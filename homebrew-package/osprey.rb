@@ -1,7 +1,7 @@
 class Osprey < Formula
   desc "Modern functional programming language designed for clarity, safety, and expressiveness"
-  homepage "https://github.com/christianfindlay/osprey"
-  url "https://github.com/christianfindlay/osprey/releases/download/v0.1.0/osprey-darwin-amd64.tar.gz"
+  homepage "https://www.ospreylang.dev"
+  url "https://github.com/melbournedeveloper/osprey/releases/download/v0.1.0/osprey-darwin-amd64.tar.gz"
   version "0.1.0"
   sha256 "PLACEHOLDER_SHA256"
   

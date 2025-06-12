@@ -79,4 +79,4 @@ Current version: **0.1.0-alpha** (not yet released)
 
 ---
 
-**Note**: Features marked as complete have working examples in the [`examples/tested/`](https://github.com/ChristianFindlay/osprey/tree/main/compiler/examples/tested) directory and pass integration tests. 
+**Note**: Features marked as complete have working examples in the [`examples/tested/`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tested) directory and pass integration tests. 
