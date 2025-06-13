@@ -96,6 +96,15 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     && ./aws/install \
     && rm -rf awscliv2.zip aws
 
+# Install GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install gh -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set up environment variables
 ENV PATH="/root/.cargo/bin:/usr/lib/llvm-14/bin:/usr/lib/jvm/java-17-openjdk-arm64/bin:${PATH}"
 ENV CLASSPATH=".:/usr/local/lib/antlr.jar:$CLASSPATH"
