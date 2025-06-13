@@ -53,11 +53,11 @@ match user {
   <div class="container">
     <h2 class="section-title">Design Principles</h2>
     <div class="principles-detailed">
-      <div class="principle-item">
-        <div class="principle-header">
+      <div class="card">
+        <div class="card-header">
           <h3>🎯 Simplicity First</h3>
         </div>
-        <div class="principle-content">
+        <div class="card-content">
           <p>One way to accomplish any task. No multiple syntax variations, minimal ceremony.</p>
           <ul>
             <li>Single approach for each language feature</li>
@@ -67,11 +67,11 @@ match user {
         </div>
       </div>
 
-      <div class="principle-item">
-        <div class="principle-header">
+      <div class="card">
+        <div class="card-header">
           <h3>🛡️ Safety by Design</h3>
         </div>
-        <div class="principle-content">
+        <div class="card-content">
           <p>Type system prevents bugs at compile time. No null pointers, buffer overflows, or data races.</p>
           <ul>
             <li>Result types for all error conditions</li>
@@ -81,11 +81,11 @@ match user {
         </div>
       </div>
 
-      <div class="principle-item">
-        <div class="principle-header">
+      <div class="card">
+        <div class="card-header">
           <h3>⚡ Fiber Concurrency</h3>
         </div>
-        <div class="principle-content">
+        <div class="card-content">
           <p>Isolated module instances per fiber eliminate data races. Scale to millions of concurrent tasks.</p>
           <ul>
             <li>Zero-cost fiber creation</li>
@@ -95,11 +95,11 @@ match user {
         </div>
       </div>
 
-      <div class="principle-item">
-        <div class="principle-header">
+      <div class="card">
+        <div class="card-header">
           <h3>🔗 Rust Interoperability</h3>
         </div>
-        <div class="principle-content">
+        <div class="card-content">
           <p>Seamless integration with Rust for maximum performance. Type-safe FFI.</p>
           <ul>
             <li>Direct Rust async/await integration</li>
@@ -116,22 +116,22 @@ match user {
   <div class="container">
     <h2 class="section-title">Core Philosophy</h2>
     <div class="philosophy-grid">
-      <div class="philosophy-card">
+      <div class="card">
         <h3>Referential Transparency</h3>
         <p>Functions return the same output for the same input. Side effects are explicit.</p>
       </div>
       
-      <div class="philosophy-card">
+      <div class="card">
         <h3>Immutability by Default</h3>
         <p>Data immutable unless explicitly marked mutable. Safe sharing across fibers.</p>
       </div>
       
-      <div class="philosophy-card">
+      <div class="card">
         <h3>Explicit Error Handling</h3>
         <p>No exceptions or panics. All failures return Result types.</p>
       </div>
       
-      <div class="philosophy-card">
+      <div class="card">
         <h3>Zero-Cost Abstractions</h3>
         <p>High-level features compile to optimal machine code.</p>
       </div>
@@ -187,12 +187,12 @@ match user {
   <div class="container">
     <h2 class="section-title">Key Innovations</h2>
     <div class="innovations-grid">
-      <div class="innovation-item">
+      <div class="card-code">
         <h3>Fiber-Isolated Modules</h3>
         <p>
           Revolutionary approach to concurrency where each fiber gets its own isolated instances of modules. Eliminates data races while maintaining clean encapsulation.
         </p>
-        <div class="innovation-code typewriter-enabled">
+        <div class="code-example typewriter-enabled">
           <pre class="language-osprey"><code class="language-osprey">module Counter {
   let mut count = 0
   fn increment() = { count = count + 1; count }
@@ -212,12 +212,12 @@ await(fiber2)  // 1 (separate instance)</code></pre>
         </div>
       </div>
 
-      <div class="innovation-item">
+      <div class="card-code">
         <h3>Constraint-Based Types</h3>
         <p>
           Type constructors with WHERE constraints ensure data validity at creation time. Invalid data simply cannot exist in your program.
         </p>
-        <div class="innovation-code typewriter-enabled">
+        <div class="code-example typewriter-enabled">
           <pre class="language-osprey"><code class="language-osprey">type Person = {
   name: String where notEmpty(name),
   age: Int where between(age, 0, 150),
@@ -233,12 +233,12 @@ let person = Person {
         </div>
       </div>
 
-      <div class="innovation-item">
+      <div class="card-code">
         <h3>Safe Arithmetic by Default</h3>
         <p>
           All arithmetic operations return Result types to handle overflow, underflow, and division by zero. Math errors are impossible to ignore.
         </p>
-        <div class="innovation-code typewriter-enabled">
+        <div class="code-example typewriter-enabled">
           <pre class="language-osprey"><code class="language-osprey">// Safe division that cannot panic
 fn divide(a: Int, b: Int) -> Result<Int, MathError> = 
   match b {
@@ -265,26 +265,26 @@ match divide(a: 10, b: 0) {
     </p>
     
     <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">🔗</div>
+      <div class="card">
+        <div class="card-icon">🔗</div>
         <h3>Haskell Integration</h3>
         <p>Future interoperability with Haskell for formal verification and mathematical proofs of program correctness.</p>
       </div>
       
-      <div class="feature-card">
-        <div class="feature-icon">📦</div>
+      <div class="card">
+        <div class="card-icon">📦</div>
         <h3>Package Ecosystem</h3>
         <p>Growing library ecosystem with built-in safety guarantees and comprehensive documentation.</p>
       </div>
       
-      <div class="feature-card">
-        <div class="feature-icon">🛠️</div>
+      <div class="card">
+        <div class="card-icon">🛠️</div>
         <h3>Development Tooling</h3>
         <p>Advanced IDE support, intelligent debuggers, and powerful development tools for productive programming.</p>
       </div>
       
-      <div class="feature-card">
-        <div class="feature-icon">🎓</div>
+      <div class="card">
+        <div class="card-icon">🎓</div>
         <h3>Education & Learning</h3>
         <p>Comprehensive resources to teach safe programming principles and functional programming concepts.</p>
       </div>

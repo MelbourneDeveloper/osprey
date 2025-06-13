@@ -14,10 +14,10 @@ description: Thoughts and insights on Osprey and modern programming language des
     <div class="blog-posts">
       {% if collections.blog.length > 0 %}
         {% for post in collections.blog %}
-          <article class="blog-card">
-            <div class="blog-card-content">
+          <article class="card">
+            <div class="card-content">
               {% if post.data.tags %}
-                <div class="blog-card-tags">
+                <div class="card-tags">
                   {% for tag in post.data.tags %}
                     {% if tag != "blog" %}
                       <span class="tag">{{ tag }}</span>
@@ -26,15 +26,15 @@ description: Thoughts and insights on Osprey and modern programming language des
                 </div>
               {% endif %}
               
-              <h2 class="blog-card-title">
+              <h2 class="card-title">
                 <a href="{{ post.url }}">{{ post.data.title }}</a>
               </h2>
               
               {% if post.data.excerpt %}
-                <p class="blog-card-excerpt">{{ post.data.excerpt }}</p>
+                <p class="card-excerpt">{{ post.data.excerpt }}</p>
               {% endif %}
               
-              <div class="blog-card-meta">
+              <div class="card-meta">
                 <time datetime="{{ post.date | htmlDateString }}">
                   {{ post.date | readableDate }}
                 </time>

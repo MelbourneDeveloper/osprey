@@ -8,7 +8,7 @@ html {
   scroll-padding-top: 80px;
 }
 
-/* Base body styling with subtle animation */
+/* Base body styling */
 body {
   font-family: var(--font-sans);
   font-size: var(--font-size-base);
@@ -23,91 +23,50 @@ body {
 
 /* Main content padding to account for fixed header */
 main {
-  padding-top: 5rem; /* Height of fixed header */
+  padding-top: 5rem;
+  /* Height of fixed header */
 }
 
-@keyframes gradientShift {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  25% { transform: translate(-5%, 5%) rotate(1deg); }
-  50% { transform: translate(5%, -5%) rotate(-1deg); }
-  75% { transform: translate(-5%, -5%) rotate(1deg); }
-}
-
-/* Floating particles effect */
-.particles {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  z-index: -1;
-  pointer-events: none;
-}
-
-.particle {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  background: var(--gradient-accent);
-  border-radius: 50%;
-  opacity: 0.3;
-  animation: float 20s infinite;
-}
-
-@keyframes float {
-  0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
-  10% { opacity: 0.3; }
-  90% { opacity: 0.3; }
-  100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
-}
-
-/* Enhanced container with fade-in animation */
+/* Enhanced container */
 .container {
   width: 100%;
   max-width: var(--container-2xl);
   margin: 0 auto;
   padding: 0 var(--space-6);
-  animation: fadeInUp 0.8s var(--ease-out-back);
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* ========================================================================
-   MASTER HEADING SYSTEM - ALL HEADING STYLES CONSOLIDATED HERE
+   UNIFIED HEADING SYSTEM - ALL HEADING STYLES CONSOLIDATED HERE
    ======================================================================== */
 
-/* Base heading styles - Default for dark backgrounds */
-h1, h2, h3, h4, h5, h6 {
+/* Base heading styles */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
-  color: var(--color-text-inverse); /* Light color for dark backgrounds */
+  color: var(--color-text-inverse);
+  /* Light color for dark backgrounds */
   transition: all var(--transition-base);
   position: relative;
 }
 
 /* Default heading sizes */
-h1 { 
+h1 {
   font-size: clamp(var(--font-size-4xl), 5vw, var(--font-size-6xl));
   margin-bottom: var(--space-6);
 }
 
-h2 { 
+h2 {
   font-size: clamp(var(--font-size-3xl), 4vw, var(--font-size-5xl));
   margin-bottom: var(--space-6);
-  color: var(--color-primary-200); /* Aqua for contrast */
+  color: var(--color-primary-200);
 }
 
-h3 { 
+h3 {
   font-size: clamp(var(--font-size-2xl), 3vw, var(--font-size-4xl));
   margin-bottom: var(--space-4);
   color: var(--color-primary-200);
@@ -131,54 +90,75 @@ h6 {
   color: var(--color-primary-200);
 }
 
-
-
 /* ========================================================================
-   DARK BACKGROUND SECTIONS - Force white headings
+   CONTEXT-BASED HEADING COLORS - Simplified system
    ======================================================================== */
 
-/* ALL headings on dark backgrounds should be white - OVERRIDE EVERYTHING */
-.page-hero h1, .page-hero h2, .page-hero h3, .page-hero h4, .page-hero h5, .page-hero h6,
-.page-header h1, .page-header h2, .page-header h3, .page-header h4, .page-header h5, .page-header h6,
-.hero h1, .hero h2, .hero h3, .hero h4, .hero h5, .hero h6,
-.blog-header h1, .blog-header h2, .blog-header h3, .blog-header h4, .blog-header h5, .blog-header h6,
-.blog-title,
-.future h1, .future h2, .future h3, .future h4, .future h5, .future h6,
-.footer h1, .footer h2, .footer h3, .footer h4, .footer h5, .footer h6,
-.cta-section h1, .cta-section h2, .cta-section h3, .cta-section h4, .cta-section h5, .cta-section h6,
-main h1, main h2 {
-  color: white !important;
-  background: none !important;
-  -webkit-background-clip: initial !important;
-  -webkit-text-fill-color: white !important;
-  background-clip: initial !important;
-}
-
-
-
-/* ========================================================================
-   LIGHT BACKGROUND SECTIONS - Force dark headings
-   ======================================================================== */
-.about-story h1, .about-story h2, .about-story h3, .about-story h4, .about-story h5, .about-story h6,
-.card h1, .card h2, .card h3, .card h4, .card h5, .card h6,
-.feature-card h1, .feature-card h2, .feature-card h3, .feature-card h4, .feature-card h5, .feature-card h6,
-.blog-card h1, .blog-card h2, .blog-card h3, .blog-card h4, .blog-card h5, .blog-card h6,
-.philosophy-card h1, .philosophy-card h2, .philosophy-card h3, .philosophy-card h4, .philosophy-card h5, .philosophy-card h6,
-.principle-item h1, .principle-item h2, .principle-item h3, .principle-item h4, .principle-item h5, .principle-item h6,
-.innovation-item h1, .innovation-item h2, .innovation-item h3, .innovation-item h4, .innovation-item h5, .innovation-item h6,
-.empty-state h1, .empty-state h2, .empty-state h3, .empty-state h4, .empty-state h5, .empty-state h6,
-.blog-content h1, .blog-content h2, .blog-content h3, .blog-content h4, .blog-content h5, .blog-content h6 {
-  color: var(--color-text-secondary) !important; /* Dark blue for light backgrounds */
-}
-
-
-
-/* ========================================================================
-   SPECIFIC SIZE AND SPACING OVERRIDES - Only size/spacing, no colors
-   ======================================================================== */
+/* Dark backgrounds - White headings */
+.hero h1,
+.hero h2,
+.hero h3,
+.hero h4,
+.hero h5,
+.hero h6,
 .page-hero h1,
+.page-hero h2,
+.page-hero h3,
+.page-hero h4,
+.page-hero h5,
+.page-hero h6,
 .page-header h1,
-.blog-title {
+.page-header h2,
+.page-header h3,
+.page-header h4,
+.page-header h5,
+.page-header h6,
+.blog-header h1,
+.blog-header h2,
+.blog-header h3,
+.blog-header h4,
+.blog-header h5,
+.blog-header h6,
+.footer h1,
+.footer h2,
+.footer h3,
+.footer h4,
+.footer h5,
+.footer h6,
+.cta-section h1,
+.cta-section h2,
+.cta-section h3,
+.cta-section h4,
+.cta-section h5,
+.cta-section h6 {
+  color: white !important;
+}
+
+/* Light backgrounds - Dark headings */
+.card h1,
+.card h2,
+.card h3,
+.card h4,
+.card h5,
+.card h6,
+.blog-content h1,
+.blog-content h2,
+.blog-content h3,
+.blog-content h4,
+.blog-content h5,
+.blog-content h6,
+.empty-state h1,
+.empty-state h2,
+.empty-state h3,
+.empty-state h4,
+.empty-state h5,
+.empty-state h6 {
+  color: var(--color-text-secondary) !important;
+}
+
+/* Specific size overrides */
+.page-hero h1,
+.page-header h1 {
   font-size: clamp(var(--font-size-3xl), 6vw, var(--font-size-5xl)) !important;
 }
 
@@ -187,23 +167,19 @@ main h1, main h2 {
   text-align: center;
 }
 
-.future h2 {
-  text-align: center;
-  margin-bottom: var(--space-8);
-}
-
 .cta-section h3 {
   font-size: var(--font-size-3xl) !important;
 }
 
-.principle-header h3 {
-  font-size: var(--font-size-2xl) !important;
-  margin-bottom: var(--space-2) !important;
-}
-
-.blog-content h2, .blog-content h3, .blog-content h4 {
+.blog-content h2,
+.blog-content h3,
+.blog-content h4 {
   margin-top: var(--space-12) !important;
 }
+
+/* ========================================================================
+   LINKS AND TYPOGRAPHY
+   ======================================================================== */
 
 /* Links with animated underline */
 a {
@@ -236,12 +212,6 @@ a:hover::after {
 p {
   margin-bottom: var(--space-4);
   line-height: var(--line-height-relaxed);
-  animation: fadeIn 1s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 /* Code blocks with glass morphism */
@@ -275,6 +245,10 @@ code {
 code:hover {
   background: rgba(102, 126, 234, 0.2);
 }
+
+/* ========================================================================
+   GLOBAL STYLES
+   ======================================================================== */
 
 /* Selection styling */
 ::selection {
@@ -338,71 +312,3 @@ code:hover {
     max-width: var(--container-2xl);
   }
 }
-
-/* Intersection observer animations - DISABLED TO PREVENT MOVEMENT */
-.animate-on-scroll {
-  opacity: 1 !important;
-  transform: none !important;
-  transition: none !important;
-}
-
-.animate-on-scroll.visible {
-  opacity: 1 !important;
-  transform: none !important;
-}
-
-/* Parallax scrolling effect - DISABLED */
-.parallax {
-  transform: none !important;
-  will-change: auto !important;
-}
-
-/* Glitch effect for headings */
-.glitch {
-  position: relative;
-  animation: glitch 2s infinite;
-}
-
-.glitch::before,
-.glitch::after {
-  content: attr(data-text);
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.glitch::before {
-  animation: glitch-1 0.5s infinite;
-  color: var(--color-accent-pink);
-  z-index: -1;
-}
-
-.glitch::after {
-  animation: glitch-2 0.5s infinite;
-  color: var(--color-accent-blue);
-  z-index: -2;
-}
-
-@keyframes glitch {
-  0%, 100% { transform: translate(0); }
-  20% { transform: translate(-2px, 2px); }
-  40% { transform: translate(-2px, -2px); }
-  60% { transform: translate(2px, 2px); }
-  80% { transform: translate(2px, -2px); }
-}
-
-@keyframes glitch-1 {
-  0%, 100% { clip-path: inset(0 0 0 0); }
-  25% { clip-path: inset(0 0 50% 0); }
-  50% { clip-path: inset(0 0 30% 0); }
-  75% { clip-path: inset(0 0 80% 0); }
-}
-
-@keyframes glitch-2 {
-  0%, 100% { clip-path: inset(0 0 0 0); }
-  25% { clip-path: inset(80% 0 0 0); }
-  50% { clip-path: inset(50% 0 0 0); }
-  75% { clip-path: inset(30% 0 0 0); }
-} 

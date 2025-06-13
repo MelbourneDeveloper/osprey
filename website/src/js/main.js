@@ -61,7 +61,7 @@ class HeaderScroll {
   init() {
     window.addEventListener('scroll', () => {
       const currentScroll = window.pageYOffset;
-      
+
       if (currentScroll > 100) {
         this.header.classList.add('scrolled');
       } else {
@@ -83,7 +83,7 @@ class ParallaxEffect {
   init() {
     window.addEventListener('scroll', () => {
       const scrolled = window.pageYOffset;
-      
+
       this.elements.forEach(el => {
         const speed = el.dataset.speed || 0.5;
         const yPos = -(scrolled * speed);
@@ -122,7 +122,7 @@ class MobileNav {
 // Magnetic Hover Effect
 class MagneticHover {
   constructor() {
-    this.elements = document.querySelectorAll('.feature-card, .showcase-item');
+    this.elements = document.querySelectorAll('.card, .card-code');
     this.init();
   }
 
@@ -132,12 +132,12 @@ class MagneticHover {
         const rect = el.getBoundingClientRect();
         const x = e.clientX - rect.left - rect.width / 2;
         const y = e.clientY - rect.top - rect.height / 2;
-        
+
         const angle = Math.atan2(y, x) * (180 / Math.PI);
         const distance = Math.sqrt(x * x + y * y);
         const maxDistance = Math.max(rect.width, rect.height) / 2;
         const strength = Math.min(distance / maxDistance, 1);
-        
+
         el.style.transform = `
           perspective(1000px)
           rotateX(${y * 0.05}deg)
@@ -165,18 +165,18 @@ class SmoothScroll {
       link.addEventListener('click', (e) => {
         const href = link.getAttribute('href');
         if (href === '#') return;
-        
+
         e.preventDefault();
-        
+
         // Get the ID without the #
         const id = href.substring(1);
-        
+
         // Try multiple methods to find the target element
         let target = null;
-        
+
         // Method 1: Try getElementById (most reliable)
         target = document.getElementById(id);
-        
+
         // Method 2: Try querySelector with various selectors
         if (!target) {
           try {
@@ -186,7 +186,7 @@ class SmoothScroll {
             // Ignore CSS.escape errors
           }
         }
-        
+
         // Method 3: Try variations of the ID (common Eleventy transformations)
         if (!target) {
           const variations = [
@@ -202,12 +202,12 @@ class SmoothScroll {
             id.replace(/^(\d+)\.(\d*)-?/, '$1$2-'), // Convert 2.4-operators to 24-operators
             id.replace(/(\d+)\.(\d+)-(.+)/, '$1$2-$3'), // 2.4-operators -> 24-operators
           ];
-          
+
           for (const variant of variations) {
             if (variant) {
               target = document.getElementById(variant);
               if (target) break;
-              
+
               try {
                 target = document.querySelector(`#${CSS.escape(variant)}`);
                 if (target) break;
@@ -217,38 +217,38 @@ class SmoothScroll {
             }
           }
         }
-        
+
         // Method 4: Find by heading text content
         if (!target) {
           const headingText = id.replace(/^\d+\.?\d*-?/, '').replace(/-/g, ' ');
           const headers = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-          
+
           for (const header of headers) {
             const headerText = header.textContent.toLowerCase().trim();
-            if (headerText.includes(headingText.toLowerCase()) || 
-                headerText.replace(/[^a-zA-Z0-9\s]/g, '').includes(headingText.toLowerCase())) {
+            if (headerText.includes(headingText.toLowerCase()) ||
+              headerText.replace(/[^a-zA-Z0-9\s]/g, '').includes(headingText.toLowerCase())) {
               target = header;
               break;
             }
           }
         }
-        
+
         // Method 5: Find by data attributes or class names
         if (!target) {
           target = document.querySelector(`[data-anchor="${id}"]`) ||
-                   document.querySelector(`[data-id="${id}"]`) ||
-                   document.querySelector(`.${id.replace(/[^a-zA-Z0-9-_]/g, '-')}`);
+            document.querySelector(`[data-id="${id}"]`) ||
+            document.querySelector(`.${id.replace(/[^a-zA-Z0-9-_]/g, '-')}`);
         }
-        
+
         if (target) {
           const offset = 100;
           const targetPosition = target.offsetTop - offset;
-          
+
           window.scrollTo({
             top: targetPosition,
             behavior: 'smooth'
           });
-          
+
           // Update URL hash
           history.pushState(null, null, href);
           console.log('✅ Found target for:', href, '-> Element:', target.tagName, target.id || target.className);
@@ -257,7 +257,7 @@ class SmoothScroll {
           const allIds = Array.from(document.querySelectorAll('[id]')).map(el => el.id);
           console.warn('❌ Could not find target element for:', href, 'ID:', id);
           console.warn('🔍 Available IDs on page:', allIds.filter(id => id.includes('operator') || id.includes('lexical')));
-          
+
           // Fallback: just update the URL and let the browser handle it
           window.location.hash = href;
         }
@@ -281,25 +281,25 @@ class TypeWriter {
       this.prepareTypingAnimation(block, blockIndex);
     });
   }
-  
+
   prepareTypingAnimation(element, blockIndex) {
     // Get all text nodes and wrap them in spans for animation
     this.wrapTextNodes(element);
-    
+
     // Get all character spans
     const chars = element.querySelectorAll('.typing-char');
-    
+
     // Hide all characters initially
     chars.forEach(char => {
       char.style.opacity = '0';
     });
-    
+
     // Start typing animation
     setTimeout(() => {
       this.animateTyping(chars);
     }, 1000 + (blockIndex * 200));
   }
-  
+
   wrapTextNodes(element) {
     const walker = document.createTreeWalker(
       element,
@@ -307,7 +307,7 @@ class TypeWriter {
       null,
       false
     );
-    
+
     const textNodes = [];
     let node;
     while (node = walker.nextNode()) {
@@ -315,12 +315,12 @@ class TypeWriter {
         textNodes.push(node);
       }
     }
-    
+
     textNodes.forEach(textNode => {
       const parent = textNode.parentNode;
       const text = textNode.textContent;
       const fragment = document.createDocumentFragment();
-      
+
       for (let i = 0; i < text.length; i++) {
         const char = text.charAt(i);
         const span = document.createElement('span');
@@ -328,11 +328,11 @@ class TypeWriter {
         span.textContent = char;
         fragment.appendChild(span);
       }
-      
+
       parent.replaceChild(fragment, textNode);
     });
   }
-  
+
   animateTyping(chars) {
     chars.forEach((char, index) => {
       setTimeout(() => {
@@ -405,7 +405,7 @@ class CursorGlow {
 // Performance Optimization
 function throttle(func, limit) {
   let inThrottle;
-  return function() {
+  return function () {
     const args = arguments;
     const context = this;
     if (!inThrottle) {
@@ -420,7 +420,7 @@ function throttle(func, limit) {
 document.addEventListener('DOMContentLoaded', () => {
   // Create particle system
   new ParticleSystem();
-  
+
   // Initialize animations
   new ScrollAnimations();
   new HeaderScroll();
@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
   new SmoothScroll();
   new GlitchEffect();
   new CursorGlow();
-  
+
   // Initialize typing animation with delay
   setTimeout(() => {
     new TypeWriter();

@@ -52,38 +52,38 @@ print("Result: ${result}")</code></pre>
   <div class="container">
     <h2 class="section-title animate-on-scroll">Why Choose Osprey?</h2>
     <div class="features-grid">
-      <div class="feature-card animate-on-scroll">
-        <div class="feature-icon">🎯</div>
+      <div class="card animate-on-scroll">
+        <div class="card-icon">🎯</div>
         <h3>Clear Function Definitions</h3>
         <p>Explicit type annotations and expression-bodied functions create self-documenting code.</p>
       </div>
       
-      <div class="feature-card animate-on-scroll">
-        <div class="feature-icon">🔀</div>
+      <div class="card animate-on-scroll">
+        <div class="card-icon">🔀</div>
         <h3>Pattern Matching</h3>
         <p>Elegant pattern matching on values with exhaustiveness checking for safe code.</p>
       </div>
       
-      <div class="feature-card animate-on-scroll">
-        <div class="feature-icon">✨</div>
+      <div class="card animate-on-scroll">
+        <div class="card-icon">✨</div>
         <h3>String Interpolation</h3>
         <p>Built-in string interpolation with expression support for readable output formatting.</p>
       </div>
       
-      <div class="feature-card animate-on-scroll">
-        <div class="feature-icon">🔗</div>
+      <div class="card animate-on-scroll">
+        <div class="card-icon">🔗</div>
         <h3>Functional Programming</h3>
         <p>Pipe operators and functional iterators for elegant data processing pipelines.</p>
       </div>
       
-      <div class="feature-card animate-on-scroll">
-        <div class="feature-icon">🛡️</div>
+      <div class="card animate-on-scroll">
+        <div class="card-icon">🛡️</div>
         <h3>Type Safety</h3>
         <p>Strong static typing prevents runtime errors and catches issues at compile time.</p>
       </div>
       
-      <div class="feature-card animate-on-scroll">
-        <div class="feature-icon">⚡</div>
+      <div class="card animate-on-scroll">
+        <div class="card-icon">⚡</div>
         <h3>Fast Compilation</h3>
         <p>Quick compilation cycles for rapid development and testing of your programs.</p>
       </div>
@@ -96,7 +96,7 @@ print("Result: ${result}")</code></pre>
     <h2 class="section-title animate-on-scroll">See Osprey in Action</h2>
     
     <div class="showcase-grid">
-      <div class="showcase-item animate-on-scroll">
+      <div class="card-code animate-on-scroll">
         <h3>Clean Functions</h3>
         <div class="code-example">
           <pre class="language-osprey"><code class="language-osprey">// Expression-bodied functions
@@ -119,7 +119,7 @@ print("Analysis: ${analysis}")</code></pre>
         </div>
       </div>
       
-      <div class="showcase-item animate-on-scroll">
+      <div class="card-code animate-on-scroll">
         <h3>String Interpolation</h3>
         <div class="code-example">
           <pre class="language-osprey"><code class="language-osprey">// Variables and expressions in strings
@@ -140,7 +140,7 @@ print("${name} (${age}) scored ${score}/100")</code></pre>
         </div>
       </div>
       
-      <div class="showcase-item animate-on-scroll">
+      <div class="card-code animate-on-scroll">
         <h3>Functional Pipelines</h3>
         <div class="code-example">
           <pre class="language-osprey"><code class="language-osprey">// Pipe operator for clean data flow
@@ -160,7 +160,7 @@ print("Result: ${result}")</code></pre>
         </div>
       </div>
       
-      <div class="showcase-item animate-on-scroll">
+      <div class="card-code animate-on-scroll">
         <h3>Pattern Matching</h3>
         <div class="code-example">
           <pre class="language-osprey"><code class="language-osprey">// Match on different values
@@ -192,19 +192,19 @@ print("4 is even: ${isEven(4)}")</code></pre>
   <div class="container">
     <h2 class="section-title animate-on-scroll">Core Principles</h2>
     <div class="philosophy-grid">
-      <div class="philosophy-card animate-on-scroll">
+      <div class="card animate-on-scroll">
         <h3>Simple & Elegant</h3>
         <p>Clean syntax that reads naturally. Expression-bodied functions and minimal ceremony.</p>
       </div>
-      <div class="philosophy-card animate-on-scroll">
+      <div class="card animate-on-scroll">
         <h3>Type Safe</h3>
         <p>Strong static typing catches errors at compile time. Explicit types prevent confusion.</p>
       </div>
-      <div class="philosophy-card animate-on-scroll">
+      <div class="card animate-on-scroll">
         <h3>Functional First</h3>
         <p>Pattern matching, pipe operators, and functional iterators for elegant data processing.</p>
       </div>
-      <div class="philosophy-card animate-on-scroll">
+      <div class="card animate-on-scroll">
         <h3>Fast Development</h3>
         <p>Quick compilation and immediate feedback. Get from idea to working code fast.</p>
       </div>
