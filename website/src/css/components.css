@@ -1748,3 +1748,61 @@ h6:hover .header-anchor {
     font-size: 16px;
   }
 }
+
+
+
+/* Table of Contents Styling - Target the OL that comes after the heading */
+#table-of-contents+ol {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  margin: var(--space-8) 0;
+  box-shadow: var(--glass-shadow);
+  list-style: none;
+}
+
+#table-of-contents+ol li {
+  margin-bottom: var(--space-1);
+}
+
+#table-of-contents+ol a {
+  color: var(--color-primary-600) !important;
+  text-decoration: none !important;
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-2) var(--space-3);
+  display: block;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  position: relative;
+  border-left: 3px solid transparent;
+}
+
+#table-of-contents+ol a::after {
+  display: none !important;
+}
+
+#table-of-contents+ol a:hover {
+  color: white !important;
+  background: var(--color-primary-600);
+  border-left-color: var(--color-primary-400);
+  transform: translateX(var(--space-1));
+}
+
+#table-of-contents+ol ul {
+  list-style: none;
+  margin-top: var(--space-2);
+  margin-left: var(--space-4);
+  padding: 0;
+}
+
+#table-of-contents+ol ul li {
+  font-size: var(--font-size-sm);
+}
+
+#table-of-contents+ol ul a {
+  padding: var(--space-1) var(--space-3);
+  font-weight: var(--font-weight-normal);
+}
