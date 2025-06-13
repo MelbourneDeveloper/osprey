@@ -317,14 +317,69 @@ code:hover {
 
   h1 {
     font-size: clamp(var(--font-size-2xl), 6vw, var(--font-size-4xl));
+    padding: 0 var(--space-3);
   }
 
   h2 {
     font-size: clamp(var(--font-size-xl), 5vw, var(--font-size-3xl));
+    padding: 0 var(--space-3);
   }
 
   h3 {
     font-size: clamp(var(--font-size-lg), 4vw, var(--font-size-2xl));
+    padding: 0 var(--space-3);
+  }
+
+  /* Content area headings on very small screens */
+  .blog-content h1,
+  .blog-content h2,
+  .blog-content h3,
+  .blog-content h4,
+  .blog-content h5,
+  .blog-content h6,
+  .page-content h1,
+  .page-content h2,
+  .page-content h3,
+  .page-content h4,
+  .page-content h5,
+  .page-content h6,
+  main h1,
+  main h2,
+  main h3,
+  main h4,
+  main h5,
+  main h6 {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+
+  /* Hero headings get slightly less padding on very small screens */
+  .hero h1,
+  .hero h2,
+  .hero h3,
+  .page-hero h1,
+  .page-hero h2,
+  .page-hero h3 {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+  }
+
+  p {
+    padding: 0 var(--space-3);
+  }
+
+  /* Don't add padding to paragraphs that are inside containers that already have padding */
+  .container p,
+  .card p,
+  .hero p,
+  .page-hero p,
+  .cta-section p,
+  .footer p,
+  .footer-content p,
+  .footer-section p,
+  .footer-bottom p {
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 
@@ -342,36 +397,94 @@ code:hover {
   h1 {
     font-size: clamp(var(--font-size-3xl), 7vw, var(--font-size-5xl));
     margin-bottom: var(--space-4);
+    padding: 0 var(--space-4);
   }
 
   h2 {
     font-size: clamp(var(--font-size-2xl), 6vw, var(--font-size-4xl));
     margin-bottom: var(--space-4);
+    padding: 0 var(--space-4);
   }
 
   h3 {
     font-size: clamp(var(--font-size-xl), 5vw, var(--font-size-3xl));
     margin-bottom: var(--space-3);
+    padding: 0 var(--space-4);
   }
 
   h4 {
     font-size: var(--font-size-lg);
     margin-bottom: var(--space-2);
+    padding: 0 var(--space-4);
   }
 
   h5 {
     font-size: var(--font-size-base);
     margin-bottom: var(--space-2);
+    padding: 0 var(--space-4);
   }
 
   h6 {
     font-size: var(--font-size-sm);
     margin-bottom: var(--space-2);
+    padding: 0 var(--space-4);
+  }
+
+  /* Add breathing room for headings in content areas */
+  .blog-content h1,
+  .blog-content h2,
+  .blog-content h3,
+  .blog-content h4,
+  .blog-content h5,
+  .blog-content h6,
+  .page-content h1,
+  .page-content h2,
+  .page-content h3,
+  .page-content h4,
+  .page-content h5,
+  .page-content h6,
+  main h1,
+  main h2,
+  main h3,
+  main h4,
+  main h5,
+  main h6 {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+    margin-top: var(--space-6);
+    margin-bottom: var(--space-4);
+  }
+
+  /* Special case for hero headings - they should remain centered */
+  .hero h1,
+  .hero h2,
+  .hero h3,
+  .page-hero h1,
+  .page-hero h2,
+  .page-hero h3 {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+    text-align: center;
   }
 
   p {
     margin-bottom: var(--space-3);
     font-size: var(--font-size-sm);
+    padding: 0 var(--space-4);
+  }
+
+  /* Don't add padding to paragraphs that are inside containers that already have padding */
+  .container p,
+  .card p,
+  .hero p,
+  .page-hero p,
+  .cta-section p,
+  .footer p,
+  .footer-content p,
+  .footer-section p,
+  .footer-bottom p {
+    padding-left: 0;
+    padding-right: 0;
   }
 
   /* Optimize code blocks for mobile */

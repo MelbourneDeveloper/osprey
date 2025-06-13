@@ -893,20 +893,20 @@ p:has(.cta-actions) {
   content: '';
   position: absolute;
   top: 0;
-  left: -100%;
-  width: 200%;
-  height: 2px;
-  background: var(--gradient-primary);
-  animation: shimmer 3s ease-in-out infinite;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, rgba(102, 126, 234, 0.1) 0%, rgba(240, 147, 251, 0.1) 100%);
+  animation: shimmer 8s ease-in-out infinite alternate;
 }
 
 @keyframes shimmer {
   0% {
-    transform: translateX(-100%);
+    opacity: 0.3;
   }
 
   100% {
-    transform: translateX(100%);
+    opacity: 0.8;
   }
 }
 
@@ -1457,18 +1457,42 @@ h6:hover .header-anchor {
   }
 
   .footer-content {
-    grid-template-columns: 1fr;
-    gap: var(--space-6);
+    grid-template-columns: 1fr !important;
+    gap: var(--space-6) !important;
     text-align: center;
   }
 
   .footer-links {
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-6);
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: var(--space-6) !important;
   }
 
   .footer-section {
     text-align: center;
+  }
+
+  .footer-section h3 {
+    font-size: var(--font-size-base);
+    margin-bottom: var(--space-3);
+  }
+
+  .footer-section h3::after {
+    display: none;
+  }
+
+  .footer-section ul {
+    margin: 0;
+  }
+
+  .footer-section li {
+    margin-bottom: var(--space-1);
+  }
+
+  .footer-bottom {
+    padding-top: var(--space-4);
+    margin-top: var(--space-6);
+    font-size: var(--font-size-sm);
   }
 
   .page-hero {
