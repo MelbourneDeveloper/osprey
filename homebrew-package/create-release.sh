@@ -34,7 +34,7 @@ echo "✓ SHA256: $SHA256"
 # Create GitHub release
 echo "✓ Creating GitHub release..."
 gh release create "v$VERSION" \
-    --repo "melbournedeveloper/osprey" \
+    --repo "MelbourneDeveloper/osprey" \
     --title "Osprey v$VERSION" \
     --notes "Release v$VERSION of the Osprey programming language" \
     osprey-darwin-amd64.tar.gz
