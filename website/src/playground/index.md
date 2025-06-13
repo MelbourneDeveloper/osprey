@@ -2,8 +2,6 @@
 layout: base.njk
 title: "Osprey Playground"
 description: "Try Osprey programming language online with interactive code examples and real-time compilation"
----
-
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.min.css">
 
 <style>
@@ -131,6 +129,36 @@ description: "Try Osprey programming language online with interactive code examp
         color: #f44747;
     }
     
+    /* Splitter styles */
+    .splitter {
+        background: #444;
+        cursor: col-resize;
+        position: relative;
+        flex-shrink: 0;
+        width: 4px;
+        transition: background-color 0.2s ease;
+    }
+    
+    .splitter:hover {
+        background: #569cd6;
+    }
+    
+    .splitter::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 2px;
+        height: 20px;
+        background: #666;
+        border-radius: 1px;
+    }
+    
+    .splitter.dragging {
+        background: #569cd6;
+    }
+    
     /* Mobile responsiveness */
     @media (max-width: 768px) {
         .playground-container {
@@ -144,7 +172,6 @@ description: "Try Osprey programming language online with interactive code examp
         
         .editor-container {
             flex: 1;
-            min-height: 60%;
         }
         
         .output-container {
@@ -152,7 +179,18 @@ description: "Try Osprey programming language online with interactive code examp
             height: 40%;
             border-left: none;
             border-top: 1px solid #444;
-            min-height: 200px;
+        }
+        
+        .splitter {
+            cursor: row-resize;
+            width: 100%;
+            height: 4px;
+            border-top: none;
+        }
+        
+        .splitter::before {
+            width: 20px;
+            height: 2px;
         }
         
         .editor-header {
@@ -220,9 +258,7 @@ description: "Try Osprey programming language online with interactive code examp
             font-size: 13px;
         }
         
-        .output-container {
-            min-height: 150px;
-        }
+
     }
     
     button {
@@ -270,6 +306,8 @@ description: "Try Osprey programming language online with interactive code examp
             </div>
             <div id="editor"></div>
         </div>
+        
+        <div id="splitter" class="splitter"></div>
         
         <div class="output-container">
             <div class="output-header">
@@ -442,4 +480,107 @@ print("Demo complete!")`,
         document.getElementById('output').textContent = '';
         document.getElementById('output').className = '';
     }
+    
+    // Splitter functionality
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+    let isMobile = false;
+    
+    function initSplitter() {
+        const splitter = document.getElementById('splitter');
+        const editorContainer = document.querySelector('.editor-container');
+        const outputContainer = document.querySelector('.output-container');
+        
+        if (!splitter || !editorContainer || !outputContainer) return;
+        
+        splitter.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', stopDrag);
+        
+        // Touch events for mobile
+        splitter.addEventListener('touchstart', startDrag);
+        document.addEventListener('touchmove', drag);
+        document.addEventListener('touchend', stopDrag);
+        
+        // Check if mobile layout
+        function checkMobile() {
+            isMobile = window.innerWidth <= 768;
+        }
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+    }
+    
+    function startDrag(e) {
+        isDragging = true;
+        const splitter = document.getElementById('splitter');
+        const editorContainer = document.querySelector('.editor-container');
+        const outputContainer = document.querySelector('.output-container');
+        
+        splitter.classList.add('dragging');
+        
+        if (isMobile) {
+            startY = e.touches ? e.touches[0].clientY : e.clientY;
+            startHeight = editorContainer.offsetHeight;
+        } else {
+            startX = e.touches ? e.touches[0].clientX : e.clientX;
+            startWidth = editorContainer.offsetWidth;
+        }
+        
+        e.preventDefault();
+    }
+    
+    function drag(e) {
+        if (!isDragging) return;
+        
+        const main = document.querySelector('.main');
+        const editorContainer = document.querySelector('.editor-container');
+        const outputContainer = document.querySelector('.output-container');
+        
+                 if (isMobile) {
+             const currentY = e.touches ? e.touches[0].clientY : e.clientY;
+             const deltaY = currentY - startY;
+             const newHeight = startHeight + deltaY;
+             const mainHeight = main.offsetHeight;
+             
+             if (newHeight >= 0 && newHeight <= mainHeight) {
+                 const heightPercent = (newHeight / mainHeight) * 100;
+                 const outputPercent = 100 - heightPercent;
+                 
+                 editorContainer.style.flex = 'none';
+                 editorContainer.style.height = `${heightPercent}%`;
+                 outputContainer.style.height = `${outputPercent}%`;
+             }
+         } else {
+             const currentX = e.touches ? e.touches[0].clientX : e.clientX;
+             const deltaX = currentX - startX;
+             const newWidth = startWidth + deltaX;
+             const mainWidth = main.offsetWidth;
+             
+             if (newWidth >= 0 && newWidth <= mainWidth) {
+                 const widthPercent = (newWidth / mainWidth) * 100;
+                 const outputWidth = mainWidth - newWidth - 4; // Account for splitter width
+                 
+                 editorContainer.style.flex = 'none';
+                 editorContainer.style.width = `${newWidth}px`;
+                 outputContainer.style.width = `${outputWidth}px`;
+             }
+         }
+        
+        e.preventDefault();
+    }
+    
+    function stopDrag() {
+        if (!isDragging) return;
+        
+        isDragging = false;
+        const splitter = document.getElementById('splitter');
+        splitter.classList.remove('dragging');
+    }
+    
+    // Initialize splitter when page loads
+    window.addEventListener('load', initSplitter);
 </script> 
