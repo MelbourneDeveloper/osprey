@@ -11,25 +11,6 @@ if [ ! -f "../compiler/osprey" ]; then
     exit 1
 fi
 
-if ! command -v gh &> /dev/null; then
-    echo "✗ GitHub CLI not found. Install with: brew install gh"
-    exit 1
-fi
-
-# Check if user is authenticated with GitHub CLI
-if ! gh auth status &> /dev/null; then
-    echo "✗ Not authenticated with GitHub CLI"
-    echo "Run: gh auth login"
-    exit 1
-fi
-
-# Step 1: Create GitHub repository
-echo "✓ Creating GitHub repository..."
-REPO_URL="https://github.com/melbournedeveloper/homebrew-osprey"
-
-# Create the repository (will fail gracefully if it already exists)
-gh repo create "homebrew-osprey" --public --description "Homebrew tap for the Osprey programming language" || echo "Repository may already exist"
-
 # Step 2: Create local tap structure
 echo "✓ Creating local tap structure..."
 
