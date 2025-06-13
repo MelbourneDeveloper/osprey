@@ -179,13 +179,19 @@
 /* Dark mode variables - Updated for design system */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg-primary: #1F1F1F;       /* DarkGrey */
+    --color-bg-primary: #1F1F1F;
     --color-bg-secondary: #262626;
     --color-bg-tertiary: #404040;
-    --color-text-primary: #FDFDFD;     /* OffWhite */
+    --color-text-primary: #FDFDFD;
     --color-text-secondary: #F2F2F2;   /* LightGrey */
+    --color-text-secondary: #F2F2F2;
     --color-text-tertiary: #A3A3A3;
-    --glass-bg: rgba(11, 58, 94, 0.2); /* BlueDark with transparency */
+    --glass-bg: rgba(11, 58, 94, 0.2);
     --glass-border: rgba(119, 215, 244, 0.1); /* Aqua with transparency */
+    --glass-border: rgba(119, 215, 244, 0.1);
+    --nav-bg-default: rgba(11, 58, 94, 1.0);
+    --nav-bg-scrolled: rgba(11, 58, 94, 1.0);
+    --nav-border-default: rgba(119, 215, 244, 0.6);
+    --nav-border-scrolled: rgba(119, 215, 244, 0.7);
   }
-} 
+}

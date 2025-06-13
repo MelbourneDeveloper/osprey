@@ -4,10 +4,10 @@
 
 /* Header & Navigation - Glass Morphism with Animations */
 .header {
-  background: var(--glass-bg);
+  background: var(--nav-bg-default);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--nav-border-default);
   position: fixed;
   top: 0;
   left: 0;
@@ -15,6 +15,13 @@
   z-index: var(--z-100);
   animation: slideDown 0.6s var(--ease-out-back);
   transition: all var(--transition-base);
+}
+
+.nav-background {
+  background: var(--nav-bg-default);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--nav-border-default);
 }
 
 @keyframes slideDown {
@@ -30,9 +37,9 @@
 }
 
 .header.scrolled {
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--nav-bg-scrolled);
   box-shadow: var(--shadow-lg);
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--nav-border-scrolled);
 }
 
 /* Fix navbar text contrast when scrolled */
@@ -1619,10 +1626,10 @@ h6:hover .header-anchor {
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--glass-bg);
+    background: var(--nav-bg-default);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border-top: 1px solid var(--glass-border);
+    border-top: 1px solid var(--nav-border-default);
     flex-direction: column;
     padding: var(--space-6);
     gap: var(--space-4);
@@ -1634,8 +1641,8 @@ h6:hover .header-anchor {
   }
 
   .header.scrolled .nav-menu {
-    background: rgba(255, 255, 255, 0.98);
-    border-top: 1px solid var(--color-border-light);
+    background: var(--nav-bg-scrolled);
+    border-top: 1px solid var(--nav-border-scrolled);
   }
 
   .nav-menu.active {
