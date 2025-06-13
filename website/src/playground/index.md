@@ -131,6 +131,100 @@ description: "Try Osprey programming language online with interactive code examp
         color: #f44747;
     }
     
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+        .playground-container {
+            height: 100vh;
+            min-height: 100vh;
+        }
+        
+        .main {
+            flex-direction: column;
+        }
+        
+        .editor-container {
+            flex: 1;
+            min-height: 60%;
+        }
+        
+        .output-container {
+            width: 100%;
+            height: 40%;
+            border-left: none;
+            border-top: 1px solid #444;
+            min-height: 200px;
+        }
+        
+        .editor-header {
+            padding: 8px 15px;
+        }
+        
+        .header-right {
+            gap: 10px;
+        }
+        
+        .editor-title {
+            gap: 5px;
+            font-size: 13px;
+        }
+        
+        .playground-badge {
+            display: none;
+        }
+        
+        .status {
+            gap: 5px;
+            font-size: 11px;
+        }
+        
+        button {
+            padding: 6px 12px;
+            font-size: 13px;
+            margin-left: 5px;
+        }
+        
+        .output-header {
+            padding: 8px 15px;
+        }
+        
+        #output {
+            padding: 15px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .editor-header, .output-header {
+            padding: 6px 10px;
+        }
+        
+        .header-right {
+            gap: 8px;
+        }
+        
+        .editor-title {
+            font-size: 12px;
+        }
+        
+        .status {
+            font-size: 10px;
+        }
+        
+        button {
+            padding: 5px 8px;
+            font-size: 12px;
+            margin-left: 3px;
+        }
+        
+        #output {
+            padding: 10px;
+            font-size: 13px;
+        }
+        
+        .output-container {
+            min-height: 150px;
+        }
+    }
+    
     button {
         background: #0e639c;
         color: white;
