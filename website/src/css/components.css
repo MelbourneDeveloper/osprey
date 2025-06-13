@@ -591,10 +591,12 @@ p:has(.cta-actions) {
 }
 
 /* ============================================
-   LAYOUT SECTIONS - Unified and Simplified
+   UNIFIED LAYOUT SYSTEM - Consolidated Headers & Sections
    ============================================ */
 
-.hero {
+/* UNIFIED HERO SECTION - For large headers with full layouts */
+.hero,
+.page-hero {
   background: var(--gradient-dark);
   color: white;
   padding: var(--space-24) 0 var(--space-16);
@@ -603,6 +605,13 @@ p:has(.cta-actions) {
   min-height: 90vh;
   width: 100%;
   max-width: none;
+  text-align: center;
+}
+
+/* Hero specific layout adjustments */
+.hero {
+  min-height: 90vh;
+  text-align: left;
 }
 
 .hero .container {
@@ -616,7 +625,20 @@ p:has(.cta-actions) {
   padding: 0 var(--space-8);
 }
 
-.hero::before {
+.page-hero {
+  min-height: auto;
+  padding: var(--space-16) 0 var(--space-12);
+  padding-top: calc(var(--space-16) + 5rem);
+}
+
+.page-hero .container {
+  max-width: var(--container-2xl);
+  margin: 0 auto;
+  padding: 0 var(--space-8);
+}
+
+.hero::before,
+.page-hero::before {
   content: '';
   position: absolute;
   top: 0;
@@ -701,8 +723,36 @@ p:has(.cta-actions) {
   padding-top: 4rem !important;
 }
 
-/* Section Layouts - Unified */
-.section {
+/* UNIFIED PAGE HEADER - For simple headers */
+.page-header,
+.blog-header {
+  background: var(--gradient-dark);
+  color: white;
+  padding: var(--space-16) 0 var(--space-8);
+  text-align: center;
+  margin-top: -5rem;
+  padding-top: calc(var(--space-16) + 5rem);
+}
+
+.page-description,
+.lead {
+  font-size: var(--font-size-xl);
+  opacity: 0.9;
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: var(--line-height-relaxed);
+}
+
+/* UNIFIED CONTENT SECTIONS - Standard layout */
+.section,
+.content-section,
+.about-story,
+.design-principles,
+.philosophy,
+.getting-started,
+.future,
+.blog-index,
+.blog-post {
   padding: var(--space-24) 0;
 }
 
@@ -710,7 +760,12 @@ p:has(.cta-actions) {
   background: var(--color-bg-secondary);
 }
 
-/* CTA Section - Simplified */
+.content-section .container,
+.section .container {
+  padding: 0 var(--space-8);
+}
+
+/* CTA Section - Unified Call-to-Action styling */
 .cta-section {
   background: var(--gradient-primary);
   color: white;
@@ -731,11 +786,51 @@ p:has(.cta-actions) {
   opacity: 0.9;
 }
 
-.cta-buttons {
+.cta-buttons,
+.cta-actions {
   display: flex;
   gap: var(--space-4);
   justify-content: center;
   flex-wrap: wrap;
+}
+
+.cta-content {
+  text-align: center;
+}
+
+.cta-content h2 {
+  margin-bottom: var(--space-4);
+}
+
+.cta-content p {
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--space-8);
+  color: var(--color-text-secondary);
+}
+
+/* Unified two-column layout */
+.two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-16);
+  align-items: center;
+}
+
+.two-column .content {
+  padding-left: var(--space-8);
+  padding-right: var(--space-4);
+}
+
+.two-column .content p {
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.two-column .visual {
+  padding-left: var(--space-4);
+  padding-right: var(--space-8);
 }
 
 /* Code Examples - Stable, No Movement */
@@ -876,42 +971,8 @@ p:has(.cta-actions) {
 }
 
 /* ============================================
-   UNIFIED LAYOUT SYSTEM - Single grid system
+   UNIFIED GRID SYSTEM - Single grid system for all layouts
    ============================================ */
-
-/* Standard content container with proper padding */
-.content-section {
-  padding: var(--space-24) 0;
-}
-
-.content-section .container {
-  padding: 0 var(--space-8);
-}
-
-/* Unified two-column layout */
-.two-column {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-16);
-  align-items: center;
-}
-
-.two-column .content {
-  padding-left: var(--space-8);
-  padding-right: var(--space-4);
-}
-
-.two-column .content p {
-  font-size: var(--font-size-lg);
-  line-height: var(--line-height-relaxed);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-6);
-}
-
-.two-column .visual {
-  padding-left: var(--space-4);
-  padding-right: var(--space-8);
-}
 
 /* UNIFIED GRID SYSTEM - Replace all different grid classes */
 .grid,
@@ -990,28 +1051,8 @@ p:has(.cta-actions) {
 }
 
 /* ============================================
-   PAGE COMPONENTS - Simplified
+   BLOG & PAGE COMPONENTS - Unified styling
    ============================================ */
-
-.page-header {
-  background: var(--gradient-dark);
-  color: white;
-  padding: var(--space-16) 0 var(--space-8);
-  text-align: center;
-}
-
-.page-description {
-  font-size: var(--font-size-xl);
-  opacity: 0.9;
-  max-width: 600px;
-  margin: 0 auto;
-  line-height: var(--line-height-relaxed);
-}
-
-/* Blog Layout */
-.blog-index {
-  padding: var(--space-8) 0 var(--space-24);
-}
 
 .tag {
   background: var(--gradient-accent);
@@ -1033,21 +1074,6 @@ p:has(.cta-actions) {
 
 .author {
   font-style: italic;
-}
-
-/* Blog Post Layout */
-.blog-post {
-  padding: var(--space-8) 0 var(--space-24);
-}
-
-.blog-header {
-  text-align: center;
-  margin-bottom: var(--space-16);
-  padding: var(--space-16) 0;
-  background: var(--gradient-dark);
-  color: white;
-  margin-top: -5rem;
-  padding-top: calc(var(--space-16) + 5rem);
 }
 
 .blog-meta {
@@ -1155,22 +1181,9 @@ p:has(.cta-actions) {
   color: var(--color-text-secondary);
 }
 
-/* About Page Components */
-.page-hero {
-  background: var(--gradient-dark);
-  color: white;
-  padding: var(--space-16) 0 var(--space-12);
-  padding-top: calc(var(--space-16) + 5rem);
-  text-align: center;
-}
-
-.page-hero .lead {
-  font-size: var(--font-size-xl);
-  opacity: 0.9;
-  max-width: 800px;
-  margin: 0 auto;
-  line-height: var(--line-height-relaxed);
-}
+/* ============================================
+   COMPARISON TABLE COMPONENT
+   ============================================ */
 
 .comparison-table {
   margin-top: var(--space-16);

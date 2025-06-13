@@ -156,15 +156,19 @@ h6 {
   color: var(--color-text-secondary) !important;
 }
 
-/* Specific size overrides */
+/* Specific overrides for hero and page headers */
 .page-hero h1,
 .page-header h1 {
   font-size: clamp(var(--font-size-3xl), 6vw, var(--font-size-5xl)) !important;
 }
 
-.section-title {
+/* Unified section title styling - works across all sections */
+.section-title,
+h2.section-title {
   font-size: clamp(var(--font-size-2xl), 4vw, var(--font-size-4xl)) !important;
   text-align: center;
+  margin-bottom: var(--space-8);
+  color: var(--color-text-secondary) !important;
 }
 
 .cta-section h3 {
@@ -300,7 +304,7 @@ code:hover {
   top: var(--space-4);
 }
 
-/* Responsive container sizes */
+/* Unified responsive container sizes */
 @media (max-width: 640px) {
   .container {
     padding: 0 var(--space-4);
