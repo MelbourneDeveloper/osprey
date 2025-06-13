@@ -6,6 +6,8 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 80px;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Base body styling */
@@ -19,6 +21,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   position: relative;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
 }
 
 /* Main content padding to account for fixed header */
@@ -305,6 +310,84 @@ code:hover {
 }
 
 /* Unified responsive container sizes */
+@media (max-width: 320px) {
+  .container {
+    padding: 0 var(--space-2);
+  }
+
+  h1 {
+    font-size: clamp(var(--font-size-2xl), 6vw, var(--font-size-4xl));
+  }
+
+  h2 {
+    font-size: clamp(var(--font-size-xl), 5vw, var(--font-size-3xl));
+  }
+
+  h3 {
+    font-size: clamp(var(--font-size-lg), 4vw, var(--font-size-2xl));
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0 var(--space-3);
+  }
+
+  /* Better mobile typography */
+  body {
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-relaxed);
+  }
+
+  h1 {
+    font-size: clamp(var(--font-size-3xl), 7vw, var(--font-size-5xl));
+    margin-bottom: var(--space-4);
+  }
+
+  h2 {
+    font-size: clamp(var(--font-size-2xl), 6vw, var(--font-size-4xl));
+    margin-bottom: var(--space-4);
+  }
+
+  h3 {
+    font-size: clamp(var(--font-size-xl), 5vw, var(--font-size-3xl));
+    margin-bottom: var(--space-3);
+  }
+
+  h4 {
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--space-2);
+  }
+
+  h5 {
+    font-size: var(--font-size-base);
+    margin-bottom: var(--space-2);
+  }
+
+  h6 {
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-2);
+  }
+
+  p {
+    margin-bottom: var(--space-3);
+    font-size: var(--font-size-sm);
+  }
+
+  /* Optimize code blocks for mobile */
+  pre {
+    padding: var(--space-3);
+    margin: var(--space-4) 0;
+    font-size: var(--font-size-xs);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  code {
+    font-size: var(--font-size-xs);
+  }
+}
+
 @media (max-width: 640px) {
   .container {
     padding: 0 var(--space-4);
@@ -315,4 +398,29 @@ code:hover {
   .container {
     max-width: var(--container-2xl);
   }
+}
+
+/* Prevent horizontal scrolling globally */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Ensure all content respects viewport boundaries */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* Fix for any elements that might cause horizontal overflow */
+img,
+video,
+iframe,
+object,
+embed {
+  max-width: 100%;
+  height: auto;
 }
