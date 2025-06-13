@@ -1769,7 +1769,7 @@ h6:hover .header-anchor {
 }
 
 #table-of-contents+ol a {
-  color: var(--color-primary-600) !important;
+  color: var(--color-primary-300) !important;
   text-decoration: none !important;
   font-weight: var(--font-weight-medium);
   padding: var(--space-2) var(--space-3);
@@ -1805,4 +1805,5 @@ h6:hover .header-anchor {
 #table-of-contents+ol ul a {
   padding: var(--space-1) var(--space-3);
   font-weight: var(--font-weight-normal);
+  color: var(--color-primary-300) !important;
 }
