@@ -2,7 +2,17 @@
 
 A modern functional programming oriented language designed for elegance, safety, and performance. It is written in Go and outputs to LLVM.
 
-## Quick Start
+## Installation
+
+```bash
+# Add the tap
+brew tap melbournedeveloper/osprey
+
+# Install Osprey
+brew install osprey
+```
+
+## Local Development Quick Start
 
 ```bash
 git clone https://github.com/christianfindlay/vexels.git
