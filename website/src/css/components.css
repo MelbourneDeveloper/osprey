@@ -766,7 +766,6 @@ p:has(.cta-actions) {
 .philosophy,
 .getting-started,
 .future,
-.blog-index,
 .blog-post {
   padding: var(--space-24) 0;
 }
@@ -1393,7 +1392,6 @@ h6:hover .header-anchor {
   .philosophy,
   .getting-started,
   .future,
-  .blog-index,
   .blog-post {
     padding: var(--space-12) 0;
   }
