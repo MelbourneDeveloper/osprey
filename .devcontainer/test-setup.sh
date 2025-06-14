@@ -3,13 +3,13 @@
 
 set -e
 
-echo "🧪 Testing Vexels development environment setup..."
+echo "🧪 Testing Osprey development environment setup..."
 echo ""
 
 # Test Go
 echo "🔍 Testing Go..."
 go version
-cd /workspaces/vexels/compiler
+cd /workspaces/osprey/compiler
 go mod tidy
 echo "✅ Go is working!"
 echo ""
@@ -41,14 +41,14 @@ echo ""
 
 # Test compiler build
 echo "🔍 Testing compiler build..."
-cd /workspaces/vexels/compiler
+cd /workspaces/osprey/compiler
 make build
 echo "✅ Compiler builds successfully!"
 echo ""
 
 # Test VS Code extension setup
 echo "🔍 Testing VS Code extension setup..."
-cd /workspaces/vexels/vscode-extension
+cd /workspaces/osprey/vscode-extension
 npm install --silent
 npm run compile
 echo "✅ VS Code extension compiles successfully!"
@@ -63,5 +63,5 @@ echo "- ✅ LLVM $(llc --version | head -1 | cut -d' ' -f3)"
 echo "- ✅ Node.js $(node --version)"
 echo "- ✅ npm $(npm --version)"
 echo "- ✅ Rust $(rustc --version | cut -d' ' -f2)"
-echo "- ✅ Vexels compiler builds"
+echo "- ✅ Osprey compiler builds"
 echo "- ✅ VS Code extension compiles" 

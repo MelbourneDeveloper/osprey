@@ -1,6 +1,6 @@
-# Vexels Development Container
+# Osprey Development Container
 
-This directory contains configuration for a development container that provides all necessary dependencies for Vexels compiler and VS Code extension development.
+This directory contains configuration for a development container that provides all necessary dependencies for the Osprey compiler and VS Code extension development.
 
 ## Features
 
@@ -22,7 +22,7 @@ This directory contains configuration for a development container that provides 
 
 ### Opening the Project in the Dev Container
 
-1. Open the `vexels.code-workspace` file in VS Code
+1. Open the `osprey.code-workspace` file in VS Code
 2. When prompted to "Reopen in Container", click "Reopen in Container"
    - Alternatively, press F1, type "Dev Containers: Reopen in Container" and press Enter
 
@@ -34,7 +34,7 @@ The container will automatically run the post-create script which sets up both t
 - `setup-all.sh` - Runs all setup scripts and tests everything
 
 ### Individual Scripts
-- `build-compiler.sh` - Builds the Vexels compiler
+- `build-compiler.sh` - Builds the Osprey compiler
 - `setup-vscode-extension.sh` - Sets up the VS Code extension
 - `test-setup.sh` - Tests that all tools are working correctly
 
@@ -55,7 +55,7 @@ The container will automatically run the post-create script which sets up both t
 
 Navigate to the compiler directory and use make commands:
 ```bash
-cd /workspaces/vexels/compiler
+cd /workspaces/osprey/compiler
 make build          # Build the compiler
 make test           # Run all tests
 make test-llvm      # Run LLVM tests only
@@ -67,7 +67,7 @@ make clean          # Clean build artifacts
 
 Navigate to the extension directory:
 ```bash
-cd /workspaces/vexels/vscode-extension
+cd /workspaces/osprey/vscode-extension
 npm install         # Install dependencies
 npm run compile     # Compile the extension
 npm run watch       # Watch for changes
@@ -82,8 +82,8 @@ To debug the extension:
 ## Project Structure
 
 ```
-/workspaces/vexels/
-├── compiler/           # Vexels compiler (Go + ANTLR + LLVM)
+/workspaces/osprey/
+├── compiler/           # Osprey compiler (Go + ANTLR + LLVM)
 ├── vscode-extension/   # VS Code extension (TypeScript)
 ├── webcompiler/        # Web compiler (ignored in dev container)
 └── .devcontainer/      # Dev container configuration
@@ -128,6 +128,6 @@ rustc --version        # Rust
 ## Notes
 
 - The container uses a non-root user `vscode` to avoid permission issues
-- The workspace is mounted at `/workspaces/vexels`
+- The workspace is mounted at `/workspaces/osprey`
 - All tools are pre-configured and ready to use
 - The post-create script automatically sets up both projects
