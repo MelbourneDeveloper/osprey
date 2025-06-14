@@ -4,14 +4,14 @@ title: "About Osprey"
 description: "Osprey's design principles and language philosophy"
 ---
 
-<section class="page-hero">
+<header class="page-header">
   <div class="container">
     <h1>About Osprey</h1>
-    <p class="lead">
+    <p class="page-description">
       A functional programming language designed for safety, elegance, and performance.
     </p>
   </div>
-</section>
+</header>
 
 <section class="about-story">
   <div class="container">
