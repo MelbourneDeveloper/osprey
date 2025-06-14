@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "Language Keywords"
 description: "Complete reference for all language keywords in Osprey"
 ---

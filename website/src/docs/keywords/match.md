@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "match (Keyword)"
 description: "Pattern matching expression. Used for destructuring values and control flow based on patterns."
 ---

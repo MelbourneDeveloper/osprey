@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "fn (Keyword)"
 description: "Function declaration keyword. Used to define functions with parameters and return types."
 ---

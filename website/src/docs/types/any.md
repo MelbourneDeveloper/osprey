@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "Any (Type)"
 description: "A type that can represent any value. Useful for generic programming but should be used carefully as it bypasses type checking."
 ---

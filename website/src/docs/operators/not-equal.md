@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "!= (Inequality Operator)"
 description: "Compares two values for inequality."
 ---

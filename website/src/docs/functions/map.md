@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "map (Function)"
 description: "Transforms each element in an iterator using a function, returning a new iterator."
 ---

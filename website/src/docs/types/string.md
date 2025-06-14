@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "String (Type)"
 description: "A sequence of characters representing text. Supports string interpolation and escape sequences."
 ---

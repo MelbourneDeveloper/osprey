@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "Built-in Functions"
 description: "Complete reference for all built-in functions in Osprey"
 ---

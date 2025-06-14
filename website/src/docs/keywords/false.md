@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "false (Keyword)"
 description: "Boolean literal representing the logical value false."
 ---

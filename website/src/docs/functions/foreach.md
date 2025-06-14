@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "forEach (Function)"
 description: "Applies a function to each element in an iterator."
 ---

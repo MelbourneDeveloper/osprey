@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "+ (Addition Operator)"
 description: "Adds two numbers together."
 ---

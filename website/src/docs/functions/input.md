@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "input (Function)"
 description: "Reads an integer from the user's input."
 ---

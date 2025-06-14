@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "- (Subtraction Operator)"
 description: "Subtracts the second number from the first."
 ---

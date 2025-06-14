@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "Built-in Types"
 description: "Complete reference for all built-in types in Osprey"
 ---

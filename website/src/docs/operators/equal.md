@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "== (Equality Operator)"
 description: "Compares two values for equality."
 ---

@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "<= (Less Than or Equal Operator)"
 description: "Checks if the first value is less than or equal to the second."
 ---

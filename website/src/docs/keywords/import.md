@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "import (Keyword)"
 description: "Import declaration keyword. Used to bring modules and their exports into the current scope."
 ---
