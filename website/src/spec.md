@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
 date: 2025-06-14

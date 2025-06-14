@@ -10,6 +10,7 @@ try {
   
   // Add front matter to make it render as a blog-style page
   const frontMatter = `---
+layout: page
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
 date: ${new Date().toISOString().split('T')[0]}
