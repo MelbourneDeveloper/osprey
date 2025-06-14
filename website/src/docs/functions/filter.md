@@ -1,4 +1,5 @@
 ---
+layout: page.njk
 title: "filter (Function)"
 description: "Filters elements in an iterator based on a predicate function."
 ---

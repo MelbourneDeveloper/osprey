@@ -1,4 +1,5 @@
 ---
+layout: page.njk
 title: "API Reference - Osprey Programming Language"
 description: "Complete reference documentation for the Osprey programming language"
 ---

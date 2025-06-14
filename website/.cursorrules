@@ -4,6 +4,8 @@
 
 ----------CRITICAL--------------
 
+**NO HTML/CSS IN MARKDOWN FILES**
+
 **NEVER DUPLICATE CODE.** Edit code in place. Do not create new versions of the same code. Always edit directly without duplicating.
 
 **AIM TO REDUCE THE NUMBER OF CSS CLASSES** Make sure you search for classes before creating new ones
