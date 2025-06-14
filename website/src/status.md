@@ -1,5 +1,4 @@
 ---
-layout: base.njk
 title: Feature Status
 description: Current implementation status of Osprey language features
 date: 2025-01-17
