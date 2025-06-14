@@ -2,6 +2,8 @@
 layout: base.njk
 title: "Osprey Playground"
 description: "Try Osprey programming language online with interactive code examples and real-time compilation"
+---
+
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.min.css">
 
 <style>

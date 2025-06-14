@@ -3,30 +3,37 @@ layout: base
 ---
 
 <article class="blog-post">
-  <header class="blog-header">
+  <header class="page-header">
     <div class="container">
-      <div class="blog-meta">
-        {% if tags %}
-          <div class="blog-tags">
-            {% for tag in tags %}
-              {% if tag != "blog" %}
-                <span class="tag">{{ tag }}</span>
-              {% endif %}
-            {% endfor %}
+      {% if tags and tags.includes('blog') %}
+        <div class="blog-meta">
+          {% if tags %}
+            <div class="blog-tags">
+              {% for tag in tags %}
+                {% if tag != "blog" %}
+                  <span class="tag">{{ tag }}</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          <time class="blog-date" datetime="{{ date | htmlDateString }}">
+            {{ date | readableDate }}
+          </time>
+        </div>
+        <h1 class="blog-title">{{ title }}</h1>
+        {% if excerpt %}
+          <p class="blog-excerpt">{{ excerpt }}</p>
+        {% endif %}
+        {% if author %}
+          <div class="blog-author">
+            <span>By {{ author }}</span>
           </div>
         {% endif %}
-        <time class="blog-date" datetime="{{ date | htmlDateString }}">
-          {{ date | readableDate }}
-        </time>
-      </div>
-      <h1 class="blog-title">{{ title }}</h1>
-      {% if excerpt %}
-        <p class="blog-excerpt">{{ excerpt }}</p>
-      {% endif %}
-      {% if author %}
-        <div class="blog-author">
-          <span>By {{ author }}</span>
-        </div>
+      {% else %}
+        <h1>{{ title }}</h1>
+        {% if description %}
+          <p class="lead">{{ description }}</p>
+        {% endif %}
       {% endif %}
     </div>
   </header>

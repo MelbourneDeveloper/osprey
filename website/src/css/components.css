@@ -731,14 +731,22 @@ p:has(.cta-actions) {
 }
 
 /* UNIFIED PAGE HEADER - For simple headers */
-.page-header,
-.blog-header {
+.page-header {
   background: var(--gradient-dark);
   color: white;
-  padding: var(--space-16) 0 var(--space-8);
+  padding: var(--space-8) 0 var(--space-8);
   text-align: center;
-  margin-top: -5rem;
-  padding-top: calc(var(--space-16) + 5rem);
+  margin-top: 0;
+  padding-top: var(--space-8);
+}
+
+.page-header h1,
+.page-header h2,
+.page-header h3,
+.page-header h4,
+.page-header h5,
+.page-header h6 {
+  color: white !important;
 }
 
 .page-description,
