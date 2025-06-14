@@ -145,11 +145,11 @@ module.exports = function (eleventyConfig) {
   });
 
   // Layout aliases - make all markdown files use blog layout by default
-  eleventyConfig.addLayoutAlias('default', 'blog.njk');
-  eleventyConfig.addLayoutAlias('docs', 'blog.njk');
+  eleventyConfig.addLayoutAlias('default', 'base.njk');
+  eleventyConfig.addLayoutAlias('docs', 'base.njk');
 
   // Set default layout for all markdown files
-  eleventyConfig.addGlobalData("layout", "blog");
+  eleventyConfig.addGlobalData("layout", "base");
 
   // Collections
   eleventyConfig.addCollection("blog", function (collectionApi) {

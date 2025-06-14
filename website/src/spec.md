@@ -1,12 +1,15 @@
 ---
-layout: base.njk
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
-date: 2025-06-13
+date: 2025-06-14
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/"
 ---
+
+**Version:** 0.1.0-alpha
+**Date:** June 2025
+**Author** Christian Findlay
 
 1. [Introduction](#1-introduction)
    - [Completeness](#11-completeness)
@@ -3169,6 +3172,3 @@ Osprey is a modern functional programming language with:
 **End of Specification**
 
 This specification defines the complete syntax and semantics of the Osprey programming language, including its revolutionary fiber-isolated module system and lightweight concurrency features. The accompanying `osprey.g4` grammar file provides the formal ANTLR4 grammar definition for parsing.
-
-  </div>
-</div>
