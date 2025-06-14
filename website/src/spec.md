@@ -8,23 +8,6 @@ author: "Christian Findlay"
 permalink: "/spec/"
 ---
 
-<header class="page-header">
-  <div class="container">
-    <h1>{{ title }}</h1>
-    <p class="page-description">{{ description }}</p>
-    <div class="blog-meta">
-      <span class="blog-date">Version: 0.1.0-alpha</span>
-      <span class="blog-date">June 2025</span>
-      <span class="author">By {{ author }}</span>
-    </div>
-  </div>
-</header>
-
-<div class="content-section">
-  <div class="container">
-
-## Table of Contents
-
 1. [Introduction](#1-introduction)
    - [Completeness](#11-completeness)
    - [Principles](#12-principles)

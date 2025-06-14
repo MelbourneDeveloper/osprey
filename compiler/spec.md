@@ -2,8 +2,6 @@
 **Date:** June 2025
 **Author** Christian Findlay
 
-## Table of Contents
-
 1. [Introduction](#1-introduction)
    - [Completeness](#11-completeness)
    - [Principles](#12-principles)

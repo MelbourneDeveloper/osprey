@@ -32,12 +32,10 @@ main {
   /* Height of fixed header */
 }
 
-/* Enhanced container */
 .container {
   width: 100%;
   max-width: var(--container-2xl);
   margin: 0 auto;
-  padding: 0 var(--space-6);
 }
 
 /* ========================================================================
