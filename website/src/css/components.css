@@ -1100,29 +1100,8 @@ p:has(.cta-actions) {
   flex-wrap: wrap;
 }
 
-.blog-tags {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
 .blog-date {
   font-size: var(--font-size-sm);
-  opacity: 0.8;
-}
-
-.blog-excerpt {
-  font-size: var(--font-size-xl);
-  color: var(--color-neutral-0) !important;
-  opacity: 0.95;
-  max-width: 800px;
-  margin: 0 auto;
-  line-height: var(--line-height-relaxed);
-}
-
-.blog-author {
-  margin-top: var(--space-4);
-  font-style: italic;
   opacity: 0.8;
 }
 
@@ -1171,23 +1150,7 @@ p:has(.cta-actions) {
   font-weight: var(--font-weight-bold);
 }
 
-.blog-navigation {
-  margin-top: var(--space-16);
-  text-align: center;
-}
 
-.back-to-blog {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-primary-300);
-  text-decoration: none;
-  font-weight: var(--font-weight-medium);
-}
-
-.back-to-blog:hover {
-  text-decoration: underline;
-}
 
 /* Empty State */
 .empty-state {
