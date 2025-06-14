@@ -194,48 +194,7 @@ code[class*="language-"] ::selection {
   color: inherit;
 }
 
-/* ========================================================================
-   LINE NUMBERS AND HIGHLIGHTING
-   ======================================================================== */
 
-.line-highlight {
-  position: absolute;
-  left: 0;
-  right: 0;
-  padding: inherit;
-  margin-top: 1em;
-  background: rgba(102, 126, 234, 0.08);
-  background: linear-gradient(to right, rgba(102, 126, 234, 0.1) 70%, rgba(102, 126, 234, 0));
-  pointer-events: none;
-  line-height: inherit;
-  white-space: pre;
-}
-
-.line-numbers .line-numbers-rows {
-  position: absolute;
-  pointer-events: none;
-  top: 0;
-  font-size: 100%;
-  left: -3.8em;
-  width: 3em;
-  letter-spacing: -1px;
-  border-right: 1px solid rgba(102, 126, 234, 0.2);
-  user-select: none;
-}
-
-.line-numbers-rows>span {
-  pointer-events: none;
-  display: block;
-  counter-increment: linenumber;
-}
-
-.line-numbers-rows>span:before {
-  content: counter(linenumber);
-  color: #64748b;
-  display: block;
-  padding-right: 0.8em;
-  text-align: right;
-}
 
 /* ========================================================================
    SCROLLBAR AND HOVER EFFECTS

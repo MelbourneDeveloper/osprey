@@ -320,10 +320,7 @@
   font-size: var(--font-size-lg);
 }
 
-.btn-sm {
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--font-size-sm);
-}
+
 
 /* ============================================
    UNIFIED CARD SYSTEM - Two types only
@@ -487,14 +484,7 @@ p:has(.cta-actions) {
   color: var(--color-primary-600);
 }
 
-.card-tagline {
-  font-size: var(--font-size-sm);
-  color: var(--color-primary-600);
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+
 
 .card-content {
   flex-grow: 1;
@@ -749,8 +739,7 @@ p:has(.cta-actions) {
   color: white !important;
 }
 
-.page-description,
-.lead {
+.page-description {
   font-size: var(--font-size-xl);
   opacity: 0.9;
   max-width: 800px;
@@ -1047,22 +1036,7 @@ p:has(.cta-actions) {
   transition-delay: 0.4s;
 }
 
-/* Loading Spinner */
-.loading {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 3px solid rgba(102, 126, 234, 0.3);
-  border-radius: 50%;
-  border-top-color: var(--color-primary-600);
-  animation: spin 1s ease-in-out infinite;
-}
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 /* ============================================
    BLOG & PAGE COMPONENTS - Unified styling
