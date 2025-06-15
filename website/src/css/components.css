@@ -2,18 +2,15 @@
    Component Styles - State of the Art
    ============================================ */
 
-/* Header & Navigation - Clean and Consistent */
+/* Header & Navigation - Clean and Opaque */
 .header {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-bottom: 1px solid var(--glass-border);
+  background: rgba(0, 20, 40, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: var(--z-100);
-  animation: slideDown 0.6s var(--ease-out-back);
   transition: all var(--transition-base);
 }
 
@@ -1506,13 +1503,11 @@ h6:hover .header-anchor {
 @media (max-width: 768px) {
   .nav-menu {
     position: fixed;
-    top: 100%;
+    top: 5rem;
     left: 0;
     right: 0;
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
-    border-top: 1px solid var(--glass-border);
+    background: rgba(0, 20, 40, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     flex-direction: column;
     padding: var(--space-6);
     gap: var(--space-4);
