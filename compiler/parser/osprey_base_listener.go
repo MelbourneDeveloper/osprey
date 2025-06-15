@@ -56,11 +56,11 @@ func (s *BaseospreyListener) EnterPluginContent(ctx *PluginContentContext) {}
 // ExitPluginContent is called when production pluginContent is exited.
 func (s *BaseospreyListener) ExitPluginContent(ctx *PluginContentContext) {}
 
-// EnterPluginName is called when production pluginName is entered.
-func (s *BaseospreyListener) EnterPluginName(ctx *PluginNameContext) {}
+// EnterPluginToken is called when production pluginToken is entered.
+func (s *BaseospreyListener) EnterPluginToken(ctx *PluginTokenContext) {}
 
-// ExitPluginName is called when production pluginName is exited.
-func (s *BaseospreyListener) ExitPluginName(ctx *PluginNameContext) {}
+// ExitPluginToken is called when production pluginToken is exited.
+func (s *BaseospreyListener) ExitPluginToken(ctx *PluginTokenContext) {}
 
 // EnterPluginReturnType is called when production pluginReturnType is entered.
 func (s *BaseospreyListener) EnterPluginReturnType(ctx *PluginReturnTypeContext) {}

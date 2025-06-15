@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/christianfindlay/osprey/parser"
 )
 
@@ -27,15 +29,24 @@ func (b *Builder) buildLetDecl(ctx parser.ILetDeclContext) *LetDeclaration {
 }
 
 func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) Statement {
-	name := ctx.ID().GetText()
+	allIDs := ctx.AllID()
 	params := b.buildParameterList(ctx.ParamList())
 
-	// Check if this is a plugin function
-	if ctx.PluginName() != nil {
-		return b.buildPluginFunctionDeclaration(ctx, name, params)
+	// Check if this is a plugin function (has 2 IDs and pluginContent rule)
+	if len(allIDs) == 2 && ctx.PluginContent() != nil {
+		pluginName := allIDs[0].GetText()
+		functionName := allIDs[1].GetText()
+		return b.buildPluginFunctionDeclaration(ctx, pluginName, functionName, params)
 	}
 
-	return b.buildRegularFunctionDeclaration(ctx, name, params)
+	// Regular function (has 1 ID)
+	if len(allIDs) >= 1 {
+		functionName := allIDs[0].GetText()
+		return b.buildRegularFunctionDeclaration(ctx, functionName, params)
+	}
+
+	// This shouldn't happen with a valid grammar
+	panic("Function declaration has no identifiers")
 }
 
 func (b *Builder) buildParameterList(paramListCtx parser.IParamListContext) []Parameter {
@@ -60,10 +71,8 @@ func (b *Builder) buildParameterList(paramListCtx parser.IParamListContext) []Pa
 }
 
 func (b *Builder) buildPluginFunctionDeclaration(
-	ctx parser.IFnDeclContext, name string, params []Parameter,
+	ctx parser.IFnDeclContext, pluginName string, functionName string, params []Parameter,
 ) *PluginFunctionDeclaration {
-	pluginName := ctx.PluginName().ID().GetText()
-
 	// Handle return type specification (as vs ->)
 	var returnType *TypeExpression
 	var isTypeGeneration bool
@@ -77,16 +86,24 @@ func (b *Builder) buildPluginFunctionDeclaration(
 		}
 	}
 
-	// Get the plugin content (everything after the = sign)
+	// Get the plugin content from the pluginContent rule (excluding the semicolon)
 	var pluginContent string
 	if ctx.PluginContent() != nil {
-		// Extract the raw plugin content
-		pluginContent = ctx.PluginContent().GetText()
+		// Get the text from the pluginContent rule
+		fullText := ctx.PluginContent().GetText()
+		// Remove the trailing semicolon
+		if strings.HasSuffix(fullText, ";") {
+			pluginContent = strings.TrimSuffix(fullText, ";")
+		} else {
+			pluginContent = fullText
+		}
+		// Trim any leading/trailing whitespace
+		pluginContent = strings.TrimSpace(pluginContent)
 	}
 
 	return &PluginFunctionDeclaration{
 		PluginName:       pluginName,
-		FunctionName:     name,
+		FunctionName:     functionName,
 		Parameters:       params,
 		ReturnType:       returnType,
 		IsTypeGeneration: isTypeGeneration,
@@ -95,7 +112,7 @@ func (b *Builder) buildPluginFunctionDeclaration(
 }
 
 func (b *Builder) buildRegularFunctionDeclaration(
-	ctx parser.IFnDeclContext, name string, params []Parameter,
+	ctx parser.IFnDeclContext, functionName string, params []Parameter,
 ) *FunctionDeclaration {
 	// Handle both expression bodies (= expr) and block bodies ({ ... })
 	var body Expression
@@ -107,17 +124,14 @@ func (b *Builder) buildRegularFunctionDeclaration(
 		body = b.buildBlockBody(ctx.BlockBody())
 	}
 
-	// Parse return type annotation if present
+	// Parse return type annotation if present (for regular functions, use ARROW type)
 	var returnType *TypeExpression
-	if ctx.PluginReturnType() != nil {
-		returnTypeCtx := ctx.PluginReturnType()
-		if returnTypeCtx.Type_() != nil {
-			returnType = b.buildTypeExpression(returnTypeCtx.Type_())
-		}
+	if ctx.Type_() != nil {
+		returnType = b.buildTypeExpression(ctx.Type_())
 	}
 
 	return &FunctionDeclaration{
-		Name:       name,
+		Name:       functionName,
 		Parameters: params,
 		ReturnType: returnType,
 		Body:       body,

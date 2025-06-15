@@ -18,11 +18,12 @@ importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
 
-fnDecl          : docComment? FN pluginName ID LPAREN paramList? RPAREN pluginReturnType? EQ expr        // Plugin function  
-                | docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE)    // Regular function
+fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE)                    // Regular function
+                | docComment? FN ID ID LPAREN paramList? RPAREN pluginReturnType? EQ pluginContent        // Plugin function: fn pluginName functionName(...) = content;
                 ;
 
-pluginName      : ID ;
+pluginContent   : pluginToken+ SEMI ;
+pluginToken     : ~SEMI | ANY_CHAR ;
 
 pluginReturnType : ARROW type          // -> Type (existing type)
                  | AS type             // as Type (generate type)
@@ -277,6 +278,6 @@ ID          : [a-zA-Z_][a-zA-Z0-9_]* ;
 WS          : [ \t\r\n]+ -> skip ;
 DOC_COMMENT : '///' ~[\r\n]* ;
 COMMENT     : '//' ~[\r\n]* -> skip ;
-// PLUGIN_CONTENT must be last to avoid conflicts - matches everything until newline
-PLUGIN_CONTENT : ~[\r\n]+ ;
+// Catch any character for plugin content - must be last
+ANY_CHAR    : . ;
 

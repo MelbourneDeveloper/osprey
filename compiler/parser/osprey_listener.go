@@ -25,8 +25,8 @@ type ospreyListener interface {
 	// EnterPluginContent is called when entering the pluginContent production.
 	EnterPluginContent(c *PluginContentContext)
 
-	// EnterPluginName is called when entering the pluginName production.
-	EnterPluginName(c *PluginNameContext)
+	// EnterPluginToken is called when entering the pluginToken production.
+	EnterPluginToken(c *PluginTokenContext)
 
 	// EnterPluginReturnType is called when entering the pluginReturnType production.
 	EnterPluginReturnType(c *PluginReturnTypeContext)
@@ -202,8 +202,8 @@ type ospreyListener interface {
 	// ExitPluginContent is called when exiting the pluginContent production.
 	ExitPluginContent(c *PluginContentContext)
 
-	// ExitPluginName is called when exiting the pluginName production.
-	ExitPluginName(c *PluginNameContext)
+	// ExitPluginToken is called when exiting the pluginToken production.
+	ExitPluginToken(c *PluginTokenContext)
 
 	// ExitPluginReturnType is called when exiting the pluginReturnType production.
 	ExitPluginReturnType(c *PluginReturnTypeContext)

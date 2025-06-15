@@ -1,0 +1,1 @@
+fn sql test(param) = SELECT * FROM users WHERE id = $param;
