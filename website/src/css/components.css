@@ -1701,8 +1701,8 @@ h6:hover .header-anchor {
 
 
 
-/* Table of Contents Styling - Target the OL that comes after the heading */
-#table-of-contents+ol {
+/* Table of Contents Styling - Robust class-based selector */
+.table-of-contents ol {
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -1714,11 +1714,11 @@ h6:hover .header-anchor {
   list-style: none;
 }
 
-#table-of-contents+ol li {
+.table-of-contents ol li {
   margin-bottom: var(--space-1);
 }
 
-#table-of-contents+ol a {
+.table-of-contents ol a {
   color: var(--color-primary-300) !important;
   text-decoration: none !important;
   font-weight: var(--font-weight-medium);
@@ -1730,29 +1730,29 @@ h6:hover .header-anchor {
   border-left: 3px solid transparent;
 }
 
-#table-of-contents+ol a::after {
+.table-of-contents ol a::after {
   display: none !important;
 }
 
-#table-of-contents+ol a:hover {
+.table-of-contents ol a:hover {
   color: white !important;
   background: var(--color-primary-600);
   border-left-color: var(--color-primary-400);
   transform: translateX(var(--space-1));
 }
 
-#table-of-contents+ol ul {
+.table-of-contents ol ul {
   list-style: none;
   margin-top: var(--space-2);
   margin-left: var(--space-4);
   padding: 0;
 }
 
-#table-of-contents+ol ul li {
+.table-of-contents ol ul li {
   font-size: var(--font-size-sm);
 }
 
-#table-of-contents+ol ul a {
+.table-of-contents ol ul a {
   padding: var(--space-1) var(--space-3);
   font-weight: var(--font-weight-normal);
   color: var(--color-primary-300) !important;
