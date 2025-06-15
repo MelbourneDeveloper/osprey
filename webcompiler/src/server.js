@@ -65,7 +65,7 @@ app.post('/api/compile', async (req, res) => {
     }
 
     try {
-        const result = await runOspreyCompiler(['--ast'], code)
+        const result = await runOspreyCompiler(['--sandbox', '--ast'], code)
         console.log('✅ Compile success, output length:', result.stdout.length)
         res.json({ success: true, output: result.stdout })
     } catch (error) {
@@ -85,7 +85,7 @@ app.post('/api/run', async (req, res) => {
     }
 
     try {
-        const result = await runOspreyCompiler(['--run'], code)
+        const result = await runOspreyCompiler(['--sandbox', '--run'], code)
         console.log('✅ Run success, output length:', result.stdout.length)
         res.json({ success: true, output: result.stdout })
     } catch (error) {
@@ -95,6 +95,7 @@ app.post('/api/run', async (req, res) => {
 })
 
 // Helper function to run Osprey compiler
+// Always uses --sandbox flag for security (disables HTTP, WebSocket, file system, and FFI access)
 function runOspreyCompiler(args, code = '') {
     return new Promise(async (resolve, reject) => {
         // Ensure the temp directory exists

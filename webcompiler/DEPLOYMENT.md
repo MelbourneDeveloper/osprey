@@ -1,5 +1,16 @@
 # Osprey Web Compiler Deployment Guide
 
+## Security Features
+
+The Osprey Web Compiler runs in sandbox mode for security:
+- **Sandbox Mode**: All code execution uses `--sandbox` flag
+- **HTTP Disabled**: No HTTP requests allowed
+- **WebSocket Disabled**: No WebSocket connections allowed  
+- **File System Disabled**: No file read/write operations
+- **FFI Disabled**: No foreign function interface access
+
+This ensures user code cannot perform potentially dangerous operations.
+
 ## AWS ECR + ECS Deployment (Production)
 
 ### Prerequisites
@@ -190,6 +201,8 @@ ports:
 
 ## Security
 
+- **Osprey Sandbox Mode**: All code execution runs with `--sandbox` flag
+- **Restricted Operations**: HTTP, WebSocket, file system, and FFI access disabled
 - Container runs as non-root user (UID 1001)
 - Multi-stage build minimizes attack surface
 - Health checks for reliability
