@@ -290,46 +290,55 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	fn *ir.Func,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
-	// Check if function has multiple parameters and enforce named arguments
+	if err := g.validateFunctionCallArguments(funcName, callExpr); err != nil {
+		return nil, err
+	}
+
+	if len(callExpr.NamedArguments) > 0 {
+		return g.handleNamedArguments(funcName, fn, callExpr)
+	}
+
+	return g.handlePositionalArguments(funcName, fn, callExpr)
+}
+
+func (g *LLVMGenerator) validateFunctionCallArguments(funcName string, callExpr *ast.CallExpression) error {
 	params, paramExists := g.functionParameters[funcName]
 	if paramExists && len(params) > 1 {
-		// Multi-parameter function - MUST use named arguments
+		if len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
+			example := g.buildNamedArgumentsExample(params)
+			return WrapFunctionRequiresNamed(funcName, len(params), example)
+		}
 		if len(callExpr.NamedArguments) == 0 {
 			example := g.buildNamedArgumentsExample(params)
-
-			return nil, WrapFunctionRequiresNamed(funcName, len(params), example)
+			return WrapFunctionRequiresNamed(funcName, len(params), example)
 		}
+	}
+	return nil
+}
 
-		if len(callExpr.Arguments) > 0 {
-			example := g.buildNamedArgumentsExample(params)
-
-			return nil, WrapFunctionRequiresNamed(funcName, len(params), example)
+func (g *LLVMGenerator) handleNamedArguments(
+	funcName string, fn *ir.Func, callExpr *ast.CallExpression,
+) (value.Value, error) {
+	for _, namedArg := range callExpr.NamedArguments {
+		if err := g.validateNotAnyType(namedArg.Value, AnyOpFunctionArgument); err != nil {
+			return nil, WrapAnyDirectFunctionArg(funcName, "unknown")
 		}
 	}
 
-	// Handle named arguments vs positional arguments
-	if len(callExpr.NamedArguments) > 0 {
-		// Validate named arguments are not of type 'any'
-		for _, namedArg := range callExpr.NamedArguments {
-			if err := g.validateNotAnyType(namedArg.Value, AnyOpFunctionArgument); err != nil {
-				return nil, WrapAnyDirectFunctionArg(funcName, "unknown")
-			}
-		}
-
-		// Named arguments - need to reorder them to match function signature
-		args, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
-		if err != nil {
-			return nil, err
-		}
-
-		return g.builder.NewCall(fn, args...), nil
+	args, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
+	if err != nil {
+		return nil, err
 	}
 
-	// Positional arguments (traditional)
+	return g.builder.NewCall(fn, args...), nil
+}
+
+func (g *LLVMGenerator) handlePositionalArguments(
+	funcName string, fn *ir.Func, callExpr *ast.CallExpression,
+) (value.Value, error) {
 	args := make([]value.Value, len(callExpr.Arguments))
 
 	for i, arg := range callExpr.Arguments {
-		// Validate that argument is not of type 'any'
 		if err := g.validateNotAnyType(arg, AnyOpFunctionArgument); err != nil {
 			return nil, WrapAnyDirectFunctionArg(funcName, "unknown")
 		}

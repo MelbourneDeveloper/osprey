@@ -163,10 +163,12 @@ func validateParameterType(t *testing.T, generator *codegen.LLVMGenerator, expec
 	function := generator.GetFunction(testFuncName)
 	if function == nil {
 		t.Fatal("Function not found after declaration")
+		return // This helps staticcheck understand that function is not nil after this point
 	}
 
 	if len(function.Params) == 0 {
 		t.Fatal("Function has no parameters")
+		return
 	}
 
 	paramType := function.Params[0].Type()

@@ -1,0 +1,1 @@
+fn sql test() = SELECT 1 

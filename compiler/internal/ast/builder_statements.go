@@ -26,19 +26,28 @@ func (b *Builder) buildLetDecl(ctx parser.ILetDeclContext) *LetDeclaration {
 	}
 }
 
-func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
+func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) Statement {
 	name := ctx.ID().GetText()
+	params := b.buildParameterList(ctx.ParamList())
 
+	// Check if this is a plugin function
+	if ctx.PluginName() != nil {
+		return b.buildPluginFunctionDeclaration(ctx, name, params)
+	}
+
+	return b.buildRegularFunctionDeclaration(ctx, name, params)
+}
+
+func (b *Builder) buildParameterList(paramListCtx parser.IParamListContext) []Parameter {
 	params := make([]Parameter, 0)
 
-	if ctx.ParamList() != nil {
-		for _, paramCtx := range ctx.ParamList().AllParam() {
+	if paramListCtx != nil {
+		for _, paramCtx := range paramListCtx.AllParam() {
 			param := Parameter{
 				Name: paramCtx.ID().GetText(),
-				Type: nil, // Parse type annotation if present
+				Type: nil,
 			}
 
-			// Parse parameter type annotation if present
 			if paramCtx.Type_() != nil {
 				param.Type = b.buildTypeExpression(paramCtx.Type_())
 			}
@@ -47,6 +56,47 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		}
 	}
 
+	return params
+}
+
+func (b *Builder) buildPluginFunctionDeclaration(
+	ctx parser.IFnDeclContext, name string, params []Parameter,
+) *PluginFunctionDeclaration {
+	pluginName := ctx.PluginName().ID().GetText()
+
+	// Handle return type specification (as vs ->)
+	var returnType *TypeExpression
+	var isTypeGeneration bool
+
+	if ctx.PluginReturnType() != nil {
+		returnTypeCtx := ctx.PluginReturnType()
+		if returnTypeCtx.Type_() != nil {
+			returnType = b.buildTypeExpression(returnTypeCtx.Type_())
+			// Check if it's "as" (type generation) or "->" (existing type)
+			isTypeGeneration = returnTypeCtx.AS() != nil
+		}
+	}
+
+	// Get the plugin content (everything after the = sign)
+	var pluginContent string
+	if ctx.PluginContent() != nil {
+		// Extract the raw plugin content
+		pluginContent = ctx.PluginContent().GetText()
+	}
+
+	return &PluginFunctionDeclaration{
+		PluginName:       pluginName,
+		FunctionName:     name,
+		Parameters:       params,
+		ReturnType:       returnType,
+		IsTypeGeneration: isTypeGeneration,
+		PluginContent:    pluginContent,
+	}
+}
+
+func (b *Builder) buildRegularFunctionDeclaration(
+	ctx parser.IFnDeclContext, name string, params []Parameter,
+) *FunctionDeclaration {
 	// Handle both expression bodies (= expr) and block bodies ({ ... })
 	var body Expression
 	if ctx.Expr() != nil {
@@ -59,8 +109,11 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 
 	// Parse return type annotation if present
 	var returnType *TypeExpression
-	if ctx.Type_() != nil {
-		returnType = b.buildTypeExpression(ctx.Type_())
+	if ctx.PluginReturnType() != nil {
+		returnTypeCtx := ctx.PluginReturnType()
+		if returnTypeCtx.Type_() != nil {
+			returnType = b.buildTypeExpression(returnTypeCtx.Type_())
+		}
 	}
 
 	return &FunctionDeclaration{
@@ -192,7 +245,7 @@ func (b *Builder) buildTypeExpression(ctx parser.ITypeContext) *TypeExpression {
 
 	return &TypeExpression{
 		Name: ctx.ID().GetText(),
-		// TODO: Add support for generic types and arrays when needed
+		// TODO: Add support for generic types and arrays when the parser context supports them
 	}
 }
 

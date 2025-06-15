@@ -18,7 +18,15 @@ importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
 
-fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE) ;
+fnDecl          : docComment? FN pluginName ID LPAREN paramList? RPAREN pluginReturnType? EQ expr        // Plugin function  
+                | docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE)    // Regular function
+                ;
+
+pluginName      : ID ;
+
+pluginReturnType : ARROW type          // -> Type (existing type)
+                 | AS type             // as Type (generate type)
+                 ;
 
 externDecl      : docComment? EXTERN FN ID LPAREN externParamList? RPAREN (ARROW type)? ;
 
@@ -52,9 +60,10 @@ booleanExpr     : comparisonExpr ;
 fieldList       : field (COMMA field)* ;
 field           : ID COLON type ;
 
-type            : ID (LT typeList GT)?  // Generic types like Result<String, Error>
-                | ID LSQUARE type RSQUARE  // Array types like [String]
-                | ID ;
+type            : ID (LT typeList GT)? LSQUARE RSQUARE  // Array types like Type[]
+                | ID (LT typeList GT)?                     // Generic types like Result<String, Error>
+                | ID LSQUARE type RSQUARE                  // Legacy array types like [String]
+                ;
 
 typeList        : type (COMMA type)* ;
 
@@ -228,6 +237,7 @@ SELECT      : 'select';
 TRUE        : 'true';
 FALSE       : 'false';
 WHERE       : 'where';
+AS          : 'as';
 
 ARROW       : '->';
 LAMBDA      : '=>';
@@ -267,3 +277,6 @@ ID          : [a-zA-Z_][a-zA-Z0-9_]* ;
 WS          : [ \t\r\n]+ -> skip ;
 DOC_COMMENT : '///' ~[\r\n]* ;
 COMMENT     : '//' ~[\r\n]* -> skip ;
+// PLUGIN_CONTENT must be last to avoid conflicts - matches everything until newline
+PLUGIN_CONTENT : ~[\r\n]+ ;
+

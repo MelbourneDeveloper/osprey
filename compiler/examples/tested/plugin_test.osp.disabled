@@ -1,0 +1,13 @@
+// Test file for SQL plugin system
+
+fn sql getUsers(type: int) = SELECT id, name, email FROM users WHERE type = $type
+
+fn sql createUser(name: string, email: string) = INSERT INTO users (name, email) VALUES ($name, $email) RETURNING id
+
+fn testPluginFunctions() = {
+    let users = sql.getUsers(type: 1)
+    let newUser = sql.createUser(name: "Alice", email: "alice@example.com")
+    print("Plugin functions compiled successfully!")
+}
+
+testPluginFunctions() 

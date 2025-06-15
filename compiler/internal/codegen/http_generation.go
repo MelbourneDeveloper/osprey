@@ -15,60 +15,52 @@ import (
 
 // generateHttpCreateServerCall generates calls to http_create_server(port, address).
 func (g *LLVMGenerator) generateHTTPCreateServerCall(callExpr *ast.CallExpression) (value.Value, error) {
-	// Handle named arguments by extracting them in the correct order
 	if len(callExpr.NamedArguments) == TwoArgs {
-		// Extract port and address from named arguments
-		var portVal, addressVal value.Value
-		var err error
+		return g.handleHTTPCreateServerNamed(callExpr)
+	}
+	return g.handleHTTPCreateServerPositional(callExpr)
+}
 
-		for _, namedArg := range callExpr.NamedArguments {
-			switch namedArg.Name {
-			case "port":
-				portVal, err = g.generateExpression(namedArg.Value)
-				if err != nil {
-					return nil, err
-				}
-			case "address":
-				addressVal, err = g.generateExpression(namedArg.Value)
-				if err != nil {
-					return nil, err
-				}
-			}
+func (g *LLVMGenerator) handleHTTPCreateServerNamed(callExpr *ast.CallExpression) (value.Value, error) {
+	var portVal, addressVal value.Value
+	var err error
+
+	for _, namedArg := range callExpr.NamedArguments {
+		switch namedArg.Name {
+		case "port":
+			portVal, err = g.generateExpression(namedArg.Value)
+		case "address":
+			addressVal, err = g.generateExpression(namedArg.Value)
 		}
-
-		if portVal == nil || addressVal == nil {
-			return nil, WrapHTTPCreateServerWrongArgs(len(callExpr.NamedArguments))
+		if err != nil {
+			return nil, err
 		}
-
-		// Ensure http_create_server function is declared
-		httpCreateServerFunc := g.ensureHTTPCreateServerDeclaration()
-
-		// Call http_create_server(port, address)
-		return g.builder.NewCall(httpCreateServerFunc, portVal, addressVal), nil
 	}
 
-	// Handle positional arguments
+	if portVal == nil || addressVal == nil {
+		return nil, WrapHTTPCreateServerWrongArgs(len(callExpr.NamedArguments))
+	}
+
+	httpCreateServerFunc := g.ensureHTTPCreateServerDeclaration()
+	return g.builder.NewCall(httpCreateServerFunc, portVal, addressVal), nil
+}
+
+func (g *LLVMGenerator) handleHTTPCreateServerPositional(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
 		return nil, WrapHTTPCreateServerWrongArgs(len(callExpr.Arguments))
 	}
 
-	// Get port argument (int)
 	portVal, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
 
-	// Get address argument (string)
 	addressVal, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err
 	}
 
-	// Ensure http_create_server function is declared
 	httpCreateServerFunc := g.ensureHTTPCreateServerDeclaration()
-
-	// Call http_create_server(port, address)
-
 	return g.builder.NewCall(httpCreateServerFunc, portVal, addressVal), nil
 }
 
@@ -76,34 +68,7 @@ func (g *LLVMGenerator) generateHTTPCreateServerCall(callExpr *ast.CallExpressio
 func (g *LLVMGenerator) generateHTTPListenCall(callExpr *ast.CallExpression) (value.Value, error) {
 	// Handle named arguments by extracting them in the correct order
 	if len(callExpr.NamedArguments) == TwoArgs {
-		// Extract serverID and handler from named arguments
-		var serverIDVal, handlerVal value.Value
-		var err error
-
-		for _, namedArg := range callExpr.NamedArguments {
-			switch namedArg.Name {
-			case "serverID":
-				serverIDVal, err = g.generateExpression(namedArg.Value)
-				if err != nil {
-					return nil, err
-				}
-			case "handler":
-				handlerVal, err = g.generateExpression(namedArg.Value)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-
-		if serverIDVal == nil || handlerVal == nil {
-			return nil, WrapHTTPListenWrongArgs(len(callExpr.NamedArguments))
-		}
-
-		// Ensure http_listen function is declared
-		httpListenFunc := g.ensureHTTPListenDeclaration()
-
-		// Call http_listen(server_id, handler)
-		return g.builder.NewCall(httpListenFunc, serverIDVal, handlerVal), nil
+		return g.handleHTTPListenNamed(callExpr)
 	}
 
 	// Handle positional arguments
@@ -128,6 +93,38 @@ func (g *LLVMGenerator) generateHTTPListenCall(callExpr *ast.CallExpression) (va
 
 	// Call http_listen(server_id, handler)
 
+	return g.builder.NewCall(httpListenFunc, serverIDVal, handlerVal), nil
+}
+
+// handleHTTPListenNamed handles named arguments for HTTP listen calls.
+func (g *LLVMGenerator) handleHTTPListenNamed(callExpr *ast.CallExpression) (value.Value, error) {
+	// Extract serverID and handler from named arguments
+	var serverIDVal, handlerVal value.Value
+	var err error
+
+	for _, namedArg := range callExpr.NamedArguments {
+		switch namedArg.Name {
+		case "serverID":
+			serverIDVal, err = g.generateExpression(namedArg.Value)
+			if err != nil {
+				return nil, err
+			}
+		case "handler":
+			handlerVal, err = g.generateExpression(namedArg.Value)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if serverIDVal == nil || handlerVal == nil {
+		return nil, WrapHTTPListenWrongArgs(len(callExpr.NamedArguments))
+	}
+
+	// Ensure http_listen function is declared
+	httpListenFunc := g.ensureHTTPListenDeclaration()
+
+	// Call http_listen(server_id, handler)
 	return g.builder.NewCall(httpListenFunc, serverIDVal, handlerVal), nil
 }
 

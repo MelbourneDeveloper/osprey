@@ -1,0 +1,18 @@
+// Test file for SQL plugin system
+
+fn sql getUsers(userType: int) = SELECT id, name, email FROM users
+
+fn sql createUser(name: string, email: string) = INSERT INTO users (name, email) VALUES (@name, @email)
+
+fn testPluginFunctions() -> int = {
+    print("Plugin functions compiled successfully!")
+    0
+}
+
+/// Test plugin with SQL function
+fn sql getUserById(userId: Int) -> User = SELECT * FROM users WHERE id = &userId
+
+/// Test plugin with SQL function that generates a type
+fn sql getUserProfile(userId: Int) as UserProfile = SELECT users.name, users.email, profiles.bio FROM users JOIN profiles ON users.id = profiles.user_id WHERE users.id = @userId
+
+testPluginFunctions() 

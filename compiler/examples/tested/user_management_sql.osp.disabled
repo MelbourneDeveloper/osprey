@@ -1,0 +1,80 @@
+// User Management SQL Plugin Example
+// This demonstrates a complete user management system using the SQL plugin
+
+// Database configuration would typically be handled elsewhere
+// but for this example, we show how plugin functions would be used
+
+// Get all users with pagination (plugin determines: Result<UserRecord[], DatabaseError>)
+fn sql getAllUsers(limit: int, offset: int) as UserRecord[] = 
+    SELECT id, name, email, created_at, status FROM users ORDER BY created_at DESC LIMIT @limit OFFSET @offset
+
+// Find users by email (plugin determines: Result<UserRecord, DatabaseError>)
+fn sql findUserByEmail(email: string) as UserRecord = 
+    SELECT id, name, email, created_at, status, last_login FROM users WHERE email = @email LIMIT 1
+
+// Create a new user (plugin determines: Result<UserRecord, DatabaseError>)
+fn sql createUser(name: string, email: string, password_hash: string) as UserRecord = 
+    INSERT INTO users (name, email, password_hash, created_at, status) VALUES (@name, @email, @password_hash, NOW(), 'active') RETURNING id, name, email, created_at
+
+// Update user profile (plugin determines: Result<UserRecord, DatabaseError>)
+fn sql updateUserProfile(user_id: int, name: string, email: string) as UserRecord = 
+    UPDATE users SET name = @name, email = @email, updated_at = NOW() WHERE id = @user_id RETURNING id, name, email, updated_at
+
+// Soft delete a user (plugin determines: Result<UserStatusRecord, DatabaseError>)
+fn sql deactivateUser(user_id: int) as UserStatusRecord = 
+    UPDATE users SET status = 'inactive', updated_at = NOW() WHERE id = @user_id RETURNING id, status
+
+// Get user statistics (plugin determines: Result<UserStatsRecord, DatabaseError>)
+fn sql getUserStats() as UserStatsRecord = 
+    SELECT COUNT(*) as total_users, COUNT(CASE WHEN status = 'active' THEN 1 END) as active_users, COUNT(CASE WHEN created_at > NOW() - INTERVAL '30 days' THEN 1 END) as new_users_30_days FROM users
+
+// Complex query with joins (plugin determines: Result<PostWithAuthor[], DatabaseError>)
+fn sql getUserPosts(user_id: int, limit: int) as PostWithAuthor[] = 
+    SELECT p.id as post_id, p.title, p.content, p.created_at as post_created, u.name as author_name, u.email as author_email FROM posts p JOIN users u ON p.user_id = u.id WHERE p.user_id = @user_id ORDER BY p.created_at DESC LIMIT @limit
+
+// Search users by name pattern (plugin determines: Result<UserRecord[], DatabaseError>)
+fn sql searchUsersByName(name_pattern: string) as UserRecord[] = 
+    SELECT id, name, email, created_at FROM users WHERE name ILIKE @name_pattern ORDER BY name
+
+// Get simple count (plugin infers: Result<int, DatabaseError>)
+fn sql getUserCount() = 
+    SELECT COUNT(*) FROM users
+
+// Regular Osprey function that uses the plugin functions
+fn getUserManagementSummary() -> Fiber<UserSummary> = {
+    let stats = getUserStats();
+    let recentUsers = getAllUsers(5, 0);
+    
+    // This would typically process the results
+    // For now, this demonstrates the integration
+    return fiber {
+        match (stats, recentUsers) {
+            (Ok(statsData), Ok(usersData)) -> {
+                return Ok(UserSummary {
+                    totalUsers: statsData[0].total_users,
+                    activeUsers: statsData[0].active_users,
+                    newUsers: statsData[0].new_users_30_days,
+                    recentUsers: usersData
+                });
+            }
+            (Err(statsError), _) -> return Err(statsError);
+            (_, Err(usersError)) -> return Err(usersError);
+        }
+    };
+}
+
+// Type definition for the summary
+type UserSummary = {
+    totalUsers: int,
+    activeUsers: int,
+    newUsers: int,
+    recentUsers: Array<UserRecord>
+}
+
+type UserRecord = {
+    id: int,
+    name: string,
+    email: string,
+    created_at: string,
+    status: string
+} 

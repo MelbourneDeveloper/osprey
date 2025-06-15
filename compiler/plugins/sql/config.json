@@ -1,0 +1,23 @@
+{
+    "plugin_name": "sql",
+    "version": "1.0.0",
+    "description": "SQL integration plugin for Osprey",
+    "executable": "osprey-sql-plugin",
+    "supported_languages": ["sql", "postgresql", "postgres", "mysql", "sqlite"],
+    "antlr_grammar": "sql_parser.g4",
+    "configuration": {
+        "connection_pool_size": 10,
+        "query_timeout_ms": 30000,
+        "max_result_size_mb": 100
+    },
+    "required_dependencies": [
+        "libpq-dev",
+        "postgresql-client"
+    ],
+    "error_types": [
+        "ConnectionError",
+        "QueryError",
+        "TimeoutError",
+        "PermissionError"
+    ]
+}

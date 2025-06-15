@@ -123,35 +123,44 @@ func canInferFromIdentifier(_ *Identifier) bool {
 func wouldInferAsAny(body Expression, fn *FunctionDeclaration) bool {
 	switch e := body.(type) {
 	case *Identifier:
-		// Direct return of a parameter - check if parameter has explicit type
-		for _, param := range fn.Parameters {
-			if param.Name == e.Name && param.Type != nil {
-				// Parameter has explicit type, so return type can be inferred
-				return false
-			}
-		}
-		// Parameter without explicit type would be 'any'
-		return true
+		return wouldIdentifierInferAsAny(e, fn)
 	case *BinaryExpression:
-		// Arithmetic expressions with explicitly typed parameters can be inferred
-		if isArithmeticOperator(e.Operator) {
-			return !allOperandsHaveExplicitTypes(e, fn)
-		}
-
-		return false
+		return wouldBinaryExpressionInferAsAny(e, fn)
 	case *CallExpression:
-		// Function calls with unknown return types would be 'any'
-		return true
+		return true // Function calls with unknown return types would be 'any'
 	case *ResultExpression:
-		// For result expressions, check the wrapped value
-		if e.IsSuccess {
-			return wouldInferAsAny(e.Value, fn)
-		}
-
-		return true
+		return wouldResultExpressionInferAsAny(e, fn)
 	default:
 		return false
 	}
+}
+
+func wouldIdentifierInferAsAny(e *Identifier, fn *FunctionDeclaration) bool {
+	// Direct return of a parameter - check if parameter has explicit type
+	for _, param := range fn.Parameters {
+		if param.Name == e.Name && param.Type != nil {
+			// Parameter has explicit type, so return type can be inferred
+			return false
+		}
+	}
+	// Parameter without explicit type would be 'any'
+	return true
+}
+
+func wouldBinaryExpressionInferAsAny(e *BinaryExpression, fn *FunctionDeclaration) bool {
+	// Arithmetic expressions with explicitly typed parameters can be inferred
+	if isArithmeticOperator(e.Operator) {
+		return !allOperandsHaveExplicitTypes(e, fn)
+	}
+	return false
+}
+
+func wouldResultExpressionInferAsAny(e *ResultExpression, fn *FunctionDeclaration) bool {
+	// For result expressions, check the wrapped value
+	if e.IsSuccess {
+		return wouldInferAsAny(e.Value, fn)
+	}
+	return true
 }
 
 // canInferParameterType checks if a parameter's type can be inferred from its usage.
@@ -251,39 +260,47 @@ func allOperandsHaveExplicitTypes(expr *BinaryExpression, fn *FunctionDeclaratio
 func operandHasExplicitType(operand Expression, fn *FunctionDeclaration) bool {
 	switch e := operand.(type) {
 	case *IntegerLiteral, *StringLiteral, *BooleanLiteral:
-		// Literals have explicit types
-		return true
+		return true // Literals have explicit types
 	case *Identifier:
-		// Check if this identifier is a parameter with explicit type
-		for _, param := range fn.Parameters {
-			if param.Name == e.Name {
-				// Parameter has explicit type annotation
-				if param.Type != nil {
-					return true
-				}
-				// Parameter can be inferred from usage in arithmetic
-				if canInferParameterType(param.Name, fn.Body, fn.ReturnType) {
-					return true
-				}
-			}
-		}
-
-		return false
+		return identifierHasExplicitType(e, fn)
 	case *BinaryExpression:
-		// Nested binary expressions - check recursively if it's an arithmetic operation
-		if isArithmeticOperator(e.Operator) {
-			return allOperandsHaveExplicitTypes(e, fn)
-		}
-
-		return false
+		return binaryExpressionHasExplicitType(e, fn)
 	case *ResultExpression:
-		// For result expressions, check the wrapped value
-		if e.IsSuccess {
-			return operandHasExplicitType(e.Value, fn)
-		}
-
-		return false
+		return resultExpressionHasExplicitType(e, fn)
 	default:
 		return false
 	}
+}
+
+func identifierHasExplicitType(e *Identifier, fn *FunctionDeclaration) bool {
+	// Check if this identifier is a parameter with explicit type
+	for _, param := range fn.Parameters {
+		if param.Name == e.Name {
+			// Parameter has explicit type annotation
+			if param.Type != nil {
+				return true
+			}
+			// Parameter can be inferred from usage in arithmetic
+			if canInferParameterType(param.Name, fn.Body, fn.ReturnType) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func binaryExpressionHasExplicitType(e *BinaryExpression, fn *FunctionDeclaration) bool {
+	// Nested binary expressions - check recursively if it's an arithmetic operation
+	if isArithmeticOperator(e.Operator) {
+		return allOperandsHaveExplicitTypes(e, fn)
+	}
+	return false
+}
+
+func resultExpressionHasExplicitType(e *ResultExpression, fn *FunctionDeclaration) bool {
+	// For result expressions, check the wrapped value
+	if e.IsSuccess {
+		return operandHasExplicitType(e.Value, fn)
+	}
+	return false
 }

@@ -195,36 +195,42 @@ func (g *LLVMGenerator) setParameterTypesForAnalysis(fnDecl *ast.FunctionDeclara
 	}
 
 	for _, param := range fnDecl.Parameters {
-		if param.Type != nil {
-			// Explicit type annotation - match all possible type name variants
-			switch param.Type.Name {
-			case "int", IntTypeName:
-				g.currentFunctionParameterTypes[param.Name] = TypeInt
-			case "string", StringTypeName:
-				g.currentFunctionParameterTypes[param.Name] = TypeString
-			case TypeBool, BoolTypeName:
-				g.currentFunctionParameterTypes[param.Name] = TypeBool
-			case "any":
-				g.currentFunctionParameterTypes[param.Name] = TypeAny
-			default:
-				// Check if it's a user-defined union type
-				if _, exists := g.typeDeclarations[param.Type.Name]; exists {
-					g.currentFunctionParameterTypes[param.Name] = TypeInt // Union types are represented as integers
-				} else {
-					g.currentFunctionParameterTypes[param.Name] = TypeInt // Default fallback
-				}
-			}
-		} else {
-			// Try to infer type from usage in function body
-			inferredType := g.analyzeParameterUsage(param.Name, fnDecl.Body)
-			if inferredType != "" && inferredType != TypeAny {
-				g.currentFunctionParameterTypes[param.Name] = inferredType
-			} else {
-				// If we can't infer, mark as 'any' for now
-				g.currentFunctionParameterTypes[param.Name] = TypeAny
-			}
-		}
+		paramType := g.determineParameterType(param, fnDecl.Body)
+		g.currentFunctionParameterTypes[param.Name] = paramType
 	}
+}
+
+func (g *LLVMGenerator) determineParameterType(param ast.Parameter, body ast.Expression) string {
+	if param.Type != nil {
+		return g.getExplicitParameterType(param.Type.Name)
+	}
+	return g.inferParameterType(param.Name, body)
+}
+
+func (g *LLVMGenerator) getExplicitParameterType(typeName string) string {
+	switch typeName {
+	case "int", IntTypeName:
+		return TypeInt
+	case "string", StringTypeName:
+		return TypeString
+	case TypeBool, BoolTypeName:
+		return TypeBool
+	case "any":
+		return TypeAny
+	default:
+		if _, exists := g.typeDeclarations[typeName]; exists {
+			return TypeInt
+		}
+		return TypeInt
+	}
+}
+
+func (g *LLVMGenerator) inferParameterType(paramName string, body ast.Expression) string {
+	inferredType := g.analyzeParameterUsage(paramName, body)
+	if inferredType != "" && inferredType != TypeAny {
+		return inferredType
+	}
+	return TypeAny
 }
 
 // clearParameterTypesForAnalysis clears temporary parameter types after analysis.

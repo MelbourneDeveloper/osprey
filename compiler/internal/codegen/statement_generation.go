@@ -1,7 +1,10 @@
 package codegen
 
 import (
+	"fmt"
+
 	"github.com/llir/llvm/ir"
+	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
@@ -26,6 +29,11 @@ func (g *LLVMGenerator) generateStatement(stmt ast.Statement) error {
 
 	case *ast.ExternDeclaration:
 		err := g.generateExternDeclaration(s)
+
+		return err
+
+	case *ast.PluginFunctionDeclaration:
+		err := g.generatePluginFunctionDeclaration(s)
 
 		return err
 
@@ -73,6 +81,73 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 	g.functionParameters[externDecl.Name] = paramNames
 
 	return nil
+}
+
+func (g *LLVMGenerator) generatePluginFunctionDeclaration(pluginDecl *ast.PluginFunctionDeclaration) error {
+	// Generate LLVM function that represents a plugin function call
+
+	// Build parameter list for LLVM function signature
+	var params []*ir.Param
+	var paramNames []string
+
+	for _, param := range pluginDecl.Parameters {
+		paramType := g.typeExpressionToLLVMType(param.Type)
+		params = append(params, ir.NewParam(param.Name, paramType))
+		paramNames = append(paramNames, param.Name)
+	}
+
+	// Plugin functions return strings for now (would be Result<T, Error> in full implementation)
+	returnType := types.I8Ptr // String type
+
+	// Create the plugin function
+	pluginFunc := g.module.NewFunc(pluginDecl.FunctionName, returnType, params...)
+	g.functions[pluginDecl.FunctionName] = pluginFunc
+	g.functionReturnTypes[pluginDecl.FunctionName] = TypeString
+	g.functionParameters[pluginDecl.FunctionName] = paramNames
+
+	// Save current builder context (might be nil during first pass)
+	savedBuilder := g.builder
+
+	// Create function body
+	entry := pluginFunc.NewBlock("entry")
+	g.builder = entry
+
+	// Generate plugin call representation
+	pluginResult := g.generatePluginCallResult(pluginDecl)
+
+	// Return the result
+	entry.NewRet(pluginResult)
+
+	// Restore original builder context (only if it wasn't nil)
+	if savedBuilder != nil {
+		g.builder = savedBuilder
+	} else {
+		g.builder = nil
+	}
+
+	return nil
+}
+
+func (g *LLVMGenerator) generatePluginCallResult(pluginDecl *ast.PluginFunctionDeclaration) value.Value {
+	// Generate a result string that represents the plugin function call
+	// In a full implementation, this would:
+	// 1. Call the plugin system runtime
+	// 2. Serialize parameters to JSON
+	// 3. Execute the plugin executable
+	// 4. Handle the JSON response
+	// 5. Return Result<T, PluginError>
+
+	// For now, create a descriptive string
+	pluginInfo := fmt.Sprintf("[Plugin %s:%s]", pluginDecl.PluginName, pluginDecl.FunctionName)
+
+	// Create a global string constant using the same approach as string literals
+	str := constant.NewCharArrayFromString(pluginInfo + StringTerminator)
+	global := g.module.NewGlobalDef("", str)
+
+	// Return pointer to the string
+	return g.builder.NewGetElementPtr(str.Typ, global,
+		constant.NewInt(types.I32, ArrayIndexZero),
+		constant.NewInt(types.I32, ArrayIndexZero))
 }
 
 // typeExpressionToLLVMType converts an Osprey TypeExpression to an LLVM type.

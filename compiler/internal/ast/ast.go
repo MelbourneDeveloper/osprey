@@ -72,6 +72,18 @@ type ExternDeclaration struct {
 
 func (e *ExternDeclaration) isStatement() {}
 
+// PluginFunctionDeclaration represents a language plugin function declaration.
+type PluginFunctionDeclaration struct {
+	PluginName       string          // e.g., "sql", "graphql", "template"
+	FunctionName     string          // Function name
+	Parameters       []Parameter     // Function parameters
+	ReturnType       *TypeExpression // Return type specification
+	IsTypeGeneration bool            // true for "as Type", false for "-> Type"
+	PluginContent    string          // Raw plugin language content (SQL, GraphQL, etc.)
+}
+
+func (p *PluginFunctionDeclaration) isStatement() {}
+
 // TypeDeclaration represents a type declaration with union types.
 type TypeDeclaration struct {
 	Name       string

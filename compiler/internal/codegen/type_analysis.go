@@ -67,31 +67,6 @@ func (g *LLVMGenerator) analyzeBinaryExpressionType(expr *ast.BinaryExpression) 
 	}
 }
 
-// isIdentifierExplicitlyTyped checks if an expression is an explicitly typed identifier or literal.
-//
-//nolint:unused
-func (g *LLVMGenerator) isIdentifierExplicitlyTyped(expr ast.Expression) bool {
-	switch e := expr.(type) {
-	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
-		return true
-	case *ast.Identifier:
-		// Check if it's a parameter with explicit type
-		if g.currentFunctionParameterTypes != nil {
-			if _, exists := g.currentFunctionParameterTypes[e.Name]; exists {
-				return true
-			}
-		}
-		// Check if it's a variable with known type
-		if _, exists := g.variableTypes[e.Name]; exists {
-			return true
-		}
-
-		return false
-	default:
-		return false
-	}
-}
-
 // getOperandType determines the type of an operand in an expression.
 func (g *LLVMGenerator) getOperandType(expr ast.Expression) string {
 	switch e := expr.(type) {
@@ -102,31 +77,30 @@ func (g *LLVMGenerator) getOperandType(expr ast.Expression) string {
 	case *ast.BooleanLiteral:
 		return TypeBool
 	case *ast.Identifier:
-		// Check if the identifier is a parameter with explicit type
-		if g.currentFunctionParameterTypes != nil {
-			if paramType, exists := g.currentFunctionParameterTypes[e.Name]; exists && paramType != TypeAny {
-				return paramType
-			}
-		}
-		// Check if it's a variable with known type
-		if varType, exists := g.variableTypes[e.Name]; exists && varType != TypeAny {
-			return varType
-		}
-		// Unknown identifiers would be 'any'
-		return TypeAny
+		return g.getIdentifierType(e)
 	case *ast.BinaryExpression:
-		// Handle nested binary expressions recursively
 		return g.analyzeBinaryExpressionType(e)
 	case *ast.CallExpression:
-		// Handle function calls
 		return g.analyzeCallExpressionType(e)
 	case *ast.ResultExpression:
-		// Handle result expressions by analyzing the wrapped value
 		return g.getOperandType(e.Value)
 	default:
-		// Other expressions would need to be analyzed recursively, but for now return 'any'
 		return TypeAny
 	}
+}
+
+func (g *LLVMGenerator) getIdentifierType(e *ast.Identifier) string {
+	// Check if the identifier is a parameter with explicit type
+	if g.currentFunctionParameterTypes != nil {
+		if paramType, exists := g.currentFunctionParameterTypes[e.Name]; exists && paramType != TypeAny {
+			return paramType
+		}
+	}
+	// Check if it's a variable with known type
+	if varType, exists := g.variableTypes[e.Name]; exists && varType != TypeAny {
+		return varType
+	}
+	return TypeAny
 }
 
 // analyzeIdentifierType analyzes an identifier to determine its type based on naming patterns and context.

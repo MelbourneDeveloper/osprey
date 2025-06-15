@@ -67,8 +67,6 @@
     - [Programming Best Practices](#185-programming-best-practices)
     - [Implementation Details](#186-implementation-details)
 
-</div>
-
 ## 1. Introduction
 
 Osprey is a modern functional programming oriented language designed for elegance, safety, and performance.. It emphasizes:
@@ -2994,6 +2992,786 @@ let fiber2 = Fiber<Int> {
 // These will both return 1, not 1 and 2
 let result1 = await(fiber1)  // 1
 let result2 = await(fiber2)  // 1 (separate instance)
+```
+
+## 19. Language Plugin System
+
+### 19.1 Overview
+
+Osprey supports a powerful **Language Plugin System** that enables seamless integration with external languages and systems while maintaining strong type safety. Language plugins are Go executables that parse domain-specific languages (DSL), analyze external systems, and provide type information back to the Osprey compiler.
+
+**Key Features:**
+- **Strong Type Safety**: Plugins provide complete type information to the compiler
+- **External Language Integration**: Support for SQL, GraphQL, HTML templates, and custom DSLs
+- **Static Analysis**: Plugins analyze external systems (databases, APIs) at compile time
+- **Fiber Integration**: Generated functions run in lightweight fibers for optimal performance
+- **ANTLR4 Parsing**: Plugins use ANTLR4 parsers for robust language support
+
+### 19.2 Plugin Architecture
+
+#### Plugin Directory Structure
+```
+osprey-compiler/
+├── plugins/
+│   ├── sql/
+│   │   ├── osprey-sql-plugin           # Go executable
+│   │   ├── sql_parser.g4               # ANTLR4 grammar
+│   │   └── config.json                 # Plugin configuration
+│   ├── graphql/
+│   │   ├── osprey-graphql-plugin
+│   │   └── graphql_parser.g4
+│   └── template/
+│       ├── osprey-template-plugin
+│       └── template_parser.g4
+```
+
+#### Plugin Communication Protocol
+
+Plugins communicate with the Osprey compiler via JSON over stdin/stdout:
+
+**Input Message (Compiler → Plugin):**
+```json
+{
+    "function_name": "getOrders",
+    "language_body": "SELECT * FROM ORDERS WHERE type = $type",
+    "parameters": [
+        {"name": "type", "type": "int"}
+    ],
+    "context": {
+        "database_url": "postgresql://localhost:5432/mydb",
+        "schema": "public"
+    },
+    "file_path": "/path/to/source.osp",
+    "line_number": 42
+}
+```
+
+**Output Message (Plugin → Compiler):**
+```json
+{
+    "success": true,
+    "return_type": {
+        "type": "Result",
+        "generic_params": [
+            {
+                "type": "Array",
+                "element_type": {
+                    "type": "Record",
+                    "fields": [
+                        {"name": "id", "type": "Int"},
+                        {"name": "customer_name", "type": "String"},
+                        {"name": "total", "type": "Float"},
+                        {"name": "order_date", "type": "String"},
+                        {"name": "type", "type": "Int"}
+                    ]
+                }
+            },
+            {
+                "type": "DatabaseError"
+            }
+        ]
+    },
+    "generated_code": {
+        "imports": ["std.database", "std.sql"],
+        "fiber_code": "/* Generated fiber implementation */",
+        "error_types": ["DatabaseError", "ConnectionError"]
+    }
+}
+```
+
+### 19.3 Plugin Function Syntax
+
+Language plugin functions use a special syntax that identifies the plugin and embeds the external language:
+
+```
+plugin_function := 'fn' plugin_name function_name '(' parameter_list? ')' '=' embedded_language_body
+
+plugin_name := ID
+embedded_language_body := /* Raw external language code */
+```
+
+#### 19.3.1 Plugin Parameter System
+
+**The Osprey compiler does NOT dictate parameter syntax. Each plugin decides how to handle parameters in their target language.**
+
+**Parameter Flow:**
+1. **Compile Time**: The Osprey compiler extracts parameter names and type information from the function signature
+2. **Plugin Communication**: Parameter metadata is sent to the plugin via JSON protocol
+3. **Runtime Execution**: The application passes actual parameter values to the plugin executable
+4. **Plugin Processing**: The plugin executable decides how to handle parameters (substitution, prepared statements, etc.)
+
+**Plugin Parameter Processing (JSON Protocol):**
+```json
+{
+  "functionName": "getAllUsers", 
+  "languageBody": "SELECT * FROM users WHERE active = ? LIMIT ?",
+  "parameters": [
+    {"name": "status", "type": "bool"},
+    {"name": "limit", "type": "int"}
+  ]
+}
+```
+
+**Plugin Flexibility:**
+- **SQL Plugin**: May use `@param`, `$param`, `?`, or `$1/$2` syntax
+- **REST Plugin**: May use `{param}`, `${param}`, or URL template syntax
+- **GraphQL Plugin**: May use `$param` GraphQL variable syntax
+- **Template Plugin**: May use `{{param}}`, `${param}`, or `%param%` syntax
+- **Custom Plugins**: Can use ANY parameter syntax appropriate for their target language
+
+**Runtime Parameter Handling:**
+- **Plugin Decision**: Plugin executable determines how to process parameters
+- **Security**: Plugins responsible for injection protection (prepared statements, escaping, etc.)
+- **Type Validation**: Plugins validate parameter types match expected values
+- **Error Handling**: Plugins return appropriate error responses for invalid parameters
+
+**Example Plugin Parameter Strategies:**
+- **Prepared Statements**: SQL plugins convert to parameterized queries
+- **Template Substitution**: Template plugins replace placeholders with escaped values
+- **URL Building**: REST plugins construct URLs with proper encoding
+- **Variable Binding**: GraphQL plugins bind to GraphQL variables
+
+**Examples:**
+
+#### SQL Plugin Function
+
+**🚨 CRITICAL REQUIREMENT**: The plugin analyzes the operation to determine the actual type structure and appropriate Result wrapping. When the type cannot be inferred by the language plugin at compile time, the consumer must specify a type, or user type generation with "as"
+
+```osprey
+// Example: SQL Plugin - Generate types from schema analysis
+fn sql getAllUsers(limit: int, offset: int) as UserRecord[] = 
+    SELECT id, name, email, created_at, status FROM users ORDER BY created_at DESC LIMIT @limit OFFSET @offset
+
+fn sql findUserByEmail(email: string) as UserRecord = 
+    SELECT id, name, email, created_at, status FROM users WHERE email = @email LIMIT 1
+
+fn sql getUserCount() = 
+    SELECT COUNT(*) FROM users
+
+fn sql getUserStats() as UserStatsRecord = 
+    SELECT COUNT(*) as total_users, AVG(age) as avg_age FROM users
+
+// Example: REST Plugin - Generate types from response analysis
+fn rest getUser(id: int) as User = 
+    GET /api/users/@{id}
+
+fn rest getUsers() as User[] = 
+    GET /api/users
+
+fn rest createUser(data: CreateUserRequest) as User = 
+    POST /api/users
+    Content-Type: application/json
+    @{data}
+
+// Example: REST Plugin - Use existing types (type checking at runtime)
+fn rest fetchUser(id: int) -> User = 
+    GET /api/users/@{id}
+
+fn rest fetchUsers() -> User[] = 
+    GET /api/users
+
+fn rest updateUser(id: int, data: User) -> User = 
+    PUT /api/users/@{id}
+    Content-Type: application/json
+    @{data}
+
+fn rest getUserStatus(id: int) -> bool = 
+    GET /api/users/@{id}/active
+
+// Example: GraphQL Plugin - Generate types from schema
+fn graphql getUserProfile(id: string) as UserProfile = 
+    query GetUser(@id: ID!) {
+        user(id: @id) {
+            id
+            name
+            email
+            posts {
+                title
+                content
+            }
+        }
+    }
+
+// Example: JSON Plugin - Generate types from structure analysis  
+fn json parseUserData(jsonStr: string) as UserRecord = 
+    { "id": 1, "name": "John", "email": "john@example.com" }
+
+fn json parseUsers(jsonStr: string) as UserRecord[] = 
+    [{ "id": 1, "name": "John" }, { "id": 2, "name": "Jane" }]
+
+fn json parseUserCount(jsonStr: string) = 
+    { "count": 42 }
+
+// Example: JSON Plugin - Use existing types (validation at runtime)
+fn json validateUser(jsonStr: string) -> UserRecord = 
+    { "id": 1, "name": "John", "email": "john@example.com" }
+
+// Example: Custom Plugin - MongoDB queries
+fn mongo findUsers(filter: BsonDocument) as UserRecord[] = 
+    db.users.find(@{filter})
+
+// Example: Custom Plugin - Redis operations  
+fn redis getUser(key: string) -> User = 
+    GET @{key}
+
+// Example: Custom Plugin - Elasticsearch queries
+fn elastic searchUsers(query: string) as SearchResult[] = 
+    GET /users/_search { "query": { "match": { "name": "@{query}" } } }
+
+fn json getScores(jsonStr: string) -> int[] = 
+    [95, 87, 92, 88]
+```
+
+**Language Plugin Examples:**
+*Osprey does not hardcode any specific language plugin behavior. The following are examples of how language plugins could implement type analysis and Result wrapping:*
+
+**Example: SQL Plugin**
+- **Multiple rows**: `fn sql getAllUsers() as UserRecord[]` → `Result<UserRecord[], DatabaseError>`
+- **Single row**: `fn sql findUser() as UserRecord` → `Result<UserRecord, DatabaseError>`  
+- **Inferred primitive**: `fn sql getUserCount()` → `Result<int, DatabaseError>`
+- **Complex aggregation**: `fn sql getUserStats() as UserStatsRecord` → `Result<UserStatsRecord, DatabaseError>`
+
+**Example: REST Plugin**
+- **Generate single**: `fn rest getUser(id) as User` → `Result<User, HttpError>`
+- **Generate array**: `fn rest getUsers() as User[]` → `Result<User[], HttpError>`
+- **Existing single**: `fn rest fetchUser(id) -> User` → `Result<User, HttpError>`
+- **Existing array**: `fn rest fetchUsers() -> User[]` → `Result<User[], HttpError>`
+- **Existing primitive**: `fn rest getUserStatus(id) -> bool` → `Result<bool, HttpError>`
+
+**Example: GraphQL Plugin**
+- **Object query**: `fn graphql getUser() as User` → `Result<User, GraphQLError>`
+- **Array query**: `fn graphql getUsers() as User[]` → `Result<User[], GraphQLError>`
+
+**Example: JSON Plugin**
+- **Generate type**: `fn json parseUser() as UserRecord` → `Result<UserRecord, JsonError>`
+- **Generate array**: `fn json parseUsers() as UserRecord[]` → `Result<UserRecord[], JsonError>`
+- **Inferred primitive**: `fn json parseCount()` → `Result<int, JsonError>`
+- **Existing type**: `fn json validateUser() -> UserRecord` → `Result<UserRecord, JsonError>`
+- **Existing array**: `fn json getScores() -> int[]` → `Result<int[], JsonError>`
+
+**Custom Language Plugins:**
+Developers can create plugins for any domain-specific language: `yaml`, `xml`, `protobuf`, `redis`, `elasticsearch`, `mongodb`, etc. Each plugin implements its own type analysis and error handling logic.
+
+**Plugin Type Generation System:**
+
+Plugin functions use a **compile-time type generation** approach where plugins analyze external systems (databases, APIs, schemas) and generate precise Osprey types based on the actual data structures.
+
+#### Type Generation Process
+
+1. **Developer declares logical type name**: Function signature specifies only the business logic type name
+2. **Plugin analyzes operation**: Plugin examines SQL/query to determine cardinality and operation type
+3. **Plugin determines Result wrapping**: Based on analysis, plugin decides Array vs single vs scalar
+4. **Plugin generates complete type**: Creates both the logical type and the final wrapped Result type
+5. **Compiler integrates generated types**: All types become available for subsequent compilation
+
+#### Query Analysis Rules
+
+**SQL Query Analysis:**
+- **SELECT with no LIMIT 1**: Returns `Result<Array<LogicalType>, DatabaseError>`
+- **SELECT with LIMIT 1**: Returns `Result<LogicalType, DatabaseError>`
+- **SELECT with aggregate functions**: Returns `Result<LogicalType, DatabaseError>` (scalar result)
+- **INSERT/UPDATE with RETURNING**: Returns `Result<LogicalType, DatabaseError>` or `Result<Array<LogicalType>, DatabaseError>`
+- **INSERT/UPDATE without RETURNING**: Returns `Result<Unit, DatabaseError>`
+
+**Language Plugin Syntax Examples:**
+*These are examples showing how different language plugins might implement type handling. Osprey's plugin system is completely generic and extensible.*
+
+```osprey
+// Example: SQL Plugin - Generate vs existing types
+fn sql getAllUsers() as UserRecord[]                 // → Result<UserRecord[], DatabaseError> (generated)
+fn sql findUser(id: int) as UserRecord               // → Result<UserRecord, DatabaseError> (generated)
+fn sql getUserCount()                                // → Result<int, DatabaseError> (inferred)
+fn sql validateUser(id: int) -> User                 // → Result<User, DatabaseError> (existing)
+
+// Example: REST Plugin - Generate vs existing types
+fn rest getUser(id: int) as User                     // → Result<User, HttpError> (generated)
+fn rest getUsers() as User[]                         // → Result<User[], HttpError> (generated)
+fn rest fetchUser(id: int) -> User                   // → Result<User, HttpError> (existing)
+fn rest getUserStatus(id: int) -> bool               // → Result<bool, HttpError> (existing)
+
+// Example: Custom Plugins - Any domain-specific language
+fn mongo findUsers(filter: BsonDocument) as User[]   // → Result<User[], MongoError> (generated)
+fn redis getUser(key: string) -> User                // → Result<User, RedisError> (existing)
+fn yaml parseConfig(path: string) as Config          // → Result<Config, YamlError> (generated)
+fn protobuf decodeMessage(data: bytes) -> Message    // → Result<Message, ProtobufError> (existing)
+
+// Example: Template Plugin - Typically infers string return
+fn template renderEmail(user: User)                  // → Result<string, TemplateError> (inferred)
+```
+
+#### Plugin Type Manifest System
+
+Plugins generate `.osprey-types` files containing all generated types:
+
+```osprey
+// File: .osprey-types/sql-generated.osp (auto-generated)
+// Generated by osprey-sql-plugin - DO NOT EDIT
+
+type UserRecord = {
+    id: Int,           // users.id (SERIAL PRIMARY KEY)
+    name: String,      // users.name (VARCHAR(255) NOT NULL)
+    email: String,     // users.email (VARCHAR(255) UNIQUE)
+    created_at: String // users.created_at (TIMESTAMP DEFAULT NOW())
+}
+
+type PostWithAuthor = {
+    id: Int,           // posts.id (SERIAL PRIMARY KEY)
+    title: String,     // posts.title (VARCHAR(500) NOT NULL)
+    content: String,   // posts.content (TEXT)
+    username: String   // users.username (VARCHAR(100) NOT NULL)
+}
+```
+
+**Manifest Integration:**
+- Generated type files are automatically included during compilation
+- Type manifests are committed to version control for team consistency
+- Plugins only regenerate types when function signatures or external schemas change
+- IDE integration reads manifests for autocomplete and type checking
+
+#### Ambient Plugin Execution
+
+The Osprey compiler supports **development mode** with real-time plugin execution:
+
+```bash
+# Development mode with database connectivity
+osprey dev --database="postgresql://localhost:5432/mydb"
+
+# Plugin executes on file changes, updates type manifests immediately
+# IDE receives live type information via Language Server Protocol
+```
+
+**Real-Time Type Updates:**
+- Plugin executes when SQL function content changes
+- Generated types updated in `.osprey-types` files
+- IDE immediately receives new type information
+- Compilation errors appear instantly for schema mismatches
+
+#### GraphQL Plugin Function
+```osprey
+fn graphql getUserProfile(userId: string) = 
+    query GetUserProfile($userId: ID!) {
+        user(id: $userId) {
+            id
+            name
+            email
+            profile {
+                bio
+                avatar
+                followers {
+                    count
+                }
+            }
+        }
+    }
+```
+
+#### HTML Template Plugin Function
+```osprey
+fn template renderUserCard(user: User, showEmail: bool) = 
+    <div class="user-card">
+        <h3>{{ user.name }}</h3>
+        {{ if showEmail }}
+            <p>{{ user.email }}</p>
+        {{ end }}
+        <span class="role">{{ user.role }}</span>
+    </div>
+```
+
+### 19.4 Type Inference and Safety
+
+#### Automatic Type Discovery
+
+Plugins analyze external systems to provide accurate type information:
+
+**SQL Plugin Type Discovery:**
+1. **Database Connection**: Plugin connects to the database using provided credentials
+2. **Query Analysis**: ANTLR4 parser analyzes the SQL query structure
+3. **Schema Inspection**: Plugin queries database metadata to determine column types
+4. **Parameter Validation**: Plugin validates that parameters match SQL parameter placeholders
+5. **Return Type Generation**: Plugin generates precise record types based on SELECT columns
+
+**Example Type Discovery Process:**
+```sql
+-- SQL Query
+SELECT o.id, o.total, c.name, o.created_at 
+FROM orders o 
+JOIN customers c ON o.customer_id = c.id 
+WHERE o.type = $type
+```
+
+**Discovered Type:**
+```osprey
+type OrderResult = {
+    id: Int,           // orders.id (PRIMARY KEY, INT)
+    total: Float,      // orders.total (DECIMAL)
+    name: String,      // customers.name (VARCHAR)
+    created_at: String // orders.created_at (TIMESTAMP)
+}
+
+// Generated function signature
+fn postgresql getOrders(type: int) -> Result<Array<OrderResult>, DatabaseError>
+```
+
+#### Compile-Time Validation
+
+**SQL Query Validation:**
+- **Syntax checking**: ANTLR4 parser validates SQL syntax
+- **Schema validation**: Plugin verifies tables and columns exist
+- **Type compatibility**: Plugin checks parameter types match SQL expectations
+- **Permission validation**: Plugin validates user has required database permissions
+
+**Parameter Binding Validation:**
+```osprey
+fn postgresql getUser(id: string, active: bool) = 
+    SELECT * FROM users WHERE id = $id AND active = $active
+//                                  ^^^              ^^^^^^^
+//                           string param         bool param
+//                           (validated against   (validated against  
+//                            users.id type)       users.active type)
+```
+
+### 19.5 Generated Function Implementation
+
+#### Fiber-Based Execution
+
+Plugin functions are compiled to fiber-based implementations for optimal performance:
+
+**Generated Code Structure:**
+```osprey
+// Original plugin function
+fn postgresql getOrders(type: int) = SELECT * FROM ORDERS WHERE type = $type
+
+// Generated implementation (conceptual)
+fn getOrders(type: int) -> Result<Array<OrderResult>, DatabaseError> = {
+    // Create database connection fiber
+    let connectionFiber = Fiber<Connection> {
+        computation: fn() => connectToDatabase(
+            url: "postgresql://localhost:5432/mydb",
+            pool_size: 10
+        )
+    }
+    
+    // Execute query in fiber
+    let queryFiber = Fiber<Array<OrderResult>> {
+        computation: fn() => {
+            let conn = await(connectionFiber)
+            executeQuery(
+                connection: conn,
+                query: "SELECT id, customer_name, total, order_date, type FROM ORDERS WHERE type = $1",
+                parameters: [type]
+            )
+        }
+    }
+    
+    await(queryFiber)
+}
+```
+
+#### Error Handling
+
+Plugin functions return Result types following Osprey's error handling principles:
+
+```osprey
+// Plugin function call with error handling
+let ordersResult = postgresql.getOrders(type: 1)
+match ordersResult {
+    Ok { value } => {
+        forEach(value, fn(order) => print("Order ${order.id}: ${order.total}"))
+    }
+    Err { error } => match error {
+        ConnectionError { message } => print("Database connection failed: ${message}")
+        QueryError { query, message } => print("Query failed: ${message}")
+        TimeoutError { duration } => print("Query timed out after ${duration}ms")
+        _ => print("Unknown database error")
+    }
+}
+```
+
+### 19.6 Plugin Configuration
+
+#### Plugin Manifest (config.json)
+```json
+{
+    "plugin_name": "postgresql",
+    "version": "1.0.0",
+    "description": "PostgreSQL integration plugin for Osprey",
+    "executable": "osprey-sql-plugin",
+    "supported_languages": ["sql", "postgresql", "postgres"],
+    "antlr_grammar": "sql_parser.g4",
+    "configuration": {
+        "connection_pool_size": 10,
+        "query_timeout_ms": 30000,
+        "max_result_size_mb": 100
+    },
+    "required_dependencies": [
+        "libpq-dev",
+        "postgresql-client"
+    ],
+    "error_types": [
+        "ConnectionError",
+        "QueryError", 
+        "TimeoutError",
+        "PermissionError"
+    ]
+}
+```
+
+#### Environment Configuration
+```osprey
+// Plugin configuration via environment or config files
+export OSPREY_POSTGRESQL_URL="postgresql://localhost:5432/mydb"
+export OSPREY_POSTGRESQL_POOL_SIZE=20
+export OSPREY_POSTGRESQL_TIMEOUT=30000
+```
+
+### 19.7 Plugin Development Interface
+
+#### Plugin Main Interface (Go)
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "os"
+    "github.com/antlr/antlr4/runtime/Go/antlr"
+)
+
+type PluginRequest struct {
+    FunctionName  string            `json:"function_name"`
+    LanguageBody  string            `json:"language_body"`
+    Parameters    []Parameter       `json:"parameters"`
+    Context       map[string]string `json:"context"`
+    FilePath      string            `json:"file_path"`
+    LineNumber    int               `json:"line_number"`
+}
+
+type PluginResponse struct {
+    Success      bool         `json:"success"`
+    ReturnType   TypeInfo     `json:"return_type,omitempty"`
+    GeneratedCode GeneratedCode `json:"generated_code,omitempty"`
+    Error        string       `json:"error,omitempty"`
+}
+
+func main() {
+    var request PluginRequest
+    if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
+        panic(err)
+    }
+    
+    response := processRequest(request)
+    
+    if err := json.NewEncoder(os.Stdout).Encode(response); err != nil {
+        panic(err)
+    }
+}
+
+func processRequest(req PluginRequest) PluginResponse {
+    // 1. Parse SQL using ANTLR4
+    sqlAST, err := parseSQLWithANTLR(req.LanguageBody)
+    if err != nil {
+        return PluginResponse{Success: false, Error: err.Error()}
+    }
+    
+    // 2. Connect to database and analyze schema
+    dbConn, err := connectToDatabase(req.Context["database_url"])
+    if err != nil {
+        return PluginResponse{Success: false, Error: err.Error()}
+    }
+    defer dbConn.Close()
+    
+    // 3. Determine return type from query analysis
+    returnType, err := analyzeQueryReturnType(sqlAST, dbConn)
+    if err != nil {
+        return PluginResponse{Success: false, Error: err.Error()}
+    }
+    
+    // 4. Generate fiber implementation code
+    generatedCode := generateFiberImplementation(req, returnType)
+    
+    return PluginResponse{
+        Success:       true,
+        ReturnType:    returnType,
+        GeneratedCode: generatedCode,
+    }
+}
+```
+
+### 19.8 Advanced Plugin Features
+
+#### Multiple Database Support
+```osprey
+// Different database plugins for the same function
+fn postgresql getUsersPostgreSQL(role: string) = 
+    SELECT id, name, email FROM users WHERE role = $role
+
+fn mysql getUsersMySQL(role: string) = 
+    SELECT id, name, email FROM users WHERE role = $role
+
+fn sqlite getUsersSQLite(role: string) = 
+    SELECT id, name, email FROM users WHERE role = $role
+```
+
+#### Complex Query Support
+```osprey
+// Stored procedure calls
+fn postgresql getOrderStatistics(year: int) = 
+    CALL calculate_order_statistics($year)
+
+// Window functions
+fn postgresql getUserRankings() = 
+    SELECT 
+        id, 
+        name, 
+        score,
+        RANK() OVER (ORDER BY score DESC) as ranking
+    FROM users
+    ORDER BY ranking
+
+// Common Table Expressions (CTEs)
+fn postgresql getRecursiveCategories(parentId: int) = 
+    WITH RECURSIVE category_tree AS (
+        SELECT id, name, parent_id, 0 as level
+        FROM categories 
+        WHERE parent_id = $parentId
+        
+        UNION ALL
+        
+        SELECT c.id, c.name, c.parent_id, ct.level + 1
+        FROM categories c
+        JOIN category_tree ct ON c.parent_id = ct.id
+    )
+    SELECT * FROM category_tree
+```
+
+#### Plugin Chaining and Composition
+```osprey
+// Combine multiple plugin functions
+fn processOrderWorkflow(customerId: int) -> Result<OrderSummary, WorkflowError> = {
+    let customer = postgresql.getCustomer(id: customerId)
+    let orders = postgresql.getCustomerOrders(customerId: customerId)
+    let template = template.renderOrderSummary(customer: customer, orders: orders)
+    
+    match (customer, orders, template) {
+        (Ok { value: c }, Ok { value: o }, Ok { value: t }) => 
+            Ok { value: OrderSummary { customer: c, orders: o, html: t } }
+        _ => Err { error: WorkflowError { message: "Failed to process order workflow" } }
+    }
+}
+```
+
+### 19.9 Plugin Security and Sandboxing
+
+#### Security Model
+- **Sandboxed Execution**: Plugins run in restricted environments
+- **Resource Limits**: Memory, CPU, and network usage limits
+- **Credential Management**: Secure credential storage and access
+- **SQL Injection Prevention**: Parameterized queries only
+- **Schema Validation**: Plugins cannot access unauthorized database objects
+
+#### Plugin Isolation
+```osprey
+// Each plugin function runs in isolated fiber with security context
+fn postgresql getSecureData(userId: int) = 
+    SELECT data FROM secure_table 
+    WHERE user_id = $userId 
+    AND accessible_by_role(current_user_role())
+```
+
+### 19.10 Performance Characteristics
+
+#### Compilation Performance
+- **Plugin Caching**: Plugin responses cached based on function signature
+- **Incremental Compilation**: Only recompile changed plugin functions
+- **Parallel Plugin Execution**: Multiple plugins run concurrently during compilation
+
+#### Runtime Performance  
+- **Connection Pooling**: Database connections pooled across fibers
+- **Query Preparation**: SQL queries prepared once, executed many times
+- **Result Streaming**: Large result sets streamed to prevent memory issues
+- **Fiber Scheduling**: Database I/O operations yield to other fibers
+
+### 19.11 Plugin Examples
+
+#### Complete SQL Plugin Example
+```osprey
+// Database configuration
+import config.database
+
+// Query functions
+fn postgresql getActiveUsers() = 
+    SELECT id, name, email, last_login
+    FROM users 
+    WHERE active = true 
+    ORDER BY last_login DESC
+
+fn postgresql createUser(name: string, email: string) = 
+    INSERT INTO users (name, email, active, created_at)
+    VALUES ($name, $email, true, NOW())
+    RETURNING id, name, email, created_at
+
+fn postgresql updateUserEmail(userId: int, newEmail: string) = 
+    UPDATE users 
+    SET email = $newEmail, updated_at = NOW()
+    WHERE id = $userId
+    RETURNING id, email, updated_at
+
+// Usage in application
+let usersResult = postgresql.getActiveUsers()
+match usersResult {
+    Ok { value } => {
+        print("Found ${length(value)} active users")
+        forEach(value, fn(user) => 
+            print("User: ${user.name} (${user.email})")
+        )
+    }
+    Err { error } => print("Database error: ${error}")
+}
+
+// Create new user
+let createResult = postgresql.createUser(
+    name: "Alice Johnson", 
+    email: "alice@example.com"
+)
+match createResult {
+    Ok { value } => print("Created user with ID: ${value.id}")
+    Err { error } => print("Failed to create user: ${error}")
+}
+```
+
+#### GraphQL Plugin Example
+```osprey
+fn graphql getRepository(owner: string, name: string) = 
+    query GetRepository($owner: String!, $name: String!) {
+        repository(owner: $owner, name: $name) {
+            id
+            name
+            description
+            stargazerCount
+            forkCount
+            issues(first: 10, states: OPEN) {
+                nodes {
+                    id
+                    title
+                    createdAt
+                    author {
+                        login
+                    }
+                }
+            }
+        }
+    }
+
+// Usage
+let repoResult = graphql.getRepository(owner: "microsoft", name: "vscode")
+match repoResult {
+    Ok { value } => {
+        print("Repository: ${value.repository.name}")
+        print("Stars: ${value.repository.stargazerCount}")
+        print("Open issues: ${length(value.repository.issues.nodes)}")
+    }
+    Err { error } => print("GraphQL error: ${error}")
+}
 ```
 
 ---

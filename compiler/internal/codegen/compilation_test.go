@@ -149,43 +149,61 @@ func TestBuildLinkArguments(t *testing.T) {
 	t.Logf("Link arguments: %v", linkArgs)
 
 	// Check that required libraries are referenced
-	hasHTTPLib := false
-	hasFiberLib := false
-	hasSSL := false
-	hasCrypto := false
-	hasPthread := false
+	validateLinkArguments(t, linkArgs)
+}
+
+// validateLinkArguments checks that all required libraries are present in link arguments.
+func validateLinkArguments(t *testing.T, linkArgs []string) {
+	libFlags := collectLibraryFlags(linkArgs)
+	checkRequiredLibraries(t, libFlags)
+}
+
+// collectLibraryFlags collects all library flags from link arguments.
+func collectLibraryFlags(linkArgs []string) map[string]bool {
+	flags := map[string]bool{
+		"http":    false,
+		"fiber":   false,
+		"ssl":     false,
+		"crypto":  false,
+		"pthread": false,
+	}
 
 	for _, arg := range linkArgs {
 		if strings.Contains(arg, "libhttp_runtime.a") {
-			hasHTTPLib = true
+			flags["http"] = true
 		}
 		if strings.Contains(arg, "libfiber_runtime.a") {
-			hasFiberLib = true
+			flags["fiber"] = true
 		}
 		if arg == "-lssl" {
-			hasSSL = true
+			flags["ssl"] = true
 		}
 		if arg == "-lcrypto" {
-			hasCrypto = true
+			flags["crypto"] = true
 		}
 		if arg == "-lpthread" {
-			hasPthread = true
+			flags["pthread"] = true
 		}
 	}
 
-	if !hasHTTPLib {
+	return flags
+}
+
+// checkRequiredLibraries verifies that all required libraries are present.
+func checkRequiredLibraries(t *testing.T, flags map[string]bool) {
+	if !flags["http"] {
 		t.Error("Missing HTTP runtime library")
 	}
-	if !hasFiberLib {
+	if !flags["fiber"] {
 		t.Error("Missing fiber runtime library")
 	}
-	if !hasSSL {
+	if !flags["ssl"] {
 		t.Error("Missing -lssl")
 	}
-	if !hasCrypto {
+	if !flags["crypto"] {
 		t.Error("Missing -lcrypto")
 	}
-	if !hasPthread {
+	if !flags["pthread"] {
 		t.Error("Missing -lpthread")
 	}
 }
@@ -359,7 +377,7 @@ func TestActualCompilationProcess(t *testing.T) {
 
 	// Create a minimal HTTP Osprey file
 	ospCode := `
-func main() {
+fn main() {
     let server = http_server("localhost", 8080)
     http_listen(server) { request ->
         http_response(request, 200, "Hello, World!")

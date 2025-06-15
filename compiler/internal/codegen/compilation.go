@@ -129,107 +129,112 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 		return fmt.Errorf("failed to generate LLVM IR: %w", err)
 	}
 
-	// Write IR to temporary file
+	objFile, err := compileIRToObject(ir, outputPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(objFile) }()
+
+	return linkObjectToExecutable(objFile, outputPath)
+}
+
+func compileIRToObject(ir, outputPath string) (string, error) {
 	irFile := outputPath + ".ll"
 	if err := os.WriteFile(irFile, []byte(ir), FilePermissions); err != nil {
-		return WrapWriteIRFile(err)
+		return "", WrapWriteIRFile(err)
 	}
-	defer func() { _ = os.Remove(irFile) }() // Clean up temp file
+	defer func() { _ = os.Remove(irFile) }()
 
-	// Compile IR to object file using llc
 	objFile := outputPath + ".o"
 	llcCmd := exec.Command("llc", "-filetype=obj", "-o", objFile, irFile) // #nosec G204 - args are controlled
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to compile IR to object file: %w\nllc output: %s", err, string(llcOutput))
+		return "", fmt.Errorf("failed to compile IR to object file: %w\nllc output: %s", err, string(llcOutput))
 	}
 
-	defer func() { _ = os.Remove(objFile) }() // Clean up temp file
+	return objFile, nil
+}
 
-	// Use single path for runtime libraries - works locally and in dev containers
-	fiberRuntimeLib := "bin/libfiber_runtime.a"
-	httpRuntimeLib := "bin/libhttp_runtime.a"
-
-	// Build link arguments with runtime libraries
-	var linkArgs []string
-	linkArgs = append(linkArgs, "-o", outputPath, objFile)
-
-	// Check if libraries exist before linking
-	if _, err := os.Stat(fiberRuntimeLib); err == nil {
-		linkArgs = append(linkArgs, fiberRuntimeLib)
-	}
-
-	if _, err := os.Stat(httpRuntimeLib); err == nil {
-		linkArgs = append(linkArgs, httpRuntimeLib)
-	}
-
-	linkArgs = append(linkArgs, "-lpthread")
-
-	// Add OpenSSL libraries with platform-specific paths
-	// Use pkg-config to get proper OpenSSL flags when available
-	cmd := exec.Command("pkg-config", "--libs", "openssl")
-	if output, err := cmd.Output(); err == nil {
-		// Parse pkg-config output and add flags
-		flags := strings.Fields(strings.TrimSpace(string(output)))
-		fmt.Fprintf(os.Stderr, "DEBUG: pkg-config openssl flags: %v\n", flags)
-		linkArgs = append(linkArgs, flags...)
-	} else {
-		fmt.Fprintf(os.Stderr, "DEBUG: pkg-config failed: %v\n", err)
-		// Fallback to standard OpenSSL flags for different platforms
-		if runtime.GOOS == "darwin" {
-			// macOS with Homebrew OpenSSL
-			linkArgs = append(linkArgs, "-L/opt/homebrew/lib", "-lssl", "-lcrypto")
-		} else {
-			// Linux and other systems
-			linkArgs = append(linkArgs, "-lssl", "-lcrypto")
-		}
-	}
-
-	// Try multiple clang options for linking
-	var clangCommands [][]string
-	fiberExists := false
-	httpExists := false
-
-	if _, err := os.Stat(fiberRuntimeLib); err == nil {
-		fiberExists = true
-	}
-
-	if _, err := os.Stat(httpRuntimeLib); err == nil {
-		httpExists = true
-	}
-
-	if fiberExists || httpExists {
-		clangCommands = [][]string{
-			append([]string{"clang"}, linkArgs...),                   // System clang
-			append([]string{"/usr/bin/clang"}, linkArgs...),          // System path clang
-			append([]string{"/opt/homebrew/bin/clang"}, linkArgs...), // Homebrew clang
-			append([]string{"gcc"}, linkArgs...),                     // Fallback to gcc
-		}
-	} else {
-		clangCommands = [][]string{
-			{"clang", "-o", outputPath, objFile},                   // System clang
-			{"/usr/bin/clang", "-o", outputPath, objFile},          // System path clang
-			{"/opt/homebrew/bin/clang", "-o", outputPath, objFile}, // Homebrew clang
-			{"gcc", "-o", outputPath, objFile},                     // Fallback to gcc
-		}
-	}
+func linkObjectToExecutable(objFile, outputPath string) error {
+	linkArgs := buildLinkArguments(objFile, outputPath)
+	clangCommands := buildClangCommands(linkArgs, outputPath, objFile)
 
 	var lastErr error
-
 	for _, cmd := range clangCommands {
 		fmt.Fprintf(os.Stderr, "DEBUG: Trying link command: %v\n", cmd)
 		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
 
 		linkOutput, err := linkCmd.CombinedOutput()
 		if err == nil {
-			return nil // Success!
+			return nil
 		}
 
 		lastErr = fmt.Errorf("failed to link executable with %s: %w\nOutput: %s", cmd[0], err, string(linkOutput))
 	}
 
 	return fmt.Errorf("failed to link executable with any available compiler: %w", lastErr)
+}
+
+func buildLinkArguments(objFile, outputPath string) []string {
+	linkArgs := []string{"-o", outputPath, objFile}
+
+	// Add runtime libraries if they exist
+	fiberRuntimeLib := "bin/libfiber_runtime.a"
+	httpRuntimeLib := "bin/libhttp_runtime.a"
+
+	if _, err := os.Stat(fiberRuntimeLib); err == nil {
+		linkArgs = append(linkArgs, fiberRuntimeLib)
+	}
+	if _, err := os.Stat(httpRuntimeLib); err == nil {
+		linkArgs = append(linkArgs, httpRuntimeLib)
+	}
+
+	linkArgs = append(linkArgs, "-lpthread")
+	linkArgs = append(linkArgs, getOpenSSLFlags()...)
+
+	return linkArgs
+}
+
+func getOpenSSLFlags() []string {
+	cmd := exec.Command("pkg-config", "--libs", "openssl")
+	if output, err := cmd.Output(); err == nil {
+		flags := strings.Fields(strings.TrimSpace(string(output)))
+		fmt.Fprintf(os.Stderr, "DEBUG: pkg-config openssl flags: %v\n", flags)
+		return flags
+	}
+
+	fmt.Fprintf(os.Stderr, "DEBUG: pkg-config failed, using fallback\n")
+	if runtime.GOOS == "darwin" {
+		return []string{"-L/opt/homebrew/lib", "-lssl", "-lcrypto"}
+	}
+	return []string{"-lssl", "-lcrypto"}
+}
+
+func buildClangCommands(linkArgs []string, outputPath, objFile string) [][]string {
+	fiberExists := fileExists("bin/libfiber_runtime.a")
+	httpExists := fileExists("bin/libhttp_runtime.a")
+
+	if fiberExists || httpExists {
+		return [][]string{
+			append([]string{"clang"}, linkArgs...),
+			append([]string{"/usr/bin/clang"}, linkArgs...),
+			append([]string{"/opt/homebrew/bin/clang"}, linkArgs...),
+			append([]string{"gcc"}, linkArgs...),
+		}
+	}
+
+	return [][]string{
+		{"clang", "-o", outputPath, objFile},
+		{"/usr/bin/clang", "-o", outputPath, objFile},
+		{"/opt/homebrew/bin/clang", "-o", outputPath, objFile},
+		{"gcc", "-o", outputPath, objFile},
+	}
+}
+
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
 }
 
 // CompileAndRun compiles and runs source code using smart JIT execution with default (permissive) security.
