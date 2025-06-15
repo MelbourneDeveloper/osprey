@@ -1,6 +1,10 @@
 **Version:** 0.1.0-alpha
+
 **Date:** June 2025
+
 **Author** Christian Findlay
+
+<div class="table-of-contents">
 
 1. [Introduction](#1-introduction)
    - [Completeness](#11-completeness)
@@ -62,6 +66,8 @@
     - [Error Messages](#184-error-messages)
     - [Programming Best Practices](#185-programming-best-practices)
     - [Implementation Details](#186-implementation-details)
+
+</div>
 
 ## 1. Introduction
 

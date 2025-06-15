@@ -2,25 +2,30 @@
   "folders": [
     {
       "name": "Osprey Compiler",
-      "path": "./compiler"
+      "path": "compiler"
     },
     {
       "name": "Osprey VS Code Extension",
-      "path": "./vscode-extension"
+      "path": "vscode-extension"
     },
     {
+      "name": "webcompiler",
       "path": "webcompiler"
     },
     {
+      "name": "website",
       "path": "website"
     },
     {
+      "name": ".devcontainer",
       "path": ".devcontainer"
     },
     {
+      "name": ".github",
       "path": ".github"
     },
     {
+      "name": "homebrew-package",
       "path": "homebrew-package"
     }
   ],

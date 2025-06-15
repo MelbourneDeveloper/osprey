@@ -2,12 +2,12 @@
    Component Styles - State of the Art
    ============================================ */
 
-/* Header & Navigation - Glass Morphism with Animations */
+/* Header & Navigation - Clean and Consistent */
 .header {
-  background: var(--nav-bg-default);
+  background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border-bottom: 1px solid var(--nav-border-default);
+  border-bottom: 1px solid var(--glass-border);
   position: fixed;
   top: 0;
   left: 0;
@@ -15,13 +15,6 @@
   z-index: var(--z-100);
   animation: slideDown 0.6s var(--ease-out-back);
   transition: all var(--transition-base);
-}
-
-.nav-background {
-  background: var(--nav-bg-default);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-bottom: 1px solid var(--nav-border-default);
 }
 
 @keyframes slideDown {
@@ -34,41 +27,6 @@
     transform: translateY(0);
     opacity: 1;
   }
-}
-
-.header.scrolled {
-  background: var(--nav-bg-scrolled);
-  box-shadow: var(--shadow-lg);
-  border-bottom: 1px solid var(--nav-border-scrolled);
-}
-
-/* Fix navbar text contrast when scrolled */
-.header.scrolled .nav-link {
-  color: #1F1F1F !important;
-  /* Force dark color for white background */
-}
-
-.header.scrolled .nav-github {
-  color: #1F1F1F !important;
-  /* Force dark color for white background */
-}
-
-.header.scrolled .nav-title {
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Ensure hover states also work with scrolled state */
-.header.scrolled .nav-link:hover {
-  color: #005C9C !important;
-  /* Force brand blue for hover */
-}
-
-.header.scrolled .nav-github:hover {
-  color: #005C9C !important;
-  /* Force brand blue for hover */
 }
 
 .nav .container {
@@ -127,7 +85,7 @@
   transition: all var(--transition-base);
 }
 
-/* Animated Navigation Links */
+/* Navigation Links - Clean and Consistent */
 .nav-menu {
   display: flex;
   align-items: center;
@@ -141,23 +99,6 @@
   position: relative;
   padding: var(--space-2) 0;
   transition: all var(--transition-base);
-  animation: fadeInUp 0.6s var(--ease-out-back) backwards;
-}
-
-.nav-link:nth-child(1) {
-  animation-delay: 0.1s;
-}
-
-.nav-link:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.nav-link:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-.nav-link:nth-child(4) {
-  animation-delay: 0.4s;
 }
 
 .nav-link::before {
@@ -184,12 +125,11 @@
 .nav-github {
   color: var(--color-text-secondary);
   transition: all var(--transition-spring);
-  animation: fadeInUp 0.6s var(--ease-out-back) 0.5s backwards;
 }
 
 .nav-github:hover {
   color: var(--color-primary-600);
-  transform: scale(1.2) rotate(360deg);
+  transform: scale(1.1);
 }
 
 /* Mobile Navigation Toggle */
@@ -1569,10 +1509,10 @@ h6:hover .header-anchor {
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--nav-bg-default);
+    background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border-top: 1px solid var(--nav-border-default);
+    border-top: 1px solid var(--glass-border);
     flex-direction: column;
     padding: var(--space-6);
     gap: var(--space-4);
@@ -1583,11 +1523,6 @@ h6:hover .header-anchor {
     z-index: var(--z-90);
   }
 
-  .header.scrolled .nav-menu {
-    background: var(--nav-bg-scrolled);
-    border-top: 1px solid var(--nav-border-scrolled);
-  }
-
   .nav-menu.active {
     transform: translateY(0);
     opacity: 1;
@@ -1596,10 +1531,6 @@ h6:hover .header-anchor {
 
   .nav-toggle {
     display: flex;
-  }
-
-  .header.scrolled .nav-toggle span {
-    background: var(--gradient-primary);
   }
 
   .two-column {
