@@ -27,13 +27,12 @@ description: "A modern functional programming oriented language designed for ele
       <div class="code-example">
         <pre class="language-osprey"><code class="language-osprey">// Simple, clean function definitions
 fn double(n: int) -> int = n * 2
-fn greet(name: string) -> string = "Hello " + name
 
 // String interpolation that works
 let x = 42
 let name = "Alice"
 print("x = ${x}")
-print("Greeting: ${greet(name)}")
+print("name = ${name}")
 
 // Pattern matching on values
 let result = match x {
@@ -99,7 +98,12 @@ brew install osprey</code></pre>
 }
 
 fn double(x: int) -> int = x * 2
-fn square(x: int) -> int = x * x</code></pre>
+fn square(x: int) -> int = x * x
+
+// Test the functions
+print("Testing functions:")
+print(analyzeNumber(0))
+print(analyzeNumber(42))</code></pre>
         </div>
       </div>
     </div>
@@ -109,11 +113,15 @@ fn square(x: int) -> int = x * x</code></pre>
         <div class="code-example">
           <pre class="language-osprey"><code class="language-osprey">fn getGrade(score: int) -> string = match score {
   100 => "Perfect!"
-  90..99 => "Excellent"
-  80..89 => "Very Good"
-  70..79 => "Good"
+  95 => "Excellent"
+  85 => "Very Good"
+  75 => "Good"
   _ => "Needs Improvement"
-}</code></pre>
+}
+
+// Test the function
+print("Grade for 100: ${getGrade(100)}")
+print("Grade for 95: ${getGrade(95)}")</code></pre>
         </div>
       </div>
       <div class="content">
@@ -141,7 +149,8 @@ fn square(x: int) -> int = x * x</code></pre>
       </div>
       <div class="visual">
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">let name = "Alice"
+          <pre class="language-osprey"><code class="language-osprey">// String interpolation example
+let name = "Alice"
 let age = 25
 let score = 95
 
@@ -156,14 +165,16 @@ print("${name} (${age}) scored ${score}/100")</code></pre>
     <div class="two-column">
       <div class="visual">
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">// Clean data transformations
+          <pre class="language-osprey"><code class="language-osprey">// Functional Programming Example
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
+
+// Clean data transformations
 5 |> double |> square |> print
 
-// Range operations
-range(1, 10) 
-  |> filter(fn(x) -> bool = x % 2 == 0)
-  |> map(fn(x) -> int = x * x)
-  |> forEach(print)</code></pre>
+// Range operations with forEach
+print("Range operations:")
+range(1, 10) |> forEach(print)</code></pre>
         </div>
       </div>
       <div class="content">
@@ -205,67 +216,71 @@ range(1, 10)
 
     <div class="showcase-grid">
       <div class="card-code animate-on-scroll">
-        <h3>Web API</h3>
+        <h3>Function Definitions</h3>
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">// Simple HTTP server
-let server = createHttpServer()
-server |> setPort(8080)
+          <pre class="language-osprey"><code class="language-osprey">// Simple, clean function definitions
+fn double(n: int) -> int = n * 2
 
-server |> addRoute("GET", "/users", fn() -> string = {
-  let users = loadUsers()
-  users |> map(userToJson) |> joinWith(",")
-})
+// String interpolation that works
+let x = 42
+let name = "Alice"
+print("x = ${x}")
+print("name = ${name}")
 
-server |> addRoute("POST", "/users", fn(body: string) -> string = {
-  let user = parseUser(body)
-  user |> saveUser |> userToJson
-})
-
-server |> start
-print("Server running on port 8080")</code></pre>
+// Pattern matching on values
+let result = match x {
+  42 => "The answer!"
+  0 => "Zero"
+  _ => "Something else"
+}
+print("Result: ${result}")</code></pre>
         </div>
       </div>
 
       <div class="card-code animate-on-scroll">
-        <h3>Data Processing</h3>
+        <h3>Type Safety</h3>
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">// Process CSV data
-let data = readFile("sales.csv")
-  |> splitLines
-  |> map(parseCsvRow)
-  |> filter(fn(row) -> bool = row.amount > 1000)
-  |> map(fn(row) -> SalesRecord = {
-       product: row.product,
-       revenue: row.amount * row.quantity
-     })
+          <pre class="language-osprey"><code class="language-osprey">fn analyzeNumber(n: int) -> string = match n {
+  0 => "Zero"
+  42 => "The answer!"
+  _ => "Something else"
+}
 
-let totalRevenue = data
-  |> map(fn(r) -> int = r.revenue)
-  |> fold(0, fn(acc, x) -> int = acc + x)
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
 
-print("Total revenue: $${totalRevenue}")</code></pre>
+// Test the functions
+print("Testing functions:")
+print(analyzeNumber(0))
+print(analyzeNumber(42))
+print(analyzeNumber(5))
+
+let x = 5
+let doubled = double(x)
+let squared = square(doubled)
+print("${x} doubled is ${doubled}")
+print("${doubled} squared is ${squared}")</code></pre>
         </div>
       </div>
 
       <div class="card-code animate-on-scroll">
         <h3>Pattern Matching</h3>
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">// Safe JSON parsing
-type JsonValue = 
-  | String(string)
-  | Number(int)
-  | Object(map[string, JsonValue])
-  | Array(list[JsonValue])
-
-fn processJson(value: JsonValue) -> string = match value {
-  String(s) => "Text: ${s}"
-  Number(n) => "Number: ${n}"
-  Object(obj) => "Object with ${obj.size} fields"
-  Array(arr) => "Array with ${arr.length} items"
+          <pre class="language-osprey"><code class="language-osprey">// Pattern matching grade example
+fn getGrade(score: int) -> string = match score {
+  100 => "Perfect!"
+  95 => "Excellent"
+  85 => "Very Good"
+  75 => "Good"
+  _ => "Needs Improvement"
 }
 
-let json = parseJson(input)
-print(processJson(json))</code></pre>
+// Test the function
+print("Grade for 100: ${getGrade(100)}")
+print("Grade for 95: ${getGrade(95)}")
+print("Grade for 85: ${getGrade(85)}")
+print("Grade for 75: ${getGrade(75)}")
+print("Grade for 50: ${getGrade(50)}")</code></pre>
         </div>
       </div>
     </div>
