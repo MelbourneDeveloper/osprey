@@ -1880,8 +1880,8 @@ h6:hover .header-anchor {
 /* Mobile Responsive for Installation */
 @media (max-width: 768px) {
   .blue-box-installation {
-    padding: var(--space-16) 0;
-    margin: var(--space-8) 0;
+    padding: var(--space-16) var(--space-4);
+    margin: var(--space-12) var(--space-2);
   }
 
   .blue-box-installation .section-title {
