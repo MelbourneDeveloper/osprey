@@ -215,45 +215,29 @@ print("=== Fiber Example Complete ===")</code></pre>
       </div>
 
       <div class="card-code">
-        <h3>Safe Arithmetic by Default</h3>
+        <h3>Pattern Matching</h3>
         <p>
-          All arithmetic operations return safe results to handle overflow, underflow, and division by zero. Math errors
-          are impossible to ignore.
+          Exhaustive pattern matching ensures all cases are handled at compile time. No forgotten branches, no runtime
+          surprises.
         </p>
         <div class="code-example typewriter-enabled">
-          <pre class="language-osprey"><code class="language-osprey">// Safe division that cannot panic
-fn divide(a: int, b: int) -> string = match b {
-  0 => "Error: Cannot divide by zero"
-  _ => "Result: ${a / b}"
+          <pre class="language-osprey"><code class="language-osprey">fn analyzeNumber(n: int) -> string = match n {
+    0 => "Zero"
+    1 => "One" 
+    42 => "The answer to everything!"
+    _ => "Some other number"
 }
 
-// Must handle the result
-print("Safe arithmetic examples:")
-print(divide(a: 10, b: 2))
-print(divide(a: 10, b: 0))</code></pre>
-        </div>
-      </div>
-
-      <div class="card-code">
-        <h3>Safe Arithmetic by Default</h3>
-        <p>
-          All arithmetic operations return Result types to handle overflow, underflow, and division by zero. Math errors
-          are impossible to ignore.
-        </p>
-        <div class="code-example typewriter-enabled">
-          <pre class="language-osprey"><code class="language-osprey">// Safe division that cannot panic
-fn divide(a: int, b: int) -> string = match b {
-  0 => "Error: Cannot divide by zero"
-  _ => "Result: ${a / b}"
+fn getCategory(score: int) -> string = match score {
+    100 => "Perfect!"
+    95 => "Excellent"
+    75 => "Good"
+    _ => "Needs Improvement"
 }
 
-// Must handle the result
-print("Safe arithmetic examples:")
-print(divide(a: 10, b: 2))
-print(divide(a: 10, b: 0))
-print(divide(a: 20, b: 4))
-
-print("=== Safe Arithmetic Complete ===")</code></pre>
+print("Number analysis:")
+print("42 is ${analyzeNumber(42)}")
+print("Score 95: ${getCategory(95)}")</code></pre>
         </div>
       </div>
     </div>
