@@ -74,18 +74,20 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", exeFile, objFile)
 
-	// Look for fiber runtime library - prioritize local builds only
+	// Look for fiber runtime library - prioritize local builds, then system installs
 	fiberRuntimePaths := []string{
 		"bin/libfiber_runtime.a",
 		"./bin/libfiber_runtime.a",
 		filepath.Join(filepath.Dir(os.Args[0]), "..", "libfiber_runtime.a"),
+		"/usr/local/lib/libfiber_runtime.a", // System install location
 	}
 
-	// Look for HTTP runtime library - prioritize local builds over system installs
+	// Look for HTTP runtime library - prioritize local builds, then system installs
 	httpRuntimePaths := []string{
 		"bin/libhttp_runtime.a",
 		"./bin/libhttp_runtime.a",
 		filepath.Join(filepath.Dir(os.Args[0]), "..", "libhttp_runtime.a"),
+		"/usr/local/lib/libhttp_runtime.a", // System install location
 	}
 
 	// Add working directory based paths
@@ -131,10 +133,8 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	if output, err := cmd.Output(); err == nil {
 		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
-		fmt.Fprintf(os.Stderr, "DEBUG: JIT pkg-config openssl flags: %v\n", flags)
 		linkArgs = append(linkArgs, flags...)
 	} else {
-		fmt.Fprintf(os.Stderr, "DEBUG: JIT pkg-config failed: %v\n", err)
 		// Fallback to standard OpenSSL flags for different platforms
 		if runtime.GOOS == "darwin" {
 			// macOS with Homebrew OpenSSL - try multiple common paths
@@ -166,16 +166,12 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 		}
 	}
 
-	// Debug output
+	// Debug output - only show warnings if libraries not found
 	if foundFiberLib == "" {
 		fmt.Fprintf(os.Stderr, "Warning: Fiber runtime library not found in any of: %v\n", fiberRuntimePaths)
-	} else {
-		fmt.Fprintf(os.Stderr, "Found fiber runtime library: %s\n", foundFiberLib)
 	}
 	if foundHTTPLib == "" {
 		fmt.Fprintf(os.Stderr, "Warning: HTTP runtime library not found in any of: %v\n", httpRuntimePaths)
-	} else {
-		fmt.Fprintf(os.Stderr, "Found HTTP runtime library: %s\n", foundHTTPLib)
 	}
 
 	// #nosec G204 - compilerPath is validated through findCompiler
