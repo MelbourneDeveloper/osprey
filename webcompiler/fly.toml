@@ -1,0 +1,27 @@
+app = "osprey-webcompiler"
+primary_region = "ord"
+
+[build]
+
+[env]
+NODE_ENV = "production"
+DOCKER_ENV = "true"
+
+[http_service]
+internal_port = 3001
+force_https = true
+auto_stop_machines = true
+auto_start_machines = true
+min_machines_running = 0
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "256mb"
+
+[http_service.concurrency]
+type = "requests"
+hard_limit = 30
+soft_limit = 25
+
+[http_service.http_options]
+idle_timeout = "5s" 
