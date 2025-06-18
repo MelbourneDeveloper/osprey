@@ -12,12 +12,11 @@ DOCS_DIR="$WEBSITE_DIR/src/docs"
 
 echo "Generating Osprey reference documentation..."
 
-# Build the compiler if it doesn't exist
-if [ ! -f "$COMPILER_DIR/bin/osprey" ]; then
-    echo "Building Osprey compiler..."
-    cd "$COMPILER_DIR"
-    make build
-fi
+# Always rebuild the compiler for local platform
+echo "Building Osprey compiler for local platform..."
+cd "$COMPILER_DIR"
+make clean
+make build
 
 # Create reference documentation directory
 mkdir -p "$DOCS_DIR"

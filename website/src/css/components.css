@@ -754,6 +754,7 @@ p:has(.cta-actions) {
   grid-template-columns: 1fr 1fr;
   gap: var(--space-16);
   align-items: center;
+  margin-bottom: var(--space-12);
 }
 
 .two-column .content {
@@ -766,6 +767,26 @@ p:has(.cta-actions) {
   line-height: var(--line-height-relaxed);
   color: var(--color-text-secondary);
   margin-bottom: var(--space-6);
+}
+
+.two-column .content ul {
+  list-style: none;
+  padding: 0;
+}
+
+.two-column .content li {
+  position: relative;
+  padding-left: var(--space-6);
+  margin-bottom: var(--space-3);
+  color: var(--color-text-primary);
+}
+
+.two-column .content li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--color-primary-400);
+  font-weight: var(--font-weight-bold);
 }
 
 .two-column .visual {
@@ -1679,7 +1700,208 @@ h6:hover .header-anchor {
 }
 
 .table-of-contents ol ul a {
-  padding: var(--space-1) var(--space-3);
-  font-weight: var(--font-weight-normal);
-  color: var(--color-primary-300) !important;
+  font-size: var(--font-size-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* Installation Section - Prominent and Beautiful */
+.installation-prominent {
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.1) 0%, rgba(88, 28, 135, 0.1) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: var(--space-20) 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.installation-prominent::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="1" fill="rgba(255,255,255,0.1)"/></svg>') repeat;
+  animation: shimmer 20s linear infinite;
+  pointer-events: none;
+}
+
+.installation-prominent .section-title {
+  text-align: center;
+  font-size: var(--font-size-4xl);
+  margin-bottom: var(--space-16);
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.install-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-8);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.install-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  position: relative;
+  transition: all var(--transition-spring);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.install-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition-spring);
+}
+
+.install-card:hover {
+  transform: translateY(-8px);
+  border-color: rgba(102, 126, 234, 0.3);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 20px rgba(102, 126, 234, 0.2);
+}
+
+.install-card:hover::before {
+  transform: scaleX(1);
+}
+
+.install-card.primary {
+  border-color: rgba(102, 126, 234, 0.3);
+  background: rgba(102, 126, 234, 0.1);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+}
+
+.install-card h3 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--space-4);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.install-card p {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-6);
+  line-height: 1.6;
+}
+
+.install-code {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-top: var(--space-4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.install-code::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.03) 50%, transparent 70%);
+  animation: shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.install-code pre {
+  margin: 0;
+  font-family: 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+
+.install-code code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.install-card .btn {
+  margin-top: var(--space-4);
+  width: 100%;
+  justify-content: center;
+}
+
+.install-card .btn-secondary {
+  background: var(--gradient-secondary);
+  color: white;
+}
+
+.install-card .inline-link {
+  color: var(--color-primary-600);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+  transition: all var(--transition-base);
+}
+
+.install-card .inline-link:hover {
+  color: var(--color-primary-500);
+  border-bottom-color: var(--color-primary-500);
+}
+
+.coming-soon {
+  color: var(--color-accent-500);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-3);
+}
+
+/* Mobile Responsive for Installation */
+@media (max-width: 768px) {
+  .installation-prominent {
+    padding: var(--space-16) 0;
+  }
+
+  .installation-prominent .section-title {
+    font-size: var(--font-size-3xl);
+    margin-bottom: var(--space-12);
+  }
+
+  .install-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  .install-card {
+    padding: var(--space-6);
+  }
+
+  .install-code {
+    padding: var(--space-3);
+  }
+
+  .install-code pre {
+    font-size: var(--font-size-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .install-card h3 {
+    font-size: var(--font-size-lg);
+  }
+
+  .install-code pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
 }
