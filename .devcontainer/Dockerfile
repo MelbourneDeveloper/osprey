@@ -126,9 +126,6 @@ RUN go install golang.org/x/tools/gopls@latest \
 # Install golangci-lint
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.1.6
 
-# Install Wrangler CLI globally
-RUN npm install -g wrangler@latest
-
 # Install Fly CLI
 RUN curl -L https://fly.io/install.sh | sh \
     && mv /root/.fly/bin/flyctl /usr/local/bin/fly \
