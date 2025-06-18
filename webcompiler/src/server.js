@@ -27,7 +27,9 @@ app.use((req, res, next) => {
         'http://localhost:8080',
         'http://127.0.0.1:8080',
         'http://localhost:3001',
-        'http://127.0.0.1:3001'
+        'http://127.0.0.1:3001',
+        'https://ospreylang.dev',
+        'https://www.ospreylang.dev'
     ];
 
     if (allowedOrigins.includes(origin)) {
@@ -173,7 +175,9 @@ const wss = new WebSocketServer({
             'http://localhost:8080',
             'http://127.0.0.1:8080',
             'http://localhost:3001',
-            'http://127.0.0.1:3001'
+            'http://127.0.0.1:3001',
+            'https://ospreylang.dev',
+            'https://www.ospreylang.dev'
         ];
 
         console.log('🔍 WebSocket upgrade request from origin:', origin);
