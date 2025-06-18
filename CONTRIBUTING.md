@@ -13,7 +13,7 @@ Osprey is built on battle-tested tools:
 
 ## AI Assisted Development
 
-You don't need a CS PhD to implement language features. I've been using Claude Sonnet 4 with Cursor, and it's the first combo that actually guided me through the process of building a compiler. Other AI agents will work too, but this setup lets anyone contribute to language design.
+You don't need a CS degree to implement language features. I've been using Claude Sonnet 4 with Cursor, and it's the first combo that actually guided me through the process of building a compiler. Other AI agents will work too, but this setup lets anyone contribute to language design.
 
 The AI can help you:
 - Parse/create ANTLR grammars and understand AST patterns
