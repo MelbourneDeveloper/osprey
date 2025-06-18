@@ -129,6 +129,11 @@ RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/i
 # Install Wrangler CLI globally
 RUN npm install -g wrangler@latest
 
+# Install Fly CLI
+RUN curl -L https://fly.io/install.sh | sh \
+    && mv /root/.fly/bin/flyctl /usr/local/bin/fly \
+    && chmod +x /usr/local/bin/fly
+
 # Set up Git configuration for development
 RUN git config --global init.defaultBranch main \
     && git config --global advice.detachedHead false
