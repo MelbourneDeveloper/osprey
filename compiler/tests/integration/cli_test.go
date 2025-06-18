@@ -332,11 +332,8 @@ print(serverID)`
 		t.Errorf("Expected sandbox mode to block HTTP functions, but compilation succeeded\nOutput: %s", string(output))
 	}
 
-	// Check for security summary and proper error
+	// Check for proper error (security summary removed from CLI output)
 	outputStr := string(output)
-	if !strings.Contains(outputStr, "SANDBOX MODE") {
-		t.Error("Expected security summary with SANDBOX MODE")
-	}
 	if !strings.Contains(outputStr, "unsupported call expression") {
 		t.Error("Expected 'unsupported call expression' error for blocked function")
 	}
@@ -360,11 +357,7 @@ print(clientID)`
 		t.Errorf("Expected --no-http to block HTTP functions, but compilation succeeded\nOutput: %s", string(output))
 	}
 
-	// Check for security summary
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "Unavailable=[HTTP]") {
-		t.Error("Expected security summary showing HTTP unavailable")
-	}
+	// Security summary removed from CLI output - test still validates blocking works
 }
 
 func testNoWebSocketBlocksWebSocket(t *testing.T) {
@@ -386,11 +379,7 @@ print(wsID)`
 			"Output: %s", string(output))
 	}
 
-	// Check for security summary
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "Unavailable=[WebSocket]") {
-		t.Error("Expected security summary showing WebSocket unavailable")
-	}
+	// Security summary removed from CLI output - test still validates blocking works
 }
 
 func testMultipleSecurityFlags(t *testing.T) {
@@ -412,11 +401,7 @@ print(x + y)`
 		t.Errorf("Safe code should compile with security restrictions: %v\nOutput: %s", err, string(output))
 	}
 
-	// Check for security summary
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "Unavailable=[HTTP,WebSocket,FFI]") {
-		t.Error("Expected security summary showing multiple restrictions")
-	}
+	// Security summary removed from CLI output - test still validates restrictions work
 }
 
 func testSafeCodeInSandbox(t *testing.T) {
@@ -440,11 +425,8 @@ print(x + y)`
 		t.Errorf("Safe code should compile in sandbox mode: %v\nOutput: %s", err, string(output))
 	}
 
-	// Check for security summary and LLVM output
+	// Check for LLVM output (security summary removed from CLI)
 	outputStr := string(output)
-	if !strings.Contains(outputStr, "SANDBOX MODE") {
-		t.Error("Expected security summary with SANDBOX MODE")
-	}
 	if !strings.Contains(outputStr, "define") || !strings.Contains(outputStr, "@main") {
 		t.Error("Expected valid LLVM IR output for safe code")
 	}
@@ -467,9 +449,5 @@ func testSecurityFlagCombinations(t *testing.T) {
 		t.Errorf("Safe code should work with --no-fs: %v\nOutput: %s", err, string(output))
 	}
 
-	// Check for security summary
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "FileRead") || !strings.Contains(outputStr, "FileWrite") {
-		t.Error("Expected security summary showing file system restrictions")
-	}
+	// Security summary removed from CLI output - test still validates flag works
 }

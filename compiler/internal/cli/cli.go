@@ -256,7 +256,7 @@ func runRunProgram(source string) CommandResult {
 	}
 
 	return CommandResult{
-		Output:  "Running program...\n",
+		Output:  "",
 		Success: true,
 	}
 }
@@ -1101,7 +1101,7 @@ func runRunProgramWithSecurity(source string, security *SecurityConfig) CommandR
 	}
 
 	return CommandResult{
-		Output:  "Running program...\n",
+		Output:  "",
 		Success: true,
 	}
 }

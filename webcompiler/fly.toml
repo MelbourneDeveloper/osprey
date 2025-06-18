@@ -1,27 +1,32 @@
-app = "osprey-webcompiler"
-primary_region = "ord"
+# fly.toml app configuration file generated for osprey-webcompiler on 2025-06-18T09:26:02Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'osprey-webcompiler'
+primary_region = 'ord'
 
 [build]
 
 [env]
-NODE_ENV = "production"
-DOCKER_ENV = "true"
+  DOCKER_ENV = 'true'
+  NODE_ENV = 'production'
 
 [http_service]
-internal_port = 3001
-force_https = true
-auto_stop_machines = true
-auto_start_machines = true
-min_machines_running = 0
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 30
+    soft_limit = 25
+
+  [http_service.http_options]
+    idle_timeout = 5
 
 [[vm]]
-size = "shared-cpu-1x"
-memory = "256mb"
-
-[http_service.concurrency]
-type = "requests"
-hard_limit = 30
-soft_limit = 25
-
-[http_service.http_options]
-idle_timeout = "5s" 
+  size = 'shared-cpu-1x'
+  memory = '256mb'

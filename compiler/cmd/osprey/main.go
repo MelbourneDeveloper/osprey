@@ -186,9 +186,6 @@ func main() {
 	if security != nil && (security.SandboxMode || !security.AllowHTTP || !security.AllowWebSocket ||
 		!security.AllowFileRead || !security.AllowFileWrite || !security.AllowFFI) {
 
-		// Show security summary
-		fmt.Println(security.GetSecuritySummary())
-
 		// Use security-aware command execution
 		result = cli.RunCommandWithSecurity(filename, outputMode, security)
 	} else {
