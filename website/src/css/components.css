@@ -705,47 +705,52 @@ p:has(.cta-actions) {
   padding: 0 var(--space-8);
 }
 
-/* CTA Section - Unified Call-to-Action styling */
-.cta-section {
+/* Blue Box Section */
+.blue-box {
   background: var(--gradient-primary);
   color: white;
-  padding: var(--space-12);
+  padding: var(--space-20) var(--space-12);
   border-radius: var(--radius-2xl);
-  margin-top: var(--space-16);
+  margin: var(--space-24) var(--space-8);
   text-align: center;
 }
 
-.cta-section h3 {
+.blue-box .container {
+  padding: 0 var(--space-16);
+  max-width: 1200px;
+}
+
+.blue-box h3 {
   font-size: var(--font-size-3xl) !important;
   margin-bottom: var(--space-4);
 }
 
-.cta-section p {
+.blue-box p {
   font-size: var(--font-size-xl);
   margin-bottom: var(--space-8);
   opacity: 0.9;
 }
 
-.cta-buttons,
-.cta-actions {
+.blue-box-buttons,
+.blue-box-actions {
   display: flex;
   gap: var(--space-4);
   justify-content: center;
   flex-wrap: wrap;
 }
 
-.cta-content {
+.blue-box-content {
   text-align: center;
 }
 
-.cta-content h2 {
+.blue-box-content h2 {
   margin-bottom: var(--space-4);
 }
 
-.cta-content p {
+.blue-box-content p {
   font-size: var(--font-size-xl);
   margin-bottom: var(--space-8);
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* Unified two-column layout */
@@ -1333,30 +1338,30 @@ h6:hover .header-anchor {
     padding: 0 var(--space-3);
   }
 
-  .cta-section {
-    padding: var(--space-6);
-    margin-top: var(--space-8);
+  .blue-box {
+    padding: var(--space-12) var(--space-6);
+    margin: var(--space-16) var(--space-4);
     border-radius: var(--radius-lg);
   }
 
-  .cta-content h2 {
+  .blue-box-content h2 {
     font-size: var(--font-size-2xl);
     margin-bottom: var(--space-3);
   }
 
-  .cta-content p {
+  .blue-box-content p {
     font-size: var(--font-size-base);
     margin-bottom: var(--space-6);
   }
 
-  .cta-buttons,
-  .cta-actions {
+  .blue-box-buttons,
+  .blue-box-actions {
     flex-direction: column;
     gap: var(--space-3);
   }
 
-  .cta-buttons .btn,
-  .cta-actions .btn {
+  .blue-box-buttons .btn,
+  .blue-box-actions .btn {
     width: 100%;
   }
 
@@ -1704,17 +1709,23 @@ h6:hover .header-anchor {
   padding: var(--space-1) var(--space-2);
 }
 
-/* Installation Section - Prominent and Beautiful */
-.installation-prominent {
+/* Blue Box Installation Section - Prominent and Beautiful with proper spacing */
+.blue-box-installation {
   background: linear-gradient(135deg, rgba(30, 58, 138, 0.1) 0%, rgba(88, 28, 135, 0.1) 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: var(--space-20) 0;
+  padding: var(--space-24) var(--space-8);
+  margin: var(--space-20) 0;
   position: relative;
   overflow: hidden;
 }
 
-.installation-prominent::before {
+.blue-box-installation .container {
+  padding: 0 var(--space-16);
+  max-width: 1400px;
+}
+
+.blue-box-installation::before {
   content: '';
   position: absolute;
   top: 0;
@@ -1726,7 +1737,7 @@ h6:hover .header-anchor {
   pointer-events: none;
 }
 
-.installation-prominent .section-title {
+.blue-box-installation .section-title {
   text-align: center;
   font-size: var(--font-size-4xl);
   margin-bottom: var(--space-16);
@@ -1868,11 +1879,12 @@ h6:hover .header-anchor {
 
 /* Mobile Responsive for Installation */
 @media (max-width: 768px) {
-  .installation-prominent {
+  .blue-box-installation {
     padding: var(--space-16) 0;
+    margin: var(--space-8) 0;
   }
 
-  .installation-prominent .section-title {
+  .blue-box-installation .section-title {
     font-size: var(--font-size-3xl);
     margin-bottom: var(--space-12);
   }

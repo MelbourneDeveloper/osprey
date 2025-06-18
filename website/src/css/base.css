@@ -122,12 +122,18 @@ h6 {
 .footer h4,
 .footer h5,
 .footer h6,
-.cta-section h1,
-.cta-section h2,
-.cta-section h3,
-.cta-section h4,
-.cta-section h5,
-.cta-section h6 {
+.blue-box h1,
+.blue-box h2,
+.blue-box h3,
+.blue-box h4,
+.blue-box h5,
+.blue-box h6,
+.blue-box-installation h1,
+.blue-box-installation h2,
+.blue-box-installation h3,
+.blue-box-installation h4,
+.blue-box-installation h5,
+.blue-box-installation h6 {
   color: white !important;
 }
 
@@ -168,7 +174,8 @@ h2.section-title {
   color: var(--color-text-secondary) !important;
 }
 
-.cta-section h3 {
+.blue-box h3,
+.blue-box-installation h3 {
   font-size: var(--font-size-3xl) !important;
 }
 
@@ -365,7 +372,8 @@ code:hover {
   .card p,
   .hero p,
   .page-hero p,
-  .cta-section p,
+  .blue-box p,
+  .blue-box-installation p,
   .footer p,
   .footer-content p,
   .footer-section p,
@@ -470,7 +478,8 @@ code:hover {
   .card p,
   .hero p,
   .page-hero p,
-  .cta-section p,
+  .blue-box p,
+  .blue-box-installation p,
   .footer p,
   .footer-content p,
   .footer-section p,
