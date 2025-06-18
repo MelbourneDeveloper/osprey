@@ -66,7 +66,9 @@ httpServer(8080) |> onRequest((req) =>
 
 Built on proven tech: [Go](https://golang.org/) for the compiler, [ANTLR](https://www.antlr.org/) for parsing, and [LLVM](https://llvm.org/) for code generation.
 
-**The best partr**: You don't need to be a compiler expert. AI agents like Claude Sonnet 4 with Cursor make implementing language features accessible to anyone willing to learn. That combo was the first that actually got me over the hump of building a compiler, though other AI setups could get you there too.
+**The best part**: You don't need to be a compiler expert. AI agents like Claude Sonnet 4 with Cursor make implementing language features accessible to anyone willing to learn. That combo was the first that actually got me over the hump of building a compiler, though other AI setups could get you there too.
+
+**Use VS Code Dev Containers** - strongly recommended. Open in VS Code and hit "Reopen in Container". Everything's pre-configured.
 
 ```bash
 cd compiler

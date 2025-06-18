@@ -23,6 +23,8 @@ The AI can help you:
 
 ## Getting Started
 
+**Use VS Code Dev Containers** - strongly recommended. Open in VS Code and hit "Reopen in Container". Everything's already configured.
+
 ```bash
 # Fork and clone
 git clone https://github.com/MelbourneDeveloper/osprey.git
