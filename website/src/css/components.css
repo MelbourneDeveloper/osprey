@@ -701,8 +701,20 @@ p:has(.cta-actions) {
 }
 
 .content-section .container,
-.section .container {
-  padding: 0 var(--space-8);
+.section .container,
+.about-story .container,
+.design-principles .container,
+.philosophy .container,
+.comparison .container,
+.innovation .container,
+.future .container {
+  padding: 0 var(--space-16);
+  max-width: 1400px;
+}
+
+.footer .container {
+  padding: 0 var(--space-16);
+  max-width: 1400px;
 }
 
 /* Blue Box Section */
@@ -882,6 +894,9 @@ p:has(.cta-actions) {
   gap: var(--space-12);
   align-items: start;
   margin-bottom: var(--space-8);
+  padding: 0 var(--space-16);
+  max-width: 1400px;
+  margin: 0 auto var(--space-8) auto;
 }
 
 .footer-logo {
@@ -931,9 +946,11 @@ p:has(.cta-actions) {
 
 .footer-bottom {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: var(--space-6);
+  padding: var(--space-6) var(--space-16) 0;
   text-align: center;
   color: rgba(255, 255, 255, 0.6);
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 /* ============================================
@@ -1334,8 +1351,14 @@ h6:hover .header-anchor {
   }
 
   .content-section .container,
-  .section .container {
-    padding: 0 var(--space-3);
+  .section .container,
+  .about-story .container,
+  .design-principles .container,
+  .philosophy .container,
+  .comparison .container,
+  .innovation .container,
+  .future .container {
+    padding: 0 var(--space-4);
   }
 
   .blue-box {
@@ -1373,12 +1396,17 @@ h6:hover .header-anchor {
     grid-template-columns: 1fr !important;
     gap: var(--space-6) !important;
     text-align: center;
+    padding: 0 var(--space-4) !important;
   }
 
   .footer-links {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
     gap: var(--space-6) !important;
+  }
+
+  .footer-bottom {
+    padding: var(--space-6) var(--space-4) 0 !important;
   }
 
   .footer-section {
