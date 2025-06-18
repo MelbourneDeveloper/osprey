@@ -387,3 +387,43 @@ print("Product: ${result2}")
 
 	t.Log("✅ Rust interop compilation test passed")
 }
+
+// TestSystemLibraryInstallation tests that runtime libraries can be found from system locations
+func TestSystemLibraryInstallation(t *testing.T) {
+	checkLLVMTools(t)
+
+	// Test that system-installed libraries work from any directory
+	tempDir := t.TempDir()
+
+	// Change to temp directory to simulate VSCode working from file directory
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
+
+	// Test with a simple example that requires runtime linking
+	source := `print("System libraries work!")`
+
+	_, err = codegen.CompileToLLVM(source)
+	if err != nil {
+		t.Fatalf("Failed to compile from temp directory: %v", err)
+	}
+
+	// Test execution which requires runtime library linking
+	output, err := captureJITOutput(source)
+	if err != nil {
+		t.Fatalf("Failed to execute from temp directory: %v", err)
+	}
+
+	expected := "System libraries work!\n"
+	if output != expected {
+		t.Errorf("Output mismatch: expected %q, got %q", expected, output)
+	}
+
+	t.Logf("✅ System library installation test passed from directory: %s", tempDir)
+}
