@@ -1,0 +1,10 @@
+// Functional Programming Example
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
+
+// Clean data transformations
+5 |> double |> square |> print
+
+// Range operations with forEach (since filter/map are not yet implemented)
+print("Range operations:")
+range(1, 10) |> forEach(print) 

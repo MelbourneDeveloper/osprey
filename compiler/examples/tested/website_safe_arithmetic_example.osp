@@ -1,0 +1,13 @@
+// Safe division that cannot panic
+fn divide(a: int, b: int) -> string = match b {
+  0 => "Error: Cannot divide by zero"
+  _ => "Result: ${a / b}"
+}
+
+// Must handle the result
+print("Safe arithmetic examples:")
+print(divide(a: 10, b: 2))
+print(divide(a: 10, b: 0))
+print(divide(a: 20, b: 4))
+
+print("=== Safe Arithmetic Complete ===") 

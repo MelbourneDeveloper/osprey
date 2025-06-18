@@ -1,0 +1,15 @@
+// Fiber Example
+fn compute(value: int) -> int = value * 2
+
+// Each fiber runs independently  
+let fiber1 = spawn compute(5)
+let fiber2 = spawn compute(10)
+
+print("Fiber 1 result: ${fiber1}")  
+print("Fiber 2 result: ${fiber2}")
+
+// Background processing with yield
+let job1 = yield 10
+print("Processed ${job1} items")
+
+print("=== Fiber Example Complete ===") 
