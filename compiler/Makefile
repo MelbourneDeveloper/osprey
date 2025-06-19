@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-coverage test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime
+.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime
 
 # Install golangci-lint
 lint-install:
@@ -105,21 +105,12 @@ clean:
 # ========== TEST SUITE ==========
 
 # Run all tests with coverage
-test: build fiber-runtime http-runtime
-	@echo "🚀 Building fresh compiler and running ALL tests with coverage..."
-	@mkdir -p outputs
-	@cd internal/codegen && ln -sf ../../bin bin 2>/dev/null || true
-	@echo "📊 Running all Go tests with coverage..."
-	@set -e; \
-	go test -cover -coverprofile=outputs/coverage.out ./...; \
-	if [ -s outputs/coverage.out ]; then \
-		go tool cover -html=outputs/coverage.out -o outputs/coverage.html; \
-		echo "📊 Coverage report generated: outputs/coverage.html"; \
-		go tool cover -func=outputs/coverage.out | tail -1; \
-		echo "✅ All tests completed!"; \
-	echo "❌ NO COVERAGE DATA COLLECTED!"; \
-		exit 1; \
-	fi
+test: build
+	@echo "🧪 Running all Go tests with coverage..."
+	@go test ./... -count=1 -race -coverpkg=./... -covermode=atomic -coverprofile=coverage.out -v
+	@echo "📊 Generating coverage summary..."
+	@go tool cover -func=coverage.out | grep total || true
+	@echo "✅ All tests completed. Coverage report saved to coverage.out"
 
 # Regenerate parser from grammar (requires ANTLR)
 regenerate-parser:
@@ -128,4 +119,4 @@ regenerate-parser:
 # Run the parser on a file
 run:
 	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=<path>"; exit 1; fi
-	go run cmd/osprey/main.go $(FILE) 
+	go run cmd/osprey/main.go $(FILE)
