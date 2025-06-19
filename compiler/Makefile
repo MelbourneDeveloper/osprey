@@ -104,13 +104,9 @@ clean:
 
 # ========== TEST SUITE ==========
 
-# Run all tests with coverage
+# Run all tests without coverage (fast feedback)
 test: build
-	@echo "🧪 Running all Go tests with coverage..."
-	@go test ./... -count=1 -race -coverpkg=./... -covermode=atomic -coverprofile=coverage.out -v
-	@echo "📊 Generating coverage summary..."
-	@go tool cover -func=coverage.out | grep total || true
-	@echo "✅ All tests completed. Coverage report saved to coverage.out"
+	@go test ./... -count=1 -race -v
 
 # Regenerate parser from grammar (requires ANTLR)
 regenerate-parser:
