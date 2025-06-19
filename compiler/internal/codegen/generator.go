@@ -84,6 +84,9 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 	// Declare external functions for FFI
 	generator.declareExternalFunctions()
 
+	// Register built-in function return types
+	generator.registerBuiltInFunctionReturnTypes()
+
 	// Initialize fiber runtime declarations will happen on first use
 
 	return generator
@@ -115,4 +118,51 @@ func (g *LLVMGenerator) declareExternalFunctions() {
 		ir.NewParam("str1", types.I8Ptr),
 		ir.NewParam("str2", types.I8Ptr))
 	g.functions["strcmp"] = strcmp
+}
+
+// registerBuiltInFunctionReturnTypes registers return types for built-in functions.
+func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
+	// Core functions
+	g.functionReturnTypes["toString"] = TypeString
+	g.functionReturnTypes["print"] = TypeInt     // Returns exit code
+	g.functionReturnTypes["input"] = TypeInt     // Returns input as integer
+	g.functionReturnTypes["range"] = TypeInt     // Returns range object (simplified as int)
+	g.functionReturnTypes["length"] = TypeInt    // Returns string/array length
+	g.functionReturnTypes["contains"] = TypeBool // Returns boolean
+	g.functionReturnTypes["substring"] = TypeString
+
+	// Process and file functions
+	g.functionReturnTypes["spawnProcess"] = TypeInt   // Returns exit code
+	g.functionReturnTypes["writeFile"] = TypeInt      // Returns bytes written or error code
+	g.functionReturnTypes["readFile"] = TypeString    // Returns file content
+	g.functionReturnTypes["parseJSON"] = TypeString   // Returns parsed JSON as string
+	g.functionReturnTypes["extractCode"] = TypeString // Returns extracted code
+
+	// HTTP functions
+	g.functionReturnTypes["httpCreateServer"] = TypeInt // Returns server ID
+	g.functionReturnTypes["httpListen"] = TypeInt       // Returns status code
+	g.functionReturnTypes["httpStopServer"] = TypeInt   // Returns status code
+	g.functionReturnTypes["httpCreateClient"] = TypeInt // Returns client ID
+	g.functionReturnTypes["httpGet"] = TypeString       // Returns response body
+	g.functionReturnTypes["httpPost"] = TypeString      // Returns response body
+	g.functionReturnTypes["httpPut"] = TypeString       // Returns response body
+	g.functionReturnTypes["httpDelete"] = TypeString    // Returns response body
+	g.functionReturnTypes["httpRequest"] = TypeString   // Returns response body
+	g.functionReturnTypes["httpCloseClient"] = TypeInt  // Returns status code
+
+	// WebSocket functions
+	g.functionReturnTypes["webSocketConnect"] = TypeInt         // Returns connection ID
+	g.functionReturnTypes["webSocketSend"] = TypeInt            // Returns status code
+	g.functionReturnTypes["webSocketClose"] = TypeInt           // Returns status code
+	g.functionReturnTypes["webSocketCreateServer"] = TypeInt    // Returns server ID
+	g.functionReturnTypes["webSocketServerListen"] = TypeInt    // Returns status code
+	g.functionReturnTypes["webSocketServerBroadcast"] = TypeInt // Returns status code
+	g.functionReturnTypes["webSocketStopServer"] = TypeInt      // Returns status code
+	g.functionReturnTypes["webSocketKeepAlive"] = TypeInt       // Returns status code
+
+	// Functional programming functions return various types
+	g.functionReturnTypes["forEach"] = TypeInt // Returns status/count
+	g.functionReturnTypes["map"] = TypeInt     // Returns transformed array (simplified as int)
+	g.functionReturnTypes["filter"] = TypeInt  // Returns filtered array (simplified as int)
+	g.functionReturnTypes["fold"] = TypeInt    // Returns accumulated value (could be any type, simplified as int)
 }

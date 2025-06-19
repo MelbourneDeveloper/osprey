@@ -4,23 +4,23 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-// Forward declarations for Osprey functions
-extern char* processCompileRequest(char* jsonBody);
-extern char* processRunRequest(char* jsonBody);
-
 // Process spawning function
 int64_t spawn_process(char* command) {
     if (!command) {
         return -1;
     }
     
-    printf("🚀 Spawning process: %s\n", command);
-    
     // Execute the command and return the exit code
     int result = system(command);
     
-    printf("✅ Process completed with result: %d\n", result);
-    return (int64_t)result;
+    // Extract the actual exit code from system() result
+    int exit_code = 0;
+    if (WIFEXITED(result)) {
+        exit_code = WEXITSTATUS(result);
+    } else {
+        exit_code = -1; // Command didn't exit normally
+    }
+    return (int64_t)exit_code;
 }
 
 // Write file function
@@ -156,31 +156,4 @@ char* extract_code(char* json_string) {
     return unescaped;
 }
 
-// Bridge functions for HTTP server to call Osprey functions
-char* process_compile_request(char* json_body) {
-    if (!json_body) {
-        return strdup("{\"error\": \"No request body provided\"}");
-    }
-    
-    printf("🔗 Bridge: calling processCompileRequest with: %s\n", json_body);
-    char* result = processCompileRequest(json_body);
-    if (!result) {
-        return strdup("{\"error\": \"Compilation function returned null\"}");
-    }
-    
-    return strdup(result);
-}
-
-char* process_run_request(char* json_body) {
-    if (!json_body) {
-        return strdup("{\"error\": \"No request body provided\"}");
-    }
-    
-    printf("🔗 Bridge: calling processRunRequest with: %s\n", json_body);
-    char* result = processRunRequest(json_body);
-    if (!result) {
-        return strdup("{\"error\": \"Run function returned null\"}");
-    }
-    
-    return strdup(result);
-} 
+ 

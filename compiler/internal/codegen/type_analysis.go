@@ -67,31 +67,6 @@ func (g *LLVMGenerator) analyzeBinaryExpressionType(expr *ast.BinaryExpression) 
 	}
 }
 
-// isIdentifierExplicitlyTyped checks if an expression is an explicitly typed identifier or literal.
-//
-//nolint:unused
-func (g *LLVMGenerator) isIdentifierExplicitlyTyped(expr ast.Expression) bool {
-	switch e := expr.(type) {
-	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
-		return true
-	case *ast.Identifier:
-		// Check if it's a parameter with explicit type
-		if g.currentFunctionParameterTypes != nil {
-			if _, exists := g.currentFunctionParameterTypes[e.Name]; exists {
-				return true
-			}
-		}
-		// Check if it's a variable with known type
-		if _, exists := g.variableTypes[e.Name]; exists {
-			return true
-		}
-
-		return false
-	default:
-		return false
-	}
-}
-
 // getOperandType determines the type of an operand in an expression.
 func (g *LLVMGenerator) getOperandType(expr ast.Expression) string {
 	switch e := expr.(type) {

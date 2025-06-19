@@ -78,6 +78,8 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	fiberRuntimePaths := []string{
 		"bin/libfiber_runtime.a",
 		"./bin/libfiber_runtime.a",
+		"../../bin/libfiber_runtime.a",    // For tests running from tests/integration
+		"../../../bin/libfiber_runtime.a", // For deeper test directories
 		filepath.Join(filepath.Dir(os.Args[0]), "..", "libfiber_runtime.a"),
 		"/usr/local/lib/libfiber_runtime.a", // System install location
 	}
@@ -86,6 +88,8 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	httpRuntimePaths := []string{
 		"bin/libhttp_runtime.a",
 		"./bin/libhttp_runtime.a",
+		"../../bin/libhttp_runtime.a",    // For tests running from tests/integration
+		"../../../bin/libhttp_runtime.a", // For deeper test directories
 		filepath.Join(filepath.Dir(os.Args[0]), "..", "libhttp_runtime.a"),
 		"/usr/local/lib/libhttp_runtime.a", // System install location
 	}
@@ -96,11 +100,13 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 			filepath.Join(wd, "bin", "libfiber_runtime.a"),
 			filepath.Join(wd, "..", "bin", "libfiber_runtime.a"),
 			filepath.Join(wd, "..", "..", "bin", "libfiber_runtime.a"),
+			filepath.Join(wd, "..", "..", "..", "bin", "libfiber_runtime.a"), // For test directories
 		)
 		httpRuntimePaths = append(httpRuntimePaths,
 			filepath.Join(wd, "bin", "libhttp_runtime.a"),
 			filepath.Join(wd, "..", "bin", "libhttp_runtime.a"),
 			filepath.Join(wd, "..", "..", "bin", "libhttp_runtime.a"),
+			filepath.Join(wd, "..", "..", "..", "bin", "libhttp_runtime.a"), // For test directories
 		)
 	}
 

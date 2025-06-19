@@ -25,8 +25,8 @@ func TestCompilationFailures(t *testing.T) {
 	expectedErrors := map[string]string{
 		"match_not_exhaustive.osp":   "match expression not exhaustive: missing patterns: [Blue]",
 		"match_not_exhaustive.ospo":  "match expression not exhaustive: missing patterns: [Blue]",
-		"match_unknown_variant.osp":  "unknown variant in match expression: variant 'Maybe' is not defined in type 'Color'",
-		"match_unknown_variant.ospo": "unknown variant in match expression: variant 'Maybe' is not defined in type 'Color'",
+		"match_unknown_variant.osp":  "unknown variant 'Maybe' in match expression for type 'Color'",
+		"match_unknown_variant.ospo": "unknown variant 'Maybe' in match expression for type 'Color'",
 		"built_in_function_redefinition.osp": "Parameter 'x' in function 'toString' " +
 			"requires explicit type annotation - type cannot be inferred from usage",
 		"built_in_function_redefinition.ospo": "Parameter 'x' in function 'toString' " +
