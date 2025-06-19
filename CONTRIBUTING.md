@@ -1,72 +1,75 @@
 # Contributing to Osprey
 
-Thanks for your interest in contributing! This guide will help you get started.
+Want to help build a programming language? You're in the right place. Building a language is a several year long process. Right now, the aims are building community, getting the first example apps deployed and shaping the ergonomics of the language.
 
-## Ways to Contribute
+Even discussions are great at this point.
 
-1. **Implement language features** - Check [compiler/spec.md](compiler/spec.md) for unimplemented features
-2. **Write tests** - Add examples to `compiler/examples/` directory
-3. **Fix bugs** - Look for issues labeled "good first issue"
-4. **Improve documentation** - Enhance error messages and examples
+## The Tech Stack
 
-## Quick Start
+Osprey is built on battle-tested tools:
+- **[Go](https://golang.org/)** - Compiler implementation 
+- **[ANTLR](https://www.antlr.org/)** - Grammar parsing
+- **[LLVM](https://llvm.org/)** - Code generation
 
-### Prerequisites
-- Docker (Dev Containers recommended)
-- GitHub account
+## AI Assisted Development
 
-### Setup
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/osprey.git`
-3. Open in VS Code and use "Reopen in Devcontainer"
-4. Create feature branch: `git checkout -b feature/your-feature-name`
+You don't need a CS degree to implement language features. I've been using Claude Sonnet 4 with Cursor, and it's the first combo that actually guided me through the process of building a compiler. Other AI agents will work too, but this setup lets anyone contribute to language design.
 
-### Development
+The AI can help you:
+- Parse/create ANTLR grammars and understand AST patterns
+- Implement new operators and language constructs
+- Debug LLVM IR generation
+- Write comprehensive tests
+
+## Getting Started
+
+**Use VS Code Dev Containers** - strongly recommended. Open in VS Code and hit "Reopen in Container". Everything's already configured.
+
 ```bash
-cd compiler
-go test ./...        # Run tests
-make build          # Build compiler
-make test           # Test with examples
+# Fork and clone
+git clone https://github.com/MelbourneDeveloper/osprey.git
+cd osprey/compiler
+
+# Build and test
+make install-deps
+make build
+make test
 ```
 
-### Submit Changes
-1. Commit with clear message describing what and why
-2. Push to your fork: `git push origin feature/your-feature-name`
-3. Create pull request with:
-   - Clear description of changes
-   - Testing performed
-   - Any breaking changes
+## What to Work On
 
-## Finding Work
+1. **Language features** - Check [spec.md](compiler/spec.md) for "NOT IMPLEMENTED" 
+2. **New operators** - Add arithmetic, comparison, or logical operators
+3. **Pattern matching** - Extend match expressions
+4. **Standard library** - Add built-in functions
+5. **Make examples** - The HTTP server works. Try building an API
+6. **Test compilation errors** - Make sure the compiler is forcing you to do things the right way
 
-- Browse issues with "good first issue" or "help wanted" labels
-- Search for `TODO` comments in codebase
-- Check `compiler/examples/failscompilation/` for features that should work
-- Review [spec.md](compiler/spec.md) for "NOT IMPLEMENTED" sections
+## The AI Workflow
+
+1. **Understand the pattern** - Ask your AI: "How does pattern matching work in this codebase?"
+2. **Implement incrementally** - Start with parsing, then AST, then codegen
+3. **Test everything** - Add examples to `compiler/examples/tested/`
+4. **Fix edge cases** - Let the AI help debug LLVM IR issues
+
+Example prompts:
+- "Add a new arithmetic operator to the ANTLR grammar"
+- "Implement string interpolation in the AST builder"
+- "Generate LLVM IR for this pattern match"
 
 ## Code Guidelines
 
-- Follow existing patterns and style
-- Include tests for new functionality
-- Keep changes focused and atomic
-- Document complex logic with comments
+- Follow existing patterns - Go lints enforce a lot
+- Test new features thoroughly
+- Keep changes focused
 - Fix linter errors before submitting
-
-## Using AI Tools
-
-AI tools like Claude can help you:
-- Understand complex compiler concepts
-- Implement language features
-- Debug issues and write tests
-- Learn patterns from existing code
-
-Ask questions like: "How do I add a new operator to this parser?" or "What's the pattern for implementing pattern matching?"
 
 ## Getting Help
 
 - Open an issue for discussion
 - Check existing issues and documentation
 - Review similar implementations in the codebase
+- The spec is the source of truth
 
 ## License
 
