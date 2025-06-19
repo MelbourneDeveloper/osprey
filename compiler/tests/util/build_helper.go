@@ -30,14 +30,18 @@ func CleanAndRebuildAll(projectRoot string) {
 	// 3. Re-build Rust interop library (when present)
 	rustDir := filepath.Join(projectRoot, "examples", "rust_integration")
 	if _, err := os.Stat(rustDir); err == nil {
-		cleanCmd := exec.Command("cargo", "clean")
-		cleanCmd.Dir = rustDir
-		if output, err := cleanCmd.CombinedOutput(); err != nil {
-			panic("Failed to clean Rust artifacts: " + err.Error() + "\nOutput: " + string(output))
+		// Only run cargo clean if there's a target directory to clean
+		targetDir := filepath.Join(rustDir, "target")
+		if _, targetErr := os.Stat(targetDir); targetErr == nil {
+			cleanCmd := exec.Command("cargo", "clean")
+			cleanCmd.Dir = rustDir
+			if output, err := cleanCmd.CombinedOutput(); err != nil {
+				panic("Failed to clean Rust artifacts: " + err.Error() + "\nOutput: " + string(output))
+			}
 		}
 
-		targetDir := filepath.Join(os.TempDir(), "osprey_rust_target_"+strconv.Itoa(os.Getpid()))
-		cmd = exec.Command("cargo", "build", "--target-dir", targetDir, "-j", "1")
+		tempTargetDir := filepath.Join(os.TempDir(), "osprey_rust_target_"+strconv.Itoa(os.Getpid()))
+		cmd = exec.Command("cargo", "build", "--target-dir", tempTargetDir, "-j", "1")
 		cmd.Dir = rustDir
 		if output, err := cmd.CombinedOutput(); err != nil {
 			panic("Failed to build Rust interop: " + err.Error() + "\nOutput: " + string(output))
