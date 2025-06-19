@@ -76,45 +76,42 @@ jobs:
           fi
           echo "✅ Directory structure verified"
 
-      - name: Run tests with coverage check and auto-bump
+      - name: Run tests & enforce coverage threshold
         working-directory: "./compiler"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚀 Running all tests with coverage..."
-          sudo apt-get update && sudo apt-get install -y bc
+          sudo apt-get update -qq && sudo apt-get install -y -qq bc
 
-                    make test-all
-          go test -coverprofile=coverage.out ./internal/... ./tests/integration/ >/dev/null 2>&1
-          CURRENT_COVERAGE=$(go tool cover -func=coverage.out | grep "total:" | awk '{print $3}' | sed 's/%//')
-          MINIMUM_COVERAGE="${{ vars.MINIMUM_COVERAGE }}"
+          echo "🚀 Executing full test-suite with coverage…"
+          ./coverage_report.sh
 
-          echo "Current coverage: ${CURRENT_COVERAGE}%"
+          # Extract the total percentage (numeric, no % sign)
+          CURRENT_COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')
+          MINIMUM_COVERAGE="${{ vars.TEST_COVERAGE_COMPILER }}"
 
-          # If no minimum set, bootstrap with current coverage
+          echo "Current coverage : ${CURRENT_COVERAGE}%"
           if [ -z "$MINIMUM_COVERAGE" ]; then
-            echo "🚀 No MINIMUM_COVERAGE variable set - bootstrapping with current coverage!"
-            gh variable set MINIMUM_COVERAGE --body "$CURRENT_COVERAGE"
-            echo "✅ MINIMUM_COVERAGE set to ${CURRENT_COVERAGE}%"
+            echo "🌱 No TEST_COVERAGE_COMPILER variable set – bootstrapping with ${CURRENT_COVERAGE}%"
+            gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE"
             exit 0
           fi
 
-          echo "Minimum required: ${MINIMUM_COVERAGE}%"
+          echo "Required minimum : ${MINIMUM_COVERAGE}%"
 
-          # Check if coverage dropped
+          # Fail if coverage dropped
           if [ "$(echo "$CURRENT_COVERAGE < $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
-            echo "❌ Coverage dropped below minimum threshold!"
+            echo "❌ Coverage dropped below threshold!"
             exit 1
           fi
 
-          # If coverage improved, bump the variable
+          # Bump stored threshold if coverage increased
           if [ "$(echo "$CURRENT_COVERAGE > $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
-            echo "🚀 Coverage improved from ${MINIMUM_COVERAGE}% to ${CURRENT_COVERAGE}%!"
-            gh variable set MINIMUM_COVERAGE --body "$CURRENT_COVERAGE"
-            echo "✅ Coverage threshold bumped to ${CURRENT_COVERAGE}%"
-          else
-            echo "✅ Coverage check passed"
+            echo "📈 Coverage improved – updating variable to ${CURRENT_COVERAGE}%"
+            gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE"
           fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          echo "✅ Coverage check passed"
 
       - name: Test example compilation and execution
         working-directory: "./compiler"
