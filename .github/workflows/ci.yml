@@ -76,11 +76,45 @@ jobs:
           fi
           echo "✅ Directory structure verified"
 
-      - name: Run all tests
+      - name: Run tests with coverage check and auto-bump
         working-directory: "./compiler"
         run: |
-          echo "🚀 Running all tests..."
-          make test-all
+          echo "🚀 Running all tests with coverage..."
+          sudo apt-get update && sudo apt-get install -y bc
+
+                    make test-all
+          go test -coverprofile=coverage.out ./internal/... ./tests/integration/ >/dev/null 2>&1
+          CURRENT_COVERAGE=$(go tool cover -func=coverage.out | grep "total:" | awk '{print $3}' | sed 's/%//')
+          MINIMUM_COVERAGE="${{ vars.MINIMUM_COVERAGE }}"
+
+          echo "Current coverage: ${CURRENT_COVERAGE}%"
+
+          # If no minimum set, bootstrap with current coverage
+          if [ -z "$MINIMUM_COVERAGE" ]; then
+            echo "🚀 No MINIMUM_COVERAGE variable set - bootstrapping with current coverage!"
+            gh variable set MINIMUM_COVERAGE --body "$CURRENT_COVERAGE"
+            echo "✅ MINIMUM_COVERAGE set to ${CURRENT_COVERAGE}%"
+            exit 0
+          fi
+
+          echo "Minimum required: ${MINIMUM_COVERAGE}%"
+
+          # Check if coverage dropped
+          if [ "$(echo "$CURRENT_COVERAGE < $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
+            echo "❌ Coverage dropped below minimum threshold!"
+            exit 1
+          fi
+
+          # If coverage improved, bump the variable
+          if [ "$(echo "$CURRENT_COVERAGE > $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
+            echo "🚀 Coverage improved from ${MINIMUM_COVERAGE}% to ${CURRENT_COVERAGE}%!"
+            gh variable set MINIMUM_COVERAGE --body "$CURRENT_COVERAGE"
+            echo "✅ Coverage threshold bumped to ${CURRENT_COVERAGE}%"
+          else
+            echo "✅ Coverage check passed"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Test example compilation and execution
         working-directory: "./compiler"
