@@ -344,3 +344,26 @@ type BlockExpression struct {
 }
 
 func (b *BlockExpression) isExpression() {}
+
+// ListLiteral represents an immutable list literal like [1, 2, 3].
+type ListLiteral struct {
+	Elements []Expression
+}
+
+func (l *ListLiteral) isExpression() {}
+
+// ListAccessExpression represents safe list access like list[0] -> Result<T, IndexError>.
+type ListAccessExpression struct {
+	List  Expression
+	Index Expression
+}
+
+func (l *ListAccessExpression) isExpression() {}
+
+// LoopExpression represents infinite loops for server applications
+type LoopExpression struct {
+	Condition *Expression     // Optional condition for conditional loops
+	Body      BlockExpression // Loop body
+}
+
+func (l *LoopExpression) isExpression() {}

@@ -64,5 +64,33 @@ func (b *Builder) buildExprStmt(ctx parser.IExprStmtContext) *ExpressionStatemen
 }
 
 func (b *Builder) buildExpression(ctx parser.IExprContext) Expression {
+	// Check for loop expression first
+	if ctx.LoopExpr() != nil {
+		return b.buildLoopExpr(ctx.LoopExpr())
+	}
+
 	return b.buildMatchExpr(ctx.MatchExpr())
+}
+
+// buildLoopExpr builds a LoopExpression from the parse tree.
+func (b *Builder) buildLoopExpr(ctx parser.ILoopExprContext) *LoopExpression {
+	var condition *Expression
+
+	// Check if it's a conditional loop
+	if ctx.Expr() != nil {
+		expr := b.buildExpression(ctx.Expr())
+		condition = &expr
+	}
+
+	// Build the loop body
+	blockBody := b.buildBlockBody(ctx.BlockBody())
+	body := BlockExpression{
+		Statements: blockBody.Statements,
+		Expression: blockBody.Expression,
+	}
+
+	return &LoopExpression{
+		Condition: condition,
+		Body:      body,
+	}
 }

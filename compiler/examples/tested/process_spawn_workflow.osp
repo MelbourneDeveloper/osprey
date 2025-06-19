@@ -1,0 +1,18 @@
+// 🚀 Process Spawning Workflow Example  
+// Demonstrates basic workflow with process spawning
+
+print("=== Process Spawning Workflow ===")
+
+// Test 1: Simple process
+let result1 = spawnProcess("echo 'Step 1'")
+print("Step 1 result: ${toString(result1)}")
+
+// Test 2: Another process
+let result2 = spawnProcess("echo 'Step 2'")
+print("Step 2 result: ${toString(result2)}")
+
+// Test 3: Process in fiber
+let fiberResult = spawn spawnProcess("echo 'Fiber step'")
+print("Fiber result: ${toString(fiberResult)}")
+
+print("=== Workflow Complete ===") 

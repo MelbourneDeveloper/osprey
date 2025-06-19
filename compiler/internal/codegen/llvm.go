@@ -75,6 +75,22 @@ func (g *LLVMGenerator) handleCoreFunctions(name string, callExpr *ast.CallExpre
 		return g.generateFilterCall(callExpr)
 	case FoldFunc:
 		return g.generateFoldCall(callExpr)
+	case LengthFunc:
+		return g.generateLengthCall(callExpr)
+	case ContainsFunc:
+		return g.generateContainsCall(callExpr)
+	case SubstringFunc:
+		return g.generateSubstringCall(callExpr)
+	case SpawnProcessFunc:
+		return g.generateSpawnProcessCall(callExpr)
+	case WriteFileFunc:
+		return g.generateWriteFileCall(callExpr)
+	case ReadFileFunc:
+		return g.generateReadFileCall(callExpr)
+	case ParseJSONFunc:
+		return g.generateParseJSONCall(callExpr)
+	case ExtractCodeFunc:
+		return g.generateExtractCodeCall(callExpr)
 	default:
 		return nil, nil
 	}
@@ -1369,9 +1385,240 @@ func (g *LLVMGenerator) callBuiltInToString(value value.Value) (value.Value, err
 
 // generateTestAnyCall generates a function that returns 'any' type for testing validation.
 func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
-	// Return a simple integer but mark the function as returning 'any'
-	// This will be used to test that direct access to 'any' types fails
-	g.functionReturnTypes["testAny"] = TypeAny
-
+	// Create a test_any function that returns 42 as a test value
 	return constant.NewInt(types.I64, DefaultPlaceholder), nil
+}
+
+// generateLengthCall handles length(s: string) -> int function calls.
+func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != OneArg {
+		return nil, WrapLengthWrongArgs(len(callExpr.Arguments))
+	}
+
+	arg, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the strlen function
+	strlenFunc := g.module.NewFunc("strlen", types.I64, ir.NewParam("str", types.I8Ptr))
+
+	// Call strlen(arg)
+	result := g.builder.NewCall(strlenFunc, arg)
+	return result, nil
+}
+
+// generateContainsCall handles contains(haystack: string, needle: string) -> bool function calls.
+func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != TwoArgs {
+		return nil, WrapContainsWrongArgs(len(callExpr.Arguments))
+	}
+
+	haystack, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	needle, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the strstr function
+	strstrFunc := g.module.NewFunc("strstr", types.I8Ptr,
+		ir.NewParam("haystack", types.I8Ptr),
+		ir.NewParam("needle", types.I8Ptr))
+
+	// Call strstr(haystack, needle)
+	result := g.builder.NewCall(strstrFunc, haystack, needle)
+
+	// Check if result is not null (convert to bool)
+	nullPtr := constant.NewNull(types.I8Ptr)
+	isNotNull := g.builder.NewICmp(enum.IPredNE, result, nullPtr)
+
+	// Convert i1 to i64 for consistency
+	return g.builder.NewZExt(isNotNull, types.I64), nil
+}
+
+// generateSubstringCall handles substring(s: string, start: int, end: int) -> string function calls.
+// generateSpawnProcessCall generates calls to spawn external processes.
+func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != 1 {
+		return nil, WrapSpawnProcessWrongArgs(len(callExpr.Arguments))
+	}
+
+	// Get the command argument
+	commandArg, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the external C function
+	var spawnProcessFunc *ir.Func
+	if fn, exists := g.functions["spawn_process"]; exists {
+		spawnProcessFunc = fn
+	} else {
+		spawnProcessFunc = g.module.NewFunc("spawn_process", types.I64, ir.NewParam("command", types.I8Ptr))
+		g.functions["spawn_process"] = spawnProcessFunc
+	}
+
+	// Call the C function
+	result := g.builder.NewCall(spawnProcessFunc, commandArg)
+	return result, nil
+}
+
+// generateWriteFileCall generates calls to write files.
+func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {
+	const expectedArgs = 2
+	if len(callExpr.Arguments) != expectedArgs {
+		return nil, WrapWriteFileWrongArgs(len(callExpr.Arguments))
+	}
+
+	// Get the arguments
+	filenameArg, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	contentArg, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the external C function
+	var writeFileFunc *ir.Func
+	if fn, exists := g.functions["write_file"]; exists {
+		writeFileFunc = fn
+	} else {
+		writeFileFunc = g.module.NewFunc("write_file", types.I64,
+			ir.NewParam("filename", types.I8Ptr), ir.NewParam("content", types.I8Ptr))
+		g.functions["write_file"] = writeFileFunc
+	}
+
+	// Call the C function
+	result := g.builder.NewCall(writeFileFunc, filenameArg, contentArg)
+	return result, nil
+}
+
+// generateReadFileCall generates calls to read files.
+func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != 1 {
+		return nil, WrapReadFileWrongArgs(len(callExpr.Arguments))
+	}
+
+	// Get the filename argument
+	filenameArg, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the external C function
+	var readFileFunc *ir.Func
+	if fn, exists := g.functions["read_file"]; exists {
+		readFileFunc = fn
+	} else {
+		readFileFunc = g.module.NewFunc("read_file", types.I8Ptr, ir.NewParam("filename", types.I8Ptr))
+		g.functions["read_file"] = readFileFunc
+	}
+
+	// Call the C function
+	result := g.builder.NewCall(readFileFunc, filenameArg)
+	return result, nil
+}
+
+// generateParseJSONCall generates calls to parse JSON.
+func (g *LLVMGenerator) generateParseJSONCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != 1 {
+		return nil, WrapParseJSONWrongArgs(len(callExpr.Arguments))
+	}
+
+	// Get the JSON string argument
+	jsonArg, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the external C function
+	var parseJSONFunc *ir.Func
+	if fn, exists := g.functions["parse_json"]; exists {
+		parseJSONFunc = fn
+	} else {
+		parseJSONFunc = g.module.NewFunc("parse_json", types.I8Ptr, ir.NewParam("json_string", types.I8Ptr))
+		g.functions["parse_json"] = parseJSONFunc
+	}
+
+	// Call the C function
+	result := g.builder.NewCall(parseJSONFunc, jsonArg)
+	return result, nil
+}
+
+// generateExtractCodeCall generates calls to extract code from JSON.
+func (g *LLVMGenerator) generateExtractCodeCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != 1 {
+		return nil, WrapExtractCodeWrongArgs(len(callExpr.Arguments))
+	}
+
+	// Get the JSON string argument
+	jsonArg, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the external C function
+	var extractCodeFunc *ir.Func
+	if fn, exists := g.functions["extract_code"]; exists {
+		extractCodeFunc = fn
+	} else {
+		extractCodeFunc = g.module.NewFunc("extract_code", types.I8Ptr, ir.NewParam("json_string", types.I8Ptr))
+		g.functions["extract_code"] = extractCodeFunc
+	}
+
+	// Call the C function
+	result := g.builder.NewCall(extractCodeFunc, jsonArg)
+	return result, nil
+}
+
+func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != ThreeArgs {
+		return nil, WrapSubstringWrongArgs(len(callExpr.Arguments))
+	}
+
+	str, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	start, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+
+	end, err := g.generateExpression(callExpr.Arguments[2])
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate length: end - start
+	length := g.builder.NewSub(end, start)
+
+	// Allocate memory for the substring (length + 1 for null terminator)
+	lengthPlusOne := g.builder.NewAdd(length, constant.NewInt(types.I64, 1))
+	mallocFunc := g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+	newStr := g.builder.NewCall(mallocFunc, lengthPlusOne)
+
+	// Calculate source pointer: str + start
+	srcPtr := g.builder.NewGetElementPtr(types.I8, str, start)
+
+	// Copy the substring using memcpy
+	memcpyFunc := g.module.NewFunc("memcpy", types.I8Ptr,
+		ir.NewParam("dest", types.I8Ptr),
+		ir.NewParam("src", types.I8Ptr),
+		ir.NewParam("n", types.I64))
+	g.builder.NewCall(memcpyFunc, newStr, srcPtr, length)
+
+	// Add null terminator
+	nullTermPos := g.builder.NewGetElementPtr(types.I8, newStr, length)
+	g.builder.NewStore(constant.NewInt(types.I8, 0), nullTermPos)
+
+	return newStr, nil
 }

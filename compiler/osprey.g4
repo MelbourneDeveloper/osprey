@@ -62,12 +62,18 @@ exprStmt        : expr ;
 
 expr
     : matchExpr
+    | loopExpr
     ;
 
 matchExpr
     : MATCH expr LBRACE matchArm+ RBRACE
     | selectExpr
     | binaryExpr
+    ;
+
+loopExpr
+    : LOOP LBRACE blockBody RBRACE              // Infinite loop: loop { ... }
+    | LOOP LPAREN expr RPAREN LBRACE blockBody RBRACE  // Conditional loop: loop(condition) { ... }
     ;
 
 selectExpr
@@ -134,6 +140,7 @@ primary
     | blockExpr                                   // Block expressions
     | literal                                     // String, number, boolean literals
     | lambdaExpr                                  // Lambda expressions
+    | ID LSQUARE INT RSQUARE                      // List access: list[0] -> Result<T, IndexError>
     | ID                                          // Variable reference
     | LPAREN expr RPAREN                          // Parenthesized expression
     ;
@@ -175,7 +182,11 @@ literal
     | STRING
     | INTERPOLATED_STRING
     | TRUE
-    | FALSE ;
+    | FALSE
+    | listLiteral ;
+
+listLiteral
+    : LSQUARE (expr (COMMA expr)*)? RSQUARE ;
 
 docComment      : DOC_COMMENT+ ;
 

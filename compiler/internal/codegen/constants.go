@@ -52,6 +52,20 @@ const (
 	FoldFunc           = "fold"
 	MainFunctionName   = "main"
 	WebSocketKeepAlive = "webSocketKeepAlive"
+
+	// String utility functions
+	LengthFunc    = "length"
+	ContainsFunc  = "contains"
+	SubstringFunc = "substring"
+
+	// Process and system functions
+	SpawnProcessFunc = "spawnProcess"
+	WriteFileFunc    = "writeFile"
+	ReadFileFunc     = "readFile"
+
+	// JSON functions
+	ParseJSONFunc   = "parseJSON"
+	ExtractCodeFunc = "extractCode"
 )
 
 // HTTP Function names.

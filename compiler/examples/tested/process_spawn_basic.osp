@@ -1,0 +1,10 @@
+// 🚀 Basic Process Spawning Example
+// Demonstrates basic spawnProcess function
+
+print("=== Basic Process Spawning Test ===")
+
+// Test 1: Simple echo command
+let result = spawnProcess("echo 'Hello World'")
+print("Process result: ${toString(result)}")
+
+print("=== Test Complete ===") 

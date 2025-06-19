@@ -181,7 +181,8 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 // CheckProtectedFunction checks if a function name is protected (built-in).
 func CheckProtectedFunction(fnDecl *ast.FunctionDeclaration) error {
 	switch fnDecl.Name {
-	case PrintFunc, InputFunc, RangeFunc, ForEachFunc, MapFunc, FilterFunc, FoldFunc:
+	case PrintFunc, InputFunc, RangeFunc, ForEachFunc, MapFunc, FilterFunc, FoldFunc,
+		LengthFunc, ContainsFunc, SubstringFunc:
 		return WrapBuiltInRedefine(fnDecl.Name)
 	default:
 		return nil

@@ -182,6 +182,12 @@ func (s *BaseospreyListener) EnterMatchExpr(ctx *MatchExprContext) {}
 // ExitMatchExpr is called when production matchExpr is exited.
 func (s *BaseospreyListener) ExitMatchExpr(ctx *MatchExprContext) {}
 
+// EnterLoopExpr is called when production loopExpr is entered.
+func (s *BaseospreyListener) EnterLoopExpr(ctx *LoopExprContext) {}
+
+// ExitLoopExpr is called when production loopExpr is exited.
+func (s *BaseospreyListener) ExitLoopExpr(ctx *LoopExprContext) {}
+
 // EnterSelectExpr is called when production selectExpr is entered.
 func (s *BaseospreyListener) EnterSelectExpr(ctx *SelectExprContext) {}
 
@@ -307,6 +313,12 @@ func (s *BaseospreyListener) EnterLiteral(ctx *LiteralContext) {}
 
 // ExitLiteral is called when production literal is exited.
 func (s *BaseospreyListener) ExitLiteral(ctx *LiteralContext) {}
+
+// EnterListLiteral is called when production listLiteral is entered.
+func (s *BaseospreyListener) EnterListLiteral(ctx *ListLiteralContext) {}
+
+// ExitListLiteral is called when production listLiteral is exited.
+func (s *BaseospreyListener) ExitListLiteral(ctx *ListLiteralContext) {}
 
 // EnterDocComment is called when production docComment is entered.
 func (s *BaseospreyListener) EnterDocComment(ctx *DocCommentContext) {}

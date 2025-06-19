@@ -163,6 +163,63 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 			ReturnType: "any",
 			Example:    `let sum = fold(range(1, 5), 0, fn(acc, x) { acc + x })\nprint(sum)  // Prints: 10`,
 		},
+		"length": {
+			Name:        "length",
+			Signature:   "length(s: string) -> int",
+			Description: "Returns the length of a string.",
+			Parameters: []ParameterDesc{
+				{
+					Name:        "s",
+					Type:        "string",
+					Description: "The string to measure",
+				},
+			},
+			ReturnType: "int",
+			Example:    `let len = length("hello")\nprint(len)  // Prints: 5`,
+		},
+		"contains": {
+			Name:        "contains",
+			Signature:   "contains(haystack: string, needle: string) -> bool",
+			Description: "Checks if a string contains a substring.",
+			Parameters: []ParameterDesc{
+				{
+					Name:        "haystack",
+					Type:        "string",
+					Description: "The string to search in",
+				},
+				{
+					Name:        "needle",
+					Type:        "string",
+					Description: "The substring to search for",
+				},
+			},
+			ReturnType: "bool",
+			Example:    `let found = contains("hello world", "world")\nprint(found)  // Prints: true`,
+		},
+		"substring": {
+			Name:        "substring",
+			Signature:   "substring(s: string, start: int, end: int) -> string",
+			Description: "Extracts a substring from start to end index.",
+			Parameters: []ParameterDesc{
+				{
+					Name:        "s",
+					Type:        "string",
+					Description: "The source string",
+				},
+				{
+					Name:        "start",
+					Type:        "int",
+					Description: "Starting index (inclusive)",
+				},
+				{
+					Name:        "end",
+					Type:        "int",
+					Description: "Ending index (exclusive)",
+				},
+			},
+			ReturnType: "string",
+			Example:    `let sub = substring("hello", 1, 4)\nprint(sub)  // Prints: ell`,
+		},
 	}
 }
 

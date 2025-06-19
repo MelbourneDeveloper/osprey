@@ -282,6 +282,23 @@ func getExpectedOutputs() map[string]string {
 			"Stopping server...\n" +
 			"Server stopped with result: 0\n" +
 			"=== Advanced HTTP Test Complete ===\n",
+		// Process spawning examples
+		"process_spawn_basic.osp": "=== Basic Process Spawning Test ===\n" +
+			"Process result: 0\n" +
+			"=== Test Complete ===\n",
+		"process_spawn_fiber.osp": "=== Process Spawning in Fibers ===\n" +
+			"Fiber ID: 1\n" +
+			"=== Test Complete ===\n",
+		"process_spawn_workflow.osp": "=== Process Spawning Workflow ===\n" +
+			"Step 1 result: 0\n" +
+			"Step 2 result: 0\n" +
+			"Fiber result: 1\n" +
+			"=== Workflow Complete ===\n",
+		"process_spawn_simple.osp": "=== Simple Process Spawning ===\n" +
+			"Result 1: 0\n" +
+			"Result 2: 0\n" +
+			"Fiber ID: 1\n" +
+			"=== Test Complete ===\n",
 	}
 }
 

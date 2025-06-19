@@ -1,0 +1,18 @@
+// 🚀 Simple Process Spawning Test
+// Basic test of spawnProcess function
+
+print("=== Simple Process Spawning ===")
+
+// Test 1: Echo command
+let result1 = spawnProcess("echo 'Hello from process!'")
+print("Result 1: ${toString(result1)}")
+
+// Test 2: Date command
+let result2 = spawnProcess("date +%Y")
+print("Result 2: ${toString(result2)}")
+
+// Test 3: Process in fiber
+let fiberId = spawn spawnProcess("echo 'Fiber process!'")
+print("Fiber ID: ${toString(fiberId)}")
+
+print("=== Test Complete ===") 

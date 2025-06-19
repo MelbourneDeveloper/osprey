@@ -3,6 +3,10 @@
 // Forward declaration of fiber functions
 extern int64_t fiber_spawn(int64_t (*fn)(void));
 
+// Forward declarations for bridge functions
+extern char* process_compile_request(char* json_body);
+extern char* process_run_request(char* json_body);
+
 // Global server context for the fiber
 static HttpServer* current_server = NULL;
 
@@ -28,12 +32,58 @@ static int64_t server_loop_fiber(void) {
         
         int client_fd = accept(current_server->socket_fd, (struct sockaddr*)&client_addr, &client_len);
         if (client_fd >= 0) {
-            // Read the request (we'll ignore it for now)
-            char buffer[1024];
-            recv(client_fd, buffer, sizeof(buffer), 0);
-            
-            // Send simple response
-            send(client_fd, simple_response, strlen(simple_response), 0);
+            // Read the full HTTP request
+            char buffer[4096];
+            ssize_t bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+            if (bytes_read > 0) {
+                buffer[bytes_read] = '\0';
+                
+                // Parse the request line to get method and path
+                char method[16] = {0};
+                char path[256] = {0};
+                sscanf(buffer, "%15s %255s", method, path);
+                
+                printf("🌐 HTTP Request: %s %s\n", method, path);
+                
+                // Find the request body (after \r\n\r\n)
+                char* body_start = strstr(buffer, "\r\n\r\n");
+                char* body = "";
+                if (body_start) {
+                    body = body_start + 4;
+                }
+                
+                // Route the request based on path and method
+                char response[4096];
+                if (strcmp(method, "POST") == 0 && strcmp(path, "/api/compile") == 0) {
+                    // Call Osprey compile function
+                    printf("📝 Compile request: %s\n", body);
+                    char* result = process_compile_request(body);
+                    snprintf(response, sizeof(response),
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: %zu\r\n"
+                        "Connection: close\r\n"
+                        "\r\n%s", strlen(result), result);
+                    free(result);
+                } else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/run") == 0) {
+                    // Call Osprey run function
+                    printf("🚀 Run request: %s\n", body);
+                    char* result = process_run_request(body);
+                    snprintf(response, sizeof(response),
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: %zu\r\n"
+                        "Connection: close\r\n"
+                        "\r\n%s", strlen(result), result);
+                    free(result);
+                } else {
+                    // Default response for other paths
+                    strcpy(response, simple_response);
+                }
+                
+                // Send the response
+                send(client_fd, response, strlen(response), 0);
+            }
             close(client_fd);
         }
     }

@@ -129,6 +129,18 @@ var (
 
 	// Match expression validation errors.
 	ErrMatchUnknownVariantType = errors.New("unknown variant in match expression")
+
+	// String utility function errors
+	ErrLengthWrongArgs    = errors.New("length expects exactly 1 argument")
+	ErrContainsWrongArgs  = errors.New("contains expects exactly 2 arguments")
+	ErrSubstringWrongArgs = errors.New("substring expects exactly 3 arguments")
+
+	// Process spawning errors.
+	ErrSpawnProcessWrongArgs = errors.New("spawnProcess expects exactly 1 argument (command)")
+	ErrWriteFileWrongArgs    = errors.New("writeFile expects exactly 2 arguments (filename, content)")
+	ErrReadFileWrongArgs     = errors.New("readFile expects exactly 1 argument (filename)")
+	ErrParseJSONWrongArgs    = errors.New("parseJSON expects exactly 1 argument (json_string)")
+	ErrExtractCodeWrongArgs  = errors.New("extractCode expects exactly 1 argument (json_string)")
 )
 
 // Helper functions to wrap static errors with context
@@ -554,5 +566,46 @@ func WrapHTTPStopServerWrongArgCount(got int) error {
 
 // WrapMatchUnknownVariantType wraps match unknown variant type errors.
 func WrapMatchUnknownVariantType(variant, typeName string) error {
-	return fmt.Errorf("%w: variant '%s' is not defined in type '%s'", ErrMatchUnknownVariantType, variant, typeName)
+	return fmt.Errorf("unknown variant '%s' in match expression for type '%s': %w",
+		variant, typeName, ErrMatchUnknownVariantType)
+}
+
+// WrapLengthWrongArgs wraps length wrong arguments errors with argument count.
+func WrapLengthWrongArgs(got int) error {
+	return fmt.Errorf("length expects exactly 1 argument, got %d: %w", got, ErrLengthWrongArgs)
+}
+
+// WrapContainsWrongArgs wraps contains wrong arguments errors with argument count.
+func WrapContainsWrongArgs(got int) error {
+	return fmt.Errorf("contains expects exactly 2 arguments, got %d: %w", got, ErrContainsWrongArgs)
+}
+
+// WrapSubstringWrongArgs wraps substring wrong arguments error.
+func WrapSubstringWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrSubstringWrongArgs, got)
+}
+
+// WrapSpawnProcessWrongArgs wraps spawnProcess wrong arguments error.
+func WrapSpawnProcessWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrSpawnProcessWrongArgs, got)
+}
+
+// WrapWriteFileWrongArgs wraps writeFile wrong arguments error.
+func WrapWriteFileWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrWriteFileWrongArgs, got)
+}
+
+// WrapReadFileWrongArgs wraps readFile wrong arguments error.
+func WrapReadFileWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrReadFileWrongArgs, got)
+}
+
+// WrapParseJSONWrongArgs wraps parseJSON wrong arguments error.
+func WrapParseJSONWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrParseJSONWrongArgs, got)
+}
+
+// WrapExtractCodeWrongArgs wraps extractCode wrong arguments error.
+func WrapExtractCodeWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrExtractCodeWrongArgs, got)
 }

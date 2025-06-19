@@ -1,0 +1,10 @@
+// 🚀 Process Spawning in Fibers Example
+// Demonstrates running processes in fibers
+
+print("=== Process Spawning in Fibers ===")
+
+// Test 1: Simple process in fiber
+let fiberId = spawn spawnProcess("echo 'Hello from fiber!'")
+print("Fiber ID: ${toString(fiberId)}")
+
+print("=== Test Complete ===") 

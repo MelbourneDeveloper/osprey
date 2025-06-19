@@ -135,6 +135,18 @@ INTERPOLATED_STRING := '"' (CHAR | INTERPOLATION)* '"'
 INTERPOLATION := '${' EXPRESSION '}'
 ```
 
+#### Immutable List Literals
+```
+LIST := '[' (expression (',' expression)*)? ']'
+```
+
+**Examples:**
+```osprey
+let numbers = [1, 2, 3, 4]  // Fixed size: 4 elements
+let names = ["Alice", "Bob", "Charlie"]  // Fixed size: 3 elements
+let pair = [x, y]  // Fixed size: 2 elements
+```
+
 ### 2.4 Operators
 
 #### Arithmetic Operators (All Safe by Default)
@@ -822,6 +834,56 @@ primary_expression := literal
                    | block_expression
 ```
 
+
+#### Binary Expressions
+```
+binary_expression := multiplicative_expression (('+' | '-') multiplicative_expression)*
+multiplicative_expression := unary_expression (('*' | '/') unary_expression)*
+```
+
+#### Boolean Pattern Matching
+Use pattern matching for conditional logic:
+
+**Examples:**
+```osprey
+let result = match x > 0 {
+    true => "positive"
+    false => "zero or negative"
+}
+
+let max = match a > b {
+    true => a
+    false => b
+}
+```
+
+#### List Access (Safe)
+```
+list_access := expression '[' INT ']'  // Returns Result<T, IndexError>
+```
+
+**CRITICAL**: List access returns `Result<T, IndexError>` - no panics, no nulls.
+
+**Examples:**
+```osprey
+let firstResult = numbers[0]  // Returns Result<Int, IndexError>
+match firstResult {
+    Success value => print("First: ${value}")
+    Err error => print("Index out of bounds")
+}
+
+let second = match numbers[1] {
+    Success value => value
+    Err _ => -1  // Default value
+}
+```
+
+#### Primary Expressions
+```
+primary_expression := literal | list_literal | identifier | '(' expression ')' 
+                   | list_access | lambda_expression | block_expression | match_expression
+```
+
 ### 3.9 Block Expressions
 
 Block expressions allow grouping multiple statements together and returning a value from the final expression. They create a new scope for variable declarations and enable sequential execution with proper scoping rules.
@@ -1096,12 +1158,14 @@ let result = match status {
 - `Bool`: Boolean values (`true`, `false`)
 - `Unit`: Type for functions that don't return a meaningful value
 - `Result<T, E>`: Built-in generic type for error handling
+- `List<T, N>`: Immutable fixed-size lists with N elements of type T
 
 ### 5.2 Built-in Error Types
 
 - `MathError`: For arithmetic operations (DivisionByZero, Overflow, Underflow)
-- `ParseError`: For string parsing operations
-- `IndexError`: For array/string indexing operations
+- `ParseError`: For string parsing operations  
+- `IndexError`: For list/string indexing operations (OutOfBounds)
+- `Success`: Successful result wrapper
 
 ### 5.3 Type Inference Rules
 
@@ -2648,17 +2712,46 @@ let age = input()
 ```
 
 #### `toString(value: int | string | bool) -> string`
-Converts any value to its string representation. Used internally by print and string interpolation.
+Converts any value to its string representation.
 
-**Parameters:**
-- `value: int | string | bool` - The value to convert to string
+#### `length(s: string) -> int`
+Returns the length of a string.
 
-**Returns:** `string` - String representation of the value
+#### `contains(haystack: string, needle: string) -> bool`
+Checks if a string contains a substring.
 
-**Examples:**
+#### `substring(s: string, start: int, end: int) -> string`
+Extracts a substring from start to end.
+
+### 17.2 File System Functions
+
+#### `writeFile(path: string, content: string) -> Result<Success, string>`
+Writes content to a file.
+
+#### `readFile(path: string) -> Result<string, string>`
+Reads file content as string.
+
+#### `deleteFile(path: string) -> Result<Success, string>`
+Deletes a file.
+
+#### `createDirectory(path: string) -> Result<Success, string>`
+Creates a directory.
+
+#### `fileExists(path: string) -> bool`
+Checks if file exists.
+
+### 17.3 Process Operations
+
+#### `spawnProcess(command: string, args: string, timeout: int) -> Result<ProcessResult, string>`
+Spawns external process with timeout.
+
+**ProcessResult Type:**
 ```osprey
-let str = toString(42)
-let msg = toString(true)
+type ProcessResult = {
+    stdout: string,
+    stderr: string,
+    exitCode: int
+}
 ```
 
 ### 17.2 Functional Iterator Functions

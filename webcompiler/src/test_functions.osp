@@ -1,0 +1,21 @@
+// Test the new system functions
+print("🧪 Testing system functions...")
+
+// Test JSON extraction
+let testJson = "{\"code\": \"print(\\\"Hello from JSON!\\\")\"}"
+let extractedCode = extractCode(testJson)
+print("Extracted code: ${extractedCode}")
+
+// Test file writing
+let writeResult = writeFile("/tmp/osprey_test.txt", "Hello from Osprey!")
+print("Write result: ${toString(writeResult)}")
+
+// Test file reading
+let readContent = readFile("/tmp/osprey_test.txt")
+print("Read content: ${readContent}")
+
+// Test process spawning (simple command)
+let processResult = spawnProcess("echo 'Hello from spawned process!'")
+print("Process result: ${toString(processResult)}")
+
+print("✅ System function tests complete!")
