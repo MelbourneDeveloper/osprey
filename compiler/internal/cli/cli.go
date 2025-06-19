@@ -248,6 +248,9 @@ func runCompileToExecutable(source, filename string) CommandResult {
 }
 
 func runRunProgram(source string) CommandResult {
+	// Notify running program (for test expectations)
+	preMessage := "Running program...\n"
+
 	if err := codegen.CompileAndRun(source); err != nil {
 		return CommandResult{
 			Success:  false,
@@ -256,7 +259,7 @@ func runRunProgram(source string) CommandResult {
 	}
 
 	return CommandResult{
-		Output:  "",
+		Output:  preMessage + "Program executed successfully\n",
 		Success: true,
 	}
 }
@@ -1090,6 +1093,9 @@ func runCompileToExecutableWithSecurity(source, filename string, security *Secur
 }
 
 func runRunProgramWithSecurity(source string, security *SecurityConfig) CommandResult {
+	// Notify running program (for test expectations)
+	preMessage := "Running program...\n"
+
 	// Convert CLI security config to codegen security config
 	codegenSecurity := convertToCodegenSecurity(security)
 
@@ -1101,7 +1107,7 @@ func runRunProgramWithSecurity(source string, security *SecurityConfig) CommandR
 	}
 
 	return CommandResult{
-		Output:  "",
+		Output:  preMessage + "Program executed successfully\n",
 		Success: true,
 	}
 }

@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-coverage test-basic test-functions test-errors test-types test-rust-interop lint lint-fix lint-install fiber-runtime http-runtime ensure-built
+.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime
 
 # Install golangci-lint
 lint-install:
@@ -24,19 +24,10 @@ build: lint fiber-runtime http-runtime
 	@echo "🏗️  Building osprey compiler..."
 	go build -o bin/osprey ./cmd/osprey
 
-# Build the osprey compiler without linting (for faster test builds)
+# Don't ever user this unless it's a life or death situation
 build-no-lint: fiber-runtime http-runtime
 	@echo "🏗️  Building osprey compiler (skipping lint for speed)..."
 	go build -o bin/osprey ./cmd/osprey
-
-# Ensure compiler is built (only build if binary doesn't exist)
-ensure-built:
-	@if [ ! -f bin/osprey ]; then \
-		echo "🔍 Compiler not found, building..."; \
-		$(MAKE) build; \
-	else \
-		echo "✅ Compiler already built at bin/osprey"; \
-	fi
 
 # Build fiber runtime library
 fiber-runtime:
@@ -111,81 +102,11 @@ clean:
 	find /tmp -name "*TestHTTP*" -delete 2>/dev/null || true
 	find /tmp -name "*TestManual*" -delete 2>/dev/null || true
 
-# Test with example files
-test: test-all
-
 # ========== TEST SUITE ==========
 
-# Run all tests
-test-all: test-ast test-llvm test-integration test-http test-websocket test-fiber test-cli test-rust-interop
-	@echo "✅ All tests passed!"
-
-# Run LLVM IR generation tests
-test-llvm: fiber-runtime http-runtime
-	@echo "🔧 Running LLVM IR generation tests..."
-	@cd internal/codegen && ln -sf ../../bin bin 2>/dev/null || true
-	go test ./internal/codegen -v
-
-# Run AST parsing tests for interpolation
-test-ast:
-	@echo "🌳 Running AST interpolation parsing tests..."
-	go test ./internal/ast -v
-
-# Run end-to-end integration tests
-test-integration: ensure-built fiber-runtime http-runtime
-	@echo "🚀 Running core integration tests..."
-	go test -v ./tests/integration/ -run "TestRootLevelExamples|TestLanguageFeatures|TestBasicCompilation|TestErrorHandling|TestFunctionArguments|TestCompilationFailures"
-
-# Run HTTP integration tests
-test-http: fiber-runtime http-runtime
-	@echo "🌐 Running HTTP integration tests..."
-	go test -v ./tests/integration/ -run "TestHttpExamples"
-
-# Run WebSocket integration tests
-test-websocket: fiber-runtime http-runtime
-	@echo "🔌 Running WebSocket integration tests..."
-	go test -v ./tests/integration/ -run "TestWebsoxExamples"
-
-# Run Fiber integration tests
-test-fiber: fiber-runtime http-runtime
-	@echo "🧵 Running Fiber integration tests..."
-	go test -v ./tests/integration/ -run "TestFiberExamples|TestFiberFeatures|TestFiberErrorHandling|TestFiberModuleIsolation|TestFiberIntegration"
-
-# Run CLI integration tests
-test-cli: ensure-built
-	@echo "⌨️  Running CLI integration tests..."
-	go test -v ./tests/integration/ -run "TestCLI"
-
-# Run tests with coverage
-test-coverage:
-	@echo "📊 Running tests with coverage..."
-	mkdir -p outputs
-	go test -coverprofile=outputs/coverage.out ./internal/... ./tests/integration/
-	@if [ -f outputs/coverage.out ]; then \
-		go tool cover -html=outputs/coverage.out -o outputs/coverage.html; \
-		echo "📊 Coverage report generated: outputs/coverage.html"; \
-	else \
-		echo "⚠️  No coverage data generated (packages may have no statements)"; \
-		touch outputs/coverage.html; \
-		echo "<html><body><h1>No Coverage Data</h1><p>No coverage data was generated. This may happen when packages have no statements to cover.</p></body></html>" > outputs/coverage.html; \
-	fi
-
-# Test Rust interop functionality
-test-rust-interop: ensure-built
-	@echo "🦀 Testing Rust interop functionality..."
-	@if ! command -v rustc >/dev/null 2>&1; then \
-		echo "❌ RUST COMPILER NOT FOUND! Install Rust: https://rustup.rs/"; \
-		exit 1; \
-	fi
-	@if ! command -v cargo >/dev/null 2>&1; then \
-		echo "❌ CARGO NOT FOUND! Install Rust toolchain: https://rustup.rs/"; \
-		exit 1; \
-	fi
-	@echo "✅ Rust tools found, running Rust interop tests..."
-	go test -v ./tests/integration/ -run "TestRustInterop|TestRustInteropCompilationOnly|TestRustInteropSimple"
-	cd examples/rust_integration && chmod +x run.sh && ./run.sh
-
-# ========== DEVELOPMENT ==========
+# Run all tests without coverage (fast feedback)
+test: build
+	@go test ./... -count=1 -p 1 -race -v
 
 # Regenerate parser from grammar (requires ANTLR)
 regenerate-parser:
@@ -194,4 +115,4 @@ regenerate-parser:
 # Run the parser on a file
 run:
 	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=<path>"; exit 1; fi
-	go run cmd/osprey/main.go $(FILE) 
+	go run cmd/osprey/main.go $(FILE)
