@@ -105,12 +105,6 @@ jobs:
             exit 1
           fi
 
-          # Bump stored threshold if coverage increased
-          if [ "$(echo "$CURRENT_COVERAGE > $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
-            echo "📈 Coverage improved – updating variable to ${CURRENT_COVERAGE}%"
-            gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE"
-          fi
-
           echo "✅ Coverage check passed"
 
       - name: Test example compilation and execution
