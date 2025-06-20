@@ -778,8 +778,9 @@ func (g *LLVMGenerator) generateErrorBlock(
 	if errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
 		// Bind the Result error message to the pattern variable
 		fieldName := errorArm.Pattern.Fields[0] // First field is the message
-		// Create a global string for the error message
-		errorStr := g.module.NewGlobalDef("error_msg", constant.NewCharArrayFromString("Error occurred\\x00"))
+		// Create a unique global string for the error message
+		blockSuffix := fmt.Sprintf("_%p", matchExpr)
+		errorStr := g.module.NewGlobalDef("error_msg"+blockSuffix, constant.NewCharArrayFromString("Error occurred\\x00"))
 		errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
 			constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
 		g.variables[fieldName] = errorPtr

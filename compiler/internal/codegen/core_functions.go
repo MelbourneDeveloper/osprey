@@ -61,12 +61,16 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 		return nil, err
 	}
 
+	// Try to get the semantic type of the expression
+	argType, typeErr := g.getTypeOfExpression(argExpr)
+
 	var stringArg value.Value
 	switch arg.Type().(type) {
 	case *types.PointerType: // Assuming i8* is string
 		stringArg = arg
 	case *types.IntType:
-		if arg.Type().(*types.IntType).BitSize == 1 { // bool (i1)
+		// Check if this is semantically a boolean (either i1 or i64 with bool type)
+		if arg.Type().(*types.IntType).BitSize == 1 || (typeErr == nil && argType == TypeBool) {
 			stringArg, err = g.generateBoolToString(arg)
 			if err != nil {
 				return nil, err
