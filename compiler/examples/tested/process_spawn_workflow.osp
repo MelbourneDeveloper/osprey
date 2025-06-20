@@ -1,18 +1,28 @@
-// 🚀 Process Spawning Workflow Example  
-// Demonstrates basic workflow with process spawning
+// 🚀 Process Spawning Workflow Example
+// Demonstrates handling Result types from process spawning.
 
 print("=== Process Spawning Workflow ===")
 
-// Test 1: Simple process
-let result1 = spawnProcess("echo 'Step 1'")
-print("Step 1 result: ${toString(result1)}")
+// Test 1: Simple successful process
+print("\n-- Test 1: Successful command --")
+match spawnProcess("echo 'Step 1 Success'") {
+    Ok(output) -> {
+        print("✅ Success! Output: '${output}'")
+    },
+    Err(e) -> {
+        print("❌ FAILURE! Expected success, got error: ${e}")
+    }
+}
 
-// Test 2: Another process
-let result2 = spawnProcess("echo 'Step 2'")
-print("Step 2 result: ${toString(result2)}")
+// Test 2: Command that should fail
+print("\n-- Test 2: Failing command --")
+match spawnProcess("command_that_does_not_exist_12345") {
+    Ok(output) -> {
+        print("❌ FAILURE! Expected error, but got success: '${output}'")
+    },
+    Err(e) -> {
+        print("✅ Success! Command failed as expected. Error: ${e}")
+    }
+}
 
-// Test 3: Process in fiber
-let fiberResult = spawn spawnProcess("echo 'Fiber step'")
-print("Fiber result: ${toString(fiberResult)}")
-
-print("=== Workflow Complete ===") 
+print("\n=== Workflow Complete ===") 

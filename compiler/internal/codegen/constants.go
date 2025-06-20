@@ -38,6 +38,7 @@ const (
 	TypeInt    = "int"
 	TypeBool   = "bool"
 	TypeAny    = "any"
+	TypeResult = "Result"
 )
 
 // Function names.

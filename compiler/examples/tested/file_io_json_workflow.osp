@@ -1,39 +1,15 @@
-fn main() -> int {
-  print("=== File I/O and JSON Workflow Test ===\n")
+// Demonstrates basic file I/O operations
+print("=== File I/O Workflow Test ===")
 
-  let json_content = "{\"name\": \"Osprey\", \"version\": \"0.1\"}"
-  let filename = "test_output.json"
+let content = "Hello, Osprey file I/O!"
+let filename = "test_output.txt"
 
-  // 1. Write JSON to file
-  let write_result = writeFile(filename, json_content)
-  print("Write file result (0 is success): ")
-  print(toString(write_result))
-  print("\n")
+print("-- Step 1: Writing to file --")
+let writeResult = writeFile(filename, content)
+print("File written, result: ${writeResult}")
 
-  // 2. Read file back
-  let read_content = readFile(filename)
-  print("Read back content: ")
-  print(read_content)
-  print("\n")
+print("-- Step 2: Reading from file --")
+let readResult = readFile(filename)
+print("Read content: '${readResult}'")
 
-  // 3. Extract a field
-  let extracted_name = extractCode(read_content, "name")
-  print("Extracted 'name': ")
-  print(extracted_name)
-  print("\n")
-
-  // 4. Extract another field
-  let extracted_version = extractCode(read_content, "version")
-  print("Extracted 'version': ")
-  print(extracted_version)
-  print("\n")
-
-  // 5. Extract non-existent field
-  let extracted_bad = extractCode(read_content, "author")
-  print("Extracted 'author' (non-existent): '")
-  print(extracted_bad)
-  print("'\n")
-
-  print("=== Test Complete ===\n")
-  0
-} 
+print("=== Test Complete ===") 

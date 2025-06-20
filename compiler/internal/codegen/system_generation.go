@@ -4,6 +4,7 @@ import (
 	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 )
@@ -138,7 +139,7 @@ func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (
 }
 
 // generateWriteFileCall writes data to a file via an external helper returning
-// the result code as i64.
+// a Result<Success, string> type.
 func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {
 	const expectedArgs = TwoArgs
 	if len(callExpr.Arguments) != expectedArgs {
@@ -164,11 +165,52 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 		g.functions["write_file"] = fn
 	}
 
-	return g.builder.NewCall(fn, filename, content), nil
+	// Call the C function
+	writeResult := g.builder.NewCall(fn, filename, content)
+
+	// Create a Result<I64, string> (bytes written on success, error on failure)
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Check if the result is negative (error)
+	zero := constant.NewInt(types.I64, 0)
+	isError := g.builder.NewICmp(enum.IPredSLT, writeResult, zero)
+
+	// Create blocks for success and error cases
+	successBlock := g.function.NewBlock("write_success")
+	errorBlock := g.function.NewBlock("write_error")
+	continueBlock := g.function.NewBlock("write_continue")
+
+	g.builder.NewCondBr(isError, errorBlock, successBlock)
+
+	// Success case: store the bytes written
+	g.builder = successBlock
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(writeResult, valuePtr)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.builder.NewBr(continueBlock)
+
+	// Error case: store error value
+	g.builder = errorBlock
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(constant.NewInt(types.I64, -1), errorValuePtr)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
+	g.builder.NewBr(continueBlock)
+
+	// Continue execution
+	g.builder = continueBlock
+
+	return result, nil
 }
 
 // generateReadFileCall reads the entire contents of the specified file and
-// returns a pointer to a C-string (i8*).
+// returns a Result<string, string> type.
 func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
 		return nil, WrapReadFileWrongArgs(len(callExpr.Arguments))
@@ -187,7 +229,51 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 		g.functions["read_file"] = fn
 	}
 
-	return g.builder.NewCall(fn, filename), nil
+	// Call the C function
+	readResult := g.builder.NewCall(fn, filename)
+
+	// Create a Result<string, string>
+	resultType := g.getResultType(types.I8Ptr)
+	result := g.builder.NewAlloca(resultType)
+
+	// Check if the result is NULL (error)
+	nullPtr := constant.NewNull(types.I8Ptr)
+	isError := g.builder.NewICmp(enum.IPredEQ, readResult, nullPtr)
+
+	// Create blocks for success and error cases
+	successBlock := g.function.NewBlock("read_success")
+	errorBlock := g.function.NewBlock("read_error")
+	continueBlock := g.function.NewBlock("read_continue")
+
+	g.builder.NewCondBr(isError, errorBlock, successBlock)
+
+	// Success case: store the file content
+	g.builder = successBlock
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(readResult, valuePtr)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.builder.NewBr(continueBlock)
+
+	// Error case: store error placeholder
+	g.builder = errorBlock
+	errorStr := g.module.NewGlobalDef("read_error_msg", constant.NewCharArrayFromString("File read error\x00"))
+	errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
+		constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(errorPtr, errorValuePtr)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
+	g.builder.NewBr(continueBlock)
+
+	// Continue execution
+	g.builder = continueBlock
+
+	return result, nil
 }
 
 // generateParseJSONCall forwards a JSON string to an external helper that
@@ -216,22 +302,46 @@ func (g *LLVMGenerator) generateParseJSONCall(callExpr *ast.CallExpression) (val
 // generateExtractCodeCall extracts code from a JSON response using an external
 // helper returning the code as a C-string.
 func (g *LLVMGenerator) generateExtractCodeCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapExtractCodeWrongArgs(len(callExpr.Arguments))
-	}
+	// Support both old single-arg version and new two-arg version
+	if len(callExpr.Arguments) == OneArg {
+		// Legacy single argument version - extracts "code" field
+		jsonStr, err := g.generateExpression(callExpr.Arguments[0])
+		if err != nil {
+			return nil, err
+		}
 
-	jsonStr, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
+		var fn *ir.Func
+		if existing, ok := g.functions["extract_code"]; ok {
+			fn = existing
+		} else {
+			fn = g.module.NewFunc("extract_code", types.I8Ptr, ir.NewParam("json_string", types.I8Ptr))
+			g.functions["extract_code"] = fn
+		}
 
-	var fn *ir.Func
-	if existing, ok := g.functions["extract_code"]; ok {
-		fn = existing
-	} else {
-		fn = g.module.NewFunc("extract_code", types.I8Ptr, ir.NewParam("json_string", types.I8Ptr))
-		g.functions["extract_code"] = fn
-	}
+		return g.builder.NewCall(fn, jsonStr), nil
+	} else if len(callExpr.Arguments) == TwoArgs {
+		// New two argument version - extracts arbitrary field
+		jsonStr, err := g.generateExpression(callExpr.Arguments[0])
+		if err != nil {
+			return nil, err
+		}
 
-	return g.builder.NewCall(fn, jsonStr), nil
+		fieldName, err := g.generateExpression(callExpr.Arguments[1])
+		if err != nil {
+			return nil, err
+		}
+
+		var fn *ir.Func
+		if existing, ok := g.functions["extract_json_field"]; ok {
+			fn = existing
+		} else {
+			fn = g.module.NewFunc("extract_json_field", types.I8Ptr,
+				ir.NewParam("json_string", types.I8Ptr),
+				ir.NewParam("field_name", types.I8Ptr))
+			g.functions["extract_json_field"] = fn
+		}
+
+		return g.builder.NewCall(fn, jsonStr, fieldName), nil
+	}
+	return nil, WrapExtractCodeWrongArgs(len(callExpr.Arguments))
 }

@@ -159,12 +159,12 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 	g.functionReturnTypes["contains"] = TypeBool // Returns boolean
 	g.functionReturnTypes["substring"] = TypeString
 
-	// Process and file functions
-	g.functionReturnTypes["spawnProcess"] = TypeInt   // Returns exit code
-	g.functionReturnTypes["writeFile"] = TypeInt      // Returns bytes written or error code
-	g.functionReturnTypes["readFile"] = TypeString    // Returns file content
-	g.functionReturnTypes["parseJSON"] = TypeString   // Returns parsed JSON as string
-	g.functionReturnTypes["extractCode"] = TypeString // Returns extracted code
+	// Process and file functions - MUST return Result types per spec
+	g.functionReturnTypes["spawnProcess"] = TypeResult + "<ProcessResult, string>" // Returns Result<ProcessResult, string>
+	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"          // Returns Result<Success, string>
+	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"            // Returns Result<string, string>
+	g.functionReturnTypes["parseJSON"] = TypeResult + "<string, string>"           // Returns Result<string, string>
+	g.functionReturnTypes["extractCode"] = TypeResult + "<string, string>"         // Returns Result<string, string>
 
 	// HTTP functions
 	g.functionReturnTypes["httpCreateServer"] = TypeInt // Returns server ID
