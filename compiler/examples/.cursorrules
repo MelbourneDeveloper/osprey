@@ -1,6 +1,5 @@
 # Examples Rules (Live Integration Tests)
 
-## Purpose
 Examples **ARE integration tests** - they prove the compiler works by being real, runnable code that developers can use as reference.
 
 ## Most Important Example Types
@@ -26,6 +25,8 @@ Examples **ARE integration tests** - they prove the compiler works by being real
 **FEWER, BETTER EXAMPLES** - prefer comprehensive examples over many small ones.
 
 **CONSOLIDATE CONSECUTIVE PRINTS** - combine multiple consecutive print statements into single statements.
+
+**USE TOP LEVEL STATEMENTS** - don't use main()
 
 **PROPER ERROR HANDLING** - show how to handle errors gracefully.
 

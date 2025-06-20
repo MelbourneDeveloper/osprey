@@ -147,21 +147,59 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	defer func() { _ = os.Remove(objFile) }() // Clean up temp file
 
-	// Use single path for runtime libraries - works locally and in dev containers
-	fiberRuntimeLib := "bin/libfiber_runtime.a"
-	httpRuntimeLib := "bin/libhttp_runtime.a"
-
 	// Build link arguments with runtime libraries
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", outputPath, objFile)
 
-	// Check if libraries exist before linking
-	if _, err := os.Stat(fiberRuntimeLib); err == nil {
-		linkArgs = append(linkArgs, fiberRuntimeLib)
+	// Look for fiber runtime library - prioritize local builds, then system installs
+	fiberRuntimePaths := []string{
+		"bin/libfiber_runtime.a",
+		"./bin/libfiber_runtime.a",
+		"../../bin/libfiber_runtime.a",    // For tests running from tests/integration
+		"../../../bin/libfiber_runtime.a", // For deeper test directories
+		filepath.Join(filepath.Dir(os.Args[0]), "..", "libfiber_runtime.a"),
+		"/usr/local/lib/libfiber_runtime.a", // System install location
 	}
 
-	if _, err := os.Stat(httpRuntimeLib); err == nil {
-		linkArgs = append(linkArgs, httpRuntimeLib)
+	// Look for HTTP runtime library - prioritize local builds, then system installs
+	httpRuntimePaths := []string{
+		"bin/libhttp_runtime.a",
+		"./bin/libhttp_runtime.a",
+		"../../bin/libhttp_runtime.a",    // For tests running from tests/integration
+		"../../../bin/libhttp_runtime.a", // For deeper test directories
+		filepath.Join(filepath.Dir(os.Args[0]), "..", "libhttp_runtime.a"),
+		"/usr/local/lib/libhttp_runtime.a", // System install location
+	}
+
+	// Add working directory based paths
+	if wd, err := os.Getwd(); err == nil {
+		fiberRuntimePaths = append(fiberRuntimePaths,
+			filepath.Join(wd, "bin", "libfiber_runtime.a"),
+			filepath.Join(wd, "..", "bin", "libfiber_runtime.a"),
+			filepath.Join(wd, "..", "..", "bin", "libfiber_runtime.a"),
+			filepath.Join(wd, "..", "..", "..", "bin", "libfiber_runtime.a"), // For test directories
+		)
+		httpRuntimePaths = append(httpRuntimePaths,
+			filepath.Join(wd, "bin", "libhttp_runtime.a"),
+			filepath.Join(wd, "..", "bin", "libhttp_runtime.a"),
+			filepath.Join(wd, "..", "..", "bin", "libhttp_runtime.a"),
+			filepath.Join(wd, "..", "..", "..", "bin", "libhttp_runtime.a"), // For test directories
+		)
+	}
+
+	// Find and add runtime libraries
+	for _, libPath := range fiberRuntimePaths {
+		if _, err := os.Stat(libPath); err == nil {
+			linkArgs = append(linkArgs, libPath)
+			break
+		}
+	}
+
+	for _, libPath := range httpRuntimePaths {
+		if _, err := os.Stat(libPath); err == nil {
+			linkArgs = append(linkArgs, libPath)
+			break
+		}
 	}
 
 	linkArgs = append(linkArgs, "-lpthread")
@@ -191,12 +229,20 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	fiberExists := false
 	httpExists := false
 
-	if _, err := os.Stat(fiberRuntimeLib); err == nil {
-		fiberExists = true
+	// Check if any fiber runtime library was found
+	for _, libPath := range fiberRuntimePaths {
+		if _, err := os.Stat(libPath); err == nil {
+			fiberExists = true
+			break
+		}
 	}
 
-	if _, err := os.Stat(httpRuntimeLib); err == nil {
-		httpExists = true
+	// Check if any HTTP runtime library was found
+	for _, libPath := range httpRuntimePaths {
+		if _, err := os.Stat(libPath); err == nil {
+			httpExists = true
+			break
+		}
 	}
 
 	if fiberExists || httpExists {

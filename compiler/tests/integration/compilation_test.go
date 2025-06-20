@@ -157,10 +157,10 @@ func TestHTTPRuntimeLibrary(t *testing.T) {
 
 	// Check for our own HTTP functions
 	expectedSymbols := []string{
-		"http_server",
+		"http_create_server",
 		"http_listen",
-		"http_response",
 		"http_create_client",
+		"http_request",
 	}
 
 	for _, symbol := range expectedSymbols {
@@ -288,17 +288,18 @@ func TestActualCompilationProcess(t *testing.T) {
 
 	// Create a minimal HTTP Osprey file that handles a Result type
 	ospCode := `
-func main() {
-    match http_server("localhost", 8080) {
-        Ok(server) -> {
-            http_listen(server) { request ->
-                http_response(request, 200, "Hello, World!")
-            }
-        },
-        Err(e) -> {
-            print("Failed to create server")
-        }
-    }
+fn main() -> int {
+    let server = httpCreateServer(8080, "127.0.0.1")
+    print("Server created with ID: ")
+    print(toString(server))
+    print("\n")
+    
+    let result = httpListen(server, 0)
+    print("Listen result: ")
+    print(toString(result))
+    print("\n")
+    
+    0
 }
 `
 
@@ -322,16 +323,13 @@ func main() {
 func TestHTTPCompilationLinking(t *testing.T) {
 	// Create a minimal HTTP example that correctly handles a Result type
 	ospCode := `
-func main() {
-    let result = http_create_client("https://httpbin.org", 5000)
-    match result {
-        Ok(client) -> {
-            print("client created")
-        },
-        Err(e) -> {
-            print("client creation failed")
-        }
-    }
+fn main() -> int {
+    let client = httpCreateClient("https://httpbin.org", 5000)
+    print("Client created with ID: ")
+    print(toString(client))
+    print("\n")
+    
+    0
 }
 `
 
