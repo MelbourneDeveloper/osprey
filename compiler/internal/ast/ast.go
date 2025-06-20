@@ -359,11 +359,3 @@ type ListAccessExpression struct {
 }
 
 func (l *ListAccessExpression) isExpression() {}
-
-// LoopExpression represents infinite loops for server applications
-type LoopExpression struct {
-	Condition *Expression     // Optional condition for conditional loops
-	Body      BlockExpression // Loop body
-}
-
-func (l *LoopExpression) isExpression() {}
