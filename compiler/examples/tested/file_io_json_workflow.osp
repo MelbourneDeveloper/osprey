@@ -1,10 +1,8 @@
-// Demonstrates basic file I/O operations with Result type handling
-print("=== File I/O Workflow Test ===")
+// Demonstrates Result type pattern matching with file I/O operations
 
 let content = "Hello, Osprey file I/O!"
 let filename = "test_output.txt"
 
-print("-- Step 1: Writing to file --")
 let writeResult = writeFile(filename, content)
 match writeResult {
     Success { value } => print("File written successfully, bytes: ${value}")

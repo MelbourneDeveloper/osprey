@@ -698,8 +698,16 @@ func (g *LLVMGenerator) createResultMatchBlocks(matchExpr *ast.MatchExpression) 
 
 // generateResultMatchCondition generates the condition for result matching.
 func (g *LLVMGenerator) generateResultMatchCondition(discriminant value.Value, blocks *ResultMatchBlocks) {
-	zero := constant.NewInt(types.I64, ArrayIndexZero)
-	isSuccess := g.builder.NewICmp(enum.IPredSGE, discriminant, zero)
+	// Extract the discriminant field from the Result struct
+	// Result struct: [value, discriminant] where discriminant is at index 1
+	resultType := discriminant.Type().(*types.PointerType).ElemType
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, discriminant,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	discriminantValue := g.builder.NewLoad(discriminantPtr.Type().(*types.PointerType).ElemType, discriminantPtr)
+
+	// 0 = Success, 1 = Error
+	zero := constant.NewInt(types.I8, 0)
+	isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminantValue, zero)
 	g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
 }
 
@@ -784,7 +792,7 @@ func (g *LLVMGenerator) generateErrorBlock(
 // findSuccessArm finds the success match arm.
 func (g *LLVMGenerator) findSuccessArm(matchExpr *ast.MatchExpression) *ast.MatchArm {
 	for i, arm := range matchExpr.Arms {
-		if arm.Pattern.Constructor == "Success" {
+		if arm.Pattern.Constructor == SuccessPattern {
 			return &matchExpr.Arms[i]
 		}
 	}
@@ -795,7 +803,7 @@ func (g *LLVMGenerator) findSuccessArm(matchExpr *ast.MatchExpression) *ast.Matc
 // findErrorArm finds the error match arm.
 func (g *LLVMGenerator) findErrorArm(matchExpr *ast.MatchExpression) *ast.MatchArm {
 	for i, arm := range matchExpr.Arms {
-		if arm.Pattern.Constructor == "Error" {
+		if arm.Pattern.Constructor == ErrorPattern {
 			return &matchExpr.Arms[i]
 		}
 	}
@@ -806,7 +814,7 @@ func (g *LLVMGenerator) findErrorArm(matchExpr *ast.MatchExpression) *ast.MatchA
 // findSuccessValue finds the success expression in match arms.
 func (g *LLVMGenerator) findSuccessValue(matchExpr *ast.MatchExpression) ast.Expression {
 	for _, arm := range matchExpr.Arms {
-		if arm.Pattern.Constructor == "Success" {
+		if arm.Pattern.Constructor == SuccessPattern {
 			return arm.Expression
 		}
 	}
@@ -817,7 +825,7 @@ func (g *LLVMGenerator) findSuccessValue(matchExpr *ast.MatchExpression) ast.Exp
 // findErrorValue finds the error expression in match arms.
 func (g *LLVMGenerator) findErrorValue(matchExpr *ast.MatchExpression) ast.Expression {
 	for _, arm := range matchExpr.Arms {
-		if arm.Pattern.Constructor == "Error" {
+		if arm.Pattern.Constructor == ErrorPattern {
 			return arm.Expression
 		}
 	}
