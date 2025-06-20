@@ -1,4 +1,4 @@
-// Demonstrates basic file I/O operations
+// Demonstrates basic file I/O operations with Result type handling
 print("=== File I/O Workflow Test ===")
 
 let content = "Hello, Osprey file I/O!"
@@ -6,10 +6,16 @@ let filename = "test_output.txt"
 
 print("-- Step 1: Writing to file --")
 let writeResult = writeFile(filename, content)
-print("File written, result: ${writeResult}")
+match writeResult {
+    Success { value } => print("File written successfully, bytes: ${value}")
+    Error { message } => print("Write failed: ${message}")
+}
 
 print("-- Step 2: Reading from file --")
 let readResult = readFile(filename)
-print("Read content: '${readResult}'")
+match readResult {
+    Success { value } => print("Read content: '${value}'")
+    Error { message } => print("Read failed: ${message}")
+}
 
 print("=== Test Complete ===") 
