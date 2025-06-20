@@ -308,6 +308,12 @@ func getExpectedOutputs() map[string]string {
 			"Length: 5\n" +
 			"Contains 'ell': true\n" +
 			"Contains 'xyz': false\n",
+		"file_io_json_workflow.osp": "=== File I/O Workflow Test ===\n" +
+			"-- Step 1: Writing to file --\n" +
+			"File written successfully!\n" +
+			"-- Step 2: Reading from file --\n" +
+			"Read successful!\n" +
+			"=== Test Complete ===\n",
 	}
 }
 

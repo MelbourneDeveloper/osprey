@@ -698,17 +698,25 @@ func (g *LLVMGenerator) createResultMatchBlocks(matchExpr *ast.MatchExpression) 
 
 // generateResultMatchCondition generates the condition for result matching.
 func (g *LLVMGenerator) generateResultMatchCondition(discriminant value.Value, blocks *ResultMatchBlocks) {
-	// Extract the discriminant field from the Result struct
-	// Result struct: [value, discriminant] where discriminant is at index 1
-	resultType := discriminant.Type().(*types.PointerType).ElemType
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, discriminant,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	discriminantValue := g.builder.NewLoad(discriminantPtr.Type().(*types.PointerType).ElemType, discriminantPtr)
+	// Check if the discriminant is a pointer to a struct (Result type) or just an integer
+	if ptrType, ok := discriminant.Type().(*types.PointerType); ok {
+		// Extract the discriminant field from the Result struct
+		// Result struct: [value, discriminant] where discriminant is at index 1
+		resultType := ptrType.ElemType
+		discriminantPtr := g.builder.NewGetElementPtr(resultType, discriminant,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+		discriminantValue := g.builder.NewLoad(discriminantPtr.Type().(*types.PointerType).ElemType, discriminantPtr)
 
-	// 0 = Success, 1 = Error
-	zero := constant.NewInt(types.I8, 0)
-	isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminantValue, zero)
-	g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
+		// 0 = Success, 1 = Error
+		zero := constant.NewInt(types.I8, 0)
+		isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminantValue, zero)
+		g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
+	} else {
+		// Fallback: treat as integer discriminant
+		zero := constant.NewInt(types.I64, 0)
+		isSuccess := g.builder.NewICmp(enum.IPredSGE, discriminant, zero)
+		g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
+	}
 }
 
 // generateSuccessBlock generates the success block for result matching.
@@ -728,11 +736,16 @@ func (g *LLVMGenerator) generateSuccessBlock(
 		// The Result struct has: [value, discriminant]
 		// We need to extract the value field (index 0)
 		if g.currentResultValue != nil {
-			resultType := g.currentResultValue.Type().(*types.PointerType).ElemType
-			valuePtr := g.builder.NewGetElementPtr(resultType, g.currentResultValue,
-				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-			extractedValue := g.builder.NewLoad(valuePtr.Type().(*types.PointerType).ElemType, valuePtr)
-			g.variables[fieldName] = extractedValue
+			if ptrType, ok := g.currentResultValue.Type().(*types.PointerType); ok {
+				resultType := ptrType.ElemType
+				valuePtr := g.builder.NewGetElementPtr(resultType, g.currentResultValue,
+					constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+				extractedValue := g.builder.NewLoad(valuePtr.Type().(*types.PointerType).ElemType, valuePtr)
+				g.variables[fieldName] = extractedValue
+			} else {
+				// Fallback: use the discriminant value directly
+				g.variables[fieldName] = g.currentResultValue
+			}
 		}
 	}
 

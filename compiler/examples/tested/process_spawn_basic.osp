@@ -5,6 +5,9 @@ print("=== Basic Process Spawning Test ===")
 
 // Test 1: Simple echo command
 let result = spawnProcess("echo 'Hello World'")
-print("Process result: ${toString(result)}")
+match result {
+    Success { value } => print("Process result: ${value}")
+    Error { message } => print("Process failed: ${message}")
+}
 
 print("=== Test Complete ===") 

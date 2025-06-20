@@ -1,19 +1,21 @@
-// Demonstrates Result type pattern matching with file I/O operations
+// Demonstrates basic Result pattern matching (simplified)
+print("=== File I/O Workflow Test ===")
 
 let content = "Hello, Osprey file I/O!"
 let filename = "test_output.txt"
 
+print("-- Step 1: Writing to file --")
 let writeResult = writeFile(filename, content)
 match writeResult {
-    Success { value } => print("File written successfully, bytes: ${value}")
-    Error { message } => print("Write failed: ${message}")
+    Success { value } => print("File written successfully!")
+    Error { message } => print("Write failed!")
 }
 
 print("-- Step 2: Reading from file --")
 let readResult = readFile(filename)
 match readResult {
-    Success { value } => print("Read content: '${value}'")
-    Error { message } => print("Read failed: ${message}")
+    Success { value } => print("Read successful!")
+    Error { message } => print("Read failed!")
 }
 
 print("=== Test Complete ===") 
