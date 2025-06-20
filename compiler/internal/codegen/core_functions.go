@@ -1,8 +1,6 @@
 package codegen
 
 import (
-	"errors"
-
 	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -80,7 +78,7 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 			}
 		}
 	default:
-		return nil, errors.New("unsupported type for print")
+		return nil, ErrPrintCannotConvert
 	}
 
 	puts := g.functions["puts"]
@@ -95,7 +93,7 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 		return nil, WrapInputWrongArgs(len(callExpr.Arguments))
 	}
 	// ... (rest of the function)
-	return nil, errors.New("unsupported call expression")
+	return nil, ErrUnsupportedCall
 }
 
 func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.Value, error) {

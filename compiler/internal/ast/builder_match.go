@@ -41,6 +41,15 @@ func (b *Builder) buildMatchArm(ctx parser.IMatchArmContext) MatchArm {
 	}
 }
 
+// buildPattern converts a pattern parse tree into the corresponding AST node.
+//
+// The function necessarily contains a lot of branching because it needs to
+// inspect many possible grammar productions to decide which concrete pattern
+// to build. Refactoring this would introduce significant duplication without
+// improving readability. Therefore we opt to silence the gocognit linter for
+// this specific case.
+//
+//nolint:gocognit
 func (b *Builder) buildPattern(ctx parser.IPatternContext) Pattern {
 	// Handle unary expressions (like negative numbers)
 	if ctx.UnaryExpr() != nil {
