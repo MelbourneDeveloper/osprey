@@ -314,6 +314,22 @@ func getExpectedOutputs() map[string]string {
 			"-- Step 2: Reading from file --\n" +
 			"Read successful!\n" +
 			"=== Test Complete ===\n",
+		"string_utils_combined.osp": "=== String Utils Test ===\n\n" +
+			"Original: \\\n" +
+			"hello world\n" +
+			"\"\n\n" +
+			"Length: \n11\n\n\n" +
+			"Contains 'world': \n1\n\n\n" +
+			"Contains 'galaxy': \n0\n\n\n" +
+			"Substring(6, 11): \\\n" +
+			"world\n" +
+			"\"\n\n" +
+			"Substring(0, 20): \\\n" +
+			"hello world\n" +
+			"\"\n\n" +
+			"=== Test Complete ===\n\n",
+		// Note: list_and_process.osp is deliberately missing because array literals are not yet implemented
+		// It will fail with proper error message until arrays are implemented in Phase 2
 	}
 }
 

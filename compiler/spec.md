@@ -863,21 +863,37 @@ let max = match a > b {
 list_access := expression '[' INT ']'  // Returns Result<T, IndexError>
 ```
 
-**CRITICAL**: List access returns `Result<T, IndexError>` - no panics, no nulls.
+🚨 **CRITICAL SAFETY GUARANTEE**: List access **ALWAYS** returns `Result<T, IndexError>` - **NO PANICS, NO NULLS, NO EXCEPTIONS**
 
-**Examples:**
+**MANDATORY PATTERN MATCHING REQUIRED:**
 ```osprey
+let numbers = [1, 2, 3, 4]
+
+// ✅ CORRECT: Pattern matching required
 let firstResult = numbers[0]  // Returns Result<Int, IndexError>
 match firstResult {
-    Success value => print("First: ${value}")
-    Err error => print("Index out of bounds")
+    Success { value } => print("First: ${value}")
+    Error { message } => print("Index out of bounds: ${message}")
 }
 
+// ✅ CORRECT: Inline pattern matching
 let second = match numbers[1] {
-    Success value => value
-    Err _ => -1  // Default value
+    Success { value } => value
+    Error { _ } => -1  // Default value for out-of-bounds
+}
+
+// ✅ CORRECT: Bounds-safe iteration
+let commands = ["echo hello", "echo world"]
+match commands[0] {
+    Success { value } => {
+        print("Executing: ${value}")
+        spawnProcess(value)
+    }
+    Error { message } => print("No command at index 0: ${message}")
 }
 ```
+
+**FUNDAMENTAL SAFETY PRINCIPLE**: Array access can fail (index out of bounds), therefore it MUST return Result types to enforce explicit error handling and prevent runtime crashes.
 
 #### Primary Expressions
 ```
@@ -2744,14 +2760,40 @@ let age = input()
 #### `toString(value: int | string | bool) -> string`
 Converts any value to its string representation.
 
-#### `length(s: string) -> int`
-Returns the length of a string.
+#### `length(s: string) -> Result<int, StringError>`
+🚨 **CRITICAL**: Returns the length of a string wrapped in a Result type for safety.
 
-#### `contains(haystack: string, needle: string) -> bool`
-Checks if a string contains a substring.
+**MANDATORY PATTERN MATCHING:**
+```osprey
+match length("hello") {
+    Success { value } => print("Length: ${value}")
+    Error { message } => print("Error: ${message}")
+}
+```
 
-#### `substring(s: string, start: int, end: int) -> string`
-Extracts a substring from start to end.
+#### `contains(haystack: string, needle: string) -> Result<bool, StringError>`
+🚨 **CRITICAL**: Checks if a string contains a substring, returns Result for safety.
+
+**MANDATORY PATTERN MATCHING:**
+```osprey
+match contains("hello", "ell") {
+    Success { value } => print("Found: ${value}")
+    Error { message } => print("Error: ${message}")
+}
+```
+
+#### `substring(s: string, start: int, end: int) -> Result<string, StringError>`
+🚨 **CRITICAL**: Extracts a substring from start to end, returns Result for bounds safety.
+
+**MANDATORY PATTERN MATCHING:**
+```osprey
+match substring("hello", 1, 3) {
+    Success { value } => print("Substring: ${value}")
+    Error { message } => print("Error: ${message}")
+}
+```
+
+**FUNDAMENTAL PRINCIPLE**: All string operations that could conceptually fail MUST return Result types. This enforces explicit error handling and prevents runtime panics.
 
 ### 17.2 File System Functions
 

@@ -107,7 +107,7 @@ clean:
 
 # Run all tests without coverage (fast feedback)
 test: build
-	@go test ./... -count=1 -p 1 -race -v
+	@go test ./... -p 1 -race -v
 
 # Regenerate parser from grammar (requires ANTLR)
 regenerate-parser:
