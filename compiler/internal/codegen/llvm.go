@@ -1404,8 +1404,28 @@ func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.
 	strlenFunc := g.module.NewFunc("strlen", types.I64, ir.NewParam("str", types.I8Ptr))
 
 	// Call strlen(arg)
-	result := g.builder.NewCall(strlenFunc, arg)
+	length := g.builder.NewCall(strlenFunc, arg)
+
+	// Create a Result<Int, NoError>
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Store the length in the value field
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(length, valuePtr)
+
+	// Store the discriminant (0 for Success)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
 	return result, nil
+}
+
+func (g *LLVMGenerator) getResultType(valueType types.Type) *types.StructType {
+	// A Result is a struct { value, discriminant }
+	return types.NewStruct(valueType, types.I8)
 }
 
 // generateContainsCall handles contains(haystack: string, needle: string) -> bool function calls.

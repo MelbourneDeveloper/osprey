@@ -1,0 +1,36 @@
+fn main() -> int {
+  let s = "hello world"
+  print("=== String Utils Test ===\n")
+  print("Original: \"")
+  print(s)
+  print("\"\n")
+
+  let len = length(s)
+  print("Length: ")
+  print(toString(len))
+  print("\n")
+
+  let has_world = contains(s, "world")
+  print("Contains 'world': ")
+  print(toString(has_world))
+  print("\n")
+
+  let has_galaxy = contains(s, "galaxy")
+  print("Contains 'galaxy': ")
+  print(toString(has_galaxy))
+  print("\n")
+
+  let sub = substring(s, 6, 11)
+  print("Substring(6, 11): \"")
+  print(sub)
+  print("\"\n")
+
+  let sub_out_of_bounds = substring(s, 0, 20)
+  print("Substring(0, 20): \"")
+  print(sub_out_of_bounds)
+  print("\"\n")
+
+  print("=== Test Complete ===\n")
+
+  0
+} 

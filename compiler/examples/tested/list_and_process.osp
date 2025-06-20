@@ -1,0 +1,30 @@
+fn main() -> int {
+  print("=== List and Process Test ===\n")
+
+  let commands = ["echo hello", "echo world"]
+
+  let first_command = commands[0]
+  print("First command: ")
+  print(first_command)
+  print("\n")
+
+  let second_command = commands[1]
+  print("Second command: ")
+  print(second_command)
+  print("\n")
+
+  print("Executing first command...\n")
+  let result1 = spawnProcess(first_command)
+  print("\nResult 1 (0 is success): ")
+  print(toString(result1))
+  print("\n")
+
+  print("Executing second command...\n")
+  let result2 = spawnProcess(second_command)
+  print("\nResult 2 (0 is success): ")
+  print(toString(result2))
+  print("\n")
+  
+  print("=== Test Complete ===\n")
+  0
+} 

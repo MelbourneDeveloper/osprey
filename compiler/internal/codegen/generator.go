@@ -122,6 +122,11 @@ func (g *LLVMGenerator) declareExternalFunctions() {
 
 // registerBuiltInFunctionReturnTypes registers return types for built-in functions.
 func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
+	
+	//TODO: Most of these are WRONG!
+	//Anything that COULD fail MUST return a RESULT
+	//Especially IO functions like readFile, writeFile, etc.
+	
 	// Core functions
 	g.functionReturnTypes["toString"] = TypeString
 	g.functionReturnTypes["print"] = TypeInt     // Returns exit code

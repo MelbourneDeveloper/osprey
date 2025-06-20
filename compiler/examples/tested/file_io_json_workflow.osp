@@ -1,0 +1,39 @@
+fn main() -> int {
+  print("=== File I/O and JSON Workflow Test ===\n")
+
+  let json_content = "{\"name\": \"Osprey\", \"version\": \"0.1\"}"
+  let filename = "test_output.json"
+
+  // 1. Write JSON to file
+  let write_result = writeFile(filename, json_content)
+  print("Write file result (0 is success): ")
+  print(toString(write_result))
+  print("\n")
+
+  // 2. Read file back
+  let read_content = readFile(filename)
+  print("Read back content: ")
+  print(read_content)
+  print("\n")
+
+  // 3. Extract a field
+  let extracted_name = extractCode(read_content, "name")
+  print("Extracted 'name': ")
+  print(extracted_name)
+  print("\n")
+
+  // 4. Extract another field
+  let extracted_version = extractCode(read_content, "version")
+  print("Extracted 'version': ")
+  print(extracted_version)
+  print("\n")
+
+  // 5. Extract non-existent field
+  let extracted_bad = extractCode(read_content, "author")
+  print("Extracted 'author' (non-existent): '")
+  print(extracted_bad)
+  print("'\n")
+
+  print("=== Test Complete ===\n")
+  0
+} 

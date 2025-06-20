@@ -304,6 +304,8 @@ func getExpectedOutputs() map[string]string {
 			"Result 2: 0\n" +
 			"Fiber ID: 1\n" +
 			"=== Test Complete ===\n",
+		"result_type_workflow.osp": "=== Result Type Workflow Test ===\n" +
+			"Length: 5\n",
 	}
 }
 
