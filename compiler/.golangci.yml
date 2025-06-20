@@ -10,7 +10,6 @@ linters:
   default: all
   disable:
     # Consider these rules for the future
-    - gocognit # Disable cognitive complexity checks for core functions
     - depguard # Allow LLVM imports
     - exhaustruct # Don't require all struct fields to be specified
     - varnamelen # Allow short variable names like 'i', 'e', etc.
@@ -46,10 +45,3 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   uniq-by-line: false
-
-  exclude-rules:
-    # Allow "int" literal in type switching context where TypeInt constant doesn't fit
-    - path: "function_signatures\\.go"
-      text: "string `int` has.*occurrences.*but such constant.*already exists"
-      linters:
-        - goconst

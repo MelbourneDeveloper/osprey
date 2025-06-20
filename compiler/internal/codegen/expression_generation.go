@@ -49,6 +49,61 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 	}
 }
 
+func (g *LLVMGenerator) getTypeOfExpression(expr ast.Expression) (string, error) {
+	switch e := expr.(type) {
+	case *ast.StringLiteral:
+		return TypeString, nil
+	case *ast.IntegerLiteral:
+		return TypeInt, nil
+	case *ast.BooleanLiteral:
+		return TypeBool, nil
+	case *ast.Identifier:
+		if varType, ok := g.variableTypes[e.Name]; ok {
+			return varType, nil
+		}
+		// Check for union type variants
+		if _, ok := g.unionVariants[e.Name]; ok {
+			return TypeInt, nil // Variants are i64 discriminants
+		}
+		return "", WrapUndefinedVariable(e.Name)
+	case *ast.CallExpression:
+		if fn, ok := e.Function.(*ast.Identifier); ok {
+			if returnType, ok := g.functionReturnTypes[fn.Name]; ok {
+				return returnType, nil
+			}
+			// It might be a user-defined function
+			if _, ok := g.functions[fn.Name]; ok {
+				if returnType, ok := g.functionReturnTypes[fn.Name]; ok {
+					return returnType, nil
+				}
+				// If not in the map, it might not have been processed yet.
+				// This is a limitation. For now, we'll assume int as a fallback
+				// for user functions not yet in the map.
+				return TypeInt, nil
+			}
+		}
+		return "", WrapUnsupportedExpression(e)
+	case *ast.BinaryExpression:
+		// For simplicity, assuming numeric operations return Int
+		// and comparisons return Bool.
+		switch e.Operator {
+		case "==", "!=", "<", "<=", ">", ">=":
+			return TypeBool, nil
+		default:
+			return TypeInt, nil
+		}
+	case *ast.ResultExpression:
+		// This is tricky. A result type is generic.
+		// For now, let's say it's 'any'
+		return TypeAny, nil
+	case *ast.FieldAccessExpression:
+		// This requires more sophisticated type tracking
+		return TypeAny, nil
+	default:
+		return "", WrapUnsupportedExpression(e)
+	}
+}
+
 // generateFiberOrModuleExpression handles fiber and module-related expressions.
 func (g *LLVMGenerator) generateFiberOrModuleExpression(expr ast.Expression) (value.Value, error) {
 	switch e := expr.(type) {
@@ -161,7 +216,6 @@ func (g *LLVMGenerator) generateStringLiteral(lit *ast.StringLiteral) (value.Val
 // generateBooleanLiteral generates LLVM IR for boolean literals.
 func (g *LLVMGenerator) generateBooleanLiteral(lit *ast.BooleanLiteral) (value.Value, error) {
 	if lit.Value {
-
 		return constant.NewInt(types.I64, 1), nil
 	}
 
@@ -182,7 +236,6 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 
 	// Check for union type variants (constants)
 	if discriminant, exists := g.unionVariants[ident.Name]; exists {
-
 		return constant.NewInt(types.I64, discriminant), nil
 	}
 
@@ -192,23 +245,19 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) (value.Value, error) {
 	// Validate that operands are not of type 'any' for arithmetic operations
 	if err := g.validateNotAnyType(binExpr.Left, AnyOpArithmetic); err != nil {
-
 		return nil, err
 	}
 	if err := g.validateNotAnyType(binExpr.Right, AnyOpArithmetic); err != nil {
-
 		return nil, err
 	}
 
 	left, err := g.generateExpression(binExpr.Left)
 	if err != nil {
-
 		return nil, err
 	}
 
 	right, err := g.generateExpression(binExpr.Right)
 	if err != nil {
-
 		return nil, err
 	}
 
@@ -283,7 +332,6 @@ func (g *LLVMGenerator) generateComparisonOperation(operator string, left, right
 func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) (value.Value, error) {
 	operand, err := g.generateExpression(unaryExpr.Operand)
 	if err != nil {
-
 		return nil, err
 	}
 
@@ -320,7 +368,6 @@ func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpressio
 func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpression) (value.Value, error) {
 	// Validate that we're not trying to access fields on 'any' type
 	if err := g.validateNotAnyType(fieldAccess.Object, AnyOpFieldAccess); err != nil {
-
 		return nil, WrapAnyDirectFieldAccess(fieldAccess.FieldName)
 	}
 
@@ -368,14 +415,12 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 	// Handle field access like a.value for other expression types
 	obj, err := g.generateExpression(fieldAccess.Object)
 	if err != nil {
-
 		return nil, err
 	}
 
 	// For .value field access on result types, just return the object itself
 	// since we're using simplified result types where the value IS the result
 	if fieldAccess.FieldName == "value" {
-
 		return obj, nil
 	}
 
@@ -399,7 +444,6 @@ func (g *LLVMGenerator) generateTypeConstructorExpression(
 	// Look up the type declaration to get constraints
 	typeDecl, exists := g.typeDeclarations[typeConstructor.TypeName]
 	if !exists {
-
 		return nil, WrapUndefinedType(typeConstructor.TypeName)
 	}
 
@@ -467,7 +511,6 @@ func (g *LLVMGenerator) validateConstraint(
 	// Generate the constraint function call
 	result, err := g.generateCallExpression(callExpr)
 	if err != nil {
-
 		return false, err
 	}
 
@@ -595,7 +638,6 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 
 	// Return the final expression value, or a default value if no expression
 	if blockExpr.Expression != nil {
-
 		return g.generateExpression(blockExpr.Expression)
 	}
 

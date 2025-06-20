@@ -118,15 +118,38 @@ func (g *LLVMGenerator) declareExternalFunctions() {
 		ir.NewParam("str1", types.I8Ptr),
 		ir.NewParam("str2", types.I8Ptr))
 	g.functions["strcmp"] = strcmp
+
+	// Declare strlen: i64 @strlen(i8* %str)
+	strlen := g.module.NewFunc("strlen", types.I64, ir.NewParam("str", types.I8Ptr))
+	g.functions["strlen"] = strlen
+
+	// Declare strstr: i8* @strstr(i8* %haystack, i8* %needle)
+	strstr := g.module.NewFunc("strstr", types.I8Ptr,
+		ir.NewParam("haystack", types.I8Ptr),
+		ir.NewParam("needle", types.I8Ptr),
+	)
+	g.functions["strstr"] = strstr
+
+	// Declare malloc: i8* @malloc(i64 %size)
+	malloc := g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+	g.functions["malloc"] = malloc
+
+	// Declare memcpy: i8* @memcpy(i8* %dest, i8* %src, i64 %n)
+	memcpy := g.module.NewFunc("memcpy", types.I8Ptr,
+		ir.NewParam("dest", types.I8Ptr),
+		ir.NewParam("src", types.I8Ptr),
+		ir.NewParam("n", types.I64),
+	)
+	g.functions["memcpy"] = memcpy
 }
 
 // registerBuiltInFunctionReturnTypes registers return types for built-in functions.
 func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
-	
-	//TODO: Most of these are WRONG!
-	//Anything that COULD fail MUST return a RESULT
-	//Especially IO functions like readFile, writeFile, etc.
-	
+	// TODO: Most of these are WRONG!
+	// Anything that COULD fail MUST return a RESULT
+	// Especially IO functions like readFile, writeFile, etc.
+	// DON'T IGNORE THIS!!! FIX IT!!
+
 	// Core functions
 	g.functionReturnTypes["toString"] = TypeString
 	g.functionReturnTypes["print"] = TypeInt     // Returns exit code

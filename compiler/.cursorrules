@@ -10,6 +10,8 @@
 
 **KEEP ALL FILES UNDER 500 LOC.** Break large files into smaller, focused modules.
 
+**DOCUMENT EVERY FUNCTION** with a comment that explains what it does and how it works.
+
 **BEFORE ADDING A PACKAGE,** always check the documentation to find and install the latest version.
 
 **DO NOT COPY FILES. MOVE THEM.** Always use raw CLI commands to move files.

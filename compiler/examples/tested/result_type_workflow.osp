@@ -16,6 +16,30 @@ fn main() -> int {
       print("Error getting length\n")
     }
   }
+
+  let contains_result = contains(s, "ell")
+  match contains_result {
+    Success { value } => {
+      print("Contains 'ell': ")
+      print(toString(value))
+      print("\n")
+    }
+    Error { message } => {
+      print("Error checking contains\n")
+    }
+  }
+
+  let not_contains_result = contains(s, "xyz")
+  match not_contains_result {
+    Success { value } => {
+      print("Contains 'xyz': ")
+      print(toString(value))
+      print("\n")
+    }
+    Error { message } => {
+      print("Error checking contains\n")
+    }
+  }
  
   0
 } 
