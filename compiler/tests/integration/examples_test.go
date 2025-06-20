@@ -297,10 +297,10 @@ func getExpectedOutputs() map[string]string {
 			"Step 2 result: 0\n" +
 			"Fiber result: 1\n" +
 			"=== Workflow Complete ===\n",
-		"process_spawn_simple.osp": "Hello from process!\n" +
-			"2025\n" +
-			"=== Simple Process Spawning ===\n" +
+		"process_spawn_simple.osp": "=== Simple Process Spawning ===\n" +
+			"Hello from process!\n" +
 			"Result 1: 0\n" +
+			"2025\n" +
 			"Result 2: 0\n" +
 			"Fiber ID: 1\n" +
 			"=== Test Complete ===\n",
