@@ -1,19 +1,57 @@
 package codegen
 
 import (
+	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	testutil "github.com/christianfindlay/osprey/tests/util"
 )
+
+// cleanAndRebuildAll is a critical test utility moved here to resolve build issues.
+// It ensures that the C runtime libraries are cleanly built before any tests run.
+func cleanAndRebuildAll(projectRoot string) {
+	// Clean previous builds
+	fmt.Println("--- Running 'make clean' ---")
+	cleanCmd := exec.Command("make", "clean")
+	cleanCmd.Dir = projectRoot
+	cleanCmd.Stdout = os.Stdout
+	cleanCmd.Stderr = os.Stderr
+	if err := cleanCmd.Run(); err != nil {
+		// We use log.Fatalf here because this isn't in a testing context (T)
+		log.Fatalf("FATAL: 'make clean' failed in %s: %v", projectRoot, err)
+	}
+
+	// Build runtime libraries
+	fmt.Println("--- Running 'make all' ---")
+	buildCmd := exec.Command("make", "all")
+	buildCmd.Dir = projectRoot
+	buildCmd.Stdout = os.Stdout
+	buildCmd.Stderr = os.Stderr
+	if err := buildCmd.Run(); err != nil {
+		log.Fatalf("FATAL: 'make all' failed in %s: %v", projectRoot, err)
+	}
+}
 
 // TestMain runs before all tests in this package.
 func TestMain(m *testing.M) {
 	projectRoot := filepath.Join("..", "..")
-	testutil.CleanAndRebuildAll(projectRoot)
+
+	cleanAndRebuildAll(projectRoot)
+
+	// Verify that libraries exist after build. This is a critical check.
+	binDir := filepath.Join(projectRoot, "bin")
+	libs := []string{"libhttp_runtime.a", "libfiber_runtime.a"}
+	for _, lib := range libs {
+		libPath := filepath.Join(binDir, lib)
+		if _, err := os.Stat(libPath); os.IsNotExist(err) {
+			// Panic here because we can't use t.Fatalf. This will stop everything.
+			panic("FATAL: Runtime library was not created during build: " + libPath)
+		}
+		fmt.Printf("Found runtime library: %s\n", libPath)
+	}
 
 	// Ensure local bin symlink exists for runtime libraries
 	wd, _ := os.Getwd()
@@ -124,19 +162,19 @@ func TestBuildLinkArguments(t *testing.T) {
 	}
 
 	if !hasHTTPLib {
-		t.Error("Missing HTTP runtime library")
+		t.Fatal("Missing HTTP runtime library")
 	}
 	if !hasFiberLib {
-		t.Error("Missing fiber runtime library")
+		t.Fatal("Missing fiber runtime library")
 	}
 	if !hasSSL {
-		t.Error("Missing -lssl")
+		t.Fatal("Missing -lssl")
 	}
 	if !hasCrypto {
-		t.Error("Missing -lcrypto")
+		t.Fatal("Missing -lcrypto")
 	}
 	if !hasPthread {
-		t.Error("Missing -lpthread")
+		t.Fatal("Missing -lpthread")
 	}
 }
 
@@ -176,14 +214,16 @@ func TestHTTPRuntimeLibrary(t *testing.T) {
 
 	// Check for our own HTTP functions
 	expectedSymbols := []string{
-		"sha1_websocket",
-		"http_create_server",
-		"websocket_handshake",
+		"http_server",
+		"http_listen",
+		"http_response",
+		"http_create_client",
 	}
 
 	for _, symbol := range expectedSymbols {
 		if !strings.Contains(symbols, symbol) {
-			t.Errorf("Missing expected symbol: %s", symbol)
+			t.Fatalf("FATAL: HTTP runtime library is missing expected symbol: '%s'. "+
+				"This is a critical build or link error. Full symbol table:\n%s", symbol, symbols)
 		}
 	}
 }
@@ -232,10 +272,7 @@ int main() {
 
 	compileCmd := exec.Command("clang", compileArgs...)
 	if output, err := compileCmd.CombinedOutput(); err != nil {
-		t.Errorf("Failed to compile test C file: %v", err)
-		t.Errorf("Compile output: %s", string(output))
-
-		return
+		t.Fatalf("Failed to compile test C file: %v. Output: %s", err, string(output))
 	}
 
 	// Build the exact link arguments that compilation.go would use
@@ -269,8 +306,7 @@ int main() {
 	output, err := linkCmd.CombinedOutput()
 
 	if err != nil {
-		t.Errorf("Manual linking failed: %v", err)
-		t.Errorf("Link output: %s", string(output))
+		t.Fatalf("Manual linking failed: %v. Output: %s", err, string(output))
 	} else {
 		t.Logf("Manual linking succeeded!")
 		t.Logf("Link output: %s", string(output))
@@ -307,12 +343,18 @@ func TestActualCompilationProcess(t *testing.T) {
 	testDir := t.TempDir()
 	ospFile := filepath.Join(testDir, "test_http.osp")
 
-	// Create a minimal HTTP Osprey file
+	// Create a minimal HTTP Osprey file that handles a Result type
 	ospCode := `
 func main() {
-    let server = http_server("localhost", 8080)
-    http_listen(server) { request ->
-        http_response(request, 200, "Hello, World!")
+    match http_server("localhost", 8080) {
+        Ok(server) -> {
+            http_listen(server) { request ->
+                http_response(request, 200, "Hello, World!")
+            }
+        },
+        Err(e) -> {
+            print("Failed to create server")
+        }
     }
 }
 `
@@ -322,56 +364,43 @@ func main() {
 		t.Fatalf("Failed to write test Osprey file: %v", err)
 	}
 
-	// Now try to compile it and capture what commands are actually executed
-	// We'll patch the exec.Command to log what's being called
-
-	// Import the compilation logic
+	// Now try to compile it
 	outputFile := filepath.Join(testDir, "test_http")
-
-	// This should trigger the same compilation path as the real examples
 	err = CompileToExecutable(ospCode, outputFile)
 
 	if err != nil {
-		t.Logf("Compilation failed (expected): %v", err)
-
-		// The failure might tell us what command was actually run
-		if strings.Contains(err.Error(), "Undefined symbols") {
-			t.Error("Compilation failed with OpenSSL linking error - this confirms the bug")
-		}
+		t.Fatalf("FATAL: Compilation failed unexpectedly. This test expects successful compilation. Error: %v", err)
 	} else {
-		t.Log("Compilation succeeded (unexpected but good)")
+		t.Log("Compilation succeeded as expected.")
 	}
 }
 
 // TestHTTPCompilation tests compiling HTTP code and traces any linking issues.
 func TestHTTPCompilationLinking(t *testing.T) {
-	// Create a minimal HTTP example
+	// Create a minimal HTTP example that correctly handles a Result type
 	ospCode := `
-let client = httpCreateClient("https://httpbin.org", 5000)
+func main() {
+    let result = http_create_client("https://httpbin.org", 5000)
+    match result {
+        Ok(client) -> {
+            print("client created")
+        },
+        Err(e) -> {
+            print("client creation failed")
+        }
+    }
+}
 `
 
 	testDir := t.TempDir()
 	outputFile := filepath.Join(testDir, "test_http")
 
-	// Run the compilation and expect it to fail with OpenSSL linking issue
+	// Run the compilation
 	err := CompileToExecutable(ospCode, outputFile)
 
 	if err != nil {
-		t.Logf("Compilation failed as expected: %v", err)
-
-		// Check if the error is specifically about OpenSSL symbols
-		errStr := err.Error()
-		if strings.Contains(errStr, "SHA1_") {
-			t.Log("✅ Confirmed: Compilation fails due to missing OpenSSL linking")
-			t.Log("This test documents the bug we need to fix")
-
-			// Check if OpenSSL flags are missing from the error message
-			if !strings.Contains(errStr, "-lssl") && !strings.Contains(errStr, "-lcrypto") {
-				t.Error("❌ OpenSSL libraries are not being added to link command")
-			}
-		} else {
-			t.Errorf("❌ Compilation failed for unexpected reason: %v", err)
-		}
+		t.Fatalf("FATAL: ❌ Compilation failed unexpectedly. "+
+			"This test requires successful compilation to verify linking. Error: %v", err)
 	} else {
 		t.Log("✅ Compilation succeeded - OpenSSL linking is working!")
 	}

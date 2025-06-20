@@ -4,9 +4,11 @@
 
 **INTEGRATION TESTS ARE PRIMARY** - they prove the compiler works end-to-end and should be the main focus.
 
-**UNIT TESTS FOR PROBLEM ISOLATION ONLY** - use sparingly, only when integration tests can't isolate a problem.
+**NEVER SKIP TESTS**
 
-**AVOID COVERAGE-DRIVEN TESTING** - don't write tests just for coverage metrics. Write tests that provide confidence.
+**FAIL HARD AND FAST** and write all error content to the console
+
+**UNIT TESTS FOR PROBLEM ISOLATION ONLY** - use sparingly, only when integration tests can't isolate a problem.
 
 **FOCUS ON LONG-TERM VALUE** - design tests that will provide maximum benefit over time.
 
