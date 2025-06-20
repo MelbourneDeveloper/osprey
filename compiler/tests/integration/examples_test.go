@@ -319,23 +319,9 @@ func getExpectedOutputs() map[string]string {
 
 // processExampleFiles processes ONLY .osp files in the given directory (SKIPS subdirectories).
 func processExampleFiles(t *testing.T, examplesDir string, entries []os.DirEntry, expectedOutputs map[string]string) {
-	// Files to skip due to unimplemented features
-	skipFiles := map[string]string{
-		"list_and_process.osp":      "uses array syntax and indexing (not implemented)",
-		"string_utils_combined.osp": "uses Result functions without pattern matching (needs rewrite)",
-	}
-
 	// Test each .osp file - SKIP ALL DIRECTORIES
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".osp") {
-			// Skip files with unimplemented features
-			if reason, shouldSkip := skipFiles[entry.Name()]; shouldSkip {
-				t.Run(strings.TrimSuffix(entry.Name(), ".osp"), func(t *testing.T) {
-					t.Skipf("⏭️  Skipping %s: %s", entry.Name(), reason)
-				})
-				continue
-			}
-
 			// Create a meaningful test name by removing .osp extension
 			testName := strings.TrimSuffix(entry.Name(), ".osp")
 
