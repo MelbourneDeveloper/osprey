@@ -1,71 +1,14 @@
-package codegen
+package integration
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/christianfindlay/osprey/internal/codegen"
 )
-
-// cleanAndRebuildAll is a critical test utility moved here to resolve build issues.
-// It ensures that the C runtime libraries are cleanly built before any tests run.
-func cleanAndRebuildAll(projectRoot string) {
-	// Clean previous builds
-	fmt.Println("--- Running 'make clean' ---")
-	cleanCmd := exec.Command("make", "clean")
-	cleanCmd.Dir = projectRoot
-	cleanCmd.Stdout = os.Stdout
-	cleanCmd.Stderr = os.Stderr
-	if err := cleanCmd.Run(); err != nil {
-		// We use log.Fatalf here because this isn't in a testing context (T)
-		log.Fatalf("FATAL: 'make clean' failed in %s: %v", projectRoot, err)
-	}
-
-	// Build runtime libraries
-	fmt.Println("--- Running 'make all' ---")
-	buildCmd := exec.Command("make", "all")
-	buildCmd.Dir = projectRoot
-	buildCmd.Stdout = os.Stdout
-	buildCmd.Stderr = os.Stderr
-	if err := buildCmd.Run(); err != nil {
-		log.Fatalf("FATAL: 'make all' failed in %s: %v", projectRoot, err)
-	}
-}
-
-// TestMain runs before all tests in this package.
-func TestMain(m *testing.M) {
-	projectRoot := filepath.Join("..", "..")
-
-	cleanAndRebuildAll(projectRoot)
-
-	// Verify that libraries exist after build. This is a critical check.
-	binDir := filepath.Join(projectRoot, "bin")
-	libs := []string{"libhttp_runtime.a", "libfiber_runtime.a"}
-	for _, lib := range libs {
-		libPath := filepath.Join(binDir, lib)
-		if _, err := os.Stat(libPath); os.IsNotExist(err) {
-			// Panic here because we can't use t.Fatalf. This will stop everything.
-			panic("FATAL: Runtime library was not created during build: " + libPath)
-		}
-		fmt.Printf("Found runtime library: %s\n", libPath)
-	}
-
-	// Ensure local bin symlink exists for runtime libraries
-	wd, _ := os.Getwd()
-	binPath := filepath.Join(wd, "bin")
-	rootBin := filepath.Join(projectRoot, "bin")
-	_ = os.Remove(binPath)
-	_ = os.Symlink(rootBin, binPath)
-
-	// Run all tests
-	code := m.Run()
-
-	// Exit with the test result code
-	os.Exit(code)
-}
 
 // TestPkgConfigOpenSSL tests that pkg-config can find OpenSSL.
 func TestPkgConfigOpenSSL(t *testing.T) {
@@ -366,7 +309,7 @@ func main() {
 
 	// Now try to compile it
 	outputFile := filepath.Join(testDir, "test_http")
-	err = CompileToExecutable(ospCode, outputFile)
+	err = codegen.CompileToExecutable(ospCode, outputFile)
 
 	if err != nil {
 		t.Fatalf("FATAL: Compilation failed unexpectedly. This test expects successful compilation. Error: %v", err)
@@ -396,7 +339,7 @@ func main() {
 	outputFile := filepath.Join(testDir, "test_http")
 
 	// Run the compilation
-	err := CompileToExecutable(ospCode, outputFile)
+	err := codegen.CompileToExecutable(ospCode, outputFile)
 
 	if err != nil {
 		t.Fatalf("FATAL: ❌ Compilation failed unexpectedly. "+

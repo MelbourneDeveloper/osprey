@@ -3,6 +3,7 @@ package codegen
 import (
 	"math/big"
 
+	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
@@ -16,6 +17,12 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
 
 		return g.generateLiteralExpression(expr)
+	case *ast.ListLiteral:
+
+		return g.generateListLiteral(e)
+	case *ast.ListAccessExpression:
+
+		return g.generateListAccess(e)
 	case *ast.InterpolatedStringLiteral:
 
 		return g.generateInterpolatedString(e)
@@ -220,6 +227,180 @@ func (g *LLVMGenerator) generateBooleanLiteral(lit *ast.BooleanLiteral) (value.V
 	}
 
 	return constant.NewInt(types.I64, 0), nil
+}
+
+// generateListLiteral generates LLVM IR for list literals like [1, 2, 3] or ["a", "b"].
+func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, error) {
+	// For simplicity, implement arrays as a struct with length and data pointer
+	// Array struct: { i64 length, i8* data }
+
+	numElements := int64(len(lit.Elements))
+	if numElements == 0 {
+		// Empty array
+		arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+		arrayStruct := g.builder.NewAlloca(arrayStructType)
+
+		// Store length = 0
+		lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayStruct,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		g.builder.NewStore(constant.NewInt(types.I64, 0), lengthPtr)
+
+		// Store null data pointer
+		dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayStruct,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+		g.builder.NewStore(constant.NewNull(types.I8Ptr), dataPtr)
+
+		return arrayStruct, nil
+	}
+
+	// Determine element type from first element
+	firstElement := lit.Elements[0]
+	var elementType types.Type
+	var elementSize int64
+
+	switch firstElement.(type) {
+	case *ast.StringLiteral:
+		elementType = types.I8Ptr
+		elementSize = 8 // pointer size
+	default:
+		elementType = types.I64
+		elementSize = 8 // i64 size
+	}
+
+	totalSize := numElements * elementSize
+
+	// Allocate memory for the array data
+	mallocFunc, ok := g.functions["malloc"]
+	if !ok {
+		mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+		g.functions["malloc"] = mallocFunc
+	}
+
+	arrayData := g.builder.NewCall(mallocFunc, constant.NewInt(types.I64, totalSize))
+
+	// Cast to appropriate pointer type
+	arrayPtr := g.builder.NewBitCast(arrayData, types.NewPointer(elementType))
+
+	// Store each element in the array
+	for i, element := range lit.Elements {
+		elementValue, err := g.generateExpression(element)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get pointer to element position
+		elementPtr := g.builder.NewGetElementPtr(elementType, arrayPtr, constant.NewInt(types.I64, int64(i)))
+		g.builder.NewStore(elementValue, elementPtr)
+	}
+
+	// Create array struct { length, data }
+	arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+	arrayStruct := g.builder.NewAlloca(arrayStructType)
+
+	// Store length
+	lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayStruct,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(constant.NewInt(types.I64, numElements), lengthPtr)
+
+	// Store data pointer
+	dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayStruct,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(arrayData, dataPtr)
+
+	return arrayStruct, nil
+}
+
+// generateListAccess generates LLVM IR for array indexing like arr[0].
+func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (value.Value, error) {
+	// Get the array value
+	arrayValue, err := g.generateExpression(access.List)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the index value
+	indexValue, err := g.generateExpression(access.Index)
+	if err != nil {
+		return nil, err
+	}
+
+	// Array access returns a Result<T, IndexError> for safety
+	// First, extract length and data from array struct
+	arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+
+	// Get length
+	lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	length := g.builder.NewLoad(types.I64, lengthPtr)
+
+	// Get data pointer
+	dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	data := g.builder.NewLoad(types.I8Ptr, dataPtr)
+
+	// Bounds check: index >= 0 && index < length
+	zero := constant.NewInt(types.I64, 0)
+	indexValid := g.builder.NewICmp(enum.IPredSGE, indexValue, zero)
+	indexInBounds := g.builder.NewICmp(enum.IPredSLT, indexValue, length)
+	boundsOk := g.builder.NewAnd(indexValid, indexInBounds)
+
+	// Create blocks for success and error cases
+	successBlock := g.function.NewBlock("array_access_success")
+	errorBlock := g.function.NewBlock("array_access_error")
+	endBlock := g.function.NewBlock("array_access_end")
+
+	// Branch based on bounds check
+	g.builder.NewCondBr(boundsOk, successBlock, errorBlock)
+
+	// Success block: return the element
+	g.builder = successBlock
+
+	// For now, assume string arrays (i8*) - this is a simplification
+	// In a full implementation, we'd need to store type information with the array
+	arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(types.I8Ptr))
+	elementPtr := g.builder.NewGetElementPtr(types.I8Ptr, arrayDataPtr, indexValue)
+	element := g.builder.NewLoad(types.I8Ptr, elementPtr)
+
+	// Create Success result for string
+	resultType := g.getResultType(types.I8Ptr)
+	successResult := g.builder.NewAlloca(resultType)
+
+	// Store element value
+	valuePtr := g.builder.NewGetElementPtr(resultType, successResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(element, valuePtr)
+
+	// Store success discriminant (0)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, successResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
+	successBlock.NewBr(endBlock)
+
+	// Error block: return index error
+	g.builder = errorBlock
+	errorResult := g.builder.NewAlloca(resultType)
+
+	// Store error value (null string as placeholder)
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, errorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(constant.NewNull(types.I8Ptr), errorValuePtr)
+
+	// Store error discriminant (1)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, errorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr)
+
+	errorBlock.NewBr(endBlock)
+
+	// End block: PHI node to select result
+	g.builder = endBlock
+	phi := endBlock.NewPhi(
+		ir.NewIncoming(successResult, successBlock),
+		ir.NewIncoming(errorResult, errorBlock),
+	)
+
+	return phi, nil
 }
 
 // generateIdentifier generates LLVM IR for identifiers.

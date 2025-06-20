@@ -154,12 +154,13 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 
 	// Core functions
 	g.functionReturnTypes["toString"] = TypeString
-	g.functionReturnTypes["print"] = TypeInt     // Returns exit code
-	g.functionReturnTypes["input"] = TypeInt     // Returns input as integer
-	g.functionReturnTypes["range"] = TypeInt     // Returns range object (simplified as int)
-	g.functionReturnTypes["length"] = TypeInt    // Returns string/array length
-	g.functionReturnTypes["contains"] = TypeBool // Returns boolean
-	g.functionReturnTypes["substring"] = TypeString
+	g.functionReturnTypes["print"] = TypeInt // Returns exit code
+	g.functionReturnTypes["input"] = TypeInt // Returns input as integer
+	g.functionReturnTypes["range"] = TypeInt // Returns range object (simplified as int)
+	// STRING FUNCTIONS RETURN RESULT TYPES - THEY CAN FAIL!
+	g.functionReturnTypes["length"] = TypeResult + "<Int, string>"       // Returns Result<Int, string>
+	g.functionReturnTypes["contains"] = TypeResult + "<Bool, string>"    // Returns Result<Bool, string>
+	g.functionReturnTypes["substring"] = TypeResult + "<String, string>" // Returns Result<String, string>
 
 	// Process and file functions - MUST return Result types per spec
 	g.functionReturnTypes["spawnProcess"] = TypeResult + "<ProcessResult, string>" // Returns Result<ProcessResult, string>

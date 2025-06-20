@@ -20,6 +20,14 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 		return nil, err
 	}
 
+	// Check if this is a Result type (struct pointer)
+	if ptrType, ok := arg.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == 2 {
+			// This is a Result type - extract the value and convert to string
+			return g.convertResultToString(arg, structType)
+		}
+	}
+
 	argType, err := g.getTypeOfExpression(callExpr.Arguments[0])
 	if err != nil {
 		// Fallback for literals without explicit type info
@@ -47,6 +55,77 @@ func (g *LLVMGenerator) convertValueToStringByType(theType string, arg value.Val
 	default:
 		return nil, WrapNoToStringImpl(theType)
 	}
+}
+
+// convertResultToString extracts the value from a Result type and converts it to string
+func (g *LLVMGenerator) convertResultToString(
+	resultPtr value.Value, structType *types.StructType,
+) (value.Value, error) {
+	// Check the discriminant first to see if it's Success or Error
+	discriminantPtr := g.builder.NewGetElementPtr(structType, resultPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	discriminant := g.builder.NewLoad(types.I8, discriminantPtr)
+
+	// Check if discriminant == 0 (Success)
+	zero := constant.NewInt(types.I8, 0)
+	isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminant, zero)
+
+	// Create blocks for success and error cases
+	successBlock := g.function.NewBlock("result_toString_success")
+	errorBlock := g.function.NewBlock("result_toString_error")
+	endBlock := g.function.NewBlock("result_toString_end")
+
+	g.builder.NewCondBr(isSuccess, successBlock, errorBlock)
+
+	// Success case: extract and convert the value
+	g.builder = successBlock
+	valuePtr := g.builder.NewGetElementPtr(structType, resultPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	resultValue := g.builder.NewLoad(structType.Fields[0], valuePtr)
+
+	var successStr value.Value
+	var err error
+
+	// Convert based on the value type
+	switch structType.Fields[0] {
+	case types.I64:
+		successStr, err = g.generateIntToString(resultValue)
+	case types.I1:
+		successStr, err = g.generateBoolToString(resultValue)
+	case types.I8Ptr:
+		successStr = resultValue // Already a string
+	default:
+		// For complex types (like ProcessResult), convert to a generic string
+		successStr = g.createGlobalString("Success")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	successBlock.NewBr(endBlock)
+
+	// Error case: return "Error"
+	g.builder = errorBlock
+	errorStr := g.createGlobalString("Error")
+	errorBlock.NewBr(endBlock)
+
+	// End block: PHI node to select result
+	g.builder = endBlock
+	phi := endBlock.NewPhi(
+		ir.NewIncoming(successStr, successBlock),
+		ir.NewIncoming(errorStr, errorBlock),
+	)
+
+	return phi, nil
+}
+
+// createGlobalString creates a global string constant and returns a pointer to it
+func (g *LLVMGenerator) createGlobalString(str string) value.Value {
+	strConstant := constant.NewCharArrayFromString(str + "\x00")
+	global := g.module.NewGlobalDef("", strConstant)
+	return g.builder.NewGetElementPtr(strConstant.Typ, global,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 }
 
 // generatePrintCall handles print function calls.

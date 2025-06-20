@@ -1,4 +1,4 @@
-package integration_test
+package integration
 
 import (
 	"os"
@@ -12,12 +12,6 @@ const (
 	ospreyBinary = "../../bin/osprey"
 	testDataDir  = "../data"
 )
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-
-	return err == nil
-}
 
 func ensureCompilerBuilt(t *testing.T) {
 	t.Helper()

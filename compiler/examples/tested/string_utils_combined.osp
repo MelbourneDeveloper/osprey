@@ -5,30 +5,70 @@ fn main() -> int {
   print(s)
   print("\"\n")
 
-  let len = length(s)
-  print("Length: ")
-  print(toString(len))
-  print("\n")
+  match length(s) {
+    Success { value } => {
+      print("Length: ")
+      print(toString(value))
+      print("\n")
+    }
+    Error { message } => {
+      print("Length error: ")
+      print(message)
+      print("\n")
+    }
+  }
 
-  let has_world = contains(s, "world")
-  print("Contains 'world': ")
-  print(toString(has_world))
-  print("\n")
+  match contains(s, "world") {
+    Success { value } => {
+      print("Contains 'world': ")
+      print(toString(value))
+      print("\n")
+    }
+    Error { message } => {
+      print("Contains error: ")
+      print(message)
+      print("\n")
+    }
+  }
 
-  let has_galaxy = contains(s, "galaxy")
-  print("Contains 'galaxy': ")
-  print(toString(has_galaxy))
-  print("\n")
+  match contains(s, "galaxy") {
+    Success { value } => {
+      print("Contains 'galaxy': ")
+      print(toString(value))
+      print("\n")
+    }
+    Error { message } => {
+      print("Contains error: ")
+      print(message)
+      print("\n")
+    }
+  }
 
-  let sub = substring(s, 6, 11)
-  print("Substring(6, 11): \"")
-  print(sub)
-  print("\"\n")
+  match substring(s, 6, 11) {
+    Success { value } => {
+      print("Substring(6, 11): \"")
+      print(value)
+      print("\"\n")
+    }
+    Error { message } => {
+      print("Substring error: ")
+      print(message)
+      print("\n")
+    }
+  }
 
-  let sub_out_of_bounds = substring(s, 0, 20)
-  print("Substring(0, 20): \"")
-  print(sub_out_of_bounds)
-  print("\"\n")
+  match substring(s, 0, 20) {
+    Success { value } => {
+      print("Substring(0, 20): \"")
+      print(value)
+      print("\"\n")
+    }
+    Error { message } => {
+      print("Substring error: ")
+      print(message)
+      print("\n")
+    }
+  }
 
   print("=== Test Complete ===\n")
 
