@@ -102,6 +102,8 @@ const (
 const (
 	UnknownPattern  = "unknown"
 	WildcardPattern = "_"
+	SuccessPattern  = "Success"
+	ErrorPattern    = "Error"
 )
 
 // Type name constants for case variations.

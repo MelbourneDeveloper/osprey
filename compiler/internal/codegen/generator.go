@@ -27,6 +27,8 @@ type LLVMGenerator struct {
 	closureCounter int
 	// Temporary parameter types for return type analysis
 	currentFunctionParameterTypes map[string]string
+	// Result pattern matching support
+	currentResultValue value.Value // Current Result value being pattern matched
 	// Security configuration
 	security SecurityConfig
 }

@@ -390,7 +390,7 @@ func (g *LLVMGenerator) generateMatchExpressionWithDiscriminant(
 // hasResultPatterns checks if the match expression has Success/Err patterns.
 func (g *LLVMGenerator) hasResultPatterns(arms []ast.MatchArm) bool {
 	for _, arm := range arms {
-		if arm.Pattern.Constructor == "Success" || arm.Pattern.Constructor == "Err" {
+		if arm.Pattern.Constructor == SuccessPattern || arm.Pattern.Constructor == ErrorPattern {
 			return true
 		}
 	}
@@ -659,6 +659,10 @@ func (g *LLVMGenerator) generateResultMatchExpression(
 	discriminant value.Value,
 ) (value.Value, error) {
 	blocks := g.createResultMatchBlocks(matchExpr)
+
+	// Store the Result value for pattern binding
+	g.currentResultValue = discriminant
+
 	g.generateResultMatchCondition(discriminant, blocks)
 
 	successValue, err := g.generateSuccessBlock(matchExpr, blocks)
@@ -706,6 +710,24 @@ func (g *LLVMGenerator) generateSuccessBlock(
 ) (value.Value, error) {
 	g.builder = blocks.Success
 
+	// Find the success arm and bind pattern variables
+	successArm := g.findSuccessArm(matchExpr)
+	if successArm != nil && len(successArm.Pattern.Fields) > 0 {
+		// Bind the Result value to the pattern variable
+		fieldName := successArm.Pattern.Fields[0] // First field is the value
+
+		// Get the Result value from the matched expression
+		// The Result struct has: [value, discriminant]
+		// We need to extract the value field (index 0)
+		if g.currentResultValue != nil {
+			resultType := g.currentResultValue.Type().(*types.PointerType).ElemType
+			valuePtr := g.builder.NewGetElementPtr(resultType, g.currentResultValue,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+			extractedValue := g.builder.NewLoad(valuePtr.Type().(*types.PointerType).ElemType, valuePtr)
+			g.variables[fieldName] = extractedValue
+		}
+	}
+
 	successExpr := g.findSuccessValue(matchExpr)
 	var successValue value.Value
 	if successExpr == nil {
@@ -730,6 +752,18 @@ func (g *LLVMGenerator) generateErrorBlock(
 ) (value.Value, error) {
 	g.builder = blocks.Error
 
+	// Find the Error arm and bind pattern variables
+	errorArm := g.findErrorArm(matchExpr)
+	if errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
+		// Bind the Result error message to the pattern variable
+		fieldName := errorArm.Pattern.Fields[0] // First field is the message
+		// Create a global string for the error message
+		errorStr := g.module.NewGlobalDef("error_msg", constant.NewCharArrayFromString("Error occurred\\x00"))
+		errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
+			constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
+		g.variables[fieldName] = errorPtr
+	}
+
 	errorExpr := g.findErrorValue(matchExpr)
 	var errorValue value.Value
 	if errorExpr == nil {
@@ -747,6 +781,28 @@ func (g *LLVMGenerator) generateErrorBlock(
 	return errorValue, nil
 }
 
+// findSuccessArm finds the success match arm.
+func (g *LLVMGenerator) findSuccessArm(matchExpr *ast.MatchExpression) *ast.MatchArm {
+	for i, arm := range matchExpr.Arms {
+		if arm.Pattern.Constructor == "Success" {
+			return &matchExpr.Arms[i]
+		}
+	}
+
+	return nil
+}
+
+// findErrorArm finds the error match arm.
+func (g *LLVMGenerator) findErrorArm(matchExpr *ast.MatchExpression) *ast.MatchArm {
+	for i, arm := range matchExpr.Arms {
+		if arm.Pattern.Constructor == "Error" {
+			return &matchExpr.Arms[i]
+		}
+	}
+
+	return nil
+}
+
 // findSuccessValue finds the success expression in match arms.
 func (g *LLVMGenerator) findSuccessValue(matchExpr *ast.MatchExpression) ast.Expression {
 	for _, arm := range matchExpr.Arms {
@@ -761,7 +817,7 @@ func (g *LLVMGenerator) findSuccessValue(matchExpr *ast.MatchExpression) ast.Exp
 // findErrorValue finds the error expression in match arms.
 func (g *LLVMGenerator) findErrorValue(matchExpr *ast.MatchExpression) ast.Expression {
 	for _, arm := range matchExpr.Arms {
-		if arm.Pattern.Constructor == "Err" {
+		if arm.Pattern.Constructor == "Error" {
 			return arm.Expression
 		}
 	}
