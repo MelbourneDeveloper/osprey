@@ -6,77 +6,27 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	testutil "github.com/christianfindlay/osprey/tests/util"
 )
 
 // TestMain runs before all tests in this package.
 func TestMain(m *testing.M) {
-	// Clean and rebuild everything before running any tests
-	cleanAndRebuildAll()
+	projectRoot := filepath.Join("..", "..")
+	testutil.CleanAndRebuildAll(projectRoot)
+
+	// Ensure local bin symlink exists for runtime libraries
+	wd, _ := os.Getwd()
+	binPath := filepath.Join(wd, "bin")
+	rootBin := filepath.Join(projectRoot, "bin")
+	_ = os.Remove(binPath)
+	_ = os.Symlink(rootBin, binPath)
 
 	// Run all tests
 	code := m.Run()
 
 	// Exit with the test result code
 	os.Exit(code)
-}
-
-// cleanAndRebuildAll cleans and rebuilds all dependencies.
-func cleanAndRebuildAll() {
-	// Get project root (go up from internal/codegen to project root)
-	wd, err := os.Getwd()
-	if err != nil {
-		panic("Failed to get working directory: " + err.Error())
-	}
-	projectRoot := filepath.Join(wd, "..", "..")
-
-	// Clean everything including Rust
-	cmd := exec.Command("make", "clean")
-	cmd.Dir = projectRoot
-	if output, err := cmd.CombinedOutput(); err != nil {
-		panic("Failed to clean: " + err.Error() + "\nOutput: " + string(output))
-	}
-
-	// Rebuild runtime libraries
-	cmd = exec.Command("make", "fiber-runtime", "http-runtime")
-	cmd.Dir = projectRoot
-	if output, err := cmd.CombinedOutput(); err != nil {
-		panic("Failed to build runtime libraries: " + err.Error() + "\nOutput: " + string(output))
-	}
-
-	// Build Rust interop library
-	rustDir := filepath.Join(projectRoot, "examples", "rust_integration")
-	if _, err := os.Stat(rustDir); err == nil {
-		cmd = exec.Command("cargo", "build")
-		cmd.Dir = rustDir
-		if output, err := cmd.CombinedOutput(); err != nil {
-			panic("Failed to build Rust interop: " + err.Error() + "\nOutput: " + string(output))
-		}
-	}
-
-	// Create symlink for codegen tests
-	binPath := filepath.Join(wd, "bin")
-	targetPath := filepath.Join(projectRoot, "bin")
-
-	// Remove existing symlink if it exists
-	_ = os.Remove(binPath)
-
-	// Create symlink (ignore errors since it may already exist)
-	_ = os.Symlink(targetPath, binPath)
-
-	// Build compiler (needed for some tests) - skip linting for faster test builds
-	cmd = exec.Command("make", "build-no-lint")
-	cmd.Dir = projectRoot
-	if output, err := cmd.CombinedOutput(); err != nil {
-		// If build-no-lint target doesn't exist, try regular build
-		cmd = exec.Command("go", "build", "-o", "bin/osprey", "./cmd/osprey")
-		cmd.Dir = projectRoot
-		if output2, err2 := cmd.CombinedOutput(); err2 != nil {
-			panic("Failed to build compiler: " + err.Error() +
-				"\nOutput: " + string(output) +
-				"\nFallback error: " + err2.Error() +
-				"\nFallback output: " + string(output2))
-		}
-	}
 }
 
 // TestPkgConfigOpenSSL tests that pkg-config can find OpenSSL.

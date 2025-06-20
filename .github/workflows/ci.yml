@@ -76,11 +76,36 @@ jobs:
           fi
           echo "✅ Directory structure verified"
 
-      - name: Run all tests
+      - name: Run tests & enforce coverage threshold
         working-directory: "./compiler"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚀 Running all tests..."
-          make test-all
+          sudo apt-get update -qq && sudo apt-get install -y -qq bc
+
+          echo "🚀 Executing full test-suite with coverage…"
+          ./coverage_report.sh
+
+          # Extract the total percentage (numeric, no % sign)
+          CURRENT_COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')
+          MINIMUM_COVERAGE="${{ vars.TEST_COVERAGE_COMPILER }}"
+
+          echo "Current coverage : ${CURRENT_COVERAGE}%"
+          if [ -z "$MINIMUM_COVERAGE" ]; then
+            echo "🌱 No TEST_COVERAGE_COMPILER variable set – bootstrapping with ${CURRENT_COVERAGE}%"
+            gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE"
+            exit 0
+          fi
+
+          echo "Required minimum : ${MINIMUM_COVERAGE}%"
+
+          # Fail if coverage dropped
+          if [ "$(echo "$CURRENT_COVERAGE < $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
+            echo "❌ Coverage dropped below threshold!"
+            exit 1
+          fi
+
+          echo "✅ Coverage check passed"
 
       - name: Test example compilation and execution
         working-directory: "./compiler"
