@@ -314,22 +314,15 @@ func getExpectedOutputs() map[string]string {
 			"-- Step 2: Reading from file --\n" +
 			"Read successful!\n" +
 			"=== Test Complete ===\n",
-		"string_utils_combined.osp": "=== String Utils Test ===\n\n" +
-			"Original: \\\n" +
-			"hello world\n" +
-			"\"\n\n" +
-			"Length: \n11\n\n\n" +
-			"Contains 'world': \n1\n\n\n" +
-			"Contains 'galaxy': \n0\n\n\n" +
-			"Substring(6, 11): \\\n" +
-			"world\n" +
-			"\"\n\n" +
-			"Substring(0, 20): \\\n" +
-			"hello world\n" +
-			"\"\n\n" +
+		"string_utils_combined.osp": "=== String Utils Test ===\n\nOriginal: \\\nhello world\n\"\n\n" +
+			"Length: \n11\n\n\nContains 'world': \n1\n\n\nContains 'galaxy': \n0\n\n\n" +
+			"Substring(6, 11): \\\nworld\n\"\n\nSubstring(0, 20): \\\nhello world\n\"\n\n" +
 			"=== Test Complete ===\n\n",
-		// Note: list_and_process.osp is deliberately missing because array literals are not yet implemented
-		// It will fail with proper error message until arrays are implemented in Phase 2
+		"list_and_process.osp": "=== Array Access Test ===\n\nCreated array with 3 commands\n\n" +
+			"Testing array access with pattern matching:\n\n✅ commands[0] = \\\necho hello\n\"\n\n" +
+			"✅ commands[1] = \\\necho world\n\"\n\n✅ commands[2] = \\\necho test\n\"\n\n" +
+			"Testing out-of-bounds access:\n\n✅ Correctly caught out-of-bounds: commands[5] -> Error\n\n" +
+			"=== Array Test Complete ===\n\n",
 	}
 }
 

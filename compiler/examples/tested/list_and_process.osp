@@ -1,30 +1,69 @@
-fn main() -> int {
-  print("=== List and Process Test ===\n")
+print("=== Array Access Test ===\n")
 
-  let commands = ["echo hello", "echo world"]
+// Test array literal creation
+let commands = ["echo hello", "echo world", "echo test"]
+print("Created array with 3 commands\n")
 
-  let first_command = commands[0]
-  print("First command: ")
-  print(first_command)
-  print("\n")
+// Test array access with proper pattern matching on Result types
+print("Testing array access with pattern matching:\n")
 
-  let second_command = commands[1]
-  print("Second command: ")
-  print(second_command)
-  print("\n")
+// Test first element
+let first_result = commands[0]
+match first_result {
+  Success { value } => {
+    print("✅ commands[0] = \"")
+    print(value)
+    print("\"\n")
+  }
+  Error { message } => {
+    print("❌ Error accessing commands[0]: ")
+    print(message)
+    print("\n")
+  }
+}
 
-  print("Executing first command...\n")
-  let result1 = spawnProcess(first_command)
-  print("\nResult 1 (0 is success): ")
-  print(toString(result1))
-  print("\n")
+// Test second element
+let second_result = commands[1]
+match second_result {
+  Success { value } => {
+    print("✅ commands[1] = \"")
+    print(value)
+    print("\"\n")
+  }
+  Error { message } => {
+    print("❌ Error accessing commands[1]: ")
+    print(message)
+    print("\n")
+  }
+}
 
-  print("Executing second command...\n")
-  let result2 = spawnProcess(second_command)
-  print("\nResult 2 (0 is success): ")
-  print(toString(result2))
-  print("\n")
-  
-  print("=== Test Complete ===\n")
-  0
-} 
+// Test third element
+let third_result = commands[2]
+match third_result {
+  Success { value } => {
+    print("✅ commands[2] = \"")
+    print(value)
+    print("\"\n")
+  }
+  Error { message } => {
+    print("❌ Error accessing commands[2]: ")
+    print(message)
+    print("\n")
+  }
+}
+
+// Test out of bounds access (should return Error)
+print("Testing out-of-bounds access:\n")
+let oob_result = commands[5]
+match oob_result {
+  Success { value } => {
+    print("❌ UNEXPECTED: commands[5] should have failed but got: \"")
+    print(value)
+    print("\"\n")
+  }
+  Error { message } => {
+    print("✅ Correctly caught out-of-bounds: commands[5] -> Error\n")
+  }
+}
+
+print("=== Array Test Complete ===\n") 

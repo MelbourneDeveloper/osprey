@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/llir/llvm/ir"
@@ -344,13 +345,17 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	indexInBounds := g.builder.NewICmp(enum.IPredSLT, indexValue, length)
 	boundsOk := g.builder.NewAnd(indexValid, indexInBounds)
 
-	// Create blocks for success and error cases
-	successBlock := g.function.NewBlock("array_access_success")
-	errorBlock := g.function.NewBlock("array_access_error")
-	endBlock := g.function.NewBlock("array_access_end")
+	// Create unique block names to avoid conflicts with multiple array accesses
+	blockSuffix := fmt.Sprintf("_%p", access)
+	successBlock := g.function.NewBlock("array_access_success" + blockSuffix)
+	errorBlock := g.function.NewBlock("array_access_error" + blockSuffix)
+	endBlock := g.function.NewBlock("array_access_end" + blockSuffix)
+
+	// Store current block before branching
+	currentBlock := g.builder
 
 	// Branch based on bounds check
-	g.builder.NewCondBr(boundsOk, successBlock, errorBlock)
+	currentBlock.NewCondBr(boundsOk, successBlock, errorBlock)
 
 	// Success block: return the element
 	g.builder = successBlock
@@ -375,7 +380,8 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
 
-	successBlock.NewBr(endBlock)
+	// Branch to end block
+	g.builder.NewBr(endBlock)
 
 	// Error block: return index error
 	g.builder = errorBlock
@@ -391,7 +397,8 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr)
 
-	errorBlock.NewBr(endBlock)
+	// Branch to end block
+	g.builder.NewBr(endBlock)
 
 	// End block: PHI node to select result
 	g.builder = endBlock

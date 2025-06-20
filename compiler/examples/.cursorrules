@@ -13,7 +13,9 @@ Examples **ARE integration tests** - they prove the compiler works by being real
 
 ---
 
-## Example Organization Principles
+**ALWAYS VERIFY FUNCTIONALITY WITH OUTPUT** don't just run statements. print the result
+
+**REDUCE PRINT OUTPUT** only use print to prove functionality is working
 
 **CONSOLIDATE BY FUNCTIONALITY** - group related examples together instead of having many tiny files.
 
@@ -23,27 +25,21 @@ Examples **ARE integration tests** - they prove the compiler works by being real
 
 **FEWER, BETTER EXAMPLES** - prefer comprehensive examples over many small ones.
 
----
-
-## Print Statement Rules
-
-**MINIMIZE PRINT STATEMENTS** - only include prints when necessary for debugging or demonstrating output.
-
 **CONSOLIDATE CONSECUTIVE PRINTS** - combine multiple consecutive print statements into single statements.
 
-**MEANINGFUL OUTPUT ONLY** - prints should serve a purpose (debugging, demonstration, or verification).
+**PROPER ERROR HANDLING** - show how to handle errors gracefully.
+
+**REALISTIC SCENARIOS** - use examples that mirror real-world use cases.
 
 ---
 
 ## DO
 
-**INCLUDE EXPECTED OUTPUTS** - all examples should have corresponding expected output files.
-
-**SHOW REAL-WORLD USAGE PATTERNS** - examples should mirror how developers will actually use the compiler.
+**ALWAYS INCLUDE EXPECTED OUTPUTS** - all examples should have corresponding expected output files.
 
 **DEMONSTRATE EDGE CASES** - show how to handle boundary conditions and error scenarios.
 
-**GROUP RELATED FUNCTIONALITY** - put related examples together in a subfolder
+**CONSOLIDATE RELATED EXAMPLES** - merge small related examples into comprehensive demonstrations.
 
 **MAKE EXAMPLES RUNNABLE** - every example should compile and execute successfully.
 
@@ -65,28 +61,4 @@ Examples **ARE integration tests** - they prove the compiler works by being real
 
 ---
 
-## Folder Organization Strategy
-
-**TESTED/** - examples with expected outputs that are automatically verified
-**FAILSCOMPILATION/** - examples that should fail compilation with specific error messages  
-**[FEATURE]/** - organize by major features (fiber, http, websox, etc.)
-
-**CONSOLIDATE RELATED EXAMPLES** - merge small related examples into comprehensive demonstrations.
-
-**BREAK UP LARGE FILES** - if a feature file gets too large, break it into smaller files.
-
----
-
-## Example Quality Standards
-
-**COMPREHENSIVE FEATURE COVERAGE** - each example should thoroughly demonstrate its target functionality.
-
-**CLEAN, READABLE CODE** - examples serve as documentation for users.
-
-**PROPER ERROR HANDLING** - show how to handle errors gracefully.
-
-**REALISTIC SCENARIOS** - use examples that mirror real-world use cases.
-
----
-
-**Remember: Examples are both tests and documentation. Make them comprehensive, clean, and valuable to developers learning the language. They are important for humans and AI agents. Make them readable for both** 
+**Remember: Examples are both tests and documentation. Make them comprehensive, clean, and valuable to developers learning the language. They are important for humans and AI agents. Make them readable for both but don't pollute the test with rubbish prints or comments** 
