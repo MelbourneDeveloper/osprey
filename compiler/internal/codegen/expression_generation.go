@@ -539,7 +539,7 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 }
 
 func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpression) (value.Value, error) {
-	if resultExpr.IsSuccess {
+	if resultExpr.Success {
 		// Generate the actual value
 		return g.generateExpression(resultExpr.Value)
 	}

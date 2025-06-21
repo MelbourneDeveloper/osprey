@@ -11,61 +11,39 @@ import (
 	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
-// TestRootLevelExamples tests ONLY the root-level examples in examples/tested/ (NOT subdirectories).
-// Subdirectories like http/, websox/, fiber/ have their own separate test functions.
-func TestRootLevelExamples(t *testing.T) {
+// TestBasicsExamples tests the basic language feature examples.
+func TestBasicsExamples(t *testing.T) {
 	checkLLVMTools(t)
 
-	examplesDir := "../../examples/tested"
-	runTestExamples(t, examplesDir, getExpectedOutputs())
+	examplesDir := "../../examples/tested/basics"
+	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
 }
 
-func runTestExamples(t *testing.T, examplesDir string, expectedOutputs map[string]string) {
-	entries, err := os.ReadDir(examplesDir)
+func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs map[string]string) {
+	err := filepath.Walk(examplesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Only process .osp files
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".osp") {
+			// Create test name from the file path relative to examples/tested
+			relPath, _ := filepath.Rel(examplesDir, path)
+			testName := strings.TrimSuffix(relPath, ".osp")
+			testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
+
+			t.Run(testName, func(t *testing.T) {
+				expectedOutput, exists := expectedOutputs[info.Name()]
+				if !exists {
+					t.Fatalf("❌ MISSING expected output for %s!", info.Name())
+				}
+				testExampleFile(t, path, expectedOutput)
+			})
+		}
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("Failed to read examples directory: %v", err)
-	}
-
-	processExampleFiles(t, examplesDir, entries, expectedOutputs)
-}
-
-// TestLanguageFeatures tests core language feature examples for better test explorer support.
-func TestLanguageFeatures(t *testing.T) {
-	checkLLVMTools(t)
-
-	examplesDir := "../../examples/tested"
-	expectedOutputs := getExpectedOutputs()
-
-	languageExamples := []string{
-		"hello.osp",
-		"basic.osp",
-		"simple.osp",
-		"function.osp",
-		"working_basics.osp",
-		"simple_types.osp",
-		"result_type_example.osp",
-		"interpolation_math.osp",
-		"interpolation_comprehensive.osp",
-		"pattern_matching_basics.osp",
-		"comparison_test.osp",
-		"equality_test.osp",
-		"comprehensive_bool_test.osp",
-		"full_bool_test.osp",
-		"modulo_test.osp",
-		"block_statements_basic.osp",
-		"block_statements_advanced.osp",
-	}
-
-	for _, exampleFile := range languageExamples {
-		testName := strings.TrimSuffix(exampleFile, ".osp")
-		t.Run(testName, func(t *testing.T) {
-			filePath := filepath.Join(examplesDir, exampleFile)
-			expectedOutput, exists := expectedOutputs[exampleFile]
-			if !exists {
-				t.Fatalf("❌ MISSING expected output for %s!", exampleFile)
-			}
-			testExampleFile(t, filePath, expectedOutput)
-		})
+		t.Fatalf("Failed to walk examples directory: %v", err)
 	}
 }
 
@@ -221,7 +199,6 @@ func getExpectedOutputs() map[string]string {
 		"website_pattern_matching_grade_example.osp": "Grade for 100: Perfect!\nGrade for 95: Excellent\n" +
 			"Grade for 85: Very Good\nGrade for 75: Good\nGrade for 50: Needs Improvement\n",
 		"website_functional_programming_example.osp": "100\nRange operations:\n1\n2\n3\n4\n5\n6\n7\n8\n9\n",
-		// TODO: REMOVED BULLSHIT "safe arithmetic" example - was just manual checking, not actually safe!
 		"website_fiber_isolation_example.osp": "Fiber 1 result: 1\nFiber 2 result: 2\n" +
 			"Processed 10 items\n=== Fiber Example Complete ===\n",
 		// Block statement examples
@@ -236,53 +213,6 @@ func getExpectedOutputs() map[string]string {
 			"Test 3 - Block with match: 0\n" +
 			"Test 4 - Complex function: 0\n" +
 			"=== Advanced Block Statements Complete ===\n",
-		"http_advanced_example.osp": "=== Advanced HTTP Test ===\n" +
-			"Creating HTTP server on port 8080...\n" +
-			"Server created with ID: 1\n" +
-			"Starting server listener...\n" +
-			"Server listening on http://127.0.0.1:8080\n" +
-			"=== Creating Multiple Clients ===\n" +
-			"Creating client 1...\n" +
-			"Client 1 created with ID: 2\n" +
-			"Creating client 2...\n" +
-			"Client 2 created with ID: 3\n" +
-			"Creating client 3...\n" +
-			"Client 3 created with ID: 4\n" +
-			"=== Concurrent Requests ===\n" +
-			"Client 1: GET /api/users\n" +
-			"Client 1 GET result: -7\n" +
-			"Client 2: POST /api/posts\n" +
-			"Client 2 POST result: -7\n" +
-			"Client 3: GET /api/health\n" +
-			"Client 3 health check: -7\n" +
-			"=== API Versioning ===\n" +
-			"Client 1: GET /v1/users\n" +
-			"v1 API result: -7\n" +
-			"Client 2: GET /v2/users\n" +
-			"v2 API result: -7\n" +
-			"=== Content Types ===\n" +
-			"Client 1: POST /api/upload (XML)\n" +
-			"XML POST result: -7\n" +
-			"Client 2: PUT /api/config (YAML)\n" +
-			"YAML PUT result: -7\n" +
-			"Client 3: POST /api/data (Form)\n" +
-			"Form POST result: -7\n" +
-			"=== Authentication ===\n" +
-			"Client 1: POST /auth/login\n" +
-			"Login result: -5\n" +
-			"Client 2: GET /protected (with token)\n" +
-			"Protected GET result: -5\n" +
-			"Client 3: DELETE /auth/logout\n" +
-			"Logout result: -5\n" +
-			"=== Error Scenarios ===\n" +
-			"Client 1: GET /nonexistent\n" +
-			"404 test result: -5\n" +
-			"Client 2: POST /api/invalid (bad JSON)\n" +
-			"Bad JSON result: -5\n" +
-			"Stopping server...\n" +
-			"Server stopped with result: 0\n" +
-			"=== Advanced HTTP Test Complete ===\n",
-		// Process spawning examples
 		"process_spawn_basic.osp": "Hello World\n" +
 			"=== Basic Process Spawning Test ===\n" +
 			"Process result: 0\n" +
@@ -323,31 +253,6 @@ func getExpectedOutputs() map[string]string {
 			"✅ commands[1] = \\\necho world\n\"\n\n✅ commands[2] = \\\necho test\n\"\n\n" +
 			"Testing out-of-bounds access:\n\n✅ Correctly caught out-of-bounds: commands[5] -> Error\n\n" +
 			"=== Array Test Complete ===\n\n",
-	}
-}
-
-// processExampleFiles processes ONLY .osp files in the given directory (SKIPS subdirectories).
-func processExampleFiles(t *testing.T, examplesDir string, entries []os.DirEntry, expectedOutputs map[string]string) {
-	// Test each .osp file - SKIP ALL DIRECTORIES
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".osp") {
-			// Create a meaningful test name by removing .osp extension
-			testName := strings.TrimSuffix(entry.Name(), ".osp")
-
-			t.Run(testName, func(t *testing.T) {
-				filePath := filepath.Join(examplesDir, entry.Name())
-				expectedOutput, exists := expectedOutputs[entry.Name()]
-				if !exists {
-					t.Fatalf("❌ MISSING expected output for %s!\n"+
-						"🚨 ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!\n"+
-						"🚨 NO COMPILATION-ONLY TESTS ALLOWED!\n"+
-						"🚨 RUN THE EXAMPLE AND ADD THE ACTUAL OUTPUT TO expectedOutputs MAP!\n"+
-						"🚨 Use: ../../osprey %s --run\n"+
-						"🚨 Then copy the output to the expectedOutputs map!", entry.Name(), entry.Name())
-				}
-				testExampleFile(t, filePath, expectedOutput)
-			})
-		}
 	}
 }
 

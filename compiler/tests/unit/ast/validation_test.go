@@ -205,7 +205,7 @@ func TestCanInferReturnType(t *testing.T) {
 		{
 			name: "successful_result_expression",
 			body: &ast.ResultExpression{
-				IsSuccess: true,
+				Success: true,
 				Value: &ast.BinaryExpression{
 					Left:     &ast.IntegerLiteral{Value: 5},
 					Operator: "*",
@@ -217,7 +217,7 @@ func TestCanInferReturnType(t *testing.T) {
 		{
 			name: "failed_result_expression",
 			body: &ast.ResultExpression{
-				IsSuccess: false,
+				Success: false,
 				Value:     &ast.StringLiteral{Value: "error"},
 			},
 			expected: false,
@@ -299,7 +299,7 @@ func TestCanInferParameterType(t *testing.T) {
 			name:  "parameter_in_result_expression",
 			param: "num",
 			body: &ast.ResultExpression{
-				IsSuccess: true,
+				Success: true,
 				Value: &ast.BinaryExpression{
 					Left:     &ast.Identifier{Name: "num"},
 					Operator: "*",
