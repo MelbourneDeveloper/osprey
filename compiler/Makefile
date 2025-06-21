@@ -107,9 +107,29 @@ clean:
 # ========== TEST SUITE ==========
 
 # Run runtime tests (C tests that verify no segfaults)
-test-runtime:
+test-runtime: build
 	@echo "🧪 Running C Runtime Tests to verify segfault fixes..."
-	@make -C tests/unit/runtime test
+	@echo "📦 Compiling fiber runtime tests..."
+	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c -pthread -std=gnu11
+	@echo "🚀 Running fiber runtime tests..."
+	./runtime/fiber_runtime_test
+	@echo ""
+	@echo "📦 Compiling HTTP runtime tests..."
+	gcc -o runtime/http_runtime_test runtime/http_runtime_tests.c \
+		runtime/http_shared.c \
+		runtime/http_client_runtime.c \
+		runtime/http_server_runtime.c \
+		runtime/websocket_client_runtime.c \
+		runtime/websocket_server_runtime.c \
+		runtime/fiber_runtime.c \
+		runtime/bridge_stubs.c \
+		-pthread `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
+	@echo "🚀 Running HTTP runtime tests..."
+	@echo "⚠️  NOTE: HTTP server tests use stub bridge functions - web API functionality not tested"
+	./runtime/http_runtime_test
+	@echo ""
+	@echo "🧹 Cleaning up test executables..."
+	rm -f runtime/fiber_runtime_test runtime/http_runtime_test
 	@echo "✅ Runtime tests passed - no segfaults detected!"
 
 # Run all tests without coverage (fast feedback)
