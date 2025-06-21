@@ -69,7 +69,11 @@ app.post('/api/compile', async (req, res) => {
     try {
         const result = await runOspreyCompiler(['--sandbox', '--ast'], code)
         console.log('✅ Compile success, output length:', result.stdout.length)
-        res.json({ success: true, output: result.stdout })
+        res.json({
+            success: true,
+            compilerOutput: result.stderr || '',
+            programOutput: result.stdout || '' // AST output goes to stdout
+        })
     } catch (error) {
         console.error('❌ Compile error:', error.message)
         res.status(500).json({ success: false, error: error.message })
@@ -88,8 +92,15 @@ app.post('/api/run', async (req, res) => {
 
     try {
         const result = await runOspreyCompiler(['--sandbox', '--run'], code)
-        console.log('✅ Run success, output length:', result.stdout.length)
-        res.json({ success: true, output: result.stdout })
+        console.log('✅ Run success')
+        console.log('📊 Compiler output length:', result.stderr?.length || 0)
+        console.log('📋 Program output length:', result.stdout?.length || 0)
+
+        res.json({
+            success: true,
+            compilerOutput: result.stderr || '',
+            programOutput: result.stdout || ''
+        })
     } catch (error) {
         console.error('❌ Run error:', error.message)
         res.status(500).json({ success: false, error: error.message })

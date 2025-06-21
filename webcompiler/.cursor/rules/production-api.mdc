@@ -1,10 +1,12 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
 # Production API Rules
 
+- **SECURITY FIRST** - We don't want this thing running up a huge bill so check every line for DOS attacks
+- **MUST RETURN TWO OUTPUTS OR ERROR OUTPUT** - The main API returns 1. Compiler output 2. App output, and these must be distinct in the JSON response
 - **PRODUCTION API** - Don't break it, keep changes minimal and safe
 - **SERVES LSP FOR WEBSITE** - This API must stay working for language server
 - **DOCKER COMPOSE MUST WORK** - Build and run successfully for deployment
