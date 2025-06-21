@@ -138,6 +138,27 @@ func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (
 	return g.builder.NewCall(fn, cmd), nil
 }
 
+// generateSleepCall emits a call to the fiber_sleep function to sleep for the specified milliseconds.
+func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != OneArg {
+		return nil, WrapSleepWrongArgs(len(callExpr.Arguments))
+	}
+
+	milliseconds, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the fiber_sleep function
+	sleepFunc := g.functions["fiber_sleep"]
+	if sleepFunc == nil {
+		g.initFiberRuntime()
+		sleepFunc = g.functions["fiber_sleep"]
+	}
+
+	return g.builder.NewCall(sleepFunc, milliseconds), nil
+}
+
 // generateWriteFileCall writes data to a file via an external helper returning
 // a Result<Success, string> type.
 func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {

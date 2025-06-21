@@ -83,6 +83,8 @@ func (g *LLVMGenerator) handleCoreFunctions(name string, callExpr *ast.CallExpre
 		return g.generateSubstringCall(callExpr)
 	case SpawnProcessFunc:
 		return g.generateSpawnProcessCall(callExpr)
+	case SleepFunc:
+		return g.generateSleepCall(callExpr)
 	case WriteFileFunc:
 		return g.generateWriteFileCall(callExpr)
 	case ReadFileFunc:

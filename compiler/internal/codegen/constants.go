@@ -63,6 +63,7 @@ const (
 	SpawnProcessFunc = "spawnProcess"
 	WriteFileFunc    = "writeFile"
 	ReadFileFunc     = "readFile"
+	SleepFunc        = "sleep"
 
 	// JSON functions
 	ParseJSONFunc   = "parseJSON"

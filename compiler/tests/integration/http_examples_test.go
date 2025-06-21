@@ -20,6 +20,7 @@ func getHTTPExpectedOutputs() map[string]string {
 			"Creating HTTP server on port 8080...\n" +
 			"Server created with ID: 1\n" +
 			"Starting server listener...\n" +
+			"HTTP server listening on 127.0.0.1:8080\n" +
 			"Server listening on http://127.0.0.1:8080\n" +
 			"=== Creating Multiple Clients ===\n" +
 			"Creating client 1...\n" +
@@ -30,35 +31,48 @@ func getHTTPExpectedOutputs() map[string]string {
 			"Client 3 created with ID: 4\n" +
 			"=== Concurrent Requests ===\n" +
 			"Client 1: GET /api/users\n" +
-			"Client 1 GET result: -7\n" +
+			"🌐 HTTP Request: GET /api/users\n" +
+			"Client 1 GET result: 200\n" +
 			"Client 2: POST /api/posts\n" +
-			"Client 2 POST result: -7\n" +
+			"🌐 HTTP Request: POST /api/posts\n" +
+			"Client 2 POST result: 200\n" +
 			"Client 3: GET /api/health\n" +
-			"Client 3 health check: -7\n" +
+			"🌐 HTTP Request: GET /api/health\n" +
+			"Client 3 health check: 200\n" +
 			"=== API Versioning ===\n" +
 			"Client 1: GET /v1/users\n" +
-			"v1 API result: -7\n" +
+			"🌐 HTTP Request: GET /v1/users\n" +
+			"v1 API result: 200\n" +
 			"Client 2: GET /v2/users\n" +
-			"v2 API result: -7\n" +
+			"🌐 HTTP Request: GET /v2/users\n" +
+			"v2 API result: 200\n" +
 			"=== Content Types ===\n" +
 			"Client 1: POST /api/upload (XML)\n" +
-			"XML POST result: -7\n" +
+			"🌐 HTTP Request: POST /api/upload\n" +
+			"XML POST result: 200\n" +
 			"Client 2: PUT /api/config (YAML)\n" +
-			"YAML PUT result: -7\n" +
+			"🌐 HTTP Request: PUT /api/config\n" +
+			"YAML PUT result: 200\n" +
 			"Client 3: POST /api/data (Form)\n" +
-			"Form POST result: -7\n" +
+			"🌐 HTTP Request: POST /api/data\n" +
+			"Form POST result: 200\n" +
 			"=== Authentication ===\n" +
 			"Client 1: POST /auth/login\n" +
-			"Login result: -5\n" +
+			"🌐 HTTP Request: POST /auth/login\n" +
+			"Login result: 200\n" +
 			"Client 2: GET /protected (with token)\n" +
-			"Protected GET result: -5\n" +
+			"🌐 HTTP Request: GET /protected\n" +
+			"Protected GET result: 200\n" +
 			"Client 3: DELETE /auth/logout\n" +
-			"Logout result: -5\n" +
+			"🌐 HTTP Request: DELETE /auth/logout\n" +
+			"Logout result: 200\n" +
 			"=== Error Scenarios ===\n" +
 			"Client 1: GET /nonexistent\n" +
-			"404 test result: -5\n" +
+			"🌐 HTTP Request: GET /nonexistent\n" +
+			"404 test result: 200\n" +
 			"Client 2: POST /api/invalid (bad JSON)\n" +
-			"Bad JSON result: -5\n" +
+			"🌐 HTTP Request: POST /api/invalid\n" +
+			"Bad JSON result: 200\n" +
 			"Stopping server...\n" +
 			"Server stopped with result: 0\n" +
 			"=== Advanced HTTP Test Complete ===\n",
@@ -73,23 +87,30 @@ func getHTTPExpectedOutputs() map[string]string {
 			"Creating HTTP server on port 8080...\n" +
 			"Server created with ID: 1\n" +
 			"Starting server listener...\n" +
+			"HTTP server listening on 127.0.0.1:8080\n" +
 			"Server listening on http://127.0.0.1:8080\n" +
 			"Creating HTTP client...\n" +
 			"Client created with ID: 2\n" +
 			"=== Testing HTTP Methods ===\n" +
 			"GET /api/users\n" +
-			"GET status: -5\n" +
+			"🌐 HTTP Request: GET /api/users\n" +
+			"GET status: 200\n" +
 			"POST /api/users\n" +
-			"POST status: -5\n" +
+			"🌐 HTTP Request: POST /api/users\n" +
+			"POST status: 200\n" +
 			"PUT /api/users/1\n" +
-			"PUT status: -5\n" +
+			"🌐 HTTP Request: PUT /api/users/1\n" +
+			"PUT status: 200\n" +
 			"DELETE /api/users/1\n" +
-			"DELETE status: -5\n" +
+			"🌐 HTTP Request: DELETE /api/users/1\n" +
+			"DELETE status: 200\n" +
 			"=== Testing Additional Endpoints ===\n" +
 			"GET /health\n" +
-			"Health check status: -5\n" +
+			"🌐 HTTP Request: GET /health\n" +
+			"Health check status: 200\n" +
 			"POST /api/auth/login\n" +
-			"Login status: -5\n" +
+			"🌐 HTTP Request: POST /api/auth/login\n" +
+			"Login status: 200\n" +
 			"Stopping server...\n" +
 			"Server stopped with result: 0\n" +
 			"=== HTTP API Test Complete ===\n",
@@ -118,6 +139,8 @@ func getHTTPExpectedOutputs() map[string]string {
 			"WebSocket closed with result: 0\n" +
 			"=== WebSocket Test Complete ===\n",
 		"websocket_local_test.osp": "=== WebSocket Local Server Test ===\n" +
+			"Creating local WebSocket server...\n" +
+			"Server listening with result: 0\n" +
 			"Connecting to local WebSocket server...\n" +
 			"WebSocket connected with ID: 1\n" +
 			"=== Basic Text Messages ===\n" +
@@ -140,6 +163,8 @@ func getHTTPExpectedOutputs() map[string]string {
 			"=== Closing Connection ===\n" +
 			"Closing WebSocket connection...\n" +
 			"WebSocket closed with result: 0\n" +
+			"Stopping WebSocket server...\n" +
+			"Server stopped with result: 0\n" +
 			"=== WebSocket Local Test Complete ===\n",
 		"websocket_server_example.osp": "=== Osprey WebSocket Server ===\n" +
 			"Creating WebSocket server on port 8080...\n" +

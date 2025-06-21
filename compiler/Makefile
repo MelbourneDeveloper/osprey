@@ -106,8 +106,14 @@ clean:
 
 # ========== TEST SUITE ==========
 
+# Run runtime tests (C tests that verify no segfaults)
+test-runtime:
+	@echo "🧪 Running C Runtime Tests to verify segfault fixes..."
+	@make -C tests/unit/runtime test
+	@echo "✅ Runtime tests passed - no segfaults detected!"
+
 # Run all tests without coverage (fast feedback)
-test: build
+test: build test-runtime
 	@go test ./... -p 1 -v
 
 # Regenerate parser from grammar (requires ANTLR)

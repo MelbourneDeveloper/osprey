@@ -137,6 +137,7 @@ var (
 
 	// Process spawning errors.
 	ErrSpawnProcessWrongArgs = errors.New("spawnProcess expects exactly 1 argument (command)")
+	ErrSleepWrongArgs        = errors.New("sleep expects exactly 1 argument (milliseconds)")
 	ErrWriteFileWrongArgs    = errors.New("writeFile expects exactly 2 arguments (filename, content)")
 	ErrReadFileWrongArgs     = errors.New("readFile expects exactly 1 argument (filename)")
 	ErrParseJSONWrongArgs    = errors.New("parseJSON expects exactly 1 argument (json_string)")
@@ -588,6 +589,11 @@ func WrapSubstringWrongArgs(got int) error {
 // WrapSpawnProcessWrongArgs wraps spawnProcess wrong arguments error.
 func WrapSpawnProcessWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrSpawnProcessWrongArgs, got)
+}
+
+// WrapSleepWrongArgs wraps sleep wrong arguments error.
+func WrapSleepWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrSleepWrongArgs, got)
 }
 
 // WrapWriteFileWrongArgs wraps writeFile wrong arguments error.

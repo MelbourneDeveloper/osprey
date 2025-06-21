@@ -4,6 +4,9 @@
 #include <string.h>
 #include <unistd.h>
 
+// DO NOT IGNORE TODOS HERE!
+// FIX THE PROBLEMS!
+
 // Stub implementations for WebSocket server functions for testing
 // These return the expected values from the test but don't actually do networking
 
@@ -37,6 +40,9 @@ void websocket_keep_alive() {
     printf("🔌 Server is now running indefinitely\n");
     printf("📡 Press Ctrl+C to stop the server\n");
     
+    // CRITICAL: IMPLEMENT THIS!!!
+    // This is absolutely necessary for HTTP servers!!!
+
     // TODO: Real implementation would have:
     // - Signal handlers for SIGINT/SIGTERM
     // - Select/epoll loop for handling connections
