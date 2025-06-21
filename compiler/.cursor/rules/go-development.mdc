@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Go Development Rules
+
+- **IDIOMATIC GO CODE** - Follow Go conventions and best practices
+- **PREFER FUNCTIONS OVER METHODS** - Use functions unless receiver state is needed
+- **EXPLICIT ERROR HANDLING** - Check all errors, return early on failures
+- **PURE FUNCTIONS** - Avoid side effects where practical (except for compiler performance)
+- **USE TYPE SWITCHES** - Pattern match on interface{} types instead of casting
+- **TABLE-DRIVEN TESTS** - Organize multiple test cases efficiently
+- **GODOC COMMENTS** - All exported functions need documentation starting with function name
+- **STATIC ANALYSIS TOOLS** - Run make lint
+- **FOLLOW compilersbestpractice.md** - Adhere to project-specific compiler guidelines
+
+@compilersbestpractice.md

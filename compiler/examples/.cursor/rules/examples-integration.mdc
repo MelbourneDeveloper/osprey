@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Examples Integration Rules
+
+- **EXAMPLES ARE INTEGRATION TESTS** - They prove compiler works with real, runnable code
+- **TESTED EXAMPLES PRIMARY** - Examples in `tested/` folders with expected outputs
+- **CONSOLIDATE BY FUNCTIONALITY** - Group related examples, avoid many tiny files
+- **MEATY EXAMPLES** - Demonstrate substantial functionality, not trivial "hello world"
+- **INCLUDE EXPECTED OUTPUTS** - All examples need corresponding expected output files
+- **SHOW REAL-WORLD PATTERNS** - Mirror how developers will use the compiler
+- **ORGANIZE BY FEATURE** - Separate fiber, http, websox into distinct folders
+- **FAILSCOMPILATION EXAMPLES** - Demonstrate proper compiler error handling
+- **MINIMIZE PRINT STATEMENTS** - Only include prints for debugging or demonstration
+- **COMPREHENSIVE COVERAGE** - Each example should thoroughly demonstrate target functionality
