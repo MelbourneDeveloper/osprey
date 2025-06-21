@@ -79,11 +79,12 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 func (g *LLVMGenerator) typeExpressionToLLVMType(typeExpr *ast.TypeExpression) types.Type {
 	switch typeExpr.Name {
 	case "Int":
-
 		return types.I64
 	case "String":
-
 		return types.I8Ptr
+	case TypeHTTPResponse:
+		// Return pointer to HttpResponse struct
+		return types.NewPointer(g.typeMap[TypeHTTPResponse])
 	default:
 		// Check if it's a user-defined type
 		if llvmType, exists := g.typeMap[typeExpr.Name]; exists {

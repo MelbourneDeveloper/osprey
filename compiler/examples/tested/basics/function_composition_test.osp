@@ -1,0 +1,31 @@
+// 🔗 Function Composition Test
+// Tests passing functions as arguments to other functions
+
+print("=== Function Composition Test ===")
+
+// Define some simple functions
+fn double(x: int) -> int = x * 2
+fn triple(x: int) -> int = x * 3
+fn add5(x: int) -> int = x + 5
+
+// Define a higher-order function that takes a function as argument
+// Use 'any' type for function parameter since Osprey doesn't have function types yet
+fn applyFunction(value: int, func: any) -> int = func(value)
+
+// Test function composition
+print("Testing function composition...")
+
+let testValue = 10
+print("Starting value: ${testValue}")
+
+// Test passing different functions - use named arguments
+let doubled = applyFunction(value: testValue, func: double)
+print("After double: ${doubled}")
+
+let tripled = applyFunction(value: testValue, func: triple)  
+print("After triple: ${tripled}")
+
+let added = applyFunction(value: testValue, func: add5)
+print("After add5: ${added}")
+
+print("=== Function Composition Test Complete ===") 

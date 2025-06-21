@@ -34,11 +34,12 @@ const (
 
 // Type names.
 const (
-	TypeString = "string"
-	TypeInt    = "int"
-	TypeBool   = "bool"
-	TypeAny    = "any"
-	TypeResult = "Result"
+	TypeString       = "string"
+	TypeInt          = "int"
+	TypeBool         = "bool"
+	TypeAny          = "any"
+	TypeResult       = "Result"
+	TypeHTTPResponse = "HttpResponse"
 )
 
 // Function names.

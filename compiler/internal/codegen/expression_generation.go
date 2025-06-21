@@ -422,6 +422,13 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 		return constant.NewInt(types.I64, discriminant), nil
 	}
 
+	// Check for function references - new functionality for function composition
+	if fn, exists := g.functions[ident.Name]; exists {
+		// Return the function as a function pointer value
+		// This enables passing functions as arguments to other functions
+		return fn, nil
+	}
+
 	return nil, WrapUndefinedVariable(ident.Name)
 }
 
@@ -624,7 +631,12 @@ func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallE
 func (g *LLVMGenerator) generateTypeConstructorExpression(
 	typeConstructor *ast.TypeConstructorExpression,
 ) (value.Value, error) {
-	// Look up the type declaration to get constraints
+	// Check if this is a built-in type first
+	if typeConstructor.TypeName == TypeHTTPResponse {
+		return g.generateHTTPResponseConstructor(typeConstructor)
+	}
+
+	// Look up the type declaration to get constraints (for user-defined types)
 	typeDecl, exists := g.typeDeclarations[typeConstructor.TypeName]
 	if !exists {
 		return nil, WrapUndefinedType(typeConstructor.TypeName)
@@ -769,4 +781,65 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 	// If no return expression, return a default integer value
 
 	return constant.NewInt(types.I64, 0), nil
+}
+
+// generateHTTPResponseConstructor generates LLVM IR for HttpResponse construction.
+func (g *LLVMGenerator) generateHTTPResponseConstructor(
+	typeConstructor *ast.TypeConstructorExpression,
+) (value.Value, error) {
+	// Get the HttpResponse struct type
+	httpResponseType, exists := g.typeMap[TypeHTTPResponse]
+	if !exists {
+		return nil, WrapUndefinedType(TypeHTTPResponse)
+	}
+
+	// Allocate memory for the HttpResponse struct
+	structPtr := g.builder.NewAlloca(httpResponseType)
+
+	// Define field order and types to match the struct definition
+	fieldInfo := []struct {
+		name      string
+		fieldType types.Type
+	}{
+		{"status", types.I64},        // status: Int
+		{"headers", types.I8Ptr},     // headers: String
+		{"contentType", types.I8Ptr}, // contentType: String
+		{"contentLength", types.I64}, // contentLength: Int
+		{"streamFd", types.I64},      // streamFd: Int
+		{"isComplete", types.I1},     // isComplete: Bool
+		{"partialBody", types.I8Ptr}, // partialBody: String
+		{"partialLength", types.I64}, // partialLength: Int
+	}
+
+	for i, field := range fieldInfo {
+		fieldValue, exists := typeConstructor.Fields[field.name]
+		if !exists {
+			return nil, WrapMissingField(field.name)
+		}
+
+		// Generate the field value
+		value, err := g.generateExpression(fieldValue)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert value to correct type if needed
+		if field.fieldType == types.I1 && value.Type() != types.I1 {
+			// Convert integer to boolean (non-zero = true, zero = false)
+			value = g.builder.NewICmp(enum.IPredNE, value, constant.NewInt(types.I64, 0))
+		}
+
+		// Get pointer to the field
+		fieldPtr := g.builder.NewGetElementPtr(
+			httpResponseType,
+			structPtr,
+			constant.NewInt(types.I32, 0),
+			constant.NewInt(types.I32, int64(i)),
+		)
+
+		// Store the value in the field
+		g.builder.NewStore(value, fieldPtr)
+	}
+
+	return structPtr, nil
 }

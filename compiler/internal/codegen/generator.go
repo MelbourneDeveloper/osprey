@@ -31,6 +31,10 @@ type LLVMGenerator struct {
 	currentResultValue value.Value // Current Result value being pattern matched
 	// Security configuration
 	security SecurityConfig
+	// New fields for the new constructor
+	stringConstants       map[string]value.Value
+	currentFunction       *ir.Func
+	currentFunctionParams map[string]value.Value
 }
 
 // SecurityConfig defines security policies for the code generator.
@@ -80,7 +84,11 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		typeDeclarations: make(map[string]*ast.TypeDeclaration),
 		unionVariants:    make(map[string]int64),
 		// Set security configuration
-		security: security,
+		security:              security,
+		stringConstants:       make(map[string]value.Value),
+		currentResultValue:    nil,
+		currentFunction:       nil,
+		currentFunctionParams: make(map[string]value.Value),
 	}
 
 	// Declare external functions for FFI
@@ -88,6 +96,9 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 
 	// Register built-in function return types
 	generator.registerBuiltInFunctionReturnTypes()
+
+	// Register built-in types
+	generator.registerBuiltInTypes()
 
 	// Initialize fiber runtime declarations will happen on first use
 
@@ -196,4 +207,21 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 	g.functionReturnTypes["map"] = TypeInt     // Returns transformed array (simplified as int)
 	g.functionReturnTypes["filter"] = TypeInt  // Returns filtered array (simplified as int)
 	g.functionReturnTypes["fold"] = TypeInt    // Returns accumulated value (could be any type, simplified as int)
+}
+
+// registerBuiltInTypes registers built-in types in the type system.
+func (g *LLVMGenerator) registerBuiltInTypes() {
+	// Register HttpResponse as a built-in struct type
+	httpResponseType := types.NewStruct(
+		types.I64,   // status: Int
+		types.I8Ptr, // headers: String
+		types.I8Ptr, // contentType: String
+		types.I64,   // contentLength: Int
+		types.I64,   // streamFd: Int
+		types.I1,    // isComplete: Bool
+		types.I8Ptr, // partialBody: String
+		types.I64,   // partialLength: Int
+	)
+
+	g.typeMap[TypeHTTPResponse] = httpResponseType
 }

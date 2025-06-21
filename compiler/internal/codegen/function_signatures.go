@@ -34,6 +34,8 @@ func (g *LLVMGenerator) createAndStoreFunctionSignature(fnDecl *ast.FunctionDecl
 			returnType = TypeBool
 		case "any":
 			returnType = TypeAny
+		case TypeHTTPResponse:
+			returnType = TypeHTTPResponse
 		default:
 			// Check if it's a user-defined union type
 			if _, exists := g.typeDeclarations[fnDecl.ReturnType.Name]; exists {
@@ -147,6 +149,13 @@ func (g *LLVMGenerator) getLLVMReturnType(returnType, functionName string) types
 		g.functionReturnTypes[functionName] = TypeAny
 
 		return types.I64 // any types are represented as i64 at LLVM level
+	}
+
+	if returnType == TypeHTTPResponse {
+		g.functionReturnTypes[functionName] = TypeHTTPResponse
+
+		// Return pointer to HttpResponse struct
+		return types.NewPointer(g.typeMap[TypeHTTPResponse])
 	}
 
 	g.functionReturnTypes[functionName] = TypeInt
