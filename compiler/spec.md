@@ -2314,6 +2314,145 @@ Stops the HTTP server and cleans up resources.
 - `Success()`: Server stopped successfully  
 - `Err(message)`: Error description
 
+### 14.2.1 HTTP Request Handling Bridge
+
+**CRITICAL REQUIREMENT**: HTTP servers in Osprey must call back into Osprey code to handle requests. **NO ROUTING LOGIC SHALL BE IMPLEMENTED IN C RUNTIME**. The C runtime provides only the transport layer; all application logic, routing, and request handling must be implemented in Osprey.
+
+#### Request Handling Architecture
+
+When an HTTP server receives a request, the C runtime must:
+
+1. **Parse the HTTP request** (method, path, headers, body)
+2. **Serialize request data** into a structured format
+3. **Call back into Osprey** to handle the request
+4. **Receive response data** from Osprey
+5. **Send HTTP response** back to the client
+
+#### Bridge Function Specification
+
+The C runtime must provide a bridge function that allows calling back into Osprey with raw HTTP data:
+
+```c
+// Bridge function to call Osprey request handler with raw HTTP data
+// This function must be implemented as a CGO export from Go
+extern int osprey_handle_http_request(
+    int server_id,
+    char* method,
+    char* full_url,
+    char* raw_headers,
+    char* body,
+    size_t body_length,
+    int* response_status,
+    char** response_headers,
+    char** response_body,
+    size_t* response_body_length
+);
+```
+
+**Parameters:**
+- `server_id`: The server ID that received the request
+- `method`: HTTP method (GET, POST, PUT, DELETE, etc.)
+- `full_url`: Complete URL including query parameters ("/api/users?page=1&limit=10")
+- `raw_headers`: Raw HTTP headers as received ("Content-Type: application/json\r\nAuthorization: Bearer token\r\n")
+- `body`: Raw request body data (may be binary)
+- `body_length`: Length of request body in bytes
+- `response_status`: Output parameter for HTTP status code
+- `response_headers`: Output parameter for raw response headers
+- `response_body`: Output parameter for response body (may be binary)
+- `response_body_length`: Output parameter for response body length
+
+**Return Value:**
+- `0`: Success
+- `-1`: Error handling request
+
+**Streaming Support:**
+For large request/response bodies, the bridge function must support streaming:
+- Request body streaming: C runtime provides file descriptor for reading body data
+- Response body streaming: Osprey can return a file descriptor for C runtime to stream response
+
+#### Implementation Requirements
+
+**🚫 FORBIDDEN IN C RUNTIME:**
+- URL routing logic
+- Application-specific response generation
+- Business logic
+- Hardcoded API endpoints
+- Request path matching beyond basic parsing
+
+**✅ REQUIRED IN C RUNTIME:**
+- HTTP protocol parsing
+- Socket management
+- Request/response serialization
+- Bridge function calls
+- Error handling for transport failures
+
+**✅ REQUIRED IN OSPREY:**
+- All request routing logic
+- Application business logic
+- Response generation
+- API endpoint definitions
+- Request validation
+
+#### Example Implementation
+
+**C Runtime (Transport Layer Only):**
+```c
+void handle_client_request(int client_fd, int server_id, char* method, char* full_url, 
+                          char* raw_headers, char* body, size_t body_length) {
+    // Prepare response parameters
+    int response_status;
+    char* response_headers = NULL;
+    char* response_body = NULL;
+    size_t response_body_length;
+    
+    // Call back into Osprey with raw HTTP data - NO ROUTING IN C!
+    int result = osprey_handle_http_request(
+        server_id, method, full_url, raw_headers, body, body_length,
+        &response_status, &response_headers, &response_body, &response_body_length
+    );
+    
+    if (result == 0) {
+        // Send HTTP response with raw data
+        send_raw_http_response(client_fd, response_status, response_headers, 
+                              response_body, response_body_length);
+    } else {
+        // Send 500 error
+        send_error_response(client_fd, 500, "Internal Server Error");
+    }
+    
+    // Clean up allocated response data
+    if (response_headers) free(response_headers);
+    if (response_body) free(response_body);
+}
+```
+
+**Osprey Code (Application Layer):**
+```osprey
+fn handleHttpRequest(request: HttpRequest) -> Result<HttpResponse, String> = 
+    match request.method {
+        GET => match request.path {
+            "/api/users" => getUserList()
+            "/api/health" => Success(HttpResponse {
+                status: 200,
+                contentType: "application/json",
+                body: "{\"status\": \"healthy\"}"
+            })
+            _ => Success(HttpResponse {
+                status: 404,
+                contentType: "text/plain", 
+                body: "Not Found"
+            })
+        }
+        POST => match request.path {
+            "/api/users" => createUser(request.body)
+            _ => Err("Endpoint not found")
+        }
+        _ => Err("Method not supported")
+    }
+```
+
+This architecture ensures **complete separation of concerns**: C handles transport, Osprey handles application logic.
+
 ### 14.3 HTTP Client Functions
 
 #### `httpCreateClient(baseUrl: String, timeout: Int) -> Result<ClientID, String>`

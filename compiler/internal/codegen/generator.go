@@ -174,11 +174,11 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 	g.functionReturnTypes["httpListen"] = TypeInt       // Returns status code
 	g.functionReturnTypes["httpStopServer"] = TypeInt   // Returns status code
 	g.functionReturnTypes["httpCreateClient"] = TypeInt // Returns client ID
-	g.functionReturnTypes["httpGet"] = TypeString       // Returns response body
-	g.functionReturnTypes["httpPost"] = TypeString      // Returns response body
-	g.functionReturnTypes["httpPut"] = TypeString       // Returns response body
-	g.functionReturnTypes["httpDelete"] = TypeString    // Returns response body
-	g.functionReturnTypes["httpRequest"] = TypeString   // Returns response body
+	g.functionReturnTypes["httpGet"] = TypeInt          // Returns status code
+	g.functionReturnTypes["httpPost"] = TypeInt         // Returns status code
+	g.functionReturnTypes["httpPut"] = TypeInt          // Returns status code
+	g.functionReturnTypes["httpDelete"] = TypeInt       // Returns status code
+	g.functionReturnTypes["httpRequest"] = TypeInt      // Returns status code
 	g.functionReturnTypes["httpCloseClient"] = TypeInt  // Returns status code
 
 	// WebSocket functions

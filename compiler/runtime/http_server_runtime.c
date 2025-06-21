@@ -3,9 +3,12 @@
 // Forward declaration of fiber functions
 extern int64_t fiber_spawn(int64_t (*fn)(void));
 
-// Forward declarations for bridge functions
-extern char *process_compile_request(char *json_body);
-extern char *process_run_request(char *json_body);
+// Bridge function to call back into Osprey with raw HTTP data
+extern int
+osprey_handle_http_request(int server_id, char *method, char *full_url,
+                           char *raw_headers, char *body, size_t body_length,
+                           int *response_status, char **response_headers,
+                           char **response_body, size_t *response_body_length);
 
 // Thread-safe server context structure
 typedef struct {
@@ -67,25 +70,59 @@ static int64_t server_loop_fiber(void) {
           body = body_start + 4;
         }
 
-        // Call back into Osprey to handle the request
-        char request_json[8192];
-        snprintf(request_json, sizeof(request_json),
-                 "{\"method\":\"%s\",\"path\":\"%s\",\"body\":\"%s\"}", method,
-                 path, body);
+        // Call back into Osprey with raw HTTP data
+        int response_status;
+        char *response_headers = NULL;
+        char *response_body = NULL;
+        size_t response_body_length;
 
-        char *response_json = process_compile_request(request_json);
+        // Build raw headers string (simplified for now)
+        char raw_headers[1024] = "";
 
-        // Default response if no handler or error
-        const char *response = simple_response;
-        if (response_json) {
-          response = response_json;
-        }
+        int result = osprey_handle_http_request(
+            1,                    // server_id
+            method,               // method
+            path,                 // full_url (path for now)
+            raw_headers,          // raw_headers
+            body,                 // body
+            strlen(body),         // body_length
+            &response_status,     // response_status
+            &response_headers,    // response_headers
+            &response_body,       // response_body
+            &response_body_length // response_body_length
+        );
 
-        // Send the response
-        send(client_fd, response, strlen(response), 0);
+        // Build and send HTTP response
+        char http_response[8192];
+        if (result == 0 && response_body) {
+          // Build proper HTTP response with status and headers
+          snprintf(http_response, sizeof(http_response),
+                   "HTTP/1.1 %d %s\r\n"
+                   "%s"
+                   "Connection: close\r\n"
+                   "\r\n",
+                   response_status,
+                   (response_status == 200)   ? "OK"
+                   : (response_status == 404) ? "Not Found"
+                   : (response_status == 405) ? "Method Not Allowed"
+                                              : "Error",
+                   response_headers ? response_headers : "");
 
-        if (response_json) {
-          free(response_json);
+          // Send headers first
+          send(client_fd, http_response, strlen(http_response), 0);
+
+          // Send body
+          send(client_fd, response_body, response_body_length, 0);
+
+          // Clean up allocated memory
+          if (response_headers)
+            free(response_headers);
+          if (response_body)
+            free(response_body);
+        } else {
+          // Fallback to simple response
+          snprintf(http_response, sizeof(http_response), "%s", simple_response);
+          send(client_fd, http_response, strlen(http_response), 0);
         }
       }
       close(client_fd);
