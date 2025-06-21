@@ -2258,13 +2258,19 @@ match serverResult {
 }
 ```
 
-#### `httpListen(serverID: Int, handler: fn(HttpRequest) -> Result<HttpResponse, String>) -> Result<Success, String>`
+#### `httpListen(serverID: Int, handler: fn(String, String, String, String) -> String) -> Result<Success, String>`
 
 Starts the HTTP server listening for requests. Each request is handled in a separate fiber for maximum concurrency.
 
+**CRITICAL**: The handler function receives **RAW HTTP request data** and must return the **RAW response body**. The C runtime handles HTTP parsing and response formatting - the Osprey handler only processes the application logic.
+
 **Parameters:**
 - `serverID`: Server identifier from `httpCreateServer`
-- `handler`: Request handler function that processes incoming requests
+- `handler`: Request handler function that takes RAW HTTP data:
+  - `method: String` - HTTP method (GET, POST, PUT, DELETE, etc.)
+  - `path: String` - Request path (e.g., "/api/users", "/health")
+  - `headers: String` - Raw HTTP headers as received
+  - `body: String` - Raw request body data
 
 **Returns:**
 - `Success()`: Server started successfully
@@ -2272,36 +2278,51 @@ Starts the HTTP server listening for requests. Each request is handled in a sepa
 
 **Example:**
 ```osprey
-fn handleRequest(request: HttpRequest) -> Result<HttpResponse, String> = match request.method {
-    GET => match request.path {
-        "/health" => Success(HttpResponse {
-            status: 200,
-            contentType: "application/json",
-            partialBody: "{\"status\": \"healthy\"}",
-            isComplete: true,
-            streamFd: -1
-        })
-        "/users" => Success(HttpResponse {
-            status: 200,
-            contentType: "application/json", 
-            partialBody: "[{\"id\": 1, \"name\": \"Alice\"}]",
-            isComplete: true,
-            streamFd: -1
-        })
-        _ => Success(HttpResponse {
-            status: 404,
-            contentType: "text/plain",
-            partialBody: "Not Found",
-            isComplete: true,
-            streamFd: -1
-        })
+fn handleRawRequest(method: String, path: String, headers: String, body: String) -> String = 
+    match method {
+        "GET" => match path {
+            "/health" => "{\"status\": \"healthy\"}"
+            "/api/users" => "[{\"id\": 1, \"name\": \"Alice\"}, {\"id\": 2, \"name\": \"Bob\"}]"
+            _ => "Not Found"
+        }
+        "POST" => match path {
+            "/api/users" => "{\"id\": 3, \"name\": \"New User\", \"message\": \"User created\"}"
+            "/api/auth/login" => "{\"token\": \"abc123\", \"message\": \"Login successful\"}"
+            _ => "Endpoint not found"
+        }
+        "PUT" => match path {
+            "/api/users/1" => "{\"id\": 1, \"name\": \"Alice Updated\", \"message\": \"User updated\"}"
+            _ => "Not Found"
+        }
+        "DELETE" => match path {
+            "/api/users/1" => "{\"message\": \"User deleted\"}"
+            _ => "Not Found"
+        }
+        _ => "Method not allowed"
     }
-    POST => handlePostRequest(request)
-    _ => Err("Method not supported")
-}
 
-let listenResult = httpListen(serverID: serverId, handler: handleRequest)
+let listenResult = httpListen(serverID: serverId, handler: handleRawRequest)
 ```
+
+**Raw HTTP Handler Architecture:**
+
+The HTTP server uses a **raw callback architecture** where:
+
+1. **C Runtime** handles TCP connections, HTTP parsing, and response formatting
+2. **Osprey Handler** receives raw request data and returns raw response body
+3. **No HTTP abstraction** - direct access to method, path, headers, and body
+4. **Maximum performance** - minimal overhead between network and application logic
+
+**Handler Function Signature:**
+```osprey
+fn myHandler(method: String, path: String, headers: String, body: String) -> String
+```
+
+**Response Handling:**
+- Return value becomes the HTTP response body
+- HTTP status codes are determined by the response content (200 for success)
+- Content-Type headers are set automatically based on response format
+- For error responses, return appropriate error messages
 
 #### `httpStopServer(serverID: Int) -> Result<Success, String>`
 
@@ -2330,11 +2351,28 @@ When an HTTP server receives a request, the C runtime must:
 
 #### Bridge Function Specification
 
-The C runtime must provide a bridge function that allows calling back into Osprey with raw HTTP data:
+**NEW ARCHITECTURE**: Osprey now uses **direct function pointer callbacks** for maximum performance and zero overhead.
+
+#### Raw Function Pointer Callbacks
+
+When `httpListen()` is called, the Osprey handler function is passed directly to the C runtime as a function pointer:
+
+**C Runtime Function Signature:**
+```c
+int64_t http_listen(int64_t server_id, char* (*handler)(char* method, char* path, char* headers, char* body));
+```
+
+**Handler Function Signature:**
+```c
+char* handler(char* method, char* path, char* headers, char* body);
+```
+
+#### Legacy Bridge Function (Deprecated)
+
+The old bridge function is deprecated but still supported for compatibility:
 
 ```c
-// Bridge function to call Osprey request handler with raw HTTP data
-// This function must be implemented as a CGO export from Go
+// DEPRECATED: Use direct function pointers instead
 extern int osprey_handle_http_request(
     int server_id,
     char* method,
@@ -2349,7 +2387,71 @@ extern int osprey_handle_http_request(
 );
 ```
 
-**Parameters:**
+#### New Raw Callback Architecture Flow
+
+**1. Osprey Code:**
+```osprey
+fn handleRawRequest(method: String, path: String, headers: String, body: String) -> String = 
+    match method {
+        "GET" => match path {
+            "/health" => "{\"status\": \"healthy\"}"
+            "/api/users" => "[{\"id\": 1, \"name\": \"Alice\"}]"
+            _ => "Not Found"
+        }
+        "POST" => "{\"message\": \"Created\"}"
+        _ => "Method not allowed"
+    }
+
+let listenResult = httpListen(serverId, handleRawRequest)
+```
+
+**2. LLVM Code Generation:**
+- Generates function pointer for `handleRawRequest`
+- Passes function pointer to `http_listen()` C function
+
+**3. C Runtime Implementation:**
+```c
+// Global storage for handler function pointer
+static char* (*request_handler)(char* method, char* path, char* headers, char* body) = NULL;
+
+int64_t http_listen(int64_t server_id, char* (*handler)(char* method, char* path, char* headers, char* body)) {
+    request_handler = handler;  // Store the function pointer
+    // Setup server socket and start listening...
+    return 0;
+}
+
+// In request processing loop:
+void handle_client_request(int client_fd, char* method, char* path, char* headers, char* body) {
+    if (request_handler) {
+        // Call Osprey function directly with RAW data
+        char* response_body = request_handler(method, path, headers, body);
+        
+        // Format and send HTTP response
+        char response[8192];
+        snprintf(response, sizeof(response),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: close\r\n"
+            "\r\n%s",
+            strlen(response_body), response_body);
+        
+        send(client_fd, response, strlen(response), 0);
+        
+        // Clean up if response was allocated
+        if (response_body) free(response_body);
+    }
+}
+```
+
+**Architecture Benefits:**
+- **Zero overhead**: Direct function calls, no serialization
+- **Raw data access**: Handler receives exactly what was sent over HTTP
+- **Maximum performance**: Minimal abstraction between network and application
+- **Simple debugging**: Direct call stack from C to Osprey
+- **Memory efficient**: No intermediate data structures
+
+**Legacy Bridge Parameters (Deprecated):**
 - `server_id`: The server ID that received the request
 - `method`: HTTP method (GET, POST, PUT, DELETE, etc.)
 - `full_url`: Complete URL including query parameters ("/api/users?page=1&limit=10")
@@ -2361,7 +2463,7 @@ extern int osprey_handle_http_request(
 - `response_body`: Output parameter for response body (may be binary)
 - `response_body_length`: Output parameter for response body length
 
-**Return Value:**
+**Legacy Return Value:**
 - `0`: Success
 - `-1`: Error handling request
 

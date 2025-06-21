@@ -3,13 +3,38 @@
 
 print("=== Comprehensive HTTP API Test ===")
 
+// Define HTTP request handler function
+// This function receives HTTP requests from the C runtime and returns responses
+fn handleHttpRequest(method: str, path: str, headers: str, body: str) -> str
+    print("Received ${method} request to ${path}")
+    print("Headers: ${headers}")
+    print("Body: ${body}")
+    
+    // Route based on method and path
+    match method
+        case "GET" -> match path
+            case "/api/users" -> "{\"users\": [{\"id\": 1, \"name\": \"Alice\"}, {\"id\": 2, \"name\": \"Bob\"}]}"
+            case "/health" -> "{\"status\": \"ok\", \"timestamp\": \"2025-01-15T10:30:00Z\"}"
+            case _ -> "{\"error\": \"Not found\"}"
+        case "POST" -> match path
+            case "/api/users" -> "{\"id\": 3, \"name\": \"New User\", \"message\": \"User created successfully\"}"
+            case "/api/auth/login" -> "{\"token\": \"abc123xyz\", \"expires\": \"2025-01-16T10:30:00Z\"}"
+            case _ -> "{\"error\": \"Not found\"}"
+        case "PUT" -> match path
+            case "/api/users/1" -> "{\"id\": 1, \"name\": \"Alice Updated\", \"message\": \"User updated successfully\"}"
+            case _ -> "{\"error\": \"Not found\"}"
+        case "DELETE" -> match path
+            case "/api/users/1" -> "{\"message\": \"User deleted successfully\"}"
+            case _ -> "{\"error\": \"Not found\"}"
+        case _ -> "{\"error\": \"Method not allowed\"}"
+
 // Start HTTP server
 print("Creating HTTP server on port 8080...")
 let serverId = httpCreateServer(8080, "127.0.0.1")
 print("Server created with ID: ${serverId}")
 
-print("Starting server listener...")
-let listenResult = httpListen(serverId, 1)
+print("Starting server listener with callback handler...")
+let listenResult = httpListen(serverId, handleHttpRequest)
 print("Server listening on http://127.0.0.1:8080")
 
 // Create HTTP client
