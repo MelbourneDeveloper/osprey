@@ -82,19 +82,24 @@ func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration
 
 		// Use explicit parameter type if provided
 		if param.Type != nil {
-			switch param.Type.Name {
-			case TypeString, StringTypeName:
-				paramType = TypeString
-			case TypeInt, IntTypeName:
-				paramType = TypeInt
-			case TypeBool, BoolTypeName:
-				paramType = TypeBool
-			default:
-				// Check if it's a user-defined union type
-				if _, exists := g.typeDeclarations[param.Type.Name]; exists {
-					paramType = TypeInt // Union types are represented as integers
-				} else {
-					paramType = TypeInt // Default fallback
+			// Check if this is a function type
+			if param.Type.IsFunction {
+				paramType = TypeFunction
+			} else {
+				switch param.Type.Name {
+				case TypeString, StringTypeName:
+					paramType = TypeString
+				case TypeInt, IntTypeName:
+					paramType = TypeInt
+				case TypeBool, BoolTypeName:
+					paramType = TypeBool
+				default:
+					// Check if it's a user-defined union type
+					if _, exists := g.typeDeclarations[param.Type.Name]; exists {
+						paramType = TypeInt // Union types are represented as integers
+					} else {
+						paramType = TypeInt // Default fallback
+					}
 				}
 			}
 		} else {
@@ -108,7 +113,7 @@ func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration
 			}
 		}
 
-		llvmParamType := g.getLLVMParameterType(paramType)
+		llvmParamType := g.getLLVMParameterType(paramType, param.Type)
 		params[i] = ir.NewParam(param.Name, llvmParamType)
 	}
 
@@ -116,9 +121,14 @@ func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration
 }
 
 // getLLVMParameterType converts a parameter type string to LLVM type.
-func (g *LLVMGenerator) getLLVMParameterType(paramType string) types.Type {
+func (g *LLVMGenerator) getLLVMParameterType(paramType string, paramTypeExpr *ast.TypeExpression) types.Type {
 	if paramType == TypeString {
 		return types.I8Ptr
+	}
+
+	if paramType == TypeFunction && paramTypeExpr != nil {
+		// Use the type expression to LLVM type conversion for function types
+		return g.typeExpressionToLLVMType(paramTypeExpr)
 	}
 
 	return types.I64

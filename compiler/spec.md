@@ -1176,6 +1176,68 @@ let result = match status {
 - `Unit`: Type for functions that don't return a meaningful value
 - `Result<T, E>`: Built-in generic type for error handling
 - `List<T, N>`: Immutable fixed-size lists with N elements of type T
+- `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
+
+#### Function Types
+
+Function types represent functions as first-class values, enabling higher-order functions and function composition.
+
+**Syntax:**
+```
+FunctionType := '(' (Type (',' Type)*)? ')' '->' Type
+```
+
+**Examples:**
+```osprey
+(Int) -> Int              // Function taking an Int, returning an Int
+(Int, String) -> Bool     // Function taking Int and String, returning Bool
+() -> String              // Function with no parameters, returning String
+(String) -> (Int) -> Bool // Higher-order function returning another function
+```
+
+**Function Type Declarations:**
+```osprey
+// Function parameter with explicit function type
+fn applyFunction(value: Int, transform: (Int) -> Int) -> Int = 
+    transform(value)
+
+// Variable with function type
+let doubler: (Int) -> Int = fn(x: Int) -> Int = x * 2
+
+// Higher-order function that returns a function
+fn createAdder(n: Int) -> (Int) -> Int = 
+    fn(x: Int) -> Int = x + n
+```
+
+**Function Composition Examples:**
+```osprey
+// Define some simple functions
+fn double(x: Int) -> Int = x * 2
+fn square(x: Int) -> Int = x * x
+fn addFive(x: Int) -> Int = x + 5
+
+// Higher-order function with strong typing
+fn applyTwice(value: Int, func: (Int) -> Int) -> Int = 
+    func(func(value))
+
+// Usage with type safety
+let result1 = applyTwice(5, double)  // 20
+let result2 = applyTwice(3, square)  // 81
+let result3 = applyTwice(10, addFive) // 20
+
+// Composition of functions
+fn compose(f: (Int) -> Int, g: (Int) -> Int) -> (Int) -> Int =
+    fn(x: Int) -> Int = f(g(x))
+
+let doubleSquare = compose(double, square)
+let result4 = doubleSquare(3) // double(square(3)) = double(9) = 18
+```
+
+**Type Safety Benefits:**
+- **Compile-time validation**: Function signatures are checked at compile time
+- **No runtime type errors**: Mismatched function types caught early
+- **Clear documentation**: Function types serve as documentation
+- **Enables optimization**: Compiler can optimize based on known function signatures
 
 ### 5.2 Built-in Error Types
 

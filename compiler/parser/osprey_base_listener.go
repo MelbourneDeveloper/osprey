@@ -1,6 +1,7 @@
-// Code generated from osprey.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from osprey.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // osprey
+
 import "github.com/antlr4-go/antlr/v4"
 
 // BaseospreyListener is a complete listener for a parse tree produced by ospreyParser.
@@ -181,12 +182,6 @@ func (s *BaseospreyListener) EnterMatchExpr(ctx *MatchExprContext) {}
 
 // ExitMatchExpr is called when production matchExpr is exited.
 func (s *BaseospreyListener) ExitMatchExpr(ctx *MatchExprContext) {}
-
-// EnterLoopExpr is called when production loopExpr is entered.
-func (s *BaseospreyListener) EnterLoopExpr(ctx *LoopExprContext) {}
-
-// ExitLoopExpr is called when production loopExpr is exited.
-func (s *BaseospreyListener) ExitLoopExpr(ctx *LoopExprContext) {}
 
 // EnterSelectExpr is called when production selectExpr is entered.
 func (s *BaseospreyListener) EnterSelectExpr(ctx *SelectExprContext) {}

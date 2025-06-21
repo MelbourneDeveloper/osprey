@@ -190,10 +190,62 @@ func (b *Builder) buildTypeExpression(ctx parser.ITypeContext) *TypeExpression {
 		return nil
 	}
 
-	return &TypeExpression{
-		Name: ctx.ID().GetText(),
-		// TODO: Add support for generic types and arrays when needed
+	// Check if this is a function type: (Type, Type, ...) -> Type
+	if ctx.LPAREN() != nil && ctx.ARROW() != nil {
+		// This is a function type
+		var paramTypes []TypeExpression
+
+		// Parse parameter types from TypeList
+		if ctx.TypeList() != nil {
+			for _, typeCtx := range ctx.TypeList().AllType_() {
+				paramType := b.buildTypeExpression(typeCtx)
+				if paramType != nil {
+					paramTypes = append(paramTypes, *paramType)
+				}
+			}
+		}
+
+		// Parse return type (the Type_ after the arrow)
+		returnType := b.buildTypeExpression(ctx.Type_())
+
+		return &TypeExpression{
+			IsFunction:     true,
+			ParameterTypes: paramTypes,
+			ReturnType:     returnType,
+		}
 	}
+
+	// Regular type (ID-based)
+	if ctx.ID() == nil {
+		// If no ID, this might be a nested function type or error case
+		return nil
+	}
+
+	typeName := ctx.ID().GetText()
+	typeExpr := &TypeExpression{
+		Name: typeName,
+	}
+
+	// Handle generic types like Result<String, Error>
+	if ctx.LT() != nil && ctx.GT() != nil && ctx.TypeList() != nil {
+		for _, typeCtx := range ctx.TypeList().AllType_() {
+			genericParam := b.buildTypeExpression(typeCtx)
+			if genericParam != nil {
+				typeExpr.GenericParams = append(typeExpr.GenericParams, *genericParam)
+			}
+		}
+	}
+
+	// Handle array types like [String]
+	if ctx.LSQUARE() != nil && ctx.RSQUARE() != nil {
+		typeExpr.IsArray = true
+		if ctx.Type_() != nil {
+			arrayElement := b.buildTypeExpression(ctx.Type_())
+			typeExpr.ArrayElement = arrayElement
+		}
+	}
+
+	return typeExpr
 }
 
 // buildModuleDecl builds a ModuleDeclaration from a parser module context.

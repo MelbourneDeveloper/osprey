@@ -8,13 +8,15 @@ fn double(x: int) -> int = x * 2
 fn triple(x: int) -> int = x * 3
 fn add5(x: int) -> int = x + 5
 
-// Define a higher-order function that takes a function as argument
-// Use 'any' type for function parameter since Osprey doesn't have function types yet
-fn applyFunction(value: int, func: any) -> int = func(value)
-
-// Test function composition
+// Function composition test showing higher-order functions with strong typing
 print("Testing function composition...")
 
+fn square(x: int) -> int = x * x
+
+// Higher-order function with proper function typing instead of 'any'
+fn applyFunction(value: int, func: (int) -> int) -> int = func(value)
+
+// Test function composition
 let testValue = 10
 print("Starting value: ${testValue}")
 
@@ -27,5 +29,10 @@ print("After triple: ${tripled}")
 
 let added = applyFunction(value: testValue, func: add5)
 print("After add5: ${added}")
+
+let squared = applyFunction(value: 5, func: square)
+print("square(5) = ${squared}")
+
+print("Function composition working correctly!")
 
 print("=== Function Composition Test Complete ===") 

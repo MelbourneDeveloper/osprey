@@ -40,6 +40,7 @@ const (
 	TypeAny          = "any"
 	TypeResult       = "Result"
 	TypeHTTPResponse = "HttpResponse"
+	TypeFunction     = "function"
 )
 
 // Function names.

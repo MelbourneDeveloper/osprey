@@ -87,7 +87,7 @@ func osprey_handle_http_request(
 
 // handleRawHTTPRequest handles the raw HTTP request data
 // TODO: This should call into actual Osprey pattern matching code
-func handleRawHTTPRequest(_ int, method, fullURL, _ string, body []byte) (int, string, []byte) {
+func handleRawHTTPRequest(_ int, _ string, _ string, _ string, _ []byte) (int, string, []byte) {
 	// TODO: implement this properly!!!
 
 	// THIS MUST NOT HARDCODE API ENDPOINTS!!!

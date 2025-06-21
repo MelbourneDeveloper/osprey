@@ -17,6 +17,11 @@ type TypeExpression struct {
 	GenericParams []TypeExpression // For generic types like Result<Int, Error>
 	IsArray       bool
 	ArrayElement  *TypeExpression
+
+	// Function type support
+	IsFunction     bool             // true if this is a function type
+	ParameterTypes []TypeExpression // Parameter types for function types
+	ReturnType     *TypeExpression  // Return type for function types
 }
 
 // Parameter represents a function parameter with optional type annotation.

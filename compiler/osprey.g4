@@ -52,7 +52,8 @@ booleanExpr     : comparisonExpr ;
 fieldList       : field (COMMA field)* ;
 field           : ID COLON type ;
 
-type            : ID (LT typeList GT)?  // Generic types like Result<String, Error>
+type            : LPAREN typeList? RPAREN ARROW type  // Function types like (Int, String) -> Bool
+                | ID (LT typeList GT)?  // Generic types like Result<String, Error>
                 | ID LSQUARE type RSQUARE  // Array types like [String]
                 | ID ;
 

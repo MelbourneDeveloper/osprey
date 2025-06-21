@@ -31,8 +31,8 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		// This enables function composition by allowing calls to function references
 		if varValue, exists := g.variables[ident.Name]; exists {
 			// Check if this variable contains a function reference
-			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeAny {
-				// This is a function stored in an 'any' type variable - enable function composition
+			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeFunction {
+				// This is a function stored in a function type variable - enable function composition
 				return g.generateFunctionCompositionCall(ident.Name, varValue, callExpr)
 			}
 		}
@@ -194,11 +194,11 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 
 // generateFunctionCompositionCall handles calling a function stored in a variable (function composition)
 func (g *LLVMGenerator) generateFunctionCompositionCall(
-	varName string,
+	_ string, // varName is unused but kept for interface consistency
 	functionRef value.Value,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
-	// For function composition, we assume the function reference stored in the 'any' variable
+	// For function composition, we assume the function reference stored in the function variable
 	// is actually a pointer to a real function. At runtime, we need to call it.
 
 	// Since functions are stored as function pointers when passed as arguments,
@@ -226,7 +226,11 @@ func (g *LLVMGenerator) generateFunctionCompositionCall(
 			}
 			namedArgs[i] = val
 		}
-		args = append(args, namedArgs...)
+		// Use a new slice to avoid makezero linting error
+		allArgs := make([]value.Value, 0, len(args)+len(namedArgs))
+		allArgs = append(allArgs, args...)
+		allArgs = append(allArgs, namedArgs...)
+		args = allArgs
 	}
 
 	// Call the function stored in the variable

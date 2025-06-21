@@ -1,6 +1,7 @@
-// Code generated from osprey.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from osprey.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // osprey
+
 import "github.com/antlr4-go/antlr/v4"
 
 // ospreyListener is a complete listener for a parse tree produced by ospreyParser.
@@ -87,9 +88,6 @@ type ospreyListener interface {
 
 	// EnterMatchExpr is called when entering the matchExpr production.
 	EnterMatchExpr(c *MatchExprContext)
-
-	// EnterLoopExpr is called when entering the loopExpr production.
-	EnterLoopExpr(c *LoopExprContext)
 
 	// EnterSelectExpr is called when entering the selectExpr production.
 	EnterSelectExpr(c *SelectExprContext)
@@ -261,9 +259,6 @@ type ospreyListener interface {
 
 	// ExitMatchExpr is called when exiting the matchExpr production.
 	ExitMatchExpr(c *MatchExprContext)
-
-	// ExitLoopExpr is called when exiting the loopExpr production.
-	ExitLoopExpr(c *LoopExprContext)
 
 	// ExitSelectExpr is called when exiting the selectExpr production.
 	ExitSelectExpr(c *SelectExprContext)
