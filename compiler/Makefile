@@ -68,8 +68,7 @@ http-runtime:
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE runtime/system_runtime.c -o bin/system_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE runtime/bridge_stubs.c -o bin/bridge_stubs.o
-	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o bin/bridge_stubs.o
+	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
 
 # Install the osprey compiler globally
@@ -122,10 +121,9 @@ test-runtime: build
 		runtime/websocket_client_runtime.c \
 		runtime/websocket_server_runtime.c \
 		runtime/fiber_runtime.c \
-		runtime/bridge_stubs.c \
 		-pthread `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
 	@echo "🚀 Running HTTP runtime tests..."
-	@echo "⚠️  NOTE: HTTP server tests use stub bridge functions - web API functionality not tested"
+	@echo "⚠️  NOTE: HTTP server tests focus on core runtime functionality"
 	./runtime/http_runtime_test
 	@echo ""
 	@echo "🧹 Cleaning up test executables..."

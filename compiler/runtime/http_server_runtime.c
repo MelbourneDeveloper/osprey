@@ -67,50 +67,26 @@ static int64_t server_loop_fiber(void) {
           body = body_start + 4;
         }
 
-        // Route the request based on path and method
-        char response[4096];
-        if (strcmp(method, "POST") == 0 && strcmp(path, "/api/compile") == 0) {
-          // Call Osprey compile function
-          printf("📝 Compile request: %s\n", body);
-          char *result = process_compile_request(body);
-          if (result) {
-            snprintf(response, sizeof(response),
-                     "HTTP/1.1 200 OK\r\n"
-                     "Content-Type: application/json\r\n"
-                     "Content-Length: %zu\r\n"
-                     "Connection: close\r\n"
-                     "\r\n%s",
-                     strlen(result), result);
-            free(result);
-          } else {
-            strcpy(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nError "
-                             "processing request");
-          }
-        } else if (strcmp(method, "POST") == 0 &&
-                   strcmp(path, "/api/run") == 0) {
-          // Call Osprey run function
-          printf("🚀 Run request: %s\n", body);
-          char *result = process_run_request(body);
-          if (result) {
-            snprintf(response, sizeof(response),
-                     "HTTP/1.1 200 OK\r\n"
-                     "Content-Type: application/json\r\n"
-                     "Content-Length: %zu\r\n"
-                     "Connection: close\r\n"
-                     "\r\n%s",
-                     strlen(result), result);
-            free(result);
-          } else {
-            strcpy(response, "HTTP/1.1 500 Internal Server Error\r\n\r\nError "
-                             "processing request");
-          }
-        } else {
-          // Default response for other paths
-          strcpy(response, simple_response);
+        // Call back into Osprey to handle the request
+        char request_json[8192];
+        snprintf(request_json, sizeof(request_json),
+                 "{\"method\":\"%s\",\"path\":\"%s\",\"body\":\"%s\"}", method,
+                 path, body);
+
+        char *response_json = process_compile_request(request_json);
+
+        // Default response if no handler or error
+        const char *response = simple_response;
+        if (response_json) {
+          response = response_json;
         }
 
         // Send the response
         send(client_fd, response, strlen(response), 0);
+
+        if (response_json) {
+          free(response_json);
+        }
       }
       close(client_fd);
     }
