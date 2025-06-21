@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Core Development Principles
+
+- **NEVER DUPLICATE CODE** - Edit in place, never create new versions
+- **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules  
+- **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
+- **NEVER IGNORE TESTS** - Don't reduce assertions to make tests pass, fail loudly
+- **NEVER COMMIT/PUSH** unless explicitly requested
+- **FOLLOW STATIC ANALYSIS** - Pay attention to linters and fix issues
+- **MOVE FILES, DON'T COPY** - Use CLI commands to move files
+- **NO SWEARING IN CODE** - Keep code professional
+- **USE CONSTANTS** - Name values meaningfully instead of using literals
+- **SEARCH BEFORE ADDING** - Check for existing code before creating new functions/constants

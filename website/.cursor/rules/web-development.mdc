@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Web Development Rules
+
+- **CONSOLIDATE CSS** - Avoid duplication, create reusable classes
+- **DON'T DUPLICATE JS OR CSS** - Search for code before adding
+- **NAME BY PURPOSE NOT LOCATION** - CSS classes should describe what they are, not where
+- **ORGANIZE BY ELEMENT TYPE** - Group CSS by element, not by page/section  
+- **USE CSS CUSTOM PROPERTIES** - Variables instead of hardcoded values
+- **NO INLINE STYLES** - Keep all styling in CSS files
+- **BREAK INTO PARTIALS** - Create reusable Eleventy partials, search before creating
+- **CHECK OUTPUT** - Verify generated HTML matches expectations
+- **MEANINGFUL PAGE TITLES** - Unique, descriptive titles for SEO
+- **VALID HTML** - Validate markup and fix errors

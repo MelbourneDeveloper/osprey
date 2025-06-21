@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# TypeScript Extension Rules
+
+- **BEST DEV EXPERIENCE** - Aim for top-tier, reliable and ergonomic LSP/extension
+- **STRICT TYPE CHECKING** - Use strict TypeScript, no `any` types. Make lints tighter where possible
+- **STATIC ANALYSIS** - Run ESLint strict rules, Prettier, TypeScript compiler. Make the rules as strict as possible
+- **USE TYPE GUARDS** - Pattern match unknown types instead of casting
+- **VS CODE API IDIOMS** - Follow extension patterns and conventions
+- **HANDLE DISPOSABLES** - Properly dispose resources (listeners, watchers)
+- **ASYNC/AWAIT** - Use over promises for better readability
+- **NO THROWING EXCEPTIONS** - Use Result objects or error return values
+- **AUTOMATED TESTING** - Test extension with actual automated testing
+- **JSDOC COMMENTS** - All exported functions need documentation
