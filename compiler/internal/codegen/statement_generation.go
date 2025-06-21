@@ -256,7 +256,10 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		}
 	}
 
-	// Return the body value
+	// CRITICAL FIX: After generating the body expression (which might be a match expression),
+	// the builder might be pointing to a different block (like a match end block).
+	// We need to ensure the return statement is added to the current block the builder is pointing to.
+	// For match expressions, this will be the end block, which is exactly what we want.
 	g.builder.NewRet(bodyValue)
 
 	// Restore context

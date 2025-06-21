@@ -5,6 +5,7 @@ alwaysApply: true
 ---
 # Testing Philosophy
 
+- **DO NOT DELETE, SKIP, OR WATER DOWN TESTS!!!** - Never reduce assertions. Only monotonically increasing assertions
 - **INTEGRATION TESTS PRIMARY** - Prove compiler works end-to-end, main focus
 - **EXAMPLES ARE TESTS** - Examples in `compiler/examples/tested/` with expected outputs
 - **UNIT TESTS FOR ISOLATION** - Use sparingly, only when integration can't isolate problems

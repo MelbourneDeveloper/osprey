@@ -113,7 +113,14 @@ test-runtime: build
 	@echo "🚀 Running fiber runtime tests..."
 	./runtime/fiber_runtime_test
 	@echo ""
-	@echo "📦 Compiling HTTP runtime tests..."
+	@echo "📦 Creating HTTP test stub for missing bridge functions..."
+	@echo '#include <stddef.h>' > runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_http_request(int server_id, char *method, char *full_url, char *raw_headers, char *body, size_t body_length, int *response_status, char **response_headers, char **response_body, size_t *response_body_length) { return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'char* osprey_handle_websocket_message(int server_id, int connection_id, char *message, size_t message_length) { return NULL; }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_websocket_connection(int server_id, int connection_id, char *client_ip) { return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_websocket_disconnect(int server_id, int connection_id) { return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'void osprey_free_websocket_response(char *response) { }' >> runtime/http_bridge_stub.c
+	@echo "📦 Compiling HTTP runtime tests with stub functions..."
 	gcc -o runtime/http_runtime_test runtime/http_runtime_tests.c \
 		runtime/http_shared.c \
 		runtime/http_client_runtime.c \
@@ -121,13 +128,14 @@ test-runtime: build
 		runtime/websocket_client_runtime.c \
 		runtime/websocket_server_runtime.c \
 		runtime/fiber_runtime.c \
+		runtime/http_bridge_stub.c \
 		-pthread `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
 	@echo "🚀 Running HTTP runtime tests..."
 	@echo "⚠️  NOTE: HTTP server tests focus on core runtime functionality"
 	./runtime/http_runtime_test
 	@echo ""
 	@echo "🧹 Cleaning up test executables..."
-	rm -f runtime/fiber_runtime_test runtime/http_runtime_test
+	rm -f runtime/fiber_runtime_test runtime/http_runtime_test runtime/http_bridge_stub.c
 	@echo "✅ Runtime tests passed - no segfaults detected!"
 
 # Run all tests without coverage (fast feedback)

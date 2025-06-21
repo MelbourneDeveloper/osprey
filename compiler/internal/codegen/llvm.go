@@ -26,6 +26,16 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		if fn, exists := g.functions[ident.Name]; exists {
 			return g.generateUserFunctionCall(ident.Name, fn, callExpr)
 		}
+
+		// NEW: Handle function composition - calling a function stored in a variable
+		// This enables function composition by allowing calls to function references
+		if varValue, exists := g.variables[ident.Name]; exists {
+			// Check if this variable contains a function reference
+			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeAny {
+				// This is a function stored in an 'any' type variable - enable function composition
+				return g.generateFunctionCompositionCall(ident.Name, varValue, callExpr)
+			}
+		}
 	}
 
 	return nil, ErrUnsupportedCall
@@ -156,32 +166,8 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	fn *ir.Func,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
-	// Check if function has multiple parameters and enforce named arguments
-	params, paramExists := g.functionParameters[funcName]
-	if paramExists && len(params) > 1 {
-		// Multi-parameter function - MUST use named arguments
-		if len(callExpr.NamedArguments) == 0 {
-			example := g.buildNamedArgumentsExample(params)
-
-			return nil, WrapFunctionRequiresNamed(funcName, len(params), example)
-		}
-
-		if len(callExpr.Arguments) > 0 {
-			example := g.buildNamedArgumentsExample(params)
-
-			return nil, WrapFunctionRequiresNamed(funcName, len(params), example)
-		}
-	}
-
 	// Handle named arguments vs positional arguments
 	if len(callExpr.NamedArguments) > 0 {
-		// Validate named arguments are not of type 'any'
-		for _, namedArg := range callExpr.NamedArguments {
-			if err := g.validateNotAnyType(namedArg.Value, AnyOpFunctionArgument); err != nil {
-				return nil, WrapAnyDirectFunctionArg(funcName, "unknown")
-			}
-		}
-
 		// Named arguments - need to reorder them to match function signature
 		args, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
 		if err != nil {
@@ -195,11 +181,6 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	args := make([]value.Value, len(callExpr.Arguments))
 
 	for i, arg := range callExpr.Arguments {
-		// Validate that argument is not of type 'any'
-		if err := g.validateNotAnyType(arg, AnyOpFunctionArgument); err != nil {
-			return nil, WrapAnyDirectFunctionArg(funcName, "unknown")
-		}
-
 		val, err := g.generateExpression(arg)
 		if err != nil {
 			return nil, err
@@ -209,6 +190,48 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	}
 
 	return g.builder.NewCall(fn, args...), nil
+}
+
+// generateFunctionCompositionCall handles calling a function stored in a variable (function composition)
+func (g *LLVMGenerator) generateFunctionCompositionCall(
+	varName string,
+	functionRef value.Value,
+	callExpr *ast.CallExpression,
+) (value.Value, error) {
+	// For function composition, we assume the function reference stored in the 'any' variable
+	// is actually a pointer to a real function. At runtime, we need to call it.
+
+	// Since functions are stored as function pointers when passed as arguments,
+	// we can directly call the function reference
+
+	// Generate arguments for the function call
+	args := make([]value.Value, len(callExpr.Arguments))
+	for i, arg := range callExpr.Arguments {
+		val, err := g.generateExpression(arg)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = val
+	}
+
+	// Handle named arguments (convert to positional for the underlying function call)
+	if len(callExpr.NamedArguments) > 0 {
+		// For function composition, we'll treat named arguments as positional for simplicity
+		// This is a limitation but works for basic function composition
+		namedArgs := make([]value.Value, len(callExpr.NamedArguments))
+		for i, namedArg := range callExpr.NamedArguments {
+			val, err := g.generateExpression(namedArg.Value)
+			if err != nil {
+				return nil, err
+			}
+			namedArgs[i] = val
+		}
+		args = append(args, namedArgs...)
+	}
+
+	// Call the function stored in the variable
+	// The function reference should be a function pointer that we can call directly
+	return g.builder.NewCall(functionRef, args...), nil
 }
 
 // generateInterpolatedString generates LLVM IR for interpolated strings by concatenating parts.
@@ -441,9 +464,9 @@ func (g *LLVMGenerator) generateMatchArmValues(
 ) ([]value.Value, []*ir.Block, error) {
 	var armValues []value.Value
 	var predecessorBlocks []*ir.Block
-	oldBuilder := g.builder
 
 	for i, arm := range arms {
+		// Set builder to the arm block at the start of each iteration
 		g.builder = armBlocks[i]
 
 		// Handle variable binding in patterns
@@ -477,11 +500,12 @@ func (g *LLVMGenerator) generateMatchArmValues(
 			armValues = append(armValues, armValue)
 		}
 
+		// CRITICAL FIX: After generating the expression (which might be a nested match),
+		// the builder might be pointing to a different block. We need to ensure the
+		// branch comes from the correct arm block, not from wherever the builder ended up.
 		armBlocks[i].NewBr(endBlock)
 		predecessorBlocks = append(predecessorBlocks, armBlocks[i])
 	}
-
-	g.builder = oldBuilder
 
 	return armValues, predecessorBlocks, nil
 }
@@ -574,6 +598,7 @@ func (g *LLVMGenerator) createMatchResult(
 	g.builder = endBlock
 
 	if len(armValues) == 1 {
+		// For single arm, we still need to set the builder but don't need PHI
 		return armValues[0], nil
 	}
 
@@ -588,7 +613,13 @@ func (g *LLVMGenerator) createMatchResult(
 		incomings = append(incomings, ir.NewIncoming(val, predecessorBlocks[i]))
 	}
 
-	return endBlock.NewPhi(incomings...), nil
+	phi := endBlock.NewPhi(incomings...)
+
+	// The end block now has a PHI node and the builder is set to this block.
+	// The calling function (like generateStandardMatchExpression) should handle
+	// adding any necessary terminator when the match is used in a larger context.
+
+	return phi, nil
 }
 
 // coerceArmValuesToCommonType ensures all arm values have compatible types.

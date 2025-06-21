@@ -15,12 +15,12 @@ import (
 // These functions are called by the C WebSocket runtime when events occur
 
 //export osprey_handle_websocket_connection
-func osprey_handle_websocket_connection(server_id C.int, connection_id C.int, client_ip *C.char) C.int {
+func osprey_handle_websocket_connection(serverID C.int, connectionID C.int, clientIP *C.char) C.int {
 	// Convert C strings to Go strings
-	clientIP := C.GoString(client_ip)
+	clientIPStr := C.GoString(clientIP)
 
 	fmt.Printf("🔌 WebSocket connection established - Server: %d, Connection: %d, Client: %s\n",
-		int(server_id), int(connection_id), clientIP)
+		int(serverID), int(connectionID), clientIPStr)
 
 	// TODO: Call into Osprey user code to handle connection event
 	// For now, just return success
@@ -28,16 +28,21 @@ func osprey_handle_websocket_connection(server_id C.int, connection_id C.int, cl
 }
 
 //export osprey_handle_websocket_message
-func osprey_handle_websocket_message(server_id C.int, connection_id C.int, message *C.char, message_length C.size_t) (*C.char, C.size_t) {
+func osprey_handle_websocket_message(
+	serverID C.int,
+	connectionID C.int,
+	message *C.char,
+	messageLength C.size_t,
+) (*C.char, C.size_t) {
 	// Convert C string to Go string
-	messageData := C.GoStringN(message, C.int(message_length))
+	messageData := C.GoStringN(message, C.int(messageLength))
 
 	fmt.Printf("💬 WebSocket message received - Server: %d, Connection: %d, Message: %s\n",
-		int(server_id), int(connection_id), messageData)
+		int(serverID), int(connectionID), messageData)
 
 	// TODO: Call into Osprey user code to handle message
 	// For now, echo the message back
-	response := fmt.Sprintf("Echo: %s", messageData)
+	response := "Echo: " + messageData
 
 	// Allocate C string for response
 	cResponse := C.CString(response)
@@ -47,9 +52,9 @@ func osprey_handle_websocket_message(server_id C.int, connection_id C.int, messa
 }
 
 //export osprey_handle_websocket_disconnect
-func osprey_handle_websocket_disconnect(server_id C.int, connection_id C.int) C.int {
+func osprey_handle_websocket_disconnect(serverID C.int, connectionID C.int) C.int {
 	fmt.Printf("🔌 WebSocket connection closed - Server: %d, Connection: %d\n",
-		int(server_id), int(connection_id))
+		int(serverID), int(connectionID))
 
 	// TODO: Call into Osprey user code to handle disconnect event
 	// For now, just return success

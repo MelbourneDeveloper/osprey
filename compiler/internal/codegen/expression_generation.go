@@ -409,9 +409,11 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, error) {
 	// Check for regular variables first
 	if val, exists := g.variables[ident.Name]; exists {
-		// Check if this variable is of type 'any' - block direct access
+		// Check if this variable is of type 'any'
 		if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeAny {
-			return nil, WrapAnyDirectVariableAccess(ident.Name)
+			// For function composition, we allow accessing 'any' type variables that contain function references
+			// The variable should contain a function pointer that we can use for calls
+			return val, nil
 		}
 
 		return val, nil

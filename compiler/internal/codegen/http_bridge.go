@@ -7,9 +7,22 @@ package codegen
 import "C"
 
 import (
-	"fmt"
-	"strings"
 	"unsafe"
+)
+
+// HTTP status codes
+const (
+	StatusOK                  = 200
+	StatusCreated             = 201
+	StatusNotFound            = 404
+	StatusMethodNotAllowed    = 405
+	StatusInternalServerError = 500
+)
+
+// Content type headers
+const (
+	ContentTypeJSON = "Content-Type: application/json\r\n"
+	ContentTypeText = "Content-Type: text/plain\r\n"
 )
 
 //export osprey_handle_http_request
@@ -28,7 +41,7 @@ func osprey_handle_http_request(
 	// SAFETY: Check for null pointers first
 	if method == nil || fullURL == nil || rawHeaders == nil {
 		if responseStatus != nil {
-			*responseStatus = 500
+			*responseStatus = StatusInternalServerError
 		}
 		return -1
 	}
@@ -74,44 +87,14 @@ func osprey_handle_http_request(
 
 // handleRawHTTPRequest handles the raw HTTP request data
 // TODO: This should call into actual Osprey pattern matching code
-func handleRawHTTPRequest(serverID int, method, fullURL, rawHeaders string, body []byte) (int, string, []byte) {
-	// Extract path from full URL (remove query parameters for routing)
-	path := fullURL
-	if queryIndex := strings.Index(fullURL, "?"); queryIndex != -1 {
-		path = fullURL[:queryIndex]
-	}
+func handleRawHTTPRequest(_ int, method, fullURL, _ string, body []byte) (int, string, []byte) {
+	// TODO: implement this properly!!!
 
-	// Simple routing - this should be replaced with Osprey pattern matching
-	switch method {
-	case "GET":
-		switch path {
-		case "/api/users":
-			headers := "Content-Type: application/json\r\n"
-			body := []byte(`[{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]`)
-			return 200, headers, body
-		case "/api/health":
-			headers := "Content-Type: application/json\r\n"
-			body := []byte(`{"status": "healthy"}`)
-			return 200, headers, body
-		default:
-			headers := "Content-Type: text/plain\r\n"
-			body := []byte("Not Found")
-			return 404, headers, body
-		}
-	case "POST":
-		switch path {
-		case "/api/users":
-			headers := "Content-Type: application/json\r\n"
-			responseBody := fmt.Sprintf(`{"id": 3, "name": "New User", "message": "User created", "received_body_length": %d}`, len(body))
-			return 201, headers, []byte(responseBody)
-		default:
-			headers := "Content-Type: text/plain\r\n"
-			body := []byte("Endpoint not found")
-			return 404, headers, body
-		}
-	default:
-		headers := "Content-Type: text/plain\r\n"
-		body := []byte("Method not allowed")
-		return 405, headers, body
-	}
+	// THIS MUST NOT HARDCODE API ENDPOINTS!!!
+
+	// THIS MUST JUST FORWARD THE REQUEST TO THE OSPREY CODE VIA A CALLBACK (FUNCTION COMPOSITION)
+
+	// Temporary return to fix compilation error
+	// This will be replaced with proper callback forwarding
+	return StatusNotFound, "", []byte("Not implemented yet")
 }
