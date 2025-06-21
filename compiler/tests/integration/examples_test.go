@@ -142,6 +142,15 @@ func getExpectedOutputs() map[string]string {
 			"=== Demo Complete ===\n",
 		"debug_module.osp": "Debug module test:\nsimple() = 42\n",
 		"function.osp":     "Function test:\nadd(3, 7) = 10\nadd(10, 20) = 30\n",
+		"function_composition_test.osp": "=== Function Composition Test ===\n" +
+			"Testing function composition...\n" +
+			"Starting value: 10\n" +
+			"After double: 20\n" +
+			"After triple: 30\n" +
+			"After add5: 15\n" +
+			"square(5) = 25\n" +
+			"Function composition working correctly!\n" +
+			"=== Function Composition Test Complete ===\n",
 		"minimal_test.osp": "Minimal test:\nx = 5\n",
 		"simple.osp":       "Simple test:\nx = 42\ngreeting = hello\n",
 		// Constraint validation test files
