@@ -447,7 +447,7 @@ description: "Try Osprey programming language online with interactive code examp
 
 <script>
     let editor;
-    const API_URL = 'http://localhost:3001';
+    const API_URL = 'https://osprey.fly.dev/api';
     
     // Initialize Monaco Editor
     require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
