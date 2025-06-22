@@ -3120,6 +3120,18 @@ Checks if file exists.
 #### `spawnProcess(command: string, args: string, timeout: int) -> Result<ProcessResult, string>`
 Spawns external process with timeout.
 
+🚧 **IMPLEMENTATION STATUS**: The current implementation is **incomplete**. The compiler currently only supports:
+```osprey
+spawnProcess(command: string) -> Result<ProcessResult, string>
+```
+
+**NEEDED WORK**:
+- Support for separate `args` parameter for command arguments
+- Support for `timeout` parameter to limit execution time
+- Full `ProcessResult` type with `stdout`, `stderr`, and `exitCode` fields
+
+**Current Implementation**: Only accepts a single command string and returns a simplified result indicating success/failure with exit code.
+
 **ProcessResult Type:**
 ```osprey
 type ProcessResult = {
