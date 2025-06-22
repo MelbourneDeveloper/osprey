@@ -1,6 +1,10 @@
 // Package descriptions provides comprehensive documentation for built-in functions.
 package descriptions
 
+import (
+	"github.com/christianfindlay/osprey/internal/codegen"
+)
+
 // BuiltinFunctionDesc represents documentation for a built-in function.
 type BuiltinFunctionDesc struct {
 	Name        string
@@ -696,33 +700,8 @@ func GetBuiltinFunctionDescription(name string) *BuiltinFunctionDesc {
 // ValidateAllBuiltinFunctionsDocumented checks that all built-in functions are documented.
 // This function should be called during build/test to ensure documentation completeness.
 func ValidateAllBuiltinFunctionsDocumented() []string {
-	// All built-in function names from constants.go
-	builtinFunctions := []string{
-		// Core functions
-		"toString", "print", "input", "range", "forEach", "map", "filter", "fold",
-
-		// String utility functions
-		"length", "contains", "substring",
-
-		// Process and system functions
-		"spawnProcess", "writeFile", "readFile", "sleep",
-
-		// JSON functions
-		"parseJSON", "extractCode",
-
-		// HTTP Server functions
-		"httpCreateServer", "httpListen", "httpStopServer",
-
-		// HTTP Client functions
-		"httpCreateClient", "httpGet", "httpPost", "httpPut", "httpDelete", "httpRequest", "httpCloseClient",
-
-		// WebSocket client functions
-		"websocketConnect", "websocketSend", "websocketClose",
-
-		// WebSocket Server functions
-		"websocketCreateServer", "websocketServerListen", "websocketServerBroadcast",
-		"websocketStopServer", "webSocketKeepAlive",
-	}
+	// Get the authoritative list of built-in functions from the compiler's constants
+	builtinFunctions := GetCompilerBuiltinFunctionNames()
 
 	descriptions := GetBuiltinFunctionDescriptions()
 	var missing []string
@@ -734,6 +713,57 @@ func ValidateAllBuiltinFunctionsDocumented() []string {
 	}
 
 	return missing
+}
+
+// GetCompilerBuiltinFunctionNames returns all built-in function names from the compiler's constants.
+// This is the authoritative source - it reads directly from the compiler's function name constants.
+func GetCompilerBuiltinFunctionNames() []string {
+	return []string{
+		// Core functions from codegen.constants
+		codegen.ToStringFunc,
+		codegen.PrintFunc,
+		codegen.InputFunc,
+		codegen.RangeFunc,
+		codegen.ForEachFunc,
+		codegen.MapFunc,
+		codegen.FilterFunc,
+		codegen.FoldFunc,
+		codegen.LengthFunc,
+		codegen.ContainsFunc,
+		codegen.SubstringFunc,
+		codegen.SpawnProcessFunc,
+		codegen.SleepFunc,
+		codegen.WriteFileFunc,
+		codegen.ReadFileFunc,
+		codegen.ParseJSONFunc,
+		codegen.ExtractCodeFunc,
+
+		// HTTP Server functions
+		codegen.HTTPCreateServerFunc,
+		codegen.HTTPListenFunc,
+		codegen.HTTPStopServerFunc,
+
+		// HTTP Client functions
+		codegen.HTTPCreateClientFunc,
+		codegen.HTTPGetFunc,
+		codegen.HTTPPostFunc,
+		codegen.HTTPPutFunc,
+		codegen.HTTPDeleteFunc,
+		codegen.HTTPRequestFunc,
+		codegen.HTTPCloseClientFunc,
+
+		// WebSocket client functions
+		codegen.WebSocketConnectFunc,
+		codegen.WebSocketSendFunc,
+		codegen.WebSocketCloseFunc,
+
+		// WebSocket Server functions
+		codegen.WebSocketCreateServerFunc,
+		codegen.WebSocketServerListenFunc,
+		codegen.WebSocketServerBroadcastFunc,
+		codegen.WebSocketStopServerFunc,
+		codegen.WebSocketKeepAlive,
+	}
 }
 
 // GetAllBuiltinFunctionNames returns all documented built-in function names.
