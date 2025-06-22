@@ -86,7 +86,7 @@ func getHTTPExpectedOutputs() map[string]string {
 		"http_server_example.osp": "=== Comprehensive HTTP API Test ===\n" +
 			"Creating HTTP server on port 8080...\n" +
 			"Server created with ID: 1\n" +
-			"Starting server listener...\n" +
+			"Starting server listener with callback handler...\n" +
 			"HTTP server listening on 127.0.0.1:8080\n" +
 			"Server listening on http://127.0.0.1:8080\n" +
 			"Creating HTTP client...\n" +
@@ -94,25 +94,26 @@ func getHTTPExpectedOutputs() map[string]string {
 			"=== Testing HTTP Methods ===\n" +
 			"GET /api/users\n" +
 			"🌐 HTTP Request: GET /api/users\n" +
-			"GET status: 200\n" +
-			"POST /api/users\n" +
-			"🌐 HTTP Request: POST /api/users\n" +
-			"POST status: 200\n" +
-			"PUT /api/users/1\n" +
-			"🌐 HTTP Request: PUT /api/users/1\n" +
-			"PUT status: 200\n" +
-			"DELETE /api/users/1\n" +
-			"🌐 HTTP Request: DELETE /api/users/1\n" +
-			"DELETE status: 200\n" +
-			"=== Testing Additional Endpoints ===\n" +
+			"GET /api/users result: 200\n" +
 			"GET /health\n" +
 			"🌐 HTTP Request: GET /health\n" +
-			"Health check status: 200\n" +
+			"GET /health result: 200\n" +
+			"POST /api/users\n" +
+			"🌐 HTTP Request: POST /api/users\n" +
+			"POST /api/users result: 201\n" +
 			"POST /api/auth/login\n" +
 			"🌐 HTTP Request: POST /api/auth/login\n" +
-			"Login status: 200\n" +
-			"Stopping server...\n" +
-			"Server stopped with result: 0\n" +
+			"POST /api/auth/login result: 200\n" +
+			"PUT /api/users/1\n" +
+			"🌐 HTTP Request: PUT /api/users/1\n" +
+			"PUT /api/users/1 result: 200\n" +
+			"DELETE /api/users/1\n" +
+			"🌐 HTTP Request: DELETE /api/users/1\n" +
+			"DELETE /api/users/1 result: 200\n" +
+			"=== Testing Error Cases ===\n" +
+			"GET /nonexistent\n" +
+			"🌐 HTTP Request: GET /nonexistent\n" +
+			"GET /nonexistent result: 404\n" +
 			"=== HTTP API Test Complete ===\n",
 		"websocket_example.osp": "=== WebSocket Communication Test ===\n" +
 			"Connecting to WebSocket server...\n" +
