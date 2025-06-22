@@ -573,11 +573,14 @@ print("Demo complete!")`,
                 // Handle HTTP errors that still have JSON error details
                 if (result.error) {
                     output.className = 'error';
+                    const errorLabel = result.isCompilationError ? 'Compilation Error' : 'Execution Error';
+                    const statusMessage = result.isCompilationError ? 'Compilation failed' : 'Execution failed';
+                    
                     output.innerHTML = `<div class="output-section">
-                        <div class="output-label">Execution Error</div>
+                        <div class="output-label">${errorLabel}</div>
                         <div class="compiler-output">${formatOutput(result.error)}</div>
                     </div>`;
-                    updateStatus('error', 'Execution failed');
+                    updateStatus('error', statusMessage);
                     return;
                 } else {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -636,10 +639,11 @@ print("Demo complete!")`,
         // Escape HTML
         text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         
-        // Highlight line numbers (format: "line X:Y" or "at line X")
-        text = text.replace(/(\b(?:line|Line)\s+)(\d+)([:\s])/g, '$1<span class="line-number">$2</span>$3');
-        text = text.replace(/(\bat line\s+)(\d+)/g, '$1<span class="line-number">$2</span>');
-        text = text.replace(/(\berror at\s+)(\d+)([:\s])/g, '$1<span class="line-number">$2</span>$3');
+        // Highlight line numbers - more comprehensive patterns
+        text = text.replace(/(\bline\s+)(\d+)(\s*:\s*\d+)?/gi, '$1<span class="line-number">$2$3</span>');
+        text = text.replace(/(\bat line\s+)(\d+)/gi, '$1<span class="line-number">$2</span>');
+        text = text.replace(/(\berror at\s+)(\d+)/gi, '$1<span class="line-number">$2</span>');
+        text = text.replace(/(\[)(\d+)(\s*:\s*\d+)(\])/g, '$1<span class="line-number">$2$3</span>$4');
         
         return text;
     }
