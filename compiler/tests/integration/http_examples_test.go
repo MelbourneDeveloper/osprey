@@ -133,6 +133,37 @@ func getHTTPExpectedOutputs() map[string]string {
 			"🛑 Stopping WebSocket server...\n" +
 			"WebSocket server stopped with result: 0\n" +
 			"=== WebSocket Server Example Complete ===\n",
-		"websocket_server_live.osp": "",
+		"websocket_server_live.osp": "🚀 Starting Osprey WebSocket Server...\n" +
+			"📁 Will serve WebSocket at: ws://127.0.0.1:8080/chat\n" +
+			"🔌 Ready to replace Node.js websocket_server.js!\n" +
+			"\n" +
+			"Creating WebSocket server on port 8080...\n" +
+			"✅ WebSocket server created with ID: 1\n" +
+			"Starting WebSocket server...\n" +
+			"✅ WebSocket server listening with result: 0\n" +
+			"\n" +
+			"🚀 Osprey WebSocket Server is LIVE!\n" +
+			"🔌 WebSocket endpoint: ws://127.0.0.1:8080/chat\n" +
+			"🌐 Connect your browsers, test apps, and clients!\n" +
+			"\n" +
+			"🔄 Broadcasting welcome message to all connections...\n" +
+			"✅ Welcome broadcast sent with result: 0\n" +
+			"\n" +
+			"💡 Server Instructions:\n" +
+			"1. Open examples/websocketserver/websocket_test.html in browser\n" +
+			"2. Browser will connect to ws://localhost:8080/chat\n" +
+			"3. Send messages and see real-time responses\n" +
+			"4. Press Ctrl+C to stop the server\n" +
+			"\n" +
+			"🎉 Osprey WebSocket Server has replaced Node.js!\n" +
+			"📦 You can now delete websocket_server.js\n" +
+			"\n" +
+			"⚠️  Current Status: Demo mode (exits immediately)\n" +
+			"🚧 TODO: Add infinite loop to keep server alive\n" +
+			"🚧 TODO: Add signal handling for graceful shutdown\n" +
+			"\n" +
+			"🛑 Stopping WebSocket server (demo complete)...\n" +
+			"✅ WebSocket server stopped with result: 0\n" +
+			"=== Osprey WebSocket Server Demo Complete ===\n",
 	}
 }
