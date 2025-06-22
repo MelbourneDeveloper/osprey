@@ -2876,6 +2876,63 @@ let sendResult = websocketSend(wsID: wsId, message: "Hello, WebSocket!")
 
 Closes the WebSocket connection.
 
+### 14.4.1 WebSocket Server Functions
+
+#### `websocketCreateServer(port: Int, address: String, path: String) -> Int`
+Creates a WebSocket server bound to the specified port and address.
+
+🚧 **IMPLEMENTATION STATUS**: The current implementation has **CRITICAL RUNTIME ISSUES**:
+
+**CURRENT BEHAVIOR**:
+- Returns server ID on successful creation
+- Returns negative error codes on failure
+
+**RUNTIME ISSUES DETECTED**:
+- **Port Binding Failures**: `websocketServerListen()` returns `-4` (bind failed) instead of expected `0` (success)
+- **Resource Conflicts**: Multiple test runs cause port conflicts and resource exhaustion
+- **Test Environment Instability**: Inconsistent behavior between different execution environments
+
+**ROOT CAUSE ANALYSIS**:
+- **Issue**: `bind()` system call fails with `EADDRINUSE` (Address already in use)
+- **Impact**: WebSocket server cannot bind to port, causing listen operation to fail
+- **Environment**: Particularly problematic in containerized test environments with limited cleanup
+
+**NEEDED FIXES**:
+1. **Port Management**: Implement proper port cleanup and reuse detection
+2. **Resource Cleanup**: Ensure proper socket closure and resource deallocation
+3. **Retry Logic**: Add exponential backoff for port binding failures
+4. **Error Handling**: Better error reporting for different failure modes
+5. **Test Isolation**: Implement proper test teardown to prevent resource conflicts
+
+**Example:**
+```osprey
+let serverId = websocketCreateServer(8080, "127.0.0.1", "/chat")
+print("Server created with ID: ${serverId}")
+```
+
+#### `websocketServerListen(serverID: Int) -> Int`
+Starts the WebSocket server listening for connections.
+
+🚧 **CURRENT ISSUE**: Returns `-4` (bind failed) instead of `0` (success) due to port binding issues.
+
+**Error Codes:**
+- `0`: Success
+- `-1`: Invalid server ID
+- `-2`: Socket creation failed
+- `-3`: Socket options failed
+- `-4`: **BIND FAILED** (most common current issue)
+- `-5`: Listen failed
+- `-6`: Thread creation failed
+
+#### `websocketServerBroadcast(serverID: Int, message: String) -> Int`
+Broadcasts a message to all connected WebSocket clients.
+
+#### `websocketStopServer(serverID: Int) -> Int`
+Stops the WebSocket server and closes all connections.
+
+#### `websocketKeepAlive() -> Void`
+Keeps the WebSocket server running indefinitely until interrupted.
+
 ### 14.5 Streaming Response Bodies
 
 Osprey automatically handles response streaming to prevent memory issues with large responses:
