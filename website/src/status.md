@@ -2,7 +2,7 @@
 layout: page.njk
 title: Feature Status
 description: Current implementation status of Osprey language features
-date: 2025-01-17
+date: 2025-06-23
 tags: ["status", "features", "roadmap"]
 author: "Christian Findlay"
 ---
