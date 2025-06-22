@@ -114,15 +114,15 @@ jobs:
 
           # Test arithmetic interpolation example
           echo "Testing interpolation_math.osp..."
-          ./bin/osprey examples/tested/interpolation_math.osp --run
+          ./bin/osprey ../examples/tested/basics/math/interpolation_math.osp --run
 
           # Test comprehensive example
           echo "Testing comprehensive.osp..."
-          ./bin/osprey examples/tested/comprehensive.osp --run
+          ./bin/osprey ../examples/tested/basics/comprehensive.osp --run
 
           # Test basic hello world
           echo "Testing hello.osp..."
-          ./bin/osprey examples/tested/hello.osp --run
+          ./bin/osprey ../examples/tested/basics/hello.osp --run
 
           echo "✅ All example compilations and executions successful!"
 
