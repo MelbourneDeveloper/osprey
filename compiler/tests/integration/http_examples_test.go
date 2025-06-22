@@ -54,6 +54,13 @@ func getHTTPExpectedOutputs() map[string]string {
 			"GET /nonexistent\n" +
 			"🌐 HTTP Request: GET /nonexistent\n" +
 			"GET /nonexistent result: 404\n" +
+			"=== Server Keep-Alive Test ===\n" +
+			"🌐 Server now accepting external connections...\n" +
+			"💡 Test with: curl http://127.0.0.1:8080/api/users\n" +
+			"💡 Test with: curl http://127.0.0.1:8080/health\n" +
+			"⏰ Server will stay alive for 3 seconds...\n" +
+			"🛑 Initiating graceful server shutdown...\n" +
+			"Server stopped with result: 0\n" +
 			"=== HTTP API Test Complete ===\n",
 		"websocket_example.osp": "=== WebSocket Communication Test ===\n" +
 			"Connecting to WebSocket server...\n" +

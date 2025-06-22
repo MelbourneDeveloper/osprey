@@ -180,4 +180,20 @@ print("GET /nonexistent")
 let notFoundResult = httpGet(clientId, "/nonexistent", "")
 print("GET /nonexistent result: ${notFoundResult}")
 
+// 🚀 FIBER-BASED KEEP-ALIVE SYSTEM - Modern Server Lifecycle Management
+print("=== Server Keep-Alive Test ===")
+print("🌐 Server now accepting external connections...")
+print("💡 Test with: curl http://127.0.0.1:8080/api/users")
+print("💡 Test with: curl http://127.0.0.1:8080/health") 
+print("⏰ Server will stay alive for 3 seconds...")
+
+// Keep server alive for external testing  
+sleep(3000)  // 3 seconds for external clients
+
+print("🛑 Initiating graceful server shutdown...")
+
+// Clean up server resources
+let stopResult = httpStopServer(serverId)
+print("Server stopped with result: ${stopResult}")
+
 print("=== HTTP API Test Complete ===") 
