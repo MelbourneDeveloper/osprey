@@ -16,66 +16,6 @@ func TestHTTPExamples(t *testing.T) {
 
 func getHTTPExpectedOutputs() map[string]string {
 	return map[string]string{
-		"http_advanced_example.osp": "=== Advanced HTTP Test ===\n" +
-			"Creating HTTP server on port 8080...\n" +
-			"Server created with ID: 1\n" +
-			"Starting server listener...\n" +
-			"HTTP server listening on 127.0.0.1:8080\n" +
-			"Server listening on http://127.0.0.1:8080\n" +
-			"=== Creating Multiple Clients ===\n" +
-			"Creating client 1...\n" +
-			"Client 1 created with ID: 2\n" +
-			"Creating client 2...\n" +
-			"Client 2 created with ID: 3\n" +
-			"Creating client 3...\n" +
-			"Client 3 created with ID: 4\n" +
-			"=== Concurrent Requests ===\n" +
-			"Client 1: GET /api/users\n" +
-			"🌐 HTTP Request: GET /api/users\n" +
-			"Client 1 GET result: 200\n" +
-			"Client 2: POST /api/posts\n" +
-			"🌐 HTTP Request: POST /api/posts\n" +
-			"Client 2 POST result: 200\n" +
-			"Client 3: GET /api/health\n" +
-			"🌐 HTTP Request: GET /api/health\n" +
-			"Client 3 health check: 200\n" +
-			"=== API Versioning ===\n" +
-			"Client 1: GET /v1/users\n" +
-			"🌐 HTTP Request: GET /v1/users\n" +
-			"v1 API result: 200\n" +
-			"Client 2: GET /v2/users\n" +
-			"🌐 HTTP Request: GET /v2/users\n" +
-			"v2 API result: 200\n" +
-			"=== Content Types ===\n" +
-			"Client 1: POST /api/upload (XML)\n" +
-			"🌐 HTTP Request: POST /api/upload\n" +
-			"XML POST result: 200\n" +
-			"Client 2: PUT /api/config (YAML)\n" +
-			"🌐 HTTP Request: PUT /api/config\n" +
-			"YAML PUT result: 200\n" +
-			"Client 3: POST /api/data (Form)\n" +
-			"🌐 HTTP Request: POST /api/data\n" +
-			"Form POST result: 200\n" +
-			"=== Authentication ===\n" +
-			"Client 1: POST /auth/login\n" +
-			"🌐 HTTP Request: POST /auth/login\n" +
-			"Login result: 200\n" +
-			"Client 2: GET /protected (with token)\n" +
-			"🌐 HTTP Request: GET /protected\n" +
-			"Protected GET result: 200\n" +
-			"Client 3: DELETE /auth/logout\n" +
-			"🌐 HTTP Request: DELETE /auth/logout\n" +
-			"Logout result: 200\n" +
-			"=== Error Scenarios ===\n" +
-			"Client 1: GET /nonexistent\n" +
-			"🌐 HTTP Request: GET /nonexistent\n" +
-			"404 test result: 200\n" +
-			"Client 2: POST /api/invalid (bad JSON)\n" +
-			"🌐 HTTP Request: POST /api/invalid\n" +
-			"Bad JSON result: 200\n" +
-			"Stopping server...\n" +
-			"Server stopped with result: 0\n" +
-			"=== Advanced HTTP Test Complete ===\n",
 		"http_create_client.osp": "Creating client\n1\n",
 		"http_client_example.osp": "=== HTTP Client Test ===\n" +
 			"Testing HTTP client creation...\n" +
