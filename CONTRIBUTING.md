@@ -4,6 +4,8 @@ Want to help build a programming language? You're in the right place. Building a
 
 Even discussions are great at this point.
 
+**CRITICIAL**: always create an issue before starting work on the compiler. Explain the issue and propose a solution for the issue. Please get approval before moving into the implementation phase. All contributions are appreciated but compiler work requires strict review and planning.
+
 ## The Tech Stack
 
 Osprey is built on battle-tested tools:
