@@ -73,14 +73,22 @@ func handleSpecialModes(args []string) *cli.CommandResult {
 
 // handleDocsMode processes the --docs flag
 func handleDocsMode(args []string) *cli.CommandResult {
-	docsDir := "../website/src/docs" // default directory
-	// Check for --docs-dir argument
+	var docsDir string
+	// Check for --docs-dir argument (REQUIRED)
 	for i := MinArgs; i < len(args); i++ {
 		if args[i] == DocsDirFlag && i+1 < len(args) {
 			docsDir = args[i+1]
 			break
 		}
 	}
+
+	if docsDir == "" {
+		return &cli.CommandResult{
+			Success:  false,
+			ErrorMsg: "--docs requires --docs-dir <directory> to specify output location",
+		}
+	}
+
 	result := cli.RunCommand("", cli.OutputModeDocs, docsDir)
 	return &result
 }
@@ -210,7 +218,7 @@ func ShowHelp() {
 	fmt.Println("Osprey Compiler")
 	fmt.Println()
 	fmt.Println("Usage: osprey <source-file> [options]")
-	fmt.Println("       osprey --docs [--docs-dir <directory>]")
+	fmt.Println("       osprey --docs --docs-dir <directory>")
 	fmt.Println("       osprey --hover <element-name>")
 	fmt.Println()
 	fmt.Println("Options:")
@@ -220,7 +228,7 @@ func ShowHelp() {
 	fmt.Println("  --run      Compile and run immediately")
 	fmt.Println("  --symbols  Output symbol information as JSON")
 	fmt.Println("  --docs     Generate API reference documentation (no file required)")
-	fmt.Println("  --docs-dir <directory> Output directory for documentation (used with --docs)")
+	fmt.Println("  --docs-dir <directory> Output directory for documentation (REQUIRED with --docs)")
 	fmt.Println("  --hover    Get hover documentation for language element")
 	fmt.Println("  --help, -h Show this help message")
 	fmt.Println()
@@ -276,8 +284,8 @@ func ParseArgs(args []string) (string, string, string, *cli.SecurityConfig) {
 func HandleSpecialModes(args []string) (string, string, string) {
 	// Handle docs flag (no file required)
 	if args[1] == DocsFlag {
-		docsDir := "../website/src/docs" // default directory
-		// Check for --docs-dir argument
+		var docsDir string
+		// Check for --docs-dir argument (REQUIRED)
 		for i := MinArgs; i < len(args); i++ {
 			if args[i] == DocsDirFlag && i+1 < len(args) {
 				docsDir = args[i+1]

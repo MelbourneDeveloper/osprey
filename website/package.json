@@ -8,7 +8,7 @@
     "dev": "npm run copy-spec && npm run generate-docs && eleventy --serve --watch",
     "build": "npm run generate-docs && eleventy",
     "copy-spec": "node scripts/copy-spec.js",
-    "generate-docs": "./scripts/generate-docs.sh",
+    "generate-docs": "bash scripts/generate-docs.sh",
     "clean": "rm -rf _site",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

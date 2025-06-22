@@ -15,13 +15,16 @@ description: "Complete reference documentation for the Osprey programming langua
 
 | Function | Description |
 |----------|-------------|
+| [contains](functions/contains/) | Checks if a string contains a substring. |
 | [filter](functions/filter/) | Filters elements in an iterator based on a predicate function. |
 | [fold](functions/fold/) | Reduces an iterator to a single value using an accumulator function. |
 | [forEach](functions/foreach/) | Applies a function to each element in an iterator. |
 | [input](functions/input/) | Reads an integer from the user's input. |
+| [length](functions/length/) | Returns the length of a string. |
 | [map](functions/map/) | Transforms each element in an iterator using a function, returning a new iterator. |
 | [print](functions/print/) | Prints a value to the console. Automatically converts the value to a string representation. |
 | [range](functions/range/) | Creates an iterator that generates numbers from start to end (exclusive). |
+| [substring](functions/substring/) | Extracts a substring from start to end index. |
 | [toString](functions/tostring/) | Converts a value to its string representation. |
 
 ## Type Reference
@@ -30,6 +33,7 @@ description: "Complete reference documentation for the Osprey programming langua
 |------|-------------|
 | [Any](types/any/) | A type that can represent any value. Useful for generic programming but should be used carefully as it bypasses type checking. |
 | [Bool](types/bool/) | A boolean type that can be either true or false. Used for logical operations and conditionals. |
+| [HttpResponse](types/httpresponse/) | A built-in type representing an HTTP response with status code, headers, content type, body, and streaming capabilities. Used by HTTP server handlers to return structured responses to clients. |
 | [Int](types/int/) | A 64-bit signed integer type. Can represent whole numbers from -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807. |
 | [String](types/string/) | A sequence of characters representing text. Supports string interpolation and escape sequences. |
 

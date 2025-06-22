@@ -89,8 +89,8 @@ func ParseArgs(args []string) (string, string, string, *SecurityConfig) {
 func HandleSpecialModes(args []string) (string, string, string) {
 	// Handle docs flag (no file required)
 	if args[1] == "--docs" {
-		docsDir := "../website/src/docs" // default directory
-		// Check for --docs-dir argument
+		var docsDir string
+		// Check for --docs-dir argument (REQUIRED)
 		for i := MinArgs; i < len(args); i++ {
 			if args[i] == "--docs-dir" && i+1 < len(args) {
 				docsDir = args[i+1]
