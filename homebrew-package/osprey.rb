@@ -1,8 +1,8 @@
 class Osprey < Formula
   desc "Modern functional programming language designed for clarity, safety, and expressiveness"
   homepage "https://www.ospreylang.dev"
-  url "https://github.com/melbournedeveloper/osprey/releases/download/v0.1.0/osprey-darwin-amd64.tar.gz"
-  version "0.1.0"
+  url "https://github.com/melbournedeveloper/osprey/releases/download/v0.2.0/osprey-darwin-amd64.tar.gz"
+  version "0.2.0"
   sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
   
   depends_on "llvm"

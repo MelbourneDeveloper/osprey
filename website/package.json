@@ -1,6 +1,6 @@
 {
   "name": "osprey-website",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "Official website for the Osprey Programming Language",
   "main": "index.js",
   "scripts": {
