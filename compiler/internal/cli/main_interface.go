@@ -6,10 +6,13 @@ import (
 )
 
 const (
-	MinArgs      = 2
+	// MinArgs is the minimum number of arguments required for most commands
+	MinArgs = 2
+	// MinHoverArgs is the minimum number of arguments required for hover command
 	MinHoverArgs = 3
 )
 
+// ShowHelp displays the help message for the Osprey compiler
 func ShowHelp() {
 	fmt.Println("Osprey Compiler")
 	fmt.Println()
@@ -46,6 +49,7 @@ func ShowHelp() {
 	fmt.Println("  osprey program.osp --no-http     # Compile without HTTP functions")
 }
 
+// ParseArgs parses command line arguments and returns parsed values
 func ParseArgs(args []string) (string, string, string, *SecurityConfig) {
 	if len(args) < MinArgs {
 		ShowHelp()
@@ -81,12 +85,13 @@ func ParseArgs(args []string) (string, string, string, *SecurityConfig) {
 	return filename, outputMode, docsDir, security
 }
 
+// HandleSpecialModes handles special command modes like docs and hover
 func HandleSpecialModes(args []string) (string, string, string) {
 	// Handle docs flag (no file required)
 	if args[1] == "--docs" {
 		docsDir := "../website/src/docs" // default directory
 		// Check for --docs-dir argument
-		for i := 2; i < len(args); i++ {
+		for i := MinArgs; i < len(args); i++ {
 			if args[i] == "--docs-dir" && i+1 < len(args) {
 				docsDir = args[i+1]
 				break
@@ -102,12 +107,13 @@ func HandleSpecialModes(args []string) (string, string, string) {
 			fmt.Println("Example: osprey --hover print")
 			return "", "", ""
 		}
-		return args[2], OutputModeHover, ""
+		return args[MinArgs], OutputModeHover, ""
 	}
 
 	return "", "", ""
 }
 
+// ParseFileBasedArgs parses arguments for file-based operations
 func ParseFileBasedArgs(args []string) (string, string, *SecurityConfig) {
 	outputMode := OutputModeLLVM // default to LLVM IR
 	docsDir := ""
@@ -116,7 +122,7 @@ func ParseFileBasedArgs(args []string) (string, string, *SecurityConfig) {
 	security := NewDefaultSecurityConfig()
 
 	// Parse remaining arguments
-	for i := 2; i < len(args); i++ {
+	for i := MinArgs; i < len(args); i++ {
 		arg := args[i]
 
 		if newOutputMode := ParseOutputModeArg(arg); newOutputMode != "" {
@@ -133,6 +139,7 @@ func ParseFileBasedArgs(args []string) (string, string, *SecurityConfig) {
 	return outputMode, docsDir, security
 }
 
+// ParseOutputModeArg parses output mode arguments and returns the corresponding mode
 func ParseOutputModeArg(arg string) string {
 	switch arg {
 	case "--ast":
@@ -154,6 +161,7 @@ func ParseOutputModeArg(arg string) string {
 	}
 }
 
+// ParseSecurityArg parses security-related arguments and applies them to the security config
 func ParseSecurityArg(arg string, security *SecurityConfig) bool {
 	switch arg {
 	case "--sandbox":
@@ -177,7 +185,7 @@ func ParseSecurityArg(arg string, security *SecurityConfig) bool {
 	}
 }
 
-// Testable main function that takes args as parameter
+// RunMainWithArgs is the testable main function that takes args as parameter
 func RunMainWithArgs(args []string) CommandResult {
 	filename, outputMode, docsDir, security := ParseArgs(args)
 	if filename == "" && outputMode == "" {
@@ -200,7 +208,7 @@ func RunMainWithArgs(args []string) CommandResult {
 	return result
 }
 
-// RunMainFromOS mimics main() function but returns result instead of calling os.Exit
+// RunMainFromOS runs the main function using os.Args
 func RunMainFromOS() CommandResult {
 	return RunMainWithArgs(os.Args)
 }
