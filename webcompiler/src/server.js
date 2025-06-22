@@ -159,7 +159,7 @@ function runOspreyCompiler(args, code = '') {
             // Use the osprey binary from PATH (installed in Docker) or fallback to local dev path
             const ospreyPath = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
                 ? 'osprey'
-                : path.resolve(__dirname, '../../compiler/bin/osprey')
+                : path.resolve(__dirname, '../compiler/bin/osprey')
             console.log(`🔨 Running: ${ospreyPath} ${tempFile} ${args.join(' ')}`)
             const child = spawn(ospreyPath, [tempFile, ...args], {
                 stdio: 'pipe',

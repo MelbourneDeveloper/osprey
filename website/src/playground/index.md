@@ -82,7 +82,7 @@ description: "Try Osprey programming language online with interactive code examp
     }
     
     .status-dot.connected {
-        background: #4ec9b0;
+        background: #5a8a6b;
     }
     
     .status-dot.error {
@@ -131,15 +131,15 @@ description: "Try Osprey programming language online with interactive code examp
     }
     
     #output.error {
-        color: #f44747;
-        background: #2d1b1b;
-        border-left: 3px solid #f44747;
+        color: #d4d4d4;
+        background: #1e1e1e;
+        border-left: none;
     }
     
     #output.success {
-        color: #4ec9b0;
-        background: #1b2d1b;
-        border-left: 3px solid #4ec9b0;
+        color: #d4d4d4;
+        background: #1e1e1e;
+        border-left: none;
     }
     
     #output.warning {
@@ -166,20 +166,19 @@ description: "Try Osprey programming language online with interactive code examp
     }
     
     .compiler-output {
-        color: #f44747;
-        background: rgba(244, 71, 71, 0.1);
-        padding: 12px;
-        border-radius: 4px;
-        border-left: 3px solid #f44747;
+        color: #d4d4d4;
+        background: transparent;
+        padding: 0;
+        border: none;
         margin-bottom: 12px;
     }
     
     .program-output {
-        color: #4ec9b0;
-        background: rgba(78, 201, 176, 0.1);
+        color: #7cb992;
+        background: rgba(124, 185, 146, 0.08);
         padding: 12px;
         border-radius: 4px;
-        border-left: 3px solid #4ec9b0;
+        border-left: 3px solid #5a8a6b;
     }
     
     .program-output.empty {
@@ -189,6 +188,68 @@ description: "Try Osprey programming language online with interactive code examp
     .line-number {
         color: #569cd6;
         font-weight: bold;
+    }
+    
+    /* Error listview styles */
+    .error-list {
+        display: grid;
+        gap: 1px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    
+    .error-line {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 12px;
+        padding: 8px 12px;
+        background: #2d2d30;
+        border: 1px solid #444;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        align-items: center;
+    }
+    
+    .error-line:hover {
+        background: #3c3c3c;
+        border-color: #569cd6;
+    }
+    
+    .error-line.selected {
+        background: #404040;
+        border-color: #569cd6;
+        box-shadow: 0 0 0 1px #569cd6;
+    }
+    
+    .error-location {
+        color: #569cd6;
+        font-weight: bold;
+        font-size: 12px;
+        white-space: nowrap;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    
+    .error-location:hover {
+        text-decoration: underline;
+    }
+    
+    .error-message {
+        color: #f44747;
+        flex: 1;
+        word-break: break-word;
+    }
+    
+    /* Editor error highlighting */
+    .highlighted-error-line {
+        background: rgba(244, 71, 71, 0.15) !important;
+        border-left: 2px solid #f44747 !important;
+    }
+    
+    .error-glyph {
+        background: #f44747;
+        width: 4px !important;
     }
     
     /* Splitter styles */
@@ -456,9 +517,7 @@ print("Math: \${a} * \${b} = \${product}")
 
 // Range iteration
 print("Numbers 1-5:")
-range(1, 6) |> forEach(print)
-
-print("Demo complete!")`,
+range(1, 6) |> forEach(print)`,
             language: 'osprey',
             theme: 'vs-dark',
             automaticLayout: true
@@ -496,10 +555,7 @@ print("Demo complete!")`,
                 // Handle HTTP errors that still have JSON error details
                 if (result.error) {
                     output.className = 'error';
-                    output.innerHTML = `<div class="output-section">
-                        <div class="output-label">Compilation Error</div>
-                        <div class="compiler-output">${formatOutput(result.error)}</div>
-                    </div>`;
+                    output.innerHTML = formatErrorOutput(result.error);
                     updateStatus('error', 'Compilation failed');
                     return;
                 } else {
@@ -510,45 +566,26 @@ print("Demo complete!")`,
             if (result.success) {
                 // Successful compilation
                 output.className = 'success';
-                let outputHtml = '';
-                
-                if (result.compilerOutput && result.compilerOutput.trim()) {
-                    outputHtml += `<div class="output-section">
-                        <div class="output-label">Compiler Messages</div>
-                        <div class="compiler-output">${formatOutput(result.compilerOutput)}</div>
-                    </div>`;
-                }
+                let outputText = '';
                 
                 if (result.programOutput && result.programOutput.trim()) {
-                    outputHtml += `<div class="output-section">
-                        <div class="output-label">AST Output</div>
-                        <div class="program-output">${formatOutput(result.programOutput)}</div>
-                    </div>`;
+                    outputText = formatPlainOutput(result.programOutput);
                 } else {
-                    outputHtml += `<div class="output-section">
-                        <div class="output-label">AST Output</div>
-                        <div class="program-output">✅ Compilation successful - no output</div>
-                    </div>`;
+                    outputText = '✅ Compilation successful - no output';
                 }
                 
-                output.innerHTML = outputHtml;
+                output.innerHTML = outputText;
                 updateStatus('connected', 'Ready');
             } else {
                 // Compilation failed
                 output.className = 'error';
-                output.innerHTML = `<div class="output-section">
-                    <div class="output-label">Compilation Error</div>
-                    <div class="compiler-output">${formatOutput(result.error)}</div>
-                </div>`;
+                output.innerHTML = formatErrorOutput(result.error || 'Unknown compilation error');
                 updateStatus('error', 'Compilation failed');
             }
             
         } catch (error) {
             output.className = 'error';
-            output.innerHTML = `<div class="output-section">
-                <div class="output-label">Network Error</div>
-                <div class="compiler-output">Failed to connect to compiler: ${error.message}</div>
-            </div>`;
+            output.innerHTML = formatErrorOutput(`Failed to connect to compiler: ${error.message}`);
             updateStatus('error', 'Connection failed');
         }
     }
@@ -573,13 +610,9 @@ print("Demo complete!")`,
                 // Handle HTTP errors that still have JSON error details
                 if (result.error) {
                     output.className = 'error';
-                    const errorLabel = result.isCompilationError ? 'Compilation Error' : 'Execution Error';
                     const statusMessage = result.isCompilationError ? 'Compilation failed' : 'Execution failed';
                     
-                    output.innerHTML = `<div class="output-section">
-                        <div class="output-label">${errorLabel}</div>
-                        <div class="compiler-output">${formatOutput(result.error)}</div>
-                    </div>`;
+                    output.innerHTML = formatErrorOutput(result.error);
                     updateStatus('error', statusMessage);
                     return;
                 } else {
@@ -590,62 +623,139 @@ print("Demo complete!")`,
             if (result.success) {
                 // Successful execution
                 output.className = 'success';
-                let outputHtml = '';
-                
-                if (result.compilerOutput && result.compilerOutput.trim()) {
-                    outputHtml += `<div class="output-section">
-                        <div class="output-label">Compiler Messages</div>
-                        <div class="compiler-output">${formatOutput(result.compilerOutput)}</div>
-                    </div>`;
-                }
+                let outputText = '';
                 
                 if (result.programOutput && result.programOutput.trim()) {
-                    outputHtml += `<div class="output-section">
-                        <div class="output-label">Program Output</div>
-                        <div class="program-output">${formatOutput(result.programOutput)}</div>
-                    </div>`;
+                    outputText = result.programOutput;
                 } else {
-                    outputHtml += `<div class="output-section">
-                        <div class="output-label">Program Output</div>
-                        <div class="program-output">✅ Program ran successfully - no output</div>
-                    </div>`;
+                    outputText = '✅ Program ran successfully - no output';
                 }
                 
-                output.innerHTML = outputHtml;
+                output.innerHTML = formatPlainOutput(outputText);
                 updateStatus('connected', 'Ready');
             } else {
                 // Execution failed
                 output.className = 'error';
-                output.innerHTML = `<div class="output-section">
-                    <div class="output-label">Execution Error</div>
-                    <div class="compiler-output">${formatOutput(result.error)}</div>
-                </div>`;
+                output.innerHTML = formatErrorOutput(result.error || 'Unknown error');
                 updateStatus('error', 'Execution failed');
             }
             
         } catch (error) {
             output.className = 'error';
-            output.innerHTML = `<div class="output-section">
-                <div class="output-label">Network Error</div>
-                <div class="compiler-output">Failed to connect to compiler: ${error.message}</div>
-            </div>`;
+            output.innerHTML = formatErrorOutput(`Failed to connect to compiler: ${error.message}`);
             updateStatus('error', 'Connection failed');
         }
     }
     
-    function formatOutput(text) {
+    function formatErrorOutput(text) {
         if (!text) return '';
         
         // Escape HTML
         text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         
-        // Highlight line numbers - more comprehensive patterns
-        text = text.replace(/(\bline\s+)(\d+)(\s*:\s*\d+)?/gi, '$1<span class="line-number">$2$3</span>');
-        text = text.replace(/(\bat line\s+)(\d+)/gi, '$1<span class="line-number">$2</span>');
-        text = text.replace(/(\berror at\s+)(\d+)/gi, '$1<span class="line-number">$2</span>');
-        text = text.replace(/(\[)(\d+)(\s*:\s*\d+)(\])/g, '$1<span class="line-number">$2$3</span>$4');
+        // Split by lines and parse errors
+        const lines = text.split('\n').filter(line => line.trim());
+        const errorLines = [];
+        
+        lines.forEach(line => {
+            // Check if line contains line number references
+            const lineNumberMatch = line.match(/\b(?:line\s+)(\d+)(?:\s*:\s*(\d+))?/i) ||
+                                  line.match(/\bat line\s+(\d+)/i) ||
+                                  line.match(/\berror at\s+(\d+)/i) ||
+                                  line.match(/\[(\d+)(?:\s*:\s*(\d+))?\]/);
+            
+            if (lineNumberMatch) {
+                const lineNum = parseInt(lineNumberMatch[1]);
+                const column = lineNumberMatch[2] ? parseInt(lineNumberMatch[2]) : 0;
+                
+                // Extract the error message (everything after the line number)
+                let message = line.replace(/^.*?(?:line\s+\d+(?::\d+)?|at line\s+\d+|\[\d+(?::\d+)?\])\s*/, '').trim();
+                if (!message) message = line.trim();
+                
+                errorLines.push({
+                    lineNum,
+                    column,
+                    message,
+                    fullText: line
+                });
+            } else {
+                // Non-line-specific error
+                errorLines.push({
+                    lineNum: null,
+                    column: null,
+                    message: line.trim(),
+                    fullText: line
+                });
+            }
+        });
+        
+        if (errorLines.length === 0) {
+            return text; // Fallback to original text
+        }
+        
+        // Build clean grid structure
+        const gridItems = errorLines.map(error => {
+            if (error.lineNum !== null) {
+                const location = error.column > 0 ? `${error.lineNum}:${error.column}` : `${error.lineNum}`;
+                return `<div class="error-line" onclick="jumpToLine(${error.lineNum}, ${error.column || 1})">
+                    <span class="error-location">Line ${location}</span>
+                    <span class="error-message">${error.message}</span>
+                </div>`;
+            } else {
+                return `<div class="error-line">
+                    <span class="error-location">—</span>
+                    <span class="error-message">${error.message}</span>
+                </div>`;
+            }
+        });
+        
+        return `<div class="error-list">${gridItems.join('')}</div>`;
+    }
+    
+    function formatPlainOutput(text) {
+        if (!text) return '';
+        
+        // Escape HTML
+        text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        
+        // Color specific messages
+        text = text.replace(/(Program executed successfully)/g, '<span style="color: #7cb992;">$1</span>');
+        text = text.replace(/(Running program\.\.\.)/g, '<span style="color: #ffa500;">$1</span>');
         
         return text;
+    }
+    
+    function jumpToLine(lineNumber, column = 1) {
+        if (!editor) return;
+        
+        console.log(`🎯 Jumping to line ${lineNumber}, column ${column}`);
+        
+        // Remove any existing selections
+        const errorLines = document.querySelectorAll('.error-line');
+        errorLines.forEach(el => el.classList.remove('selected'));
+        
+        // Mark clicked line as selected
+        event.target.closest('.error-line')?.classList.add('selected');
+        
+        // Jump to the line in Monaco editor
+        editor.setPosition({ lineNumber: lineNumber, column: column });
+        editor.revealLineInCenter(lineNumber);
+        editor.focus();
+        
+        // Optionally highlight the line temporarily
+        const decoration = editor.deltaDecorations([], [{
+            range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+            options: {
+                isWholeLine: true,
+                className: 'highlighted-error-line',
+                glyphMarginClassName: 'error-glyph'
+            }
+        }]);
+        
+        // Remove decoration after 2 seconds
+        setTimeout(() => {
+            editor.deltaDecorations(decoration, []);
+        }, 2000);
     }
     
     function clearOutput() {
