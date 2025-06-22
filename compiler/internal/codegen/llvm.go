@@ -26,6 +26,16 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		if fn, exists := g.functions[ident.Name]; exists {
 			return g.generateUserFunctionCall(ident.Name, fn, callExpr)
 		}
+
+		// NEW: Handle function composition - calling a function stored in a variable
+		// This enables function composition by allowing calls to function references
+		if varValue, exists := g.variables[ident.Name]; exists {
+			// Check if this variable contains a function reference
+			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeFunction {
+				// This is a function stored in a function type variable - enable function composition
+				return g.generateFunctionCompositionCall(ident.Name, varValue, callExpr)
+			}
+		}
 	}
 
 	return nil, ErrUnsupportedCall
@@ -75,6 +85,24 @@ func (g *LLVMGenerator) handleCoreFunctions(name string, callExpr *ast.CallExpre
 		return g.generateFilterCall(callExpr)
 	case FoldFunc:
 		return g.generateFoldCall(callExpr)
+	case LengthFunc:
+		return g.generateLengthCall(callExpr)
+	case ContainsFunc:
+		return g.generateContainsCall(callExpr)
+	case SubstringFunc:
+		return g.generateSubstringCall(callExpr)
+	case SpawnProcessFunc:
+		return g.generateSpawnProcessCall(callExpr)
+	case SleepFunc:
+		return g.generateSleepCall(callExpr)
+	case WriteFileFunc:
+		return g.generateWriteFileCall(callExpr)
+	case ReadFileFunc:
+		return g.generateReadFileCall(callExpr)
+	case ParseJSONFunc:
+		return g.generateParseJSONCall(callExpr)
+	case ExtractCodeFunc:
+		return g.generateExtractCodeCall(callExpr)
 	default:
 		return nil, nil
 	}
@@ -132,190 +160,19 @@ func (g *LLVMGenerator) handleWebSocketFunctions(name string, callExpr *ast.Call
 	}
 }
 
-// generateToStringCall handles toString function calls.
-func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 1 {
-		return nil, WrapToStringWrongArgs(len(callExpr.Arguments))
-	}
-
-	arg, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	// Check the type of the argument and handle accordingly
-
-	return g.convertArgumentToString(callExpr.Arguments[0], arg)
-}
-
-// convertArgumentToString converts different argument types to string.
-func (g *LLVMGenerator) convertArgumentToString(argExpr ast.Expression, arg value.Value) (value.Value, error) {
-	switch expr := argExpr.(type) {
-	case *ast.StringLiteral:
-		// String -> String (identity conversion)
-		return arg, nil
-
-	case *ast.IntegerLiteral:
-		// Int -> String conversion using sprintf
-		return g.generateIntToString(arg)
-
-	case *ast.BooleanLiteral:
-		// Bool -> String conversion
-		return g.generateBoolToString(arg)
-
-	case *ast.Identifier:
-
-		return g.convertIdentifierToString(expr, arg)
-
-	case *ast.CallExpression:
-
-		return g.convertCallExpressionToString(expr, arg)
-
-	default:
-		// For other expressions, assume int conversion
-		return g.generateIntToString(arg)
-	}
-}
-
-// convertIdentifierToString handles identifier to string conversion.
-func (g *LLVMGenerator) convertIdentifierToString(ident *ast.Identifier, arg value.Value) (value.Value, error) {
-	if varType, exists := g.variableTypes[ident.Name]; exists {
-		switch varType {
-		case TypeString:
-			return arg, nil // Identity conversion
-		case TypeInt:
-			return g.generateIntToString(arg)
-		case TypeBool:
-			return g.generateBoolToString(arg)
-		case TypeAny:
-			// 'any' type is represented as i64 at LLVM level, treat as int
-			return g.generateIntToString(arg)
-		default:
-			return nil, WrapNoToStringImpl(varType)
-		}
-	}
-	// Default to int if type unknown
-
-	return g.generateIntToString(arg)
-}
-
-// convertCallExpressionToString handles call expression to string conversion.
-func (g *LLVMGenerator) convertCallExpressionToString(
-	callArg *ast.CallExpression,
-	arg value.Value,
-) (value.Value, error) {
-	if fnIdent, ok := callArg.Function.(*ast.Identifier); ok {
-		if returnType, exists := g.functionReturnTypes[fnIdent.Name]; exists {
-			switch returnType {
-			case TypeString:
-				return arg, nil // Identity conversion for string-returning functions
-			case TypeInt:
-				return g.generateIntToString(arg)
-			case TypeBool:
-				return g.generateBoolToString(arg)
-			case TypeAny:
-				// 'any' type is represented as i64 at LLVM level, treat as int
-				return g.generateIntToString(arg)
-			default:
-				return nil, WrapNoToStringForFunc(returnType)
-			}
-		}
-	}
-	// Default to int conversion if function type unknown
-
-	return g.generateIntToString(arg)
-}
-
-// generatePrintCall handles print function calls.
-func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 1 {
-		return nil, WrapPrintWrongArgs(len(callExpr.Arguments))
-	}
-
-	// Auto-convert basic types to strings, reject complex types
-	switch argExpr := callExpr.Arguments[0].(type) {
-	case *ast.StringLiteral, *ast.InterpolatedStringLiteral:
-
-		return g.generatePrintStringLiteral(callExpr)
-
-	case *ast.IntegerLiteral, *ast.BinaryExpression, *ast.UnaryExpression, *ast.ResultExpression:
-
-		return g.generatePrintIntExpression(callExpr)
-
-	case *ast.BooleanLiteral:
-
-		return g.generatePrintBoolExpression(callExpr)
-
-	case *ast.CallExpression:
-
-		return g.generatePrintCallExpression(callExpr, argExpr)
-
-	case *ast.Identifier:
-
-		return g.generatePrintIdentifier(callExpr, argExpr)
-
-	default:
-
-		return nil, WrapPrintComplexExpr(argExpr)
-	}
-}
-
-// generateInputCall handles input function calls.
-func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 0 {
-		return nil, WrapInputWrongArgs(len(callExpr.Arguments))
-	}
-
-	// Create format string for scanf("%ld", &var)
-	formatStr := constant.NewCharArrayFromString(FormatStringInt)
-	formatGlobal := g.module.NewGlobalDef("", formatStr)
-	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
-		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
-
-	// Allocate space for the input integer
-	inputVar := g.builder.NewAlloca(types.I64)
-
-	// Call scanf
-	scanf := g.functions["scanf"]
-	g.builder.NewCall(scanf, formatPtr, inputVar)
-
-	// Load the result
-
-	return g.builder.NewLoad(types.I64, inputVar), nil
-}
-
 // generateUserFunctionCall handles user-defined function calls.
 func (g *LLVMGenerator) generateUserFunctionCall(
 	funcName string,
 	fn *ir.Func,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
-	// Check if function has multiple parameters and enforce named arguments
-	params, paramExists := g.functionParameters[funcName]
-	if paramExists && len(params) > 1 {
-		// Multi-parameter function - MUST use named arguments
-		if len(callExpr.NamedArguments) == 0 {
-			example := g.buildNamedArgumentsExample(params)
-
-			return nil, WrapFunctionRequiresNamed(funcName, len(params), example)
-		}
-
-		if len(callExpr.Arguments) > 0 {
-			example := g.buildNamedArgumentsExample(params)
-
-			return nil, WrapFunctionRequiresNamed(funcName, len(params), example)
-		}
+	// VALIDATION: Multi-parameter functions require named arguments
+	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
+		return nil, WrapFunctionRequiresNamed(funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName))
 	}
 
 	// Handle named arguments vs positional arguments
 	if len(callExpr.NamedArguments) > 0 {
-		// Validate named arguments are not of type 'any'
-		for _, namedArg := range callExpr.NamedArguments {
-			if err := g.validateNotAnyType(namedArg.Value, AnyOpFunctionArgument); err != nil {
-				return nil, WrapAnyDirectFunctionArg(funcName, "unknown")
-			}
-		}
-
 		// Named arguments - need to reorder them to match function signature
 		args, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
 		if err != nil {
@@ -329,9 +186,11 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	args := make([]value.Value, len(callExpr.Arguments))
 
 	for i, arg := range callExpr.Arguments {
-		// Validate that argument is not of type 'any'
-		if err := g.validateNotAnyType(arg, AnyOpFunctionArgument); err != nil {
-			return nil, WrapAnyDirectFunctionArg(funcName, "unknown")
+		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
+		// This preserves type safety while allowing function composition
+		paramName := "unknown" // We don't have parameter names for positional args
+		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
+			return nil, err
 		}
 
 		val, err := g.generateExpression(arg)
@@ -345,112 +204,62 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	return g.builder.NewCall(fn, args...), nil
 }
 
-// generatePrintStringLiteral handles printing string literals.
-func (g *LLVMGenerator) generatePrintStringLiteral(callExpr *ast.CallExpression) (value.Value, error) {
-	arg, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	puts := g.functions["puts"]
-	result := g.builder.NewCall(puts, arg)
-
-	return g.builder.NewSExt(result, types.I64), nil
-}
-
-// generatePrintIntExpression handles printing integer expressions.
-func (g *LLVMGenerator) generatePrintIntExpression(callExpr *ast.CallExpression) (value.Value, error) {
-	arg, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	stringArg, err := g.generateIntToString(arg)
-	if err != nil {
-		return nil, err
-	}
-
-	puts := g.functions["puts"]
-	result := g.builder.NewCall(puts, stringArg)
-
-	return g.builder.NewSExt(result, types.I64), nil
-}
-
-// generatePrintBoolExpression handles printing boolean expressions.
-func (g *LLVMGenerator) generatePrintBoolExpression(callExpr *ast.CallExpression) (value.Value, error) {
-	arg, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	stringArg, err := g.generateBoolToString(arg)
-	if err != nil {
-		return nil, err
-	}
-
-	puts := g.functions["puts"]
-	result := g.builder.NewCall(puts, stringArg)
-
-	return g.builder.NewSExt(result, types.I64), nil
-}
-
-// generatePrintCallExpression handles printing call expressions.
-func (g *LLVMGenerator) generatePrintCallExpression(
-	callExpr *ast.CallExpression,
-	argExpr *ast.CallExpression,
-) (value.Value, error) {
-	if callIdent, ok := argExpr.Function.(*ast.Identifier); ok {
-		if callIdent.Name == ToStringFunc {
-			// toString call - allowed directly
-			return g.generatePrintStringLiteral(callExpr)
+// generateNamedArgsSuggestion generates a helpful suggestion for named arguments.
+func (g *LLVMGenerator) generateNamedArgsSuggestion(funcName string) string {
+	if paramNames, exists := g.functionParameters[funcName]; exists {
+		suggestions := make([]string, len(paramNames))
+		for i, paramName := range paramNames {
+			suggestions[i] = paramName + ": value"
 		}
+		return strings.Join(suggestions, ", ")
+	}
+	return "param1: value, param2: value"
+}
 
-		if returnType, exists := g.functionReturnTypes[callIdent.Name]; exists {
-			switch returnType {
-			case TypeString:
-				return g.generatePrintStringLiteral(callExpr)
-			case TypeInt:
-				return g.generatePrintIntExpression(callExpr)
-			case TypeBool:
-				return g.generatePrintBoolExpression(callExpr)
-			case TypeAny:
-				// 'any' type is represented as i64 at LLVM level, treat as int
-				return g.generatePrintIntExpression(callExpr)
-			default:
-				return nil, WrapPrintCannotConvertFunc(returnType, callIdent.Name)
+// generateFunctionCompositionCall handles calling a function stored in a variable (function composition)
+func (g *LLVMGenerator) generateFunctionCompositionCall(
+	_ string, // varName is unused but kept for interface consistency
+	functionRef value.Value,
+	callExpr *ast.CallExpression,
+) (value.Value, error) {
+	// For function composition, we assume the function reference stored in the function variable
+	// is actually a pointer to a real function. At runtime, we need to call it.
+
+	// Since functions are stored as function pointers when passed as arguments,
+	// we can directly call the function reference
+
+	// Generate arguments for the function call
+	args := make([]value.Value, len(callExpr.Arguments))
+	for i, arg := range callExpr.Arguments {
+		val, err := g.generateExpression(arg)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = val
+	}
+
+	// Handle named arguments (convert to positional for the underlying function call)
+	if len(callExpr.NamedArguments) > 0 {
+		// For function composition, we'll treat named arguments as positional for simplicity
+		// This is a limitation but works for basic function composition
+		namedArgs := make([]value.Value, len(callExpr.NamedArguments))
+		for i, namedArg := range callExpr.NamedArguments {
+			val, err := g.generateExpression(namedArg.Value)
+			if err != nil {
+				return nil, err
 			}
+			namedArgs[i] = val
 		}
-
-		return nil, WrapPrintUnknownFunc(callIdent.Name)
+		// Use a new slice to avoid makezero linting error
+		allArgs := make([]value.Value, 0, len(args)+len(namedArgs))
+		allArgs = append(allArgs, args...)
+		allArgs = append(allArgs, namedArgs...)
+		args = allArgs
 	}
 
-	return nil, ErrPrintComplexExpr
-}
-
-// generatePrintIdentifier handles printing identifier expressions.
-func (g *LLVMGenerator) generatePrintIdentifier(
-	callExpr *ast.CallExpression,
-	argExpr *ast.Identifier,
-) (value.Value, error) {
-	if varType, exists := g.variableTypes[argExpr.Name]; exists {
-		switch varType {
-		case TypeString:
-			return g.generatePrintStringLiteral(callExpr)
-		case TypeInt:
-			return g.generatePrintIntExpression(callExpr)
-		case TypeBool:
-			return g.generatePrintBoolExpression(callExpr)
-		case TypeAny:
-			// 'any' type is represented as i64 at LLVM level, treat as int
-			return g.generatePrintIntExpression(callExpr)
-		default:
-			return nil, WrapPrintCannotConvert(argExpr.Name, varType)
-		}
-	}
-
-	// Unknown variable type - assume int and try auto-conversion
-
-	return g.generatePrintIntExpression(callExpr)
+	// Call the function stored in the variable
+	// The function reference should be a function pointer that we can call directly
+	return g.builder.NewCall(functionRef, args...), nil
 }
 
 // generateInterpolatedString generates LLVM IR for interpolated strings by concatenating parts.
@@ -634,7 +443,7 @@ func (g *LLVMGenerator) generateMatchExpressionWithDiscriminant(
 // hasResultPatterns checks if the match expression has Success/Err patterns.
 func (g *LLVMGenerator) hasResultPatterns(arms []ast.MatchArm) bool {
 	for _, arm := range arms {
-		if arm.Pattern.Constructor == "Success" || arm.Pattern.Constructor == "Err" {
+		if arm.Pattern.Constructor == SuccessPattern || arm.Pattern.Constructor == ErrorPattern {
 			return true
 		}
 	}
@@ -683,9 +492,9 @@ func (g *LLVMGenerator) generateMatchArmValues(
 ) ([]value.Value, []*ir.Block, error) {
 	var armValues []value.Value
 	var predecessorBlocks []*ir.Block
-	oldBuilder := g.builder
 
 	for i, arm := range arms {
+		// Set builder to the arm block at the start of each iteration
 		g.builder = armBlocks[i]
 
 		// Handle variable binding in patterns
@@ -719,11 +528,14 @@ func (g *LLVMGenerator) generateMatchArmValues(
 			armValues = append(armValues, armValue)
 		}
 
-		armBlocks[i].NewBr(endBlock)
-		predecessorBlocks = append(predecessorBlocks, armBlocks[i])
+		// CRITICAL FIX: After generating the expression (which might be a nested match),
+		// the builder might be pointing to a different block. We need to ensure the
+		// branch comes from the current builder block (where the expression ended),
+		// not necessarily from the arm block.
+		currentBuilderBlock := g.builder
+		currentBuilderBlock.NewBr(endBlock)
+		predecessorBlocks = append(predecessorBlocks, currentBuilderBlock)
 	}
-
-	g.builder = oldBuilder
 
 	return armValues, predecessorBlocks, nil
 }
@@ -816,6 +628,7 @@ func (g *LLVMGenerator) createMatchResult(
 	g.builder = endBlock
 
 	if len(armValues) == 1 {
+		// For single arm, we still need to set the builder but don't need PHI
 		return armValues[0], nil
 	}
 
@@ -830,7 +643,13 @@ func (g *LLVMGenerator) createMatchResult(
 		incomings = append(incomings, ir.NewIncoming(val, predecessorBlocks[i]))
 	}
 
-	return endBlock.NewPhi(incomings...), nil
+	phi := endBlock.NewPhi(incomings...)
+
+	// The end block now has a PHI node and the builder is set to this block.
+	// The calling function (like generateStandardMatchExpression) should handle
+	// adding any necessary terminator when the match is used in a larger context.
+
+	return phi, nil
 }
 
 // coerceArmValuesToCommonType ensures all arm values have compatible types.
@@ -903,6 +722,10 @@ func (g *LLVMGenerator) generateResultMatchExpression(
 	discriminant value.Value,
 ) (value.Value, error) {
 	blocks := g.createResultMatchBlocks(matchExpr)
+
+	// Store the Result value for pattern binding
+	g.currentResultValue = discriminant
+
 	g.generateResultMatchCondition(discriminant, blocks)
 
 	successValue, err := g.generateSuccessBlock(matchExpr, blocks)
@@ -938,9 +761,25 @@ func (g *LLVMGenerator) createResultMatchBlocks(matchExpr *ast.MatchExpression) 
 
 // generateResultMatchCondition generates the condition for result matching.
 func (g *LLVMGenerator) generateResultMatchCondition(discriminant value.Value, blocks *ResultMatchBlocks) {
-	zero := constant.NewInt(types.I64, ArrayIndexZero)
-	isSuccess := g.builder.NewICmp(enum.IPredSGE, discriminant, zero)
-	g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
+	// Check if the discriminant is a pointer to a struct (Result type) or just an integer
+	if ptrType, ok := discriminant.Type().(*types.PointerType); ok {
+		// Extract the discriminant field from the Result struct
+		// Result struct: [value, discriminant] where discriminant is at index 1
+		resultType := ptrType.ElemType
+		discriminantPtr := g.builder.NewGetElementPtr(resultType, discriminant,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+		discriminantValue := g.builder.NewLoad(discriminantPtr.Type().(*types.PointerType).ElemType, discriminantPtr)
+
+		// 0 = Success, 1 = Error
+		zero := constant.NewInt(types.I8, 0)
+		isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminantValue, zero)
+		g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
+	} else {
+		// Fallback: treat as integer discriminant
+		zero := constant.NewInt(types.I64, 0)
+		isSuccess := g.builder.NewICmp(enum.IPredSGE, discriminant, zero)
+		g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
+	}
 }
 
 // generateSuccessBlock generates the success block for result matching.
@@ -949,6 +788,29 @@ func (g *LLVMGenerator) generateSuccessBlock(
 	blocks *ResultMatchBlocks,
 ) (value.Value, error) {
 	g.builder = blocks.Success
+
+	// Find the success arm and bind pattern variables
+	successArm := g.findSuccessArm(matchExpr)
+	if successArm != nil && len(successArm.Pattern.Fields) > 0 {
+		// Bind the Result value to the pattern variable
+		fieldName := successArm.Pattern.Fields[0] // First field is the value
+
+		// Get the Result value from the matched expression
+		// The Result struct has: [value, discriminant]
+		// We need to extract the value field (index 0)
+		if g.currentResultValue != nil {
+			if ptrType, ok := g.currentResultValue.Type().(*types.PointerType); ok {
+				resultType := ptrType.ElemType
+				valuePtr := g.builder.NewGetElementPtr(resultType, g.currentResultValue,
+					constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+				extractedValue := g.builder.NewLoad(valuePtr.Type().(*types.PointerType).ElemType, valuePtr)
+				g.variables[fieldName] = extractedValue
+			} else {
+				// Fallback: use the discriminant value directly
+				g.variables[fieldName] = g.currentResultValue
+			}
+		}
+	}
 
 	successExpr := g.findSuccessValue(matchExpr)
 	var successValue value.Value
@@ -974,6 +836,19 @@ func (g *LLVMGenerator) generateErrorBlock(
 ) (value.Value, error) {
 	g.builder = blocks.Error
 
+	// Find the Error arm and bind pattern variables
+	errorArm := g.findErrorArm(matchExpr)
+	if errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
+		// Bind the Result error message to the pattern variable
+		fieldName := errorArm.Pattern.Fields[0] // First field is the message
+		// Create a unique global string for the error message
+		blockSuffix := fmt.Sprintf("_%p", matchExpr)
+		errorStr := g.module.NewGlobalDef("error_msg"+blockSuffix, constant.NewCharArrayFromString("Error occurred\\x00"))
+		errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
+			constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
+		g.variables[fieldName] = errorPtr
+	}
+
 	errorExpr := g.findErrorValue(matchExpr)
 	var errorValue value.Value
 	if errorExpr == nil {
@@ -991,10 +866,32 @@ func (g *LLVMGenerator) generateErrorBlock(
 	return errorValue, nil
 }
 
+// findSuccessArm finds the success match arm.
+func (g *LLVMGenerator) findSuccessArm(matchExpr *ast.MatchExpression) *ast.MatchArm {
+	for i, arm := range matchExpr.Arms {
+		if arm.Pattern.Constructor == SuccessPattern {
+			return &matchExpr.Arms[i]
+		}
+	}
+
+	return nil
+}
+
+// findErrorArm finds the error match arm.
+func (g *LLVMGenerator) findErrorArm(matchExpr *ast.MatchExpression) *ast.MatchArm {
+	for i, arm := range matchExpr.Arms {
+		if arm.Pattern.Constructor == ErrorPattern {
+			return &matchExpr.Arms[i]
+		}
+	}
+
+	return nil
+}
+
 // findSuccessValue finds the success expression in match arms.
 func (g *LLVMGenerator) findSuccessValue(matchExpr *ast.MatchExpression) ast.Expression {
 	for _, arm := range matchExpr.Arms {
-		if arm.Pattern.Constructor == "Success" {
+		if arm.Pattern.Constructor == SuccessPattern {
 			return arm.Expression
 		}
 	}
@@ -1005,7 +902,7 @@ func (g *LLVMGenerator) findSuccessValue(matchExpr *ast.MatchExpression) ast.Exp
 // findErrorValue finds the error expression in match arms.
 func (g *LLVMGenerator) findErrorValue(matchExpr *ast.MatchExpression) ast.Expression {
 	for _, arm := range matchExpr.Arms {
-		if arm.Pattern.Constructor == "Err" {
+		if arm.Pattern.Constructor == ErrorPattern {
 			return arm.Expression
 		}
 	}
@@ -1055,323 +952,4 @@ func (g *LLVMGenerator) createResultMatchPhi(
 	)
 
 	return phi, nil
-}
-
-// generateRangeCall handles range function calls - creates an iterator from start to end.
-func (g *LLVMGenerator) generateRangeCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapRangeWrongArgs(len(callExpr.Arguments))
-	}
-
-	start, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	end, err := g.generateExpression(callExpr.Arguments[1])
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a struct to hold range data: {start, end}
-	rangeStructType := types.NewStruct(types.I64, types.I64)
-	rangeValue := g.builder.NewAlloca(rangeStructType)
-
-	// Store start value at index 0
-	startPtr := g.builder.NewGetElementPtr(rangeStructType, rangeValue,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(start, startPtr)
-
-	// Store end value at index 1
-	endPtr := g.builder.NewGetElementPtr(rangeStructType, rangeValue,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(end, endPtr)
-
-	return rangeValue, nil
-}
-
-// generateForEachCall handles forEach function calls - applies a function to each element.
-func (g *LLVMGenerator) generateForEachCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapForEachWrongArgs(len(callExpr.Arguments))
-	}
-
-	// Get the range struct from first argument
-	rangeValue, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the function to apply from second argument
-	funcArg := callExpr.Arguments[1]
-	funcIdent, ok := funcArg.(*ast.Identifier)
-	if !ok {
-		return nil, ErrForEachNotFunction
-	}
-
-	// Extract range bounds
-	start, end := g.extractRangeBounds(rangeValue)
-
-	// Create loop blocks
-	blocks := g.createForEachLoopBlocks(callExpr)
-
-	// Generate loop logic
-	err = g.generateForEachLoop(start, end, funcIdent, blocks)
-	if err != nil {
-		return nil, err
-	}
-
-	// Return the original range struct for potential pipe chaining
-
-	return rangeValue, nil
-}
-
-// extractRangeBounds extracts start and end values from a range struct.
-func (g *LLVMGenerator) extractRangeBounds(rangeValue value.Value) (value.Value, value.Value) {
-	// Define the range struct type
-	rangeStructType := types.NewStruct(types.I64, types.I64)
-
-	// Check if rangeValue is already a pointer to the struct or if we need to handle it differently
-	var startPtr, endPtr value.Value
-
-	// Check the type of rangeValue - if it's a pointer to struct, use it directly
-	// If it's the struct value itself, we need to handle it differently
-	if rangeValue.Type().String() == rangeStructType.String()+"*" {
-		// It's a pointer to the struct (from range() call)
-		startPtr = g.builder.NewGetElementPtr(rangeStructType, rangeValue,
-			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-		endPtr = g.builder.NewGetElementPtr(rangeStructType, rangeValue,
-			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	} else {
-		// It's likely the struct value itself or something else - allocate and store
-		tempRange := g.builder.NewAlloca(rangeStructType)
-		g.builder.NewStore(rangeValue, tempRange)
-
-		startPtr = g.builder.NewGetElementPtr(rangeStructType, tempRange,
-			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-		endPtr = g.builder.NewGetElementPtr(rangeStructType, tempRange,
-			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	}
-
-	start := g.builder.NewLoad(types.I64, startPtr)
-	end := g.builder.NewLoad(types.I64, endPtr)
-
-	return start, end
-}
-
-// ForEachLoopBlocks holds the basic blocks for a forEach loop.
-type ForEachLoopBlocks struct {
-	LoopCond *ir.Block
-	LoopBody *ir.Block
-	LoopEnd  *ir.Block
-}
-
-// createForEachLoopBlocks creates the basic blocks needed for a forEach loop.
-func (g *LLVMGenerator) createForEachLoopBlocks(callExpr *ast.CallExpression) *ForEachLoopBlocks {
-	// Create unique block names using pointer address
-	blockSuffix := fmt.Sprintf("_%p", callExpr)
-
-	return &ForEachLoopBlocks{
-		LoopCond: g.function.NewBlock("loop_cond" + blockSuffix),
-		LoopBody: g.function.NewBlock("loop_body" + blockSuffix),
-		LoopEnd:  g.function.NewBlock("loop_end" + blockSuffix),
-	}
-}
-
-// generateForEachLoop generates the actual loop logic for forEach.
-func (g *LLVMGenerator) generateForEachLoop(
-	start, end value.Value,
-	funcIdent *ast.Identifier,
-	blocks *ForEachLoopBlocks,
-) error {
-	// Allocate and initialize the loop counter
-	counterPtr := g.builder.NewAlloca(types.I64)
-	g.builder.NewStore(start, counterPtr)
-
-	// Branch to loop condition check
-	g.builder.NewBr(blocks.LoopCond)
-
-	// Loop condition: while (counter < end)
-	g.builder = blocks.LoopCond
-	currentCounter := g.builder.NewLoad(types.I64, counterPtr)
-	condition := g.builder.NewICmp(enum.IPredSLT, currentCounter, end)
-	g.builder.NewCondBr(condition, blocks.LoopBody, blocks.LoopEnd)
-
-	// Loop body: call function with current counter value
-	g.builder = blocks.LoopBody
-	counterValue := g.builder.NewLoad(types.I64, counterPtr)
-
-	// Call the function with the current counter value
-	_, err := g.callFunctionWithValue(funcIdent, counterValue)
-	if err != nil {
-		return err
-	}
-
-	// Increment the counter: counter = counter + 1
-	one := constant.NewInt(types.I64, 1)
-	incrementedValue := g.builder.NewAdd(counterValue, one)
-	g.builder.NewStore(incrementedValue, counterPtr)
-
-	// Branch back to condition check
-	g.builder.NewBr(blocks.LoopCond)
-
-	// After the loop
-	g.builder = blocks.LoopEnd
-
-	return nil
-}
-
-// generateMapCall handles map function calls - transforms each element.
-func (g *LLVMGenerator) generateMapCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapMapWrongArgs(len(callExpr.Arguments))
-	}
-
-	// Get the range iterator
-	rangeValue, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the function to apply
-	funcArg := callExpr.Arguments[1]
-	if _, ok := funcArg.(*ast.Identifier); !ok {
-		return nil, ErrMapNotFunction
-	}
-
-	// For now, map just returns the original range since we're dealing with lazy evaluation
-	// In a full implementation, this would create a new iterator that applies the function
-	// when iterated over. For simplicity, we'll return the range and let forEach handle
-	// the function application.
-
-	// TODO: Implement proper lazy map that stores the transformation function
-	// For now, just return the range and the transformation will happen in forEach
-
-	return rangeValue, nil
-}
-
-// generateFilterCall handles filter function calls - selects elements based on predicate.
-func (g *LLVMGenerator) generateFilterCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapFilterWrongArgs(len(callExpr.Arguments))
-	}
-
-	iterator, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the predicate function
-	funcArg := callExpr.Arguments[1]
-	if funcIdent, ok := funcArg.(*ast.Identifier); ok {
-		// Apply the predicate and return the result
-		return g.callFunctionWithValue(funcIdent, iterator)
-	}
-
-	return nil, ErrFilterNotFunction
-}
-
-// generateFoldCall handles fold function calls - reduces iterator to single value.
-func (g *LLVMGenerator) generateFoldCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != ThreeArgs {
-		return nil, WrapFoldWrongArgs(len(callExpr.Arguments))
-	}
-
-	iterator, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	initial, err := g.generateExpression(callExpr.Arguments[1])
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the fold function
-	funcArg := callExpr.Arguments[2]
-	if funcIdent, ok := funcArg.(*ast.Identifier); ok {
-		// Apply the function with both accumulator and current value
-		return g.callFunctionWithTwoValues(funcIdent, initial, iterator)
-	}
-
-	return nil, ErrFoldNotFunction
-}
-
-// callFunctionWithValue calls any function (built-in or user-defined) with a single value argument.
-func (g *LLVMGenerator) callFunctionWithValue(
-	funcIdent *ast.Identifier,
-	value value.Value,
-) (value.Value, error) {
-	// Handle built-in functions
-	switch funcIdent.Name {
-	case PrintFunc:
-
-		return g.callBuiltInPrint(value)
-	case ToStringFunc:
-
-		return g.callBuiltInToString(value)
-	case InputFunc:
-
-		return nil, ErrInputNoArgs
-	case "testAny":
-		// Test function that returns 'any' type to test validation
-		return g.generateTestAnyCall()
-	}
-
-	// Handle user-defined functions
-	if fn, exists := g.functions[funcIdent.Name]; exists {
-		return g.builder.NewCall(fn, value), nil
-	}
-
-	return nil, WrapFunctionNotFound(funcIdent.Name)
-}
-
-// callFunctionWithTwoValues calls any function with two value arguments.
-func (g *LLVMGenerator) callFunctionWithTwoValues(
-	funcIdent *ast.Identifier,
-	value1, value2 value.Value,
-) (value.Value, error) {
-	// Built-in functions typically don't take two arguments, but handle edge cases
-	switch funcIdent.Name {
-	case PrintFunc, ToStringFunc, InputFunc:
-
-		return nil, WrapBuiltInTwoArgs(funcIdent.Name)
-	}
-
-	// Handle user-defined functions
-	if fn, exists := g.functions[funcIdent.Name]; exists {
-		return g.builder.NewCall(fn, value1, value2), nil
-	}
-
-	return nil, WrapFunctionNotFound(funcIdent.Name)
-}
-
-// callBuiltInPrint handles calling the built-in print function with a value.
-func (g *LLVMGenerator) callBuiltInPrint(value value.Value) (value.Value, error) {
-	// Convert the value to string and call puts
-	stringArg, err := g.generateIntToString(value)
-	if err != nil {
-		return nil, err
-	}
-
-	puts := g.functions["puts"]
-	result := g.builder.NewCall(puts, stringArg)
-
-	return g.builder.NewSExt(result, types.I64), nil
-}
-
-// callBuiltInToString handles calling the built-in toString function with a value.
-func (g *LLVMGenerator) callBuiltInToString(value value.Value) (value.Value, error) {
-	// For now, assume integer values and convert to string
-
-	return g.generateIntToString(value)
-}
-
-// generateTestAnyCall generates a function that returns 'any' type for testing validation.
-func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
-	// Return a simple integer but mark the function as returning 'any'
-	// This will be used to test that direct access to 'any' types fails
-	g.functionReturnTypes["testAny"] = TypeAny
-
-	return constant.NewInt(types.I64, DefaultPlaceholder), nil
 }

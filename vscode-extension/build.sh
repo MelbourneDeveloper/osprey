@@ -25,7 +25,7 @@ if [ $? -eq 0 ]; then
     echo "📋 Next steps:"
     echo "1. Package extension: npm run package"
     echo "2. Install extension: npm run install-extension"
-    echo "3. Or manually install: code --install-extension osprey-language-support-0.1.0.vsix"
+    echo "3. Or manually install: code --install-extension osprey-language-support-0.2.0.vsix"
 else
     echo "❌ Build failed!"
     exit 1

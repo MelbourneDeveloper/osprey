@@ -1,6 +1,6 @@
 {
   "name": "osprey-web-compiler",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "Secure web-based Osprey compiler with Monaco Editor and sandbox mode",
   "main": "src/server.js",
   "type": "module",

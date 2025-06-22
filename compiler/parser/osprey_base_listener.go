@@ -1,6 +1,7 @@
-// Code generated from osprey.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from osprey.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // osprey
+
 import "github.com/antlr4-go/antlr/v4"
 
 // BaseospreyListener is a complete listener for a parse tree produced by ospreyParser.
@@ -307,6 +308,12 @@ func (s *BaseospreyListener) EnterLiteral(ctx *LiteralContext) {}
 
 // ExitLiteral is called when production literal is exited.
 func (s *BaseospreyListener) ExitLiteral(ctx *LiteralContext) {}
+
+// EnterListLiteral is called when production listLiteral is entered.
+func (s *BaseospreyListener) EnterListLiteral(ctx *ListLiteralContext) {}
+
+// ExitListLiteral is called when production listLiteral is exited.
+func (s *BaseospreyListener) ExitListLiteral(ctx *ListLiteralContext) {}
 
 // EnterDocComment is called when production docComment is entered.
 func (s *BaseospreyListener) EnterDocComment(ctx *DocCommentContext) {}

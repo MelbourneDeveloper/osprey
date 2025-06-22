@@ -77,13 +77,35 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 
 // typeExpressionToLLVMType converts an Osprey TypeExpression to an LLVM type.
 func (g *LLVMGenerator) typeExpressionToLLVMType(typeExpr *ast.TypeExpression) types.Type {
+	// Handle function types
+	if typeExpr.IsFunction {
+		// Build parameter types
+		paramTypes := make([]types.Type, len(typeExpr.ParameterTypes))
+		for i, paramType := range typeExpr.ParameterTypes {
+			paramTypes[i] = g.typeExpressionToLLVMType(&paramType)
+		}
+
+		// Build return type
+		var returnType types.Type = types.I64 // Default to int
+		if typeExpr.ReturnType != nil {
+			returnType = g.typeExpressionToLLVMType(typeExpr.ReturnType)
+		}
+
+		// Create function signature
+		funcSig := types.NewFunc(returnType, paramTypes...)
+
+		// Return pointer to function (function pointer type)
+		return types.NewPointer(funcSig)
+	}
+
 	switch typeExpr.Name {
 	case "Int":
-
 		return types.I64
 	case "String":
-
 		return types.I8Ptr
+	case TypeHTTPResponse:
+		// Return pointer to HttpResponse struct
+		return types.NewPointer(g.typeMap[TypeHTTPResponse])
 	default:
 		// Check if it's a user-defined type
 		if llvmType, exists := g.typeMap[typeExpr.Name]; exists {
@@ -181,6 +203,11 @@ func (g *LLVMGenerator) inferCallExpressionType(expr *ast.CallExpression) string
 
 // inferIdentifierType determines the type of an identifier expression.
 func (g *LLVMGenerator) inferIdentifierType(expr *ast.Identifier) string {
+	// Check if it's a function name - this enables function composition
+	if _, exists := g.functions[expr.Name]; exists {
+		return TypeFunction
+	}
+
 	// Check if it's a union variant
 	if _, exists := g.unionVariants[expr.Name]; exists {
 		return g.findUnionTypeForVariant(expr.Name)
@@ -233,12 +260,43 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 
 	for i := range minLen {
 		g.variables[fnDecl.Parameters[i].Name] = fn.Params[i]
-		// Track parameter types based on LLVM type
-		if fn.Params[i].Type() == types.I8Ptr {
-			g.variableTypes[fnDecl.Parameters[i].Name] = TypeString
+
+		// Track parameter types - use explicit parameter type if available
+		var paramType string
+		if fnDecl.Parameters[i].Type != nil {
+			// Check if this is a function type
+			if fnDecl.Parameters[i].Type.IsFunction {
+				paramType = TypeFunction
+			} else {
+				// Use explicit type annotation for regular types
+				switch fnDecl.Parameters[i].Type.Name {
+				case TypeString, StringTypeName:
+					paramType = TypeString
+				case TypeInt, IntTypeName:
+					paramType = TypeInt
+				case "bool", "Bool":
+					paramType = TypeBool
+				case TypeAny:
+					paramType = TypeAny
+				default:
+					// Check if it's a user-defined union type
+					if _, exists := g.typeDeclarations[fnDecl.Parameters[i].Type.Name]; exists {
+						paramType = TypeInt // Union types are represented as integers
+					} else {
+						paramType = TypeInt // Default fallback
+					}
+				}
+			}
 		} else {
-			g.variableTypes[fnDecl.Parameters[i].Name] = TypeInt
+			// Fall back to LLVM type inference
+			if fn.Params[i].Type() == types.I8Ptr {
+				paramType = TypeString
+			} else {
+				paramType = TypeInt
+			}
 		}
+
+		g.variableTypes[fnDecl.Parameters[i].Name] = paramType
 	}
 
 	// Generate function body
@@ -255,7 +313,10 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		}
 	}
 
-	// Return the body value
+	// CRITICAL FIX: After generating the body expression (which might be a match expression),
+	// the builder might be pointing to a different block (like a match end block).
+	// We need to ensure the return statement is added to the current block the builder is pointing to.
+	// For match expressions, this will be the end block, which is exactly what we want.
 	g.builder.NewRet(bodyValue)
 
 	// Restore context

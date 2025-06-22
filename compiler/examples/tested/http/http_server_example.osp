@@ -3,13 +3,136 @@
 
 print("=== Comprehensive HTTP API Test ===")
 
+// Define HTTP request handler function
+// This function receives HTTP requests from the C runtime and returns HttpResponse
+fn handleHttpRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = match method {
+    "GET" => match path {
+        "/api/users" => HttpResponse {
+            status: 200,
+            headers: "Content-Type: application/json",
+            contentType: "application/json", 
+            contentLength: 78,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"users\": [{\"id\": 1, \"name\": \"Alice\"}, {\"id\": 2, \"name\": \"Bob\"}]}",
+            partialLength: 78
+        }
+        "/health" => HttpResponse {
+            status: 200,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 58,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"status\": \"ok\", \"timestamp\": \"2025-01-15T10:30:00Z\"}",
+            partialLength: 58
+        }
+        _ => HttpResponse {
+            status: 404,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 25,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"error\": \"Not found\"}",
+            partialLength: 25
+        }
+    }
+    "POST" => match path {
+        "/api/users" => HttpResponse {
+            status: 201,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 80,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"id\": 3, \"name\": \"New User\", \"message\": \"User created successfully\"}",
+            partialLength: 80
+        }
+        "/api/auth/login" => HttpResponse {
+            status: 200,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 73,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"token\": \"abc123xyz\", \"expires\": \"2025-01-16T10:30:00Z\"}",
+            partialLength: 73
+        }
+        _ => HttpResponse {
+            status: 404,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 25,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"error\": \"Not found\"}",
+            partialLength: 25
+        }
+    }
+    "PUT" => match path {
+        "/api/users/1" => HttpResponse {
+            status: 200,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 85,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"id\": 1, \"name\": \"Alice Updated\", \"message\": \"User updated successfully\"}",
+            partialLength: 85
+        }
+        _ => HttpResponse {
+            status: 404,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 25,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"error\": \"Not found\"}",
+            partialLength: 25
+        }
+    }
+    "DELETE" => match path {
+        "/api/users/1" => HttpResponse {
+            status: 200,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 47,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"message\": \"User deleted successfully\"}",
+            partialLength: 47
+        }
+        _ => HttpResponse {
+            status: 404,
+            headers: "Content-Type: application/json",
+            contentType: "application/json",
+            contentLength: 25,
+            streamFd: -1,
+            isComplete: true,
+            partialBody: "{\"error\": \"Not found\"}",
+            partialLength: 25
+        }
+    }
+    _ => HttpResponse {
+        status: 405,
+        headers: "Content-Type: application/json",
+        contentType: "application/json",
+        contentLength: 35,
+        streamFd: -1,
+        isComplete: true,
+        partialBody: "{\"error\": \"Method not allowed\"}",
+        partialLength: 35
+    }
+}
+
 // Start HTTP server
 print("Creating HTTP server on port 8080...")
 let serverId = httpCreateServer(8080, "127.0.0.1")
 print("Server created with ID: ${serverId}")
 
-print("Starting server listener...")
-let listenResult = httpListen(serverId, 1)
+print("Starting server listener with callback handler...")
+let listenResult = httpListen(serverId, handleHttpRequest)
 print("Server listening on http://127.0.0.1:8080")
 
 // Create HTTP client
@@ -22,37 +145,54 @@ print("=== Testing HTTP Methods ===")
 
 // Test GET request
 print("GET /api/users")
-let getResult = httpGet(clientId, "/api/users", "Accept: application/json")
-print("GET status: ${getResult}")
+let getUsersResult = httpGet(clientId, "/api/users", "")
+print("GET /api/users result: ${getUsersResult}")
 
-// Test POST request (create)
+print("GET /health")
+let getHealthResult = httpGet(clientId, "/health", "")
+print("GET /health result: ${getHealthResult}")
+
+// Test POST request
 print("POST /api/users")
-let postResult = httpPost(clientId, "/api/users", "{\"name\": \"Alice\", \"email\": \"alice@example.com\"}", "Content-Type: application/json")
-print("POST status: ${postResult}")
+let createUserData = "{\"name\": \"Charlie\", \"email\": \"charlie@example.com\"}"
+let postResult = httpPost(clientId, "/api/users", createUserData, "Content-Type: application/json")
+print("POST /api/users result: ${postResult}")
 
-// Test PUT request (update)
+print("POST /api/auth/login")
+let loginData = "{\"username\": \"admin\", \"password\": \"secret\"}"
+let loginResult = httpPost(clientId, "/api/auth/login", loginData, "Content-Type: application/json")
+print("POST /api/auth/login result: ${loginResult}")
+
+// Test PUT request
 print("PUT /api/users/1")
-let putResult = httpPut(clientId, "/api/users/1", "{\"name\": \"Alice Updated\", \"email\": \"alice.updated@example.com\"}", "Content-Type: application/json")
-print("PUT status: ${putResult}")
+let updateUserData = "{\"name\": \"Alice Smith\", \"email\": \"alice.smith@example.com\"}"
+let putResult = httpPut(clientId, "/api/users/1", updateUserData, "Content-Type: application/json")
+print("PUT /api/users/1 result: ${putResult}")
 
 // Test DELETE request
 print("DELETE /api/users/1")
-let deleteResult = httpDelete(clientId, "/api/users/1", "Authorization: Bearer token123")
-print("DELETE status: ${deleteResult}")
+let deleteResult = httpDelete(clientId, "/api/users/1", "")
+print("DELETE /api/users/1 result: ${deleteResult}")
 
-// Test additional endpoints
-print("=== Testing Additional Endpoints ===")
+// Test non-existent endpoints
+print("=== Testing Error Cases ===")
+print("GET /nonexistent")
+let notFoundResult = httpGet(clientId, "/nonexistent", "")
+print("GET /nonexistent result: ${notFoundResult}")
 
-print("GET /health")
-let healthResult = httpGet(clientId, "/health", "")
-print("Health check status: ${healthResult}")
+// 🚀 FIBER-BASED KEEP-ALIVE SYSTEM - Modern Server Lifecycle Management
+print("=== Server Keep-Alive Test ===")
+print("🌐 Server now accepting external connections...")
+print("💡 Test with: curl http://127.0.0.1:8080/api/users")
+print("💡 Test with: curl http://127.0.0.1:8080/health") 
+print("⏰ Server will stay alive for 3 seconds...")
 
-print("POST /api/auth/login")
-let loginResult = httpPost(clientId, "/api/auth/login", "{\"username\": \"admin\", \"password\": \"secret\"}", "Content-Type: application/json")
-print("Login status: ${loginResult}")
+// Keep server alive for external testing  
+sleep(3000)  // 3 seconds for external clients
 
-// Stop server
-print("Stopping server...")
+print("🛑 Initiating graceful server shutdown...")
+
+// Clean up server resources
 let stopResult = httpStopServer(serverId)
 print("Server stopped with result: ${stopResult}")
 

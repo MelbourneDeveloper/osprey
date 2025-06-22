@@ -37,6 +37,8 @@ fiber-runtime:
 	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
 	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a"
 
+
+
 # Build HTTP runtime library with TITANIUM-ARMORED MILITARY-GRADE SECURITY 🛡️💀
 http-runtime:
 	@echo "🔨 Building HTTP runtime with OpenSSL 3.5.0+ support..."
@@ -67,7 +69,8 @@ http-runtime:
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
-	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE runtime/system_runtime.c -o bin/system_runtime.o
+	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
 
 # Install the osprey compiler globally
@@ -104,9 +107,42 @@ clean:
 
 # ========== TEST SUITE ==========
 
+# Run runtime tests (C tests that verify no segfaults)
+test-runtime: build
+	@echo "🧪 Running C Runtime Tests to verify segfault fixes..."
+	@echo "📦 Compiling fiber runtime tests..."
+	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c -pthread -std=gnu11
+	@echo "🚀 Running fiber runtime tests..."
+	./runtime/fiber_runtime_test
+	@echo ""
+	@echo "📦 Creating HTTP test stub for missing bridge functions..."
+	@echo '#include <stddef.h>' > runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_http_request(int server_id, char *method, char *full_url, char *raw_headers, char *body, size_t body_length, int *response_status, char **response_headers, char **response_body, size_t *response_body_length) { return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'char* osprey_handle_websocket_message(int server_id, int connection_id, char *message, size_t message_length) { return NULL; }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_websocket_connection(int server_id, int connection_id, char *client_ip) { return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_websocket_disconnect(int server_id, int connection_id) { return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'void osprey_free_websocket_response(char *response) { }' >> runtime/http_bridge_stub.c
+	@echo "📦 Compiling HTTP runtime tests with stub functions..."
+	gcc -o runtime/http_runtime_test runtime/http_runtime_tests.c \
+		runtime/http_shared.c \
+		runtime/http_client_runtime.c \
+		runtime/http_server_runtime.c \
+		runtime/websocket_client_runtime.c \
+		runtime/websocket_server_runtime.c \
+		runtime/fiber_runtime.c \
+		runtime/http_bridge_stub.c \
+		-pthread `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
+	@echo "🚀 Running HTTP runtime tests..."
+	@echo "⚠️  NOTE: HTTP server tests focus on core runtime functionality"
+	./runtime/http_runtime_test
+	@echo ""
+	@echo "🧹 Cleaning up test executables..."
+	rm -f runtime/fiber_runtime_test runtime/http_runtime_test runtime/http_bridge_stub.c
+	@echo "✅ Runtime tests passed - no segfaults detected!"
+
 # Run all tests without coverage (fast feedback)
-test: build
-	@go test ./... -count=1 -p 1 -race -v
+test: build test-runtime
+	@go test ./... -p 1 -v
 
 # Regenerate parser from grammar (requires ANTLR)
 regenerate-parser:

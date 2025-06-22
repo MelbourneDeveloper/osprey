@@ -34,6 +34,8 @@ func (g *LLVMGenerator) createAndStoreFunctionSignature(fnDecl *ast.FunctionDecl
 			returnType = TypeBool
 		case "any":
 			returnType = TypeAny
+		case TypeHTTPResponse:
+			returnType = TypeHTTPResponse
 		default:
 			// Check if it's a user-defined union type
 			if _, exists := g.typeDeclarations[fnDecl.ReturnType.Name]; exists {
@@ -80,19 +82,24 @@ func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration
 
 		// Use explicit parameter type if provided
 		if param.Type != nil {
-			switch param.Type.Name {
-			case TypeString, StringTypeName:
-				paramType = TypeString
-			case TypeInt, IntTypeName:
-				paramType = TypeInt
-			case TypeBool, BoolTypeName:
-				paramType = TypeBool
-			default:
-				// Check if it's a user-defined union type
-				if _, exists := g.typeDeclarations[param.Type.Name]; exists {
-					paramType = TypeInt // Union types are represented as integers
-				} else {
-					paramType = TypeInt // Default fallback
+			// Check if this is a function type
+			if param.Type.IsFunction {
+				paramType = TypeFunction
+			} else {
+				switch param.Type.Name {
+				case TypeString, StringTypeName:
+					paramType = TypeString
+				case TypeInt, IntTypeName:
+					paramType = TypeInt
+				case TypeBool, BoolTypeName:
+					paramType = TypeBool
+				default:
+					// Check if it's a user-defined union type
+					if _, exists := g.typeDeclarations[param.Type.Name]; exists {
+						paramType = TypeInt // Union types are represented as integers
+					} else {
+						paramType = TypeInt // Default fallback
+					}
 				}
 			}
 		} else {
@@ -106,7 +113,7 @@ func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration
 			}
 		}
 
-		llvmParamType := g.getLLVMParameterType(paramType)
+		llvmParamType := g.getLLVMParameterType(paramType, param.Type)
 		params[i] = ir.NewParam(param.Name, llvmParamType)
 	}
 
@@ -114,9 +121,14 @@ func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration
 }
 
 // getLLVMParameterType converts a parameter type string to LLVM type.
-func (g *LLVMGenerator) getLLVMParameterType(paramType string) types.Type {
+func (g *LLVMGenerator) getLLVMParameterType(paramType string, paramTypeExpr *ast.TypeExpression) types.Type {
 	if paramType == TypeString {
 		return types.I8Ptr
+	}
+
+	if paramType == TypeFunction && paramTypeExpr != nil {
+		// Use the type expression to LLVM type conversion for function types
+		return g.typeExpressionToLLVMType(paramTypeExpr)
 	}
 
 	return types.I64
@@ -147,6 +159,13 @@ func (g *LLVMGenerator) getLLVMReturnType(returnType, functionName string) types
 		g.functionReturnTypes[functionName] = TypeAny
 
 		return types.I64 // any types are represented as i64 at LLVM level
+	}
+
+	if returnType == TypeHTTPResponse {
+		g.functionReturnTypes[functionName] = TypeHTTPResponse
+
+		// Return pointer to HttpResponse struct
+		return types.NewPointer(g.typeMap[TypeHTTPResponse])
 	}
 
 	g.functionReturnTypes[functionName] = TypeInt
@@ -181,7 +200,8 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 // CheckProtectedFunction checks if a function name is protected (built-in).
 func CheckProtectedFunction(fnDecl *ast.FunctionDeclaration) error {
 	switch fnDecl.Name {
-	case PrintFunc, InputFunc, RangeFunc, ForEachFunc, MapFunc, FilterFunc, FoldFunc:
+	case PrintFunc, InputFunc, RangeFunc, ForEachFunc, MapFunc, FilterFunc, FoldFunc,
+		LengthFunc, ContainsFunc, SubstringFunc:
 		return WrapBuiltInRedefine(fnDecl.Name)
 	default:
 		return nil

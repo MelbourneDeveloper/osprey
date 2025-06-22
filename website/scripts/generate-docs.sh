@@ -16,6 +16,17 @@ echo "Generating Osprey reference documentation..."
 echo "Building Osprey compiler for local platform..."
 cd "$COMPILER_DIR"
 make clean
+
+# Validate that all built-in functions are documented before generating docs
+echo "🔍 Validating built-in function documentation completeness..."
+if ! go test ./internal/language/descriptions/ -run TestAllBuiltinFunctionsDocumented; then
+    echo "❌ Documentation validation failed!"
+    echo "Some built-in functions are missing documentation."
+    echo "Please add all missing functions to GetBuiltinFunctionDescriptions() in internal/language/descriptions/functions.go"
+    exit 1
+fi
+echo "✅ All built-in functions are documented!"
+
 make build
 
 # Create reference documentation directory

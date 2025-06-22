@@ -1,8 +1,6 @@
 package codegen
 
 import (
-	"strings"
-
 	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/value"
@@ -55,16 +53,6 @@ func (g *LLVMGenerator) CreateAndStoreFunctionSignature(fnDecl *ast.FunctionDecl
 }
 
 // reorderNamedArguments reorders named arguments to match the function's parameter order
-// buildNamedArgumentsExample creates an example of how to call a function with named arguments.
-func (g *LLVMGenerator) buildNamedArgumentsExample(params []string) string {
-	examples := make([]string, len(params))
-	for i, param := range params {
-		examples[i] = param + ": value"
-	}
-
-	return strings.Join(examples, ", ")
-}
-
 func (g *LLVMGenerator) reorderNamedArguments(
 	functionName string,
 	namedArgs []ast.NamedArgument,
@@ -91,6 +79,12 @@ func (g *LLVMGenerator) reorderNamedArguments(
 		namedArg, exists := argMap[paramName]
 		if !exists {
 			return nil, WrapMissingArgument(paramName, functionName)
+		}
+
+		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
+		// This preserves type safety while allowing function composition
+		if err := g.validateFunctionArgument(namedArg.Value, functionName, paramName); err != nil {
+			return nil, err
 		}
 
 		val, err := g.generateExpression(namedArg.Value)

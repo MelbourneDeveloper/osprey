@@ -11,7 +11,7 @@ func TestFiberExamples(t *testing.T) {
 	checkLLVMTools(t)
 
 	examplesDir := "../../examples/tested/fiber"
-	runTestExamples(t, examplesDir, map[string]string{
+	runTestExamplesRecursive(t, examplesDir, map[string]string{
 		"simple_fiber.osp": "=== Simple Fiber ===\n" +
 			"Handling request 1, response code: 1\n" +
 			"Database query returned user data: 123000\n" +

@@ -34,6 +34,22 @@ func GetBuiltinTypeDescriptions() map[string]*BuiltinTypeDesc {
 				"programming but should be used carefully as it bypasses type checking.",
 			Example: `let value: Any = 42\nlet text: Any = "Hello"`,
 		},
+		"HttpResponse": {
+			Name: "HttpResponse",
+			Description: "A built-in type representing an HTTP response with status code, " +
+				"headers, content type, body, and streaming capabilities. Used by HTTP server " +
+				"handlers to return structured responses to clients.",
+			Example: `HttpResponse {` + "\n" +
+				`    status: 200,` + "\n" +
+				`    headers: "Content-Type: application/json",` + "\n" +
+				`    contentType: "application/json",` + "\n" +
+				`    contentLength: 25,` + "\n" +
+				`    streamFd: -1,` + "\n" +
+				`    isComplete: true,` + "\n" +
+				`    partialBody: "{\"message\": \"Hello\"}",` + "\n" +
+				`    partialLength: 25` + "\n" +
+				`}`,
+		},
 	}
 }
 

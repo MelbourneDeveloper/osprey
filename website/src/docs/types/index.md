@@ -14,6 +14,10 @@ A type that can represent any value. Useful for generic programming but should b
 
 A boolean type that can be either true or false. Used for logical operations and conditionals.
 
+## [HttpResponse](httpresponse/)
+
+A built-in type representing an HTTP response with status code, headers, content type, body, and streaming capabilities. Used by HTTP server handlers to return structured responses to clients.
+
 ## [Int](int/)
 
 A 64-bit signed integer type. Can represent whole numbers from -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807.
