@@ -3,13 +3,6 @@
 // Forward declaration of fiber functions
 extern int64_t fiber_spawn(int64_t (*fn)(void));
 
-// Bridge function to call back into Osprey with raw HTTP data
-extern int
-osprey_handle_http_request(int server_id, char *method, char *full_url,
-                           char *raw_headers, char *body, size_t body_length,
-                           int *response_status, char **response_headers,
-                           char **response_body, size_t *response_body_length);
-
 // Thread-safe server context structure
 typedef struct {
   int64_t server_id;
@@ -70,55 +63,40 @@ static int64_t server_loop_fiber(void) {
           body = body_start + 4;
         }
 
-        // Call back into Osprey with raw HTTP data
-        int response_status;
-        char *response_headers = NULL;
-        char *response_body = NULL;
-        size_t response_body_length;
+        // Call the Osprey handler function directly
+        struct HttpResponse *response = NULL;
 
         // Build raw headers string (simplified for now)
         char raw_headers[1024] = "";
 
-        int result = osprey_handle_http_request(
-            1,                    // server_id
-            method,               // method
-            path,                 // full_url (path for now)
-            raw_headers,          // raw_headers
-            body,                 // body
-            strlen(body),         // body_length
-            &response_status,     // response_status
-            &response_headers,    // response_headers
-            &response_body,       // response_body
-            &response_body_length // response_body_length
-        );
+        if (server->handler) {
+          response = server->handler(method, path, raw_headers, body);
+        }
 
         // Build and send HTTP response
         char http_response[8192];
-        if (result == 0 && response_body) {
+        if (response && response->partialBody) {
           // Build proper HTTP response with status and headers
           snprintf(http_response, sizeof(http_response),
                    "HTTP/1.1 %d %s\r\n"
                    "%s"
                    "Connection: close\r\n"
                    "\r\n",
-                   response_status,
-                   (response_status == 200)   ? "OK"
-                   : (response_status == 404) ? "Not Found"
-                   : (response_status == 405) ? "Method Not Allowed"
-                                              : "Error",
-                   response_headers ? response_headers : "");
+                   response->status,
+                   (response->status == 200)   ? "OK"
+                   : (response->status == 404) ? "Not Found"
+                   : (response->status == 405) ? "Method Not Allowed"
+                                               : "Error",
+                   response->headers ? response->headers : "");
 
           // Send headers first
           send(client_fd, http_response, strlen(http_response), 0);
 
           // Send body
-          send(client_fd, response_body, response_body_length, 0);
+          send(client_fd, response->partialBody, response->partialLength, 0);
 
-          // Clean up allocated memory
-          if (response_headers)
-            free(response_headers);
-          if (response_body)
-            free(response_body);
+          // Clean up allocated memory (if needed)
+          // Note: Osprey-allocated memory should be managed by Osprey
         } else {
           // Fallback to simple response
           snprintf(http_response, sizeof(http_response), "%s", simple_response);
@@ -167,7 +145,7 @@ int64_t http_create_server(int64_t port, char *address) {
 }
 
 // Start HTTP server listening - returns 0 on success
-int64_t http_listen(int64_t server_id, int64_t handler) {
+int64_t http_listen(int64_t server_id, HttpRequestHandler handler) {
   pthread_mutex_lock(&runtime_mutex);
   HttpServer *server = servers[server_id];
   pthread_mutex_unlock(&runtime_mutex);
@@ -175,6 +153,9 @@ int64_t http_listen(int64_t server_id, int64_t handler) {
   if (!server) {
     return -1;
   }
+
+  // Store the handler function pointer
+  server->handler = handler;
 
   // Create socket
   server->socket_fd = socket(AF_INET, SOCK_STREAM, 0);

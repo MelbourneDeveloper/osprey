@@ -39,6 +39,22 @@ typedef enum {
   HTTP_OPTIONS = 6
 } HttpMethod;
 
+// HTTP Response structure (matches Osprey HttpResponse type)
+typedef struct HttpResponse {
+  int64_t status;
+  char *headers;
+  char *contentType;
+  int64_t contentLength;
+  int64_t streamFd;
+  bool isComplete;
+  char *partialBody;
+  int64_t partialLength;
+} HttpResponse;
+
+// Function pointer type for HTTP request handlers
+typedef HttpResponse *(*HttpRequestHandler)(char *method, char *path,
+                                            char *headers, char *body);
+
 // HTTP Server structure
 typedef struct {
   int64_t id;
@@ -48,6 +64,7 @@ typedef struct {
   bool is_listening;
   pthread_t server_thread;
   pthread_mutex_t mutex;
+  HttpRequestHandler handler; // Function pointer to Osprey callback
 } HttpServer;
 
 // HTTP Client structure

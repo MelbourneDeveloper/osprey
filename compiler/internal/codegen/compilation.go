@@ -115,6 +115,121 @@ func CompileToExecutable(source, outputPath string) error {
 	})
 }
 
+// buildLibraryPaths builds the search paths for runtime libraries
+func buildLibraryPaths(libName string) []string {
+	paths := []string{
+		fmt.Sprintf("bin/lib%s.a", libName),
+		fmt.Sprintf("./bin/lib%s.a", libName),
+		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
+		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
+		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
+		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
+	}
+
+	// Add working directory based paths
+	if wd, err := os.Getwd(); err == nil {
+		paths = append(paths,
+			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
+		)
+	}
+
+	return paths
+}
+
+// findAndAddLibrary finds a library in the given paths and adds it to linkArgs
+func findAndAddLibrary(libName string, linkArgs []string) []string {
+	paths := buildLibraryPaths(libName)
+	for _, libPath := range paths {
+		if _, err := os.Stat(libPath); err == nil {
+			return append(linkArgs, libPath)
+		}
+	}
+	return linkArgs
+}
+
+// addOpenSSLFlags adds OpenSSL linking flags using pkg-config or platform-specific fallbacks
+func addOpenSSLFlags(linkArgs []string) []string {
+	// Use pkg-config to get proper OpenSSL flags when available
+	cmd := exec.Command("pkg-config", "--libs", "openssl")
+	if output, err := cmd.Output(); err == nil {
+		// Parse pkg-config output and add flags
+		flags := strings.Fields(strings.TrimSpace(string(output)))
+		fmt.Fprintf(os.Stderr, "DEBUG: pkg-config openssl flags: %v\n", flags)
+		return append(linkArgs, flags...)
+	}
+
+	// Fallback to standard OpenSSL flags for different platforms
+	if runtime.GOOS == "darwin" {
+		// macOS with Homebrew OpenSSL
+		return append(linkArgs, "-L/opt/homebrew/lib", "-lssl", "-lcrypto")
+	}
+	// Linux and other systems
+	return append(linkArgs, "-lssl", "-lcrypto")
+}
+
+// checkLibraryAvailability checks if any runtime libraries are available
+func checkLibraryAvailability() (bool, bool) {
+	fiberExists := false
+	httpExists := false
+
+	// Check if any fiber runtime library was found
+	for _, libPath := range buildLibraryPaths("fiber_runtime") {
+		if _, err := os.Stat(libPath); err == nil {
+			fiberExists = true
+			break
+		}
+	}
+
+	// Check if any HTTP runtime library was found
+	for _, libPath := range buildLibraryPaths("http_runtime") {
+		if _, err := os.Stat(libPath); err == nil {
+			httpExists = true
+			break
+		}
+	}
+
+	return fiberExists, httpExists
+}
+
+// tryLinkWithCompilers attempts to link the executable using multiple compiler options
+func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberExists, httpExists bool) error {
+	var clangCommands [][]string
+
+	if fiberExists || httpExists {
+		clangCommands = [][]string{
+			append([]string{"clang"}, linkArgs...),                   // System clang
+			append([]string{"/usr/bin/clang"}, linkArgs...),          // System path clang
+			append([]string{"/opt/homebrew/bin/clang"}, linkArgs...), // Homebrew clang
+			append([]string{"gcc"}, linkArgs...),                     // Fallback to gcc
+		}
+	} else {
+		clangCommands = [][]string{
+			{"clang", "-o", outputPath, objFile},                   // System clang
+			{"/usr/bin/clang", "-o", outputPath, objFile},          // System path clang
+			{"/opt/homebrew/bin/clang", "-o", outputPath, objFile}, // Homebrew clang
+			{"gcc", "-o", outputPath, objFile},                     // Fallback to gcc
+		}
+	}
+
+	var lastErr error
+	for _, cmd := range clangCommands {
+		fmt.Fprintf(os.Stderr, "DEBUG: Trying link command: %v\n", cmd)
+		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
+
+		linkOutput, err := linkCmd.CombinedOutput()
+		if err == nil {
+			return nil // Success!
+		}
+
+		lastErr = fmt.Errorf("failed to link executable with %s: %w\nOutput: %s", cmd[0], err, string(linkOutput))
+	}
+
+	return fmt.Errorf("failed to link executable with any available compiler: %w", lastErr)
+}
+
 // CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.
 func CompileToExecutableWithSecurity(source, outputPath string, security SecurityConfig) error {
 	// Ensure the output directory exists
@@ -151,154 +266,18 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", outputPath, objFile)
 
-	// Look for fiber runtime library - prioritize local builds, then system installs
-	fiberRuntimePaths := []string{
-		"bin/libfiber_runtime.a",
-		"./bin/libfiber_runtime.a",
-		"../../bin/libfiber_runtime.a",    // For tests running from tests/integration
-		"../../../bin/libfiber_runtime.a", // For deeper test directories
-		filepath.Join(filepath.Dir(os.Args[0]), "..", "libfiber_runtime.a"),
-		"/usr/local/lib/libfiber_runtime.a", // System install location
-	}
-
-	// Look for HTTP runtime library - prioritize local builds, then system installs
-	httpRuntimePaths := []string{
-		"bin/libhttp_runtime.a",
-		"./bin/libhttp_runtime.a",
-		"../../bin/libhttp_runtime.a",    // For tests running from tests/integration
-		"../../../bin/libhttp_runtime.a", // For deeper test directories
-		filepath.Join(filepath.Dir(os.Args[0]), "..", "libhttp_runtime.a"),
-		"/usr/local/lib/libhttp_runtime.a", // System install location
-	}
-
-	// Look for HTTP bridge library - prioritize local builds, then system installs
-	bridgeLibraryPaths := []string{
-		"bin/libosprey_bridge.a",
-		"./bin/libosprey_bridge.a",
-		"../../bin/libosprey_bridge.a",    // For tests running from tests/integration
-		"../../../bin/libosprey_bridge.a", // For deeper test directories
-		filepath.Join(filepath.Dir(os.Args[0]), "..", "libosprey_bridge.a"),
-		"/usr/local/lib/libosprey_bridge.a", // System install location
-	}
-
-	// Add working directory based paths
-	if wd, err := os.Getwd(); err == nil {
-		fiberRuntimePaths = append(fiberRuntimePaths,
-			filepath.Join(wd, "bin", "libfiber_runtime.a"),
-			filepath.Join(wd, "..", "bin", "libfiber_runtime.a"),
-			filepath.Join(wd, "..", "..", "bin", "libfiber_runtime.a"),
-			filepath.Join(wd, "..", "..", "..", "bin", "libfiber_runtime.a"), // For test directories
-		)
-		httpRuntimePaths = append(httpRuntimePaths,
-			filepath.Join(wd, "bin", "libhttp_runtime.a"),
-			filepath.Join(wd, "..", "bin", "libhttp_runtime.a"),
-			filepath.Join(wd, "..", "..", "bin", "libhttp_runtime.a"),
-			filepath.Join(wd, "..", "..", "..", "bin", "libhttp_runtime.a"), // For test directories
-		)
-		bridgeLibraryPaths = append(bridgeLibraryPaths,
-			filepath.Join(wd, "bin", "libosprey_bridge.a"),
-			filepath.Join(wd, "..", "bin", "libosprey_bridge.a"),
-			filepath.Join(wd, "..", "..", "bin", "libosprey_bridge.a"),
-			filepath.Join(wd, "..", "..", "..", "bin", "libosprey_bridge.a"), // For test directories
-		)
-	}
-
 	// Find and add runtime libraries
-	for _, libPath := range fiberRuntimePaths {
-		if _, err := os.Stat(libPath); err == nil {
-			linkArgs = append(linkArgs, libPath)
-			break
-		}
-	}
-
-	for _, libPath := range httpRuntimePaths {
-		if _, err := os.Stat(libPath); err == nil {
-			linkArgs = append(linkArgs, libPath)
-			break
-		}
-	}
-
-	for _, libPath := range bridgeLibraryPaths {
-		if _, err := os.Stat(libPath); err == nil {
-			linkArgs = append(linkArgs, libPath)
-			break
-		}
-	}
+	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
+	linkArgs = findAndAddLibrary("http_runtime", linkArgs)
 
 	linkArgs = append(linkArgs, "-lpthread")
 
 	// Add OpenSSL libraries with platform-specific paths
-	// Use pkg-config to get proper OpenSSL flags when available
-	cmd := exec.Command("pkg-config", "--libs", "openssl")
-	if output, err := cmd.Output(); err == nil {
-		// Parse pkg-config output and add flags
-		flags := strings.Fields(strings.TrimSpace(string(output)))
-		fmt.Fprintf(os.Stderr, "DEBUG: pkg-config openssl flags: %v\n", flags)
-		linkArgs = append(linkArgs, flags...)
-	} else {
-		fmt.Fprintf(os.Stderr, "DEBUG: pkg-config failed: %v\n", err)
-		// Fallback to standard OpenSSL flags for different platforms
-		if runtime.GOOS == "darwin" {
-			// macOS with Homebrew OpenSSL
-			linkArgs = append(linkArgs, "-L/opt/homebrew/lib", "-lssl", "-lcrypto")
-		} else {
-			// Linux and other systems
-			linkArgs = append(linkArgs, "-lssl", "-lcrypto")
-		}
-	}
+	linkArgs = addOpenSSLFlags(linkArgs)
 
-	// Try multiple clang options for linking
-	var clangCommands [][]string
-	fiberExists := false
-	httpExists := false
-
-	// Check if any fiber runtime library was found
-	for _, libPath := range fiberRuntimePaths {
-		if _, err := os.Stat(libPath); err == nil {
-			fiberExists = true
-			break
-		}
-	}
-
-	// Check if any HTTP runtime library was found
-	for _, libPath := range httpRuntimePaths {
-		if _, err := os.Stat(libPath); err == nil {
-			httpExists = true
-			break
-		}
-	}
-
-	if fiberExists || httpExists {
-		clangCommands = [][]string{
-			append([]string{"clang"}, linkArgs...),                   // System clang
-			append([]string{"/usr/bin/clang"}, linkArgs...),          // System path clang
-			append([]string{"/opt/homebrew/bin/clang"}, linkArgs...), // Homebrew clang
-			append([]string{"gcc"}, linkArgs...),                     // Fallback to gcc
-		}
-	} else {
-		clangCommands = [][]string{
-			{"clang", "-o", outputPath, objFile},                   // System clang
-			{"/usr/bin/clang", "-o", outputPath, objFile},          // System path clang
-			{"/opt/homebrew/bin/clang", "-o", outputPath, objFile}, // Homebrew clang
-			{"gcc", "-o", outputPath, objFile},                     // Fallback to gcc
-		}
-	}
-
-	var lastErr error
-
-	for _, cmd := range clangCommands {
-		fmt.Fprintf(os.Stderr, "DEBUG: Trying link command: %v\n", cmd)
-		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
-
-		linkOutput, err := linkCmd.CombinedOutput()
-		if err == nil {
-			return nil // Success!
-		}
-
-		lastErr = fmt.Errorf("failed to link executable with %s: %w\nOutput: %s", cmd[0], err, string(linkOutput))
-	}
-
-	return fmt.Errorf("failed to link executable with any available compiler: %w", lastErr)
+	// Check library availability and try linking
+	fiberExists, httpExists := checkLibraryAvailability()
+	return tryLinkWithCompilers(outputPath, objFile, linkArgs, fiberExists, httpExists)
 }
 
 // CompileAndRun compiles and runs source code using smart JIT execution with default (permissive) security.

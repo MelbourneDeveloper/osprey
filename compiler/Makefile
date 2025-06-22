@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime http-bridge
+.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime
 
 # Install golangci-lint
 lint-install:
@@ -37,15 +37,10 @@ fiber-runtime:
 	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
 	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a"
 
-# Build HTTP bridge shared library
-http-bridge:
-	@echo "🌉 Building HTTP bridge shared library..."
-	@mkdir -p bin
-	go build -buildmode=c-archive -o bin/libosprey_bridge.a ./cmd/bridge
-	@echo "✅ HTTP bridge library built: bin/libosprey_bridge.a"
+
 
 # Build HTTP runtime library with TITANIUM-ARMORED MILITARY-GRADE SECURITY 🛡️💀
-http-runtime: http-bridge
+http-runtime:
 	@echo "🔨 Building HTTP runtime with OpenSSL 3.5.0+ support..."
 	@echo "⚠️  DEPLOYING MILITARY-GRADE PROTECTIONS..."
 	@mkdir -p bin
@@ -77,7 +72,6 @@ http-runtime: http-bridge
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE runtime/system_runtime.c -o bin/system_runtime.o
 	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
-	@echo "🌉 HTTP Bridge library available separately: bin/libosprey_bridge.a"
 
 # Install the osprey compiler globally
 install: build
