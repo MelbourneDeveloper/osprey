@@ -16,16 +16,40 @@ description: "Complete reference documentation for the Osprey programming langua
 | Function | Description |
 |----------|-------------|
 | [contains](functions/contains/) | Checks if a string contains a substring. |
+| [extractCode](functions/extractcode/) | Extracts code from a JSON structure. |
 | [filter](functions/filter/) | Filters elements in an iterator based on a predicate function. |
 | [fold](functions/fold/) | Reduces an iterator to a single value using an accumulator function. |
 | [forEach](functions/foreach/) | Applies a function to each element in an iterator. |
+| [httpCloseClient](functions/httpcloseclient/) | Closes the HTTP client and cleans up resources. |
+| [httpCreateClient](functions/httpcreateclient/) | Creates an HTTP client for making requests to a base URL. |
+| [httpCreateServer](functions/httpcreateserver/) | Creates an HTTP server bound to the specified port and address. |
+| [httpDelete](functions/httpdelete/) | Makes an HTTP DELETE request to the specified path. |
+| [httpGet](functions/httpget/) | Makes an HTTP GET request to the specified path. |
+| [httpListen](functions/httplisten/) | Starts the HTTP server listening for requests with a handler function. |
+| [httpPost](functions/httppost/) | Makes an HTTP POST request with a request body. |
+| [httpPut](functions/httpput/) | Makes an HTTP PUT request with a request body. |
+| [httpRequest](functions/httprequest/) | Makes a generic HTTP request with any method. |
+| [httpStopServer](functions/httpstopserver/) | Stops the HTTP server and closes all connections. |
 | [input](functions/input/) | Reads an integer from the user's input. |
 | [length](functions/length/) | Returns the length of a string. |
 | [map](functions/map/) | Transforms each element in an iterator using a function, returning a new iterator. |
+| [parseJSON](functions/parsejson/) | Parses a JSON string and returns the parsed result. |
 | [print](functions/print/) | Prints a value to the console. Automatically converts the value to a string representation. |
 | [range](functions/range/) | Creates an iterator that generates numbers from start to end (exclusive). |
+| [readFile](functions/readfile/) | Reads the entire contents of a file as a string. |
+| [sleep](functions/sleep/) | Pauses execution for the specified number of milliseconds. |
+| [spawnProcess](functions/spawnprocess/) | Spawns an external process and returns the result. Currently supports simple command execution. |
 | [substring](functions/substring/) | Extracts a substring from start to end index. |
 | [toString](functions/tostring/) | Converts a value to its string representation. |
+| [webSocketKeepAlive](functions/websocketkeepalive/) | Keeps the WebSocket server running indefinitely until interrupted. |
+| [websocketClose](functions/websocketclose/) | Closes the WebSocket connection. |
+| [websocketConnect](functions/websocketconnect/) | Establishes a WebSocket connection to the specified URL. |
+| [websocketCreateServer](functions/websocketcreateserver/) | Creates a WebSocket server bound to the specified port, address, and path. |
+| [websocketSend](functions/websocketsend/) | Sends a message through the WebSocket connection. |
+| [websocketServerBroadcast](functions/websocketserverbroadcast/) | Broadcasts a message to all connected WebSocket clients. |
+| [websocketServerListen](functions/websocketserverlisten/) | Starts the WebSocket server listening for connections. |
+| [websocketStopServer](functions/websocketstopserver/) | Stops the WebSocket server and closes all connections. |
+| [writeFile](functions/writefile/) | Writes content to a file. Creates the file if it doesn't exist. |
 
 ## Type Reference
 
