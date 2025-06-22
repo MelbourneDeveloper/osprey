@@ -81,6 +81,12 @@ func (g *LLVMGenerator) reorderNamedArguments(
 			return nil, WrapMissingArgument(paramName, functionName)
 		}
 
+		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
+		// This preserves type safety while allowing function composition
+		if err := g.validateFunctionArgument(namedArg.Value, functionName, paramName); err != nil {
+			return nil, err
+		}
+
 		val, err := g.generateExpression(namedArg.Value)
 		if err != nil {
 			return nil, err

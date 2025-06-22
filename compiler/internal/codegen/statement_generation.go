@@ -203,6 +203,11 @@ func (g *LLVMGenerator) inferCallExpressionType(expr *ast.CallExpression) string
 
 // inferIdentifierType determines the type of an identifier expression.
 func (g *LLVMGenerator) inferIdentifierType(expr *ast.Identifier) string {
+	// Check if it's a function name - this enables function composition
+	if _, exists := g.functions[expr.Name]; exists {
+		return TypeFunction
+	}
+
 	// Check if it's a union variant
 	if _, exists := g.unionVariants[expr.Name]; exists {
 		return g.findUnionTypeForVariant(expr.Name)

@@ -171,6 +171,16 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 		"/usr/local/lib/libhttp_runtime.a", // System install location
 	}
 
+	// Look for HTTP bridge library - prioritize local builds, then system installs
+	bridgeLibraryPaths := []string{
+		"bin/libosprey_bridge.a",
+		"./bin/libosprey_bridge.a",
+		"../../bin/libosprey_bridge.a",    // For tests running from tests/integration
+		"../../../bin/libosprey_bridge.a", // For deeper test directories
+		filepath.Join(filepath.Dir(os.Args[0]), "..", "libosprey_bridge.a"),
+		"/usr/local/lib/libosprey_bridge.a", // System install location
+	}
+
 	// Add working directory based paths
 	if wd, err := os.Getwd(); err == nil {
 		fiberRuntimePaths = append(fiberRuntimePaths,
@@ -185,6 +195,12 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 			filepath.Join(wd, "..", "..", "bin", "libhttp_runtime.a"),
 			filepath.Join(wd, "..", "..", "..", "bin", "libhttp_runtime.a"), // For test directories
 		)
+		bridgeLibraryPaths = append(bridgeLibraryPaths,
+			filepath.Join(wd, "bin", "libosprey_bridge.a"),
+			filepath.Join(wd, "..", "bin", "libosprey_bridge.a"),
+			filepath.Join(wd, "..", "..", "bin", "libosprey_bridge.a"),
+			filepath.Join(wd, "..", "..", "..", "bin", "libosprey_bridge.a"), // For test directories
+		)
 	}
 
 	// Find and add runtime libraries
@@ -196,6 +212,13 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	}
 
 	for _, libPath := range httpRuntimePaths {
+		if _, err := os.Stat(libPath); err == nil {
+			linkArgs = append(linkArgs, libPath)
+			break
+		}
+	}
+
+	for _, libPath := range bridgeLibraryPaths {
 		if _, err := os.Stat(libPath); err == nil {
 			linkArgs = append(linkArgs, libPath)
 			break

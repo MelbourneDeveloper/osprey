@@ -288,13 +288,24 @@ func TestActualCompilationProcess(t *testing.T) {
 
 	// Create a minimal HTTP Osprey file that handles a Result type
 	ospCode := `
+fn handleRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = HttpResponse {
+    status: 200,
+    headers: "Content-Type: text/plain",
+    contentType: "text/plain",
+    contentLength: 12,
+    streamFd: -1,
+    isComplete: true,
+    partialBody: "Hello World!",
+    partialLength: 12
+}
+
 fn main() -> int {
     let server = httpCreateServer(8080, "127.0.0.1")
     print("Server created with ID: ")
     print(toString(server))
     print("\n")
     
-    let result = httpListen(server, 0)
+    let result = httpListen(server, handleRequest)
     print("Listen result: ")
     print(toString(result))
     print("\n")

@@ -530,11 +530,19 @@ func (g *LLVMGenerator) ensureHTTPListenDeclaration() *ir.Func {
 		return fn
 	}
 
-	// int64_t http_listen(int64_t server_id, int64_t handler)
-	// Simple function that takes server ID and handler ID (integer)
+	// int64_t http_listen(int64_t server_id, HttpResponse* (*handler)(char*, char*, char*, char*))
+	// Function that takes server ID and a callback function pointer
+	handlerType := types.NewPointer(types.NewFunc(
+		types.NewPointer(g.typeMap[TypeHTTPResponse]), // Return type: HttpResponse*
+		types.I8Ptr, // method parameter
+		types.I8Ptr, // path parameter
+		types.I8Ptr, // headers parameter
+		types.I8Ptr, // body parameter
+	))
+
 	fn := g.module.NewFunc("http_listen", types.I64,
 		ir.NewParam("server_id", types.I64),
-		ir.NewParam("handler", types.I64))
+		ir.NewParam("handler", handlerType))
 
 	g.functions["http_listen"] = fn
 

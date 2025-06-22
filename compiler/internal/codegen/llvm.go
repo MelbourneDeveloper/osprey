@@ -166,6 +166,11 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	fn *ir.Func,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
+	// VALIDATION: Multi-parameter functions require named arguments
+	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
+		return nil, WrapFunctionRequiresNamed(funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName))
+	}
+
 	// Handle named arguments vs positional arguments
 	if len(callExpr.NamedArguments) > 0 {
 		// Named arguments - need to reorder them to match function signature
@@ -181,6 +186,13 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	args := make([]value.Value, len(callExpr.Arguments))
 
 	for i, arg := range callExpr.Arguments {
+		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
+		// This preserves type safety while allowing function composition
+		paramName := "unknown" // We don't have parameter names for positional args
+		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
+			return nil, err
+		}
+
 		val, err := g.generateExpression(arg)
 		if err != nil {
 			return nil, err
@@ -190,6 +202,18 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	}
 
 	return g.builder.NewCall(fn, args...), nil
+}
+
+// generateNamedArgsSuggestion generates a helpful suggestion for named arguments.
+func (g *LLVMGenerator) generateNamedArgsSuggestion(funcName string) string {
+	if paramNames, exists := g.functionParameters[funcName]; exists {
+		suggestions := make([]string, len(paramNames))
+		for i, paramName := range paramNames {
+			suggestions[i] = paramName + ": value"
+		}
+		return strings.Join(suggestions, ", ")
+	}
+	return "param1: value, param2: value"
 }
 
 // generateFunctionCompositionCall handles calling a function stored in a variable (function composition)
@@ -506,9 +530,11 @@ func (g *LLVMGenerator) generateMatchArmValues(
 
 		// CRITICAL FIX: After generating the expression (which might be a nested match),
 		// the builder might be pointing to a different block. We need to ensure the
-		// branch comes from the correct arm block, not from wherever the builder ended up.
-		armBlocks[i].NewBr(endBlock)
-		predecessorBlocks = append(predecessorBlocks, armBlocks[i])
+		// branch comes from the current builder block (where the expression ended),
+		// not necessarily from the arm block.
+		currentBuilderBlock := g.builder
+		currentBuilderBlock.NewBr(endBlock)
+		predecessorBlocks = append(predecessorBlocks, currentBuilderBlock)
 	}
 
 	return armValues, predecessorBlocks, nil
