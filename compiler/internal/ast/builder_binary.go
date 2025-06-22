@@ -116,7 +116,7 @@ func (b *Builder) wrapInResultType(expr Expression) Expression {
 			if intLit, ok := binExpr.Right.(*IntegerLiteral); ok && intLit.Value == 0 {
 				// Division by zero - return error result
 				return &ResultExpression{
-					Success: false,
+					Success:   false,
 					Value:     &StringLiteral{Value: "Division by zero"},
 					ErrorType: "DivisionByZero",
 				}
@@ -125,7 +125,7 @@ func (b *Builder) wrapInResultType(expr Expression) Expression {
 
 		// Return success result with the arithmetic operation
 		return &ResultExpression{
-			Success: true,
+			Success:   true,
 			Value:     binExpr,
 			ErrorType: "",
 		}

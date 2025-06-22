@@ -218,7 +218,7 @@ func TestCanInferReturnType(t *testing.T) {
 			name: "failed_result_expression",
 			body: &ast.ResultExpression{
 				Success: false,
-				Value:     &ast.StringLiteral{Value: "error"},
+				Value:   &ast.StringLiteral{Value: "error"},
 			},
 			expected: false,
 		},
