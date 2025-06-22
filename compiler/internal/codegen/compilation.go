@@ -266,9 +266,9 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", outputPath, objFile)
 
-	// Find and add runtime libraries
-	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
+	// Find and add runtime libraries (order matters: dependents before dependencies)
 	linkArgs = findAndAddLibrary("http_runtime", linkArgs)
+	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
 
 	linkArgs = append(linkArgs, "-lpthread")
 

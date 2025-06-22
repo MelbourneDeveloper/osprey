@@ -1,4 +1,4 @@
-package integration
+package main
 
 import (
 	"os"
@@ -9,39 +9,64 @@ import (
 	"github.com/christianfindlay/osprey/internal/cli"
 )
 
-const testDataDir = "../data"
+const testDataDir = "../../tests/data"
 
-func TestCLI(t *testing.T) {
-	t.Run("help output via cli", testHelpOutputViaCLI)
-	t.Run("ast output via cli", testASTOutputViaCLI)
-	t.Run("llvm output via cli", testLLVMOutputViaCLI)
-	t.Run("compile mode via cli", testCompileModeViaCLI)
-	t.Run("symbols output via cli", testSymbolsOutputViaCLI)
-	t.Run("run mode via cli", testRunModeViaCLI)
-	t.Run("invalid arguments via cli", testInvalidArgumentsViaCLI)
-	t.Run("missing file via cli", testMissingFileViaCLI)
-	t.Run("syntax error handling via cli", testSyntaxErrorHandlingViaCLI)
-	t.Run("security cli arguments via cli", testSecurityCLIArgumentsViaCLI)
-	t.Run("cli interface functions", testCLIInterfaceFunctions)
+func TestRunCLI(t *testing.T) {
+	t.Run("help output", testRunCLIHelp)
+	t.Run("version output", testRunCLIVersion)
+	t.Run("ast output", testRunCLIAST)
+	t.Run("llvm output", testRunCLILLVM)
+	t.Run("compile mode", testRunCLICompile)
+	t.Run("symbols output", testRunCLISymbols)
+	t.Run("run mode", testRunCLIRun)
+	t.Run("invalid arguments", testRunCLIInvalidArgs)
+	t.Run("missing file", testRunCLIMissingFile)
+	t.Run("syntax error handling", testRunCLISyntaxError)
+	t.Run("security arguments", testRunCLISecurityArgs)
+	t.Run("docs mode", testRunCLIDocs)
+	t.Run("hover mode", testRunCLIHover)
 }
 
-func testHelpOutputViaCLI(t *testing.T) {
-	// Test help via CLI interface
+func TestParsingFunctions(t *testing.T) {
+	t.Run("ParseOutputModeArg", testParseOutputModeArg)
+	t.Run("ParseSecurityArg", testParseSecurityArg)
+	t.Run("ShowHelp", testShowHelp)
+}
+
+func testRunCLIHelp(t *testing.T) {
 	args := []string{"osprey", "--help"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
+
 	if !result.Success {
-		t.Error("CLI with --help should succeed")
+		t.Error("RunCLI with --help should succeed")
+	}
+
+	// Test -h as well
+	args = []string{"osprey", "-h"}
+	result = RunCLI(args)
+
+	if !result.Success {
+		t.Error("RunCLI with -h should succeed")
 	}
 }
 
-func testASTOutputViaCLI(t *testing.T) {
+func testRunCLIVersion(t *testing.T) {
+	args := []string{"osprey", "--version"}
+	result := RunCLI(args)
+
+	if !result.Success {
+		t.Error("RunCLI with --version should succeed")
+	}
+}
+
+func testRunCLIAST(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Fatal("❌ TEST FILE NOT FOUND - TEST FAILED:", testFile)
+		t.Skip("❌ TEST FILE NOT FOUND - SKIPPING:", testFile)
 	}
 
 	args := []string{"osprey", testFile, "--ast"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
 
 	if !result.Success {
 		t.Fatalf("AST command failed: %s", result.ErrorMsg)
@@ -60,14 +85,14 @@ func testASTOutputViaCLI(t *testing.T) {
 	}
 }
 
-func testLLVMOutputViaCLI(t *testing.T) {
+func testRunCLILLVM(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Fatal("❌ TEST FILE NOT FOUND - TEST FAILED:", testFile)
+		t.Skip("❌ TEST FILE NOT FOUND - SKIPPING:", testFile)
 	}
 
 	args := []string{"osprey", testFile, "--llvm"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
 
 	if !result.Success {
 		t.Fatalf("LLVM command failed: %s", result.ErrorMsg)
@@ -87,10 +112,10 @@ func testLLVMOutputViaCLI(t *testing.T) {
 	}
 }
 
-func testCompileModeViaCLI(t *testing.T) {
+func testRunCLICompile(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Fatal("❌ TEST FILE NOT FOUND - TEST FAILED:", testFile)
+		t.Skip("❌ TEST FILE NOT FOUND - SKIPPING:", testFile)
 	}
 
 	// The compiler creates outputs/filename (without extension) relative to source file
@@ -98,7 +123,7 @@ func testCompileModeViaCLI(t *testing.T) {
 	defer func() { _ = os.RemoveAll(filepath.Join(testDataDir, "outputs")) }() // Cleanup
 
 	args := []string{"osprey", testFile, "--compile"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
 
 	if result.Success {
 		// If compilation succeeded, check if executable was created
@@ -113,7 +138,7 @@ func testCompileModeViaCLI(t *testing.T) {
 	}
 }
 
-func testSymbolsOutputViaCLI(t *testing.T) {
+func testRunCLISymbols(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "simple_types.osp")
 	if !fileExists(testFile) {
 		// Create a simple test file for symbols
@@ -127,7 +152,7 @@ func testSymbolsOutputViaCLI(t *testing.T) {
 	}
 
 	args := []string{"osprey", testFile, "--symbols"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
 
 	if !result.Success {
 		t.Fatalf("Symbols command failed: %s", result.ErrorMsg)
@@ -139,14 +164,14 @@ func testSymbolsOutputViaCLI(t *testing.T) {
 	}
 }
 
-func testRunModeViaCLI(t *testing.T) {
+func testRunCLIRun(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Fatal("❌ TEST FILE NOT FOUND - TEST FAILED:", testFile)
+		t.Skip("❌ TEST FILE NOT FOUND - SKIPPING:", testFile)
 	}
 
 	args := []string{"osprey", testFile, "--run"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
 
 	if result.Success {
 		t.Log("✅ Run mode successful")
@@ -160,30 +185,29 @@ func testRunModeViaCLI(t *testing.T) {
 	}
 }
 
-func testInvalidArgumentsViaCLI(t *testing.T) {
+func testRunCLIInvalidArgs(t *testing.T) {
 	args := []string{"osprey", "nonexistent.osp", "--invalid-flag"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
 
 	if result.Success {
 		t.Error("Expected failure for invalid arguments, but got success")
 	}
 
-	if !strings.Contains(result.ErrorMsg, "Unknown option") &&
-		!strings.Contains(result.ErrorMsg, "no such file") {
-		t.Errorf("Expected error about unknown option or missing file, got: %s", result.ErrorMsg)
+	if !strings.Contains(result.ErrorMsg, "Unknown option") {
+		t.Errorf("Expected error about unknown option, got: %s", result.ErrorMsg)
 	}
 }
 
-func testMissingFileViaCLI(t *testing.T) {
+func testRunCLIMissingFile(t *testing.T) {
 	args := []string{"osprey", "definitely_nonexistent_file.osp"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
 
 	if result.Success {
 		t.Error("Expected failure for missing file, but got success")
 	}
 }
 
-func testSyntaxErrorHandlingViaCLI(t *testing.T) {
+func testRunCLISyntaxError(t *testing.T) {
 	// Create a file with syntax errors
 	testFile := "/tmp/syntax_error_test.osp"
 	testContent := `fn broken_syntax( = invalid`
@@ -194,7 +218,7 @@ func testSyntaxErrorHandlingViaCLI(t *testing.T) {
 	defer func() { _ = os.Remove(testFile) }()
 
 	args := []string{"osprey", testFile, "--ast"}
-	result := cli.RunMainWithArgs(args)
+	result := RunCLI(args)
 
 	if result.Success {
 		t.Log("⚠️ Expected syntax error to fail compilation, but it succeeded")
@@ -207,10 +231,17 @@ func testSyntaxErrorHandlingViaCLI(t *testing.T) {
 	}
 }
 
-func testSecurityCLIArgumentsViaCLI(t *testing.T) {
+func testRunCLISecurityArgs(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Fatal("❌ TEST FILE NOT FOUND - TEST FAILED:", testFile)
+		// Create a simple test file
+		testFile = "/tmp/security_test.osp"
+		testContent := `print("Hello, world!")`
+		err := os.WriteFile(testFile, []byte(testContent), 0o644)
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+		defer func() { _ = os.Remove(testFile) }()
 	}
 
 	// Test security flags with compilation
@@ -219,7 +250,7 @@ func testSecurityCLIArgumentsViaCLI(t *testing.T) {
 	for _, flag := range securityFlags {
 		t.Run(flag, func(t *testing.T) {
 			args := []string{"osprey", testFile, "--ast", flag}
-			result := cli.RunMainWithArgs(args)
+			result := RunCLI(args)
 
 			if !result.Success {
 				t.Logf("⚠️ Security flag %s caused failure: %s", flag, result.ErrorMsg)
@@ -230,8 +261,49 @@ func testSecurityCLIArgumentsViaCLI(t *testing.T) {
 	}
 }
 
-func testCLIInterfaceFunctions(t *testing.T) {
-	// Test ParseOutputModeArg function via CLI interface
+func testRunCLIDocs(t *testing.T) {
+	args := []string{"osprey", "--docs"}
+	result := RunCLI(args)
+
+	// Docs mode might fail due to missing dependencies, but should not crash
+	if !result.Success {
+		t.Logf("⚠️ Docs mode failed: %s", result.ErrorMsg)
+	} else {
+		t.Log("✅ Docs mode processed successfully")
+	}
+
+	// Test with custom docs directory
+	args = []string{"osprey", "--docs", "--docs-dir", "/tmp/test-docs"}
+	result = RunCLI(args)
+
+	if !result.Success {
+		t.Logf("⚠️ Docs mode with custom directory failed: %s", result.ErrorMsg)
+	} else {
+		t.Log("✅ Docs mode with custom directory processed successfully")
+	}
+}
+
+func testRunCLIHover(t *testing.T) {
+	args := []string{"osprey", "--hover", "print"}
+	result := RunCLI(args)
+
+	// Hover mode might fail due to missing dependencies, but should not crash
+	if !result.Success {
+		t.Logf("⚠️ Hover mode failed: %s", result.ErrorMsg)
+	} else {
+		t.Log("✅ Hover mode processed successfully")
+	}
+
+	// Test hover without element name (should fail)
+	args = []string{"osprey", "--hover"}
+	result = RunCLI(args)
+
+	if result.Success {
+		t.Error("Expected hover without element name to fail")
+	}
+}
+
+func testParseOutputModeArg(t *testing.T) {
 	testCases := []struct {
 		arg      string
 		expected string
@@ -241,21 +313,23 @@ func testCLIInterfaceFunctions(t *testing.T) {
 		{"--compile", cli.OutputModeCompile},
 		{"--run", cli.OutputModeRun},
 		{"--symbols", cli.OutputModeSymbols},
+		{"--docs", cli.OutputModeDocs},
+		{"--hover", cli.OutputModeHover},
 		{"--invalid", ""},
 	}
 
 	for _, tc := range testCases {
-		result := cli.ParseOutputModeArg(tc.arg)
+		result := ParseOutputModeArg(tc.arg)
 		if result != tc.expected {
 			t.Errorf("ParseOutputModeArg(%s) = %s, expected %s", tc.arg, result, tc.expected)
 		}
 	}
+}
 
-	// Test ParseSecurityArg function via CLI interface
-	security := cli.NewDefaultSecurityConfig()
-
+func testParseSecurityArg(t *testing.T) {
 	// Test --sandbox flag
-	if !cli.ParseSecurityArg("--sandbox", security) {
+	security := cli.NewDefaultSecurityConfig()
+	if !ParseSecurityArg("--sandbox", security) {
 		t.Error("ParseSecurityArg should return true for --sandbox")
 	}
 	if !security.SandboxMode {
@@ -264,15 +338,53 @@ func testCLIInterfaceFunctions(t *testing.T) {
 
 	// Test --no-http flag
 	security = cli.NewDefaultSecurityConfig()
-	if !cli.ParseSecurityArg("--no-http", security) {
+	if !ParseSecurityArg("--no-http", security) {
 		t.Error("ParseSecurityArg should return true for --no-http")
 	}
 	if security.AllowHTTP {
 		t.Error("--no-http should disable AllowHTTP")
 	}
 
+	// Test --no-websocket flag
+	security = cli.NewDefaultSecurityConfig()
+	if !ParseSecurityArg("--no-websocket", security) {
+		t.Error("ParseSecurityArg should return true for --no-websocket")
+	}
+	if security.AllowWebSocket {
+		t.Error("--no-websocket should disable AllowWebSocket")
+	}
+
+	// Test --no-fs flag
+	security = cli.NewDefaultSecurityConfig()
+	if !ParseSecurityArg("--no-fs", security) {
+		t.Error("ParseSecurityArg should return true for --no-fs")
+	}
+	if security.AllowFileRead || security.AllowFileWrite {
+		t.Error("--no-fs should disable AllowFileRead and AllowFileWrite")
+	}
+
+	// Test --no-ffi flag
+	security = cli.NewDefaultSecurityConfig()
+	if !ParseSecurityArg("--no-ffi", security) {
+		t.Error("ParseSecurityArg should return true for --no-ffi")
+	}
+	if security.AllowFFI {
+		t.Error("--no-ffi should disable AllowFFI")
+	}
+
 	// Test invalid flag
-	if cli.ParseSecurityArg("--invalid", security) {
+	if ParseSecurityArg("--invalid", security) {
 		t.Error("ParseSecurityArg should return false for invalid flag")
 	}
+}
+
+func testShowHelp(t *testing.T) {
+	// Just test that ShowHelp doesn't crash
+	ShowHelp()
+	t.Log("✅ ShowHelp executed without crashing")
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
 }

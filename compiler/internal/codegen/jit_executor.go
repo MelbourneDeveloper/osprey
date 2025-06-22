@@ -76,9 +76,9 @@ func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) []string {
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", exeFile, objFile)
 
-	// Find and add runtime libraries
-	linkArgs = j.findAndAddRuntimeLibrary("fiber_runtime", linkArgs)
+	// Find and add runtime libraries (order matters: dependents before dependencies)
 	linkArgs = j.findAndAddRuntimeLibrary("http_runtime", linkArgs)
+	linkArgs = j.findAndAddRuntimeLibrary("fiber_runtime", linkArgs)
 
 	linkArgs = append(linkArgs, "-lpthread")
 
