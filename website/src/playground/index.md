@@ -125,10 +125,70 @@ description: "Try Osprey programming language online with interactive code examp
         font-family: 'Consolas', 'Monaco', monospace;
         white-space: pre-wrap;
         min-height: 0;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        line-height: 1.4;
     }
     
     #output.error {
         color: #f44747;
+        background: #2d1b1b;
+        border-left: 3px solid #f44747;
+    }
+    
+    #output.success {
+        color: #4ec9b0;
+        background: #1b2d1b;
+        border-left: 3px solid #4ec9b0;
+    }
+    
+    #output.warning {
+        color: #ffa500;
+        background: #2d2d1b;
+        border-left: 3px solid #ffa500;
+    }
+    
+    .output-section {
+        margin-bottom: 20px;
+    }
+    
+    .output-section:last-child {
+        margin-bottom: 0;
+    }
+    
+    .output-label {
+        font-size: 12px;
+        text-transform: uppercase;
+        opacity: 0.7;
+        margin-bottom: 8px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    
+    .compiler-output {
+        color: #f44747;
+        background: rgba(244, 71, 71, 0.1);
+        padding: 12px;
+        border-radius: 4px;
+        border-left: 3px solid #f44747;
+        margin-bottom: 12px;
+    }
+    
+    .program-output {
+        color: #4ec9b0;
+        background: rgba(78, 201, 176, 0.1);
+        padding: 12px;
+        border-radius: 4px;
+        border-left: 3px solid #4ec9b0;
+    }
+    
+    .program-output.empty {
+        display: none;
+    }
+    
+    .line-number {
+        color: #569cd6;
+        font-weight: bold;
     }
     
     /* Splitter styles */
@@ -326,7 +386,7 @@ description: "Try Osprey programming language online with interactive code examp
 
 <script>
     let editor;
-    const API_URL = 'https://osprey.fly.dev/api';
+    const API_URL = 'http://localhost:3001';
     
     // Initialize Monaco Editor
     require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
@@ -421,29 +481,75 @@ print("Demo complete!")`,
         const output = document.getElementById('output');
         
         updateStatus('', 'Compiling...');
-        output.textContent = 'Compiling...';
+        output.innerHTML = '<div style="color: #ffa500;">Compiling...</div>';
         
         try {
-            const response = await fetch(`${API_URL}/compile`, {
+            const response = await fetch(`${API_URL}/api/compile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code })
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
             const result = await response.json();
             
-            output.className = result.success ? '' : 'error';
-            output.textContent = result.success ? result.output : result.error;
-            updateStatus('connected', 'Ready');
+            if (!response.ok) {
+                // Handle HTTP errors that still have JSON error details
+                if (result.error) {
+                    output.className = 'error';
+                    output.innerHTML = `<div class="output-section">
+                        <div class="output-label">Compilation Error</div>
+                        <div class="compiler-output">${formatOutput(result.error)}</div>
+                    </div>`;
+                    updateStatus('error', 'Compilation failed');
+                    return;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            }
+            
+            if (result.success) {
+                // Successful compilation
+                output.className = 'success';
+                let outputHtml = '';
+                
+                if (result.compilerOutput && result.compilerOutput.trim()) {
+                    outputHtml += `<div class="output-section">
+                        <div class="output-label">Compiler Messages</div>
+                        <div class="compiler-output">${formatOutput(result.compilerOutput)}</div>
+                    </div>`;
+                }
+                
+                if (result.programOutput && result.programOutput.trim()) {
+                    outputHtml += `<div class="output-section">
+                        <div class="output-label">AST Output</div>
+                        <div class="program-output">${formatOutput(result.programOutput)}</div>
+                    </div>`;
+                } else {
+                    outputHtml += `<div class="output-section">
+                        <div class="output-label">AST Output</div>
+                        <div class="program-output">✅ Compilation successful - no output</div>
+                    </div>`;
+                }
+                
+                output.innerHTML = outputHtml;
+                updateStatus('connected', 'Ready');
+            } else {
+                // Compilation failed
+                output.className = 'error';
+                output.innerHTML = `<div class="output-section">
+                    <div class="output-label">Compilation Error</div>
+                    <div class="compiler-output">${formatOutput(result.error)}</div>
+                </div>`;
+                updateStatus('error', 'Compilation failed');
+            }
             
         } catch (error) {
             output.className = 'error';
-            output.textContent = `Compilation failed: ${error.message}`;
-            updateStatus('error', 'Error');
+            output.innerHTML = `<div class="output-section">
+                <div class="output-label">Network Error</div>
+                <div class="compiler-output">Failed to connect to compiler: ${error.message}</div>
+            </div>`;
+            updateStatus('error', 'Connection failed');
         }
     }
     
@@ -452,34 +558,94 @@ print("Demo complete!")`,
         const output = document.getElementById('output');
         
         updateStatus('', 'Running...');
-        output.textContent = 'Running...';
+        output.innerHTML = '<div style="color: #ffa500;">Compiling and running...</div>';
         
         try {
-            const response = await fetch(`${API_URL}/run`, {
+            const response = await fetch(`${API_URL}/api/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code })
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
             const result = await response.json();
             
-            output.className = result.success ? '' : 'error';
-            output.textContent = result.success ? result.output : result.error;
-            updateStatus('connected', 'Ready');
+            if (!response.ok) {
+                // Handle HTTP errors that still have JSON error details
+                if (result.error) {
+                    output.className = 'error';
+                    output.innerHTML = `<div class="output-section">
+                        <div class="output-label">Execution Error</div>
+                        <div class="compiler-output">${formatOutput(result.error)}</div>
+                    </div>`;
+                    updateStatus('error', 'Execution failed');
+                    return;
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            }
+            
+            if (result.success) {
+                // Successful execution
+                output.className = 'success';
+                let outputHtml = '';
+                
+                if (result.compilerOutput && result.compilerOutput.trim()) {
+                    outputHtml += `<div class="output-section">
+                        <div class="output-label">Compiler Messages</div>
+                        <div class="compiler-output">${formatOutput(result.compilerOutput)}</div>
+                    </div>`;
+                }
+                
+                if (result.programOutput && result.programOutput.trim()) {
+                    outputHtml += `<div class="output-section">
+                        <div class="output-label">Program Output</div>
+                        <div class="program-output">${formatOutput(result.programOutput)}</div>
+                    </div>`;
+                } else {
+                    outputHtml += `<div class="output-section">
+                        <div class="output-label">Program Output</div>
+                        <div class="program-output">✅ Program ran successfully - no output</div>
+                    </div>`;
+                }
+                
+                output.innerHTML = outputHtml;
+                updateStatus('connected', 'Ready');
+            } else {
+                // Execution failed
+                output.className = 'error';
+                output.innerHTML = `<div class="output-section">
+                    <div class="output-label">Execution Error</div>
+                    <div class="compiler-output">${formatOutput(result.error)}</div>
+                </div>`;
+                updateStatus('error', 'Execution failed');
+            }
             
         } catch (error) {
             output.className = 'error';
-            output.textContent = `Execution failed: ${error.message}`;
-            updateStatus('error', 'Error');
+            output.innerHTML = `<div class="output-section">
+                <div class="output-label">Network Error</div>
+                <div class="compiler-output">Failed to connect to compiler: ${error.message}</div>
+            </div>`;
+            updateStatus('error', 'Connection failed');
         }
     }
     
+    function formatOutput(text) {
+        if (!text) return '';
+        
+        // Escape HTML
+        text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        
+        // Highlight line numbers (format: "line X:Y" or "at line X")
+        text = text.replace(/(\b(?:line|Line)\s+)(\d+)([:\s])/g, '$1<span class="line-number">$2</span>$3');
+        text = text.replace(/(\bat line\s+)(\d+)/g, '$1<span class="line-number">$2</span>');
+        text = text.replace(/(\berror at\s+)(\d+)([:\s])/g, '$1<span class="line-number">$2</span>$3');
+        
+        return text;
+    }
+    
     function clearOutput() {
-        document.getElementById('output').textContent = '';
+        document.getElementById('output').innerHTML = '';
         document.getElementById('output').className = '';
     }
     
