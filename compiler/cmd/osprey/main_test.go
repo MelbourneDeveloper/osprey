@@ -193,7 +193,7 @@ func testRunCLIInvalidArgs(t *testing.T) {
 		t.Error("Expected failure for invalid arguments, but got success")
 	}
 
-	if !strings.Contains(result.ErrorMsg, "Unknown option") {
+	if !strings.Contains(result.ErrorMsg, "unknown option") {
 		t.Errorf("Expected error about unknown option, got: %s", result.ErrorMsg)
 	}
 }
