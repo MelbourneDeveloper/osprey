@@ -22,8 +22,10 @@ jobs:
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Deploy to Fly.io
+            - name: Deploy to Fly.io
         working-directory: ./webcompiler
-        run: flyctl deploy --remote-only
+        run: |
+          flyctl launch --no-deploy --copy-config --name osprey-webcompiler --region ord || true
+          flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
