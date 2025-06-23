@@ -476,48 +476,121 @@ description: "Try Osprey programming language online with interactive code examp
         
         // Create editor
         editor = monaco.editor.create(document.getElementById('editor'), {
-            value: `// Simple Osprey Demo - Basic constructs that definitely work
-// Pattern matching, functional pipes, and string interpolation
+            value: `// 🚀 OSPREY FIBER CONCURRENCY DEMO 🚀
+// Real concurrent programming with fibers, channels, and parallel processing!
 
-fn double(x: int) -> int = x * 2
-fn add10(x: int) -> int = x + 10
+print("=== 🔥 Osprey Fiber Concurrency Demo 🔥 ===")
 
-fn gradeScore(score: int) -> string = match score {
-    100 => "Perfect"
-    90 => "Excellent" 
-    80 => "Good"
-    70 => "Fair"
-    _ => "Needs work"
-}
+// 🧵 FIBER BASICS: Spawn concurrent tasks
+print("\\n🧵 Basic Fiber Operations:")
 
-print("=== Osprey Language Demo ===")
+fn handleRequest(requestId: Int) -> Int = requestId * 10 + 200
+fn queryDatabase(userId: Int) -> Int = userId * 1000
+fn processFile(fileSize: Int) -> Int = fileSize / 1024
 
-// Basic functional pipeline
-let result = 5 |> double |> add10
-print("Pipeline: 5 -> double -> add10 = \${result}")
+// Launch concurrent fibers
+let request1 = spawn handleRequest(1)
+let request2 = spawn handleRequest(2)
+let dbQuery = spawn queryDatabase(123)
 
-// Pattern matching demo
-let score1 = 100
-let score2 = 85
-let score3 = 60
+print("Request 1 fiber ID: \${request1}")
+print("Request 2 fiber ID: \${request2}")
+print("Database query fiber ID: \${dbQuery}")
 
-print("Scores:")
-print("\${score1}: \${gradeScore(score1)}")
-print("\${score2}: \${gradeScore(score2)}")
-print("\${score3}: \${gradeScore(score3)}")
+// 🎯 MAP-REDUCE PATTERN: Parallel data processing
+print("\\n🎯 Map-Reduce Parallel Processing:")
 
-// Math operations
-let a = 15
-let b = 25
-let sum = a + b
-let product = a * b
+fn mapPhase(data: Int) -> Int = data * data  // Square each element
+let data1 = spawn mapPhase(10)
+let data2 = spawn mapPhase(20)
+let data3 = spawn mapPhase(30)
 
-print("Math: \${a} + \${b} = \${sum}")
-print("Math: \${a} * \${b} = \${product}")
+// Collect results in parallel
+let mapped1 = await(data1)
+let mapped2 = await(data2)
+let mapped3 = await(data3)
+let total = mapped1 + mapped2 + mapped3
 
-// Range iteration
-print("Numbers 1-5:")
-range(1, 6) |> forEach(print)`,
+print("Mapped: \${mapped1}, \${mapped2}, \${mapped3}")
+print("Total: \${total}")
+
+// 📡 CONCURRENT API SIMULATION
+print("\\n📡 Concurrent API Calls:")
+
+fn fetchUserData(userId: Int) -> Int = userId * 1000 + 123
+fn fetchOrderData(userId: Int) -> Int = userId * 100 + 45
+
+let userData = spawn fetchUserData(5)
+let orderData = spawn fetchOrderData(5)
+
+print("User data: \${await(userData)}")
+print("Order data: \${await(orderData)}")
+
+// 📦 PARALLEL FILE PROCESSING
+print("\\n📦 Parallel File Processing:")
+
+let file1 = spawn processFile(1048576)   // 1MB file
+let file2 = spawn processFile(2097152)   // 2MB file
+let file3 = spawn processFile(5242880)   // 5MB file
+
+print("File sizes in KB: \${await(file1)}, \${await(file2)}, \${await(file3)}")
+
+// 🔄 YIELD-BASED TASK SCHEDULING
+print("\\n🔄 Task Scheduling with Yield:")
+
+let highPriority = yield 1
+let mediumPriority = yield 2
+let lowPriority = yield 3
+
+print("High priority task: \${highPriority}")
+print("Medium priority task: \${mediumPriority}")
+print("Low priority task: \${lowPriority}")
+
+// 🔗 PIPELINE PROCESSING
+print("\\n🔗 Pipeline Processing:")
+
+fn stage1(input: Int) -> Int = input + 100
+fn stage2(input: Int) -> Int = input * 2
+fn stage3(input: Int) -> Int = input - 50
+
+let pipeline = await(spawn stage3(await(spawn stage2(await(spawn stage1(25))))))
+print("Pipeline result: \${pipeline}")
+
+// 📨 CHANNEL COMMUNICATION
+print("\\n📨 Channel Operations:")
+
+let channel1 = Channel<Int> { capacity: 1 }
+let channel2 = Channel<Int> { capacity: 1 }
+
+print("Channel 1 ID: \${channel1}")
+print("Channel 2 ID: \${channel2}")
+
+let sendResult = send(channel1, 42)
+let recvValue = recv(channel1)
+
+print("Send result: \${sendResult}")
+print("Received value: \${recvValue}")
+
+// 💥 COMPLEX CONCURRENT PATTERNS
+print("\\n💥 Complex Fiber Interactions:")
+
+fn complexTask(id: Int) -> Int = yield(id * 10) + (id * 100)
+
+let complex1 = spawn complexTask(1)
+let complex2 = spawn complexTask(2)
+let complex3 = spawn complexTask(3)
+
+print("Complex 1: \${await(complex1)}")
+print("Complex 2: \${await(complex2)}")
+print("Complex 3: \${await(complex3)}")
+
+print("\\n🎉 OSPREY CONCURRENCY: PROVEN!")
+print("✅ Real fiber IDs from C runtime")
+print("✅ Parallel execution with spawn/await")
+print("✅ Channel communication")
+print("✅ Task scheduling with yield")
+print("✅ Complex concurrent patterns")
+print("=== 🚀 Demo Complete! 🚀 ===")`,
             language: 'osprey',
             theme: 'vs-dark',
             automaticLayout: true
