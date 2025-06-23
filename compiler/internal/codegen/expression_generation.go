@@ -165,7 +165,12 @@ func (g *LLVMGenerator) generateChannelOrUnsupportedExpression(expr ast.Expressi
 
 // generateUnsupportedExpression handles unsupported expression types.
 func (g *LLVMGenerator) generateUnsupportedExpression(expr ast.Expression) (value.Value, error) {
-	return nil, WrapUnsupportedExpression(expr)
+	switch e := expr.(type) {
+	case *ast.LoopExpression:
+		return g.generateLoopExpression(e)
+	default:
+		return nil, WrapUnsupportedExpression(expr)
+	}
 }
 
 // generateLiteralExpression handles all literal types.
@@ -767,6 +772,64 @@ func (g *LLVMGenerator) validateBoolConstraint(_ string, _ bool) (bool, error) {
 }
 
 // generateBlockExpression generates LLVM IR for block expressions.
+// generateLoopExpression generates LLVM IR for infinite loops to keep servers alive.
+func (g *LLVMGenerator) generateLoopExpression(loopExpr *ast.LoopExpression) (value.Value, error) {
+	// Create loop blocks
+	loopEntry := g.function.NewBlock("loop_entry")
+	loopBody := g.function.NewBlock("loop_body")
+
+	// Jump to loop entry
+	g.builder.NewBr(loopEntry)
+
+	// Set builder to loop entry block
+	g.builder = loopEntry
+
+	// If there's a condition, evaluate it
+	if loopExpr.Condition != nil {
+		condition, err := g.generateExpression(*loopExpr.Condition)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create exit block for conditional loops
+		loopExit := g.function.NewBlock("loop_exit")
+
+		// Branch based on condition
+		cmp := g.builder.NewICmp(enum.IPredNE, condition, constant.NewInt(types.I64, 0))
+		g.builder.NewCondBr(cmp, loopBody, loopExit)
+
+		// Set insert point to exit block (for code after loop)
+		g.builder = loopExit
+
+		// For conditional loops, continue with the exit block
+		return constant.NewInt(types.I64, 0), nil
+	} else {
+		// Infinite loop - jump directly to body
+		g.builder.NewBr(loopBody)
+
+		// Generate loop body
+		g.builder = loopBody
+
+		// Generate body statements if any
+		for _, stmt := range loopExpr.Body.Statements {
+			err := g.generateStatement(stmt)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Jump back to loop entry (infinite loop)
+		g.builder.NewBr(loopEntry)
+
+		// Create unreachable block for code after infinite loop
+		unreachableBlock := g.function.NewBlock("unreachable")
+		g.builder = unreachableBlock
+
+		// Return a dummy value (this code should never execute)
+		return constant.NewInt(types.I64, 0), nil
+	}
+}
+
 func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) (value.Value, error) {
 	// Execute all statements in the block
 	for _, stmt := range blockExpr.Statements {

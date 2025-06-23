@@ -63,12 +63,18 @@ exprStmt        : expr ;
 
 expr
     : matchExpr
+    | loopExpr
     ;
 
 matchExpr
     : MATCH expr LBRACE matchArm+ RBRACE
     | selectExpr
     | binaryExpr
+    ;
+
+loopExpr
+    : LOOP LBRACE blockBody RBRACE              // Infinite loop: loop { ... }
+    | LOOP LPAREN expr RPAREN LBRACE blockBody RBRACE  // Conditional loop: loop(condition) { ... }
     ;
 
 selectExpr

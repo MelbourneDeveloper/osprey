@@ -4962,6 +4962,7 @@ type IExprContext interface {
 
 	// Getter signatures
 	MatchExpr() IMatchExprContext
+	LoopExpr() ILoopExprContext
 
 	// IsExprContext differentiates from other interfaces.
 	IsExprContext()
@@ -5015,6 +5016,22 @@ func (s *ExprContext) MatchExpr() IMatchExprContext {
 	return t.(IMatchExprContext)
 }
 
+func (s *ExprContext) LoopExpr() ILoopExprContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(ILoopExprContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(ILoopExprContext)
+}
+
 func (s *ExprContext) GetRuleContext() antlr.RuleContext {
 	return s
 }
@@ -5042,6 +5059,26 @@ func (p *ospreyParser) Expr() (localctx IExprContext) {
 	{
 		p.SetState(324)
 		p.MatchExpr()
+	}
+
+	switch p.GetTokenStream().LA(1) {
+	case ospreyParserMATCH, ospreyParserFN, ospreyParserSPAWN, ospreyParserYIELD, ospreyParserAWAIT, ospreyParserSEND, ospreyParserRECV, ospreyParserSELECT, ospreyParserTRUE, ospreyParserFALSE, ospreyParserNOT_OP, ospreyParserBAR, ospreyParserLPAREN, ospreyParserLBRACE, ospreyParserLSQUARE, ospreyParserPLUS, ospreyParserMINUS, ospreyParserINT, ospreyParserINTERPOLATED_STRING, ospreyParserSTRING, ospreyParserID:
+		p.EnterOuterAlt(localctx, 1)
+		{
+			p.SetState(319)
+			p.MatchExpr()
+		}
+
+	case ospreyParserLOOP:
+		p.EnterOuterAlt(localctx, 2)
+		{
+			p.SetState(320)
+			p.LoopExpr()
+		}
+
+	default:
+		p.SetError(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
+		goto errorExit
 	}
 
 errorExit:
@@ -5325,6 +5362,239 @@ errorExit:
 	goto errorExit // Trick to prevent compiler error if the label is not used
 }
 
+// ILoopExprContext is an interface to support dynamic dispatch.
+type ILoopExprContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// Getter signatures
+	LOOP() antlr.TerminalNode
+	LBRACE() antlr.TerminalNode
+	BlockBody() IBlockBodyContext
+	RBRACE() antlr.TerminalNode
+	LPAREN() antlr.TerminalNode
+	Expr() IExprContext
+	RPAREN() antlr.TerminalNode
+
+	// IsLoopExprContext differentiates from other interfaces.
+	IsLoopExprContext()
+}
+
+type LoopExprContext struct {
+	antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyLoopExprContext() *LoopExprContext {
+	var p = new(LoopExprContext)
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = ospreyParserRULE_loopExpr
+	return p
+}
+
+func InitEmptyLoopExprContext(p *LoopExprContext) {
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, nil, -1)
+	p.RuleIndex = ospreyParserRULE_loopExpr
+}
+
+func (*LoopExprContext) IsLoopExprContext() {}
+
+func NewLoopExprContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *LoopExprContext {
+	var p = new(LoopExprContext)
+
+	antlr.InitBaseParserRuleContext(&p.BaseParserRuleContext, parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = ospreyParserRULE_loopExpr
+
+	return p
+}
+
+func (s *LoopExprContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *LoopExprContext) LOOP() antlr.TerminalNode {
+	return s.GetToken(ospreyParserLOOP, 0)
+}
+
+func (s *LoopExprContext) LBRACE() antlr.TerminalNode {
+	return s.GetToken(ospreyParserLBRACE, 0)
+}
+
+func (s *LoopExprContext) BlockBody() IBlockBodyContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IBlockBodyContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IBlockBodyContext)
+}
+
+func (s *LoopExprContext) RBRACE() antlr.TerminalNode {
+	return s.GetToken(ospreyParserRBRACE, 0)
+}
+
+func (s *LoopExprContext) LPAREN() antlr.TerminalNode {
+	return s.GetToken(ospreyParserLPAREN, 0)
+}
+
+func (s *LoopExprContext) Expr() IExprContext {
+	var t antlr.RuleContext
+	for _, ctx := range s.GetChildren() {
+		if _, ok := ctx.(IExprContext); ok {
+			t = ctx.(antlr.RuleContext)
+			break
+		}
+	}
+
+	if t == nil {
+		return nil
+	}
+
+	return t.(IExprContext)
+}
+
+func (s *LoopExprContext) RPAREN() antlr.TerminalNode {
+	return s.GetToken(ospreyParserRPAREN, 0)
+}
+
+func (s *LoopExprContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *LoopExprContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *LoopExprContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(ospreyListener); ok {
+		listenerT.EnterLoopExpr(s)
+	}
+}
+
+func (s *LoopExprContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(ospreyListener); ok {
+		listenerT.ExitLoopExpr(s)
+	}
+}
+
+func (p *ospreyParser) LoopExpr() (localctx ILoopExprContext) {
+	localctx = NewLoopExprContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 54, ospreyParserRULE_loopExpr)
+	p.SetState(350)
+	p.GetErrorHandler().Sync(p)
+	if p.HasError() {
+		goto errorExit
+	}
+
+	switch p.GetInterpreter().AdaptivePredict(p.BaseParser, p.GetTokenStream(), 30, p.GetParserRuleContext()) {
+	case 1:
+		p.EnterOuterAlt(localctx, 1)
+		{
+			p.SetState(337)
+			p.Match(ospreyParserLOOP)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(338)
+			p.Match(ospreyParserLBRACE)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(339)
+			p.BlockBody()
+		}
+		{
+			p.SetState(340)
+			p.Match(ospreyParserRBRACE)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+
+	case 2:
+		p.EnterOuterAlt(localctx, 2)
+		{
+			p.SetState(342)
+			p.Match(ospreyParserLOOP)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(343)
+			p.Match(ospreyParserLPAREN)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(344)
+			p.Expr()
+		}
+		{
+			p.SetState(345)
+			p.Match(ospreyParserRPAREN)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(346)
+			p.Match(ospreyParserLBRACE)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+		{
+			p.SetState(347)
+			p.BlockBody()
+		}
+		{
+			p.SetState(348)
+			p.Match(ospreyParserRBRACE)
+			if p.HasError() {
+				// Recognition error - abort rule
+				goto errorExit
+			}
+		}
+
+	case antlr.ATNInvalidAltNumber:
+		goto errorExit
+	}
+
+errorExit:
+	if p.HasError() {
+		v := p.GetError()
+		localctx.SetException(v)
+		p.GetErrorHandler().ReportError(p, v)
+		p.GetErrorHandler().Recover(p, v)
+		p.SetError(nil)
+	}
+	p.ExitRule()
+	return localctx
+	goto errorExit // Trick to prevent compiler error if the label is not used
+}
+
 // ISelectExprContext is an interface to support dynamic dispatch.
 type ISelectExprContext interface {
 	antlr.ParserRuleContext
@@ -5450,7 +5720,7 @@ func (s *SelectExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) SelectExpr() (localctx ISelectExprContext) {
 	localctx = NewSelectExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 54, ospreyParserRULE_selectExpr)
+	p.EnterRule(localctx, 56, ospreyParserRULE_selectExpr)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -5774,7 +6044,7 @@ func (s *BinaryExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) BinaryExpr() (localctx IBinaryExprContext) {
 	localctx = NewBinaryExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 58, ospreyParserRULE_binaryExpr)
+	p.EnterRule(localctx, 60, ospreyParserRULE_binaryExpr)
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(358)
@@ -5964,7 +6234,7 @@ func (s *ComparisonExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) ComparisonExpr() (localctx IComparisonExprContext) {
 	localctx = NewComparisonExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 60, ospreyParserRULE_comparisonExpr)
+	p.EnterRule(localctx, 62, ospreyParserRULE_comparisonExpr)
 	var _la int
 
 	var _alt int
@@ -6156,7 +6426,7 @@ func (s *AddExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) AddExpr() (localctx IAddExprContext) {
 	localctx = NewAddExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 62, ospreyParserRULE_addExpr)
+	p.EnterRule(localctx, 64, ospreyParserRULE_addExpr)
 	var _la int
 
 	var _alt int
@@ -6358,7 +6628,7 @@ func (s *MulExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) MulExpr() (localctx IMulExprContext) {
 	localctx = NewMulExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 64, ospreyParserRULE_mulExpr)
+	p.EnterRule(localctx, 66, ospreyParserRULE_mulExpr)
 	var _la int
 
 	var _alt int
@@ -6524,7 +6794,7 @@ func (s *UnaryExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) UnaryExpr() (localctx IUnaryExprContext) {
 	localctx = NewUnaryExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 66, ospreyParserRULE_unaryExpr)
+	p.EnterRule(localctx, 68, ospreyParserRULE_unaryExpr)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -6685,7 +6955,7 @@ func (s *PipeExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) PipeExpr() (localctx IPipeExprContext) {
 	localctx = NewPipeExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 68, ospreyParserRULE_pipeExpr)
+	p.EnterRule(localctx, 70, ospreyParserRULE_pipeExpr)
 	var _alt int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -6909,7 +7179,7 @@ func (s *CallExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) CallExpr() (localctx ICallExprContext) {
 	localctx = NewCallExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 70, ospreyParserRULE_callExpr)
+	p.EnterRule(localctx, 72, ospreyParserRULE_callExpr)
 	var _la int
 
 	var _alt int
@@ -7279,7 +7549,7 @@ func (s *ArgListContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) ArgList() (localctx IArgListContext) {
 	localctx = NewArgListContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 72, ospreyParserRULE_argList)
+	p.EnterRule(localctx, 74, ospreyParserRULE_argList)
 	var _la int
 
 	p.SetState(442)
@@ -7468,7 +7738,7 @@ func (s *NamedArgListContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) NamedArgList() (localctx INamedArgListContext) {
 	localctx = NewNamedArgListContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 74, ospreyParserRULE_namedArgList)
+	p.EnterRule(localctx, 76, ospreyParserRULE_namedArgList)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -7612,7 +7882,7 @@ func (s *NamedArgContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) NamedArg() (localctx INamedArgContext) {
 	localctx = NewNamedArgContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 76, ospreyParserRULE_namedArg)
+	p.EnterRule(localctx, 78, ospreyParserRULE_namedArg)
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(451)
@@ -8328,7 +8598,7 @@ func (s *TypeConstructorContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) TypeConstructor() (localctx ITypeConstructorContext) {
 	localctx = NewTypeConstructorContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 80, ospreyParserRULE_typeConstructor)
+	p.EnterRule(localctx, 82, ospreyParserRULE_typeConstructor)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -8482,7 +8752,7 @@ func (s *TypeArgsContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) TypeArgs() (localctx ITypeArgsContext) {
 	localctx = NewTypeArgsContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 82, ospreyParserRULE_typeArgs)
+	p.EnterRule(localctx, 84, ospreyParserRULE_typeArgs)
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(504)
@@ -8638,7 +8908,7 @@ func (s *FieldAssignmentsContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) FieldAssignments() (localctx IFieldAssignmentsContext) {
 	localctx = NewFieldAssignmentsContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 84, ospreyParserRULE_fieldAssignments)
+	p.EnterRule(localctx, 86, ospreyParserRULE_fieldAssignments)
 	var _la int
 
 	p.EnterOuterAlt(localctx, 1)
@@ -8782,7 +9052,7 @@ func (s *FieldAssignmentContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) FieldAssignment() (localctx IFieldAssignmentContext) {
 	localctx = NewFieldAssignmentContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 86, ospreyParserRULE_fieldAssignment)
+	p.EnterRule(localctx, 88, ospreyParserRULE_fieldAssignment)
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(516)
@@ -8971,7 +9241,7 @@ func (s *LambdaExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) LambdaExpr() (localctx ILambdaExprContext) {
 	localctx = NewLambdaExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 88, ospreyParserRULE_lambdaExpr)
+	p.EnterRule(localctx, 90, ospreyParserRULE_lambdaExpr)
 	var _la int
 
 	p.SetState(539)
@@ -9218,7 +9488,7 @@ func (s *UpdateExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) UpdateExpr() (localctx IUpdateExprContext) {
 	localctx = NewUpdateExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 90, ospreyParserRULE_updateExpr)
+	p.EnterRule(localctx, 92, ospreyParserRULE_updateExpr)
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(541)
@@ -9356,7 +9626,7 @@ func (s *BlockExprContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *ospreyParser) BlockExpr() (localctx IBlockExprContext) {
 	localctx = NewBlockExprContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 92, ospreyParserRULE_blockExpr)
+	p.EnterRule(localctx, 94, ospreyParserRULE_blockExpr)
 	p.EnterOuterAlt(localctx, 1)
 	{
 		p.SetState(546)

@@ -144,6 +144,7 @@ typeList
 exprStmt
 expr
 matchExpr
+loopExpr
 selectExpr
 selectArm
 binaryExpr
