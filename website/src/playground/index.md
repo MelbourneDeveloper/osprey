@@ -615,7 +615,7 @@ print("=== 🚀 Demo Complete! 🚀 ===")`,
         output.innerHTML = '<div style="color: #ffa500;">Compiling...</div>';
         
         try {
-            const response = await fetch(`${API_URL}/api/compile`, {
+            const response = await fetch(`${API_URL}/compile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code })
@@ -670,7 +670,7 @@ print("=== 🚀 Demo Complete! 🚀 ===")`,
         output.innerHTML = '<div style="color: #ffa500;">Compiling and running...</div>';
         
         try {
-            const response = await fetch(`${API_URL}/api/run`, {
+            const response = await fetch(`${API_URL}/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code })

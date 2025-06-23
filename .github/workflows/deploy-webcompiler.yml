@@ -23,7 +23,7 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io
-        working-directory: ./webcompiler
-        run: flyctl deploy --remote-only
+        run: |
+          flyctl deploy --remote-only --app osprey --config webcompiler/fly.toml
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
