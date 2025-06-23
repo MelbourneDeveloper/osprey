@@ -81,22 +81,13 @@ fn handleHttpRequest(method: string, path: string, headers: string, body: string
 
 
 // Start HTTP server
-print("Creating HTTP server on port ${toString(serverPort)}...")
+print("🚀 Starting Osprey Web Compiler on port ${toString(serverPort)}")
 let serverId = httpCreateServer(serverPort, "127.0.0.1")
-print("Server created with ID: ${toString(serverId)}")
-
-print("Starting server listener with proper handler...")
 let listenResult = httpListen(serverId, handleHttpRequest)
-print("HTTP server listen result: ${toString(listenResult)}")
-print("HTTP server listening on 127.0.0.1:${toString(serverPort)}")
+print("✅ Server listening on http://127.0.0.1:${toString(serverPort)}")
 
-print("✅ Server is LIVE and ready!")
+// Keep server alive
+sleep(30000)
 
-// Keep server alive - in production this would run indefinitely
-// For testing, we'll keep it alive for a reasonable time
-print("⏰ Server will stay alive for 30 seconds for testing...")
-sleep(30000)  // 30 seconds
-
-print("🛑 Shutting down server...")
 let stopResult = httpStopServer(serverId)
-print("✅ Server shutdown complete!")
+print("🛑 Server stopped")

@@ -54,6 +54,7 @@ ID=53
 WS=54
 DOC_COMMENT=55
 COMMENT=56
+LOOP=57
 '|>'=1
 'match'=2
 'fn'=3
