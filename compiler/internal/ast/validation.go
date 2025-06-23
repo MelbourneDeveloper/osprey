@@ -95,7 +95,7 @@ func canInferFromBinaryExpression(e *BinaryExpression) bool {
 
 // canInferFromResultExpression checks if type can be inferred from result expressions.
 func canInferFromResultExpression(e *ResultExpression) bool {
-	if !e.IsSuccess {
+	if !e.Success {
 		return false
 	}
 
@@ -144,7 +144,7 @@ func wouldInferAsAny(body Expression, fn *FunctionDeclaration) bool {
 		return true
 	case *ResultExpression:
 		// For result expressions, check the wrapped value
-		if e.IsSuccess {
+		if e.Success {
 			return wouldInferAsAny(e.Value, fn)
 		}
 
@@ -193,7 +193,7 @@ func analyzeParameterUsage(paramName string, body Expression) ParameterUsage {
 		}
 	case *ResultExpression:
 		// Check if parameter is used in arithmetic within ResultExpression
-		if e.IsSuccess {
+		if e.Success {
 			if binExpr, ok := e.Value.(*BinaryExpression); ok {
 				if containsParameterInArithmetic(paramName, binExpr) {
 					usage.usedInArithmetic = true
@@ -278,7 +278,7 @@ func operandHasExplicitType(operand Expression, fn *FunctionDeclaration) bool {
 		return false
 	case *ResultExpression:
 		// For result expressions, check the wrapped value
-		if e.IsSuccess {
+		if e.Success {
 			return operandHasExplicitType(e.Value, fn)
 		}
 

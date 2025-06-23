@@ -14,13 +14,12 @@ import (
 	"testing"
 
 	"github.com/christianfindlay/osprey/internal/codegen"
-	testutil "github.com/christianfindlay/osprey/tests/util"
 )
 
-// TestMain runs before all tests in this package.
+// TestMain runs before all tests in this package and builds the compiler ONCE.
 func TestMain(m *testing.M) {
-	projectRoot := filepath.Join("..", "..")
-	testutil.CleanAndRebuildAll(projectRoot)
+	// Note: Individual tests now handle their own setup with testSetup(t)
+	// This approach gives better error reporting and isolation
 
 	// Run all tests
 	code := m.Run()
@@ -219,11 +218,24 @@ func TestRustInterop(t *testing.T) {
 	t.Log("✅ All required tools found")
 
 	// Navigate to rust integration directory
-	rustDir := "../../examples/rust_integration"
+	currentDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("❌ FAILED TO GET CURRENT DIR: %v", err)
+	}
+
+	var rustDir string
+	if strings.HasSuffix(currentDir, "tests/integration") {
+		rustDir = "../../examples/rust_integration"
+	} else if strings.HasSuffix(currentDir, "compiler") {
+		rustDir = "examples/rust_integration"
+	} else {
+		// Try to find the examples directory relative to compiler root
+		rustDir = "examples/rust_integration"
+	}
 
 	// Check if directory exists
 	if _, err := os.Stat(rustDir); os.IsNotExist(err) {
-		t.Fatalf("❌ RUST INTEGRATION DIRECTORY NOT FOUND: %s", rustDir)
+		t.Fatalf("❌ RUST INTEGRATION DIRECTORY NOT FOUND: %s (current dir: %s)", rustDir, currentDir)
 	}
 
 	// Clean up any previous build artifacts first
@@ -253,7 +265,7 @@ func TestRustInterop(t *testing.T) {
 
 	// Test the interop by running the demo script
 	t.Log("🚀 Running Rust interop demo...")
-	runCmd := exec.Command("./run.sh")
+	runCmd := exec.Command("bash", "run.sh")
 	runCmd.Dir = rustDir
 	output, err := runCmd.CombinedOutput()
 	if err != nil {

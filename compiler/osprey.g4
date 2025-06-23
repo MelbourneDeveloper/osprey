@@ -52,7 +52,8 @@ booleanExpr     : comparisonExpr ;
 fieldList       : field (COMMA field)* ;
 field           : ID COLON type ;
 
-type            : ID (LT typeList GT)?  // Generic types like Result<String, Error>
+type            : LPAREN typeList? RPAREN ARROW type  // Function types like (Int, String) -> Bool
+                | ID (LT typeList GT)?  // Generic types like Result<String, Error>
                 | ID LSQUARE type RSQUARE  // Array types like [String]
                 | ID ;
 
@@ -134,6 +135,7 @@ primary
     | blockExpr                                   // Block expressions
     | literal                                     // String, number, boolean literals
     | lambdaExpr                                  // Lambda expressions
+    | ID LSQUARE INT RSQUARE                      // List access: list[0] -> Result<T, IndexError>
     | ID                                          // Variable reference
     | LPAREN expr RPAREN                          // Parenthesized expression
     ;
@@ -175,7 +177,11 @@ literal
     | STRING
     | INTERPOLATED_STRING
     | TRUE
-    | FALSE ;
+    | FALSE
+    | listLiteral ;
+
+listLiteral
+    : LSQUARE (expr (COMMA expr)*)? RSQUARE ;
 
 docComment      : DOC_COMMENT+ ;
 
@@ -216,7 +222,6 @@ LET         : 'let';
 MUT         : 'mut';
 IF          : 'if';
 ELSE        : 'else';
-LOOP        : 'loop';
 SPAWN       : 'spawn';
 YIELD       : 'yield';
 AWAIT       : 'await';

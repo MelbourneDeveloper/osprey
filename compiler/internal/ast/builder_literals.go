@@ -25,6 +25,9 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLiteral(ctx.Literal())
 	case ctx.LambdaExpr() != nil:
 		return b.buildLambdaExpr(ctx.LambdaExpr())
+	case ctx.ID() != nil && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
+		// Array indexing: ID[INT]
+		return b.buildListAccess(ctx)
 	case ctx.ID() != nil:
 		return &Identifier{Name: ctx.ID().GetText()}
 	case ctx.Expr(0) != nil:
@@ -76,6 +79,8 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 		return &BooleanLiteral{Value: true}
 	case ctx.FALSE() != nil:
 		return &BooleanLiteral{Value: false}
+	case ctx.ListLiteral() != nil:
+		return b.buildListLiteral(ctx.ListLiteral())
 	}
 
 	return nil
@@ -94,6 +99,45 @@ func (b *Builder) buildInterpolatedString(text string) Expression {
 	}
 
 	return &InterpolatedStringLiteral{Parts: parts}
+}
+
+// buildListLiteral builds a ListLiteral from a list literal context.
+func (b *Builder) buildListLiteral(ctx parser.IListLiteralContext) Expression {
+	if ctx == nil {
+		return nil
+	}
+
+	elements := make([]Expression, 0)
+
+	// Build each expression in the list
+	for _, exprCtx := range ctx.AllExpr() {
+		element := b.buildExpression(exprCtx)
+		if element != nil {
+			elements = append(elements, element)
+		}
+	}
+
+	return &ListLiteral{Elements: elements}
+}
+
+// buildListAccess builds a ListAccessExpression from array indexing syntax.
+func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
+	if ctx == nil || ctx.ID() == nil || ctx.INT() == nil {
+		return nil
+	}
+
+	// Get the list identifier
+	listExpr := &Identifier{Name: ctx.ID().GetText()}
+
+	// Parse the index
+	indexText := ctx.INT().GetText()
+	indexValue, _ := strconv.ParseInt(indexText, 10, 64)
+	indexExpr := &IntegerLiteral{Value: indexValue}
+
+	return &ListAccessExpression{
+		List:  listExpr,
+		Index: indexExpr,
+	}
 }
 
 // buildLambdaExpr builds a LambdaExpression from a lambda context.

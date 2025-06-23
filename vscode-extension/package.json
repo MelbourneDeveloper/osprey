@@ -2,7 +2,7 @@
   "name": "osprey-language-support",
   "displayName": "Osprey Language Support",
   "description": "Syntax highlighting and language server for Osprey programming language",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "christianfindlay",
   "repository": {
     "type": "git",

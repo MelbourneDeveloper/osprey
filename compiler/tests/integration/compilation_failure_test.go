@@ -9,15 +9,14 @@ import (
 	"testing"
 
 	"github.com/christianfindlay/osprey/internal/codegen"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCompilationFailures tests that examples in failscompilation directory fail compilation with expected errors.
 func TestCompilationFailures(t *testing.T) {
 	failsDir := "../../examples/failscompilation"
 	entries, err := os.ReadDir(failsDir)
-	if err != nil {
-		t.Fatalf("Failed to read failscompilation directory: %v", err)
-	}
+	require.NoError(t, err, "Failed to read failscompilation directory: %v", err)
 
 	// YOU ARE NOT ALLOWED TO LET RUNTIME ERRORS APPEAR HERE!!!
 
@@ -25,8 +24,8 @@ func TestCompilationFailures(t *testing.T) {
 	expectedErrors := map[string]string{
 		"match_not_exhaustive.osp":   "match expression not exhaustive: missing patterns: [Blue]",
 		"match_not_exhaustive.ospo":  "match expression not exhaustive: missing patterns: [Blue]",
-		"match_unknown_variant.osp":  "unknown variant in match expression: variant 'Maybe' is not defined in type 'Color'",
-		"match_unknown_variant.ospo": "unknown variant in match expression: variant 'Maybe' is not defined in type 'Color'",
+		"match_unknown_variant.osp":  "unknown variant 'Maybe' in match expression for type 'Color'",
+		"match_unknown_variant.ospo": "unknown variant 'Maybe' in match expression for type 'Color'",
 		"built_in_function_redefinition.osp": "Parameter 'x' in function 'toString' " +
 			"requires explicit type annotation - type cannot be inferred from usage",
 		"built_in_function_redefinition.ospo": "Parameter 'x' in function 'toString' " +
@@ -63,28 +62,23 @@ func TestCompilationFailures(t *testing.T) {
 
 			// Read the file
 			content, err := os.ReadFile(filePath)
-			if err != nil {
-				t.Fatalf("Failed to read %s: %v", filePath, err)
-			}
+			require.NoError(t, err, "Failed to read %s: %v", filePath, err)
 
 			source := string(content)
 
 			// Attempt compilation - this should fail
 			_, err = codegen.CompileToLLVM(source)
 
-			if err == nil {
-				t.Errorf("File %s should have failed compilation but succeeded", entry.Name())
-				return //nolint:nlreturn
-			}
+			require.Error(t, err, "File %s should have failed compilation but succeeded", entry.Name())
 
 			// Check if error message contains expected pattern
 			if expectedPattern, ok := expectedErrors[entry.Name()]; ok {
-				if !strings.Contains(err.Error(), expectedPattern) {
-					t.Errorf("File %s failed compilation but with unexpected error.\nExpected to contain: %s\nActual error: %s",
-						entry.Name(), expectedPattern, err.Error())
-				} else {
-					t.Logf("✓ File %s correctly failed with expected error: %s", entry.Name(), err.Error())
-				}
+				require.Contains(t,
+					err.Error(),
+					expectedPattern,
+					"File %s failed compilation but with unexpected error.\\nExpected to contain: %s\\nActual error: %s",
+					entry.Name(), expectedPattern, err.Error())
+				t.Logf("✓ File %s correctly failed with expected error: %s", entry.Name(), err.Error())
 			} else {
 				// No specific pattern defined, just verify it failed
 				t.Logf("✓ File %s correctly failed compilation: %s", entry.Name(), err.Error())

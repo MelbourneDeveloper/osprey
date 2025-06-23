@@ -17,6 +17,11 @@ type TypeExpression struct {
 	GenericParams []TypeExpression // For generic types like Result<Int, Error>
 	IsArray       bool
 	ArrayElement  *TypeExpression
+
+	// Function type support
+	IsFunction     bool             // true if this is a function type
+	ParameterTypes []TypeExpression // Parameter types for function types
+	ReturnType     *TypeExpression  // Return type for function types
 }
 
 // Parameter represents a function parameter with optional type annotation.
@@ -172,9 +177,9 @@ func (u *UnaryExpression) isExpression() {}
 
 // CallExpression represents a function call (with optional parentheses).
 type CallExpression struct {
-	Function  Expression
-	Arguments []Expression
-	// For named arguments (multi-parameter functions)
+	Function       Expression
+	Arguments      []Expression
+	HasParentheses bool // Whether call uses parentheses
 	NamedArguments []NamedArgument
 }
 
@@ -188,10 +193,10 @@ type NamedArgument struct {
 
 // MethodCallExpression represents method chaining like obj.method().
 type MethodCallExpression struct {
-	Object     Expression
-	MethodName string
-	Arguments  []Expression
-	// For named arguments
+	Object         Expression
+	MethodName     string
+	Arguments      []Expression
+	HasParentheses bool // Whether call uses parentheses
 	NamedArguments []NamedArgument
 }
 
@@ -200,7 +205,7 @@ func (m *MethodCallExpression) isExpression() {}
 // LambdaExpression represents anonymous functions.
 type LambdaExpression struct {
 	Parameters []Parameter     // Updated to support type annotations
-	ReturnType *TypeExpression // Optional return type
+	ReturnType *TypeExpression // Optional return type annotation
 	Body       Expression
 }
 
@@ -214,13 +219,13 @@ type MatchExpression struct {
 
 func (m *MatchExpression) isExpression() {}
 
-// MatchArm represents an arm in a match expression.
+// MatchArm represents a single arm in a match expression.
 type MatchArm struct {
 	Pattern    Pattern
 	Expression Expression
 }
 
-// Pattern represents a pattern in match expressions.
+// Pattern represents a pattern in pattern matching.
 type Pattern struct {
 	Constructor string
 	Variable    string
@@ -229,10 +234,10 @@ type Pattern struct {
 	IsWildcard  bool      // For _ patterns
 }
 
-// ResultExpression represents a result type for arithmetic operations.
+// ResultExpression represents Result<T, E> construction.
 type ResultExpression struct {
-	IsSuccess bool
-	Value     Expression // The actual value for Success, error message for Err
+	Success   bool       // true for Success, false for Error
+	Value     Expression // Value for Success or Error
 	ErrorType string     // Type of error (e.g., "DivisionByZero")
 }
 
@@ -246,7 +251,7 @@ type FieldAccessExpression struct {
 
 func (f *FieldAccessExpression) isExpression() {}
 
-// ModuleAccessExpression represents accessing a member of a module like Module.function.
+// ModuleAccessExpression represents module member access.
 type ModuleAccessExpression struct {
 	ModuleName     string
 	MemberName     string
@@ -278,7 +283,7 @@ type AwaitExpression struct {
 
 func (a *AwaitExpression) isExpression() {}
 
-// YieldExpression represents yielding control to the scheduler.
+// YieldExpression represents yielding in a fiber.
 type YieldExpression struct {
 	Value Expression // Optional value to yield
 }
@@ -293,7 +298,7 @@ type ChannelExpression struct {
 
 func (c *ChannelExpression) isExpression() {}
 
-// ChannelSendExpression represents sending data through a channel.
+// ChannelSendExpression represents sending to a channel.
 type ChannelSendExpression struct {
 	Channel Expression
 	Value   Expression
@@ -301,46 +306,69 @@ type ChannelSendExpression struct {
 
 func (c *ChannelSendExpression) isExpression() {}
 
-// ChannelRecvExpression represents receiving data from a channel.
+// ChannelRecvExpression represents receiving from a channel.
 type ChannelRecvExpression struct {
 	Channel Expression
 }
 
 func (c *ChannelRecvExpression) isExpression() {}
 
-// SelectExpression represents a select statement for channel operations.
+// SelectExpression represents select statements for channel operations.
 type SelectExpression struct {
 	Arms []SelectArm
 }
 
-// ChannelCreateExpression represents creating a channel with capacity.
+func (s *SelectExpression) isExpression() {}
+
+// ChannelCreateExpression represents creating a channel.
 type ChannelCreateExpression struct {
 	Capacity Expression
 }
 
-// TypeConstructorExpression represents generic type construction like TypeName { field: value }.
+func (c *ChannelCreateExpression) isExpression() {}
+
+// TypeConstructorExpression represents type construction.
 type TypeConstructorExpression struct {
 	TypeName string
 	Fields   map[string]Expression
 }
 
-// SelectArm represents a single arm in a select expression.
+func (t *TypeConstructorExpression) isExpression() {}
+
+// SelectArm represents an arm in a select expression.
 type SelectArm struct {
 	Pattern    Pattern
 	Operation  Expression // The channel operation (send/recv)
 	Expression Expression // The result expression
 }
 
-func (s *SelectExpression) isExpression() {}
-
-func (c *ChannelCreateExpression) isExpression() {}
-
-func (t *TypeConstructorExpression) isExpression() {}
-
-// BlockExpression represents a block of statements followed by an optional expression.
+// BlockExpression represents a block with statements and optional return expression.
 type BlockExpression struct {
 	Statements []Statement
 	Expression Expression // Optional return expression
 }
 
 func (b *BlockExpression) isExpression() {}
+
+// ListLiteral represents a list literal like [1, 2, 3].
+type ListLiteral struct {
+	Elements []Expression
+}
+
+func (l *ListLiteral) isExpression() {}
+
+// ListAccessExpression represents safe list access like list[0] -> Result<T, IndexError>.
+type ListAccessExpression struct {
+	List  Expression
+	Index Expression
+}
+
+func (l *ListAccessExpression) isExpression() {}
+
+// UpdateExpression represents non-destructive updates.
+type UpdateExpression struct {
+	Target Expression
+	Fields map[string]Expression
+}
+
+func (u *UpdateExpression) isExpression() {}

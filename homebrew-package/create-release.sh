@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION=${1:-"0.1.0"}
+VERSION=${1:-"0.2.0"}
 echo "Creating release v$VERSION..."
 
 # Build runtime libraries

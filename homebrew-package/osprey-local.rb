@@ -1,7 +1,7 @@
 class OspreyLocal < Formula
   desc "A modern, systems programming language for building networked applications"
   homepage "https://ospreylang.com"
-  version "0.1.0"
+  version "0.2.0"
   license "MIT"
 
   if Hardware::CPU.arm?

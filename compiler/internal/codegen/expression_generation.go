@@ -1,8 +1,10 @@
 package codegen
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
@@ -16,6 +18,12 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
 
 		return g.generateLiteralExpression(expr)
+	case *ast.ListLiteral:
+
+		return g.generateListLiteral(e)
+	case *ast.ListAccessExpression:
+
+		return g.generateListAccess(e)
 	case *ast.InterpolatedStringLiteral:
 
 		return g.generateInterpolatedString(e)
@@ -49,7 +57,62 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 	}
 }
 
-// generateFiberOrModuleExpression handles fiber and module-related expressions.
+func (g *LLVMGenerator) getTypeOfExpression(expr ast.Expression) (string, error) {
+	switch e := expr.(type) {
+	case *ast.StringLiteral:
+		return TypeString, nil
+	case *ast.IntegerLiteral:
+		return TypeInt, nil
+	case *ast.BooleanLiteral:
+		return TypeBool, nil
+	case *ast.Identifier:
+		if varType, ok := g.variableTypes[e.Name]; ok {
+			return varType, nil
+		}
+		// Check for union type variants
+		if _, ok := g.unionVariants[e.Name]; ok {
+			return TypeInt, nil // Variants are i64 discriminants
+		}
+		return "", WrapUndefinedVariable(e.Name)
+	case *ast.CallExpression:
+		if fn, ok := e.Function.(*ast.Identifier); ok {
+			if returnType, ok := g.functionReturnTypes[fn.Name]; ok {
+				return returnType, nil
+			}
+			// It might be a user-defined function
+			if _, ok := g.functions[fn.Name]; ok {
+				if returnType, ok := g.functionReturnTypes[fn.Name]; ok {
+					return returnType, nil
+				}
+				// If not in the map, it might not have been processed yet.
+				// This is a limitation. For now, we'll assume int as a fallback
+				// for user functions not yet in the map.
+				return TypeInt, nil
+			}
+		}
+		return "", WrapUnsupportedExpression(e)
+	case *ast.BinaryExpression:
+		// For simplicity, assuming numeric operations return Int
+		// and comparisons return Bool.
+		switch e.Operator {
+		case "==", "!=", "<", "<=", ">", ">=":
+			return TypeBool, nil
+		default:
+			return TypeInt, nil
+		}
+	case *ast.ResultExpression:
+		// This is tricky. A result type is generic.
+		// For now, let's say it's 'any'
+		return TypeAny, nil
+	case *ast.FieldAccessExpression:
+		// This requires more sophisticated type tracking
+		return TypeAny, nil
+	default:
+		return "", WrapUnsupportedExpression(e)
+	}
+}
+
+// generateFiberOrModuleExpression handles fiber expressions and module access.
 func (g *LLVMGenerator) generateFiberOrModuleExpression(expr ast.Expression) (value.Value, error) {
 	switch e := expr.(type) {
 	case *ast.SpawnExpression:
@@ -156,20 +219,201 @@ func (g *LLVMGenerator) generateStringLiteral(lit *ast.StringLiteral) (value.Val
 // generateBooleanLiteral generates LLVM IR for boolean literals.
 func (g *LLVMGenerator) generateBooleanLiteral(lit *ast.BooleanLiteral) (value.Value, error) {
 	if lit.Value {
-
 		return constant.NewInt(types.I64, 1), nil
 	}
 
 	return constant.NewInt(types.I64, 0), nil
 }
 
+// generateListLiteral generates LLVM IR for list literals like [1, 2, 3] or ["a", "b"].
+func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, error) {
+	// For simplicity, implement arrays as a struct with length and data pointer
+	// Array struct: { i64 length, i8* data }
+
+	numElements := int64(len(lit.Elements))
+	if numElements == 0 {
+		// Empty array
+		arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+		arrayStruct := g.builder.NewAlloca(arrayStructType)
+
+		// Store length = 0
+		lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayStruct,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		g.builder.NewStore(constant.NewInt(types.I64, 0), lengthPtr)
+
+		// Store null data pointer
+		dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayStruct,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+		g.builder.NewStore(constant.NewNull(types.I8Ptr), dataPtr)
+
+		return arrayStruct, nil
+	}
+
+	// Determine element type from first element
+	firstElement := lit.Elements[0]
+	var elementType types.Type
+	var elementSize int64
+
+	switch firstElement.(type) {
+	case *ast.StringLiteral:
+		elementType = types.I8Ptr
+		elementSize = 8 // pointer size
+	default:
+		elementType = types.I64
+		elementSize = 8 // i64 size
+	}
+
+	totalSize := numElements * elementSize
+
+	// Allocate memory for the array data
+	mallocFunc, ok := g.functions["malloc"]
+	if !ok {
+		mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+		g.functions["malloc"] = mallocFunc
+	}
+
+	arrayData := g.builder.NewCall(mallocFunc, constant.NewInt(types.I64, totalSize))
+
+	// Cast to appropriate pointer type
+	arrayPtr := g.builder.NewBitCast(arrayData, types.NewPointer(elementType))
+
+	// Store each element in the array
+	for i, element := range lit.Elements {
+		elementValue, err := g.generateExpression(element)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get pointer to element position
+		elementPtr := g.builder.NewGetElementPtr(elementType, arrayPtr, constant.NewInt(types.I64, int64(i)))
+		g.builder.NewStore(elementValue, elementPtr)
+	}
+
+	// Create array struct { length, data }
+	arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+	arrayStruct := g.builder.NewAlloca(arrayStructType)
+
+	// Store length
+	lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayStruct,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(constant.NewInt(types.I64, numElements), lengthPtr)
+
+	// Store data pointer
+	dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayStruct,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(arrayData, dataPtr)
+
+	return arrayStruct, nil
+}
+
+// generateListAccess generates LLVM IR for array indexing like arr[0].
+func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (value.Value, error) {
+	// Get the array value
+	arrayValue, err := g.generateExpression(access.List)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the index value
+	indexValue, err := g.generateExpression(access.Index)
+	if err != nil {
+		return nil, err
+	}
+
+	// Array access returns a Result<T, IndexError> for safety
+	// First, extract length and data from array struct
+	arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+
+	// Get length
+	lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	length := g.builder.NewLoad(types.I64, lengthPtr)
+
+	// Get data pointer
+	dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	data := g.builder.NewLoad(types.I8Ptr, dataPtr)
+
+	// Bounds check: index >= 0 && index < length
+	zero := constant.NewInt(types.I64, 0)
+	indexValid := g.builder.NewICmp(enum.IPredSGE, indexValue, zero)
+	indexInBounds := g.builder.NewICmp(enum.IPredSLT, indexValue, length)
+	boundsOk := g.builder.NewAnd(indexValid, indexInBounds)
+
+	// Create unique block names to avoid conflicts with multiple array accesses
+	blockSuffix := fmt.Sprintf("_%p", access)
+	successBlock := g.function.NewBlock("array_access_success" + blockSuffix)
+	errorBlock := g.function.NewBlock("array_access_error" + blockSuffix)
+	endBlock := g.function.NewBlock("array_access_end" + blockSuffix)
+
+	// Store current block before branching
+	currentBlock := g.builder
+
+	// Branch based on bounds check
+	currentBlock.NewCondBr(boundsOk, successBlock, errorBlock)
+
+	// Success block: return the element
+	g.builder = successBlock
+
+	// For now, assume string arrays (i8*) - this is a simplification
+	// In a full implementation, we'd need to store type information with the array
+	arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(types.I8Ptr))
+	elementPtr := g.builder.NewGetElementPtr(types.I8Ptr, arrayDataPtr, indexValue)
+	element := g.builder.NewLoad(types.I8Ptr, elementPtr)
+
+	// Create Success result for string
+	resultType := g.getResultType(types.I8Ptr)
+	successResult := g.builder.NewAlloca(resultType)
+
+	// Store element value
+	valuePtr := g.builder.NewGetElementPtr(resultType, successResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(element, valuePtr)
+
+	// Store success discriminant (0)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, successResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
+	// Branch to end block
+	g.builder.NewBr(endBlock)
+
+	// Error block: return index error
+	g.builder = errorBlock
+	errorResult := g.builder.NewAlloca(resultType)
+
+	// Store error value (null string as placeholder)
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, errorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(constant.NewNull(types.I8Ptr), errorValuePtr)
+
+	// Store error discriminant (1)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, errorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr)
+
+	// Branch to end block
+	g.builder.NewBr(endBlock)
+
+	// End block: PHI node to select result
+	g.builder = endBlock
+	phi := endBlock.NewPhi(
+		ir.NewIncoming(successResult, successBlock),
+		ir.NewIncoming(errorResult, errorBlock),
+	)
+
+	return phi, nil
+}
+
 // generateIdentifier generates LLVM IR for identifiers.
 func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, error) {
 	// Check for regular variables first
 	if val, exists := g.variables[ident.Name]; exists {
-		// Check if this variable is of type 'any' - block direct access
+		// Check if this variable is of type 'any'
 		if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeAny {
-			return nil, WrapAnyDirectVariableAccess(ident.Name)
+			// For function composition, we allow accessing 'any' type variables that contain function references
+			// The variable should contain a function pointer that we can use for calls
+			return val, nil
 		}
 
 		return val, nil
@@ -177,8 +421,14 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 
 	// Check for union type variants (constants)
 	if discriminant, exists := g.unionVariants[ident.Name]; exists {
-
 		return constant.NewInt(types.I64, discriminant), nil
+	}
+
+	// Check for function references - new functionality for function composition
+	if fn, exists := g.functions[ident.Name]; exists {
+		// Return the function as a function pointer value
+		// This enables passing functions as arguments to other functions
+		return fn, nil
 	}
 
 	return nil, WrapUndefinedVariable(ident.Name)
@@ -187,23 +437,19 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) (value.Value, error) {
 	// Validate that operands are not of type 'any' for arithmetic operations
 	if err := g.validateNotAnyType(binExpr.Left, AnyOpArithmetic); err != nil {
-
 		return nil, err
 	}
 	if err := g.validateNotAnyType(binExpr.Right, AnyOpArithmetic); err != nil {
-
 		return nil, err
 	}
 
 	left, err := g.generateExpression(binExpr.Left)
 	if err != nil {
-
 		return nil, err
 	}
 
 	right, err := g.generateExpression(binExpr.Right)
 	if err != nil {
-
 		return nil, err
 	}
 
@@ -278,7 +524,6 @@ func (g *LLVMGenerator) generateComparisonOperation(operator string, left, right
 func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) (value.Value, error) {
 	operand, err := g.generateExpression(unaryExpr.Operand)
 	if err != nil {
-
 		return nil, err
 	}
 
@@ -303,7 +548,7 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 }
 
 func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpression) (value.Value, error) {
-	if resultExpr.IsSuccess {
+	if resultExpr.Success {
 		// Generate the actual value
 		return g.generateExpression(resultExpr.Value)
 	}
@@ -315,7 +560,6 @@ func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpressio
 func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpression) (value.Value, error) {
 	// Validate that we're not trying to access fields on 'any' type
 	if err := g.validateNotAnyType(fieldAccess.Object, AnyOpFieldAccess); err != nil {
-
 		return nil, WrapAnyDirectFieldAccess(fieldAccess.FieldName)
 	}
 
@@ -363,14 +607,12 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 	// Handle field access like a.value for other expression types
 	obj, err := g.generateExpression(fieldAccess.Object)
 	if err != nil {
-
 		return nil, err
 	}
 
 	// For .value field access on result types, just return the object itself
 	// since we're using simplified result types where the value IS the result
 	if fieldAccess.FieldName == "value" {
-
 		return obj, nil
 	}
 
@@ -391,10 +633,14 @@ func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallE
 func (g *LLVMGenerator) generateTypeConstructorExpression(
 	typeConstructor *ast.TypeConstructorExpression,
 ) (value.Value, error) {
-	// Look up the type declaration to get constraints
+	// Check if this is a built-in type first
+	if typeConstructor.TypeName == TypeHTTPResponse {
+		return g.generateHTTPResponseConstructor(typeConstructor)
+	}
+
+	// Look up the type declaration to get constraints (for user-defined types)
 	typeDecl, exists := g.typeDeclarations[typeConstructor.TypeName]
 	if !exists {
-
 		return nil, WrapUndefinedType(typeConstructor.TypeName)
 	}
 
@@ -462,7 +708,6 @@ func (g *LLVMGenerator) validateConstraint(
 	// Generate the constraint function call
 	result, err := g.generateCallExpression(callExpr)
 	if err != nil {
-
 		return false, err
 	}
 
@@ -532,11 +777,71 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 
 	// Return the final expression value, or a default value if no expression
 	if blockExpr.Expression != nil {
-
 		return g.generateExpression(blockExpr.Expression)
 	}
 
 	// If no return expression, return a default integer value
 
 	return constant.NewInt(types.I64, 0), nil
+}
+
+// generateHTTPResponseConstructor generates LLVM IR for HttpResponse construction.
+func (g *LLVMGenerator) generateHTTPResponseConstructor(
+	typeConstructor *ast.TypeConstructorExpression,
+) (value.Value, error) {
+	// Get the HttpResponse struct type
+	httpResponseType, exists := g.typeMap[TypeHTTPResponse]
+	if !exists {
+		return nil, WrapUndefinedType(TypeHTTPResponse)
+	}
+
+	// Allocate memory for the HttpResponse struct
+	structPtr := g.builder.NewAlloca(httpResponseType)
+
+	// Define field order and types to match the struct definition
+	fieldInfo := []struct {
+		name      string
+		fieldType types.Type
+	}{
+		{"status", types.I64},        // status: Int
+		{"headers", types.I8Ptr},     // headers: String
+		{"contentType", types.I8Ptr}, // contentType: String
+		{"contentLength", types.I64}, // contentLength: Int
+		{"streamFd", types.I64},      // streamFd: Int
+		{"isComplete", types.I1},     // isComplete: Bool
+		{"partialBody", types.I8Ptr}, // partialBody: String
+		{"partialLength", types.I64}, // partialLength: Int
+	}
+
+	for i, field := range fieldInfo {
+		fieldValue, exists := typeConstructor.Fields[field.name]
+		if !exists {
+			return nil, WrapMissingField(field.name)
+		}
+
+		// Generate the field value
+		value, err := g.generateExpression(fieldValue)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert value to correct type if needed
+		if field.fieldType == types.I1 && value.Type() != types.I1 {
+			// Convert integer to boolean (non-zero = true, zero = false)
+			value = g.builder.NewICmp(enum.IPredNE, value, constant.NewInt(types.I64, 0))
+		}
+
+		// Get pointer to the field
+		fieldPtr := g.builder.NewGetElementPtr(
+			httpResponseType,
+			structPtr,
+			constant.NewInt(types.I32, 0),
+			constant.NewInt(types.I32, int64(i)),
+		)
+
+		// Store the value in the field
+		g.builder.NewStore(value, fieldPtr)
+	}
+
+	return structPtr, nil
 }

@@ -51,7 +51,7 @@ app.get('/api', (req, res) => {
     res.json({
         status: 'ok',
         service: 'osprey-web-compiler',
-        version: '1.0.0',
+        version: '0.2.0',
         timestamp: new Date().toISOString()
     })
 })

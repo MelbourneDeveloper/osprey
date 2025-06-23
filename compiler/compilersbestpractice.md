@@ -144,4 +144,73 @@ Finally, let’s list some **early-stage pitfalls to watch out for** when design
 
 In conclusion, building a compiled FP language is a challenging but rewarding project. By carefully choosing your design battles (purity vs pragmatism, ARC vs GC, etc.) and learning from modern language successes and missteps, you can create a language that is both **elegant and practical**. Remember to iterate, listen to your users (and your compiler’s output), and don’t hesitate to leverage existing technologies like ANTLR, LLVM, and even AI coding assistants to accelerate development. Good luck, and happy language building!
 
-**Sources:** The guidance above draws from a variety of expert and academic sources: insights on macro systems across Lisp, Scheme, and Racket; advice on type inference limitations with subtyping; memory management comparisons between GC and ARC; concurrency models in Haskell’s runtime; and many more references linked inline throughout the text. These references provide further reading and evidence for the best practices and trade-offs discussed.
+Functional programming - Wikipedia
+https://en.wikipedia.org/wiki/Functional_programming
+2
+
+Why are FP devs obsessed with Referential Transparency? - DEV Community
+https://dev.to/zelenya/why-are-fp-devs-obsessed-with-referential-transparency-50cb
+3 4
+
+Purely Functional Languages and Monads – Surely I Am Joking
+https://yinwang0.wordpress.com/2013/11/16/pure-fp-and-monads/
+5 6
+
+microsoft.com
+https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/paper-67.pdf
+7
+
+Algebraic Data Types and Pattern Matching with Java
+https://blog.scottlogic.com/2025/01/20/algebraic-data-types-with-java.html
+10
+
+Tufts: CS 21: Tail Calls
+https://www.cs.tufts.edu/comp/21/notes/tail_calls/index.html
+11 12 13
+
+static typing - What are some options for integrating subtyping with Damas-Hindley-Milner
+inference? - Programming Language Design and Implementation Stack Exchange
+https://langdev.stackexchange.com/questions/1789/what-are-some-options-for-integrating-subtyping-with-damas-hindley-
+milner-infere
+14
+
+When do we need complex type inference? - Programming Language Design and Implementation
+Stack Exchange
+https://langdev.stackexchange.com/questions/2424/when-do-we-need-complex-type-inference
+15 16 17
+
+Should Programming Languages be Safe or Powerful? | Lambda Land
+https://lambdaland.org/posts/2024-11-21_powerful_or_safe_languages/
+13
+18 19 20 21
+
+Control.Concurrent
+https://hackage.haskell.org/package/base-4.21.0.0/docs/Control-Concurrent.html
+22 25 26
+
+swift language - How does garbage collection compare to reference counting? - Software
+Engineering Stack Exchange
+https://softwareengineering.stackexchange.com/questions/285333/how-does-garbage-collection-compare-to-reference-
+counting
+23
+
+FAQ | Nim Programming
+https://nimprogramming.com/docs/faq/
+24
+
+Why do CPython and Swift use ARC instead of a tracing GC? : r/ProgrammingLanguages
+https://www.reddit.com/r/ProgrammingLanguages/comments/1dy1sxu/why_do_cpython_and_swift_use_arc_instead_of_a/
+27
+
+LLVM - Wikipedia
+https://en.wikipedia.org/wiki/LLVM
+28 30 31
+
+optimization - What are the pitfalls of using an existing IR/compiler infrastructure like LLVM? -
+Programming Language Design and Implementation Stack Exchange
+https://langdev.stackexchange.com/questions/1824/what-are-the-pitfalls-of-using-an-existing-ir-compiler-infrastructure-like-
+llvm
+29
+
+Can someone tell me what the advantage of emitting LLVM IR is ...
+https://news.ycombinator.com/item?id=4827166
