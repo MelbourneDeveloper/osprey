@@ -256,18 +256,21 @@ int main() {
 	}
 }
 
-// findLibrary is a helper function to find library.
+// findLibrary is a helper function to find library using the same search logic as the JIT executor.
 func findLibrary(libName string) string {
+	// Use the exact same search paths as the JIT executor
 	possiblePaths := []string{
 		filepath.Join("bin", libName),
 		filepath.Join(".", "bin", libName),
+		"/usr/local/lib/" + libName, // System install location
 	}
 
-	// Add working directory based paths - go up to project root
+	// Add working directory based paths - match JIT executor exactly
 	if wd, err := os.Getwd(); err == nil {
 		possiblePaths = append(possiblePaths,
-			filepath.Join(wd, "..", "..", "bin", libName),
 			filepath.Join(wd, "bin", libName),
+			filepath.Join(wd, "..", "bin", libName),
+			filepath.Join(wd, "..", "..", "bin", libName),
 		)
 	}
 
@@ -354,6 +357,6 @@ fn main() -> int {
 		t.Fatalf("FATAL: ❌ Compilation failed unexpectedly. "+
 			"This test requires successful compilation to verify linking. Error: %v", err)
 	} else {
-		t.Log("✅ Compilation succeeded - OpenSSL linking is working!")
+		t.Log("✅ Compilation succeeded - HTTP runtime linking is working!")
 	}
 }

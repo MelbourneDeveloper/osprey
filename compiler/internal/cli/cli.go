@@ -248,18 +248,20 @@ func runCompileToExecutable(source, filename string) CommandResult {
 }
 
 func runRunProgram(source string) CommandResult {
-	// Notify running program (for test expectations)
-	preMessage := "Running program...\n"
+	fmt.Fprintf(os.Stderr, "Starting compilation...\n")
 
 	if err := codegen.CompileAndRun(source); err != nil {
+		fmt.Fprintf(os.Stderr, "Compilation failed\n")
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Execution failed: %v", err),
 		}
 	}
 
+	fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
+
 	return CommandResult{
-		Output:  preMessage + "Program executed successfully\n",
+		Output:  "",
 		Success: true,
 	}
 }
@@ -1093,21 +1095,23 @@ func runCompileToExecutableWithSecurity(source, filename string, security *Secur
 }
 
 func runRunProgramWithSecurity(source string, security *SecurityConfig) CommandResult {
-	// Notify running program (for test expectations)
-	preMessage := "Running program...\n"
+	fmt.Fprintf(os.Stderr, "Starting compilation...\n")
 
 	// Convert CLI security config to codegen security config
 	codegenSecurity := convertToCodegenSecurity(security)
 
 	if err := codegen.CompileAndRunWithSecurity(source, codegenSecurity); err != nil {
+		fmt.Fprintf(os.Stderr, "Compilation failed\n")
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Execution failed: %v", err),
 		}
 	}
 
+	fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
+
 	return CommandResult{
-		Output:  preMessage + "Program executed successfully\n",
+		Output:  "",
 		Success: true,
 	}
 }

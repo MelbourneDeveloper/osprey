@@ -44,7 +44,8 @@ http-runtime:
 	@echo "🔨 Building HTTP runtime with OpenSSL 3.5.0+ support..."
 	@echo "⚠️  DEPLOYING MILITARY-GRADE PROTECTIONS..."
 	@mkdir -p bin
-	gcc -c -fPIC -O2 \
+	@echo "🔧 Building http_shared.o..."
+	@gcc -c -fPIC -O2 \
 		-D_FORTIFY_SOURCE=2 \
 		-fstack-protector-strong \
 		-Wformat \

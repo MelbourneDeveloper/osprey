@@ -68,10 +68,25 @@ app.post('/api/compile', async (req, res) => {
 
     try {
         const result = await runOspreyCompiler(['--sandbox', '--ast'], code)
-        console.log('✅ Compile success, output length:', result.stdout.length)
-        res.json({ success: true, output: result.stdout })
+
+        if (result.success) {
+            console.log('✅ Compile success, output length:', result.stdout.length)
+            res.status(200).json({
+                success: true,
+                compilerOutput: result.stderr || '',
+                programOutput: result.stdout || '' // AST output goes to stdout
+            })
+        } else {
+            console.error('❌ Compile error, stderr:', result.stderr)
+            res.status(422).json({ // 422 Unprocessable Entity for compilation errors
+                success: false,
+                compilerOutput: result.stderr || '',
+                programOutput: result.stdout || '',
+                error: result.stderr || result.stdout || `Compilation failed with exit code ${result.exitCode}`
+            })
+        }
     } catch (error) {
-        console.error('❌ Compile error:', error.message)
+        console.error('❌ System error:', error.message)
         res.status(500).json({ success: false, error: error.message })
     }
 })
@@ -88,10 +103,40 @@ app.post('/api/run', async (req, res) => {
 
     try {
         const result = await runOspreyCompiler(['--sandbox', '--run'], code)
-        console.log('✅ Run success, output length:', result.stdout.length)
-        res.json({ success: true, output: result.stdout })
+
+        if (result.success) {
+            console.log('✅ Run success')
+            console.log('📊 Compiler output length:', result.stderr?.length || 0)
+            console.log('📋 Program output length:', result.stdout?.length || 0)
+
+            res.status(200).json({
+                success: true,
+                compilerOutput: result.stderr || '',
+                programOutput: result.stdout || ''
+            })
+        } else {
+            console.error('❌ Run failed, stderr:', result.stderr)
+            console.error('❌ Run failed, stdout:', result.stdout)
+
+            // Determine if it's a compilation error or runtime error
+            const errorOutput = result.stderr || result.stdout || '';
+            const isCompilationError = errorOutput.includes('parse errors') ||
+                errorOutput.includes('failed to generate') ||
+                errorOutput.includes('undefined variable') ||
+                errorOutput.includes('syntax error');
+
+            const statusCode = isCompilationError ? 422 : 400; // 422 for compilation, 400 for runtime
+
+            res.status(statusCode).json({
+                success: false,
+                compilerOutput: result.stderr || '',
+                programOutput: result.stdout || '',
+                isCompilationError: isCompilationError,
+                error: errorOutput || `Process failed with exit code ${result.exitCode}`
+            })
+        }
     } catch (error) {
-        console.error('❌ Run error:', error.message)
+        console.error('❌ System error:', error.message)
         res.status(500).json({ success: false, error: error.message })
     }
 })
@@ -114,7 +159,7 @@ function runOspreyCompiler(args, code = '') {
             // Use the osprey binary from PATH (installed in Docker) or fallback to local dev path
             const ospreyPath = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
                 ? 'osprey'
-                : path.resolve(__dirname, '../../compiler/bin/osprey')
+                : path.resolve(__dirname, '../compiler/bin/osprey')
             console.log(`🔨 Running: ${ospreyPath} ${tempFile} ${args.join(' ')}`)
             const child = spawn(ospreyPath, [tempFile, ...args], {
                 stdio: 'pipe',
@@ -133,7 +178,7 @@ function runOspreyCompiler(args, code = '') {
                 stderr += data.toString()
             })
 
-            child.on('close', async (code) => {
+            child.on('close', async (exitCode) => {
                 // Clean up temp file
                 try {
                     await fs.unlink(tempFile)
@@ -142,11 +187,13 @@ function runOspreyCompiler(args, code = '') {
                     console.error('⚠️ Failed to clean up temp file:', e.message)
                 }
 
-                if (code === 0) {
-                    resolve({ stdout, stderr })
-                } else {
-                    reject(new Error(stderr || stdout || `Process exited with code ${code}`))
-                }
+                // Always resolve with the result - let the caller determine success/failure
+                resolve({
+                    exitCode,
+                    stdout,
+                    stderr,
+                    success: exitCode === 0
+                })
             })
 
             child.on('error', async (error) => {

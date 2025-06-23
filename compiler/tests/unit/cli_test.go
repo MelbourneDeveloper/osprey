@@ -97,8 +97,9 @@ func TestRunCommand_Run(t *testing.T) {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
 	}
 
-	if !strings.Contains(result.Output, "Running program") {
-		t.Errorf("Expected run output, got: %s", result.Output)
+	// The output should be empty for successful runs (just the program output)
+	if result.Output != "" {
+		t.Errorf("Expected empty output for successful run, got: %s", result.Output)
 	}
 }
 
@@ -167,8 +168,15 @@ func TestRunCommand_AllModes(t *testing.T) {
 				t.Fatalf("Mode %s failed: %s", mode, result.ErrorMsg)
 			}
 
-			if result.Output == "" {
-				t.Errorf("Mode %s produced no output", mode)
+			// Run mode returns empty output (program output only), other modes should have output
+			if mode == cli.OutputModeRun {
+				if result.Output != "" {
+					t.Errorf("Mode %s should produce empty output, got: %s", mode, result.Output)
+				}
+			} else {
+				if result.Output == "" {
+					t.Errorf("Mode %s produced no output", mode)
+				}
 			}
 		})
 	}

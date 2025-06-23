@@ -105,12 +105,35 @@ fi
 echo "🔍 Checking for race conditions or other specific failures..."
 
 # -----------------------------------------------------------------------------
+# Verify coverage file was created
+# -----------------------------------------------------------------------------
+if [ ! -f coverage.out ]; then
+    echo "❌ Error: coverage.out file was not created"
+    exit 1
+fi
+
+echo "✅ Coverage file created successfully"
+
+# -----------------------------------------------------------------------------
 # Generate & display coverage reports
 # -----------------------------------------------------------------------------
-go tool cover -func=coverage.out | { echo "📈 Coverage Summary:"; cat; }
+echo "📈 Coverage Summary:"
+go tool cover -func=coverage.out
+
+echo "🔧 Generating HTML report…"
 go tool cover -html=coverage.out -o coverage.html
 
-TOTAL_COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
+# -----------------------------------------------------------------------------
+# Extract total coverage with error handling
+# -----------------------------------------------------------------------------
+TOTAL_COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' || echo "unknown")
+
+if [ "$TOTAL_COVERAGE" = "unknown" ]; then
+    echo "⚠️  Warning: Could not extract total coverage percentage"
+    echo "📁 Raw coverage data saved to: coverage.out"
+    echo "📁 HTML report saved to: coverage.html"
+    exit 0
+fi
 
 printf "\n🎯 Total Coverage: %s\n" "$TOTAL_COVERAGE"
 
