@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "toString (Function)"
 description: "Converts a value to its string representation."
 ---

@@ -1,5 +1,5 @@
 ---
-layout: blog
+layout: page.njk
 title: "Building Type-Safe Web APIs with Osprey's Pattern Matching"
 excerpt: "Discover how Osprey's exhaustive pattern matching and algebraic data types eliminate entire classes of runtime errors in web API development, making your services more reliable and maintainable."
 date: 2025-01-10

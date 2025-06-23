@@ -67,31 +67,6 @@ func (g *LLVMGenerator) analyzeBinaryExpressionType(expr *ast.BinaryExpression) 
 	}
 }
 
-// isIdentifierExplicitlyTyped checks if an expression is an explicitly typed identifier or literal.
-//
-//nolint:unused
-func (g *LLVMGenerator) isIdentifierExplicitlyTyped(expr ast.Expression) bool {
-	switch e := expr.(type) {
-	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
-		return true
-	case *ast.Identifier:
-		// Check if it's a parameter with explicit type
-		if g.currentFunctionParameterTypes != nil {
-			if _, exists := g.currentFunctionParameterTypes[e.Name]; exists {
-				return true
-			}
-		}
-		// Check if it's a variable with known type
-		if _, exists := g.variableTypes[e.Name]; exists {
-			return true
-		}
-
-		return false
-	default:
-		return false
-	}
-}
-
 // getOperandType determines the type of an operand in an expression.
 func (g *LLVMGenerator) getOperandType(expr ast.Expression) string {
 	switch e := expr.(type) {
@@ -380,4 +355,24 @@ func (g *LLVMGenerator) validateNotAnyType(expr ast.Expression, operation string
 	}
 
 	return nil
+}
+
+// validateFunctionArgument validates function arguments with strong typing rules.
+// Allows function composition (function types) but prevents 'any' from being passed to non-function parameters.
+func (g *LLVMGenerator) validateFunctionArgument(expr ast.Expression, functionName, paramName string) error {
+	// Only validate if the expression is of type 'any'
+	if !g.isAnyType(expr) {
+		return nil
+	}
+
+	// Check if this is a function reference (for function composition)
+	// If the 'any' variable actually contains a function reference, allow it
+	if ident, ok := expr.(*ast.Identifier); ok {
+		if varType, exists := g.variableTypes[ident.Name]; exists && varType == TypeFunction {
+			return nil // Allow function composition - this is a function reference
+		}
+	}
+
+	// For all other cases, 'any' type is not allowed (strong typing)
+	return WrapAnyDirectFunctionArg(functionName, paramName)
 }

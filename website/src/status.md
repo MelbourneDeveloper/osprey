@@ -1,12 +1,13 @@
 ---
+layout: page.njk
 title: Feature Status
 description: Current implementation status of Osprey language features
-date: 2025-01-17
+date: 2025-06-23
 tags: ["status", "features", "roadmap"]
 author: "Christian Findlay"
 ---
 
-Current version: **0.1.0-alpha** (not yet released)
+Current version: **0.2.0-alpha** (released)
 
 ## ✅ Complete Features
 
@@ -49,6 +50,10 @@ Current version: **0.1.0-alpha** (not yet released)
 
 ### Built-in Functions
 - **I/O**: `print()`, `input()`, `toString()`
+- **String Utilities**: `length()`, `contains()`, `substring()`
+- **File System**: `writeFile()`, `readFile()` (with Result types)
+- **Process Operations**: `spawnProcess()`, `sleep()`
+- **JSON Processing**: `parseJSON()`, `extractCode()`
 - **Functional Iterators**: Complete pipe operator support
 - **Safe Math**: All arithmetic operations return `Result` types
 
@@ -79,4 +84,4 @@ Current version: **0.1.0-alpha** (not yet released)
 
 ---
 
-**Note**: Features marked as complete have working examples in the [`examples/tested/`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tested) directory and pass integration tests. 
+**Note**: Features marked as complete have working examples in the [`examples/tested/`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tested) directory and pass integration tests.

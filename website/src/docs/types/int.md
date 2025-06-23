@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "Int (Type)"
 description: "A 64-bit signed integer type. Can represent whole numbers from -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807."
 ---

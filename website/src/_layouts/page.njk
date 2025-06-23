@@ -1,0 +1,22 @@
+---
+layout: base.njk
+---
+
+<header class="page-header">
+  <div class="container">
+    <h1>{{ title }}</h1>
+    <p class="page-description">{{ description }}</p>
+    <div class="blog-meta">
+      <span class="blog-date">{{ date | readableDate }}</span>
+      <span class="author">By {{ author }}</span>
+    </div>
+  </div>
+</header>
+
+<div class="section">
+    <div class="container">
+        <div class="blog-content">
+            {{ content | safe }}
+        </div>
+    </div>
+</div> 

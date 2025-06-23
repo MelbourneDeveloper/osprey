@@ -1,0 +1,55 @@
+---
+layout: page.njk
+title: Blog
+description: Thoughts and insights on Osprey and modern programming language design
+---
+
+<div class="blog-index">
+  <div class="container">
+
+    <div class="blog-posts">
+      {% if collections.blog.length > 0 %}
+        {% for post in collections.blog %}
+          <article class="card">
+            <div class="card-content">
+              {% if post.data.tags %}
+                <div class="card-tags">
+                  {% for tag in post.data.tags %}
+                    {% if tag != "blog" %}
+                      <span class="tag">{{ tag }}</span>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+              
+              <h2 class="card-title">
+                <a href="{{ post.url }}">{{ post.data.title }}</a>
+              </h2>
+              
+              {% if post.data.excerpt %}
+                <p class="card-excerpt">{{ post.data.excerpt }}</p>
+              {% endif %}
+              
+              <div class="card-meta">
+                <time datetime="{{ post.date | htmlDateString }}">
+                  {{ post.date | readableDate }}
+                </time>
+                {% if post.data.readingTime %}
+                  <span class="reading-time">{{ post.data.readingTime }} min read</span>
+                {% endif %}
+                {% if post.data.author %}
+                  <span class="author">By {{ post.data.author }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </article>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <h3>No posts yet</h3>
+          <p>Check back soon for insights on Osprey and functional programming!</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div> 

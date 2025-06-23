@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "range (Function)"
 description: "Creates an iterator that generates numbers from start to end (exclusive)."
 ---

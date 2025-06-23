@@ -12,12 +12,22 @@ DOCS_DIR="$WEBSITE_DIR/src/docs"
 
 echo "Generating Osprey reference documentation..."
 
-# Build the compiler if it doesn't exist
-if [ ! -f "$COMPILER_DIR/bin/osprey" ]; then
-    echo "Building Osprey compiler..."
-    cd "$COMPILER_DIR"
-    make build
+# Always rebuild the compiler for local platform
+echo "Building Osprey compiler for local platform..."
+cd "$COMPILER_DIR"
+make clean
+
+# Validate that all built-in functions are documented before generating docs
+echo "🔍 Validating built-in function documentation completeness..."
+if ! go test ./internal/language/descriptions/ -run TestAllBuiltinFunctionsDocumented; then
+    echo "❌ Documentation validation failed!"
+    echo "Some built-in functions are missing documentation."
+    echo "Please add all missing functions to GetBuiltinFunctionDescriptions() in internal/language/descriptions/functions.go"
+    exit 1
 fi
+echo "✅ All built-in functions are documented!"
+
+make build
 
 # Create reference documentation directory
 mkdir -p "$DOCS_DIR"

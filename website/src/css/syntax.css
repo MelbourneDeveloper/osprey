@@ -14,12 +14,12 @@ pre[class*="language-"] {
   overflow-x: auto;
   position: relative;
   white-space: pre !important;
-  box-shadow: 
+  box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.3),
     0 20px 40px rgba(0, 0, 0, 0.4);
 }
 
-/* Don't style pre elements inside .code-example - they have their own Mac window styling */
+/* Don't style pre elements inside .code-example */
 .code-example pre[class*="language-"] {
   background: transparent !important;
   border-radius: 0 !important;
@@ -30,67 +30,10 @@ pre[class*="language-"] {
   white-space: pre !important;
 }
 
-/* Ensure syntax highlighting works in code-example blocks */
 .code-example code[class*="language-"] {
   color: #e0e6f1 !important;
   font-family: var(--font-mono) !important;
   white-space: pre !important;
-}
-
-/* Osprey syntax highlighting - MAIN RULES */
-.code-example .language-osprey .token.keyword,
-.language-osprey .token.keyword {
-  color: #c084fc !important;
-  font-weight: 600 !important;
-  text-shadow: 0 0 20px rgba(192, 132, 252, 0.5) !important;
-}
-
-.code-example .language-osprey .token.string,
-.language-osprey .token.string {
-  color: #4ade80 !important;
-  text-shadow: 0 0 20px rgba(74, 222, 128, 0.3) !important;
-}
-
-.code-example .language-osprey .token.function,
-.language-osprey .token.function {
-  color: #f472b6 !important;
-  text-shadow: 0 0 20px rgba(244, 114, 182, 0.3) !important;
-}
-
-.code-example .language-osprey .token.comment,
-.language-osprey .token.comment {
-  color: #6b7280 !important;
-  font-style: italic !important;
-}
-
-.code-example .language-osprey .token.number,
-.language-osprey .token.number {
-  color: #67e8f9 !important;
-  text-shadow: 0 0 20px rgba(103, 232, 249, 0.3) !important;
-}
-
-.code-example .language-osprey .token.type,
-.code-example .language-osprey .token.class-name,
-.language-osprey .token.type,
-.language-osprey .token.class-name {
-  color: #fbbf24 !important;
-  font-weight: 600 !important;
-  text-shadow: 0 0 20px rgba(251, 191, 36, 0.3) !important;
-}
-
-.code-example .language-osprey .token.operator,
-.language-osprey .token.operator {
-  color: #f87171 !important;
-}
-
-.code-example .language-osprey .token.punctuation,
-.language-osprey .token.punctuation {
-  color: #94a3b8 !important;
-}
-
-.code-example .language-osprey .token.variable,
-.language-osprey .token.variable {
-  color: #e9d5ff !important;
 }
 
 code[class*="language-"] {
@@ -108,194 +51,126 @@ code[class*="language-"] ::selection {
   color: inherit;
 }
 
-/* Comments - Soft purple */
+/* ========================================================================
+   UNIFIED TOKEN STYLES - Single source of truth
+   ======================================================================== */
+
+/* Comments */
 .token.comment,
 .token.prolog,
 .token.doctype,
 .token.cdata {
-  color: #b084fc;
+  color: #6b7280;
   font-style: italic;
   opacity: 0.8;
 }
 
-/* Punctuation - Soft blue */
+/* Punctuation */
 .token.punctuation {
   color: #94a3b8;
 }
 
-/* Keywords - Vibrant purple with glow */
+/* Keywords */
 .token.keyword,
 .token.control,
 .token.directive {
   color: #c084fc;
   font-weight: 600;
-  text-shadow: 
-    0 0 20px rgba(192, 132, 252, 0.8),
-    0 0 40px rgba(192, 132, 252, 0.4);
+  text-shadow: 0 0 20px rgba(192, 132, 252, 0.5);
 }
 
-/* Functions - Hot pink with glow */
+/* Functions */
 .token.function,
 .token.method {
   color: #f472b6;
-  text-shadow: 
-    0 0 20px rgba(244, 114, 182, 0.8),
-    0 0 40px rgba(244, 114, 182, 0.4);
+  text-shadow: 0 0 20px rgba(244, 114, 182, 0.3);
 }
 
-/* Strings - Neon green with glow */
+/* Strings */
 .token.string,
 .token.char,
 .token.attr-value,
 .token.regex {
   color: #4ade80;
-  text-shadow: 
-    0 0 20px rgba(74, 222, 128, 0.8),
-    0 0 40px rgba(74, 222, 128, 0.4);
+  text-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
 }
 
-/* Numbers - Cyan with glow */
+/* Numbers and constants */
 .token.number,
 .token.boolean,
 .token.constant {
   color: #67e8f9;
-  text-shadow: 
-    0 0 20px rgba(103, 232, 249, 0.8),
-    0 0 40px rgba(103, 232, 249, 0.4);
+  text-shadow: 0 0 20px rgba(103, 232, 249, 0.3);
 }
 
-/* Types - Golden yellow with glow */
+/* Types and classes */
 .token.class-name,
 .token.type,
 .token.builtin {
   color: #fbbf24;
   font-weight: 600;
-  text-shadow: 
-    0 0 20px rgba(251, 191, 36, 0.8),
-    0 0 40px rgba(251, 191, 36, 0.4);
+  text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
 }
 
-/* Operators - Orange with glow */
+/* Operators */
 .token.operator,
 .token.entity,
 .token.url {
   color: #fb923c;
-  text-shadow: 
-    0 0 15px rgba(251, 146, 60, 0.6);
+  text-shadow: 0 0 15px rgba(251, 146, 60, 0.6);
 }
 
-/* Variables - Light purple */
+/* Variables and properties */
 .token.variable,
 .token.property,
 .token.parameter {
   color: #e9d5ff;
-  text-shadow: 
-    0 0 10px rgba(233, 213, 255, 0.3);
+  text-shadow: 0 0 10px rgba(233, 213, 255, 0.3);
 }
 
-/* Attributes - Teal */
+/* Attributes */
 .token.attr-name,
 .token.attribute {
   color: #5eead4;
 }
 
-/* Tags - Pink */
+/* Tags */
 .token.tag,
-.token.selector {
-  color: #f9a8d4;
+.token.selector,
+.token.namespace {
+  color: #f87171;
 }
 
-/* Important - Red with strong glow */
+/* Important and special tokens */
 .token.important,
-.token.bold {
-  color: #ef4444;
+.token.atrule {
+  color: #fbbf24;
   font-weight: bold;
-  text-shadow: 
-    0 0 20px rgba(239, 68, 68, 0.8),
-    0 0 40px rgba(239, 68, 68, 0.4);
 }
 
-/* Deleted - Red */
+/* Deleted and inserted for diffs */
 .token.deleted {
   color: #ef4444;
-  text-decoration: line-through;
+  background: rgba(239, 68, 68, 0.1);
 }
 
-/* Inserted - Green */
 .token.inserted {
   color: #10b981;
-  text-decoration: underline;
+  background: rgba(16, 185, 129, 0.1);
 }
 
-/* Italic */
 .token.italic {
   font-style: italic;
 }
 
-/* Line highlighting */
-.line-highlight {
-  position: absolute;
-  left: 0;
-  right: 0;
-  padding: inherit 0;
-  margin-top: 1em;
-  background: linear-gradient(90deg, 
-    transparent 0%, 
-    rgba(102, 126, 234, 0.1) 10%, 
-    rgba(102, 126, 234, 0.1) 90%, 
-    transparent 100%);
-  pointer-events: none;
-  line-height: inherit;
-  white-space: pre;
-}
+/* ========================================================================
+   OSPREY-SPECIFIC SYNTAX - Enhanced rules
+   ======================================================================== */
 
-/* Line numbers */
-.line-numbers .line-numbers-rows {
-  position: absolute;
-  pointer-events: none;
-  top: 1em;
-  font-size: 100%;
-  left: -3.8em;
-  width: 3em;
-  letter-spacing: -1px;
-  border-right: 1px solid rgba(102, 126, 234, 0.3);
-  user-select: none;
-}
-
-.line-numbers-rows > span {
-  display: block;
-  counter-increment: linenumber;
-}
-
-.line-numbers-rows > span:before {
-  content: counter(linenumber);
-  color: #64748b;
-  display: block;
-  padding-right: 0.8em;
-  text-align: right;
-}
-
-/* Diff highlighting */
-.token.prefix.deleted,
-.token.prefix.inserted {
-  user-select: none;
-  opacity: 0.5;
-}
-
-.token.prefix.deleted {
-  color: #ef4444;
-}
-
-.token.prefix.inserted {
-  color: #10b981;
-}
-
-/* Special Osprey syntax */
 .language-osprey .token.pipe {
   color: #a78bfa;
   font-weight: bold;
-  text-shadow: 
-    0 0 20px rgba(167, 139, 250, 0.8);
+  text-shadow: 0 0 20px rgba(167, 139, 250, 0.8);
 }
 
 .language-osprey .token.pattern {
@@ -310,26 +185,20 @@ code[class*="language-"] ::selection {
   border-radius: 4px;
 }
 
-/* Hover effects */
-.token:hover {
-  filter: brightness(1.2);
-  transform: scale(1.05);
-  transition: all 0.2s ease;
+.language-osprey .token.interpolation .token.punctuation {
+  color: #fbbf24;
 }
 
-/* Animation for code blocks */
-@keyframes codePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
+.language-osprey ::selection {
+  background: rgba(102, 126, 234, 0.3);
+  color: inherit;
 }
 
-pre[class*="language-"]:hover {
-  animation: codePulse 2s ease-in-out infinite;
-  box-shadow: 
-    inset 0 2px 4px rgba(0, 0, 0, 0.3),
-    0 25px 50px rgba(0, 0, 0, 0.5),
-    0 0 100px rgba(102, 126, 234, 0.2);
-}
+
+
+/* ========================================================================
+   SCROLLBAR AND HOVER EFFECTS
+   ======================================================================== */
 
 /* Scrollbar styling for code blocks */
 pre[class*="language-"]::-webkit-scrollbar {
@@ -350,168 +219,17 @@ pre[class*="language-"]::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, #764ba2 0%, #f093fb 100%);
 }
 
-/* Syntax Highlighting for Osprey */
-.language-osprey {
-  color: var(--color-neutral-100);
+/* Subtle hover effects */
+.token:hover {
+  filter: brightness(1.1);
+  transition: filter 0.2s ease;
 }
 
-/* Keywords */
-.language-osprey .token.keyword {
-  color: #F472B6;
-  font-weight: var(--font-medium);
+/* Override for inline code */
+:not(pre)>code[class*="language-"] {
+  padding: 0.2em 0.4em;
+  border-radius: var(--radius-sm);
+  background: rgba(102, 126, 234, 0.1);
+  color: var(--color-primary-600) !important;
+  font-size: 0.9em;
 }
-
-/* Functions */
-.language-osprey .token.function {
-  color: #7DD3FC;
-}
-
-/* Strings */
-.language-osprey .token.string {
-  color: #34D399;
-}
-
-/* Comments */
-.language-osprey .token.comment {
-  color: var(--color-neutral-500);
-  font-style: italic;
-}
-
-/* Numbers */
-.language-osprey .token.number {
-  color: #FCD34D;
-}
-
-/* Operators */
-.language-osprey .token.operator {
-  color: #FB7185;
-}
-
-/* Types */
-.language-osprey .token.class-name,
-.language-osprey .token.type {
-  color: #A78BFA;
-}
-
-/* Variables */
-.language-osprey .token.variable {
-  color: #60A5FA;
-}
-
-/* Punctuation */
-.language-osprey .token.punctuation {
-  color: var(--color-neutral-400);
-}
-
-/* Boolean */
-.language-osprey .token.boolean {
-  color: #F472B6;
-  font-weight: var(--font-medium);
-}
-
-/* Interpolation */
-.language-osprey .token.interpolation {
-  color: #FCA5A5;
-}
-
-.language-osprey .token.interpolation .token.punctuation {
-  color: #FCA5A5;
-}
-
-/* Selection */
-.language-osprey ::selection {
-  background: var(--color-primary);
-  color: white;
-}
-
-/* Line highlighting */
-.language-osprey .highlight-line {
-  background: rgba(14, 165, 233, 0.1);
-  display: block;
-  margin: 0 calc(-1 * var(--space-6));
-  padding: 0 var(--space-6);
-}
-
-/* Line numbers */
-.language-osprey.line-numbers {
-  position: relative;
-  padding-left: 3.8em;
-  counter-reset: linenumber;
-}
-
-.language-osprey.line-numbers > code {
-  position: relative;
-  white-space: inherit;
-}
-
-.language-osprey.line-numbers .line-numbers-rows {
-  position: absolute;
-  pointer-events: none;
-  top: 0;
-  font-size: 100%;
-  left: -3.8em;
-  width: 3em;
-  letter-spacing: -1px;
-  border-right: 1px solid var(--color-neutral-800);
-}
-
-.language-osprey.line-numbers .line-numbers-rows > span {
-  display: block;
-  counter-increment: linenumber;
-}
-
-.language-osprey.line-numbers .line-numbers-rows > span:before {
-  content: counter(linenumber);
-  color: var(--color-neutral-600);
-  display: block;
-  padding-right: 0.8em;
-  text-align: right;
-}
-
-/* Generic syntax highlighting (fallback) */
-pre[class*="language-"] {
-  color: var(--color-neutral-100);
-  background: var(--color-neutral-950);
-  font-family: var(--font-mono);
-  text-align: left;
-  white-space: pre;
-  word-spacing: normal;
-  word-break: normal;
-  word-wrap: normal;
-  line-height: var(--leading-relaxed);
-  tab-size: 2;
-  hyphens: none;
-}
-
-code[class*="language-"] {
-  color: var(--color-neutral-100);
-  background: none;
-  font-family: var(--font-mono);
-  text-align: left;
-  white-space: pre;
-  word-spacing: normal;
-  word-break: normal;
-  word-wrap: normal;
-  line-height: var(--leading-relaxed);
-  tab-size: 2;
-  hyphens: none;
-}
-
-/* Code blocks */
-pre[class*="language-"] {
-  padding: var(--space-6);
-  margin: var(--space-6) 0;
-  overflow: auto;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  border: 1px solid var(--color-neutral-800);
-}
-
-/* Inline code */
-:not(pre) > code[class*="language-"] {
-  padding: 0.1em 0.3em;
-  border-radius: var(--radius-base);
-  white-space: normal;
-  background: var(--color-neutral-100);
-  color: var(--color-accent);
-} 

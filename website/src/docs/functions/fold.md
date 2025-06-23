@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "fold (Function)"
 description: "Reduces an iterator to a single value using an accumulator function."
 ---

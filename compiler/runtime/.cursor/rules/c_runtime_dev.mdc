@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# C Runtime Development Rules
+
+- **IDIOMATIC CODE** - Follow C conventions and best practices
+- **EXPLICIT ERROR HANDLING** - Check all errors, return early on failures
+- **MINIMAL C CODE** - bubble code up to Osprey that doesn't need to be written in C
+- **DO NOT STOP UNTIL TESTS PASS** - Run make test
+- **WRITE INTEGRATION TESTS FOR THE RUNTIME** - Osprey must depend on a RELIABLE, COMPLETE, but MINIMAL underlying runtime
+- **PURE FUNCTIONS** - Avoid side effects where practical (except for performance)
+- **DOCUMENT ALL EXPORTED FUNCTIONS** - All exported functions need documentation
+- **STATIC ANALYSIS TOOLS** - Use strict static code analysis and don't ignore this
+- **FOLLOW compilersbestpractice.md** - Adhere to project-specific compiler guidelines
+
+@compilersbestpractice.md

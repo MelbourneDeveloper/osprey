@@ -46,6 +46,14 @@ func (g *LLVMGenerator) initFiberRuntime() {
 	fiberYield.Linkage = enum.LinkageExternal
 	g.functions["fiber_yield"] = fiberYield
 
+	// fiber_sleep: Sleep for specified milliseconds
+	fiberSleep := g.module.NewFunc("fiber_sleep",
+		types.I64,                              // returns 0 on success
+		ir.NewParam("milliseconds", types.I64), // milliseconds to sleep
+	)
+	fiberSleep.Linkage = enum.LinkageExternal
+	g.functions["fiber_sleep"] = fiberSleep
+
 	// channel_create: Create a channel
 	channelCreate := g.module.NewFunc("channel_create",
 		types.I64,                          // returns channel ID

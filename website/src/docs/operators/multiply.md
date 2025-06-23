@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "* (Multiplication Operator)"
 description: "Multiplies two numbers."
 ---

@@ -1,5 +1,5 @@
 ---
-layout: blog
+layout: page.njk
 title: "The Memory-Safe Revolution: Why Osprey is Built for Tomorrow's Challenges"
 excerpt: "As governments demand memory-safe code and AI accelerates vulnerability discovery, functional languages like Osprey are positioned to lead the next generation of secure, scalable software development."
 date: 2025-01-15

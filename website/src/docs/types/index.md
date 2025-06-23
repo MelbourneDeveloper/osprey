@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "Built-in Types"
 description: "Complete reference for all built-in types in Osprey"
 ---
@@ -12,6 +13,10 @@ A type that can represent any value. Useful for generic programming but should b
 ## [Bool](bool/)
 
 A boolean type that can be either true or false. Used for logical operations and conditionals.
+
+## [HttpResponse](httpresponse/)
+
+A built-in type representing an HTTP response with status code, headers, content type, body, and streaming capabilities. Used by HTTP server handlers to return structured responses to clients.
 
 ## [Int](int/)
 

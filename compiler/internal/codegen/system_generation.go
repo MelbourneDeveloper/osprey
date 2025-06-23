@@ -1,0 +1,368 @@
+package codegen
+
+import (
+	"github.com/christianfindlay/osprey/internal/ast"
+	"github.com/llir/llvm/ir"
+	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/enum"
+	"github.com/llir/llvm/ir/types"
+	"github.com/llir/llvm/ir/value"
+)
+
+// -----------------------------------------------------------------------------
+// Built-in helper dispatchers used from iterator_generation.go
+// -----------------------------------------------------------------------------
+
+// callFunctionWithValue calls a built-in or user-defined function with a single
+// LLVM IR value argument. It is used by iterator helpers such as forEach,
+// filter and map.
+func (g *LLVMGenerator) callFunctionWithValue(
+	funcIdent *ast.Identifier,
+	val value.Value,
+) (value.Value, error) {
+	switch funcIdent.Name {
+	// Built-ins that accept a single argument.
+	case PrintFunc:
+		return g.callBuiltInPrint(val)
+	case ToStringFunc:
+		return g.callBuiltInToString(val)
+	case InputFunc:
+		return nil, ErrInputNoArgs
+	case "testAny": // Helper used by validation tests.
+		return g.generateTestAnyCall()
+	}
+
+	// User-defined function.
+	if fn, ok := g.functions[funcIdent.Name]; ok {
+		return g.builder.NewCall(fn, val), nil
+	}
+
+	return nil, WrapFunctionNotFound(funcIdent.Name)
+}
+
+// callFunctionWithTwoValues is similar to callFunctionWithValue but passes two
+// arguments to the callee.
+func (g *LLVMGenerator) callFunctionWithTwoValues(
+	funcIdent *ast.Identifier,
+	val1, val2 value.Value,
+) (value.Value, error) {
+	// None of the current built-ins legitimately take two positional
+	// arguments.  Treat any attempt as an error so that misuse is surfaced
+	// during compilation rather than silently ignored.
+	switch funcIdent.Name {
+	case PrintFunc, ToStringFunc, InputFunc:
+		return nil, WrapBuiltInTwoArgs(funcIdent.Name)
+	}
+
+	if fn, ok := g.functions[funcIdent.Name]; ok {
+		return g.builder.NewCall(fn, val1, val2), nil
+	}
+
+	return nil, WrapFunctionNotFound(funcIdent.Name)
+}
+
+// callBuiltInPrint prints a single LLVM IR value using the C library puts
+// function. It first converts any integer or boolean values to strings.
+func (g *LLVMGenerator) callBuiltInPrint(val value.Value) (value.Value, error) {
+	var strArg value.Value
+	var err error
+
+	switch val.Type().(type) {
+	case *types.PointerType: // i8* – already a C-string.
+		strArg = val
+	case *types.IntType:
+		// i1 == bool, otherwise treat as int64.
+		if val.Type().(*types.IntType).BitSize == 1 {
+			strArg, err = g.generateBoolToString(val)
+		} else {
+			strArg, err = g.generateIntToString(val)
+		}
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, ErrPrintCannotConvert
+	}
+
+	puts := g.functions["puts"]
+	res := g.builder.NewCall(puts, strArg)
+	return g.builder.NewSExt(res, types.I64), nil // normalise to i64
+}
+
+// callBuiltInToString converts the provided value to its string representation
+// and returns it.
+func (g *LLVMGenerator) callBuiltInToString(val value.Value) (value.Value, error) {
+	switch val.Type().(type) {
+	case *types.PointerType:
+		return val, nil // Already a string.
+	case *types.IntType:
+		if val.Type().(*types.IntType).BitSize == 1 {
+			return g.generateBoolToString(val)
+		}
+		return g.generateIntToString(val)
+	default:
+		return nil, ErrNoToStringImpl
+	}
+}
+
+// generateTestAnyCall returns a constant placeholder value used in unit tests
+// for validating that the compiler correctly handles the `any` type.
+func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
+	return constant.NewInt(types.I64, DefaultPlaceholder), nil
+}
+
+// -----------------------------------------------------------------------------
+// Process / File / JSON built-ins
+// -----------------------------------------------------------------------------
+
+// generateSpawnProcessCall emits a call to an external C helper that spawns a
+// process and returns its exit code as an i64 value.
+func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != OneArg {
+		return nil, WrapSpawnProcessWrongArgs(len(callExpr.Arguments))
+	}
+
+	cmd, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	var fn *ir.Func
+	if existing, ok := g.functions["spawn_process"]; ok {
+		fn = existing
+	} else {
+		fn = g.module.NewFunc("spawn_process", types.I64, ir.NewParam("command", types.I8Ptr))
+		g.functions["spawn_process"] = fn
+	}
+
+	return g.builder.NewCall(fn, cmd), nil
+}
+
+// generateSleepCall emits a call to the fiber_sleep function to sleep for the specified milliseconds.
+func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != OneArg {
+		return nil, WrapSleepWrongArgs(len(callExpr.Arguments))
+	}
+
+	milliseconds, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the fiber_sleep function
+	sleepFunc := g.functions["fiber_sleep"]
+	if sleepFunc == nil {
+		g.initFiberRuntime()
+		sleepFunc = g.functions["fiber_sleep"]
+	}
+
+	return g.builder.NewCall(sleepFunc, milliseconds), nil
+}
+
+// generateWriteFileCall writes data to a file via an external helper returning
+// a Result<Success, string> type.
+func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {
+	const expectedArgs = TwoArgs
+	if len(callExpr.Arguments) != expectedArgs {
+		return nil, WrapWriteFileWrongArgs(len(callExpr.Arguments))
+	}
+
+	filename, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+	content, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+
+	var fn *ir.Func
+	if existing, ok := g.functions["write_file"]; ok {
+		fn = existing
+	} else {
+		fn = g.module.NewFunc("write_file", types.I64,
+			ir.NewParam("filename", types.I8Ptr),
+			ir.NewParam("content", types.I8Ptr))
+		g.functions["write_file"] = fn
+	}
+
+	// Call the C function
+	writeResult := g.builder.NewCall(fn, filename, content)
+
+	// Create a Result<I64, string> (bytes written on success, error on failure)
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Check if the result is negative (error)
+	zero := constant.NewInt(types.I64, 0)
+	isError := g.builder.NewICmp(enum.IPredSLT, writeResult, zero)
+
+	// Create blocks for success and error cases
+	successBlock := g.function.NewBlock("write_success")
+	errorBlock := g.function.NewBlock("write_error")
+	continueBlock := g.function.NewBlock("write_continue")
+
+	g.builder.NewCondBr(isError, errorBlock, successBlock)
+
+	// Success case: store the bytes written
+	g.builder = successBlock
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(writeResult, valuePtr)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.builder.NewBr(continueBlock)
+
+	// Error case: store error value
+	g.builder = errorBlock
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(constant.NewInt(types.I64, -1), errorValuePtr)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
+	g.builder.NewBr(continueBlock)
+
+	// Continue execution
+	g.builder = continueBlock
+
+	return result, nil
+}
+
+// generateReadFileCall reads the entire contents of the specified file and
+// returns a Result<string, string> type.
+func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != OneArg {
+		return nil, WrapReadFileWrongArgs(len(callExpr.Arguments))
+	}
+
+	filename, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	var fn *ir.Func
+	if existing, ok := g.functions["read_file"]; ok {
+		fn = existing
+	} else {
+		fn = g.module.NewFunc("read_file", types.I8Ptr, ir.NewParam("filename", types.I8Ptr))
+		g.functions["read_file"] = fn
+	}
+
+	// Call the C function
+	readResult := g.builder.NewCall(fn, filename)
+
+	// Create a Result<string, string>
+	resultType := g.getResultType(types.I8Ptr)
+	result := g.builder.NewAlloca(resultType)
+
+	// Check if the result is NULL (error)
+	nullPtr := constant.NewNull(types.I8Ptr)
+	isError := g.builder.NewICmp(enum.IPredEQ, readResult, nullPtr)
+
+	// Create blocks for success and error cases
+	successBlock := g.function.NewBlock("read_success")
+	errorBlock := g.function.NewBlock("read_error")
+	continueBlock := g.function.NewBlock("read_continue")
+
+	g.builder.NewCondBr(isError, errorBlock, successBlock)
+
+	// Success case: store the file content
+	g.builder = successBlock
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(readResult, valuePtr)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.builder.NewBr(continueBlock)
+
+	// Error case: store error placeholder
+	g.builder = errorBlock
+	errorStr := g.module.NewGlobalDef("read_error_msg", constant.NewCharArrayFromString("File read error\x00"))
+	errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
+		constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(errorPtr, errorValuePtr)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
+	g.builder.NewBr(continueBlock)
+
+	// Continue execution
+	g.builder = continueBlock
+
+	return result, nil
+}
+
+// generateParseJSONCall forwards a JSON string to an external helper that
+// parses it and returns a representation (currently a string).
+func (g *LLVMGenerator) generateParseJSONCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != OneArg {
+		return nil, WrapParseJSONWrongArgs(len(callExpr.Arguments))
+	}
+
+	jsonStr, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	var fn *ir.Func
+	if existing, ok := g.functions["parse_json"]; ok {
+		fn = existing
+	} else {
+		fn = g.module.NewFunc("parse_json", types.I8Ptr, ir.NewParam("json_string", types.I8Ptr))
+		g.functions["parse_json"] = fn
+	}
+
+	return g.builder.NewCall(fn, jsonStr), nil
+}
+
+// generateExtractCodeCall extracts code from a JSON response using an external
+// helper returning the code as a C-string.
+func (g *LLVMGenerator) generateExtractCodeCall(callExpr *ast.CallExpression) (value.Value, error) {
+	// Support both old single-arg version and new two-arg version
+	if len(callExpr.Arguments) == OneArg {
+		// Legacy single argument version - extracts "code" field
+		jsonStr, err := g.generateExpression(callExpr.Arguments[0])
+		if err != nil {
+			return nil, err
+		}
+
+		var fn *ir.Func
+		if existing, ok := g.functions["extract_code"]; ok {
+			fn = existing
+		} else {
+			fn = g.module.NewFunc("extract_code", types.I8Ptr, ir.NewParam("json_string", types.I8Ptr))
+			g.functions["extract_code"] = fn
+		}
+
+		return g.builder.NewCall(fn, jsonStr), nil
+	} else if len(callExpr.Arguments) == TwoArgs {
+		// New two argument version - extracts arbitrary field
+		jsonStr, err := g.generateExpression(callExpr.Arguments[0])
+		if err != nil {
+			return nil, err
+		}
+
+		fieldName, err := g.generateExpression(callExpr.Arguments[1])
+		if err != nil {
+			return nil, err
+		}
+
+		var fn *ir.Func
+		if existing, ok := g.functions["extract_json_field"]; ok {
+			fn = existing
+		} else {
+			fn = g.module.NewFunc("extract_json_field", types.I8Ptr,
+				ir.NewParam("json_string", types.I8Ptr),
+				ir.NewParam("field_name", types.I8Ptr))
+			g.functions["extract_json_field"] = fn
+		}
+
+		return g.builder.NewCall(fn, jsonStr, fieldName), nil
+	}
+	return nil, WrapExtractCodeWrongArgs(len(callExpr.Arguments))
+}

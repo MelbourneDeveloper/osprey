@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "filter (Function)"
 description: "Filters elements in an iterator based on a predicate function."
 ---

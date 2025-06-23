@@ -76,11 +76,36 @@ jobs:
           fi
           echo "✅ Directory structure verified"
 
-      - name: Run all tests
+      - name: Run tests & enforce coverage threshold
         working-directory: "./compiler"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚀 Running all tests..."
-          make test-all
+          sudo apt-get update -qq && sudo apt-get install -y -qq bc
+
+          echo "🚀 Executing full test-suite with coverage…"
+          ./coverage_report.sh
+
+          # Extract the total percentage (numeric, no % sign)
+          CURRENT_COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')
+          MINIMUM_COVERAGE="${{ vars.TEST_COVERAGE_COMPILER }}"
+
+          echo "Current coverage : ${CURRENT_COVERAGE}%"
+          if [ -z "$MINIMUM_COVERAGE" ]; then
+            echo "🌱 No TEST_COVERAGE_COMPILER variable set – bootstrapping with ${CURRENT_COVERAGE}%"
+            gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE"
+            exit 0
+          fi
+
+          echo "Required minimum : ${MINIMUM_COVERAGE}%"
+
+          # Fail if coverage dropped
+          if [ "$(echo "$CURRENT_COVERAGE < $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
+            echo "❌ Coverage dropped below threshold!"
+            exit 1
+          fi
+
+          echo "✅ Coverage check passed"
 
       - name: Test example compilation and execution
         working-directory: "./compiler"
@@ -89,15 +114,15 @@ jobs:
 
           # Test arithmetic interpolation example
           echo "Testing interpolation_math.osp..."
-          ./bin/osprey examples/tested/interpolation_math.osp --run
+          ./bin/osprey examples/tested/basics/math/interpolation_math.osp --run
 
           # Test comprehensive example
           echo "Testing comprehensive.osp..."
-          ./bin/osprey examples/tested/comprehensive.osp --run
+          ./bin/osprey examples/tested/basics/comprehensive.osp --run
 
           # Test basic hello world
           echo "Testing hello.osp..."
-          ./bin/osprey examples/tested/hello.osp --run
+          ./bin/osprey examples/tested/basics/hello.osp --run
 
           echo "✅ All example compilations and executions successful!"
 
@@ -115,43 +140,11 @@ jobs:
           path: "compiler/bin/osprey"
           retention-days: 30
 
-      - name: Test Web Compiler with Docker Compose
+      - name: Test Web Compiler
         run: |
-          echo "🐳 Testing Web Compiler with Docker Compose..."
           cd webcompiler
-
-          # Build and start the web compiler service
-          echo "🔨 Building and starting web compiler..."
           docker compose up --build -d
-
-          # Wait for service to be ready
-          echo "⏳ Waiting for web compiler to be ready..."
-          timeout=60
-          while [ $timeout -gt 0 ]; do
-            if curl -s http://localhost:3001/api > /dev/null; then
-              echo "✅ Web compiler is ready!"
-              break
-            fi
-            echo "⏳ Waiting for service... ($timeout seconds remaining)"
-            sleep 2
-            timeout=$((timeout - 2))
-          done
-
-          if [ $timeout -le 0 ]; then
-            echo "❌ Web compiler failed to start within timeout"
-            echo "📋 Docker logs:"
-            docker compose logs
-            docker compose down
-            exit 1
-          fi
-
-          # Run the test script
-          echo "🧪 Running web compiler tests..."
+          sleep 10
           chmod +x test.sh
           ./test.sh
-
-          # Clean up
-          echo "🧹 Cleaning up Docker containers..."
           docker compose down
-
-          echo "✅ Web compiler tests completed successfully!"

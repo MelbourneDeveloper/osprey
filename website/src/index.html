@@ -1,0 +1,305 @@
+---
+title: "Osprey Programming Language"
+description: "A modern functional programming oriented language designed for elegance, safety, and performance."
+---
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-content">
+      <h1 class="hero-title animate-on-scroll">
+        Build the Future with
+        Osprey
+      </h1>
+      <p class="hero-subtitle animate-on-scroll">
+        A modern functional programming oriented language designed for elegance, safety, and performance.
+      </p>
+      <div class="hero-actions animate-on-scroll">
+        <a href="/playground/" class="btn btn-primary btn-lg">
+          Try Osprey Online
+        </a>
+        <a href="https://github.com/MelbourneDeveloper/osprey/blob/main/CONTRIBUTING.md" class="btn btn-secondary btn-lg">
+          Start Contributing
+        </a>
+      </div>
+    </div>
+
+    <div class="hero-code animate-on-scroll parallax typewriter-enabled" data-speed="0.3">
+      <div class="code-example">
+        <pre class="language-osprey"><code class="language-osprey">// Simple, clean function definitions
+fn double(n: int) -> int = n * 2
+
+// String interpolation that works
+let x = 42
+let name = "Alice"
+print("x = ${x}")
+print("name = ${name}")
+
+// Pattern matching on values
+let result = match x {
+  42 => "The answer!"
+  0 => "Zero"
+  _ => "Something else"
+}
+print("Result: ${result}")</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="blue-box-installation">
+  <div class="container">
+    <h2 class="section-title animate-on-scroll">Get Osprey Now</h2>
+    <div class="install-grid">
+      <div class="install-card primary animate-on-scroll">
+        <h3>🍎 Install on macOS</h3>
+        <div class="install-code">
+          <pre class="language-bash"><code class="language-bash">brew tap melbournedeveloper/osprey
+brew install osprey</code></pre>
+        </div>
+      </div>
+
+      <div class="install-card animate-on-scroll">
+        <h3>🌐 Try Web Compiler</h3>
+        <p>No installation needed! Compile and run Osprey code in your browser.</p>
+        <a href="/playground/" class="btn btn-primary">Open Playground</a>
+      </div>
+
+      <div class="install-card animate-on-scroll">
+        <h3>🔨 Build from Source</h3>
+        <p>Want the latest features? Build the compiler locally from GitHub.</p>
+        <a href="https://github.com/melbournedeveloper/osprey" class="btn btn-secondary">View on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">Language Features</h2>
+
+    <div class="two-column">
+      <div class="content">
+        <h3>Type-Safe & Expressive</h3>
+        <p>Strong static typing prevents runtime errors while keeping syntax clean and readable. Expression-bodied
+          functions eliminate boilerplate.</p>
+        <ul>
+          <li>Explicit type annotations</li>
+          <li>Compile-time error checking</li>
+          <li>Self-documenting code</li>
+          <li>Expression-bodied functions</li>
+        </ul>
+      </div>
+      <div class="visual">
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">fn analyzeNumber(n: int) -> string = match n {
+  0 => "Zero"
+  42 => "The answer!"
+  _ => "Something else"
+}
+
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
+
+// Test the functions
+print("Testing functions:")
+print(analyzeNumber(0))
+print(analyzeNumber(42))</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-column">
+      <div class="visual">
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">fn getGrade(score: int) -> string = match score {
+  100 => "Perfect!"
+  95 => "Excellent"
+  85 => "Very Good"
+  75 => "Good"
+  _ => "Needs Improvement"
+}
+
+// Test the function
+print("Grade for 100: ${getGrade(100)}")
+print("Grade for 95: ${getGrade(95)}")</code></pre>
+        </div>
+      </div>
+      <div class="content">
+        <h3>Pattern Matching</h3>
+        <p>Elegant pattern matching with exhaustiveness checking ensures you handle all cases safely.</p>
+        <ul>
+          <li>Exhaustive pattern checking</li>
+          <li>Safe value destructuring</li>
+          <li>Clear conditional logic</li>
+          <li>No forgotten edge cases</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="two-column">
+      <div class="content">
+        <h3>String Interpolation</h3>
+        <p>Built-in string interpolation with full expression support makes output formatting clean and readable.</p>
+        <ul>
+          <li>Expression interpolation</li>
+          <li>Type-safe formatting</li>
+          <li>Readable string templates</li>
+          <li>No manual concatenation</li>
+        </ul>
+      </div>
+      <div class="visual">
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">// String interpolation example
+let name = "Alice"
+let age = 25
+let score = 95
+
+print("Hello ${name}!")
+print("Next year you'll be ${age + 1}")
+print("Double score: ${score * 2}")
+print("${name} (${age}) scored ${score}/100")</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-column">
+      <div class="visual">
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">// Functional Programming Example
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
+
+// Clean data transformations
+5 |> double |> square |> print
+
+// Range operations with forEach
+print("Range operations:")
+range(1, 10) |> forEach(print)</code></pre>
+        </div>
+      </div>
+      <div class="content">
+        <h3>Functional Programming</h3>
+        <p>Pipe operators and functional iterators create elegant data processing pipelines.</p>
+        <ul>
+          <li>Pipe operator for data flow</li>
+          <li>Functional iterators</li>
+          <li>Immutable by default</li>
+          <li>Clean transformation chains</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="blue-box">
+  <div class="container">
+    <div class="grid">
+      <div class="card">
+        <h3>Fast Compilation</h3>
+        <p>Quick compilation cycles for rapid development and testing</p>
+      </div>
+      <div class="card">
+        <h3>Memory Safe</h3>
+        <p>Strong typing prevents buffer overflows and memory leaks</p>
+      </div>
+      <div class="card">
+        <h3>Zero Runtime Overhead</h3>
+        <p>Compile-time optimizations with minimal runtime costs</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container">
+    <h2 class="section-title">Real-World Examples</h2>
+
+    <div class="showcase-grid">
+      <div class="card-code animate-on-scroll">
+        <h3>Function Definitions</h3>
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">// Simple, clean function definitions
+fn double(n: int) -> int = n * 2
+
+// String interpolation that works
+let x = 42
+let name = "Alice"
+print("x = ${x}")
+print("name = ${name}")
+
+// Pattern matching on values
+let result = match x {
+  42 => "The answer!"
+  0 => "Zero"
+  _ => "Something else"
+}
+print("Result: ${result}")</code></pre>
+        </div>
+      </div>
+
+      <div class="card-code animate-on-scroll">
+        <h3>Type Safety</h3>
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">fn analyzeNumber(n: int) -> string = match n {
+  0 => "Zero"
+  42 => "The answer!"
+  _ => "Something else"
+}
+
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
+
+// Test the functions
+print("Testing functions:")
+print(analyzeNumber(0))
+print(analyzeNumber(42))
+print(analyzeNumber(5))
+
+let x = 5
+let doubled = double(x)
+let squared = square(doubled)
+print("${x} doubled is ${doubled}")
+print("${doubled} squared is ${squared}")</code></pre>
+        </div>
+      </div>
+
+      <div class="card-code animate-on-scroll">
+        <h3>Pattern Matching</h3>
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">// Pattern matching grade example
+fn getGrade(score: int) -> string = match score {
+  100 => "Perfect!"
+  95 => "Excellent"
+  85 => "Very Good"
+  75 => "Good"
+  _ => "Needs Improvement"
+}
+
+// Test the function
+print("Grade for 100: ${getGrade(100)}")
+print("Grade for 95: ${getGrade(95)}")
+print("Grade for 85: ${getGrade(85)}")
+print("Grade for 75: ${getGrade(75)}")
+print("Grade for 50: ${getGrade(50)}")</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="blue-box">
+  <div class="container">
+    <div class="blue-box-content animate-on-scroll">
+      <h2>Help Build the Future of Programming</h2>
+      <p><strong>Anyone can contribute.</strong> AI assistants like Claude + Cursor make compiler development accessible to regular developers. No CS degree required.</p>
+      <div class="blue-box-actions">
+        <a href="https://github.com/MelbourneDeveloper/osprey/blob/main/CONTRIBUTING.md" class="btn btn-primary btn-lg">
+          Start Contributing
+        </a>
+        <a href="/playground/" class="btn btn-secondary btn-lg">
+          Try Osprey Now
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

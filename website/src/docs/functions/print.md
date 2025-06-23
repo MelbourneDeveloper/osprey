@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "print (Function)"
 description: "Prints a value to the console. Automatically converts the value to a string representation."
 ---

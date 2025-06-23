@@ -1,0 +1,20 @@
+fn analyzeNumber(n: int) -> string = match n {
+  0 => "Zero"
+  42 => "The answer!"
+  _ => "Something else"
+}
+
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
+
+// Test the functions
+print("Testing functions:")
+print(analyzeNumber(0))
+print(analyzeNumber(42))
+print(analyzeNumber(5))
+
+let x = 5
+let doubled = double(x)
+let squared = square(doubled)
+print("${x} doubled is ${doubled}")
+print("${doubled} squared is ${squared}") 

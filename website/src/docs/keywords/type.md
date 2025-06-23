@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "type (Keyword)"
 description: "Type declaration keyword. Used to define custom types and type aliases."
 ---

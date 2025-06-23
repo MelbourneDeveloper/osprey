@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "/ (Division Operator)"
 description: "Divides the first number by the second."
 ---

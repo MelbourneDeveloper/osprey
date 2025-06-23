@@ -1,0 +1,19 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Production API Rules
+
+- **SECURITY FIRST** - We don't want this thing running up a huge bill so check every line for DOS attacks
+- **MUST RETURN TWO OUTPUTS OR ERROR OUTPUT** - The main API returns 1. Compiler output 2. App output, and these must be distinct in the JSON response
+- **PRODUCTION API** - Don't break it, keep changes minimal and safe
+- **SERVES LSP FOR WEBSITE** - This API must stay working for language server
+- **DOCKER COMPOSE MUST WORK** - Build and run successfully for deployment
+- **API ENDPOINTS MUST RESPOND** - Ensure all endpoints return proper responses
+- **HANDLE ERRORS PROPERLY** - Don't let the API crash, fail gracefully
+- **INTEGRATION TESTS ARE KEY** - Docker Compose pipeline tests are critical
+- **DON'T BREAK THE PIPELINE** - If CI tests fail, fix immediately
+- **ENVIRONMENT VARIABLES** - Handle configuration for different environments
+- **KEEP IT SIMPLE** - Don't over-engineer this basic project
+- **MAKE IT DEPLOYABLE** - Ensure app deploys to host without issues

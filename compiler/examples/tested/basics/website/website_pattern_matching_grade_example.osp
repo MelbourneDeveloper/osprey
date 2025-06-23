@@ -1,0 +1,15 @@
+// Pattern matching grade example
+fn getGrade(score: int) -> string = match score {
+  100 => "Perfect!"
+  95 => "Excellent"
+  85 => "Very Good"
+  75 => "Good"
+  _ => "Needs Improvement"
+}
+
+// Test the function
+print("Grade for 100: ${getGrade(100)}")
+print("Grade for 95: ${getGrade(95)}")
+print("Grade for 85: ${getGrade(85)}")
+print("Grade for 75: ${getGrade(75)}")
+print("Grade for 50: ${getGrade(50)}") 

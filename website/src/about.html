@@ -1,0 +1,291 @@
+---
+title: "About Osprey"
+description: "Osprey's design principles and language philosophy"
+---
+
+<header class="page-header">
+  <div class="container">
+    <h1>About Osprey</h1>
+    <p class="page-description">
+      A functional programming language designed for safety, elegance, and performance.
+    </p>
+  </div>
+</header>
+
+<section class="about-story">
+  <div class="container">
+    <div class="two-column">
+      <div class="content">
+        <h2>The Vision</h2>
+        <p>
+          Osprey was born from the belief that elegance <strong>is</strong> the best defence against bugs. Too many
+          hours are wasted debugging null pointer exceptions, handling unexpected panics, and tracking down race
+          conditions. Osprey is different.
+        </p>
+        <p>
+          Osprey's type system aims to prevent entire classes of bugs at compile time, make concurrency safe by default,
+          and keep your code maintainable for years to come.
+        </p>
+      </div>
+      <div class="visual typewriter-enabled">
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">// Simple, clean function definitions
+fn double(n: int) -> int = n * 2
+
+// String interpolation that works
+let x = 42
+let name = "Alice"
+print("x = ${x}")
+print("name = ${name}")
+
+// Pattern matching on values
+let result = match x {
+  42 => "The answer!"
+  0 => "Zero"
+  _ => "Something else"
+}
+print("Result: ${result}")</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="design-principles">
+  <div class="container">
+    <h2 class="section-title">Design Principles</h2>
+    <div class="principles-detailed">
+      <div class="card">
+        <div class="card-header">
+          <h3>🎯 Simplicity First</h3>
+        </div>
+        <div class="card-content">
+          <p>One way to accomplish any task. No multiple syntax variations, minimal ceremony.</p>
+          <ul>
+            <li>Single approach for each language feature</li>
+            <li>Named arguments for clarity</li>
+            <li>Self-documenting code</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>🛡️ Safety by Design</h3>
+        </div>
+        <div class="card-content">
+          <p>Type system prevents bugs at compile time. No null pointers, buffer overflows, or data races.</p>
+          <ul>
+            <li>Result types for all error conditions</li>
+            <li>Memory safety without garbage collection</li>
+            <li>Compile-time race condition prevention</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>⚡ Fiber Concurrency</h3>
+        </div>
+        <div class="card-content">
+          <p>Isolated module instances per fiber eliminate data races. Scale to millions of concurrent tasks.</p>
+          <ul>
+            <li>Zero-cost fiber creation</li>
+            <li>No shared mutable state</li>
+            <li>Typed channels for communication</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>🔗 Rust Interoperability</h3>
+        </div>
+        <div class="card-content">
+          <p>Seamless integration with Rust for maximum performance. Type-safe FFI.</p>
+          <ul>
+            <li>Direct Rust async/await integration</li>
+            <li>Zero-overhead interop</li>
+            <li>Gradual migration support</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="philosophy">
+  <div class="container">
+    <h2 class="section-title">Core Philosophy</h2>
+    <div class="philosophy-grid">
+      <div class="card">
+        <h3>Referential Transparency</h3>
+        <p>Functions return the same output for the same input. Side effects are explicit.</p>
+      </div>
+
+      <div class="card">
+        <h3>Immutability by Default</h3>
+        <p>Data immutable unless explicitly marked mutable. Safe sharing across fibers.</p>
+      </div>
+
+      <div class="card">
+        <h3>Explicit Error Handling</h3>
+        <p>No exceptions or panics. All failures return Result types.</p>
+      </div>
+
+      <div class="card">
+        <h3>Zero-Cost Abstractions</h3>
+        <p>High-level features compile to optimal machine code.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="comparison">
+  <div class="container">
+    <h2 class="section-title">Key Differences</h2>
+    <div class="comparison-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Traditional</th>
+            <th>Osprey</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Error Handling</td>
+            <td>Exceptions, panics</td>
+            <td>Result types</td>
+          </tr>
+          <tr>
+            <td>Null Safety</td>
+            <td>Null pointer exceptions</td>
+            <td>Option types only</td>
+          </tr>
+          <tr>
+            <td>Concurrency</td>
+            <td>Shared mutable state</td>
+            <td>Fiber-isolated modules</td>
+          </tr>
+          <tr>
+            <td>Type Safety</td>
+            <td>Runtime type errors possible</td>
+            <td>Compile-time prevention of type errors</td>
+          </tr>
+          <tr>
+            <td>Memory Management</td>
+            <td>Manual memory or garbage collection</td>
+            <td>Memory safety with automatic reference counting</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="innovation">
+  <div class="container">
+    <h2 class="section-title">Key Innovations</h2>
+    <div class="innovations-grid">
+      <div class="card-code">
+        <h3>Fiber-Isolated Modules</h3>
+        <p>
+          Revolutionary approach to concurrency where each fiber gets its own isolated instances of modules. Eliminates
+          data races while maintaining clean encapsulation.
+        </p>
+        <div class="code-example typewriter-enabled">
+          <pre class="language-osprey"><code class="language-osprey">// Fiber Example
+fn compute(value: int) -> int = value * 2
+
+// Each fiber runs independently  
+let fiber1 = spawn compute(5)
+let fiber2 = spawn compute(10)
+
+print("Fiber 1 result: ${fiber1}")  
+print("Fiber 2 result: ${fiber2}")
+
+// Background processing with yield
+let job1 = yield 10
+print("Processed ${job1} items")
+
+print("=== Fiber Example Complete ===")</code></pre>
+        </div>
+      </div>
+
+      <div class="card-code">
+        <h3>Pattern Matching</h3>
+        <p>
+          Exhaustive pattern matching ensures all cases are handled at compile time. No forgotten branches, no runtime
+          surprises.
+        </p>
+        <div class="code-example typewriter-enabled">
+          <pre class="language-osprey"><code class="language-osprey">fn analyzeNumber(n: int) -> string = match n {
+    0 => "Zero"
+    1 => "One" 
+    42 => "The answer to everything!"
+    _ => "Some other number"
+}
+
+fn getCategory(score: int) -> string = match score {
+    100 => "Perfect!"
+    95 => "Excellent"
+    75 => "Good"
+    _ => "Needs Improvement"
+}
+
+print("Number analysis:")
+print("42 is ${analyzeNumber(42)}")
+print("Score 95: ${getCategory(95)}")</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="future">
+  <div class="container">
+    <h2 class="section-title">The Future</h2>
+    <p
+      style="text-align: center; font-size: var(--font-size-xl); margin-bottom: var(--space-12); color: var(--color-text-secondary); max-width: 800px; margin-left: auto; margin-right: auto;">
+      We are just getting started. We're building a complete ecosystem for safe, concurrent programming.
+    </p>
+
+    <div class="features-grid">
+      <div class="card">
+        <div class="card-icon">🔗</div>
+        <h3>Haskell Integration</h3>
+        <p>Future interoperability with Haskell for formal verification and mathematical proofs of program correctness.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">📦</div>
+        <h3>Package Ecosystem</h3>
+        <p>Growing library ecosystem with built-in safety guarantees and comprehensive documentation.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🛠️</div>
+        <h3>Development Tooling</h3>
+        <p>Advanced IDE support, intelligent debuggers, and powerful development tools for productive programming.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🎓</div>
+        <h3>Education & Learning</h3>
+        <p>Comprehensive resources to teach safe programming principles and functional programming concepts.</p>
+      </div>
+    </div>
+
+    <div class="blue-box">
+      <h3>Build It With Us</h3>
+      <p>AI assistants have democratized compiler development. If you can build apps with Claude or Cursor, you can help build Osprey.</p>
+      <div class="blue-box-buttons">
+        <a href="https://github.com/MelbourneDeveloper/osprey/blob/main/CONTRIBUTING.md" class="btn btn-primary">Start Contributing</a>
+        <a href="/playground/" class="btn btn-secondary">Try Osprey Now</a>
+      </div>
+    </div>
+  </div>
+</section>

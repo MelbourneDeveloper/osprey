@@ -34,10 +34,13 @@ const (
 
 // Type names.
 const (
-	TypeString = "string"
-	TypeInt    = "int"
-	TypeBool   = "bool"
-	TypeAny    = "any"
+	TypeString       = "string"
+	TypeInt          = "int"
+	TypeBool         = "bool"
+	TypeAny          = "any"
+	TypeResult       = "Result"
+	TypeHTTPResponse = "HttpResponse"
+	TypeFunction     = "function"
 )
 
 // Function names.
@@ -52,6 +55,21 @@ const (
 	FoldFunc           = "fold"
 	MainFunctionName   = "main"
 	WebSocketKeepAlive = "webSocketKeepAlive"
+
+	// String utility functions
+	LengthFunc    = "length"
+	ContainsFunc  = "contains"
+	SubstringFunc = "substring"
+
+	// Process and system functions
+	SpawnProcessFunc = "spawnProcess"
+	WriteFileFunc    = "writeFile"
+	ReadFileFunc     = "readFile"
+	SleepFunc        = "sleep"
+
+	// JSON functions
+	ParseJSONFunc   = "parseJSON"
+	ExtractCodeFunc = "extractCode"
 )
 
 // HTTP Function names.
@@ -87,6 +105,8 @@ const (
 const (
 	UnknownPattern  = "unknown"
 	WildcardPattern = "_"
+	SuccessPattern  = "Success"
+	ErrorPattern    = "Error"
 )
 
 // Type name constants for case variations.

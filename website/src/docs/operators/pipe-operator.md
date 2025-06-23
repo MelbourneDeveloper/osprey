@@ -1,4 +1,5 @@
 ---
+layout: page
 title: "|> (Pipe Operator Operator)"
 description: "Takes the result of the left expression and passes it as the first argument to the right function. Enables functional programming and method chaining."
 ---

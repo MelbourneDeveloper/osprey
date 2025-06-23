@@ -1,8 +1,10 @@
-**Version:** 0.1.0-alpha
+**Version:** 0.2.0-alpha
+
 **Date:** June 2025
+
 **Author** Christian Findlay
 
-## Table of Contents
+<div class="table-of-contents">
 
 1. [Introduction](#1-introduction)
    - [Completeness](#11-completeness)
@@ -50,6 +52,7 @@
     - [Fiber-Based Concurrency](#147-fiber-based-concurrency)
     - [Complete HTTP Server Example](#148-complete-http-server-example)
 15. [Error Handling](#15-error-handling)
+    - [The Result Type](#151-the-result-type)
 16. [Examples](#16-examples)
 17. [Built-in Functions Reference](#17-built-in-functions-reference)
     - [Basic I/O Functions](#171-basic-io-functions)
@@ -64,6 +67,8 @@
     - [Error Messages](#184-error-messages)
     - [Programming Best Practices](#185-programming-best-practices)
     - [Implementation Details](#186-implementation-details)
+
+</div>
 
 ## 1. Introduction
 
@@ -129,6 +134,18 @@ ESCAPE_SEQUENCE := '\n' | '\t' | '\r' | '\\' | '\"'
 ```
 INTERPOLATED_STRING := '"' (CHAR | INTERPOLATION)* '"'
 INTERPOLATION := '${' EXPRESSION '}'
+```
+
+#### Immutable List Literals
+```
+LIST := '[' (expression (',' expression)*)? ']'
+```
+
+**Examples:**
+```osprey
+let numbers = [1, 2, 3, 4]  // Fixed size: 4 elements
+let names = ["Alice", "Bob", "Charlie"]  // Fixed size: 3 elements
+let pair = [x, y]  // Fixed size: 2 elements
 ```
 
 ### 2.4 Operators
@@ -818,6 +835,72 @@ primary_expression := literal
                    | block_expression
 ```
 
+
+#### Binary Expressions
+```
+binary_expression := multiplicative_expression (('+' | '-') multiplicative_expression)*
+multiplicative_expression := unary_expression (('*' | '/') unary_expression)*
+```
+
+#### Boolean Pattern Matching
+Use pattern matching for conditional logic:
+
+**Examples:**
+```osprey
+let result = match x > 0 {
+    true => "positive"
+    false => "zero or negative"
+}
+
+let max = match a > b {
+    true => a
+    false => b
+}
+```
+
+#### List Access (Safe)
+```
+list_access := expression '[' INT ']'  // Returns Result<T, IndexError>
+```
+
+🚨 **CRITICAL SAFETY GUARANTEE**: List access **ALWAYS** returns `Result<T, IndexError>` - **NO PANICS, NO NULLS, NO EXCEPTIONS**
+
+**MANDATORY PATTERN MATCHING REQUIRED:**
+```osprey
+let numbers = [1, 2, 3, 4]
+
+// ✅ CORRECT: Pattern matching required
+let firstResult = numbers[0]  // Returns Result<Int, IndexError>
+match firstResult {
+    Success { value } => print("First: ${value}")
+    Error { message } => print("Index out of bounds: ${message}")
+}
+
+// ✅ CORRECT: Inline pattern matching
+let second = match numbers[1] {
+    Success { value } => value
+    Error { _ } => -1  // Default value for out-of-bounds
+}
+
+// ✅ CORRECT: Bounds-safe iteration
+let commands = ["echo hello", "echo world"]
+match commands[0] {
+    Success { value } => {
+        print("Executing: ${value}")
+        spawnProcess(value)
+    }
+    Error { message } => print("No command at index 0: ${message}")
+}
+```
+
+**FUNDAMENTAL SAFETY PRINCIPLE**: Array access can fail (index out of bounds), therefore it MUST return Result types to enforce explicit error handling and prevent runtime crashes.
+
+#### Primary Expressions
+```
+primary_expression := literal | list_literal | identifier | '(' expression ')' 
+                   | list_access | lambda_expression | block_expression | match_expression
+```
+
 ### 3.9 Block Expressions
 
 Block expressions allow grouping multiple statements together and returning a value from the final expression. They create a new scope for variable declarations and enable sequential execution with proper scoping rules.
@@ -1092,12 +1175,76 @@ let result = match status {
 - `Bool`: Boolean values (`true`, `false`)
 - `Unit`: Type for functions that don't return a meaningful value
 - `Result<T, E>`: Built-in generic type for error handling
+- `List<T, N>`: Immutable fixed-size lists with N elements of type T
+- `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
+
+#### Function Types
+
+Function types represent functions as first-class values, enabling higher-order functions and function composition.
+
+**Syntax:**
+```
+FunctionType := '(' (Type (',' Type)*)? ')' '->' Type
+```
+
+**Examples:**
+```osprey
+(Int) -> Int              // Function taking an Int, returning an Int
+(Int, String) -> Bool     // Function taking Int and String, returning Bool
+() -> String              // Function with no parameters, returning String
+(String) -> (Int) -> Bool // Higher-order function returning another function
+```
+
+**Function Type Declarations:**
+```osprey
+// Function parameter with explicit function type
+fn applyFunction(value: Int, transform: (Int) -> Int) -> Int = 
+    transform(value)
+
+// Variable with function type
+let doubler: (Int) -> Int = fn(x: Int) -> Int = x * 2
+
+// Higher-order function that returns a function
+fn createAdder(n: Int) -> (Int) -> Int = 
+    fn(x: Int) -> Int = x + n
+```
+
+**Function Composition Examples:**
+```osprey
+// Define some simple functions
+fn double(x: Int) -> Int = x * 2
+fn square(x: Int) -> Int = x * x
+fn addFive(x: Int) -> Int = x + 5
+
+// Higher-order function with strong typing
+fn applyTwice(value: Int, func: (Int) -> Int) -> Int = 
+    func(func(value))
+
+// Usage with type safety
+let result1 = applyTwice(5, double)  // 20
+let result2 = applyTwice(3, square)  // 81
+let result3 = applyTwice(10, addFive) // 20
+
+// Composition of functions
+fn compose(f: (Int) -> Int, g: (Int) -> Int) -> (Int) -> Int =
+    fn(x: Int) -> Int = f(g(x))
+
+let doubleSquare = compose(double, square)
+let result4 = doubleSquare(3) // double(square(3)) = double(9) = 18
+```
+
+**Type Safety Benefits:**
+- **Compile-time validation**: Function signatures are checked at compile time
+- **No runtime type errors**: Mismatched function types caught early
+- **Clear documentation**: Function types serve as documentation
+- **Enables optimization**: Compiler can optimize based on known function signatures
 
 ### 5.2 Built-in Error Types
 
 - `MathError`: For arithmetic operations (DivisionByZero, Overflow, Underflow)
-- `ParseError`: For string parsing operations
-- `IndexError`: For array/string indexing operations
+- `ParseError`: For string parsing operations  
+- `IndexError`: For list/string indexing operations (OutOfBounds)
+- `Success`: Successful result wrapper
 
 ### 5.3 Type Inference Rules
 
@@ -2173,13 +2320,19 @@ match serverResult {
 }
 ```
 
-#### `httpListen(serverID: Int, handler: fn(HttpRequest) -> Result<HttpResponse, String>) -> Result<Success, String>`
+#### `httpListen(serverID: Int, handler: fn(String, String, String, String) -> String) -> Result<Success, String>`
 
 Starts the HTTP server listening for requests. Each request is handled in a separate fiber for maximum concurrency.
 
+**CRITICAL**: The handler function receives **RAW HTTP request data** and must return the **RAW response body**. The C runtime handles HTTP parsing and response formatting - the Osprey handler only processes the application logic.
+
 **Parameters:**
 - `serverID`: Server identifier from `httpCreateServer`
-- `handler`: Request handler function that processes incoming requests
+- `handler`: Request handler function that takes RAW HTTP data:
+  - `method: String` - HTTP method (GET, POST, PUT, DELETE, etc.)
+  - `path: String` - Request path (e.g., "/api/users", "/health")
+  - `headers: String` - Raw HTTP headers as received
+  - `body: String` - Raw request body data
 
 **Returns:**
 - `Success()`: Server started successfully
@@ -2187,36 +2340,51 @@ Starts the HTTP server listening for requests. Each request is handled in a sepa
 
 **Example:**
 ```osprey
-fn handleRequest(request: HttpRequest) -> Result<HttpResponse, String> = match request.method {
-    GET => match request.path {
-        "/health" => Success(HttpResponse {
-            status: 200,
-            contentType: "application/json",
-            partialBody: "{\"status\": \"healthy\"}",
-            isComplete: true,
-            streamFd: -1
-        })
-        "/users" => Success(HttpResponse {
-            status: 200,
-            contentType: "application/json", 
-            partialBody: "[{\"id\": 1, \"name\": \"Alice\"}]",
-            isComplete: true,
-            streamFd: -1
-        })
-        _ => Success(HttpResponse {
-            status: 404,
-            contentType: "text/plain",
-            partialBody: "Not Found",
-            isComplete: true,
-            streamFd: -1
-        })
+fn handleRawRequest(method: String, path: String, headers: String, body: String) -> String = 
+    match method {
+        "GET" => match path {
+            "/health" => "{\"status\": \"healthy\"}"
+            "/api/users" => "[{\"id\": 1, \"name\": \"Alice\"}, {\"id\": 2, \"name\": \"Bob\"}]"
+            _ => "Not Found"
+        }
+        "POST" => match path {
+            "/api/users" => "{\"id\": 3, \"name\": \"New User\", \"message\": \"User created\"}"
+            "/api/auth/login" => "{\"token\": \"abc123\", \"message\": \"Login successful\"}"
+            _ => "Endpoint not found"
+        }
+        "PUT" => match path {
+            "/api/users/1" => "{\"id\": 1, \"name\": \"Alice Updated\", \"message\": \"User updated\"}"
+            _ => "Not Found"
+        }
+        "DELETE" => match path {
+            "/api/users/1" => "{\"message\": \"User deleted\"}"
+            _ => "Not Found"
+        }
+        _ => "Method not allowed"
     }
-    POST => handlePostRequest(request)
-    _ => Err("Method not supported")
-}
 
-let listenResult = httpListen(serverID: serverId, handler: handleRequest)
+let listenResult = httpListen(serverID: serverId, handler: handleRawRequest)
 ```
+
+**Raw HTTP Handler Architecture:**
+
+The HTTP server uses a **raw callback architecture** where:
+
+1. **C Runtime** handles TCP connections, HTTP parsing, and response formatting
+2. **Osprey Handler** receives raw request data and returns raw response body
+3. **No HTTP abstraction** - direct access to method, path, headers, and body
+4. **Maximum performance** - minimal overhead between network and application logic
+
+**Handler Function Signature:**
+```osprey
+fn myHandler(method: String, path: String, headers: String, body: String) -> String
+```
+
+**Response Handling:**
+- Return value becomes the HTTP response body
+- HTTP status codes are determined by the response content (200 for success)
+- Content-Type headers are set automatically based on response format
+- For error responses, return appropriate error messages
 
 #### `httpStopServer(serverID: Int) -> Result<Success, String>`
 
@@ -2228,6 +2396,226 @@ Stops the HTTP server and cleans up resources.
 **Returns:**
 - `Success()`: Server stopped successfully  
 - `Err(message)`: Error description
+
+### 14.2.1 HTTP Request Handling Bridge
+
+**CRITICAL REQUIREMENT**: HTTP servers in Osprey must call back into Osprey code to handle requests. **NO ROUTING LOGIC SHALL BE IMPLEMENTED IN C RUNTIME**. The C runtime provides only the transport layer; all application logic, routing, and request handling must be implemented in Osprey.
+
+#### Request Handling Architecture
+
+When an HTTP server receives a request, the C runtime must:
+
+1. **Parse the HTTP request** (method, path, headers, body)
+2. **Serialize request data** into a structured format
+3. **Call back into Osprey** to handle the request
+4. **Receive response data** from Osprey
+5. **Send HTTP response** back to the client
+
+#### Bridge Function Specification
+
+**NEW ARCHITECTURE**: Osprey now uses **direct function pointer callbacks** for maximum performance and zero overhead.
+
+#### Raw Function Pointer Callbacks
+
+When `httpListen()` is called, the Osprey handler function is passed directly to the C runtime as a function pointer:
+
+**C Runtime Function Signature:**
+```c
+int64_t http_listen(int64_t server_id, char* (*handler)(char* method, char* path, char* headers, char* body));
+```
+
+**Handler Function Signature:**
+```c
+char* handler(char* method, char* path, char* headers, char* body);
+```
+
+#### Legacy Bridge Function (Deprecated)
+
+The old bridge function is deprecated but still supported for compatibility:
+
+```c
+// DEPRECATED: Use direct function pointers instead
+extern int osprey_handle_http_request(
+    int server_id,
+    char* method,
+    char* full_url,
+    char* raw_headers,
+    char* body,
+    size_t body_length,
+    int* response_status,
+    char** response_headers,
+    char** response_body,
+    size_t* response_body_length
+);
+```
+
+#### New Raw Callback Architecture Flow
+
+**1. Osprey Code:**
+```osprey
+fn handleRawRequest(method: String, path: String, headers: String, body: String) -> String = 
+    match method {
+        "GET" => match path {
+            "/health" => "{\"status\": \"healthy\"}"
+            "/api/users" => "[{\"id\": 1, \"name\": \"Alice\"}]"
+            _ => "Not Found"
+        }
+        "POST" => "{\"message\": \"Created\"}"
+        _ => "Method not allowed"
+    }
+
+let listenResult = httpListen(serverId, handleRawRequest)
+```
+
+**2. LLVM Code Generation:**
+- Generates function pointer for `handleRawRequest`
+- Passes function pointer to `http_listen()` C function
+
+**3. C Runtime Implementation:**
+```c
+// Global storage for handler function pointer
+static char* (*request_handler)(char* method, char* path, char* headers, char* body) = NULL;
+
+int64_t http_listen(int64_t server_id, char* (*handler)(char* method, char* path, char* headers, char* body)) {
+    request_handler = handler;  // Store the function pointer
+    // Setup server socket and start listening...
+    return 0;
+}
+
+// In request processing loop:
+void handle_client_request(int client_fd, char* method, char* path, char* headers, char* body) {
+    if (request_handler) {
+        // Call Osprey function directly with RAW data
+        char* response_body = request_handler(method, path, headers, body);
+        
+        // Format and send HTTP response
+        char response[8192];
+        snprintf(response, sizeof(response),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: close\r\n"
+            "\r\n%s",
+            strlen(response_body), response_body);
+        
+        send(client_fd, response, strlen(response), 0);
+        
+        // Clean up if response was allocated
+        if (response_body) free(response_body);
+    }
+}
+```
+
+**Architecture Benefits:**
+- **Zero overhead**: Direct function calls, no serialization
+- **Raw data access**: Handler receives exactly what was sent over HTTP
+- **Maximum performance**: Minimal abstraction between network and application
+- **Simple debugging**: Direct call stack from C to Osprey
+- **Memory efficient**: No intermediate data structures
+
+**Legacy Bridge Parameters (Deprecated):**
+- `server_id`: The server ID that received the request
+- `method`: HTTP method (GET, POST, PUT, DELETE, etc.)
+- `full_url`: Complete URL including query parameters ("/api/users?page=1&limit=10")
+- `raw_headers`: Raw HTTP headers as received ("Content-Type: application/json\r\nAuthorization: Bearer token\r\n")
+- `body`: Raw request body data (may be binary)
+- `body_length`: Length of request body in bytes
+- `response_status`: Output parameter for HTTP status code
+- `response_headers`: Output parameter for raw response headers
+- `response_body`: Output parameter for response body (may be binary)
+- `response_body_length`: Output parameter for response body length
+
+**Legacy Return Value:**
+- `0`: Success
+- `-1`: Error handling request
+
+**Streaming Support:**
+For large request/response bodies, the bridge function must support streaming:
+- Request body streaming: C runtime provides file descriptor for reading body data
+- Response body streaming: Osprey can return a file descriptor for C runtime to stream response
+
+#### Implementation Requirements
+
+**🚫 FORBIDDEN IN C RUNTIME:**
+- URL routing logic
+- Application-specific response generation
+- Business logic
+- Hardcoded API endpoints
+- Request path matching beyond basic parsing
+
+**✅ REQUIRED IN C RUNTIME:**
+- HTTP protocol parsing
+- Socket management
+- Request/response serialization
+- Bridge function calls
+- Error handling for transport failures
+
+**✅ REQUIRED IN OSPREY:**
+- All request routing logic
+- Application business logic
+- Response generation
+- API endpoint definitions
+- Request validation
+
+#### Example Implementation
+
+**C Runtime (Transport Layer Only):**
+```c
+void handle_client_request(int client_fd, int server_id, char* method, char* full_url, 
+                          char* raw_headers, char* body, size_t body_length) {
+    // Prepare response parameters
+    int response_status;
+    char* response_headers = NULL;
+    char* response_body = NULL;
+    size_t response_body_length;
+    
+    // Call back into Osprey with raw HTTP data - NO ROUTING IN C!
+    int result = osprey_handle_http_request(
+        server_id, method, full_url, raw_headers, body, body_length,
+        &response_status, &response_headers, &response_body, &response_body_length
+    );
+    
+    if (result == 0) {
+        // Send HTTP response with raw data
+        send_raw_http_response(client_fd, response_status, response_headers, 
+                              response_body, response_body_length);
+    } else {
+        // Send 500 error
+        send_error_response(client_fd, 500, "Internal Server Error");
+    }
+    
+    // Clean up allocated response data
+    if (response_headers) free(response_headers);
+    if (response_body) free(response_body);
+}
+```
+
+**Osprey Code (Application Layer):**
+```osprey
+fn handleHttpRequest(request: HttpRequest) -> Result<HttpResponse, String> = 
+    match request.method {
+        GET => match request.path {
+            "/api/users" => getUserList()
+            "/api/health" => Success(HttpResponse {
+                status: 200,
+                contentType: "application/json",
+                body: "{\"status\": \"healthy\"}"
+            })
+            _ => Success(HttpResponse {
+                status: 404,
+                contentType: "text/plain", 
+                body: "Not Found"
+            })
+        }
+        POST => match request.path {
+            "/api/users" => createUser(request.body)
+            _ => Err("Endpoint not found")
+        }
+        _ => Err("Method not supported")
+    }
+```
+
+This architecture ensures **complete separation of concerns**: C handles transport, Osprey handles application logic.
 
 ### 14.3 HTTP Client Functions
 
@@ -2488,6 +2876,63 @@ let sendResult = websocketSend(wsID: wsId, message: "Hello, WebSocket!")
 
 Closes the WebSocket connection.
 
+### 14.4.1 WebSocket Server Functions
+
+#### `websocketCreateServer(port: Int, address: String, path: String) -> Int`
+Creates a WebSocket server bound to the specified port and address.
+
+🚧 **IMPLEMENTATION STATUS**: The current implementation has **CRITICAL RUNTIME ISSUES**:
+
+**CURRENT BEHAVIOR**:
+- Returns server ID on successful creation
+- Returns negative error codes on failure
+
+**RUNTIME ISSUES DETECTED**:
+- **Port Binding Failures**: `websocketServerListen()` returns `-4` (bind failed) instead of expected `0` (success)
+- **Resource Conflicts**: Multiple test runs cause port conflicts and resource exhaustion
+- **Test Environment Instability**: Inconsistent behavior between different execution environments
+
+**ROOT CAUSE ANALYSIS**:
+- **Issue**: `bind()` system call fails with `EADDRINUSE` (Address already in use)
+- **Impact**: WebSocket server cannot bind to port, causing listen operation to fail
+- **Environment**: Particularly problematic in containerized test environments with limited cleanup
+
+**NEEDED FIXES**:
+1. **Port Management**: Implement proper port cleanup and reuse detection
+2. **Resource Cleanup**: Ensure proper socket closure and resource deallocation
+3. **Retry Logic**: Add exponential backoff for port binding failures
+4. **Error Handling**: Better error reporting for different failure modes
+5. **Test Isolation**: Implement proper test teardown to prevent resource conflicts
+
+**Example:**
+```osprey
+let serverId = websocketCreateServer(8080, "127.0.0.1", "/chat")
+print("Server created with ID: ${serverId}")
+```
+
+#### `websocketServerListen(serverID: Int) -> Int`
+Starts the WebSocket server listening for connections.
+
+🚧 **CURRENT ISSUE**: Returns `-4` (bind failed) instead of `0` (success) due to port binding issues.
+
+**Error Codes:**
+- `0`: Success
+- `-1`: Invalid server ID
+- `-2`: Socket creation failed
+- `-3`: Socket options failed
+- `-4`: **BIND FAILED** (most common current issue)
+- `-5`: Listen failed
+- `-6`: Thread creation failed
+
+#### `websocketServerBroadcast(serverID: Int, message: String) -> Int`
+Broadcasts a message to all connected WebSocket clients.
+
+#### `websocketStopServer(serverID: Int) -> Int`
+Stops the WebSocket server and closes all connections.
+
+#### `websocketKeepAlive() -> Void`
+Keeps the WebSocket server running indefinitely until interrupted.
+
 ### 14.5 Streaming Response Bodies
 
 Osprey automatically handles response streaming to prevent memory issues with large responses:
@@ -2608,7 +3053,36 @@ match serverResult {
 
 ## 15. Error Handling
 
+### 15.1 The Result Type
+
+**CRITICAL**: All functions that can fail **MUST** return a `Result` type. There are no exceptions, panics, or nulls. This is a core design principle of the language to ensure safety and eliminate entire classes of runtime errors.
+
+The `Result` type is a generic union type with two variants:
+
+- `Success { value: T }`: Represents a successful result, containing the value of type `T`.
+- `Error { message: E }`: Represents an error, containing an error message or object of type `E`.
+
+**Example:**
+```osprey
+type Result<T, E> = Success { value: T } | Error { message: E }
+```
+
+The compiler **MUST** enforce that `Result` types are always handled with a `match` expression, preventing direct access to the underlying value and ensuring that all possible outcomes are considered.
+
+```osprey
+let result = someFunctionThatCanFail()
+
+match result {
+    Success { value } => print("Success: ${value}")
+    Error { message } => print("Error: ${message}")
+}
+```
+
+This approach guarantees that error handling is explicit, robust, and checked at compile time.
+
 ## 16. Examples
+
+The `examples/` directory contains a variety of sample programs demonstrating Osprey's features. These examples are tested as part of the standard build process to ensure they remain up-to-date and functional.
 
 ## 17. Built-in Functions Reference
 
@@ -2644,17 +3118,84 @@ let age = input()
 ```
 
 #### `toString(value: int | string | bool) -> string`
-Converts any value to its string representation. Used internally by print and string interpolation.
+Converts any value to its string representation.
 
-**Parameters:**
-- `value: int | string | bool` - The value to convert to string
+#### `length(s: string) -> Result<int, StringError>`
+🚨 **CRITICAL**: Returns the length of a string wrapped in a Result type for safety.
 
-**Returns:** `string` - String representation of the value
-
-**Examples:**
+**MANDATORY PATTERN MATCHING:**
 ```osprey
-let str = toString(42)
-let msg = toString(true)
+match length("hello") {
+    Success { value } => print("Length: ${value}")
+    Error { message } => print("Error: ${message}")
+}
+```
+
+#### `contains(haystack: string, needle: string) -> Result<bool, StringError>`
+🚨 **CRITICAL**: Checks if a string contains a substring, returns Result for safety.
+
+**MANDATORY PATTERN MATCHING:**
+```osprey
+match contains("hello", "ell") {
+    Success { value } => print("Found: ${value}")
+    Error { message } => print("Error: ${message}")
+}
+```
+
+#### `substring(s: string, start: int, end: int) -> Result<string, StringError>`
+🚨 **CRITICAL**: Extracts a substring from start to end, returns Result for bounds safety.
+
+**MANDATORY PATTERN MATCHING:**
+```osprey
+match substring("hello", 1, 3) {
+    Success { value } => print("Substring: ${value}")
+    Error { message } => print("Error: ${message}")
+}
+```
+
+**FUNDAMENTAL PRINCIPLE**: All string operations that could conceptually fail MUST return Result types. This enforces explicit error handling and prevents runtime panics.
+
+### 17.2 File System Functions
+
+#### `writeFile(path: string, content: string) -> Result<Success, string>`
+Writes content to a file.
+
+#### `readFile(path: string) -> Result<string, string>`
+Reads file content as string.
+
+#### `deleteFile(path: string) -> Result<Success, string>`
+Deletes a file.
+
+#### `createDirectory(path: string) -> Result<Success, string>`
+Creates a directory.
+
+#### `fileExists(path: string) -> bool`
+Checks if file exists.
+
+### 17.3 Process Operations
+
+#### `spawnProcess(command: string, args: string, timeout: int) -> Result<ProcessResult, string>`
+Spawns external process with timeout.
+
+🚧 **IMPLEMENTATION STATUS**: The current implementation is **incomplete**. The compiler currently only supports:
+```osprey
+spawnProcess(command: string) -> Result<ProcessResult, string>
+```
+
+**NEEDED WORK**:
+- Support for separate `args` parameter for command arguments
+- Support for `timeout` parameter to limit execution time
+- Full `ProcessResult` type with `stdout`, `stderr`, and `exitCode` fields
+
+**Current Implementation**: Only accepts a single command string and returns a simplified result indicating success/failure with exit code.
+
+**ProcessResult Type:**
+```osprey
+type ProcessResult = {
+    stdout: string,
+    stderr: string,
+    exitCode: int
+}
 ```
 
 ### 17.2 Functional Iterator Functions
@@ -3165,3 +3706,150 @@ Osprey is a modern functional programming language with:
 **End of Specification**
 
 This specification defines the complete syntax and semantics of the Osprey programming language, including its revolutionary fiber-isolated module system and lightweight concurrency features. The accompanying `osprey.g4` grammar file provides the formal ANTLR4 grammar definition for parsing.
+
+## 7. Server Applications and Long-Running Processes
+
+### 7.1 Functional Approaches to Server Persistence
+
+**Osprey is a functional language and does NOT support imperative loop constructs.** Server applications that need to stay alive should use functional patterns instead:
+
+#### 7.1.1 Fiber-Based Server Persistence
+
+Use fibers to handle concurrent requests and keep the server process alive:
+
+```osprey
+// HTTP server with fiber-based request handling
+fn handleRequest(requestId: Int) -> Int = {
+    // Process the request
+    let response = processData(requestId)
+    response
+}
+
+fn serverMain() -> Unit = {
+    let server = httpCreateServer(port: 8080, address: "0.0.0.0")
+    
+    // Spawn fibers to handle requests concurrently
+    let requestHandler = spawn {
+        // Use functional iteration to process incoming requests
+        range(1, 1000000) |> forEach(handleRequest)
+    }
+    
+    // Keep server alive by awaiting the handler fiber
+    await(requestHandler)
+}
+```
+
+#### 7.1.2 Recursive Function Patterns
+
+Use tail-recursive functions for continuous processing:
+
+```osprey
+fn serverLoop(state: ServerState) -> Unit = match getNextRequest(state) {
+    Some { request } => {
+        let newState = processRequest(request, state)
+        serverLoop(newState)  // Tail recursion keeps server alive
+    }
+    None => serverLoop(state)  // Continue waiting for requests
+}
+
+fn main() -> Unit = {
+    let initialState = initializeServer()
+    serverLoop(initialState)  // Functional "loop" via recursion
+}
+```
+
+#### 7.1.3 Event-Driven Architecture with Channels
+
+Use channels for event-driven server architectures:
+
+```osprey
+fn eventProcessor(eventChannel: Channel<Event>) -> Unit = {
+    let event = recv(eventChannel)
+    match event {
+        Success { value } => {
+            processEvent(value)
+            eventProcessor(eventChannel)  // Continue processing
+        }
+        Error { _ } => eventProcessor(eventChannel)  // Retry on error
+    }
+}
+
+fn serverWithEvents() -> Unit = {
+    let eventChan = Channel<Event> { capacity: 100 }
+    
+    // Spawn event processor fiber
+    let processor = spawn eventProcessor(eventChan)
+    
+    // Spawn request handlers that send events
+    let handler1 = spawn handleHTTPRequests(eventChan)
+    let handler2 = spawn handleWebSocketRequests(eventChan)
+    
+    // Wait for all handlers
+    await(processor)
+    await(handler1)
+    await(handler2)
+}
+```
+
+#### 7.1.4 Functional Iterator-Based Processing
+
+Use functional iterators for continuous data processing:
+
+```osprey
+// Stream processing with functional iterators
+fn processIncomingData() -> Unit = {
+    // Process data in batches using functional approach
+    range(1, Int.MAX_VALUE) 
+    |> map(getBatch)
+    |> filter(isValidBatch)
+    |> forEach(processBatch)
+}
+
+fn webSocketServer() -> Unit = {
+    let server = websocketCreateServer(port: 8080, address: "0.0.0.0", path: "/ws")
+    
+    // Use functional processing instead of loops
+    let dataProcessor = spawn processIncomingData()
+    let connectionHandler = spawn manageConnections(server)
+    
+    await(dataProcessor)
+    await(connectionHandler)
+}
+```
+
+### 7.2 Why No Imperative Loops?
+
+**Functional Superiority:**
+1. **Composability** - Functional iterators can be chained with `|>`
+2. **Safety** - No mutable state, no infinite loop bugs
+3. **Concurrency** - Fibers provide better parallelism than loops
+4. **Testability** - Pure functions are easier to test than stateful loops
+
+**Anti-Pattern:**
+```osprey
+// ❌ WRONG - Imperative loops (NOT SUPPORTED)
+loop {
+    let request = getRequest()
+    processRequest(request)
+}
+```
+
+**Functional Pattern:**
+```osprey
+// ✅ CORRECT - Functional approach
+fn serverHandler() -> Unit = {
+    requestStream() 
+    |> map(processRequest)
+    |> forEach(sendResponse)
+}
+```
+
+### 7.3 Performance Considerations
+
+Functional approaches in Osprey are optimized for:
+- **Tail call optimization** prevents stack overflow in recursive functions
+- **Fiber scheduling** provides efficient concurrency without OS threads
+- **Channel buffering** enables high-throughput event processing
+- **Iterator fusion** optimizes chained functional operations
+
+This functional approach provides better maintainability, testability, and performance than traditional imperative loops.

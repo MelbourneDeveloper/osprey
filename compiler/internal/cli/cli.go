@@ -248,15 +248,20 @@ func runCompileToExecutable(source, filename string) CommandResult {
 }
 
 func runRunProgram(source string) CommandResult {
+	fmt.Fprintf(os.Stderr, "Starting compilation...\n")
+
 	if err := codegen.CompileAndRun(source); err != nil {
+		fmt.Fprintf(os.Stderr, "Compilation failed\n")
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Execution failed: %v", err),
 		}
 	}
 
+	fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
+
 	return CommandResult{
-		Output:  "Running program...\n",
+		Output:  "",
 		Success: true,
 	}
 }
@@ -696,6 +701,7 @@ func generateMainIndex(docsDir string) error {
 	var content strings.Builder
 
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString("title: \"API Reference - Osprey Programming Language\"\n")
 	content.WriteString("description: \"Complete reference documentation for the Osprey programming language\"\n")
 	content.WriteString("---\n\n")
@@ -789,6 +795,7 @@ func generateMainIndex(docsDir string) error {
 func generateFunctionIndex(docsDir string) error {
 	var content strings.Builder
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString("title: \"Built-in Functions\"\n")
 	content.WriteString("description: \"Complete reference for all built-in functions in Osprey\"\n")
 	content.WriteString("---\n\n")
@@ -817,6 +824,7 @@ func generateFunctionIndex(docsDir string) error {
 func generateTypeIndex(docsDir string) error {
 	var content strings.Builder
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString("title: \"Built-in Types\"\n")
 	content.WriteString("description: \"Complete reference for all built-in types in Osprey\"\n")
 	content.WriteString("---\n\n")
@@ -844,6 +852,7 @@ func generateTypeIndex(docsDir string) error {
 func generateOperatorIndex(docsDir string) error {
 	var content strings.Builder
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString("title: \"Operators\"\n")
 	content.WriteString("description: \"Complete reference for all operators in Osprey\"\n")
 	content.WriteString("---\n\n")
@@ -872,6 +881,7 @@ func generateOperatorIndex(docsDir string) error {
 func generateKeywordIndex(docsDir string) error {
 	var content strings.Builder
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString("title: \"Language Keywords\"\n")
 	content.WriteString("description: \"Complete reference for all language keywords in Osprey\"\n")
 	content.WriteString("---\n\n")
@@ -900,6 +910,7 @@ func generateFunctionMarkdown(doc *descriptions.BuiltinFunctionDesc) string {
 	var content strings.Builder
 
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString(fmt.Sprintf("title: \"%s (Function)\"\n", doc.Name))
 	content.WriteString(fmt.Sprintf("description: \"%s\"\n", doc.Description))
 	content.WriteString("---\n\n")
@@ -930,6 +941,7 @@ func generateTypeMarkdown(doc *descriptions.BuiltinTypeDesc) string {
 	var content strings.Builder
 
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString(fmt.Sprintf("title: \"%s (Type)\"\n", doc.Name))
 	content.WriteString(fmt.Sprintf("description: \"%s\"\n", doc.Description))
 	content.WriteString("---\n\n")
@@ -949,6 +961,7 @@ func generateOperatorMarkdown(doc *descriptions.OperatorDesc) string {
 	var content strings.Builder
 
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString(fmt.Sprintf("title: \"%s (%s Operator)\"\n", doc.Symbol, doc.Name))
 	content.WriteString(fmt.Sprintf("description: \"%s\"\n", doc.Description))
 	content.WriteString("---\n\n")
@@ -968,6 +981,7 @@ func generateKeywordMarkdown(doc *descriptions.KeywordDesc) string {
 	var content strings.Builder
 
 	content.WriteString("---\n")
+	content.WriteString("layout: page\n")
 	content.WriteString(fmt.Sprintf("title: \"%s (Keyword)\"\n", doc.Keyword))
 	content.WriteString(fmt.Sprintf("description: \"%s\"\n", doc.Description))
 	content.WriteString("---\n\n")
@@ -1081,18 +1095,23 @@ func runCompileToExecutableWithSecurity(source, filename string, security *Secur
 }
 
 func runRunProgramWithSecurity(source string, security *SecurityConfig) CommandResult {
+	fmt.Fprintf(os.Stderr, "Starting compilation...\n")
+
 	// Convert CLI security config to codegen security config
 	codegenSecurity := convertToCodegenSecurity(security)
 
 	if err := codegen.CompileAndRunWithSecurity(source, codegenSecurity); err != nil {
+		fmt.Fprintf(os.Stderr, "Compilation failed\n")
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Execution failed: %v", err),
 		}
 	}
 
+	fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
+
 	return CommandResult{
-		Output:  "Running program...\n",
+		Output:  "",
 		Success: true,
 	}
 }

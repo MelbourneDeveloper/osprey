@@ -9,7 +9,8 @@
     "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
     "source=vscode-extensions,target=/root/.vscode-server/extensions,type=volume",
     "source=go-cache,target=/go/pkg,type=volume",
-    "source=cargo-cache,target=/root/.cargo/registry,type=volume"
+    "source=cargo-cache,target=/root/.cargo/registry,type=volume",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
   "customizations": {
     "vscode": {

@@ -1,6 +1,7 @@
-// Code generated from osprey.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from osprey.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // osprey
+
 import "github.com/antlr4-go/antlr/v4"
 
 // ospreyListener is a complete listener for a parse tree produced by ospreyParser.
@@ -150,6 +151,9 @@ type ospreyListener interface {
 
 	// EnterLiteral is called when entering the literal production.
 	EnterLiteral(c *LiteralContext)
+
+	// EnterListLiteral is called when entering the listLiteral production.
+	EnterListLiteral(c *ListLiteralContext)
 
 	// EnterDocComment is called when entering the docComment production.
 	EnterDocComment(c *DocCommentContext)
@@ -318,6 +322,9 @@ type ospreyListener interface {
 
 	// ExitLiteral is called when exiting the literal production.
 	ExitLiteral(c *LiteralContext)
+
+	// ExitListLiteral is called when exiting the listLiteral production.
+	ExitListLiteral(c *ListLiteralContext)
 
 	// ExitDocComment is called when exiting the docComment production.
 	ExitDocComment(c *DocCommentContext)
