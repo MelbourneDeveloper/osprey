@@ -24,9 +24,8 @@
 // - app output
 // AI: DO NOT CHANGE!!!!
 
-// TODO: replace with real call to compiler! Span process
-fn processCompileRequest(jsonBody: string) -> string = 
-    "DISTINCTIVE_COMPILE_RESPONSE_FROM_OSPREY_FUNCTION"
+// Server configuration
+let serverPort = 3002
 
 
 // Helper function to generate unique temp filenames
@@ -81,15 +80,15 @@ fn handleHttpRequest(method: string, path: string, headers: string, body: string
     }
 
 
-// Start HTTP server on port 3001
-print("Creating HTTP server on port 3001...")
-let serverId = httpCreateServer(3001, "127.0.0.1")
+// Start HTTP server
+print("Creating HTTP server on port ${toString(serverPort)}...")
+let serverId = httpCreateServer(serverPort, "127.0.0.1")
 print("Server created with ID: ${toString(serverId)}")
 
 print("Starting server listener with proper handler...")
 let listenResult = httpListen(serverId, handleHttpRequest)
 print("HTTP server listen result: ${toString(listenResult)}")
-print("HTTP server listening on 127.0.0.1:3001")
+print("HTTP server listening on 127.0.0.1:${toString(serverPort)}")
 
 print("✅ Server is LIVE and ready!")
 
