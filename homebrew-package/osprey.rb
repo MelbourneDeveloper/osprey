@@ -3,7 +3,7 @@ class Osprey < Formula
   homepage "https://www.ospreylang.dev"
   url "https://github.com/melbournedeveloper/osprey/releases/download/v0.2.0/osprey-darwin-amd64.tar.gz"
   version "0.2.0"
-  sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
+  sha256 "ab9e08edc663ff82c22f2c9ec243122f6cb8bacebb48629b1c2237f48063fb40"
   
   depends_on "llvm"
 
