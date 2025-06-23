@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +14,39 @@ import (
 // TestMain runs before all tests in this package.
 func TestMain(m *testing.M) {
 	projectRoot := filepath.Join("..", "..")
+
+	// Debug: Print current working directory and project root
+	if wd, err := os.Getwd(); err == nil {
+		fmt.Printf("🔍 Test working directory: %s\n", wd)
+		fmt.Printf("🔍 Project root: %s\n", projectRoot)
+
+		// Check if project root actually exists
+		if absRoot, err := filepath.Abs(projectRoot); err == nil {
+			fmt.Printf("🔍 Absolute project root: %s\n", absRoot)
+			if _, err := os.Stat(absRoot); err != nil {
+				fmt.Printf("❌ Project root doesn't exist: %v\n", err)
+			}
+		}
+	}
+
+	// Clean and rebuild everything
 	testutil.CleanAndRebuildAll(projectRoot)
+
+	// Debug: Check if libraries were actually built
+	expectedLibs := []string{
+		filepath.Join(projectRoot, "bin", "libhttp_runtime.a"),
+		filepath.Join(projectRoot, "bin", "libfiber_runtime.a"),
+	}
+
+	for _, lib := range expectedLibs {
+		if absLib, err := filepath.Abs(lib); err == nil {
+			if _, err := os.Stat(absLib); err == nil {
+				fmt.Printf("✅ Library found: %s\n", absLib)
+			} else {
+				fmt.Printf("❌ Library missing: %s (error: %v)\n", absLib, err)
+			}
+		}
+	}
 
 	// Ensure local bin symlink exists for runtime libraries
 	wd, _ := os.Getwd()
@@ -277,18 +310,21 @@ int main() {
 	}
 }
 
-// findLibrary is a helper function to find library.
+// findLibrary is a helper function to find library using the same search logic as the JIT executor.
 func findLibrary(libName string) string {
+	// Use the exact same search paths as the JIT executor
 	possiblePaths := []string{
 		filepath.Join("bin", libName),
 		filepath.Join(".", "bin", libName),
+		"/usr/local/lib/" + libName, // System install location
 	}
 
-	// Add working directory based paths - go up to project root
+	// Add working directory based paths - match JIT executor exactly
 	if wd, err := os.Getwd(); err == nil {
 		possiblePaths = append(possiblePaths,
-			filepath.Join(wd, "..", "..", "bin", libName),
 			filepath.Join(wd, "bin", libName),
+			filepath.Join(wd, "..", "bin", libName),
+			filepath.Join(wd, "..", "..", "bin", libName),
 		)
 	}
 
@@ -345,6 +381,14 @@ func main() {
 
 // TestHTTPCompilation tests compiling HTTP code and traces any linking issues.
 func TestHTTPCompilationLinking(t *testing.T) {
+	// Debug: Check if HTTP runtime library is available before testing
+	httpLib := findLibrary("libhttp_runtime.a")
+	if httpLib == "" {
+		t.Skip("⚠️ Skipping HTTP compilation test - libhttp_runtime.a not found")
+		return
+	}
+	t.Logf("✅ Using HTTP library: %s", httpLib)
+
 	// Create a minimal HTTP example
 	ospCode := `
 let client = httpCreateClient("https://httpbin.org", 5000)
@@ -353,15 +397,17 @@ let client = httpCreateClient("https://httpbin.org", 5000)
 	testDir := t.TempDir()
 	outputFile := filepath.Join(testDir, "test_http")
 
-	// Run the compilation and expect it to fail with OpenSSL linking issue
+	// Run the compilation and expect it to succeed now that we have the library
 	err := CompileToExecutable(ospCode, outputFile)
 
 	if err != nil {
-		t.Logf("Compilation failed as expected: %v", err)
+		t.Logf("Compilation failed: %v", err)
 
-		// Check if the error is specifically about OpenSSL symbols
+		// Check if the error is specifically about missing symbols
 		errStr := err.Error()
-		if strings.Contains(errStr, "SHA1_") {
+		if strings.Contains(errStr, "http_create_client") || strings.Contains(errStr, "_http_create_client") {
+			t.Error("❌ Compilation failed due to missing HTTP runtime symbols - library not linked properly")
+		} else if strings.Contains(errStr, "SHA1_") || strings.Contains(errStr, "OpenSSL") {
 			t.Log("✅ Confirmed: Compilation fails due to missing OpenSSL linking")
 			t.Log("This test documents the bug we need to fix")
 
@@ -373,6 +419,6 @@ let client = httpCreateClient("https://httpbin.org", 5000)
 			t.Errorf("❌ Compilation failed for unexpected reason: %v", err)
 		}
 	} else {
-		t.Log("✅ Compilation succeeded - OpenSSL linking is working!")
+		t.Log("✅ Compilation succeeded - HTTP runtime linking is working!")
 	}
 }

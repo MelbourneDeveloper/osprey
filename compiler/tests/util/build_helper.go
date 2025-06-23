@@ -20,23 +20,46 @@ func CleanAndRebuildAll(projectRoot string) {
 		panic("Failed to clean: " + err.Error() + "\nOutput: " + string(output))
 	}
 
-	// 2. Re-build native runtime libraries
-	cmd = exec.Command("make", "fiber-runtime", "http-runtime")
+	// 2. Re-build native runtime libraries (build sequentially to avoid race conditions)
+	// First ensure the bin directory exists
+	binDir := filepath.Join(projectRoot, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		panic("Failed to create bin directory: " + err.Error())
+	}
+
+	// Build fiber runtime first
+	cmd = exec.Command("make", "fiber-runtime")
 	cmd.Dir = projectRoot
 	if output, err := cmd.CombinedOutput(); err != nil {
-		panic("Failed to build runtime libraries: " + err.Error() + "\nOutput: " + string(output))
+		panic("Failed to build fiber runtime: " + err.Error() + "\nOutput: " + string(output))
+	}
+
+	// Build HTTP runtime second
+	cmd = exec.Command("make", "http-runtime")
+	cmd.Dir = projectRoot
+	if output, err := cmd.CombinedOutput(); err != nil {
+		panic("Failed to build HTTP runtime: " + err.Error() + "\nOutput: " + string(output))
 	}
 
 	// 3. Re-build Rust interop library (when present)
 	rustDir := filepath.Join(projectRoot, "examples", "rust_integration")
 	if _, err := os.Stat(rustDir); err == nil {
-		// Only run cargo clean if there's a target directory to clean
+		// Only run cargo clean if there's a target directory with content to clean
 		targetDir := filepath.Join(rustDir, "target")
 		if _, targetErr := os.Stat(targetDir); targetErr == nil {
-			cleanCmd := exec.Command("cargo", "clean")
-			cleanCmd.Dir = rustDir
-			if output, err := cleanCmd.CombinedOutput(); err != nil {
-				panic("Failed to clean Rust artifacts: " + err.Error() + "\nOutput: " + string(output))
+			// Check if the target directory has any content
+			entries, err := os.ReadDir(targetDir)
+			if err != nil {
+				panic("Failed to read target directory: " + err.Error())
+			}
+
+			// Only clean if there are files/directories to clean
+			if len(entries) > 0 {
+				cleanCmd := exec.Command("cargo", "clean")
+				cleanCmd.Dir = rustDir
+				if output, err := cleanCmd.CombinedOutput(); err != nil {
+					panic("Failed to clean Rust artifacts: " + err.Error() + "\nOutput: " + string(output))
+				}
 			}
 		}
 
