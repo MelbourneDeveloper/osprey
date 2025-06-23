@@ -14,7 +14,7 @@ jobs:
     name: Deploy Web Compiler
     runs-on: ubuntu-latest
     concurrency: webcompiler-deploy-group
- 
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,10 +22,8 @@ jobs:
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-            - name: Deploy to Fly.io
-        working-directory: ./webcompiler
+      - name: Deploy to Fly.io
         run: |
-          flyctl launch --no-deploy --copy-config --name osprey-webcompiler --region ord || true
-          flyctl deploy --remote-only
+          flyctl deploy --remote-only --app osprey --config webcompiler/fly.toml
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
