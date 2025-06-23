@@ -511,86 +511,9 @@ let mapped2 = await(data2)
 let mapped3 = await(data3)
 let total = mapped1 + mapped2 + mapped3
 
-print("Mapped: \${mapped1}, \${mapped2}, \${mapped3}")
-print("Total: \${total}")
-
-// 📡 CONCURRENT API SIMULATION
-print("\\n📡 Concurrent API Calls:")
-
-fn fetchUserData(userId: Int) -> Int = userId * 1000 + 123
-fn fetchOrderData(userId: Int) -> Int = userId * 100 + 45
-
-let userData = spawn fetchUserData(5)
-let orderData = spawn fetchOrderData(5)
-
-print("User data: \${await(userData)}")
-print("Order data: \${await(orderData)}")
-
-// 📦 PARALLEL FILE PROCESSING
-print("\\n📦 Parallel File Processing:")
-
-let file1 = spawn processFile(1048576)   // 1MB file
-let file2 = spawn processFile(2097152)   // 2MB file
-let file3 = spawn processFile(5242880)   // 5MB file
-
-print("File sizes in KB: \${await(file1)}, \${await(file2)}, \${await(file3)}")
-
-// 🔄 YIELD-BASED TASK SCHEDULING
-print("\\n🔄 Task Scheduling with Yield:")
-
-let highPriority = yield 1
-let mediumPriority = yield 2
-let lowPriority = yield 3
-
-print("High priority task: \${highPriority}")
-print("Medium priority task: \${mediumPriority}")
-print("Low priority task: \${lowPriority}")
-
-// 🔗 PIPELINE PROCESSING
-print("\\n🔗 Pipeline Processing:")
-
-fn stage1(input: Int) -> Int = input + 100
-fn stage2(input: Int) -> Int = input * 2
-fn stage3(input: Int) -> Int = input - 50
-
-let pipeline = await(spawn stage3(await(spawn stage2(await(spawn stage1(25))))))
-print("Pipeline result: \${pipeline}")
-
-// 📨 CHANNEL COMMUNICATION
-print("\\n📨 Channel Operations:")
-
-let channel1 = Channel<Int> { capacity: 1 }
-let channel2 = Channel<Int> { capacity: 1 }
-
-print("Channel 1 ID: \${channel1}")
-print("Channel 2 ID: \${channel2}")
-
-let sendResult = send(channel1, 42)
-let recvValue = recv(channel1)
-
-print("Send result: \${sendResult}")
-print("Received value: \${recvValue}")
-
-// 💥 COMPLEX CONCURRENT PATTERNS
-print("\\n💥 Complex Fiber Interactions:")
-
-fn complexTask(id: Int) -> Int = yield(id * 10) + (id * 100)
-
-let complex1 = spawn complexTask(1)
-let complex2 = spawn complexTask(2)
-let complex3 = spawn complexTask(3)
-
-print("Complex 1: \${await(complex1)}")
-print("Complex 2: \${await(complex2)}")
-print("Complex 3: \${await(complex3)}")
-
-print("\\n🎉 OSPREY CONCURRENCY: PROVEN!")
-print("✅ Real fiber IDs from C runtime")
-print("✅ Parallel execution with spawn/await")
-print("✅ Channel communication")
-print("✅ Task scheduling with yield")
-print("✅ Complex concurrent patterns")
-print("=== 🚀 Demo Complete! 🚀 ===")`,
+// Range iteration
+print("Numbers 1-5:")
+range(1, 6) |> forEach(print)`,
             language: 'osprey',
             theme: 'vs-dark',
             automaticLayout: true
