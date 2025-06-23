@@ -16,13 +16,13 @@ echo "Response: $RESPONSE"
 
 # Verify the response contains expected structure and output
 if echo "$RESPONSE" | grep -q "Testing API Response" && \
-   echo "$RESPONSE" | grep -q "\"output\":" && \
+   echo "$RESPONSE" | grep -q "\"programOutput\":" && \
    echo "$RESPONSE" | grep -q "\"success\":true"; then
     echo "✅ Test PASSED: API returned expected response format with correct output"
     exit 0
 else
     echo "❌ Test FAILED: API did not return expected response format"
-    echo "Expected: JSON with success:true, output field, and 'Testing API Response' in output"
+    echo "Expected: JSON with success:true, programOutput field, and 'Testing API Response' in programOutput"
     echo "Got: $RESPONSE"
     exit 1
 fi
