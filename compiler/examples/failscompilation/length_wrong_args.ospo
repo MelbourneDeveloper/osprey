@@ -1,0 +1,8 @@
+// Test case for length function wrong arguments error
+// This should trigger WrapLengthWrongArgs
+
+fn main() -> Int {
+    let result = length()  // Missing required string argument
+    print(result)
+    0
+} 

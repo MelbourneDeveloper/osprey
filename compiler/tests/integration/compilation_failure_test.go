@@ -19,38 +19,7 @@ func TestCompilationFailures(t *testing.T) {
 	require.NoError(t, err, "Failed to read failscompilation directory: %v", err)
 
 	// YOU ARE NOT ALLOWED TO LET RUNTIME ERRORS APPEAR HERE!!!
-
-	// Define expected error patterns for each test case
-	expectedErrors := map[string]string{
-		"match_not_exhaustive.osp":   "match expression not exhaustive: missing patterns: [Blue]",
-		"match_not_exhaustive.ospo":  "match expression not exhaustive: missing patterns: [Blue]",
-		"match_unknown_variant.osp":  "unknown variant 'Maybe' in match expression for type 'Color'",
-		"match_unknown_variant.ospo": "unknown variant 'Maybe' in match expression for type 'Color'",
-		"built_in_function_redefinition.osp": "Parameter 'x' in function 'toString' " +
-			"requires explicit type annotation - type cannot be inferred from usage",
-		"built_in_function_redefinition.ospo": "Parameter 'x' in function 'toString' " +
-			"requires explicit type annotation - type cannot be inferred from usage",
-		"named_args_violation.osp": "function requires named arguments 'add' has 2 parameters " +
-			"and requires named arguments. Use: add(x: value, y: value)",
-		"named_args_violation.ospo": "function requires named arguments 'add' has 2 parameters " +
-			"and requires named arguments. Use: add(x: value, y: value)",
-		"type_inference_ambiguity.osp": "Function 'identity' requires explicit return type " +
-			"annotation - type cannot be inferred from body",
-		"type_inference_ambiguity.ospo": "Function 'identity' requires explicit return type " +
-			"annotation - type cannot be inferred from body",
-		"undefined_variable.osp":                 "undefined variable 'unknownVar': undefined variable",
-		"undefined_variable.ospo":                "undefined variable 'unknownVar': undefined variable",
-		"constraint_field_access_violation.osp":  "field access not implemented for field 'name'",
-		"constraint_field_access_violation.ospo": "field access not implemented for field 'name'",
-		"simple_field_access.osp":                "field access not implemented for field 'name'",
-		"simple_field_access.ospo":               "field access not implemented for field 'name'",
-		"debug_interpolation.osp":                "field access not implemented for field 'name'",
-		"debug_interpolation.ospo":               "field access not implemented for field 'name'",
-		"any_function_arg.osp":                   "cannot pass 'any' type to function expecting specific type",
-		"any_direct_arithmetic.ospo":             "cannot pass 'any' type to function expecting specific type",
-		"any_direct_variable_access.osp":         "direct access to 'any' type variable",
-		"nested_match_type_mismatch.ospo":        "match expression type mismatch",
-	}
+	// EVERY .ospo FILE MUST HAVE A CORRESPONDING .expectedoutput FILE!
 
 	// Test each .osp and .ospo file (both extensions should be tested)
 	for _, entry := range entries {
@@ -60,8 +29,24 @@ func TestCompilationFailures(t *testing.T) {
 
 		t.Run(entry.Name(), func(t *testing.T) {
 			filePath := filepath.Join(failsDir, entry.Name())
+			expectedOutputPath := filePath + ".expectedoutput"
 
-			// Read the file
+			// 🚨 SCREAM FAILURE IF NO .expectedoutput FILE EXISTS! 🚨
+			expectedContent, err := os.ReadFile(expectedOutputPath)
+			require.NoError(t, err,
+				"🚨🚨🚨 MISSING .expectedoutput FILE FOR %s! 🚨🚨🚨\n"+
+					"EVERY FAILURE TEST MUST HAVE EXACT EXPECTED ERROR!\n"+
+					"Create: %s\n"+
+					"Run the test manually and copy the EXACT error message!",
+				entry.Name(), expectedOutputPath)
+
+			expectedError := strings.TrimSpace(string(expectedContent))
+			require.NotEmpty(t, expectedError,
+				"🚨🚨🚨 EMPTY .expectedoutput FILE FOR %s! 🚨🚨🚨\n"+
+					"The .expectedoutput file must contain the EXACT error message!",
+				entry.Name())
+
+			// Read the source file
 			content, err := os.ReadFile(filePath)
 			require.NoError(t, err, "Failed to read %s: %v", filePath, err)
 
@@ -72,18 +57,16 @@ func TestCompilationFailures(t *testing.T) {
 
 			require.Error(t, err, "File %s should have failed compilation but succeeded", entry.Name())
 
-			// Check if error message contains expected pattern
-			if expectedPattern, ok := expectedErrors[entry.Name()]; ok {
-				require.Contains(t,
-					err.Error(),
-					expectedPattern,
-					"File %s failed compilation but with unexpected error.\\nExpected to contain: %s\\nActual error: %s",
-					entry.Name(), expectedPattern, err.Error())
-				t.Logf("✓ File %s correctly failed with expected error: %s", entry.Name(), err.Error())
-			} else {
-				// No specific pattern defined, just verify it failed
-				t.Logf("✓ File %s correctly failed compilation: %s", entry.Name(), err.Error())
-			}
+			// 🎯 EXACT ERROR MESSAGE MATCH REQUIRED! 🎯
+			actualError := strings.TrimSpace(err.Error())
+			require.Equal(t, expectedError, actualError,
+				"🚨 EXACT ERROR MISMATCH FOR %s! 🚨\n"+
+					"Expected EXACT error: %q\n"+
+					"Actual error:         %q\n"+
+					"Update the .expectedoutput file with the correct error message!",
+				entry.Name(), expectedError, actualError)
+
+			t.Logf("✅ File %s correctly failed with EXACT expected error: %s", entry.Name(), actualError)
 		})
 	}
 }

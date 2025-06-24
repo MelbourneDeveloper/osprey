@@ -1,0 +1,9 @@
+// Test case for HTTP GET wrong arguments error
+// This should trigger WrapHTTPGetWrongArgs
+
+fn main() -> Int {
+    let client = httpCreateClient("http://test.com", 5000)
+    let response = httpGet()  // Missing required URL argument
+    print(response)
+    0
+} 
