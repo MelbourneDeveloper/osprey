@@ -70,29 +70,6 @@
 
 </div>
 
-
-## 4. Semantics
-
-### 4.1 Variable Binding
-
-- `let` creates immutable bindings
-- `mut` creates mutable bindings
-- Variables must be initialized at declaration
-- Shadowing is allowed in nested scopes
-
-### 4.2 Function Semantics
-
-- Functions are first-class values
-- All functions are pure (no side effects except I/O)
-- Recursive functions are supported
-- Tail recursion is optimized
-
-### 4.3 Evaluation Order
-
-- Expressions are evaluated left-to-right
-- Function arguments are evaluated before the function call
-- Short-circuit evaluation for logical operators
-
 ## 5. Type System
 
 ### 5.1 Built-in Types
