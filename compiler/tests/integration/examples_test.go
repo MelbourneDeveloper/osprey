@@ -66,7 +66,8 @@ func getExpectedOutputs() map[string]string {
 			"42 is The answer to everything!\n7 is Some other number\n" +
 			"\nEven number check:\n42 is even: 0\n7 is even: 0\n2 is even: 1\n" +
 			"\nScore categories:\nScore 100: Perfect!\n" +
-			"Score 85: Very Good\nScore 50: Needs Improvement\n",
+			"Score 85: Very Good\nScore 50: Needs Improvement\n" +
+			"Nested: Both zero\n",
 		"safe_arithmetic_demo.osp": "=== Type-Safe Arithmetic Demo ===\n" +
 			"Future: All operators return Result<T, Error>\n\n10 / 2 = 5\n" +
 			"Error: Cannot divide 15 by 0!\n20 / 4 = 5\n\n" +

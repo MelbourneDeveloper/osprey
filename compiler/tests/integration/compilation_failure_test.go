@@ -49,6 +49,7 @@ func TestCompilationFailures(t *testing.T) {
 		"any_function_arg.osp":                   "cannot pass 'any' type to function expecting specific type",
 		"any_direct_arithmetic.ospo":             "cannot pass 'any' type to function expecting specific type",
 		"any_direct_variable_access.osp":         "direct access to 'any' type variable",
+		"nested_match_type_mismatch.ospo":        "match expression type mismatch",
 	}
 
 	// Test each .osp and .ospo file (both extensions should be tested)

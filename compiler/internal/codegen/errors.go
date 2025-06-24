@@ -357,6 +357,12 @@ func WrapMatchNotExhaustive(missingPatterns []string) error {
 	return fmt.Errorf("%w: missing patterns: %v", ErrMatchNotExhaustive, missingPatterns)
 }
 
+// WrapMatchArmTypeMismatch wraps match arm type mismatch error with details.
+func WrapMatchArmTypeMismatch(armIndex int, actualType, expectedType string) error {
+	return fmt.Errorf("%w: arm %d returns '%s' but expected '%s'",
+		ErrMatchTypeMismatch, armIndex, actualType, expectedType)
+}
+
 // WrapMatchInvalidPattern wraps invalid pattern errors with pattern details.
 func WrapMatchInvalidPattern(pattern, reason string) error {
 	return fmt.Errorf("%w: pattern '%s' is invalid: %s", ErrMatchInvalidPattern, pattern, reason)
