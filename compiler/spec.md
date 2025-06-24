@@ -76,13 +76,7 @@
 
 
 
-## 9. Block Expressions
 
-## 10. Boolean Operations
-
-## 11. Loop Constructs and Functional Iterators
-
-🚧 **PARTIAL IMPLEMENTATION**: Basic iterator functions (`range`, `forEach`, `map`, `filter`, `fold`) are implemented and working. The pipe operator (`|>`) is implemented.
 
 ## 12. Lightweight Fibers and Concurrency
 
