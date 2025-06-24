@@ -88,9 +88,6 @@ type ospreyListener interface {
 	// EnterMatchExpr is called when entering the matchExpr production.
 	EnterMatchExpr(c *MatchExprContext)
 
-	// EnterLoopExpr is called when entering the loopExpr production.
-	EnterLoopExpr(c *LoopExprContext)
-
 	// EnterSelectExpr is called when entering the selectExpr production.
 	EnterSelectExpr(c *SelectExprContext)
 
@@ -261,9 +258,6 @@ type ospreyListener interface {
 
 	// ExitMatchExpr is called when exiting the matchExpr production.
 	ExitMatchExpr(c *MatchExprContext)
-
-	// ExitLoopExpr is called when exiting the loopExpr production.
-	ExitLoopExpr(c *LoopExprContext)
 
 	// ExitSelectExpr is called when exiting the selectExpr production.
 	ExitSelectExpr(c *SelectExprContext)

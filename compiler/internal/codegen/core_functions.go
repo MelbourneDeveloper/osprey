@@ -95,7 +95,7 @@ func (g *LLVMGenerator) convertResultToString(
 	case types.I8Ptr:
 		successStr = resultValue // Already a string
 	default:
-		// For complex types (like ProcessResult), convert to a generic string
+		// For complex types (like ProcessHandle), convert to a generic string
 		successStr = g.createGlobalString("Success")
 	}
 

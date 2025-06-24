@@ -1,6 +1,8 @@
 package codegen
 
 import (
+	"fmt"
+
 	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -115,10 +117,10 @@ func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
 // Process / File / JSON built-ins
 // -----------------------------------------------------------------------------
 
-// generateSpawnProcessCall emits a call to an external C helper that spawns a
-// process and returns its exit code as an i64 value.
+// generateSpawnProcessCall emits a call to the simple process spawning function
+// that uses a default callback for stdout/stderr events.
 func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != OneArg {
+	if len(callExpr.Arguments) != TwoArgs {
 		return nil, WrapSpawnProcessWrongArgs(len(callExpr.Arguments))
 	}
 
@@ -127,15 +129,76 @@ func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (
 		return nil, err
 	}
 
-	var fn *ir.Func
-	if existing, ok := g.functions["spawn_process"]; ok {
-		fn = existing
-	} else {
-		fn = g.module.NewFunc("spawn_process", types.I64, ir.NewParam("command", types.I8Ptr))
-		g.functions["spawn_process"] = fn
+	callback, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
 	}
 
-	return g.builder.NewCall(fn, cmd), nil
+	// Use the callback-based process spawning function (MANDATORY callback)
+	var fn *ir.Func
+	if existing, ok := g.functions["spawn_process_with_handler"]; ok {
+		fn = existing
+	} else {
+		// int64_t spawn_process_with_handler(char *command, ProcessEventHandler handler)
+		// ProcessEventHandler: void (*)(int64_t process_id, int event_type, char *data)
+		handlerType := types.NewPointer(types.NewFunc(
+			types.Void,  // Return type: void (matches C runtime)
+			types.I64,   // process_id parameter
+			types.I32,   // event_type parameter
+			types.I8Ptr, // data parameter
+		))
+
+		fn = g.module.NewFunc("spawn_process_with_handler", types.I64,
+			ir.NewParam("command", types.I8Ptr),
+			ir.NewParam("handler", handlerType))
+		g.functions["spawn_process_with_handler"] = fn
+	}
+
+	// Call the callback-based process spawning function
+	processID := g.builder.NewCall(fn, cmd, callback)
+
+	// Create a Result<Int, String> - process ID on success, error message on failure
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Initialize the result struct with default values
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+
+	// Check if the process ID is negative (error)
+	zero := constant.NewInt(types.I64, 0)
+	isError := g.builder.NewICmp(enum.IPredSLT, processID, zero)
+
+	// Create blocks with unique names to avoid conflicts
+	blockID := len(g.function.Blocks) // Use block count as unique ID
+	successBlockName := fmt.Sprintf("spawn_success_%d", blockID)
+	errorBlockName := fmt.Sprintf("spawn_error_%d", blockID)
+	continueBlockName := fmt.Sprintf("spawn_continue_%d", blockID)
+
+	successBlock := g.function.NewBlock(successBlockName)
+	errorBlock := g.function.NewBlock(errorBlockName)
+	continueBlock := g.function.NewBlock(continueBlockName)
+
+	g.builder.NewCondBr(isError, errorBlock, successBlock)
+
+	// Success case: store the process ID
+	g.builder = successBlock
+	g.builder.NewStore(processID, valuePtr)
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.builder.NewBr(continueBlock)
+
+	// Error case: store error indicator (we'll use -1 as the "error value")
+	g.builder = errorBlock
+	g.builder.NewStore(constant.NewInt(types.I64, -1), valuePtr)
+	g.builder.NewStore(constant.NewInt(types.I8, 1), discriminantPtr) // 1 = Error
+	g.builder.NewBr(continueBlock)
+
+	// Continue execution
+	g.builder = continueBlock
+
+	return result, nil
 }
 
 // generateSleepCall emits a call to the fiber_sleep function to sleep for the specified milliseconds.
@@ -365,4 +428,51 @@ func (g *LLVMGenerator) generateExtractCodeCall(callExpr *ast.CallExpression) (v
 		return g.builder.NewCall(fn, jsonStr, fieldName), nil
 	}
 	return nil, WrapExtractCodeWrongArgs(len(callExpr.Arguments))
+}
+
+// Process management functions for async process handling
+
+// generateAwaitProcessCall waits for process completion
+func (g *LLVMGenerator) generateAwaitProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != OneArg {
+		return nil, WrapAwaitProcessWrongArgs(len(callExpr.Arguments))
+	}
+
+	processID, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	var fn *ir.Func
+	if existing, ok := g.functions["fiber_await_process"]; ok {
+		fn = existing
+	} else {
+		fn = g.module.NewFunc("fiber_await_process", types.I64, ir.NewParam("process_id", types.I64))
+		g.functions["fiber_await_process"] = fn
+	}
+
+	return g.builder.NewCall(fn, processID), nil
+}
+
+// generateCleanupProcessCall cleans up process resources
+func (g *LLVMGenerator) generateCleanupProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != OneArg {
+		return nil, WrapCleanupProcessWrongArgs(len(callExpr.Arguments))
+	}
+
+	processID, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	var fn *ir.Func
+	if existing, ok := g.functions["fiber_cleanup_process"]; ok {
+		fn = existing
+	} else {
+		fn = g.module.NewFunc("fiber_cleanup_process", types.Void, ir.NewParam("process_id", types.I64))
+		g.functions["fiber_cleanup_process"] = fn
+	}
+
+	g.builder.NewCall(fn, processID)
+	return constant.NewInt(types.I64, 0), nil // Return success
 }

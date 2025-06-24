@@ -1,0 +1,13 @@
+// This should fail: nested match expression type mismatch
+// Function declares string return but match returns different types
+
+fn badNestedMatch(x: int) -> string = match x {
+    0 => match x {
+        0 => 42  // Returns int, not string!
+        _ => "string"  // Returns string
+    }
+    _ => "other string"
+}
+
+let result = badNestedMatch(0)
+print(result) 

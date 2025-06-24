@@ -136,12 +136,15 @@ var (
 	ErrSubstringWrongArgs = errors.New("substring expects exactly 3 arguments")
 
 	// Process spawning errors.
-	ErrSpawnProcessWrongArgs = errors.New("spawnProcess expects exactly 1 argument (command)")
-	ErrSleepWrongArgs        = errors.New("sleep expects exactly 1 argument (milliseconds)")
-	ErrWriteFileWrongArgs    = errors.New("writeFile expects exactly 2 arguments (filename, content)")
-	ErrReadFileWrongArgs     = errors.New("readFile expects exactly 1 argument (filename)")
-	ErrParseJSONWrongArgs    = errors.New("parseJSON expects exactly 1 argument (json_string)")
-	ErrExtractCodeWrongArgs  = errors.New("extractCode expects exactly 1 argument (json_string)")
+	ErrSpawnProcessWrongArgs = errors.New("spawnProcess expects exactly 2 arguments (command, callback)")
+
+	ErrAwaitProcessWrongArgs   = errors.New("awaitProcess expects exactly 1 argument (processId)")
+	ErrCleanupProcessWrongArgs = errors.New("cleanupProcess expects exactly 1 argument (processId)")
+	ErrSleepWrongArgs          = errors.New("sleep expects exactly 1 argument (milliseconds)")
+	ErrWriteFileWrongArgs      = errors.New("writeFile expects exactly 2 arguments (filename, content)")
+	ErrReadFileWrongArgs       = errors.New("readFile expects exactly 1 argument (filename)")
+	ErrParseJSONWrongArgs      = errors.New("parseJSON expects exactly 1 argument (json_string)")
+	ErrExtractCodeWrongArgs    = errors.New("extractCode expects exactly 1 argument (json_string)")
 )
 
 // Helper functions to wrap static errors with context
@@ -589,6 +592,18 @@ func WrapSubstringWrongArgs(got int) error {
 // WrapSpawnProcessWrongArgs wraps spawnProcess wrong arguments error.
 func WrapSpawnProcessWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrSpawnProcessWrongArgs, got)
+}
+
+// WrapSpawnProcessWithCallbackWrongArgs wraps spawnProcessWithCallback wrong arguments error.
+
+// WrapAwaitProcessWrongArgs wraps awaitProcess wrong arguments error.
+func WrapAwaitProcessWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrAwaitProcessWrongArgs, got)
+}
+
+// WrapCleanupProcessWrongArgs wraps cleanupProcess wrong arguments error.
+func WrapCleanupProcessWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrCleanupProcessWrongArgs, got)
 }
 
 // WrapSleepWrongArgs wraps sleep wrong arguments error.

@@ -227,8 +227,50 @@ func getExpectedOutputs() map[string]string {
 			"Process result: 0\n" +
 			"=== Test Complete ===\n",
 		"process_spawn_fiber.osp": "=== Process Spawning in Fibers ===\n" +
-			"Fiber ID: 1\n" +
-			"=== Test Complete ===\n",
+			"Process result: 0\n" +
+			"=== Fiber Test Complete ===\n",
+		"simple_process_test.osp": "Testing simple process spawn...\n" +
+			"Process spawned successfully\n" +
+			"[STDOUT] Process 1: hello\n\n" +
+			"[EXIT] Process 1 exited with code: 0\n" +
+			"Process finished\n" +
+			"Test complete\n",
+		"async_process_management.osp": "=== Async Process Management Demo ===\n" +
+			"--- Test 1: Basic Process Spawning ---\n" +
+			"✓ Process spawned successfully\n" +
+			"[STDOUT] Process 1: Hello from async process!\n\n" +
+			"[EXIT] Process 1 exited with code: 0\n" +
+			"✓ Process completed successfully\n" +
+			"✓ Process resources cleaned up\n" +
+			"--- Test 2: Another Process ---\n" +
+			"Process 2 spawned successfully\n" +
+			"[STDOUT] Process 2: Process 2 output\n\n" +
+			"[EXIT] Process 2 exited with code: 0\n" +
+			"Process 2 finished\n" +
+			"--- Test 3: Error Handling ---\n" +
+			"[EXIT] Process 3 exited with code: 1\n" +
+			"Error process returned non-zero exit code\n" +
+			"=== Async Process Management Demo Complete ===\n" +
+			"Note: Process output appears via C runtime callbacks during execution\n",
+		"callback_stdout_demo.osp": "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
+			"--- Test 1: Basic Stdout Callback ---\n" +
+			"✓ Process spawned with ID: 1\n" +
+			"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
+			"[CALLBACK] Process 1 EXIT: 0\n" +
+			"✓ Process finished with exit code: 0\n" +
+			"✓ Process cleaned up\n" +
+			"--- Test 2: Multiple Lines Callback ---\n" +
+			"✓ Multi-line process spawned with ID: 2\n" +
+			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+			"[CALLBACK] Process 2 EXIT: 0\n" +
+			"✓ Multi-line process finished\n" +
+			"--- Test 3: Error Process Callback ---\n" +
+			"✓ Error process spawned with ID: 3\n" +
+			"[CALLBACK] Process 3 STDERR: ls: /nonexistent/directory: No such file or directory\n\n" +
+			"[CALLBACK] Process 3 EXIT: 1\n" +
+			"✓ Error process finished with exit code: 1\n" +
+			"=== CALLBACK DEMO COMPLETE ===\n" +
+			"The [CALLBACK] lines above show C runtime calling into Osprey!\n",
 		"process_spawn_workflow.osp": "Step 1\n" +
 			"Step 2\n" +
 			"=== Process Spawning Workflow ===\n" +
