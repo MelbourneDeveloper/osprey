@@ -90,6 +90,7 @@ Osprey is a modern functional programming oriented language designed for eleganc
 
 - Elegance (simplicity, ergonomics, efficiency), safety (fewer footguns, security at every level), performance (uses the most efficient approach and allows the use of Rust interop for extreme performance)
 - No more than 1 way to do anything
+- ML style syntax by default
 - Make illegal states unrepresentable. There are no exceptions or panics. Anything than can result in an error state returns a result object
 - Referential transparency
 - Simplicity
@@ -3174,29 +3175,94 @@ Checks if file exists.
 
 ### 17.3 Process Operations
 
-#### `spawnProcess(command: string, args: string, timeout: int) -> Result<ProcessResult, string>`
-Spawns external process with timeout.
+#### `spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessResult, string>`
+Spawns external process with asynchronous stdout/stderr collection via callbacks.
 
-🚧 **IMPLEMENTATION STATUS**: The current implementation is **incomplete**. The compiler currently only supports:
-```osprey
-spawnProcess(command: string) -> Result<ProcessResult, string>
-```
+**Key Features:**
+- **Event-driven output collection** - Uses callbacks from the runtime for things like new stdout
+- **Non-blocking execution** - Runs in background threads via fiber runtime
+- **Real-time stdout/stderr** - Process output is sent to Osprey via callbacks as it's generated
+- **Thread-safe** - Safe for concurrent use with multiple processes
 
-**NEEDED WORK**:
-- Support for separate `args` parameter for command arguments
-- Support for `timeout` parameter to limit execution time
-- Full `ProcessResult` type with `stdout`, `stderr`, and `exitCode` fields
-
-**Current Implementation**: Only accepts a single command string and returns a simplified result indicating success/failure with exit code.
+**Architecture:**
+The process runtime follows the same callback pattern as the HTTP server:
+1. Osprey calls `spawnProcess(command)` 
+2. C runtime spawns process and monitoring thread
+3. C runtime calls back to Osprey with stdout/stderr events as they occur
+4. Process completion triggers exit event callback
 
 **ProcessResult Type:**
 ```osprey
 type ProcessResult = {
-    stdout: string,
-    stderr: string,
-    exitCode: int
+    processId: int
 }
 ```
+
+**Event Types (handled by C runtime callbacks):**
+- `PROCESS_STDOUT_DATA` - New stdout data available
+- `PROCESS_STDERR_DATA` - New stderr data available  
+- `PROCESS_EXIT` - Process completed with exit code
+
+**Stdout Callback Handling:**
+
+The process runtime uses callback functions to deliver stdout/stderr data as it's generated. The C runtime calls back into Osprey functions for real-time process events.
+
+🚨 **CALLBACK IS MANDATORY!** The callback parameter is **REQUIRED** for `spawnProcess` - it cannot be omitted.
+
+```osprey
+// Define the callback function that C runtime will call for ALL process events
+fn processEventHandler(processID: int, eventType: int, data: string) -> Unit = {
+    match eventType {
+        1 => print("[STDOUT] Process ${toString(processID)}: ${data}")
+        2 => print("[STDERR] Process ${toString(processID)}: ${data}")
+        3 => print("[EXIT] Process ${toString(processID)} exited with code: ${data}")
+        _ => print("[UNKNOWN] Process ${toString(processID)} event ${toString(eventType)}: ${data}")
+    }
+}
+
+// Process with callback-based stdout collection (CALLBACK IS MANDATORY!)
+let result = spawnProcess("echo 'Hello from callback!'", processEventHandler)
+match result {
+    Success { value } => {
+        print("Process spawned with ID: ${toString(value)}")
+        let exitCode = awaitProcess(value)
+        print("Process finished with exit code: ${toString(exitCode)}")
+        cleanupProcess(value)
+        print("Process cleaned up")
+    }
+    Error { message } => print("Failed to spawn process")
+}
+```
+
+**Advanced Usage:**
+```osprey
+// Wait for process completion and get exit code
+let result = spawnProcess("gcc myprogram.c -o myprogram")
+match result {
+    Success { value } => {
+        let exitCode = awaitProcess(value.processId)
+        cleanupProcess(value.processId)
+        print("Compilation finished with exit code: ${toString(exitCode)}")
+    }
+    Error { message } => print("Compilation failed: ${message}")
+}
+```
+
+#### `awaitProcess(processId: int) -> int`
+Waits for process completion and returns exit code.
+
+**Parameters:**
+- `processId: int` - Process ID returned by spawnProcess
+
+**Returns:** `int` - Process exit code (0 = success, non-zero = error)
+
+#### `cleanupProcess(processId: int) -> void`
+Cleans up process resources after completion.
+
+**Parameters:**  
+- `processId: int` - Process ID to clean up
+
+**Note:** Always call this after `awaitProcess` to prevent memory leaks.
 
 ### 17.2 Functional Iterator Functions
 
