@@ -6,8 +6,6 @@
 
 <div class="table-of-contents">
 
-- [15. Error Handling](#15-error-handling)
-  - [15.1 The Result Type](#151-the-result-type)
 - [16. Examples](#16-examples)
 - [17. Built-in Functions Reference](#17-built-in-functions-reference)
   - [17.1 Basic I/O Functions](#171-basic-io-functions)
@@ -82,34 +80,7 @@
 
 </div>
 
-## 15. Error Handling
 
-### 15.1 The Result Type
-
-**CRITICAL**: All functions that can fail **MUST** return a `Result` type. There are no exceptions, panics, or nulls. This is a core design principle of the language to ensure safety and eliminate entire classes of runtime errors.
-
-The `Result` type is a generic union type with two variants:
-
-- `Success { value: T }`: Represents a successful result, containing the value of type `T`.
-- `Error { message: E }`: Represents an error, containing an error message or object of type `E`.
-
-**Example:**
-```osprey
-type Result<T, E> = Success { value: T } | Error { message: E }
-```
-
-The compiler **MUST** enforce that `Result` types are always handled with a `match` expression, preventing direct access to the underlying value and ensuring that all possible outcomes are considered.
-
-```osprey
-let result = someFunctionThatCanFail()
-
-match result {
-    Success { value } => print("Success: ${value}")
-    Error { message } => print("Error: ${message}")
-}
-```
-
-This approach guarantees that error handling is explicit, robust, and checked at compile time.
 
 ## 16. Examples
 
