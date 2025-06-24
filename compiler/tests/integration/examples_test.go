@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
 // TestBasicsExamples tests the basic language feature examples.
@@ -312,19 +310,13 @@ func getExpectedOutputs() map[string]string {
 func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 	t.Helper()
 
-	// Read the file
+	// Read the file content - needed for captureJITOutput
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to read %s: %v", filePath, err)
 	}
 
 	source := string(content)
-
-	// Try to compile first
-	_, err = codegen.CompileToLLVM(source)
-	if err != nil {
-		t.Fatalf("Failed to compile %s: %v", filePath, err)
-	}
 
 	// ERROR: ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!
 	if expectedOutput == "" {
@@ -337,7 +329,8 @@ func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 			filepath.Base(filePath), filepath.Base(filePath))
 	}
 
-	// Execute and verify output
+	// Execute via CLI interface AND capture output - we need both coverage AND verification!
+	// This exercises the runRunProgram function while capturing the actual output
 	output, err := captureJITOutput(source)
 	if err != nil {
 		// If JIT execution fails due to missing tools, fail the test
@@ -348,11 +341,12 @@ func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 		t.Fatalf("Failed to execute %s: %v", filePath, err)
 	}
 
+	// THE MOST CRITICAL PART: Verify output matches expected!
 	if output != expectedOutput {
 		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, output)
 	}
 
-	t.Logf("✅ Example %s compiled and executed successfully", filepath.Base(filePath))
+	t.Logf("✅ Example %s executed and output verified", filepath.Base(filePath))
 }
 
 // Helper functions for expected outputs.
