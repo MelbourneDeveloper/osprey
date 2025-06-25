@@ -8,6 +8,12 @@ effect ProcessOutput {
     captureStderr: fn(string) -> Unit
 }
 
+// Type for capturing process output results
+type ProcessOutputResult = {
+    stdout: string,
+    stderr: string
+}
+
 // Server configuration
 let serverPort = 3002
 
@@ -22,22 +28,18 @@ fn processEventHandler(processID: int, eventType: int, data: string) -> Unit !Pr
 }
 
 // SUPREMO EFFECT HANDLER that captures all output functionally
-fn withProcessCapture(program: fn() -> Unit !ProcessOutput) -> (string, string) = {
+fn withProcessCapture(program: fn() -> Unit) -> ProcessOutputResult = {
     mut capturedStdout = ""
     mut capturedStderr = ""
     
-    handle ProcessOutput {
-        captureStdout(data) => {
-            capturedStdout = capturedStdout + data
-            resume(Unit)  // Continue execution
-        }
-        captureStderr(data) => {
-            capturedStderr = capturedStderr + data
-            resume(Unit)  // Continue execution  
-        }
-    } in program()
+    with handler ProcessOutput {
+        captureStdout(data) => capturedStdout = capturedStdout + data
+        captureStderr(data) => capturedStderr = capturedStderr + data
+    } do {
+        program()
+    }
     
-    (capturedStdout, capturedStderr)
+    ProcessOutputResult { stdout: capturedStdout, stderr: capturedStderr }
 }
 
 // ALGEBRAIC EFFECTS-POWERED PROCESS RUNNER!
@@ -49,7 +51,7 @@ fn processRunRequest(jsonBody: string) -> string = {
     let writeResult = writeFile("/tmp/osprey_web_temp.osp", actualCode)
     
     // Define the effectful process execution
-    let effectfulExecution = fn() -> Unit !ProcessOutput = {
+    let effectfulExecution = fn() -> Unit = {
         let command = "../compiler/bin/osprey /tmp/osprey_web_temp.osp --run"
         let spawnResult = spawnProcess(command, processEventHandler)
         
@@ -65,10 +67,10 @@ fn processRunRequest(jsonBody: string) -> string = {
     }
     
     // HANDLE THE EFFECTS LIKE A FUCKING BOSS! 🔥
-    let (stdout, stderr) = withProcessCapture(effectfulExecution)
+    let result = withProcessCapture(effectfulExecution)
     
     // Return comprehensive result with ACTUALLY CAPTURED output!
-    "{\"success\": true, \"compilerOutput\": \"" + stderr + "\", \"appOutput\": \"" + stdout + "\"}"
+    "{\"success\": true, \"compilerOutput\": \"" + result.stderr + "\", \"appOutput\": \"" + result.stdout + "\"}"
 }
 
 // HTTP request handler function - same as before but now POWERED BY EFFECTS!
