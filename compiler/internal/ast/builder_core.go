@@ -48,6 +48,8 @@ func (b *Builder) buildStatement(ctx parser.IStatementContext) Statement {
 		return b.buildExternDecl(ctx.ExternDecl())
 	case ctx.TypeDecl() != nil:
 		return b.buildTypeDecl(ctx.TypeDecl())
+	case ctx.EffectDecl() != nil:
+		return b.buildEffectDecl(ctx.EffectDecl())
 	case ctx.ModuleDecl() != nil:
 		return b.buildModuleDecl(ctx.ModuleDecl())
 	case ctx.ExprStmt() != nil:

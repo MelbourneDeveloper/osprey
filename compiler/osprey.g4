@@ -10,6 +10,7 @@ statement
     | fnDecl
     | externDecl
     | typeDecl
+    | effectDecl
     | moduleDecl
     | exprStmt
     ;
@@ -18,7 +19,7 @@ importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
 
-fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE) ;
+fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | LBRACE blockBody RBRACE) ;
 
 externDecl      : docComment? EXTERN FN ID LPAREN externParamList? RPAREN (ARROW type)? ;
 
@@ -45,6 +46,17 @@ fieldDeclaration  : ID COLON type constraint? ;
 
 constraint      : WHERE functionCall ;
 
+// Effect declarations
+effectDecl      : docComment? EFFECT ID LBRACE opDecl* RBRACE ;
+opDecl          : ID COLON type ;
+
+// Effect sets for function types
+effectSet       : NOT_OP ID ;
+
+// Handler expressions  
+handlerExpr     : HANDLER ID LBRACE handlerArm+ RBRACE ;
+handlerArm      : ID (LPAREN ID RPAREN)? LAMBDA expr ;
+
 functionCall    : ID LPAREN argList? RPAREN ;
 
 booleanExpr     : comparisonExpr ;
@@ -53,6 +65,7 @@ fieldList       : field (COMMA field)* ;
 field           : ID COLON type ;
 
 type            : LPAREN typeList? RPAREN ARROW type  // Function types like (Int, String) -> Bool
+                | FN LPAREN typeList? RPAREN ARROW type  // Function types like fn(Int, String) -> Bool
                 | ID (LT typeList GT)?  // Generic types like Result<String, Error>
                 | ID LSQUARE type RSQUARE  // Array types like [String]
                 | ID ;
@@ -132,6 +145,8 @@ primary
     | SEND LPAREN expr COMMA expr RPAREN          // send(channel, value)
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
+    | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
+    | WITH handlerExpr DO blockExpr               // with handler do block
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
     | blockExpr                                   // Block expressions
@@ -235,6 +250,11 @@ SELECT      : 'select';
 TRUE        : 'true';
 FALSE       : 'false';
 WHERE       : 'where';
+EFFECT      : 'effect';
+PERFORM     : 'perform';
+HANDLER     : 'handler';
+WITH        : 'with';
+DO          : 'do';
 
 ARROW       : '->';
 LAMBDA      : '=>';

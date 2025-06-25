@@ -320,3 +320,27 @@ func (b *Builder) buildBlockBody(ctx parser.IBlockBodyContext) *BlockExpression 
 		Expression: expr,
 	}
 }
+
+// buildEffectDecl builds an EffectDeclaration from parser context - ALGEBRAIC EFFECTS SUPREMO!
+func (b *Builder) buildEffectDecl(ctx parser.IEffectDeclContext) *EffectDeclaration {
+	if ctx == nil {
+		return nil
+	}
+
+	name := ctx.ID().GetText()
+	operations := make([]EffectOperation, 0)
+
+	// Parse effect operations
+	for _, opCtx := range ctx.AllOpDecl() {
+		operation := EffectOperation{
+			Name: opCtx.ID().GetText(),
+			Type: opCtx.Type_().GetText(), // Parse type as string for now
+		}
+		operations = append(operations, operation)
+	}
+
+	return &EffectDeclaration{
+		Name:       name,
+		Operations: operations,
+	}
+}

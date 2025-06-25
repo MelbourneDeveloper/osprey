@@ -33,6 +33,9 @@ func (g *LLVMGenerator) generateStatement(stmt ast.Statement) error {
 		// Type declarations are handled in first pass
 		return nil
 
+	case *ast.EffectDeclaration:
+		return g.generateEffectDeclaration(s)
+
 	case *ast.ExpressionStatement:
 		_, err := g.generateExpression(s.Expression)
 

@@ -61,6 +61,21 @@ type ospreyListener interface {
 	// EnterConstraint is called when entering the constraint production.
 	EnterConstraint(c *ConstraintContext)
 
+	// EnterEffectDecl is called when entering the effectDecl production.
+	EnterEffectDecl(c *EffectDeclContext)
+
+	// EnterOpDecl is called when entering the opDecl production.
+	EnterOpDecl(c *OpDeclContext)
+
+	// EnterEffectSet is called when entering the effectSet production.
+	EnterEffectSet(c *EffectSetContext)
+
+	// EnterHandlerExpr is called when entering the handlerExpr production.
+	EnterHandlerExpr(c *HandlerExprContext)
+
+	// EnterHandlerArm is called when entering the handlerArm production.
+	EnterHandlerArm(c *HandlerArmContext)
+
 	// EnterFunctionCall is called when entering the functionCall production.
 	EnterFunctionCall(c *FunctionCallContext)
 
@@ -231,6 +246,21 @@ type ospreyListener interface {
 
 	// ExitConstraint is called when exiting the constraint production.
 	ExitConstraint(c *ConstraintContext)
+
+	// ExitEffectDecl is called when exiting the effectDecl production.
+	ExitEffectDecl(c *EffectDeclContext)
+
+	// ExitOpDecl is called when exiting the opDecl production.
+	ExitOpDecl(c *OpDeclContext)
+
+	// ExitEffectSet is called when exiting the effectSet production.
+	ExitEffectSet(c *EffectSetContext)
+
+	// ExitHandlerExpr is called when exiting the handlerExpr production.
+	ExitHandlerExpr(c *HandlerExprContext)
+
+	// ExitHandlerArm is called when exiting the handlerArm production.
+	ExitHandlerArm(c *HandlerArmContext)
 
 	// ExitFunctionCall is called when exiting the functionCall production.
 	ExitFunctionCall(c *FunctionCallContext)

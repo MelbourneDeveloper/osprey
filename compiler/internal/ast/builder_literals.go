@@ -17,6 +17,11 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return fiberExpr
 	}
 
+	// Handle algebraic effects expressions
+	if effectExpr := b.buildEffectExpression(ctx); effectExpr != nil {
+		return effectExpr
+	}
+
 	// Handle other expressions
 	switch {
 	case ctx.BlockExpr() != nil:
@@ -25,11 +30,11 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLiteral(ctx.Literal())
 	case ctx.LambdaExpr() != nil:
 		return b.buildLambdaExpr(ctx.LambdaExpr())
-	case ctx.ID() != nil && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
+	case ctx.ID(0) != nil && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
 		// Array indexing: ID[INT]
 		return b.buildListAccess(ctx)
-	case ctx.ID() != nil:
-		return &Identifier{Name: ctx.ID().GetText()}
+	case ctx.ID(0) != nil:
+		return &Identifier{Name: ctx.ID(0).GetText()}
 	case ctx.Expr(0) != nil:
 		return b.buildExpression(ctx.Expr(0))
 	}
@@ -54,6 +59,18 @@ func (b *Builder) buildFiberExpression(ctx parser.IPrimaryContext) Expression {
 		return b.buildSelectExpression(ctx.SelectExpr().(*parser.SelectExprContext))
 	case ctx.TypeConstructor() != nil:
 		return b.buildTypeConstructor(ctx.TypeConstructor().(*parser.TypeConstructorContext))
+	}
+
+	return nil
+}
+
+// buildEffectExpression handles algebraic effects expressions.
+func (b *Builder) buildEffectExpression(ctx parser.IPrimaryContext) Expression {
+	switch {
+	case ctx.PERFORM() != nil:
+		return b.buildPerformExpression(ctx)
+	case ctx.WITH() != nil:
+		return b.buildWithHandlerExpression(ctx)
 	}
 
 	return nil
@@ -122,12 +139,12 @@ func (b *Builder) buildListLiteral(ctx parser.IListLiteralContext) Expression {
 
 // buildListAccess builds a ListAccessExpression from array indexing syntax.
 func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
-	if ctx == nil || ctx.ID() == nil || ctx.INT() == nil {
+	if ctx == nil || ctx.ID(0) == nil || ctx.INT() == nil {
 		return nil
 	}
 
 	// Get the list identifier
-	listExpr := &Identifier{Name: ctx.ID().GetText()}
+	listExpr := &Identifier{Name: ctx.ID(0).GetText()}
 
 	// Parse the index
 	indexText := ctx.INT().GetText()
@@ -261,5 +278,60 @@ func (b *Builder) buildBlockExpression(ctx parser.IBlockExprContext) Expression 
 	return &BlockExpression{
 		Statements: statements,
 		Expression: finalExpr,
+	}
+}
+
+// buildPerformExpression builds a PerformExpression from perform EffectName.operation(args) syntax.
+func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExpression {
+	// PERFORM ID DOT ID LPAREN argList? RPAREN
+	effectName := ctx.ID(0).GetText()
+	operationName := ctx.ID(1).GetText()
+
+	var arguments []Expression
+	if ctx.ArgList() != nil {
+		args, _ := b.buildArguments(ctx.ArgList()) // Ignore named args for now
+		arguments = args
+	}
+
+	return &PerformExpression{
+		EffectName:    effectName,
+		OperationName: operationName,
+		Arguments:     arguments,
+	}
+}
+
+// buildWithHandlerExpression builds a HandlerExpression from with handler do block syntax.
+func (b *Builder) buildWithHandlerExpression(ctx parser.IPrimaryContext) *HandlerExpression {
+	// WITH handlerExpr DO blockExpr
+	handlerCtx := ctx.HandlerExpr()
+	blockExpr := b.buildBlockExpression(ctx.BlockExpr())
+
+	effectName := handlerCtx.ID().GetText()
+	handlers := make([]HandlerArm, 0)
+
+	// Build handler arms
+	for _, armCtx := range handlerCtx.AllHandlerArm() {
+		operationName := armCtx.ID(0).GetText()
+
+		// Get parameter name if present (for operations like captureStdout(data))
+		var parameters []string
+		if armCtx.LPAREN() != nil && len(armCtx.AllID()) > 1 {
+			parameters = append(parameters, armCtx.ID(1).GetText())
+		}
+
+		// Build handler body
+		body := b.buildExpression(armCtx.Expr())
+
+		handlers = append(handlers, HandlerArm{
+			OperationName: operationName,
+			Parameters:    parameters,
+			Body:          body,
+		})
+	}
+
+	return &HandlerExpression{
+		EffectName: effectName,
+		Handlers:   handlers,
+		Body:       blockExpr,
 	}
 }

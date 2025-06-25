@@ -51,6 +51,12 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 	case *ast.BlockExpression:
 
 		return g.generateBlockExpression(e)
+	case *ast.PerformExpression:
+
+		return g.generatePerformExpression(e)
+	case *ast.HandlerExpression:
+
+		return g.generateHandlerExpression(e)
 	default:
 
 		return g.generateFiberOrModuleExpression(expr)
@@ -475,7 +481,10 @@ func (g *LLVMGenerator) generateBinaryOperation(operator string, left, right val
 func (g *LLVMGenerator) generateArithmeticOperation(operator string, left, right value.Value) (value.Value, error) {
 	switch operator {
 	case "+":
-
+		// Handle string concatenation for pointer types (strings)
+		if _, isPtr := left.Type().(*types.PointerType); isPtr {
+			return g.generateStringConcatenation(left, right)
+		}
 		return g.builder.NewAdd(left, right), nil
 	case "-":
 
@@ -852,4 +861,78 @@ func (g *LLVMGenerator) generateHTTPResponseConstructor(
 	}
 
 	return structPtr, nil
+}
+
+// generateStringConcatenation generates LLVM IR for string concatenation using strcat
+func (g *LLVMGenerator) generateStringConcatenation(left, right value.Value) (value.Value, error) {
+	// Ensure strcat and strlen are declared
+	strcatFunc := g.ensureStrcatDeclaration()
+	strlenFunc := g.ensureStrlenDeclaration()
+	mallocFunc := g.ensureMallocDeclaration()
+
+	// Calculate lengths of both strings
+	leftLen := g.builder.NewCall(strlenFunc, left)
+	rightLen := g.builder.NewCall(strlenFunc, right)
+
+	// Calculate total length: leftLen + rightLen + 1 (for null terminator)
+	totalLen := g.builder.NewAdd(leftLen, rightLen)
+	totalLenPlusOne := g.builder.NewAdd(totalLen, constant.NewInt(types.I64, 1))
+
+	// Allocate memory for the result string
+	result := g.builder.NewCall(mallocFunc, totalLenPlusOne)
+
+	// Copy left string to result
+	strcpyFunc := g.ensureStrcpyDeclaration()
+	g.builder.NewCall(strcpyFunc, result, left)
+
+	// Concatenate right string to result
+	g.builder.NewCall(strcatFunc, result, right)
+
+	return result, nil
+}
+
+// ensureStrcatDeclaration ensures strcat is declared
+func (g *LLVMGenerator) ensureStrcatDeclaration() *ir.Func {
+	if strcat, exists := g.functions["strcat"]; exists {
+		return strcat
+	}
+	strcat := g.module.NewFunc("strcat", types.I8Ptr,
+		ir.NewParam("dest", types.I8Ptr),
+		ir.NewParam("src", types.I8Ptr))
+	g.functions["strcat"] = strcat
+	return strcat
+}
+
+// ensureStrcpyDeclaration ensures strcpy is declared
+func (g *LLVMGenerator) ensureStrcpyDeclaration() *ir.Func {
+	if strcpy, exists := g.functions["strcpy"]; exists {
+		return strcpy
+	}
+	strcpy := g.module.NewFunc("strcpy", types.I8Ptr,
+		ir.NewParam("dest", types.I8Ptr),
+		ir.NewParam("src", types.I8Ptr))
+	g.functions["strcpy"] = strcpy
+	return strcpy
+}
+
+// ensureStrlenDeclaration ensures strlen is declared
+func (g *LLVMGenerator) ensureStrlenDeclaration() *ir.Func {
+	if strlen, exists := g.functions["strlen"]; exists {
+		return strlen
+	}
+	strlen := g.module.NewFunc("strlen", types.I64,
+		ir.NewParam("s", types.I8Ptr))
+	g.functions["strlen"] = strlen
+	return strlen
+}
+
+// ensureMallocDeclaration ensures malloc is declared
+func (g *LLVMGenerator) ensureMallocDeclaration() *ir.Func {
+	if malloc, exists := g.functions["malloc"]; exists {
+		return malloc
+	}
+	malloc := g.module.NewFunc("malloc", types.I8Ptr,
+		ir.NewParam("size", types.I64))
+	g.functions["malloc"] = malloc
+	return malloc
 }

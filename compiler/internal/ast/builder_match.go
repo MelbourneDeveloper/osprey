@@ -111,9 +111,9 @@ func (b *Builder) buildPipeExprPattern(pipeCtx parser.IPipeExprContext) Pattern 
 	if callCtx := pipeCtx.CallExpr(0); callCtx != nil {
 		if primaryCtx := callCtx.Primary(); primaryCtx != nil {
 			// Check for simple identifier (like Red, Green, Blue)
-			if primaryCtx.ID() != nil {
+			if primaryCtx.ID(0) != nil {
 				return Pattern{
-					Constructor: primaryCtx.ID().GetText(),
+					Constructor: primaryCtx.ID(0).GetText(),
 					Variable:    "",
 					Fields:      nil,
 					Nested:      nil,
