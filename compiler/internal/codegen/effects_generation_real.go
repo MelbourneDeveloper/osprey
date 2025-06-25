@@ -121,7 +121,7 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 		"all effects must be explicitly handled or forwarded in function signatures. "+
 		"Add a handler or declare the effect in the function signature with !%s",
 		perform.EffectName, perform.OperationName, perform.EffectName)
-	return nil, fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
+	return nil, fmt.Errorf("unhandled effect: %s", errorMsg)
 }
 
 // GenerateHandlerExpression generates handler expressions with proper CPS
@@ -175,7 +175,7 @@ func (ec *EffectCodegen) createHandlerFunction(effectName string, arm ast.Handle
 		}
 	}
 
-	// Create function type (no continuation for now - simplified)
+	// Create function type
 	funcType := types.NewFunc(types.Void, paramTypes...)
 
 	// Create the function
@@ -184,38 +184,43 @@ func (ec *EffectCodegen) createHandlerFunction(effectName string, arm ast.Handle
 	// Create entry block
 	entry := handlerFunc.NewBlock("entry")
 
-	// Store current builder and switch to handler function
+	// Store current state
 	oldBuilder := ec.generator.builder
 	oldVars := make(map[string]value.Value)
 	oldVarTypes := make(map[string]string)
 	for k, v := range ec.generator.variables {
 		oldVars[k] = v
 	}
-	for k, v := range ec.generator.variableTypes {
-		oldVarTypes[k] = v
+	if ec.generator.variableTypes != nil {
+		for k, v := range ec.generator.variableTypes {
+			oldVarTypes[k] = v
+		}
 	}
 
+	// Switch to handler function builder
 	ec.generator.builder = entry
 
-	// Set up parameters as variables in scope
+	// Initialize variable types if nil
+	if ec.generator.variableTypes == nil {
+		ec.generator.variableTypes = make(map[string]string)
+	}
+
+	// Set up parameters as variables - THIS IS THE KEY FIX!
 	for i, param := range arm.Parameters {
 		if i < len(handlerFunc.Params) {
 			ec.generator.variables[param] = handlerFunc.Params[i]
-			// Also set the variable type for the parameter
-			if ec.generator.variableTypes == nil {
-				ec.generator.variableTypes = make(map[string]string)
-			}
 			ec.generator.variableTypes[param] = "string" // Default to string for now
 		}
 	}
 
-	// Generate handler body - this actually executes the handler logic!
+	// Generate handler body - now the parameters are available!
 	if arm.Body != nil {
 		result, err := ec.generator.generateExpression(arm.Body)
 		if err != nil {
-			// Restore state
+			// Restore state before returning error
 			ec.generator.builder = oldBuilder
 			ec.generator.variables = oldVars
+			ec.generator.variableTypes = oldVarTypes
 			return nil, err
 		}
 		_ = result // Ignore result for now
