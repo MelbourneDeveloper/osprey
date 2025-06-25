@@ -134,7 +134,10 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 
 	// Generate handler functions for each operation
 	for _, arm := range handler.Handlers {
-		handlerFunc := ec.createHandlerFunction(handler.EffectName, arm)
+		handlerFunc, err := ec.createHandlerFunction(handler.EffectName, arm)
+		if err != nil {
+			return nil, err
+		}
 		frame.Operations[arm.OperationName] = handlerFunc
 	}
 
@@ -154,7 +157,7 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 }
 
 // createHandlerFunction creates a handler function for an effect operation
-func (ec *EffectCodegen) createHandlerFunction(effectName string, arm ast.HandlerArm) *ir.Func {
+func (ec *EffectCodegen) createHandlerFunction(effectName string, arm ast.HandlerArm) (*ir.Func, error) {
 	// Create function name
 	funcName := fmt.Sprintf("__handler_%s_%s_%d", effectName, arm.OperationName, ec.contCounter)
 	ec.contCounter++
@@ -172,14 +175,7 @@ func (ec *EffectCodegen) createHandlerFunction(effectName string, arm ast.Handle
 		}
 	}
 
-	// Add continuation parameter
-	contType := types.NewFunc(types.Void, types.I64) // Simplified continuation type
-	allParamTypes := make([]types.Type, len(paramTypes)+1)
-	copy(allParamTypes, paramTypes)
-	allParamTypes[len(paramTypes)] = types.NewPointer(contType)
-	paramTypes = allParamTypes
-
-	// Create function type
+	// Create function type (no continuation for now - simplified)
 	funcType := types.NewFunc(types.Void, paramTypes...)
 
 	// Create the function
@@ -190,25 +186,50 @@ func (ec *EffectCodegen) createHandlerFunction(effectName string, arm ast.Handle
 
 	// Store current builder and switch to handler function
 	oldBuilder := ec.generator.builder
+	oldVars := make(map[string]value.Value)
+	oldVarTypes := make(map[string]string)
+	for k, v := range ec.generator.variables {
+		oldVars[k] = v
+	}
+	for k, v := range ec.generator.variableTypes {
+		oldVarTypes[k] = v
+	}
+
 	ec.generator.builder = entry
 
-	// Generate handler body
-	// For now, just call the continuation with Unit value
-	if len(handlerFunc.Params) > 0 {
-		contParam := handlerFunc.Params[len(handlerFunc.Params)-1]
+	// Set up parameters as variables in scope
+	for i, param := range arm.Parameters {
+		if i < len(handlerFunc.Params) {
+			ec.generator.variables[param] = handlerFunc.Params[i]
+			// Also set the variable type for the parameter
+			if ec.generator.variableTypes == nil {
+				ec.generator.variableTypes = make(map[string]string)
+			}
+			ec.generator.variableTypes[param] = "string" // Default to string for now
+		}
+	}
 
-		// Call the continuation with a default value (0 for simplicity)
-		defaultVal := constant.NewInt(types.I64, 0)
-		entry.NewCall(contParam, defaultVal)
+	// Generate handler body - this actually executes the handler logic!
+	if arm.Body != nil {
+		result, err := ec.generator.generateExpression(arm.Body)
+		if err != nil {
+			// Restore state
+			ec.generator.builder = oldBuilder
+			ec.generator.variables = oldVars
+			return nil, err
+		}
+		_ = result // Ignore result for now
 	}
 
 	// Return void
 	entry.NewRet(nil)
 
-	// Restore builder
+	// Restore state
 	ec.generator.builder = oldBuilder
+	ec.generator.variables = oldVars
+	ec.generator.variableTypes = oldVarTypes
 
-	return handlerFunc
+	return handlerFunc, nil
 }
 
 // createBodyContinuation creates a continuation for the handler body
@@ -238,6 +259,15 @@ func (ec *EffectCodegen) createContinuation() value.Value {
 // InitializeEffects initializes the effect system for the generator
 func (g *LLVMGenerator) InitializeEffects() {
 	g.effectCodegen = g.NewEffectCodegen()
+}
+
+// RegisterEffectDeclaration registers an effect declaration with the effect system
+func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration) error {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	g.effectCodegen.RegisterEffect(effect)
+	return nil
 }
 
 // generateRealPerformExpression generates real algebraic effects perform expressions

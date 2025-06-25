@@ -101,14 +101,19 @@ fn handleHttpRequest(method: string, path: string, headers: string, body: string
         }
     }
 
-// Start the SUPREMO EFFECTS-POWERED HTTP server!
-print("🚀 Starting SUPREMO Algebraic Effects Web Compiler on port " + toString(serverPort))
-let serverId = httpCreateServer(serverPort, "127.0.0.1")
-let listenResult = httpListen(serverId, handleHttpRequest)
-print("✅ SUPREMO Effects Server listening on http://127.0.0.1:" + toString(serverPort))
+// 🔥 SUPREMO ALGEBRAIC EFFECTS WEB SERVER WITH PROPER HANDLERS! 🔥
+with handler ProcessOutput {
+    captureStdout(data) => print("🚀 CAPTURED STDOUT: " + data)
+    captureStderr(data) => print("🚨 CAPTURED STDERR: " + data)
+} do {
+    print("🚀 Starting SUPREMO Algebraic Effects Web Compiler on port " + toString(serverPort))
+    let serverId = httpCreateServer(serverPort, "127.0.0.1")
+    let listenResult = httpListen(serverId, handleHttpRequest)
+    print("✅ SUPREMO Effects Server listening on http://127.0.0.1:" + toString(serverPort))
 
-// Keep server alive
-sleep(30000)
+    // Keep server alive
+    sleep(30000)
 
-let stopResult = httpStopServer(serverId)
-print("🛑 SUPREMO Effects Server stopped")
+    let stopResult = httpStopServer(serverId)
+    print("🛑 SUPREMO Effects Server stopped")
+}
