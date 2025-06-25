@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # Osprey Web Compiler API Test
-# Tests the local container running on localhost:3002
+# Tests the local container running on localhost:3001
 
 echo "🧪 Testing Osprey Web Compiler API..."
 echo "===================================="
 
 # Test the local API
-echo "Testing local API at http://localhost:3002/api/run"
-RESPONSE=$(curl -s -X POST http://localhost:3002/api/run \
+echo "Testing local API at http://localhost:3001/api/run"
+RESPONSE=$(curl -s -X POST http://localhost:3001/api/run \
   -H 'Content-Type: application/json' \
   -d '{"code":"print(\"Testing API Response\")"}')
 
