@@ -17,6 +17,15 @@ func TestBasicsExamples(t *testing.T) {
 	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
 }
 
+// TestEffectsExamples tests the algebraic effects examples.
+func TestEffectsExamples(t *testing.T) {
+	checkLLVMTools(t)
+
+	examplesDir := "../../examples/tested/effects"
+	// Effects examples use same expected outputs map as basics, with .expectedoutput file fallback
+	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
+}
+
 func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs map[string]string) {
 	err := filepath.Walk(examplesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -34,9 +43,9 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 				// Try to read from .expectedoutput file first
 				expectedOutputPath := path + ".expectedoutput"
 				if expectedContent, err := os.ReadFile(expectedOutputPath); err == nil {
-					// Use .expectedoutput file content
+					// Use .expectedoutput file content, trimmed to match captureJITOutput behavior
 					expectedOutput := strings.TrimSpace(string(expectedContent))
-					testExampleFile(t, path, expectedOutput)
+					testExampleFileWithTrimming(t, path, expectedOutput, true)
 					return
 				}
 
@@ -50,7 +59,7 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 						"🚨 Then copy the output to create the .expectedoutput file!",
 						info.Name(), expectedOutputPath, info.Name())
 				}
-				testExampleFile(t, path, expectedOutput)
+				testExampleFileWithTrimming(t, path, expectedOutput, false)
 			})
 		}
 		return nil
@@ -318,11 +327,18 @@ func getExpectedOutputs() map[string]string {
 			"✅ commands[1] = \\\necho world\n\"\n\n✅ commands[2] = \\\necho test\n\"\n\n" +
 			"Testing out-of-bounds access:\n\n✅ Correctly caught out-of-bounds: commands[5] -> Error\n\n" +
 			"=== Array Test Complete ===\n\n",
+		// Effects examples
+		"algebraic_effects.osp": "Pure function result: 42\n🎉 BASIC TEST COMPLETE! 🎉",
 	}
 }
 
 // testExampleFile tests a single example file.
 func testExampleFile(t *testing.T, filePath, expectedOutput string) {
+	testExampleFileWithTrimming(t, filePath, expectedOutput, false)
+}
+
+// testExampleFileWithTrimming tests a single example file with optional output trimming.
+func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, trimActualOutput bool) {
 	t.Helper()
 
 	// Read the file content - needed for captureJITOutput
@@ -358,8 +374,14 @@ func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 	}
 
 	// THE MOST CRITICAL PART: Verify output matches expected!
-	if output != expectedOutput {
-		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, output)
+	// If expected output came from a file (and was trimmed), trim actual output too
+	actualOutput := output
+	if trimActualOutput {
+		actualOutput = strings.TrimSpace(output)
+	}
+
+	if actualOutput != expectedOutput {
+		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, actualOutput)
 	}
 
 	t.Logf("✅ Example %s executed and output verified", filepath.Base(filePath))

@@ -17,14 +17,9 @@ func (g *LLVMGenerator) generatePerformExpression(perform *ast.PerformExpression
 
 // generateHandlerExpression generates LLVM IR for handler expressions
 func (g *LLVMGenerator) generateHandlerExpression(handler *ast.HandlerExpression) (value.Value, error) {
-	// For this basic implementation, we'll execute the body directly
-	// A full implementation would set up effect handlers
-
-	// Store current effect handlers (for nested handlers)
-	// TODO: Implement proper handler stack
-
-	// Generate the body expression
-	return g.generateExpression(handler.Body)
+	// Use REAL algebraic effects system!
+	effectCodegen := g.NewEffectCodegen()
+	return effectCodegen.GenerateHandlerExpression(handler)
 }
 
 // generateEffectDeclaration generates LLVM IR for effect declarations
