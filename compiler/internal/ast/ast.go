@@ -63,6 +63,7 @@ type FunctionDeclaration struct {
 	Name       string
 	Parameters []Parameter     // Updated to support type annotations
 	ReturnType *TypeExpression // Optional return type annotation
+	Effects    []string        // CRITICAL: Effect declarations like !Logger, !IO
 	Body       Expression
 }
 

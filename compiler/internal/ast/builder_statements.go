@@ -63,10 +63,17 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		returnType = b.buildTypeExpression(ctx.Type_())
 	}
 
+	// CRITICAL FIX: Parse effect signatures (!Logger, ![IO, Net])
+	var effects []string
+	if ctx.EffectSet() != nil {
+		effects = b.buildEffectSet(ctx.EffectSet())
+	}
+
 	return &FunctionDeclaration{
 		Name:       name,
 		Parameters: params,
 		ReturnType: returnType,
+		Effects:    effects, // CRITICAL: Include parsed effects
 		Body:       body,
 	}
 }
@@ -343,4 +350,27 @@ func (b *Builder) buildEffectDecl(ctx parser.IEffectDeclContext) *EffectDeclarat
 		Name:       name,
 		Operations: operations,
 	}
+}
+
+// buildEffectSet parses effect signatures like !Logger or ![IO, Net]
+func (b *Builder) buildEffectSet(ctx parser.IEffectSetContext) []string {
+	if ctx == nil {
+		return nil
+	}
+
+	effects := make([]string, 0)
+
+	// Single effect: !Effect
+	if ctx.ID() != nil {
+		effects = append(effects, ctx.ID().GetText())
+	}
+
+	// Multiple effects: ![Effect1, Effect2]
+	if ctx.EffectList() != nil {
+		for _, idNode := range ctx.EffectList().AllID() {
+			effects = append(effects, idNode.GetText())
+		}
+	}
+
+	return effects
 }

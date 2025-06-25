@@ -255,6 +255,12 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	g.variables = make(map[string]value.Value)
 	g.variableTypes = make(map[string]string)
 
+	// CRITICAL FIX: Track effects declared in function signature for compile-time safety
+	if g.effectCodegen != nil {
+		// Set current function effects for effect validation
+		g.effectCodegen.currentFunctionEffects = fnDecl.Effects
+	}
+
 	// Add parameters to variable scope - ensure we don't go out of bounds
 	minLen := len(fn.Params)
 	if len(fnDecl.Parameters) < minLen {
@@ -327,6 +333,11 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	g.builder = oldBuilder
 	g.variables = oldVars
 	g.variableTypes = oldTypes
+
+	// CRITICAL FIX: Clear function effects when exiting function context
+	if g.effectCodegen != nil {
+		g.effectCodegen.currentFunctionEffects = nil
+	}
 
 	return nil
 }

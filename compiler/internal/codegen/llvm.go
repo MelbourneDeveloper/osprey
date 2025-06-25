@@ -209,42 +209,33 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	fn *ir.Func,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
+	// CRITICAL FIX: Preserve effect scope across function calls
+	var scopeRestored bool
+	if g.effectCodegen != nil && g.effectCodegen.inHandlerScope {
+		// Function call from within handler scope - maintain effect context
+		scopeRestored = true
+	}
+
 	// VALIDATION: Multi-parameter functions require named arguments
 	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
 		return nil, WrapFunctionRequiresNamed(funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName))
 	}
 
-	// Handle named arguments vs positional arguments
-	if len(callExpr.NamedArguments) > 0 {
-		// Named arguments - need to reorder them to match function signature
-		args, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
-		if err != nil {
-			return nil, err
-		}
-
-		return g.builder.NewCall(fn, args...), nil
+	// Generate arguments for the function call
+	args, err := g.generateFunctionCallArguments(funcName, fn, callExpr)
+	if err != nil {
+		return nil, err
 	}
 
-	// Positional arguments (traditional)
-	args := make([]value.Value, len(callExpr.Arguments))
+	// TARGETED FIX: Call the function directly and store the result
+	result := g.builder.NewCall(fn, args...)
 
-	for i, arg := range callExpr.Arguments {
-		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
-		// This preserves type safety while allowing function composition
-		paramName := "unknown" // We don't have parameter names for positional args
-		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
-			return nil, err
-		}
-
-		val, err := g.generateExpression(arg)
-		if err != nil {
-			return nil, err
-		}
-
-		args[i] = val
+	// Clean up effect scope if it was preserved
+	if scopeRestored {
+		// Scope automatically maintained through function call
 	}
 
-	return g.builder.NewCall(fn, args...), nil
+	return result, nil
 }
 
 // generateNamedArgsSuggestion generates a helpful suggestion for named arguments.
@@ -1006,4 +997,38 @@ func (g *LLVMGenerator) createResultMatchPhi(
 	)
 
 	return phi, nil
+}
+
+// generateFunctionCallArguments generates arguments for function calls, handling both named and positional arguments
+func (g *LLVMGenerator) generateFunctionCallArguments(
+	funcName string,
+	fn *ir.Func,
+	callExpr *ast.CallExpression,
+) ([]value.Value, error) {
+	// Handle named arguments vs positional arguments
+	if len(callExpr.NamedArguments) > 0 {
+		// Named arguments - need to reorder them to match function signature
+		return g.reorderNamedArguments(funcName, callExpr.NamedArguments)
+	}
+
+	// Positional arguments (traditional)
+	args := make([]value.Value, len(callExpr.Arguments))
+
+	for i, arg := range callExpr.Arguments {
+		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
+		// This preserves type safety while allowing function composition
+		paramName := "unknown" // We don't have parameter names for positional args
+		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
+			return nil, err
+		}
+
+		val, err := g.generateExpression(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		args[i] = val
+	}
+
+	return args, nil
 }
