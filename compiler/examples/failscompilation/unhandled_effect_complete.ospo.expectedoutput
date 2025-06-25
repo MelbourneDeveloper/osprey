@@ -1,0 +1,6 @@
+🚀 DEMONSTRATING PRIMO ALGEBRAIC EFFECTS! 🔥
+COMPILATION ERROR: Unhandled effect 'Logger.log' - all effects must be explicitly handled or forwarded in function signatures. Add a handler or declare the effect in the function signature with !Logger
+RUNTIME ERROR: Unhandled effect: Logger.debug
+Result from effectful function: 0
+Result from pure function: 42
+✅ ALGEBRAIC EFFECTS DEMONSTRATION COMPLETE! 🎉 

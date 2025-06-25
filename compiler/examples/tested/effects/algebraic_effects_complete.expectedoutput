@@ -1,0 +1,6 @@
+🚀 DEMONSTRATING PRIMO ALGEBRAIC EFFECTS! 🔥
+RUNTIME ERROR: Unhandled effect: Logger.log
+RUNTIME ERROR: Unhandled effect: Logger.debug
+Result from effectful function: 0
+Result from pure function: 42
+✅ ALGEBRAIC EFFECTS DEMONSTRATION COMPLETE! 🎉 

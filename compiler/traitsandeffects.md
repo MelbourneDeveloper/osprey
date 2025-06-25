@@ -116,7 +116,7 @@ fn fetch(url: String) -> String ![IO, Net] = ...
 perform EffectName.operation(args...)
 ```
 
-If no handler intercepts the call, the runtime aborts with an **UnhandledEffect** error.
+**CRITICAL COMPILE-TIME SAFETY**: If no handler intercepts the call, the compiler produces a **compilation error**. Unhandled effects are **NEVER** permitted at runtime - this ensures complete effect safety and prevents runtime crashes.
 
 ### 20.5 Handlers
 
@@ -161,6 +161,7 @@ When you call `parse`, its effect set bubbles to the caller. The compiler unions
 * The compiler infers the minimal effect set for every `expr`.
 * If inference fails, you add an explicit `!EffectSet`.
 * A function that *declares* no effects **must not** perform any.
+* **COMPILE-TIME EFFECT SAFETY**: All effects must be explicitly handled or forwarded in function signatures. The compiler **rejects** any code with unhandled effects - **NO RUNTIME EFFECT ERRORS ALLOWED**.
 
 ### 20.8 Compilation Model (Design)
 

@@ -31,9 +31,24 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 			testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
 
 			t.Run(testName, func(t *testing.T) {
+				// Try to read from .expectedoutput file first
+				expectedOutputPath := path + ".expectedoutput"
+				if expectedContent, err := os.ReadFile(expectedOutputPath); err == nil {
+					// Use .expectedoutput file content
+					expectedOutput := strings.TrimSpace(string(expectedContent))
+					testExampleFile(t, path, expectedOutput)
+					return
+				}
+
+				// Fallback to hardcoded expected outputs
 				expectedOutput, exists := expectedOutputs[info.Name()]
 				if !exists {
-					t.Fatalf("❌ MISSING expected output for %s!", info.Name())
+					t.Fatalf("❌ MISSING expected output for %s!\n"+
+						"🚨 CREATE: %s\n"+
+						"🚨 OR ADD TO expectedOutputs MAP!\n"+
+						"🚨 RUN: ../../osprey %s --run\n"+
+						"🚨 Then copy the output to create the .expectedoutput file!",
+						info.Name(), expectedOutputPath, info.Name())
 				}
 				testExampleFile(t, path, expectedOutput)
 			})
@@ -320,13 +335,14 @@ func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 
 	// ERROR: ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!
 	if expectedOutput == "" {
+		expectedOutputPath := filePath + ".expectedoutput"
 		t.Fatalf("❌ MISSING EXPECTED OUTPUT FOR %s!\n"+
 			"🚨 ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!\n"+
 			"🚨 NO COMPILATION-ONLY TESTS ALLOWED!\n"+
-			"🚨 RUN THE EXAMPLE AND ADD THE ACTUAL OUTPUT TO expectedOutputs MAP!\n"+
-			"🚨 Use: ../../osprey %s --run\n"+
-			"🚨 Then copy the output to the expectedOutputs map!",
-			filepath.Base(filePath), filepath.Base(filePath))
+			"🚨 CREATE: %s\n"+
+			"🚨 RUN: ../../osprey %s --run\n"+
+			"🚨 Then copy the output to create the .expectedoutput file!",
+			filepath.Base(filePath), expectedOutputPath, filepath.Base(filePath))
 	}
 
 	// Execute via CLI interface AND capture output - we need both coverage AND verification!

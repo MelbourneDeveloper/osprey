@@ -35,6 +35,8 @@ type LLVMGenerator struct {
 	stringConstants       map[string]value.Value
 	currentFunction       *ir.Func
 	currentFunctionParams map[string]value.Value
+	// Real algebraic effects system
+	effectCodegen *EffectCodegen
 }
 
 // SecurityConfig defines security policies for the code generator.
