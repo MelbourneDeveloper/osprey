@@ -1,3 +1,10 @@
+17. [Built-in Functions Reference](0017-Built-inFunctionsReference.md)
+    - [Basic I/O Functions](#171-basic-io-functions)
+    - [Functional Iterator Functions](#172-functional-iterator-functions)
+    - [Pipe Operator](#173-pipe-operator)
+    - [Functional Programming Patterns](#174-functional-programming-patterns)
+    - [Fiber Types and Concurrency](#175-fiber-types-and-concurrency)
+
 ## 17. Built-in Functions Reference
 
 ### 17.1 Basic I/O Functions

@@ -1,3 +1,5 @@
+4. [Semantics](0004-Semantics.md)
+
 ## 4. Semantics
 
 TODO: this section needs serious work. Add more detail.

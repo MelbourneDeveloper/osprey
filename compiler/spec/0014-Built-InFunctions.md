@@ -1,3 +1,50 @@
+14. [Built-in Functions](0014-Built-InFunctions.md)
+    - [HTTP Core Types](#141-http-core-types)
+        - [HTTP Method Union Type](#http-method-union-type)
+        - [HTTP Request Type (Immutable)](#http-request-type-immutable)
+        - [HTTP Response Type (Immutable with Streaming)](#http-response-type-immutable-with-streaming)
+    - [HTTP Server Functions](#142-http-server-functions)
+        - [`httpCreateServer(port: Int, address: String) -> Result<ServerID, String>`](#httpcreateserverport-int-address-string---resultserverid-string)
+        - [`httpListen(serverID: Int, handler: fn(String, String, String, String) -> String) -> Result<Success, String>`](#httplistenserverid-int-handler-fnstring-string-string-string---string---resultsuccess-string)
+        - [`httpStopServer(serverID: Int) -> Result<Success, String>`](#httpstopserverserverid-int---resultsuccess-string)
+        - [HTTP Request Handling Bridge](#1421-http-request-handling-bridge)
+            - [Request Handling Architecture](#request-handling-architecture)
+            - [Bridge Function Specification](#bridge-function-specification)
+            - [Raw Function Pointer Callbacks](#raw-function-pointer-callbacks)
+            - [Legacy Bridge Function (Deprecated)](#legacy-bridge-function-deprecated)
+            - [New Raw Callback Architecture Flow](#new-raw-callback-architecture-flow)
+            - [Implementation Requirements](#implementation-requirements)
+            - [Example Implementation](#example-implementation)
+    - [HTTP Client Functions](#143-http-client-functions)
+        - [`httpCreateClient(baseUrl: String, timeout: Int) -> Result<ClientID, String>`](#httpcreeateclientbaseurl-string-timeout-int---resultclientid-string)
+        - [`httpGet(clientID: Int, path: String, headers: String) -> Result<StatusCode, String>`](#httpgetclientid-int-path-string-headers-string---resultstatuscode-string)
+        - [`httpPost(clientID: Int, path: String, body: String, headers: String) -> Result<StatusCode, String>`](#httppostclientid-int-path-string-body-string-headers-string---resultstatuscode-string)
+        - [`httpPut(clientID: Int, path: String, body: String, headers: String) -> Result<StatusCode, String>`](#httpputclientid-int-path-string-body-string-headers-string---resultstatuscode-string)
+        - [`httpDelete(clientID: Int, path: String, headers: String) -> Result<StatusCode, String>`](#httpdeleteclientid-int-path-string-headers-string---resultstatuscode-string)
+        - [`httpRequest(clientID: Int, method: HttpMethod, path: String, headers: String, body: String) -> Result<StatusCode, String>`](#httprequestclientid-int-method-httpmethod-path-string-headers-string-body-string---resultstatuscode-string)
+        - [`httpCloseClient(clientID: Int) -> Result<Success, String>`](#httpcloseclientclientid-int---resultsuccess-string)
+    - [WebSocket Support (Two-Way Communication)](#144-websocket-support-two-way-communication)
+        - [WebSocket Security Implementation](#1441-websocket-security-implementation)
+        - [Security Standards Compliance](#1442-security-standards-compliance)
+        - [Security Architecture](#1443-security-architecture)
+        - [Security Testing and Validation](#1444-security-testing-and-validation)
+        - [Security References and Standards](#1445-security-references-and-standards)
+        - [`websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`](#websocketconnecturl-string-messagehandler-fnstring---resultsuccess-string---resultwebsocketid-string)
+        - [`websocketSend(wsID: Int, message: String) -> Result<Success, String>`](#websocketsendwsid-int-message-string---resultsuccess-string)
+        - [`websocketClose(wsID: Int) -> Result<Success, String>`](#websocketclosewsid-int---resultsuccess-string)
+        - [WebSocket Server Functions](#1441-websocket-server-functions)
+            - [`websocketCreateServer(port: Int, address: String, path: String) -> Int`](#websocketcreateserverport-int-address-string-path-string---int)
+            - [`websocketServerListen(serverID: Int) -> Int`](#websocketserverlistenserverid-int---int)
+            - [`websocketServerBroadcast(serverID: Int, message: String) -> Int`](#websocketserverbroadcastserverid-int-message-string---int)
+            - [`websocketStopServer(serverID: Int) -> Int`](#websocketstopserverserverid-int---int)
+            - [`websocketKeepAlive() -> Void`](#websocketkeepalive---void)
+    - [Streaming Response Bodies](#145-streaming-response-bodies)
+        - [Complete Response](#complete-response)
+        - [Streamed Response](#streamed-response)
+    - [Error Handling in HTTP](#146-error-handling-in-http)
+    - [Fiber-Based Concurrency](#147-fiber-based-concurrency)
+    - [Complete HTTP Server Example](#148-complete-http-server-example)
+
 ## 14. Built-in Functions
 
 🚀 **IMPLEMENTATION STATUS**: HTTP functions are implemented and working. WebSocket functions are implemented but undergoing testing. Fiber operations are partially implemented.
@@ -673,131 +720,4 @@ Starts the WebSocket server listening for connections.
 - `-3`: Socket options failed
 - `-4`: **BIND FAILED** (most common current issue)
 - `-5`: Listen failed
-- `-6`: Thread creation failed
-
-#### `websocketServerBroadcast(serverID: Int, message: String) -> Int`
-Broadcasts a message to all connected WebSocket clients.
-
-#### `websocketStopServer(serverID: Int) -> Int`
-Stops the WebSocket server and closes all connections.
-
-#### `websocketKeepAlive() -> Void`
-Keeps the WebSocket server running indefinitely until interrupted.
-
-### 14.5 Streaming Response Bodies
-
-Osprey automatically handles response streaming to prevent memory issues with large responses:
-
-#### Complete Response
-For small responses that fit in memory:
-```osprey
-HttpResponse {
-    status: 200,
-    contentType: "application/json",
-    partialBody: "{\"data\": \"small response\"}",
-    isComplete: true,
-    streamFd: -1
-}
-```
-
-#### Streamed Response
-For large responses that should be streamed:
-```osprey
-HttpResponse {
-    status: 200,
-    contentType: "application/octet-stream",
-    streamFd: fileDescriptor,  // File descriptor to stream from
-    isComplete: false,
-    contentLength: -1,         // -1 indicates chunked encoding
-    partialBody: "",
-    partialLength: 0
-}
-```
-
-### 14.6 Error Handling in HTTP
-
-All HTTP functions return Result types following Osprey's principle of making illegal states unrepresentable:
-
-```osprey
-// Server creation with error handling
-let serverResult = httpCreateServer(port: 8080, address: "127.0.0.1")
-match serverResult {
-    Success serverId => {
-        print("Server created successfully")
-        let listenResult = httpListen(serverID: serverId, handler: myHandler)
-        match listenResult {
-            Success _ => print("Server is listening")
-            Err error => print("Failed to start listening: ${error}")
-        }
-    }
-    Err error => print("Failed to create server: ${error}")
-}
-```
-
-### 14.7 Fiber-Based Concurrency
-
-HTTP servers automatically spawn a new fiber for each incoming request, enabling thousands of concurrent connections:
-
-```osprey
-// Each request handler runs in its own fiber
-fn handleRequest(request: HttpRequest) -> Result<HttpResponse, String> = {
-    // This function runs in a separate fiber for each request
-    // Multiple requests can be processed concurrently
-    let result = processLongRunningTask(request.body)
-    Success(HttpResponse {
-        status: 200,
-        contentType: "application/json",
-        partialBody: result,
-        isComplete: true,
-        streamFd: -1
-    })
-}
-```
-
-### 14.8 Complete HTTP Server Example
-
-```osprey
-// Create and start an HTTP server
-let serverResult = httpCreateServer(port: 8080, address: "0.0.0.0")
-match serverResult {
-    Success serverId => {
-        fn apiHandler(request: HttpRequest) -> Result<HttpResponse, String> = match request.method {
-            GET => match request.path {
-                "/api/health" => Success(HttpResponse {
-                    status: 200,
-                    contentType: "application/json",
-                    partialBody: "{\"status\": \"healthy\", \"timestamp\": \"${getCurrentTime()}\"}",
-                    isComplete: true,
-                    streamFd: -1
-                })
-                "/api/users" => Success(HttpResponse {
-                    status: 200,
-                    contentType: "application/json",
-                    partialBody: getUsersJson(),
-                    isComplete: true,
-                    streamFd: -1
-                })
-                _ => Success(HttpResponse {
-                    status: 404,
-                    contentType: "application/json", 
-                    partialBody: "{\"error\": \"Not Found\"}",
-                    isComplete: true,
-                    streamFd: -1
-                })
-            }
-            POST => match request.path {
-                "/api/users" => createUser(request.body)
-                _ => Err("Unsupported POST endpoint")
-            }
-            _ => Err("Method not allowed")
-        }
-        
-        let listenResult = httpListen(serverID: serverId, handler: apiHandler)
-        match listenResult {
-            Success _ => print("🚀 HTTP server listening on http://0.0.0.0:8080")
-            Err error => print("❌ Failed to start server: ${error}")
-        }
-    }
-    Err error => print("❌ Failed to create server: ${error}")
-}
-```
+- `

@@ -1,3 +1,9 @@
+7. [String Interpolation](0007-StringInterpolation.md)
+   - [Syntax](#71-syntax)
+   - [Expression Support](#72-expression-support)
+   - [Type Handling](#73-type-handling)
+   - [Implementation](#74-implementation)
+
 ## 7. String Interpolation
 
 ✅ **IMPLEMENTED**: String interpolation is fully implemented and working with comprehensive test coverage.

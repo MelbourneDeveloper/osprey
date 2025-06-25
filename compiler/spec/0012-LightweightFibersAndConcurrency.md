@@ -1,3 +1,28 @@
+12. [Lightweight Fibers and Concurrency](0012-LightweightFibersAndConcurrency.md)
+    - [Fiber Types and Concurrency](#121-fiber-types-and-concurrency)
+        - [Core Fiber Types](#core-fiber-types)
+        - [Fiber Construction](#fiber-construction)
+        - [Spawn Syntax Sugar](#spawn-syntax-sugar)
+        - [Channel Construction](#channel-construction)
+        - [Fiber Operations](#fiber-operations)
+        - [Complete Fiber Example](#complete-fiber-example)
+        - [Select Expression for Channel Multiplexing](#select-expression-for-channel-multiplexing)
+        - [Rust Interoperability](#rust-interoperability)
+    - [Fiber-Isolated Module System](#122-fiber-isolated-module-system)
+        - [Module Isolation Principles](#module-isolation-principles)
+        - [Module Declaration Syntax](#132-module-declaration-syntax)
+        - [Fiber Isolation Behavior](#fiber-isolation-behavior)
+        - [Memory and Performance Characteristics](#memory-and-performance-characteristics)
+        - [Inter-Fiber Communication](#135-inter-fiber-communication)
+    - [Server Applications and Long-Running Processes](#123-server-applications-and-long-running-processes)
+        - [Functional Approaches to Server Persistence](#1231-functional-approaches-to-server-persistence)
+            - [Fiber-Based Server Persistence](#12311-fiber-based-server-persistence)
+            - [Recursive Function Patterns](#12312-recursive-function-patterns)
+            - [Event-Driven Architecture with Channels](#12313-event-driven-architecture-with-channels)
+            - [Functional Iterator-Based Processing](#12314-functional-iterator-based-processing)
+        - [Why No Imperative Loops?](#1232-why-no-imperative-loops)
+        - [Performance Considerations](#1233-performance-considerations)
+
 ## 12. Lightweight Fibers and Concurrency
 
 🚧 **IMPLEMENTATION STATUS**: Fiber syntax is partially implemented. Basic fiber operations (`spawn`, `await`, `yield`) are in the grammar but runtime support is limited.

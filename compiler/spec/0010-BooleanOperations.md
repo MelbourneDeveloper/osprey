@@ -1,3 +1,7 @@
+10. [Boolean Operations](0010-BooleanOperations.md)
+    - [Boolean Pattern Matching](#101-boolean-pattern-matching)
+    - [Boolean Operators](#102-boolean-operators)
+
 # 10. Boolean Operations
 
 Use pattern matching for conditional logic:

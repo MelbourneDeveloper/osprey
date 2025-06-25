@@ -1,3 +1,8 @@
+9. [Block Expressions](0009-BlockExpressions.md)
+   - [Block Scoping Rules](#91-block-scoping-rules)
+   - [Block Return Values](#92-block-return-values)
+   - [Performance Characteristics](#93-performance-characteristics)
+
 # 9. Block Expressions
 
 Block expressions allow grouping multiple statements together and returning a value from the final expression. They create a new scope for variable declarations and enable sequential execution with proper scoping rules.
