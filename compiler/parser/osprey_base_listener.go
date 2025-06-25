@@ -146,6 +146,12 @@ func (s *BaseospreyListener) EnterEffectSet(ctx *EffectSetContext) {}
 // ExitEffectSet is called when production effectSet is exited.
 func (s *BaseospreyListener) ExitEffectSet(ctx *EffectSetContext) {}
 
+// EnterEffectList is called when production effectList is entered.
+func (s *BaseospreyListener) EnterEffectList(ctx *EffectListContext) {}
+
+// ExitEffectList is called when production effectList is exited.
+func (s *BaseospreyListener) ExitEffectList(ctx *EffectListContext) {}
+
 // EnterHandlerExpr is called when production handlerExpr is entered.
 func (s *BaseospreyListener) EnterHandlerExpr(ctx *HandlerExprContext) {}
 

@@ -70,6 +70,9 @@ type ospreyListener interface {
 	// EnterEffectSet is called when entering the effectSet production.
 	EnterEffectSet(c *EffectSetContext)
 
+	// EnterEffectList is called when entering the effectList production.
+	EnterEffectList(c *EffectListContext)
+
 	// EnterHandlerExpr is called when entering the handlerExpr production.
 	EnterHandlerExpr(c *HandlerExprContext)
 
@@ -255,6 +258,9 @@ type ospreyListener interface {
 
 	// ExitEffectSet is called when exiting the effectSet production.
 	ExitEffectSet(c *EffectSetContext)
+
+	// ExitEffectList is called when exiting the effectList production.
+	ExitEffectList(c *EffectListContext)
 
 	// ExitHandlerExpr is called when exiting the handlerExpr production.
 	ExitHandlerExpr(c *HandlerExprContext)

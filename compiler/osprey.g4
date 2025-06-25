@@ -51,7 +51,11 @@ effectDecl      : docComment? EFFECT ID LBRACE opDecl* RBRACE ;
 opDecl          : ID COLON type ;
 
 // Effect sets for function types
-effectSet       : NOT_OP ID ;
+effectSet       : NOT_OP ID                              // Single effect: !Effect
+                | NOT_OP LSQUARE effectList RSQUARE      // Multiple effects: ![Effect1, Effect2]
+                ;
+
+effectList      : ID (COMMA ID)* ;
 
 // Handler expressions  
 handlerExpr     : HANDLER ID LBRACE handlerArm+ RBRACE ;
