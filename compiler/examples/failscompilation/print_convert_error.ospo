@@ -1,0 +1,8 @@
+// Test case for writeFile function wrong arguments error
+// This should trigger WrapWriteFileWrongArgs
+
+fn main() -> Int {
+    let result = writeFile()  // Missing required filename and content arguments
+    print(result)
+    0
+} 

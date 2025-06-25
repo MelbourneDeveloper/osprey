@@ -1,0 +1,24 @@
+// Simple process test to debug linking issues
+print("Testing simple process spawn...")
+
+// Define the callback function that C runtime will call
+fn processEventHandler(processID: int, eventType: int, data: string) -> Unit = {
+    match eventType {
+        1 => print("[STDOUT] Process ${toString(processID)}: ${data}")
+        2 => print("[STDERR] Process ${toString(processID)}: ${data}")
+        3 => print("[EXIT] Process ${toString(processID)} exited with code: ${data}")
+        _ => print("[UNKNOWN] Process ${toString(processID)} event ${toString(eventType)}: ${data}")
+    }
+}
+
+let result = spawnProcess("echo hello", processEventHandler)
+match result {
+    Success { value } => {
+        print("Process spawned successfully")
+        let exitCode = awaitProcess(value)
+        print("Process finished")
+        cleanupProcess(value)
+    }
+    Error { message } => print("Failed to spawn process")
+}
+print("Test complete") 

@@ -1,7 +1,6 @@
-// Code generated from osprey.g4 by ANTLR 4.13.1. DO NOT EDIT.
+// Code generated from osprey.g4 by ANTLR 4.13.2. DO NOT EDIT.
 
 package parser // osprey
-
 import "github.com/antlr4-go/antlr/v4"
 
 // BaseospreyListener is a complete listener for a parse tree produced by ospreyParser.

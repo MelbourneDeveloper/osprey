@@ -50,3 +50,18 @@ let scores2 = 85
 print("Score ${scores2}: ${getCategory(scores2)}")
 let scores3 = 50
 print("Score ${scores3}: ${getCategory(scores3)}") 
+
+// Nested match expressions (critical test)
+fn nestedTest(x: int, y: int) -> string = match x {
+    0 => match y {
+        0 => "Both zero"
+        _ => "X zero"
+    }
+    _ => match y {
+        0 => "Y zero"
+        _ => "Both other"
+    }
+}
+
+let nested = nestedTest(x: 0, y: 0)
+print("Nested: ${nested}")

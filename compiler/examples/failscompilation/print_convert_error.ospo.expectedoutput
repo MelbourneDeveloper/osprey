@@ -1,0 +1,1 @@
+writeFile expects exactly 2 arguments (filename, content), got 0

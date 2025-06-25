@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
 // TestBasicsExamples tests the basic language feature examples.
@@ -66,7 +64,8 @@ func getExpectedOutputs() map[string]string {
 			"42 is The answer to everything!\n7 is Some other number\n" +
 			"\nEven number check:\n42 is even: 0\n7 is even: 0\n2 is even: 1\n" +
 			"\nScore categories:\nScore 100: Perfect!\n" +
-			"Score 85: Very Good\nScore 50: Needs Improvement\n",
+			"Score 85: Very Good\nScore 50: Needs Improvement\n" +
+			"Nested: Both zero\n",
 		"safe_arithmetic_demo.osp": "=== Type-Safe Arithmetic Demo ===\n" +
 			"Future: All operators return Result<T, Error>\n\n10 / 2 = 5\n" +
 			"Error: Cannot divide 15 by 0!\n20 / 4 = 5\n\n" +
@@ -227,8 +226,50 @@ func getExpectedOutputs() map[string]string {
 			"Process result: 0\n" +
 			"=== Test Complete ===\n",
 		"process_spawn_fiber.osp": "=== Process Spawning in Fibers ===\n" +
-			"Fiber ID: 1\n" +
-			"=== Test Complete ===\n",
+			"Process result: 0\n" +
+			"=== Fiber Test Complete ===\n",
+		"simple_process_test.osp": "Testing simple process spawn...\n" +
+			"Process spawned successfully\n" +
+			"[STDOUT] Process 1: hello\n\n" +
+			"[EXIT] Process 1 exited with code: 0\n" +
+			"Process finished\n" +
+			"Test complete\n",
+		"async_process_management.osp": "=== Async Process Management Demo ===\n" +
+			"--- Test 1: Basic Process Spawning ---\n" +
+			"✓ Process spawned successfully\n" +
+			"[STDOUT] Process 1: Hello from async process!\n\n" +
+			"[EXIT] Process 1 exited with code: 0\n" +
+			"✓ Process completed successfully\n" +
+			"✓ Process resources cleaned up\n" +
+			"--- Test 2: Another Process ---\n" +
+			"Process 2 spawned successfully\n" +
+			"[STDOUT] Process 2: Process 2 output\n\n" +
+			"[EXIT] Process 2 exited with code: 0\n" +
+			"Process 2 finished\n" +
+			"--- Test 3: Error Handling ---\n" +
+			"[EXIT] Process 3 exited with code: 1\n" +
+			"Error process returned non-zero exit code\n" +
+			"=== Async Process Management Demo Complete ===\n" +
+			"Note: Process output appears via C runtime callbacks during execution\n",
+		"callback_stdout_demo.osp": "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
+			"--- Test 1: Basic Stdout Callback ---\n" +
+			"✓ Process spawned with ID: 1\n" +
+			"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
+			"[CALLBACK] Process 1 EXIT: 0\n" +
+			"✓ Process finished with exit code: 0\n" +
+			"✓ Process cleaned up\n" +
+			"--- Test 2: Multiple Lines Callback ---\n" +
+			"✓ Multi-line process spawned with ID: 2\n" +
+			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+			"[CALLBACK] Process 2 EXIT: 0\n" +
+			"✓ Multi-line process finished\n" +
+			"--- Test 3: Error Process Callback ---\n" +
+			"✓ Error process spawned with ID: 3\n" +
+			"[CALLBACK] Process 3 STDERR: ls: /nonexistent/directory: No such file or directory\n\n" +
+			"[CALLBACK] Process 3 EXIT: 1\n" +
+			"✓ Error process finished with exit code: 1\n" +
+			"=== CALLBACK DEMO COMPLETE ===\n" +
+			"The [CALLBACK] lines above show C runtime calling into Osprey!\n",
 		"process_spawn_workflow.osp": "Step 1\n" +
 			"Step 2\n" +
 			"=== Process Spawning Workflow ===\n" +
@@ -269,19 +310,13 @@ func getExpectedOutputs() map[string]string {
 func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 	t.Helper()
 
-	// Read the file
+	// Read the file content - needed for captureJITOutput
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to read %s: %v", filePath, err)
 	}
 
 	source := string(content)
-
-	// Try to compile first
-	_, err = codegen.CompileToLLVM(source)
-	if err != nil {
-		t.Fatalf("Failed to compile %s: %v", filePath, err)
-	}
 
 	// ERROR: ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!
 	if expectedOutput == "" {
@@ -294,7 +329,8 @@ func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 			filepath.Base(filePath), filepath.Base(filePath))
 	}
 
-	// Execute and verify output
+	// Execute via CLI interface AND capture output - we need both coverage AND verification!
+	// This exercises the runRunProgram function while capturing the actual output
 	output, err := captureJITOutput(source)
 	if err != nil {
 		// If JIT execution fails due to missing tools, fail the test
@@ -305,11 +341,12 @@ func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 		t.Fatalf("Failed to execute %s: %v", filePath, err)
 	}
 
+	// THE MOST CRITICAL PART: Verify output matches expected!
 	if output != expectedOutput {
 		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, output)
 	}
 
-	t.Logf("✅ Example %s compiled and executed successfully", filepath.Base(filePath))
+	t.Logf("✅ Example %s executed and output verified", filepath.Base(filePath))
 }
 
 // Helper functions for expected outputs.

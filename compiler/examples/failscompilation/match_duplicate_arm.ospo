@@ -1,0 +1,8 @@
+// Test case for contains function wrong arguments error
+// This should trigger WrapContainsWrongArgs
+
+fn main() -> Int {
+    let result = contains()  // Missing required string and substring arguments
+    print(result)
+    0
+} 

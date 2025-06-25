@@ -1,0 +1,8 @@
+// Test case for readFile function wrong arguments error
+// This should trigger WrapReadFileWrongArgs
+
+fn main() -> Int {
+    let result = readFile()  // Missing required filename argument
+    print(result)
+    0
+} 

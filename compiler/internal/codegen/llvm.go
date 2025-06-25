@@ -68,6 +68,26 @@ func (g *LLVMGenerator) handleBuiltInFunction(name string, callExpr *ast.CallExp
 
 // handleCoreFunctions handles core built-in functions like print, toString, etc.
 func (g *LLVMGenerator) handleCoreFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
+	// Try core system functions first
+	if result, err := g.handleSystemFunctions(name, callExpr); err != nil || result != nil {
+		return result, err
+	}
+
+	// Try string/functional programming functions
+	if result, err := g.handleStringAndFunctionalFunctions(name, callExpr); err != nil || result != nil {
+		return result, err
+	}
+
+	// Try file/JSON functions
+	if result, err := g.handleFileAndJSONFunctions(name, callExpr); err != nil || result != nil {
+		return result, err
+	}
+
+	return nil, nil
+}
+
+// handleSystemFunctions handles basic system and I/O functions.
+func (g *LLVMGenerator) handleSystemFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
 	switch name {
 	case ToStringFunc:
 		return g.generateToStringCall(callExpr)
@@ -75,6 +95,25 @@ func (g *LLVMGenerator) handleCoreFunctions(name string, callExpr *ast.CallExpre
 		return g.generatePrintCall(callExpr)
 	case InputFunc:
 		return g.generateInputCall(callExpr)
+	case SleepFunc:
+		return g.generateSleepCall(callExpr)
+	case SpawnProcessFunc:
+		return g.generateSpawnProcessCall(callExpr)
+	case AwaitProcessFunc:
+		return g.generateAwaitProcessCall(callExpr)
+	case CleanupProcessFunc:
+		return g.generateCleanupProcessCall(callExpr)
+	default:
+		return nil, nil
+	}
+}
+
+// handleStringAndFunctionalFunctions handles string manipulation and functional programming functions.
+func (g *LLVMGenerator) handleStringAndFunctionalFunctions(
+	name string,
+	callExpr *ast.CallExpression,
+) (value.Value, error) {
+	switch name {
 	case RangeFunc:
 		return g.generateRangeCall(callExpr)
 	case ForEachFunc:
@@ -91,10 +130,14 @@ func (g *LLVMGenerator) handleCoreFunctions(name string, callExpr *ast.CallExpre
 		return g.generateContainsCall(callExpr)
 	case SubstringFunc:
 		return g.generateSubstringCall(callExpr)
-	case SpawnProcessFunc:
-		return g.generateSpawnProcessCall(callExpr)
-	case SleepFunc:
-		return g.generateSleepCall(callExpr)
+	default:
+		return nil, nil
+	}
+}
+
+// handleFileAndJSONFunctions handles file I/O and JSON processing functions.
+func (g *LLVMGenerator) handleFileAndJSONFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
+	switch name {
 	case WriteFileFunc:
 		return g.generateWriteFileCall(callExpr)
 	case ReadFileFunc:
@@ -528,12 +571,17 @@ func (g *LLVMGenerator) generateMatchArmValues(
 			armValues = append(armValues, armValue)
 		}
 
+		// TODO: FIX THIS! DON'T IGNORE IT!!
 		// CRITICAL FIX: After generating the expression (which might be a nested match),
 		// the builder might be pointing to a different block. We need to ensure the
 		// branch comes from the current builder block (where the expression ended),
-		// not necessarily from the arm block.
+		// but ONLY if that block doesn't already have a terminator.
 		currentBuilderBlock := g.builder
-		currentBuilderBlock.NewBr(endBlock)
+
+		// Check if the current block already has a terminator instruction
+		if currentBuilderBlock.Term == nil {
+			currentBuilderBlock.NewBr(endBlock)
+		}
 		predecessorBlocks = append(predecessorBlocks, currentBuilderBlock)
 	}
 
@@ -824,7 +872,10 @@ func (g *LLVMGenerator) generateSuccessBlock(
 		successValue = val
 	}
 
-	blocks.Success.NewBr(blocks.End)
+	// Only add branch if the current block doesn't already have a terminator
+	if g.builder.Term == nil {
+		g.builder.NewBr(blocks.End)
+	}
 
 	return successValue, nil
 }
@@ -861,7 +912,10 @@ func (g *LLVMGenerator) generateErrorBlock(
 		errorValue = val
 	}
 
-	blocks.Error.NewBr(blocks.End)
+	// Only add branch if the current block doesn't already have a terminator
+	if g.builder.Term == nil {
+		g.builder.NewBr(blocks.End)
+	}
 
 	return errorValue, nil
 }

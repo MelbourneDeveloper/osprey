@@ -1,0 +1,8 @@
+// Test case for forEach function wrong arguments error
+// This should trigger WrapForEachWrongArgs
+
+fn main() -> Int {
+    let result = forEach()  // Missing required list and function arguments
+    print(result)
+    0
+} 

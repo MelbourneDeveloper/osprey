@@ -50,6 +50,20 @@ func GetBuiltinTypeDescriptions() map[string]*BuiltinTypeDesc {
 				`    partialLength: 25` + "\n" +
 				`}`,
 		},
+		"ProcessHandle": {
+			Name: "ProcessHandle",
+			Description: "A handle to a spawned async process. Contains the process ID and allows " +
+				"waiting for completion and cleanup. Process output is delivered via callbacks " +
+				"registered with the runtime.",
+			Example: `let result = spawnProcess("echo hello")` + "\n" +
+				`match result {` + "\n" +
+				`    Success { value } => {` + "\n" +
+				`        let exitCode = awaitProcess(value)` + "\n" +
+				`        cleanupProcess(value)` + "\n" +
+				`    }` + "\n" +
+				`    Error { message } => print("Process failed")` + "\n" +
+				`}`,
+		},
 	}
 }
 
