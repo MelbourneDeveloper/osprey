@@ -16,23 +16,58 @@ effect Logger {
     error: fn(string) -> Unit
 }
 
+effect Counter {
+    increment: fn() -> Unit
+    getValue: fn() -> int
+}
+
 // Pure functions work fine
 fn doubleValue(x: int) -> int = x * 2
 
 fn concatenateStrings(a: string, b: string) -> string = a + b
 
 // Main function showing what works
+fn loggedIncrement(message: string) -> Unit !Logger !Counter = {
+    perform Logger.log(message)
+    perform Counter.increment()
+}
+
+fn processItems(count: int) -> int !Logger !Counter = {
+    if count <= 0 then {
+        perform Counter.getValue()
+    } else {
+        loggedIncrement("Processing item")
+        processItems(count - 1)
+    }
+}
+
+fn loggedCalculation(x: int) -> int !Logger = {
+    perform Logger.log("Starting calculation")
+    let result = x * 2
+    perform Logger.log("Calculation complete")
+    result
+}
+
+fn errorProne(value: int) -> int !Logger = match value {
+    -5 => {
+        perform Logger.error("Negative value detected")
+        0
+    }
+    _ => loggedCalculation(value)
+}
+
+fn calculation(x: int) -> int !Logger = {
+    perform Logger.log("Calculating...")
+    x * 2
+}
+
 fn main() -> Unit = {
-    print("🚀 ALGEBRAIC EFFECTS SYSTEM STATUS:")
-    print("✅ Effect declarations: WORKING")
-    print("✅ Effect operation syntax: WORKING") 
-    print("✅ Multiple effect declarations: WORKING")
-    print("✅ Pure functions: WORKING")
-    print("🚧 Effect handlers: PARSING ONLY")
-    print("🚧 Perform expressions: COMPILE-TIME SAFETY WORKING")
-    
-    let result = doubleValue(21)
-    print("Pure computation: " + toString(result))
-    
-    print("🎉 EFFECTS DECLARATION TEST COMPLETE! 🔥")
+    with handler Logger {
+        log(msg) => print("LOG: " + msg)
+        error(msg) => print("ERR: " + msg)
+    } do {
+        let result = calculation(21)
+        perform Logger.error("Test error")
+        print("Done: " + toString(result))
+    }
 } 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/llir/llvm/ir"
-	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
@@ -155,15 +154,6 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	return nil, fmt.Errorf("unhandled effect: %s", errorMsg)
 }
 
-// Helper function to get map keys for debugging
-func getKeys(m map[string]*ir.Func) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
 // GenerateHandlerExpression generates code for handler expressions
 func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpression) (value.Value, error) {
 	effectName := handler.EffectName
@@ -287,28 +277,6 @@ func (ec *EffectCodegen) createHandlerFunction(effectName string, arm ast.Handle
 	ec.generator.variableTypes = oldVarTypes
 
 	return handlerFunc, nil
-}
-
-// createBodyContinuation creates a continuation for the handler body
-func (ec *EffectCodegen) createBodyContinuation(_ ast.Expression) *ir.Func {
-	funcName := fmt.Sprintf("__body_cont_%d", ec.contCounter)
-	ec.contCounter++
-
-	// Simple continuation that takes a value and returns void
-	funcType := types.NewFunc(types.Void, types.I64)
-	contFunc := ec.generator.module.NewFunc(funcName, funcType)
-
-	entry := contFunc.NewBlock("entry")
-	entry.NewRet(nil)
-
-	return contFunc
-}
-
-// createContinuation creates a continuation closure
-func (ec *EffectCodegen) createContinuation() value.Value {
-	// For now, return a null pointer - in a full implementation this would
-	// capture the current computation state
-	return constant.NewNull(types.I8Ptr)
 }
 
 // Integration with main generator

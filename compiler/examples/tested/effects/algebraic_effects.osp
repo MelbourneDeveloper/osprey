@@ -1,6 +1,6 @@
 // 🚀 SUPREMO BASIC ALGEBRAIC EFFECTS! 🔥
 
-// Effect declaration for logging
+// Basic algebraic effects
 effect Logger {
     log: fn(string) -> Unit
 }
@@ -11,6 +11,5 @@ fn double(x: int) -> int = x * 2
 // Main function to test
 fn main() -> Unit = {
     let doubled = double(21)
-    print("Pure function result: " + toString(doubled))
-    print("🎉 BASIC TEST COMPLETE! 🎉")
+    print(toString(doubled))
 } 

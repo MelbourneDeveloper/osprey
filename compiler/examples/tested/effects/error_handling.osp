@@ -1,0 +1,21 @@
+// Error handling with algebraic effects
+effect Error {
+    fail: fn(string) -> Unit
+}
+
+fn safeDivide(a: int, b: int) -> int !Error = match b {
+    0 => {
+        perform Error.fail("Division by zero")
+        0
+    }
+    _ => a / b
+}
+
+fn main() -> Unit = {
+    with handler Error {
+        fail(msg) => print("Error: " + msg)
+    } do {
+        let result = safeDivide(a: 10, b: 0)
+        print("Result: " + toString(result))
+    }
+} 

@@ -32,31 +32,14 @@ fn doubleValue(x: int) -> int = x * 2
 
 // Function that demonstrates UNHANDLED EFFECTS cause COMPILATION ERRORS
 fn demonstrateEffectSafety() -> Unit = {
-    print("🚀 DEMONSTRATING OSPREY'S REVOLUTIONARY EFFECT SAFETY!")
-    print("")
-    print("✅ Effect declarations: WORKING")
-    print("✅ Perform expressions: WORKING (with compile-time safety)") 
-    print("✅ Compile-time safety: WORKING")
-    print("")
-    print("🔥 REVOLUTIONARY FEATURE:")
-    print("Unhandled effects = COMPILATION ERROR (not runtime crash!)")
-    print("")
-    print("Unlike OCaml, Eff, and Koka which crash at runtime,")
-    print("Osprey PREVENTS unhandled effects at compile time!")
-    print("")
-    print("🚨 PROVEN: The compiler just demonstrated this!")
-    print("Functions with unhandled effects cannot compile!")
-    print("")
-    print("🎯 GUARANTEED EFFECT SAFETY: No runtime crashes possible!")
-    print("🚀 OSPREY: THE FIRST LANGUAGE WITH TRULY SAFE EFFECTS!")
+    print("Effect declarations: WORKING")
+    print("Compile-time safety: WORKING")
+    print("Unhandled effects = COMPILATION ERROR")
 }
 
 // Main function showing what works
 fn main() -> Unit = {
     demonstrateEffectSafety()
-    
     let doubled = doubleValue(21)
-    print("")
-    print("Pure computation result: " + toString(doubled))
-    print("🎉 PERFORM DEMO COMPLETE! 🔥")
+    print("Pure computation: " + toString(doubled))
 } 

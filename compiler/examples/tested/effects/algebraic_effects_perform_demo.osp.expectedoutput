@@ -1,20 +1,4 @@
-🚀 DEMONSTRATING OSPREY'S REVOLUTIONARY EFFECT SAFETY!
-
-✅ Effect declarations: WORKING
-✅ Perform expressions: WORKING (with compile-time safety)
-✅ Compile-time safety: WORKING
-
-🔥 REVOLUTIONARY FEATURE:
-Unhandled effects = COMPILATION ERROR (not runtime crash!)
-
-Unlike OCaml, Eff, and Koka which crash at runtime,
-Osprey PREVENTS unhandled effects at compile time!
-
-🚨 PROVEN: The compiler just demonstrated this!
-Functions with unhandled effects cannot compile!
-
-🎯 GUARANTEED EFFECT SAFETY: No runtime crashes possible!
-🚀 OSPREY: THE FIRST LANGUAGE WITH TRULY SAFE EFFECTS!
-
-Pure computation result: 42
-🎉 PERFORM DEMO COMPLETE! 🔥 
+Effect declarations: WORKING
+Compile-time safety: WORKING
+Unhandled effects = COMPILATION ERROR
+Pure computation: 42 
