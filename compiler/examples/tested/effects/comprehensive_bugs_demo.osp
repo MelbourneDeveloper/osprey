@@ -1,0 +1,106 @@
+// 🚀 COMPREHENSIVE ALGEBRAIC EFFECTS BUGS DEMO 🔥
+// This test demonstrates ALL THREE bugs in a realistic scenario
+
+effect Logger {
+    log: fn(string) -> Unit
+    error: fn(string) -> Unit
+    debug: fn(string) -> Unit
+}
+
+effect FileSystem {
+    read: fn(string) -> string
+    write: fn(string, string) -> Unit
+}
+
+effect Network {
+    request: fn(string) -> string
+    upload: fn(string, string) -> Unit
+}
+
+// Complex nested operation that triggers scope timing bug
+fn processFileWithLogging(filename: string) -> string ![Logger, FileSystem] = {
+    perform Logger.log("Starting file processing: " + filename)
+    
+    // This deep call chain should maintain handler scope
+    let content = readFileWithValidation(filename)
+    let processedContent = transformContent(content)
+    
+    perform Logger.log("File processing complete")
+    processedContent
+}
+
+fn readFileWithValidation(filename: string) -> string ![Logger, FileSystem] = {
+    perform Logger.debug("Validating file: " + filename)
+    let content = perform FileSystem.read(filename)
+    validateContent(content)
+}
+
+fn validateContent(content: string) -> string !Logger = {
+    perform Logger.debug("Validating content structure")
+    content + " [validated]"
+}
+
+fn transformContent(content: string) -> string !Logger = {
+    perform Logger.debug("Transforming content")
+    content + " [transformed]"
+}
+
+// Multiple effects composition that should work but fails
+fn syncFileToNetwork(filename: string, url: string) -> Unit ![Logger, FileSystem, Network] = {
+    perform Logger.log("Syncing file to network")
+    let content = perform FileSystem.read(filename)
+    perform Network.upload(url, content)
+    perform Logger.log("Sync complete")
+}
+
+// Nested handler scoping test with realistic overrides
+fn runWithDifferentLogging() -> Unit ![Logger, FileSystem] = {
+    perform Logger.log("Starting with outer logging")
+    
+    // Inner scope with debug-level logging
+    with handler Logger
+        log(msg) => print("[DEBUG-LOG] " + msg)
+        error(msg) => print("[DEBUG-ERROR] " + msg) 
+        debug(msg) => print("[DEBUG] " + msg)
+    {
+        let result = processFileWithLogging("test.txt")
+        perform Logger.log("Inner scope result: " + result)
+    }
+    
+    // Back to outer scope
+    perform Logger.log("Back to outer logging")
+}
+
+// Main test that combines all three bug scenarios
+fn main() -> Unit = with handler Logger
+    log(msg) => print("[MAIN-LOG] " + msg)
+    error(msg) => print("[MAIN-ERROR] " + msg)
+    debug(msg) => print("[MAIN-DEBUG] " + msg)
+{
+    with handler FileSystem
+        read(filename) => "file content from " + filename
+        write(filename, content) => print("Writing to " + filename + ": " + content)
+    {
+        with handler Network
+            request(url) => "response from " + url
+            upload(url, content) => print("Uploading to " + url + ": " + content)
+        {
+            print("=== Comprehensive Effects Bug Demo ===")
+            
+            // Test 1: Handler scope timing (nested calls)
+            print("Test 1: Handler scope timing")
+            runWithDifferentLogging()
+            
+            // Test 2: Multiple effects composition
+            print("Test 2: Multiple effects composition")
+            syncFileToNetwork("data.txt", "https://api.example.com/upload")
+            
+            // Test 3: Complex nested scoping
+            print("Test 3: Complex nested scenarios")
+            let finalResult = processFileWithLogging("final.txt")
+            perform Logger.log("Final result: " + finalResult)
+            
+            print("=== Test Complete ===")
+        }
+    }
+} 

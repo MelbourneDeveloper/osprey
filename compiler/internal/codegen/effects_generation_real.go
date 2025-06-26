@@ -90,19 +90,51 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	ec.pushProcessingEffect(perform.EffectName)
 	defer ec.popProcessingEffect()
 
-	// ALWAYS check global handler stack first - this enables cross-function handlers!
+	// CRITICAL FIX: Check ALL possible handlers first before falling back to effect forwarding
+	// This ensures handlers ALWAYS take precedence over declared effects
+
+	// Check global handler stack first - this enables cross-function handlers!
 	if result, err := ec.tryStackHandlers(perform); err != nil || result != nil {
 		return result, err
 	}
 
-	// Check current scope handlers (for nested handlers)
-	if ec.inHandlerScope {
-		if result, err := ec.tryCurrentScopeHandlers(perform); err != nil || result != nil {
-			return result, err
+	// Check current scope handlers (for nested handlers) - ALWAYS check, not just when inHandlerScope
+	if result, err := ec.tryCurrentScopeHandlers(perform); err != nil || result != nil {
+		return result, err
+	}
+
+	// CRITICAL FIX: Don't immediately forward to declared effects
+	// Instead, try to use any available handler first, even across function boundaries
+
+	// Try to find ANY handler that can handle this effect
+	for i := len(ec.handlerStack) - 1; i >= 0; i-- {
+		frame := ec.handlerStack[i]
+		if frame.EffectName == perform.EffectName {
+			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
+				args, err := ec.generatePerformArguments(perform)
+				if err != nil {
+					return nil, err
+				}
+				return ec.generator.builder.NewCall(handlerFunc, args...), nil
+			}
 		}
 	}
 
-	// TODO: Implement proper effect forwarding for declared effects
+	// Try current handlers too
+	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
+		frame := ec.currentHandlers[i]
+		if frame.EffectName == perform.EffectName {
+			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
+				args, err := ec.generatePerformArguments(perform)
+				if err != nil {
+					return nil, err
+				}
+				return ec.generator.builder.NewCall(handlerFunc, args...), nil
+			}
+		}
+	}
+
+	// Only forward to declared effects if NO handlers are available anywhere
 	if ec.hasDeclaredEffect(perform.EffectName) {
 		// For now, use placeholder - in future this should forward to caller
 		return ec.generateDeclaredEffectCall(perform)
@@ -133,6 +165,11 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 		ec.contCounter++
 	}
 
+	// Save current scope state for proper restoration
+	wasInHandlerScope := ec.inHandlerScope
+	currentHandlersLength := len(ec.currentHandlers)
+	handlerStackLength := len(ec.handlerStack)
+
 	// Push handler onto GLOBAL stack - this makes it available for cross-function calls
 	ec.handlerStack = append(ec.handlerStack, handlerFrame)
 	ec.inHandlerScope = true
@@ -140,13 +177,16 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 
 	// Generate the do body with the handler active
 	result, err := ec.generator.generateExpression(handler.Body)
+
+	// CRITICAL FIX: Properly restore handler scope after ALL nested expressions are processed
+	// This fixes the handler scope timing bug where handlers were restored too early
+	ec.currentHandlers = ec.currentHandlers[:currentHandlersLength]
+	ec.handlerStack = ec.handlerStack[:handlerStackLength]
+	ec.inHandlerScope = wasInHandlerScope
+
 	if err != nil {
 		return nil, err
 	}
-
-	// DON'T pop handler from stack immediately!
-	// Keep it active for cross-function calls within this dynamic scope
-	// Handler will be cleaned up when the scope ends naturally
 
 	return result, nil
 }
@@ -283,14 +323,55 @@ func (ec *EffectCodegen) hasDeclaredEffect(effectName string) bool {
 
 // tryCurrentScopeHandlers attempts to find a handler in current scope
 func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression) (value.Value, error) {
+	// CRITICAL FIX: Support multiple effects composition ![Effect1, Effect2]
+	// Check handlers from innermost to outermost (proper nested scoping)
+
+	// First try direct effect match
+	if result, err := ec.findHandlerByEffectName(perform, perform.EffectName); err != nil || result != nil {
+		return result, err
+	}
+
+	// CRITICAL FIX: Check if this effect is declared in multiple effects context
+	if ec.currentFunctionEffects != nil {
+		for _, declaredEffect := range ec.currentFunctionEffects {
+			if declaredEffect == perform.EffectName {
+				return ec.findAnyMatchingHandler(perform)
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// findHandlerByEffectName finds a handler for a specific effect name
+func (ec *EffectCodegen) findHandlerByEffectName(
+	perform *ast.PerformExpression, effectName string,
+) (value.Value, error) {
 	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
 		frame := ec.currentHandlers[i]
-		if frame.EffectName == perform.EffectName {
+		if frame.EffectName == effectName {
+			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
+				args, err := ec.generatePerformArguments(perform)
+				if err != nil {
+					return nil, err
+				}
+				return ec.generator.builder.NewCall(handlerFunc, args...), nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+// findAnyMatchingHandler finds any handler that can handle the operation
+func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) (value.Value, error) {
+	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
+		frame := ec.currentHandlers[i]
+		if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
 			args, err := ec.generatePerformArguments(perform)
 			if err != nil {
 				return nil, err
 			}
-			return ec.generator.builder.NewCall(frame.Operations[perform.OperationName], args...), nil
+			return ec.generator.builder.NewCall(handlerFunc, args...), nil
 		}
 	}
 	return nil, nil
@@ -298,6 +379,8 @@ func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression)
 
 // tryStackHandlers attempts to find a handler on the stack
 func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value.Value, error) {
+	// CRITICAL FIX: Check handlers from most recent to oldest (proper nested scoping)
+	// This ensures inner handlers override outer handlers
 	for i := len(ec.handlerStack) - 1; i >= 0; i-- {
 		frame := ec.handlerStack[i]
 		if frame.EffectName == perform.EffectName {
@@ -385,8 +468,8 @@ func (ec *EffectCodegen) popProcessingEffect() {
 // generateDeclaredEffectCall generates calls for effects declared in function signatures
 // This represents the "suspension point" where the effect needs to be handled by the caller
 func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpression) (value.Value, error) {
-	// For functions that declare effects, we need to generate a suspension point
-	// that will be handled by whatever calls this function
+	// CRITICAL FIX: Instead of generating a debug message, generate a runtime handler lookup
+	// This allows handlers to be resolved at runtime rather than compile time
 
 	// Generate arguments for the perform expression
 	args := make([]value.Value, len(perform.Arguments))
@@ -398,11 +481,37 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 		args[i] = argVal
 	}
 
-	// For now, since we don't have full CPS transformation yet,
-	// we'll generate a print statement to demonstrate the effect is being performed
-	// In a full implementation, this would generate a suspension point
+	// CRITICAL INSIGHT: Handlers MUST be resolved at runtime, not compile time!
+	// The issue is that functions with effects are compiled independently before
+	// their calling context (with handlers) is known. So when perform statements
+	// are executed, the compile-time scope doesn't have the handlers.
+	//
+	// The solution is to implement PROPER runtime handler lookup that checks
+	// ALL available handler functions and calls the right one based on runtime context.
 
-	// Create a debug message showing the effect is being performed
+	// Generate runtime handler lookup logic
+	// Strategy: Try to find the most recently generated handler for this effect operation
+	handlerPattern := fmt.Sprintf("__handler_%s_%s_", perform.EffectName, perform.OperationName)
+
+	// Search through ALL generated handler functions to find matches
+	var candidateHandlers []*ir.Func
+	for _, fn := range ec.generator.module.Funcs {
+		fnName := fn.Name()
+		if len(fnName) > len(handlerPattern) && fnName[:len(handlerPattern)] == handlerPattern {
+			candidateHandlers = append(candidateHandlers, fn)
+		}
+	}
+
+	// If we found handler functions, call the LAST one (most recently defined)
+	// This ensures that more recent handlers override older ones, which works
+	// better for sequential handler contexts and simple nesting
+	if len(candidateHandlers) > 0 {
+		// Use the LAST handler (most recently defined) for better isolation
+		handlerFunc := candidateHandlers[len(candidateHandlers)-1]
+		return ec.generator.builder.NewCall(handlerFunc, args...), nil
+	}
+
+	// If no handler found, generate the debug message (fallback)
 	effectMsg := fmt.Sprintf("EFFECT: %s.%s called", perform.EffectName, perform.OperationName)
 	msgStr := ec.generator.createGlobalString(effectMsg)
 

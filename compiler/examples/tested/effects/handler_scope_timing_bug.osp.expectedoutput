@@ -1,0 +1,8 @@
+=== Testing Handler Scope Timing ===
+[HANDLER] Before nested operation
+[HANDLER] Deep operation executing
+[HANDLER] Complex calculation starting
+[HANDLER] Intermediate result: 42
+[HANDLER] After nested operation
+Final result: 42
+=== Test Complete === 
