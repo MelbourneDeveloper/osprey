@@ -604,137 +604,168 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 		// === WEBSOCKET CLIENT FUNCTIONS ===
 		"websocketConnect": {
 			Name:        "websocketConnect",
-			Signature:   "websocketConnect(url: string, messageHandler: string) -> int",
-			Description: "Establishes a WebSocket connection to the specified URL.",
+			Signature:   "websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "url",
-					Type:        "string",
+					Type:        "String",
 					Description: "WebSocket URL (e.g., \"ws://localhost:8080/chat\")",
 				},
 				{
 					Name:        "messageHandler",
-					Type:        "string",
-					Description: "Message handler identifier",
+					Type:        "fn(String) -> Result<Success, String>",
+					Description: "Callback function to handle incoming messages",
 				},
 			},
-			ReturnType: "int",
-			Example: `let wsId = websocketConnect("ws://localhost:8080/chat", "handler")` +
-				`\nprint("Connected with ID: ${wsId}")`,
+			ReturnType: "Result<WebSocketID, String>",
+			Example: `fn handleMessage(message: String) -> Result<Success, String> = {` + "\n" +
+				`    print("Received: ${message}")` + "\n" +
+				`    Success()` + "\n" +
+				`}` + "\n" +
+				`let wsResult = websocketConnect(url: "ws://localhost:8080/chat", messageHandler: handleMessage)` + "\n" +
+				`match wsResult {` + "\n" +
+				`    Success wsId => print("Connected with ID: ${wsId}")` + "\n" +
+				`    Err message => print("Failed to connect: ${message}")` + "\n" +
+				`}`,
 		},
 		"websocketSend": {
 			Name:        "websocketSend",
-			Signature:   "websocketSend(wsID: int, message: string) -> int",
-			Description: "Sends a message through the WebSocket connection.",
+			Signature:   "websocketSend(wsID: Int, message: String) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "wsID",
-					Type:        "int",
+					Type:        "Int",
 					Description: "WebSocket identifier from websocketConnect",
 				},
 				{
 					Name:        "message",
-					Type:        "string",
+					Type:        "String",
 					Description: "Message to send",
 				},
 			},
-			ReturnType: "int",
-			Example:    `let result = websocketSend(wsId, "Hello, WebSocket!")\nprint("Message sent")`,
+			ReturnType: "Result<Success, String>",
+			Example: `let sendResult = websocketSend(wsID: wsId, message: "Hello, WebSocket!")` + "\n" +
+				`match sendResult {` + "\n" +
+				`    Success _ => print("Message sent successfully")` + "\n" +
+				`    Err message => print("Failed to send: ${message}")` + "\n" +
+				`}`,
 		},
 		"websocketClose": {
 			Name:        "websocketClose",
-			Signature:   "websocketClose(wsID: int) -> int",
-			Description: "Closes the WebSocket connection.",
+			Signature:   "websocketClose(wsID: Int) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "wsID",
-					Type:        "int",
+					Type:        "Int",
 					Description: "WebSocket identifier to close",
 				},
 			},
-			ReturnType: "int",
-			Example:    `let result = websocketClose(wsId)\nprint("WebSocket closed")`,
+			ReturnType: "Result<Success, String>",
+			Example: `let closeResult = websocketClose(wsID: wsId)` + "\n" +
+				`match closeResult {` + "\n" +
+				`    Success _ => print("Connection closed")` + "\n" +
+				`    Err message => print("Failed to close: ${message}")` + "\n" +
+				`}`,
 		},
 
 		// === WEBSOCKET SERVER FUNCTIONS ===
 		"websocketCreateServer": {
 			Name:        "websocketCreateServer",
-			Signature:   "websocketCreateServer(port: int, address: string, path: string) -> int",
-			Description: "Creates a WebSocket server bound to the specified port, address, and path.",
+			Signature:   "websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "port",
-					Type:        "int",
+					Type:        "Int",
 					Description: "Port number to bind to (1-65535)",
 				},
 				{
 					Name:        "address",
-					Type:        "string",
-					Description: "IP address to bind to (e.g., \"127.0.0.1\")",
+					Type:        "String",
+					Description: "IP address to bind to (e.g., \"127.0.0.1\", \"0.0.0.0\")",
 				},
 				{
 					Name:        "path",
-					Type:        "string",
-					Description: "WebSocket endpoint path (e.g., \"/chat\")",
+					Type:        "String",
+					Description: "WebSocket endpoint path (e.g., \"/chat\", \"/live\")",
 				},
 			},
-			ReturnType: "int",
-			Example:    `let serverId = websocketCreateServer(8080, "127.0.0.1", "/chat")\nprint("WebSocket server created")`,
+			ReturnType: "Result<ServerID, String>",
+			Example: `let serverResult = websocketCreateServer(port: 8080, address: "127.0.0.1", path: "/chat")` + "\n" +
+				`match serverResult {` + "\n" +
+				`    Success serverId => print("WebSocket server created with ID: ${serverId}")` + "\n" +
+				`    Err message => print("Failed to create server: ${message}")` + "\n" +
+				`}`,
 		},
 		"websocketServerListen": {
 			Name:        "websocketServerListen",
-			Signature:   "websocketServerListen(serverID: int) -> int",
-			Description: "Starts the WebSocket server listening for connections.",
+			Signature:   "websocketServerListen(serverID: Int) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "serverID",
-					Type:        "int",
+					Type:        "Int",
 					Description: "Server identifier from websocketCreateServer",
 				},
 			},
-			ReturnType: "int",
-			Example:    `let result = websocketServerListen(serverId)\nprint("WebSocket server listening")`,
+			ReturnType: "Result<Success, String>",
+			Example: `let listenResult = websocketServerListen(serverID: serverId)` + "\n" +
+				`match listenResult {` + "\n" +
+				`    Success _ => print("Server listening on ws://127.0.0.1:8080/chat")` + "\n" +
+				`    Err message => print("Failed to start listening: ${message}")` + "\n" +
+				`}`,
 		},
 		"websocketServerBroadcast": {
 			Name:        "websocketServerBroadcast",
-			Signature:   "websocketServerBroadcast(serverID: int, message: string) -> int",
-			Description: "Broadcasts a message to all connected WebSocket clients.",
+			Signature:   "websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients sent to) instead of Result<Success, String>. Broadcasts a message to all connected WebSocket clients.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "serverID",
-					Type:        "int",
+					Type:        "Int",
 					Description: "Server identifier",
 				},
 				{
 					Name:        "message",
-					Type:        "string",
-					Description: "Message to broadcast",
+					Type:        "String",
+					Description: "Message to broadcast to all clients",
 				},
 			},
-			ReturnType: "int",
-			Example:    `let result = websocketServerBroadcast(serverId, "Hello everyone!")\nprint("Message broadcasted")`,
+			ReturnType: "Result<Success, String>",
+			Example: `let broadcastResult = websocketServerBroadcast(serverID: serverId, message: "Welcome to Osprey Chat!")` + "\n" +
+				`match broadcastResult {` + "\n" +
+				`    Success _ => print("Message broadcasted to all clients")` + "\n" +
+				`    Err message => print("Failed to broadcast: ${message}")` + "\n" +
+				`}`,
 		},
 		"websocketStopServer": {
 			Name:        "websocketStopServer",
-			Signature:   "websocketStopServer(serverID: int) -> int",
-			Description: "Stops the WebSocket server and closes all connections.",
+			Signature:   "websocketStopServer(serverID: Int) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "serverID",
-					Type:        "int",
+					Type:        "Int",
 					Description: "Server identifier to stop",
 				},
 			},
-			ReturnType: "int",
-			Example:    `let result = websocketStopServer(serverId)\nprint("WebSocket server stopped")`,
+			ReturnType: "Result<Success, String>",
+			Example: `let stopResult = websocketStopServer(serverID: serverId)` + "\n" +
+				`match stopResult {` + "\n" +
+				`    Success _ => print("Server stopped successfully")` + "\n" +
+				`    Err message => print("Failed to stop server: ${message}")` + "\n" +
+				`}`,
 		},
 		"webSocketKeepAlive": {
 			Name:        "webSocketKeepAlive",
-			Signature:   "webSocketKeepAlive() -> int",
-			Description: "Keeps the WebSocket server running indefinitely until interrupted.",
+			Signature:   "webSocketKeepAlive() -> Unit",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).",
 			Parameters:  []ParameterDesc{},
-			ReturnType:  "int",
-			Example:     `webSocketKeepAlive()  // Server runs until Ctrl+C`,
+			ReturnType:  "Unit",
+			Example:     `webSocketKeepAlive()  // Blocks until Ctrl+C`,
 		},
 	}
 }

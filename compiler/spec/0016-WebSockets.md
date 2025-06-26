@@ -1,152 +1,69 @@
-### 15.4 WebSocket Support (Two-Way Communication)
+## 16. WebSocket Functions
 
-🔒 **IMPLEMENTATION STATUS**: WebSocket functions are implemented with security features but are currently undergoing stability testing.
+🔒 **IMPLEMENTATION STATUS**: WebSocket functions are implemented with security features but have critical design flaws that violate Osprey's functional programming principles.
 
-WebSockets provide real-time, bidirectional communication between client and server. Osprey implements WebSocket support with **MILITARY-GRADE SECURITY** following industry best practices for preventing attacks and ensuring bulletproof operation.
+### Table of Contents
+- [16. WebSocket Functions](#16-websocket-functions)
+  - [Table of Contents](#table-of-contents)
+  - [16.1 WebSocket Core Types](#161-websocket-core-types)
+  - [16.2 WebSocket Security Implementation](#162-websocket-security-implementation)
+  - [16.3 WebSocket Client Functions](#163-websocket-client-functions)
+    - [`websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`](#websocketconnecturl-string-messagehandler-fnstring---resultsuccess-string---resultwebsocketid-string)
+    - [`websocketSend(wsID: Int, message: String) -> Result<Success, String>`](#websocketsendwsid-int-message-string---resultsuccess-string)
+    - [`websocketClose(wsID: Int) -> Result<Success, String>`](#websocketclosewsid-int---resultsuccess-string)
+  - [16.4 WebSocket Server Functions](#164-websocket-server-functions)
+    - [`websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`](#websocketcreateserverport-int-address-string-path-string---resultserverid-string)
+    - [`websocketServerListen(serverID: Int) -> Result<Success, String>`](#websocketserverlistenserverid-int---resultsuccess-string)
+    - [`websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>`](#websocketserverbroadcastserverid-int-message-string---resultsuccess-string)
+    - [`websocketStopServer(serverID: Int) -> Result<Success, String>`](#websocketstopserverserverid-int---resultsuccess-string)
+  - [16.5 Complete WebSocket Example](#165-complete-websocket-example)
 
-#### 15.4.1 WebSocket Security Implementation
+WebSockets provide real-time, bidirectional communication between client and server. Osprey implements WebSocket support following functional programming principles with comprehensive error handling through Result types.
 
-Osprey's WebSocket implementation follows the **OWASP WebSocket Security Guidelines** and implements multiple layers of security protection:
+All WebSocket functions comply with:
+- **RFC 6455**: The WebSocket Protocol ([https://tools.ietf.org/html/rfc6455](https://tools.ietf.org/html/rfc6455))
+- **Result types** for all operations that can fail
+- **Immutable message handling** with functional callbacks
+- **Type safety** through structured error handling
 
-**🛡️ TITANIUM-ARMORED Compilation Security:**
-- `_FORTIFY_SOURCE=3`: Maximum buffer overflow protection
-- `fstack-protector-all`: Complete stack canary protection  
-- `fstack-clash-protection`: Stack clash attack prevention
-- `fcf-protection=full`: Control Flow Integrity (CFI) protection
-- `ftrapv`: Integer overflow trapping
-- `fno-delete-null-pointer-checks`: Prevent null pointer optimizations
-- `Wl,-z,relro,-z,now`: Full RELRO with immediate binding
-- `Wl,-z,noexecstack`: Non-executable stack protection
+### 16.1 WebSocket Core Types
 
-**🔒 Cryptographic Security:**
-- **OpenSSL SHA-1**: RFC 6455 compliant WebSocket handshake using industry-standard OpenSSL
+```osprey
+type WebSocketID = Int
+type ServerID = Int
+
+type WebSocketMessage = {
+    type: String,
+    data: String,
+    timestamp: Int
+}
+
+type WebSocketConnection = {
+    id: WebSocketID,
+    url: String,
+    isConnected: Bool
+}
+```
+
+### 16.2 WebSocket Security Implementation
+
+Osprey's WebSocket implementation follows **OWASP WebSocket Security Guidelines** with multiple security layers:
+
+**🛡️ Cryptographic Security:**
+- **OpenSSL SHA-1**: RFC 6455 compliant WebSocket handshake
 - **Secure key validation**: 24-character base64 key format validation
-- **Constant-time operations**: Memory clearing to prevent timing attacks
-- **Error checking**: All OpenSSL operations validated for success
+- **Memory clearing**: All sensitive data zeroed before deallocation
 
-**⚔️ Input Validation Fortress:**
+**⚔️ Input Validation:**
 - **WebSocket key format validation**: Strict RFC 6455 compliance
-- **Base64 character validation**: Only valid characters accepted
-- **Buffer length validation**: Maximum 4096 character keys prevent DoS
-- **Integer overflow protection**: All memory calculations checked
+- **Buffer length validation**: Maximum limits prevent DoS attacks
 - **Memory boundary checking**: No buffer overruns possible
 
-**🏰 Memory Security:**
-- **Secure memory allocation**: `calloc()` with zero-initialization
-- **Memory clearing**: All sensitive data zeroed before deallocation
-- **Bounds checking**: All `snprintf()` operations validated for truncation
-- **Safe string operations**: `memcpy()` instead of unsafe `strcpy()`/`strcat()`
-
-#### 15.4.2 Security Standards Compliance
-
-Osprey WebSocket implementation follows these security standards:
-
-**RFC 6455 - WebSocket Protocol Security** ([https://tools.ietf.org/html/rfc6455](https://tools.ietf.org/html/rfc6455)):
-- Proper Sec-WebSocket-Accept calculation using SHA-1 + base64
-- Origin validation support for CSRF protection
-- Secure WebSocket handshake implementation
-
-**OWASP WebSocket Security Cheat Sheet** ([https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#websockets](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#websockets)):
-- Input validation on all WebSocket frames
-- Authentication and authorization enforcement
-- Rate limiting and DoS protection
-- Secure error handling without information leakage
-
-**NIST Cybersecurity Framework:**
-- Defense in depth through multiple security layers
-- Secure coding practices with compiler hardening
-- Memory safety through bounds checking
-- Cryptographic integrity using OpenSSL
-
-**CWE (Common Weakness Enumeration) Mitigation:**
-- CWE-120: Buffer overflow prevention through bounds checking
-- CWE-190: Integer overflow protection with `ftrapv`
-- CWE-200: Information exposure prevention through secure error handling
-- CWE-416: Use-after-free prevention through memory clearing
-
-#### 15.4.3 Security Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                TITANIUM SECURITY LAYERS                 │
-├─────────────────────────────────────────────────────────┤
-│ 🏰 Application Layer: Input Validation Fortress        │
-│    • WebSocket key format validation                   │
-│    • Base64 character validation                       │
-│    • Buffer length enforcement                         │
-│    • Memory boundary checking                          │
-├─────────────────────────────────────────────────────────┤
-│ 🔒 Cryptographic Layer: OpenSSL SHA-1                  │
-│    • RFC 6455 compliant handshake                      │
-│    • Secure hash computation                           │
-│    • Constant-time operations                          │
-│    • Error validated operations                        │
-├─────────────────────────────────────────────────────────┤
-│ ⚔️ Memory Layer: Bulletproof Memory Management         │
-│    • Secure allocation with calloc()                   │
-│    • Memory clearing before deallocation               │
-│    • Safe string operations                            │
-│    • Integer overflow protection                       │
-├─────────────────────────────────────────────────────────┤
-│ 🛡️ Compiler Layer: Military-Grade Hardening           │
-│    • Stack protection (canaries + clash protection)    │
-│    • Control Flow Integrity (CFI)                      │
-│    • FORTIFY_SOURCE=3 buffer overflow protection       │
-│    • RELRO + immediate binding                         │
-│    • Non-executable stack                              │
-└─────────────────────────────────────────────────────────┘
-```
-
-#### 15.4.4 Security Testing and Validation
-
-Osprey WebSocket security is validated through:
-
-**🧪 Automated Security Testing:**
-- Buffer overflow attack simulation
-- Malformed WebSocket key injection
-- Integer overflow boundary testing
-- Memory corruption detection
-
-**🔍 Static Analysis:**
-- Compiler warnings elevated to errors
-- Memory safety analysis
-- Control flow analysis
-- Buffer bounds verification
-
-**⚡ Dynamic Testing:**
-- Address Sanitizer (ASan) testing
-- Valgrind memory error detection
-- Fuzzing with malformed inputs
-- DoS resilience testing
-
-#### 15.4.5 Security References and Standards
-
-**Primary Security Standards:**
-- **RFC 6455**: "The WebSocket Protocol" - Official WebSocket specification ([https://tools.ietf.org/html/rfc6455](https://tools.ietf.org/html/rfc6455))
-- **OWASP WebSocket Security Cheat Sheet**: ([https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#websockets](https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#websockets))
-- **NIST SP 800-53**: Security Controls for Federal Information Systems
-- **ISO 27001**: Information Security Management Standards
-
-**Compiler Security References:**
-- **GCC Security Options**: ([https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html](https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html))
-- **Red Hat Security Guide**: "Defensive Coding Practices"
-- **Microsoft SDL**: Security Development Lifecycle practices
-- **Google Safe Coding Practices**: Memory safety guidelines
-
-**Cryptographic Standards:**
-- **FIPS 180-4**: SHA-1 cryptographic hash standard
-- **RFC 3174**: US Secure Hash Algorithm 1 (SHA1) ([https://tools.ietf.org/html/rfc3174](https://tools.ietf.org/html/rfc3174))
-- **OpenSSL Security Advisories**: ([https://www.openssl.org/news/secadv.html](https://www.openssl.org/news/secadv.html))
-
-**Memory Security Research:**
-- **"Control Flow Integrity"** by Abadi et al. - CFI protection principles
-- **"Stack Canaries"** - Buffer overflow detection mechanisms  
-- **"RELRO"** - Read-only relocations for exploit mitigation
-- **"FORTIFY_SOURCE"** - Compile-time and runtime buffer overflow detection
+### 16.3 WebSocket Client Functions
 
 #### `websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`
 
-Establishes a WebSocket connection.
+Establishes a WebSocket connection with a message handler callback.
 
 **Parameters:**
 - `url`: WebSocket URL (e.g., "ws://localhost:8080/chat")
@@ -154,7 +71,9 @@ Establishes a WebSocket connection.
 
 **Returns:**
 - `Success(wsID)`: WebSocket connection identifier
-- `Err(message)`: Connection error
+- `Err(message)`: Connection error description
+
+**Implementation Status:** ⚠️ **INCORRECT** - Current C runtime returns raw `int64_t` instead of `Result<WebSocketID, String>` and takes string handler instead of function pointer
 
 **Example:**
 ```osprey
@@ -164,6 +83,13 @@ fn handleMessage(message: String) -> Result<Success, String> = {
 }
 
 let wsResult = websocketConnect(url: "ws://localhost:8080/chat", messageHandler: handleMessage)
+match wsResult {
+    Success wsId => {
+        print("Connected with ID: ${wsId}")
+        // Use the connection
+    }
+    Err message => print("Failed to connect: ${message}")
+}
 ```
 
 #### `websocketSend(wsID: Int, message: String) -> Result<Success, String>`
@@ -171,110 +97,186 @@ let wsResult = websocketConnect(url: "ws://localhost:8080/chat", messageHandler:
 Sends a message through the WebSocket connection.
 
 **Parameters:**
-- `wsID`: WebSocket identifier
+- `wsID`: WebSocket identifier from `websocketConnect`
 - `message`: Message to send
+
+**Returns:**
+- `Success()`: Message sent successfully
+- `Err(message)`: Send error description
+
+**Implementation Status:** ⚠️ **INCORRECT** - Current C runtime returns raw `int64_t` instead of `Result<Success, String>`
 
 **Example:**
 ```osprey
 let sendResult = websocketSend(wsID: wsId, message: "Hello, WebSocket!")
+match sendResult {
+    Success _ => print("Message sent successfully")
+    Err message => print("Failed to send: ${message}")
+}
 ```
 
 #### `websocketClose(wsID: Int) -> Result<Success, String>`
 
-Closes the WebSocket connection.
+Closes the WebSocket connection and cleans up resources.
 
-### 15.4.1 WebSocket Server Functions
+**Parameters:**
+- `wsID`: WebSocket identifier to close
 
-#### `websocketCreateServer(port: Int, address: String, path: String) -> Int`
-Creates a WebSocket server bound to the specified port and address.
+**Returns:**
+- `Success()`: Connection closed successfully
+- `Err(message)`: Close error description
 
-🚧 **IMPLEMENTATION STATUS**: The current implementation has **CRITICAL RUNTIME ISSUES**:
-
-**CURRENT BEHAVIOR**:
-- Returns server ID on successful creation
-- Returns negative error codes on failure
-
-**RUNTIME ISSUES DETECTED**:
-- **Port Binding Failures**: `websocketServerListen()` returns `-4` (bind failed) instead of expected `0` (success)
-- **Resource Conflicts**: Multiple test runs cause port conflicts and resource exhaustion
-- **Test Environment Instability**: Inconsistent behavior between different execution environments
-
-**ROOT CAUSE ANALYSIS**:
-- **Issue**: `bind()` system call fails with `EADDRINUSE` (Address already in use)
-- **Impact**: WebSocket server cannot bind to port, causing listen operation to fail
-- **Environment**: Particularly problematic in containerized test environments with limited cleanup
-
-**NEEDED FIXES**:
-1. **Port Management**: Implement proper port cleanup and reuse detection
-2. **Resource Cleanup**: Ensure proper socket closure and resource deallocation
-3. **Retry Logic**: Add exponential backoff for port binding failures
-4. **Error Handling**: Better error reporting for different failure modes
-5. **Test Isolation**: Implement proper test teardown to prevent resource conflicts
+**Implementation Status:** ⚠️ **INCORRECT** - Current C runtime returns raw `int64_t` instead of `Result<Success, String>`
 
 **Example:**
 ```osprey
-let serverId = websocketCreateServer(8080, "127.0.0.1", "/chat")
-print("Server created with ID: ${serverId}")
+let closeResult = websocketClose(wsID: wsId)
+match closeResult {
+    Success _ => print("Connection closed")
+    Err message => print("Failed to close: ${message}")
+}
 ```
 
-#### `websocketServerListen(serverID: Int) -> Int`
+### 16.4 WebSocket Server Functions
+
+#### `websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`
+
+Creates a WebSocket server bound to the specified port, address, and path.
+
+**Parameters:**
+- `port`: Port number (1-65535)
+- `address`: IP address to bind to (e.g., "127.0.0.1", "0.0.0.0")
+- `path`: WebSocket endpoint path (e.g., "/chat", "/live")
+
+**Returns:**
+- `Success(serverID)`: Unique WebSocket server identifier
+- `Err(message)`: Server creation error description
+
+**Implementation Status:** ⚠️ **INCORRECT** - Current C runtime returns raw `int64_t` instead of `Result<ServerID, String>`. Also has critical runtime issues with port binding failures.
+
+**Example:**
+```osprey
+let serverResult = websocketCreateServer(port: 8080, address: "127.0.0.1", path: "/chat")
+match serverResult {
+    Success serverId => print("WebSocket server created with ID: ${serverId}")
+    Err message => print("Failed to create server: ${message}")
+}
+```
+
+#### `websocketServerListen(serverID: Int) -> Result<Success, String>`
+
 Starts the WebSocket server listening for connections.
 
-🚧 **CURRENT ISSUE**: Returns `-4` (bind failed) instead of `0` (success) due to port binding issues.
+**Parameters:**
+- `serverID`: Server identifier from `websocketCreateServer`
 
-**Error Codes:**
-- `0`: Success
-- `-1`: Invalid server ID
-- `-2`: Socket creation failed
-- `-3`: Socket options failed
-- `-4`: **BIND FAILED** (most common current issue)
-- `-5`: Listen failed
+**Returns:**
+- `Success()`: Server started listening successfully
+- `Err(message)`: Listen error description
 
-#### `websocketServerBroadcast(serverID: Int, message: String) -> Int`
-Broadcasts a message to all connected clients.
+**Implementation Status:** ⚠️ **INCORRECT** - Current C runtime returns raw `int64_t` instead of `Result<Success, String>`. Currently returns `-4` (bind failed) due to port binding issues.
 
-#### `websocketStopServer(serverID: Int) -> Int`
-Stops the WebSocket server.
+**Example:**
+```osprey
+let listenResult = websocketServerListen(serverID: serverId)
+match listenResult {
+    Success _ => print("Server listening on ws://127.0.0.1:8080/chat")
+    Err message => print("Failed to start listening: ${message}")
+}
+```
 
-#### `websocketKeepAlive() -> Void`
-Maintains WebSocket connections.
+#### `websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>`
 
-## 16.5 WebSocket Chat Server Example
+Broadcasts a message to all connected WebSocket clients.
 
-A practical WebSocket server implementation demonstrating real-time communication:
+**Parameters:**
+- `serverID`: Server identifier
+- `message`: Message to broadcast to all clients
+
+**Returns:**
+- `Success()`: Message broadcasted successfully
+- `Err(message)`: Broadcast error description
+
+**Implementation Status:** ⚠️ **INCORRECT** - Current C runtime returns raw `int64_t` (number of clients sent to) instead of `Result<Success, String>`
+
+**Example:**
+```osprey
+let broadcastResult = websocketServerBroadcast(serverID: serverId, message: "Welcome to Osprey Chat!")
+match broadcastResult {
+    Success _ => print("Message broadcasted to all clients")
+    Err message => print("Failed to broadcast: ${message}")
+}
+```
+
+#### `websocketStopServer(serverID: Int) -> Result<Success, String>`
+
+Stops the WebSocket server and closes all connections.
+
+**Parameters:**
+- `serverID`: Server identifier to stop
+
+**Returns:**
+- `Success()`: Server stopped successfully
+- `Err(message)`: Stop error description
+
+**Implementation Status:** ⚠️ **INCORRECT** - Current C runtime returns raw `int64_t` instead of `Result<Success, String>`
+
+**Example:**
+```osprey
+let stopResult = websocketStopServer(serverID: serverId)
+match stopResult {
+    Success _ => print("Server stopped successfully")
+    Err message => print("Failed to stop server: ${message}")
+}
+```
+
+### 16.5 Complete WebSocket Example
+
+A practical WebSocket server and client implementation demonstrating real-time communication:
 
 ```osprey
 fn main() -> Int = {
     print("Starting WebSocket chat server...")
     
     // Create WebSocket server
-    let serverId = websocketCreateServer(8080, "127.0.0.1", "/chat")
+    let serverResult = websocketCreateServer(port: 8080, address: "127.0.0.1", path: "/chat")
     
-    if serverId >= 0 {
-        print("WebSocket server created with ID: ${toString(serverId)}")
-        
-        // Start listening for connections
-        let listenResult = websocketServerListen(serverId)
-        
-        match listenResult {
-            0 => {
-                print("Server listening on ws://127.0.0.1:8080/chat")
-                
-                // Broadcast welcome message
-                let broadcastResult = websocketServerBroadcast(serverId, "Welcome to Osprey Chat!")
-                
-                // Keep server alive
-                websocketKeepAlive()
-                
-                // Clean shutdown
-                websocketStopServer(serverId)
-                print("Server stopped")
+    match serverResult {
+        Success serverId => {
+            print("WebSocket server created with ID: ${serverId}")
+            
+            // Start listening for connections
+            let listenResult = websocketServerListen(serverID: serverId)
+            
+            match listenResult {
+                Success _ => {
+                    print("Server listening on ws://127.0.0.1:8080/chat")
+                    
+                    // Broadcast welcome message
+                    let welcomeResult = websocketServerBroadcast(
+                        serverID: serverId, 
+                        message: "Welcome to Osprey Chat!"
+                    )
+                    
+                    match welcomeResult {
+                        Success _ => print("Welcome message broadcasted")
+                        Err message => print("Failed to broadcast welcome: ${message}")
+                    }
+                    
+                    // Keep server alive for 10 seconds
+                    sleep(10000)
+                    
+                    // Clean shutdown
+                    let stopResult = websocketStopServer(serverID: serverId)
+                    match stopResult {
+                        Success _ => print("Server stopped successfully")
+                        Err message => print("Failed to stop server: ${message}")
+                    }
+                }
+                Err message => print("Failed to start listening: ${message}")
             }
-            -4 => print("Failed to bind to port - address already in use")
-            _ => print("Failed to start server with error code: ${toString(listenResult)}")
         }
-    } else {
-        print("Failed to create server with error code: ${toString(serverId)}")
+        Err message => print("Failed to create server: ${message}")
     }
     
     0
@@ -285,42 +287,86 @@ fn connectToChat() -> Int = {
     fn chatMessageHandler(message: String) -> Result<Success, String> = {
         print("Chat: ${message}")
         
-        // Echo responses for demonstration
+        // Process different message types
         match message {
-            "hello" => Success()
-            "ping" => Success()  // Could respond with "pong"
-            _ => Success()
+            "ping" => {
+                print("Received ping, responding with pong")
+                Success()
+            }
+            _ => {
+                print("Received message: ${message}")
+                Success()
+            }
         }
     }
     
-    let wsResult = websocketConnect("ws://127.0.0.1:8080/chat", chatMessageHandler)
+    let wsResult = websocketConnect(
+        url: "ws://127.0.0.1:8080/chat", 
+        messageHandler: chatMessageHandler
+    )
     
     match wsResult {
         Success wsId => {
-            print("Connected to chat server")
+            print("Connected to chat server with ID: ${wsId}")
             
             // Send some messages
-            websocketSend(wsId, "hello")
-            websocketSend(wsId, "How is everyone?")
-            websocketSend(wsId, "ping")
+            let sendResult1 = websocketSend(wsID: wsId, message: "Hello from Osprey!")
+            match sendResult1 {
+                Success _ => print("First message sent")
+                Err message => print("Failed to send first message: ${message}")
+            }
+            
+            let sendResult2 = websocketSend(wsID: wsId, message: "How is everyone?")
+            match sendResult2 {
+                Success _ => print("Second message sent")
+                Err message => print("Failed to send second message: ${message}")
+            }
+            
+            let pingResult = websocketSend(wsID: wsId, message: "ping")
+            match pingResult {
+                Success _ => print("Ping sent")
+                Err message => print("Failed to send ping: ${message}")
+            }
+            
+            // Wait a bit before closing
+            sleep(2000)
             
             // Close connection
-            websocketClose(wsId)
-            print("Disconnected from chat")
+            let closeResult = websocketClose(wsID: wsId)
+            match closeResult {
+                Success _ => print("Disconnected from chat")
+                Err message => print("Failed to disconnect: ${message}")
+            }
         }
         Err message => print("Failed to connect: ${message}")
     }
     
     0
 }
+
+// Chat message processing with pattern matching
+fn processMessage(message: String) -> Result<String, String> = 
+    match message {
+        "{\"type\":\"join\"}" => Success("User joined the chat")
+        "{\"type\":\"leave\"}" => Success("User left the chat")
+        "{\"type\":\"message\"}" => Success("Regular chat message")
+        _ => Success("Unknown message type")
+    }
 ```
 
 This example demonstrates:
 
-- **WebSocket server creation** with proper error handling
-- **Connection management** with listening and broadcasting
-- **Message handling** through callback functions
+- **Result type error handling** for all WebSocket operations
+- **Functional message handlers** with proper callback signatures
+- **Pattern matching** for different message types
+- **Resource management** with proper connection cleanup
 - **Real-time communication** patterns for chat applications
-- **Error handling** for common WebSocket issues
-- **Resource cleanup** with proper server shutdown
-- **Client-server interaction** with bidirectional messaging
+- **Comprehensive error handling** following Osprey's functional principles
+- **Type-safe WebSocket operations** with structured error messages
+
+**Key Differences from Current Implementation:**
+1. **All functions return Result types** instead of raw integers
+2. **Message handlers are proper function pointers** instead of string identifiers
+3. **Comprehensive error handling** with descriptive error messages
+4. **Functional programming patterns** with immutable message processing
+5. **Type safety** through structured return types and pattern matching
