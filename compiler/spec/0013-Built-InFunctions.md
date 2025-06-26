@@ -1,51 +1,3 @@
-13. [Built-in Functions](0014-Built-InFunctions.md)
-    - [HTTP Core Types](#141-http-core-types)
-        - [HTTP Method Union Type](#http-method-union-type)
-        - [HTTP Request Type (Immutable)](#http-request-type-immutable)
-        - [HTTP Response Type (Immutable with Streaming)](#http-response-type-immutable-with-streaming)
-    - [HTTP Server Functions](#142-http-server-functions)
-        - [`httpCreateServer(port: Int, address: String) -> Result<ServerID, String>`](#httpcreateserverport-int-address-string---resultserverid-string)
-        - [`httpListen(serverID: Int, handler: fn(String, String, String, String) -> String) -> Result<Success, String>`](#httplistenserverid-int-handler-fnstring-string-string-string---string---resultsuccess-string)
-        - [`httpStopServer(serverID: Int) -> Result<Success, String>`](#httpstopserverserverid-int---resultsuccess-string)
-        - [HTTP Request Handling Bridge](#1421-http-request-handling-bridge)
-            - [Request Handling Architecture](#request-handling-architecture)
-            - [Bridge Function Specification](#bridge-function-specification)
-            - [Raw Function Pointer Callbacks](#raw-function-pointer-callbacks)
-            - [Legacy Bridge Function (Deprecated)](#legacy-bridge-function-deprecated)
-            - [New Raw Callback Architecture Flow](#new-raw-callback-architecture-flow)
-            - [Implementation Requirements](#implementation-requirements)
-            - [Example Implementation](#example-implementation)
-    - [HTTP Client Functions](#143-http-client-functions)
-        - [`httpCreateClient(baseUrl: String, timeout: Int) -> Result<ClientID, String>`](#httpcreeateclientbaseurl-string-timeout-int---resultclientid-string)
-        - [`httpGet(clientID: Int, path: String, headers: String) -> Result<StatusCode, String>`](#httpgetclientid-int-path-string-headers-string---resultstatuscode-string)
-        - [`httpPost(clientID: Int, path: String, body: String, headers: String) -> Result<StatusCode, String>`](#httppostclientid-int-path-string-body-string-headers-string---resultstatuscode-string)
-        - [`httpPut(clientID: Int, path: String, body: String, headers: String) -> Result<StatusCode, String>`](#httpputclientid-int-path-string-body-string-headers-string---resultstatuscode-string)
-        - [`httpDelete(clientID: Int, path: String, headers: String) -> Result<StatusCode, String>`](#httpdeleteclientid-int-path-string-headers-string---resultstatuscode-string)
-        - [`httpRequest(clientID: Int, method: HttpMethod, path: String, headers: String, body: String) -> Result<StatusCode, String>`](#httprequestclientid-int-method-httpmethod-path-string-headers-string-body-string---resultstatuscode-string)
-        - [`httpCloseClient(clientID: Int) -> Result<Success, String>`](#httpcloseclientclientid-int---resultsuccess-string)
-    - [WebSocket Support (Two-Way Communication)](#144-websocket-support-two-way-communication)
-        - [WebSocket Security Implementation](#1441-websocket-security-implementation)
-        - [Security Standards Compliance](#1442-security-standards-compliance)
-        - [Security Architecture](#1443-security-architecture)
-        - [Security Testing and Validation](#1444-security-testing-and-validation)
-        - [Security References and Standards](#1445-security-references-and-standards)
-        - [`websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`](#websocketconnecturl-string-messagehandler-fnstring---resultsuccess-string---resultwebsocketid-string)
-        - [`websocketSend(wsID: Int, message: String) -> Result<Success, String>`](#websocketsendwsid-int-message-string---resultsuccess-string)
-        - [`websocketClose(wsID: Int) -> Result<Success, String>`](#websocketclosewsid-int---resultsuccess-string)
-        - [WebSocket Server Functions](#1441-websocket-server-functions)
-            - [`websocketCreateServer(port: Int, address: String, path: String) -> Int`](#websocketcreateserverport-int-address-string-path-string---int)
-            - [`websocketServerListen(serverID: Int) -> Int`](#websocketserverlistenserverid-int---int)
-            - [`websocketServerBroadcast(serverID: Int, message: String) -> Int`](#websocketserverbroadcastserverid-int-message-string---int)
-            - [`websocketStopServer(serverID: Int) -> Int`](#websocketstopserverserverid-int---int)
-            - [`websocketKeepAlive() -> Void`](#websocketkeepalive---void)
-    - [Streaming Response Bodies](#145-streaming-response-bodies)
-        - [Complete Response](#complete-response)
-        - [Streamed Response](#streamed-response)
-    - [Error Handling in HTTP](#146-error-handling-in-http)
-    - [Fiber-Based Concurrency](#147-fiber-based-concurrency)
-    - [Complete HTTP Server Example](#148-complete-http-server-example)
-
-
 # 13. Built-in Functions
 
 🚀 **IMPLEMENTATION STATUS**: HTTP and basic I/O functions are implemented and working. WebSocket functions are implemented but undergoing testing. Fiber operations are partially implemented.
@@ -189,122 +141,11 @@ range(1, 10) |> map(square) |> filter(isEven) |> forEach(print)
 
 ## 13.5 HTTP Functions
 
-### Core Types
-
-```osprey
-type HttpMethod = GET | POST | PUT | DELETE | PATCH | HEAD | OPTIONS
-
-type HttpRequest = {
-    method: HttpMethod,
-    path: String,
-    headers: String,
-    body: String,
-    queryParams: String
-}
-
-type HttpResponse = {
-    status: Int,
-    headers: String,
-    contentType: String,
-    body: String
-}
-```
-
-### HTTP Server Functions
-
-#### `httpCreateServer(port: Int, address: String) -> Result<ServerID, String>`
-Creates an HTTP server bound to the specified port and address.
-
-```osprey
-let serverResult = httpCreateServer(port: 8080, address: "127.0.0.1")
-```
-
-#### `httpListen(serverID: Int, handler: fn(String, String, String, String) -> String) -> Result<Success, String>`
-Starts the HTTP server with a raw request handler. The handler receives method, path, headers, and body and returns the response body.
-
-```osprey
-fn handleRequest(method: String, path: String, headers: String, body: String) -> String = 
-    match method {
-        "GET" => match path {
-            "/health" => "{\"status\": \"healthy\"}"
-            "/api/users" => "[{\"id\": 1, \"name\": \"Alice\"}]"
-            _ => "Not Found"
-        }
-        "POST" => "{\"message\": \"Created\"}"
-        _ => "Method not allowed"
-    }
-
-let listenResult = httpListen(serverId, handleRequest)
-```
-
-#### `httpStopServer(serverID: Int) -> Result<Success, String>`
-Stops the HTTP server and cleans up resources.
-
-### HTTP Client Functions
-
-#### `httpCreateClient(baseUrl: String, timeout: Int) -> Result<ClientID, String>`
-Creates an HTTP client for making requests.
-
-#### `httpGet(clientID: Int, path: String, headers: String) -> Result<StatusCode, String>`
-Makes an HTTP GET request.
-
-#### `httpPost(clientID: Int, path: String, body: String, headers: String) -> Result<StatusCode, String>`
-Makes an HTTP POST request with a request body.
-
-#### `httpPut(clientID: Int, path: String, body: String, headers: String) -> Result<StatusCode, String>`
-Makes an HTTP PUT request.
-
-#### `httpDelete(clientID: Int, path: String, headers: String) -> Result<StatusCode, String>`
-Makes an HTTP DELETE request.
-
-#### `httpRequest(clientID: Int, method: HttpMethod, path: String, headers: String, body: String) -> Result<StatusCode, String>`
-Generic HTTP request function for any HTTP method.
-
-#### `httpCloseClient(clientID: Int) -> Result<Success, String>`
-Closes the HTTP client and cleans up resources.
+HTTP functions for server and client operations are documented in [Chapter 15 - HTTP](0015-HTTP.md).
 
 ## 13.6 WebSocket Functions
 
-WebSocket functions provide real-time, bidirectional communication. Implementation includes security features and follows RFC 6455 standards.
-
-### Client Functions
-
-#### `websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`
-Establishes a WebSocket connection.
-
-```osprey
-fn handleMessage(message: String) -> Result<Success, String> = {
-    print("Received: ${message}")
-    Success()
-}
-
-let wsResult = websocketConnect("ws://localhost:8080/chat", handleMessage)
-```
-
-#### `websocketSend(wsID: Int, message: String) -> Result<Success, String>`
-Sends a message through the WebSocket connection.
-
-#### `websocketClose(wsID: Int) -> Result<Success, String>`
-Closes the WebSocket connection.
-
-### Server Functions
-
-#### `websocketCreateServer(port: Int, address: String, path: String) -> Int`
-Creates a WebSocket server.
-
-🚧 **IMPLEMENTATION STATUS**: Currently has port binding issues in test environments.
-
-#### `websocketServerListen(serverID: Int) -> Int`
-Starts the WebSocket server listening for connections.
-
-#### `websocketServerBroadcast(serverID: Int, message: String) -> Int`
-Broadcasts a message to all connected clients.
-
-#### `websocketStopServer(serverID: Int) -> Int`
-Stops the WebSocket server.
-
-#### `websocketKeepAlive() -> Void`
-Maintains WebSocket connections.
+WebSocket functions for real-time bidirectional communication are documented in [Chapter 16 - WebSockets](0016-WebSockets.md).
 
 ## 13.7 Fiber and Concurrency Functions
 
@@ -362,45 +203,51 @@ await(producer)
 await(consumer)
 ```
 
-## 13.8 Complete Example
+## 13.8 Functional Programming Examples
 
-A simple HTTP server with functional programming:
+Combining functional programming capabilities for data processing:
 
 ```osprey
 fn main() -> Int = {
-    let serverResult = httpCreateServer(8080, "127.0.0.1")
-    match serverResult {
-        Success serverId => {
-            print("Server created, starting listener...")
-            let listenResult = httpListen(serverId, handleRequest)
-            match listenResult {
-                Success _ => print("Server stopped")
-                Err message => print("Server error: ${message}")
-            }
-        }
-        Err message => print("Failed to create server: ${message}")
+    // Calculate sum of squares of even numbers from 1 to 10
+    let evenSquareSum = range(1, 11)
+        |> filter(isEven)
+        |> map(square)
+        |> fold(0, add)
+    
+    print("Sum of squares of even numbers: ${toString(evenSquareSum)}")
+    
+    // Process user data with functional pipeline
+    print("Processing user data:")
+    range(1, 6)
+        |> map(createUserData)
+        |> forEach(print)
+    
+    // Concurrent processing with fibers
+    let ch = Channel<String> { capacity: 3 }
+    
+    let producer = spawn {
+        range(1, 4) |> forEach(fn(i) => send(ch, "Message ${toString(i)}"))
     }
+    
+    let consumer = spawn {
+        range(1, 4) |> forEach(fn(_) => {
+            match recv(ch) {
+                Success { value } => print("Received: ${value}")
+                Error { message } => print("Error: ${message}")
+            }
+        })
+    }
+    
+    await(producer)
+    await(consumer)
+    
     0
 }
 
-fn handleRequest(method: String, path: String, headers: String, body: String) -> String = 
-    match method {
-        "GET" => match path {
-            "/health" => "{\"status\": \"healthy\"}"
-            "/users" => generateUserList()
-            _ => "Not Found"
-        }
-        "POST" => match path {
-            "/users" => createUser(body)
-            _ => "Endpoint not found"
-        }
-        _ => "Method not allowed"
-    }
+fn isEven(x: Int) -> Bool = x % 2 == 0
+fn square(x: Int) -> Int = x * x
+fn add(a: Int, b: Int) -> Int = a + b
 
-fn generateUserList() -> String = 
-    range(1, 6)
-    |> map(createUser)
-    |> fold("[]", appendJson)
-
-fn createUser(id: Int) -> String = 
+fn createUserData(id: Int) -> String = 
     "{\"id\": ${toString(id)}, \"name\": \"User${toString(id)}\"}"

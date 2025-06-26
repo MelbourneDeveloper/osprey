@@ -229,4 +229,98 @@ Starts the WebSocket server listening for connections.
 - `-3`: Socket options failed
 - `-4`: **BIND FAILED** (most common current issue)
 - `-5`: Listen failed
-- `
+
+#### `websocketServerBroadcast(serverID: Int, message: String) -> Int`
+Broadcasts a message to all connected clients.
+
+#### `websocketStopServer(serverID: Int) -> Int`
+Stops the WebSocket server.
+
+#### `websocketKeepAlive() -> Void`
+Maintains WebSocket connections.
+
+## 16.5 WebSocket Chat Server Example
+
+A practical WebSocket server implementation demonstrating real-time communication:
+
+```osprey
+fn main() -> Int = {
+    print("Starting WebSocket chat server...")
+    
+    // Create WebSocket server
+    let serverId = websocketCreateServer(8080, "127.0.0.1", "/chat")
+    
+    if serverId >= 0 {
+        print("WebSocket server created with ID: ${toString(serverId)}")
+        
+        // Start listening for connections
+        let listenResult = websocketServerListen(serverId)
+        
+        match listenResult {
+            0 => {
+                print("Server listening on ws://127.0.0.1:8080/chat")
+                
+                // Broadcast welcome message
+                let broadcastResult = websocketServerBroadcast(serverId, "Welcome to Osprey Chat!")
+                
+                // Keep server alive
+                websocketKeepAlive()
+                
+                // Clean shutdown
+                websocketStopServer(serverId)
+                print("Server stopped")
+            }
+            -4 => print("Failed to bind to port - address already in use")
+            _ => print("Failed to start server with error code: ${toString(listenResult)}")
+        }
+    } else {
+        print("Failed to create server with error code: ${toString(serverId)}")
+    }
+    
+    0
+}
+
+// WebSocket client example
+fn connectToChat() -> Int = {
+    fn chatMessageHandler(message: String) -> Result<Success, String> = {
+        print("Chat: ${message}")
+        
+        // Echo responses for demonstration
+        match message {
+            "hello" => Success()
+            "ping" => Success()  // Could respond with "pong"
+            _ => Success()
+        }
+    }
+    
+    let wsResult = websocketConnect("ws://127.0.0.1:8080/chat", chatMessageHandler)
+    
+    match wsResult {
+        Success wsId => {
+            print("Connected to chat server")
+            
+            // Send some messages
+            websocketSend(wsId, "hello")
+            websocketSend(wsId, "How is everyone?")
+            websocketSend(wsId, "ping")
+            
+            // Close connection
+            websocketClose(wsId)
+            print("Disconnected from chat")
+        }
+        Err message => print("Failed to connect: ${message}")
+    }
+    
+    0
+}
+```
+
+This example demonstrates:
+
+- **WebSocket server creation** with proper error handling
+- **Connection management** with listening and broadcasting
+- **Message handling** through callback functions
+- **Real-time communication** patterns for chat applications
+- **Error handling** for common WebSocket issues
+- **Resource cleanup** with proper server shutdown
+- **Client-server interaction** with bidirectional messaging
