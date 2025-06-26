@@ -2,7 +2,7 @@
 layout: page
 title: "Introduction"
 description: "Osprey Language Specification: Introduction"
-date: 2025-06-25
+date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0001-introduction/"

@@ -2,15 +2,14 @@
 layout: page
 title: "Error Handling"
 description: "Osprey Language Specification: Error Handling"
-date: 2025-06-25
+date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
-permalink: "/spec/0015-errorhandling/"
+permalink: "/spec/0014-errorhandling/"
 ---
 
-## 15. Error Handling
-
-### 15.1 The Result Type
+## 14. Error Handling
+### 14.1 The Result Type
 
 **CRITICAL**: All functions that can fail **MUST** return a `Result` type. There are no exceptions, panics, or nulls. This is a core design principle of the language to ensure safety and eliminate entire classes of runtime errors.
 

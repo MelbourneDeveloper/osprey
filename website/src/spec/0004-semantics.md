@@ -2,7 +2,7 @@
 layout: page
 title: "Semantics"
 description: "Osprey Language Specification: Semantics"
-date: 2025-06-25
+date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0004-semantics/"

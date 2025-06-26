@@ -2,7 +2,7 @@
 layout: page
 title: "Lightweight Fibers and Concurrency"
 description: "Osprey Language Specification: Lightweight Fibers and Concurrency"
-date: 2025-06-25
+date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0012-lightweightfibersandconcurrency/"
@@ -179,7 +179,7 @@ The fiber-isolated module system eliminates data races by design through:
 3. **Immutable Sharing**: Only immutable data can be shared between fibers
 4. **Automatic Isolation**: Module isolation happens automatically without explicit synchronization
 
-## 13.2 Module Declaration Syntax
+### Module Declaration Syntax
 
 ```osprey
 module ModuleName {
@@ -227,7 +227,7 @@ let result2 = await(fiber2)  // 1 (not 2!)
 - **No Synchronization Overhead**: No locks, atomics, or other synchronization primitives needed
 - **Deterministic Behavior**: Same input always produces same output within a fiber
 
-## 13.5 Inter-Fiber Communication
+### Inter-Fiber Communication
 
 Since modules are isolated, inter-fiber communication must use explicit channels:
 

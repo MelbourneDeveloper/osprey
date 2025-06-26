@@ -2,7 +2,7 @@
 layout: page
 title: "Type System"
 description: "Osprey Language Specification: Type System"
-date: 2025-06-25
+date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0005-typesystem/"
@@ -10,7 +10,7 @@ permalink: "/spec/0005-typesystem/"
 
 ## 5. Type System
 
-Osprey's type system is one of the most important aspect's of the language. It puts type safety and expressiveness as the top priorities. It is inpired by popular functional programming languages like Haskell and ML. The type system aims towards making illegal states unrepresentable. Some features like constructor where constraints are critical features that mean that instances cannot exist where they fail the criteria in construction.
+Osprey's type system is one of the most important aspects of the language. It puts type safety and expressiveness as the top priorities. It is inspired by popular functional programming languages like Haskell and ML. The type system aims towards making illegal states unrepresentable. Some features like constructor where constraints are critical features that mean that instances cannot exist where they fail the criteria in construction.
 
 ### 5.1 Built-in Types
 

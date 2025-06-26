@@ -603,9 +603,12 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 
 		// === WEBSOCKET CLIENT FUNCTIONS ===
 		"websocketConnect": {
-			Name:        "websocketConnect",
-			Signature:   "websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>",
-			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback.",
+			Name: "websocketConnect",
+			Signature: "websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> " +
+				"Result<WebSocketID, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+				"Result<WebSocketID, String> and takes string handler instead of function pointer. " +
+				"Establishes a WebSocket connection with a message handler callback.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "url",
@@ -630,9 +633,10 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 				`}`,
 		},
 		"websocketSend": {
-			Name:        "websocketSend",
-			Signature:   "websocketSend(wsID: Int, message: String) -> Result<Success, String>",
-			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection.",
+			Name:      "websocketSend",
+			Signature: "websocketSend(wsID: Int, message: String) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+				"Result<Success, String>. Sends a message through the WebSocket connection.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "wsID",
@@ -653,9 +657,10 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 				`}`,
 		},
 		"websocketClose": {
-			Name:        "websocketClose",
-			Signature:   "websocketClose(wsID: Int) -> Result<Success, String>",
-			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources.",
+			Name:      "websocketClose",
+			Signature: "websocketClose(wsID: Int) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+				"Result<Success, String>. Closes the WebSocket connection and cleans up resources.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "wsID",
@@ -673,9 +678,11 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 
 		// === WEBSOCKET SERVER FUNCTIONS ===
 		"websocketCreateServer": {
-			Name:        "websocketCreateServer",
-			Signature:   "websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>",
-			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path.",
+			Name:      "websocketCreateServer",
+			Signature: "websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+				"Result<ServerID, String> and has critical runtime issues with port binding failures. " +
+				"Creates a WebSocket server bound to the specified port, address, and path.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "port",
@@ -701,9 +708,11 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 				`}`,
 		},
 		"websocketServerListen": {
-			Name:        "websocketServerListen",
-			Signature:   "websocketServerListen(serverID: Int) -> Result<Success, String>",
-			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections.",
+			Name:      "websocketServerListen",
+			Signature: "websocketServerListen(serverID: Int) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+				"Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. " +
+				"Starts the WebSocket server listening for connections.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "serverID",
@@ -719,9 +728,11 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 				`}`,
 		},
 		"websocketServerBroadcast": {
-			Name:        "websocketServerBroadcast",
-			Signature:   "websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>",
-			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients sent to) instead of Result<Success, String>. Broadcasts a message to all connected WebSocket clients.",
+			Name:      "websocketServerBroadcast",
+			Signature: "websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients " +
+				"sent to) instead of Result<Success, String>. Broadcasts a message to all connected " +
+				"WebSocket clients.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "serverID",
@@ -735,16 +746,18 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 				},
 			},
 			ReturnType: "Result<Success, String>",
-			Example: `let broadcastResult = websocketServerBroadcast(serverID: serverId, message: "Welcome to Osprey Chat!")` + "\n" +
+			Example: `let broadcastResult = websocketServerBroadcast(serverID: serverId, ` +
+				`message: "Welcome to Osprey Chat!")` + "\n" +
 				`match broadcastResult {` + "\n" +
 				`    Success _ => print("Message broadcasted to all clients")` + "\n" +
 				`    Err message => print("Failed to broadcast: ${message}")` + "\n" +
 				`}`,
 		},
 		"websocketStopServer": {
-			Name:        "websocketStopServer",
-			Signature:   "websocketStopServer(serverID: Int) -> Result<Success, String>",
-			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections.",
+			Name:      "websocketStopServer",
+			Signature: "websocketStopServer(serverID: Int) -> Result<Success, String>",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+				"Result<Success, String>. Stops the WebSocket server and closes all connections.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "serverID",
@@ -760,12 +773,13 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 				`}`,
 		},
 		"webSocketKeepAlive": {
-			Name:        "webSocketKeepAlive",
-			Signature:   "webSocketKeepAlive() -> Unit",
-			Description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).",
-			Parameters:  []ParameterDesc{},
-			ReturnType:  "Unit",
-			Example:     `webSocketKeepAlive()  // Blocks until Ctrl+C`,
+			Name:      "webSocketKeepAlive",
+			Signature: "webSocketKeepAlive() -> Unit",
+			Description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. " +
+				"Keeps the WebSocket server running indefinitely until interrupted (blocking operation).",
+			Parameters: []ParameterDesc{},
+			ReturnType: "Unit",
+			Example:    `webSocketKeepAlive()  // Blocks until Ctrl+C`,
 		},
 	}
 }

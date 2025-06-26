@@ -2,7 +2,7 @@
 layout: page
 title: "11. Loop Constructs and Functional Iterators"
 description: "Osprey Language Specification: 11. Loop Constructs and Functional Iterators"
-date: 2025-06-25
+date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0011-loopconstructsandfunctionaliterators/"

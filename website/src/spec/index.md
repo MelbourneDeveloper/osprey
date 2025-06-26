@@ -2,7 +2,7 @@
 layout: page
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
-date: 2025-06-25
+date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/"
@@ -11,26 +11,28 @@ permalink: "/spec/"
 # Osprey Language Specification
 
 **Version:** 0.2.0-alpha  
-**Date:** 2025-06-25  
+**Date:** 2025-06-26  
 **Author:** Christian Findlay
 
 ## Table of Contents
 
 1. [Introduction](/spec/0001-introduction/)
+2. [Lexical Structure](/spec/0002-lexicalstructure/)
 3. [Syntax](/spec/0003-syntax/)
 4. [Semantics](/spec/0004-semantics/)
 5. [Type System](/spec/0005-typesystem/)
 6. [Function Calls](/spec/0006-functioncalls/)
 7. [String Interpolation](/spec/0007-stringinterpolation/)
 8. [Pattern Matching](/spec/0008-patternmatching/)
-9. [9. Block Expressions](/spec/0009-blockexpressions/)
-10. [10. Boolean Operations](/spec/0010-booleanoperations/)
-11. [11. Loop Constructs and Functional Iterators](/spec/0011-loopconstructsandfunctionaliterators/)
+9. [Block Expressions](/spec/0009-blockexpressions/)
+10. [Boolean Operations](/spec/0010-booleanoperations/)
+11. [Loop Constructs and Functional Iterators](/spec/0011-loopconstructsandfunctionaliterators/)
 12. [Lightweight Fibers and Concurrency](/spec/0012-lightweightfibersandconcurrency/)
-14. [Built-in Functions](/spec/0014-built-infunctions/)
-15. [Error Handling](/spec/0015-errorhandling/)
-17. [Built-in Functions Reference](/spec/0017-built-infunctionsreference/)
-18. [Disable only HTTP operations](/spec/0018-securityandsandboxing/)
+13. [Built-in Functions](/spec/0013-built-infunctions/)
+14. [Error Handling](/spec/0014-errorhandling/)
+15. [HTTP](/spec/0015-http/)
+16. [WebSocket Functions](/spec/0016-websockets/)
+17. [Security and Sandboxing](/spec/0017-securityandsandboxing/)
 
 ## About This Specification
 
