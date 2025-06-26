@@ -1,22 +1,25 @@
 ---
 layout: page
 title: "websocketServerListen (Function)"
-description: "Starts the WebSocket server listening for connections."
+description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections."
 ---
 
-**Signature:** `websocketServerListen(serverID: int) -> int`
+**Signature:** `websocketServerListen(serverID: Int) -> Result<Success, String>`
 
-**Description:** Starts the WebSocket server listening for connections.
+**Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections.
 
 ## Parameters
 
-- **serverID** (int): Server identifier from websocketCreateServer
+- **serverID** (Int): Server identifier from websocketCreateServer
 
-**Returns:** int
+**Returns:** Result<Success, String>
 
 ## Example
 
 ```osprey
-let result = websocketServerListen(serverId)
-print("WebSocket server listening")
+let listenResult = websocketServerListen(serverID: serverId)
+match listenResult {
+    Success _ => print("Server listening on ws://127.0.0.1:8080/chat")
+    Err message => print("Failed to start listening: ${message}")
+}
 ```

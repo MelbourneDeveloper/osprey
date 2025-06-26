@@ -15,6 +15,8 @@ description: "Complete reference documentation for the Osprey programming langua
 
 | Function | Description |
 |----------|-------------|
+| [awaitProcess](functions/awaitprocess/) | Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes. |
+| [cleanupProcess](functions/cleanupprocess/) | Cleans up resources associated with a completed process. Should be called after awaitProcess. |
 | [contains](functions/contains/) | Checks if a string contains a substring. |
 | [extractCode](functions/extractcode/) | Extracts code from a JSON structure. |
 | [filter](functions/filter/) | Filters elements in an iterator based on a predicate function. |
@@ -38,17 +40,17 @@ description: "Complete reference documentation for the Osprey programming langua
 | [range](functions/range/) | Creates an iterator that generates numbers from start to end (exclusive). |
 | [readFile](functions/readfile/) | Reads the entire contents of a file as a string. |
 | [sleep](functions/sleep/) | Pauses execution for the specified number of milliseconds. |
-| [spawnProcess](functions/spawnprocess/) | Spawns an external process and returns the result. Currently supports simple command execution. |
+| [spawnProcess](functions/spawnprocess/) | Spawns an external async process with MANDATORY callback for stdout/stderr capture. The callback function receives (processID: int, eventType: int, data: string) and is called for stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING! |
 | [substring](functions/substring/) | Extracts a substring from start to end index. |
 | [toString](functions/tostring/) | Converts a value to its string representation. |
-| [webSocketKeepAlive](functions/websocketkeepalive/) | Keeps the WebSocket server running indefinitely until interrupted. |
-| [websocketClose](functions/websocketclose/) | Closes the WebSocket connection. |
-| [websocketConnect](functions/websocketconnect/) | Establishes a WebSocket connection to the specified URL. |
-| [websocketCreateServer](functions/websocketcreateserver/) | Creates a WebSocket server bound to the specified port, address, and path. |
-| [websocketSend](functions/websocketsend/) | Sends a message through the WebSocket connection. |
-| [websocketServerBroadcast](functions/websocketserverbroadcast/) | Broadcasts a message to all connected WebSocket clients. |
-| [websocketServerListen](functions/websocketserverlisten/) | Starts the WebSocket server listening for connections. |
-| [websocketStopServer](functions/websocketstopserver/) | Stops the WebSocket server and closes all connections. |
+| [webSocketKeepAlive](functions/websocketkeepalive/) | ⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation). |
+| [websocketClose](functions/websocketclose/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources. |
+| [websocketConnect](functions/websocketconnect/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback. |
+| [websocketCreateServer](functions/websocketcreateserver/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path. |
+| [websocketSend](functions/websocketsend/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection. |
+| [websocketServerBroadcast](functions/websocketserverbroadcast/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients sent to) instead of Result<Success, String>. Broadcasts a message to all connected WebSocket clients. |
+| [websocketServerListen](functions/websocketserverlisten/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections. |
+| [websocketStopServer](functions/websocketstopserver/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections. |
 | [writeFile](functions/writefile/) | Writes content to a file. Creates the file if it doesn't exist. |
 
 ## Type Reference
@@ -59,6 +61,7 @@ description: "Complete reference documentation for the Osprey programming langua
 | [Bool](types/bool/) | A boolean type that can be either true or false. Used for logical operations and conditionals. |
 | [HttpResponse](types/httpresponse/) | A built-in type representing an HTTP response with status code, headers, content type, body, and streaming capabilities. Used by HTTP server handlers to return structured responses to clients. |
 | [Int](types/int/) | A 64-bit signed integer type. Can represent whole numbers from -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807. |
+| [ProcessHandle](types/processhandle/) | A handle to a spawned async process. Contains the process ID and allows waiting for completion and cleanup. Process output is delivered via callbacks registered with the runtime. |
 | [String](types/string/) | A sequence of characters representing text. Supports string interpolation and escape sequences. |
 
 ## Operator Reference

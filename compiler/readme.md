@@ -4,7 +4,7 @@ Modern functional programming language compiler designed for elegance, safety, a
 
 ## Documentation
 
-- [Language Specification](spec.md) - Complete syntax reference
+- [Language Specification](spec/index.md) - Complete syntax reference
 - [Examples](examples/) - Code examples and demos
 - [Tests](tests/) - Compiler test suite
 
