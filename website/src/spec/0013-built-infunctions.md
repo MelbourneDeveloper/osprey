@@ -1,16 +1,33 @@
 ---
 layout: page
-title: "13. Built-in Functions"
-description: "Osprey Language Specification: 13. Built-in Functions"
+title: "Built-in Functions"
+description: "Osprey Language Specification: Built-in Functions"
 date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0013-built-infunctions/"
 ---
 
+13. [Built-in Functions](0013-Built-InFunctions.md)
+    - [Basic I/O Functions](#131-basic-io-functions)
+    - [File System Functions](#132-file-system-functions)
+    - [Process Operations](#133-process-operations)
+    - [Functional Programming](#134-functional-programming)
+    - [HTTP Functions](#135-http-functions)
+    - [WebSocket Functions](#136-websocket-functions)
+    - [Fiber and Concurrency Functions](#137-fiber-and-concurrency-functions)
+
+# 13. Built-in Functions
+
+🚀 **IMPLEMENTATION STATUS**: HTTP and basic I/O functions are implemented and working. WebSocket functions are implemented but undergoing testing. Fiber operations are partially implemented.
+
+Osprey provides built-in functions for I/O, networking, concurrency, and functional programming. All functions follow Osprey's functional programming paradigms with Result types for error handling.
+
 ## 13.1 Basic I/O Functions
 
-### `print(value: int | string | bool) -> int`
+```osprey
+print(value: int | string | bool) -> int
+```
 Prints values to standard output with automatic type conversion.
 
 ```osprey

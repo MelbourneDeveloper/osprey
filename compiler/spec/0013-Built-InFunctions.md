@@ -15,7 +15,9 @@ Osprey provides built-in functions for I/O, networking, concurrency, and functio
 
 ## 13.1 Basic I/O Functions
 
-### `print(value: int | string | bool) -> int`
+```osprey
+print(value: int | string | bool) -> int
+```
 Prints values to standard output with automatic type conversion.
 
 ```osprey

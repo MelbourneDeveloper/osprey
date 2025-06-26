@@ -8,6 +8,15 @@ author: "Christian Findlay"
 permalink: "/spec/0017-securityandsandboxing/"
 ---
 
+# 17. Security and Sandboxing
+
+- [Security Flags](#171-security-flags)
+- [Security Policies](#172-security-policies)
+- [Blocked Functions by Category](#173-blocked-functions-by-category)
+- [Function Availability](#174-function-availability)
+- [Programming Best Practices](#175-programming-best-practices)
+- [Implementation Details](#176-implementation-details)
+
 ## 17. Security and Sandboxing
 
 The Osprey compiler includes built-in security controls to restrict access to potentially dangerous functionality like network operations and file system access. This is essential for safe code execution in environments like web compilers where untrusted code may be executed.

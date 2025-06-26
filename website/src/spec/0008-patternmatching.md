@@ -8,6 +8,17 @@ author: "Christian Findlay"
 permalink: "/spec/0008-patternmatching/"
 ---
 
+8. [Pattern Matching](0008-PatternMatching.md)
+   - [Basic Patterns](#81-basic-patterns)
+   - [Union Type Patterns](#82-union-type-patterns)
+   - [Wildcard Patterns](#83-wildcard-patterns)
+   - [Type Annotation Patterns](#84-type-annotation-patterns)
+       - [Type Annotation Patterns](#1-type-annotation-patterns)
+       - [Anonymous Structural Matching](#2-anonymous-structural-matching)
+       - [Named Structural Matching](#3-named-structural-matching)
+       - [Mixed Type and Structural Patterns](#4-mixed-type-and-structural-patterns)
+   - [Match Expression Type Safety Rules](#85-match-expression-type-safety-rules)
+
 ## 8. Pattern Matching
 
 ### 8.1 Basic Patterns

@@ -1,10 +1,11 @@
-17. [Security and Sandboxing](0018-SecurityAndSandboxing.md)
-    - [Security Flags](#181-security-flags)
-    - [Security Policies](#182-security-policies)
-    - [Blocked Functions by Category](#183-blocked-functions-by-category)
-    - [Error Messages](#184-error-messages)
-    - [Programming Best Practices](#185-programming-best-practices)
-    - [Implementation Details](#186-implementation-details)
+# 17. Security and Sandboxing
+
+- [Security Flags](#171-security-flags)
+- [Security Policies](#172-security-policies)
+- [Blocked Functions by Category](#173-blocked-functions-by-category)
+- [Function Availability](#174-function-availability)
+- [Programming Best Practices](#175-programming-best-practices)
+- [Implementation Details](#176-implementation-details)
 
 ## 17. Security and Sandboxing
 

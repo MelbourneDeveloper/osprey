@@ -1,12 +1,32 @@
 ---
 layout: page
-title: "11. Loop Constructs and Functional Iterators"
-description: "Osprey Language Specification: 11. Loop Constructs and Functional Iterators"
+title: "Loop Constructs and Functional Iterators"
+description: "Osprey Language Specification: Loop Constructs and Functional Iterators"
 date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0011-loopconstructsandfunctionaliterators/"
 ---
+
+11. [Loop Constructs and Functional Iterators](0011-LoopConstructsAndFunctionalIterators.md)
+    - [Functional Iteration Philosophy](#111-functional-iteration-philosophy)
+    - [Core Iterator Functions](#112-core-iterator-functions)
+        - [`range(start: int, end: int) -> Iterator<int>`](#rangestart-int-end-int---iteratorint)
+        - [`forEach(iterator: Iterator<T>, function: T -> U) -> T`](#foreachiterator-iteratort-function-t---u---t)
+        - [`map(iterator: Iterator<T>, function: T -> U) -> U`](#mapiterator-iteratort-function-t---u---u)
+        - [`filter(iterator: Iterator<T>, predicate: T -> bool) -> T`](#filteriterator-iteratort-predicate-t---bool---t)
+        - [`fold(iterator: Iterator<T>, initial: U, function: (U, T) -> U) -> U`](#folditerator-iteratort-initial-u-function-u-t---u---u)
+    - [Pipe Operator](#113-pipe-operator)
+        - [`|>` - Pipe Operator](#---pipe-operator)
+    - [Functional Programming Patterns](#114-functional-programming-patterns)
+        - [Chaining Pattern](#chaining-pattern)
+        - [Side Effect Pattern](#side-effect-pattern)
+        - [Data Transformation Pattern](#data-transformation-pattern)
+    - [Why No Imperative Loops?](#115-why-no-imperative-loops)
+
+# 11. Loop Constructs and Functional Iterators
+
+🚧 **PARTIAL IMPLEMENTATION**: Basic iterator functions (`range`, `forEach`, `map`, `filter`, `fold`) are implemented and working. The pipe operator (`|>`) is implemented.
 
 ## 11.1 Functional Iteration Philosophy
 

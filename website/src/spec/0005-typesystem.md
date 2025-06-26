@@ -8,6 +8,38 @@ author: "Christian Findlay"
 permalink: "/spec/0005-typesystem/"
 ---
 
+5. [Type System](0005-TypeSystem.md)
+   - [Built-in Types](#51-built-in-types)
+       - [Function Types](#function-types)
+   - [Built-in Error Types](#52-built-in-error-types)
+   - [Type Inference Rules](#53-type-inference-rules)
+       - [Function Return Types](#function-return-types)
+       - [Parameter Types](#parameter-types)
+       - [Type Inference Examples](#type-inference-examples)
+       - [Rationale](#rationale)
+       - [Function Return Type "any" Restriction](#function-return-type-any-restriction)
+       - [Common Validation Fixes](#common-validation-fixes)
+   - [Type Safety and Explicit Typing](#54-type-safety-and-explicit-typing)
+       - [Mandatory Type Safety](#mandatory-type-safety)
+   - [Any Type Handling and Pattern Matching Requirement](#55-any-type-handling-and-pattern-matching-requirement)
+       - [Forbidden Operations on `any` Types](#forbidden-operations-on-any-types)
+       - [Legal Operations on `any` Types](#legal-operations-on-any-types)
+       - [Pattern Matching Requirement](#pattern-matching-requirement)
+       - [Direct Access Compilation Errors](#direct-access-compilation-errors)
+       - [Function Return Type Handling](#function-return-type-handling)
+       - [Type Annotation Pattern Syntax](#type-annotation-pattern-syntax)
+       - [Compilation Error Messages](#compilation-error-messages)
+       - [Exhaustiveness Checking for Any Types](#exhaustiveness-checking-for-any-types)
+       - [Default Wildcard Behavior for Any Types](#default-wildcard-behavior-for-any-types)
+       - [Type Constraint Checking](#type-constraint-checking)
+       - [Context-Aware Type Validation](#context-aware-type-validation)
+       - [Compilation Errors for Impossible Types](#compilation-errors-for-impossible-types)
+       - [Performance and Safety Characteristics](#performance-and-safety-characteristics)
+       - [Type Annotation Requirements](#type-annotation-requirements)
+       - [Compilation Errors for Type Ambiguity](#compilation-errors-for-type-ambiguity)
+       - [Error Handling Requirements](#error-handling-requirements)
+   - [Type Compatibility](#56-type-compatibility)
+
 ## 5. Type System
 
 Osprey's type system is one of the most important aspects of the language. It puts type safety and expressiveness as the top priorities. It is inspired by popular functional programming languages like Haskell and ML. The type system aims towards making illegal states unrepresentable. Some features like constructor where constraints are critical features that mean that instances cannot exist where they fail the criteria in construction.

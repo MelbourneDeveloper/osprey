@@ -8,6 +8,18 @@ author: "Christian Findlay"
 permalink: "/spec/0003-syntax/"
 ---
 
+3. [Syntax](0003-Syntax.md)
+   - [Program Structure](#31-program-structure)
+   - [Import Statements](#32-import-statements)
+   - [Let Declarations](#33-let-declarations)
+   - [Function Declarations](#34-function-declarations)
+   - [Extern Declarations](#35-extern-declarations)
+   - [Type Declarations](#36-type-declarations)
+   - [Record Types and Type Constructors](#37-record-types-and-type-constructors)
+   - [Expressions](#38-expressions)
+   - [Block Expressions](#39-block-expressions)
+   - [Match Expressions](#310-match-expressions)
+
 ## 3. Syntax
 
 ### 3.1 Program Structure

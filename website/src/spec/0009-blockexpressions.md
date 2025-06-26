@@ -1,12 +1,56 @@
 ---
 layout: page
-title: "9. Block Expressions"
-description: "Osprey Language Specification: 9. Block Expressions"
+title: "Block Expressions"
+description: "Osprey Language Specification: Block Expressions"
 date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0009-blockexpressions/"
 ---
+
+9. [Block Expressions](0009-BlockExpressions.md)
+   - [Block Scoping Rules](#91-block-scoping-rules)
+   - [Block Return Values](#92-block-return-values)
+   - [Performance Characteristics](#93-performance-characteristics)
+
+# 9. Block Expressions
+
+Block expressions allow grouping multiple statements together and returning a value from the final expression. They create a new scope for variable declarations and enable sequential execution with proper scoping rules.
+
+```
+block_expression := '{' statement* expression? '}'
+```
+
+**Examples:**
+```osprey
+// Simple block with local variables
+let result = {
+    let x = 10
+    let y = 20
+    x + y
+}
+print("Result: ${result}")  // prints "Result: 30"
+
+// Nested blocks
+let complex = {
+    let outer = 100
+    let inner_result = {
+        let inner = 50
+        outer + inner
+    }
+    inner_result * 2
+}
+print("Complex: ${complex}")  // prints "Complex: 300"
+
+// Block with function calls
+fn multiply(a: int, b: int) -> int = a * b
+let calc = {
+    let a = 5
+    let b = 6
+    multiply(a: a, b: b)
+}
+print("Calculation: ${calc}")  // prints "Calculation: 30"
+```
 
 ## 9.1 Block Scoping Rules
 

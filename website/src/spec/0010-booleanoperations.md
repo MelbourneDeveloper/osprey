@@ -1,12 +1,33 @@
 ---
 layout: page
-title: "10. Boolean Operations"
-description: "Osprey Language Specification: 10. Boolean Operations"
+title: "Boolean Operations"
+description: "Osprey Language Specification: Boolean Operations"
 date: 2025-06-26
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0010-booleanoperations/"
 ---
+
+10. [Boolean Operations](0010-BooleanOperations.md)
+    - [Boolean Pattern Matching](#101-boolean-pattern-matching)
+    - [Boolean Operators](#102-boolean-operators)
+
+# 10. Boolean Operations
+
+Use pattern matching for conditional logic:
+
+**Examples:**
+```osprey
+let result = match x > 0 {
+    true => "positive"
+    false => "zero or negative"
+}
+
+let max = match a > b {
+    true => a
+    false => b
+}
+```
 
 ## 10.1 Boolean Pattern Matching
 

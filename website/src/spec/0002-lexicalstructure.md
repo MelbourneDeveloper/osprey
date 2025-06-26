@@ -8,6 +8,13 @@ author: "Christian Findlay"
 permalink: "/spec/0002-lexicalstructure/"
 ---
 
+2. [Lexical Structure](0002-LexicalStructure)
+   - [Identifiers](#21-identifiers)
+   - [Keywords](#22-keywords)
+   - [Literals](#23-literals)
+   - [Operators](#24-operators)
+   - [Delimiters](#25-delimiters)
+
 ## 2. Lexical Structure
 
 ### 2.1 Identifiers

@@ -16,16 +16,20 @@ function extractTitle(content, filename) {
   // Look for H1 headers first
   for (const line of lines) {
     if (line.startsWith('# ')) {
-      return line.substring(2).trim();
+      let title = line.substring(2).trim();
+      // Remove section numbers like "1. " from the beginning
+      title = title.replace(/^\d+\.\s*/, '');
+      return title;
     }
   }
 
   // Look for H2 headers with section numbers
   for (const line of lines) {
     if (line.startsWith('## ')) {
-      const title = line.substring(3).trim();
+      let title = line.substring(3).trim();
       // Remove section numbers like "1. " from the beginning
-      return title.replace(/^\d+\.\s*/, '');
+      title = title.replace(/^\d+\.\s*/, '');
+      return title;
     }
   }
 
@@ -36,41 +40,9 @@ function extractTitle(content, filename) {
 
 // Helper function to clean content for individual spec pages
 function cleanSpecContent(content, filename) {
-  const lines = content.split('\n');
-  const cleanedLines = [];
-  let skipTOC = false;
-  let foundContent = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Skip the initial TOC section that starts with numbered list items
-    if (line.match(/^\d+\.\s*\[/) && !foundContent) {
-      skipTOC = true;
-      continue;
-    }
-
-    // Skip indented TOC items
-    if (skipTOC && line.match(/^\s+[-*]\s*\[/)) {
-      continue;
-    }
-
-    // Stop skipping when we hit the first H2 header
-    if (line.startsWith('## ') && skipTOC) {
-      skipTOC = false;
-      foundContent = true;
-    }
-
-    // Add line if we're not skipping TOC
-    if (!skipTOC) {
-      cleanedLines.push(line);
-      if (line.trim() !== '') {
-        foundContent = true;
-      }
-    }
-  }
-
-  return cleanedLines.join('\n').trim();
+  // Don't remove TOC from individual pages - just return the content as-is
+  // The TOC provides valuable navigation within each document
+  return content.trim();
 }
 
 // Helper function to generate URL-friendly slug from filename

@@ -8,6 +8,9 @@ author: "Christian Findlay"
 permalink: "/spec/0014-errorhandling/"
 ---
 
+14. [Error Handling](0015-ErrorHandling.md)
+    - [The Result Type](#151-the-result-type)
+
 ## 14. Error Handling
 ### 14.1 The Result Type
 

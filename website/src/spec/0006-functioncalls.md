@@ -8,6 +8,12 @@ author: "Christian Findlay"
 permalink: "/spec/0006-functioncalls/"
 ---
 
+6. [Function Calls](0006-FunctionCalls.md)
+   - [Named Arguments Requirement](#61-named-arguments-requirement)
+       - [Valid Function Calls](#valid-function-calls)
+       - [Invalid Function Calls](#invalid-function-calls)
+   - [Function Call Compilation Rules](#62-function-call-compilation-rules)
+
 ## 6. Function Calls
 
 ### 6.1 Named Arguments Requirement

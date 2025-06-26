@@ -8,6 +8,10 @@ author: "Christian Findlay"
 permalink: "/spec/0001-introduction/"
 ---
 
+1. [Introduction](0001-Introduction.md)
+   - [Completeness](#11-completeness)
+   - [Principles](#12-principles)
+
 ## 1. Introduction
 
 Osprey is a modern functional programming oriented language designed for elegance, safety, and performance.. It emphasizes:
