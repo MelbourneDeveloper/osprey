@@ -1,3 +1,12 @@
+13. [Built-in Functions](0013-Built-InFunctions.md)
+    - [Basic I/O Functions](#131-basic-io-functions)
+    - [File System Functions](#132-file-system-functions)
+    - [Process Operations](#133-process-operations)
+    - [Functional Programming](#134-functional-programming)
+    - [HTTP Functions](#135-http-functions)
+    - [WebSocket Functions](#136-websocket-functions)
+    - [Fiber and Concurrency Functions](#137-fiber-and-concurrency-functions)
+
 # 13. Built-in Functions
 
 🚀 **IMPLEMENTATION STATUS**: HTTP and basic I/O functions are implemented and working. WebSocket functions are implemented but undergoing testing. Fiber operations are partially implemented.

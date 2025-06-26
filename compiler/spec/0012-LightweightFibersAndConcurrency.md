@@ -10,10 +10,10 @@
         - [Rust Interoperability](#rust-interoperability)
     - [Fiber-Isolated Module System](#122-fiber-isolated-module-system)
         - [Module Isolation Principles](#module-isolation-principles)
-        - [Module Declaration Syntax](#132-module-declaration-syntax)
+        - [Module Declaration Syntax](#module-declaration-syntax)
         - [Fiber Isolation Behavior](#fiber-isolation-behavior)
         - [Memory and Performance Characteristics](#memory-and-performance-characteristics)
-        - [Inter-Fiber Communication](#135-inter-fiber-communication)
+        - [Inter-Fiber Communication](#inter-fiber-communication)
     - [Server Applications and Long-Running Processes](#123-server-applications-and-long-running-processes)
         - [Functional Approaches to Server Persistence](#1231-functional-approaches-to-server-persistence)
             - [Fiber-Based Server Persistence](#12311-fiber-based-server-persistence)
@@ -194,7 +194,7 @@ The fiber-isolated module system eliminates data races by design through:
 3. **Immutable Sharing**: Only immutable data can be shared between fibers
 4. **Automatic Isolation**: Module isolation happens automatically without explicit synchronization
 
-## 13.2 Module Declaration Syntax
+### Module Declaration Syntax
 
 ```osprey
 module ModuleName {
@@ -242,7 +242,7 @@ let result2 = await(fiber2)  // 1 (not 2!)
 - **No Synchronization Overhead**: No locks, atomics, or other synchronization primitives needed
 - **Deterministic Behavior**: Same input always produces same output within a fiber
 
-## 13.5 Inter-Fiber Communication
+### Inter-Fiber Communication
 
 Since modules are isolated, inter-fiber communication must use explicit channels:
 

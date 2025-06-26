@@ -1,4 +1,7 @@
 4. [Semantics](0004-Semantics.md)
+   - [Variable Binding](#41-variable-binding)
+   - [Function Semantics](#42-function-semantics)
+   - [Evaluation Order](#43-evaluation-order)
 
 ## 4. Semantics
 
