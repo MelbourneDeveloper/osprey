@@ -1,9 +1,9 @@
-15. [Error Handling](0015-ErrorHandling.md)
+14. [Error Handling](0015-ErrorHandling.md)
     - [The Result Type](#151-the-result-type)
 
-## 15. Error Handling
+## 14. Error Handling
 
-### 15.1 The Result Type
+### 14.1 The Result Type
 
 **CRITICAL**: All functions that can fail **MUST** return a `Result` type. There are no exceptions, panics, or nulls. This is a core design principle of the language to ensure safety and eliminate entire classes of runtime errors.
 

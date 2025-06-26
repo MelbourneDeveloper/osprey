@@ -1,13 +1,13 @@
-17. [Built-in Functions Reference](0017-Built-inFunctionsReference.md)
+15. [Built-in Functions Reference](0017-Built-inFunctionsReference.md)
     - [Basic I/O Functions](#171-basic-io-functions)
     - [Functional Iterator Functions](#172-functional-iterator-functions)
     - [Pipe Operator](#173-pipe-operator)
     - [Functional Programming Patterns](#174-functional-programming-patterns)
     - [Fiber Types and Concurrency](#175-fiber-types-and-concurrency)
 
-## 17. Built-in Functions Reference
+## 15. Built-in Functions Reference
 
-### 17.1 Basic I/O Functions
+### 15.1 Basic I/O Functions
 
 #### `print(value: int | string | bool) -> int`
 Prints the given value to standard output with automatic type conversion.
@@ -76,7 +76,7 @@ match substring("hello", 1, 3) {
 
 **FUNDAMENTAL PRINCIPLE**: All string operations that could conceptually fail MUST return Result types. This enforces explicit error handling and prevents runtime panics.
 
-### 17.2 File System Functions
+### 15.2 File System Functions
 
 #### `writeFile(path: string, content: string) -> Result<Success, string>`
 Writes content to a file.
@@ -93,7 +93,7 @@ Creates a directory.
 #### `fileExists(path: string) -> bool`
 Checks if file exists.
 
-### 17.3 Process Operations
+### 15.3 Process Operations
 
 #### `spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessResult, string>`
 Spawns external process with asynchronous stdout/stderr collection via callbacks.
@@ -184,7 +184,7 @@ Cleans up process resources after completion.
 
 **Note:** Always call this after `awaitProcess` to prevent memory leaks.
 
-### 17.2 Functional Iterator Functions
+### 15.2 Functional Iterator Functions
 
 #### `range(start: int, end: int) -> Iterator<int>`
 Creates an iterator that generates integers from start (inclusive) to end (exclusive). Used with functional iterator functions like forEach, map, filter, and fold.
@@ -269,7 +269,7 @@ fold(range(1, 6), 1, multiply)       // product: 1*1*2*3*4*5 = 120
 range(0, 10) |> fold(0, max)
 ```
 
-### 17.3 Pipe Operator
+### 15.3 Pipe Operator
 
 #### `|>` - Pipe Operator
 The pipe operator takes the result of the left expression and passes it as the first argument to the right function. This enables elegant functional programming and method chaining.
@@ -310,7 +310,7 @@ range(1, 10)
   |> print
 ```
 
-### 17.4 Functional Programming Patterns
+### 15.4 Functional Programming Patterns
 
 The combination of iterator functions and the pipe operator enables powerful functional programming patterns:
 
@@ -343,7 +343,7 @@ input()
   |> print
 ```
 
-### 17.5 Fiber Types and Concurrency
+### 15.5 Fiber Types and Concurrency
 
 Osprey provides lightweight concurrency through fiber types. Unlike traditional function-based approaches, fibers are proper type instances constructed using Osprey's standard type construction syntax.
 

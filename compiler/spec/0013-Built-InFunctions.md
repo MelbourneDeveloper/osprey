@@ -1,4 +1,4 @@
-14. [Built-in Functions](0014-Built-InFunctions.md)
+13. [Built-in Functions](0014-Built-InFunctions.md)
     - [HTTP Core Types](#141-http-core-types)
         - [HTTP Method Union Type](#http-method-union-type)
         - [HTTP Request Type (Immutable)](#http-request-type-immutable)
@@ -45,7 +45,7 @@
     - [Fiber-Based Concurrency](#147-fiber-based-concurrency)
     - [Complete HTTP Server Example](#148-complete-http-server-example)
 
-## 14. Built-in Functions
+## 13. Built-in Functions
 
 🚀 **IMPLEMENTATION STATUS**: HTTP functions are implemented and working. WebSocket functions are implemented but undergoing testing. Fiber operations are partially implemented.
 
@@ -63,7 +63,7 @@ Osprey provides first-class support for HTTP servers and clients, designed with 
 - **Streaming by default** for large response bodies to prevent memory issues
 - **Fiber-based concurrency** for handling thousands of concurrent connections
 
-### 14.1 HTTP Core Types
+### 13.1 HTTP Core Types
 
 #### HTTP Method Union Type
 ```osprey
@@ -95,7 +95,7 @@ type HttpResponse = {
 }
 ```
 
-### 14.2 HTTP Server Functions
+### 13.2 HTTP Server Functions
 
 #### `httpCreateServer(port: Int, address: String) -> Result<ServerID, String>`
 
@@ -195,7 +195,7 @@ Stops the HTTP server and cleans up resources.
 - `Success()`: Server stopped successfully  
 - `Err(message)`: Error description
 
-### 14.2.1 HTTP Request Handling Bridge
+### 13.2.1 HTTP Request Handling Bridge
 
 **CRITICAL REQUIREMENT**: HTTP servers in Osprey must call back into Osprey code to handle requests. **NO ROUTING LOGIC SHALL BE IMPLEMENTED IN C RUNTIME**. The C runtime provides only the transport layer; all application logic, routing, and request handling must be implemented in Osprey.
 
@@ -415,7 +415,7 @@ fn handleHttpRequest(request: HttpRequest) -> Result<HttpResponse, String> =
 
 This architecture ensures **complete separation of concerns**: C handles transport, Osprey handles application logic.
 
-### 14.3 HTTP Client Functions
+### 13.3 HTTP Client Functions
 
 #### `httpCreateClient(baseUrl: String, timeout: Int) -> Result<ClientID, String>`
 
@@ -489,13 +489,13 @@ Generic HTTP request function for any HTTP method.
 
 Closes the HTTP client and cleans up resources.
 
-### 14.4 WebSocket Support (Two-Way Communication)
+### 13.4 WebSocket Support (Two-Way Communication)
 
 🔒 **IMPLEMENTATION STATUS**: WebSocket functions are implemented with security features but are currently undergoing stability testing.
 
 WebSockets provide real-time, bidirectional communication between client and server. Osprey implements WebSocket support with **MILITARY-GRADE SECURITY** following industry best practices for preventing attacks and ensuring bulletproof operation.
 
-#### 14.4.1 WebSocket Security Implementation
+#### 13.4.1 WebSocket Security Implementation
 
 Osprey's WebSocket implementation follows the **OWASP WebSocket Security Guidelines** and implements multiple layers of security protection:
 
@@ -528,7 +528,7 @@ Osprey's WebSocket implementation follows the **OWASP WebSocket Security Guideli
 - **Bounds checking**: All `snprintf()` operations validated for truncation
 - **Safe string operations**: `memcpy()` instead of unsafe `strcpy()`/`strcat()`
 
-#### 14.4.2 Security Standards Compliance
+#### 13.4.2 Security Standards Compliance
 
 Osprey WebSocket implementation follows these security standards:
 
@@ -555,7 +555,7 @@ Osprey WebSocket implementation follows these security standards:
 - CWE-200: Information exposure prevention through secure error handling
 - CWE-416: Use-after-free prevention through memory clearing
 
-#### 14.4.3 Security Architecture
+#### 13.4.3 Security Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -588,7 +588,7 @@ Osprey WebSocket implementation follows these security standards:
 └─────────────────────────────────────────────────────────┘
 ```
 
-#### 14.4.4 Security Testing and Validation
+#### 13.4.4 Security Testing and Validation
 
 Osprey WebSocket security is validated through:
 
@@ -610,7 +610,7 @@ Osprey WebSocket security is validated through:
 - Fuzzing with malformed inputs
 - DoS resilience testing
 
-#### 14.4.5 Security References and Standards
+#### 13.4.5 Security References and Standards
 
 **Primary Security Standards:**
 - **RFC 6455**: "The WebSocket Protocol" - Official WebSocket specification ([https://tools.ietf.org/html/rfc6455](https://tools.ietf.org/html/rfc6455))
@@ -674,7 +674,7 @@ let sendResult = websocketSend(wsID: wsId, message: "Hello, WebSocket!")
 
 Closes the WebSocket connection.
 
-### 14.4.1 WebSocket Server Functions
+### 13.4.1 WebSocket Server Functions
 
 #### `websocketCreateServer(port: Int, address: String, path: String) -> Int`
 Creates a WebSocket server bound to the specified port and address.
