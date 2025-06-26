@@ -1,0 +1,8 @@
+// Test case for substring function wrong arguments error
+// This should trigger WrapSubstringWrongArgs
+
+fn main() -> Int {
+    let result = substring()  // Missing required string, start, and end arguments
+    print(result)
+    0
+} 

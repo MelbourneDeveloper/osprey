@@ -229,3 +229,72 @@ int64_t fiber_sleep(int64_t milliseconds) {
   usleep(milliseconds * 1000); // Convert milliseconds to microseconds
   return 0;
 }
+
+// FIBER-BASED PROCESS SPAWNING FUNCTIONS
+// These functions integrate process spawning with the fiber runtime
+
+// External process functions from system_runtime.c
+extern int64_t spawn_process_with_handler(char *command, void (*handler)(int64_t, int, char *));
+extern int64_t await_process(int64_t process_id);
+extern void cleanup_process(int64_t process_id);
+
+// Process event types (matching system_runtime.c)
+#define PROCESS_STDOUT_DATA 1
+#define PROCESS_STDERR_DATA 2
+#define PROCESS_EXIT 3
+
+// Simple process event handler that just prints output (demo implementation)
+static void default_process_event_handler(int64_t process_id, int event_type, char *data) {
+    switch (event_type) {
+        case PROCESS_STDOUT_DATA:
+            printf("Process %lld stdout: %s", (long long)process_id, data);
+            break;
+        case PROCESS_STDERR_DATA:
+            printf("Process %lld stderr: %s", (long long)process_id, data);
+            break;
+        case PROCESS_EXIT:
+            printf("Process %lld exited with code: %s\n", (long long)process_id, data);
+            break;
+        default:
+            printf("Process %lld unknown event %d: %s\n", (long long)process_id, event_type, data);
+            break;
+    }
+}
+
+// Spawn a process with event handler - returns process ID
+int64_t fiber_spawn_process(char *command) {
+    if (!command) {
+        return -1;
+    }
+    
+    // Spawn process with default event handler
+    return spawn_process_with_handler(command, default_process_event_handler);
+}
+
+// Spawn a process with custom handler - for advanced use cases
+int64_t fiber_spawn_process_with_handler(char *command, void (*handler)(int64_t, int, char *)) {
+    if (!command || !handler) {
+        return -1;
+    }
+    
+    return spawn_process_with_handler(command, handler);
+}
+
+// Await process completion in fiber context
+int64_t fiber_await_process(int64_t process_id) {
+    return await_process(process_id);
+}
+
+// Await process completion with stdout callback in fiber context
+int64_t fiber_await_process_with_callback(int64_t process_id, void (*stdout_callback)(char *)) {
+    if (!stdout_callback) {
+        return await_process(process_id);
+    }
+    
+    return fiber_await_process(process_id);
+}
+
+// Clean up process resources
+void fiber_cleanup_process(int64_t process_id) {
+    cleanup_process(process_id);
+}

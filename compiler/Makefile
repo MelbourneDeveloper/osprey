@@ -112,7 +112,7 @@ clean:
 test-runtime: build
 	@echo "🧪 Running C Runtime Tests to verify segfault fixes..."
 	@echo "📦 Compiling fiber runtime tests..."
-	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c -pthread -std=gnu11
+	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c runtime/system_runtime.c -pthread -std=gnu11
 	@echo "🚀 Running fiber runtime tests..."
 	./runtime/fiber_runtime_test
 	@echo ""
@@ -131,6 +131,7 @@ test-runtime: build
 		runtime/websocket_client_runtime.c \
 		runtime/websocket_server_runtime.c \
 		runtime/fiber_runtime.c \
+		runtime/system_runtime.c \
 		runtime/http_bridge_stub.c \
 		-pthread `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
 	@echo "🚀 Running HTTP runtime tests..."

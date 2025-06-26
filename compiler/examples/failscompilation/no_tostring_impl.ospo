@@ -1,0 +1,8 @@
+// Test case for no toString implementation error
+// This should trigger WrapNoToStringImpl
+
+fn main() {
+    let func_ref = main  // Function reference
+    let stringified = toString(func_ref)  // Functions don't have toString
+    print(stringified)
+} 

@@ -230,18 +230,69 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 
 		// === CORE SYSTEM FUNCTIONS ===
 		"spawnProcess": {
-			Name:        "spawnProcess",
-			Signature:   "spawnProcess(command: string) -> Result<ProcessResult, string>",
-			Description: "Spawns an external process and returns the result. Currently supports simple command execution.",
+			Name:      "spawnProcess",
+			Signature: "spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessHandle, string>",
+			Description: "Spawns an external async process with MANDATORY callback for stdout/stderr capture. " +
+				"The callback function receives (processID: int, eventType: int, data: string) and " +
+				"is called for stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. " +
+				"CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING!",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "command",
 					Type:        "string",
 					Description: "The command to execute",
 				},
+				{
+					Name:        "callback",
+					Type:        "fn(int, int, string) -> Unit",
+					Description: "MANDATORY callback function for process events (processID, eventType, data)",
+				},
 			},
-			ReturnType: "Result<ProcessResult, string>",
-			Example:    `let result = spawnProcess("echo hello")\nprint("Command executed")`,
+			ReturnType: "Result<ProcessHandle, string>",
+			Example: `fn processEventHandler(processID: int, eventType: int, data: string) -> Unit = {` + "\n" +
+				`    match eventType {` + "\n" +
+				`        1 => print("STDOUT: ${data}")` + "\n" +
+				`        2 => print("STDERR: ${data}")` + "\n" +
+				`        3 => print("EXIT: ${data}")` + "\n" +
+				`        _ => print("Unknown event")` + "\n" +
+				`    }` + "\n" +
+				`}` + "\n" +
+				`let result = spawnProcess("echo hello", processEventHandler)` + "\n" +
+				`match result {` + "\n" +
+				`    Success { value } => {` + "\n" +
+				`        let exitCode = awaitProcess(value)` + "\n" +
+				`        cleanupProcess(value)` + "\n" +
+				`    }` + "\n" +
+				`    Error { message } => print("Failed")` + "\n" +
+				`}`,
+		},
+		"awaitProcess": {
+			Name:        "awaitProcess",
+			Signature:   "awaitProcess(handle: ProcessHandle) -> int",
+			Description: "Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes.",
+			Parameters: []ParameterDesc{
+				{
+					Name:        "handle",
+					Type:        "ProcessHandle",
+					Description: "Process handle from spawnProcess",
+				},
+			},
+			ReturnType: "int",
+			Example:    `let exitCode = awaitProcess(processHandle)\nprint("Process exited with code: ${toString(exitCode)}")`,
+		},
+		"cleanupProcess": {
+			Name:        "cleanupProcess",
+			Signature:   "cleanupProcess(handle: ProcessHandle) -> void",
+			Description: "Cleans up resources associated with a completed process. Should be called after awaitProcess.",
+			Parameters: []ParameterDesc{
+				{
+					Name:        "handle",
+					Type:        "ProcessHandle",
+					Description: "Process handle from spawnProcess",
+				},
+			},
+			ReturnType: "void",
+			Example:    `cleanupProcess(processHandle)  // Free process resources`,
 		},
 		"sleep": {
 			Name:        "sleep",
@@ -732,6 +783,9 @@ func GetCompilerBuiltinFunctionNames() []string {
 		codegen.ContainsFunc,
 		codegen.SubstringFunc,
 		codegen.SpawnProcessFunc,
+
+		codegen.AwaitProcessFunc,
+		codegen.CleanupProcessFunc,
 		codegen.SleepFunc,
 		codegen.WriteFileFunc,
 		codegen.ReadFileFunc,

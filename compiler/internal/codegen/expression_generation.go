@@ -766,7 +766,6 @@ func (g *LLVMGenerator) validateBoolConstraint(_ string, _ bool) (bool, error) {
 	return true, nil
 }
 
-// generateBlockExpression generates LLVM IR for block expressions.
 func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) (value.Value, error) {
 	// Execute all statements in the block
 	for _, stmt := range blockExpr.Statements {
@@ -795,8 +794,17 @@ func (g *LLVMGenerator) generateHTTPResponseConstructor(
 		return nil, WrapUndefinedType(TypeHTTPResponse)
 	}
 
-	// Allocate memory for the HttpResponse struct
-	structPtr := g.builder.NewAlloca(httpResponseType)
+	// Allocate memory for the HttpResponse struct on the heap
+	mallocFunc, ok := g.functions["malloc"]
+	if !ok {
+		mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+		g.functions["malloc"] = mallocFunc
+	}
+
+	const httpResponseStructSize = 64 // 8 fields * 8 bytes each
+	structSize := constant.NewInt(types.I64, httpResponseStructSize)
+	structMem := g.builder.NewCall(mallocFunc, structSize)
+	structPtr := g.builder.NewBitCast(structMem, types.NewPointer(httpResponseType))
 
 	// Define field order and types to match the struct definition
 	fieldInfo := []struct {
