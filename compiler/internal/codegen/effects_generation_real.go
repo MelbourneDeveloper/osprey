@@ -14,7 +14,8 @@ import (
 
 // Static errors for better error handling
 var (
-	ErrUnhandledEffect = errors.New("unhandled effect")
+	ErrUnhandledEffect      = errors.New("unhandled effect")
+	ErrPutsFunctionNotFound = errors.New("puts function not found during runtime lookup generation")
 )
 
 // EffectRegistry maintains all declared effects and their operations
@@ -40,6 +41,7 @@ type HandlerFrame struct {
 	EffectName   string
 	Operations   map[string]*ir.Func
 	Continuation *ir.Func
+	LexicalDepth int // Track lexical nesting depth for proper scoping
 }
 
 // EffectCodegen implements real algebraic effects with CPS transformation
@@ -56,6 +58,8 @@ type EffectCodegen struct {
 	currentFunctionEffects []string
 	// CIRCULAR DEPENDENCY DETECTION: Track currently processing effects
 	processingStack []string
+	// LEXICAL DEPTH: Track current lexical depth for proper scoping
+	currentLexicalDepth int
 }
 
 // NewEffectCodegen creates a new algebraic effects code generator
@@ -150,9 +154,12 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	effectName := handler.EffectName
 
 	// Create handler function for each operation
+	// SPEC COMPLIANCE: Track lexical depth for proper scoping
+	ec.currentLexicalDepth++
 	handlerFrame := &HandlerFrame{
-		EffectName: effectName,
-		Operations: make(map[string]*ir.Func),
+		EffectName:   effectName,
+		Operations:   make(map[string]*ir.Func),
+		LexicalDepth: ec.currentLexicalDepth,
 	}
 
 	for _, arm := range handler.Handlers {
@@ -168,7 +175,6 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	// Save current scope state for proper restoration
 	wasInHandlerScope := ec.inHandlerScope
 	currentHandlersLength := len(ec.currentHandlers)
-	handlerStackLength := len(ec.handlerStack)
 
 	// Push handler onto GLOBAL stack - this makes it available for cross-function calls
 	ec.handlerStack = append(ec.handlerStack, handlerFrame)
@@ -178,11 +184,17 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	// Generate the do body with the handler active
 	result, err := ec.generator.generateExpression(handler.Body)
 
-	// CRITICAL FIX: Properly restore handler scope after ALL nested expressions are processed
-	// This fixes the handler scope timing bug where handlers were restored too early
+	// CRITICAL ARCHITECTURAL FIX: Handler scoping strategy
+	// - currentHandlers: Cleared when exiting lexical scope (for proper nested scoping within function)
+	// - handlerStack: PERSISTENT across function calls (for cross-function effects)
+	// This enables both lexical scoping AND cross-function effect handling
+
 	ec.currentHandlers = ec.currentHandlers[:currentHandlersLength]
-	ec.handlerStack = ec.handlerStack[:handlerStackLength]
+	// DON'T clear handlerStack - keep it persistent for cross-function calls!
+	// ec.handlerStack = ec.handlerStack[:handlerStackLength]  // COMMENTED OUT FOR CROSS-FUNCTION EFFECTS
 	ec.inHandlerScope = wasInHandlerScope
+	// SPEC COMPLIANCE: Restore lexical depth when exiting handler scope
+	ec.currentLexicalDepth--
 
 	if err != nil {
 		return nil, err
@@ -347,18 +359,29 @@ func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression)
 func (ec *EffectCodegen) findHandlerByEffectName(
 	perform *ast.PerformExpression, effectName string,
 ) (value.Value, error) {
-	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
-		frame := ec.currentHandlers[i]
+	// SPEC COMPLIANCE: Find handler with highest lexical depth (innermost)
+	var bestHandler *ir.Func
+	bestDepth := -1
+
+	for _, frame := range ec.currentHandlers {
 		if frame.EffectName == effectName {
 			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
-				args, err := ec.generatePerformArguments(perform)
-				if err != nil {
-					return nil, err
+				if frame.LexicalDepth > bestDepth {
+					bestHandler = handlerFunc
+					bestDepth = frame.LexicalDepth
 				}
-				return ec.generator.builder.NewCall(handlerFunc, args...), nil
 			}
 		}
 	}
+
+	if bestHandler != nil {
+		args, err := ec.generatePerformArguments(perform)
+		if err != nil {
+			return nil, err
+		}
+		return ec.generator.builder.NewCall(bestHandler, args...), nil
+	}
+
 	return nil, nil
 }
 
@@ -379,20 +402,31 @@ func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) 
 
 // tryStackHandlers attempts to find a handler on the stack
 func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value.Value, error) {
-	// CRITICAL FIX: Check handlers from most recent to oldest (proper nested scoping)
-	// This ensures inner handlers override outer handlers
-	for i := len(ec.handlerStack) - 1; i >= 0; i-- {
-		frame := ec.handlerStack[i]
+	// SPEC COMPLIANCE: Lexical Handler Stack - search by lexical depth (innermost first)
+	var bestHandler *ir.Func
+	bestDepth := -1
+
+	// Find the handler with the HIGHEST lexical depth (innermost)
+	for _, frame := range ec.handlerStack {
 		if frame.EffectName == perform.EffectName {
 			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
-				args, err := ec.generatePerformArguments(perform)
-				if err != nil {
-					return nil, err
+				if frame.LexicalDepth > bestDepth {
+					bestHandler = handlerFunc
+					bestDepth = frame.LexicalDepth
 				}
-				return ec.generator.builder.NewCall(handlerFunc, args...), nil
 			}
 		}
 	}
+
+	// If we found a handler, use the innermost one
+	if bestHandler != nil {
+		args, err := ec.generatePerformArguments(perform)
+		if err != nil {
+			return nil, err
+		}
+		return ec.generator.builder.NewCall(bestHandler, args...), nil
+	}
+
 	return nil, nil
 }
 
@@ -468,8 +502,8 @@ func (ec *EffectCodegen) popProcessingEffect() {
 // generateDeclaredEffectCall generates calls for effects declared in function signatures
 // This represents the "suspension point" where the effect needs to be handled by the caller
 func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpression) (value.Value, error) {
-	// CRITICAL FIX: Instead of generating a debug message, generate a runtime handler lookup
-	// This allows handlers to be resolved at runtime rather than compile time
+	// RUNTIME HANDLER LOOKUP: Generate a call to a lookup function that will
+	// find the appropriate handler when the function is executed, not when it's defined
 
 	// Generate arguments for the perform expression
 	args := make([]value.Value, len(perform.Arguments))
@@ -481,44 +515,114 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 		args[i] = argVal
 	}
 
-	// CRITICAL INSIGHT: Handlers MUST be resolved at runtime, not compile time!
-	// The issue is that functions with effects are compiled independently before
-	// their calling context (with handlers) is known. So when perform statements
-	// are executed, the compile-time scope doesn't have the handlers.
-	//
-	// The solution is to implement PROPER runtime handler lookup that checks
-	// ALL available handler functions and calls the right one based on runtime context.
+	// Create or get the runtime lookup function for this effect operation
+	lookupFunc, err := ec.getOrCreateRuntimeLookup(perform.EffectName, perform.OperationName)
+	if err != nil {
+		return nil, err
+	}
 
-	// Generate runtime handler lookup logic
-	// Strategy: Try to find the most recently generated handler for this effect operation
-	handlerPattern := fmt.Sprintf("__handler_%s_%s_", perform.EffectName, perform.OperationName)
+	// Call the lookup function with the arguments
+	return ec.generator.builder.NewCall(lookupFunc, args...), nil
+}
 
-	// Search through ALL generated handler functions to find matches
-	var candidateHandlers []*ir.Func
+// getOrCreateRuntimeLookup creates a runtime lookup function for an effect operation
+func (ec *EffectCodegen) getOrCreateRuntimeLookup(effectName, operationName string) (*ir.Func, error) {
+	lookupName := fmt.Sprintf("__lookup_%s_%s", effectName, operationName)
+
+	// Check if lookup function already exists
 	for _, fn := range ec.generator.module.Funcs {
-		fnName := fn.Name()
-		if len(fnName) > len(handlerPattern) && fnName[:len(handlerPattern)] == handlerPattern {
-			candidateHandlers = append(candidateHandlers, fn)
+		if fn.Name() == lookupName {
+			return fn, nil
 		}
 	}
 
-	// If we found handler functions, call the LAST one (most recently defined)
-	// This ensures that more recent handlers override older ones, which works
-	// better for sequential handler contexts and simple nesting
-	if len(candidateHandlers) > 0 {
-		// Use the LAST handler (most recently defined) for better isolation
-		handlerFunc := candidateHandlers[len(candidateHandlers)-1]
-		return ec.generator.builder.NewCall(handlerFunc, args...), nil
+	// Create the lookup function
+	// For now, create a simple function that calls the most recent handler
+	// In the future, this should do proper lexical scoping
+
+	// Determine parameter types for the operation
+	paramTypes, returnType := ec.inferOperationTypes(effectName, operationName, 1) // Assume 1 param for now
+
+	// Create the lookup function
+	params := make([]*ir.Param, len(paramTypes))
+	for i, paramType := range paramTypes {
+		params[i] = ir.NewParam(fmt.Sprintf("arg%d", i), paramType)
 	}
 
-	// If no handler found, generate the debug message (fallback)
-	effectMsg := fmt.Sprintf("EFFECT: %s.%s called", perform.EffectName, perform.OperationName)
-	msgStr := ec.generator.createGlobalString(effectMsg)
+	lookupFunc := ec.generator.module.NewFunc(lookupName, returnType, params...)
 
-	// Use existing puts function from the functions map
-	putsFunc := ec.generator.functions["puts"]
-	call := ec.generator.builder.NewCall(putsFunc, msgStr)
+	// Generate the lookup function body
+	err := ec.generateRuntimeLookupBody(lookupFunc, effectName, operationName, returnType)
+	if err != nil {
+		return nil, err
+	}
 
-	// Convert to i64 to match expected return type
-	return ec.generator.builder.NewSExt(call, types.I64), nil
+	return lookupFunc, nil
+}
+
+// generateRuntimeLookupBody generates the body of a runtime lookup function
+func (ec *EffectCodegen) generateRuntimeLookupBody(
+	lookupFunc *ir.Func, effectName, operationName string, returnType types.Type,
+) error {
+	// Save current context
+	oldFunc := ec.generator.function
+	oldBuilder := ec.generator.builder
+
+	// Set up function context
+	ec.generator.function = lookupFunc
+	entry := lookupFunc.NewBlock("entry")
+	ec.generator.builder = entry
+
+	// FOR NOW: Just call the most recent handler we can find
+	// This is a temporary solution - we need proper runtime stack searching
+
+	var targetHandler *ir.Func
+
+	// Find the most recent handler for this effect
+	for i := len(ec.handlerStack) - 1; i >= 0; i-- {
+		frame := ec.handlerStack[i]
+		if frame.EffectName == effectName {
+			if handlerFunc, exists := frame.Operations[operationName]; exists {
+				targetHandler = handlerFunc
+				break
+			}
+		}
+	}
+
+	if targetHandler != nil {
+		// Call the target handler with the lookup function's parameters
+		args := make([]value.Value, len(lookupFunc.Params))
+		for i, param := range lookupFunc.Params {
+			args[i] = param
+		}
+
+		result := ec.generator.builder.NewCall(targetHandler, args...)
+
+		if returnType == types.Void {
+			ec.generator.builder.NewRet(nil)
+		} else {
+			ec.generator.builder.NewRet(result)
+		}
+	} else {
+		// No handler found - generate error message
+		effectMsg := fmt.Sprintf("No handler found for %s.%s", effectName, operationName)
+		msgStr := ec.generator.createGlobalString(effectMsg)
+		putsFunc := ec.generator.functions["puts"]
+		if putsFunc == nil {
+			return ErrPutsFunctionNotFound
+		}
+		ec.generator.builder.NewCall(putsFunc, msgStr)
+
+		if returnType == types.Void {
+			ec.generator.builder.NewRet(nil)
+		} else {
+			ec.generator.builder.NewRet(constant.NewInt(returnType.(*types.IntType), 0))
+		}
+	}
+
+	// Restore context
+	ec.generator.function = oldFunc
+	ec.generator.builder = oldBuilder
+
+	return nil
 }

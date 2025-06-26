@@ -30,11 +30,11 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLiteral(ctx.Literal())
 	case ctx.LambdaExpr() != nil:
 		return b.buildLambdaExpr(ctx.LambdaExpr())
-	case ctx.ID(0) != nil && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
+	case len(ctx.AllID()) > 0 && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
 		// Array indexing: ID[INT]
 		return b.buildListAccess(ctx)
-	case ctx.ID(0) != nil:
-		return &Identifier{Name: ctx.ID(0).GetText()}
+	case len(ctx.AllID()) > 0:
+		return &Identifier{Name: ctx.AllID()[0].GetText()}
 	case ctx.Expr(0) != nil:
 		return b.buildExpression(ctx.Expr(0))
 	}
@@ -139,12 +139,12 @@ func (b *Builder) buildListLiteral(ctx parser.IListLiteralContext) Expression {
 
 // buildListAccess builds a ListAccessExpression from array indexing syntax.
 func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
-	if ctx == nil || ctx.ID(0) == nil || ctx.INT() == nil {
+	if ctx == nil || len(ctx.AllID()) == 0 || ctx.INT() == nil {
 		return nil
 	}
 
 	// Get the list identifier
-	listExpr := &Identifier{Name: ctx.ID(0).GetText()}
+	listExpr := &Identifier{Name: ctx.AllID()[0].GetText()}
 
 	// Parse the index
 	indexText := ctx.INT().GetText()
@@ -284,8 +284,13 @@ func (b *Builder) buildBlockExpression(ctx parser.IBlockExprContext) Expression 
 // buildPerformExpression builds a PerformExpression from perform EffectName.operation(args) syntax.
 func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExpression {
 	// PERFORM ID DOT ID LPAREN argList? RPAREN
-	effectName := ctx.ID(0).GetText()
-	operationName := ctx.ID(1).GetText()
+	allIDs := ctx.AllID()
+	const requiredIDCount = 2
+	if len(allIDs) < requiredIDCount {
+		return nil
+	}
+	effectName := allIDs[0].GetText()
+	operationName := allIDs[1].GetText()
 
 	var arguments []Expression
 	if ctx.ArgList() != nil {
@@ -311,12 +316,14 @@ func (b *Builder) buildWithHandlerExpression(ctx parser.IPrimaryContext) *Handle
 
 	// Build handler arms
 	for _, armCtx := range handlerCtx.AllHandlerArm() {
-		operationName := armCtx.ID(0).GetText()
+		operationName := armCtx.ID().GetText()
 
-		// Get parameter name if present (for operations like captureStdout(data))
+		// Get parameter names if present (for operations like log(msg))
 		var parameters []string
-		if armCtx.LPAREN() != nil && len(armCtx.AllID()) > 1 {
-			parameters = append(parameters, armCtx.ID(1).GetText())
+		if armCtx.LPAREN() != nil && armCtx.ParamList() != nil {
+			for _, paramCtx := range armCtx.ParamList().AllParam() {
+				parameters = append(parameters, paramCtx.ID().GetText())
+			}
 		}
 
 		// Build handler body

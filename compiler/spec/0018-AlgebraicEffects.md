@@ -329,4 +329,119 @@ Osprey's compiler performs **static call graph analysis** to detect:
 
 **🔥 OSPREY: THE ONLY LANGUAGE WITH MATHEMATICALLY PROVEN EFFECT SAFETY! 🔥**
 
+---
+
+## 23. **HANDLER LOOKUP MECHANISMS - RESEARCH AND IMPLEMENTATION OPTIONS**
+
+### 23.1 **THE LEXICAL SCOPING CHALLENGE**
+
+Proper algebraic effects require **lexical scoping** for handler resolution - the innermost lexically enclosing handler should handle each effect operation, not the most recently defined handler.
+
+**Problem**: "Last defined wins" vs. "Innermost lexical scope wins"
+
+```osprey
+effect Logger { log: fn(String) -> Unit }
+
+fn testLog(msg: String) -> Unit !Logger = perform Logger.log(msg)
+
+fn main() -> Unit = {
+    with handler Logger                    // OUTER scope
+        log(msg) => print("[OUTER] " + msg)
+    {
+        testLog("Call 1")  // Should print [OUTER] Call 1
+        
+        with handler Logger                // INNER scope  
+            log(msg) => print("[INNER] " + msg)
+        {
+            testLog("Call 2")  // Should print [INNER] Call 2
+        }
+        
+        testLog("Call 3")  // Should print [OUTER] Call 3
+    }
+}
+```
+
+**Expected Output**: `[OUTER] Call 1`, `[INNER] Call 2`, `[OUTER] Call 3`
+**Wrong Output** (last-wins): `[INNER] Call 1`, `[INNER] Call 2`, `[INNER] Call 3`
+
+### 23.2 **OSPREY'S IMPLEMENTATION APPROACH**
+
+#### 23.2.1 **Evidence Passing - OSPREY'S MANDATED APPROACH**
+
+**OSPREY'S CHOSEN METHOD**: Compile-time transformation to explicit handler evidence.
+
+**Mechanism**:
+- Compiler transforms effectful code to pass handler "evidence" as hidden parameters
+- Effect operations become **O(1) direct function calls** via evidence
+- Lexical scope preserved through compile-time analysis
+
+**Advantages**:
+- ✅ **O(1) handler lookup** (fastest possible)
+- ✅ **Perfect lexical scoping** preservation
+- ✅ **Compile-time optimization** opportunities
+- ✅ **Static verification** of handler availability
+- ✅ **COMPLETE COMPILE-TIME SAFETY** - NO RUNTIME ERRORS
+
+**Implementation in Osprey**:
+```llvm
+// CORRECT: Evidence passing  
+define void @testLog(i8* %msg, void(i8*)* %__logger_evidence) {
+0:
+        call void %__logger_evidence(i8* %msg)    // ✅ DIRECT CALL!
+        ret void
+}
+
+// Call sites pass appropriate handler evidence:
+call void @testLog(i8* %msg, void(i8*)* @__handler_Logger_log_0)  // OUTER handler
+call void @testLog(i8* %msg, void(i8*)* @__handler_Logger_log_1)  // INNER handler
+```
+
+**WHY EVIDENCE PASSING IS SUPERIOR**:
+- **NO RUNTIME HANDLER LOOKUP** - All resolution at compile time
+- **NO RUNTIME EFFECT ERRORS** - Impossible by construction  
+- **NO HANDLER STACK** - Evidence passing only
+- **O(1) EFFECT OPERATIONS** - Direct function calls
+- **LEXICAL SCOPING PRESERVED** - Through compile-time analysis
+- **COMPLETE STATIC VERIFICATION** - All effects checked at compile time
+
+### 23.3 **IMPLEMENTATION STATUS**
+
+**CURRENT STATUS**: ❌ Broken - using runtime lookup instead of evidence passing
+**REQUIRED FIX**: Implement evidence passing transformation with lexical scope analysis
+**TARGET**: All lexical scoping tests MUST pass with correct output
+
+### 23.4 **IMPLEMENTATION REQUIREMENTS**
+
+**COMPILATION PHASES**:
+1. **Effect Analysis**: Determine which effects each function needs
+2. **Evidence Generation**: Add hidden handler parameters to function signatures
+3. **Call Site Transformation**: Pass appropriate handler evidence at each call site based on lexical scope
+4. **Handler Function Generation**: Generate efficient direct handler calls
+
+**MANDATORY IMPLEMENTATION**:
+- ✅ **FUNCTIONS WITH DECLARED EFFECTS** get hidden handler parameters
+- ✅ **CALL SITES** pass appropriate handler evidence based on lexical scope
+- ✅ **PERFORM EXPRESSIONS** become direct function calls via evidence
+- ✅ **LEXICAL ANALYSIS** determines which handler evidence to pass
+- ✅ **INNERMOST HANDLER WINS** through compile-time scope analysis
+
+**FORBIDDEN IMPLEMENTATIONS**:
+- ❌ **NO global handler stacks**
+- ❌ **NO runtime handler lookup functions**  
+- ❌ **NO dynamic handler resolution**
+- ❌ **NO runtime effect checking**
+- ❌ **NO handler stack searching**
+
+### 23.5 **RESEARCH REFERENCES**
+
+**Foundational Papers**:
+- Plotkin & Pretnar: "Algebraic Effects and Handlers" (1312.1399)
+- Leijen: "Koka Programming with Row Polymorphic Effect Types" (1807.05923)
+
+**Key Insight**: Evidence passing is the ONLY approach that maintains complete compile-time safety while preserving lexical scoping semantics.
+
+---
+
+**🚀 OSPREY: ALGEBRAIC EFFECTS WITH IMPLEMENTATION FLEXIBILITY! 🚀**
+
 [1]: https://www.ospreylang.dev/spec/ "Osprey Language Specification - Osprey Programming Language"

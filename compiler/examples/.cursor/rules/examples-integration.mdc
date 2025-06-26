@@ -6,7 +6,7 @@ alwaysApply: true
 # Examples Integration Rules
 
 - **EXAMPLES ARE INTEGRATION TESTS** - They prove compiler works with real, runnable code
-- **NEVER DISABLE DELETE EXAMPLES, OR REDUCE ASSERTIONS** - The only exception is when consolidating examples into one file
+- **NEVER DISABLE OR DELETE EXAMPLES, OR REDUCE ASSERTIONS** - The only exception is when consolidating examples into one file
 - **TESTED EXAMPLES PRIMARY** - Examples in `tested/` folders with expected outputs
 - **INCLUDE EXPECTED OUTPUTS** - All examples need corresponding expected output files
 - **MINIMIZE PRINT STATEMENTS** - Only include prints to prove the functionality is working. DON'T list junk in prints

@@ -50,6 +50,12 @@ func (s *BaseospreyListener) EnterFnDecl(ctx *FnDeclContext) {}
 // ExitFnDecl is called when production fnDecl is exited.
 func (s *BaseospreyListener) ExitFnDecl(ctx *FnDeclContext) {}
 
+// EnterWithHandlerBlock is called when production withHandlerBlock is entered.
+func (s *BaseospreyListener) EnterWithHandlerBlock(ctx *WithHandlerBlockContext) {}
+
+// ExitWithHandlerBlock is called when production withHandlerBlock is exited.
+func (s *BaseospreyListener) ExitWithHandlerBlock(ctx *WithHandlerBlockContext) {}
+
 // EnterExternDecl is called when production externDecl is entered.
 func (s *BaseospreyListener) EnterExternDecl(ctx *ExternDeclContext) {}
 

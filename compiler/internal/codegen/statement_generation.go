@@ -250,6 +250,15 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	oldVars := g.variables
 	oldTypes := g.variableTypes
 
+	// CRITICAL FIX: Reset handler stacks for each function to ensure proper lexical scoping
+	// Functions with declared effects should use runtime lookup, not inherit handlers from other functions
+	if g.effectCodegen != nil {
+		// Reset handler stacks to ensure clean function boundaries
+		g.effectCodegen.handlerStack = nil    // Reset to empty slice
+		g.effectCodegen.currentHandlers = nil // Reset to empty slice
+		g.effectCodegen.currentLexicalDepth = 0
+	}
+
 	// Set up function context
 	g.function = fn
 	g.builder = fn.NewBlock("")
