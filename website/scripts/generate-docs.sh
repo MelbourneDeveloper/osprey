@@ -66,6 +66,7 @@ EOF
         tail -n +1 "$DOCS_DIR/README.md" >> "$DOCS_DIR/stdlib.md"
     fi
     
+    echo "API reference documentation generated successfully!"
     echo "Documentation generation complete!"
     echo "Generated files:"
     echo "  - $DOCS_DIR/stdlib.md (Main API Reference)"

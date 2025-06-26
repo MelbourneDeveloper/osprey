@@ -1,23 +1,26 @@
 ---
 layout: page
 title: "websocketSend (Function)"
-description: "Sends a message through the WebSocket connection."
+description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection."
 ---
 
-**Signature:** `websocketSend(wsID: int, message: string) -> int`
+**Signature:** `websocketSend(wsID: Int, message: String) -> Result<Success, String>`
 
-**Description:** Sends a message through the WebSocket connection.
+**Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection.
 
 ## Parameters
 
-- **wsID** (int): WebSocket identifier from websocketConnect
-- **message** (string): Message to send
+- **wsID** (Int): WebSocket identifier from websocketConnect
+- **message** (String): Message to send
 
-**Returns:** int
+**Returns:** Result<Success, String>
 
 ## Example
 
 ```osprey
-let result = websocketSend(wsId, "Hello, WebSocket!")
-print("Message sent")
+let sendResult = websocketSend(wsID: wsId, message: "Hello, WebSocket!")
+match sendResult {
+    Success _ => print("Message sent successfully")
+    Err message => print("Failed to send: ${message}")
+}
 ```

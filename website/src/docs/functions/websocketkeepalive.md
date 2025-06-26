@@ -1,17 +1,17 @@
 ---
 layout: page
 title: "webSocketKeepAlive (Function)"
-description: "Keeps the WebSocket server running indefinitely until interrupted."
+description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation)."
 ---
 
-**Signature:** `webSocketKeepAlive() -> int`
+**Signature:** `webSocketKeepAlive() -> Unit`
 
-**Description:** Keeps the WebSocket server running indefinitely until interrupted.
+**Description:** ⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).
 
-**Returns:** int
+**Returns:** Unit
 
 ## Example
 
 ```osprey
-webSocketKeepAlive()  // Server runs until Ctrl+C
+webSocketKeepAlive()  // Blocks until Ctrl+C
 ```

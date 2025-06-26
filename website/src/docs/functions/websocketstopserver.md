@@ -1,22 +1,25 @@
 ---
 layout: page
 title: "websocketStopServer (Function)"
-description: "Stops the WebSocket server and closes all connections."
+description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections."
 ---
 
-**Signature:** `websocketStopServer(serverID: int) -> int`
+**Signature:** `websocketStopServer(serverID: Int) -> Result<Success, String>`
 
-**Description:** Stops the WebSocket server and closes all connections.
+**Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections.
 
 ## Parameters
 
-- **serverID** (int): Server identifier to stop
+- **serverID** (Int): Server identifier to stop
 
-**Returns:** int
+**Returns:** Result<Success, String>
 
 ## Example
 
 ```osprey
-let result = websocketStopServer(serverId)
-print("WebSocket server stopped")
+let stopResult = websocketStopServer(serverID: serverId)
+match stopResult {
+    Success _ => print("Server stopped successfully")
+    Err message => print("Failed to stop server: ${message}")
+}
 ```

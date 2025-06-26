@@ -1,22 +1,25 @@
 ---
 layout: page
 title: "websocketClose (Function)"
-description: "Closes the WebSocket connection."
+description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources."
 ---
 
-**Signature:** `websocketClose(wsID: int) -> int`
+**Signature:** `websocketClose(wsID: Int) -> Result<Success, String>`
 
-**Description:** Closes the WebSocket connection.
+**Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources.
 
 ## Parameters
 
-- **wsID** (int): WebSocket identifier to close
+- **wsID** (Int): WebSocket identifier to close
 
-**Returns:** int
+**Returns:** Result<Success, String>
 
 ## Example
 
 ```osprey
-let result = websocketClose(wsId)
-print("WebSocket closed")
+let closeResult = websocketClose(wsID: wsId)
+match closeResult {
+    Success _ => print("Connection closed")
+    Err message => print("Failed to close: ${message}")
+}
 ```
