@@ -776,6 +776,25 @@ func (g *LLVMGenerator) validateBoolConstraint(_ string, _ bool) (bool, error) {
 }
 
 func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) (value.Value, error) {
+	// Check if the last statement is an expression statement that should be the return value
+	if len(blockExpr.Statements) > 0 && blockExpr.Expression == nil {
+		// Get the last statement
+		lastStmt := blockExpr.Statements[len(blockExpr.Statements)-1]
+
+		// Check if it's an expression statement
+		if exprStmt, ok := lastStmt.(*ast.ExpressionStatement); ok {
+			// Execute all statements except the last one
+			for _, stmt := range blockExpr.Statements[:len(blockExpr.Statements)-1] {
+				if err := g.generateStatement(stmt); err != nil {
+					return nil, err
+				}
+			}
+
+			// Return the value of the last expression statement
+			return g.generateExpression(exprStmt.Expression)
+		}
+	}
+
 	// Execute all statements in the block
 	for _, stmt := range blockExpr.Statements {
 		if err := g.generateStatement(stmt); err != nil {
@@ -788,8 +807,8 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 		return g.generateExpression(blockExpr.Expression)
 	}
 
-	// If no return expression, return a default integer value
-
+	// If no return expression, return a default value
+	// For Unit functions, we still need to return a value that will be ignored
 	return constant.NewInt(types.I64, 0), nil
 }
 

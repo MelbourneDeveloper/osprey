@@ -1,4 +1,4 @@
-Effect declarations: WORKING
-Compile-time safety: WORKING
-Unhandled effects = COMPILATION ERROR
-Pure computation: 42 
+[LOG] Starting increment operation
+State set to: 43
+[LOG] Increment completed
+Final result: 43 

@@ -332,11 +332,6 @@ func getExpectedOutputs() map[string]string {
 	}
 }
 
-// testExampleFile tests a single example file.
-func testExampleFile(t *testing.T, filePath, expectedOutput string) {
-	testExampleFileWithTrimming(t, filePath, expectedOutput, false)
-}
-
 // testExampleFileWithTrimming tests a single example file with optional output trimming.
 func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, trimActualOutput bool) {
 	t.Helper()

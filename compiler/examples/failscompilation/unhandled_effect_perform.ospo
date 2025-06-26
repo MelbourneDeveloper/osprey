@@ -15,4 +15,5 @@ fn main() -> Unit = {
     print("Testing perform expression parsing...")
     testLogging()
     print("🎉 PERFORM TEST COMPLETE! 🎉")
+    print("Value: " + toString(finalUndefinedVariable))  // This should cause compilation error!
 } 

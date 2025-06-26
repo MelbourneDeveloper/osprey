@@ -12,9 +12,9 @@ fn greetWithEffect(name: string) -> Unit !Logger = {
 
 // Main function with handler
 fn main() -> Unit = {
-    with handler Logger {
+    with handler Logger
         log(msg) => print("[HANDLED] " + msg)
-    } do {
+    {
         greetWithEffect("Osprey")
         print("🎉 HANDLER TEST COMPLETE! 🎉")
     }

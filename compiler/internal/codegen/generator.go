@@ -112,6 +112,28 @@ func (g *LLVMGenerator) GenerateIR() string {
 	return g.module.String()
 }
 
+// InitializeEffects initializes the effect system for the generator
+func (g *LLVMGenerator) InitializeEffects() {
+	g.effectCodegen = g.NewEffectCodegen()
+}
+
+// RegisterEffectDeclaration registers an effect declaration with the effect system
+func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration) error {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	g.effectCodegen.RegisterEffect(effect)
+	return nil
+}
+
+// generateRealPerformExpression generates real algebraic effects perform expressions
+func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpression) (value.Value, error) {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	return g.effectCodegen.GeneratePerformExpression(perform)
+}
+
 // declareExternalFunctions declares external C library functions.
 func (g *LLVMGenerator) declareExternalFunctions() {
 	// Declare printf: i32 @printf(i8*, ...)

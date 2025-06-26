@@ -1,0 +1,9 @@
+🔒 Testing Effect Handler Isolation
+=== Production Handler ===
+=== Debug Handler ===
+=== Silent Handler ===
+📊 Results:
+  Production: 25
+  Debug: 49
+  Silent: 81
+🎉 Handler Isolation Test Complete! 

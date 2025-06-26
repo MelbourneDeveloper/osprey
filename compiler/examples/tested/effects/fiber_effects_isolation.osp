@@ -1,0 +1,49 @@
+// 🔒 SIMPLE FIBER EFFECT ISOLATION TEST 🔒
+
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+// Simple task function
+fn simpleTask(taskName: string, value: int) -> int !Logger = {
+    perform Logger.log("Task " + taskName + " processing: " + toString(value))
+    let result = value * value
+    perform Logger.log("Task " + taskName + " result: " + toString(result))
+    result
+}
+
+// Main function showing different handlers in sequence
+fn main() -> Unit = {
+    print("🔒 Testing Effect Handler Isolation")
+    
+    // Test 1: Production handler
+    print("=== Production Handler ===")
+    let result1 = with handler Logger
+        log(msg) => print("[PROD] " + msg)
+    {
+        simpleTask(taskName: "Production", value: 5)
+    }
+    
+    // Test 2: Debug handler  
+    print("=== Debug Handler ===")
+    let result2 = with handler Logger
+        log(msg) => print("[DEBUG] " + msg)
+    {
+        simpleTask(taskName: "Debug", value: 7)
+    }
+    
+    // Test 3: Silent handler
+    print("=== Silent Handler ===")
+    let result3 = with handler Logger
+        log(msg) => 0  // Silent
+    {
+        simpleTask(taskName: "Silent", value: 9)
+    }
+    
+    print("📊 Results:")
+    print("  Production: " + toString(result1))
+    print("  Debug: " + toString(result2))
+    print("  Silent: " + toString(result3))
+    
+    print("🎉 Handler Isolation Test Complete!")
+} 

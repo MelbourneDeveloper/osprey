@@ -57,9 +57,9 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 
 effectList      : ID (COMMA ID)* ;
 
-// Handler expressions  
-handlerExpr     : HANDLER ID LBRACE handlerArm+ RBRACE ;
-handlerArm      : ID (LPAREN ID RPAREN)? LAMBDA expr ;
+// Handler expressions - cleaner ML-style syntax without redundant 'do'
+handlerExpr     : HANDLER ID handlerArm+ ;
+handlerArm      : ID (LPAREN ID? RPAREN)? LAMBDA expr ;
 
 functionCall    : ID LPAREN argList? RPAREN ;
 
@@ -150,7 +150,7 @@ primary
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
     | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
-    | WITH handlerExpr DO blockExpr               // with handler do block
+    | WITH handlerExpr blockExpr                  // with handler EffectName arms { body }
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
     | blockExpr                                   // Block expressions

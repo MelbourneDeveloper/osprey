@@ -300,9 +300,9 @@ func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExp
 	}
 }
 
-// buildWithHandlerExpression builds a HandlerExpression from with handler do block syntax.
+// buildWithHandlerExpression builds a HandlerExpression from with handler block syntax.
 func (b *Builder) buildWithHandlerExpression(ctx parser.IPrimaryContext) *HandlerExpression {
-	// WITH handlerExpr DO blockExpr
+	// WITH handlerExpr blockExpr (new ML-style syntax without DO)
 	handlerCtx := ctx.HandlerExpr()
 	blockExpr := b.buildBlockExpression(ctx.BlockExpr())
 

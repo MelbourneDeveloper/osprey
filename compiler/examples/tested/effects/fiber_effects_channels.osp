@@ -1,0 +1,33 @@
+// 🌊 SIMPLE FIBER + EFFECTS INTEGRATION 🌊
+
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+// Simple task with effects
+fn task(data: int) -> int !Logger = {
+    perform Logger.log("Processing: " + toString(data))
+    data * 2
+}
+
+// Main function with deterministic fiber usage
+fn main() -> Unit = {
+    with handler Logger
+        log(msg) => print("[LOG] " + msg)
+    {
+        print("🌊 Starting Simple Fiber + Effects Integration")
+        
+        // Test effects work in main context
+        let direct = task(5)
+        
+        // Test effects work with single fiber
+        let fiber1 = spawn task(10)
+        let result1 = await(fiber1)
+        
+        print("🎯 Results:")
+        print("  Direct result: " + toString(direct))
+        print("  Fiber result: " + toString(result1))
+        
+        print("🎉 Integration Complete!")
+    }
+} 

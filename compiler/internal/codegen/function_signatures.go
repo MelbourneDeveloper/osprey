@@ -34,6 +34,8 @@ func (g *LLVMGenerator) createAndStoreFunctionSignature(fnDecl *ast.FunctionDecl
 			returnType = TypeBool
 		case "any":
 			returnType = TypeAny
+		case TypeUnit:
+			returnType = TypeUnit
 		case TypeHTTPResponse:
 			returnType = TypeHTTPResponse
 		default:
@@ -166,6 +168,12 @@ func (g *LLVMGenerator) getLLVMReturnType(returnType, functionName string) types
 
 		// Return pointer to HttpResponse struct
 		return types.NewPointer(g.typeMap[TypeHTTPResponse])
+	}
+
+	if returnType == TypeUnit {
+		g.functionReturnTypes[functionName] = TypeUnit
+
+		return types.Void
 	}
 
 	g.functionReturnTypes[functionName] = TypeInt

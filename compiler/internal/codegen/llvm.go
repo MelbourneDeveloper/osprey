@@ -209,13 +209,6 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	fn *ir.Func,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
-	// CRITICAL FIX: Preserve effect scope across function calls
-	var scopeRestored bool
-	if g.effectCodegen != nil && g.effectCodegen.inHandlerScope {
-		// Function call from within handler scope - maintain effect context
-		scopeRestored = true
-	}
-
 	// VALIDATION: Multi-parameter functions require named arguments
 	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
 		return nil, WrapFunctionRequiresNamed(funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName))
@@ -227,13 +220,8 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 		return nil, err
 	}
 
-	// TARGETED FIX: Call the function directly and store the result
+	// Call the function directly and store the result
 	result := g.builder.NewCall(fn, args...)
-
-	// Clean up effect scope if it was preserved
-	if scopeRestored {
-		// Scope automatically maintained through function call
-	}
 
 	return result, nil
 }
@@ -1002,7 +990,7 @@ func (g *LLVMGenerator) createResultMatchPhi(
 // generateFunctionCallArguments generates arguments for function calls, handling both named and positional arguments
 func (g *LLVMGenerator) generateFunctionCallArguments(
 	funcName string,
-	fn *ir.Func,
+	_ *ir.Func,
 	callExpr *ast.CallExpression,
 ) ([]value.Value, error) {
 	// Handle named arguments vs positional arguments

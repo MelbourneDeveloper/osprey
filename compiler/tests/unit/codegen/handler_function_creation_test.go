@@ -31,8 +31,8 @@ func TestHandlerFunctionCreation(t *testing.T) {
 		}
 
 		// Test parameter name
-		if testFunc.Params[0].LocalIdent.Name() != "msg" {
-			t.Errorf("Expected parameter name 'msg', got '%s'", testFunc.Params[0].LocalIdent.Name())
+		if testFunc.Params[0].Name() != "msg" {
+			t.Errorf("Expected parameter name 'msg', got '%s'", testFunc.Params[0].Name())
 		}
 	})
 
@@ -62,7 +62,7 @@ func TestHandlerFunctionCreation(t *testing.T) {
 		expectedNames := []string{"msg", "count", "data"}
 		for i, expectedName := range expectedNames {
 			if i < len(multiFunc.Params) {
-				actualName := multiFunc.Params[i].LocalIdent.Name()
+				actualName := multiFunc.Params[i].Name()
 				if actualName != expectedName {
 					t.Errorf("Expected parameter %d name '%s', got '%s'", i, expectedName, actualName)
 				}
