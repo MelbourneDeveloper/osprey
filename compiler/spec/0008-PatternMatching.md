@@ -21,7 +21,7 @@ let result = match value {
 }
 ```
 
-### 8.2 Union Type Patterns
+## 8.2 Union Type Patterns
 
 ```osprey
 type Option = Some { value: Int } | None
@@ -32,7 +32,7 @@ let message = match option {
 }
 ```
 
-### 8.3 Wildcard Patterns
+## 8.3 Wildcard Patterns
 
 The underscore `_` matches any value:
 
@@ -44,7 +44,7 @@ let category = match score {
 }
 ```
 
-### 8.4 Type Annotation Patterns
+## 8.4 Type Annotation Patterns
 
 Type annotation patterns use the `:` operator to match values of specific types. This is **REQUIRED** for `any` types.
 
@@ -91,7 +91,7 @@ match result {
 }
 ```
 
-### Pattern Matching Features
+## Pattern Matching Features
 
 #### **1. Type Annotation Patterns**
 ```osprey
@@ -134,3 +134,5 @@ match anyValue {
     _ => print("Unknown structure")
 }
 ```
+
+## 8.5 Match Expression Type Safety Rules
