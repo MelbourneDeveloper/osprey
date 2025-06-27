@@ -14,7 +14,20 @@ import (
 
 // Static errors for better error handling
 var (
-	ErrUnhandledEffect = errors.New("unhandled effect")
+	ErrUnhandledEffect      = errors.New("unhandled effect")
+	ErrPutsFunctionNotFound = errors.New("puts function not found during runtime lookup generation")
+	ErrEffectNotDeclared    = errors.New("effect not declared in function signature")
+	ErrNoLexicalHandler     = errors.New("no lexical handler found for effect")
+)
+
+// Common operation names as constants
+const (
+	OpLog       = "log"
+	OpWrite     = "write"
+	OpError     = "error"
+	OpGet       = "get"
+	OpSet       = "set"
+	OpIncrement = "increment"
 )
 
 // EffectRegistry maintains all declared effects and their operations
@@ -40,33 +53,41 @@ type HandlerFrame struct {
 	EffectName   string
 	Operations   map[string]*ir.Func
 	Continuation *ir.Func
+	LexicalDepth int // Track lexical nesting depth for proper scoping
 }
 
-// EffectCodegen implements real algebraic effects with CPS transformation
+// EffectCodegen implements real algebraic effects with evidence passing
 type EffectCodegen struct {
 	generator    *LLVMGenerator
 	registry     *EffectRegistry
 	handlerStack []*HandlerFrame
 	contCounter  int
 	handlerFuncs map[string]*ir.Func
-	// NEW: Track function generation context for scope maintenance
+	// EVIDENCE PASSING: Track function generation context
 	inHandlerScope  bool
 	currentHandlers []*HandlerFrame
-	// CRITICAL: Track effects declared in current function signature
+	// EVIDENCE PASSING: Track effects declared in current function signature
 	currentFunctionEffects []string
+	// EVIDENCE PASSING: Track evidence parameters for current function
+	currentEvidenceParams map[string]*ir.Param
 	// CIRCULAR DEPENDENCY DETECTION: Track currently processing effects
 	processingStack []string
+	// LEXICAL DEPTH: Track current lexical depth for proper scoping
+	currentLexicalDepth int
 }
 
 // NewEffectCodegen creates a new algebraic effects code generator
 func (g *LLVMGenerator) NewEffectCodegen() *EffectCodegen {
 	return &EffectCodegen{
-		generator:       g,
-		registry:        &EffectRegistry{Effects: make(map[string]*EffectType)},
-		handlerStack:    make([]*HandlerFrame, 0),
-		handlerFuncs:    make(map[string]*ir.Func),
-		inHandlerScope:  false,
-		currentHandlers: make([]*HandlerFrame, 0),
+		generator:              g,
+		registry:               &EffectRegistry{Effects: make(map[string]*EffectType)},
+		handlerStack:           make([]*HandlerFrame, 0),
+		handlerFuncs:           make(map[string]*ir.Func),
+		inHandlerScope:         false,
+		currentHandlers:        make([]*HandlerFrame, 0),
+		currentFunctionEffects: make([]string, 0),
+		currentEvidenceParams:  make(map[string]*ir.Param),
+		processingStack:        make([]string, 0),
 	}
 }
 
@@ -90,53 +111,21 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	ec.pushProcessingEffect(perform.EffectName)
 	defer ec.popProcessingEffect()
 
-	// CRITICAL FIX: Check ALL possible handlers first before falling back to effect forwarding
-	// This ensures handlers ALWAYS take precedence over declared effects
+	// CRITICAL FIX: When in handler scope, try handlers FIRST regardless of declared effects
+	if len(ec.currentHandlers) > 0 || len(ec.handlerStack) > 0 {
+		// PRIORITY 1: Check for lexically scoped handlers
+		if result, err := ec.tryCurrentScopeHandlers(perform); err != nil || result != nil {
+			return result, err
+		}
 
-	// Check global handler stack first - this enables cross-function handlers!
-	if result, err := ec.tryStackHandlers(perform); err != nil || result != nil {
-		return result, err
-	}
-
-	// Check current scope handlers (for nested handlers) - ALWAYS check, not just when inHandlerScope
-	if result, err := ec.tryCurrentScopeHandlers(perform); err != nil || result != nil {
-		return result, err
-	}
-
-	// CRITICAL FIX: Don't immediately forward to declared effects
-	// Instead, try to use any available handler first, even across function boundaries
-
-	// Try to find ANY handler that can handle this effect
-	for i := len(ec.handlerStack) - 1; i >= 0; i-- {
-		frame := ec.handlerStack[i]
-		if frame.EffectName == perform.EffectName {
-			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
-				args, err := ec.generatePerformArguments(perform)
-				if err != nil {
-					return nil, err
-				}
-				return ec.generator.builder.NewCall(handlerFunc, args...), nil
-			}
+		// PRIORITY 2: Check global handler stack
+		if result, err := ec.tryStackHandlers(perform); err != nil || result != nil {
+			return result, err
 		}
 	}
 
-	// Try current handlers too
-	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
-		frame := ec.currentHandlers[i]
-		if frame.EffectName == perform.EffectName {
-			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
-				args, err := ec.generatePerformArguments(perform)
-				if err != nil {
-					return nil, err
-				}
-				return ec.generator.builder.NewCall(handlerFunc, args...), nil
-			}
-		}
-	}
-
-	// Only forward to declared effects if NO handlers are available anywhere
+	// EVIDENCE PASSING: For functions with declared effects, use evidence parameters as fallback
 	if ec.hasDeclaredEffect(perform.EffectName) {
-		// For now, use placeholder - in future this should forward to caller
 		return ec.generateDeclaredEffectCall(perform)
 	}
 
@@ -150,9 +139,12 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	effectName := handler.EffectName
 
 	// Create handler function for each operation
+	// SPEC COMPLIANCE: Track lexical depth for proper scoping
+	ec.currentLexicalDepth++
 	handlerFrame := &HandlerFrame{
-		EffectName: effectName,
-		Operations: make(map[string]*ir.Func),
+		EffectName:   effectName,
+		Operations:   make(map[string]*ir.Func),
+		LexicalDepth: ec.currentLexicalDepth,
 	}
 
 	for _, arm := range handler.Handlers {
@@ -168,21 +160,23 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	// Save current scope state for proper restoration
 	wasInHandlerScope := ec.inHandlerScope
 	currentHandlersLength := len(ec.currentHandlers)
-	handlerStackLength := len(ec.handlerStack)
+	handlerStackLength := len(ec.handlerStack) // CRITICAL FIX: Save stack length
 
-	// Push handler onto GLOBAL stack - this makes it available for cross-function calls
-	ec.handlerStack = append(ec.handlerStack, handlerFrame)
+	// EVIDENCE PASSING: Push handler onto current scope for lexical scoping
 	ec.inHandlerScope = true
 	ec.currentHandlers = append(ec.currentHandlers, handlerFrame)
+
+	// EVIDENCE PASSING: Also track on global stack for cross-function evidence passing
+	ec.handlerStack = append(ec.handlerStack, handlerFrame)
 
 	// Generate the do body with the handler active
 	result, err := ec.generator.generateExpression(handler.Body)
 
-	// CRITICAL FIX: Properly restore handler scope after ALL nested expressions are processed
-	// This fixes the handler scope timing bug where handlers were restored too early
+	// CRITICAL BUG FIX: Restore BOTH currentHandlers AND handlerStack for proper lexical scoping
 	ec.currentHandlers = ec.currentHandlers[:currentHandlersLength]
-	ec.handlerStack = ec.handlerStack[:handlerStackLength]
+	ec.handlerStack = ec.handlerStack[:handlerStackLength] // CRITICAL FIX: Restore stack
 	ec.inHandlerScope = wasInHandlerScope
+	ec.currentLexicalDepth--
 
 	if err != nil {
 		return nil, err
@@ -200,29 +194,60 @@ func (ec *EffectCodegen) inferOperationTypes(
 		return effectType.Operations[operationName].ParamTypes, effectType.Operations[operationName].ReturnType
 	}
 
-	// Default parameter types to string
-	paramTypes := make([]types.Type, paramCount)
-	for i := range paramTypes {
-		paramTypes[i] = types.I8Ptr
-	}
-
-	// Infer return type from operation name
+	// FIXED: Correct operation-specific type inference based on implementation plan
+	var paramTypes []types.Type
 	var returnType types.Type
-	switch operationName {
-	case "get", "getValue", "increment", "receive":
-		returnType = types.I64
-	default:
-		returnType = types.Void
-	}
 
-	// Infer parameter types from operation name
 	switch operationName {
-	case "set", "setValue", "increment":
-		if len(paramTypes) > 0 {
-			paramTypes[0] = types.I64
-		}
-	case "get", "getValue", "receive":
+	case OpGet, "getValue":
+		// get() -> i64, no parameters
 		paramTypes = []types.Type{}
+		returnType = types.I64
+	case OpSet, "setValue":
+		// set(i64) -> void, one i64 parameter
+		paramTypes = []types.Type{types.I64}
+		returnType = types.Void
+	case OpLog, "print", OpWrite, OpError:
+		// log(string) -> void, one string parameter
+		paramTypes = []types.Type{types.I8Ptr}
+		returnType = types.Void
+	case OpIncrement:
+		// increment() -> void, no parameters
+		paramTypes = []types.Type{}
+		returnType = types.Void
+	case "receive", "recv":
+		// receive() -> i64, no parameters
+		paramTypes = []types.Type{}
+		returnType = types.I64
+	case "send":
+		// send(value) -> void, one parameter
+		if paramCount > 0 {
+			paramTypes = make([]types.Type, paramCount)
+			for i := range paramTypes {
+				paramTypes[i] = types.I64 // Default to i64 for send values
+			}
+		} else {
+			paramTypes = []types.Type{types.I64}
+		}
+		returnType = types.Void
+	default:
+		// Default fallback: infer from parameter count
+		if paramCount == 0 {
+			// No parameters - likely returns something
+			paramTypes = []types.Type{}
+			returnType = types.I64
+		} else {
+			// Has parameters - likely void return
+			paramTypes = make([]types.Type, paramCount)
+			for i := range paramTypes {
+				if i == 0 && (operationName == "log" || operationName == "print" || operationName == "write") {
+					paramTypes[i] = types.I8Ptr // String parameter
+				} else {
+					paramTypes[i] = types.I64 // Default parameter type
+				}
+			}
+			returnType = types.Void
+		}
 	}
 
 	return paramTypes, returnType
@@ -347,18 +372,30 @@ func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression)
 func (ec *EffectCodegen) findHandlerByEffectName(
 	perform *ast.PerformExpression, effectName string,
 ) (value.Value, error) {
-	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
-		frame := ec.currentHandlers[i]
+	// SPEC COMPLIANCE: Find handler with highest lexical depth (innermost)
+	var bestHandler *ir.Func
+	bestDepth := -1
+
+	for _, frame := range ec.currentHandlers {
 		if frame.EffectName == effectName {
 			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
-				args, err := ec.generatePerformArguments(perform)
-				if err != nil {
-					return nil, err
+				// CRITICAL SAFETY CHECK: Validate handler function before using
+				if handlerFunc != nil && frame.LexicalDepth > bestDepth {
+					bestHandler = handlerFunc
+					bestDepth = frame.LexicalDepth
 				}
-				return ec.generator.builder.NewCall(handlerFunc, args...), nil
 			}
 		}
 	}
+
+	if bestHandler != nil {
+		args, err := ec.generatePerformArguments(perform)
+		if err != nil {
+			return nil, err
+		}
+		return ec.generator.builder.NewCall(bestHandler, args...), nil
+	}
+
 	return nil, nil
 }
 
@@ -379,20 +416,32 @@ func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) 
 
 // tryStackHandlers attempts to find a handler on the stack
 func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value.Value, error) {
-	// CRITICAL FIX: Check handlers from most recent to oldest (proper nested scoping)
-	// This ensures inner handlers override outer handlers
-	for i := len(ec.handlerStack) - 1; i >= 0; i-- {
-		frame := ec.handlerStack[i]
+	// SPEC COMPLIANCE: Lexical Handler Stack - search by lexical depth (innermost first)
+	var bestHandler *ir.Func
+	bestDepth := -1
+
+	// Find the handler with the HIGHEST lexical depth (innermost)
+	for _, frame := range ec.handlerStack {
 		if frame.EffectName == perform.EffectName {
 			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
-				args, err := ec.generatePerformArguments(perform)
-				if err != nil {
-					return nil, err
+				// CRITICAL SAFETY CHECK: Validate handler function before using
+				if handlerFunc != nil && frame.LexicalDepth > bestDepth {
+					bestHandler = handlerFunc
+					bestDepth = frame.LexicalDepth
 				}
-				return ec.generator.builder.NewCall(handlerFunc, args...), nil
 			}
 		}
 	}
+
+	// If we found a handler, use the innermost one
+	if bestHandler != nil {
+		args, err := ec.generatePerformArguments(perform)
+		if err != nil {
+			return nil, err
+		}
+		return ec.generator.builder.NewCall(bestHandler, args...), nil
+	}
+
 	return nil, nil
 }
 

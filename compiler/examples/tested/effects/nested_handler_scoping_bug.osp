@@ -30,12 +30,13 @@ fn testNestedScoping() -> Unit !Logger = {
     perform Logger.log("Before inner handler")
     
     // Inner handler should override outer for Logger
-    with handler Logger
+    let innerResult = with handler Logger 
         log(msg) => print("[INNER-LOG] " + msg)
         debug(msg) => print("[INNER-DEBUG] " + msg)
     {
-        let innerResult = innerOperation()
-        perform Logger.log("Inner result: " + toString(innerResult))
+        let result = innerOperation()
+        perform Logger.log("Inner result: " + toString(result))
+        result
     }
     
     // Should be back to outer handler now
@@ -45,7 +46,7 @@ fn testNestedScoping() -> Unit !Logger = {
 }
 
 // This should work but fails due to nested handler scoping bug
-fn main() -> Unit = with handler Logger
+fn main() -> Unit = with handler Logger 
     log(msg) => print("[OUTER-LOG] " + msg)
     debug(msg) => print("[OUTER-DEBUG] " + msg)
 {
