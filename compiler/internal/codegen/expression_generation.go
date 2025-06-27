@@ -481,10 +481,19 @@ func (g *LLVMGenerator) generateBinaryOperation(operator string, left, right val
 func (g *LLVMGenerator) generateArithmeticOperation(operator string, left, right value.Value) (value.Value, error) {
 	switch operator {
 	case "+":
-		// Handle string concatenation for pointer types (strings)
-		if _, isPtr := left.Type().(*types.PointerType); isPtr {
+		// CRITICAL FIX: Check if this is string concatenation vs numeric addition
+		leftType := left.Type()
+		rightType := right.Type()
+
+		// Check if either operand is a string pointer type
+		isLeftString := g.isStringType(leftType)
+		isRightString := g.isStringType(rightType)
+
+		if isLeftString || isRightString {
+			// String concatenation: use proper string concatenation logic
 			return g.generateStringConcatenation(left, right)
 		}
+		// Numeric addition: use standard add instruction
 		return g.builder.NewAdd(left, right), nil
 	case "-":
 
@@ -527,6 +536,60 @@ func (g *LLVMGenerator) generateComparisonOperation(operator string, left, right
 	}
 
 	return g.builder.NewZExt(cmp, types.I64), nil
+}
+
+// generateStringConcatenation generates proper string concatenation using malloc, strlen, and memcpy
+func (g *LLVMGenerator) generateStringConcatenation(left, right value.Value) (value.Value, error) {
+	// Get required C functions
+	mallocFunc := g.functions["malloc"]
+	strlenFunc := g.functions["strlen"]
+	memcpyFunc := g.functions["memcpy"]
+
+	// Calculate lengths of both strings
+	leftLen := g.builder.NewCall(strlenFunc, left)
+	rightLen := g.builder.NewCall(strlenFunc, right)
+
+	// Calculate total length (left + right + 1 for null terminator)
+	totalLen := g.builder.NewAdd(leftLen, rightLen)
+	totalLenWithNull := g.builder.NewAdd(totalLen, constant.NewInt(types.I64, 1))
+
+	// Allocate memory for the concatenated string
+	resultPtr := g.builder.NewCall(mallocFunc, totalLenWithNull)
+
+	// Copy left string to result
+	g.builder.NewCall(memcpyFunc, resultPtr, left, leftLen)
+
+	// Calculate position to copy right string (result + leftLen)
+	rightPos := g.builder.NewGetElementPtr(types.I8, resultPtr, leftLen)
+
+	// Copy right string to result + leftLen
+	g.builder.NewCall(memcpyFunc, rightPos, right, rightLen)
+
+	// Add null terminator at the end
+	nullPos := g.builder.NewGetElementPtr(types.I8, resultPtr, totalLen)
+	g.builder.NewStore(constant.NewInt(types.I8, 0), nullPos)
+
+	return resultPtr, nil
+}
+
+// isStringType checks if a type represents a string (i8* or pointer to i8)
+func (g *LLVMGenerator) isStringType(t types.Type) bool {
+	// Check for exact i8* type
+	if t == types.I8Ptr {
+		return true
+	}
+
+	// Check for pointer to i8 type
+	if ptrType, ok := t.(*types.PointerType); ok {
+		return ptrType.ElemType == types.I8
+	}
+
+	// Check for array of i8 (string literals)
+	if arrayType, ok := t.(*types.ArrayType); ok {
+		return arrayType.ElemType == types.I8
+	}
+
+	return false
 }
 
 // generateUnaryExpression generates LLVM IR for unary expressions.
@@ -776,39 +839,40 @@ func (g *LLVMGenerator) validateBoolConstraint(_ string, _ bool) (bool, error) {
 }
 
 func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) (value.Value, error) {
-	// Check if the last statement is an expression statement that should be the return value
-	if len(blockExpr.Statements) > 0 && blockExpr.Expression == nil {
-		// Get the last statement
-		lastStmt := blockExpr.Statements[len(blockExpr.Statements)-1]
+	var lastValue value.Value
 
-		// Check if it's an expression statement
-		if exprStmt, ok := lastStmt.(*ast.ExpressionStatement); ok {
-			// Execute all statements except the last one
-			for _, stmt := range blockExpr.Statements[:len(blockExpr.Statements)-1] {
-				if err := g.generateStatement(stmt); err != nil {
+	// Execute all statements in the block, keeping track of the last expression value
+	for i, stmt := range blockExpr.Statements {
+		// Check if this is the last statement and it's an expression statement
+		if i == len(blockExpr.Statements)-1 {
+			if exprStmt, ok := stmt.(*ast.ExpressionStatement); ok {
+				// Generate the expression and use it as the return value
+				val, err := g.generateExpression(exprStmt.Expression)
+				if err != nil {
 					return nil, err
 				}
+				lastValue = val
+				continue
 			}
-
-			// Return the value of the last expression statement
-			return g.generateExpression(exprStmt.Expression)
 		}
-	}
 
-	// Execute all statements in the block
-	for _, stmt := range blockExpr.Statements {
+		// Generate regular statement
 		if err := g.generateStatement(stmt); err != nil {
 			return nil, err
 		}
 	}
 
-	// Return the final expression value, or a default value if no expression
+	// Return the final expression value if explicitly set
 	if blockExpr.Expression != nil {
 		return g.generateExpression(blockExpr.Expression)
 	}
 
-	// If no return expression, return a default value
-	// For Unit functions, we still need to return a value that will be ignored
+	// If we have a last expression value from the statements, return it
+	if lastValue != nil {
+		return lastValue, nil
+	}
+
+	// If no return expression, return a default integer value
 	return constant.NewInt(types.I64, 0), nil
 }
 
@@ -880,78 +944,4 @@ func (g *LLVMGenerator) generateHTTPResponseConstructor(
 	}
 
 	return structPtr, nil
-}
-
-// generateStringConcatenation generates LLVM IR for string concatenation using strcat
-func (g *LLVMGenerator) generateStringConcatenation(left, right value.Value) (value.Value, error) {
-	// Ensure strcat and strlen are declared
-	strcatFunc := g.ensureStrcatDeclaration()
-	strlenFunc := g.ensureStrlenDeclaration()
-	mallocFunc := g.ensureMallocDeclaration()
-
-	// Calculate lengths of both strings
-	leftLen := g.builder.NewCall(strlenFunc, left)
-	rightLen := g.builder.NewCall(strlenFunc, right)
-
-	// Calculate total length: leftLen + rightLen + 1 (for null terminator)
-	totalLen := g.builder.NewAdd(leftLen, rightLen)
-	totalLenPlusOne := g.builder.NewAdd(totalLen, constant.NewInt(types.I64, 1))
-
-	// Allocate memory for the result string
-	result := g.builder.NewCall(mallocFunc, totalLenPlusOne)
-
-	// Copy left string to result
-	strcpyFunc := g.ensureStrcpyDeclaration()
-	g.builder.NewCall(strcpyFunc, result, left)
-
-	// Concatenate right string to result
-	g.builder.NewCall(strcatFunc, result, right)
-
-	return result, nil
-}
-
-// ensureStrcatDeclaration ensures strcat is declared
-func (g *LLVMGenerator) ensureStrcatDeclaration() *ir.Func {
-	if strcat, exists := g.functions["strcat"]; exists {
-		return strcat
-	}
-	strcat := g.module.NewFunc("strcat", types.I8Ptr,
-		ir.NewParam("dest", types.I8Ptr),
-		ir.NewParam("src", types.I8Ptr))
-	g.functions["strcat"] = strcat
-	return strcat
-}
-
-// ensureStrcpyDeclaration ensures strcpy is declared
-func (g *LLVMGenerator) ensureStrcpyDeclaration() *ir.Func {
-	if strcpy, exists := g.functions["strcpy"]; exists {
-		return strcpy
-	}
-	strcpy := g.module.NewFunc("strcpy", types.I8Ptr,
-		ir.NewParam("dest", types.I8Ptr),
-		ir.NewParam("src", types.I8Ptr))
-	g.functions["strcpy"] = strcpy
-	return strcpy
-}
-
-// ensureStrlenDeclaration ensures strlen is declared
-func (g *LLVMGenerator) ensureStrlenDeclaration() *ir.Func {
-	if strlen, exists := g.functions["strlen"]; exists {
-		return strlen
-	}
-	strlen := g.module.NewFunc("strlen", types.I64,
-		ir.NewParam("s", types.I8Ptr))
-	g.functions["strlen"] = strlen
-	return strlen
-}
-
-// ensureMallocDeclaration ensures malloc is declared
-func (g *LLVMGenerator) ensureMallocDeclaration() *ir.Func {
-	if malloc, exists := g.functions["malloc"]; exists {
-		return malloc
-	}
-	malloc := g.module.NewFunc("malloc", types.I8Ptr,
-		ir.NewParam("size", types.I64))
-	g.functions["malloc"] = malloc
-	return malloc
 }

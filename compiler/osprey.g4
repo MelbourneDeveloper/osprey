@@ -19,10 +19,7 @@ importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
 
-fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | EQ withHandlerBlock | LBRACE blockBody RBRACE) ;
-
-// Support for "fn main() = with handler Effect arms { body }" syntax without redundant braces
-withHandlerBlock : WITH handlerExpr blockExpr ;
+fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | LBRACE blockBody RBRACE) ;
 
 externDecl      : docComment? EXTERN FN ID LPAREN externParamList? RPAREN (ARROW type)? ;
 
@@ -60,10 +57,9 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 
 effectList      : ID (COMMA ID)* ;
 
-// Handler expressions - support indented syntax
-handlerExpr     : HANDLER ID handlerArm+                          // handler Logger log(msg) => ... error(msg) => ...
-                ;
-handlerArm      : ID (LPAREN paramList? RPAREN)? LAMBDA expr ;    // Support multiple parameters
+// Handler expressions - cleaner ML-style syntax without redundant 'do'
+handlerExpr     : HANDLER ID handlerArm+ ;
+handlerArm      : ID (LPAREN ID? RPAREN)? LAMBDA expr ;
 
 functionCall    : ID LPAREN argList? RPAREN ;
 

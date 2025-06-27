@@ -636,3 +636,15 @@ func WrapParseJSONWrongArgs(got int) error {
 func WrapExtractCodeWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrExtractCodeWrongArgs, got)
 }
+
+// WrapEffectsSystemUnavailable wraps effects system unavailable errors.
+func WrapEffectsSystemUnavailable(funcName string) error {
+	return fmt.Errorf("effects system not available for function '%s': %w", funcName, ErrEffectNotDeclared)
+}
+
+// WrapHandlerNotAvailable wraps handler not available errors.
+func WrapHandlerNotAvailable(argIndex int, funcName string, currentHandlers, handlerStack int) error {
+	return fmt.Errorf("no handler available for evidence argument %d of function %s - "+
+		"currentHandlers: %d, handlerStack: %d: %w",
+		argIndex, funcName, currentHandlers, handlerStack, ErrUnhandledEffect)
+}

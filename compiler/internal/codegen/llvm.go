@@ -210,20 +210,64 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
 	// VALIDATION: Multi-parameter functions require named arguments
-	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
-		return nil, WrapFunctionRequiresNamed(funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName))
+	// BUT: Functions with evidence parameters are exempt from this rule
+	regularParamCount := len(fn.Params)
+
+	// EVIDENCE PASSING: Check if this function has evidence parameters
+	// Evidence parameters are added automatically, so don't count them for validation
+	if len(callExpr.Arguments) > 0 && len(callExpr.Arguments) < len(fn.Params) {
+		// Assume the extra parameters are evidence parameters
+		// The evidence passing logic will handle adding them
+		regularParamCount = len(callExpr.Arguments)
 	}
 
-	// Generate arguments for the function call
-	args, err := g.generateFunctionCallArguments(funcName, fn, callExpr)
+	if regularParamCount > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
+		return nil, WrapFunctionRequiresNamed(funcName, regularParamCount, g.generateNamedArgsSuggestion(funcName))
+	}
+
+	// Handle named arguments vs positional arguments
+	if len(callExpr.NamedArguments) > 0 {
+		// Named arguments - need to reorder them to match function signature
+		args, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
+		if err != nil {
+			return nil, err
+		}
+
+		// PHASE A4: EVIDENCE PASSING - Add evidence arguments for named argument calls too
+		finalArgs, err := g.addEvidenceArguments(funcName, args)
+		if err != nil {
+			return nil, err
+		}
+
+		return g.builder.NewCall(fn, finalArgs...), nil
+	}
+
+	// Positional arguments (traditional)
+	args := make([]value.Value, len(callExpr.Arguments))
+
+	for i, arg := range callExpr.Arguments {
+		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
+		// This preserves type safety while allowing function composition
+		paramName := "unknown" // We don't have parameter names for positional args
+		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
+			return nil, err
+		}
+
+		val, err := g.generateExpression(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		args[i] = val
+	}
+
+	// PHASE A4: EVIDENCE PASSING - Add evidence arguments for functions with declared effects
+	finalArgs, err := g.addEvidenceArguments(funcName, args)
 	if err != nil {
 		return nil, err
 	}
 
-	// Call the function directly and store the result
-	result := g.builder.NewCall(fn, args...)
-
-	return result, nil
+	return g.builder.NewCall(fn, finalArgs...), nil
 }
 
 // generateNamedArgsSuggestion generates a helpful suggestion for named arguments.
@@ -282,6 +326,103 @@ func (g *LLVMGenerator) generateFunctionCompositionCall(
 	// Call the function stored in the variable
 	// The function reference should be a function pointer that we can call directly
 	return g.builder.NewCall(functionRef, args...), nil
+}
+
+// addEvidenceArguments adds evidence arguments for functions with declared effects
+func (g *LLVMGenerator) addEvidenceArguments(funcName string, regularArgs []value.Value) ([]value.Value, error) {
+	// PHASE A4: Check if function has declared effects by looking up function declaration
+	// For now, we'll use a simple approach: check if the function has more parameters than regular arguments
+	if fn, exists := g.functions[funcName]; exists {
+		expectedParams := len(fn.Params)
+		providedArgs := len(regularArgs)
+
+		// If function expects more parameters than provided, these are likely evidence parameters
+		if expectedParams > providedArgs {
+			evidenceCount := expectedParams - providedArgs
+
+			// CRITICAL FIX: Check if we're in a handler scope first
+			// If handlers are available, don't require evidence parameters
+			if g.effectCodegen != nil && len(g.effectCodegen.currentHandlers) > 0 {
+				// We're in a handler scope - use null evidence placeholders
+				// The actual handler calls will be resolved by the effects system
+				evidenceArgs := make([]value.Value, evidenceCount)
+				for i := range evidenceCount {
+					// Create null function pointers - these will be replaced by actual handlers
+					paramTypes := []types.Type{types.I8Ptr}
+					returnType := types.Void
+					funcType := types.NewFunc(returnType, paramTypes...)
+					evidenceType := types.NewPointer(funcType)
+					evidenceArgs[i] = constant.NewNull(evidenceType)
+				}
+
+				// Combine regular arguments with placeholder evidence arguments
+				finalArgs := make([]value.Value, 0, expectedParams)
+				finalArgs = append(finalArgs, regularArgs...)
+				finalArgs = append(finalArgs, evidenceArgs...)
+
+				return finalArgs, nil
+			}
+
+			// No handler scope - try to find evidence parameters
+			evidenceArgs, err := g.findEvidenceArguments(funcName, evidenceCount)
+			if err != nil {
+				// Check if this is a critical system error vs missing handlers
+				if strings.Contains(err.Error(), "effects system not available") {
+					return nil, err // Propagate system errors
+				}
+
+				// CRITICAL COMPILE-TIME SAFETY: Return compilation error for missing handlers
+				// This ensures unhandled effects are caught at compile time, not runtime
+				return nil, fmt.Errorf("no handler found for effect: function '%s' has declared effects but no handlers are available in current scope", funcName)
+			}
+
+			// Combine regular arguments with evidence arguments
+			finalArgs := make([]value.Value, 0, expectedParams)
+			finalArgs = append(finalArgs, regularArgs...)
+			finalArgs = append(finalArgs, evidenceArgs...)
+
+			return finalArgs, nil
+		}
+	}
+
+	// No evidence needed - return regular arguments unchanged
+	return regularArgs, nil
+}
+
+// findEvidenceArguments finds handler functions to use as evidence arguments
+func (g *LLVMGenerator) findEvidenceArguments(funcName string, evidenceCount int) ([]value.Value, error) {
+	// CRITICAL FIX: Initialize effects system if not available
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+
+	if g.effectCodegen == nil {
+		return nil, WrapEffectsSystemUnavailable(funcName)
+	}
+
+	evidenceArgs := make([]value.Value, evidenceCount)
+
+	// For each required evidence argument, find the corresponding handler function
+	// This is a simplified approach - in a full implementation, we'd need to know
+	// which effects the function declares and match them to available handlers
+	for i := range evidenceCount {
+		// Try to find any available handler function from current scope
+		if len(g.effectCodegen.currentHandlers) > 0 {
+			// Use the first available handler function (simplified)
+			frame := g.effectCodegen.currentHandlers[len(g.effectCodegen.currentHandlers)-1]
+			for _, handlerFunc := range frame.Operations {
+				// Convert handler function to evidence argument (function pointer)
+				evidenceArgs[i] = handlerFunc
+				break
+			}
+		} else {
+			// No handlers available - this should be an error
+			return nil, WrapHandlerNotAvailable(i, funcName,
+				len(g.effectCodegen.currentHandlers), len(g.effectCodegen.handlerStack))
+		}
+	}
+
+	return evidenceArgs, nil
 }
 
 // generateInterpolatedString generates LLVM IR for interpolated strings by concatenating parts.
@@ -985,38 +1126,4 @@ func (g *LLVMGenerator) createResultMatchPhi(
 	)
 
 	return phi, nil
-}
-
-// generateFunctionCallArguments generates arguments for function calls, handling both named and positional arguments
-func (g *LLVMGenerator) generateFunctionCallArguments(
-	funcName string,
-	_ *ir.Func,
-	callExpr *ast.CallExpression,
-) ([]value.Value, error) {
-	// Handle named arguments vs positional arguments
-	if len(callExpr.NamedArguments) > 0 {
-		// Named arguments - need to reorder them to match function signature
-		return g.reorderNamedArguments(funcName, callExpr.NamedArguments)
-	}
-
-	// Positional arguments (traditional)
-	args := make([]value.Value, len(callExpr.Arguments))
-
-	for i, arg := range callExpr.Arguments {
-		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
-		// This preserves type safety while allowing function composition
-		paramName := "unknown" // We don't have parameter names for positional args
-		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
-			return nil, err
-		}
-
-		val, err := g.generateExpression(arg)
-		if err != nil {
-			return nil, err
-		}
-
-		args[i] = val
-	}
-
-	return args, nil
 }

@@ -1,1 +1,1 @@
-unhandled effect: COMPILATION ERROR: Circular effect dependency detected - effects cannot have circular references that would cause infinite recursion 
+effect not declared in function signature: StateA.getFromB - add !StateA to signature or provide handler

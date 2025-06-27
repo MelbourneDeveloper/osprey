@@ -38,7 +38,6 @@ const (
 	TypeInt          = "int"
 	TypeBool         = "bool"
 	TypeAny          = "any"
-	TypeUnit         = "Unit"
 	TypeResult       = "Result"
 	TypeHTTPResponse = "HttpResponse"
 	TypeFunction     = "function"
@@ -138,4 +137,10 @@ const (
 	AnyOpFieldAccess      = "field_access"
 	AnyOpFunctionArgument = "function_argument"
 	AnyOpVariableAccess   = "variable_access"
+)
+
+// Effect constants.
+const (
+	StateEffect  = "State"
+	LoggerEffect = "Logger"
 )

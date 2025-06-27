@@ -47,14 +47,11 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		}
 	}
 
-	// Handle expression bodies (= expr), handler blocks (= with handler...), and block bodies ({ ... })
+	// Handle both expression bodies (= expr) and block bodies ({ ... })
 	var body Expression
 	if ctx.Expr() != nil {
 		// Expression-bodied function: fn name() = expr
 		body = b.buildExpression(ctx.Expr())
-	} else if ctx.WithHandlerBlock() != nil {
-		// Handler block function: fn name() = with handler Effect arms { body }
-		body = b.buildWithHandlerBlock(ctx.WithHandlerBlock())
 	} else if ctx.BlockBody() != nil {
 		// Block-bodied function: fn name() { statements }
 		body = b.buildBlockBody(ctx.BlockBody())
@@ -78,45 +75,6 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		ReturnType: returnType,
 		Effects:    effects, // CRITICAL: Include parsed effects
 		Body:       body,
-	}
-}
-
-// buildWithHandlerBlock builds a HandlerExpression from withHandlerBlock syntax.
-// This handles "fn name() = with handler Effect arms { body }" syntax
-func (b *Builder) buildWithHandlerBlock(ctx parser.IWithHandlerBlockContext) *HandlerExpression {
-	// WITH handlerExpr blockExpr
-	handlerCtx := ctx.HandlerExpr()
-	blockExpr := b.buildBlockExpression(ctx.BlockExpr())
-
-	effectName := handlerCtx.ID().GetText()
-	handlers := make([]HandlerArm, 0)
-
-	// Build handler arms
-	for _, armCtx := range handlerCtx.AllHandlerArm() {
-		operationName := armCtx.ID().GetText()
-
-		// Get parameter names if present (for operations like log(msg))
-		var parameters []string
-		if armCtx.LPAREN() != nil && armCtx.ParamList() != nil {
-			for _, paramCtx := range armCtx.ParamList().AllParam() {
-				parameters = append(parameters, paramCtx.ID().GetText())
-			}
-		}
-
-		// Build handler body
-		body := b.buildExpression(armCtx.Expr())
-
-		handlers = append(handlers, HandlerArm{
-			OperationName: operationName,
-			Parameters:    parameters,
-			Body:          body,
-		})
-	}
-
-	return &HandlerExpression{
-		EffectName: effectName,
-		Handlers:   handlers,
-		Body:       blockExpr,
 	}
 }
 

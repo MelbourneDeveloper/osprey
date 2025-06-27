@@ -327,13 +327,11 @@ func getExpectedOutputs() map[string]string {
 			"✅ commands[1] = \\\necho world\n\"\n\n✅ commands[2] = \\\necho test\n\"\n\n" +
 			"Testing out-of-bounds access:\n\n✅ Correctly caught out-of-bounds: commands[5] -> Error\n\n" +
 			"=== Array Test Complete ===\n\n",
-		// Effects examples
-		"algebraic_effects.osp": "Pure function result: 42\n🎉 BASIC TEST COMPLETE! 🎉",
 	}
 }
 
 // testExampleFileWithTrimming tests a single example file with optional output trimming.
-func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, trimActualOutput bool) {
+func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, useExpectedOutputFile bool) {
 	t.Helper()
 
 	// Read the file content - needed for captureJITOutput
@@ -346,14 +344,13 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 
 	// ERROR: ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!
 	if expectedOutput == "" {
-		expectedOutputPath := filePath + ".expectedoutput"
 		t.Fatalf("❌ MISSING EXPECTED OUTPUT FOR %s!\n"+
 			"🚨 ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!\n"+
 			"🚨 NO COMPILATION-ONLY TESTS ALLOWED!\n"+
-			"🚨 CREATE: %s\n"+
-			"🚨 RUN: ../../osprey %s --run\n"+
-			"🚨 Then copy the output to create the .expectedoutput file!",
-			filepath.Base(filePath), expectedOutputPath, filepath.Base(filePath))
+			"🚨 RUN THE EXAMPLE AND ADD THE ACTUAL OUTPUT TO expectedOutputs MAP!\n"+
+			"🚨 Use: ../../osprey %s --run\n"+
+			"🚨 Then copy the output to the expectedOutputs map!",
+			filepath.Base(filePath), filepath.Base(filePath))
 	}
 
 	// Execute via CLI interface AND capture output - we need both coverage AND verification!
@@ -368,15 +365,15 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 		t.Fatalf("Failed to execute %s: %v", filePath, err)
 	}
 
-	// THE MOST CRITICAL PART: Verify output matches expected!
-	// If expected output came from a file (and was trimmed), trim actual output too
-	actualOutput := output
-	if trimActualOutput {
-		actualOutput = strings.TrimSpace(output)
+	// Trim output if using .expectedoutput file to match captureJITOutput behavior
+	if useExpectedOutputFile {
+		output = strings.TrimSpace(output)
+		expectedOutput = strings.TrimSpace(expectedOutput)
 	}
 
-	if actualOutput != expectedOutput {
-		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, actualOutput)
+	// THE MOST CRITICAL PART: Verify output matches expected!
+	if output != expectedOutput {
+		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, output)
 	}
 
 	t.Logf("✅ Example %s executed and output verified", filepath.Base(filePath))

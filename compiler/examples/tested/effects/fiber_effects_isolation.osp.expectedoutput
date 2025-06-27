@@ -1,6 +1,10 @@
 🔒 Testing Effect Handler Isolation
 === Production Handler ===
+[PROD] Task Production processing: 5
+[PROD] Task Production result: 25
 === Debug Handler ===
+[DEBUG] Task Debug processing: 7
+[DEBUG] Task Debug result: 49
 === Silent Handler ===
 📊 Results:
   Production: 25

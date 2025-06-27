@@ -35,7 +35,7 @@ type LLVMGenerator struct {
 	stringConstants       map[string]value.Value
 	currentFunction       *ir.Func
 	currentFunctionParams map[string]value.Value
-	// Real algebraic effects system
+	// Algebraic effects support
 	effectCodegen *EffectCodegen
 }
 
@@ -112,9 +112,11 @@ func (g *LLVMGenerator) GenerateIR() string {
 	return g.module.String()
 }
 
-// InitializeEffects initializes the effect system for the generator
+// InitializeEffects initializes the algebraic effects system
 func (g *LLVMGenerator) InitializeEffects() {
-	g.effectCodegen = g.NewEffectCodegen()
+	if g.effectCodegen == nil {
+		g.effectCodegen = g.NewEffectCodegen()
+	}
 }
 
 // RegisterEffectDeclaration registers an effect declaration with the effect system
@@ -126,13 +128,7 @@ func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration)
 	return nil
 }
 
-// generateRealPerformExpression generates real algebraic effects perform expressions
-func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpression) (value.Value, error) {
-	if g.effectCodegen == nil {
-		g.InitializeEffects()
-	}
-	return g.effectCodegen.GeneratePerformExpression(perform)
-}
+// Unexported helper methods (moved after exported methods for funcorder compliance)
 
 // declareExternalFunctions declares external C library functions.
 func (g *LLVMGenerator) declareExternalFunctions() {
@@ -256,4 +252,12 @@ func (g *LLVMGenerator) registerBuiltInTypes() {
 
 	// Register ProcessHandle as Int64 (process ID)
 	g.typeMap["ProcessHandle"] = types.I64
+}
+
+// generateRealPerformExpression generates LLVM IR for perform expressions using the real effects system
+func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpression) (value.Value, error) {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	return g.effectCodegen.GeneratePerformExpression(perform)
 }

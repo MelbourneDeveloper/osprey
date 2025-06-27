@@ -343,9 +343,7 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 
 	// Error case: store error placeholder
 	g.builder = errorBlock
-	// Create unique global name to avoid redefinition
-	globalName := fmt.Sprintf("read_error_msg_%p", callExpr)
-	errorStr := g.module.NewGlobalDef(globalName, constant.NewCharArrayFromString("File read error\x00"))
+	errorStr := g.module.NewGlobalDef("read_error_msg", constant.NewCharArrayFromString("File read error\x00"))
 	errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
 		constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
 	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,

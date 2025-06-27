@@ -26,20 +26,9 @@ fn doubleValue(x: int) -> int = x * 2
 
 fn concatenateStrings(a: string, b: string) -> string = a + b
 
-// Main function showing what works
-fn loggedIncrement(message: string) -> Unit ![Logger, Counter] = {
-    perform Logger.log(message)
+// Simple function for testing
+fn simpleCounter() -> Unit !Counter = {
     perform Counter.increment()
-}
-
-fn processItems(count: int) -> int ![Logger, Counter] = {
-    //WRONG No ifs is in Osprey!!
-    // if count <= 0 then {
-    //     perform Counter.getValue()
-    // } else {
-    //     loggedIncrement("Processing item")
-    //     processItems(count - 1)
-    // }
 }
 
 fn loggedCalculation(x: int) -> int !Logger = {
@@ -66,7 +55,13 @@ fn main() -> Unit = with handler Logger
     log(msg) => print("LOG: " + msg)
     error(msg) => print("ERR: " + msg)
 {
-    let result = calculation(21)
-    perform Logger.error("Test error")
-    print("Done: " + toString(result))
+    with handler Counter
+        increment() => print("Counter incremented")
+        getValue() => 42
+    {
+        let result = calculation(21)
+        simpleCounter()
+        perform Logger.error("Test error")
+        print("Done: " + toString(result))
+    }
 } 

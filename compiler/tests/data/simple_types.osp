@@ -1,1 +1,12 @@
-fn add(a, b) = a + b
+fn testInt() -> int = 42
+
+fn testString() -> string = "Hello"
+
+fn testBool() -> bool = true
+
+fn main() -> Unit = {
+    let x = testInt()
+    let y = testString()
+    let z = testBool()
+    print("Testing types")
+} 
