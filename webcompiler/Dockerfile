@@ -47,6 +47,7 @@ RUN apt-get update \
     wget \
     llvm-14 \
     llvm-14-dev \
+    clang-14 \
     gcc \
     build-essential \
     libssl-dev \
@@ -54,7 +55,8 @@ RUN apt-get update \
     openssl \
     pkg-config \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 60
 
 # Add LLVM14 tools to PATH so Osprey compiler can find them
 ENV PATH="/usr/lib/llvm-14/bin:${PATH}"

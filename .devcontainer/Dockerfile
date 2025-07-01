@@ -71,14 +71,16 @@ RUN apt-get update \
         procps \
         gdb \
         valgrind \
-        llvm \
-        clang \
-        clangd \
-        llvm-dev \
-        libclang-dev \
-        llvm-runtime \
+        llvm-14 \
+        clang-14 \
+        clangd-14 \
+        llvm-14-dev \
+        libclang-14-dev \
+        llvm-14-runtime \
         libllvm14 \
         libclang-cpp14 \
+        gcc \
+        build-essential \
         libssl-dev \
         libssl3 \
         openssl \
@@ -88,7 +90,9 @@ RUN apt-get update \
         jq \
         unzip \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 60 \
+    && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 60
 
 # Install Docker CLI (client only - talks to host daemon via socket)
 RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
