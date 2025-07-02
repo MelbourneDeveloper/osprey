@@ -1,5 +1,6 @@
 # Osprey Development Container
 
+This directory contains configuration for a development container that provides all necessary dependencies for the Osprey compiler and VS Code extension development.
 This directory contains configuration for a development container that provides all necessary dependencies for Osprey compiler and VS Code extension development.
 
 ## Features

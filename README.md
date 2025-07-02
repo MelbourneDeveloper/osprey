@@ -58,7 +58,7 @@ httpServer(8080) |> onRequest((req) =>
 
 ## Documentation
 
-- [Language specification](compiler/spec.md)
+- [Language specification](compiler/spec/)
 - [API reference](website/src/docs/)
 - [Contributing guide](CONTRIBUTING.md)
 
