@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# This script runs all setup scripts for the Vexels development environment
+# This script runs all setup scripts for the Osprey development environment
 
 set -e
 
-echo "🚀 Setting up complete Vexels development environment..."
+echo "🚀 Setting up complete Osprey development environment..."
 echo ""
 
 # Make all scripts executable
-chmod +x /workspaces/vexels/.devcontainer/*.sh
+chmod +x /workspaces/osprey/.devcontainer/*.sh
 
 # Build the compiler
 echo "📦 Building compiler..."
-/workspaces/vexels/.devcontainer/build-compiler.sh
+/workspaces/osprey/.devcontainer/build-compiler.sh
 echo ""
 
 # Setup VS Code extension
 echo "📦 Setting up VS Code extension..."
-/workspaces/vexels/.devcontainer/setup-vscode-extension.sh
+/workspaces/osprey/.devcontainer/setup-vscode-extension.sh
 echo ""
 
 # Test everything
 echo "🧪 Testing setup..."
-/workspaces/vexels/.devcontainer/test-setup.sh
+/workspaces/osprey/.devcontainer/test-setup.sh
 
 echo ""
 echo "✅ Complete development environment setup finished!"

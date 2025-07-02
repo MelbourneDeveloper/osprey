@@ -3,7 +3,7 @@
 
 set -e
 
-cd /workspaces/vexels/vscode-extension
+cd /workspaces/osprey/vscode-extension
 
 # Install dependencies for client
 echo "📦 Installing VS Code extension dependencies..."
