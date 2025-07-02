@@ -91,18 +91,22 @@ jobs:
           MINIMUM_COVERAGE="${{ vars.TEST_COVERAGE_COMPILER }}"
 
           echo "Current coverage : ${CURRENT_COVERAGE}%"
-          if [ -z "$MINIMUM_COVERAGE" ]; then
-            echo "🌱 No TEST_COVERAGE_COMPILER variable set – bootstrapping with ${CURRENT_COVERAGE}%"
-            gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE"
-            exit 0
-          fi
-
           echo "Required minimum : ${MINIMUM_COVERAGE}%"
 
-          # Fail if coverage dropped
+          # Fail if coverage dropped below threshold
           if [ "$(echo "$CURRENT_COVERAGE < $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
             echo "❌ Coverage dropped below threshold!"
             exit 1
+          fi
+
+          # Try to update threshold if coverage improved (ignore failures)
+          if [ "$(echo "$CURRENT_COVERAGE > $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
+            echo "🚀 Coverage improved! Attempting to update threshold..."
+            if gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE" 2>/dev/null; then
+              echo "✅ Updated threshold to ${CURRENT_COVERAGE}%"
+            else
+              echo "⚠️ Could not update threshold (permissions issue - ignoring)"
+            fi
           fi
 
           echo "✅ Coverage check passed"
