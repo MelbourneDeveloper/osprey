@@ -6,6 +6,18 @@ description: "Complete reference for all built-in functions in Osprey"
 
 All built-in functions available in Osprey.
 
+## [awaitProcess](awaitprocess/)
+
+**Signature:** `awaitProcess(handle: ProcessHandle) -> int`
+
+Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes.
+
+## [cleanupProcess](cleanupprocess/)
+
+**Signature:** `cleanupProcess(handle: ProcessHandle) -> void`
+
+Cleans up resources associated with a completed process. Should be called after awaitProcess.
+
 ## [contains](contains/)
 
 **Signature:** `contains(haystack: string, needle: string) -> bool`
@@ -146,9 +158,9 @@ Pauses execution for the specified number of milliseconds.
 
 ## [spawnProcess](spawnprocess/)
 
-**Signature:** `spawnProcess(command: string) -> Result<ProcessResult, string>`
+**Signature:** `spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessHandle, string>`
 
-Spawns an external process and returns the result. Currently supports simple command execution.
+Spawns an external async process with MANDATORY callback for stdout/stderr capture. The callback function receives (processID: int, eventType: int, data: string) and is called for stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING!
 
 ## [substring](substring/)
 
@@ -164,51 +176,51 @@ Converts a value to its string representation.
 
 ## [webSocketKeepAlive](websocketkeepalive/)
 
-**Signature:** `webSocketKeepAlive() -> int`
+**Signature:** `webSocketKeepAlive() -> Unit`
 
-Keeps the WebSocket server running indefinitely until interrupted.
+⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).
 
 ## [websocketClose](websocketclose/)
 
-**Signature:** `websocketClose(wsID: int) -> int`
+**Signature:** `websocketClose(wsID: Int) -> Result<Success, String>`
 
-Closes the WebSocket connection.
+⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources.
 
 ## [websocketConnect](websocketconnect/)
 
-**Signature:** `websocketConnect(url: string, messageHandler: string) -> int`
+**Signature:** `websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`
 
-Establishes a WebSocket connection to the specified URL.
+⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback.
 
 ## [websocketCreateServer](websocketcreateserver/)
 
-**Signature:** `websocketCreateServer(port: int, address: string, path: string) -> int`
+**Signature:** `websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`
 
-Creates a WebSocket server bound to the specified port, address, and path.
+⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path.
 
 ## [websocketSend](websocketsend/)
 
-**Signature:** `websocketSend(wsID: int, message: string) -> int`
+**Signature:** `websocketSend(wsID: Int, message: String) -> Result<Success, String>`
 
-Sends a message through the WebSocket connection.
+⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection.
 
 ## [websocketServerBroadcast](websocketserverbroadcast/)
 
-**Signature:** `websocketServerBroadcast(serverID: int, message: string) -> int`
+**Signature:** `websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>`
 
-Broadcasts a message to all connected WebSocket clients.
+⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients sent to) instead of Result<Success, String>. Broadcasts a message to all connected WebSocket clients.
 
 ## [websocketServerListen](websocketserverlisten/)
 
-**Signature:** `websocketServerListen(serverID: int) -> int`
+**Signature:** `websocketServerListen(serverID: Int) -> Result<Success, String>`
 
-Starts the WebSocket server listening for connections.
+⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections.
 
 ## [websocketStopServer](websocketstopserver/)
 
-**Signature:** `websocketStopServer(serverID: int) -> int`
+**Signature:** `websocketStopServer(serverID: Int) -> Result<Success, String>`
 
-Stops the WebSocket server and closes all connections.
+⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections.
 
 ## [writeFile](writefile/)
 

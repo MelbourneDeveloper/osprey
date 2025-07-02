@@ -1,0 +1,8 @@
+// Test case for range function wrong arguments error
+// This should trigger WrapRangeWrongArgs
+
+fn main() -> Int {
+    let result = range()  // Missing required start and end arguments
+    print(result)
+    0
+} 

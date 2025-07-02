@@ -39,12 +39,6 @@ if "$COMPILER_PATH" --help | grep -q "generate-docs\|docs\|spec"; then
     "$COMPILER_PATH" generate-docs --output src/docs/generated/ || echo "⚠️ Docs generation not available yet"
 fi
 
-# Copy spec.md to website if it exists
-if [ -f "spec.md" ]; then
-    echo "📋 Copying spec.md to website..."
-    cp spec.md src/docs/language-specification.md
-fi
-
 # Build the website
 echo "🏗️ Building website..."
 npm run build

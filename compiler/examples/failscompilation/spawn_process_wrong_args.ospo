@@ -1,0 +1,8 @@
+// Test case for spawnProcess wrong arguments error
+// This should trigger WrapSpawnProcessWrongArgs
+
+fn main() -> Int {
+    let result = spawnProcess()  // Missing required command argument
+    print(result)
+    0
+} 

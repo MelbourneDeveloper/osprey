@@ -174,11 +174,16 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 	g.functionReturnTypes["substring"] = TypeResult + "<String, string>" // Returns Result<String, string>
 
 	// Process and file functions - MUST return Result types per spec
-	g.functionReturnTypes["spawnProcess"] = TypeResult + "<ProcessResult, string>" // Returns Result<ProcessResult, string>
-	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"          // Returns Result<Success, string>
-	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"            // Returns Result<string, string>
-	g.functionReturnTypes["parseJSON"] = TypeResult + "<string, string>"           // Returns Result<string, string>
-	g.functionReturnTypes["extractCode"] = TypeResult + "<string, string>"         // Returns Result<string, string>
+	// Process functions
+	g.functionReturnTypes["spawnProcess"] = TypeResult + "<ProcessHandle, string>"
+	g.functionReturnTypes["awaitProcess"] = TypeInt
+	g.functionReturnTypes["cleanupProcess"] = TypeInt
+
+	// File I/O functions
+	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"
+	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"
+	g.functionReturnTypes["parseJSON"] = TypeResult + "<string, string>"
+	g.functionReturnTypes["extractCode"] = TypeResult + "<string, string>"
 
 	// HTTP functions
 	g.functionReturnTypes["httpCreateServer"] = TypeInt // Returns server ID
@@ -224,4 +229,7 @@ func (g *LLVMGenerator) registerBuiltInTypes() {
 	)
 
 	g.typeMap[TypeHTTPResponse] = httpResponseType
+
+	// Register ProcessHandle as Int64 (process ID)
+	g.typeMap["ProcessHandle"] = types.I64
 }

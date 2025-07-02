@@ -53,11 +53,18 @@ ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
 
 # Build HTTP runtime
 echo "   Building HTTP runtime..."
-gcc -c -fPIC -O2 runtime/http_shared.c -o bin/http_shared.o
-gcc -c -fPIC -O2 runtime/http_client_runtime.c -o bin/http_client_runtime.o
-gcc -c -fPIC -O2 runtime/http_server_runtime.c -o bin/http_server_runtime.o
-gcc -c -fPIC -O2 runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
-gcc -c -fPIC -O2 runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
+# Set OpenSSL paths for macOS Homebrew
+OPENSSL_CFLAGS=""
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    OPENSSL_PREFIX=$(brew --prefix openssl 2>/dev/null || echo "/usr/local")
+    OPENSSL_CFLAGS="-I${OPENSSL_PREFIX}/include"
+fi
+
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/http_shared.c -o bin/http_shared.o
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/http_client_runtime.c -o bin/http_client_runtime.o
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/http_server_runtime.c -o bin/http_server_runtime.o
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
 gcc -c -fPIC -O2 runtime/system_runtime.c -o bin/system_runtime.o
 ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o
 

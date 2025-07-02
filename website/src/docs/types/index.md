@@ -22,6 +22,10 @@ A built-in type representing an HTTP response with status code, headers, content
 
 A 64-bit signed integer type. Can represent whole numbers from -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807.
 
+## [ProcessHandle](processhandle/)
+
+A handle to a spawned async process. Contains the process ID and allows waiting for completion and cleanup. Process output is delivered via callbacks registered with the runtime.
+
 ## [String](string/)
 
 A sequence of characters representing text. Supports string interpolation and escape sequences.
