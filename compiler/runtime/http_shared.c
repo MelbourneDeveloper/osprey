@@ -172,15 +172,16 @@ int parse_websocket_frame(const char *frame_data, size_t frame_len,
   if (frame_len < 2)
     return -1;
 
-  unsigned char first_byte = frame_data[0];
+  // Extract only the values we actually use in this simplified implementation
   unsigned char second_byte = frame_data[1];
-
-  bool fin = (first_byte & 0x80) != 0;
-  unsigned char opcode = first_byte & 0x0F;
   bool mask = (second_byte & 0x80) != 0;
   size_t payload_len = second_byte & 0x7F;
 
-  int offset = 2;
+  // NOTE: This is a simplified WebSocket frame parser that ignores:
+  // - FIN bit (frame_data[0] & 0x80): fragmentation handling
+  // - Opcode (frame_data[0] & 0x0F): frame type (text, binary, close, ping, pong)
+
+  size_t offset = 2;
 
   // Extended payload length
   if (payload_len == 126) {

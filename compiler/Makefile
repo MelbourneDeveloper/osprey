@@ -42,7 +42,6 @@ fiber-runtime:
 # Build HTTP runtime library with TITANIUM-ARMORED MILITARY-GRADE SECURITY 🛡️💀
 http-runtime:
 	@echo "🔨 Building HTTP runtime with OpenSSL 3.5.0+ support..."
-	@echo "⚠️  DEPLOYING MILITARY-GRADE PROTECTIONS..."
 	@mkdir -p bin
 	@echo "🔧 Building http_shared.o..."
 	@gcc -c -fPIC -O2 \
@@ -119,11 +118,11 @@ test-runtime: build
 	@echo ""
 	@echo "📦 Creating HTTP test stub for missing bridge functions..."
 	@echo '#include <stddef.h>' > runtime/http_bridge_stub.c
-	@echo 'int osprey_handle_http_request(int server_id, char *method, char *full_url, char *raw_headers, char *body, size_t body_length, int *response_status, char **response_headers, char **response_body, size_t *response_body_length) { return -1; }' >> runtime/http_bridge_stub.c
-	@echo 'char* osprey_handle_websocket_message(int server_id, int connection_id, char *message, size_t message_length) { return NULL; }' >> runtime/http_bridge_stub.c
-	@echo 'int osprey_handle_websocket_connection(int server_id, int connection_id, char *client_ip) { return -1; }' >> runtime/http_bridge_stub.c
-	@echo 'int osprey_handle_websocket_disconnect(int server_id, int connection_id) { return -1; }' >> runtime/http_bridge_stub.c
-	@echo 'void osprey_free_websocket_response(char *response) { }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_http_request(int server_id, char *method, char *full_url, char *raw_headers, char *body, size_t body_length, int *response_status, char **response_headers, char **response_body, size_t *response_body_length) { (void)server_id; (void)method; (void)full_url; (void)raw_headers; (void)body; (void)body_length; (void)response_status; (void)response_headers; (void)response_body; (void)response_body_length; return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'char* osprey_handle_websocket_message(int server_id, int connection_id, char *message, size_t message_length) { (void)server_id; (void)connection_id; (void)message; (void)message_length; return NULL; }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_websocket_connection(int server_id, int connection_id, char *client_ip) { (void)server_id; (void)connection_id; (void)client_ip; return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_websocket_disconnect(int server_id, int connection_id) { (void)server_id; (void)connection_id; return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'void osprey_free_websocket_response(char *response) { (void)response; }' >> runtime/http_bridge_stub.c
 	@echo "📦 Compiling HTTP runtime tests with stub functions..."
 	gcc -o runtime/http_runtime_test runtime/http_runtime_tests.c \
 		runtime/http_shared.c \
@@ -159,7 +158,7 @@ c-lint:
 		-Wfloat-equal -Wbad-function-cast \
 		-Wstrict-overflow=5 -Wstack-protector \
 		-Winline -Wdisabled-optimization \
-		-std=c11 -fsyntax-only \
+		-std=c11 -D_GNU_SOURCE -fsyntax-only \
 		system_runtime.c fiber_runtime.c test_system_runtime.c fiber_runtime_tests.c
 	@echo "✅ No C lint errors found"
 
