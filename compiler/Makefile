@@ -29,11 +29,11 @@ build-no-lint: fiber-runtime http-runtime
 	@echo "🏗️  Building osprey compiler (skipping lint for speed)..."
 	go build -o bin/osprey ./cmd/osprey
 
-# Build fiber runtime library
+# Build fiber runtime library - WARNINGS ARE ERRORS!!!
 fiber-runtime:
 	@echo "🔨 Building fiber runtime library..."
 	@mkdir -p bin
-	gcc -c -fPIC -O2 runtime/fiber_runtime.c -o bin/fiber_runtime.o
+	gcc -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
 	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
 	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a"
 
@@ -48,12 +48,13 @@ http-runtime:
 	@gcc -c -fPIC -O2 \
 		-D_FORTIFY_SOURCE=2 \
 		-fstack-protector-strong \
+		-Werror \
+		-Wall -Wextra \
 		-Wformat \
 		-Werror=format-security \
 		-Werror=implicit-function-declaration \
 		-Werror=incompatible-pointer-types \
 		-Werror=int-conversion \
-		-Wall -Wextra \
 		-Warray-bounds \
 		-ftrapv \
 		-fno-delete-null-pointer-checks \
@@ -66,11 +67,11 @@ http-runtime:
 		-Wno-deprecated-declarations \
 		`pkg-config --cflags openssl 2>/dev/null || echo ""` \
 		-o bin/http_shared.o runtime/http_shared.c
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_client_runtime.c -o bin/http_client_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE runtime/system_runtime.c -o bin/system_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_client_runtime.c -o bin/http_client_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
 	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
 
@@ -112,7 +113,7 @@ clean:
 test-runtime: build
 	@echo "🧪 Running C Runtime Tests to verify segfault fixes..."
 	@echo "📦 Compiling fiber runtime tests..."
-	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c runtime/system_runtime.c -pthread -std=gnu11
+	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c runtime/system_runtime.c -pthread -std=gnu11 -Werror -Wall -Wextra -D_GNU_SOURCE
 	@echo "🚀 Running fiber runtime tests..."
 	./runtime/fiber_runtime_test
 	@echo ""
@@ -133,7 +134,7 @@ test-runtime: build
 		runtime/fiber_runtime.c \
 		runtime/system_runtime.c \
 		runtime/http_bridge_stub.c \
-		-pthread `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
+		-pthread -Werror -Wall -Wextra -D_GNU_SOURCE `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
 	@echo "🚀 Running HTTP runtime tests..."
 	@echo "⚠️  NOTE: HTTP server tests focus on core runtime functionality"
 	./runtime/http_runtime_test
@@ -146,10 +147,7 @@ test-runtime: build
 test: build test-runtime c-test
 	@go test ./... -p 1 -v
 
-# MAXIMUM STRICTNESS C LINTING - ERRORS FOR EVERYTHING!!!
 c-lint:
-	@echo "💀 DEPLOYING MAXIMUM C STRICTNESS - NO MERCY!!! 💀"
-	@echo "🔥 Running C linter with MILITARY-GRADE strictness..."
 	@cd runtime && clang \
 		-Wall -Wextra -Werror -Wpedantic \
 		-Wformat=2 -Wconversion -Wsign-conversion \
@@ -163,17 +161,17 @@ c-lint:
 		-Winline -Wdisabled-optimization \
 		-std=c11 -fsyntax-only \
 		system_runtime.c fiber_runtime.c test_system_runtime.c fiber_runtime_tests.c
-	@echo "✅ C CODE IS BULLETPROOF! NO WARNINGS SURVIVED!"
+	@echo "✅ No C lint errors found"
 
-# C TESTS - Vanilla C Tests with standard assert()
+# C TESTS - Vanilla C Tests with standard assert() - WARNINGS ARE ERRORS!!!
 c-test:
 	@echo "🧪 RUNNING C RUNTIME TESTS..."
 	@cd runtime && echo "📦 Compiling system runtime tests..."
-	@cd runtime && clang -o test_system_runtime test_system_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g
+	@cd runtime && clang -o test_system_runtime test_system_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
 	@cd runtime && echo "🚀 Running system runtime tests..."
 	@cd runtime && ./test_system_runtime
 	@cd runtime && echo "📦 Compiling fiber runtime tests..."
-	@cd runtime && clang -o test_fiber_runtime fiber_runtime_tests.c fiber_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g
+	@cd runtime && clang -o test_fiber_runtime fiber_runtime_tests.c fiber_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
 	@cd runtime && echo "🚀 Running fiber runtime tests..."
 	@cd runtime && ./test_fiber_runtime
 	@cd runtime && echo "🧹 Cleaning up test executables..."

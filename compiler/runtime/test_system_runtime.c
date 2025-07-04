@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 // Include the system runtime header (we'll define the interface)
-extern int64_t spawn_process_with_handler(char *command,
+extern int64_t spawn_process_with_handler(const char *command,
                                           void (*handler)(int64_t, int64_t,
                                                           char *));
 extern int64_t await_process(int64_t process_id);
@@ -60,7 +60,7 @@ static void test_event_handler(int64_t process_id, int64_t event_type,
            (long long)test_data.last_exit_code);
     break;
   default:
-    printf("TEST: Unknown event type %d from process %lld\n", event_type,
+    printf("TEST: Unknown event type %lld from process %lld\n", (long long)event_type,
            (long long)process_id);
     break;
   }
@@ -68,7 +68,7 @@ static void test_event_handler(int64_t process_id, int64_t event_type,
   pthread_mutex_unlock(&test_data.mutex);
 }
 
-void test_basic_process_spawn() {
+void test_basic_process_spawn(void) {
   printf("=== Testing Basic Process Spawn ===\n");
 
   int64_t process_id = spawn_process_with_handler(
@@ -90,7 +90,7 @@ void test_basic_process_spawn() {
   printf("=== Basic Process Spawn Test PASSED ===\n\n");
 }
 
-void test_multiple_processes() {
+void test_multiple_processes(void) {
   printf("=== Testing Multiple Processes ===\n");
 
   int64_t pid1 =
@@ -126,7 +126,7 @@ void test_multiple_processes() {
   printf("=== Multiple Processes Test PASSED ===\n\n");
 }
 
-void test_process_with_error() {
+void test_process_with_error(void) {
   printf("=== Testing Process With Error ===\n");
 
   int64_t process_id = spawn_process_with_handler(
@@ -146,7 +146,7 @@ void test_process_with_error() {
   printf("=== Process With Error Test PASSED ===\n\n");
 }
 
-void test_process_with_stderr() {
+void test_process_with_stderr(void) {
   printf("=== Testing Process With Stderr ===\n");
 
   int64_t process_id = spawn_process_with_handler(
@@ -164,7 +164,7 @@ void test_process_with_stderr() {
   printf("=== Process With Stderr Test PASSED ===\n\n");
 }
 
-void test_long_running_process() {
+void test_long_running_process(void) {
   printf("=== Testing Long Running Process ===\n");
 
   int64_t process_id = spawn_process_with_handler(
@@ -183,7 +183,7 @@ void test_long_running_process() {
   printf("=== Long Running Process Test PASSED ===\n\n");
 }
 
-void test_invalid_command() {
+void test_invalid_command(void) {
   printf("=== Testing Invalid Command ===\n");
 
   int64_t process_id = spawn_process_with_handler("nonexistent_command_12345",
@@ -203,7 +203,7 @@ void test_invalid_command() {
   printf("=== Invalid Command Test PASSED ===\n\n");
 }
 
-int main() {
+int main(void) {
   printf("Running System Runtime Tests...\n\n");
 
   test_basic_process_spawn();

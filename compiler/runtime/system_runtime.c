@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -146,7 +145,7 @@ static void *process_monitor_thread(void *arg) {
 }
 
 // Spawn process with event handler - similar to HTTP server pattern
-int64_t spawn_process_with_handler(char *command, ProcessEventHandler handler) {
+int64_t spawn_process_with_handler(const char *command, ProcessEventHandler handler) {
   if (!command || !handler) {
     return -1;
   }
@@ -167,7 +166,7 @@ int64_t spawn_process_with_handler(char *command, ProcessEventHandler handler) {
 
   // Initialize process structure
   proc->process_id = process_id;
-  proc->command = strdup(command);
+  proc->command = strdup(command); // strdup handles const char * correctly
   proc->exit_code = -999; // Not finished yet
   proc->is_running = true;
   proc->handler = handler;
