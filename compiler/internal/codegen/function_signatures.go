@@ -151,6 +151,12 @@ func (g *LLVMGenerator) getLLVMReturnType(returnType, functionName string) types
 		return types.I8Ptr
 	}
 
+	if returnType == TypeUnit {
+		g.functionReturnTypes[functionName] = TypeUnit
+
+		return types.Void
+	}
+
 	if returnType == TypeBool {
 		g.functionReturnTypes[functionName] = TypeBool
 

@@ -1,2 +1,8 @@
 *.o
 *.a
+*.dSYM/
+test_fiber_runtime
+test_system_runtime
+fiber_runtime_test
+http_runtime_test
+http_bridge_stub.c

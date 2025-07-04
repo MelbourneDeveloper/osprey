@@ -140,11 +140,11 @@ func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (
 		fn = existing
 	} else {
 		// int64_t spawn_process_with_handler(char *command, ProcessEventHandler handler)
-		// ProcessEventHandler: void (*)(int64_t process_id, int event_type, char *data)
+		// ProcessEventHandler: void (*)(int64_t process_id, int64_t event_type, char *data)
 		handlerType := types.NewPointer(types.NewFunc(
 			types.Void,  // Return type: void (matches C runtime)
 			types.I64,   // process_id parameter
-			types.I32,   // event_type parameter
+			types.I64,   // event_type parameter
 			types.I8Ptr, // data parameter
 		))
 

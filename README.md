@@ -15,8 +15,8 @@ brew install osprey
 ## Local Development Quick Start
 
 ```bash
-git clone https://github.com/christianfindlay/vexels.git
-cd vexels/compiler
+git clone https://github.com/MelbourneDeveloper/osprey.git
+cd compiler
 make build
 ./bin/osprey examples/simple.osp
 ```
@@ -58,7 +58,7 @@ httpServer(8080) |> onRequest((req) =>
 
 ## Documentation
 
-- [Language specification](compiler/spec.md)
+- [Language specification](compiler/spec/)
 - [API reference](website/src/docs/)
 - [Contributing guide](CONTRIBUTING.md)
 

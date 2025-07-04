@@ -1,0 +1,156 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Unity System Runtime Tests",
+            "type": "shell",
+            "command": "clang",
+            "args": [
+                "-o",
+                "test_system_runtime_unity",
+                "test_system_runtime_unity.c",
+                "unity.c",
+                "system_runtime.c",
+                "-pthread",
+                "-std=c11",
+                "-D_GNU_SOURCE",
+                "-g",
+                "-Wall",
+                "-Wextra"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/runtime"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Build Unity Fiber Runtime Tests",
+            "type": "shell",
+            "command": "clang",
+            "args": [
+                "-o",
+                "test_fiber_runtime_unity",
+                "test_fiber_runtime_unity.c",
+                "unity.c",
+                "fiber_runtime.c",
+                "system_runtime.c",
+                "-pthread",
+                "-std=c11",
+                "-D_GNU_SOURCE",
+                "-g",
+                "-Wall",
+                "-Wextra"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/runtime"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Run Unity System Runtime Tests",
+            "type": "shell",
+            "command": "./test_system_runtime_unity",
+            "options": {
+                "cwd": "${workspaceFolder}/runtime"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "dependsOn": "Build Unity System Runtime Tests"
+        },
+        {
+            "label": "Run Unity Fiber Runtime Tests",
+            "type": "shell",
+            "command": "./test_fiber_runtime_unity",
+            "options": {
+                "cwd": "${workspaceFolder}/runtime"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "dependsOn": "Build Unity Fiber Runtime Tests"
+        },
+        {
+            "label": "Run All C Tests (via Makefile)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "c-test"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "Clean C Test Executables",
+            "type": "shell",
+            "command": "rm",
+            "args": [
+                "-f",
+                "test_system_runtime_unity",
+                "test_fiber_runtime_unity"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/runtime"
+            },
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            }
+        }
+    ]
+}

@@ -26,5 +26,33 @@
             "unusedparams": true,
             "unusedwrite": true
         }
+    },
+    "C_Cpp.default.compilerPath": "/usr/bin/clang",
+    "C_Cpp.default.cStandard": "c11",
+    "C_Cpp.default.intelliSenseMode": "clang-x64",
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/runtime",
+        "/usr/include",
+        "/usr/local/include"
+    ],
+    "testMate.cpp.test.executables": [
+        {
+            "name": "Unity System Runtime Tests",
+            "pattern": "runtime/test_system_runtime_unity",
+            "cwd": "${workspaceFolder}",
+            "env": {}
+        },
+        {
+            "name": "Unity Fiber Runtime Tests",
+            "pattern": "runtime/test_fiber_runtime_unity",
+            "cwd": "${workspaceFolder}",
+            "env": {}
+        }
+    ],
+    "testMate.cpp.discovery.loadOnStartup": true,
+    "testMate.cpp.discovery.gracePeriodForMissing": 10,
+    "files.associations": {
+        "*.h": "c",
+        "*.c": "c"
     }
 }

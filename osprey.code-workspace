@@ -57,7 +57,20 @@
     "mochaExplorer.files": "vscode-extension/test/**/*.test.{js,ts}",
     "mochaExplorer.env": {},
     "mochaExplorer.cwd": "${workspaceFolder}/vscode-extension",
-    "jestTestExplorer.rootPath": "webcompiler"
+    "jestTestExplorer.rootPath": "webcompiler",
+    "C_Cpp.default.cStandard": "c11",
+    "C_Cpp.default.compilerPath": "/usr/bin/clang",
+    "C_Cpp.default.compilerArgs": [
+      "-Wall",
+      "-Wextra", 
+      "-Werror",
+      "-Wpedantic",
+      "-std=c11"
+    ],
+    "testExplorer.codeLens": true,
+    "testExplorer.gutterDecoration": true,
+    "testExplorer.errorDecoration": true,
+    "testExplorer.sort": "byLabel"
   },
   "extensions": [
     "golang.go",
@@ -74,6 +87,11 @@
     "hbenl.vscode-test-explorer",
     "hbenl.vscode-jest-test-adapter",
     "kondratiev.vscode-rust-test-adapter",
-    "premparihar.gotestexplorer"
+    "premparihar.gotestexplorer",
+    "ms-vscode.cpptools",
+    "vadimcn.vscode-lldb",
+    "twxs.cmake",
+    "formulahendry.terminal",
+    "bbenoist.shell"
   ]
 }

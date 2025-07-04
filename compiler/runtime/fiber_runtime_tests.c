@@ -167,11 +167,6 @@ void run_all_fiber_tests(void) {
   test_fiber_stress();
 
   printf("\n🎉 ALL FIBER TESTS PASSED! 🎉\n");
-  printf("✅ No segfaults detected\n");
-  printf("✅ Bounds checking working\n");
-  printf("✅ Null pointer handling working\n");
-  printf("✅ Memory management stable\n");
-  printf("The fiber runtime is bulletproof!\n\n");
 }
 
 int main(void) {
