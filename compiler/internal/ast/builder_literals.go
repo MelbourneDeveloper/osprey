@@ -302,31 +302,37 @@ func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExp
 
 // buildWithHandlerExpression builds a HandlerExpression from with handler block syntax.
 func (b *Builder) buildWithHandlerExpression(ctx parser.IPrimaryContext) *HandlerExpression {
-	// WITH handlerExpr blockExpr (new ML-style syntax without DO)
-	handlerCtx := ctx.HandlerExpr()
+	// WITH HANDLER ID handlerArm* blockExpr (new direct syntax)
+
+	// Get effect name - should be ID(0) after WITH HANDLER
+	effectName := ctx.ID(0).GetText()
+
+	// Get the block expression
 	blockExpr := b.buildBlockExpression(ctx.BlockExpr())
 
-	effectName := handlerCtx.ID().GetText()
+	// Build handler arms from the context
 	handlers := make([]HandlerArm, 0)
 
-	// Build handler arms
-	for _, armCtx := range handlerCtx.AllHandlerArm() {
-		operationName := armCtx.ID(0).GetText()
+	// Check if we have handler arms in the context
+	if ctx.AllHandlerArm() != nil {
+		for _, armCtx := range ctx.AllHandlerArm() {
+			operationName := armCtx.ID(0).GetText()
 
-		// Get parameter name if present (for operations like captureStdout(data))
-		var parameters []string
-		if armCtx.LPAREN() != nil && len(armCtx.AllID()) > 1 {
-			parameters = append(parameters, armCtx.ID(1).GetText())
+			// Get parameter name if present (for operations like captureStdout(data))
+			var parameters []string
+			if armCtx.LPAREN() != nil && len(armCtx.AllID()) > 1 {
+				parameters = append(parameters, armCtx.ID(1).GetText())
+			}
+
+			// Build handler body
+			body := b.buildExpression(armCtx.Expr())
+
+			handlers = append(handlers, HandlerArm{
+				OperationName: operationName,
+				Parameters:    parameters,
+				Body:          body,
+			})
 		}
-
-		// Build handler body
-		body := b.buildExpression(armCtx.Expr())
-
-		handlers = append(handlers, HandlerArm{
-			OperationName: operationName,
-			Parameters:    parameters,
-			Body:          body,
-		})
 	}
 
 	return &HandlerExpression{

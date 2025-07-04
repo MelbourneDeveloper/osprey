@@ -57,9 +57,9 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 
 effectList      : ID (COMMA ID)* ;
 
-// Handler expressions - cleaner ML-style syntax without redundant 'do'
-handlerExpr     : HANDLER ID handlerArm+ ;
-handlerArm      : ID (LPAREN ID? RPAREN)? LAMBDA expr ;
+// Handler expressions - updated to handle multi-line syntax properly
+handlerExpr     : HANDLER ID (LBRACE handlerArm* RBRACE | handlerArm*) ;
+handlerArm      : ID LPAREN ID RPAREN LAMBDA expr ;
 
 functionCall    : ID LPAREN argList? RPAREN ;
 
@@ -150,7 +150,7 @@ primary
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
     | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
-    | WITH handlerExpr blockExpr                  // with handler EffectName arms { body }
+    | WITH HANDLER ID handlerArm* blockExpr       // with handler EffectName arms { body }
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
     | blockExpr                                   // Block expressions
@@ -231,18 +231,33 @@ fieldPattern    : ID (COMMA ID)* ;
 blockBody       : statement* expr? ;
 
 // ---------- LEXER RULES ----------
+// Keywords MUST come before ID to ensure proper tokenization
 
-PIPE        : '|>';
+// Control flow keywords
 MATCH       : 'match';
+IF          : 'if';
+ELSE        : 'else';
+SELECT      : 'select';
+
+// Function keywords  
 FN          : 'fn';
 EXTERN      : 'extern';
+
+// Declaration keywords
 IMPORT      : 'import';
 TYPE        : 'type';
 MODULE      : 'module';
 LET         : 'let';
 MUT         : 'mut';
-IF          : 'if';
-ELSE        : 'else';
+
+// Effect system keywords - CRITICAL ORDER FOR PROPER TOKENIZATION
+EFFECT      : 'effect';
+PERFORM     : 'perform';
+WITH        : 'with';
+HANDLER     : 'handler';
+DO          : 'do';
+
+// Concurrency keywords
 SPAWN       : 'spawn';
 YIELD       : 'yield';
 AWAIT       : 'await';
@@ -250,16 +265,16 @@ FIBER       : 'fiber';
 CHANNEL     : 'channel';
 SEND        : 'send';
 RECV        : 'recv';
-SELECT      : 'select';
+
+// Boolean keywords
 TRUE        : 'true';
 FALSE       : 'false';
-WHERE       : 'where';
-EFFECT      : 'effect';
-PERFORM     : 'perform';
-HANDLER     : 'handler';
-WITH        : 'with';
-DO          : 'do';
 
+// Constraint keyword
+WHERE       : 'where';
+
+// Operators and symbols
+PIPE        : '|>';
 ARROW       : '->';
 LAMBDA      : '=>';
 UNDERSCORE  : '_';
@@ -290,11 +305,13 @@ MINUS       : '-';
 STAR        : '*';
 SLASH       : '/';
 
+// Literals and identifiers - MUST come after keywords
 INT         : [0-9]+ ;
 INTERPOLATED_STRING : '"' (~["\\$] | '\\' . | '$' ~[{])* ('${' ~[}]* '}' (~["\\$] | '\\' . | '$' ~[{])*)+ '"' ;
 STRING      : '"' (~["\\] | '\\' .)* '"' ;
 ID          : [a-zA-Z_][a-zA-Z0-9_]* ;
 
+// Whitespace and comments - MUST be at the end
 WS          : [ \t\r\n]+ -> skip ;
 DOC_COMMENT : '///' ~[\r\n]* ;
 COMMENT     : '//' ~[\r\n]* -> skip ;

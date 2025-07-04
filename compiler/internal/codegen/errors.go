@@ -15,6 +15,7 @@ var (
 	ErrUnsupportedExpression = errors.New("unsupported expression type")
 	ErrUnsupportedBinaryOp   = errors.New("unsupported binary operator")
 	ErrUnsupportedUnaryOp    = errors.New("unsupported unary operator")
+	ErrVoidArithmetic        = errors.New("cannot perform arithmetic operation on Unit (void) type")
 	ErrFieldAccessNotImpl    = errors.New("field access not implemented for field")
 	ErrToStringWrongArgs     = errors.New("toString expects exactly 1 argument")
 	ErrPrintWrongArgs        = errors.New("print expects exactly 1 argument")
@@ -177,6 +178,11 @@ func WrapUnsupportedBinaryOp(op string) error {
 // WrapUnsupportedUnaryOp wraps unsupported unary operator errors with operator.
 func WrapUnsupportedUnaryOp(op string) error {
 	return fmt.Errorf("unsupported unary operator '%s': %w", op, ErrUnsupportedUnaryOp)
+}
+
+// WrapVoidArithmetic wraps void arithmetic operation errors.
+func WrapVoidArithmetic(operator string) error {
+	return fmt.Errorf("cannot perform arithmetic operation '%s' on Unit (void) type: %w", operator, ErrVoidArithmetic)
 }
 
 // WrapFieldAccessNotImpl wraps field access not implemented errors with field name.

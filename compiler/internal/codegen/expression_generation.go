@@ -479,6 +479,11 @@ func (g *LLVMGenerator) generateBinaryOperation(operator string, left, right val
 
 // generateArithmeticOperation generates LLVM arithmetic operations.
 func (g *LLVMGenerator) generateArithmeticOperation(operator string, left, right value.Value) (value.Value, error) {
+	// CRITICAL FIX: Check for void types before arithmetic operations
+	if left.Type() == types.Void || right.Type() == types.Void {
+		return nil, WrapVoidArithmetic(operator)
+	}
+
 	switch operator {
 	case "+":
 		// Handle string concatenation for pointer types (strings)
