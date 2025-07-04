@@ -103,6 +103,8 @@ func (g *LLVMGenerator) typeExpressionToLLVMType(typeExpr *ast.TypeExpression) t
 		return types.I64
 	case "String":
 		return types.I8Ptr
+	case TypeUnit:
+		return types.Void
 	case TypeHTTPResponse:
 		// Return pointer to HttpResponse struct
 		return types.NewPointer(g.typeMap[TypeHTTPResponse])
@@ -317,7 +319,13 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	// the builder might be pointing to a different block (like a match end block).
 	// We need to ensure the return statement is added to the current block the builder is pointing to.
 	// For match expressions, this will be the end block, which is exactly what we want.
-	g.builder.NewRet(bodyValue)
+
+	// Check if this is a Unit function and generate appropriate return
+	if returnType, exists := g.functionReturnTypes[fnDecl.Name]; exists && returnType == TypeUnit {
+		g.builder.NewRet(nil) // Void return for Unit functions
+	} else {
+		g.builder.NewRet(bodyValue) // Return value for non-Unit functions
+	}
 
 	// Restore context
 	g.function = oldFunc

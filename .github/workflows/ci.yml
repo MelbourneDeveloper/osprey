@@ -76,6 +76,16 @@ jobs:
           fi
           echo "✅ Directory structure verified"
 
+      - name: Run C Runtime Linting with MAXIMUM STRICTNESS
+        working-directory: "./compiler"
+        run: |
+          make c-lint
+
+      - name: Run C Runtime Tests
+        working-directory: "./compiler"
+        run: |
+          make c-test
+          
       - name: Run tests & enforce coverage threshold
         working-directory: "./compiler"
         env:

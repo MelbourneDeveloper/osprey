@@ -26,8 +26,6 @@
         "go.gopath": "/go",
         "go.testWorkingDirectory": "${workspaceFolder}/compiler",
         "go.testExplorer.enable": true,
-        "go.testExplorer.packageDisplayMode": "nested",
-        "go.testExplorer.showDynamicSubtestsInEditor": true,
         "rust-analyzer.check.command": "clippy",
         "rust-analyzer.cargo.buildScripts.enable": true,
         "editor.formatOnSave": true,
@@ -37,15 +35,20 @@
         "terminal.integrated.defaultProfile.linux": "bash",
         "git.autofetch": true,
         "git.confirmSync": false,
-        "testExplorer.useNativeTesting": true,
-        "testExplorer.mergeSuites": true,
-        "testExplorer.showCollapseButton": true,
-        "testExplorer.showExpandButton": true,
-        "testExplorer.showOnRun": true,
-        "mochaExplorer.files": "vscode-extension/test/**/*.test.{js,ts}",
-        "mochaExplorer.env": {},
-        "mochaExplorer.cwd": "${workspaceFolder}/vscode-extension",
-        "jestTestExplorer.rootPath": "webcompiler"
+        "C_Cpp.default.cStandard": "c11",
+        "C_Cpp.default.cppStandard": "c++17",
+        "C_Cpp.default.compilerPath": "/usr/bin/clang-14",
+        "C_Cpp.default.compilerArgs": [
+          "-Wall",
+          "-Wextra", 
+          "-Werror",
+          "-Wpedantic",
+          "-std=c11",
+          "-pthread"
+        ],
+        "C_Cpp.default.includePath": [
+          "${workspaceFolder}/compiler/runtime"
+        ]
       },
       "extensions": [
         "golang.go",
@@ -53,16 +56,13 @@
         "antlr.antlr4",
         "llvm-vs-code-extensions.vscode-clangd",
         "ms-vscode.makefile-tools",
-        "ms-vscode.test-adapter-converter",
-        "ms-vscode.vscode-json",
-        "redhat.vscode-yaml",
-        "ms-vscode.vscode-markdown",
         "streetsidesoftware.code-spell-checker",
-        "ms-vscode.hexeditor",
-        "hbenl.vscode-test-explorer",
-        "hbenl.vscode-jest-test-adapter",
-        "kondratiev.vscode-rust-test-adapter",
-        "premparihar.gotestexplorer"
+        "fpopescu.vscode-unity-test-adapter",
+        "matepek.vscode-catch2-test-adapter",
+        "ms-vscode.test-adapter-converter",
+        "twxs.cmake",
+        "ms-vscode.cmake-tools",
+        "ms-vscode.makefile-tools"
       ]
     }
   },

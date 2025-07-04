@@ -265,9 +265,9 @@ func getExpectedOutputs() map[string]string {
 			"✓ Multi-line process finished\n" +
 			"--- Test 3: Error Process Callback ---\n" +
 			"✓ Error process spawned with ID: 3\n" +
-			"[CALLBACK] Process 3 STDERR: ls: /nonexistent/directory: No such file or directory\n\n" +
-			"[CALLBACK] Process 3 EXIT: 1\n" +
-			"✓ Error process finished with exit code: 1\n" +
+			"[CALLBACK] Process 3 STDERR: ls: cannot access '/nonexistent/directory': No such file or directory\n\n" +
+			"[CALLBACK] Process 3 EXIT: 2\n" +
+			"✓ Error process finished with exit code: 2\n" +
 			"=== CALLBACK DEMO COMPLETE ===\n" +
 			"The [CALLBACK] lines above show C runtime calling into Osprey!\n",
 		"process_spawn_workflow.osp": "Step 1\n" +

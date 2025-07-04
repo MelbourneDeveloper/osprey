@@ -1,6 +1,7 @@
 # Osprey Development Container
 
 This directory contains configuration for a development container that provides all necessary dependencies for the Osprey compiler and VS Code extension development.
+This directory contains configuration for a development container that provides all necessary dependencies for Osprey compiler and VS Code extension development.
 
 ## Features
 
@@ -30,23 +31,17 @@ The container will automatically run the post-create script which sets up both t
 
 ## Available Scripts
 
-### Quick Setup
-- `setup-all.sh` - Runs all setup scripts and tests everything
-
 ### Individual Scripts
 - `build-compiler.sh` - Builds the Osprey compiler
-- `setup-vscode-extension.sh` - Sets up the VS Code extension
 - `test-setup.sh` - Tests that all tools are working correctly
 
 ### Running Scripts
 ```bash
-# Run all setup at once
-.devcontainer/setup-all.sh
-
-# Or run individual scripts
+# Build the compiler
 .devcontainer/build-compiler.sh
-.devcontainer/setup-vscode-extension.sh
-.devcontainer/test-setup.sh
+
+# Build VS Code extension (use the proper build script)
+cd vscode-extension && ./build.sh
 ```
 
 ## Development Tasks
@@ -55,7 +50,7 @@ The container will automatically run the post-create script which sets up both t
 
 Navigate to the compiler directory and use make commands:
 ```bash
-cd /workspaces/osprey/compiler
+cd /compiler
 make build          # Build the compiler
 make test           # Run all tests
 make test-llvm      # Run LLVM tests only
@@ -67,7 +62,7 @@ make clean          # Clean build artifacts
 
 Navigate to the extension directory:
 ```bash
-cd /workspaces/osprey/vscode-extension
+cd /vscode-extension
 npm install         # Install dependencies
 npm run compile     # Compile the extension
 npm run watch       # Watch for changes
@@ -82,7 +77,7 @@ To debug the extension:
 ## Project Structure
 
 ```
-/workspaces/osprey/
+/osprey/
 ├── compiler/           # Osprey compiler (Go + ANTLR + LLVM)
 ├── vscode-extension/   # VS Code extension (TypeScript)
 ├── webcompiler/        # Web compiler (ignored in dev container)
@@ -113,9 +108,6 @@ The container uses Node.js 20.17.0 which is compatible with the latest npm. If y
 After the container starts, you can verify everything works:
 
 ```bash
-# Test all tools
-.devcontainer/test-setup.sh
-
 # Test individual components
 go version              # Go
 antlr -version         # ANTLR  
@@ -128,6 +120,5 @@ rustc --version        # Rust
 ## Notes
 
 - The container uses a non-root user `vscode` to avoid permission issues
-- The workspace is mounted at `/workspaces/osprey`
 - All tools are pre-configured and ready to use
 - The post-create script automatically sets up both projects
