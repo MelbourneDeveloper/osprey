@@ -12,9 +12,9 @@ fn safeDivide(a: int, b: int) -> int !Error = match b {
 }
 
 fn main() -> Unit = {
-    with handler Error
-        fail(msg) => print("Error: " + msg)
-    {
+    handle Error
+        fail msg => print("Error: " + msg)
+    in {
         let result = safeDivide(a: 10, b: 0)
         print("Result: " + toString(result))
     }

@@ -57,11 +57,10 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 
 effectList      : ID (COMMA ID)* ;
 
-// Handler expressions - both old and new syntax
-handlerExpr     : HANDLE ID handlerArm+ IN expr                // ML-style: handle Logger log msg => ... in
-                | WITH HANDLER ID handlerArm* blockExpr ;       // Original: with handler Logger { ... }
+// Handler expressions - implementing spec syntax
+handlerExpr     : HANDLE ID handlerArm+ IN expr ;              // handle Logger log msg => ... in expr
 handlerArm      : ID handlerParams? LAMBDA expr ;
-handlerParams   : ID+ ;  // Simple space-separated identifiers for ML style
+handlerParams   : ID+ ;
 
 functionCall    : ID LPAREN argList? RPAREN ;
 
@@ -152,7 +151,7 @@ primary
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
     | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
-    | handlerExpr                                 // let handle EffectName arms in body
+    | handlerExpr                                 // handle EffectName ... in expr
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
     | blockExpr                                   // Block expressions
@@ -255,8 +254,6 @@ MUT         : 'mut';
 // Effect system keywords - CRITICAL ORDER FOR PROPER TOKENIZATION
 EFFECT      : 'effect';
 PERFORM     : 'perform';
-WITH        : 'with';
-HANDLER     : 'handler';
 HANDLE      : 'handle';
 IN          : 'in';
 DO          : 'do';

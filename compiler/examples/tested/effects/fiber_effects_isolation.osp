@@ -18,27 +18,24 @@ fn main() -> Unit = {
     
     // Test 1: Production handler
     print("=== Production Handler ===")
-    let result1 = with handler Logger
-        log(msg) => print("[PROD] " + msg)
-    {
+    let result1 = handle Logger
+        log msg => print("[PROD] " + msg)
+    in
         simpleTask(taskName: "Production", value: 5)
-    }
     
     // Test 2: Debug handler  
     print("=== Debug Handler ===")
-    let result2 = with handler Logger
-        log(msg) => print("[DEBUG] " + msg)
-    {
+    let result2 = handle Logger
+        log msg => print("[DEBUG] " + msg)
+    in
         simpleTask(taskName: "Debug", value: 7)
-    }
     
     // Test 3: Silent handler
     print("=== Silent Handler ===")
-    let result3 = with handler Logger
-        log(msg) => 0  // Silent
-    {
+    let result3 = handle Logger
+        log msg => 0  // Silent
+    in
         simpleTask(taskName: "Silent", value: 9)
-    }
     
     print("📊 Results:")
     print("  Production: " + toString(result1))

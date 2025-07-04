@@ -79,6 +79,9 @@ type ospreyListener interface {
 	// EnterHandlerArm is called when entering the handlerArm production.
 	EnterHandlerArm(c *HandlerArmContext)
 
+	// EnterHandlerParams is called when entering the handlerParams production.
+	EnterHandlerParams(c *HandlerParamsContext)
+
 	// EnterFunctionCall is called when entering the functionCall production.
 	EnterFunctionCall(c *FunctionCallContext)
 
@@ -267,6 +270,9 @@ type ospreyListener interface {
 
 	// ExitHandlerArm is called when exiting the handlerArm production.
 	ExitHandlerArm(c *HandlerArmContext)
+
+	// ExitHandlerParams is called when exiting the handlerParams production.
+	ExitHandlerParams(c *HandlerParamsContext)
 
 	// ExitFunctionCall is called when exiting the functionCall production.
 	ExitFunctionCall(c *FunctionCallContext)

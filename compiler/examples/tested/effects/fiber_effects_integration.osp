@@ -14,9 +14,9 @@ fn fiberTask(taskId: int) -> int !Logger = {
 fn main() -> Unit = {
     print("🚀 Starting Fiber + Effects Integration Test")
     
-    with handler Logger
-        log(msg) => print("[FIBER-LOG] " + msg)
-    {
+    handle Logger
+        log msg => print("[FIBER-LOG] " + msg)
+    in {
         // Execute one fiber at a time for deterministic output
         let fiber1 = spawn fiberTask(1)
         let result1 = await(fiber1)

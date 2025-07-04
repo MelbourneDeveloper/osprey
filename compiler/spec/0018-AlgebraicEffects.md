@@ -114,7 +114,7 @@ in
 - `get()` is interpreted as returning `42`
 - `set(newVal)` is interpreted as printing the new value
 
-The `with` construct applies the **unique homomorphism** from the free model (where `incrementTwice` lives) to the handler model.
+The `handle...in` construct applies the **unique homomorphism** from the free model (where `incrementTwice` lives) to the handler model.
 
 ### 20.7 Handler Correctness
 
@@ -166,7 +166,7 @@ fn loggedCalculation<E>(x: Int) -> Int !E = {
 | Aspect                | Plotkin & Pretnar Theory | Osprey Implementation         |
 | --------------------- | ------------------------ | ----------------------------- |
 | **Effect Operations** | Free algebraic theory    | `effect` declarations         |
-| **Handlers**          | Models of the theory     | `with handler` blocks         |
+| **Handlers**          | Models of the theory     | `handle...in` expressions     |
 | **Handling**          | Unique homomorphisms     | Compile-time dispatch         |
 | **Safety**            | Theoretical correctness  | **Compile-time verification** |
 

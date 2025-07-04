@@ -164,6 +164,12 @@ func (s *BaseospreyListener) EnterHandlerArm(ctx *HandlerArmContext) {}
 // ExitHandlerArm is called when production handlerArm is exited.
 func (s *BaseospreyListener) ExitHandlerArm(ctx *HandlerArmContext) {}
 
+// EnterHandlerParams is called when production handlerParams is entered.
+func (s *BaseospreyListener) EnterHandlerParams(ctx *HandlerParamsContext) {}
+
+// ExitHandlerParams is called when production handlerParams is exited.
+func (s *BaseospreyListener) ExitHandlerParams(ctx *HandlerParamsContext) {}
+
 // EnterFunctionCall is called when production functionCall is entered.
 func (s *BaseospreyListener) EnterFunctionCall(ctx *FunctionCallContext) {}
 

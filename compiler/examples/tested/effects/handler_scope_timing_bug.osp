@@ -33,11 +33,13 @@ fn performComplexCalculation() -> int !Logger = {
 }
 
 // This should work but fails due to handler scope timing bug
-fn main() -> Unit = with handler Logger
-    log(msg) => print("[HANDLER] " + msg)
-{
-    print("=== Testing Handler Scope Timing ===")
-    let result = nestedCall()
-    print("Final result: " + toString(result))
-    print("=== Test Complete ===")
+fn main() -> Unit = {
+    handle Logger
+        log msg => print("[HANDLER] " + msg)
+    in {
+        print("=== Testing Handler Scope Timing ===")
+        let result = nestedCall()
+        print("Final result: " + toString(result))
+        print("=== Test Complete ===")
+    }
 } 

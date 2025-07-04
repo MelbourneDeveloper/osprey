@@ -62,11 +62,13 @@ fn calculation(x: int) -> int !Logger = {
     x * 2
 }
 
-fn main() -> Unit = with handler Logger
-    log(msg) => print("LOG: " + msg)
-    error(msg) => print("ERR: " + msg)
-{
-    let result = calculation(21)
-    perform Logger.error("Test error")
-    print("Done: " + toString(result))
+fn main() -> Unit = {
+    handle Logger
+        log msg => print("LOG: " + msg)
+        error msg => print("ERR: " + msg)
+    in {
+        let result = calculation(21)
+        perform Logger.error("Test error")
+        print("Done: " + toString(result))
+    }
 } 
