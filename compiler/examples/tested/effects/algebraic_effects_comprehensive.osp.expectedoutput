@@ -1,3 +1,15 @@
-LOG: Calculating...
-ERR: Test error
-Done: 42 
+🚀 Starting Comprehensive Effects Test
+📝 LOG: Starting calculation for: 21
+📊 State updated to: 52
+📝 LOG: Calculation complete: 21 -> 52
+❌ ERROR: Count too high: 3
+🔄 Counter reset to 0
+❌ ERROR: Negative value detected: -5
+❌ ERROR: Value too large: 150
+❌ ERROR: Value too large: 25
+📝 LOG: Starting async task 5
+📝 LOG: Fiber1 executing
+📝 LOG: Fiber2 running
+⬆️ Counter incremented
+📝 LOG: Tasks completed: 20, 15
+🎯 Final Results: Calc=52, Process=0, Errors=[0,100,100], Async=35 🎉 

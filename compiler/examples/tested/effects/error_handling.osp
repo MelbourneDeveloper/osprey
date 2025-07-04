@@ -5,17 +5,20 @@ effect Error {
 
 fn safeDivide(a: int, b: int) -> int !Error = match b {
     0 => {
-        perform Error.fail("Division by zero")
+        perform Error.fail("Division by zero: " + toString(a) + " / " + toString(b))
         0
     }
-    _ => a / b
+    _ => match a {
+        0 => 0
+        _ => a / b
+    }
 }
 
 fn main() -> Unit = {
     handle Error
-        fail msg => print("Error: " + msg)
+        fail msg => print("❌ Error: " + msg)
     in {
         let result = safeDivide(a: 10, b: 0)
-        print("Result: " + toString(result))
+        print("✅ Result: " + toString(result))
     }
 } 

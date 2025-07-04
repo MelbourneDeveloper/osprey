@@ -1,2 +1,2 @@
-Error: Division by zero
-Result: 0 
+❌ Error: Division by zero: 10 / 0
+✅ Result: 0 

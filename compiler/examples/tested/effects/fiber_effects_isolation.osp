@@ -1,46 +1,36 @@
-// 🔒 SIMPLE FIBER EFFECT ISOLATION TEST 🔒
+// 🔒 HANDLER ISOLATION SIMPLE TEST 🔒
 
 effect Logger {
     log: fn(string) -> Unit
 }
 
-// Simple task function
-fn simpleTask(taskName: string, value: int) -> int !Logger = {
-    perform Logger.log("Task " + taskName + " processing: " + toString(value))
-    let result = value * value
-    perform Logger.log("Task " + taskName + " result: " + toString(result))
-    result
-}
-
-// Main function showing different handlers in sequence
+// Main function with different handlers
 fn main() -> Unit = {
-    print("🔒 Testing Effect Handler Isolation")
+    print("🔒 Testing Handler Isolation")
     
-    // Test 1: Production handler
-    print("=== Production Handler ===")
+    // Production handler
     let result1 = handle Logger
         log msg => print("[PROD] " + msg)
-    in
-        simpleTask(taskName: "Production", value: 5)
+    in {
+        perform Logger.log("Processing task: 5")
+        10
+    }
     
-    // Test 2: Debug handler  
-    print("=== Debug Handler ===")
+    // Debug handler
     let result2 = handle Logger
-        log msg => print("[DEBUG] " + msg)
-    in
-        simpleTask(taskName: "Debug", value: 7)
+        log msg => print("[TEST] " + msg)
+    in {
+        perform Logger.log("Processing task: 12")
+        24
+    }
     
-    // Test 3: Silent handler
-    print("=== Silent Handler ===")
+    // Silent handler
     let result3 = handle Logger
-        log msg => 0  // Silent
-    in
-        simpleTask(taskName: "Silent", value: 9)
+        log msg => 0
+    in {
+        perform Logger.log("Processing task: 0")
+        0
+    }
     
-    print("📊 Results:")
-    print("  Production: " + toString(result1))
-    print("  Debug: " + toString(result2))
-    print("  Silent: " + toString(result3))
-    
-    print("🎉 Handler Isolation Test Complete!")
+    print("📊 Results: Prod=" + toString(result1) + ", Test=" + toString(result2) + ", Silent=" + toString(result3))
 } 

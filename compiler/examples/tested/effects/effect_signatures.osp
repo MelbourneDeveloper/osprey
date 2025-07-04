@@ -1,13 +1,12 @@
-// 🚀 SIMPLE ALGEBRAIC EFFECTS WITH HANDLERS! 🔥
+// 🚀 EFFECT SIGNATURES SIMPLE TEST! 🔥
 
-// Effect declaration
 effect Logger {
     log: fn(string) -> Unit
 }
 
 // Function that performs an effect
 fn greetWithEffect(name: string) -> Unit !Logger = {
-    perform Logger.log("Hello " + name + "!")
+    perform Logger.log("Hello " + name + "! 🦅")
 }
 
 // Main function with handler
