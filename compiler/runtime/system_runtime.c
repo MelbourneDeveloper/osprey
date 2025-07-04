@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -130,7 +131,8 @@ static void *process_monitor_thread(void *arg) {
 
       // Send error exit event
       if (proc->handler) {
-        proc->handler(proc->process_id, PROCESS_EXIT, "-1");
+        char error_code[] = "-1";
+        proc->handler(proc->process_id, PROCESS_EXIT, error_code);
       }
       break;
     }
@@ -351,13 +353,13 @@ char *read_file(char *filename) {
   fseek(file, 0, SEEK_SET);
 
   // Allocate buffer and read content
-  char *content = malloc(size + 1);
+  char *content = malloc((size_t)size + 1);
   if (!content) {
     fclose(file);
     return NULL;
   }
 
-  size_t read_size = fread(content, 1, size, file);
+  size_t read_size = fread(content, 1, (size_t)size, file);
   content[read_size] = '\0';
   fclose(file);
 
@@ -376,7 +378,7 @@ char *parse_json(char *json_string) {
 }
 
 // Extract arbitrary field from JSON {"field": "value"}
-char *extract_json_field(char *json_string, char *field_name) {
+char *extract_json_field(char *json_string, const char *field_name) {
   if (!json_string || !field_name) {
     return NULL;
   }
@@ -407,7 +409,7 @@ char *extract_json_field(char *json_string, char *field_name) {
   }
 
   // Extract the field value
-  size_t field_len = field_end - field_start;
+  size_t field_len = (size_t)(field_end - field_start);
   char *extracted_value = malloc(field_len + 1);
   strncpy(extracted_value, field_start, field_len);
   extracted_value[field_len] = '\0';
@@ -417,5 +419,6 @@ char *extract_json_field(char *json_string, char *field_name) {
 
 // Extract code from JSON {"code": "..."} - backward compatibility
 char *extract_code(char *json_string) {
-  return extract_json_field(json_string, "code");
+  const char *code_field = "code";
+  return extract_json_field(json_string, code_field);
 }

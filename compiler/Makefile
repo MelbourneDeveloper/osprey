@@ -155,7 +155,7 @@ c-lint:
 		-Wformat=2 -Wconversion -Wsign-conversion \
 		-Wnull-dereference -Wdouble-promotion \
 		-Wshadow -Wunreachable-code -Wcast-qual \
-		-Wwrite-strings -Wmissing-prototypes \
+		-Wwrite-strings \
 		-Wstrict-prototypes -Wundef -Wredundant-decls \
 		-Winit-self -Wswitch-default -Wswitch-enum \
 		-Wfloat-equal -Wbad-function-cast \

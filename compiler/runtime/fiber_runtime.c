@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -140,8 +141,8 @@ int64_t channel_create(int64_t capacity) {
   int64_t id = next_id++;
   Channel *channel = malloc(sizeof(Channel));
   channel->id = id;
-  channel->capacity = capacity;
-  channel->buffer = malloc(capacity * sizeof(int64_t));
+  channel->capacity = (int)capacity;
+  channel->buffer = malloc((size_t)capacity * sizeof(int64_t));
   channel->head = 0;
   channel->tail = 0;
   channel->count = 0;
@@ -226,7 +227,7 @@ int64_t channel_recv(int64_t channel_id) {
 
 // Sleep for specified milliseconds
 int64_t fiber_sleep(int64_t milliseconds) {
-  usleep(milliseconds * 1000); // Convert milliseconds to microseconds
+  usleep((unsigned int)(milliseconds * 1000)); // Convert milliseconds to microseconds
   return 0;
 }
 
@@ -259,8 +260,8 @@ static void default_process_event_handler(int64_t process_id,
     printf("Process %lld exited with code: %s\n", (long long)process_id, data);
     break;
   default:
-    printf("Process %lld unknown event %d: %s\n", (long long)process_id,
-           event_type, data);
+    printf("Process %lld unknown event %lld: %s\n", (long long)process_id,
+           (long long)event_type, data);
     break;
   }
 }
