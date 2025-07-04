@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime
+.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime c-lint c-test test-runtime
 
 # Install golangci-lint
 lint-install:
@@ -20,7 +20,7 @@ lint-fix: lint-install
 	golangci-lint run --config .golangci.yml --fix
 
 # Build the osprey compiler with linting
-build: lint fiber-runtime http-runtime
+build: lint c-lint fiber-runtime http-runtime
 	@echo "🏗️  Building osprey compiler..."
 	go build -o bin/osprey ./cmd/osprey
 
@@ -143,8 +143,42 @@ test-runtime: build
 	@echo "✅ Runtime tests passed - no segfaults detected!"
 
 # Run all tests without coverage (fast feedback)
-test: build test-runtime
+test: build test-runtime c-test
 	@go test ./... -p 1 -v
+
+# MAXIMUM STRICTNESS C LINTING - ERRORS FOR EVERYTHING!!!
+c-lint:
+	@echo "💀 DEPLOYING MAXIMUM C STRICTNESS - NO MERCY!!! 💀"
+	@echo "🔥 Running C linter with MILITARY-GRADE strictness..."
+	@cd runtime && clang \
+		-Wall -Wextra -Werror -Wpedantic \
+		-Wformat=2 -Wconversion -Wsign-conversion \
+		-Wnull-dereference -Wdouble-promotion \
+		-Wshadow -Wunreachable-code -Wcast-qual \
+		-Wwrite-strings -Wmissing-prototypes \
+		-Wstrict-prototypes -Wundef -Wredundant-decls \
+		-Winit-self -Wswitch-default -Wswitch-enum \
+		-Wfloat-equal -Wbad-function-cast \
+		-Wstrict-overflow=5 -Wstack-protector \
+		-Winline -Wdisabled-optimization \
+		-std=c11 -fsyntax-only \
+		system_runtime.c fiber_runtime.c unity.c test_system_runtime_unity.c test_fiber_runtime_unity.c
+	@echo "✅ C CODE IS BULLETPROOF! NO WARNINGS SURVIVED!"
+
+# C TESTS - Unity Framework Tests for VS Code discovery
+c-test:
+	@echo "🧪 RUNNING C RUNTIME UNITY TESTS..."
+	@cd runtime && echo "📦 Compiling Unity system runtime tests..."
+	@cd runtime && clang -o test_system_runtime_unity test_system_runtime_unity.c unity.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g
+	@cd runtime && echo "🚀 Running Unity system runtime tests..."
+	@cd runtime && ./test_system_runtime_unity
+	@cd runtime && echo "📦 Compiling Unity fiber runtime tests..."
+	@cd runtime && clang -o test_fiber_runtime_unity test_fiber_runtime_unity.c unity.c fiber_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g
+	@cd runtime && echo "🚀 Running Unity fiber runtime tests..."
+	@cd runtime && ./test_fiber_runtime_unity
+	@cd runtime && echo "🧹 Cleaning up test executables..."
+	@cd runtime && rm -f test_system_runtime_unity test_fiber_runtime_unity
+	@echo "✅ ALL C RUNTIME UNITY TESTS PASSED!"
 
 # Regenerate parser from grammar (requires ANTLR)
 regenerate-parser:

@@ -89,6 +89,12 @@ RUN apt-get update \
         pkg-config \
         jq \
         unzip \
+        libcunit1-dev \
+        check \
+        cmake \
+        ninja-build \
+        gcovr \
+        lcov \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 60 \
@@ -129,6 +135,33 @@ RUN go install golang.org/x/tools/gopls@latest \
 
 # Install golangci-lint
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.1.6
+
+# Install additional C testing tools and frameworks
+RUN git clone https://github.com/ThrowTheSwitch/Unity.git /tmp/unity \
+    && cp /tmp/unity/src/unity.c /usr/local/src/ \
+    && cp /tmp/unity/src/unity.h /usr/local/include/ \
+    && cp /tmp/unity/src/unity_internals.h /usr/local/include/ \
+    && rm -rf /tmp/unity
+
+# Create test discovery helper script
+RUN echo '#!/bin/bash\n\
+echo "🔍 Discovering C Tests..."\n\
+find /workspace -name "test_*_unity" -executable | while read test; do\n\
+    echo "Found C test: $test"\n\
+    if [ -x "$test" ]; then\n\
+        echo "  ✅ Executable"\n\
+    else\n\
+        echo "  ❌ Not executable"\n\
+    fi\n\
+done\n\
+echo "🧪 Running C Runtime Tests..."\n\
+cd /workspace/compiler/runtime\n\
+if [ -f "./run_tests.sh" ]; then\n\
+    ./run_tests.sh\n\
+else\n\
+    echo "❌ run_tests.sh not found"\n\
+fi' > /usr/local/bin/discover-c-tests \
+    && chmod +x /usr/local/bin/discover-c-tests
 
 # Install Fly CLI
 RUN curl -L https://fly.io/install.sh | sh \

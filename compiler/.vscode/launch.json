@@ -1,0 +1,47 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Unity System Runtime Tests",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/runtime/test_system_runtime_unity",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/runtime",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Build Unity System Runtime Tests",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "Debug Unity Fiber Runtime Tests",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/runtime/test_fiber_runtime_unity",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/runtime",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Build Unity Fiber Runtime Tests",
+            "miDebuggerPath": "/usr/bin/gdb"
+        }
+    ]
+}

@@ -110,3 +110,6 @@ node_modules/
 
 bin/
 bin
+
+
+/compiler/runtime/test_system_runtime
