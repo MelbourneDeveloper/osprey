@@ -76,7 +76,7 @@ int parse_url(const char *url, char **host, int *port, char **path) {
       return -1;
     }
   } else {
-    host_len = slash ? slash - start : strlen(start);
+    host_len = slash ? slash - start : (int)strlen(start);
     *port = 80; // Default port
   }
 
@@ -179,7 +179,8 @@ int parse_websocket_frame(const char *frame_data, size_t frame_len,
 
   // NOTE: This is a simplified WebSocket frame parser that ignores:
   // - FIN bit (frame_data[0] & 0x80): fragmentation handling
-  // - Opcode (frame_data[0] & 0x0F): frame type (text, binary, close, ping, pong)
+  // - Opcode (frame_data[0] & 0x0F): frame type (text, binary, close, ping,
+  // pong)
 
   size_t offset = 2;
 

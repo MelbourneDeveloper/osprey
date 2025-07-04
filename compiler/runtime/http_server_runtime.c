@@ -78,7 +78,7 @@ static int64_t server_loop_fiber(void) {
         if (response && response->partialBody) {
           // Build proper HTTP response with status and headers
           snprintf(http_response, sizeof(http_response),
-                   "HTTP/1.1 %lld %s\r\n"
+                   "HTTP/1.1 %" PRId64 " %s\r\n"
                    "%s"
                    "Connection: close\r\n"
                    "\r\n",
