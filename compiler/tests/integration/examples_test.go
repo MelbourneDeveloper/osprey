@@ -5,6 +5,7 @@ package integration
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -275,25 +276,7 @@ func getExpectedOutputs() map[string]string {
 			"Error process returned non-zero exit code\n" +
 			"=== Async Process Management Demo Complete ===\n" +
 			"Note: Process output appears via C runtime callbacks during execution\n",
-		"callback_stdout_demo.osp": "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
-			"--- Test 1: Basic Stdout Callback ---\n" +
-			"✓ Process spawned with ID: 1\n" +
-			"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
-			"[CALLBACK] Process 1 EXIT: 0\n" +
-			"✓ Process finished with exit code: 0\n" +
-			"✓ Process cleaned up\n" +
-			"--- Test 2: Multiple Lines Callback ---\n" +
-			"✓ Multi-line process spawned with ID: 2\n" +
-			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
-			"[CALLBACK] Process 2 EXIT: 0\n" +
-			"✓ Multi-line process finished\n" +
-			"--- Test 3: Error Process Callback ---\n" +
-			"✓ Error process spawned with ID: 3\n" +
-			"[CALLBACK] Process 3 STDERR: ls: cannot access '/nonexistent/directory': No such file or directory\n\n" +
-			"[CALLBACK] Process 3 EXIT: 2\n" +
-			"✓ Error process finished with exit code: 2\n" +
-			"=== CALLBACK DEMO COMPLETE ===\n" +
-			"The [CALLBACK] lines above show C runtime calling into Osprey!\n",
+		"callback_stdout_demo.osp": getCallbackStdoutDemoExpectedOutput(),
 		"process_spawn_workflow.osp": "Step 1\n" +
 			"Step 2\n" +
 			"=== Process Spawning Workflow ===\n" +
@@ -383,6 +366,53 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 }
 
 // Helper functions for expected outputs.
+func getCallbackStdoutDemoExpectedOutput() string {
+	// Platform-specific expected output due to different ls behavior
+	if runtime.GOOS == "darwin" {
+		// macOS behavior: exit code 1, different error message format
+		return "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
+			"--- Test 1: Basic Stdout Callback ---\n" +
+			"✓ Process spawned with ID: 1\n" +
+			"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
+			"[CALLBACK] Process 1 EXIT: 0\n" +
+			"✓ Process finished with exit code: 0\n" +
+			"✓ Process cleaned up\n" +
+			"--- Test 2: Multiple Lines Callback ---\n" +
+			"✓ Multi-line process spawned with ID: 2\n" +
+			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+			"[CALLBACK] Process 2 EXIT: 0\n" +
+			"✓ Multi-line process finished\n" +
+			"--- Test 3: Error Process Callback ---\n" +
+			"✓ Error process spawned with ID: 3\n" +
+			"[CALLBACK] Process 3 STDERR: ls: /nonexistent/directory: No such file or directory\n\n" +
+			"[CALLBACK] Process 3 EXIT: 1\n" +
+			"✓ Error process finished with exit code: 1\n" +
+			"=== CALLBACK DEMO COMPLETE ===\n" +
+			"The [CALLBACK] lines above show C runtime calling into Osprey!\n"
+	}
+
+	// Linux behavior: exit code 2, different error message format
+	return "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
+		"--- Test 1: Basic Stdout Callback ---\n" +
+		"✓ Process spawned with ID: 1\n" +
+		"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
+		"[CALLBACK] Process 1 EXIT: 0\n" +
+		"✓ Process finished with exit code: 0\n" +
+		"✓ Process cleaned up\n" +
+		"--- Test 2: Multiple Lines Callback ---\n" +
+		"✓ Multi-line process spawned with ID: 2\n" +
+		"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+		"[CALLBACK] Process 2 EXIT: 0\n" +
+		"✓ Multi-line process finished\n" +
+		"--- Test 3: Error Process Callback ---\n" +
+		"✓ Error process spawned with ID: 3\n" +
+		"[CALLBACK] Process 3 STDERR: ls: cannot access '/nonexistent/directory': No such file or directory\n\n" +
+		"[CALLBACK] Process 3 EXIT: 2\n" +
+		"✓ Error process finished with exit code: 2\n" +
+		"=== CALLBACK DEMO COMPLETE ===\n" +
+		"The [CALLBACK] lines above show C runtime calling into Osprey!\n"
+}
+
 func getSpaceTraderExpectedOutput() string {
 	return "🌌 Welcome to the Galactic Trade Network! 🌌\n" +
 		"You are Captain Alex, commander of the starship Osprey-7\n" +
