@@ -404,6 +404,10 @@ func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) 
 	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
 		frame := ec.currentHandlers[i]
 		if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
+			// CRITICAL SAFETY CHECK: Validate handler function before calling
+			if handlerFunc == nil {
+				continue // Skip null handlers
+			}
 			args, err := ec.generatePerformArguments(perform)
 			if err != nil {
 				return nil, err
@@ -515,12 +519,13 @@ func (ec *EffectCodegen) popProcessingEffect() {
 // Integration methods are now in generator.go to avoid circular dependencies
 
 // generateDeclaredEffectCall generates calls for effects declared in function signatures
-// This represents the "suspension point" where the effect needs to be handled by the caller
 func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpression) (value.Value, error) {
-	// CRITICAL FIX: Instead of generating a debug message, generate a runtime handler lookup
-	// This allows handlers to be resolved at runtime rather than compile time
+	// CRITICAL INSIGHT: The real bug is that functions with declared effects are being called
+	// when currentHandlers=0, stack=0. This means the handler context is not being preserved
+	// across function calls. The issue is NOT in this function, but in how handlers are
+	// maintained when calling functions with declared effects.
 
-	// Generate arguments for the perform expression
+	// For now, fall back to the original runtime lookup behavior to restore functionality
 	args := make([]value.Value, len(perform.Arguments))
 	for i, argExpr := range perform.Arguments {
 		argVal, err := ec.generator.generateExpression(argExpr)
@@ -530,19 +535,8 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 		args[i] = argVal
 	}
 
-	// CRITICAL INSIGHT: Handlers MUST be resolved at runtime, not compile time!
-	// The issue is that functions with effects are compiled independently before
-	// their calling context (with handlers) is known. So when perform statements
-	// are executed, the compile-time scope doesn't have the handlers.
-	//
-	// The solution is to implement PROPER runtime handler lookup that checks
-	// ALL available handler functions and calls the right one based on runtime context.
-
-	// Generate runtime handler lookup logic
-	// Strategy: Try to find the most recently generated handler for this effect operation
+	// Find the most recent handler for this effect operation
 	handlerPattern := fmt.Sprintf("__handler_%s_%s_", perform.EffectName, perform.OperationName)
-
-	// Search through ALL generated handler functions to find matches
 	var candidateHandlers []*ir.Func
 	for _, fn := range ec.generator.module.Funcs {
 		fnName := fn.Name()
@@ -551,23 +545,16 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 		}
 	}
 
-	// If we found handler functions, call the LAST one (most recently defined)
-	// This ensures that more recent handlers override older ones, which works
-	// better for sequential handler contexts and simple nesting
+	// Use the LAST handler (most recently defined)
 	if len(candidateHandlers) > 0 {
-		// Use the LAST handler (most recently defined) for better isolation
 		handlerFunc := candidateHandlers[len(candidateHandlers)-1]
 		return ec.generator.builder.NewCall(handlerFunc, args...), nil
 	}
 
-	// If no handler found, generate the debug message (fallback)
+	// Fallback to debug message
 	effectMsg := fmt.Sprintf("EFFECT: %s.%s called", perform.EffectName, perform.OperationName)
 	msgStr := ec.generator.createGlobalString(effectMsg)
-
-	// Use existing puts function from the functions map
 	putsFunc := ec.generator.functions["puts"]
 	call := ec.generator.builder.NewCall(putsFunc, msgStr)
-
-	// Convert to i64 to match expected return type
 	return ec.generator.builder.NewSExt(call, types.I64), nil
 }
