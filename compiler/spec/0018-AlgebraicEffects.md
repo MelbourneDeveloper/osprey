@@ -96,21 +96,18 @@ fn incrementTwice() -> Int !State = {
 A handler provides a **model** of the effect theory by specifying how each operation should be interpreted:
 
 ```ebnf
-handlerExpr ::= "handler" IDENT handlerArm+
-handlerArm  ::= IDENT pattern? "=>" expr
-
-withExpr    ::= "with" handlerExpr blockExpr
+handlerExpr ::= "handle" IDENT handlerArm+ "in" expr
+handlerArm  ::= IDENT paramList? "=>" expr
 ```
 
 Example:
 
 ```osprey
-with handler State
-  get()       => 42
-  set(newVal) => print("Setting state to: " + toString(newVal))
-{
+handle State
+  get => 42
+  set newVal => print "Setting state to: " + toString newVal
+in
   incrementTwice()
-}
 ```
 
 **Handler Semantics**: The handler provides a model where:
@@ -133,15 +130,13 @@ In Osprey:
 Handlers can be nested. The **innermost handler** wins for each effect:
 
 ```osprey
-with handler Logger
-  log(msg) => print("[OUTER] " + msg)
-{
-  with handler Logger
-    log(msg) => print("[INNER] " + msg)  // This handler takes precedence
-  {
-    perform Logger.log("test")  // Prints "[INNER] test"
-  }
-}
+handle Logger
+  log msg => print "[OUTER] " + msg
+in
+  handle Logger
+    log msg => print "[INNER] " + msg  // This handler takes precedence
+  in
+    perform Logger.log "test"  // Prints "[INNER] test"
 ```
 
 ### 20.9 Effect Sets and Inference
@@ -203,20 +198,17 @@ fn safeDivide(a: Int, b: Int) -> Int ![Exception, State] = {
 }
 
 // Handler providing exception model
-with handler Exception
-  raise(msg) => {
-    print("Error: " + msg)
+handle Exception
+  raise msg => 
+    print "Error: " + msg
     -1  // Recovery value
-  }
-{
-  with handler State
-    get()       => 0
-    set(newVal) => print("State: " + toString(newVal))
-  {
-    let result = safeDivide(10, 0)
-    print("Result: " + toString(result))
-  }
-}
+in
+  handle State
+    get => 0
+    set newVal => print "State: " + toString newVal
+  in
+    let result = safeDivide 10 0
+    print "Result: " + toString result
 ```
 
 ---
@@ -274,15 +266,14 @@ effect StateB { getFromA: fn() -> int }
 fn circularA() -> int !StateA = perform StateA.getFromB()
 fn circularB() -> int !StateB = perform StateB.getFromA()
 
-fn main() -> Unit = {
-    with handler StateA
-        getFromB() => circularB()  // ❌ CIRCULAR DEPENDENCY!
-    with handler StateB
-        getFromA() => circularA()  // ❌ CIRCULAR DEPENDENCY!
-    {
-        circularA()  // Would cause infinite recursion
-    }
-}
+fn main() -> Unit = 
+    handle StateA
+        getFromB => circularB  // ❌ CIRCULAR DEPENDENCY!
+    in
+      handle StateB
+          getFromA => circularA  // ❌ CIRCULAR DEPENDENCY!
+      in
+          circularA  // Would cause infinite recursion
 ```
 
 **Error**: `COMPILATION ERROR: Circular effect dependency detected - handler StateA.getFromB calls function that performs StateB.getFromA, which is handled by calling StateA.getFromB (infinite recursion detected)`
@@ -296,13 +287,11 @@ effect Counter { increment: fn(int) -> int }
 
 fn performIncrement(n: int) -> int !Counter = perform Counter.increment(n)
 
-fn main() -> Unit = {
-    with handler Counter
-        increment(n) => performIncrement(n + 1)  // ❌ INFINITE RECURSION!
-    {
-        performIncrement(5)  // Would cause stack overflow
-    }
-}
+fn main() -> Unit = 
+    handle Counter
+        increment n => performIncrement (n + 1)  // ❌ INFINITE RECURSION!
+    in
+        performIncrement 5  // Would cause stack overflow
 ```
 
 **Error**: `COMPILATION ERROR: Infinite handler recursion detected - handler Counter.increment calls function that performs the same effect it handles (infinite recursion detected)`

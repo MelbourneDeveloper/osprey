@@ -57,9 +57,11 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 
 effectList      : ID (COMMA ID)* ;
 
-// Handler expressions - updated to handle multi-line syntax properly
-handlerExpr     : HANDLER ID (LBRACE handlerArm* RBRACE | handlerArm*) ;
-handlerArm      : ID LPAREN ID RPAREN LAMBDA expr ;
+// Handler expressions - both old and new syntax
+handlerExpr     : HANDLE ID handlerArm+ IN expr                // ML-style: handle Logger log msg => ... in
+                | WITH HANDLER ID handlerArm* blockExpr ;       // Original: with handler Logger { ... }
+handlerArm      : ID handlerParams? LAMBDA expr ;
+handlerParams   : ID+ ;  // Simple space-separated identifiers for ML style
 
 functionCall    : ID LPAREN argList? RPAREN ;
 
@@ -150,7 +152,7 @@ primary
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
     | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
-    | WITH HANDLER ID handlerArm* blockExpr       // with handler EffectName arms { body }
+    | handlerExpr                                 // let handle EffectName arms in body
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
     | blockExpr                                   // Block expressions
@@ -255,6 +257,8 @@ EFFECT      : 'effect';
 PERFORM     : 'perform';
 WITH        : 'with';
 HANDLER     : 'handler';
+HANDLE      : 'handle';
+IN          : 'in';
 DO          : 'do';
 
 // Concurrency keywords
