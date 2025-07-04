@@ -162,23 +162,23 @@ c-lint:
 		-Wstrict-overflow=5 -Wstack-protector \
 		-Winline -Wdisabled-optimization \
 		-std=c11 -fsyntax-only \
-		system_runtime.c fiber_runtime.c unity.c test_system_runtime_unity.c test_fiber_runtime_unity.c
+		system_runtime.c fiber_runtime.c test_system_runtime.c fiber_runtime_tests.c
 	@echo "✅ C CODE IS BULLETPROOF! NO WARNINGS SURVIVED!"
 
-# C TESTS - Unity Framework Tests for VS Code discovery
+# C TESTS - Vanilla C Tests with standard assert()
 c-test:
-	@echo "🧪 RUNNING C RUNTIME UNITY TESTS..."
-	@cd runtime && echo "📦 Compiling Unity system runtime tests..."
-	@cd runtime && clang -o test_system_runtime_unity test_system_runtime_unity.c unity.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g
-	@cd runtime && echo "🚀 Running Unity system runtime tests..."
-	@cd runtime && ./test_system_runtime_unity
-	@cd runtime && echo "📦 Compiling Unity fiber runtime tests..."
-	@cd runtime && clang -o test_fiber_runtime_unity test_fiber_runtime_unity.c unity.c fiber_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g
-	@cd runtime && echo "🚀 Running Unity fiber runtime tests..."
-	@cd runtime && ./test_fiber_runtime_unity
+	@echo "🧪 RUNNING C RUNTIME TESTS..."
+	@cd runtime && echo "📦 Compiling system runtime tests..."
+	@cd runtime && clang -o test_system_runtime test_system_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g
+	@cd runtime && echo "🚀 Running system runtime tests..."
+	@cd runtime && ./test_system_runtime
+	@cd runtime && echo "📦 Compiling fiber runtime tests..."
+	@cd runtime && clang -o test_fiber_runtime fiber_runtime_tests.c fiber_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g
+	@cd runtime && echo "🚀 Running fiber runtime tests..."
+	@cd runtime && ./test_fiber_runtime
 	@cd runtime && echo "🧹 Cleaning up test executables..."
-	@cd runtime && rm -f test_system_runtime_unity test_fiber_runtime_unity
-	@echo "✅ ALL C RUNTIME UNITY TESTS PASSED!"
+	@cd runtime && rm -f test_system_runtime test_fiber_runtime
+	@echo "✅ ALL C RUNTIME TESTS PASSED!"
 
 # Regenerate parser from grammar (requires ANTLR)
 regenerate-parser:
