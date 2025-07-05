@@ -82,7 +82,9 @@ func (g *LLVMGenerator) validateMatchArmTypes(matchExpr *ast.MatchExpression) er
 }
 
 // validatePatternVariants ensures all patterns in the match arms are valid variants.
-func (g *LLVMGenerator) validatePatternVariants(arms []ast.MatchArm, unionType *ast.TypeDeclaration, pos *ast.Position) error {
+func (g *LLVMGenerator) validatePatternVariants(
+	arms []ast.MatchArm, unionType *ast.TypeDeclaration, pos *ast.Position,
+) error {
 	for _, arm := range arms {
 		if arm.Pattern.Constructor == "_" || arm.Pattern.Constructor == UnknownPattern {
 			continue // Wildcard patterns are always valid
@@ -107,7 +109,9 @@ func (g *LLVMGenerator) validatePatternVariants(arms []ast.MatchArm, unionType *
 }
 
 // validateExhaustiveness ensures all variants of the union type are covered.
-func (g *LLVMGenerator) validateExhaustiveness(arms []ast.MatchArm, unionType *ast.TypeDeclaration, pos *ast.Position) error {
+func (g *LLVMGenerator) validateExhaustiveness(
+	arms []ast.MatchArm, unionType *ast.TypeDeclaration, pos *ast.Position,
+) error {
 	// Collect all covered patterns
 	coveredPatterns := make(map[string]bool)
 	hasWildcard := false

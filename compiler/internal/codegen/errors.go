@@ -579,7 +579,8 @@ func WrapMatchUnknownVariant(variant, typeName string) error {
 
 // WrapMatchUnknownVariantWithPos wraps unknown variant errors with variant and type info and position.
 func WrapMatchUnknownVariantWithPos(variant, typeName string, pos *ast.Position) error {
-	return fmt.Errorf("line %d:%d: %w: variant '%s' is not defined in type '%s'", pos.Line, pos.Column, ErrMatchUnknownVariant, variant, typeName)
+	return fmt.Errorf("line %d:%d: %w: variant '%s' is not defined in type '%s'",
+		pos.Line, pos.Column, ErrMatchUnknownVariant, variant, typeName)
 }
 
 // WrapMatchMixedPatterns wraps mixed pattern type errors with pattern details.
@@ -691,11 +692,11 @@ func WrapHTTPGetWrongArgs(got int) error {
 // WrapHTTPGetWrongArgsWithPos wraps httpGet wrong arguments errors with argument count and position.
 func WrapHTTPGetWrongArgsWithPos(got int, pos *ast.Position) error {
 	if pos != nil {
-		return fmt.Errorf("line %d:%d: httpGet expects exactly 3 arguments (client_id, path, headers), got %d: httpGet expects exactly 3 arguments (client_id, path, headers)",
-			pos.Line, pos.Column, got)
+		return fmt.Errorf("line %d:%d: httpGet expects exactly 3 arguments (client_id, path, headers), got %d: %w",
+			pos.Line, pos.Column, got, ErrHTTPGetWrongArgs)
 	}
-	return fmt.Errorf("httpGet expects exactly 3 arguments (client_id, path, headers), got %d: httpGet expects exactly 3 arguments (client_id, path, headers)",
-		got)
+	return fmt.Errorf("httpGet expects exactly 3 arguments (client_id, path, headers), got %d: %w",
+		got, ErrHTTPGetWrongArgs)
 }
 
 // WrapHTTPPostWrongArgs wraps httpPost wrong arguments errors with argument count.
@@ -846,7 +847,8 @@ func WrapLengthWrongArgs(got int) error {
 // WrapLengthWrongArgsWithPos wraps length wrong arguments errors with argument count and position.
 func WrapLengthWrongArgsWithPos(got int, pos *ast.Position) error {
 	if pos != nil {
-		return fmt.Errorf("line %d:%d: length expects exactly 1 argument, got %d: %w", pos.Line, pos.Column, got, ErrLengthWrongArgs)
+		return fmt.Errorf("line %d:%d: length expects exactly 1 argument, got %d: %w",
+			pos.Line, pos.Column, got, ErrLengthWrongArgs)
 	}
 	return fmt.Errorf("length expects exactly 1 argument, got %d: %w", got, ErrLengthWrongArgs)
 }
@@ -859,7 +861,8 @@ func WrapContainsWrongArgs(got int) error {
 // WrapContainsWrongArgsWithPos wraps contains wrong arguments errors with argument count and position.
 func WrapContainsWrongArgsWithPos(got int, pos *ast.Position) error {
 	if pos != nil {
-		return fmt.Errorf("line %d:%d: contains expects exactly 2 arguments, got %d: %w", pos.Line, pos.Column, got, ErrContainsWrongArgs)
+		return fmt.Errorf("line %d:%d: contains expects exactly 2 arguments, got %d: %w",
+			pos.Line, pos.Column, got, ErrContainsWrongArgs)
 	}
 	return fmt.Errorf("contains expects exactly 2 arguments, got %d: %w", got, ErrContainsWrongArgs)
 }
