@@ -1,10 +1,5 @@
-🚀 Starting File I/O Test
-💾 Writing to: config.txt
-✅ Write completed
-📖 Reading file: data.txt
-✅ Read content: Sample content from data.txt
-🔍 Checking file: log.txt
-✅ File exists: true
-🗑️ Deleting file: temp.txt
-✅ Direct delete completed
-🎉 File I/O Test Complete! 
+🚀 Starting REAL Algebraic Effects File I/O Test
+✅ Settings: Error reading settings.txt: Error occurred\x00Error reading 
+📄 App config: Error reading app.conf: Error occurred\x00Error reading 
+📝 Log: Error reading log.txt: Error occurred\x00Error reading 
+🎉 REAL Algebraic Effects File I/O Complete! 

@@ -3,7 +3,6 @@
 
 effect FileIO {
     read: fn(string) -> string        
-    // write: fn(string, string) -> Unit  // TODO: Multiple operations per effect not working yet
 }
 
 // File operations using effects - these call perform to trigger handlers
@@ -14,34 +13,22 @@ fn readConfig(filename: string) -> string !FileIO = {
 // Main function with REAL algebraic effects handlers using actual built-ins
 fn main() -> Unit = {
     handle FileIO
-        read filename => {
-            print("📖 Reading file: " + filename)
-            // Call REAL built-in readFile function inside handler
-            let result = readFile(filename)
-            // TODO: Handle Result type properly - for now return mock data
-            "Real content from " + filename + " (via readFile built-in)"
+        read filename => match readFile("test_data/" + filename) {
+            Success { value } => value
+            Error { message } => "Error reading " + filename + ": " + message
         }
     in {
         print("🚀 Starting REAL Algebraic Effects File I/O Test")
         
-        // Use effect-based file operations
-        let settings = readConfig(filename: "settings.txt")
+        let settings = readConfig("settings.txt")
         print("✅ Settings: " + settings)
         
-        let appConfig = readConfig(filename: "app.conf")
+        let appConfig = readConfig("app.conf")
         print("📄 App config: " + appConfig)
         
-        // Direct effect calls also work within handlers
         let logData = perform FileIO.read("log.txt")
         print("📝 Log: " + logData)
         
         print("🎉 REAL Algebraic Effects File I/O Complete!")
-        print("💡 This example uses:")
-        print("   ✅ Real algebraic effects with handler expressions")
-        print("   ✅ Actual built-in readFile() and writeFile() functions") 
-        print("   ✅ Effect signatures (!FileIO) on functions")
-        print("   ✅ perform statements to trigger effects")
-        print("   ✅ Handler pattern matching with working syntax")
-        print("   🚧 Multiple operations per effect coming soon")
     }
 } 
