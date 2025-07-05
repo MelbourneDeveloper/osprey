@@ -208,6 +208,7 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 	// File I/O functions
 	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"
 	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"
+	g.functionReturnTypes["deleteFile"] = TypeResult + "<Success, string>"
 	g.functionReturnTypes["parseJSON"] = TypeResult + "<string, string>"
 	g.functionReturnTypes["extractCode"] = TypeResult + "<string, string>"
 

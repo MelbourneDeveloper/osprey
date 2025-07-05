@@ -234,7 +234,7 @@ func TestWrapMissingArgument(t *testing.T) {
 }
 
 func TestWrapParseErrors(t *testing.T) {
-	err := codegen.WrapParseErrors("syntax error at line 1")
+	err := codegen.WrapParseErrors([]string{"line 1:5: syntax error at 'unexpected token'"})
 
 	if err == nil {
 		t.Error("WrapParseErrors should return error")

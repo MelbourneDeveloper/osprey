@@ -51,7 +51,7 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 
 	// Check for parse errors before proceeding
 	if len(errorListener.Errors) > 0 {
-		return "", WrapParseErrors(strings.Join(errorListener.Errors, "\n"))
+		return "", WrapParseErrors(errorListener.Errors)
 	}
 
 	// Check if parse tree is valid
@@ -157,7 +157,7 @@ func addOpenSSLFlags(linkArgs []string) []string {
 	if output, err := cmd.Output(); err == nil {
 		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
-		fmt.Fprintf(os.Stderr, "DEBUG: pkg-config openssl flags: %v\n", flags)
+	
 		return append(linkArgs, flags...)
 	}
 
@@ -216,7 +216,7 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 
 	var lastErr error
 	for _, cmd := range clangCommands {
-		fmt.Fprintf(os.Stderr, "DEBUG: Trying link command: %v\n", cmd)
+	
 		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
 
 		linkOutput, err := linkCmd.CombinedOutput()
