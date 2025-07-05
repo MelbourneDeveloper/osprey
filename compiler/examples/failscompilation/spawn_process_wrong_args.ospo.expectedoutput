@@ -1,1 +1,1 @@
-spawnProcess expects exactly 2 arguments (command, callback), got 0
+line 5:17: spawnProcess expects exactly 2 arguments (command, callback), got 0

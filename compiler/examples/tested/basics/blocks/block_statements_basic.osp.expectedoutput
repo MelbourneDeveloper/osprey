@@ -1,0 +1,5 @@
+=== Basic Block Statements Test ===
+Test 1 - Simple block: 42
+Test 2 - Block computation: 20
+Test 3 - Multiple statements: 15
+=== Basic Block Statements Complete === 

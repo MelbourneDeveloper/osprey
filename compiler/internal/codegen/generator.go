@@ -35,6 +35,10 @@ type LLVMGenerator struct {
 	stringConstants       map[string]value.Value
 	currentFunction       *ir.Func
 	currentFunctionParams map[string]value.Value
+	// Real algebraic effects system
+	effectCodegen *EffectCodegen
+	// Context for type-aware literal generation
+	expectedReturnType types.Type
 }
 
 // SecurityConfig defines security policies for the code generator.
@@ -110,6 +114,28 @@ func (g *LLVMGenerator) GenerateIR() string {
 	return g.module.String()
 }
 
+// InitializeEffects initializes the effect system for the generator
+func (g *LLVMGenerator) InitializeEffects() {
+	g.effectCodegen = g.NewEffectCodegen()
+}
+
+// RegisterEffectDeclaration registers an effect declaration with the effect system
+func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration) error {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	g.effectCodegen.RegisterEffect(effect)
+	return nil
+}
+
+// generateRealPerformExpression generates real algebraic effects perform expressions
+func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpression) (value.Value, error) {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	return g.effectCodegen.GeneratePerformExpression(perform)
+}
+
 // declareExternalFunctions declares external C library functions.
 func (g *LLVMGenerator) declareExternalFunctions() {
 	// Declare printf: i32 @printf(i8*, ...)
@@ -182,6 +208,7 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 	// File I/O functions
 	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"
 	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"
+	g.functionReturnTypes["deleteFile"] = TypeResult + "<Success, string>"
 	g.functionReturnTypes["parseJSON"] = TypeResult + "<string, string>"
 	g.functionReturnTypes["extractCode"] = TypeResult + "<string, string>"
 

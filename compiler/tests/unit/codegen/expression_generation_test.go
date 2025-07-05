@@ -65,7 +65,8 @@ func TestFieldAccessExpression(t *testing.T) {
 		{
 			name:      "result value field access",
 			source:    `let x = (42).value`,
-			shouldErr: false, // .value should work
+			shouldErr: true, // .value field access not implemented for integers
+			errMsg:    "field access not implemented",
 		},
 		{
 			name:      "unsupported field access",

@@ -51,7 +51,8 @@ func TestDocumentationDeterministic(t *testing.T) {
 	}
 
 	if successfulRuns == 0 {
-		t.Skip("All documentation generation runs failed - skipping deterministic test")
+		                t.Fatalf("❌ CRITICAL FAILURE: All %d documentation generation runs failed - " +
+                    "this indicates a broken docs system", numRuns)
 	}
 
 	// Compare all runs against the first run
@@ -111,7 +112,7 @@ func TestFunctionsIndexDeterministic(t *testing.T) {
 	}
 
 	if successfulRuns == 0 {
-		t.Skip("All documentation generation runs failed - skipping functions index test")
+		t.Fatalf("❌ CRITICAL FAILURE: All %d documentation generation runs failed - functions index system broken", numRuns)
 	}
 
 	// Compare all runs against the first successful run
@@ -126,7 +127,8 @@ func TestFunctionsIndexDeterministic(t *testing.T) {
 	}
 
 	if firstContent == "" {
-		t.Skip("No successful documentation runs found")
+		                t.Fatalf("❌ CRITICAL FAILURE: No successful documentation runs found out of %d attempts - " +
+                    "docs system completely broken", numRuns)
 	}
 
 	for i := 1; i < numRuns; i++ {

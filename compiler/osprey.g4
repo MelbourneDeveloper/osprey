@@ -10,6 +10,7 @@ statement
     | fnDecl
     | externDecl
     | typeDecl
+    | effectDecl
     | moduleDecl
     | exprStmt
     ;
@@ -18,7 +19,7 @@ importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
 
-fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE) ;
+fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | LBRACE blockBody RBRACE) ;
 
 externDecl      : docComment? EXTERN FN ID LPAREN externParamList? RPAREN (ARROW type)? ;
 
@@ -45,6 +46,22 @@ fieldDeclaration  : ID COLON type constraint? ;
 
 constraint      : WHERE functionCall ;
 
+// Effect declarations
+effectDecl      : docComment? EFFECT ID LBRACE opDecl* RBRACE ;
+opDecl          : ID COLON type ;
+
+// Effect sets for function types
+effectSet       : NOT_OP ID                              // Single effect: !Effect
+                | NOT_OP LSQUARE effectList RSQUARE      // Multiple effects: ![Effect1, Effect2]
+                ;
+
+effectList      : ID (COMMA ID)* ;
+
+// Handler expressions - implementing spec syntax
+handlerExpr     : HANDLE ID handlerArm+ IN expr ;              // handle Logger log msg => ... in expr
+handlerArm      : ID handlerParams? LAMBDA expr ;
+handlerParams   : ID+ ;
+
 functionCall    : ID LPAREN argList? RPAREN ;
 
 booleanExpr     : comparisonExpr ;
@@ -53,6 +70,7 @@ fieldList       : field (COMMA field)* ;
 field           : ID COLON type ;
 
 type            : LPAREN typeList? RPAREN ARROW type  // Function types like (Int, String) -> Bool
+                | FN LPAREN typeList? RPAREN ARROW type  // Function types like fn(Int, String) -> Bool
                 | ID (LT typeList GT)?  // Generic types like Result<String, Error>
                 | ID LSQUARE type RSQUARE  // Array types like [String]
                 | ID ;
@@ -132,6 +150,8 @@ primary
     | SEND LPAREN expr COMMA expr RPAREN          // send(channel, value)
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
+    | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
+    | handlerExpr                                 // handle EffectName ... in expr
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
     | blockExpr                                   // Block expressions
@@ -212,18 +232,33 @@ fieldPattern    : ID (COMMA ID)* ;
 blockBody       : statement* expr? ;
 
 // ---------- LEXER RULES ----------
+// Keywords MUST come before ID to ensure proper tokenization
 
-PIPE        : '|>';
+// Control flow keywords
 MATCH       : 'match';
+IF          : 'if';
+ELSE        : 'else';
+SELECT      : 'select';
+
+// Function keywords  
 FN          : 'fn';
 EXTERN      : 'extern';
+
+// Declaration keywords
 IMPORT      : 'import';
 TYPE        : 'type';
 MODULE      : 'module';
 LET         : 'let';
 MUT         : 'mut';
-IF          : 'if';
-ELSE        : 'else';
+
+// Effect system keywords - CRITICAL ORDER FOR PROPER TOKENIZATION
+EFFECT      : 'effect';
+PERFORM     : 'perform';
+HANDLE      : 'handle';
+IN          : 'in';
+DO          : 'do';
+
+// Concurrency keywords
 SPAWN       : 'spawn';
 YIELD       : 'yield';
 AWAIT       : 'await';
@@ -231,11 +266,16 @@ FIBER       : 'fiber';
 CHANNEL     : 'channel';
 SEND        : 'send';
 RECV        : 'recv';
-SELECT      : 'select';
+
+// Boolean keywords
 TRUE        : 'true';
 FALSE       : 'false';
+
+// Constraint keyword
 WHERE       : 'where';
 
+// Operators and symbols
+PIPE        : '|>';
 ARROW       : '->';
 LAMBDA      : '=>';
 UNDERSCORE  : '_';
@@ -266,11 +306,13 @@ MINUS       : '-';
 STAR        : '*';
 SLASH       : '/';
 
+// Literals and identifiers - MUST come after keywords
 INT         : [0-9]+ ;
 INTERPOLATED_STRING : '"' (~["\\$] | '\\' . | '$' ~[{])* ('${' ~[}]* '}' (~["\\$] | '\\' . | '$' ~[{])*)+ '"' ;
 STRING      : '"' (~["\\] | '\\' .)* '"' ;
 ID          : [a-zA-Z_][a-zA-Z0-9_]* ;
 
+// Whitespace and comments - MUST be at the end
 WS          : [ \t\r\n]+ -> skip ;
 DOC_COMMENT : '///' ~[\r\n]* ;
 COMMENT     : '//' ~[\r\n]* -> skip ;

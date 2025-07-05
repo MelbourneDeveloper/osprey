@@ -121,7 +121,7 @@ func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
 // that uses a default callback for stdout/stderr events.
 func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapSpawnProcessWrongArgs(len(callExpr.Arguments))
+		return nil, WrapSpawnProcessWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	cmd, err := g.generateExpression(callExpr.Arguments[0])
@@ -343,7 +343,9 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 
 	// Error case: store error placeholder
 	g.builder = errorBlock
-	errorStr := g.module.NewGlobalDef("read_error_msg", constant.NewCharArrayFromString("File read error\x00"))
+	// Create unique global name to avoid redefinition
+	globalName := fmt.Sprintf("read_error_msg_%p", callExpr)
+	errorStr := g.module.NewGlobalDef(globalName, constant.NewCharArrayFromString("File read error\x00"))
 	errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
 		constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
 	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,

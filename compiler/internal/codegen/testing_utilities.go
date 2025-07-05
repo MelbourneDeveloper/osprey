@@ -83,7 +83,13 @@ func (g *LLVMGenerator) reorderNamedArguments(
 
 		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
 		// This preserves type safety while allowing function composition
-		if err := g.validateFunctionArgument(namedArg.Value, functionName, paramName); err != nil {
+		// Extract position from identifier arguments only
+		var pos *ast.Position
+		if ident, ok := namedArg.Value.(*ast.Identifier); ok {
+			pos = ident.Position
+		}
+
+		if err := g.validateFunctionArgument(namedArg.Value, functionName, paramName, pos); err != nil {
 			return nil, err
 		}
 

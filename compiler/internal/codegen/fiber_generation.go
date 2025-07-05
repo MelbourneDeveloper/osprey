@@ -98,6 +98,14 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	g.builder = entry
 	g.variables = make(map[string]value.Value)
 
+	// 🔥 CRITICAL FIX: Fiber handler context inheritance!
+	// The effectCodegen instance IS shared, so the handler stack should be available
+	// BUT we need to ensure the fiber closure can access it
+
+	// The key insight: g.effectCodegen is a pointer to the same instance!
+	// So when we call g.generateExpression inside the fiber, it should still
+	// have access to the same handler stack. Let's verify this works...
+
 	// Generate the expression inside the closure
 	result, err := g.generateExpression(spawn.Expression)
 	if err != nil {

@@ -1,0 +1,1 @@
+line 14:4: unhandled effect: COMPILATION ERROR: Circular effect dependency detected - effects cannot have circular references that would cause infinite recursion 

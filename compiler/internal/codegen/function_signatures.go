@@ -1,6 +1,8 @@
 package codegen
 
 import (
+	"strings"
+
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/types"
 
@@ -39,8 +41,10 @@ func (g *LLVMGenerator) createAndStoreFunctionSignature(fnDecl *ast.FunctionDecl
 		case TypeHTTPResponse:
 			returnType = TypeHTTPResponse
 		default:
-			// Check if it's a user-defined union type
-			if _, exists := g.typeDeclarations[fnDecl.ReturnType.Name]; exists {
+			// Check if it's a Result type (generic type)
+			if strings.HasPrefix(fnDecl.ReturnType.Name, "Result<") {
+				returnType = fnDecl.ReturnType.Name // Keep full Result<T, E> type
+			} else if _, exists := g.typeDeclarations[fnDecl.ReturnType.Name]; exists {
 				returnType = fnDecl.ReturnType.Name
 			} else {
 				returnType = TypeInt // Default fallback
@@ -145,6 +149,12 @@ func (g *LLVMGenerator) getLLVMReturnType(returnType, functionName string) types
 		return types.I32
 	}
 
+	// Check if this is a Result type
+	if isResultType(returnType) {
+		g.functionReturnTypes[functionName] = returnType
+		return g.getResultTypeForSignature(returnType)
+	}
+
 	if returnType == TypeString {
 		g.functionReturnTypes[functionName] = TypeString
 
@@ -160,7 +170,7 @@ func (g *LLVMGenerator) getLLVMReturnType(returnType, functionName string) types
 	if returnType == TypeBool {
 		g.functionReturnTypes[functionName] = TypeBool
 
-		return types.I64 // Use i64 for consistency, but could use i1
+		return types.I1
 	}
 
 	if returnType == TypeAny {
@@ -179,6 +189,27 @@ func (g *LLVMGenerator) getLLVMReturnType(returnType, functionName string) types
 	g.functionReturnTypes[functionName] = TypeInt
 
 	return types.I64
+}
+
+// isResultType checks if the return type is a Result type
+func isResultType(returnType string) bool {
+	return strings.HasPrefix(returnType, "Result<")
+}
+
+// getResultTypeForSignature returns the LLVM type for a Result type signature
+func (g *LLVMGenerator) getResultTypeForSignature(resultType string) types.Type {
+	// Parse the Result<T, E> type to get the inner type
+	if strings.Contains(resultType, "Result<Unit,") {
+		return g.getResultType(types.Void)
+	}
+	if strings.Contains(resultType, "Result<string,") {
+		return g.getResultType(types.I8Ptr)
+	}
+	if strings.Contains(resultType, "Result<bool,") {
+		return g.getResultType(types.I1)
+	}
+	// Default to Result<i64, Error>
+	return g.getResultType(types.I64)
 }
 
 // storeFunctionParameterNames stores parameter names for named argument support.

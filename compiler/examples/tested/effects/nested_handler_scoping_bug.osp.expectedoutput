@@ -1,0 +1,10 @@
+=== Testing Nested Handler Scoping ===
+[OUTER-LOG] Before inner handler
+[OUTER-LOG] Inner operation executing
+[OUTER-DEBUG] Debug info from inner
+[INNER-LOG] Inner result: 42
+[INNER-LOG] After inner handler
+[OUTER-LOG] Outer operation executing
+[OUTER-DEBUG] Debug info from outer
+[INNER-LOG] Outer result: 21
+=== Test Complete === 

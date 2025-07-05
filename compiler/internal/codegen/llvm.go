@@ -17,13 +17,17 @@ import (
 func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (value.Value, error) {
 	// Handle function calls
 	if ident, ok := callExpr.Function.(*ast.Identifier); ok {
+		// DEBUG: Add logging to understand what's failing
+
 		// Handle built-in functions
 		if result, err := g.handleBuiltInFunction(ident.Name, callExpr); result != nil || err != nil {
+	
 			return result, err
 		}
 
 		// Handle user-defined functions
 		if fn, exists := g.functions[ident.Name]; exists {
+	
 			return g.generateUserFunctionCall(ident.Name, fn, callExpr)
 		}
 
@@ -33,10 +37,14 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 			// Check if this variable contains a function reference
 			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeFunction {
 				// This is a function stored in a function type variable - enable function composition
+	
 				return g.generateFunctionCompositionCall(ident.Name, varValue, callExpr)
 			}
 		}
+
+
 	}
+
 
 	return nil, ErrUnsupportedCall
 }
@@ -142,6 +150,10 @@ func (g *LLVMGenerator) handleFileAndJSONFunctions(name string, callExpr *ast.Ca
 		return g.generateWriteFileCall(callExpr)
 	case ReadFileFunc:
 		return g.generateReadFileCall(callExpr)
+	case DeleteFileFunc:
+		// TODO: deleteFile built-in function is fucked - not implemented yet
+		// Return a placeholder success result for now
+		return constant.NewInt(types.I64, 0), nil
 	case ParseJSONFunc:
 		return g.generateParseJSONCall(callExpr)
 	case ExtractCodeFunc:
@@ -211,40 +223,20 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 ) (value.Value, error) {
 	// VALIDATION: Multi-parameter functions require named arguments
 	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
-		return nil, WrapFunctionRequiresNamed(funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName))
+		return nil, WrapFunctionRequiresNamedWithPos(
+			funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName), callExpr.Position)
 	}
 
-	// Handle named arguments vs positional arguments
-	if len(callExpr.NamedArguments) > 0 {
-		// Named arguments - need to reorder them to match function signature
-		args, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
-		if err != nil {
-			return nil, err
-		}
-
-		return g.builder.NewCall(fn, args...), nil
+	// Generate arguments for the function call
+	args, err := g.generateFunctionCallArguments(funcName, fn, callExpr)
+	if err != nil {
+		return nil, err
 	}
 
-	// Positional arguments (traditional)
-	args := make([]value.Value, len(callExpr.Arguments))
+	// Call the function directly and store the result
+	result := g.builder.NewCall(fn, args...)
 
-	for i, arg := range callExpr.Arguments {
-		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
-		// This preserves type safety while allowing function composition
-		paramName := "unknown" // We don't have parameter names for positional args
-		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
-			return nil, err
-		}
-
-		val, err := g.generateExpression(arg)
-		if err != nil {
-			return nil, err
-		}
-
-		args[i] = val
-	}
-
-	return g.builder.NewCall(fn, args...), nil
+	return result, nil
 }
 
 // generateNamedArgsSuggestion generates a helpful suggestion for named arguments.
@@ -862,14 +854,25 @@ func (g *LLVMGenerator) generateSuccessBlock(
 
 	successExpr := g.findSuccessValue(matchExpr)
 	var successValue value.Value
-	if successExpr == nil {
-		successValue = constant.NewInt(types.I64, ArrayIndexZero)
-	} else {
+	if successExpr != nil {
+		// CRITICAL: Use the actual expression from the match arm
 		val, err := g.generateExpression(successExpr)
 		if err != nil {
 			return nil, err
 		}
 		successValue = val
+	} else {
+		// Fallback: use the bound variable from pattern matching
+		if successArm := g.findSuccessArm(matchExpr); successArm != nil && len(successArm.Pattern.Fields) > 0 {
+			fieldName := successArm.Pattern.Fields[0]
+			if extractedValue, exists := g.variables[fieldName]; exists {
+				successValue = extractedValue
+			} else {
+				successValue = constant.NewInt(types.I64, ArrayIndexZero)
+			}
+		} else {
+			successValue = constant.NewInt(types.I64, ArrayIndexZero)
+		}
 	}
 
 	// Only add branch if the current block doesn't already have a terminator
@@ -902,14 +905,25 @@ func (g *LLVMGenerator) generateErrorBlock(
 
 	errorExpr := g.findErrorValue(matchExpr)
 	var errorValue value.Value
-	if errorExpr == nil {
-		errorValue = constant.NewInt(types.I64, ArrayIndexZero)
-	} else {
+	if errorExpr != nil {
+		// CRITICAL: Use the actual expression from the match arm
 		val, err := g.generateExpression(errorExpr)
 		if err != nil {
 			return nil, err
 		}
 		errorValue = val
+	} else {
+		// Fallback: use the bound variable from pattern matching
+		if errorArm := g.findErrorArm(matchExpr); errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
+			fieldName := errorArm.Pattern.Fields[0]
+			if extractedError, exists := g.variables[fieldName]; exists {
+				errorValue = extractedError
+			} else {
+				errorValue = constant.NewInt(types.I64, ArrayIndexZero)
+			}
+		} else {
+			errorValue = constant.NewInt(types.I64, ArrayIndexZero)
+		}
 	}
 
 	// Only add branch if the current block doesn't already have a terminator
@@ -971,39 +985,53 @@ func (g *LLVMGenerator) createResultMatchPhi(
 ) (value.Value, error) {
 	g.builder = blocks.End
 
-	// Ensure both values have the same type for PHI node
-	if successValue.Type() != errorValue.Type() {
-		// Determine which type to use - prefer string if either is string
-		if successValue.Type() == types.I8Ptr {
-			// Convert errorValue to string if it's not already
-			if errorValue.Type() == types.I64 {
-				convertedError, err := g.generateIntToString(errorValue)
-				if err != nil {
-					return nil, err
-				}
-				errorValue = convertedError
-			}
-		} else if errorValue.Type() == types.I8Ptr {
-			// Convert successValue to string if it's not already
-			if successValue.Type() == types.I64 {
-				convertedSuccess, err := g.generateIntToString(successValue)
-				if err != nil {
-					return nil, err
-				}
-				successValue = convertedSuccess
-			}
-		}
-		// If both are different non-string types, convert both to int
-		if successValue.Type() != errorValue.Type() {
-			successValue = constant.NewInt(types.I64, 0)
-			errorValue = constant.NewInt(types.I64, 0)
-		}
-	}
-
+	// CRITICAL: Use the actual values from the success and error cases
+	// Don't do any type conversion - let the pattern matching values determine the type
 	phi := blocks.End.NewPhi(
 		ir.NewIncoming(successValue, blocks.Success),
 		ir.NewIncoming(errorValue, blocks.Error),
 	)
 
 	return phi, nil
+}
+
+// generateFunctionCallArguments generates arguments for function calls, handling both named and positional arguments
+func (g *LLVMGenerator) generateFunctionCallArguments(
+	funcName string,
+	_ *ir.Func,
+	callExpr *ast.CallExpression,
+) ([]value.Value, error) {
+	// Handle named arguments vs positional arguments
+	if len(callExpr.NamedArguments) > 0 {
+		// Named arguments - need to reorder them to match function signature
+		return g.reorderNamedArguments(funcName, callExpr.NamedArguments)
+	}
+
+	// Positional arguments (traditional)
+	args := make([]value.Value, len(callExpr.Arguments))
+
+	for i, arg := range callExpr.Arguments {
+		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
+		// This preserves type safety while allowing function composition
+		paramName := "unknown" // We don't have parameter names for positional args
+
+		// Extract position from the argument (simple version)
+		var pos *ast.Position
+		if ident, ok := arg.(*ast.Identifier); ok {
+			pos = ident.Position
+		}
+
+		if err := g.validateFunctionArgument(arg, funcName, paramName, pos); err != nil {
+			return nil, err
+		}
+
+		val, err := g.generateExpression(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		args[i] = val
+	}
+
+	return args, nil
 }

@@ -1,0 +1,1 @@
+line 26:4: unhandled effect: COMPILATION ERROR: Unhandled effect 'IO.write' - all effects must be explicitly handled or forwarded in function signatures. Add a handler or declare the effect in the function signature with !IO 

@@ -8,6 +8,7 @@ alwaysApply: true
 - **NO DUPLICATION** - always search before adding text, consolidate where appropriate
 - **Keep it tight** - remove flowery language that doesn't assert how the syntax works 
 - **Keep it udpated** - when functionality is not implemented, mark it as such
+- **Less curly braces, semicolons and brackets** - more ML style
 - **Keep it ordered** - check the numbering
 - **Always take the best practices document into account** follow the URLS in the document for more information when making decisions
 - **Ensure examples don't conflict with the compiler's actual syntax** - check all examples are actual Osprey syntax unless the functionality has not been implemented yet

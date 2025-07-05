@@ -61,6 +61,27 @@ type ospreyListener interface {
 	// EnterConstraint is called when entering the constraint production.
 	EnterConstraint(c *ConstraintContext)
 
+	// EnterEffectDecl is called when entering the effectDecl production.
+	EnterEffectDecl(c *EffectDeclContext)
+
+	// EnterOpDecl is called when entering the opDecl production.
+	EnterOpDecl(c *OpDeclContext)
+
+	// EnterEffectSet is called when entering the effectSet production.
+	EnterEffectSet(c *EffectSetContext)
+
+	// EnterEffectList is called when entering the effectList production.
+	EnterEffectList(c *EffectListContext)
+
+	// EnterHandlerExpr is called when entering the handlerExpr production.
+	EnterHandlerExpr(c *HandlerExprContext)
+
+	// EnterHandlerArm is called when entering the handlerArm production.
+	EnterHandlerArm(c *HandlerArmContext)
+
+	// EnterHandlerParams is called when entering the handlerParams production.
+	EnterHandlerParams(c *HandlerParamsContext)
+
 	// EnterFunctionCall is called when entering the functionCall production.
 	EnterFunctionCall(c *FunctionCallContext)
 
@@ -231,6 +252,27 @@ type ospreyListener interface {
 
 	// ExitConstraint is called when exiting the constraint production.
 	ExitConstraint(c *ConstraintContext)
+
+	// ExitEffectDecl is called when exiting the effectDecl production.
+	ExitEffectDecl(c *EffectDeclContext)
+
+	// ExitOpDecl is called when exiting the opDecl production.
+	ExitOpDecl(c *OpDeclContext)
+
+	// ExitEffectSet is called when exiting the effectSet production.
+	ExitEffectSet(c *EffectSetContext)
+
+	// ExitEffectList is called when exiting the effectList production.
+	ExitEffectList(c *EffectListContext)
+
+	// ExitHandlerExpr is called when exiting the handlerExpr production.
+	ExitHandlerExpr(c *HandlerExprContext)
+
+	// ExitHandlerArm is called when exiting the handlerArm production.
+	ExitHandlerArm(c *HandlerArmContext)
+
+	// ExitHandlerParams is called when exiting the handlerParams production.
+	ExitHandlerParams(c *HandlerParamsContext)
 
 	// ExitFunctionCall is called when exiting the functionCall production.
 	ExitFunctionCall(c *FunctionCallContext)

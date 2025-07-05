@@ -1,0 +1,86 @@
+// 🚀 COMPREHENSIVE ALGEBRAIC EFFECTS FILE I/O SYSTEM 🔥
+// Real-world file I/O operations using actual built-in functions
+// Uses readFile, writeFile with proper algebraic effects
+
+effect FileSystem {
+    readFile: fn(string) -> string
+    writeFile: fn(string, string) -> Unit
+}
+
+effect Logger {
+    log: fn(string) -> Unit
+    error: fn(string) -> Unit
+}
+
+// Load configuration with effects
+fn loadConfig(filename: string) -> string ![FileSystem, Logger] = {
+    perform Logger.log("Loading config: " + filename)
+    let content = perform FileSystem.readFile(filename)
+    perform Logger.log("Config loaded successfully")
+    content
+}
+
+// Process data and write to file
+fn processAndSave(inputFile: string, outputFile: string, prefix: string) -> Unit ![FileSystem, Logger] = {
+    perform Logger.log("Processing: " + inputFile)
+    let rawData = perform FileSystem.readFile(inputFile)
+    let processedData = prefix + rawData
+    perform FileSystem.writeFile(outputFile, processedData)
+    perform Logger.log("Data processed and saved to: " + outputFile)
+}
+
+// Create temporary file and clean it up
+fn createTempAndCleanup(tempFile: string, data: string) -> Unit ![FileSystem, Logger] = {
+    perform Logger.log("Creating temp file: " + tempFile)
+    perform FileSystem.writeFile(tempFile, data)
+    perform Logger.log("Temp file created, now cleaning up")
+}
+
+// Comprehensive file workflow
+fn runFileWorkflow() -> Unit ![FileSystem, Logger] = {
+    perform Logger.log("🚀 Starting File I/O Workflow")
+    
+    // Load configuration files
+    let appConfig = loadConfig("test_data/app.conf")
+    let settings = loadConfig("test_data/settings.txt")
+    
+    // Process log file
+    processAndSave(inputFile: "test_data/log.txt", outputFile: "processed_log.txt", prefix: "=== PROCESSED LOG ===\n")
+    
+    // Create system report
+    let reportData = "=== SYSTEM REPORT ===\nApp: " + appConfig + "\nSettings: " + settings + "\n=== END ==="
+    perform FileSystem.writeFile("system_report.txt", reportData)
+    perform Logger.log("System report generated")
+    
+    // Test temp file creation and cleanup
+    createTempAndCleanup(tempFile: "temp_test.txt", data: "Temporary test data")
+    
+    perform Logger.log("🎉 File I/O Workflow Complete!")
+}
+
+// Main function with comprehensive effect handlers
+fn main() -> Unit = {
+    handle Logger
+        log msg => print("[LOG] " + msg)
+        error msg => print("[ERROR] " + msg)
+    in handle FileSystem
+        readFile filename => {
+            let content = readFile(filename)
+            match content {
+                Success { value } => value
+                Error { message } => "FILE_NOT_FOUND"
+            }
+        }
+        writeFile filename content => {
+            let result = writeFile(filename, content)
+            match result {
+                Success { value } => print("✅ Written: " + filename)
+                Error { message } => print("❌ Write failed: " + filename)
+            }
+        }
+    in {
+        print("🚀 COMPREHENSIVE FILE I/O WITH ALGEBRAIC EFFECTS 🚀")
+        runFileWorkflow()
+        print("🎯 All file operations completed successfully!")
+    }
+} 

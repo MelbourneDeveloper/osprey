@@ -29,12 +29,12 @@ func (g *LLVMGenerator) validateMatchExpression(matchExpr *ast.MatchExpression) 
 	}
 
 	// Validate that all patterns are known variants
-	if err := g.validatePatternVariants(matchExpr.Arms, unionType); err != nil {
+	if err := g.validatePatternVariants(matchExpr.Arms, unionType, matchExpr.Position); err != nil {
 		return err
 	}
 
 	// Validate exhaustiveness
-	if err := g.validateExhaustiveness(matchExpr.Arms, unionType); err != nil {
+	if err := g.validateExhaustiveness(matchExpr.Arms, unionType, matchExpr.Position); err != nil {
 		return err
 	}
 
@@ -74,7 +74,7 @@ func (g *LLVMGenerator) validateMatchArmTypes(matchExpr *ast.MatchExpression) er
 			((firstArmType == TypeInt && armType == TypeString) ||
 				(firstArmType == TypeString && armType == TypeInt) ||
 				(firstArmType == TypeBool && armType != TypeBool)) {
-			return WrapMatchArmTypeMismatch(i, armType, firstArmType)
+			return WrapMatchArmTypeMismatchWithPos(i, armType, firstArmType, matchExpr.Position)
 		}
 	}
 
@@ -82,7 +82,9 @@ func (g *LLVMGenerator) validateMatchArmTypes(matchExpr *ast.MatchExpression) er
 }
 
 // validatePatternVariants ensures all patterns in the match arms are valid variants.
-func (g *LLVMGenerator) validatePatternVariants(arms []ast.MatchArm, unionType *ast.TypeDeclaration) error {
+func (g *LLVMGenerator) validatePatternVariants(
+	arms []ast.MatchArm, unionType *ast.TypeDeclaration, pos *ast.Position,
+) error {
 	for _, arm := range arms {
 		if arm.Pattern.Constructor == "_" || arm.Pattern.Constructor == UnknownPattern {
 			continue // Wildcard patterns are always valid
@@ -99,7 +101,7 @@ func (g *LLVMGenerator) validatePatternVariants(arms []ast.MatchArm, unionType *
 		}
 
 		if !found {
-			return WrapMatchUnknownVariantType(arm.Pattern.Constructor, unionType.Name)
+			return WrapMatchUnknownVariantWithPos(arm.Pattern.Constructor, unionType.Name, pos)
 		}
 	}
 
@@ -107,7 +109,9 @@ func (g *LLVMGenerator) validatePatternVariants(arms []ast.MatchArm, unionType *
 }
 
 // validateExhaustiveness ensures all variants of the union type are covered.
-func (g *LLVMGenerator) validateExhaustiveness(arms []ast.MatchArm, unionType *ast.TypeDeclaration) error {
+func (g *LLVMGenerator) validateExhaustiveness(
+	arms []ast.MatchArm, unionType *ast.TypeDeclaration, pos *ast.Position,
+) error {
 	// Collect all covered patterns
 	coveredPatterns := make(map[string]bool)
 	hasWildcard := false
@@ -136,7 +140,7 @@ func (g *LLVMGenerator) validateExhaustiveness(arms []ast.MatchArm, unionType *a
 	if len(missingPatterns) > 0 {
 		sort.Strings(missingPatterns)
 
-		return WrapMatchNotExhaustive(missingPatterns)
+		return WrapMatchNotExhaustiveWithPos(missingPatterns, pos)
 	}
 
 	return nil

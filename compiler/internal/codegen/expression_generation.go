@@ -3,6 +3,7 @@ package codegen
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -51,6 +52,12 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 	case *ast.BlockExpression:
 
 		return g.generateBlockExpression(e)
+	case *ast.PerformExpression:
+
+		return g.generatePerformExpression(e)
+	case *ast.HandlerExpression:
+
+		return g.generateHandlerExpression(e)
 	default:
 
 		return g.generateFiberOrModuleExpression(expr)
@@ -218,10 +225,24 @@ func (g *LLVMGenerator) generateStringLiteral(lit *ast.StringLiteral) (value.Val
 
 // generateBooleanLiteral generates LLVM IR for boolean literals.
 func (g *LLVMGenerator) generateBooleanLiteral(lit *ast.BooleanLiteral) (value.Value, error) {
+	// Use expected return type if available, otherwise default to i64
+	targetType := types.I64
+	if g.expectedReturnType != nil {
+		if g.expectedReturnType == types.I1 {
+			targetType = types.I1
+		}
+	}
+
 	if lit.Value {
+		if targetType == types.I1 {
+			return constant.NewBool(true), nil
+		}
 		return constant.NewInt(types.I64, 1), nil
 	}
 
+	if targetType == types.I1 {
+		return constant.NewBool(false), nil
+	}
 	return constant.NewInt(types.I64, 0), nil
 }
 
@@ -431,7 +452,7 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 		return fn, nil
 	}
 
-	return nil, WrapUndefinedVariable(ident.Name)
+	return nil, WrapUndefinedVariableWithPos(ident.Name, ident.Position)
 }
 
 func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) (value.Value, error) {
@@ -453,50 +474,58 @@ func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) 
 		return nil, err
 	}
 
-	return g.generateBinaryOperation(binExpr.Operator, left, right)
+	return g.generateBinaryOperationWithPos(binExpr.Operator, left, right, binExpr.Position)
 }
 
-// generateBinaryOperation generates the appropriate LLVM operation for the given operator.
-func (g *LLVMGenerator) generateBinaryOperation(operator string, left, right value.Value) (value.Value, error) {
+// generateBinaryOperationWithPos generates the appropriate LLVM operation for the given operator with position info.
+func (g *LLVMGenerator) generateBinaryOperationWithPos(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
 	switch operator {
 	case "+", "-", "*", "/", "%":
-
-		return g.generateArithmeticOperation(operator, left, right)
+		return g.generateArithmeticOperationWithPos(operator, left, right, pos)
 	case "==", "!=", "<", "<=", ">", ">=":
-
-		return g.generateComparisonOperation(operator, left, right)
+		return g.generateComparisonOperationWithPos(operator, left, right, pos)
+	case "&&", "||":
+		return g.generateLogicalOperationWithPos(operator, left, right, pos)
 	default:
-
-		return nil, WrapUnsupportedBinaryOp(operator)
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
 }
 
-// generateArithmeticOperation generates LLVM arithmetic operations.
-func (g *LLVMGenerator) generateArithmeticOperation(operator string, left, right value.Value) (value.Value, error) {
+// generateArithmeticOperationWithPos generates LLVM arithmetic operations with position info.
+func (g *LLVMGenerator) generateArithmeticOperationWithPos(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
+	// CRITICAL FIX: Check for void types before arithmetic operations
+	if left.Type() == types.Void || right.Type() == types.Void {
+		return nil, WrapVoidArithmeticWithPos(operator, pos)
+	}
+
 	switch operator {
 	case "+":
-
+		// Handle string concatenation for pointer types (strings)
+		if _, isPtr := left.Type().(*types.PointerType); isPtr {
+			return g.generateStringConcatenation(left, right)
+		}
 		return g.builder.NewAdd(left, right), nil
 	case "-":
-
 		return g.builder.NewSub(left, right), nil
 	case "*":
-
 		return g.builder.NewMul(left, right), nil
 	case "/":
-
 		return g.builder.NewSDiv(left, right), nil
 	case "%":
-
 		return g.builder.NewSRem(left, right), nil
 	default:
-
-		return nil, WrapUnsupportedBinaryOp(operator)
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
 }
 
-// generateComparisonOperation generates LLVM comparison operations.
-func (g *LLVMGenerator) generateComparisonOperation(operator string, left, right value.Value) (value.Value, error) {
+// generateComparisonOperationWithPos generates LLVM comparison operations with position info.
+func (g *LLVMGenerator) generateComparisonOperationWithPos(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
 	var cmp value.Value
 
 	switch operator {
@@ -513,11 +542,56 @@ func (g *LLVMGenerator) generateComparisonOperation(operator string, left, right
 	case ">=":
 		cmp = g.builder.NewICmp(enum.IPredSGE, left, right)
 	default:
-
-		return nil, WrapUnsupportedBinaryOp(operator)
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
 
 	return g.builder.NewZExt(cmp, types.I64), nil
+}
+
+// generateLogicalOperationWithPos generates LLVM logical operations with position info.
+func (g *LLVMGenerator) generateLogicalOperationWithPos(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
+	switch operator {
+	case "&&":
+		return g.generateLogicalAnd(left, right)
+	case "||":
+		return g.generateLogicalOr(left, right)
+	default:
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
+	}
+}
+
+// generateLogicalAnd generates LLVM IR for logical AND operations.
+func (g *LLVMGenerator) generateLogicalAnd(left, right value.Value) (value.Value, error) {
+	// Short-circuit evaluation for &&
+	// If left is false, return false without evaluating right
+
+	// Convert to booleans first
+	leftBool := g.builder.NewICmp(enum.IPredNE, left, constant.NewInt(types.I64, 0))
+	rightBool := g.builder.NewICmp(enum.IPredNE, right, constant.NewInt(types.I64, 0))
+
+	// Perform logical AND
+	result := g.builder.NewAnd(leftBool, rightBool)
+
+	// Convert back to i64 (0 for false, 1 for true)
+	return g.builder.NewZExt(result, types.I64), nil
+}
+
+// generateLogicalOr generates LLVM IR for logical OR operations.
+func (g *LLVMGenerator) generateLogicalOr(left, right value.Value) (value.Value, error) {
+	// Short-circuit evaluation for ||
+	// If left is true, return true without evaluating right
+
+	// Convert to booleans first
+	leftBool := g.builder.NewICmp(enum.IPredNE, left, constant.NewInt(types.I64, 0))
+	rightBool := g.builder.NewICmp(enum.IPredNE, right, constant.NewInt(types.I64, 0))
+
+	// Perform logical OR
+	result := g.builder.NewOr(leftBool, rightBool)
+
+	// Convert back to i64 (0 for false, 1 for true)
+	return g.builder.NewZExt(result, types.I64), nil
 }
 
 // generateUnaryExpression generates LLVM IR for unary expressions.
@@ -543,7 +617,7 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 		return g.builder.NewZExt(cmp, types.I64), nil
 	default:
 
-		return nil, WrapUnsupportedUnaryOp(unaryExpr.Operator)
+		return nil, WrapUnsupportedUnaryOpWithPos(unaryExpr.Operator, unaryExpr.Position)
 	}
 }
 
@@ -582,43 +656,32 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 	}
 
 	// Check if this is field access on an identifier that might be a constrained type result
-	if _, isIdent := fieldAccess.Object.(*ast.Identifier); isIdent {
-		// Check if this identifier was declared as a constrained type constructor result
-		// For now, we'll generate the object and then check if field access is valid
-		obj, err := g.generateExpression(fieldAccess.Object)
-		if err != nil {
-			// If we can't generate the object, it's likely an undefined variable
-			// Return the original error (which will be "undefined variable")
-			return nil, err
+	if ident, isIdent := fieldAccess.Object.(*ast.Identifier); isIdent {
+		// Check if this identifier represents a constrained type constructor result
+		if varType, exists := g.variableTypes[ident.Name]; exists {
+			// Look for Result< pattern in the type
+			if strings.Contains(varType, "Result<") {
+				// This is field access on a Result type - requires pattern matching
+				return nil, WrapConstraintResultFieldAccessWithPos(fieldAccess.FieldName, fieldAccess.Position)
+			}
 		}
+	}
 
-		// If we got here, the variable exists but field access may not be valid
-		// For .value field access on result types, just return the object itself
-		// since we're using simplified result types where the value IS the result
-		if fieldAccess.FieldName == "value" {
-			return obj, nil
+	// Check for standard field access patterns
+	if ident, ok := fieldAccess.Object.(*ast.Identifier); ok {
+		varName := ident.Name
+
+		// Check if it's a record access pattern like person.name
+		if recordValue, exists := g.variables[varName]; exists {
+			// For .value field access on result types, just return the object itself
+			// since we're using simplified result types where the value IS the result
+			if fieldAccess.FieldName == "value" {
+				return recordValue, nil
+			}
 		}
-
-		// For other field access on identifiers, we need proper struct handling
-		// This is where we would implement proper field access for non-Result types
-		return nil, WrapFieldAccessNotImpl(fieldAccess.FieldName)
 	}
 
-	// Handle field access like a.value for other expression types
-	obj, err := g.generateExpression(fieldAccess.Object)
-	if err != nil {
-		return nil, err
-	}
-
-	// For .value field access on result types, just return the object itself
-	// since we're using simplified result types where the value IS the result
-	if fieldAccess.FieldName == "value" {
-		return obj, nil
-	}
-
-	// For other field access, we'd need proper struct handling
-
-	return nil, WrapFieldAccessNotImpl(fieldAccess.FieldName)
+	return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
 }
 
 func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) (value.Value, error) {
@@ -767,6 +830,25 @@ func (g *LLVMGenerator) validateBoolConstraint(_ string, _ bool) (bool, error) {
 }
 
 func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) (value.Value, error) {
+	// Check if the last statement is an expression statement that should be the return value
+	if len(blockExpr.Statements) > 0 && blockExpr.Expression == nil {
+		// Get the last statement
+		lastStmt := blockExpr.Statements[len(blockExpr.Statements)-1]
+
+		// Check if it's an expression statement
+		if exprStmt, ok := lastStmt.(*ast.ExpressionStatement); ok {
+			// Execute all statements except the last one
+			for _, stmt := range blockExpr.Statements[:len(blockExpr.Statements)-1] {
+				if err := g.generateStatement(stmt); err != nil {
+					return nil, err
+				}
+			}
+
+			// Return the value of the last expression statement
+			return g.generateExpression(exprStmt.Expression)
+		}
+	}
+
 	// Execute all statements in the block
 	for _, stmt := range blockExpr.Statements {
 		if err := g.generateStatement(stmt); err != nil {
@@ -779,8 +861,8 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 		return g.generateExpression(blockExpr.Expression)
 	}
 
-	// If no return expression, return a default integer value
-
+	// If no return expression, return a default value
+	// For Unit functions, we still need to return a value that will be ignored
 	return constant.NewInt(types.I64, 0), nil
 }
 
@@ -852,4 +934,103 @@ func (g *LLVMGenerator) generateHTTPResponseConstructor(
 	}
 
 	return structPtr, nil
+}
+
+// generateStringConcatenation generates LLVM IR for string concatenation using strcat
+func (g *LLVMGenerator) generateStringConcatenation(left, right value.Value) (value.Value, error) {
+	// Ensure strcat and strlen are declared
+	strcatFunc := g.ensureStrcatDeclaration()
+	strlenFunc := g.ensureStrlenDeclaration()
+	mallocFunc := g.ensureMallocDeclaration()
+
+	// CRITICAL FIX: Extract strings from Result types if needed
+	leftStr := g.extractStringFromValue(left)
+	rightStr := g.extractStringFromValue(right)
+
+	// Calculate lengths of both strings
+	leftLen := g.builder.NewCall(strlenFunc, leftStr)
+	rightLen := g.builder.NewCall(strlenFunc, rightStr)
+
+	// Calculate total length: leftLen + rightLen + 1 (for null terminator)
+	totalLen := g.builder.NewAdd(leftLen, rightLen)
+	totalLenPlusOne := g.builder.NewAdd(totalLen, constant.NewInt(types.I64, 1))
+
+	// Allocate memory for the result string
+	result := g.builder.NewCall(mallocFunc, totalLenPlusOne)
+
+	// Copy left string to result
+	strcpyFunc := g.ensureStrcpyDeclaration()
+	g.builder.NewCall(strcpyFunc, result, leftStr)
+
+	// Concatenate right string to result
+	g.builder.NewCall(strcatFunc, result, rightStr)
+
+	return result, nil
+}
+
+// extractStringFromValue extracts a string from either a regular string or a Result type
+func (g *LLVMGenerator) extractStringFromValue(val value.Value) value.Value {
+	// If it's already a string pointer, return it as is
+	if val.Type() == types.I8Ptr {
+		return val
+	}
+
+	// Check if it's a Result type struct pointer
+	if ptrType, ok := val.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == 2 {
+			// This is a Result type { T, i8 } - extract the value (first field)
+			valuePtr := g.builder.NewGetElementPtr(structType, val,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+			return g.builder.NewLoad(structType.Fields[0], valuePtr)
+		}
+	}
+
+	// If it's not a string or Result type, return it as is (might be an error case)
+	return val
+}
+
+// ensureStrcatDeclaration ensures strcat is declared
+func (g *LLVMGenerator) ensureStrcatDeclaration() *ir.Func {
+	if strcat, exists := g.functions["strcat"]; exists {
+		return strcat
+	}
+	strcat := g.module.NewFunc("strcat", types.I8Ptr,
+		ir.NewParam("dest", types.I8Ptr),
+		ir.NewParam("src", types.I8Ptr))
+	g.functions["strcat"] = strcat
+	return strcat
+}
+
+// ensureStrcpyDeclaration ensures strcpy is declared
+func (g *LLVMGenerator) ensureStrcpyDeclaration() *ir.Func {
+	if strcpy, exists := g.functions["strcpy"]; exists {
+		return strcpy
+	}
+	strcpy := g.module.NewFunc("strcpy", types.I8Ptr,
+		ir.NewParam("dest", types.I8Ptr),
+		ir.NewParam("src", types.I8Ptr))
+	g.functions["strcpy"] = strcpy
+	return strcpy
+}
+
+// ensureStrlenDeclaration ensures strlen is declared
+func (g *LLVMGenerator) ensureStrlenDeclaration() *ir.Func {
+	if strlen, exists := g.functions["strlen"]; exists {
+		return strlen
+	}
+	strlen := g.module.NewFunc("strlen", types.I64,
+		ir.NewParam("s", types.I8Ptr))
+	g.functions["strlen"] = strlen
+	return strlen
+}
+
+// ensureMallocDeclaration ensures malloc is declared
+func (g *LLVMGenerator) ensureMallocDeclaration() *ir.Func {
+	if malloc, exists := g.functions["malloc"]; exists {
+		return malloc
+	}
+	malloc := g.module.NewFunc("malloc", types.I8Ptr,
+		ir.NewParam("size", types.I64))
+	g.functions["malloc"] = malloc
+	return malloc
 }

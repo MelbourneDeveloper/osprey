@@ -359,7 +359,8 @@ func (g *LLVMGenerator) validateNotAnyType(expr ast.Expression, operation string
 
 // validateFunctionArgument validates function arguments with strong typing rules.
 // Allows function composition (function types) but prevents 'any' from being passed to non-function parameters.
-func (g *LLVMGenerator) validateFunctionArgument(expr ast.Expression, functionName, paramName string) error {
+func (g *LLVMGenerator) validateFunctionArgument(expr ast.Expression, functionName, paramName string,
+	pos *ast.Position) error {
 	// Only validate if the expression is of type 'any'
 	if !g.isAnyType(expr) {
 		return nil
@@ -374,5 +375,5 @@ func (g *LLVMGenerator) validateFunctionArgument(expr ast.Expression, functionNa
 	}
 
 	// For all other cases, 'any' type is not allowed (strong typing)
-	return WrapAnyDirectFunctionArg(functionName, paramName)
+	return WrapAnyDirectFunctionArgWithPos(functionName, paramName, pos)
 }

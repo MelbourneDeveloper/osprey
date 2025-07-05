@@ -6,3 +6,7 @@ compiler/examples/rust_integration/librust_utils.a
 webcompiler/src/outputs/
 
 compiler/test_output.txt
+
+*.txt
+
+compiler/examples/tested/effects/test_data/

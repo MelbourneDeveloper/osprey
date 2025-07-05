@@ -15,6 +15,7 @@ typedef struct Fiber {
   pthread_t thread;
   pthread_mutex_t mutex;
   pthread_cond_t cond;
+  bool uses_thread; // Track if this fiber uses threading
 } Fiber;
 
 typedef struct Channel {
@@ -34,6 +35,27 @@ static Fiber *fibers[1000];
 static Channel *channels[1000];
 static int64_t next_id = 1;
 static pthread_mutex_t runtime_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Deterministic execution mode
+static bool deterministic_mode = false;
+static int64_t execution_queue[1000];
+static int64_t queue_size = 0;
+
+// Enable/disable deterministic fiber execution
+void fiber_set_deterministic_mode(bool enabled) {
+  pthread_mutex_lock(&runtime_mutex);
+  deterministic_mode = enabled;
+  if (enabled) {
+    queue_size = 0; // Reset queue when enabling
+  }
+  pthread_mutex_unlock(&runtime_mutex);
+}
+
+// Execute a fiber directly (for deterministic mode)
+static void execute_fiber_directly(Fiber *fiber) {
+  fiber->result = fiber->function();
+  fiber->completed = true;
+}
 
 // Thread function for executing fibers
 static void *fiber_thread_func(void *arg) {
@@ -76,21 +98,31 @@ int64_t fiber_spawn(int64_t (*fn)(void)) {
   fiber->id = id;
   fiber->function = fn;
   fiber->completed = false;
-  pthread_mutex_init(&fiber->mutex, NULL);
-  pthread_cond_init(&fiber->cond, NULL);
+  fiber->uses_thread = false;
+  
+  if (!deterministic_mode) {
+    // Normal concurrent mode - use threads
+    pthread_mutex_init(&fiber->mutex, NULL);
+    pthread_cond_init(&fiber->cond, NULL);
+    fiber->uses_thread = true;
 
-  fibers[id] = fiber;
+    fibers[id] = fiber;
 
-  // Create thread to execute fiber
-  int result = pthread_create(&fiber->thread, NULL, fiber_thread_func, fiber);
-  if (result != 0) {
-    // Thread creation failed, clean up
-    fibers[id] = NULL;
-    pthread_mutex_destroy(&fiber->mutex);
-    pthread_cond_destroy(&fiber->cond);
-    free(fiber);
-    pthread_mutex_unlock(&runtime_mutex);
-    return -3; // Thread creation failed
+    // Create thread to execute fiber
+    int result = pthread_create(&fiber->thread, NULL, fiber_thread_func, fiber);
+    if (result != 0) {
+      // Thread creation failed, clean up
+      fibers[id] = NULL;
+      pthread_mutex_destroy(&fiber->mutex);
+      pthread_cond_destroy(&fiber->cond);
+      free(fiber);
+      pthread_mutex_unlock(&runtime_mutex);
+      return -3; // Thread creation failed
+    }
+  } else {
+    // Deterministic mode - queue for sequential execution
+    fibers[id] = fiber;
+    execution_queue[queue_size++] = id;
   }
 
   pthread_mutex_unlock(&runtime_mutex);
@@ -107,23 +139,44 @@ int64_t fiber_await(int64_t fiber_id) {
 
   pthread_mutex_lock(&runtime_mutex);
   Fiber *fiber = fibers[fiber_id];
+  bool is_deterministic = deterministic_mode;
   pthread_mutex_unlock(&runtime_mutex);
 
   if (!fiber)
     return -1;
 
-  // Wait for fiber to complete
-  pthread_mutex_lock(&fiber->mutex);
-  while (!fiber->completed) {
-    pthread_cond_wait(&fiber->cond, &fiber->mutex);
+  if (is_deterministic) {
+    // Deterministic mode - execute fibers in queue order up to the requested one
+    pthread_mutex_lock(&runtime_mutex);
+    for (int64_t i = 0; i < queue_size; i++) {
+      int64_t current_id = execution_queue[i];
+      Fiber *current_fiber = fibers[current_id];
+      if (current_fiber && !current_fiber->completed) {
+        execute_fiber_directly(current_fiber);
+      }
+      if (current_id == fiber_id) {
+        break; // Stop once we've executed the requested fiber
+      }
+    }
+    int64_t result = fiber->result;
+    pthread_mutex_unlock(&runtime_mutex);
+    return result;
+  } else {
+    // Normal concurrent mode - wait for thread completion
+    pthread_mutex_lock(&fiber->mutex);
+    while (!fiber->completed) {
+      pthread_cond_wait(&fiber->cond, &fiber->mutex);
+    }
+    int64_t result = fiber->result;
+    pthread_mutex_unlock(&fiber->mutex);
+
+    // Join thread
+    if (fiber->uses_thread) {
+      pthread_join(fiber->thread, NULL);
+    }
+
+    return result;
   }
-  int64_t result = fiber->result;
-  pthread_mutex_unlock(&fiber->mutex);
-
-  // Join thread
-  pthread_join(fiber->thread, NULL);
-
-  return result;
 }
 
 // TODO: Implement proper fiber yielding with context switching

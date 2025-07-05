@@ -1,0 +1,58 @@
+// 🚀 NESTED HANDLER SCOPING BUG TEST 🔥
+// This test SHOULD work but FAILS due to nested handler scoping issues
+
+effect Logger {
+    log: fn(string) -> Unit
+    debug: fn(string) -> Unit
+}
+
+effect State {
+    get: fn() -> int
+    set: fn(int) -> Unit
+}
+
+// Function that should use inner handler
+fn innerOperation() -> int !Logger = {
+    perform Logger.log("Inner operation executing")
+    perform Logger.debug("Debug info from inner")
+    42
+}
+
+// Function that should use outer handler after inner scope
+fn outerOperation() -> int !Logger = {
+    perform Logger.log("Outer operation executing")
+    perform Logger.debug("Debug info from outer")
+    21
+}
+
+// Test nested handlers with different implementations
+fn testNestedScoping() -> Unit !Logger = {
+    perform Logger.log("Before inner handler")
+    
+    // Inner handler should override outer for Logger
+    let innerResult = handle Logger 
+        log msg => print("[INNER-LOG] " + msg)
+        debug msg => print("[INNER-DEBUG] " + msg)
+    in {
+        let result = innerOperation()
+        perform Logger.log("Inner result: " + toString(result))
+        result
+    }
+    
+    // Should be back to outer handler now
+    perform Logger.log("After inner handler")
+    let outerResult = outerOperation()
+    perform Logger.log("Outer result: " + toString(outerResult))
+}
+
+// This should work but fails due to nested handler scoping bug
+fn main() -> Unit = {
+    handle Logger 
+        log msg => print("[OUTER-LOG] " + msg)
+        debug msg => print("[OUTER-DEBUG] " + msg)
+    in {
+        print("=== Testing Nested Handler Scoping ===")
+        testNestedScoping()
+        print("=== Test Complete ===")
+    }
+} 

@@ -5,6 +5,7 @@ package integration
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -13,7 +14,15 @@ import (
 func TestBasicsExamples(t *testing.T) {
 	checkLLVMTools(t)
 
-	examplesDir := "../../examples/tested/basics"
+	runTestExamplesRecursive(t, "../../examples/tested/basics", getExpectedOutputs())
+}
+
+// TestEffectsExamples tests the algebraic effects examples.
+func TestEffectsExamples(t *testing.T) {
+	checkLLVMTools(t)
+
+	examplesDir := "../../examples/tested/effects"
+	// Effects examples use same expected outputs map as basics, with .expectedoutput file fallback
 	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
 }
 
@@ -31,11 +40,26 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 			testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
 
 			t.Run(testName, func(t *testing.T) {
+				// Try to read from .expectedoutput file first
+				expectedOutputPath := path + ".expectedoutput"
+				if expectedContent, err := os.ReadFile(expectedOutputPath); err == nil {
+					// Use .expectedoutput file content, trimmed to match captureJITOutput behavior
+					expectedOutput := strings.TrimSpace(string(expectedContent))
+					testExampleFileWithTrimming(t, path, expectedOutput, true)
+					return
+				}
+
+				// Fallback to hardcoded expected outputs
 				expectedOutput, exists := expectedOutputs[info.Name()]
 				if !exists {
-					t.Fatalf("❌ MISSING expected output for %s!", info.Name())
+					t.Fatalf("❌ MISSING expected output for %s!\n"+
+						"🚨 CREATE: %s\n"+
+						"🚨 OR ADD TO expectedOutputs MAP!\n"+
+						"🚨 RUN: ../../osprey %s --run\n"+
+						"🚨 Then copy the output to create the .expectedoutput file!",
+						info.Name(), expectedOutputPath, info.Name())
 				}
-				testExampleFile(t, path, expectedOutput)
+				testExampleFileWithTrimming(t, path, expectedOutput, false)
 			})
 		}
 		return nil
@@ -251,25 +275,7 @@ func getExpectedOutputs() map[string]string {
 			"Error process returned non-zero exit code\n" +
 			"=== Async Process Management Demo Complete ===\n" +
 			"Note: Process output appears via C runtime callbacks during execution\n",
-		"callback_stdout_demo.osp": "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
-			"--- Test 1: Basic Stdout Callback ---\n" +
-			"✓ Process spawned with ID: 1\n" +
-			"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
-			"[CALLBACK] Process 1 EXIT: 0\n" +
-			"✓ Process finished with exit code: 0\n" +
-			"✓ Process cleaned up\n" +
-			"--- Test 2: Multiple Lines Callback ---\n" +
-			"✓ Multi-line process spawned with ID: 2\n" +
-			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
-			"[CALLBACK] Process 2 EXIT: 0\n" +
-			"✓ Multi-line process finished\n" +
-			"--- Test 3: Error Process Callback ---\n" +
-			"✓ Error process spawned with ID: 3\n" +
-			"[CALLBACK] Process 3 STDERR: ls: cannot access '/nonexistent/directory': No such file or directory\n\n" +
-			"[CALLBACK] Process 3 EXIT: 2\n" +
-			"✓ Error process finished with exit code: 2\n" +
-			"=== CALLBACK DEMO COMPLETE ===\n" +
-			"The [CALLBACK] lines above show C runtime calling into Osprey!\n",
+		"callback_stdout_demo.osp": getCallbackStdoutDemoExpectedOutput(),
 		"process_spawn_workflow.osp": "Step 1\n" +
 			"Step 2\n" +
 			"=== Process Spawning Workflow ===\n" +
@@ -303,11 +309,13 @@ func getExpectedOutputs() map[string]string {
 			"✅ commands[1] = \\\necho world\n\"\n\n✅ commands[2] = \\\necho test\n\"\n\n" +
 			"Testing out-of-bounds access:\n\n✅ Correctly caught out-of-bounds: commands[5] -> Error\n\n" +
 			"=== Array Test Complete ===\n\n",
+		// Effects examples
+		"algebraic_effects.osp": "Pure function result: 42\n🎉 BASIC TEST COMPLETE! 🎉",
 	}
 }
 
-// testExampleFile tests a single example file.
-func testExampleFile(t *testing.T, filePath, expectedOutput string) {
+// testExampleFileWithTrimming tests a single example file with optional output trimming.
+func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, trimActualOutput bool) {
 	t.Helper()
 
 	// Read the file content - needed for captureJITOutput
@@ -320,13 +328,14 @@ func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 
 	// ERROR: ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!
 	if expectedOutput == "" {
+		expectedOutputPath := filePath + ".expectedoutput"
 		t.Fatalf("❌ MISSING EXPECTED OUTPUT FOR %s!\n"+
 			"🚨 ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!\n"+
 			"🚨 NO COMPILATION-ONLY TESTS ALLOWED!\n"+
-			"🚨 RUN THE EXAMPLE AND ADD THE ACTUAL OUTPUT TO expectedOutputs MAP!\n"+
-			"🚨 Use: ../../osprey %s --run\n"+
-			"🚨 Then copy the output to the expectedOutputs map!",
-			filepath.Base(filePath), filepath.Base(filePath))
+			"🚨 CREATE: %s\n"+
+			"🚨 RUN: ../../osprey %s --run\n"+
+			"🚨 Then copy the output to create the .expectedoutput file!",
+			filepath.Base(filePath), expectedOutputPath, filepath.Base(filePath))
 	}
 
 	// Execute via CLI interface AND capture output - we need both coverage AND verification!
@@ -342,14 +351,67 @@ func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 	}
 
 	// THE MOST CRITICAL PART: Verify output matches expected!
-	if output != expectedOutput {
-		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, output)
+	// If expected output came from a file (and was trimmed), trim actual output too
+	actualOutput := output
+	if trimActualOutput {
+		actualOutput = strings.TrimSpace(output)
+	}
+
+	if actualOutput != expectedOutput {
+		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, actualOutput)
 	}
 
 	t.Logf("✅ Example %s executed and output verified", filepath.Base(filePath))
 }
 
 // Helper functions for expected outputs.
+func getCallbackStdoutDemoExpectedOutput() string {
+	// Platform-specific expected output due to different ls behavior
+	if runtime.GOOS == "darwin" {
+		// macOS behavior: exit code 1, different error message format
+		return "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
+			"--- Test 1: Basic Stdout Callback ---\n" +
+			"✓ Process spawned with ID: 1\n" +
+			"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
+			"[CALLBACK] Process 1 EXIT: 0\n" +
+			"✓ Process finished with exit code: 0\n" +
+			"✓ Process cleaned up\n" +
+			"--- Test 2: Multiple Lines Callback ---\n" +
+			"✓ Multi-line process spawned with ID: 2\n" +
+			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+			"[CALLBACK] Process 2 EXIT: 0\n" +
+			"✓ Multi-line process finished\n" +
+			"--- Test 3: Error Process Callback ---\n" +
+			"✓ Error process spawned with ID: 3\n" +
+			"[CALLBACK] Process 3 STDERR: ls: /nonexistent/directory: No such file or directory\n\n" +
+			"[CALLBACK] Process 3 EXIT: 1\n" +
+			"✓ Error process finished with exit code: 1\n" +
+			"=== CALLBACK DEMO COMPLETE ===\n" +
+			"The [CALLBACK] lines above show C runtime calling into Osprey!\n"
+	}
+
+	// Linux behavior: exit code 2, different error message format
+	return "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
+		"--- Test 1: Basic Stdout Callback ---\n" +
+		"✓ Process spawned with ID: 1\n" +
+		"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
+		"[CALLBACK] Process 1 EXIT: 0\n" +
+		"✓ Process finished with exit code: 0\n" +
+		"✓ Process cleaned up\n" +
+		"--- Test 2: Multiple Lines Callback ---\n" +
+		"✓ Multi-line process spawned with ID: 2\n" +
+		"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+		"[CALLBACK] Process 2 EXIT: 0\n" +
+		"✓ Multi-line process finished\n" +
+		"--- Test 3: Error Process Callback ---\n" +
+		"✓ Error process spawned with ID: 3\n" +
+		"[CALLBACK] Process 3 STDERR: ls: cannot access '/nonexistent/directory': No such file or directory\n\n" +
+		"[CALLBACK] Process 3 EXIT: 2\n" +
+		"✓ Error process finished with exit code: 2\n" +
+		"=== CALLBACK DEMO COMPLETE ===\n" +
+		"The [CALLBACK] lines above show C runtime calling into Osprey!\n"
+}
+
 func getSpaceTraderExpectedOutput() string {
 	return "🌌 Welcome to the Galactic Trade Network! 🌌\n" +
 		"You are Captain Alex, commander of the starship Osprey-7\n" +

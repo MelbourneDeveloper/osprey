@@ -1,0 +1,45 @@
+// 🚀 HANDLER SCOPE TIMING BUG TEST 🔥
+// This test SHOULD work but FAILS due to handler scope restoration timing
+
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+effect State {
+    get: fn() -> int
+    set: fn(int) -> Unit
+}
+
+// Function that calls another effectful function inside a handler
+fn nestedCall() -> int !Logger = {
+    perform Logger.log("Before nested operation")
+    let result = deepNestedOperation()
+    perform Logger.log("After nested operation")
+    result
+}
+
+// Deep function that should still have access to handler scope
+fn deepNestedOperation() -> int !Logger = {
+    perform Logger.log("Deep operation executing")
+    performComplexCalculation()
+}
+
+// Complex calculation that performs effects
+fn performComplexCalculation() -> int !Logger = {
+    perform Logger.log("Complex calculation starting")
+    let intermediate = 21 * 2
+    perform Logger.log("Intermediate result: " + toString(intermediate))
+    intermediate
+}
+
+// This should work but fails due to handler scope timing bug
+fn main() -> Unit = {
+    handle Logger
+        log msg => print("[HANDLER] " + msg)
+    in {
+        print("=== Testing Handler Scope Timing ===")
+        let result = nestedCall()
+        print("Final result: " + toString(result))
+        print("=== Test Complete ===")
+    }
+} 
