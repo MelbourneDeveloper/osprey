@@ -121,7 +121,7 @@ func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
 // that uses a default callback for stdout/stderr events.
 func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapSpawnProcessWrongArgs(len(callExpr.Arguments))
+		return nil, WrapSpawnProcessWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	cmd, err := g.generateExpression(callExpr.Arguments[0])

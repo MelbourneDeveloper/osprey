@@ -180,7 +180,7 @@ func (g *LLVMGenerator) generateHTTPStopServerCall(callExpr *ast.CallExpression)
 // generateHttpCreateClientCall generates calls to http_create_client(base_url, timeout).
 func (g *LLVMGenerator) generateHTTPCreateClientCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapHTTPCreateClientWrongArgs(len(callExpr.Arguments))
+		return nil, WrapHTTPCreateClientWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	// Get base URL argument (string)
@@ -206,7 +206,7 @@ func (g *LLVMGenerator) generateHTTPCreateClientCall(callExpr *ast.CallExpressio
 // generateHttpGetCall generates calls to http_request(client_id, GET, path, headers, "").
 func (g *LLVMGenerator) generateHTTPGetCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != ThreeArgs {
-		return nil, WrapHTTPGetWrongArgs(len(callExpr.Arguments))
+		return nil, WrapHTTPGetWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	// Get client ID
