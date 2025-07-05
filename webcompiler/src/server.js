@@ -5,6 +5,7 @@ import { createServer } from 'http'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { WebSocketServer } from 'ws'
+import { randomUUID } from 'crypto'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -141,17 +142,60 @@ app.post('/api/run', async (req, res) => {
     }
 })
 
-// Helper function to run Osprey compiler
+// STARTUP: Delete ALL temp folders on server startup
+async function deleteAllTempFolders() {
+    const tempBaseDir = '/tmp/osprey-temp'
+    try {
+        console.log('🗑️ Deleting ALL temp folders on startup...')
+        await fs.rm(tempBaseDir, { recursive: true, force: true })
+        console.log('✅ All temp folders deleted')
+    } catch (error) {
+        console.error('⚠️ Error deleting temp folders:', error.message)
+    }
+}
+
+// Cleanup old temp folders periodically to prevent disk space issues
+async function cleanupOldTempFolders() {
+    const tempBaseDir = '/tmp/osprey-temp'
+    try {
+        const folders = await fs.readdir(tempBaseDir)
+        const now = Date.now()
+        const oneHourAgo = now - (60 * 60 * 1000) // 1 hour ago
+        
+        for (const folder of folders) {
+            const folderPath = path.join(tempBaseDir, folder)
+            const stats = await fs.stat(folderPath)
+            if (stats.isDirectory() && stats.mtime.getTime() < oneHourAgo) {
+                await fs.rm(folderPath, { recursive: true, force: true })
+                console.log(`🗑️ Cleaned up old temp folder: ${folder}`)
+            }
+        }
+    } catch (error) {
+        console.error('⚠️ Error cleaning up temp folders:', error.message)
+    }
+}
+
+// Run cleanup every 30 minutes
+setInterval(cleanupOldTempFolders, 30 * 60 * 1000)
+
+// DELETE ALL TEMP FOLDERS ON STARTUP
+deleteAllTempFolders()
+
+// THREAD-SAFE Helper function to run Osprey compiler
+// Each request gets its own UUID-named folder for complete isolation
 // Always uses --sandbox flag for security (disables HTTP, WebSocket, file system, and FFI access)
 function runOspreyCompiler(args, code = '') {
     return new Promise(async (resolve, reject) => {
-        // Ensure the temp directory exists
-        const tempDir = '/tmp/osprey-temp'
-        const tempFile = path.join(tempDir, `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.osp`)
+        // Create a unique UUID folder for this request - THREAD SAFE!
+        const requestId = randomUUID()
+        const tempBaseDir = '/tmp/osprey-temp'
+        const tempRequestDir = path.join(tempBaseDir, requestId)
+        const tempFile = path.join(tempRequestDir, 'main.osp')
 
         try {
-            // Create the temp directory if it doesn't exist
-            await fs.mkdir(tempDir, { recursive: true })
+            // Create the unique temp directory for this request
+            await fs.mkdir(tempRequestDir, { recursive: true })
+            console.log(`📁 Created temp folder: ${requestId}`)
 
             console.log(`💾 Writing temp file: ${tempFile}`)
             await fs.writeFile(tempFile, code)
@@ -163,7 +207,7 @@ function runOspreyCompiler(args, code = '') {
             console.log(`🔨 Running: ${ospreyPath} ${tempFile} ${args.join(' ')}`)
             const child = spawn(ospreyPath, [tempFile, ...args], {
                 stdio: 'pipe',
-                cwd: process.cwd(),
+                cwd: tempRequestDir, // Run in the temp directory
                 timeout: 5000 // 5 second timeout - kill any program that runs longer
             })
 
@@ -179,12 +223,12 @@ function runOspreyCompiler(args, code = '') {
             })
 
             child.on('close', async (exitCode) => {
-                // Clean up temp file
+                // Clean up the ENTIRE temp folder for this request
                 try {
-                    await fs.unlink(tempFile)
-                    console.log(`🗑️ Cleaned up temp file: ${tempFile}`)
+                    await fs.rm(tempRequestDir, { recursive: true, force: true })
+                    console.log(`🗑️ Cleaned up temp folder: ${requestId}`)
                 } catch (e) {
-                    console.error('⚠️ Failed to clean up temp file:', e.message)
+                    console.error('⚠️ Failed to clean up temp folder:', e.message)
                 }
 
                 // Always resolve with the result - let the caller determine success/failure
@@ -197,15 +241,22 @@ function runOspreyCompiler(args, code = '') {
             })
 
             child.on('error', async (error) => {
-                // Clean up temp file on error
+                // Clean up temp folder on error
                 try {
-                    await fs.unlink(tempFile)
+                    await fs.rm(tempRequestDir, { recursive: true, force: true })
+                    console.log(`🗑️ Cleaned up temp folder after error: ${requestId}`)
                 } catch (e) {
-                    // Ignore cleanup errors
+                    console.error('⚠️ Failed to clean up temp folder after error:', e.message)
                 }
                 reject(error)
             })
         } catch (error) {
+            // Clean up temp folder if creation failed
+            try {
+                await fs.rm(tempRequestDir, { recursive: true, force: true })
+            } catch (e) {
+                // Ignore cleanup errors
+            }
             reject(error)
         }
     })

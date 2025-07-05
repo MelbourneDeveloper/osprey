@@ -2,7 +2,7 @@
 layout: page
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
-date: 2025-06-26
+date: 2025-07-05
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/"
@@ -11,7 +11,7 @@ permalink: "/spec/"
 # Osprey Language Specification
 
 **Version:** 0.2.0-alpha  
-**Date:** 2025-06-26  
+**Date:** 2025-07-05  
 **Author:** Christian Findlay
 
 ## Table of Contents
@@ -33,6 +33,7 @@ permalink: "/spec/"
 15. [HTTP](/spec/0015-http/)
 16. [WebSocket Functions](/spec/0016-websockets/)
 17. [Security and Sandboxing](/spec/0017-securityandsandboxing/)
+18. [Algebraic Effects ([ospreylang.dev][1])](/spec/0018-algebraiceffects/)
 
 ## About This Specification
 

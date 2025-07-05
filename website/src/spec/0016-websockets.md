@@ -2,7 +2,7 @@
 layout: page
 title: "WebSocket Functions"
 description: "Osprey Language Specification: WebSocket Functions"
-date: 2025-06-26
+date: 2025-07-05
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0016-websockets/"
