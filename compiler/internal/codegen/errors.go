@@ -246,10 +246,10 @@ func WrapFieldAccessNotImpl(field string) error {
 // WrapFieldAccessNotImplWithPos wraps field access not implemented errors with field name and position.
 func WrapFieldAccessNotImplWithPos(field string, pos *ast.Position) error {
 	if pos != nil {
-		return fmt.Errorf("line %d:%d: field access not implemented for field '%s': %w",
-			pos.Line, pos.Column, field, ErrFieldAccessNotImpl)
+		return fmt.Errorf("line %d:%d: field access not implemented for field '%s'",
+			pos.Line, pos.Column, field)
 	}
-	return fmt.Errorf("field access not implemented for field '%s': %w", field, ErrFieldAccessNotImpl)
+	return fmt.Errorf("field access not implemented for field '%s'", field)
 }
 
 // WrapToStringWrongArgs wraps toString wrong arguments errors with argument count.

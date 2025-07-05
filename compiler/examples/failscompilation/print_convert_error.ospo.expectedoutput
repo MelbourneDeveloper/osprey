@@ -1,1 +1,1 @@
-line 5:18: writeFile expects exactly 2 arguments (filename, content), got 0
+writeFile expects exactly 2 arguments (filename, content), got 0

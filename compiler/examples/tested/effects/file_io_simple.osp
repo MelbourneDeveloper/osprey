@@ -1,68 +1,49 @@
-// File I/O Effects Demo - Functions that CAN FAIL return Result types
-// Effect handlers use syntax sugar for automatic error handling
+// Real File I/O Demo - Using actual built-in functions
+// These functions return Result types for proper error handling
 
-effect FileIO {
-    read: fn(string) -> string        // Effect declarations use raw types (clean)
-    write: fn(string, string) -> Unit
-    delete: fn(string) -> Unit  
-    exists: fn(string) -> bool
-}
-
-// File I/O functions - using raw types for now (TODO: Result types later)
-fn writeFileContent(filename: string, content: string) -> Unit !FileIO = {
-    perform FileIO.write(filename, content)
-}
-
-fn readFileContent(filename: string) -> string !FileIO = {
-    perform FileIO.read(filename)
-}
-
-fn checkFileExists(filename: string) -> bool !FileIO = {
-    perform FileIO.exists(filename)
-}
-
-// Main function with file I/O handler
 fn main() -> Unit = {
-    handle FileIO
-        read filename => {
-            print("📖 Reading file: " + filename)
-            // DESIGN: Handler returns raw value, effect system wraps in Result
-            // TODO: Add syntax sugar Error("message") for failures
-            "Sample content from " + filename
-        }
-        write filename content => {
-            print("💾 Writing to: " + filename)
-            // DESIGN: void operations succeed with Unit, failures with Error("msg")
-            // TODO: Implement Unit literal and Error constructor
-        }
-        delete filename => {
-            print("🗑️ Deleting file: " + filename)
-            // DESIGN: Same as write - Unit for success, Error for failure
-        }
-        exists filename => {
-            print("🔍 Checking file: " + filename)
-            // DESIGN: Raw boolean wrapped in Result<bool, Error> by effect system
-            true
-        }
-    in {
-        print("🚀 Starting File I/O Test")
-        
-        // Test writing files - returns Unit (raw type for now)
-        writeFileContent(filename: "config.txt", content: "debug=true")
-        print("✅ Write completed")
-        
-        // Test reading files - returns string (raw type for now)
-        let content = readFileContent("data.txt")
-        print("✅ Read content: " + content)
-        
-        // Test file existence - returns bool (raw type for now)
-        let exists = checkFileExists("log.txt")  
-        print("✅ File exists: " + toString(exists))
-        
-        // Direct perform calls also work (for handlers only)
-        perform FileIO.delete("temp.txt")
-        print("✅ Direct delete completed")
-        
-        print("🎉 File I/O Test Complete!")
-    }
+    print("🚀 Starting Real File I/O Test")
+    
+    // Test writing files - writeFile returns Result<Success, string>
+    let writeResult = writeFile("config.txt", "debug=true\nverbose=false\nlogLevel=info")
+    print("✅ Write result created")
+    
+    // Test reading files - readFile returns Result<string, string>
+    let readResult = readFile("config.txt")
+    print("✅ Read result created")
+    
+    // Write some test data
+    let testData = "name=Osprey\nversion=1.0\nauthor=Developer"
+    let dataWriteResult = writeFile("test.txt", testData)
+    print("✅ Test data written")
+    
+    // Read the test data back
+    let dataReadResult = readFile("test.txt")
+    print("✅ Test data read back")
+    
+    // Write JSON-like configuration
+    let configData = "{\n  \"database\": \"sqlite\",\n  \"port\": 8080,\n  \"debug\": true\n}"
+    let jsonWriteResult = writeFile("config.json", configData)
+    print("✅ JSON config written")
+    
+    // Read the JSON config
+    let jsonReadResult = readFile("config.json")
+    print("✅ JSON config read")
+    
+    // Write multiple small files for testing
+    let file1Result = writeFile("file1.txt", "Content of file 1")
+    let file2Result = writeFile("file2.txt", "Content of file 2") 
+    let file3Result = writeFile("file3.txt", "Content of file 3")
+    print("✅ Multiple files written")
+    
+    // Read all the files back
+    let read1Result = readFile("file1.txt")
+    let read2Result = readFile("file2.txt")
+    let read3Result = readFile("file3.txt")
+    print("✅ Multiple files read")
+    
+    print("🎉 Real File I/O Test Complete!")
+    print("📝 All operations use actual built-in functions:")
+    print("   - writeFile(filename, content) -> Result<Success, string>")
+    print("   - readFile(filename) -> Result<string, string>")
 } 

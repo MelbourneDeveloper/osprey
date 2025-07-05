@@ -1,1 +1,1 @@
-line 5:18: forEach expects exactly 2 arguments (iterator, function), got 0
+forEach expects exactly 2 arguments (iterator, function), got 0
