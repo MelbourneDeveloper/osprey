@@ -550,10 +550,21 @@ func WrapMatchNotExhaustive(missingPatterns []string) error {
 	return fmt.Errorf("%w: missing patterns: %v", ErrMatchNotExhaustive, missingPatterns)
 }
 
+// WrapMatchNotExhaustiveWithPos wraps non-exhaustive match errors with missing patterns and position.
+func WrapMatchNotExhaustiveWithPos(missingPatterns []string, pos *ast.Position) error {
+	return fmt.Errorf("line %d:%d: %w: missing patterns: %v", pos.Line, pos.Column, ErrMatchNotExhaustive, missingPatterns)
+}
+
 // WrapMatchArmTypeMismatch wraps match arm type mismatch error with details.
 func WrapMatchArmTypeMismatch(armIndex int, actualType, expectedType string) error {
 	return fmt.Errorf("%w: arm %d returns '%s' but expected '%s'",
 		ErrMatchTypeMismatch, armIndex, actualType, expectedType)
+}
+
+// WrapMatchArmTypeMismatchWithPos wraps match arm type mismatch error with details and position.
+func WrapMatchArmTypeMismatchWithPos(armIndex int, actualType, expectedType string, pos *ast.Position) error {
+	return fmt.Errorf("line %d:%d: %w: arm %d returns '%s' but expected '%s'",
+		pos.Line, pos.Column, ErrMatchTypeMismatch, armIndex, actualType, expectedType)
 }
 
 // WrapMatchInvalidPattern wraps invalid pattern errors with pattern details.
@@ -564,6 +575,11 @@ func WrapMatchInvalidPattern(pattern, reason string) error {
 // WrapMatchUnknownVariant wraps unknown variant errors with variant and type info.
 func WrapMatchUnknownVariant(variant, typeName string) error {
 	return fmt.Errorf("%w: variant '%s' is not defined in type '%s'", ErrMatchUnknownVariant, variant, typeName)
+}
+
+// WrapMatchUnknownVariantWithPos wraps unknown variant errors with variant and type info and position.
+func WrapMatchUnknownVariantWithPos(variant, typeName string, pos *ast.Position) error {
+	return fmt.Errorf("line %d:%d: %w: variant '%s' is not defined in type '%s'", pos.Line, pos.Column, ErrMatchUnknownVariant, variant, typeName)
 }
 
 // WrapMatchMixedPatterns wraps mixed pattern type errors with pattern details.
@@ -726,7 +742,18 @@ func WrapAnyDirectAssignment(varName, targetType string) error {
 
 // WrapAnyDirectFunctionArg wraps any direct function argument errors.
 func WrapAnyDirectFunctionArg(funcName, expectedType string) error {
-	return fmt.Errorf("%w: function '%s' expecting '%s'", ErrAnyDirectFunctionArg, funcName, expectedType)
+	return fmt.Errorf("%w: function '%s' expecting '%s'",
+		ErrAnyDirectFunctionArg, funcName, expectedType)
+}
+
+// WrapAnyDirectFunctionArgWithPos wraps any direct function argument errors with position.
+func WrapAnyDirectFunctionArgWithPos(funcName, expectedType string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: function '%s' expecting '%s'",
+			pos.Line, pos.Column, ErrAnyDirectFunctionArg, funcName, expectedType)
+	}
+	return fmt.Errorf("%w: function '%s' expecting '%s'",
+		ErrAnyDirectFunctionArg, funcName, expectedType)
 }
 
 // WrapAnyImplicitConversion wraps any implicit conversion errors.

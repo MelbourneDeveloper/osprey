@@ -1007,7 +1007,14 @@ func (g *LLVMGenerator) generateFunctionCallArguments(
 		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
 		// This preserves type safety while allowing function composition
 		paramName := "unknown" // We don't have parameter names for positional args
-		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
+
+		// Extract position from the argument (simple version)
+		var pos *ast.Position
+		if ident, ok := arg.(*ast.Identifier); ok {
+			pos = ident.Position
+		}
+
+		if err := g.validateFunctionArgument(arg, funcName, paramName, pos); err != nil {
 			return nil, err
 		}
 

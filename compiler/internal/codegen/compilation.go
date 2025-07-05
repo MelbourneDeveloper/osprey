@@ -70,7 +70,7 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 
 	// Validate AST for type inference rules
 	if err := ast.ValidateProgram(program); err != nil {
-		return "", fmt.Errorf("validation error: %w", err)
+		return "", err
 	}
 
 	// Generate LLVM IR with security configuration
