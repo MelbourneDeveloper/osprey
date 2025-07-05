@@ -34,7 +34,10 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		// Array indexing: ID[INT]
 		return b.buildListAccess(ctx)
 	case ctx.ID(0) != nil:
-		return &Identifier{Name: ctx.ID(0).GetText()}
+		return &Identifier{
+			Name:     ctx.ID(0).GetText(),
+			Position: b.getPosition(ctx.ID(0).GetSymbol()),
+		}
 	case ctx.Expr(0) != nil:
 		return b.buildExpression(ctx.Expr(0))
 	}
@@ -82,20 +85,32 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 		text := ctx.INT().GetText()
 		value, _ := strconv.ParseInt(text, 10, 64)
 
-		return &IntegerLiteral{Value: value}
+		return &IntegerLiteral{
+			Value:    value,
+			Position: b.getPosition(ctx.INT().GetSymbol()),
+		}
 	case ctx.STRING() != nil:
 		text := ctx.STRING().GetText()
 		// Remove quotes and process escape sequences
 		value := strings.Trim(text, "\"")
 		value = b.processEscapeSequences(value)
 
-		return &StringLiteral{Value: value}
+		return &StringLiteral{
+			Value:    value,
+			Position: b.getPosition(ctx.STRING().GetSymbol()),
+		}
 	case ctx.INTERPOLATED_STRING() != nil:
 		return b.buildInterpolatedString(ctx.INTERPOLATED_STRING().GetText())
 	case ctx.TRUE() != nil:
-		return &BooleanLiteral{Value: true}
+		return &BooleanLiteral{
+			Value:    true,
+			Position: b.getPosition(ctx.TRUE().GetSymbol()),
+		}
 	case ctx.FALSE() != nil:
-		return &BooleanLiteral{Value: false}
+		return &BooleanLiteral{
+			Value:    false,
+			Position: b.getPosition(ctx.FALSE().GetSymbol()),
+		}
 	case ctx.ListLiteral() != nil:
 		return b.buildListLiteral(ctx.ListLiteral())
 	}
@@ -115,7 +130,10 @@ func (b *Builder) buildInterpolatedString(text string) Expression {
 		}
 	}
 
-	return &InterpolatedStringLiteral{Parts: parts}
+	return &InterpolatedStringLiteral{
+		Parts:    parts,
+		Position: nil, // Position will be set by caller if available
+	}
 }
 
 // buildListLiteral builds a ListLiteral from a list literal context.
@@ -134,7 +152,10 @@ func (b *Builder) buildListLiteral(ctx parser.IListLiteralContext) Expression {
 		}
 	}
 
-	return &ListLiteral{Elements: elements}
+	return &ListLiteral{
+		Elements: elements,
+		Position: b.getPositionFromContext(ctx),
+	}
 }
 
 // buildListAccess builds a ListAccessExpression from array indexing syntax.
@@ -144,16 +165,23 @@ func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
 	}
 
 	// Get the list identifier
-	listExpr := &Identifier{Name: ctx.ID(0).GetText()}
+	listExpr := &Identifier{
+		Name:     ctx.ID(0).GetText(),
+		Position: b.getPosition(ctx.ID(0).GetSymbol()),
+	}
 
 	// Parse the index
 	indexText := ctx.INT().GetText()
 	indexValue, _ := strconv.ParseInt(indexText, 10, 64)
-	indexExpr := &IntegerLiteral{Value: indexValue}
+	indexExpr := &IntegerLiteral{
+		Value:    indexValue,
+		Position: b.getPosition(ctx.INT().GetSymbol()),
+	}
 
 	return &ListAccessExpression{
-		List:  listExpr,
-		Index: indexExpr,
+		List:     listExpr,
+		Index:    indexExpr,
+		Position: b.getPositionFromContext(ctx),
 	}
 }
 
@@ -297,6 +325,7 @@ func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExp
 		EffectName:    effectName,
 		OperationName: operationName,
 		Arguments:     arguments,
+		Position:      b.getPositionFromContext(ctx),
 	}
 }
 
@@ -330,6 +359,7 @@ func (b *Builder) buildHandlerExpression(ctx parser.IPrimaryContext) *HandlerExp
 			OperationName: operationName,
 			Parameters:    parameters,
 			Body:          body,
+			Position:      b.getPositionFromContext(armCtx),
 		})
 	}
 
@@ -340,5 +370,6 @@ func (b *Builder) buildHandlerExpression(ctx parser.IPrimaryContext) *HandlerExp
 		EffectName: effectName,
 		Handlers:   handlers,
 		Body:       bodyExpr,
+		Position:   b.getPositionFromContext(ctx),
 	}
 }

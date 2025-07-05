@@ -19,10 +19,11 @@ func (b *Builder) buildLetDecl(ctx parser.ILetDeclContext) *LetDeclaration {
 	value := b.buildExpression(ctx.Expr())
 
 	return &LetDeclaration{
-		Name:    name,
-		Mutable: mutable,
-		Type:    nil, // For now, type annotation support comes later
-		Value:   value,
+		Name:     name,
+		Mutable:  mutable,
+		Type:     nil, // For now, type annotation support comes later
+		Value:    value,
+		Position: b.getPositionFromContext(ctx),
 	}
 }
 
@@ -75,6 +76,7 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		ReturnType: returnType,
 		Effects:    effects, // CRITICAL: Include parsed effects
 		Body:       body,
+		Position:   b.getPositionFromContext(ctx),
 	}
 }
 

@@ -509,6 +509,12 @@ func (ec *EffectCodegen) createUnhandledEffectError(perform *ast.PerformExpressi
 	if ec.isLikelyCircularDependency(perform.EffectName) {
 		errorMsg := "COMPILATION ERROR: Circular effect dependency detected - " +
 			"effects cannot have circular references that would cause infinite recursion"
+
+		// Include position information if available
+		if perform.Position != nil {
+			return fmt.Errorf("line %d:%d: %w: %s",
+				perform.Position.Line, perform.Position.Column, ErrUnhandledEffect, errorMsg)
+		}
 		return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 	}
 
@@ -516,6 +522,12 @@ func (ec *EffectCodegen) createUnhandledEffectError(perform *ast.PerformExpressi
 		"all effects must be explicitly handled or forwarded in function signatures. "+
 		"Add a handler or declare the effect in the function signature with !%s",
 		perform.EffectName, perform.OperationName, perform.EffectName)
+
+	// Include position information if available
+	if perform.Position != nil {
+		return fmt.Errorf("line %d:%d: %w: %s",
+			perform.Position.Line, perform.Position.Column, ErrUnhandledEffect, errorMsg)
+	}
 	return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 }
 

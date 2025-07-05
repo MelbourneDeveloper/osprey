@@ -19,6 +19,7 @@ func (b *Builder) buildMatchExpr(ctx parser.IMatchExprContext) Expression {
 		return &MatchExpression{
 			Expression: expr,
 			Arms:       arms,
+			Position:   b.getPositionFromContext(ctx),
 		}
 	}
 

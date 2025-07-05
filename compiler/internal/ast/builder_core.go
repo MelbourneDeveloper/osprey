@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"github.com/antlr4-go/antlr/v4"
 	"github.com/christianfindlay/osprey/parser"
 )
 
@@ -34,6 +35,32 @@ func (b *Builder) BuildProgram(tree parser.IProgramContext) *Program {
 	}
 
 	return &Program{Statements: statements}
+}
+
+// getPosition extracts position information from an ANTLR token.
+func (b *Builder) getPosition(token antlr.Token) *Position {
+	if token == nil {
+		return &Position{Line: 1, Column: 0}
+	}
+	return &Position{
+		Line:   token.GetLine(),
+		Column: token.GetColumn(),
+	}
+}
+
+// getPositionFromContext extracts position information from a parser context.
+func (b *Builder) getPositionFromContext(ctx antlr.ParserRuleContext) *Position {
+	if ctx == nil {
+		return &Position{Line: 1, Column: 0}
+	}
+	start := ctx.GetStart()
+	if start == nil {
+		return &Position{Line: 1, Column: 0}
+	}
+	return &Position{
+		Line:   start.GetLine(),
+		Column: start.GetColumn(),
+	}
 }
 
 func (b *Builder) buildStatement(ctx parser.IStatementContext) Statement {

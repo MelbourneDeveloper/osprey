@@ -1,1 +1,2 @@
-field access not implemented for field 'name': field access not implemented for field
+Error generating LLVM IR: line 1:0: field access not implemented for field 'name': field access not implemented for field
+line 2:16: field access not implemented for field 'name': field access not implemented for field

@@ -5,6 +5,7 @@ type PerformExpression struct {
 	EffectName    string
 	OperationName string
 	Arguments     []Expression
+	Position      *Position
 }
 
 func (pe *PerformExpression) isExpression() {}
@@ -14,6 +15,7 @@ type HandlerExpression struct {
 	EffectName string
 	Handlers   []HandlerArm
 	Body       Expression
+	Position   *Position
 }
 
 func (he *HandlerExpression) isExpression() {}
@@ -23,4 +25,5 @@ type HandlerArm struct {
 	OperationName string
 	Parameters    []string
 	Body          Expression
+	Position      *Position
 }

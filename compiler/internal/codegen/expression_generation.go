@@ -3,6 +3,7 @@ package codegen
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -451,7 +452,7 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 		return fn, nil
 	}
 
-	return nil, WrapUndefinedVariable(ident.Name)
+	return nil, WrapUndefinedVariableWithPos(ident.Name, ident.Position)
 }
 
 func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) (value.Value, error) {
@@ -473,29 +474,32 @@ func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) 
 		return nil, err
 	}
 
-	return g.generateBinaryOperation(binExpr.Operator, left, right)
+	return g.generateBinaryOperationWithPos(binExpr.Operator, left, right, binExpr.Position)
 }
 
-// generateBinaryOperation generates the appropriate LLVM operation for the given operator.
-func (g *LLVMGenerator) generateBinaryOperation(operator string, left, right value.Value) (value.Value, error) {
+// generateBinaryOperationWithPos generates the appropriate LLVM operation for the given operator with position info.
+func (g *LLVMGenerator) generateBinaryOperationWithPos(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
 	switch operator {
 	case "+", "-", "*", "/", "%":
-
-		return g.generateArithmeticOperation(operator, left, right)
+		return g.generateArithmeticOperationWithPos(operator, left, right, pos)
 	case "==", "!=", "<", "<=", ">", ">=":
-
-		return g.generateComparisonOperation(operator, left, right)
+		return g.generateComparisonOperationWithPos(operator, left, right, pos)
+	case "&&", "||":
+		return g.generateLogicalOperationWithPos(operator, left, right, pos)
 	default:
-
-		return nil, WrapUnsupportedBinaryOp(operator)
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
 }
 
-// generateArithmeticOperation generates LLVM arithmetic operations.
-func (g *LLVMGenerator) generateArithmeticOperation(operator string, left, right value.Value) (value.Value, error) {
+// generateArithmeticOperationWithPos generates LLVM arithmetic operations with position info.
+func (g *LLVMGenerator) generateArithmeticOperationWithPos(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
 	// CRITICAL FIX: Check for void types before arithmetic operations
 	if left.Type() == types.Void || right.Type() == types.Void {
-		return nil, WrapVoidArithmetic(operator)
+		return nil, WrapVoidArithmeticWithPos(operator, pos)
 	}
 
 	switch operator {
@@ -506,25 +510,22 @@ func (g *LLVMGenerator) generateArithmeticOperation(operator string, left, right
 		}
 		return g.builder.NewAdd(left, right), nil
 	case "-":
-
 		return g.builder.NewSub(left, right), nil
 	case "*":
-
 		return g.builder.NewMul(left, right), nil
 	case "/":
-
 		return g.builder.NewSDiv(left, right), nil
 	case "%":
-
 		return g.builder.NewSRem(left, right), nil
 	default:
-
-		return nil, WrapUnsupportedBinaryOp(operator)
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
 }
 
-// generateComparisonOperation generates LLVM comparison operations.
-func (g *LLVMGenerator) generateComparisonOperation(operator string, left, right value.Value) (value.Value, error) {
+// generateComparisonOperationWithPos generates LLVM comparison operations with position info.
+func (g *LLVMGenerator) generateComparisonOperationWithPos(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
 	var cmp value.Value
 
 	switch operator {
@@ -541,11 +542,56 @@ func (g *LLVMGenerator) generateComparisonOperation(operator string, left, right
 	case ">=":
 		cmp = g.builder.NewICmp(enum.IPredSGE, left, right)
 	default:
-
-		return nil, WrapUnsupportedBinaryOp(operator)
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
 
 	return g.builder.NewZExt(cmp, types.I64), nil
+}
+
+// generateLogicalOperationWithPos generates LLVM logical operations with position info.
+func (g *LLVMGenerator) generateLogicalOperationWithPos(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
+	switch operator {
+	case "&&":
+		return g.generateLogicalAnd(left, right)
+	case "||":
+		return g.generateLogicalOr(left, right)
+	default:
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
+	}
+}
+
+// generateLogicalAnd generates LLVM IR for logical AND operations.
+func (g *LLVMGenerator) generateLogicalAnd(left, right value.Value) (value.Value, error) {
+	// Short-circuit evaluation for &&
+	// If left is false, return false without evaluating right
+
+	// Convert to booleans first
+	leftBool := g.builder.NewICmp(enum.IPredNE, left, constant.NewInt(types.I64, 0))
+	rightBool := g.builder.NewICmp(enum.IPredNE, right, constant.NewInt(types.I64, 0))
+
+	// Perform logical AND
+	result := g.builder.NewAnd(leftBool, rightBool)
+
+	// Convert back to i64 (0 for false, 1 for true)
+	return g.builder.NewZExt(result, types.I64), nil
+}
+
+// generateLogicalOr generates LLVM IR for logical OR operations.
+func (g *LLVMGenerator) generateLogicalOr(left, right value.Value) (value.Value, error) {
+	// Short-circuit evaluation for ||
+	// If left is true, return true without evaluating right
+
+	// Convert to booleans first
+	leftBool := g.builder.NewICmp(enum.IPredNE, left, constant.NewInt(types.I64, 0))
+	rightBool := g.builder.NewICmp(enum.IPredNE, right, constant.NewInt(types.I64, 0))
+
+	// Perform logical OR
+	result := g.builder.NewOr(leftBool, rightBool)
+
+	// Convert back to i64 (0 for false, 1 for true)
+	return g.builder.NewZExt(result, types.I64), nil
 }
 
 // generateUnaryExpression generates LLVM IR for unary expressions.
@@ -571,7 +617,7 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 		return g.builder.NewZExt(cmp, types.I64), nil
 	default:
 
-		return nil, WrapUnsupportedUnaryOp(unaryExpr.Operator)
+		return nil, WrapUnsupportedUnaryOpWithPos(unaryExpr.Operator, unaryExpr.Position)
 	}
 }
 
@@ -610,43 +656,32 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 	}
 
 	// Check if this is field access on an identifier that might be a constrained type result
-	if _, isIdent := fieldAccess.Object.(*ast.Identifier); isIdent {
-		// Check if this identifier was declared as a constrained type constructor result
-		// For now, we'll generate the object and then check if field access is valid
-		obj, err := g.generateExpression(fieldAccess.Object)
-		if err != nil {
-			// If we can't generate the object, it's likely an undefined variable
-			// Return the original error (which will be "undefined variable")
-			return nil, err
+	if ident, isIdent := fieldAccess.Object.(*ast.Identifier); isIdent {
+		// Check if this identifier represents a constrained type constructor result
+		if varType, exists := g.variableTypes[ident.Name]; exists {
+			// Look for Result< pattern in the type
+			if strings.Contains(varType, "Result<") {
+				// This is field access on a Result type - requires pattern matching
+				return nil, WrapConstraintResultFieldAccessWithPos(fieldAccess.FieldName, fieldAccess.Position)
+			}
 		}
+	}
 
-		// If we got here, the variable exists but field access may not be valid
-		// For .value field access on result types, just return the object itself
-		// since we're using simplified result types where the value IS the result
-		if fieldAccess.FieldName == "value" {
-			return obj, nil
+	// Check for standard field access patterns
+	if ident, ok := fieldAccess.Object.(*ast.Identifier); ok {
+		varName := ident.Name
+
+		// Check if it's a record access pattern like person.name
+		if recordValue, exists := g.variables[varName]; exists {
+			// For .value field access on result types, just return the object itself
+			// since we're using simplified result types where the value IS the result
+			if fieldAccess.FieldName == "value" {
+				return recordValue, nil
+			}
 		}
-
-		// For other field access on identifiers, we need proper struct handling
-		// This is where we would implement proper field access for non-Result types
-		return nil, WrapFieldAccessNotImpl(fieldAccess.FieldName)
 	}
 
-	// Handle field access like a.value for other expression types
-	obj, err := g.generateExpression(fieldAccess.Object)
-	if err != nil {
-		return nil, err
-	}
-
-	// For .value field access on result types, just return the object itself
-	// since we're using simplified result types where the value IS the result
-	if fieldAccess.FieldName == "value" {
-		return obj, nil
-	}
-
-	// For other field access, we'd need proper struct handling
-
-	return nil, WrapFieldAccessNotImpl(fieldAccess.FieldName)
+	return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
 }
 
 func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) (value.Value, error) {

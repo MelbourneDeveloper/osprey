@@ -211,7 +211,8 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 ) (value.Value, error) {
 	// VALIDATION: Multi-parameter functions require named arguments
 	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
-		return nil, WrapFunctionRequiresNamed(funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName))
+		return nil, WrapFunctionRequiresNamedWithPos(
+			funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName), callExpr.Position)
 	}
 
 	// Generate arguments for the function call

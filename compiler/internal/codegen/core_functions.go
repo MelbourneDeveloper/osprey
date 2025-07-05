@@ -131,7 +131,7 @@ func (g *LLVMGenerator) createGlobalString(str string) value.Value {
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != 1 {
-		return nil, WrapPrintWrongArgs(len(callExpr.Arguments))
+		return nil, WrapPrintWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	argExpr := callExpr.Arguments[0]
@@ -173,7 +173,7 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 // generateInputCall handles input function calls.
 func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != 0 {
-		return nil, WrapInputWrongArgs(len(callExpr.Arguments))
+		return nil, WrapInputWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 	// ... (rest of the function)
 	return nil, ErrUnsupportedCall

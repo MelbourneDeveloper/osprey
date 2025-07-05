@@ -67,6 +67,7 @@ func (b *Builder) buildChainElement(
 	return &FieldAccessExpression{
 		Object:    object,
 		FieldName: fieldName,
+		Position:  b.getPositionFromContext(ctx),
 	}
 }
 
@@ -90,6 +91,7 @@ func (b *Builder) buildModuleAccess(
 			MemberName:     fieldName,
 			Arguments:      args,
 			NamedArguments: namedArgs,
+			Position:       b.getPositionFromContext(ctx),
 		}
 	}
 
@@ -97,6 +99,7 @@ func (b *Builder) buildModuleAccess(
 	return &ModuleAccessExpression{
 		ModuleName: ident.Name,
 		MemberName: fieldName,
+		Position:   b.getPositionFromContext(ctx),
 	}
 }
 
@@ -124,6 +127,7 @@ func (b *Builder) buildMethodCallAtIndex(
 		MethodName:     methodName,
 		Arguments:      args,
 		NamedArguments: namedArgs,
+		Position:       b.getPositionFromContext(ctx),
 	}
 }
 
@@ -145,6 +149,7 @@ func (b *Builder) buildSimpleCall(ctx parser.ICallExprContext, primary Expressio
 			Function:       ident,
 			Arguments:      args,
 			NamedArguments: namedArgs,
+			Position:       b.getPositionFromContext(ctx),
 		}
 	}
 
