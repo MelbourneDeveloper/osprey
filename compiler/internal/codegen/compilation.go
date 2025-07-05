@@ -224,10 +224,11 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 			return nil // Success!
 		}
 
-		lastErr = fmt.Errorf("failed to link executable with %s: %w\nOutput: %s", cmd[0], err, string(linkOutput))
+		lastErr = fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with %s: %w\nOutput: %s", 
+			cmd[0], err, string(linkOutput))
 	}
 
-	return fmt.Errorf("failed to link executable with any available compiler: %w", lastErr)
+	return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with any available compiler: %w", lastErr)
 }
 
 // CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.
@@ -257,7 +258,8 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to compile IR to object file: %w\nllc output: %s", err, string(llcOutput))
+		return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to compile IR to object file: %w\nllc output: %s", 
+			err, string(llcOutput))
 	}
 
 	defer func() { _ = os.Remove(objFile) }() // Clean up temp file

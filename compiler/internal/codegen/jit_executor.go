@@ -32,13 +32,13 @@ func (j *JITExecutor) setupCompilation(ir string) (string, string, string, error
 	// Create temporary directory for compilation
 	tempDir, err := os.MkdirTemp("", "osprey_compile_*")
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to create temp directory: %w", err)
+		return "", "", "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to create temp directory: %w", err)
 	}
 
 	// Write IR to file
 	irFile := filepath.Join(tempDir, "program.ll")
 	if writeErr := os.WriteFile(irFile, []byte(ir), FilePermissionsLess); writeErr != nil {
-		return "", "", "", fmt.Errorf("failed to write IR file: %w", writeErr)
+		return "", "", "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to write IR file: %w", writeErr)
 	}
 
 	// Determine executable file name
@@ -65,7 +65,7 @@ func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to compile IR: %w\nOutput: %s", err, string(llcOutput))
+		return "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to compile IR: %w\nOutput: %s", err, string(llcOutput))
 	}
 
 	return objFile, nil
@@ -184,7 +184,7 @@ func (j *JITExecutor) linkExecutable(linkArgs []string) error {
 
 	linkOutput, err := linkCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to link executable: %w\nOutput: %s", err, string(linkOutput))
+		return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable: %w\nOutput: %s", err, string(linkOutput))
 	}
 
 	return nil

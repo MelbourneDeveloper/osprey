@@ -79,11 +79,28 @@ app.post('/api/compile', async (req, res) => {
             })
         } else {
             console.error('❌ Compile error, stderr:', result.stderr)
+            
+            const errorOutput = result.stderr || result.stdout || '';
+            
+            // Detect INTERNAL compiler errors - simple marker from compiler
+            const isInternalError = errorOutput.includes('INTERNAL_COMPILER_ERROR:');
+
+            if (isInternalError) {
+                // Internal compiler error - log for debugging but don't expose to user
+                console.error('🚨 INTERNAL COMPILER ERROR DETECTED:', errorOutput);
+                res.status(502).json({
+                    success: false,
+                    error: 'The compiler encountered an internal error. Please report this code to help us fix the issue.',
+                    isInternalError: true
+                });
+                return;
+            }
+
             res.status(422).json({ // 422 Unprocessable Entity for compilation errors
                 success: false,
                 compilerOutput: result.stderr || '',
                 programOutput: result.stdout || '',
-                error: result.stderr || result.stdout || `Compilation failed with exit code ${result.exitCode}`
+                error: errorOutput || `Compilation failed with exit code ${result.exitCode}`
             })
         }
     } catch (error) {
@@ -119,12 +136,28 @@ app.post('/api/run', async (req, res) => {
             console.error('❌ Run failed, stderr:', result.stderr)
             console.error('❌ Run failed, stdout:', result.stdout)
 
-            // Determine if it's a compilation error or runtime error
             const errorOutput = result.stderr || result.stdout || '';
+            
+            // Detect INTERNAL compiler errors - simple marker from compiler
+            const isInternalError = errorOutput.includes('INTERNAL_COMPILER_ERROR:');
+
+            if (isInternalError) {
+                // Internal compiler error - log for debugging but don't expose to user
+                console.error('🚨 INTERNAL COMPILER ERROR DETECTED:', errorOutput);
+                res.status(502).json({
+                    success: false,
+                    error: 'The compiler encountered an internal error. Please report this code to help us fix the issue.',
+                    isInternalError: true
+                });
+                return;
+            }
+
+            // Determine if it's a user syntax/compilation error or runtime error
             const isCompilationError = errorOutput.includes('parse errors') ||
-                errorOutput.includes('failed to generate') ||
                 errorOutput.includes('undefined variable') ||
-                errorOutput.includes('syntax error');
+                errorOutput.includes('syntax error') ||
+                errorOutput.includes('type mismatch') ||
+                errorOutput.includes('Compilation failed');
 
             const statusCode = isCompilationError ? 422 : 400; // 422 for compilation, 400 for runtime
 

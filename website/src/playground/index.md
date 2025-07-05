@@ -721,18 +721,31 @@ fn main() -> Unit = {
                 body: JSON.stringify({ code })
             });
             
-            const result = await response.json();
+            let result;
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                result = await response.json();
+            } else {
+                // Handle non-JSON responses (like 500 errors)
+                const text = await response.text();
+                result = { success: false, error: text || `HTTP ${response.status}: ${response.statusText}` };
+            }
             
             if (!response.ok) {
-                // Handle HTTP errors that still have JSON error details
-                if (result.error) {
-                    output.className = 'error';
-                    output.innerHTML = formatErrorOutput(result.error);
-                    updateStatus('error', 'Compilation failed');
-                    return;
-                } else {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Handle HTTP errors (400, 500, etc.)
+                output.className = 'error';
+                let errorMessage = result.error || `HTTP ${response.status}: ${response.statusText}`;
+                
+                if (response.status === 500) {
+                    errorMessage = 'Internal server error occurred. Please try again or contact support if the issue persists.';
+                } else if (response.status === 502) {
+                    errorMessage = result.error || 'The compiler encountered an internal error. Please report this code to help us fix the issue.';
                 }
+                
+                output.innerHTML = formatErrorOutput(errorMessage);
+                updateStatus('error', 'Compilation failed');
+                return;
             }
             
             if (result.success) {
@@ -776,20 +789,32 @@ fn main() -> Unit = {
                 body: JSON.stringify({ code })
             });
             
-            const result = await response.json();
+            let result;
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                result = await response.json();
+            } else {
+                // Handle non-JSON responses (like 500 errors)
+                const text = await response.text();
+                result = { success: false, error: text || `HTTP ${response.status}: ${response.statusText}` };
+            }
             
             if (!response.ok) {
-                // Handle HTTP errors that still have JSON error details
-                if (result.error) {
-                    output.className = 'error';
-                    const statusMessage = result.isCompilationError ? 'Compilation failed' : 'Execution failed';
-                    
-                    output.innerHTML = formatErrorOutput(result.error);
-                    updateStatus('error', statusMessage);
-                    return;
-                } else {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Handle HTTP errors (400, 500, etc.)
+                output.className = 'error';
+                let errorMessage = result.error || `HTTP ${response.status}: ${response.statusText}`;
+                
+                if (response.status === 500) {
+                    errorMessage = 'Internal server error occurred. Please try again or contact support if the issue persists.';
+                } else if (response.status === 502) {
+                    errorMessage = result.error || 'The compiler encountered an internal error. Please report this code to help us fix the issue.';
                 }
+                
+                const statusMessage = result.isCompilationError ? 'Compilation failed' : 'Execution failed';
+                output.innerHTML = formatErrorOutput(errorMessage);
+                updateStatus('error', statusMessage);
+                return;
             }
             
             if (result.success) {
