@@ -16,7 +16,7 @@ func (e *ValidationError) Error() string {
 	if e.Position != nil {
 		return fmt.Sprintf("line %d:%d: validation error: %s", e.Position.Line, e.Position.Column, e.Message)
 	}
-	return "validation error: " + e.Message
+	return e.Message
 }
 
 // ValidateProgram validates the entire program AST and returns any validation errors.

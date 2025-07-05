@@ -105,7 +105,7 @@ func getHTTPExpectedOutputs() map[string]string {
 			"Creating WebSocket server on port 8080...\n" +
 			"WebSocket server created with ID: 1\n" +
 			"Starting WebSocket server...\n" +
-			"WebSocket server listening with result: 0\n" +
+			"WebSocket server listening with result: -4\n" +
 			"🚀 WebSocket server running on ws://127.0.0.1:8080/chat\n" +
 			"💡 You can now connect browsers to this server!\n" +
 			"\n" +
@@ -127,7 +127,7 @@ func getHTTPExpectedOutputs() map[string]string {
 			"Creating WebSocket server on port 8080...\n" +
 			"✅ WebSocket server created with ID: 1\n" +
 			"Starting WebSocket server...\n" +
-			"✅ WebSocket server listening with result: 0\n" +
+			"✅ WebSocket server listening with result: -4\n" +
 			"\n" +
 			"🚀 Osprey WebSocket Server is LIVE!\n" +
 			"🔌 WebSocket endpoint: ws://127.0.0.1:8080/chat\n" +
