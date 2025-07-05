@@ -14,8 +14,7 @@ import (
 func TestBasicsExamples(t *testing.T) {
 	checkLLVMTools(t)
 
-	examplesDir := "../../examples/tested/basics"
-	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
+	runTestExamplesRecursive(t, "../../examples/tested/basics", getExpectedOutputs())
 }
 
 // TestEffectsExamples tests the algebraic effects examples.

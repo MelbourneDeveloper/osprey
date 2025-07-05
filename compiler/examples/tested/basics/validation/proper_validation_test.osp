@@ -1,16 +1,13 @@
 // Proper validation functions using match expressions
 
-fn notEmpty(s: String) -> Bool = match s {
+fn notEmpty(s: string) -> bool = match s {
     "" => false
     _ => true
 }
 
-fn isPositive(n: Int) -> Bool = match n {
-    0 => false
-    _ => n > 0
-}
+fn isPositive(n: int) -> Result<bool, MathError> = n > 0
 
-fn isValidAge(age: Int) -> Bool = match age {
+fn isValidAge(age: int) -> bool = match age {
     0 => false
     1 => true
     25 => true
@@ -21,7 +18,7 @@ fn isValidAge(age: Int) -> Bool = match age {
     _ => true  // Simplified for now
 }
 
-fn isValidEmail(email: String) -> Bool = match email {
+fn isValidEmail(email: string) -> bool = match email {
     "" => false
     "invalid" => false
     _ => true
@@ -31,7 +28,18 @@ fn isValidEmail(email: String) -> Bool = match email {
 print("Testing validation functions:")
 print(toString(notEmpty("")))           // Should be false
 print(toString(notEmpty("test")))       // Should be true
-print(toString(isPositive(0)))          // Should be false  
-print(toString(isPositive(10)))         // Should be true
+
+let positiveResult1 = isPositive(0)
+match positiveResult1 {
+    Success { value } => print(toString(value))  // Should be false
+    Error { message } => print("Error: ${message}")
+}
+
+let positiveResult2 = isPositive(10)
+match positiveResult2 {
+    Success { value } => print(toString(value))  // Should be true
+    Error { message } => print("Error: ${message}")
+}
+
 print(toString(isValidAge(25)))         // Should be true
 print(toString(isValidAge(200)))        // Should be false 

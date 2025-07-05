@@ -1,5 +1,19 @@
-fn add(x, y) = x + y
+// Functions with arithmetic operations return Result for the entire expression
+fn add(x: int, y: int) -> Result<int, MathError> = x + y
 
-print("Function test:")
-print("add(3, 7) = ${add(x: 3, y: 7)}")
-print("add(10, 20) = ${add(x: 10, y: 20)}") 
+fn main() -> Unit = {
+    print("Function test:")
+    
+    // Handle Results properly for compound expressions
+    let result1 = add(x: 3, y: 7)
+    match result1 {
+        Success { value } => print("add(3, 7) = ${value}")
+        Error { message } => print("Error: ${message}")
+    }
+    
+    let result2 = add(x: 10, y: 20)
+    match result2 {
+        Success { value } => print("add(10, 20) = ${value}")
+        Error { message } => print("Error: ${message}")
+    }
+} 

@@ -1,0 +1,69 @@
+// File I/O Effects Demo - Functions that CAN FAIL return Result types
+// Effect handlers use syntax sugar for automatic error handling
+
+effect FileIO {
+    read: fn(string) -> string        // Effect declarations use raw types (clean)
+    write: fn(string, string) -> Unit
+    delete: fn(string) -> Unit  
+    exists: fn(string) -> bool
+}
+
+// File I/O functions - using raw types for now (TODO: Result types later)
+fn writeFile(filename: string, content: string) -> Unit !FileIO = {
+    perform FileIO.write(filename, content)
+}
+
+fn readFile(filename: string) -> string !FileIO = {
+    perform FileIO.read(filename)
+}
+
+fn checkFile(filename: string) -> bool !FileIO = {
+    perform FileIO.exists(filename)
+}
+
+// Main function with file I/O handler
+fn main() -> Unit = {
+    handle FileIO
+        read filename => {
+            print("📖 Reading file: " + filename)
+            // DESIGN: Handler returns raw value, effect system wraps in Result
+            // TODO: Add syntax sugar Error("message") for failures
+            "Sample content from " + filename
+        }
+        write filename content => {
+            print("💾 Writing to: " + filename)
+            // DESIGN: void operations succeed with Unit, failures with Error("msg")
+            // TODO: Implement Unit literal and Error constructor
+        }
+        delete filename => {
+            print("🗑️ Deleting file: " + filename)
+            // DESIGN: Same as write - Unit for success, Error for failure
+        }
+        exists filename => {
+            print("🔍 Checking file: " + filename)
+            // DESIGN: Raw boolean wrapped in Result<bool, Error> by effect system
+            true
+        }
+    in {
+        print("🚀 Starting File I/O Test")
+        
+        // Test writing files - returns Unit (raw type for now)
+        writeFile("config.txt", "debug=true")
+        print("✅ Write completed")
+        
+        // Test reading files - returns string (raw type for now)
+        let content = readFile("data.txt")
+        print("✅ Read content: " + content)
+        
+        // Test file existence - returns bool (raw type for now)
+        let exists = checkFile("log.txt")  
+        print("✅ File exists: " + toString(exists))
+        
+        // Direct perform calls also work (for handlers only)
+        perform FileIO.delete("temp.txt")
+        print("✅ Direct delete completed")
+        
+        print("🎉 File I/O Test Complete!")
+        print("📋 TODO: Add Result<T, Error> types for proper error handling")
+    }
+} 

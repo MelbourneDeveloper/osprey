@@ -37,6 +37,8 @@ type LLVMGenerator struct {
 	currentFunctionParams map[string]value.Value
 	// Real algebraic effects system
 	effectCodegen *EffectCodegen
+	// Context for type-aware literal generation
+	expectedReturnType types.Type
 }
 
 // SecurityConfig defines security policies for the code generator.

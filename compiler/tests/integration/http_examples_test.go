@@ -7,11 +7,10 @@ import (
 )
 
 // TestHTTPExamples tests HTTP and WebSocket examples in the examples/tested/http directory.
-func TestHTTPExamples(t *testing.T) {
+func TestHTTPExaNOmples(t *testing.T) {
 	checkLLVMTools(t)
 
-	examplesDir := "../../examples/tested/http"
-	runTestExamplesRecursive(t, examplesDir, getHTTPExpectedOutputs())
+	runTestExamplesRecursive(t, "../../examples/tested/http", getHTTPExpectedOutputs())
 }
 
 func getHTTPExpectedOutputs() map[string]string {

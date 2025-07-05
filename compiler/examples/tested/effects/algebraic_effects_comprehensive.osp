@@ -6,6 +6,12 @@ effect IO {
     write: fn(string) -> Unit
 }
 
+effect FileIO {
+    writeFile: fn(string, string) -> Unit
+    readFile: fn(string) -> string
+    deleteFile: fn(string) -> Unit
+}
+
 effect State {
     get: fn() -> int
     set: fn(int) -> Unit
@@ -105,37 +111,73 @@ fn errorProne(value: int) -> int !Logger = match value {
     }
 }
 
+// File I/O operations with effects
+fn writeConfigFile(configName: string, data: string) -> Unit ![FileIO, Logger] = {
+    let filename = "config_" + configName + ".txt"
+    perform Logger.log("Writing config file: ${filename}")
+    perform FileIO.writeFile(filename, data)
+    perform Logger.log("Config file written successfully")
+}
+
+fn readAndProcessLogFile(logFile: string) -> string ![FileIO, Logger] = {
+    perform Logger.log("Reading log file: ${logFile}")
+    let content = perform FileIO.readFile(logFile)
+    perform Logger.log("Processing log content, length: ${toString(length(content))}")
+    let processedContent = "PROCESSED: " + content + " [END]"
+    processedContent
+}
+
+fn generateReport(reportId: int, data: string) -> Unit ![FileIO, Logger, State] = {
+    let reportFile = "report_" + toString(reportId) + ".txt"
+    let currentState = perform State.get()
+    let reportContent = "=== REPORT ${toString(reportId)} ===\n" +
+                       "State: ${toString(currentState)}\n" +
+                       "Data: ${data}\n" +
+                       "Timestamp: ${toString(reportId * 1000)}\n" +
+                       "=== END REPORT ===\n"
+    
+    perform Logger.log("Generating report: ${reportFile}")
+    perform FileIO.writeFile(reportFile, reportContent)
+    perform State.set(currentState + 1)
+    perform Logger.log("Report generated and state updated")
+}
+
+fn cleanupTempFiles() -> Unit ![FileIO, Logger] = {
+    perform Logger.log("Cleaning up temporary files")
+    perform FileIO.deleteFile("temp_data.txt")
+    perform FileIO.deleteFile("temp_logs.txt")
+    perform Logger.log("Temporary files cleaned up")
+}
+
 // Main function demonstrating all features
 fn main() -> Unit = {
     handle Counter
         increment => print("⬆️ Counter incremented")
         getValue => 42
         reset => print("🔄 Counter reset to 0")
-    in
-        handle State
-            get => 10
-            set newVal => print("📊 State updated to: ${toString(newVal)}")
-        in
-            handle Logger
-                log msg => print("📝 LOG: ${msg}")
-                error msg => print("❌ ERROR: ${msg}")
-            in {
-                print("🚀 Starting Comprehensive Effects Test")
-                
-                // Test basic calculation
-                let calcResult = calculation(21)
-                
-                // Test pattern matching with effects
-                let processResult = processItems(3)
-                
-                // Test error handling patterns
-                let errorResult1 = errorProne(-5)
-                let errorResult2 = errorProne(150)
-                let errorResult3 = errorProne(25)
-                
-                // Test async processing with fibers
-                let asyncResult = asyncProcessing(5)
-                
-                print("🎯 Final Results: Calc=${toString(calcResult)}, Process=${toString(processResult)}, Errors=[${toString(errorResult1)},${toString(errorResult2)},${toString(errorResult3)}], Async=${toString(asyncResult)} 🎉")
-            }
+    in handle State
+        get => 10
+        set newVal => print("📊 State updated to: " + toString(newVal))
+    in handle Logger
+        log msg => print("📝 LOG: " + msg)
+        error msg => print("❌ ERROR: " + msg)  
+    in {
+        print("🚀 Starting Comprehensive Effects Test")
+        
+        // Test basic calculation
+        let calcResult = calculation(21)
+        
+        // Test pattern matching with effects
+        let processResult = processItems(3)
+        
+        // Test error handling patterns
+        let errorResult1 = errorProne(-5)
+        let errorResult2 = errorProne(150)
+        let errorResult3 = errorProne(25)
+        
+        // Test async processing with fibers
+        let asyncResult = asyncProcessing(5)
+        
+        print("🎯 Final Results: Calc=" + toString(calcResult) + ", Process=" + toString(processResult) + ", Errors=[" + toString(errorResult1) + "," + toString(errorResult2) + "," + toString(errorResult3) + "], Async=" + toString(asyncResult) + " 🎉")
+    }
 } 

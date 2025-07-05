@@ -224,10 +224,24 @@ func (g *LLVMGenerator) generateStringLiteral(lit *ast.StringLiteral) (value.Val
 
 // generateBooleanLiteral generates LLVM IR for boolean literals.
 func (g *LLVMGenerator) generateBooleanLiteral(lit *ast.BooleanLiteral) (value.Value, error) {
+	// Use expected return type if available, otherwise default to i64
+	targetType := types.I64
+	if g.expectedReturnType != nil {
+		if g.expectedReturnType == types.I1 {
+			targetType = types.I1
+		}
+	}
+
 	if lit.Value {
+		if targetType == types.I1 {
+			return constant.NewBool(true), nil
+		}
 		return constant.NewInt(types.I64, 1), nil
 	}
 
+	if targetType == types.I1 {
+		return constant.NewBool(false), nil
+	}
 	return constant.NewInt(types.I64, 0), nil
 }
 

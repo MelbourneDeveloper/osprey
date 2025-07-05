@@ -62,7 +62,7 @@ func testRunCLIVersion(t *testing.T) {
 func testRunCLIAST(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Skip("❌ TEST FILE NOT FOUND - SKIPPING:", testFile)
+		t.Fatalf("❌ CRITICAL FAILURE: Required test file missing: %s - test infrastructure broken", testFile)
 	}
 
 	args := []string{"osprey", testFile, "--ast"}
@@ -88,7 +88,7 @@ func testRunCLIAST(t *testing.T) {
 func testRunCLILLVM(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Skip("❌ TEST FILE NOT FOUND - SKIPPING:", testFile)
+		t.Fatalf("❌ CRITICAL FAILURE: Required test file missing: %s - test infrastructure broken", testFile)
 	}
 
 	args := []string{"osprey", testFile, "--llvm"}
@@ -115,7 +115,7 @@ func testRunCLILLVM(t *testing.T) {
 func testRunCLICompile(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Skip("❌ TEST FILE NOT FOUND - SKIPPING:", testFile)
+		t.Fatalf("❌ CRITICAL FAILURE: Required test file missing: %s - test infrastructure broken", testFile)
 	}
 
 	// The compiler creates outputs/filename (without extension) relative to source file
@@ -167,7 +167,7 @@ func testRunCLISymbols(t *testing.T) {
 func testRunCLIRun(t *testing.T) {
 	testFile := filepath.Join(testDataDir, "hello.osp")
 	if !fileExists(testFile) {
-		t.Skip("❌ TEST FILE NOT FOUND - SKIPPING:", testFile)
+		t.Fatalf("❌ CRITICAL FAILURE: Required test file missing: %s - test infrastructure broken", testFile)
 	}
 
 	args := []string{"osprey", testFile, "--run"}

@@ -207,8 +207,9 @@ func (ec *EffectCodegen) inferOperationTypes(
 		// set(i64) -> void, one i64 parameter
 		paramTypes = []types.Type{types.I64}
 		returnType = types.Void
-	case OpLog, "print", OpWrite, OpError:
+	case OpLog, "print", OpError:
 		// log(string) -> void, one string parameter
+		// Note: "write" is handled by FileIO operations instead
 		paramTypes = []types.Type{types.I8Ptr}
 		returnType = types.Void
 	case OpIncrement:
@@ -219,6 +220,9 @@ func (ec *EffectCodegen) inferOperationTypes(
 		// receive() -> i64, no parameters
 		paramTypes = []types.Type{}
 		returnType = types.I64
+	// FileIO operations - Raw types in effect declarations, Result types when called outside handlers
+	case "read", "readFile", OpWrite, "writeFile", "delete", "deleteFile", "exists":
+		return ec.inferFileIOOperationTypes(operationName, paramCount)
 	case "send":
 		// send(value) -> void, one parameter
 		if paramCount > 0 {
@@ -253,6 +257,27 @@ func (ec *EffectCodegen) inferOperationTypes(
 	return paramTypes, returnType
 }
 
+// inferFileIOOperationTypes handles FileIO operation type inference
+func (ec *EffectCodegen) inferFileIOOperationTypes(operationName string, _ int) ([]types.Type, types.Type) {
+	switch operationName {
+	case "read", "readFile":
+		// read(filename) -> string (raw type in handler context)
+		return []types.Type{types.I8Ptr}, types.I8Ptr
+	case OpWrite, "writeFile":
+		// write(filename, content) -> Unit (raw type in handler context)
+		return []types.Type{types.I8Ptr, types.I8Ptr}, types.Void
+	case "delete", "deleteFile":
+		// delete(filename) -> Unit (raw type in handler context)
+		return []types.Type{types.I8Ptr}, types.Void
+	case "exists":
+		// exists(filename) -> bool (raw type in handler context)
+		return []types.Type{types.I8Ptr}, types.I1
+	default:
+		// Fallback
+		return []types.Type{types.I64}, types.I64
+	}
+}
+
 // generateHandlerFunctionBody generates the body of a handler function
 func (ec *EffectCodegen) generateHandlerFunctionBody(
 	handlerFunc *ir.Func, arm ast.HandlerArm, returnType types.Type,
@@ -272,23 +297,38 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 		}
 	}
 
+	// Set expected return type context for boolean literals
+	oldExpectedReturnType := ec.generator.expectedReturnType
+	ec.generator.expectedReturnType = returnType
+
 	// Generate handler body
 	bodyResult, err := ec.generator.generateExpression(arm.Body)
 	if err != nil {
 		return err
 	}
 
+	// Restore context
+	ec.generator.expectedReturnType = oldExpectedReturnType
+
 	// Add return statement
 	if returnType == types.Void {
 		ec.generator.builder.NewRet(nil)
 	} else if bodyResult != nil {
+		// Just return the body result directly - no double wrapping!
 		ec.generator.builder.NewRet(bodyResult)
 	} else {
+		// Handle default return values for different types
 		switch returnType {
 		case types.I64:
 			ec.generator.builder.NewRet(constant.NewInt(types.I64, 0))
+		case types.I8Ptr:
+			nullPtr := constant.NewNull(types.I8Ptr)
+			ec.generator.builder.NewRet(nullPtr)
+		case types.I1:
+			ec.generator.builder.NewRet(constant.NewBool(true))
 		default:
-			ec.generator.builder.NewRet(nil)
+			// Return zero value for integer types
+			ec.generator.builder.NewRet(constant.NewInt(types.I64, 0))
 		}
 	}
 
@@ -320,7 +360,7 @@ func (ec *EffectCodegen) createHandlerFunction(
 		}
 	}
 
-	// Create the handler function with CORRECT return type
+	// Create the handler function with raw return type (no Result wrapper)
 	handlerFunc := ec.generator.module.NewFunc(funcName, returnType, params...)
 
 	// Generate function body

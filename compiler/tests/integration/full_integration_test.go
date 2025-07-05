@@ -12,9 +12,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/christianfindlay/osprey/internal/codegen"
 )
+
+var ErrTestExecutionTimeout = errors.New("test execution timeout (30s) - no hanging allowed")
 
 // TestMain runs before all tests in this package and builds the compiler ONCE.
 func TestMain(m *testing.M) {
@@ -58,7 +61,24 @@ func captureJITOutput(source string) (string, error) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := codegen.CompileAndRunJIT(source)
+	// CRITICAL FIX: Add timeout to prevent hanging tests!
+	done := make(chan error, 1)
+	var execErr error
+
+	go func() {
+		done <- codegen.CompileAndRunJIT(source)
+	}()
+
+	// Wait for completion or timeout (30 seconds max)
+	select {
+	case execErr = <-done:
+		// Execution completed normally
+	case <-time.After(30 * time.Second):
+		// FAIL HARD: No fucking hanging tests allowed!
+		_ = w.Close()
+		os.Stdout = old
+		return "", ErrTestExecutionTimeout
+	}
 
 	_ = w.Close()
 	os.Stdout = old
@@ -66,7 +86,7 @@ func captureJITOutput(source string) (string, error) {
 	var buf bytes.Buffer
 	_, _ = io.Copy(&buf, r)
 
-	return buf.String(), err
+	return buf.String(), execErr
 }
 
 // TestBasicCompilation tests that basic syntax compiles without errors.

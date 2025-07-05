@@ -1,2 +1,7 @@
-fn isEqual(x, y) = x == y
-print(toString(isEqual(x: 5, y: 5)))
+fn isEqual(x: int, y: int) -> Result<bool, MathError> = x == y
+
+let result = isEqual(x: 5, y: 5)
+match result {
+    Success { value } => print(toString(value))
+    Error { message } => print("Error: ${message}")
+}

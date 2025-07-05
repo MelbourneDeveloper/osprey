@@ -267,6 +267,23 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	// Add parameters to variable scope
 	g.setupFunctionParameters(fnDecl, fn)
 
+	// CRITICAL FIX: Set expected return type for boolean literal generation
+	oldExpectedReturnType := g.expectedReturnType
+	if returnType, exists := g.functionReturnTypes[fnDecl.Name]; exists {
+		switch returnType {
+		case TypeBool:
+			g.expectedReturnType = types.I1
+		case TypeInt:
+			g.expectedReturnType = types.I64
+		case TypeString:
+			g.expectedReturnType = types.I8Ptr
+		case TypeUnit:
+			g.expectedReturnType = types.Void
+		default:
+			g.expectedReturnType = types.I64 // Default fallback
+		}
+	}
+
 	// Generate function body
 	bodyValue, err := g.generateExpression(fnDecl.Body)
 	if err != nil {
@@ -304,6 +321,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	g.builder = oldBuilder
 	g.variables = oldVars
 	g.variableTypes = oldTypes
+	g.expectedReturnType = oldExpectedReturnType
 
 	// CRITICAL FIX: Clear function effects when exiting function context
 	if g.effectCodegen != nil {
