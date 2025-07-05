@@ -21,13 +21,13 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 
 		// Handle built-in functions
 		if result, err := g.handleBuiltInFunction(ident.Name, callExpr); result != nil || err != nil {
-	
+
 			return result, err
 		}
 
 		// Handle user-defined functions
 		if fn, exists := g.functions[ident.Name]; exists {
-	
+
 			return g.generateUserFunctionCall(ident.Name, fn, callExpr)
 		}
 
@@ -37,14 +37,12 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 			// Check if this variable contains a function reference
 			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeFunction {
 				// This is a function stored in a function type variable - enable function composition
-	
+
 				return g.generateFunctionCompositionCall(ident.Name, varValue, callExpr)
 			}
 		}
 
-
 	}
-
 
 	return nil, ErrUnsupportedCall
 }

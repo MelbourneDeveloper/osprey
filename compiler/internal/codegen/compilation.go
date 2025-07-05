@@ -157,7 +157,7 @@ func addOpenSSLFlags(linkArgs []string) []string {
 	if output, err := cmd.Output(); err == nil {
 		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
-	
+
 		return append(linkArgs, flags...)
 	}
 
@@ -216,7 +216,7 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 
 	var lastErr error
 	for _, cmd := range clangCommands {
-	
+
 		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
 
 		linkOutput, err := linkCmd.CombinedOutput()
