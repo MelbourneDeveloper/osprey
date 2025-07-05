@@ -9,15 +9,15 @@ effect FileIO {
 }
 
 // File I/O functions - using raw types for now (TODO: Result types later)
-fn writeFile(filename: string, content: string) -> Unit !FileIO = {
+fn writeFileContent(filename: string, content: string) -> Unit !FileIO = {
     perform FileIO.write(filename, content)
 }
 
-fn readFile(filename: string) -> string !FileIO = {
+fn readFileContent(filename: string) -> string !FileIO = {
     perform FileIO.read(filename)
 }
 
-fn checkFile(filename: string) -> bool !FileIO = {
+fn checkFileExists(filename: string) -> bool !FileIO = {
     perform FileIO.exists(filename)
 }
 
@@ -48,15 +48,15 @@ fn main() -> Unit = {
         print("🚀 Starting File I/O Test")
         
         // Test writing files - returns Unit (raw type for now)
-        writeFile("config.txt", "debug=true")
+        writeFileContent(filename: "config.txt", content: "debug=true")
         print("✅ Write completed")
         
         // Test reading files - returns string (raw type for now)
-        let content = readFile("data.txt")
+        let content = readFileContent("data.txt")
         print("✅ Read content: " + content)
         
         // Test file existence - returns bool (raw type for now)
-        let exists = checkFile("log.txt")  
+        let exists = checkFileExists("log.txt")  
         print("✅ File exists: " + toString(exists))
         
         // Direct perform calls also work (for handlers only)
@@ -64,6 +64,5 @@ fn main() -> Unit = {
         print("✅ Direct delete completed")
         
         print("🎉 File I/O Test Complete!")
-        print("📋 TODO: Add Result<T, Error> types for proper error handling")
     }
 } 

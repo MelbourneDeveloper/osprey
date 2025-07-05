@@ -908,9 +908,13 @@ func (g *LLVMGenerator) generateStringConcatenation(left, right value.Value) (va
 	strlenFunc := g.ensureStrlenDeclaration()
 	mallocFunc := g.ensureMallocDeclaration()
 
+	// CRITICAL FIX: Extract strings from Result types if needed
+	leftStr := g.extractStringFromValue(left)
+	rightStr := g.extractStringFromValue(right)
+
 	// Calculate lengths of both strings
-	leftLen := g.builder.NewCall(strlenFunc, left)
-	rightLen := g.builder.NewCall(strlenFunc, right)
+	leftLen := g.builder.NewCall(strlenFunc, leftStr)
+	rightLen := g.builder.NewCall(strlenFunc, rightStr)
 
 	// Calculate total length: leftLen + rightLen + 1 (for null terminator)
 	totalLen := g.builder.NewAdd(leftLen, rightLen)
@@ -921,12 +925,33 @@ func (g *LLVMGenerator) generateStringConcatenation(left, right value.Value) (va
 
 	// Copy left string to result
 	strcpyFunc := g.ensureStrcpyDeclaration()
-	g.builder.NewCall(strcpyFunc, result, left)
+	g.builder.NewCall(strcpyFunc, result, leftStr)
 
 	// Concatenate right string to result
-	g.builder.NewCall(strcatFunc, result, right)
+	g.builder.NewCall(strcatFunc, result, rightStr)
 
 	return result, nil
+}
+
+// extractStringFromValue extracts a string from either a regular string or a Result type
+func (g *LLVMGenerator) extractStringFromValue(val value.Value) value.Value {
+	// If it's already a string pointer, return it as is
+	if val.Type() == types.I8Ptr {
+		return val
+	}
+
+	// Check if it's a Result type struct pointer
+	if ptrType, ok := val.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == 2 {
+			// This is a Result type { T, i8 } - extract the value (first field)
+			valuePtr := g.builder.NewGetElementPtr(structType, val,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+			return g.builder.NewLoad(structType.Fields[0], valuePtr)
+		}
+	}
+
+	// If it's not a string or Result type, return it as is (might be an error case)
+	return val
 }
 
 // ensureStrcatDeclaration ensures strcat is declared

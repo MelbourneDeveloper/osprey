@@ -1,9 +1,10 @@
 🚀 Starting File I/O Test
+💾 Writing to: config.txt
 ✅ Write completed
-✅ Read content: ���
+📖 Reading file: data.txt
+✅ Read content: Sample content from data.txt
 🔍 Checking file: log.txt
 ✅ File exists: true
 🗑️ Deleting file: temp.txt
 ✅ Direct delete completed
-🎉 File I/O Test Complete!
-📋 TODO: Add Result<T, Error> types for proper error handling 
+🎉 File I/O Test Complete! 
