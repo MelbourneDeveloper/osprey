@@ -418,15 +418,29 @@ func WrapMissingArgumentWithPos(paramName, funcName string, pos *ast.Position) e
 	return fmt.Errorf("%w %s in function %s", ErrMissingArgument, paramName, funcName)
 }
 
+// parseWrapperError wraps parse errors without adding prefix to error message
+type parseWrapperError struct {
+	message string
+}
+
+func (e *parseWrapperError) Error() string {
+	return e.message
+}
+
+func (e *parseWrapperError) Unwrap() error {
+	return ErrParseErrors
+}
+
 // WrapParseErrors wraps parse errors with error details.
 func WrapParseErrors(errors []string) error {
 	if len(errors) == 0 {
 		return ErrParseErrors
 	}
 
-	// Parse errors should already be properly formatted with line numbers and positions
-	// Return the first error since it has the most relevant position info for IDE consumption
-	return fmt.Errorf("%w: %s", ErrParseErrors, errors[0])
+	// Return all errors for IDE consumption - just the raw error messages
+	// Parser errors already have proper line:column format
+	errorMessage := strings.Join(errors, "\n")
+	return &parseWrapperError{message: errorMessage}
 }
 
 // WrapLLVMGenFailed wraps LLVM generation failed errors with underlying error.

@@ -1,4 +1,3 @@
-parse errors:
 line 41:7 no viable alternative at input '('
 line 41:13 extraneous input '=>' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
 line 42:9 no viable alternative at input '('

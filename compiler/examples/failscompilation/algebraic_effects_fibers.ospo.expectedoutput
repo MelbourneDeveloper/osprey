@@ -1,4 +1,3 @@
-parse errors:
 line 6:4 mismatched input 'yield' expecting {'}', ID}
 line 6:9 extraneous input ':' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
 line 7:10 extraneous input ':' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}

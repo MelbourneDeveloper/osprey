@@ -242,7 +242,7 @@ func TestWrapParseErrors(t *testing.T) {
 	if !errors.Is(err, codegen.ErrParseErrors) {
 		t.Error("Should wrap ErrParseErrors")
 	}
-	if !strings.Contains(err.Error(), "syntax error at line 1") {
+	if !strings.Contains(err.Error(), "line 1:5: syntax error") {
 		t.Error("Should contain error details")
 	}
 }
