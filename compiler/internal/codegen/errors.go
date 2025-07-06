@@ -157,6 +157,9 @@ func WrapUnsupportedStatement(t interface{}) error {
 }
 
 // WrapFunctionNotDeclared is DEPRECATED - use WrapFunctionNotDeclaredWithPos instead
+func WrapFunctionNotDeclared(name string) error {
+	return fmt.Errorf("function '%s' not declared: %w", name, ErrFunctionNotDeclared)
+}
 
 // WrapFunctionNotDeclaredWithPos wraps function not declared errors with function name and position.
 func WrapFunctionNotDeclaredWithPos(name string, pos *ast.Position) error {
@@ -187,9 +190,10 @@ func WrapImmutableAssignmentError(name string) error {
 // WrapImmutableAssignmentErrorWithPos wraps immutable assignment errors with variable name and position.
 func WrapImmutableAssignmentErrorWithPos(name string, pos *ast.Position) error {
 	if pos != nil {
-		return fmt.Errorf("line %d:%d cannot assign to immutable variable '%s'", pos.Line, pos.Column, name)
+		return fmt.Errorf("line %d:%d: cannot assign to immutable variable '%s': %w",
+			pos.Line, pos.Column, name, ErrImmutableAssignment)
 	}
-	return fmt.Errorf("cannot assign to immutable variable '%s'", name)
+	return fmt.Errorf("cannot assign to immutable variable '%s': %w", name, ErrImmutableAssignment)
 }
 
 // WrapUnsupportedExpression wraps unsupported expression errors with type information.

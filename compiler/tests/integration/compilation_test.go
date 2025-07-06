@@ -295,11 +295,9 @@ fn handleRequest(method: string, path: string, headers: string, body: string) ->
     status: 200,
     headers: "Content-Type: text/plain",
     contentType: "text/plain",
-    contentLength: 12,
     streamFd: -1,
     isComplete: true,
-    partialBody: "Hello World!",
-    partialLength: 12
+    partialBody: "Hello World!"
 }
 
 fn main() -> int {
