@@ -924,7 +924,7 @@ func (g *LLVMGenerator) generateSuccessBlock(
 		// This might be different from the original success block if we had nested expressions
 		return successValue, nil
 	}
-	
+
 	// Fallback: use the bound variable from pattern matching
 	if successArm := g.findSuccessArm(matchExpr); successArm != nil && len(successArm.Pattern.Fields) > 0 {
 		fieldName := successArm.Pattern.Fields[0]
@@ -984,7 +984,7 @@ func (g *LLVMGenerator) generateErrorBlock(
 
 		return errorValue, nil
 	}
-	
+
 	// Fallback: use the bound variable from pattern matching
 	if errorArm := g.findErrorArm(matchExpr); errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
 		fieldName := errorArm.Pattern.Fields[0]
@@ -1086,8 +1086,6 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 
 	return phi, nil
 }
-
-
 
 // generateFunctionCallArguments generates arguments for function calls, handling both named and positional arguments
 func (g *LLVMGenerator) generateFunctionCallArguments(

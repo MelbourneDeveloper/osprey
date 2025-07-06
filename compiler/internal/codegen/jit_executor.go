@@ -231,13 +231,13 @@ func (j *JITExecutor) executeProgram(exeFile string) error {
 func (j *JITExecutor) executeProgramWithCapture(exeFile string) (string, error) {
 	// #nosec G204 - exeFile is created in controlled temp directory
 	runCmd := exec.Command(exeFile)
-	
+
 	// CAPTURE STDOUT instead of outputting directly to terminal
 	output, err := runCmd.Output()
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(output), nil
 }
 

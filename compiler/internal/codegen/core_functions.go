@@ -71,7 +71,7 @@ func (g *LLVMGenerator) convertResultToString(
 	zero := constant.NewInt(types.I8, 0)
 	isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminant, zero)
 
-	// Create blocks with unique names to avoid conflicts 
+	// Create blocks with unique names to avoid conflicts
 	blockID := len(g.function.Blocks) // Use block count as unique ID
 	successBlockName := fmt.Sprintf("result_toString_success_%d", blockID)
 	errorBlockName := fmt.Sprintf("result_toString_error_%d", blockID)

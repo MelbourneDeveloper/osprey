@@ -224,7 +224,7 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 			return nil // Success!
 		}
 
-		lastErr = fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with %s: %w\nOutput: %s", 
+		lastErr = fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with %s: %w\nOutput: %s",
 			cmd[0], err, string(linkOutput))
 	}
 
@@ -258,7 +258,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to compile IR to object file: %w\nllc output: %s", 
+		return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to compile IR to object file: %w\nllc output: %s",
 			err, string(llcOutput))
 	}
 

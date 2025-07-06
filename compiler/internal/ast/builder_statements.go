@@ -358,7 +358,7 @@ func (b *Builder) buildEffectDecl(ctx parser.IEffectDeclContext) *EffectDeclarat
 			Name: opCtx.ID().GetText(),
 			Type: opCtx.Type_().GetText(), // Parse type as string for now
 		}
-		
+
 		// CRITICAL FIX: Parse function type to extract parameters and return type
 		typeExpr := b.buildTypeExpression(opCtx.Type_())
 		if typeExpr != nil && typeExpr.IsFunction {
@@ -370,13 +370,13 @@ func (b *Builder) buildEffectDecl(ctx parser.IEffectDeclContext) *EffectDeclarat
 					Type: &paramType,
 				}
 			}
-			
+
 			// Extract return type
 			if typeExpr.ReturnType != nil {
 				operation.ReturnType = typeExpr.ReturnType.Name
 			}
 		}
-		
+
 		operations = append(operations, operation)
 	}
 

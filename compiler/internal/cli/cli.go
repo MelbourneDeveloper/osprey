@@ -268,7 +268,7 @@ func runRunProgram(source string, quiet bool) CommandResult {
 	}
 
 	return CommandResult{
-		Output:  programOutput,  // ✅ RETURN THE ACTUAL PROGRAM OUTPUT!
+		Output:  programOutput, // ✅ RETURN THE ACTUAL PROGRAM OUTPUT!
 		Success: true,
 	}
 }
@@ -1125,7 +1125,7 @@ func runRunProgramWithSecurity(source string, quiet bool, security *SecurityConf
 	}
 
 	return CommandResult{
-		Output:  programOutput,  // ✅ RETURN THE ACTUAL PROGRAM OUTPUT!
+		Output:  programOutput, // ✅ RETURN THE ACTUAL PROGRAM OUTPUT!
 		Success: true,
 	}
 }
