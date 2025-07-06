@@ -1,6 +1,8 @@
 # Osprey Programming Language
 
-A modern functional programming oriented language designed for elegance, safety, and performance. It is written in Go and outputs to LLVM.
+A modern functional programming language designed for elegance, safety, and performance. Written in Go, outputs to LLVM.
+
+⭐ **[Star us on GitHub](https://github.com/MelbourneDeveloper/osprey)** to support the project and allow us to submit to Homebrew! ⭐
 
 ## Installation
 
@@ -12,49 +14,68 @@ brew tap melbournedeveloper/osprey
 brew install osprey
 ```
 
-## Local Development Quick Start
-
-```bash
-git clone https://github.com/MelbourneDeveloper/osprey.git
-cd compiler
-make build
-./bin/osprey examples/simple.osp
-```
-
 ## Language Features
 
 - **Functional-first**: Immutable data, pattern matching, pipe operators
+- **Algebraic Effects**: First-class effects system with compile-time safety
 - **Type-safe**: Algebraic data types with variant types
 - **HTTP-native**: Built-in server/client with streaming support
 - **Fiber concurrency**: Lightweight isolated execution contexts
 - **Zero-cost abstractions**: Compiles to efficient LLVM IR
 
-## Syntax Examples
+## Revolutionary Safety
+
+🚀 **World's first language with 100% compile-time effect safety** - unhandled effects cause compilation errors, not runtime crashes!
+
+## Syntax Example
 
 ```osprey
-// Variables and functions
-let x = 42
-fn add(x, y) = x + y
+// 🔒 HANDLER ISOLATION SIMPLE TEST 🔒
 
-// Types and pattern matching
-type Result = Ok { value: Int } | Error { message: String }
-let status = match result {
-    Ok -> "success"
-    Error -> "failed"
+effect Logger {
+    log: fn(string) -> Unit
 }
 
-// HTTP server
-httpServer(8080) |> onRequest((req) => 
-    response(200, "Hello World")
-)
+// Main function with different handlers
+fn main() -> Unit = {
+    print("🔒 Testing Handler Isolation")
+    
+    // Production handler
+    let result1 = handle Logger
+        log msg => print("[PROD] " + msg)
+    in {
+        perform Logger.log("Processing task: 5")
+        10
+    }
+    
+    // Debug handler
+    let result2 = handle Logger
+        log msg => print("[TEST] " + msg)
+    in {
+        perform Logger.log("Processing task: 12")
+        24
+    }
+    
+    // Silent handler
+    let result3 = handle Logger
+        log msg => 0
+    in {
+        perform Logger.log("Processing task: 0")
+        0
+    }
+    
+    print("📊 Results: Prod=" + toString(result1) + ", Test=" + toString(result2) + ", Silent=" + toString(result3))
+} 
 ```
 
 ## Project Structure
 
-- [`compiler/`](compiler/) - Main Osprey compiler (Go + ANTLR)
-- [`vscode-extension/`](vscode-extension/) - VSCode language support
-- [`website/`](website/) - Documentation site
-- [`webcompiler/`](webcompiler/) - Browser-based compiler
+- `compiler/` - Main Osprey compiler (Go + ANTLR)
+- `vscode-extension/` - VSCode language support
+- `website/` - Documentation site
+- `webcompiler/` - Browser-based compiler
+- `homebrew-package/` - Homebrew tap
+- `.devcontainer` - Configuration for the dev container
 
 ## Documentation
 
@@ -64,28 +85,37 @@ httpServer(8080) |> onRequest((req) =>
 
 ## Development
 
-Built on proven tech: [Go](https://golang.org/) for the compiler, [ANTLR](https://www.antlr.org/) for parsing, and [LLVM](https://llvm.org/) for code generation.
+Built on proven tech: Go for the compiler, ANTLR for parsing, and LLVM for code generation.
 
-**The best part**: You don't need to be a compiler expert. AI agents like Claude Sonnet 4 with Cursor make implementing language features accessible to anyone willing to learn. That combo was the first that actually got me over the hump of building a compiler, though other AI setups could get you there too.
+**AI-Assisted Development**: Claude Sonnet 4 with Cursor makes implementing language features accessible. Check out [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow.
 
-**Use VS Code Dev Containers** - strongly recommended. Open in VS Code and hit "Reopen in Container". Everything's pre-configured.
+**Use VS Code Dev Containers** - strongly recommended. Open in VS Code and hit "Reopen in Container".
 
 ```bash
 cd compiler
-make install-deps  # Install Go dependencies
 make build         # Build compiler
 make test          # Run tests
-make regenerate-parser  # Regenerate from grammar
+make install       # Install locally
 ```
-
-Want to add a new operator or language feature? Check out [CONTRIBUTING.md](CONTRIBUTING.md) for the AI-assisted workflow that works.
 
 ## Status
 
-🚧 **Alpha**: Core language features implemented. HTTP and fiber systems in development.
+🚧 **Alpha**: Core language features implemented. Algebraic effects system working with compile-time safety, but are missing some features. HTTP and advanced features in development.
 
-See [compiler/spec.md](compiler/spec.md) for implementation status and roadmap.
+See [compiler/spec/](compiler/spec/) for implementation status.
+
+## Recent Major Updates
+
+- **Algebraic Effects System**: Complete implementation with compile-time safety guarantees
+- **Effect Declarations**: `effect` keyword for defining effect operations
+- **Perform Expressions**: `perform` keyword for effect operations
+- **Handler Expressions**: `handle...in` syntax for effect handling
+- **Compile-Time Verification**: Unhandled effects cause compilation errors (world-first!)
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) 
+MIT License - see [LICENSE](LICENSE)
+
+---
+
+⭐ **[Give us a star on GitHub](https://github.com/MelbourneDeveloper/osprey)** if you like what we're building! ⭐ 

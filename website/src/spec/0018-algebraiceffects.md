@@ -1,36 +1,24 @@
 ---
 layout: page
-title: "Algebraic Effects ([ospreylang.dev][1])"
-description: "Osprey Language Specification: Algebraic Effects ([ospreylang.dev][1])"
+title: "Algebraic Effects"
+description: "Osprey Language Specification: Algebraic Effects"
 date: 2025-07-06
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0018-algebraiceffects/"
 ---
 
-OSPREY HAS A FIRST-CLASS EFFECTS SYSTEM
-
-https://arxiv.org/pdf/1312.1399
-
-https://arxiv.org/pdf/1807.05923
-
-https://www.inner-product.com/posts/direct-style-effects/
-
-https://www.eff-lang.org/handlers-tutorial.pdf
-
-https://en.wikipedia.org/wiki/Effect_system
-
-https://dl.acm.org/doi/pdf/10.1145/3290319
-
-## 20. Algebraic Effects ([ospreylang.dev][1])
+## 18. Algebraic Effects
 
 **Based on Plotkin & Pretnar's foundational work on algebraic effects and handlers**
 
-### 20.0 IMPLEMENTATION STATUS
+Osprey has a first class effects system.
+
+### 18.0 IMPLEMENTATION STATUS
 
 **PARTIALLY IMPLEMENTED** - Effect declarations, perform expressions, and **COMPILE-TIME SAFETY** are fully working! Handler expressions parsing is implemented but handler execution needs completion.
 
-### 20.1 Theoretical Foundation
+### 18.1 Theoretical Foundation
 
 Algebraic effects are computational effects that can be represented by:
 1. **A set of operations** that produce the effects
@@ -44,13 +32,13 @@ The **free model** of the equational theory generates the computational monad fo
 
 **Key insight from Plotkin & Pretnar**: Handlers are **effect deconstructors** that provide interpretations, while operations are **effect constructors** that produce effects.
 
-### 20.2 New Keywords
+### 18.2 New Keywords
 
 ```
 effect perform handler with do
 ```
 
-### 20.3 Effect Declarations
+### 18.3 Effect Declarations
 
 An effect declares a set of operations in the algebraic theory:
 
@@ -70,7 +58,7 @@ effect State {
 
 This declares a **State** effect with operations `get` and `set`. No equations are specified (free theory).
 
-### 20.4 Effectful Function Types
+### 18.4 Effectful Function Types
 
 Functions declare their effect dependencies with `!EffectSet`:
 
@@ -82,7 +70,7 @@ fn fetch(url: String) -> String ![IO, Net] = ...
 
 The effect annotation declares that this function may perform operations from the specified effects.
 
-### 20.5 Performing Operations
+### 18.5 Performing Operations
 
 ```
 perform EffectName.operation(args...)
@@ -101,7 +89,7 @@ fn incrementTwice() -> Int !State = {
 
 **CRITICAL COMPILE-TIME SAFETY**: If no handler intercepts the call, the compiler produces a **compilation error**. Unhandled effects are **NEVER** permitted at runtime.
 
-### 20.6 Handlers - Models of the Effect Theory
+### 18.6 Handlers - Models of the Effect Theory
 
 A handler provides a **model** of the effect theory by specifying how each operation should be interpreted:
 
@@ -126,7 +114,7 @@ in
 
 The `handle...in` construct applies the **unique homomorphism** from the free model (where `incrementTwice` lives) to the handler model.
 
-### 20.7 Handler Correctness
+### 18.7 Handler Correctness
 
 From Plotkin & Pretnar: A handler is **correct** if its interpretation holds in the corresponding model of the effect theory.
 
@@ -135,7 +123,7 @@ In Osprey:
 - **Type checking** ensures handler signatures match operation signatures  
 - **Effect inference** computes minimal effect sets for expressions
 
-### 20.8 Nested Handlers and Composition
+### 18.8 Nested Handlers and Composition
 
 Handlers can be nested. The **innermost handler** wins for each effect:
 
@@ -149,7 +137,7 @@ in
     perform Logger.log "test"  // Prints "[INNER] test"
 ```
 
-### 20.9 Effect Sets and Inference
+### 18.9 Effect Sets and Inference
 
 * The compiler **infers the minimal effect set** for every expression
 * Functions must **declare** their effects or be **pure**  
@@ -162,7 +150,7 @@ fn loggedCalculation<E>(x: Int) -> Int !E = {
 }
 ```
 
-### 20.10 Compilation Model
+### 18.10 Compilation Model
 
 1. **Effect Verification**: Front-end verifies all effects are handled
 2. **Handler Registration**: Build handler stack during type checking
@@ -171,7 +159,7 @@ fn loggedCalculation<E>(x: Int) -> Int !E = {
 
 **Revolutionary Safety**: Unlike other effect systems, unhandled effects cause **compile-time errors**, never runtime crashes.
 
-### 20.11 Comparison with Research
+### 18.11 Comparison with Research
 
 | Aspect                | Plotkin & Pretnar Theory | Osprey Implementation         |
 | --------------------- | ------------------------ | ----------------------------- |
@@ -180,7 +168,7 @@ fn loggedCalculation<E>(x: Int) -> Int !E = {
 | **Handling**          | Unique homomorphisms     | Compile-time dispatch         |
 | **Safety**            | Theoretical correctness  | **Compile-time verification** |
 
-### 20.12 Examples
+### 18.12 Examples
 
 ```osprey
 effect Exception {
@@ -330,41 +318,20 @@ Osprey's compiler performs **static call graph analysis** to detect:
 
 [1]: https://www.ospreylang.dev/spec/ "Osprey Language Specification - Osprey Programming Language"
 
+https://arxiv.org/pdf/1312.1399
+
+https://arxiv.org/pdf/1807.05923
+
+https://www.inner-product.com/posts/direct-style-effects/
+
+https://www.eff-lang.org/handlers-tutorial.pdf
+
+https://en.wikipedia.org/wiki/Effect_system
+
+https://dl.acm.org/doi/pdf/10.1145/3290319
+
+
 ## Completeness Report
-
-I'll analyze the Osprey algebraic effects implementation against the Plotkin & Pretnar paper to verify correctness. Let me examine the key theoretical concepts and their implementation.
-Read file: spec.md
-
-Read file: spec.md
-
-Read file: spec.md
-
-Read file: spec.md
-
-Now let me analyze Osprey's implementation against the theoretical foundation. I'll create a comprehensive verification of the algebraic effects implementation.
-Ran tool
-
-Ran tool
-
-Ran tool
-
-Ran tool
-
-Ran tool
-
-Ran tool
-
-Read file: compiler/examples/tested/effects/algebraic_effects_comprehensive.osp
-
-Ran tool
-
-Ran tool
-
-Ran tool
-
-Ran tool
-
-Ran tool
 
 ## 📋 ALGEBRAIC EFFECTS VERIFICATION REPORT
 

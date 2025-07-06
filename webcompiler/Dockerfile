@@ -1,16 +1,13 @@
 # Build stage for Osprey compiler
-FROM golang:1.24-bookworm AS osprey-builder
+FROM golang:1.23-bookworm AS osprey-builder
 
-# Install build dependencies (matching dev container base)
+# Install build dependencies including gcc for the fiber runtime and OpenSSL for HTTP runtime
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     git \
-    curl \
-    wget \
     make \
     gcc \
     build-essential \
-    ca-certificates \
     libssl-dev \
     openssl \
     pkg-config \
@@ -43,31 +40,23 @@ RUN cd vscode-extension/server && npm ci && npm run compile
 # Runtime stage
 FROM node:20-bookworm
 
-# Install runtime dependencies including LLVM, compiler toolchain, and utilities (matching dev container)
+# Install runtime dependencies including LLVM, compiler toolchain, and utilities
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     ca-certificates \
     wget \
     llvm-14 \
-    clang-14 \
-    clangd-14 \
     llvm-14-dev \
-    libclang-14-dev \
-    llvm-14-runtime \
-    libllvm14 \
-    libclang-cpp14 \
+    clang-14 \
     gcc \
     build-essential \
     libssl-dev \
     libssl3 \
     openssl \
-    libcrypto++-dev \
-    libcrypto++8 \
     pkg-config \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 60 \
-    && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 60
+    && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 60
 
 # Add LLVM14 tools to PATH so Osprey compiler can find them
 ENV PATH="/usr/lib/llvm-14/bin:${PATH}"
