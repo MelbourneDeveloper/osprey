@@ -1,0 +1,32 @@
+🚀 Starting Osprey WebSocket Server...
+📁 Will serve WebSocket at: ws://127.0.0.1:8080/chat
+🔌 Ready to replace Node.js websocket_server.js!
+
+Creating WebSocket server on port 8080...
+✅ WebSocket server created with ID: 1
+Starting WebSocket server...
+✅ WebSocket server listening with result: 0
+
+🚀 Osprey WebSocket Server is LIVE!
+🔌 WebSocket endpoint: ws://127.0.0.1:8080/chat
+🌐 Connect your browsers, test apps, and clients!
+
+🔄 Broadcasting welcome message to all connections...
+✅ Welcome broadcast sent with result: 0
+
+💡 Server Instructions:
+1. Open examples/websocketserver/websocket_test.html in browser
+2. Browser will connect to ws://localhost:8080/chat
+3. Send messages and see real-time responses
+4. Press Ctrl+C to stop the server
+
+🎉 Osprey WebSocket Server has replaced Node.js!
+📦 You can now delete websocket_server.js
+
+⚠️  Current Status: Demo mode (exits immediately)
+🚧 TODO: Add infinite loop to keep server alive
+🚧 TODO: Add signal handling for graceful shutdown
+
+🛑 Stopping WebSocket server (demo complete)...
+✅ WebSocket server stopped with result: 0
+=== Osprey WebSocket Server Demo Complete === 

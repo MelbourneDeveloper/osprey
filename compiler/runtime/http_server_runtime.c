@@ -9,12 +9,12 @@ typedef struct {
 } ServerContext;
 
 // Simple HTTP response
-static const char *simple_response = "HTTP/1.1 200 OK\r\n"
-                                     "Content-Type: text/plain\r\n"
-                                     "Content-Length: 13\r\n"
-                                     "Connection: close\r\n"
-                                     "\r\n"
-                                     "Hello, World!";
+static const char *simple_response_body = "Hello, World!";
+static const char *simple_response_headers = "HTTP/1.1 200 OK\r\n"
+                                            "Content-Type: text/plain\r\n"
+                                            "Content-Length: %zu\r\n"
+                                            "Connection: close\r\n"
+                                            "\r\n";
 
 // Server loop fiber function that actually handles requests
 static int64_t server_loop_fiber(void) {
@@ -76,10 +76,14 @@ static int64_t server_loop_fiber(void) {
         // Build and send HTTP response
         char http_response[8192];
         if (response && response->partialBody) {
+          // Calculate actual body length instead of using hardcoded partialLength
+          size_t actual_body_length = strlen(response->partialBody);
+          
           // Build proper HTTP response with status and headers
           snprintf(http_response, sizeof(http_response),
                    "HTTP/1.1 %" PRId64 " %s\r\n"
                    "%s"
+                   "Content-Length: %zu\r\n"
                    "Connection: close\r\n"
                    "\r\n",
                    response->status,
@@ -87,20 +91,23 @@ static int64_t server_loop_fiber(void) {
                    : (response->status == 404) ? "Not Found"
                    : (response->status == 405) ? "Method Not Allowed"
                                                : "Error",
-                   response->headers ? response->headers : "");
+                   response->headers ? response->headers : "",
+                   actual_body_length);
 
           // Send headers first
           send(client_fd, http_response, strlen(http_response), 0);
 
-          // Send body
-          send(client_fd, response->partialBody, response->partialLength, 0);
+          // Send body using actual string length, not hardcoded partialLength
+          send(client_fd, response->partialBody, actual_body_length, 0);
 
           // Clean up allocated memory (if needed)
           // Note: Osprey-allocated memory should be managed by Osprey
         } else {
-          // Fallback to simple response
-          snprintf(http_response, sizeof(http_response), "%s", simple_response);
+          // Fallback to simple response with dynamic length calculation
+          size_t body_len = strlen(simple_response_body);
+          snprintf(http_response, sizeof(http_response), simple_response_headers, body_len);
           send(client_fd, http_response, strlen(http_response), 0);
+          send(client_fd, simple_response_body, body_len, 0);
         }
       }
       close(client_fd);

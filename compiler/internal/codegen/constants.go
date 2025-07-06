@@ -73,10 +73,6 @@ const (
 	// Process management functions
 	AwaitProcessFunc   = "awaitProcess"
 	CleanupProcessFunc = "cleanupProcess"
-
-	// JSON functions
-	ParseJSONFunc   = "parseJSON"
-	ExtractCodeFunc = "extractCode"
 )
 
 // HTTP Function names.

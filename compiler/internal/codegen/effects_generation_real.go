@@ -373,29 +373,37 @@ func (ec *EffectCodegen) hasDeclaredEffect(effectName string) bool {
 	return false
 }
 
-// tryCurrentScopeHandlers attempts to find a handler in current scope
+// tryCurrentScopeHandlers attempts to handle perform using current scope handlers (lexical scoping)
 func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression) (value.Value, error) {
-	// CRITICAL FIX: Support multiple effects composition ![Effect1, Effect2]
-	// Check handlers from innermost to outermost (proper nested scoping)
-
-	// First try direct effect match
-	if result, err := ec.findHandlerByEffectName(perform, perform.EffectName); err != nil || result != nil {
-		return result, err
-	}
-
-	// CRITICAL FIX: Check if this effect is declared in multiple effects context
-	if ec.currentFunctionEffects != nil {
-		for _, declaredEffect := range ec.currentFunctionEffects {
-			if declaredEffect == perform.EffectName {
-				return ec.findAnyMatchingHandler(perform)
+	// Check handlers in current scope (lexical scoping)
+	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
+		handler := ec.currentHandlers[i]
+		if handler.EffectName == perform.EffectName {
+			result, err := ec.findHandlerByEffectName(perform, handler.EffectName)
+			if err != nil {
+				return nil, err
+			}
+			if result != nil {
+				// CRITICAL FIX: Return the actual handler result, not Unit
+				return result, nil
 			}
 		}
+	}
+
+	// Try to find ANY handler for this operation (relaxed matching)
+	result, err := ec.findAnyMatchingHandler(perform)
+	if err != nil {
+		return nil, err
+	}
+	if result != nil {
+		// CRITICAL FIX: Return the actual handler result, not Unit
+		return result, nil
 	}
 
 	return nil, nil
 }
 
-// findHandlerByEffectName finds a handler for a specific effect name
+// findHandlerByEffectName finds a handler by exact effect name match
 func (ec *EffectCodegen) findHandlerByEffectName(
 	perform *ast.PerformExpression, effectName string,
 ) (value.Value, error) {
@@ -420,7 +428,10 @@ func (ec *EffectCodegen) findHandlerByEffectName(
 		if err != nil {
 			return nil, err
 		}
-		return ec.generator.builder.NewCall(bestHandler, args...), nil
+		// Execute the handler function and return its result
+		handlerResult := ec.generator.builder.NewCall(bestHandler, args...)
+		// CRITICAL FIX: Return the actual handler result, not Unit
+		return handlerResult, nil
 	}
 
 	return nil, nil
@@ -439,38 +450,40 @@ func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) 
 			if err != nil {
 				return nil, err
 			}
-			return ec.generator.builder.NewCall(handlerFunc, args...), nil
+			// Execute the handler function and return its result
+			handlerResult := ec.generator.builder.NewCall(handlerFunc, args...)
+			// CRITICAL FIX: Return the actual handler result, not Unit
+			return handlerResult, nil
 		}
 	}
 	return nil, nil
 }
 
-// tryStackHandlers attempts to find a handler on the stack
+// tryStackHandlers attempts to find a handler on the global stack (cross-function effects)
 func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value.Value, error) {
-	// SPEC COMPLIANCE: Lexical Handler Stack - search by lexical depth (innermost first)
-	var bestHandler *ir.Func
-	bestDepth := -1
-
-	// Find the handler with the HIGHEST lexical depth (innermost)
-	for _, frame := range ec.handlerStack {
-		if frame.EffectName == perform.EffectName {
-			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
-				// CRITICAL SAFETY CHECK: Validate handler function before using
-				if handlerFunc != nil && frame.LexicalDepth > bestDepth {
-					bestHandler = handlerFunc
-					bestDepth = frame.LexicalDepth
-				}
+	// Check the handler stack for cross-function effects
+	for i := len(ec.handlerStack) - 1; i >= 0; i-- {
+		handler := ec.handlerStack[i]
+		if handler.EffectName == perform.EffectName {
+			result, err := ec.findHandlerByEffectName(perform, handler.EffectName)
+			if err != nil {
+				return nil, err
+			}
+			if result != nil {
+				// CRITICAL FIX: Return the actual handler result, not Unit
+				return result, nil
 			}
 		}
 	}
 
-	// If we found a handler, use the innermost one
-	if bestHandler != nil {
-		args, err := ec.generatePerformArguments(perform)
-		if err != nil {
-			return nil, err
-		}
-		return ec.generator.builder.NewCall(bestHandler, args...), nil
+	// Try to find ANY handler for this operation (relaxed matching)
+	result, err := ec.findAnyMatchingHandler(perform)
+	if err != nil {
+		return nil, err
+	}
+	if result != nil {
+		// CRITICAL FIX: Return the actual handler result, not Unit
+		return result, nil
 	}
 
 	return nil, nil
@@ -587,7 +600,10 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 	// Use the LAST handler (most recently defined)
 	if len(candidateHandlers) > 0 {
 		handlerFunc := candidateHandlers[len(candidateHandlers)-1]
-		return ec.generator.builder.NewCall(handlerFunc, args...), nil
+		// Execute the handler function and return its result
+		handlerResult := ec.generator.builder.NewCall(handlerFunc, args...)
+		// CRITICAL FIX: Return the actual handler result, not Unit
+		return handlerResult, nil
 	}
 
 	// 🔥 CRITICAL COMPILER SAFETY FIX: NO MORE FALLBACK TO DEBUG MESSAGES!

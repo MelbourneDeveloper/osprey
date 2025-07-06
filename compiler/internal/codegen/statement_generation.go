@@ -20,6 +20,9 @@ func (g *LLVMGenerator) generateStatement(stmt ast.Statement) error {
 
 		return err
 
+	case *ast.AssignmentStatement:
+		return g.generateAssignmentStatement(s)
+
 	case *ast.FunctionDeclaration:
 		err := g.generateFunctionDeclaration(s)
 
@@ -152,6 +155,8 @@ func (g *LLVMGenerator) generateLetDeclaration(letDecl *ast.LetDeclaration) (val
 
 	// ALWAYS store the type, even if it's any
 	g.variableTypes[letDecl.Name] = variableType
+	// Track if this variable is mutable
+	g.mutableVariables[letDecl.Name] = letDecl.Mutable
 
 	return value, nil
 }
@@ -164,6 +169,34 @@ func (g *LLVMGenerator) isAnyValidationTest() bool {
 	_, hasAddFunction := g.functions["add"]
 
 	return hasAddFunction
+}
+
+// generateAssignmentStatement generates LLVM IR for mutable variable assignments.
+func (g *LLVMGenerator) generateAssignmentStatement(assignStmt *ast.AssignmentStatement) error {
+	// Check if the variable exists
+	if _, exists := g.variables[assignStmt.Name]; !exists {
+		return WrapUndefinedVariableWithPos(assignStmt.Name, assignStmt.Position)
+	}
+
+	// Check if the variable is mutable
+	if mutable, exists := g.mutableVariables[assignStmt.Name]; !exists || !mutable {
+		return WrapImmutableAssignmentErrorWithPos(assignStmt.Name, assignStmt.Position)
+	}
+
+	// Generate the new value
+	newValue, err := g.generateExpression(assignStmt.Value)
+	if err != nil {
+		return err
+	}
+
+	// Update the variable in our variable map
+	g.variables[assignStmt.Name] = newValue
+
+	// Update the variable type if needed (for type inference)
+	newType := g.inferVariableType(assignStmt.Value)
+	g.variableTypes[assignStmt.Name] = newType
+
+	return nil
 }
 
 // inferVariableType determines the type of a variable based on its value expression.
@@ -243,7 +276,7 @@ func (g *LLVMGenerator) findUnionTypeForVariant(variantName string) string {
 func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclaration) error {
 	fn, exists := g.functions[fnDecl.Name]
 	if !exists {
-		return WrapFunctionNotDeclared(fnDecl.Name)
+		return WrapFunctionNotDeclaredWithPos(fnDecl.Name, fnDecl.Position)
 	}
 
 	// Save current context
@@ -251,12 +284,14 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	oldBuilder := g.builder
 	oldVars := g.variables
 	oldTypes := g.variableTypes
+	oldMutableVars := g.mutableVariables
 
 	// Set up function context
 	g.function = fn
 	g.builder = fn.NewBlock("")
 	g.variables = make(map[string]value.Value)
 	g.variableTypes = make(map[string]string)
+	g.mutableVariables = make(map[string]bool)
 
 	// CRITICAL FIX: Track effects declared in function signature for compile-time safety
 	if g.effectCodegen != nil {
@@ -321,6 +356,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	g.builder = oldBuilder
 	g.variables = oldVars
 	g.variableTypes = oldTypes
+	g.mutableVariables = oldMutableVars
 	g.expectedReturnType = oldExpectedReturnType
 
 	// CRITICAL FIX: Clear function effects when exiting function context

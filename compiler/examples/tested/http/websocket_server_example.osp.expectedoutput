@@ -1,0 +1,19 @@
+=== Osprey WebSocket Server ===
+Creating WebSocket server on port 8080...
+WebSocket server created with ID: 1
+Starting WebSocket server...
+WebSocket server listening with result: 0
+🚀 WebSocket server running on ws://127.0.0.1:8080/chat
+💡 You can now connect browsers to this server!
+
+🧪 Test with browser:
+1. Open examples/websocketserver/websocket_test.html
+2. Browser will connect to ws://localhost:8080/chat
+3. Send messages and see real-time echo responses
+
+🔄 Broadcasting welcome message to all connections...
+Broadcast result: 0
+
+🛑 Stopping WebSocket server...
+WebSocket server stopped with result: 0
+=== WebSocket Server Example Complete ===

@@ -69,6 +69,8 @@ func (b *Builder) buildStatement(ctx parser.IStatementContext) Statement {
 		return b.buildImport(ctx.ImportStmt())
 	case ctx.LetDecl() != nil:
 		return b.buildLetDecl(ctx.LetDecl())
+	case ctx.AssignStmt() != nil:
+		return b.buildAssignStmt(ctx.AssignStmt())
 	case ctx.FnDecl() != nil:
 		return b.buildFnDecl(ctx.FnDecl())
 	case ctx.ExternDecl() != nil:

@@ -883,12 +883,12 @@ func (g *LLVMGenerator) generateHTTPResponseConstructor(
 		g.functions["malloc"] = mallocFunc
 	}
 
-	const httpResponseStructSize = 64 // 8 fields * 8 bytes each
+	const httpResponseStructSize = 48 // 6 fields * 8 bytes each (removed redundant length fields)
 	structSize := constant.NewInt(types.I64, httpResponseStructSize)
 	structMem := g.builder.NewCall(mallocFunc, structSize)
 	structPtr := g.builder.NewBitCast(structMem, types.NewPointer(httpResponseType))
 
-	// Define field order and types to match the struct definition
+	// Define field order and types to match the struct definition (REMOVED REDUNDANT LENGTH FIELDS)
 	fieldInfo := []struct {
 		name      string
 		fieldType types.Type
@@ -896,11 +896,9 @@ func (g *LLVMGenerator) generateHTTPResponseConstructor(
 		{"status", types.I64},        // status: Int
 		{"headers", types.I8Ptr},     // headers: String
 		{"contentType", types.I8Ptr}, // contentType: String
-		{"contentLength", types.I64}, // contentLength: Int
 		{"streamFd", types.I64},      // streamFd: Int
 		{"isComplete", types.I1},     // isComplete: Bool
-		{"partialBody", types.I8Ptr}, // partialBody: String
-		{"partialLength", types.I64}, // partialLength: Int
+		{"partialBody", types.I8Ptr}, // partialBody: String (runtime calculates length)
 	}
 
 	for i, field := range fieldInfo {

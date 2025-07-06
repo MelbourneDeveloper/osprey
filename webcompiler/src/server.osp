@@ -1,4 +1,4 @@
-// 🚀 SUPREMO ALGEBRAIC EFFECTS WEB COMPILER! 🔥
+// 🔥 SUPREMO ALGEBRAIC EFFECTS WEB COMPILER! 🔥
 // This is THE FUTURE of programming languages!
 // Direct-style effects that make OCaml, Eff, and Koka look like toys!
 
@@ -6,63 +6,89 @@
 effect ProcessOutput {
     captureStdout: fn(string) -> Unit
     captureStderr: fn(string) -> Unit
+    getAccumulatedOutput: fn() -> string
+    resetAccumulatedOutput: fn() -> Unit
 }
 
-// Type for capturing process output results
-type ProcessOutputResult = {
-    stdout: string,
-    stderr: string
-}
-
-// Server configuration
-let serverPort = 3002
+// Server configuration  
+let serverPort = 3001
 
 // EFFECTFUL callback function that performs output capture via algebraic effects
 fn processEventHandler(processID: int, eventType: int, data: string) -> Unit !ProcessOutput = {
     match eventType {
-        1 => perform ProcessOutput.captureStdout(data)  // DIRECT-STYLE EFFECT PERFORMANCE!
-        2 => perform ProcessOutput.captureStderr(data)  // NO MONADIC BULLSHIT!
-        3 => print("Process exited with code: " + data)
-        _ => print("Unknown event: " + toString(eventType) + ": " + data)
+        1 => perform ProcessOutput.captureStdout(data)
+        2 => perform ProcessOutput.captureStderr(data)
+        3 => perform ProcessOutput.captureStdout("Process exited with code: " + data)
+        _ => perform ProcessOutput.captureStdout("Unknown event: " + toString(eventType) + ": " + data)
     }
 }
 
 // 🔥 REVOLUTIONARY EFFECTFUL PROCESS RUNNER WITH COMPILE-TIME SAFETY! 🔥
 // This demonstrates Osprey's SUPERIOR effect safety over OCaml, Eff, and Koka!
-fn processRunRequest(jsonBody: string) -> string = {
-    // Extract code from JSON body
-    let actualCode = extractCode(jsonBody)
+fn processRunRequest(jsonBody: string) -> string !ProcessOutput = {
+    // Reset accumulated output for this request
+    perform ProcessOutput.resetAccumulatedOutput()
+    
+    // DUMP THE JSON TO A FILE FIRST!
+    let jsonFile = "/tmp/osprey_request.json"
+    let writeJsonResult = writeFile(jsonFile, jsonBody)
+    
+    // USE CLI JQ TO EXTRACT THE CODE FIELD - PROPER WAY!
+    let extractResult = spawnProcess("jq -r '.code' /tmp/osprey_request.json > /tmp/osprey_code.txt", processEventHandler)
+    
+    let actualCode = match extractResult {
+        Success { value } => {
+            let exitCode = awaitProcess(value)
+            cleanupProcess(value)
+            
+            // Read the extracted code from the output file
+            let readResult = readFile("/tmp/osprey_code.txt")
+            match readResult {
+                Success { value } => value
+                Error { message } => "print(\"JSON parsing failed!\")"
+            }
+        }
+        Error { message } => "print(\"Failed to extract code from JSON!\")"
+    }
     
     // Write the Osprey code to temp file
     let writeResult = writeFile("/tmp/osprey_web_temp.osp", actualCode)
     
-    // 🚨 REVOLUTIONARY COMPILE-TIME EFFECT SAFETY DEMO! 🚨
-    // The following function would cause a COMPILATION ERROR if uncommented:
-    // This proves Osprey's SUPERIOR safety over other effect systems!
-    //
-    // fn unsafeEffectFunction() -> Unit = {
-    //     perform ProcessOutput.captureStdout("This would fail compilation!")
-    //     perform ProcessOutput.captureStderr("Unhandled effects = COMPILATION ERROR!")
-    // }
+    // Reset before running the actual program to capture ONLY its output
+    perform ProcessOutput.resetAccumulatedOutput()
     
-    // For now, return success with explanation of the revolutionary safety
-    let safetymessage = "🚀 OSPREY ALGEBRAIC EFFECTS DEMO! 🔥\\n" +
-        "✅ Effect declarations: FULLY IMPLEMENTED\\n" + 
-        "✅ Perform expressions: FULLY IMPLEMENTED\\n" +
-        "✅ REVOLUTIONARY compile-time safety: FULLY IMPLEMENTED\\n" +
-        "🚨 Handler execution: IN PROGRESS\\n\\n" +
-        "🔥 WHAT MAKES OSPREY REVOLUTIONARY:\\n" +
-        "• Unhandled effects = COMPILATION ERROR (not runtime crash!)\\n" +
-        "• Unlike OCaml, Eff, Koka which crash at runtime\\n" +
-        "• ZERO runtime effect errors - GUARANTEED!\\n" +
-        "• 100% compile-time effect verification\\n\\n" +
-        "🎯 CODE COMPILED SUCCESSFULLY WITH EFFECT SAFETY!"
+    // Spawn the Osprey compiler process WITHOUT SANDBOX to allow proper execution
+    let compilerResult = spawnProcess("osprey /tmp/osprey_web_temp.osp --run", processEventHandler)
     
-    "{\"success\": true, \"compilerOutput\": \"" + safetymessage + "\", \"appOutput\": \"Effect safety demonstration complete!\"}"
+    match compilerResult {
+        Success { value } => {
+            // Wait for process to complete and capture all output via effects
+            let exitCode = awaitProcess(value)
+            
+            // Clean up process resources
+            cleanupProcess(value)
+            
+            // GET THE ACTUAL CAPTURED OUTPUT FROM EFFECTS! 
+            let stdoutResult = readFile("/tmp/osprey_accumulated_stdout.txt")
+            let capturedOutput = match stdoutResult {
+                Success { value } => value
+                Error { message } => "No output captured"
+            }
+            
+            // Return response with REAL captured output, not hardcoded garbage
+            match exitCode {
+                0 => "{\"success\": true, \"compilerOutput\": \"Compilation successful\", \"programOutput\": \"" + capturedOutput + "\"}"
+                _ => "{\"success\": false, \"compilerOutput\": \"Compilation failed\", \"programOutput\": \"" + capturedOutput + "\"}"
+            }
+        }
+        Error { message } => {
+            "{\"success\": false, \"compilerOutput\": \"Process spawn failed: " + message + "\", \"programOutput\": \"\"}"
+        }
+    }
 }
 
 // HTTP request handler function - same as before but now POWERED BY EFFECTS!
-fn handleHttpRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = 
+fn handleHttpRequest(method: string, path: string, headers: string, body: string) -> HttpResponse !ProcessOutput = 
     match method {
         "POST" => match path {
             "/api/run" => {
@@ -71,49 +97,73 @@ fn handleHttpRequest(method: string, path: string, headers: string, body: string
                     status: 200,
                     headers: "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
                     contentType: "application/json",
-                    contentLength: 150,
                     streamFd: -1,
                     isComplete: true,
-                    partialBody: responseBody,
-                    partialLength: 150
+                    partialBody: responseBody
                 }
             }
-            _ => HttpResponse {
-                status: 404,
-                headers: "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
-                contentType: "application/json", 
-                contentLength: 50,
-                streamFd: -1,
-                isComplete: true,
-                partialBody: "{\"success\": false, \"error\": \"Endpoint not found\"}",
-                partialLength: 50
+            _ => {
+                let errorBody = "{\"success\": false, \"error\": \"Endpoint not found\"}"
+                HttpResponse {
+                    status: 404,
+                    headers: "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
+                    contentType: "application/json", 
+                    streamFd: -1,
+                    isComplete: true,
+                    partialBody: errorBody
+                }
             }
         }
-        _ => HttpResponse {
-            status: 405,
-            headers: "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
-            contentType: "application/json",
-            contentLength: 45,
-            streamFd: -1,
-            isComplete: true,
-            partialBody: "{\"success\": false, \"error\": \"Method not allowed\"}",
-            partialLength: 45
+        _ => {
+            let methodErrorBody = "{\"success\": false, \"error\": \"Method not allowed\"}"
+            HttpResponse {
+                status: 405,
+                headers: "Content-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n",
+                contentType: "application/json",
+                streamFd: -1,
+                isComplete: true,
+                partialBody: methodErrorBody
+            }
         }
     }
 
-// 🔥 SUPREMO ALGEBRAIC EFFECTS WEB SERVER WITH PROPER HANDLERS! 🔥
-with handler ProcessOutput {
-    captureStdout(data) => print("🚀 CAPTURED STDOUT: " + data)
-    captureStderr(data) => print("🚨 CAPTURED STDERR: " + data)
-} do {
-    print("🚀 Starting SUPREMO Algebraic Effects Web Compiler on port " + toString(serverPort))
-    let serverId = httpCreateServer(serverPort, "127.0.0.1")
-    let listenResult = httpListen(serverId, handleHttpRequest)
-    print("✅ SUPREMO Effects Server listening on http://127.0.0.1:" + toString(serverPort))
+// 🔥 SUPREMO ALGEBRAIC EFFECTS MAIN WITH PROPER FUNCTIONAL FILE-BASED ACCUMULATION! 🔥
+// This is the BEAUTIFUL FUNCTIONAL WAY using file-based state management!
+fn main() -> Unit = {
+    // PROPER FUNCTIONAL algebraic effects handlers using FILE-BASED STATE ACCUMULATION!
+    handle ProcessOutput
+        captureStdout data => {
+            let appendResult = writeFile("/tmp/osprey_accumulated_stdout.txt", data)
+            print("🚀 ACCUMULATED STDOUT: " + data)
+        }
+        captureStderr data => {
+            let appendResult = writeFile("/tmp/osprey_accumulated_stderr.txt", data)
+            print("🚨 ACCUMULATED STDERR: " + data)
+        }
+        getAccumulatedOutput => {
+            let stdoutResult = readFile("/tmp/osprey_accumulated_stdout.txt")
+            let stdout = match stdoutResult {
+                Success { value } => value
+                Error { message } => ""
+            }
+            stdout
+        }
+        resetAccumulatedOutput => {
+            let resetStdout = writeFile("/tmp/osprey_accumulated_stdout.txt", "")
+            let resetStderr = writeFile("/tmp/osprey_accumulated_stderr.txt", "")
+            print("🔄 RESET ACCUMULATED OUTPUT")
+        }
+    in {
+        print("🚀 Starting SUPREMO Algebraic Effects Web Compiler on port 3001")
+        let serverId = httpCreateServer(3001, "127.0.0.1")
+        let listenResult = httpListen(serverId, handleHttpRequest)
+        print("✅ SUPREMO Effects Server listening on http://127.0.0.1:3001")
+        print("🎯 NOW WITH PROPER FUNCTIONAL FILE-BASED STATE ACCUMULATION!")
 
-    // Keep server alive
-    sleep(30000)
+        // Keep server alive for 5 minutes
+        sleep(3000000)
 
-    let stopResult = httpStopServer(serverId)
-    print("🛑 SUPREMO Effects Server stopped")
+        let stopResult = httpStopServer(serverId)
+        print("🛑 SUPREMO Effects Server stopped")
+    }
 }

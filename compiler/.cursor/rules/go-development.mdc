@@ -7,7 +7,7 @@ alwaysApply: true
 
 - **ALWAYS RUN make clean & make build * make test AFTER MAKING CHANGES** You are not finished until this passes. Do not stop unti passing
 - **TESTS MUST EXPECT THE CORRECT OUTPUT** - never set expected output to get tests passing without the osprey program working correctly
-- **IGNORE VSCODE COMPILER ERRORS FOR .OSP FILES** - the compiler is out of date
+- **INSTALL THE COMPILER** - run make install to update teh compiler on the machine, which should fix vscode .osp problems
 - **PREFER PURE FUNCTIONS OVER METHODS** - Use functions unless receiver state is needed. Avoid side effects where practical (except for compiler performance)
 - **EXPLICIT ERROR HANDLING** - Check all errors, return early on failures
 - **KEEP FILES UNDER 500 LOC** - break files up when they get too big

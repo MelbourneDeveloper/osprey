@@ -70,6 +70,17 @@ type LetDeclaration struct {
 
 func (l *LetDeclaration) isStatement() {}
 
+// AssignmentStatement represents a mutable variable assignment.
+type AssignmentStatement struct {
+	Name  string
+	Value Expression
+
+	// Position information
+	Position *Position
+}
+
+func (a *AssignmentStatement) isStatement() {}
+
 // FunctionDeclaration represents a function declaration.
 type FunctionDeclaration struct {
 	Name       string

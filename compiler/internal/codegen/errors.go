@@ -14,6 +14,7 @@ var (
 	ErrUnsupportedStatement  = errors.New("unsupported statement type")
 	ErrFunctionNotDeclared   = errors.New("function not declared")
 	ErrUndefinedVariable     = errors.New("undefined variable")
+	ErrImmutableAssignment   = errors.New("cannot assign to immutable variable")
 	ErrUnsupportedExpression = errors.New("unsupported expression type")
 	ErrUnsupportedBinaryOp   = errors.New("unsupported binary operator")
 	ErrUnsupportedUnaryOp    = errors.New("unsupported unary operator")
@@ -146,8 +147,6 @@ var (
 	ErrSleepWrongArgs          = errors.New("sleep expects exactly 1 argument (milliseconds)")
 	ErrWriteFileWrongArgs      = errors.New("writeFile expects exactly 2 arguments (filename, content)")
 	ErrReadFileWrongArgs       = errors.New("readFile expects exactly 1 argument (filename)")
-	ErrParseJSONWrongArgs      = errors.New("parseJSON expects exactly 1 argument (json_string)")
-	ErrExtractCodeWrongArgs    = errors.New("extractCode expects exactly 1 argument (json_string)")
 )
 
 // Helper functions to wrap static errors with context
@@ -157,10 +156,7 @@ func WrapUnsupportedStatement(t interface{}) error {
 	return fmt.Errorf("%w: %T", ErrUnsupportedStatement, t)
 }
 
-// WrapFunctionNotDeclared wraps function not declared errors with function name.
-func WrapFunctionNotDeclared(name string) error {
-	return fmt.Errorf("function '%s' not declared: %w", name, ErrFunctionNotDeclared)
-}
+// WrapFunctionNotDeclared is DEPRECATED - use WrapFunctionNotDeclaredWithPos instead
 
 // WrapFunctionNotDeclaredWithPos wraps function not declared errors with function name and position.
 func WrapFunctionNotDeclaredWithPos(name string, pos *ast.Position) error {
@@ -181,6 +177,19 @@ func WrapUndefinedVariableWithPos(name string, pos *ast.Position) error {
 		return fmt.Errorf("line %d:%d: undefined variable '%s': %w", pos.Line, pos.Column, name, ErrUndefinedVariable)
 	}
 	return fmt.Errorf("undefined variable '%s': %w", name, ErrUndefinedVariable)
+}
+
+// WrapImmutableAssignmentError wraps immutable assignment errors with variable name.
+func WrapImmutableAssignmentError(name string) error {
+	return fmt.Errorf("cannot assign to immutable variable '%s': %w", name, ErrImmutableAssignment)
+}
+
+// WrapImmutableAssignmentErrorWithPos wraps immutable assignment errors with variable name and position.
+func WrapImmutableAssignmentErrorWithPos(name string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d cannot assign to immutable variable '%s'", pos.Line, pos.Column, name)
+	}
+	return fmt.Errorf("cannot assign to immutable variable '%s'", name)
 }
 
 // WrapUnsupportedExpression wraps unsupported expression errors with type information.
@@ -521,8 +530,24 @@ func WrapRangeWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrRangeWrongArgs, got)
 }
 
+// WrapRangeWrongArgsWithPos wraps range wrong arguments error with position.
+func WrapRangeWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrRangeWrongArgs, got)
+	}
+	return fmt.Errorf("%w, got %d", ErrRangeWrongArgs, got)
+}
+
 // WrapForEachWrongArgs wraps forEach wrong arguments error.
 func WrapForEachWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrForEachWrongArgs, got)
+}
+
+// WrapForEachWrongArgsWithPos wraps forEach wrong arguments error with position.
+func WrapForEachWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrForEachWrongArgs, got)
+	}
 	return fmt.Errorf("%w, got %d", ErrForEachWrongArgs, got)
 }
 
@@ -935,17 +960,23 @@ func WrapWriteFileWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrWriteFileWrongArgs, got)
 }
 
+// WrapWriteFileWrongArgsWithPos wraps writeFile wrong arguments error with position.
+func WrapWriteFileWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrWriteFileWrongArgs, got)
+	}
+	return fmt.Errorf("%w, got %d", ErrWriteFileWrongArgs, got)
+}
+
 // WrapReadFileWrongArgs wraps readFile wrong arguments error.
 func WrapReadFileWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrReadFileWrongArgs, got)
 }
 
-// WrapParseJSONWrongArgs wraps parseJSON wrong arguments error.
-func WrapParseJSONWrongArgs(got int) error {
-	return fmt.Errorf("%w, got %d", ErrParseJSONWrongArgs, got)
-}
-
-// WrapExtractCodeWrongArgs wraps extractCode wrong arguments error.
-func WrapExtractCodeWrongArgs(got int) error {
-	return fmt.Errorf("%w, got %d", ErrExtractCodeWrongArgs, got)
+// WrapReadFileWrongArgsWithPos wraps readFile wrong arguments error with position.
+func WrapReadFileWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrReadFileWrongArgs, got)
+	}
+	return fmt.Errorf("%w, got %d", ErrReadFileWrongArgs, got)
 }

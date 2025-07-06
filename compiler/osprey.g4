@@ -7,6 +7,7 @@ program         : statement* EOF ;
 statement
     : importStmt
     | letDecl
+    | assignStmt
     | fnDecl
     | externDecl
     | typeDecl
@@ -18,6 +19,8 @@ statement
 importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
+
+assignStmt       : ID EQ expr ;
 
 fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | LBRACE blockBody RBRACE) ;
 

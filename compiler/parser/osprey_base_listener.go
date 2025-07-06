@@ -44,6 +44,12 @@ func (s *BaseospreyListener) EnterLetDecl(ctx *LetDeclContext) {}
 // ExitLetDecl is called when production letDecl is exited.
 func (s *BaseospreyListener) ExitLetDecl(ctx *LetDeclContext) {}
 
+// EnterAssignStmt is called when production assignStmt is entered.
+func (s *BaseospreyListener) EnterAssignStmt(ctx *AssignStmtContext) {}
+
+// ExitAssignStmt is called when production assignStmt is exited.
+func (s *BaseospreyListener) ExitAssignStmt(ctx *AssignStmtContext) {}
+
 // EnterFnDecl is called when production fnDecl is entered.
 func (s *BaseospreyListener) EnterFnDecl(ctx *FnDeclContext) {}
 

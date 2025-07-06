@@ -29,6 +29,17 @@ func (b *Builder) buildLetDecl(ctx parser.ILetDeclContext) *LetDeclaration {
 	}
 }
 
+func (b *Builder) buildAssignStmt(ctx parser.IAssignStmtContext) *AssignmentStatement {
+	name := ctx.ID().GetText()
+	value := b.buildExpression(ctx.Expr())
+
+	return &AssignmentStatement{
+		Name:     name,
+		Value:    value,
+		Position: b.getPositionFromContext(ctx),
+	}
+}
+
 func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 	name := ctx.ID().GetText()
 

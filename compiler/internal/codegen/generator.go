@@ -16,6 +16,7 @@ type LLVMGenerator struct {
 	function            *ir.Func
 	variables           map[string]value.Value
 	variableTypes       map[string]string // Track variable types: "string" or "int"
+	mutableVariables    map[string]bool   // Track which variables were declared as mutable
 	functions           map[string]*ir.Func
 	functionReturnTypes map[string]string   // Track function return types: "string" or "int"
 	functionParameters  map[string][]string // Track function parameter names for named argument reordering
@@ -80,6 +81,7 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		module:              module,
 		variables:           make(map[string]value.Value),
 		variableTypes:       make(map[string]string),
+		mutableVariables:    make(map[string]bool),
 		functions:           make(map[string]*ir.Func),
 		functionReturnTypes: make(map[string]string),
 		functionParameters:  make(map[string][]string),
@@ -208,8 +210,6 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"
 	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"
 	g.functionReturnTypes["deleteFile"] = TypeResult + "<Success, string>"
-	g.functionReturnTypes["parseJSON"] = TypeResult + "<string, string>"
-	g.functionReturnTypes["extractCode"] = TypeResult + "<string, string>"
 
 	// HTTP functions
 	g.functionReturnTypes["httpCreateServer"] = TypeInt // Returns server ID
@@ -242,16 +242,14 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 
 // registerBuiltInTypes registers built-in types in the type system.
 func (g *LLVMGenerator) registerBuiltInTypes() {
-	// Register HttpResponse as a built-in struct type
+	// Register HttpResponse as a built-in struct type (REMOVED REDUNDANT LENGTH FIELDS)
 	httpResponseType := types.NewStruct(
 		types.I64,   // status: Int
 		types.I8Ptr, // headers: String
 		types.I8Ptr, // contentType: String
-		types.I64,   // contentLength: Int
 		types.I64,   // streamFd: Int
 		types.I1,    // isComplete: Bool
-		types.I8Ptr, // partialBody: String
-		types.I64,   // partialLength: Int
+		types.I8Ptr, // partialBody: String (runtime calculates length automatically)
 	)
 
 	g.typeMap[TypeHTTPResponse] = httpResponseType

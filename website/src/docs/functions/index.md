@@ -24,12 +24,6 @@ Cleans up resources associated with a completed process. Should be called after 
 
 Checks if a string contains a substring.
 
-## [extractCode](extractcode/)
-
-**Signature:** `extractCode(json: string) -> Result<string, string>`
-
-Extracts code from a JSON structure.
-
 ## [filter](filter/)
 
 **Signature:** `filter(iterator: iterator, predicate: function) -> iterator`
@@ -125,12 +119,6 @@ Returns the length of a string.
 **Signature:** `map(iterator: iterator, fn: function) -> iterator`
 
 Transforms each element in an iterator using a function, returning a new iterator.
-
-## [parseJSON](parsejson/)
-
-**Signature:** `parseJSON(json: string) -> Result<string, string>`
-
-Parses a JSON string and returns the parsed result.
 
 ## [print](print/)
 

@@ -53,7 +53,6 @@ Current version: **0.2.0-alpha** (released)
 - **String Utilities**: `length()`, `contains()`, `substring()`
 - **File System**: `writeFile()`, `readFile()` (with Result types)
 - **Process Operations**: `spawnProcess()`, `sleep()`
-- **JSON Processing**: `parseJSON()`, `extractCode()`
 - **Functional Iterators**: Complete pipe operator support
 - **Safe Math**: All arithmetic operations return `Result` types
 

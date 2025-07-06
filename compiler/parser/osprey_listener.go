@@ -19,6 +19,9 @@ type ospreyListener interface {
 	// EnterLetDecl is called when entering the letDecl production.
 	EnterLetDecl(c *LetDeclContext)
 
+	// EnterAssignStmt is called when entering the assignStmt production.
+	EnterAssignStmt(c *AssignStmtContext)
+
 	// EnterFnDecl is called when entering the fnDecl production.
 	EnterFnDecl(c *FnDeclContext)
 
@@ -210,6 +213,9 @@ type ospreyListener interface {
 
 	// ExitLetDecl is called when exiting the letDecl production.
 	ExitLetDecl(c *LetDeclContext)
+
+	// ExitAssignStmt is called when exiting the assignStmt production.
+	ExitAssignStmt(c *AssignStmtContext)
 
 	// ExitFnDecl is called when exiting the fnDecl production.
 	ExitFnDecl(c *FnDeclContext)

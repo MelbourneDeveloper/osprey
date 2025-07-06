@@ -18,7 +18,6 @@ description: "Complete reference documentation for the Osprey programming langua
 | [awaitProcess](functions/awaitprocess/) | Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes. |
 | [cleanupProcess](functions/cleanupprocess/) | Cleans up resources associated with a completed process. Should be called after awaitProcess. |
 | [contains](functions/contains/) | Checks if a string contains a substring. |
-| [extractCode](functions/extractcode/) | Extracts code from a JSON structure. |
 | [filter](functions/filter/) | Filters elements in an iterator based on a predicate function. |
 | [fold](functions/fold/) | Reduces an iterator to a single value using an accumulator function. |
 | [forEach](functions/foreach/) | Applies a function to each element in an iterator. |
@@ -35,7 +34,6 @@ description: "Complete reference documentation for the Osprey programming langua
 | [input](functions/input/) | Reads an integer from the user's input. |
 | [length](functions/length/) | Returns the length of a string. |
 | [map](functions/map/) | Transforms each element in an iterator using a function, returning a new iterator. |
-| [parseJSON](functions/parsejson/) | Parses a JSON string and returns the parsed result. |
 | [print](functions/print/) | Prints a value to the console. Automatically converts the value to a string representation. |
 | [range](functions/range/) | Creates an iterator that generates numbers from start to end (exclusive). |
 | [readFile](functions/readfile/) | Reads the entire contents of a file as a string. |
