@@ -2,7 +2,7 @@
 layout: page
 title: "Block Expressions"
 description: "Osprey Language Specification: Block Expressions"
-date: 2025-06-26
+date: 2025-07-06
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0009-blockexpressions/"

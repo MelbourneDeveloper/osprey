@@ -2,7 +2,7 @@
 let x = 42
 let name = "Alice"
 
-fn double(n: int) -> int = n * 2
+fn double(n: int) -> Result<int, MathError> = n * 2
 fn greet(name: string) -> string = name
 
 let result = double(21)
@@ -10,21 +10,27 @@ let greeting = greet("Hello")
 
 print("x = ${x}")
 print("name = ${name}")
-print("double(21) = ${result}")
+
+// Handle Result from arithmetic function
+match result {
+    Success { value } => print("double(21) = ${value}")
+    Error { message } => print("Error in double: ${message}")
+}
+
 print("greeting = ${greeting}")
 
+// Compound expressions return single Result
 let sum = 10 + 5
-let sumValue = match sum {
-    Success => sum.value
-    Err => 0
+match sum {
+    Success { value } => print("10 + 5 = ${value}")
+    Error { message } => print("Error in addition: ${message}")
 }
+
 let product = 6 * 7
-let productValue = match product {
-    Success => product.value
-    Err => 0
+match product {
+    Success { value } => print("6 * 7 = ${value}")
+    Error { message } => print("Error in multiplication: ${message}")
 }
-print("10 + 5 = ${sumValue}")
-print("6 * 7 = ${productValue}")
 
 // Simple match expression
 let test = match 42 {

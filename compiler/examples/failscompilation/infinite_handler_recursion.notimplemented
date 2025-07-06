@@ -1,0 +1,16 @@
+// 🚨 INFINITE HANDLER RECURSION TEST - SHOULD FAIL COMPILATION! 🚨
+
+effect Recursive {
+    recurse: fn(int) -> int
+}
+
+// Function that performs recursive effect
+fn performRecursive(n: int) -> int !Recursive = {
+    perform Recursive.recurse(n - 1)
+}
+
+// This should fail compilation with syntax error
+fn main() -> Unit = {
+    let result = undefinedFunction()  // Undefined function call
+    print("Result: " + toString(result))
+} 

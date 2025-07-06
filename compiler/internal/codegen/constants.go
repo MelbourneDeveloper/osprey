@@ -65,17 +65,14 @@ const (
 	// Process and system functions
 	SpawnProcessFunc = "spawnProcess"
 
-	WriteFileFunc = "writeFile"
-	ReadFileFunc  = "readFile"
-	SleepFunc     = "sleep"
+	WriteFileFunc  = "writeFile"
+	ReadFileFunc   = "readFile"
+	DeleteFileFunc = "deleteFile"
+	SleepFunc      = "sleep"
 
 	// Process management functions
 	AwaitProcessFunc   = "awaitProcess"
 	CleanupProcessFunc = "cleanupProcess"
-
-	// JSON functions
-	ParseJSONFunc   = "parseJSON"
-	ExtractCodeFunc = "extractCode"
 )
 
 // HTTP Function names.

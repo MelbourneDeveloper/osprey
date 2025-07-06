@@ -1,1 +1,1 @@
-unknown variant 'Maybe' in match expression for type 'Color': unknown variant in match expression
+line 8:18: unknown variant in match expression: variant 'Maybe' is not defined in type 'Color'

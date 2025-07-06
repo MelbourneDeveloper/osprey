@@ -341,34 +341,6 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 			ReturnType: "Result<string, string>",
 			Example:    `let content = readFile("input.txt")\nprint("File read")`,
 		},
-		"parseJSON": {
-			Name:        "parseJSON",
-			Signature:   "parseJSON(json: string) -> Result<string, string>",
-			Description: "Parses a JSON string and returns the parsed result.",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "json",
-					Type:        "string",
-					Description: "JSON string to parse",
-				},
-			},
-			ReturnType: "Result<string, string>",
-			Example:    `let parsed = parseJSON("{\"key\": \"value\"}")\nprint("JSON parsed")`,
-		},
-		"extractCode": {
-			Name:        "extractCode",
-			Signature:   "extractCode(json: string) -> Result<string, string>",
-			Description: "Extracts code from a JSON structure.",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "json",
-					Type:        "string",
-					Description: "JSON string containing code",
-				},
-			},
-			ReturnType: "Result<string, string>",
-			Example:    `let code = extractCode("{\"code\": \"print(42)\"}")\nprint("Code extracted")`,
-		},
 
 		// === HTTP SERVER FUNCTIONS ===
 		"httpCreateServer": {
@@ -834,8 +806,6 @@ func GetCompilerBuiltinFunctionNames() []string {
 		codegen.SleepFunc,
 		codegen.WriteFileFunc,
 		codegen.ReadFileFunc,
-		codegen.ParseJSONFunc,
-		codegen.ExtractCodeFunc,
 
 		// HTTP Server functions
 		codegen.HTTPCreateServerFunc,

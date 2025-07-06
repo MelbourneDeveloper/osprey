@@ -1,0 +1,36 @@
+// 🔒 HANDLER ISOLATION SIMPLE TEST 🔒
+
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+// Main function with different handlers
+fn main() -> Unit = {
+    print("🔒 Testing Handler Isolation")
+    
+    // Production handler
+    let result1 = handle Logger
+        log msg => print("[PROD] " + msg)
+    in {
+        perform Logger.log("Processing task: 5")
+        10
+    }
+    
+    // Debug handler
+    let result2 = handle Logger
+        log msg => print("[TEST] " + msg)
+    in {
+        perform Logger.log("Processing task: 12")
+        24
+    }
+    
+    // Silent handler
+    let result3 = handle Logger
+        log msg => 0
+    in {
+        perform Logger.log("Processing task: 0")
+        0
+    }
+    
+    print("📊 Results: Prod=" + toString(result1) + ", Test=" + toString(result2) + ", Silent=" + toString(result3))
+} 

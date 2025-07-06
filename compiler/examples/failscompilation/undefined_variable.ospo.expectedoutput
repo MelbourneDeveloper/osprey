@@ -1,1 +1,1 @@
-undefined variable 'unknownVar': undefined variable
+line 5:17: undefined variable 'unknownVar': undefined variable

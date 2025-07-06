@@ -51,7 +51,7 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 
 	// Check for parse errors before proceeding
 	if len(errorListener.Errors) > 0 {
-		return "", WrapParseErrors(strings.Join(errorListener.Errors, "\n"))
+		return "", WrapParseErrors(errorListener.Errors)
 	}
 
 	// Check if parse tree is valid
@@ -70,7 +70,7 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 
 	// Validate AST for type inference rules
 	if err := ast.ValidateProgram(program); err != nil {
-		return "", fmt.Errorf("validation error: %w", err)
+		return "", err
 	}
 
 	// Generate LLVM IR with security configuration
@@ -157,7 +157,7 @@ func addOpenSSLFlags(linkArgs []string) []string {
 	if output, err := cmd.Output(); err == nil {
 		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
-		fmt.Fprintf(os.Stderr, "DEBUG: pkg-config openssl flags: %v\n", flags)
+
 		return append(linkArgs, flags...)
 	}
 
@@ -216,7 +216,7 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 
 	var lastErr error
 	for _, cmd := range clangCommands {
-		fmt.Fprintf(os.Stderr, "DEBUG: Trying link command: %v\n", cmd)
+
 		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
 
 		linkOutput, err := linkCmd.CombinedOutput()
@@ -224,10 +224,11 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 			return nil // Success!
 		}
 
-		lastErr = fmt.Errorf("failed to link executable with %s: %w\nOutput: %s", cmd[0], err, string(linkOutput))
+		lastErr = fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with %s: %w\nOutput: %s",
+			cmd[0], err, string(linkOutput))
 	}
 
-	return fmt.Errorf("failed to link executable with any available compiler: %w", lastErr)
+	return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with any available compiler: %w", lastErr)
 }
 
 // CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.
@@ -257,7 +258,8 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to compile IR to object file: %w\nllc output: %s", err, string(llcOutput))
+		return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to compile IR to object file: %w\nllc output: %s",
+			err, string(llcOutput))
 	}
 
 	defer func() { _ = os.Remove(objFile) }() // Clean up temp file
@@ -297,4 +299,14 @@ func CompileAndRun(source string) error {
 func CompileAndRunWithSecurity(source string, security SecurityConfig) error {
 	// Try JIT execution first (smart tool detection)
 	return CompileAndRunJITWithSecurity(source, security)
+}
+
+// CompileAndCapture compiles and captures program output with default (permissive) security.
+func CompileAndCapture(source string) (string, error) {
+	return CompileAndCaptureJIT(source)
+}
+
+// CompileAndCaptureWithSecurity compiles and captures program output with specified security configuration.
+func CompileAndCaptureWithSecurity(source string, security SecurityConfig) (string, error) {
+	return CompileAndCaptureJITWithSecurity(source, security)
 }

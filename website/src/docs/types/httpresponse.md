@@ -13,10 +13,8 @@ HttpResponse {
     status: 200,
     headers: "Content-Type: application/json",
     contentType: "application/json",
-    contentLength: 25,
     streamFd: -1,
     isComplete: true,
-    partialBody: "{\"message\": \"Hello\"}",
-    partialLength: 25
+    partialBody: "{\"message\": \"Hello\"}"
 }
 ```

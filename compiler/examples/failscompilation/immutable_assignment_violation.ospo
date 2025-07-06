@@ -1,0 +1,12 @@
+// 🚨 IMMUTABLE ASSIGNMENT VIOLATION TEST 🚨
+// This should FAIL compilation - proving immutability by default!
+
+fn main() -> Unit = {
+    // Immutable variable declaration
+    let x = 42
+    
+    // This should FAIL - attempting to assign to immutable variable!
+    x = 100
+    
+    print("This should never execute!")
+} 

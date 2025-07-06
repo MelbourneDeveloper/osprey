@@ -4,11 +4,12 @@
   "description": "Official website for the Osprey Programming Language",
   "main": "index.js",
   "scripts": {
-    "start": "npm run copy-spec && npm run generate-docs && eleventy --serve",
-    "dev": "npm run copy-spec && npm run generate-docs && eleventy --serve --watch",
-    "build": "npm run generate-docs && eleventy",
+    "start": "npm run update-playground && npm run copy-spec && npm run generate-docs && eleventy --serve",
+    "dev": "npm run update-playground && npm run copy-spec && npm run generate-docs && eleventy --serve --watch",
+    "build": "npm run update-playground && npm run generate-docs && eleventy",
     "copy-spec": "node scripts/copy-spec.js",
     "generate-docs": "bash scripts/generate-docs.sh",
+    "update-playground": "node scripts/update-playground.js",
     "clean": "rm -rf _site",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

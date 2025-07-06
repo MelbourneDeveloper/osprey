@@ -43,11 +43,9 @@ func GetBuiltinTypeDescriptions() map[string]*BuiltinTypeDesc {
 				`    status: 200,` + "\n" +
 				`    headers: "Content-Type: application/json",` + "\n" +
 				`    contentType: "application/json",` + "\n" +
-				`    contentLength: 25,` + "\n" +
 				`    streamFd: -1,` + "\n" +
 				`    isComplete: true,` + "\n" +
-				`    partialBody: "{\"message\": \"Hello\"}",` + "\n" +
-				`    partialLength: 25` + "\n" +
+				`    partialBody: "{\"message\": \"Hello\"}"` + "\n" +
 				`}`,
 		},
 		"ProcessHandle": {

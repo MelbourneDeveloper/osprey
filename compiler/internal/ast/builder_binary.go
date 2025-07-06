@@ -38,6 +38,7 @@ func (b *Builder) buildComparisonExpr(ctx parser.IComparisonExprContext) Express
 			Left:     left,
 			Operator: operator,
 			Right:    right,
+			Position: b.getPositionFromContext(ctx),
 		}
 	}
 
@@ -67,6 +68,7 @@ func (b *Builder) buildAddExpr(ctx parser.IAddExprContext) Expression {
 			Left:     left,
 			Operator: operator,
 			Right:    right,
+			Position: b.getPositionFromContext(ctx),
 		}
 
 		left = b.wrapInResultType(binExpr)
@@ -87,7 +89,7 @@ func (b *Builder) buildMulExpr(ctx parser.IMulExprContext) Expression {
 	for i := 1; i < len(unaryExprs); i++ {
 		right := b.buildUnaryExpr(unaryExprs[i])
 
-		// Determine operator (*, /, or %)
+		// Determine operator (*, /, %)
 		operator := "*"
 		if ctx.SLASH(i-1) != nil {
 			operator = "/"
@@ -100,6 +102,7 @@ func (b *Builder) buildMulExpr(ctx parser.IMulExprContext) Expression {
 			Left:     left,
 			Operator: operator,
 			Right:    right,
+			Position: b.getPositionFromContext(ctx),
 		}
 
 		left = b.wrapInResultType(binExpr)
@@ -146,21 +149,25 @@ func (b *Builder) buildUnaryExpr(ctx parser.IUnaryExprContext) Expression {
 		return &UnaryExpression{
 			Operator: "+",
 			Operand:  pipeExpr,
+			Position: b.getPositionFromContext(ctx),
 		}
 	} else if ctx.MINUS() != nil {
 		return &UnaryExpression{
 			Operator: "-",
 			Operand:  pipeExpr,
+			Position: b.getPositionFromContext(ctx),
 		}
 	} else if ctx.NOT_OP() != nil {
 		return &UnaryExpression{
 			Operator: "!",
 			Operand:  pipeExpr,
+			Position: b.getPositionFromContext(ctx),
 		}
 	} else if ctx.AWAIT() != nil {
 		// Handle await as unary operator: await expr
 		return &AwaitExpression{
 			Expression: pipeExpr,
+			Position:   b.getPositionFromContext(ctx),
 		}
 	}
 

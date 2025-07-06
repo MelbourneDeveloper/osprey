@@ -2,7 +2,7 @@
 layout: page
 title: "Lexical Structure"
 description: "Osprey Language Specification: Lexical Structure"
-date: 2025-06-26
+date: 2025-07-06
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0002-lexicalstructure/"

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/christianfindlay/osprey/internal/ast"
 )
 
 // Static error definitions to replace dynamic errors.
@@ -12,9 +14,11 @@ var (
 	ErrUnsupportedStatement  = errors.New("unsupported statement type")
 	ErrFunctionNotDeclared   = errors.New("function not declared")
 	ErrUndefinedVariable     = errors.New("undefined variable")
+	ErrImmutableAssignment   = errors.New("cannot assign to immutable variable")
 	ErrUnsupportedExpression = errors.New("unsupported expression type")
 	ErrUnsupportedBinaryOp   = errors.New("unsupported binary operator")
 	ErrUnsupportedUnaryOp    = errors.New("unsupported unary operator")
+	ErrVoidArithmetic        = errors.New("cannot perform arithmetic operation on Unit (void) type")
 	ErrFieldAccessNotImpl    = errors.New("field access not implemented for field")
 	ErrToStringWrongArgs     = errors.New("toString expects exactly 1 argument")
 	ErrPrintWrongArgs        = errors.New("print expects exactly 1 argument")
@@ -143,8 +147,6 @@ var (
 	ErrSleepWrongArgs          = errors.New("sleep expects exactly 1 argument (milliseconds)")
 	ErrWriteFileWrongArgs      = errors.New("writeFile expects exactly 2 arguments (filename, content)")
 	ErrReadFileWrongArgs       = errors.New("readFile expects exactly 1 argument (filename)")
-	ErrParseJSONWrongArgs      = errors.New("parseJSON expects exactly 1 argument (json_string)")
-	ErrExtractCodeWrongArgs    = errors.New("extractCode expects exactly 1 argument (json_string)")
 )
 
 // Helper functions to wrap static errors with context
@@ -154,8 +156,16 @@ func WrapUnsupportedStatement(t interface{}) error {
 	return fmt.Errorf("%w: %T", ErrUnsupportedStatement, t)
 }
 
-// WrapFunctionNotDeclared wraps function not declared errors with function name.
+// WrapFunctionNotDeclared is DEPRECATED - use WrapFunctionNotDeclaredWithPos instead
 func WrapFunctionNotDeclared(name string) error {
+	return fmt.Errorf("function '%s' not declared: %w", name, ErrFunctionNotDeclared)
+}
+
+// WrapFunctionNotDeclaredWithPos wraps function not declared errors with function name and position.
+func WrapFunctionNotDeclaredWithPos(name string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: function '%s' not declared: %w", pos.Line, pos.Column, name, ErrFunctionNotDeclared)
+	}
 	return fmt.Errorf("function '%s' not declared: %w", name, ErrFunctionNotDeclared)
 }
 
@@ -164,8 +174,38 @@ func WrapUndefinedVariable(name string) error {
 	return fmt.Errorf("undefined variable '%s': %w", name, ErrUndefinedVariable)
 }
 
+// WrapUndefinedVariableWithPos wraps undefined variable errors with variable name and position.
+func WrapUndefinedVariableWithPos(name string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: undefined variable '%s': %w", pos.Line, pos.Column, name, ErrUndefinedVariable)
+	}
+	return fmt.Errorf("undefined variable '%s': %w", name, ErrUndefinedVariable)
+}
+
+// WrapImmutableAssignmentError wraps immutable assignment errors with variable name.
+func WrapImmutableAssignmentError(name string) error {
+	return fmt.Errorf("cannot assign to immutable variable '%s': %w", name, ErrImmutableAssignment)
+}
+
+// WrapImmutableAssignmentErrorWithPos wraps immutable assignment errors with variable name and position.
+func WrapImmutableAssignmentErrorWithPos(name string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: cannot assign to immutable variable '%s': %w",
+			pos.Line, pos.Column, name, ErrImmutableAssignment)
+	}
+	return fmt.Errorf("cannot assign to immutable variable '%s': %w", name, ErrImmutableAssignment)
+}
+
 // WrapUnsupportedExpression wraps unsupported expression errors with type information.
 func WrapUnsupportedExpression(t interface{}) error {
+	return fmt.Errorf("%w: %T", ErrUnsupportedExpression, t)
+}
+
+// WrapUnsupportedExpressionWithPos wraps unsupported expression errors with type information and position.
+func WrapUnsupportedExpressionWithPos(t interface{}, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: %T", pos.Line, pos.Column, ErrUnsupportedExpression, t)
+	}
 	return fmt.Errorf("%w: %T", ErrUnsupportedExpression, t)
 }
 
@@ -174,13 +214,54 @@ func WrapUnsupportedBinaryOp(op string) error {
 	return fmt.Errorf("unsupported binary operator '%s': %w", op, ErrUnsupportedBinaryOp)
 }
 
+// WrapUnsupportedBinaryOpWithPos wraps unsupported binary operator errors with operator and position.
+func WrapUnsupportedBinaryOpWithPos(op string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: unsupported binary operator '%s': %w",
+			pos.Line, pos.Column, op, ErrUnsupportedBinaryOp)
+	}
+	return fmt.Errorf("unsupported binary operator '%s': %w", op, ErrUnsupportedBinaryOp)
+}
+
 // WrapUnsupportedUnaryOp wraps unsupported unary operator errors with operator.
 func WrapUnsupportedUnaryOp(op string) error {
 	return fmt.Errorf("unsupported unary operator '%s': %w", op, ErrUnsupportedUnaryOp)
 }
 
+// WrapUnsupportedUnaryOpWithPos wraps unsupported unary operator errors with operator and position.
+func WrapUnsupportedUnaryOpWithPos(op string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: unsupported unary operator '%s': %w", pos.Line, pos.Column, op, ErrUnsupportedUnaryOp)
+	}
+	return fmt.Errorf("unsupported unary operator '%s': %w", op, ErrUnsupportedUnaryOp)
+}
+
+// WrapVoidArithmetic wraps void arithmetic operation errors.
+func WrapVoidArithmetic(operator string) error {
+	return fmt.Errorf("cannot perform arithmetic operation '%s' on Unit (void) type: %w", operator, ErrVoidArithmetic)
+}
+
+// WrapVoidArithmeticWithPos wraps void arithmetic operation errors with position.
+func WrapVoidArithmeticWithPos(operator string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: cannot perform arithmetic operation '%s' on Unit (void) type: %w",
+			pos.Line, pos.Column, operator, ErrVoidArithmetic)
+	}
+	return fmt.Errorf("cannot perform arithmetic operation '%s' on Unit (void) type: %w",
+		operator, ErrVoidArithmetic)
+}
+
 // WrapFieldAccessNotImpl wraps field access not implemented errors with field name.
 func WrapFieldAccessNotImpl(field string) error {
+	return fmt.Errorf("field access not implemented for field '%s': %w", field, ErrFieldAccessNotImpl)
+}
+
+// WrapFieldAccessNotImplWithPos wraps field access not implemented errors with field name and position.
+func WrapFieldAccessNotImplWithPos(field string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: field access not implemented for field '%s': %w",
+			pos.Line, pos.Column, field, ErrFieldAccessNotImpl)
+	}
 	return fmt.Errorf("field access not implemented for field '%s': %w", field, ErrFieldAccessNotImpl)
 }
 
@@ -189,8 +270,26 @@ func WrapToStringWrongArgs(got int) error {
 	return fmt.Errorf("toString expects exactly 1 argument, got %d: %w", got, ErrToStringWrongArgs)
 }
 
+// WrapToStringWrongArgsWithPos wraps toString wrong arguments errors with argument count and position.
+func WrapToStringWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: toString expects exactly 1 argument, got %d: %w",
+			pos.Line, pos.Column, got, ErrToStringWrongArgs)
+	}
+	return fmt.Errorf("toString expects exactly 1 argument, got %d: %w", got, ErrToStringWrongArgs)
+}
+
 // WrapPrintWrongArgs wraps print wrong arguments errors with argument count.
 func WrapPrintWrongArgs(got int) error {
+	return fmt.Errorf("print expects exactly 1 argument, got %d: %w", got, ErrPrintWrongArgs)
+}
+
+// WrapPrintWrongArgsWithPos wraps print wrong arguments errors with argument count and position.
+func WrapPrintWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: print expects exactly 1 argument, got %d: %w",
+			pos.Line, pos.Column, got, ErrPrintWrongArgs)
+	}
 	return fmt.Errorf("print expects exactly 1 argument, got %d: %w", got, ErrPrintWrongArgs)
 }
 
@@ -199,8 +298,26 @@ func WrapInputWrongArgs(got int) error {
 	return fmt.Errorf("input expects exactly 0 arguments, got %d: %w", got, ErrInputWrongArgs)
 }
 
+// WrapInputWrongArgsWithPos wraps input wrong arguments errors with argument count and position.
+func WrapInputWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: input expects exactly 0 arguments, got %d: %w",
+			pos.Line, pos.Column, got, ErrInputWrongArgs)
+	}
+	return fmt.Errorf("input expects exactly 0 arguments, got %d: %w", got, ErrInputWrongArgs)
+}
+
 // WrapMethodNotImpl wraps method not implemented errors with method name.
 func WrapMethodNotImpl(method string) error {
+	return fmt.Errorf("method call not implemented for method '%s': %w", method, ErrMethodNotImpl)
+}
+
+// WrapMethodNotImplWithPos wraps method not implemented errors with method name and position.
+func WrapMethodNotImplWithPos(method string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: method call not implemented for method '%s': %w",
+			pos.Line, pos.Column, method, ErrMethodNotImpl)
+	}
 	return fmt.Errorf("method call not implemented for method '%s': %w", method, ErrMethodNotImpl)
 }
 
@@ -209,8 +326,24 @@ func WrapNoToStringImpl(typeName string) error {
 	return fmt.Errorf("%w: %s", ErrNoToStringImpl, typeName)
 }
 
+// WrapNoToStringImplWithPos wraps no toString implementation errors with type name and position.
+func WrapNoToStringImplWithPos(typeName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: %s", pos.Line, pos.Column, ErrNoToStringImpl, typeName)
+	}
+	return fmt.Errorf("%w: %s", ErrNoToStringImpl, typeName)
+}
+
 // WrapNoToStringForFunc wraps no toString for function errors with type name.
 func WrapNoToStringForFunc(typeName string) error {
+	return fmt.Errorf("%w: %s", ErrNoToStringForFunc, typeName)
+}
+
+// WrapNoToStringForFuncWithPos wraps no toString for function errors with type name and position.
+func WrapNoToStringForFuncWithPos(typeName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: %s", pos.Line, pos.Column, ErrNoToStringForFunc, typeName)
+	}
 	return fmt.Errorf("%w: %s", ErrNoToStringForFunc, typeName)
 }
 
@@ -220,8 +353,27 @@ func WrapPrintCannotConvert(varName, typeName string) error {
 		ErrPrintCannotConvert, varName, typeName, varName)
 }
 
+// WrapPrintCannotConvertWithPos wraps print cannot convert errors with variable and type info and position.
+func WrapPrintCannotConvertWithPos(varName, typeName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w variable '%s' of type '%s'. Use toString(%s) explicitly",
+			pos.Line, pos.Column, ErrPrintCannotConvert, varName, typeName, varName)
+	}
+	return fmt.Errorf("%w variable '%s' of type '%s'. Use toString(%s) explicitly",
+		ErrPrintCannotConvert, varName, typeName, varName)
+}
+
 // WrapPrintUnknownFunc wraps print unknown function errors with function name.
 func WrapPrintUnknownFunc(funcName string) error {
+	return fmt.Errorf("%w '%s'. Use toString(%s) to convert", ErrPrintUnknownFunc, funcName, funcName)
+}
+
+// WrapPrintUnknownFuncWithPos wraps print unknown function errors with function name and position.
+func WrapPrintUnknownFuncWithPos(funcName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w '%s'. Use toString(%s) to convert",
+			pos.Line, pos.Column, ErrPrintUnknownFunc, funcName, funcName)
+	}
 	return fmt.Errorf("%w '%s'. Use toString(%s) to convert", ErrPrintUnknownFunc, funcName, funcName)
 }
 
@@ -242,8 +394,27 @@ func WrapFunctionRequiresNamed(funcName string, paramCount int, example string) 
 		ErrFunctionRequiresNamed, funcName, paramCount, funcName, example)
 }
 
+// WrapFunctionRequiresNamedWithPos wraps function requires named arguments errors with details and position.
+func WrapFunctionRequiresNamedWithPos(funcName string, paramCount int, example string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w '%s' has %d parameters and requires named arguments. Use: %s(%s)",
+			pos.Line, pos.Column, ErrFunctionRequiresNamed, funcName, paramCount, funcName, example)
+	}
+	return fmt.Errorf("%w '%s' has %d parameters and requires named arguments. Use: %s(%s)",
+		ErrFunctionRequiresNamed, funcName, paramCount, funcName, example)
+}
+
 // WrapWrongArgCount wraps wrong argument count errors with function and count details.
 func WrapWrongArgCount(funcName string, expected, got int) error {
+	return fmt.Errorf("%w %s expects %d arguments, got %d", ErrWrongArgCount, funcName, expected, got)
+}
+
+// WrapWrongArgCountWithPos wraps wrong argument count errors with function and count details and position.
+func WrapWrongArgCountWithPos(funcName string, expected, got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w %s expects %d arguments, got %d",
+			pos.Line, pos.Column, ErrWrongArgCount, funcName, expected, got)
+	}
 	return fmt.Errorf("%w %s expects %d arguments, got %d", ErrWrongArgCount, funcName, expected, got)
 }
 
@@ -252,9 +423,37 @@ func WrapMissingArgument(paramName, funcName string) error {
 	return fmt.Errorf("%w %s in function %s", ErrMissingArgument, paramName, funcName)
 }
 
+// WrapMissingArgumentWithPos wraps missing argument errors with parameter and function info and position.
+func WrapMissingArgumentWithPos(paramName, funcName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w %s in function %s", pos.Line, pos.Column, ErrMissingArgument, paramName, funcName)
+	}
+	return fmt.Errorf("%w %s in function %s", ErrMissingArgument, paramName, funcName)
+}
+
+// parseWrapperError wraps parse errors without adding prefix to error message
+type parseWrapperError struct {
+	message string
+}
+
+func (e *parseWrapperError) Error() string {
+	return e.message
+}
+
+func (e *parseWrapperError) Unwrap() error {
+	return ErrParseErrors
+}
+
 // WrapParseErrors wraps parse errors with error details.
-func WrapParseErrors(errors string) error {
-	return fmt.Errorf("%w:\n%s", ErrParseErrors, errors)
+func WrapParseErrors(errors []string) error {
+	if len(errors) == 0 {
+		return ErrParseErrors
+	}
+
+	// Return all errors for IDE consumption - just the raw error messages
+	// Parser errors already have proper line:column format
+	errorMessage := strings.Join(errors, "\n")
+	return &parseWrapperError{message: errorMessage}
 }
 
 // WrapLLVMGenFailed wraps LLVM generation failed errors with underlying error.
@@ -293,8 +492,27 @@ func WrapPrintConvertError(returnType, funcName string) error {
 		ErrPrintConvertError, returnType, funcName)
 }
 
+// WrapPrintConvertErrorWithPos wraps print convert errors with return type and function name and position.
+func WrapPrintConvertErrorWithPos(returnType, funcName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: function return type '%s'. Use toString(%s) explicitly",
+			pos.Line, pos.Column, ErrPrintConvertError, returnType, funcName)
+	}
+	return fmt.Errorf("%w: function return type '%s'. Use toString(%s) explicitly",
+		ErrPrintConvertError, returnType, funcName)
+}
+
 // WrapPrintDetermineError wraps print determine errors with function name.
 func WrapPrintDetermineError(funcName string) error {
+	return fmt.Errorf("%w: '%s'. Use toString(%s) to convert", ErrPrintDetermineError, funcName, funcName)
+}
+
+// WrapPrintDetermineErrorWithPos wraps print determine errors with function name and position.
+func WrapPrintDetermineErrorWithPos(funcName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: '%s'. Use toString(%s) to convert",
+			pos.Line, pos.Column, ErrPrintDetermineError, funcName, funcName)
+	}
 	return fmt.Errorf("%w: '%s'. Use toString(%s) to convert", ErrPrintDetermineError, funcName, funcName)
 }
 
@@ -303,13 +521,37 @@ func WrapBuiltInRedefine(fnName string) error {
 	return fmt.Errorf("%w: '%s'", ErrBuiltInRedefine, fnName)
 }
 
+// WrapBuiltInRedefineWithPos wraps built-in function redefinition errors with position.
+func WrapBuiltInRedefineWithPos(fnName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: '%s'", pos.Line, pos.Column, ErrBuiltInRedefine, fnName)
+	}
+	return fmt.Errorf("%w: '%s'", ErrBuiltInRedefine, fnName)
+}
+
 // WrapRangeWrongArgs wraps range wrong arguments error.
 func WrapRangeWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrRangeWrongArgs, got)
 }
 
+// WrapRangeWrongArgsWithPos wraps range wrong arguments error with position.
+func WrapRangeWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrRangeWrongArgs, got)
+	}
+	return fmt.Errorf("%w, got %d", ErrRangeWrongArgs, got)
+}
+
 // WrapForEachWrongArgs wraps forEach wrong arguments error.
 func WrapForEachWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrForEachWrongArgs, got)
+}
+
+// WrapForEachWrongArgsWithPos wraps forEach wrong arguments error with position.
+func WrapForEachWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrForEachWrongArgs, got)
+	}
 	return fmt.Errorf("%w, got %d", ErrForEachWrongArgs, got)
 }
 
@@ -357,10 +599,21 @@ func WrapMatchNotExhaustive(missingPatterns []string) error {
 	return fmt.Errorf("%w: missing patterns: %v", ErrMatchNotExhaustive, missingPatterns)
 }
 
+// WrapMatchNotExhaustiveWithPos wraps non-exhaustive match errors with missing patterns and position.
+func WrapMatchNotExhaustiveWithPos(missingPatterns []string, pos *ast.Position) error {
+	return fmt.Errorf("line %d:%d: %w: missing patterns: %v", pos.Line, pos.Column, ErrMatchNotExhaustive, missingPatterns)
+}
+
 // WrapMatchArmTypeMismatch wraps match arm type mismatch error with details.
 func WrapMatchArmTypeMismatch(armIndex int, actualType, expectedType string) error {
 	return fmt.Errorf("%w: arm %d returns '%s' but expected '%s'",
 		ErrMatchTypeMismatch, armIndex, actualType, expectedType)
+}
+
+// WrapMatchArmTypeMismatchWithPos wraps match arm type mismatch error with details and position.
+func WrapMatchArmTypeMismatchWithPos(armIndex int, actualType, expectedType string, pos *ast.Position) error {
+	return fmt.Errorf("line %d:%d: %w: arm %d returns '%s' but expected '%s'",
+		pos.Line, pos.Column, ErrMatchTypeMismatch, armIndex, actualType, expectedType)
 }
 
 // WrapMatchInvalidPattern wraps invalid pattern errors with pattern details.
@@ -371,6 +624,12 @@ func WrapMatchInvalidPattern(pattern, reason string) error {
 // WrapMatchUnknownVariant wraps unknown variant errors with variant and type info.
 func WrapMatchUnknownVariant(variant, typeName string) error {
 	return fmt.Errorf("%w: variant '%s' is not defined in type '%s'", ErrMatchUnknownVariant, variant, typeName)
+}
+
+// WrapMatchUnknownVariantWithPos wraps unknown variant errors with variant and type info and position.
+func WrapMatchUnknownVariantWithPos(variant, typeName string, pos *ast.Position) error {
+	return fmt.Errorf("line %d:%d: %w: variant '%s' is not defined in type '%s'",
+		pos.Line, pos.Column, ErrMatchUnknownVariant, variant, typeName)
 }
 
 // WrapMatchMixedPatterns wraps mixed pattern type errors with pattern details.
@@ -416,9 +675,27 @@ func WrapFieldAccessOnResult(fieldName, typeName string) error {
 		fieldName, typeName, ErrFieldAccessOnResult)
 }
 
+// WrapFieldAccessOnResultWithPos wraps field access on Result type errors with position.
+func WrapFieldAccessOnResultWithPos(fieldName, typeName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: cannot access field '%s' on Result type '%s' - use pattern matching",
+			pos.Line, pos.Column, ErrFieldAccessOnResult, fieldName, typeName)
+	}
+	return fmt.Errorf("%w: cannot access field '%s' on Result type '%s' - use pattern matching",
+		ErrFieldAccessOnResult, fieldName, typeName)
+}
+
 // WrapConstraintResultFieldAccess wraps constraint result field access errors.
-func WrapConstraintResultFieldAccess() error {
-	return ErrConstraintResultFieldAccess
+func WrapConstraintResultFieldAccess(fieldName string) error {
+	return fmt.Errorf("%w: field '%s'", ErrConstraintResultFieldAccess, fieldName)
+}
+
+// WrapConstraintResultFieldAccessWithPos wraps constraint result field access errors with position.
+func WrapConstraintResultFieldAccessWithPos(fieldName string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: field '%s'", pos.Line, pos.Column, ErrConstraintResultFieldAccess, fieldName)
+	}
+	return fmt.Errorf("%w: field '%s'", ErrConstraintResultFieldAccess, fieldName)
 }
 
 // WrapHTTPCreateServerWrongArgs wraps httpCreateServer wrong arguments errors with argument count.
@@ -445,8 +722,28 @@ func WrapHTTPCreateClientWrongArgs(got int) error {
 		got, ErrHTTPCreateClientWrongArgs)
 }
 
+// WrapHTTPCreateClientWrongArgsWithPos wraps httpCreateClient wrong arguments errors with argument count and position.
+func WrapHTTPCreateClientWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: httpCreateClient expects exactly 2 arguments (base_url, timeout), got %d: %w",
+			pos.Line, pos.Column, got, ErrHTTPCreateClientWrongArgs)
+	}
+	return fmt.Errorf("httpCreateClient expects exactly 2 arguments (base_url, timeout), got %d: %w",
+		got, ErrHTTPCreateClientWrongArgs)
+}
+
 // WrapHTTPGetWrongArgs wraps httpGet wrong arguments errors with argument count.
 func WrapHTTPGetWrongArgs(got int) error {
+	return fmt.Errorf("httpGet expects exactly 3 arguments (client_id, path, headers), got %d: %w",
+		got, ErrHTTPGetWrongArgs)
+}
+
+// WrapHTTPGetWrongArgsWithPos wraps httpGet wrong arguments errors with argument count and position.
+func WrapHTTPGetWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: httpGet expects exactly 3 arguments (client_id, path, headers), got %d: %w",
+			pos.Line, pos.Column, got, ErrHTTPGetWrongArgs)
+	}
 	return fmt.Errorf("httpGet expects exactly 3 arguments (client_id, path, headers), got %d: %w",
 		got, ErrHTTPGetWrongArgs)
 }
@@ -515,7 +812,18 @@ func WrapAnyDirectAssignment(varName, targetType string) error {
 
 // WrapAnyDirectFunctionArg wraps any direct function argument errors.
 func WrapAnyDirectFunctionArg(funcName, expectedType string) error {
-	return fmt.Errorf("%w: function '%s' expecting '%s'", ErrAnyDirectFunctionArg, funcName, expectedType)
+	return fmt.Errorf("%w: function '%s' expecting '%s'",
+		ErrAnyDirectFunctionArg, funcName, expectedType)
+}
+
+// WrapAnyDirectFunctionArgWithPos wraps any direct function argument errors with position.
+func WrapAnyDirectFunctionArgWithPos(funcName, expectedType string, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w: function '%s' expecting '%s'",
+			pos.Line, pos.Column, ErrAnyDirectFunctionArg, funcName, expectedType)
+	}
+	return fmt.Errorf("%w: function '%s' expecting '%s'",
+		ErrAnyDirectFunctionArg, funcName, expectedType)
 }
 
 // WrapAnyImplicitConversion wraps any implicit conversion errors.
@@ -585,8 +893,26 @@ func WrapLengthWrongArgs(got int) error {
 	return fmt.Errorf("length expects exactly 1 argument, got %d: %w", got, ErrLengthWrongArgs)
 }
 
+// WrapLengthWrongArgsWithPos wraps length wrong arguments errors with argument count and position.
+func WrapLengthWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: length expects exactly 1 argument, got %d: %w",
+			pos.Line, pos.Column, got, ErrLengthWrongArgs)
+	}
+	return fmt.Errorf("length expects exactly 1 argument, got %d: %w", got, ErrLengthWrongArgs)
+}
+
 // WrapContainsWrongArgs wraps contains wrong arguments errors with argument count.
 func WrapContainsWrongArgs(got int) error {
+	return fmt.Errorf("contains expects exactly 2 arguments, got %d: %w", got, ErrContainsWrongArgs)
+}
+
+// WrapContainsWrongArgsWithPos wraps contains wrong arguments errors with argument count and position.
+func WrapContainsWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: contains expects exactly 2 arguments, got %d: %w",
+			pos.Line, pos.Column, got, ErrContainsWrongArgs)
+	}
 	return fmt.Errorf("contains expects exactly 2 arguments, got %d: %w", got, ErrContainsWrongArgs)
 }
 
@@ -595,8 +921,24 @@ func WrapSubstringWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrSubstringWrongArgs, got)
 }
 
+// WrapSubstringWrongArgsWithPos wraps substring wrong arguments error with position.
+func WrapSubstringWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w, got %d", pos.Line, pos.Column, ErrSubstringWrongArgs, got)
+	}
+	return fmt.Errorf("%w, got %d", ErrSubstringWrongArgs, got)
+}
+
 // WrapSpawnProcessWrongArgs wraps spawnProcess wrong arguments error.
 func WrapSpawnProcessWrongArgs(got int) error {
+	return fmt.Errorf("%w, got %d", ErrSpawnProcessWrongArgs, got)
+}
+
+// WrapSpawnProcessWrongArgsWithPos wraps spawnProcess wrong arguments error with position.
+func WrapSpawnProcessWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d: %w, got %d", pos.Line, pos.Column, ErrSpawnProcessWrongArgs, got)
+	}
 	return fmt.Errorf("%w, got %d", ErrSpawnProcessWrongArgs, got)
 }
 
@@ -622,17 +964,23 @@ func WrapWriteFileWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrWriteFileWrongArgs, got)
 }
 
+// WrapWriteFileWrongArgsWithPos wraps writeFile wrong arguments error with position.
+func WrapWriteFileWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrWriteFileWrongArgs, got)
+	}
+	return fmt.Errorf("%w, got %d", ErrWriteFileWrongArgs, got)
+}
+
 // WrapReadFileWrongArgs wraps readFile wrong arguments error.
 func WrapReadFileWrongArgs(got int) error {
 	return fmt.Errorf("%w, got %d", ErrReadFileWrongArgs, got)
 }
 
-// WrapParseJSONWrongArgs wraps parseJSON wrong arguments error.
-func WrapParseJSONWrongArgs(got int) error {
-	return fmt.Errorf("%w, got %d", ErrParseJSONWrongArgs, got)
-}
-
-// WrapExtractCodeWrongArgs wraps extractCode wrong arguments error.
-func WrapExtractCodeWrongArgs(got int) error {
-	return fmt.Errorf("%w, got %d", ErrExtractCodeWrongArgs, got)
+// WrapReadFileWrongArgsWithPos wraps readFile wrong arguments error with position.
+func WrapReadFileWrongArgsWithPos(got int, pos *ast.Position) error {
+	if pos != nil {
+		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrReadFileWrongArgs, got)
+	}
+	return fmt.Errorf("%w, got %d", ErrReadFileWrongArgs, got)
 }

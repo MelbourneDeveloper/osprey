@@ -25,6 +25,7 @@ func ShowHelp() {
 	fmt.Println("  --llvm     Show LLVM IR (default)")
 	fmt.Println("  --compile  Compile to executable")
 	fmt.Println("  --run      Compile and run immediately")
+	fmt.Println("  --quiet    Suppress compiler messages (use with --run)")
 	fmt.Println("  --symbols  Output symbol information as JSON")
 	fmt.Println("  --docs     Generate API reference documentation (no file required)")
 	fmt.Println("  --docs-dir <directory> Output directory for documentation (used with --docs)")
@@ -50,39 +51,39 @@ func ShowHelp() {
 }
 
 // ParseArgs parses command line arguments and returns parsed values
-func ParseArgs(args []string) (string, string, string, *SecurityConfig) {
+func ParseArgs(args []string) (string, string, string, bool, *SecurityConfig) {
 	if len(args) < MinArgs {
 		ShowHelp()
-		return "", "", "", nil
+		return "", "", "", false, nil
 	}
 
 	// Handle help flags
 	if args[1] == "--help" || args[1] == "-h" {
 		ShowHelp()
-		return "", "", "", nil
+		return "", "", "", false, nil
 	}
 
 	// Handle version flag
 	if args[1] == "--version" {
 		fmt.Println("Osprey Compiler 1.0.0")
-		return "", "", "", nil
+		return "", "", "", false, nil
 	}
 
 	// Handle special modes (docs, hover)
 	if filename, outputMode, docsDir := HandleSpecialModes(args); filename != "" || outputMode != "" {
-		return filename, outputMode, docsDir, nil
+		return filename, outputMode, docsDir, false, nil
 	}
 
 	// Regular file-based operations need at least 2 args
 	if len(args) < MinArgs {
 		ShowHelp()
-		return "", "", "", nil
+		return "", "", "", false, nil
 	}
 
 	filename := args[1]
-	outputMode, docsDir, security := ParseFileBasedArgs(args)
+	outputMode, docsDir, quiet, security := ParseFileBasedArgs(args)
 
-	return filename, outputMode, docsDir, security
+	return filename, outputMode, docsDir, quiet, security
 }
 
 // HandleSpecialModes handles special command modes like docs and hover
@@ -114,9 +115,10 @@ func HandleSpecialModes(args []string) (string, string, string) {
 }
 
 // ParseFileBasedArgs parses arguments for file-based operations
-func ParseFileBasedArgs(args []string) (string, string, *SecurityConfig) {
+func ParseFileBasedArgs(args []string) (string, string, bool, *SecurityConfig) {
 	outputMode := OutputModeLLVM // default to LLVM IR
 	docsDir := ""
+	quiet := false
 
 	// Create security config with defaults
 	security := NewDefaultSecurityConfig()
@@ -130,13 +132,15 @@ func ParseFileBasedArgs(args []string) (string, string, *SecurityConfig) {
 		} else if arg == "--docs-dir" && i+1 < len(args) {
 			docsDir = args[i+1]
 			i++ // Skip next argument since we consumed it
+		} else if arg == "--quiet" {
+			quiet = true
 		} else if !ParseSecurityArg(arg, security) {
 			fmt.Printf("Unknown option: %s\n", arg)
-			return "", "", nil
+			return "", "", false, nil
 		}
 	}
 
-	return outputMode, docsDir, security
+	return outputMode, docsDir, quiet, security
 }
 
 // ParseOutputModeArg parses output mode arguments and returns the corresponding mode
@@ -187,7 +191,7 @@ func ParseSecurityArg(arg string, security *SecurityConfig) bool {
 
 // RunMainWithArgs is the testable main function that takes args as parameter
 func RunMainWithArgs(args []string) CommandResult {
-	filename, outputMode, docsDir, security := ParseArgs(args)
+	filename, outputMode, docsDir, quiet, security := ParseArgs(args)
 	if filename == "" && outputMode == "" {
 		return CommandResult{Success: true, Output: ""}
 	}
@@ -199,10 +203,10 @@ func RunMainWithArgs(args []string) CommandResult {
 		!security.AllowFileRead || !security.AllowFileWrite || !security.AllowFFI) {
 
 		// Use security-aware command execution
-		result = RunCommandWithSecurity(filename, outputMode, security)
+		result = RunCommandWithSecurity(filename, outputMode, quiet, security)
 	} else {
 		// Use regular command execution for default/permissive mode
-		result = RunCommand(filename, outputMode, docsDir)
+		result = RunCommand(filename, outputMode, docsDir, quiet)
 	}
 
 	return result

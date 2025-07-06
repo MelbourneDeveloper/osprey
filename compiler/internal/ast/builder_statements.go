@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"fmt"
+
 	"github.com/christianfindlay/osprey/parser"
 )
 
@@ -19,10 +21,22 @@ func (b *Builder) buildLetDecl(ctx parser.ILetDeclContext) *LetDeclaration {
 	value := b.buildExpression(ctx.Expr())
 
 	return &LetDeclaration{
-		Name:    name,
-		Mutable: mutable,
-		Type:    nil, // For now, type annotation support comes later
-		Value:   value,
+		Name:     name,
+		Mutable:  mutable,
+		Type:     nil, // For now, type annotation support comes later
+		Value:    value,
+		Position: b.getPositionFromContext(ctx),
+	}
+}
+
+func (b *Builder) buildAssignStmt(ctx parser.IAssignStmtContext) *AssignmentStatement {
+	name := ctx.ID().GetText()
+	value := b.buildExpression(ctx.Expr())
+
+	return &AssignmentStatement{
+		Name:     name,
+		Value:    value,
+		Position: b.getPositionFromContext(ctx),
 	}
 }
 
@@ -63,11 +77,19 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		returnType = b.buildTypeExpression(ctx.Type_())
 	}
 
+	// CRITICAL FIX: Parse effect signatures (!Logger, ![IO, Net])
+	var effects []string
+	if ctx.EffectSet() != nil {
+		effects = b.buildEffectSet(ctx.EffectSet())
+	}
+
 	return &FunctionDeclaration{
 		Name:       name,
 		Parameters: params,
 		ReturnType: returnType,
+		Effects:    effects, // CRITICAL: Include parsed effects
 		Body:       body,
+		Position:   b.getPositionFromContext(ctx),
 	}
 }
 
@@ -319,4 +341,70 @@ func (b *Builder) buildBlockBody(ctx parser.IBlockBodyContext) *BlockExpression 
 		Statements: statements,
 		Expression: expr,
 	}
+}
+
+// buildEffectDecl builds an EffectDeclaration from parser context - ALGEBRAIC EFFECTS SUPREMO!
+func (b *Builder) buildEffectDecl(ctx parser.IEffectDeclContext) *EffectDeclaration {
+	if ctx == nil {
+		return nil
+	}
+
+	name := ctx.ID().GetText()
+	operations := make([]EffectOperation, 0)
+
+	// Parse effect operations
+	for _, opCtx := range ctx.AllOpDecl() {
+		operation := EffectOperation{
+			Name: opCtx.ID().GetText(),
+			Type: opCtx.Type_().GetText(), // Parse type as string for now
+		}
+
+		// CRITICAL FIX: Parse function type to extract parameters and return type
+		typeExpr := b.buildTypeExpression(opCtx.Type_())
+		if typeExpr != nil && typeExpr.IsFunction {
+			// Extract parameters from function type
+			operation.Parameters = make([]Parameter, len(typeExpr.ParameterTypes))
+			for i, paramType := range typeExpr.ParameterTypes {
+				operation.Parameters[i] = Parameter{
+					Name: fmt.Sprintf("param%d", i), // Generate parameter names
+					Type: &paramType,
+				}
+			}
+
+			// Extract return type
+			if typeExpr.ReturnType != nil {
+				operation.ReturnType = typeExpr.ReturnType.Name
+			}
+		}
+
+		operations = append(operations, operation)
+	}
+
+	return &EffectDeclaration{
+		Name:       name,
+		Operations: operations,
+	}
+}
+
+// buildEffectSet parses effect signatures like !Logger or ![IO, Net]
+func (b *Builder) buildEffectSet(ctx parser.IEffectSetContext) []string {
+	if ctx == nil {
+		return nil
+	}
+
+	effects := make([]string, 0)
+
+	// Single effect: !Effect
+	if ctx.ID() != nil {
+		effects = append(effects, ctx.ID().GetText())
+	}
+
+	// Multiple effects: ![Effect1, Effect2]
+	if ctx.EffectList() != nil {
+		for _, idNode := range ctx.EffectList().AllID() {
+			effects = append(effects, idNode.GetText())
+		}
+	}
+
+	return effects
 }

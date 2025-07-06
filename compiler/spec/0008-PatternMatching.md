@@ -135,4 +135,77 @@ match anyValue {
 }
 ```
 
-## 8.5 Match Expression Type Safety Rules
+## 8.5 Result Type Pattern Matching (Arithmetic Expressions)
+
+**🔥 CRITICAL**: All arithmetic expressions return `Result<T, MathError>`. You **MUST** handle them with pattern matching.
+
+### Simple Arithmetic Result Handling
+```osprey
+let calculation = 1 + 3 + (300 / 5)  // Result<int, MathError>
+
+match calculation {
+    Success { value } => print("Result: ${value}")
+    Error { message } => print("Math error: ${message}")
+}
+```
+
+### Compound Expression Examples (CRYSTAL CLEAR)
+```osprey
+// Each of these returns a SINGLE Result for the ENTIRE expression
+let simple = 10 + 5                    // Result<int, MathError>
+let complex = 1 + 2 * 3 - 4 / 2        // Result<int, MathError>  
+let nested = ((a + b) * c) / (d - e)   // Result<int, MathError>
+
+// Handle ALL of them the SAME WAY
+match simple {
+    Success { value } => print("10 + 5 = ${value}")
+    Error { message } => print("Failed: ${message}")
+}
+
+match complex {
+    Success { value } => print("Complex calc = ${value}")
+    Error { message } => print("Overflow/error: ${message}")
+}
+
+match nested {
+    Success { value } => print("Nested result = ${value}")
+    Error { message } => print("Division by zero or overflow: ${message}")
+}
+```
+
+### Function Return Results
+```osprey
+fn calculate(x: int, y: int) -> Result<int, MathError> = x + y * 2 - 5
+
+let result = calculate(10, 3)  // Result<int, MathError>
+match result {
+    Success { value } => print("Function result: ${value}")
+    Error { message } => print("Function failed: ${message}")
+}
+```
+
+### Advanced Result Chains
+```osprey
+// Multiple Results in sequence
+let step1 = 100 + 50        // Result<int, MathError>
+let step2 = 200 * 3         // Result<int, MathError>
+
+// Handle each step
+match step1 {
+    Success { value1 } => {
+        match step2 {
+            Success { value2 } => {
+                let final = value1 + value2  // This is also Result<int, MathError>!
+                match final {
+                    Success { total } => print("Final: ${total}")
+                    Error { message } => print("Final calc failed: ${message}")
+                }
+            }
+            Error { message } => print("Step 2 failed: ${message}")
+        }
+    }
+    Error { message } => print("Step 1 failed: ${message}")
+}
+```
+
+## 8.6 Match Expression Type Safety Rules

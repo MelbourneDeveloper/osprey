@@ -40,16 +40,14 @@ typedef enum {
   HTTP_OPTIONS = 6
 } HttpMethod;
 
-// HTTP Response structure (matches Osprey HttpResponse type)
+// HTTP Response structure (matches Osprey HttpResponse type - REMOVED REDUNDANT LENGTH FIELDS)
 typedef struct HttpResponse {
   int64_t status;
   char *headers;
   char *contentType;
-  int64_t contentLength;
   int64_t streamFd;
   bool isComplete;
-  char *partialBody;
-  int64_t partialLength;
+  char *partialBody;  // Runtime automatically calculates length using strlen()
 } HttpResponse;
 
 // Function pointer type for HTTP request handlers

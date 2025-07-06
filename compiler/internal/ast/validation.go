@@ -5,12 +5,17 @@ import (
 	"fmt"
 )
 
-// ValidationError represents an error during AST validation.
+// ValidationError represents a validation error with optional position information.
 type ValidationError struct {
-	Message string
+	Message  string
+	Position *Position
 }
 
+// Error returns the formatted error message with position information.
 func (e *ValidationError) Error() string {
+	if e.Position != nil {
+		return fmt.Sprintf("line %d:%d: validation error: %s", e.Position.Line, e.Position.Column, e.Message)
+	}
 	return e.Message
 }
 
@@ -43,6 +48,7 @@ func validateFunctionDeclaration(fn *FunctionDeclaration) error {
 			return &ValidationError{
 				Message: fmt.Sprintf("Function '%s' requires explicit return type annotation - "+
 					"type cannot be inferred from body", fn.Name),
+				Position: fn.Position,
 			}
 		}
 
@@ -51,6 +57,7 @@ func validateFunctionDeclaration(fn *FunctionDeclaration) error {
 			return &ValidationError{
 				Message: fmt.Sprintf("Function '%s' cannot implicitly return 'any' type - "+
 					"if 'any' return type is intended, declare it explicitly with '-> any'", fn.Name),
+				Position: fn.Position,
 			}
 		}
 	}
@@ -62,6 +69,7 @@ func validateFunctionDeclaration(fn *FunctionDeclaration) error {
 				return &ValidationError{
 					Message: fmt.Sprintf("Parameter '%s' in function '%s' requires explicit type annotation - "+
 						"type cannot be inferred from usage", param.Name, fn.Name),
+					Position: fn.Position,
 				}
 			}
 		}

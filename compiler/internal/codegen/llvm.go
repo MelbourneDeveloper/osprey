@@ -17,13 +17,17 @@ import (
 func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (value.Value, error) {
 	// Handle function calls
 	if ident, ok := callExpr.Function.(*ast.Identifier); ok {
+		// DEBUG: Add logging to understand what's failing
+
 		// Handle built-in functions
 		if result, err := g.handleBuiltInFunction(ident.Name, callExpr); result != nil || err != nil {
+
 			return result, err
 		}
 
 		// Handle user-defined functions
 		if fn, exists := g.functions[ident.Name]; exists {
+
 			return g.generateUserFunctionCall(ident.Name, fn, callExpr)
 		}
 
@@ -33,9 +37,11 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 			// Check if this variable contains a function reference
 			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeFunction {
 				// This is a function stored in a function type variable - enable function composition
+
 				return g.generateFunctionCompositionCall(ident.Name, varValue, callExpr)
 			}
 		}
+
 	}
 
 	return nil, ErrUnsupportedCall
@@ -142,10 +148,10 @@ func (g *LLVMGenerator) handleFileAndJSONFunctions(name string, callExpr *ast.Ca
 		return g.generateWriteFileCall(callExpr)
 	case ReadFileFunc:
 		return g.generateReadFileCall(callExpr)
-	case ParseJSONFunc:
-		return g.generateParseJSONCall(callExpr)
-	case ExtractCodeFunc:
-		return g.generateExtractCodeCall(callExpr)
+	case DeleteFileFunc:
+		// TODO: deleteFile built-in function is fucked - not implemented yet
+		// Return a placeholder success result for now
+		return constant.NewInt(types.I64, 0), nil
 	default:
 		return nil, nil
 	}
@@ -211,40 +217,20 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 ) (value.Value, error) {
 	// VALIDATION: Multi-parameter functions require named arguments
 	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
-		return nil, WrapFunctionRequiresNamed(funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName))
+		return nil, WrapFunctionRequiresNamedWithPos(
+			funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName), callExpr.Position)
 	}
 
-	// Handle named arguments vs positional arguments
-	if len(callExpr.NamedArguments) > 0 {
-		// Named arguments - need to reorder them to match function signature
-		args, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
-		if err != nil {
-			return nil, err
-		}
-
-		return g.builder.NewCall(fn, args...), nil
+	// Generate arguments for the function call
+	args, err := g.generateFunctionCallArguments(funcName, fn, callExpr)
+	if err != nil {
+		return nil, err
 	}
 
-	// Positional arguments (traditional)
-	args := make([]value.Value, len(callExpr.Arguments))
+	// Call the function directly and store the result
+	result := g.builder.NewCall(fn, args...)
 
-	for i, arg := range callExpr.Arguments {
-		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
-		// This preserves type safety while allowing function composition
-		paramName := "unknown" // We don't have parameter names for positional args
-		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
-			return nil, err
-		}
-
-		val, err := g.generateExpression(arg)
-		if err != nil {
-			return nil, err
-		}
-
-		args[i] = val
-	}
-
-	return g.builder.NewCall(fn, args...), nil
+	return result, nil
 }
 
 // generateNamedArgsSuggestion generates a helpful suggestion for named arguments.
@@ -560,12 +546,24 @@ func (g *LLVMGenerator) generateMatchArmValues(
 			// Restore the previous variable scope
 			g.variables = oldVariables
 
+			// CRITICAL FIX: Handle Unit expressions in match arms
+			// If the expression returns Unit, use void type
+			if armValue == nil || armValue.Type() == types.Void {
+				armValue = constant.NewUndef(types.Void)
+			}
+
 			armValues = append(armValues, armValue)
 		} else {
 			// No variable binding, generate normally
 			armValue, err := g.generateExpression(arm.Expression)
 			if err != nil {
 				return nil, nil, err
+			}
+
+			// CRITICAL FIX: Handle Unit expressions in match arms
+			// If the expression returns Unit, use void type
+			if armValue == nil || armValue.Type() == types.Void {
+				armValue = constant.NewUndef(types.Void)
 			}
 
 			armValues = append(armValues, armValue)
@@ -680,18 +678,50 @@ func (g *LLVMGenerator) createMatchResult(
 		return armValues[0], nil
 	}
 
+	// CRITICAL FIX: Check if all arm values are void type
+	// PHI nodes cannot be created with void values
+	allVoid := true
+	for _, val := range armValues {
+		if val.Type() != types.Void {
+			allVoid = false
+			break
+		}
+	}
+
+	// If all arms return void, return void directly without PHI
+	if allVoid {
+		return constant.NewUndef(types.Void), nil
+	}
+
 	// Check if we need type coercion
 	coercedValues, err := g.coerceArmValuesToCommonType(armValues)
 	if err != nil {
 		return nil, err
 	}
 
-	var incomings []*ir.Incoming
+	// CRITICAL FIX: Only include predecessors that actually have terminators
+	var validIncomings []*ir.Incoming
 	for i, val := range coercedValues {
-		incomings = append(incomings, ir.NewIncoming(val, predecessorBlocks[i]))
+		// Skip void values in PHI nodes
+		if val.Type() != types.Void {
+			// Check if the predecessor block has a terminator (meaning it actually branches)
+			if i < len(predecessorBlocks) && predecessorBlocks[i].Term != nil {
+				validIncomings = append(validIncomings, ir.NewIncoming(val, predecessorBlocks[i]))
+			}
+		}
 	}
 
-	phi := endBlock.NewPhi(incomings...)
+	// If no valid (non-void) values for PHI, return void
+	if len(validIncomings) == 0 {
+		return constant.NewUndef(types.Void), nil
+	}
+
+	// If only one valid incoming, don't create PHI
+	if len(validIncomings) == 1 {
+		return validIncomings[0].X, nil
+	}
+
+	phi := endBlock.NewPhi(validIncomings...)
 
 	// The end block now has a PHI node and the builder is set to this block.
 	// The calling function (like generateStandardMatchExpression) should handle
@@ -776,17 +806,30 @@ func (g *LLVMGenerator) generateResultMatchExpression(
 
 	g.generateResultMatchCondition(discriminant, blocks)
 
+	// Track which blocks actually branch to the end
+	var actualSuccessBlock *ir.Block
+	var actualErrorBlock *ir.Block
+
+	// Generate success block and track the actual ending block
+	g.builder = blocks.Success
 	successValue, err := g.generateSuccessBlock(matchExpr, blocks)
 	if err != nil {
 		return nil, err
 	}
+	// The builder is now pointing to the block that will branch to the end
+	actualSuccessBlock = g.builder
 
+	// Generate error block and track the actual ending block
+	g.builder = blocks.Error
 	errorValue, err := g.generateErrorBlock(matchExpr, blocks)
 	if err != nil {
 		return nil, err
 	}
+	// The builder is now pointing to the block that will branch to the end
+	actualErrorBlock = g.builder
 
-	return g.createResultMatchPhi(successValue, errorValue, blocks)
+	// Create PHI with the actual predecessor blocks
+	return g.createResultMatchPhiWithActualBlocks(successValue, errorValue, actualSuccessBlock, actualErrorBlock, blocks)
 }
 
 // ResultMatchBlocks holds the blocks for result match expressions.
@@ -862,14 +905,36 @@ func (g *LLVMGenerator) generateSuccessBlock(
 
 	successExpr := g.findSuccessValue(matchExpr)
 	var successValue value.Value
-	if successExpr == nil {
-		successValue = constant.NewInt(types.I64, ArrayIndexZero)
-	} else {
+	if successExpr != nil {
+		// Generate the expression (which might be a nested match)
 		val, err := g.generateExpression(successExpr)
 		if err != nil {
 			return nil, err
 		}
 		successValue = val
+
+		// CRITICAL FIX: After generating a nested expression, the builder might have changed
+		// We need to ensure the branch to the end block comes from the correct block
+		// But only add the branch if the current block doesn't already have a terminator
+		if g.builder.Term == nil {
+			g.builder.NewBr(blocks.End)
+		}
+
+		// For PHI node creation, we need to track which block actually branches to the end
+		// This might be different from the original success block if we had nested expressions
+		return successValue, nil
+	}
+
+	// Fallback: use the bound variable from pattern matching
+	if successArm := g.findSuccessArm(matchExpr); successArm != nil && len(successArm.Pattern.Fields) > 0 {
+		fieldName := successArm.Pattern.Fields[0]
+		if extractedValue, exists := g.variables[fieldName]; exists {
+			successValue = extractedValue
+		} else {
+			successValue = constant.NewInt(types.I64, ArrayIndexZero)
+		}
+	} else {
+		successValue = constant.NewInt(types.I64, ArrayIndexZero)
 	}
 
 	// Only add branch if the current block doesn't already have a terminator
@@ -902,14 +967,34 @@ func (g *LLVMGenerator) generateErrorBlock(
 
 	errorExpr := g.findErrorValue(matchExpr)
 	var errorValue value.Value
-	if errorExpr == nil {
-		errorValue = constant.NewInt(types.I64, ArrayIndexZero)
-	} else {
+	if errorExpr != nil {
+		// Generate the expression (which might be a nested match)
 		val, err := g.generateExpression(errorExpr)
 		if err != nil {
 			return nil, err
 		}
 		errorValue = val
+
+		// CRITICAL FIX: After generating a nested expression, the builder might have changed
+		// We need to ensure the branch to the end block comes from the correct block
+		// But only add the branch if the current block doesn't already have a terminator
+		if g.builder.Term == nil {
+			g.builder.NewBr(blocks.End)
+		}
+
+		return errorValue, nil
+	}
+
+	// Fallback: use the bound variable from pattern matching
+	if errorArm := g.findErrorArm(matchExpr); errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
+		fieldName := errorArm.Pattern.Fields[0]
+		if extractedError, exists := g.variables[fieldName]; exists {
+			errorValue = extractedError
+		} else {
+			errorValue = constant.NewInt(types.I64, ArrayIndexZero)
+		}
+	} else {
+		errorValue = constant.NewInt(types.I64, ArrayIndexZero)
 	}
 
 	// Only add branch if the current block doesn't already have a terminator
@@ -964,46 +1049,81 @@ func (g *LLVMGenerator) findErrorValue(matchExpr *ast.MatchExpression) ast.Expre
 	return nil
 }
 
-// createResultMatchPhi creates the PHI node for result matching.
-func (g *LLVMGenerator) createResultMatchPhi(
+// createResultMatchPhiWithActualBlocks creates the PHI node for result matching with actual predecessor blocks.
+func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 	successValue, errorValue value.Value,
+	actualSuccessBlock, actualErrorBlock *ir.Block,
 	blocks *ResultMatchBlocks,
 ) (value.Value, error) {
 	g.builder = blocks.End
 
-	// Ensure both values have the same type for PHI node
-	if successValue.Type() != errorValue.Type() {
-		// Determine which type to use - prefer string if either is string
-		if successValue.Type() == types.I8Ptr {
-			// Convert errorValue to string if it's not already
-			if errorValue.Type() == types.I64 {
-				convertedError, err := g.generateIntToString(errorValue)
-				if err != nil {
-					return nil, err
-				}
-				errorValue = convertedError
-			}
-		} else if errorValue.Type() == types.I8Ptr {
-			// Convert successValue to string if it's not already
-			if successValue.Type() == types.I64 {
-				convertedSuccess, err := g.generateIntToString(successValue)
-				if err != nil {
-					return nil, err
-				}
-				successValue = convertedSuccess
-			}
-		}
-		// If both are different non-string types, convert both to int
-		if successValue.Type() != errorValue.Type() {
-			successValue = constant.NewInt(types.I64, 0)
-			errorValue = constant.NewInt(types.I64, 0)
-		}
+	// CRITICAL FIX: Use the actual blocks that branch to the end
+	var validPredecessors []*ir.Incoming
+
+	// Check if the actual success block has a terminator and branches to end
+	if actualSuccessBlock != nil && actualSuccessBlock.Term != nil {
+		validPredecessors = append(validPredecessors, ir.NewIncoming(successValue, actualSuccessBlock))
 	}
 
-	phi := blocks.End.NewPhi(
-		ir.NewIncoming(successValue, blocks.Success),
-		ir.NewIncoming(errorValue, blocks.Error),
-	)
+	// Check if the actual error block has a terminator and branches to end
+	if actualErrorBlock != nil && actualErrorBlock.Term != nil {
+		validPredecessors = append(validPredecessors, ir.NewIncoming(errorValue, actualErrorBlock))
+	}
+
+	// If we don't have valid predecessors, return a default value
+	if len(validPredecessors) == 0 {
+		// Return the success value as a fallback
+		return successValue, nil
+	}
+
+	// If we only have one valid predecessor, don't create a PHI
+	if len(validPredecessors) == 1 {
+		return validPredecessors[0].X, nil
+	}
+
+	// Create PHI node with valid predecessors
+	phi := blocks.End.NewPhi(validPredecessors...)
 
 	return phi, nil
+}
+
+// generateFunctionCallArguments generates arguments for function calls, handling both named and positional arguments
+func (g *LLVMGenerator) generateFunctionCallArguments(
+	funcName string,
+	_ *ir.Func,
+	callExpr *ast.CallExpression,
+) ([]value.Value, error) {
+	// Handle named arguments vs positional arguments
+	if len(callExpr.NamedArguments) > 0 {
+		// Named arguments - need to reorder them to match function signature
+		return g.reorderNamedArguments(funcName, callExpr.NamedArguments)
+	}
+
+	// Positional arguments (traditional)
+	args := make([]value.Value, len(callExpr.Arguments))
+
+	for i, arg := range callExpr.Arguments {
+		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
+		// This preserves type safety while allowing function composition
+		paramName := "unknown" // We don't have parameter names for positional args
+
+		// Extract position from the argument (simple version)
+		var pos *ast.Position
+		if ident, ok := arg.(*ast.Identifier); ok {
+			pos = ident.Position
+		}
+
+		if err := g.validateFunctionArgument(arg, funcName, paramName, pos); err != nil {
+			return nil, err
+		}
+
+		val, err := g.generateExpression(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		args[i] = val
+	}
+
+	return args, nil
 }

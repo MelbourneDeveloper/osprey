@@ -16,6 +16,7 @@ type LLVMGenerator struct {
 	function            *ir.Func
 	variables           map[string]value.Value
 	variableTypes       map[string]string // Track variable types: "string" or "int"
+	mutableVariables    map[string]bool   // Track which variables were declared as mutable
 	functions           map[string]*ir.Func
 	functionReturnTypes map[string]string   // Track function return types: "string" or "int"
 	functionParameters  map[string][]string // Track function parameter names for named argument reordering
@@ -35,6 +36,10 @@ type LLVMGenerator struct {
 	stringConstants       map[string]value.Value
 	currentFunction       *ir.Func
 	currentFunctionParams map[string]value.Value
+	// Real algebraic effects system
+	effectCodegen *EffectCodegen
+	// Context for type-aware literal generation
+	expectedReturnType types.Type
 }
 
 // SecurityConfig defines security policies for the code generator.
@@ -76,6 +81,7 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		module:              module,
 		variables:           make(map[string]value.Value),
 		variableTypes:       make(map[string]string),
+		mutableVariables:    make(map[string]bool),
 		functions:           make(map[string]*ir.Func),
 		functionReturnTypes: make(map[string]string),
 		functionParameters:  make(map[string][]string),
@@ -108,6 +114,27 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 // GenerateIR returns the LLVM IR as a string.
 func (g *LLVMGenerator) GenerateIR() string {
 	return g.module.String()
+}
+
+// InitializeEffects initializes the effect system for the generator
+func (g *LLVMGenerator) InitializeEffects() {
+	g.effectCodegen = g.NewEffectCodegen()
+}
+
+// RegisterEffectDeclaration registers an effect declaration with the effect system
+func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration) error {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	return g.effectCodegen.RegisterEffect(effect)
+}
+
+// generateRealPerformExpression generates real algebraic effects perform expressions
+func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpression) (value.Value, error) {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	return g.effectCodegen.GeneratePerformExpression(perform)
 }
 
 // declareExternalFunctions declares external C library functions.
@@ -182,8 +209,7 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 	// File I/O functions
 	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"
 	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"
-	g.functionReturnTypes["parseJSON"] = TypeResult + "<string, string>"
-	g.functionReturnTypes["extractCode"] = TypeResult + "<string, string>"
+	g.functionReturnTypes["deleteFile"] = TypeResult + "<Success, string>"
 
 	// HTTP functions
 	g.functionReturnTypes["httpCreateServer"] = TypeInt // Returns server ID
@@ -216,16 +242,14 @@ func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
 
 // registerBuiltInTypes registers built-in types in the type system.
 func (g *LLVMGenerator) registerBuiltInTypes() {
-	// Register HttpResponse as a built-in struct type
+	// Register HttpResponse as a built-in struct type (REMOVED REDUNDANT LENGTH FIELDS)
 	httpResponseType := types.NewStruct(
 		types.I64,   // status: Int
 		types.I8Ptr, // headers: String
 		types.I8Ptr, // contentType: String
-		types.I64,   // contentLength: Int
 		types.I64,   // streamFd: Int
 		types.I1,    // isComplete: Bool
-		types.I8Ptr, // partialBody: String
-		types.I64,   // partialLength: Int
+		types.I8Ptr, // partialBody: String (runtime calculates length automatically)
 	)
 
 	g.typeMap[TypeHTTPResponse] = httpResponseType

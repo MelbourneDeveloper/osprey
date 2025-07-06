@@ -44,6 +44,12 @@ func (s *BaseospreyListener) EnterLetDecl(ctx *LetDeclContext) {}
 // ExitLetDecl is called when production letDecl is exited.
 func (s *BaseospreyListener) ExitLetDecl(ctx *LetDeclContext) {}
 
+// EnterAssignStmt is called when production assignStmt is entered.
+func (s *BaseospreyListener) EnterAssignStmt(ctx *AssignStmtContext) {}
+
+// ExitAssignStmt is called when production assignStmt is exited.
+func (s *BaseospreyListener) ExitAssignStmt(ctx *AssignStmtContext) {}
+
 // EnterFnDecl is called when production fnDecl is entered.
 func (s *BaseospreyListener) EnterFnDecl(ctx *FnDeclContext) {}
 
@@ -127,6 +133,48 @@ func (s *BaseospreyListener) EnterConstraint(ctx *ConstraintContext) {}
 
 // ExitConstraint is called when production constraint is exited.
 func (s *BaseospreyListener) ExitConstraint(ctx *ConstraintContext) {}
+
+// EnterEffectDecl is called when production effectDecl is entered.
+func (s *BaseospreyListener) EnterEffectDecl(ctx *EffectDeclContext) {}
+
+// ExitEffectDecl is called when production effectDecl is exited.
+func (s *BaseospreyListener) ExitEffectDecl(ctx *EffectDeclContext) {}
+
+// EnterOpDecl is called when production opDecl is entered.
+func (s *BaseospreyListener) EnterOpDecl(ctx *OpDeclContext) {}
+
+// ExitOpDecl is called when production opDecl is exited.
+func (s *BaseospreyListener) ExitOpDecl(ctx *OpDeclContext) {}
+
+// EnterEffectSet is called when production effectSet is entered.
+func (s *BaseospreyListener) EnterEffectSet(ctx *EffectSetContext) {}
+
+// ExitEffectSet is called when production effectSet is exited.
+func (s *BaseospreyListener) ExitEffectSet(ctx *EffectSetContext) {}
+
+// EnterEffectList is called when production effectList is entered.
+func (s *BaseospreyListener) EnterEffectList(ctx *EffectListContext) {}
+
+// ExitEffectList is called when production effectList is exited.
+func (s *BaseospreyListener) ExitEffectList(ctx *EffectListContext) {}
+
+// EnterHandlerExpr is called when production handlerExpr is entered.
+func (s *BaseospreyListener) EnterHandlerExpr(ctx *HandlerExprContext) {}
+
+// ExitHandlerExpr is called when production handlerExpr is exited.
+func (s *BaseospreyListener) ExitHandlerExpr(ctx *HandlerExprContext) {}
+
+// EnterHandlerArm is called when production handlerArm is entered.
+func (s *BaseospreyListener) EnterHandlerArm(ctx *HandlerArmContext) {}
+
+// ExitHandlerArm is called when production handlerArm is exited.
+func (s *BaseospreyListener) ExitHandlerArm(ctx *HandlerArmContext) {}
+
+// EnterHandlerParams is called when production handlerParams is entered.
+func (s *BaseospreyListener) EnterHandlerParams(ctx *HandlerParamsContext) {}
+
+// ExitHandlerParams is called when production handlerParams is exited.
+func (s *BaseospreyListener) ExitHandlerParams(ctx *HandlerParamsContext) {}
 
 // EnterFunctionCall is called when production functionCall is entered.
 func (s *BaseospreyListener) EnterFunctionCall(ctx *FunctionCallContext) {}

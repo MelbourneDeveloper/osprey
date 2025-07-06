@@ -1,0 +1,9 @@
+=== Boolean Test Results ===
+5 > 3:
+1
+10 == 10:
+1
+true literal:
+true
+false literal:
+false 

@@ -1,0 +1,47 @@
+🚀 OSPREY MEGA SHOWCASE - COMPREHENSIVE SANDBOXABLE FEATURES DEMO
+═══════════════════════════════════════════════════════════════
+ℹ️  Starting concurrent data processing
+📈 Metric: traffic_analyzed += 4500
+🔢 Counter: traffic_sources incremented
+ℹ️  Traffic analyzed: 4500 visitors from Google
+📈 Metric: traffic_analyzed += 2800
+🔢 Counter: traffic_sources incremented
+ℹ️  Traffic analyzed: 2800 visitors from Social
+📈 Metric: traffic_analyzed += 1200
+🔢 Counter: traffic_sources incremented
+ℹ️  Traffic analyzed: 1200 visitors from Direct
+📈 Metric: sales_processed += 1
+🔢 Counter: North incremented
+ℹ️  Sales processed: North region, $12000, bonus: $1800
+📈 Metric: sales_processed += 1
+🔢 Counter: South incremented
+ℹ️  Sales processed: South region, $8500, bonus: $1275
+📈 Metric: sales_processed += 1
+🔢 Counter: East incremented
+ℹ️  Sales processed: East region, $3200, bonus: $480
+📈 Metric: performance_checked += 1
+ℹ️  Performance: /api/users - 45ms (Excellent)
+📈 Metric: performance_checked += 1
+ℹ️  Performance: /api/orders - 180ms (Excellent)
+📈 Metric: performance_checked += 1
+ℹ️  Performance: /api/reports - 650ms (Excellent)
+💾 Cache: Stored grand_total = 228125
+📈 Metric: concurrent_processing_complete += 1
+ℹ️  Concurrent processing complete - Sales: 200500, Traffic: 25500, Performance: 2125
+🔢 Counter: reports_generated incremented
+📊 ANALYTICS DASHBOARD REPORT 📊
+═════════════════════════════════════
+Total Score: 228125 points
+Processing Time: 35ms
+Efficiency Rating: 633680 (Grade: A+)
+Last Batch Total: 1250 points
+Performance Category: Excellent
+═════════════════════════════════════
+🎯 System Status: 🟢 EXCELLENT
+
+📊 Performance Metrics Total: 1500
+✅ Success: System operating normally
+═══════════════════════════════════════════════════════════════
+🎉 COMPREHENSIVE DEMO COMPLETE - ALL SANDBOXABLE FEATURES TESTED
+✅ Type System ✅ Algebraic Effects ✅ Pattern Matching
+✅ Fiber Concurrency ✅ Functional Programming ✅ String Interpolation

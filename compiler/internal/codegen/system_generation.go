@@ -11,6 +11,10 @@ import (
 	"github.com/llir/llvm/ir/value"
 )
 
+// There is an insane amount of duplication in this file.
+// TODO: Merge a bunch of this code!
+// TODO: Code REUSE!!!!
+
 // -----------------------------------------------------------------------------
 // Built-in helper dispatchers used from iterator_generation.go
 // -----------------------------------------------------------------------------
@@ -121,7 +125,7 @@ func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
 // that uses a default callback for stdout/stderr events.
 func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapSpawnProcessWrongArgs(len(callExpr.Arguments))
+		return nil, WrapSpawnProcessWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	cmd, err := g.generateExpression(callExpr.Arguments[0])
@@ -227,7 +231,7 @@ func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.V
 func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {
 	const expectedArgs = TwoArgs
 	if len(callExpr.Arguments) != expectedArgs {
-		return nil, WrapWriteFileWrongArgs(len(callExpr.Arguments))
+		return nil, WrapWriteFileWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	filename, err := g.generateExpression(callExpr.Arguments[0])
@@ -252,7 +256,7 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 	// Call the C function
 	writeResult := g.builder.NewCall(fn, filename, content)
 
-	// Create a Result<I64, string> (bytes written on success, error on failure)
+	// CRITICAL FIX: Create the Result allocation in the current block before branching
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
 
@@ -260,10 +264,15 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 	zero := constant.NewInt(types.I64, 0)
 	isError := g.builder.NewICmp(enum.IPredSLT, writeResult, zero)
 
-	// Create blocks for success and error cases
-	successBlock := g.function.NewBlock("write_success")
-	errorBlock := g.function.NewBlock("write_error")
-	continueBlock := g.function.NewBlock("write_continue")
+	// Create blocks with unique names to avoid conflicts
+	blockID := len(g.function.Blocks) // Use block count as unique ID
+	successBlockName := fmt.Sprintf("write_success_%d", blockID)
+	errorBlockName := fmt.Sprintf("write_error_%d", blockID)
+	continueBlockName := fmt.Sprintf("write_continue_%d", blockID)
+
+	successBlock := g.function.NewBlock(successBlockName)
+	errorBlock := g.function.NewBlock(errorBlockName)
+	continueBlock := g.function.NewBlock(continueBlockName)
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
@@ -297,7 +306,7 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 // returns a Result<string, string> type.
 func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapReadFileWrongArgs(len(callExpr.Arguments))
+		return nil, WrapReadFileWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	filename, err := g.generateExpression(callExpr.Arguments[0])
@@ -324,10 +333,15 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 	nullPtr := constant.NewNull(types.I8Ptr)
 	isError := g.builder.NewICmp(enum.IPredEQ, readResult, nullPtr)
 
-	// Create blocks for success and error cases
-	successBlock := g.function.NewBlock("read_success")
-	errorBlock := g.function.NewBlock("read_error")
-	continueBlock := g.function.NewBlock("read_continue")
+	// Create blocks with unique names to avoid conflicts (same fix as writeFile)
+	blockID := len(g.function.Blocks) // Use block count as unique ID
+	successBlockName := fmt.Sprintf("read_success_%d", blockID)
+	errorBlockName := fmt.Sprintf("read_error_%d", blockID)
+	continueBlockName := fmt.Sprintf("read_continue_%d", blockID)
+
+	successBlock := g.function.NewBlock(successBlockName)
+	errorBlock := g.function.NewBlock(errorBlockName)
+	continueBlock := g.function.NewBlock(continueBlockName)
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
@@ -343,7 +357,9 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 
 	// Error case: store error placeholder
 	g.builder = errorBlock
-	errorStr := g.module.NewGlobalDef("read_error_msg", constant.NewCharArrayFromString("File read error\x00"))
+	// Create unique global name to avoid redefinition
+	globalName := fmt.Sprintf("read_error_msg_%p", callExpr)
+	errorStr := g.module.NewGlobalDef(globalName, constant.NewCharArrayFromString("File read error\x00"))
 	errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
 		constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
 	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
@@ -358,76 +374,6 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 	g.builder = continueBlock
 
 	return result, nil
-}
-
-// generateParseJSONCall forwards a JSON string to an external helper that
-// parses it and returns a representation (currently a string).
-func (g *LLVMGenerator) generateParseJSONCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapParseJSONWrongArgs(len(callExpr.Arguments))
-	}
-
-	jsonStr, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	var fn *ir.Func
-	if existing, ok := g.functions["parse_json"]; ok {
-		fn = existing
-	} else {
-		fn = g.module.NewFunc("parse_json", types.I8Ptr, ir.NewParam("json_string", types.I8Ptr))
-		g.functions["parse_json"] = fn
-	}
-
-	return g.builder.NewCall(fn, jsonStr), nil
-}
-
-// generateExtractCodeCall extracts code from a JSON response using an external
-// helper returning the code as a C-string.
-func (g *LLVMGenerator) generateExtractCodeCall(callExpr *ast.CallExpression) (value.Value, error) {
-	// Support both old single-arg version and new two-arg version
-	if len(callExpr.Arguments) == OneArg {
-		// Legacy single argument version - extracts "code" field
-		jsonStr, err := g.generateExpression(callExpr.Arguments[0])
-		if err != nil {
-			return nil, err
-		}
-
-		var fn *ir.Func
-		if existing, ok := g.functions["extract_code"]; ok {
-			fn = existing
-		} else {
-			fn = g.module.NewFunc("extract_code", types.I8Ptr, ir.NewParam("json_string", types.I8Ptr))
-			g.functions["extract_code"] = fn
-		}
-
-		return g.builder.NewCall(fn, jsonStr), nil
-	} else if len(callExpr.Arguments) == TwoArgs {
-		// New two argument version - extracts arbitrary field
-		jsonStr, err := g.generateExpression(callExpr.Arguments[0])
-		if err != nil {
-			return nil, err
-		}
-
-		fieldName, err := g.generateExpression(callExpr.Arguments[1])
-		if err != nil {
-			return nil, err
-		}
-
-		var fn *ir.Func
-		if existing, ok := g.functions["extract_json_field"]; ok {
-			fn = existing
-		} else {
-			fn = g.module.NewFunc("extract_json_field", types.I8Ptr,
-				ir.NewParam("json_string", types.I8Ptr),
-				ir.NewParam("field_name", types.I8Ptr))
-			g.functions["extract_json_field"] = fn
-		}
-
-		return g.builder.NewCall(fn, jsonStr, fieldName), nil
-	}
-	return nil, WrapExtractCodeWrongArgs(len(callExpr.Arguments))
 }
 
 // Process management functions for async process handling

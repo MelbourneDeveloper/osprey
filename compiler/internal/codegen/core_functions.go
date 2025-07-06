@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"fmt"
 	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -70,10 +71,15 @@ func (g *LLVMGenerator) convertResultToString(
 	zero := constant.NewInt(types.I8, 0)
 	isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminant, zero)
 
-	// Create blocks for success and error cases
-	successBlock := g.function.NewBlock("result_toString_success")
-	errorBlock := g.function.NewBlock("result_toString_error")
-	endBlock := g.function.NewBlock("result_toString_end")
+	// Create blocks with unique names to avoid conflicts
+	blockID := len(g.function.Blocks) // Use block count as unique ID
+	successBlockName := fmt.Sprintf("result_toString_success_%d", blockID)
+	errorBlockName := fmt.Sprintf("result_toString_error_%d", blockID)
+	endBlockName := fmt.Sprintf("result_toString_end_%d", blockID)
+
+	successBlock := g.function.NewBlock(successBlockName)
+	errorBlock := g.function.NewBlock(errorBlockName)
+	endBlock := g.function.NewBlock(endBlockName)
 
 	g.builder.NewCondBr(isSuccess, successBlock, errorBlock)
 
@@ -131,7 +137,7 @@ func (g *LLVMGenerator) createGlobalString(str string) value.Value {
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != 1 {
-		return nil, WrapPrintWrongArgs(len(callExpr.Arguments))
+		return nil, WrapPrintWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	argExpr := callExpr.Arguments[0]
@@ -173,7 +179,7 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 // generateInputCall handles input function calls.
 func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != 0 {
-		return nil, WrapInputWrongArgs(len(callExpr.Arguments))
+		return nil, WrapInputWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 	// ... (rest of the function)
 	return nil, ErrUnsupportedCall
@@ -181,7 +187,7 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 
 func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapLengthWrongArgs(len(callExpr.Arguments))
+		return nil, WrapLengthWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	arg, err := g.generateExpression(callExpr.Arguments[0])
@@ -224,7 +230,7 @@ func (g *LLVMGenerator) getResultType(valueType types.Type) *types.StructType {
 // generateContainsCall handles contains(haystack: string, needle: string) -> bool function calls.
 func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapContainsWrongArgs(len(callExpr.Arguments))
+		return nil, WrapContainsWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	haystack, err := g.generateExpression(callExpr.Arguments[0])
@@ -272,7 +278,7 @@ func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (valu
 
 func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != ThreeArgs {
-		return nil, WrapSubstringWrongArgs(len(callExpr.Arguments))
+		return nil, WrapSubstringWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
 	}
 
 	str, err := g.generateExpression(callExpr.Arguments[0])
