@@ -11,6 +11,10 @@ import (
 	"github.com/llir/llvm/ir/value"
 )
 
+// There is an insane amount of duplication in this file.
+// TODO: Merge a bunch of this code!
+// TODO: Code REUSE!!!!
+
 // -----------------------------------------------------------------------------
 // Built-in helper dispatchers used from iterator_generation.go
 // -----------------------------------------------------------------------------
@@ -329,10 +333,15 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 	nullPtr := constant.NewNull(types.I8Ptr)
 	isError := g.builder.NewICmp(enum.IPredEQ, readResult, nullPtr)
 
-	// Create blocks for success and error cases
-	successBlock := g.function.NewBlock("read_success")
-	errorBlock := g.function.NewBlock("read_error")
-	continueBlock := g.function.NewBlock("read_continue")
+	// Create blocks with unique names to avoid conflicts (same fix as writeFile)
+	blockID := len(g.function.Blocks) // Use block count as unique ID
+	successBlockName := fmt.Sprintf("read_success_%d", blockID)
+	errorBlockName := fmt.Sprintf("read_error_%d", blockID)
+	continueBlockName := fmt.Sprintf("read_continue_%d", blockID)
+
+	successBlock := g.function.NewBlock(successBlockName)
+	errorBlock := g.function.NewBlock(errorBlockName)
+	continueBlock := g.function.NewBlock(continueBlockName)
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 

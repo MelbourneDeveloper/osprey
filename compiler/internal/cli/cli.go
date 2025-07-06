@@ -69,7 +69,7 @@ func (v *VexErrorListener) SyntaxError(
 
 // RunCommand executes a Osprey command with the given filename and mode.
 // This function mimics exactly what the CLI does but returns testable results.
-func RunCommand(filename, outputMode, docsDir string) CommandResult {
+func RunCommand(filename, outputMode, docsDir string, quiet bool) CommandResult {
 	// Handle docs mode (no file required)
 	if outputMode == OutputModeDocs {
 		return runGenerateDocs(docsDir)
@@ -99,7 +99,7 @@ func RunCommand(filename, outputMode, docsDir string) CommandResult {
 	case OutputModeCompile:
 		return runCompileToExecutable(source, filename)
 	case OutputModeRun:
-		return runRunProgram(source)
+		return runRunProgram(source, quiet)
 	case OutputModeSymbols:
 		return runShowSymbols(source, filename)
 	default:
@@ -112,7 +112,7 @@ func RunCommand(filename, outputMode, docsDir string) CommandResult {
 
 // RunCommandWithSecurity executes a Osprey command with the given filename, mode, and security configuration.
 // This function is used for testing security restrictions.
-func RunCommandWithSecurity(filename, outputMode string, security *SecurityConfig) CommandResult {
+func RunCommandWithSecurity(filename, outputMode string, quiet bool, security *SecurityConfig) CommandResult {
 	// Handle docs mode (no file required)
 	if outputMode == OutputModeDocs {
 		return runGenerateDocs("") // Security doesn't affect docs generation
@@ -142,7 +142,7 @@ func RunCommandWithSecurity(filename, outputMode string, security *SecurityConfi
 	case OutputModeCompile:
 		return runCompileToExecutableWithSecurity(source, filename, security)
 	case OutputModeRun:
-		return runRunProgramWithSecurity(source, security)
+		return runRunProgramWithSecurity(source, quiet, security)
 	case OutputModeSymbols:
 		return runShowSymbolsWithSecurity(source, filename, security)
 	default:
@@ -247,10 +247,15 @@ func runCompileToExecutable(source, filename string) CommandResult {
 	}
 }
 
-func runRunProgram(source string) CommandResult {
-	fmt.Fprintf(os.Stderr, "Starting compilation...\n")
+func runRunProgram(source string, quiet bool) CommandResult {
+	if !quiet {
+		fmt.Fprintf(os.Stderr, "Starting compilation...\n")
+	}
 
-	if err := codegen.CompileAndRun(source); err != nil {
+	// CAPTURE PROGRAM OUTPUT instead of outputting directly to terminal!
+	programOutput, err := codegen.CompileAndCapture(source)
+	if err != nil {
+		// ALWAYS show compilation errors regardless of quiet flag
 		fmt.Fprintf(os.Stderr, "Compilation failed\n")
 		return CommandResult{
 			Success:  false,
@@ -258,10 +263,12 @@ func runRunProgram(source string) CommandResult {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
+	if !quiet {
+		fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
+	}
 
 	return CommandResult{
-		Output:  "",
+		Output:  programOutput,  // ✅ RETURN THE ACTUAL PROGRAM OUTPUT!
 		Success: true,
 	}
 }
@@ -1094,13 +1101,18 @@ func runCompileToExecutableWithSecurity(source, filename string, security *Secur
 	}
 }
 
-func runRunProgramWithSecurity(source string, security *SecurityConfig) CommandResult {
-	fmt.Fprintf(os.Stderr, "Starting compilation...\n")
+func runRunProgramWithSecurity(source string, quiet bool, security *SecurityConfig) CommandResult {
+	if !quiet {
+		fmt.Fprintf(os.Stderr, "Starting compilation...\n")
+	}
 
 	// Convert CLI security config to codegen security config
 	codegenSecurity := convertToCodegenSecurity(security)
 
-	if err := codegen.CompileAndRunWithSecurity(source, codegenSecurity); err != nil {
+	// CAPTURE PROGRAM OUTPUT instead of outputting directly to terminal!
+	programOutput, err := codegen.CompileAndCaptureWithSecurity(source, codegenSecurity)
+	if err != nil {
+		// ALWAYS show compilation errors regardless of quiet flag
 		fmt.Fprintf(os.Stderr, "Compilation failed\n")
 		return CommandResult{
 			Success:  false,
@@ -1108,10 +1120,12 @@ func runRunProgramWithSecurity(source string, security *SecurityConfig) CommandR
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
+	if !quiet {
+		fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
+	}
 
 	return CommandResult{
-		Output:  "",
+		Output:  programOutput,  // ✅ RETURN THE ACTUAL PROGRAM OUTPUT!
 		Success: true,
 	}
 }

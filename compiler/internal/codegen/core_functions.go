@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"fmt"
 	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -70,10 +71,15 @@ func (g *LLVMGenerator) convertResultToString(
 	zero := constant.NewInt(types.I8, 0)
 	isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminant, zero)
 
-	// Create blocks for success and error cases
-	successBlock := g.function.NewBlock("result_toString_success")
-	errorBlock := g.function.NewBlock("result_toString_error")
-	endBlock := g.function.NewBlock("result_toString_end")
+	// Create blocks with unique names to avoid conflicts 
+	blockID := len(g.function.Blocks) // Use block count as unique ID
+	successBlockName := fmt.Sprintf("result_toString_success_%d", blockID)
+	errorBlockName := fmt.Sprintf("result_toString_error_%d", blockID)
+	endBlockName := fmt.Sprintf("result_toString_end_%d", blockID)
+
+	successBlock := g.function.NewBlock(successBlockName)
+	errorBlock := g.function.NewBlock(errorBlockName)
+	endBlock := g.function.NewBlock(endBlockName)
 
 	g.builder.NewCondBr(isSuccess, successBlock, errorBlock)
 

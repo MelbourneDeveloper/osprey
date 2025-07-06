@@ -300,3 +300,13 @@ func CompileAndRunWithSecurity(source string, security SecurityConfig) error {
 	// Try JIT execution first (smart tool detection)
 	return CompileAndRunJITWithSecurity(source, security)
 }
+
+// CompileAndCapture compiles and captures program output with default (permissive) security.
+func CompileAndCapture(source string) (string, error) {
+	return CompileAndCaptureJIT(source)
+}
+
+// CompileAndCaptureWithSecurity compiles and captures program output with specified security configuration.
+func CompileAndCaptureWithSecurity(source string, security SecurityConfig) (string, error) {
+	return CompileAndCaptureJITWithSecurity(source, security)
+}

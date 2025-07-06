@@ -27,6 +27,33 @@ func (j *JITExecutor) CompileAndRunInMemory(ir string) error {
 	return j.compileAndRunEmbedded(ir)
 }
 
+// CompileAndCaptureOutput compiles LLVM IR and captures the program's output
+func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
+	// Setup compilation environment
+	tempDir, irFile, exeFile, err := j.setupCompilation(ir)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Compile IR to object file
+	objFile, err := j.compileToObject(irFile, tempDir)
+	if err != nil {
+		return "", err
+	}
+
+	// Setup linking arguments
+	linkArgs := j.setupLinkArgs(exeFile, objFile)
+
+	// Link to executable
+	if err := j.linkExecutable(linkArgs); err != nil {
+		return "", err
+	}
+
+	// Execute and capture output
+	return j.executeProgramWithCapture(exeFile)
+}
+
 // setupCompilation creates temp directory and writes IR file
 func (j *JITExecutor) setupCompilation(ir string) (string, string, string, error) {
 	// Create temporary directory for compilation
@@ -200,6 +227,20 @@ func (j *JITExecutor) executeProgram(exeFile string) error {
 	return runCmd.Run()
 }
 
+// executeProgramWithCapture runs the compiled executable and captures its output
+func (j *JITExecutor) executeProgramWithCapture(exeFile string) (string, error) {
+	// #nosec G204 - exeFile is created in controlled temp directory
+	runCmd := exec.Command(exeFile)
+	
+	// CAPTURE STDOUT instead of outputting directly to terminal
+	output, err := runCmd.Output()
+	if err != nil {
+		return "", err
+	}
+	
+	return string(output), nil
+}
+
 // compileAndRunEmbedded uses an embedded approach with built-in LLVM tools detection.
 func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	// Setup compilation environment
@@ -309,4 +350,31 @@ func CompileAndRunJITWithSecurity(source string, security SecurityConfig) error 
 	executor := NewJITExecutor()
 
 	return executor.CompileAndRunInMemory(ir)
+}
+
+// CompileAndCaptureJIT compiles and captures program output with default (permissive) security.
+func CompileAndCaptureJIT(source string) (string, error) {
+	return CompileAndCaptureJITWithSecurity(source, SecurityConfig{
+		AllowHTTP:             true,
+		AllowWebSocket:        true,
+		AllowFileRead:         true,
+		AllowFileWrite:        true,
+		AllowFFI:              true,
+		AllowProcessExecution: true,
+		SandboxMode:           false,
+	})
+}
+
+// CompileAndCaptureJITWithSecurity compiles and captures program output with specified security configuration.
+func CompileAndCaptureJITWithSecurity(source string, security SecurityConfig) (string, error) {
+	// Generate LLVM IR with security configuration
+	ir, err := CompileToLLVMWithSecurity(source, security)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate LLVM IR: %w", err)
+	}
+
+	// Use JIT executor to compile and capture output
+	executor := NewJITExecutor()
+
+	return executor.CompileAndCaptureOutput(ir)
 }
