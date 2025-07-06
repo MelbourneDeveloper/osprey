@@ -33,7 +33,7 @@ permalink: "/spec/"
 15. [HTTP](/spec/0015-http/)
 16. [WebSocket Functions](/spec/0016-websockets/)
 17. [Security and Sandboxing](/spec/0017-securityandsandboxing/)
-18. [Algebraic Effects ([ospreylang.dev][1])](/spec/0018-algebraiceffects/)
+18. [Algebraic Effects](/spec/0018-algebraiceffects/)
 
 ## About This Specification
 
