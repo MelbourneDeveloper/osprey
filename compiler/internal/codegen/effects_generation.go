@@ -1,9 +1,6 @@
 package codegen
 
 import (
-	"fmt"
-
-	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
 	"github.com/christianfindlay/osprey/internal/ast"
@@ -29,29 +26,6 @@ func (g *LLVMGenerator) generateEffectDeclaration(effect *ast.EffectDeclaration)
 	// Register the effect with the effect system
 	if err := g.RegisterEffectDeclaration(effect); err != nil {
 		return err
-	}
-
-	// Register effect operations as function declarations
-	for _, operation := range effect.Operations {
-		functionName := fmt.Sprintf("__effect_%s_%s", effect.Name, operation.Name)
-
-		// For now, create a simple function signature
-		// TODO: Parse the actual operation type signature
-		funcType := types.NewFunc(types.Void, types.I64) // Simple stub
-
-		// Check if function already exists
-		exists := false
-		for _, fn := range g.module.Funcs {
-			if fn.Name() == functionName {
-				exists = true
-				break
-			}
-		}
-
-		if !exists {
-			// Create the function declaration
-			g.module.NewFunc(functionName, funcType)
-		}
 	}
 
 	return nil

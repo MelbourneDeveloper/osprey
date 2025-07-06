@@ -41,14 +41,13 @@ fn loggedIncrement() -> int ![State, Logger] = {
 }
 
 // Main function with proper handlers
-fn main() -> Unit = with handler Logger
+fn main() -> Unit = handle Logger
     log(msg) => print("[LOG] " + msg)
-{
-    with handler State
+in
+    handle State
         get() => 42
         set(value) => print("State set to: " + toString(value))
-    {
+    in {
         let result = loggedIncrement()
         print("Final result: " + toString(result))
-    }
-} 
+    } 

@@ -147,13 +147,6 @@ jobs:
           ./bin/osprey --help
           echo "✅ Binary verification successful!"
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: osprey-binary
-          path: "compiler/bin/osprey"
-          retention-days: 30
-
       - name: Test Web Compiler
         run: |
           cd webcompiler

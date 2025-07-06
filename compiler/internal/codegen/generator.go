@@ -124,8 +124,7 @@ func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration)
 	if g.effectCodegen == nil {
 		g.InitializeEffects()
 	}
-	g.effectCodegen.RegisterEffect(effect)
-	return nil
+	return g.effectCodegen.RegisterEffect(effect)
 }
 
 // generateRealPerformExpression generates real algebraic effects perform expressions

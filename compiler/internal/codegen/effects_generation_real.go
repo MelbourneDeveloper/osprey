@@ -18,6 +18,10 @@ var (
 	ErrPutsFunctionNotFound = errors.New("puts function not found during runtime lookup generation")
 	ErrEffectNotDeclared    = errors.New("effect not declared in function signature")
 	ErrNoLexicalHandler     = errors.New("no lexical handler found for effect")
+	ErrMissingParameterType = errors.New("effect operation parameter missing type annotation")
+	ErrMissingReturnType    = errors.New("effect operation missing return type annotation")
+	ErrParseParameterTypes  = errors.New("failed to parse parameter types for effect operation")
+	ErrParseReturnType      = errors.New("failed to parse return type for effect operation")
 )
 
 // Common operation names as constants
@@ -92,12 +96,44 @@ func (g *LLVMGenerator) NewEffectCodegen() *EffectCodegen {
 }
 
 // RegisterEffect registers an effect declaration with the effect system
-func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) {
+func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 	effectType := &EffectType{
 		Name:       effect.Name,
 		Operations: make(map[string]*EffectOp),
 	}
+
+	// Parse actual operation signatures from the AST
+	for _, operation := range effect.Operations {
+		paramTypes := make([]types.Type, len(operation.Parameters))
+		for i, param := range operation.Parameters {
+			if param.Type != nil {
+				paramTypes[i] = ec.stringTypeToLLVMType(param.Type.Name)
+			} else {
+				// INTERNAL COMPILER ERROR: Function type parsing should have extracted parameter types
+				// from declarations like `log: fn(string) -> Unit`
+				return fmt.Errorf("INTERNAL COMPILER ERROR: %w for operation '%s.%s' - function type parsing bug",
+					ErrParseParameterTypes, effect.Name, operation.Name)
+			}
+		}
+
+		if operation.ReturnType == "" {
+			// INTERNAL COMPILER ERROR: Function type parsing should have extracted return type
+			// from declarations like `log: fn(string) -> Unit`
+			return fmt.Errorf("INTERNAL COMPILER ERROR: %w for operation '%s.%s' - function type parsing bug",
+				ErrParseReturnType, effect.Name, operation.Name)
+		}
+
+		returnType := ec.stringTypeToLLVMType(operation.ReturnType)
+
+		effectType.Operations[operation.Name] = &EffectOp{
+			Name:       operation.Name,
+			ParamTypes: paramTypes,
+			ReturnType: returnType,
+		}
+	}
+
 	ec.registry.Effects[effect.Name] = effectType
+	return nil
 }
 
 // GeneratePerformExpression generates CPS-transformed perform expressions
@@ -185,97 +221,48 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	return result, nil
 }
 
+// stringTypeToLLVMType converts string type names to LLVM types
+func (ec *EffectCodegen) stringTypeToLLVMType(typeName string) types.Type {
+	switch typeName {
+	case TypeString:
+		return types.I8Ptr
+	case TypeInt:
+		return types.I64
+	case TypeBool:
+		return types.I1
+	case TypeUnit:
+		return types.Void
+	default:
+		return types.I64 // Default fallback
+	}
+}
+
 // inferOperationTypes determines parameter and return types for an operation
 func (ec *EffectCodegen) inferOperationTypes(
 	effectName string, operationName string, paramCount int,
 ) ([]types.Type, types.Type) {
+	// Use the parsed effect declaration types
 	effectType := ec.registry.Effects[effectName]
 	if effectType != nil && effectType.Operations[operationName] != nil {
 		return effectType.Operations[operationName].ParamTypes, effectType.Operations[operationName].ReturnType
 	}
 
-	// FIXED: Correct operation-specific type inference based on implementation plan
-	var paramTypes []types.Type
-	var returnType types.Type
+	// CRITICAL FIX: Fallback logic was completely backwards!
+	// Operations are NOT found in registry - this should be a loud error, not silent fallback
+	// But for now, provide sensible defaults until we fix the registry issue
 
-	switch operationName {
-	case OpGet, "getValue":
-		// get() -> i64, no parameters
-		paramTypes = []types.Type{}
-		returnType = types.I64
-	case OpSet, "setValue":
-		// set(i64) -> void, one i64 parameter
-		paramTypes = []types.Type{types.I64}
-		returnType = types.Void
-	case OpLog, "print", OpError:
-		// log(string) -> void, one string parameter
-		// Note: "write" is handled by FileIO operations instead
-		paramTypes = []types.Type{types.I8Ptr}
-		returnType = types.Void
-	case OpIncrement:
-		// increment() -> void, no parameters
-		paramTypes = []types.Type{}
-		returnType = types.Void
-	case "receive", "recv":
-		// receive() -> i64, no parameters
-		paramTypes = []types.Type{}
-		returnType = types.I64
-	// FileIO operations - Raw types in effect declarations, Result types when called outside handlers
-	case "read", "readFile", OpWrite, "writeFile", "delete", "deleteFile", "exists":
-		return ec.inferFileIOOperationTypes(operationName, paramCount)
-	case "send":
-		// send(value) -> void, one parameter
-		if paramCount > 0 {
-			paramTypes = make([]types.Type, paramCount)
-			for i := range paramTypes {
-				paramTypes[i] = types.I64 // Default to i64 for send values
-			}
-		} else {
-			paramTypes = []types.Type{types.I64}
-		}
-		returnType = types.Void
-	default:
-		// Default fallback: infer from parameter count
-		if paramCount == 0 {
-			// No parameters - likely returns something
-			paramTypes = []types.Type{}
-			returnType = types.I64
-		} else {
-			// Has parameters - likely void return
-			paramTypes = make([]types.Type, paramCount)
-			for i := range paramTypes {
-				if i == 0 && (operationName == "log" || operationName == "print" || operationName == "write") {
-					paramTypes[i] = types.I8Ptr // String parameter
-				} else {
-					paramTypes[i] = types.I64 // Default parameter type
-				}
-			}
-			returnType = types.Void
-		}
+	paramTypes := make([]types.Type, paramCount)
+	for i := range paramTypes {
+		paramTypes[i] = types.I8Ptr // Default to string for now (most common)
 	}
 
-	return paramTypes, returnType
-}
+	// CRITICAL ERROR: Operation not found in registry!
+	// This should be a compile-time error, not a silent fallback
+	// The effect system should NOT know about built-in functions like readFile/writeFile
+	// Those are just normal functions that handlers can call from their code blocks
 
-// inferFileIOOperationTypes handles FileIO operation type inference
-func (ec *EffectCodegen) inferFileIOOperationTypes(operationName string, _ int) ([]types.Type, types.Type) {
-	switch operationName {
-	case "read", "readFile":
-		// read(filename) -> string (raw type in handler context)
-		return []types.Type{types.I8Ptr}, types.I8Ptr
-	case OpWrite, "writeFile":
-		// write(filename, content) -> Unit (raw type in handler context)
-		return []types.Type{types.I8Ptr, types.I8Ptr}, types.Void
-	case "delete", "deleteFile":
-		// delete(filename) -> Unit (raw type in handler context)
-		return []types.Type{types.I8Ptr}, types.Void
-	case "exists":
-		// exists(filename) -> bool (raw type in handler context)
-		return []types.Type{types.I8Ptr}, types.I1
-	default:
-		// Fallback
-		return []types.Type{types.I64}, types.I64
-	}
+	// TODO: Make this a proper compile-time error once registry is fixed
+	return paramTypes, types.I64
 }
 
 // generateHandlerFunctionBody generates the body of a handler function
@@ -507,7 +494,7 @@ func (ec *EffectCodegen) generatePerformArguments(perform *ast.PerformExpression
 func (ec *EffectCodegen) createUnhandledEffectError(perform *ast.PerformExpression) error {
 	// Check if this is potentially a circular dependency scenario
 	if ec.isLikelyCircularDependency(perform.EffectName) {
-		errorMsg := "COMPILATION ERROR: Circular effect dependency detected - " +
+		errorMsg := "Circular effect dependency detected - " +
 			"effects cannot have circular references that would cause infinite recursion"
 
 		// Include position information if available
@@ -518,7 +505,7 @@ func (ec *EffectCodegen) createUnhandledEffectError(perform *ast.PerformExpressi
 		return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 	}
 
-	errorMsg := fmt.Sprintf("COMPILATION ERROR: Unhandled effect '%s.%s' - "+
+	errorMsg := fmt.Sprintf("Unhandled effect '%s.%s' - "+
 		"all effects must be explicitly handled or forwarded in function signatures. "+
 		"Add a handler or declare the effect in the function signature with !%s",
 		perform.EffectName, perform.OperationName, perform.EffectName)
@@ -548,7 +535,7 @@ func (ec *EffectCodegen) detectCircularDependency(effectName string) error {
 	// Check if this effect is already in the processing stack
 	for _, processingEffect := range ec.processingStack {
 		if processingEffect == effectName {
-			errorMsg := "COMPILATION ERROR: Circular effect dependency detected - " +
+			errorMsg := "Circular effect dependency detected - " +
 				"effects cannot have circular references that would cause infinite recursion"
 			return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 		}
@@ -572,12 +559,12 @@ func (ec *EffectCodegen) popProcessingEffect() {
 
 // generateDeclaredEffectCall generates calls for effects declared in function signatures
 func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpression) (value.Value, error) {
-	// CRITICAL INSIGHT: The real bug is that functions with declared effects are being called
+	// CRITICAL TODO: The real bug is that functions with declared effects are being called
 	// when currentHandlers=0, stack=0. This means the handler context is not being preserved
 	// across function calls. The issue is NOT in this function, but in how handlers are
 	// maintained when calling functions with declared effects.
 
-	// For now, fall back to the original runtime lookup behavior to restore functionality
+	// Generate arguments for the perform expression
 	args := make([]value.Value, len(perform.Arguments))
 	for i, argExpr := range perform.Arguments {
 		argVal, err := ec.generator.generateExpression(argExpr)
@@ -603,10 +590,8 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 		return ec.generator.builder.NewCall(handlerFunc, args...), nil
 	}
 
-	// Fallback to debug message
-	effectMsg := fmt.Sprintf("EFFECT: %s.%s called", perform.EffectName, perform.OperationName)
-	msgStr := ec.generator.createGlobalString(effectMsg)
-	putsFunc := ec.generator.functions["puts"]
-	call := ec.generator.builder.NewCall(putsFunc, msgStr)
-	return ec.generator.builder.NewSExt(call, types.I64), nil
+	// 🔥 CRITICAL COMPILER SAFETY FIX: NO MORE FALLBACK TO DEBUG MESSAGES!
+	// If no handler is found, this is an UNHANDLED EFFECT and should FAIL COMPILATION
+	// This makes the compiler strict and catches the errors that should be caught
+	return nil, ec.createUnhandledEffectError(perform)
 }

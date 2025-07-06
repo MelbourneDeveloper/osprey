@@ -161,6 +161,10 @@ fn main() -> Unit = {
     in handle Logger
         log msg => print("📝 LOG: " + msg)
         error msg => print("❌ ERROR: " + msg)  
+    in handle FileIO
+        writeFile filename content => print("💾 Writing file: " + filename)
+        readFile filename => "mock file content"
+        deleteFile filename => print("🗑️ Deleting file: " + filename)
     in {
         print("🚀 Starting Comprehensive Effects Test")
         
