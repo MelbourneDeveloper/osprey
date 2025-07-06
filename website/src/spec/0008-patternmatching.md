@@ -2,7 +2,7 @@
 layout: page
 title: "Pattern Matching"
 description: "Osprey Language Specification: Pattern Matching"
-date: 2025-07-05
+date: 2025-07-06
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0008-patternmatching/"
