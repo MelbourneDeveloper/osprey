@@ -2,7 +2,6 @@ package codegen
 
 import (
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/llir/llvm/ir"
@@ -637,20 +636,14 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 		return nil, WrapAnyDirectFieldAccess(fieldAccess.FieldName)
 	}
 
-	// Check if this is field access on a constrained type constructor result
+	// Check if this is field access on a validated type constructor result
 	if typeConstructor, isTypeConstructor := fieldAccess.Object.(*ast.TypeConstructorExpression); isTypeConstructor {
-		// Check if this type has constraints
+		// Check if this type has validation
 		if typeDecl, exists := g.typeDeclarations[typeConstructor.TypeName]; exists {
-			// Check if any field has constraints
-			if len(typeDecl.Variants) == 1 {
-				variant := typeDecl.Variants[0]
-				for _, field := range variant.Fields {
-					if field.Constraint != nil {
-						// This type has constraints, so constructor returns Result<T, E>
-						// Field access on Result types should be a compilation error
-						return nil, WrapFieldAccessOnResult(fieldAccess.FieldName, typeConstructor.TypeName)
-					}
-				}
+			if typeDecl.ValidationFunc != nil {
+				// This type has validation, so constructor returns Result<T, E>
+				// Field access on Result types should be a compilation error
+				return nil, WrapFieldAccessOnResult(fieldAccess.FieldName, typeConstructor.TypeName)
 			}
 		}
 	}
@@ -667,21 +660,92 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 		}
 	}
 
-	// Check for standard field access patterns
-	if ident, ok := fieldAccess.Object.(*ast.Identifier); ok {
-		varName := ident.Name
+	// Generate the object value
+	objectValue, err := g.generateExpression(fieldAccess.Object)
+	if err != nil {
+		return nil, err
+	}
 
-		// Check if it's a record access pattern like person.name
-		if recordValue, exists := g.variables[varName]; exists {
-			// For .value field access on result types, just return the object itself
-			// since we're using simplified result types where the value IS the result
-			if fieldAccess.FieldName == "value" {
-				return recordValue, nil
+	// Handle field access on struct types (record types)
+	return g.generateStructFieldAccess(fieldAccess, objectValue)
+}
+
+// generateStructFieldAccess handles field access on struct types
+func (g *LLVMGenerator) generateStructFieldAccess(
+	fieldAccess *ast.FieldAccessExpression,
+	objectValue value.Value,
+) (value.Value, error) {
+	// Check if this is a pointer to a struct
+	objectType := objectValue.Type()
+	var structType *types.StructType
+	var isPointer bool
+
+	if ptrType, ok := objectType.(*types.PointerType); ok {
+		if st, ok := ptrType.ElemType.(*types.StructType); ok {
+			structType = st
+			isPointer = true
+		}
+	} else if st, ok := objectType.(*types.StructType); ok {
+		structType = st
+		isPointer = false
+	}
+
+	if structType == nil {
+		// Field access is not supported on non-struct types
+		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
+	}
+
+	// Find the record type name that corresponds to this struct
+	recordTypeName := g.findRecordTypeForStruct(structType)
+	if recordTypeName == "" {
+		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
+	}
+
+	// Find the field index
+	fieldIndex := g.findFieldIndex(recordTypeName, fieldAccess.FieldName)
+	if fieldIndex == -1 {
+		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
+	}
+
+	// Get pointer to the field
+	var fieldPtr value.Value
+	if isPointer {
+		// Object is already a pointer to the struct
+		fieldPtr = g.builder.NewGetElementPtr(
+			structType,
+			objectValue,
+			constant.NewInt(types.I32, 0),
+			constant.NewInt(types.I32, int64(fieldIndex)),
+		)
+	} else {
+		// Object is a struct value, need to get its address first
+		structAddr := g.builder.NewAlloca(structType)
+		g.builder.NewStore(objectValue, structAddr)
+		fieldPtr = g.builder.NewGetElementPtr(
+			structType,
+			structAddr,
+			constant.NewInt(types.I32, 0),
+			constant.NewInt(types.I32, int64(fieldIndex)),
+		)
+	}
+
+	// Load the field value
+	fieldType := structType.Fields[fieldIndex]
+	fieldValue := g.builder.NewLoad(fieldType, fieldPtr)
+
+	return fieldValue, nil
+}
+
+// findRecordTypeForStruct finds the record type name that corresponds to a struct type
+func (g *LLVMGenerator) findRecordTypeForStruct(structType *types.StructType) string {
+	for typeName, llvmType := range g.typeMap {
+		if st, ok := llvmType.(*types.StructType); ok {
+			if st == structType {
+				return typeName
 			}
 		}
 	}
-
-	return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
+	return ""
 }
 
 func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) (value.Value, error) {
@@ -707,127 +771,126 @@ func (g *LLVMGenerator) generateTypeConstructorExpression(
 		return nil, WrapUndefinedType(typeConstructor.TypeName)
 	}
 
-	// For record types, validate constraints on each field
-	if len(typeDecl.Variants) == 1 {
-		variant := typeDecl.Variants[0]
-
-		// Check each field for constraints
-		for _, field := range variant.Fields {
-			if field.Constraint != nil {
-				// Get the field value from the constructor
-				fieldValue, exists := typeConstructor.Fields[field.Name]
-				if !exists {
-					return nil, WrapMissingField(field.Name)
-				}
-
-				// Validate the constraint
-				isValid, err := g.validateConstraint(field.Constraint, fieldValue)
-				if err != nil {
-					return nil, err
-				}
-
-				if !isValid {
-					// Return constraint violation as Err variant
-					// For now, we'll use a discriminant value that represents Err
-					// TODO: Implement proper Result<T, E> type construction
-					return constant.NewInt(types.I64, -1), nil
-				}
-			}
-		}
+	// Check if this is a record type (single variant with fields)
+	if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
+		return g.generateRecordTypeConstructor(typeConstructor, typeDecl)
 	}
 
-	// If all constraints pass, return success as Ok variant
-	// For now, we'll use a discriminant value that represents Ok
-	// TODO: Implement proper Result<T, E> type construction
-
+	// For union types without fields, return discriminant value
 	return constant.NewInt(types.I64, 1), nil
 }
 
-// validateConstraint validates a constraint function call against a field value.
-func (g *LLVMGenerator) validateConstraint(
-	constraint *ast.FunctionCallExpression,
-	fieldValue ast.Expression,
-) (bool, error) {
-	// Handle compile-time evaluation for literal values
-	switch fieldVal := fieldValue.(type) {
-	case *ast.StringLiteral:
-
-		return g.validateStringConstraint(constraint.Function, fieldVal.Value)
-	case *ast.IntegerLiteral:
-
-		return g.validateIntConstraint(constraint.Function, fieldVal.Value)
-	case *ast.BooleanLiteral:
-
-		return g.validateBoolConstraint(constraint.Function, fieldVal.Value)
+// generateRecordTypeConstructor generates LLVM IR for record type construction
+func (g *LLVMGenerator) generateRecordTypeConstructor(
+	typeConstructor *ast.TypeConstructorExpression,
+	typeDecl *ast.TypeDeclaration,
+) (value.Value, error) {
+	// If no validation function, create the struct directly
+	if typeDecl.ValidationFunc == nil {
+		return g.generateUnconstrainedRecordConstructor(typeConstructor, typeDecl)
 	}
 
-	// For non-literal values, we need runtime evaluation
-	// Convert FunctionCallExpression to CallExpression for proper function calling
-	callExpr := &ast.CallExpression{
-		Function:  &ast.Identifier{Name: constraint.Function},
-		Arguments: []ast.Expression{fieldValue},
-	}
-
-	// Generate the constraint function call
-	result, err := g.generateCallExpression(callExpr)
+	// First create the struct instance
+	structValue, err := g.generateUnconstrainedRecordConstructor(typeConstructor, typeDecl)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	// Check if the result is a compile-time constant
-	if constResult, ok := result.(*constant.Int); ok {
-		// Non-zero means constraint passed (check if X != 0)
-		return constResult.X.Cmp(big.NewInt(0)) != 0, nil
+	// Call the validation function
+	validationFunc, exists := g.functions[*typeDecl.ValidationFunc]
+	if !exists {
+		return nil, WrapUndefinedFunction(*typeDecl.ValidationFunc)
 	}
 
-	// For runtime evaluation, we can't determine the result at compile time
-	// So we'll assume it passes for now (this should be improved for runtime constraints)
+	// Call validation function with the struct as argument
+	result := g.builder.NewCall(validationFunc, structValue)
 
-	return true, nil
+	// Return the result (should be Result<T, String> type)
+	return result, nil
 }
 
-// validateStringConstraint evaluates string constraints at compile time.
-func (g *LLVMGenerator) validateStringConstraint(constraintFunc, value string) (bool, error) {
-	switch constraintFunc {
-	case "notEmpty":
-
-		return value != "", nil
-	case "validEmail":
-
-		return value != "", nil // Simple validation for now
-	case "validLength":
-
-		return value != "", nil
-	default:
-
-		return true, nil // Unknown constraint, assume valid
+// generateUnconstrainedRecordConstructor creates actual struct instances for unconstrained record types
+func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
+	typeConstructor *ast.TypeConstructorExpression,
+	_ *ast.TypeDeclaration,
+) (value.Value, error) {
+	// Get the struct type from our type map
+	structType, exists := g.typeMap[typeConstructor.TypeName]
+	if !exists {
+		return nil, WrapUndefinedType(typeConstructor.TypeName)
 	}
-}
 
-// validateIntConstraint evaluates integer constraints at compile time.
-func (g *LLVMGenerator) validateIntConstraint(constraintFunc string, value int64) (bool, error) {
-	switch constraintFunc {
-	case "isPositive":
+	// Allocate memory for the struct
+	structValue := g.builder.NewAlloca(structType)
 
-		return value > 0, nil
-	case "validAge":
-
-		return value > 0, nil
-	case "positive":
-
-		return value > 0, nil
-	default:
-
-		return true, nil // Unknown constraint, assume valid
+	// Get field names for this record type
+	fieldNames, exists := g.getRecordFieldNames(typeConstructor.TypeName)
+	if !exists {
+		return nil, WrapUndefinedType(typeConstructor.TypeName)
 	}
+
+	// Store each field value in the struct
+	for i, fieldName := range fieldNames {
+		fieldValue, exists := typeConstructor.Fields[fieldName]
+		if !exists {
+			return nil, WrapMissingField(fieldName)
+		}
+
+		// Generate the field value
+		llvmFieldValue, err := g.generateExpression(fieldValue)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get expected field type from struct
+		expectedFieldType := structType.(*types.StructType).Fields[i]
+
+		// Convert value to match expected field type if necessary
+		convertedValue := g.convertValueToExpectedType(llvmFieldValue, expectedFieldType)
+
+		// Get pointer to the field in the struct
+		fieldPtr := g.builder.NewGetElementPtr(
+			structType,
+			structValue,
+			constant.NewInt(types.I32, 0),
+			constant.NewInt(types.I32, int64(i)),
+		)
+
+		// Store the converted value in the field
+		g.builder.NewStore(convertedValue, fieldPtr)
+	}
+
+	return structValue, nil
 }
 
-// validateBoolConstraint evaluates boolean constraints at compile time.
-func (g *LLVMGenerator) validateBoolConstraint(_ string, _ bool) (bool, error) {
-	// Add boolean constraint logic here if needed
+// convertValueToExpectedType converts a value to match the expected LLVM type
+func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedType types.Type) value.Value {
+	currentType := value.Type()
 
-	return true, nil
+	// If types already match, no conversion needed
+	if currentType == expectedType {
+		return value
+	}
+
+	// Convert i64 to i1 (boolean)
+	if currentType == types.I64 && expectedType == types.I1 {
+		// Convert non-zero to true, zero to false
+		zero := constant.NewInt(types.I64, 0)
+		return g.builder.NewICmp(enum.IPredNE, value, zero)
+	}
+
+	// Convert i1 to i64 (boolean to integer)
+	if currentType == types.I1 && expectedType == types.I64 {
+		return g.builder.NewZExt(value, types.I64)
+	}
+
+	// For other cases, just return the original value and let LLVM handle it
+	return value
 }
+
+// NOTE: Old field-level constraint validation functions removed.
+// Type-level validation is now handled by user-defined validation functions
+// that return Result<T, String> types.
 
 func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) (value.Value, error) {
 	// Check if the last statement is an expression statement that should be the return value

@@ -1,0 +1,112 @@
+// Field Access with Discriminated Unions and Variable Binding
+// This demonstrates field access mixed with pattern matching on union types
+
+// Discriminated union for different entity types
+type Entity = Warrior { health: Int, strength: Int } | 
+              Mage { health: Int, mana: Int } | 
+              Archer { health: Int, arrows: Int }
+
+// Equipment union with field access
+type Equipment = Sword { damage: Int, durability: Int } |
+                 Staff { power: Int, charges: Int } |
+                 Bow { range: Int, tension: Int }
+
+// Combat calculation with variable binding in pattern matching
+fn calculateAttack(entity: Entity, equipment: Equipment) = match entity {
+    Warrior { health: h, strength: s } => match equipment {
+        Sword { damage: d, durability: dur } => match dur > 50 {
+            true => s + d + (h / 10)
+            false => s + (d / 2)
+        }
+        _ => s + (h / 20)
+    }
+    Mage { health: h, mana: m } => match equipment {
+        Staff { power: p, charges: c } => match c > 0 {
+            true => p + m + (h / 15)
+            false => m / 2
+        }
+        _ => m / 3
+    }
+    Archer { health: h, arrows: a } => match equipment {
+        Bow { range: r, tension: t } => match a > 10 {
+            true => r + t + (a / 5)
+            false => r / 2
+        }
+        _ => a / 4
+    }
+}
+
+// Status calculation with complex field access and pattern matching
+fn getEntityStatus(entity: Entity) -> String = match entity {
+    Warrior { health: h, strength: s } => match h > 80 {
+        true => match s > 15 {
+            true => "Mighty Warrior"
+            false => "Healthy Fighter"
+        }
+        false => "Wounded Warrior"
+    }
+    Mage { health: h, mana: m } => match m > 100 {
+        true => "Archmage"
+        false => match h > 60 {
+            true => "Battle Mage"
+            false => "Apprentice"
+        }
+    }
+    Archer { health: h, arrows: a } => match a > 20 {
+        true => "Master Archer"
+        false => "Scout"
+    }
+}
+
+print("=== DISCRIMINATED UNIONS WITH FIELD ACCESS ===")
+
+// Create entities with different types
+let warrior = Warrior { health: 120, strength: 18 }
+let mage = Mage { health: 80, mana: 150 }
+let archer = Archer { health: 100, arrows: 25 }
+
+// Create equipment
+let sword = Sword { damage: 25, durability: 75 }
+let staff = Staff { power: 40, charges: 8 }
+let bow = Bow { range: 30, tension: 12 }
+
+// Complex calculations mixing pattern matching with field access
+let warriorAttack = calculateAttack(warrior, sword)
+let mageAttack = calculateAttack(mage, staff)
+let archerAttack = calculateAttack(archer, bow)
+
+let warriorStatus = getEntityStatus(warrior)
+let mageStatus = getEntityStatus(mage)
+let archerStatus = getEntityStatus(archer)
+
+print("Combat Results:")
+print("${warriorStatus}: Attack=${warriorAttack} (Health=${match warrior { Warrior { health: h } => h }})")
+print("${mageStatus}: Attack=${mageAttack} (Mana=${match mage { Mage { mana: m } => m }})")
+print("${archerStatus}: Attack=${archerAttack} (Arrows=${match archer { Archer { arrows: a } => a }})")
+
+// Equipment degradation with field access in pattern matching
+fn degradeEquipment(equipment: Equipment) -> String = match equipment {
+    Sword { damage: d, durability: dur } => match dur - 10 {
+        remaining => match remaining > 20 {
+            true => "Sword sharpened (${d} dmg, ${remaining} dur)"
+            false => "Sword needs repair"
+        }
+    }
+    Staff { power: p, charges: c } => match c - 2 {
+        remaining => "Staff used (${p} power, ${remaining} charges left)"
+    }
+    Bow { range: r, tension: t } => match t - 1 {
+        newTension => "Bow string loosened (${r} range, ${newTension} tension)"
+    }
+}
+
+let swordStatus = degradeEquipment(sword)
+let staffStatus = degradeEquipment(staff)
+let bowStatus = degradeEquipment(bow)
+
+print("Equipment Status:")
+print("${swordStatus}")
+print("${staffStatus}")
+print("${bowStatus}")
+
+print("=== UNION PATTERN MATCHING COMPLETE ===") 

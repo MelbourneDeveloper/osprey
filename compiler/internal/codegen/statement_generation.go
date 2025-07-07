@@ -68,7 +68,7 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 	if externDecl.ReturnType != nil {
 		returnType = g.typeExpressionToLLVMType(externDecl.ReturnType)
 		returnTypeStr = externDecl.ReturnType.Name
-		if returnTypeStr == "String" {
+		if returnTypeStr == StringTypeName {
 			returnTypeStr = TypeString
 		}
 	}
@@ -408,7 +408,7 @@ func (g *LLVMGenerator) determineParameterType(param ast.Parameter) string {
 		return TypeString
 	case TypeInt, IntTypeName:
 		return TypeInt
-	case "bool", "Bool":
+	case "bool", BoolTypeName:
 		return TypeBool
 	case TypeAny:
 		return TypeAny

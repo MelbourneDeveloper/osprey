@@ -61,8 +61,8 @@ type ospreyListener interface {
 	// EnterFieldDeclaration is called when entering the fieldDeclaration production.
 	EnterFieldDeclaration(c *FieldDeclarationContext)
 
-	// EnterConstraint is called when entering the constraint production.
-	EnterConstraint(c *ConstraintContext)
+	// EnterTypeValidation is called when entering the typeValidation production.
+	EnterTypeValidation(c *TypeValidationContext)
 
 	// EnterEffectDecl is called when entering the effectDecl production.
 	EnterEffectDecl(c *EffectDeclContext)
@@ -256,8 +256,8 @@ type ospreyListener interface {
 	// ExitFieldDeclaration is called when exiting the fieldDeclaration production.
 	ExitFieldDeclaration(c *FieldDeclarationContext)
 
-	// ExitConstraint is called when exiting the constraint production.
-	ExitConstraint(c *ConstraintContext)
+	// ExitTypeValidation is called when exiting the typeValidation production.
+	ExitTypeValidation(c *TypeValidationContext)
 
 	// ExitEffectDecl is called when exiting the effectDecl production.
 	ExitEffectDecl(c *EffectDeclContext)

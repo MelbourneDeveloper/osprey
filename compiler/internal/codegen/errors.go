@@ -659,6 +659,11 @@ func WrapUndefinedType(typeName string) error {
 	return fmt.Errorf("%w: '%s'", ErrUndefinedType, typeName)
 }
 
+// WrapUndefinedFunction wraps undefined function errors with function name.
+func WrapUndefinedFunction(functionName string) error {
+	return fmt.Errorf("%w: '%s'", ErrUndefinedVariable, functionName)
+}
+
 // WrapMissingField wraps missing field errors with field name.
 func WrapMissingField(fieldName string) error {
 	return fmt.Errorf("%w: '%s'", ErrMissingField, fieldName)

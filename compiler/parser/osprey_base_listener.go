@@ -128,11 +128,11 @@ func (s *BaseospreyListener) EnterFieldDeclaration(ctx *FieldDeclarationContext)
 // ExitFieldDeclaration is called when production fieldDeclaration is exited.
 func (s *BaseospreyListener) ExitFieldDeclaration(ctx *FieldDeclarationContext) {}
 
-// EnterConstraint is called when production constraint is entered.
-func (s *BaseospreyListener) EnterConstraint(ctx *ConstraintContext) {}
+// EnterTypeValidation is called when production typeValidation is entered.
+func (s *BaseospreyListener) EnterTypeValidation(ctx *TypeValidationContext) {}
 
-// ExitConstraint is called when production constraint is exited.
-func (s *BaseospreyListener) ExitConstraint(ctx *ConstraintContext) {}
+// ExitTypeValidation is called when production typeValidation is exited.
+func (s *BaseospreyListener) ExitTypeValidation(ctx *TypeValidationContext) {}
 
 // EnterEffectDecl is called when production effectDecl is entered.
 func (s *BaseospreyListener) EnterEffectDecl(ctx *EffectDeclContext) {}

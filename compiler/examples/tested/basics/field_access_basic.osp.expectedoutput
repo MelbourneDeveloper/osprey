@@ -1,0 +1,14 @@
+=== BASIC FIELD ACCESS TEST ===
+Created point and rectangle instances
+Point field access:
+Point x: 10
+Point y: 20
+Rectangle field access:
+Rectangle width: 15
+Rectangle height: 8
+Field access in expressions:
+Point coordinates: (10, 20)
+Rectangle dimensions: 15x8
+Sum of coordinates: 30
+Rectangle area: 120
+=== BASIC FIELD ACCESS TEST COMPLETE === 

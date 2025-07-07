@@ -544,6 +544,72 @@ match result {
 }
 ```
 
+#### Type-Level Validation
+
+**CRITICAL**: When a type has a WHERE validation function, the type constructor **ALWAYS** returns `Result<T, String>` instead of the type directly.
+
+**Validation Syntax:**
+```
+type_validation := 'where' function_name
+```
+
+**Examples:**
+```osprey
+// Unconstrained type - direct construction
+type Point = { x: Int, y: Int }
+let point = Point { x: 10, y: 20 }  // Returns Point directly
+
+// Type with validation function - returns Result type
+type Product = { 
+    name: String,
+    price: Int
+} where validateProduct
+
+fn validateProduct(product: Product) -> Result<Product, String> = match product.name {
+    "" => Error("Product name cannot be empty")
+    _ => match product.price {
+        0 => Error("Price must be positive")
+        _ => Success(product)
+    }
+}
+
+let product = Product { name: "Widget", price: 100 }  // Returns Result<Product, String>
+
+// Pattern matching required for validated types
+match product {
+    Success { value } => {
+        print("Product: ${value.name}")
+        print("Price: ${value.price}")
+    }
+    Error { message } => {
+        print("Validation failed: ${message}")
+    }
+}
+
+// Invalid validation fails at construction
+let invalid = Product { name: "", price: -10 }  // Returns Error variant
+match invalid {
+    Success { value } => print("This won't execute")
+    Error { message } => print("Expected error: ${message}")
+}
+```
+
+**Field Access Rules:**
+- **Unvalidated types**: Direct field access allowed (`point.x`)
+- **Validated types**: Field access **ONLY** after pattern matching on Result
+
+**Compilation Errors:**
+```osprey
+// ERROR: Cannot access field on Result type
+let name = product.name  // Compilation error - pattern matching required
+
+// CORRECT: Field access after unwrapping
+match product {
+    Success { value } => print("Name: ${value.name}")  // Valid field access
+    Error { message } => print("Error: ${message}")
+}
+```
+
 ### 5.6 Type Compatibility
 
 - Pattern matching for type discrimination

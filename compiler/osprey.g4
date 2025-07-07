@@ -34,7 +34,7 @@ paramList       : param (COMMA param)* ;
 
 param           : ID (COLON type)? ;
 
-typeDecl        : docComment? TYPE ID (LT typeParamList GT)? EQ (unionType | recordType) ;
+typeDecl        : docComment? TYPE ID (LT typeParamList GT)? EQ (unionType | recordType) typeValidation? ;
 
 typeParamList   : ID (COMMA ID)* ;
 
@@ -45,9 +45,9 @@ recordType      : LBRACE fieldDeclarations RBRACE ;
 variant         : ID (LBRACE fieldDeclarations RBRACE)? ;
 
 fieldDeclarations : fieldDeclaration (COMMA fieldDeclaration)* ;
-fieldDeclaration  : ID COLON type constraint? ;
+fieldDeclaration  : ID COLON type ;
 
-constraint      : WHERE functionCall ;
+typeValidation  : WHERE ID ;
 
 // Effect declarations
 effectDecl      : docComment? EFFECT ID LBRACE opDecl* RBRACE ;

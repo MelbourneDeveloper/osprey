@@ -154,11 +154,7 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 					Type: fieldCtx.Type_().ID().GetText(),
 				}
 
-				// Handle optional constraint
-				if fieldCtx.Constraint() != nil {
-					constraint := b.buildFunctionCall(fieldCtx.Constraint().FunctionCall())
-					field.Constraint = constraint
-				}
+				// No longer using field-level constraints
 
 				fields = append(fields, field)
 			}
@@ -171,10 +167,18 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 		variants = append(variants, variant)
 	}
 
+	// Handle optional type validation
+	var validationFunc *string
+	if ctx.TypeValidation() != nil {
+		funcName := ctx.TypeValidation().ID().GetText()
+		validationFunc = &funcName
+	}
+
 	return &TypeDeclaration{
-		Name:       name,
-		TypeParams: typeParams,
-		Variants:   variants,
+		Name:           name,
+		TypeParams:     typeParams,
+		Variants:       variants,
+		ValidationFunc: validationFunc,
 	}
 }
 
@@ -190,11 +194,7 @@ func (b *Builder) buildVariant(ctx parser.IVariantContext) TypeVariant {
 				Type: fieldCtx.Type_().ID().GetText(),
 			}
 
-			// Handle optional constraint
-			if fieldCtx.Constraint() != nil {
-				constraint := b.buildFunctionCall(fieldCtx.Constraint().FunctionCall())
-				field.Constraint = constraint
-			}
+			// No longer using field-level constraints
 
 			fields = append(fields, field)
 		}
@@ -299,25 +299,7 @@ func (b *Builder) buildModuleDecl(ctx parser.IModuleDeclContext) *ModuleDeclarat
 	}
 }
 
-// buildFunctionCall builds a FunctionCallExpression from a parser function call context.
-func (b *Builder) buildFunctionCall(ctx parser.IFunctionCallContext) *FunctionCallExpression {
-	if ctx == nil {
-		return nil
-	}
-
-	functionName := ctx.ID().GetText()
-
-	var arguments []Expression
-	if ctx.ArgList() != nil {
-		args, _ := b.buildArguments(ctx.ArgList()) // Ignore named args for now
-		arguments = args
-	}
-
-	return &FunctionCallExpression{
-		Function:  functionName,
-		Arguments: arguments,
-	}
-}
+// buildFunctionCall removed - no longer needed for type-level validation
 
 // buildBlockBody builds a BlockExpression from a parser block body context.
 func (b *Builder) buildBlockBody(ctx parser.IBlockBodyContext) *BlockExpression {

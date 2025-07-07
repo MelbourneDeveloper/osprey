@@ -106,9 +106,10 @@ func (e *ExternDeclaration) isStatement() {}
 
 // TypeDeclaration represents a type declaration with union types.
 type TypeDeclaration struct {
-	Name       string
-	TypeParams []string // Generic type parameters
-	Variants   []TypeVariant
+	Name           string
+	TypeParams     []string // Generic type parameters
+	Variants       []TypeVariant
+	ValidationFunc *string // Optional WHERE validation function name
 }
 
 func (t *TypeDeclaration) isStatement() {}
@@ -121,9 +122,8 @@ type TypeVariant struct {
 
 // TypeField represents a field in a type variant.
 type TypeField struct {
-	Name       string
-	Type       string
-	Constraint *FunctionCallExpression // Optional WHERE constraint
+	Name string
+	Type string
 }
 
 // FunctionCallExpression represents a function call in constraints.

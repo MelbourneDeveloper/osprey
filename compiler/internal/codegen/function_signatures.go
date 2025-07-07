@@ -225,15 +225,115 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 	// Store the complete type declaration
 	g.typeDeclarations[typeDecl.Name] = typeDecl
 
-	// For now, just map the type name to i64 (simplified)
-	// In a full implementation, you'd create proper struct types for variants
-	g.typeMap[typeDecl.Name] = types.I64
+	// Check if this is a record type (single variant with fields)
+	if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
+		// Create a proper struct type for record types
+		variant := typeDecl.Variants[0]
+		fieldTypes := make([]types.Type, len(variant.Fields))
 
-	// Register each variant as a constant with a discriminant value
-	for i, variant := range typeDecl.Variants {
-		discriminantValue := int64(i)
-		g.unionVariants[variant.Name] = discriminantValue
+		for i, field := range variant.Fields {
+			fieldTypes[i] = g.getFieldType(field.Type)
+		}
+
+		// Create the struct type
+		structType := types.NewStruct(fieldTypes...)
+		g.typeMap[typeDecl.Name] = structType
+
+		// Store field names for field access
+		fieldNames := make([]string, len(variant.Fields))
+		for i, field := range variant.Fields {
+			fieldNames[i] = field.Name
+		}
+		g.storeRecordFieldNames(typeDecl.Name, fieldNames)
+	} else if len(typeDecl.Variants) > 1 {
+		// This is a discriminated union with multiple variants
+		g.declareDiscriminatedUnion(typeDecl)
+	} else {
+		// Simple enum (variants without fields)
+		g.typeMap[typeDecl.Name] = types.I64
+
+		// Register each variant as a constant with a discriminant value
+		for i, variant := range typeDecl.Variants {
+			discriminantValue := int64(i)
+			g.unionVariants[variant.Name] = discriminantValue
+		}
 	}
+}
+
+// declareDiscriminatedUnion creates a tagged union structure for discriminated unions
+func (g *LLVMGenerator) declareDiscriminatedUnion(typeDecl *ast.TypeDeclaration) {
+	// For discriminated unions, we need to create:
+	// struct { i8 tag, [largest_variant_size x i8] data }
+
+	// Find the largest variant data size
+	maxDataSize := int64(0)
+	hasFieldVariants := false
+
+	for _, variant := range typeDecl.Variants {
+		if len(variant.Fields) > 0 {
+			hasFieldVariants = true
+			// Calculate size needed for this variant's fields
+			variantSize := int64(0)
+			for _, field := range variant.Fields {
+				fieldType := g.getFieldType(field.Type)
+				switch fieldType {
+				case types.I64:
+					variantSize += 8
+				case types.I8Ptr:
+					variantSize += 8 // pointer size
+				case types.I1:
+					variantSize += 1
+				default:
+					variantSize += 8 // default to 8 bytes
+				}
+			}
+			if variantSize > maxDataSize {
+				maxDataSize = variantSize
+			}
+		}
+	}
+
+	if !hasFieldVariants {
+		// If no variants have fields, treat as simple enum
+		g.typeMap[typeDecl.Name] = types.I64
+		for i, variant := range typeDecl.Variants {
+			g.unionVariants[variant.Name] = int64(i)
+		}
+		return
+	}
+
+	// Create tagged union: struct { i8 tag, [maxDataSize x i8] data }
+	tagType := types.I8
+	dataType := types.NewArray(uint64(maxDataSize), types.I8)
+	unionType := types.NewStruct(tagType, dataType)
+
+	g.typeMap[typeDecl.Name] = unionType
+
+	// Store variant information for construction and pattern matching
+	for i, variant := range typeDecl.Variants {
+		g.unionVariants[variant.Name] = int64(i)
+		// Store variant field information
+		if len(variant.Fields) > 0 {
+			fieldNames := make([]string, len(variant.Fields))
+			for j, field := range variant.Fields {
+				fieldNames[j] = field.Name
+			}
+			g.storeVariantFieldNames(typeDecl.Name, variant.Name, fieldNames)
+		}
+	}
+}
+
+// storeVariantFieldNames stores field names for discriminated union variants
+func (g *LLVMGenerator) storeVariantFieldNames(typeName, variantName string, fieldNames []string) {
+	key := typeName + "_" + variantName + "_fields"
+	g.functionParameters[key] = fieldNames
+}
+
+// getVariantFieldNames retrieves field names for a specific variant
+func (g *LLVMGenerator) getVariantFieldNames(typeName, variantName string) ([]string, bool) {
+	key := typeName + "_" + variantName + "_fields"
+	fieldNames, exists := g.functionParameters[key]
+	return fieldNames, exists
 }
 
 // CheckProtectedFunction checks if a function name is protected (built-in).
@@ -289,4 +389,48 @@ func (g *LLVMGenerator) setParameterTypesForAnalysis(fnDecl *ast.FunctionDeclara
 // clearParameterTypesForAnalysis clears temporary parameter types after analysis.
 func (g *LLVMGenerator) clearParameterTypesForAnalysis() {
 	g.currentFunctionParameterTypes = nil
+}
+
+// getFieldType converts an Osprey field type to LLVM type
+func (g *LLVMGenerator) getFieldType(fieldType string) types.Type {
+	switch fieldType {
+	case "Int":
+		return types.I64
+	case "String":
+		return types.I8Ptr
+	case "Bool":
+		return types.I1
+	default:
+		// Check if it's a user-defined type
+		if llvmType, exists := g.typeMap[fieldType]; exists {
+			return llvmType
+		}
+		// Default to i64 for unknown types
+		return types.I64
+	}
+}
+
+// storeRecordFieldNames stores field names for record types to enable field access
+func (g *LLVMGenerator) storeRecordFieldNames(typeName string, fieldNames []string) {
+	// For now, store in the existing functionParameters map with a special key
+	// In a full implementation, you'd have a dedicated recordFields map
+	g.functionParameters[typeName+"_fields"] = fieldNames
+}
+
+// getRecordFieldNames retrieves field names for a record type
+func (g *LLVMGenerator) getRecordFieldNames(typeName string) ([]string, bool) {
+	fieldNames, exists := g.functionParameters[typeName+"_fields"]
+	return fieldNames, exists
+}
+
+// findFieldIndex finds the index of a field in a record type
+func (g *LLVMGenerator) findFieldIndex(typeName, fieldName string) int {
+	if fieldNames, exists := g.getRecordFieldNames(typeName); exists {
+		for i, name := range fieldNames {
+			if name == fieldName {
+				return i
+			}
+		}
+	}
+	return -1
 }
