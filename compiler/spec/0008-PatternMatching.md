@@ -209,3 +209,53 @@ match step1 {
 ```
 
 ## 8.6 Match Expression Type Safety Rules
+
+```
+
+## 8.7 Ternary Match Expression (Syntactic Sugar)
+
+To reduce verbosity for common two-armed match scenarios, Osprey provides a concise ternary match expression. This is **purely syntactic sugar** and desugars to a standard `match` expression internally.
+
+**Syntax:**
+`<expression> { <pattern> } ? <then_expr> : <else_expr>`
+
+This is exactly equivalent to:
+```osprey
+match <expression> {
+    { <pattern> } => <then_expr>
+    _ => <else_expr>
+}
+```
+
+### Breakdown
+
+- **`<expression>`**: The value to be matched.
+- **`{ <pattern> }`**: A structural pattern to match against the expression. This can be used for destructuring.
+- **`? <then_expr>`**: The expression to evaluate if the pattern matches.
+- **`: <else_expr>`**: The expression to evaluate if the pattern does not match.
+
+### Examples
+
+**Example 1: Handling a `Result` Type**
+
+Given the type: `type Result = Success { value: String } | Error`
+
+The ternary match provides a clean way to extract a value or provide a default.
+
+```osprey
+let myResult = Success { value: "It worked" }
+
+// Extracts "It worked" using the ternary match
+let message = myResult { value } ? value : "An unknown error occurred"
+// message is now "It worked"
+```
+
+**Example 2: Handling Booleans**
+
+The ternary match can also work with boolean values by matching on the implicit structure of a `true` value.
+
+```osprey
+let is_active = true
+let status_text = is_active ? "Active" : "Inactive"
+// status_text is now "Active"
+```

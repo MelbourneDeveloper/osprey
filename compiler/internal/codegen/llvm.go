@@ -14,37 +14,60 @@ import (
 	"github.com/christianfindlay/osprey/internal/ast"
 )
 
+// Constants for type sizes and arrays (shared with expression_generation.go)
+const (
+	LargeArraySizeForCasting = 1000 // Large array size for type casting operations
+)
+
 func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (value.Value, error) {
-	// Handle function calls
+	// Get function name if it's an identifier
+	var funcName string
 	if ident, ok := callExpr.Function.(*ast.Identifier); ok {
-		// DEBUG: Add logging to understand what's failing
+		funcName = ident.Name
 
-		// Handle built-in functions
-		if result, err := g.handleBuiltInFunction(ident.Name, callExpr); result != nil || err != nil {
-
+		// First check if this is a built-in function
+		if result, err := g.handleBuiltInFunction(funcName, callExpr); result != nil || err != nil {
 			return result, err
 		}
-
-		// Handle user-defined functions
-		if fn, exists := g.functions[ident.Name]; exists {
-
-			return g.generateUserFunctionCall(ident.Name, fn, callExpr)
-		}
-
-		// NEW: Handle function composition - calling a function stored in a variable
-		// This enables function composition by allowing calls to function references
-		if varValue, exists := g.variables[ident.Name]; exists {
-			// Check if this variable contains a function reference
-			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeFunction {
-				// This is a function stored in a function type variable - enable function composition
-
-				return g.generateFunctionCompositionCall(ident.Name, varValue, callExpr)
-			}
-		}
-
 	}
 
-	return nil, ErrUnsupportedCall
+	// Not a built-in function, generate the function value
+	funcValue, err := g.generateExpression(callExpr.Function)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate arguments
+	var args []value.Value
+	if len(callExpr.NamedArguments) > 0 {
+		// Handle named arguments
+		reorderedExprs, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
+		if err != nil {
+			return nil, err
+		}
+		// Convert expressions to values
+		args = make([]value.Value, len(reorderedExprs))
+		for i, expr := range reorderedExprs {
+			val, err := g.generateExpression(expr)
+			if err != nil {
+				return nil, err
+			}
+			args[i] = val
+		}
+	} else {
+		// Handle regular arguments
+		args = make([]value.Value, len(callExpr.Arguments))
+		for i, arg := range callExpr.Arguments {
+			val, err := g.generateExpression(arg)
+			if err != nil {
+				return nil, err
+			}
+			args[i] = val
+		}
+	}
+
+	// Create the function call
+	return g.builder.NewCall(funcValue, args...), nil
 }
 
 // handleBuiltInFunction handles all built-in function calls.
@@ -54,21 +77,43 @@ func (g *LLVMGenerator) handleBuiltInFunction(name string, callExpr *ast.CallExp
 		return result, err
 	}
 
-	// Try HTTP functions only if allowed by security policy
-	if g.security.AllowHTTP {
-		if result, err := g.handleHTTPFunctions(name, callExpr); result != nil || err != nil {
-			return result, err
+	// Check if this is an HTTP function
+	httpFunctions := []string{
+		"httpCreateServer", "httpListen", "httpStopServer",
+		"httpCreateClient", "httpGet", "httpPost", "httpPut",
+		"httpDelete", "httpRequest", "httpCloseClient",
+	}
+	for _, httpFunc := range httpFunctions {
+		if name == httpFunc {
+			if !g.security.AllowHTTP {
+				return nil, WrapUnsupportedCallExpressionSecurity(name)
+			}
+			// Function is allowed, try to handle it
+			if result, err := g.handleHTTPFunctions(name, callExpr); result != nil || err != nil {
+				return result, err
+			}
 		}
 	}
 
-	// Try WebSocket functions only if allowed by security policy
-	if g.security.AllowWebSocket {
-		if result, err := g.handleWebSocketFunctions(name, callExpr); result != nil || err != nil {
-			return result, err
+	// Check if this is a WebSocket function
+	webSocketFunctions := []string{
+		"websocketConnect", "websocketSend", "websocketClose",
+		"websocketCreateServer", "websocketServerListen",
+		"websocketServerSend", "websocketServerBroadcast", "websocketStopServer",
+	}
+	for _, wsFunc := range webSocketFunctions {
+		if name == wsFunc {
+			if !g.security.AllowWebSocket {
+				return nil, WrapUnsupportedCallExpressionSecurity(name)
+			}
+			// Function is allowed, try to handle it
+			if result, err := g.handleWebSocketFunctions(name, callExpr); result != nil || err != nil {
+				return result, err
+			}
 		}
 	}
 
-	// Not a built-in function or not allowed by security policy
+	// Not a built-in function
 	return nil, nil
 }
 
@@ -209,88 +254,6 @@ func (g *LLVMGenerator) handleWebSocketFunctions(name string, callExpr *ast.Call
 	}
 }
 
-// generateUserFunctionCall handles user-defined function calls.
-func (g *LLVMGenerator) generateUserFunctionCall(
-	funcName string,
-	fn *ir.Func,
-	callExpr *ast.CallExpression,
-) (value.Value, error) {
-	// VALIDATION: Multi-parameter functions require named arguments
-	if len(fn.Params) > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
-		return nil, WrapFunctionRequiresNamedWithPos(
-			funcName, len(fn.Params), g.generateNamedArgsSuggestion(funcName), callExpr.Position)
-	}
-
-	// Generate arguments for the function call
-	args, err := g.generateFunctionCallArguments(funcName, fn, callExpr)
-	if err != nil {
-		return nil, err
-	}
-
-	// Call the function directly and store the result
-	result := g.builder.NewCall(fn, args...)
-
-	return result, nil
-}
-
-// generateNamedArgsSuggestion generates a helpful suggestion for named arguments.
-func (g *LLVMGenerator) generateNamedArgsSuggestion(funcName string) string {
-	if paramNames, exists := g.functionParameters[funcName]; exists {
-		suggestions := make([]string, len(paramNames))
-		for i, paramName := range paramNames {
-			suggestions[i] = paramName + ": value"
-		}
-		return strings.Join(suggestions, ", ")
-	}
-	return "param1: value, param2: value"
-}
-
-// generateFunctionCompositionCall handles calling a function stored in a variable (function composition)
-func (g *LLVMGenerator) generateFunctionCompositionCall(
-	_ string, // varName is unused but kept for interface consistency
-	functionRef value.Value,
-	callExpr *ast.CallExpression,
-) (value.Value, error) {
-	// For function composition, we assume the function reference stored in the function variable
-	// is actually a pointer to a real function. At runtime, we need to call it.
-
-	// Since functions are stored as function pointers when passed as arguments,
-	// we can directly call the function reference
-
-	// Generate arguments for the function call
-	args := make([]value.Value, len(callExpr.Arguments))
-	for i, arg := range callExpr.Arguments {
-		val, err := g.generateExpression(arg)
-		if err != nil {
-			return nil, err
-		}
-		args[i] = val
-	}
-
-	// Handle named arguments (convert to positional for the underlying function call)
-	if len(callExpr.NamedArguments) > 0 {
-		// For function composition, we'll treat named arguments as positional for simplicity
-		// This is a limitation but works for basic function composition
-		namedArgs := make([]value.Value, len(callExpr.NamedArguments))
-		for i, namedArg := range callExpr.NamedArguments {
-			val, err := g.generateExpression(namedArg.Value)
-			if err != nil {
-				return nil, err
-			}
-			namedArgs[i] = val
-		}
-		// Use a new slice to avoid makezero linting error
-		allArgs := make([]value.Value, 0, len(args)+len(namedArgs))
-		allArgs = append(allArgs, args...)
-		allArgs = append(allArgs, namedArgs...)
-		args = allArgs
-	}
-
-	// Call the function stored in the variable
-	// The function reference should be a function pointer that we can call directly
-	return g.builder.NewCall(functionRef, args...), nil
-}
-
 // generateInterpolatedString generates LLVM IR for interpolated strings by concatenating parts.
 func (g *LLVMGenerator) generateInterpolatedString(interpStr *ast.InterpolatedStringLiteral) (value.Value, error) {
 	// For now, we'll use a simple approach: build the string by calling printf multiple times
@@ -414,18 +377,18 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 	isTrue := currentBlock.NewICmp(enum.IPredNE, arg, zero)
 	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
 
-	// True case - return "true"
+	// True case - return "1"
 	g.builder = trueBlock
-	trueStr := constant.NewCharArrayFromString(TrueString)
+	trueStr := constant.NewCharArrayFromString("1\x00")
 	trueGlobal := g.module.NewGlobalDef("", trueStr)
 	truePtr := trueBlock.NewGetElementPtr(trueStr.Typ, trueGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
 	trueBlock.NewBr(endBlock)
 
-	// False case - return "false"
+	// False case - return "0"
 	g.builder = falseBlock
-	falseStr := constant.NewCharArrayFromString(FalseString)
+	falseStr := constant.NewCharArrayFromString("0\x00")
 	falseGlobal := g.module.NewGlobalDef("", falseStr)
 	falsePtr := falseBlock.NewGetElementPtr(falseStr.Typ, falseGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
@@ -527,63 +490,140 @@ func (g *LLVMGenerator) generateMatchArmValues(
 		g.builder = armBlocks[i]
 
 		// Handle variable binding in patterns
-		if arm.Pattern.Variable != "" {
-			// Save the current variable scope
-			oldVariables := make(map[string]value.Value)
-			for k, v := range g.variables {
-				oldVariables[k] = v
-			}
-
-			// Bind the pattern variable to the discriminant value
-			g.variables[arm.Pattern.Variable] = discriminant
-
-			// Generate the arm expression
-			armValue, err := g.generateExpression(arm.Expression)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// Restore the previous variable scope
-			g.variables = oldVariables
-
-			// CRITICAL FIX: Handle Unit expressions in match arms
-			// If the expression returns Unit, use void type
-			if armValue == nil || armValue.Type() == types.Void {
-				armValue = constant.NewUndef(types.Void)
-			}
-
-			armValues = append(armValues, armValue)
-		} else {
-			// No variable binding, generate normally
-			armValue, err := g.generateExpression(arm.Expression)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// CRITICAL FIX: Handle Unit expressions in match arms
-			// If the expression returns Unit, use void type
-			if armValue == nil || armValue.Type() == types.Void {
-				armValue = constant.NewUndef(types.Void)
-			}
-
-			armValues = append(armValues, armValue)
+		armValue, err := g.processMatchArm(arm, discriminant)
+		if err != nil {
+			return nil, nil, err
 		}
 
-		// TODO: FIX THIS! DON'T IGNORE IT!!
-		// CRITICAL FIX: After generating the expression (which might be a nested match),
-		// the builder might be pointing to a different block. We need to ensure the
-		// branch comes from the current builder block (where the expression ended),
-		// but ONLY if that block doesn't already have a terminator.
-		currentBuilderBlock := g.builder
+		armValues = append(armValues, armValue)
 
-		// Check if the current block already has a terminator instruction
-		if currentBuilderBlock.Term == nil {
-			currentBuilderBlock.NewBr(endBlock)
-		}
+		// Handle branch termination
+		currentBuilderBlock := g.addBranchTermination(endBlock)
 		predecessorBlocks = append(predecessorBlocks, currentBuilderBlock)
 	}
 
 	return armValues, predecessorBlocks, nil
+}
+
+// processMatchArm handles the processing of a single match arm
+func (g *LLVMGenerator) processMatchArm(arm ast.MatchArm, discriminant value.Value) (value.Value, error) {
+	if arm.Pattern.Variable != "" || len(arm.Pattern.Fields) > 0 {
+		return g.processMatchArmWithBinding(arm, discriminant)
+	}
+	return g.processMatchArmWithoutBinding(arm)
+}
+
+// processMatchArmWithBinding handles match arms that have variable binding
+func (g *LLVMGenerator) processMatchArmWithBinding(arm ast.MatchArm, discriminant value.Value) (value.Value, error) {
+	// Save the current variable scope
+	oldVariables := g.saveVariableScope()
+
+	// Bind the pattern variable to the discriminant value
+	if arm.Pattern.Variable != "" {
+		g.variables[arm.Pattern.Variable] = discriminant
+	}
+
+	// Handle field extraction for structural matching and discriminated unions
+	if len(arm.Pattern.Fields) > 0 {
+		g.extractPatternFields(arm.Pattern, discriminant)
+	}
+
+	// Generate the arm expression
+	armValue, err := g.generateExpression(arm.Expression)
+	if err != nil {
+		g.restoreVariableScope(oldVariables)
+		return nil, err
+	}
+
+	// Restore the previous variable scope
+	g.restoreVariableScope(oldVariables)
+
+	return g.normalizeArmValue(armValue), nil
+}
+
+// processMatchArmWithoutBinding handles match arms without variable binding
+func (g *LLVMGenerator) processMatchArmWithoutBinding(arm ast.MatchArm) (value.Value, error) {
+	armValue, err := g.generateExpression(arm.Expression)
+	if err != nil {
+		return nil, err
+	}
+
+	return g.normalizeArmValue(armValue), nil
+}
+
+// saveVariableScope saves the current variable scope
+func (g *LLVMGenerator) saveVariableScope() map[string]value.Value {
+	oldVariables := make(map[string]value.Value)
+	for k, v := range g.variables {
+		oldVariables[k] = v
+	}
+	return oldVariables
+}
+
+// restoreVariableScope restores a saved variable scope
+func (g *LLVMGenerator) restoreVariableScope(oldVariables map[string]value.Value) {
+	g.variables = oldVariables
+}
+
+// extractPatternFields handles field extraction for patterns
+func (g *LLVMGenerator) extractPatternFields(pattern ast.Pattern, discriminant value.Value) {
+	if pattern.Constructor == "*" {
+		// For structural matching, extract fields from the object
+		g.extractStructuralFields(pattern.Fields, discriminant)
+	} else if _, exists := g.unionVariants[pattern.Constructor]; exists {
+		// FIXED: Handle discriminated union field extraction
+		err := g.extractDiscriminatedUnionFields(discriminant, pattern, g.variables)
+		if err != nil {
+			// If field extraction fails, bind fields to zero values
+			g.bindFieldsToZeroValues(pattern.Fields)
+		}
+	}
+}
+
+// extractStructuralFields extracts fields for structural matching
+func (g *LLVMGenerator) extractStructuralFields(fields []string, discriminant value.Value) {
+	for _, fieldName := range fields {
+		// Extract the actual field value from the object
+		fieldValue, err := g.extractFieldFromObject(discriminant, fieldName)
+		if err != nil {
+			// If field extraction fails, bind to null/zero value
+			fieldValue = constant.NewNull(types.I8Ptr)
+		}
+		g.variables[fieldName] = fieldValue
+	}
+}
+
+// bindFieldsToZeroValues binds pattern fields to zero values when extraction fails
+func (g *LLVMGenerator) bindFieldsToZeroValues(fields []string) {
+	for _, fieldName := range fields {
+		g.variables[fieldName] = constant.NewInt(types.I64, 0)
+	}
+}
+
+// normalizeArmValue handles Unit expressions in match arms
+func (g *LLVMGenerator) normalizeArmValue(armValue value.Value) value.Value {
+	// CRITICAL FIX: Handle Unit expressions in match arms
+	// If the expression returns Unit, use void type
+	if armValue == nil || armValue.Type() == types.Void {
+		armValue = constant.NewUndef(types.Void)
+	}
+	return armValue
+}
+
+// addBranchTermination ensures proper branch termination for match arms
+func (g *LLVMGenerator) addBranchTermination(endBlock *ir.Block) *ir.Block {
+	// TODO: FIX THIS! DON'T IGNORE IT!!
+	// CRITICAL FIX: After generating the expression (which might be a nested match),
+	// the builder might be pointing to a different block. We need to ensure the
+	// branch comes from the current builder block (where the expression ended),
+	// but ONLY if that block doesn't already have a terminator.
+	currentBuilderBlock := g.builder
+
+	// Check if the current block already has a terminator instruction
+	if currentBuilderBlock.Term == nil {
+		currentBuilderBlock.NewBr(endBlock)
+	}
+	return currentBuilderBlock
 }
 
 // generateMatchConditions generates the conditional branches for pattern matching.
@@ -620,15 +660,54 @@ func (g *LLVMGenerator) createPatternCondition(
 		return constant.NewBool(true)
 	}
 
+	// Handle structural matching (any constructor with field extraction)
+	if pattern.Constructor == "*" {
+		// For structural matching, we assume the pattern always matches for now
+		// Real field checking would require runtime type information
+		// But we need to extract and bind the field values when this pattern is used
+		return constant.NewBool(true)
+	}
+
 	// Handle variable binding patterns (empty constructor means variable binding)
 	if pattern.Constructor == "" && pattern.Variable != "" {
 		return constant.NewBool(true)
 	}
 
+	// Handle boolean patterns for ternary expressions
+	if pattern.Constructor == "true" {
+		// Check if discriminant is true (non-zero)
+		zero := constant.NewInt(types.I64, 0)
+		return currentBlock.NewICmp(enum.IPredNE, discriminant, zero)
+	}
+
+	if pattern.Constructor == "false" {
+		// Check if discriminant is false (zero)
+		zero := constant.NewInt(types.I64, 0)
+		return currentBlock.NewICmp(enum.IPredEQ, discriminant, zero)
+	}
+
 	// Check if it's a union type variant
 	if discriminantValue, exists := g.unionVariants[pattern.Constructor]; exists {
-		patternConst := constant.NewInt(types.I64, discriminantValue)
+		// FIXED: Handle both simple enums and discriminated unions
+		discriminantType := discriminant.Type()
 
+		// Check if this is a tagged union (pointer to struct with tag + data)
+		if ptrType, ok := discriminantType.(*types.PointerType); ok {
+			if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == 2 {
+				// This is a discriminated union - extract tag field (index 0)
+				tagPtr := currentBlock.NewGetElementPtr(structType, discriminant,
+					constant.NewInt(types.I32, 0), // struct index
+					constant.NewInt(types.I32, 0)) // tag field index
+				tagValue := currentBlock.NewLoad(types.I8, tagPtr)
+
+				// Convert discriminant value to i8 for comparison
+				patternConst := constant.NewInt(types.I8, discriminantValue)
+				return currentBlock.NewICmp(enum.IPredEQ, tagValue, patternConst)
+			}
+		}
+
+		// Fallback: simple enum discriminant (i64)
+		patternConst := constant.NewInt(types.I64, discriminantValue)
 		return currentBlock.NewICmp(enum.IPredEQ, discriminant, patternConst)
 	}
 
@@ -640,6 +719,150 @@ func (g *LLVMGenerator) createPatternCondition(
 	}
 
 	return g.createStringPatternCondition(pattern.Constructor, discriminant, currentBlock)
+}
+
+// extractFieldFromObject extracts a field value from an object literal
+func (g *LLVMGenerator) extractFieldFromObject(objectValue value.Value, fieldName string) (value.Value, error) {
+	// Check if this is a pointer to a struct
+	objectType := objectValue.Type()
+	var structType *types.StructType
+	var isPointer bool
+
+	if ptrType, ok := objectType.(*types.PointerType); ok {
+		if st, ok := ptrType.ElemType.(*types.StructType); ok {
+			structType = st
+			isPointer = true
+		}
+	} else if st, ok := objectType.(*types.StructType); ok {
+		structType = st
+		isPointer = false
+	}
+
+	if structType == nil {
+		// If not a struct, we can't extract fields
+		return nil, fmt.Errorf("%w: %s", ErrCannotExtractField, fieldName)
+	}
+
+	// For now, assume the first field contains the value we want
+	// In a real implementation, we'd need to map field names to indices
+	fieldIndex := 0
+
+	// Get pointer to the field
+	var fieldPtr value.Value
+	if isPointer {
+		// Object is already a pointer to the struct
+		fieldPtr = g.builder.NewGetElementPtr(
+			structType,
+			objectValue,
+			constant.NewInt(types.I32, 0),
+			constant.NewInt(types.I32, int64(fieldIndex)),
+		)
+	} else {
+		// Object is a struct value, need to get its address first
+		structAddr := g.builder.NewAlloca(structType)
+		g.builder.NewStore(objectValue, structAddr)
+		fieldPtr = g.builder.NewGetElementPtr(
+			structType,
+			structAddr,
+			constant.NewInt(types.I32, 0),
+			constant.NewInt(types.I32, int64(fieldIndex)),
+		)
+	}
+
+	// Load the field value
+	fieldType := structType.Fields[fieldIndex]
+	fieldValue := g.builder.NewLoad(fieldType, fieldPtr)
+
+	return fieldValue, nil
+}
+
+// extractDiscriminatedUnionFields extracts field values from a discriminated union variant
+func (g *LLVMGenerator) extractDiscriminatedUnionFields(
+	discriminant value.Value,
+	pattern ast.Pattern,
+	variables map[string]value.Value,
+) error {
+	// Check if this is a tagged union (pointer to struct with tag + data)
+	discriminantType := discriminant.Type()
+	ptrType, ok := discriminantType.(*types.PointerType)
+	if !ok {
+		return ErrDiscriminantNotPointer
+	}
+
+	structType, ok := ptrType.ElemType.(*types.StructType)
+	if !ok || len(structType.Fields) != 2 {
+		return ErrDiscriminantNotTaggedUnion
+	}
+
+	// Get pointer to the data area (second field in the tagged union)
+	dataPtr := g.builder.NewGetElementPtr(structType, discriminant,
+		constant.NewInt(types.I32, 0), // struct index
+		constant.NewInt(types.I32, 1)) // data field index
+
+	// Find the union type and variant information
+	var variant *ast.TypeVariant
+
+	// Find which union type this discriminant belongs to
+	for _, typeDecl := range g.typeDeclarations {
+		if len(typeDecl.Variants) > 1 {
+			// Check if this pattern constructor matches any variant
+			for _, v := range typeDecl.Variants {
+				if v.Name == pattern.Constructor {
+					variant = &v
+					break
+				}
+			}
+			if variant != nil {
+				break
+			}
+		}
+	}
+
+	if variant == nil {
+		return fmt.Errorf("%w: %s", ErrVariantNotFound, pattern.Constructor)
+	}
+
+	// Extract each field from the data area
+	offset := int64(0)
+	for _, field := range variant.Fields {
+		// Check if this field is requested in the pattern
+		fieldRequested := false
+		for _, patternField := range pattern.Fields {
+			if patternField == field.Name {
+				fieldRequested = true
+				break
+			}
+		}
+
+		if fieldRequested {
+			// Get the field type and calculate its size
+			fieldType := g.getFieldType(field.Type)
+
+			// Cast data array to appropriate pointer type for this field
+			fieldPtr := g.builder.NewBitCast(
+				g.builder.NewGetElementPtr(
+					types.NewArray(uint64(LargeArraySizeForCasting), types.I8), // Use large array for casting
+					dataPtr,
+					constant.NewInt(types.I32, 0),      // array index
+					constant.NewInt(types.I32, offset), // byte offset
+				),
+				types.NewPointer(fieldType),
+			)
+
+			// Load the field value
+			fieldValue := g.builder.NewLoad(fieldType, fieldPtr)
+
+			// Bind the field value to the pattern variable
+			variables[field.Name] = fieldValue
+			// Type tracking is now handled by Hindley-Milner inference
+		}
+
+		// Move to next field offset regardless of whether it was requested
+		fieldSize := g.getTypeSize(g.getFieldType(field.Type))
+		offset += fieldSize
+	}
+
+	return nil
 }
 
 // createStringPatternCondition creates a condition for string pattern matching.
@@ -1085,45 +1308,4 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 	phi := blocks.End.NewPhi(validPredecessors...)
 
 	return phi, nil
-}
-
-// generateFunctionCallArguments generates arguments for function calls, handling both named and positional arguments
-func (g *LLVMGenerator) generateFunctionCallArguments(
-	funcName string,
-	_ *ir.Func,
-	callExpr *ast.CallExpression,
-) ([]value.Value, error) {
-	// Handle named arguments vs positional arguments
-	if len(callExpr.NamedArguments) > 0 {
-		// Named arguments - need to reorder them to match function signature
-		return g.reorderNamedArguments(funcName, callExpr.NamedArguments)
-	}
-
-	// Positional arguments (traditional)
-	args := make([]value.Value, len(callExpr.Arguments))
-
-	for i, arg := range callExpr.Arguments {
-		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
-		// This preserves type safety while allowing function composition
-		paramName := "unknown" // We don't have parameter names for positional args
-
-		// Extract position from the argument (simple version)
-		var pos *ast.Position
-		if ident, ok := arg.(*ast.Identifier); ok {
-			pos = ident.Position
-		}
-
-		if err := g.validateFunctionArgument(arg, funcName, paramName, pos); err != nil {
-			return nil, err
-		}
-
-		val, err := g.generateExpression(arg)
-		if err != nil {
-			return nil, err
-		}
-
-		args[i] = val
-	}
-
-	return args, nil
 }

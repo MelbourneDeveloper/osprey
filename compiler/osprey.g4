@@ -87,7 +87,7 @@ expr
     ;
 
 matchExpr
-    : MATCH expr LBRACE matchArm+ RBRACE
+    : MATCH binaryExpr LBRACE matchArm+ RBRACE
     | selectExpr
     | binaryExpr
     ;
@@ -104,8 +104,16 @@ selectArm
     ;
 
 binaryExpr
-    : comparisonExpr
+    : ternaryExpr
     ;
+
+ternaryExpr
+    : cond=comparisonExpr LBRACE pat=fieldPattern RBRACE QUESTION thenExpr=ternaryExpr COLON elseExpr=ternaryExpr    // expr { pattern } ? then : else
+    | comparisonExpr QUESTION thenExpr=ternaryExpr COLON elseExpr=ternaryExpr                                        // expr ? then : else
+    | comparisonExpr
+    ;
+
+
 
 comparisonExpr
     : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP) addExpr)*
@@ -157,12 +165,18 @@ primary
     | handlerExpr                                 // handle EffectName ... in expr
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
+    | objectLiteral                               // Anonymous object literal { field: value }
     | blockExpr                                   // Block expressions
     | literal                                     // String, number, boolean literals
     | lambdaExpr                                  // Lambda expressions
     | ID LSQUARE INT RSQUARE                      // List access: list[0] -> Result<T, IndexError>
     | ID                                          // Variable reference
     | LPAREN expr RPAREN                          // Parenthesized expression
+    ;
+
+// Anonymous object literal: { field: value, field2: value2 }
+objectLiteral
+    : LBRACE fieldAssignments RBRACE
     ;
 
 // Type construction for Fiber<T> { ... } and Channel<T> { ... }
@@ -203,7 +217,8 @@ literal
     | INTERPOLATED_STRING
     | TRUE
     | FALSE
-    | listLiteral ;
+    | listLiteral
+    ;
 
 listLiteral
     : LSQUARE (expr (COMMA expr)*)? RSQUARE ;
@@ -303,6 +318,7 @@ LBRACE      : '{';
 RBRACE      : '}';
 LSQUARE     : '[';
 RSQUARE     : ']';
+QUESTION    : '?';
 
 PLUS        : '+';
 MINUS       : '-';

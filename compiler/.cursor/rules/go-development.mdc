@@ -1,17 +1,16 @@
 ---
-description: 
-globs: 
+description: main rules for all compiler development
 alwaysApply: true
 ---
 # Go Development Rules
 
 - **ALWAYS RUN make clean & make build * make test AFTER MAKING CHANGES** You are not finished until this passes. Do not stop unti passing
-- **TESTS MUST EXPECT THE CORRECT OUTPUT** - never set expected output to get tests passing without the osprey program working correctly
-- **INSTALL THE COMPILER** - run make install to update teh compiler on the machine, which should fix vscode .osp problems
-- **PREFER PURE FUNCTIONS OVER METHODS** - Use functions unless receiver state is needed. Avoid side effects where practical (except for compiler performance)
-- **EXPLICIT ERROR HANDLING** - Check all errors, return early on failures
-- **KEEP FILES UNDER 500 LOC** - break files up when they get too big
-- **Less curly braces and semicolons** - more ML style
+- **Test MUST expect the CORRECT output** - never set expected output to get tests passing without the osprey program working correctly
+- **Install the compiler** - run make install to update the compiler on the machine, which should fix vscode .osp problems
+- **Never use literals** - always use constants
+- **Prefer pure functions over methods** - Use functions unless receiver state is needed. Avoid side effects where practical (except for compiler performance)
+- **Explicit error handling** - Check all errors, return early on failures
+- **ALWAYS break up files when they go over 500 LOC** - move functions into smaller files
 - **GODOC COMMENTS** - All exported functions need documentation starting with function name
 - **NO POINTLESS ASSIGNMENTS**
 

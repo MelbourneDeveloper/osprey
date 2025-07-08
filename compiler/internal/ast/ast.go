@@ -444,6 +444,16 @@ type ListLiteral struct {
 
 func (l *ListLiteral) isExpression() {}
 
+// ObjectLiteral represents an object literal like { field: value }.
+type ObjectLiteral struct {
+	Fields map[string]Expression
+
+	// Position information
+	Position *Position
+}
+
+func (o *ObjectLiteral) isExpression() {}
+
 // ListAccessExpression represents safe list access like list[0] -> Result<T, IndexError>.
 type ListAccessExpression struct {
 	List  Expression

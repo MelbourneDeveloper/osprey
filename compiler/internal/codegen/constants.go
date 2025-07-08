@@ -128,11 +128,3 @@ const (
 	HTTPErrorParse      = -4
 	HTTPErrorServer     = -5
 )
-
-// Any type validation operation types.
-const (
-	AnyOpArithmetic       = "arithmetic"
-	AnyOpFieldAccess      = "field_access"
-	AnyOpFunctionArgument = "function_argument"
-	AnyOpVariableAccess   = "variable_access"
-)

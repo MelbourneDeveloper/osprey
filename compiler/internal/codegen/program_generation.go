@@ -16,6 +16,9 @@ func (g *LLVMGenerator) GenerateProgram(program *ast.Program) (*ir.Module, error
 		return nil, err
 	}
 
+	// CRITICAL: Resolve all type variables before code generation
+	g.typeInferer.ResolveAllEnvironmentTypes()
+
 	// Create main function
 	err = g.createMainFunction(mainFunc, topLevelStatements)
 	if err != nil {

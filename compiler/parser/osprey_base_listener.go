@@ -248,6 +248,12 @@ func (s *BaseospreyListener) EnterBinaryExpr(ctx *BinaryExprContext) {}
 // ExitBinaryExpr is called when production binaryExpr is exited.
 func (s *BaseospreyListener) ExitBinaryExpr(ctx *BinaryExprContext) {}
 
+// EnterTernaryExpr is called when production ternaryExpr is entered.
+func (s *BaseospreyListener) EnterTernaryExpr(ctx *TernaryExprContext) {}
+
+// ExitTernaryExpr is called when production ternaryExpr is exited.
+func (s *BaseospreyListener) ExitTernaryExpr(ctx *TernaryExprContext) {}
+
 // EnterComparisonExpr is called when production comparisonExpr is entered.
 func (s *BaseospreyListener) EnterComparisonExpr(ctx *ComparisonExprContext) {}
 
@@ -307,6 +313,12 @@ func (s *BaseospreyListener) EnterPrimary(ctx *PrimaryContext) {}
 
 // ExitPrimary is called when production primary is exited.
 func (s *BaseospreyListener) ExitPrimary(ctx *PrimaryContext) {}
+
+// EnterObjectLiteral is called when production objectLiteral is entered.
+func (s *BaseospreyListener) EnterObjectLiteral(ctx *ObjectLiteralContext) {}
+
+// ExitObjectLiteral is called when production objectLiteral is exited.
+func (s *BaseospreyListener) ExitObjectLiteral(ctx *ObjectLiteralContext) {}
 
 // EnterTypeConstructor is called when production typeConstructor is entered.
 func (s *BaseospreyListener) EnterTypeConstructor(ctx *TypeConstructorContext) {}

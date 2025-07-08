@@ -205,8 +205,8 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 		},
 		"substring": {
 			Name:        "substring",
-			Signature:   "substring(s: string, start: int, end: int) -> string",
-			Description: "Extracts a substring from start to end index.",
+			Signature:   "substring(s: string, start: int, end: int) -> Result<string, Error>",
+			Description: "Extracts a substring from start to end index, or returns an error if indices are invalid.",
 			Parameters: []ParameterDesc{
 				{
 					Name:        "s",
@@ -224,8 +224,8 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 					Description: "Ending index (exclusive)",
 				},
 			},
-			ReturnType: "string",
-			Example:    `let sub = substring("hello", 1, 4)\nprint(sub)  // Prints: ell`,
+			ReturnType: "Result<string, Error>",
+			Example:    `let sub = substring("hello", 1, 4)\nprint(sub)  // Prints: Result containing "ell"`,
 		},
 
 		// === CORE SYSTEM FUNCTIONS ===
@@ -310,7 +310,7 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 		},
 		"writeFile": {
 			Name:        "writeFile",
-			Signature:   "writeFile(filename: string, content: string) -> Result<Success, string>",
+			Signature:   "writeFile(filename: string, content: string) -> Result<Unit, Error>",
 			Description: "Writes content to a file. Creates the file if it doesn't exist.",
 			Parameters: []ParameterDesc{
 				{
@@ -324,12 +324,12 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 					Description: "Content to write to the file",
 				},
 			},
-			ReturnType: "Result<Success, string>",
+			ReturnType: "Result<Unit, Error>",
 			Example:    `let result = writeFile("output.txt", "Hello, World!")\nprint("File written")`,
 		},
 		"readFile": {
 			Name:        "readFile",
-			Signature:   "readFile(filename: string) -> Result<string, string>",
+			Signature:   "readFile(filename: string) -> Result<string, Error>",
 			Description: "Reads the entire contents of a file as a string.",
 			Parameters: []ParameterDesc{
 				{
@@ -338,7 +338,7 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 					Description: "Path to the file to read",
 				},
 			},
-			ReturnType: "Result<string, string>",
+			ReturnType: "Result<string, Error>",
 			Example:    `let content = readFile("input.txt")\nprint("File read")`,
 		},
 

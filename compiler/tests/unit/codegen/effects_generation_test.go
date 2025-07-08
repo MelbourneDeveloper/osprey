@@ -13,7 +13,7 @@ func TestGenerateEffectDeclaration_NoMalformedLLVM(t *testing.T) {
 	generator := codegen.NewLLVMGenerator()
 
 	// Create a simple effect declaration like: effect Logger { log: fn(string) -> Unit }
-	effect := &ast.EffectDeclaration{
+	effectDecl := &ast.EffectDeclaration{
 		Name: "Logger",
 		Operations: []ast.EffectOperation{
 			{
@@ -21,7 +21,7 @@ func TestGenerateEffectDeclaration_NoMalformedLLVM(t *testing.T) {
 				Parameters: []ast.Parameter{
 					{
 						Name: "message",
-						Type: &ast.TypeExpression{Name: "string"},
+						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 				},
 				ReturnType: "Unit",
@@ -30,7 +30,7 @@ func TestGenerateEffectDeclaration_NoMalformedLLVM(t *testing.T) {
 	}
 
 	// Generate the effect declaration
-	err := generator.RegisterEffectDeclaration(effect)
+	err := generator.RegisterEffectDeclaration(effectDecl)
 	if err != nil {
 		t.Fatalf("Failed to register effect declaration: %v", err)
 	}
@@ -76,21 +76,21 @@ func TestGenerateEffectDeclaration_EffectRegistration(t *testing.T) {
 				Parameters: []ast.Parameter{
 					{
 						Name: "path",
-						Type: &ast.TypeExpression{Name: "string"},
+						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 				},
-				ReturnType: "string",
+				ReturnType: codegen.TypeString,
 			},
 			{
 				Name: "write",
 				Parameters: []ast.Parameter{
 					{
 						Name: "path",
-						Type: &ast.TypeExpression{Name: "string"},
+						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 					{
 						Name: "content",
-						Type: &ast.TypeExpression{Name: "string"},
+						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 				},
 				ReturnType: "Unit",
@@ -158,7 +158,7 @@ func TestGenerateEffectDeclaration_MultipleEffects(t *testing.T) {
 				Parameters: []ast.Parameter{
 					{
 						Name: "message",
-						Type: &ast.TypeExpression{Name: "string"},
+						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 				},
 				ReturnType: "Unit",
@@ -172,14 +172,14 @@ func TestGenerateEffectDeclaration_MultipleEffects(t *testing.T) {
 			{
 				Name:       "get",
 				Parameters: []ast.Parameter{},
-				ReturnType: "int",
+				ReturnType: codegen.TypeInt,
 			},
 			{
 				Name: "set",
 				Parameters: []ast.Parameter{
 					{
 						Name: "value",
-						Type: &ast.TypeExpression{Name: "int"},
+						Type: &ast.TypeExpression{Name: codegen.TypeInt},
 					},
 				},
 				ReturnType: "Unit",
@@ -225,14 +225,14 @@ func TestGenerateEffectDeclaration_NoStubGeneration(t *testing.T) {
 				Parameters: []ast.Parameter{
 					{
 						Name: "param1",
-						Type: &ast.TypeExpression{Name: "string"},
+						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 					{
 						Name: "param2",
-						Type: &ast.TypeExpression{Name: "int"},
+						Type: &ast.TypeExpression{Name: codegen.TypeInt},
 					},
 				},
-				ReturnType: "bool",
+				ReturnType: codegen.TypeBool,
 			},
 		},
 	}

@@ -5,6 +5,89 @@ import (
 )
 
 func (b *Builder) buildBinaryExpr(ctx parser.IBinaryExprContext) Expression {
+	return b.buildTernaryExpr(ctx.TernaryExpr())
+}
+
+func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
+	// Check if this is a type pattern ternary ({ type: pattern } expr ? then : else)
+	if ctx.GetTypePattern() != nil {
+		conditionExpr := b.buildComparisonExpr(ctx.GetCond())
+		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
+		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
+		
+		// Convert type pattern to structural pattern
+		pattern := Pattern{
+			Constructor: "",
+			IsWildcard:  false,
+			Fields:      []string{}, // Extract from object literal
+		}
+		
+		thenArm := MatchArm{
+			Pattern:    pattern,
+			Expression: thenExpr,
+		}
+
+		elseArm := MatchArm{
+			Pattern:    Pattern{IsWildcard: true},
+			Expression: elseExpr,
+		}
+
+		return &MatchExpression{
+			Expression: conditionExpr,
+			Arms:       []MatchArm{thenArm, elseArm},
+		}
+	}
+
+	// Check if this is a pattern-based ternary (expr { pattern } ? then : else)
+	if ctx.LBRACE() != nil {
+		conditionExpr := b.buildComparisonExpr(ctx.GetCond())
+		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
+		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
+		
+		// For structural matching, create a pattern that matches any constructor
+		// but extracts the specified fields
+		pattern := b.buildFieldPattern("*", ctx.GetPat()) // "*" means match any structure
+		
+		thenArm := MatchArm{
+			Pattern:    pattern,
+			Expression: thenExpr,
+		}
+
+		elseArm := MatchArm{
+			Pattern:    Pattern{IsWildcard: true},
+			Expression: elseExpr,
+		}
+
+		return &MatchExpression{
+			Expression: conditionExpr,
+			Arms:       []MatchArm{thenArm, elseArm},
+		}
+	}
+	
+	// Check if this is a simple boolean ternary (expr ? then : else)
+	if ctx.QUESTION() != nil {
+		// First comparison expression is the condition 
+		conditionExpr := b.buildComparisonExpr(ctx.ComparisonExpr())
+		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
+		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
+		
+		trueArm := MatchArm{
+			Pattern:    Pattern{Constructor: "true"},
+			Expression: thenExpr,
+		}
+
+		falseArm := MatchArm{
+			Pattern:    Pattern{Constructor: "false"},
+			Expression: elseExpr,
+		}
+
+		return &MatchExpression{
+			Expression: conditionExpr,
+			Arms:       []MatchArm{trueArm, falseArm},
+		}
+	}
+	
+	// Otherwise it's just a comparison expression
 	return b.buildComparisonExpr(ctx.ComparisonExpr())
 }
 

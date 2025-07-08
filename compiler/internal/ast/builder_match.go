@@ -7,7 +7,7 @@ import (
 func (b *Builder) buildMatchExpr(ctx parser.IMatchExprContext) Expression {
 	if ctx.MATCH() != nil {
 		// This is a match expression
-		expr := b.buildExpression(ctx.Expr())
+		expr := b.buildBinaryExpr(ctx.BinaryExpr())
 
 		arms := make([]MatchArm, 0)
 

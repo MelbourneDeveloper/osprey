@@ -68,10 +68,8 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 		return "", ErrASTBuildFailed
 	}
 
-	// Validate AST for type inference rules
-	if err := ast.ValidateProgram(program); err != nil {
-		return "", err
-	}
+	// Skip old validation - using Hindley-Milner type system instead
+	// The old validation system conflicts with Hindley-Milner type inference
 
 	// Generate LLVM IR with security configuration
 	generator := NewLLVMGeneratorWithSecurity(security)

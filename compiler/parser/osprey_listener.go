@@ -121,6 +121,9 @@ type ospreyListener interface {
 	// EnterBinaryExpr is called when entering the binaryExpr production.
 	EnterBinaryExpr(c *BinaryExprContext)
 
+	// EnterTernaryExpr is called when entering the ternaryExpr production.
+	EnterTernaryExpr(c *TernaryExprContext)
+
 	// EnterComparisonExpr is called when entering the comparisonExpr production.
 	EnterComparisonExpr(c *ComparisonExprContext)
 
@@ -150,6 +153,9 @@ type ospreyListener interface {
 
 	// EnterPrimary is called when entering the primary production.
 	EnterPrimary(c *PrimaryContext)
+
+	// EnterObjectLiteral is called when entering the objectLiteral production.
+	EnterObjectLiteral(c *ObjectLiteralContext)
 
 	// EnterTypeConstructor is called when entering the typeConstructor production.
 	EnterTypeConstructor(c *TypeConstructorContext)
@@ -316,6 +322,9 @@ type ospreyListener interface {
 	// ExitBinaryExpr is called when exiting the binaryExpr production.
 	ExitBinaryExpr(c *BinaryExprContext)
 
+	// ExitTernaryExpr is called when exiting the ternaryExpr production.
+	ExitTernaryExpr(c *TernaryExprContext)
+
 	// ExitComparisonExpr is called when exiting the comparisonExpr production.
 	ExitComparisonExpr(c *ComparisonExprContext)
 
@@ -345,6 +354,9 @@ type ospreyListener interface {
 
 	// ExitPrimary is called when exiting the primary production.
 	ExitPrimary(c *PrimaryContext)
+
+	// ExitObjectLiteral is called when exiting the objectLiteral production.
+	ExitObjectLiteral(c *ObjectLiteralContext)
 
 	// ExitTypeConstructor is called when exiting the typeConstructor production.
 	ExitTypeConstructor(c *TypeConstructorContext)

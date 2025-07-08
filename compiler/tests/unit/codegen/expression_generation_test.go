@@ -16,7 +16,7 @@ func TestUnaryExpressionGeneration(t *testing.T) {
 	}{
 		{"unary plus", "+", "42", false},
 		{"unary minus", "-", "42", false},
-		{"boolean not", "!", "1", false},
+		{"boolean not", "!", "true", false},
 		{"unsupported operator", "@", "42", true},
 	}
 

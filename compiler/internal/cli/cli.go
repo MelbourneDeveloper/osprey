@@ -385,7 +385,7 @@ func extractFunctionSymbol(fn *ast.FunctionDeclaration) SymbolInfo {
 		returnType = fn.ReturnType.Name
 	} else {
 		// Use compiler's type inference logic for functions without explicit return types
-		returnType = inferFunctionReturnType(fn)
+		returnType = anyType // CLI uses simple fallback; actual inference is done by Hindley-Milner
 	}
 
 	signature := fmt.Sprintf("%s(%s) -> %s", fn.Name, getParameterSignature(params), returnType)
@@ -422,7 +422,8 @@ func extractVariableSymbol(letDecl *ast.LetDeclaration) SymbolInfo {
 	if letDecl.Type != nil {
 		varType = normalizeTypeName(letDecl.Type.Name)
 	} else if letDecl.Value != nil {
-		varType = normalizeTypeName(inferTypeFromExpression(letDecl.Value))
+		// Use simple fallback for type inference
+		varType = anyType
 	}
 
 	return SymbolInfo{
@@ -452,21 +453,13 @@ func extractTypeSymbol(typeDecl *ast.TypeDeclaration) SymbolInfo {
 	}
 }
 
-// inferFunctionReturnType infers the return type of a function using simplified logic.
-func inferFunctionReturnType(fn *ast.FunctionDeclaration) string {
-	if fn.Body == nil {
-		return anyType
-	}
 
-	// Simple return type inference based on body expression type
-	return inferTypeFromExpression(fn.Body)
-}
 
 func normalizeTypeName(typeName string) string {
 	switch typeName {
-	case "int", "Int":
+	case "int":
 		return "Int"
-	case "string", "String":
+	case "string":
 		return "String"
 	case "bool", "Bool":
 		return "Bool"
@@ -475,42 +468,7 @@ func normalizeTypeName(typeName string) string {
 	}
 }
 
-func inferTypeFromExpression(expr ast.Expression) string {
-	switch e := expr.(type) {
-	case *ast.IntegerLiteral:
-		return typeInt
-	case *ast.StringLiteral:
-		return typeString
-	case *ast.BooleanLiteral:
-		return typeBool
-	case *ast.BinaryExpression:
-		switch e.Operator {
-		case "+", "-", "*", "/", "%":
-			// For arithmetic operations, check operands
-			leftType := inferTypeFromExpression(e.Left)
-			rightType := inferTypeFromExpression(e.Right)
-			if leftType == typeString || rightType == typeString {
-				return typeString
-			}
-			return typeInt
-		case "==", "!=", "<", "<=", ">", ">=":
-			return typeBool
-		default:
-			return typeInt
-		}
-	case *ast.CallExpression:
-		// Could analyze known function return types here
-		return anyType
-	case *ast.MatchExpression:
-		// Could analyze match arms to determine return type
-		return anyType
-	case *ast.Identifier:
-		// For identifiers, we can't determine type without context
-		return anyType
-	default:
-		return anyType
-	}
-}
+
 
 func runGenerateDocs(docsDir string) CommandResult {
 	err := generateAPIDocumentationFiles(docsDir)

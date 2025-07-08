@@ -5,8 +5,58 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/christianfindlay/osprey/internal/codegen"
 )
+
+func TestErrorDefinition(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected string
+	}{
+		{"ErrToStringWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
+		{"ErrPrintWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
+		{"ErrInputWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
+		{"ErrMethodNotImpl", codegen.ErrMethodNotImpl, "method not implemented"},
+		{"ErrNoToStringForFunc", codegen.ErrNoToStringForFunc, "no toString implementation for function"},
+		{"ErrPrintComplexExpr", codegen.ErrPrintComplexExpr, "print complex expression error"},
+		{"ErrPrintUnknownFunc", codegen.ErrPrintUnknownFunc, "print unknown function error"},
+		{"ErrFunctionRequiresNamed", codegen.ErrFunctionRequiresNamed, "function requires named arguments"},
+		{"ErrWrongArgCount", codegen.ErrWrongArgCount, "wrong argument count"},
+		{"ErrMissingArgument", codegen.ErrMissingArgument, "missing argument"},
+		{"ErrParseErrors", codegen.ErrParseErrors, "parse errors"},
+		{"ErrLLVMGenFailed", codegen.ErrLLVMGenFailed, "LLVM generation failed"},
+		{"ErrWriteIRFile", codegen.ErrWriteIRFile, "write IR file failed"},
+		{"ErrCompileToObj", codegen.ErrCompileToObj, "compile to object failed"},
+		{"ErrLinkExecutable", codegen.ErrLinkExecutable, "link executable failed"},
+		{"ErrToolNotFound", codegen.ErrToolNotFound, "tool not found"},
+		{"ErrNoSuitableCompiler", codegen.ErrNoSuitableCompiler, "no suitable compiler found"},
+		{"ErrPrintComplexCall", codegen.ErrPrintComplexCall, "print complex call error"},
+		{"ErrPrintConvertError", codegen.ErrPrintConvertError, "print convert error"},
+		{"ErrPrintDetermineError", codegen.ErrPrintDetermineError, "print determine error"},
+		{"ErrUnsupportedStatement", codegen.ErrUnsupportedStatement, "unsupported statement"},
+		{"ErrUndefinedVariable", codegen.ErrUndefinedVariable, "undefined variable"},
+		{"ErrUnsupportedBinaryOp", codegen.ErrUnsupportedBinaryOp, "unsupported binary operator"},
+		{"ErrFieldAccessNotImpl", codegen.ErrFieldAccessNotImpl, "field access not implemented"},
+		{"ErrRangeWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
+		{"ErrForEachWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
+		{"ErrBuiltInTwoArgs", codegen.ErrBuiltInTwoArgs, "built-in function expects two arguments"},
+		{"ErrMapWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
+		{"ErrBuiltInRedefine", codegen.ErrBuiltInRedefine, "cannot redefine built-in function"},
+		{"ErrFilterWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
+		{"ErrFunctionNotFound", codegen.ErrFunctionNotFound, "function not found"},
+		{"ErrFoldWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.err.Error() != test.expected {
+				t.Errorf("Expected %q, got %q", test.expected, test.err.Error())
+			}
+		})
+	}
+}
 
 func TestStaticErrors(t *testing.T) {
 	// Test that static errors are defined
@@ -18,9 +68,7 @@ func TestStaticErrors(t *testing.T) {
 		codegen.ErrUnsupportedExpression,
 		codegen.ErrUnsupportedBinaryOp,
 		codegen.ErrFieldAccessNotImpl,
-		codegen.ErrToStringWrongArgs,
-		codegen.ErrPrintWrongArgs,
-		codegen.ErrInputWrongArgs,
+		codegen.ErrWrongArgCount, // consolidated all WrongArgs errors into this one
 		codegen.ErrUnsupportedCall,
 		codegen.ErrMethodNotImpl,
 		codegen.ErrNoToStringImpl,
@@ -29,7 +77,6 @@ func TestStaticErrors(t *testing.T) {
 		codegen.ErrPrintComplexExpr,
 		codegen.ErrPrintUnknownFunc,
 		codegen.ErrFunctionRequiresNamed,
-		codegen.ErrWrongArgCount,
 		codegen.ErrMissingArgument,
 		codegen.ErrParseErrors,
 		codegen.ErrParseTreeNil,
@@ -43,14 +90,9 @@ func TestStaticErrors(t *testing.T) {
 		codegen.ErrPrintComplexCall,
 		codegen.ErrPrintConvertError,
 		codegen.ErrPrintDetermineError,
-		codegen.ErrRangeWrongArgs,
-		codegen.ErrForEachWrongArgs,
 		codegen.ErrForEachNotFunction,
-		codegen.ErrMapWrongArgs,
 		codegen.ErrMapNotFunction,
-		codegen.ErrFilterWrongArgs,
 		codegen.ErrFilterNotFunction,
-		codegen.ErrFoldWrongArgs,
 		codegen.ErrFoldNotFunction,
 		codegen.ErrInputNoArgs,
 		codegen.ErrBuiltInTwoArgs,
@@ -160,8 +202,8 @@ func TestWrapToStringWrongArgs(t *testing.T) {
 	if err == nil {
 		t.Error("WrapToStringWrongArgs should return error")
 	}
-	if !errors.Is(err, codegen.ErrToStringWrongArgs) {
-		t.Error("Should wrap ErrToStringWrongArgs")
+	if !errors.Is(err, codegen.ErrWrongArgCount) {
+		t.Error("Should wrap ErrWrongArgCount")
 	}
 	if !strings.Contains(err.Error(), "3") {
 		t.Error("Should contain argument count")
@@ -174,8 +216,8 @@ func TestWrapPrintWrongArgs(t *testing.T) {
 	if err == nil {
 		t.Error("WrapPrintWrongArgs should return error")
 	}
-	if !errors.Is(err, codegen.ErrPrintWrongArgs) {
-		t.Error("Should wrap ErrPrintWrongArgs")
+	if !errors.Is(err, codegen.ErrWrongArgCount) {
+		t.Error("Should wrap ErrWrongArgCount")
 	}
 	if !strings.Contains(err.Error(), "2") {
 		t.Error("Should contain argument count")
@@ -188,8 +230,8 @@ func TestWrapInputWrongArgs(t *testing.T) {
 	if err == nil {
 		t.Error("WrapInputWrongArgs should return error")
 	}
-	if !errors.Is(err, codegen.ErrInputWrongArgs) {
-		t.Error("Should wrap ErrInputWrongArgs")
+	if !errors.Is(err, codegen.ErrWrongArgCount) {
+		t.Error("Should wrap ErrWrongArgCount")
 	}
 	if !strings.Contains(err.Error(), "1") {
 		t.Error("Should contain argument count")
@@ -390,11 +432,11 @@ func TestWrapIteratorErrors(t *testing.T) {
 		wrapFunc func(int) error
 		baseErr  error
 	}{
-		{"WrapRangeWrongArgs", codegen.WrapRangeWrongArgs, codegen.ErrRangeWrongArgs},
-		{"WrapForEachWrongArgs", codegen.WrapForEachWrongArgs, codegen.ErrForEachWrongArgs},
-		{"WrapMapWrongArgs", codegen.WrapMapWrongArgs, codegen.ErrMapWrongArgs},
-		{"WrapFilterWrongArgs", codegen.WrapFilterWrongArgs, codegen.ErrFilterWrongArgs},
-		{"WrapFoldWrongArgs", codegen.WrapFoldWrongArgs, codegen.ErrFoldWrongArgs},
+		{"WrapRangeWrongArgs", codegen.WrapRangeWrongArgs, codegen.ErrWrongArgCount},
+		{"WrapForEachWrongArgs", codegen.WrapForEachWrongArgs, codegen.ErrWrongArgCount},
+		{"WrapMapWrongArgs", codegen.WrapMapWrongArgs, codegen.ErrWrongArgCount},
+		{"WrapFilterWrongArgs", codegen.WrapFilterWrongArgs, codegen.ErrWrongArgCount},
+		{"WrapFoldWrongArgs", codegen.WrapFoldWrongArgs, codegen.ErrWrongArgCount},
 	}
 
 	for _, test := range tests {
@@ -442,15 +484,214 @@ func TestWrapFunctionNotFound(t *testing.T) {
 	}
 }
 
-func TestErrorChaining(t *testing.T) {
-	// Test that error unwrapping works correctly
-	baseErr := codegen.ErrLLVMGenFailed
-	wrappedErr := codegen.WrapLLVMGenFailed(baseErr)
+func TestErrorWrappingWithPosition(t *testing.T) {
+	position := &ast.Position{Line: 10, Column: 5}
+
+	tests := []struct {
+		name        string
+		wrapperFunc func() error
+		expectedMsg string
+	}{
+		{
+			"WrapUndefinedVariableWithPos",
+			func() error { return codegen.WrapUndefinedVariableWithPos("myVar", position) },
+			"line 10:5: undefined variable: myVar",
+		},
+		{
+			"WrapUnsupportedBinaryOpWithPos",
+			func() error { return codegen.WrapUnsupportedBinaryOpWithPos("***", position) },
+			"line 10:5: unsupported binary operator: ***",
+		},
+		{
+			"WrapVoidArithmeticWithPos",
+			func() error { return codegen.WrapVoidArithmeticWithPos("+", position) },
+			"line 10:5: arithmetic operation on void type +",
+		},
+		{
+			"WrapUnsupportedUnaryOpWithPos",
+			func() error { return codegen.WrapUnsupportedUnaryOpWithPos("***", position) },
+			"line 10:5: unsupported unary operator: ***",
+		},
+		{
+			"WrapConstraintResultFieldAccessWithPos",
+			func() error { return codegen.WrapConstraintResultFieldAccessWithPos("myField", position) },
+			"line 10:5: constraint result field access not allowed: myField",
+		},
+		{
+			"WrapFieldAccessNotImplWithPos",
+			func() error { return codegen.WrapFieldAccessNotImplWithPos("myField", position) },
+			"line 10:5: field access not implemented for field 'myField': field access not implemented",
+		},
+		{
+			"WrapPrintWrongArgsWithPos",
+			func() error { return codegen.WrapPrintWrongArgsWithPos(2, position) },
+			"line 10:5: print expects exactly 1 argument(s), got 2: wrong argument count",
+		},
+		{
+			"WrapInputWrongArgsWithPos",
+			func() error { return codegen.WrapInputWrongArgsWithPos(1, position) },
+			"line 10:5: input expects exactly 0 argument(s), got 1: wrong argument count",
+		},
+		{
+			"WrapLengthWrongArgsWithPos",
+			func() error { return codegen.WrapLengthWrongArgsWithPos(2, position) },
+			"line 10:5: length expects exactly 1 argument(s), got 2: wrong argument count",
+		},
+		{
+			"WrapContainsWrongArgsWithPos",
+			func() error { return codegen.WrapContainsWrongArgsWithPos(1, position) },
+			"line 10:5: contains expects exactly 2 argument(s), got 1: wrong argument count",
+		},
+		{
+			"WrapSubstringWrongArgsWithPos",
+			func() error { return codegen.WrapSubstringWrongArgsWithPos(2, position) },
+			"line 10:5: substring expects exactly 3 argument(s), got 2: wrong argument count",
+		},
+		{
+			"WrapRangeWrongArgsWithPos",
+			func() error { return codegen.WrapRangeWrongArgsWithPos(1, position) },
+			"line 10:5: range expects exactly 2 argument(s), got 1: wrong argument count",
+		},
+		{
+			"WrapForEachWrongArgsWithPos",
+			func() error { return codegen.WrapForEachWrongArgsWithPos(1, position) },
+			"line 10:5: forEach expects exactly 2 argument(s), got 1: wrong argument count",
+		},
+		{
+			"WrapHTTPCreateClientWrongArgsWithPos",
+			func() error { return codegen.WrapHTTPCreateClientWrongArgsWithPos(1, position) },
+			"line 10:5: httpCreateClient expects exactly 2 argument(s), got 1: wrong argument count",
+		},
+		{
+			"WrapHTTPGetWrongArgsWithPos",
+			func() error { return codegen.WrapHTTPGetWrongArgsWithPos(2, position) },
+			"line 10:5: httpGet expects exactly 3 argument(s), got 2: wrong argument count",
+		},
+		{
+			"WrapSpawnProcessWrongArgsWithPos",
+			func() error { return codegen.WrapSpawnProcessWrongArgsWithPos(1, position) },
+			"line 10:5: spawnProcess expects exactly 2 argument(s), got 1: wrong argument count",
+		},
+		{
+			"WrapWriteFileWrongArgsWithPos",
+			func() error { return codegen.WrapWriteFileWrongArgsWithPos(1, position) },
+			"line 10:5: writeFile expects exactly 2 argument(s), got 1: wrong argument count",
+		},
+		{
+			"WrapReadFileWrongArgsWithPos",
+			func() error { return codegen.WrapReadFileWrongArgsWithPos(2, position) },
+			"line 10:5: readFile expects exactly 1 argument(s), got 2: wrong argument count",
+		},
+		{
+			"WrapImmutableAssignmentErrorWithPos",
+			func() error { return codegen.WrapImmutableAssignmentErrorWithPos("myVar", position) },
+			"line 10:5: cannot assign to immutable variable: myVar",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.wrapperFunc()
+			if err.Error() != test.expectedMsg {
+				t.Errorf("Expected %q, got %q", test.expectedMsg, err.Error())
+			}
+		})
+	}
+}
+
+// Test error wrapping without position
+func TestErrorWrappingWithoutPosition(t *testing.T) {
+	// Use existing static error for testing
+	errTest := codegen.ErrLLVMGenFailed
+
+	tests := []struct {
+		name        string
+		wrapperFunc func() error
+		expectedMsg string
+	}{
+		{
+			"WrapUndefinedVariableWithPos nil position",
+			func() error { return codegen.WrapUndefinedVariableWithPos("myVar", nil) },
+			"undefined variable: myVar",
+		},
+		{
+			"WrapPrintWrongArgsWithPos nil position",
+			func() error { return codegen.WrapPrintWrongArgsWithPos(2, nil) },
+			"function print expects 1 arguments, got 2",
+		},
+		{
+			"WrapLengthWrongArgsWithPos nil position",
+			func() error { return codegen.WrapLengthWrongArgsWithPos(2, nil) },
+			"function length expects 1 arguments, got 2",
+		},
+		{
+			"WrapToStringWrongArgs",
+			func() error { return codegen.WrapToStringWrongArgs(2) },
+			"function toString expects 1 arguments, got 2",
+		},
+		{
+			"WrapMissingArgument",
+			func() error { return codegen.WrapMissingArgument("argName", "funcName") },
+			"missing argument argName for function funcName",
+		},
+		{
+			"WrapLLVMGenFailed",
+			func() error { return codegen.WrapLLVMGenFailed(errTest) },
+			"LLVM generation failed: LLVM generation failed",
+		},
+		{
+			"WrapCompileToObj",
+			func() error { return codegen.WrapCompileToObj(errTest, "output") },
+			"compile to object failed: LLVM generation failed - output",
+		},
+		{
+			"WrapLinkExecutable",
+			func() error { return codegen.WrapLinkExecutable("gcc", errTest, "output") },
+			"link executable failed: gcc failed - LLVM generation failed - output",
+		},
+		{
+			"WrapPrintConvertError",
+			func() error { return codegen.WrapPrintConvertError("int", "myFunc") },
+			"print convert error: cannot convert return type int for function myFunc to string",
+		},
+		{
+			"WrapPrintDetermineError",
+			func() error { return codegen.WrapPrintDetermineError("myFunc") },
+			"print determine error: cannot determine return type for function myFunc",
+		},
+		{
+			"WrapUnsupportedBinaryOp string",
+			func() error { return codegen.WrapUnsupportedBinaryOp("***") },
+			"unsupported binary operator: ***",
+		},
+		{
+			"WrapUnsupportedCallExpressionSecurity",
+			func() error { return codegen.WrapUnsupportedCallExpressionSecurity("myFunc") },
+			"unsupported call expression in current security mode: myFunc",
+		},
+		{
+			"WrapMethodCallNotImplemented",
+			func() error { return codegen.WrapMethodCallNotImplemented("myMethod") },
+			"method call not implemented: myMethod",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.wrapperFunc()
+			if err.Error() != test.expectedMsg {
+				t.Errorf("Expected %q, got %q", test.expectedMsg, err.Error())
+			}
+		})
+	}
+}
+
+// Test if error is wrapped by checking if it's an instance of the base error
+func TestErrorWrapping(t *testing.T) {
+	baseErr := codegen.ErrWrongArgCount
+	wrappedErr := codegen.WrapToStringWrongArgs(2)
 
 	if !errors.Is(wrappedErr, baseErr) {
-		t.Error("Should be able to unwrap to inner error")
-	}
-	if !errors.Is(wrappedErr, codegen.ErrLLVMGenFailed) {
-		t.Error("Should be able to unwrap to wrapper error")
+		t.Errorf("Expected wrapped error to be instance of %v", baseErr)
 	}
 }

@@ -1,0 +1,21 @@
+// DO NOT CHANGE
+// FIX THE COMPILER!!!
+
+type Success = { value: string }
+
+let a = { a: true }
+let b = a.a ? "true" : "false"
+print(b)
+
+let myResult = Success { value: "It worked" }
+let message = myResult { value } ? value : "An unknown error occurred"
+print(message)
+
+let c = true
+let d = c ? "true" : "false"
+print(d)
+
+let v = { value: "It worked" }
+// This is a structural match - flexible on this syntax. Fix it
+let message2 = v { value } ? value : "An unknown error occurred"
+print(message2)

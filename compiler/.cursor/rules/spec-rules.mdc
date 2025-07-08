@@ -5,12 +5,12 @@ alwaysApply: true
 ---
 # Spec Rules
 
-- **NO DUPLICATION** - always search before adding text, consolidate where appropriate
-- **Keep it tight** - remove flowery language that doesn't assert how the syntax works 
-- **Keep it udpated** - when functionality is not implemented, mark it as such
-- **Less curly braces, semicolons and brackets** - more ML style
-- **Keep it ordered** - check the numbering
-- **Always take the best practices document into account** follow the URLS in the document for more information when making decisions
-- **Ensure examples don't conflict with the compiler's actual syntax** - check all examples are actual Osprey syntax unless the functionality has not been implemented yet
+- NO DUPLICATION. always search before adding text, consolidate where appropriate
+- Keep it tight. remove flowery language that doesn't assert how the syntax works 
+- Keep it udpated. When functionality is not implemented, mark it as such and correct spec examples when they don't match the TESTED examples.  
+- LESS CURLY BRACES, SEMICOLONS and BRACKETS. - more ML style
+- Keep it ordered: check the numbering and fix when needed
+- Always take the best practices document into account. Follow the URLS in the document for more information when making decisions 
+- Check all examples are actual Osprey syntax unless the functionality has not been implemented yet. Fix they are wrong.
 
 @compilersbestpractice.md

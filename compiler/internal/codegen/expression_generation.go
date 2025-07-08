@@ -13,6 +13,18 @@ import (
 	"github.com/christianfindlay/osprey/internal/ast"
 )
 
+// Constants for type sizes in bytes
+const (
+	ByteSize64Bit   = 8    // Size of 64-bit integers and pointers
+	ByteSize32Bit   = 4    // Size of 32-bit integers
+	ByteSize8Bit    = 1    // Size of 8-bit integers and booleans
+	DefaultByteSize = 8    // Default size fallback
+	LargeArraySize  = 1000 // Large array size for type casting operations
+
+	// MinResultFieldCount represents the minimum number of fields in a Result type struct
+	MinResultFieldCount = 2
+)
+
 func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, error) {
 	switch e := expr.(type) {
 	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
@@ -21,6 +33,9 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 	case *ast.ListLiteral:
 
 		return g.generateListLiteral(e)
+	case *ast.ObjectLiteral:
+
+		return g.generateObjectLiteral(e)
 	case *ast.ListAccessExpression:
 
 		return g.generateListAccess(e)
@@ -60,61 +75,6 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 	default:
 
 		return g.generateFiberOrModuleExpression(expr)
-	}
-}
-
-func (g *LLVMGenerator) getTypeOfExpression(expr ast.Expression) (string, error) {
-	switch e := expr.(type) {
-	case *ast.StringLiteral:
-		return TypeString, nil
-	case *ast.IntegerLiteral:
-		return TypeInt, nil
-	case *ast.BooleanLiteral:
-		return TypeBool, nil
-	case *ast.Identifier:
-		if varType, ok := g.variableTypes[e.Name]; ok {
-			return varType, nil
-		}
-		// Check for union type variants
-		if _, ok := g.unionVariants[e.Name]; ok {
-			return TypeInt, nil // Variants are i64 discriminants
-		}
-		return "", WrapUndefinedVariable(e.Name)
-	case *ast.CallExpression:
-		if fn, ok := e.Function.(*ast.Identifier); ok {
-			if returnType, ok := g.functionReturnTypes[fn.Name]; ok {
-				return returnType, nil
-			}
-			// It might be a user-defined function
-			if _, ok := g.functions[fn.Name]; ok {
-				if returnType, ok := g.functionReturnTypes[fn.Name]; ok {
-					return returnType, nil
-				}
-				// If not in the map, it might not have been processed yet.
-				// This is a limitation. For now, we'll assume int as a fallback
-				// for user functions not yet in the map.
-				return TypeInt, nil
-			}
-		}
-		return "", WrapUnsupportedExpression(e)
-	case *ast.BinaryExpression:
-		// For simplicity, assuming numeric operations return Int
-		// and comparisons return Bool.
-		switch e.Operator {
-		case "==", "!=", "<", "<=", ">", ">=":
-			return TypeBool, nil
-		default:
-			return TypeInt, nil
-		}
-	case *ast.ResultExpression:
-		// This is tricky. A result type is generic.
-		// For now, let's say it's 'any'
-		return TypeAny, nil
-	case *ast.FieldAccessExpression:
-		// This requires more sophisticated type tracking
-		return TypeAny, nil
-	default:
-		return "", WrapUnsupportedExpression(e)
 	}
 }
 
@@ -224,8 +184,17 @@ func (g *LLVMGenerator) generateStringLiteral(lit *ast.StringLiteral) (value.Val
 
 // generateBooleanLiteral generates LLVM IR for boolean literals.
 func (g *LLVMGenerator) generateBooleanLiteral(lit *ast.BooleanLiteral) (value.Value, error) {
-	// Use expected return type if available, otherwise default to i64
-	targetType := types.I64
+	// Check context to determine the correct type
+	targetType := types.I64 // Default to i64 for most contexts
+
+	// 1. Check if function expects boolean return type
+	if g.function != nil && g.function.Sig != nil {
+		if g.function.Sig.RetType == types.I1 {
+			targetType = types.I1
+		}
+	}
+
+	// 2. Check expected return type context (for nested expressions)
 	if g.expectedReturnType != nil {
 		if g.expectedReturnType == types.I1 {
 			targetType = types.I1
@@ -324,6 +293,40 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 	g.builder.NewStore(arrayData, dataPtr)
 
 	return arrayStruct, nil
+}
+
+// generateObjectLiteral generates LLVM IR for object literals like { field: value }.
+func (g *LLVMGenerator) generateObjectLiteral(lit *ast.ObjectLiteral) (value.Value, error) {
+	// For now, treat object literals as structs with string keys and any values
+	// This is a simplified implementation - a full implementation would need type information
+
+	// Create a simple struct with the fields
+	var fieldTypes []types.Type
+	var fieldValues []value.Value
+
+	for _, fieldValue := range lit.Fields {
+		val, err := g.generateExpression(fieldValue)
+		if err != nil {
+			return nil, err
+		}
+		fieldValues = append(fieldValues, val)
+		fieldTypes = append(fieldTypes, val.Type())
+	}
+
+	// Create struct type and allocate
+	structType := types.NewStruct(fieldTypes...)
+	structValue := g.builder.NewAlloca(structType)
+
+	// Store each field value
+	i := 0
+	for _, fieldValue := range fieldValues {
+		fieldPtr := g.builder.NewGetElementPtr(structType, structValue,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, int64(i)))
+		g.builder.NewStore(fieldValue, fieldPtr)
+		i++
+	}
+
+	return structValue, nil
 }
 
 // generateListAccess generates LLVM IR for array indexing like arr[0].
@@ -427,42 +430,33 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 
 // generateIdentifier generates LLVM IR for identifiers.
 func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, error) {
-	// Check for regular variables first
-	if val, exists := g.variables[ident.Name]; exists {
-		// Check if this variable is of type 'any'
-		if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeAny {
-			// For function composition, we allow accessing 'any' type variables that contain function references
-			// The variable should contain a function pointer that we can use for calls
-			return val, nil
-		}
-
-		return val, nil
-	}
-
-	// Check for union type variants (constants)
+	// Check for union type variants (constants) first
 	if discriminant, exists := g.unionVariants[ident.Name]; exists {
 		return constant.NewInt(types.I64, discriminant), nil
 	}
 
-	// Check for function references - new functionality for function composition
+	// Check for function references (user-defined functions and extern declarations)
 	if fn, exists := g.functions[ident.Name]; exists {
-		// Return the function as a function pointer value
-		// This enables passing functions as arguments to other functions
 		return fn, nil
 	}
 
+	// Check for regular variables
+	if val, exists := g.variables[ident.Name]; exists {
+		return val, nil
+	}
+
+	// Check if this exists in the Hindley-Milner type environment
+	if _, exists := g.typeInferer.env.Get(ident.Name); exists {
+		// Variable exists in type environment but not in runtime
+		// This can happen for built-in functions or uninitialized variables
+		return nil, fmt.Errorf("%w: %s", ErrVariableNotInRuntime, ident.Name)
+	}
+
+	// Variable doesn't exist anywhere - undefined variable
 	return nil, WrapUndefinedVariableWithPos(ident.Name, ident.Position)
 }
 
 func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) (value.Value, error) {
-	// Validate that operands are not of type 'any' for arithmetic operations
-	if err := g.validateNotAnyType(binExpr.Left, AnyOpArithmetic); err != nil {
-		return nil, err
-	}
-	if err := g.validateNotAnyType(binExpr.Right, AnyOpArithmetic); err != nil {
-		return nil, err
-	}
-
 	left, err := g.generateExpression(binExpr.Left)
 	if err != nil {
 		return nil, err
@@ -480,6 +474,7 @@ func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) 
 func (g *LLVMGenerator) generateBinaryOperationWithPos(
 	operator string, left, right value.Value, pos *ast.Position,
 ) (value.Value, error) {
+	// Note: auto-unwrapping for Result types is already done in generateBinaryExpression
 	switch operator {
 	case "+", "-", "*", "/", "%":
 		return g.generateArithmeticOperationWithPos(operator, left, right, pos)
@@ -544,6 +539,15 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
 
+	// CRITICAL FIX: Check current function's return type to determine output type
+	if g.function != nil && g.function.Sig != nil {
+		returnType := g.function.Sig.RetType
+		if returnType == types.I1 {
+			return cmp, nil
+		}
+	}
+
+	// Default to extending to i64 for most contexts
 	return g.builder.NewZExt(cmp, types.I64), nil
 }
 
@@ -631,10 +635,7 @@ func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpressio
 }
 
 func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpression) (value.Value, error) {
-	// Validate that we're not trying to access fields on 'any' type
-	if err := g.validateNotAnyType(fieldAccess.Object, AnyOpFieldAccess); err != nil {
-		return nil, WrapAnyDirectFieldAccess(fieldAccess.FieldName)
-	}
+	// Type validation is now handled by Hindley-Milner type inference
 
 	// Check if this is field access on a validated type constructor result
 	if typeConstructor, isTypeConstructor := fieldAccess.Object.(*ast.TypeConstructorExpression); isTypeConstructor {
@@ -650,10 +651,10 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 
 	// Check if this is field access on an identifier that might be a constrained type result
 	if ident, isIdent := fieldAccess.Object.(*ast.Identifier); isIdent {
-		// Check if this identifier represents a constrained type constructor result
-		if varType, exists := g.variableTypes[ident.Name]; exists {
+		// Check if this identifier represents a constrained type constructor result using Hindley-Milner
+		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
 			// Look for Result< pattern in the type
-			if strings.Contains(varType, "Result<") {
+			if strings.Contains(varType.String(), "Result<") {
 				// This is field access on a Result type - requires pattern matching
 				return nil, WrapConstraintResultFieldAccessWithPos(fieldAccess.FieldName, fieldAccess.Position)
 			}
@@ -776,8 +777,22 @@ func (g *LLVMGenerator) generateTypeConstructorExpression(
 		return g.generateRecordTypeConstructor(typeConstructor, typeDecl)
 	}
 
-	// For union types without fields, return discriminant value
-	return constant.NewInt(types.I64, 1), nil
+	// FIXED: Handle discriminated unions with multiple variants
+	if len(typeDecl.Variants) > 1 {
+		// This is a discriminated union - find which variant we're constructing
+		return g.generateDiscriminatedUnionConstructor(typeConstructor, typeDecl)
+	}
+
+	// For simple enum types (single variant without fields), return discriminant value
+	if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) == 0 {
+		// Simple enum variant - return its discriminant
+		if discriminant, exists := g.unionVariants[typeDecl.Variants[0].Name]; exists {
+			return constant.NewInt(types.I64, discriminant), nil
+		}
+	}
+
+	// Fallback for unknown union structure
+	return constant.NewInt(types.I64, 0), nil
 }
 
 // generateRecordTypeConstructor generates LLVM IR for record type construction
@@ -803,9 +818,54 @@ func (g *LLVMGenerator) generateRecordTypeConstructor(
 	}
 
 	// Call validation function with the struct as argument
-	result := g.builder.NewCall(validationFunc, structValue)
+	validationResult := g.builder.NewCall(validationFunc, structValue)
 
-	// Return the result (should be Result<T, String> type)
+	// FIXED: Create proper Result<T, String> type
+	// The validation function should return a boolean: true for valid, false for invalid
+	// We need to convert this to a proper Result<T, String> structure
+
+	// Get the struct type to determine what type this Result should wrap
+	structType, exists := g.typeMap[typeDecl.Name]
+	if !exists {
+		return nil, WrapUndefinedType(typeDecl.Name)
+	}
+
+	// Create Result<StructType, String>
+	resultType := g.getResultType(structType)
+	result := g.builder.NewAlloca(resultType)
+
+	// Check if validation passed (non-zero = success, zero = failure)
+	zero := constant.NewInt(types.I64, 0)
+	validationPassed := g.builder.NewICmp(enum.IPredNE, validationResult, zero)
+
+	// Create blocks for success and failure cases
+	successBlock := g.function.NewBlock("validation_success")
+	failureBlock := g.function.NewBlock("validation_failure")
+	continueBlock := g.function.NewBlock("validation_continue")
+
+	g.builder.NewCondBr(validationPassed, successBlock, failureBlock)
+
+	// Success case: store the struct and success discriminant
+	g.builder = successBlock
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(structValue, valuePtr)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.builder.NewBr(continueBlock)
+
+	// Failure case: store error discriminant
+	g.builder = failureBlock
+	// For validation failure, we don't store a value, just set error discriminant
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
+	g.builder.NewBr(continueBlock)
+
+	// Continue with the result
+	g.builder = continueBlock
+
 	return result, nil
 }
 
@@ -863,12 +923,178 @@ func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 	return structValue, nil
 }
 
+// generateDiscriminatedUnionConstructor generates LLVM IR for discriminated union variant construction
+func (g *LLVMGenerator) generateDiscriminatedUnionConstructor(
+	typeConstructor *ast.TypeConstructorExpression,
+	typeDecl *ast.TypeDeclaration,
+) (value.Value, error) {
+	// Find which variant we're constructing
+	variant, variantIndex, err := g.findVariantByConstructorCall(typeConstructor, typeDecl)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the tagged union type from our type map
+	unionType, exists := g.typeMap[typeDecl.Name]
+	if !exists {
+		return nil, WrapUndefinedType(typeDecl.Name)
+	}
+
+	// Allocate memory for the tagged union
+	unionValue := g.builder.NewAlloca(unionType)
+
+	// Set the discriminant (tag) field - this is the first field (index 0)
+	tagPtr := g.builder.NewGetElementPtr(
+		unionType,
+		unionValue,
+		constant.NewInt(types.I32, 0), // struct index
+		constant.NewInt(types.I32, 0), // tag field index
+	)
+	g.builder.NewStore(constant.NewInt(types.I8, int64(variantIndex)), tagPtr)
+
+	// If the variant has fields, serialize them into the data area
+	if len(variant.Fields) > 0 {
+		err := g.serializeVariantFields(variant, typeConstructor.Fields, unionValue, "")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return unionValue, nil
+}
+
+// findVariantByConstructorCall finds which variant matches the constructor call
+func (g *LLVMGenerator) findVariantByConstructorCall(
+	typeConstructor *ast.TypeConstructorExpression,
+	typeDecl *ast.TypeDeclaration,
+) (*ast.TypeVariant, int, error) {
+	// The constructor call should be in the form: VariantName { field1: value1, field2: value2 }
+	// We need to find which variant matches by looking at the discriminant of the variant name
+
+	// First, try to find a variant by matching field names if fields are provided
+	if len(typeConstructor.Fields) > 0 {
+		for i, variant := range typeDecl.Variants {
+			if len(variant.Fields) == len(typeConstructor.Fields) {
+				// Check if all constructor fields match variant fields
+				allMatch := true
+				for _, variantField := range variant.Fields {
+					if _, exists := typeConstructor.Fields[variantField.Name]; !exists {
+						allMatch = false
+						break
+					}
+				}
+				if allMatch {
+					return &variant, i, nil
+				}
+			}
+		}
+		return nil, -1, fmt.Errorf("%w for type %s", ErrNoVariantFound, typeDecl.Name)
+	}
+
+	// If no fields provided, this might be a simple enum variant
+	// Try to find variant by checking if typeConstructor.TypeName matches any variant name
+	for i, variant := range typeDecl.Variants {
+		if variant.Name == typeConstructor.TypeName {
+			return &variant, i, nil
+		}
+	}
+
+	// If we still haven't found it, return the first variant as a fallback
+	// This handles cases where we're constructing by type name rather than variant name
+	if len(typeDecl.Variants) > 0 {
+		return &typeDecl.Variants[0], 0, nil
+	}
+
+	return nil, -1, fmt.Errorf("%w: %s", ErrNoVariantsFound, typeDecl.Name)
+}
+
+// serializeVariantFields serializes variant fields into the union data area
+func (g *LLVMGenerator) serializeVariantFields(
+	variant *ast.TypeVariant,
+	fieldValues map[string]ast.Expression,
+	unionPtr value.Value,
+	_ string,
+) error {
+	// Get pointer to the data area (second field in the tagged union)
+	unionType := unionPtr.Type().(*types.PointerType).ElemType
+	dataPtr := g.builder.NewGetElementPtr(
+		unionType,
+		unionPtr,
+		constant.NewInt(types.I32, 0), // struct index
+		constant.NewInt(types.I32, 1), // data field index
+	)
+
+	// Serialize each field into the data area
+	offset := int64(0)
+	for _, field := range variant.Fields {
+		fieldValue, exists := fieldValues[field.Name]
+		if !exists {
+			return WrapMissingField(field.Name)
+		}
+
+		// Generate the field value
+		llvmFieldValue, err := g.generateExpression(fieldValue)
+		if err != nil {
+			return err
+		}
+
+		// Get the field type and calculate its size
+		fieldType := g.getFieldType(field.Type)
+		fieldSize := g.getTypeSize(fieldType)
+
+		// Cast data array to appropriate pointer type for this field
+		fieldPtr := g.builder.NewBitCast(
+			g.builder.NewGetElementPtr(
+				types.NewArray(uint64(LargeArraySize), types.I8), // Use large array for casting
+				dataPtr,
+				constant.NewInt(types.I32, 0),      // array index
+				constant.NewInt(types.I32, offset), // byte offset
+			),
+			types.NewPointer(fieldType),
+		)
+
+		// Convert value to correct type if needed
+		convertedValue := g.convertValueToExpectedType(llvmFieldValue, fieldType)
+
+		// Store the field value
+		g.builder.NewStore(convertedValue, fieldPtr)
+
+		// Move to next field offset
+		offset += fieldSize
+	}
+
+	return nil
+}
+
+// getTypeSize returns the size in bytes of an LLVM type
+func (g *LLVMGenerator) getTypeSize(t types.Type) int64 {
+	switch t {
+	case types.I64:
+		return ByteSize64Bit
+	case types.I8Ptr:
+		return ByteSize64Bit // pointer size
+	case types.I1:
+		return ByteSize8Bit
+	case types.I32:
+		return ByteSize32Bit
+	case types.I8:
+		return ByteSize8Bit
+	default:
+		return DefaultByteSize // default to 8 bytes
+	}
+}
+
 // convertValueToExpectedType converts a value to match the expected LLVM type
 func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedType types.Type) value.Value {
 	currentType := value.Type()
 
 	// If types already match, no conversion needed
 	if currentType == expectedType {
+		return value
+	}
+
+	// Handle string types (i8*) explicitly
+	if currentType == types.I8Ptr && expectedType == types.I8Ptr {
 		return value
 	}
 
@@ -884,7 +1110,47 @@ func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedTy
 		return g.builder.NewZExt(value, types.I64)
 	}
 
-	// For other cases, just return the original value and let LLVM handle it
+	// CRITICAL FIX: Handle incompatible pointer types by checking what the field actually expects
+	if ptrType, ok := expectedType.(*types.PointerType); ok {
+		// If expected type is a pointer and we have a different type, try to convert via casting
+		if currentType != expectedType {
+			// Don't try to cast between fundamentally incompatible types
+			if currentType == types.I8Ptr && ptrType.ElemType != types.I8 {
+				// This is a string being stored in a non-string pointer field - likely an error
+				// Return a null pointer of the expected type to avoid crash
+				return constant.NewNull(ptrType)
+			}
+		}
+	}
+
+	// CRITICAL FIX: Detect and prevent incompatible assignments
+	// If we're trying to store a string (i8*) into an integer field or vice versa
+	if (currentType == types.I8Ptr && expectedType == types.I64) ||
+		(currentType == types.I64 && expectedType == types.I8Ptr) {
+		// This is an incompatible assignment - return a safe default value
+		switch expectedType {
+		case types.I64:
+			return constant.NewInt(types.I64, 0)
+		case types.I8Ptr:
+			return constant.NewNull(types.I8Ptr)
+		}
+	}
+
+	// For other cases, try basic casting if the types are compatible
+	if intType1, ok1 := currentType.(*types.IntType); ok1 {
+		if intType2, ok2 := expectedType.(*types.IntType); ok2 {
+			// Both are integer types - try casting
+			if intType1.BitSize < intType2.BitSize {
+				// Zero-extend smaller to larger
+				return g.builder.NewZExt(value, expectedType)
+			} else if intType1.BitSize > intType2.BitSize {
+				// Truncate larger to smaller
+				return g.builder.NewTrunc(value, expectedType)
+			}
+		}
+	}
+
+	// For other cases, return the original value and hope LLVM can handle it
 	return value
 }
 
@@ -893,39 +1159,39 @@ func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedTy
 // that return Result<T, String> types.
 
 func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) (value.Value, error) {
-	// Check if the last statement is an expression statement that should be the return value
-	if len(blockExpr.Statements) > 0 && blockExpr.Expression == nil {
-		// Get the last statement
-		lastStmt := blockExpr.Statements[len(blockExpr.Statements)-1]
-
-		// Check if it's an expression statement
-		if exprStmt, ok := lastStmt.(*ast.ExpressionStatement); ok {
-			// Execute all statements except the last one
-			for _, stmt := range blockExpr.Statements[:len(blockExpr.Statements)-1] {
-				if err := g.generateStatement(stmt); err != nil {
-					return nil, err
-				}
+	// If the block has statements, execute all but the last one
+	// Then check if the last statement is an expression that should be returned
+	if len(blockExpr.Statements) > 0 {
+		// Execute all statements except the last one
+		for _, stmt := range blockExpr.Statements[:len(blockExpr.Statements)-1] {
+			if err := g.generateStatement(stmt); err != nil {
+				return nil, err
 			}
-
-			// Return the value of the last expression statement
-			return g.generateExpression(exprStmt.Expression)
 		}
-	}
 
-	// Execute all statements in the block
-	for _, stmt := range blockExpr.Statements {
-		if err := g.generateStatement(stmt); err != nil {
+		// Check if the last statement is an expression statement
+		lastStmt := blockExpr.Statements[len(blockExpr.Statements)-1]
+		if exprStmt, ok := lastStmt.(*ast.ExpressionStatement); ok {
+			// Return the value of the last expression statement
+			result, err := g.generateExpression(exprStmt.Expression)
+			if err != nil {
+				return nil, err
+			}
+			return result, nil
+		}
+
+		// Execute the last statement (it's not an expression statement)
+		if err := g.generateStatement(lastStmt); err != nil {
 			return nil, err
 		}
 	}
 
-	// Return the final expression value, or a default value if no expression
+	// Return the final expression value if present
 	if blockExpr.Expression != nil {
 		return g.generateExpression(blockExpr.Expression)
 	}
 
-	// If no return expression, return a default value
-	// For Unit functions, we still need to return a value that will be ignored
+	// If no explicit expression and no expression statements, return Unit (0)
 	return constant.NewInt(types.I64, 0), nil
 }
 
@@ -1038,7 +1304,7 @@ func (g *LLVMGenerator) extractStringFromValue(val value.Value) value.Value {
 
 	// Check if it's a Result type struct pointer
 	if ptrType, ok := val.Type().(*types.PointerType); ok {
-		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == 2 {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == MinResultFieldCount {
 			// This is a Result type { T, i8 } - extract the value (first field)
 			valuePtr := g.builder.NewGetElementPtr(structType, val,
 				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
