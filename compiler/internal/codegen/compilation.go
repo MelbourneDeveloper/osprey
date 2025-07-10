@@ -183,21 +183,26 @@ const (
 )
 
 // RuntimeLibraries defines the complete list of all runtime libraries required by the compiler
-// These must match what the Makefile actually builds
-// NOTE: libhttp_runtime.a contains ALL runtime components (HTTP, WebSocket, System, AND Fiber)
+// These must match what the Makefile actually builds - NOW BUILDING 4 SEPARATE LIBRARIES!
 //
 //nolint:gochecknoglobals // Global runtime libraries list required for linking
 var RuntimeLibraries = []string{
-	LibHTTPRuntime, // libhttp_runtime.a contains everything we need
+	LibFiberRuntime,     // libfiber_runtime.a
+	LibHTTPRuntime,      // libhttp_runtime.a
+	LibWebSocketRuntime, // libwebsocket_runtime.a
+	LibSystemRuntime,    // libsystem_runtime.a
 }
 
 // checkLibraryAvailability checks if runtime libraries are available
 func checkLibraryAvailability() map[string]bool {
 	// Helper function to check if a library exists in any location
 	checkLibrary := func(libName string) bool {
-		libPath := getLibraryPath(libName)
+		libPath, err := getLibraryPath(libName)
+		if err != nil {
+			return false
+		}
 
-		_, err := os.Stat(libPath)
+		_, err = os.Stat(libPath)
 		return err == nil
 	}
 
