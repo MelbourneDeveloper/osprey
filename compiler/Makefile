@@ -66,18 +66,28 @@ http-runtime:
 		-Wno-deprecated-declarations \
 		`pkg-config --cflags openssl 2>/dev/null || echo ""` \
 		-o bin/http_shared.o runtime/http_shared.c
+	@echo "🔧 Building fiber_runtime.o for HTTP runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime_http.o
+	@echo "🔧 Building system_runtime.o for HTTP runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime_http.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_client_runtime.c -o bin/http_client_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
-	ar rcs lib/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o
+	ar rcs lib/libhttp_runtime.a bin/http_shared.o bin/fiber_runtime_http.o bin/system_runtime_http.o bin/http_client_runtime.o bin/http_server_runtime.o
 	@echo "💀 HTTP RUNTIME LIBRARY BUILT! 💀"
 
 # Build WebSocket runtime library
 websocket-runtime:
 	@echo "🔨 Building WebSocket runtime with OpenSSL support..."
 	@mkdir -p bin lib
+	@echo "🔧 Building http_shared.o for websocket runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_shared.c -o bin/http_shared_ws.o
+	@echo "🔧 Building fiber_runtime.o for websocket runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime_ws.o
+	@echo "🔧 Building system_runtime.o for websocket runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime_ws.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
-	ar rcs lib/libwebsocket_runtime.a bin/websocket_client_runtime.o bin/websocket_server_runtime.o
+	ar rcs lib/libwebsocket_runtime.a bin/http_shared_ws.o bin/fiber_runtime_ws.o bin/system_runtime_ws.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o
 	@echo "🔌 WebSocket runtime library built: lib/libwebsocket_runtime.a"
 
 # Build System runtime library
