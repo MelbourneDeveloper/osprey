@@ -135,7 +135,9 @@ func CompileToExecutableWithLibDir(source, outputPath, libDir string) error {
 // │   └── osprey (executable)
 // ├── lib/
 // │   ├── libfiber_runtime.a
-// │   └── libhttp_runtime.a
+// │   ├── libhttp_runtime.a
+// │   ├── libwebsocket_runtime.a
+// │   └── libsystem_runtime.a
 // ├── include/
 // │   └── stdio.h, stdlib.h, etc.
 // getLibraryPathWithDir returns the path for a runtime library with optional lib directory override

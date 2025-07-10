@@ -16,8 +16,10 @@ class OspreyLocal < Formula
 
   def install
     bin.install "osprey"
-    lib.install "libhttp_runtime.a"
     lib.install "libfiber_runtime.a"
+    lib.install "libhttp_runtime.a"
+    lib.install "libwebsocket_runtime.a"
+    lib.install "libsystem_runtime.a"
   end
 
   test do

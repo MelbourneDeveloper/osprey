@@ -63,8 +63,10 @@ func TestPkgConfigOpenSSL(t *testing.T) {
 
 // TestBuildLinkArguments tests that we can generate proper link arguments.
 func TestBuildLinkArguments(t *testing.T) {
-	httpLib := filepath.Join("lib", "libhttp_runtime.a")
 	fiberLib := filepath.Join("lib", "libfiber_runtime.a")
+	httpLib := filepath.Join("lib", "libhttp_runtime.a")
+	websocketLib := filepath.Join("lib", "libwebsocket_runtime.a")
+	systemLib := filepath.Join("lib", "libsystem_runtime.a")
 
 	// Get current working directory for absolute path
 	cwd, err := os.Getwd()
@@ -75,26 +77,36 @@ func TestBuildLinkArguments(t *testing.T) {
 	linkArgs := []string{
 		"-o", "test",
 		"test.o",
-		filepath.Join(cwd, httpLib),
 		filepath.Join(cwd, fiberLib),
+		filepath.Join(cwd, httpLib),
+		filepath.Join(cwd, websocketLib),
+		filepath.Join(cwd, systemLib),
 		"-lpthread", "-lssl", "-lcrypto",
 	}
 
 	t.Logf("Link arguments: %v", linkArgs)
 
-	// Check that required libraries are referenced
-	hasHTTPLib := false
+	// Check that ALL 4 required libraries are referenced
 	hasFiberLib := false
+	hasHTTPLib := false
+	hasWebSocketLib := false
+	hasSystemLib := false
 	hasSSL := false
 	hasCrypto := false
 	hasPthread := false
 
 	for _, arg := range linkArgs {
+		if strings.Contains(arg, "libfiber_runtime.a") {
+			hasFiberLib = true
+		}
 		if strings.Contains(arg, "libhttp_runtime.a") {
 			hasHTTPLib = true
 		}
-		if strings.Contains(arg, "libfiber_runtime.a") {
-			hasFiberLib = true
+		if strings.Contains(arg, "libwebsocket_runtime.a") {
+			hasWebSocketLib = true
+		}
+		if strings.Contains(arg, "libsystem_runtime.a") {
+			hasSystemLib = true
 		}
 		if arg == "-lssl" {
 			hasSSL = true
@@ -107,11 +119,17 @@ func TestBuildLinkArguments(t *testing.T) {
 		}
 	}
 
+	if !hasFiberLib {
+		t.Fatal("Missing fiber runtime library")
+	}
 	if !hasHTTPLib {
 		t.Fatal("Missing HTTP runtime library")
 	}
-	if !hasFiberLib {
-		t.Fatal("Missing fiber runtime library")
+	if !hasWebSocketLib {
+		t.Fatal("Missing WebSocket runtime library")
+	}
+	if !hasSystemLib {
+		t.Fatal("Missing System runtime library")
 	}
 	if !hasSSL {
 		t.Fatal("Missing -lssl")
@@ -124,53 +142,70 @@ func TestBuildLinkArguments(t *testing.T) {
 	}
 }
 
-// TestHTTPRuntimeLibrary verifies that the HTTP runtime library contains expected symbols.
-func TestHTTPRuntimeLibrary(t *testing.T) {
-	// Get the working directory and construct the library path
+// TestAllRuntimeLibraries verifies that ALL 4 runtime libraries are built and contain expected symbols.
+func TestAllRuntimeLibraries(t *testing.T) {
+	// Get the working directory and construct the library paths
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get working directory: %v", err)
 	}
 
-	// Go up to the project root and then to lib
-	httpLibPath := filepath.Join(wd, "..", "..", "lib", "libhttp_runtime.a")
-	t.Logf("Found HTTP library: %s", httpLibPath)
-
-	// Check if the library exists
-	if _, err := os.Stat(httpLibPath); os.IsNotExist(err) {
-		t.Fatalf("HTTP runtime library not built at %s - build failed! Error: %v", httpLibPath, err)
+	// Define all 4 runtime libraries with their expected symbols
+	libraries := map[string][]string{
+		"libfiber_runtime.a": {
+			"fiber_create",
+			"fiber_yield",
+			"fiber_schedule",
+		},
+		"libhttp_runtime.a": {
+			"http_create_server",
+			"http_listen",
+			"http_create_client",
+			"http_request",
+		},
+		"libwebsocket_runtime.a": {
+			"websocket_create_server",
+			"websocket_create_client",
+			"websocket_send",
+		},
+		"libsystem_runtime.a": {
+			"system_execute",
+			"system_get_env",
+		},
 	}
 
-	// Use nm to check symbols in the library
-	cmd := exec.Command("nm", httpLibPath)
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("nm command failed - required for symbol analysis: %v", err)
-	}
+	// Test each library
+	for libName, expectedSymbols := range libraries {
+		t.Run(libName, func(t *testing.T) {
+			// Go up to the project root and then to lib
+			libPath := filepath.Join(wd, "..", "..", "lib", libName)
+			t.Logf("Testing library: %s", libPath)
 
-	symbols := string(output)
-	t.Logf("HTTP library symbols (first 500 chars): \n%s", symbols[:min(500, len(symbols))])
+			// Check if the library exists
+			if _, err := os.Stat(libPath); os.IsNotExist(err) {
+				t.Fatalf("%s not built at %s - build failed! Error: %v", libName, libPath, err)
+			}
 
-	// Check for modern OpenSSL EVP symbols instead of deprecated SHA1 symbols
-	if !strings.Contains(symbols, "EVP_MD_CTX_new") &&
-		!strings.Contains(symbols, "EVP_sha1") &&
-		!strings.Contains(symbols, "EVP_DigestInit_ex") {
-		t.Log("No OpenSSL EVP symbols found - may be statically linked or using system libraries")
-	}
+			// Use nm to check symbols in the library
+			cmd := exec.Command("nm", libPath)
+			output, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("nm command failed for %s - required for symbol analysis: %v", libName, err)
+			}
 
-	// Check for our own HTTP functions
-	expectedSymbols := []string{
-		"http_create_server",
-		"http_listen",
-		"http_create_client",
-		"http_request",
-	}
+			symbols := string(output)
+			t.Logf("%s symbols (first 500 chars): \n%s", libName, symbols[:min(500, len(symbols))])
 
-	for _, symbol := range expectedSymbols {
-		if !strings.Contains(symbols, symbol) {
-			t.Fatalf("FATAL: HTTP runtime library is missing expected symbol: '%s'. "+
-				"This is a critical build or link error. Full symbol table:\n%s", symbol, symbols)
-		}
+			// Check for expected symbols
+			for _, symbol := range expectedSymbols {
+				if !strings.Contains(symbols, symbol) {
+					t.Fatalf("FATAL: %s is missing expected symbol: '%s'. "+
+						"This is a critical build or link error. Full symbol table:\n%s", libName, symbol, symbols)
+				}
+			}
+
+			t.Logf("✅ %s contains all expected symbols", libName)
+		})
 	}
 }
 
@@ -226,10 +261,22 @@ int main() {
 	linkArgs = append(linkArgs, "clang")
 	linkArgs = append(linkArgs, "-o", testExe, testO)
 
-	// Add HTTP runtime library if available
+	// Add ALL 4 runtime libraries if available (order matters: dependents before dependencies)
+	if fiberLib := findLibrary("libfiber_runtime.a"); fiberLib != "" {
+		linkArgs = append(linkArgs, fiberLib)
+		t.Logf("Using Fiber library: %s", fiberLib)
+	}
 	if httpLib := findLibrary("libhttp_runtime.a"); httpLib != "" {
 		linkArgs = append(linkArgs, httpLib)
 		t.Logf("Using HTTP library: %s", httpLib)
+	}
+	if websocketLib := findLibrary("libwebsocket_runtime.a"); websocketLib != "" {
+		linkArgs = append(linkArgs, websocketLib)
+		t.Logf("Using WebSocket library: %s", websocketLib)
+	}
+	if systemLib := findLibrary("libsystem_runtime.a"); systemLib != "" {
+		linkArgs = append(linkArgs, systemLib)
+		t.Logf("Using System library: %s", systemLib)
 	}
 
 	linkArgs = append(linkArgs, "-lpthread")

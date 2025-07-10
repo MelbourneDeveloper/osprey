@@ -13,10 +13,12 @@ class Osprey < Formula
   end
 
   def install
-    # Install pre-built binaries and libraries
+    # Install pre-built binaries and ALL 4 runtime libraries
     bin.install "osprey"
     lib.install "libfiber_runtime.a"
     lib.install "libhttp_runtime.a"
+    lib.install "libwebsocket_runtime.a"
+    lib.install "libsystem_runtime.a"
   end
 
   test do
@@ -24,8 +26,10 @@ class Osprey < Formula
     output = shell_output("#{bin}/osprey --help 2>&1", 0)
     assert_match "Osprey", output
     
-    # Test that runtime libraries are installed
+    # Test that ALL 4 runtime libraries are installed
     assert_predicate lib/"libfiber_runtime.a", :exist?
     assert_predicate lib/"libhttp_runtime.a", :exist?
+    assert_predicate lib/"libwebsocket_runtime.a", :exist?
+    assert_predicate lib/"libsystem_runtime.a", :exist?
   end
 end 

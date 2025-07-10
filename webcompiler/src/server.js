@@ -227,8 +227,8 @@ function runOspreyCompiler(args, code = '') {
             
             // Set working directory so compiler can find runtime libraries
             const workingDir = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
-                ? process.cwd() // Docker: libraries are in /usr/local/lib
-                : path.resolve(__dirname, '../../compiler') // Dev: libraries are in compiler/bin
+                ? process.cwd() // Docker: osprey binary in /usr/local/bin uses FHS ../lib = /usr/local/lib
+                : path.resolve(__dirname, '../../compiler') // Dev: osprey binary in compiler/bin uses ../lib = compiler/lib
             
             const child = spawn(ospreyPath, [tempFile, ...args], {
                 stdio: 'pipe',

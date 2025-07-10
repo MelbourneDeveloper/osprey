@@ -31,7 +31,9 @@ All other dependencies (Go, ANTLR, OpenSSL) are compiled into the pre-built bina
 
 - `osprey` binary - The main compiler executable
 - `libfiber_runtime.a` - Runtime library for fiber-based concurrency
-- `libhttp_runtime.a` - Runtime library for HTTP client/server and WebSocket functionality
+- `libhttp_runtime.a` - Runtime library for HTTP client/server functionality
+- `libwebsocket_runtime.a` - Runtime library for WebSocket functionality
+- `libsystem_runtime.a` - Runtime library for system operations
 
 ## Usage
 
@@ -76,7 +78,9 @@ brew uninstall osprey
    mkdir -p osprey-darwin-amd64
    cp bin/osprey osprey-darwin-amd64/
    cp lib/libfiber_runtime.a osprey-darwin-amd64/
-cp lib/libhttp_runtime.a osprey-darwin-amd64/
+   cp lib/libhttp_runtime.a osprey-darwin-amd64/
+   cp lib/libwebsocket_runtime.a osprey-darwin-amd64/
+   cp lib/libsystem_runtime.a osprey-darwin-amd64/
    tar -czf osprey-darwin-amd64.tar.gz osprey-darwin-amd64/
    ```
 
@@ -196,6 +200,8 @@ mkdir -p osprey-darwin-amd64
 cp bin/osprey osprey-darwin-amd64/
 cp lib/libfiber_runtime.a osprey-darwin-amd64/
 cp lib/libhttp_runtime.a osprey-darwin-amd64/
+cp lib/libwebsocket_runtime.a osprey-darwin-amd64/
+cp lib/libsystem_runtime.a osprey-darwin-amd64/
 tar -czf osprey-darwin-amd64.tar.gz osprey-darwin-amd64/
 ```
 

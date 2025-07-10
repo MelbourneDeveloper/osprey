@@ -14,7 +14,7 @@ make build
 echo "📦 Creating release tarball..."
 mkdir -p ../homebrew-package/release
 cp bin/osprey ../homebrew-package/release/
-cp bin/lib*.a ../homebrew-package/release/
+cp lib/lib*.a ../homebrew-package/release/
 
 cd ../homebrew-package/release
 tar -czf "osprey-$VERSION.tar.gz" osprey lib*.a
