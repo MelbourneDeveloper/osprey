@@ -106,15 +106,18 @@ func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) ([]string, error) {
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", exeFile, objFile)
 
-
-	//TODO: use the standard list of runtime libraries
-
-	var err error
-	for _, libName := range runtimeLibsInOrder {
-		linkArgs, err = j.findAndAddRuntimeLibrary(libName, linkArgs)
+	// FAIL HARD: All runtime libraries must be available for JIT execution
+	for _, libName := range RuntimeLibraries {
+		libPath, err := getLibraryPath(libName)
 		if err != nil {
-			return nil, err
+			return nil, WrapMissingRuntimeLibrary(libName)
 		}
+
+		if _, err := os.Stat(libPath); err != nil {
+			return nil, WrapMissingRuntimeLibrary(libName)
+		}
+
+		linkArgs = append(linkArgs, libPath)
 	}
 
 	linkArgs = append(linkArgs, "-lpthread")
@@ -123,21 +126,6 @@ func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) ([]string, error) {
 	linkArgs = j.addOpenSSLFlags(linkArgs)
 
 	return linkArgs, nil
-}
-
-// findAndAddRuntimeLibrary finds a runtime library and adds it to link args, failing if not found
-func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string) ([]string, error) {
-	libPath, err := getLibraryPath(libName)
-	if err != nil {
-		return linkArgs, WrapMissingRuntimeLibrary(libName)
-	}
-
-	if _, err := os.Stat(libPath); err == nil {
-		return append(linkArgs, libPath), nil
-	}
-
-	// FAIL HARD if runtime library is missing
-	return linkArgs, WrapMissingRuntimeLibrary(libName)
 }
 
 // addOpenSSLFlags adds OpenSSL linking flags
