@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -104,7 +105,7 @@ func (p *ParseErrorListener) SyntaxError(
 
 // CompileToExecutable compiles source code to an executable binary with default (permissive) security.
 func CompileToExecutable(source, outputPath string) error {
-	return CompileToExecutableWithSecurity(source, outputPath, SecurityConfig{
+	return compileToExecutableInternal(source, outputPath, SecurityConfig{
 		AllowHTTP:             true,
 		AllowWebSocket:        true,
 		AllowFileRead:         true,
@@ -112,29 +113,22 @@ func CompileToExecutable(source, outputPath string) error {
 		AllowFFI:              true,
 		AllowProcessExecution: true,
 		SandboxMode:           false,
-	})
+	}, "")
 }
 
-// getLibraryPath returns the FHS-compliant path for a runtime library
-func getLibraryPath(libName string) (string, error) {
-	libFileName := fmt.Sprintf("lib%s.a", libName)
-
-	execPath, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-
-	// Primary FHS path: executable/../lib/
-	execDir := filepath.Dir(execPath)
-	libPath := filepath.Join(execDir, "..", "lib", libFileName)
-
-
-	// Return original FHS path even if it doesn't exist (for error reporting)
-	return libPath, nil
+// CompileToExecutableWithLibDir compiles source code to an executable binary with custom lib directory.
+func CompileToExecutableWithLibDir(source, outputPath, libDir string) error {
+	return compileToExecutableInternal(source, outputPath, SecurityConfig{
+		AllowHTTP:             true,
+		AllowWebSocket:        true,
+		AllowFileRead:         true,
+		AllowFileWrite:        true,
+		AllowFFI:              true,
+		AllowProcessExecution: true,
+		SandboxMode:           false,
+	}, libDir)
 }
 
-// addLibrary adds a library to linkArgs, checking multiple locations
-//
 // This is how artefacts must be organised. Follow FHS (Filesystem Hierarchy Standard)
 // osprey/
 // ├── bin/
@@ -144,14 +138,28 @@ func getLibraryPath(libName string) (string, error) {
 // │   └── libhttp_runtime.a
 // ├── include/
 // │   └── stdio.h, stdlib.h, etc.
-func addLibrary(libName string, linkArgs []string) ([]string, error) {
-	// Follow FHS (Filesystem Hierarchy Standard)
-	libPath, err := getLibraryPath(libName)
-	if err != nil {
-		return linkArgs, err
+// getLibraryPathWithDir returns the path for a runtime library with optional lib directory override
+func getLibraryPathWithDir(libName, libDir string) (string, error) {
+	libFileName := fmt.Sprintf("lib%s.a", libName)
+
+	// If libDir is provided, use it directly (for tests)
+	if libDir != "" {
+		libPath := filepath.Join(libDir, libFileName)
+		return libPath, nil
 	}
 
-	return append(linkArgs, libPath), nil
+	// Otherwise use normal FHS path: executable/../lib/
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+
+	// Primary FHS path: executable/../lib/
+	execDir := filepath.Dir(execPath)
+	libPath := filepath.Join(execDir, "..", "lib", libFileName)
+
+	// Return original FHS path even if it doesn't exist (for error reporting)
+	return libPath, nil
 }
 
 // addOpenSSLFlags adds OpenSSL linking flags using pkg-config or platform-specific fallbacks
@@ -182,6 +190,11 @@ const (
 	LibSystemRuntime    = "system_runtime"
 )
 
+// Static errors
+var (
+	ErrProjectRootNotFound = errors.New("could not find project root (go.mod not found)")
+)
+
 // RuntimeLibraries defines the complete list of all runtime libraries required by the compiler
 // These must match what the Makefile actually builds - NOW BUILDING 4 SEPARATE LIBRARIES!
 //
@@ -193,11 +206,11 @@ var RuntimeLibraries = []string{
 	LibSystemRuntime,    // libsystem_runtime.a
 }
 
-// checkLibraryAvailability checks if runtime libraries are available
-func checkLibraryAvailability() map[string]bool {
-	// Helper function to check if a library exists in any location
+// checkLibraryAvailabilityWithDir checks if runtime libraries are available with optional custom lib directory
+func checkLibraryAvailabilityWithDir(libDir string) map[string]bool {
+	// Helper function to check if a library exists
 	checkLibrary := func(libName string) bool {
-		libPath, err := getLibraryPath(libName)
+		libPath, err := getLibraryPathWithDir(libName, libDir)
 		if err != nil {
 			return false
 		}
@@ -262,6 +275,11 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, library
 
 // CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.
 func CompileToExecutableWithSecurity(source, outputPath string, security SecurityConfig) error {
+	return compileToExecutableInternal(source, outputPath, security, "")
+}
+
+// compileToExecutableInternal is the unified implementation for all compilation functions
+func compileToExecutableInternal(source, outputPath string, security SecurityConfig, libDir string) error {
 	// Ensure the output directory exists
 	outputDir := filepath.Dir(outputPath)
 	if err := os.MkdirAll(outputDir, DirPermissions); err != nil {
@@ -299,10 +317,11 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	// Add runtime libraries (order matters: dependents before dependencies)
 	for _, libName := range RuntimeLibraries {
-		linkArgs, err = addLibrary(libName, linkArgs)
+		libPath, err := getLibraryPathWithDir(libName, libDir)
 		if err != nil {
 			return err
 		}
+		linkArgs = append(linkArgs, libPath)
 	}
 
 	linkArgs = append(linkArgs, "-lpthread")
@@ -311,7 +330,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	linkArgs = addOpenSSLFlags(linkArgs)
 
 	// Check library availability and try linking
-	libraryAvailability := checkLibraryAvailability()
+	libraryAvailability := checkLibraryAvailabilityWithDir(libDir)
 	return tryLinkWithCompilers(outputPath, objFile, linkArgs, libraryAvailability)
 }
 

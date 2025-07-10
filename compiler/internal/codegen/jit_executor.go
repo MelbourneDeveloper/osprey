@@ -13,11 +13,17 @@ import (
 // JITExecutor provides in-memory compilation and execution.
 type JITExecutor struct {
 	// For now, we'll use a self-contained approach that embeds the required tools
+	libDir string // Optional lib directory override (for tests)
 }
 
 // NewJITExecutor creates a new JIT executor.
 func NewJITExecutor() *JITExecutor {
 	return &JITExecutor{}
+}
+
+// NewJITExecutorWithLibDir creates a new JIT executor instance with custom lib directory
+func NewJITExecutorWithLibDir(libDir string) *JITExecutor {
+	return &JITExecutor{libDir: libDir}
 }
 
 // CompileAndRunInMemory compiles LLVM IR and runs it without external dependencies.
@@ -108,7 +114,7 @@ func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) ([]string, error) {
 
 	// FAIL HARD: All runtime libraries must be available for JIT execution
 	for _, libName := range RuntimeLibraries {
-		libPath, err := getLibraryPath(libName)
+		libPath, err := getLibraryPathWithDir(libName, j.libDir)
 		if err != nil {
 			return nil, WrapMissingRuntimeLibrary(libName)
 		}
@@ -309,6 +315,19 @@ func CompileAndRunJIT(source string) error {
 	})
 }
 
+// CompileAndRunJITWithLibDir is the main entry point for JIT compilation with custom lib directory.
+func CompileAndRunJITWithLibDir(source, libDir string) error {
+	return CompileAndRunJITWithSecurityAndLibDir(source, SecurityConfig{
+		AllowHTTP:             true,
+		AllowWebSocket:        true,
+		AllowFileRead:         true,
+		AllowFileWrite:        true,
+		AllowFFI:              true,
+		AllowProcessExecution: true,
+		SandboxMode:           false,
+	}, libDir)
+}
+
 // CompileAndRunJITWithSecurity is the main entry point for JIT compilation with specified security configuration.
 func CompileAndRunJITWithSecurity(source string, security SecurityConfig) error {
 	// Generate LLVM IR with security configuration
@@ -319,7 +338,19 @@ func CompileAndRunJITWithSecurity(source string, security SecurityConfig) error 
 
 	// Use JIT executor
 	executor := NewJITExecutor()
+	return executor.CompileAndRunInMemory(ir)
+}
 
+// CompileAndRunJITWithSecurityAndLibDir is the main entry point for JIT compilation with security and lib directory.
+func CompileAndRunJITWithSecurityAndLibDir(source string, security SecurityConfig, libDir string) error {
+	// Generate LLVM IR with security configuration
+	ir, err := CompileToLLVMWithSecurity(source, security)
+	if err != nil {
+		return fmt.Errorf("failed to generate LLVM IR: %w", err)
+	}
+
+	// Use JIT executor with custom lib directory
+	executor := NewJITExecutorWithLibDir(libDir)
 	return executor.CompileAndRunInMemory(ir)
 }
 
@@ -336,6 +367,19 @@ func CompileAndCaptureJIT(source string) (string, error) {
 	})
 }
 
+// CompileAndCaptureJITWithLibDir compiles and captures program output with custom lib directory.
+func CompileAndCaptureJITWithLibDir(source, libDir string) (string, error) {
+	return CompileAndCaptureJITWithSecurityAndLibDir(source, SecurityConfig{
+		AllowHTTP:             true,
+		AllowWebSocket:        true,
+		AllowFileRead:         true,
+		AllowFileWrite:        true,
+		AllowFFI:              true,
+		AllowProcessExecution: true,
+		SandboxMode:           false,
+	}, libDir)
+}
+
 // CompileAndCaptureJITWithSecurity compiles and captures program output with specified security configuration.
 func CompileAndCaptureJITWithSecurity(source string, security SecurityConfig) (string, error) {
 	// Generate LLVM IR with security configuration
@@ -346,6 +390,18 @@ func CompileAndCaptureJITWithSecurity(source string, security SecurityConfig) (s
 
 	// Use JIT executor to compile and capture output
 	executor := NewJITExecutor()
+	return executor.CompileAndCaptureOutput(ir)
+}
 
+// CompileAndCaptureJITWithSecurityAndLibDir compiles and captures program output with security and lib directory.
+func CompileAndCaptureJITWithSecurityAndLibDir(source string, security SecurityConfig, libDir string) (string, error) {
+	// Generate LLVM IR with security configuration
+	ir, err := CompileToLLVMWithSecurity(source, security)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate LLVM IR: %w", err)
+	}
+
+	// Use JIT executor with custom lib directory to compile and capture output
+	executor := NewJITExecutorWithLibDir(libDir)
 	return executor.CompileAndCaptureOutput(ir)
 }

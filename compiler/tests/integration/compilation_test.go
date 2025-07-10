@@ -10,6 +10,9 @@ import (
 	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
+// TestLibDir is the relative path to the lib directory for tests
+const TestLibDir = "../../lib"
+
 // TestPkgConfigOpenSSL tests that pkg-config can find OpenSSL.
 func TestPkgConfigOpenSSL(t *testing.T) {
 	cmd := exec.Command("pkg-config", "--libs", "openssl")
@@ -322,7 +325,8 @@ fn main() -> int {
 
 	// Now try to compile it
 	outputFile := filepath.Join(testDir, "test_http")
-	err = codegen.CompileToExecutable(ospCode, outputFile)
+	// Use CompileToExecutableWithLibDir to specify the lib directory for tests
+	err = codegen.CompileToExecutableWithLibDir(ospCode, outputFile, TestLibDir)
 
 	if err != nil {
 		t.Fatalf("FATAL: Compilation failed unexpectedly. This test expects successful compilation. Error: %v", err)
@@ -349,7 +353,8 @@ fn main() -> int {
 	outputFile := filepath.Join(testDir, "test_http")
 
 	// Run the compilation
-	err := codegen.CompileToExecutable(ospCode, outputFile)
+	// Use CompileToExecutableWithLibDir to specify the lib directory for tests
+	err := codegen.CompileToExecutableWithLibDir(ospCode, outputFile, TestLibDir)
 
 	if err != nil {
 		t.Fatalf("FATAL: ❌ Compilation failed unexpectedly. "+
@@ -362,7 +367,8 @@ fn main() -> int {
 // TestFailsCompilationCircularDependency tests that circular effect dependencies fail compilation
 func TestFailsCompilationCircularDependency(t *testing.T) {
 	// Test the circular dependency example
-	err := codegen.CompileToExecutable(`
+	// Use CompileToExecutableWithLibDir to specify the lib directory for tests
+	err := codegen.CompileToExecutableWithLibDir(`
 effect StateA {
     getFromB: fn() -> int
     setInA: fn(int) -> Unit
@@ -396,7 +402,7 @@ fn main() -> Unit = {
         let result = circularEffectA()
         print("Result: " + toString(result))
     }
-}`, "/tmp/circular_test")
+}`, "/tmp/circular_test", TestLibDir)
 
 	// This SHOULD fail with a circular dependency error
 	if err == nil {
