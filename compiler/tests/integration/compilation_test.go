@@ -60,8 +60,8 @@ func TestPkgConfigOpenSSL(t *testing.T) {
 
 // TestBuildLinkArguments tests that we can generate proper link arguments.
 func TestBuildLinkArguments(t *testing.T) {
-	httpLib := filepath.Join("bin", "libhttp_runtime.a")
-	fiberLib := filepath.Join("bin", "libfiber_runtime.a")
+	httpLib := filepath.Join("lib", "libhttp_runtime.a")
+	fiberLib := filepath.Join("lib", "libfiber_runtime.a")
 
 	// Get current working directory for absolute path
 	cwd, err := os.Getwd()
@@ -129,8 +129,8 @@ func TestHTTPRuntimeLibrary(t *testing.T) {
 		t.Fatalf("Failed to get working directory: %v", err)
 	}
 
-	// Go up to the project root and then to bin
-	httpLibPath := filepath.Join(wd, "..", "..", "bin", "libhttp_runtime.a")
+	// Go up to the project root and then to lib
+	httpLibPath := filepath.Join(wd, "..", "..", "lib", "libhttp_runtime.a")
 	t.Logf("Found HTTP library: %s", httpLibPath)
 
 	// Check if the library exists
@@ -260,17 +260,17 @@ int main() {
 func findLibrary(libName string) string {
 	// Use the exact same search paths as the JIT executor
 	possiblePaths := []string{
-		filepath.Join("bin", libName),
-		filepath.Join(".", "bin", libName),
+		filepath.Join("lib", libName),
+		filepath.Join(".", "lib", libName),
 		"/usr/local/lib/" + libName, // System install location
 	}
 
 	// Add working directory based paths - match JIT executor exactly
 	if wd, err := os.Getwd(); err == nil {
 		possiblePaths = append(possiblePaths,
-			filepath.Join(wd, "bin", libName),
-			filepath.Join(wd, "..", "bin", libName),
-			filepath.Join(wd, "..", "..", "bin", libName),
+			filepath.Join(wd, "lib", libName),
+			filepath.Join(wd, "..", "lib", libName),
+			filepath.Join(wd, "..", "..", "lib", libName),
 		)
 	}
 

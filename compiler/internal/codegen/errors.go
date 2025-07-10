@@ -147,6 +147,9 @@ var (
 	ErrSleepWrongArgs          = errors.New("sleep expects exactly 1 argument (milliseconds)")
 	ErrWriteFileWrongArgs      = errors.New("writeFile expects exactly 2 arguments (filename, content)")
 	ErrReadFileWrongArgs       = errors.New("readFile expects exactly 1 argument (filename)")
+	
+	// Runtime library errors
+	ErrMissingRuntimeLibrary = errors.New("COMPILATION_ERROR: Required runtime library not found")
 )
 
 // Helper functions to wrap static errors with context
@@ -983,4 +986,9 @@ func WrapReadFileWrongArgsWithPos(got int, pos *ast.Position) error {
 		return fmt.Errorf("line %d:%d %w, got %d", pos.Line, pos.Column, ErrReadFileWrongArgs, got)
 	}
 	return fmt.Errorf("%w, got %d", ErrReadFileWrongArgs, got)
+}
+
+// WrapMissingRuntimeLibrary wraps missing runtime library errors with library name.
+func WrapMissingRuntimeLibrary(libName string) error {
+	return fmt.Errorf("lib%s.a: %w", libName, ErrMissingRuntimeLibrary)
 }

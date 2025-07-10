@@ -32,10 +32,10 @@ build-no-lint: fiber-runtime http-runtime
 # Build fiber runtime library - WARNINGS ARE ERRORS!!!
 fiber-runtime:
 	@echo "🔨 Building fiber runtime library..."
-	@mkdir -p bin
+	@mkdir -p bin lib
 	gcc -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
-	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
-	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a"
+	ar rcs lib/libfiber_runtime.a bin/fiber_runtime.o
+	@echo "✅ Fiber runtime library built: lib/libfiber_runtime.a"
 
 
 
@@ -71,7 +71,7 @@ http-runtime:
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
-	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
+	ar rcs lib/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
 
 # Install the osprey compiler globally
@@ -80,8 +80,8 @@ install: build
 	sudo cp bin/osprey /usr/local/bin/
 	@echo "📁 Creating /usr/local/lib if it doesn't exist..."
 	sudo mkdir -p /usr/local/lib
-	sudo cp bin/libfiber_runtime.a /usr/local/lib/
-	sudo cp bin/libhttp_runtime.a /usr/local/lib/
+	sudo cp lib/libfiber_runtime.a /usr/local/lib/
+	sudo cp lib/libhttp_runtime.a /usr/local/lib/
 	@echo "✅ osprey compiler installed! You can now use 'osprey' from anywhere."
 	@echo "Test with: osprey --help"
 
@@ -100,6 +100,7 @@ install-deps:
 # Clean build artifacts
 clean:
 	rm -rf bin/
+	rm -rf lib/
 	rm -rf outputs/
 	rm -rf internal/codegen/bin
 	find /tmp -name "*osprey*" -delete 2>/dev/null || true

@@ -65,15 +65,16 @@ ENV PATH="/usr/lib/llvm-14/bin:${PATH}"
 RUN groupadd -g 1001 nodejs && \
     useradd -r -u 1001 -g nodejs osprey
 
-# Create app directory
+# Create app directory and bin subdirectory
 WORKDIR /app
+RUN mkdir -p bin
 
 # Copy built Osprey compiler from the build stage
 COPY --from=osprey-builder /workspace/bin/osprey /usr/local/bin/osprey
 
-# Copy built runtime libraries to system location
-COPY --from=osprey-builder /workspace/bin/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
-COPY --from=osprey-builder /workspace/bin/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
+# Copy built runtime libraries to bin directory where the code expects them
+COPY --from=osprey-builder /workspace/lib/libfiber_runtime.a /app/lib/libfiber_runtime.a
+COPY --from=osprey-builder /workspace/lib/libhttp_runtime.a /app/lib/libhttp_runtime.a
 
 # Copy built LSP server
 COPY --from=lsp-builder /workspace/vscode-extension/server /app/server

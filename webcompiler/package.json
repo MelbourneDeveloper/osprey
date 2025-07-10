@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "./start.sh",
+    "dev": "cd ../compiler && make clean && make build && cd ../webcompiler && node src/server.js",
     "server": "node src/server.js"
   },
   "dependencies": {

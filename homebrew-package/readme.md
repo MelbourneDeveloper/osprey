@@ -75,8 +75,8 @@ brew uninstall osprey
    make build
    mkdir -p osprey-darwin-amd64
    cp bin/osprey osprey-darwin-amd64/
-   cp bin/libfiber_runtime.a osprey-darwin-amd64/
-   cp bin/libhttp_runtime.a osprey-darwin-amd64/
+   cp lib/libfiber_runtime.a osprey-darwin-amd64/
+cp lib/libhttp_runtime.a osprey-darwin-amd64/
    tar -czf osprey-darwin-amd64.tar.gz osprey-darwin-amd64/
    ```
 
@@ -194,8 +194,8 @@ make build  # This builds with all security hardening
 ```bash
 mkdir -p osprey-darwin-amd64
 cp bin/osprey osprey-darwin-amd64/
-cp bin/libfiber_runtime.a osprey-darwin-amd64/
-cp bin/libhttp_runtime.a osprey-darwin-amd64/
+cp lib/libfiber_runtime.a osprey-darwin-amd64/
+cp lib/libhttp_runtime.a osprey-darwin-amd64/
 tar -czf osprey-darwin-amd64.tar.gz osprey-darwin-amd64/
 ```
 

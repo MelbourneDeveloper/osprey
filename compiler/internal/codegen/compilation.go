@@ -115,39 +115,43 @@ func CompileToExecutable(source, outputPath string) error {
 	})
 }
 
-// buildLibraryPaths builds the search paths for runtime libraries
-func buildLibraryPaths(libName string) []string {
-	paths := []string{
-		fmt.Sprintf("bin/lib%s.a", libName),
-		fmt.Sprintf("./bin/lib%s.a", libName),
-		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
-		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
-		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
-		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
+// getLibraryPath returns the FHS-compliant path for a runtime library
+func getLibraryPath(libName string) (string, error) {
+	libFileName := fmt.Sprintf("lib%s.a", libName)
+
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", err
 	}
 
-	// Add working directory based paths
-	if wd, err := os.Getwd(); err == nil {
-		paths = append(paths,
-			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
-		)
-	}
+	// Primary FHS path: executable/../lib/
+	execDir := filepath.Dir(execPath)
+	libPath := filepath.Join(execDir, "..", "lib", libFileName)
 
-	return paths
+
+	// Return original FHS path even if it doesn't exist (for error reporting)
+	return libPath, nil
 }
 
-// findAndAddLibrary finds a library in the given paths and adds it to linkArgs
-func findAndAddLibrary(libName string, linkArgs []string) []string {
-	paths := buildLibraryPaths(libName)
-	for _, libPath := range paths {
-		if _, err := os.Stat(libPath); err == nil {
-			return append(linkArgs, libPath)
-		}
+// addLibrary adds a library to linkArgs, checking multiple locations
+//
+// This is how artefacts must be organised. Follow FHS (Filesystem Hierarchy Standard)
+// osprey/
+// ├── bin/
+// │   └── osprey (executable)
+// ├── lib/
+// │   ├── libfiber_runtime.a
+// │   └── libhttp_runtime.a
+// ├── include/
+// │   └── stdio.h, stdlib.h, etc.
+func addLibrary(libName string, linkArgs []string) ([]string, error) {
+	// Follow FHS (Filesystem Hierarchy Standard)
+	libPath, err := getLibraryPath(libName)
+	if err != nil {
+		return linkArgs, err
 	}
-	return linkArgs
+
+	return append(linkArgs, libPath), nil
 }
 
 // addOpenSSLFlags adds OpenSSL linking flags using pkg-config or platform-specific fallbacks
@@ -170,35 +174,57 @@ func addOpenSSLFlags(linkArgs []string) []string {
 	return append(linkArgs, "-lssl", "-lcrypto")
 }
 
-// checkLibraryAvailability checks if any runtime libraries are available
-func checkLibraryAvailability() (bool, bool) {
-	fiberExists := false
-	httpExists := false
+// Runtime library name constants
+const (
+	LibFiberRuntime     = "fiber_runtime"
+	LibHTTPRuntime      = "http_runtime"
+	LibWebSocketRuntime = "websocket_runtime"
+	LibSystemRuntime    = "system_runtime"
+)
 
-	// Check if any fiber runtime library was found
-	for _, libPath := range buildLibraryPaths("fiber_runtime") {
-		if _, err := os.Stat(libPath); err == nil {
-			fiberExists = true
-			break
+// RuntimeLibraries defines the complete list of all runtime libraries required by the compiler
+var RuntimeLibraries = []string{
+	LibFiberRuntime,
+	LibHTTPRuntime,
+	LibWebSocketRuntime,
+	LibSystemRuntime,
+}
+
+// checkLibraryAvailability checks if runtime libraries are available
+func checkLibraryAvailability() map[string]bool {
+	// Helper function to check if a library exists in any location
+	checkLibrary := func(libName string) bool {
+		libPath, err := getLibraryPath(libName)
+		if err != nil {
+			return false
 		}
+
+		_, err = os.Stat(libPath)
+		return err == nil
 	}
 
-	// Check if any HTTP runtime library was found
-	for _, libPath := range buildLibraryPaths("http_runtime") {
-		if _, err := os.Stat(libPath); err == nil {
-			httpExists = true
-			break
-		}
+	availability := make(map[string]bool)
+	for _, libName := range RuntimeLibraries {
+		availability[libName] = checkLibrary(libName)
 	}
 
-	return fiberExists, httpExists
+	return availability
 }
 
 // tryLinkWithCompilers attempts to link the executable using multiple compiler options
-func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberExists, httpExists bool) error {
+func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, libraryAvailability map[string]bool) error {
 	var clangCommands [][]string
 
-	if fiberExists || httpExists {
+	// Check if any runtime libraries are available
+	anyLibraryExists := false
+	for _, libName := range RuntimeLibraries {
+		if libraryAvailability[libName] {
+			anyLibraryExists = true
+			break
+		}
+	}
+
+	if anyLibraryExists {
 		clangCommands = [][]string{
 			append([]string{"clang"}, linkArgs...),                   // System clang
 			append([]string{"/usr/bin/clang"}, linkArgs...),          // System path clang
@@ -268,9 +294,13 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", outputPath, objFile)
 
-	// Find and add runtime libraries (order matters: dependents before dependencies)
-	linkArgs = findAndAddLibrary("http_runtime", linkArgs)
-	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
+	// Add runtime libraries (order matters: dependents before dependencies)
+	for _, libName := range RuntimeLibraries {
+		linkArgs, err = addLibrary(libName, linkArgs)
+		if err != nil {
+			return err
+		}
+	}
 
 	linkArgs = append(linkArgs, "-lpthread")
 
@@ -278,8 +308,8 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	linkArgs = addOpenSSLFlags(linkArgs)
 
 	// Check library availability and try linking
-	fiberExists, httpExists := checkLibraryAvailability()
-	return tryLinkWithCompilers(outputPath, objFile, linkArgs, fiberExists, httpExists)
+	libraryAvailability := checkLibraryAvailability()
+	return tryLinkWithCompilers(outputPath, objFile, linkArgs, libraryAvailability)
 }
 
 // CompileAndRun compiles and runs source code using smart JIT execution with default (permissive) security.

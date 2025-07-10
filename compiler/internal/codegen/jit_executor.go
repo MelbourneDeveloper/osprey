@@ -43,7 +43,10 @@ func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
 	}
 
 	// Setup linking arguments
-	linkArgs := j.setupLinkArgs(exeFile, objFile)
+	linkArgs, err := j.setupLinkArgs(exeFile, objFile)
+	if err != nil {
+		return "", err
+	}
 
 	// Link to executable
 	if err := j.linkExecutable(linkArgs); err != nil {
@@ -99,65 +102,42 @@ func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
 }
 
 // setupLinkArgs builds the linking arguments for the executable
-func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) []string {
+func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) ([]string, error) {
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", exeFile, objFile)
 
-	// Find and add runtime libraries (order matters: dependents before dependencies)
-	linkArgs = j.findAndAddRuntimeLibrary("http_runtime", linkArgs)
-	linkArgs = j.findAndAddRuntimeLibrary("fiber_runtime", linkArgs)
+
+	//TODO: use the standard list of runtime libraries
+
+	var err error
+	for _, libName := range runtimeLibsInOrder {
+		linkArgs, err = j.findAndAddRuntimeLibrary(libName, linkArgs)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	linkArgs = append(linkArgs, "-lpthread")
 
 	// Add OpenSSL libraries
 	linkArgs = j.addOpenSSLFlags(linkArgs)
 
-	return linkArgs
+	return linkArgs, nil
 }
 
-// findAndAddRuntimeLibrary finds a runtime library and adds it to link args
-func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string) []string {
-	paths := j.buildRuntimeLibraryPaths(libName)
-
-	var foundLib string
-	for _, libPath := range paths {
-		if _, err := os.Stat(libPath); err == nil {
-			linkArgs = append(linkArgs, libPath)
-			foundLib = libPath
-			break
-		}
+// findAndAddRuntimeLibrary finds a runtime library and adds it to link args, failing if not found
+func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string) ([]string, error) {
+	libPath, err := getLibraryPath(libName)
+	if err != nil {
+		return linkArgs, WrapMissingRuntimeLibrary(libName)
 	}
 
-	// Debug output - only show warnings if libraries not found
-	if foundLib == "" {
-		fmt.Fprintf(os.Stderr, "Warning: %s runtime library not found in any of: %v\n", libName, paths)
+	if _, err := os.Stat(libPath); err == nil {
+		return append(linkArgs, libPath), nil
 	}
 
-	return linkArgs
-}
-
-// buildRuntimeLibraryPaths builds search paths for a specific runtime library
-func (j *JITExecutor) buildRuntimeLibraryPaths(libName string) []string {
-	paths := []string{
-		fmt.Sprintf("bin/lib%s.a", libName),
-		fmt.Sprintf("./bin/lib%s.a", libName),
-		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
-		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
-		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
-		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
-	}
-
-	// Add working directory based paths
-	if wd, err := os.Getwd(); err == nil {
-		paths = append(paths,
-			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
-		)
-	}
-
-	return paths
+	// FAIL HARD if runtime library is missing
+	return linkArgs, WrapMissingRuntimeLibrary(libName)
 }
 
 // addOpenSSLFlags adds OpenSSL linking flags
@@ -257,7 +237,10 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	}
 
 	// Setup linking arguments
-	linkArgs := j.setupLinkArgs(exeFile, objFile)
+	linkArgs, err := j.setupLinkArgs(exeFile, objFile)
+	if err != nil {
+		return err
+	}
 
 	// Link to executable
 	if err := j.linkExecutable(linkArgs); err != nil {
