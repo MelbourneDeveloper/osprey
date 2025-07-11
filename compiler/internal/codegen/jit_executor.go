@@ -104,14 +104,14 @@ func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
 func (j *JITExecutor) getRequiredRuntimeLibraries() []string {
 	var required []string
 
-	// Fiber runtime is always required for basic execution
+	// Fiber runtime is always required for basic execution. Dependents must come BEFORE their dependencies
+	// The fiber runtime depends on system runtime functions, so it must be linked first
 	required = append(required, LibFiberRuntime)
 
-	// System runtime only required if permissions are allowed
-	if j.security.AllowFileRead || j.security.AllowFileWrite ||
-		j.security.AllowProcessExecution || j.security.AllowFFI {
-		required = append(required, LibSystemRuntime)
-	}
+	// System runtime is ALWAYS required because fiber runtime depends on it
+	// The fiber runtime calls spawn_process_with_handler, await_process, and cleanup_process
+	// which are defined in system_runtime.c
+	required = append(required, LibSystemRuntime)
 
 	// HTTP runtime only if HTTP is allowed
 	if j.security.AllowHTTP {
@@ -177,6 +177,7 @@ func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) ([]string, error) {
 
 	// Only check for runtime libraries that are actually needed based on security configuration
 	requiredLibs := j.getRequiredRuntimeLibraries()
+
 	for _, libName := range requiredLibs {
 		libPath, err := getLibraryPathWithDir(libName, j.libDir)
 		if err != nil {

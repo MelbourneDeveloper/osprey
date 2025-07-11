@@ -196,12 +196,12 @@ var (
 
 // RuntimeLibraries defines the complete list of all runtime libraries required by the compiler
 // These must match what the Makefile actually builds - NOW BUILDING 4 SEPARATE LIBRARIES!
-// LINKING ORDER CRITICAL: Dependencies must come BEFORE their dependents for static linking
+// LINKING ORDER CRITICAL: For static libraries, dependents must come BEFORE their dependencies
 //
 //nolint:gochecknoglobals // Global runtime libraries list required for linking
 var RuntimeLibraries = []string{
-	LibSystemRuntime,    // libsystem_runtime.a - PROVIDES functions (must be first)
-	LibFiberRuntime,     // libfiber_runtime.a - DEPENDS ON system_runtime
+	LibFiberRuntime,     // libfiber_runtime.a - DEPENDS ON system_runtime (must be first)
+	LibSystemRuntime,    // libsystem_runtime.a - PROVIDES functions for fiber_runtime
 	LibHTTPRuntime,      // libhttp_runtime.a
 	LibWebSocketRuntime, // libwebsocket_runtime.a
 }
