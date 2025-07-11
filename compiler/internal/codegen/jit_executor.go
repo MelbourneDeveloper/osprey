@@ -65,8 +65,6 @@ func NewJITExecutorWithLibDirAndSecurity(libDir string, security SecurityConfig)
 	}
 }
 
-
-
 // CompileAndRunInMemory compiles LLVM IR and runs it without external dependencies.
 func (j *JITExecutor) CompileAndRunInMemory(ir string) error {
 	// For immediate solution: use embedded compilation approach
@@ -112,7 +110,9 @@ func (j *JITExecutor) getRequiredRuntimeLibraries() []string {
 	required = append(required, LibFiberRuntime)
 
 	// System runtime is always required for basic system operations
-	required = append(required, LibSystemRuntime)
+	if j.security.AllowFileRead || j.security.AllowFileWrite || j.security.AllowProcessExecution || j.security.AllowFFI {
+		required = append(required, LibSystemRuntime)
+	}
 
 	// HTTP runtime only if HTTP is allowed
 	if j.security.AllowHTTP {
