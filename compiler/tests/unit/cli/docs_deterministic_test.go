@@ -38,7 +38,7 @@ func TestDocumentationDeterministic(t *testing.T) {
 		tempDirs[i] = tempDir
 
 		// Generate documentation
-		result := cli.RunCommand("", "docs", tempDir, false)
+		result := cli.RunCommand("", "docs", tempDir, false, cli.NewDefaultSecurityConfig())
 		if !result.Success {
 			t.Logf("Documentation generation failed on run %d: %s (continuing test)", i, result.ErrorMsg)
 			// Create empty directory so hash comparison doesn't fail
@@ -90,7 +90,7 @@ func TestFunctionsIndexDeterministic(t *testing.T) {
 		defer func() { _ = os.RemoveAll(tempDir) }()
 
 		// Generate documentation
-		result := cli.RunCommand("", "docs", tempDir, false)
+		result := cli.RunCommand("", "docs", tempDir, false, cli.NewDefaultSecurityConfig())
 		if !result.Success {
 			t.Logf("Documentation generation failed on run %d: %s (continuing test)", i, result.ErrorMsg)
 			contents = append(contents, "") // Add empty content

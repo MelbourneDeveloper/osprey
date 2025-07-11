@@ -196,20 +196,9 @@ func RunMainWithArgs(args []string) CommandResult {
 		return CommandResult{Success: true, Output: ""}
 	}
 
-	var result CommandResult
-
-	// Use security-aware functions if security settings are non-default
-	if security != nil && (security.SandboxMode || !security.AllowHTTP || !security.AllowWebSocket ||
-		!security.AllowFileRead || !security.AllowFileWrite || !security.AllowFFI) {
-
-		// Use security-aware command execution
-		result = RunCommandWithSecurity(filename, outputMode, quiet, security)
-	} else {
-		// Use regular command execution for default/permissive mode
-		result = RunCommand(filename, outputMode, docsDir, quiet)
-	}
-
-	return result
+	// ALWAYS use security-aware command execution
+	// The security config handles both permissive and restrictive modes
+	return RunCommand(filename, outputMode, docsDir, quiet, security)
 }
 
 // RunMainFromOS runs the main function using os.Args
