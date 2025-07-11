@@ -196,13 +196,14 @@ var (
 
 // RuntimeLibraries defines the complete list of all runtime libraries required by the compiler
 // These must match what the Makefile actually builds - NOW BUILDING 4 SEPARATE LIBRARIES!
+// LINKING ORDER CRITICAL: Dependencies must come BEFORE their dependents for static linking
 //
 //nolint:gochecknoglobals // Global runtime libraries list required for linking
 var RuntimeLibraries = []string{
-	LibFiberRuntime,     // libfiber_runtime.a
+	LibSystemRuntime,    // libsystem_runtime.a - PROVIDES functions (must be first)
+	LibFiberRuntime,     // libfiber_runtime.a - DEPENDS ON system_runtime
 	LibHTTPRuntime,      // libhttp_runtime.a
 	LibWebSocketRuntime, // libwebsocket_runtime.a
-	LibSystemRuntime,    // libsystem_runtime.a
 }
 
 // checkLibraryAvailabilityWithDir checks if runtime libraries are available with optional custom lib directory
@@ -314,7 +315,7 @@ func compileToExecutableInternal(source, outputPath string, security SecurityCon
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", outputPath, objFile)
 
-	// Add runtime libraries (order matters: dependents before dependencies)
+	// Add runtime libraries (order matters: dependencies before dependents for static linking)
 	for _, libName := range RuntimeLibraries {
 		libPath, err := getLibraryPathWithDir(libName, libDir)
 		if err != nil {

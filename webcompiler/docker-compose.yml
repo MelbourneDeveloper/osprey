@@ -9,6 +9,8 @@ services:
       - NODE_ENV=production
       - PORT=3001
     restart: unless-stopped
+    tmpfs:
+      - /app/temp:rw,noexec,nosuid,size=256m,uid=1001,gid=1001,mode=755
     healthcheck:
       test: [
         "CMD",

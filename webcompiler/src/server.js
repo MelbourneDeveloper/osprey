@@ -205,35 +205,44 @@ setInterval(cleanupOldTempFolders, 30 * 60 * 1000)
 deleteAllTempFolders()
 
 // THREAD-SAFE Helper function to run Osprey compiler
-// Each request gets its own UUID-named folder for complete isolation
 // Always uses --sandbox flag for security (disables HTTP, WebSocket, file system, and FFI access)
 function runOspreyCompiler(args, code = '') {
     return new Promise(async (resolve, reject) => {
-        // Create a unique UUID folder for this request - THREAD SAFE!
-        const requestId = randomUUID()
-        const tempBaseDir = '/tmp/osprey-temp'
-        const tempRequestDir = path.join(tempBaseDir, requestId)
-        const tempFile = path.join(tempRequestDir, 'main.osp')
+        // Simple temp file approach
+        const tempBaseDir = path.resolve(process.cwd(), 'temp')
+        const tempFile = path.join(tempBaseDir, 'main.osp')
+
+        console.log(`🔧 Setting up temp file: ${tempFile}`)
 
         try {
-            // Create the unique temp directory for this request
-            await fs.mkdir(tempRequestDir, { recursive: true })
-            await fs.writeFile(tempFile, code)
+            // Make sure the temp directory exists
+            await fs.mkdir(tempBaseDir, { recursive: true, mode: 0o755 })
+
+            // Write the code file
+            await fs.writeFile(tempFile, code, { mode: 0o644 })
 
             // Use the osprey binary from PATH (installed in Docker) or fallback to local dev path
             const ospreyPath = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
                 ? 'osprey'
                 : path.resolve(__dirname, '../../compiler/bin/osprey')
-            
+
             // Set working directory so compiler can find runtime libraries
             const workingDir = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
                 ? process.cwd() // Docker: osprey binary in /usr/local/bin uses FHS ../lib = /usr/local/lib
                 : path.resolve(__dirname, '../../compiler') // Dev: osprey binary in compiler/bin uses ../lib = compiler/lib
-            
+
+            console.log(`🔧 Running: ${ospreyPath} ${tempFile} ${args.join(' ')}`)
+
             const child = spawn(ospreyPath, [tempFile, ...args], {
                 stdio: 'pipe',
-                cwd: workingDir, // Run from directory where libraries can be found
-                timeout: 5000 // 5 second timeout - kill any program that runs longer
+                cwd: workingDir,
+                timeout: 5000,
+                env: {
+                    ...process.env,
+                    TMPDIR: tempBaseDir,  // Force compiler to use our temp directory
+                    TMP: tempBaseDir,     // Windows fallback
+                    TEMP: tempBaseDir     // Another Windows fallback
+                }
             })
 
             let stdout = ''
@@ -253,14 +262,14 @@ function runOspreyCompiler(args, code = '') {
                 console.log('📤 PROGRAM OUTPUT:')
                 console.log(stdout || '(no stdout)')
 
-                // Clean up the ENTIRE temp folder for this request
+                // Clean up the temp file
                 try {
-                    await fs.rm(tempRequestDir, { recursive: true, force: true })
+                    await fs.rm(tempFile, { force: true })
+                    console.log(`🧹 Cleaned up: ${tempFile}`)
                 } catch (e) {
-                    // Ignore cleanup errors
+                    console.warn('⚠️ Failed to cleanup:', e.message)
                 }
 
-                // Always resolve with the result - let the caller determine success/failure
                 resolve({
                     exitCode,
                     stdout,
@@ -270,21 +279,17 @@ function runOspreyCompiler(args, code = '') {
             })
 
             child.on('error', async (error) => {
-                // Clean up temp folder on error
+                console.error('❌ Spawn error:', error.message)
+                // Clean up temp file on error
                 try {
-                    await fs.rm(tempRequestDir, { recursive: true, force: true })
+                    await fs.rm(tempFile, { force: true })
                 } catch (e) {
                     // Ignore cleanup errors
                 }
                 reject(error)
             })
         } catch (error) {
-            // Clean up temp folder if creation failed
-            try {
-                await fs.rm(tempRequestDir, { recursive: true, force: true })
-            } catch (e) {
-                // Ignore cleanup errors
-            }
+            console.error('❌ Setup error:', error.message)
             reject(error)
         }
     })
