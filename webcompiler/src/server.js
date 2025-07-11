@@ -15,6 +15,9 @@ const server = createServer(app)
 
 const PORT = process.env.PORT || 3001
 
+// Set umask to ensure files are created with execute permissions
+process.umask(0o000)
+
 console.log('🚀 Starting WebSocket LSP Bridge...')
 
 // Middleware
@@ -121,21 +124,17 @@ app.post('/api/run', async (req, res) => {
         const result = await runOspreyCompiler(['--sandbox', '--run'], code)
 
         if (result.success) {
-
             res.status(200).json({
                 success: true,
                 compilerOutput: result.stderr || '',
                 programOutput: result.stdout || ''
             })
         } else {
-
             const errorOutput = result.stderr || result.stdout || '';
 
-            // Detect INTERNAL compiler errors - simple marker from compiler
+            // Detect INTERNAL compiler errors
             const isInternalError = errorOutput.includes('INTERNAL_COMPILER_ERROR:');
-
             if (isInternalError) {
-                // Internal compiler error - log for debugging but don't expose to user
                 console.error('🚨 INTERNAL COMPILER ERROR DETECTED:', errorOutput);
                 res.status(502).json({
                     success: false,
@@ -152,7 +151,7 @@ app.post('/api/run', async (req, res) => {
                 errorOutput.includes('type mismatch') ||
                 errorOutput.includes('Compilation failed');
 
-            const statusCode = isCompilationError ? 422 : 400; // 422 for compilation, 400 for runtime
+            const statusCode = isCompilationError ? 422 : 400;
 
             res.status(statusCode).json({
                 success: false,
@@ -204,12 +203,14 @@ setInterval(cleanupOldTempFolders, 30 * 60 * 1000)
 // DELETE ALL TEMP FOLDERS ON STARTUP
 deleteAllTempFolders()
 
-// THREAD-SAFE Helper function to run Osprey compiler
+// Helper function to run Osprey compiler
 // Always uses --sandbox flag for security (disables HTTP, WebSocket, file system, and FFI access)
 function runOspreyCompiler(args, code = '') {
     return new Promise(async (resolve, reject) => {
-        // Simple temp file approach
-        const tempBaseDir = path.resolve(process.cwd(), 'temp')
+        // Simple temp file approach - use absolute path for Docker
+        const tempBaseDir = process.env.DOCKER_ENV
+            ? '/app/temp'
+            : path.resolve(process.cwd(), 'temp')
         const tempFile = path.join(tempBaseDir, 'main.osp')
 
         console.log(`🔧 Setting up temp file: ${tempFile}`)
@@ -239,9 +240,9 @@ function runOspreyCompiler(args, code = '') {
                 timeout: 5000,
                 env: {
                     ...process.env,
-                    TMPDIR: tempBaseDir,  // Force compiler to use our temp directory
-                    TMP: tempBaseDir,     // Windows fallback
-                    TEMP: tempBaseDir     // Another Windows fallback
+                    TMPDIR: tempBaseDir,
+                    TMP: tempBaseDir,
+                    TEMP: tempBaseDir
                 }
             })
 

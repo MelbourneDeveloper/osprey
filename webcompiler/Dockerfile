@@ -73,7 +73,7 @@ RUN groupadd -g 1001 nodejs && \
 
 # Create app directory and bin/lib subdirectories
 WORKDIR /app
-RUN mkdir -p bin lib temp && chmod 755 temp
+RUN mkdir -p bin lib temp && chmod 777 temp
 
 # Copy built Osprey compiler from the build stage
 COPY --from=osprey-builder /workspace/bin/osprey /usr/local/bin/osprey
@@ -103,7 +103,12 @@ RUN npm ci --only=production && npm cache clean --force
 COPY webcompiler/src ./src
 
 # Change ownership to non-root user (including temp directory)
-RUN chown -R osprey:nodejs /app && chmod -R 755 /app/temp
+RUN chown -R osprey:nodejs /app && chmod -R 777 /app/temp
+
+# Create a startup script to fix permissions
+RUN echo '#!/bin/bash\n\
+umask 0000\n\
+exec "$@"' > /app/startup.sh && chmod +x /app/startup.sh
 
 # Make sure the osprey binary is executable
 RUN chmod +x /usr/local/bin/osprey
@@ -122,5 +127,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api || exit 1
 
-# Start the server
-CMD ["npm", "run", "server"] 
+# Start the server with the startup script
+CMD ["/app/startup.sh", "npm", "run", "server"] 
