@@ -147,7 +147,7 @@ var (
 	ErrSleepWrongArgs          = errors.New("sleep expects exactly 1 argument (milliseconds)")
 	ErrWriteFileWrongArgs      = errors.New("writeFile expects exactly 2 arguments (filename, content)")
 	ErrReadFileWrongArgs       = errors.New("readFile expects exactly 1 argument (filename)")
-	
+
 	// Runtime library errors
 	ErrMissingRuntimeLibrary = errors.New("COMPILATION_ERROR: Required runtime library not found")
 )
