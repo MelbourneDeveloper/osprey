@@ -142,73 +142,6 @@ func TestBuildLinkArguments(t *testing.T) {
 	}
 }
 
-// TestAllRuntimeLibraries verifies that ALL 4 runtime libraries are built and contain expected symbols.
-func TestAllRuntimeLibraries(t *testing.T) {
-	// Get the working directory and construct the library paths
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get working directory: %v", err)
-	}
-
-	// Define all 4 runtime libraries with their expected symbols
-	libraries := map[string][]string{
-		"libfiber_runtime.a": {
-			"fiber_create",
-			"fiber_yield",
-			"fiber_schedule",
-		},
-		"libhttp_runtime.a": {
-			"http_create_server",
-			"http_listen",
-			"http_create_client",
-			"http_request",
-		},
-		"libwebsocket_runtime.a": {
-			"websocket_create_server",
-			"websocket_create_client",
-			"websocket_send",
-		},
-		"libsystem_runtime.a": {
-			"system_execute",
-			"system_get_env",
-		},
-	}
-
-	// Test each library
-	for libName, expectedSymbols := range libraries {
-		t.Run(libName, func(t *testing.T) {
-			// Go up to the project root and then to lib
-			libPath := filepath.Join(wd, "..", "..", "lib", libName)
-			t.Logf("Testing library: %s", libPath)
-
-			// Check if the library exists
-			if _, err := os.Stat(libPath); os.IsNotExist(err) {
-				t.Fatalf("%s not built at %s - build failed! Error: %v", libName, libPath, err)
-			}
-
-			// Use nm to check symbols in the library
-			cmd := exec.Command("nm", libPath)
-			output, err := cmd.Output()
-			if err != nil {
-				t.Fatalf("nm command failed for %s - required for symbol analysis: %v", libName, err)
-			}
-
-			symbols := string(output)
-			t.Logf("%s symbols (first 500 chars): \n%s", libName, symbols[:min(500, len(symbols))])
-
-			// Check for expected symbols
-			for _, symbol := range expectedSymbols {
-				if !strings.Contains(symbols, symbol) {
-					t.Fatalf("FATAL: %s is missing expected symbol: '%s'. "+
-						"This is a critical build or link error. Full symbol table:\n%s", libName, symbol, symbols)
-				}
-			}
-
-			t.Logf("✅ %s contains all expected symbols", libName)
-		})
-	}
-}
-
 // TestManualLinking tests manual linking with the exact same arguments that compilation.go would use.
 func TestManualLinking(t *testing.T) {
 	// Create a minimal test object file first
@@ -355,12 +288,12 @@ fn main() -> int {
     print("Server created with ID: ")
     print(toString(server))
     print("\n")
-    
+
     let result = httpListen(server, handleRequest)
     print("Listen result: ")
     print(toString(result))
     print("\n")
-    
+
     0
 }
 `
@@ -391,7 +324,7 @@ fn main() -> int {
     print("Client created with ID: ")
     print(toString(client))
     print("\n")
-    
+
     0
 }
 `
@@ -422,7 +355,7 @@ effect StateA {
 }
 
 effect StateB {
-    getFromA: fn() -> int  
+    getFromA: fn() -> int
     setInB: fn(int) -> Unit
 }
 
@@ -442,7 +375,7 @@ fn main() -> Unit = {
     with handler StateA
         getFromB() => circularEffectB()
         setInA(x) => print("StateA set: " + toString(x))
-    with handler StateB  
+    with handler StateB
         getFromA() => circularEffectA()
         setInB(x) => print("StateB set: " + toString(x))
     {

@@ -2,7 +2,7 @@
 layout: page
 title: "Function Calls"
 description: "Osprey Language Specification: Function Calls"
-date: 2025-07-06
+date: 2025-07-11
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0006-functioncalls/"
