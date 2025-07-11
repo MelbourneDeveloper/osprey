@@ -18,11 +18,8 @@ RUN apt-get update && apt-get upgrade -y \
 COPY compiler /workspace
 WORKDIR /workspace
 
-# Build fiber runtime first
-RUN make fiber-runtime
-
-# Build HTTP runtime
-RUN make http-runtime
+# Build all runtime libraries
+RUN make fiber-runtime http-runtime websocket-runtime system-runtime
 
 # Build the Osprey compiler directly without linting
 RUN go build -o bin/osprey ./cmd/osprey
