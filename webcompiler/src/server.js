@@ -118,7 +118,7 @@ app.post('/api/run', async (req, res) => {
     }
 
     try {
-        const result = await runOspreyCompiler(['--run'], code)
+        const result = await runOspreyCompiler(['--sandbox', '--run'], code)
 
         if (result.success) {
 

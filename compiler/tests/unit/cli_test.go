@@ -15,7 +15,7 @@ func TestRunCommand_AST(t *testing.T) {
 	testFile := createTestFile(t, "test_ast.osp", "fn add(a, b) = a + b")
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false)
+	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false, cli.NewDefaultSecurityConfig())
 
 	if !result.Success {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
@@ -35,7 +35,7 @@ func TestRunCommand_LLVM(t *testing.T) {
 	testFile := createTestFile(t, "test_llvm.osp", "fn add(a, b) = a + b")
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeLLVM, "", false)
+	result := cli.RunCommand(testFile, cli.OutputModeLLVM, "", false, cli.NewDefaultSecurityConfig())
 
 	if !result.Success {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
@@ -51,7 +51,7 @@ func TestRunCommand_Symbols(t *testing.T) {
 	testFile := createTestFile(t, "test_symbols.osp", "fn add(a, b) = a + b")
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeSymbols, "", false)
+	result := cli.RunCommand(testFile, cli.OutputModeSymbols, "", false, cli.NewDefaultSecurityConfig())
 
 	if !result.Success {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
@@ -71,7 +71,7 @@ func TestRunCommand_Compile(t *testing.T) {
 	defer func() { _ = os.Remove(testFile) }()
 	defer cleanupOutputs(t, testFile)
 
-	result := cli.RunCommand(testFile, cli.OutputModeCompile, "", false)
+	result := cli.RunCommand(testFile, cli.OutputModeCompile, "", false, cli.NewDefaultSecurityConfig())
 
 	if !result.Success {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
@@ -91,7 +91,7 @@ func TestRunCommand_Run(t *testing.T) {
 	testFile := createTestFile(t, "test_run.osp", "fn add(a, b) = a + b")
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeRun, "", false)
+	result := cli.RunCommand(testFile, cli.OutputModeRun, "", false, cli.NewDefaultSecurityConfig())
 
 	if !result.Success {
 		// Runtime libraries might not be available in test environment
@@ -114,7 +114,7 @@ func TestRunCommand_InvalidMode(t *testing.T) {
 	testFile := createTestFile(t, "test_invalid.osp", "fn add(a, b) = a + b")
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, "invalid", "", false)
+	result := cli.RunCommand(testFile, "invalid", "", false, cli.NewDefaultSecurityConfig())
 
 	if result.Success {
 		t.Fatal("Expected failure for invalid mode")
@@ -126,7 +126,7 @@ func TestRunCommand_InvalidMode(t *testing.T) {
 }
 
 func TestRunCommand_FileNotFound(t *testing.T) {
-	result := cli.RunCommand("nonexistent.osp", cli.OutputModeAST, "", false)
+	result := cli.RunCommand("nonexistent.osp", cli.OutputModeAST, "", false, cli.NewDefaultSecurityConfig())
 
 	if result.Success {
 		t.Fatal("Expected failure for nonexistent file")
@@ -142,7 +142,7 @@ func TestRunCommand_SyntaxError(t *testing.T) {
 	testFile := createTestFile(t, "test_syntax_error.osp", "fn invalid syntax {{{}}")
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false)
+	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false, cli.NewDefaultSecurityConfig())
 
 	if result.Success {
 		t.Fatal("Expected failure for syntax error")
@@ -168,7 +168,7 @@ func TestRunCommand_AllModes(t *testing.T) {
 			defer func() { _ = os.Remove(testFile) }()
 			defer cleanupOutputs(t, testFile)
 
-			result := cli.RunCommand(testFile, mode, "", false)
+			result := cli.RunCommand(testFile, mode, "", false, cli.NewDefaultSecurityConfig())
 
 			if !result.Success {
 				// Runtime libraries might not be available in test environment for run mode

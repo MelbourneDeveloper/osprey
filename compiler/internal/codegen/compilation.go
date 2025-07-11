@@ -24,7 +24,6 @@ func CompileToLLVM(source string) (string, error) {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	})
 }
 
@@ -112,7 +111,6 @@ func CompileToExecutable(source, outputPath string) error {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	}, "")
 }
 
@@ -125,7 +123,6 @@ func CompileToExecutableWithLibDir(source, outputPath, libDir string) error {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	}, libDir)
 }
 
@@ -345,7 +342,6 @@ func CompileAndRun(source string) error {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	})
 }
 

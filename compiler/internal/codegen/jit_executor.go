@@ -28,7 +28,6 @@ func NewJITExecutor() *JITExecutor {
 			AllowFileWrite:        true,
 			AllowFFI:              true,
 			AllowProcessExecution: true,
-			SandboxMode:           false,
 		},
 	}
 }
@@ -44,7 +43,6 @@ func NewJITExecutorWithLibDir(libDir string) *JITExecutor {
 			AllowFileWrite:        true,
 			AllowFFI:              true,
 			AllowProcessExecution: true,
-			SandboxMode:           false,
 		},
 	}
 }
@@ -109,8 +107,9 @@ func (j *JITExecutor) getRequiredRuntimeLibraries() []string {
 	// Fiber runtime is always required for basic execution
 	required = append(required, LibFiberRuntime)
 
-	// System runtime is always required for basic system operations
-	if j.security.AllowFileRead || j.security.AllowFileWrite || j.security.AllowProcessExecution || j.security.AllowFFI {
+	// System runtime only required if permissions are allowed
+	if j.security.AllowFileRead || j.security.AllowFileWrite ||
+		j.security.AllowProcessExecution || j.security.AllowFFI {
 		required = append(required, LibSystemRuntime)
 	}
 
@@ -378,7 +377,6 @@ func CompileAndRunJIT(source string) error {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	})
 }
 
@@ -391,7 +389,6 @@ func CompileAndRunJITWithLibDir(source, libDir string) error {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	}, libDir)
 }
 
@@ -430,7 +427,6 @@ func CompileAndCaptureJIT(source string) (string, error) {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	})
 }
 
@@ -443,7 +439,6 @@ func CompileAndCaptureJITWithLibDir(source, libDir string) (string, error) {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	}, libDir)
 }
 
