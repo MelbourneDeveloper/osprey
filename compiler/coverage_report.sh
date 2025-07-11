@@ -43,15 +43,14 @@ find /tmp -name "*osprey*" -delete 2>/dev/null || true
 
 echo "🔨 Force rebuilding all runtimes and compiler..."
 
-# Create bin directory
-mkdir -p bin
+# Create bin and lib directories
+mkdir -p bin lib
 
-# Build fiber runtime
+# Build ALL 4 runtime libraries (same as Makefile)
 echo "   Building fiber runtime..."
 gcc -c -fPIC -O2 runtime/fiber_runtime.c -o bin/fiber_runtime.o
-ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
+ar rcs lib/libfiber_runtime.a bin/fiber_runtime.o
 
-# Build HTTP runtime
 echo "   Building HTTP runtime..."
 # Set OpenSSL paths for macOS Homebrew
 OPENSSL_CFLAGS=""
@@ -61,12 +60,23 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 
 gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/http_shared.c -o bin/http_shared.o
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/fiber_runtime.c -o bin/fiber_runtime_http.o
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/system_runtime.c -o bin/system_runtime_http.o
 gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/http_client_runtime.c -o bin/http_client_runtime.o
 gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/http_server_runtime.c -o bin/http_server_runtime.o
+ar rcs lib/libhttp_runtime.a bin/http_shared.o bin/fiber_runtime_http.o bin/system_runtime_http.o bin/http_client_runtime.o bin/http_server_runtime.o
+
+echo "   Building WebSocket runtime..."
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/http_shared.c -o bin/http_shared_ws.o
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/fiber_runtime.c -o bin/fiber_runtime_ws.o
+gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/system_runtime.c -o bin/system_runtime_ws.o
 gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
 gcc -c -fPIC -O2 $OPENSSL_CFLAGS runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
+ar rcs lib/libwebsocket_runtime.a bin/http_shared_ws.o bin/fiber_runtime_ws.o bin/system_runtime_ws.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o
+
+echo "   Building System runtime..."
 gcc -c -fPIC -O2 runtime/system_runtime.c -o bin/system_runtime.o
-ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o
+ar rcs lib/libsystem_runtime.a bin/system_runtime.o
 
 # Build compiler
 echo "   Building Osprey compiler..."

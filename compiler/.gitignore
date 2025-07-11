@@ -108,6 +108,7 @@ coverage_report.out
 node_modules/
 
 bin/
+lib/
 bin
 
 

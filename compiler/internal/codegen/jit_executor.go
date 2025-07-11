@@ -13,11 +13,54 @@ import (
 // JITExecutor provides in-memory compilation and execution.
 type JITExecutor struct {
 	// For now, we'll use a self-contained approach that embeds the required tools
+	libDir   string         // Optional lib directory override (for tests)
+	security SecurityConfig // Security configuration to determine required libraries
 }
 
-// NewJITExecutor creates a new JIT executor.
+// NewJITExecutor creates a new JIT executor with default security configuration.
 func NewJITExecutor() *JITExecutor {
-	return &JITExecutor{}
+	return &JITExecutor{
+		libDir: "",
+		security: SecurityConfig{
+			AllowHTTP:             true,
+			AllowWebSocket:        true,
+			AllowFileRead:         true,
+			AllowFileWrite:        true,
+			AllowFFI:              true,
+			AllowProcessExecution: true,
+		},
+	}
+}
+
+// NewJITExecutorWithLibDir creates a new JIT executor with custom lib directory and default security configuration.
+func NewJITExecutorWithLibDir(libDir string) *JITExecutor {
+	return &JITExecutor{
+		libDir: libDir,
+		security: SecurityConfig{
+			AllowHTTP:             true,
+			AllowWebSocket:        true,
+			AllowFileRead:         true,
+			AllowFileWrite:        true,
+			AllowFFI:              true,
+			AllowProcessExecution: true,
+		},
+	}
+}
+
+// NewJITExecutorWithSecurity creates a new JIT executor with specified security configuration.
+func NewJITExecutorWithSecurity(security SecurityConfig) *JITExecutor {
+	return &JITExecutor{
+		libDir:   "",
+		security: security,
+	}
+}
+
+// NewJITExecutorWithLibDirAndSecurity creates a new JIT executor with custom lib directory and security configuration.
+func NewJITExecutorWithLibDirAndSecurity(libDir string, security SecurityConfig) *JITExecutor {
+	return &JITExecutor{
+		libDir:   libDir,
+		security: security,
+	}
 }
 
 // CompileAndRunInMemory compiles LLVM IR and runs it without external dependencies.
@@ -43,7 +86,10 @@ func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
 	}
 
 	// Setup linking arguments
-	linkArgs := j.setupLinkArgs(exeFile, objFile)
+	linkArgs, err := j.setupLinkArgs(exeFile, objFile)
+	if err != nil {
+		return "", err
+	}
 
 	// Link to executable
 	if err := j.linkExecutable(linkArgs); err != nil {
@@ -52,6 +98,32 @@ func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
 
 	// Execute and capture output
 	return j.executeProgramWithCapture(exeFile)
+}
+
+// getRequiredRuntimeLibraries determines which runtime libraries are needed based on security configuration
+func (j *JITExecutor) getRequiredRuntimeLibraries() []string {
+	var required []string
+
+	// Fiber runtime is always required for basic execution. Dependents must come BEFORE their dependencies
+	// The fiber runtime depends on system runtime functions, so it must be linked first
+	required = append(required, LibFiberRuntime)
+
+	// System runtime is ALWAYS required because fiber runtime depends on it
+	// The fiber runtime calls spawn_process_with_handler, await_process, and cleanup_process
+	// which are defined in system_runtime.c
+	required = append(required, LibSystemRuntime)
+
+	// HTTP runtime only if HTTP is allowed
+	if j.security.AllowHTTP {
+		required = append(required, LibHTTPRuntime)
+	}
+
+	// WebSocket runtime only if WebSocket is allowed
+	if j.security.AllowWebSocket {
+		required = append(required, LibWebSocketRuntime)
+	}
+
+	return required
 }
 
 // setupCompilation creates temp directory and writes IR file
@@ -99,65 +171,34 @@ func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
 }
 
 // setupLinkArgs builds the linking arguments for the executable
-func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) []string {
+func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) ([]string, error) {
 	var linkArgs []string
 	linkArgs = append(linkArgs, "-o", exeFile, objFile)
 
-	// Find and add runtime libraries (order matters: dependents before dependencies)
-	linkArgs = j.findAndAddRuntimeLibrary("http_runtime", linkArgs)
-	linkArgs = j.findAndAddRuntimeLibrary("fiber_runtime", linkArgs)
+	// Only check for runtime libraries that are actually needed based on security configuration
+	requiredLibs := j.getRequiredRuntimeLibraries()
+
+	for _, libName := range requiredLibs {
+		libPath, err := getLibraryPathWithDir(libName, j.libDir)
+		if err != nil {
+			return nil, WrapMissingRuntimeLibrary(libName)
+		}
+
+		if _, err := os.Stat(libPath); err != nil {
+			return nil, WrapMissingRuntimeLibrary(libName)
+		}
+
+		linkArgs = append(linkArgs, libPath)
+	}
 
 	linkArgs = append(linkArgs, "-lpthread")
 
-	// Add OpenSSL libraries
-	linkArgs = j.addOpenSSLFlags(linkArgs)
-
-	return linkArgs
-}
-
-// findAndAddRuntimeLibrary finds a runtime library and adds it to link args
-func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string) []string {
-	paths := j.buildRuntimeLibraryPaths(libName)
-
-	var foundLib string
-	for _, libPath := range paths {
-		if _, err := os.Stat(libPath); err == nil {
-			linkArgs = append(linkArgs, libPath)
-			foundLib = libPath
-			break
-		}
+	// Add OpenSSL libraries only if HTTP or WebSocket is allowed
+	if j.security.AllowHTTP || j.security.AllowWebSocket {
+		linkArgs = j.addOpenSSLFlags(linkArgs)
 	}
 
-	// Debug output - only show warnings if libraries not found
-	if foundLib == "" {
-		fmt.Fprintf(os.Stderr, "Warning: %s runtime library not found in any of: %v\n", libName, paths)
-	}
-
-	return linkArgs
-}
-
-// buildRuntimeLibraryPaths builds search paths for a specific runtime library
-func (j *JITExecutor) buildRuntimeLibraryPaths(libName string) []string {
-	paths := []string{
-		fmt.Sprintf("bin/lib%s.a", libName),
-		fmt.Sprintf("./bin/lib%s.a", libName),
-		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
-		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
-		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
-		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
-	}
-
-	// Add working directory based paths
-	if wd, err := os.Getwd(); err == nil {
-		paths = append(paths,
-			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
-		)
-	}
-
-	return paths
+	return linkArgs, nil
 }
 
 // addOpenSSLFlags adds OpenSSL linking flags
@@ -257,7 +298,10 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	}
 
 	// Setup linking arguments
-	linkArgs := j.setupLinkArgs(exeFile, objFile)
+	linkArgs, err := j.setupLinkArgs(exeFile, objFile)
+	if err != nil {
+		return err
+	}
 
 	// Link to executable
 	if err := j.linkExecutable(linkArgs); err != nil {
@@ -334,8 +378,19 @@ func CompileAndRunJIT(source string) error {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	})
+}
+
+// CompileAndRunJITWithLibDir is the main entry point for JIT compilation with custom lib directory.
+func CompileAndRunJITWithLibDir(source, libDir string) error {
+	return CompileAndRunJITWithSecurityAndLibDir(source, SecurityConfig{
+		AllowHTTP:             true,
+		AllowWebSocket:        true,
+		AllowFileRead:         true,
+		AllowFileWrite:        true,
+		AllowFFI:              true,
+		AllowProcessExecution: true,
+	}, libDir)
 }
 
 // CompileAndRunJITWithSecurity is the main entry point for JIT compilation with specified security configuration.
@@ -346,9 +401,21 @@ func CompileAndRunJITWithSecurity(source string, security SecurityConfig) error 
 		return fmt.Errorf("failed to generate LLVM IR: %w", err)
 	}
 
-	// Use JIT executor
-	executor := NewJITExecutor()
+	// Use JIT executor with security configuration
+	executor := NewJITExecutorWithSecurity(security)
+	return executor.CompileAndRunInMemory(ir)
+}
 
+// CompileAndRunJITWithSecurityAndLibDir is the main entry point for JIT compilation with security and lib directory.
+func CompileAndRunJITWithSecurityAndLibDir(source string, security SecurityConfig, libDir string) error {
+	// Generate LLVM IR with security configuration
+	ir, err := CompileToLLVMWithSecurity(source, security)
+	if err != nil {
+		return fmt.Errorf("failed to generate LLVM IR: %w", err)
+	}
+
+	// Use JIT executor with custom lib directory and security configuration
+	executor := NewJITExecutorWithLibDirAndSecurity(libDir, security)
 	return executor.CompileAndRunInMemory(ir)
 }
 
@@ -361,8 +428,19 @@ func CompileAndCaptureJIT(source string) (string, error) {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	})
+}
+
+// CompileAndCaptureJITWithLibDir compiles and captures program output with custom lib directory.
+func CompileAndCaptureJITWithLibDir(source, libDir string) (string, error) {
+	return CompileAndCaptureJITWithSecurityAndLibDir(source, SecurityConfig{
+		AllowHTTP:             true,
+		AllowWebSocket:        true,
+		AllowFileRead:         true,
+		AllowFileWrite:        true,
+		AllowFFI:              true,
+		AllowProcessExecution: true,
+	}, libDir)
 }
 
 // CompileAndCaptureJITWithSecurity compiles and captures program output with specified security configuration.
@@ -373,8 +451,20 @@ func CompileAndCaptureJITWithSecurity(source string, security SecurityConfig) (s
 		return "", fmt.Errorf("failed to generate LLVM IR: %w", err)
 	}
 
-	// Use JIT executor to compile and capture output
-	executor := NewJITExecutor()
+	// Use JIT executor with security configuration to compile and capture output
+	executor := NewJITExecutorWithSecurity(security)
+	return executor.CompileAndCaptureOutput(ir)
+}
 
+// CompileAndCaptureJITWithSecurityAndLibDir compiles and captures program output with security and lib directory.
+func CompileAndCaptureJITWithSecurityAndLibDir(source string, security SecurityConfig, libDir string) (string, error) {
+	// Generate LLVM IR with security configuration
+	ir, err := CompileToLLVMWithSecurity(source, security)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate LLVM IR: %w", err)
+	}
+
+	// Use JIT executor with custom lib directory and security configuration to compile and capture output
+	executor := NewJITExecutorWithLibDirAndSecurity(libDir, security)
 	return executor.CompileAndCaptureOutput(ir)
 }

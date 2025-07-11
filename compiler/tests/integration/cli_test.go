@@ -258,8 +258,10 @@ func testCLIInterfaceFunctions(t *testing.T) {
 	if !cli.ParseSecurityArg("--sandbox", security) {
 		t.Error("ParseSecurityArg should return true for --sandbox")
 	}
-	if !security.SandboxMode {
-		t.Error("--sandbox should enable SandboxMode")
+	// Verify all security flags are disabled after --sandbox
+	if security.AllowHTTP || security.AllowWebSocket || security.AllowFileRead ||
+		security.AllowFileWrite || security.AllowFFI || security.AllowProcessExecution {
+		t.Error("--sandbox should disable all security flags")
 	}
 
 	// Test --no-http flag

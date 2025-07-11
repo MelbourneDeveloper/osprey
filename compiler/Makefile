@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime c-lint c-test test-runtime
+.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime websocket-runtime system-runtime c-lint c-test test-runtime
 
 # Install golangci-lint
 lint-install:
@@ -20,29 +20,29 @@ lint-fix: lint-install
 	golangci-lint run --config .golangci.yml --fix
 
 # Build the osprey compiler with linting
-build: lint c-lint fiber-runtime http-runtime
+build: lint c-lint fiber-runtime http-runtime websocket-runtime system-runtime
 	@echo "🏗️  Building osprey compiler..."
 	go build -o bin/osprey ./cmd/osprey
 
 # Don't ever user this unless it's a life or death situation
-build-no-lint: fiber-runtime http-runtime
+build-no-lint: fiber-runtime http-runtime websocket-runtime system-runtime
 	@echo "🏗️  Building osprey compiler (skipping lint for speed)..."
 	go build -o bin/osprey ./cmd/osprey
 
 # Build fiber runtime library - WARNINGS ARE ERRORS!!!
 fiber-runtime:
 	@echo "🔨 Building fiber runtime library..."
-	@mkdir -p bin
+	@mkdir -p bin lib
 	gcc -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
-	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
-	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a"
+	ar rcs lib/libfiber_runtime.a bin/fiber_runtime.o
+	@echo "✅ Fiber runtime library built: lib/libfiber_runtime.a"
 
 
 
 # Build HTTP runtime library with TITANIUM-ARMORED MILITARY-GRADE SECURITY 🛡️💀
 http-runtime:
 	@echo "🔨 Building HTTP runtime with OpenSSL 3.5.0+ support..."
-	@mkdir -p bin
+	@mkdir -p bin lib
 	@echo "🔧 Building http_shared.o..."
 	@gcc -c -fPIC -O2 \
 		-D_FORTIFY_SOURCE=2 \
@@ -66,13 +66,37 @@ http-runtime:
 		-Wno-deprecated-declarations \
 		`pkg-config --cflags openssl 2>/dev/null || echo ""` \
 		-o bin/http_shared.o runtime/http_shared.c
+	@echo "🔧 Building fiber_runtime.o for HTTP runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime_http.o
+	@echo "🔧 Building system_runtime.o for HTTP runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime_http.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_client_runtime.c -o bin/http_client_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
+	ar rcs lib/libhttp_runtime.a bin/http_shared.o bin/fiber_runtime_http.o bin/system_runtime_http.o bin/http_client_runtime.o bin/http_server_runtime.o
+	@echo "💀 HTTP RUNTIME LIBRARY BUILT! 💀"
+
+# Build WebSocket runtime library
+websocket-runtime:
+	@echo "🔨 Building WebSocket runtime with OpenSSL support..."
+	@mkdir -p bin lib
+	@echo "🔧 Building http_shared.o for websocket runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_shared.c -o bin/http_shared_ws.o
+	@echo "🔧 Building fiber_runtime.o for websocket runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime_ws.o
+	@echo "🔧 Building system_runtime.o for websocket runtime..."
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime_ws.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
+	ar rcs lib/libwebsocket_runtime.a bin/http_shared_ws.o bin/fiber_runtime_ws.o bin/system_runtime_ws.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o
+	@echo "🔌 WebSocket runtime library built: lib/libwebsocket_runtime.a"
+
+# Build System runtime library
+system-runtime:
+	@echo "🔨 Building System runtime library..."
+	@mkdir -p bin lib
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
-	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
-	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
+	ar rcs lib/libsystem_runtime.a bin/system_runtime.o
+	@echo "⚙️  System runtime library built: lib/libsystem_runtime.a"
 
 # Install the osprey compiler globally
 install: build
@@ -80,9 +104,11 @@ install: build
 	sudo cp bin/osprey /usr/local/bin/
 	@echo "📁 Creating /usr/local/lib if it doesn't exist..."
 	sudo mkdir -p /usr/local/lib
-	sudo cp bin/libfiber_runtime.a /usr/local/lib/
-	sudo cp bin/libhttp_runtime.a /usr/local/lib/
-	@echo "✅ osprey compiler installed! You can now use 'osprey' from anywhere."
+	sudo cp lib/libfiber_runtime.a /usr/local/lib/
+	sudo cp lib/libhttp_runtime.a /usr/local/lib/
+	sudo cp lib/libwebsocket_runtime.a /usr/local/lib/
+	sudo cp lib/libsystem_runtime.a /usr/local/lib/
+	@echo "✅ osprey compiler installed with ALL 4 runtime libraries! You can now use 'osprey' from anywhere."
 	@echo "Test with: osprey --help"
 
 # Uninstall the osprey compiler
@@ -91,6 +117,8 @@ uninstall:
 	sudo rm -f /usr/local/bin/osprey
 	sudo rm -f /usr/local/lib/libfiber_runtime.a
 	sudo rm -f /usr/local/lib/libhttp_runtime.a
+	sudo rm -f /usr/local/lib/libwebsocket_runtime.a
+	sudo rm -f /usr/local/lib/libsystem_runtime.a
 	@echo "✅ osprey compiler uninstalled."
 
 # Install dependencies
@@ -100,6 +128,7 @@ install-deps:
 # Clean build artifacts
 clean:
 	rm -rf bin/
+	rm -rf lib/
 	rm -rf outputs/
 	rm -rf internal/codegen/bin
 	find /tmp -name "*osprey*" -delete 2>/dev/null || true
