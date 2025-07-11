@@ -18,8 +18,8 @@ RUN apt-get update && apt-get upgrade -y \
 COPY compiler /workspace
 WORKDIR /workspace
 
-# Build fiber runtime (only library needed for sandbox mode)
-RUN make fiber-runtime
+# Build fiber runtime AND system runtime (fiber runtime depends on system runtime functions)
+RUN make fiber-runtime system-runtime
 
 # Build the Osprey compiler directly without linting
 RUN go build -o bin/osprey ./cmd/osprey
@@ -69,8 +69,10 @@ RUN mkdir -p bin lib
 # Copy built Osprey compiler from the build stage
 COPY --from=osprey-builder /workspace/bin/osprey /usr/local/bin/osprey
 
-# Copy ALL 4 built runtime libraries to /usr/local/lib/ where osprey expects them (FHS standard)
+# Copy BOTH fiber and system runtime libraries to /usr/local/lib/ where osprey expects them (FHS standard)
 COPY --from=osprey-builder /workspace/lib/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
+COPY --from=osprey-builder /workspace/lib/libsystem_runtime.a /usr/local/lib/libsystem_runtime.a
+
 # Copy built LSP server
 COPY --from=lsp-builder /workspace/vscode-extension/server /app/server
 
