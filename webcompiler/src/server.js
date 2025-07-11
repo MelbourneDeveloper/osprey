@@ -15,7 +15,33 @@ const server = createServer(app)
 
 const PORT = process.env.PORT || 3001
 
-console.log('🚀 Starting WebSocket LSP Bridge...')
+// STARTUP LOGGING - Make it super obvious the server is starting
+console.log('\n' + '='.repeat(80))
+console.log('🚀 OSPREY WEB COMPILER STARTING UP')
+console.log('='.repeat(80))
+console.log(`📍 Server file: ${__filename}`)
+console.log(`📁 Working directory: ${process.cwd()}`)
+console.log(`🐳 Docker environment: ${process.env.DOCKER_ENV || 'false'}`)
+console.log(`🏃 Node environment: ${process.env.NODE_ENV || 'development'}`)
+console.log(`🔌 Target port: ${PORT}`)
+console.log('='.repeat(80))
+
+// Request logging middleware - track ALL requests
+app.use((req, res, next) => {
+    const timestamp = new Date().toISOString()
+    console.log(`\n📨 [${timestamp}] ${req.method} ${req.url}`)
+    console.log(`📍 User-Agent: ${req.headers['user-agent'] || 'unknown'}`)
+    console.log(`📍 Origin: ${req.headers.origin || 'none'}`)
+    console.log(`📍 Content-Type: ${req.headers['content-type'] || 'none'}`)
+
+    // Log body size for POST requests
+    if (req.method === 'POST' && req.body) {
+        const bodySize = JSON.stringify(req.body).length
+        console.log(`📏 Body size: ${bodySize} bytes`)
+    }
+
+    next()
+})
 
 // Middleware
 app.use(express.json({ limit: '10mb' }))
@@ -79,9 +105,9 @@ app.post('/api/compile', async (req, res) => {
             })
         } else {
             console.error('❌ Compile error, stderr:', result.stderr)
-            
+
             const errorOutput = result.stderr || result.stdout || '';
-            
+
             // Detect INTERNAL compiler errors - simple marker from compiler
             const isInternalError = errorOutput.includes('INTERNAL_COMPILER_ERROR:');
 
@@ -137,7 +163,7 @@ app.post('/api/run', async (req, res) => {
             console.error('❌ Run failed, stdout:', result.stdout)
 
             const errorOutput = result.stderr || result.stdout || '';
-            
+
             // Detect INTERNAL compiler errors - simple marker from compiler
             const isInternalError = errorOutput.includes('INTERNAL_COMPILER_ERROR:');
 
@@ -194,7 +220,7 @@ async function cleanupOldTempFolders() {
         const folders = await fs.readdir(tempBaseDir)
         const now = Date.now()
         const oneHourAgo = now - (60 * 60 * 1000) // 1 hour ago
-        
+
         for (const folder of folders) {
             const folderPath = path.join(tempBaseDir, folder)
             const stats = await fs.stat(folderPath)

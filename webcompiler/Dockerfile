@@ -71,9 +71,11 @@ WORKDIR /app
 # Copy built Osprey compiler from the build stage
 COPY --from=osprey-builder /workspace/bin/osprey /usr/local/bin/osprey
 
-# Copy built runtime libraries to system location
-COPY --from=osprey-builder /workspace/bin/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
-COPY --from=osprey-builder /workspace/bin/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
+# Copy built runtime libraries from the lib directory (not bin)
+COPY --from=osprey-builder /workspace/lib/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
+COPY --from=osprey-builder /workspace/lib/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
+COPY --from=osprey-builder /workspace/lib/libwebsocket_runtime.a /usr/local/lib/libwebsocket_runtime.a
+COPY --from=osprey-builder /workspace/lib/libsystem_runtime.a /usr/local/lib/libsystem_runtime.a
 
 # Copy built LSP server
 COPY --from=lsp-builder /workspace/vscode-extension/server /app/server
