@@ -106,5 +106,9 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api || exit 1
 
-# Start the server
-CMD ["npm", "run", "server"] 
+# Add diagnostics script
+COPY webcompiler/diagnostics.sh /app/diagnostics.sh
+RUN chmod +x /app/diagnostics.sh
+
+# Start the server with diagnostics
+CMD ["/bin/bash", "-c", "/app/diagnostics.sh && npm run server"] 
