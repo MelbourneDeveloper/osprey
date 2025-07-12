@@ -288,21 +288,61 @@ function runOspreyCompiler(args, code = '') {
 
         try {
             // Create the unique temp directory for this request
+            console.log(`📁 Creating temp directory: ${tempRequestDir}`)
             await fs.mkdir(tempRequestDir, { recursive: true })
             console.log(`📁 Created temp folder: ${requestId}`)
 
+            // Verify temp directory was created
+            const tempStats = await fs.stat(tempRequestDir)
+            console.log(`📊 Temp directory stats: ${JSON.stringify({
+                isDirectory: tempStats.isDirectory(),
+                mode: tempStats.mode,
+                uid: tempStats.uid,
+                gid: tempStats.gid
+            })}`)
+
             console.log(`💾 Writing temp file: ${tempFile}`)
             await fs.writeFile(tempFile, code)
-
+            
+            // Verify file was written
+            const fileStats = await fs.stat(tempFile)
+            console.log(`📊 Temp file stats: ${JSON.stringify({
+                size: fileStats.size,
+                isFile: fileStats.isFile(),
+                mode: fileStats.mode
+            })}`)
+            
             // Use the osprey binary from PATH (installed in Docker) or fallback to local dev path
             const ospreyPath = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
                 ? 'osprey'
                 : path.resolve(__dirname, '../compiler/bin/osprey')
+            
+            // Check if osprey binary exists and is executable
+            console.log(`🔍 Checking osprey binary: ${ospreyPath}`)
+            try {
+                if (ospreyPath === 'osprey') {
+                    console.log(`🔍 Using osprey from PATH`)
+                } else {
+                    const binaryStats = await fs.stat(ospreyPath)
+                    console.log(`📊 Osprey binary stats: ${JSON.stringify({
+                        size: binaryStats.size,
+                        isFile: binaryStats.isFile(),
+                        mode: binaryStats.mode,
+                        executable: (binaryStats.mode & 0o111) !== 0
+                    })}`)
+                }
+            } catch (e) {
+                console.error(`❌ Error checking osprey binary: ${e.message}`)
+            }
+            
+            const startTime = Date.now()
             console.log(`🔨 Running: ${ospreyPath} ${tempFile} ${args.join(' ')}`)
+            console.log(`⏰ Started at: ${new Date().toISOString()}`)
+            
             const child = spawn(ospreyPath, [tempFile, ...args], {
                 stdio: 'pipe',
                 cwd: tempRequestDir, // Run in the temp directory
-                timeout: 5000 // 5 second timeout - kill any program that runs longer
+                timeout: 15000 
             })
 
             let stdout = ''
@@ -316,7 +356,15 @@ function runOspreyCompiler(args, code = '') {
                 stderr += data.toString()
             })
 
-            child.on('close', async (exitCode) => {
+            child.on('close', async (exitCode, signal) => {
+                const endTime = Date.now()
+                const duration = endTime - startTime
+                
+                // Log detailed exit information with timing
+                console.log(`🔚 Process finished - Exit code: ${exitCode}, Signal: ${signal}`)
+                console.log(`⏰ Ended at: ${new Date().toISOString()}`)
+                console.log(`⏱️ Duration: ${duration}ms`)
+                
                 // Clean up the ENTIRE temp folder for this request
                 try {
                     await fs.rm(tempRequestDir, { recursive: true, force: true })
@@ -325,9 +373,15 @@ function runOspreyCompiler(args, code = '') {
                     console.error('⚠️ Failed to clean up temp folder:', e.message)
                 }
 
+                // Handle timeout/signal termination
+                if (exitCode === null && signal) {
+                    console.error(`⏰ Process was killed by signal: ${signal} after ${duration}ms`)
+                    stderr += `\nProcess was terminated by signal: ${signal} (likely timeout) after ${duration}ms`
+                }
+
                 // Always resolve with the result - let the caller determine success/failure
                 resolve({
-                    exitCode,
+                    exitCode: exitCode || -1, // Convert null to -1 for consistency
                     stdout,
                     stderr,
                     success: exitCode === 0
