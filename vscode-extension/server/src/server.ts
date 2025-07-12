@@ -31,8 +31,7 @@ import {
     RenameParams,
     PrepareRenameParams,
     ImplementationParams,
-    DocumentFormattingParams,
-    DocumentRangeFormattingParams
+    WorkspaceEdit
 } from 'vscode-languageserver/node';
 
 import { execFile } from 'child_process';
@@ -173,10 +172,6 @@ connection.onInitialize((params: InitializeParams) => {
             CodeActionKind.SourceOrganizeImports
           ]
         },
-        // Document formatting
-        documentFormattingProvider: true,
-        // Range formatting
-        documentRangeFormattingProvider: true,
         // Document highlights (same symbol highlighting)
         documentHighlightProvider: true,
         // Folding ranges
@@ -757,6 +752,18 @@ function findAllSymbolReferences(document: TextDocument): SymbolReference[] {
     variableDef: /\b(let|mut)\s+(\w+)\s*=/g,
     // Type definitions: type Name =
     typeDef: /\btype\s+(\w+)\s*=/g,
+    // Effect definitions: effect Name {
+    effectDef: /\beffect\s+(\w+)\s*\{/g,
+    // Effect operations: name: type
+    effectOpDef: /\b(\w+)\s*:\s*[^,\n]+/g,
+    // Perform statements: perform Effect.operation
+    performStmt: /\bperform\s+(\w+)\.(\w+)/g,
+    // Handler expressions: handle Effect
+    handlerExpr: /\bhandle\s+(\w+)/g,
+    // Module definitions: module Name {
+    moduleDef: /\bmodule\s+(\w+)\s*\{/g,
+    // Import statements: import Name
+    importStmt: /\bimport\s+(\w+)/g,
     // Function calls: name(
     functionCall: /\b(\w+)\s*\(/g,
     // Variable/type references: any word not in definition context
@@ -771,6 +778,10 @@ function findAllSymbolReferences(document: TextDocument): SymbolReference[] {
     const functionDefs = new Set<string>();
     const variableDefs = new Set<string>();
     const typeDefs = new Set<string>();
+    const effectDefs = new Set<string>();
+    const effectOps = new Set<string>();
+    const moduleDefs = new Set<string>();
+    const imports = new Set<string>();
     
     // Find function definitions
     patterns.functionDef.lastIndex = 0;
@@ -829,6 +840,139 @@ function findAllSymbolReferences(document: TextDocument): SymbolReference[] {
       });
     }
     
+    // Find effect definitions
+    patterns.effectDef.lastIndex = 0;
+    while ((match = patterns.effectDef.exec(line)) !== null) {
+      const name = match[1];
+      effectDefs.add(name);
+      connection.console.log(`  ⚡ Found effect definition: ${name}`);
+      references.push({
+        symbol: name,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(name) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(name) + name.length }
+          }
+        },
+        kind: 'definition',
+        context: 'effect'
+      });
+    }
+    
+    // Find effect operations (within effect blocks)
+    patterns.effectOpDef.lastIndex = 0;
+    while ((match = patterns.effectOpDef.exec(line)) !== null) {
+      const name = match[1];
+      // Skip if this looks like a type annotation
+      if (line.includes(':')) {
+        effectOps.add(name);
+        connection.console.log(`  🔧 Found effect operation: ${name}`);
+        references.push({
+          symbol: name,
+          location: {
+            uri: document.uri,
+            range: {
+              start: { line: lineIndex, character: match.index },
+              end: { line: lineIndex, character: match.index + name.length }
+            }
+          },
+          kind: 'effect_operation'
+        });
+      }
+    }
+    
+    // Find perform statements
+    patterns.performStmt.lastIndex = 0;
+    while ((match = patterns.performStmt.exec(line)) !== null) {
+      const effectName = match[1];
+      const operationName = match[2];
+      connection.console.log(`  🎭 Found perform: ${effectName}.${operationName}`);
+      references.push({
+        symbol: effectName,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(effectName) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(effectName) + effectName.length }
+          }
+        },
+        kind: 'usage',
+        context: 'perform'
+      });
+      references.push({
+        symbol: operationName,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(operationName) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(operationName) + operationName.length }
+          }
+        },
+        kind: 'effect_operation',
+        context: effectName
+      });
+    }
+    
+    // Find handler expressions
+    patterns.handlerExpr.lastIndex = 0;
+    while ((match = patterns.handlerExpr.exec(line)) !== null) {
+      const effectName = match[1];
+      connection.console.log(`  🎯 Found handler: ${effectName}`);
+      references.push({
+        symbol: effectName,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(effectName) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(effectName) + effectName.length }
+          }
+        },
+        kind: 'handler',
+        context: 'handler'
+      });
+    }
+    
+    // Find module definitions
+    patterns.moduleDef.lastIndex = 0;
+    while ((match = patterns.moduleDef.exec(line)) !== null) {
+      const name = match[1];
+      moduleDefs.add(name);
+      connection.console.log(`  📦 Found module definition: ${name}`);
+      references.push({
+        symbol: name,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(name) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(name) + name.length }
+          }
+        },
+        kind: 'definition',
+        context: 'module'
+      });
+    }
+    
+    // Find import statements
+    patterns.importStmt.lastIndex = 0;
+    while ((match = patterns.importStmt.exec(line)) !== null) {
+      const name = match[1];
+      imports.add(name);
+      connection.console.log(`  📥 Found import: ${name}`);
+      references.push({
+        symbol: name,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(name) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(name) + name.length }
+          }
+        },
+        kind: 'definition',
+        context: 'import'
+      });
+    }
+    
     // Find all symbol references (usages)
     patterns.symbolRef.lastIndex = 0;
     while ((match = patterns.symbolRef.exec(line)) !== null) {
@@ -836,11 +980,11 @@ function findAllSymbolReferences(document: TextDocument): SymbolReference[] {
       const startChar = match.index;
       
       // Skip if this is a keyword
-      const keywords = ['fn', 'let', 'mut', 'type', 'match', 'if', 'then', 'else', 'case', 'of', 'import', 'extern'];
+      const keywords = ['fn', 'let', 'mut', 'type', 'match', 'if', 'then', 'else', 'case', 'of', 'import', 'extern', 'effect', 'perform', 'handle', 'in', 'module'];
       if (keywords.includes(name)) continue;
       
       // Skip if this is part of a definition we already tracked
-      if (functionDefs.has(name) || variableDefs.has(name) || typeDefs.has(name)) {
+      if (functionDefs.has(name) || variableDefs.has(name) || typeDefs.has(name) || effectDefs.has(name) || effectOps.has(name) || moduleDefs.has(name) || imports.has(name)) {
         // Check if this occurrence is the definition itself
         const defRef = references.find(r => 
           r.symbol === name && 
@@ -908,6 +1052,55 @@ connection.onCompletion((_textDocumentPosition: TextDocumentPositionParams): Com
       data: 5,
       detail: 'Type declaration',
       insertText: 'type ${1:Name} = ${2:Variant} | ${3:Variant}'
+    },
+    {
+      label: 'effect',
+      kind: CompletionItemKind.Keyword,
+      data: 7,
+      detail: 'Effect declaration',
+      insertText: 'effect ${1:Name} {\n\t${2:operation}: ${3:type}\n}'
+    },
+    {
+      label: 'perform',
+      kind: CompletionItemKind.Keyword,
+      data: 8,
+      detail: 'Perform effect operation',
+      insertText: 'perform ${1:Effect}.${2:operation}(${3:args})'
+    },
+    {
+      label: 'handle',
+      kind: CompletionItemKind.Keyword,
+      data: 9,
+      detail: 'Handle effect',
+      insertText: 'handle ${1:Effect}\n\t${2:operation} => ${3:handler}\nin ${4:expression}'
+    },
+    {
+      label: 'module',
+      kind: CompletionItemKind.Keyword,
+      data: 10,
+      detail: 'Module declaration',
+      insertText: 'module ${1:Name} {\n\t${2:content}\n}'
+    },
+    {
+      label: 'import',
+      kind: CompletionItemKind.Keyword,
+      data: 11,
+      detail: 'Import module',
+      insertText: 'import ${1:Module}'
+    },
+    {
+      label: 'spawn',
+      kind: CompletionItemKind.Keyword,
+      data: 12,
+      detail: 'Spawn fiber',
+      insertText: 'spawn ${1:expression}'
+    },
+    {
+      label: 'await',
+      kind: CompletionItemKind.Keyword,
+      data: 13,
+      detail: 'Await fiber',
+      insertText: 'await(${1:fiber})'
     },
     {
       label: 'print',
@@ -1426,93 +1619,7 @@ connection.onCodeAction((params): CodeAction[] => {
   return actions;
 });
 
-// DOCUMENT FORMATTING
-connection.onDocumentFormatting((params: DocumentFormattingParams): TextEdit[] => {
-  connection.console.log(`📝 Document formatting request for ${params.textDocument.uri}`);
-  
-  const document = documents.get(params.textDocument.uri);
-  if (!document) return [];
-  
-  const text = document.getText();
-  const lines = text.split('\n');
-  const edits: TextEdit[] = [];
-  
-  // Basic formatting: consistent indentation
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    
-    if (trimmed.length > 0) {
-      // Calculate proper indentation based on context
-      let indentLevel = 0;
-      
-      // Increase indent for blocks
-      if (trimmed.includes('{') && !trimmed.includes('}')) {
-        indentLevel = 1;
-      }
-      
-      // Decrease indent for closing braces
-      if (trimmed.includes('}') && !trimmed.includes('{')) {
-        indentLevel = -1;
-      }
-      
-      const properIndent = '  '.repeat(Math.max(0, indentLevel));
-      const formattedLine = properIndent + trimmed;
-      
-      if (formattedLine !== line) {
-        edits.push({
-          range: {
-            start: { line: i, character: 0 },
-            end: { line: i, character: line.length }
-          },
-          newText: formattedLine
-        });
-      }
-    }
-  }
-  
-  connection.console.log(`✅ Applied ${edits.length} formatting edits`);
-  return edits;
-});
 
-// DOCUMENT RANGE FORMATTING
-connection.onDocumentRangeFormatting((params: DocumentRangeFormattingParams): TextEdit[] => {
-  connection.console.log(`📝 Range formatting request for ${params.textDocument.uri}`);
-  
-  const document = documents.get(params.textDocument.uri);
-  if (!document) return [];
-  
-  const text = document.getText();
-  const lines = text.split('\n');
-  const edits: TextEdit[] = [];
-  
-  const startLine = params.range.start.line;
-  const endLine = params.range.end.line;
-  
-  // Format only the specified range
-  for (let i = startLine; i <= endLine; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    
-    if (trimmed.length > 0) {
-      const properIndent = '  '; // Simple 2-space indentation
-      const formattedLine = properIndent + trimmed;
-      
-      if (formattedLine !== line) {
-        edits.push({
-          range: {
-            start: { line: i, character: 0 },
-            end: { line: i, character: line.length }
-          },
-          newText: formattedLine
-        });
-      }
-    }
-  }
-  
-  connection.console.log(`✅ Applied ${edits.length} range formatting edits`);
-  return edits;
-});
 
 // DOCUMENT HIGHLIGHTS
 connection.onDocumentHighlight((params): DocumentHighlight[] => {
