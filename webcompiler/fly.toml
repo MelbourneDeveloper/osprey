@@ -29,5 +29,5 @@ primary_region = 'ord'
     idle_timeout = 5
 
 [[vm]]
-  size = 'shared-cpu-1x'
-  memory = '256mb'
+  size = 'shared-cpu-2x'
+  memory = '512mb'
