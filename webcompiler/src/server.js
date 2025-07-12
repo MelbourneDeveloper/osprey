@@ -6,6 +6,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { WebSocketServer } from 'ws'
 import { randomUUID } from 'crypto'
+import { execSync } from 'child_process'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -245,6 +246,17 @@ deleteAllTempFolders()
 // Always uses --sandbox flag for security (disables HTTP, WebSocket, file system, and FFI access)
 function runOspreyCompiler(args, code = '') {
     return new Promise(async (resolve, reject) => {
+        // Diagnostics before running compiler
+        try {
+            console.log('🛠️ ENV:', process.env);
+            console.log('🛠️ which osprey:', execSync('which osprey').toString());
+            console.log('🛠️ ldd osprey:', execSync('ldd /usr/local/bin/osprey').toString());
+            console.log('🛠️ ls /usr/local/lib:', execSync('ls -l /usr/local/lib').toString());
+            console.log('🛠️ ls /usr/lib/llvm-14/bin:', execSync('ls -l /usr/lib/llvm-14/bin').toString());
+            console.log('🛠️ ls /tmp/osprey-temp:', execSync('ls -l /tmp/osprey-temp').toString());
+        } catch (e) {
+            console.error('🛠️ Diagnostics error:', e.message);
+        }
         // Create a unique UUID folder for this request - THREAD SAFE!
         const requestId = randomUUID()
         const tempBaseDir = '/tmp/osprey-temp'
