@@ -342,7 +342,7 @@ function runOspreyCompiler(args, code = '') {
             const child = spawn(ospreyPath, [tempFile, ...args], {
                 stdio: 'pipe',
                 cwd: tempRequestDir, // Run in the temp directory
-                timeout: 15000 
+                timeout: 20000 
             })
 
             let stdout = ''
