@@ -89,6 +89,12 @@ app.post('/api/compile', async (req, res) => {
     const { code } = req.body
     console.log('📝 Compile request received')
     console.log('📄 Code length:', code?.length || 0)
+    
+    // LOG THE ACTUAL CODE
+    console.log('🔍 CODE BEING COMPILED:')
+    console.log('='.repeat(50))
+    console.log(code || 'NO CODE PROVIDED')
+    console.log('='.repeat(50))
 
     if (!code) {
         return res.status(400).json({ success: false, error: 'No code provided' })
@@ -97,15 +103,27 @@ app.post('/api/compile', async (req, res) => {
     try {
         const result = await runOspreyCompiler(['--sandbox', '--ast'], code)
 
+        // LOG THE COMPILER OUTPUT
+        console.log('🔨 COMPILER OUTPUT (stderr):')
+        console.log('-'.repeat(50))
+        console.log(result.stderr || 'NO COMPILER OUTPUT')
+        console.log('-'.repeat(50))
+
+        // LOG THE PROGRAM OUTPUT
+        console.log('📋 PROGRAM OUTPUT (stdout):')
+        console.log('-'.repeat(50))
+        console.log(result.stdout || 'NO PROGRAM OUTPUT')
+        console.log('-'.repeat(50))
+
         if (result.success) {
-            console.log('✅ Compile success, output length:', result.stdout.length)
+            console.log('✅ Compile success, exit code:', result.exitCode)
             res.status(200).json({
                 success: true,
                 compilerOutput: result.stderr || '',
                 programOutput: result.stdout || '' // AST output goes to stdout
             })
         } else {
-            console.error('❌ Compile error, stderr:', result.stderr)
+            console.error('❌ Compile failed, exit code:', result.exitCode)
 
             const errorOutput = result.stderr || result.stdout || '';
 
@@ -141,6 +159,12 @@ app.post('/api/run', async (req, res) => {
     const { code } = req.body
     console.log('🏃 Run request received')
     console.log('📄 Code length:', code?.length || 0)
+    
+    // LOG THE ACTUAL CODE
+    console.log('🔍 CODE BEING RUN:')
+    console.log('='.repeat(50))
+    console.log(code || 'NO CODE PROVIDED')
+    console.log('='.repeat(50))
 
     if (!code) {
         return res.status(400).json({ success: false, error: 'No code provided' })
@@ -149,10 +173,20 @@ app.post('/api/run', async (req, res) => {
     try {
         const result = await runOspreyCompiler(['--run'], code)
 
+        // LOG THE COMPILER OUTPUT
+        console.log('🔨 COMPILER OUTPUT (stderr):')
+        console.log('-'.repeat(50))
+        console.log(result.stderr || 'NO COMPILER OUTPUT')
+        console.log('-'.repeat(50))
+
+        // LOG THE PROGRAM OUTPUT
+        console.log('📋 PROGRAM OUTPUT (stdout):')
+        console.log('-'.repeat(50))
+        console.log(result.stdout || 'NO PROGRAM OUTPUT')
+        console.log('-'.repeat(50))
+
         if (result.success) {
-            console.log('✅ Run success')
-            console.log('📊 Compiler output length:', result.stderr?.length || 0)
-            console.log('📋 Program output length:', result.stdout?.length || 0)
+            console.log('✅ Run success, exit code:', result.exitCode)
 
             res.status(200).json({
                 success: true,
@@ -160,8 +194,7 @@ app.post('/api/run', async (req, res) => {
                 programOutput: result.stdout || ''
             })
         } else {
-            console.error('❌ Run failed, stderr:', result.stderr)
-            console.error('❌ Run failed, stdout:', result.stdout)
+            console.error('❌ Run failed, exit code:', result.exitCode)
 
             const errorOutput = result.stderr || result.stdout || '';
 
@@ -246,17 +279,7 @@ deleteAllTempFolders()
 // Always uses --sandbox flag for security (disables HTTP, WebSocket, file system, and FFI access)
 function runOspreyCompiler(args, code = '') {
     return new Promise(async (resolve, reject) => {
-        // Diagnostics before running compiler
-        try {
-            console.log('🛠️ ENV:', process.env);
-            console.log('🛠️ which osprey:', execSync('which osprey').toString());
-            console.log('🛠️ ldd osprey:', execSync('ldd /usr/local/bin/osprey').toString());
-            console.log('🛠️ ls /usr/local/lib:', execSync('ls -l /usr/local/lib').toString());
-            console.log('🛠️ ls /usr/lib/llvm-14/bin:', execSync('ls -l /usr/lib/llvm-14/bin').toString());
-            console.log('🛠️ ls /tmp/osprey-temp:', execSync('ls -l /tmp/osprey-temp').toString());
-        } catch (e) {
-            console.error('🛠️ Diagnostics error:', e.message);
-        }
+        // Diagnostics removed - too verbose for production logging
         // Create a unique UUID folder for this request - THREAD SAFE!
         const requestId = randomUUID()
         const tempBaseDir = '/tmp/osprey-temp'

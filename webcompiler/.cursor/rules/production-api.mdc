@@ -10,10 +10,10 @@ alwaysApply: false
 - **KEEP DOCKERFILE IN SYNC WITH DEV CONTAINER DOCKERFILE** including dependency versions
 - **PRODUCTION API** - Don't break it, keep changes minimal and safe
 - **SERVES LSP FOR WEBSITE** - This API must stay working for language server
-- **DOCKER COMPOSE MUST WORK** - Build and run successfully for deployment
+- **DOCKER BUILD MUST WORK** - Build and run successfully for deployment
 - **API ENDPOINTS MUST RESPOND** - Ensure all endpoints return proper responses
 - **HANDLE ERRORS PROPERLY** - Don't let the API crash, fail gracefully
-- **INTEGRATION TESTS ARE KEY** - Docker Compose pipeline tests are critical
+- **INTEGRATION TESTS ARE KEY** - Docker pipeline tests are critical
 - **DON'T BREAK THE PIPELINE** - If CI tests fail, fix immediately
 - **KEEP IT SIMPLE** - Don't over-engineer this basic project
 - **MAKE IT DEPLOYABLE** - Ensure app deploys to host without issues
