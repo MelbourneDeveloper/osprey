@@ -302,6 +302,16 @@ function runOspreyCompiler(args, code = '') {
                     console.error('⚠️ Failed to clean up temp folder:', e.message)
                 }
 
+                // Log detailed information about the compiler execution
+                console.log(`🔍 Compiler execution completed with exit code: ${exitCode}`)
+                console.log(`📊 stdout length: ${stdout.length}, stderr length: ${stderr.length}`)
+                if (stdout.length > 0) {
+                    console.log(`📤 stdout: ${stdout.substring(0, 500)}${stdout.length > 500 ? '...' : ''}`)
+                }
+                if (stderr.length > 0) {
+                    console.log(`📤 stderr: ${stderr.substring(0, 500)}${stderr.length > 500 ? '...' : ''}`)
+                }
+
                 // Always resolve with the result - let the caller determine success/failure
                 resolve({
                     exitCode,

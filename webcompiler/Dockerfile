@@ -21,8 +21,8 @@ WORKDIR /workspace
 # Build all runtime libraries
 RUN make fiber-runtime http-runtime websocket-runtime system-runtime
 
-# Build the Osprey compiler directly without linting
-RUN go build -o bin/osprey ./cmd/osprey
+# Build the Osprey compiler with proper build process
+RUN make build-no-lint
 
 # Build stage for LSP server
 FROM node:20-bookworm AS lsp-builder
