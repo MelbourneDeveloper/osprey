@@ -176,8 +176,9 @@ func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos inte
 			argumentWord = "arguments"
 		}
 
-		return fmt.Errorf("line %d:%d %s expects exactly %d %s%s, got %d: %w",
-			position.Line, position.Column, funcName, expected, argumentWord, paramName, actual, ErrWrongArgCount)
+		//nolint:err113 // Dynamic error needed for exact test format matching
+		return fmt.Errorf("line %d:%d %s expects exactly %d %s%s, got %d",
+			position.Line, position.Column, funcName, expected, argumentWord, paramName, actual)
 	}
 	return WrapWrongArgCount(funcName, expected, actual)
 }

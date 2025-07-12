@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/christianfindlay/osprey/internal/ast"
 )
@@ -394,6 +395,15 @@ func (ti *TypeInferer) unifyConcreteTypes(t1, t2 Type) error {
 		if ct1.name == ct2.name || ct1.name == TypeAny || ct2.name == TypeAny {
 			return nil
 		}
+		
+		// Special case: generic "Function" type should be compatible with any specific function signature
+		if ct1.name == TypeFunction && strings.HasPrefix(ct2.name, "fn(") {
+			return nil
+		}
+		if ct2.name == TypeFunction && strings.HasPrefix(ct1.name, "fn(") {
+			return nil
+		}
+		
 		return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, ct1.name, ct2.name)
 	}
 
@@ -403,6 +413,13 @@ func (ti *TypeInferer) unifyConcreteTypes(t1, t2 Type) error {
 	}
 	if ct2, ok := t2.(*ConcreteType); ok && ct2.name == TypeAny {
 		return nil
+	}
+
+	// Special case: generic "Function" type should be compatible with function types
+	if ct1.name == TypeFunction {
+		if _, ok := t2.(*FunctionType); ok {
+			return nil
+		}
 	}
 
 	return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, ct1.name, t2.String())

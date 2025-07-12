@@ -210,8 +210,6 @@ func (g *LLVMGenerator) checkSecurityPermission(permission SecurityPermission) b
 	}
 }
 
-
-
 // generateInterpolatedString generates LLVM IR for interpolated strings by concatenating parts.
 func (g *LLVMGenerator) generateInterpolatedString(interpStr *ast.InterpolatedStringLiteral) (value.Value, error) {
 	// For now, we'll use a simple approach: build the string by calling printf multiple times
@@ -335,18 +333,18 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 	isTrue := currentBlock.NewICmp(enum.IPredNE, arg, zero)
 	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
 
-	// True case - return "true"
+	// True case - return "1"
 	g.builder = trueBlock
-	trueStr := constant.NewCharArrayFromString("true\x00")
+	trueStr := constant.NewCharArrayFromString("1\x00")
 	trueGlobal := g.module.NewGlobalDef("", trueStr)
 	truePtr := trueBlock.NewGetElementPtr(trueStr.Typ, trueGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
 	trueBlock.NewBr(endBlock)
 
-	// False case - return "false"
+	// False case - return "0"
 	g.builder = falseBlock
-	falseStr := constant.NewCharArrayFromString("false\x00")
+	falseStr := constant.NewCharArrayFromString("0\x00")
 	falseGlobal := g.module.NewGlobalDef("", falseStr)
 	falsePtr := falseBlock.NewGetElementPtr(falseStr.Typ, falseGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))

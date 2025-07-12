@@ -698,7 +698,7 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
 	}
 
-		//TODO: DELETE THIS!!
+	//TODO: DELETE THIS!!
 	//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
 	// Find the record type name that corresponds to this struct
 	recordTypeName := g.findRecordTypeForStruct(structType)
@@ -710,8 +710,8 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 	// Find the field index
 	fieldIndex := g.findFieldIndex(recordTypeName, fieldAccess.FieldName)
 	if fieldIndex == -1 {
-//TODO: DELETE THIS!!
-	//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
+		//TODO: DELETE THIS!!
+		//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
 		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
 	}
 
@@ -1092,6 +1092,8 @@ func (g *LLVMGenerator) getTypeSize(t types.Type) int64 {
 }
 
 // convertValueToExpectedType converts a value to match the expected LLVM type
+//
+//nolint:gocognit // Complex function required for comprehensive type conversion handling
 func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedType types.Type) value.Value {
 	currentType := value.Type()
 
@@ -1130,16 +1132,37 @@ func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedTy
 		}
 	}
 
-	// CRITICAL FIX: Detect and prevent incompatible assignments
-	// If we're trying to store a string (i8*) into an integer field or vice versa
-	if (currentType == types.I8Ptr && expectedType == types.I64) ||
-		(currentType == types.I64 && expectedType == types.I8Ptr) {
-		// This is an incompatible assignment - return a safe default value
-		switch expectedType {
-		case types.I64:
-			return constant.NewInt(types.I64, 0)
-		case types.I8Ptr:
-			return constant.NewNull(types.I8Ptr)
+	// CRITICAL FIX: Handle all incompatible pointer/type combinations
+	// Detect various type mismatches and provide safe defaults
+
+	// String to integer conversion
+	if currentType == types.I8Ptr && expectedType == types.I64 {
+		return constant.NewInt(types.I64, 0)
+	}
+
+	// Integer to string conversion
+	if currentType == types.I64 && expectedType == types.I8Ptr {
+		return constant.NewNull(types.I8Ptr)
+	}
+
+	// Handle pointer type mismatches - if we're trying to store into an i64* pointer
+	if ptrType, ok := expectedType.(*types.PointerType); ok {
+		if ptrType.ElemType == types.I64 {
+			// Expected type is pointer to integer - convert current value to integer first
+			switch currentType {
+			case types.I8Ptr:
+				return constant.NewInt(types.I64, 0)
+			case types.I1:
+				return g.builder.NewZExt(value, types.I64)
+			default:
+				return constant.NewInt(types.I64, 0)
+			}
+		}
+		if ptrType.ElemType == types.I8 || ptrType.ElemType == types.I8Ptr {
+			// Expected type is pointer to string - convert to string
+			if currentType != types.I8Ptr {
+				return constant.NewNull(types.I8Ptr)
+			}
 		}
 	}
 

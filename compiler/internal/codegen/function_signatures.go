@@ -217,12 +217,27 @@ func (g *LLVMGenerator) getLLVMType(typeName string) types.Type {
 		return types.I1
 	case TypeUnit: // "Unit"
 		return types.Void
+	case TypeHTTPResponse: // "HttpResponse"
+		// Return pointer to HttpResponse struct
+		if httpResponseType, exists := g.typeMap[TypeHTTPResponse]; exists {
+			return types.NewPointer(httpResponseType)
+		}
+		return types.I64 // fallback
 	default:
 		// Handle function types like "fn(int, int, string) -> Unit"
 		if strings.HasPrefix(typeName, "fn(") && strings.Contains(typeName, ") -> ") {
 			return g.parseFunctionTypeString(typeName)
 		}
-		
+
+		// Check if it's a user-defined type
+		if userType, exists := g.typeMap[typeName]; exists {
+			// For struct types, return pointer to the struct
+			if _, ok := userType.(*types.StructType); ok {
+				return types.NewPointer(userType)
+			}
+			return userType
+		}
+
 		// For now, default to i64 for unknown types
 		return types.I64
 	}
@@ -234,16 +249,16 @@ func (g *LLVMGenerator) parseFunctionTypeString(typeStr string) types.Type {
 	if !strings.HasPrefix(typeStr, "fn(") {
 		return types.I64 // fallback
 	}
-	
+
 	arrowIndex := strings.Index(typeStr, ") -> ")
 	if arrowIndex == -1 {
 		return types.I64 // fallback
 	}
-	
+
 	// Extract parameter types
 	paramStr := typeStr[3:arrowIndex] // Remove "fn(" prefix
 	var paramTypes []types.Type
-	
+
 	if paramStr != "" {
 		paramNames := strings.Split(paramStr, ", ")
 		for _, paramName := range paramNames {
@@ -251,11 +266,11 @@ func (g *LLVMGenerator) parseFunctionTypeString(typeStr string) types.Type {
 			paramTypes = append(paramTypes, paramType)
 		}
 	}
-	
+
 	// Extract return type
 	returnTypeStr := strings.TrimSpace(typeStr[arrowIndex+4:]) // Remove ") -> " prefix
 	returnType := g.getLLVMType(returnTypeStr)
-	
+
 	// Create function signature and return pointer to it
 	funcSig := types.NewFunc(returnType, paramTypes...)
 	return types.NewPointer(funcSig)
@@ -390,11 +405,11 @@ func CheckProtectedFunction(fnDecl *ast.FunctionDeclaration) error {
 // getFieldType converts an Osprey field type to LLVM type
 func (g *LLVMGenerator) getFieldType(fieldType string) types.Type {
 	switch fieldType {
-	case TypeString: // "string"
+	case TypeString, "String": // "string" or "String"
 		return types.I8Ptr
-	case TypeInt: // "int"
+	case TypeInt, "Int": // "int" or "Int"
 		return types.I64
-	case TypeBool: // "bool"
+	case TypeBool, "Bool": // "bool" or "Bool"  
 		return types.I1
 	default:
 		return types.I64 // default to i64
