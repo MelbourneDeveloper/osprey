@@ -225,10 +225,10 @@ func TestWrapPrintWrongArgs(t *testing.T) {
 }
 
 func TestWrapInputWrongArgs(t *testing.T) {
-	err := codegen.WrapInputWrongArgs(1)
+	err := codegen.WrapWrongArgCount("input", 0, 1)
 
 	if err == nil {
-		t.Error("WrapInputWrongArgs should return error")
+		t.Error("WrapWrongArgCount should return error")
 	}
 	if !errors.Is(err, codegen.ErrWrongArgCount) {
 		t.Error("Should wrap ErrWrongArgCount")
@@ -430,8 +430,6 @@ func TestWrapIteratorErrors(t *testing.T) {
 		wrapFunc func(int) error
 		baseErr  error
 	}{
-		{"WrapRangeWrongArgs", codegen.WrapRangeWrongArgs, codegen.ErrWrongArgCount},
-		{"WrapForEachWrongArgs", codegen.WrapForEachWrongArgs, codegen.ErrWrongArgCount},
 		{"WrapMapWrongArgs", codegen.WrapMapWrongArgs, codegen.ErrWrongArgCount},
 		{"WrapFilterWrongArgs", codegen.WrapFilterWrongArgs, codegen.ErrWrongArgCount},
 		{"WrapFoldWrongArgs", codegen.WrapFoldWrongArgs, codegen.ErrWrongArgCount},
@@ -516,68 +514,63 @@ func TestErrorWrappingWithPosition(t *testing.T) {
 			"line 10:5: constraint result field access not allowed: myField",
 		},
 		{
-			"WrapFieldAccessNotImplWithPos",
-			func() error { return codegen.WrapFieldAccessNotImplWithPos("myField", position) },
-			"line 10:5: field access not implemented for field 'myField': field access not implemented",
-		},
-		{
-			"WrapPrintWrongArgsWithPos",
-			func() error { return codegen.WrapPrintWrongArgsWithPos(2, position) },
+			"WrapFunctionArgsWithPos print",
+			func() error { return codegen.WrapFunctionArgsWithPos("print", 1, 2, position) },
 			"line 10:5: print expects exactly 1 argument(s), got 2: wrong argument count",
 		},
 		{
-			"WrapInputWrongArgsWithPos",
-			func() error { return codegen.WrapInputWrongArgsWithPos(1, position) },
+			"WrapFunctionArgsWithPos input",
+			func() error { return codegen.WrapFunctionArgsWithPos("input", 0, 1, position) },
 			"line 10:5: input expects exactly 0 argument(s), got 1: wrong argument count",
 		},
 		{
-			"WrapLengthWrongArgsWithPos",
-			func() error { return codegen.WrapLengthWrongArgsWithPos(2, position) },
+			"WrapFunctionArgsWithPos length",
+			func() error { return codegen.WrapFunctionArgsWithPos("length", 1, 2, position) },
 			"line 10:5: length expects exactly 1 argument(s), got 2: wrong argument count",
 		},
 		{
-			"WrapContainsWrongArgsWithPos",
-			func() error { return codegen.WrapContainsWrongArgsWithPos(1, position) },
+			"WrapFunctionArgsWithPos contains",
+			func() error { return codegen.WrapFunctionArgsWithPos("contains", 2, 1, position) },
 			"line 10:5: contains expects exactly 2 argument(s), got 1: wrong argument count",
 		},
 		{
-			"WrapSubstringWrongArgsWithPos",
-			func() error { return codegen.WrapSubstringWrongArgsWithPos(2, position) },
+			"WrapFunctionArgsWithPos substring",
+			func() error { return codegen.WrapFunctionArgsWithPos("substring", 3, 2, position) },
 			"line 10:5: substring expects exactly 3 argument(s), got 2: wrong argument count",
 		},
 		{
-			"WrapRangeWrongArgsWithPos",
-			func() error { return codegen.WrapRangeWrongArgsWithPos(1, position) },
+			"WrapFunctionArgsWithPos range",
+			func() error { return codegen.WrapFunctionArgsWithPos("range", 2, 1, position) },
 			"line 10:5: range expects exactly 2 argument(s), got 1: wrong argument count",
 		},
 		{
-			"WrapForEachWrongArgsWithPos",
-			func() error { return codegen.WrapForEachWrongArgsWithPos(1, position) },
+			"WrapFunctionArgsWithPos forEach",
+			func() error { return codegen.WrapFunctionArgsWithPos("forEach", 2, 1, position) },
 			"line 10:5: forEach expects exactly 2 argument(s), got 1: wrong argument count",
 		},
 		{
-			"WrapHTTPCreateClientWrongArgsWithPos",
-			func() error { return codegen.WrapHTTPCreateClientWrongArgsWithPos(1, position) },
+			"WrapFunctionArgsWithPos httpCreateClient",
+			func() error { return codegen.WrapFunctionArgsWithPos("httpCreateClient", 2, 1, position) },
 			"line 10:5: httpCreateClient expects exactly 2 argument(s), got 1: wrong argument count",
 		},
 		{
-			"WrapHTTPGetWrongArgsWithPos",
-			func() error { return codegen.WrapHTTPGetWrongArgsWithPos(2, position) },
+			"WrapFunctionArgsWithPos httpGet",
+			func() error { return codegen.WrapFunctionArgsWithPos("httpGet", 3, 2, position) },
 			"line 10:5: httpGet expects exactly 3 argument(s), got 2: wrong argument count",
 		},
 		{
-			"WrapSpawnProcessWrongArgsWithPos",
-			func() error { return codegen.WrapSpawnProcessWrongArgsWithPos(1, position) },
+			"WrapFunctionArgsWithPos spawnProcess",
+			func() error { return codegen.WrapFunctionArgsWithPos("spawnProcess", 2, 1, position) },
 			"line 10:5: spawnProcess expects exactly 2 argument(s), got 1: wrong argument count",
 		},
 		{
-			"WrapWriteFileWrongArgsWithPos",
-			func() error { return codegen.WrapWriteFileWrongArgsWithPos(1, position) },
+			"WrapFunctionArgsWithPos writeFile",
+			func() error { return codegen.WrapFunctionArgsWithPos("writeFile", 2, 1, position) },
 			"line 10:5: writeFile expects exactly 2 argument(s), got 1: wrong argument count",
 		},
 		{
-			"WrapReadFileWrongArgsWithPos",
-			func() error { return codegen.WrapReadFileWrongArgsWithPos(2, position) },
+			"WrapFunctionArgsWithPos readFile",
+			func() error { return codegen.WrapFunctionArgsWithPos("readFile", 1, 2, position) },
 			"line 10:5: readFile expects exactly 1 argument(s), got 2: wrong argument count",
 		},
 		{
@@ -618,13 +611,13 @@ func TestErrorWrappingWithoutPosition(t *testing.T) {
 			"undefined variable: myVar",
 		},
 		{
-			"WrapPrintWrongArgsWithPos nil position",
-			func() error { return codegen.WrapPrintWrongArgsWithPos(2, nil) },
+			"WrapFunctionArgsWithPos nil position for print",
+			func() error { return codegen.WrapFunctionArgsWithPos("print", 1, 2, nil) },
 			"function print expects 1 arguments, got 2: wrong argument count",
 		},
 		{
-			"WrapLengthWrongArgsWithPos nil position",
-			func() error { return codegen.WrapLengthWrongArgsWithPos(2, nil) },
+			"WrapFunctionArgsWithPos nil position for length",
+			func() error { return codegen.WrapFunctionArgsWithPos("length", 1, 2, nil) },
 			"function length expects 1 arguments, got 2: wrong argument count",
 		},
 		{

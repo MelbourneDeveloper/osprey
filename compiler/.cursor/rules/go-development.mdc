@@ -21,8 +21,5 @@ alwaysApply: true
 ✅ CORRECT
 	runTestExamplesRecursive(t, "../../examples/tested/basics", getExpectedOutputs())
 
-- **STATIC ANALYSIS TOOLS** - Run make lint, add linters to config where possible
 - - **USE TYPE SWITCHES** - Pattern match on interface{} types instead of casting
 - **FOLLOW compilersbestpractice.md** - Adhere to project-specific compiler guidelines
-
-@compilersbestpractice.md

@@ -597,51 +597,116 @@ func (ti *TypeInferer) inferLambdaExpression(e *ast.LambdaExpression) (Type, err
 	}, nil
 }
 
-// TODO: fix this horrible code. We need a registry of built-in functions with param list and return type.
-// TODO: this list needs to also drive the documentation. This is just filthy. Please stop.
+// TODO: fix this horrible code. We need a general purpose registry of built-in functions with param list
+// and return type, as well as documentation etc.
+// TODO: this list needs to also be part of documentation. This is just filthy. Please stop. Merge this
+// list with other built-in function lists!!!
 // validateBuiltInFunctionArgs validates argument counts for built-in functions
 func (ti *TypeInferer) validateBuiltInFunctionArgs(funcName string, argCount int, position *ast.Position) error {
-	switch funcName {
-	case LengthFunc:
-		if argCount != LengthExpectedArgs {
-			return WrapLengthWrongArgsWithPos(argCount, position)
-		}
-	case ReadFileFunc:
-		if argCount != ReadFileExpectedArgs {
-			return WrapReadFileWrongArgsWithPos(argCount, position)
-		}
-	case WriteFileFunc:
-		if argCount != WriteFileExpectedArgs {
-			return WrapWriteFileWrongArgsWithPos(argCount, position)
-		}
-	case ContainsFunc:
-		if argCount != ContainsExpectedArgs {
-			return WrapContainsWrongArgsWithPos(argCount, position)
-		}
-	case SubstringFunc:
-		if argCount != SubstringExpectedArgs {
-			return WrapSubstringWrongArgsWithPos(argCount, position)
-		}
-	case ToStringFunc:
-		if argCount != ToStringExpectedArgs {
-			return WrapToStringWrongArgsWithPos(argCount, position)
-		}
-	case InputFunc:
-		if argCount != InputExpectedArgs {
-			return WrapInputWrongArgsWithPos(argCount, position)
-		}
-	case HTTPCreateClientFunc:
-		if argCount != HTTPCreateClientExpectedArgs {
-			return WrapHTTPCreateClientWrongArgsWithPos(argCount, position)
-		}
-	case HTTPGetFunc:
-		if argCount != HTTPGetExpectedArgs {
-			return WrapHTTPGetWrongArgsWithPos(argCount, position)
-		}
+	// Built-in function validation map
+	validationMap := map[string]func(int, *ast.Position) error{
+		LengthFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, LengthExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(LengthFunc, LengthExpectedArgs, actualCount, pos)
+			})
+		},
+		ReadFileFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, ReadFileExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(ReadFileFunc, ReadFileExpectedArgs, actualCount, pos)
+			})
+		},
+		WriteFileFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, WriteFileExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(WriteFileFunc, WriteFileExpectedArgs, actualCount, pos)
+			})
+		},
+		ContainsFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, ContainsExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(ContainsFunc, ContainsExpectedArgs, actualCount, pos)
+			})
+		},
+		SubstringFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, SubstringExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(SubstringFunc, SubstringExpectedArgs, actualCount, pos)
+			})
+		},
+		ToStringFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, ToStringExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(ToStringFunc, ToStringExpectedArgs, actualCount, pos)
+			})
+		},
+		InputFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, InputExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(InputFunc, InputExpectedArgs, actualCount, pos)
+			})
+		},
+		HTTPCreateClientFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, HTTPCreateClientExpectedArgs, pos,
+				func(actualCount int, pos interface{}) error {
+					return WrapFunctionArgsWithPos(HTTPCreateClientFunc, HTTPCreateClientExpectedArgs, actualCount, pos)
+				})
+		},
+		HTTPGetFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, HTTPGetExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(HTTPGetFunc, HTTPGetExpectedArgs, actualCount, pos)
+			})
+		},
+		RangeFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, RangeExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(RangeFunc, RangeExpectedArgs, actualCount, pos)
+			})
+		},
+		ForEachFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, ForEachExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(ForEachFunc, ForEachExpectedArgs, actualCount, pos)
+			})
+		},
+		SpawnProcessFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, SpawnProcessExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(SpawnProcessFunc, SpawnProcessExpectedArgs, actualCount, pos)
+			})
+		},
+		PrintFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, PrintExpectedArgs, pos, func(actualCount int, pos interface{}) error {
+				return WrapFunctionArgsWithPos(PrintFunc, PrintExpectedArgs, actualCount, pos)
+			})
+		},
+		AwaitProcessFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, AwaitProcessExpectedArgs, pos,
+				func(c int, _ interface{}) error { return WrapAwaitProcessWrongArgs(c) })
+		},
+		CleanupProcessFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, CleanupProcessExpectedArgs, pos,
+				func(c int, _ interface{}) error { return WrapCleanupProcessWrongArgs(c) })
+		},
+		MapFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, MapExpectedArgs, pos,
+				func(c int, _ interface{}) error { return WrapMapWrongArgs(c) })
+		},
+		FilterFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, FilterExpectedArgs, pos,
+				func(c int, _ interface{}) error { return WrapFilterWrongArgs(c) })
+		},
+		FoldFunc: func(count int, pos *ast.Position) error {
+			return ti.validateArgsOrError(count, FoldExpectedArgs, pos,
+				func(c int, _ interface{}) error { return WrapFoldWrongArgs(c) })
+		},
+	}
+
+	if validator, exists := validationMap[funcName]; exists {
+		return validator(argCount, position)
 	}
 	return nil
 }
 
+// validateArgsOrError is a helper function to validate argument counts
+func (ti *TypeInferer) validateArgsOrError(argCount, expected int, position *ast.Position,
+	errorFunc func(int, interface{}) error) error {
+	if argCount != expected {
+		return errorFunc(argCount, position)
+	}
+	return nil
+}
 
 // inferCallExpression infers types for call expressions
 func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) {
@@ -1061,9 +1126,9 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 	})
 
 	// Process functions
-	// spawnProcess(command: String, args: String) -> Result<ProcessHandle, Error>
+	// spawnProcess(command: String, callback: fn(int, int, string) -> Unit) -> Result<ProcessHandle, Error>
 	ti.env.Set("spawnProcess", &FunctionType{
-		paramTypes: []Type{stringType, stringType},
+		paramTypes: []Type{stringType, &ConcreteType{name: "fn(int, int, string) -> Unit"}},
 		returnType: &ConcreteType{name: "Result<ProcessHandle, Error>"},
 	})
 

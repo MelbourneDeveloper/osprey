@@ -167,7 +167,7 @@ func (g *LLVMGenerator) createGlobalString(str string) value.Value {
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != 1 {
-		return nil, WrapPrintWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+		return nil, WrapFunctionArgsWithPos(PrintFunc, PrintExpectedArgs, len(callExpr.Arguments), callExpr.Position)
 	}
 
 	argExpr := callExpr.Arguments[0]
@@ -217,7 +217,7 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 // generateInputCall handles input function calls.
 func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != 0 {
-		return nil, WrapInputWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+		return nil, WrapFunctionArgsWithPos(InputFunc, InputExpectedArgs, len(callExpr.Arguments), callExpr.Position)
 	}
 
 	// Declare scanf function if not already declared
@@ -287,7 +287,7 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 
 func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapLengthWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+		return nil, WrapFunctionArgsWithPos(LengthFunc, LengthExpectedArgs, len(callExpr.Arguments), callExpr.Position)
 	}
 
 	arg, err := g.generateExpression(callExpr.Arguments[0])
@@ -316,7 +316,7 @@ func (g *LLVMGenerator) getResultType(valueType types.Type) *types.StructType {
 // generateContainsCall handles contains(haystack: string, needle: string) -> bool function calls.
 func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapContainsWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+		return nil, WrapFunctionArgsWithPos(ContainsFunc, ContainsExpectedArgs, len(callExpr.Arguments), callExpr.Position)
 	}
 
 	haystack, err := g.generateExpression(callExpr.Arguments[0])
@@ -364,7 +364,7 @@ func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (valu
 
 func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != ThreeArgs {
-		return nil, WrapSubstringWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+		return nil, WrapFunctionArgsWithPos(SubstringFunc, SubstringExpectedArgs, len(callExpr.Arguments), callExpr.Position)
 	}
 
 	str, err := g.generateExpression(callExpr.Arguments[0])

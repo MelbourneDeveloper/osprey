@@ -691,20 +691,27 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 		isPointer = false
 	}
 
+	//TODO: DELETE THIS!!
+	//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
 	if structType == nil {
 		// Field access is not supported on non-struct types
 		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
 	}
 
+		//TODO: DELETE THIS!!
+	//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
 	// Find the record type name that corresponds to this struct
 	recordTypeName := g.findRecordTypeForStruct(structType)
 	if recordTypeName == "" {
+
 		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
 	}
 
 	// Find the field index
 	fieldIndex := g.findFieldIndex(recordTypeName, fieldAccess.FieldName)
 	if fieldIndex == -1 {
+//TODO: DELETE THIS!!
+	//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
 		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
 	}
 

@@ -125,7 +125,9 @@ func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
 // that uses a default callback for stdout/stderr events.
 func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapSpawnProcessWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+		return nil, WrapFunctionArgsWithPos(
+			SpawnProcessFunc, SpawnProcessExpectedArgs,
+			len(callExpr.Arguments), callExpr.Position)
 	}
 
 	cmd, err := g.generateExpression(callExpr.Arguments[0])
@@ -231,7 +233,7 @@ func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.V
 func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {
 	const expectedArgs = TwoArgs
 	if len(callExpr.Arguments) != expectedArgs {
-		return nil, WrapWriteFileWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+		return nil, WrapFunctionArgsWithPos(WriteFileFunc, WriteFileExpectedArgs, len(callExpr.Arguments), callExpr.Position)
 	}
 
 	filename, err := g.generateExpression(callExpr.Arguments[0])
@@ -306,7 +308,7 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 // returns a Result<string, string> type.
 func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapReadFileWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+		return nil, WrapFunctionArgsWithPos(ReadFileFunc, ReadFileExpectedArgs, len(callExpr.Arguments), callExpr.Position)
 	}
 
 	filename, err := g.generateExpression(callExpr.Arguments[0])

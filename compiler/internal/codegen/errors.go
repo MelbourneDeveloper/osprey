@@ -201,56 +201,6 @@ func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos inte
 	return WrapWrongArgCount(funcName, expected, actual)
 }
 
-// WrapPrintWrongArgsWithPos wraps errors for wrong number of print arguments
-func WrapPrintWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos("print", PrintExpectedArgs, argCount, pos)
-}
-
-// WrapInputWrongArgsWithPos wraps errors for wrong number of input arguments
-func WrapInputWrongArgsWithPos(argCount int, _ interface{}) error {
-	return WrapWrongArgCount(InputFunc, InputExpectedArgs, argCount)
-}
-
-// WrapToStringWrongArgsWithPos wraps errors for wrong number of toString arguments
-func WrapToStringWrongArgsWithPos(argCount int, _ interface{}) error {
-	return WrapWrongArgCount(ToStringFunc, ToStringExpectedArgs, argCount)
-}
-
-// WrapReadFileWrongArgsWithPos wraps errors for wrong number of readFile arguments
-func WrapReadFileWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos(ReadFileFunc, ReadFileExpectedArgs, argCount, pos)
-}
-
-// WrapWriteFileWrongArgsWithPos wraps errors for wrong number of writeFile arguments
-func WrapWriteFileWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos(WriteFileFunc, WriteFileExpectedArgs, argCount, pos)
-}
-
-// WrapLengthWrongArgsWithPos wraps errors for wrong number of length arguments
-func WrapLengthWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos(LengthFunc, LengthExpectedArgs, argCount, pos)
-}
-
-// WrapContainsWrongArgsWithPos wraps errors for wrong number of contains arguments
-func WrapContainsWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos(ContainsFunc, ContainsExpectedArgs, argCount, pos)
-}
-
-// WrapSubstringWrongArgsWithPos wraps errors for wrong number of substring arguments
-func WrapSubstringWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos(SubstringFunc, SubstringExpectedArgs, argCount, pos)
-}
-
-// WrapHTTPCreateClientWrongArgsWithPos wraps errors for wrong number of HTTP client creation arguments
-func WrapHTTPCreateClientWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos(HTTPCreateClientFunc, HTTPCreateClientExpectedArgs, argCount, pos)
-}
-
-// WrapHTTPGetWrongArgsWithPos wraps errors for wrong number of HTTP GET arguments
-func WrapHTTPGetWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos(HTTPGetFunc, HTTPGetExpectedArgs, argCount, pos)
-}
-
 // WrapUnsupportedExpression wraps errors for unsupported expressions
 func WrapUnsupportedExpression(expr interface{}) error {
 	return fmt.Errorf("%w: %T", ErrUnsupportedExpression, expr)
@@ -259,7 +209,8 @@ func WrapUnsupportedExpression(expr interface{}) error {
 // WrapUndefinedVariableWithPos wraps errors for undefined variables
 func WrapUndefinedVariableWithPos(varName string, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
-		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrUndefinedVariable, varName)
+		return fmt.Errorf("line %d:%d: %w: %s",
+			position.Line, position.Column, ErrUndefinedVariable, varName)
 	}
 	return fmt.Errorf("%w: %s", ErrUndefinedVariable, varName)
 }
@@ -299,14 +250,6 @@ func WrapConstraintResultFieldAccessWithPos(field string, pos interface{}) error
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrConstraintResultFieldAccess, field)
 	}
 	return fmt.Errorf("%w: %s", ErrConstraintResultFieldAccess, field)
-}
-
-// WrapFieldAccessNotImplWithPos wraps errors for field access not implemented
-func WrapFieldAccessNotImplWithPos(fieldName string, pos interface{}) error {
-	if position, ok := pos.(*ast.Position); ok && position != nil {
-		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrFieldAccessNotImpl, fieldName)
-	}
-	return fmt.Errorf("%w for field: %s", ErrFieldAccessNotImpl, fieldName)
 }
 
 // WrapMethodNotImpl wraps errors for method not implemented
@@ -414,16 +357,6 @@ func WrapWebSocketStopServerWrongArgs(argCount int) error {
 	return WrapWrongArgCount("websocketStopServer", WebSocketStopServerExpectedArgs, argCount)
 }
 
-// WrapRangeWrongArgsWithPos wraps errors for wrong number of range arguments
-func WrapRangeWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos("range", RangeExpectedArgs, argCount, pos)
-}
-
-// WrapForEachWrongArgsWithPos wraps errors for wrong number of forEach arguments
-func WrapForEachWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos("forEach", ForEachExpectedArgs, argCount, pos)
-}
-
 // WrapMapWrongArgs wraps errors for wrong number of map arguments
 func WrapMapWrongArgs(argCount int) error {
 	return WrapWrongArgCount("map", MapExpectedArgs, argCount)
@@ -472,11 +405,6 @@ func WrapBuiltInTwoArgs(funcName string) error {
 	return fmt.Errorf("%w: %s", ErrBuiltInTwoArgs, funcName)
 }
 
-// WrapSpawnProcessWrongArgsWithPos wraps errors for wrong number of spawn process arguments
-func WrapSpawnProcessWrongArgsWithPos(argCount int, pos interface{}) error {
-	return WrapFunctionArgsWithPos("spawnProcess", SpawnProcessExpectedArgs, argCount, pos)
-}
-
 // WrapSleepWrongArgs wraps errors for wrong number of sleep arguments
 func WrapSleepWrongArgs(argCount int) error {
 	return WrapWrongArgCount("sleep", SleepExpectedArgs, argCount)
@@ -508,6 +436,15 @@ func WrapUndefinedVariable(varName string) error {
 
 // WrapFieldAccessNotImpl wraps field access not implemented errors
 func WrapFieldAccessNotImpl(fieldName string) error {
+	return fmt.Errorf("%w: %s", ErrFieldAccessNotImpl, fieldName)
+}
+
+// WrapFieldAccessNotImplWithPos wraps field access errors with position information
+func WrapFieldAccessNotImplWithPos(fieldName string, pos interface{}) error {
+	if position, ok := pos.(*ast.Position); ok && position != nil {
+		return fmt.Errorf("line %d:%d: %w: %s",
+			position.Line, position.Column, ErrFieldAccessNotImpl, fieldName)
+	}
 	return fmt.Errorf("%w: %s", ErrFieldAccessNotImpl, fieldName)
 }
 
@@ -566,21 +503,6 @@ func WrapUnsupportedBinaryOp(op string) error {
 // WrapPrintWrongArgs wraps errors for wrong number of print arguments (simplified version)
 func WrapPrintWrongArgs(argCount int) error {
 	return WrapWrongArgCount("print", PrintExpectedArgs, argCount)
-}
-
-// WrapInputWrongArgs wraps errors for wrong number of input arguments (simplified version)
-func WrapInputWrongArgs(argCount int) error {
-	return WrapWrongArgCount("input", InputExpectedArgs, argCount)
-}
-
-// WrapRangeWrongArgs wraps errors for wrong number of range arguments (simplified version)
-func WrapRangeWrongArgs(argCount int) error {
-	return WrapWrongArgCount("range", RangeExpectedArgs, argCount)
-}
-
-// WrapForEachWrongArgs wraps errors for wrong number of forEach arguments (simplified version)
-func WrapForEachWrongArgs(argCount int) error {
-	return WrapWrongArgCount("forEach", ForEachExpectedArgs, argCount)
 }
 
 // WrapUnsupportedCallExpressionSecurity wraps errors for security violations
