@@ -95,6 +95,7 @@ RUN chmod +x /usr/local/bin/osprey
 # Set environment variables
 ENV DOCKER_ENV=true
 ENV NODE_ENV=production
+ENV PORT=3001
 
 # Switch to non-root user
 USER osprey
@@ -103,7 +104,7 @@ USER osprey
 EXPOSE 3001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api || exit 1
 
 # Start the server
