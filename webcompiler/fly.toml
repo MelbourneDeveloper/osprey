@@ -31,3 +31,8 @@ primary_region = 'ord'
 [[vm]]
   size = 'shared-cpu-1x'
   memory = '256mb'
+
+# Mount temp directory for compiler operations (matching docker-compose volume requirements)
+[[mounts]]
+  source = "osprey_temp"
+  destination = "/tmp/osprey-temp"
