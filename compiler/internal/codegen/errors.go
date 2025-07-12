@@ -123,7 +123,7 @@ var (
 
 // NOTE: Function argument count constants have been moved to the unified built-in function registry
 // (builtin_registry.go). These constants are no longer needed as the registry contains all
-// built-in function metadata in one place. Use GlobalBuiltInRegistry.GetFunction(name).ExpectedArgs instead.
+// built-in function metadata in one place. Use len(GlobalBuiltInRegistry.GetFunction(name).ParameterTypes) instead.
 
 // Error wrapper functions
 
@@ -154,7 +154,7 @@ func WrapWriteIRFile(err error) error {
 // WrapToStringWrongArgs wraps errors for wrong number of toString arguments
 func WrapToStringWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(ToStringFunc)
-	return WrapWrongArgCount(ToStringFunc, fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount(ToStringFunc, len(fn.ParameterTypes), argCount)
 }
 
 // WrapNoToStringImpl wraps errors when no toString implementation is found
@@ -165,8 +165,19 @@ func WrapNoToStringImpl(typeName string) error {
 // WrapFunctionArgsWithPos is a consolidated function for all "wrong arguments" errors
 func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
-		return fmt.Errorf("line %d:%d: %s expects exactly %d argument(s), got %d: %w",
-			position.Line, position.Column, funcName, expected, actual, ErrWrongArgCount)
+		// Get parameter name from registry if available
+		paramName := ""
+		if fn, exists := GlobalBuiltInRegistry.GetFunction(funcName); exists && expected == 1 && len(fn.ParameterTypes) > 0 {
+			paramName = " (" + fn.ParameterTypes[0].Name + ")"
+		}
+
+		argumentWord := "argument"
+		if expected != 1 {
+			argumentWord = "arguments"
+		}
+
+		return fmt.Errorf("line %d:%d %s expects exactly %d %s%s, got %d: %w",
+			position.Line, position.Column, funcName, expected, argumentWord, paramName, actual, ErrWrongArgCount)
 	}
 	return WrapWrongArgCount(funcName, expected, actual)
 }
@@ -250,13 +261,13 @@ func WrapBuiltInRedefine(funcName string) error {
 // WrapHTTPCreateServerWrongArgs wraps errors for wrong number of HTTP server creation arguments
 func WrapHTTPCreateServerWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCreateServerFunc)
-	return WrapWrongArgCount("httpCreateServer", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("httpCreateServer", len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPListenWrongArgs wraps errors for wrong number of HTTP listen arguments
 func WrapHTTPListenWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPListenFunc)
-	return WrapWrongArgCount("httpListen", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("httpListen", len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPStopServerUnknownNamedArg wraps errors for unknown named arguments in HTTP stop server
@@ -267,97 +278,97 @@ func WrapHTTPStopServerUnknownNamedArg(argName string) error {
 // WrapHTTPStopServerWrongArgCount wraps errors for wrong argument count in HTTP stop server
 func WrapHTTPStopServerWrongArgCount(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPStopServerFunc)
-	return WrapWrongArgCount("httpStopServer", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("httpStopServer", len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPPostWrongArgs wraps errors for wrong number of HTTP POST arguments
 func WrapHTTPPostWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPPostFunc)
-	return WrapWrongArgCount("httpPost", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("httpPost", len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPPutWrongArgs wraps errors for wrong number of HTTP PUT arguments
 func WrapHTTPPutWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPPutFunc)
-	return WrapWrongArgCount("httpPut", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("httpPut", len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPDeleteWrongArgs wraps errors for wrong number of HTTP DELETE arguments
 func WrapHTTPDeleteWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPDeleteFunc)
-	return WrapWrongArgCount("httpDelete", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("httpDelete", len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPRequestWrongArgs wraps errors for wrong number of HTTP request arguments
 func WrapHTTPRequestWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPRequestFunc)
-	return WrapWrongArgCount("httpRequest", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("httpRequest", len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPCloseClientWrongArgs wraps errors for wrong number of HTTP close client arguments
 func WrapHTTPCloseClientWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCloseClientFunc)
-	return WrapWrongArgCount("httpCloseClient", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("httpCloseClient", len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketConnectWrongArgs wraps errors for wrong number of WebSocket connect arguments
 func WrapWebSocketConnectWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketConnectFunc)
-	return WrapWrongArgCount("websocketConnect", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("websocketConnect", len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketSendWrongArgs wraps errors for wrong number of WebSocket send arguments
 func WrapWebSocketSendWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketSendFunc)
-	return WrapWrongArgCount("websocketSend", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("websocketSend", len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketCloseWrongArgs wraps errors for wrong number of WebSocket close arguments
 func WrapWebSocketCloseWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketCloseFunc)
-	return WrapWrongArgCount("websocketClose", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("websocketClose", len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketCreateServerWrongArgs wraps errors for wrong number of WebSocket server creation arguments
 func WrapWebSocketCreateServerWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketCreateServerFunc)
-	return WrapWrongArgCount("websocketCreateServer", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("websocketCreateServer", len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketServerListenWrongArgs wraps errors for wrong number of WebSocket server listen arguments
 func WrapWebSocketServerListenWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketServerListenFunc)
-	return WrapWrongArgCount("websocketServerListen", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("websocketServerListen", len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketServerBroadcastWrongArgs wraps errors for wrong number of WebSocket server broadcast arguments
 func WrapWebSocketServerBroadcastWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketServerBroadcastFunc)
-	return WrapWrongArgCount("websocketServerBroadcast", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("websocketServerBroadcast", len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketStopServerWrongArgs wraps errors for wrong number of WebSocket stop server arguments
 func WrapWebSocketStopServerWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketStopServerFunc)
-	return WrapWrongArgCount("websocketStopServer", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("websocketStopServer", len(fn.ParameterTypes), argCount)
 }
 
 // WrapMapWrongArgs wraps errors for wrong number of map arguments
 func WrapMapWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(MapFunc)
-	return WrapWrongArgCount("map", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("map", len(fn.ParameterTypes), argCount)
 }
 
 // WrapFilterWrongArgs wraps errors for wrong number of filter arguments
 func WrapFilterWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(FilterFunc)
-	return WrapWrongArgCount("filter", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("filter", len(fn.ParameterTypes), argCount)
 }
 
 // WrapFoldWrongArgs wraps errors for wrong number of fold arguments
 func WrapFoldWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(FoldFunc)
-	return WrapWrongArgCount("fold", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("fold", len(fn.ParameterTypes), argCount)
 }
 
 // WrapToolNotFound wraps errors for tool not found
@@ -396,7 +407,7 @@ func WrapBuiltInTwoArgs(funcName string) error {
 // WrapSleepWrongArgs wraps errors for wrong number of sleep arguments
 func WrapSleepWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(SleepFunc)
-	return WrapWrongArgCount("sleep", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("sleep", len(fn.ParameterTypes), argCount)
 }
 
 // Functions removed - definitions are above to match exact expected outputs
@@ -404,13 +415,13 @@ func WrapSleepWrongArgs(argCount int) error {
 // WrapAwaitProcessWrongArgs wraps errors for wrong number of await process arguments
 func WrapAwaitProcessWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(AwaitProcessFunc)
-	return WrapWrongArgCount("awaitProcess", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("awaitProcess", len(fn.ParameterTypes), argCount)
 }
 
 // WrapCleanupProcessWrongArgs wraps errors for wrong number of cleanup process arguments
 func WrapCleanupProcessWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(CleanupProcessFunc)
-	return WrapWrongArgCount("cleanupProcess", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("cleanupProcess", len(fn.ParameterTypes), argCount)
 }
 
 // Additional wrapper functions expected by tests
@@ -494,7 +505,7 @@ func WrapUnsupportedBinaryOp(op string) error {
 // WrapPrintWrongArgs wraps errors for wrong number of print arguments (simplified version)
 func WrapPrintWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(PrintFunc)
-	return WrapWrongArgCount("print", fn.ExpectedArgs, argCount)
+	return WrapWrongArgCount("print", len(fn.ParameterTypes), argCount)
 }
 
 // WrapUnsupportedCallExpressionSecurity wraps errors for security violations

@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/types"
@@ -214,10 +215,50 @@ func (g *LLVMGenerator) getLLVMType(typeName string) types.Type {
 		return types.I8Ptr
 	case TypeBool: // "bool"
 		return types.I1
+	case TypeUnit: // "Unit"
+		return types.Void
 	default:
+		// Handle function types like "fn(int, int, string) -> Unit"
+		if strings.HasPrefix(typeName, "fn(") && strings.Contains(typeName, ") -> ") {
+			return g.parseFunctionTypeString(typeName)
+		}
+		
 		// For now, default to i64 for unknown types
 		return types.I64
 	}
+}
+
+// parseFunctionTypeString parses a function type string like "fn(int, int, string) -> Unit"
+func (g *LLVMGenerator) parseFunctionTypeString(typeStr string) types.Type {
+	// Extract the part between "fn(" and ") -> "
+	if !strings.HasPrefix(typeStr, "fn(") {
+		return types.I64 // fallback
+	}
+	
+	arrowIndex := strings.Index(typeStr, ") -> ")
+	if arrowIndex == -1 {
+		return types.I64 // fallback
+	}
+	
+	// Extract parameter types
+	paramStr := typeStr[3:arrowIndex] // Remove "fn(" prefix
+	var paramTypes []types.Type
+	
+	if paramStr != "" {
+		paramNames := strings.Split(paramStr, ", ")
+		for _, paramName := range paramNames {
+			paramType := g.getLLVMType(strings.TrimSpace(paramName))
+			paramTypes = append(paramTypes, paramType)
+		}
+	}
+	
+	// Extract return type
+	returnTypeStr := strings.TrimSpace(typeStr[arrowIndex+4:]) // Remove ") -> " prefix
+	returnType := g.getLLVMType(returnTypeStr)
+	
+	// Create function signature and return pointer to it
+	funcSig := types.NewFunc(returnType, paramTypes...)
+	return types.NewPointer(funcSig)
 }
 
 // declareType processes type declarations and sets up LLVM structures

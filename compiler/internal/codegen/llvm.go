@@ -335,18 +335,18 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 	isTrue := currentBlock.NewICmp(enum.IPredNE, arg, zero)
 	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
 
-	// True case - return "1"
+	// True case - return "true"
 	g.builder = trueBlock
-	trueStr := constant.NewCharArrayFromString("1\x00")
+	trueStr := constant.NewCharArrayFromString("true\x00")
 	trueGlobal := g.module.NewGlobalDef("", trueStr)
 	truePtr := trueBlock.NewGetElementPtr(trueStr.Typ, trueGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
 	trueBlock.NewBr(endBlock)
 
-	// False case - return "0"
+	// False case - return "false"
 	g.builder = falseBlock
-	falseStr := constant.NewCharArrayFromString("0\x00")
+	falseStr := constant.NewCharArrayFromString("false\x00")
 	falseGlobal := g.module.NewGlobalDef("", falseStr)
 	falsePtr := falseBlock.NewGetElementPtr(falseStr.Typ, falseGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))

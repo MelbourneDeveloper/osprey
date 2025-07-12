@@ -17,13 +17,14 @@ type BuiltInFunction struct {
 	Signature   string
 	Description string
 
-	// Type information
+	// Type information - TODO: Rename to ParameterDefinitions!!
 	ParameterTypes []BuiltInParameter
 	ReturnType     Type
 
 	// Generation information
-	Category     FunctionCategory
-	ExpectedArgs int
+	Category FunctionCategory
+	// TODO: DELETE THIS. Get these from the BuiltInParameter list instead!!
+	//ExpectedArgs int
 	IsProtected  bool
 	SecurityFlag SecurityPermission
 
@@ -135,8 +136,9 @@ func (r *BuiltInFunctionRegistry) ValidateArguments(name string, argCount int, p
 		return nil // Not a built-in function
 	}
 
-	if argCount != fn.ExpectedArgs {
-		return WrapFunctionArgsWithPos(name, fn.ExpectedArgs, argCount, position)
+	expectedArgs := len(fn.ParameterTypes)
+	if argCount != expectedArgs {
+		return WrapFunctionArgsWithPos(name, expectedArgs, argCount, position)
 	}
 
 	return nil
@@ -190,11 +192,12 @@ func (r *BuiltInFunctionRegistry) registerCoreIOFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryCore,
-		ExpectedArgs: OneArg,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generatePrintCall,
-		Example:      `print("Hello, World!")  // Prints: Hello, World!\nprint(42)             // Prints: 42\nprint(true)           // Prints: true`,
+		Example: `print("Hello, World!")  // Prints: Hello, World!\n` +
+			`print(42)             // Prints: 42\n` +
+			`print(true)           // Prints: true`,
 	}
 
 	// toString function
@@ -207,7 +210,6 @@ func (r *BuiltInFunctionRegistry) registerCoreIOFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeString},
 		Category:     CategoryCore,
-		ExpectedArgs: OneArg,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateToStringCall,
@@ -222,7 +224,6 @@ func (r *BuiltInFunctionRegistry) registerCoreIOFunctions() {
 		ParameterTypes: []BuiltInParameter{},
 		ReturnType:     &ConcreteType{name: "Result<int, Error>"},
 		Category:       CategoryCore,
-		ExpectedArgs:   0,
 		IsProtected:    true,
 		SecurityFlag:   PermissionNone,
 		Generator:      (*LLVMGenerator).generateInputCall,
@@ -242,7 +243,6 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryString,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateLengthCall,
@@ -260,7 +260,6 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: "Result<bool, Error>"},
 		Category:     CategoryString,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateContainsCall,
@@ -279,7 +278,6 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: "Result<string, Error>"},
 		Category:     CategoryString,
-		ExpectedArgs: 3,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateSubstringCall,
@@ -300,7 +298,6 @@ func (r *BuiltInFunctionRegistry) registerFunctionalFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: "Iterator<int>"},
 		Category:     CategoryFunctional,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateRangeCall,
@@ -318,7 +315,6 @@ func (r *BuiltInFunctionRegistry) registerFunctionalFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeUnit},
 		Category:     CategoryFunctional,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateForEachCall,
@@ -336,7 +332,6 @@ func (r *BuiltInFunctionRegistry) registerFunctionalFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: "Iterator<U>"},
 		Category:     CategoryFunctional,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateMapCall,
@@ -350,11 +345,11 @@ func (r *BuiltInFunctionRegistry) registerFunctionalFunctions() {
 		Description: "Filters elements in an iterator based on a predicate function.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "iterator", Type: &ConcreteType{name: "Iterator<T>"}, Description: "The iterator to filter"},
-			{Name: "predicate", Type: &ConcreteType{name: "T -> bool"}, Description: "The predicate function that returns true for elements to keep"},
+			{Name: "predicate", Type: &ConcreteType{name: "T -> bool"},
+				Description: "The predicate function that returns true for elements to keep"},
 		},
 		ReturnType:   &ConcreteType{name: "Iterator<T>"},
 		Category:     CategoryFunctional,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateFilterCall,
@@ -369,11 +364,11 @@ func (r *BuiltInFunctionRegistry) registerFunctionalFunctions() {
 		ParameterTypes: []BuiltInParameter{
 			{Name: "iterator", Type: &ConcreteType{name: "Iterator<T>"}, Description: "The iterator to reduce"},
 			{Name: "initial", Type: &ConcreteType{name: "U"}, Description: "The initial value for the accumulator"},
-			{Name: "fn", Type: &ConcreteType{name: "(U, T) -> U"}, Description: "The reduction function that takes (accumulator, current) and returns new accumulator"},
+			{Name: "fn", Type: &ConcreteType{name: "(U, T) -> U"},
+				Description: "The reduction function that takes (accumulator, current) and returns new accumulator"},
 		},
 		ReturnType:   &ConcreteType{name: "U"},
 		Category:     CategoryFunctional,
-		ExpectedArgs: 3,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateFoldCall,
@@ -393,7 +388,6 @@ func (r *BuiltInFunctionRegistry) registerFileIOFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: "Result<string, Error>"},
 		Category:     CategoryFile,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionFileRead,
 		Generator:    (*LLVMGenerator).generateReadFileCall,
@@ -411,7 +405,6 @@ func (r *BuiltInFunctionRegistry) registerFileIOFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: "Result<Unit, Error>"},
 		Category:     CategoryFile,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionFileWrite,
 		Generator:    (*LLVMGenerator).generateWriteFileCall,
@@ -423,16 +416,19 @@ func (r *BuiltInFunctionRegistry) registerFileIOFunctions() {
 func (r *BuiltInFunctionRegistry) registerProcessFunctions() {
 	// spawnProcess function
 	r.functions[SpawnProcessFunc] = &BuiltInFunction{
-		Name:        SpawnProcessFunc,
-		Signature:   "spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessHandle, string>",
-		Description: "Spawns an external async process with MANDATORY callback for stdout/stderr capture. The callback function receives (processID: int, eventType: int, data: string) and is called for stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING!",
+		Name:      SpawnProcessFunc,
+		Signature: "spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessHandle, string>",
+		Description: "Spawns an external async process with MANDATORY callback for stdout/stderr capture. " +
+			"The callback function receives (processID: int, eventType: int, data: string) and is called for " +
+			"stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. " +
+			"CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING!",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "command", Type: &ConcreteType{name: TypeString}, Description: "The command to execute"},
-			{Name: "callback", Type: &ConcreteType{name: "fn(int, int, string) -> Unit"}, Description: "MANDATORY callback function for process events (processID, eventType, data)"},
+			{Name: "callback", Type: &ConcreteType{name: "fn(int, int, string) -> Unit"},
+				Description: "MANDATORY callback function for process events (processID, eventType, data)"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<ProcessHandle, string>"},
 		Category:     CategoryProcess,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionProcess,
 		Generator:    (*LLVMGenerator).generateSpawnProcessCall,
@@ -464,7 +460,6 @@ match result {
 		},
 		ReturnType:   &ConcreteType{name: "Result<int, Error>"},
 		Category:     CategoryProcess,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionProcess,
 		Generator:    (*LLVMGenerator).generateAwaitProcessCall,
@@ -481,7 +476,6 @@ match result {
 		},
 		ReturnType:   &ConcreteType{name: "Result<Unit, Error>"},
 		Category:     CategoryProcess,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionProcess,
 		Generator:    (*LLVMGenerator).generateCleanupProcessCall,
@@ -498,7 +492,6 @@ match result {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategorySystem,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateSleepCall,
@@ -515,11 +508,11 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		Description: "Creates an HTTP server bound to the specified port and address.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "port", Type: &ConcreteType{name: TypeInt}, Description: "Port number to bind to (1-65535)"},
-			{Name: "address", Type: &ConcreteType{name: TypeString}, Description: "IP address to bind to (e.g., \"127.0.0.1\", \"0.0.0.0\")"},
+			{Name: "address", Type: &ConcreteType{name: TypeString},
+				Description: "IP address to bind to (e.g., \"127.0.0.1\", \"0.0.0.0\")"},
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPCreateServerCall,
@@ -537,7 +530,6 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPListenCall,
@@ -554,7 +546,6 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPStopServerCall,
@@ -567,12 +558,12 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		Signature:   "httpCreateClient(baseUrl: string, timeout: int) -> int",
 		Description: "Creates an HTTP client for making requests to a base URL.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "baseUrl", Type: &ConcreteType{name: TypeString}, Description: "Base URL for requests (e.g., \"http://api.example.com\")"},
+			{Name: "baseUrl", Type: &ConcreteType{name: TypeString},
+				Description: "Base URL for requests (e.g., \"http://api.example.com\")"},
 			{Name: "timeout", Type: &ConcreteType{name: TypeInt}, Description: "Request timeout in milliseconds"},
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPCreateClientCall,
@@ -587,11 +578,11 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		ParameterTypes: []BuiltInParameter{
 			{Name: "clientID", Type: &ConcreteType{name: TypeInt}, Description: "Client identifier from httpCreateClient"},
 			{Name: "path", Type: &ConcreteType{name: TypeString}, Description: "Request path (e.g., \"/api/users\")"},
-			{Name: "headers", Type: &ConcreteType{name: TypeString}, Description: "Additional headers (e.g., \"Authorization: Bearer token\")"},
+			{Name: "headers", Type: &ConcreteType{name: TypeString},
+				Description: "Additional headers (e.g., \"Authorization: Bearer token\")"},
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 3,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPGetCall,
@@ -611,11 +602,11 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 4,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPPostCall,
-		Example:      `let status = httpPost(clientId, "/post", "{\"key\":\"value\"}", "Content-Type: application/json")\nprint("POST status: ${status}")`,
+		Example: `let status = httpPost(clientId, "/post", "{\"key\":\"value\"}", "Content-Type: application/json")\n` +
+			`print("POST status: ${status}")`,
 	}
 
 	// httpPut function
@@ -631,11 +622,11 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 4,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPPutCall,
-		Example:      `let status = httpPut(clientId, "/put", "{\"updated\":\"data\"}", "Content-Type: application/json")\nprint("PUT status: ${status}")`,
+		Example: `let status = httpPut(clientId, "/put", "{\"updated\":\"data\"}", "Content-Type: application/json")\n` +
+			`print("PUT status: ${status}")`,
 	}
 
 	// httpDelete function
@@ -650,7 +641,6 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 3,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPDeleteCall,
@@ -671,7 +661,6 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 5,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPRequestCall,
@@ -688,7 +677,6 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionHTTP,
 		Generator:    (*LLVMGenerator).generateHTTPCloseClientCall,
@@ -700,16 +688,20 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 func (r *BuiltInFunctionRegistry) registerWebSocketFunctions() {
 	// websocketConnect function
 	r.functions[WebSocketConnectFunc] = &BuiltInFunction{
-		Name:        WebSocketConnectFunc,
-		Signature:   "websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>",
-		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback.",
+		Name: WebSocketConnectFunc,
+		Signature: "websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> " +
+			"Result<WebSocketID, String>",
+		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+			"Result<WebSocketID, String> and takes string handler instead of function pointer. " +
+			"Establishes a WebSocket connection with a message handler callback.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "url", Type: &ConcreteType{name: TypeString}, Description: "WebSocket URL (e.g., \"ws://localhost:8080/chat\")"},
-			{Name: "messageHandler", Type: &ConcreteType{name: "fn(String) -> Result<Success, String>"}, Description: "Callback function to handle incoming messages"},
+			{Name: "url", Type: &ConcreteType{name: TypeString},
+				Description: "WebSocket URL (e.g., \"ws://localhost:8080/chat\")"},
+			{Name: "messageHandler", Type: &ConcreteType{name: "fn(String) -> Result<Success, String>"},
+				Description: "Callback function to handle incoming messages"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<WebSocketID, String>"},
 		Category:     CategoryWebSocket,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionWebSocket,
 		Generator:    (*LLVMGenerator).generateWebSocketConnectCall,
@@ -726,16 +718,16 @@ match wsResult {
 
 	// websocketSend function
 	r.functions[WebSocketSendFunc] = &BuiltInFunction{
-		Name:        WebSocketSendFunc,
-		Signature:   "websocketSend(wsID: Int, message: String) -> Result<Success, String>",
-		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection.",
+		Name:      WebSocketSendFunc,
+		Signature: "websocketSend(wsID: Int, message: String) -> Result<Success, String>",
+		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+			"Result<Success, String>. Sends a message through the WebSocket connection.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "wsID", Type: &ConcreteType{name: TypeInt}, Description: "WebSocket identifier from websocketConnect"},
 			{Name: "message", Type: &ConcreteType{name: TypeString}, Description: "Message to send"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<Success, String>"},
 		Category:     CategoryWebSocket,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionWebSocket,
 		Generator:    (*LLVMGenerator).generateWebSocketSendCall,
@@ -748,15 +740,15 @@ match sendResult {
 
 	// websocketClose function
 	r.functions[WebSocketCloseFunc] = &BuiltInFunction{
-		Name:        WebSocketCloseFunc,
-		Signature:   "websocketClose(wsID: Int) -> Result<Success, String>",
-		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources.",
+		Name:      WebSocketCloseFunc,
+		Signature: "websocketClose(wsID: Int) -> Result<Success, String>",
+		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+			"Result<Success, String>. Closes the WebSocket connection and cleans up resources.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "wsID", Type: &ConcreteType{name: TypeInt}, Description: "WebSocket identifier to close"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<Success, String>"},
 		Category:     CategoryWebSocket,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionWebSocket,
 		Generator:    (*LLVMGenerator).generateWebSocketCloseCall,
@@ -769,17 +761,20 @@ match closeResult {
 
 	// websocketCreateServer function
 	r.functions[WebSocketCreateServerFunc] = &BuiltInFunction{
-		Name:        WebSocketCreateServerFunc,
-		Signature:   "websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>",
-		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path.",
+		Name:      WebSocketCreateServerFunc,
+		Signature: "websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>",
+		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+			"Result<ServerID, String> and has critical runtime issues with port binding failures. " +
+			"Creates a WebSocket server bound to the specified port, address, and path.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "port", Type: &ConcreteType{name: TypeInt}, Description: "Port number to bind to (1-65535)"},
-			{Name: "address", Type: &ConcreteType{name: TypeString}, Description: "IP address to bind to (e.g., \"127.0.0.1\", \"0.0.0.0\")"},
-			{Name: "path", Type: &ConcreteType{name: TypeString}, Description: "WebSocket endpoint path (e.g., \"/chat\", \"/live\")"},
+			{Name: "address", Type: &ConcreteType{name: TypeString},
+				Description: "IP address to bind to (e.g., \"127.0.0.1\", \"0.0.0.0\")"},
+			{Name: "path", Type: &ConcreteType{name: TypeString},
+				Description: "WebSocket endpoint path (e.g., \"/chat\", \"/live\")"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<ServerID, String>"},
 		Category:     CategoryWebSocket,
-		ExpectedArgs: 3,
 		IsProtected:  true,
 		SecurityFlag: PermissionWebSocket,
 		Generator:    (*LLVMGenerator).generateWebSocketCreateServerCall,
@@ -792,15 +787,16 @@ match serverResult {
 
 	// websocketServerListen function
 	r.functions[WebSocketServerListenFunc] = &BuiltInFunction{
-		Name:        WebSocketServerListenFunc,
-		Signature:   "websocketServerListen(serverID: Int) -> Result<Success, String>",
-		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections.",
+		Name:      WebSocketServerListenFunc,
+		Signature: "websocketServerListen(serverID: Int) -> Result<Success, String>",
+		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+			"Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. " +
+			"Starts the WebSocket server listening for connections.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "serverID", Type: &ConcreteType{name: TypeInt}, Description: "Server identifier from websocketCreateServer"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<Success, String>"},
 		Category:     CategoryWebSocket,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionWebSocket,
 		Generator:    (*LLVMGenerator).generateWebSocketServerListenCall,
@@ -813,16 +809,17 @@ match listenResult {
 
 	// websocketServerBroadcast function
 	r.functions[WebSocketServerBroadcastFunc] = &BuiltInFunction{
-		Name:        WebSocketServerBroadcastFunc,
-		Signature:   "websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>",
-		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients sent to) instead of Result<Success, String>. Broadcasts a message to all connected WebSocket clients.",
+		Name:      WebSocketServerBroadcastFunc,
+		Signature: "websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>",
+		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of " +
+			"clients sent to) instead of Result<Success, String>. Broadcasts a message to all " +
+			"connected WebSocket clients.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "serverID", Type: &ConcreteType{name: TypeInt}, Description: "Server identifier"},
 			{Name: "message", Type: &ConcreteType{name: TypeString}, Description: "Message to broadcast to all clients"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<Success, String>"},
 		Category:     CategoryWebSocket,
-		ExpectedArgs: 2,
 		IsProtected:  true,
 		SecurityFlag: PermissionWebSocket,
 		Generator:    (*LLVMGenerator).generateWebSocketServerBroadcastCall,
@@ -835,15 +832,15 @@ match broadcastResult {
 
 	// websocketStopServer function
 	r.functions[WebSocketStopServerFunc] = &BuiltInFunction{
-		Name:        WebSocketStopServerFunc,
-		Signature:   "websocketStopServer(serverID: Int) -> Result<Success, String>",
-		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections.",
+		Name:      WebSocketStopServerFunc,
+		Signature: "websocketStopServer(serverID: Int) -> Result<Success, String>",
+		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
+			"Result<Success, String>. Stops the WebSocket server and closes all connections.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "serverID", Type: &ConcreteType{name: TypeInt}, Description: "Server identifier to stop"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<Success, String>"},
 		Category:     CategoryWebSocket,
-		ExpectedArgs: 1,
 		IsProtected:  true,
 		SecurityFlag: PermissionWebSocket,
 		Generator:    (*LLVMGenerator).generateWebSocketStopServerCall,
@@ -859,13 +856,13 @@ match stopResult {
 func (r *BuiltInFunctionRegistry) registerSystemFunctions() {
 	// webSocketKeepAlive function
 	r.functions[WebSocketKeepAlive] = &BuiltInFunction{
-		Name:           WebSocketKeepAlive,
-		Signature:      "webSocketKeepAlive() -> Unit",
-		Description:    "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).",
+		Name:      WebSocketKeepAlive,
+		Signature: "webSocketKeepAlive() -> Unit",
+		Description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. " +
+			"Keeps the WebSocket server running indefinitely until interrupted (blocking operation).",
 		ParameterTypes: []BuiltInParameter{},
 		ReturnType:     &ConcreteType{name: TypeUnit},
 		Category:       CategoryWebSocket,
-		ExpectedArgs:   0,
 		IsProtected:    true,
 		SecurityFlag:   PermissionWebSocket,
 		Generator:      (*LLVMGenerator).generateWebSocketKeepAliveCall,
@@ -874,6 +871,8 @@ func (r *BuiltInFunctionRegistry) registerSystemFunctions() {
 }
 
 // GlobalBuiltInRegistry is the global instance of the built-in function registry
+//
+//nolint:gochecknoglobals // This is a necessary global registry for built-in functions
 var GlobalBuiltInRegistry *BuiltInFunctionRegistry
 
 // init initializes the global registry

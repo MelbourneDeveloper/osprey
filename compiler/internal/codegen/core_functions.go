@@ -16,10 +16,10 @@ import (
 func validateBuiltInArgs(funcName string, callExpr *ast.CallExpression) error {
 	fn, exists := GlobalBuiltInRegistry.GetFunction(funcName)
 	if !exists {
-		return fmt.Errorf("built-in function %s not found in registry", funcName)
+		return WrapFunctionNotFound(funcName)
 	}
-	if len(callExpr.Arguments) != fn.ExpectedArgs {
-		return WrapFunctionArgsWithPos(funcName, fn.ExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if len(callExpr.Arguments) != len(fn.ParameterTypes) {
+		return WrapFunctionArgsWithPos(funcName, len(fn.ParameterTypes), len(callExpr.Arguments), callExpr.Position)
 	}
 	return nil
 }
@@ -67,7 +67,8 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 	return g.convertValueToStringByType(argType, arg)
 }
 
-// TODO: This is wrong. We cannot convert fibers to string unless they return a String or there is a toString implementation
+// TODO: This is wrong. We cannot convert fibers to string unless they return a String or 
+// there is a toString implementation
 func (g *LLVMGenerator) convertValueToStringByType(theType string, arg value.Value) (value.Value, error) {
 	// TODO: unhard code this!!! DO NOT IGNORE THIS! FIX IT!!
 	// but the actual LLVM value is a plain int, treat as int
@@ -175,7 +176,8 @@ func (g *LLVMGenerator) convertResultToString(
 	return phi, nil
 }
 
-// TODO: This is wrong. We cannot convert fibers to string unless they return a String or there is a toString implementation
+// TODO: This is wrong. We cannot convert fibers to string unless they return a String or 
+// there is a toString implementation
 // autoAwaitFiberToString automatically awaits a fiber and converts the result to string
 func (g *LLVMGenerator) autoAwaitFiberToString(fiberID value.Value) (value.Value, error) {
 	// Get runtime await function
