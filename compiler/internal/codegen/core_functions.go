@@ -12,6 +12,18 @@ import (
 	"github.com/llir/llvm/ir/value"
 )
 
+// validateBuiltInArgs validates argument count for built-in functions using the registry
+func validateBuiltInArgs(funcName string, callExpr *ast.CallExpression) error {
+	fn, exists := GlobalBuiltInRegistry.GetFunction(funcName)
+	if !exists {
+		return fmt.Errorf("built-in function %s not found in registry", funcName)
+	}
+	if len(callExpr.Arguments) != fn.ExpectedArgs {
+		return WrapFunctionArgsWithPos(funcName, fn.ExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	}
+	return nil
+}
+
 // generateToStringCall handles toString function calls.
 func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != 1 {
@@ -55,7 +67,7 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 	return g.convertValueToStringByType(argType, arg)
 }
 
-//TODO: This is wrong. We cannot convert fibers to string unless they return a String or there is a toString implementation
+// TODO: This is wrong. We cannot convert fibers to string unless they return a String or there is a toString implementation
 func (g *LLVMGenerator) convertValueToStringByType(theType string, arg value.Value) (value.Value, error) {
 	// TODO: unhard code this!!! DO NOT IGNORE THIS! FIX IT!!
 	// but the actual LLVM value is a plain int, treat as int
@@ -79,7 +91,7 @@ func (g *LLVMGenerator) convertValueToStringByType(theType string, arg value.Val
 			// Auto-await the fiber and convert the result to string
 			return g.autoAwaitFiberToString(arg)
 		}
-		
+
 		// Check if it's a Result type
 		if strings.HasPrefix(theType, "Result<") {
 			// For Result types, check if it's a struct pointer
@@ -163,7 +175,7 @@ func (g *LLVMGenerator) convertResultToString(
 	return phi, nil
 }
 
-//TODO: This is wrong. We cannot convert fibers to string unless they return a String or there is a toString implementation
+// TODO: This is wrong. We cannot convert fibers to string unless they return a String or there is a toString implementation
 // autoAwaitFiberToString automatically awaits a fiber and converts the result to string
 func (g *LLVMGenerator) autoAwaitFiberToString(fiberID value.Value) (value.Value, error) {
 	// Get runtime await function
@@ -190,8 +202,8 @@ func (g *LLVMGenerator) createGlobalString(str string) value.Value {
 
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 1 {
-		return nil, WrapFunctionArgsWithPos(PrintFunc, PrintExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(PrintFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	argExpr := callExpr.Arguments[0]
@@ -200,24 +212,13 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 		return nil, err
 	}
 
-	// Try to get the semantic type of the expression
-	inferredType, typeErr := g.typeInferer.InferType(argExpr)
-	var argType string
-	if typeErr == nil {
-		// CRITICAL: Resolve the type to get concrete type instead of type variables
-		resolvedType := g.typeInferer.ResolveType(inferredType)
-		argType = resolvedType.String()
-	} else {
-		argType = ""
-	}
-
 	var stringArg value.Value
 	switch arg.Type().(type) {
 	case *types.PointerType: // Assuming i8* is string
 		stringArg = arg
 	case *types.IntType:
-		// Check if this is semantically a boolean (either i1 or i64 with bool type)
-		if arg.Type().(*types.IntType).BitSize == 1 || (typeErr == nil && argType == TypeBool) {
+		// Check if this is a boolean by bit size
+		if arg.Type().(*types.IntType).BitSize == 1 {
 			stringArg, err = g.generateBoolToString(arg)
 			if err != nil {
 				return nil, err
@@ -233,15 +234,16 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 	}
 
 	puts := g.functions["puts"]
-	result := g.builder.NewCall(puts, stringArg)
-	// puts returns i32, but our functions should return i64
-	return g.builder.NewSExt(result, types.I64), nil
+	g.builder.NewCall(puts, stringArg)
+
+	// Print returns Unit according to the registry, so return a Unit value (represented as 0)
+	return constant.NewInt(types.I64, 0), nil
 }
 
 // generateInputCall handles input function calls.
 func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 0 {
-		return nil, WrapFunctionArgsWithPos(InputFunc, InputExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(InputFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	// Declare scanf function if not already declared
@@ -310,8 +312,8 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 }
 
 func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapFunctionArgsWithPos(LengthFunc, LengthExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(LengthFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	arg, err := g.generateExpression(callExpr.Arguments[0])
@@ -339,8 +341,8 @@ func (g *LLVMGenerator) getResultType(valueType types.Type) *types.StructType {
 
 // generateContainsCall handles contains(haystack: string, needle: string) -> bool function calls.
 func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapFunctionArgsWithPos(ContainsFunc, ContainsExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(ContainsFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	haystack, err := g.generateExpression(callExpr.Arguments[0])
@@ -387,8 +389,8 @@ func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (valu
 }
 
 func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != ThreeArgs {
-		return nil, WrapFunctionArgsWithPos(SubstringFunc, SubstringExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(SubstringFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	str, err := g.generateExpression(callExpr.Arguments[0])

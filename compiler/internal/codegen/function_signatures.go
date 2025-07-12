@@ -338,15 +338,12 @@ func (g *LLVMGenerator) storeVariantFieldNames(typeName, variantName string, fie
 	g.functionParameters[key] = fieldNames
 }
 
-// CheckProtectedFunction checks if a function name is protected (built-in).
+// CheckProtectedFunction checks if a function name is protected (built-in) using the unified registry.
 func CheckProtectedFunction(fnDecl *ast.FunctionDeclaration) error {
-	switch fnDecl.Name {
-	case PrintFunc, InputFunc, RangeFunc, ForEachFunc, MapFunc, FilterFunc, FoldFunc,
-		LengthFunc, ContainsFunc, SubstringFunc:
+	if GlobalBuiltInRegistry.IsProtectedFunction(fnDecl.Name) {
 		return WrapBuiltInRedefine(fnDecl.Name)
-	default:
-		return nil
 	}
+	return nil
 }
 
 // getFieldType converts an Osprey field type to LLVM type

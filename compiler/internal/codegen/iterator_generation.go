@@ -13,8 +13,8 @@ import (
 
 // generateRangeCall handles range function calls - creates an iterator from start to end.
 func (g *LLVMGenerator) generateRangeCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapFunctionArgsWithPos(RangeFunc, RangeExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(RangeFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	start, err := g.generateExpression(callExpr.Arguments[0])
@@ -46,8 +46,8 @@ func (g *LLVMGenerator) generateRangeCall(callExpr *ast.CallExpression) (value.V
 
 // generateForEachCall handles forEach function calls - applies a function to each element.
 func (g *LLVMGenerator) generateForEachCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapFunctionArgsWithPos(ForEachFunc, ForEachExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(ForEachFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	// Get the range struct from first argument

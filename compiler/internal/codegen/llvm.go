@@ -171,189 +171,46 @@ func (g *LLVMGenerator) getParameterName(funcName string, paramIndex int) string
 	return ""
 }
 
-// handleBuiltInFunction handles all built-in function calls.
+// handleBuiltInFunction handles all built-in function calls using the unified registry.
 func (g *LLVMGenerator) handleBuiltInFunction(name string, callExpr *ast.CallExpression) (value.Value, error) {
-	// Try core functions first (always available)
-	if result, err := g.handleCoreFunctions(name, callExpr); result != nil || err != nil {
-		return result, err
+	// Check if this is a built-in function using the registry
+	fn, exists := GlobalBuiltInRegistry.GetFunction(name)
+	if !exists {
+		return nil, nil // Not a built-in function
 	}
 
-	// Check if this is an HTTP function
-	httpFunctions := []string{
-		"httpCreateServer", "httpListen", "httpStopServer",
-		"httpCreateClient", "httpGet", "httpPost", "httpPut",
-		"httpDelete", "httpRequest", "httpCloseClient",
-	}
-	for _, httpFunc := range httpFunctions {
-		if name == httpFunc {
-			if !g.security.AllowHTTP {
-				return nil, WrapUnsupportedCallExpressionSecurity(name)
-			}
-			// Function is allowed, try to handle it
-			if result, err := g.handleHTTPFunctions(name, callExpr); result != nil || err != nil {
-				return result, err
-			}
-		}
+	// Check security permissions
+	if !g.checkSecurityPermission(fn.SecurityFlag) {
+		return nil, WrapUnsupportedCallExpressionSecurity(name)
 	}
 
-	// Check if this is a WebSocket function
-	webSocketFunctions := []string{
-		"websocketConnect", "websocketSend", "websocketClose",
-		"websocketCreateServer", "websocketServerListen",
-		"websocketServerSend", "websocketServerBroadcast", "websocketStopServer",
-	}
-	for _, wsFunc := range webSocketFunctions {
-		if name == wsFunc {
-			if !g.security.AllowWebSocket {
-				return nil, WrapUnsupportedCallExpressionSecurity(name)
-			}
-			// Function is allowed, try to handle it
-			if result, err := g.handleWebSocketFunctions(name, callExpr); result != nil || err != nil {
-				return result, err
-			}
-		}
-	}
-
-	// Not a built-in function
-	return nil, nil
+	// Call the function's generator
+	return fn.Generator(g, callExpr)
 }
 
-// handleCoreFunctions handles core built-in functions like print, toString, etc.
-func (g *LLVMGenerator) handleCoreFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
-	// Try core system functions first
-	if result, err := g.handleSystemFunctions(name, callExpr); err != nil || result != nil {
-		return result, err
-	}
-
-	// Try string/functional programming functions
-	if result, err := g.handleStringAndFunctionalFunctions(name, callExpr); err != nil || result != nil {
-		return result, err
-	}
-
-	// Try file/JSON functions
-	if result, err := g.handleFileAndJSONFunctions(name, callExpr); err != nil || result != nil {
-		return result, err
-	}
-
-	return nil, nil
-}
-
-// handleSystemFunctions handles basic system and I/O functions.
-func (g *LLVMGenerator) handleSystemFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
-	switch name {
-	case ToStringFunc:
-		return g.generateToStringCall(callExpr)
-	case PrintFunc:
-		return g.generatePrintCall(callExpr)
-	case InputFunc:
-		return g.generateInputCall(callExpr)
-	case SleepFunc:
-		return g.generateSleepCall(callExpr)
-	case SpawnProcessFunc:
-		return g.generateSpawnProcessCall(callExpr)
-	case AwaitProcessFunc:
-		return g.generateAwaitProcessCall(callExpr)
-	case CleanupProcessFunc:
-		return g.generateCleanupProcessCall(callExpr)
+// checkSecurityPermission checks if the generator's security config allows the given permission
+func (g *LLVMGenerator) checkSecurityPermission(permission SecurityPermission) bool {
+	switch permission {
+	case PermissionNone:
+		return true
+	case PermissionHTTP:
+		return g.security.AllowHTTP
+	case PermissionWebSocket:
+		return g.security.AllowWebSocket
+	case PermissionFileRead:
+		return g.security.AllowFileRead
+	case PermissionFileWrite:
+		return g.security.AllowFileWrite
+	case PermissionProcess:
+		return g.security.AllowProcessExecution
+	case PermissionFFI:
+		return g.security.AllowFFI
 	default:
-		return nil, nil
+		return false
 	}
 }
 
-// handleStringAndFunctionalFunctions handles string manipulation and functional programming functions.
-func (g *LLVMGenerator) handleStringAndFunctionalFunctions(
-	name string,
-	callExpr *ast.CallExpression,
-) (value.Value, error) {
-	switch name {
-	case RangeFunc:
-		return g.generateRangeCall(callExpr)
-	case ForEachFunc:
-		return g.generateForEachCall(callExpr)
-	case MapFunc:
-		return g.generateMapCall(callExpr)
-	case FilterFunc:
-		return g.generateFilterCall(callExpr)
-	case FoldFunc:
-		return g.generateFoldCall(callExpr)
-	case LengthFunc:
-		return g.generateLengthCall(callExpr)
-	case ContainsFunc:
-		return g.generateContainsCall(callExpr)
-	case SubstringFunc:
-		return g.generateSubstringCall(callExpr)
-	default:
-		return nil, nil
-	}
-}
 
-// handleFileAndJSONFunctions handles file I/O and JSON processing functions.
-func (g *LLVMGenerator) handleFileAndJSONFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
-	switch name {
-	case WriteFileFunc:
-		return g.generateWriteFileCall(callExpr)
-	case ReadFileFunc:
-		return g.generateReadFileCall(callExpr)
-	case DeleteFileFunc:
-		// TODO: deleteFile built-in function is fucked - not implemented yet
-		// Return a placeholder success result for now
-		return constant.NewInt(types.I64, 0), nil
-	default:
-		return nil, nil
-	}
-}
-
-// handleHTTPFunctions handles HTTP-related built-in functions.
-func (g *LLVMGenerator) handleHTTPFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
-	switch name {
-	case HTTPCreateServerFunc:
-		return g.generateHTTPCreateServerCall(callExpr)
-	case HTTPListenFunc:
-		return g.generateHTTPListenCall(callExpr)
-	case HTTPStopServerFunc:
-		return g.generateHTTPStopServerCall(callExpr)
-	case HTTPCreateClientFunc:
-		return g.generateHTTPCreateClientCall(callExpr)
-	case HTTPGetFunc:
-		return g.generateHTTPGetCall(callExpr)
-	case HTTPPostFunc:
-		return g.generateHTTPPostCall(callExpr)
-	case HTTPPutFunc:
-		return g.generateHTTPPutCall(callExpr)
-	case HTTPDeleteFunc:
-		return g.generateHTTPDeleteCall(callExpr)
-	case HTTPRequestFunc:
-		return g.generateHTTPRequestCall(callExpr)
-	case HTTPCloseClientFunc:
-		return g.generateHTTPCloseClientCall(callExpr)
-	default:
-		return nil, nil
-	}
-}
-
-// handleWebSocketFunctions handles WebSocket-related built-in functions.
-func (g *LLVMGenerator) handleWebSocketFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
-	switch name {
-	case WebSocketConnectFunc:
-		return g.generateWebSocketConnectCall(callExpr)
-	case WebSocketSendFunc:
-		return g.generateWebSocketSendCall(callExpr)
-	case WebSocketCloseFunc:
-		return g.generateWebSocketCloseCall(callExpr)
-	case WebSocketCreateServerFunc:
-		return g.generateWebSocketCreateServerCall(callExpr)
-	case WebSocketServerListenFunc:
-		return g.generateWebSocketServerListenCall(callExpr)
-	case WebSocketServerBroadcastFunc:
-		return g.generateWebSocketServerBroadcastCall(callExpr)
-	case WebSocketStopServerFunc:
-		return g.generateWebSocketStopServerCall(callExpr)
-	case WebSocketKeepAlive:
-		return g.generateWebSocketKeepAliveCall(callExpr)
-	default:
-		return nil, nil
-	}
-}
 
 // generateInterpolatedString generates LLVM IR for interpolated strings by concatenating parts.
 func (g *LLVMGenerator) generateInterpolatedString(interpStr *ast.InterpolatedStringLiteral) (value.Value, error) {

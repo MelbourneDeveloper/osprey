@@ -597,116 +597,12 @@ func (ti *TypeInferer) inferLambdaExpression(e *ast.LambdaExpression) (Type, err
 	}, nil
 }
 
-// TODO: fix this horrible code. We need a general purpose registry of built-in functions with param list
-// and return type, as well as documentation etc.
-// TODO: this list needs to also be part of documentation. This is just filthy. Please stop. Merge this
-// list with other built-in function lists!!!
-// validateBuiltInFunctionArgs validates argument counts for built-in functions
+// validateBuiltInFunctionArgs validates argument counts for built-in functions using the unified registry
 func (ti *TypeInferer) validateBuiltInFunctionArgs(funcName string, argCount int, position *ast.Position) error {
-	// Built-in function validation map
-	validationMap := map[string]func(int, *ast.Position) error{
-		LengthFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, LengthExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(LengthFunc, LengthExpectedArgs, actualCount, pos)
-			})
-		},
-		ReadFileFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, ReadFileExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(ReadFileFunc, ReadFileExpectedArgs, actualCount, pos)
-			})
-		},
-		WriteFileFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, WriteFileExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(WriteFileFunc, WriteFileExpectedArgs, actualCount, pos)
-			})
-		},
-		ContainsFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, ContainsExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(ContainsFunc, ContainsExpectedArgs, actualCount, pos)
-			})
-		},
-		SubstringFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, SubstringExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(SubstringFunc, SubstringExpectedArgs, actualCount, pos)
-			})
-		},
-		ToStringFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, ToStringExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(ToStringFunc, ToStringExpectedArgs, actualCount, pos)
-			})
-		},
-		InputFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, InputExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(InputFunc, InputExpectedArgs, actualCount, pos)
-			})
-		},
-		HTTPCreateClientFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, HTTPCreateClientExpectedArgs, pos,
-				func(actualCount int, pos interface{}) error {
-					return WrapFunctionArgsWithPos(HTTPCreateClientFunc, HTTPCreateClientExpectedArgs, actualCount, pos)
-				})
-		},
-		HTTPGetFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, HTTPGetExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(HTTPGetFunc, HTTPGetExpectedArgs, actualCount, pos)
-			})
-		},
-		RangeFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, RangeExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(RangeFunc, RangeExpectedArgs, actualCount, pos)
-			})
-		},
-		ForEachFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, ForEachExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(ForEachFunc, ForEachExpectedArgs, actualCount, pos)
-			})
-		},
-		SpawnProcessFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, SpawnProcessExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(SpawnProcessFunc, SpawnProcessExpectedArgs, actualCount, pos)
-			})
-		},
-		PrintFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, PrintExpectedArgs, pos, func(actualCount int, pos interface{}) error {
-				return WrapFunctionArgsWithPos(PrintFunc, PrintExpectedArgs, actualCount, pos)
-			})
-		},
-		AwaitProcessFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, AwaitProcessExpectedArgs, pos,
-				func(c int, _ interface{}) error { return WrapAwaitProcessWrongArgs(c) })
-		},
-		CleanupProcessFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, CleanupProcessExpectedArgs, pos,
-				func(c int, _ interface{}) error { return WrapCleanupProcessWrongArgs(c) })
-		},
-		MapFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, MapExpectedArgs, pos,
-				func(c int, _ interface{}) error { return WrapMapWrongArgs(c) })
-		},
-		FilterFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, FilterExpectedArgs, pos,
-				func(c int, _ interface{}) error { return WrapFilterWrongArgs(c) })
-		},
-		FoldFunc: func(count int, pos *ast.Position) error {
-			return ti.validateArgsOrError(count, FoldExpectedArgs, pos,
-				func(c int, _ interface{}) error { return WrapFoldWrongArgs(c) })
-		},
-	}
-
-	if validator, exists := validationMap[funcName]; exists {
-		return validator(argCount, position)
-	}
-	return nil
+	return GlobalBuiltInRegistry.ValidateArguments(funcName, argCount, position)
 }
 
-// validateArgsOrError is a helper function to validate argument counts
-func (ti *TypeInferer) validateArgsOrError(argCount, expected int, position *ast.Position,
-	errorFunc func(int, interface{}) error) error {
-	if argCount != expected {
-		return errorFunc(argCount, position)
-	}
-	return nil
-}
+
 
 // inferCallExpression infers types for call expressions
 func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) {
@@ -1080,13 +976,8 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 	return &ConcreteType{name: fmt.Sprintf("Result<%s, Error>", elementType.String())}, nil
 }
 
-// initializeBuiltInFunctions adds built-in functions to the type environment
+// initializeBuiltInFunctions adds built-in functions to the type environment using the unified registry
 func (ti *TypeInferer) initializeBuiltInFunctions() {
-	// Built-in function types
-	anyType := &ConcreteType{name: TypeAny}
-	intType := &ConcreteType{name: TypeInt}
-	stringType := &ConcreteType{name: TypeString}
-
 	// Type constructors
 	ti.env.Set("Success", &ConcreteType{name: "Success"})
 	ti.env.Set("Error", &ConcreteType{name: "Error"})
@@ -1096,135 +987,19 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 	ti.env.Set("ProcessHandle", &ConcreteType{name: "ProcessHandle"})
 	ti.env.Set("Iterator", &ConcreteType{name: "Iterator"})
 
-	// print(value: any) -> Int
-	ti.env.Set("print", &FunctionType{
-		paramTypes: []Type{anyType},
-		returnType: intType,
-	})
-
-	// toString(value: any) -> String
-	ti.env.Set("toString", &FunctionType{
-		paramTypes: []Type{anyType},
-		returnType: stringType,
-	})
-
-	// input() -> Result<int, Error>
-	ti.env.Set("input", &FunctionType{
-		paramTypes: []Type{},
-		returnType: &ConcreteType{name: "Result<int, Error>"},
-	})
-
-	// length(s: String) -> Int (can't fail, returns plain Int)
-	ti.env.Set("length", &FunctionType{
-		paramTypes: []Type{stringType},
-		returnType: intType,
-	})
-
-	// contains(haystack: String, needle: String) -> Result<bool, Error>
-	ti.env.Set("contains", &FunctionType{
-		paramTypes: []Type{stringType, stringType},
-		returnType: &ConcreteType{name: "Result<bool, Error>"},
-	})
-
-	// substring(s: String, start: Int, length: Int) -> Result<string, Error>
-	ti.env.Set("substring", &FunctionType{
-		paramTypes: []Type{stringType, intType, intType},
-		returnType: &ConcreteType{name: "Result<string, Error>"},
-	})
-
-	// File I/O functions
-	// readFile(filename: String) -> Result<string, Error>
-	ti.env.Set("readFile", &FunctionType{
-		paramTypes: []Type{stringType},
-		returnType: &ConcreteType{name: "Result<string, Error>"},
-	})
-
-	// writeFile(filename: String, content: String) -> Result<Unit, Error>
-	ti.env.Set("writeFile", &FunctionType{
-		paramTypes: []Type{stringType, stringType},
-		returnType: &ConcreteType{name: "Result<Unit, Error>"},
-	})
-
-	// Process functions
-	// spawnProcess(command: String, callback: fn(int, int, string) -> Unit) -> Result<ProcessHandle, Error>
-	ti.env.Set("spawnProcess", &FunctionType{
-		paramTypes: []Type{stringType, &ConcreteType{name: "fn(int, int, string) -> Unit"}},
-		returnType: &ConcreteType{name: "Result<ProcessHandle, Error>"},
-	})
-
-	// awaitProcess(handle: ProcessHandle) -> Result<int, Error>
-	ti.env.Set("awaitProcess", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "ProcessHandle"}},
-		returnType: &ConcreteType{name: "Result<int, Error>"},
-	})
-
-	// cleanupProcess(handle: ProcessHandle) -> Result<Unit, Error>
-	ti.env.Set("cleanupProcess", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "ProcessHandle"}},
-		returnType: &ConcreteType{name: "Result<Unit, Error>"},
-	})
-
-	// HTTP functions
-	// httpCreateClient(baseUrl: String, timeout: Int) -> Int (returns client ID or negative error)
-	ti.env.Set("httpCreateClient", &FunctionType{
-		paramTypes: []Type{stringType, intType},
-		returnType: intType,
-	})
-
-	// httpCreateServer(port: Int, address: String) -> Int (returns server ID or negative error)
-	ti.env.Set("httpCreateServer", &FunctionType{
-		paramTypes: []Type{intType, stringType},
-		returnType: intType,
-	})
-
-	// httpGet(client: Int, path: String, headers: String) -> Int (returns status code or negative error)
-	ti.env.Set("httpGet", &FunctionType{
-		paramTypes: []Type{intType, stringType, stringType},
-		returnType: intType,
-	})
-
-	// httpPost(client: Int, path: String, headers: String, body: String) -> Int (returns status code or negative error)
-	ti.env.Set("httpPost", &FunctionType{
-		paramTypes: []Type{intType, stringType, stringType, stringType},
-		returnType: intType,
-	})
-
-	// httpListen(server: Int, handler: Function) -> Int (returns status or negative error)
-	ti.env.Set("httpListen", &FunctionType{
-		paramTypes: []Type{intType, anyType},
-		returnType: intType,
-	})
-
-	// Iterator functions
-	// range(start: int, end: int) -> Iterator<int>
-	ti.env.Set("range", &FunctionType{
-		paramTypes: []Type{intType, intType},
-		returnType: &ConcreteType{name: "Iterator<int>"},
-	})
-
-	// forEach(iter: Iterator<T>, fn: T -> Unit) -> Unit
-	ti.env.Set("forEach", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "Iterator<T>"}, &ConcreteType{name: "T -> Unit"}},
-		returnType: &ConcreteType{name: TypeUnit},
-	})
-
-	// map(iter: Iterator<T>, fn: T -> U) -> Iterator<U>
-	ti.env.Set("map", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "Iterator<T>"}, &ConcreteType{name: "T -> U"}},
-		returnType: &ConcreteType{name: "Iterator<U>"},
-	})
-
-	// filter(iter: Iterator<T>, predicate: T -> bool) -> Iterator<T>
-	ti.env.Set("filter", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "Iterator<T>"}, &ConcreteType{name: "T -> bool"}},
-		returnType: &ConcreteType{name: "Iterator<T>"},
-	})
-
-	// fold(iter: Iterator<T>, initial: U, fn: (U, T) -> U) -> U
-	ti.env.Set("fold", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "Iterator<T>"}, &ConcreteType{name: "U"}, &ConcreteType{name: "(U, T) -> U"}},
-		returnType: &ConcreteType{name: "U"},
-	})
-
-	// Add more built-in functions as needed
+	// Load all built-in functions from the unified registry
+	for _, fn := range GlobalBuiltInRegistry.GetAllFunctions() {
+		// Create function type from registry data
+		paramTypes := make([]Type, len(fn.ParameterTypes))
+		for i, param := range fn.ParameterTypes {
+			paramTypes[i] = param.Type
+		}
+		
+		functionType := &FunctionType{
+			paramTypes: paramTypes,
+			returnType: fn.ReturnType,
+		}
+		
+		ti.env.Set(fn.Name, functionType)
+	}
 }

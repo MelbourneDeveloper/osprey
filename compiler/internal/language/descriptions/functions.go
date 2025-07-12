@@ -22,10 +22,40 @@ type ParameterDesc struct {
 	Description string
 }
 
-// GetBuiltinFunctionDescriptions returns all built-in function descriptions.
+// GetBuiltinFunctionDescriptions returns all built-in function descriptions from the unified registry.
+func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
+	// Convert from the unified registry format to the legacy format
+	descriptions := make(map[string]*BuiltinFunctionDesc)
+	
+	for _, fn := range codegen.GlobalBuiltInRegistry.GetAllFunctions() {
+		// Convert parameters
+		params := make([]ParameterDesc, len(fn.ParameterTypes))
+		for i, param := range fn.ParameterTypes {
+			params[i] = ParameterDesc{
+				Name:        param.Name,
+				Type:        param.Type.String(),
+				Description: param.Description,
+			}
+		}
+		
+		descriptions[fn.Name] = &BuiltinFunctionDesc{
+			Name:        fn.Name,
+			Signature:   fn.Signature,
+			Description: fn.Description,
+			Parameters:  params,
+			ReturnType:  fn.ReturnType.String(),
+			Example:     fn.Example,
+		}
+	}
+	
+	return descriptions
+}
+
+// GetBuiltinFunctionDescriptionsLegacy returns all built-in function descriptions using the old hardcoded method.
+// This is kept for reference but should not be used in new code.
 //
 //nolint:maintidx // Large function with comprehensive function documentation
-func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
+func GetBuiltinFunctionDescriptionsLegacy() map[string]*BuiltinFunctionDesc {
 	return map[string]*BuiltinFunctionDesc{
 		"print": {
 			Name:      "print",
@@ -783,56 +813,10 @@ func ValidateAllBuiltinFunctionsDocumented() []string {
 	return missing
 }
 
-// GetCompilerBuiltinFunctionNames returns all built-in function names from the compiler's constants.
-// This is the authoritative source - it reads directly from the compiler's function name constants.
+// GetCompilerBuiltinFunctionNames returns all built-in function names from the unified registry.
+// This is the authoritative source - it reads directly from the unified built-in function registry.
 func GetCompilerBuiltinFunctionNames() []string {
-	return []string{
-		// Core functions from codegen.constants
-		codegen.ToStringFunc,
-		codegen.PrintFunc,
-		codegen.InputFunc,
-		codegen.RangeFunc,
-		codegen.ForEachFunc,
-		codegen.MapFunc,
-		codegen.FilterFunc,
-		codegen.FoldFunc,
-		codegen.LengthFunc,
-		codegen.ContainsFunc,
-		codegen.SubstringFunc,
-		codegen.SpawnProcessFunc,
-
-		codegen.AwaitProcessFunc,
-		codegen.CleanupProcessFunc,
-		codegen.SleepFunc,
-		codegen.WriteFileFunc,
-		codegen.ReadFileFunc,
-
-		// HTTP Server functions
-		codegen.HTTPCreateServerFunc,
-		codegen.HTTPListenFunc,
-		codegen.HTTPStopServerFunc,
-
-		// HTTP Client functions
-		codegen.HTTPCreateClientFunc,
-		codegen.HTTPGetFunc,
-		codegen.HTTPPostFunc,
-		codegen.HTTPPutFunc,
-		codegen.HTTPDeleteFunc,
-		codegen.HTTPRequestFunc,
-		codegen.HTTPCloseClientFunc,
-
-		// WebSocket client functions
-		codegen.WebSocketConnectFunc,
-		codegen.WebSocketSendFunc,
-		codegen.WebSocketCloseFunc,
-
-		// WebSocket Server functions
-		codegen.WebSocketCreateServerFunc,
-		codegen.WebSocketServerListenFunc,
-		codegen.WebSocketServerBroadcastFunc,
-		codegen.WebSocketStopServerFunc,
-		codegen.WebSocketKeepAlive,
-	}
+	return codegen.GlobalBuiltInRegistry.GetFunctionNames()
 }
 
 // GetAllBuiltinFunctionNames returns all documented built-in function names.

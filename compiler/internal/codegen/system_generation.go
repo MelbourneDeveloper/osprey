@@ -124,10 +124,8 @@ func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
 // generateSpawnProcessCall emits a call to the simple process spawning function
 // that uses a default callback for stdout/stderr events.
 func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapFunctionArgsWithPos(
-			SpawnProcessFunc, SpawnProcessExpectedArgs,
-			len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(SpawnProcessFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	cmd, err := g.generateExpression(callExpr.Arguments[0])
@@ -231,9 +229,8 @@ func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.V
 // generateWriteFileCall writes data to a file via an external helper returning
 // a Result<Success, string> type.
 func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {
-	const expectedArgs = TwoArgs
-	if len(callExpr.Arguments) != expectedArgs {
-		return nil, WrapFunctionArgsWithPos(WriteFileFunc, WriteFileExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(WriteFileFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	filename, err := g.generateExpression(callExpr.Arguments[0])
@@ -307,8 +304,8 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 // generateReadFileCall reads the entire contents of the specified file and
 // returns a Result<string, string> type.
 func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapFunctionArgsWithPos(ReadFileFunc, ReadFileExpectedArgs, len(callExpr.Arguments), callExpr.Position)
+	if err := validateBuiltInArgs(ReadFileFunc, callExpr); err != nil {
+		return nil, err
 	}
 
 	filename, err := g.generateExpression(callExpr.Arguments[0])
