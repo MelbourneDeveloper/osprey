@@ -21,7 +21,17 @@ import {
     SymbolKind,
     TextDocumentPositionParams,
     TextDocuments,
-    TextDocumentSyncKind
+    TextDocumentSyncKind,
+    CodeAction,
+    TextEdit,
+    Range,
+    DocumentHighlight,
+    FoldingRange,
+    WorkspaceSymbol,
+    RenameParams,
+    PrepareRenameParams,
+    ImplementationParams,
+    WorkspaceEdit
 } from 'vscode-languageserver/node';
 
 import { execFile } from 'child_process';
@@ -29,41 +39,53 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
-// Symbol and type information tracking
+// Enhanced symbol and type information tracking
 interface OspreySymbol {
   name: string;
   type: string;
-  kind: 'function' | 'variable' | 'type' | 'parameter';
+  kind: 'function' | 'variable' | 'type' | 'parameter' | 'effect' | 'operation' | 'module' | 'import';
   location: Location;
   documentation?: string;
   signature?: string;
   parameters?: OspreyParameter[];
   returnType?: string;
+  effectSet?: string; // For functions with effects
+  isEffectOperation?: boolean; // For effect operations
+  parentEffect?: string; // For effect operations
+  isExported?: boolean; // For module exports
+  isImported?: boolean; // For imports
 }
 
 interface OspreyParameter {
   name: string;
   type: string;
   documentation?: string;
+  isOptional?: boolean;
 }
 
 interface DocumentAnalysis {
   symbols: OspreySymbol[];
   errors: Diagnostic[];
   uri: string;
+  imports: string[]; // Track imported modules
+  effects: string[]; // Track effect declarations
+  handlers: string[]; // Track handler expressions
 }
 
 // Symbol reference tracking
 interface SymbolReference {
   symbol: string;
   location: Location;
-  kind: 'definition' | 'usage';
+  kind: 'definition' | 'usage' | 'implementation' | 'effect_operation' | 'handler';
+  context?: string; // Additional context like effect name for operations
 }
 
 // Global symbol table (workspace-wide)
 const workspaceSymbols: Map<string, OspreySymbol[]> = new Map();
 const documentAnalyses: Map<string, DocumentAnalysis> = new Map();
 const symbolReferences: Map<string, SymbolReference[]> = new Map(); // Track all references
+const effectOperations: Map<string, OspreySymbol[]> = new Map(); // Track effect operations
+const implementations: Map<string, Location[]> = new Map(); // Track implementations
 
 // Create a connection for the server
 const connection = createConnection(ProposedFeatures.all);
@@ -119,12 +141,14 @@ connection.onInitialize((params: InitializeParams) => {
         // Auto-completion
         completionProvider: {
           resolveProvider: true,
-          triggerCharacters: ['.', ':', '$', '(', '|']
+          triggerCharacters: ['.', ':', '$', '(', '|', '!', '{']
         },
         // Hover information (TYPE INFO!)
         hoverProvider: true,
         // Go to definition
         definitionProvider: true,
+        // Go to implementation
+        implementationProvider: true,
         // Find references
         referencesProvider: true,
         // Document symbols (outline)
@@ -144,13 +168,10 @@ connection.onInitialize((params: InitializeParams) => {
           codeActionKinds: [
             CodeActionKind.QuickFix,
             CodeActionKind.Refactor,
-            CodeActionKind.Source
+            CodeActionKind.Source,
+            CodeActionKind.SourceOrganizeImports
           ]
         },
-        // Document formatting
-        documentFormattingProvider: true,
-        // Range formatting
-        documentRangeFormattingProvider: true,
         // Document highlights (same symbol highlighting)
         documentHighlightProvider: true,
         // Folding ranges
@@ -191,9 +212,7 @@ connection.onInitialized(() => {
     }
     
     connection.console.log('🚀 Osprey Language Server is ready!');
-    connection.console.log('🎯 HOVER PROVIDER IS REGISTERED AND READY!');
-    connection.console.log('🎯 GO-TO-DEFINITION PROVIDER IS REGISTERED AND READY!');
-    connection.console.log('🎯 DOCUMENT SYMBOLS PROVIDER IS REGISTERED AND READY!');
+    connection.console.log('🎯 ALL LSP FEATURES REGISTERED AND READY!');
   } catch (error) {
     connection.console.error(`💥 Error during post-initialization: ${error}`);
   }
@@ -310,7 +329,10 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   const analysis: DocumentAnalysis = {
     symbols,
     errors: diagnostics,
-    uri: textDocument.uri
+    uri: textDocument.uri,
+    imports: [], // Initialize
+    effects: [], // Initialize
+    handlers: [] // Initialize
   };
   documentAnalyses.set(textDocument.uri, analysis);
   workspaceSymbols.set(textDocument.uri, symbols);
@@ -432,7 +454,7 @@ async function getSymbolsFromCompiler(sourceCode: string, uri: string): Promise<
     const symbols: OspreySymbol[] = symbolsData.map((sym: any) => ({
       name: sym.name,
       type: sym.type,
-      kind: sym.kind as 'function' | 'variable' | 'type' | 'parameter',
+      kind: sym.kind as 'function' | 'variable' | 'type' | 'parameter' | 'effect' | 'operation' | 'module' | 'import',
       location: {
         uri: uri,
         range: {
@@ -443,7 +465,12 @@ async function getSymbolsFromCompiler(sourceCode: string, uri: string): Promise<
       documentation: sym.documentation,
       signature: sym.signature,
       parameters: sym.parameters,
-      returnType: sym.returnType
+      returnType: sym.returnType,
+      effectSet: sym.effectSet,
+      isEffectOperation: sym.isEffectOperation,
+      parentEffect: sym.parentEffect,
+      isExported: sym.isExported,
+      isImported: sym.isImported
     }));
     
     connection.console.log(`✅ Parsed ${symbols.length} symbols from compiler`);
@@ -725,6 +752,18 @@ function findAllSymbolReferences(document: TextDocument): SymbolReference[] {
     variableDef: /\b(let|mut)\s+(\w+)\s*=/g,
     // Type definitions: type Name =
     typeDef: /\btype\s+(\w+)\s*=/g,
+    // Effect definitions: effect Name {
+    effectDef: /\beffect\s+(\w+)\s*\{/g,
+    // Effect operations: name: type
+    effectOpDef: /\b(\w+)\s*:\s*[^,\n]+/g,
+    // Perform statements: perform Effect.operation
+    performStmt: /\bperform\s+(\w+)\.(\w+)/g,
+    // Handler expressions: handle Effect
+    handlerExpr: /\bhandle\s+(\w+)/g,
+    // Module definitions: module Name {
+    moduleDef: /\bmodule\s+(\w+)\s*\{/g,
+    // Import statements: import Name
+    importStmt: /\bimport\s+(\w+)/g,
     // Function calls: name(
     functionCall: /\b(\w+)\s*\(/g,
     // Variable/type references: any word not in definition context
@@ -739,6 +778,10 @@ function findAllSymbolReferences(document: TextDocument): SymbolReference[] {
     const functionDefs = new Set<string>();
     const variableDefs = new Set<string>();
     const typeDefs = new Set<string>();
+    const effectDefs = new Set<string>();
+    const effectOps = new Set<string>();
+    const moduleDefs = new Set<string>();
+    const imports = new Set<string>();
     
     // Find function definitions
     patterns.functionDef.lastIndex = 0;
@@ -797,6 +840,139 @@ function findAllSymbolReferences(document: TextDocument): SymbolReference[] {
       });
     }
     
+    // Find effect definitions
+    patterns.effectDef.lastIndex = 0;
+    while ((match = patterns.effectDef.exec(line)) !== null) {
+      const name = match[1];
+      effectDefs.add(name);
+      connection.console.log(`  ⚡ Found effect definition: ${name}`);
+      references.push({
+        symbol: name,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(name) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(name) + name.length }
+          }
+        },
+        kind: 'definition',
+        context: 'effect'
+      });
+    }
+    
+    // Find effect operations (within effect blocks)
+    patterns.effectOpDef.lastIndex = 0;
+    while ((match = patterns.effectOpDef.exec(line)) !== null) {
+      const name = match[1];
+      // Skip if this looks like a type annotation
+      if (line.includes(':')) {
+        effectOps.add(name);
+        connection.console.log(`  🔧 Found effect operation: ${name}`);
+        references.push({
+          symbol: name,
+          location: {
+            uri: document.uri,
+            range: {
+              start: { line: lineIndex, character: match.index },
+              end: { line: lineIndex, character: match.index + name.length }
+            }
+          },
+          kind: 'effect_operation'
+        });
+      }
+    }
+    
+    // Find perform statements
+    patterns.performStmt.lastIndex = 0;
+    while ((match = patterns.performStmt.exec(line)) !== null) {
+      const effectName = match[1];
+      const operationName = match[2];
+      connection.console.log(`  🎭 Found perform: ${effectName}.${operationName}`);
+      references.push({
+        symbol: effectName,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(effectName) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(effectName) + effectName.length }
+          }
+        },
+        kind: 'usage',
+        context: 'perform'
+      });
+      references.push({
+        symbol: operationName,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(operationName) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(operationName) + operationName.length }
+          }
+        },
+        kind: 'effect_operation',
+        context: effectName
+      });
+    }
+    
+    // Find handler expressions
+    patterns.handlerExpr.lastIndex = 0;
+    while ((match = patterns.handlerExpr.exec(line)) !== null) {
+      const effectName = match[1];
+      connection.console.log(`  🎯 Found handler: ${effectName}`);
+      references.push({
+        symbol: effectName,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(effectName) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(effectName) + effectName.length }
+          }
+        },
+        kind: 'handler',
+        context: 'handler'
+      });
+    }
+    
+    // Find module definitions
+    patterns.moduleDef.lastIndex = 0;
+    while ((match = patterns.moduleDef.exec(line)) !== null) {
+      const name = match[1];
+      moduleDefs.add(name);
+      connection.console.log(`  📦 Found module definition: ${name}`);
+      references.push({
+        symbol: name,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(name) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(name) + name.length }
+          }
+        },
+        kind: 'definition',
+        context: 'module'
+      });
+    }
+    
+    // Find import statements
+    patterns.importStmt.lastIndex = 0;
+    while ((match = patterns.importStmt.exec(line)) !== null) {
+      const name = match[1];
+      imports.add(name);
+      connection.console.log(`  📥 Found import: ${name}`);
+      references.push({
+        symbol: name,
+        location: {
+          uri: document.uri,
+          range: {
+            start: { line: lineIndex, character: match.index + match[0].indexOf(name) },
+            end: { line: lineIndex, character: match.index + match[0].indexOf(name) + name.length }
+          }
+        },
+        kind: 'definition',
+        context: 'import'
+      });
+    }
+    
     // Find all symbol references (usages)
     patterns.symbolRef.lastIndex = 0;
     while ((match = patterns.symbolRef.exec(line)) !== null) {
@@ -804,11 +980,11 @@ function findAllSymbolReferences(document: TextDocument): SymbolReference[] {
       const startChar = match.index;
       
       // Skip if this is a keyword
-      const keywords = ['fn', 'let', 'mut', 'type', 'match', 'if', 'then', 'else', 'case', 'of', 'import', 'extern'];
+      const keywords = ['fn', 'let', 'mut', 'type', 'match', 'if', 'then', 'else', 'case', 'of', 'import', 'extern', 'effect', 'perform', 'handle', 'in', 'module'];
       if (keywords.includes(name)) continue;
       
       // Skip if this is part of a definition we already tracked
-      if (functionDefs.has(name) || variableDefs.has(name) || typeDefs.has(name)) {
+      if (functionDefs.has(name) || variableDefs.has(name) || typeDefs.has(name) || effectDefs.has(name) || effectOps.has(name) || moduleDefs.has(name) || imports.has(name)) {
         // Check if this occurrence is the definition itself
         const defRef = references.find(r => 
           r.symbol === name && 
@@ -876,6 +1052,55 @@ connection.onCompletion((_textDocumentPosition: TextDocumentPositionParams): Com
       data: 5,
       detail: 'Type declaration',
       insertText: 'type ${1:Name} = ${2:Variant} | ${3:Variant}'
+    },
+    {
+      label: 'effect',
+      kind: CompletionItemKind.Keyword,
+      data: 7,
+      detail: 'Effect declaration',
+      insertText: 'effect ${1:Name} {\n\t${2:operation}: ${3:type}\n}'
+    },
+    {
+      label: 'perform',
+      kind: CompletionItemKind.Keyword,
+      data: 8,
+      detail: 'Perform effect operation',
+      insertText: 'perform ${1:Effect}.${2:operation}(${3:args})'
+    },
+    {
+      label: 'handle',
+      kind: CompletionItemKind.Keyword,
+      data: 9,
+      detail: 'Handle effect',
+      insertText: 'handle ${1:Effect}\n\t${2:operation} => ${3:handler}\nin ${4:expression}'
+    },
+    {
+      label: 'module',
+      kind: CompletionItemKind.Keyword,
+      data: 10,
+      detail: 'Module declaration',
+      insertText: 'module ${1:Name} {\n\t${2:content}\n}'
+    },
+    {
+      label: 'import',
+      kind: CompletionItemKind.Keyword,
+      data: 11,
+      detail: 'Import module',
+      insertText: 'import ${1:Module}'
+    },
+    {
+      label: 'spawn',
+      kind: CompletionItemKind.Keyword,
+      data: 12,
+      detail: 'Spawn fiber',
+      insertText: 'spawn ${1:expression}'
+    },
+    {
+      label: 'await',
+      kind: CompletionItemKind.Keyword,
+      data: 13,
+      detail: 'Await fiber',
+      insertText: 'await(${1:fiber})'
     },
     {
       label: 'print',
@@ -1004,7 +1229,12 @@ function createHoverContent(symbol: OspreySymbol, position: Position, currentLin
   if (symbol.returnType && symbol.kind === 'function') {
     content += `**Returns:** \`${symbol.returnType}\`\n\n`;
   }
-  
+
+  // Add effect set for functions
+  if (symbol.effectSet) {
+    content += `**Effect Set:** \`${symbol.effectSet}\`\n\n`;
+  }
+
   // Add documentation
   if (symbol.documentation) {
     content += `**Description:**\n${symbol.documentation}\n\n`;
@@ -1165,6 +1395,59 @@ connection.onDefinition((params): Definition | null => {
   return null;
 });
 
+// GO TO IMPLEMENTATION
+connection.onImplementation((params: ImplementationParams): Location[] | null => {
+  connection.console.log(`🎯 GO TO IMPLEMENTATION REQUEST RECEIVED at ${params.textDocument.uri}:${params.position.line}:${params.position.character}`);
+  
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    connection.console.log(`❌ Document not found: ${params.textDocument.uri}`);
+    return null;
+  }
+  
+  const text = document.getText();
+  const lines = text.split('\n');
+  const line = lines[params.position.line];
+  if (!line) {
+    connection.console.log(`❌ No line at position ${params.position.line}`);
+    return null;
+  }
+  
+  connection.console.log(`📄 Line content: "${line}"`);
+  
+  const wordAtPosition = getWordAtPosition(line, params.position.character);
+  if (!wordAtPosition) {
+    connection.console.log(`❌ No word at cursor position ${params.position.character}`);
+    return null;
+  }
+  
+  const targetWord = wordAtPosition.word;
+  connection.console.log(`🔍 Looking for implementation of: "${targetWord}"`);
+  
+  // Search in all document references
+  for (const [uri, refs] of symbolReferences) {
+    for (const ref of refs) {
+      if (ref.symbol === targetWord && ref.kind === 'implementation') {
+        connection.console.log(`✅ Found implementation at ${uri}:${ref.location.range.start.line + 1}`);
+        return [ref.location];
+      }
+    }
+  }
+  
+  // Search in workspace symbols
+  for (const [uri, symbols] of workspaceSymbols) {
+    for (const symbol of symbols) {
+      if (symbol.name === targetWord && symbol.kind === 'implementation') {
+        connection.console.log(`✅ Found implementation at ${uri}:${symbol.location.range.start.line + 1}`);
+        return [symbol.location];
+      }
+    }
+  }
+  
+  connection.console.log(`❌ No implementation found for "${targetWord}"`);
+  return null;
+});
+
 // DOCUMENT SYMBOLS (Outline)
 connection.onDocumentSymbol((params): DocumentSymbol[] => {
   connection.console.log(`📋 Document symbols request for ${params.textDocument.uri}`);
@@ -1189,6 +1472,18 @@ connection.onDocumentSymbol((params): DocumentSymbol[] => {
         break;
       case 'parameter':
         symbolKind = SymbolKind.Variable;
+        break;
+      case 'effect':
+        symbolKind = SymbolKind.Enum;
+        break;
+      case 'operation':
+        symbolKind = SymbolKind.Function;
+        break;
+      case 'module':
+        symbolKind = SymbolKind.Module;
+        break;
+      case 'import':
+        symbolKind = SymbolKind.Import;
         break;
       default:
         symbolKind = SymbolKind.Variable;
@@ -1261,6 +1556,300 @@ connection.onSignatureHelp((params): SignatureHelp | null => {
   
   connection.console.log(`❌ No signature help found`);
   return null;
+});
+
+// CODE ACTIONS
+connection.onCodeAction((params): CodeAction[] => {
+  connection.console.log(`🔧 Code action request for ${params.textDocument.uri}`);
+  
+  const actions: CodeAction[] = [];
+  const diagnostics = params.context.diagnostics;
+  
+  for (const diagnostic of diagnostics) {
+    // Quick fix for common errors
+    if (diagnostic.message.includes('undefined variable')) {
+      const variableName = diagnostic.message.match(/undefined variable '([^']+)'/)?.[1];
+      if (variableName) {
+        actions.push({
+          title: `Add 'let ${variableName}' declaration`,
+          kind: CodeActionKind.QuickFix,
+          diagnostics: [diagnostic],
+          edit: {
+            changes: {
+              [params.textDocument.uri]: [{
+                range: diagnostic.range,
+                newText: `let ${variableName} = \n`
+              }]
+            }
+          }
+        });
+      }
+    }
+    
+    // Quick fix for missing semicolons
+    if (diagnostic.message.includes('expected')) {
+      actions.push({
+        title: 'Add missing semicolon',
+        kind: CodeActionKind.QuickFix,
+        diagnostics: [diagnostic],
+        edit: {
+          changes: {
+            [params.textDocument.uri]: [{
+              range: diagnostic.range,
+              newText: ';'
+            }]
+          }
+        }
+      });
+    }
+  }
+  
+  // Add organize imports action
+  actions.push({
+    title: 'Organize Imports',
+    kind: CodeActionKind.SourceOrganizeImports,
+    edit: {
+      changes: {
+        [params.textDocument.uri]: [] // Would implement import organization logic
+      }
+    }
+  });
+  
+  connection.console.log(`✅ Returning ${actions.length} code actions`);
+  return actions;
+});
+
+
+
+// DOCUMENT HIGHLIGHTS
+connection.onDocumentHighlight((params): DocumentHighlight[] => {
+  connection.console.log(`🔍 Document highlight request at ${params.textDocument.uri}:${params.position.line}:${params.position.character}`);
+  
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return [];
+  
+  const text = document.getText();
+  const lines = text.split('\n');
+  const line = lines[params.position.line];
+  if (!line) return [];
+  
+  const wordAtPosition = getWordAtPosition(line, params.position.character);
+  if (!wordAtPosition) return [];
+  
+  const targetWord = wordAtPosition.word;
+  const highlights: DocumentHighlight[] = [];
+  
+  // Find all occurrences of the word in the document
+  for (let i = 0; i < lines.length; i++) {
+    const currentLine = lines[i];
+    let startIndex = 0;
+    
+    while (true) {
+      const index = currentLine.indexOf(targetWord, startIndex);
+      if (index === -1) break;
+      
+      // Check if it's a complete word match
+      const before = index > 0 ? currentLine[index - 1] : ' ';
+      const after = index + targetWord.length < currentLine.length ? currentLine[index + targetWord.length] : ' ';
+      
+      if (!/[a-zA-Z0-9_]/.test(before) && !/[a-zA-Z0-9_]/.test(after)) {
+        highlights.push({
+          range: {
+            start: { line: i, character: index },
+            end: { line: i, character: index + targetWord.length }
+          },
+          kind: 1 // Read
+        });
+      }
+      
+      startIndex = index + 1;
+    }
+  }
+  
+  connection.console.log(`✅ Found ${highlights.length} highlights for "${targetWord}"`);
+  return highlights;
+});
+
+// FOLDING RANGES
+connection.onFoldingRanges((params): FoldingRange[] => {
+  connection.console.log(`📁 Folding ranges request for ${params.textDocument.uri}`);
+  
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return [];
+  
+  const text = document.getText();
+  const lines = text.split('\n');
+  const ranges: FoldingRange[] = [];
+  
+  let braceStack: number[] = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Track opening braces
+    for (let j = 0; j < line.length; j++) {
+      if (line[j] === '{') {
+        braceStack.push(i);
+      } else if (line[j] === '}') {
+        if (braceStack.length > 0) {
+          const startLine = braceStack.pop()!;
+          if (i > startLine) {
+            ranges.push({
+              startLine,
+              endLine: i,
+              kind: 'region'
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  // Add function folding
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim().startsWith('fn ')) {
+      // Find the end of the function
+      let braceCount = 0;
+      let foundStart = false;
+      
+      for (let j = i; j < lines.length; j++) {
+        const currentLine = lines[j];
+        
+        for (let k = 0; k < currentLine.length; k++) {
+          if (currentLine[k] === '{') {
+            braceCount++;
+            foundStart = true;
+          } else if (currentLine[k] === '}') {
+            braceCount--;
+            if (foundStart && braceCount === 0) {
+              if (j > i) {
+                ranges.push({
+                  startLine: i,
+                  endLine: j,
+                  kind: 'function'
+                });
+              }
+              break;
+            }
+          }
+        }
+        
+        if (foundStart && braceCount === 0) break;
+      }
+    }
+  }
+  
+  connection.console.log(`✅ Found ${ranges.length} folding ranges`);
+  return ranges;
+});
+
+// WORKSPACE SYMBOLS
+connection.onWorkspaceSymbol((params): WorkspaceSymbol[] => {
+  connection.console.log(`🔍 Workspace symbol search for: "${params.query}"`);
+  
+  const symbols: WorkspaceSymbol[] = [];
+  
+  for (const [uri, docSymbols] of workspaceSymbols) {
+    for (const symbol of docSymbols) {
+      if (symbol.name.toLowerCase().includes(params.query.toLowerCase())) {
+        let symbolKind: SymbolKind;
+        switch (symbol.kind) {
+          case 'function':
+            symbolKind = SymbolKind.Function;
+            break;
+          case 'variable':
+            symbolKind = SymbolKind.Variable;
+            break;
+          case 'type':
+            symbolKind = SymbolKind.Class;
+            break;
+          case 'effect':
+            symbolKind = SymbolKind.Enum;
+            break;
+          case 'operation':
+            symbolKind = SymbolKind.Function;
+            break;
+          case 'module':
+            symbolKind = SymbolKind.Module;
+            break;
+          default:
+            symbolKind = SymbolKind.Variable;
+        }
+        
+        symbols.push({
+          name: symbol.name,
+          kind: symbolKind,
+          location: symbol.location,
+          containerName: path.basename(uri)
+        });
+      }
+    }
+  }
+  
+  connection.console.log(`✅ Found ${symbols.length} workspace symbols`);
+  return symbols;
+});
+
+// PREPARE RENAME
+connection.onPrepareRename((params: PrepareRenameParams): Range | null => {
+  connection.console.log(`✏️ Prepare rename request at ${params.textDocument.uri}:${params.position.line}:${params.position.character}`);
+  
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return null;
+  
+  const text = document.getText();
+  const lines = text.split('\n');
+  const line = lines[params.position.line];
+  if (!line) return null;
+  
+  const wordAtPosition = getWordAtPosition(line, params.position.character);
+  if (!wordAtPosition) return null;
+  
+  return {
+    start: { line: params.position.line, character: wordAtPosition.start },
+    end: { line: params.position.line, character: wordAtPosition.end }
+  };
+});
+
+// RENAME
+connection.onRename((params: RenameParams): WorkspaceEdit | null => {
+  connection.console.log(`✏️ Rename request for "${params.newName}" at ${params.textDocument.uri}:${params.position.line}:${params.position.character}`);
+  
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return null;
+  
+  const text = document.getText();
+  const lines = text.split('\n');
+  const line = lines[params.position.line];
+  if (!line) return null;
+  
+  const wordAtPosition = getWordAtPosition(line, params.position.character);
+  if (!wordAtPosition) return null;
+  
+  const oldName = wordAtPosition.word;
+  const changes: { [uri: string]: TextEdit[] } = {};
+  
+  // Find all references and rename them
+  for (const [uri, refs] of symbolReferences) {
+    const uriChanges: TextEdit[] = [];
+    
+    for (const ref of refs) {
+      if (ref.symbol === oldName) {
+        uriChanges.push({
+          range: ref.location.range,
+          newText: params.newName
+        });
+      }
+    }
+    
+    if (uriChanges.length > 0) {
+      changes[uri] = uriChanges;
+    }
+  }
+  
+  connection.console.log(`✅ Renamed "${oldName}" to "${params.newName}" in ${Object.keys(changes).length} files`);
+  return { changes };
 });
 
 // FIND REFERENCES

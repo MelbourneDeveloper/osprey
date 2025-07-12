@@ -28,6 +28,9 @@
       "include": "#types"
     },
     {
+      "include": "#effects"
+    },
+    {
       "include": "#modules"
     },
     {
@@ -59,6 +62,10 @@
         {
           "name": "keyword.fiber.osprey",
           "match": "\\b(spawn|await|yield|channel|send|recv)\\b"
+        },
+        {
+          "name": "keyword.effect.osprey",
+          "match": "\\b(effect|perform|handle|in)\\b"
         },
         {
           "name": "keyword.other.osprey",
@@ -171,6 +178,87 @@
               "name": "entity.name.function.call.osprey"
             }
           }
+        }
+      ]
+    },
+    "effects": {
+      "patterns": [
+        {
+          "name": "meta.effect.declaration.osprey",
+          "begin": "\\b(effect)\\s+([A-Z][a-zA-Z0-9_]*)\\s*\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.declaration.effect.osprey"
+            },
+            "2": {
+              "name": "entity.name.type.effect.osprey"
+            }
+          },
+          "patterns": [
+            {
+              "name": "meta.effect.operation.osprey",
+              "match": "\\b([a-z][a-zA-Z0-9_]*)\\s*:\\s*([^,\\n]+)",
+              "captures": {
+                "1": {
+                  "name": "entity.name.function.effect.osprey"
+                },
+                "2": {
+                  "name": "entity.name.type.osprey"
+                }
+              }
+            },
+            {
+              "include": "source.osprey"
+            }
+          ]
+        },
+        {
+          "name": "meta.perform.statement.osprey",
+          "match": "\\b(perform)\\s+([A-Z][a-zA-Z0-9_]*)\\.([a-z][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.effect.osprey"
+            },
+            "2": {
+              "name": "entity.name.type.effect.osprey"
+            },
+            "3": {
+              "name": "entity.name.function.effect.osprey"
+            }
+          }
+        },
+        {
+          "name": "meta.handler.expression.osprey",
+          "begin": "\\b(handle)\\s+([A-Z][a-zA-Z0-9_]*)\\s*\\{",
+          "end": "\\}\\s*\\b(in)\\b",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.effect.osprey"
+            },
+            "2": {
+              "name": "entity.name.type.effect.osprey"
+            }
+          },
+          "endCaptures": {
+            "1": {
+              "name": "keyword.control.effect.osprey"
+            }
+          },
+          "patterns": [
+            {
+              "name": "meta.handler.arm.osprey",
+              "match": "\\b([a-z][a-zA-Z0-9_]*)\\s*=>",
+              "captures": {
+                "1": {
+                  "name": "entity.name.function.effect.osprey"
+                }
+              }
+            },
+            {
+              "include": "source.osprey"
+            }
+          ]
         }
       ]
     },
