@@ -195,7 +195,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	// Restore original environment and add function to it
 	g.typeInferer.env = oldEnv
 	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
-	
+
 	// Restore expected return type context
 	g.expectedReturnType = oldExpectedReturnType
 
@@ -208,11 +208,11 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 // getLLVMType converts our type system types to LLVM types
 func (g *LLVMGenerator) getLLVMType(typeName string) types.Type {
 	switch typeName {
-	case TypeInt, IntTypeName: // Handle both "int" and "Int"
+	case TypeInt: // "int"
 		return types.I64
-	case TypeString, StringTypeName: // Handle both "string" and "String"
+	case TypeString: // "string"
 		return types.I8Ptr
-	case TypeBool, BoolTypeName: // Handle both "bool" and "Bool"
+	case TypeBool: // "bool"
 		return types.I1
 	default:
 		// For now, default to i64 for unknown types
@@ -352,11 +352,11 @@ func CheckProtectedFunction(fnDecl *ast.FunctionDeclaration) error {
 // getFieldType converts an Osprey field type to LLVM type
 func (g *LLVMGenerator) getFieldType(fieldType string) types.Type {
 	switch fieldType {
-	case TypeString, StringTypeName: // Handle both "string" and "String"
+	case TypeString: // "string"
 		return types.I8Ptr
-	case TypeInt, IntTypeName: // Handle both "int" and "Int"
+	case TypeInt: // "int"
 		return types.I64
-	case TypeBool, BoolTypeName: // Handle both "bool" and "Bool"
+	case TypeBool: // "bool"
 		return types.I1
 	default:
 		return types.I64 // default to i64

@@ -41,7 +41,7 @@ const (
 	TypeUnit         = "Unit"
 	TypeResult       = "Result"
 	TypeHTTPResponse = "HttpResponse"
-	TypeFunction     = "function"
+	TypeFunction     = "Function"
 )
 
 // Function names.
@@ -110,13 +110,6 @@ const (
 	WildcardPattern = "_"
 	SuccessPattern  = "Success"
 	ErrorPattern    = "Error"
-)
-
-// Type name constants for case variations.
-const (
-	StringTypeName = "String"
-	IntTypeName    = "Int"
-	BoolTypeName   = "Bool"
 )
 
 // HTTP Error codes (matching C runtime).

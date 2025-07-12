@@ -420,7 +420,7 @@ func getParameterSignature(params []ParameterInfo) string {
 func extractVariableSymbol(letDecl *ast.LetDeclaration) SymbolInfo {
 	varType := anyType
 	if letDecl.Type != nil {
-		varType = normalizeTypeName(letDecl.Type.Name)
+		varType = letDecl.Type.Name
 	} else if letDecl.Value != nil {
 		// Use simple fallback for type inference
 		varType = anyType
@@ -452,23 +452,6 @@ func extractTypeSymbol(typeDecl *ast.TypeDeclaration) SymbolInfo {
 		ReturnType:    "",
 	}
 }
-
-
-
-func normalizeTypeName(typeName string) string {
-	switch typeName {
-	case "int":
-		return "Int"
-	case "string":
-		return "String"
-	case "bool", "Bool":
-		return "Bool"
-	default:
-		return typeName
-	}
-}
-
-
 
 func runGenerateDocs(docsDir string) CommandResult {
 	err := generateAPIDocumentationFiles(docsDir)

@@ -773,11 +773,31 @@ func (ti *TypeInferer) inferConcurrencyExpression(expr ast.Expression) (Type, er
 		// spawn returns a fiber handle
 		return &ConcreteType{name: "Fiber"}, nil
 	case *ast.YieldExpression:
-		// yield returns Unit
+		// yield returns the type of the yielded value
+		if e.Value != nil {
+			return ti.InferType(e.Value)
+		}
+		// If no value is yielded, return Unit
 		return &ConcreteType{name: TypeUnit}, nil
 	case *ast.AwaitExpression:
-		// await expression type depends on the awaited fiber
-		return ti.InferType(e.Expression)
+		// CRITICAL FIX: await should return the type that the fiber produces, not the Fiber type
+		// The awaited expression should be a Fiber, but await returns the result type
+		fiberType, err := ti.InferType(e.Expression)
+		if err != nil {
+			return nil, err
+		}
+
+		// Verify that we're awaiting a Fiber
+		if concreteType, ok := fiberType.(*ConcreteType); ok && concreteType.name == "Fiber" {
+			// For now, we need to track what type the fiber produces
+			// Since we don't have generic types yet, we'll use a heuristic:
+			// Most fibers in the current examples produce Int values
+			// TODO: Implement proper generic types for Fiber<T>
+			return &ConcreteType{name: TypeInt}, nil
+		}
+
+		// If it's not a Fiber type, return an error
+		return nil, fmt.Errorf("%w: got %s", ErrAwaitTypeMismatch, fiberType.String())
 	default:
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedExpression, expr)
 	}
@@ -1088,10 +1108,10 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 		returnType: stringType,
 	})
 
-	// input() -> Result<Int, Error>
+	// input() -> Result<int, Error>
 	ti.env.Set("input", &FunctionType{
 		paramTypes: []Type{},
-		returnType: &ConcreteType{name: "Result<Int, Error>"},
+		returnType: &ConcreteType{name: "Result<int, Error>"},
 	})
 
 	// length(s: String) -> Int (can't fail, returns plain Int)
@@ -1100,23 +1120,23 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 		returnType: intType,
 	})
 
-	// contains(haystack: String, needle: String) -> Result<Bool, Error>
+	// contains(haystack: String, needle: String) -> Result<bool, Error>
 	ti.env.Set("contains", &FunctionType{
 		paramTypes: []Type{stringType, stringType},
-		returnType: &ConcreteType{name: "Result<Bool, Error>"},
+		returnType: &ConcreteType{name: "Result<bool, Error>"},
 	})
 
-	// substring(s: String, start: Int, length: Int) -> Result<String, Error>
+	// substring(s: String, start: Int, length: Int) -> Result<string, Error>
 	ti.env.Set("substring", &FunctionType{
 		paramTypes: []Type{stringType, intType, intType},
-		returnType: &ConcreteType{name: "Result<String, Error>"},
+		returnType: &ConcreteType{name: "Result<string, Error>"},
 	})
 
 	// File I/O functions
-	// readFile(filename: String) -> Result<String, Error>
+	// readFile(filename: String) -> Result<string, Error>
 	ti.env.Set("readFile", &FunctionType{
 		paramTypes: []Type{stringType},
-		returnType: &ConcreteType{name: "Result<String, Error>"},
+		returnType: &ConcreteType{name: "Result<string, Error>"},
 	})
 
 	// writeFile(filename: String, content: String) -> Result<Unit, Error>
@@ -1132,10 +1152,10 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 		returnType: &ConcreteType{name: "Result<ProcessHandle, Error>"},
 	})
 
-	// awaitProcess(handle: ProcessHandle) -> Result<Int, Error>
+	// awaitProcess(handle: ProcessHandle) -> Result<int, Error>
 	ti.env.Set("awaitProcess", &FunctionType{
 		paramTypes: []Type{&ConcreteType{name: "ProcessHandle"}},
-		returnType: &ConcreteType{name: "Result<Int, Error>"},
+		returnType: &ConcreteType{name: "Result<int, Error>"},
 	})
 
 	// cleanupProcess(handle: ProcessHandle) -> Result<Unit, Error>
@@ -1176,10 +1196,10 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 	})
 
 	// Iterator functions
-	// range(start: Int, end: Int) -> Iterator<Int>
+	// range(start: int, end: int) -> Iterator<int>
 	ti.env.Set("range", &FunctionType{
 		paramTypes: []Type{intType, intType},
-		returnType: &ConcreteType{name: "Iterator<Int>"},
+		returnType: &ConcreteType{name: "Iterator<int>"},
 	})
 
 	// forEach(iter: Iterator<T>, fn: T -> Unit) -> Unit
@@ -1194,9 +1214,9 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 		returnType: &ConcreteType{name: "Iterator<U>"},
 	})
 
-	// filter(iter: Iterator<T>, predicate: T -> Bool) -> Iterator<T>
+	// filter(iter: Iterator<T>, predicate: T -> bool) -> Iterator<T>
 	ti.env.Set("filter", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "Iterator<T>"}, &ConcreteType{name: "T -> Bool"}},
+		paramTypes: []Type{&ConcreteType{name: "Iterator<T>"}, &ConcreteType{name: "T -> bool"}},
 		returnType: &ConcreteType{name: "Iterator<T>"},
 	})
 

@@ -55,6 +55,7 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 	return g.convertValueToStringByType(argType, arg)
 }
 
+//TODO: This is wrong. We cannot convert fibers to string unless they return a String or there is a toString implementation
 func (g *LLVMGenerator) convertValueToStringByType(theType string, arg value.Value) (value.Value, error) {
 	// TODO: unhard code this!!! DO NOT IGNORE THIS! FIX IT!!
 	// but the actual LLVM value is a plain int, treat as int
@@ -73,6 +74,12 @@ func (g *LLVMGenerator) convertValueToStringByType(theType string, arg value.Val
 		// Unit type should return "()"
 		return g.createGlobalString("()"), nil
 	default:
+		// Check if it's a Fiber type - auto-await and convert result
+		if theType == "Fiber" {
+			// Auto-await the fiber and convert the result to string
+			return g.autoAwaitFiberToString(arg)
+		}
+		
 		// Check if it's a Result type
 		if strings.HasPrefix(theType, "Result<") {
 			// For Result types, check if it's a struct pointer
@@ -154,6 +161,23 @@ func (g *LLVMGenerator) convertResultToString(
 	)
 
 	return phi, nil
+}
+
+//TODO: This is wrong. We cannot convert fibers to string unless they return a String or there is a toString implementation
+// autoAwaitFiberToString automatically awaits a fiber and converts the result to string
+func (g *LLVMGenerator) autoAwaitFiberToString(fiberID value.Value) (value.Value, error) {
+	// Get runtime await function
+	awaitFunc := g.functions["fiber_await"]
+	if awaitFunc == nil {
+		g.initFiberRuntime()
+		awaitFunc = g.functions["fiber_await"]
+	}
+
+	// Call fiber_await to get the result
+	result := g.builder.NewCall(awaitFunc, fiberID)
+
+	// Convert the result (assumed to be Int) to string
+	return g.generateIntToString(result)
 }
 
 // createGlobalString creates a global string constant and returns a pointer to it

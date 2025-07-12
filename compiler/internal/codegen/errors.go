@@ -109,6 +109,9 @@ var (
 	// Security-related errors
 	ErrUnsupportedCallExpressionSecurity = errors.New("unsupported call expression in current security mode")
 	ErrMethodCallNotImplemented          = errors.New("method call not implemented")
+	
+	// Fiber-related errors
+	ErrAwaitTypeMismatch = errors.New("await can only be used on Fiber types")
 )
 
 // Static error definitions for match expressions
