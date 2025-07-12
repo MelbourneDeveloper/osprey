@@ -124,14 +124,22 @@ func (g *LLVMGenerator) generateLetDeclaration(letDecl *ast.LetDeclaration) (val
 	// Store the value in our variable map
 	g.variables[letDecl.Name] = value
 
-	// Use unified type inference system
-	inferredType, err := g.typeInferer.InferType(letDecl.Value)
-	if err != nil {
-		return nil, err
+	// CRITICAL FIX: Use explicit type annotation if present, otherwise infer from value
+	var varType Type
+	if letDecl.Type != nil {
+		// Use the explicit type annotation
+		varType = &ConcreteType{name: letDecl.Type.Name}
+	} else {
+		// Use unified type inference system for untyped declarations
+		inferredType, err := g.typeInferer.InferType(letDecl.Value)
+		if err != nil {
+			return nil, err
+		}
+		varType = inferredType
 	}
 
-	// Store the inferred type in the Hindley-Milner environment
-	g.typeInferer.env.Set(letDecl.Name, inferredType)
+	// Store the type in the Hindley-Milner environment
+	g.typeInferer.env.Set(letDecl.Name, varType)
 
 	// Track if this variable is mutable
 	g.mutableVariables[letDecl.Name] = letDecl.Mutable

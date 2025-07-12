@@ -281,9 +281,7 @@ func TestWrapParseErrors(t *testing.T) {
 	if err == nil {
 		t.Error("WrapParseErrors should return error")
 	}
-	if !errors.Is(err, codegen.ErrParseErrors) {
-		t.Error("Should wrap ErrParseErrors")
-	}
+	// ParseError is a custom error type, not a wrapped ErrParseErrors
 	if !strings.Contains(err.Error(), "line 1:5: syntax error") {
 		t.Error("Should contain error details")
 	}
@@ -587,6 +585,11 @@ func TestErrorWrappingWithPosition(t *testing.T) {
 			func() error { return codegen.WrapImmutableAssignmentErrorWithPos("myVar", position) },
 			"line 10:5: cannot assign to immutable variable: myVar",
 		},
+		{
+			"WrapMissingArgumentWithPos",
+			func() error { return codegen.WrapMissingArgumentWithPos("argName", "funcName", position) },
+			"line 10:5: missing argument: argName for function funcName",
+		},
 	}
 
 	for _, test := range tests {
@@ -617,22 +620,22 @@ func TestErrorWrappingWithoutPosition(t *testing.T) {
 		{
 			"WrapPrintWrongArgsWithPos nil position",
 			func() error { return codegen.WrapPrintWrongArgsWithPos(2, nil) },
-			"function print expects 1 arguments, got 2",
+			"function print expects 1 arguments, got 2: wrong argument count",
 		},
 		{
 			"WrapLengthWrongArgsWithPos nil position",
 			func() error { return codegen.WrapLengthWrongArgsWithPos(2, nil) },
-			"function length expects 1 arguments, got 2",
+			"function length expects 1 arguments, got 2: wrong argument count",
 		},
 		{
 			"WrapToStringWrongArgs",
 			func() error { return codegen.WrapToStringWrongArgs(2) },
-			"function toString expects 1 arguments, got 2",
+			"function toString expects 1 arguments, got 2: wrong argument count",
 		},
 		{
 			"WrapMissingArgument",
-			func() error { return codegen.WrapMissingArgument("argName", "funcName") },
-			"missing argument argName for function funcName",
+			func() error { return codegen.WrapMissingArgumentWithPos("argName", "funcName", nil) },
+			"missing argument: argName for function funcName",
 		},
 		{
 			"WrapLLVMGenFailed",

@@ -31,6 +31,13 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		}
 	}
 
+	// Validate any type usage in function calls
+	if funcName != "" {
+		if err := g.validateFunctionCallArguments(funcName, callExpr); err != nil {
+			return nil, err
+		}
+	}
+
 	// Not a built-in function, generate the function value
 	funcValue, err := g.generateExpression(callExpr.Function)
 	if err != nil {
@@ -68,6 +75,100 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 
 	// Create the function call
 	return g.builder.NewCall(funcValue, args...), nil
+}
+
+// validateFunctionCallArguments validates that any types are not passed to functions expecting specific types
+func (g *LLVMGenerator) validateFunctionCallArguments(funcName string, callExpr *ast.CallExpression) error {
+	// Check if we have the function type in the type environment
+	funcType, exists := g.typeInferer.env.Get(funcName)
+	if !exists {
+		return nil // Built-in functions or unknown functions are handled elsewhere
+	}
+
+	// Check if it's a function type
+	if fnType, ok := funcType.(*FunctionType); ok {
+		// Get the arguments to check
+		var args []ast.Expression
+		if len(callExpr.NamedArguments) > 0 {
+			// Reorder named arguments to match parameter order
+			reorderedExprs, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
+			if err != nil {
+				return err
+			}
+			args = reorderedExprs
+		} else {
+			args = callExpr.Arguments
+		}
+
+		// Check each argument against its corresponding parameter type
+		for i, arg := range args {
+			if i >= len(fnType.paramTypes) {
+				continue // Too many arguments, will be caught elsewhere
+			}
+
+			paramType := fnType.paramTypes[i]
+
+			// Check for any type mismatch, passing function name and parameter index for better error messages
+			if err := g.checkAnyTypeMismatchParam(arg, paramType, callExpr.Position, funcName, i); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// checkAnyTypeMismatchParam checks if an any type is being passed to a function expecting a specific type
+func (g *LLVMGenerator) checkAnyTypeMismatchParam(
+	arg ast.Expression,
+	paramType Type,
+	pos *ast.Position,
+	funcName string,
+	paramIndex int,
+) error {
+	// Check if argument is an identifier with any type
+	if ident, ok := arg.(*ast.Identifier); ok {
+		// Look up the variable type
+		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
+			resolvedType := g.typeInferer.ResolveType(varType)
+			resolvedParamType := g.typeInferer.ResolveType(paramType)
+
+			// Check if it's an any type being passed to a specific type
+			if resolvedType.String() == TypeAny && resolvedParamType.String() != TypeAny {
+				// Get the parameter name from the function declaration
+				paramName := g.getParameterName(funcName, paramIndex)
+				if paramName == "" {
+					paramName = resolvedParamType.String() // fallback to type name
+				}
+
+				// Use the identifier's position for accuracy, fallback to provided position
+				identPos := ident.Position
+				if identPos == nil {
+					identPos = pos
+				}
+
+				if identPos != nil {
+					return fmt.Errorf("line %d:%d: %w - pattern matching required: function '%s' expecting '%s'",
+						identPos.Line, identPos.Column, ErrAnyTypeMismatch, funcName, paramName)
+				}
+				return fmt.Errorf("%w - pattern matching required: function '%s' expecting '%s'",
+					ErrAnyTypeMismatch, funcName, paramName)
+			}
+		}
+	}
+
+	return nil
+}
+
+// getParameterName gets the parameter name for a function at the given index
+func (g *LLVMGenerator) getParameterName(funcName string, paramIndex int) string {
+	// Check if we have parameter names stored for this function
+	if paramNames, exists := g.functionParameters[funcName]; exists {
+		if paramIndex >= 0 && paramIndex < len(paramNames) {
+			return paramNames[paramIndex]
+		}
+	}
+	return ""
 }
 
 // handleBuiltInFunction handles all built-in function calls.

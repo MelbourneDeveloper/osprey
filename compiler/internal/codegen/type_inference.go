@@ -446,8 +446,6 @@ func isLogicalOp(op string) bool {
 	return op == "&&" || op == "||"
 }
 
-
-
 func uniqueInts(ints []int) []int {
 	seen := make(map[int]bool)
 	var result []int
@@ -599,8 +597,65 @@ func (ti *TypeInferer) inferLambdaExpression(e *ast.LambdaExpression) (Type, err
 	}, nil
 }
 
+// TODO: fix this horrible code. We need a registry of built-in functions with param list and return type.
+// TODO: this list needs to also drive the documentation. This is just filthy. Please stop.
+// validateBuiltInFunctionArgs validates argument counts for built-in functions
+func (ti *TypeInferer) validateBuiltInFunctionArgs(funcName string, argCount int, position *ast.Position) error {
+	switch funcName {
+	case LengthFunc:
+		if argCount != LengthExpectedArgs {
+			return WrapLengthWrongArgsWithPos(argCount, position)
+		}
+	case ReadFileFunc:
+		if argCount != ReadFileExpectedArgs {
+			return WrapReadFileWrongArgsWithPos(argCount, position)
+		}
+	case WriteFileFunc:
+		if argCount != WriteFileExpectedArgs {
+			return WrapWriteFileWrongArgsWithPos(argCount, position)
+		}
+	case ContainsFunc:
+		if argCount != ContainsExpectedArgs {
+			return WrapContainsWrongArgsWithPos(argCount, position)
+		}
+	case SubstringFunc:
+		if argCount != SubstringExpectedArgs {
+			return WrapSubstringWrongArgsWithPos(argCount, position)
+		}
+	case ToStringFunc:
+		if argCount != ToStringExpectedArgs {
+			return WrapToStringWrongArgsWithPos(argCount, position)
+		}
+	case InputFunc:
+		if argCount != InputExpectedArgs {
+			return WrapInputWrongArgsWithPos(argCount, position)
+		}
+	case HTTPCreateClientFunc:
+		if argCount != HTTPCreateClientExpectedArgs {
+			return WrapHTTPCreateClientWrongArgsWithPos(argCount, position)
+		}
+	case HTTPGetFunc:
+		if argCount != HTTPGetExpectedArgs {
+			return WrapHTTPGetWrongArgsWithPos(argCount, position)
+		}
+	}
+	return nil
+}
+
+
 // inferCallExpression infers types for call expressions
 func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) {
+	// Check for built-in functions and validate argument count BEFORE type inference
+	if ident, ok := e.Function.(*ast.Identifier); ok {
+		// Calculate total argument count
+		argCount := len(e.Arguments) + len(e.NamedArguments)
+
+		// Validate built-in function argument counts
+		if err := ti.validateBuiltInFunctionArgs(ident.Name, argCount, e.Position); err != nil {
+			return nil, err
+		}
+	}
+
 	// Infer function type
 	funcType, err := ti.InferType(e.Function)
 	if err != nil {
@@ -1025,34 +1080,34 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 	})
 
 	// HTTP functions
-	// httpCreateClient(baseUrl: String, timeout: Int) -> Result<HttpClient, Error>
+	// httpCreateClient(baseUrl: String, timeout: Int) -> Int (returns client ID or negative error)
 	ti.env.Set("httpCreateClient", &FunctionType{
 		paramTypes: []Type{stringType, intType},
-		returnType: &ConcreteType{name: "Result<HttpClient, Error>"},
+		returnType: intType,
 	})
 
-	// httpCreateServer(port: Int, address: String) -> Result<HttpServer, Error>
+	// httpCreateServer(port: Int, address: String) -> Int (returns server ID or negative error)
 	ti.env.Set("httpCreateServer", &FunctionType{
 		paramTypes: []Type{intType, stringType},
-		returnType: &ConcreteType{name: "Result<HttpServer, Error>"},
+		returnType: intType,
 	})
 
-	// httpGet(client: HttpClient, path: String, headers: String) -> Result<HttpResponse, Error>
+	// httpGet(client: Int, path: String, headers: String) -> Int (returns status code or negative error)
 	ti.env.Set("httpGet", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "HttpClient"}, stringType, stringType},
-		returnType: &ConcreteType{name: "Result<HttpResponse, Error>"},
+		paramTypes: []Type{intType, stringType, stringType},
+		returnType: intType,
 	})
 
-	// httpPost(client: HttpClient, path: String, headers: String, body: String) -> Result<HttpResponse, Error>
+	// httpPost(client: Int, path: String, headers: String, body: String) -> Int (returns status code or negative error)
 	ti.env.Set("httpPost", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "HttpClient"}, stringType, stringType, stringType},
-		returnType: &ConcreteType{name: "Result<HttpResponse, Error>"},
+		paramTypes: []Type{intType, stringType, stringType, stringType},
+		returnType: intType,
 	})
 
-	// httpListen(server: Result<HttpServer, Error>, handler: Function) -> Result<Int, Error>
+	// httpListen(server: Int, handler: Function) -> Int (returns status or negative error)
 	ti.env.Set("httpListen", &FunctionType{
-		paramTypes: []Type{&ConcreteType{name: "Result<HttpServer, Error>"}, anyType},
-		returnType: &ConcreteType{name: "Result<Int, Error>"},
+		paramTypes: []Type{intType, anyType},
+		returnType: intType,
 	})
 
 	// Iterator functions

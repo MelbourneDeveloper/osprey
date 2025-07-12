@@ -20,10 +20,16 @@ func (b *Builder) buildLetDecl(ctx parser.ILetDeclContext) *LetDeclaration {
 	mutable := ctx.MUT() != nil
 	value := b.buildExpression(ctx.Expr())
 
+	// Parse type annotation if present
+	var typeAnnotation *TypeExpression
+	if ctx.Type_() != nil {
+		typeAnnotation = b.buildTypeExpression(ctx.Type_())
+	}
+
 	return &LetDeclaration{
 		Name:     name,
 		Mutable:  mutable,
-		Type:     nil, // For now, type annotation support comes later
+		Type:     typeAnnotation,
 		Value:    value,
 		Position: b.getPositionFromContext(ctx),
 	}
