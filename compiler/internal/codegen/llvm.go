@@ -36,6 +36,11 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		if err := g.validateFunctionCallArguments(funcName, callExpr); err != nil {
 			return nil, err
 		}
+		
+		// Validate named arguments requirement for multi-parameter functions
+		if err := g.validateNamedArguments(funcName, callExpr); err != nil {
+			return nil, err
+		}
 	}
 
 	// Not a built-in function, generate the function value

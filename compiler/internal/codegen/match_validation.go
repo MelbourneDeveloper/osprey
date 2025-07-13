@@ -7,6 +7,11 @@ import (
 	"github.com/christianfindlay/osprey/internal/ast"
 )
 
+const (
+	// MinParametersForNamedArgs is the minimum number of parameters required to enforce named arguments
+	MinParametersForNamedArgs = 2
+)
+
 // validateMatchExpression validates match expressions for exhaustiveness and unknown variants.
 func (g *LLVMGenerator) validateMatchExpression(expr *ast.MatchExpression) error {
 	for _, arm := range expr.Arms {
@@ -14,6 +19,92 @@ func (g *LLVMGenerator) validateMatchExpression(expr *ast.MatchExpression) error
 			return err
 		}
 	}
+
+	// Check for exhaustiveness
+	if err := g.validateMatchExhaustiveness(expr); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateMatchExhaustiveness checks if all union variants are covered in match expressions
+func (g *LLVMGenerator) validateMatchExhaustiveness(expr *ast.MatchExpression) error {
+	// First, we need to infer the type of the expression being matched
+	exprType, err := g.typeInferer.InferType(expr.Expression)
+	if err != nil {
+		return err
+	}
+
+	// Resolve the type to get the concrete type
+	resolvedType := g.typeInferer.ResolveType(exprType)
+	typeName := resolvedType.String()
+
+	// Check if this is a union type
+	typeDecl, exists := g.typeDeclarations[typeName]
+	if !exists {
+		// Not a union type, no exhaustiveness check needed
+		return nil
+	}
+
+	// Only check exhaustiveness for union types with multiple variants
+	if len(typeDecl.Variants) <= 1 {
+		return nil
+	}
+
+	// Collect all patterns from match arms
+	coveredVariants := make(map[string]bool)
+	hasWildcard := false
+
+	for _, arm := range expr.Arms {
+		pattern := arm.Pattern.Constructor
+		if pattern == "_" {
+			hasWildcard = true
+			break // Wildcard covers all remaining cases
+		}
+		if pattern != "" {
+			coveredVariants[pattern] = true
+		}
+	}
+
+	// If there's a wildcard, the match is exhaustive
+	if hasWildcard {
+		return nil
+	}
+
+	// Check if all variants are covered
+	var missingVariants []string
+	for _, variant := range typeDecl.Variants {
+		if !coveredVariants[variant.Name] {
+			missingVariants = append(missingVariants, variant.Name)
+		}
+	}
+
+	if len(missingVariants) > 0 {
+		return WrapMatchNotExhaustiveWithPos(missingVariants, expr.Position)
+	}
+
+	return nil
+}
+
+// validateNamedArguments validates that multi-parameter functions require named arguments
+func (g *LLVMGenerator) validateNamedArguments(funcName string, callExpr *ast.CallExpression) error {
+	// Check if this is a user-defined function with multiple parameters
+	paramNames, exists := g.functionParameters[funcName]
+	if !exists {
+		return nil // Built-in or unknown function
+	}
+
+	// Only enforce named arguments for multi-parameter functions
+	if len(paramNames) < MinParametersForNamedArgs {
+		return nil
+	}
+
+	// If the function has 2 or more parameters and positional arguments are used, require named arguments
+	if len(callExpr.Arguments) > 0 && len(callExpr.NamedArguments) == 0 {
+		return WrapFunctionRequiresNamedArgsWithPos(funcName, len(paramNames), callExpr.Position)
+	}
+
 	return nil
 }
 
@@ -49,8 +140,6 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 
 	return reorderedArgs, nil
 }
-
-
 
 func (g *LLVMGenerator) validateMatchArmWithPosition(arm ast.MatchArm, matchPos *ast.Position) error {
 	return g.validateMatchPatternWithPosition(arm.Pattern, matchPos)

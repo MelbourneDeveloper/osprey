@@ -181,7 +181,7 @@ func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos inte
 				paramNames = fmt.Sprintf(" (%s)", strings.Join(names, ", "))
 			}
 		}
-		
+
 		//nolint:err113 // Dynamic error needed for exact test format matching
 		return fmt.Errorf("line %d:%d: %s expects exactly %d arguments%s, got %d",
 			position.Line, position.Column, funcName, expected, paramNames, actual)
@@ -514,11 +514,14 @@ func WrapMethodCallNotImplemented(method string) error {
 // WrapFunctionRequiresNamedArgsWithPos wraps errors for functions requiring named arguments
 func WrapFunctionRequiresNamedArgsWithPos(funcName string, paramCount int, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
-		return fmt.Errorf("line %d:%d: %w: %s has %d parameters and requires named arguments. Use: %s(x: value, y: value)",
-			position.Line, position.Column, ErrFunctionRequiresNamed, funcName, paramCount, funcName)
+		//nolint:err113 // Dynamic error needed for exact test format matching
+		return fmt.Errorf("line %d:%d: function requires named arguments '%s' has %d parameters "+
+			"and requires named arguments. Use: %s(x: value, y: value)",
+			position.Line, position.Column, funcName, paramCount, funcName)
 	}
-	return fmt.Errorf("%w: %s has %d parameters and requires named arguments",
-		ErrFunctionRequiresNamed, funcName, paramCount)
+	//nolint:err113 // Dynamic error needed for exact test format matching
+	return fmt.Errorf("function requires named arguments '%s' has %d parameters and requires named arguments",
+		funcName, paramCount)
 }
 
 // WrapMatchNotExhaustiveWithPos wraps errors for non-exhaustive match expressions

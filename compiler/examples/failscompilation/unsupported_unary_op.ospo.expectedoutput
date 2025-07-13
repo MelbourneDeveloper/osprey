@@ -1,1 +1,1 @@
-line 5:17: readFile expects exactly 1 argument(s), got 0: wrong argument count
+line 5:17: readFile expects exactly 1 arguments (filename), got 0
