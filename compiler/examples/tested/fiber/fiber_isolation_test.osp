@@ -4,7 +4,7 @@ print("=== Fiber Module Isolation Test ===")
 // Test concurrent execution ordering
 print("\nTest 1: Concurrent execution order test:")
 
-fn slowComputation(n: Int) -> Int = match n {
+fn slowComputation(n: int) -> int = match n {
     1 => 100
     2 => 200  
     3 => 300
@@ -28,8 +28,8 @@ print("Task 2 result: ${r2}")
 // Test 2: Channel communication between fibers
 print("\nTest 2: Channel communication test:")
 
-fn producer(id: Int) -> Int = id * 100 + 50
-fn consumer(data: Int) -> Int = data / 10
+fn producer(id: int) -> int = id * 100 + 50
+fn consumer(data: int) -> int = data / 10
 
 let prod1 = spawn producer(1)
 let prod2 = spawn producer(2)
@@ -59,8 +59,8 @@ print("\nTest 4: Complex fiber interactions:")
 // Test 4: Module access from fibers
 print("\nTest 4: Module access from different fibers:")
 
-fn getValue(key: Int) -> Int = key * 1000
-fn transform(val: Int) -> Int = val + 42
+fn getValue(key: int) -> int = key * 1000
+fn transform(val: int) -> int = val + 42
 
 let access1 = spawn getValue(1)
 let access2 = spawn getValue(2)

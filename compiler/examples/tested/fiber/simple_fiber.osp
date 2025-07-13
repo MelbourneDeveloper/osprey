@@ -2,12 +2,12 @@
 print("=== Simple Fiber ===")
 
 // Simulate web request handling
-fn handleRequest(requestId: Int) -> Int = requestId * 10 + 200
+fn handleRequest(requestId: int) -> int = requestId
 let request1 = spawn handleRequest(1)
 print("Handling request 1, response code: ${request1}")
 
 // Simulate database query with await
-fn queryDatabase(userId: Int) -> Int = userId * 1000
+fn queryDatabase(userId: int) -> int = userId * 1000
 let dbQuery = spawn queryDatabase(123)
 let userData = await(dbQuery)
 print("Database query returned user data: ${userData}")
@@ -20,7 +20,7 @@ let job2 = yield 25  // Process 25 more
 print("Processed ${job2} more items, total: ${job1 + job2}")
 
 // Simple message queue simulation
-fn sendMessage(queueSize: Int) -> Int = queueSize + 1
+fn sendMessage(queueSize: int) -> int = queueSize + 1
 let messageQueue = 5  // Initial queue size
 let newQueueSize = sendMessage(messageQueue)
 print("Message queue size: ${newQueueSize}")

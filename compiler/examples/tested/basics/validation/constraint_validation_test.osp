@@ -4,17 +4,17 @@
 print("=== BASIC TYPE CONSTRUCTION TEST ===")
 
 // Simple types without validation
-type Person = { 
-    name: String, 
-    age: Int 
+type Person = {
+    name: string,
+    age: int 
 }
 
-type Product = { 
-    name: String,
-    price: Int
+type Product = {
+    name: string,
+    price: int
 }
 
-type Point = { x: Int, y: Int }
+type Point = { x: int, y: int }
 
 print("Test 1: Creating Person")
 let person = Person { name: "Alice", age: 25 }

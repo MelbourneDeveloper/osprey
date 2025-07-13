@@ -2,22 +2,22 @@
 // This demonstrates constraint validation and exposes type safety issues
 
 // Constraint functions for WHERE clauses
-fn notEmpty(s: String) -> Bool = match s {
+fn notEmpty(s: string) -> bool = match s {
     "" => false
     _ => true
 }
 
-fn isPositive(n: Int) -> Bool = match n {
+fn isPositive(n: int) -> bool = match n {
     0 => false
     _ => true
 }
 
-fn validAge(age: Int) -> Bool = match age {
+fn validAge(age: int) -> bool = match age {
     0 => false
     _ => true
 }
 
-fn validEmail(email: String) -> Bool = match email {
+fn validEmail(email: string) -> bool = match email {
     "" => false
     _ => true
 }
@@ -50,20 +50,20 @@ print("validEmail(\"test@email.com\") should be true:")
 print(toString(validEmail("test@email.com")))
 
 // Types with WHERE constraints - SHOULD return Result<T, ConstraintError>
-type Person = { 
-    name: String where notEmpty(name),
-    age: Int where validAge(age)
+type Person = {
+    name: string where notEmpty(name),
+    age: int where validAge(age)
 }
 
 type User = {
-    username: String where notEmpty(username),
-    email: String where validEmail(email),
-    userId: Int where isPositive(userId)
+    username: string where notEmpty(username),
+    email: string where validEmail(email),
+    userId: int where isPositive(userId)
 }
 
 type Product = {
-    name: String where notEmpty(name),
-    price: Int where isPositive(price)
+    name: string where notEmpty(name),
+    price: int where isPositive(price)
 }
 
 print("=== CONSTRAINT VALIDATION TEST ===")

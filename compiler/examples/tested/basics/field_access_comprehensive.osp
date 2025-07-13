@@ -2,14 +2,12 @@
 // This demonstrates field access mixed with pattern matching on union types
 
 // Discriminated union for different entity types
-type Entity = Warrior { health: Int, strength: Int } | 
-              Mage { health: Int, mana: Int } | 
-              Archer { health: Int, arrows: Int }
+type Entity = Warrior { health: int, strength: int } | Mage { health: int, mana: int } | Archer { health: int, arrows: int }
 
 // Equipment union with field access
-type Equipment = Sword { damage: Int, durability: Int } |
-                 Staff { power: Int, charges: Int } |
-                 Bow { range: Int, tension: Int }
+type Equipment = Sword { damage: int, durability: int } |
+                   Staff { power: int, charges: int } |
+                   Bow { range: int, tension: int }
 
 // Combat calculation with variable binding in pattern matching
 fn calculateAttack(entity: Entity, equipment: Equipment) = match entity {

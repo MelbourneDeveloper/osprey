@@ -2,8 +2,8 @@
 // This tests field access on record types without constraints
 
 // Define simple record types with integer fields
-type Point = { x: Int, y: Int }
-type Rectangle = { width: Int, height: Int }
+type Point = { x: int, y: int }
+type Rectangle = { width: int, height: int }
 
 print("=== BASIC FIELD ACCESS TEST ===")
 

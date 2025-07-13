@@ -36,10 +36,12 @@ Osprey's type system is one of the most important aspects of the language. It pu
 
 ### 5.1 Built-in Types
 
-- `Int`: 64-bit signed integers
-- `String`: UTF-8 encoded strings  
-- `Bool`: Boolean values (`true`, `false`)
-- `Unit`: Type for functions that don't return a meaningful value
+**IMPORTANT**: All primitive types use lowercase names - `int`, `string`, `bool`. Capitalized forms (`Int`, `String`, `Bool`) are invalid.
+
+- `int`: 64-bit signed integers
+- `string`: UTF-8 encoded strings  
+- `bool`: Boolean values (`true`, `false`)
+- `unit`: Type for functions that don't return a meaningful value
 - `Result<T, E>`: Built-in generic type for error handling
 - `List<T, N>`: Immutable fixed-size lists with N elements of type T
 - `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
@@ -55,35 +57,35 @@ FunctionType := '(' (Type (',' Type)*)? ')' '->' Type
 
 **Examples:**
 ```osprey
-(Int) -> Int              // Function taking an Int, returning an Int
-(Int, String) -> Bool     // Function taking Int and String, returning Bool
-() -> String              // Function with no parameters, returning String
-(String) -> (Int) -> Bool // Higher-order function returning another function
+(int) -> int              // Function taking an int, returning an int
+(int, string) -> bool     // Function taking int and string, returning bool
+() -> string              // Function with no parameters, returning string
+(string) -> (int) -> bool // Higher-order function returning another function
 ```
 
 **Function Type Declarations:**
 ```osprey
 // Function parameter with explicit function type
-fn applyFunction(value: Int, transform: (Int) -> Int) -> Int = 
+fn applyFunction(value: int, transform: (int) -> int) -> int = 
     transform(value)
 
 // Variable with function type
-let doubler: (Int) -> Int = fn(x: Int) -> Int = x * 2
+let doubler: (int) -> int = fn(x: int) -> int = x * 2
 
 // Higher-order function that returns a function
-fn createAdder(n: Int) -> (Int) -> Int = 
-    fn(x: Int) -> Int = x + n
+fn createAdder(n: int) -> (int) -> int = 
+    fn(x: int) -> int = x + n
 ```
 
 **Function Composition Examples:**
 ```osprey
 // Define some simple functions
-fn double(x: Int) -> Int = x * 2
-fn square(x: Int) -> Int = x * x
-fn addFive(x: Int) -> Int = x + 5
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
+fn addFive(x: int) -> int = x + 5
 
 // Higher-order function with strong typing
-fn applyTwice(value: Int, func: (Int) -> Int) -> Int = 
+fn applyTwice(value: int, func: (int) -> int) -> int = 
     func(func(value))
 
 // Usage with type safety
@@ -92,8 +94,8 @@ let result2 = applyTwice(3, square)  // 81
 let result3 = applyTwice(10, addFive) // 20
 
 // Composition of functions
-fn compose(f: (Int) -> Int, g: (Int) -> Int) -> (Int) -> Int =
-    fn(x: Int) -> Int = f(g(x))
+fn compose(f: (int) -> int, g: (int) -> int) -> (int) -> int =
+    fn(x: int) -> int = f(g(x))
 
 let doubleSquare = compose(double, square)
 let result4 = doubleSquare(3) // double(square(3)) = double(9) = 18

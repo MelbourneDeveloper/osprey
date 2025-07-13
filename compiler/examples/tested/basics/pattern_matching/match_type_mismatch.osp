@@ -3,7 +3,7 @@
 
 let x = 42
 
-type Option = Some { value: String } | None
+type Option = Some { value: string } | None
 
 let result = match x {
     Some => "some"

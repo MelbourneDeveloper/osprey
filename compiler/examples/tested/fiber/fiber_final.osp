@@ -2,7 +2,7 @@
 print("=== Final Fiber Test ===")
 
 // Distributed computing simulation
-fn computePartition(partitionId: Int, dataSize: Int) -> Int = 
+fn computePartition(partitionId: int, dataSize: int) -> int = 
     partitionId * (dataSize / 4)  // Each partition processes 1/4 of data
 
 // Spawn multiple compute nodes
@@ -18,13 +18,13 @@ print("Node 3 processed: ${await(node3)} records")
 print("Node 4 processed: ${await(node4)} records")
 
 // Microservices orchestration pattern
-fn authService(userId: Int) -> Int = match userId {
+fn authService(userId: int) -> int = match userId {
     0 => 401  // Unauthorized
     _ => 200  // OK
 }
 
-fn inventoryService(productId: Int) -> Int = productId * 50  // Stock count
-fn paymentService(amount: Int) = amount + 25  // Add processing fee
+fn inventoryService(productId: int) -> int = productId * 50  // Stock count
+fn paymentService(amount: int) = amount + 25  // Add processing fee
 
 // Orchestrate multiple service calls
 let authResult = spawn authService(123)
@@ -37,7 +37,7 @@ print("Inventory count: ${await(inventory)}")
 print("Payment total: ${await(payment)}")
 
 // Real-time data streaming simulation
-fn streamProcessor(batchSize: Int) -> Int = batchSize * 8  // Process 8KB per item
+fn streamProcessor(batchSize: int) -> int = batchSize * 8  // Process 8KB per item
 
 let batch1 = yield streamProcessor(128)
 let batch2 = yield streamProcessor(256)

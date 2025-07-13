@@ -4,7 +4,7 @@ print("=== Fiber Concurrency Proof Test ===")
 // Test 1: Show real fiber IDs from C runtime
 print("\nTest 1: Proving real fiber IDs from C runtime:")
 
-fn simpleTask(value: Int) -> Int = value * 100
+fn simpleTask(value: int) -> int = value * 100
 
 // Spawn fibers and show their ACTUAL IDs from C runtime
 let fiber1 = spawn simpleTask(1)
@@ -52,7 +52,7 @@ print("Yield fiber result: ${await(yieldFiber)}")  // Should be 42+84+126=252
 // Test 5: Complex concurrent pattern
 print("\nTest 5: Complex fiber interaction:")
 
-fn complexTask(id: Int) -> Int = yield(id * 10) + (id * 100)
+fn complexTask(id: int) -> int = yield(id * 10) + (id * 100)
 
 let complexFiber1 = spawn complexTask(1)
 let complexFiber2 = spawn complexTask(2)
