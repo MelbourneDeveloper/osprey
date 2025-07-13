@@ -585,9 +585,12 @@ func (ti *TypeInferer) inferIdentifierType(e *ast.Identifier) (Type, error) {
 		return t, nil
 	}
 	if e.Position != nil {
-		return nil, fmt.Errorf("line %d:%d: %w: %s", e.Position.Line, e.Position.Column, ErrUndefinedVariable, e.Name)
+		//nolint:err113 // Dynamic error needed for exact test format matching
+		return nil, fmt.Errorf("line %d:%d: undefined variable '%s': undefined variable",
+			e.Position.Line, e.Position.Column, e.Name)
 	}
-	return nil, fmt.Errorf("%w: %s", ErrUndefinedVariable, e.Name)
+	//nolint:err113 // Dynamic error needed for exact test format matching
+	return nil, fmt.Errorf("undefined variable '%s': undefined variable", e.Name)
 }
 
 // inferLambdaExpression infers types for lambda expressions
@@ -891,7 +894,10 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 			return nil, err
 		}
 		if err := ti.Unify(firstArmType, armType); err != nil {
-			return nil, fmt.Errorf("match arm %d type mismatch: %w", i, err)
+			// Include position info and proper formatting
+			expectedType := firstArmType.String()
+			actualType := armType.String()
+			return nil, WrapMatchTypeMismatchWithPos(i, actualType, expectedType, e.Position)
 		}
 	}
 

@@ -170,9 +170,21 @@ func WrapNoToStringImpl(typeName string) error {
 // WrapFunctionArgsWithPos is a consolidated function for all "wrong arguments" errors
 func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
+		// Try to get parameter names from the built-in function registry
+		paramNames := ""
+		if fn, exists := GlobalBuiltInRegistry.GetFunction(funcName); exists {
+			var names []string
+			for _, param := range fn.ParameterTypes {
+				names = append(names, param.Name)
+			}
+			if len(names) > 0 {
+				paramNames = fmt.Sprintf(" (%s)", strings.Join(names, ", "))
+			}
+		}
+		
 		//nolint:err113 // Dynamic error needed for exact test format matching
-		return fmt.Errorf("line %d:%d: %s expects exactly %d argument(s), got %d: wrong argument count",
-			position.Line, position.Column, funcName, expected, actual)
+		return fmt.Errorf("line %d:%d: %s expects exactly %d arguments%s, got %d",
+			position.Line, position.Column, funcName, expected, paramNames, actual)
 	}
 	return WrapWrongArgCount(funcName, expected, actual)
 }

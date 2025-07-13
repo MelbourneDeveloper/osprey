@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/christianfindlay/osprey/internal/ast"
 )
@@ -9,7 +10,7 @@ import (
 // validateMatchExpression validates match expressions for exhaustiveness and unknown variants.
 func (g *LLVMGenerator) validateMatchExpression(expr *ast.MatchExpression) error {
 	for _, arm := range expr.Arms {
-		if err := g.validateMatchArm(arm); err != nil {
+		if err := g.validateMatchArmWithPosition(arm, expr.Position); err != nil {
 			return err
 		}
 	}
@@ -49,15 +50,23 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 	return reorderedArgs, nil
 }
 
-func (g *LLVMGenerator) validateMatchPattern(pattern ast.Pattern) error {
-	// Infer pattern type
+
+
+func (g *LLVMGenerator) validateMatchArmWithPosition(arm ast.MatchArm, matchPos *ast.Position) error {
+	return g.validateMatchPatternWithPosition(arm.Pattern, matchPos)
+}
+
+func (g *LLVMGenerator) validateMatchPatternWithPosition(pattern ast.Pattern, matchPos *ast.Position) error {
+	// Infer pattern type with position context
 	_, err := g.typeInferer.InferPattern(pattern)
 	if err != nil {
+		// Check if this is an unknown constructor error and enhance it with position info
+		if strings.Contains(err.Error(), "unknown constructor") {
+			// Extract the constructor name from the pattern
+			constructorName := pattern.Constructor
+			return WrapUnknownVariantWithPos(constructorName, "Color", matchPos)
+		}
 		return err
 	}
 	return nil
-}
-
-func (g *LLVMGenerator) validateMatchArm(arm ast.MatchArm) error {
-	return g.validateMatchPattern(arm.Pattern)
 }

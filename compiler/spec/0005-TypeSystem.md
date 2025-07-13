@@ -45,6 +45,7 @@ Osprey's type system is one of the most important aspects of the language. It pu
 - `Result<T, E>`: Built-in generic type for error handling
 - `List<T, N>`: Immutable fixed-size lists with N elements of type T
 - `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
+- `Record Types`: Immutable structured data types with named fields
 
 #### Function Types
 
@@ -106,6 +107,216 @@ let result4 = doubleSquare(3) // double(square(3)) = double(9) = 18
 - **No runtime type errors**: Mismatched function types caught early
 - **Clear documentation**: Function types serve as documentation
 - **Enables optimization**: Compiler can optimize based on known function signatures
+
+#### Record Types
+
+Record types are immutable structured data types with named fields, providing structural equality semantics and compile-time field access validation.
+
+**Syntax:**
+```
+RecordType := 'type' Identifier '=' '{' FieldList '}'
+FieldList  := Field (',' Field)*
+Field      := Identifier ':' Type
+```
+
+**Declaration Examples:**
+```osprey
+type Point = { x: int, y: int }
+type Person = { name: string, age: int, active: bool }
+type Address = { street: string, city: string, zipCode: string }
+```
+
+**Construction Syntax:**
+```osprey
+// Simple record construction
+let point = Point { x: 10, y: 20 }
+let person = Person { name: "Alice", age: 30, active: true }
+
+// Field order is flexible during construction
+let address = Address { 
+    city: "Melbourne",
+    street: "123 Main St", 
+    zipCode: "3000"
+}
+```
+
+**Field Access:**
+```osprey
+// Direct field access with dot notation
+let x = point.x           // 10
+let name = person.name    // "Alice"
+let isActive = person.active  // true
+
+// Field access in expressions
+let distance = sqrt(point.x * point.x + point.y * point.y)
+let greeting = "Hello, ${person.name}!"
+```
+
+**Key Properties:**
+- **Immutability**: Records cannot be modified after creation
+- **Structural Equality**: Two records are equal if all their fields are equal
+- **Compile-time Field Validation**: Field access is validated at compile time
+- **Type Safety**: Field types are enforced during construction and access
+- **No Null Fields**: All fields must be provided during construction
+
+**Pattern Matching with Records:**
+Records support pattern matching for destructuring and value extraction (see [Pattern Matching](0008-PatternMatching.md) for complete details).
+
+**Nested Records:**
+```osprey
+type Company = { name: string, address: Address }
+
+let company = Company {
+    name: "Tech Corp",
+    address: Address {
+        street: "456 Tech Ave",
+        city: "Sydney", 
+        zipCode: "2000"
+    }
+}
+
+// Nested field access
+let companyCity = company.address.city  // "Sydney"
+```
+
+**Record Updates (Non-destructive):**
+Records support elegant non-destructive updates that create modified copies:
+
+```osprey
+// Original record
+let person = Person { name: "Alice", age: 25, active: true }
+
+// Non-destructive update (creates new instance)
+let olderPerson = person { age: 26 }           // Only age changes
+let renamedPerson = person { name: "Alicia" }  // Only name changes
+
+// Multiple field updates
+let updatedPerson = person { 
+    age: 26, 
+    active: false 
+}
+
+// Original person unchanged - all updates create new instances
+print(person.age)        // Still 25
+print(olderPerson.age)   // Now 26
+```
+
+**Record Type Constraints:**
+Records can have validation constraints using `where` clauses:
+
+```osprey
+type ValidatedPerson = {
+    name: string,
+    age: int,
+    email: string
+} where validatePersonData
+
+fn validatePersonData(person: ValidatedPerson) -> Result<ValidatedPerson, string> = 
+    match person.age {
+        age when age < 0 => Error("Age cannot be negative")
+        age when age > 150 => Error("Age must be realistic")
+        _ => match person.name {
+            "" => Error("Name cannot be empty")
+            _ => Success(person)
+        }
+    }
+
+// Constrained record construction returns Result type
+let result = ValidatedPerson { name: "Bob", age: 25, email: "bob@example.com" }
+// result type: Result<ValidatedPerson, string>
+// Must be handled with pattern matching (see Pattern Matching chapter)
+```
+
+**Field Access Rules:**
+
+**✅ ALLOWED - Field Access on Record Types:**
+```osprey
+type User = { id: int, name: string, email: string }
+let user = User { id: 1, name: "Alice", email: "alice@example.com" }
+
+let userId = user.id          // Valid: direct field access
+let userName = user.name      // Valid: direct field access
+let userEmail = user.email    // Valid: direct field access
+```
+
+**❌ FORBIDDEN - Field Access on `any` Types:**
+```osprey
+fn processAnyValue(value: any) -> string = {
+    // ERROR: Cannot access fields on 'any' type
+    let result = value.name   // Compilation error
+    return result
+}
+
+// CORRECT: Use pattern matching for 'any' types
+fn processAnyValue(value: any) -> string = match value {
+    person: { name } => person.name        // Extract field via pattern matching
+    user: User { name } => name           // Type-specific pattern matching
+    _ => "unknown"
+}
+```
+
+**❌ FORBIDDEN - Field Access on Result Types:**
+```osprey
+type Person = { 
+    name: string
+} where validatePerson
+
+fn validatePerson(person: Person) -> Result<Person, string> = match person.name {
+    "" => Error("Name cannot be empty")
+    _ => Success(person)
+}
+
+let personResult = Person { name: "Alice" }  // Returns Result<Person, string>
+
+// ERROR: Cannot access fields on Result type
+let name = personResult.name    // Compilation error
+
+// CORRECT: Pattern match on Result first
+let name = match personResult {
+    Success { value } => value.name
+    Error { message } => "error"
+}
+```
+
+**❌ FORBIDDEN - Field Access on Union Types:**
+```osprey
+type Shape = Circle { radius: int } 
+           | Rectangle { width: int, height: int }
+
+let shape = Circle { radius: 5 }
+
+// ERROR: Cannot access fields on union type
+let radius = shape.radius     // Compilation error
+
+// CORRECT: Pattern match on union type first
+let area = match shape {
+    Circle { radius } => 3.14 * radius * radius
+    Rectangle { width, height } => width * height
+}
+```
+
+**Compilation Errors:**
+```osprey
+// ERROR: Unknown field
+let invalid = Point { x: 10, z: 30 }  // 'z' not defined in Point
+
+// ERROR: Missing required field  
+let incomplete = Person { name: "Alice" }  // Missing 'age' and 'active'
+
+// ERROR: Type mismatch
+let wrongType = Point { x: "ten", y: 20 }  // 'x' expects int, got string
+
+// ERROR: Field access on non-record type
+let num = 42
+let invalid = num.x  // Cannot access field on non-record type
+
+// ERROR: Cannot assign to fields (immutable)
+let counter = Counter { value: 0 }
+counter.value = 5    // Compilation error
+
+// CORRECT: Create new instance with updated value
+let newCounter = counter { value: 5 }
+```
 
 ### 5.2 Built-in Error Types
 
@@ -279,16 +490,8 @@ These operations are safe because they return `Result` types that encapsulate po
 
 #### Pattern Matching Requirement
 
-**Pattern Matching on `any` Types:**
-```osprey
-// Pattern matching on any type
-match anyValue {
-    value: Int => handleInteger(value)
-    value: String => handleString(value)
-    value: Bool => handleBoolean(value)
-    _ => handleUnknownType()
-}
-```
+**Pattern Matching Requirement:**
+All `any` values must be accessed through pattern matching to extract their actual types (see [Pattern Matching](0008-PatternMatching.md) for complete syntax and examples).
 
 #### Direct Access Compilation Errors
 
@@ -311,42 +514,11 @@ let converted = toString(value)  // where value: any
 ```
 
 **✅ REQUIRED - Pattern Matching:**
-```osprey
-fn processAny(value: any) -> int = match value {
-    num: Int => num + 1
-    str: String => length(str)
-    _ => 0
-}
-
-fn getLength(value: any) -> int = match value {
-    str: String => length(str)
-    arr: Array<T> => arrayLength(arr)
-    _ => 0
-}
-
-let result = match someAnyFunction() {
-    value: Int => value
-    _ => 0
-}
-```
+Use pattern matching to safely extract values from `any` types (complete examples in [Pattern Matching](0008-PatternMatching.md)).
 
 #### Function Return Type Handling
 
-Functions returning `any` types require immediate pattern matching:
-
-```osprey
-// Function that returns any
-extern fn parseValue(input: string) -> any
-
-// ERROR: Direct usage
-let number = parseValue("42") + 1
-
-// CORRECT: Pattern matching
-let number = match parseValue("42") {
-    value: Int => value + 1
-    _ => 0
-}
-```
+Functions returning `any` types require immediate pattern matching (see [Pattern Matching](0008-PatternMatching.md)).
 
 #### Type Annotation Pattern Syntax
 
@@ -399,18 +571,16 @@ Pattern matching on `any` types **MUST** be exhaustive:
 
 ```osprey
 // Non-exhaustive (ERROR)
-match anyValue {
+match anyValue 
     value: Int => processInt(value)
     value: String => processString(value)
     // ERROR: missing wildcard or Bool case
-}
 
 // Exhaustive (CORRECT)
-match anyValue {
+match anyValue 
     value: Int => processInt(value)
     value: String => processString(value)
     _ => handleOther()
-}
 ```
 
 #### Default Wildcard Behavior for Any Types
@@ -419,19 +589,17 @@ The wildcard pattern (`_`) in `any` type matching preserves the `any` type:
 
 ```osprey
 // Wildcard returns any type
-let result = match someAnyValue {
+let result = match someAnyValue 
     value: Int => processInt(value)    // Returns specific type
     value: String => processString(value)  // Returns specific type
     _ => someAnyValue  // Returns any type (unchanged)
-}
 // result type: any (due to wildcard arm)
 
 // To avoid any type in result, handle all expected cases explicitly
-let result = match someAnyValue {
+let result = match someAnyValue 
     value: Int => processInt(value)
     value: String => processString(value)
     _ => defaultInt()  // Convert to specific type
-}
 // result type: Int (all arms return Int)
 ```
 
@@ -444,11 +612,10 @@ The compiler **MUST** validate that pattern types are actually possible for the 
 // Function known to return Int or String
 extern fn parseIntOrString(input: string) -> any
 
-match parseIntOrString("42") {
+match parseIntOrString("42") 
     value: Int => value + 1
     value: String => length(value)
     _ => 0  // Valid: handles any unexpected types
-}
 ```
 
 **❌ INVALID - Impossible Type Patterns:**
@@ -456,12 +623,11 @@ match parseIntOrString("42") {
 // Function documented to only return Int or String
 extern fn parseIntOrString(input: string) -> any
 
-match parseIntOrString("42") {
+match parseIntOrString("42") 
     value: Int => value + 1
     value: String => length(value)
     value: Bool => if value then 1 else 0  // ERROR: Bool not possible
     _ => 0
-}
 // ERROR: pattern 'Bool' is not a possible type for function 'parseIntOrString'
 ```
 

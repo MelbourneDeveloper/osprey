@@ -236,10 +236,10 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 	// length function
 	r.functions[LengthFunc] = &BuiltInFunction{
 		Name:        LengthFunc,
-		Signature:   "length(s: string) -> int",
+		Signature:   "length(text: string) -> int",
 		Description: "Returns the length of a string.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to measure"},
+			{Name: "text", Type: &ConcreteType{name: TypeString}, Description: "The string to measure"},
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryString,
@@ -307,11 +307,11 @@ func (r *BuiltInFunctionRegistry) registerFunctionalFunctions() {
 	// forEach function
 	r.functions[ForEachFunc] = &BuiltInFunction{
 		Name:        ForEachFunc,
-		Signature:   "forEach(iterator: iterator, fn: function) -> int",
+		Signature:   "forEach(iterator: iterator, function: function) -> int",
 		Description: "Applies a function to each element in an iterator.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "iterator", Type: &ConcreteType{name: "Iterator<T>"}, Description: "The iterator to process"},
-			{Name: "fn", Type: &ConcreteType{name: "T -> Unit"}, Description: "The function to apply to each element"},
+			{Name: "function", Type: &ConcreteType{name: "T -> Unit"}, Description: "The function to apply to each element"},
 		},
 		ReturnType:   &ConcreteType{name: TypeUnit},
 		Category:     CategoryFunctional,
@@ -555,10 +555,10 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	// httpCreateClient function
 	r.functions[HTTPCreateClientFunc] = &BuiltInFunction{
 		Name:        HTTPCreateClientFunc,
-		Signature:   "httpCreateClient(baseUrl: string, timeout: int) -> int",
+		Signature:   "httpCreateClient(base_url: string, timeout: int) -> int",
 		Description: "Creates an HTTP client for making requests to a base URL.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "baseUrl", Type: &ConcreteType{name: TypeString},
+			{Name: "base_url", Type: &ConcreteType{name: TypeString},
 				Description: "Base URL for requests (e.g., \"http://api.example.com\")"},
 			{Name: "timeout", Type: &ConcreteType{name: TypeInt}, Description: "Request timeout in milliseconds"},
 		},
