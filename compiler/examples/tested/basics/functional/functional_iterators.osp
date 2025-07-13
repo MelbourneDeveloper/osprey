@@ -2,10 +2,10 @@
 // Demonstrates: range, forEach, map, filter, fold with pipe operator |>
 
 // Helper functions for transformations
-fn double(x: int) -> int = x * 2
-fn square(x: int) -> int = x * x
-fn isEven(x: int) -> int = 1  // Simplified for testing
-fn add(a: int, b: int) -> int = a + b
+fn double(x: int) = x * 2
+fn square(x: int) = x * x
+fn isEven(x: int) = 1  // Simplified for testing
+fn add(a: int, b: int) = a + b
 
 print("=== Functional Iterator Examples ===")
 

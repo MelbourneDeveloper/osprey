@@ -296,6 +296,14 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return &ConcreteType{name: TypeString}, nil
 	case *ast.SpawnExpression, *ast.AwaitExpression, *ast.YieldExpression:
 		return ti.inferConcurrencyExpression(e)
+	case *ast.ChannelExpression, *ast.ChannelCreateExpression:
+		return ti.inferChannelExpression(e)
+	case *ast.ChannelSendExpression, *ast.ChannelRecvExpression:
+		return ti.inferChannelOperationExpression(e)
+	case *ast.SelectExpression:
+		return ti.inferSelectExpression(e)
+	case *ast.ModuleAccessExpression:
+		return ti.inferModuleAccessExpression(e)
 	case *ast.BinaryExpression:
 		return ti.inferBinaryExpression(e)
 	case *ast.FieldAccessExpression:
@@ -1130,4 +1138,63 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 
 		ti.env.Set(fn.Name, functionType)
 	}
+}
+
+// inferChannelExpression infers types for channel creation expressions
+func (ti *TypeInferer) inferChannelExpression(_ ast.Expression) (Type, error) {
+	// Both ChannelExpression and ChannelCreateExpression return Channel type
+	return &ConcreteType{name: "Channel"}, nil
+}
+
+// inferChannelOperationExpression infers types for channel operations (send/recv)
+func (ti *TypeInferer) inferChannelOperationExpression(expr ast.Expression) (Type, error) {
+	switch e := expr.(type) {
+	case *ast.ChannelSendExpression:
+		// Channel send returns bool (success/failure)
+		// TODO: Type check the channel and value types
+		_, err := ti.InferType(e.Channel)
+		if err != nil {
+			return nil, err
+		}
+		_, err = ti.InferType(e.Value)
+		if err != nil {
+			return nil, err
+		}
+		return &ConcreteType{name: TypeBool}, nil
+	case *ast.ChannelRecvExpression:
+		// Channel recv returns the value type (simplified as any for now)
+		// TODO: Proper generic channel types
+		_, err := ti.InferType(e.Channel)
+		if err != nil {
+			return nil, err
+		}
+		return &ConcreteType{name: "any"}, nil
+	default:
+		return nil, fmt.Errorf("%w: %T", ErrUnsupportedExpression, expr)
+	}
+}
+
+// inferSelectExpression infers types for select expressions
+func (ti *TypeInferer) inferSelectExpression(e *ast.SelectExpression) (Type, error) {
+	// Select expression returns the type of its arms
+	// For now, assume all arms return the same type
+	if len(e.Arms) == 0 {
+		return &ConcreteType{name: TypeUnit}, nil
+	}
+
+	// Infer type from first arm
+	firstArmType, err := ti.InferType(e.Arms[0].Expression)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Verify all arms have compatible types
+	return firstArmType, nil
+}
+
+// inferModuleAccessExpression infers types for module access expressions
+func (ti *TypeInferer) inferModuleAccessExpression(_ *ast.ModuleAccessExpression) (Type, error) {
+	// Module access returns any type for now
+	// TODO: Implement proper module type system
+	return &ConcreteType{name: "any"}, nil
 }

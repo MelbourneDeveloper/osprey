@@ -28,8 +28,8 @@ print("Awaiting fiber 2 result: ${await(fiber2)}")  // Shows real concurrency
 // Test 3: Real channel operations from C runtime  
 print("\nTest 3: Real channel operations:")
 
-let channel1 = Channel<Int> { capacity: 1 }
-let channel2 = Channel<Int> { capacity: 1 }
+let channel1 = Channel<int> { capacity: 1 }
+let channel2 = Channel<int> { capacity: 1 }
 
 print("Channel 1 ID: ${channel1}")  // Should show channel ID
 print("Channel 2 ID: ${channel2}")  // Should show different channel ID
@@ -44,7 +44,7 @@ print("Received value: ${recvValue}") // Should be 100
 // Test 4: Yield operations
 print("\nTest 4: Real yield operations:")
 
-fn yieldingFunction() -> Int = yield(42) + yield(84) + yield(126)
+fn yieldingFunction() -> int = yield(42) + yield(84) + yield(126)
 
 let yieldFiber = spawn yieldingFunction()
 print("Yield fiber result: ${await(yieldFiber)}")  // Should be 42+84+126=252
