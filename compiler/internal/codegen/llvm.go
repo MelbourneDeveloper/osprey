@@ -36,7 +36,7 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		if err := g.validateFunctionCallArguments(funcName, callExpr); err != nil {
 			return nil, err
 		}
-		
+
 		// Validate named arguments requirement for multi-parameter functions
 		if err := g.validateNamedArguments(funcName, callExpr); err != nil {
 			return nil, err
@@ -338,18 +338,18 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 	isTrue := currentBlock.NewICmp(enum.IPredNE, arg, zero)
 	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
 
-	// True case - return "1"
+	// True case - return "true"
 	g.builder = trueBlock
-	trueStr := constant.NewCharArrayFromString("1\x00")
+	trueStr := constant.NewCharArrayFromString("true\x00")
 	trueGlobal := g.module.NewGlobalDef("", trueStr)
 	truePtr := trueBlock.NewGetElementPtr(trueStr.Typ, trueGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
 	trueBlock.NewBr(endBlock)
 
-	// False case - return "0"
+	// False case - return "false"
 	g.builder = falseBlock
-	falseStr := constant.NewCharArrayFromString("0\x00")
+	falseStr := constant.NewCharArrayFromString("false\x00")
 	falseGlobal := g.module.NewGlobalDef("", falseStr)
 	falsePtr := falseBlock.NewGetElementPtr(falseStr.Typ, falseGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
@@ -531,14 +531,68 @@ func (g *LLVMGenerator) extractPatternFields(pattern ast.Pattern, discriminant v
 	if pattern.Constructor == "*" {
 		// For structural matching, extract fields from the object
 		g.extractStructuralFields(pattern.Fields, discriminant)
-	} else if _, exists := g.unionVariants[pattern.Constructor]; exists {
-		// FIXED: Handle discriminated union field extraction
-		err := g.extractDiscriminatedUnionFields(discriminant, pattern, g.variables)
-		if err != nil {
-			// If field extraction fails, bind fields to zero values
-			g.bindFieldsToZeroValues(pattern.Fields)
+		return
+	}
+
+	// Try to extract fields for record types (single-variant)
+	if g.extractRecordTypeFields(pattern, discriminant) {
+		return
+	}
+
+	// Try to extract fields for discriminated unions (multi-variant)
+	if g.extractDiscriminatedUnionTypeFields(pattern, discriminant) {
+		return
+	}
+
+	// If no type found, bind fields to zero values
+	g.bindFieldsToZeroValues(pattern.Fields)
+}
+
+// extractRecordTypeFields extracts fields for single-variant types
+func (g *LLVMGenerator) extractRecordTypeFields(pattern ast.Pattern, discriminant value.Value) bool {
+	for _, typeDecl := range g.typeDeclarations {
+		if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
+			if typeDecl.Variants[0].Name == pattern.Constructor {
+				g.extractRecordFields(pattern, discriminant, typeDecl.Variants[0])
+				return true
+			}
 		}
 	}
+	return false
+}
+
+// extractDiscriminatedUnionTypeFields extracts fields for multi-variant discriminated unions
+func (g *LLVMGenerator) extractDiscriminatedUnionTypeFields(pattern ast.Pattern, discriminant value.Value) bool {
+	if _, exists := g.unionVariants[pattern.Constructor]; !exists {
+		return false
+	}
+
+	// Check if this is actually a multi-variant union
+	if !g.isMultiVariantType(pattern.Constructor) {
+		return false
+	}
+
+	// Handle discriminated union field extraction
+	err := g.extractDiscriminatedUnionFields(discriminant, pattern, g.variables)
+	if err != nil {
+		// If field extraction fails, bind fields to zero values
+		g.bindFieldsToZeroValues(pattern.Fields)
+	}
+	return true
+}
+
+// isMultiVariantType checks if a pattern constructor belongs to a multi-variant type
+func (g *LLVMGenerator) isMultiVariantType(constructorName string) bool {
+	for _, typeDecl := range g.typeDeclarations {
+		if len(typeDecl.Variants) > 1 {
+			for _, variant := range typeDecl.Variants {
+				if variant.Name == constructorName {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // extractStructuralFields extracts fields for structural matching
@@ -558,6 +612,71 @@ func (g *LLVMGenerator) extractStructuralFields(fields []string, discriminant va
 func (g *LLVMGenerator) bindFieldsToZeroValues(fields []string) {
 	for _, fieldName := range fields {
 		g.variables[fieldName] = constant.NewInt(types.I64, 0)
+	}
+}
+
+// extractRecordFields extracts fields from a record type (single-variant struct)
+func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant value.Value, variant ast.TypeVariant) {
+	// For record types, the discriminant is a pointer to the struct
+	discriminantType := discriminant.Type()
+	var structType *types.StructType
+	var isPointer bool
+
+	if ptrType, ok := discriminantType.(*types.PointerType); ok {
+		if st, ok := ptrType.ElemType.(*types.StructType); ok {
+			structType = st
+			isPointer = true
+		}
+	} else if st, ok := discriminantType.(*types.StructType); ok {
+		structType = st
+		isPointer = false
+	}
+
+	if structType == nil {
+		// If not a struct, bind fields to zero values
+		g.bindFieldsToZeroValues(pattern.Fields)
+		return
+	}
+
+	// Extract each field from the struct using positional mapping
+	for i, field := range variant.Fields {
+		// Check if this field position has a corresponding pattern field
+		if i < len(pattern.Fields) {
+			patternFieldName := pattern.Fields[i]
+
+			// Get pointer to the field
+			var fieldPtr value.Value
+			if isPointer {
+				// Discriminant is already a pointer to the struct
+				fieldPtr = g.builder.NewGetElementPtr(
+					structType,
+					discriminant,
+					constant.NewInt(types.I32, 0),
+					constant.NewInt(types.I32, int64(i)),
+				)
+			} else {
+				// Discriminant is a struct value, need to get its address first
+				structAddr := g.builder.NewAlloca(structType)
+				g.builder.NewStore(discriminant, structAddr)
+				fieldPtr = g.builder.NewGetElementPtr(
+					structType,
+					structAddr,
+					constant.NewInt(types.I32, 0),
+					constant.NewInt(types.I32, int64(i)),
+				)
+			}
+
+			// Load the field value
+			fieldType := structType.Fields[i]
+			fieldValue := g.builder.NewLoad(fieldType, fieldPtr)
+
+			// Bind the pattern variable to the field value
+			g.variables[patternFieldName] = fieldValue
+
+			// Also register the variable in the Hindley-Milner type environment
+			concreteType := &ConcreteType{name: field.Type}
+			g.typeInferer.env.Set(patternFieldName, concreteType)
+		}
 	}
 }
 
@@ -785,14 +904,19 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 
 	// Extract each field from the data area
 	offset := int64(0)
-	for _, field := range variant.Fields {
-		// Check if this field is requested in the pattern
+
+	// CRITICAL FIX: Pattern fields are provided as a mapping from variant field names to pattern variable names
+	// For example: pattern.Fields = ["d", "dur"] corresponds to variant fields ["damage", "durability"]
+	// We need to map them correctly based on position/order
+
+	for i, field := range variant.Fields {
+		// Check if this field position has a corresponding pattern field
+		var patternFieldName string
 		fieldRequested := false
-		for _, patternField := range pattern.Fields {
-			if patternField == field.Name {
-				fieldRequested = true
-				break
-			}
+
+		if i < len(pattern.Fields) {
+			patternFieldName = pattern.Fields[i]
+			fieldRequested = true
 		}
 
 		if fieldRequested {
@@ -813,9 +937,13 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 			// Load the field value
 			fieldValue := g.builder.NewLoad(fieldType, fieldPtr)
 
-			// Bind the field value to the pattern variable
-			variables[field.Name] = fieldValue
-			// Type tracking is now handled by Hindley-Milner inference
+			// CRITICAL FIX: Bind using the pattern variable name, not the variant field name
+			variables[patternFieldName] = fieldValue
+
+			// CRITICAL FIX: Also register the variable in the Hindley-Milner type environment
+			// Infer the type from the field definition
+			concreteType := &ConcreteType{name: field.Type}
+			g.typeInferer.env.Set(patternFieldName, concreteType)
 		}
 
 		// Move to next field offset regardless of whether it was requested

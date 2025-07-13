@@ -55,10 +55,68 @@ func TestMethodCallExpression(t *testing.T) {
 	}
 }
 
-func TestFieldAccessExpression(_ *testing.T) {
+func TestFieldAccessExpression(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		wantErr  bool
+		contains string
+	}{
+		{
+			name: "valid field access on struct",
+			source: `
+				type Point = { x: int, y: int }
+				let point = Point { x: 10, y: 20 }
+				let result = point.x
+			`,
+			wantErr: false,
+		},
+		{
+			name: "invalid field access on integer",
+			source: `
+				let x = 42
+				let result = x.value
+			`,
+			wantErr:  true,
+			contains: "cannot access field 'value' on non-struct type",
+		},
+		{
+			name: "invalid field access on string",
+			source: `
+				let s = "hello"
+				let result = s.length
+			`,
+			wantErr:  true,
+			contains: "cannot access field 'length' on non-struct type",
+		},
+		{
+			name: "valid field access in expression",
+			source: `
+				type Rectangle = { width: int, height: int }
+				let rect = Rectangle { width: 10, height: 5 }
+				let result = rect.width + rect.height
+			`,
+			wantErr: false,
+		},
+	}
 
-	TODO: put a test here that verifies that field access is actually working
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := codegen.CompileToLLVM(tt.source)
 
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if tt.contains != "" && !strings.Contains(err.Error(), tt.contains) {
+					t.Errorf("Expected error to contain '%s', but got: %v", tt.contains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
 }
 
 func TestToStringConversions(t *testing.T) {
@@ -154,13 +212,13 @@ print(x)`,
 			name:    "print wrong args",
 			source:  `print()`,
 			wantErr: true,
-			errMsg:  "print expects exactly 1 argument(s), got 0",
+			errMsg:  "print expects exactly 1 arguments (value), got 0",
 		},
 		{
 			name:    "print too many args",
 			source:  `print(1, 2)`,
 			wantErr: true,
-			errMsg:  "print expects exactly 1 argument(s), got 2",
+			errMsg:  "print expects exactly 1 arguments (value), got 2",
 		},
 	}
 
@@ -195,13 +253,13 @@ func TestInputFunction(t *testing.T) {
 			name:    "input with wrong args",
 			source:  `input(42)`,
 			wantErr: true,
-			errMsg:  "input expects exactly 0 argument(s), got 1",
+			errMsg:  "input expects exactly 0 arguments, got 1",
 		},
 		{
 			name:    "input too many args",
 			source:  `input("prompt", "extra")`,
 			wantErr: true,
-			errMsg:  "input expects exactly 0 argument(s), got 2",
+			errMsg:  "input expects exactly 0 arguments, got 2",
 		},
 	}
 

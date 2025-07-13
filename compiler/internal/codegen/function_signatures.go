@@ -299,6 +299,10 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 		recordType := &ConcreteType{name: typeDecl.Name}
 		g.typeInferer.env.Set(typeDecl.Name, recordType)
 
+		// Register the variant name in unionVariants for pattern matching
+		// This allows pattern matching to work correctly for single-variant types with fields
+		g.unionVariants[variant.Name] = 0 // Use 0 as discriminant for single-variant types
+
 		// Store field names for field access
 		fieldNames := make([]string, len(variant.Fields))
 		for i, field := range variant.Fields {

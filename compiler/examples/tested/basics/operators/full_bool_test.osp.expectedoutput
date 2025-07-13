@@ -1,8 +1,8 @@
 === Boolean Test Results ===
 5 > 3:
-1
+true
 10 == 10:
-1
+true
 true literal:
 true
 false literal:

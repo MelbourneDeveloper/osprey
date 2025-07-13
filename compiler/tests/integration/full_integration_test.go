@@ -17,6 +17,7 @@ import (
 	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
+// ErrTestExecutionTimeout is returned when a test execution times out
 var ErrTestExecutionTimeout = errors.New("test execution timeout (30s) - no hanging allowed")
 
 // TestMain runs before all tests in this package and builds the compiler ONCE.

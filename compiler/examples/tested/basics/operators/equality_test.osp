@@ -1,4 +1,4 @@
-fn isEqual(x: int, y: int) -> Result<bool, MathError> = x == y
+fn isEqual(x: int, y: int) = x == y
 
 let result = isEqual(x: 5, y: 5)
 match result {

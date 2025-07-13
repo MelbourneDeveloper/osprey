@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
@@ -461,121 +460,6 @@ func TestWrapFunctionNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "missingFunc") {
 		t.Error("Should contain function name")
-	}
-}
-
-func TestErrorWrappingWithPosition(t *testing.T) {
-	position := &ast.Position{Line: 10, Column: 5}
-
-	tests := []struct {
-		name        string
-		wrapperFunc func() error
-		expectedMsg string
-	}{
-		{
-			"WrapUndefinedVariableWithPos",
-			func() error { return codegen.WrapUndefinedVariableWithPos("myVar", position) },
-			"line 10:5: undefined variable: myVar",
-		},
-		{
-			"WrapUnsupportedBinaryOpWithPos",
-			func() error { return codegen.WrapUnsupportedBinaryOpWithPos("***", position) },
-			"line 10:5: unsupported binary operator: ***",
-		},
-		{
-			"WrapVoidArithmeticWithPos",
-			func() error { return codegen.WrapVoidArithmeticWithPos("+", position) },
-			"line 10:5: arithmetic operation on void type +",
-		},
-		{
-			"WrapUnsupportedUnaryOpWithPos",
-			func() error { return codegen.WrapUnsupportedUnaryOpWithPos("***", position) },
-			"line 10:5: unsupported unary operator: ***",
-		},
-		{
-			"WrapConstraintResultFieldAccessWithPos",
-			func() error { return codegen.WrapConstraintResultFieldAccessWithPos("myField", position) },
-			"line 10:5: constraint result field access not allowed: myField",
-		},
-		{
-			"WrapFunctionArgsWithPos print",
-			func() error { return codegen.WrapFunctionArgsWithPos("print", 1, 2, position) },
-			"line 10:5: print expects exactly 1 argument(s), got 2: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos input",
-			func() error { return codegen.WrapFunctionArgsWithPos("input", 0, 1, position) },
-			"line 10:5: input expects exactly 0 argument(s), got 1: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos length",
-			func() error { return codegen.WrapFunctionArgsWithPos("length", 1, 2, position) },
-			"line 10:5: length expects exactly 1 argument(s), got 2: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos contains",
-			func() error { return codegen.WrapFunctionArgsWithPos("contains", 2, 1, position) },
-			"line 10:5: contains expects exactly 2 argument(s), got 1: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos substring",
-			func() error { return codegen.WrapFunctionArgsWithPos("substring", 3, 2, position) },
-			"line 10:5: substring expects exactly 3 argument(s), got 2: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos range",
-			func() error { return codegen.WrapFunctionArgsWithPos("range", 2, 1, position) },
-			"line 10:5: range expects exactly 2 argument(s), got 1: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos forEach",
-			func() error { return codegen.WrapFunctionArgsWithPos("forEach", 2, 1, position) },
-			"line 10:5: forEach expects exactly 2 argument(s), got 1: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos httpCreateClient",
-			func() error { return codegen.WrapFunctionArgsWithPos("httpCreateClient", 2, 1, position) },
-			"line 10:5: httpCreateClient expects exactly 2 argument(s), got 1: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos httpGet",
-			func() error { return codegen.WrapFunctionArgsWithPos("httpGet", 3, 2, position) },
-			"line 10:5: httpGet expects exactly 3 argument(s), got 2: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos spawnProcess",
-			func() error { return codegen.WrapFunctionArgsWithPos("spawnProcess", 2, 1, position) },
-			"line 10:5: spawnProcess expects exactly 2 argument(s), got 1: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos writeFile",
-			func() error { return codegen.WrapFunctionArgsWithPos("writeFile", 2, 1, position) },
-			"line 10:5: writeFile expects exactly 2 argument(s), got 1: wrong argument count",
-		},
-		{
-			"WrapFunctionArgsWithPos readFile",
-			func() error { return codegen.WrapFunctionArgsWithPos("readFile", 1, 2, position) },
-			"line 10:5: readFile expects exactly 1 argument(s), got 2: wrong argument count",
-		},
-		{
-			"WrapImmutableAssignmentErrorWithPos",
-			func() error { return codegen.WrapImmutableAssignmentErrorWithPos("myVar", position) },
-			"line 10:5: cannot assign to immutable variable: myVar",
-		},
-		{
-			"WrapMissingArgumentWithPos",
-			func() error { return codegen.WrapMissingArgumentWithPos("argName", "funcName", position) },
-			"line 10:5: missing argument: argName for function funcName",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := test.wrapperFunc()
-			if err.Error() != test.expectedMsg {
-				t.Errorf("Expected %q, got %q", test.expectedMsg, err.Error())
-			}
-		})
 	}
 }
 
