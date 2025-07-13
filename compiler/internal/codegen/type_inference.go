@@ -316,6 +316,10 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return ti.inferMethodCall(e)
 	case *ast.ListAccessExpression:
 		return ti.inferListAccess(e)
+	case *ast.PerformExpression:
+		return ti.inferPerformExpression(e)
+	case *ast.HandlerExpression:
+		return ti.inferHandlerExpression(e)
 	default:
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedExpression, expr)
 	}
@@ -395,7 +399,7 @@ func (ti *TypeInferer) unifyConcreteTypes(t1, t2 Type) error {
 		if ct1.name == ct2.name || ct1.name == TypeAny || ct2.name == TypeAny {
 			return nil
 		}
-		
+
 		// Special case: generic "Function" type should be compatible with any specific function signature
 		if ct1.name == TypeFunction && strings.HasPrefix(ct2.name, "fn(") {
 			return nil
@@ -403,7 +407,7 @@ func (ti *TypeInferer) unifyConcreteTypes(t1, t2 Type) error {
 		if ct2.name == TypeFunction && strings.HasPrefix(ct1.name, "fn(") {
 			return nil
 		}
-		
+
 		return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, ct1.name, ct2.name)
 	}
 
@@ -619,8 +623,6 @@ func (ti *TypeInferer) validateBuiltInFunctionArgs(funcName string, argCount int
 	return GlobalBuiltInRegistry.ValidateArguments(funcName, argCount, position)
 }
 
-
-
 // inferCallExpression infers types for call expressions
 func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) {
 	// Check for built-in functions and validate argument count BEFORE type inference
@@ -730,7 +732,12 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 
 	switch {
 	case isArithmeticOp(e.Operator):
-		// Arithmetic operations require Int operands and return Int
+		// CRITICAL FIX: Handle operator overloading for + operator
+		if e.Operator == "+" {
+			return ti.inferPlusOperation(leftType, rightType)
+		}
+
+		// Other arithmetic operations (-, *, /, %) require Int operands and return Int
 		intType := &ConcreteType{name: TypeInt}
 
 		// Both operands must be Int
@@ -765,6 +772,75 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedBinaryOp, e.Operator)
 	}
+}
+
+// inferPlusOperation handles operator overloading for the + operator
+// Supports both Int + Int (arithmetic) and String + String (concatenation)
+func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error) {
+	// Resolve types to their concrete forms
+	leftResolved := ti.prune(leftType)
+	rightResolved := ti.prune(rightType)
+
+	// Check if both operands are concrete string types
+	if leftConcrete, ok := leftResolved.(*ConcreteType); ok {
+		if rightConcrete, ok := rightResolved.(*ConcreteType); ok {
+			// Both are concrete types - check for string concatenation
+			if leftConcrete.name == TypeString && rightConcrete.name == TypeString {
+				return &ConcreteType{name: TypeString}, nil
+			}
+
+			// Both are concrete types - check for integer addition
+			if leftConcrete.name == TypeInt && rightConcrete.name == TypeInt {
+				return &ConcreteType{name: TypeInt}, nil
+			}
+		}
+	}
+
+	// Try string concatenation first if one operand is clearly a string
+	if ti.isStringType(leftResolved) || ti.isStringType(rightResolved) {
+		stringType := &ConcreteType{name: TypeString}
+		if err := ti.Unify(leftType, stringType); err == nil {
+			if err := ti.Unify(rightType, stringType); err == nil {
+				return stringType, nil
+			}
+		}
+	}
+
+	// Try integer addition if one operand is clearly an integer
+	if ti.isIntType(leftResolved) || ti.isIntType(rightResolved) {
+		intType := &ConcreteType{name: TypeInt}
+		if err := ti.Unify(leftType, intType); err == nil {
+			if err := ti.Unify(rightType, intType); err == nil {
+				return intType, nil
+			}
+		}
+	}
+
+	// Default case: try integer addition (for compatibility)
+	intType := &ConcreteType{name: TypeInt}
+	if err := ti.Unify(leftType, intType); err != nil {
+		return nil, fmt.Errorf("left operand of + must be Int or String: %w", err)
+	}
+	if err := ti.Unify(rightType, intType); err != nil {
+		return nil, fmt.Errorf("right operand of + must be Int or String: %w", err)
+	}
+	return intType, nil
+}
+
+// isStringType checks if a type is a string type
+func (ti *TypeInferer) isStringType(t Type) bool {
+	if concrete, ok := t.(*ConcreteType); ok {
+		return concrete.name == TypeString
+	}
+	return false
+}
+
+// isIntType checks if a type is an integer type
+func (ti *TypeInferer) isIntType(t Type) bool {
+	if concrete, ok := t.(*ConcreteType); ok {
+		return concrete.name == TypeInt
+	}
+	return false
 }
 
 // inferFieldAccess infers types for field access expressions
@@ -993,6 +1069,35 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 	return &ConcreteType{name: fmt.Sprintf("Result<%s, Error>", elementType.String())}, nil
 }
 
+// inferPerformExpression infers types for perform expressions
+func (ti *TypeInferer) inferPerformExpression(e *ast.PerformExpression) (Type, error) {
+	// Infer the types of the arguments
+	for _, arg := range e.Arguments {
+		_, err := ti.InferType(arg)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// For now, perform expressions typically return the result of the effect operation
+	// which could be various types depending on the effect declaration.
+	// We'll return a fresh type variable for now, but in a full implementation
+	// this would look up the effect declaration to get the correct return type
+	return ti.Fresh(), nil
+}
+
+// inferHandlerExpression infers types for handler expressions
+func (ti *TypeInferer) inferHandlerExpression(e *ast.HandlerExpression) (Type, error) {
+	// Infer the type of the body expression that the handler will execute
+	bodyType, err := ti.InferType(e.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// The type of a handler expression is the type of its body expression
+	return bodyType, nil
+}
+
 // initializeBuiltInFunctions adds built-in functions to the type environment using the unified registry
 func (ti *TypeInferer) initializeBuiltInFunctions() {
 	// Type constructors
@@ -1011,12 +1116,12 @@ func (ti *TypeInferer) initializeBuiltInFunctions() {
 		for i, param := range fn.ParameterTypes {
 			paramTypes[i] = param.Type
 		}
-		
+
 		functionType := &FunctionType{
 			paramTypes: paramTypes,
 			returnType: fn.ReturnType,
 		}
-		
+
 		ti.env.Set(fn.Name, functionType)
 	}
 }

@@ -1,1 +1,1 @@
-line 5:17 range expects exactly 2 arguments (start, end), got 0
+line 5:17: range expects exactly 2 argument(s), got 0: wrong argument count
