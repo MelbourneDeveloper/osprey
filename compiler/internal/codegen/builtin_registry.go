@@ -13,7 +13,8 @@ type BuiltInFunctionRegistry struct {
 // BuiltInFunction represents a complete built-in function definition
 type BuiltInFunction struct {
 	// Basic information
-	Name        string
+	Name        string // The Osprey name
+	CName       string // The function at the C level (if relevant). TODO: NULLABLE
 	Signature   string
 	Description string
 
@@ -64,6 +65,8 @@ const (
 	CategoryProcess
 	// CategoryIterator represents iterator functions
 	CategoryIterator
+	// CategoryFiber represents fiber and concurrency functions
+	CategoryFiber
 )
 
 // SecurityPermission represents security permissions required for a function
@@ -119,19 +122,19 @@ func (r *BuiltInFunctionRegistry) GetFunctionsByCategory(category FunctionCatego
 
 // IsProtectedFunction checks if a function name is protected (built-in)
 func (r *BuiltInFunctionRegistry) IsProtectedFunction(name string) bool {
-	fn, exists := r.functions[name]
+	fn, exists := r.GetFunction(name)
 	return exists && fn.IsProtected
 }
 
 // RequiresPermission checks if a function requires specific security permissions
 func (r *BuiltInFunctionRegistry) RequiresPermission(name string, permission SecurityPermission) bool {
-	fn, exists := r.functions[name]
+	fn, exists := r.GetFunction(name)
 	return exists && fn.SecurityFlag == permission
 }
 
 // ValidateArguments validates function arguments
 func (r *BuiltInFunctionRegistry) ValidateArguments(name string, argCount int, position *ast.Position) error {
-	fn, exists := r.functions[name]
+	fn, exists := r.GetFunction(name)
 	if !exists {
 		return nil // Not a built-in function
 	}
@@ -178,16 +181,22 @@ func (r *BuiltInFunctionRegistry) initializeFunctions() {
 
 	// System functions
 	r.registerSystemFunctions()
+
+	// Fiber functions
+	r.registerFiberFunctions()
 }
 
 // registerCoreIOFunctions registers core I/O functions
 func (r *BuiltInFunctionRegistry) registerCoreIOFunctions() {
 	// print function
 	r.functions[PrintFunc] = &BuiltInFunction{
-		Name:        PrintFunc,
+		Name: PrintFunc,
+		// 🪲
+		//TODO: Incorrect. Print accepts a string as the only parameter - not any.
 		Signature:   "print(value: any) -> int",
 		Description: "Prints a value to the console. Automatically converts the value to a string representation.",
 		ParameterTypes: []BuiltInParameter{
+			//TODO: Incorrect. Print accepts a string as the only parameter - not any.
 			{Name: "value", Type: &ConcreteType{name: TypeAny}, Description: "The value to print"},
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
@@ -867,6 +876,159 @@ func (r *BuiltInFunctionRegistry) registerSystemFunctions() {
 		SecurityFlag:   PermissionWebSocket,
 		Generator:      (*LLVMGenerator).generateWebSocketKeepAliveCall,
 		Example:        `webSocketKeepAlive()  // Blocks until Ctrl+C`,
+	}
+
+	// Channel operations
+	r.functions["send"] = &BuiltInFunction{
+		Name:        "send",
+		Signature:   "send(channel: Channel, value: any) -> int",
+		Description: "Sends a value to a channel. Returns 1 on success, 0 on failure.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "channel", Type: &ConcreteType{name: "Channel"}, Description: "Channel to send to"},
+			{Name: "value", Type: &ConcreteType{name: "any"}, Description: "Value to send"},
+		},
+		ReturnType:   &ConcreteType{name: TypeInt},
+		Category:     CategorySystem,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateChannelSendCall,
+		Example:      `let result = send(myChannel, 42)`,
+	}
+
+	r.functions["recv"] = &BuiltInFunction{
+		Name:        "recv",
+		Signature:   "recv(channel: Channel) -> any",
+		Description: "Receives a value from a channel. Blocks until a value is available.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "channel", Type: &ConcreteType{name: "Channel"}, Description: "Channel to receive from"},
+		},
+		ReturnType:   &ConcreteType{name: "any"},
+		Category:     CategorySystem,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateChannelRecvCall,
+		Example:      `let value = recv(myChannel)`,
+	}
+
+	r.functions["Channel"] = &BuiltInFunction{
+		Name:        "Channel",
+		Signature:   "Channel(capacity: int) -> Channel",
+		Description: "Creates a new channel with the specified capacity.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "capacity", Type: &ConcreteType{name: TypeInt}, Description: "Channel capacity"},
+		},
+		ReturnType:   &ConcreteType{name: "Channel"},
+		Category:     CategorySystem,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateChannelCreateCall,
+		Example:      `let ch = Channel(10)`,
+	}
+}
+
+// registerFiberFunctions registers fiber and concurrency functions
+func (r *BuiltInFunctionRegistry) registerFiberFunctions() {
+	// fiber_spawn function
+	r.functions["fiber_spawn"] = &BuiltInFunction{
+		Name:        "fiber_spawn",
+		CName:       "fiber_spawn",
+		Signature:   "fiber_spawn(fn: () -> any) -> Fiber",
+		Description: "Spawns a new fiber to execute the given function concurrently.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "fn", Type: &ConcreteType{name: "function"}, Description: "The function to execute in the fiber"},
+		},
+		ReturnType:   &ConcreteType{name: "Fiber"},
+		Category:     CategoryFiber,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateSpawnCall,
+		Example:      `let fiber = fiber_spawn(() -> print("Hello from fiber"))`,
+	}
+
+	// fiber_yield function
+	r.functions["fiber_yield"] = &BuiltInFunction{
+		Name:        "fiber_yield",
+		CName:       "fiber_yield",
+		Signature:   "fiber_yield(value: any) -> any",
+		Description: "Yields control to the fiber scheduler with an optional value.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "value", Type: &ConcreteType{name: "any"}, Description: "The value to yield"},
+		},
+		ReturnType:   &ConcreteType{name: "any"},
+		Category:     CategoryFiber,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateYieldCall,
+		Example:      `let result = fiber_yield(42)`,
+	}
+
+	// fiber_await function
+	r.functions["fiber_await"] = &BuiltInFunction{
+		Name:        "fiber_await",
+		CName:       "fiber_await",
+		Signature:   "fiber_await(fiber: Fiber) -> any",
+		Description: "Waits for a fiber to complete and returns its result.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "fiber", Type: &ConcreteType{name: "Fiber"}, Description: "The fiber to await"},
+		},
+		ReturnType:   &ConcreteType{name: "any"},
+		Category:     CategoryFiber,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateAwaitCall,
+		Example:      `let result = fiber_await(fiberHandle)`,
+	}
+
+	// Channel function
+	r.functions["Channel"] = &BuiltInFunction{
+		Name:        "Channel",
+		CName:       "channel_create",
+		Signature:   "Channel(capacity: int) -> Channel",
+		Description: "Creates a new channel with the specified capacity.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "capacity", Type: &ConcreteType{name: TypeInt}, Description: "The capacity of the channel"},
+		},
+		ReturnType:   &ConcreteType{name: "Channel"},
+		Category:     CategoryFiber,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateChannelCreateCall,
+		Example:      `let ch = Channel(10)`,
+	}
+
+	// send function
+	r.functions["send"] = &BuiltInFunction{
+		Name:        "send",
+		CName:       "channel_send",
+		Signature:   "send(channel: Channel, value: any) -> bool",
+		Description: "Sends a value to a channel.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "channel", Type: &ConcreteType{name: "Channel"}, Description: "The channel to send to"},
+			{Name: "value", Type: &ConcreteType{name: "any"}, Description: "The value to send"},
+		},
+		ReturnType:   &ConcreteType{name: "bool"},
+		Category:     CategoryFiber,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateChannelSendCall,
+		Example:      `let success = send(ch, 42)`,
+	}
+
+	// recv function
+	r.functions["recv"] = &BuiltInFunction{
+		Name:        "recv",
+		CName:       "channel_recv",
+		Signature:   "recv(channel: Channel) -> any",
+		Description: "Receives a value from a channel.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "channel", Type: &ConcreteType{name: "Channel"}, Description: "The channel to receive from"},
+		},
+		ReturnType:   &ConcreteType{name: "any"},
+		Category:     CategoryFiber,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateChannelRecvCall,
+		Example:      `let value = recv(ch)`,
 	}
 }
 

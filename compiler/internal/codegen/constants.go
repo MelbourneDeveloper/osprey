@@ -7,6 +7,8 @@ const (
 	FourArgs             = 4
 	FiveArgs             = 5
 	OneArg               = 1
+	HTTPMethodGet        = 0
+	HTTPMethodPost       = 1
 	HTTPMethodPut        = 2
 	HTTPMethodDelete     = 3
 	BufferSize1KB        = 1024
@@ -55,7 +57,7 @@ const (
 	FilterFunc         = "filter"
 	FoldFunc           = "fold"
 	MainFunctionName   = "main"
-	WebSocketKeepAlive = "webSocketKeepAlive"
+	WebSocketKeepAlive = "websocket_keep_alive"
 
 	// String utility functions
 	LengthFunc    = "length"
@@ -78,30 +80,30 @@ const (
 // HTTP Function names.
 const (
 	// HTTP Server functions.
-	HTTPCreateServerFunc = "httpCreateServer"
-	HTTPListenFunc       = "httpListen"
-	HTTPStopServerFunc   = "httpStopServer"
+	HTTPCreateServerFunc = "http_create_server"
+	HTTPListenFunc       = "http_listen"
+	HTTPStopServerFunc   = "http_stop_server"
 
 	// HTTP Client functions.
-	HTTPCreateClientFunc = "httpCreateClient"
-	HTTPGetFunc          = "httpGet"
-	HTTPPostFunc         = "httpPost"
-	HTTPPutFunc          = "httpPut"
-	HTTPDeleteFunc       = "httpDelete"
-	HTTPRequestFunc      = "httpRequest"
-	HTTPCloseClientFunc  = "httpCloseClient"
+	HTTPCreateClientFunc = "http_create_client"
+	HTTPGetFunc          = "http_get"
+	HTTPPostFunc         = "http_post"
+	HTTPPutFunc          = "http_put"
+	HTTPDeleteFunc       = "http_delete"
+	HTTPRequestFunc      = "http_request"
+	HTTPCloseClientFunc  = "http_close_client"
 
 	// WebSocket functions.
-	WebSocketConnectFunc = "websocketConnect"
-	WebSocketSendFunc    = "websocketSend"
-	WebSocketCloseFunc   = "websocketClose"
+	WebSocketConnectFunc = "websocket_connect"
+	WebSocketSendFunc    = "websocket_send"
+	WebSocketCloseFunc   = "websocket_close"
 
 	// WebSocket Server functions.
-	WebSocketCreateServerFunc    = "websocketCreateServer"
-	WebSocketServerListenFunc    = "websocketServerListen"
-	WebSocketServerSendFunc      = "websocketServerSend"
-	WebSocketServerBroadcastFunc = "websocketServerBroadcast"
-	WebSocketStopServerFunc      = "websocketStopServer"
+	WebSocketCreateServerFunc    = "websocket_create_server"
+	WebSocketServerListenFunc    = "websocket_server_listen"
+	WebSocketServerSendFunc      = "websocket_server_send"
+	WebSocketServerBroadcastFunc = "websocket_server_broadcast"
+	WebSocketStopServerFunc      = "websocket_stop_server"
 )
 
 // Pattern matching constants.
@@ -121,3 +123,13 @@ const (
 	HTTPErrorParse      = -4
 	HTTPErrorServer     = -5
 )
+
+// Constants for argument counts
+const (
+	// Only keep truly unique constants that aren't function argument counts
+	MaxFunctionParams = 10
+	DefaultBufferSize = 1024
+)
+
+// NOTE: Function argument counts have been moved to the unified built-in function registry
+// (builtin_registry.go). Use len(GlobalBuiltInRegistry.GetFunction(name).ParameterTypes) instead.

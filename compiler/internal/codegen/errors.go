@@ -117,6 +117,11 @@ var (
 
 	// Fiber-related errors
 	ErrAwaitTypeMismatch = errors.New("await can only be used on Fiber types")
+
+	// Channel-related errors
+	ErrChannelSendFunctionNotFound  = errors.New("channel send function not found")
+	ErrChannelRecvFunctionNotFound  = errors.New("channel recv function not found")
+	ErrChannelCreateInvalidArgCount = errors.New("channel create invalid argument count")
 )
 
 // Static error definitions for match expressions
@@ -316,6 +321,21 @@ func WrapHTTPRequestWrongArgs(argCount int) error {
 func WrapHTTPCloseClientWrongArgs(argCount int) error {
 	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCloseClientFunc)
 	return WrapWrongArgCount("httpCloseClient", len(fn.ParameterTypes), argCount)
+}
+
+// WrapHTTPFunctionWrongArgs wraps errors for wrong number of HTTP function arguments
+func WrapHTTPFunctionWrongArgs(functionName string, expected, actual int) error {
+	return WrapWrongArgCount(functionName, expected, actual)
+}
+
+// WrapHTTPFunctionNotFound wraps errors for HTTP function not found
+func WrapHTTPFunctionNotFound(functionName string) error {
+	return WrapUndefinedFunction(functionName)
+}
+
+// WrapHTTPFunctionMissingNamedArg wraps errors for missing named arguments in HTTP functions
+func WrapHTTPFunctionMissingNamedArg(functionName, argName string) error {
+	return WrapMissingArgument(argName, functionName)
 }
 
 // WrapWebSocketConnectWrongArgs wraps errors for wrong number of WebSocket connect arguments
