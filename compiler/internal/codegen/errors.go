@@ -46,6 +46,12 @@ var (
 	ErrCannotExtractField         = errors.New("cannot extract field from non-struct type")
 	ErrDiscriminantNotPointer     = errors.New("discriminant is not a pointer type")
 	ErrDiscriminantNotTaggedUnion = errors.New("discriminant is not a tagged union")
+	ErrFieldAccessOnInteger       = errors.New("cannot access field on integer type")
+	ErrFieldAccessOnString        = errors.New("cannot access field on string type")
+	ErrFieldAccessOnBoolean       = errors.New("cannot access field on boolean type")
+	ErrFieldAccessOnNonStruct     = errors.New("cannot access field on non-struct type")
+	ErrFieldAccessOnUnknownStruct = errors.New("cannot access field on unknown struct type")
+	ErrFieldNotFoundOnType        = errors.New("field not found on type")
 
 	// Parse errors
 	ErrParseTreeNil   = errors.New("parse tree is nil")
@@ -73,7 +79,6 @@ var (
 	ErrUnsupportedStatement = errors.New("unsupported statement")
 	ErrUndefinedVariable    = errors.New("undefined variable")
 	ErrUnsupportedBinaryOp  = errors.New("unsupported binary operator") // Alias for ErrUnsupportedBinaryOperator
-	ErrFieldAccessNotImpl   = errors.New("field access not implemented")
 
 	ErrMethodNotImpl         = errors.New("method not implemented")
 	ErrNoToStringForFunc     = errors.New("no toString implementation for function")
@@ -424,20 +429,6 @@ func WrapFunctionNotDeclared(funcName string) error {
 // WrapUndefinedVariable wraps undefined variable errors
 func WrapUndefinedVariable(varName string) error {
 	return fmt.Errorf("%w: %s", ErrUndefinedVariable, varName)
-}
-
-// WrapFieldAccessNotImpl wraps field access not implemented errors
-func WrapFieldAccessNotImpl(fieldName string) error {
-	return fmt.Errorf("%w: %s", ErrFieldAccessNotImpl, fieldName)
-}
-
-// WrapFieldAccessNotImplWithPos wraps field access errors with position information
-func WrapFieldAccessNotImplWithPos(fieldName string, pos interface{}) error {
-	if position, ok := pos.(*ast.Position); ok && position != nil {
-		return fmt.Errorf("line %d:%d: %w: %s",
-			position.Line, position.Column, ErrFieldAccessNotImpl, fieldName)
-	}
-	return fmt.Errorf("%w: %s", ErrFieldAccessNotImpl, fieldName)
 }
 
 // WrapWrongArgCount wraps wrong argument count errors

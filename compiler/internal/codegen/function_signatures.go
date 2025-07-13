@@ -295,6 +295,10 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 		structType := types.NewStruct(fieldTypes...)
 		g.typeMap[typeDecl.Name] = structType
 
+		// CRITICAL FIX: Register the record type in the type inference environment
+		recordType := &ConcreteType{name: typeDecl.Name}
+		g.typeInferer.env.Set(typeDecl.Name, recordType)
+
 		// Store field names for field access
 		fieldNames := make([]string, len(variant.Fields))
 		for i, field := range variant.Fields {
@@ -371,6 +375,10 @@ func (g *LLVMGenerator) declareDiscriminatedUnion(typeDecl *ast.TypeDeclaration)
 
 	g.typeMap[typeDecl.Name] = unionType
 
+	// CRITICAL FIX: Register the union type in the type inference environment
+	unionTypeInference := &ConcreteType{name: typeDecl.Name}
+	g.typeInferer.env.Set(typeDecl.Name, unionTypeInference)
+
 	// Store variant information for construction and pattern matching
 	for i, variant := range typeDecl.Variants {
 		g.unionVariants[variant.Name] = int64(i)
@@ -409,7 +417,7 @@ func (g *LLVMGenerator) getFieldType(fieldType string) types.Type {
 		return types.I8Ptr
 	case TypeInt, "Int": // "int" or "Int"
 		return types.I64
-	case TypeBool, "Bool": // "bool" or "Bool"  
+	case TypeBool, "Bool": // "bool" or "Bool"
 		return types.I1
 	default:
 		return types.I64 // default to i64

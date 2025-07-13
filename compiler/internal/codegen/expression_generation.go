@@ -691,28 +691,24 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 		isPointer = false
 	}
 
-	//TODO: DELETE THIS!!
-	//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
 	if structType == nil {
 		// Field access is not supported on non-struct types
-		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
+		return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on non-struct type", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
 	}
 
-	//TODO: DELETE THIS!!
-	//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
 	// Find the record type name that corresponds to this struct
 	recordTypeName := g.findRecordTypeForStruct(structType)
 	if recordTypeName == "" {
-
-		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
+		return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on unknown struct type", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
 	}
 
 	// Find the field index
 	fieldIndex := g.findFieldIndex(recordTypeName, fieldAccess.FieldName)
 	if fieldIndex == -1 {
-		//TODO: DELETE THIS!!
-		//FIELD ACCESS IS CRITICAL. IMPLEMENT IT!!
-		return nil, WrapFieldAccessNotImplWithPos(fieldAccess.FieldName, fieldAccess.Position)
+		return nil, fmt.Errorf("line %d:%d: type '%s' does not have field '%s'", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, recordTypeName, fieldAccess.FieldName)
 	}
 
 	// Get pointer to the field

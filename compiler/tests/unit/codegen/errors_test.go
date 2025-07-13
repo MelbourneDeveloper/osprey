@@ -38,7 +38,6 @@ func TestErrorDefinition(t *testing.T) {
 		{"ErrUnsupportedStatement", codegen.ErrUnsupportedStatement, "unsupported statement"},
 		{"ErrUndefinedVariable", codegen.ErrUndefinedVariable, "undefined variable"},
 		{"ErrUnsupportedBinaryOp", codegen.ErrUnsupportedBinaryOp, "unsupported binary operator"},
-		{"ErrFieldAccessNotImpl", codegen.ErrFieldAccessNotImpl, "field access not implemented"},
 		{"ErrRangeWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
 		{"ErrForEachWrongArgs", codegen.ErrWrongArgCount, "wrong argument count"},
 		{"ErrBuiltInTwoArgs", codegen.ErrBuiltInTwoArgs, "built-in function expects two arguments"},
@@ -67,7 +66,6 @@ func TestStaticErrors(t *testing.T) {
 		codegen.ErrUndefinedVariable,
 		codegen.ErrUnsupportedExpression,
 		codegen.ErrUnsupportedBinaryOp,
-		codegen.ErrFieldAccessNotImpl,
 		codegen.ErrWrongArgCount, // consolidated all WrongArgs errors into this one
 		codegen.ErrUnsupportedCall,
 		codegen.ErrMethodNotImpl,
@@ -179,20 +177,6 @@ func TestWrapUnsupportedBinaryOp(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "@@") {
 		t.Error("Should contain operator")
-	}
-}
-
-func TestWrapFieldAccessNotImpl(t *testing.T) {
-	err := codegen.WrapFieldAccessNotImpl("testField")
-
-	if err == nil {
-		t.Error("WrapFieldAccessNotImpl should return error")
-	}
-	if !errors.Is(err, codegen.ErrFieldAccessNotImpl) {
-		t.Error("Should wrap ErrFieldAccessNotImpl")
-	}
-	if !strings.Contains(err.Error(), "testField") {
-		t.Error("Should contain field name")
 	}
 }
 
