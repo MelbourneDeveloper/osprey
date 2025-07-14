@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime c-lint c-test test-runtime
+.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime rust-interop c-lint c-test test-runtime
 
 # Install golangci-lint
 lint-install:
@@ -20,12 +20,12 @@ lint-fix: lint-install
 	golangci-lint run --config .golangci.yml --fix
 
 # Build the osprey compiler with linting
-build: lint c-lint fiber-runtime http-runtime
+build: lint c-lint fiber-runtime http-runtime rust-interop
 	@echo "🏗️  Building osprey compiler..."
 	go build -o bin/osprey ./cmd/osprey
 
 # Don't ever user this unless it's a life or death situation
-build-no-lint: fiber-runtime http-runtime
+build-no-lint: fiber-runtime http-runtime rust-interop
 	@echo "🏗️  Building osprey compiler (skipping lint for speed)..."
 	go build -o bin/osprey ./cmd/osprey
 
@@ -74,6 +74,17 @@ http-runtime:
 	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
 
+# Build Rust interop library
+rust-interop:
+	@echo "🦀 Building Rust interop library..."
+	@if command -v cargo >/dev/null 2>&1; then \
+		cd examples/rust_integration && cargo build --release; \
+		cp target/release/libosprey_math_utils.a ../../lib/librust_utils.a; \
+		echo "✅ Rust interop library built and copied to lib/"; \
+	else \
+		echo "⚠️  Rust not found, skipping Rust interop build"; \
+	fi
+
 # Install the osprey compiler globally
 install: build
 	@echo "🚀 Installing osprey compiler to /usr/local/bin..."
@@ -82,6 +93,10 @@ install: build
 	sudo mkdir -p /usr/local/lib
 	sudo cp bin/libfiber_runtime.a /usr/local/lib/
 	sudo cp bin/libhttp_runtime.a /usr/local/lib/
+	@if [ -f lib/librust_utils.a ]; then \
+		sudo cp lib/librust_utils.a /usr/local/lib/; \
+		echo "✅ Rust interop library installed"; \
+	fi
 	@echo "✅ osprey compiler installed! You can now use 'osprey' from anywhere."
 	@echo "Test with: osprey --help"
 
@@ -91,6 +106,7 @@ uninstall:
 	sudo rm -f /usr/local/bin/osprey
 	sudo rm -f /usr/local/lib/libfiber_runtime.a
 	sudo rm -f /usr/local/lib/libhttp_runtime.a
+	sudo rm -f /usr/local/lib/librust_utils.a
 	@echo "✅ osprey compiler uninstalled."
 
 # Install dependencies
@@ -100,11 +116,15 @@ install-deps:
 # Clean build artifacts
 clean:
 	rm -rf bin/
+	rm -rf lib/
 	rm -rf outputs/
 	rm -rf internal/codegen/bin
 	find /tmp -name "*osprey*" -delete 2>/dev/null || true
 	find /tmp -name "*TestHTTP*" -delete 2>/dev/null || true
 	find /tmp -name "*TestManual*" -delete 2>/dev/null || true
+	@if [ -d examples/rust_integration/target ]; then \
+		cd examples/rust_integration && cargo clean; \
+	fi
 
 # ========== TEST SUITE ==========
 

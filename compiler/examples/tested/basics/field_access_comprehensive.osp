@@ -13,46 +13,46 @@ type Equipment = Sword { damage: int, durability: int } |
 
 // Combat calculation with variable binding in pattern matching
 fn calculateAttack(entity: Entity, equipment: Equipment) -> int = match entity {
-    Warrior { health: h, strength: s } => match equipment {
-        Sword { damage: d, durability: dur } => match dur > 50 {
-            true => s + d + (h / 10)
-            false => s + (d / 2)
+    Warrior { health, strength } => match equipment {
+        Sword { damage, durability } => match durability > 50 {
+            true => strength + damage + (health / 10)
+            false => strength + (damage / 2)
         }
-        _ => s + (h / 20)
+        _ => strength + (health / 20)
     }
-    Mage { health: h, mana: m } => match equipment {
-        Staff { power: p, charges: c } => match c > 0 {
-            true => p + m + (h / 15)
-            false => m / 2
+    Mage { health, mana } => match equipment {
+        Staff { power, charges } => match charges > 0 {
+            true => power + mana + (health / 15)
+            false => mana / 2
         }
-        _ => m / 3
+        _ => mana / 3
     }
-    Archer { health: h, arrows: a } => match equipment {
-        Bow { range: r, tension: t } => match a > 10 {
-            true => r + t + (a / 5)
-            false => r / 2
+    Archer { health, arrows } => match equipment {
+        Bow { range, tension } => match arrows > 10 {
+            true => range + tension + (arrows / 5)
+            false => range / 2
         }
-        _ => a / 4
+        _ => arrows / 4
     }
 }
 
 // Status calculation with complex field access and pattern matching
 fn getEntityStatus(entity: Entity) -> String = match entity {
-    Warrior { health: h, strength: s } => match h > 80 {
-        true => match s > 15 {
+    Warrior { health, strength } => match health > 80 {
+        true => match strength > 15 {
             true => "Mighty Warrior"
             false => "Healthy Fighter"
         }
         false => "Wounded Warrior"
     }
-    Mage { health: h, mana: m } => match m > 100 {
+    Mage { health, mana } => match mana > 100 {
         true => "Archmage"
-        false => match h > 60 {
+        false => match health > 60 {
             true => "Battle Mage"
             false => "Apprentice"
         }
     }
-    Archer { health: h, arrows: a } => match a > 20 {
+    Archer { health, arrows } => match arrows > 20 {
         true => "Master Archer"
         false => "Scout"
     }
@@ -80,23 +80,23 @@ let mageStatus = getEntityStatus(mage)
 let archerStatus = getEntityStatus(archer)
 
 print("Combat Results:")
-print("${warriorStatus}: Attack=${warriorAttack} (Health=${match warrior { Warrior { health: h } => h }})")
-print("${mageStatus}: Attack=${mageAttack} (Mana=${match mage { Mage { mana: m } => m }})")
-print("${archerStatus}: Attack=${archerAttack} (Arrows=${match archer { Archer { arrows: a } => a }})")
+print("${warriorStatus}: Attack=${warriorAttack} (Health=${match warrior { Warrior { health } => health }})")
+print("${mageStatus}: Attack=${mageAttack} (Mana=${match mage { Mage { mana } => mana }})")
+print("${archerStatus}: Attack=${archerAttack} (Arrows=${match archer { Archer { arrows } => arrows }})")
 
 // Equipment degradation with field access in pattern matching
 fn degradeEquipment(equipment: Equipment) -> String = match equipment {
-    Sword { damage: d, durability: dur } => match dur - 10 {
+    Sword { damage, durability } => match durability - 10 {
         remaining => match remaining > 20 {
-            true => "Sword sharpened (${d} dmg, ${remaining} dur)"
+            true => "Sword sharpened (${damage} dmg, ${remaining} dur)"
             false => "Sword needs repair"
         }
     }
-    Staff { power: p, charges: c } => match c - 2 {
-        remaining => "Staff used (${p} power, ${remaining} charges left)"
+    Staff { power, charges } => match charges - 2 {
+        remaining => "Staff used (${power} power, ${remaining} charges left)"
     }
-    Bow { range: r, tension: t } => match t - 1 {
-        newTension => "Bow string loosened (${r} range, ${newTension} tension)"
+    Bow { range, tension } => match tension - 1 {
+        newTension => "Bow string loosened (${range} range, ${newTension} tension)"
     }
 }
 
