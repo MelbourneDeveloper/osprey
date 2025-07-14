@@ -62,7 +62,7 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 		case *ast.TypeDeclaration:
 			g.declareType(s)
 		case *ast.EffectDeclaration:
-			// CRITICAL FIX: Process effect declarations in the first pass!
+			// Process effect declarations in the first pass!
 			// This populates the effect registry before any handlers are generated
 			if err := g.generateEffectDeclaration(s); err != nil {
 				return nil, nil, err

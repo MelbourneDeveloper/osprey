@@ -147,7 +147,7 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	ec.pushProcessingEffect(perform.EffectName)
 	defer ec.popProcessingEffect()
 
-	// CRITICAL FIX: When in handler scope, try handlers FIRST regardless of declared effects
+	// When in handler scope, try handlers FIRST regardless of declared effects
 	if len(ec.currentHandlers) > 0 || len(ec.handlerStack) > 0 {
 		// PRIORITY 1: Check for lexically scoped handlers
 		if result, err := ec.tryCurrentScopeHandlers(perform); err != nil || result != nil {
@@ -196,7 +196,7 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	// Save current scope state for proper restoration
 	wasInHandlerScope := ec.inHandlerScope
 	currentHandlersLength := len(ec.currentHandlers)
-	handlerStackLength := len(ec.handlerStack) // CRITICAL FIX: Save stack length
+	handlerStackLength := len(ec.handlerStack) // Save stack length
 
 	// EVIDENCE PASSING: Push handler onto current scope for lexical scoping
 	ec.inHandlerScope = true
@@ -210,7 +210,7 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 
 	// CRITICAL BUG FIX: Restore BOTH currentHandlers AND handlerStack for proper lexical scoping
 	ec.currentHandlers = ec.currentHandlers[:currentHandlersLength]
-	ec.handlerStack = ec.handlerStack[:handlerStackLength] // CRITICAL FIX: Restore stack
+	ec.handlerStack = ec.handlerStack[:handlerStackLength] // Restore stack
 	ec.inHandlerScope = wasInHandlerScope
 	ec.currentLexicalDepth--
 
@@ -247,7 +247,7 @@ func (ec *EffectCodegen) inferOperationTypes(
 		return effectType.Operations[operationName].ParamTypes, effectType.Operations[operationName].ReturnType
 	}
 
-	// CRITICAL FIX: Fallback logic was completely backwards!
+	// Fallback logic was completely backwards!
 	// Operations are NOT found in registry - this should be a loud error, not silent fallback
 	// But for now, provide sensible defaults until we fix the registry issue
 
@@ -272,7 +272,7 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 	oldFunc := ec.generator.function
 	oldBuilder := ec.generator.builder
 	oldVars := ec.generator.variables
-	// CRITICAL FIX: Save the type inference environment too
+	// Save the type inference environment too
 	oldTypeEnv := ec.generator.typeInferer.env.Clone()
 
 	ec.generator.function = handlerFunc
@@ -284,7 +284,7 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 		if i < len(arm.Parameters) {
 			// Add to runtime variables map
 			ec.generator.variables[arm.Parameters[i]] = param
-			// CRITICAL FIX: Add to type inference environment too
+			// Add to type inference environment too
 			paramType := ec.llvmTypeToConcreteType(param.Type())
 			ec.generator.typeInferer.env.Set(arm.Parameters[i], paramType)
 		}
@@ -329,7 +329,7 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 	ec.generator.function = oldFunc
 	ec.generator.builder = oldBuilder
 	ec.generator.variables = oldVars
-	// CRITICAL FIX: Restore the type inference environment
+	// Restore the type inference environment
 	ec.generator.typeInferer.env = oldTypeEnv
 
 	return nil
@@ -409,7 +409,7 @@ func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression)
 				return nil, err
 			}
 			if result != nil {
-				// CRITICAL FIX: Return the actual handler result, not Unit
+				// Return the actual handler result, not Unit
 				return result, nil
 			}
 		}
@@ -421,7 +421,7 @@ func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression)
 		return nil, err
 	}
 	if result != nil {
-		// CRITICAL FIX: Return the actual handler result, not Unit
+		// Return the actual handler result, not Unit
 		return result, nil
 	}
 
@@ -455,7 +455,7 @@ func (ec *EffectCodegen) findHandlerByEffectName(
 		}
 		// Execute the handler function and return its result
 		handlerResult := ec.generator.builder.NewCall(bestHandler, args...)
-		// CRITICAL FIX: Return the actual handler result, not Unit
+		// Return the actual handler result, not Unit
 		return handlerResult, nil
 	}
 
@@ -477,7 +477,7 @@ func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) 
 			}
 			// Execute the handler function and return its result
 			handlerResult := ec.generator.builder.NewCall(handlerFunc, args...)
-			// CRITICAL FIX: Return the actual handler result, not Unit
+			// Return the actual handler result, not Unit
 			return handlerResult, nil
 		}
 	}
@@ -495,7 +495,7 @@ func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value
 				return nil, err
 			}
 			if result != nil {
-				// CRITICAL FIX: Return the actual handler result, not Unit
+				// Return the actual handler result, not Unit
 				return result, nil
 			}
 		}
@@ -507,7 +507,7 @@ func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value
 		return nil, err
 	}
 	if result != nil {
-		// CRITICAL FIX: Return the actual handler result, not Unit
+		// Return the actual handler result, not Unit
 		return result, nil
 	}
 
@@ -627,7 +627,7 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 		handlerFunc := candidateHandlers[len(candidateHandlers)-1]
 		// Execute the handler function and return its result
 		handlerResult := ec.generator.builder.NewCall(handlerFunc, args...)
-		// CRITICAL FIX: Return the actual handler result, not Unit
+		// Return the actual handler result, not Unit
 		return handlerResult, nil
 	}
 

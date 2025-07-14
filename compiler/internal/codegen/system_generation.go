@@ -255,7 +255,7 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 	// Call the C function
 	writeResult := g.builder.NewCall(fn, filename, content)
 
-	// CRITICAL FIX: Create the Result allocation in the current block before branching
+	// Create the Result allocation in the current block before branching
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
 

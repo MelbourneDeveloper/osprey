@@ -462,7 +462,6 @@ func (ti *TypeInferer) Unify(t1, t2 Type) error {
 	}
 }
 
-
 // ResolveType resolves a type by following substitutions and resolving unbound type variables
 func (ti *TypeInferer) ResolveType(t Type) Type {
 	resolved := ti.prune(t)
@@ -539,7 +538,6 @@ func uniqueInts(ints []int) []int {
 	}
 	return result
 }
-
 
 // Helper functions for operator checking
 func isArithmeticOp(op string) bool {
@@ -1063,7 +1061,7 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 		return nil, fmt.Errorf("function call type mismatch: %w", err)
 	}
 
-	// CRITICAL FIX: Return the resolved/substituted result type, not the fresh variable
+	// Return the resolved/substituted result type, not the fresh variable
 	return ti.prune(resultType), nil
 }
 
@@ -1081,7 +1079,7 @@ func (ti *TypeInferer) inferConcurrencyExpression(expr ast.Expression) (Type, er
 		// If no value is yielded, return Unit
 		return &ConcreteType{name: TypeUnit}, nil
 	case *ast.AwaitExpression:
-		// CRITICAL FIX: await should return the type that the fiber produces, not the Fiber type
+		// await should return the type that the fiber produces, not the Fiber type
 		// The awaited expression should be a Fiber, but await returns the result type
 		fiberType, err := ti.InferType(e.Expression)
 		if err != nil {
@@ -1178,7 +1176,7 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 
 	switch {
 	case isArithmeticOp(e.Operator):
-		// CRITICAL FIX: Handle operator overloading for + operator
+		// Handle operator overloading for + operator
 		if e.Operator == "+" {
 			return ti.inferPlusOperation(leftType, rightType)
 		}
@@ -1331,27 +1329,27 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 		oldEnv := ti.env
 		newEnv := ti.env.Clone()
 		ti.env = newEnv
-		
+
 		// Infer the pattern type and bind its variables
 		_, err := ti.InferPattern(arm.Pattern)
 		if err != nil {
 			ti.env = oldEnv
 			return nil, err
 		}
-		
+
 		// Infer the expression type in the context of the bound pattern variables
 		armType, err := ti.InferType(arm.Expression)
 		if err != nil {
 			ti.env = oldEnv
 			return nil, err
 		}
-		
+
 		armTypes = append(armTypes, armType)
-		
+
 		// Restore the environment
 		ti.env = oldEnv
 	}
-	
+
 	// All arms must have the same type
 	firstArmType := armTypes[0]
 	for i := 1; i < len(armTypes); i++ {
@@ -1373,7 +1371,7 @@ func (ti *TypeInferer) inferResultExpression(e *ast.ResultExpression) (Type, err
 		return nil, err
 	}
 
-	// CRITICAL FIX: If Success=true and ErrorType="", this is a transparent wrapper
+	// If Success=true and ErrorType="", this is a transparent wrapper
 	// that should just return the underlying type without wrapping in Result
 	if e.Success && e.ErrorType == "" {
 		return valueType, nil
@@ -1445,7 +1443,7 @@ func (ti *TypeInferer) inferBlockExpression(e *ast.BlockExpression) (Type, error
 			return nil, err
 		}
 	} else {
-		// CRITICAL FIX: Check if the last statement is an expression statement
+		// Check if the last statement is an expression statement
 		// If so, the block's type is the type of that expression
 		if len(e.Statements) > 0 {
 			if exprStmt, ok := e.Statements[len(e.Statements)-1].(*ast.ExpressionStatement); ok {
@@ -1547,7 +1545,7 @@ func (ti *TypeInferer) inferPerformExpression(e *ast.PerformExpression) (Type, e
 		}
 	}
 
-	// CRITICAL FIX: Look up the effect operation to get the correct return type
+	// Look up the effect operation to get the correct return type
 	// For now, we'll handle common cases explicitly
 	switch e.EffectName {
 	case "Logger":

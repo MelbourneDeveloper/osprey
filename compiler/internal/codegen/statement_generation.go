@@ -69,7 +69,7 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 	// Built-in functions are handled by Hindley-Milner type inference
 	g.functionParameters[externDecl.Name] = paramNames
 
-	// CRITICAL FIX: Add extern function to type environment for type inference
+	// Add extern function to type environment for type inference
 	// Convert extern parameters to type inference types
 	paramTypes := make([]Type, len(externDecl.Parameters))
 	for i, param := range externDecl.Parameters {
@@ -188,7 +188,7 @@ func (g *LLVMGenerator) generateLetDeclaration(letDecl *ast.LetDeclaration) (val
 	// Store the value in our variable map
 	g.variables[letDecl.Name] = value
 
-	// CRITICAL FIX: Use explicit type annotation if present, otherwise infer from value
+	// Use explicit type annotation if present, otherwise infer from value
 	var varType Type
 	if letDecl.Type != nil {
 		// Use the explicit type annotation

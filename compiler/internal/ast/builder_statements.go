@@ -83,7 +83,7 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		returnType = b.buildTypeExpression(ctx.Type_())
 	}
 
-	// CRITICAL FIX: Parse effect signatures (!Logger, ![IO, Net])
+	// Parse effect signatures (!Logger, ![IO, Net])
 	var effects []string
 	if ctx.EffectSet() != nil {
 		effects = b.buildEffectSet(ctx.EffectSet())
@@ -347,7 +347,7 @@ func (b *Builder) buildEffectDecl(ctx parser.IEffectDeclContext) *EffectDeclarat
 			Type: opCtx.Type_().GetText(), // Parse type as string for now
 		}
 
-		// CRITICAL FIX: Parse function type to extract parameters and return type
+		// Parse function type to extract parameters and return type
 		typeExpr := b.buildTypeExpression(opCtx.Type_())
 		if typeExpr != nil && typeExpr.IsFunction {
 			// Extract parameters from function type

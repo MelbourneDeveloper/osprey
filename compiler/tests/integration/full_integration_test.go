@@ -62,7 +62,7 @@ func captureJITOutput(source string) (string, error) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	// CRITICAL FIX: Add timeout to prevent hanging tests!
+	// Add timeout to prevent hanging tests!
 	done := make(chan error, 1)
 	var execErr error
 

@@ -498,7 +498,12 @@ func (g *LLVMGenerator) generateBinaryOperationWithPos(
 func (g *LLVMGenerator) generateArithmeticOperationWithPos(
 	operator string, left, right value.Value, pos *ast.Position,
 ) (value.Value, error) {
-	// CRITICAL FIX: Check for void types before arithmetic operations
+	// Check for nil values before accessing type information
+	if left == nil || right == nil {
+		return nil, ErrNilOperand
+	}
+
+	// Check for void types before arithmetic operations
 	if left.Type() == types.Void || right.Type() == types.Void {
 		return nil, WrapVoidArithmeticWithPos(operator, pos)
 	}
@@ -546,7 +551,7 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
 
-	// CRITICAL FIX: Check current function's return type to determine output type
+	// Check current function's return type to determine output type
 	if g.function != nil && g.function.Sig != nil {
 		returnType := g.function.Sig.RetType
 		if returnType == types.I1 {
@@ -886,7 +891,7 @@ func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 ) (value.Value, error) {
 	// Use the type name from the declaration, not the variant name
 	typeName := typeDecl.Name
-	
+
 	// Get the struct type from our type map
 	structType, exists := g.typeMap[typeName]
 	if !exists {
@@ -1125,7 +1130,7 @@ func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedTy
 		return g.builder.NewZExt(value, types.I64)
 	}
 
-	// CRITICAL FIX: Handle incompatible pointer types by checking what the field actually expects
+	// Handle incompatible pointer types by checking what the field actually expects
 	if ptrType, ok := expectedType.(*types.PointerType); ok {
 		// If expected type is a pointer and we have a different type, try to convert via casting
 		if currentType != expectedType {
@@ -1138,7 +1143,7 @@ func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedTy
 		}
 	}
 
-	// CRITICAL FIX: Handle all incompatible pointer/type combinations
+	// Handle all incompatible pointer/type combinations
 	// Detect various type mismatches and provide safe defaults
 
 	// String to integer conversion
@@ -1306,7 +1311,7 @@ func (g *LLVMGenerator) generateStringConcatenation(left, right value.Value) (va
 	strlenFunc := g.ensureStrlenDeclaration()
 	mallocFunc := g.ensureMallocDeclaration()
 
-	// CRITICAL FIX: Extract strings from Result types if needed
+	// Extract strings from Result types if needed
 	leftStr := g.extractStringFromValue(left)
 	rightStr := g.extractStringFromValue(right)
 
@@ -1439,7 +1444,7 @@ func (g *LLVMGenerator) findTypeDeclarationByVariant(variantName string) *ast.Ty
 	if typeDecl, exists := g.typeDeclarations[variantName]; exists {
 		return typeDecl
 	}
-	
+
 	// If not found, search through all type declarations for the variant name
 	for _, typeDecl := range g.typeDeclarations {
 		for _, variant := range typeDecl.Variants {
@@ -1448,6 +1453,6 @@ func (g *LLVMGenerator) findTypeDeclarationByVariant(variantName string) *ast.Ty
 			}
 		}
 	}
-	
+
 	return nil
 }

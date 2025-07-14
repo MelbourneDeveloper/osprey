@@ -129,6 +129,7 @@ var (
 	ErrMatchNotExhaustive = errors.New("match expression not exhaustive")
 	ErrMatchTypeMismatch  = errors.New("match expression type mismatch")
 	ErrUnknownVariant     = errors.New("unknown variant in match expression")
+	ErrNilOperand         = errors.New("arithmetic operation has nil operand")
 )
 
 // NOTE: Function argument count constants have been moved to the unified built-in function registry

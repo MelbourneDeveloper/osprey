@@ -685,7 +685,7 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 
 // normalizeArmValue handles Unit expressions in match arms
 func (g *LLVMGenerator) normalizeArmValue(armValue value.Value) value.Value {
-	// CRITICAL FIX: Handle Unit expressions in match arms
+	// Handle Unit expressions in match arms
 	// If the expression returns Unit, use void type
 	if armValue == nil || armValue.Type() == types.Void {
 		armValue = constant.NewUndef(types.Void)
@@ -696,7 +696,7 @@ func (g *LLVMGenerator) normalizeArmValue(armValue value.Value) value.Value {
 // addBranchTermination ensures proper branch termination for match arms
 func (g *LLVMGenerator) addBranchTermination(endBlock *ir.Block) *ir.Block {
 	// TODO: FIX THIS! DON'T IGNORE IT!!
-	// CRITICAL FIX: After generating the expression (which might be a nested match),
+	// After generating the expression (which might be a nested match),
 	// the builder might be pointing to a different block. We need to ensure the
 	// branch comes from the current builder block (where the expression ended),
 	// but ONLY if that block doesn't already have a terminator.
@@ -908,7 +908,7 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 	// Extract each field from the data area
 	offset := int64(0)
 
-	// CRITICAL FIX: Pattern fields are provided as a mapping from variant field names to pattern variable names
+	// Pattern fields are provided as a mapping from variant field names to pattern variable names
 	// For example: pattern.Fields = ["d", "dur"] corresponds to variant fields ["damage", "durability"]
 	// We need to map them correctly based on position/order
 
@@ -940,10 +940,10 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 			// Load the field value
 			fieldValue := g.builder.NewLoad(fieldType, fieldPtr)
 
-			// CRITICAL FIX: Bind using the pattern variable name, not the variant field name
+			// Bind using the pattern variable name, not the variant field name
 			variables[patternFieldName] = fieldValue
 
-			// CRITICAL FIX: Also register the variable in the Hindley-Milner type environment
+			// Also register the variable in the Hindley-Milner type environment
 			// Infer the type from the field definition
 			concreteType := &ConcreteType{name: field.Type}
 			g.typeInferer.env.Set(patternFieldName, concreteType)
@@ -993,7 +993,7 @@ func (g *LLVMGenerator) createMatchResult(
 		return armValues[0], nil
 	}
 
-	// CRITICAL FIX: Check if all arm values are void type
+	// Check if all arm values are void type
 	// PHI nodes cannot be created with void values
 	allVoid := true
 	for _, val := range armValues {
@@ -1014,7 +1014,7 @@ func (g *LLVMGenerator) createMatchResult(
 		return nil, err
 	}
 
-	// CRITICAL FIX: Only include predecessors that actually have terminators
+	// Only include predecessors that actually have terminators
 	var validIncomings []*ir.Incoming
 	for i, val := range coercedValues {
 		// Skip void values in PHI nodes
@@ -1228,7 +1228,7 @@ func (g *LLVMGenerator) generateSuccessBlock(
 		}
 		successValue = val
 
-		// CRITICAL FIX: After generating a nested expression, the builder might have changed
+		// After generating a nested expression, the builder might have changed
 		// We need to ensure the branch to the end block comes from the correct block
 		// But only add the branch if the current block doesn't already have a terminator
 		if g.builder.Term == nil {
@@ -1290,7 +1290,7 @@ func (g *LLVMGenerator) generateErrorBlock(
 		}
 		errorValue = val
 
-		// CRITICAL FIX: After generating a nested expression, the builder might have changed
+		// After generating a nested expression, the builder might have changed
 		// We need to ensure the branch to the end block comes from the correct block
 		// But only add the branch if the current block doesn't already have a terminator
 		if g.builder.Term == nil {
@@ -1372,16 +1372,16 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 ) (value.Value, error) {
 	g.builder = blocks.End
 
-	// CRITICAL FIX: Use the actual blocks that branch to the end
+	// Use the actual blocks that branch to the end
 	var validPredecessors []*ir.Incoming
 
 	// Check if the actual success block has a terminator and branches to end
-	if actualSuccessBlock != nil && actualSuccessBlock.Term != nil {
+	if actualSuccessBlock != nil && actualSuccessBlock.Term != nil && successValue != nil {
 		validPredecessors = append(validPredecessors, ir.NewIncoming(successValue, actualSuccessBlock))
 	}
 
 	// Check if the actual error block has a terminator and branches to end
-	if actualErrorBlock != nil && actualErrorBlock.Term != nil {
+	if actualErrorBlock != nil && actualErrorBlock.Term != nil && errorValue != nil {
 		validPredecessors = append(validPredecessors, ir.NewIncoming(errorValue, actualErrorBlock))
 	}
 

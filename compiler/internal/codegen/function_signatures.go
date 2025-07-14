@@ -30,7 +30,7 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 	// Infer parameter types
 	paramTypes := make([]Type, len(fnDecl.Parameters))
 	for i, param := range fnDecl.Parameters {
-		// CRITICAL FIX: Use explicit type annotation if present
+		// Use explicit type annotation if present
 		if param.Type != nil {
 			// Use the explicit type annotation
 			paramType := &ConcreteType{name: param.Type.Name}
@@ -45,7 +45,7 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 	}
 
 	// For recursion: Add the function to the environment before processing the body
-	// CRITICAL FIX: Use explicit return type annotation if present
+	// Use explicit return type annotation if present
 	var returnTypeVar Type
 	if fnDecl.ReturnType != nil {
 		// Use the explicit return type annotation
@@ -61,7 +61,7 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 	}
 	g.typeInferer.env.Set(fnDecl.Name, fnType)
 
-	// CRITICAL FIX: Set effect context for functions with effect annotations
+	// Set effect context for functions with effect annotations
 	var oldEffects []string
 	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
 		// Save old effect context
@@ -154,7 +154,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	// Infer parameter types (same as in declareFunctionSignature)
 	paramTypes := make([]Type, len(fnDecl.Parameters))
 	for i, param := range fnDecl.Parameters {
-		// CRITICAL FIX: Use explicit type annotation if present
+		// Use explicit type annotation if present
 		if param.Type != nil {
 			// Use the explicit type annotation
 			paramType := &ConcreteType{name: param.Type.Name}
@@ -169,7 +169,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	}
 
 	// For recursion: Add the function to the environment before processing the body
-	// CRITICAL FIX: Use explicit return type annotation if present
+	// Use explicit return type annotation if present
 	var returnTypeVar Type
 	if fnDecl.ReturnType != nil {
 		// Use the explicit return type annotation
@@ -223,7 +223,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		g.variables[param.Name] = params[i]
 	}
 
-	// CRITICAL FIX: Set effect context for functions with effect annotations
+	// Set effect context for functions with effect annotations
 	var oldEffects []string
 	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
 		// Save old effect context
@@ -240,7 +240,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		}
 		g.expectedReturnType = oldExpectedReturnType
 		g.typeInferer.env = oldEnv
-		// CRITICAL FIX: Restore effect context on error
+		// Restore effect context on error
 		if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
 			g.effectCodegen.currentFunctionEffects = oldEffects
 		}
@@ -259,7 +259,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	// Restore expected return type context
 	g.expectedReturnType = oldExpectedReturnType
 
-	// CRITICAL FIX: Restore effect context
+	// Restore effect context
 	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
 		g.effectCodegen.currentFunctionEffects = oldEffects
 	}
@@ -366,11 +366,11 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 		structType := types.NewStruct(fieldTypes...)
 		g.typeMap[typeDecl.Name] = structType
 
-		// CRITICAL FIX: Register the record type in the type inference environment
+		// Register the record type in the type inference environment
 		recordType := &ConcreteType{name: typeDecl.Name}
 		g.typeInferer.env.Set(typeDecl.Name, recordType)
 
-		// CRITICAL FIX: Also register the variant name in the type environment
+		// Also register the variant name in the type environment
 		// This allows type constructors like Warrior { health: 100, strength: 20 } to work
 		g.typeInferer.env.Set(variant.Name, recordType)
 
@@ -454,7 +454,7 @@ func (g *LLVMGenerator) declareDiscriminatedUnion(typeDecl *ast.TypeDeclaration)
 
 	g.typeMap[typeDecl.Name] = unionType
 
-	// CRITICAL FIX: Register the union type in the type inference environment
+	// Register the union type in the type inference environment
 	unionTypeInference := &ConcreteType{name: typeDecl.Name}
 	g.typeInferer.env.Set(typeDecl.Name, unionTypeInference)
 
