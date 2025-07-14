@@ -777,8 +777,8 @@ func (g *LLVMGenerator) generateTypeConstructorExpression(
 	}
 
 	// Look up the type declaration to get constraints (for user-defined types)
-	typeDecl, exists := g.typeDeclarations[typeConstructor.TypeName]
-	if !exists {
+	typeDecl := g.findTypeDeclarationByVariant(typeConstructor.TypeName)
+	if typeDecl == nil {
 		return nil, WrapUndefinedType(typeConstructor.TypeName)
 	}
 
@@ -882,21 +882,24 @@ func (g *LLVMGenerator) generateRecordTypeConstructor(
 // generateUnconstrainedRecordConstructor creates actual struct instances for unconstrained record types
 func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 	typeConstructor *ast.TypeConstructorExpression,
-	_ *ast.TypeDeclaration,
+	typeDecl *ast.TypeDeclaration,
 ) (value.Value, error) {
+	// Use the type name from the declaration, not the variant name
+	typeName := typeDecl.Name
+	
 	// Get the struct type from our type map
-	structType, exists := g.typeMap[typeConstructor.TypeName]
+	structType, exists := g.typeMap[typeName]
 	if !exists {
-		return nil, WrapUndefinedType(typeConstructor.TypeName)
+		return nil, WrapUndefinedType(typeName)
 	}
 
 	// Allocate memory for the struct
 	structValue := g.builder.NewAlloca(structType)
 
 	// Get field names for this record type
-	fieldNames, exists := g.getRecordFieldNames(typeConstructor.TypeName)
+	fieldNames, exists := g.getRecordFieldNames(typeName)
 	if !exists {
-		return nil, WrapUndefinedType(typeConstructor.TypeName)
+		return nil, WrapUndefinedType(typeName)
 	}
 
 	// Store each field value in the struct
@@ -1428,4 +1431,23 @@ func (g *LLVMGenerator) ensureBuiltinFunctionDeclaration(ospreyName string) *ir.
 	fn := g.module.NewFunc(llvmFunctionName, returnType, params...)
 	g.functions[ospreyName] = fn
 	return fn
+}
+
+// findTypeDeclarationByVariant finds the type declaration that contains the given variant name
+func (g *LLVMGenerator) findTypeDeclarationByVariant(variantName string) *ast.TypeDeclaration {
+	// First try to find by type name (for direct type lookup)
+	if typeDecl, exists := g.typeDeclarations[variantName]; exists {
+		return typeDecl
+	}
+	
+	// If not found, search through all type declarations for the variant name
+	for _, typeDecl := range g.typeDeclarations {
+		for _, variant := range typeDecl.Variants {
+			if variant.Name == variantName {
+				return typeDecl
+			}
+		}
+	}
+	
+	return nil
 }

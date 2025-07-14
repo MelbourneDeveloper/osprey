@@ -1324,22 +1324,41 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 		return nil, ErrMatchNoArms
 	}
 
-	// Infer type of first arm
-	firstArmType, err := ti.InferType(e.Arms[0].Expression)
-	if err != nil {
-		return nil, err
-	}
-
-	// All arms must have the same type
-	for i := 1; i < len(e.Arms); i++ {
-		armType, err := ti.InferType(e.Arms[i].Expression)
+	// Process each arm separately to handle pattern binding
+	var armTypes []Type
+	for _, arm := range e.Arms {
+		// Save the current environment
+		oldEnv := ti.env
+		newEnv := ti.env.Clone()
+		ti.env = newEnv
+		
+		// Infer the pattern type and bind its variables
+		_, err := ti.InferPattern(arm.Pattern)
 		if err != nil {
+			ti.env = oldEnv
 			return nil, err
 		}
-		if err := ti.Unify(firstArmType, armType); err != nil {
+		
+		// Infer the expression type in the context of the bound pattern variables
+		armType, err := ti.InferType(arm.Expression)
+		if err != nil {
+			ti.env = oldEnv
+			return nil, err
+		}
+		
+		armTypes = append(armTypes, armType)
+		
+		// Restore the environment
+		ti.env = oldEnv
+	}
+	
+	// All arms must have the same type
+	firstArmType := armTypes[0]
+	for i := 1; i < len(armTypes); i++ {
+		if err := ti.Unify(firstArmType, armTypes[i]); err != nil {
 			// Include position info and proper formatting
 			expectedType := firstArmType.String()
-			actualType := armType.String()
+			actualType := armTypes[i].String()
 			return nil, WrapMatchTypeMismatchWithPos(i, actualType, expectedType, e.Position)
 		}
 	}

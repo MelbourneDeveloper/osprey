@@ -370,6 +370,10 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 		recordType := &ConcreteType{name: typeDecl.Name}
 		g.typeInferer.env.Set(typeDecl.Name, recordType)
 
+		// CRITICAL FIX: Also register the variant name in the type environment
+		// This allows type constructors like Warrior { health: 100, strength: 20 } to work
+		g.typeInferer.env.Set(variant.Name, recordType)
+
 		// Register the variant name in unionVariants for pattern matching
 		// This allows pattern matching to work correctly for single-variant types with fields
 		g.unionVariants[variant.Name] = 0 // Use 0 as discriminant for single-variant types

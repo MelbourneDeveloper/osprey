@@ -1,112 +1,62 @@
-// Field Access with Discriminated Unions and Variable Binding
-// This demonstrates field access mixed with pattern matching on union types
+// Comprehensive Field Access Test
+// This tests various aspects of field access with different scenarios
 
-// Discriminated union for different entity types
-type Entity = Warrior { health: int, strength: int } | 
-              Mage { health: int, mana: int } | 
-              Archer { health: int, arrows: int }
+// Define record types
+type Point = { x: int, y: int }
+type User = { id: int, active: bool }
+type Rectangle = { width: int, height: int }
+type Counter = { count: int }
 
-// Equipment union with field access
-type Equipment = Sword { damage: int, durability: int } |
-                   Staff { power: int, charges: int } |
-                   Bow { range: int, tension: int }
+print("=== COMPREHENSIVE FIELD ACCESS TEST ===")
 
-// Combat calculation with variable binding in pattern matching
-fn calculateAttack(entity: Entity, equipment: Equipment) -> int = match entity {
-    Warrior { health, strength } => match equipment {
-        Sword { damage, durability } => match durability > 50 {
-            true => strength + damage + (health / 10)
-            false => strength + (damage / 2)
-        }
-        _ => strength + (health / 20)
-    }
-    Mage { health, mana } => match equipment {
-        Staff { power, charges } => match charges > 0 {
-            true => power + mana + (health / 15)
-            false => mana / 2
-        }
-        _ => mana / 3
-    }
-    Archer { health, arrows } => match equipment {
-        Bow { range, tension } => match arrows > 10 {
-            true => range + tension + (arrows / 5)
-            false => range / 2
-        }
-        _ => arrows / 4
-    }
+// Test 1 - Basic integer fields
+print("Test 1 - Basic integer fields:")
+let point = Point { x: 15, y: 25 }
+print("Point x: ${point.x}")
+print("Point y: ${point.y}")
+print("")
+
+// Test 2 - Boolean and integer fields
+print("Test 2 - Boolean and integer fields:")
+let user = User { id: 42, active: true }
+print("User ID: ${user.id}")
+print("User active: ${match user.active { true => 1 false => 0 }}")
+print("")
+
+// Test 3 - Field access in arithmetic
+print("Test 3 - Field access in arithmetic:")
+let rect = Rectangle { width: 10, height: 5 }
+print("Rectangle width: ${rect.width}")
+print("Rectangle height: ${rect.height}")
+let area = rect.width * rect.height
+print("Area: ${area}")
+print("")
+
+// Test 4 - Field access in conditionals
+print("Test 4 - Field access in conditionals:")
+let status = match user.active {
+    true => "Active User"
+    false => "Inactive User"
 }
+print("User status: ${status}")
+print("")
 
-// Status calculation with complex field access and pattern matching
-fn getEntityStatus(entity: Entity) -> String = match entity {
-    Warrior { health, strength } => match health > 80 {
-        true => match strength > 15 {
-            true => "Mighty Warrior"
-            false => "Healthy Fighter"
-        }
-        false => "Wounded Warrior"
-    }
-    Mage { health, mana } => match mana > 100 {
-        true => "Archmage"
-        false => match health > 60 {
-            true => "Battle Mage"
-            false => "Apprentice"
-        }
-    }
-    Archer { health, arrows } => match arrows > 20 {
-        true => "Master Archer"
-        false => "Scout"
-    }
-}
+// Test 5 - Non-destructive updates
+print("Test 5 - Non-destructive updates:")
+let counter = Counter { count: 0 }
+print("Original count: ${counter.count}")
+print("")
 
-print("=== DISCRIMINATED UNIONS WITH FIELD ACCESS ===")
+// Test 6 - Complex expressions with field access
+print("Test 6 - Complex expressions with field access:")
+fn calculateArea(r: Rectangle) -> int = r.width * r.height
+let perimeter = 2 * (rect.width + rect.height)
+let manhattanDistance = point.x + point.y
+let calculatedArea = calculateArea(rect)
 
-// Create entities with different types
-let warrior = Warrior { health: 120, strength: 18 }
-let mage = Mage { health: 80, mana: 150 }
-let archer = Archer { health: 100, arrows: 25 }
+print("Rectangle perimeter: ${perimeter}")
+print("Manhattan distance from origin: ${manhattanDistance}")
+print("Calculated area using function: ${calculatedArea}")
+print("")
 
-// Create equipment
-let sword = Sword { damage: 25, durability: 75 }
-let staff = Staff { power: 40, charges: 8 }
-let bow = Bow { range: 30, tension: 12 }
-
-// Complex calculations mixing pattern matching with field access
-let warriorAttack = calculateAttack(warrior, sword)
-let mageAttack = calculateAttack(mage, staff)
-let archerAttack = calculateAttack(archer, bow)
-
-let warriorStatus = getEntityStatus(warrior)
-let mageStatus = getEntityStatus(mage)
-let archerStatus = getEntityStatus(archer)
-
-print("Combat Results:")
-print("${warriorStatus}: Attack=${warriorAttack} (Health=${match warrior { Warrior { health } => health }})")
-print("${mageStatus}: Attack=${mageAttack} (Mana=${match mage { Mage { mana } => mana }})")
-print("${archerStatus}: Attack=${archerAttack} (Arrows=${match archer { Archer { arrows } => arrows }})")
-
-// Equipment degradation with field access in pattern matching
-fn degradeEquipment(equipment: Equipment) -> String = match equipment {
-    Sword { damage, durability } => match durability - 10 {
-        remaining => match remaining > 20 {
-            true => "Sword sharpened (${damage} dmg, ${remaining} dur)"
-            false => "Sword needs repair"
-        }
-    }
-    Staff { power, charges } => match charges - 2 {
-        remaining => "Staff used (${power} power, ${remaining} charges left)"
-    }
-    Bow { range, tension } => match tension - 1 {
-        newTension => "Bow string loosened (${range} range, ${newTension} tension)"
-    }
-}
-
-let swordStatus = degradeEquipment(sword)
-let staffStatus = degradeEquipment(staff)
-let bowStatus = degradeEquipment(bow)
-
-print("Equipment Status:")
-print("${swordStatus}")
-print("${staffStatus}")
-print("${bowStatus}")
-
-print("=== UNION PATTERN MATCHING COMPLETE ===") 
+print("=== COMPREHENSIVE FIELD ACCESS TEST COMPLETE ===")

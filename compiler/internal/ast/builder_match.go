@@ -149,6 +149,22 @@ func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern
 			Nested:      nil,
 			IsWildcard:  false,
 		}
+	} else if literalCtx.TRUE() != nil {
+		return Pattern{
+			Constructor: literalCtx.TRUE().GetText(),
+			Variable:    "",
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
+	} else if literalCtx.FALSE() != nil {
+		return Pattern{
+			Constructor: literalCtx.FALSE().GetText(),
+			Variable:    "",
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
 	}
 	return Pattern{Constructor: "unknown"}
 }
