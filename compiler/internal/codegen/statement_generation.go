@@ -69,6 +69,26 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 	// Built-in functions are handled by Hindley-Milner type inference
 	g.functionParameters[externDecl.Name] = paramNames
 
+	// CRITICAL FIX: Add extern function to type environment for type inference
+	// Convert extern parameters to type inference types
+	paramTypes := make([]Type, len(externDecl.Parameters))
+	for i, param := range externDecl.Parameters {
+		paramTypes[i] = g.typeExpressionToInferenceType(&param.Type)
+	}
+
+	// Determine inference return type
+	var inferenceReturnType Type = &ConcreteType{name: TypeInt} // Default to int
+	if externDecl.ReturnType != nil {
+		inferenceReturnType = g.typeExpressionToInferenceType(externDecl.ReturnType)
+	}
+
+	// Add extern function to type environment
+	functionType := &FunctionType{
+		paramTypes: paramTypes,
+		returnType: inferenceReturnType,
+	}
+	g.typeInferer.env.Set(externDecl.Name, functionType)
+
 	return nil
 }
 
@@ -112,6 +132,50 @@ func (g *LLVMGenerator) typeExpressionToLLVMType(typeExpr *ast.TypeExpression) t
 		}
 		// Default to i64 for unknown types
 		return types.I64
+	}
+}
+
+// typeExpressionToInferenceType converts an Osprey TypeExpression to a type inference Type.
+func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpression) Type {
+	// Handle function types
+	if typeExpr.IsFunction {
+		// Build parameter types
+		paramTypes := make([]Type, len(typeExpr.ParameterTypes))
+		for i, paramType := range typeExpr.ParameterTypes {
+			paramTypes[i] = g.typeExpressionToInferenceType(&paramType)
+		}
+
+		// Build return type
+		var returnType Type = &ConcreteType{name: TypeInt} // Default to int
+		if typeExpr.ReturnType != nil {
+			returnType = g.typeExpressionToInferenceType(typeExpr.ReturnType)
+		}
+
+		// Create function type
+		return &FunctionType{
+			paramTypes: paramTypes,
+			returnType: returnType,
+		}
+	}
+
+	switch typeExpr.Name {
+	case "int":
+		return &ConcreteType{name: TypeInt}
+	case "string":
+		return &ConcreteType{name: TypeString}
+	case "bool":
+		return &ConcreteType{name: TypeBool}
+	case TypeUnit:
+		return &ConcreteType{name: TypeUnit}
+	case TypeHTTPResponse:
+		return &ConcreteType{name: TypeHTTPResponse}
+	case TypeFiber:
+		return &ConcreteType{name: TypeFiber}
+	case TypeChannel:
+		return &ConcreteType{name: TypeChannel}
+	default:
+		// For unknown types, return as concrete type
+		return &ConcreteType{name: typeExpr.Name}
 	}
 }
 

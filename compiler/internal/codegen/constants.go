@@ -44,6 +44,8 @@ const (
 	TypeResult       = "Result"
 	TypeHTTPResponse = "HttpResponse"
 	TypeFunction     = "Function"
+	TypeFiber        = "Fiber"
+	TypeChannel      = "Channel"
 )
 
 // Function names.

@@ -318,8 +318,8 @@ func TestRustInteropCompilationOnly(t *testing.T) {
 	checkLLVMTools(t)
 
 	rustInteropSource := `
-extern fn rust_add(a: Int, b: Int) -> Int
-extern fn rust_multiply(a: Int, b: Int) -> Int
+extern fn rust_add(a: int, b: int) -> int
+extern fn rust_multiply(a: int, b: int) -> int
 
 let result1 = rust_add(a: 10, b: 20)
 let result2 = rust_multiply(a: 5, b: 6)
