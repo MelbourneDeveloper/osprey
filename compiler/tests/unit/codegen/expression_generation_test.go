@@ -22,7 +22,12 @@ func TestUnaryExpressionGeneration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			source := "fn test() -> int = " + tt.operator + tt.operand
+			var source string
+			if tt.operator == "!" {
+				source = "fn test() -> bool = " + tt.operator + tt.operand
+			} else {
+				source = "fn test() -> int = " + tt.operator + tt.operand
+			}
 			_, err := codegen.CompileToLLVM(source)
 
 			if tt.wantErr {
@@ -352,7 +357,7 @@ func TestBinaryOperatorErrors(t *testing.T) {
 		},
 		{
 			name:    "valid comparison",
-			source:  `fn test() -> int = 1 < 2`,
+			source:  `fn test() -> bool = 1 < 2`,
 			wantErr: false,
 		},
 		{
