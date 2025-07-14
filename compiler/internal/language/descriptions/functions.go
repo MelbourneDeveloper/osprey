@@ -780,7 +780,7 @@ func GetBuiltinFunctionDescriptionsLegacy() map[string]*BuiltinFunctionDesc {
 			Description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. " +
 				"Keeps the WebSocket server running indefinitely until interrupted (blocking operation).",
 			Parameters: []ParameterDesc{},
-			ReturnType: "Unit",
+			ReturnType: codegen.TypeUnit,
 			Example:    `webSocketKeepAlive()  // Blocks until Ctrl+C`,
 		},
 	}

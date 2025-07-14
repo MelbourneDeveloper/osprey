@@ -32,7 +32,7 @@ func (g *LLVMGenerator) ensureHTTPFunctionDeclaration(functionName string) *ir.F
 	returnType := g.getLLVMType(builtinFunc.ReturnType.String())
 
 	// Create function with the correct C runtime name (which is now in the registry)
-	fn := g.module.NewFunc(functionName, returnType, params...)
+	fn := g.module.NewFunc(builtinFunc.CName, returnType, params...)
 	g.functions[functionName] = fn
 	return fn
 }
@@ -116,20 +116,20 @@ func (g *LLVMGenerator) generateHTTPFunctionCallNamed(functionName string, callE
 
 // HTTP Server Functions
 func (g *LLVMGenerator) generateHTTPCreateServerCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(HTTPCreateServerFunc, callExpr, TwoArgs)
+	return g.generateHTTPFunctionCall(HTTPCreateServerOsprey, callExpr, TwoArgs)
 }
 
 func (g *LLVMGenerator) generateHTTPListenCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(HTTPListenFunc, callExpr, TwoArgs)
+	return g.generateHTTPFunctionCall(HTTPListenOsprey, callExpr, TwoArgs)
 }
 
 func (g *LLVMGenerator) generateHTTPStopServerCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(HTTPStopServerFunc, callExpr, OneArg)
+	return g.generateHTTPFunctionCall(HTTPStopServerOsprey, callExpr, OneArg)
 }
 
 // HTTP Client Functions
 func (g *LLVMGenerator) generateHTTPCreateClientCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(HTTPCreateClientFunc, callExpr, TwoArgs)
+	return g.generateHTTPFunctionCall(HTTPCreateClientOsprey, callExpr, TwoArgs)
 }
 
 func (g *LLVMGenerator) generateHTTPGetCall(callExpr *ast.CallExpression) (value.Value, error) {
@@ -149,18 +149,18 @@ func (g *LLVMGenerator) generateHTTPDeleteCall(callExpr *ast.CallExpression) (va
 }
 
 func (g *LLVMGenerator) generateHTTPRequestCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(HTTPRequestFunc, callExpr, FiveArgs)
+	return g.generateHTTPFunctionCall(HTTPRequestOsprey, callExpr, FiveArgs)
 }
 
 func (g *LLVMGenerator) generateHTTPCloseClientCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(HTTPCloseClientFunc, callExpr, OneArg)
+	return g.generateHTTPFunctionCall(HTTPCloseClientOsprey, callExpr, OneArg)
 }
 
 // generateHTTPRequestWithMethod generates HTTP requests with specific methods
 func (g *LLVMGenerator) generateHTTPRequestWithMethod(callExpr *ast.CallExpression, expectedArgs int,
 	method int64) (value.Value, error) {
 	if len(callExpr.Arguments) != expectedArgs {
-		return nil, WrapHTTPFunctionWrongArgs(HTTPRequestFunc, expectedArgs, len(callExpr.Arguments))
+		return nil, WrapHTTPFunctionWrongArgs(HTTPRequestOsprey, expectedArgs, len(callExpr.Arguments))
 	}
 
 	// Generate client ID
@@ -200,7 +200,7 @@ func (g *LLVMGenerator) generateHTTPRequestWithMethod(callExpr *ast.CallExpressi
 	}
 
 	// Call http_request
-	fn := g.ensureHTTPFunctionDeclaration(HTTPRequestFunc)
+	fn := g.ensureHTTPFunctionDeclaration(HTTPRequestOsprey)
 	return g.builder.NewCall(fn, clientID, methodVal, path, headers, body), nil
 }
 
@@ -214,31 +214,31 @@ func (g *LLVMGenerator) createEmptyStringConstant() value.Value {
 
 // WebSocket Functions
 func (g *LLVMGenerator) generateWebSocketConnectCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(WebSocketConnectFunc, callExpr, TwoArgs)
+	return g.generateHTTPFunctionCall(WebSocketConnectOsprey, callExpr, TwoArgs)
 }
 
 func (g *LLVMGenerator) generateWebSocketSendCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(WebSocketSendFunc, callExpr, TwoArgs)
+	return g.generateHTTPFunctionCall(WebSocketSendOsprey, callExpr, TwoArgs)
 }
 
 func (g *LLVMGenerator) generateWebSocketCloseCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(WebSocketCloseFunc, callExpr, OneArg)
+	return g.generateHTTPFunctionCall(WebSocketCloseOsprey, callExpr, OneArg)
 }
 
 func (g *LLVMGenerator) generateWebSocketCreateServerCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(WebSocketCreateServerFunc, callExpr, ThreeArgs)
+	return g.generateHTTPFunctionCall(WebSocketCreateServerOsprey, callExpr, ThreeArgs)
 }
 
 func (g *LLVMGenerator) generateWebSocketServerListenCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(WebSocketServerListenFunc, callExpr, OneArg)
+	return g.generateHTTPFunctionCall(WebSocketServerListenOsprey, callExpr, OneArg)
 }
 
 func (g *LLVMGenerator) generateWebSocketServerBroadcastCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(WebSocketServerBroadcastFunc, callExpr, TwoArgs)
+	return g.generateHTTPFunctionCall(WebSocketServerBroadcastOsprey, callExpr, TwoArgs)
 }
 
 func (g *LLVMGenerator) generateWebSocketStopServerCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(WebSocketStopServerFunc, callExpr, OneArg)
+	return g.generateHTTPFunctionCall(WebSocketStopServerOsprey, callExpr, OneArg)
 }
 
 func (g *LLVMGenerator) generateWebSocketKeepAliveCall(callExpr *ast.CallExpression) (value.Value, error) {

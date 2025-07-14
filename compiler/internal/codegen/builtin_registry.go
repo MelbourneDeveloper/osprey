@@ -193,13 +193,13 @@ func (r *BuiltInFunctionRegistry) registerCoreIOFunctions() {
 		Name: PrintFunc,
 		// 🪲
 		//TODO: Incorrect. Print accepts a string as the only parameter - not any.
-		Signature:   "print(value: any) -> int",
+		Signature:   "print(value: any) -> Unit",
 		Description: "Prints a value to the console. Automatically converts the value to a string representation.",
 		ParameterTypes: []BuiltInParameter{
 			//TODO: Incorrect. Print accepts a string as the only parameter - not any.
 			{Name: "value", Type: &ConcreteType{name: TypeAny}, Description: "The value to print"},
 		},
-		ReturnType:   &ConcreteType{name: TypeInt},
+		ReturnType:   &ConcreteType{name: TypeUnit},
 		Category:     CategoryCore,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
@@ -511,8 +511,9 @@ match result {
 // registerHTTPFunctions registers HTTP-related functions
 func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	// httpCreateServer function
-	r.functions[HTTPCreateServerFunc] = &BuiltInFunction{
-		Name:        HTTPCreateServerFunc,
+	r.functions[HTTPCreateServerOsprey] = &BuiltInFunction{
+		Name:        HTTPCreateServerOsprey,
+		CName:       HTTPCreateServerFunc,
 		Signature:   "httpCreateServer(port: int, address: string) -> int",
 		Description: "Creates an HTTP server bound to the specified port and address.",
 		ParameterTypes: []BuiltInParameter{
@@ -529,8 +530,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpListen function
-	r.functions[HTTPListenFunc] = &BuiltInFunction{
-		Name:        HTTPListenFunc,
+	r.functions[HTTPListenOsprey] = &BuiltInFunction{
+		Name:        HTTPListenOsprey,
+		CName:       HTTPListenFunc,
 		Signature:   "httpListen(serverID: int, handler: function) -> int",
 		Description: "Starts the HTTP server listening for requests with a handler function.",
 		ParameterTypes: []BuiltInParameter{
@@ -546,8 +548,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpStopServer function
-	r.functions[HTTPStopServerFunc] = &BuiltInFunction{
-		Name:        HTTPStopServerFunc,
+	r.functions[HTTPStopServerOsprey] = &BuiltInFunction{
+		Name:        HTTPStopServerOsprey,
+		CName:       HTTPStopServerFunc,
 		Signature:   "httpStopServer(serverID: int) -> int",
 		Description: "Stops the HTTP server and closes all connections.",
 		ParameterTypes: []BuiltInParameter{
@@ -562,8 +565,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpCreateClient function
-	r.functions[HTTPCreateClientFunc] = &BuiltInFunction{
-		Name:        HTTPCreateClientFunc,
+	r.functions[HTTPCreateClientOsprey] = &BuiltInFunction{
+		Name:        HTTPCreateClientOsprey,
+		CName:       HTTPCreateClientFunc,
 		Signature:   "httpCreateClient(base_url: string, timeout: int) -> int",
 		Description: "Creates an HTTP client for making requests to a base URL.",
 		ParameterTypes: []BuiltInParameter{
@@ -580,8 +584,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpGet function
-	r.functions[HTTPGetFunc] = &BuiltInFunction{
-		Name:        HTTPGetFunc,
+	r.functions[HTTPGetOsprey] = &BuiltInFunction{
+		Name:        HTTPGetOsprey,
+		CName:       HTTPGetFunc,
 		Signature:   "httpGet(clientID: int, path: string, headers: string) -> int",
 		Description: "Makes an HTTP GET request to the specified path.",
 		ParameterTypes: []BuiltInParameter{
@@ -599,8 +604,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpPost function
-	r.functions[HTTPPostFunc] = &BuiltInFunction{
-		Name:        HTTPPostFunc,
+	r.functions[HTTPPostOsprey] = &BuiltInFunction{
+		Name:        HTTPPostOsprey,
+		CName:       HTTPPostFunc,
 		Signature:   "httpPost(clientID: int, path: string, body: string, headers: string) -> int",
 		Description: "Makes an HTTP POST request with a request body.",
 		ParameterTypes: []BuiltInParameter{
@@ -619,8 +625,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpPut function
-	r.functions[HTTPPutFunc] = &BuiltInFunction{
-		Name:        HTTPPutFunc,
+	r.functions[HTTPPutOsprey] = &BuiltInFunction{
+		Name:        HTTPPutOsprey,
+		CName:       HTTPPutFunc,
 		Signature:   "httpPut(clientID: int, path: string, body: string, headers: string) -> int",
 		Description: "Makes an HTTP PUT request with a request body.",
 		ParameterTypes: []BuiltInParameter{
@@ -639,8 +646,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpDelete function
-	r.functions[HTTPDeleteFunc] = &BuiltInFunction{
-		Name:        HTTPDeleteFunc,
+	r.functions[HTTPDeleteOsprey] = &BuiltInFunction{
+		Name:        HTTPDeleteOsprey,
+		CName:       HTTPDeleteFunc,
 		Signature:   "httpDelete(clientID: int, path: string, headers: string) -> int",
 		Description: "Makes an HTTP DELETE request to the specified path.",
 		ParameterTypes: []BuiltInParameter{
@@ -657,8 +665,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpRequest function
-	r.functions[HTTPRequestFunc] = &BuiltInFunction{
-		Name:        HTTPRequestFunc,
+	r.functions[HTTPRequestOsprey] = &BuiltInFunction{
+		Name:        HTTPRequestOsprey,
+		CName:       HTTPRequestFunc,
 		Signature:   "httpRequest(clientID: int, method: int, path: string, headers: string, body: string) -> int",
 		Description: "Makes a generic HTTP request with any method.",
 		ParameterTypes: []BuiltInParameter{
@@ -677,8 +686,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	}
 
 	// httpCloseClient function
-	r.functions[HTTPCloseClientFunc] = &BuiltInFunction{
-		Name:        HTTPCloseClientFunc,
+	r.functions[HTTPCloseClientOsprey] = &BuiltInFunction{
+		Name:        HTTPCloseClientOsprey,
+		CName:       HTTPCloseClientFunc,
 		Signature:   "httpCloseClient(clientID: int) -> int",
 		Description: "Closes the HTTP client and cleans up resources.",
 		ParameterTypes: []BuiltInParameter{
@@ -696,8 +706,9 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 // registerWebSocketFunctions registers WebSocket-related functions
 func (r *BuiltInFunctionRegistry) registerWebSocketFunctions() {
 	// websocketConnect function
-	r.functions[WebSocketConnectFunc] = &BuiltInFunction{
-		Name: WebSocketConnectFunc,
+	r.functions[WebSocketConnectOsprey] = &BuiltInFunction{
+		Name:  WebSocketConnectOsprey,
+		CName: WebSocketConnectFunc,
 		Signature: "websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> " +
 			"Result<WebSocketID, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
@@ -726,8 +737,9 @@ match wsResult {
 	}
 
 	// websocketSend function
-	r.functions[WebSocketSendFunc] = &BuiltInFunction{
-		Name:      WebSocketSendFunc,
+	r.functions[WebSocketSendOsprey] = &BuiltInFunction{
+		Name:      WebSocketSendOsprey,
+		CName:     WebSocketSendFunc,
 		Signature: "websocketSend(wsID: Int, message: String) -> Result<Success, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
 			"Result<Success, String>. Sends a message through the WebSocket connection.",
@@ -748,8 +760,9 @@ match sendResult {
 	}
 
 	// websocketClose function
-	r.functions[WebSocketCloseFunc] = &BuiltInFunction{
-		Name:      WebSocketCloseFunc,
+	r.functions[WebSocketCloseOsprey] = &BuiltInFunction{
+		Name:      WebSocketCloseOsprey,
+		CName:     WebSocketCloseFunc,
 		Signature: "websocketClose(wsID: Int) -> Result<Success, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
 			"Result<Success, String>. Closes the WebSocket connection and cleans up resources.",
@@ -769,8 +782,9 @@ match closeResult {
 	}
 
 	// websocketCreateServer function
-	r.functions[WebSocketCreateServerFunc] = &BuiltInFunction{
-		Name:      WebSocketCreateServerFunc,
+	r.functions[WebSocketCreateServerOsprey] = &BuiltInFunction{
+		Name:      WebSocketCreateServerOsprey,
+		CName:     WebSocketCreateServerFunc,
 		Signature: "websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
 			"Result<ServerID, String> and has critical runtime issues with port binding failures. " +
@@ -795,8 +809,9 @@ match serverResult {
 	}
 
 	// websocketServerListen function
-	r.functions[WebSocketServerListenFunc] = &BuiltInFunction{
-		Name:      WebSocketServerListenFunc,
+	r.functions[WebSocketServerListenOsprey] = &BuiltInFunction{
+		Name:      WebSocketServerListenOsprey,
+		CName:     WebSocketServerListenFunc,
 		Signature: "websocketServerListen(serverID: Int) -> Result<Success, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
 			"Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. " +
@@ -817,8 +832,9 @@ match listenResult {
 	}
 
 	// websocketServerBroadcast function
-	r.functions[WebSocketServerBroadcastFunc] = &BuiltInFunction{
-		Name:      WebSocketServerBroadcastFunc,
+	r.functions[WebSocketServerBroadcastOsprey] = &BuiltInFunction{
+		Name:      WebSocketServerBroadcastOsprey,
+		CName:     WebSocketServerBroadcastFunc,
 		Signature: "websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of " +
 			"clients sent to) instead of Result<Success, String>. Broadcasts a message to all " +
@@ -840,8 +856,9 @@ match broadcastResult {
 	}
 
 	// websocketStopServer function
-	r.functions[WebSocketStopServerFunc] = &BuiltInFunction{
-		Name:      WebSocketStopServerFunc,
+	r.functions[WebSocketStopServerOsprey] = &BuiltInFunction{
+		Name:      WebSocketStopServerOsprey,
+		CName:     WebSocketStopServerFunc,
 		Signature: "websocketStopServer(serverID: Int) -> Result<Success, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
 			"Result<Success, String>. Stops the WebSocket server and closes all connections.",
@@ -1000,13 +1017,13 @@ func (r *BuiltInFunctionRegistry) registerFiberFunctions() {
 	r.functions["send"] = &BuiltInFunction{
 		Name:        "send",
 		CName:       "channel_send",
-		Signature:   "send(channel: Channel, value: any) -> bool",
-		Description: "Sends a value to a channel.",
+		Signature:   "send(channel: Channel, value: any) -> int",
+		Description: "Sends a value to a channel. Returns 1 for success, 0 for failure.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "channel", Type: &ConcreteType{name: "Channel"}, Description: "The channel to send to"},
 			{Name: "value", Type: &ConcreteType{name: "any"}, Description: "The value to send"},
 		},
-		ReturnType:   &ConcreteType{name: "bool"},
+		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryFiber,
 		IsProtected:  false,
 		SecurityFlag: PermissionNone,

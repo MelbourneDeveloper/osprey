@@ -272,14 +272,14 @@ func WrapBuiltInRedefine(funcName string) error {
 
 // WrapHTTPCreateServerWrongArgs wraps errors for wrong number of HTTP server creation arguments
 func WrapHTTPCreateServerWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCreateServerFunc)
-	return WrapWrongArgCount("httpCreateServer", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCreateServerOsprey)
+	return WrapWrongArgCount(HTTPCreateServerOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPListenWrongArgs wraps errors for wrong number of HTTP listen arguments
 func WrapHTTPListenWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPListenFunc)
-	return WrapWrongArgCount("httpListen", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPListenOsprey)
+	return WrapWrongArgCount(HTTPListenOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPStopServerUnknownNamedArg wraps errors for unknown named arguments in HTTP stop server
@@ -289,38 +289,38 @@ func WrapHTTPStopServerUnknownNamedArg(argName string) error {
 
 // WrapHTTPStopServerWrongArgCount wraps errors for wrong argument count in HTTP stop server
 func WrapHTTPStopServerWrongArgCount(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPStopServerFunc)
-	return WrapWrongArgCount("httpStopServer", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPStopServerOsprey)
+	return WrapWrongArgCount(HTTPStopServerOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPPostWrongArgs wraps errors for wrong number of HTTP POST arguments
 func WrapHTTPPostWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPPostFunc)
-	return WrapWrongArgCount("httpPost", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPPostOsprey)
+	return WrapWrongArgCount(HTTPPostOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPPutWrongArgs wraps errors for wrong number of HTTP PUT arguments
 func WrapHTTPPutWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPPutFunc)
-	return WrapWrongArgCount("httpPut", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPPutOsprey)
+	return WrapWrongArgCount(HTTPPutOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPDeleteWrongArgs wraps errors for wrong number of HTTP DELETE arguments
 func WrapHTTPDeleteWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPDeleteFunc)
-	return WrapWrongArgCount("httpDelete", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPDeleteOsprey)
+	return WrapWrongArgCount(HTTPDeleteOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPRequestWrongArgs wraps errors for wrong number of HTTP request arguments
 func WrapHTTPRequestWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPRequestFunc)
-	return WrapWrongArgCount("httpRequest", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPRequestOsprey)
+	return WrapWrongArgCount(HTTPRequestOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPCloseClientWrongArgs wraps errors for wrong number of HTTP close client arguments
 func WrapHTTPCloseClientWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCloseClientFunc)
-	return WrapWrongArgCount("httpCloseClient", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCloseClientOsprey)
+	return WrapWrongArgCount(HTTPCloseClientOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapHTTPFunctionWrongArgs wraps errors for wrong number of HTTP function arguments
@@ -340,44 +340,44 @@ func WrapHTTPFunctionMissingNamedArg(functionName, argName string) error {
 
 // WrapWebSocketConnectWrongArgs wraps errors for wrong number of WebSocket connect arguments
 func WrapWebSocketConnectWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketConnectFunc)
-	return WrapWrongArgCount("websocketConnect", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketConnectOsprey)
+	return WrapWrongArgCount(WebSocketConnectOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketSendWrongArgs wraps errors for wrong number of WebSocket send arguments
 func WrapWebSocketSendWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketSendFunc)
-	return WrapWrongArgCount("websocketSend", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketSendOsprey)
+	return WrapWrongArgCount(WebSocketSendOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketCloseWrongArgs wraps errors for wrong number of WebSocket close arguments
 func WrapWebSocketCloseWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketCloseFunc)
-	return WrapWrongArgCount("websocketClose", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketCloseOsprey)
+	return WrapWrongArgCount(WebSocketCloseOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketCreateServerWrongArgs wraps errors for wrong number of WebSocket server creation arguments
 func WrapWebSocketCreateServerWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketCreateServerFunc)
-	return WrapWrongArgCount("websocketCreateServer", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketCreateServerOsprey)
+	return WrapWrongArgCount(WebSocketCreateServerOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketServerListenWrongArgs wraps errors for wrong number of WebSocket server listen arguments
 func WrapWebSocketServerListenWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketServerListenFunc)
-	return WrapWrongArgCount("websocketServerListen", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketServerListenOsprey)
+	return WrapWrongArgCount(WebSocketServerListenOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketServerBroadcastWrongArgs wraps errors for wrong number of WebSocket server broadcast arguments
 func WrapWebSocketServerBroadcastWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketServerBroadcastFunc)
-	return WrapWrongArgCount("websocketServerBroadcast", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketServerBroadcastOsprey)
+	return WrapWrongArgCount(WebSocketServerBroadcastOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapWebSocketStopServerWrongArgs wraps errors for wrong number of WebSocket stop server arguments
 func WrapWebSocketStopServerWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketStopServerFunc)
-	return WrapWrongArgCount("websocketStopServer", len(fn.ParameterTypes), argCount)
+	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketStopServerOsprey)
+	return WrapWrongArgCount(WebSocketStopServerOsprey, len(fn.ParameterTypes), argCount)
 }
 
 // WrapMapWrongArgs wraps errors for wrong number of map arguments

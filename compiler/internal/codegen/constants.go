@@ -77,7 +77,39 @@ const (
 	CleanupProcessFunc = "cleanupProcess"
 )
 
-// HTTP Function names.
+// Osprey HTTP Function names.
+// These are the names of the functions at the Osprey level.
+const (
+	// HTTP Server functions.
+	HTTPCreateServerOsprey = "httpCreateServer"
+	HTTPListenOsprey       = "httpListen"
+	HTTPStopServerOsprey   = "httpStopServer"
+
+	// HTTP Client functions.
+	HTTPCreateClientOsprey = "httpCreateClient"
+	HTTPGetOsprey          = "httpGet"
+	HTTPPostOsprey         = "httpPost"
+	HTTPPutOsprey          = "httpPut"
+	HTTPDeleteOsprey       = "httpDelete"
+	HTTPRequestOsprey      = "httpRequest"
+	HTTPCloseClientOsprey  = "httpCloseClient"
+
+	// WebSocket functions.
+	WebSocketConnectOsprey = "websocketConnect"
+	WebSocketSendOsprey    = "websocketSend"
+	WebSocketCloseOsprey   = "websocketClose"
+
+	// WebSocket Server functions.
+	WebSocketCreateServerOsprey    = "websocketCreateServer"
+	WebSocketServerListenOsprey    = "websocketServerListen"
+	WebSocketServerSendOsprey      = "websocketServerSend"
+	WebSocketServerBroadcastOsprey = "websocketServerBroadcast"
+	WebSocketStopServerOsprey      = "websocketStopServer"
+)
+
+// C Runtime HTTP Function names.
+// These are the names of the functions at the C level.
+// There are NOT the Osprey function names
 const (
 	// HTTP Server functions.
 	HTTPCreateServerFunc = "http_create_server"

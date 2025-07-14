@@ -272,6 +272,8 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 	oldFunc := ec.generator.function
 	oldBuilder := ec.generator.builder
 	oldVars := ec.generator.variables
+	// CRITICAL FIX: Save the type inference environment too
+	oldTypeEnv := ec.generator.typeInferer.env.Clone()
 
 	ec.generator.function = handlerFunc
 	ec.generator.builder = handlerFunc.NewBlock("entry")
@@ -280,7 +282,11 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 	// Add parameters to scope
 	for i, param := range handlerFunc.Params {
 		if i < len(arm.Parameters) {
+			// Add to runtime variables map
 			ec.generator.variables[arm.Parameters[i]] = param
+			// CRITICAL FIX: Add to type inference environment too
+			paramType := ec.llvmTypeToConcreteType(param.Type())
+			ec.generator.typeInferer.env.Set(arm.Parameters[i], paramType)
 		}
 	}
 
@@ -323,8 +329,27 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 	ec.generator.function = oldFunc
 	ec.generator.builder = oldBuilder
 	ec.generator.variables = oldVars
+	// CRITICAL FIX: Restore the type inference environment
+	ec.generator.typeInferer.env = oldTypeEnv
 
 	return nil
+}
+
+// llvmTypeToConcreteType converts LLVM types to Hindley-Milner concrete types
+func (ec *EffectCodegen) llvmTypeToConcreteType(llvmType types.Type) Type {
+	switch llvmType {
+	case types.I64:
+		return &ConcreteType{name: TypeInt}
+	case types.I8Ptr:
+		return &ConcreteType{name: TypeString}
+	case types.I1:
+		return &ConcreteType{name: TypeBool}
+	case types.Void:
+		return &ConcreteType{name: TypeUnit}
+	default:
+		// Default to int for unknown types
+		return &ConcreteType{name: TypeInt}
+	}
 }
 
 // createHandlerFunction creates a handler function for an effect operation

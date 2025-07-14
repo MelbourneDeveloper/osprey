@@ -24,7 +24,7 @@ func TestGenerateEffectDeclaration_NoMalformedLLVM(t *testing.T) {
 						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 				},
-				ReturnType: "Unit",
+				ReturnType: codegen.TypeUnit,
 			},
 		},
 	}
@@ -93,7 +93,7 @@ func TestGenerateEffectDeclaration_EffectRegistration(t *testing.T) {
 						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 				},
-				ReturnType: "Unit",
+				ReturnType: codegen.TypeUnit,
 			},
 		},
 	}
@@ -129,7 +129,7 @@ func TestGenerateEffectDeclaration_ErrorHandling(t *testing.T) {
 						Type: nil, // Missing type - should cause error
 					},
 				},
-				ReturnType: "Unit",
+				ReturnType: codegen.TypeUnit,
 			},
 		},
 	}
@@ -161,7 +161,7 @@ func TestGenerateEffectDeclaration_MultipleEffects(t *testing.T) {
 						Type: &ast.TypeExpression{Name: codegen.TypeString},
 					},
 				},
-				ReturnType: "Unit",
+				ReturnType: codegen.TypeUnit,
 			},
 		},
 	}
@@ -182,7 +182,7 @@ func TestGenerateEffectDeclaration_MultipleEffects(t *testing.T) {
 						Type: &ast.TypeExpression{Name: codegen.TypeInt},
 					},
 				},
-				ReturnType: "Unit",
+				ReturnType: codegen.TypeUnit,
 			},
 		},
 	}

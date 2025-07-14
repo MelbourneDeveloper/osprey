@@ -445,6 +445,13 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 		return val, nil
 	}
 
+	// Check for built-in functions
+	if _, exists := GlobalBuiltInRegistry.GetFunction(ident.Name); exists {
+		// For built-in functions referenced as identifiers, we need to create/get the LLVM function
+		// This handles cases where built-in functions are passed as values
+		return g.ensureBuiltinFunctionDeclaration(ident.Name), nil
+	}
+
 	// Check if this exists in the Hindley-Milner type environment
 	if _, exists := g.typeInferer.env.Get(ident.Name); exists {
 		// Variable exists in type environment but not in runtime
@@ -1386,4 +1393,39 @@ func (g *LLVMGenerator) ensureMallocDeclaration() *ir.Func {
 		ir.NewParam("size", types.I64))
 	g.functions["malloc"] = malloc
 	return malloc
+}
+
+// ensureBuiltinFunctionDeclaration ensures a built-in function is declared using builtin registry
+func (g *LLVMGenerator) ensureBuiltinFunctionDeclaration(ospreyName string) *ir.Func {
+	// Get function details from builtin registry
+	builtinFunc, exists := GlobalBuiltInRegistry.GetFunction(ospreyName)
+	if !exists {
+		return nil
+	}
+
+	// Determine the actual function name to use for LLVM
+	llvmFunctionName := ospreyName
+	if builtinFunc.CName != "" {
+		llvmFunctionName = builtinFunc.CName
+	}
+
+	// Check if function is already declared
+	if fn, exists := g.functions[ospreyName]; exists {
+		return fn
+	}
+
+	// Convert builtin parameters to LLVM parameters
+	params := make([]*ir.Param, len(builtinFunc.ParameterTypes))
+	for i, param := range builtinFunc.ParameterTypes {
+		llvmType := g.getLLVMType(param.Type.String())
+		params[i] = ir.NewParam(param.Name, llvmType)
+	}
+
+	// Convert return type to LLVM type
+	returnType := g.getLLVMType(builtinFunc.ReturnType.String())
+
+	// Create function with the correct name (C name if available, otherwise Osprey name)
+	fn := g.module.NewFunc(llvmFunctionName, returnType, params...)
+	g.functions[ospreyName] = fn
+	return fn
 }

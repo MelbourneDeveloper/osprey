@@ -26,8 +26,11 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		funcName = ident.Name
 
 		// First check if this is a built-in function
-		if result, err := g.handleBuiltInFunction(funcName, callExpr); result != nil || err != nil {
-			return result, err
+		if result, err := g.handleBuiltInFunction(funcName, callExpr); err != nil {
+			return nil, err
+		} else if _, exists := GlobalBuiltInRegistry.GetFunction(funcName); exists {
+			// This is a built-in function that was handled successfully (even if it returned nil)
+			return result, nil
 		}
 	}
 

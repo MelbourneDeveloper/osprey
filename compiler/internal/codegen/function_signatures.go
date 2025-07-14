@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/llir/llvm/ir"
+	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/types"
 
 	"github.com/christianfindlay/osprey/internal/ast"
@@ -44,13 +45,30 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 	}
 
 	// For recursion: Add the function to the environment before processing the body
-	// We'll use a fresh type variable for the return type initially
-	returnTypeVar := g.typeInferer.Fresh()
+	// CRITICAL FIX: Use explicit return type annotation if present
+	var returnTypeVar Type
+	if fnDecl.ReturnType != nil {
+		// Use the explicit return type annotation
+		returnTypeVar = &ConcreteType{name: fnDecl.ReturnType.Name}
+	} else {
+		// Use a fresh type variable for the return type only if no explicit annotation
+		returnTypeVar = g.typeInferer.Fresh()
+	}
+
 	fnType := &FunctionType{
 		paramTypes: paramTypes,
 		returnType: returnTypeVar,
 	}
 	g.typeInferer.env.Set(fnDecl.Name, fnType)
+
+	// CRITICAL FIX: Set effect context for functions with effect annotations
+	var oldEffects []string
+	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
+		// Save old effect context
+		oldEffects = g.effectCodegen.currentFunctionEffects
+		// Set current function effects
+		g.effectCodegen.currentFunctionEffects = fnDecl.Effects
+	}
 
 	// Infer body type
 	bodyType, err := g.typeInferer.InferType(fnDecl.Body)
@@ -58,6 +76,10 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		// Restore environment AND substitution map on error
 		g.typeInferer.env = oldEnv
 		g.typeInferer.subst = oldSubst
+		// Restore effect context on error
+		if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
+			g.effectCodegen.currentFunctionEffects = oldEffects
+		}
 		return err
 	}
 
@@ -66,7 +88,16 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		// Restore environment AND substitution map on error
 		g.typeInferer.env = oldEnv
 		g.typeInferer.subst = oldSubst
+		// Restore effect context on error
+		if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
+			g.effectCodegen.currentFunctionEffects = oldEffects
+		}
 		return fmt.Errorf("return type mismatch: %w", err)
+	}
+
+	// Restore effect context
+	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
+		g.effectCodegen.currentFunctionEffects = oldEffects
 	}
 
 	// Create the final function type with the unified return type
@@ -84,6 +115,12 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 
 	// Generate LLVM function signature ONLY (no body)
 	llvmReturnType := g.getLLVMType(finalFnType.returnType.String())
+
+	// Special case: main function must return i32 for C compatibility
+	if fnDecl.Name == MainFunctionName {
+		llvmReturnType = types.I32
+	}
+
 	params := make([]*ir.Param, len(paramTypes))
 	for i, paramType := range paramTypes {
 		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType.String()))
@@ -132,7 +169,16 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	}
 
 	// For recursion: Add the function to the environment before processing the body
-	returnTypeVar := g.typeInferer.Fresh()
+	// CRITICAL FIX: Use explicit return type annotation if present
+	var returnTypeVar Type
+	if fnDecl.ReturnType != nil {
+		// Use the explicit return type annotation
+		returnTypeVar = &ConcreteType{name: fnDecl.ReturnType.Name}
+	} else {
+		// Use a fresh type variable for the return type only if no explicit annotation
+		returnTypeVar = g.typeInferer.Fresh()
+	}
+
 	fnType := &FunctionType{
 		paramTypes: paramTypes,
 		returnType: returnTypeVar,
@@ -177,6 +223,15 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		g.variables[param.Name] = params[i]
 	}
 
+	// CRITICAL FIX: Set effect context for functions with effect annotations
+	var oldEffects []string
+	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
+		// Save old effect context
+		oldEffects = g.effectCodegen.currentFunctionEffects
+		// Set current function effects
+		g.effectCodegen.currentFunctionEffects = fnDecl.Effects
+	}
+
 	bodyValue, err := g.generateExpression(fnDecl.Body)
 	if err != nil {
 		// Clean up before returning error
@@ -185,6 +240,10 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		}
 		g.expectedReturnType = oldExpectedReturnType
 		g.typeInferer.env = oldEnv
+		// CRITICAL FIX: Restore effect context on error
+		if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
+			g.effectCodegen.currentFunctionEffects = oldEffects
+		}
 		return err
 	}
 
@@ -200,8 +259,20 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	// Restore expected return type context
 	g.expectedReturnType = oldExpectedReturnType
 
+	// CRITICAL FIX: Restore effect context
+	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
+		g.effectCodegen.currentFunctionEffects = oldEffects
+	}
+
 	// Add return instruction
-	g.builder.NewRet(bodyValue)
+	if fn.Sig.RetType == types.Void {
+		g.builder.NewRet(nil)
+	} else if fnDecl.Name == MainFunctionName {
+		// Special case: main function returns 0 for success
+		g.builder.NewRet(constant.NewInt(types.I32, 0))
+	} else {
+		g.builder.NewRet(bodyValue)
+	}
 
 	return nil
 }
