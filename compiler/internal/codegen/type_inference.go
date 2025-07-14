@@ -237,9 +237,9 @@ func NewTypeVar(id int, name string) *TypeVar {
 
 func (tv *TypeVar) String() string {
 	if tv.name != "" {
-		return "'" + tv.name
+		return tv.name
 	}
-	return fmt.Sprintf("'t%d", tv.id)
+	return fmt.Sprintf("t%d", tv.id)
 }
 
 // Category returns the category of the type variable
@@ -462,6 +462,194 @@ func (ti *TypeInferer) Unify(t1, t2 Type) error {
 	}
 }
 
+
+// ResolveType resolves a type by following substitutions and resolving unbound type variables
+func (ti *TypeInferer) ResolveType(t Type) Type {
+	resolved := ti.prune(t)
+
+	// If it's still a type variable after pruning, it's unbound
+	if tv, ok := resolved.(*TypeVar); ok {
+		// Try to infer a concrete type based on context
+		concreteType := ti.resolveUnboundTypeVariable(tv)
+		// Update the substitution for future references
+		ti.subst[tv.id] = concreteType
+		return concreteType
+	}
+
+	// For concrete types, return as-is (don't modify)
+	if _, ok := resolved.(*ConcreteType); ok {
+		return resolved
+	}
+	if _, ok := resolved.(*PrimitiveType); ok {
+		return resolved
+	}
+
+	// For function types, only resolve if they contain unbound type variables
+	if ft, ok := resolved.(*FunctionType); ok {
+		hasUnboundVars := false
+
+		// Check if any parameter types need resolution
+		newParams := make([]Type, len(ft.paramTypes))
+		for i, p := range ft.paramTypes {
+			resolvedParam := ti.ResolveType(p)
+			newParams[i] = resolvedParam
+			if resolvedParam != p {
+				hasUnboundVars = true
+			}
+		}
+
+		// Check if return type needs resolution
+		resolvedReturn := ti.ResolveType(ft.returnType)
+		if resolvedReturn != ft.returnType {
+			hasUnboundVars = true
+		}
+
+		// Only create a new function type if something actually changed
+		if hasUnboundVars {
+			return &FunctionType{
+				paramTypes: newParams,
+				returnType: resolvedReturn,
+			}
+		}
+	}
+
+	return resolved
+}
+
+// ResolveAllEnvironmentTypes resolves all types in the type environment
+func (ti *TypeInferer) ResolveAllEnvironmentTypes() {
+	for name, t := range ti.env.vars {
+		// Skip function types to avoid recursive resolution issues
+		if _, ok := t.(*FunctionType); ok {
+			continue
+		}
+		ti.env.vars[name] = ti.ResolveType(t)
+	}
+}
+
+// Helper functions for type checking
+func uniqueInts(ints []int) []int {
+	seen := make(map[int]bool)
+	var result []int
+	for _, i := range ints {
+		if !seen[i] {
+			seen[i] = true
+			result = append(result, i)
+		}
+	}
+	return result
+}
+
+
+// Helper functions for operator checking
+func isArithmeticOp(op string) bool {
+	return op == "+" || op == "-" || op == "*" || op == "/" || op == "%"
+}
+
+func isComparisonOp(op string) bool {
+	return op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" || op == ">="
+}
+
+func isLogicalOp(op string) bool {
+	return op == "&&" || op == "||"
+}
+
+// Now I need to continue with the rest of the functions...
+
+// InferType performs type inference on an expression
+func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
+	switch e := expr.(type) {
+	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
+		return ti.inferLiteralType(e)
+	case *ast.Identifier:
+		return ti.inferIdentifierType(e)
+	case *ast.LambdaExpression:
+		return ti.inferLambdaExpression(e)
+	case *ast.CallExpression:
+		return ti.inferCallExpression(e)
+	case *ast.InterpolatedStringLiteral:
+		return &ConcreteType{name: TypeString}, nil
+	case *ast.SpawnExpression, *ast.AwaitExpression, *ast.YieldExpression:
+		return ti.inferConcurrencyExpression(e)
+	case *ast.ChannelExpression, *ast.ChannelCreateExpression:
+		return ti.inferChannelExpression(e)
+	case *ast.ChannelSendExpression, *ast.ChannelRecvExpression:
+		return ti.inferChannelOperationExpression(e)
+	case *ast.SelectExpression:
+		return ti.inferSelectExpression(e)
+	case *ast.ModuleAccessExpression:
+		return ti.inferModuleAccessExpression(e)
+	case *ast.BinaryExpression:
+		return ti.inferBinaryExpression(e)
+	case *ast.FieldAccessExpression:
+		return ti.inferFieldAccess(e)
+	case *ast.TypeConstructorExpression:
+		return ti.inferTypeConstructor(e)
+	case *ast.MatchExpression:
+		return ti.inferMatchExpression(e)
+	case *ast.ResultExpression:
+		return ti.inferResultExpression(e)
+	case *ast.ListLiteral:
+		return ti.inferListLiteral(e)
+	case *ast.BlockExpression:
+		return ti.inferBlockExpression(e)
+	case *ast.UnaryExpression:
+		return ti.inferUnaryExpression(e)
+	case *ast.MethodCallExpression:
+		return ti.inferMethodCall(e)
+	case *ast.ListAccessExpression:
+		return ti.inferListAccess(e)
+	case *ast.PerformExpression:
+		return ti.inferPerformExpression(e)
+	case *ast.HandlerExpression:
+		return ti.inferHandlerExpression(e)
+	default:
+		return nil, fmt.Errorf("%w: %T", ErrUnsupportedExpression, expr)
+	}
+}
+
+// InferPattern performs type inference on a pattern
+func (ti *TypeInferer) InferPattern(pattern ast.Pattern) (Type, error) {
+	switch pattern.Constructor {
+	case "_":
+		// Wildcard pattern matches anything
+		return ti.Fresh(), nil
+	case "":
+		// Variable pattern
+		if pattern.Variable != "" {
+			tv := ti.Fresh()
+			ti.env.Set(pattern.Variable, tv)
+			return tv, nil
+		}
+		return nil, ErrInvalidEmptyPattern
+	case "true", "false":
+		// Boolean literal pattern
+		return &ConcreteType{name: TypeBool}, nil
+	default:
+		// Check if it's an integer literal pattern
+		if _, err := strconv.ParseInt(pattern.Constructor, 10, 64); err == nil {
+			return &ConcreteType{name: TypeInt}, nil
+		}
+
+		// Check if it's a string literal pattern (quoted)
+		constructorLen := len(pattern.Constructor)
+		if constructorLen >= 2 && pattern.Constructor[0] == '"' &&
+			pattern.Constructor[constructorLen-1] == '"' {
+			return &ConcreteType{name: TypeString}, nil
+		}
+
+		// Constructor pattern - look up in environment
+		if t, ok := ti.env.Get(pattern.Constructor); ok {
+			// Handle field bindings
+			for _, field := range pattern.Fields {
+				ti.env.Set(field, ti.Fresh())
+			}
+			return t, nil
+		}
+		return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, pattern.Constructor)
+	}
+}
+
 // unifyPrimitiveTypes handles unification of primitive types
 func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 	// Handle backward compatibility with ConcreteType
@@ -649,83 +837,7 @@ func (ti *TypeInferer) unifyTypeVariables(t1, t2 Type) error {
 	return ErrNotTypeVariable
 }
 
-// ResolveType resolves a type by following substitutions and resolving unbound type variables
-func (ti *TypeInferer) ResolveType(t Type) Type {
-	resolved := ti.prune(t)
-
-	// If it's still a type variable after pruning, it's unbound
-	if tv, ok := resolved.(*TypeVar); ok {
-		// Try to infer a concrete type based on context
-		concreteType := ti.resolveUnboundTypeVariable(tv)
-		// Update the substitution for future references
-		ti.subst[tv.id] = concreteType
-		return concreteType
-	}
-
-	// For concrete types, return as-is (don't modify)
-	if _, ok := resolved.(*ConcreteType); ok {
-		return resolved
-	}
-	if _, ok := resolved.(*PrimitiveType); ok {
-		return resolved
-	}
-
-	// For function types, only resolve if they contain unbound type variables
-	if ft, ok := resolved.(*FunctionType); ok {
-		hasUnboundVars := false
-
-		// Check if any parameter types need resolution
-		newParams := make([]Type, len(ft.paramTypes))
-		for i, p := range ft.paramTypes {
-			resolvedParam := ti.ResolveType(p)
-			newParams[i] = resolvedParam
-			if resolvedParam != p {
-				hasUnboundVars = true
-			}
-		}
-
-		// Check if return type needs resolution
-		resolvedReturn := ti.ResolveType(ft.returnType)
-		if resolvedReturn != ft.returnType {
-			hasUnboundVars = true
-		}
-
-		// Only create a new function type if something actually changed
-		if hasUnboundVars {
-			return &FunctionType{
-				paramTypes: newParams,
-				returnType: resolvedReturn,
-			}
-		}
-	}
-
-	return resolved
-}
-
-// ResolveAllEnvironmentTypes resolves all types in the type environment
-func (ti *TypeInferer) ResolveAllEnvironmentTypes() {
-	for name, t := range ti.env.vars {
-		// Skip function types to avoid recursive resolution issues
-		if _, ok := t.(*FunctionType); ok {
-			continue
-		}
-		ti.env.vars[name] = ti.ResolveType(t)
-	}
-}
-
-// Helper functions for type checking
-func uniqueInts(ints []int) []int {
-	seen := make(map[int]bool)
-	var result []int
-	for _, i := range ints {
-		if !seen[i] {
-			seen[i] = true
-			result = append(result, i)
-		}
-	}
-	return result
-}
-
+// occursCheck checks if a type variable occurs in a type (prevents infinite types)
 func (ti *TypeInferer) occursCheck(v *TypeVar, t Type) bool {
 	t = ti.prune(t)
 	switch t := t.(type) {
@@ -831,118 +943,6 @@ func (ti *TypeInferer) getFreeVars(t Type) []int {
 		return []int{}
 	}
 }
-
-// Helper functions for operator checking
-func isArithmeticOp(op string) bool {
-	return op == "+" || op == "-" || op == "*" || op == "/" || op == "%"
-}
-
-func isComparisonOp(op string) bool {
-	return op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" || op == ">="
-}
-
-func isLogicalOp(op string) bool {
-	return op == "&&" || op == "||"
-}
-
-// Now I need to continue with the rest of the functions...
-
-// InferType performs type inference on an expression
-func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
-	switch e := expr.(type) {
-	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
-		return ti.inferLiteralType(e)
-	case *ast.Identifier:
-		return ti.inferIdentifierType(e)
-	case *ast.LambdaExpression:
-		return ti.inferLambdaExpression(e)
-	case *ast.CallExpression:
-		return ti.inferCallExpression(e)
-	case *ast.InterpolatedStringLiteral:
-		return &ConcreteType{name: TypeString}, nil
-	case *ast.SpawnExpression, *ast.AwaitExpression, *ast.YieldExpression:
-		return ti.inferConcurrencyExpression(e)
-	case *ast.ChannelExpression, *ast.ChannelCreateExpression:
-		return ti.inferChannelExpression(e)
-	case *ast.ChannelSendExpression, *ast.ChannelRecvExpression:
-		return ti.inferChannelOperationExpression(e)
-	case *ast.SelectExpression:
-		return ti.inferSelectExpression(e)
-	case *ast.ModuleAccessExpression:
-		return ti.inferModuleAccessExpression(e)
-	case *ast.BinaryExpression:
-		return ti.inferBinaryExpression(e)
-	case *ast.FieldAccessExpression:
-		return ti.inferFieldAccess(e)
-	case *ast.TypeConstructorExpression:
-		return ti.inferTypeConstructor(e)
-	case *ast.MatchExpression:
-		return ti.inferMatchExpression(e)
-	case *ast.ResultExpression:
-		return ti.inferResultExpression(e)
-	case *ast.ListLiteral:
-		return ti.inferListLiteral(e)
-	case *ast.BlockExpression:
-		return ti.inferBlockExpression(e)
-	case *ast.UnaryExpression:
-		return ti.inferUnaryExpression(e)
-	case *ast.MethodCallExpression:
-		return ti.inferMethodCall(e)
-	case *ast.ListAccessExpression:
-		return ti.inferListAccess(e)
-	case *ast.PerformExpression:
-		return ti.inferPerformExpression(e)
-	case *ast.HandlerExpression:
-		return ti.inferHandlerExpression(e)
-	default:
-		return nil, fmt.Errorf("%w: %T", ErrUnsupportedExpression, expr)
-	}
-}
-
-// InferPattern performs type inference on a pattern
-func (ti *TypeInferer) InferPattern(pattern ast.Pattern) (Type, error) {
-	switch pattern.Constructor {
-	case "_":
-		// Wildcard pattern matches anything
-		return ti.Fresh(), nil
-	case "":
-		// Variable pattern
-		if pattern.Variable != "" {
-			tv := ti.Fresh()
-			ti.env.Set(pattern.Variable, tv)
-			return tv, nil
-		}
-		return nil, ErrInvalidEmptyPattern
-	case "true", "false":
-		// Boolean literal pattern
-		return &ConcreteType{name: TypeBool}, nil
-	default:
-		// Check if it's an integer literal pattern
-		if _, err := strconv.ParseInt(pattern.Constructor, 10, 64); err == nil {
-			return &ConcreteType{name: TypeInt}, nil
-		}
-
-		// Check if it's a string literal pattern (quoted)
-		constructorLen := len(pattern.Constructor)
-		if constructorLen >= 2 && pattern.Constructor[0] == '"' &&
-			pattern.Constructor[constructorLen-1] == '"' {
-			return &ConcreteType{name: TypeString}, nil
-		}
-
-		// Constructor pattern - look up in environment
-		if t, ok := ti.env.Get(pattern.Constructor); ok {
-			// Handle field bindings
-			for _, field := range pattern.Fields {
-				ti.env.Set(field, ti.Fresh())
-			}
-			return t, nil
-		}
-		return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, pattern.Constructor)
-	}
-}
-
-// Continue with the rest of the inference functions, but I need to keep the existing file structure intact
-// I'll add the remaining functions in the next edit...
 
 // inferLiteralType infers types for literal expressions
 func (ti *TypeInferer) inferLiteralType(expr ast.Expression) (Type, error) {

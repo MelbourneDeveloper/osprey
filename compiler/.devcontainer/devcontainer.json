@@ -1,6 +1,0 @@
-{
-  "name": "Osprey Compiler",
-  "dockerFile": "../../.devcontainer/Dockerfile",
-  "context": "../../",
-  "workspaceFolder": "/workspace"
-} 
