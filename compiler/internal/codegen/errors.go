@@ -63,7 +63,7 @@ var (
 	ErrToStringReserved   = errors.New("toString is a reserved function name")
 
 	// WebSocket errors
-	ErrWebSocketKeepAliveWrongArgs = errors.New("webSocketKeepAlive function has wrong number of arguments")
+	ErrWebSocketKeepAliveWrongArgs = errors.New("websocketKeepAlive function has wrong number of arguments")
 
 	// Iterator errors
 	ErrForEachNotFunction = errors.New("forEach callback is not a function")

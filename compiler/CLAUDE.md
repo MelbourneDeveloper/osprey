@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Rules
+
+- **DO NOT COMMIT/PUSH CODE** unless explicitly requested
+- **NEVER DUPLICATE CODE** - Edit in place, **SEARCH** for code **BEFORE** creating new functions/constants
+- **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
+- **NEVER IGNORE TESTS** - Don't reduce assertions to make tests pass, fail loudly
+- **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules  
+- **FOLLOW STATIC ANALYSIS** - Pay attention to linters and fix issues
+- **MOVE FILES, DON'T COPY** - Use CLI commands to move files
+- **NO SWEARING IN CODE** - Keep code professional
+- **USE CONSTANTS** - Name values meaningfully instead of using literals
+
 ## Essential Commands
 
 **Build & Development:**

@@ -888,11 +888,11 @@ match stopResult {
 
 // registerSystemFunctions registers system-related functions
 func (r *BuiltInFunctionRegistry) registerSystemFunctions() {
-	// webSocketKeepAlive function
+	// websocketKeepAlive function
 	r.functions[WebSocketKeepAliveOsprey] = &BuiltInFunction{
 		Name:      WebSocketKeepAliveOsprey,
 		CName:     WebSocketKeepAliveFunc,
-		Signature: "websocket_keep_alive() -> Unit",
+		Signature: "websocketKeepAlive() -> Unit",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. " +
 			"Keeps the WebSocket server running indefinitely until interrupted (blocking operation).",
 		ParameterTypes: []BuiltInParameter{},
@@ -901,7 +901,7 @@ func (r *BuiltInFunctionRegistry) registerSystemFunctions() {
 		IsProtected:    true,
 		SecurityFlag:   PermissionWebSocket,
 		Generator:      (*LLVMGenerator).generateWebSocketKeepAliveCall,
-		Example:        `webSocketKeepAlive()  // Blocks until Ctrl+C`,
+		Example:        `websocketKeepAlive()  // Blocks until Ctrl+C`,
 	}
 
 }

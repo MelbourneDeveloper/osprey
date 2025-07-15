@@ -162,9 +162,9 @@ Extracts a substring from start to end index.
 
 Converts a value to its string representation.
 
-## [webSocketKeepAlive](websocketkeepalive/)
+## [websocketKeepAlive](websocketKeepAlive/)
 
-**Signature:** `webSocketKeepAlive() -> Unit`
+**Signature:** `websocketKeepAlive() -> Unit`
 
 ⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).
 

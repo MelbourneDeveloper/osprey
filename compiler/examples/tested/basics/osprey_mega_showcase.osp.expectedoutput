@@ -15,25 +15,25 @@
 ℹ️  Sales processed: North region, $12000, bonus: $1800
 📈 Metric: sales_processed += 1
 🔢 Counter: South incremented
-ℹ️  Sales processed: South region, $8500, bonus: $1275
+ℹ️  Sales processed: South region, $8500, bonus: $850
 📈 Metric: sales_processed += 1
 🔢 Counter: East incremented
-ℹ️  Sales processed: East region, $3200, bonus: $480
+ℹ️  Sales processed: East region, $3200, bonus: $160
 📈 Metric: performance_checked += 1
 ℹ️  Performance: /api/users - 45ms (Excellent)
 📈 Metric: performance_checked += 1
-ℹ️  Performance: /api/orders - 180ms (Excellent)
+ℹ️  Performance: /api/orders - 180ms (Good)
 📈 Metric: performance_checked += 1
-ℹ️  Performance: /api/reports - 650ms (Excellent)
-💾 Cache: Stored grand_total = 228125
+ℹ️  Performance: /api/reports - 650ms (Poor)
+💾 Cache: Stored grand_total = 30702
 📈 Metric: concurrent_processing_complete += 1
-ℹ️  Concurrent processing complete - Sales: 200500, Traffic: 25500, Performance: 2125
+ℹ️  Concurrent processing complete - Sales: 3662, Traffic: 25500, Performance: 1540
 🔢 Counter: reports_generated incremented
 📊 ANALYTICS DASHBOARD REPORT 📊
 ═════════════════════════════════════
-Total Score: 228125 points
+Total Score: 30702 points
 Processing Time: 35ms
-Efficiency Rating: 633680 (Grade: A+)
+Efficiency Rating: 85283 (Grade: A+)
 Last Batch Total: 1250 points
 Performance Category: Excellent
 ═════════════════════════════════════

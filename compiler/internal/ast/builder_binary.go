@@ -169,21 +169,60 @@ func (b *Builder) buildMulExpr(ctx parser.IMulExprContext) Expression {
 	// Build left-associative multiplication/division expression
 	left := b.buildUnaryExpr(unaryExprs[0])
 
+	// Get all operators in order they appear
+	stars := ctx.AllSTAR()
+	slashes := ctx.AllSLASH()
+	mods := ctx.AllMOD_OP()
+	
+	// Determine operators by their positions in the input text
+	operators := make([]string, len(unaryExprs)-1)
+	starIdx, slashIdx, modIdx := 0, 0, 0
+	
+	for i := 0; i < len(operators); i++ {
+		starPos := -1
+		slashPos := -1
+		modPos := -1
+		
+		if starIdx < len(stars) {
+			starPos = stars[starIdx].GetSymbol().GetTokenIndex()
+		}
+		if slashIdx < len(slashes) {
+			slashPos = slashes[slashIdx].GetSymbol().GetTokenIndex()
+		}
+		if modIdx < len(mods) {
+			modPos = mods[modIdx].GetSymbol().GetTokenIndex()
+		}
+		
+		// Find the operator with the smallest position (appears first)
+		operators[i] = "*"
+		earliestPos := starPos
+		
+		if slashPos != -1 && (earliestPos == -1 || slashPos < earliestPos) {
+			earliestPos = slashPos
+			operators[i] = "/"
+		}
+		if modPos != -1 && (earliestPos == -1 || modPos < earliestPos) {
+			operators[i] = "%"
+		}
+		
+		// Advance the index for the operator we just used
+		switch operators[i] {
+		case "*":
+			starIdx++
+		case "/":
+			slashIdx++
+		case "%":
+			modIdx++
+		}
+	}
+
 	for i := 1; i < len(unaryExprs); i++ {
 		right := b.buildUnaryExpr(unaryExprs[i])
-
-		// Determine operator (*, /, %)
-		operator := "*"
-		if ctx.SLASH(i-1) != nil {
-			operator = "/"
-		} else if ctx.MOD_OP(i-1) != nil {
-			operator = "%"
-		}
 
 		// Wrap arithmetic operations in result types
 		binExpr := &BinaryExpression{
 			Left:     left,
-			Operator: operator,
+			Operator: operators[i-1],
 			Right:    right,
 			Position: b.getPositionFromContext(ctx),
 		}
