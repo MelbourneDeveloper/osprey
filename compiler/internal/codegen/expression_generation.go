@@ -473,6 +473,7 @@ func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) 
 	if err != nil {
 		return nil, err
 	}
+	
 
 	return g.generateBinaryOperationWithPos(binExpr.Operator, left, right, binExpr.Position)
 }

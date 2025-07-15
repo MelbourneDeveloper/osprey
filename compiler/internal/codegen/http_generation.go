@@ -242,5 +242,5 @@ func (g *LLVMGenerator) generateWebSocketStopServerCall(callExpr *ast.CallExpres
 }
 
 func (g *LLVMGenerator) generateWebSocketKeepAliveCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.generateHTTPFunctionCall(WebSocketKeepAlive, callExpr, 0)
+	return g.generateHTTPFunctionCall(WebSocketKeepAliveOsprey, callExpr, 0)
 }

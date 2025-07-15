@@ -59,7 +59,6 @@ const (
 	FilterFunc         = "filter"
 	FoldFunc           = "fold"
 	MainFunctionName   = "main"
-	WebSocketKeepAlive = "websocket_keep_alive"
 
 	// String utility functions
 	LengthFunc    = "length"
@@ -107,6 +106,8 @@ const (
 	WebSocketServerSendOsprey      = "websocketServerSend"
 	WebSocketServerBroadcastOsprey = "websocketServerBroadcast"
 	WebSocketStopServerOsprey      = "websocketStopServer"
+	WebSocketKeepAliveOsprey       = "websocketKeepAlive"
+
 )
 
 // C Runtime HTTP Function names.
@@ -138,6 +139,7 @@ const (
 	WebSocketServerSendFunc      = "websocket_server_send"
 	WebSocketServerBroadcastFunc = "websocket_server_broadcast"
 	WebSocketStopServerFunc      = "websocket_stop_server"
+	WebSocketKeepAliveFunc       = "websocket_keep_alive"
 )
 
 // Pattern matching constants.

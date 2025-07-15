@@ -533,11 +533,19 @@ func (r *BuiltInFunctionRegistry) registerHTTPFunctions() {
 	r.functions[HTTPListenOsprey] = &BuiltInFunction{
 		Name:        HTTPListenOsprey,
 		CName:       HTTPListenFunc,
-		Signature:   "httpListen(serverID: int, handler: function) -> int",
+		Signature:   "httpListen(serverID: int, handler: (string, string, string, string) -> HttpResponse) -> int",
 		Description: "Starts the HTTP server listening for requests with a handler function.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "serverID", Type: &ConcreteType{name: TypeInt}, Description: "Server identifier from httpCreateServer"},
-			{Name: "handler", Type: &ConcreteType{name: TypeFunction}, Description: "Request handler function"},
+			{Name: "handler", Type: NewFunctionType(
+				[]Type{
+					&ConcreteType{name: TypeString},
+					&ConcreteType{name: TypeString},
+					&ConcreteType{name: TypeString},
+					&ConcreteType{name: TypeString},
+				},
+				&ConcreteType{name: TypeHTTPResponse},
+			), Description: "Request handler function"},
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryHTTP,
@@ -881,9 +889,10 @@ match stopResult {
 // registerSystemFunctions registers system-related functions
 func (r *BuiltInFunctionRegistry) registerSystemFunctions() {
 	// webSocketKeepAlive function
-	r.functions[WebSocketKeepAlive] = &BuiltInFunction{
-		Name:      WebSocketKeepAlive,
-		Signature: "webSocketKeepAlive() -> Unit",
+	r.functions[WebSocketKeepAliveOsprey] = &BuiltInFunction{
+		Name:      WebSocketKeepAliveOsprey,
+		CName:     WebSocketKeepAliveFunc,
+		Signature: "websocket_keep_alive() -> Unit",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. " +
 			"Keeps the WebSocket server running indefinitely until interrupted (blocking operation).",
 		ParameterTypes: []BuiltInParameter{},
@@ -895,52 +904,6 @@ func (r *BuiltInFunctionRegistry) registerSystemFunctions() {
 		Example:        `webSocketKeepAlive()  // Blocks until Ctrl+C`,
 	}
 
-	// Channel operations
-	r.functions["send"] = &BuiltInFunction{
-		Name:        "send",
-		Signature:   "send(channel: Channel, value: any) -> int",
-		Description: "Sends a value to a channel. Returns 1 on success, 0 on failure.",
-		ParameterTypes: []BuiltInParameter{
-			{Name: "channel", Type: &ConcreteType{name: "Channel"}, Description: "Channel to send to"},
-			{Name: "value", Type: &ConcreteType{name: "any"}, Description: "Value to send"},
-		},
-		ReturnType:   &ConcreteType{name: TypeInt},
-		Category:     CategorySystem,
-		IsProtected:  false,
-		SecurityFlag: PermissionNone,
-		Generator:    (*LLVMGenerator).generateChannelSendCall,
-		Example:      `let result = send(myChannel, 42)`,
-	}
-
-	r.functions["recv"] = &BuiltInFunction{
-		Name:        "recv",
-		Signature:   "recv(channel: Channel) -> any",
-		Description: "Receives a value from a channel. Blocks until a value is available.",
-		ParameterTypes: []BuiltInParameter{
-			{Name: "channel", Type: &ConcreteType{name: "Channel"}, Description: "Channel to receive from"},
-		},
-		ReturnType:   &ConcreteType{name: "any"},
-		Category:     CategorySystem,
-		IsProtected:  false,
-		SecurityFlag: PermissionNone,
-		Generator:    (*LLVMGenerator).generateChannelRecvCall,
-		Example:      `let value = recv(myChannel)`,
-	}
-
-	r.functions["Channel"] = &BuiltInFunction{
-		Name:        "Channel",
-		Signature:   "Channel(capacity: int) -> Channel",
-		Description: "Creates a new channel with the specified capacity.",
-		ParameterTypes: []BuiltInParameter{
-			{Name: "capacity", Type: &ConcreteType{name: TypeInt}, Description: "Channel capacity"},
-		},
-		ReturnType:   &ConcreteType{name: "Channel"},
-		Category:     CategorySystem,
-		IsProtected:  false,
-		SecurityFlag: PermissionNone,
-		Generator:    (*LLVMGenerator).generateChannelCreateCall,
-		Example:      `let ch = Channel(10)`,
-	}
 }
 
 // registerFiberFunctions registers fiber and concurrency functions

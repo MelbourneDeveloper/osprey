@@ -1,4 +1,4 @@
-fn greet(name: string) -> unit = print("Hello from function!")
+fn greet(name: string) -> Unit = print("Hello from function!")
 
 let message = "Hello, World!"
 print(message)
