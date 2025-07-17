@@ -73,7 +73,10 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 
 		return g.generateHandlerExpression(e)
 	default:
-
+		// Debug: Check if this is an unhandled ObjectLiteral
+		if _, ok := expr.(*ast.ObjectLiteral); ok {
+			return g.generateObjectLiteral(expr.(*ast.ObjectLiteral))
+		}
 		return g.generateFiberOrModuleExpression(expr)
 	}
 }
@@ -297,8 +300,8 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 
 // generateObjectLiteral generates LLVM IR for object literals like { field: value }.
 func (g *LLVMGenerator) generateObjectLiteral(lit *ast.ObjectLiteral) (value.Value, error) {
-	// For now, treat object literals as structs with string keys and any values
-	// This is a simplified implementation - a full implementation would need type information
+
+	//CRITICAL TODO: implement record types properly, as per the spec 0005-TypeSystem.md
 
 	// Create a simple struct with the fields
 	var fieldTypes []types.Type

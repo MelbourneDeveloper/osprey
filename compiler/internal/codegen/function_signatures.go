@@ -7,6 +7,7 @@ import (
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/types"
+	"github.com/llir/llvm/ir/value"
 
 	"github.com/christianfindlay/osprey/internal/ast"
 )
@@ -32,8 +33,18 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 	for i, param := range fnDecl.Parameters {
 		// Use explicit type annotation if present
 		if param.Type != nil {
-			// Use the explicit type annotation
-			paramType := &ConcreteType{name: param.Type.Name}
+			// Debug: param type information
+			// Parse function types properly
+			var paramType Type
+			if param.Type.IsFunction {
+				// This is a function type parsed from AST like "(int) -> int"
+				paramType = g.buildFunctionTypeFromAST(param.Type)
+				// Debug: parsed function type from AST
+			} else {
+				// Regular concrete type
+				paramType = &ConcreteType{name: param.Type.Name}
+				// Debug: concrete type mapping
+			}
 			g.typeInferer.env.Set(param.Name, paramType)
 			paramTypes[i] = paramType
 		} else {
@@ -83,8 +94,11 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		return err
 	}
 
-	// Unify the return type variable with the actual body type
-	if err := g.typeInferer.Unify(returnTypeVar, bodyType); err != nil {
+	// Check if we can implicitly convert body type to declared return type
+	if g.canImplicitlyConvert(bodyType, returnTypeVar, fnDecl) {
+		// Allow implicit conversion from int to Result<int, MathError>
+		// The actual wrapping will be done in code generation
+	} else if err := g.typeInferer.Unify(returnTypeVar, bodyType); err != nil {
 		// Restore environment AND substitution map on error
 		g.typeInferer.env = oldEnv
 		g.typeInferer.subst = oldSubst
@@ -92,7 +106,14 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
 			g.effectCodegen.currentFunctionEffects = oldEffects
 		}
-		return fmt.Errorf("return type mismatch: %w", err)
+		
+		// Add position information to error message
+		var positionInfo string
+		if fnDecl.Position != nil {
+			positionInfo = fmt.Sprintf(" at line %d, column %d", fnDecl.Position.Line, fnDecl.Position.Column)
+		}
+		
+		return fmt.Errorf("return type mismatch in function '%s'%s: %w", fnDecl.Name, positionInfo, err)
 	}
 
 	// Restore effect context
@@ -156,8 +177,15 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	for i, param := range fnDecl.Parameters {
 		// Use explicit type annotation if present
 		if param.Type != nil {
-			// Use the explicit type annotation
-			paramType := &ConcreteType{name: param.Type.Name}
+			// Parse function types properly
+			var paramType Type
+			if param.Type.IsFunction {
+				// This is a function type parsed from AST like "(int) -> int"
+				paramType = g.buildFunctionTypeFromAST(param.Type)
+			} else {
+				// Regular concrete type
+				paramType = &ConcreteType{name: param.Type.Name}
+			}
 			fnEnv.Set(param.Name, paramType)
 			paramTypes[i] = paramType
 		} else {
@@ -195,10 +223,20 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		return fmt.Errorf("failed to infer return type: %w", err)
 	}
 
-	// Unify the return type variable with the actual body type
-	if err := g.typeInferer.Unify(returnTypeVar, inferredReturnType); err != nil {
+	// Check if we can implicitly convert inferred return type to declared return type
+	if g.canImplicitlyConvert(inferredReturnType, returnTypeVar, fnDecl) {
+		// Allow implicit conversion from int to Result<int, MathError>
+		// The actual wrapping will be done in code generation
+	} else if err := g.typeInferer.Unify(returnTypeVar, inferredReturnType); err != nil {
 		g.typeInferer.env = oldEnv
-		return fmt.Errorf("return type mismatch: %w", err)
+		
+		// Add position information to error message
+		var positionInfo string
+		if fnDecl.Position != nil {
+			positionInfo = fmt.Sprintf(" at line %d, column %d", fnDecl.Position.Line, fnDecl.Position.Column)
+		}
+		
+		return fmt.Errorf("return type mismatch in function '%s'%s: %w", fnDecl.Name, positionInfo, err)
 	}
 
 	// Create final function type
@@ -271,12 +309,80 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		// Special case: main function returns 0 for success
 		g.builder.NewRet(constant.NewInt(types.I32, 0))
 	} else {
-		g.builder.NewRet(bodyValue)
+		// Check if function declares Result<int, MathError> return but body returns plain int
+		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
+		g.builder.NewRet(finalReturnValue)
 	}
 
 	return nil
 }
 
+// maybeWrapInResult wraps a plain value in a Result structure if the function declares a Result return type
+func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.FunctionDeclaration) value.Value {
+	// Check if function declares a Result return type
+	if fnDecl.ReturnType != nil && strings.HasPrefix(fnDecl.ReturnType.Name, "Result<") {
+		// Check if the body value is a plain int and function expects Result<int, MathError>
+		if fnDecl.ReturnType.Name == "Result<int, MathError>" && bodyValue.Type() == types.I64 {
+			return g.wrapInMathResult(bodyValue)
+		}
+		// Add other Result type mappings as needed
+	}
+	
+	// No wrapping needed, return original value
+	return bodyValue
+}
+
+// wrapInMathResult wraps a plain int value in a Result<int, MathError> structure
+func (g *LLVMGenerator) wrapInMathResult(intValue value.Value) value.Value {
+	// Create Result<int, MathError> structure
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Store the int value in the success field
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(intValue, valuePtr)
+
+	// Store success discriminant (0 = Success)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
+	// Return pointer to the Result structure
+	return result
+}
+
+// canImplicitlyConvert checks if we can implicitly convert from one type to another
+func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, fnDecl *ast.FunctionDeclaration) bool {
+	// Check if we're trying to convert primitive types to Result types
+	if fnDecl.ReturnType != nil && fnDecl.ReturnType.Name == "Result" {
+		if len(fnDecl.ReturnType.GenericParams) >= 2 {
+			expectedInnerType := fnDecl.ReturnType.GenericParams[0].Name
+			expectedErrorType := fnDecl.ReturnType.GenericParams[1].Name
+			
+			// Check if it's Result<int, MathError> or Result<bool, MathError>
+			if (expectedInnerType == "int" || expectedInnerType == "bool") && 
+			   expectedErrorType == "MathError" {
+				
+				if fromConcrete, ok := fromType.(*ConcreteType); ok {
+					if fromConcrete.name == expectedInnerType {
+						if toConcrete, ok := toType.(*ConcreteType); ok {
+							return toConcrete.name == "Result"
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// Add other implicit conversions as needed
+	return false
+}
+
+// TODO: this is wrong! We cannot pass Osprey's types around as a string
+// we need a proper type system that maps to LLVM types
+// Completely rewrite this so that it accepts our Type system as a struct
+/*
 // getLLVMType converts our type system types to LLVM types
 func (g *LLVMGenerator) getLLVMType(typeName string) types.Type {
 	switch typeName {
@@ -295,9 +401,21 @@ func (g *LLVMGenerator) getLLVMType(typeName string) types.Type {
 		}
 		return types.I64 // fallback
 	default:
-		// Handle function types like "fn(int, int, string) -> Unit"
+		// Handle Result types like "Result<int, MathError>"
+		if strings.HasPrefix(typeName, "Result<") {
+			// Result types are represented as structs with { value, discriminant }
+			if typeName == "Result<int, MathError>" {
+				return types.NewPointer(g.getResultType(types.I64))
+			}
+			// Add other Result type mappings as needed
+		}
+		
+		// Handle function types like "fn(int, int, string) -> Unit" or "(int) -> int"
 		if strings.HasPrefix(typeName, "fn(") && strings.Contains(typeName, ") -> ") {
 			return g.parseFunctionTypeString(typeName)
+		}
+		if strings.HasPrefix(typeName, "(") && strings.Contains(typeName, ") -> ") {
+			return g.parseSimpleFunctionTypeString(typeName)
 		}
 
 		// Check if it's a user-defined type
@@ -313,38 +431,42 @@ func (g *LLVMGenerator) getLLVMType(typeName string) types.Type {
 		return types.I64
 	}
 }
+*/
 
-// parseFunctionTypeString parses a function type string like "fn(int, int, string) -> Unit"
-func (g *LLVMGenerator) parseFunctionTypeString(typeStr string) types.Type {
-	// Extract the part between "fn(" and ") -> "
-	if !strings.HasPrefix(typeStr, "fn(") {
-		return types.I64 // fallback
+
+// buildFunctionTypeFromAST converts an AST TypeExpression with IsFunction=true to a FunctionType
+func (g *LLVMGenerator) buildFunctionTypeFromAST(typeExpr *ast.TypeExpression) Type {
+	if !typeExpr.IsFunction {
+		return &ConcreteType{name: typeExpr.Name}
 	}
 
-	arrowIndex := strings.Index(typeStr, ") -> ")
-	if arrowIndex == -1 {
-		return types.I64 // fallback
-	}
-
-	// Extract parameter types
-	paramStr := typeStr[3:arrowIndex] // Remove "fn(" prefix
-	var paramTypes []types.Type
-
-	if paramStr != "" {
-		paramNames := strings.Split(paramStr, ", ")
-		for _, paramName := range paramNames {
-			paramType := g.getLLVMType(strings.TrimSpace(paramName))
-			paramTypes = append(paramTypes, paramType)
+	// Convert parameter types
+	var paramTypes []Type
+	for _, paramType := range typeExpr.ParameterTypes {
+		if paramType.IsFunction {
+			// Recursive function types
+			paramTypes = append(paramTypes, g.buildFunctionTypeFromAST(&paramType))
+		} else {
+			paramTypes = append(paramTypes, &ConcreteType{name: paramType.Name})
 		}
 	}
 
-	// Extract return type
-	returnTypeStr := strings.TrimSpace(typeStr[arrowIndex+4:]) // Remove ") -> " prefix
-	returnType := g.getLLVMType(returnTypeStr)
+	// Convert return type
+	var returnType Type
+	if typeExpr.ReturnType != nil {
+		if typeExpr.ReturnType.IsFunction {
+			returnType = g.buildFunctionTypeFromAST(typeExpr.ReturnType)
+		} else {
+			returnType = &ConcreteType{name: typeExpr.ReturnType.Name}
+		}
+	} else {
+		returnType = &ConcreteType{name: "Unit"} // default return type
+	}
 
-	// Create function signature and return pointer to it
-	funcSig := types.NewFunc(returnType, paramTypes...)
-	return types.NewPointer(funcSig)
+	return &FunctionType{
+		paramTypes: paramTypes,
+		returnType: returnType,
+	}
 }
 
 // declareType processes type declarations and sets up LLVM structures

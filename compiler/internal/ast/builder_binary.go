@@ -10,7 +10,7 @@ func (b *Builder) buildBinaryExpr(ctx parser.IBinaryExprContext) Expression {
 
 func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 	// Check if this is a type pattern ternary ({ type: pattern } expr ? then : else)
-	if ctx.GetTypePattern() != nil {
+	if ctx.GetPat() != nil {
 		conditionExpr := b.buildComparisonExpr(ctx.GetCond())
 		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
 		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())

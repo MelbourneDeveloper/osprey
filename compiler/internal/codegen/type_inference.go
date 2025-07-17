@@ -255,7 +255,7 @@ func (tv *TypeVar) Equals(other Type) bool {
 	return false
 }
 
-// ConcreteType represents a concrete type for backward compatibility
+// TODO: don't use this. Use a proper type
 type ConcreteType struct {
 	name string
 }
@@ -686,6 +686,15 @@ func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 		}
 	}
 
+	// Handle generic type compatibility (Iterator<T> with Iterator<int>)
+	if ct1, ok := t1.(*ConcreteType); ok {
+		if ct2, ok := t2.(*ConcreteType); ok {
+			if ti.isGenericTypeCompatible(ct1.name, ct2.name) {
+				return nil
+			}
+		}
+	}
+
 	return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, t1.String(), t2.String())
 }
 
@@ -807,11 +816,15 @@ func (ti *TypeInferer) unifyFunctionTypes(t1, t2 Type) error {
 
 	for i, p1 := range ft1.paramTypes {
 		if err := ti.Unify(p1, ft2.paramTypes[i]); err != nil {
-			return err
+			return fmt.Errorf("parameter %d unification failed: %s vs %s: %w", i, p1.String(), ft2.paramTypes[i].String(), err)
 		}
 	}
 
-	return ti.Unify(ft1.returnType, ft2.returnType)
+	if err := ti.Unify(ft1.returnType, ft2.returnType); err != nil {
+		return fmt.Errorf("return type unification failed: %s vs %s: %w", ft1.returnType.String(), ft2.returnType.String(), err)
+	}
+
+	return nil
 }
 
 // unifyTypeVariables handles unification when one or both types are type variables
@@ -1058,7 +1071,7 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 
 	// Unify with actual function type
 	if err := ti.Unify(funcType, expectedFuncType); err != nil {
-		return nil, fmt.Errorf("function call type mismatch: %w", err)
+		return nil, fmt.Errorf("function call type mismatch: actual=%s, expected=%s: %w", funcType.String(), expectedFuncType.String(), err)
 	}
 
 	// Return the resolved/substituted result type, not the fresh variable
@@ -1193,6 +1206,7 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 			return nil, fmt.Errorf("right operand of %s must be Int: %w", e.Operator, err)
 		}
 
+		// TODO: we need other number types like float.
 		return intType, nil
 
 	case isComparisonOp(e.Operator):
@@ -1233,7 +1247,7 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 				return &ConcreteType{name: TypeString}, nil
 			}
 
-			// Both are concrete types - check for integer addition
+			// TODO: we need other number types like float.
 			if leftConcrete.name == TypeInt && rightConcrete.name == TypeInt {
 				return &ConcreteType{name: TypeInt}, nil
 			}
@@ -1255,6 +1269,7 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 		intType := &ConcreteType{name: TypeInt}
 		if err := ti.Unify(leftType, intType); err == nil {
 			if err := ti.Unify(rightType, intType); err == nil {
+				//TODO: we need other number types like float.
 				return intType, nil
 			}
 		}
@@ -1268,6 +1283,7 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 	if err := ti.Unify(rightType, intType); err != nil {
 		return nil, fmt.Errorf("right operand of + must be Int or String: %w", err)
 	}
+	//TODO: we need other number types like float.
 	return intType, nil
 }
 
@@ -1276,6 +1292,43 @@ func (ti *TypeInferer) isStringType(t Type) bool {
 	if concrete, ok := t.(*ConcreteType); ok {
 		return concrete.name == TypeString
 	}
+	return false
+}
+
+// isGenericTypeCompatible checks if two generic types are compatible
+func (ti *TypeInferer) isGenericTypeCompatible(t1, t2 string) bool {
+	// Handle Iterator<T> compatibility with Iterator<int>
+	if t1 == "Iterator<T>" && strings.HasPrefix(t2, "Iterator<") {
+		return true
+	}
+	if t2 == "Iterator<T>" && strings.HasPrefix(t1, "Iterator<") {
+		return true
+	}
+	
+	// Handle Iterator<U> compatibility with Iterator<int>
+	if t1 == "Iterator<U>" && strings.HasPrefix(t2, "Iterator<") {
+		return true
+	}
+	if t2 == "Iterator<U>" && strings.HasPrefix(t1, "Iterator<") {
+		return true
+	}
+	
+	// Handle function type compatibility
+	if t1 == "T -> Unit" && strings.HasSuffix(t2, " -> Unit") {
+		return true
+	}
+	if t2 == "T -> Unit" && strings.HasSuffix(t1, " -> Unit") {
+		return true
+	}
+	
+	// Handle generic type variables
+	if t1 == "T" || t1 == "U" {
+		return true
+	}
+	if t2 == "T" || t2 == "U" {
+		return true
+	}
+	
 	return false
 }
 

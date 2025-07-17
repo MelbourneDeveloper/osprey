@@ -194,6 +194,14 @@ func (g *LLVMGenerator) createGlobalString(str string) value.Value {
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 }
 
+// isSemanticBooleanType checks if the inferred type is semantically a boolean
+func (g *LLVMGenerator) isSemanticBooleanType(inferredType Type) bool {
+	if concrete, ok := inferredType.(*ConcreteType); ok {
+		return concrete.name == TypeBool
+	}
+	return false
+}
+
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if err := validateBuiltInArgs(PrintFunc, callExpr); err != nil {
@@ -206,13 +214,19 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 		return nil, err
 	}
 
+	// Check if the expression is semantically a boolean using type inference
+	inferredType, err := g.typeInferer.InferType(argExpr)
+	if err != nil {
+		return nil, err
+	}
+	
 	var stringArg value.Value
 	switch arg.Type().(type) {
 	case *types.PointerType: // Assuming i8* is string
 		stringArg = arg
 	case *types.IntType:
-		// Check if this is a boolean by bit size
-		if arg.Type().(*types.IntType).BitSize == 1 {
+		// Check if this is a boolean by bit size OR by inferred type
+		if arg.Type().(*types.IntType).BitSize == 1 || g.isSemanticBooleanType(inferredType) {
 			stringArg, err = g.generateBoolToString(arg)
 			if err != nil {
 				return nil, err
