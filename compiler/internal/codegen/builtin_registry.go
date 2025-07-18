@@ -426,15 +426,21 @@ func (r *BuiltInFunctionRegistry) registerProcessFunctions() {
 	// spawnProcess function
 	r.functions[SpawnProcessFunc] = &BuiltInFunction{
 		Name:      SpawnProcessFunc,
-		Signature: "spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessHandle, string>",
+		Signature: "spawnProcess(command: string, callback: (int, int, string) -> Unit) -> Result<ProcessHandle, string>",
 		Description: "Spawns an external async process with MANDATORY callback for stdout/stderr capture. " +
 			"The callback function receives (processID: int, eventType: int, data: string) and is called for " +
 			"stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. " +
 			"CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING!",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "command", Type: &ConcreteType{name: TypeString}, Description: "The command to execute"},
-			{Name: "callback", Type: &ConcreteType{name: "fn(int, int, string) -> Unit"},
-				Description: "MANDATORY callback function for process events (processID, eventType, data)"},
+			{Name: "callback", Type: &FunctionType{
+				paramTypes: []Type{
+					&ConcreteType{name: TypeInt},
+					&ConcreteType{name: TypeInt},
+					&ConcreteType{name: TypeString},
+				},
+				returnType: &ConcreteType{name: TypeUnit},
+			}, Description: "MANDATORY callback function for process events (processID, eventType, data)"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<ProcessHandle, string>"},
 		Category:     CategoryProcess,
@@ -462,7 +468,7 @@ match result {
 	// awaitProcess function
 	r.functions[AwaitProcessFunc] = &BuiltInFunction{
 		Name:        AwaitProcessFunc,
-		Signature:   "awaitProcess(handle: ProcessHandle) -> int",
+		Signature:   "awaitProcess(handle: ProcessHandle) -> Result<int, Error>",
 		Description: "Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "handle", Type: &ConcreteType{name: "ProcessHandle"}, Description: "Process handle from spawnProcess"},
@@ -478,7 +484,7 @@ match result {
 	// cleanupProcess function
 	r.functions[CleanupProcessFunc] = &BuiltInFunction{
 		Name:        CleanupProcessFunc,
-		Signature:   "cleanupProcess(handle: ProcessHandle) -> void",
+		Signature:   "cleanupProcess(handle: ProcessHandle) -> Result<Unit, Error>",
 		Description: "Cleans up resources associated with a completed process. Should be called after awaitProcess.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "handle", Type: &ConcreteType{name: "ProcessHandle"}, Description: "Process handle from spawnProcess"},
@@ -717,7 +723,7 @@ func (r *BuiltInFunctionRegistry) registerWebSocketFunctions() {
 	r.functions[WebSocketConnectOsprey] = &BuiltInFunction{
 		Name:  WebSocketConnectOsprey,
 		CName: WebSocketConnectFunc,
-		Signature: "websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> " +
+		Signature: "websocketConnect(url: String, messageHandler: (String) -> Result<Success, String>) -> " +
 			"Result<WebSocketID, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
 			"Result<WebSocketID, String> and takes string handler instead of function pointer. " +
@@ -725,8 +731,12 @@ func (r *BuiltInFunctionRegistry) registerWebSocketFunctions() {
 		ParameterTypes: []BuiltInParameter{
 			{Name: "url", Type: &ConcreteType{name: TypeString},
 				Description: "WebSocket URL (e.g., \"ws://localhost:8080/chat\")"},
-			{Name: "messageHandler", Type: &ConcreteType{name: "fn(String) -> Result<Success, String>"},
-				Description: "Callback function to handle incoming messages"},
+			{Name: "messageHandler", Type: &FunctionType{
+				paramTypes: []Type{
+					&ConcreteType{name: TypeString},
+				},
+				returnType: &ConcreteType{name: "Result<Success, String>"},
+			}, Description: "Callback function to handle incoming messages"},
 		},
 		ReturnType:   &ConcreteType{name: "Result<WebSocketID, String>"},
 		Category:     CategoryWebSocket,

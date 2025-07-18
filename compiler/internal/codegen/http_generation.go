@@ -24,12 +24,12 @@ func (g *LLVMGenerator) ensureHTTPFunctionDeclaration(functionName string) *ir.F
 	// Convert builtin parameters to LLVM parameters
 	params := make([]*ir.Param, len(builtinFunc.ParameterTypes))
 	for i, param := range builtinFunc.ParameterTypes {
-		llvmType := g.getLLVMType(param.Type.String())
+		llvmType := g.getLLVMType(param.Type)
 		params[i] = ir.NewParam(param.Name, llvmType)
 	}
 
 	// Convert return type to LLVM type
-	returnType := g.getLLVMType(builtinFunc.ReturnType.String())
+	returnType := g.getLLVMType(builtinFunc.ReturnType)
 
 	// Create function with the correct C runtime name (which is now in the registry)
 	fn := g.module.NewFunc(builtinFunc.CName, returnType, params...)

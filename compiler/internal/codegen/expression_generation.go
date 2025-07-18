@@ -1429,12 +1429,12 @@ func (g *LLVMGenerator) ensureBuiltinFunctionDeclaration(ospreyName string) *ir.
 	// Convert builtin parameters to LLVM parameters
 	params := make([]*ir.Param, len(builtinFunc.ParameterTypes))
 	for i, param := range builtinFunc.ParameterTypes {
-		llvmType := g.getLLVMType(param.Type.String())
+		llvmType := g.getLLVMType(param.Type)
 		params[i] = ir.NewParam(param.Name, llvmType)
 	}
 
 	// Convert return type to LLVM type
-	returnType := g.getLLVMType(builtinFunc.ReturnType.String())
+	returnType := g.getLLVMType(builtinFunc.ReturnType)
 
 	// Create function with the correct name (C name if available, otherwise Osprey name)
 	fn := g.module.NewFunc(llvmFunctionName, returnType, params...)

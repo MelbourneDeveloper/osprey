@@ -135,7 +135,7 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
 
 	// Generate LLVM function signature ONLY (no body)
-	llvmReturnType := g.getLLVMType(finalFnType.returnType.String())
+	llvmReturnType := g.getLLVMType(finalFnType.returnType)
 
 	// Special case: main function must return i32 for C compatibility
 	if fnDecl.Name == MainFunctionName {
@@ -144,7 +144,7 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 
 	params := make([]*ir.Param, len(paramTypes))
 	for i, paramType := range paramTypes {
-		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType.String()))
+		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType))
 	}
 
 	// Create LLVM function declaration ONLY
@@ -379,47 +379,94 @@ func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, fnDecl *ast.
 	return false
 }
 
-// TODO: this is wrong! We cannot pass Osprey's types around as a string
-// we need a proper type system that maps to LLVM types
-// Completely rewrite this so that it accepts our Type system as a struct
-/*
 // getLLVMType converts our type system types to LLVM types
-func (g *LLVMGenerator) getLLVMType(typeName string) types.Type {
-	switch typeName {
-	case TypeInt: // "int"
+func (g *LLVMGenerator) getLLVMType(ospreyType Type) types.Type {
+	switch t := ospreyType.(type) {
+	case *PrimitiveType:
+		return g.getLLVMPrimitiveType(t)
+	case *ConcreteType:
+		return g.getLLVMConcreteType(t)
+	case *GenericType:
+		return g.getLLVMGenericType(t)
+	case *FunctionType:
+		return g.getLLVMFunctionType(t)
+	case *RecordType:
+		return g.getLLVMRecordType(t)
+	case *UnionType:
+		return g.getLLVMUnionType(t)
+	case *TypeVar:
+		// Type variables should be resolved before code generation
+		// For now, default to i64 as a fallback
 		return types.I64
-	case TypeString: // "string"
+	default:
+		// Unknown type, fallback to i64
+		return types.I64
+	}
+}
+
+// getLLVMPrimitiveType converts primitive types to LLVM types
+func (g *LLVMGenerator) getLLVMPrimitiveType(pt *PrimitiveType) types.Type {
+	switch pt.name {
+	case TypeInt:
+		return types.I64
+	case TypeString:
 		return types.I8Ptr
-	case TypeBool: // "bool"
+	case TypeBool:
 		return types.I1
-	case TypeUnit: // "Unit"
+	case TypeUnit:
 		return types.Void
-	case TypeHTTPResponse: // "HttpResponse"
+	default:
+		return types.I64
+	}
+}
+
+// getLLVMConcreteType converts concrete types to LLVM types
+func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
+	switch ct.name {
+	case TypeInt:
+		return types.I64
+	case TypeString:
+		return types.I8Ptr
+	case TypeBool:
+		return types.I1
+	case TypeUnit:
+		return types.Void
+	case TypeHTTPResponse:
 		// Return pointer to HttpResponse struct
 		if httpResponseType, exists := g.typeMap[TypeHTTPResponse]; exists {
 			return types.NewPointer(httpResponseType)
 		}
 		return types.I64 // fallback
+	case "Fiber":
+		return types.I64 // Fiber handle is represented as i64
+	case "Channel":
+		return types.I64 // Channel handle is represented as i64
+	case "ProcessHandle":
+		return types.I64 // Process handle is represented as i64
+	case "any":
+		return types.I64 // any type is represented as i64
 	default:
 		// Handle Result types like "Result<int, MathError>"
-		if strings.HasPrefix(typeName, "Result<") {
+		if strings.HasPrefix(ct.name, "Result<") {
 			// Result types are represented as structs with { value, discriminant }
-			if typeName == "Result<int, MathError>" {
+			if ct.name == "Result<int, MathError>" {
 				return types.NewPointer(g.getResultType(types.I64))
 			}
 			// Add other Result type mappings as needed
 		}
 		
 		// Handle function types like "fn(int, int, string) -> Unit" or "(int) -> int"
-		if strings.HasPrefix(typeName, "fn(") && strings.Contains(typeName, ") -> ") {
-			return g.parseFunctionTypeString(typeName)
+		if strings.HasPrefix(ct.name, "fn(") && strings.Contains(ct.name, ") -> ") {
+			// For now, represent function types as function pointers (i8*)
+			return types.I8Ptr
 		}
-		if strings.HasPrefix(typeName, "(") && strings.Contains(typeName, ") -> ") {
-			return g.parseSimpleFunctionTypeString(typeName)
+		if strings.HasPrefix(ct.name, "(") && strings.Contains(ct.name, ") -> ") {
+			// For now, represent function types as function pointers (i8*)
+			return types.I8Ptr
 		}
 
 		// Check if it's a user-defined type
-		if userType, exists := g.typeMap[typeName]; exists {
+		if userType, exists := g.typeMap[ct.name]; exists {
 			// For struct types, return pointer to the struct
 			if _, ok := userType.(*types.StructType); ok {
 				return types.NewPointer(userType)
@@ -431,7 +478,86 @@ func (g *LLVMGenerator) getLLVMType(typeName string) types.Type {
 		return types.I64
 	}
 }
-*/
+
+// getLLVMGenericType converts generic types to LLVM types
+func (g *LLVMGenerator) getLLVMGenericType(gt *GenericType) types.Type {
+	switch gt.name {
+	case "Result":
+		if len(gt.typeArgs) >= 2 {
+			// Result<T, E> - get the inner type for the value
+			innerType := g.getLLVMType(gt.typeArgs[0])
+			return types.NewPointer(g.getResultType(innerType))
+		}
+		return types.I64 // fallback
+	case "List":
+		if len(gt.typeArgs) >= 1 {
+			// List<T> - for now, represent as pointer to dynamic array
+			return types.I8Ptr // TODO: implement proper list types
+		}
+		return types.I8Ptr // fallback
+	default:
+		// Unknown generic type, fallback to i64
+		return types.I64
+	}
+}
+
+// getLLVMFunctionType converts function types to LLVM function pointer types
+func (g *LLVMGenerator) getLLVMFunctionType(ft *FunctionType) types.Type {
+	// Convert parameter types
+	paramTypes := make([]types.Type, len(ft.paramTypes))
+	for i, paramType := range ft.paramTypes {
+		paramTypes[i] = g.getLLVMType(paramType)
+	}
+	
+	// Convert return type
+	returnType := g.getLLVMType(ft.returnType)
+	
+	// Create function signature and return pointer to it
+	funcSignature := types.NewFunc(returnType, paramTypes...)
+	return types.NewPointer(funcSignature)
+}
+
+// getLLVMRecordType converts record types to LLVM struct types
+func (g *LLVMGenerator) getLLVMRecordType(rt *RecordType) types.Type {
+	// Check if we already have this record type in the type map
+	if llvmType, exists := g.typeMap[rt.name]; exists {
+		// For struct types, return pointer to the struct
+		if _, ok := llvmType.(*types.StructType); ok {
+			return types.NewPointer(llvmType)
+		}
+		return llvmType
+	}
+	
+	// Create struct type from record fields
+	fieldTypes := make([]types.Type, 0, len(rt.fields))
+	for _, fieldType := range rt.fields {
+		fieldTypes = append(fieldTypes, g.getLLVMType(fieldType))
+	}
+	
+	structType := types.NewStruct(fieldTypes...)
+	g.typeMap[rt.name] = structType
+	
+	return types.NewPointer(structType)
+}
+
+// getLLVMUnionType converts union types to LLVM tagged union types
+func (g *LLVMGenerator) getLLVMUnionType(ut *UnionType) types.Type {
+	// Check if we already have this union type in the type map
+	if llvmType, exists := g.typeMap[ut.name]; exists {
+		return types.NewPointer(llvmType)
+	}
+	
+	// For now, represent union types as tagged unions with discriminant
+	// This is a simplified implementation - full implementation would need
+	// proper analysis of variant sizes
+	tagType := types.I8
+	dataType := types.I64 // simplified data representation
+	unionType := types.NewStruct(tagType, dataType)
+	
+	g.typeMap[ut.name] = unionType
+	
+	return types.NewPointer(unionType)
+}
 
 
 // buildFunctionTypeFromAST converts an AST TypeExpression with IsFunction=true to a FunctionType
