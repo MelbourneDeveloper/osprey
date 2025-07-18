@@ -563,7 +563,8 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 		}
 	}
 
-	// Default to extending to i64 for most contexts
+	// Default to extending to i64 for Result type construction and other contexts
+	// The print function will handle the conversion to proper boolean strings
 	return g.builder.NewZExt(cmp, types.I64), nil
 }
 

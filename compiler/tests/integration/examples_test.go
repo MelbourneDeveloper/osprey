@@ -148,7 +148,7 @@ func getExpectedOutputs() map[string]string {
 		"comparison_test.osp": "1\n",    // Prints result of 5 > 3
 		"equality_test.osp":   "true\n", // Prints result of isEqual(5, 5)
 		"comprehensive_bool_test.osp": "=== Boolean Test ===\nFunction returning true:\ntrue\n" +
-			"Function returning false:\nfalse\nBoolean literals:\nfalse\ntrue\nComparisons:\n1\n1\n1\n1\n1\n",
+			"Function returning false:\nfalse\nBoolean literals:\nfalse\ntrue\nComparisons:\ntrue\ntrue\ntrue\ntrue\ntrue\n",
 		"full_bool_test.osp": "=== Boolean Test Results ===\n5 > 3:\ntrue\n" +
 			"10 == 10:\ntrue\ntrue literal:\ntrue\nfalse literal:\nfalse\n",
 		"modulo_test.osp": "true\nfalse\n",

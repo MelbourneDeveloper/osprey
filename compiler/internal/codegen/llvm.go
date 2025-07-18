@@ -337,8 +337,20 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 	endBlock := g.function.NewBlock("bool_end" + blockSuffix)
 
 	// Check if arg == 1 (true) or 0 (false)
-	zero := constant.NewInt(types.I64, ArrayIndexZero)
-	isTrue := currentBlock.NewICmp(enum.IPredNE, arg, zero)
+	// Use the correct zero value type based on the argument type
+	var zero value.Value
+	var isTrue value.Value
+	
+	if arg.Type() == types.I1 {
+		// For i1 (boolean) types, compare against i1 false
+		zero = constant.NewBool(false)
+		isTrue = currentBlock.NewICmp(enum.IPredNE, arg, zero)
+	} else {
+		// For i64 types, compare against i64 zero
+		zero = constant.NewInt(types.I64, 0)
+		isTrue = currentBlock.NewICmp(enum.IPredNE, arg, zero)
+	}
+	
 	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
 
 	// True case - return "true"
@@ -386,7 +398,14 @@ func (g *LLVMGenerator) generateMatchExpressionWithDiscriminant(
 	discriminant value.Value,
 ) (value.Value, error) {
 	if g.hasResultPatterns(matchExpr.Arms) {
-		return g.generateResultMatchExpression(matchExpr, discriminant)
+		// Check if the discriminant is already a Result type
+		if g.isResultType(discriminant) {
+			return g.generateResultMatchExpression(matchExpr, discriminant)
+		}
+		
+		// If not a Result type, wrap it in a Success Result automatically
+		wrappedDiscriminant := g.wrapInSuccessResult(discriminant)
+		return g.generateResultMatchExpression(matchExpr, wrappedDiscriminant)
 	}
 
 	if len(matchExpr.Arms) == 0 {
@@ -405,6 +424,40 @@ func (g *LLVMGenerator) hasResultPatterns(arms []ast.MatchArm) bool {
 	}
 
 	return false
+}
+
+// isResultType checks if the discriminant is already a Result type
+func (g *LLVMGenerator) isResultType(discriminant value.Value) bool {
+	// Check if it's a pointer to a struct with 2 fields (value, discriminant)
+	if ptrType, ok := discriminant.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
+			// Result types have exactly 2 fields: value and discriminant
+			return len(structType.Fields) == 2
+		}
+	}
+	return false
+}
+
+// wrapInSuccessResult wraps a value in a Success Result automatically
+func (g *LLVMGenerator) wrapInSuccessResult(discriminant value.Value) value.Value {
+	// Create a Result struct with the discriminant value as the success value
+	// Result struct: [value, discriminant] where discriminant=0 for success
+	resultType := types.NewStruct(discriminant.Type(), types.I8)
+	
+	// Allocate memory for the result
+	resultPtr := g.builder.NewAlloca(resultType)
+	
+	// Store the value in the first field
+	valuePtr := g.builder.NewGetElementPtr(resultType, resultPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(discriminant, valuePtr)
+	
+	// Store 0 (success) in the discriminant field
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, resultPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+	
+	return resultPtr
 }
 
 // generateStandardMatchExpression generates a standard (non-result) match expression.

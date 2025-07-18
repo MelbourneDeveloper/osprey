@@ -12,7 +12,7 @@ fn isError(result: int) -> int = match result {
   _ => 0         // Success
 }
 
-fn showResult(result: int, a: int, b: int) -> unit = match result {
+fn showResult(result: int, a: int, b: int) -> Unit = match result {
   999999 => print("Error: Cannot divide ${a} by ${b}!")
   _ => print("${a} / ${b} = ${result}")
 }
@@ -33,4 +33,4 @@ showResult(result: result3, a: 20, b: 4)
 
 print("")
 print("✅ No panics! All division operations handled safely")
-print("🔮 Future: Built-in Result<T, E> types for all fallible operations") 
+print("🔮 Future: Built-in Result<T, E> types for all fallible operations")

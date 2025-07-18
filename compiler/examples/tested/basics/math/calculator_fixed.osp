@@ -28,7 +28,7 @@ fn fibonacci(n: int) -> int = match n {
     _ => 8
 }
 
-fn classify_number(n: int) -> unit = match n {
+fn classify_number(n: int) -> Unit = match n {
     0 => print("Zero!")
     1 => print("One!")
     n => print("Many!")
@@ -45,4 +45,4 @@ let fact = factorial(number)
 let fib = fibonacci(number)
 
 classify_number(number)
-print("All computations complete!") 
+print("All computations complete!")
