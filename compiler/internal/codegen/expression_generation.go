@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/llir/llvm/ir"
@@ -73,10 +74,7 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 
 		return g.generateHandlerExpression(e)
 	default:
-		// Debug: Check if this is an unhandled ObjectLiteral
-		if _, ok := expr.(*ast.ObjectLiteral); ok {
-			return g.generateObjectLiteral(expr.(*ast.ObjectLiteral))
-		}
+
 		return g.generateFiberOrModuleExpression(expr)
 	}
 }
@@ -307,7 +305,16 @@ func (g *LLVMGenerator) generateObjectLiteral(lit *ast.ObjectLiteral) (value.Val
 	var fieldTypes []types.Type
 	var fieldValues []value.Value
 
-	for _, fieldValue := range lit.Fields {
+	// Sort field names to ensure consistent ordering
+	fieldNames := make([]string, 0, len(lit.Fields))
+	for fieldName := range lit.Fields {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames)
+
+	// Process fields in sorted order
+	for _, fieldName := range fieldNames {
+		fieldValue := lit.Fields[fieldName]
 		val, err := g.generateExpression(fieldValue)
 		if err != nil {
 			return nil, err
@@ -321,12 +328,10 @@ func (g *LLVMGenerator) generateObjectLiteral(lit *ast.ObjectLiteral) (value.Val
 	structValue := g.builder.NewAlloca(structType)
 
 	// Store each field value
-	i := 0
-	for _, fieldValue := range fieldValues {
+	for i, fieldValue := range fieldValues {
 		fieldPtr := g.builder.NewGetElementPtr(structType, structValue,
 			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, int64(i)))
 		g.builder.NewStore(fieldValue, fieldPtr)
-		i++
 	}
 
 	return structValue, nil
@@ -476,7 +481,6 @@ func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) 
 	if err != nil {
 		return nil, err
 	}
-	
 
 	return g.generateBinaryOperationWithPos(binExpr.Operator, left, right, binExpr.Position)
 }
@@ -693,7 +697,48 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 	fieldAccess *ast.FieldAccessExpression,
 	objectValue value.Value,
 ) (value.Value, error) {
-	// Check if this is a pointer to a struct
+	// For ObjectLiterals, we need to use the Hindley-Milner type information
+	// instead of trying to reverse-engineer from LLVM types
+	
+	// If the object is an identifier, get its type from the type environment
+	if ident, ok := fieldAccess.Object.(*ast.Identifier); ok {
+		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
+			if recordType, ok := varType.(*RecordType); ok {
+				return g.generateRecordFieldAccess(fieldAccess, objectValue, recordType)
+			}
+		}
+	}
+	
+	// For non-identifier objects, try to infer the type
+	objectType, err := g.typeInferer.InferType(fieldAccess.Object)
+	if err != nil {
+		return nil, err
+	}
+	
+	resolvedType := g.typeInferer.ResolveType(objectType)
+	if recordType, ok := resolvedType.(*RecordType); ok {
+		return g.generateRecordFieldAccess(fieldAccess, objectValue, recordType)
+	}
+
+	// If we can't find a record type, this is an error
+	return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on object without known record type", //nolint:err113
+		fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
+}
+
+// generateRecordFieldAccess handles field access using Hindley-Milner RecordType information
+func (g *LLVMGenerator) generateRecordFieldAccess(
+	fieldAccess *ast.FieldAccessExpression,
+	objectValue value.Value,
+	recordType *RecordType,
+) (value.Value, error) {
+	// Check if the field exists in the record type
+	_, exists := recordType.fields[fieldAccess.FieldName]
+	if !exists {
+		return nil, fmt.Errorf("line %d:%d: field '%s' not found in record type", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
+	}
+
+	// Get the LLVM struct type from the object value
 	objectType := objectValue.Type()
 	var structType *types.StructType
 	var isPointer bool
@@ -709,23 +754,29 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 	}
 
 	if structType == nil {
-		// Field access is not supported on non-struct types
-		return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on non-struct type", //nolint:err113
+		return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on non-struct value", //nolint:err113
 			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
 	}
 
-	// Find the record type name that corresponds to this struct
-	recordTypeName := g.findRecordTypeForStruct(structType)
-	if recordTypeName == "" {
-		return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on unknown struct type", //nolint:err113
-			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
+	// Find the field index by iterating through the record type fields in sorted order
+	// The order should match the ObjectLiteral field iteration order
+	fieldNames := make([]string, 0, len(recordType.fields))
+	for fieldName := range recordType.fields {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames)
+	
+	fieldIndex := -1
+	for i, fieldName := range fieldNames {
+		if fieldName == fieldAccess.FieldName {
+			fieldIndex = i
+			break
+		}
 	}
 
-	// Find the field index
-	fieldIndex := g.findFieldIndex(recordTypeName, fieldAccess.FieldName)
-	if fieldIndex == -1 {
-		return nil, fmt.Errorf("line %d:%d: type '%s' does not have field '%s'", //nolint:err113
-			fieldAccess.Position.Line, fieldAccess.Position.Column, recordTypeName, fieldAccess.FieldName)
+	if fieldIndex == -1 || fieldIndex >= len(structType.Fields) {
+		return nil, fmt.Errorf("line %d:%d: field index mismatch for field '%s'", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
 	}
 
 	// Get pointer to the field
@@ -756,6 +807,7 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 
 	return fieldValue, nil
 }
+
 
 // findRecordTypeForStruct finds the record type name that corresponds to a struct type
 func (g *LLVMGenerator) findRecordTypeForStruct(structType *types.StructType) string {

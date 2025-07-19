@@ -590,6 +590,8 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return ti.inferResultExpression(e)
 	case *ast.ListLiteral:
 		return ti.inferListLiteral(e)
+	case *ast.ObjectLiteral:
+		return ti.inferObjectLiteral(e)
 	case *ast.BlockExpression:
 		return ti.inferBlockExpression(e)
 	case *ast.UnaryExpression:
@@ -1435,16 +1437,32 @@ func (ti *TypeInferer) isIntType(t Type) bool {
 
 // inferFieldAccess infers types for field access expressions
 func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, error) {
-	_, err := ti.InferType(e.Object)
+	objectType, err := ti.InferType(e.Object)
 	if err != nil {
 		return nil, err
 	}
 
-	// For now, create a fresh type variable for field type
-	// In a full implementation, this would look up the field type
-	fieldType := ti.Fresh()
+	// Resolve the object type to handle type variables
+	resolvedObjectType := ti.ResolveType(objectType)
 
-	return fieldType, nil
+	// Check if it's a record type
+	if recordType, ok := resolvedObjectType.(*RecordType); ok {
+		// Look up the field in the record type
+		if fieldType, exists := recordType.fields[e.FieldName]; exists {
+			return fieldType, nil
+		}
+		return nil, fmt.Errorf("field '%s' not found in record type %s", e.FieldName, recordType.String())
+	}
+
+	// Check if it's a concrete type (for compatibility)
+	if concreteType, ok := resolvedObjectType.(*ConcreteType); ok {
+		// Handle legacy record string representations
+		if strings.Contains(concreteType.name, "Record<") {
+			return nil, fmt.Errorf("field access on legacy record type not supported, field '%s' on type %s", e.FieldName, concreteType.name)
+		}
+	}
+
+	return nil, fmt.Errorf("cannot access field '%s' on non-record type %s", e.FieldName, resolvedObjectType.String())
 }
 
 // inferTypeConstructor infers types for type constructor expressions
@@ -1557,6 +1575,47 @@ func (ti *TypeInferer) inferListLiteral(e *ast.ListLiteral) (Type, error) {
 	}
 
 	return &ConcreteType{name: fmt.Sprintf("List<%s>", firstType.String())}, nil
+}
+
+// inferObjectLiteral infers types for object literal expressions
+func (ti *TypeInferer) inferObjectLiteral(e *ast.ObjectLiteral) (Type, error) {
+	if len(e.Fields) == 0 {
+		// Empty object - create a record type with no fields
+		return NewRecordType("", make(map[string]Type)), nil
+	}
+
+	// Sort field names to ensure consistent ordering with LLVM generation
+	fieldNames := make([]string, 0, len(e.Fields))
+	for fieldName := range e.Fields {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	
+	// Use deterministic ordering based on field names
+	for i := 0; i < len(fieldNames); i++ {
+		for j := i + 1; j < len(fieldNames); j++ {
+			if fieldNames[i] > fieldNames[j] {
+				fieldNames[i], fieldNames[j] = fieldNames[j], fieldNames[i]
+			}
+		}
+	}
+
+	// Infer types of all fields in sorted order
+	fieldTypes := make(map[string]Type)
+	for _, fieldName := range fieldNames {
+		fieldValue := e.Fields[fieldName]
+		fieldType, err := ti.InferType(fieldValue)
+		if err != nil {
+			return nil, fmt.Errorf("object field '%s' type inference failed: %w", fieldName, err)
+		}
+		fieldTypes[fieldName] = fieldType
+	}
+
+	// Create a proper RecordType instead of a string representation
+	// Generate a unique name for anonymous record types
+	recordTypeName := fmt.Sprintf("Record_%d", ti.nextID)
+	ti.nextID++
+	
+	return NewRecordType(recordTypeName, fieldTypes), nil
 }
 
 // inferBlockExpression infers types for block expressions
