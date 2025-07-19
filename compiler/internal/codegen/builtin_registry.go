@@ -442,7 +442,7 @@ func (r *BuiltInFunctionRegistry) registerProcessFunctions() {
 				returnType: &ConcreteType{name: TypeUnit},
 			}, Description: "MANDATORY callback function for process events (processID, eventType, data)"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<ProcessHandle, string>"},
+		ReturnType:   &ConcreteType{name: "Result<int, string>"},
 		Category:     CategoryProcess,
 		IsProtected:  true,
 		SecurityFlag: PermissionProcess,
@@ -468,12 +468,12 @@ match result {
 	// awaitProcess function
 	r.functions[AwaitProcessFunc] = &BuiltInFunction{
 		Name:        AwaitProcessFunc,
-		Signature:   "awaitProcess(handle: ProcessHandle) -> Result<int, Error>",
+		Signature:   "awaitProcess(handle: int) -> int",
 		Description: "Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "handle", Type: &ConcreteType{name: "ProcessHandle"}, Description: "Process handle from spawnProcess"},
+			{Name: "handle", Type: &ConcreteType{name: TypeInt}, Description: "Process ID from spawnProcess"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<int, Error>"},
+		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryProcess,
 		IsProtected:  true,
 		SecurityFlag: PermissionProcess,
@@ -484,12 +484,12 @@ match result {
 	// cleanupProcess function
 	r.functions[CleanupProcessFunc] = &BuiltInFunction{
 		Name:        CleanupProcessFunc,
-		Signature:   "cleanupProcess(handle: ProcessHandle) -> Result<Unit, Error>",
+		Signature:   "cleanupProcess(handle: int) -> Unit",
 		Description: "Cleans up resources associated with a completed process. Should be called after awaitProcess.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "handle", Type: &ConcreteType{name: "ProcessHandle"}, Description: "Process handle from spawnProcess"},
+			{Name: "handle", Type: &ConcreteType{name: TypeInt}, Description: "Process ID from spawnProcess"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<Unit, Error>"},
+		ReturnType:   &ConcreteType{name: TypeUnit},
 		Category:     CategoryProcess,
 		IsProtected:  true,
 		SecurityFlag: PermissionProcess,

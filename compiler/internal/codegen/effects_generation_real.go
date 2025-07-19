@@ -277,7 +277,8 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 
 	ec.generator.function = handlerFunc
 	ec.generator.builder = handlerFunc.NewBlock("entry")
-	ec.generator.variables = make(map[string]value.Value)
+	// Don't reset variables - preserve existing scope for handler generation
+	// ec.generator.variables = make(map[string]value.Value)
 
 	// Add parameters to scope
 	for i, param := range handlerFunc.Params {

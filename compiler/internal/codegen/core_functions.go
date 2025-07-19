@@ -35,11 +35,13 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 		return nil, err
 	}
 
-	// Check if this is a Result type (struct pointer)
-	if ptrType, ok := arg.Type().(*types.PointerType); ok {
-		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == 2 {
-			// This is a Result type - extract the value and convert to string
-			return g.convertResultToString(arg, structType)
+	// TODO: check if result type. The value should have type info attached to it
+	// If not, something has gone wrong
+	if g.isResultType(arg) {
+		if ptrType, ok := arg.Type().(*types.PointerType); ok {
+			if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+				return g.convertResultToString(arg, structType)
+			}
 		}
 	}
 
@@ -92,7 +94,7 @@ func (g *LLVMGenerator) convertValueToStringByType(
 		return g.createGlobalString("()"), nil
 	default:
 		// Check if it's a Fiber type - show the fiber ID, not await the result
-		if theType == "Fiber" {
+		if theType == TypeFiber {
 			// Fiber is just an integer ID, convert it to string
 			return g.generateIntToString(arg)
 		}
@@ -107,7 +109,7 @@ func (g *LLVMGenerator) convertValueToStringByType(
 		if strings.HasPrefix(theType, "Result<") {
 			// For Result types, check if it's a struct pointer
 			if ptrType, ok := arg.Type().(*types.PointerType); ok {
-				if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == 2 {
+				if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
 					return g.convertResultToString(arg, structType)
 				}
 			}
@@ -209,7 +211,7 @@ func (g *LLVMGenerator) isSemanticBooleanType(inferredType Type) bool {
 }
 
 // isResultValueSemanticBoolean checks if a Result value contains a semantic boolean
-func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bool {
+func (g *LLVMGenerator) isResultValueSemanticBoolean(_ value.Value) bool {
 	// For now, we'll use a simple heuristic: if the value is 0 or 1, it might be a boolean
 	// In the future, we should track the semantic type through the compilation process
 	// This is a temporary solution to handle the specific case where comparison operations
@@ -221,7 +223,7 @@ func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bo
 }
 
 // shouldTreatAsBoolean determines if an i64 value should be treated as a boolean when printing
-func (g *LLVMGenerator) shouldTreatAsBoolean(arg value.Value, argExpr ast.Expression) bool {
+func (g *LLVMGenerator) shouldTreatAsBoolean(_ value.Value, argExpr ast.Expression) bool {
 	// Check if the expression is an identifier (variable)
 	if ident, ok := argExpr.(*ast.Identifier); ok {
 		// Check if this variable was bound from a Result type pattern match

@@ -129,7 +129,8 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	g.function = closureFunc
 	entry := closureFunc.NewBlock("entry")
 	g.builder = entry
-	g.variables = make(map[string]value.Value)
+	// Don't reset variables - preserve function parameters for the closure
+	// g.variables = make(map[string]value.Value)
 
 	// Generate the expression inside the closure
 	result, err := g.generateExpression(spawn.Expression)

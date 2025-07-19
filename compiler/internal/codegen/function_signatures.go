@@ -17,141 +17,159 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		return ErrToStringReserved
 	}
 
-	// Save old environment AND substitution map
-	oldEnv := g.typeInferer.env
+	state := g.saveTypeInferenceState()
+	
+	paramTypes := g.inferParameterTypesForSignature(fnDecl)
+
+	returnTypeVar := g.determineReturnTypeForSignature(fnDecl)
+	
+	err := g.unifyBodyWithReturnType(fnDecl, paramTypes, returnTypeVar, state)
+	if err != nil {
+		return err
+	}
+
+	finalFnType := &FunctionType{
+		paramTypes: paramTypes,
+		returnType: g.typeInferer.prune(returnTypeVar),
+	}
+
+	g.restoreTypeInferenceState(state)
+	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
+
+	err = g.createLLVMFunctionSignature(fnDecl, finalFnType)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// typeInferenceState holds the state that needs to be saved and restored
+type typeInferenceState struct {
+	env     *TypeEnv
+	subst   Substitution
+	effects []string
+}
+
+// saveTypeInferenceState saves the current type inference state
+func (g *LLVMGenerator) saveTypeInferenceState() *typeInferenceState {
 	oldSubst := make(Substitution)
 	for k, v := range g.typeInferer.subst {
 		oldSubst[k] = v
 	}
 
-	// Clone the existing environment to preserve access to previously declared functions
+	var oldEffects []string
+	if g.effectCodegen != nil {
+		oldEffects = g.effectCodegen.currentFunctionEffects
+	}
+
+	return &typeInferenceState{
+		env:     g.typeInferer.env,
+		subst:   oldSubst,
+		effects: oldEffects,
+	}
+}
+
+// restoreTypeInferenceState restores the saved type inference state
+func (g *LLVMGenerator) restoreTypeInferenceState(state *typeInferenceState) {
+	g.typeInferer.env = state.env
+	g.typeInferer.subst = state.subst
+	if g.effectCodegen != nil {
+		g.effectCodegen.currentFunctionEffects = state.effects
+	}
+}
+
+// inferParameterTypesForSignature infers the parameter types for function signature
+func (g *LLVMGenerator) inferParameterTypesForSignature(fnDecl *ast.FunctionDeclaration) []Type {
 	newEnv := g.typeInferer.env.Clone()
 	g.typeInferer.env = newEnv
 
-	// Infer parameter types
 	paramTypes := make([]Type, len(fnDecl.Parameters))
 	for i, param := range fnDecl.Parameters {
-		// Use explicit type annotation if present
 		if param.Type != nil {
-			// Debug: param type information
-			// Parse function types properly
 			var paramType Type
 			if param.Type.IsFunction {
-				// This is a function type parsed from AST like "(int) -> int"
 				paramType = g.buildFunctionTypeFromAST(param.Type)
-				// Debug: parsed function type from AST
 			} else {
-				// Regular concrete type
 				paramType = &ConcreteType{name: param.Type.Name}
-				// Debug: concrete type mapping
 			}
 			g.typeInferer.env.Set(param.Name, paramType)
 			paramTypes[i] = paramType
 		} else {
-			// Create fresh type variable for parameter without explicit type
 			paramType := g.typeInferer.Fresh()
 			g.typeInferer.env.Set(param.Name, paramType)
 			paramTypes[i] = paramType
 		}
 	}
 
-	// For recursion: Add the function to the environment before processing the body
-	// Use explicit return type annotation if present
-	var returnTypeVar Type
-	if fnDecl.ReturnType != nil {
-		// Use the explicit return type annotation
-		returnTypeVar = &ConcreteType{name: fnDecl.ReturnType.Name}
-	} else {
-		// Use a fresh type variable for the return type only if no explicit annotation
-		returnTypeVar = g.typeInferer.Fresh()
-	}
+	return paramTypes
+}
 
+// determineReturnTypeForSignature determines the return type for function signature
+func (g *LLVMGenerator) determineReturnTypeForSignature(fnDecl *ast.FunctionDeclaration) Type {
+	if fnDecl.ReturnType != nil {
+		return &ConcreteType{name: fnDecl.ReturnType.Name}
+	}
+	return g.typeInferer.Fresh()
+}
+
+// unifyBodyWithReturnType performs type inference on the function body and unifies with return type
+func (g *LLVMGenerator) unifyBodyWithReturnType(
+	fnDecl *ast.FunctionDeclaration,
+	paramTypes []Type,
+	returnTypeVar Type,
+	state *typeInferenceState,
+) error {
 	fnType := &FunctionType{
 		paramTypes: paramTypes,
 		returnType: returnTypeVar,
 	}
 	g.typeInferer.env.Set(fnDecl.Name, fnType)
 
-	// Set effect context for functions with effect annotations
-	var oldEffects []string
 	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
-		// Save old effect context
-		oldEffects = g.effectCodegen.currentFunctionEffects
-		// Set current function effects
 		g.effectCodegen.currentFunctionEffects = fnDecl.Effects
 	}
 
-	// Infer body type
 	bodyType, err := g.typeInferer.InferType(fnDecl.Body)
 	if err != nil {
-		// Restore environment AND substitution map on error
-		g.typeInferer.env = oldEnv
-		g.typeInferer.subst = oldSubst
-		// Restore effect context on error
-		if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
-			g.effectCodegen.currentFunctionEffects = oldEffects
-		}
+		g.restoreTypeInferenceState(state)
 		return err
 	}
 
-	// Check if we can implicitly convert body type to declared return type
-	if g.canImplicitlyConvert(bodyType, returnTypeVar, fnDecl) {
-		// Allow implicit conversion from int to Result<int, MathError>
-		// The actual wrapping will be done in code generation
-	} else if err := g.typeInferer.Unify(returnTypeVar, bodyType); err != nil {
-		// Restore environment AND substitution map on error
-		g.typeInferer.env = oldEnv
-		g.typeInferer.subst = oldSubst
-		// Restore effect context on error
-		if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
-			g.effectCodegen.currentFunctionEffects = oldEffects
+	if !g.canImplicitlyConvert(bodyType, returnTypeVar, fnDecl) {
+		if err := g.typeInferer.Unify(returnTypeVar, bodyType); err != nil {
+			g.restoreTypeInferenceState(state)
+			var positionInfo string
+			if fnDecl.Position != nil {
+				positionInfo = fmt.Sprintf(" at line %d, column %d", fnDecl.Position.Line, fnDecl.Position.Column)
+			}
+			return fmt.Errorf("return type mismatch in function '%s'%s: %w", fnDecl.Name, positionInfo, err)
 		}
-		
-		// Add position information to error message
-		var positionInfo string
-		if fnDecl.Position != nil {
-			positionInfo = fmt.Sprintf(" at line %d, column %d", fnDecl.Position.Line, fnDecl.Position.Column)
-		}
-		
-		return fmt.Errorf("return type mismatch in function '%s'%s: %w", fnDecl.Name, positionInfo, err)
 	}
 
-	// Restore effect context
 	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
-		g.effectCodegen.currentFunctionEffects = oldEffects
+		g.effectCodegen.currentFunctionEffects = state.effects
 	}
 
-	// Create the final function type with the unified return type
-	finalFnType := &FunctionType{
-		paramTypes: paramTypes,
-		returnType: g.typeInferer.prune(returnTypeVar), // Use the unified type
-	}
+	return nil
+}
 
-	// Restore original environment and substitution map
-	g.typeInferer.env = oldEnv
-	g.typeInferer.subst = oldSubst
-
-	// Add function to the clean environment
-	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
-
-	// Generate LLVM function signature ONLY (no body)
+// createLLVMFunctionSignature creates the LLVM function signature
+func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclaration, finalFnType *FunctionType) error {
 	llvmReturnType := g.getLLVMType(finalFnType.returnType)
 
-	// Special case: main function must return i32 for C compatibility
 	if fnDecl.Name == MainFunctionName {
 		llvmReturnType = types.I32
 	}
 
-	params := make([]*ir.Param, len(paramTypes))
-	for i, paramType := range paramTypes {
+	params := make([]*ir.Param, len(finalFnType.paramTypes))
+	for i, paramType := range finalFnType.paramTypes {
 		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType))
 	}
 
-	// Create LLVM function declaration ONLY
 	fn := g.module.NewFunc(fnDecl.Name, llvmReturnType, params...)
 	g.functions[fnDecl.Name] = fn
 
-	// Store parameter names for named argument support
 	g.functionParameters[fnDecl.Name] = make([]string, len(fnDecl.Parameters))
 	for i, param := range fnDecl.Parameters {
 		g.functionParameters[fnDecl.Name][i] = param.Name
@@ -162,159 +180,192 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 
 // generateFunctionDeclaration generates the LLVM function signature and body.
 func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclaration) error {
-	// Get the already-declared function
 	fn, exists := g.functions[fnDecl.Name]
 	if !exists {
 		return fmt.Errorf("%w: %s", ErrFunctionNotDeclared, fnDecl.Name)
 	}
 
-	// Create function environment for parameter type inference
-	oldEnv := g.typeInferer.env
+	paramTypes, fnEnv := g.setupFunctionEnvironment(fnDecl)
+
+	returnTypeVar := g.determineReturnType(fnDecl)
+	finalFnType, err := g.inferAndValidateTypes(fnDecl, paramTypes, returnTypeVar, fnEnv)
+	if err != nil {
+		return err
+	}
+
+	err = g.generateFunctionBody(fnDecl, fn, finalFnType)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setupFunctionEnvironment creates the type environment and infers parameter types
+func (g *LLVMGenerator) setupFunctionEnvironment(
+	fnDecl *ast.FunctionDeclaration,
+) ([]Type, *TypeEnv) {
 	fnEnv := g.typeInferer.env.Clone()
 
-	// Infer parameter types (same as in declareFunctionSignature)
 	paramTypes := make([]Type, len(fnDecl.Parameters))
 	for i, param := range fnDecl.Parameters {
-		// Use explicit type annotation if present
 		if param.Type != nil {
-			// Parse function types properly
 			var paramType Type
 			if param.Type.IsFunction {
-				// This is a function type parsed from AST like "(int) -> int"
 				paramType = g.buildFunctionTypeFromAST(param.Type)
 			} else {
-				// Regular concrete type
 				paramType = &ConcreteType{name: param.Type.Name}
 			}
 			fnEnv.Set(param.Name, paramType)
 			paramTypes[i] = paramType
 		} else {
-			// Create fresh type variable for parameter without explicit type
 			paramType := g.typeInferer.Fresh()
 			fnEnv.Set(param.Name, paramType)
 			paramTypes[i] = paramType
 		}
 	}
 
-	// For recursion: Add the function to the environment before processing the body
-	// Use explicit return type annotation if present
-	var returnTypeVar Type
+	return paramTypes, fnEnv
+}
+
+// determineReturnType gets the return type from annotation or creates fresh type variable
+func (g *LLVMGenerator) determineReturnType(fnDecl *ast.FunctionDeclaration) Type {
 	if fnDecl.ReturnType != nil {
-		// Use the explicit return type annotation
-		returnTypeVar = &ConcreteType{name: fnDecl.ReturnType.Name}
-	} else {
-		// Use a fresh type variable for the return type only if no explicit annotation
-		returnTypeVar = g.typeInferer.Fresh()
+		return &ConcreteType{name: fnDecl.ReturnType.Name}
 	}
+	return g.typeInferer.Fresh()
+}
+
+// inferAndValidateTypes performs type inference and validation for the function
+func (g *LLVMGenerator) inferAndValidateTypes(
+	fnDecl *ast.FunctionDeclaration,
+	paramTypes []Type,
+	returnTypeVar Type,
+	fnEnv *TypeEnv,
+) (*FunctionType, error) {
+	oldEnv := g.typeInferer.env
 
 	fnType := &FunctionType{
 		paramTypes: paramTypes,
 		returnType: returnTypeVar,
 	}
 	fnEnv.Set(fnDecl.Name, fnType)
-
-	// Set the function environment with parameters for body inference
 	g.typeInferer.env = fnEnv
 
-	// Infer the return type in the context with parameters and the function itself
 	inferredReturnType, err := g.typeInferer.InferType(fnDecl.Body)
 	if err != nil {
 		g.typeInferer.env = oldEnv
-		return fmt.Errorf("failed to infer return type: %w", err)
+		return nil, fmt.Errorf("failed to infer return type: %w", err)
 	}
 
-	// Check if we can implicitly convert inferred return type to declared return type
-	if g.canImplicitlyConvert(inferredReturnType, returnTypeVar, fnDecl) {
-		// Allow implicit conversion from int to Result<int, MathError>
-		// The actual wrapping will be done in code generation
-	} else if err := g.typeInferer.Unify(returnTypeVar, inferredReturnType); err != nil {
-		g.typeInferer.env = oldEnv
-		
-		// Add position information to error message
-		var positionInfo string
-		if fnDecl.Position != nil {
-			positionInfo = fmt.Sprintf(" at line %d, column %d", fnDecl.Position.Line, fnDecl.Position.Column)
+	if !g.canImplicitlyConvert(inferredReturnType, returnTypeVar, fnDecl) {
+		if err := g.typeInferer.Unify(returnTypeVar, inferredReturnType); err != nil {
+			g.typeInferer.env = oldEnv
+			var positionInfo string
+			if fnDecl.Position != nil {
+				positionInfo = fmt.Sprintf(" at line %d, column %d", fnDecl.Position.Line, fnDecl.Position.Column)
+			}
+			return nil, fmt.Errorf("return type mismatch in function '%s'%s: %w", fnDecl.Name, positionInfo, err)
 		}
-		
-		return fmt.Errorf("return type mismatch in function '%s'%s: %w", fnDecl.Name, positionInfo, err)
 	}
 
-	// Create final function type
 	finalFnType := &FunctionType{
 		paramTypes: paramTypes,
 		returnType: g.typeInferer.prune(returnTypeVar),
 	}
 
-	// Generate function body (keep the function environment with parameters and function itself)
+	g.typeInferer.env = oldEnv
+	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
+
+	return finalFnType, nil
+}
+
+// generateFunctionBody generates the LLVM instructions for the function body
+func (g *LLVMGenerator) generateFunctionBody(
+	fnDecl *ast.FunctionDeclaration,
+	fn *ir.Func,
+	_ *FunctionType,
+) error {
 	entry := fn.NewBlock("")
 	g.builder = entry
 	g.function = fn
 
-	// Set expected return type context for literals and expressions
 	oldExpectedReturnType := g.expectedReturnType
 	g.expectedReturnType = fn.Sig.RetType
 
-	// Set up parameter values in runtime environment
-	// (type environment already has them from fnEnv)
 	params := fn.Params
 	for i, param := range fnDecl.Parameters {
 		g.variables[param.Name] = params[i]
+		// Also add to type inference environment for runtime generation
+		if param.Type != nil {
+			var paramType Type
+			if param.Type.IsFunction {
+				paramType = g.buildFunctionTypeFromAST(param.Type)
+			} else {
+				paramType = &ConcreteType{name: param.Type.Name}
+			}
+			g.typeInferer.env.Set(param.Name, paramType)
+		}
 	}
 
-	// Set effect context for functions with effect annotations
 	var oldEffects []string
 	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
-		// Save old effect context
 		oldEffects = g.effectCodegen.currentFunctionEffects
-		// Set current function effects
 		g.effectCodegen.currentFunctionEffects = fnDecl.Effects
 	}
 
 	bodyValue, err := g.generateExpression(fnDecl.Body)
 	if err != nil {
-		// Clean up before returning error
-		for _, param := range fnDecl.Parameters {
-			delete(g.variables, param.Name)
-		}
-		g.expectedReturnType = oldExpectedReturnType
-		g.typeInferer.env = oldEnv
-		// Restore effect context on error
-		if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
-			g.effectCodegen.currentFunctionEffects = oldEffects
-		}
+		g.cleanupAfterError(fnDecl, oldExpectedReturnType, oldEffects)
 		return err
 	}
 
-	// Clean up parameter variables from runtime environment
-	for _, param := range fnDecl.Parameters {
-		delete(g.variables, param.Name)
-	}
+	g.cleanupAfterSuccess(fnDecl, oldExpectedReturnType, oldEffects)
+	g.generateReturnInstruction(fn, fnDecl, bodyValue)
 
-	// Restore original environment and add function to it
-	g.typeInferer.env = oldEnv
-	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
+	return nil
+}
 
-	// Restore expected return type context
+// cleanupAfterError cleans up state when an error occurs during function generation
+func (g *LLVMGenerator) cleanupAfterError(
+	fnDecl *ast.FunctionDeclaration,
+	oldExpectedReturnType types.Type,
+	oldEffects []string,
+) {
+	// Don't delete parameters from g.variables - they need to remain for function calls
 	g.expectedReturnType = oldExpectedReturnType
-
-	// Restore effect context
 	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
 		g.effectCodegen.currentFunctionEffects = oldEffects
 	}
+}
 
-	// Add return instruction
+// cleanupAfterSuccess cleans up state after successful function generation
+func (g *LLVMGenerator) cleanupAfterSuccess(
+	fnDecl *ast.FunctionDeclaration,
+	oldExpectedReturnType types.Type,
+	oldEffects []string,
+) {
+	// Don't delete parameters from g.variables - they need to remain for function calls
+	g.expectedReturnType = oldExpectedReturnType
+	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
+		g.effectCodegen.currentFunctionEffects = oldEffects
+	}
+}
+
+// generateReturnInstruction generates the appropriate return instruction
+func (g *LLVMGenerator) generateReturnInstruction(
+	fn *ir.Func,
+	fnDecl *ast.FunctionDeclaration,
+	bodyValue value.Value,
+) {
 	if fn.Sig.RetType == types.Void {
 		g.builder.NewRet(nil)
 	} else if fnDecl.Name == MainFunctionName {
-		// Special case: main function returns 0 for success
 		g.builder.NewRet(constant.NewInt(types.I32, 0))
 	} else {
-		// Check if function declares Result<int, MathError> return but body returns plain int
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
 		g.builder.NewRet(finalReturnValue)
 	}
-
-	return nil
 }
 
 // maybeWrapInResult wraps a plain value in a Result structure if the function declares a Result return type
@@ -355,8 +406,8 @@ func (g *LLVMGenerator) wrapInMathResult(intValue value.Value) value.Value {
 // canImplicitlyConvert checks if we can implicitly convert from one type to another
 func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, fnDecl *ast.FunctionDeclaration) bool {
 	// Check if we're trying to convert primitive types to Result types
-	if fnDecl.ReturnType != nil && fnDecl.ReturnType.Name == "Result" {
-		if len(fnDecl.ReturnType.GenericParams) >= 2 {
+	if fnDecl.ReturnType != nil && fnDecl.ReturnType.Name == TypeResult {
+		if len(fnDecl.ReturnType.GenericParams) >= TwoArgs {
 			expectedInnerType := fnDecl.ReturnType.GenericParams[0].Name
 			expectedErrorType := fnDecl.ReturnType.GenericParams[1].Name
 			
@@ -483,7 +534,7 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 func (g *LLVMGenerator) getLLVMGenericType(gt *GenericType) types.Type {
 	switch gt.name {
 	case "Result":
-		if len(gt.typeArgs) >= 2 {
+		if len(gt.typeArgs) >= TwoArgs {
 			// Result<T, E> - get the inner type for the value
 			innerType := g.getLLVMType(gt.typeArgs[0])
 			return types.NewPointer(g.getResultType(innerType))

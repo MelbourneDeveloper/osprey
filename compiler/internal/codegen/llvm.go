@@ -426,17 +426,6 @@ func (g *LLVMGenerator) hasResultPatterns(arms []ast.MatchArm) bool {
 	return false
 }
 
-// isResultType checks if the discriminant is already a Result type
-func (g *LLVMGenerator) isResultType(discriminant value.Value) bool {
-	// Check if it's a pointer to a struct with 2 fields (value, discriminant)
-	if ptrType, ok := discriminant.Type().(*types.PointerType); ok {
-		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
-			// Result types have exactly 2 fields: value and discriminant
-			return len(structType.Fields) == 2
-		}
-	}
-	return false
-}
 
 // wrapInSuccessResult wraps a value in a Success Result automatically
 func (g *LLVMGenerator) wrapInSuccessResult(discriminant value.Value) value.Value {
@@ -458,6 +447,16 @@ func (g *LLVMGenerator) wrapInSuccessResult(discriminant value.Value) value.Valu
 	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
 	
 	return resultPtr
+}
+
+// isResultType checks if a value is a Result type (pointer to struct with two fields)
+func (g *LLVMGenerator) isResultType(val value.Value) bool {
+	if ptrType, ok := val.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
+			return len(structType.Fields) == ResultFieldCount
+		}
+	}
+	return false
 }
 
 // generateStandardMatchExpression generates a standard (non-result) match expression.
@@ -829,7 +828,7 @@ func (g *LLVMGenerator) createPatternCondition(
 
 		// Check if this is a tagged union (pointer to struct with tag + data)
 		if ptrType, ok := discriminantType.(*types.PointerType); ok {
-			if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == 2 {
+			if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
 				// This is a discriminated union - extract tag field (index 0)
 				tagPtr := currentBlock.NewGetElementPtr(structType, discriminant,
 					constant.NewInt(types.I32, 0), // struct index

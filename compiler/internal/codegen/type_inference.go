@@ -255,6 +255,7 @@ func (tv *TypeVar) Equals(other Type) bool {
 	return false
 }
 
+// ConcreteType represents a concrete type in the type system.
 // TODO: don't use this. Use a proper type
 type ConcreteType struct {
 	name string
@@ -608,6 +609,11 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 
 // InferPattern performs type inference on a pattern
 func (ti *TypeInferer) InferPattern(pattern ast.Pattern) (Type, error) {
+	return ti.InferPatternWithType(pattern, nil)
+}
+
+// InferPatternWithType performs type inference on a pattern with optional discriminant type
+func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantType Type) (Type, error) {
 	switch pattern.Constructor {
 	case "_":
 		// Wildcard pattern matches anything
@@ -638,64 +644,149 @@ func (ti *TypeInferer) InferPattern(pattern ast.Pattern) (Type, error) {
 
 		// Constructor pattern - look up in environment
 		if t, ok := ti.env.Get(pattern.Constructor); ok {
-			// Handle field bindings
-			for _, field := range pattern.Fields {
-				ti.env.Set(field, ti.Fresh())
-			}
+			// Handle field bindings with proper type extraction
+			ti.handlePatternFieldBindings(pattern, discriminantType)
 			return t, nil
 		}
 		return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, pattern.Constructor)
 	}
 }
 
+// handlePatternFieldBindings handles field bindings in patterns with proper type extraction
+func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discriminantType Type) {
+	// Special handling for Result type patterns
+	if pattern.Constructor == "Success" && discriminantType != nil {
+		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
+			// Extract the success type from Result<T, E>
+			successType := ti.extractResultSuccessType(ct.name)
+			fmt.Printf("DEBUG: Extracted success type: %s\n", successType.String())
+			if len(pattern.Fields) > 0 {
+				// Bind the first field to the success type
+				ti.env.Set(pattern.Fields[0], successType)
+				fmt.Printf("DEBUG: Bound field %s to type %s\n", pattern.Fields[0], successType.String())
+			}
+			return
+		}
+	}
+	
+	if pattern.Constructor == "Error" && discriminantType != nil {
+		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
+			// Extract the error type from Result<T, E>
+			errorType := ti.extractResultErrorType(ct.name)
+			if len(pattern.Fields) > 0 {
+				// Bind the first field to the error type
+				ti.env.Set(pattern.Fields[0], errorType)
+			}
+			return
+		}
+	}
+	
+	// Default behavior: assign fresh type variables
+	for _, field := range pattern.Fields {
+		ti.env.Set(field, ti.Fresh())
+	}
+}
+
+// extractResultSuccessType extracts the success type T from Result<T, E>
+func (ti *TypeInferer) extractResultSuccessType(resultTypeName string) Type {
+	// Parse "Result<ProcessHandle, string>" to extract "ProcessHandle"
+	if strings.HasPrefix(resultTypeName, "Result<") && strings.HasSuffix(resultTypeName, ">") {
+		inner := resultTypeName[7 : len(resultTypeName)-1] // Remove "Result<" and ">"
+		parts := strings.Split(inner, ",")
+		if len(parts) >= 1 {
+			successTypeName := strings.TrimSpace(parts[0])
+			return &ConcreteType{name: successTypeName}
+		}
+	}
+	return &ConcreteType{name: TypeInt} // fallback
+}
+
+// extractResultErrorType extracts the error type E from Result<T, E>
+func (ti *TypeInferer) extractResultErrorType(resultTypeName string) Type {
+	// Parse "Result<ProcessHandle, string>" to extract "string"
+	if strings.HasPrefix(resultTypeName, "Result<") && strings.HasSuffix(resultTypeName, ">") {
+		inner := resultTypeName[7 : len(resultTypeName)-1] // Remove "Result<" and ">"
+		parts := strings.Split(inner, ",")
+		if len(parts) >= TwoArgs {
+			errorTypeName := strings.TrimSpace(parts[1])
+			return &ConcreteType{name: errorTypeName}
+		}
+	}
+	return &ConcreteType{name: TypeString} // fallback
+}
+
 // unifyPrimitiveTypes handles unification of primitive types
 func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
-	// Handle backward compatibility with ConcreteType
-	if ct1, ok := t1.(*ConcreteType); ok {
-		if ct2, ok := t2.(*ConcreteType); ok {
-			if ct1.name == ct2.name || ct1.name == TypeAny || ct2.name == TypeAny {
-				return nil
-			}
-			return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, ct1.name, ct2.name)
-		}
+	if ti.unifyConcreteTypes(t1, t2) {
+		return nil
 	}
-
-	// Handle new PrimitiveType
-	if pt1, ok := t1.(*PrimitiveType); ok {
-		if pt2, ok := t2.(*PrimitiveType); ok {
-			if pt1.name == pt2.name || pt1.name == TypeAny || pt2.name == TypeAny {
-				return nil
-			}
-			return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, pt1.name, pt2.name)
-		}
+	
+	if ti.unifyPrimitiveTypesPair(t1, t2) {
+		return nil
 	}
+	
+	if ti.unifyMixedTypes(t1, t2) {
+		return nil
+	}
+	
+	if ti.unifyGenericCompatibleTypes(t1, t2) {
+		return nil
+	}
+	
+	return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, t1.String(), t2.String())
+}
 
-	// Mixed ConcreteType/PrimitiveType compatibility
+// unifyConcreteTypes handles backward compatibility with ConcreteType
+func (ti *TypeInferer) unifyConcreteTypes(t1, t2 Type) bool {
+	ct1, ok1 := t1.(*ConcreteType)
+	ct2, ok2 := t2.(*ConcreteType)
+	
+	if !ok1 || !ok2 {
+		return false
+	}
+	
+	return ct1.name == ct2.name || ct1.name == TypeAny || ct2.name == TypeAny
+}
+
+// unifyPrimitiveTypesPair handles unification of PrimitiveType pairs
+func (ti *TypeInferer) unifyPrimitiveTypesPair(t1, t2 Type) bool {
+	pt1, ok1 := t1.(*PrimitiveType)
+	pt2, ok2 := t2.(*PrimitiveType)
+	
+	if !ok1 || !ok2 {
+		return false
+	}
+	
+	return pt1.name == pt2.name || pt1.name == TypeAny || pt2.name == TypeAny
+}
+
+// unifyMixedTypes handles ConcreteType/PrimitiveType compatibility
+func (ti *TypeInferer) unifyMixedTypes(t1, t2 Type) bool {
 	if ct, ok := t1.(*ConcreteType); ok {
 		if pt, ok := t2.(*PrimitiveType); ok {
-			if ct.name == pt.name || ct.name == TypeAny || pt.name == TypeAny {
-				return nil
-			}
+			return ct.name == pt.name || ct.name == TypeAny || pt.name == TypeAny
 		}
 	}
+	
 	if pt, ok := t1.(*PrimitiveType); ok {
 		if ct, ok := t2.(*ConcreteType); ok {
-			if pt.name == ct.name || pt.name == TypeAny || ct.name == TypeAny {
-				return nil
-			}
+			return pt.name == ct.name || pt.name == TypeAny || ct.name == TypeAny
 		}
 	}
+	
+	return false
+}
 
-	// Handle generic type compatibility (Iterator<T> with Iterator<int>)
-	if ct1, ok := t1.(*ConcreteType); ok {
-		if ct2, ok := t2.(*ConcreteType); ok {
-			if ti.isGenericTypeCompatible(ct1.name, ct2.name) {
-				return nil
-			}
-		}
+// unifyGenericCompatibleTypes handles generic type compatibility
+func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
+	ct1, ok1 := t1.(*ConcreteType)
+	ct2, ok2 := t2.(*ConcreteType)
+	
+	if !ok1 || !ok2 {
+		return false
 	}
-
-	return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, t1.String(), t2.String())
+	
+	return ti.isGenericTypeCompatible(ct1.name, ct2.name)
 }
 
 // unifyGenericTypes handles unification of generic types
@@ -821,7 +912,8 @@ func (ti *TypeInferer) unifyFunctionTypes(t1, t2 Type) error {
 	}
 
 	if err := ti.Unify(ft1.returnType, ft2.returnType); err != nil {
-		return fmt.Errorf("return type unification failed: %s vs %s: %w", ft1.returnType.String(), ft2.returnType.String(), err)
+		return fmt.Errorf("return type unification failed: %s vs %s: %w", 
+			ft1.returnType.String(), ft2.returnType.String(), err)
 	}
 
 	return nil
@@ -1071,7 +1163,8 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 
 	// Unify with actual function type
 	if err := ti.Unify(funcType, expectedFuncType); err != nil {
-		return nil, fmt.Errorf("function call type mismatch: actual=%s, expected=%s: %w", funcType.String(), expectedFuncType.String(), err)
+		return nil, fmt.Errorf("function call type mismatch: actual=%s, expected=%s: %w", 
+			funcType.String(), expectedFuncType.String(), err)
 	}
 
 	// Return the resolved/substituted result type, not the fresh variable
@@ -1366,10 +1459,11 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 // inferMatchExpression infers types for match expressions
 func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error) {
 	// Infer discriminant type
-	_, err := ti.InferType(e.Expression)
+	discriminantType, err := ti.InferType(e.Expression)
 	if err != nil {
 		return nil, err
 	}
+	
 
 	if len(e.Arms) == 0 {
 		return nil, ErrMatchNoArms
@@ -1384,7 +1478,7 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 		ti.env = newEnv
 
 		// Infer the pattern type and bind its variables
-		_, err := ti.InferPattern(arm.Pattern)
+		_, err := ti.InferPatternWithType(arm.Pattern, discriminantType)
 		if err != nil {
 			ti.env = oldEnv
 			return nil, err

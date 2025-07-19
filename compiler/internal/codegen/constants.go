@@ -22,6 +22,7 @@ const (
 	MinArgs              = 2  // Minimum command line arguments
 	ExpressionOffset     = 2  // Offset for expression parsing
 	DefaultPlaceholder   = 42 // Default placeholder value for LLVM constants
+	ResultFieldCount     = 2  // Number of fields in Result type struct (value, discriminant)
 )
 
 // String constants.
@@ -160,12 +161,6 @@ const (
 	HTTPErrorServer     = -5
 )
 
-// Constants for argument counts
-const (
-	// Only keep truly unique constants that aren't function argument counts
-	MaxFunctionParams = 10
-	DefaultBufferSize = 1024
-)
 
 // NOTE: Function argument counts have been moved to the unified built-in function registry
 // (builtin_registry.go). Use len(GlobalBuiltInRegistry.GetFunction(name).ParameterTypes) instead.

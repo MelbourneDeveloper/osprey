@@ -18,7 +18,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Build & Development:**
 - `make build` - Build the osprey compiler (includes linting and C runtime builds)
-- `make build-no-lint` - Build without linting for speed (emergency only)
 - `make clean` - Clean all build artifacts
 - `make install` - Install compiler globally to /usr/local/bin
 
