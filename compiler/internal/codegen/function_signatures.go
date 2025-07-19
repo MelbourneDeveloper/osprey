@@ -18,11 +18,11 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 	}
 
 	state := g.saveTypeInferenceState()
-	
+
 	paramTypes := g.inferParameterTypesForSignature(fnDecl)
 
 	returnTypeVar := g.determineReturnTypeForSignature(fnDecl)
-	
+
 	err := g.unifyBodyWithReturnType(fnDecl, paramTypes, returnTypeVar, state)
 	if err != nil {
 		return err
@@ -378,7 +378,7 @@ func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.Fun
 		}
 		// Add other Result type mappings as needed
 	}
-	
+
 	// No wrapping needed, return original value
 	return bodyValue
 }
@@ -410,11 +410,11 @@ func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, fnDecl *ast.
 		if len(fnDecl.ReturnType.GenericParams) >= TwoArgs {
 			expectedInnerType := fnDecl.ReturnType.GenericParams[0].Name
 			expectedErrorType := fnDecl.ReturnType.GenericParams[1].Name
-			
+
 			// Check if it's Result<int, MathError> or Result<bool, MathError>
-			if (expectedInnerType == "int" || expectedInnerType == "bool") && 
-			   expectedErrorType == "MathError" {
-				
+			if (expectedInnerType == "int" || expectedInnerType == "bool") &&
+				expectedErrorType == "MathError" {
+
 				if fromConcrete, ok := fromType.(*ConcreteType); ok {
 					if fromConcrete.name == expectedInnerType {
 						if toConcrete, ok := toType.(*ConcreteType); ok {
@@ -425,7 +425,7 @@ func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, fnDecl *ast.
 			}
 		}
 	}
-	
+
 	// Add other implicit conversions as needed
 	return false
 }
@@ -505,7 +505,7 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 			}
 			// Add other Result type mappings as needed
 		}
-		
+
 		// Handle function types like "fn(int, int, string) -> Unit" or "(int) -> int"
 		if strings.HasPrefix(ct.name, "fn(") && strings.Contains(ct.name, ") -> ") {
 			// For now, represent function types as function pointers (i8*)
@@ -559,10 +559,10 @@ func (g *LLVMGenerator) getLLVMFunctionType(ft *FunctionType) types.Type {
 	for i, paramType := range ft.paramTypes {
 		paramTypes[i] = g.getLLVMType(paramType)
 	}
-	
+
 	// Convert return type
 	returnType := g.getLLVMType(ft.returnType)
-	
+
 	// Create function signature and return pointer to it
 	funcSignature := types.NewFunc(returnType, paramTypes...)
 	return types.NewPointer(funcSignature)
@@ -578,16 +578,16 @@ func (g *LLVMGenerator) getLLVMRecordType(rt *RecordType) types.Type {
 		}
 		return llvmType
 	}
-	
+
 	// Create struct type from record fields
 	fieldTypes := make([]types.Type, 0, len(rt.fields))
 	for _, fieldType := range rt.fields {
 		fieldTypes = append(fieldTypes, g.getLLVMType(fieldType))
 	}
-	
+
 	structType := types.NewStruct(fieldTypes...)
 	g.typeMap[rt.name] = structType
-	
+
 	return types.NewPointer(structType)
 }
 
@@ -597,19 +597,18 @@ func (g *LLVMGenerator) getLLVMUnionType(ut *UnionType) types.Type {
 	if llvmType, exists := g.typeMap[ut.name]; exists {
 		return types.NewPointer(llvmType)
 	}
-	
+
 	// For now, represent union types as tagged unions with discriminant
 	// This is a simplified implementation - full implementation would need
 	// proper analysis of variant sizes
 	tagType := types.I8
 	dataType := types.I64 // simplified data representation
 	unionType := types.NewStruct(tagType, dataType)
-	
+
 	g.typeMap[ut.name] = unionType
-	
+
 	return types.NewPointer(unionType)
 }
-
 
 // buildFunctionTypeFromAST converts an AST TypeExpression with IsFunction=true to a FunctionType
 func (g *LLVMGenerator) buildFunctionTypeFromAST(typeExpr *ast.TypeExpression) Type {
