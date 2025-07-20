@@ -51,6 +51,9 @@ var (
 	ErrFieldAccessOnBoolean       = errors.New("cannot access field on boolean type")
 	ErrFieldAccessOnNonStruct     = errors.New("cannot access field on non-struct type")
 	ErrFieldAccessOnUnknownStruct = errors.New("cannot access field on unknown struct type")
+	ErrFieldNotFoundInRecord      = errors.New("field not found in record type")
+	ErrFieldAccessOnNonRecord     = errors.New("cannot access field on non-record type")
+	ErrFieldAccessOnLegacyRecord  = errors.New("field access on legacy record type not supported")
 	ErrFieldNotFoundOnType        = errors.New("field not found on type")
 
 	// Parse errors
@@ -249,6 +252,21 @@ func WrapConstraintResultFieldAccessWithPos(field string, pos interface{}) error
 // WrapMethodNotImpl wraps errors for method not implemented
 func WrapMethodNotImpl(method string) error {
 	return WrapMethodCallNotImplemented(method)
+}
+
+// WrapFieldNotFoundInRecord wraps the field not found error with additional context
+func WrapFieldNotFoundInRecord(field, recordType string) error {
+	return fmt.Errorf("%w '%s' in record type %s", ErrFieldNotFoundInRecord, field, recordType)
+}
+
+// WrapFieldAccessOnNonRecord wraps the non-record field access error with context
+func WrapFieldAccessOnNonRecord(field, typeStr string) error {
+	return fmt.Errorf("%w '%s' on non-record type %s", ErrFieldAccessOnNonRecord, field, typeStr)
+}
+
+// WrapFieldAccessOnLegacyRecord wraps the legacy record field access error
+func WrapFieldAccessOnLegacyRecord(field, typeName string) error {
+	return fmt.Errorf("%w, field '%s' on type %s", ErrFieldAccessOnLegacyRecord, field, typeName)
 }
 
 // WrapUndefinedType wraps errors for undefined types

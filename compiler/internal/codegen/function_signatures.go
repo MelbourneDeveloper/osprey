@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/llir/llvm/ir"
@@ -214,7 +215,23 @@ func (g *LLVMGenerator) setupFunctionEnvironment(
 			if param.Type.IsFunction {
 				paramType = g.buildFunctionTypeFromAST(param.Type)
 			} else {
-				paramType = &ConcreteType{name: param.Type.Name}
+				// Check if this is a known record type first
+				if typeDecl, exists := g.typeDeclarations[param.Type.Name]; exists {
+					// Check if this is a record type (single variant with fields)
+					if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
+						variant := typeDecl.Variants[0]
+						// Create a proper RecordType for the type inference environment
+						recordFieldTypes := make(map[string]Type)
+						for _, field := range variant.Fields {
+							recordFieldTypes[field.Name] = g.getInferenceFieldType(field.Type)
+						}
+						paramType = NewRecordType(typeDecl.Name, recordFieldTypes)
+					} else {
+						paramType = &ConcreteType{name: param.Type.Name}
+					}
+				} else {
+					paramType = &ConcreteType{name: param.Type.Name}
+				}
 			}
 			fnEnv.Set(param.Name, paramType)
 			paramTypes[i] = paramType
@@ -302,7 +319,23 @@ func (g *LLVMGenerator) generateFunctionBody(
 			if param.Type.IsFunction {
 				paramType = g.buildFunctionTypeFromAST(param.Type)
 			} else {
-				paramType = &ConcreteType{name: param.Type.Name}
+				// Check if this is a known record type first
+				if typeDecl, exists := g.typeDeclarations[param.Type.Name]; exists {
+					// Check if this is a record type (single variant with fields)
+					if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
+						variant := typeDecl.Variants[0]
+						// Create a proper RecordType for the type inference environment
+						recordFieldTypes := make(map[string]Type)
+						for _, field := range variant.Fields {
+							recordFieldTypes[field.Name] = g.getInferenceFieldType(field.Type)
+						}
+						paramType = NewRecordType(typeDecl.Name, recordFieldTypes)
+					} else {
+						paramType = &ConcreteType{name: param.Type.Name}
+					}
+				} else {
+					paramType = &ConcreteType{name: param.Type.Name}
+				}
 			}
 			g.typeInferer.env.Set(param.Name, paramType)
 		}
@@ -654,18 +687,33 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 	if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
 		// Create a proper struct type for record types
 		variant := typeDecl.Variants[0]
-		fieldTypes := make([]types.Type, len(variant.Fields))
-
+		
+		// Sort field names to match ObjectLiteral and field access ordering
+		fieldNames := make([]string, len(variant.Fields))
+		fieldTypeMap := make(map[string]string)
 		for i, field := range variant.Fields {
-			fieldTypes[i] = g.getFieldType(field.Type)
+			fieldNames[i] = field.Name
+			fieldTypeMap[field.Name] = field.Type
+		}
+		sort.Strings(fieldNames)
+		
+		// Create field types in sorted order
+		fieldTypes := make([]types.Type, len(fieldNames))
+		for i, fieldName := range fieldNames {
+			fieldTypes[i] = g.getFieldType(fieldTypeMap[fieldName])
 		}
 
 		// Create the struct type
 		structType := types.NewStruct(fieldTypes...)
 		g.typeMap[typeDecl.Name] = structType
 
-		// Register the record type in the type inference environment
-		recordType := &ConcreteType{name: typeDecl.Name}
+		// Create a proper RecordType for the type inference environment
+		// Infer field types for the record
+		recordFieldTypes := make(map[string]Type)
+		for _, field := range variant.Fields {
+			recordFieldTypes[field.Name] = g.getInferenceFieldType(field.Type)
+		}
+		recordType := NewRecordType(typeDecl.Name, recordFieldTypes)
 		g.typeInferer.env.Set(typeDecl.Name, recordType)
 
 		// Also register the variant name in the type environment
@@ -676,11 +724,7 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 		// This allows pattern matching to work correctly for single-variant types with fields
 		g.unionVariants[variant.Name] = 0 // Use 0 as discriminant for single-variant types
 
-		// Store field names for field access
-		fieldNames := make([]string, len(variant.Fields))
-		for i, field := range variant.Fields {
-			fieldNames[i] = field.Name
-		}
+		// Store field names for field access (already sorted above)
 		g.storeRecordFieldNames(typeDecl.Name, fieldNames)
 	} else if len(typeDecl.Variants) > 1 {
 		// This is a discriminated union with multiple variants
@@ -790,11 +834,14 @@ func CheckProtectedFunction(fnDecl *ast.FunctionDeclaration) error {
 // getFieldType converts an Osprey field type to LLVM type
 func (g *LLVMGenerator) getFieldType(fieldType string) types.Type {
 	switch fieldType {
-	case TypeString, "String": // "string" or "String"
+	//ALWAYS LOWERCASE!
+	case TypeString: // "string"
 		return types.I8Ptr
-	case TypeInt, "Int": // "int" or "Int"
+		//ALWAYS LOWERCASE!
+	case TypeInt: // "int"
 		return types.I64
-	case TypeBool, "Bool": // "bool" or "Bool"
+		//ALWAYS LOWERCASE!
+	case TypeBool: // "bool"
 		return types.I1
 	default:
 		return types.I64 // default to i64
@@ -814,14 +861,21 @@ func (g *LLVMGenerator) getRecordFieldNames(typeName string) ([]string, bool) {
 	return fieldNames, exists
 }
 
-// findFieldIndex finds the index of a field in a record type
-func (g *LLVMGenerator) findFieldIndex(typeName, fieldName string) int {
-	if fieldNames, exists := g.getRecordFieldNames(typeName); exists {
-		for i, name := range fieldNames {
-			if name == fieldName {
-				return i
-			}
+// getInferenceFieldType converts a field type string to a Type for type inference
+func (g *LLVMGenerator) getInferenceFieldType(fieldType string) Type {
+	switch fieldType {
+	case TypeInt, "Int":
+		return &ConcreteType{name: TypeInt}
+	case TypeString, "String":
+		return &ConcreteType{name: TypeString}
+	case TypeBool, "Bool":
+		return &ConcreteType{name: TypeBool}
+	default:
+		// For user-defined types, check if they exist in the type map
+		if _, exists := g.typeMap[fieldType]; exists {
+			return &ConcreteType{name: fieldType}
 		}
+		// Default to creating a concrete type
+		return &ConcreteType{name: fieldType}
 	}
-	return -1
 }

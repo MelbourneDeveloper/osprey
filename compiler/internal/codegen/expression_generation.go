@@ -699,7 +699,7 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 ) (value.Value, error) {
 	// For ObjectLiterals, we need to use the Hindley-Milner type information
 	// instead of trying to reverse-engineer from LLVM types
-	
+
 	// If the object is an identifier, get its type from the type environment
 	if ident, ok := fieldAccess.Object.(*ast.Identifier); ok {
 		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
@@ -708,13 +708,13 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 			}
 		}
 	}
-	
+
 	// For non-identifier objects, try to infer the type
 	objectType, err := g.typeInferer.InferType(fieldAccess.Object)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	resolvedType := g.typeInferer.ResolveType(objectType)
 	if recordType, ok := resolvedType.(*RecordType); ok {
 		return g.generateRecordFieldAccess(fieldAccess, objectValue, recordType)
@@ -765,7 +765,7 @@ func (g *LLVMGenerator) generateRecordFieldAccess(
 		fieldNames = append(fieldNames, fieldName)
 	}
 	sort.Strings(fieldNames)
-	
+
 	fieldIndex := -1
 	for i, fieldName := range fieldNames {
 		if fieldName == fieldAccess.FieldName {
@@ -808,18 +808,6 @@ func (g *LLVMGenerator) generateRecordFieldAccess(
 	return fieldValue, nil
 }
 
-
-// findRecordTypeForStruct finds the record type name that corresponds to a struct type
-func (g *LLVMGenerator) findRecordTypeForStruct(structType *types.StructType) string {
-	for typeName, llvmType := range g.typeMap {
-		if st, ok := llvmType.(*types.StructType); ok {
-			if st == structType {
-				return typeName
-			}
-		}
-	}
-	return ""
-}
 
 func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) (value.Value, error) {
 	// For now, method calls are not fully implemented

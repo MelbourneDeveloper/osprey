@@ -1451,18 +1451,18 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 		if fieldType, exists := recordType.fields[e.FieldName]; exists {
 			return fieldType, nil
 		}
-		return nil, fmt.Errorf("field '%s' not found in record type %s", e.FieldName, recordType.String())
+		return nil, WrapFieldNotFoundInRecord(e.FieldName, recordType.String())
 	}
 
 	// Check if it's a concrete type (for compatibility)
 	if concreteType, ok := resolvedObjectType.(*ConcreteType); ok {
 		// Handle legacy record string representations
 		if strings.Contains(concreteType.name, "Record<") {
-			return nil, fmt.Errorf("field access on legacy record type not supported, field '%s' on type %s", e.FieldName, concreteType.name)
+			return nil, WrapFieldAccessOnLegacyRecord(e.FieldName, concreteType.name)
 		}
 	}
 
-	return nil, fmt.Errorf("cannot access field '%s' on non-record type %s", e.FieldName, resolvedObjectType.String())
+	return nil, WrapFieldAccessOnNonRecord(e.FieldName, resolvedObjectType.String())
 }
 
 // inferTypeConstructor infers types for type constructor expressions
