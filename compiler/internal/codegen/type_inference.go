@@ -443,6 +443,11 @@ func (ti *TypeInferer) Unify(t1, t2 Type) error {
 		return err
 	}
 
+	// Handle "any" types specially - they can unify with any other type
+	if ti.isAnyType(t1) || ti.isAnyType(t2) {
+		return nil
+	}
+
 	// Handle types by category
 	switch t1.Category() {
 	case PrimitiveTypeCategory:
@@ -620,6 +625,10 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 	case "_":
 		// Wildcard pattern matches anything
 		return ti.Fresh(), nil
+	case "*":
+		// Structural pattern for ternary expressions - matches any structure and extracts fields
+		ti.handlePatternFieldBindings(pattern, discriminantType)
+		return discriminantType, nil
 	case "":
 		// Variable pattern
 		if pattern.Variable != "" {
@@ -627,7 +636,15 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 			ti.env.Set(pattern.Variable, tv)
 			return tv, nil
 		}
-		return nil, ErrInvalidEmptyPattern
+		// Check if this is a field-only pattern from structural matching
+		if len(pattern.Fields) > 0 {
+			// This is a structural pattern with fields but no constructor
+			// Treat it as a fresh type variable
+			return ti.Fresh(), nil
+		}
+		// If it's completely empty, treat it as a wildcard pattern for now
+		// This might happen in generated match expressions
+		return ti.Fresh(), nil
 	case "true", "false":
 		// Boolean literal pattern
 		return &ConcreteType{name: TypeBool}, nil
@@ -656,6 +673,20 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 
 // handlePatternFieldBindings handles field bindings in patterns with proper type extraction
 func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discriminantType Type) {
+	// Special handling for structural patterns (constructor "*")
+	if pattern.Constructor == "*" && discriminantType != nil {
+		// For structural patterns, try to extract field types from the discriminant type
+		// This is used in ternary expressions like: v { value } ? value : "default"
+		for _, field := range pattern.Fields {
+			// For structural patterns, we need to infer the field type
+			// Since we don't have sophisticated field type inference yet,
+			// we'll use a type variable that can unify with any type
+			fieldType := ti.Fresh()
+			ti.env.Set(field, fieldType)
+		}
+		return
+	}
+	
 	// Special handling for Result type patterns
 	if pattern.Constructor == "Success" && discriminantType != nil {
 		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
@@ -940,6 +971,17 @@ func (ti *TypeInferer) unifyTypeVariables(t1, t2 Type) error {
 	}
 
 	return ErrNotTypeVariable
+}
+
+// isAnyType checks if a type represents the "any" type
+func (ti *TypeInferer) isAnyType(t Type) bool {
+	if ct, ok := t.(*ConcreteType); ok {
+		return ct.name == TypeAny
+	}
+	if pt, ok := t.(*PrimitiveType); ok {
+		return pt.name == TypeAny
+	}
+	return false
 }
 
 // occursCheck checks if a type variable occurs in a type (prevents infinite types)

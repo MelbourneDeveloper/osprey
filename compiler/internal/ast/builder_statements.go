@@ -160,7 +160,23 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 					Type: fieldCtx.Type_().ID().GetText(),
 				}
 
-				// No longer using field-level constraints
+				// Parse WHERE constraint if present
+				if fieldCtx.FunctionCall() != nil {
+					constraint := &FunctionCallExpression{
+						Function:  fieldCtx.FunctionCall().ID().GetText(),
+						Arguments: make([]Expression, 0),
+					}
+					
+					// Parse function call arguments if any
+					if fieldCtx.FunctionCall().ArgList() != nil {
+						for _, argCtx := range fieldCtx.FunctionCall().ArgList().AllExpr() {
+							arg := b.buildExpression(argCtx)
+							constraint.Arguments = append(constraint.Arguments, arg)
+						}
+					}
+					
+					field.Constraint = constraint
+				}
 
 				fields = append(fields, field)
 			}
@@ -200,7 +216,23 @@ func (b *Builder) buildVariant(ctx parser.IVariantContext) TypeVariant {
 				Type: fieldCtx.Type_().ID().GetText(),
 			}
 
-			// No longer using field-level constraints
+			// Parse WHERE constraint if present
+			if fieldCtx.FunctionCall() != nil {
+				constraint := &FunctionCallExpression{
+					Function:  fieldCtx.FunctionCall().ID().GetText(),
+					Arguments: make([]Expression, 0),
+				}
+				
+				// Parse function call arguments if any
+				if fieldCtx.FunctionCall().ArgList() != nil {
+					for _, argCtx := range fieldCtx.FunctionCall().ArgList().AllExpr() {
+						arg := b.buildExpression(argCtx)
+						constraint.Arguments = append(constraint.Arguments, arg)
+					}
+				}
+				
+				field.Constraint = constraint
+			}
 
 			fields = append(fields, field)
 		}

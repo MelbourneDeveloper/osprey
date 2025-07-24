@@ -1,0 +1,5 @@
+// Simple ternary test to isolate the issue
+
+let a = { a: true }
+let b = a.a ? "true" : "false"
+print(b)

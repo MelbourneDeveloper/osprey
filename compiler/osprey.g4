@@ -45,7 +45,7 @@ recordType      : LBRACE fieldDeclarations RBRACE ;
 variant         : ID (LBRACE fieldDeclarations RBRACE)? ;
 
 fieldDeclarations : fieldDeclaration (COMMA fieldDeclaration)* ;
-fieldDeclaration  : ID COLON type ;
+fieldDeclaration  : ID COLON type (WHERE functionCall)? ;
 
 typeValidation  : WHERE ID ;
 

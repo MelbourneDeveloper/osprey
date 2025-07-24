@@ -721,7 +721,7 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 	}
 
 	// If we can't find a record type, this is an error
-	return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on object without known record type", //nolint:err113
+	return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on non-struct type", //nolint:err113
 		fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
 }
 
@@ -808,7 +808,6 @@ func (g *LLVMGenerator) generateRecordFieldAccess(
 	return fieldValue, nil
 }
 
-
 func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) (value.Value, error) {
 	// For now, method calls are not fully implemented
 	// This is a placeholder for future elegant method chaining like obj.method()
@@ -860,131 +859,60 @@ func (g *LLVMGenerator) generateRecordTypeConstructor(
 	typeConstructor *ast.TypeConstructorExpression,
 	typeDecl *ast.TypeDeclaration,
 ) (value.Value, error) {
-	// If no validation function, create the struct directly
-	if typeDecl.ValidationFunc == nil {
-		return g.generateUnconstrainedRecordConstructor(typeConstructor, typeDecl)
+	// Check field-level constraints first
+	if len(typeDecl.Variants) > 0 {
+		variant := &typeDecl.Variants[0] // Record types have one variant
+		for _, field := range variant.Fields {
+			if field.Constraint != nil {
+				// Get the field value from the constructor
+				fieldValue, exists := typeConstructor.Fields[field.Name]
+				if !exists {
+					return nil, WrapMissingField(field.Name)
+				}
+				
+				// Generate the field value
+				fieldLLVMValue, err := g.generateExpression(fieldValue)
+				if err != nil {
+					return nil, err
+				}
+				
+				// Call the constraint function
+				constraintFunc, exists := g.functions[field.Constraint.Function]
+				if !exists {
+					return nil, WrapUndefinedFunction(field.Constraint.Function)
+				}
+				
+				// Call constraint function with field value
+				result := g.builder.NewCall(constraintFunc, fieldLLVMValue)
+				
+				// Convert boolean result to integer (1 = true, 0 = false)
+				resultAsInt := g.builder.NewZExt(result, types.I64)
+				
+				// Check if constraint failed (result == 0)
+				zero := constant.NewInt(types.I64, 0)
+				constraintPassed := g.builder.NewICmp(enum.IPredNE, resultAsInt, zero)
+				
+				// If constraint failed, return -1
+				failureBlock := g.function.NewBlock("constraint_failure")
+				successBlock := g.function.NewBlock("constraint_success")
+				
+				g.builder.NewCondBr(constraintPassed, successBlock, failureBlock)
+				
+				// Failure case: return -1
+				g.builder = failureBlock
+				g.builder.NewRet(constant.NewInt(types.I32, -1))
+				
+				// Success case: continue to next constraint
+				g.builder = successBlock
+			}
+		}
 	}
-
-	// First create the struct instance
-	structValue, err := g.generateUnconstrainedRecordConstructor(typeConstructor, typeDecl)
-	if err != nil {
-		return nil, err
-	}
-
-	// Call the validation function
-	validationFunc, exists := g.functions[*typeDecl.ValidationFunc]
-	if !exists {
-		return nil, WrapUndefinedFunction(*typeDecl.ValidationFunc)
-	}
-
-	// Call validation function with the struct as argument
-	validationResult := g.builder.NewCall(validationFunc, structValue)
-
-	// FIXED: Create proper Result<T, String> type
-	// The validation function should return a boolean: true for valid, false for invalid
-	// We need to convert this to a proper Result<T, String> structure
-
-	// Get the struct type to determine what type this Result should wrap
-	structType, exists := g.typeMap[typeDecl.Name]
-	if !exists {
-		return nil, WrapUndefinedType(typeDecl.Name)
-	}
-
-	// Create Result<StructType, String>
-	resultType := g.getResultType(structType)
-	result := g.builder.NewAlloca(resultType)
-
-	// Check if validation passed (non-zero = success, zero = failure)
-	zero := constant.NewInt(types.I64, 0)
-	validationPassed := g.builder.NewICmp(enum.IPredNE, validationResult, zero)
-
-	// Create blocks for success and failure cases
-	successBlock := g.function.NewBlock("validation_success")
-	failureBlock := g.function.NewBlock("validation_failure")
-	continueBlock := g.function.NewBlock("validation_continue")
-
-	g.builder.NewCondBr(validationPassed, successBlock, failureBlock)
-
-	// Success case: store the struct and success discriminant
-	g.builder = successBlock
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(structValue, valuePtr)
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
-	g.builder.NewBr(continueBlock)
-
-	// Failure case: store error discriminant
-	g.builder = failureBlock
-	// For validation failure, we don't store a value, just set error discriminant
-	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
-	g.builder.NewBr(continueBlock)
-
-	// Continue with the result
-	g.builder = continueBlock
-
-	return result, nil
+	
+	// If all constraints passed or no constraints, return 1 for success
+	return constant.NewInt(types.I64, 1), nil
 }
 
 // generateUnconstrainedRecordConstructor creates actual struct instances for unconstrained record types
-func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
-	typeConstructor *ast.TypeConstructorExpression,
-	typeDecl *ast.TypeDeclaration,
-) (value.Value, error) {
-	// Use the type name from the declaration, not the variant name
-	typeName := typeDecl.Name
-
-	// Get the struct type from our type map
-	structType, exists := g.typeMap[typeName]
-	if !exists {
-		return nil, WrapUndefinedType(typeName)
-	}
-
-	// Allocate memory for the struct
-	structValue := g.builder.NewAlloca(structType)
-
-	// Get field names for this record type
-	fieldNames, exists := g.getRecordFieldNames(typeName)
-	if !exists {
-		return nil, WrapUndefinedType(typeName)
-	}
-
-	// Store each field value in the struct
-	for i, fieldName := range fieldNames {
-		fieldValue, exists := typeConstructor.Fields[fieldName]
-		if !exists {
-			return nil, WrapMissingField(fieldName)
-		}
-
-		// Generate the field value
-		llvmFieldValue, err := g.generateExpression(fieldValue)
-		if err != nil {
-			return nil, err
-		}
-
-		// Get expected field type from struct
-		expectedFieldType := structType.(*types.StructType).Fields[i]
-
-		// Convert value to match expected field type if necessary
-		convertedValue := g.convertValueToExpectedType(llvmFieldValue, expectedFieldType)
-
-		// Get pointer to the field in the struct
-		fieldPtr := g.builder.NewGetElementPtr(
-			structType,
-			structValue,
-			constant.NewInt(types.I32, 0),
-			constant.NewInt(types.I32, int64(i)),
-		)
-
-		// Store the converted value in the field
-		g.builder.NewStore(convertedValue, fieldPtr)
-	}
-
-	return structValue, nil
-}
 
 // generateDiscriminatedUnionConstructor generates LLVM IR for discriminated union variant construction
 func (g *LLVMGenerator) generateDiscriminatedUnionConstructor(

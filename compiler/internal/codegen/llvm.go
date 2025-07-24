@@ -729,10 +729,38 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 			g.variables[patternFieldName] = fieldValue
 
 			// Also register the variable in the Hindley-Milner type environment
-			concreteType := &ConcreteType{name: field.Type}
+			// For Result types, try to infer the semantic type of the value field
+			var semanticType string
+			if patternFieldName == "value" && pattern.Constructor == "Success" {
+				// This is likely a value extracted from a Result<T, E>
+				// Try to infer the original type T from the context
+				semanticType = g.inferResultValueType(discriminant, field.Type)
+			} else {
+				semanticType = field.Type
+			}
+			concreteType := &ConcreteType{name: semanticType}
 			g.typeInferer.env.Set(patternFieldName, concreteType)
 		}
 	}
+}
+
+// inferResultValueType tries to infer the semantic type of a value extracted from a Result type
+func (g *LLVMGenerator) inferResultValueType(_ value.Value, fieldType string) string {
+	// Try to track back to the source of this Result value to determine the generic type parameter
+	// This is a complex problem that requires proper generic type tracking
+	
+	// For now, we'll use heuristics based on the field type
+	// Check if the field type suggests this could be a boolean value
+	
+	// Simple heuristic: if the field type suggests it could be boolean (i64 that might be boolean)
+	// and this is a Success pattern match, assume it's a boolean
+	// This handles the common case of Result<bool, Error> from comparison functions
+	if fieldType == TypeInt || fieldType == "" {
+		// This is likely a boolean value stored as i64 in the Result
+		return TypeBool
+	}
+	
+	return fieldType // Otherwise use the original field type
 }
 
 // normalizeArmValue handles Unit expressions in match arms

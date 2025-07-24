@@ -109,6 +109,16 @@ func (g *LLVMGenerator) inferParameterTypesForSignature(fnDecl *ast.FunctionDecl
 // determineReturnTypeForSignature determines the return type for function signature
 func (g *LLVMGenerator) determineReturnTypeForSignature(fnDecl *ast.FunctionDeclaration) Type {
 	if fnDecl.ReturnType != nil {
+		// Handle Result types specially for signature generation
+		if fnDecl.ReturnType.Name == TypeResult && len(fnDecl.ReturnType.GenericParams) >= 2 {
+			// For Result types, we need a pointer to the Result struct
+			successType := fnDecl.ReturnType.GenericParams[0].Name
+			errorType := fnDecl.ReturnType.GenericParams[1].Name
+			
+			// Create a full Result type name for compatibility with existing code
+			fullTypeName := fmt.Sprintf("Result<%s, %s>", successType, errorType)
+			return &ConcreteType{name: fullTypeName}
+		}
 		return &ConcreteType{name: fnDecl.ReturnType.Name}
 	}
 	return g.typeInferer.Fresh()
@@ -404,10 +414,18 @@ func (g *LLVMGenerator) generateReturnInstruction(
 // maybeWrapInResult wraps a plain value in a Result structure if the function declares a Result return type
 func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.FunctionDeclaration) value.Value {
 	// Check if function declares a Result return type
-	if fnDecl.ReturnType != nil && strings.HasPrefix(fnDecl.ReturnType.Name, "Result<") {
+	if fnDecl.ReturnType != nil && fnDecl.ReturnType.Name == TypeResult && len(fnDecl.ReturnType.GenericParams) >= 2 {
+		successType := fnDecl.ReturnType.GenericParams[0].Name
+		errorType := fnDecl.ReturnType.GenericParams[1].Name
+		
 		// Check if the body value is a plain int and function expects Result<int, MathError>
-		if fnDecl.ReturnType.Name == "Result<int, MathError>" && bodyValue.Type() == types.I64 {
+		if successType == "int" && errorType == TypeMathError && bodyValue.Type() == types.I64 {
 			return g.wrapInMathResult(bodyValue)
+		}
+		// Check if the body value is a plain bool and function expects Result<bool, MathError>
+		if successType == "bool" && errorType == TypeMathError && 
+			(bodyValue.Type() == types.I1 || bodyValue.Type() == types.I64) {
+			return g.wrapInBoolResult(bodyValue)
 		}
 		// Add other Result type mappings as needed
 	}
@@ -436,6 +454,34 @@ func (g *LLVMGenerator) wrapInMathResult(intValue value.Value) value.Value {
 	return result
 }
 
+// wrapInBoolResult wraps a plain bool value in a Result<bool, MathError> structure
+func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
+	// Convert the value to i64 if it's i1
+	var valueToStore value.Value
+	if boolValue.Type() == types.I1 {
+		valueToStore = g.builder.NewZExt(boolValue, types.I64)
+	} else {
+		valueToStore = boolValue
+	}
+
+	// Create Result<bool, MathError> structure (using i64 as the value type for consistency)
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Store the bool value (as i64) in the success field
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(valueToStore, valuePtr)
+
+	// Store success discriminant (0 = Success)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
+	// Return pointer to the Result structure
+	return result
+}
+
 // canImplicitlyConvert checks if we can implicitly convert from one type to another
 func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, fnDecl *ast.FunctionDeclaration) bool {
 	// Check if we're trying to convert primitive types to Result types
@@ -446,12 +492,14 @@ func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, fnDecl *ast.
 
 			// Check if it's Result<int, MathError> or Result<bool, MathError>
 			if (expectedInnerType == "int" || expectedInnerType == "bool") &&
-				expectedErrorType == "MathError" {
+				expectedErrorType == TypeMathError {
 
 				if fromConcrete, ok := fromType.(*ConcreteType); ok {
 					if fromConcrete.name == expectedInnerType {
 						if toConcrete, ok := toType.(*ConcreteType); ok {
-							return toConcrete.name == "Result"
+							// Also check for the full Result type name
+							return toConcrete.name == "Result" || 
+								strings.HasPrefix(toConcrete.name, "Result<")
 						}
 					}
 				}
@@ -534,6 +582,9 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 		if strings.HasPrefix(ct.name, "Result<") {
 			// Result types are represented as structs with { value, discriminant }
 			if ct.name == "Result<int, MathError>" {
+				return types.NewPointer(g.getResultType(types.I64))
+			}
+			if ct.name == "Result<bool, MathError>" {
 				return types.NewPointer(g.getResultType(types.I64))
 			}
 			// Add other Result type mappings as needed
@@ -856,10 +907,6 @@ func (g *LLVMGenerator) storeRecordFieldNames(typeName string, fieldNames []stri
 }
 
 // getRecordFieldNames retrieves field names for a record type
-func (g *LLVMGenerator) getRecordFieldNames(typeName string) ([]string, bool) {
-	fieldNames, exists := g.functionParameters[typeName+"_fields"]
-	return fieldNames, exists
-}
 
 // getInferenceFieldType converts a field type string to a Type for type inference
 func (g *LLVMGenerator) getInferenceFieldType(fieldType string) Type {

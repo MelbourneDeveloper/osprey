@@ -1,0 +1,5 @@
+// Structural pattern ternary test
+
+let v = { value: "It worked" }
+let message2 = v { value } ? value : "An unknown error occurred"
+print(message2)

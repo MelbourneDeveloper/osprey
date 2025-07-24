@@ -43,6 +43,7 @@ const (
 	TypeAny          = "any"
 	TypeUnit         = "Unit"
 	TypeResult       = "Result"
+	TypeMathError    = "MathError"
 	TypeHTTPResponse = "HttpResponse"
 	TypeFunction     = "Function"
 	TypeFiber        = "Fiber"

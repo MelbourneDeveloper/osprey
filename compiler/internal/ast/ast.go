@@ -122,8 +122,9 @@ type TypeVariant struct {
 
 // TypeField represents a field in a type variant.
 type TypeField struct {
-	Name string
-	Type string
+	Name       string
+	Type       string
+	Constraint *FunctionCallExpression // WHERE constraint function
 }
 
 // FunctionCallExpression represents a function call in constraints.

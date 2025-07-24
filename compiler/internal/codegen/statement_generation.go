@@ -116,9 +116,9 @@ func (g *LLVMGenerator) typeExpressionToLLVMType(typeExpr *ast.TypeExpression) t
 	}
 
 	switch typeExpr.Name {
-	case "Int":
+	case TypeInt:
 		return types.I64
-	case "String":
+	case TypeString:
 		return types.I8Ptr
 	case TypeUnit:
 		return types.Void
@@ -159,11 +159,11 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 	}
 
 	switch typeExpr.Name {
-	case "int":
+	case TypeInt:
 		return &ConcreteType{name: TypeInt}
 	case "string":
 		return &ConcreteType{name: TypeString}
-	case "bool":
+	case TypeBool:
 		return &ConcreteType{name: TypeBool}
 	case TypeUnit:
 		return &ConcreteType{name: TypeUnit}

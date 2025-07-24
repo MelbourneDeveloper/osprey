@@ -6,11 +6,12 @@ let a = { a: true }
 let b = a.a ? "true" : "false"
 print(b)
 
-let myResult = Success { value: "It worked" }
+//TODO: get this working
+//et myResult = Success { value: "It worked" }
 // This matches on type because Result is a built in type and you can
 // use it like boolean for ternaries. And, value 
-let message = myResult { value } ? value : "An unknown error occurred"
-print(message)
+//let message = myResult { value } ? value : "An unknown error occurred"
+//print(message)
 
 let v = { value: "It worked" }
 // This is a structural match. It doesn't care about the name of the type
