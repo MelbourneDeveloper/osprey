@@ -244,11 +244,6 @@ func (g *LLVMGenerator) shouldTreatAsBoolean(_ value.Value, argExpr ast.Expressi
 			}
 		}
 		
-		// Fallback heuristic: if the variable name is "value", 
-		// it might be from a Result pattern match containing a boolean
-		if ident.Name == "value" {
-			return true
-		}
 	}
 	
 	// For now, return false for non-identifier expressions
