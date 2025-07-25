@@ -158,6 +158,16 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 		}
 	}
 
+	// Handle generic types like Result<bool, MathError>
+	if len(typeExpr.GenericParams) > 0 {
+		// Convert generic parameters to Type arguments
+		typeArgs := make([]Type, len(typeExpr.GenericParams))
+		for i, genericParam := range typeExpr.GenericParams {
+			typeArgs[i] = g.typeExpressionToInferenceType(&genericParam)
+		}
+		return NewGenericType(typeExpr.Name, typeArgs)
+	}
+
 	switch typeExpr.Name {
 	case TypeInt:
 		return &ConcreteType{name: TypeInt}
@@ -174,7 +184,7 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 	case TypeChannel:
 		return &ConcreteType{name: TypeChannel}
 	default:
-		// For unknown types, return as concrete type
+		// For unknown types without generic parameters, return as concrete type
 		return &ConcreteType{name: typeExpr.Name}
 	}
 }
@@ -192,7 +202,7 @@ func (g *LLVMGenerator) generateLetDeclaration(letDecl *ast.LetDeclaration) (val
 	var varType Type
 	if letDecl.Type != nil {
 		// Use the explicit type annotation
-		varType = &ConcreteType{name: letDecl.Type.Name}
+		varType = g.typeExpressionToInferenceType(letDecl.Type)
 	} else {
 		// Use unified type inference system for untyped declarations
 		inferredType, err := g.typeInferer.InferType(letDecl.Value)

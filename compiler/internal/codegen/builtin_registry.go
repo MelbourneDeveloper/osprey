@@ -267,7 +267,7 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 			{Name: "haystack", Type: &ConcreteType{name: TypeString}, Description: "The string to search in"},
 			{Name: "needle", Type: &ConcreteType{name: TypeString}, Description: "The substring to search for"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<bool, Error>"},
+		ReturnType:   CreateResultType(&ConcreteType{name: TypeBool}, &ConcreteType{name: "Error"}),
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,

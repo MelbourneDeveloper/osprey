@@ -56,8 +56,9 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 	resolvedType := g.typeInferer.ResolveType(inferredType)
 	argType := resolvedType.String()
 
-	// Check if this should be treated as a boolean (e.g., extracted from Result<bool, E>)
-	if argType == TypeInt && g.shouldTreatAsBoolean(arg, callExpr.Arguments[0]) {
+	// Check if the resolved type IS boolean (not Result<bool, Error>!)
+	isBooleanType := g.isSemanticBooleanType(resolvedType)
+	if isBooleanType {
 		argType = TypeBool
 	}
 
@@ -232,23 +233,7 @@ func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bo
 	return true // Assume boolean for now to fix the immediate issue
 }
 
-// shouldTreatAsBoolean determines if an i64 value should be treated as a boolean when printing
-func (g *LLVMGenerator) shouldTreatAsBoolean(_ value.Value, argExpr ast.Expression) bool {
-	// Check if the expression is an identifier (variable)
-	if ident, ok := argExpr.(*ast.Identifier); ok {
-		// Check the semantic type from the type inference environment
-		if typeInfo, exists := g.typeInferer.env.Get(ident.Name); exists {
-			if concreteType, ok := typeInfo.(*ConcreteType); ok {
-				// Check if the type is semantically boolean
-				return concreteType.name == TypeBool
-			}
-		}
-		
-	}
-	
-	// For now, return false for non-identifier expressions
-	return false
-}
+
 
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
@@ -280,19 +265,10 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 				return nil, err
 			}
 		} else {
-			// For i64 values, check if they should be treated as boolean
-			// This handles cases where boolean values are extracted from Result types
-			if g.shouldTreatAsBoolean(arg, argExpr) {
-				stringArg, err = g.generateBoolToString(arg)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				stringArg, err = g.generateIntToString(arg)
-				if err != nil {
-					return nil, err
-				}
-			}
+			stringArg, err = g.generateIntToString(arg)
+			if err != nil {
+				return nil, err
+			}	
 		}
 	default:
 		return nil, ErrPrintCannotConvert

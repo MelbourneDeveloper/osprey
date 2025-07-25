@@ -692,11 +692,9 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
 			// Extract the success type from Result<T, E>
 			successType := ti.extractResultSuccessType(ct.name)
-			fmt.Printf("DEBUG: Extracted success type: %s\n", successType.String())
 			if len(pattern.Fields) > 0 {
 				// Bind the first field to the success type
 				ti.env.Set(pattern.Fields[0], successType)
-				fmt.Printf("DEBUG: Bound field %s to type %s\n", pattern.Fields[0], successType.String())
 			}
 			return
 		}
@@ -1524,6 +1522,7 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 		return nil, err
 	}
 	
+	
 
 	if len(e.Arms) == 0 {
 		return nil, ErrMatchNoArms
@@ -1586,9 +1585,12 @@ func (ti *TypeInferer) inferResultExpression(e *ast.ResultExpression) (Type, err
 
 	// Otherwise, this is an explicit Result type construction
 	if e.Success {
-		return &ConcreteType{name: fmt.Sprintf("Result<%s, Error>", valueType.String())}, nil
+		errorType := &ConcreteType{name: "Error"}
+		return CreateResultType(valueType, errorType), nil
 	}
-	return &ConcreteType{name: fmt.Sprintf("Result<T, %s>", valueType.String())}, nil
+	// For error case, we need a fresh type variable for the success type
+	successType := ti.Fresh()
+	return CreateResultType(successType, valueType), nil
 }
 
 // inferListLiteral infers types for list literal expressions
@@ -1757,6 +1759,11 @@ func (ti *TypeInferer) inferMethodCall(e *ast.MethodCallExpression) (Type, error
 	return resultType, nil
 }
 
+// CreateResultType creates a proper GenericType for Result<T, E>
+func CreateResultType(successType, errorType Type) Type {
+	return NewGenericType(TypeResult, []Type{successType, errorType})
+}
+
 // inferListAccess infers types for list access expressions
 func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error) {
 	_, err := ti.InferType(e.List)
@@ -1780,7 +1787,8 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 	elementType := ti.Fresh()
 
 	// List access returns Result<T, Error> for safety
-	return &ConcreteType{name: fmt.Sprintf("Result<%s, Error>", elementType.String())}, nil
+	errorType := &ConcreteType{name: "Error"}
+	return CreateResultType(elementType, errorType), nil
 }
 
 // inferPerformExpression infers types for perform expressions

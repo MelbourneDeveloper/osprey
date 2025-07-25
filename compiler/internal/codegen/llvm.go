@@ -449,15 +449,65 @@ func (g *LLVMGenerator) wrapInSuccessResult(discriminant value.Value) value.Valu
 	return resultPtr
 }
 
-// isResultType checks if a value is a Result type (pointer to struct with two fields)
+// isResultType checks if a value is a Result type (struct with two fields or pointer to such struct)
 func (g *LLVMGenerator) isResultType(val value.Value) bool {
+	// Check for pointer to struct (legacy pointer semantics)
 	if ptrType, ok := val.Type().(*types.PointerType); ok {
 		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
 			return len(structType.Fields) == ResultFieldCount
 		}
 	}
+	// Check for struct value directly (value semantics)
+	if structType, ok := val.Type().(*types.StructType); ok {
+		return len(structType.Fields) == ResultFieldCount
+	}
 	return false
 }
+
+
+// inferSuccessTypeFromExtractedValue infers the type from an already extracted value
+func (g *LLVMGenerator) inferSuccessTypeFromExtractedValue(extractedValue value.Value) Type {
+	// Get the actual type from the original function's return type
+	// Extract from the Result type: Result<T, E> -> T
+	
+	if extractInst, ok := extractedValue.(*ir.InstExtractValue); ok {
+		// This is extracting from a Result struct
+		aggregate := extractInst.X
+		
+		if callInst, ok := aggregate.(*ir.InstCall); ok {
+			// Get the function that was called
+			if function, ok := callInst.Callee.(*ir.Func); ok {
+				funcName := function.GlobalName
+				
+				// Look up the function's declared return type from the type inference system
+				if funcType, exists := g.typeInferer.env.Get(funcName); exists {
+					if fnType, ok := funcType.(*FunctionType); ok {
+						// Extract the success type from Result<T, E>
+						return g.extractSuccessTypeFromResultType(fnType.returnType)
+					}
+				}
+			}
+		}
+	}
+	
+	// If we can't determine the type definitively, this is an error
+	panic("Cannot determine success type from Result - type inference failed")
+}
+
+// extractSuccessTypeFromResultType extracts T from Result<T, E>
+func (g *LLVMGenerator) extractSuccessTypeFromResultType(resultType Type) Type {
+	// Proper type inference: Result types should be GenericType with type arguments
+	if genericType, ok := resultType.(*GenericType); ok {
+		if genericType.name == TypeResult && len(genericType.typeArgs) >= 1 {
+			// Return the first type argument (success type T from Result<T, E>)
+			return genericType.typeArgs[0]
+		}
+	}
+	
+	// If it's not a Result type, this is an error - no more string parsing bullshit!
+	panic(fmt.Sprintf("Expected Result type to be GenericType, got: %s (type: %T)", resultType.String(), resultType))
+}
+
 
 // generateStandardMatchExpression generates a standard (non-result) match expression.
 func (g *LLVMGenerator) generateStandardMatchExpression(
@@ -1247,7 +1297,7 @@ func (g *LLVMGenerator) createResultMatchBlocks(matchExpr *ast.MatchExpression) 
 
 // generateResultMatchCondition generates the condition for result matching.
 func (g *LLVMGenerator) generateResultMatchCondition(discriminant value.Value, blocks *ResultMatchBlocks) {
-	// Check if the discriminant is a pointer to a struct (Result type) or just an integer
+	// Handle both struct values and pointers to structs
 	if ptrType, ok := discriminant.Type().(*types.PointerType); ok {
 		// Extract the discriminant field from the Result struct
 		// Result struct: [value, discriminant] where discriminant is at index 1
@@ -1255,6 +1305,15 @@ func (g *LLVMGenerator) generateResultMatchCondition(discriminant value.Value, b
 		discriminantPtr := g.builder.NewGetElementPtr(resultType, discriminant,
 			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 		discriminantValue := g.builder.NewLoad(discriminantPtr.Type().(*types.PointerType).ElemType, discriminantPtr)
+
+		// 0 = Success, 1 = Error
+		zero := constant.NewInt(types.I8, 0)
+		isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminantValue, zero)
+		g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
+	} else if _, ok := discriminant.Type().(*types.StructType); ok {
+		// Handle struct value directly (for value semantics)
+		// Extract discriminant field (index 1) from struct value
+		discriminantValue := g.builder.NewExtractValue(discriminant, 1)
 
 		// 0 = Success, 1 = Error
 		zero := constant.NewInt(types.I8, 0)
@@ -1291,6 +1350,18 @@ func (g *LLVMGenerator) generateSuccessBlock(
 					constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 				extractedValue := g.builder.NewLoad(valuePtr.Type().(*types.PointerType).ElemType, valuePtr)
 				g.variables[fieldName] = extractedValue
+			} else if _, ok := g.currentResultValue.Type().(*types.StructType); ok {
+				// Handle struct value directly (for value semantics)
+				// Extract value field (index 0) from struct value
+				extractedValue := g.builder.NewExtractValue(g.currentResultValue, 0)
+				g.variables[fieldName] = extractedValue
+				
+				// Store semantic type information for the extracted value
+				// This is critical for proper boolean printing in pattern matching
+				successType := g.inferSuccessTypeFromExtractedValue(extractedValue)
+				if successType != nil {
+					g.typeInferer.env.Set(fieldName, successType)
+				}
 			} else {
 				// Fallback: use the discriminant value directly
 				g.variables[fieldName] = g.currentResultValue
