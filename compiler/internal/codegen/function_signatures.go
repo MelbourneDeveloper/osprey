@@ -284,7 +284,9 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 			if fnDecl.Position != nil {
 				positionInfo = fmt.Sprintf(" at line %d, column %d", fnDecl.Position.Line, fnDecl.Position.Column)
 			}
-			return nil, fmt.Errorf("return type mismatch in function '%s'%s: %w", fnDecl.Name, positionInfo, err)
+			return nil, fmt.Errorf("return type mismatch in function '%s'%s: body type=%s (%T), return type=%s (%T), error: %w", 
+				fnDecl.Name, positionInfo, inferredReturnType.String(), inferredReturnType, 
+				returnTypeVar.String(), returnTypeVar, err)
 		}
 	}
 
@@ -476,32 +478,45 @@ func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
 
 // canImplicitlyConvert checks if we can implicitly convert from one type to another
 func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, _ *ast.FunctionDeclaration) bool {
-	// Check if we're trying to convert primitive types to Result types
-	if toGeneric, ok := toType.(*GenericType); ok {
-		if toGeneric.name == TypeResult && len(toGeneric.typeArgs) >= 2 {
-			// Extract the success type from Result<T, E>
-			successType := toGeneric.typeArgs[0]
-			errorType := toGeneric.typeArgs[1]
-
-			// Check if it's Result<int, MathError> or Result<bool, MathError>
-			if successConcrete, ok := successType.(*ConcreteType); ok {
-				if errorConcrete, ok := errorType.(*ConcreteType); ok {
-					if (successConcrete.name == TypeInt || successConcrete.name == TypeBool) &&
-						errorConcrete.name == TypeMathError {
-						
-						// Check if the from type matches the success type
-						if fromConcrete, ok := fromType.(*ConcreteType); ok {
-							canConvert := fromConcrete.name == successConcrete.name
-							return canConvert
-						}
-					}
-				}
+	// Handle the case where Result types are still ConcreteType due to type inference issues
+	if fromConcrete, ok := fromType.(*ConcreteType); ok {
+		if toConcrete, ok := toType.(*ConcreteType); ok {
+			// Check for primitive to Result conversion
+			if (fromConcrete.name == TypeInt || fromConcrete.name == TypeBool) && 
+				toConcrete.name == TypeResult {
+				return true
 			}
 		}
 	}
+	
+	return g.canConvertToResult(fromType, toType)
+}
 
-	// Add other implicit conversions as needed
-	return false
+// canConvertToResult checks if we can convert a primitive type to a Result type
+func (g *LLVMGenerator) canConvertToResult(fromType, toType Type) bool {
+	toGeneric, ok := toType.(*GenericType)
+	if !ok || toGeneric.name != TypeResult || len(toGeneric.typeArgs) < 2 {
+		return false
+	}
+
+	fromConcrete, ok := fromType.(*ConcreteType)
+	if !ok {
+		return false
+	}
+
+	successType, ok := toGeneric.typeArgs[0].(*ConcreteType)
+	if !ok {
+		return false
+	}
+
+	_, ok = toGeneric.typeArgs[1].(*ConcreteType)
+	if !ok {
+		return false
+	}
+
+	// Check if from type matches success type - allow any error type for Result conversion
+	return fromConcrete.name == successType.name &&
+		(successType.name == TypeInt || successType.name == TypeBool)
 }
 
 // getLLVMType converts our type system types to LLVM types

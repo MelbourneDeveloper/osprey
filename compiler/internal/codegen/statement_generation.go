@@ -165,7 +165,8 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 		for i, genericParam := range typeExpr.GenericParams {
 			typeArgs[i] = g.typeExpressionToInferenceType(&genericParam)
 		}
-		return NewGenericType(typeExpr.Name, typeArgs)
+		genericType := NewGenericType(typeExpr.Name, typeArgs)
+		return genericType
 	}
 
 	switch typeExpr.Name {
