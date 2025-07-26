@@ -450,19 +450,20 @@ func (g *LLVMGenerator) wrapInMathResult(intValue value.Value) value.Value {
 
 // wrapInBoolResult wraps a plain bool value in a Result<bool, MathError> structure
 func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
-	// Convert the value to i64 if it's i1
+	// Create Result<bool, MathError> structure (using i1 as the value type for booleans)
+	resultType := g.getResultType(types.I1)
+	result := g.builder.NewAlloca(resultType)
+
+	// Ensure we store the correct type - if value is i64, convert to i1
 	var valueToStore value.Value
-	if boolValue.Type() == types.I1 {
-		valueToStore = g.builder.NewZExt(boolValue, types.I64)
+	if boolValue.Type() == types.I64 {
+		// Truncate i64 to i1 for boolean values
+		valueToStore = g.builder.NewTrunc(boolValue, types.I1)
 	} else {
 		valueToStore = boolValue
 	}
 
-	// Create Result<bool, MathError> structure (using i64 as the value type for consistency)
-	resultType := g.getResultType(types.I64)
-	result := g.builder.NewAlloca(resultType)
-
-	// Store the bool value (as i64) in the success field
+	// Store the bool value in the success field
 	valuePtr := g.builder.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 	g.builder.NewStore(valueToStore, valuePtr)
