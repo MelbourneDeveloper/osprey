@@ -203,20 +203,101 @@ func (g *LLVMGenerator) generateFoldCall(callExpr *ast.CallExpression) (value.Va
 		return nil, WrapFoldWrongArgs(len(callExpr.Arguments))
 	}
 
-	iterator, err := g.generateExpression(callExpr.Arguments[0])
+	// Get the range struct from first argument (iterator)
+	rangeValue, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
 
+	// Get the initial accumulator value
 	initial, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err
 	}
 
+	// Get the fold function
 	funcArg := callExpr.Arguments[2]
-	if funcIdent, ok := funcArg.(*ast.Identifier); ok {
-		return g.callFunctionWithTwoValues(funcIdent, initial, iterator)
+	funcIdent, ok := funcArg.(*ast.Identifier)
+	if !ok {
+		return nil, ErrFoldNotFunction
 	}
 
-	return nil, ErrFoldNotFunction
+	// Extract range bounds
+	start, end := g.extractRangeBounds(rangeValue)
+
+	// Create fold loop blocks
+	blocks := g.createFoldLoopBlocks(callExpr)
+
+	// Generate fold loop logic
+	return g.generateFoldLoop(start, end, initial, funcIdent, blocks)
+}
+
+// FoldLoopBlocks holds the basic blocks for a fold loop.
+type FoldLoopBlocks struct {
+	LoopCond *ir.Block
+	LoopBody *ir.Block
+	LoopEnd  *ir.Block
+}
+
+// createFoldLoopBlocks creates the basic blocks needed for a fold loop.
+func (g *LLVMGenerator) createFoldLoopBlocks(callExpr *ast.CallExpression) *FoldLoopBlocks {
+	blockSuffix := fmt.Sprintf("_%p", callExpr)
+
+	return &FoldLoopBlocks{
+		LoopCond: g.function.NewBlock("fold_cond" + blockSuffix),
+		LoopBody: g.function.NewBlock("fold_body" + blockSuffix),
+		LoopEnd:  g.function.NewBlock("fold_end" + blockSuffix),
+	}
+}
+
+// generateFoldLoop generates the actual loop logic for fold.
+func (g *LLVMGenerator) generateFoldLoop(
+	start, end, initial value.Value,
+	funcIdent *ast.Identifier,
+	blocks *FoldLoopBlocks,
+) (value.Value, error) {
+	// Create counter and accumulator variables
+	counterPtr := g.builder.NewAlloca(types.I64)
+	accumulatorPtr := g.builder.NewAlloca(types.I64)
+	
+	// Initialize counter and accumulator
+	g.builder.NewStore(start, counterPtr)
+	g.builder.NewStore(initial, accumulatorPtr)
+
+	// Jump to condition check
+	g.builder.NewBr(blocks.LoopCond)
+
+	// Loop condition block
+	g.builder = blocks.LoopCond
+	currentCounter := g.builder.NewLoad(types.I64, counterPtr)
+	condition := g.builder.NewICmp(enum.IPredSLT, currentCounter, end)
+	g.builder.NewCondBr(condition, blocks.LoopBody, blocks.LoopEnd)
+
+	// Loop body block
+	g.builder = blocks.LoopBody
+	counterValue := g.builder.NewLoad(types.I64, counterPtr)
+	currentAccumulator := g.builder.NewLoad(types.I64, accumulatorPtr)
+
+	// Call the fold function with (accumulator, currentValue)
+	newAccumulator, err := g.callFunctionWithTwoValues(funcIdent, currentAccumulator, counterValue)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store the new accumulator value
+	g.builder.NewStore(newAccumulator, accumulatorPtr)
+
+	// Increment counter
+	one := constant.NewInt(types.I64, 1)
+	incrementedValue := g.builder.NewAdd(counterValue, one)
+	g.builder.NewStore(incrementedValue, counterPtr)
+
+	// Jump back to condition
+	g.builder.NewBr(blocks.LoopCond)
+
+	// Loop end block
+	g.builder = blocks.LoopEnd
+	finalResult := g.builder.NewLoad(types.I64, accumulatorPtr)
+
+	return finalResult, nil
 }

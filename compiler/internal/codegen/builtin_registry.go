@@ -368,20 +368,20 @@ func (r *BuiltInFunctionRegistry) registerFunctionalFunctions() {
 	// fold function
 	r.functions[FoldFunc] = &BuiltInFunction{
 		Name:        FoldFunc,
-		Signature:   "fold(iterator: iterator, initial: any, fn: function) -> any",
-		Description: "Reduces an iterator to a single value using an accumulator function.",
+		Signature:   "fold(iterator: Iterator<T>, initial: U, function: (U, T) -> U) -> U",
+		Description: "Reduces an iterator to a single value by repeatedly applying a function.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "iterator", Type: &ConcreteType{name: "Iterator<T>"}, Description: "The iterator to reduce"},
-			{Name: "initial", Type: &ConcreteType{name: "U"}, Description: "The initial value for the accumulator"},
-			{Name: "fn", Type: &ConcreteType{name: "(U, T) -> U"},
+			{Name: "iterator", Type: &ConcreteType{name: "any"}, Description: "The iterator to reduce"},
+			{Name: "initial", Type: &ConcreteType{name: "any"}, Description: "The initial value for the accumulator"},
+			{Name: "fn", Type: &ConcreteType{name: "any"},
 				Description: "The reduction function that takes (accumulator, current) and returns new accumulator"},
 		},
-		ReturnType:   &ConcreteType{name: "U"},
+		ReturnType:   &ConcreteType{name: "any"},
 		Category:     CategoryFunctional,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateFoldCall,
-		Example:      `let sum = fold(range(1, 5), 0, fn(acc, x) { acc + x })\nprint(sum)  // Prints: 10`,
+		Example:      `range(1, 5) |> fold(0, add)  // sum: 0+1+2+3+4 = 10`,
 	}
 }
 
