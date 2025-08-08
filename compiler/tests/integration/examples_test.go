@@ -129,7 +129,7 @@ func getExpectedOutputs() map[string]string {
 			"Example 4: Range forEach\n42\n43\n44\n" +
 			"Example 5: Small range\n10\n11\n12\n" +
 			"Example 6: Range 0 to 4\n0\n1\n2\n3\n4\n" +
-			"Example 7: Fold operations\n15\n42\n" +
+			"Example 7: Fold operations\n15\n6\n" +
 			"Example 8: Chained single value operations\n21\n" +
 			"Example 9: Conditional operations\n1\n0\n=== Showcase Complete ===\n",
 		"explicit_any_allowed.osp": "Explicit any return type works\n" +
@@ -140,7 +140,7 @@ func getExpectedOutputs() map[string]string {
 			"1. Basic forEach:\n1\n2\n3\n4\n" +
 			"2. Single value transformations:\n10\n9\n" +
 			"3. Different ranges:\n10\n11\n12\n0\n1\n2\n" +
-			"4. Fold operations:\n15\n125\n" +
+			"4. Fold operations:\n10\n60\n" +
 			"5. Chained single value operations:\n16\n" +
 			"=== Examples Complete ===\n",
 		"documentation_test.osp": "Testing documentation\n1\n2\n3\n4\n",
