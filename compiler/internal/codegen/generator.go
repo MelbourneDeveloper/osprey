@@ -101,6 +101,9 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 	// Register built-in types
 	generator.registerBuiltInTypes()
 
+	// Set the generator reference in the type inferer for constraint checking
+	generator.typeInferer.SetGenerator(generator)
+
 	// Initialize fiber runtime declarations will happen on first use
 
 	return generator

@@ -194,7 +194,7 @@ func getExpectedOutputs() map[string]string {
 			"❌ Invalid constructions return -1 (constraint violation)\n" +
 			"✅ notEmpty constraint rejects empty strings\n" +
 			"✅ validAge constraint rejects zero age\n" +
-			"✅ positive constraint rejects zero prices\n" +
+			"✅ isPositive constraint rejects zero prices\n" +
 			"✅ Multiple violations are properly detected\n\n" +
 			"FUTURE: Should return Result<T, ConstraintError> types for type safety.\n",
 		"working_constraint_test.osp": "=== CONSTRAINT FUNCTION VERIFICATION ===\n" +
@@ -204,12 +204,40 @@ func getExpectedOutputs() map[string]string {
 			"Testing validAge function:\nvalidAge(0) should be false:\nfalse\n" +
 			"validAge(25) should be true:\ntrue\nTesting validEmail function:\n" +
 			"validEmail(\"\") should be false:\nfalse\nvalidEmail(\"test@email.com\") should be true:\ntrue\n" +
-			"=== BASIC TYPE CONSTRUCTION TEST ===\n" +
-			"✅ Creating Person:\nPerson created successfully\n" +
-			"✅ Creating User:\nUser created successfully\n" +
-			"✅ Creating Product:\nProduct created successfully\n" +
-			"=== CONSTRAINT FUNCTIONS AND TYPE CONSTRUCTION COMPLETE ===\n" +
-			"📝 Note: Type-level validation with Result types to be implemented later\n",
+			"=== CONSTRAINT VALIDATION TEST ===\n" +
+			"Testing current constraint implementation:\n" +
+			"✅ Valid Person (returns 1):\n1\n" +
+			"❌ Invalid Person - empty name (returns -1):\n-1\n" +
+			"❌ Invalid Person - zero age (returns -1):\n-1\n" +
+			"✅ Valid Product (returns 1):\n1\n" +
+			"❌ Invalid Product - empty name (returns -1):\n-1\n" +
+			"❌ Invalid Product - zero price (returns -1):\n-1\n" +
+			"=== TYPE SAFETY ISSUES ===\n" +
+			"PROBLEM: These variables have type 'any' instead of Result<T, E>:\n" +
+			"invalidPersonAge should be Result<Person, ConstraintError>\n" +
+			"But we can treat it as an integer:\n-1\n" +
+			"SOLUTION NEEDED: Proper Result<T, E> types\n" +
+			"Then we would need pattern matching:\n" +
+			"match invalidPersonAge {\n" +
+			"  Ok { value } => use the person\n" +
+			"  Err { error } => handle constraint violation\n" +
+			"}\n" +
+			"=== CONSTRAINT TESTS COMPLETE ===\n" +
+			"=== COMPREHENSIVE WHERE CONSTRAINT TESTS ===\n" +
+			"PERSON CONSTRAINT TESTS:\n" +
+			"✅ Valid Person (should return 1):\n1\n" +
+			"❌ Invalid Person - empty name (should return -1):\n-1\n" +
+			"❌ Invalid Person - zero age (should return -1):\n-1\n" +
+			"USER CONSTRAINT TESTS:\n" +
+			"✅ Valid User (should return 1):\n1\n" +
+			"❌ Invalid User - empty username (should return -1):\n-1\n" +
+			"❌ Invalid User - empty email (should return -1):\n-1\n" +
+			"❌ Invalid User - zero userId (should return -1):\n-1\n" +
+			"PRODUCT CONSTRAINT TESTS:\n" +
+			"✅ Valid Product (should return 1):\n1\n" +
+			"❌ Invalid Product - empty name (should return -1):\n-1\n" +
+			"❌ Invalid Product - zero price (should return -1):\n-1\n" +
+			"=== WHERE CONSTRAINT VALIDATION COMPLETE ===\n",
 		"proper_validation_test.osp": "Testing validation functions:\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\n",
 		"match_type_mismatch.osp":    "none\n",
 		// Website examples

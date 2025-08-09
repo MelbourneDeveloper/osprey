@@ -873,16 +873,7 @@ func (g *LLVMGenerator) generateRecordTypeConstructor(
 
 // hasRecordTypeConstraints checks if a record type has any constraints
 func (g *LLVMGenerator) hasRecordTypeConstraints(typeDecl *ast.TypeDeclaration) bool {
-	if len(typeDecl.Variants) > 0 {
-		variant := &typeDecl.Variants[0] // Record types have one variant
-		for _, field := range variant.Fields {
-			if field.Constraint != nil {
-				return true
-			}
-		}
-	}
-	
-	// Also check for type-level constraints (validation function)
+	// Only check for type-level constraints (validation function)
 	return typeDecl.ValidationFunc != nil
 }
 
@@ -891,71 +882,40 @@ func (g *LLVMGenerator) generateConstrainedRecordConstructor(
 	typeConstructor *ast.TypeConstructorExpression,
 	typeDecl *ast.TypeDeclaration,
 ) (value.Value, error) {
-	// Check field-level constraints first
-	if len(typeDecl.Variants) > 0 {
-		variant := &typeDecl.Variants[0]
-		for _, field := range variant.Fields {
-			if field.Constraint != nil {
-				err := g.validateFieldConstraint(typeConstructor, &field)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
+	// Step 1: First create the struct instance (same as unconstrained)
+	structValue, err := g.generateUnconstrainedRecordConstructor(typeConstructor, typeDecl)
+	if err != nil {
+		return nil, err
 	}
 	
-	// If all constraints passed, return 1 for success (for constrained types)
-	return constant.NewInt(types.I64, 1), nil
+	// Step 2: If there's a validation function, call it with the struct
+	if typeDecl.ValidationFunc != nil {
+		validationFuncName := *typeDecl.ValidationFunc
+		
+		// Look up the validation function
+		validationFunc, exists := g.functions[validationFuncName]
+		if !exists {
+			return nil, WrapUndefinedFunction(validationFuncName)
+		}
+		
+		// Call the validation function with the struct
+		validationResult := g.builder.NewCall(validationFunc, structValue)
+		
+		// For boolean validation: return 1 for success, -1 for failure
+		// Use a simpler approach with select instruction instead of branches
+		successValue := constant.NewInt(types.I32, 1)
+		failureValue := constant.NewInt(types.I32, -1)
+		
+		// Use LLVM select: result = validationResult ? 1 : -1
+		resultValue := g.builder.NewSelect(validationResult, successValue, failureValue)
+		
+		return resultValue, nil
+	}
+	
+	// No validation function - just return the struct
+	return structValue, nil
 }
 
-// validateFieldConstraint validates a single field constraint
-func (g *LLVMGenerator) validateFieldConstraint(
-	typeConstructor *ast.TypeConstructorExpression,
-	field *ast.TypeField,
-) error {
-	// Get the field value from the constructor
-	fieldValue, exists := typeConstructor.Fields[field.Name]
-	if !exists {
-		return WrapMissingField(field.Name)
-	}
-	
-	// Generate the field value
-	fieldLLVMValue, err := g.generateExpression(fieldValue)
-	if err != nil {
-		return err
-	}
-	
-	// Call the constraint function
-	constraintFunc, exists := g.functions[field.Constraint.Function]
-	if !exists {
-		return WrapUndefinedFunction(field.Constraint.Function)
-	}
-	
-	// Call constraint function with field value
-	result := g.builder.NewCall(constraintFunc, fieldLLVMValue)
-	
-	// Convert boolean result to integer (1 = true, 0 = false)
-	resultAsInt := g.builder.NewZExt(result, types.I64)
-	
-	// Check if constraint failed (result == 0)
-	zero := constant.NewInt(types.I64, 0)
-	constraintPassed := g.builder.NewICmp(enum.IPredNE, resultAsInt, zero)
-	
-	// If constraint failed, return -1
-	failureBlock := g.function.NewBlock("constraint_failure")
-	successBlock := g.function.NewBlock("constraint_success")
-	
-	g.builder.NewCondBr(constraintPassed, successBlock, failureBlock)
-	
-	// Failure case: return -1
-	g.builder = failureBlock
-	g.builder.NewRet(constant.NewInt(types.I32, -1))
-	
-	// Success case: continue to next constraint
-	g.builder = successBlock
-	
-	return nil
-}
 
 // generateUnconstrainedRecordConstructor creates actual struct instances for unconstrained record types
 func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(

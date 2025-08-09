@@ -49,22 +49,53 @@ print(toString(validEmail("")))
 print("validEmail(\"test@email.com\") should be true:")
 print(toString(validEmail("test@email.com")))
 
-// Types with WHERE constraints - SHOULD return Result<T, ConstraintError>
+// SPEC-COMPLIANT: Type-level validation functions
+fn validatePersonData(person: Person) -> bool =
+    match person.name {
+        "" => false
+        _ => match person.age {
+            0 => false
+            _ => true
+        }
+    }
+
+fn validateUserData(user: User) -> bool =
+    match user.username {
+        "" => false
+        _ => match user.email {
+            "" => false
+            _ => match user.userId {
+                0 => false
+                _ => true
+            }
+        }
+    }
+
+fn validateProductData(product: Product) -> bool =
+    match product.name {
+        "" => false
+        _ => match product.price {
+            0 => false
+            _ => true
+        }
+    }
+
+// Types with WHERE constraints - SPEC COMPLIANT (type-level validation)
 type Person = {
-    name: string where notEmpty(name),
-    age: int where validAge(age)
-}
+    name: string,
+    age: int
+} where validatePersonData
 
 type User = {
-    username: string where notEmpty(username),
-    email: string where validEmail(email),
-    userId: int where isPositive(userId)
-}
+    username: string,
+    email: string,
+    userId: int
+} where validateUserData
 
 type Product = {
-    name: string where notEmpty(name),
-    price: int where isPositive(price)
-}
+    name: string,
+    price: int
+} where validateProductData
 
 print("=== CONSTRAINT VALIDATION TEST ===")
 
@@ -118,16 +149,16 @@ print("=== COMPREHENSIVE WHERE CONSTRAINT TESTS ===")
 print("PERSON CONSTRAINT TESTS:")
 
 print("✅ Valid Person (should return 1):")
-let validPerson = Person { name: "Alice", age: 25 }
-print(toString(validPerson))
+let validPerson2 = Person { name: "Alice", age: 25 }
+print(toString(validPerson2))
 
 print("❌ Invalid Person - empty name (should return -1):")
-let invalidPersonName = Person { name: "", age: 25 }
-print(toString(invalidPersonName))
+let invalidPersonName2 = Person { name: "", age: 25 }
+print(toString(invalidPersonName2))
 
 print("❌ Invalid Person - zero age (should return -1):")
-let invalidPersonAge = Person { name: "Bob", age: 0 }
-print(toString(invalidPersonAge))
+let invalidPersonAge2 = Person { name: "Bob", age: 0 }
+print(toString(invalidPersonAge2))
 
 // User constraint tests  
 print("USER CONSTRAINT TESTS:")
@@ -152,15 +183,15 @@ print(toString(invalidUserId))
 print("PRODUCT CONSTRAINT TESTS:")
 
 print("✅ Valid Product (should return 1):")
-let validProduct = Product { name: "Widget", price: 100 }
-print(toString(validProduct))
+let validProduct2 = Product { name: "Widget", price: 100 }
+print(toString(validProduct2))
 
 print("❌ Invalid Product - empty name (should return -1):")
-let invalidProductName = Product { name: "", price: 100 }
-print(toString(invalidProductName))
+let invalidProductName2 = Product { name: "", price: 100 }
+print(toString(invalidProductName2))
 
 print("❌ Invalid Product - zero price (should return -1):")
-let invalidProductPrice = Product { name: "Widget", price: 0 }
-print(toString(invalidProductPrice))
+let invalidProductPrice2 = Product { name: "Widget", price: 0 }
+print(toString(invalidProductPrice2))
 
-print("=== WHERE CONSTRAINT VALIDATION COMPLETE ===") 
+print("=== WHERE CONSTRAINT VALIDATION COMPLETE ===")

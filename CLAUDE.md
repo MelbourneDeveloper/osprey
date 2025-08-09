@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **SEARCH BEFORE ADDING** - Check for existing code before creating new functions/constants
 - **NEVER IGNORE FAILING TESTS** - Don't reduce assertions to make tests pass, fail loudly
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules 
-- **RUN LINTER REGULARLY** - lints are strict. Obey them!!
+- **RUN LINTER REGULARLY** - lints are strict. Obey them!! DO NOT TURN THEM OFF!!!!
 - **FP STYLE CODE** - pure functions over OOP style
 - **NEVER COMMIT/PUSH** unless explicitly requested
 - **FOLLOW STATIC ANALYSIS** - Pay attention to linters and fix issues

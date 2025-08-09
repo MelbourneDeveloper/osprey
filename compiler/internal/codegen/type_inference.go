@@ -367,23 +367,30 @@ type Substitution map[int]Type
 
 // TypeInferer handles type inference
 type TypeInferer struct {
-	nextID int
-	env    *TypeEnv
-	subst  Substitution
+	nextID    int
+	env       *TypeEnv
+	subst     Substitution
+	generator *LLVMGenerator // Reference to generator for constraint checking
 }
 
 // NewTypeInferer creates a new type inferer with built-in functions initialized
 func NewTypeInferer() *TypeInferer {
 	ti := &TypeInferer{
-		nextID: 0,
-		env:    NewTypeEnv(),
-		subst:  make(Substitution),
+		nextID:    0,
+		env:       NewTypeEnv(),
+		subst:     make(Substitution),
+		generator: nil, // Will be set later after generator is created
 	}
 
 	// Initialize built-in functions
 	ti.initializeBuiltInFunctions()
 
 	return ti
+}
+
+// SetGenerator sets the generator reference for constraint checking
+func (ti *TypeInferer) SetGenerator(generator *LLVMGenerator) {
+	ti.generator = generator
 }
 
 // Fresh creates a new type variable
@@ -1509,6 +1516,18 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (Type, error) {
 	// Look up constructor in environment
 	if t, ok := ti.env.Get(e.TypeName); ok {
+		// Check if this is a constrained record type
+		if _, isRecord := t.(*RecordType); isRecord {
+			// Check if the type has constraints by looking up the type declaration
+			if ti.generator != nil {
+				if typeDecl, exists := ti.generator.typeDeclarations[e.TypeName]; exists {
+					if ti.generator.hasRecordTypeConstraints(typeDecl) {
+						// Constrained record types return int (1 for success, -1 for failure)
+						return &ConcreteType{name: TypeInt}, nil
+					}
+				}
+			}
+		}
 		return t, nil
 	}
 	return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, e.TypeName)

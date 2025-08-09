@@ -39,7 +39,26 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 	var mainFunc *ast.FunctionDeclaration
 	var topLevelStatements []ast.Statement
 
-	// FIRST: Declare ALL function signatures (including main if it's a function)
+	// FIRST PASS: Declare ALL types and externs first
+	for _, stmt := range program.Statements {
+		switch s := stmt.(type) {
+		case *ast.ExternDeclaration:
+			// Process extern declarations in the first pass
+			if err := g.generateExternDeclaration(s); err != nil {
+				return nil, nil, err
+			}
+		case *ast.TypeDeclaration:
+			g.declareType(s)
+		case *ast.EffectDeclaration:
+			// Process effect declarations in the first pass!
+			// This populates the effect registry before any handlers are generated
+			if err := g.generateEffectDeclaration(s); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
+	// SECOND PASS: Declare function signatures after types are available
 	for _, stmt := range program.Statements {
 		switch s := stmt.(type) {
 		case *ast.FunctionDeclaration:
@@ -54,25 +73,32 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 					return nil, nil, err
 				}
 			}
-		case *ast.ExternDeclaration:
-			// Process extern declarations in the first pass
-			if err := g.generateExternDeclaration(s); err != nil {
-				return nil, nil, err
-			}
-		case *ast.TypeDeclaration:
-			g.declareType(s)
-		case *ast.EffectDeclaration:
-			// Process effect declarations in the first pass!
-			// This populates the effect registry before any handlers are generated
-			if err := g.generateEffectDeclaration(s); err != nil {
-				return nil, nil, err
-			}
 		default:
-			topLevelStatements = append(topLevelStatements, stmt)
+			// Only add non-type, non-function, non-extern, non-effect statements
+			if g.isTopLevelStatement(s) {
+				topLevelStatements = append(topLevelStatements, stmt)
+			}
 		}
 	}
 
 	return mainFunc, topLevelStatements, nil
+}
+
+// isTopLevelStatement checks if a statement should be added to top-level statements
+func (g *LLVMGenerator) isTopLevelStatement(stmt ast.Statement) bool {
+	if _, isType := stmt.(*ast.TypeDeclaration); isType {
+		return false
+	}
+	if _, isExtern := stmt.(*ast.ExternDeclaration); isExtern {
+		return false
+	}
+	if _, isEffect := stmt.(*ast.EffectDeclaration); isEffect {
+		return false
+	}
+	if _, isFunc := stmt.(*ast.FunctionDeclaration); isFunc {
+		return false
+	}
+	return true
 }
 
 // createMainFunction creates the main function based on user definition or top-level statements.
