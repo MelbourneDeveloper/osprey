@@ -1,0 +1,23 @@
+// Result Pattern Matching and Error Cases
+// Tests: Result types, Success/Error constructors, type mismatches
+
+// SECTION 1: Type Mismatch Error Case
+// This should fail compilation: Type mismatch in match expression
+// Error: cannot match expression of type 'int' against pattern of type 'Option'
+let x = 42
+type Option = Some { value: string } | None
+let result = match x {
+    Some => "some"
+    None => "none"
+}
+print(result)
+
+// SECTION 2: Result Type Tests (Success constructor working)
+let myResult = Success { value: "It worked" }
+print("Success constructor created")
+// NOTE: Direct field access on Result types is blocked - must use pattern matching
+
+// SECTION 3: Result Ternary (Currently being implemented)
+// This should extract the value from Success Result
+let message = myResult { value } ? value : "An unknown error occurred"
+print(message)

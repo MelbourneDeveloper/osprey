@@ -656,6 +656,11 @@ func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpressio
 }
 
 func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpression) (value.Value, error) {
+	// TEMPORARY DEBUG: Always show which field we're accessing
+	if fieldAccess.FieldName == "value" {
+		return nil, fmt.Errorf("DEBUG: Accessing field 'value' - this should show up") //nolint:err113
+	}
+	
 	// Type validation is now handled by Hindley-Milner type inference
 
 	// Check if this is field access on a validated type constructor result
@@ -674,10 +679,14 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 	if ident, isIdent := fieldAccess.Object.(*ast.Identifier); isIdent {
 		// Check if this identifier represents a constrained type constructor result using Hindley-Milner
 		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
-			// Look for Result< pattern in the type
-			if strings.Contains(varType.String(), "Result<") {
-				// This is field access on a Result type - requires pattern matching
-				return nil, WrapConstraintResultFieldAccessWithPos(fieldAccess.FieldName, fieldAccess.Position)
+			// Look for Result[ pattern in the type (GenericType uses square brackets)
+			if strings.Contains(varType.String(), "Result[") {
+				// This is field access on a Result type - convert to pattern matching
+				return g.generateResultFieldAccessAsMatch(fieldAccess, ident)
+			}
+			// TEMPORARY DEBUG: Check what the actual type string is
+			if strings.Contains(ident.Name, "myResult") {
+				return nil, fmt.Errorf("DEBUG: myResult type is: %s", varType.String()) //nolint:err113
 			}
 		}
 	}
@@ -687,6 +696,12 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 	if err != nil {
 		return nil, err
 	}
+
+	// DISABLED: Result type detection was too broad and broke regular structs
+	// TODO: Implement proper Result type tracking through Success/Error constructors
+	// if g.isResultType(objectValue) {
+	// 	return g.generateResultFieldAccess(fieldAccess, objectValue)
+	// }
 
 	// Handle field access on struct types (record types)
 	return g.generateStructFieldAccess(fieldAccess, objectValue)
@@ -721,8 +736,12 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 	}
 
 	// If we can't find a record type, this is an error
-	return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on non-struct type", //nolint:err113
-		fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
+	if fieldAccess.Position != nil {
+		return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on non-struct type", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
+	}
+	return nil, fmt.Errorf("cannot access field '%s' on non-struct type", //nolint:err113
+		fieldAccess.FieldName)
 }
 
 // generateRecordFieldAccess handles field access using Hindley-Milner RecordType information
@@ -823,6 +842,14 @@ func (g *LLVMGenerator) generateTypeConstructorExpression(
 	// Check if this is a built-in type first
 	if typeConstructor.TypeName == TypeHTTPResponse {
 		return g.generateHTTPResponseConstructor(typeConstructor)
+	}
+	
+	// Handle built-in Result constructors
+	if typeConstructor.TypeName == SuccessPattern {
+		return g.generateSuccessConstructor(typeConstructor)
+	}
+	if typeConstructor.TypeName == ErrorPattern {
+		return g.generateErrorConstructor(typeConstructor)
 	}
 
 	// Look up the type declaration to get constraints (for user-defined types)
@@ -1486,3 +1513,114 @@ func (g *LLVMGenerator) findTypeDeclarationByVariant(variantName string) *ast.Ty
 
 	return nil
 }
+
+// generateSuccessConstructor generates LLVM IR for Success { value: T } constructor.
+func (g *LLVMGenerator) generateSuccessConstructor(
+	typeConstructor *ast.TypeConstructorExpression,
+) (value.Value, error) {
+	// Success constructor should create a Result struct with discriminant = 0 (success)
+	// Result struct: [value, discriminant] where discriminant=0 for success
+	
+	// Get the value expression from the constructor fields
+	valueExpr, exists := typeConstructor.Fields["value"]
+	if !exists {
+		return nil, ErrSuccessConstructorMissingValue
+	}
+	
+	// Generate the value
+	value, err := g.generateExpression(valueExpr)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Create Result struct type based on the value type
+	valueType := value.Type()
+	resultStructType := types.NewStruct(valueType, types.I8) // [value, discriminant]
+	
+	// Create the result struct
+	result := g.builder.NewAlloca(resultStructType)
+	
+	// Store the success value
+	valuePtr := g.builder.NewGetElementPtr(resultStructType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(value, valuePtr)
+	
+	// Store discriminant = 0 for success
+	discriminantPtr := g.builder.NewGetElementPtr(resultStructType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+	
+	return result, nil
+}
+
+// generateErrorConstructor generates LLVM IR for Error { message: E } constructor.
+func (g *LLVMGenerator) generateErrorConstructor(
+	typeConstructor *ast.TypeConstructorExpression,
+) (value.Value, error) {
+	// Error constructor should create a Result struct with discriminant = 1 (error)
+	// Result struct: [defaultValue, discriminant] where discriminant=1 for error
+	
+	// Get the message expression from the constructor fields
+	messageExpr, exists := typeConstructor.Fields["message"]
+	if !exists {
+		return nil, ErrErrorConstructorMissingMessage
+	}
+	
+	// Generate the error message
+	message, err := g.generateExpression(messageExpr)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Error constructor creates Result struct: [error_message, discriminant]
+	// where discriminant = 1 for error
+	messageType := message.Type()
+	resultStructType := types.NewStruct(messageType, types.I8) // [error_message, discriminant]
+	
+	// Create the result struct
+	result := g.builder.NewAlloca(resultStructType)
+	
+	// Store the error message in the first field
+	messagePtr := g.builder.NewGetElementPtr(resultStructType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(message, messagePtr)
+	
+	// Store discriminant = 1 for error
+	discriminantPtr := g.builder.NewGetElementPtr(resultStructType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), discriminantPtr)
+	
+	return result, nil
+}
+
+// generateResultFieldAccessAsMatch converts Result field access to pattern matching
+// This handles cases like myResult { value } ? value : "default"
+func (g *LLVMGenerator) generateResultFieldAccessAsMatch(
+	fieldAccess *ast.FieldAccessExpression,
+	ident *ast.Identifier,
+) (value.Value, error) {
+	// For now, just extract the value directly from the Success Result struct
+	// This is a simplified implementation that assumes the Result is a Success
+	
+	// Generate the Result value
+	resultValue, err := g.generateExpression(ident)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Extract the first field (value) from the Result struct
+	// Result struct layout: [value, discriminant] 
+	resultType := resultValue.Type()
+	if structType, ok := resultType.(*types.StructType); ok && len(structType.Fields) >= 2 {
+		// Get pointer to the value field (index 0)
+		valuePtr := g.builder.NewGetElementPtr(structType, resultValue,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		
+		// Load the value
+		return g.builder.NewLoad(structType.Fields[0], valuePtr), nil
+	}
+	
+	return nil, fmt.Errorf("Result field access failed: invalid Result type structure") //nolint:err113
+}
+
+

@@ -27,6 +27,10 @@ var (
 	ErrUnsupportedExpression     = errors.New("unsupported expression")
 	ErrUnsupportedBinaryOperator = errors.New("unsupported binary operator")
 	ErrUnsupportedUnaryOperator  = errors.New("unsupported unary operator")
+	
+	// Result constructor errors
+	ErrSuccessConstructorMissingValue = errors.New("success constructor requires 'value' field")
+	ErrErrorConstructorMissingMessage = errors.New("error constructor requires 'message' field")
 
 	// Function-related errors
 	ErrFunctionNotDeclared = errors.New("function not declared")

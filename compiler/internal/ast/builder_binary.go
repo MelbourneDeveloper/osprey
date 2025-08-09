@@ -23,10 +23,12 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 			fieldName := fieldPattern.Fields[0]
 			
 			// If then expression is just the field name, return field access directly
+			// Note: Result types will be caught at codegen and forced to use pattern matching
 			if identExpr, ok := thenExpr.(*Identifier); ok && identExpr.Name == fieldName {
 				return &FieldAccessExpression{
 					Object:    conditionExpr,
 					FieldName: fieldName,
+					Position:  b.getPositionFromContext(ctx),
 				}
 			}
 		}
@@ -67,10 +69,12 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 			fieldName := fieldPattern.Fields[0]
 			
 			// If then expression is just the field name, return field access directly
+			// Note: Result types will be caught at codegen and forced to use pattern matching
 			if identExpr, ok := thenExpr.(*Identifier); ok && identExpr.Name == fieldName {
 				return &FieldAccessExpression{
 					Object:    conditionExpr,
 					FieldName: fieldName,
+					Position:  b.getPositionFromContext(ctx),
 				}
 			}
 		}

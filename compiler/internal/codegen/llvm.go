@@ -781,7 +781,7 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 			// Also register the variable in the Hindley-Milner type environment
 			// For Result types, try to infer the semantic type of the value field
 			var semanticType string
-			if patternFieldName == "value" && pattern.Constructor == "Success" {
+			if patternFieldName == "value" && pattern.Constructor == SuccessPattern {
 				// This is likely a value extracted from a Result<T, E>
 				// Try to infer the original type T from the context
 				semanticType = g.inferResultValueType(discriminant, field.Type)

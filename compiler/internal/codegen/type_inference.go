@@ -1514,6 +1514,42 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 
 // inferTypeConstructor infers types for type constructor expressions
 func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (Type, error) {
+	// Special handling for Success constructor
+	if e.TypeName == "Success" {
+		valueExpr, exists := e.Fields["value"]
+		if !exists {
+			return nil, ErrSuccessConstructorMissingValue
+		}
+		
+		// Infer the type of the value
+		valueType, err := ti.InferType(valueExpr)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Create Result<T, string> type where T is the value type
+		errorType := &ConcreteType{name: "string"}
+		return CreateResultType(valueType, errorType), nil
+	}
+	
+	// Special handling for Error constructor
+	if e.TypeName == "Error" {
+		messageExpr, exists := e.Fields["message"]
+		if !exists {
+			return nil, ErrErrorConstructorMissingMessage
+		}
+		
+		// Infer the type of the message
+		messageType, err := ti.InferType(messageExpr)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Create Result<T, E> type where E is the message type and T is a fresh type variable
+		valueType := ti.Fresh()
+		return CreateResultType(valueType, messageType), nil
+	}
+	
 	// Look up constructor in environment
 	if t, ok := ti.env.Get(e.TypeName); ok {
 		// Check if this is a constrained record type

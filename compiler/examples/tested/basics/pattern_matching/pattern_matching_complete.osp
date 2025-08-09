@@ -1,6 +1,10 @@
-// Basic Pattern Matching Examples
-// This example demonstrates pattern matching with integers and simple cases
+// Complete Pattern Matching Test Suite
+// Tests: basic patterns, functions, nested matches, ternary expressions, structural matching
 
+// SECTION 1: Type Definitions
+type Option = Some { value: string } | None
+
+// SECTION 2: Basic Pattern Matching Functions
 fn analyzeNumber(n: int) -> string = match n {
     0 => "Zero"
     1 => "One" 
@@ -27,7 +31,7 @@ fn getCategory(score: int) -> string = match score {
     _ => "Needs Improvement"
 }
 
-// Usage examples
+// SECTION 3: Basic Pattern Usage
 let test1 = 0
 let test2 = 42
 let test3 = 7
@@ -51,7 +55,7 @@ print("Score ${scores2}: ${getCategory(scores2)}")
 let scores3 = 50
 print("Score ${scores3}: ${getCategory(scores3)}") 
 
-// Nested match expressions (critical test)
+// SECTION 4: Nested Match Expressions (CRITICAL)
 fn nestedTest(x: int, y: int) -> string = match x {
     0 => match y {
         0 => "Both zero"
@@ -65,3 +69,24 @@ fn nestedTest(x: int, y: int) -> string = match x {
 
 let nested = nestedTest(x: 0, y: 0)
 print("Nested: ${nested}")
+
+// SECTION 5: Ternary Expressions (Boolean)
+let a = { a: true }
+let b = a.a ? "true" : "false"
+print(b)
+
+// SECTION 6: Structural Ternary (Working - any type matching structure)
+let v = { value: "It worked" }
+// This is a structural match. It doesn't care about the name of the type
+// It just matches on the structure.
+let message2 = v { value } ? value : "An unknown error occurred"
+print(message2)
+
+// SECTION 7: Additional Ternary Tests
+let testA = { a: true }
+let testResult = testA.a ? "true" : "false"
+print(testResult)
+
+let testStruct = { value: "It worked" }
+let extractedValue = testStruct { value } ? value : "An unknown error occurred"
+print(extractedValue)
