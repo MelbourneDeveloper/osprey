@@ -1,8 +1,6 @@
 package ast
 
 import (
-	"fmt"
-	
 	"github.com/christianfindlay/osprey/parser"
 )
 
@@ -13,7 +11,6 @@ func (b *Builder) buildBinaryExpr(ctx parser.IBinaryExprContext) Expression {
 func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 	// Check if this is a type pattern ternary ({ type: pattern } expr ? then : else)
 	if ctx.GetPat() != nil {
-		fmt.Printf("DEBUG: Found pattern ternary with GetPat != nil\n")
 		conditionExpr := b.buildComparisonExpr(ctx.GetCond())
 		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
 		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
@@ -21,23 +18,16 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 		// For structural patterns like v { value } ? value : "default"
 		// Extract fields from the pattern and replace variable references with field access
 		fieldPattern := b.buildFieldPattern("*", ctx.GetPat())
-		fmt.Printf("DEBUG: Pattern has %d fields\n", len(fieldPattern.Fields))
 		
 		if len(fieldPattern.Fields) == 1 {
 			fieldName := fieldPattern.Fields[0]
-			fmt.Printf("DEBUG: Field name: %s\n", fieldName)
 			
 			// If then expression is just the field name, return field access directly
 			if identExpr, ok := thenExpr.(*Identifier); ok && identExpr.Name == fieldName {
-				fmt.Printf("DEBUG: Replacing with field access for field: %s\n", fieldName)
 				return &FieldAccessExpression{
 					Object:    conditionExpr,
 					FieldName: fieldName,
 				}
-			}
-			fmt.Printf("DEBUG: Not replacing - thenExpr type: %T\n", thenExpr)
-			if identExpr, ok := thenExpr.(*Identifier); ok {
-				fmt.Printf("DEBUG: ThenExpr is identifier '%s', field is '%s'\n", identExpr.Name, fieldName)
 			}
 		}
 		
@@ -66,7 +56,6 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 
 	// Check if this is a pattern-based ternary (expr { pattern } ? then : else)
 	if ctx.LBRACE() != nil {
-		fmt.Printf("DEBUG: Found pattern-based ternary\n")
 		conditionExpr := b.buildComparisonExpr(ctx.GetCond())
 		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
 		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
@@ -74,22 +63,15 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 		// For structural patterns like v { value } ? value : "default"
 		// Simplify to direct field access since pattern implies field exists
 		fieldPattern := b.buildFieldPattern("*", ctx.GetPat())
-		fmt.Printf("DEBUG: Field pattern has %d fields\n", len(fieldPattern.Fields))
 		if len(fieldPattern.Fields) == 1 {
 			fieldName := fieldPattern.Fields[0]
-			fmt.Printf("DEBUG: Field name: %s\n", fieldName)
 			
 			// If then expression is just the field name, return field access directly
 			if identExpr, ok := thenExpr.(*Identifier); ok && identExpr.Name == fieldName {
-				fmt.Printf("DEBUG: Replacing with field access for field: %s\n", fieldName)
 				return &FieldAccessExpression{
 					Object:    conditionExpr,
 					FieldName: fieldName,
 				}
-			}
-			fmt.Printf("DEBUG: Not replacing - thenExpr type: %T\n", thenExpr)
-			if identExpr, ok := thenExpr.(*Identifier); ok {
-				fmt.Printf("DEBUG: ThenExpr is identifier '%s', field is '%s'\n", identExpr.Name, fieldName)
 			}
 		}
 		

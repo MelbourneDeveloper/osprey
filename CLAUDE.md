@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **NEVER DUPLICATE CODE** - Edit in place, never create new versions
 - **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
 - **SEARCH BEFORE ADDING** - Check for existing code before creating new functions/constants
+- **MAKE EXAMPLES (TESTS) CONCISE AND MIX WITH MANY LANGUAGE CONSTRUCTS** - Don't create many files with overlapping functionality
 - **NEVER IGNORE FAILING TESTS** - Don't reduce assertions to make tests pass, fail loudly
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules 
 - **RUN LINTER REGULARLY** - lints are strict. Obey them!! DO NOT TURN THEM OFF!!!!
