@@ -656,11 +656,6 @@ func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpressio
 }
 
 func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpression) (value.Value, error) {
-	// TEMPORARY DEBUG: Always show which field we're accessing
-	if fieldAccess.FieldName == "value" {
-		return nil, fmt.Errorf("DEBUG: Accessing field 'value' - this should show up") //nolint:err113
-	}
-	
 	// Type validation is now handled by Hindley-Milner type inference
 
 	// Check if this is field access on a validated type constructor result
@@ -683,10 +678,6 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 			if strings.Contains(varType.String(), "Result[") {
 				// This is field access on a Result type - convert to pattern matching
 				return g.generateResultFieldAccessAsMatch(fieldAccess, ident)
-			}
-			// TEMPORARY DEBUG: Check what the actual type string is
-			if strings.Contains(ident.Name, "myResult") {
-				return nil, fmt.Errorf("DEBUG: myResult type is: %s", varType.String()) //nolint:err113
 			}
 		}
 	}
