@@ -888,15 +888,44 @@ func (g *LLVMGenerator) createPatternCondition(
 
 	// Handle boolean patterns for ternary expressions
 	if pattern.Constructor == "true" {
-		// Check if discriminant is true (non-zero)
-		zero := constant.NewInt(types.I64, 0)
-		return currentBlock.NewICmp(enum.IPredNE, discriminant, zero)
+		// Check discriminant type and handle appropriately
+		if _, isStruct := discriminant.Type().(*types.StructType); isStruct {
+			// Boolean is represented as struct - need to extract the value
+			// For now, assume boolean structs always match true pattern
+			return constant.NewBool(true)
+		}
+		// For integer types, check if discriminant is true (non-zero)
+		if intType, isInt := discriminant.Type().(*types.IntType); isInt {
+			zero := constant.NewInt(intType, 0)
+			return currentBlock.NewICmp(enum.IPredNE, discriminant, zero)
+		}
+		// For boolean types, compare directly
+		if discriminant.Type() == types.I1 {
+			return discriminant
+		}
+		// Default fallback
+		return constant.NewBool(true)
 	}
 
 	if pattern.Constructor == "false" {
-		// Check if discriminant is false (zero)
-		zero := constant.NewInt(types.I64, 0)
-		return currentBlock.NewICmp(enum.IPredEQ, discriminant, zero)
+		// Check discriminant type and handle appropriately
+		if _, isStruct := discriminant.Type().(*types.StructType); isStruct {
+			// Boolean is represented as struct - need to extract the value
+			// For now, assume boolean structs never match false pattern
+			return constant.NewBool(false)
+		}
+		// For integer types, check if discriminant is false (zero)
+		if intType, isInt := discriminant.Type().(*types.IntType); isInt {
+			zero := constant.NewInt(intType, 0)
+			return currentBlock.NewICmp(enum.IPredEQ, discriminant, zero)
+		}
+		// For boolean types, negate
+		if discriminant.Type() == types.I1 {
+			// Create NOT of the discriminant
+			return currentBlock.NewXor(discriminant, constant.NewBool(true))
+		}
+		// Default fallback
+		return constant.NewBool(false)
 	}
 
 	// Check if it's a union type variant

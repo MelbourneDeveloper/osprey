@@ -110,6 +110,7 @@ binaryExpr
 ternaryExpr
     : cond=comparisonExpr LBRACE pat=fieldPattern RBRACE QUESTION thenExpr=ternaryExpr COLON elseExpr=ternaryExpr    // expr { pattern } ? then : else
     | comparisonExpr QUESTION thenExpr=ternaryExpr COLON elseExpr=ternaryExpr                                        // expr ? then : else
+    | comparisonExpr QUESTION COLON elseExpr=ternaryExpr                                                             // expr ?: else (Elvis operator)
     | comparisonExpr
     ;
 

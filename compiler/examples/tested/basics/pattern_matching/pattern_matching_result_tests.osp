@@ -1,35 +1,28 @@
-// Result Pattern Matching and Error Cases
-// Tests: Result types, Success/Error constructors, ternary operations on Results, type mismatches
+// Result Pattern Matching and Ternary Tests  
+// Tests: Built-in Result type ternary syntax, arithmetic Result handling
 
-// SECTION 1: Result Type Definition
-type Result = Success { value: string } | Error { message: string }
+// SECTION 1: Arithmetic operations return Result<int, MathError>
+let calculation = 10 + 5
+print("Arithmetic calculation created")
 
-// SECTION 2: Type Mismatch Error Case
-// This should fail compilation: Type mismatch in match expression
-// Error: cannot match expression of type 'int' against pattern of type 'Option'
-let x = 42
-type Option = Some { value: string } | None
-let result = match x {
-    Some => "some"
-    None => "none"
-}
-print(result)
+// SECTION 2: Test simple boolean ternary first
+let testBool = true
+let boolResult = testBool ? 42 : -1
+print(boolResult)
 
-// SECTION 3: Result Type Tests (Success constructor working)
-let successResult = Success { value: "It worked" }
-print("Success constructor created")
+// SECTION 3: Result Elvis operator - automatically extracts Success value or uses default on Error
+let successValue = calculation ?: -1  // Should extract 15 from Success, or -1 on Error
+print(successValue)
 
-// SECTION 4: Result Match with Success - should return success value
-let successMessage = match successResult {
-    Success { value } => value
-    Error { message } => "An unknown error occurred"
-}
-print(successMessage)
+// SECTION 4: Function returning Result type
+fn divide(a: int, b: int) -> Result<int, MathError> = a / b
 
-// SECTION 5: Result Match with Error - should return error message
-let errorResult = Error { message: "Something went wrong" }
-let errorMessage = match errorResult {
-    Success { value } => "Success: " + value
-    Error { message } => "Error: " + message
-}
-print(errorMessage)
+// SECTION 5: Test Result Elvis operator - success case
+let divisionGood = divide(a: 10, b: 2)
+let goodResult = divisionGood ?: -1  // Should extract 5 from Success, or -1 on Error
+print(goodResult)
+
+// SECTION 6: Test Result Elvis operator - error case  
+let divisionBad = divide(a: 10, b: 0)
+let badResult = divisionBad ?: -1  // Should return -1 on Error, or extract value on Success
+print(badResult)

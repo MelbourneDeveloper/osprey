@@ -236,18 +236,23 @@ match <expression> {
 
 ### Examples
 
-**Example 1: Handling a `Result` Type**
+**Example 1: Handling Built-in `Result` Types**
 
-Given the type: `type Result = Success { value: String } | Error`
-
-The ternary match provides a clean way to extract a value or provide a default.
+The built-in `Result<T, E>` type uses `Success { value: T }` and `Error { message: E }` constructors.
 
 ```osprey
-let myResult = Success { value: "It worked" }
+// Arithmetic operations return Result<int, MathError>
+let calculation = 10 + 5  // Result<int, MathError>
 
-// Extracts "It worked" using the ternary match
-let message = myResult { value } ? value : "An unknown error occurred"
-// message is now "It worked"
+// Extracts value using the structural ternary match
+let message = calculation { value } ? value : -1
+// message is now 15
+
+// Function returning Result type  
+fn divide(a: int, b: int) -> Result<int, MathError> = a / b
+let result = divide(a: 10, b: 2)
+let safeValue = result { value } ? value : 0
+// safeValue is now 5
 ```
 
 **Example 2: Handling Booleans**
@@ -258,4 +263,33 @@ The ternary match can also work with boolean values by matching on the implicit 
 let is_active = true
 let status_text = is_active ? "Active" : "Inactive"
 // status_text is now "Active"
+```
+
+**Example 3: Handling Result Types with Ternary**
+
+For Result types, the ternary operator provides a clean way to extract success values or provide defaults:
+
+```osprey
+// Arithmetic operations return Result<int, MathError>
+let calculation = 10 + 5  // Result<int, MathError>
+
+// Result ternary: automatically extracts Success value or uses default on Error
+let value = calculation ?: -1  // 15 (extracts value from Success) or -1 (on Error)
+
+// Function returning Result type
+fn divide(a: int, b: int) -> Result<int, MathError> = a / b
+
+let goodResult = divide(a: 10, b: 2)
+let safeValue = goodResult ?: -1  // 5 (extracts value from Success) or -1 (on Error)
+
+let badResult = divide(a: 10, b: 0)  
+let errorValue = badResult ?: -1  // -1 (Error case, uses default)
+```
+
+This is syntactic sugar for:
+```osprey
+let value = match calculation {
+    Success { value } => value
+    Error { message } => -1
+}
 ```

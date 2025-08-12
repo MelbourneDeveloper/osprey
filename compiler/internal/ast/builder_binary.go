@@ -98,6 +98,29 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 		}
 	}
 	
+	// Check if this is an Elvis operator (expr ?: else)  
+	if ctx.QUESTION() != nil && ctx.GetThenExpr() == nil {
+		// This is Elvis operator: condition ?: elseExpr
+		conditionExpr := b.buildComparisonExpr(ctx.ComparisonExpr())
+		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
+		
+		// For Result types, Elvis extracts Success value or uses default on Error
+		successArm := MatchArm{
+			Pattern:    Pattern{Constructor: "Success", Fields: []string{"value"}},
+			Expression: &Identifier{Name: "value"},
+		}
+
+		errorArm := MatchArm{
+			Pattern:    Pattern{Constructor: "Error", Fields: []string{"message"}},
+			Expression: elseExpr,
+		}
+
+		return &MatchExpression{
+			Expression: conditionExpr,
+			Arms:       []MatchArm{successArm, errorArm},
+		}
+	}
+	
 	// Check if this is a simple boolean ternary (expr ? then : else)
 	if ctx.QUESTION() != nil {
 		// First comparison expression is the condition 
