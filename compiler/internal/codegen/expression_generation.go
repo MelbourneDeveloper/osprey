@@ -1587,7 +1587,7 @@ func (g *LLVMGenerator) generateErrorConstructor(
 // generateResultFieldAccessAsMatch converts Result field access to pattern matching
 // This handles cases like myResult { value } ? value : "default"
 func (g *LLVMGenerator) generateResultFieldAccessAsMatch(
-	fieldAccess *ast.FieldAccessExpression,
+	_ *ast.FieldAccessExpression,
 	ident *ast.Identifier,
 ) (value.Value, error) {
 	// For now, just extract the value directly from the Success Result struct
@@ -1611,7 +1611,7 @@ func (g *LLVMGenerator) generateResultFieldAccessAsMatch(
 		return g.builder.NewLoad(structType.Fields[0], valuePtr), nil
 	}
 	
-	return nil, fmt.Errorf("Result field access failed: invalid Result type structure") //nolint:err113
+	return nil, fmt.Errorf("result field access failed: invalid Result type structure") //nolint:err113
 }
 
 
