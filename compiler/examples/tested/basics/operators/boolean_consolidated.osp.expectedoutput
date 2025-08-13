@@ -1,0 +1,18 @@
+=== Boolean Test ===
+Function returning true:
+true
+Function returning false:
+false
+Boolean literals:
+false
+true
+Comparisons:
+true
+true
+true
+true
+true
+Function equality test:
+Equal
+Simple comparison:
+true

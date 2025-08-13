@@ -1,0 +1,16 @@
+// Comprehensive Any Type Test - includes functionality from removed tests
+// Tests explicit any return types and storing any values without auto-conversion
+
+fn getDynamicValue() -> any = 42
+
+// This should also pass - explicit any with parameter 
+fn processAnyValue(input: int) -> any = input + 10
+
+print("Explicit any return type works")
+print("getDynamicValue() = ${getDynamicValue()}")
+print("processAnyValue(5) = ${processAnyValue(5)}")
+
+// Test storing any values without auto-conversion
+let result1 = getDynamicValue()
+let result2 = processAnyValue(5)
+print("Any values stored without auto-conversion")

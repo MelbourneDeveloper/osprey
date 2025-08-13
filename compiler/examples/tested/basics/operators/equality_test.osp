@@ -1,7 +1,0 @@
-fn isEqual(x: int, y: int) = x == y
-
-let result = isEqual(x: 5, y: 5)
-match result {
-    true => print("Equal")
-    false => print("Not Equal")
-}

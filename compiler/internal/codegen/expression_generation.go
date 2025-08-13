@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -1611,7 +1612,7 @@ func (g *LLVMGenerator) generateResultFieldAccessAsMatch(
 		return g.builder.NewLoad(structType.Fields[0], valuePtr), nil
 	}
 	
-	return nil, fmt.Errorf("result field access failed: invalid Result type structure") //nolint:err113
+	return nil, errors.New("result field access failed: invalid Result type structure") //nolint:err113
 }
 
 

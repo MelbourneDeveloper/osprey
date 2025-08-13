@@ -1,0 +1,4 @@
+Explicit any return type works
+getDynamicValue() = 42
+processAnyValue(5) = 15
+Any values stored without auto-conversion

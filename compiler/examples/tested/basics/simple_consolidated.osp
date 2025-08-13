@@ -1,0 +1,24 @@
+// Consolidated simple variable and function tests
+// Combines hello.osp, simple.osp, and minimal_test.osp functionality
+
+let x = 42
+let message = "Hello, World!"
+let greeting = "hello"
+
+fn greet(name: string) -> Unit = print("Hello from function!")
+
+print("Basic test results:")
+print("x = ${x}")
+print("message = ${message}")
+print("greeting = ${greeting}")
+greet("Osprey")
+
+// Minimal variable test
+let y = 5
+print("Minimal test:")
+print("y = ${y}")
+
+// Simple test with string interpolation
+print("Simple test:")
+print("x = ${x}")
+print("greeting = ${greeting}")
