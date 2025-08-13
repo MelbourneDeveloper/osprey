@@ -35,7 +35,11 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 	}
 
 	g.restoreTypeInferenceState(state)
-	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
+	
+	// HINDLEY-MILNER: Generalize the function type to create a type scheme
+	// This allows the function to be polymorphic across multiple call sites
+	scheme := g.typeInferer.Generalize(finalFnType)
+	g.typeInferer.env.Set(fnDecl.Name, scheme)
 
 	err = g.createLLVMFunctionSignature(fnDecl, finalFnType)
 	if err != nil {
@@ -136,6 +140,20 @@ func (g *LLVMGenerator) unifyBodyWithReturnType(
 	if err != nil {
 		g.restoreTypeInferenceState(state)
 		return err
+	}
+
+	// CRUCIAL: After type inference, update parameter types which may now be constrained
+	for i, param := range fnDecl.Parameters {
+		if param.Type == nil { // Only for parameters without explicit types
+			if paramType, exists := g.typeInferer.env.Get(param.Name); exists {
+				prunedType := g.typeInferer.prune(paramType)
+				g.typeInferer.env.Set(param.Name, prunedType)
+				// Update the parameter type in the function's paramTypes
+				if i < len(paramTypes) {
+					paramTypes[i] = prunedType
+				}
+			}
+		}
 	}
 
 	if !g.canImplicitlyConvert(bodyType, returnTypeVar, fnDecl) {
@@ -277,6 +295,20 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 		return nil, fmt.Errorf("failed to infer return type: %w", err)
 	}
 
+	// CRUCIAL: After type inference, update parameter types which may now be constrained
+	for i, param := range fnDecl.Parameters {
+		if param.Type == nil { // Only for parameters without explicit types
+			if paramType, exists := g.typeInferer.env.Get(param.Name); exists {
+				prunedType := g.typeInferer.prune(paramType)
+				g.typeInferer.env.Set(param.Name, prunedType)
+				// Update the parameter type in the function's paramTypes
+				if i < len(paramTypes) {
+					paramTypes[i] = prunedType
+				}
+			}
+		}
+	}
+
 	if !g.canImplicitlyConvert(inferredReturnType, returnTypeVar, fnDecl) {
 		if err := g.typeInferer.Unify(returnTypeVar, inferredReturnType); err != nil {
 			g.typeInferer.env = oldEnv
@@ -314,36 +346,8 @@ func (g *LLVMGenerator) generateFunctionBody(
 	oldExpectedReturnType := g.expectedReturnType
 	g.expectedReturnType = fn.Sig.RetType
 
-	params := fn.Params
-	for i, param := range fnDecl.Parameters {
-		g.variables[param.Name] = params[i]
-		// Also add to type inference environment for runtime generation
-		if param.Type != nil {
-			var paramType Type
-			if param.Type.IsFunction {
-				paramType = g.buildFunctionTypeFromAST(param.Type)
-			} else {
-				// Check if this is a known record type first
-				if typeDecl, exists := g.typeDeclarations[param.Type.Name]; exists {
-					// Check if this is a record type (single variant with fields)
-					if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
-						variant := typeDecl.Variants[0]
-						// Create a proper RecordType for the type inference environment
-						recordFieldTypes := make(map[string]Type)
-						for _, field := range variant.Fields {
-							recordFieldTypes[field.Name] = g.getInferenceFieldType(field.Type)
-						}
-						paramType = NewRecordType(typeDecl.Name, recordFieldTypes)
-					} else {
-						paramType = g.typeExpressionToInferenceType(param.Type)
-					}
-				} else {
-					paramType = g.typeExpressionToInferenceType(param.Type)
-				}
-			}
-			g.typeInferer.env.Set(param.Name, paramType)
-		}
-	}
+	// Set up parameters in type inference environment
+	g.setupParametersInEnvironment(fnDecl, fn)
 
 	var oldEffects []string
 	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
@@ -361,6 +365,59 @@ func (g *LLVMGenerator) generateFunctionBody(
 	g.generateReturnInstruction(fn, fnDecl, bodyValue)
 
 	return nil
+}
+
+// setupParametersInEnvironment sets up parameters in the type inference environment
+func (g *LLVMGenerator) setupParametersInEnvironment(fnDecl *ast.FunctionDeclaration, fn *ir.Func) {
+	params := fn.Params
+	for i, param := range fnDecl.Parameters {
+		g.variables[param.Name] = params[i]
+		// Also add to type inference environment for runtime generation
+		if param.Type != nil {
+			paramType := g.getParameterType(param.Type)
+			g.typeInferer.env.Set(param.Name, paramType)
+		} else {
+			// HINDLEY-MILNER: For parameters without explicit types, 
+			// get the type from the function signature that was already inferred
+			g.setInferredParameterType(fnDecl.Name, param.Name, i)
+		}
+	}
+}
+
+// getParameterType gets the type for a parameter with explicit type annotation
+func (g *LLVMGenerator) getParameterType(paramType *ast.TypeExpression) Type {
+	if paramType.IsFunction {
+		return g.buildFunctionTypeFromAST(paramType)
+	}
+	// Check if this is a known record type first
+	if typeDecl, exists := g.typeDeclarations[paramType.Name]; exists {
+		// Check if this is a record type (single variant with fields)
+		if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
+			variant := typeDecl.Variants[0]
+			// Create a proper RecordType for the type inference environment
+			recordFieldTypes := make(map[string]Type)
+			for _, field := range variant.Fields {
+				recordFieldTypes[field.Name] = g.getInferenceFieldType(field.Type)
+			}
+			return NewRecordType(typeDecl.Name, recordFieldTypes)
+		}
+	}
+	return g.typeExpressionToInferenceType(paramType)
+}
+
+// setInferredParameterType sets the type for a parameter without explicit type annotation
+func (g *LLVMGenerator) setInferredParameterType(fnName, paramName string, paramIndex int) {
+	if fnType, exists := g.typeInferer.env.Get(fnName); exists {
+		// Check if it's a type scheme and instantiate it
+		if scheme, ok := fnType.(*TypeScheme); ok {
+			instantiated := g.typeInferer.Instantiate(scheme)
+			if ft, ok := instantiated.(*FunctionType); ok && paramIndex < len(ft.paramTypes) {
+				g.typeInferer.env.Set(paramName, ft.paramTypes[paramIndex])
+			}
+		} else if ft, ok := fnType.(*FunctionType); ok && paramIndex < len(ft.paramTypes) {
+			g.typeInferer.env.Set(paramName, ft.paramTypes[paramIndex])
+		}
+	}
 }
 
 // cleanupAfterError cleans up state when an error occurs during function generation
@@ -665,10 +722,7 @@ func (g *LLVMGenerator) getLLVMFunctionType(ft *FunctionType) types.Type {
 func (g *LLVMGenerator) getLLVMRecordType(rt *RecordType) types.Type {
 	// Check if we already have this record type in the type map
 	if llvmType, exists := g.typeMap[rt.name]; exists {
-		// For struct types, return pointer to the struct
-		if _, ok := llvmType.(*types.StructType); ok {
-			return types.NewPointer(llvmType)
-		}
+		// Return struct type by value, not pointer
 		return llvmType
 	}
 
@@ -681,7 +735,7 @@ func (g *LLVMGenerator) getLLVMRecordType(rt *RecordType) types.Type {
 	structType := types.NewStruct(fieldTypes...)
 	g.typeMap[rt.name] = structType
 
-	return types.NewPointer(structType)
+	return structType
 }
 
 // getLLVMUnionType converts union types to LLVM tagged union types

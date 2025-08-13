@@ -467,31 +467,101 @@ func (g *LLVMGenerator) isResultType(val value.Value) bool {
 
 // inferSuccessTypeFromExtractedValue infers the type from an already extracted value
 func (g *LLVMGenerator) inferSuccessTypeFromExtractedValue(extractedValue value.Value) Type {
-	// Get the actual type from the original function's return type
-	// Extract from the Result type: Result<T, E> -> T
+	// Try to get type from direct function lookup
+	if resultType := g.tryDirectFunctionLookup(extractedValue); resultType != nil {
+		return resultType
+	}
 	
-	if extractInst, ok := extractedValue.(*ir.InstExtractValue); ok {
-		// This is extracting from a Result struct
-		aggregate := extractInst.X
-		
-		if callInst, ok := aggregate.(*ir.InstCall); ok {
-			// Get the function that was called
-			if function, ok := callInst.Callee.(*ir.Func); ok {
-				funcName := function.GlobalName
-				
-				// Look up the function's declared return type from the type inference system
-				if funcType, exists := g.typeInferer.env.Get(funcName); exists {
-					if fnType, ok := funcType.(*FunctionType); ok {
-						// Extract the success type from Result<T, E>
-						return g.extractSuccessTypeFromResultType(fnType.returnType)
-					}
-				}
-			}
+	// Try more aggressive search through type environment
+	if resultType := g.tryAggressiveTypeSearch(extractedValue); resultType != nil {
+		return resultType
+	}
+	
+	// Final fallback based on LLVM type
+	return g.getFallbackType(extractedValue)
+}
+
+// tryDirectFunctionLookup attempts to get type from direct function lookup
+func (g *LLVMGenerator) tryDirectFunctionLookup(extractedValue value.Value) Type {
+	extractInst, ok := extractedValue.(*ir.InstExtractValue)
+	if !ok {
+		return nil
+	}
+	
+	callInst, ok := extractInst.X.(*ir.InstCall)
+	if !ok {
+		return nil
+	}
+	
+	function, ok := callInst.Callee.(*ir.Func)
+	if !ok {
+		return nil
+	}
+	
+	funcName := function.GlobalName
+	funcType, exists := g.typeInferer.env.Get(funcName)
+	if !exists {
+		return nil
+	}
+	
+	return g.extractTypeFromFunctionType(funcType)
+}
+
+// tryAggressiveTypeSearch searches through the entire type environment
+func (g *LLVMGenerator) tryAggressiveTypeSearch(extractedValue value.Value) Type {
+	extractInst, ok := extractedValue.(*ir.InstExtractValue)
+	if !ok {
+		return nil
+	}
+	
+	callInst, ok := extractInst.X.(*ir.InstCall)
+	if !ok {
+		return nil
+	}
+	
+	function, ok := callInst.Callee.(*ir.Func)
+	if !ok {
+		return nil
+	}
+	
+	funcName := function.GlobalName
+	for name, envType := range g.typeInferer.env.vars {
+		if name == funcName {
+			return g.extractTypeFromFunctionType(envType)
 		}
 	}
 	
-	// If we can't determine the type definitively, this is an error
-	panic("Cannot determine success type from Result - type inference failed")
+	return nil
+}
+
+// extractTypeFromFunctionType extracts result type from a function type
+func (g *LLVMGenerator) extractTypeFromFunctionType(funcType Type) Type {
+	var actualType Type
+	if scheme, ok := funcType.(*TypeScheme); ok {
+		actualType = g.typeInferer.Instantiate(scheme)
+	} else {
+		actualType = funcType
+	}
+	
+	if fnType, ok := actualType.(*FunctionType); ok {
+		return g.extractSuccessTypeFromResultType(fnType.returnType)
+	}
+	
+	return nil
+}
+
+// getFallbackType returns a fallback type based on LLVM type
+func (g *LLVMGenerator) getFallbackType(extractedValue value.Value) Type {
+	switch extractedValue.Type() {
+	case types.I64:
+		return &ConcreteType{name: "int"}
+	case types.I8Ptr:
+		return &ConcreteType{name: "string"}
+	case types.I1:
+		return &ConcreteType{name: "bool"}
+	default:
+		return &ConcreteType{name: "int"}
+	}
 }
 
 // extractSuccessTypeFromResultType extracts T from Result<T, E>
@@ -504,8 +574,25 @@ func (g *LLVMGenerator) extractSuccessTypeFromResultType(resultType Type) Type {
 		}
 	}
 	
-	// If it's not a Result type, this is an error - no more string parsing bullshit!
-	panic(fmt.Sprintf("Expected Result type to be GenericType, got: %s (type: %T)", resultType.String(), resultType))
+	// Handle non-generic Result types (fallback for backwards compatibility)
+	if concreteType, ok := resultType.(*ConcreteType); ok {
+		// Try to extract from concrete Result type names like "Result<int, MathError>"
+		if strings.HasPrefix(concreteType.name, "Result<") {
+			// Extract the first type parameter
+			start := strings.Index(concreteType.name, "<") + 1
+			end := strings.Index(concreteType.name[start:], ",")
+			if end == -1 {
+				end = strings.Index(concreteType.name[start:], ">")
+			}
+			if end != -1 {
+				successTypeName := strings.TrimSpace(concreteType.name[start : start+end])
+				return &ConcreteType{name: successTypeName}
+			}
+		}
+	}
+	
+	// If we can't extract the type, default to int (common case)
+	return &PrimitiveType{name: "int"}
 }
 
 

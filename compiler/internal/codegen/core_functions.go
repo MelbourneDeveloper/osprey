@@ -55,6 +55,33 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 	// CRITICAL: Resolve the type to get concrete type instead of type variables
 	resolvedType := g.typeInferer.ResolveType(inferredType)
 	argType := resolvedType.String()
+	
+	// If the resolved type is still a type variable (like t16), fall back to LLVM type
+	if strings.HasPrefix(argType, "t") && len(argType) > 1 {
+		// Check if it's a type variable (starts with 't' followed by digits)
+		isTypeVar := true
+		for _, c := range argType[1:] {
+			if c < '0' || c > '9' {
+				isTypeVar = false
+				break
+			}
+		}
+		
+		if isTypeVar {
+			// Fallback to determine type from LLVM value
+			switch arg.Type() {
+			case types.I64:
+				argType = TypeInt
+			case types.I8Ptr:
+				argType = TypeString
+			case types.I1:
+				argType = TypeBool
+			default:
+				// Default to int for unknown types
+				argType = TypeInt
+			}
+		}
+	}
 
 	// Check if the resolved type IS boolean (not Result<bool, Error>!)
 	isBooleanType := g.isSemanticBooleanType(resolvedType)

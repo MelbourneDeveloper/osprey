@@ -495,6 +495,10 @@ func (ti *TypeInferer) ResolveType(t Type) Type {
 	if _, ok := resolved.(*PrimitiveType); ok {
 		return resolved
 	}
+	// For record types, return as-is (don't modify)
+	if _, ok := resolved.(*RecordType); ok {
+		return resolved
+	}
 
 	// For function types, only resolve if they contain unbound type variables
 	if ft, ok := resolved.(*FunctionType); ok {
@@ -1014,20 +1018,34 @@ func (ti *TypeInferer) occursCheck(v *TypeVar, t Type) bool {
 	}
 }
 
-// resolveUnboundTypeVariable resolves an unbound type variable to a concrete type
-func (ti *TypeInferer) resolveUnboundTypeVariable(_ *TypeVar) Type {
-	// For now, use a simple heuristic:
-	// Default to Int for most unbound variables since many operations produce integers
-	// This could be enhanced with more sophisticated inference based on usage context
-	return &ConcreteType{name: TypeInt}
+// resolveUnboundTypeVariable resolves an unbound type variable
+// In Hindley-Milner, unbound type variables should remain as type variables for generalization
+func (ti *TypeInferer) resolveUnboundTypeVariable(tv *TypeVar) Type {
+	// HINDLEY-MILNER: Keep type variables as type variables
+	// Don't resolve to concrete types - let generalization handle this
+	return tv
 }
 
 // prune follows substitution chains to find the actual type
 func (ti *TypeInferer) prune(t Type) Type {
+	return ti.pruneWithVisited(t, make(map[int]bool))
+}
+
+// pruneWithVisited follows substitution chains with cycle detection
+func (ti *TypeInferer) pruneWithVisited(t Type, visited map[int]bool) Type {
 	if tv, ok := t.(*TypeVar); ok {
+		// Check for cycles
+		if visited[tv.id] {
+			// Cycle detected - return the type variable to break the cycle
+			return tv
+		}
+		
 		if subst, exists := ti.subst[tv.id]; exists {
-			// Follow the substitution chain and update it
-			pruned := ti.prune(subst)
+			// Mark as visited before recursing
+			visited[tv.id] = true
+			// Follow the substitution chain
+			pruned := ti.pruneWithVisited(subst, visited)
+			// Update substitution for efficiency
 			ti.subst[tv.id] = pruned
 			return pruned
 		}
@@ -1489,10 +1507,47 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 		return nil, err
 	}
 
-	// Resolve the object type to handle type variables
+	// Handle direct record types
+	if recordType, ok := objectType.(*RecordType); ok {
+		// Look up the field in the record type
+		if fieldType, exists := recordType.fields[e.FieldName]; exists {
+			return fieldType, nil
+		}
+		return nil, WrapFieldNotFoundInRecord(e.FieldName, recordType.String())
+	}
+
+	// Handle type variables - create a constraint that the type variable has this field
+	if typeVar, ok := objectType.(*TypeVar); ok {
+		// For polymorphic field access, create a fresh type variable for the field type
+		fieldType := ti.Fresh()
+		
+		// Check if this type variable is already constrained to a record type
+		if existing := ti.prune(typeVar); existing != typeVar {
+			if recordType, ok := existing.(*RecordType); ok {
+				// Add the field to the existing record type
+				recordType.fields[e.FieldName] = fieldType
+				return fieldType, nil
+			}
+		}
+		
+		// Create a record type constraint with the required field
+		// Use the type variable ID to ensure all field accesses on the same variable
+		// create constraints on the same record type
+		constraintName := fmt.Sprintf("Record_%d", typeVar.id)
+		constraintRecord := NewRecordType(constraintName, map[string]Type{e.FieldName: fieldType})
+		
+		// Unify the type variable with a record type that has this field
+		if err := ti.Unify(typeVar, constraintRecord); err != nil {
+			return nil, fmt.Errorf("field access constraint failed: %w", err)
+		}
+		
+		return fieldType, nil
+	}
+
+	// Resolve the object type to handle substituted type variables
 	resolvedObjectType := ti.ResolveType(objectType)
 
-	// Check if it's a record type
+	// Check if it's a record type after resolution
 	if recordType, ok := resolvedObjectType.(*RecordType); ok {
 		// Look up the field in the record type
 		if fieldType, exists := recordType.fields[e.FieldName]; exists {
@@ -1552,18 +1607,34 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 	
 	// Look up constructor in environment
 	if t, ok := ti.env.Get(e.TypeName); ok {
+		// Check if this is a record type
+		if recordType, isRecord := t.(*RecordType); isRecord {
+			// Create a new record type with fields instantiated from the constructor values
+			fieldTypes := make(map[string]Type)
+			
+			// Infer the type of each field from the constructor expression
+			for fieldName, fieldExpr := range e.Fields {
+				fieldType, err := ti.InferType(fieldExpr)
+				if err != nil {
+					return nil, err
+				}
+				fieldTypes[fieldName] = fieldType
+			}
+			
+			// Create a monomorphic instance of the record type
+			return NewRecordType(recordType.name, fieldTypes), nil
+		}
+		
 		// Check if this is a constrained record type
-		if _, isRecord := t.(*RecordType); isRecord {
-			// Check if the type has constraints by looking up the type declaration
-			if ti.generator != nil {
-				if typeDecl, exists := ti.generator.typeDeclarations[e.TypeName]; exists {
-					if ti.generator.hasRecordTypeConstraints(typeDecl) {
-						// Constrained record types return int (1 for success, -1 for failure)
-						return &ConcreteType{name: TypeInt}, nil
-					}
+		if ti.generator != nil {
+			if typeDecl, exists := ti.generator.typeDeclarations[e.TypeName]; exists {
+				if ti.generator.hasRecordTypeConstraints(typeDecl) {
+					// Constrained record types return int (1 for success, -1 for failure)
+					return &ConcreteType{name: TypeInt}, nil
 				}
 			}
 		}
+		
 		return t, nil
 	}
 	return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, e.TypeName)

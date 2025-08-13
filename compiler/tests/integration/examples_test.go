@@ -37,7 +37,7 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 			// Create test name from the file path relative to examples/tested
 			relPath, _ := filepath.Rel(examplesDir, path)
 			testName := strings.TrimSuffix(relPath, ".osp")
-			testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
+			testName = strings.ReplaceAll(testName, string(filepath.Separator), "/")
 
 			t.Run(testName, func(t *testing.T) {
 				// Try to read from .expectedoutput file first
@@ -79,7 +79,7 @@ func getExpectedOutputs() map[string]string {
 			"Your score is 95 points\nNext year you'll be 26\n" +
 			"Double your score: 190\nAlice (25) scored 95/100\n",
 		"working_basics.osp": "x = 42\nname = Alice\ndouble(21) = 42\n" +
-			"greeting = Hello\n10 + 5 = 15\n6 * 7 = 42\nmatch 42 = 1\n",
+			"greeting = Hello\nmultiply(6, 7) = 42\nisEven(10) = true\n10 + 5 = 15\n6 * 7 = 42\nmatch 42 = 1\n",
 		"simple_types.osp":        "Type definitions compiled successfully\nred\nworking\n",
 		"result_type_example.osp": "Result type defined successfully\n42\n",
 		"simple_input.osp": "Greeting code: 1\nNumber result: 999\n" +

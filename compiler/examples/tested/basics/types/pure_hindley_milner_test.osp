@@ -1,0 +1,121 @@
+// HINDLEY-MILNER TYPE INFERENCE TEST  
+// Tests what HM inference CAN do in the current implementation
+// Function types and return values inferred from usage context
+
+// Type definitions needed for the test
+type Pair = { first: int, second: int }
+type Point = { x: int, y: int }
+type Container = { value: string, label: string }
+
+print("=== HINDLEY-MILNER TEST ===")
+
+// Test 1: Function parameter and return type inference
+print("Test 1: Function type inference from usage")
+// These functions have NO explicit types - all inferred!
+fn identity(x) = x              // HM infers type from usage context
+fn add(a, b) = a + b           // HM infers (int, int) -> Result<int, MathError>
+fn concat(s1, s2) = s1 + s2     // HM infers (string, string) -> string
+fn negate(x) = !x              // HM infers (bool) -> bool
+
+// Usage drives monomorphization
+let intId = identity(42)        // identity<int>
+let stringId = identity("test") // identity<string>
+let boolId = identity(true)     // identity<bool>
+
+print("identity(42) = ${intId}, identity(\"test\") = ${stringId}, identity(true) = ${toString(boolId)}")
+
+// Test arithmetic inference
+let addResult = add(a: 10, b: 20)
+let addValue = addResult ?: 0
+let concatResult = concat(s1: "hello", s2: "world")
+let negateResult = negate(false)
+
+print("add(10, 20) = ${addValue}, concat = ${concatResult}, negate(false) = ${toString(negateResult)}")
+print("")
+
+// Test 3: Function inference with generic records
+print("Test 3: Function inference with generic records")
+fn getFirst(p) = p.first        // HM infers: <T>(Pair<T, _>) -> T
+fn getSecond(p) = p.second      // HM infers: <T>(Pair<_, T>) -> T
+fn getValue(c) = c.value        // HM infers: <T>(Container<T, _>) -> T
+
+let intPair = Pair { first: 100, second: 200 }      // Pair<int, int>
+let mixedPair = Pair { first: "hello", second: 42 } // Pair<string, int>
+
+let firstInt = getFirst(intPair)        // int inferred
+let firstString = getFirst(mixedPair)   // string inferred
+let secondInt = getSecond(intPair)      // int inferred  
+let secondMixed = getSecond(mixedPair)  // int inferred
+
+print("getFirst(intPair) = ${firstInt}")
+print("getFirst(mixedPair) = ${firstString}")
+print("getSecond(intPair) = ${secondInt}")
+print("getSecond(mixedPair) = ${secondMixed}")
+print("")
+
+// Test 4: Polymorphic functions with HM inference
+print("Test 4: Polymorphic function inference")
+fn identityP(x) = x              // HM infers: <T>(T) -> T
+fn makePoint(a, b) = Point { x: a, y: b }  // HM infers: <T>(T, T) -> Point<T, T>
+fn makePair(x, y) = Pair { first: x, second: y }  // HM infers: <A, B>(A, B) -> Pair<A, B>
+
+// Each usage gets monomorphized
+let id1 = identityP(42)          // int -> int
+let id2 = identityP("test")      // string -> string
+let id3 = identityP(true)        // bool -> bool
+
+let point1 = makePoint(a: 1, b: 2)              // Point<int, int>
+let point2 = makePoint(a: "x", b: "y")          // Point<string, string>
+let pair1 = makePair(x: 10, y: "label")         // Pair<int, string>
+let pair2 = makePair(x: true, y: false)         // Pair<bool, bool>
+
+print("identityP(42) = ${id1}")
+print("identityP(\"test\") = ${id2}")
+print("identityP(true) = ${toString(id3)}")
+print("makePoint(1, 2) = {${point1.x}, ${point1.y}}")
+print("makePoint(\"x\", \"y\") = {${point2.x}, ${point2.y}}")
+print("")
+
+// Test 5: Complex HM inference with field access
+print("Test 5: Complex field access inference")
+fn distance(p) = p.x * p.x + p.y * p.y    // HM infers: Point<int, int> -> int
+fn combine(c) = c.value + c.label          // HM infers: Container<string, string> -> string
+
+let numPoint = Point { x: 3, y: 4 }
+let textContainer = Container { value: "hello", label: "world" }
+
+let dist = distance(numPoint)              // int inferred
+let combined = combine(textContainer)      // string inferred
+
+print("distance({3, 4}) = ${dist}")
+print("combine({\"hello\", \"world\"}) = ${combined}")
+print("")
+
+// Test 6: Higher-order functions with HM inference
+print("Test 6: Higher-order HM inference")
+fn apply(f, x) = f(x)           // HM infers: <A, B>((A) -> B, A) -> B
+fn extract(obj, extractor) = extractor(obj)  // HM infers: <T, R>(T, (T) -> R) -> R
+
+fn getX(p) = p.x                // Point field extractor
+fn getY(p) = p.y                // Point field extractor
+
+// Define missing variables
+let intPoint = Point { x: 1, y: 2 }
+let stringContainer = Container { value: "hello", label: "world" }
+
+let extracted1 = extract(obj: intPoint, extractor: getX)            // int inferred
+let extracted2 = extract(obj: intPair, extractor: getFirst)         // int inferred
+let extracted3 = extract(obj: stringContainer, extractor: getValue) // string inferred
+
+let applied1 = apply(f: identityP, x: 99)          // int inferred
+let applied2 = apply(f: toString, x: 123)         // string inferred
+
+print("extract(intPoint, getX) = ${extracted1}")
+print("extract(intPair, getFirst) = ${extracted2}")
+print("extract(stringContainer, getValue) = ${extracted3}")
+print("apply(identity, 99) = ${applied1}")
+print("apply(toString, 123) = ${applied2}")
+print("")
+
+print("=== PURE HINDLEY-MILNER TEST COMPLETE ===")
+print("All types inferred from usage context - no explicit type annotations!")

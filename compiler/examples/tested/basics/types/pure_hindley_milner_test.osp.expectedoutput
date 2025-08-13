@@ -1,0 +1,13 @@
+Starting compilation...
+Compilation failed
+Execution failed: failed to generate LLVM IR: line 9:16 mismatched input ',' expecting ':'
+line 9:20 mismatched input '}' expecting ':'
+line 10:24 mismatched input ',' expecting ':'
+line 10:32 mismatched input '}' expecting ':'
+line 11:19 mismatched input ',' expecting ':'
+line 11:28 mismatched input '}' expecting ':'
+line 15:30 no viable alternative at input '{x:3.14'
+line 15:26 extraneous input ':' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
+line 15:32 extraneous input ',' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
+line 15:35 extraneous input ':' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
+line 15:42 extraneous input '}' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}

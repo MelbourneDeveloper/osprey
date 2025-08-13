@@ -129,6 +129,9 @@ var (
 	ErrChannelSendFunctionNotFound  = errors.New("channel send function not found")
 	ErrChannelRecvFunctionNotFound  = errors.New("channel recv function not found")
 	ErrChannelCreateInvalidArgCount = errors.New("channel create invalid argument count")
+
+	// Record type errors
+	ErrRecordFieldTypeMismatch = errors.New("record field type mismatch")
 )
 
 // Static error definitions for match expressions

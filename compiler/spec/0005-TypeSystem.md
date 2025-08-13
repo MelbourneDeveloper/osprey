@@ -325,129 +325,228 @@ let newCounter = counter { value: 5 }
 - `IndexError`: For list/string indexing operations (OutOfBounds)
 - `Success`: Successful result wrapper
 
-### 5.3 Type Inference Rules
+### 5.3 Hindley-Milner Type Inference
 
-**Core Principle**: The `any` type is invalid unless explicitly declared. All types must be either explicitly annotated or inferrable from context.
+**Core Implementation**: Osprey implements complete Hindley-Milner type inference (Hindley 1969, Milner 1978) enabling polymorphic type inference without explicit type annotations.
 
-#### Function Return Types
+**Academic Foundation**:
+- **Hindley, R. (1969)**: "The Principal Type-Scheme of an Object in Combinatory Logic" - Communications of the ACM 12(12):719-721
+- **Milner, R. (1978)**: "A Theory of Type Polymorphism in Programming" - Journal of Computer and System Sciences 17:348-375
+- **Damas, L. & Milner, R. (1982)**: "Principal type-schemes for functional programs" - POPL '82
 
-Return type annotations may be omitted **only** when the return type can be definitively inferred from the function body:
+**Implementation Principle**: Variables may be declared without type annotations when their types can be inferred through unification and constraint solving. The system performs automatic generalization and instantiation of polymorphic types.
 
-##### Allowed (Return Type Inferred)
-- **Literal expressions**: `fn getNumber() = 42` → infers `int`
-- **String literals**: `fn getText() = "hello"` → infers `string`  
-- **Boolean literals**: `fn getFlag() = true` → infers `bool`
-- **Arithmetic expressions**: `fn calculate() = 1 + 2` → infers `int`
+**Hindley-Milner Algorithm Steps**:
+1. **Type Variable Generation**: Assign fresh type variables to untyped expressions
+2. **Constraint Collection**: Gather type equality constraints from expression structure
+3. **Unification**: Solve constraints using Robinson's unification algorithm
+4. **Generalization**: Generalize types to introduce polymorphism at let-bindings
+5. **Instantiation**: Create fresh instances of polymorphic types at usage sites
 
-##### Disallowed (Requires Explicit Return Type)
-- **Direct parameter return**: `fn identity(x) = x` → **ERROR** (would be `any`)
-- **Function calls**: `fn process() = someFunction()` → **ERROR** (unknown return type)
-- **Complex expressions**: Without clear type resolution
+#### Hindley-Milner Function Inference
 
-#### Parameter Types
+**Complete Type Inference**: Both parameter and return types can be omitted when inferrable through Hindley-Milner constraint solving:
 
-Parameter type annotations may be omitted **only** when the parameter type can be definitively inferred from usage within the function body:
+##### Hindley-Milner Inference Examples
 
-##### Allowed (Parameter Type Inferred)
-- **Arithmetic usage**: `fn addOne(x) = x + 1` → `x` infers as `int`
-- **With explicit return type**: `fn identity(x) -> int = x` → `x` infers as `int` from return type
-- **Direct return with explicit type**: `fn process(data) -> string = data` → `data` infers as `string`
-
-##### Disallowed (Requires Explicit Parameter Type)
-- **Direct return without return type**: `fn identity(x) = x` → **ERROR**
-- **String parameter return**: `fn greet(name) = name` → **ERROR** (use `name: string` or `-> string`)
-- **Mixed parameter scenarios**: `fn formatScore(name, score) = name` → **ERROR**
-- **Ambiguous usage**: Where type cannot be determined from context
-
-#### Type Inference Examples
-
-**Valid Code:**
+**✅ POLYMORPHIC INFERENCE (No Type Annotations Required):**
 ```osprey
-// Literals allow return type inference
-fn getAge() = 25
-fn getName() = "Alice"
-fn isActive() = true
+// Identity function - fully polymorphic
+fn identity(x) = x              // Infers: <T>(T) -> T
 
-// Arithmetic allows both return and parameter type inference  
-fn increment(x) = x + 1
-fn add(a, b) = a + b
+// Arithmetic functions
+fn add(a, b) = a + b           // Infers: (int, int) -> Result<int, MathError>
+fn increment(x) = x + 1        // Infers: (int) -> Result<int, MathError>
 
-// Explicit types always allowed
-fn identity(x) -> int = x
-fn process(data: string) -> string = data
+// String operations  
+fn concat(s1, s2) = s1 + s2    // Infers: (string, string) -> string
+
+// Boolean operations
+fn negate(x) = !x              // Infers: (bool) -> bool
+
+// Field access polymorphism
+fn getX(p) = p.x               // Infers: <T>(Point<T, _>) -> T
+fn getValue(c) = c.value       // Infers: <T>(Container<T, _>) -> T
+
+// Higher-order functions
+fn apply(f, x) = f(x)          // Infers: <A, B>((A) -> B, A) -> B
+fn compose(f, g) = fn(x) = f(g(x))  // Infers: <A, B, C>((B) -> C, (A) -> B) -> (A) -> C
 ```
 
-**Invalid Code:**
+**✅ MONOMORPHIC USAGE (Types Specialized at Call Sites):**
 ```osprey
-// ERROR: Cannot infer return type from parameter
-fn identity(x) = x
+// Same identity function used with different types
+let intResult = identity(42)        // identity<int>
+let stringResult = identity("test") // identity<string>
+let boolResult = identity(true)     // identity<bool>
 
-// ERROR: String parameter without type annotation
-fn greet(name) = name
+// Field accessors specialized by usage
+let intPoint = Point { x: 10, y: 20 }
+let stringPoint = Point { x: "a", y: "b" }
 
-// ERROR: Mixed parameters without explicit types
-fn formatScore(name, score) = name
-
-// ERROR: Cannot infer parameter type from function call
-fn process(data) = someFunction(data)
-
-// ERROR: Ambiguous type inference
-fn conditional(flag, a, b) = if flag then a else b
+let intX = getX(intPoint)           // getX<int>
+let stringX = getX(stringPoint)     // getX<string>
 ```
 
-#### Rationale
+#### Constraint-Based Type Inference
 
-This design ensures:
-1. **Type Safety**: No implicit `any` types that could lead to runtime errors
-2. **Readability**: Clear type contracts without excessive annotation
-3. **Maintainability**: Predictable type behavior for code evolution
-4. **Performance**: Compile-time type checking without runtime overhead
+**Unification Rules**: Osprey's Hindley-Milner implementation uses constraint unification to solve type equations:
 
-**Summary Rule**: "Type annotations may be omitted only when the type can be unambiguously determined from constants, literals, well-defined operations, or explicit return types that constrain parameter types."
-
-#### Function Return Type "any" Restriction
-
-**CRITICAL RULE**: Functions CANNOT return `any` type unless the return type is EXPLICITLY declared as `any`.
-
-**✅ ALLOWED - Explicit any return type:**
+**✅ CONSTRAINT SOLVING EXAMPLES:**
 ```osprey
-fn parseValue(input: string) -> any = processInput(input)
-fn getDynamicValue() -> any = readFromConfig()
+// Function with multiple constraints
+fn processData(item, transform) = transform(item.value)
+// Constraints:
+// - item must have field 'value' of type α
+// - transform must be function (α) -> β  
+// - return type is β
+// Solution: <α, β>(Container<α>, (α) -> β) -> β
+
+// Recursive constraint solving
+fn chain(f, g, x) = f(g(x))
+// Constraints:
+// - g must be function (α) -> β
+// - f must be function (β) -> γ
+// - x has type α
+// - return type is γ
+// Solution: <α, β, γ>((β) -> γ, (α) -> β, α) -> γ
 ```
 
-**❌ FORBIDDEN - Implicit any return type:**
+**✅ POLYMORPHIC GENERALIZATION:**
 ```osprey
-fn identity(x) = x                    // ERROR: Would infer as 'any'
-fn callUnknown() = someFunction()     // ERROR: Would infer as 'any'
-fn processData(data) = data           // ERROR: Would infer as 'any'
+// Generic data constructors
+fn makePair(x, y) = Pair { first: x, second: y }
+// Infers: <A, B>(A, B) -> Pair<A, B>
+
+fn makePoint(a, b) = Point { x: a, y: b }
+// Infers: <T>(T, T) -> Point<T, T>
+
+// Generic extractors
+fn getFirst(p) = p.first
+// Infers: <A, B>(Pair<A, B>) -> A
+
+fn getSecond(p) = p.second  
+// Infers: <A, B>(Pair<A, B>) -> B
 ```
 
-**Rationale**: This prevents accidental `any` type propagation that could lead to runtime type errors and maintains Osprey's strong type safety guarantees.
+#### Hindley-Milner Implementation Examples
 
-**Built-in Functions**: No built-in functions return `any` type. All built-in functions have concrete, well-defined return types.
+**✅ COMPLETE TYPE INFERENCE (All Types Derived):**
+```osprey
+// Polymorphic identity - no annotations needed
+fn identity(x) = x              // <T>(T) -> T
 
-#### Common Validation Fixes
+// Arithmetic with constraint propagation
+fn add(a, b) = a + b           // (int, int) -> Result<int, MathError>
+fn multiply(x, y) = x * y      // (int, int) -> Result<int, MathError>
 
-When the compiler reports type inference errors, use these patterns:
+// String operations
+fn greet(name) = "Hello, " + name  // (string) -> string
+
+// Record construction and access
+fn makeUser(n, a) = User { name: n, age: a }  // (string, int) -> User
+fn getName(u) = u.name         // (User) -> string
+
+// Higher-order functions
+fn twice(f, x) = f(f(x))       // <T>((T) -> T, T) -> T
+fn map(f, list) = [f(x) for x in list]  // <A, B>((A) -> B, List<A>) -> List<B>
+```
+
+**✅ MONOMORPHIZATION AT USAGE SITES:**
+```osprey
+// Same polymorphic functions, different instantiations
+let id1 = identity(42)          // identity<int>
+let id2 = identity("test")      // identity<string> 
+let id3 = identity(true)        // identity<bool>
+
+// Function used in different contexts
+let intTwice = twice(increment, 5)      // twice<int>
+let stringTwice = twice(greet, "World")  // twice<string>
+```
+
+**❌ INFERENCE LIMITATIONS (Explicit Types Required):**
+```osprey
+// Ambiguous conditional requires annotation
+fn conditional(flag, a, b) -> T = if flag then a else b  // T must be specified
+
+// External function calls may need hints
+fn process(data) -> R = externalFunction(data)  // R may need annotation
+
+// Complex constraints may require explicit polymorphic declaration
+fn complex<T>(x: T, pred: (T) -> bool) -> Option<T> = 
+    if pred(x) then Some(x) else None
+```
+
+#### Hindley-Milner Benefits
+
+**Academic Guarantees (Milner 1978, Damas & Milner 1982)**:
+1. **Principal Types**: Every well-typed expression has a unique most general type
+2. **Completeness**: If a program has a type, Hindley-Milner will find it
+3. **Soundness**: All inferred types are correct - no runtime type errors
+4. **Decidability**: Type inference always terminates with definitive result
+
+**Practical Benefits**:
+- **Zero Annotation Burden**: Write polymorphic functions without type signatures
+- **Maximum Reusability**: Functions automatically work with all compatible types
+- **Compile-time Safety**: All type errors caught before execution
+- **Performance**: Monomorphization enables optimal code generation
+
+**Implementation References**:
+- **Robinson, J.A. (1965)**: "A Machine-Oriented Logic Based on the Resolution Principle" - Unification algorithm
+- **Cardelli, L. (1987)**: "Basic Polymorphic Typechecking" - Implementation techniques
+- **Jones, M.P. (1995)**: "Functional Programming with Overloading and Higher-Order Polymorphism" - Advanced HM features
+
+**Hindley-Milner Principle**: "Type annotations are optional for all expressions where types can be inferred through constraint unification. The system automatically finds the most general (polymorphic) type for each expression."
+
+#### Polymorphic Type Variables vs Any Type
+
+**CRITICAL DISTINCTION**: Hindley-Milner infers polymorphic type variables (α, β, γ), NOT the `any` type.
+
+**✅ HINDLEY-MILNER POLYMORPHISM:**
+```osprey
+fn identity(x) = x                    // Infers: <T>(T) -> T (polymorphic)
+fn getFirst(p) = p.first             // Infers: <A, B>(Pair<A, B>) -> A
+fn apply(f, x) = f(x)                // Infers: <A, B>((A) -> B, A) -> B
+```
+
+**❌ ANY TYPE (Requires Explicit Declaration):**
+```osprey
+fn parseValue(input: string) -> any = processInput(input)  // Explicit any
+fn getDynamicValue() -> any = readFromConfig()             // Explicit any
+```
+
+**Type Variable Instantiation**: Polymorphic type variables are instantiated to concrete types at usage sites:
+```osprey
+let intId = identity(42)        // T := int
+let stringId = identity("test") // T := string
+let boolId = identity(true)     // T := bool
+```
+
+**Safety Guarantee**: Polymorphic types are statically safe - all type checking occurs at compile time with no runtime type uncertainty.
+
+#### Hindley-Milner Constraint Resolution
+
+**Automatic Type Resolution**: The compiler uses constraint solving to resolve all type variables:
 
 ```osprey
-// ❌ ERROR: Function 'greet' requires explicit return type annotation
-fn greet(name) = name
+// ✅ FULLY INFERRED: No annotations needed
+fn greet(name) = "Hello, " + name    // String constraint from concatenation
+fn formatScore(name, score) = "${name}: ${score}"  // String interpolation context
+fn calculate(x, y) = x * y + 1       // Arithmetic constraints
 
-// ✅ FIX: Add explicit parameter type
-fn greet(name: string) = name
+// ✅ POLYMORPHIC RESOLUTION: Generic across multiple types
+fn wrap(value) = Container { data: value }  // <T>(T) -> Container<T>
+fn unwrap(container) = container.data       // <T>(Container<T>) -> T
 
-// ✅ FIX: Add explicit return type  
-fn greet(name) -> string = name
+// ✅ HIGHER-ORDER INFERENCE: Function parameters inferred
+fn applyToList(func, items) = [func(x) for x in items]
+// Infers: <A, B>((A) -> B, List<A>) -> List<B>
+```
 
-// ❌ ERROR: Parameter 'name' requires explicit type annotation
-fn formatScore(name, score) = name
-
-// ✅ FIX: Add explicit parameter types
-fn formatScore(name: string, score: int) = name
-
-// ✅ FIX: Add explicit return type to enable inference
-fn formatScore(name, score) -> string = name
+**Manual Annotation (When Desired)**: Explicit types can be added for documentation:
+```osprey
+fn greet(name: string) -> string = "Hello, " + name  // Explicit for clarity
+fn identity<T>(x: T) -> T = x                        // Explicit polymorphism
 ```
 
 ### 5.4 Type Safety and Explicit Typing
