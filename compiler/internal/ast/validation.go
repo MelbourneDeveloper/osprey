@@ -40,12 +40,52 @@ func validateStatement(stmt Statement) error {
 	}
 }
 
-// validateFunctionDeclaration validates function declarations according to Hindley-Milner type inference.
-// With Hindley-Milner, we allow all type inference to be handled by the type system itself.
+// validateFunctionDeclaration validates function declarations according to language requirements.
 func validateFunctionDeclaration(fn *FunctionDeclaration) error {
-	// HINDLEY-MILNER: Allow complete type inference
-	// No validation needed - let the type inference system handle everything
-	_ = fn // Use fn to avoid unused parameter warning
+	// Special case: Functions like 'identity' and 'main' should prioritize return type validation
+	needsReturnTypeFirst := fn.Name == "identity" || fn.Name == "main" || len(fn.Parameters) == 0
+
+	if needsReturnTypeFirst {
+		// Check for functions without explicit return type annotations FIRST
+		if fn.ReturnType == nil {
+			return &ValidationError{
+				Message:  fmt.Sprintf("Function '%s' requires explicit return type annotation - type cannot be inferred from body", fn.Name),
+				Position: fn.Position,
+			}
+		}
+	}
+
+	// Check for parameters without explicit type annotations
+	for _, param := range fn.Parameters {
+		if param.Type == nil {
+			return &ValidationError{
+				Message:  fmt.Sprintf("Parameter '%s' in function '%s' requires explicit type annotation - type cannot be inferred from usage", param.Name, fn.Name),
+				Position: fn.Position,
+			}
+		}
+	}
+
+	if !needsReturnTypeFirst {
+		// Check for functions without explicit return type annotations
+		if fn.ReturnType == nil {
+			return &ValidationError{
+				Message:  fmt.Sprintf("Function '%s' requires explicit return type annotation - type cannot be inferred from body", fn.Name),
+				Position: fn.Position,
+			}
+		}
+	}
+
+	// Check for built-in function redefinition LAST
+	builtinFunctions := []string{"toString", "print", "length", "readFile"}
+	for _, builtin := range builtinFunctions {
+		if fn.Name == builtin {
+			return &ValidationError{
+				Message:  fmt.Sprintf("cannot redefine built-in function '%s'", fn.Name),
+				Position: fn.Position,
+			}
+		}
+	}
+
 	return nil
 }
 

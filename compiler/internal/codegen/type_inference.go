@@ -1221,6 +1221,64 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 		}
 	}
 
+	// Validate that no arguments have 'any' type - pattern matching is required
+	for i, argType := range argTypes {
+		if ti.isAnyType(argType) {
+			var argPos *ast.Position
+			if len(e.NamedArguments) > 0 && i < len(e.NamedArguments) {
+				// Get position from named argument expression
+				if valExpr := e.NamedArguments[i].Value; valExpr != nil {
+					switch v := valExpr.(type) {
+					case *ast.Identifier:
+						argPos = v.Position
+					case *ast.IntegerLiteral:
+						argPos = v.Position
+					case *ast.StringLiteral:
+						argPos = v.Position
+					default:
+						argPos = e.Position
+					}
+				} else {
+					argPos = e.Position
+				}
+			} else if i < len(e.Arguments) {
+				// Get position from regular argument expression
+				if argExpr := e.Arguments[i]; argExpr != nil {
+					switch v := argExpr.(type) {
+					case *ast.Identifier:
+						argPos = v.Position
+					case *ast.IntegerLiteral:
+						argPos = v.Position
+					case *ast.StringLiteral:
+						argPos = v.Position
+					default:
+						argPos = e.Position
+					}
+				} else {
+					argPos = e.Position
+				}
+			} else {
+				argPos = e.Position
+			}
+			
+			// Get function name for error message
+			var funcName string
+			if ident, ok := e.Function.(*ast.Identifier); ok {
+				funcName = ident.Name
+			} else {
+				funcName = "function"
+			}
+			
+			// Use default position if argument position is nil
+			if argPos == nil {
+				argPos = e.Position
+			}
+			
+			return nil, fmt.Errorf("line %d:%d: %w - pattern matching required: function '%s' expecting '%c'",
+				argPos.Line, argPos.Column, ErrAnyTypeMismatch, funcName, 'a'+i)
+		}
+	}
+
 	// Create expected function type
 	resultType := ti.Fresh()
 	expectedFuncType := &FunctionType{
