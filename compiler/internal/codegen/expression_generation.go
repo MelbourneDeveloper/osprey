@@ -871,20 +871,24 @@ func (g *LLVMGenerator) generateRecordFieldAccess(
 			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
 	}
 
-	// Find the field index by iterating through the record type fields in sorted order
-	// The order should match the ObjectLiteral field iteration order
-	fieldNames := make([]string, 0, len(recordType.fields))
-	for fieldName := range recordType.fields {
-		fieldNames = append(fieldNames, fieldName)
-	}
-	sort.Strings(fieldNames)
-
+	// Find the field index using the original type declaration order
 	fieldIndex := -1
-	for i, fieldName := range fieldNames {
-		if fieldName == fieldAccess.FieldName {
-			fieldIndex = i
-			break
+	
+	// Get the type name from the record type
+	typeName := recordType.name
+	if typeDecl, exists := g.typeDeclarations[typeName]; exists && len(typeDecl.Variants) > 0 {
+		// For record types, use the first (and only) variant
+		variant := &typeDecl.Variants[0]
+		for i, field := range variant.Fields {
+			if field.Name == fieldAccess.FieldName {
+				fieldIndex = i
+				break
+			}
 		}
+	} else {
+		// Fallback: if we can't find the type declaration, return an error
+		return nil, fmt.Errorf("line %d:%d: cannot find type declaration for record type '%s'", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, typeName)
 	}
 
 	if fieldIndex == -1 || fieldIndex >= len(structType.Fields) {
@@ -1049,59 +1053,56 @@ func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 	
 	variant := &typeDecl.Variants[0] // Record types have one variant
 	
-	// Create lists for field types and values, maintaining sorted order for consistency
+	// Create lists for field types and values, maintaining declaration order
 	var fieldTypes []types.Type
 	var fieldValues []value.Value
 	
-	// Sort field names to ensure consistent ordering
-	fieldNames := make([]string, 0, len(variant.Fields))
+	// Process fields in declaration order (not sorted)
 	for _, field := range variant.Fields {
-		fieldNames = append(fieldNames, field.Name)
-	}
-	sort.Strings(fieldNames)
-	
-	// Process fields in sorted order
-	for _, fieldName := range fieldNames {
+		fieldName := field.Name
 		// Find the field value in the constructor
 		fieldExpr, exists := typeConstructor.Fields[fieldName]
 		if !exists {
 			return nil, WrapMissingField(fieldName)
 		}
 		
-		// Generate the field value
+		// Use the declared field type from the type declaration
+		declaredFieldTypeName := field.Type
+		
+		// Convert declared type name to LLVM type
+		var declaredLLVMType types.Type
+		switch declaredFieldTypeName {
+		case TypeInt:
+			declaredLLVMType = types.I64
+		case TypeString:
+			declaredLLVMType = types.I8Ptr
+		case TypeBool:
+			declaredLLVMType = types.I1
+		default:
+			// For complex types, we'll determine after generation
+			declaredLLVMType = nil
+		}
+		
+		// Set expected type context for proper literal generation
+		oldExpectedType := g.expectedReturnType
+		g.expectedReturnType = declaredLLVMType
+		
+		// Generate the field value with the expected type context
 		fieldValue, err := g.generateExpression(fieldExpr)
 		if err != nil {
+			g.expectedReturnType = oldExpectedType
 			return nil, err
 		}
 		
+		// Restore previous expected type
+		g.expectedReturnType = oldExpectedType
+		
 		fieldValues = append(fieldValues, fieldValue)
 		
-		// Use the declared field type from the type declaration, not the inferred value type
-		var declaredFieldTypeName string
-		for _, field := range variant.Fields {
-			if field.Name == fieldName {
-				declaredFieldTypeName = field.Type
-				break
-			}
-		}
-		
-		if declaredFieldTypeName != "" {
-			// Convert declared type name to LLVM type
-			var declaredLLVMType types.Type
-			switch declaredFieldTypeName {
-			case TypeInt:
-				declaredLLVMType = types.I64
-			case TypeString:
-				declaredLLVMType = types.I8Ptr
-			case TypeBool:
-				declaredLLVMType = types.I1
-			default:
-				// Fallback to inferred type for unknown types
-				declaredLLVMType = fieldValue.Type()
-			}
+		// Use declared type if known, otherwise use inferred type
+		if declaredLLVMType != nil {
 			fieldTypes = append(fieldTypes, declaredLLVMType)
 		} else {
-			// Fallback to inferred type if no declaration found
 			fieldTypes = append(fieldTypes, fieldValue.Type())
 		}
 	}

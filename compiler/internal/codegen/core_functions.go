@@ -524,3 +524,4 @@ func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (val
 
 	return result, nil
 }
+
