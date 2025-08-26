@@ -18,7 +18,6 @@ func (g *LLVMGenerator) generateHandlerExpression(handler *ast.HandlerExpression
 	if g.effectCodegen == nil {
 		g.InitializeEffects()
 	}
-
 	return g.effectCodegen.GenerateHandlerExpression(handler)
 }
 
