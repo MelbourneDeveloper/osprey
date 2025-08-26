@@ -302,6 +302,7 @@ func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes [
 
 			// Use the declared return type from the function declaration if available
 			fnDecl, exists := g.functionDeclarations[funcName]
+
 			var concreteReturnType Type
 			if exists && fnDecl.ReturnType != nil {
 				// Use the declared return type for functions with explicit return type annotations
@@ -309,6 +310,7 @@ func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes [
 			} else {
 				// Re-infer the return type with concrete parameter types for accurate monomorphization
 				var err error
+
 				concreteReturnType, err = g.reInferReturnType(funcName, argTypes)
 				if err != nil {
 					// Fallback to original return type if re-inference fails

@@ -673,29 +673,21 @@ func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.Fun
 
 // wrapInMathResult wraps a plain int value in a Result<int, MathError> structure
 func (g *LLVMGenerator) wrapInMathResult(intValue value.Value) value.Value {
-	// Create Result<int, MathError> structure by value instead of allocating on stack
+	// Create Result<int, MathError> structure by value
 	resultType := g.getResultType(types.I64)
-	result := g.builder.NewAlloca(resultType)
+	
+	// Use InsertValue to build the struct value directly
+	undefStruct := constant.NewUndef(resultType)
+	resultWithValue := g.builder.NewInsertValue(undefStruct, intValue, 0)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
 
-	// Store the int value in the success field
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(intValue, valuePtr)
-
-	// Store success discriminant (0 = Success)
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-
-	// Load and return the struct by value
-	return g.builder.NewLoad(resultType, result)
+	return resultComplete
 }
 
 // wrapInBoolResult wraps a plain bool value in a Result<bool, MathError> structure
 func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
 	// Create Result<bool, MathError> structure (using i1 as the value type for booleans)
 	resultType := g.getResultType(types.I1)
-	result := g.builder.NewAlloca(resultType)
 
 	// Ensure we store the correct type - if value is i64, convert to i1
 	var valueToStore value.Value
@@ -706,18 +698,12 @@ func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
 		valueToStore = boolValue
 	}
 
-	// Store the bool value in the success field
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(valueToStore, valuePtr)
+	// Use InsertValue to build the struct value directly
+	undefStruct := constant.NewUndef(resultType)
+	resultWithValue := g.builder.NewInsertValue(undefStruct, valueToStore, 0)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
 
-	// Store success discriminant (0 = Success)
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-
-	// Load and return the struct by value
-	return g.builder.NewLoad(resultType, result)
+	return resultComplete
 }
 
 // canImplicitlyConvert checks if we can implicitly convert from one type to another

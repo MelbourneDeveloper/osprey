@@ -1024,13 +1024,37 @@ func (g *LLVMGenerator) generateConstrainedRecordConstructor(
 		}
 
 		// Call the validation function with the struct
-		_ = g.builder.NewCall(validationFunc, structValue)
+		validationResult := g.builder.NewCall(validationFunc, structValue)
 
-		// Check validation result and decide what to return
-		// For now, we'll return the struct itself regardless of validation
-		// TODO: This should return a Result<T, ConstraintError> type in the future
-		// For now, just return the struct to maintain type consistency
-		return structValue, nil
+		// The validation function returns a bool (true for valid, false for invalid)
+		// Convert to integer: 1 for success (valid), -1 for failure (invalid)
+		// Generate unique block names to avoid conflicts with multiple constraint validations
+		blockSuffix := fmt.Sprintf("_%p", typeConstructor)
+		validBlock := g.function.NewBlock("valid" + blockSuffix)
+		invalidBlock := g.function.NewBlock("invalid" + blockSuffix)
+		mergeBlock := g.function.NewBlock("merge" + blockSuffix)
+
+		// Branch based on validation result
+		g.builder.NewCondBr(validationResult, validBlock, invalidBlock)
+
+		// Valid case: return 1
+		g.builder = validBlock
+		successValue := constant.NewInt(types.I64, 1)
+		g.builder.NewBr(mergeBlock)
+
+		// Invalid case: return -1
+		g.builder = invalidBlock
+		failureValue := constant.NewInt(types.I64, -1)
+		g.builder.NewBr(mergeBlock)
+
+		// Merge point - use PHI to select the result
+		g.builder = mergeBlock
+		phi := g.builder.NewPhi(
+			ir.NewIncoming(successValue, validBlock),
+			ir.NewIncoming(failureValue, invalidBlock),
+		)
+		
+		return phi, nil
 	}
 
 	// No validation function - just return the struct
@@ -1811,20 +1835,13 @@ func (g *LLVMGenerator) generateSuccessConstructor(
 	valueType := value.Type()
 	resultStructType := types.NewStruct(valueType, types.I8) // [value, discriminant]
 
-	// Create the result struct
-	result := g.builder.NewAlloca(resultStructType)
+	// Create the result struct as a value (not pointer)
+	// Use InsertValue to build the struct value directly
+	undefStruct := constant.NewUndef(resultStructType)
+	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
 
-	// Store the success value
-	valuePtr := g.builder.NewGetElementPtr(resultStructType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(value, valuePtr)
-
-	// Store discriminant = 0 for success
-	discriminantPtr := g.builder.NewGetElementPtr(resultStructType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-
-	return result, nil
+	return resultComplete, nil
 }
 
 // generateErrorConstructor generates LLVM IR for Error { message: E } constructor.
@@ -1851,20 +1868,13 @@ func (g *LLVMGenerator) generateErrorConstructor(
 	messageType := message.Type()
 	resultStructType := types.NewStruct(messageType, types.I8) // [error_message, discriminant]
 
-	// Create the result struct
-	result := g.builder.NewAlloca(resultStructType)
+	// Create the result struct as a value (not pointer)
+	// Use InsertValue to build the struct value directly
+	undefStruct := constant.NewUndef(resultStructType)
+	resultWithMessage := g.builder.NewInsertValue(undefStruct, message, 0)
+	resultComplete := g.builder.NewInsertValue(resultWithMessage, constant.NewInt(types.I8, 1), 1)
 
-	// Store the error message in the first field
-	messagePtr := g.builder.NewGetElementPtr(resultStructType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(message, messagePtr)
-
-	// Store discriminant = 1 for error
-	discriminantPtr := g.builder.NewGetElementPtr(resultStructType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 1), discriminantPtr)
-
-	return result, nil
+	return resultComplete, nil
 }
 
 // generateResultFieldAccessAsMatch converts Result field access to pattern matching

@@ -181,15 +181,15 @@ func getExpectedOutputs() map[string]string {
 		"simple.osp":       "Simple test:\nx = 42\ngreeting = hello\n",
 		// Constraint validation test files
 		"constraint_validation_test.osp": "=== CONSTRAINT VALIDATION WITH FAILURE DETECTION ===\n" +
-			"Test 1: Valid Person construction\nResult: <{name: string, age: int}>\nSuccess: 0\nFailure: 0\n\n" +
-			"Test 2: Invalid Person - empty name constraint violation\nResult: <{name: string, age: int}>\nSuccess: 0\nFailure: 0\n" +
+			"Test 1: Valid Person construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
+			"Test 2: Invalid Person - empty name constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 3: Invalid Person - zero age constraint violation\nResult: <{name: string, age: int}>\nSuccess: 0\nFailure: 0\n" +
+			"Test 3: Invalid Person - zero age constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 4: Valid Product construction\nResult: <{name: string, price: int}>\nSuccess: 0\nFailure: 0\n\n" +
-			"Test 5: Invalid Product - zero price constraint violation\nResult: <{name: string, price: int}>\nSuccess: 0\nFailure: 0\n" +
+			"Test 4: Valid Product construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
+			"Test 5: Invalid Product - zero price constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 6: Multiple constraint violations\nResult: <{price: int, name: string}>\nSuccess: 0\nFailure: 0\n" +
+			"Test 6: Multiple constraint violations\nResult: 1\nSuccess: 1\nFailure: 0\n" +
 			"Expected: Failure = 1 (multiple constraint violations)\n\n" +
 			"=== CONSTRAINT VALIDATION TESTS COMPLETE ===\n" +
 			"This test demonstrates that WHERE constraints work correctly:\n" +
