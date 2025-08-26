@@ -181,15 +181,15 @@ func getExpectedOutputs() map[string]string {
 		"simple.osp":       "Simple test:\nx = 42\ngreeting = hello\n",
 		// Constraint validation test files
 		"constraint_validation_test.osp": "=== CONSTRAINT VALIDATION WITH FAILURE DETECTION ===\n" +
-			"Test 1: Valid Person construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
-			"Test 2: Invalid Person - empty name constraint violation\nResult: -1\nSuccess: 0\nFailure: 1\n" +
+			"Test 1: Valid Person construction\nResult: <{name: string, age: int}>\nSuccess: 0\nFailure: 0\n\n" +
+			"Test 2: Invalid Person - empty name constraint violation\nResult: <{name: string, age: int}>\nSuccess: 0\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 3: Invalid Person - zero age constraint violation\nResult: -1\nSuccess: 0\nFailure: 1\n" +
+			"Test 3: Invalid Person - zero age constraint violation\nResult: <{name: string, age: int}>\nSuccess: 0\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 4: Valid Product construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
-			"Test 5: Invalid Product - zero price constraint violation\nResult: -1\nSuccess: 0\nFailure: 1\n" +
+			"Test 4: Valid Product construction\nResult: <{name: string, price: int}>\nSuccess: 0\nFailure: 0\n\n" +
+			"Test 5: Invalid Product - zero price constraint violation\nResult: <{name: string, price: int}>\nSuccess: 0\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 6: Multiple constraint violations\nResult: -1\nSuccess: 0\nFailure: 1\n" +
+			"Test 6: Multiple constraint violations\nResult: <{price: int, name: string}>\nSuccess: 0\nFailure: 0\n" +
 			"Expected: Failure = 1 (multiple constraint violations)\n\n" +
 			"=== CONSTRAINT VALIDATION TESTS COMPLETE ===\n" +
 			"This test demonstrates that WHERE constraints work correctly:\n" +
@@ -313,8 +313,8 @@ func getExpectedOutputs() map[string]string {
 			"=== Test Complete ===\n",
 		"result_type_workflow.osp": "=== Result Type Workflow Test ===\n\n" +
 			"Length: \n5\n\n\n" +
-			"Contains 'ell': \n1\n\n\n" +
-			"Contains 'xyz': \n0\n\n\n",
+			"Contains 'ell': \ntrue\n\n\n" +
+			"Contains 'xyz': \nfalse\n\n\n",
 		"file_io_json_workflow.osp": "=== File I/O Workflow Test ===\n" +
 			"-- Step 1: Writing to file --\n" +
 			"File written successfully!\n" +
@@ -322,7 +322,7 @@ func getExpectedOutputs() map[string]string {
 			"Read successful!\n" +
 			"=== Test Complete ===\n",
 		"string_utils_combined.osp": "=== String Utils Test ===\n\nOriginal: \\\nhello world\n\"\n\n" +
-			"Length: \n11\n\n\nContains 'world': \n1\n\n\nContains 'galaxy': \n0\n\n\n" +
+			"Length: \n11\n\n\nContains 'world': \ntrue\n\n\nContains 'galaxy': \nfalse\n\n\n" +
 			"Substring(6, 11): \\\nworld\n\"\n\nSubstring(0, 20): \\\nhello world\n\"\n\n" +
 			"=== Test Complete ===\n\n",
 		"list_and_process.osp": "=== Array Access Test ===\n\nCreated array with 3 commands\n\n" +
