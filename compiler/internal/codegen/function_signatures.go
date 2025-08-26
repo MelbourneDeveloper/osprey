@@ -438,7 +438,8 @@ func (g *LLVMGenerator) setupFunctionEnvironment(
 // determineReturnType gets the return type from annotation or creates fresh type variable
 func (g *LLVMGenerator) determineReturnType(fnDecl *ast.FunctionDeclaration) Type {
 	if fnDecl.ReturnType != nil {
-		return &ConcreteType{name: fnDecl.ReturnType.Name}
+		// Use proper type conversion to handle generic types like Result<int, MathError>
+		return g.typeExpressionToInferenceType(fnDecl.ReturnType)
 	}
 
 	return g.typeInferer.Fresh()
@@ -645,6 +646,12 @@ func (g *LLVMGenerator) generateReturnInstruction(
 func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.FunctionDeclaration) value.Value {
 	// Check if function declares a Result return type
 	if fnDecl.ReturnType != nil && fnDecl.ReturnType.Name == TypeResult && len(fnDecl.ReturnType.GenericParams) >= 2 {
+		// Check if bodyValue is already a Result struct type
+		if _, isStruct := bodyValue.Type().(*types.StructType); isStruct {
+			// Already a Result struct, no wrapping needed
+			return bodyValue
+		}
+		
 		successType := fnDecl.ReturnType.GenericParams[0].Name
 		errorType := fnDecl.ReturnType.GenericParams[1].Name
 
