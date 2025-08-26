@@ -321,7 +321,8 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 
 // generateInputCall handles input function calls.
 func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if err := validateBuiltInArgs(InputFunc, callExpr); err != nil {
+	err := validateBuiltInArgs(InputFunc, callExpr)
+	if err != nil {
 		return nil, err
 	}
 

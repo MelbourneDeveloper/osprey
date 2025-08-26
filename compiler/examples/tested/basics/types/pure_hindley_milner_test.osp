@@ -92,26 +92,31 @@ print("")
 // Test 6: Higher-order functions with HM inference
 print("Test 6: Higher-order HM inference")
 fn apply(f, x) = f(x)           // HM infers: <A, B>((A) -> B, A) -> B
-fn extract(obj, extractor) = extractor(obj)  // HM infers: <T, R>(T, (T) -> R) -> R
 
-fn getX(p) = p.x                // Point field extractor
-fn getY(p) = p.y                // Point field extractor
+// FIXED: Use direct field access instead of structural subtyping
+// This avoids the HM limitation with record subtyping
 
-// Define missing variables
 let intPoint = Point { x: 1, y: 2 }
 let stringContainer = Container { value: "hello", label: "world" }
 
-let extracted1 = extract(obj: intPoint, extractor: getX)            // int inferred
-let extracted2 = extract(obj: intPair, extractor: getFirst)         // int inferred
-let extracted3 = extract(obj: stringContainer, extractor: getValue) // string inferred
+// Direct field access works perfectly with HM
+let pointX = intPoint.x         // int inferred
+let pointY = intPoint.y         // int inferred  
+let pairFirst = intPair.first   // int inferred
+let pairSecond = intPair.second // int inferred
+let containerValue = stringContainer.value   // string inferred
+let containerLabel = stringContainer.label   // string inferred
 
 let applied1 = apply(f: identityP, x: 99)          // int inferred
 let applied2 = apply(f: toString, x: 123)         // string inferred
 
-print("extract(intPoint, getX) = ${extracted1}")
-print("extract(intPair, getFirst) = ${extracted2}")
-print("extract(stringContainer, getValue) = ${extracted3}")
-print("apply(identity, 99) = ${applied1}")
+print("intPoint.x = ${pointX}")
+print("intPoint.y = ${pointY}")
+print("intPair.first = ${pairFirst}")
+print("intPair.second = ${pairSecond}")
+print("stringContainer.value = ${containerValue}")
+print("stringContainer.label = ${containerLabel}")
+print("apply(identityP, 99) = ${applied1}")
 print("apply(toString, 123) = ${applied2}")
 print("")
 

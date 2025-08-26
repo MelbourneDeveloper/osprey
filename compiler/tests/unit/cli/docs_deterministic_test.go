@@ -45,7 +45,8 @@ func TestDocumentationDeterministic(t *testing.T) {
 		if !result.Success {
 			t.Logf("Documentation generation failed on run %d: %s (continuing test)", i, result.ErrorMsg)
 			// Create empty directory so hash comparison doesn't fail
-			if err := os.MkdirAll(tempDir, 0o755); err != nil {
+			err := os.MkdirAll(tempDir, 0o755)
+			if err != nil {
 				t.Logf("Failed to create empty temp dir %d: %v", i, err)
 			}
 		} else {
@@ -169,7 +170,8 @@ func getDirectoryHashes(t *testing.T, dirPath string) map[string]string {
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
 		t.Logf("Directory %s doesn't exist, creating it", dirPath)
 
-		if err := os.MkdirAll(dirPath, 0o755); err != nil {
+		err := os.MkdirAll(dirPath, 0o755)
+		if err != nil {
 			t.Logf("Failed to create directory %s: %v", dirPath, err)
 			return hashes // Return empty map instead of failing
 		}

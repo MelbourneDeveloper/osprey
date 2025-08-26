@@ -15,13 +15,15 @@ const (
 // validateMatchExpression validates match expressions for exhaustiveness and unknown variants.
 func (g *LLVMGenerator) validateMatchExpression(expr *ast.MatchExpression) error {
 	for _, arm := range expr.Arms {
-		if err := g.validateMatchArmWithPosition(arm, expr.Position); err != nil {
+		err := g.validateMatchArmWithPosition(arm, expr.Position)
+		if err != nil {
 			return err
 		}
 	}
 
 	// Check for exhaustiveness
-	if err := g.validateMatchExhaustiveness(expr); err != nil {
+	err := g.validateMatchExhaustiveness(expr)
+	if err != nil {
 		return err
 	}
 

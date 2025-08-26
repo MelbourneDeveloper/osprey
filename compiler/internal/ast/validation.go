@@ -23,7 +23,8 @@ func (e *ValidationError) Error() string {
 // ValidateProgram validates the entire program AST and returns any validation errors.
 func ValidateProgram(program *Program) error {
 	for _, stmt := range program.Statements {
-		if err := validateStatement(stmt); err != nil {
+		err := validateStatement(stmt)
+		if err != nil {
 			return err
 		}
 	}
@@ -45,7 +46,7 @@ func validateStatement(stmt Statement) error {
 func validateFunctionDeclaration(fn *FunctionDeclaration) error {
 	// With Hindley-Milner type inference, we trust the type system to handle inference
 	// Only validate basic language constraints, not type inference capabilities
-	
+
 	// Check for built-in function redefinition
 	builtinFunctions := []string{"toString", "print", "length", "readFile"}
 	for _, builtin := range builtinFunctions {

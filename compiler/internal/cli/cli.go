@@ -52,6 +52,7 @@ type CommandResult struct {
 // VexErrorListener handles parsing errors for the Osprey compiler.
 type VexErrorListener struct {
 	*antlr.DefaultErrorListener
+
 	HasErrors bool
 }
 
@@ -224,7 +225,8 @@ func runCompileToExecutable(source, filename string) CommandResult {
 	sourceDir := filepath.Dir(filename)
 
 	outputsDir := filepath.Join(sourceDir, "outputs")
-	if err := os.MkdirAll(outputsDir, dirPerms); err != nil {
+	err := os.MkdirAll(outputsDir, dirPerms)
+	if err != nil {
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Failed to create outputs directory: %v", err),
@@ -233,7 +235,8 @@ func runCompileToExecutable(source, filename string) CommandResult {
 
 	outputName := filepath.Join(outputsDir, baseName)
 
-	if err := codegen.CompileToExecutable(source, outputName); err != nil {
+	err = codegen.CompileToExecutable(source, outputName)
+	if err != nil {
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Compilation failed: %v", err),
@@ -487,27 +490,33 @@ func runGetHoverDocumentation(elementName string) CommandResult {
 }
 
 func generateAPIDocumentationFiles(docsDir string) error {
-	if err := os.MkdirAll(docsDir, dirPermissions); err != nil {
+	err := os.MkdirAll(docsDir, dirPermissions)
+	if err != nil {
 		return fmt.Errorf("failed to create docs directory: %w", err)
 	}
 
-	if err := generateFunctionDocs(docsDir); err != nil {
+	err = generateFunctionDocs(docsDir)
+	if err != nil {
 		return fmt.Errorf("failed to generate function docs: %w", err)
 	}
 
-	if err := generateTypeDocs(docsDir); err != nil {
+	err = generateTypeDocs(docsDir)
+	if err != nil {
 		return fmt.Errorf("failed to generate type docs: %w", err)
 	}
 
-	if err := generateOperatorDocs(docsDir); err != nil {
+	err = generateOperatorDocs(docsDir)
+	if err != nil {
 		return fmt.Errorf("failed to generate operator docs: %w", err)
 	}
 
-	if err := generateKeywordDocs(docsDir); err != nil {
+	err = generateKeywordDocs(docsDir)
+	if err != nil {
 		return fmt.Errorf("failed to generate keyword docs: %w", err)
 	}
 
-	if err := generateIndexFiles(docsDir); err != nil {
+	err = generateIndexFiles(docsDir)
+	if err != nil {
 		return fmt.Errorf("failed to generate index files: %w", err)
 	}
 
@@ -516,7 +525,8 @@ func generateAPIDocumentationFiles(docsDir string) error {
 
 func generateFunctionDocs(docsDir string) error {
 	functionsDir := filepath.Join(docsDir, "functions")
-	if err := os.MkdirAll(functionsDir, dirPermissions); err != nil {
+	err := os.MkdirAll(functionsDir, dirPermissions)
+	if err != nil {
 		return err
 	}
 
@@ -535,7 +545,8 @@ func generateFunctionDocs(docsDir string) error {
 		content := generateFunctionMarkdown(doc)
 
 		filename := filepath.Join(functionsDir, strings.ToLower(name)+".md")
-		if err := os.WriteFile(filename, []byte(content), filePermissions); err != nil {
+		err := os.WriteFile(filename, []byte(content), filePermissions)
+		if err != nil {
 			return fmt.Errorf("failed to write function doc %s: %w", name, err)
 		}
 	}
@@ -545,7 +556,8 @@ func generateFunctionDocs(docsDir string) error {
 
 func generateTypeDocs(docsDir string) error {
 	typesDir := filepath.Join(docsDir, "types")
-	if err := os.MkdirAll(typesDir, dirPermissions); err != nil {
+	err := os.MkdirAll(typesDir, dirPermissions)
+	if err != nil {
 		return err
 	}
 
@@ -564,7 +576,8 @@ func generateTypeDocs(docsDir string) error {
 		content := generateTypeMarkdown(doc)
 
 		filename := filepath.Join(typesDir, strings.ToLower(name)+".md")
-		if err := os.WriteFile(filename, []byte(content), filePermissions); err != nil {
+		err := os.WriteFile(filename, []byte(content), filePermissions)
+		if err != nil {
 			return fmt.Errorf("failed to write type doc %s: %w", name, err)
 		}
 	}
@@ -574,7 +587,8 @@ func generateTypeDocs(docsDir string) error {
 
 func generateOperatorDocs(docsDir string) error {
 	operatorsDir := filepath.Join(docsDir, "operators")
-	if err := os.MkdirAll(operatorsDir, dirPermissions); err != nil {
+	err := os.MkdirAll(operatorsDir, dirPermissions)
+	if err != nil {
 		return err
 	}
 
@@ -594,7 +608,8 @@ func generateOperatorDocs(docsDir string) error {
 		safeFilename := getOperatorFilename(symbol)
 		filename := filepath.Join(operatorsDir, safeFilename+".md")
 
-		if err := os.WriteFile(filename, []byte(content), filePermissions); err != nil {
+		err := os.WriteFile(filename, []byte(content), filePermissions)
+		if err != nil {
 			return fmt.Errorf("failed to write operator doc %s: %w", symbol, err)
 		}
 	}
@@ -604,7 +619,8 @@ func generateOperatorDocs(docsDir string) error {
 
 func generateKeywordDocs(docsDir string) error {
 	keywordsDir := filepath.Join(docsDir, "keywords")
-	if err := os.MkdirAll(keywordsDir, dirPermissions); err != nil {
+	err := os.MkdirAll(keywordsDir, dirPermissions)
+	if err != nil {
 		return err
 	}
 
@@ -623,7 +639,8 @@ func generateKeywordDocs(docsDir string) error {
 		content := generateKeywordMarkdown(doc)
 
 		filename := filepath.Join(keywordsDir, strings.ToLower(name)+".md")
-		if err := os.WriteFile(filename, []byte(content), filePermissions); err != nil {
+		err := os.WriteFile(filename, []byte(content), filePermissions)
+		if err != nil {
 			return fmt.Errorf("failed to write keyword doc %s: %w", name, err)
 		}
 	}
@@ -632,23 +649,28 @@ func generateKeywordDocs(docsDir string) error {
 }
 
 func generateIndexFiles(docsDir string) error {
-	if err := generateMainIndex(docsDir); err != nil {
+	err := generateMainIndex(docsDir)
+	if err != nil {
 		return err
 	}
 
-	if err := generateFunctionIndex(docsDir); err != nil {
+	err = generateFunctionIndex(docsDir)
+	if err != nil {
 		return err
 	}
 
-	if err := generateTypeIndex(docsDir); err != nil {
+	err = generateTypeIndex(docsDir)
+	if err != nil {
 		return err
 	}
 
-	if err := generateOperatorIndex(docsDir); err != nil {
+	err = generateOperatorIndex(docsDir)
+	if err != nil {
 		return err
 	}
 
-	if err := generateKeywordIndex(docsDir); err != nil {
+	err = generateKeywordIndex(docsDir)
+	if err != nil {
 		return err
 	}
 
@@ -1048,7 +1070,8 @@ func runCompileToExecutableWithSecurity(source, filename string, security *Secur
 	sourceDir := filepath.Dir(filename)
 
 	outputsDir := filepath.Join(sourceDir, "outputs")
-	if err := os.MkdirAll(outputsDir, dirPerms); err != nil {
+	err := os.MkdirAll(outputsDir, dirPerms)
+	if err != nil {
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Failed to create outputs directory: %v", err),
@@ -1060,7 +1083,8 @@ func runCompileToExecutableWithSecurity(source, filename string, security *Secur
 	// Convert CLI security config to codegen security config
 	codegenSecurity := convertToCodegenSecurity(security)
 
-	if err := codegen.CompileToExecutableWithSecurity(source, outputName, codegenSecurity); err != nil {
+	err = codegen.CompileToExecutableWithSecurity(source, outputName, codegenSecurity)
+	if err != nil {
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Compilation failed: %v", err),

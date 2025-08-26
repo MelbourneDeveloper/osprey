@@ -88,6 +88,7 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 // ParseErrorListener collects parse errors instead of panicking.
 type ParseErrorListener struct {
 	antlr.DefaultErrorListener
+
 	Errors []string
 }
 

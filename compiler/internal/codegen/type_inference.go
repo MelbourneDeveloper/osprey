@@ -489,7 +489,8 @@ func (ti *TypeInferer) Unify(t1, t2 Type) error {
 	t2 = ti.prune(t2)
 
 	// Handle type variables
-	if err := ti.unifyTypeVariables(t1, t2); !errors.Is(err, ErrNotTypeVariable) {
+	err := ti.unifyTypeVariables(t1, t2)
+	if !errors.Is(err, ErrNotTypeVariable) {
 		return err
 	}
 
@@ -914,7 +915,8 @@ func (ti *TypeInferer) unifyGenericTypes(t1, t2 Type) error {
 
 	// All type arguments must unify
 	for i, arg1 := range gt1.typeArgs {
-		if err := ti.Unify(arg1, gt2.typeArgs[i]); err != nil {
+		err := ti.Unify(arg1, gt2.typeArgs[i])
+		if err != nil {
 			return err
 		}
 	}
@@ -936,22 +938,23 @@ func (ti *TypeInferer) unifyRecordTypes(t1, t2 Type) error {
 
 	// HINDLEY-MILNER FIX: Structural equivalence based on field names ONLY
 	// Record type names are irrelevant - only field structure matters
-	
+
 	// Check if rt1 is a structural subset of rt2 (rt1 has fields that rt2 must have)
 	// This allows polymorphic field access: getX(p) works with any record having field 'x'
 	for fieldName, fieldType1 := range rt1.fields {
 		if fieldType2, exists := rt2.fields[fieldName]; exists {
 			// Field exists in both records - unify their types
-			if err := ti.Unify(fieldType1, fieldType2); err != nil {
+			err := ti.Unify(fieldType1, fieldType2)
+			if err != nil {
 				return fmt.Errorf("field %s type unification failed: %w", fieldName, err)
 			}
 		} else {
 			// rt1 requires a field that rt2 doesn't have - not compatible
-			return fmt.Errorf("%w: field %s required by %s not found in %s", 
+			return fmt.Errorf("%w: field %s required by %s not found in %s",
 				ErrTypeMismatch, fieldName, rt1.name, rt2.name)
 		}
 	}
-	
+
 	// Also check if rt2 has fields that rt1 doesn't have (bidirectional check for full structural equivalence)
 	for fieldName, fieldType2 := range rt2.fields {
 		if _, exists := rt1.fields[fieldName]; exists {
@@ -992,7 +995,8 @@ func (ti *TypeInferer) unifyUnionTypes(t1, t2 Type) error {
 
 	// All variants must unify
 	for i, variant1 := range ut1.variants {
-		if err := ti.Unify(variant1, ut2.variants[i]); err != nil {
+		err := ti.Unify(variant1, ut2.variants[i])
+		if err != nil {
 			return err
 		}
 	}
@@ -1017,12 +1021,14 @@ func (ti *TypeInferer) unifyFunctionTypes(t1, t2 Type) error {
 	}
 
 	for i, p1 := range ft1.paramTypes {
-		if err := ti.Unify(p1, ft2.paramTypes[i]); err != nil {
+		err := ti.Unify(p1, ft2.paramTypes[i])
+		if err != nil {
 			return fmt.Errorf("parameter %d unification failed: %s vs %s: %w", i, p1.String(), ft2.paramTypes[i].String(), err)
 		}
 	}
 
-	if err := ti.Unify(ft1.returnType, ft2.returnType); err != nil {
+	err := ti.Unify(ft1.returnType, ft2.returnType)
+	if err != nil {
 		return fmt.Errorf("return type unification failed: %s vs %s: %w",
 			ft1.returnType.String(), ft2.returnType.String(), err)
 	}
@@ -1143,11 +1149,12 @@ func (ti *TypeInferer) applySubstWithVisited(t Type, subst Substitution, visited
 		if visited[t.id] {
 			return t // Return original type if we've seen it before (cycle detected)
 		}
-		
+
 		if newType, exists := subst[t.id]; exists {
 			visited[t.id] = true
 			result := ti.applySubstWithVisited(newType, subst, visited)
 			delete(visited, t.id) // Clean up for other branches
+
 			return result
 		}
 
@@ -1182,6 +1189,7 @@ func (ti *TypeInferer) applySubstWithVisited(t Type, subst Substitution, visited
 		for fieldName, fieldType := range t.fields {
 			newFields[fieldName] = ti.applySubstWithVisited(fieldType, subst, visited)
 		}
+
 		return &RecordType{
 			name:   t.name,
 			fields: newFields,
@@ -1221,6 +1229,7 @@ func (ti *TypeInferer) getFreeVars(t Type) []int {
 		for _, fieldType := range t.fields {
 			vars = append(vars, ti.getFreeVars(fieldType)...)
 		}
+
 		return uniqueInts(vars)
 	default:
 		return []int{}
@@ -1302,7 +1311,8 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 		argCount := len(e.Arguments) + len(e.NamedArguments)
 
 		// Validate built-in function argument counts
-		if err := ti.validateBuiltInFunctionArgs(ident.Name, argCount, e.Position); err != nil {
+		err := ti.validateBuiltInFunctionArgs(ident.Name, argCount, e.Position)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -1408,7 +1418,7 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 	// This ensures that type variables are resolved before attempting unification
 	substitutedFuncType := ti.applySubst(funcType, ti.subst)
 	substitutedExpectedType := ti.applySubst(expectedFuncType, ti.subst)
-	
+
 	// Unify with actual function type after applying substitutions
 	if err := ti.Unify(substitutedFuncType, substitutedExpectedType); err != nil {
 		return nil, fmt.Errorf("function call type mismatch: actual=%s, expected=%s: %w",
@@ -1542,11 +1552,13 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 		intType := &ConcreteType{name: TypeInt}
 
 		// Both operands must be Int
-		if err := ti.Unify(leftType, intType); err != nil {
+		err := ti.Unify(leftType, intType)
+		if err != nil {
 			return nil, fmt.Errorf("left operand of %s must be Int: %w", e.Operator, err)
 		}
 
-		if err := ti.Unify(rightType, intType); err != nil {
+		err = ti.Unify(rightType, intType)
+		if err != nil {
 			return nil, fmt.Errorf("right operand of %s must be Int: %w", e.Operator, err)
 		}
 
@@ -1555,7 +1567,8 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 
 	case isComparisonOp(e.Operator):
 		// Comparison operations require operands of same type and return Bool
-		if err := ti.Unify(leftType, rightType); err != nil {
+		err := ti.Unify(leftType, rightType)
+		if err != nil {
 			return nil, fmt.Errorf("comparison operands must have same type: %w", err)
 		}
 
@@ -1564,11 +1577,13 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 	case isLogicalOp(e.Operator):
 		// Logical operations require Bool operands and return Bool
 		boolType := &ConcreteType{name: TypeBool}
-		if err := ti.Unify(leftType, boolType); err != nil {
+		err := ti.Unify(leftType, boolType)
+		if err != nil {
 			return nil, fmt.Errorf("left operand of %s must be Bool: %w", e.Operator, err)
 		}
 
-		if err := ti.Unify(rightType, boolType); err != nil {
+		err = ti.Unify(rightType, boolType)
+		if err != nil {
 			return nil, fmt.Errorf("right operand of %s must be Bool: %w", e.Operator, err)
 		}
 
@@ -1604,8 +1619,10 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 	// Try string concatenation first if one operand is clearly a string
 	if ti.isStringType(leftResolved) || ti.isStringType(rightResolved) {
 		stringType := &ConcreteType{name: TypeString}
-		if err := ti.Unify(leftType, stringType); err == nil {
-			if err := ti.Unify(rightType, stringType); err == nil {
+		err := ti.Unify(leftType, stringType)
+		if err == nil {
+			err := ti.Unify(rightType, stringType)
+			if err == nil {
 				return stringType, nil
 			}
 		}
@@ -1614,8 +1631,10 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 	// Try integer addition if one operand is clearly an integer
 	if ti.isIntType(leftResolved) || ti.isIntType(rightResolved) {
 		intType := &ConcreteType{name: TypeInt}
-		if err := ti.Unify(leftType, intType); err == nil {
-			if err := ti.Unify(rightType, intType); err == nil {
+		err := ti.Unify(leftType, intType)
+		if err == nil {
+			err := ti.Unify(rightType, intType)
+			if err == nil {
 				//TODO: we need other number types like float.
 				return intType, nil
 			}
@@ -1625,10 +1644,11 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 	// HINDLEY-MILNER FIX: Default case for type variables
 	// If we reach here, we have type variables that could be either int or string
 	// Create a constraint that both operands must have the same type
-	if err := ti.Unify(leftType, rightType); err != nil {
+	err := ti.Unify(leftType, rightType)
+	if err != nil {
 		return nil, fmt.Errorf("operands of + must have the same type: %w", err)
 	}
-	
+
 	// For polymorphic + operator, we can't determine the result type yet
 	// Return a fresh type variable that will be unified later based on usage context
 	// The actual type (int or string) will be determined when the function is called
@@ -1732,7 +1752,8 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 		constraintRecord := NewRecordType(constraintName, map[string]Type{e.FieldName: fieldType})
 
 		// Unify the type variable with a record type that has this field
-		if err := ti.Unify(typeVar, constraintRecord); err != nil {
+		err := ti.Unify(typeVar, constraintRecord)
+		if err != nil {
 			return nil, fmt.Errorf("field access constraint failed: %w", err)
 		}
 
@@ -1884,7 +1905,8 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 	// All arms must have the same type
 	firstArmType := armTypes[0]
 	for i := 1; i < len(armTypes); i++ {
-		if err := ti.Unify(firstArmType, armTypes[i]); err != nil {
+		err := ti.Unify(firstArmType, armTypes[i])
+		if err != nil {
 			// Include position info and proper formatting
 			expectedType := firstArmType.String()
 			actualType := armTypes[i].String()
@@ -2061,7 +2083,8 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 	case "+", "-":
 		// Unary plus and minus require Int operand and return Int
 		intType := &ConcreteType{name: TypeInt}
-		if err := ti.Unify(operandType, intType); err != nil {
+		err := ti.Unify(operandType, intType)
+		if err != nil {
 			return nil, fmt.Errorf("operand of %s must be Int: %w", e.Operator, err)
 		}
 
@@ -2069,7 +2092,8 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 	case "!":
 		// Logical NOT requires Bool operand and returns Bool
 		boolType := &ConcreteType{name: TypeBool}
-		if err := ti.Unify(operandType, boolType); err != nil {
+		err := ti.Unify(operandType, boolType)
+		if err != nil {
 			return nil, fmt.Errorf("operand of ! must be Bool: %w", err)
 		}
 

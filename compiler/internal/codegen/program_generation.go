@@ -47,7 +47,8 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 		switch s := stmt.(type) {
 		case *ast.ExternDeclaration:
 			// Process extern declarations in the first pass
-			if err := g.generateExternDeclaration(s); err != nil {
+			err := g.generateExternDeclaration(s)
+			if err != nil {
 				return nil, nil, err
 			}
 		case *ast.TypeDeclaration:
@@ -55,7 +56,8 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 		case *ast.EffectDeclaration:
 			// Process effect declarations in the first pass!
 			// This populates the effect registry before any handlers are generated
-			if err := g.generateEffectDeclaration(s); err != nil {
+			err := g.generateEffectDeclaration(s)
+			if err != nil {
 				return nil, nil, err
 			}
 		}
@@ -68,11 +70,13 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 			if s.Name == MainFunctionName {
 				mainFunc = s
 				// Also declare main function signature so other code can reference it
-				if err := g.declareFunctionSignature(s); err != nil {
+				err := g.declareFunctionSignature(s)
+				if err != nil {
 					return nil, nil, err
 				}
 			} else {
-				if err := g.declareFunctionSignature(s); err != nil {
+				err := g.declareFunctionSignature(s)
+				if err != nil {
 					return nil, nil, err
 				}
 			}
@@ -125,7 +129,8 @@ func (g *LLVMGenerator) createMainFunction(
 
 	// Process top-level statements in the main function
 	for _, stmt := range topLevelStatements {
-		if err := g.generateStatement(stmt); err != nil {
+		err := g.generateStatement(stmt)
+		if err != nil {
 			return err
 		}
 	}
@@ -140,7 +145,8 @@ func (g *LLVMGenerator) createMainFunction(
 func (g *LLVMGenerator) generateUserFunctions(program *ast.Program) error {
 	for _, stmt := range program.Statements {
 		if fnDecl, ok := stmt.(*ast.FunctionDeclaration); ok && fnDecl.Name != MainFunctionName {
-			if err := g.generateFunctionDeclaration(fnDecl); err != nil {
+			err := g.generateFunctionDeclaration(fnDecl)
+			if err != nil {
 				return err
 			}
 		}

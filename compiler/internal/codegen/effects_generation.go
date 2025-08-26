@@ -18,13 +18,15 @@ func (g *LLVMGenerator) generateHandlerExpression(handler *ast.HandlerExpression
 	if g.effectCodegen == nil {
 		g.InitializeEffects()
 	}
+
 	return g.effectCodegen.GenerateHandlerExpression(handler)
 }
 
 // generateEffectDeclaration generates LLVM IR for effect declarations
 func (g *LLVMGenerator) generateEffectDeclaration(effect *ast.EffectDeclaration) error {
 	// Register the effect with the effect system
-	if err := g.RegisterEffectDeclaration(effect); err != nil {
+	err := g.RegisterEffectDeclaration(effect)
+	if err != nil {
 		return err
 	}
 

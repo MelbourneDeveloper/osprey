@@ -1,13 +1,35 @@
 Starting compilation...
-Compilation failed
-Execution failed: failed to generate LLVM IR: line 9:16 mismatched input ',' expecting ':'
-line 9:20 mismatched input '}' expecting ':'
-line 10:24 mismatched input ',' expecting ':'
-line 10:32 mismatched input '}' expecting ':'
-line 11:19 mismatched input ',' expecting ':'
-line 11:28 mismatched input '}' expecting ':'
-line 15:30 no viable alternative at input '{x:3.14'
-line 15:26 extraneous input ':' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
-line 15:32 extraneous input ',' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
-line 15:35 extraneous input ':' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
-line 15:42 extraneous input '}' expecting {<EOF>, 'match', 'select', 'fn', 'extern', 'import', 'type', 'module', 'let', 'mut', 'effect', 'perform', 'handle', 'spawn', 'yield', 'await', 'send', 'recv', 'true', 'false', '!', '|', '(', '{', '[', '+', '-', INT, INTERPOLATED_STRING, STRING, ID, DOC_COMMENT}
+Compilation completed successfully
+=== HINDLEY-MILNER TEST ===
+Test 1: Function type inference from usage
+identity(42) = 42, identity("test") = test, identity(true) = true
+add(10, 20) = 30, concat = helloworld, negate(false) = true
+
+Test 3: Function inference with generic records
+getFirst(intPair) = 100
+getValue(container1) = hello
+getSecond(intPair) = 200
+
+Test 4: Polymorphic function inference
+identityP(42) = 42
+identityP("test") = test
+identityP(true) = true
+makePoint(1, 2) = {1, 2}
+makePoint("x", "y") = {x, y}
+
+Test 5: Complex field access inference
+distance({3, 4}) = 25
+combine({"hello", "world"}) = helloworld
+
+Test 6: Higher-order HM inference
+intPoint.x = 1
+intPoint.y = 2
+intPair.first = 100
+intPair.second = 200
+stringContainer.value = hello
+stringContainer.label = world
+apply(identityP, 99) = 99
+apply(toString, 123) = 123
+
+=== PURE HINDLEY-MILNER TEST COMPLETE ===
+All types inferred from usage context - no explicit type annotations!

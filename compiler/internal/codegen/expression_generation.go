@@ -3,6 +3,7 @@ package codegen
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/llir/llvm/ir"
@@ -165,7 +166,7 @@ func (g *LLVMGenerator) generateBooleanLiteral(lit *ast.BooleanLiteral) (value.V
 			targetType = types.I1
 		}
 	}
-	
+
 	// 3. Check expected parameter type context (for function arguments)
 	if g.expectedParameterType != nil {
 		if g.expectedParameterType == types.I1 {
@@ -287,15 +288,15 @@ func (g *LLVMGenerator) generateObjectLiteral(lit *ast.ObjectLiteral) (value.Val
 	if err != nil {
 		return nil, fmt.Errorf("failed to infer object literal type: %w", err)
 	}
-	
+
 	recordType, ok := objType.(*RecordType)
 	if !ok {
 		return nil, fmt.Errorf("%w: object literal did not infer to record type", ErrTypeMismatch)
 	}
-	
+
 	// Get consistent field mapping
 	fieldMapping := g.getOrCreateRecordFieldMapping(recordType.name, recordType.fields)
-	
+
 	// Create ordered field names based on mapping
 	fieldNames := make([]string, len(lit.Fields))
 	for fieldName, index := range fieldMapping {
@@ -630,10 +631,20 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 
 		return g.builder.NewSub(zero, operand), nil
 	case "!":
-		// Boolean NOT: convert to 0/1 and XOR with 1
-		cmp := g.builder.NewICmp(enum.IPredEQ, operand, constant.NewInt(types.I64, 0))
-
-		return g.builder.NewZExt(cmp, types.I64), nil
+		// Boolean NOT: check operand type and return appropriate type
+		if operand.Type() == types.I1 {
+			// If operand is already boolean, just invert it
+			return g.builder.NewICmp(enum.IPredEQ, operand, constant.NewBool(false)), nil
+		} else {
+			// If operand is integer, compare with 0 and return boolean
+			cmp := g.builder.NewICmp(enum.IPredEQ, operand, constant.NewInt(types.I64, 0))
+			// Check if we need boolean or integer result based on context
+			if g.expectedReturnType == types.I1 {
+				return cmp, nil
+			} else {
+				return g.builder.NewZExt(cmp, types.I64), nil
+			}
+		}
 	default:
 		return nil, WrapUnsupportedUnaryOpWithPos(unaryExpr.Operator, unaryExpr.Position)
 	}
@@ -873,7 +884,7 @@ func (g *LLVMGenerator) generateRecordFieldAccess(
 
 	// HINDLEY-MILNER FIX: Use consistent field mapping
 	fieldMapping := g.getOrCreateRecordFieldMapping(recordType.name, recordType.fields)
-	
+
 	fieldIndex, exists := fieldMapping[fieldAccess.FieldName]
 	if !exists {
 		return nil, fmt.Errorf("line %d:%d: field '%s' not found in record type '%s'", //nolint:err113
@@ -1054,27 +1065,43 @@ func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 			// For complex types, create a concrete type
 			fieldType = NewConcreteType(field.Type)
 		}
+
 		fieldMap[field.Name] = fieldType
 	}
-	
+
 	// Get consistent field mapping
 	fieldMapping := g.getOrCreateRecordFieldMapping(typeDecl.Name, fieldMap)
-	
-	// Create ordered field arrays based on mapping
-	fieldTypes := make([]types.Type, len(variant.Fields))
-	fieldValues := make([]value.Value, len(variant.Fields))
-	
-	// Process fields using consistent mapping order
-	for _, field := range variant.Fields {
-		fieldName := field.Name
+
+	// Create ordered field arrays based on mapping size
+	fieldTypes := make([]types.Type, len(fieldMapping))
+	fieldValues := make([]value.Value, len(fieldMapping))
+
+	// HINDLEY-MILNER FIX: Process fields in the same sorted order as the mapping
+	// Get sorted field names to ensure consistent processing order
+	sortedFieldNames := make([]string, 0, len(fieldMapping))
+	for fieldName := range fieldMapping {
+		sortedFieldNames = append(sortedFieldNames, fieldName)
+	}
+
+	sort.Strings(sortedFieldNames)
+
+	// Process fields using sorted order that matches the mapping
+	for _, fieldName := range sortedFieldNames {
+		// Find the field declaration
+		var declaredFieldTypeName string
+
+		for _, field := range variant.Fields {
+			if field.Name == fieldName {
+				declaredFieldTypeName = field.Type
+				break
+			}
+		}
+
 		// Find the field value in the constructor
 		fieldExpr, exists := typeConstructor.Fields[fieldName]
 		if !exists {
 			return nil, WrapMissingField(fieldName)
 		}
-
-		// Use the declared field type from the type declaration
-		declaredFieldTypeName := field.Type
 
 		// Convert declared type name to LLVM type
 		var declaredLLVMType types.Type
@@ -1105,16 +1132,13 @@ func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 		// Restore previous expected type
 		g.expectedReturnType = oldExpectedType
 
-		// HINDLEY-MILNER FIX: Place field value at correct index based on mapping
+		// Place field value at correct index based on mapping
 		fieldIndex := fieldMapping[fieldName]
 		fieldValues[fieldIndex] = fieldValue
 
-		// Use declared type if known, otherwise use inferred type
-		if declaredLLVMType != nil {
-			fieldTypes[fieldIndex] = declaredLLVMType
-		} else {
-			fieldTypes[fieldIndex] = fieldValue.Type()
-		}
+		// HINDLEY-MILNER FIX: For polymorphic records, use actual field value types
+		// not declared types to ensure type safety
+		fieldTypes[fieldIndex] = fieldValue.Type()
 	}
 
 	// Create struct type and initialize with values
@@ -1160,12 +1184,12 @@ func (g *LLVMGenerator) areCompatibleLLVMTypes(expected, actual types.Type) bool
 	if expected.String() == actual.String() {
 		return true
 	}
-	
+
 	// Check if both are pointer types
 	if g.isPointerType(expected) && g.isPointerType(actual) {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -1444,7 +1468,8 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 	if len(blockExpr.Statements) > 0 {
 		// Execute all statements except the last one
 		for _, stmt := range blockExpr.Statements[:len(blockExpr.Statements)-1] {
-			if err := g.generateStatement(stmt); err != nil {
+			err := g.generateStatement(stmt)
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -1462,7 +1487,8 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 		}
 
 		// Execute the last statement (it's not an expression statement)
-		if err := g.generateStatement(lastStmt); err != nil {
+		err := g.generateStatement(lastStmt)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -1686,7 +1712,59 @@ func (g *LLVMGenerator) ensureBuiltinFunctionDeclaration(ospreyName string) *ir.
 	fn := g.module.NewFunc(llvmFunctionName, returnType, params...)
 	g.functions[ospreyName] = fn
 
+	// For certain built-in functions that can be used as first-class values,
+	// we need to generate the actual function body
+	if ospreyName == "toString" {
+		g.generateToStringFunctionBody(fn)
+	}
+
 	return fn
+}
+
+// generateToStringFunctionBody generates the function body for toString built-in function
+func (g *LLVMGenerator) generateToStringFunctionBody(fn *ir.Func) {
+	// Save current context
+	oldFunction := g.function
+	oldBuilder := g.builder
+	
+	// Set up function context
+	entry := fn.NewBlock("")
+	g.builder = entry
+	g.function = fn
+	
+	// Get the argument value
+	valueParam := fn.Params[0] // toString takes one parameter
+	
+	// Simple toString implementation for integers
+	// Use sprintf to convert integer to string
+	sprintf := g.ensureSprintfDeclaration()
+	
+	// Format string for integer conversion
+	formatStr := constant.NewCharArrayFromString("%ld\x00")
+	formatGlobal := g.module.NewGlobalDef("", formatStr)
+	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	
+	// Allocate buffer for result string (64 bytes should be enough for any 64-bit integer)
+	bufferType := types.NewArray(64, types.I8)
+	buffer := g.builder.NewAlloca(bufferType)
+	bufferPtr := g.builder.NewGetElementPtr(bufferType, buffer,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	
+	// Call sprintf(buffer, "%ld", value)
+	g.builder.NewCall(sprintf, bufferPtr, formatPtr, valueParam)
+	
+	// Ensure null termination by explicitly setting the last byte to 0
+	// (sprintf should handle this, but let's be safe)
+	lastBytePtr := g.builder.NewGetElementPtr(bufferType, buffer,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 63))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), lastBytePtr)
+	
+	g.builder.NewRet(bufferPtr)
+	
+	// Restore context
+	g.function = oldFunction
+	g.builder = oldBuilder
 }
 
 // findTypeDeclarationByVariant finds the type declaration that contains the given variant name

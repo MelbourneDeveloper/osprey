@@ -133,13 +133,15 @@ func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 	}
 
 	ec.registry.Effects[effect.Name] = effectType
+
 	return nil
 }
 
 // GeneratePerformExpression generates CPS-transformed perform expressions
 func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpression) (value.Value, error) {
 	// FIRST: Check for circular dependency BEFORE any processing
-	if err := ec.detectCircularDependency(perform.EffectName); err != nil {
+	err := ec.detectCircularDependency(perform.EffectName)
+	if err != nil {
 		return nil, err
 	}
 
@@ -391,11 +393,13 @@ func (ec *EffectCodegen) hasDeclaredEffect(effectName string) bool {
 	if ec.currentFunctionEffects == nil {
 		return false
 	}
+
 	for _, declaredEffect := range ec.currentFunctionEffects {
 		if declaredEffect == effectName {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -409,6 +413,7 @@ func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression)
 			if err != nil {
 				return nil, err
 			}
+
 			if result != nil {
 				// Return the actual handler result, not Unit
 				return result, nil
@@ -421,6 +426,7 @@ func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression)
 	if err != nil {
 		return nil, err
 	}
+
 	if result != nil {
 		// Return the actual handler result, not Unit
 		return result, nil
@@ -435,6 +441,7 @@ func (ec *EffectCodegen) findHandlerByEffectName(
 ) (value.Value, error) {
 	// SPEC COMPLIANCE: Find handler with highest lexical depth (innermost)
 	var bestHandler *ir.Func
+
 	bestDepth := -1
 
 	for _, frame := range ec.currentHandlers {
@@ -472,6 +479,7 @@ func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) 
 			if handlerFunc == nil {
 				continue // Skip null handlers
 			}
+
 			args, err := ec.generatePerformArguments(perform)
 			if err != nil {
 				return nil, err
@@ -482,6 +490,7 @@ func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) 
 			return handlerResult, nil
 		}
 	}
+
 	return nil, nil
 }
 
@@ -495,6 +504,7 @@ func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value
 			if err != nil {
 				return nil, err
 			}
+
 			if result != nil {
 				// Return the actual handler result, not Unit
 				return result, nil
@@ -507,6 +517,7 @@ func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value
 	if err != nil {
 		return nil, err
 	}
+
 	if result != nil {
 		// Return the actual handler result, not Unit
 		return result, nil
@@ -523,8 +534,10 @@ func (ec *EffectCodegen) generatePerformArguments(perform *ast.PerformExpression
 		if err != nil {
 			return nil, err
 		}
+
 		args[i] = argVal
 	}
+
 	return args, nil
 }
 
@@ -541,6 +554,7 @@ func (ec *EffectCodegen) createUnhandledEffectError(perform *ast.PerformExpressi
 			return fmt.Errorf("line %d:%d: %w: %s",
 				perform.Position.Line, perform.Position.Column, ErrUnhandledEffect, errorMsg)
 		}
+
 		return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 	}
 
@@ -554,6 +568,7 @@ func (ec *EffectCodegen) createUnhandledEffectError(perform *ast.PerformExpressi
 		return fmt.Errorf("line %d:%d: %w: %s",
 			perform.Position.Line, perform.Position.Column, ErrUnhandledEffect, errorMsg)
 	}
+
 	return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 }
 
@@ -566,6 +581,7 @@ func (ec *EffectCodegen) isLikelyCircularDependency(effectName string) bool {
 		// In a real implementation, this would be more sophisticated
 		return true
 	}
+
 	return false
 }
 
@@ -576,9 +592,11 @@ func (ec *EffectCodegen) detectCircularDependency(effectName string) error {
 		if processingEffect == effectName {
 			errorMsg := "Circular effect dependency detected - " +
 				"effects cannot have circular references that would cause infinite recursion"
+
 			return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 		}
 	}
+
 	return nil
 }
 
@@ -610,12 +628,15 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 		if err != nil {
 			return nil, err
 		}
+
 		args[i] = argVal
 	}
 
 	// Find the most recent handler for this effect operation
 	handlerPattern := fmt.Sprintf("__handler_%s_%s_", perform.EffectName, perform.OperationName)
+
 	var candidateHandlers []*ir.Func
+
 	for _, fn := range ec.generator.module.Funcs {
 		fnName := fn.Name()
 		if len(fnName) > len(handlerPattern) && fnName[:len(handlerPattern)] == handlerPattern {

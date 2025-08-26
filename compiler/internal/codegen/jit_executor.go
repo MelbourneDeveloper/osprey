@@ -64,7 +64,8 @@ func (j *JITExecutor) setupCompilation(ir string) (string, string, string, error
 
 	// Write IR to file
 	irFile := filepath.Join(tempDir, "program.ll")
-	if writeErr := os.WriteFile(irFile, []byte(ir), FilePermissionsLess); writeErr != nil {
+	writeErr := os.WriteFile(irFile, []byte(ir), FilePermissionsLess)
+	if writeErr != nil {
 		return "", "", "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to write IR file: %w", writeErr)
 	}
 

@@ -178,7 +178,8 @@ func (g *LLVMGenerator) unifyBodyWithReturnType(
 	}
 
 	if !g.canImplicitlyConvert(bodyType, returnTypeVar, fnDecl) {
-		if err := g.typeInferer.Unify(returnTypeVar, bodyType); err != nil {
+		err := g.typeInferer.Unify(returnTypeVar, bodyType)
+		if err != nil {
 			g.restoreTypeInferenceState(state)
 
 			var positionInfo string
@@ -206,8 +207,9 @@ func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclarat
 		llvmReturnType = types.I32
 	}
 
-	// For polymorphic functions, create a monomorphized name
-	mangledName := g.getMonomorphizedName(fnDecl.Name, finalFnType)
+	// HINDLEY-MILNER FIX: During initial declaration, use original name for all functions
+	// Monomorphization will happen later during function calls
+	mangledName := fnDecl.Name
 
 	params := make([]*ir.Param, len(finalFnType.paramTypes))
 	for i, paramType := range finalFnType.paramTypes {
@@ -217,10 +219,10 @@ func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclarat
 	fn := g.module.NewFunc(mangledName, llvmReturnType, params...)
 	g.functions[mangledName] = fn
 
-	// Also store under original name for first instantiation
-	if _, exists := g.functions[fnDecl.Name]; !exists {
-		g.functions[fnDecl.Name] = fn
-	}
+	// HINDLEY-MILNER FIX: During initial declaration, always store under original name
+	// This allows generateFunctionDeclaration to find the function later
+	// Monomorphized instances will be created on-demand with different names
+	g.functions[fnDecl.Name] = fn
 
 	g.functionParameters[mangledName] = make([]string, len(fnDecl.Parameters))
 	for i, param := range fnDecl.Parameters {
@@ -240,19 +242,35 @@ func (g *LLVMGenerator) getMonomorphizedName(baseName string, fnType *FunctionTy
 	// Create a type signature for mangling
 	typeSignature := g.createTypeSignature(fnType)
 	mangledName := fmt.Sprintf("%s_%s", baseName, typeSignature)
-	
+
 	// Track this monomorphization
 	if g.monomorphizedInstances == nil {
 		g.monomorphizedInstances = make(map[string]string)
 	}
 
 	g.monomorphizedInstances[typeSignature] = mangledName
-	
+
 	return mangledName
 }
 
 // isPolymorphicFunction checks if a function needs monomorphization
 func (g *LLVMGenerator) isPolymorphicFunction(name string, fnType *FunctionType) bool {
+	// HINDLEY-MILNER FIX: Check if function has type variables or concrete types that differ from base
+
+	// Always monomorphize if there are already monomorphized instances
+	for existingName := range g.functions {
+		if strings.HasPrefix(existingName, name+"_") {
+			return true
+		}
+	}
+
+	// Check if this function has a type scheme in the environment (polymorphic)
+	if funcTypeFromEnv, exists := g.typeInferer.env.Get(name); exists {
+		if _, isScheme := funcTypeFromEnv.(*TypeScheme); isScheme {
+			return true
+		}
+	}
+
 	// Check if we already have an instance of this function with a different signature
 	if existingFn, exists := g.functions[name]; exists {
 		// Compare signatures - if they differ, this is a polymorphic instantiation
@@ -268,15 +286,15 @@ func (g *LLVMGenerator) isPolymorphicFunction(name string, fnType *FunctionType)
 // createTypeSignature creates a string representation of a function type for mangling
 func (g *LLVMGenerator) createTypeSignature(fnType *FunctionType) string {
 	var parts []string
-	
+
 	// Add parameter types
 	for _, paramType := range fnType.paramTypes {
 		parts = append(parts, g.getTypeString(paramType))
 	}
-	
+
 	// Add return type
 	parts = append(parts, g.getTypeString(fnType.returnType))
-	
+
 	return strings.Join(parts, "_")
 }
 
@@ -315,15 +333,15 @@ func (g *LLVMGenerator) getTypeString(t Type) string {
 // getFunctionTypeSignature extracts type signature from an existing LLVM function
 func (g *LLVMGenerator) getFunctionTypeSignature(fn *ir.Func) string {
 	var parts []string
-	
+
 	// Add parameter types
 	for _, param := range fn.Params {
 		parts = append(parts, g.getLLVMTypeString(param.Type()))
 	}
-	
+
 	// Add return type
 	parts = append(parts, g.getLLVMTypeString(fn.Sig.RetType))
-	
+
 	return strings.Join(parts, "_")
 }
 
@@ -463,7 +481,8 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 	}
 
 	if !g.canImplicitlyConvert(inferredReturnType, returnTypeVar, fnDecl) {
-		if err := g.typeInferer.Unify(returnTypeVar, inferredReturnType); err != nil {
+		err := g.typeInferer.Unify(returnTypeVar, inferredReturnType)
+		if err != nil {
 			g.typeInferer.env = oldEnv
 
 			var positionInfo string
@@ -898,7 +917,7 @@ func (g *LLVMGenerator) getOrCreateRecordFieldMapping(recordTypeName string, fie
 	for fieldName := range fields {
 		fieldNames = append(fieldNames, fieldName)
 	}
-	
+
 	// Sort field names for deterministic ordering
 	sort.Strings(fieldNames)
 
@@ -910,20 +929,47 @@ func (g *LLVMGenerator) getOrCreateRecordFieldMapping(recordTypeName string, fie
 
 	// Cache the mapping
 	g.recordFieldMappings[recordTypeName] = mapping
+
 	return mapping
+}
+
+// createRecordTypeKey creates a unique key for record types that includes field types
+func (g *LLVMGenerator) createRecordTypeKey(rt *RecordType) string {
+	var keyParts []string
+	keyParts = append(keyParts, rt.name)
+
+	// Sort field names for consistent key generation
+	fieldNames := make([]string, 0, len(rt.fields))
+	for fieldName := range rt.fields {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames)
+
+	// Add field types to the key
+	for _, fieldName := range fieldNames {
+		fieldType := rt.fields[fieldName]
+		keyParts = append(keyParts, fmt.Sprintf("%s:%s", fieldName, fieldType.String()))
+	}
+
+	return strings.Join(keyParts, "_")
 }
 
 // getLLVMRecordType converts record types to LLVM struct types
 func (g *LLVMGenerator) getLLVMRecordType(rt *RecordType) types.Type {
-	// Check if we already have this record type in the type map
-	if llvmType, exists := g.typeMap[rt.name]; exists {
+	// Create a unique key that includes both the record name and field types
+	// This ensures that polymorphic records like Point<int,int> and Point<string,string>
+	// get different LLVM struct types
+	typeKey := g.createRecordTypeKey(rt)
+	
+	// Check if we already have this specific record type in the type map
+	if llvmType, exists := g.typeMap[typeKey]; exists {
 		// Return struct type by value, not pointer
 		return llvmType
 	}
 
 	// HINDLEY-MILNER FIX: Use consistent field mapping
 	fieldMapping := g.getOrCreateRecordFieldMapping(rt.name, rt.fields)
-	
+
 	// Create field types in the mapped order
 	fieldTypes := make([]types.Type, len(rt.fields))
 	for fieldName, fieldType := range rt.fields {
@@ -932,7 +978,7 @@ func (g *LLVMGenerator) getLLVMRecordType(rt *RecordType) types.Type {
 	}
 
 	structType := types.NewStruct(fieldTypes...)
-	g.typeMap[rt.name] = structType
+	g.typeMap[typeKey] = structType
 
 	return structType
 }

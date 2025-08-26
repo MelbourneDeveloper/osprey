@@ -36,12 +36,14 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 
 	// Validate any type usage in function calls
 	if funcName != "" {
-		if err := g.validateFunctionCallArguments(funcName, callExpr); err != nil {
+		err := g.validateFunctionCallArguments(funcName, callExpr)
+		if err != nil {
 			return nil, err
 		}
 
 		// Validate named arguments requirement for multi-parameter functions
-		if err := g.validateNamedArguments(funcName, callExpr); err != nil {
+		err = g.validateNamedArguments(funcName, callExpr)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -60,7 +62,7 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 			if err != nil {
 				return nil, err
 			}
-			
+
 			// Get the correct monomorphized function
 			resolvedFunc, err := g.resolveMonomorphizedFunction(funcName, argTypes)
 			if err != nil {
@@ -93,12 +95,12 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		for i, expr := range reorderedExprs {
 			// Set expected parameter type context for boolean literals
 			g.setParameterTypeContext(funcValue, i)
-			
+
 			val, err := g.generateTypedArgumentExpression(expr, i, callExpr, funcValue)
 			if err != nil {
 				return nil, err
 			}
-			
+
 			// Clear context after generating argument
 			g.clearParameterTypeContext()
 
@@ -110,12 +112,12 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		for i, arg := range callExpr.Arguments {
 			// Set expected parameter type context for boolean literals
 			g.setParameterTypeContext(funcValue, i)
-			
+
 			val, err := g.generateTypedArgumentExpression(arg, i, callExpr, funcValue)
 			if err != nil {
 				return nil, err
 			}
-			
+
 			// Clear context after generating argument
 			g.clearParameterTypeContext()
 
@@ -129,8 +131,8 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 
 // generateArgumentExpression generates an argument value, handling polymorphic functions specially
 func (g *LLVMGenerator) generateArgumentExpression(
-	expr ast.Expression, 
-	argIndex int, 
+	expr ast.Expression,
+	argIndex int,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
 	// Check if this argument is a function identifier that might be polymorphic
@@ -144,72 +146,72 @@ func (g *LLVMGenerator) generateArgumentExpression(
 				if err != nil {
 					return nil, fmt.Errorf("failed to infer call type: %w", err)
 				}
-				
+
 				// The type inference should have resolved the concrete types
 				// Now we can look up the monomorphized function
-				
+
 				// Get the argument types from the inferred call
 				argTypes, err := g.inferCallArgumentTypes(callExpr)
 				if err != nil {
 					return nil, fmt.Errorf("failed to infer argument types: %w", err)
 				}
-				
+
 				// For the function argument, we need to determine its concrete function type
 				// based on the context of how it will be used
 				if argIndex < len(argTypes) {
 					if fnType, ok := argTypes[argIndex].(*FunctionType); ok {
 						// Get the monomorphized function instance
 						mangledName := g.getMonomorphizedName(ident.Name, fnType)
-						
+
 						// Check if we already have this monomorphized instance
 						if fn, exists := g.functions[mangledName]; exists {
 							return fn, nil
 						}
-						
+
 						// Generate it on-demand
 						return g.generateMonomorphizedInstance(ident.Name, fnType)
 					}
 				}
-				
+
 				// If we get here, we need a different approach
 				// For now, try to infer from the argument context
 				if argIndex == 0 && len(argTypes) > 1 {
 					// This is likely the function parameter for apply(f, x)
 					// Try to create a function type based on x's type
-					xType := argTypes[1]  // The second argument (x)
+					xType := argTypes[1] // The second argument (x)
 					// Create a function type: xType -> xType (for identity)
 					inferredFnType := &FunctionType{
 						paramTypes: []Type{xType},
 						returnType: xType,
 					}
-					
+
 					// Get the monomorphized function instance
 					mangledName := g.getMonomorphizedName(ident.Name, inferredFnType)
-					
+
 					// Check if we already have this monomorphized instance
 					if fn, exists := g.functions[mangledName]; exists {
 						return fn, nil
 					}
-					
+
 					// Generate it on-demand
 					return g.generateMonomorphizedInstance(ident.Name, inferredFnType)
 				}
 			}
 		}
 	}
-	
+
 	// For non-polymorphic function arguments, check if we need to handle type-specific generation
 	// This is important for boolean literals that need to match the expected parameter type
-	
+
 	// For now, generate normally - the type inference system should handle most cases
 	return g.generateExpression(expr)
 }
 
 // generateTypedArgumentExpression generates an argument with type awareness
 func (g *LLVMGenerator) generateTypedArgumentExpression(
-	expr ast.Expression, 
-	argIndex int, 
-	callExpr *ast.CallExpression, 
+	expr ast.Expression,
+	argIndex int,
+	callExpr *ast.CallExpression,
 	funcValue value.Value,
 ) (value.Value, error) {
 	// Handle boolean literals directly if we know the expected type
@@ -218,7 +220,7 @@ func (g *LLVMGenerator) generateTypedArgumentExpression(
 		if irFunc, ok := funcValue.(*ir.Func); ok {
 			if argIndex < len(irFunc.Sig.Params) {
 				expectedType := irFunc.Sig.Params[argIndex]
-				
+
 				// Generate boolean with the correct type from the start
 				if expectedType == types.I1 {
 					if boolLit.Value {
@@ -230,21 +232,20 @@ func (g *LLVMGenerator) generateTypedArgumentExpression(
 			}
 		}
 	}
-	
+
 	// For non-boolean literals or when type is not i1, use the polymorphic function handling
 	val, err := g.generateArgumentExpression(expr, argIndex, callExpr)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return val, nil
 }
-
 
 // inferCallArgumentTypes infers the types of arguments in a function call
 func (g *LLVMGenerator) inferCallArgumentTypes(callExpr *ast.CallExpression) ([]Type, error) {
 	var argTypes []Type
-	
+
 	if len(callExpr.NamedArguments) > 0 {
 		// Process named arguments
 		for _, namedArg := range callExpr.NamedArguments {
@@ -266,7 +267,7 @@ func (g *LLVMGenerator) inferCallArgumentTypes(callExpr *ast.CallExpression) ([]
 			argTypes = append(argTypes, argType)
 		}
 	}
-	
+
 	return argTypes, nil
 }
 
@@ -282,7 +283,7 @@ func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes [
 
 		return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, funcName)
 	}
-	
+
 	// Handle TypeScheme (polymorphic function)
 	if scheme, ok := funcTypeFromEnv.(*TypeScheme); ok {
 		// Instantiate the scheme to get a concrete function type
@@ -293,41 +294,49 @@ func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes [
 				paramTypes: argTypes,
 				returnType: g.typeInferer.Fresh(),
 			}
-			
-			if err := g.typeInferer.Unify(fnType, expectedFnType); err != nil {
+
+			err := g.typeInferer.Unify(fnType, expectedFnType)
+			if err != nil {
 				return nil, fmt.Errorf("function call type mismatch: %w", err)
 			}
-			
+
+			// Re-infer the return type with concrete parameter types for accurate monomorphization
+			concreteReturnType, err := g.reInferReturnType(funcName, argTypes)
+			if err != nil {
+				// Fallback to original return type if re-inference fails
+				concreteReturnType = g.typeInferer.prune(expectedFnType.returnType)
+			}
+
 			// Create the concrete function type after unification
 			concreteFnType := &FunctionType{
 				paramTypes: argTypes,
-				returnType: g.typeInferer.prune(expectedFnType.returnType),
+				returnType: concreteReturnType,
 			}
-			
+
 			// Get the monomorphized name
 			mangledName := g.getMonomorphizedName(funcName, concreteFnType)
-			
+
 			// Check if we already have this monomorphized instance
 			if fn, exists := g.functions[mangledName]; exists {
 				return fn, nil
 			}
-			
+
 			// If not, we need to generate it on-demand
 			return g.generateMonomorphizedInstance(funcName, concreteFnType)
 		}
 	}
-	
+
 	// For non-polymorphic functions, just return the existing function
 	if fn, exists := g.functions[funcName]; exists {
 		return fn, nil
 	}
-	
+
 	return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, funcName)
 }
 
 // generateMonomorphizedInstance generates a new monomorphized instance of a polymorphic function
 func (g *LLVMGenerator) generateMonomorphizedInstance(
-	baseFuncName string, 
+	baseFuncName string,
 	concreteFnType *FunctionType,
 ) (value.Value, error) {
 	// Get the original function declaration
@@ -335,33 +344,33 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, baseFuncName)
 	}
-	
+
 	// Create the monomorphized name
 	mangledName := g.getMonomorphizedName(baseFuncName, concreteFnType)
-	
+
 	// Check if it was already generated (race condition protection)
 	if fn, exists := g.functions[mangledName]; exists {
 		return fn, nil
 	}
-	
+
 	// Create the LLVM function signature for this monomorphized instance
 	llvmReturnType := g.getLLVMType(concreteFnType.returnType)
-	
+
 	params := make([]*ir.Param, len(concreteFnType.paramTypes))
 	for i, paramType := range concreteFnType.paramTypes {
 		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType))
 	}
-	
+
 	// Create the LLVM function
 	fn := g.module.NewFunc(mangledName, llvmReturnType, params...)
 	g.functions[mangledName] = fn
-	
+
 	// Store parameter names for this instance
 	g.functionParameters[mangledName] = make([]string, len(fnDecl.Parameters))
 	for i, param := range fnDecl.Parameters {
 		g.functionParameters[mangledName][i] = param.Name
 	}
-	
+
 	// Generate the function body
 	err := g.generateMonomorphizedFunctionBody(fnDecl, fn, concreteFnType)
 	if err != nil {
@@ -371,14 +380,14 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 
 		return nil, fmt.Errorf("failed to generate monomorphized function body: %w", err)
 	}
-	
+
 	return fn, nil
 }
 
 // generateMonomorphizedFunctionBody generates the body for a monomorphized function instance
 func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
-	fnDecl *ast.FunctionDeclaration, 
-	fn *ir.Func, 
+	fnDecl *ast.FunctionDeclaration,
+	fn *ir.Func,
 	concreteFnType *FunctionType,
 ) error {
 	// Save current state
@@ -391,13 +400,13 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 	}
 
 	oldExpectedReturnType := g.expectedReturnType
-	
+
 	// Set up new function context
 	entry := fn.NewBlock("")
 	g.builder = entry
 	g.function = fn
 	g.expectedReturnType = fn.Sig.RetType
-	
+
 	// Set up parameters with concrete types in the type environment
 	savedTypeEnv := g.typeInferer.env.Clone()
 	for i, param := range fnDecl.Parameters {
@@ -408,10 +417,13 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 			g.typeInferer.env.Set(param.Name, concreteFnType.paramTypes[i])
 		}
 	}
-	
+
 	// Set the function type in the environment with the concrete type
 	g.typeInferer.env.Set(fnDecl.Name, concreteFnType)
-	
+
+	// Set expected return type for proper expression generation (especially for boolean operators)
+	g.expectedReturnType = g.getLLVMType(concreteFnType.returnType)
+
 	// Generate the function body
 	bodyValue, err := g.generateExpression(fnDecl.Body)
 	if err != nil {
@@ -424,7 +436,7 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 
 		return err
 	}
-	
+
 	// Generate return instruction
 	if fn.Sig.RetType == types.Void {
 		g.builder.NewRet(nil)
@@ -434,14 +446,14 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
 		g.builder.NewRet(finalReturnValue)
 	}
-	
+
 	// Restore original state
 	g.function = oldFunction
-	g.builder = oldBuilder  
+	g.builder = oldBuilder
 	g.variables = oldVariables
 	g.expectedReturnType = oldExpectedReturnType
 	g.typeInferer.env = savedTypeEnv
-	
+
 	return nil
 }
 
@@ -479,7 +491,8 @@ func (g *LLVMGenerator) validateFunctionCallArguments(funcName string, callExpr 
 			paramType := fnType.paramTypes[i]
 
 			// Check for any type mismatch, passing function name and parameter index for better error messages
-			if err := g.checkAnyTypeMismatchParam(arg, paramType, callExpr.Position, funcName, i); err != nil {
+			err := g.checkAnyTypeMismatchParam(arg, paramType, callExpr.Position, funcName, i)
+			if err != nil {
 				return err
 			}
 		}
@@ -2104,6 +2117,38 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 	return phi, nil
 }
 
+// reInferReturnType re-infers the return type of a function with concrete parameter types
+func (g *LLVMGenerator) reInferReturnType(funcName string, argTypes []Type) (Type, error) {
+	// Get the original function declaration
+	fnDecl, exists := g.functionDeclarations[funcName]
+	if !exists {
+		return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, funcName)
+	}
+
+	// Save current type environment
+	savedEnv := g.typeInferer.env.Clone()
+
+	// Set up a new environment with concrete parameter types
+	for i, param := range fnDecl.Parameters {
+		if i < len(argTypes) {
+			g.typeInferer.env.Set(param.Name, argTypes[i])
+		}
+	}
+
+	// Re-infer the return type from the function body
+	bodyType, err := g.typeInferer.InferType(fnDecl.Body)
+	if err != nil {
+		// Restore environment on error
+		g.typeInferer.env = savedEnv
+		return nil, err
+	}
+
+	// Restore environment
+	g.typeInferer.env = savedEnv
+
+	return g.typeInferer.prune(bodyType), nil
+}
+
 // setParameterTypeContext sets the expected parameter type context for argument generation
 func (g *LLVMGenerator) setParameterTypeContext(funcValue value.Value, paramIndex int) {
 	if funcValue != nil {
@@ -2116,4 +2161,14 @@ func (g *LLVMGenerator) setParameterTypeContext(funcValue value.Value, paramInde
 // clearParameterTypeContext clears the parameter type context
 func (g *LLVMGenerator) clearParameterTypeContext() {
 	g.expectedParameterType = nil
+}
+
+// getFunctionNames returns a list of available function names for debugging
+func (g *LLVMGenerator) getFunctionNames() []string {
+	var names []string
+	for name := range g.functions {
+		names = append(names, name)
+	}
+
+	return names
 }
