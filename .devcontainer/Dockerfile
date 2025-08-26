@@ -29,23 +29,26 @@ RUN apt-get update && apt-get install -y \
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
+# Continue with the same image for Rust installation
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && . ~/.cargo/env \
+    && rustup component add clippy rustfmt
+
 # Install ANTLR
 RUN wget -q https://www.antlr.org/download/antlr-4.13.2-complete.jar -O /usr/local/lib/antlr.jar \
     && echo '#!/bin/sh\njava -Xmx500M -cp "/usr/local/lib/antlr.jar:$CLASSPATH" org.antlr.v4.Tool "$@"' > /usr/local/bin/antlr \
     && echo '#!/bin/sh\njava -Xmx500M -cp "/usr/local/lib/antlr.jar:$CLASSPATH" org.antlr.v4.gui.TestRig "$@"' > /usr/local/bin/grun \
     && chmod +x /usr/local/bin/antlr /usr/local/bin/grun
 
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Install golangci-lint
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
-
 # Install Go tools
 RUN go install golang.org/x/tools/gopls@v0.16.2 \
     && go install github.com/go-delve/delve/cmd/dlv@latest \
     && go install golang.org/x/tools/cmd/goimports@latest
+
+# Install golangci-lint
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.1.6
 
 # Create vscode user
 RUN apt-get update && apt-get install -y sudo \
