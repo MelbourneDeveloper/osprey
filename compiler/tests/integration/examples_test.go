@@ -26,6 +26,21 @@ func TestEffectsExamples(t *testing.T) {
 	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
 }
 
+// TestRustIntegrationExamples tests the Rust interop examples.
+func TestRustIntegrationExamples(t *testing.T) {
+	checkLLVMTools(t)
+
+	// Check if Rust tools are available before running the test
+	if _, _, err := findRustTools(); err != nil {
+		t.Fail()
+		return
+	}
+
+	examplesDir := "../../examples/rust_integration"
+	// Rust integration examples use same expected outputs map with .expectedoutput file fallback
+	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
+}
+
 func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs map[string]string) {
 	err := filepath.Walk(examplesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -332,6 +347,13 @@ func getExpectedOutputs() map[string]string {
 			"=== Array Test Complete ===\n\n",
 		// Effects examples
 		"algebraic_effects.osp": "Pure function result: 42\n🎉 BASIC TEST COMPLETE! 🎉",
+		// Rust integration examples
+		"demo.osp": "Rust add(15, 25) = 40\n" +
+			"Rust multiply(6, 7) = 42\n" +
+			"Rust factorial(5) = 120\n" +
+			"Rust fibonacci(10) = 55\n" +
+			"Rust is_prime(17) = 1\n" +
+			"✅ Rust-Osprey integration demo completed successfully!",
 	}
 }
 

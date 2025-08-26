@@ -1040,11 +1040,13 @@ func (g *LLVMGenerator) generateConstrainedRecordConstructor(
 		// Valid case: return 1
 		g.builder = validBlock
 		successValue := constant.NewInt(types.I64, 1)
+
 		g.builder.NewBr(mergeBlock)
 
 		// Invalid case: return -1
 		g.builder = invalidBlock
 		failureValue := constant.NewInt(types.I64, -1)
+
 		g.builder.NewBr(mergeBlock)
 
 		// Merge point - use PHI to select the result
@@ -1053,7 +1055,7 @@ func (g *LLVMGenerator) generateConstrainedRecordConstructor(
 			ir.NewIncoming(successValue, validBlock),
 			ir.NewIncoming(failureValue, invalidBlock),
 		)
-		
+
 		return phi, nil
 	}
 
