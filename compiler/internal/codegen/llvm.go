@@ -389,7 +389,7 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 		delete(g.functions, mangledName)
 		delete(g.functionParameters, mangledName)
 
-		return nil, fmt.Errorf("failed to generate monomorphized function body: %w", err)
+		return nil, err
 	}
 
 	return fn, nil

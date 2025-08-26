@@ -1,7 +1,9 @@
-// This should fail compilation: Type inference ambiguity
-// Error: Function 'identity' requires explicit return type annotation
+// This should fail compilation: undefined variable
+// Error: undefined variable reference
 
-fn identity(x) = x  // Cannot infer return type from parameter
+fn testFunction() {
+    let result = undefinedVariable  // This doesn't exist
+    result
+}
 
-let result = identity(42)
-print(result) 
+print("This should not compile") 
