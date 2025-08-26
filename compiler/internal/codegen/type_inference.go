@@ -58,6 +58,7 @@ func (pt *PrimitiveType) Equals(other Type) bool {
 	if otherPt, ok := other.(*PrimitiveType); ok {
 		return pt.name == otherPt.name
 	}
+
 	return false
 }
 
@@ -76,10 +77,12 @@ func (gt *GenericType) String() string {
 	if len(gt.typeArgs) == 0 {
 		return gt.name
 	}
+
 	args := make([]string, len(gt.typeArgs))
 	for i, arg := range gt.typeArgs {
 		args[i] = arg.String()
 	}
+
 	return fmt.Sprintf("%s[%s]", gt.name, strings.Join(args, ", "))
 }
 
@@ -94,13 +97,16 @@ func (gt *GenericType) Equals(other Type) bool {
 		if gt.name != otherGt.name || len(gt.typeArgs) != len(otherGt.typeArgs) {
 			return false
 		}
+
 		for i, arg := range gt.typeArgs {
 			if !arg.Equals(otherGt.typeArgs[i]) {
 				return false
 			}
 		}
+
 		return true
 	}
+
 	return false
 }
 
@@ -120,6 +126,7 @@ func (ft *FunctionType) String() string {
 	for i, param := range ft.paramTypes {
 		paramStrings[i] = param.String()
 	}
+
 	return fmt.Sprintf("(%s) -> %s", strings.Join(paramStrings, ", "), ft.returnType.String())
 }
 
@@ -134,13 +141,16 @@ func (ft *FunctionType) Equals(other Type) bool {
 		if len(ft.paramTypes) != len(otherFt.paramTypes) {
 			return false
 		}
+
 		for i, param := range ft.paramTypes {
 			if !param.Equals(otherFt.paramTypes[i]) {
 				return false
 			}
 		}
+
 		return ft.returnType.Equals(otherFt.returnType)
 	}
+
 	return false
 }
 
@@ -148,10 +158,18 @@ func (ft *FunctionType) Equals(other Type) bool {
 type RecordType struct {
 	name   string
 	fields map[string]Type
+	// HINDLEY-MILNER: NO fieldOrder - use field names only for structural equivalence
 }
 
 // NewRecordType creates a new record type
 func NewRecordType(name string, fields map[string]Type) *RecordType {
+	return &RecordType{name: name, fields: fields}
+}
+
+// NewOrderedRecordType creates a new record type with ordered fields
+// HINDLEY-MILNER FIX: Ignore fieldOrder parameter - use structural equivalence by field names only
+func NewOrderedRecordType(name string, fields map[string]Type, fieldOrder []string) *RecordType {
+	_ = fieldOrder // Ignore field ordering - not part of Hindley-Milner structural types
 	return &RecordType{name: name, fields: fields}
 }
 
@@ -160,6 +178,7 @@ func (rt *RecordType) String() string {
 	for name, t := range rt.fields {
 		fieldStrings = append(fieldStrings, fmt.Sprintf("%s: %s", name, t.String()))
 	}
+
 	return fmt.Sprintf("{%s}", strings.Join(fieldStrings, ", "))
 }
 
@@ -174,13 +193,16 @@ func (rt *RecordType) Equals(other Type) bool {
 		if rt.name != otherRt.name || len(rt.fields) != len(otherRt.fields) {
 			return false
 		}
+
 		for name, t := range rt.fields {
 			if otherT, exists := otherRt.fields[name]; !exists || !t.Equals(otherT) {
 				return false
 			}
 		}
+
 		return true
 	}
+
 	return false
 }
 
@@ -200,6 +222,7 @@ func (ut *UnionType) String() string {
 	for i, variant := range ut.variants {
 		variantStrings[i] = variant.String()
 	}
+
 	return fmt.Sprintf("%s(%s)", ut.name, strings.Join(variantStrings, " | "))
 }
 
@@ -214,13 +237,16 @@ func (ut *UnionType) Equals(other Type) bool {
 		if ut.name != otherUt.name || len(ut.variants) != len(otherUt.variants) {
 			return false
 		}
+
 		for i, variant := range ut.variants {
 			if !variant.Equals(otherUt.variants[i]) {
 				return false
 			}
 		}
+
 		return true
 	}
+
 	return false
 }
 
@@ -239,6 +265,7 @@ func (tv *TypeVar) String() string {
 	if tv.name != "" {
 		return tv.name
 	}
+
 	return fmt.Sprintf("t%d", tv.id)
 }
 
@@ -252,6 +279,7 @@ func (tv *TypeVar) Equals(other Type) bool {
 	if otherTv, ok := other.(*TypeVar); ok {
 		return tv.id == otherTv.id
 	}
+
 	return false
 }
 
@@ -280,6 +308,7 @@ func (ct *ConcreteType) Equals(other Type) bool {
 	if otherCt, ok := other.(*ConcreteType); ok {
 		return ct.name == otherCt.name
 	}
+
 	return false
 }
 
@@ -293,10 +322,12 @@ func (ts *TypeScheme) String() string {
 	if len(ts.vars) == 0 {
 		return ts.typ.String()
 	}
+
 	varStrings := make([]string, len(ts.vars))
 	for i, v := range ts.vars {
 		varStrings[i] = fmt.Sprintf("'t%d", v)
 	}
+
 	return fmt.Sprintf("forall %s. %s", strings.Join(varStrings, " "), ts.typ.String())
 }
 
@@ -311,13 +342,16 @@ func (ts *TypeScheme) Equals(other Type) bool {
 		if len(ts.vars) != len(otherTs.vars) {
 			return false
 		}
+
 		for i, v := range ts.vars {
 			if v != otherTs.vars[i] {
 				return false
 			}
 		}
+
 		return ts.typ.Equals(otherTs.typ)
 	}
+
 	return false
 }
 
@@ -350,6 +384,7 @@ func (env *TypeEnv) GetAllVars() map[string]Type {
 	for k, v := range env.vars {
 		result[k] = v
 	}
+
 	return result
 }
 
@@ -359,6 +394,7 @@ func (env *TypeEnv) Clone() *TypeEnv {
 	for k, v := range env.vars {
 		newEnv.Set(k, v)
 	}
+
 	return newEnv
 }
 
@@ -397,6 +433,7 @@ func (ti *TypeInferer) SetGenerator(generator *LLVMGenerator) {
 func (ti *TypeInferer) Fresh() *TypeVar {
 	tv := NewTypeVar(ti.nextID, "")
 	ti.nextID++
+
 	return tv
 }
 
@@ -405,10 +442,12 @@ func (ti *TypeInferer) Instantiate(scheme *TypeScheme) Type {
 	if len(scheme.vars) == 0 {
 		return scheme.typ
 	}
+
 	subst := make(Substitution)
 	for _, v := range scheme.vars {
 		subst[v] = ti.Fresh()
 	}
+
 	return ti.applySubst(scheme.typ, subst)
 }
 
@@ -418,8 +457,10 @@ func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
 
 	// Remove vars that are already in the environment
 	var schemeVars []int
+
 	for _, v := range freeVars {
 		inEnv := false
+
 		for _, envType := range ti.env.GetAllVars() {
 			envFreeVars := ti.getFreeVars(envType)
 			for _, envVar := range envFreeVars {
@@ -428,10 +469,12 @@ func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
 					break
 				}
 			}
+
 			if inEnv {
 				break
 			}
 		}
+
 		if !inEnv {
 			schemeVars = append(schemeVars, v)
 		}
@@ -485,6 +528,7 @@ func (ti *TypeInferer) ResolveType(t Type) Type {
 		concreteType := ti.resolveUnboundTypeVariable(tv)
 		// Update the substitution for future references
 		ti.subst[tv.id] = concreteType
+
 		return concreteType
 	}
 
@@ -492,6 +536,7 @@ func (ti *TypeInferer) ResolveType(t Type) Type {
 	if _, ok := resolved.(*ConcreteType); ok {
 		return resolved
 	}
+
 	if _, ok := resolved.(*PrimitiveType); ok {
 		return resolved
 	}
@@ -508,6 +553,7 @@ func (ti *TypeInferer) ResolveType(t Type) Type {
 		newParams := make([]Type, len(ft.paramTypes))
 		for i, p := range ft.paramTypes {
 			resolvedParam := ti.ResolveType(p)
+
 			newParams[i] = resolvedParam
 			if resolvedParam != p {
 				hasUnboundVars = true
@@ -539,6 +585,7 @@ func (ti *TypeInferer) ResolveAllEnvironmentTypes() {
 		if _, ok := t.(*FunctionType); ok {
 			continue
 		}
+
 		ti.env.vars[name] = ti.ResolveType(t)
 	}
 }
@@ -546,13 +593,16 @@ func (ti *TypeInferer) ResolveAllEnvironmentTypes() {
 // Helper functions for type checking
 func uniqueInts(ints []int) []int {
 	seen := make(map[int]bool)
+
 	var result []int
+
 	for _, i := range ints {
 		if !seen[i] {
 			seen[i] = true
 			result = append(result, i)
 		}
 	}
+
 	return result
 }
 
@@ -645,6 +695,7 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 		if pattern.Variable != "" {
 			tv := ti.Fresh()
 			ti.env.Set(pattern.Variable, tv)
+
 			return tv, nil
 		}
 		// Check if this is a field-only pattern from structural matching
@@ -678,6 +729,7 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 			ti.handlePatternFieldBindings(pattern, discriminantType)
 			return t, nil
 		}
+
 		return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, pattern.Constructor)
 	}
 }
@@ -695,9 +747,10 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 			fieldType := ti.Fresh()
 			ti.env.Set(field, fieldType)
 		}
+
 		return
 	}
-	
+
 	// Special handling for Result type patterns
 	if pattern.Constructor == "Success" && discriminantType != nil {
 		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
@@ -707,10 +760,11 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 				// Bind the first field to the success type
 				ti.env.Set(pattern.Fields[0], successType)
 			}
+
 			return
 		}
 	}
-	
+
 	if pattern.Constructor == "Error" && discriminantType != nil {
 		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
 			// Extract the error type from Result<T, E>
@@ -719,10 +773,11 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 				// Bind the first field to the error type
 				ti.env.Set(pattern.Fields[0], errorType)
 			}
+
 			return
 		}
 	}
-	
+
 	// Default behavior: assign fresh type variables
 	for _, field := range pattern.Fields {
 		ti.env.Set(field, ti.Fresh())
@@ -734,12 +789,14 @@ func (ti *TypeInferer) extractResultSuccessType(resultTypeName string) Type {
 	// Parse "Result<ProcessHandle, string>" to extract "ProcessHandle"
 	if strings.HasPrefix(resultTypeName, "Result<") && strings.HasSuffix(resultTypeName, ">") {
 		inner := resultTypeName[7 : len(resultTypeName)-1] // Remove "Result<" and ">"
+
 		parts := strings.Split(inner, ",")
 		if len(parts) >= 1 {
 			successTypeName := strings.TrimSpace(parts[0])
 			return &ConcreteType{name: successTypeName}
 		}
 	}
+
 	return &ConcreteType{name: TypeInt} // fallback
 }
 
@@ -748,12 +805,14 @@ func (ti *TypeInferer) extractResultErrorType(resultTypeName string) Type {
 	// Parse "Result<ProcessHandle, string>" to extract "string"
 	if strings.HasPrefix(resultTypeName, "Result<") && strings.HasSuffix(resultTypeName, ">") {
 		inner := resultTypeName[7 : len(resultTypeName)-1] // Remove "Result<" and ">"
+
 		parts := strings.Split(inner, ",")
 		if len(parts) >= TwoArgs {
 			errorTypeName := strings.TrimSpace(parts[1])
 			return &ConcreteType{name: errorTypeName}
 		}
 	}
+
 	return &ConcreteType{name: TypeString} // fallback
 }
 
@@ -762,19 +821,19 @@ func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 	if ti.unifyConcreteTypes(t1, t2) {
 		return nil
 	}
-	
+
 	if ti.unifyPrimitiveTypesPair(t1, t2) {
 		return nil
 	}
-	
+
 	if ti.unifyMixedTypes(t1, t2) {
 		return nil
 	}
-	
+
 	if ti.unifyGenericCompatibleTypes(t1, t2) {
 		return nil
 	}
-	
+
 	return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, t1.String(), t2.String())
 }
 
@@ -782,11 +841,11 @@ func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 func (ti *TypeInferer) unifyConcreteTypes(t1, t2 Type) bool {
 	ct1, ok1 := t1.(*ConcreteType)
 	ct2, ok2 := t2.(*ConcreteType)
-	
+
 	if !ok1 || !ok2 {
 		return false
 	}
-	
+
 	return ct1.name == ct2.name || ct1.name == TypeAny || ct2.name == TypeAny
 }
 
@@ -794,11 +853,11 @@ func (ti *TypeInferer) unifyConcreteTypes(t1, t2 Type) bool {
 func (ti *TypeInferer) unifyPrimitiveTypesPair(t1, t2 Type) bool {
 	pt1, ok1 := t1.(*PrimitiveType)
 	pt2, ok2 := t2.(*PrimitiveType)
-	
+
 	if !ok1 || !ok2 {
 		return false
 	}
-	
+
 	return pt1.name == pt2.name || pt1.name == TypeAny || pt2.name == TypeAny
 }
 
@@ -809,13 +868,13 @@ func (ti *TypeInferer) unifyMixedTypes(t1, t2 Type) bool {
 			return ct.name == pt.name || ct.name == TypeAny || pt.name == TypeAny
 		}
 	}
-	
+
 	if pt, ok := t1.(*PrimitiveType); ok {
 		if ct, ok := t2.(*ConcreteType); ok {
 			return pt.name == ct.name || pt.name == TypeAny || ct.name == TypeAny
 		}
 	}
-	
+
 	return false
 }
 
@@ -823,11 +882,11 @@ func (ti *TypeInferer) unifyMixedTypes(t1, t2 Type) bool {
 func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
 	ct1, ok1 := t1.(*ConcreteType)
 	ct2, ok2 := t2.(*ConcreteType)
-	
+
 	if !ok1 || !ok2 {
 		return false
 	}
-	
+
 	return ti.isGenericTypeCompatible(ct1.name, ct2.name)
 }
 
@@ -875,24 +934,34 @@ func (ti *TypeInferer) unifyRecordTypes(t1, t2 Type) error {
 		return fmt.Errorf("%w: %s is not a record type", ErrTypeMismatch, t2.String())
 	}
 
-	// Names must match
-	if rt1.name != rt2.name {
-		return fmt.Errorf("%w: %s != %s", ErrTypeMismatch, rt1.name, rt2.name)
-	}
-
-	// Field count must match
-	if len(rt1.fields) != len(rt2.fields) {
-		return fmt.Errorf("%w: different field counts", ErrTypeMismatch)
-	}
-
-	// All fields must unify
-	for name, typ1 := range rt1.fields {
-		if typ2, exists := rt2.fields[name]; exists {
-			if err := ti.Unify(typ1, typ2); err != nil {
-				return err
+	// HINDLEY-MILNER FIX: Structural equivalence based on field names ONLY
+	// Record type names are irrelevant - only field structure matters
+	
+	// Check if rt1 is a structural subset of rt2 (rt1 has fields that rt2 must have)
+	// This allows polymorphic field access: getX(p) works with any record having field 'x'
+	for fieldName, fieldType1 := range rt1.fields {
+		if fieldType2, exists := rt2.fields[fieldName]; exists {
+			// Field exists in both records - unify their types
+			if err := ti.Unify(fieldType1, fieldType2); err != nil {
+				return fmt.Errorf("field %s type unification failed: %w", fieldName, err)
 			}
 		} else {
-			return fmt.Errorf("%w: field %s not found in %s", ErrTypeMismatch, name, rt2.name)
+			// rt1 requires a field that rt2 doesn't have - not compatible
+			return fmt.Errorf("%w: field %s required by %s not found in %s", 
+				ErrTypeMismatch, fieldName, rt1.name, rt2.name)
+		}
+	}
+	
+	// Also check if rt2 has fields that rt1 doesn't have (bidirectional check for full structural equivalence)
+	for fieldName, fieldType2 := range rt2.fields {
+		if _, exists := rt1.fields[fieldName]; exists {
+			// Already checked above, skip
+			continue
+		} else {
+			// rt2 has a field that rt1 doesn't have
+			// For polymorphic field access, this is OK - rt1 is a structural subset
+			// But we need to add the missing field to rt1 to maintain consistency
+			rt1.fields[fieldName] = fieldType2
 		}
 	}
 
@@ -954,7 +1023,7 @@ func (ti *TypeInferer) unifyFunctionTypes(t1, t2 Type) error {
 	}
 
 	if err := ti.Unify(ft1.returnType, ft2.returnType); err != nil {
-		return fmt.Errorf("return type unification failed: %s vs %s: %w", 
+		return fmt.Errorf("return type unification failed: %s vs %s: %w",
 			ft1.returnType.String(), ft2.returnType.String(), err)
 	}
 
@@ -968,6 +1037,7 @@ func (ti *TypeInferer) unifyTypeVariables(t1, t2 Type) error {
 			ti.subst[t1v.id] = t2
 			return nil
 		}
+
 		return ErrRecursiveType
 	}
 
@@ -976,6 +1046,7 @@ func (ti *TypeInferer) unifyTypeVariables(t1, t2 Type) error {
 			ti.subst[t2v.id] = t1
 			return nil
 		}
+
 		return ErrRecursiveType
 	}
 
@@ -987,9 +1058,11 @@ func (ti *TypeInferer) isAnyType(t Type) bool {
 	if ct, ok := t.(*ConcreteType); ok {
 		return ct.name == TypeAny
 	}
+
 	if pt, ok := t.(*PrimitiveType); ok {
 		return pt.name == TypeAny
 	}
+
 	return false
 }
 
@@ -1005,6 +1078,7 @@ func (ti *TypeInferer) occursCheck(v *TypeVar, t Type) bool {
 				return true
 			}
 		}
+
 		return ti.occursCheck(v, t.returnType)
 	case *GenericType:
 		for _, arg := range t.typeArgs {
@@ -1012,6 +1086,7 @@ func (ti *TypeInferer) occursCheck(v *TypeVar, t Type) bool {
 				return true
 			}
 		}
+
 		return false
 	default:
 		return false
@@ -1039,7 +1114,7 @@ func (ti *TypeInferer) pruneWithVisited(t Type, visited map[int]bool) Type {
 			// Cycle detected - return the type variable to break the cycle
 			return tv
 		}
-		
+
 		if subst, exists := ti.subst[tv.id]; exists {
 			// Mark as visited before recursing
 			visited[tv.id] = true
@@ -1047,19 +1122,35 @@ func (ti *TypeInferer) pruneWithVisited(t Type, visited map[int]bool) Type {
 			pruned := ti.pruneWithVisited(subst, visited)
 			// Update substitution for efficiency
 			ti.subst[tv.id] = pruned
+
 			return pruned
 		}
 	}
+
 	return t
 }
 
-// applySubst applies a substitution to a type
+// applySubst applies a substitution to a type with cycle detection
 func (ti *TypeInferer) applySubst(t Type, subst Substitution) Type {
+	return ti.applySubstWithVisited(t, subst, make(map[int]bool))
+}
+
+// applySubstWithVisited applies substitution with visited tracking to prevent infinite recursion
+func (ti *TypeInferer) applySubstWithVisited(t Type, subst Substitution, visited map[int]bool) Type {
 	switch t := t.(type) {
 	case *TypeVar:
-		if newType, exists := subst[t.id]; exists {
-			return ti.applySubst(newType, subst)
+		// Prevent infinite recursion by tracking visited type variables
+		if visited[t.id] {
+			return t // Return original type if we've seen it before (cycle detected)
 		}
+		
+		if newType, exists := subst[t.id]; exists {
+			visited[t.id] = true
+			result := ti.applySubstWithVisited(newType, subst, visited)
+			delete(visited, t.id) // Clean up for other branches
+			return result
+		}
+
 		return t
 	case *ConcreteType:
 		return t
@@ -1068,20 +1159,32 @@ func (ti *TypeInferer) applySubst(t Type, subst Substitution) Type {
 	case *FunctionType:
 		newParams := make([]Type, len(t.paramTypes))
 		for i, p := range t.paramTypes {
-			newParams[i] = ti.applySubst(p, subst)
+			newParams[i] = ti.applySubstWithVisited(p, subst, visited)
 		}
+
 		return &FunctionType{
 			paramTypes: newParams,
-			returnType: ti.applySubst(t.returnType, subst),
+			returnType: ti.applySubstWithVisited(t.returnType, subst, visited),
 		}
 	case *GenericType:
 		newArgs := make([]Type, len(t.typeArgs))
 		for i, arg := range t.typeArgs {
-			newArgs[i] = ti.applySubst(arg, subst)
+			newArgs[i] = ti.applySubstWithVisited(arg, subst, visited)
 		}
+
 		return &GenericType{
 			name:     t.name,
 			typeArgs: newArgs,
+		}
+	case *RecordType:
+		// HINDLEY-MILNER FIX: Apply substitutions to record field types
+		newFields := make(map[string]Type)
+		for fieldName, fieldType := range t.fields {
+			newFields[fieldName] = ti.applySubstWithVisited(fieldType, subst, visited)
+		}
+		return &RecordType{
+			name:   t.name,
+			fields: newFields,
 		}
 	default:
 		return t
@@ -1101,12 +1204,22 @@ func (ti *TypeInferer) getFreeVars(t Type) []int {
 		for _, p := range t.paramTypes {
 			vars = append(vars, ti.getFreeVars(p)...)
 		}
+
 		vars = append(vars, ti.getFreeVars(t.returnType)...)
+
 		return uniqueInts(vars)
 	case *GenericType:
 		var vars []int
 		for _, arg := range t.typeArgs {
 			vars = append(vars, ti.getFreeVars(arg)...)
+		}
+
+		return uniqueInts(vars)
+	case *RecordType:
+		// HINDLEY-MILNER FIX: Include free variables from record field types
+		var vars []int
+		for _, fieldType := range t.fields {
+			vars = append(vars, ti.getFreeVars(fieldType)...)
 		}
 		return uniqueInts(vars)
 	default:
@@ -1135,8 +1248,10 @@ func (ti *TypeInferer) inferIdentifierType(e *ast.Identifier) (Type, error) {
 		if scheme, ok := t.(*TypeScheme); ok {
 			return ti.Instantiate(scheme), nil
 		}
+
 		return t, nil
 	}
+
 	if e.Position != nil {
 		//nolint:err113 // Dynamic error needed for exact test format matching
 		return nil, fmt.Errorf("line %d:%d: undefined variable '%s': undefined variable",
@@ -1208,6 +1323,7 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 			if err != nil {
 				return nil, err
 			}
+
 			argTypes = append(argTypes, argType)
 		}
 	} else {
@@ -1217,6 +1333,7 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 			if err != nil {
 				return nil, err
 			}
+
 			argTypes = append(argTypes, argType)
 		}
 	}
@@ -1225,6 +1342,7 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 	for i, argType := range argTypes {
 		if ti.isAnyType(argType) {
 			var argPos *ast.Position
+
 			if len(e.NamedArguments) > 0 && i < len(e.NamedArguments) {
 				// Get position from named argument expression
 				if valExpr := e.NamedArguments[i].Value; valExpr != nil {
@@ -1260,7 +1378,7 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 			} else {
 				argPos = e.Position
 			}
-			
+
 			// Get function name for error message
 			var funcName string
 			if ident, ok := e.Function.(*ast.Identifier); ok {
@@ -1268,12 +1386,12 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 			} else {
 				funcName = "function"
 			}
-			
+
 			// Use default position if argument position is nil
 			if argPos == nil {
 				argPos = e.Position
 			}
-			
+
 			return nil, fmt.Errorf("line %d:%d: %w - pattern matching required: function '%s' expecting '%c'",
 				argPos.Line, argPos.Column, ErrAnyTypeMismatch, funcName, 'a'+i)
 		}
@@ -1286,10 +1404,15 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 		returnType: resultType,
 	}
 
-	// Unify with actual function type
-	if err := ti.Unify(funcType, expectedFuncType); err != nil {
-		return nil, fmt.Errorf("function call type mismatch: actual=%s, expected=%s: %w", 
-			funcType.String(), expectedFuncType.String(), err)
+	// HINDLEY-MILNER FIX: Apply current substitutions to function type before unification
+	// This ensures that type variables are resolved before attempting unification
+	substitutedFuncType := ti.applySubst(funcType, ti.subst)
+	substitutedExpectedType := ti.applySubst(expectedFuncType, ti.subst)
+	
+	// Unify with actual function type after applying substitutions
+	if err := ti.Unify(substitutedFuncType, substitutedExpectedType); err != nil {
+		return nil, fmt.Errorf("function call type mismatch: actual=%s, expected=%s: %w",
+			substitutedFuncType.String(), substitutedExpectedType.String(), err)
 	}
 
 	// Return the resolved/substituted result type, not the fresh variable
@@ -1350,10 +1473,12 @@ func (ti *TypeInferer) inferChannelOperationExpression(expr ast.Expression) (Typ
 		if err != nil {
 			return nil, err
 		}
+
 		_, err = ti.InferType(e.Value)
 		if err != nil {
 			return nil, err
 		}
+
 		return &ConcreteType{name: TypeInt}, nil
 	case *ast.ChannelRecvExpression:
 		// Channel recv returns the value type (simplified as any for now)
@@ -1362,6 +1487,7 @@ func (ti *TypeInferer) inferChannelOperationExpression(expr ast.Expression) (Typ
 		if err != nil {
 			return nil, err
 		}
+
 		return &ConcreteType{name: "any"}, nil
 	default:
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedExpression, expr)
@@ -1432,6 +1558,7 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 		if err := ti.Unify(leftType, rightType); err != nil {
 			return nil, fmt.Errorf("comparison operands must have same type: %w", err)
 		}
+
 		return &ConcreteType{name: TypeBool}, nil
 
 	case isLogicalOp(e.Operator):
@@ -1440,9 +1567,11 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 		if err := ti.Unify(leftType, boolType); err != nil {
 			return nil, fmt.Errorf("left operand of %s must be Bool: %w", e.Operator, err)
 		}
+
 		if err := ti.Unify(rightType, boolType); err != nil {
 			return nil, fmt.Errorf("right operand of %s must be Bool: %w", e.Operator, err)
 		}
+
 		return boolType, nil
 
 	default:
@@ -1493,16 +1622,17 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 		}
 	}
 
-	// Default case: try integer addition (for compatibility)
-	intType := &ConcreteType{name: TypeInt}
-	if err := ti.Unify(leftType, intType); err != nil {
-		return nil, fmt.Errorf("left operand of + must be Int or String: %w", err)
+	// HINDLEY-MILNER FIX: Default case for type variables
+	// If we reach here, we have type variables that could be either int or string
+	// Create a constraint that both operands must have the same type
+	if err := ti.Unify(leftType, rightType); err != nil {
+		return nil, fmt.Errorf("operands of + must have the same type: %w", err)
 	}
-	if err := ti.Unify(rightType, intType); err != nil {
-		return nil, fmt.Errorf("right operand of + must be Int or String: %w", err)
-	}
-	//TODO: we need other number types like float.
-	return intType, nil
+	
+	// For polymorphic + operator, we can't determine the result type yet
+	// Return a fresh type variable that will be unified later based on usage context
+	// The actual type (int or string) will be determined when the function is called
+	return ti.Fresh(), nil
 }
 
 // isStringType checks if a type is a string type
@@ -1510,6 +1640,7 @@ func (ti *TypeInferer) isStringType(t Type) bool {
 	if concrete, ok := t.(*ConcreteType); ok {
 		return concrete.name == TypeString
 	}
+
 	return false
 }
 
@@ -1519,34 +1650,38 @@ func (ti *TypeInferer) isGenericTypeCompatible(t1, t2 string) bool {
 	if t1 == "Iterator<T>" && strings.HasPrefix(t2, "Iterator<") {
 		return true
 	}
+
 	if t2 == "Iterator<T>" && strings.HasPrefix(t1, "Iterator<") {
 		return true
 	}
-	
+
 	// Handle Iterator<U> compatibility with Iterator<int>
 	if t1 == "Iterator<U>" && strings.HasPrefix(t2, "Iterator<") {
 		return true
 	}
+
 	if t2 == "Iterator<U>" && strings.HasPrefix(t1, "Iterator<") {
 		return true
 	}
-	
+
 	// Handle function type compatibility
 	if t1 == "T -> Unit" && strings.HasSuffix(t2, " -> Unit") {
 		return true
 	}
+
 	if t2 == "T -> Unit" && strings.HasSuffix(t1, " -> Unit") {
 		return true
 	}
-	
+
 	// Handle generic type variables
 	if t1 == "T" || t1 == "U" {
 		return true
 	}
+
 	if t2 == "T" || t2 == "U" {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -1555,6 +1690,7 @@ func (ti *TypeInferer) isIntType(t Type) bool {
 	if concrete, ok := t.(*ConcreteType); ok {
 		return concrete.name == TypeInt
 	}
+
 	return false
 }
 
@@ -1571,6 +1707,7 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 		if fieldType, exists := recordType.fields[e.FieldName]; exists {
 			return fieldType, nil
 		}
+
 		return nil, WrapFieldNotFoundInRecord(e.FieldName, recordType.String())
 	}
 
@@ -1578,7 +1715,7 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 	if typeVar, ok := objectType.(*TypeVar); ok {
 		// For polymorphic field access, create a fresh type variable for the field type
 		fieldType := ti.Fresh()
-		
+
 		// Check if this type variable is already constrained to a record type
 		if existing := ti.prune(typeVar); existing != typeVar {
 			if recordType, ok := existing.(*RecordType); ok {
@@ -1587,18 +1724,18 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 				return fieldType, nil
 			}
 		}
-		
+
 		// Create a record type constraint with the required field
 		// Use the type variable ID to ensure all field accesses on the same variable
 		// create constraints on the same record type
 		constraintName := fmt.Sprintf("Record_%d", typeVar.id)
 		constraintRecord := NewRecordType(constraintName, map[string]Type{e.FieldName: fieldType})
-		
+
 		// Unify the type variable with a record type that has this field
 		if err := ti.Unify(typeVar, constraintRecord); err != nil {
 			return nil, fmt.Errorf("field access constraint failed: %w", err)
 		}
-		
+
 		return fieldType, nil
 	}
 
@@ -1611,6 +1748,7 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 		if fieldType, exists := recordType.fields[e.FieldName]; exists {
 			return fieldType, nil
 		}
+
 		return nil, WrapFieldNotFoundInRecord(e.FieldName, recordType.String())
 	}
 
@@ -1633,56 +1771,59 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 		if !exists {
 			return nil, ErrSuccessConstructorMissingValue
 		}
-		
+
 		// Infer the type of the value
 		valueType, err := ti.InferType(valueExpr)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// Create Result<T, string> type where T is the value type
 		errorType := &ConcreteType{name: "string"}
+
 		return CreateResultType(valueType, errorType), nil
 	}
-	
+
 	// Special handling for Error constructor
 	if e.TypeName == "Error" {
 		messageExpr, exists := e.Fields["message"]
 		if !exists {
 			return nil, ErrErrorConstructorMissingMessage
 		}
-		
+
 		// Infer the type of the message
 		messageType, err := ti.InferType(messageExpr)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// Create Result<T, E> type where E is the message type and T is a fresh type variable
 		valueType := ti.Fresh()
+
 		return CreateResultType(valueType, messageType), nil
 	}
-	
+
 	// Look up constructor in environment
 	if t, ok := ti.env.Get(e.TypeName); ok {
 		// Check if this is a record type
 		if recordType, isRecord := t.(*RecordType); isRecord {
 			// Create a new record type with fields instantiated from the constructor values
 			fieldTypes := make(map[string]Type)
-			
+
 			// Infer the type of each field from the constructor expression
 			for fieldName, fieldExpr := range e.Fields {
 				fieldType, err := ti.InferType(fieldExpr)
 				if err != nil {
 					return nil, err
 				}
+
 				fieldTypes[fieldName] = fieldType
 			}
-			
+
 			// Create a monomorphic instance of the record type
 			return NewRecordType(recordType.name, fieldTypes), nil
 		}
-		
+
 		// Check if this is a constrained record type
 		if ti.generator != nil {
 			if typeDecl, exists := ti.generator.typeDeclarations[e.TypeName]; exists {
@@ -1692,9 +1833,10 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 				}
 			}
 		}
-		
+
 		return t, nil
 	}
+
 	return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, e.TypeName)
 }
 
@@ -1705,8 +1847,6 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 	if err != nil {
 		return nil, err
 	}
-	
-	
 
 	if len(e.Arms) == 0 {
 		return nil, ErrMatchNoArms
@@ -1714,6 +1854,7 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 
 	// Process each arm separately to handle pattern binding
 	var armTypes []Type
+
 	for _, arm := range e.Arms {
 		// Save the current environment
 		oldEnv := ti.env
@@ -1747,6 +1888,7 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 			// Include position info and proper formatting
 			expectedType := firstArmType.String()
 			actualType := armTypes[i].String()
+
 			return nil, WrapMatchTypeMismatchWithPos(i, actualType, expectedType, e.Position)
 		}
 	}
@@ -1774,6 +1916,7 @@ func (ti *TypeInferer) inferResultExpression(e *ast.ResultExpression) (Type, err
 	}
 	// For error case, we need a fresh type variable for the success type
 	successType := ti.Fresh()
+
 	return CreateResultType(successType, valueType), nil
 }
 
@@ -1797,6 +1940,7 @@ func (ti *TypeInferer) inferListLiteral(e *ast.ListLiteral) (Type, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		if err := ti.Unify(firstType, elemType); err != nil {
 			return nil, fmt.Errorf("list element %d type mismatch: %w", i, err)
 		}
@@ -1817,7 +1961,7 @@ func (ti *TypeInferer) inferObjectLiteral(e *ast.ObjectLiteral) (Type, error) {
 	for fieldName := range e.Fields {
 		fieldNames = append(fieldNames, fieldName)
 	}
-	
+
 	// Use deterministic ordering based on field names
 	for i := 0; i < len(fieldNames); i++ {
 		for j := i + 1; j < len(fieldNames); j++ {
@@ -1829,12 +1973,15 @@ func (ti *TypeInferer) inferObjectLiteral(e *ast.ObjectLiteral) (Type, error) {
 
 	// Infer types of all fields in sorted order
 	fieldTypes := make(map[string]Type)
+
 	for _, fieldName := range fieldNames {
 		fieldValue := e.Fields[fieldName]
+
 		fieldType, err := ti.InferType(fieldValue)
 		if err != nil {
 			return nil, fmt.Errorf("object field '%s' type inference failed: %w", fieldName, err)
 		}
+
 		fieldTypes[fieldName] = fieldType
 	}
 
@@ -1842,7 +1989,7 @@ func (ti *TypeInferer) inferObjectLiteral(e *ast.ObjectLiteral) (Type, error) {
 	// Generate a unique name for anonymous record types
 	recordTypeName := fmt.Sprintf("Record_%d", ti.nextID)
 	ti.nextID++
-	
+
 	return NewRecordType(recordTypeName, fieldTypes), nil
 }
 
@@ -1871,6 +2018,7 @@ func (ti *TypeInferer) inferBlockExpression(e *ast.BlockExpression) (Type, error
 	// The type of the block is the type of its final expression
 	if e.Expression != nil {
 		var err error
+
 		blockType, err = ti.InferType(e.Expression)
 		if err != nil {
 			ti.env = oldEnv // Restore environment on error
@@ -1882,6 +2030,7 @@ func (ti *TypeInferer) inferBlockExpression(e *ast.BlockExpression) (Type, error
 		if len(e.Statements) > 0 {
 			if exprStmt, ok := e.Statements[len(e.Statements)-1].(*ast.ExpressionStatement); ok {
 				var err error
+
 				blockType, err = ti.InferType(exprStmt.Expression)
 				if err != nil {
 					ti.env = oldEnv // Restore environment on error
@@ -1915,6 +2064,7 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 		if err := ti.Unify(operandType, intType); err != nil {
 			return nil, fmt.Errorf("operand of %s must be Int: %w", e.Operator, err)
 		}
+
 		return intType, nil
 	case "!":
 		// Logical NOT requires Bool operand and returns Bool
@@ -1922,6 +2072,7 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 		if err := ti.Unify(operandType, boolType); err != nil {
 			return nil, fmt.Errorf("operand of ! must be Bool: %w", err)
 		}
+
 		return boolType, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedUnaryOperator, e.Operator)
@@ -1972,6 +2123,7 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 
 	// List access returns Result<T, Error> for safety
 	errorType := &ConcreteType{name: "Error"}
+
 	return CreateResultType(elementType, errorType), nil
 }
 

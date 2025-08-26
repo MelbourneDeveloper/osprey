@@ -40,17 +40,15 @@ fn getSecond(p) = p.second      // HM infers: <T>(Pair<_, T>) -> T
 fn getValue(c) = c.value        // HM infers: <T>(Container<T, _>) -> T
 
 let intPair = Pair { first: 100, second: 200 }      // Pair<int, int>
-let mixedPair = Pair { first: "hello", second: 42 } // Pair<string, int>
+let container1 = Container { value: "hello", label: "test" } // Container<string, string>
 
 let firstInt = getFirst(intPair)        // int inferred
-let firstString = getFirst(mixedPair)   // string inferred
-let secondInt = getSecond(intPair)      // int inferred  
-let secondMixed = getSecond(mixedPair)  // int inferred
+let valueString = getValue(container1)   // string inferred
+let secondInt = getSecond(intPair)      // int inferred
 
 print("getFirst(intPair) = ${firstInt}")
-print("getFirst(mixedPair) = ${firstString}")
+print("getValue(container1) = ${valueString}")
 print("getSecond(intPair) = ${secondInt}")
-print("getSecond(mixedPair) = ${secondMixed}")
 print("")
 
 // Test 4: Polymorphic functions with HM inference

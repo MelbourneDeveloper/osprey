@@ -13,9 +13,11 @@ func TestGetOperatorDescription(t *testing.T) {
 	if desc == nil {
 		t.Fatal("Expected description for '+' operator, got nil")
 	}
+
 	if desc.Symbol != "+" {
 		t.Errorf("Expected symbol '+', got %q", desc.Symbol)
 	}
+
 	if desc.Name != "Addition" {
 		t.Errorf("Expected name 'Addition', got %q", desc.Name)
 	}
@@ -25,9 +27,11 @@ func TestGetOperatorDescription(t *testing.T) {
 	if desc == nil {
 		t.Fatal("Expected description for '==' operator, got nil")
 	}
+
 	if desc.Symbol != "==" {
 		t.Errorf("Expected symbol '==', got %q", desc.Symbol)
 	}
+
 	if desc.Name != "Equality" {
 		t.Errorf("Expected name 'Equality', got %q", desc.Name)
 	}
@@ -46,6 +50,7 @@ func TestGetBuiltinTypeDescription(t *testing.T) {
 	if desc == nil {
 		t.Fatal("Expected description for 'Int' type, got nil")
 	}
+
 	if desc.Name != "Int" {
 		t.Errorf("Expected name 'Int', got %q", desc.Name)
 	}
@@ -55,6 +60,7 @@ func TestGetBuiltinTypeDescription(t *testing.T) {
 	if desc == nil {
 		t.Fatal("Expected description for 'String' type, got nil")
 	}
+
 	if desc.Name != "String" {
 		t.Errorf("Expected name 'String', got %q", desc.Name)
 	}
@@ -73,6 +79,7 @@ func TestGetBuiltinFunctionDescription(t *testing.T) {
 	if desc == nil {
 		t.Fatal("Expected description for 'print' function, got nil")
 	}
+
 	if desc.Name != "print" {
 		t.Errorf("Expected name 'print', got %q", desc.Name)
 	}
@@ -82,6 +89,7 @@ func TestGetBuiltinFunctionDescription(t *testing.T) {
 	if desc == nil {
 		t.Fatal("Expected description for 'length' function, got nil")
 	}
+
 	if desc.Name != "length" {
 		t.Errorf("Expected name 'length', got %q", desc.Name)
 	}
@@ -100,6 +108,7 @@ func TestGetKeywordDescription(t *testing.T) {
 	if desc == nil {
 		t.Fatal("Expected description for 'fn' keyword, got nil")
 	}
+
 	if desc.Keyword != "fn" {
 		t.Errorf("Expected keyword 'fn', got %q", desc.Keyword)
 	}
@@ -109,6 +118,7 @@ func TestGetKeywordDescription(t *testing.T) {
 	if desc == nil {
 		t.Fatal("Expected description for 'let' keyword, got nil")
 	}
+
 	if desc.Keyword != "let" {
 		t.Errorf("Expected keyword 'let', got %q", desc.Keyword)
 	}

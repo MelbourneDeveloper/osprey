@@ -245,6 +245,7 @@ func (b *Builder) buildTypeConstructor(ctx *parser.TypeConstructorContext) Expre
 
 	// Build field assignments
 	fieldAssignments := make(map[string]Expression)
+
 	if ctx.FieldAssignments() != nil {
 		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
 			fieldName := fieldCtx.ID().GetText()
@@ -292,6 +293,7 @@ func (b *Builder) buildBlockExpression(ctx parser.IBlockExprContext) Expression 
 
 	// Build all statements in the block
 	statements := make([]Statement, 0)
+
 	for _, stmtCtx := range blockBody.AllStatement() {
 		stmt := b.buildStatement(stmtCtx)
 		if stmt != nil {
@@ -318,6 +320,7 @@ func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExp
 	operationName := ctx.ID(1).GetText()
 
 	var arguments []Expression
+
 	if ctx.ArgList() != nil {
 		args, _ := b.buildArguments(ctx.ArgList()) // Ignore named args for now
 		arguments = args
@@ -339,6 +342,7 @@ func (b *Builder) buildObjectLiteral(ctx parser.IObjectLiteralContext) Expressio
 
 	// Build field assignments
 	fieldAssignments := make(map[string]Expression)
+
 	if ctx.FieldAssignments() != nil {
 		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
 			fieldName := fieldCtx.ID().GetText()
@@ -365,11 +369,13 @@ func (b *Builder) buildHandlerExpression(ctx parser.IPrimaryContext) *HandlerExp
 
 	// Build handler arms
 	handlers := make([]HandlerArm, 0)
+
 	for _, armCtx := range handlerCtx.AllHandlerArm() {
 		operationName := armCtx.ID().GetText()
 
 		// Get parameters if present
 		var parameters []string
+
 		if armCtx.HandlerParams() != nil {
 			for _, idCtx := range armCtx.HandlerParams().AllID() {
 				parameters = append(parameters, idCtx.GetText())

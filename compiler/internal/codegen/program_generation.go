@@ -36,10 +36,13 @@ func (g *LLVMGenerator) GenerateProgram(program *ast.Program) (*ir.Module, error
 
 // collectDeclarations collects function declarations and top-level statements.
 func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.FunctionDeclaration, []ast.Statement, error) {
-	var mainFunc *ast.FunctionDeclaration
-	var topLevelStatements []ast.Statement
+	var (
+		mainFunc           *ast.FunctionDeclaration
+		topLevelStatements []ast.Statement
+	)
 
 	// FIRST PASS: Declare ALL types and externs first
+
 	for _, stmt := range program.Statements {
 		switch s := stmt.(type) {
 		case *ast.ExternDeclaration:
@@ -89,15 +92,19 @@ func (g *LLVMGenerator) isTopLevelStatement(stmt ast.Statement) bool {
 	if _, isType := stmt.(*ast.TypeDeclaration); isType {
 		return false
 	}
+
 	if _, isExtern := stmt.(*ast.ExternDeclaration); isExtern {
 		return false
 	}
+
 	if _, isEffect := stmt.(*ast.EffectDeclaration); isEffect {
 		return false
 	}
+
 	if _, isFunc := stmt.(*ast.FunctionDeclaration); isFunc {
 		return false
 	}
+
 	return true
 }
 

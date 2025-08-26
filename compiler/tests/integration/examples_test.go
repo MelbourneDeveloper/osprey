@@ -46,6 +46,7 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 					// Use .expectedoutput file content, trimmed to match captureJITOutput behavior
 					expectedOutput := strings.TrimSpace(string(expectedContent))
 					testExampleFileWithTrimming(t, path, expectedOutput, true)
+
 					return
 				}
 
@@ -59,9 +60,11 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 						"🚨 Then copy the output to create the .expectedoutput file!",
 						info.Name(), expectedOutputPath, info.Name())
 				}
+
 				testExampleFileWithTrimming(t, path, expectedOutput, false)
 			})
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -365,6 +368,7 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 			strings.Contains(err.Error(), "no suitable compiler found") {
 			t.Fatalf("❌ LLVM TOOLS NOT FOUND - TEST FAILED for %s: %v", filePath, err)
 		}
+
 		t.Fatalf("Failed to execute %s: %v", filePath, err)
 	}
 

@@ -7,7 +7,6 @@ import (
 func TestAnyTypeValidationBehavior(t *testing.T) {
 	// This test verifies that the any-type validation rules work correctly
 	// by testing the actual files that should pass/fail compilation
-
 	tests := []struct {
 		name        string
 		filePath    string
@@ -53,7 +52,6 @@ func TestAnyTypeValidationBehavior(t *testing.T) {
 			// 1. Parse the file using the actual parser
 			// 2. Generate code using the actual generator
 			// 3. Check for the expected success/failure
-
 			t.Logf("Testing: %s", tt.description)
 			t.Logf("File: %s", tt.filePath)
 			t.Logf("Should fail: %v", tt.shouldFail)

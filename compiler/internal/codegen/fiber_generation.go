@@ -168,6 +168,7 @@ func (g *LLVMGenerator) generateYieldExpression(yield *ast.YieldExpression) (val
 	var yieldValue value.Value
 	if yield.Value != nil {
 		var err error
+
 		yieldValue, err = g.generateExpression(yield.Value)
 		if err != nil {
 			return nil, err
@@ -184,8 +185,10 @@ func (g *LLVMGenerator) generateYieldExpression(yield *ast.YieldExpression) (val
 func (g *LLVMGenerator) generateChannelExpression(channel *ast.ChannelExpression) (value.Value, error) {
 	// Get capacity
 	var capacity value.Value = constant.NewInt(types.I64, defaultChannelCapacity)
+
 	if channel.Capacity != nil {
 		var err error
+
 		capacity, err = g.generateExpression(channel.Capacity)
 		if err != nil {
 			return nil, err
@@ -200,8 +203,10 @@ func (g *LLVMGenerator) generateChannelExpression(channel *ast.ChannelExpression
 func (g *LLVMGenerator) generateChannelCreateExpression(channel *ast.ChannelCreateExpression) (value.Value, error) {
 	// Get capacity
 	var capacity value.Value = constant.NewInt(types.I64, defaultChannelCapacity)
+
 	if channel.Capacity != nil {
 		var err error
+
 		capacity, err = g.generateExpression(channel.Capacity)
 		if err != nil {
 			return nil, err
@@ -249,6 +254,7 @@ func (g *LLVMGenerator) generateChannelFunctionCall(builtinName string, runtimeN
 	args := make([]value.Value, len(callExpr.Arguments))
 	for i, arg := range callExpr.Arguments {
 		var err error
+
 		args[i], err = g.generateExpression(arg)
 		if err != nil {
 			return nil, err
@@ -278,13 +284,13 @@ func (g *LLVMGenerator) generateChannelCreateCall(callExpr *ast.CallExpression) 
 func (g *LLVMGenerator) generateSelectExpression(selectExpr *ast.SelectExpression) (value.Value, error) {
 	// For now, implement basic select that evaluates first ready channel
 	// TODO: Implement proper non-deterministic select with runtime support
-
 	if len(selectExpr.Arms) == 0 {
 		return constant.NewInt(types.I64, 0), nil
 	}
 
 	// For simplicity, evaluate first arm
 	firstArm := selectExpr.Arms[0]
+
 	result, err := g.generateExpression(firstArm.Expression)
 	if err != nil {
 		return nil, err

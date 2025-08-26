@@ -11,6 +11,10 @@
 
 ## 8. Pattern Matching
 
+**🔥 CRITICAL SPECIFICATION**: Pattern matching in Osprey MUST use **FIELD NAME MATCHING ONLY**. Pattern matching on record types is based on **structural equivalence by field names**, never field ordering or positioning.
+
+**IMPLEMENTATION REQUIREMENT**: The compiler MUST implement pattern matching using field name lookup and structural type unification as specified in the Hindley-Milner Type Inference requirements (see [Type System](0005-TypeSystem.md#50-hindley-milner-type-inference-foundation)).
+
 ### 8.1 Basic Patterns
 
 ```osprey

@@ -23,7 +23,6 @@ func NewJITExecutor() *JITExecutor {
 // CompileAndRunInMemory compiles LLVM IR and runs it without external dependencies.
 func (j *JITExecutor) CompileAndRunInMemory(ir string) error {
 	// For immediate solution: use embedded compilation approach
-
 	return j.compileAndRunEmbedded(ir)
 }
 
@@ -34,6 +33,7 @@ func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Compile IR to object file
@@ -101,6 +101,7 @@ func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
 // setupLinkArgs builds the linking arguments for the executable
 func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) []string {
 	var linkArgs []string
+
 	linkArgs = append(linkArgs, "-o", exeFile, objFile)
 
 	// Find and add runtime libraries (order matters: dependents before dependencies)
@@ -120,10 +121,12 @@ func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string
 	paths := j.buildRuntimeLibraryPaths(libName)
 
 	var foundLib string
+
 	for _, libPath := range paths {
 		if _, err := os.Stat(libPath); err == nil {
 			linkArgs = append(linkArgs, libPath)
 			foundLib = libPath
+
 			break
 		}
 	}
@@ -181,6 +184,7 @@ func (j *JITExecutor) addOpenSSLFlags(linkArgs []string) []string {
 		}
 
 		opensslLibPath := ""
+
 		for _, path := range possiblePaths {
 			if _, err := os.Stat(filepath.Join(path, "libssl.dylib")); err == nil {
 				opensslLibPath = path
@@ -248,6 +252,7 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Compile IR to object file

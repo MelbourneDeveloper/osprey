@@ -153,6 +153,7 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 	if ctx.RecordType() != nil {
 		// Create a single variant with the type name and record fields
 		fields := make([]TypeField, 0)
+
 		if ctx.RecordType().FieldDeclarations() != nil {
 			for _, fieldCtx := range ctx.RecordType().FieldDeclarations().AllFieldDeclaration() {
 				field := TypeField{
@@ -166,7 +167,7 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 						Function:  fieldCtx.FunctionCall().ID().GetText(),
 						Arguments: make([]Expression, 0),
 					}
-					
+
 					// Parse function call arguments if any
 					if fieldCtx.FunctionCall().ArgList() != nil {
 						for _, argCtx := range fieldCtx.FunctionCall().ArgList().AllExpr() {
@@ -174,7 +175,7 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 							constraint.Arguments = append(constraint.Arguments, arg)
 						}
 					}
-					
+
 					field.Constraint = constraint
 				}
 
@@ -191,6 +192,7 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 
 	// Handle optional type validation
 	var validationFunc *string
+
 	if ctx.TypeValidation() != nil {
 		funcName := ctx.TypeValidation().ID().GetText()
 		validationFunc = &funcName
@@ -222,7 +224,7 @@ func (b *Builder) buildVariant(ctx parser.IVariantContext) TypeVariant {
 					Function:  fieldCtx.FunctionCall().ID().GetText(),
 					Arguments: make([]Expression, 0),
 				}
-				
+
 				// Parse function call arguments if any
 				if fieldCtx.FunctionCall().ArgList() != nil {
 					for _, argCtx := range fieldCtx.FunctionCall().ArgList().AllExpr() {
@@ -230,7 +232,7 @@ func (b *Builder) buildVariant(ctx parser.IVariantContext) TypeVariant {
 						constraint.Arguments = append(constraint.Arguments, arg)
 					}
 				}
-				
+
 				field.Constraint = constraint
 			}
 
@@ -299,6 +301,7 @@ func (b *Builder) buildTypeExpression(ctx parser.ITypeContext) *TypeExpression {
 	// Handle array types like [String]
 	if ctx.LSQUARE() != nil && ctx.RSQUARE() != nil {
 		typeExpr.IsArray = true
+
 		if ctx.Type_() != nil {
 			arrayElement := b.buildTypeExpression(ctx.Type_())
 			typeExpr.ArrayElement = arrayElement
@@ -313,6 +316,7 @@ func (b *Builder) buildModuleDecl(ctx parser.IModuleDeclContext) *ModuleDeclarat
 	name := ctx.ID().GetText()
 
 	statements := make([]Statement, 0)
+
 	if ctx.ModuleBody() != nil {
 		for _, stmtCtx := range ctx.ModuleBody().AllModuleStatement() {
 			var stmt Statement

@@ -95,6 +95,7 @@ func NewBuiltInFunctionRegistry() *BuiltInFunctionRegistry {
 		functions: make(map[string]*BuiltInFunction),
 	}
 	registry.initializeFunctions()
+
 	return registry
 }
 
@@ -117,6 +118,7 @@ func (r *BuiltInFunctionRegistry) GetFunctionsByCategory(category FunctionCatego
 			functions = append(functions, fn)
 		}
 	}
+
 	return functions
 }
 
@@ -153,6 +155,7 @@ func (r *BuiltInFunctionRegistry) GetFunctionNames() []string {
 	for name := range r.functions {
 		names = append(names, name)
 	}
+
 	return names
 }
 
@@ -913,7 +916,6 @@ func (r *BuiltInFunctionRegistry) registerSystemFunctions() {
 		Generator:      (*LLVMGenerator).generateWebSocketKeepAliveCall,
 		Example:        `websocketKeepAlive()  // Blocks until Ctrl+C`,
 	}
-
 }
 
 // registerFiberFunctions registers fiber and concurrency functions

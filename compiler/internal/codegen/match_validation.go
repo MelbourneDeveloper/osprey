@@ -62,6 +62,7 @@ func (g *LLVMGenerator) validateMatchExhaustiveness(expr *ast.MatchExpression) e
 			hasWildcard = true
 			break // Wildcard covers all remaining cases
 		}
+
 		if pattern != "" {
 			coveredVariants[pattern] = true
 		}
@@ -74,6 +75,7 @@ func (g *LLVMGenerator) validateMatchExhaustiveness(expr *ast.MatchExpression) e
 
 	// Check if all variants are covered
 	var missingVariants []string
+
 	for _, variant := range typeDecl.Variants {
 		if !coveredVariants[variant.Name] {
 			missingVariants = append(missingVariants, variant.Name)
@@ -117,6 +119,7 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 		for i, arg := range args {
 			exprs[i] = arg.Value
 		}
+
 		return exprs, nil // No parameter info, keep original order
 	}
 
@@ -135,6 +138,7 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 		if !exists {
 			return nil, fmt.Errorf("%w: %s", ErrUnknownParameterName, arg.Name)
 		}
+
 		reorderedArgs[pos] = arg.Value
 	}
 
@@ -155,7 +159,9 @@ func (g *LLVMGenerator) validateMatchPatternWithPosition(pattern ast.Pattern, ma
 			constructorName := pattern.Constructor
 			return WrapUnknownVariantWithPos(constructorName, "Color", matchPos)
 		}
+
 		return err
 	}
+
 	return nil
 }

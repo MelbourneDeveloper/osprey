@@ -26,7 +26,7 @@ type ParameterDesc struct {
 func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 	// Convert from the unified registry format to the legacy format
 	descriptions := make(map[string]*BuiltinFunctionDesc)
-	
+
 	for _, fn := range codegen.GlobalBuiltInRegistry.GetAllFunctions() {
 		// Convert parameters
 		params := make([]ParameterDesc, len(fn.ParameterTypes))
@@ -37,7 +37,7 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 				Description: param.Description,
 			}
 		}
-		
+
 		descriptions[fn.Name] = &BuiltinFunctionDesc{
 			Name:        fn.Name,
 			Signature:   fn.Signature,
@@ -47,7 +47,7 @@ func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
 			Example:     fn.Example,
 		}
 	}
-	
+
 	return descriptions
 }
 
@@ -57,6 +57,7 @@ func GetBuiltinFunctionDescription(name string) *BuiltinFunctionDesc {
 	if desc, exists := descriptions[name]; exists {
 		return desc
 	}
+
 	return nil
 }
 
@@ -67,6 +68,7 @@ func ValidateAllBuiltinFunctionsDocumented() []string {
 	builtinFunctions := GetCompilerBuiltinFunctionNames()
 
 	descriptions := GetBuiltinFunctionDescriptions()
+
 	var missing []string
 
 	for _, funcName := range builtinFunctions {
@@ -88,9 +90,11 @@ func GetCompilerBuiltinFunctionNames() []string {
 // This can be used to cross-check against the actual compiler implementation.
 func GetAllBuiltinFunctionNames() []string {
 	descriptions := GetBuiltinFunctionDescriptions()
+
 	var names []string
 	for name := range descriptions {
 		names = append(names, name)
 	}
+
 	return names
 }

@@ -34,6 +34,7 @@ func (g *LLVMGenerator) ensureHTTPFunctionDeclaration(functionName string) *ir.F
 	// Create function with the correct C runtime name (which is now in the registry)
 	fn := g.module.NewFunc(builtinFunc.CName, returnType, params...)
 	g.functions[functionName] = fn
+
 	return fn
 }
 
@@ -57,6 +58,7 @@ func (g *LLVMGenerator) generateHTTPFunctionCall(functionName string, callExpr *
 		if err != nil {
 			return nil, err
 		}
+
 		argValues[i] = val
 	}
 
@@ -88,17 +90,21 @@ func (g *LLVMGenerator) generateHTTPFunctionCallNamed(functionName string, callE
 	argValues := make([]value.Value, len(builtinFunc.ParameterTypes))
 	for i, param := range builtinFunc.ParameterTypes {
 		found := false
+
 		for _, namedArg := range callExpr.NamedArguments {
 			if namedArg.Name == param.Name {
 				val, err := g.generateExpression(namedArg.Value)
 				if err != nil {
 					return nil, err
 				}
+
 				argValues[i] = val
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			return nil, WrapHTTPFunctionMissingNamedArg(functionName, param.Name)
 		}
@@ -186,6 +192,7 @@ func (g *LLVMGenerator) generateHTTPRequestWithMethod(callExpr *ast.CallExpressi
 		if err != nil {
 			return nil, err
 		}
+
 		body = g.createEmptyStringConstant()
 	} else {
 		// POST/PUT: body from arg 2, headers from arg 3
@@ -193,6 +200,7 @@ func (g *LLVMGenerator) generateHTTPRequestWithMethod(callExpr *ast.CallExpressi
 		if err != nil {
 			return nil, err
 		}
+
 		headers, err = g.generateExpression(callExpr.Arguments[3])
 		if err != nil {
 			return nil, err
@@ -201,6 +209,7 @@ func (g *LLVMGenerator) generateHTTPRequestWithMethod(callExpr *ast.CallExpressi
 
 	// Call http_request
 	fn := g.ensureHTTPFunctionDeclaration(HTTPRequestOsprey)
+
 	return g.builder.NewCall(fn, clientID, methodVal, path, headers, body), nil
 }
 
@@ -208,6 +217,7 @@ func (g *LLVMGenerator) generateHTTPRequestWithMethod(callExpr *ast.CallExpressi
 func (g *LLVMGenerator) createEmptyStringConstant() value.Value {
 	emptyStr := constant.NewCharArrayFromString("")
 	emptyGlobal := g.module.NewGlobalDef("", emptyStr)
+
 	return g.builder.NewGetElementPtr(emptyStr.Typ, emptyGlobal,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 }

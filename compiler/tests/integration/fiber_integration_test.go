@@ -154,6 +154,7 @@ func testFiberKeywords(t *testing.T) {
 	for _, keyword := range fiberKeywords {
 		t.Run("keyword_"+keyword, func(t *testing.T) {
 			source := getFiberKeywordTestSource(keyword)
+
 			_, err := codegen.CompileToLLVM(source)
 			if err != nil {
 				t.Errorf("Fiber keyword %s should compile successfully: %v", keyword, err)
@@ -190,6 +191,7 @@ func testFiberNesting(t *testing.T) {
 
 		for i, expr := range nestedFiberTests {
 			var source string
+
 			switch i {
 			case 0: // "await (spawn 42)" - returns int
 				source = fmt.Sprintf("fn test() -> int = %s\nfn main() -> int = test()", expr)
@@ -202,6 +204,7 @@ func testFiberNesting(t *testing.T) {
 			default:
 				source = fmt.Sprintf("fn test() -> int = %s\nfn main() -> int = test()", expr)
 			}
+
 			_, err := codegen.CompileToLLVM(source)
 			if err != nil {
 				t.Errorf("Nested fiber expression %d should compile: %v", i, err)
@@ -224,6 +227,7 @@ func testChannelOperations(t *testing.T) {
 
 		for name, expr := range channelTests {
 			var source string
+
 			switch name {
 			case "channel_creation", "typed_channel":
 				source = fmt.Sprintf("fn test() -> Channel = %s\nfn main() -> int = recv(test())", expr)
@@ -234,6 +238,7 @@ func testChannelOperations(t *testing.T) {
 			default:
 				source = fmt.Sprintf("fn test() -> int = %s\nfn main() -> int = test()", expr)
 			}
+
 			_, err := codegen.CompileToLLVM(source)
 			if err != nil {
 				t.Errorf("Channel operation %s should compile: %v", name, err)
@@ -258,6 +263,7 @@ func testFiberLambdas(t *testing.T) {
 
 		for i, expr := range lambdaTests {
 			var source string
+
 			switch i {
 			case 0: // "spawn 42" - returns Fiber
 				source = fmt.Sprintf("fn test() -> Fiber = %s\nfn main() -> int = await(test())", expr)
@@ -270,6 +276,7 @@ func testFiberLambdas(t *testing.T) {
 			default:
 				source = fmt.Sprintf("fn test() -> int = %s\nfn main() -> int = test()", expr)
 			}
+
 			_, err := codegen.CompileToLLVM(source)
 			if err != nil {
 				t.Errorf("Fiber lambda %d should compile: %v", i, err)

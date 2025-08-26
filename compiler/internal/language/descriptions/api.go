@@ -68,6 +68,7 @@ func GetLanguageElementDescription(name string) *LanguageElement {
 	if element, exists := elements[name]; exists {
 		return element
 	}
+
 	return nil
 }
 
@@ -85,24 +86,28 @@ func GetHoverDocumentation(name string) string {
 		if element.Signature != "" {
 			parts = append(parts, "```osprey\n"+element.Signature+"\n```")
 		}
+
 		parts = append(parts, element.Description)
 		if element.Example != "" {
 			parts = append(parts, "\n**Example:**\n```osprey\n"+element.Example+"\n```")
 		}
 	case "type":
 		parts = append(parts, "```osprey\ntype "+element.Name+"\n```")
+
 		parts = append(parts, element.Description)
 		if element.Example != "" {
 			parts = append(parts, "\n**Example:**\n```osprey\n"+element.Example+"\n```")
 		}
 	case "operator":
 		parts = append(parts, "**Operator:** `"+name+"`")
+
 		parts = append(parts, element.Description)
 		if element.Example != "" {
 			parts = append(parts, "\n**Example:**\n```osprey\n"+element.Example+"\n```")
 		}
 	case "keyword":
 		parts = append(parts, "**Keyword:** `"+element.Name+"`")
+
 		parts = append(parts, element.Description)
 		if element.Example != "" {
 			parts = append(parts, "\n**Example:**\n```osprey\n"+element.Example+"\n```")

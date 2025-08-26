@@ -72,5 +72,6 @@ func GetBuiltinTypeDescription(name string) *BuiltinTypeDesc {
 	if desc, exists := descriptions[name]; exists {
 		return desc
 	}
+
 	return nil
 }

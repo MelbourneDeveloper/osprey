@@ -60,5 +60,6 @@ func GetKeywordDescription(keyword string) *KeywordDesc {
 	if desc, exists := descriptions[keyword]; exists {
 		return desc
 	}
+
 	return nil
 }

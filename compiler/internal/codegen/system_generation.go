@@ -70,8 +70,10 @@ func (g *LLVMGenerator) callFunctionWithTwoValues(
 // callBuiltInPrint prints a single LLVM IR value using the C library puts
 // function. It first converts any integer or boolean values to strings.
 func (g *LLVMGenerator) callBuiltInPrint(val value.Value) (value.Value, error) {
-	var strArg value.Value
-	var err error
+	var (
+		strArg value.Value
+		err    error
+	)
 
 	switch val.Type().(type) {
 	case *types.PointerType: // i8* – already a C-string.
@@ -83,6 +85,7 @@ func (g *LLVMGenerator) callBuiltInPrint(val value.Value) (value.Value, error) {
 		} else {
 			strArg, err = g.generateIntToString(val)
 		}
+
 		if err != nil {
 			return nil, err
 		}
@@ -92,6 +95,7 @@ func (g *LLVMGenerator) callBuiltInPrint(val value.Value) (value.Value, error) {
 
 	puts := g.functions["puts"]
 	res := g.builder.NewCall(puts, strArg)
+
 	return g.builder.NewSExt(res, types.I64), nil // normalise to i64
 }
 
@@ -105,6 +109,7 @@ func (g *LLVMGenerator) callBuiltInToString(val value.Value) (value.Value, error
 		if val.Type().(*types.IntType).BitSize == 1 {
 			return g.generateBoolToString(val)
 		}
+
 		return g.generateIntToString(val)
 	default:
 		return nil, ErrNoToStringImpl
@@ -237,6 +242,7 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 	if err != nil {
 		return nil, err
 	}
+
 	content, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err
@@ -419,5 +425,6 @@ func (g *LLVMGenerator) generateCleanupProcessCall(callExpr *ast.CallExpression)
 	}
 
 	g.builder.NewCall(fn, processID)
+
 	return constant.NewInt(types.I64, 0), nil // Return success
 }

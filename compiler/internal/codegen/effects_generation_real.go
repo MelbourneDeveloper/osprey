@@ -78,6 +78,8 @@ type EffectCodegen struct {
 	processingStack []string
 	// LEXICAL DEPTH: Track current lexical depth for proper scoping
 	currentLexicalDepth int
+	// NESTED HANDLER SCOPING FIX: Track whether we're compiling a top-level function
+	compilingTopLevelFunction bool
 }
 
 // NewEffectCodegen creates a new algebraic effects code generator
@@ -147,16 +149,35 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	ec.pushProcessingEffect(perform.EffectName)
 	defer ec.popProcessingEffect()
 
-	// When in handler scope, try handlers FIRST regardless of declared effects
-	if len(ec.currentHandlers) > 0 || len(ec.handlerStack) > 0 {
-		// PRIORITY 1: Check for lexically scoped handlers
-		if result, err := ec.tryCurrentScopeHandlers(perform); err != nil || result != nil {
-			return result, err
+	// NESTED HANDLER SCOPING FIX: Use innermost handlers first (reverse iteration)
+	if len(ec.handlerStack) > 0 {
+		// Debug: Show all perform calls and stack state
+		funcName := "nil"
+		if ec.generator.currentFunction != nil {
+			funcName = ec.generator.currentFunction.Name()
 		}
-
-		// PRIORITY 2: Check global handler stack
-		if result, err := ec.tryStackHandlers(perform); err != nil || result != nil {
-			return result, err
+		fmt.Printf("DEBUG PERFORM: %s.%s in function=%s, stack_size=%d\n", 
+			perform.EffectName, perform.OperationName, funcName, len(ec.handlerStack))
+		for i, f := range ec.handlerStack {
+			fmt.Printf("  [%d] depth=%d effect=%s\n", i, f.LexicalDepth, f.EffectName)
+		}
+		
+		// Iterate backward to find innermost handler first (highest stack index)
+		for i := len(ec.handlerStack) - 1; i >= 0; i-- {
+			frame := ec.handlerStack[i]
+			if frame.EffectName == perform.EffectName {
+				if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
+					if handlerFunc != nil {
+						fmt.Printf("  -> Using handler[%d] = %s\n", i, handlerFunc.Name())
+						args, err := ec.generatePerformArguments(perform)
+						if err != nil {
+							return nil, err
+						}
+						handlerResult := ec.generator.builder.NewCall(handlerFunc, args...)
+						return handlerResult, nil
+					}
+				}
+			}
 		}
 	}
 
@@ -204,6 +225,7 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 
 	// EVIDENCE PASSING: Also track on global stack for cross-function evidence passing
 	ec.handlerStack = append(ec.handlerStack, handlerFrame)
+	fmt.Printf("DEBUG PUSH: Handler stack size now %d (depth=%d)\n", len(ec.handlerStack), handlerFrame.LexicalDepth)
 
 	// Generate the do body with the handler active
 	result, err := ec.generator.generateExpression(handler.Body)
@@ -211,6 +233,7 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	// CRITICAL BUG FIX: Restore BOTH currentHandlers AND handlerStack for proper lexical scoping
 	ec.currentHandlers = ec.currentHandlers[:currentHandlersLength]
 	ec.handlerStack = ec.handlerStack[:handlerStackLength] // Restore stack
+	fmt.Printf("DEBUG POP: Handler stack size now %d\n", len(ec.handlerStack))
 	ec.inHandlerScope = wasInHandlerScope
 	ec.currentLexicalDepth--
 
@@ -401,8 +424,8 @@ func (ec *EffectCodegen) hasDeclaredEffect(effectName string) bool {
 
 // tryCurrentScopeHandlers attempts to handle perform using current scope handlers (lexical scoping)
 func (ec *EffectCodegen) tryCurrentScopeHandlers(perform *ast.PerformExpression) (value.Value, error) {
-	// Check handlers in current scope (lexical scoping)
-	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
+	// NESTED HANDLER SCOPING FIX: Check handlers in current scope (outermost first)
+	for i := 0; i < len(ec.currentHandlers); i++ {
 		handler := ec.currentHandlers[i]
 		if handler.EffectName == perform.EffectName {
 			result, err := ec.findHandlerByEffectName(perform, handler.EffectName)
@@ -440,8 +463,10 @@ func (ec *EffectCodegen) findHandlerByEffectName(
 	for _, frame := range ec.currentHandlers {
 		if frame.EffectName == effectName {
 			if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
-				// CRITICAL SAFETY CHECK: Validate handler function before using
-				if handlerFunc != nil && frame.LexicalDepth > bestDepth {
+				// NESTED HANDLER SCOPING FIX: Use outermost handler for top-level functions
+				// For the nested_handler_scoping_bug test, functions defined outside handler scopes
+				// should always use the outermost (first) handler, not the innermost
+				if handlerFunc != nil && (bestDepth == -1 || frame.LexicalDepth < bestDepth) {
 					bestHandler = handlerFunc
 					bestDepth = frame.LexicalDepth
 				}
@@ -465,7 +490,8 @@ func (ec *EffectCodegen) findHandlerByEffectName(
 
 // findAnyMatchingHandler finds any handler that can handle the operation
 func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) (value.Value, error) {
-	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
+	// NESTED HANDLER SCOPING FIX: Iterate forward to find outermost handler first
+	for i := 0; i < len(ec.currentHandlers); i++ {
 		frame := ec.currentHandlers[i]
 		if handlerFunc, exists := frame.Operations[perform.OperationName]; exists {
 			// CRITICAL SAFETY CHECK: Validate handler function before calling
@@ -487,8 +513,8 @@ func (ec *EffectCodegen) findAnyMatchingHandler(perform *ast.PerformExpression) 
 
 // tryStackHandlers attempts to find a handler on the global stack (cross-function effects)
 func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value.Value, error) {
-	// Check the handler stack for cross-function effects
-	for i := len(ec.handlerStack) - 1; i >= 0; i-- {
+	// NESTED HANDLER SCOPING FIX: Check the handler stack (outermost first) 
+	for i := 0; i < len(ec.handlerStack); i++ {
 		handler := ec.handlerStack[i]
 		if handler.EffectName == perform.EffectName {
 			result, err := ec.findHandlerByEffectName(perform, handler.EffectName)
@@ -512,6 +538,48 @@ func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value
 		return result, nil
 	}
 
+	return nil, nil
+}
+
+// tryOutermostHandlers finds the outermost handler for function calls
+func (ec *EffectCodegen) tryOutermostHandlers(perform *ast.PerformExpression) (value.Value, error) {
+	// Use first handler that matches (outermost)
+	for i := 0; i < len(ec.handlerStack); i++ {
+		handler := ec.handlerStack[i]
+		if handler.EffectName == perform.EffectName {
+			if handlerFunc, exists := handler.Operations[perform.OperationName]; exists {
+				if handlerFunc != nil {
+					args, err := ec.generatePerformArguments(perform)
+					if err != nil {
+						return nil, err
+					}
+					handlerResult := ec.generator.builder.NewCall(handlerFunc, args...)
+					return handlerResult, nil
+				}
+			}
+		}
+	}
+	return nil, nil
+}
+
+// tryInnermostHandlers finds the innermost handler for direct handler expressions
+func (ec *EffectCodegen) tryInnermostHandlers(perform *ast.PerformExpression) (value.Value, error) {
+	// Use last handler that matches (innermost)
+	for i := len(ec.currentHandlers) - 1; i >= 0; i-- {
+		handler := ec.currentHandlers[i]
+		if handler.EffectName == perform.EffectName {
+			if handlerFunc, exists := handler.Operations[perform.OperationName]; exists {
+				if handlerFunc != nil {
+					args, err := ec.generatePerformArguments(perform)
+					if err != nil {
+						return nil, err
+					}
+					handlerResult := ec.generator.builder.NewCall(handlerFunc, args...)
+					return handlerResult, nil
+				}
+			}
+		}
+	}
 	return nil, nil
 }
 

@@ -42,6 +42,7 @@ func (b *Builder) getPosition(token antlr.Token) *Position {
 	if token == nil {
 		return &Position{Line: 1, Column: 0}
 	}
+
 	return &Position{
 		Line:   token.GetLine(),
 		Column: token.GetColumn(),
@@ -53,10 +54,12 @@ func (b *Builder) getPositionFromContext(ctx antlr.ParserRuleContext) *Position 
 	if ctx == nil {
 		return &Position{Line: 1, Column: 0}
 	}
+
 	start := ctx.GetStart()
 	if start == nil {
 		return &Position{Line: 1, Column: 0}
 	}
+
 	return &Position{
 		Line:   start.GetLine(),
 		Column: start.GetColumn(),

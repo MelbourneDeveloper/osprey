@@ -11,17 +11,20 @@ import (
 
 // LLVMGenerator generates LLVM IR from AST.
 type LLVMGenerator struct {
-	module            *ir.Module
-	builder           *ir.Block
-	function          *ir.Func
-	variables         map[string]value.Value
-	mutableVariables  map[string]bool   // Track which variables were declared as mutable
-	functions         map[string]*ir.Func
+	module             *ir.Module
+	builder            *ir.Block
+	function           *ir.Func
+	variables          map[string]value.Value
+	mutableVariables   map[string]bool // Track which variables were declared as mutable
+	functions          map[string]*ir.Func
 	functionParameters map[string][]string // Track function parameter names for named argument reordering
-	typeMap           map[string]types.Type
+	typeMap            map[string]types.Type
 	// Union type tracking
 	typeDeclarations map[string]*ast.TypeDeclaration // Track all type declarations
 	unionVariants    map[string]int64                // Track union variants and their discriminant values
+	// Monomorphization tracking
+	monomorphizedInstances map[string]string                   // Track monomorphized function instances
+	functionDeclarations   map[string]*ast.FunctionDeclaration // Track original function declarations
 	// Fiber closure counter
 	closureCounter int
 	// Result pattern matching support
@@ -35,9 +38,13 @@ type LLVMGenerator struct {
 	// Real algebraic effects system
 	effectCodegen *EffectCodegen
 	// Context for type-aware literal generation
-	expectedReturnType types.Type
+	expectedReturnType   types.Type
+	expectedParameterType types.Type
 	// Hindley-Milner type inference system
 	typeInferer *TypeInferer
+	// HINDLEY-MILNER FIX: Single source of truth for record field mappings
+	// Maps record type name to field name -> LLVM index mapping
+	recordFieldMappings map[string]map[string]int
 }
 
 // SecurityConfig defines security policies for the code generator.
@@ -76,12 +83,12 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 	}
 
 	generator := &LLVMGenerator{
-		module:            module,
-		variables:         make(map[string]value.Value),
-		mutableVariables:  make(map[string]bool),
-		functions:         make(map[string]*ir.Func),
+		module:             module,
+		variables:          make(map[string]value.Value),
+		mutableVariables:   make(map[string]bool),
+		functions:          make(map[string]*ir.Func),
 		functionParameters: make(map[string][]string),
-		typeMap:           typeMap,
+		typeMap:            typeMap,
 		// Initialize union type tracking
 		typeDeclarations: make(map[string]*ast.TypeDeclaration),
 		unionVariants:    make(map[string]int64),
@@ -93,6 +100,8 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		currentFunctionParams: make(map[string]value.Value),
 		// Initialize Hindley-Milner type inference system
 		typeInferer: NewTypeInferer(),
+		// HINDLEY-MILNER FIX: Initialize record field mappings
+		recordFieldMappings: make(map[string]map[string]int),
 	}
 
 	// Declare external functions for FFI
@@ -124,6 +133,7 @@ func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration)
 	if g.effectCodegen == nil {
 		g.InitializeEffects()
 	}
+
 	return g.effectCodegen.RegisterEffect(effect)
 }
 
@@ -132,6 +142,7 @@ func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpres
 	if g.effectCodegen == nil {
 		g.InitializeEffects()
 	}
+
 	return g.effectCodegen.GeneratePerformExpression(perform)
 }
 
@@ -180,8 +191,6 @@ func (g *LLVMGenerator) declareExternalFunctions() {
 	)
 	g.functions["memcpy"] = memcpy
 }
-
-
 
 // registerBuiltInTypes registers built-in types in the type system.
 func (g *LLVMGenerator) registerBuiltInTypes() {

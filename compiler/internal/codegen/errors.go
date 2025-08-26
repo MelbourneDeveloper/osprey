@@ -27,7 +27,7 @@ var (
 	ErrUnsupportedExpression     = errors.New("unsupported expression")
 	ErrUnsupportedBinaryOperator = errors.New("unsupported binary operator")
 	ErrUnsupportedUnaryOperator  = errors.New("unsupported unary operator")
-	
+
 	// Result constructor errors
 	ErrSuccessConstructorMissingValue = errors.New("success constructor requires 'value' field")
 	ErrErrorConstructorMissingMessage = errors.New("error constructor requires 'message' field")
@@ -188,11 +188,13 @@ func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos inte
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		// Try to get parameter names from the built-in function registry
 		paramNames := ""
+
 		if fn, exists := GlobalBuiltInRegistry.GetFunction(funcName); exists {
 			var names []string
 			for _, param := range fn.ParameterTypes {
 				names = append(names, param.Name)
 			}
+
 			if len(names) > 0 {
 				paramNames = fmt.Sprintf(" (%s)", strings.Join(names, ", "))
 			}
@@ -202,6 +204,7 @@ func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos inte
 		return fmt.Errorf("line %d:%d: %s expects exactly %d arguments%s, got %d",
 			position.Line, position.Column, funcName, expected, paramNames, actual)
 	}
+
 	return WrapWrongArgCount(funcName, expected, actual)
 }
 
@@ -216,6 +219,7 @@ func WrapUndefinedVariableWithPos(varName string, pos interface{}) error {
 		return fmt.Errorf("line %d:%d: %w: %s",
 			position.Line, position.Column, ErrUndefinedVariable, varName)
 	}
+
 	return fmt.Errorf("%w: %s", ErrUndefinedVariable, varName)
 }
 
@@ -224,6 +228,7 @@ func WrapUnsupportedBinaryOpWithPos(op string, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrUnsupportedBinaryOp, op)
 	}
+
 	return fmt.Errorf("%w: %s", ErrUnsupportedBinaryOp, op)
 }
 
@@ -232,6 +237,7 @@ func WrapVoidArithmeticWithPos(op string, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w %s", position.Line, position.Column, ErrVoidArithmetic, op)
 	}
+
 	return fmt.Errorf("%w %s", ErrVoidArithmetic, op)
 }
 
@@ -240,6 +246,7 @@ func WrapUnsupportedUnaryOpWithPos(op string, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrUnsupportedUnaryOperator, op)
 	}
+
 	return fmt.Errorf("%w: %s", ErrUnsupportedUnaryOperator, op)
 }
 
@@ -253,6 +260,7 @@ func WrapConstraintResultFieldAccessWithPos(field string, pos interface{}) error
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrConstraintResultFieldAccess, field)
 	}
+
 	return fmt.Errorf("%w: %s", ErrConstraintResultFieldAccess, field)
 }
 
@@ -444,6 +452,7 @@ func WrapImmutableAssignmentErrorWithPos(varName string, pos interface{}) error 
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrImmutableAssignmentError, varName)
 	}
+
 	return fmt.Errorf("%w: %s", ErrImmutableAssignmentError, varName)
 }
 
@@ -505,6 +514,7 @@ func WrapMissingArgumentWithPos(argName string, funcName string, pos interface{}
 		return fmt.Errorf("line %d:%d: %w: %s for function %s",
 			position.Line, position.Column, ErrMissingArgument, argName, funcName)
 	}
+
 	return fmt.Errorf("%w: %s for function %s", ErrMissingArgument, argName, funcName)
 }
 
@@ -576,6 +586,7 @@ func WrapMatchNotExhaustiveWithPos(missingPatterns []string, pos interface{}) er
 		return fmt.Errorf("line %d:%d: %w: missing patterns: %v",
 			position.Line, position.Column, ErrMatchNotExhaustive, missingPatterns)
 	}
+
 	return fmt.Errorf("%w: missing patterns: %v", ErrMatchNotExhaustive, missingPatterns)
 }
 
@@ -585,6 +596,7 @@ func WrapMatchTypeMismatchWithPos(armIndex int, returnType, expectedType string,
 		return fmt.Errorf("line %d:%d: %w: arm %d returns '%s' but expected '%s'",
 			position.Line, position.Column, ErrMatchTypeMismatch, armIndex, returnType, expectedType)
 	}
+
 	return fmt.Errorf("%w: arm %d returns '%s' but expected '%s'",
 		ErrMatchTypeMismatch, armIndex, returnType, expectedType)
 }
@@ -595,6 +607,7 @@ func WrapUnknownVariantWithPos(variantName, typeName string, pos interface{}) er
 		return fmt.Errorf("line %d:%d: %w: variant '%s' is not defined in type '%s'",
 			position.Line, position.Column, ErrUnknownVariant, variantName, typeName)
 	}
+
 	return fmt.Errorf("%w: variant '%s' is not defined in type '%s'",
 		ErrUnknownVariant, variantName, typeName)
 }

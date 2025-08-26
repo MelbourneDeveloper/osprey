@@ -57,6 +57,7 @@ func handleBasicFlags(args []string) *cli.CommandResult {
 		fmt.Println("Osprey Compiler 1.0.0")
 		return &cli.CommandResult{Success: true, Output: ""}
 	}
+
 	return nil
 }
 
@@ -68,6 +69,7 @@ func handleSpecialModes(args []string) *cli.CommandResult {
 	case HoverFlag:
 		return handleHoverMode(args)
 	}
+
 	return nil
 }
 
@@ -90,6 +92,7 @@ func handleDocsMode(args []string) *cli.CommandResult {
 	}
 
 	result := cli.RunCommand("", cli.OutputModeDocs, docsDir, false)
+
 	return &result
 }
 
@@ -98,9 +101,12 @@ func handleHoverMode(args []string) *cli.CommandResult {
 	if len(args) < MinHoverArgs {
 		fmt.Println("Error: --hover requires an element name")
 		fmt.Println("Example: osprey --hover print")
+
 		return &cli.CommandResult{Success: false, ErrorMsg: "Missing element name for --hover"}
 	}
+
 	result := cli.RunCommand(args[2], cli.OutputModeHover, "", false)
+
 	return &result
 }
 
@@ -131,6 +137,7 @@ func handleFileBasedOperations(args []string) cli.CommandResult {
 	if parsedMode != "" {
 		outputMode = parsedMode
 	}
+
 	if parsedDocsDir != "" {
 		docsDir = parsedDocsDir
 	}
@@ -175,6 +182,7 @@ func parseOutputMode(arg string) string {
 		DocsFlag:    cli.OutputModeDocs,
 		HoverFlag:   cli.OutputModeHover,
 	}
+
 	return modes[arg]
 }
 
@@ -193,6 +201,7 @@ func parseSecurityMode(arg string, security *cli.SecurityConfig) bool {
 	case "--no-fs":
 		security.AllowFileRead = false
 		security.AllowFileWrite = false
+
 		return true
 	case "--no-ffi":
 		security.AllowFFI = false
@@ -211,7 +220,6 @@ func executeCommandWithSecurity(
 	// Use security-aware functions if security settings are non-default
 	if security.SandboxMode || !security.AllowHTTP || !security.AllowWebSocket ||
 		!security.AllowFileRead || !security.AllowFileWrite || !security.AllowFFI {
-
 		// Use security-aware command execution
 		return cli.RunCommandWithSecurity(filename, outputMode, quiet, security)
 	}
@@ -300,6 +308,7 @@ func HandleSpecialModes(args []string) (string, string, string) {
 				break
 			}
 		}
+
 		return "", cli.OutputModeDocs, docsDir
 	}
 
@@ -308,8 +317,10 @@ func HandleSpecialModes(args []string) (string, string, string) {
 		if len(args) < MinHoverArgs {
 			fmt.Println("Error: --hover requires an element name")
 			fmt.Println("Example: osprey --hover print")
+
 			return "", "", ""
 		}
+
 		return args[2], cli.OutputModeHover, ""
 	}
 
@@ -379,6 +390,7 @@ func ParseSecurityArg(arg string, security *cli.SecurityConfig) bool {
 	case "--no-fs":
 		security.AllowFileRead = false
 		security.AllowFileWrite = false
+
 		return true
 	case "--no-ffi":
 		security.AllowFFI = false
@@ -394,9 +406,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s\n", result.ErrorMsg)
 		os.Exit(1)
 	}
+
 	if result.Output != "" {
 		fmt.Print(result.Output)
 	}
+
 	if result.OutputFile != "" {
 		fmt.Printf("Output written to: %s\n", result.OutputFile)
 	}

@@ -165,7 +165,9 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 		for i, genericParam := range typeExpr.GenericParams {
 			typeArgs[i] = g.typeExpressionToInferenceType(&genericParam)
 		}
+
 		genericType := NewGenericType(typeExpr.Name, typeArgs)
+
 		return genericType
 	}
 
@@ -190,6 +192,7 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 			// If it's a single-variant record type, return RecordType
 			if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
 				fields := make(map[string]Type)
+
 				variant := &typeDecl.Variants[0]
 				for _, field := range variant.Fields {
 					// For now, use the field's declared type or default to int
@@ -205,12 +208,14 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 					default:
 						fieldType = &ConcreteType{name: field.Type}
 					}
+
 					fields[field.Name] = fieldType
 				}
+
 				return NewRecordType(typeExpr.Name, fields)
 			}
 		}
-		
+
 		// For unknown types without generic parameters, return as concrete type
 		return &ConcreteType{name: typeExpr.Name}
 	}
@@ -236,6 +241,7 @@ func (g *LLVMGenerator) generateLetDeclaration(letDecl *ast.LetDeclaration) (val
 		if err != nil {
 			return nil, err
 		}
+
 		varType = inferredType
 	}
 

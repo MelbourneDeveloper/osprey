@@ -148,6 +148,7 @@ func findAndAddLibrary(libName string, linkArgs []string) []string {
 			return append(linkArgs, libPath)
 		}
 	}
+
 	return linkArgs
 }
 
@@ -216,8 +217,8 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 	}
 
 	var lastErr error
-	for _, cmd := range clangCommands {
 
+	for _, cmd := range clangCommands {
 		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
 
 		linkOutput, err := linkCmd.CombinedOutput()
@@ -251,6 +252,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	if err := os.WriteFile(irFile, []byte(ir), FilePermissions); err != nil {
 		return WrapWriteIRFile(err)
 	}
+
 	defer func() { _ = os.Remove(irFile) }() // Clean up temp file
 
 	// Compile IR to object file using llc
@@ -267,6 +269,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	// Build link arguments with runtime libraries
 	var linkArgs []string
+
 	linkArgs = append(linkArgs, "-o", outputPath, objFile)
 
 	// Find and add runtime libraries (order matters: dependents before dependencies)
@@ -280,6 +283,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	// Check library availability and try linking
 	fiberExists, httpExists := checkLibraryAvailability()
+
 	return tryLinkWithCompilers(outputPath, objFile, linkArgs, fiberExists, httpExists)
 }
 

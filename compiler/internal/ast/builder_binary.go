@@ -14,14 +14,14 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 		conditionExpr := b.buildComparisonExpr(ctx.GetCond())
 		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
 		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
-		
+
 		// For structural patterns like v { value } ? value : "default"
 		// Extract fields from the pattern and replace variable references with field access
 		fieldPattern := b.buildFieldPattern("*", ctx.GetPat())
-		
+
 		if len(fieldPattern.Fields) == 1 {
 			fieldName := fieldPattern.Fields[0]
-			
+
 			// If then expression is just the field name, return field access directly
 			// Note: Result types will be caught at codegen and forced to use pattern matching
 			if identExpr, ok := thenExpr.(*Identifier); ok && identExpr.Name == fieldName {
@@ -32,14 +32,14 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 				}
 			}
 		}
-		
+
 		// Convert type pattern to structural pattern
 		pattern := Pattern{
 			Constructor: "",
 			IsWildcard:  false,
 			Fields:      fieldPattern.Fields,
 		}
-		
+
 		thenArm := MatchArm{
 			Pattern:    pattern,
 			Expression: thenExpr,
@@ -61,13 +61,13 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 		conditionExpr := b.buildComparisonExpr(ctx.GetCond())
 		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
 		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
-		
+
 		// For structural patterns like v { value } ? value : "default"
 		// Simplify to direct field access since pattern implies field exists
 		fieldPattern := b.buildFieldPattern("*", ctx.GetPat())
 		if len(fieldPattern.Fields) == 1 {
 			fieldName := fieldPattern.Fields[0]
-			
+
 			// If then expression is just the field name, return field access directly
 			// Note: Result types will be caught at codegen and forced to use pattern matching
 			if identExpr, ok := thenExpr.(*Identifier); ok && identExpr.Name == fieldName {
@@ -78,10 +78,10 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 				}
 			}
 		}
-		
+
 		// Fallback: create match expression (this shouldn't be reached for simple cases)
 		pattern := b.buildFieldPattern("*", ctx.GetPat())
-		
+
 		thenArm := MatchArm{
 			Pattern:    pattern,
 			Expression: thenExpr,
@@ -97,13 +97,13 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 			Arms:       []MatchArm{thenArm, elseArm},
 		}
 	}
-	
-	// Check if this is an Elvis operator (expr ?: else)  
+
+	// Check if this is an Elvis operator (expr ?: else)
 	if ctx.QUESTION() != nil && ctx.GetThenExpr() == nil {
 		// This is Elvis operator: condition ?: elseExpr
 		conditionExpr := b.buildComparisonExpr(ctx.ComparisonExpr())
 		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
-		
+
 		// For Result types, Elvis extracts Success value or uses default on Error
 		successArm := MatchArm{
 			Pattern:    Pattern{Constructor: "Success", Fields: []string{"value"}},
@@ -120,14 +120,14 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 			Arms:       []MatchArm{successArm, errorArm},
 		}
 	}
-	
+
 	// Check if this is a simple boolean ternary (expr ? then : else)
 	if ctx.QUESTION() != nil {
-		// First comparison expression is the condition 
+		// First comparison expression is the condition
 		conditionExpr := b.buildComparisonExpr(ctx.ComparisonExpr())
 		thenExpr := b.buildTernaryExpr(ctx.GetThenExpr())
 		elseExpr := b.buildTernaryExpr(ctx.GetElseExpr())
-		
+
 		trueArm := MatchArm{
 			Pattern:    Pattern{Constructor: "true"},
 			Expression: thenExpr,
@@ -143,7 +143,7 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 			Arms:       []MatchArm{trueArm, falseArm},
 		}
 	}
-	
+
 	// Otherwise it's just a comparison expression
 	return b.buildComparisonExpr(ctx.ComparisonExpr())
 }
@@ -230,38 +230,41 @@ func (b *Builder) buildMulExpr(ctx parser.IMulExprContext) Expression {
 	stars := ctx.AllSTAR()
 	slashes := ctx.AllSLASH()
 	mods := ctx.AllMOD_OP()
-	
+
 	// Determine operators by their positions in the input text
 	operators := make([]string, len(unaryExprs)-1)
 	starIdx, slashIdx, modIdx := 0, 0, 0
-	
+
 	for i := 0; i < len(operators); i++ {
 		starPos := -1
 		slashPos := -1
 		modPos := -1
-		
+
 		if starIdx < len(stars) {
 			starPos = stars[starIdx].GetSymbol().GetTokenIndex()
 		}
+
 		if slashIdx < len(slashes) {
 			slashPos = slashes[slashIdx].GetSymbol().GetTokenIndex()
 		}
+
 		if modIdx < len(mods) {
 			modPos = mods[modIdx].GetSymbol().GetTokenIndex()
 		}
-		
+
 		// Find the operator with the smallest position (appears first)
 		operators[i] = "*"
 		earliestPos := starPos
-		
+
 		if slashPos != -1 && (earliestPos == -1 || slashPos < earliestPos) {
 			earliestPos = slashPos
 			operators[i] = "/"
 		}
+
 		if modPos != -1 && (earliestPos == -1 || modPos < earliestPos) {
 			operators[i] = "%"
 		}
-		
+
 		// Advance the index for the operator we just used
 		switch operators[i] {
 		case "*":

@@ -13,6 +13,7 @@ import (
 func TestRunCommand_AST(t *testing.T) {
 	// Create test file
 	testFile := createTestFile(t, "test_ast.osp", "fn add(a, b) = a + b")
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false)
@@ -33,6 +34,7 @@ func TestRunCommand_AST(t *testing.T) {
 func TestRunCommand_LLVM(t *testing.T) {
 	// Create test file
 	testFile := createTestFile(t, "test_llvm.osp", "fn add(a, b) = a + b")
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	result := cli.RunCommand(testFile, cli.OutputModeLLVM, "", false)
@@ -49,6 +51,7 @@ func TestRunCommand_LLVM(t *testing.T) {
 func TestRunCommand_Symbols(t *testing.T) {
 	// Create test file with function
 	testFile := createTestFile(t, "test_symbols.osp", "fn add(a, b) = a + b")
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	result := cli.RunCommand(testFile, cli.OutputModeSymbols, "", false)
@@ -59,6 +62,7 @@ func TestRunCommand_Symbols(t *testing.T) {
 
 	// Validate JSON output
 	var symbols []interface{}
+
 	err := json.Unmarshal([]byte(result.Output), &symbols)
 	if err != nil {
 		t.Fatalf("Expected valid JSON output, got error: %v", err)
@@ -68,6 +72,7 @@ func TestRunCommand_Symbols(t *testing.T) {
 func TestRunCommand_Compile(t *testing.T) {
 	// Create test file
 	testFile := createTestFile(t, "test_compile.osp", "fn add(a, b) = a + b")
+
 	defer func() { _ = os.Remove(testFile) }()
 	defer cleanupOutputs(t, testFile)
 
@@ -89,6 +94,7 @@ func TestRunCommand_Compile(t *testing.T) {
 func TestRunCommand_Run(t *testing.T) {
 	// Create test file
 	testFile := createTestFile(t, "test_run.osp", "fn add(a, b) = a + b")
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	result := cli.RunCommand(testFile, cli.OutputModeRun, "", false)
@@ -106,6 +112,7 @@ func TestRunCommand_Run(t *testing.T) {
 func TestRunCommand_InvalidMode(t *testing.T) {
 	// Create test file
 	testFile := createTestFile(t, "test_invalid.osp", "fn add(a, b) = a + b")
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	result := cli.RunCommand(testFile, "invalid", "", false)
@@ -134,6 +141,7 @@ func TestRunCommand_FileNotFound(t *testing.T) {
 func TestRunCommand_SyntaxError(t *testing.T) {
 	// Create test file with syntax error
 	testFile := createTestFile(t, "test_syntax_error.osp", "fn invalid syntax {{{}}")
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false)
@@ -159,6 +167,7 @@ func TestRunCommand_AllModes(t *testing.T) {
 	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			testFile := createTestFile(t, "test_mode_"+mode+".osp", "fn add(a, b) = a + b")
+
 			defer func() { _ = os.Remove(testFile) }()
 			defer cleanupOutputs(t, testFile)
 
@@ -188,6 +197,7 @@ func createTestFile(t *testing.T, filename, content string) string {
 	t.Helper()
 
 	testFile := filepath.Join(t.TempDir(), filename)
+
 	err := os.WriteFile(testFile, []byte(content), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)

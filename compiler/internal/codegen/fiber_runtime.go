@@ -96,6 +96,7 @@ func fiberWorker() {
 func executeFiber(fiber *Fiber) {
 	// Mark as running
 	fiber.State = FiberRunning
+
 	atomic.AddInt32(&fiberRuntime.scheduler.runningCount, 1)
 
 	// Execute the fiber function
@@ -103,6 +104,7 @@ func executeFiber(fiber *Fiber) {
 
 	// Mark as completed
 	fiber.State = FiberCompleted
+
 	atomic.AddInt32(&fiberRuntime.scheduler.runningCount, -1)
 
 	// Signal completion

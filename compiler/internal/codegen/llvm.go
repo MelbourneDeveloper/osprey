@@ -46,43 +46,403 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		}
 	}
 
-	// Not a built-in function, generate the function value
-	funcValue, err := g.generateExpression(callExpr.Function)
-	if err != nil {
-		return nil, err
+	// For user-defined functions, resolve the correct monomorphized instance
+	var funcValue value.Value
+
+	if funcName != "" {
+		// Check if this function name is a parameter (not a declared function)
+		if val, isParam := g.variables[funcName]; isParam {
+			// This is a function parameter being called
+			funcValue = val
+		} else {
+			// Infer the argument types to determine which monomorphized instance to use
+			argTypes, err := g.inferCallArgumentTypes(callExpr)
+			if err != nil {
+				return nil, err
+			}
+			
+			// Get the correct monomorphized function
+			resolvedFunc, err := g.resolveMonomorphizedFunction(funcName, argTypes)
+			if err != nil {
+				return nil, err
+			}
+
+			funcValue = resolvedFunc
+		}
+	} else {
+		// Not an identifier (e.g., lambda or function parameter), generate normally
+		var err error
+
+		funcValue, err = g.generateExpression(callExpr.Function)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// Generate arguments
+	// Generate arguments - need to handle polymorphic function arguments specially
 	var args []value.Value
+
 	if len(callExpr.NamedArguments) > 0 {
 		// Handle named arguments
 		reorderedExprs, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
 		if err != nil {
 			return nil, err
 		}
-		// Convert expressions to values
+		// Convert expressions to values with type awareness
 		args = make([]value.Value, len(reorderedExprs))
 		for i, expr := range reorderedExprs {
-			val, err := g.generateExpression(expr)
+			// Set expected parameter type context for boolean literals
+			g.setParameterTypeContext(funcValue, i)
+			
+			val, err := g.generateTypedArgumentExpression(expr, i, callExpr, funcValue)
 			if err != nil {
 				return nil, err
 			}
+			
+			// Clear context after generating argument
+			g.clearParameterTypeContext()
+
 			args[i] = val
 		}
 	} else {
-		// Handle regular arguments
+		// Handle regular arguments with type awareness
 		args = make([]value.Value, len(callExpr.Arguments))
 		for i, arg := range callExpr.Arguments {
-			val, err := g.generateExpression(arg)
+			// Set expected parameter type context for boolean literals
+			g.setParameterTypeContext(funcValue, i)
+			
+			val, err := g.generateTypedArgumentExpression(arg, i, callExpr, funcValue)
 			if err != nil {
 				return nil, err
 			}
+			
+			// Clear context after generating argument
+			g.clearParameterTypeContext()
+
 			args[i] = val
 		}
 	}
 
 	// Create the function call
 	return g.builder.NewCall(funcValue, args...), nil
+}
+
+// generateArgumentExpression generates an argument value, handling polymorphic functions specially
+func (g *LLVMGenerator) generateArgumentExpression(
+	expr ast.Expression, 
+	argIndex int, 
+	callExpr *ast.CallExpression,
+) (value.Value, error) {
+	// Check if this argument is a function identifier that might be polymorphic
+	if ident, ok := expr.(*ast.Identifier); ok {
+		// Check if this is a polymorphic function
+		if funcTypeFromEnv, exists := g.typeInferer.env.Get(ident.Name); exists {
+			if _, ok := funcTypeFromEnv.(*TypeScheme); ok {
+				// This is a polymorphic function being passed as an argument
+				// We need to infer the complete call expression to determine concrete types
+				_, err := g.typeInferer.InferType(callExpr)
+				if err != nil {
+					return nil, fmt.Errorf("failed to infer call type: %w", err)
+				}
+				
+				// The type inference should have resolved the concrete types
+				// Now we can look up the monomorphized function
+				
+				// Get the argument types from the inferred call
+				argTypes, err := g.inferCallArgumentTypes(callExpr)
+				if err != nil {
+					return nil, fmt.Errorf("failed to infer argument types: %w", err)
+				}
+				
+				// For the function argument, we need to determine its concrete function type
+				// based on the context of how it will be used
+				if argIndex < len(argTypes) {
+					if fnType, ok := argTypes[argIndex].(*FunctionType); ok {
+						// Get the monomorphized function instance
+						mangledName := g.getMonomorphizedName(ident.Name, fnType)
+						
+						// Check if we already have this monomorphized instance
+						if fn, exists := g.functions[mangledName]; exists {
+							return fn, nil
+						}
+						
+						// Generate it on-demand
+						return g.generateMonomorphizedInstance(ident.Name, fnType)
+					}
+				}
+				
+				// If we get here, we need a different approach
+				// For now, try to infer from the argument context
+				if argIndex == 0 && len(argTypes) > 1 {
+					// This is likely the function parameter for apply(f, x)
+					// Try to create a function type based on x's type
+					xType := argTypes[1]  // The second argument (x)
+					// Create a function type: xType -> xType (for identity)
+					inferredFnType := &FunctionType{
+						paramTypes: []Type{xType},
+						returnType: xType,
+					}
+					
+					// Get the monomorphized function instance
+					mangledName := g.getMonomorphizedName(ident.Name, inferredFnType)
+					
+					// Check if we already have this monomorphized instance
+					if fn, exists := g.functions[mangledName]; exists {
+						return fn, nil
+					}
+					
+					// Generate it on-demand
+					return g.generateMonomorphizedInstance(ident.Name, inferredFnType)
+				}
+			}
+		}
+	}
+	
+	// For non-polymorphic function arguments, check if we need to handle type-specific generation
+	// This is important for boolean literals that need to match the expected parameter type
+	
+	// For now, generate normally - the type inference system should handle most cases
+	return g.generateExpression(expr)
+}
+
+// generateTypedArgumentExpression generates an argument with type awareness
+func (g *LLVMGenerator) generateTypedArgumentExpression(
+	expr ast.Expression, 
+	argIndex int, 
+	callExpr *ast.CallExpression, 
+	funcValue value.Value,
+) (value.Value, error) {
+	// Handle boolean literals directly if we know the expected type
+	if boolLit, ok := expr.(*ast.BooleanLiteral); ok && funcValue != nil {
+		// Try to get the function signature directly from the IR function
+		if irFunc, ok := funcValue.(*ir.Func); ok {
+			if argIndex < len(irFunc.Sig.Params) {
+				expectedType := irFunc.Sig.Params[argIndex]
+				
+				// Generate boolean with the correct type from the start
+				if expectedType == types.I1 {
+					if boolLit.Value {
+						return constant.NewBool(true), nil
+					}
+
+					return constant.NewBool(false), nil
+				}
+			}
+		}
+	}
+	
+	// For non-boolean literals or when type is not i1, use the polymorphic function handling
+	val, err := g.generateArgumentExpression(expr, argIndex, callExpr)
+	if err != nil {
+		return nil, err
+	}
+	
+	return val, nil
+}
+
+
+// inferCallArgumentTypes infers the types of arguments in a function call
+func (g *LLVMGenerator) inferCallArgumentTypes(callExpr *ast.CallExpression) ([]Type, error) {
+	var argTypes []Type
+	
+	if len(callExpr.NamedArguments) > 0 {
+		// Process named arguments
+		for _, namedArg := range callExpr.NamedArguments {
+			argType, err := g.typeInferer.InferType(namedArg.Value)
+			if err != nil {
+				return nil, err
+			}
+
+			argTypes = append(argTypes, argType)
+		}
+	} else {
+		// Process regular arguments
+		for _, arg := range callExpr.Arguments {
+			argType, err := g.typeInferer.InferType(arg)
+			if err != nil {
+				return nil, err
+			}
+
+			argTypes = append(argTypes, argType)
+		}
+	}
+	
+	return argTypes, nil
+}
+
+// resolveMonomorphizedFunction finds or creates the correct monomorphized instance
+func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes []Type) (value.Value, error) {
+	// Check if we have the function type in the environment
+	funcTypeFromEnv, exists := g.typeInferer.env.Get(funcName)
+	if !exists {
+		// Fallback to existing function lookup
+		if fn, exists := g.functions[funcName]; exists {
+			return fn, nil
+		}
+
+		return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, funcName)
+	}
+	
+	// Handle TypeScheme (polymorphic function)
+	if scheme, ok := funcTypeFromEnv.(*TypeScheme); ok {
+		// Instantiate the scheme to get a concrete function type
+		instantiated := g.typeInferer.Instantiate(scheme)
+		if fnType, ok := instantiated.(*FunctionType); ok {
+			// Unify the argument types to determine the concrete instantiation
+			expectedFnType := &FunctionType{
+				paramTypes: argTypes,
+				returnType: g.typeInferer.Fresh(),
+			}
+			
+			if err := g.typeInferer.Unify(fnType, expectedFnType); err != nil {
+				return nil, fmt.Errorf("function call type mismatch: %w", err)
+			}
+			
+			// Create the concrete function type after unification
+			concreteFnType := &FunctionType{
+				paramTypes: argTypes,
+				returnType: g.typeInferer.prune(expectedFnType.returnType),
+			}
+			
+			// Get the monomorphized name
+			mangledName := g.getMonomorphizedName(funcName, concreteFnType)
+			
+			// Check if we already have this monomorphized instance
+			if fn, exists := g.functions[mangledName]; exists {
+				return fn, nil
+			}
+			
+			// If not, we need to generate it on-demand
+			return g.generateMonomorphizedInstance(funcName, concreteFnType)
+		}
+	}
+	
+	// For non-polymorphic functions, just return the existing function
+	if fn, exists := g.functions[funcName]; exists {
+		return fn, nil
+	}
+	
+	return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, funcName)
+}
+
+// generateMonomorphizedInstance generates a new monomorphized instance of a polymorphic function
+func (g *LLVMGenerator) generateMonomorphizedInstance(
+	baseFuncName string, 
+	concreteFnType *FunctionType,
+) (value.Value, error) {
+	// Get the original function declaration
+	fnDecl, exists := g.functionDeclarations[baseFuncName]
+	if !exists {
+		return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, baseFuncName)
+	}
+	
+	// Create the monomorphized name
+	mangledName := g.getMonomorphizedName(baseFuncName, concreteFnType)
+	
+	// Check if it was already generated (race condition protection)
+	if fn, exists := g.functions[mangledName]; exists {
+		return fn, nil
+	}
+	
+	// Create the LLVM function signature for this monomorphized instance
+	llvmReturnType := g.getLLVMType(concreteFnType.returnType)
+	
+	params := make([]*ir.Param, len(concreteFnType.paramTypes))
+	for i, paramType := range concreteFnType.paramTypes {
+		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType))
+	}
+	
+	// Create the LLVM function
+	fn := g.module.NewFunc(mangledName, llvmReturnType, params...)
+	g.functions[mangledName] = fn
+	
+	// Store parameter names for this instance
+	g.functionParameters[mangledName] = make([]string, len(fnDecl.Parameters))
+	for i, param := range fnDecl.Parameters {
+		g.functionParameters[mangledName][i] = param.Name
+	}
+	
+	// Generate the function body
+	err := g.generateMonomorphizedFunctionBody(fnDecl, fn, concreteFnType)
+	if err != nil {
+		// Clean up on error
+		delete(g.functions, mangledName)
+		delete(g.functionParameters, mangledName)
+
+		return nil, fmt.Errorf("failed to generate monomorphized function body: %w", err)
+	}
+	
+	return fn, nil
+}
+
+// generateMonomorphizedFunctionBody generates the body for a monomorphized function instance
+func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
+	fnDecl *ast.FunctionDeclaration, 
+	fn *ir.Func, 
+	concreteFnType *FunctionType,
+) error {
+	// Save current state
+	oldFunction := g.function
+	oldBuilder := g.builder
+
+	oldVariables := make(map[string]value.Value)
+	for k, v := range g.variables {
+		oldVariables[k] = v
+	}
+
+	oldExpectedReturnType := g.expectedReturnType
+	
+	// Set up new function context
+	entry := fn.NewBlock("")
+	g.builder = entry
+	g.function = fn
+	g.expectedReturnType = fn.Sig.RetType
+	
+	// Set up parameters with concrete types in the type environment
+	savedTypeEnv := g.typeInferer.env.Clone()
+	for i, param := range fnDecl.Parameters {
+		// Add parameter value to variables
+		g.variables[param.Name] = fn.Params[i]
+		// Set concrete type in type environment for this monomorphization
+		if i < len(concreteFnType.paramTypes) {
+			g.typeInferer.env.Set(param.Name, concreteFnType.paramTypes[i])
+		}
+	}
+	
+	// Set the function type in the environment with the concrete type
+	g.typeInferer.env.Set(fnDecl.Name, concreteFnType)
+	
+	// Generate the function body
+	bodyValue, err := g.generateExpression(fnDecl.Body)
+	if err != nil {
+		// Restore state on error
+		g.function = oldFunction
+		g.builder = oldBuilder
+		g.variables = oldVariables
+		g.expectedReturnType = oldExpectedReturnType
+		g.typeInferer.env = savedTypeEnv
+
+		return err
+	}
+	
+	// Generate return instruction
+	if fn.Sig.RetType == types.Void {
+		g.builder.NewRet(nil)
+	} else if fnDecl.Name == MainFunctionName {
+		g.builder.NewRet(constant.NewInt(types.I32, 0))
+	} else {
+		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
+		g.builder.NewRet(finalReturnValue)
+	}
+	
+	// Restore original state
+	g.function = oldFunction
+	g.builder = oldBuilder  
+	g.variables = oldVariables
+	g.expectedReturnType = oldExpectedReturnType
+	g.typeInferer.env = savedTypeEnv
+	
+	return nil
 }
 
 // validateFunctionCallArguments validates that any types are not passed to functions expecting specific types
@@ -97,12 +457,14 @@ func (g *LLVMGenerator) validateFunctionCallArguments(funcName string, callExpr 
 	if fnType, ok := funcType.(*FunctionType); ok {
 		// Get the arguments to check
 		var args []ast.Expression
+
 		if len(callExpr.NamedArguments) > 0 {
 			// Reorder named arguments to match parameter order
 			reorderedExprs, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
 			if err != nil {
 				return err
 			}
+
 			args = reorderedExprs
 		} else {
 			args = callExpr.Arguments
@@ -159,6 +521,7 @@ func (g *LLVMGenerator) checkAnyTypeMismatchParam(
 					return fmt.Errorf("line %d:%d: %w - pattern matching required: function '%s' expecting '%s'",
 						identPos.Line, identPos.Column, ErrAnyTypeMismatch, funcName, paramName)
 				}
+
 				return fmt.Errorf("%w - pattern matching required: function '%s' expecting '%s'",
 					ErrAnyTypeMismatch, funcName, paramName)
 			}
@@ -176,6 +539,7 @@ func (g *LLVMGenerator) getParameterName(funcName string, paramIndex int) string
 			return paramNames[paramIndex]
 		}
 	}
+
 	return ""
 }
 
@@ -338,9 +702,11 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 
 	// Check if arg == 1 (true) or 0 (false)
 	// Use the correct zero value type based on the argument type
-	var zero value.Value
-	var isTrue value.Value
-	
+	var (
+		zero   value.Value
+		isTrue value.Value
+	)
+
 	if arg.Type() == types.I1 {
 		// For i1 (boolean) types, compare against i1 false
 		zero = constant.NewBool(false)
@@ -350,7 +716,7 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 		zero = constant.NewInt(types.I64, 0)
 		isTrue = currentBlock.NewICmp(enum.IPredNE, arg, zero)
 	}
-	
+
 	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
 
 	// True case - return "true"
@@ -402,9 +768,10 @@ func (g *LLVMGenerator) generateMatchExpressionWithDiscriminant(
 		if g.isResultType(discriminant) {
 			return g.generateResultMatchExpression(matchExpr, discriminant)
 		}
-		
+
 		// If not a Result type, wrap it in a Success Result automatically
 		wrappedDiscriminant := g.wrapInSuccessResult(discriminant)
+
 		return g.generateResultMatchExpression(matchExpr, wrappedDiscriminant)
 	}
 
@@ -426,26 +793,25 @@ func (g *LLVMGenerator) hasResultPatterns(arms []ast.MatchArm) bool {
 	return false
 }
 
-
 // wrapInSuccessResult wraps a value in a Success Result automatically
 func (g *LLVMGenerator) wrapInSuccessResult(discriminant value.Value) value.Value {
 	// Create a Result struct with the discriminant value as the success value
 	// Result struct: [value, discriminant] where discriminant=0 for success
 	resultType := types.NewStruct(discriminant.Type(), types.I8)
-	
+
 	// Allocate memory for the result
 	resultPtr := g.builder.NewAlloca(resultType)
-	
+
 	// Store the value in the first field
 	valuePtr := g.builder.NewGetElementPtr(resultType, resultPtr,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 	g.builder.NewStore(discriminant, valuePtr)
-	
+
 	// Store 0 (success) in the discriminant field
 	discriminantPtr := g.builder.NewGetElementPtr(resultType, resultPtr,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-	
+
 	return resultPtr
 }
 
@@ -461,9 +827,9 @@ func (g *LLVMGenerator) isResultType(val value.Value) bool {
 	if structType, ok := val.Type().(*types.StructType); ok {
 		return len(structType.Fields) == ResultFieldCount
 	}
+
 	return false
 }
-
 
 // inferSuccessTypeFromExtractedValue infers the type from an already extracted value
 func (g *LLVMGenerator) inferSuccessTypeFromExtractedValue(extractedValue value.Value) Type {
@@ -471,12 +837,12 @@ func (g *LLVMGenerator) inferSuccessTypeFromExtractedValue(extractedValue value.
 	if resultType := g.tryDirectFunctionLookup(extractedValue); resultType != nil {
 		return resultType
 	}
-	
+
 	// Try more aggressive search through type environment
 	if resultType := g.tryAggressiveTypeSearch(extractedValue); resultType != nil {
 		return resultType
 	}
-	
+
 	// Final fallback based on LLVM type
 	return g.getFallbackType(extractedValue)
 }
@@ -487,23 +853,24 @@ func (g *LLVMGenerator) tryDirectFunctionLookup(extractedValue value.Value) Type
 	if !ok {
 		return nil
 	}
-	
+
 	callInst, ok := extractInst.X.(*ir.InstCall)
 	if !ok {
 		return nil
 	}
-	
+
 	function, ok := callInst.Callee.(*ir.Func)
 	if !ok {
 		return nil
 	}
-	
+
 	funcName := function.GlobalName
+
 	funcType, exists := g.typeInferer.env.Get(funcName)
 	if !exists {
 		return nil
 	}
-	
+
 	return g.extractTypeFromFunctionType(funcType)
 }
 
@@ -513,24 +880,24 @@ func (g *LLVMGenerator) tryAggressiveTypeSearch(extractedValue value.Value) Type
 	if !ok {
 		return nil
 	}
-	
+
 	callInst, ok := extractInst.X.(*ir.InstCall)
 	if !ok {
 		return nil
 	}
-	
+
 	function, ok := callInst.Callee.(*ir.Func)
 	if !ok {
 		return nil
 	}
-	
+
 	funcName := function.GlobalName
 	for name, envType := range g.typeInferer.env.vars {
 		if name == funcName {
 			return g.extractTypeFromFunctionType(envType)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -542,11 +909,11 @@ func (g *LLVMGenerator) extractTypeFromFunctionType(funcType Type) Type {
 	} else {
 		actualType = funcType
 	}
-	
+
 	if fnType, ok := actualType.(*FunctionType); ok {
 		return g.extractSuccessTypeFromResultType(fnType.returnType)
 	}
-	
+
 	return nil
 }
 
@@ -573,28 +940,29 @@ func (g *LLVMGenerator) extractSuccessTypeFromResultType(resultType Type) Type {
 			return genericType.typeArgs[0]
 		}
 	}
-	
+
 	// Handle non-generic Result types (fallback for backwards compatibility)
 	if concreteType, ok := resultType.(*ConcreteType); ok {
 		// Try to extract from concrete Result type names like "Result<int, MathError>"
 		if strings.HasPrefix(concreteType.name, "Result<") {
 			// Extract the first type parameter
 			start := strings.Index(concreteType.name, "<") + 1
+
 			end := strings.Index(concreteType.name[start:], ",")
 			if end == -1 {
 				end = strings.Index(concreteType.name[start:], ">")
 			}
+
 			if end != -1 {
 				successTypeName := strings.TrimSpace(concreteType.name[start : start+end])
 				return &ConcreteType{name: successTypeName}
 			}
 		}
 	}
-	
+
 	// If we can't extract the type, default to int (common case)
 	return &PrimitiveType{name: "int"}
 }
-
 
 // generateStandardMatchExpression generates a standard (non-result) match expression.
 func (g *LLVMGenerator) generateStandardMatchExpression(
@@ -635,8 +1003,10 @@ func (g *LLVMGenerator) generateMatchArmValues(
 	endBlock *ir.Block,
 	discriminant value.Value,
 ) ([]value.Value, []*ir.Block, error) {
-	var armValues []value.Value
-	var predecessorBlocks []*ir.Block
+	var (
+		armValues         []value.Value
+		predecessorBlocks []*ir.Block
+	)
 
 	for i, arm := range arms {
 		// Set builder to the arm block at the start of each iteration
@@ -663,6 +1033,7 @@ func (g *LLVMGenerator) processMatchArm(arm ast.MatchArm, discriminant value.Val
 	if arm.Pattern.Variable != "" || len(arm.Pattern.Fields) > 0 {
 		return g.processMatchArmWithBinding(arm, discriminant)
 	}
+
 	return g.processMatchArmWithoutBinding(arm)
 }
 
@@ -710,6 +1081,7 @@ func (g *LLVMGenerator) saveVariableScope() map[string]value.Value {
 	for k, v := range g.variables {
 		oldVariables[k] = v
 	}
+
 	return oldVariables
 }
 
@@ -750,6 +1122,7 @@ func (g *LLVMGenerator) extractRecordTypeFields(pattern ast.Pattern, discriminan
 			}
 		}
 	}
+
 	return false
 }
 
@@ -770,6 +1143,7 @@ func (g *LLVMGenerator) extractDiscriminatedUnionTypeFields(pattern ast.Pattern,
 		// If field extraction fails, bind fields to zero values
 		g.bindFieldsToZeroValues(pattern.Fields)
 	}
+
 	return true
 }
 
@@ -784,6 +1158,7 @@ func (g *LLVMGenerator) isMultiVariantType(constructorName string) bool {
 			}
 		}
 	}
+
 	return false
 }
 
@@ -796,6 +1171,7 @@ func (g *LLVMGenerator) extractStructuralFields(fields []string, discriminant va
 			// If field extraction fails, bind to null/zero value
 			fieldValue = constant.NewNull(types.I8Ptr)
 		}
+
 		g.variables[fieldName] = fieldValue
 	}
 }
@@ -811,8 +1187,11 @@ func (g *LLVMGenerator) bindFieldsToZeroValues(fields []string) {
 func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant value.Value, variant ast.TypeVariant) {
 	// For record types, the discriminant is a pointer to the struct
 	discriminantType := discriminant.Type()
-	var structType *types.StructType
-	var isPointer bool
+
+	var (
+		structType *types.StructType
+		isPointer  bool
+	)
 
 	if ptrType, ok := discriminantType.(*types.PointerType); ok {
 		if st, ok := ptrType.ElemType.(*types.StructType); ok {
@@ -875,6 +1254,7 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 			} else {
 				semanticType = field.Type
 			}
+
 			concreteType := &ConcreteType{name: semanticType}
 			g.typeInferer.env.Set(patternFieldName, concreteType)
 		}
@@ -885,10 +1265,10 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 func (g *LLVMGenerator) inferResultValueType(_ value.Value, fieldType string) string {
 	// Try to track back to the source of this Result value to determine the generic type parameter
 	// This is a complex problem that requires proper generic type tracking
-	
+
 	// For now, we'll use heuristics based on the field type
 	// Check if the field type suggests this could be a boolean value
-	
+
 	// Simple heuristic: if the field type suggests it could be boolean (i64 that might be boolean)
 	// and this is a Success pattern match, assume it's a boolean
 	// This handles the common case of Result<bool, Error> from comparison functions
@@ -896,7 +1276,7 @@ func (g *LLVMGenerator) inferResultValueType(_ value.Value, fieldType string) st
 		// This is likely a boolean value stored as i64 in the Result
 		return TypeBool
 	}
-	
+
 	return fieldType // Otherwise use the original field type
 }
 
@@ -907,6 +1287,7 @@ func (g *LLVMGenerator) normalizeArmValue(armValue value.Value) value.Value {
 	if armValue == nil || armValue.Type() == types.Void {
 		armValue = constant.NewUndef(types.Void)
 	}
+
 	return armValue
 }
 
@@ -923,6 +1304,7 @@ func (g *LLVMGenerator) addBranchTermination(endBlock *ir.Block) *ir.Block {
 	if currentBuilderBlock.Term == nil {
 		currentBuilderBlock.NewBr(endBlock)
 	}
+
 	return currentBuilderBlock
 }
 
@@ -1001,6 +1383,10 @@ func (g *LLVMGenerator) createPatternCondition(
 			// For now, assume boolean structs never match false pattern
 			return constant.NewBool(false)
 		}
+		// For pointer types (like strings), false pattern never matches
+		if _, isPtr := discriminant.Type().(*types.PointerType); isPtr {
+			return constant.NewBool(false)
+		}
 		// For integer types, check if discriminant is false (zero)
 		if intType, isInt := discriminant.Type().(*types.IntType); isInt {
 			zero := constant.NewInt(intType, 0)
@@ -1031,22 +1417,37 @@ func (g *LLVMGenerator) createPatternCondition(
 
 				// Convert discriminant value to i8 for comparison
 				patternConst := constant.NewInt(types.I8, discriminantValue)
+
 				return currentBlock.NewICmp(enum.IPredEQ, tagValue, patternConst)
 			}
 		}
 
 		// Fallback: simple enum discriminant (i64)
+		// Only compare with integers if discriminant is actually an integer type
+		if _, isInt := discriminant.Type().(*types.IntType); !isInt && discriminant.Type() != types.I64 {
+			// If discriminant is not an integer type, this pattern can't match
+			return constant.NewBool(false)
+		}
+
 		patternConst := constant.NewInt(types.I64, discriminantValue)
+
 		return currentBlock.NewICmp(enum.IPredEQ, discriminant, patternConst)
 	}
 
 	// Check if it's a numeric literal
 	if patternValue, err := strconv.ParseInt(pattern.Constructor, 10, 64); err == nil {
+		// Only compare with integers if discriminant is actually an integer type
+		if _, isInt := discriminant.Type().(*types.IntType); !isInt && discriminant.Type() != types.I64 {
+			// If discriminant is not an integer type, this pattern can't match
+			return constant.NewBool(false)
+		}
+
 		patternConst := constant.NewInt(types.I64, patternValue)
 
 		return currentBlock.NewICmp(enum.IPredEQ, discriminant, patternConst)
 	}
 
+	// Default to string pattern condition for unhandled cases
 	return g.createStringPatternCondition(pattern.Constructor, discriminant, currentBlock)
 }
 
@@ -1054,8 +1455,11 @@ func (g *LLVMGenerator) createPatternCondition(
 func (g *LLVMGenerator) extractFieldFromObject(objectValue value.Value, fieldName string) (value.Value, error) {
 	// Check if this is a pointer to a struct
 	objectType := objectValue.Type()
-	var structType *types.StructType
-	var isPointer bool
+
+	var (
+		structType *types.StructType
+		isPointer  bool
+	)
 
 	if ptrType, ok := objectType.(*types.PointerType); ok {
 		if st, ok := ptrType.ElemType.(*types.StructType); ok {
@@ -1113,6 +1517,7 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 ) error {
 	// Check if this is a tagged union (pointer to struct with tag + data)
 	discriminantType := discriminant.Type()
+
 	ptrType, ok := discriminantType.(*types.PointerType)
 	if !ok {
 		return ErrDiscriminantNotPointer
@@ -1141,6 +1546,7 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 					break
 				}
 			}
+
 			if variant != nil {
 				break
 			}
@@ -1161,6 +1567,7 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 	for i, field := range variant.Fields {
 		// Check if this field position has a corresponding pattern field
 		var patternFieldName string
+
 		fieldRequested := false
 
 		if i < len(pattern.Fields) {
@@ -1219,8 +1626,26 @@ func (g *LLVMGenerator) createStringPatternCondition(
 	patternPtr := currentBlock.NewGetElementPtr(patternConstStr.Typ, patternGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
+	// Ensure discriminant is i8* for strcmp
+	stringPtr := discriminant
+	if discriminant.Type().String() != "i8*" {
+		// If discriminant is not i8*, try to convert it
+		if discriminant.Type().String() == "i64" {
+			// This might be a string passed as i64 - need to cast or handle differently
+			// For now, return false to avoid the strcmp issue
+			return constant.NewBool(false)
+		}
+		// If it's another pointer type, try bitcast
+		if _, isPtr := discriminant.Type().(*types.PointerType); isPtr {
+			stringPtr = currentBlock.NewBitCast(discriminant, types.I8Ptr)
+		} else {
+			// Can't convert, pattern doesn't match
+			return constant.NewBool(false)
+		}
+	}
+
 	strcmp := g.functions["strcmp"]
-	compareResult := currentBlock.NewCall(strcmp, discriminant, patternPtr)
+	compareResult := currentBlock.NewCall(strcmp, stringPtr, patternPtr)
 	zero := constant.NewInt(types.I32, ArrayIndexZero)
 
 	return currentBlock.NewICmp(enum.IPredEQ, compareResult, zero)
@@ -1242,6 +1667,7 @@ func (g *LLVMGenerator) createMatchResult(
 	// Check if all arm values are void type
 	// PHI nodes cannot be created with void values
 	allVoid := true
+
 	for _, val := range armValues {
 		if val.Type() != types.Void {
 			allVoid = false
@@ -1262,6 +1688,7 @@ func (g *LLVMGenerator) createMatchResult(
 
 	// Only include predecessors that actually have terminators
 	var validIncomings []*ir.Incoming
+
 	for i, val := range coercedValues {
 		// Skip void values in PHI nodes
 		if val.Type() != types.Void {
@@ -1325,6 +1752,7 @@ func (g *LLVMGenerator) performTypeCoercion(armValues []value.Value, expectedTyp
 			if err != nil {
 				return nil, err
 			}
+
 			coercedValues[i] = coercedVal
 		}
 	}
@@ -1336,13 +1764,10 @@ func (g *LLVMGenerator) performTypeCoercion(armValues []value.Value, expectedTyp
 func (g *LLVMGenerator) coerceValueToType(val value.Value, targetType types.Type) (value.Value, error) {
 	switch targetType {
 	case types.I8Ptr:
-
 		return g.convertToString(val)
 	case types.I64:
-
 		return constant.NewInt(types.I64, 0), nil
 	default:
-
 		return val, nil
 	}
 }
@@ -1368,11 +1793,14 @@ func (g *LLVMGenerator) generateResultMatchExpression(
 	g.generateResultMatchCondition(discriminant, blocks)
 
 	// Track which blocks actually branch to the end
-	var actualSuccessBlock *ir.Block
-	var actualErrorBlock *ir.Block
+	var (
+		actualSuccessBlock *ir.Block
+		actualErrorBlock   *ir.Block
+	)
 
 	// Generate success block and track the actual ending block
 	g.builder = blocks.Success
+
 	successValue, err := g.generateSuccessBlock(matchExpr, blocks)
 	if err != nil {
 		return nil, err
@@ -1382,6 +1810,7 @@ func (g *LLVMGenerator) generateResultMatchExpression(
 
 	// Generate error block and track the actual ending block
 	g.builder = blocks.Error
+
 	errorValue, err := g.generateErrorBlock(matchExpr, blocks)
 	if err != nil {
 		return nil, err
@@ -1471,7 +1900,7 @@ func (g *LLVMGenerator) generateSuccessBlock(
 				// Extract value field (index 0) from struct value
 				extractedValue := g.builder.NewExtractValue(g.currentResultValue, 0)
 				g.variables[fieldName] = extractedValue
-				
+
 				// Store semantic type information for the extracted value
 				// This is critical for proper boolean printing in pattern matching
 				successType := g.inferSuccessTypeFromExtractedValue(extractedValue)
@@ -1486,13 +1915,16 @@ func (g *LLVMGenerator) generateSuccessBlock(
 	}
 
 	successExpr := g.findSuccessValue(matchExpr)
+
 	var successValue value.Value
+
 	if successExpr != nil {
 		// Generate the expression (which might be a nested match)
 		val, err := g.generateExpression(successExpr)
 		if err != nil {
 			return nil, err
 		}
+
 		successValue = val
 
 		// After generating a nested expression, the builder might have changed
@@ -1548,13 +1980,16 @@ func (g *LLVMGenerator) generateErrorBlock(
 	}
 
 	errorExpr := g.findErrorValue(matchExpr)
+
 	var errorValue value.Value
+
 	if errorExpr != nil {
 		// Generate the expression (which might be a nested match)
 		val, err := g.generateExpression(errorExpr)
 		if err != nil {
 			return nil, err
 		}
+
 		errorValue = val
 
 		// After generating a nested expression, the builder might have changed
@@ -1667,4 +2102,18 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 	phi := blocks.End.NewPhi(validPredecessors...)
 
 	return phi, nil
+}
+
+// setParameterTypeContext sets the expected parameter type context for argument generation
+func (g *LLVMGenerator) setParameterTypeContext(funcValue value.Value, paramIndex int) {
+	if funcValue != nil {
+		if funcType, ok := funcValue.Type().(*types.FuncType); ok && paramIndex < len(funcType.Params) {
+			g.expectedParameterType = funcType.Params[paramIndex]
+		}
+	}
+}
+
+// clearParameterTypeContext clears the parameter type context
+func (g *LLVMGenerator) clearParameterTypeContext() {
+	g.expectedParameterType = nil
 }

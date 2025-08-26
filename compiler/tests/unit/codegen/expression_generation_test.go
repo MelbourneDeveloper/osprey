@@ -28,6 +28,7 @@ func TestUnaryExpressionGeneration(t *testing.T) {
 			} else {
 				source = "fn test() -> int = " + tt.operator + tt.operand
 			}
+
 			_, err := codegen.CompileToLLVM(source)
 
 			if tt.wantErr {
@@ -168,6 +169,7 @@ func TestToStringConversions(t *testing.T) {
 				if err == nil {
 					t.Error("Expected error")
 				}
+
 				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("Expected error message to contain %q, got: %v", tt.errMsg, err)
 				}
@@ -235,6 +237,7 @@ print(x)`,
 				if err == nil {
 					t.Error("Expected error")
 				}
+
 				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("Expected error message to contain %q, got: %v", tt.errMsg, err)
 				}
@@ -276,6 +279,7 @@ func TestInputFunction(t *testing.T) {
 				if err == nil {
 					t.Error("Expected error")
 				}
+
 				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("Expected error message to contain %q, got: %v", tt.errMsg, err)
 				}
@@ -380,6 +384,7 @@ func TestBinaryOperatorErrors(t *testing.T) {
 				if err == nil {
 					t.Error("Expected error")
 				}
+
 				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
 					t.Errorf("Expected error message to contain %q, got: %v", tt.errMsg, err)
 				}

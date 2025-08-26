@@ -1,8 +1,10 @@
 5. [Type System](0005-TypeSystem.md)
+   - [Hindley-Milner Type Inference Foundation](#50-hindley-milner-type-inference-foundation)
    - [Built-in Types](#51-built-in-types)
        - [Function Types](#function-types)
+       - [Record Types](#record-types)
    - [Built-in Error Types](#52-built-in-error-types)
-   - [Type Inference Rules](#53-type-inference-rules)
+   - [Hindley-Milner Type Inference](#53-hindley-milner-type-inference)
        - [Function Return Types](#function-return-types)
        - [Parameter Types](#parameter-types)
        - [Type Inference Examples](#type-inference-examples)
@@ -32,7 +34,46 @@
 
 ## 5. Type System
 
-Osprey's type system is one of the most important aspects of the language. It puts type safety and expressiveness as the top priorities. It is inspired by popular functional programming languages like Haskell and ML. The type system aims towards making illegal states unrepresentable. Some features like constructor where constraints are critical features that mean that instances cannot exist where they fail the criteria in construction.
+### 5.0 Hindley-Milner Type Inference Foundation
+
+**🔥 CORE SPECIFICATION**: Osprey implements complete **Hindley-Milner type inference** as its foundational type system. This is a **MANDATORY REQUIREMENT** for compiler implementation.
+
+**Academic Foundation & Implementation Requirements:**
+- **Hindley, R. (1969)**: "The Principal Type-Scheme of an Object in Combinatory Logic" - Communications of the ACM 12(12):719-721
+- **Milner, R. (1978)**: "A Theory of Type Polymorphism in Programming" - Journal of Computer and System Sciences 17:348-375  
+- **Damas, L. & Milner, R. (1982)**: "Principal type-schemes for functional programs" - POPL '82
+
+**🔥 CRITICAL IMPLEMENTATION MANDATES:**
+
+1. **COMPLETE TYPE INFERENCE**: Variables and functions MAY be declared without type annotations when types can be inferred through Hindley-Milner unification
+2. **PRINCIPAL TYPES**: Every well-typed expression MUST have a unique most general (polymorphic) type
+3. **SOUNDNESS GUARANTEE**: If type checker accepts a program, NO runtime type errors can occur
+4. **COMPLETENESS GUARANTEE**: If a program has a valid typing, the type system MUST find it
+5. **DECIDABILITY GUARANTEE**: Type inference MUST always terminate with definitive results
+
+**🔥 STRUCTURAL TYPE REQUIREMENTS:**
+- **Record Type Unification**: MUST use structural equivalence based on **FIELD NAMES ONLY**
+- **Field Access**: MUST be **STRICTLY BY NAME** - never by position or ordering
+- **Type Environment (Γ)**: MUST maintain consistent field name-to-type mappings
+- **Substitution Application**: MUST apply substitutions consistently across all type expressions
+
+**Hindley-Milner Algorithm Implementation Steps (MANDATORY):**
+1. **Type Variable Generation**: Assign fresh type variables (α, β, γ) to untyped expressions
+2. **Constraint Collection**: Gather type equality constraints from expression structure  
+3. **Unification**: Solve constraints using Robinson's unification algorithm with occurs check
+4. **Generalization**: Generalize types to introduce polymorphism at let-bindings
+5. **Instantiation**: Create fresh instances of polymorphic types at usage sites
+
+**Implementation References (REQUIRED READING):**
+- **Robinson, J.A. (1965)**: "A Machine-Oriented Logic Based on the Resolution Principle" - Unification algorithm
+- **Cardelli, L. (1987)**: "Basic Polymorphic Typechecking" - Implementation techniques  
+- **Jones, M.P. (1995)**: "Functional Programming with Overloading and Higher-Order Polymorphism" - Advanced HM features
+
+**🔥 COMPILER CORRECTNESS REQUIREMENT**: The implementation MUST pass all Hindley-Milner theoretical guarantees. Failure to implement proper HM inference is a **CRITICAL COMPILER BUG**.
+
+---
+
+Osprey's type system puts type safety and expressiveness as the top priorities. It is built upon the solid theoretical foundation of Hindley-Milner type inference, inspired by ML and Haskell. The type system aims towards making illegal states unrepresentable through complete static verification.
 
 ### 5.1 Built-in Types
 
@@ -229,15 +270,50 @@ let result = ValidatedPerson { name: "Bob", age: 25, email: "bob@example.com" }
 
 **Field Access Rules:**
 
-**✅ ALLOWED - Field Access on Record Types:**
+**🔥 CRITICAL SPECIFICATION: FIELD ACCESS IS STRICTLY BY NAME ONLY**
+
+**ABSOLUTE REQUIREMENT**: Record field access is **EXCLUSIVELY BY NAME**. Field ordering, positioning, or indexing is **COMPLETELY FORBIDDEN** and must **NEVER** be relied upon by the compiler implementation.
+
+**✅ ALLOWED - Field Access on Record Types (BY NAME ONLY):**
 ```osprey
 type User = { id: int, name: string, email: string }
 let user = User { id: 1, name: "Alice", email: "alice@example.com" }
 
-let userId = user.id          // Valid: direct field access
-let userName = user.name      // Valid: direct field access
-let userEmail = user.email    // Valid: direct field access
+let userId = user.id          // ✅ VALID: direct field access BY NAME
+let userName = user.name      // ✅ VALID: direct field access BY NAME  
+let userEmail = user.email    // ✅ VALID: direct field access BY NAME
+
+// Field order during construction is IRRELEVANT
+let user2 = User { 
+    email: "bob@example.com",  // Different order - PERFECTLY VALID
+    name: "Bob",               // Field position does NOT matter
+    id: 2                      // Only field NAMES matter
+}
+let bobName = user2.name      // ✅ VALID: name-based access works regardless of declaration order
 ```
+
+**❌ ABSOLUTELY FORBIDDEN - Positional or Indexed Access:**
+```osprey
+// NEVER ALLOWED - These are COMPILATION ERRORS
+let value1 = user[0]          // ❌ FORBIDDEN: No indexed access  
+let value2 = user.fields[1]   // ❌ FORBIDDEN: No positional access
+let value3 = getFieldAt(user, 0)  // ❌ FORBIDDEN: No position-based access
+
+// COMPILER IMPLEMENTATION MUST NEVER:
+// - Rely on field declaration order for LLVM struct generation
+// - Use field positioning for type unification
+// - Access fields by index in any internal operation
+// - Generate code that depends on field ordering
+```
+
+**🔥 COMPILER IMPLEMENTATION REQUIREMENT:**
+The Osprey compiler **MUST** implement field access using **FIELD NAME LOOKUP ONLY**:
+- ✅ Field-to-LLVM-index mapping by name
+- ✅ Type unification based on field name matching  
+- ✅ Pattern matching using field names
+- ❌ **NEVER** field ordering dependencies
+- ❌ **NEVER** positional field access in codegen
+- ❌ **NEVER** field index assumptions
 
 **❌ FORBIDDEN - Field Access on `any` Types:**
 ```osprey
@@ -497,6 +573,55 @@ fn complex<T>(x: T, pred: (T) -> bool) -> Option<T> =
 - **Jones, M.P. (1995)**: "Functional Programming with Overloading and Higher-Order Polymorphism" - Advanced HM features
 
 **Hindley-Milner Principle**: "Type annotations are optional for all expressions where types can be inferred through constraint unification. The system automatically finds the most general (polymorphic) type for each expression."
+
+#### 🔥 CRITICAL: Record Type Structural Equivalence
+
+**MANDATORY REQUIREMENT**: Osprey's Hindley-Milner implementation MUST treat record types using **structural equivalence based EXCLUSIVELY on field names**.
+
+**✅ CORRECT Structural Unification:**
+```osprey
+// These record types are structurally equivalent (same field names and types)
+type PersonA = { name: string, age: int }
+type PersonB = { age: int, name: string }  // Different field ORDER - still equivalent
+
+// Hindley-Milner MUST unify these as the same structural type
+fn processA(p: PersonA) = p.name
+fn processB(p: PersonB) = p.name
+
+// These functions MUST be considered type-compatible
+let result1 = processA(PersonB { age: 25, name: "Alice" })  // ✅ MUST work
+let result2 = processB(PersonA { name: "Bob", age: 30 })    // ✅ MUST work
+```
+
+**✅ POLYMORPHIC Field Access Inference:**
+```osprey
+// Generic field accessor - inferred type based on field NAME only
+fn getName(record) = record.name           // Infers: ∀α. {name: string, ...α} -> string
+fn getAge(record) = record.age            // Infers: ∀α. {age: int, ...α} -> int
+
+// Works with ANY record type that has the named field
+let name1 = getName(Person { name: "Alice", age: 25 })      // ✅ Valid
+let name2 = getName(User { name: "Bob", id: 1, email: "bob@example.com" })  // ✅ Valid
+let age1 = getAge(Person { name: "Alice", age: 25 })       // ✅ Valid
+```
+
+**❌ FORBIDDEN Implementation Approaches:**
+```
+// NEVER ALLOWED in compiler implementation:
+struct_field_0 = llvm_get_field_by_index(record, 0)  // ❌ Positional access
+field_type = type_signature.params[field_position]   // ❌ Position-based type lookup
+unify_by_field_order(record1, record2)              // ❌ Order-dependent unification
+```
+
+**🔥 UNIFICATION ALGORITHM REQUIREMENT:**
+```
+unify(RecordType1, RecordType2) := 
+    if field_names(RecordType1) ≠ field_names(RecordType2) then FAIL
+    else ∀ field_name ∈ field_names(RecordType1):
+        unify(field_type(RecordType1, field_name), field_type(RecordType2, field_name))
+        
+// Field ordering is IRRELEVANT - only field names and their types matter
+```
 
 #### Polymorphic Type Variables vs Any Type
 

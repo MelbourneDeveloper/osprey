@@ -47,11 +47,13 @@ func TestTypeInference(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inferer := codegen.NewTypeInferer()
+
 			typ, err := inferer.InferType(tt.expr)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
+
 			if typ.String() != tt.expected {
 				t.Errorf("expected type %q, got %q", tt.expected, typ.String())
 			}
@@ -112,10 +114,12 @@ func TestUnification(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inferer := codegen.NewTypeInferer()
+
 			err := inferer.Unify(tt.t1, tt.t2)
 			if tt.shouldSucceed && err != nil {
 				t.Errorf("expected unification to succeed, got error: %v", err)
 			}
+
 			if !tt.shouldSucceed && err == nil {
 				t.Error("expected unification to fail, but it succeeded")
 			}

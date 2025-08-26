@@ -64,6 +64,7 @@ func (v *VexErrorListener) SyntaxError(
 	_ antlr.RecognitionException,
 ) {
 	fmt.Printf("Syntax error at line %d:%d - %s\n", line, column, msg)
+
 	v.HasErrors = true
 }
 
@@ -221,6 +222,7 @@ func runCompileToExecutable(source, filename string) CommandResult {
 
 	// Create outputs directory relative to the source file
 	sourceDir := filepath.Dir(filename)
+
 	outputsDir := filepath.Join(sourceDir, "outputs")
 	if err := os.MkdirAll(outputsDir, dirPerms); err != nil {
 		return CommandResult{
@@ -257,6 +259,7 @@ func runRunProgram(source string, quiet bool) CommandResult {
 	if err != nil {
 		// ALWAYS show compilation errors regardless of quiet flag
 		fmt.Fprintf(os.Stderr, "Compilation failed\n")
+
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Execution failed: %v", err),
@@ -524,11 +527,13 @@ func generateFunctionDocs(docsDir string) error {
 	for name := range functionDocs {
 		functionNames = append(functionNames, name)
 	}
+
 	sort.Strings(functionNames)
 
 	for _, name := range functionNames {
 		doc := functionDocs[name]
 		content := generateFunctionMarkdown(doc)
+
 		filename := filepath.Join(functionsDir, strings.ToLower(name)+".md")
 		if err := os.WriteFile(filename, []byte(content), filePermissions); err != nil {
 			return fmt.Errorf("failed to write function doc %s: %w", name, err)
@@ -551,11 +556,13 @@ func generateTypeDocs(docsDir string) error {
 	for name := range typeDocs {
 		typeNames = append(typeNames, name)
 	}
+
 	sort.Strings(typeNames)
 
 	for _, name := range typeNames {
 		doc := typeDocs[name]
 		content := generateTypeMarkdown(doc)
+
 		filename := filepath.Join(typesDir, strings.ToLower(name)+".md")
 		if err := os.WriteFile(filename, []byte(content), filePermissions); err != nil {
 			return fmt.Errorf("failed to write type doc %s: %w", name, err)
@@ -578,6 +585,7 @@ func generateOperatorDocs(docsDir string) error {
 	for symbol := range operatorDocs {
 		operatorSymbols = append(operatorSymbols, symbol)
 	}
+
 	sort.Strings(operatorSymbols)
 
 	for _, symbol := range operatorSymbols {
@@ -607,11 +615,13 @@ func generateKeywordDocs(docsDir string) error {
 	for name := range keywordDocs {
 		keywordNames = append(keywordNames, name)
 	}
+
 	sort.Strings(keywordNames)
 
 	for _, name := range keywordNames {
 		doc := keywordDocs[name]
 		content := generateKeywordMarkdown(doc)
+
 		filename := filepath.Join(keywordsDir, strings.ToLower(name)+".md")
 		if err := os.WriteFile(filename, []byte(content), filePermissions); err != nil {
 			return fmt.Errorf("failed to write keyword doc %s: %w", name, err)
@@ -666,10 +676,12 @@ func generateMainIndex(docsDir string) error {
 	content.WriteString("|----------|-------------|\n")
 
 	functionDocs := descriptions.GetBuiltinFunctionDescriptions()
+
 	var functionNames []string
 	for name := range functionDocs {
 		functionNames = append(functionNames, name)
 	}
+
 	sort.Strings(functionNames)
 
 	for _, name := range functionNames {
@@ -677,6 +689,7 @@ func generateMainIndex(docsDir string) error {
 		linkName := strings.ToLower(name)
 		content.WriteString(fmt.Sprintf("| [%s](functions/%s/) | %s |\n", name, linkName, doc.Description))
 	}
+
 	content.WriteString("\n")
 
 	// Generate Type Reference table dynamically with sorted order
@@ -685,10 +698,12 @@ func generateMainIndex(docsDir string) error {
 	content.WriteString("|------|-------------|\n")
 
 	typeDocs := descriptions.GetBuiltinTypeDescriptions()
+
 	var typeNames []string
 	for name := range typeDocs {
 		typeNames = append(typeNames, name)
 	}
+
 	sort.Strings(typeNames)
 
 	for _, name := range typeNames {
@@ -696,6 +711,7 @@ func generateMainIndex(docsDir string) error {
 		linkName := strings.ToLower(name)
 		content.WriteString(fmt.Sprintf("| [%s](types/%s/) | %s |\n", name, linkName, doc.Description))
 	}
+
 	content.WriteString("\n")
 
 	// Generate Operator Reference table dynamically with sorted order
@@ -704,10 +720,12 @@ func generateMainIndex(docsDir string) error {
 	content.WriteString("|----------|------|-------------|\n")
 
 	operatorDocs := descriptions.GetOperatorDescriptions()
+
 	var operatorSymbols []string
 	for symbol := range operatorDocs {
 		operatorSymbols = append(operatorSymbols, symbol)
 	}
+
 	sort.Strings(operatorSymbols)
 
 	for _, symbol := range operatorSymbols {
@@ -715,6 +733,7 @@ func generateMainIndex(docsDir string) error {
 		filename := getOperatorFilename(symbol)
 		content.WriteString(fmt.Sprintf("| [%s](operators/%s/) | %s | %s |\n", symbol, filename, doc.Name, doc.Description))
 	}
+
 	content.WriteString("\n")
 
 	// Generate Keyword Reference table dynamically with sorted order
@@ -723,10 +742,12 @@ func generateMainIndex(docsDir string) error {
 	content.WriteString("|---------|-------------|\n")
 
 	keywordDocs := descriptions.GetKeywordDescriptions()
+
 	var keywordNames []string
 	for name := range keywordDocs {
 		keywordNames = append(keywordNames, name)
 	}
+
 	sort.Strings(keywordNames)
 
 	for _, name := range keywordNames {
@@ -734,9 +755,11 @@ func generateMainIndex(docsDir string) error {
 		linkName := strings.ToLower(name)
 		content.WriteString(fmt.Sprintf("| [%s](keywords/%s/) | %s |\n", name, linkName, doc.Description))
 	}
+
 	content.WriteString("\n")
 
 	filename := filepath.Join(docsDir, "index.md")
+
 	return os.WriteFile(filename, []byte(content.String()), filePermissions)
 }
 
@@ -756,6 +779,7 @@ func generateFunctionIndex(docsDir string) error {
 	for name := range functionDocs {
 		functionNames = append(functionNames, name)
 	}
+
 	sort.Strings(functionNames)
 
 	for _, name := range functionNames {
@@ -766,6 +790,7 @@ func generateFunctionIndex(docsDir string) error {
 	}
 
 	filename := filepath.Join(docsDir, "functions", "index.md")
+
 	return os.WriteFile(filename, []byte(content.String()), filePermissions)
 }
 
@@ -785,6 +810,7 @@ func generateTypeIndex(docsDir string) error {
 	for name := range typeDocs {
 		typeNames = append(typeNames, name)
 	}
+
 	sort.Strings(typeNames)
 
 	for _, name := range typeNames {
@@ -794,6 +820,7 @@ func generateTypeIndex(docsDir string) error {
 	}
 
 	filename := filepath.Join(docsDir, "types", "index.md")
+
 	return os.WriteFile(filename, []byte(content.String()), filePermissions)
 }
 
@@ -813,6 +840,7 @@ func generateOperatorIndex(docsDir string) error {
 	for symbol := range operatorDocs {
 		operatorSymbols = append(operatorSymbols, symbol)
 	}
+
 	sort.Strings(operatorSymbols)
 
 	for _, symbol := range operatorSymbols {
@@ -823,6 +851,7 @@ func generateOperatorIndex(docsDir string) error {
 	}
 
 	filename := filepath.Join(docsDir, "operators", "index.md")
+
 	return os.WriteFile(filename, []byte(content.String()), filePermissions)
 }
 
@@ -842,6 +871,7 @@ func generateKeywordIndex(docsDir string) error {
 	for name := range keywordDocs {
 		keywordNames = append(keywordNames, name)
 	}
+
 	sort.Strings(keywordNames)
 
 	for _, name := range keywordNames {
@@ -851,6 +881,7 @@ func generateKeywordIndex(docsDir string) error {
 	}
 
 	filename := filepath.Join(docsDir, "keywords", "index.md")
+
 	return os.WriteFile(filename, []byte(content.String()), filePermissions)
 }
 
@@ -867,9 +898,11 @@ func generateFunctionMarkdown(doc *descriptions.BuiltinFunctionDesc) string {
 
 	if len(doc.Parameters) > 0 {
 		content.WriteString("## Parameters\n\n")
+
 		for _, param := range doc.Parameters {
 			content.WriteString(fmt.Sprintf("- **%s** (%s): %s\n", param.Name, param.Type, param.Description))
 		}
+
 		content.WriteString("\n")
 	}
 
@@ -1013,6 +1046,7 @@ func runCompileToExecutableWithSecurity(source, filename string, security *Secur
 
 	// Create outputs directory relative to the source file
 	sourceDir := filepath.Dir(filename)
+
 	outputsDir := filepath.Join(sourceDir, "outputs")
 	if err := os.MkdirAll(outputsDir, dirPerms); err != nil {
 		return CommandResult{
@@ -1055,6 +1089,7 @@ func runRunProgramWithSecurity(source string, quiet bool, security *SecurityConf
 	if err != nil {
 		// ALWAYS show compilation errors regardless of quiet flag
 		fmt.Fprintf(os.Stderr, "Compilation failed\n")
+
 		return CommandResult{
 			Success:  false,
 			ErrorMsg: fmt.Sprintf("Execution failed: %v", err),

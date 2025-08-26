@@ -64,6 +64,7 @@ func captureJITOutput(source string) (string, error) {
 
 	// Add timeout to prevent hanging tests!
 	done := make(chan error, 1)
+
 	var execErr error
 
 	go func() {
@@ -78,6 +79,7 @@ func captureJITOutput(source string) (string, error) {
 		// FAIL HARD: No fucking hanging tests allowed!
 		_ = w.Close()
 		os.Stdout = old
+
 		return "", ErrTestExecutionTimeout
 	}
 
@@ -85,6 +87,7 @@ func captureJITOutput(source string) (string, error) {
 	os.Stdout = old
 
 	var buf bytes.Buffer
+
 	_, _ = io.Copy(&buf, r)
 
 	return buf.String(), execErr
@@ -191,6 +194,7 @@ func findRustTools() (string, string, error) {
 		if _, err := os.Stat(rustcPath); err == nil {
 			rustc = rustcPath
 		}
+
 		if _, err := os.Stat(cargoPath); err == nil {
 			cargo = cargoPath
 		}
@@ -261,7 +265,9 @@ func TestRustInterop(t *testing.T) {
 
 	// Clean up any previous build artifacts first
 	t.Log("🧹 Cleaning up previous Rust build artifacts...")
+
 	cleanCmd := exec.Command("cargo", "clean")
+
 	cleanCmd.Dir = rustDir
 	if output, err := cleanCmd.CombinedOutput(); err != nil {
 		t.Logf("⚠️ Warning: Failed to clean Rust artifacts: %v\nOutput: %s", err, output)
@@ -269,12 +275,15 @@ func TestRustInterop(t *testing.T) {
 
 	// Build the Rust library
 	t.Log("🦀 Building Rust library...")
+
 	targetDir := filepath.Join(os.TempDir(), "osprey_rust_target_"+strconv.Itoa(os.Getpid()))
 	buildCmd := exec.Command(cargo, "build", "--release", "--target-dir", targetDir, "-j", "1")
+
 	buildCmd.Dir = rustDir
 	if output, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("❌ FAILED TO BUILD RUST LIBRARY: %v\nOutput: %s", err, output)
 	}
+
 	t.Log("✅ Rust library built successfully")
 
 	// Verify the Rust library was created
@@ -282,12 +291,15 @@ func TestRustInterop(t *testing.T) {
 	if !fileExists(rustLibPath) {
 		t.Fatalf("❌ RUST LIBRARY NOT FOUND AT: %s", rustLibPath)
 	}
+
 	t.Log("✅ Rust library verified at:", rustLibPath)
 
 	// Test the interop by running the demo script
 	t.Log("🚀 Running Rust interop demo...")
+
 	runCmd := exec.Command("bash", "run.sh")
 	runCmd.Dir = rustDir
+
 	output, err := runCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("❌ FAILED TO RUN RUST INTEROP DEMO: %v\nOutput: %s", err, output)
@@ -396,6 +408,7 @@ func TestSystemLibraryInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get working directory: %v", err)
 	}
+
 	defer func() { _ = os.Chdir(oldWd) }()
 
 	if err := os.Chdir(tempDir); err != nil {

@@ -16,6 +16,7 @@ func (e *ValidationError) Error() string {
 	if e.Position != nil {
 		return fmt.Sprintf("line %d:%d: validation error: %s", e.Position.Line, e.Position.Column, e.Message)
 	}
+
 	return e.Message
 }
 
@@ -42,40 +43,10 @@ func validateStatement(stmt Statement) error {
 
 // validateFunctionDeclaration validates function declarations according to language requirements.
 func validateFunctionDeclaration(fn *FunctionDeclaration) error {
-	// Special case: Functions like 'identity' and 'main' should prioritize return type validation
-	needsReturnTypeFirst := fn.Name == "identity" || fn.Name == "main" || len(fn.Parameters) == 0
-
-	if needsReturnTypeFirst {
-		// Check for functions without explicit return type annotations FIRST
-		if fn.ReturnType == nil {
-			return &ValidationError{
-				Message:  fmt.Sprintf("Function '%s' requires explicit return type annotation - type cannot be inferred from body", fn.Name),
-				Position: fn.Position,
-			}
-		}
-	}
-
-	// Check for parameters without explicit type annotations
-	for _, param := range fn.Parameters {
-		if param.Type == nil {
-			return &ValidationError{
-				Message:  fmt.Sprintf("Parameter '%s' in function '%s' requires explicit type annotation - type cannot be inferred from usage", param.Name, fn.Name),
-				Position: fn.Position,
-			}
-		}
-	}
-
-	if !needsReturnTypeFirst {
-		// Check for functions without explicit return type annotations
-		if fn.ReturnType == nil {
-			return &ValidationError{
-				Message:  fmt.Sprintf("Function '%s' requires explicit return type annotation - type cannot be inferred from body", fn.Name),
-				Position: fn.Position,
-			}
-		}
-	}
-
-	// Check for built-in function redefinition LAST
+	// With Hindley-Milner type inference, we trust the type system to handle inference
+	// Only validate basic language constraints, not type inference capabilities
+	
+	// Check for built-in function redefinition
 	builtinFunctions := []string{"toString", "print", "length", "readFile"}
 	for _, builtin := range builtinFunctions {
 		if fn.Name == builtin {
@@ -91,4 +62,3 @@ func validateFunctionDeclaration(fn *FunctionDeclaration) error {
 
 // HINDLEY-MILNER: All validation removed
 // Type inference is now handled entirely by the Hindley-Milner type system
-

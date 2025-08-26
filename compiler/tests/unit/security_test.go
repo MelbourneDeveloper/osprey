@@ -15,6 +15,7 @@ print(serverID)`
 
 	// Create test file
 	testFile := createTestFile(t, "test_http.osp", source)
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	// Create sandbox security configuration
@@ -41,6 +42,7 @@ print(wsID)`
 
 	// Create test file
 	testFile := createTestFile(t, "test_ws.osp", source)
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	// Create sandbox security configuration
@@ -67,6 +69,7 @@ print(x)`
 
 	// Create test file
 	testFile := createTestFile(t, "test_safe.osp", source)
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	// Create default (permissive) security configuration
@@ -119,12 +122,14 @@ func TestBlockedFunctionsList(t *testing.T) {
 	httpFunctions := []string{"httpCreateServer", "httpListen", "httpGet", "httpPost"}
 	for _, fn := range httpFunctions {
 		found := false
+
 		for _, blocked := range blocked {
 			if blocked == fn {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("Expected function %s to be unavailable in sandbox mode", fn)
 		}
@@ -134,12 +139,14 @@ func TestBlockedFunctionsList(t *testing.T) {
 	wsFunctions := []string{"websocketConnect", "websocketSend", "websocketClose"}
 	for _, fn := range wsFunctions {
 		found := false
+
 		for _, blocked := range blocked {
 			if blocked == fn {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("Expected function %s to be unavailable in sandbox mode", fn)
 		}

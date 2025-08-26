@@ -13,6 +13,7 @@ import (
 // TestPkgConfigOpenSSL tests that pkg-config can find OpenSSL.
 func TestPkgConfigOpenSSL(t *testing.T) {
 	cmd := exec.Command("pkg-config", "--libs", "openssl")
+
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("pkg-config failed to find OpenSSL: %v", err)
@@ -27,6 +28,7 @@ func TestPkgConfigOpenSSL(t *testing.T) {
 
 	// Also test cflags
 	cmd = exec.Command("pkg-config", "--cflags", "openssl")
+
 	output, err = cmd.Output()
 	if err != nil {
 		t.Fatalf("pkg-config failed to get OpenSSL cflags: %v", err)
@@ -37,6 +39,7 @@ func TestPkgConfigOpenSSL(t *testing.T) {
 
 	// Test crypto specifically
 	cmd = exec.Command("pkg-config", "--libs", "libcrypto")
+
 	output, err = cmd.Output()
 	if err != nil {
 		t.Fatalf("pkg-config failed to find libcrypto: %v", err)
@@ -90,15 +93,19 @@ func TestBuildLinkArguments(t *testing.T) {
 		if strings.Contains(arg, "libhttp_runtime.a") {
 			hasHTTPLib = true
 		}
+
 		if strings.Contains(arg, "libfiber_runtime.a") {
 			hasFiberLib = true
 		}
+
 		if arg == "-lssl" {
 			hasSSL = true
 		}
+
 		if arg == "-lcrypto" {
 			hasCrypto = true
 		}
+
 		if arg == "-lpthread" {
 			hasPthread = true
 		}
@@ -107,15 +114,19 @@ func TestBuildLinkArguments(t *testing.T) {
 	if !hasHTTPLib {
 		t.Fatal("Missing HTTP runtime library")
 	}
+
 	if !hasFiberLib {
 		t.Fatal("Missing fiber runtime library")
 	}
+
 	if !hasSSL {
 		t.Fatal("Missing -lssl")
 	}
+
 	if !hasCrypto {
 		t.Fatal("Missing -lcrypto")
 	}
+
 	if !hasPthread {
 		t.Fatal("Missing -lpthread")
 	}
@@ -140,6 +151,7 @@ func TestHTTPRuntimeLibrary(t *testing.T) {
 
 	// Use nm to check symbols in the library
 	cmd := exec.Command("nm", httpLibPath)
+
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("nm command failed - required for symbol analysis: %v", err)
@@ -220,6 +232,7 @@ int main() {
 
 	// Build the exact link arguments that compilation.go would use
 	var linkArgs []string
+
 	linkArgs = append(linkArgs, "clang")
 	linkArgs = append(linkArgs, "-o", testExe, testO)
 
@@ -239,6 +252,7 @@ int main() {
 		t.Logf("Added OpenSSL flags: %v", flags)
 	} else {
 		t.Logf("pkg-config failed, using direct linking")
+
 		linkArgs = append(linkArgs, "-lssl", "-lcrypto")
 	}
 
@@ -246,8 +260,8 @@ int main() {
 
 	// Execute the link command
 	linkCmd := exec.Command(linkArgs[0], linkArgs[1:]...)
-	output, err := linkCmd.CombinedOutput()
 
+	output, err := linkCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Manual linking failed: %v. Output: %s", err, string(output))
 	} else {
@@ -322,8 +336,8 @@ fn main() -> int {
 
 	// Now try to compile it
 	outputFile := filepath.Join(testDir, "test_http")
-	err = codegen.CompileToExecutable(ospCode, outputFile)
 
+	err = codegen.CompileToExecutable(ospCode, outputFile)
 	if err != nil {
 		t.Fatalf("FATAL: Compilation failed unexpectedly. This test expects successful compilation. Error: %v", err)
 	} else {
@@ -350,7 +364,6 @@ fn main() -> int {
 
 	// Run the compilation
 	err := codegen.CompileToExecutable(ospCode, outputFile)
-
 	if err != nil {
 		t.Fatalf("FATAL: ❌ Compilation failed unexpectedly. "+
 			"This test requires successful compilation to verify linking. Error: %v", err)

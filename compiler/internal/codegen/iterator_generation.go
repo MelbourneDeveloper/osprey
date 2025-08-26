@@ -58,6 +58,7 @@ func (g *LLVMGenerator) generateForEachCall(callExpr *ast.CallExpression) (value
 
 	// Get the function to apply from second argument
 	funcArg := callExpr.Arguments[1]
+
 	funcIdent, ok := funcArg.(*ast.Identifier)
 	if !ok {
 		return nil, ErrForEachNotFunction
@@ -217,6 +218,7 @@ func (g *LLVMGenerator) generateFoldCall(callExpr *ast.CallExpression) (value.Va
 
 	// Get the fold function
 	funcArg := callExpr.Arguments[2]
+
 	funcIdent, ok := funcArg.(*ast.Identifier)
 	if !ok {
 		return nil, ErrFoldNotFunction
@@ -259,7 +261,7 @@ func (g *LLVMGenerator) generateFoldLoop(
 	// Create counter and accumulator variables
 	counterPtr := g.builder.NewAlloca(types.I64)
 	accumulatorPtr := g.builder.NewAlloca(types.I64)
-	
+
 	// Initialize counter and accumulator
 	g.builder.NewStore(start, counterPtr)
 	g.builder.NewStore(initial, accumulatorPtr)

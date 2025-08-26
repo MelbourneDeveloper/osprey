@@ -94,5 +94,6 @@ func GetOperatorDescription(symbol string) *OperatorDesc {
 	if desc, exists := descriptions[symbol]; exists {
 		return desc
 	}
+
 	return nil
 }

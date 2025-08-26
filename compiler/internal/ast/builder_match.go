@@ -104,6 +104,7 @@ func (b *Builder) tryBuildNegativeNumberPattern(pipeCtx parser.IPipeExprContext)
 			}
 		}
 	}
+
 	return Pattern{Constructor: "unknown"}
 }
 
@@ -128,6 +129,7 @@ func (b *Builder) buildPipeExprPattern(pipeCtx parser.IPipeExprContext) Pattern 
 			}
 		}
 	}
+
 	return Pattern{Constructor: "unknown"}
 }
 
@@ -166,6 +168,7 @@ func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern
 			IsWildcard:  false,
 		}
 	}
+
 	return Pattern{Constructor: "unknown"}
 }
 
