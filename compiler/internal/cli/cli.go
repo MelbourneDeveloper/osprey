@@ -225,6 +225,7 @@ func runCompileToExecutable(source, filename string) CommandResult {
 	sourceDir := filepath.Dir(filename)
 
 	outputsDir := filepath.Join(sourceDir, "outputs")
+
 	err := os.MkdirAll(outputsDir, dirPerms)
 	if err != nil {
 		return CommandResult{
@@ -525,6 +526,7 @@ func generateAPIDocumentationFiles(docsDir string) error {
 
 func generateFunctionDocs(docsDir string) error {
 	functionsDir := filepath.Join(docsDir, "functions")
+
 	err := os.MkdirAll(functionsDir, dirPermissions)
 	if err != nil {
 		return err
@@ -545,6 +547,7 @@ func generateFunctionDocs(docsDir string) error {
 		content := generateFunctionMarkdown(doc)
 
 		filename := filepath.Join(functionsDir, strings.ToLower(name)+".md")
+
 		err := os.WriteFile(filename, []byte(content), filePermissions)
 		if err != nil {
 			return fmt.Errorf("failed to write function doc %s: %w", name, err)
@@ -556,6 +559,7 @@ func generateFunctionDocs(docsDir string) error {
 
 func generateTypeDocs(docsDir string) error {
 	typesDir := filepath.Join(docsDir, "types")
+
 	err := os.MkdirAll(typesDir, dirPermissions)
 	if err != nil {
 		return err
@@ -576,6 +580,7 @@ func generateTypeDocs(docsDir string) error {
 		content := generateTypeMarkdown(doc)
 
 		filename := filepath.Join(typesDir, strings.ToLower(name)+".md")
+
 		err := os.WriteFile(filename, []byte(content), filePermissions)
 		if err != nil {
 			return fmt.Errorf("failed to write type doc %s: %w", name, err)
@@ -587,6 +592,7 @@ func generateTypeDocs(docsDir string) error {
 
 func generateOperatorDocs(docsDir string) error {
 	operatorsDir := filepath.Join(docsDir, "operators")
+
 	err := os.MkdirAll(operatorsDir, dirPermissions)
 	if err != nil {
 		return err
@@ -619,6 +625,7 @@ func generateOperatorDocs(docsDir string) error {
 
 func generateKeywordDocs(docsDir string) error {
 	keywordsDir := filepath.Join(docsDir, "keywords")
+
 	err := os.MkdirAll(keywordsDir, dirPermissions)
 	if err != nil {
 		return err
@@ -639,6 +646,7 @@ func generateKeywordDocs(docsDir string) error {
 		content := generateKeywordMarkdown(doc)
 
 		filename := filepath.Join(keywordsDir, strings.ToLower(name)+".md")
+
 		err := os.WriteFile(filename, []byte(content), filePermissions)
 		if err != nil {
 			return fmt.Errorf("failed to write keyword doc %s: %w", name, err)
@@ -1070,6 +1078,7 @@ func runCompileToExecutableWithSecurity(source, filename string, security *Secur
 	sourceDir := filepath.Dir(filename)
 
 	outputsDir := filepath.Join(sourceDir, "outputs")
+
 	err := os.MkdirAll(outputsDir, dirPerms)
 	if err != nil {
 		return CommandResult{

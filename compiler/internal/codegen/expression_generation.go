@@ -1738,6 +1738,7 @@ func (g *LLVMGenerator) generateToStringFunctionBody(fn *ir.Func) {
 	// Simple toString implementation for integers
 	// Use sprintf to convert integer to string
 	sprintf := g.ensureSprintfDeclaration()
+	malloc := g.ensureMallocDeclaration()
 	
 	// Format string for integer conversion
 	formatStr := constant.NewCharArrayFromString("%ld\x00")
@@ -1745,19 +1746,19 @@ func (g *LLVMGenerator) generateToStringFunctionBody(fn *ir.Func) {
 	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 	
-	// Allocate buffer for result string (64 bytes should be enough for any 64-bit integer)
-	bufferType := types.NewArray(64, types.I8)
-	buffer := g.builder.NewAlloca(bufferType)
-	bufferPtr := g.builder.NewGetElementPtr(bufferType, buffer,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	// Allocate buffer on heap for result string (64 bytes should be enough for any 64-bit integer)
+	const bufferSizeBytes = 64
+	bufferSize := constant.NewInt(types.I64, bufferSizeBytes)
+	bufferPtr := g.builder.NewCall(malloc, bufferSize)
 	
 	// Call sprintf(buffer, "%ld", value)
 	g.builder.NewCall(sprintf, bufferPtr, formatPtr, valueParam)
 	
 	// Ensure null termination by explicitly setting the last byte to 0
 	// (sprintf should handle this, but let's be safe)
-	lastBytePtr := g.builder.NewGetElementPtr(bufferType, buffer,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 63))
+	// bufferPtr is already i8*, so we just need to get element at index 63
+	lastBytePtr := g.builder.NewGetElementPtr(types.I8, bufferPtr,
+		constant.NewInt(types.I32, bufferSizeBytes-1))
 	g.builder.NewStore(constant.NewInt(types.I8, 0), lastBytePtr)
 	
 	g.builder.NewRet(bufferPtr)

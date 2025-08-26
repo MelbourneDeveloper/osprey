@@ -936,6 +936,7 @@ func (g *LLVMGenerator) getOrCreateRecordFieldMapping(recordTypeName string, fie
 // createRecordTypeKey creates a unique key for record types that includes field types
 func (g *LLVMGenerator) createRecordTypeKey(rt *RecordType) string {
 	var keyParts []string
+
 	keyParts = append(keyParts, rt.name)
 
 	// Sort field names for consistent key generation
@@ -943,6 +944,7 @@ func (g *LLVMGenerator) createRecordTypeKey(rt *RecordType) string {
 	for fieldName := range rt.fields {
 		fieldNames = append(fieldNames, fieldName)
 	}
+
 	sort.Strings(fieldNames)
 
 	// Add field types to the key
@@ -960,7 +962,7 @@ func (g *LLVMGenerator) getLLVMRecordType(rt *RecordType) types.Type {
 	// This ensures that polymorphic records like Point<int,int> and Point<string,string>
 	// get different LLVM struct types
 	typeKey := g.createRecordTypeKey(rt)
-	
+
 	// Check if we already have this specific record type in the type map
 	if llvmType, exists := g.typeMap[typeKey]; exists {
 		// Return struct type by value, not pointer

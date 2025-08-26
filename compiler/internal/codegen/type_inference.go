@@ -1577,6 +1577,7 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 	case isLogicalOp(e.Operator):
 		// Logical operations require Bool operands and return Bool
 		boolType := &ConcreteType{name: TypeBool}
+
 		err := ti.Unify(leftType, boolType)
 		if err != nil {
 			return nil, fmt.Errorf("left operand of %s must be Bool: %w", e.Operator, err)
@@ -1619,6 +1620,7 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 	// Try string concatenation first if one operand is clearly a string
 	if ti.isStringType(leftResolved) || ti.isStringType(rightResolved) {
 		stringType := &ConcreteType{name: TypeString}
+
 		err := ti.Unify(leftType, stringType)
 		if err == nil {
 			err := ti.Unify(rightType, stringType)
@@ -1631,6 +1633,7 @@ func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error
 	// Try integer addition if one operand is clearly an integer
 	if ti.isIntType(leftResolved) || ti.isIntType(rightResolved) {
 		intType := &ConcreteType{name: TypeInt}
+
 		err := ti.Unify(leftType, intType)
 		if err == nil {
 			err := ti.Unify(rightType, intType)
@@ -2083,6 +2086,7 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 	case "+", "-":
 		// Unary plus and minus require Int operand and return Int
 		intType := &ConcreteType{name: TypeInt}
+
 		err := ti.Unify(operandType, intType)
 		if err != nil {
 			return nil, fmt.Errorf("operand of %s must be Int: %w", e.Operator, err)
@@ -2092,6 +2096,7 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 	case "!":
 		// Logical NOT requires Bool operand and returns Bool
 		boolType := &ConcreteType{name: TypeBool}
+
 		err := ti.Unify(operandType, boolType)
 		if err != nil {
 			return nil, fmt.Errorf("operand of ! must be Bool: %w", err)

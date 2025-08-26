@@ -202,6 +202,7 @@ func findRustTools() (string, string, error) {
 		if rustc != "" && cargo != "" {
 			// Update PATH to include this directory
 			newPath := path + ":" + currentPath
+
 			err := os.Setenv("PATH", newPath)
 			if err != nil {
 				return "", "", err
