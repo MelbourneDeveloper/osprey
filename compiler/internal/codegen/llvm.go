@@ -233,8 +233,8 @@ func (g *LLVMGenerator) handlePolymorphicFunctionArgument(
 		return result, true, err
 	}
 
-	// Try alternative resolution for specific patterns
-	return g.resolvePolymorphicArgumentAlternative(ident.Name, argIndex, argTypes)
+	// No alternative resolution needed - Osprey requires named args for multi-param functions
+	return nil, false, nil
 }
 
 // resolvePolymorphicArgument resolves a polymorphic function argument by direct type matching
@@ -266,38 +266,6 @@ func (g *LLVMGenerator) resolvePolymorphicArgument(
 	return result, true, err
 }
 
-// resolvePolymorphicArgumentAlternative tries alternative resolution for specific patterns like apply(f, x)
-func (g *LLVMGenerator) resolvePolymorphicArgumentAlternative(
-	funcName string,
-	argIndex int,
-	argTypes []Type,
-) (value.Value, bool, error) {
-	// Handle special case: apply(f, x) where f is polymorphic
-	if argIndex != 0 || len(argTypes) <= 1 {
-		return nil, true, nil
-	}
-
-	// This is likely the function parameter for apply(f, x)
-	// Try to create a function type based on x's type
-	xType := argTypes[1] // The second argument (x)
-	// Create a function type: xType -> xType (for identity)
-	inferredFnType := &FunctionType{
-		paramTypes: []Type{xType},
-		returnType: xType,
-	}
-
-	// Get the monomorphized function instance
-	mangledName := g.getMonomorphizedName(funcName, inferredFnType)
-
-	// Check if we already have this monomorphized instance
-	if fn, exists := g.functions[mangledName]; exists {
-		return fn, true, nil
-	}
-
-	// Generate it on-demand
-	result, err := g.generateMonomorphizedInstance(funcName, inferredFnType)
-	return result, true, err
-}
 
 // generateTypedArgumentExpression generates an argument with type awareness
 func (g *LLVMGenerator) generateTypedArgumentExpression(
