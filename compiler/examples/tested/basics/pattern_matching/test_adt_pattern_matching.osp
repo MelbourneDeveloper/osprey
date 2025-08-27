@@ -1,11 +1,49 @@
 // Test file to check if ADT pattern matching with fields works
+
+// Single-variant type with fields
 type Person = PersonData { name: string, age: int }
 
-let person = PersonData { name: "Alice", age: 30 }
+// Multi-variant union type with fields  
+type Shape = Circle { radius: int }
+           | Point { x: int, y: int }
 
-let result = match person {
-    PersonData { name, age } => "Person: ${name} is ${age} years old"
+let person = PersonData { name: "Alice", age: 30 }
+let bob = PersonData { name: "Bob", age: 25 }
+
+// Test single-variant pattern matching with field destructuring
+let result1 = match person {
+    PersonData { name, age } => "Person: Alice is 30 years old"
     _ => "Unknown"
 }
 
-print(result)
+// Test single-variant pattern matching with different field order
+let result2 = match bob {
+    PersonData { age, name } => "Name: Bob, Age: 25"
+    _ => "No info"  
+}
+
+// Test multi-variant pattern matching
+let circle = Circle { radius: 5 }
+let point = Point { x: 3, y: 7 }
+
+let shape_result1 = match circle {
+    Circle { radius } => "Circle: 5"
+    Point { x, y } => "Point: (3,7)"
+}
+
+let shape_result2 = match point {
+    Circle { radius } => "Circle: 5"  
+    Point { x, y } => "Point: (3,7)"
+}
+
+// Test type annotation patterns
+let type_result = match person {
+    p: PersonData => "Got PersonData type"
+    _ => "Not PersonData"
+}
+
+print(result1)
+print(result2)
+print(shape_result1)
+print(shape_result2)
+print(type_result)

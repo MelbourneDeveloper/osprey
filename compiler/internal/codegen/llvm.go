@@ -1560,10 +1560,13 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 			// Get the field type and calculate its size
 			fieldType := g.getFieldType(field.Type)
 
+			// Get the actual data field type from the struct (second field)
+			dataFieldType := structType.Fields[1] // Data field is at index 1
+			
 			// Cast data array to appropriate pointer type for this field
 			fieldPtr := g.builder.NewBitCast(
 				g.builder.NewGetElementPtr(
-					types.NewArray(uint64(LargeArraySizeForCasting), types.I8), // Use large array for casting
+					dataFieldType, // Use the actual data field type
 					dataPtr,
 					constant.NewInt(types.I32, 0),      // array index
 					constant.NewInt(types.I32, offset), // byte offset
