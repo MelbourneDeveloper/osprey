@@ -16,3 +16,11 @@ Function equality test:
 Equal
 Simple comparison:
 true
+Logical operators:
+true && false = false
+true || false = true
+(5 > 3) && (10 == 10) = true
+(5 < 3) || (10 != 5) = true
+Short-circuit evaluation:
+false && true = false
+true || false = true

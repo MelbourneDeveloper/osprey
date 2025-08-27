@@ -149,18 +149,45 @@ func (b *Builder) buildTernaryExpr(ctx parser.ITernaryExprContext) Expression {
 }
 
 func (b *Builder) buildComparisonExpr(ctx parser.IComparisonExprContext) Expression {
+	return b.buildLogicalOrExpr(ctx.LogicalOrExpr())
+}
+
+func (b *Builder) buildLogicalOrExpr(ctx parser.ILogicalOrExprContext) Expression {
+	andExprs := ctx.AllLogicalAndExpr()
+	if len(andExprs) == 1 {
+		return b.buildLogicalAndExpr(andExprs[0])
+	}
+
+	// Build left-associative logical OR expression
+	left := b.buildLogicalAndExpr(andExprs[0])
+
+	for i := 1; i < len(andExprs); i++ {
+		right := b.buildLogicalAndExpr(andExprs[i])
+
+		left = &BinaryExpression{
+			Left:     left,
+			Operator: "||",
+			Right:    right,
+			Position: b.getPositionFromContext(ctx),
+		}
+	}
+
+	return left
+}
+
+func (b *Builder) buildLogicalAndExpr(ctx parser.ILogicalAndExprContext) Expression {
 	addExprs := ctx.AllAddExpr()
 	if len(addExprs) == 1 {
 		return b.buildAddExpr(addExprs[0])
 	}
 
-	// Build left-associative comparison expression
+	// Build left-associative logical AND and comparison expressions
 	left := b.buildAddExpr(addExprs[0])
 
 	for i := 1; i < len(addExprs); i++ {
 		right := b.buildAddExpr(addExprs[i])
 
-		// Determine comparison operator
+		// Determine operator
 		operator := "=="
 		if ctx.NE_OP(i-1) != nil {
 			operator = "!="
@@ -172,6 +199,8 @@ func (b *Builder) buildComparisonExpr(ctx parser.IComparisonExprContext) Express
 			operator = "<="
 		} else if ctx.GE_OP(i-1) != nil {
 			operator = ">="
+		} else if ctx.AND_OP(i-1) != nil {
+			operator = "&&"
 		}
 
 		left = &BinaryExpression{

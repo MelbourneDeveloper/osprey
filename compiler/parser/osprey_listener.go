@@ -127,6 +127,12 @@ type ospreyListener interface {
 	// EnterComparisonExpr is called when entering the comparisonExpr production.
 	EnterComparisonExpr(c *ComparisonExprContext)
 
+	// EnterLogicalOrExpr is called when entering the logicalOrExpr production.
+	EnterLogicalOrExpr(c *LogicalOrExprContext)
+
+	// EnterLogicalAndExpr is called when entering the logicalAndExpr production.
+	EnterLogicalAndExpr(c *LogicalAndExprContext)
+
 	// EnterAddExpr is called when entering the addExpr production.
 	EnterAddExpr(c *AddExprContext)
 
@@ -327,6 +333,12 @@ type ospreyListener interface {
 
 	// ExitComparisonExpr is called when exiting the comparisonExpr production.
 	ExitComparisonExpr(c *ComparisonExprContext)
+
+	// ExitLogicalOrExpr is called when exiting the logicalOrExpr production.
+	ExitLogicalOrExpr(c *LogicalOrExprContext)
+
+	// ExitLogicalAndExpr is called when exiting the logicalAndExpr production.
+	ExitLogicalAndExpr(c *LogicalAndExprContext)
 
 	// ExitAddExpr is called when exiting the addExpr production.
 	ExitAddExpr(c *AddExprContext)

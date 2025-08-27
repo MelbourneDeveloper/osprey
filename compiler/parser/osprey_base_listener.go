@@ -260,6 +260,18 @@ func (s *BaseospreyListener) EnterComparisonExpr(ctx *ComparisonExprContext) {}
 // ExitComparisonExpr is called when production comparisonExpr is exited.
 func (s *BaseospreyListener) ExitComparisonExpr(ctx *ComparisonExprContext) {}
 
+// EnterLogicalOrExpr is called when production logicalOrExpr is entered.
+func (s *BaseospreyListener) EnterLogicalOrExpr(ctx *LogicalOrExprContext) {}
+
+// ExitLogicalOrExpr is called when production logicalOrExpr is exited.
+func (s *BaseospreyListener) ExitLogicalOrExpr(ctx *LogicalOrExprContext) {}
+
+// EnterLogicalAndExpr is called when production logicalAndExpr is entered.
+func (s *BaseospreyListener) EnterLogicalAndExpr(ctx *LogicalAndExprContext) {}
+
+// ExitLogicalAndExpr is called when production logicalAndExpr is exited.
+func (s *BaseospreyListener) ExitLogicalAndExpr(ctx *LogicalAndExprContext) {}
+
 // EnterAddExpr is called when production addExpr is entered.
 func (s *BaseospreyListener) EnterAddExpr(ctx *AddExprContext) {}
 

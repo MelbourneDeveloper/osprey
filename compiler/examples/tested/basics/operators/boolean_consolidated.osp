@@ -38,3 +38,19 @@ match result {
 print("Simple comparison:")
 let simple_result = 5 > 3
 print(toString(simple_result))
+
+print("Logical operators:")
+let and_result = true && false
+let or_result = true || false
+let complex_logic = (5 > 3) && (10 == 10)
+let complex_or = (5 < 3) || (10 != 5)
+print("true && false = ${toString(and_result)}")
+print("true || false = ${toString(or_result)}")
+print("(5 > 3) && (10 == 10) = ${toString(complex_logic)}")
+print("(5 < 3) || (10 != 5) = ${toString(complex_or)}")
+
+print("Short-circuit evaluation:")
+let short_and = false && true
+let short_or = true || false  
+print("false && true = ${toString(short_and)}")
+print("true || false = ${toString(short_or)}")

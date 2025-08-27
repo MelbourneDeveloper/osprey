@@ -117,7 +117,15 @@ ternaryExpr
 
 
 comparisonExpr
-    : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP) addExpr)*
+    : logicalOrExpr
+    ;
+
+logicalOrExpr
+    : logicalAndExpr (OR_OP logicalAndExpr)*
+    ;
+
+logicalAndExpr
+    : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP | AND_OP) addExpr)*
     ;
 
 addExpr
@@ -304,6 +312,8 @@ EQ_OP       : '==';
 NE_OP       : '!=';
 LE_OP       : '<=';
 GE_OP       : '>=';
+AND_OP      : '&&';
+OR_OP       : '||';
 NOT_OP      : '!';
 MOD_OP      : '%';
 COLON       : ':';

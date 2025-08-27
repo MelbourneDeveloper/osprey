@@ -218,9 +218,21 @@ primary_expression := literal
 
 #### Binary Expressions
 ```
-binary_expression := multiplicative_expression (('+' | '-') multiplicative_expression)*
+binary_expression := logical_or_expression
+logical_or_expression := logical_and_expression ('||' logical_and_expression)*
+logical_and_expression := comparison_expression ('&&' comparison_expression)*
+comparison_expression := additive_expression (('==' | '!=' | '<' | '>' | '<=' | '>=') additive_expression)*
+additive_expression := multiplicative_expression (('+' | '-') multiplicative_expression)*
 multiplicative_expression := unary_expression (('*' | '/') unary_expression)*
 ```
+
+**Operator Precedence (highest to lowest):**
+1. Unary operators (`!`, `-`)
+2. Multiplicative (`*`, `/`)  
+3. Additive (`+`, `-`)
+4. Comparison (`==`, `!=`, `<`, `>`, `<=`, `>=`)
+5. Logical AND (`&&`)
+6. Logical OR (`||`)
 
 #### Boolean Pattern Matching
 Use pattern matching for conditional logic:
