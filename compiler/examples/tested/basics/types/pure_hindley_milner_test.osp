@@ -120,5 +120,36 @@ print("apply(identityP, 99) = ${applied1}")
 print("apply(toString, 123) = ${applied2}")
 print("")
 
+// Test 7: Generic type equality testing (for GenericType.Equals coverage)
+print("Test 7: Generic type equality comparison")
+
+// Create generic types that will exercise the Equals method
+type Generic<T> = { data: T }
+type AnotherGeneric<T, U> = { first: T, second: U }
+
+// Functions that return generic types - this will exercise type comparison during unification
+fn makeGenericInt(value) = Generic { data: value }         // Returns Generic<int>
+fn makeGenericString(value) = Generic { data: value }      // Returns Generic<string>
+fn makeAnotherGeneric(a, b) = AnotherGeneric { first: a, second: b }  // Returns AnotherGeneric<T, U>
+
+let gen1 = makeGenericInt(42)               // Generic<int>
+let gen2 = makeGenericInt(99)               // Generic<int> - same type as gen1
+let gen3 = makeGenericString("test")        // Generic<string> - different type
+let gen4 = makeAnotherGeneric(a: 1, b: "two")     // AnotherGeneric<int, string>
+let gen5 = makeAnotherGeneric(a: 3, b: "four")    // AnotherGeneric<int, string> - same type as gen4
+
+// Access fields to force type unification and comparison
+let val1 = gen1.data         // int from Generic<int>
+let val2 = gen2.data         // int from Generic<int> - same type
+let val3 = gen3.data         // string from Generic<string>
+let val4 = gen4.first        // int from AnotherGeneric<int, string>
+let val5 = gen5.first        // int from AnotherGeneric<int, string> - same type
+
+print("Generic type equality test - gen1.data = ${val1}")
+print("Generic type equality test - gen2.data = ${val2}")
+print("Generic type equality test - gen3.data = ${val3}")
+print("Generic type equality test - gen4.first = ${val4}")
+print("Generic type equality test - gen5.first = ${val5}")
+
 print("=== PURE HINDLEY-MILNER TEST COMPLETE ===")
 print("All types inferred from usage context - no explicit type annotations!")

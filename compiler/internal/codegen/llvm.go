@@ -652,8 +652,9 @@ func (g *LLVMGenerator) ensureSprintfDeclaration() *ir.Func {
 }
 
 func (g *LLVMGenerator) generateIntToString(arg value.Value) (value.Value, error) {
-	// Ensure sprintf is declared
+	// Ensure sprintf and malloc are declared
 	sprintf := g.ensureSprintfDeclaration()
+	malloc := g.ensureMallocDeclaration()
 
 	// Create format string for integer conversion
 	formatStr := constant.NewCharArrayFromString("%ld\x00")
@@ -661,11 +662,9 @@ func (g *LLVMGenerator) generateIntToString(arg value.Value) (value.Value, error
 	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
-	// Allocate buffer for result string (64 bytes should be enough for any 64-bit integer)
-	bufferType := types.NewArray(BufferSize64Bytes, types.I8)
-	buffer := g.builder.NewAlloca(bufferType)
-	bufferPtr := g.builder.NewGetElementPtr(bufferType, buffer,
-		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
+	// Allocate buffer for result string using malloc (64 bytes should be enough for any 64-bit integer)
+	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
+	bufferPtr := g.builder.NewCall(malloc, bufferSize)
 
 	// Call sprintf(buffer, "%ld", arg)
 	g.builder.NewCall(sprintf, bufferPtr, formatPtr, arg)

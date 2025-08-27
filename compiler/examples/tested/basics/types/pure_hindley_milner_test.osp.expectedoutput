@@ -29,5 +29,11 @@ stringContainer.label = world
 apply(identityP, 99) = 99
 apply(toString, 123) = 123
 
+Test 7: Generic type equality comparison
+Generic type equality test - gen1.data = 42
+Generic type equality test - gen2.data = 99
+Generic type equality test - gen3.data = test
+Generic type equality test - gen4.first = 1
+Generic type equality test - gen5.first = 3
 === PURE HINDLEY-MILNER TEST COMPLETE ===
 All types inferred from usage context - no explicit type annotations!
