@@ -83,10 +83,7 @@ func (g *LLVMGenerator) validateFunctionCall(funcName string, callExpr *ast.Call
 		return nil
 	}
 
-	// Validate any type usage in function calls
-	if err := g.validateFunctionCallArguments(funcName, callExpr); err != nil {
-		return err
-	}
+	// Type inference already validates any type mismatches
 
 	// Validate named arguments requirement for multi-parameter functions
 	return g.validateNamedArguments(funcName, callExpr)
@@ -528,105 +525,6 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 	return nil
 }
 
-// validateFunctionCallArguments validates that any types are not passed to functions expecting specific types
-func (g *LLVMGenerator) validateFunctionCallArguments(funcName string, callExpr *ast.CallExpression) error {
-	// Check if we have the function type in the type environment
-	funcType, exists := g.typeInferer.env.Get(funcName)
-	if !exists {
-		return nil // Built-in functions or unknown functions are handled elsewhere
-	}
-
-	// Check if it's a function type
-	if fnType, ok := funcType.(*FunctionType); ok {
-		// Get the arguments to check
-		var args []ast.Expression
-
-		if len(callExpr.NamedArguments) > 0 {
-			// Reorder named arguments to match parameter order
-			reorderedExprs, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
-			if err != nil {
-				return err
-			}
-
-			args = reorderedExprs
-		} else {
-			args = callExpr.Arguments
-		}
-
-		// Check each argument against its corresponding parameter type
-		for i, arg := range args {
-			if i >= len(fnType.paramTypes) {
-				continue // Too many arguments, will be caught elsewhere
-			}
-
-			paramType := fnType.paramTypes[i]
-
-			// Check for any type mismatch, passing function name and parameter index for better error messages
-			err := g.checkAnyTypeMismatchParam(arg, paramType, callExpr.Position, funcName, i)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// checkAnyTypeMismatchParam checks if an any type is being passed to a function expecting a specific type
-func (g *LLVMGenerator) checkAnyTypeMismatchParam(
-	arg ast.Expression,
-	paramType Type,
-	pos *ast.Position,
-	funcName string,
-	paramIndex int,
-) error {
-	// Check if argument is an identifier with any type
-	if ident, ok := arg.(*ast.Identifier); ok {
-		// Look up the variable type
-		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
-			resolvedType := g.typeInferer.ResolveType(varType)
-			resolvedParamType := g.typeInferer.ResolveType(paramType)
-
-			// Check if it's an any type being passed to a specific type
-			if resolvedType.String() == TypeAny && resolvedParamType.String() != TypeAny {
-				// Get the parameter name from the function declaration
-				paramName := g.getParameterName(funcName, paramIndex)
-				if paramName == "" {
-					paramName = resolvedParamType.String() // fallback to type name
-				}
-
-				// Use the identifier's position for accuracy, fallback to provided position
-				identPos := ident.Position
-				if identPos == nil {
-					identPos = pos
-				}
-
-				if identPos != nil {
-					return fmt.Errorf("line %d:%d: %w - pattern matching required: function '%s' expecting '%s'",
-						identPos.Line, identPos.Column, ErrAnyTypeMismatch, funcName, paramName)
-				}
-
-				return fmt.Errorf("%w - pattern matching required: function '%s' expecting '%s'",
-					ErrAnyTypeMismatch, funcName, paramName)
-			}
-		}
-	}
-
-	return nil
-}
-
-// getParameterName gets the parameter name for a function at the given index
-func (g *LLVMGenerator) getParameterName(funcName string, paramIndex int) string {
-	// Check if we have parameter names stored for this function
-	if paramNames, exists := g.functionParameters[funcName]; exists {
-		if paramIndex >= 0 && paramIndex < len(paramNames) {
-			return paramNames[paramIndex]
-		}
-	}
-
-	return ""
-}
-
 // handleBuiltInFunction handles all built-in function calls using the unified registry.
 func (g *LLVMGenerator) handleBuiltInFunction(name string, callExpr *ast.CallExpression) (value.Value, error) {
 	// Check if this is a built-in function using the registry
@@ -915,138 +813,10 @@ func (g *LLVMGenerator) isResultType(val value.Value) bool {
 	return false
 }
 
-// inferSuccessTypeFromExtractedValue infers the type from an already extracted value
-func (g *LLVMGenerator) inferSuccessTypeFromExtractedValue(extractedValue value.Value) Type {
-	// Try to get type from direct function lookup
-	if resultType := g.tryDirectFunctionLookup(extractedValue); resultType != nil {
-		return resultType
-	}
 
-	// Try more aggressive search through type environment
-	if resultType := g.tryAggressiveTypeSearch(extractedValue); resultType != nil {
-		return resultType
-	}
 
-	// Final fallback based on LLVM type
-	return g.getFallbackType(extractedValue)
-}
 
-// tryDirectFunctionLookup attempts to get type from direct function lookup
-func (g *LLVMGenerator) tryDirectFunctionLookup(extractedValue value.Value) Type {
-	extractInst, ok := extractedValue.(*ir.InstExtractValue)
-	if !ok {
-		return nil
-	}
 
-	callInst, ok := extractInst.X.(*ir.InstCall)
-	if !ok {
-		return nil
-	}
-
-	function, ok := callInst.Callee.(*ir.Func)
-	if !ok {
-		return nil
-	}
-
-	funcName := function.GlobalName
-
-	funcType, exists := g.typeInferer.env.Get(funcName)
-	if !exists {
-		return nil
-	}
-
-	return g.extractTypeFromFunctionType(funcType)
-}
-
-// tryAggressiveTypeSearch searches through the entire type environment
-func (g *LLVMGenerator) tryAggressiveTypeSearch(extractedValue value.Value) Type {
-	extractInst, ok := extractedValue.(*ir.InstExtractValue)
-	if !ok {
-		return nil
-	}
-
-	callInst, ok := extractInst.X.(*ir.InstCall)
-	if !ok {
-		return nil
-	}
-
-	function, ok := callInst.Callee.(*ir.Func)
-	if !ok {
-		return nil
-	}
-
-	funcName := function.GlobalName
-	for name, envType := range g.typeInferer.env.vars {
-		if name == funcName {
-			return g.extractTypeFromFunctionType(envType)
-		}
-	}
-
-	return nil
-}
-
-// extractTypeFromFunctionType extracts result type from a function type
-func (g *LLVMGenerator) extractTypeFromFunctionType(funcType Type) Type {
-	var actualType Type
-	if scheme, ok := funcType.(*TypeScheme); ok {
-		actualType = g.typeInferer.Instantiate(scheme)
-	} else {
-		actualType = funcType
-	}
-
-	if fnType, ok := actualType.(*FunctionType); ok {
-		return g.extractSuccessTypeFromResultType(fnType.returnType)
-	}
-
-	return nil
-}
-
-// getFallbackType returns a fallback type based on LLVM type
-func (g *LLVMGenerator) getFallbackType(extractedValue value.Value) Type {
-	switch extractedValue.Type() {
-	case types.I64:
-		return &ConcreteType{name: "int"}
-	case types.I8Ptr:
-		return &ConcreteType{name: "string"}
-	case types.I1:
-		return &ConcreteType{name: "bool"}
-	default:
-		return &ConcreteType{name: "int"}
-	}
-}
-
-// extractSuccessTypeFromResultType extracts T from Result<T, E>
-func (g *LLVMGenerator) extractSuccessTypeFromResultType(resultType Type) Type {
-	// Proper type inference: Result types should be GenericType with type arguments
-	if genericType, ok := resultType.(*GenericType); ok {
-		if genericType.name == TypeResult && len(genericType.typeArgs) >= 1 {
-			// Return the first type argument (success type T from Result<T, E>)
-			return genericType.typeArgs[0]
-		}
-	}
-
-	// Handle non-generic Result types (fallback for backwards compatibility)
-	if concreteType, ok := resultType.(*ConcreteType); ok {
-		// Try to extract from concrete Result type names like "Result<int, MathError>"
-		if strings.HasPrefix(concreteType.name, "Result<") {
-			// Extract the first type parameter
-			start := strings.Index(concreteType.name, "<") + 1
-
-			end := strings.Index(concreteType.name[start:], ",")
-			if end == -1 {
-				end = strings.Index(concreteType.name[start:], ">")
-			}
-
-			if end != -1 {
-				successTypeName := strings.TrimSpace(concreteType.name[start : start+end])
-				return &ConcreteType{name: successTypeName}
-			}
-		}
-	}
-
-	// If we can't extract the type, default to int (common case)
-	return &PrimitiveType{name: "int"}
-}
 
 // generateStandardMatchExpression generates a standard (non-result) match expression.
 func (g *LLVMGenerator) generateStandardMatchExpression(
@@ -2040,13 +1810,7 @@ func (g *LLVMGenerator) generateSuccessBlock(
 				// Extract value field (index 0) from struct value
 				extractedValue := g.builder.NewExtractValue(g.currentResultValue, 0)
 				g.variables[fieldName] = extractedValue
-
-				// Store semantic type information for the extracted value
-				// This is critical for proper boolean printing in pattern matching
-				successType := g.inferSuccessTypeFromExtractedValue(extractedValue)
-				if successType != nil {
-					g.typeInferer.env.Set(fieldName, successType)
-				}
+				// Note: Type information is handled elsewhere for struct values
 			} else {
 				// Fallback: use the discriminant value directly
 				g.variables[fieldName] = g.currentResultValue
