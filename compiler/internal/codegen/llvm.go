@@ -727,17 +727,56 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 }
 
 func (g *LLVMGenerator) generateMatchExpression(matchExpr *ast.MatchExpression) (value.Value, error) {
-	// Validate match expression for exhaustiveness and unknown variants
-	if err := g.validateMatchExpression(matchExpr); err != nil {
-		return nil, err
-	}
-
 	discriminant, err := g.generateExpression(matchExpr.Expression)
 	if err != nil {
 		return nil, err
 	}
 
+	// Validate match expression for exhaustiveness and unknown variants
+	// Now that we have the discriminant, we can infer its type for proper validation
+	discriminantType := g.inferDiscriminantTypeName(discriminant, matchExpr.Expression)
+	if err := g.validateMatchExpressionWithType(matchExpr, discriminantType); err != nil {
+		return nil, err
+	}
+
 	return g.generateMatchExpressionWithDiscriminant(matchExpr, discriminant)
+}
+
+// inferDiscriminantTypeName infers the type name of the discriminant for match validation
+func (g *LLVMGenerator) inferDiscriminantTypeName(_ value.Value, expr ast.Expression) string {
+	// Try to get the type from the type environment if the discriminant expression is an identifier
+	if ident, ok := expr.(*ast.Identifier); ok {
+		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
+			resolvedType := g.typeInferer.ResolveType(varType)
+			if concreteType, ok := resolvedType.(*ConcreteType); ok {
+				return concreteType.name
+			}
+			if recordType, ok := resolvedType.(*RecordType); ok {
+				// For record types, we need to find which type declaration this belongs to
+				for _, typeDecl := range g.typeDeclarations {
+					if len(typeDecl.Variants) == 1 && len(typeDecl.Variants[0].Fields) > 0 {
+						// Check if this record type matches the variant's fields
+						variant := typeDecl.Variants[0]
+						if len(recordType.fields) == len(variant.Fields) {
+							return typeDecl.Name
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Alternative approach: directly call type inference on the expression
+	if inferredType, err := g.typeInferer.InferType(expr); err == nil {
+		resolvedType := g.typeInferer.ResolveType(inferredType)
+		if concreteType, ok := resolvedType.(*ConcreteType); ok {
+			return concreteType.name
+		}
+	}
+
+	// If that fails, try to find the type by looking at the type declarations
+	// This is needed for custom ADTs where the variable has the type name, not constructor name
+	return "UnknownType"
 }
 
 // generateMatchExpressionWithDiscriminant generates match expression with pre-computed discriminant.
@@ -1063,11 +1102,33 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 		return
 	}
 
-	// Extract each field from the struct using positional mapping
-	for i, field := range variant.Fields {
-		// Check if this field position has a corresponding pattern field
-		if i < len(pattern.Fields) {
-			patternFieldName := pattern.Fields[i]
+	// Build field map from variant to match the struct generation logic
+	fieldMap := g.buildFieldMapFromVariant(&variant)
+	
+	// Get the same field mapping that was used during struct creation
+	// This ensures we use the same sorted field order
+	fieldMapping := g.getOrCreateRecordFieldMapping(pattern.Constructor, fieldMap)
+
+	// Extract fields from the struct using the correct mapping
+	for _, patternFieldName := range pattern.Fields {
+		// Get the actual struct index for this field name
+		fieldIndex, exists := fieldMapping[patternFieldName]
+		if !exists {
+			// Field not found in type, bind to zero
+			g.variables[patternFieldName] = constant.NewInt(types.I64, 0)
+			continue
+		}
+		
+		// Find the field info from the variant
+		var field ast.TypeField
+		for _, variantField := range variant.Fields {
+			if variantField.Name == patternFieldName {
+				field = variantField
+				break
+			}
+		}
+		
+		if fieldIndex >= 0 && fieldIndex < len(structType.Fields) {
 
 			// Get pointer to the field
 			var fieldPtr value.Value
@@ -1077,7 +1138,7 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 					structType,
 					discriminant,
 					constant.NewInt(types.I32, 0),
-					constant.NewInt(types.I32, int64(i)),
+					constant.NewInt(types.I32, int64(fieldIndex)),
 				)
 			} else {
 				// Discriminant is a struct value, need to get its address first
@@ -1087,12 +1148,12 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 					structType,
 					structAddr,
 					constant.NewInt(types.I32, 0),
-					constant.NewInt(types.I32, int64(i)),
+					constant.NewInt(types.I32, int64(fieldIndex)),
 				)
 			}
 
 			// Load the field value
-			fieldType := structType.Fields[i]
+			fieldType := structType.Fields[fieldIndex]
 			fieldValue := g.builder.NewLoad(fieldType, fieldPtr)
 
 			// Bind the pattern variable to the field value
@@ -1212,7 +1273,17 @@ func (g *LLVMGenerator) createPatternCondition(
 		return g.createBooleanPatternCondition(pattern.Constructor, discriminant, currentBlock)
 	}
 
-	// Handle union type variants
+	// Handle single-variant types FIRST (like PersonData { name, age })
+	// Check if this constructor belongs to a single-variant type
+	for _, typeDecl := range g.typeDeclarations {
+		if len(typeDecl.Variants) == 1 && typeDecl.Variants[0].Name == pattern.Constructor {
+			// For single-variant types, the constructor always matches
+			// (there's only one possible variant)
+			return constant.NewBool(true)
+		}
+	}
+
+	// Handle union type variants (multi-variant types only)
 	if discriminantValue, exists := g.unionVariants[pattern.Constructor]; exists {
 		return g.createUnionPatternCondition(discriminantValue, discriminant, currentBlock)
 	}

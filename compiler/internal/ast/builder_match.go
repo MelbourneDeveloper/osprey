@@ -4,6 +4,10 @@ import (
 	"github.com/christianfindlay/osprey/parser"
 )
 
+const (
+	unknownPatternConstructor = "unknown"
+)
+
 func (b *Builder) buildMatchExpr(ctx parser.IMatchExprContext) Expression {
 	if ctx.MATCH() != nil {
 		// This is a match expression
@@ -68,7 +72,7 @@ func (b *Builder) buildPattern(ctx parser.IPatternContext) Pattern {
 func (b *Builder) buildUnaryExprPattern(unaryCtx parser.IUnaryExprContext) Pattern {
 	// Check if it's a negative number
 	if unaryCtx.MINUS() != nil && unaryCtx.PipeExpr() != nil {
-		if pattern := b.tryBuildNegativeNumberPattern(unaryCtx.PipeExpr()); pattern.Constructor != "unknown" {
+		if pattern := b.tryBuildNegativeNumberPattern(unaryCtx.PipeExpr()); pattern.Constructor != unknownPatternConstructor {
 			return pattern
 		}
 	}
@@ -79,7 +83,7 @@ func (b *Builder) buildUnaryExprPattern(unaryCtx parser.IUnaryExprContext) Patte
 	}
 
 	return Pattern{
-		Constructor: "unknown",
+		Constructor: unknownPatternConstructor,
 		Variable:    "",
 		Fields:      nil,
 		Nested:      nil,
@@ -105,7 +109,7 @@ func (b *Builder) tryBuildNegativeNumberPattern(pipeCtx parser.IPipeExprContext)
 		}
 	}
 
-	return Pattern{Constructor: "unknown"}
+	return Pattern{Constructor: unknownPatternConstructor}
 }
 
 // buildPipeExprPattern builds patterns from pipe expressions.
@@ -130,7 +134,7 @@ func (b *Builder) buildPipeExprPattern(pipeCtx parser.IPipeExprContext) Pattern 
 		}
 	}
 
-	return Pattern{Constructor: "unknown"}
+	return Pattern{Constructor: unknownPatternConstructor}
 }
 
 // buildLiteralPattern builds patterns from literal contexts.
@@ -169,7 +173,7 @@ func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern
 		}
 	}
 
-	return Pattern{Constructor: "unknown"}
+	return Pattern{Constructor: unknownPatternConstructor}
 }
 
 // buildIdentifierPattern handles identifier patterns including field patterns.
@@ -179,6 +183,18 @@ func (b *Builder) buildIdentifierPattern(ctx parser.IPatternContext) Pattern {
 	// Handle constructor with field pattern (like: Success { value } => ...)
 	if len(ids) == OneIdentifier && ctx.LBRACE() != nil && ctx.FieldPattern() != nil {
 		return b.buildFieldPattern(ids[0].GetText(), ctx.FieldPattern())
+	}
+
+	// Handle type annotation pattern (like: p: PersonData => ...)  
+	if len(ids) == OneIdentifier && ctx.COLON() != nil && ctx.Type_() != nil {
+		typeName := b.buildTypeFromContext(ctx.Type_())
+		return Pattern{
+			Constructor: typeName,
+			Variable:    ids[0].GetText(),
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
 	}
 
 	if len(ids) == OneIdentifier {
@@ -202,7 +218,7 @@ func (b *Builder) buildIdentifierPattern(ctx parser.IPatternContext) Pattern {
 	}
 
 	return Pattern{
-		Constructor: "unknown",
+		Constructor: unknownPatternConstructor,
 		Variable:    "",
 		Fields:      nil,
 		Nested:      nil,
@@ -226,4 +242,16 @@ func (b *Builder) buildFieldPattern(constructor string, fieldPattern parser.IFie
 		Nested:      nil,
 		IsWildcard:  false,
 	}
+}
+
+// buildTypeFromContext extracts type name from a type context
+func (b *Builder) buildTypeFromContext(ctx parser.ITypeContext) string {
+	if ctx == nil {
+		return unknownPatternConstructor
+	}
+	// For simple type ID patterns like "PersonData", just return the ID text
+	if ctx.ID() != nil {
+		return ctx.ID().GetText()
+	}
+	return unknownPatternConstructor
 }

@@ -12,16 +12,17 @@ const (
 	MinParametersForNamedArgs = 2
 )
 
-// validateMatchExpression validates match expressions for exhaustiveness and unknown variants.
-func (g *LLVMGenerator) validateMatchExpression(expr *ast.MatchExpression) error {
+
+// validateMatchExpressionWithType validates match expressions with discriminant type information
+func (g *LLVMGenerator) validateMatchExpressionWithType(expr *ast.MatchExpression, discriminantType string) error {
 	for _, arm := range expr.Arms {
-		err := g.validateMatchArmWithPosition(arm, expr.Position)
+		err := g.validateMatchArmWithTypeAndPosition(arm, discriminantType, expr.Position)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Check for exhaustiveness
+	// Check for exhaustiveness (using the existing function)
 	err := g.validateMatchExhaustiveness(expr)
 	if err != nil {
 		return err
@@ -147,11 +148,17 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 	return reorderedArgs, nil
 }
 
-func (g *LLVMGenerator) validateMatchArmWithPosition(arm ast.MatchArm, matchPos *ast.Position) error {
-	return g.validateMatchPatternWithPosition(arm.Pattern, matchPos)
+
+func (g *LLVMGenerator) validateMatchArmWithTypeAndPosition(
+	arm ast.MatchArm, discriminantType string, matchPos *ast.Position,
+) error {
+	return g.validateMatchPatternWithTypeAndPosition(arm.Pattern, discriminantType, matchPos)
 }
 
-func (g *LLVMGenerator) validateMatchPatternWithPosition(pattern ast.Pattern, matchPos *ast.Position) error {
+
+func (g *LLVMGenerator) validateMatchPatternWithTypeAndPosition(
+	pattern ast.Pattern, discriminantType string, matchPos *ast.Position,
+) error {
 	// Infer pattern type with position context
 	_, err := g.typeInferer.InferPattern(pattern)
 	if err != nil {
@@ -159,7 +166,8 @@ func (g *LLVMGenerator) validateMatchPatternWithPosition(pattern ast.Pattern, ma
 		if strings.Contains(err.Error(), "unknown constructor") {
 			// Extract the constructor name from the pattern
 			constructorName := pattern.Constructor
-			return WrapUnknownVariantWithPos(constructorName, "Color", matchPos)
+			// Use the provided discriminant type instead of hardcoded "Color"
+			return WrapUnknownVariantWithPos(constructorName, discriminantType, matchPos)
 		}
 
 		return err

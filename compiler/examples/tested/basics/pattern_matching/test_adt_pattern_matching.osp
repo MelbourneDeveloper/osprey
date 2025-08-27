@@ -1,0 +1,11 @@
+// Test file to check if ADT pattern matching with fields works
+type Person = PersonData { name: string, age: int }
+
+let person = PersonData { name: "Alice", age: 30 }
+
+let result = match person {
+    PersonData { name, age } => "Person: ${name} is ${age} years old"
+    _ => "Unknown"
+}
+
+print(result)
