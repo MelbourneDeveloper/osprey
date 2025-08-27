@@ -10,7 +10,7 @@ lint-install:
 	fi
 
 # Run golangci-lint
-lint: lint-install
+lint:
 	@echo "🔍 Running golangci-lint..."
 	golangci-lint run --config .golangci.yml
 
@@ -34,7 +34,8 @@ fiber-runtime:
 	@echo "🔨 Building fiber runtime library..."
 	@mkdir -p bin
 	gcc -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
-	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
+	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o
 	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a"
 
 

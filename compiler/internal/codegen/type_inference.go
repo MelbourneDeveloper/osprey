@@ -960,12 +960,11 @@ func (ti *TypeInferer) unifyRecordTypes(t1, t2 Type) error {
 		if _, exists := rt1.fields[fieldName]; exists {
 			// Already checked above, skip
 			continue
-		} else {
-			// rt2 has a field that rt1 doesn't have
-			// For polymorphic field access, this is OK - rt1 is a structural subset
-			// But we need to add the missing field to rt1 to maintain consistency
-			rt1.fields[fieldName] = fieldType2
 		}
+		// rt2 has a field that rt1 doesn't have
+		// For polymorphic field access, this is OK - rt1 is a structural subset
+		// But we need to add the missing field to rt1 to maintain consistency
+		rt1.fields[fieldName] = fieldType2
 	}
 
 	return nil
@@ -1305,16 +1304,9 @@ func (ti *TypeInferer) validateBuiltInFunctionArgs(funcName string, argCount int
 
 // inferCallExpression infers types for call expressions
 func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) {
-	// Check for built-in functions and validate argument count BEFORE type inference
-	if ident, ok := e.Function.(*ast.Identifier); ok {
-		// Calculate total argument count
-		argCount := len(e.Arguments) + len(e.NamedArguments)
-
-		// Validate built-in function argument counts
-		err := ti.validateBuiltInFunctionArgs(ident.Name, argCount, e.Position)
-		if err != nil {
-			return nil, err
-		}
+	// Validate built-in functions first
+	if err := ti.validateBuiltInCall(e); err != nil {
+		return nil, err
 	}
 
 	// Infer function type
@@ -1323,90 +1315,145 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 		return nil, err
 	}
 
-	// Handle both regular arguments and named arguments
-	var argTypes []Type
-
-	if len(e.NamedArguments) > 0 {
-		// Process named arguments
-		for _, namedArg := range e.NamedArguments {
-			argType, err := ti.InferType(namedArg.Value)
-			if err != nil {
-				return nil, err
-			}
-
-			argTypes = append(argTypes, argType)
-		}
-	} else {
-		// Process regular arguments
-		for _, arg := range e.Arguments {
-			argType, err := ti.InferType(arg)
-			if err != nil {
-				return nil, err
-			}
-
-			argTypes = append(argTypes, argType)
-		}
+	// Infer argument types
+	argTypes, err := ti.inferCallArguments(e)
+	if err != nil {
+		return nil, err
 	}
 
-	// Validate that no arguments have 'any' type - pattern matching is required
+	// Validate argument types (no 'any' types allowed)
+	if err := ti.validateArgumentTypes(e, argTypes); err != nil {
+		return nil, err
+	}
+
+	// Create and unify function types
+	return ti.unifyCallTypes(funcType, argTypes)
+}
+
+// validateBuiltInCall validates built-in function calls
+func (ti *TypeInferer) validateBuiltInCall(e *ast.CallExpression) error {
+	ident, ok := e.Function.(*ast.Identifier)
+	if !ok {
+		return nil
+	}
+
+	// Calculate total argument count
+	argCount := len(e.Arguments) + len(e.NamedArguments)
+
+	// Validate built-in function argument counts
+	return ti.validateBuiltInFunctionArgs(ident.Name, argCount, e.Position)
+}
+
+// inferCallArguments infers types for all call arguments
+func (ti *TypeInferer) inferCallArguments(e *ast.CallExpression) ([]Type, error) {
+	if len(e.NamedArguments) > 0 {
+		return ti.inferNamedArguments(e.NamedArguments)
+	}
+	return ti.inferRegularArguments(e.Arguments)
+}
+
+// inferNamedArguments infers types for named arguments
+func (ti *TypeInferer) inferNamedArguments(namedArgs []ast.NamedArgument) ([]Type, error) {
+	var argTypes []Type
+	for _, namedArg := range namedArgs {
+		argType, err := ti.InferType(namedArg.Value)
+		if err != nil {
+			return nil, err
+		}
+		argTypes = append(argTypes, argType)
+	}
+	return argTypes, nil
+}
+
+// inferRegularArguments infers types for regular arguments
+func (ti *TypeInferer) inferRegularArguments(args []ast.Expression) ([]Type, error) {
+	var argTypes []Type
+	for _, arg := range args {
+		argType, err := ti.InferType(arg)
+		if err != nil {
+			return nil, err
+		}
+		argTypes = append(argTypes, argType)
+	}
+	return argTypes, nil
+}
+
+// validateArgumentTypes validates that no arguments have 'any' type
+func (ti *TypeInferer) validateArgumentTypes(e *ast.CallExpression, argTypes []Type) error {
 	for i, argType := range argTypes {
 		if ti.isAnyType(argType) {
-			var argPos *ast.Position
-
-			if len(e.NamedArguments) > 0 && i < len(e.NamedArguments) {
-				// Get position from named argument expression
-				if valExpr := e.NamedArguments[i].Value; valExpr != nil {
-					switch v := valExpr.(type) {
-					case *ast.Identifier:
-						argPos = v.Position
-					case *ast.IntegerLiteral:
-						argPos = v.Position
-					case *ast.StringLiteral:
-						argPos = v.Position
-					default:
-						argPos = e.Position
-					}
-				} else {
-					argPos = e.Position
-				}
-			} else if i < len(e.Arguments) {
-				// Get position from regular argument expression
-				if argExpr := e.Arguments[i]; argExpr != nil {
-					switch v := argExpr.(type) {
-					case *ast.Identifier:
-						argPos = v.Position
-					case *ast.IntegerLiteral:
-						argPos = v.Position
-					case *ast.StringLiteral:
-						argPos = v.Position
-					default:
-						argPos = e.Position
-					}
-				} else {
-					argPos = e.Position
-				}
-			} else {
-				argPos = e.Position
-			}
-
-			// Get function name for error message
-			var funcName string
-			if ident, ok := e.Function.(*ast.Identifier); ok {
-				funcName = ident.Name
-			} else {
-				funcName = "function"
-			}
-
-			// Use default position if argument position is nil
-			if argPos == nil {
-				argPos = e.Position
-			}
-
-			return nil, fmt.Errorf("line %d:%d: %w - pattern matching required: function '%s' expecting '%c'",
-				argPos.Line, argPos.Column, ErrAnyTypeMismatch, funcName, 'a'+i)
+			return ti.createAnyTypeError(e, i)
 		}
 	}
+	return nil
+}
 
+// createAnyTypeError creates an error for 'any' type arguments
+func (ti *TypeInferer) createAnyTypeError(e *ast.CallExpression, argIndex int) error {
+	argPos := ti.getArgumentPosition(e, argIndex)
+	funcName := ti.getFunctionName(e)
+
+	return fmt.Errorf("line %d:%d: %w - pattern matching required: function '%s' expecting '%c'",
+		argPos.Line, argPos.Column, ErrAnyTypeMismatch, funcName, 'a'+argIndex)
+}
+
+// getArgumentPosition gets the position of a specific argument
+func (ti *TypeInferer) getArgumentPosition(e *ast.CallExpression, index int) *ast.Position {
+	if len(e.NamedArguments) > 0 && index < len(e.NamedArguments) {
+		return ti.getNamedArgumentPosition(e.NamedArguments[index], e.Position)
+	}
+	if index < len(e.Arguments) {
+		return ti.getRegularArgumentPosition(e.Arguments[index], e.Position)
+	}
+	return e.Position
+}
+
+// getNamedArgumentPosition gets position from named argument expression
+func (ti *TypeInferer) getNamedArgumentPosition(namedArg ast.NamedArgument, defaultPos *ast.Position) *ast.Position {
+	if namedArg.Value == nil {
+		return defaultPos
+	}
+
+	switch v := namedArg.Value.(type) {
+	case *ast.Identifier:
+		return v.Position
+	case *ast.IntegerLiteral:
+		return v.Position
+	case *ast.StringLiteral:
+		return v.Position
+	default:
+		return defaultPos
+	}
+}
+
+// getRegularArgumentPosition gets position from regular argument expression
+func (ti *TypeInferer) getRegularArgumentPosition(argExpr ast.Expression, defaultPos *ast.Position) *ast.Position {
+	if argExpr == nil {
+		return defaultPos
+	}
+
+	switch v := argExpr.(type) {
+	case *ast.Identifier:
+		return v.Position
+	case *ast.IntegerLiteral:
+		return v.Position
+	case *ast.StringLiteral:
+		return v.Position
+	default:
+		return defaultPos
+	}
+}
+
+// getFunctionName extracts function name for error messages
+func (ti *TypeInferer) getFunctionName(e *ast.CallExpression) string {
+	if ident, ok := e.Function.(*ast.Identifier); ok {
+		return ident.Name
+	}
+	return "function"
+}
+
+// unifyCallTypes creates expected function type and unifies with actual type
+func (ti *TypeInferer) unifyCallTypes(funcType Type, argTypes []Type) (Type, error) {
 	// Create expected function type
 	resultType := ti.Fresh()
 	expectedFuncType := &FunctionType{
@@ -1414,18 +1461,17 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 		returnType: resultType,
 	}
 
-	// HINDLEY-MILNER FIX: Apply current substitutions to function type before unification
-	// This ensures that type variables are resolved before attempting unification
+	// Apply current substitutions before unification
 	substitutedFuncType := ti.applySubst(funcType, ti.subst)
 	substitutedExpectedType := ti.applySubst(expectedFuncType, ti.subst)
 
-	// Unify with actual function type after applying substitutions
+	// Unify with actual function type
 	if err := ti.Unify(substitutedFuncType, substitutedExpectedType); err != nil {
 		return nil, fmt.Errorf("function call type mismatch: actual=%s, expected=%s: %w",
 			substitutedFuncType.String(), substitutedExpectedType.String(), err)
 	}
 
-	// Return the resolved/substituted result type, not the fresh variable
+	// Return the resolved result type
 	return ti.prune(resultType), nil
 }
 

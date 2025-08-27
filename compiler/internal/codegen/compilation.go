@@ -122,8 +122,12 @@ func buildLibraryPaths(libName string) []string {
 	paths := []string{
 		fmt.Sprintf("bin/lib%s.a", libName),
 		fmt.Sprintf("./bin/lib%s.a", libName),
+		fmt.Sprintf("lib/lib%s.a", libName),          // For rust interop libraries
+		fmt.Sprintf("./lib/lib%s.a", libName),        // For rust interop libraries
 		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
 		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
+		fmt.Sprintf("../../lib/lib%s.a", libName),    // For rust interop in tests/integration
+		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
 		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
 		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
 	}
@@ -135,6 +139,10 @@ func buildLibraryPaths(libName string) []string {
 			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
 			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
 			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
+			filepath.Join(wd, "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "..", "lib", fmt.Sprintf("lib%s.a", libName)), // For test directories
 		)
 	}
 
@@ -276,6 +284,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	// Find and add runtime libraries (order matters: dependents before dependencies)
 	linkArgs = findAndAddLibrary("http_runtime", linkArgs)
 	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
+	linkArgs = findAndAddLibrary("rust_utils", linkArgs)
 
 	linkArgs = append(linkArgs, "-lpthread")
 

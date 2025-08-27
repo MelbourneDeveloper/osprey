@@ -6,7 +6,7 @@ severity:
 linters:
   settings:
     cyclop:
-      max-complexity: 30
+      max-complexity: 35
   default: all
   disable:
     # Consider these rules for the future

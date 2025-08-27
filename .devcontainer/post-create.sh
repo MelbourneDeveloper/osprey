@@ -68,11 +68,25 @@ fi
 # Return to workspace root
 cd /workspace
 
+echo "🦀 Setting up Rust for vscode user..."
+# Ensure Rust is properly set up for vscode user
+if [ ! -f ~/.cargo/env ]; then
+  echo "🔧 Rust not found for vscode user, installing..."
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+fi
+
+# Source Rust environment and set default toolchain
+source ~/.cargo/env
+rustup default stable
+rustup component add clippy rustfmt
+
 echo "🎯 Verifying installation..."
 go version
 node --version
 npm --version
-claude-code --version || echo "⚠️ Claude Code not installed"
+rustc --version || echo "⚠️ Rust not properly installed"
+cargo --version || echo "⚠️ Cargo not properly installed"
+claude --version || echo "⚠️ Claude Code not installed"
 
 echo "🎉 Post-creation setup complete!"
 echo ""

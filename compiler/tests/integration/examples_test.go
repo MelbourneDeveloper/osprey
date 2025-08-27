@@ -353,7 +353,7 @@ func getExpectedOutputs() map[string]string {
 			"Rust factorial(5) = 120\n" +
 			"Rust fibonacci(10) = 55\n" +
 			"Rust is_prime(17) = 1\n" +
-			"✅ Rust-Osprey integration demo completed successfully!",
+			"✅ Rust-Osprey integration demo completed successfully!\n",
 	}
 }
 

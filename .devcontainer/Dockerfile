@@ -56,9 +56,11 @@ RUN apt-get update && apt-get install -y sudo \
     && useradd --uid 1000 --gid vscode --shell /bin/bash --create-home vscode \
     && mkdir -p /etc/sudoers.d \
     && echo 'vscode ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/50-vscode \
-    && mkdir -p /home/vscode/.cargo \
-    && cp -r /root/.cargo/* /home/vscode/.cargo/ \
-    && chown -R vscode:vscode /home/vscode
+    && mkdir -p /home/vscode/.cargo /home/vscode/.rustup \
+    && cp -r /root/.cargo/* /home/vscode/.cargo/ || true \
+    && cp -r /root/.rustup/* /home/vscode/.rustup/ || true \
+    && chown -R vscode:vscode /home/vscode \
+    && echo 'source ~/.cargo/env' >> /home/vscode/.bashrc
 
 # Set environment variables
 ENV JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"
