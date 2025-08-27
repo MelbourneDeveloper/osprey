@@ -79,9 +79,11 @@ http-runtime:
 rust-interop:
 	@echo "🦀 Building Rust interop library..."
 	@if command -v cargo >/dev/null 2>&1; then \
+		mkdir -p lib bin; \
 		cd examples/rust_integration && cargo build --release; \
 		cp target/release/libosprey_math_utils.a ../../lib/librust_utils.a; \
-		echo "✅ Rust interop library built and copied to lib/"; \
+		cp target/release/libosprey_math_utils.a ../../bin/librust_utils.a; \
+		echo "✅ Rust interop library built and copied to lib/ and bin/"; \
 	else \
 		echo "⚠️  Rust not found, skipping Rust interop build"; \
 	fi
