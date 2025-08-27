@@ -231,10 +231,10 @@ func (r *BuiltInFunctionRegistry) registerCoreIOFunctions() {
 	// input function
 	r.functions[InputFunc] = &BuiltInFunction{
 		Name:           InputFunc,
-		Signature:      "input() -> int",
-		Description:    "Reads an integer from the user's input.",
+		Signature:      "input() -> Result<string, Error>",
+		Description:    "Reads a string from the user's input.",
 		ParameterTypes: []BuiltInParameter{},
-		ReturnType:     &ConcreteType{name: "Result<int, Error>"},
+		ReturnType:     &ConcreteType{name: "Result<string, Error>"},
 		Category:       CategoryCore,
 		IsProtected:    true,
 		SecurityFlag:   PermissionNone,

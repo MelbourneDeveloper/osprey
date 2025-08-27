@@ -326,49 +326,77 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 		return nil, err
 	}
 
-	// Declare scanf function if not already declared
-	scanfFunc, ok := g.functions["scanf"]
+	// Declare fgets function if not already declared
+	fgetsFunc, ok := g.functions["fgets"]
 	if !ok {
-		scanfFunc = g.module.NewFunc("scanf", types.I32, ir.NewParam("format", types.I8Ptr))
-		scanfFunc.Sig.Variadic = true
-		g.functions["scanf"] = scanfFunc
+		fgetsFunc = g.module.NewFunc("fgets", types.I8Ptr, 
+			ir.NewParam("str", types.I8Ptr),
+			ir.NewParam("size", types.I32), 
+			ir.NewParam("stream", types.I8Ptr))
+		g.functions["fgets"] = fgetsFunc
 	}
 
-	// Create format string for reading an integer
-	formatStr := constant.NewCharArrayFromString("%ld\x00")
-	formatGlobal := g.module.NewGlobalDef("", formatStr)
-	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
+	// Use stdin directly - it's an external global in libc
+	stdinGlobal := g.module.NewGlobalDef("stdin", constant.NewNull(types.I8Ptr))
+
+	// Allocate buffer for input string (256 chars should be enough)
+	const inputBufferSize = 256
+	bufferSize := constant.NewInt(types.I32, inputBufferSize)
+	inputBuffer := g.builder.NewAlloca(types.NewArray(inputBufferSize, types.I8))
+	
+	// Cast array to i8* for fgets
+	bufferPtr := g.builder.NewGetElementPtr(types.NewArray(inputBufferSize, types.I8), inputBuffer,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 
-	// Allocate space for the input value
-	inputVar := g.builder.NewAlloca(types.I64)
+	// Call fgets to read the string
+	fgetsResult := g.builder.NewCall(fgetsFunc, bufferPtr, bufferSize, stdinGlobal)
 
-	// Call scanf to read the integer
-	scanfResult := g.builder.NewCall(scanfFunc, formatPtr, inputVar)
-
-	// Load the input value
-	inputValue := g.builder.NewLoad(types.I64, inputVar)
-
-	// Create a Result<Int, Error>
-	resultType := g.getResultType(types.I64)
+	// Create a Result<String, Error>
+	resultType := g.getResultType(types.I8Ptr)
 	result := g.builder.NewAlloca(resultType)
 
-	// Check if scanf succeeded (returns 1 for successful read)
-	one := constant.NewInt(types.I32, 1)
-	scanfSucceeded := g.builder.NewICmp(enum.IPredEQ, scanfResult, one)
+	// Check if fgets succeeded (returns non-null pointer)
+	nullPtr := constant.NewNull(types.I8Ptr)
+	fgetsSucceeded := g.builder.NewICmp(enum.IPredNE, fgetsResult, nullPtr)
 
 	// Create blocks for success and error cases
 	successBlock := g.function.NewBlock("input_success")
 	errorBlock := g.function.NewBlock("input_error")
 	endBlock := g.function.NewBlock("input_end")
 
-	g.builder.NewCondBr(scanfSucceeded, successBlock, errorBlock)
+	g.builder.NewCondBr(fgetsSucceeded, successBlock, errorBlock)
 
-	// Success case: store the input value
+	// Success case: store the input string
 	g.builder = successBlock
+	
+	// Remove trailing newline if present using strlen and string manipulation
+	strlenFunc, ok := g.functions["strlen"]
+	if !ok {
+		strlenFunc = g.module.NewFunc("strlen", types.I64, ir.NewParam("str", types.I8Ptr))
+		g.functions["strlen"] = strlenFunc
+	}
+	
+	// Get string length
+	strLength := successBlock.NewCall(strlenFunc, bufferPtr)
+	
+	// Check if last character is newline (ASCII 10) and remove it
+	one := constant.NewInt(types.I64, 1)
+	lastCharIdx := successBlock.NewSub(strLength, one)
+	lastCharPtr := successBlock.NewGetElementPtr(types.I8, bufferPtr, lastCharIdx)
+	lastChar := successBlock.NewLoad(types.I8, lastCharPtr)
+	const asciiNewline = 10
+	newlineChar := constant.NewInt(types.I8, asciiNewline) // ASCII newline
+	isNewline := successBlock.NewICmp(enum.IPredEQ, lastChar, newlineChar)
+	
+	// Replace newline with null terminator if it exists
+	nullChar := constant.NewInt(types.I8, 0)
+	// Conditionally replace the newline character with null terminator
+	charToStore := successBlock.NewSelect(isNewline, nullChar, lastChar)
+	successBlock.NewStore(charToStore, lastCharPtr)
+	
 	valuePtr := successBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	successBlock.NewStore(inputValue, valuePtr)
+	successBlock.NewStore(bufferPtr, valuePtr)
 	discriminantPtr := successBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	successBlock.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 for Success
@@ -379,10 +407,10 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 	errorDiscriminantPtr := errorBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	errorBlock.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 for Error
-	// Set value to 0 for error case
+	// Set value to null for error case
 	errorValuePtr := errorBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	errorBlock.NewStore(constant.NewInt(types.I64, 0), errorValuePtr)
+	errorBlock.NewStore(nullPtr, errorValuePtr)
 	errorBlock.NewBr(endBlock)
 
 	// Continue with end block
