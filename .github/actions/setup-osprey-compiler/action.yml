@@ -69,6 +69,13 @@ runs:
         llc --version
         clang --version
 
+    - name: Install golangci-lint
+      shell: bash
+      run: |
+        echo "📦 Installing golangci-lint v2.1.6..."
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.1.6
+        echo "✅ golangci-lint v2.1.6 installed"
+
     - name: Install dependencies
       shell: bash
       working-directory: ./compiler
