@@ -1381,7 +1381,7 @@ func (g *LLVMGenerator) serializeVariantFields(
 		// Get the actual data field type from the union struct (second field)
 		unionStruct := unionType.(*types.StructType)
 		dataFieldType := unionStruct.Fields[1] // Data field is at index 1
-		
+
 		// Cast data array to appropriate pointer type for this field
 		fieldPtr := g.builder.NewBitCast(
 			g.builder.NewGetElementPtr(

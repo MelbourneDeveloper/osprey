@@ -651,7 +651,7 @@ func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.Fun
 			// Already a Result struct, no wrapping needed
 			return bodyValue
 		}
-		
+
 		successType := fnDecl.ReturnType.GenericParams[0].Name
 		errorType := fnDecl.ReturnType.GenericParams[1].Name
 
@@ -675,7 +675,7 @@ func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.Fun
 func (g *LLVMGenerator) wrapInMathResult(intValue value.Value) value.Value {
 	// Create Result<int, MathError> structure by value
 	resultType := g.getResultType(types.I64)
-	
+
 	// Use InsertValue to build the struct value directly
 	undefStruct := constant.NewUndef(resultType)
 	resultWithValue := g.builder.NewInsertValue(undefStruct, intValue, 0)

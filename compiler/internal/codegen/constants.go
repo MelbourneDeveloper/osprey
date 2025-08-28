@@ -52,15 +52,15 @@ const (
 
 // Function names.
 const (
-	ToStringFunc       = "toString"
-	PrintFunc          = "print"
-	InputFunc          = "input"
-	RangeFunc          = "range"
-	ForEachFunc        = "forEach"
-	MapFunc            = "map"
-	FilterFunc         = "filter"
-	FoldFunc           = "fold"
-	MainFunctionName   = "main"
+	ToStringFunc     = "toString"
+	PrintFunc        = "print"
+	InputFunc        = "input"
+	RangeFunc        = "range"
+	ForEachFunc      = "forEach"
+	MapFunc          = "map"
+	FilterFunc       = "filter"
+	FoldFunc         = "fold"
+	MainFunctionName = "main"
 
 	// String utility functions
 	LengthFunc    = "length"
@@ -109,7 +109,6 @@ const (
 	WebSocketServerBroadcastOsprey = "websocketServerBroadcast"
 	WebSocketStopServerOsprey      = "websocketStopServer"
 	WebSocketKeepAliveOsprey       = "websocketKeepAlive"
-
 )
 
 // C Runtime HTTP Function names.
@@ -161,7 +160,6 @@ const (
 	HTTPErrorParse      = -4
 	HTTPErrorServer     = -5
 )
-
 
 // NOTE: Function argument counts have been moved to the unified built-in function registry
 // (builtin_registry.go). Use len(GlobalBuiltInRegistry.GetFunction(name).ParameterTypes) instead.

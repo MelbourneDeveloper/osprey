@@ -38,7 +38,7 @@ type LLVMGenerator struct {
 	// Real algebraic effects system
 	effectCodegen *EffectCodegen
 	// Context for type-aware literal generation
-	expectedReturnType   types.Type
+	expectedReturnType    types.Type
 	expectedParameterType types.Type
 	// Hindley-Milner type inference system
 	typeInferer *TypeInferer

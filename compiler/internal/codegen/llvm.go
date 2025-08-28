@@ -119,33 +119,33 @@ func (g *LLVMGenerator) resolveFunctionValue(funcName string, callExpr *ast.Call
 
 // validateCallableType validates that a value is callable (function or function pointer)
 func (g *LLVMGenerator) validateCallableType(
-	funcValue value.Value, 
-	_ string, 
+	funcValue value.Value,
+	_ string,
 	callExpr *ast.CallExpression,
 ) error {
 	// Check if the value is a function type or function pointer
 	valueType := funcValue.Type()
-	
+
 	// Handle pointer to function
 	if ptrType, ok := valueType.(*types.PointerType); ok {
 		if _, isFuncType := ptrType.ElemType.(*types.FuncType); isFuncType {
 			return nil // Valid function pointer
 		}
 	}
-	
+
 	// Handle direct function type
 	if _, isFuncType := valueType.(*types.FuncType); isFuncType {
 		return nil // Valid function
 	}
-	
+
 	// Not a callable type - return appropriate error
 	if callExpr.Function != nil {
 		if ident, ok := callExpr.Function.(*ast.Identifier); ok && ident.Position != nil {
-			return fmt.Errorf("line %d:%d: %w", 
+			return fmt.Errorf("line %d:%d: %w",
 				ident.Position.Line, ident.Position.Column, ErrNotAFunction)
 		}
 	}
-	
+
 	return fmt.Errorf("%w", ErrNotAFunction)
 }
 
@@ -299,7 +299,6 @@ func (g *LLVMGenerator) resolvePolymorphicArgument(
 	result, err := g.generateMonomorphizedInstance(funcName, fnType)
 	return result, true, err
 }
-
 
 // generateTypedArgumentExpression generates an argument with type awareness
 func (g *LLVMGenerator) generateTypedArgumentExpression(
@@ -888,11 +887,6 @@ func (g *LLVMGenerator) isResultType(val value.Value) bool {
 	return false
 }
 
-
-
-
-
-
 // generateStandardMatchExpression generates a standard (non-result) match expression.
 func (g *LLVMGenerator) generateStandardMatchExpression(
 	matchExpr *ast.MatchExpression,
@@ -1140,7 +1134,7 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 
 	// Build field map from variant to match the struct generation logic
 	fieldMap := g.buildFieldMapFromVariant(&variant)
-	
+
 	// Get the same field mapping that was used during struct creation
 	// This ensures we use the same sorted field order
 	fieldMapping := g.getOrCreateRecordFieldMapping(pattern.Constructor, fieldMap)
@@ -1154,7 +1148,7 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 			g.variables[patternFieldName] = constant.NewInt(types.I64, 0)
 			continue
 		}
-		
+
 		// Find the field info from the variant
 		var field ast.TypeField
 		for _, variantField := range variant.Fields {
@@ -1163,7 +1157,7 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 				break
 			}
 		}
-		
+
 		if fieldIndex >= 0 && fieldIndex < len(structType.Fields) {
 
 			// Get pointer to the field
@@ -1598,7 +1592,7 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 
 			// Get the actual data field type from the struct (second field)
 			dataFieldType := structType.Fields[1] // Data field is at index 1
-			
+
 			// Cast data array to appropriate pointer type for this field
 			fieldPtr := g.builder.NewBitCast(
 				g.builder.NewGetElementPtr(

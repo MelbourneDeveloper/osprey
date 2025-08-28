@@ -278,7 +278,7 @@ func WrapUndefinedType(typeName string) error {
 func WrapUndefinedTypeWithPos(typeName string, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		//nolint:err113 // Dynamic error needed for exact test format matching
-		return fmt.Errorf("line %d:%d: undefined type: %s", 
+		return fmt.Errorf("line %d:%d: undefined type: %s",
 			position.Line, position.Column, typeName)
 	}
 	//nolint:err113 // Dynamic error needed for exact test format matching
@@ -316,7 +316,7 @@ func WrapSimpleError(baseErr error, arg string) error {
 	return fmt.Errorf("%w: %s", baseErr, arg)
 }
 
-// WrapSimpleErrorWithPos wraps a base error with position and single string argument  
+// WrapSimpleErrorWithPos wraps a base error with position and single string argument
 func WrapSimpleErrorWithPos(baseErr error, arg string, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, baseErr, arg)

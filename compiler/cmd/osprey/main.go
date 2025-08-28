@@ -266,11 +266,6 @@ func ShowHelp() {
 	fmt.Println("  osprey program.osp --no-http     # Compile without HTTP functions")
 }
 
-
-
-
-
-
 // ParseOutputModeArg parses output mode arguments (internal for testing)
 func ParseOutputModeArg(arg string) string {
 	switch arg {
@@ -333,4 +328,3 @@ func main() {
 		fmt.Printf("Output written to: %s\n", result.OutputFile)
 	}
 }
-

@@ -92,7 +92,6 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 		argType = TypeBool
 	}
 
-
 	return g.convertValueToStringByType(argType, arg)
 }
 
@@ -318,9 +317,9 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 	// Declare fgets function if not already declared
 	fgetsFunc, ok := g.functions["fgets"]
 	if !ok {
-		fgetsFunc = g.module.NewFunc("fgets", types.I8Ptr, 
+		fgetsFunc = g.module.NewFunc("fgets", types.I8Ptr,
 			ir.NewParam("str", types.I8Ptr),
-			ir.NewParam("size", types.I32), 
+			ir.NewParam("size", types.I32),
 			ir.NewParam("stream", types.I8Ptr))
 		g.functions["fgets"] = fgetsFunc
 	}
@@ -332,7 +331,7 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 	const inputBufferSize = 256
 	bufferSize := constant.NewInt(types.I32, inputBufferSize)
 	inputBuffer := g.builder.NewAlloca(types.NewArray(inputBufferSize, types.I8))
-	
+
 	// Cast array to i8* for fgets
 	bufferPtr := g.builder.NewGetElementPtr(types.NewArray(inputBufferSize, types.I8), inputBuffer,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
@@ -357,17 +356,17 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 
 	// Success case: store the input string
 	g.builder = successBlock
-	
+
 	// Remove trailing newline if present using strlen and string manipulation
 	strlenFunc, ok := g.functions["strlen"]
 	if !ok {
 		strlenFunc = g.module.NewFunc("strlen", types.I64, ir.NewParam("str", types.I8Ptr))
 		g.functions["strlen"] = strlenFunc
 	}
-	
+
 	// Get string length
 	strLength := successBlock.NewCall(strlenFunc, bufferPtr)
-	
+
 	// Check if last character is newline (ASCII 10) and remove it
 	one := constant.NewInt(types.I64, 1)
 	lastCharIdx := successBlock.NewSub(strLength, one)
@@ -376,13 +375,13 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 	const asciiNewline = 10
 	newlineChar := constant.NewInt(types.I8, asciiNewline) // ASCII newline
 	isNewline := successBlock.NewICmp(enum.IPredEQ, lastChar, newlineChar)
-	
+
 	// Replace newline with null terminator if it exists
 	nullChar := constant.NewInt(types.I8, 0)
 	// Conditionally replace the newline character with null terminator
 	charToStore := successBlock.NewSelect(isNewline, nullChar, lastChar)
 	successBlock.NewStore(charToStore, lastCharPtr)
-	
+
 	valuePtr := successBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 	successBlock.NewStore(bufferPtr, valuePtr)

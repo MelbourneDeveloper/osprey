@@ -12,7 +12,6 @@ const (
 	MinParametersForNamedArgs = 2
 )
 
-
 // validateMatchExpressionWithType validates match expressions with discriminant type information
 func (g *LLVMGenerator) validateMatchExpressionWithType(expr *ast.MatchExpression, discriminantType string) error {
 	// Check if match expression has no arms
@@ -158,13 +157,11 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 	return reorderedArgs, nil
 }
 
-
 func (g *LLVMGenerator) validateMatchArmWithTypeAndPosition(
 	arm ast.MatchArm, discriminantType string, matchPos *ast.Position,
 ) error {
 	return g.validateMatchPatternWithTypeAndPosition(arm.Pattern, discriminantType, matchPos)
 }
-
 
 func (g *LLVMGenerator) validateMatchPatternWithTypeAndPosition(
 	pattern ast.Pattern, discriminantType string, matchPos *ast.Position,
