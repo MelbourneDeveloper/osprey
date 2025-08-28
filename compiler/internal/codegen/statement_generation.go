@@ -233,8 +233,22 @@ func (g *LLVMGenerator) generateLetDeclaration(letDecl *ast.LetDeclaration) (val
 	// Use explicit type annotation if present, otherwise infer from value
 	var varType Type
 	if letDecl.Type != nil {
-		// Use the explicit type annotation
-		varType = g.typeExpressionToInferenceType(letDecl.Type)
+		// Use the explicit type annotation, but validate it matches the value
+		annotatedType := g.typeExpressionToInferenceType(letDecl.Type)
+		
+		// Infer the actual type of the value
+		valueType, err := g.typeInferer.InferType(letDecl.Value)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Check if the value type is compatible with the annotation
+		if err := g.typeInferer.Unify(annotatedType, valueType); err != nil {
+			return nil, WrapTypeMismatchWithPos(
+				valueType.String(), letDecl.Name, annotatedType.String(), letDecl.Position)
+		}
+		
+		varType = annotatedType
 	} else {
 		// Use unified type inference system for untyped declarations
 		inferredType, err := g.typeInferer.InferType(letDecl.Value)

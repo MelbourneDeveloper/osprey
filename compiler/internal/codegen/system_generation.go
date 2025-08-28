@@ -43,7 +43,7 @@ func (g *LLVMGenerator) callFunctionWithValue(
 		return g.builder.NewCall(fn, val), nil
 	}
 
-	return nil, WrapFunctionNotFound(funcIdent.Name)
+	return nil, WrapUndefinedFunction(funcIdent.Name)
 }
 
 // callFunctionWithTwoValues is similar to callFunctionWithValue but passes two
@@ -64,7 +64,7 @@ func (g *LLVMGenerator) callFunctionWithTwoValues(
 		return g.builder.NewCall(fn, val1, val2), nil
 	}
 
-	return nil, WrapFunctionNotFound(funcIdent.Name)
+	return nil, WrapUndefinedFunction(funcIdent.Name)
 }
 
 // callBuiltInPrint prints a single LLVM IR value using the C library puts
@@ -213,7 +213,7 @@ func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (
 // generateSleepCall emits a call to the fiber_sleep function to sleep for the specified milliseconds.
 func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapSleepWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(SleepFunc, len(callExpr.Arguments))
 	}
 
 	milliseconds, err := g.generateExpression(callExpr.Arguments[0])
@@ -386,7 +386,7 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 // generateAwaitProcessCall waits for process completion
 func (g *LLVMGenerator) generateAwaitProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapAwaitProcessWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(AwaitProcessFunc, len(callExpr.Arguments))
 	}
 
 	processID, err := g.generateExpression(callExpr.Arguments[0])
@@ -408,7 +408,7 @@ func (g *LLVMGenerator) generateAwaitProcessCall(callExpr *ast.CallExpression) (
 // generateCleanupProcessCall cleans up process resources
 func (g *LLVMGenerator) generateCleanupProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapCleanupProcessWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(CleanupProcessFunc, len(callExpr.Arguments))
 	}
 
 	processID, err := g.generateExpression(callExpr.Arguments[0])

@@ -42,6 +42,11 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 		return nil, err
 	}
 
+	// Validate that the resolved value is actually callable
+	if err := g.validateCallableType(funcValue, funcName, callExpr); err != nil {
+		return nil, err
+	}
+
 	// Generate arguments
 	args, err := g.generateCallArguments(funcName, callExpr, funcValue)
 	if err != nil {
@@ -110,6 +115,38 @@ func (g *LLVMGenerator) resolveFunctionValue(funcName string, callExpr *ast.Call
 
 	// Get the correct monomorphized function
 	return g.resolveMonomorphizedFunction(funcName, argTypes)
+}
+
+// validateCallableType validates that a value is callable (function or function pointer)
+func (g *LLVMGenerator) validateCallableType(
+	funcValue value.Value, 
+	_ string, 
+	callExpr *ast.CallExpression,
+) error {
+	// Check if the value is a function type or function pointer
+	valueType := funcValue.Type()
+	
+	// Handle pointer to function
+	if ptrType, ok := valueType.(*types.PointerType); ok {
+		if _, isFuncType := ptrType.ElemType.(*types.FuncType); isFuncType {
+			return nil // Valid function pointer
+		}
+	}
+	
+	// Handle direct function type
+	if _, isFuncType := valueType.(*types.FuncType); isFuncType {
+		return nil // Valid function
+	}
+	
+	// Not a callable type - return appropriate error
+	if callExpr.Function != nil {
+		if ident, ok := callExpr.Function.(*ast.Identifier); ok && ident.Position != nil {
+			return fmt.Errorf("line %d:%d: %w", 
+				ident.Position.Line, ident.Position.Column, ErrNotAFunction)
+		}
+	}
+	
+	return fmt.Errorf("%w", ErrNotAFunction)
 }
 
 // generateCallArguments generates the arguments for the function call

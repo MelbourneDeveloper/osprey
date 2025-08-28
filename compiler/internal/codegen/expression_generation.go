@@ -927,7 +927,7 @@ func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallE
 	// For now, method calls are not fully implemented
 	// This is a placeholder for future elegant method chaining like obj.method()
 	// We could implement this to support chaining operations on values
-	return nil, WrapMethodNotImpl(methodCall.MethodName)
+	return nil, WrapMethodCallNotImplementedWithPos(methodCall.MethodName, methodCall.Position)
 }
 
 // generateTypeConstructorExpression generates LLVM IR for type construction with constraint validation.
@@ -951,7 +951,7 @@ func (g *LLVMGenerator) generateTypeConstructorExpression(
 	// Look up the type declaration to get constraints (for user-defined types)
 	typeDecl := g.findTypeDeclarationByVariant(typeConstructor.TypeName)
 	if typeDecl == nil {
-		return nil, WrapUndefinedType(typeConstructor.TypeName)
+		return nil, WrapUndefinedTypeWithPos(typeConstructor.TypeName, typeConstructor.Position)
 	}
 
 	// Check if this is a record type (single variant with fields)
@@ -1269,7 +1269,7 @@ func (g *LLVMGenerator) generateDiscriminatedUnionConstructor(
 	// Get the tagged union type from our type map
 	unionType, exists := g.typeMap[typeDecl.Name]
 	if !exists {
-		return nil, WrapUndefinedType(typeDecl.Name)
+		return nil, WrapUndefinedTypeWithPos(typeDecl.Name, typeConstructor.Position)
 	}
 
 	// Allocate memory for the tagged union
@@ -1569,7 +1569,7 @@ func (g *LLVMGenerator) generateHTTPResponseConstructor(
 	// Get the HttpResponse struct type
 	httpResponseType, exists := g.typeMap[TypeHTTPResponse]
 	if !exists {
-		return nil, WrapUndefinedType(TypeHTTPResponse)
+		return nil, WrapUndefinedTypeWithPos(TypeHTTPResponse, typeConstructor.Position)
 	}
 
 	// Allocate memory for the HttpResponse struct on the heap

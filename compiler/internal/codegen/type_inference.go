@@ -664,7 +664,8 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 	case *ast.UnaryExpression:
 		return ti.inferUnaryExpression(e)
 	case *ast.MethodCallExpression:
-		return ti.inferMethodCall(e)
+		// Method calls are not supported in the grammar
+		return nil, ErrMethodCallsNotImplemented
 	case *ast.ListAccessExpression:
 		return ti.inferListAccess(e)
 	case *ast.PerformExpression:
@@ -2154,20 +2155,7 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 	}
 }
 
-// inferMethodCall infers types for method call expressions
-func (ti *TypeInferer) inferMethodCall(e *ast.MethodCallExpression) (Type, error) {
-	// Infer object type
-	_, err := ti.InferType(e.Object)
-	if err != nil {
-		return nil, err
-	}
-
-	// For now, create a fresh type variable for method result
-	// In a full implementation, this would look up the method type
-	resultType := ti.Fresh()
-
-	return resultType, nil
-}
+// Removed inferMethodCall as method calls are not supported in the grammar
 
 // CreateResultType creates a proper GenericType for Result<T, E>
 func CreateResultType(successType, errorType Type) Type {

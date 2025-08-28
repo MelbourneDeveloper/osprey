@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+// Element type constants for language documentation
+const (
+	ElementTypeFunction = "function"
+	ElementTypeType     = "type"
+	ElementTypeOperator = "operator"
+	ElementTypeKeyword  = "keyword"
+)
+
 // LanguageElement represents any element in the language that can have documentation.
 type LanguageElement struct {
 	Type        string // "function", "type", "operator", "keyword"
@@ -21,7 +29,7 @@ func GetAllLanguageElements() map[string]*LanguageElement {
 	// Add functions
 	for name, desc := range GetBuiltinFunctionDescriptions() {
 		elements[name] = &LanguageElement{
-			Type:        "function",
+			Type:        ElementTypeFunction,
 			Name:        desc.Name,
 			Description: desc.Description,
 			Example:     desc.Example,
@@ -32,7 +40,7 @@ func GetAllLanguageElements() map[string]*LanguageElement {
 	// Add types
 	for name, desc := range GetBuiltinTypeDescriptions() {
 		elements[name] = &LanguageElement{
-			Type:        "type",
+			Type:        ElementTypeType,
 			Name:        desc.Name,
 			Description: desc.Description,
 			Example:     desc.Example,
@@ -42,7 +50,7 @@ func GetAllLanguageElements() map[string]*LanguageElement {
 	// Add operators
 	for symbol, desc := range GetOperatorDescriptions() {
 		elements[symbol] = &LanguageElement{
-			Type:        "operator",
+			Type:        ElementTypeOperator,
 			Name:        desc.Name,
 			Description: desc.Description,
 			Example:     desc.Example,
@@ -52,7 +60,7 @@ func GetAllLanguageElements() map[string]*LanguageElement {
 	// Add keywords
 	for keyword, desc := range GetKeywordDescriptions() {
 		elements[keyword] = &LanguageElement{
-			Type:        "keyword",
+			Type:        ElementTypeKeyword,
 			Name:        desc.Keyword,
 			Description: desc.Description,
 			Example:     desc.Example,
@@ -82,35 +90,35 @@ func GetHoverDocumentation(name string) string {
 	var parts []string
 
 	switch element.Type {
-	case "function":
+	case ElementTypeFunction:
 		if element.Signature != "" {
 			parts = append(parts, "```osprey\n"+element.Signature+"\n```")
 		}
 
 		parts = append(parts, element.Description)
 		if element.Example != "" {
-			parts = append(parts, "\n**Example:**\n```osprey\n"+element.Example+"\n```")
+			parts = append(parts, "**Example:**\n```osprey\n"+element.Example+"\n```")
 		}
-	case "type":
+	case ElementTypeType:
 		parts = append(parts, "```osprey\ntype "+element.Name+"\n```")
 
 		parts = append(parts, element.Description)
 		if element.Example != "" {
-			parts = append(parts, "\n**Example:**\n```osprey\n"+element.Example+"\n```")
+			parts = append(parts, "**Example:**\n```osprey\n"+element.Example+"\n```")
 		}
-	case "operator":
+	case ElementTypeOperator:
 		parts = append(parts, "**Operator:** `"+name+"`")
 
 		parts = append(parts, element.Description)
 		if element.Example != "" {
-			parts = append(parts, "\n**Example:**\n```osprey\n"+element.Example+"\n```")
+			parts = append(parts, "**Example:**\n```osprey\n"+element.Example+"\n```")
 		}
-	case "keyword":
+	case ElementTypeKeyword:
 		parts = append(parts, "**Keyword:** `"+element.Name+"`")
 
 		parts = append(parts, element.Description)
 		if element.Example != "" {
-			parts = append(parts, "\n**Example:**\n```osprey\n"+element.Example+"\n```")
+			parts = append(parts, "**Example:**\n```osprey\n"+element.Example+"\n```")
 		}
 	}
 

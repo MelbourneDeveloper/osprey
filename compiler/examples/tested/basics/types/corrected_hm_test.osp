@@ -22,7 +22,7 @@ type IntPoint = { x: int, y: int }
 type StringPair = { first: string, second: string }
 
 fn makeIntPoint(a, b) = IntPoint { x: a, y: b }      // (int, int) -> IntPoint
-fn makeStringPair(a: string, b: string) = StringPair { first: a, second: b }  // (string, string) -> StringPair
+fn makeStringPair(a, b) = StringPair { first: a, second: b }  // HM infers (string, string) -> StringPair
 
 let intPoint1 = makeIntPoint(a: 1, b: 2)
 let intPoint2 = makeIntPoint(a: 3, b: 4)

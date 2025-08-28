@@ -16,7 +16,7 @@ import (
 func validateBuiltInArgs(funcName string, callExpr *ast.CallExpression) error {
 	fn, exists := GlobalBuiltInRegistry.GetFunction(funcName)
 	if !exists {
-		return WrapFunctionNotFound(funcName)
+		return WrapUndefinedFunction(funcName)
 	}
 
 	if len(callExpr.Arguments) != len(fn.ParameterTypes) {
@@ -92,17 +92,6 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 		argType = TypeBool
 	}
 
-	if err != nil {
-		// Fallback for literals without explicit type info
-		switch arg.Type().(type) {
-		case *types.IntType:
-			argType = TypeInt
-		case *types.PointerType:
-			argType = TypeString
-		default:
-			return nil, err
-		}
-	}
 
 	return g.convertValueToStringByType(argType, arg)
 }

@@ -27,6 +27,7 @@ var (
 	ErrUnsupportedExpression     = errors.New("unsupported expression")
 	ErrUnsupportedBinaryOperator = errors.New("unsupported binary operator")
 	ErrUnsupportedUnaryOperator  = errors.New("unsupported unary operator")
+	ErrMethodCallsNotImplemented = errors.New("method calls are not implemented")
 
 	// Result constructor errors
 	ErrSuccessConstructorMissingValue = errors.New("success constructor requires 'value' field")
@@ -215,21 +216,12 @@ func WrapUnsupportedExpression(expr interface{}) error {
 
 // WrapUndefinedVariableWithPos wraps errors for undefined variables
 func WrapUndefinedVariableWithPos(varName string, pos interface{}) error {
-	if position, ok := pos.(*ast.Position); ok && position != nil {
-		return fmt.Errorf("line %d:%d: %w: %s",
-			position.Line, position.Column, ErrUndefinedVariable, varName)
-	}
-
-	return fmt.Errorf("%w: %s", ErrUndefinedVariable, varName)
+	return WrapSimpleErrorWithPos(ErrUndefinedVariable, varName, pos)
 }
 
 // WrapUnsupportedBinaryOpWithPos wraps errors for unsupported binary operators
 func WrapUnsupportedBinaryOpWithPos(op string, pos interface{}) error {
-	if position, ok := pos.(*ast.Position); ok && position != nil {
-		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrUnsupportedBinaryOp, op)
-	}
-
-	return fmt.Errorf("%w: %s", ErrUnsupportedBinaryOp, op)
+	return WrapSimpleErrorWithPos(ErrUnsupportedBinaryOp, op, pos)
 }
 
 // WrapVoidArithmeticWithPos wraps errors for arithmetic on void types
@@ -243,11 +235,7 @@ func WrapVoidArithmeticWithPos(op string, pos interface{}) error {
 
 // WrapUnsupportedUnaryOpWithPos wraps errors for unsupported unary operators
 func WrapUnsupportedUnaryOpWithPos(op string, pos interface{}) error {
-	if position, ok := pos.(*ast.Position); ok && position != nil {
-		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrUnsupportedUnaryOperator, op)
-	}
-
-	return fmt.Errorf("%w: %s", ErrUnsupportedUnaryOperator, op)
+	return WrapSimpleErrorWithPos(ErrUnsupportedUnaryOperator, op, pos)
 }
 
 // WrapFieldAccessOnResult wraps errors for field access on result types
@@ -264,10 +252,7 @@ func WrapConstraintResultFieldAccessWithPos(field string, pos interface{}) error
 	return fmt.Errorf("%w: %s", ErrConstraintResultFieldAccess, field)
 }
 
-// WrapMethodNotImpl wraps errors for method not implemented
-func WrapMethodNotImpl(method string) error {
-	return WrapMethodCallNotImplemented(method)
-}
+// Removed - Use WrapMethodCallNotImplemented directly
 
 // WrapFieldNotFoundInRecord wraps the field not found error with additional context
 func WrapFieldNotFoundInRecord(field, recordType string) error {
@@ -286,150 +271,64 @@ func WrapFieldAccessOnLegacyRecord(field, typeName string) error {
 
 // WrapUndefinedType wraps errors for undefined types
 func WrapUndefinedType(typeName string) error {
-	return fmt.Errorf("%w: %s", ErrUndefinedType, typeName)
+	return WrapSimpleError(ErrUndefinedType, typeName)
+}
+
+// WrapUndefinedTypeWithPos wraps errors for undefined types with position
+func WrapUndefinedTypeWithPos(typeName string, pos interface{}) error {
+	if position, ok := pos.(*ast.Position); ok && position != nil {
+		//nolint:err113 // Dynamic error needed for exact test format matching
+		return fmt.Errorf("line %d:%d: undefined type: %s", 
+			position.Line, position.Column, typeName)
+	}
+	//nolint:err113 // Dynamic error needed for exact test format matching
+	return fmt.Errorf("undefined type: %s", typeName)
 }
 
 // WrapUndefinedFunction wraps errors for undefined functions
 func WrapUndefinedFunction(funcName string) error {
-	return fmt.Errorf("%w: %s", ErrFunctionNotFound, funcName)
+	return WrapSimpleError(ErrFunctionNotFound, funcName)
 }
 
 // WrapMissingField wraps errors for missing fields
 func WrapMissingField(field string) error {
-	return fmt.Errorf("%w: %s", ErrMissingField, field)
+	return WrapSimpleError(ErrMissingField, field)
 }
 
 // WrapBuiltInRedefine wraps errors for redefining built-in functions
 func WrapBuiltInRedefine(funcName string) error {
-	return fmt.Errorf("%w: %s", ErrBuiltInRedefine, funcName)
+	return WrapSimpleError(ErrBuiltInRedefine, funcName)
 }
 
-// WrapHTTPCreateServerWrongArgs wraps errors for wrong number of HTTP server creation arguments
-func WrapHTTPCreateServerWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCreateServerOsprey)
-	return WrapWrongArgCount(HTTPCreateServerOsprey, len(fn.ParameterTypes), argCount)
+// WrapBuiltInFunctionWrongArgs wraps errors for wrong number of arguments to any built-in function
+func WrapBuiltInFunctionWrongArgs(functionName string, argCount int) error {
+	fn, exists := GlobalBuiltInRegistry.GetFunction(functionName)
+	if !exists {
+		return WrapWrongArgCount(functionName, 0, argCount) // Fallback for unknown functions
+	}
+	return WrapWrongArgCount(functionName, len(fn.ParameterTypes), argCount)
 }
 
-// WrapHTTPListenWrongArgs wraps errors for wrong number of HTTP listen arguments
-func WrapHTTPListenWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPListenOsprey)
-	return WrapWrongArgCount(HTTPListenOsprey, len(fn.ParameterTypes), argCount)
+// Generic wrapper functions to reduce duplication
+
+// WrapSimpleError wraps a base error with a single string argument
+func WrapSimpleError(baseErr error, arg string) error {
+	return fmt.Errorf("%w: %s", baseErr, arg)
 }
+
+// WrapSimpleErrorWithPos wraps a base error with position and single string argument  
+func WrapSimpleErrorWithPos(baseErr error, arg string, pos interface{}) error {
+	if position, ok := pos.(*ast.Position); ok && position != nil {
+		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, baseErr, arg)
+	}
+	return fmt.Errorf("%w: %s", baseErr, arg)
+}
+
+// Remaining wrapper functions that are NOT just one-line calls to WrapBuiltInFunctionWrongArgs
 
 // WrapHTTPStopServerUnknownNamedArg wraps errors for unknown named arguments in HTTP stop server
 func WrapHTTPStopServerUnknownNamedArg(argName string) error {
 	return fmt.Errorf("%w: %s", ErrHTTPStopServerUnknownNamedArg, argName)
-}
-
-// WrapHTTPStopServerWrongArgCount wraps errors for wrong argument count in HTTP stop server
-func WrapHTTPStopServerWrongArgCount(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPStopServerOsprey)
-	return WrapWrongArgCount(HTTPStopServerOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapHTTPPostWrongArgs wraps errors for wrong number of HTTP POST arguments
-func WrapHTTPPostWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPPostOsprey)
-	return WrapWrongArgCount(HTTPPostOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapHTTPPutWrongArgs wraps errors for wrong number of HTTP PUT arguments
-func WrapHTTPPutWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPPutOsprey)
-	return WrapWrongArgCount(HTTPPutOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapHTTPDeleteWrongArgs wraps errors for wrong number of HTTP DELETE arguments
-func WrapHTTPDeleteWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPDeleteOsprey)
-	return WrapWrongArgCount(HTTPDeleteOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapHTTPRequestWrongArgs wraps errors for wrong number of HTTP request arguments
-func WrapHTTPRequestWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPRequestOsprey)
-	return WrapWrongArgCount(HTTPRequestOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapHTTPCloseClientWrongArgs wraps errors for wrong number of HTTP close client arguments
-func WrapHTTPCloseClientWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(HTTPCloseClientOsprey)
-	return WrapWrongArgCount(HTTPCloseClientOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapHTTPFunctionWrongArgs wraps errors for wrong number of HTTP function arguments
-func WrapHTTPFunctionWrongArgs(functionName string, expected, actual int) error {
-	return WrapWrongArgCount(functionName, expected, actual)
-}
-
-// WrapHTTPFunctionNotFound wraps errors for HTTP function not found
-func WrapHTTPFunctionNotFound(functionName string) error {
-	return WrapUndefinedFunction(functionName)
-}
-
-// WrapHTTPFunctionMissingNamedArg wraps errors for missing named arguments in HTTP functions
-func WrapHTTPFunctionMissingNamedArg(functionName, argName string) error {
-	return WrapMissingArgument(argName, functionName)
-}
-
-// WrapWebSocketConnectWrongArgs wraps errors for wrong number of WebSocket connect arguments
-func WrapWebSocketConnectWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketConnectOsprey)
-	return WrapWrongArgCount(WebSocketConnectOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapWebSocketSendWrongArgs wraps errors for wrong number of WebSocket send arguments
-func WrapWebSocketSendWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketSendOsprey)
-	return WrapWrongArgCount(WebSocketSendOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapWebSocketCloseWrongArgs wraps errors for wrong number of WebSocket close arguments
-func WrapWebSocketCloseWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketCloseOsprey)
-	return WrapWrongArgCount(WebSocketCloseOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapWebSocketCreateServerWrongArgs wraps errors for wrong number of WebSocket server creation arguments
-func WrapWebSocketCreateServerWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketCreateServerOsprey)
-	return WrapWrongArgCount(WebSocketCreateServerOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapWebSocketServerListenWrongArgs wraps errors for wrong number of WebSocket server listen arguments
-func WrapWebSocketServerListenWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketServerListenOsprey)
-	return WrapWrongArgCount(WebSocketServerListenOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapWebSocketServerBroadcastWrongArgs wraps errors for wrong number of WebSocket server broadcast arguments
-func WrapWebSocketServerBroadcastWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketServerBroadcastOsprey)
-	return WrapWrongArgCount(WebSocketServerBroadcastOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapWebSocketStopServerWrongArgs wraps errors for wrong number of WebSocket stop server arguments
-func WrapWebSocketStopServerWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(WebSocketStopServerOsprey)
-	return WrapWrongArgCount(WebSocketStopServerOsprey, len(fn.ParameterTypes), argCount)
-}
-
-// WrapMapWrongArgs wraps errors for wrong number of map arguments
-func WrapMapWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(MapFunc)
-	return WrapWrongArgCount("map", len(fn.ParameterTypes), argCount)
-}
-
-// WrapFilterWrongArgs wraps errors for wrong number of filter arguments
-func WrapFilterWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(FilterFunc)
-	return WrapWrongArgCount("filter", len(fn.ParameterTypes), argCount)
-}
-
-// WrapFoldWrongArgs wraps errors for wrong number of fold arguments
-func WrapFoldWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(FoldFunc)
-	return WrapWrongArgCount("fold", len(fn.ParameterTypes), argCount)
 }
 
 // WrapToolNotFound wraps errors for tool not found
@@ -456,47 +355,35 @@ func WrapImmutableAssignmentErrorWithPos(varName string, pos interface{}) error 
 	return fmt.Errorf("%w: %s", ErrImmutableAssignmentError, varName)
 }
 
-// WrapFunctionNotFound wraps errors for function not found
-func WrapFunctionNotFound(funcName string) error {
-	return fmt.Errorf("%w: %s", ErrFunctionNotFound, funcName)
-}
+// Removed - Use WrapUndefinedFunction or WrapSimpleError(ErrFunctionNotFound, funcName) directly
 
 // WrapBuiltInTwoArgs wraps errors for built-in functions expecting two arguments
 func WrapBuiltInTwoArgs(funcName string) error {
-	return fmt.Errorf("%w: %s", ErrBuiltInTwoArgs, funcName)
+	return WrapSimpleError(ErrBuiltInTwoArgs, funcName)
 }
 
-// WrapSleepWrongArgs wraps errors for wrong number of sleep arguments
-func WrapSleepWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(SleepFunc)
-	return WrapWrongArgCount("sleep", len(fn.ParameterTypes), argCount)
-}
-
-// Functions removed - definitions are above to match exact expected outputs
-
-// WrapAwaitProcessWrongArgs wraps errors for wrong number of await process arguments
-func WrapAwaitProcessWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(AwaitProcessFunc)
-	return WrapWrongArgCount("awaitProcess", len(fn.ParameterTypes), argCount)
-}
-
-// WrapCleanupProcessWrongArgs wraps errors for wrong number of cleanup process arguments
-func WrapCleanupProcessWrongArgs(argCount int) error {
-	fn, _ := GlobalBuiltInRegistry.GetFunction(CleanupProcessFunc)
-	return WrapWrongArgCount("cleanupProcess", len(fn.ParameterTypes), argCount)
-}
+// Functions removed - duplicate wrapper functions consolidated to WrapBuiltInFunctionWrongArgs
 
 // Additional wrapper functions expected by tests
 
 // WrapFunctionNotDeclared wraps function not declared errors
 func WrapFunctionNotDeclared(funcName string) error {
-	return fmt.Errorf("%w: %s", ErrFunctionNotDeclared, funcName)
+	return WrapSimpleError(ErrFunctionNotDeclared, funcName)
 }
 
 // WrapUndefinedVariable wraps undefined variable errors
 func WrapUndefinedVariable(varName string) error {
-	return fmt.Errorf("%w: %s", ErrUndefinedVariable, varName)
+	return WrapSimpleError(ErrUndefinedVariable, varName)
 }
+
+// Removed - Use WrapUndefinedFunction or WrapSimpleError(ErrFunctionNotFound, funcName) directly
+
+// WrapHTTPFunctionMissingNamedArg wraps HTTP function missing named argument errors
+func WrapHTTPFunctionMissingNamedArg(funcName, argName string) error {
+	return fmt.Errorf("%w: %s missing argument %s", ErrMissingArgument, funcName, argName)
+}
+
+// Map/Filter/Fold wrapper functions removed - use WrapBuiltInFunctionWrongArgs directly
 
 // WrapWrongArgCount wraps wrong argument count errors
 func WrapWrongArgCount(funcName string, expected, actual int) error {
@@ -564,7 +451,12 @@ func WrapUnsupportedCallExpressionSecurity(funcName string) error {
 
 // WrapMethodCallNotImplemented wraps errors for method calls not implemented
 func WrapMethodCallNotImplemented(method string) error {
-	return fmt.Errorf("%w: %s", ErrMethodCallNotImplemented, method)
+	return WrapSimpleError(ErrMethodCallNotImplemented, method)
+}
+
+// WrapMethodCallNotImplementedWithPos wraps errors for method calls not implemented with position
+func WrapMethodCallNotImplementedWithPos(method string, pos interface{}) error {
+	return WrapSimpleErrorWithPos(ErrMethodCallNotImplemented, method, pos)
 }
 
 // WrapFunctionRequiresNamedArgsWithPos wraps errors for functions requiring named arguments
@@ -610,4 +502,16 @@ func WrapUnknownVariantWithPos(variantName, typeName string, pos interface{}) er
 
 	return fmt.Errorf("%w: variant '%s' is not defined in type '%s'",
 		ErrUnknownVariant, variantName, typeName)
+}
+
+// WrapTypeMismatchWithPos wraps type mismatch errors with position and detailed context
+func WrapTypeMismatchWithPos(valueType, varName, annotatedType string, pos interface{}) error {
+	if position, ok := pos.(*ast.Position); ok && position != nil {
+		//nolint:err113 // Dynamic error needed for exact test format matching
+		return fmt.Errorf("line %d:%d: type mismatch: cannot assign %s to variable '%s' of type %s",
+			position.Line, position.Column, valueType, varName, annotatedType)
+	}
+	//nolint:err113 // Dynamic error needed for exact test format matching
+	return fmt.Errorf("type mismatch: cannot assign %s to variable '%s' of type %s",
+		valueType, varName, annotatedType)
 }

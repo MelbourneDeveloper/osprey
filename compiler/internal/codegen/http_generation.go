@@ -48,7 +48,7 @@ func (g *LLVMGenerator) generateHTTPFunctionCall(functionName string, callExpr *
 
 	// Validate argument count
 	if len(callExpr.Arguments) != expectedArgs {
-		return nil, WrapHTTPFunctionWrongArgs(functionName, expectedArgs, len(callExpr.Arguments))
+		return nil, WrapWrongArgCount(functionName, expectedArgs, len(callExpr.Arguments))
 	}
 
 	// Generate argument values
@@ -65,7 +65,7 @@ func (g *LLVMGenerator) generateHTTPFunctionCall(functionName string, callExpr *
 	// Ensure function is declared
 	fn := g.ensureHTTPFunctionDeclaration(functionName)
 	if fn == nil {
-		return nil, WrapHTTPFunctionNotFound(functionName)
+		return nil, WrapUndefinedFunction(functionName)
 	}
 
 	// Call the function
@@ -78,12 +78,12 @@ func (g *LLVMGenerator) generateHTTPFunctionCallNamed(functionName string, callE
 	// Get function details from builtin registry
 	builtinFunc, exists := GlobalBuiltInRegistry.GetFunction(functionName)
 	if !exists {
-		return nil, WrapHTTPFunctionNotFound(functionName)
+		return nil, WrapUndefinedFunction(functionName)
 	}
 
 	// Validate argument count
 	if len(callExpr.NamedArguments) != expectedArgs {
-		return nil, WrapHTTPFunctionWrongArgs(functionName, expectedArgs, len(callExpr.NamedArguments))
+		return nil, WrapWrongArgCount(functionName, expectedArgs, len(callExpr.NamedArguments))
 	}
 
 	// Generate argument values in correct order
@@ -113,7 +113,7 @@ func (g *LLVMGenerator) generateHTTPFunctionCallNamed(functionName string, callE
 	// Ensure function is declared
 	fn := g.ensureHTTPFunctionDeclaration(functionName)
 	if fn == nil {
-		return nil, WrapHTTPFunctionNotFound(functionName)
+		return nil, WrapUndefinedFunction(functionName)
 	}
 
 	// Call the function
@@ -166,7 +166,7 @@ func (g *LLVMGenerator) generateHTTPCloseClientCall(callExpr *ast.CallExpression
 func (g *LLVMGenerator) generateHTTPRequestWithMethod(callExpr *ast.CallExpression, expectedArgs int,
 	method int64) (value.Value, error) {
 	if len(callExpr.Arguments) != expectedArgs {
-		return nil, WrapHTTPFunctionWrongArgs(HTTPRequestOsprey, expectedArgs, len(callExpr.Arguments))
+		return nil, WrapWrongArgCount(HTTPRequestOsprey, expectedArgs, len(callExpr.Arguments))
 	}
 
 	// Generate client ID

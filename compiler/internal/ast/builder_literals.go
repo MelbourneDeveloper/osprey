@@ -274,6 +274,7 @@ func (b *Builder) buildTypeConstructor(ctx *parser.TypeConstructorContext) Expre
 	return &TypeConstructorExpression{
 		TypeName: typeName,
 		Fields:   fieldAssignments,
+		Position: b.getPositionFromContext(ctx),
 	}
 }
 

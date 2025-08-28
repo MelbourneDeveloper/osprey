@@ -15,7 +15,7 @@ let successValue = calculation ?: -1  // Should extract 15 from Success, or -1 o
 print(successValue)
 
 // SECTION 4: Function returning Result type
-fn divide(a: int, b: int) -> Result<int, MathError> = a / b
+fn divide(a, b) = a / b
 
 // SECTION 5: Test Result Elvis operator - success case
 let divisionGood = divide(a: 10, b: 2)

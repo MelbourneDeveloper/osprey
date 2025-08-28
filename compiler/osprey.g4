@@ -87,7 +87,7 @@ expr
     ;
 
 matchExpr
-    : MATCH binaryExpr LBRACE matchArm+ RBRACE
+    : MATCH binaryExpr LBRACE matchArm* RBRACE
     | selectExpr
     | binaryExpr
     ;

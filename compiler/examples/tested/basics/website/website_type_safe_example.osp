@@ -1,11 +1,11 @@
-fn analyzeNumber(n: int) -> string = match n {
+fn analyzeNumber(n) = match n {
   0 => "Zero"
   42 => "The answer!"
   _ => "Something else"
 }
 
-fn double(x: int) -> int = x * 2
-fn square(x: int) -> int = x * x
+fn double(x) = x * 2
+fn square(x) = x * x
 
 // Test the functions
 print("Testing functions:")

@@ -42,8 +42,41 @@ let type_result = match person {
     _ => "Not PersonData"
 }
 
+// Function that returns union types to test inference  
+fn getShape(kind) = match kind {
+    "circle" => Circle { radius: 7 }
+    _ => Point { x: 1, y: 2 }
+}
+
+// Test function returning union type
+let dynamic_shape = getShape("circle")
+let dynamic_result = match dynamic_shape {
+    Circle { radius } => "Dynamic Circle"
+    Point { x, y } => "Dynamic Point"
+}
+
+// Function with union type parameter
+fn describeShape(s: Shape) -> string = match s {
+    Circle { radius } => "A circle"
+    Point { x, y } => "A point"
+}
+
+let shape_description = describeShape(circle)
+
+// Force union type unification by passing return value of one union function to another
+fn processAnyShape(s) = match s {
+    Circle { radius } => "Processing circle"
+    Point { x, y } => "Processing point"
+}
+
+// This should trigger unifyUnionTypes when getShape returns Shape and processAnyShape expects Shape
+let unification_test = processAnyShape(getShape("circle"))
+
 print(result1)
 print(result2)
 print(shape_result1)
 print(shape_result2)
 print(type_result)
+print(dynamic_result)
+print(shape_description)
+print(unification_test)

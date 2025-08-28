@@ -163,7 +163,7 @@ func (g *LLVMGenerator) generateForEachLoop(
 // generateMapCall handles map function calls.
 func (g *LLVMGenerator) generateMapCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapMapWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(MapFunc, len(callExpr.Arguments))
 	}
 
 	rangeValue, err := g.generateExpression(callExpr.Arguments[0])
@@ -182,7 +182,7 @@ func (g *LLVMGenerator) generateMapCall(callExpr *ast.CallExpression) (value.Val
 // generateFilterCall handles filter function calls.
 func (g *LLVMGenerator) generateFilterCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapFilterWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(FilterFunc, len(callExpr.Arguments))
 	}
 
 	iterator, err := g.generateExpression(callExpr.Arguments[0])
@@ -201,7 +201,7 @@ func (g *LLVMGenerator) generateFilterCall(callExpr *ast.CallExpression) (value.
 // generateFoldCall handles fold function calls.
 func (g *LLVMGenerator) generateFoldCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != ThreeArgs {
-		return nil, WrapFoldWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(FoldFunc, len(callExpr.Arguments))
 	}
 
 	// Get the range struct from first argument (iterator)

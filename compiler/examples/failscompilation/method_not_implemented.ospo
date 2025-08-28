@@ -1,0 +1,9 @@
+// This should fail compilation: Method not implemented
+// Tests: WrapMethodCallNotImplemented, ErrMethodCallNotImplemented
+// Error: method call not implemented
+
+type Person = { name: String, age: Int }
+
+let person = Person { name: "Alice", age: 30 }
+let result = person.unknownMethod()  // Method call not implemented
+print(result)

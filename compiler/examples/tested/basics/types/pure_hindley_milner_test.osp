@@ -151,5 +151,70 @@ print("Generic type equality test - gen3.data = ${val3}")
 print("Generic type equality test - gen4.first = ${val4}")
 print("Generic type equality test - gen5.first = ${val5}")
 
+
+// Test method call inference
+print("")
+print("Test 9: Method call type inference")
+
+type StringWrapper = { content: string }
+
+// Add a method-like function that takes self
+fn getLength(self: StringWrapper) = 42  // Need explicit type for self parameter
+
+fn uppercase(self: StringWrapper) = self.content + "_UPPER"
+
+let wrapper = StringWrapper { content: "hello" }
+
+// These aren't real method calls in OSP, but test the pattern
+let wrapperLen = getLength(wrapper)
+let wrapperUpper = uppercase(wrapper)
+
+print("wrapper.length() equivalent = ${wrapperLen}")
+print("wrapper.uppercase() equivalent = ${wrapperUpper}")
+
+// Test unifyGenericTypes coverage
+print("")
+print("Test 10: Generic type unification")
+
+type Box<T> = { item: T }
+type Pair2<A, B> = { left: A, right: B }
+
+fn makeBox(val) = Box { item: val }
+fn makePair2(a, b) = Pair2 { left: a, right: b }
+
+// Force generic type unification through usage
+let box1 = makeBox(100)              // Box<int>
+let box2 = makeBox("test")           // Box<string>
+let pair2_1 = makePair2(a: 5, b: "five")    // Pair2<int, string>
+let pair2_2 = makePair2(a: true, b: 314)   // Pair2<bool, int>
+
+// Access to force unification
+let boxVal1 = box1.item
+let boxVal2 = box2.item  
+let pairLeft = pair2_1.left
+let pairRight = pair2_1.right
+
+print("Box<int>.item = ${boxVal1}")
+print("Box<string>.item = ${boxVal2}")
+print("Pair2<int, string>.left = ${pairLeft}")
+print("Pair2<int, string>.right = ${pairRight}")
+
+// Test type equality methods coverage
+print("")
+print("Test 11: Type equality and String methods")
+
+// This will exercise the String() and Equals() methods on various types
+fn typeTest1(x) = x * 2
+fn typeTest2(s: string) = s + s  // Need explicit type for string concatenation
+fn typeTest3(b) = !b
+
+let typeResult1 = typeTest1(21)
+let typeResult2 = typeTest2("hi")
+let typeResult3 = typeTest3(false)
+
+print("typeTest1(21) = ${typeResult1}")
+print("typeTest2(\"hi\") = ${typeResult2}")
+print("typeTest3(false) = ${toString(typeResult3)}")
+
 print("=== PURE HINDLEY-MILNER TEST COMPLETE ===")
 print("All types inferred from usage context - no explicit type annotations!")

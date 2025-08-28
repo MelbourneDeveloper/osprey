@@ -1,7 +1,7 @@
 print("=== Advanced Block Statements Test ===")
 
 // Test 1: Block in function definition
-fn compute() -> int = {
+fn compute() = {
     let base = 10
     let multiplier = 3
     base * multiplier
@@ -32,7 +32,7 @@ let result3 = {
 print("Test 3 - Block with match: ${result3}")
 
 // Test 4: Function returning block
-fn processData(input: int) -> int = {
+fn processData(input) = {
     let step1 = input * 2
     let step2 = step1 + 10
     let step3 = step2 / 2

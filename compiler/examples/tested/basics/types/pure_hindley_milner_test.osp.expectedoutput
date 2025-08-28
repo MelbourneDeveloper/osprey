@@ -35,5 +35,20 @@ Generic type equality test - gen2.data = 99
 Generic type equality test - gen3.data = test
 Generic type equality test - gen4.first = 1
 Generic type equality test - gen5.first = 3
+
+Test 9: Method call type inference
+wrapper.length() equivalent = 42
+wrapper.uppercase() equivalent = hello_UPPER
+
+Test 10: Generic type unification
+Box<int>.item = 100
+Box<string>.item = test
+Pair2<int, string>.left = 5
+Pair2<int, string>.right = five
+
+Test 11: Type equality and String methods
+typeTest1(21) = 42
+typeTest2("hi") = hihi
+typeTest3(false) = true
 === PURE HINDLEY-MILNER TEST COMPLETE ===
 All types inferred from usage context - no explicit type annotations!

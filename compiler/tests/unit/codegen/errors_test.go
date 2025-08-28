@@ -441,17 +441,17 @@ func TestWrapBuiltInRedefine(t *testing.T) {
 func TestWrapIteratorErrors(t *testing.T) {
 	tests := []struct {
 		name     string
-		wrapFunc func(int) error
+		funcName string
 		baseErr  error
 	}{
-		{"WrapMapWrongArgs", codegen.WrapMapWrongArgs, codegen.ErrWrongArgCount},
-		{"WrapFilterWrongArgs", codegen.WrapFilterWrongArgs, codegen.ErrWrongArgCount},
-		{"WrapFoldWrongArgs", codegen.WrapFoldWrongArgs, codegen.ErrWrongArgCount},
+		{"WrapMapWrongArgs", codegen.MapFunc, codegen.ErrWrongArgCount},
+		{"WrapFilterWrongArgs", codegen.FilterFunc, codegen.ErrWrongArgCount},
+		{"WrapFoldWrongArgs", codegen.FoldFunc, codegen.ErrWrongArgCount},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := test.wrapFunc(5)
+			err := codegen.WrapBuiltInFunctionWrongArgs(test.funcName, 5)
 			if err == nil {
 				t.Errorf("%s should return error", test.name)
 			}
@@ -483,9 +483,9 @@ func TestWrapBuiltInTwoArgs(t *testing.T) {
 }
 
 func TestWrapFunctionNotFound(t *testing.T) {
-	err := codegen.WrapFunctionNotFound("missingFunc")
+	err := codegen.WrapUndefinedFunction("missingFunc")
 	if err == nil {
-		t.Error("WrapFunctionNotFound should return error")
+		t.Error("WrapUndefinedFunction should return error")
 	}
 
 	if !errors.Is(err, codegen.ErrFunctionNotFound) {

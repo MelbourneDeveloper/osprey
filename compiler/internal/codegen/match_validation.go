@@ -15,6 +15,16 @@ const (
 
 // validateMatchExpressionWithType validates match expressions with discriminant type information
 func (g *LLVMGenerator) validateMatchExpressionWithType(expr *ast.MatchExpression, discriminantType string) error {
+	// Check if match expression has no arms
+	if len(expr.Arms) == 0 {
+		if expr.Position != nil {
+			//nolint:err113 // Dynamic error needed for exact test format matching
+			return fmt.Errorf("line %d:%d: match expression must have at least one arm",
+				expr.Position.Line, expr.Position.Column)
+		}
+		return ErrMatchNoArms
+	}
+
 	for _, arm := range expr.Arms {
 		err := g.validateMatchArmWithTypeAndPosition(arm, discriminantType, expr.Position)
 		if err != nil {

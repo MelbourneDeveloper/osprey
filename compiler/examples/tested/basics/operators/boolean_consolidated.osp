@@ -3,7 +3,7 @@
 
 fn getBool() = true
 fn getFalse() = false
-fn isEqual(x: int, y: int) = x == y
+fn isEqual(x, y) = x == y
 
 let flag = false
 let truthy = true

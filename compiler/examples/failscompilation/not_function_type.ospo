@@ -1,0 +1,7 @@
+// This should fail compilation: Not a function type
+// Tests: ErrNotAFunction, ErrNotFunctionType 
+// Error: type is not a function
+
+let x = 42
+let result = x(10)  // Trying to call an integer as function
+print(result)
