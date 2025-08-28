@@ -68,8 +68,7 @@ func captureJITOutput(source string) (string, error) {
 	var execErr error
 
 	go func() {
-		// Use CompileAndRunJITWithLibDir with the correct lib directory for tests
-		done <- codegen.CompileAndRunJITWithLibDir(source, TestLibDir)
+		done <- codegen.CompileAndRunJIT(source)
 	}()
 
 	// Wait for completion or timeout (30 seconds max)
@@ -429,12 +428,6 @@ func TestSystemLibraryInstallation(t *testing.T) {
 	// Test execution which requires runtime library linking
 	output, err := captureJITOutput(source)
 	if err != nil {
-		// Runtime libraries might not be available in system locations
-		if strings.Contains(err.Error(), "Required runtime library not found") ||
-			strings.Contains(err.Error(), "LLVM tools not found") ||
-			strings.Contains(err.Error(), "no suitable compiler found") {
-			t.Skipf("⚠️ Runtime libraries not available in system locations: %v", err)
-		}
 		t.Fatalf("Failed to execute from temp directory: %v", err)
 	}
 

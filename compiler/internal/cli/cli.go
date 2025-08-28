@@ -70,8 +70,8 @@ func (v *VexErrorListener) SyntaxError(
 }
 
 // RunCommand executes a Osprey command with the given filename and mode.
-// This function always uses security-aware execution.
-func RunCommand(filename, outputMode, docsDir string, quiet bool, security *SecurityConfig) CommandResult {
+// This function mimics exactly what the CLI does but returns testable results.
+func RunCommand(filename, outputMode, docsDir string, quiet bool) CommandResult {
 	// Handle docs mode (no file required)
 	if outputMode == OutputModeDocs {
 		return runGenerateDocs(docsDir)
@@ -97,11 +97,54 @@ func RunCommand(filename, outputMode, docsDir string, quiet bool, security *Secu
 	case OutputModeAST:
 		return runShowAST(source, filename)
 	case OutputModeLLVM:
-		return runShowLLVM(source, filename, security)
+		return runShowLLVM(source, filename)
 	case OutputModeCompile:
-		return runCompileToExecutable(source, filename, security)
+		return runCompileToExecutable(source, filename)
 	case OutputModeRun:
-		return runRunProgram(source, quiet, security)
+		return runRunProgram(source, quiet)
+	case OutputModeSymbols:
+		return runShowSymbols(source, filename)
+	default:
+		return CommandResult{
+			Success:  false,
+			ErrorMsg: "Unknown output mode: " + outputMode,
+		}
+	}
+}
+
+// RunCommandWithSecurity executes a Osprey command with the given filename, mode, and security configuration.
+// This function is used for testing security restrictions.
+func RunCommandWithSecurity(filename, outputMode string, quiet bool, security *SecurityConfig) CommandResult {
+	// Handle docs mode (no file required)
+	if outputMode == OutputModeDocs {
+		return runGenerateDocs("") // Security doesn't affect docs generation
+	}
+
+	// Handle hover mode (element name passed as filename)
+	if outputMode == OutputModeHover {
+		return runGetHoverDocumentation(filename) // Security doesn't affect hover docs
+	}
+
+	// Read source file for all other modes
+	content, err := os.ReadFile(filename) // #nosec G304 - filename is from CLI args
+	if err != nil {
+		return CommandResult{
+			Success:  false,
+			ErrorMsg: fmt.Sprintf("Error reading file: %v", err),
+		}
+	}
+
+	source := string(content)
+
+	switch outputMode {
+	case OutputModeAST:
+		return runShowASTWithSecurity(source, filename, security)
+	case OutputModeLLVM:
+		return runShowLLVMWithSecurity(source, filename, security)
+	case OutputModeCompile:
+		return runCompileToExecutableWithSecurity(source, filename, security)
+	case OutputModeRun:
+		return runRunProgramWithSecurity(source, quiet, security)
 	case OutputModeSymbols:
 		return runShowSymbolsWithSecurity(source, filename, security)
 	default:
@@ -111,6 +154,7 @@ func RunCommand(filename, outputMode, docsDir string, quiet bool, security *Secu
 		}
 	}
 }
+
 func runShowAST(source, filename string) CommandResult {
 	// Create input stream from source
 	input := antlr.NewInputStream(source)
@@ -997,7 +1041,13 @@ func getOperatorFilename(symbol string) string {
 	}
 }
 
-func runShowLLVM(source, filename string, security *SecurityConfig) CommandResult {
+// Security-aware versions of the functions
+func runShowASTWithSecurity(source, filename string, _ *SecurityConfig) CommandResult {
+	// AST generation doesn't need security restrictions
+	return runShowAST(source, filename)
+}
+
+func runShowLLVMWithSecurity(source, filename string, security *SecurityConfig) CommandResult {
 	// Convert CLI security config to codegen security config
 	codegenSecurity := convertToCodegenSecurity(security)
 
@@ -1017,7 +1067,7 @@ func runShowLLVM(source, filename string, security *SecurityConfig) CommandResul
 	}
 }
 
-func runCompileToExecutable(source, filename string, security *SecurityConfig) CommandResult {
+func runCompileToExecutableWithSecurity(source, filename string, security *SecurityConfig) CommandResult {
 	// Determine output filename (remove extension, put in outputs/ relative to source file)
 	baseName := filepath.Base(filename)
 	if ext := filepath.Ext(baseName); ext != "" {
@@ -1059,7 +1109,7 @@ func runCompileToExecutable(source, filename string, security *SecurityConfig) C
 	}
 }
 
-func runRunProgram(source string, quiet bool, security *SecurityConfig) CommandResult {
+func runRunProgramWithSecurity(source string, quiet bool, security *SecurityConfig) CommandResult {
 	if !quiet {
 		fmt.Fprintf(os.Stderr, "Starting compilation...\n")
 	}
@@ -1103,5 +1153,6 @@ func convertToCodegenSecurity(security *SecurityConfig) codegen.SecurityConfig {
 		AllowFileWrite:        security.AllowFileWrite,
 		AllowFFI:              security.AllowFFI,
 		AllowProcessExecution: security.AllowProcessExecution,
+		SandboxMode:           security.SandboxMode,
 	}
 }

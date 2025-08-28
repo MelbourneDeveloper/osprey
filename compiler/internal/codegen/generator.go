@@ -56,6 +56,7 @@ type SecurityConfig struct {
 	AllowFileWrite        bool
 	AllowFFI              bool
 	AllowProcessExecution bool
+	SandboxMode           bool
 }
 
 // NewLLVMGenerator creates a new LLVM IR generator with default (permissive) security.
@@ -67,6 +68,7 @@ func NewLLVMGenerator() *LLVMGenerator {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
+		SandboxMode:           false,
 	})
 }
 

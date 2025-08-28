@@ -10,9 +10,6 @@ import (
 	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
-// TestLibDir is the relative path to the lib directory for tests
-const TestLibDir = "../../lib"
-
 // TestPkgConfigOpenSSL tests that pkg-config can find OpenSSL.
 func TestPkgConfigOpenSSL(t *testing.T) {
 	cmd := exec.Command("pkg-config", "--libs", "openssl")
@@ -66,10 +63,8 @@ func TestPkgConfigOpenSSL(t *testing.T) {
 
 // TestBuildLinkArguments tests that we can generate proper link arguments.
 func TestBuildLinkArguments(t *testing.T) {
-	fiberLib := filepath.Join("lib", "libfiber_runtime.a")
-	httpLib := filepath.Join("lib", "libhttp_runtime.a")
-	websocketLib := filepath.Join("lib", "libwebsocket_runtime.a")
-	systemLib := filepath.Join("lib", "libsystem_runtime.a")
+	httpLib := filepath.Join("bin", "libhttp_runtime.a")
+	fiberLib := filepath.Join("bin", "libfiber_runtime.a")
 
 	// Get current working directory for absolute path
 	cwd, err := os.Getwd()
@@ -80,28 +75,21 @@ func TestBuildLinkArguments(t *testing.T) {
 	linkArgs := []string{
 		"-o", "test",
 		"test.o",
-		filepath.Join(cwd, fiberLib),
 		filepath.Join(cwd, httpLib),
-		filepath.Join(cwd, websocketLib),
-		filepath.Join(cwd, systemLib),
+		filepath.Join(cwd, fiberLib),
 		"-lpthread", "-lssl", "-lcrypto",
 	}
 
 	t.Logf("Link arguments: %v", linkArgs)
 
-	// Check that ALL 4 required libraries are referenced
-	hasFiberLib := false
+	// Check that required libraries are referenced
 	hasHTTPLib := false
-	hasWebSocketLib := false
-	hasSystemLib := false
+	hasFiberLib := false
 	hasSSL := false
 	hasCrypto := false
 	hasPthread := false
 
 	for _, arg := range linkArgs {
-		if strings.Contains(arg, "libfiber_runtime.a") {
-			hasFiberLib = true
-		}
 		if strings.Contains(arg, "libhttp_runtime.a") {
 			hasHTTPLib = true
 		}
@@ -123,9 +111,6 @@ func TestBuildLinkArguments(t *testing.T) {
 		}
 	}
 
-	if !hasFiberLib {
-		t.Fatal("Missing fiber runtime library")
-	}
 	if !hasHTTPLib {
 		t.Fatal("Missing HTTP runtime library")
 	}
@@ -251,22 +236,10 @@ int main() {
 	linkArgs = append(linkArgs, "clang")
 	linkArgs = append(linkArgs, "-o", testExe, testO)
 
-	// Add ALL 4 runtime libraries if available (order matters: dependents before dependencies)
-	if fiberLib := findLibrary("libfiber_runtime.a"); fiberLib != "" {
-		linkArgs = append(linkArgs, fiberLib)
-		t.Logf("Using Fiber library: %s", fiberLib)
-	}
+	// Add HTTP runtime library if available
 	if httpLib := findLibrary("libhttp_runtime.a"); httpLib != "" {
 		linkArgs = append(linkArgs, httpLib)
 		t.Logf("Using HTTP library: %s", httpLib)
-	}
-	if websocketLib := findLibrary("libwebsocket_runtime.a"); websocketLib != "" {
-		linkArgs = append(linkArgs, websocketLib)
-		t.Logf("Using WebSocket library: %s", websocketLib)
-	}
-	if systemLib := findLibrary("libsystem_runtime.a"); systemLib != "" {
-		linkArgs = append(linkArgs, systemLib)
-		t.Logf("Using System library: %s", systemLib)
 	}
 
 	linkArgs = append(linkArgs, "-lpthread")
@@ -301,17 +274,17 @@ int main() {
 func findLibrary(libName string) string {
 	// Use the exact same search paths as the JIT executor
 	possiblePaths := []string{
-		filepath.Join("lib", libName),
-		filepath.Join(".", "lib", libName),
+		filepath.Join("bin", libName),
+		filepath.Join(".", "bin", libName),
 		"/usr/local/lib/" + libName, // System install location
 	}
 
 	// Add working directory based paths - match JIT executor exactly
 	if wd, err := os.Getwd(); err == nil {
 		possiblePaths = append(possiblePaths,
-			filepath.Join(wd, "lib", libName),
-			filepath.Join(wd, "..", "lib", libName),
-			filepath.Join(wd, "..", "..", "lib", libName),
+			filepath.Join(wd, "bin", libName),
+			filepath.Join(wd, "..", "bin", libName),
+			filepath.Join(wd, "..", "..", "bin", libName),
 		)
 	}
 
@@ -346,12 +319,12 @@ fn main() -> int {
     print("Server created with ID: ")
     print(toString(server))
     print("\n")
-
+    
     let result = httpListen(server, handleRequest)
     print("Listen result: ")
     print(toString(result))
     print("\n")
-
+    
     0
 }
 `
@@ -381,7 +354,7 @@ fn main() -> int {
     print("Client created with ID: ")
     print(toString(client))
     print("\n")
-
+    
     0
 }
 `
@@ -402,15 +375,14 @@ fn main() -> int {
 // TestFailsCompilationCircularDependency tests that circular effect dependencies fail compilation
 func TestFailsCompilationCircularDependency(t *testing.T) {
 	// Test the circular dependency example
-	// Use CompileToExecutableWithLibDir to specify the lib directory for tests
-	err := codegen.CompileToExecutableWithLibDir(`
+	err := codegen.CompileToExecutable(`
 effect StateA {
     getFromB: fn() -> int
     setInA: fn(int) -> Unit
 }
 
 effect StateB {
-    getFromA: fn() -> int
+    getFromA: fn() -> int  
     setInB: fn(int) -> Unit
 }
 
@@ -430,14 +402,14 @@ fn main() -> Unit = {
     with handler StateA
         getFromB() => circularEffectB()
         setInA(x) => print("StateA set: " + toString(x))
-    with handler StateB
+    with handler StateB  
         getFromA() => circularEffectA()
         setInB(x) => print("StateB set: " + toString(x))
     {
         let result = circularEffectA()
         print("Result: " + toString(result))
     }
-}`, "/tmp/circular_test", TestLibDir)
+}`, "/tmp/circular_test")
 
 	// This SHOULD fail with a circular dependency error
 	if err == nil {

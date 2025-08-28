@@ -22,7 +22,7 @@ print(serverID)`
 	security := cli.NewSandboxSecurityConfig()
 
 	// Try to compile with sandbox mode
-	result := cli.RunCommand(testFile, cli.OutputModeLLVM, "", false, security)
+	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, false, security)
 
 	// Should fail because httpCreateServer function doesn't exist in sandbox mode
 	if result.Success {
@@ -49,7 +49,7 @@ print(wsID)`
 	security := cli.NewSandboxSecurityConfig()
 
 	// Try to compile with sandbox mode
-	result := cli.RunCommand(testFile, cli.OutputModeLLVM, "", false, security)
+	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, false, security)
 
 	// Should fail because websocketConnect function doesn't exist in sandbox mode
 	if result.Success {
@@ -76,7 +76,7 @@ print(x)`
 	security := cli.NewDefaultSecurityConfig()
 
 	// Should succeed with default security
-	result := cli.RunCommand(testFile, cli.OutputModeLLVM, "", false, security)
+	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, false, security)
 
 	if !result.Success {
 		t.Errorf("Expected compilation to succeed with default security, but it failed: %s", result.ErrorMsg)

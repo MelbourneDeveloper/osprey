@@ -16,7 +16,7 @@ func TestRunCommand_AST(t *testing.T) {
 
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false)
 
 	if !result.Success {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
@@ -37,7 +37,7 @@ func TestRunCommand_LLVM(t *testing.T) {
 
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeLLVM, "", false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand(testFile, cli.OutputModeLLVM, "", false)
 
 	if !result.Success {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
@@ -54,7 +54,7 @@ func TestRunCommand_Symbols(t *testing.T) {
 
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeSymbols, "", false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand(testFile, cli.OutputModeSymbols, "", false)
 
 	if !result.Success {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
@@ -76,7 +76,7 @@ func TestRunCommand_Compile(t *testing.T) {
 	defer func() { _ = os.Remove(testFile) }()
 	defer cleanupOutputs(t, testFile)
 
-	result := cli.RunCommand(testFile, cli.OutputModeCompile, "", false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand(testFile, cli.OutputModeCompile, "", false)
 
 	if !result.Success {
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
@@ -97,15 +97,9 @@ func TestRunCommand_Run(t *testing.T) {
 
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeRun, "", false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand(testFile, cli.OutputModeRun, "", false)
 
 	if !result.Success {
-		// Runtime libraries might not be available in test environment
-		if strings.Contains(result.ErrorMsg, "Required runtime library not found") ||
-			strings.Contains(result.ErrorMsg, "LLVM tools not found") ||
-			strings.Contains(result.ErrorMsg, "no suitable compiler found") {
-			t.Skipf("⚠️ Runtime libraries not available in test environment: %s", result.ErrorMsg)
-		}
 		t.Fatalf("Expected success, got error: %s", result.ErrorMsg)
 	}
 
@@ -121,7 +115,7 @@ func TestRunCommand_InvalidMode(t *testing.T) {
 
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, "invalid", "", false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand(testFile, "invalid", "", false)
 
 	if result.Success {
 		t.Fatal("Expected failure for invalid mode")
@@ -133,7 +127,7 @@ func TestRunCommand_InvalidMode(t *testing.T) {
 }
 
 func TestRunCommand_FileNotFound(t *testing.T) {
-	result := cli.RunCommand("nonexistent.osp", cli.OutputModeAST, "", false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand("nonexistent.osp", cli.OutputModeAST, "", false)
 
 	if result.Success {
 		t.Fatal("Expected failure for nonexistent file")
@@ -150,7 +144,7 @@ func TestRunCommand_SyntaxError(t *testing.T) {
 
 	defer func() { _ = os.Remove(testFile) }()
 
-	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand(testFile, cli.OutputModeAST, "", false)
 
 	if result.Success {
 		t.Fatal("Expected failure for syntax error")
@@ -177,15 +171,9 @@ func TestRunCommand_AllModes(t *testing.T) {
 			defer func() { _ = os.Remove(testFile) }()
 			defer cleanupOutputs(t, testFile)
 
-			result := cli.RunCommand(testFile, mode, "", false, cli.NewDefaultSecurityConfig())
+			result := cli.RunCommand(testFile, mode, "", false)
 
 			if !result.Success {
-				// Runtime libraries might not be available in test environment for run mode
-				if mode == cli.OutputModeRun && (strings.Contains(result.ErrorMsg, "Required runtime library not found") ||
-					strings.Contains(result.ErrorMsg, "LLVM tools not found") ||
-					strings.Contains(result.ErrorMsg, "no suitable compiler found")) {
-					t.Skipf("⚠️ Runtime libraries not available in test environment for mode %s: %s", mode, result.ErrorMsg)
-				}
 				t.Fatalf("Mode %s failed: %s", mode, result.ErrorMsg)
 			}
 

@@ -34,7 +34,7 @@ func testCompileAndRunWithOutput(t *testing.T, source string, expectedOutput str
 	t.Helper()
 
 	output, err := captureOutput(func() error {
-		return codegen.CompileAndRunJITWithLibDir(source, "../../../lib")
+		return codegen.CompileAndRunJIT(source)
 	})
 	if err != nil {
 		// If JIT execution fails due to missing tools, FAIL LOUDLY
@@ -367,7 +367,7 @@ func TestLLVMIRGeneration(t *testing.T) {
 
 // Test JIT compilation detection.
 func TestJITToolDetection(t *testing.T) {
-	executor := codegen.NewJITExecutorWithLibDir("../../../lib")
+	executor := codegen.NewJITExecutor()
 
 	// Try to find LLVM tools - if not found, fail the test
 	err := executor.CompileAndRunInMemory("define i32 @main() { ret i32 0 }")
