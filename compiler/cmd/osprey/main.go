@@ -75,9 +75,9 @@ func handleSpecialModes(args []string) *cli.CommandResult {
 
 // handleDocsMode processes the --docs flag
 func handleDocsMode(args []string) *cli.CommandResult {
-	var docsDir string
-	// Check for --docs-dir argument (REQUIRED)
-	for i := MinArgs; i < len(args); i++ {
+	// Find --docs-dir argument
+	docsDir := ""
+	for i := 1; i < len(args); i++ {
 		if args[i] == DocsDirFlag && i+1 < len(args) {
 			docsDir = args[i+1]
 			break
@@ -143,7 +143,7 @@ func handleFileBasedOperations(args []string) cli.CommandResult {
 	}
 
 	// Execute the command with appropriate security settings
-	return executeCommandWithSecurity(filename, outputMode, docsDir, quiet, security)
+	return executeCommand(filename, outputMode, docsDir, quiet, security)
 }
 
 // parseArgumentsForFile parses command line arguments for file-based operations
@@ -211,8 +211,8 @@ func parseSecurityMode(arg string, security *cli.SecurityConfig) bool {
 	}
 }
 
-// executeCommandWithSecurity executes the command with appropriate security settings
-func executeCommandWithSecurity(
+// executeCommand executes the command with the given security settings
+func executeCommand(
 	filename, outputMode, docsDir string,
 	quiet bool,
 	security *cli.SecurityConfig,

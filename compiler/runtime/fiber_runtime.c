@@ -287,9 +287,11 @@ int64_t fiber_sleep(int64_t milliseconds) {
 // These functions integrate process spawning with the fiber runtime
 
 // External process functions from system_runtime.c
-extern int64_t spawn_process_with_handler(char *command,
-                                          void (*handler)(int64_t, int64_t,
-                                                          char *));
+// Process event handler function type - must match system_runtime.c
+typedef void (*ProcessEventHandler)(int64_t process_id, int64_t event_type, char *data);
+
+extern int64_t spawn_process_with_handler(const char *command,
+                                          ProcessEventHandler handler);
 extern int64_t await_process(int64_t process_id);
 extern void cleanup_process(int64_t process_id);
 
@@ -319,7 +321,7 @@ static void default_process_event_handler(int64_t process_id,
 }
 
 // Spawn a process with event handler - returns process ID
-int64_t fiber_spawn_process(char *command) {
+int64_t fiber_spawn_process(const char *command) {
   if (!command) {
     return -1;
   }
@@ -329,9 +331,8 @@ int64_t fiber_spawn_process(char *command) {
 }
 
 // Spawn a process with custom handler - for advanced use cases
-int64_t fiber_spawn_process_with_handler(char *command,
-                                         void (*handler)(int64_t, int64_t,
-                                                         char *)) {
+int64_t fiber_spawn_process_with_handler(const char *command,
+                                         ProcessEventHandler handler) {
   if (!command || !handler) {
     return -1;
   }

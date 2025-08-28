@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,7 +24,6 @@ func CompileToLLVM(source string) (string, error) {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	})
 }
 
@@ -106,15 +106,14 @@ func (p *ParseErrorListener) SyntaxError(
 
 // CompileToExecutable compiles source code to an executable binary with default (permissive) security.
 func CompileToExecutable(source, outputPath string) error {
-	return CompileToExecutableWithSecurity(source, outputPath, SecurityConfig{
+	return compileToExecutableInternal(source, outputPath, SecurityConfig{
 		AllowHTTP:             true,
 		AllowWebSocket:        true,
 		AllowFileRead:         true,
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
-	})
+	}, "")
 }
 
 // buildLibraryPaths builds the search paths for runtime libraries
@@ -146,8 +145,9 @@ func buildLibraryPaths(libName string) []string {
 		)
 	}
 
-	return paths
-}
+	// Primary FHS path: executable/../lib/
+	execDir := filepath.Dir(execPath)
+	libPath := filepath.Join(execDir, "..", "lib", libFileName)
 
 // findAndAddLibrary finds a library in the given paths and adds it to linkArgs
 func findAndAddLibrary(libName string, linkArgs []string) []string {
@@ -181,35 +181,66 @@ func addOpenSSLFlags(linkArgs []string) []string {
 	return append(linkArgs, "-lssl", "-lcrypto")
 }
 
-// checkLibraryAvailability checks if any runtime libraries are available
-func checkLibraryAvailability() (bool, bool) {
-	fiberExists := false
-	httpExists := false
+// Runtime library name constants
+const (
+	LibFiberRuntime     = "fiber_runtime"
+	LibHTTPRuntime      = "http_runtime"
+	LibWebSocketRuntime = "websocket_runtime"
+	LibSystemRuntime    = "system_runtime"
+)
 
-	// Check if any fiber runtime library was found
-	for _, libPath := range buildLibraryPaths("fiber_runtime") {
-		if _, err := os.Stat(libPath); err == nil {
-			fiberExists = true
-			break
+// Static errors
+var (
+	ErrProjectRootNotFound = errors.New("could not find project root (go.mod not found)")
+)
+
+// RuntimeLibraries defines the complete list of all runtime libraries required by the compiler
+// These must match what the Makefile actually builds - NOW BUILDING 4 SEPARATE LIBRARIES!
+// LINKING ORDER CRITICAL: For static libraries, dependents must come BEFORE their dependencies
+//
+//nolint:gochecknoglobals // Global runtime libraries list required for linking
+var RuntimeLibraries = []string{
+	LibFiberRuntime,     // libfiber_runtime.a - DEPENDS ON system_runtime (must be first)
+	LibSystemRuntime,    // libsystem_runtime.a - PROVIDES functions for fiber_runtime
+	LibHTTPRuntime,      // libhttp_runtime.a
+	LibWebSocketRuntime, // libwebsocket_runtime.a
+}
+
+// checkLibraryAvailabilityWithDir checks if runtime libraries are available with optional custom lib directory
+func checkLibraryAvailabilityWithDir(libDir string) map[string]bool {
+	// Helper function to check if a library exists
+	checkLibrary := func(libName string) bool {
+		libPath, err := getLibraryPathWithDir(libName, libDir)
+		if err != nil {
+			return false
 		}
+
+		_, err = os.Stat(libPath)
+		return err == nil
 	}
 
-	// Check if any HTTP runtime library was found
-	for _, libPath := range buildLibraryPaths("http_runtime") {
-		if _, err := os.Stat(libPath); err == nil {
-			httpExists = true
-			break
-		}
+	availability := make(map[string]bool)
+	for _, libName := range RuntimeLibraries {
+		availability[libName] = checkLibrary(libName)
 	}
 
-	return fiberExists, httpExists
+	return availability
 }
 
 // tryLinkWithCompilers attempts to link the executable using multiple compiler options
-func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberExists, httpExists bool) error {
+func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, libraryAvailability map[string]bool) error {
 	var clangCommands [][]string
 
-	if fiberExists || httpExists {
+	// Check if any runtime libraries are available
+	anyLibraryExists := false
+	for _, libName := range RuntimeLibraries {
+		if libraryAvailability[libName] {
+			anyLibraryExists = true
+			break
+		}
+	}
+
+	if anyLibraryExists {
 		clangCommands = [][]string{
 			append([]string{"clang"}, linkArgs...),                   // System clang
 			append([]string{"/usr/bin/clang"}, linkArgs...),          // System path clang
@@ -244,6 +275,11 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 
 // CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.
 func CompileToExecutableWithSecurity(source, outputPath string, security SecurityConfig) error {
+	return compileToExecutableInternal(source, outputPath, security, "")
+}
+
+// compileToExecutableInternal is the unified implementation for all compilation functions
+func compileToExecutableInternal(source, outputPath string, security SecurityConfig, libDir string) error {
 	// Ensure the output directory exists
 	outputDir := filepath.Dir(outputPath)
 	if err := os.MkdirAll(outputDir, DirPermissions); err != nil {
@@ -306,7 +342,6 @@ func CompileAndRun(source string) error {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	})
 }
 

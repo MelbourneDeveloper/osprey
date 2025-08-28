@@ -150,8 +150,27 @@ jobs:
       - name: Test Web Compiler
         run: |
           cd webcompiler
-          docker compose up --build -d
-          sleep 10
+          
+          # Build the Docker image
+          docker build -t osprey-web-compiler-ci -f Dockerfile ..
+          
+          # Run the container in detached mode
+          docker run -d \
+            --name osprey-web-compiler-ci \
+            -p 3001:3001 \
+            -e NODE_ENV=production \
+            -e PORT=3001 \
+            --memory=256m \
+            --memory-reservation=256m \
+            osprey-web-compiler-ci
+          
+          # Wait for container to be ready
+          sleep 15
+          
+          # Run the test
           chmod +x test.sh
           ./test.sh
-          docker compose down
+          
+          # Cleanup
+          docker stop osprey-web-compiler-ci
+          docker rm osprey-web-compiler-ci

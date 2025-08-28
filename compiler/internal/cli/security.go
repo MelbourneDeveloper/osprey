@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// SecurityConfig holds the security configuration for compilation.
+// SecurityConfig holds the security configuration for compilation. In sandbox mode, all permissions are disabled.
 type SecurityConfig struct {
 	// Network access controls
 	AllowHTTP      bool `json:"allowHttp"`
@@ -20,9 +20,6 @@ type SecurityConfig struct {
 
 	// Process execution controls (for future use)
 	AllowProcessExecution bool `json:"allowProcessExecution"`
-
-	// Sandbox mode (disables all risky operations)
-	SandboxMode bool `json:"sandboxMode"`
 }
 
 // NewDefaultSecurityConfig creates a security config with permissive defaults.
@@ -34,7 +31,6 @@ func NewDefaultSecurityConfig() *SecurityConfig {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-		SandboxMode:           false,
 	}
 }
 
@@ -47,13 +43,11 @@ func NewSandboxSecurityConfig() *SecurityConfig {
 		AllowFileWrite:        false,
 		AllowFFI:              false,
 		AllowProcessExecution: false,
-		SandboxMode:           true,
 	}
 }
 
 // ApplySandboxMode applies sandbox restrictions to the security config.
 func (sc *SecurityConfig) ApplySandboxMode() {
-	sc.SandboxMode = true
 	sc.AllowHTTP = false
 	sc.AllowWebSocket = false
 	sc.AllowFileRead = false
@@ -100,7 +94,9 @@ func (sc *SecurityConfig) GetBlockedFunctions() []string {
 
 // GetSecuritySummary returns a human-readable summary of the security configuration.
 func (sc *SecurityConfig) GetSecuritySummary() string {
-	if sc.SandboxMode {
+	// Detect sandbox mode by checking if all permissions are disabled
+	if !sc.AllowHTTP && !sc.AllowWebSocket && !sc.AllowFileRead &&
+		!sc.AllowFileWrite && !sc.AllowFFI && !sc.AllowProcessExecution {
 		return "Security: SANDBOX MODE - Only safe functions available"
 	}
 
