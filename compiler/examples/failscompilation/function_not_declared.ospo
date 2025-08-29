@@ -1,0 +1,6 @@
+// This should fail compilation: Function not declared
+// Tests: ErrFunctionNotDeclared, WrapFunctionNotDeclared 
+// Error: function not declared
+
+let result = unknownFunction(42)  // unknownFunction is not declared
+print(result)

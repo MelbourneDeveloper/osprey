@@ -34,7 +34,7 @@ func testCompileAndRunWithOutput(t *testing.T, source string, expectedOutput str
 	t.Helper()
 
 	output, err := captureOutput(func() error {
-		return codegen.CompileAndRunJITWithLibDir(source, "../../../lib")
+		return codegen.CompileAndRunJIT(source)
 	})
 	if err != nil {
 		// If JIT execution fails due to missing tools, FAIL LOUDLY
@@ -117,11 +117,7 @@ func TestVariableAssignment(t *testing.T) {
 	source := `let x = 10
 let y = x
 let z = x + y
-let result = match z {
-    Success => z.value
-    Err => 0
-}
-print(toString(result))`
+print(toString(z))`
 
 	testCompileAndRunWithOutput(t, source, "20", "variable assignment and arithmetic")
 }
@@ -150,11 +146,7 @@ func TestImportStatement(t *testing.T) {
 
 func TestComplexExpression(t *testing.T) {
 	source := `let result = (10 + 5) * 2 - 3
-let value = match result {
-    Success => result.value
-    Err => 0
-}
-print(toString(value))`
+print(toString(result))`
 	testCompileAndRunWithOutput(t, source, "27", "complex arithmetic expression")
 }
 
@@ -176,11 +168,7 @@ func TestMultipleLetDeclarations(t *testing.T) {
 	source := `let a = 10
 let b = 20
 let c = a + b
-let result = match c {
-    Success => c.value
-    Err => 0
-}
-print(toString(result))`
+print(toString(c))`
 
 	testCompileAndRunWithOutput(t, source, "30", "multiple let declarations")
 }
@@ -217,31 +205,19 @@ func TestUnaryMinus(t *testing.T) {
 
 func TestParenthesizedExpressions(t *testing.T) {
 	source := `let result = (10 + 5) * 2
-let value = match result {
-    Success => result.value
-    Err => 0
-}
-print(toString(value))`
+print(toString(result))`
 	testCompileAndRunWithOutput(t, source, "30", "parenthesized expressions")
 }
 
 func TestOperatorPrecedence(t *testing.T) {
 	source := `let result = 2 + 3 * 4
-let value = match result {
-    Success => result.value
-    Err => 0
-}
-print(toString(value))`
+print(toString(result))`
 	testCompileAndRunWithOutput(t, source, "14", "operator precedence")
 }
 
 func TestComplexArithmetic(t *testing.T) {
 	source := `let result = ((5 + 3) * 2) - (4 / 2)
-let value = match result {
-    Success => result.value
-    Err => 0
-}
-print(toString(value))`
+print(toString(result))`
 	testCompileAndRunWithOutput(t, source, "14", "complex arithmetic")
 }
 
@@ -391,7 +367,7 @@ func TestLLVMIRGeneration(t *testing.T) {
 
 // Test JIT compilation detection.
 func TestJITToolDetection(t *testing.T) {
-	executor := codegen.NewJITExecutorWithLibDir("../../../lib")
+	executor := codegen.NewJITExecutor()
 
 	// Try to find LLVM tools - if not found, fail the test
 	err := executor.CompileAndRunInMemory("define i32 @main() { ret i32 0 }")

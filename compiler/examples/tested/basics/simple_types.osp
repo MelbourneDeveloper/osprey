@@ -1,7 +1,7 @@
 // Simple Type Definition Example
 type Color = Red | Green | Blue
 
-type Status = Active { count: String } | Inactive
+type Status = Active { count: string } | Inactive
 
 fn getStatus() = "working"
 

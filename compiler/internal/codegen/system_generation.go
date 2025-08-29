@@ -43,7 +43,7 @@ func (g *LLVMGenerator) callFunctionWithValue(
 		return g.builder.NewCall(fn, val), nil
 	}
 
-	return nil, WrapFunctionNotFound(funcIdent.Name)
+	return nil, WrapUndefinedFunction(funcIdent.Name)
 }
 
 // callFunctionWithTwoValues is similar to callFunctionWithValue but passes two
@@ -64,14 +64,16 @@ func (g *LLVMGenerator) callFunctionWithTwoValues(
 		return g.builder.NewCall(fn, val1, val2), nil
 	}
 
-	return nil, WrapFunctionNotFound(funcIdent.Name)
+	return nil, WrapUndefinedFunction(funcIdent.Name)
 }
 
 // callBuiltInPrint prints a single LLVM IR value using the C library puts
 // function. It first converts any integer or boolean values to strings.
 func (g *LLVMGenerator) callBuiltInPrint(val value.Value) (value.Value, error) {
-	var strArg value.Value
-	var err error
+	var (
+		strArg value.Value
+		err    error
+	)
 
 	switch val.Type().(type) {
 	case *types.PointerType: // i8* – already a C-string.
@@ -83,6 +85,7 @@ func (g *LLVMGenerator) callBuiltInPrint(val value.Value) (value.Value, error) {
 		} else {
 			strArg, err = g.generateIntToString(val)
 		}
+
 		if err != nil {
 			return nil, err
 		}
@@ -92,6 +95,7 @@ func (g *LLVMGenerator) callBuiltInPrint(val value.Value) (value.Value, error) {
 
 	puts := g.functions["puts"]
 	res := g.builder.NewCall(puts, strArg)
+
 	return g.builder.NewSExt(res, types.I64), nil // normalise to i64
 }
 
@@ -105,6 +109,7 @@ func (g *LLVMGenerator) callBuiltInToString(val value.Value) (value.Value, error
 		if val.Type().(*types.IntType).BitSize == 1 {
 			return g.generateBoolToString(val)
 		}
+
 		return g.generateIntToString(val)
 	default:
 		return nil, ErrNoToStringImpl
@@ -124,8 +129,9 @@ func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
 // generateSpawnProcessCall emits a call to the simple process spawning function
 // that uses a default callback for stdout/stderr events.
 func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapSpawnProcessWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+	err := validateBuiltInArgs(SpawnProcessFunc, callExpr)
+	if err != nil {
+		return nil, err
 	}
 
 	cmd, err := g.generateExpression(callExpr.Arguments[0])
@@ -208,7 +214,7 @@ func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (
 // generateSleepCall emits a call to the fiber_sleep function to sleep for the specified milliseconds.
 func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapSleepWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(SleepFunc, len(callExpr.Arguments))
 	}
 
 	milliseconds, err := g.generateExpression(callExpr.Arguments[0])
@@ -229,15 +235,16 @@ func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.V
 // generateWriteFileCall writes data to a file via an external helper returning
 // a Result<Success, string> type.
 func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {
-	const expectedArgs = TwoArgs
-	if len(callExpr.Arguments) != expectedArgs {
-		return nil, WrapWriteFileWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+	err := validateBuiltInArgs(WriteFileFunc, callExpr)
+	if err != nil {
+		return nil, err
 	}
 
 	filename, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
+
 	content, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err
@@ -256,7 +263,7 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 	// Call the C function
 	writeResult := g.builder.NewCall(fn, filename, content)
 
-	// CRITICAL FIX: Create the Result allocation in the current block before branching
+	// Create the Result allocation in the current block before branching
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
 
@@ -305,8 +312,9 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 // generateReadFileCall reads the entire contents of the specified file and
 // returns a Result<string, string> type.
 func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapReadFileWrongArgsWithPos(len(callExpr.Arguments), callExpr.Position)
+	err := validateBuiltInArgs(ReadFileFunc, callExpr)
+	if err != nil {
+		return nil, err
 	}
 
 	filename, err := g.generateExpression(callExpr.Arguments[0])
@@ -381,7 +389,7 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 // generateAwaitProcessCall waits for process completion
 func (g *LLVMGenerator) generateAwaitProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapAwaitProcessWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(AwaitProcessFunc, len(callExpr.Arguments))
 	}
 
 	processID, err := g.generateExpression(callExpr.Arguments[0])
@@ -403,7 +411,7 @@ func (g *LLVMGenerator) generateAwaitProcessCall(callExpr *ast.CallExpression) (
 // generateCleanupProcessCall cleans up process resources
 func (g *LLVMGenerator) generateCleanupProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != OneArg {
-		return nil, WrapCleanupProcessWrongArgs(len(callExpr.Arguments))
+		return nil, WrapBuiltInFunctionWrongArgs(CleanupProcessFunc, len(callExpr.Arguments))
 	}
 
 	processID, err := g.generateExpression(callExpr.Arguments[0])
@@ -420,5 +428,6 @@ func (g *LLVMGenerator) generateCleanupProcessCall(callExpr *ast.CallExpression)
 	}
 
 	g.builder.NewCall(fn, processID)
+
 	return constant.NewInt(types.I64, 0), nil // Return success
 }

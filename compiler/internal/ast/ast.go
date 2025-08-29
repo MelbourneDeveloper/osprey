@@ -106,12 +106,29 @@ func (e *ExternDeclaration) isStatement() {}
 
 // TypeDeclaration represents a type declaration with union types.
 type TypeDeclaration struct {
-	Name       string
-	TypeParams []string // Generic type parameters
-	Variants   []TypeVariant
+	Name           string
+	TypeParams     []string // Generic type parameters
+	Variants       []TypeVariant
+	ValidationFunc *string // Optional WHERE validation function name
 }
 
 func (t *TypeDeclaration) isStatement() {}
+
+// EffectDeclaration represents effect declarations like 'effect ProcessOutput { captureStdout: fn(string) -> Unit }'
+type EffectDeclaration struct {
+	Name       string
+	Operations []EffectOperation
+}
+
+func (ed *EffectDeclaration) isStatement() {}
+
+// EffectOperation represents individual operations in an effect declaration
+type EffectOperation struct {
+	Name       string
+	Type       string
+	Parameters []Parameter
+	ReturnType string
+}
 
 // TypeVariant represents a variant in a union type.
 type TypeVariant struct {
@@ -123,7 +140,7 @@ type TypeVariant struct {
 type TypeField struct {
 	Name       string
 	Type       string
-	Constraint *FunctionCallExpression // Optional WHERE constraint
+	Constraint *FunctionCallExpression // WHERE constraint function
 }
 
 // FunctionCallExpression represents a function call in constraints.
@@ -443,6 +460,16 @@ type ListLiteral struct {
 }
 
 func (l *ListLiteral) isExpression() {}
+
+// ObjectLiteral represents an object literal like { field: value }.
+type ObjectLiteral struct {
+	Fields map[string]Expression
+
+	// Position information
+	Position *Position
+}
+
+func (o *ObjectLiteral) isExpression() {}
 
 // ListAccessExpression represents safe list access like list[0] -> Result<T, IndexError>.
 type ListAccessExpression struct {

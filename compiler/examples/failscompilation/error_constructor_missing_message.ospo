@@ -1,0 +1,8 @@
+// This should fail compilation: Error constructor missing message field
+// Tests: ErrErrorConstructorMissingMessage, WrapErrorConstructorMissingMessage  
+// Error: error constructor requires 'message' field
+
+type Result = Success { value: Int } | Error { message: String }
+
+let result = Error { text: "failed" }  // Missing 'message' field
+print(result)

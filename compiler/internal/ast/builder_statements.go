@@ -20,10 +20,16 @@ func (b *Builder) buildLetDecl(ctx parser.ILetDeclContext) *LetDeclaration {
 	mutable := ctx.MUT() != nil
 	value := b.buildExpression(ctx.Expr())
 
+	// Parse type annotation if present
+	var typeAnnotation *TypeExpression
+	if ctx.Type_() != nil {
+		typeAnnotation = b.buildTypeExpression(ctx.Type_())
+	}
+
 	return &LetDeclaration{
 		Name:     name,
 		Mutable:  mutable,
-		Type:     nil, // For now, type annotation support comes later
+		Type:     typeAnnotation,
 		Value:    value,
 		Position: b.getPositionFromContext(ctx),
 	}
@@ -77,7 +83,7 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		returnType = b.buildTypeExpression(ctx.Type_())
 	}
 
-	// CRITICAL FIX: Parse effect signatures (!Logger, ![IO, Net])
+	// Parse effect signatures (!Logger, ![IO, Net])
 	var effects []string
 	if ctx.EffectSet() != nil {
 		effects = b.buildEffectSet(ctx.EffectSet())
@@ -147,6 +153,7 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 	if ctx.RecordType() != nil {
 		// Create a single variant with the type name and record fields
 		fields := make([]TypeField, 0)
+
 		if ctx.RecordType().FieldDeclarations() != nil {
 			for _, fieldCtx := range ctx.RecordType().FieldDeclarations().AllFieldDeclaration() {
 				field := TypeField{
@@ -154,9 +161,21 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 					Type: fieldCtx.Type_().ID().GetText(),
 				}
 
-				// Handle optional constraint
-				if fieldCtx.Constraint() != nil {
-					constraint := b.buildFunctionCall(fieldCtx.Constraint().FunctionCall())
+				// Parse WHERE constraint if present
+				if fieldCtx.FunctionCall() != nil {
+					constraint := &FunctionCallExpression{
+						Function:  fieldCtx.FunctionCall().ID().GetText(),
+						Arguments: make([]Expression, 0),
+					}
+
+					// Parse function call arguments if any
+					if fieldCtx.FunctionCall().ArgList() != nil {
+						for _, argCtx := range fieldCtx.FunctionCall().ArgList().AllExpr() {
+							arg := b.buildExpression(argCtx)
+							constraint.Arguments = append(constraint.Arguments, arg)
+						}
+					}
+
 					field.Constraint = constraint
 				}
 
@@ -171,10 +190,19 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 		variants = append(variants, variant)
 	}
 
+	// Handle optional type validation
+	var validationFunc *string
+
+	if ctx.TypeValidation() != nil {
+		funcName := ctx.TypeValidation().ID().GetText()
+		validationFunc = &funcName
+	}
+
 	return &TypeDeclaration{
-		Name:       name,
-		TypeParams: typeParams,
-		Variants:   variants,
+		Name:           name,
+		TypeParams:     typeParams,
+		Variants:       variants,
+		ValidationFunc: validationFunc,
 	}
 }
 
@@ -190,9 +218,21 @@ func (b *Builder) buildVariant(ctx parser.IVariantContext) TypeVariant {
 				Type: fieldCtx.Type_().ID().GetText(),
 			}
 
-			// Handle optional constraint
-			if fieldCtx.Constraint() != nil {
-				constraint := b.buildFunctionCall(fieldCtx.Constraint().FunctionCall())
+			// Parse WHERE constraint if present
+			if fieldCtx.FunctionCall() != nil {
+				constraint := &FunctionCallExpression{
+					Function:  fieldCtx.FunctionCall().ID().GetText(),
+					Arguments: make([]Expression, 0),
+				}
+
+				// Parse function call arguments if any
+				if fieldCtx.FunctionCall().ArgList() != nil {
+					for _, argCtx := range fieldCtx.FunctionCall().ArgList().AllExpr() {
+						arg := b.buildExpression(argCtx)
+						constraint.Arguments = append(constraint.Arguments, arg)
+					}
+				}
+
 				field.Constraint = constraint
 			}
 
@@ -261,6 +301,7 @@ func (b *Builder) buildTypeExpression(ctx parser.ITypeContext) *TypeExpression {
 	// Handle array types like [String]
 	if ctx.LSQUARE() != nil && ctx.RSQUARE() != nil {
 		typeExpr.IsArray = true
+
 		if ctx.Type_() != nil {
 			arrayElement := b.buildTypeExpression(ctx.Type_())
 			typeExpr.ArrayElement = arrayElement
@@ -275,6 +316,7 @@ func (b *Builder) buildModuleDecl(ctx parser.IModuleDeclContext) *ModuleDeclarat
 	name := ctx.ID().GetText()
 
 	statements := make([]Statement, 0)
+
 	if ctx.ModuleBody() != nil {
 		for _, stmtCtx := range ctx.ModuleBody().AllModuleStatement() {
 			var stmt Statement
@@ -299,25 +341,7 @@ func (b *Builder) buildModuleDecl(ctx parser.IModuleDeclContext) *ModuleDeclarat
 	}
 }
 
-// buildFunctionCall builds a FunctionCallExpression from a parser function call context.
-func (b *Builder) buildFunctionCall(ctx parser.IFunctionCallContext) *FunctionCallExpression {
-	if ctx == nil {
-		return nil
-	}
-
-	functionName := ctx.ID().GetText()
-
-	var arguments []Expression
-	if ctx.ArgList() != nil {
-		args, _ := b.buildArguments(ctx.ArgList()) // Ignore named args for now
-		arguments = args
-	}
-
-	return &FunctionCallExpression{
-		Function:  functionName,
-		Arguments: arguments,
-	}
-}
+// buildFunctionCall removed - no longer needed for type-level validation
 
 // buildBlockBody builds a BlockExpression from a parser block body context.
 func (b *Builder) buildBlockBody(ctx parser.IBlockBodyContext) *BlockExpression {
@@ -359,7 +383,7 @@ func (b *Builder) buildEffectDecl(ctx parser.IEffectDeclContext) *EffectDeclarat
 			Type: opCtx.Type_().GetText(), // Parse type as string for now
 		}
 
-		// CRITICAL FIX: Parse function type to extract parameters and return type
+		// Parse function type to extract parameters and return type
 		typeExpr := b.buildTypeExpression(opCtx.Type_())
 		if typeExpr != nil && typeExpr.IsFunction {
 			// Extract parameters from function type

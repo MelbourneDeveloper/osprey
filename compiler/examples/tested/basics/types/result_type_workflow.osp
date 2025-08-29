@@ -4,18 +4,10 @@ fn main() -> int {
   print("=== Result Type Workflow Test ===\n")
 
   let s = "hello"
-  let len_result = length(s)
-
-  match len_result {
-    Success { value } => {
-      print("Length: ")
-      print(toString(value))
-      print("\n")
-    }
-    Error { message } => {
-      print("Error getting length\n")
-    }
-  }
+  let len = length(s)
+  print("Length: ")
+  print(toString(len))
+  print("\n")
 
   let contains_result = contains(s, "ell")
   match contains_result {

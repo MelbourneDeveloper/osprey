@@ -61,8 +61,8 @@ type ospreyListener interface {
 	// EnterFieldDeclaration is called when entering the fieldDeclaration production.
 	EnterFieldDeclaration(c *FieldDeclarationContext)
 
-	// EnterConstraint is called when entering the constraint production.
-	EnterConstraint(c *ConstraintContext)
+	// EnterTypeValidation is called when entering the typeValidation production.
+	EnterTypeValidation(c *TypeValidationContext)
 
 	// EnterEffectDecl is called when entering the effectDecl production.
 	EnterEffectDecl(c *EffectDeclContext)
@@ -121,8 +121,17 @@ type ospreyListener interface {
 	// EnterBinaryExpr is called when entering the binaryExpr production.
 	EnterBinaryExpr(c *BinaryExprContext)
 
+	// EnterTernaryExpr is called when entering the ternaryExpr production.
+	EnterTernaryExpr(c *TernaryExprContext)
+
 	// EnterComparisonExpr is called when entering the comparisonExpr production.
 	EnterComparisonExpr(c *ComparisonExprContext)
+
+	// EnterLogicalOrExpr is called when entering the logicalOrExpr production.
+	EnterLogicalOrExpr(c *LogicalOrExprContext)
+
+	// EnterLogicalAndExpr is called when entering the logicalAndExpr production.
+	EnterLogicalAndExpr(c *LogicalAndExprContext)
 
 	// EnterAddExpr is called when entering the addExpr production.
 	EnterAddExpr(c *AddExprContext)
@@ -150,6 +159,9 @@ type ospreyListener interface {
 
 	// EnterPrimary is called when entering the primary production.
 	EnterPrimary(c *PrimaryContext)
+
+	// EnterObjectLiteral is called when entering the objectLiteral production.
+	EnterObjectLiteral(c *ObjectLiteralContext)
 
 	// EnterTypeConstructor is called when entering the typeConstructor production.
 	EnterTypeConstructor(c *TypeConstructorContext)
@@ -256,8 +268,8 @@ type ospreyListener interface {
 	// ExitFieldDeclaration is called when exiting the fieldDeclaration production.
 	ExitFieldDeclaration(c *FieldDeclarationContext)
 
-	// ExitConstraint is called when exiting the constraint production.
-	ExitConstraint(c *ConstraintContext)
+	// ExitTypeValidation is called when exiting the typeValidation production.
+	ExitTypeValidation(c *TypeValidationContext)
 
 	// ExitEffectDecl is called when exiting the effectDecl production.
 	ExitEffectDecl(c *EffectDeclContext)
@@ -316,8 +328,17 @@ type ospreyListener interface {
 	// ExitBinaryExpr is called when exiting the binaryExpr production.
 	ExitBinaryExpr(c *BinaryExprContext)
 
+	// ExitTernaryExpr is called when exiting the ternaryExpr production.
+	ExitTernaryExpr(c *TernaryExprContext)
+
 	// ExitComparisonExpr is called when exiting the comparisonExpr production.
 	ExitComparisonExpr(c *ComparisonExprContext)
+
+	// ExitLogicalOrExpr is called when exiting the logicalOrExpr production.
+	ExitLogicalOrExpr(c *LogicalOrExprContext)
+
+	// ExitLogicalAndExpr is called when exiting the logicalAndExpr production.
+	ExitLogicalAndExpr(c *LogicalAndExprContext)
 
 	// ExitAddExpr is called when exiting the addExpr production.
 	ExitAddExpr(c *AddExprContext)
@@ -345,6 +366,9 @@ type ospreyListener interface {
 
 	// ExitPrimary is called when exiting the primary production.
 	ExitPrimary(c *PrimaryContext)
+
+	// ExitObjectLiteral is called when exiting the objectLiteral production.
+	ExitObjectLiteral(c *ObjectLiteralContext)
 
 	// ExitTypeConstructor is called when exiting the typeConstructor production.
 	ExitTypeConstructor(c *TypeConstructorContext)

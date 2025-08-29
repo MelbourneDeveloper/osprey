@@ -1,2 +1,0 @@
-print("Testing documentation")
-range(1, 5) |> forEach(print)

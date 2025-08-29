@@ -1,0 +1,29 @@
+// HINDLEY-MILNER DEMONSTRATION
+// Shows what works now vs what pure HM would enable
+
+print("=== CURRENT HM CAPABILITIES ===")
+
+// What WORKS: Function parameter inference from operations
+fn multiply(a, b) = a * b      // HM successfully infers: (int, int) -> Result<int, MathError>  
+fn compare(x, y) = x > y       // HM successfully infers: (int, int) -> bool
+fn subtract(a, b) = a - b      // HM successfully infers: (int, int) -> Result<int, MathError>
+
+let product = multiply(a: 6, b: 7) ?: 0
+let greater = compare(x: 10, y: 5)
+let difference = subtract(a: 20, b: 8) ?: 0
+
+print("Working HM inference: multiply(6,7)=${product}, compare(10,5)=${toString(greater)}, subtract(20,8)=${difference}")
+
+// Record types with explicit field types (current limitation)
+type Point = { x: int, y: int }
+let point = Point { x: 3, y: 4 }
+print("Current: explicit record types work: Point{x:${point.x}, y:${point.y}}")
+
+print("=== PURE HM WOULD ENABLE ===")
+print("// Pure HM syntax (not yet supported):")
+print("// type Point = { x, y }  // No explicit types!")
+print("// let intPoint = Point { x: 1, y: 2 }     // HM infers Point<int, int>") 
+print("// let floatPoint = Point { x: 1.5, y: 2.5 } // HM infers Point<float, float>")
+print("// fn identity(x) = x  // HM infers polymorphic <T>(T) -> T")
+
+print("=== DEMONSTRATION COMPLETE ===")

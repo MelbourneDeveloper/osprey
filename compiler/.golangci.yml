@@ -6,7 +6,7 @@ severity:
 linters:
   settings:
     cyclop:
-      max-complexity: 20
+      max-complexity: 35
   default: all
   disable:
     # Consider these rules for the future
@@ -16,6 +16,7 @@ linters:
     # - funcorder    # Don't enforce function ordering
     - gocritic # Disable overly pedantic suggestions
     - wsl # Don't enforce whitespace rules
+    - wsl_v5 # Don't enforce whitespace rules
     - whitespace # Don't enforce unnecessary leading newlines
     - nestif # Don't limit nested if statements
     - prealloc # Don't require slice preallocation

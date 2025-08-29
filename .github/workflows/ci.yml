@@ -134,10 +134,6 @@ jobs:
           echo "Testing comprehensive.osp..."
           ./bin/osprey examples/tested/basics/comprehensive.osp --run
 
-          # Test basic hello world
-          echo "Testing hello.osp..."
-          ./bin/osprey examples/tested/basics/hello.osp --run
-
           echo "✅ All example compilations and executions successful!"
 
       - name: Verify binary works

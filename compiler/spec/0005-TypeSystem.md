@@ -1,8 +1,10 @@
 5. [Type System](0005-TypeSystem.md)
+   - [Hindley-Milner Type Inference Foundation](#50-hindley-milner-type-inference-foundation)
    - [Built-in Types](#51-built-in-types)
        - [Function Types](#function-types)
+       - [Record Types](#record-types)
    - [Built-in Error Types](#52-built-in-error-types)
-   - [Type Inference Rules](#53-type-inference-rules)
+   - [Hindley-Milner Type Inference](#53-hindley-milner-type-inference)
        - [Function Return Types](#function-return-types)
        - [Parameter Types](#parameter-types)
        - [Type Inference Examples](#type-inference-examples)
@@ -32,17 +34,59 @@
 
 ## 5. Type System
 
-Osprey's type system is one of the most important aspects of the language. It puts type safety and expressiveness as the top priorities. It is inspired by popular functional programming languages like Haskell and ML. The type system aims towards making illegal states unrepresentable. Some features like constructor where constraints are critical features that mean that instances cannot exist where they fail the criteria in construction.
+### 5.0 Hindley-Milner Type Inference Foundation
+
+**🔥 CORE SPECIFICATION**: Osprey implements complete **Hindley-Milner type inference** as its foundational type system. This is a **MANDATORY REQUIREMENT** for compiler implementation.
+
+**Academic Foundation & Implementation Requirements:**
+- **Hindley, R. (1969)**: "The Principal Type-Scheme of an Object in Combinatory Logic" - Communications of the ACM 12(12):719-721
+- **Milner, R. (1978)**: "A Theory of Type Polymorphism in Programming" - Journal of Computer and System Sciences 17:348-375  
+- **Damas, L. & Milner, R. (1982)**: "Principal type-schemes for functional programs" - POPL '82
+
+**🔥 CRITICAL IMPLEMENTATION MANDATES:**
+
+1. **COMPLETE TYPE INFERENCE**: Variables and functions MAY be declared without type annotations when types can be inferred through Hindley-Milner unification
+2. **PRINCIPAL TYPES**: Every well-typed expression MUST have a unique most general (polymorphic) type
+3. **SOUNDNESS GUARANTEE**: If type checker accepts a program, NO runtime type errors can occur
+4. **COMPLETENESS GUARANTEE**: If a program has a valid typing, the type system MUST find it
+5. **DECIDABILITY GUARANTEE**: Type inference MUST always terminate with definitive results
+
+**🔥 STRUCTURAL TYPE REQUIREMENTS:**
+- **Record Type Unification**: MUST use structural equivalence based on **FIELD NAMES ONLY**
+- **Field Access**: MUST be **STRICTLY BY NAME** - never by position or ordering
+- **Type Environment (Γ)**: MUST maintain consistent field name-to-type mappings
+- **Substitution Application**: MUST apply substitutions consistently across all type expressions
+
+**Hindley-Milner Algorithm Implementation Steps (MANDATORY):**
+1. **Type Variable Generation**: Assign fresh type variables (α, β, γ) to untyped expressions
+2. **Constraint Collection**: Gather type equality constraints from expression structure  
+3. **Unification**: Solve constraints using Robinson's unification algorithm with occurs check
+4. **Generalization**: Generalize types to introduce polymorphism at let-bindings
+5. **Instantiation**: Create fresh instances of polymorphic types at usage sites
+
+**Implementation References (REQUIRED READING):**
+- **Robinson, J.A. (1965)**: "A Machine-Oriented Logic Based on the Resolution Principle" - Unification algorithm
+- **Cardelli, L. (1987)**: "Basic Polymorphic Typechecking" - Implementation techniques  
+- **Jones, M.P. (1995)**: "Functional Programming with Overloading and Higher-Order Polymorphism" - Advanced HM features
+
+**🔥 COMPILER CORRECTNESS REQUIREMENT**: The implementation MUST pass all Hindley-Milner theoretical guarantees. Failure to implement proper HM inference is a **CRITICAL COMPILER BUG**.
+
+---
+
+Osprey's type system puts type safety and expressiveness as the top priorities. It is built upon the solid theoretical foundation of Hindley-Milner type inference, inspired by ML and Haskell. The type system aims towards making illegal states unrepresentable through complete static verification.
 
 ### 5.1 Built-in Types
 
-- `Int`: 64-bit signed integers
-- `String`: UTF-8 encoded strings  
-- `Bool`: Boolean values (`true`, `false`)
-- `Unit`: Type for functions that don't return a meaningful value
+**IMPORTANT**: All primitive types use lowercase names - `int`, `string`, `bool`. Capitalized forms (`Int`, `String`, `Bool`) are invalid.
+
+- `int`: 64-bit signed integers
+- `string`: UTF-8 encoded strings  
+- `bool`: Boolean values (`true`, `false`)
+- `unit`: Type for functions that don't return a meaningful value
 - `Result<T, E>`: Built-in generic type for error handling
 - `List<T, N>`: Immutable fixed-size lists with N elements of type T
 - `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
+- `Record Types`: Immutable structured data types with named fields
 
 #### Function Types
 
@@ -55,35 +99,35 @@ FunctionType := '(' (Type (',' Type)*)? ')' '->' Type
 
 **Examples:**
 ```osprey
-(Int) -> Int              // Function taking an Int, returning an Int
-(Int, String) -> Bool     // Function taking Int and String, returning Bool
-() -> String              // Function with no parameters, returning String
-(String) -> (Int) -> Bool // Higher-order function returning another function
+(int) -> int              // Function taking an int, returning an int
+(int, string) -> bool     // Function taking int and string, returning bool
+() -> string              // Function with no parameters, returning string
+(string) -> (int) -> bool // Higher-order function returning another function
 ```
 
 **Function Type Declarations:**
 ```osprey
 // Function parameter with explicit function type
-fn applyFunction(value: Int, transform: (Int) -> Int) -> Int = 
+fn applyFunction(value: int, transform: (int) -> int) -> int = 
     transform(value)
 
 // Variable with function type
-let doubler: (Int) -> Int = fn(x: Int) -> Int = x * 2
+let doubler: (int) -> int = fn(x: int) -> int = x * 2
 
 // Higher-order function that returns a function
-fn createAdder(n: Int) -> (Int) -> Int = 
-    fn(x: Int) -> Int = x + n
+fn createAdder(n: int) -> (int) -> int = 
+    fn(x: int) -> int = x + n
 ```
 
 **Function Composition Examples:**
 ```osprey
 // Define some simple functions
-fn double(x: Int) -> Int = x * 2
-fn square(x: Int) -> Int = x * x
-fn addFive(x: Int) -> Int = x + 5
+fn double(x: int) -> int = x * 2
+fn square(x: int) -> int = x * x
+fn addFive(x: int) -> int = x + 5
 
 // Higher-order function with strong typing
-fn applyTwice(value: Int, func: (Int) -> Int) -> Int = 
+fn applyTwice(value: int, func: (int) -> int) -> int = 
     func(func(value))
 
 // Usage with type safety
@@ -92,8 +136,8 @@ let result2 = applyTwice(3, square)  // 81
 let result3 = applyTwice(10, addFive) // 20
 
 // Composition of functions
-fn compose(f: (Int) -> Int, g: (Int) -> Int) -> (Int) -> Int =
-    fn(x: Int) -> Int = f(g(x))
+fn compose(f: (int) -> int, g: (int) -> int) -> (int) -> int =
+    fn(x: int) -> int = f(g(x))
 
 let doubleSquare = compose(double, square)
 let result4 = doubleSquare(3) // double(square(3)) = double(9) = 18
@@ -105,6 +149,251 @@ let result4 = doubleSquare(3) // double(square(3)) = double(9) = 18
 - **Clear documentation**: Function types serve as documentation
 - **Enables optimization**: Compiler can optimize based on known function signatures
 
+#### Record Types
+
+Record types are immutable structured data types with named fields, providing structural equality semantics and compile-time field access validation.
+
+**Syntax:**
+```
+RecordType := 'type' Identifier '=' '{' FieldList '}'
+FieldList  := Field (',' Field)*
+Field      := Identifier ':' Type
+```
+
+**Declaration Examples:**
+```osprey
+type Point = { x: int, y: int }
+type Person = { name: string, age: int, active: bool }
+type Address = { street: string, city: string, zipCode: string }
+```
+
+**Construction Syntax:**
+```osprey
+// Simple record construction
+let point = Point { x: 10, y: 20 }
+let person = Person { name: "Alice", age: 30, active: true }
+
+// Field order is flexible during construction
+let address = Address { 
+    city: "Melbourne",
+    street: "123 Main St", 
+    zipCode: "3000"
+}
+```
+
+**Field Access:**
+```osprey
+// Direct field access with dot notation
+let x = point.x           // 10
+let name = person.name    // "Alice"
+let isActive = person.active  // true
+
+// Field access in expressions
+let distance = sqrt(point.x * point.x + point.y * point.y)
+let greeting = "Hello, ${person.name}!"
+```
+
+**Key Properties:**
+- **Immutability**: Records cannot be modified after creation
+- **Structural Equality**: Two records are equal if all their fields are equal
+- **Compile-time Field Validation**: Field access is validated at compile time
+- **Type Safety**: Field types are enforced during construction and access
+- **No Null Fields**: All fields must be provided during construction
+
+**Pattern Matching with Records:**
+Records support pattern matching for destructuring and value extraction (see [Pattern Matching](0008-PatternMatching.md) for complete details).
+
+**Nested Records:**
+```osprey
+type Company = { name: string, address: Address }
+
+let company = Company {
+    name: "Tech Corp",
+    address: Address {
+        street: "456 Tech Ave",
+        city: "Sydney", 
+        zipCode: "2000"
+    }
+}
+
+// Nested field access
+let companyCity = company.address.city  // "Sydney"
+```
+
+**Record Updates (Non-destructive):**
+Records support elegant non-destructive updates that create modified copies:
+
+```osprey
+// Original record
+let person = Person { name: "Alice", age: 25, active: true }
+
+// Non-destructive update (creates new instance)
+let olderPerson = person { age: 26 }           // Only age changes
+let renamedPerson = person { name: "Alicia" }  // Only name changes
+
+// Multiple field updates
+let updatedPerson = person { 
+    age: 26, 
+    active: false 
+}
+
+// Original person unchanged - all updates create new instances
+print(person.age)        // Still 25
+print(olderPerson.age)   // Now 26
+```
+
+**Record Type Constraints:**
+Records can have validation constraints using `where` clauses:
+
+```osprey
+type ValidatedPerson = {
+    name: string,
+    age: int,
+    email: string
+} where validatePersonData
+
+fn validatePersonData(person: ValidatedPerson) -> Result<ValidatedPerson, string> = 
+    match person.age {
+        age when age < 0 => Error("Age cannot be negative")
+        age when age > 150 => Error("Age must be realistic")
+        _ => match person.name {
+            "" => Error("Name cannot be empty")
+            _ => Success(person)
+        }
+    }
+
+// Constrained record construction returns Result type
+let result = ValidatedPerson { name: "Bob", age: 25, email: "bob@example.com" }
+// result type: Result<ValidatedPerson, string>
+// Must be handled with pattern matching (see Pattern Matching chapter)
+```
+
+**Field Access Rules:**
+
+**🔥 CRITICAL SPECIFICATION: FIELD ACCESS IS STRICTLY BY NAME ONLY**
+
+**ABSOLUTE REQUIREMENT**: Record field access is **EXCLUSIVELY BY NAME**. Field ordering, positioning, or indexing is **COMPLETELY FORBIDDEN** and must **NEVER** be relied upon by the compiler implementation.
+
+**✅ ALLOWED - Field Access on Record Types (BY NAME ONLY):**
+```osprey
+type User = { id: int, name: string, email: string }
+let user = User { id: 1, name: "Alice", email: "alice@example.com" }
+
+let userId = user.id          // ✅ VALID: direct field access BY NAME
+let userName = user.name      // ✅ VALID: direct field access BY NAME  
+let userEmail = user.email    // ✅ VALID: direct field access BY NAME
+
+// Field order during construction is IRRELEVANT
+let user2 = User { 
+    email: "bob@example.com",  // Different order - PERFECTLY VALID
+    name: "Bob",               // Field position does NOT matter
+    id: 2                      // Only field NAMES matter
+}
+let bobName = user2.name      // ✅ VALID: name-based access works regardless of declaration order
+```
+
+**❌ ABSOLUTELY FORBIDDEN - Positional or Indexed Access:**
+```osprey
+// NEVER ALLOWED - These are COMPILATION ERRORS
+let value1 = user[0]          // ❌ FORBIDDEN: No indexed access  
+let value2 = user.fields[1]   // ❌ FORBIDDEN: No positional access
+let value3 = getFieldAt(user, 0)  // ❌ FORBIDDEN: No position-based access
+
+// COMPILER IMPLEMENTATION MUST NEVER:
+// - Rely on field declaration order for LLVM struct generation
+// - Use field positioning for type unification
+// - Access fields by index in any internal operation
+// - Generate code that depends on field ordering
+```
+
+**🔥 COMPILER IMPLEMENTATION REQUIREMENT:**
+The Osprey compiler **MUST** implement field access using **FIELD NAME LOOKUP ONLY**:
+- ✅ Field-to-LLVM-index mapping by name
+- ✅ Type unification based on field name matching  
+- ✅ Pattern matching using field names
+- ❌ **NEVER** field ordering dependencies
+- ❌ **NEVER** positional field access in codegen
+- ❌ **NEVER** field index assumptions
+
+**❌ FORBIDDEN - Field Access on `any` Types:**
+```osprey
+fn processAnyValue(value: any) -> string = {
+    // ERROR: Cannot access fields on 'any' type
+    let result = value.name   // Compilation error
+    return result
+}
+
+// CORRECT: Use pattern matching for 'any' types
+fn processAnyValue(value: any) -> string = match value {
+    person: { name } => person.name        // Extract field via pattern matching
+    user: User { name } => name           // Type-specific pattern matching
+    _ => "unknown"
+}
+```
+
+**❌ FORBIDDEN - Field Access on Result Types:**
+```osprey
+type Person = { 
+    name: string
+} where validatePerson
+
+fn validatePerson(person: Person) -> Result<Person, string> = match person.name {
+    "" => Error("Name cannot be empty")
+    _ => Success(person)
+}
+
+let personResult = Person { name: "Alice" }  // Returns Result<Person, string>
+
+// ERROR: Cannot access fields on Result type
+let name = personResult.name    // Compilation error
+
+// CORRECT: Pattern match on Result first
+let name = match personResult {
+    Success { value } => value.name
+    Error { message } => "error"
+}
+```
+
+**❌ FORBIDDEN - Field Access on Union Types:**
+```osprey
+type Shape = Circle { radius: int } 
+           | Rectangle { width: int, height: int }
+
+let shape = Circle { radius: 5 }
+
+// ERROR: Cannot access fields on union type
+let radius = shape.radius     // Compilation error
+
+// CORRECT: Pattern match on union type first
+let area = match shape {
+    Circle { radius } => 3.14 * radius * radius
+    Rectangle { width, height } => width * height
+}
+```
+
+**Compilation Errors:**
+```osprey
+// ERROR: Unknown field
+let invalid = Point { x: 10, z: 30 }  // 'z' not defined in Point
+
+// ERROR: Missing required field  
+let incomplete = Person { name: "Alice" }  // Missing 'age' and 'active'
+
+// ERROR: Type mismatch
+let wrongType = Point { x: "ten", y: 20 }  // 'x' expects int, got string
+
+// ERROR: Field access on non-record type
+let num = 42
+let invalid = num.x  // Cannot access field on non-record type
+
+// ERROR: Cannot assign to fields (immutable)
+let counter = Counter { value: 0 }
+counter.value = 5    // Compilation error
+
+// CORRECT: Create new instance with updated value
+let newCounter = counter { value: 5 }
+```
+
 ### 5.2 Built-in Error Types
 
 - `MathError`: For arithmetic operations (DivisionByZero, Overflow, Underflow)
@@ -112,129 +401,277 @@ let result4 = doubleSquare(3) // double(square(3)) = double(9) = 18
 - `IndexError`: For list/string indexing operations (OutOfBounds)
 - `Success`: Successful result wrapper
 
-### 5.3 Type Inference Rules
+### 5.3 Hindley-Milner Type Inference
 
-**Core Principle**: The `any` type is invalid unless explicitly declared. All types must be either explicitly annotated or inferrable from context.
+**Core Implementation**: Osprey implements complete Hindley-Milner type inference (Hindley 1969, Milner 1978) enabling polymorphic type inference without explicit type annotations.
 
-#### Function Return Types
+**Academic Foundation**:
+- **Hindley, R. (1969)**: "The Principal Type-Scheme of an Object in Combinatory Logic" - Communications of the ACM 12(12):719-721
+- **Milner, R. (1978)**: "A Theory of Type Polymorphism in Programming" - Journal of Computer and System Sciences 17:348-375
+- **Damas, L. & Milner, R. (1982)**: "Principal type-schemes for functional programs" - POPL '82
 
-Return type annotations may be omitted **only** when the return type can be definitively inferred from the function body:
+**Implementation Principle**: Variables may be declared without type annotations when their types can be inferred through unification and constraint solving. The system performs automatic generalization and instantiation of polymorphic types.
 
-##### Allowed (Return Type Inferred)
-- **Literal expressions**: `fn getNumber() = 42` → infers `int`
-- **String literals**: `fn getText() = "hello"` → infers `string`  
-- **Boolean literals**: `fn getFlag() = true` → infers `bool`
-- **Arithmetic expressions**: `fn calculate() = 1 + 2` → infers `int`
+**Hindley-Milner Algorithm Steps**:
+1. **Type Variable Generation**: Assign fresh type variables to untyped expressions
+2. **Constraint Collection**: Gather type equality constraints from expression structure
+3. **Unification**: Solve constraints using Robinson's unification algorithm
+4. **Generalization**: Generalize types to introduce polymorphism at let-bindings
+5. **Instantiation**: Create fresh instances of polymorphic types at usage sites
 
-##### Disallowed (Requires Explicit Return Type)
-- **Direct parameter return**: `fn identity(x) = x` → **ERROR** (would be `any`)
-- **Function calls**: `fn process() = someFunction()` → **ERROR** (unknown return type)
-- **Complex expressions**: Without clear type resolution
+#### Hindley-Milner Function Inference
 
-#### Parameter Types
+**Complete Type Inference**: Both parameter and return types can be omitted when inferrable through Hindley-Milner constraint solving:
 
-Parameter type annotations may be omitted **only** when the parameter type can be definitively inferred from usage within the function body:
+##### Hindley-Milner Inference Examples
 
-##### Allowed (Parameter Type Inferred)
-- **Arithmetic usage**: `fn addOne(x) = x + 1` → `x` infers as `int`
-- **With explicit return type**: `fn identity(x) -> int = x` → `x` infers as `int` from return type
-- **Direct return with explicit type**: `fn process(data) -> string = data` → `data` infers as `string`
-
-##### Disallowed (Requires Explicit Parameter Type)
-- **Direct return without return type**: `fn identity(x) = x` → **ERROR**
-- **String parameter return**: `fn greet(name) = name` → **ERROR** (use `name: string` or `-> string`)
-- **Mixed parameter scenarios**: `fn formatScore(name, score) = name` → **ERROR**
-- **Ambiguous usage**: Where type cannot be determined from context
-
-#### Type Inference Examples
-
-**Valid Code:**
+**✅ POLYMORPHIC INFERENCE (No Type Annotations Required):**
 ```osprey
-// Literals allow return type inference
-fn getAge() = 25
-fn getName() = "Alice"
-fn isActive() = true
+// Identity function - fully polymorphic
+fn identity(x) = x              // Infers: <T>(T) -> T
 
-// Arithmetic allows both return and parameter type inference  
-fn increment(x) = x + 1
-fn add(a, b) = a + b
+// Arithmetic functions
+fn add(a, b) = a + b           // Infers: (int, int) -> Result<int, MathError>
+fn increment(x) = x + 1        // Infers: (int) -> Result<int, MathError>
 
-// Explicit types always allowed
-fn identity(x) -> int = x
-fn process(data: string) -> string = data
+// String operations  
+fn concat(s1, s2) = s1 + s2    // Infers: (string, string) -> string
+
+// Boolean operations
+fn negate(x) = !x              // Infers: (bool) -> bool
+
+// Field access polymorphism
+fn getX(p) = p.x               // Infers: <T>(Point<T, _>) -> T
+fn getValue(c) = c.value       // Infers: <T>(Container<T, _>) -> T
+
+// Higher-order functions
+fn apply(f, x) = f(x)          // Infers: <A, B>((A) -> B, A) -> B
+fn compose(f, g) = fn(x) = f(g(x))  // Infers: <A, B, C>((B) -> C, (A) -> B) -> (A) -> C
 ```
 
-**Invalid Code:**
+**✅ MONOMORPHIC USAGE (Types Specialized at Call Sites):**
 ```osprey
-// ERROR: Cannot infer return type from parameter
-fn identity(x) = x
+// Same identity function used with different types
+let intResult = identity(42)        // identity<int>
+let stringResult = identity("test") // identity<string>
+let boolResult = identity(true)     // identity<bool>
 
-// ERROR: String parameter without type annotation
-fn greet(name) = name
+// Field accessors specialized by usage
+let intPoint = Point { x: 10, y: 20 }
+let stringPoint = Point { x: "a", y: "b" }
 
-// ERROR: Mixed parameters without explicit types
-fn formatScore(name, score) = name
-
-// ERROR: Cannot infer parameter type from function call
-fn process(data) = someFunction(data)
-
-// ERROR: Ambiguous type inference
-fn conditional(flag, a, b) = if flag then a else b
+let intX = getX(intPoint)           // getX<int>
+let stringX = getX(stringPoint)     // getX<string>
 ```
 
-#### Rationale
+#### Constraint-Based Type Inference
 
-This design ensures:
-1. **Type Safety**: No implicit `any` types that could lead to runtime errors
-2. **Readability**: Clear type contracts without excessive annotation
-3. **Maintainability**: Predictable type behavior for code evolution
-4. **Performance**: Compile-time type checking without runtime overhead
+**Unification Rules**: Osprey's Hindley-Milner implementation uses constraint unification to solve type equations:
 
-**Summary Rule**: "Type annotations may be omitted only when the type can be unambiguously determined from constants, literals, well-defined operations, or explicit return types that constrain parameter types."
-
-#### Function Return Type "any" Restriction
-
-**CRITICAL RULE**: Functions CANNOT return `any` type unless the return type is EXPLICITLY declared as `any`.
-
-**✅ ALLOWED - Explicit any return type:**
+**✅ CONSTRAINT SOLVING EXAMPLES:**
 ```osprey
-fn parseValue(input: string) -> any = processInput(input)
-fn getDynamicValue() -> any = readFromConfig()
+// Function with multiple constraints
+fn processData(item, transform) = transform(item.value)
+// Constraints:
+// - item must have field 'value' of type α
+// - transform must be function (α) -> β  
+// - return type is β
+// Solution: <α, β>(Container<α>, (α) -> β) -> β
+
+// Recursive constraint solving
+fn chain(f, g, x) = f(g(x))
+// Constraints:
+// - g must be function (α) -> β
+// - f must be function (β) -> γ
+// - x has type α
+// - return type is γ
+// Solution: <α, β, γ>((β) -> γ, (α) -> β, α) -> γ
 ```
 
-**❌ FORBIDDEN - Implicit any return type:**
+**✅ POLYMORPHIC GENERALIZATION:**
 ```osprey
-fn identity(x) = x                    // ERROR: Would infer as 'any'
-fn callUnknown() = someFunction()     // ERROR: Would infer as 'any'
-fn processData(data) = data           // ERROR: Would infer as 'any'
+// Generic data constructors
+fn makePair(x, y) = Pair { first: x, second: y }
+// Infers: <A, B>(A, B) -> Pair<A, B>
+
+fn makePoint(a, b) = Point { x: a, y: b }
+// Infers: <T>(T, T) -> Point<T, T>
+
+// Generic extractors
+fn getFirst(p) = p.first
+// Infers: <A, B>(Pair<A, B>) -> A
+
+fn getSecond(p) = p.second  
+// Infers: <A, B>(Pair<A, B>) -> B
 ```
 
-**Rationale**: This prevents accidental `any` type propagation that could lead to runtime type errors and maintains Osprey's strong type safety guarantees.
+#### Hindley-Milner Implementation Examples
 
-**Built-in Functions**: No built-in functions return `any` type. All built-in functions have concrete, well-defined return types.
+**✅ COMPLETE TYPE INFERENCE (All Types Derived):**
+```osprey
+// Polymorphic identity - no annotations needed
+fn identity(x) = x              // <T>(T) -> T
 
-#### Common Validation Fixes
+// Arithmetic with constraint propagation
+fn add(a, b) = a + b           // (int, int) -> Result<int, MathError>
+fn multiply(x, y) = x * y      // (int, int) -> Result<int, MathError>
 
-When the compiler reports type inference errors, use these patterns:
+// String operations
+fn greet(name) = "Hello, " + name  // (string) -> string
+
+// Record construction and access
+fn makeUser(n, a) = User { name: n, age: a }  // (string, int) -> User
+fn getName(u) = u.name         // (User) -> string
+
+// Higher-order functions
+fn twice(f, x) = f(f(x))       // <T>((T) -> T, T) -> T
+fn map(f, list) = [f(x) for x in list]  // <A, B>((A) -> B, List<A>) -> List<B>
+```
+
+**✅ MONOMORPHIZATION AT USAGE SITES:**
+```osprey
+// Same polymorphic functions, different instantiations
+let id1 = identity(42)          // identity<int>
+let id2 = identity("test")      // identity<string> 
+let id3 = identity(true)        // identity<bool>
+
+// Function used in different contexts
+let intTwice = twice(increment, 5)      // twice<int>
+let stringTwice = twice(greet, "World")  // twice<string>
+```
+
+**❌ INFERENCE LIMITATIONS (Explicit Types Required):**
+```osprey
+// Ambiguous conditional requires annotation
+fn conditional(flag, a, b) -> T = if flag then a else b  // T must be specified
+
+// External function calls may need hints
+fn process(data) -> R = externalFunction(data)  // R may need annotation
+
+// Complex constraints may require explicit polymorphic declaration
+fn complex<T>(x: T, pred: (T) -> bool) -> Option<T> = 
+    if pred(x) then Some(x) else None
+```
+
+#### Hindley-Milner Benefits
+
+**Academic Guarantees (Milner 1978, Damas & Milner 1982)**:
+1. **Principal Types**: Every well-typed expression has a unique most general type
+2. **Completeness**: If a program has a type, Hindley-Milner will find it
+3. **Soundness**: All inferred types are correct - no runtime type errors
+4. **Decidability**: Type inference always terminates with definitive result
+
+**Practical Benefits**:
+- **Zero Annotation Burden**: Write polymorphic functions without type signatures
+- **Maximum Reusability**: Functions automatically work with all compatible types
+- **Compile-time Safety**: All type errors caught before execution
+- **Performance**: Monomorphization enables optimal code generation
+
+**Implementation References**:
+- **Robinson, J.A. (1965)**: "A Machine-Oriented Logic Based on the Resolution Principle" - Unification algorithm
+- **Cardelli, L. (1987)**: "Basic Polymorphic Typechecking" - Implementation techniques
+- **Jones, M.P. (1995)**: "Functional Programming with Overloading and Higher-Order Polymorphism" - Advanced HM features
+
+**Hindley-Milner Principle**: "Type annotations are optional for all expressions where types can be inferred through constraint unification. The system automatically finds the most general (polymorphic) type for each expression."
+
+#### 🔥 CRITICAL: Record Type Structural Equivalence
+
+**MANDATORY REQUIREMENT**: Osprey's Hindley-Milner implementation MUST treat record types using **structural equivalence based EXCLUSIVELY on field names**.
+
+**✅ CORRECT Structural Unification:**
+```osprey
+// These record types are structurally equivalent (same field names and types)
+type PersonA = { name: string, age: int }
+type PersonB = { age: int, name: string }  // Different field ORDER - still equivalent
+
+// Hindley-Milner MUST unify these as the same structural type
+fn processA(p: PersonA) = p.name
+fn processB(p: PersonB) = p.name
+
+// These functions MUST be considered type-compatible
+let result1 = processA(PersonB { age: 25, name: "Alice" })  // ✅ MUST work
+let result2 = processB(PersonA { name: "Bob", age: 30 })    // ✅ MUST work
+```
+
+**✅ POLYMORPHIC Field Access Inference:**
+```osprey
+// Generic field accessor - inferred type based on field NAME only
+fn getName(record) = record.name           // Infers: ∀α. {name: string, ...α} -> string
+fn getAge(record) = record.age            // Infers: ∀α. {age: int, ...α} -> int
+
+// Works with ANY record type that has the named field
+let name1 = getName(Person { name: "Alice", age: 25 })      // ✅ Valid
+let name2 = getName(User { name: "Bob", id: 1, email: "bob@example.com" })  // ✅ Valid
+let age1 = getAge(Person { name: "Alice", age: 25 })       // ✅ Valid
+```
+
+**❌ FORBIDDEN Implementation Approaches:**
+```
+// NEVER ALLOWED in compiler implementation:
+struct_field_0 = llvm_get_field_by_index(record, 0)  // ❌ Positional access
+field_type = type_signature.params[field_position]   // ❌ Position-based type lookup
+unify_by_field_order(record1, record2)              // ❌ Order-dependent unification
+```
+
+**🔥 UNIFICATION ALGORITHM REQUIREMENT:**
+```
+unify(RecordType1, RecordType2) := 
+    if field_names(RecordType1) ≠ field_names(RecordType2) then FAIL
+    else ∀ field_name ∈ field_names(RecordType1):
+        unify(field_type(RecordType1, field_name), field_type(RecordType2, field_name))
+        
+// Field ordering is IRRELEVANT - only field names and their types matter
+```
+
+#### Polymorphic Type Variables vs Any Type
+
+**CRITICAL DISTINCTION**: Hindley-Milner infers polymorphic type variables (α, β, γ), NOT the `any` type.
+
+**✅ HINDLEY-MILNER POLYMORPHISM:**
+```osprey
+fn identity(x) = x                    // Infers: <T>(T) -> T (polymorphic)
+fn getFirst(p) = p.first             // Infers: <A, B>(Pair<A, B>) -> A
+fn apply(f, x) = f(x)                // Infers: <A, B>((A) -> B, A) -> B
+```
+
+**❌ ANY TYPE (Requires Explicit Declaration):**
+```osprey
+fn parseValue(input: string) -> any = processInput(input)  // Explicit any
+fn getDynamicValue() -> any = readFromConfig()             // Explicit any
+```
+
+**Type Variable Instantiation**: Polymorphic type variables are instantiated to concrete types at usage sites:
+```osprey
+let intId = identity(42)        // T := int
+let stringId = identity("test") // T := string
+let boolId = identity(true)     // T := bool
+```
+
+**Safety Guarantee**: Polymorphic types are statically safe - all type checking occurs at compile time with no runtime type uncertainty.
+
+#### Hindley-Milner Constraint Resolution
+
+**Automatic Type Resolution**: The compiler uses constraint solving to resolve all type variables:
 
 ```osprey
-// ❌ ERROR: Function 'greet' requires explicit return type annotation
-fn greet(name) = name
+// ✅ FULLY INFERRED: No annotations needed
+fn greet(name) = "Hello, " + name    // String constraint from concatenation
+fn formatScore(name, score) = "${name}: ${score}"  // String interpolation context
+fn calculate(x, y) = x * y + 1       // Arithmetic constraints
 
-// ✅ FIX: Add explicit parameter type
-fn greet(name: string) = name
+// ✅ POLYMORPHIC RESOLUTION: Generic across multiple types
+fn wrap(value) = Container { data: value }  // <T>(T) -> Container<T>
+fn unwrap(container) = container.data       // <T>(Container<T>) -> T
 
-// ✅ FIX: Add explicit return type  
-fn greet(name) -> string = name
+// ✅ HIGHER-ORDER INFERENCE: Function parameters inferred
+fn applyToList(func, items) = [func(x) for x in items]
+// Infers: <A, B>((A) -> B, List<A>) -> List<B>
+```
 
-// ❌ ERROR: Parameter 'name' requires explicit type annotation
-fn formatScore(name, score) = name
-
-// ✅ FIX: Add explicit parameter types
-fn formatScore(name: string, score: int) = name
-
-// ✅ FIX: Add explicit return type to enable inference
-fn formatScore(name, score) -> string = name
+**Manual Annotation (When Desired)**: Explicit types can be added for documentation:
+```osprey
+fn greet(name: string) -> string = "Hello, " + name  // Explicit for clarity
+fn identity<T>(x: T) -> T = x                        // Explicit polymorphism
 ```
 
 ### 5.4 Type Safety and Explicit Typing
@@ -277,16 +714,8 @@ These operations are safe because they return `Result` types that encapsulate po
 
 #### Pattern Matching Requirement
 
-**Pattern Matching on `any` Types:**
-```osprey
-// Pattern matching on any type
-match anyValue {
-    value: Int => handleInteger(value)
-    value: String => handleString(value)
-    value: Bool => handleBoolean(value)
-    _ => handleUnknownType()
-}
-```
+**Pattern Matching Requirement:**
+All `any` values must be accessed through pattern matching to extract their actual types (see [Pattern Matching](0008-PatternMatching.md) for complete syntax and examples).
 
 #### Direct Access Compilation Errors
 
@@ -309,42 +738,11 @@ let converted = toString(value)  // where value: any
 ```
 
 **✅ REQUIRED - Pattern Matching:**
-```osprey
-fn processAny(value: any) -> int = match value {
-    num: Int => num + 1
-    str: String => length(str)
-    _ => 0
-}
-
-fn getLength(value: any) -> int = match value {
-    str: String => length(str)
-    arr: Array<T> => arrayLength(arr)
-    _ => 0
-}
-
-let result = match someAnyFunction() {
-    value: Int => value
-    _ => 0
-}
-```
+Use pattern matching to safely extract values from `any` types (complete examples in [Pattern Matching](0008-PatternMatching.md)).
 
 #### Function Return Type Handling
 
-Functions returning `any` types require immediate pattern matching:
-
-```osprey
-// Function that returns any
-extern fn parseValue(input: string) -> any
-
-// ERROR: Direct usage
-let number = parseValue("42") + 1
-
-// CORRECT: Pattern matching
-let number = match parseValue("42") {
-    value: Int => value + 1
-    _ => 0
-}
-```
+Functions returning `any` types require immediate pattern matching (see [Pattern Matching](0008-PatternMatching.md)).
 
 #### Type Annotation Pattern Syntax
 
@@ -397,18 +795,16 @@ Pattern matching on `any` types **MUST** be exhaustive:
 
 ```osprey
 // Non-exhaustive (ERROR)
-match anyValue {
+match anyValue 
     value: Int => processInt(value)
     value: String => processString(value)
     // ERROR: missing wildcard or Bool case
-}
 
 // Exhaustive (CORRECT)
-match anyValue {
+match anyValue 
     value: Int => processInt(value)
     value: String => processString(value)
     _ => handleOther()
-}
 ```
 
 #### Default Wildcard Behavior for Any Types
@@ -417,19 +813,17 @@ The wildcard pattern (`_`) in `any` type matching preserves the `any` type:
 
 ```osprey
 // Wildcard returns any type
-let result = match someAnyValue {
+let result = match someAnyValue 
     value: Int => processInt(value)    // Returns specific type
     value: String => processString(value)  // Returns specific type
     _ => someAnyValue  // Returns any type (unchanged)
-}
 // result type: any (due to wildcard arm)
 
 // To avoid any type in result, handle all expected cases explicitly
-let result = match someAnyValue {
+let result = match someAnyValue 
     value: Int => processInt(value)
     value: String => processString(value)
     _ => defaultInt()  // Convert to specific type
-}
 // result type: Int (all arms return Int)
 ```
 
@@ -442,11 +836,10 @@ The compiler **MUST** validate that pattern types are actually possible for the 
 // Function known to return Int or String
 extern fn parseIntOrString(input: string) -> any
 
-match parseIntOrString("42") {
+match parseIntOrString("42") 
     value: Int => value + 1
     value: String => length(value)
     _ => 0  // Valid: handles any unexpected types
-}
 ```
 
 **❌ INVALID - Impossible Type Patterns:**
@@ -454,12 +847,11 @@ match parseIntOrString("42") {
 // Function documented to only return Int or String
 extern fn parseIntOrString(input: string) -> any
 
-match parseIntOrString("42") {
+match parseIntOrString("42") 
     value: Int => value + 1
     value: String => length(value)
     value: Bool => if value then 1 else 0  // ERROR: Bool not possible
     _ => 0
-}
 // ERROR: pattern 'Bool' is not a possible type for function 'parseIntOrString'
 ```
 
@@ -541,6 +933,72 @@ let result = safeDivide(a: 10, b: 2)
 match result {
   Ok { value } => print("Result: ${value}")
   Err { error } => handleError(error)
+}
+```
+
+#### Type-Level Validation
+
+**CRITICAL**: When a type has a WHERE validation function, the type constructor **ALWAYS** returns `Result<T, String>` instead of the type directly.
+
+**Validation Syntax:**
+```
+type_validation := 'where' function_name
+```
+
+**Examples:**
+```osprey
+// Unconstrained type - direct construction
+type Point = { x: Int, y: Int }
+let point = Point { x: 10, y: 20 }  // Returns Point directly
+
+// Type with validation function - returns Result type
+type Product = { 
+    name: String,
+    price: Int
+} where validateProduct
+
+fn validateProduct(product: Product) -> Result<Product, String> = match product.name {
+    "" => Error("Product name cannot be empty")
+    _ => match product.price {
+        0 => Error("Price must be positive")
+        _ => Success(product)
+    }
+}
+
+let product = Product { name: "Widget", price: 100 }  // Returns Result<Product, String>
+
+// Pattern matching required for validated types
+match product {
+    Success { value } => {
+        print("Product: ${value.name}")
+        print("Price: ${value.price}")
+    }
+    Error { message } => {
+        print("Validation failed: ${message}")
+    }
+}
+
+// Invalid validation fails at construction
+let invalid = Product { name: "", price: -10 }  // Returns Error variant
+match invalid {
+    Success { value } => print("This won't execute")
+    Error { message } => print("Expected error: ${message}")
+}
+```
+
+**Field Access Rules:**
+- **Unvalidated types**: Direct field access allowed (`point.x`)
+- **Validated types**: Field access **ONLY** after pattern matching on Result
+
+**Compilation Errors:**
+```osprey
+// ERROR: Cannot access field on Result type
+let name = product.name  // Compilation error - pattern matching required
+
+// CORRECT: Field access after unwrapping
+match product {
+    Success { value } => print("Name: ${value.name}")  // Valid field access
+    Error { message } => print("Error: ${message}")
 }
 ```
 

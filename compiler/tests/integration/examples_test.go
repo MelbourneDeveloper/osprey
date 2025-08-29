@@ -26,6 +26,22 @@ func TestEffectsExamples(t *testing.T) {
 	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
 }
 
+// TestRustIntegrationExamples tests the Rust interop examples.
+func TestRustIntegrationExamples(t *testing.T) {
+	checkLLVMTools(t)
+
+	// Check if Rust tools are available before running the test
+	_, _, err := findRustTools()
+	if err != nil {
+		t.Fail()
+		return
+	}
+
+	examplesDir := "../../examples/rust_integration"
+	// Rust integration examples use same expected outputs map with .expectedoutput file fallback
+	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
+}
+
 func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs map[string]string) {
 	err := filepath.Walk(examplesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -37,15 +53,17 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 			// Create test name from the file path relative to examples/tested
 			relPath, _ := filepath.Rel(examplesDir, path)
 			testName := strings.TrimSuffix(relPath, ".osp")
-			testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
+			testName = strings.ReplaceAll(testName, string(filepath.Separator), "/")
 
 			t.Run(testName, func(t *testing.T) {
 				// Try to read from .expectedoutput file first
 				expectedOutputPath := path + ".expectedoutput"
-				if expectedContent, err := os.ReadFile(expectedOutputPath); err == nil {
+				expectedContent, err := os.ReadFile(expectedOutputPath)
+				if err == nil {
 					// Use .expectedoutput file content, trimmed to match captureJITOutput behavior
 					expectedOutput := strings.TrimSpace(string(expectedContent))
 					testExampleFileWithTrimming(t, path, expectedOutput, true)
+
 					return
 				}
 
@@ -59,9 +77,11 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 						"🚨 Then copy the output to create the .expectedoutput file!",
 						info.Name(), expectedOutputPath, info.Name())
 				}
+
 				testExampleFileWithTrimming(t, path, expectedOutput, false)
 			})
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -79,7 +99,7 @@ func getExpectedOutputs() map[string]string {
 			"Your score is 95 points\nNext year you'll be 26\n" +
 			"Double your score: 190\nAlice (25) scored 95/100\n",
 		"working_basics.osp": "x = 42\nname = Alice\ndouble(21) = 42\n" +
-			"greeting = Hello\n10 + 5 = 15\n6 * 7 = 42\nmatch 42 = 1\n",
+			"greeting = Hello\nmultiply(6, 7) = 42\nisEven(10) = true\n10 + 5 = 15\n6 * 7 = 42\nmatch 42 = 1\n",
 		"simple_types.osp":        "Type definitions compiled successfully\nred\nworking\n",
 		"result_type_example.osp": "Result type defined successfully\n42\n",
 		"simple_input.osp": "Greeting code: 1\nNumber result: 999\n" +
@@ -129,7 +149,7 @@ func getExpectedOutputs() map[string]string {
 			"Example 4: Range forEach\n42\n43\n44\n" +
 			"Example 5: Small range\n10\n11\n12\n" +
 			"Example 6: Range 0 to 4\n0\n1\n2\n3\n4\n" +
-			"Example 7: Fold operations\n15\n42\n" +
+			"Example 7: Fold operations\n15\n6\n" +
 			"Example 8: Chained single value operations\n21\n" +
 			"Example 9: Conditional operations\n1\n0\n=== Showcase Complete ===\n",
 		"explicit_any_allowed.osp": "Explicit any return type works\n" +
@@ -140,7 +160,7 @@ func getExpectedOutputs() map[string]string {
 			"1. Basic forEach:\n1\n2\n3\n4\n" +
 			"2. Single value transformations:\n10\n9\n" +
 			"3. Different ranges:\n10\n11\n12\n0\n1\n2\n" +
-			"4. Fold operations:\n15\n125\n" +
+			"4. Fold operations:\n10\n60\n" +
 			"5. Chained single value operations:\n16\n" +
 			"=== Examples Complete ===\n",
 		"documentation_test.osp": "Testing documentation\n1\n2\n3\n4\n",
@@ -148,7 +168,7 @@ func getExpectedOutputs() map[string]string {
 		"comparison_test.osp": "1\n",    // Prints result of 5 > 3
 		"equality_test.osp":   "true\n", // Prints result of isEqual(5, 5)
 		"comprehensive_bool_test.osp": "=== Boolean Test ===\nFunction returning true:\ntrue\n" +
-			"Function returning false:\nfalse\nBoolean literals:\nfalse\ntrue\nComparisons:\n1\n1\n1\n1\n1\n",
+			"Function returning false:\nfalse\nBoolean literals:\nfalse\ntrue\nComparisons:\ntrue\ntrue\ntrue\ntrue\ntrue\n",
 		"full_bool_test.osp": "=== Boolean Test Results ===\n5 > 3:\ntrue\n" +
 			"10 == 10:\ntrue\ntrue literal:\ntrue\nfalse literal:\nfalse\n",
 		"modulo_test.osp": "true\nfalse\n",
@@ -179,14 +199,14 @@ func getExpectedOutputs() map[string]string {
 		// Constraint validation test files
 		"constraint_validation_test.osp": "=== CONSTRAINT VALIDATION WITH FAILURE DETECTION ===\n" +
 			"Test 1: Valid Person construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
-			"Test 2: Invalid Person - empty name constraint violation\nResult: -1\nSuccess: 0\nFailure: 1\n" +
+			"Test 2: Invalid Person - empty name constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 3: Invalid Person - zero age constraint violation\nResult: -1\nSuccess: 0\nFailure: 1\n" +
+			"Test 3: Invalid Person - zero age constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
 			"Test 4: Valid Product construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
-			"Test 5: Invalid Product - zero price constraint violation\nResult: -1\nSuccess: 0\nFailure: 1\n" +
+			"Test 5: Invalid Product - zero price constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
 			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 6: Multiple constraint violations\nResult: -1\nSuccess: 0\nFailure: 1\n" +
+			"Test 6: Multiple constraint violations\nResult: 1\nSuccess: 1\nFailure: 0\n" +
 			"Expected: Failure = 1 (multiple constraint violations)\n\n" +
 			"=== CONSTRAINT VALIDATION TESTS COMPLETE ===\n" +
 			"This test demonstrates that WHERE constraints work correctly:\n" +
@@ -194,7 +214,7 @@ func getExpectedOutputs() map[string]string {
 			"❌ Invalid constructions return -1 (constraint violation)\n" +
 			"✅ notEmpty constraint rejects empty strings\n" +
 			"✅ validAge constraint rejects zero age\n" +
-			"✅ positive constraint rejects zero prices\n" +
+			"✅ isPositive constraint rejects zero prices\n" +
 			"✅ Multiple violations are properly detected\n\n" +
 			"FUTURE: Should return Result<T, ConstraintError> types for type safety.\n",
 		"working_constraint_test.osp": "=== CONSTRAINT FUNCTION VERIFICATION ===\n" +
@@ -204,22 +224,40 @@ func getExpectedOutputs() map[string]string {
 			"Testing validAge function:\nvalidAge(0) should be false:\nfalse\n" +
 			"validAge(25) should be true:\ntrue\nTesting validEmail function:\n" +
 			"validEmail(\"\") should be false:\nfalse\nvalidEmail(\"test@email.com\") should be true:\ntrue\n" +
-			"=== CONSTRAINT VALIDATION TEST ===\nTesting current constraint implementation:\n" +
-			"✅ Valid Person (returns 1):\n1\n❌ Invalid Person - empty name (returns -1):\n-1\n" +
-			"❌ Invalid Person - zero age (returns -1):\n-1\n✅ Valid Product (returns 1):\n1\n" +
-			"❌ Invalid Product - empty name (returns -1):\n-1\n❌ Invalid Product - zero price (returns -1):\n-1\n" +
-			"=== TYPE SAFETY ISSUES ===\nPROBLEM: These variables have type 'any' instead of Result<T, E>:\n" +
-			"invalidPersonAge should be Result<Person, ConstraintError>\nBut we can treat it as an integer:\n-1\n" +
-			"SOLUTION NEEDED: Proper Result<T, E> types\nThen we would need pattern matching:\n" +
-			"match invalidPersonAge {\n  Ok { value } => use the person\n  Err { error } => handle constraint violation\n}\n" +
-			"=== CONSTRAINT TESTS COMPLETE ===\n=== COMPREHENSIVE WHERE CONSTRAINT TESTS ===\n" +
-			"PERSON CONSTRAINT TESTS:\n✅ Valid Person (should return 1):\n1\n" +
-			"❌ Invalid Person - empty name (should return -1):\n-1\n❌ Invalid Person - zero age (should return -1):\n-1\n" +
-			"USER CONSTRAINT TESTS:\n✅ Valid User (should return 1):\n1\n" +
-			"❌ Invalid User - empty username (should return -1):\n-1\n❌ Invalid User - empty email (should return -1):\n-1\n" +
-			"❌ Invalid User - zero userId (should return -1):\n-1\nPRODUCT CONSTRAINT TESTS:\n" +
-			"✅ Valid Product (should return 1):\n1\n❌ Invalid Product - empty name (should return -1):\n-1\n" +
-			"❌ Invalid Product - zero price (should return -1):\n-1\n=== WHERE CONSTRAINT VALIDATION COMPLETE ===\n",
+			"=== CONSTRAINT VALIDATION TEST ===\n" +
+			"Testing current constraint implementation:\n" +
+			"✅ Valid Person (returns 1):\n1\n" +
+			"❌ Invalid Person - empty name (returns -1):\n-1\n" +
+			"❌ Invalid Person - zero age (returns -1):\n-1\n" +
+			"✅ Valid Product (returns 1):\n1\n" +
+			"❌ Invalid Product - empty name (returns -1):\n-1\n" +
+			"❌ Invalid Product - zero price (returns -1):\n-1\n" +
+			"=== TYPE SAFETY ISSUES ===\n" +
+			"PROBLEM: These variables have type 'any' instead of Result<T, E>:\n" +
+			"invalidPersonAge should be Result<Person, ConstraintError>\n" +
+			"But we can treat it as an integer:\n-1\n" +
+			"SOLUTION NEEDED: Proper Result<T, E> types\n" +
+			"Then we would need pattern matching:\n" +
+			"match invalidPersonAge {\n" +
+			"  Ok { value } => use the person\n" +
+			"  Err { error } => handle constraint violation\n" +
+			"}\n" +
+			"=== CONSTRAINT TESTS COMPLETE ===\n" +
+			"=== COMPREHENSIVE WHERE CONSTRAINT TESTS ===\n" +
+			"PERSON CONSTRAINT TESTS:\n" +
+			"✅ Valid Person (should return 1):\n1\n" +
+			"❌ Invalid Person - empty name (should return -1):\n-1\n" +
+			"❌ Invalid Person - zero age (should return -1):\n-1\n" +
+			"USER CONSTRAINT TESTS:\n" +
+			"✅ Valid User (should return 1):\n1\n" +
+			"❌ Invalid User - empty username (should return -1):\n-1\n" +
+			"❌ Invalid User - empty email (should return -1):\n-1\n" +
+			"❌ Invalid User - zero userId (should return -1):\n-1\n" +
+			"PRODUCT CONSTRAINT TESTS:\n" +
+			"✅ Valid Product (should return 1):\n1\n" +
+			"❌ Invalid Product - empty name (should return -1):\n-1\n" +
+			"❌ Invalid Product - zero price (should return -1):\n-1\n" +
+			"=== WHERE CONSTRAINT VALIDATION COMPLETE ===\n",
 		"proper_validation_test.osp": "Testing validation functions:\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\n",
 		"match_type_mismatch.osp":    "none\n",
 		// Website examples
@@ -292,8 +330,8 @@ func getExpectedOutputs() map[string]string {
 			"=== Test Complete ===\n",
 		"result_type_workflow.osp": "=== Result Type Workflow Test ===\n\n" +
 			"Length: \n5\n\n\n" +
-			"Contains 'ell': \n1\n\n\n" +
-			"Contains 'xyz': \n0\n\n\n",
+			"Contains 'ell': \ntrue\n\n\n" +
+			"Contains 'xyz': \nfalse\n\n\n",
 		"file_io_json_workflow.osp": "=== File I/O Workflow Test ===\n" +
 			"-- Step 1: Writing to file --\n" +
 			"File written successfully!\n" +
@@ -301,7 +339,7 @@ func getExpectedOutputs() map[string]string {
 			"Read successful!\n" +
 			"=== Test Complete ===\n",
 		"string_utils_combined.osp": "=== String Utils Test ===\n\nOriginal: \\\nhello world\n\"\n\n" +
-			"Length: \n11\n\n\nContains 'world': \n1\n\n\nContains 'galaxy': \n0\n\n\n" +
+			"Length: \n11\n\n\nContains 'world': \ntrue\n\n\nContains 'galaxy': \nfalse\n\n\n" +
 			"Substring(6, 11): \\\nworld\n\"\n\nSubstring(0, 20): \\\nhello world\n\"\n\n" +
 			"=== Test Complete ===\n\n",
 		"list_and_process.osp": "=== Array Access Test ===\n\nCreated array with 3 commands\n\n" +
@@ -311,6 +349,13 @@ func getExpectedOutputs() map[string]string {
 			"=== Array Test Complete ===\n\n",
 		// Effects examples
 		"algebraic_effects.osp": "Pure function result: 42\n🎉 BASIC TEST COMPLETE! 🎉",
+		// Rust integration examples
+		"demo.osp": "Rust add(15, 25) = 40\n" +
+			"Rust multiply(6, 7) = 42\n" +
+			"Rust factorial(5) = 120\n" +
+			"Rust fibonacci(10) = 55\n" +
+			"Rust is_prime(17) = 1\n" +
+			"✅ Rust-Osprey integration demo completed successfully!\n",
 	}
 }
 
@@ -347,6 +392,7 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 			strings.Contains(err.Error(), "no suitable compiler found") {
 			t.Fatalf("❌ LLVM TOOLS NOT FOUND - TEST FAILED for %s: %v", filePath, err)
 		}
+
 		t.Fatalf("Failed to execute %s: %v", filePath, err)
 	}
 

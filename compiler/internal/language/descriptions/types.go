@@ -22,6 +22,7 @@ func GetBuiltinTypeDescriptions() map[string]*BuiltinTypeDesc {
 				"interpolation and escape sequences.",
 			Example: `let greeting: String = "Hello, World!"\nlet name = "Alice"\nlet message = "Hello, ${name}!"`,
 		},
+		//WRONG! MUST BE LOWERCASE - bool
 		"Bool": {
 			Name: "Bool",
 			Description: "A boolean type that can be either true or false. Used for " +
@@ -71,5 +72,6 @@ func GetBuiltinTypeDescription(name string) *BuiltinTypeDesc {
 	if desc, exists := descriptions[name]; exists {
 		return desc
 	}
+
 	return nil
 }

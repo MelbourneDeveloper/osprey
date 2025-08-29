@@ -10,6 +10,7 @@ import (
 // parseInterpolatedParts parses the parts of an interpolated string.
 func (b *Builder) parseInterpolatedParts(text string) []InterpolatedPart {
 	var parts []InterpolatedPart
+
 	i := 0
 
 	for i < len(text) {

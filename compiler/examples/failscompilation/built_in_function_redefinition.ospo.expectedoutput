@@ -1,1 +1,1 @@
-line 4:0: validation error: Parameter 'x' in function 'toString' requires explicit type annotation - type cannot be inferred from usage
+line 4:0: validation error: cannot redefine built-in function 'toString'

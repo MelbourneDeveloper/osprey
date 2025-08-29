@@ -1,7 +1,7 @@
 package codegen
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,6 +24,7 @@ func CompileToLLVM(source string) (string, error) {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
+		SandboxMode:           false,
 	})
 }
 
@@ -68,15 +69,17 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 		return "", ErrASTBuildFailed
 	}
 
-	// Validate AST for type inference rules
-	if err := ast.ValidateProgram(program); err != nil {
+	// Run AST validation before type inference
+	// This catches issues like missing type annotations that the tests expect
+	err := ast.ValidateProgram(program)
+	if err != nil {
 		return "", err
 	}
 
 	// Generate LLVM IR with security configuration
 	generator := NewLLVMGeneratorWithSecurity(security)
 
-	_, err := generator.GenerateProgram(program)
+	_, err = generator.GenerateProgram(program)
 	if err != nil {
 		return "", err
 	}
@@ -87,6 +90,7 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 // ParseErrorListener collects parse errors instead of panicking.
 type ParseErrorListener struct {
 	antlr.DefaultErrorListener
+
 	Errors []string
 }
 
@@ -104,68 +108,69 @@ func (p *ParseErrorListener) SyntaxError(
 
 // CompileToExecutable compiles source code to an executable binary with default (permissive) security.
 func CompileToExecutable(source, outputPath string) error {
-	return compileToExecutableInternal(source, outputPath, SecurityConfig{
+	return CompileToExecutableWithSecurity(source, outputPath, SecurityConfig{
 		AllowHTTP:             true,
 		AllowWebSocket:        true,
 		AllowFileRead:         true,
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
-	}, "")
+		SandboxMode:           false,
+	})
 }
 
-// CompileToExecutableWithLibDir compiles source code to an executable binary with custom lib directory.
-func CompileToExecutableWithLibDir(source, outputPath, libDir string) error {
-	return compileToExecutableInternal(source, outputPath, SecurityConfig{
-		AllowHTTP:             true,
-		AllowWebSocket:        true,
-		AllowFileRead:         true,
-		AllowFileWrite:        true,
-		AllowFFI:              true,
-		AllowProcessExecution: true,
-	}, libDir)
+// buildLibraryPaths builds the search paths for runtime libraries
+func buildLibraryPaths(libName string) []string {
+	paths := []string{
+		fmt.Sprintf("bin/lib%s.a", libName),
+		fmt.Sprintf("./bin/lib%s.a", libName),
+		fmt.Sprintf("lib/lib%s.a", libName),          // For rust interop libraries
+		fmt.Sprintf("./lib/lib%s.a", libName),        // For rust interop libraries
+		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
+		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
+		fmt.Sprintf("../../lib/lib%s.a", libName),    // For rust interop in tests/integration
+		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
+		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
+		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
+	}
+
+	// Add working directory based paths
+	wd, err := os.Getwd()
+	if err == nil {
+		paths = append(paths,
+			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
+			filepath.Join(wd, "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "..", "lib", fmt.Sprintf("lib%s.a", libName)), // For test directories
+		)
+	}
+
+	return paths
 }
 
-// This is how artefacts must be organised. Follow FHS (Filesystem Hierarchy Standard)
-// osprey/
-// ├── bin/
-// │   └── osprey (executable)
-// ├── lib/
-// │   ├── libfiber_runtime.a
-// │   ├── libhttp_runtime.a
-// │   ├── libwebsocket_runtime.a
-// │   └── libsystem_runtime.a
-// ├── include/
-// │   └── stdio.h, stdlib.h, etc.
-// getLibraryPathWithDir returns the path for a runtime library with optional lib directory override
-func getLibraryPathWithDir(libName, libDir string) (string, error) {
-	libFileName := fmt.Sprintf("lib%s.a", libName)
-
-	// If libDir is provided, use it directly (for tests)
-	if libDir != "" {
-		libPath := filepath.Join(libDir, libFileName)
-		return libPath, nil
+// findAndAddLibrary finds a library in the given paths and adds it to linkArgs
+func findAndAddLibrary(libName string, linkArgs []string) []string {
+	paths := buildLibraryPaths(libName)
+	for _, libPath := range paths {
+		_, err := os.Stat(libPath)
+		if err == nil {
+			return append(linkArgs, libPath)
+		}
 	}
 
-	// Otherwise use normal FHS path: executable/../lib/
-	execPath, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-
-	// Primary FHS path: executable/../lib/
-	execDir := filepath.Dir(execPath)
-	libPath := filepath.Join(execDir, "..", "lib", libFileName)
-
-	// Return original FHS path even if it doesn't exist (for error reporting)
-	return libPath, nil
+	return linkArgs
 }
 
 // addOpenSSLFlags adds OpenSSL linking flags using pkg-config or platform-specific fallbacks
 func addOpenSSLFlags(linkArgs []string) []string {
 	// Use pkg-config to get proper OpenSSL flags when available
-	cmd := exec.Command("pkg-config", "--libs", "openssl")
-	if output, err := cmd.Output(); err == nil {
+	cmd := exec.CommandContext(context.Background(), "pkg-config", "--libs", "openssl")
+	output, err := cmd.Output()
+	if err == nil {
 		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
 
@@ -181,66 +186,37 @@ func addOpenSSLFlags(linkArgs []string) []string {
 	return append(linkArgs, "-lssl", "-lcrypto")
 }
 
-// Runtime library name constants
-const (
-	LibFiberRuntime     = "fiber_runtime"
-	LibHTTPRuntime      = "http_runtime"
-	LibWebSocketRuntime = "websocket_runtime"
-	LibSystemRuntime    = "system_runtime"
-)
+// checkLibraryAvailability checks if any runtime libraries are available
+func checkLibraryAvailability() (bool, bool) {
+	fiberExists := false
+	httpExists := false
 
-// Static errors
-var (
-	ErrProjectRootNotFound = errors.New("could not find project root (go.mod not found)")
-)
-
-// RuntimeLibraries defines the complete list of all runtime libraries required by the compiler
-// These must match what the Makefile actually builds - NOW BUILDING 4 SEPARATE LIBRARIES!
-// LINKING ORDER CRITICAL: For static libraries, dependents must come BEFORE their dependencies
-//
-//nolint:gochecknoglobals // Global runtime libraries list required for linking
-var RuntimeLibraries = []string{
-	LibFiberRuntime,     // libfiber_runtime.a - DEPENDS ON system_runtime (must be first)
-	LibSystemRuntime,    // libsystem_runtime.a - PROVIDES functions for fiber_runtime
-	LibHTTPRuntime,      // libhttp_runtime.a
-	LibWebSocketRuntime, // libwebsocket_runtime.a
-}
-
-// checkLibraryAvailabilityWithDir checks if runtime libraries are available with optional custom lib directory
-func checkLibraryAvailabilityWithDir(libDir string) map[string]bool {
-	// Helper function to check if a library exists
-	checkLibrary := func(libName string) bool {
-		libPath, err := getLibraryPathWithDir(libName, libDir)
-		if err != nil {
-			return false
-		}
-
-		_, err = os.Stat(libPath)
-		return err == nil
-	}
-
-	availability := make(map[string]bool)
-	for _, libName := range RuntimeLibraries {
-		availability[libName] = checkLibrary(libName)
-	}
-
-	return availability
-}
-
-// tryLinkWithCompilers attempts to link the executable using multiple compiler options
-func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, libraryAvailability map[string]bool) error {
-	var clangCommands [][]string
-
-	// Check if any runtime libraries are available
-	anyLibraryExists := false
-	for _, libName := range RuntimeLibraries {
-		if libraryAvailability[libName] {
-			anyLibraryExists = true
+	// Check if any fiber runtime library was found
+	for _, libPath := range buildLibraryPaths("fiber_runtime") {
+		_, err := os.Stat(libPath)
+		if err == nil {
+			fiberExists = true
 			break
 		}
 	}
 
-	if anyLibraryExists {
+	// Check if any HTTP runtime library was found
+	for _, libPath := range buildLibraryPaths("http_runtime") {
+		_, err := os.Stat(libPath)
+		if err == nil {
+			httpExists = true
+			break
+		}
+	}
+
+	return fiberExists, httpExists
+}
+
+// tryLinkWithCompilers attempts to link the executable using multiple compiler options
+func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberExists, httpExists bool) error {
+	var clangCommands [][]string
+
+	if fiberExists || httpExists {
 		clangCommands = [][]string{
 			append([]string{"clang"}, linkArgs...),                   // System clang
 			append([]string{"/usr/bin/clang"}, linkArgs...),          // System path clang
@@ -257,9 +233,9 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, library
 	}
 
 	var lastErr error
-	for _, cmd := range clangCommands {
 
-		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
+	for _, cmd := range clangCommands {
+		linkCmd := exec.CommandContext(context.Background(), cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
 
 		linkOutput, err := linkCmd.CombinedOutput()
 		if err == nil {
@@ -275,14 +251,10 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, library
 
 // CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.
 func CompileToExecutableWithSecurity(source, outputPath string, security SecurityConfig) error {
-	return compileToExecutableInternal(source, outputPath, security, "")
-}
-
-// compileToExecutableInternal is the unified implementation for all compilation functions
-func compileToExecutableInternal(source, outputPath string, security SecurityConfig, libDir string) error {
 	// Ensure the output directory exists
 	outputDir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(outputDir, DirPermissions); err != nil {
+	err := os.MkdirAll(outputDir, DirPermissions)
+	if err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -294,14 +266,17 @@ func compileToExecutableInternal(source, outputPath string, security SecurityCon
 
 	// Write IR to temporary file
 	irFile := outputPath + ".ll"
-	if err := os.WriteFile(irFile, []byte(ir), FilePermissions); err != nil {
+	err = os.WriteFile(irFile, []byte(ir), FilePermissions)
+	if err != nil {
 		return WrapWriteIRFile(err)
 	}
+
 	defer func() { _ = os.Remove(irFile) }() // Clean up temp file
 
 	// Compile IR to object file using llc
 	objFile := outputPath + ".o"
-	llcCmd := exec.Command("llc", "-filetype=obj", "-o", objFile, irFile) // #nosec G204 - args are controlled
+	// #nosec G204 - args are controlled
+	llcCmd := exec.CommandContext(context.Background(), "llc", "-filetype=obj", "-o", objFile, irFile)
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
@@ -313,16 +288,13 @@ func compileToExecutableInternal(source, outputPath string, security SecurityCon
 
 	// Build link arguments with runtime libraries
 	var linkArgs []string
+
 	linkArgs = append(linkArgs, "-o", outputPath, objFile)
 
-	// Add runtime libraries (order matters: dependencies before dependents for static linking)
-	for _, libName := range RuntimeLibraries {
-		libPath, err := getLibraryPathWithDir(libName, libDir)
-		if err != nil {
-			return err
-		}
-		linkArgs = append(linkArgs, libPath)
-	}
+	// Find and add runtime libraries (order matters: dependents before dependencies)
+	linkArgs = findAndAddLibrary("http_runtime", linkArgs)
+	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
+	linkArgs = findAndAddLibrary("rust_utils", linkArgs)
 
 	linkArgs = append(linkArgs, "-lpthread")
 
@@ -330,8 +302,9 @@ func compileToExecutableInternal(source, outputPath string, security SecurityCon
 	linkArgs = addOpenSSLFlags(linkArgs)
 
 	// Check library availability and try linking
-	libraryAvailability := checkLibraryAvailabilityWithDir(libDir)
-	return tryLinkWithCompilers(outputPath, objFile, linkArgs, libraryAvailability)
+	fiberExists, httpExists := checkLibraryAvailability()
+
+	return tryLinkWithCompilers(outputPath, objFile, linkArgs, fiberExists, httpExists)
 }
 
 // CompileAndRun compiles and runs source code using smart JIT execution with default (permissive) security.
@@ -343,6 +316,7 @@ func CompileAndRun(source string) error {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
+		SandboxMode:           false,
 	})
 }
 
