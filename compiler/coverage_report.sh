@@ -12,12 +12,23 @@ TEST_PKGS=$(go list ./... | grep -v "/parser$")
 COVERPKG=$(go list ./... | grep -v "/parser$" | grep -v "/tests/" | tr '\n' ',' | sed 's/,$//')
 
 # Run tests - fail fast (suppress verbose output for cleaner CI)
-if ! go test -covermode=atomic -coverpkg="$COVERPKG" -coverprofile=coverage.out $TEST_PKGS; then
+# First run with normal output to capture the result
+if ! go test -covermode=atomic -coverpkg="$COVERPKG" -coverprofile=coverage.out $TEST_PKGS 2>&1 | tee test_output.tmp; then
+    echo ""
     echo "❌ TESTS FAILED!"
-    echo "Last failing test output:"
-    go test -v $TEST_PKGS 2>&1 | grep -E "(FAIL|--- FAIL:)" | tail -5
+    echo ""
+    echo "=== FAILURE DETAILS ==="
+    # Show the specific test failures with context
+    grep -A 5 -B 2 "--- FAIL:" test_output.tmp || true
+    # Also show any runtime errors/panics
+    grep -E "(panic:|runtime error:|signal:|core dumped)" test_output.tmp || true
+    # Show any assertion failures
+    grep -E "(Expected:|Got:|Error:|Failed to|Output mismatch)" test_output.tmp | head -20 || true
+    echo "==================="
+    rm -f test_output.tmp
     exit 1
 fi
+rm -f test_output.tmp
 
 echo "✅ All tests passed"
 
