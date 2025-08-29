@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime rust-interop c-lint c-test test-runtime
+.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime websocket-runtime system-runtime rust-interop c-lint c-test test-runtime
 
 # Install golangci-lint
 lint-install:
@@ -32,18 +32,19 @@ build-no-lint: fiber-runtime http-runtime rust-interop
 # Build fiber runtime library - WARNINGS ARE ERRORS!!!
 fiber-runtime:
 	@echo "🔨 Building fiber runtime library..."
-	@mkdir -p bin
+	@mkdir -p bin lib
 	gcc -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
 	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o
-	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a"
+	cp bin/libfiber_runtime.a lib/libfiber_runtime.a
+	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a and lib/libfiber_runtime.a"
 
 
 
 # Build HTTP runtime library with TITANIUM-ARMORED MILITARY-GRADE SECURITY 🛡️💀
 http-runtime:
 	@echo "🔨 Building HTTP runtime with OpenSSL 3.5.0+ support..."
-	@mkdir -p bin
+	@mkdir -p bin lib
 	@echo "🔧 Building http_shared.o..."
 	@gcc -c -fPIC -O2 \
 		-D_FORTIFY_SOURCE=2 \
@@ -73,7 +74,29 @@ http-runtime:
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
 	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
+	cp bin/libhttp_runtime.a lib/libhttp_runtime.a
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
+
+# Build WebSocket runtime library (included in HTTP runtime but separate for Docker compatibility)
+websocket-runtime: http-runtime
+	@echo "🔨 Building WebSocket runtime library..."
+	@mkdir -p lib
+	@if [ -f bin/libhttp_runtime.a ]; then \
+		cp bin/libhttp_runtime.a lib/libwebsocket_runtime.a; \
+		echo "✅ WebSocket runtime library copied: lib/libwebsocket_runtime.a"; \
+	else \
+		echo "❌ Error: HTTP runtime must be built first"; \
+		exit 1; \
+	fi
+
+# Build System runtime library
+system-runtime:
+	@echo "🔨 Building System runtime library..."
+	@mkdir -p bin lib
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
+	ar rcs bin/libsystem_runtime.a bin/system_runtime.o
+	cp bin/libsystem_runtime.a lib/libsystem_runtime.a
+	@echo "✅ System runtime library built: bin/libsystem_runtime.a and lib/libsystem_runtime.a"
 
 # Build Rust interop library
 rust-interop:
