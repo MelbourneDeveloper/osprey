@@ -166,6 +166,7 @@ func (g *LLVMGenerator) generateAwaitExpression(await *ast.AwaitExpression) (val
 func (g *LLVMGenerator) generateYieldExpression(yield *ast.YieldExpression) (value.Value, error) {
 	// Get the value to yield
 	var yieldValue value.Value
+
 	if yield.Value != nil {
 		var err error
 
@@ -252,6 +253,7 @@ func (g *LLVMGenerator) generateChannelFunctionCall(builtinName string, runtimeN
 	callExpr *ast.CallExpression) (value.Value, error) {
 	// Generate arguments
 	args := make([]value.Value, len(callExpr.Arguments))
+
 	for i, arg := range callExpr.Arguments {
 		var err error
 

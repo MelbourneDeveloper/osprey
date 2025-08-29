@@ -12,6 +12,7 @@ func TestGetOperatorDescription(t *testing.T) {
 	desc := descriptions.GetOperatorDescription("+")
 	if desc == nil {
 		t.Fatal("Expected description for '+' operator, got nil")
+		return
 	}
 
 	if desc.Symbol != "+" {
@@ -26,6 +27,7 @@ func TestGetOperatorDescription(t *testing.T) {
 	desc = descriptions.GetOperatorDescription("==")
 	if desc == nil {
 		t.Fatal("Expected description for '==' operator, got nil")
+		return
 	}
 
 	if desc.Symbol != "==" {
@@ -49,6 +51,7 @@ func TestGetBuiltinTypeDescription(t *testing.T) {
 	desc := descriptions.GetBuiltinTypeDescription("Int")
 	if desc == nil {
 		t.Fatal("Expected description for 'Int' type, got nil")
+		return
 	}
 
 	if desc.Name != "Int" {
@@ -59,6 +62,7 @@ func TestGetBuiltinTypeDescription(t *testing.T) {
 	desc = descriptions.GetBuiltinTypeDescription("String")
 	if desc == nil {
 		t.Fatal("Expected description for 'String' type, got nil")
+		return
 	}
 
 	if desc.Name != "String" {
@@ -78,6 +82,7 @@ func TestGetBuiltinFunctionDescription(t *testing.T) {
 	desc := descriptions.GetBuiltinFunctionDescription("print")
 	if desc == nil {
 		t.Fatal("Expected description for 'print' function, got nil")
+		return
 	}
 
 	if desc.Name != "print" {
@@ -88,6 +93,7 @@ func TestGetBuiltinFunctionDescription(t *testing.T) {
 	desc = descriptions.GetBuiltinFunctionDescription("length")
 	if desc == nil {
 		t.Fatal("Expected description for 'length' function, got nil")
+		return
 	}
 
 	if desc.Name != "length" {
@@ -107,6 +113,7 @@ func TestGetKeywordDescription(t *testing.T) {
 	desc := descriptions.GetKeywordDescription("fn")
 	if desc == nil {
 		t.Fatal("Expected description for 'fn' keyword, got nil")
+		return
 	}
 
 	if desc.Keyword != "fn" {
@@ -117,6 +124,7 @@ func TestGetKeywordDescription(t *testing.T) {
 	desc = descriptions.GetKeywordDescription("let")
 	if desc == nil {
 		t.Fatal("Expected description for 'let' keyword, got nil")
+		return
 	}
 
 	if desc.Keyword != "let" {

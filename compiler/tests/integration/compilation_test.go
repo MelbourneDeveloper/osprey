@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +13,7 @@ import (
 
 // TestPkgConfigOpenSSL tests that pkg-config can find OpenSSL.
 func TestPkgConfigOpenSSL(t *testing.T) {
-	cmd := exec.Command("pkg-config", "--libs", "openssl")
+	cmd := exec.CommandContext(context.Background(), "pkg-config", "--libs", "openssl")
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -27,7 +28,7 @@ func TestPkgConfigOpenSSL(t *testing.T) {
 	t.Logf("✅ OpenSSL libraries found: %s", outputStr)
 
 	// Also test cflags
-	cmd = exec.Command("pkg-config", "--cflags", "openssl")
+	cmd = exec.CommandContext(context.Background(), "pkg-config", "--cflags", "openssl")
 
 	output, err = cmd.Output()
 	if err != nil {
@@ -38,7 +39,7 @@ func TestPkgConfigOpenSSL(t *testing.T) {
 	t.Logf("✅ OpenSSL cflags: %s", cflagsStr)
 
 	// Test crypto specifically
-	cmd = exec.Command("pkg-config", "--libs", "libcrypto")
+	cmd = exec.CommandContext(context.Background(), "pkg-config", "--libs", "libcrypto")
 
 	output, err = cmd.Output()
 	if err != nil {
@@ -145,12 +146,13 @@ func TestHTTPRuntimeLibrary(t *testing.T) {
 	t.Logf("Found HTTP library: %s", httpLibPath)
 
 	// Check if the library exists
-	if _, err := os.Stat(httpLibPath); os.IsNotExist(err) {
+	_, err = os.Stat(httpLibPath)
+	if os.IsNotExist(err) {
 		t.Fatalf("HTTP runtime library not built at %s - build failed! Error: %v", httpLibPath, err)
 	}
 
 	// Use nm to check symbols in the library
-	cmd := exec.Command("nm", httpLibPath)
+	cmd := exec.CommandContext(context.Background(), "nm", httpLibPath)
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -212,8 +214,10 @@ int main() {
 	compileArgs := []string{"-c"}
 
 	// Add pkg-config OpenSSL compile flags if available
-	if cmd := exec.Command("pkg-config", "--cflags", "openssl"); cmd != nil {
-		if output, err := cmd.Output(); err == nil {
+	cmd := exec.CommandContext(context.Background(), "pkg-config", "--cflags", "openssl")
+	if cmd != nil {
+		output, err := cmd.Output()
+		if err == nil {
 			flags := strings.Fields(strings.TrimSpace(string(output)))
 			compileArgs = append(compileArgs, flags...)
 		}
@@ -225,8 +229,9 @@ int main() {
 		"-Wno-deprecated-declarations",
 		"-o", testO, testC)
 
-	compileCmd := exec.Command("clang", compileArgs...)
-	if output, err := compileCmd.CombinedOutput(); err != nil {
+	compileCmd := exec.CommandContext(context.Background(), "clang", compileArgs...)
+	output, err := compileCmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("Failed to compile test C file: %v. Output: %s", err, string(output))
 	}
 
@@ -245,8 +250,9 @@ int main() {
 	linkArgs = append(linkArgs, "-lpthread")
 
 	// Add OpenSSL flags exactly as compilation.go does
-	pkgCmd := exec.Command("pkg-config", "--libs", "openssl")
-	if output, err := pkgCmd.Output(); err == nil {
+	pkgCmd := exec.CommandContext(context.Background(), "pkg-config", "--libs", "openssl")
+	output, err = pkgCmd.Output()
+	if err == nil {
 		flags := strings.Fields(strings.TrimSpace(string(output)))
 		linkArgs = append(linkArgs, flags...)
 		t.Logf("Added OpenSSL flags: %v", flags)
@@ -259,9 +265,9 @@ int main() {
 	t.Logf("Final link command: %v", linkArgs)
 
 	// Execute the link command
-	linkCmd := exec.Command(linkArgs[0], linkArgs[1:]...)
+	linkCmd := exec.CommandContext(context.Background(), linkArgs[0], linkArgs[1:]...)
 
-	output, err := linkCmd.CombinedOutput()
+	output, err = linkCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Manual linking failed: %v. Output: %s", err, string(output))
 	} else {
@@ -280,7 +286,8 @@ func findLibrary(libName string) string {
 	}
 
 	// Add working directory based paths - match JIT executor exactly
-	if wd, err := os.Getwd(); err == nil {
+	wd, err := os.Getwd()
+	if err == nil {
 		possiblePaths = append(possiblePaths,
 			filepath.Join(wd, "bin", libName),
 			filepath.Join(wd, "..", "bin", libName),
@@ -289,7 +296,8 @@ func findLibrary(libName string) string {
 	}
 
 	for _, libPath := range possiblePaths {
-		if _, err := os.Stat(libPath); err == nil {
+		_, err := os.Stat(libPath)
+		if err == nil {
 			return libPath
 		}
 	}

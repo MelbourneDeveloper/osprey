@@ -13,7 +13,8 @@ import (
 
 // generateRangeCall handles range function calls - creates an iterator from start to end.
 func (g *LLVMGenerator) generateRangeCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if err := validateBuiltInArgs(RangeFunc, callExpr); err != nil {
+	err := validateBuiltInArgs(RangeFunc, callExpr)
+	if err != nil {
 		return nil, err
 	}
 
@@ -46,7 +47,8 @@ func (g *LLVMGenerator) generateRangeCall(callExpr *ast.CallExpression) (value.V
 
 // generateForEachCall handles forEach function calls - applies a function to each element.
 func (g *LLVMGenerator) generateForEachCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if err := validateBuiltInArgs(ForEachFunc, callExpr); err != nil {
+	err := validateBuiltInArgs(ForEachFunc, callExpr)
+	if err != nil {
 		return nil, err
 	}
 
@@ -145,7 +147,8 @@ func (g *LLVMGenerator) generateForEachLoop(
 	g.builder = blocks.LoopBody
 	counterValue := g.builder.NewLoad(types.I64, counterPtr)
 
-	if _, err := g.callFunctionWithValue(funcIdent, counterValue); err != nil {
+	_, err := g.callFunctionWithValue(funcIdent, counterValue)
+	if err != nil {
 		return err
 	}
 

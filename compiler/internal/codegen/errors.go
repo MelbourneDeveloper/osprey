@@ -306,6 +306,7 @@ func WrapBuiltInFunctionWrongArgs(functionName string, argCount int) error {
 	if !exists {
 		return WrapWrongArgCount(functionName, 0, argCount) // Fallback for unknown functions
 	}
+
 	return WrapWrongArgCount(functionName, len(fn.ParameterTypes), argCount)
 }
 
@@ -321,6 +322,7 @@ func WrapSimpleErrorWithPos(baseErr error, arg string, pos interface{}) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, baseErr, arg)
 	}
+
 	return fmt.Errorf("%w: %s", baseErr, arg)
 }
 

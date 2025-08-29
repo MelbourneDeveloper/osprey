@@ -244,7 +244,6 @@ func (g *LLVMGenerator) isSemanticBooleanType(inferredType Type) bool {
 func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bool {
 	// Check if this is a value that's known to be from a boolean-returning function
 	// This is a heuristic approach until we have better generic type tracking
-
 	// For now, check if the value is constrained to 0 or 1 (typical boolean values)
 	if constant, ok := resultValue.(*constant.Int); ok {
 		val := constant.X.Int64()
@@ -259,7 +258,8 @@ func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bo
 
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if err := validateBuiltInArgs(PrintFunc, callExpr); err != nil {
+	err := validateBuiltInArgs(PrintFunc, callExpr)
+	if err != nil {
 		return nil, err
 	}
 
@@ -329,6 +329,7 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 
 	// Allocate buffer for input string (256 chars should be enough)
 	const inputBufferSize = 256
+
 	bufferSize := constant.NewInt(types.I32, inputBufferSize)
 	inputBuffer := g.builder.NewAlloca(types.NewArray(inputBufferSize, types.I8))
 
@@ -372,7 +373,9 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 	lastCharIdx := successBlock.NewSub(strLength, one)
 	lastCharPtr := successBlock.NewGetElementPtr(types.I8, bufferPtr, lastCharIdx)
 	lastChar := successBlock.NewLoad(types.I8, lastCharPtr)
+
 	const asciiNewline = 10
+
 	newlineChar := constant.NewInt(types.I8, asciiNewline) // ASCII newline
 	isNewline := successBlock.NewICmp(enum.IPredEQ, lastChar, newlineChar)
 
@@ -408,7 +411,8 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 }
 
 func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if err := validateBuiltInArgs(LengthFunc, callExpr); err != nil {
+	err := validateBuiltInArgs(LengthFunc, callExpr)
+	if err != nil {
 		return nil, err
 	}
 
@@ -437,7 +441,8 @@ func (g *LLVMGenerator) getResultType(valueType types.Type) *types.StructType {
 
 // generateContainsCall handles contains(haystack: string, needle: string) -> bool function calls.
 func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if err := validateBuiltInArgs(ContainsFunc, callExpr); err != nil {
+	err := validateBuiltInArgs(ContainsFunc, callExpr)
+	if err != nil {
 		return nil, err
 	}
 
@@ -485,7 +490,8 @@ func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (valu
 }
 
 func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if err := validateBuiltInArgs(SubstringFunc, callExpr); err != nil {
+	err := validateBuiltInArgs(SubstringFunc, callExpr)
+	if err != nil {
 		return nil, err
 	}
 

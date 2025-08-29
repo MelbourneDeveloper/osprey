@@ -31,7 +31,8 @@ func TestRustIntegrationExamples(t *testing.T) {
 	checkLLVMTools(t)
 
 	// Check if Rust tools are available before running the test
-	if _, _, err := findRustTools(); err != nil {
+	_, _, err := findRustTools()
+	if err != nil {
 		t.Fail()
 		return
 	}
@@ -57,7 +58,8 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 			t.Run(testName, func(t *testing.T) {
 				// Try to read from .expectedoutput file first
 				expectedOutputPath := path + ".expectedoutput"
-				if expectedContent, err := os.ReadFile(expectedOutputPath); err == nil {
+				expectedContent, err := os.ReadFile(expectedOutputPath)
+				if err == nil {
 					// Use .expectedoutput file content, trimmed to match captureJITOutput behavior
 					expectedOutput := strings.TrimSpace(string(expectedContent))
 					testExampleFileWithTrimming(t, path, expectedOutput, true)

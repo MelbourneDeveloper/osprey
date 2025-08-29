@@ -109,6 +109,7 @@ func (g *LLVMGenerator) inferParameterTypesForSignature(fnDecl *ast.FunctionDecl
 	g.typeInferer.env = newEnv
 
 	paramTypes := make([]Type, len(fnDecl.Parameters))
+
 	for i, param := range fnDecl.Parameters {
 		if param.Type != nil {
 			var paramType Type
@@ -256,7 +257,6 @@ func (g *LLVMGenerator) getMonomorphizedName(baseName string, fnType *FunctionTy
 // isPolymorphicFunction checks if a function needs monomorphization
 func (g *LLVMGenerator) isPolymorphicFunction(name string, fnType *FunctionType) bool {
 	// HINDLEY-MILNER FIX: Check if function has type variables or concrete types that differ from base
-
 	// Always monomorphize if there are already monomorphized instances
 	for existingName := range g.functions {
 		if strings.HasPrefix(existingName, name+"_") {
@@ -394,6 +394,7 @@ func (g *LLVMGenerator) setupFunctionEnvironment(
 	fnEnv := g.typeInferer.env.Clone()
 
 	paramTypes := make([]Type, len(fnDecl.Parameters))
+
 	for i, param := range fnDecl.Parameters {
 		if param.Type != nil {
 			var paramType Type
@@ -409,6 +410,7 @@ func (g *LLVMGenerator) setupFunctionEnvironment(
 						recordFieldTypes := make(map[string]Type)
 
 						fieldOrder := make([]string, 0, len(variant.Fields))
+
 						for _, field := range variant.Fields {
 							recordFieldTypes[field.Name] = g.getInferenceFieldType(field.Type)
 							fieldOrder = append(fieldOrder, field.Name)
@@ -573,6 +575,7 @@ func (g *LLVMGenerator) getParameterType(paramType *ast.TypeExpression) Type {
 			recordFieldTypes := make(map[string]Type)
 
 			fieldOrder := make([]string, 0, len(variant.Fields))
+
 			for _, field := range variant.Fields {
 				recordFieldTypes[field.Name] = g.getInferenceFieldType(field.Type)
 				fieldOrder = append(fieldOrder, field.Name)
@@ -967,6 +970,7 @@ func (g *LLVMGenerator) getLLVMRecordType(rt *RecordType) types.Type {
 
 	// Create field types in the mapped order
 	fieldTypes := make([]types.Type, len(rt.fields))
+
 	for fieldName, fieldType := range rt.fields {
 		index := fieldMapping[fieldName]
 		fieldTypes[index] = g.getLLVMType(fieldType)
@@ -1070,6 +1074,7 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 		recordFieldTypes := make(map[string]Type)
 
 		fieldOrder := make([]string, 0, len(variant.Fields))
+
 		for _, field := range variant.Fields {
 			recordFieldTypes[field.Name] = g.getInferenceFieldType(field.Type)
 			fieldOrder = append(fieldOrder, field.Name)
@@ -1110,7 +1115,6 @@ func (g *LLVMGenerator) declareType(typeDecl *ast.TypeDeclaration) {
 func (g *LLVMGenerator) declareDiscriminatedUnion(typeDecl *ast.TypeDeclaration) {
 	// For discriminated unions, we need to create:
 	// struct { i8 tag, [largest_variant_size x i8] data }
-
 	// Find the largest variant data size
 	maxDataSize := int64(0)
 	hasFieldVariants := false

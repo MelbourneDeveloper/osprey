@@ -27,12 +27,14 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 	if err != nil {
 		return nil, err
 	}
+
 	if isBuiltin {
 		return builtinResult, nil
 	}
 
 	// Validate function call
-	if err := g.validateFunctionCall(funcName, callExpr); err != nil {
+	err = g.validateFunctionCall(funcName, callExpr)
+	if err != nil {
 		return nil, err
 	}
 
@@ -43,7 +45,8 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 	}
 
 	// Validate that the resolved value is actually callable
-	if err := g.validateCallableType(funcValue, funcName, callExpr); err != nil {
+	err = g.validateCallableType(funcValue, funcName, callExpr)
+	if err != nil {
 		return nil, err
 	}
 
@@ -158,6 +161,7 @@ func (g *LLVMGenerator) generateCallArguments(
 	if len(callExpr.NamedArguments) > 0 {
 		return g.generateNamedArguments(funcName, callExpr, funcValue)
 	}
+
 	return g.generateRegularArguments(callExpr, funcValue)
 }
 
@@ -173,11 +177,13 @@ func (g *LLVMGenerator) generateNamedArguments(
 	}
 
 	args := make([]value.Value, len(reorderedExprs))
+
 	for i, expr := range reorderedExprs {
 		arg, err := g.generateSingleArgument(expr, i, callExpr, funcValue)
 		if err != nil {
 			return nil, err
 		}
+
 		args[i] = arg
 	}
 
@@ -190,13 +196,16 @@ func (g *LLVMGenerator) generateRegularArguments(
 	funcValue value.Value,
 ) ([]value.Value, error) {
 	args := make([]value.Value, len(callExpr.Arguments))
+
 	for i, argExpr := range callExpr.Arguments {
 		arg, err := g.generateSingleArgument(argExpr, i, callExpr, funcValue)
 		if err != nil {
 			return nil, err
 		}
+
 		args[i] = arg
 	}
+
 	return args, nil
 }
 
@@ -297,6 +306,7 @@ func (g *LLVMGenerator) resolvePolymorphicArgument(
 
 	// Generate it on-demand
 	result, err := g.generateMonomorphizedInstance(funcName, fnType)
+
 	return result, true, err
 }
 
@@ -513,6 +523,7 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 
 	// Set up parameters with concrete types in the type environment
 	savedTypeEnv := g.typeInferer.env.Clone()
+
 	for i, param := range fnDecl.Parameters {
 		// Add parameter value to variables
 		g.variables[param.Name] = fn.Params[i]
@@ -770,7 +781,8 @@ func (g *LLVMGenerator) generateMatchExpression(matchExpr *ast.MatchExpression) 
 	// Validate match expression for exhaustiveness and unknown variants
 	// Now that we have the discriminant, we can infer its type for proper validation
 	discriminantType := g.inferDiscriminantTypeName(discriminant, matchExpr.Expression)
-	if err := g.validateMatchExpressionWithType(matchExpr, discriminantType); err != nil {
+	err = g.validateMatchExpressionWithType(matchExpr, discriminantType)
+	if err != nil {
 		return nil, err
 	}
 
@@ -786,6 +798,7 @@ func (g *LLVMGenerator) inferDiscriminantTypeName(_ value.Value, expr ast.Expres
 			if concreteType, ok := resolvedType.(*ConcreteType); ok {
 				return concreteType.name
 			}
+
 			if recordType, ok := resolvedType.(*RecordType); ok {
 				// For record types, we need to find which type declaration this belongs to
 				for _, typeDecl := range g.typeDeclarations {
@@ -802,7 +815,8 @@ func (g *LLVMGenerator) inferDiscriminantTypeName(_ value.Value, expr ast.Expres
 	}
 
 	// Alternative approach: directly call type inference on the expression
-	if inferredType, err := g.typeInferer.InferType(expr); err == nil {
+	inferredType, err := g.typeInferer.InferType(expr)
+	if err == nil {
 		resolvedType := g.typeInferer.ResolveType(inferredType)
 		if concreteType, ok := resolvedType.(*ConcreteType); ok {
 			return concreteType.name
@@ -1151,6 +1165,7 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 
 		// Find the field info from the variant
 		var field ast.TypeField
+
 		for _, variantField := range variant.Fields {
 			if variantField.Name == patternFieldName {
 				field = variantField
@@ -1159,7 +1174,6 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 		}
 
 		if fieldIndex >= 0 && fieldIndex < len(structType.Fields) {
-
 			// Get pointer to the field
 			var fieldPtr value.Value
 			if isPointer {
@@ -1210,10 +1224,8 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 func (g *LLVMGenerator) inferResultValueType(_ value.Value, fieldType string) string {
 	// Try to track back to the source of this Result value to determine the generic type parameter
 	// This is a complex problem that requires proper generic type tracking
-
 	// For now, we'll use heuristics based on the field type
 	// Check if the field type suggests this could be a boolean value
-
 	// Simple heuristic: if the field type suggests it could be boolean (i64 that might be boolean)
 	// and this is a Success pattern match, assume it's a boolean
 	// This handles the common case of Result<bool, Error> from comparison functions
@@ -1319,7 +1331,8 @@ func (g *LLVMGenerator) createPatternCondition(
 	}
 
 	// Handle numeric literals
-	if patternValue, err := strconv.ParseInt(pattern.Constructor, 10, 64); err == nil {
+	patternValue, err := strconv.ParseInt(pattern.Constructor, 10, 64)
+	if err == nil {
 		return g.createNumericPatternCondition(patternValue, discriminant, currentBlock)
 	}
 
@@ -1336,6 +1349,7 @@ func (g *LLVMGenerator) createBooleanPatternCondition(
 	if constructor == TruePattern {
 		return g.createTruePatternCondition(discriminant, currentBlock)
 	}
+
 	return g.createFalsePatternCondition(discriminant, currentBlock)
 }
 
@@ -1443,6 +1457,7 @@ func (g *LLVMGenerator) createSimpleEnumCondition(
 	}
 
 	patternConst := constant.NewInt(types.I64, discriminantValue)
+
 	return currentBlock.NewICmp(enum.IPredEQ, discriminant, patternConst)
 }
 
@@ -1459,6 +1474,7 @@ func (g *LLVMGenerator) createNumericPatternCondition(
 	}
 
 	patternConst := constant.NewInt(types.I64, patternValue)
+
 	return currentBlock.NewICmp(enum.IPredEQ, discriminant, patternConst)
 }
 
@@ -1642,6 +1658,7 @@ func (g *LLVMGenerator) createStringPatternCondition(
 
 	// Ensure discriminant is i8* for strcmp
 	stringPtr := discriminant
+
 	if discriminant.Type().String() != "i8*" {
 		// If discriminant is not i8*, try to convert it
 		if discriminant.Type().String() == "i64" {

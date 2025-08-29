@@ -275,7 +275,6 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 // generateObjectLiteral generates LLVM IR for object literals like { field: value }.
 func (g *LLVMGenerator) generateObjectLiteral(lit *ast.ObjectLiteral) (value.Value, error) {
 	//CRITICAL TODO: implement record types properly, as per the spec 0005-TypeSystem.md
-
 	// Create a simple struct with the fields
 	var (
 		fieldTypes  []types.Type
@@ -586,7 +585,6 @@ func (g *LLVMGenerator) generateLogicalOperationWithPos(
 func (g *LLVMGenerator) generateLogicalAnd(left, right value.Value) (value.Value, error) {
 	// Short-circuit evaluation for &&
 	// If left is false, return false without evaluating right
-
 	// Convert to booleans first
 	leftBool := g.builder.NewICmp(enum.IPredNE, left, constant.NewInt(types.I64, 0))
 	rightBool := g.builder.NewICmp(enum.IPredNE, right, constant.NewInt(types.I64, 0))
@@ -602,7 +600,6 @@ func (g *LLVMGenerator) generateLogicalAnd(left, right value.Value) (value.Value
 func (g *LLVMGenerator) generateLogicalOr(left, right value.Value) (value.Value, error) {
 	// Short-circuit evaluation for ||
 	// If left is true, return true without evaluating right
-
 	// Convert to booleans first
 	leftBool := g.builder.NewICmp(enum.IPredNE, left, constant.NewInt(types.I64, 0))
 	rightBool := g.builder.NewICmp(enum.IPredNE, right, constant.NewInt(types.I64, 0))
@@ -642,6 +639,7 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 		if g.expectedReturnType == types.I1 {
 			return cmp, nil
 		}
+
 		return g.builder.NewZExt(cmp, types.I64), nil
 	default:
 		return nil, WrapUnsupportedUnaryOpWithPos(unaryExpr.Operator, unaryExpr.Position)
@@ -660,7 +658,6 @@ func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpressio
 
 func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpression) (value.Value, error) {
 	// Type validation is now handled by Hindley-Milner type inference
-
 	// Check if this is field access on a validated type constructor result
 	if typeConstructor, isTypeConstructor := fieldAccess.Object.(*ast.TypeConstructorExpression); isTypeConstructor {
 		// Check if this type has validation
@@ -708,7 +705,6 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 ) (value.Value, error) {
 	// For ObjectLiterals, we need to use the Hindley-Milner type information
 	// instead of trying to reverse-engineer from LLVM types
-
 	// If the object is an identifier, get its type from the type environment
 	if ident, ok := fieldAccess.Object.(*ast.Identifier); ok {
 		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
@@ -792,7 +788,6 @@ func (g *LLVMGenerator) generateStructFieldAccessFallback(
 ) (value.Value, error) {
 	// For polymorphic field access, we need to make assumptions about field ordering
 	// This is a fallback for when type inference hasn't provided a concrete record type
-
 	// Try to find the field by name using a heuristic approach
 	// For now, assume common field names map to indices
 	var fieldIndex int
@@ -1089,8 +1084,10 @@ func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 // buildFieldMapFromVariant converts variant fields to Type system
 func (g *LLVMGenerator) buildFieldMapFromVariant(variant *ast.TypeVariant) map[string]Type {
 	fieldMap := make(map[string]Type)
+
 	for _, field := range variant.Fields {
 		var fieldType Type
+
 		switch field.Type {
 		case TypeInt:
 			fieldType = NewPrimitiveType(TypeInt)
@@ -1101,8 +1098,10 @@ func (g *LLVMGenerator) buildFieldMapFromVariant(variant *ast.TypeVariant) map[s
 		default:
 			fieldType = NewConcreteType(field.Type)
 		}
+
 		fieldMap[field.Name] = fieldType
 	}
+
 	return fieldMap
 }
 
@@ -1120,6 +1119,7 @@ func (g *LLVMGenerator) processRecordFields(
 	for fieldName := range fieldMapping {
 		sortedFieldNames = append(sortedFieldNames, fieldName)
 	}
+
 	sort.Strings(sortedFieldNames)
 
 	// Process each field
@@ -1145,6 +1145,7 @@ func (g *LLVMGenerator) generateRecordField(
 ) (value.Value, types.Type, error) {
 	// Find field declaration type
 	var declaredFieldTypeName string
+
 	for _, field := range variant.Fields {
 		if field.Name == fieldName {
 			declaredFieldTypeName = field.Type
@@ -1160,6 +1161,7 @@ func (g *LLVMGenerator) generateRecordField(
 
 	// Convert to LLVM type
 	var declaredLLVMType types.Type
+
 	switch declaredFieldTypeName {
 	case TypeInt:
 		declaredLLVMType = types.I64
@@ -1174,6 +1176,7 @@ func (g *LLVMGenerator) generateRecordField(
 	// Generate field value with expected type context
 	oldExpectedType := g.expectedReturnType
 	g.expectedReturnType = declaredLLVMType
+
 	defer func() { g.expectedReturnType = oldExpectedType }()
 
 	fieldValue, err := g.generateExpression(fieldExpr)
@@ -1188,6 +1191,7 @@ func (g *LLVMGenerator) generateRecordField(
 // createRecordStruct creates and populates the struct value
 func (g *LLVMGenerator) createRecordStruct(fieldTypes []types.Type, fieldValues []value.Value) (value.Value, error) {
 	structType := types.NewStruct(fieldTypes...)
+
 	var structValue value.Value = constant.NewUndef(structType)
 
 	for i, fieldValue := range fieldValues {
@@ -1195,11 +1199,13 @@ func (g *LLVMGenerator) createRecordStruct(fieldTypes []types.Type, fieldValues 
 		actualType := fieldValue.Type()
 
 		finalFieldValue := fieldValue
+
 		if expectedType != actualType {
 			converted, err := g.convertFieldType(fieldValue, expectedType, actualType, i)
 			if err != nil {
 				return nil, err
 			}
+
 			finalFieldValue = converted
 		}
 
@@ -1302,7 +1308,6 @@ func (g *LLVMGenerator) findVariantByConstructorCall(
 ) (*ast.TypeVariant, int, error) {
 	// The constructor call should be in the form: VariantName { field1: value1, field2: value2 }
 	// We need to find which variant matches by looking at the discriminant of the variant name
-
 	// First, try to find a variant by matching field names if fields are provided
 	if len(typeConstructor.Fields) > 0 {
 		for i, variant := range typeDecl.Variants {
@@ -1760,6 +1765,7 @@ func (g *LLVMGenerator) ensureBuiltinFunctionDeclaration(ospreyName string) *ir.
 
 	// Convert builtin parameters to LLVM parameters
 	params := make([]*ir.Param, len(builtinFunc.ParameterTypes))
+
 	for i, param := range builtinFunc.ParameterTypes {
 		llvmType := g.getLLVMType(param.Type)
 		params[i] = ir.NewParam(param.Name, llvmType)
@@ -1854,7 +1860,6 @@ func (g *LLVMGenerator) generateSuccessConstructor(
 ) (value.Value, error) {
 	// Success constructor should create a Result struct with discriminant = 0 (success)
 	// Result struct: [value, discriminant] where discriminant=0 for success
-
 	// Get the value expression from the constructor fields
 	valueExpr, exists := typeConstructor.Fields["value"]
 	if !exists {
@@ -1886,7 +1891,6 @@ func (g *LLVMGenerator) generateErrorConstructor(
 ) (value.Value, error) {
 	// Error constructor should create a Result struct with discriminant = 1 (error)
 	// Result struct: [defaultValue, discriminant] where discriminant=1 for error
-
 	// Get the message expression from the constructor fields
 	messageExpr, exists := typeConstructor.Fields["message"]
 	if !exists {
@@ -1921,7 +1925,6 @@ func (g *LLVMGenerator) generateResultFieldAccessAsMatch(
 ) (value.Value, error) {
 	// For now, just extract the value directly from the Success Result struct
 	// This is a simplified implementation that assumes the Result is a Success
-
 	// Generate the Result value
 	resultValue, err := g.generateExpression(ident)
 	if err != nil {

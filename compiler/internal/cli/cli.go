@@ -795,6 +795,7 @@ func generateMainIndex(docsDir string) error {
 
 func generateFunctionIndex(docsDir string) error {
 	var content strings.Builder
+
 	content.WriteString("---\n")
 	content.WriteString("layout: page\n")
 	content.WriteString("title: \"Built-in Functions\"\n")
@@ -826,6 +827,7 @@ func generateFunctionIndex(docsDir string) error {
 
 func generateTypeIndex(docsDir string) error {
 	var content strings.Builder
+
 	content.WriteString("---\n")
 	content.WriteString("layout: page\n")
 	content.WriteString("title: \"Built-in Types\"\n")
@@ -856,6 +858,7 @@ func generateTypeIndex(docsDir string) error {
 
 func generateOperatorIndex(docsDir string) error {
 	var content strings.Builder
+
 	content.WriteString("---\n")
 	content.WriteString("layout: page\n")
 	content.WriteString("title: \"Operators\"\n")
@@ -887,6 +890,7 @@ func generateOperatorIndex(docsDir string) error {
 
 func generateKeywordIndex(docsDir string) error {
 	var content strings.Builder
+
 	content.WriteString("---\n")
 	content.WriteString("layout: page\n")
 	content.WriteString("title: \"Language Keywords\"\n")

@@ -55,7 +55,6 @@ func TestAnyTypeValidationBehavior(t *testing.T) {
 			t.Logf("Testing: %s", tt.description)
 			t.Logf("File: %s", tt.filePath)
 			t.Logf("Should fail: %v", tt.shouldFail)
-
 			// This serves as documentation of the expected behavior
 			// The actual integration tests verify this functionality
 		})
@@ -101,7 +100,6 @@ func TestTypeInferenceRules(t *testing.T) {
 			t.Logf("Rule: %s", rule.description)
 			t.Logf("Example: %s", rule.example)
 			t.Logf("Should be valid: %v", rule.valid)
-
 			// This documents the expected behavior
 			// The actual validation is tested through integration tests
 		})

@@ -167,7 +167,8 @@ func getDirectoryHashes(t *testing.T, dirPath string) map[string]string {
 	hashes := make(map[string]string)
 
 	// Check if directory exists, create it if it doesn't
-	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+	_, err := os.Stat(dirPath)
+	if os.IsNotExist(err) {
 		t.Logf("Directory %s doesn't exist, creating it", dirPath)
 
 		err := os.MkdirAll(dirPath, 0o755)
@@ -177,7 +178,7 @@ func getDirectoryHashes(t *testing.T, dirPath string) map[string]string {
 		}
 	}
 
-	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			t.Logf("Warning: Error accessing %s: %v", path, err)
 			return nil // Continue walking instead of failing

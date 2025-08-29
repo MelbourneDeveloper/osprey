@@ -552,10 +552,12 @@ func (ti *TypeInferer) ResolveType(t Type) Type {
 
 		// Check if any parameter types need resolution
 		newParams := make([]Type, len(ft.paramTypes))
+
 		for i, p := range ft.paramTypes {
 			resolvedParam := ti.ResolveType(p)
 
 			newParams[i] = resolvedParam
+
 			if resolvedParam != p {
 				hasUnboundVars = true
 			}
@@ -600,6 +602,7 @@ func uniqueInts(ints []int) []int {
 	for _, i := range ints {
 		if !seen[i] {
 			seen[i] = true
+
 			result = append(result, i)
 		}
 	}
@@ -714,7 +717,8 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 		return &ConcreteType{name: TypeBool}, nil
 	default:
 		// Check if it's an integer literal pattern
-		if _, err := strconv.ParseInt(pattern.Constructor, 10, 64); err == nil {
+		_, err := strconv.ParseInt(pattern.Constructor, 10, 64)
+		if err == nil {
 			return &ConcreteType{name: TypeInt}, nil
 		}
 
@@ -1306,7 +1310,8 @@ func (ti *TypeInferer) validateBuiltInFunctionArgs(funcName string, argCount int
 // inferCallExpression infers types for call expressions
 func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) {
 	// Validate built-in functions first
-	if err := ti.validateBuiltInCall(e); err != nil {
+	err := ti.validateBuiltInCall(e)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1323,7 +1328,8 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 	}
 
 	// Validate argument types (no 'any' types allowed)
-	if err := ti.validateArgumentTypes(e, argTypes); err != nil {
+	err = ti.validateArgumentTypes(e, argTypes)
+	if err != nil {
 		return nil, err
 	}
 
@@ -1350,32 +1356,39 @@ func (ti *TypeInferer) inferCallArguments(e *ast.CallExpression) ([]Type, error)
 	if len(e.NamedArguments) > 0 {
 		return ti.inferNamedArguments(e.NamedArguments)
 	}
+
 	return ti.inferRegularArguments(e.Arguments)
 }
 
 // inferNamedArguments infers types for named arguments
 func (ti *TypeInferer) inferNamedArguments(namedArgs []ast.NamedArgument) ([]Type, error) {
 	var argTypes []Type
+
 	for _, namedArg := range namedArgs {
 		argType, err := ti.InferType(namedArg.Value)
 		if err != nil {
 			return nil, err
 		}
+
 		argTypes = append(argTypes, argType)
 	}
+
 	return argTypes, nil
 }
 
 // inferRegularArguments infers types for regular arguments
 func (ti *TypeInferer) inferRegularArguments(args []ast.Expression) ([]Type, error) {
 	var argTypes []Type
+
 	for _, arg := range args {
 		argType, err := ti.InferType(arg)
 		if err != nil {
 			return nil, err
 		}
+
 		argTypes = append(argTypes, argType)
 	}
+
 	return argTypes, nil
 }
 
@@ -1386,6 +1399,7 @@ func (ti *TypeInferer) validateArgumentTypes(e *ast.CallExpression, argTypes []T
 			return ti.createAnyTypeError(e, i)
 		}
 	}
+
 	return nil
 }
 
@@ -1403,9 +1417,11 @@ func (ti *TypeInferer) getArgumentPosition(e *ast.CallExpression, index int) *as
 	if len(e.NamedArguments) > 0 && index < len(e.NamedArguments) {
 		return ti.getNamedArgumentPosition(e.NamedArguments[index], e.Position)
 	}
+
 	if index < len(e.Arguments) {
 		return ti.getRegularArgumentPosition(e.Arguments[index], e.Position)
 	}
+
 	return e.Position
 }
 
@@ -1450,6 +1466,7 @@ func (ti *TypeInferer) getFunctionName(e *ast.CallExpression) string {
 	if ident, ok := e.Function.(*ast.Identifier); ok {
 		return ident.Name
 	}
+
 	return "function"
 }
 
@@ -1467,7 +1484,8 @@ func (ti *TypeInferer) unifyCallTypes(funcType Type, argTypes []Type) (Type, err
 	substitutedExpectedType := ti.applySubst(expectedFuncType, ti.subst)
 
 	// Unify with actual function type
-	if err := ti.Unify(substitutedFuncType, substitutedExpectedType); err != nil {
+	err := ti.Unify(substitutedFuncType, substitutedExpectedType)
+	if err != nil {
 		return nil, fmt.Errorf("function call type mismatch: actual=%s, expected=%s: %w",
 			substitutedFuncType.String(), substitutedExpectedType.String(), err)
 	}
@@ -2013,7 +2031,8 @@ func (ti *TypeInferer) inferListLiteral(e *ast.ListLiteral) (Type, error) {
 			return nil, err
 		}
 
-		if err := ti.Unify(firstType, elemType); err != nil {
+		err = ti.Unify(firstType, elemType)
+		if err != nil {
 			return nil, fmt.Errorf("list element %d type mismatch: %w", i, err)
 		}
 	}
@@ -2176,7 +2195,8 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 
 	// Index must be Int
 	intType := &ConcreteType{name: TypeInt}
-	if err := ti.Unify(indexType, intType); err != nil {
+	err = ti.Unify(indexType, intType)
+	if err != nil {
 		return nil, fmt.Errorf("list index must be Int: %w", err)
 	}
 

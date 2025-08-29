@@ -23,6 +23,7 @@ func (g *LLVMGenerator) ensureHTTPFunctionDeclaration(functionName string) *ir.F
 
 	// Convert builtin parameters to LLVM parameters
 	params := make([]*ir.Param, len(builtinFunc.ParameterTypes))
+
 	for i, param := range builtinFunc.ParameterTypes {
 		llvmType := g.getLLVMType(param.Type)
 		params[i] = ir.NewParam(param.Name, llvmType)
@@ -53,6 +54,7 @@ func (g *LLVMGenerator) generateHTTPFunctionCall(functionName string, callExpr *
 
 	// Generate argument values
 	argValues := make([]value.Value, len(callExpr.Arguments))
+
 	for i, arg := range callExpr.Arguments {
 		val, err := g.generateExpression(arg)
 		if err != nil {
@@ -88,6 +90,7 @@ func (g *LLVMGenerator) generateHTTPFunctionCallNamed(functionName string, callE
 
 	// Generate argument values in correct order
 	argValues := make([]value.Value, len(builtinFunc.ParameterTypes))
+
 	for i, param := range builtinFunc.ParameterTypes {
 		found := false
 

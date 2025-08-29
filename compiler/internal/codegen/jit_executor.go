@@ -2,6 +2,7 @@
 package codegen
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -46,7 +47,8 @@ func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
 	linkArgs := j.setupLinkArgs(exeFile, objFile)
 
 	// Link to executable
-	if err := j.linkExecutable(linkArgs); err != nil {
+	err = j.linkExecutable(linkArgs)
+	if err != nil {
 		return "", err
 	}
 
@@ -90,7 +92,7 @@ func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
 	// Compile IR to object file
 	objFile := filepath.Join(tempDir, "program.o")
 	// #nosec G204 - llcPath is validated through findLLVMTool
-	llcCmd := exec.Command(llcPath, "-filetype=obj", "-o", objFile, irFile)
+	llcCmd := exec.CommandContext(context.Background(), llcPath, "-filetype=obj", "-o", objFile, irFile)
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
@@ -126,7 +128,8 @@ func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string
 	var foundLib string
 
 	for _, libPath := range paths {
-		if _, err := os.Stat(libPath); err == nil {
+		_, err := os.Stat(libPath)
+		if err == nil {
 			linkArgs = append(linkArgs, libPath)
 			foundLib = libPath
 
@@ -158,7 +161,8 @@ func (j *JITExecutor) buildRuntimeLibraryPaths(libName string) []string {
 	}
 
 	// Add working directory based paths
-	if wd, err := os.Getwd(); err == nil {
+	wd, err := os.Getwd()
+	if err == nil {
 		paths = append(paths,
 			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
 			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
@@ -177,8 +181,9 @@ func (j *JITExecutor) buildRuntimeLibraryPaths(libName string) []string {
 // addOpenSSLFlags adds OpenSSL linking flags
 func (j *JITExecutor) addOpenSSLFlags(linkArgs []string) []string {
 	// Use pkg-config to get proper OpenSSL flags when available
-	cmd := exec.Command("pkg-config", "--libs", "openssl")
-	if output, err := cmd.Output(); err == nil {
+	cmd := exec.CommandContext(context.Background(), "pkg-config", "--libs", "openssl")
+	output, err := cmd.Output()
+	if err == nil {
 		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
 		return append(linkArgs, flags...)
@@ -197,7 +202,8 @@ func (j *JITExecutor) addOpenSSLFlags(linkArgs []string) []string {
 		opensslLibPath := ""
 
 		for _, path := range possiblePaths {
-			if _, err := os.Stat(filepath.Join(path, "libssl.dylib")); err == nil {
+			_, err := os.Stat(filepath.Join(path, "libssl.dylib"))
+			if err == nil {
 				opensslLibPath = path
 				break
 			}
@@ -222,7 +228,7 @@ func (j *JITExecutor) linkExecutable(linkArgs []string) error {
 	}
 
 	// #nosec G204 - compilerPath is validated through findCompiler
-	linkCmd := exec.Command(compilerPath, linkArgs...)
+	linkCmd := exec.CommandContext(context.Background(), compilerPath, linkArgs...)
 
 	linkOutput, err := linkCmd.CombinedOutput()
 	if err != nil {
@@ -235,7 +241,7 @@ func (j *JITExecutor) linkExecutable(linkArgs []string) error {
 // executeProgram runs the compiled executable
 func (j *JITExecutor) executeProgram(exeFile string) error {
 	// #nosec G204 - exeFile is created in controlled temp directory
-	runCmd := exec.Command(exeFile)
+	runCmd := exec.CommandContext(context.Background(), exeFile)
 	runCmd.Stdout = os.Stdout
 	runCmd.Stderr = os.Stderr
 
@@ -245,7 +251,7 @@ func (j *JITExecutor) executeProgram(exeFile string) error {
 // executeProgramWithCapture runs the compiled executable and captures its output
 func (j *JITExecutor) executeProgramWithCapture(exeFile string) (string, error) {
 	// #nosec G204 - exeFile is created in controlled temp directory
-	runCmd := exec.Command(exeFile)
+	runCmd := exec.CommandContext(context.Background(), exeFile)
 
 	// CAPTURE STDOUT instead of outputting directly to terminal
 	output, err := runCmd.Output()
@@ -276,7 +282,8 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 	linkArgs := j.setupLinkArgs(exeFile, objFile)
 
 	// Link to executable
-	if err := j.linkExecutable(linkArgs); err != nil {
+	err = j.linkExecutable(linkArgs)
+	if err != nil {
 		return err
 	}
 
@@ -296,13 +303,15 @@ func (j *JITExecutor) findLLVMTool(toolName string) (string, error) {
 	}
 
 	// First check if it's in PATH
-	if path, err := exec.LookPath(toolName); err == nil {
+	path, err := exec.LookPath(toolName)
+	if err == nil {
 		return path, nil
 	}
 
 	// Check common installation locations
 	for _, path := range commonPaths {
-		if _, err := os.Stat(path); err == nil {
+		_, err := os.Stat(path)
+		if err == nil {
 			return path, nil
 		}
 	}
@@ -323,7 +332,8 @@ func (j *JITExecutor) findCompiler() (string, error) {
 
 	// First check PATH
 	for _, compiler := range compilers {
-		if path, err := exec.LookPath(compiler); err == nil {
+		path, err := exec.LookPath(compiler)
+		if err == nil {
 			return path, nil
 		}
 	}
@@ -332,7 +342,8 @@ func (j *JITExecutor) findCompiler() (string, error) {
 	for _, basePath := range commonPaths {
 		for _, compiler := range compilers {
 			fullPath := basePath + compiler
-			if _, err := os.Stat(fullPath); err == nil {
+			_, err := os.Stat(fullPath)
+			if err == nil {
 				return fullPath, nil
 			}
 		}

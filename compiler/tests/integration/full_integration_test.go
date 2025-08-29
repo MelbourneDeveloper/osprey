@@ -4,6 +4,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -24,7 +25,6 @@ var ErrTestExecutionTimeout = errors.New("test execution timeout (30s) - no hang
 func TestMain(m *testing.M) {
 	// Note: Individual tests now handle their own setup with testSetup(t)
 	// This approach gives better error reporting and isolation
-
 	// Run all tests
 	code := m.Run()
 
@@ -46,12 +46,14 @@ func checkLLVMTools(t *testing.T) {
 	t.Helper()
 
 	// Check for llc
-	if _, err := exec.LookPath("llc"); err != nil {
+	_, err := exec.LookPath("llc")
+	if err != nil {
 		t.Fatalf("llc not found in PATH - required for integration tests. Install LLVM tools: brew install llvm")
 	}
 
 	// Check for clang
-	if _, err := exec.LookPath("clang"); err != nil {
+	_, err = exec.LookPath("clang")
+	if err != nil {
 		t.Fatalf("clang not found in PATH - required for integration tests. Install clang: brew install llvm")
 	}
 }
@@ -191,11 +193,13 @@ func findRustTools() (string, string, error) {
 		rustcPath := filepath.Join(path, "rustc")
 		cargoPath := filepath.Join(path, "cargo")
 
-		if _, err := os.Stat(rustcPath); err == nil {
+		_, err := os.Stat(rustcPath)
+		if err == nil {
 			rustc = rustcPath
 		}
 
-		if _, err := os.Stat(cargoPath); err == nil {
+		_, err = os.Stat(cargoPath)
+		if err == nil {
 			cargo = cargoPath
 		}
 
@@ -213,8 +217,10 @@ func findRustTools() (string, string, error) {
 	}
 
 	// Try using exec.LookPath as fallback
-	if rustcPath, err := exec.LookPath("rustc"); err == nil {
-		if cargoPath, err := exec.LookPath("cargo"); err == nil {
+	rustcPath, err := exec.LookPath("rustc")
+	if err == nil {
+		cargoPath, err := exec.LookPath("cargo")
+		if err == nil {
 			return rustcPath, cargoPath, nil
 		}
 	}
@@ -225,7 +231,6 @@ func findRustTools() (string, string, error) {
 // TestRustInterop tests the Rust-Osprey interop functionality.
 func TestRustInterop(t *testing.T) {
 	// Ensure compiler is built before running the test
-
 	// Force the test to be visible in test explorers
 	t.Log("🦀 Starting Rust interop test")
 
@@ -238,7 +243,8 @@ func TestRustInterop(t *testing.T) {
 	t.Logf("✅ Found Rust tools: rustc=%s, cargo=%s", rustc, cargo)
 
 	// Check for clang
-	if _, err := exec.LookPath("clang"); err != nil {
+	_, err = exec.LookPath("clang")
+	if err != nil {
 		t.Fatalf("❌ CLANG NOT FOUND - TEST FAILED. Install LLVM/Clang - Error: %v", err)
 	}
 
@@ -261,17 +267,19 @@ func TestRustInterop(t *testing.T) {
 	}
 
 	// Check if directory exists
-	if _, err := os.Stat(rustDir); os.IsNotExist(err) {
+	_, err = os.Stat(rustDir)
+	if os.IsNotExist(err) {
 		t.Fatalf("❌ RUST INTEGRATION DIRECTORY NOT FOUND: %s (current dir: %s)", rustDir, currentDir)
 	}
 
 	// Clean up any previous build artifacts first
 	t.Log("🧹 Cleaning up previous Rust build artifacts...")
 
-	cleanCmd := exec.Command("cargo", "clean")
+	cleanCmd := exec.CommandContext(context.Background(), "cargo", "clean")
 
 	cleanCmd.Dir = rustDir
-	if output, err := cleanCmd.CombinedOutput(); err != nil {
+	output, err := cleanCmd.CombinedOutput()
+	if err != nil {
 		t.Logf("⚠️ Warning: Failed to clean Rust artifacts: %v\nOutput: %s", err, output)
 	}
 
@@ -279,10 +287,12 @@ func TestRustInterop(t *testing.T) {
 	t.Log("🦀 Building Rust library...")
 
 	targetDir := filepath.Join(os.TempDir(), "osprey_rust_target_"+strconv.Itoa(os.Getpid()))
-	buildCmd := exec.Command(cargo, "build", "--release", "--target-dir", targetDir, "-j", "1")
+	buildCmd := exec.CommandContext(context.Background(), cargo,
+		"build", "--release", "--target-dir", targetDir, "-j", "1")
 
 	buildCmd.Dir = rustDir
-	if output, err := buildCmd.CombinedOutput(); err != nil {
+	output, err = buildCmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("❌ FAILED TO BUILD RUST LIBRARY: %v\nOutput: %s", err, output)
 	}
 
@@ -299,10 +309,10 @@ func TestRustInterop(t *testing.T) {
 	// Test the interop by running the demo script
 	t.Log("🚀 Running Rust interop demo...")
 
-	runCmd := exec.Command("bash", "run.sh")
+	runCmd := exec.CommandContext(context.Background(), "bash", "run.sh")
 	runCmd.Dir = rustDir
 
-	output, err := runCmd.CombinedOutput()
+	output, err = runCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("❌ FAILED TO RUN RUST INTEROP DEMO: %v\nOutput: %s", err, output)
 	}
@@ -413,7 +423,8 @@ func TestSystemLibraryInstallation(t *testing.T) {
 
 	defer func() { _ = os.Chdir(oldWd) }()
 
-	if err := os.Chdir(tempDir); err != nil {
+	err = os.Chdir(tempDir)
+	if err != nil {
 		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 

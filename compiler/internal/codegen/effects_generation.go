@@ -105,6 +105,7 @@ func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 	// Parse actual operation signatures from the AST
 	for _, operation := range effect.Operations {
 		paramTypes := make([]types.Type, len(operation.Parameters))
+
 		for i, param := range operation.Parameters {
 			if param.Type != nil {
 				paramTypes[i] = ec.stringTypeToLLVMType(param.Type.Name)
@@ -152,12 +153,14 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	// When in handler scope, try handlers FIRST regardless of declared effects
 	if len(ec.currentHandlers) > 0 || len(ec.handlerStack) > 0 {
 		// PRIORITY 1: Check for lexically scoped handlers
-		if result, err := ec.tryCurrentScopeHandlers(perform); err != nil || result != nil {
+		result, err := ec.tryCurrentScopeHandlers(perform)
+		if err != nil || result != nil {
 			return result, err
 		}
 
 		// PRIORITY 2: Check global handler stack
-		if result, err := ec.tryStackHandlers(perform); err != nil || result != nil {
+		result, err = ec.tryStackHandlers(perform)
+		if err != nil || result != nil {
 			return result, err
 		}
 	}
@@ -367,6 +370,7 @@ func (ec *EffectCodegen) createHandlerFunction(
 
 	// Create parameters with proper names
 	params := make([]*ir.Param, len(paramTypes))
+
 	for i, paramType := range paramTypes {
 		if i < len(arm.Parameters) {
 			params[i] = ir.NewParam(arm.Parameters[i], paramType)
@@ -529,6 +533,7 @@ func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value
 // generatePerformArguments generates arguments for perform expressions
 func (ec *EffectCodegen) generatePerformArguments(perform *ast.PerformExpression) ([]value.Value, error) {
 	args := make([]value.Value, len(perform.Arguments))
+
 	for i, argExpr := range perform.Arguments {
 		argVal, err := ec.generator.generateExpression(argExpr)
 		if err != nil {
@@ -644,9 +649,9 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 	// when currentHandlers=0, stack=0. This means the handler context is not being preserved
 	// across function calls. The issue is NOT in this function, but in how handlers are
 	// maintained when calling functions with declared effects.
-
 	// Generate arguments for the perform expression
 	args := make([]value.Value, len(perform.Arguments))
+
 	for i, argExpr := range perform.Arguments {
 		argVal, err := ec.generator.generateExpression(argExpr)
 		if err != nil {

@@ -21,6 +21,7 @@ func (g *LLVMGenerator) validateMatchExpressionWithType(expr *ast.MatchExpressio
 			return fmt.Errorf("line %d:%d: match expression must have at least one arm",
 				expr.Position.Line, expr.Position.Column)
 		}
+
 		return ErrMatchNoArms
 	}
 

@@ -78,6 +78,7 @@ func TestGetLanguageElementDescription_ExistingElement(t *testing.T) {
 		if result.Type != ElementTypeFunction {
 			t.Errorf("Expected type 'function', got: %s", result.Type)
 		}
+
 		if result.Name != "print" {
 			t.Errorf("Expected name 'print', got: %s", result.Name)
 		}

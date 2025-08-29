@@ -48,7 +48,7 @@ RUN go install golang.org/x/tools/gopls@v0.16.2 \
     && go install golang.org/x/tools/cmd/goimports@latest
 
 # Install golangci-lint
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.1.6
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
 
 # Create vscode user
 RUN apt-get update && apt-get install -y sudo \

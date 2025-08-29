@@ -188,6 +188,7 @@ func (b *Builder) buildIdentifierPattern(ctx parser.IPatternContext) Pattern {
 	// Handle type annotation pattern (like: p: PersonData => ...)
 	if len(ids) == OneIdentifier && ctx.COLON() != nil && ctx.Type_() != nil {
 		typeName := b.buildTypeFromContext(ctx.Type_())
+
 		return Pattern{
 			Constructor: typeName,
 			Variable:    ids[0].GetText(),
@@ -253,5 +254,6 @@ func (b *Builder) buildTypeFromContext(ctx parser.ITypeContext) string {
 	if ctx.ID() != nil {
 		return ctx.ID().GetText()
 	}
+
 	return unknownPatternConstructor
 }
