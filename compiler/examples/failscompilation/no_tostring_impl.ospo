@@ -1,8 +1,7 @@
-// Test case for no toString implementation error
-// This should trigger WrapNoToStringImpl
+// Test case that should fail - trying to call undefined function
+// This should trigger undefined variable error
 
 fn main() {
-    let func_ref = main  // Function reference
-    let stringified = toString(func_ref)  // Functions don't have toString
-    print(stringified)
+    let result = someUndefinedFunction()  // This doesn't exist
+    print("This should not compile")
 } 

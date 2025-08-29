@@ -134,503 +134,46 @@ variant := ID (LBRACE fieldDeclarations RBRACE)?
 fieldDeclarations := fieldDeclaration (COMMA fieldDeclaration)*
 fieldDeclaration := ID COLON type constraint?
 
-constraint := WHERE functionCall
+constraint := WHERE function_name
 ```
 
 **Examples:**
 ```osprey
 type Color = Red | Green | Blue
 
-type Shape = Circle { radius: Int } 
-           | Rectangle { width: Int, height: Int }
+type Shape = Circle { radius: int } 
+           | Rectangle { width: int, height: int }
 
-type Result = Success { value: String } 
-            | Error { message: String }
+type Result = Success { value: string } 
+            | Error { message: string }
 ```
 
 ### 3.7 Record Types and Type Constructors
 
-❌ **NOT FULLY IMPLEMENTED**: Record types with constraints are a design goal but not yet implemented. Basic type declarations work but constraint validation is not implemented.
-
-#### 3.7.1 Record Type Declaration
-
-Record types define structured data with named fields:
+Record types define structured data with named fields using the following syntax:
 
 ```
-record_type := 'type' ID '=' '{' field_declarations '}'
+record_type := 'type' ID '=' '{' field_declarations '}' validation?
 
 field_declarations := field_declaration (',' field_declaration)*
-field_declaration := ID ':' type constraint?
-constraint := 'where' function_call
-```
+field_declaration := ID ':' type
+validation := 'where' function_name
 
-**Examples:**
-```osprey
-// Simple record type
-type Point = { x: Int, y: Int }
-
-// Record with constraints
-type Person = { 
-    name: String where isValidName(name),
-    age: Int where between(age, 0, 150),
-    email: String where validateEmail(email),
-    confirmEmail: String where equals(email, confirmEmail)  // Cross-field
-}
-
-// Mixed record and union types
-type User = Guest { sessionId: String }
-          | Member { 
-              id: Int where id > 0,
-              name: String where isValidName(name),
-              joinDate: String
-            }
-```
-
-#### 3.7.2 Type Construction
-
-Type constructors create instances of record types using elegant field syntax. If there are any where constraints on any fields, the constructor returns the same Result type as arithmetic operators
-
-```
 type_constructor := type_name '{' field_assignments '}'
 field_assignments := field_assignment (',' field_assignment)*
 field_assignment := ID ':' expression
 ```
 
-**Construction Examples:**
-```osprey
-// Simple construction
-let point = Point { x: 10, y: 20 }
-
-// Construction with constraints (returns Result)
-let person = Person { 
-    name: "Alice", 
-    age: 25, 
-    email: "alice@example.com" 
-}
-
-// Handle construction results
-match person {
-    Ok { value } => print("Created person: ${value.name}")
-    Err { error } => print("Construction failed: ${error}")
-}
-```
-
-#### 3.7.3 Construction Result Types
-
-**CRITICAL**: Type constructors with constraints return `Result<T, ConstructionError>`:
-
-- **Unconstrained types**: Direct construction returns the type
-- **Constrained types**: Construction returns `Result<T, ConstructionError>`
-
-**Rule**: If ANY field in a type has a WHERE constraint, the constructor ALWAYS returns a Result type.
-
-```osprey
-// No constraints = direct construction
-type Point = { x: Int, y: Int }
-let point = Point { x: 10, y: 20 }  // Returns Point
-
-// With constraints = Result construction  
-type Person = { 
-    name: String where notEmpty(name),
-    age: Int where isPositive(age) 
-}
-let person = Person { name: "Alice", age: 25 }  // Returns Result<Person, ConstructionError>
-
-// Even ONE constraint makes it return Result
-type User = {
-    id: Int,                                    // No constraint
-    name: String where notEmpty(name),          // Has constraint
-    email: String                               // No constraint  
-}
-let user = User { id: 1, name: "Alice", email: "alice@test.com" }  // Returns Result<User, ConstructionError>
-
-// Construction error handling
-match Person { name: "", age: 25 } {
-    Ok { value } => useValidPerson(value)
-    Err { error } => match error {
-        ConstraintViolation { field, message } => 
-            print("Field ${field} failed: ${message}")
-        MissingField { field } => 
-            print("Required field missing: ${field}")
-    }
-}
-```
-
-#### 3.7.4 Non-Destructive Mutation (Structural Updates)
-
-Records support elegant non-destructive updates that create modified copies:
-
-```osprey
-// Original record
-let person = Person { name: "Alice", age: 25, email: "alice@example.com" }
-
-// Non-destructive update (creates new instance)
-let olderPerson = person { age: 26 }           // Only age changes
-let renamedPerson = person { name: "Alicia" }  // Only name changes
-
-// Multiple field updates
-let updatedPerson = person { 
-    age: 26, 
-    email: "alicia@newdomain.com" 
-}
-
-// Original person unchanged - all updates create new instances
-print(person.age)        // Still 25
-print(olderPerson.age)   // Now 26
-```
-
-#### 3.7.5 Update Result Types
-
-Updates that involve constrained fields also return Results:
-
-```osprey
-// Update with constraint validation
-let result = person { age: 200 }  // Returns Result<Person, ConstraintViolation>
-
-match result {
-    Ok { value } => useUpdatedPerson(value)
-    Err { error } => handleConstraintError(error)
-}
-
-// Valid update
-let validUpdate = person { age: 30 }  // Returns Ok<Person>
-```
-
-#### 3.7.6 Field Access
-
-Record fields are accessed using dot notation:
-
-```osprey
-let person = Person { name: "Alice", age: 25, email: "alice@example.com" }
-
-print("Name: ${person.name}")     // "Alice"
-print("Age: ${person.age}")       // 25
-print("Email: ${person.email}")   // "alice@example.com"
-```
-
-#### 3.7.7 Pattern Matching on Records
-
-Records can be destructured in pattern matching:
-
-```osprey
-match person {
-    Person { name, age: 25, email } => 
-        print("25-year-old ${name} with email ${email}")
-    Person { name, age, email } => 
-        print("${name} is ${age} years old")
-}
-
-// Partial destructuring
-match person {
-    Person { name: "Alice", ... } => print("It's Alice!")
-    Person { age, ... } if age < 18 => print("Minor")
-    _ => print("Other person")
-}
-```
-
-#### 3.7.8 Constraint Functions
-
-Constraints are function calls that return boolean values. The constraint system supports both compile-time and runtime evaluation:
-
-- **Compile-time constraints**: When all arguments are constants/literals, functions execute at compile time
-- **Runtime constraints**: When any argument is a runtime value, functions execute during construction
-
-**Constraint Syntax:**
-```
-constraint := 'where' function_call
-function_call := ID '(' argument_list ')'
-```
-
-**Constraint Categories:**
-- **Field validation**: Direct field value checking
-- **Cross-field validation**: Constraints involving multiple fields  
-- **Complex validation**: Custom validation functions
-- **Built-in constraints**: Standard validation functions
-
 **Examples:**
 ```osprey
-type Person = {
-    name: String where isValidName(name),
-    age: Int where between(age, 0, 150),
-    email: String where validateEmail(email),
-    confirmEmail: String where equals(email, confirmEmail)  // Cross-field
-}
+type Point = { x: int, y: int }
+type Person = { name: string, age: int } where validatePerson
 
-type Rectangle = {
-    width: Int where positive(width),
-    height: Int where positive(height),
-    area: Int where equals(area, multiply(width, height))  // Computed constraint
-}
-
-type CreditCard = {
-    number: String where luhnCheck(number),
-    expiryMonth: Int where between(expiryMonth, 1, 12),
-    expiryYear: Int where greaterThan(expiryYear, currentYear()),
-    cvv: String where matchesPattern(cvv, "^[0-9]{3,4}$")
-}
+let point = Point { x: 10, y: 20 }
+let person = Person { name: "Alice", age: 25 }
 ```
 
-**Compile-Time vs Runtime Evaluation:**
-
-```osprey
-// All constraints evaluated at COMPILE TIME (constants/literals)
-let person1 = Person { 
-    name: "Alice",           // isValidName("Alice") → compile time
-    age: 25,                 // between(25, 0, 150) → compile time  
-    email: "alice@test.com"  // validateEmail("alice@test.com") → compile time
-}
-
-// Mixed compile-time and runtime evaluation
-let inputName = input()
-let person2 = Person {
-    name: inputName,         // isValidName(inputName) → RUNTIME
-    age: 30,                 // between(30, 0, 150) → compile time
-    email: "bob@test.com"    // validateEmail("bob@test.com") → compile time
-}
-
-// All constraints evaluated at RUNTIME
-let inputAge = input()
-let inputEmail = input()
-let person3 = Person {
-    name: inputName,         // isValidName(inputName) → runtime
-    age: inputAge,           // between(inputAge, 0, 150) → runtime
-    email: inputEmail        // validateEmail(inputEmail) → runtime
-}
-```
-
-**Custom Constraint Functions:**
-
-```osprey
-// Basic validation functions using match expressions
-fn notEmpty(s: String) -> Bool = match s {
-    "" => false
-    _ => true
-}
-
-fn isPositive(n: Int) -> Bool = match n {
-    0 => false  
-    _ => true
-}
-
-// Complex validation with multiple rules
-fn validateUsername(username: String) -> Bool = match username {
-    "" => false           // Empty
-    " " => false          // Whitespace only
-    "admin" => false      // Reserved word
-    "root" => false       // Reserved word
-    "a" => false          // Too short
-    _ => true             // Everything else valid
-}
-
-// Numeric range and reserved value validation
-fn validatePort(port: Int) -> Bool = match port {
-    0 => false           // Invalid port
-    1 => false           // Reserved
-    22 => false          // SSH reserved
-    80 => true           // HTTP valid
-    443 => true          // HTTPS valid
-    65536 => false       // Too high
-    _ => true            // Most ports valid
-}
-
-// Complex password validation
-fn isValidPassword(password: String) -> Bool = 
-    length(password) >= 8 && 
-    hasUppercase(password) && 
-    hasLowercase(password) && 
-    hasDigits(password)
-
-fn isBusinessHour(hour: Int) -> Bool = 
-    between(hour, 9, 17)
-
-fn isWeekend(dayOfWeek: String) -> Bool = 
-    equals(dayOfWeek, "Saturday") || equals(dayOfWeek, "Sunday")
-
-// Use in type definitions
-type UserAccount = {
-    username: String where validateUsername(username),
-    password: String where isValidPassword(password),
-    loginHour: Int where isBusinessHour(loginHour)
-}
-
-type NetworkConfig = {
-    port: Int where validatePort(port),
-    host: String where notEmpty(host)
-}
-
-type Appointment = {
-    dayOfWeek: String where not(isWeekend(dayOfWeek)),
-    hour: Int where isBusinessHour(hour),
-    duration: Int where between(duration, 15, 240)  // 15 min to 4 hours
-}
-```
-
-**Constraint Function Requirements:**
-- Must return `Bool` type
-- Can reference the field being constrained
-- Can reference other fields in the same record
-- Can call other functions (including built-ins)
-- Must be pure functions (no side effects)
-
-**Performance Characteristics:**
-- **Compile-time evaluation**: Zero runtime cost for constant expressions
-- **Runtime evaluation**: Minimal overhead, constraints evaluated once during construction
-- **Caching**: Constraint results cached to avoid re-evaluation
-- **Short-circuiting**: Constraint evaluation stops at first failure
-
-#### 3.7.9 Built-in Constraint Functions
-
-Standard constraint functions available for validation:
-
-```osprey
-// String validation functions
-length(s: String) -> Int                    // String length
-isEmpty(s: String) -> Bool                  // Empty string check
-notEmpty(s: String) -> Bool                 // Non-empty string check
-contains(s: String, sub: String) -> Bool    // Substring check
-startsWith(s: String, prefix: String) -> Bool
-endsWith(s: String, suffix: String) -> Bool
-matchesPattern(s: String, regex: String) -> Bool  // Regex validation
-
-// String content validation
-isAlphabetic(s: String) -> Bool            // Only letters
-isNumeric(s: String) -> Bool               // Only digits
-isAlphanumeric(s: String) -> Bool          // Letters and digits
-hasUppercase(s: String) -> Bool            // Contains uppercase
-hasLowercase(s: String) -> Bool            // Contains lowercase  
-hasDigits(s: String) -> Bool               // Contains digits
-
-// Numeric validation functions
-between(n: Int, min: Int, max: Int) -> Bool  // Range check: min <= n <= max
-positive(n: Int) -> Bool                     // n > 0
-negative(n: Int) -> Bool                     // n < 0
-nonNegative(n: Int) -> Bool                  // n >= 0
-nonPositive(n: Int) -> Bool                  // n <= 0
-greaterThan(a: Int, b: Int) -> Bool          // a > b
-lessThan(a: Int, b: Int) -> Bool             // a < b
-equals(a: Any, b: Any) -> Bool               // a == b
-
-// Logical functions
-not(condition: Bool) -> Bool                 // Logical negation
-and(a: Bool, b: Bool) -> Bool               // Logical AND
-or(a: Bool, b: Bool) -> Bool                // Logical OR
-
-// Mathematical functions (for constraints)
-multiply(a: Int, b: Int) -> Int             // a * b
-add(a: Int, b: Int) -> Int                  // a + b
-subtract(a: Int, b: Int) -> Int             // a - b
-divide(a: Int, b: Int) -> Int               // a / b (constraint context)
-
-// Specialized validation functions
-luhnCheck(cardNumber: String) -> Bool        // Credit card validation
-isValidEmail(email: String) -> Bool          // Email format validation
-isValidURL(url: String) -> Bool              // URL format validation
-isValidIPAddress(ip: String) -> Bool         // IP address validation
-
-// Temporal functions (for date/time constraints)
-currentYear() -> Int                         // Current year (compile-time constant)
-currentMonth() -> Int                        // Current month
-currentDay() -> Int                          // Current day
-```
-
-**Function-Based Constraint Examples:**
-
-```osprey
-type StrongPassword = {
-    value: String where and(
-        between(length(value), 8, 128),
-        and(hasUppercase(value), 
-            and(hasLowercase(value), hasDigits(value))
-        )
-    )
-}
-
-type ValidatedEmail = {
-    address: String where and(
-        notEmpty(address),
-        and(contains(address, "@"), isValidEmail(address))
-    )
-}
-
-type DateOfBirth = {
-    year: Int where between(year, 1900, currentYear()),
-    month: Int where between(month, 1, 12),
-    day: Int where between(day, 1, 31)
-}
-
-type BankAccount = {
-    accountNumber: String where and(
-        equals(length(accountNumber), 10),
-        isNumeric(accountNumber)
-    ),
-    routingNumber: String where luhnCheck(routingNumber),
-    balance: Int where nonNegative(balance)
-}
-```
-
-#### 3.7.10 Error Types for Construction
-
-```osprey
-type ConstructionError = 
-    ConstraintViolation { 
-        field: String, 
-        value: String, 
-        constraint: String,
-        message: String 
-    }
-  | MissingField { field: String }
-  | TypeMismatch { 
-        field: String, 
-        expected: String, 
-        actual: String 
-    }
-  | ConstraintFunctionError {
-        field: String,
-        function: String,
-        error: String
-    }
-  | MultipleConstraintViolations {
-        violations: String  // List of all constraint failures
-    }
-```
-
-#### 3.7.11 Compilation Errors for Field Access
-
-**CRITICAL**: Attempting to access fields directly on constrained type constructor results must produce specific compilation errors.
-
-**Field Access on Result Types:**
-When a type has WHERE constraints, its constructor returns `Result<T, ConstructionError>`. Attempting to access fields directly on this Result type should produce a clear compilation error:
-
-```osprey
-type User = { 
-    name: String where notEmpty(name)
-}
-
-let user = User { name: "alice" }  // Returns Result<User, ConstructionError>
-
-// COMPILATION ERROR: Cannot access field on Result type
-print("${user.name}")  
-// Should produce: "cannot access field 'name' on Result<User, ConstructionError> type - pattern matching required"
-
-let name = user.name
-// Should produce: "field access requires pattern matching on Result type"
-```
-
-**Required Error Messages:**
-- **Field access on Result**: `"cannot access field 'FIELD' on Result<TYPE, ConstructionError> type - pattern matching required"`
-- **Assignment from Result field**: `"field access requires pattern matching on Result type"`
-- **Missing pattern matching**: `"constrained types return Result - use match expression to handle success/failure"`
-
-**Correct Pattern:**
-```osprey
-match user {
-    Ok { value } => print("Name: ${value.name}")
-    Err { error } => print("Construction failed: ${error}")
-}
-```
-
-**Current Implementation Issue:**
-The current compiler incorrectly reports field access attempts as "undefined variable" errors instead of proper Result type access errors. This should be fixed to provide clear guidance on Result type handling.
+For complete record type semantics, construction rules, field access, constraints, and validation behavior, see [Type System - Record Types](0005-TypeSystem.md#record-types).
 
 ### 3.8 Expressions
 
@@ -642,11 +185,13 @@ multiplicative_expression := unary_expression (('*' | '/') unary_expression)*
 ```
 
 #### Unary Expressions
+
 ```
 unary_expression := ('+' | '-')? pipe_expression
 ```
 
 #### Function Calls
+
 ```
 call_expression := primary ('.' ID '(' argument_list? ')')* 
                 | primary ('(' argument_list? ')')?
@@ -661,6 +206,7 @@ positional_argument_list := expression (',' expression)*
 ```
 
 #### Primary Expressions
+
 ```
 primary_expression := literal
                    | identifier
@@ -672,9 +218,21 @@ primary_expression := literal
 
 #### Binary Expressions
 ```
-binary_expression := multiplicative_expression (('+' | '-') multiplicative_expression)*
+binary_expression := logical_or_expression
+logical_or_expression := logical_and_expression ('||' logical_and_expression)*
+logical_and_expression := comparison_expression ('&&' comparison_expression)*
+comparison_expression := additive_expression (('==' | '!=' | '<' | '>' | '<=' | '>=') additive_expression)*
+additive_expression := multiplicative_expression (('+' | '-') multiplicative_expression)*
 multiplicative_expression := unary_expression (('*' | '/') unary_expression)*
 ```
+
+**Operator Precedence (highest to lowest):**
+1. Unary operators (`!`, `-`)
+2. Multiplicative (`*`, `/`)  
+3. Additive (`+`, `-`)
+4. Comparison (`==`, `!=`, `<`, `>`, `<=`, `>=`)
+5. Logical AND (`&&`)
+6. Logical OR (`||`)
 
 #### Boolean Pattern Matching
 Use pattern matching for conditional logic:
@@ -729,10 +287,129 @@ match commands[0] {
 
 **FUNDAMENTAL SAFETY PRINCIPLE**: Array access can fail (index out of bounds), therefore it MUST return Result types to enforce explicit error handling and prevent runtime crashes.
 
+#### Field Access
+
+Field access uses dot notation to access fields of record types:
+
+```
+field_access := expression '.' identifier
+```
+
+**Examples:**
+```osprey
+type Person = { name: String, age: Int }
+let person = Person { name: "Alice", age: 25 }
+
+// Field access on record types
+let name = person.name        // "Alice"
+let age = person.age          // 25
+
+// Field access in expressions
+print("Name: ${person.name}")
+print("Age: ${person.age}")
+
+// Field access in function calls
+sendEmail(to: person.name, subject: "Hello")
+```
+
+#### Field Access Rules and Restrictions
+
+**✅ ALLOWED - Field Access on Record Types:**
+```osprey
+type User = { id: Int, name: String, email: String }
+let user = User { id: 1, name: "Alice", email: "alice@example.com" }
+
+let userId = user.id          // Valid: direct field access
+let userName = user.name      // Valid: direct field access
+let userEmail = user.email    // Valid: direct field access
+```
+
+**❌ FORBIDDEN - Field Access on `any` Types:**
+```osprey
+fn processAnyValue(value: any) -> String = {
+    // ERROR: Cannot access fields on 'any' type
+    let result = value.name   // Compilation error
+    return result
+}
+
+// CORRECT: Use pattern matching for 'any' types
+fn processAnyValue(value: any) -> String = match value {
+    person: { name } => person.name        // Extract field via pattern matching
+    user: User { name } => name           // Type-specific pattern matching
+    _ => "unknown"
+}
+```
+
+**❌ FORBIDDEN - Field Access on Result Types:**
+```osprey
+type Person = { 
+    name: String
+} where validatePerson
+
+fn validatePerson(person: Person) -> Result<Person, String> = match person.name {
+    "" => Error("Name cannot be empty")
+    _ => Success(person)
+}
+
+let personResult = Person { name: "Alice" }  // Returns Result<Person, String>
+
+// ERROR: Cannot access field on Result type
+let name = personResult.name   // Compilation error
+
+// CORRECT: Use pattern matching on Result types
+match personResult {
+    Ok { value } => print("Name: ${value.name}")    // Access field after unwrapping
+    Err { error } => print("Construction failed: ${error}")
+}
+```
+
+#### Structural Field Access
+
+Osprey supports structural field access through pattern matching, allowing access to fields regardless of the specific type:
+
+```osprey
+// Any type with 'name' and 'age' fields can be matched
+fn processEntity(entity: any) -> String = match entity {
+    { name, age } => "Entity ${name} is ${age}"           // Structural matching
+    person: { name } => "Named entity: ${person.name}"    // Named structural matching  
+    _ => "Unknown entity"
+}
+
+// Works with any type that has these fields
+type Person = { name: String, age: Int }
+type Employee = { name: String, age: Int, department: String }
+
+let person = Person { name: "Alice", age: 25 }
+let employee = Employee { name: "Bob", age: 30, department: "Engineering" }
+
+// Both work with the same function
+print(processEntity(person))     // "Entity Alice is 25"
+print(processEntity(employee))   // "Entity Bob is 30"
+```
+
+#### Immutability and Field Access
+
+All record types are immutable by default. Field access returns the current value and cannot be used for assignment:
+
+```osprey
+type Point = { x: Int, y: Int }
+let point = Point { x: 10, y: 20 }
+
+let x = point.x              // ✅ Valid: read field value
+let y = point.y              // ✅ Valid: read field value
+
+// ERROR: Cannot assign to fields (immutable by default)
+point.x = 15                 // ❌ Compilation error
+
+// CORRECT: Create new instance with updated values
+let newPoint = point { x: 15 }   // ✅ Non-destructive update syntax
+print("New point: ${newPoint.x}, ${newPoint.y}")  // 15, 20
+```
+
 #### Primary Expressions
 ```
 primary_expression := literal | list_literal | identifier | '(' expression ')' 
-                   | list_access | lambda_expression | block_expression | match_expression
+                   | list_access | field_access | lambda_expression | block_expression | match_expression
 ```
 
 ### 3.9 Block Expressions

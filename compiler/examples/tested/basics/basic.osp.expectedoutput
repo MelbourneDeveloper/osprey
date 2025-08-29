@@ -1,0 +1,7 @@
+Basic test results:
+x = 42
+testGood(10) = 10
+getIntResult() = 42
+getStringResult() = asd
+addOne(5) = 6
+HM inferred: double(7)=14, isPositive(10)=true, isPositive(-3)=false

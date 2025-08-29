@@ -253,7 +253,7 @@ test.describe('🟨 Node.js WebSocket Server Tests', () => {
             console.log('✅ Node.js server started for tests');
         } catch (error) {
             console.log('⚠️ Could not start Node.js server, skipping Node.js tests');
-            test.skip();
+            test.fail();
         }
     });
 
@@ -262,7 +262,7 @@ test.describe('🟨 Node.js WebSocket Server Tests', () => {
     });
 
     test('nodejs websocket server should serve html page', async ({ page }) => {
-        test.skip(!nodeServer, 'Node.js server not running');
+        test.fail(!nodeServer, 'Node.js server not running');
 
         console.log('🧪 Testing Node.js server HTTP serving...');
 
@@ -276,7 +276,7 @@ test.describe('🟨 Node.js WebSocket Server Tests', () => {
     });
 
     test('nodejs websocket connection should be attempted', async ({ page }) => {
-        test.skip(!nodeServer, 'Node.js server not running');
+        test.fail(!nodeServer, 'Node.js server not running');
 
         console.log('🧪 Testing Node.js WebSocket connection attempt...');
 

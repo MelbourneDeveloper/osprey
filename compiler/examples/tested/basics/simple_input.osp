@@ -1,13 +1,13 @@
 // Simple Pattern Matching Demo (integers only - strings not working yet)
 
-fn greetCode(name: string) -> int = match name {
+fn greetCode(name) = match name {
   "alice" => 1
   "bob" => 2
   "admin" => 3
   _ => 0
 }
 
-fn processNumber(num: int) -> int = match num {
+fn processNumber(num) = match num {
   1 => 100
   2 => 200
   42 => 999

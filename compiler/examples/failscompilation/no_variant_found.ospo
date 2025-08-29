@@ -1,0 +1,8 @@
+// This should fail compilation: No variant found matching field structure
+// Tests: ErrNoVariantFound, WrapNoVariantFound
+// Error: no variant found matching field structure
+
+type Result = Success { value: Int } | Error { message: String }
+
+let badResult = Success { badField: 42 }  // Field doesn't match variant
+print(badResult)

@@ -1,1 +1,1 @@
-line 1:0: field access not implemented for field 'name': field access not implemented for field
+line 6:13: cannot access field 'value' on non-struct type

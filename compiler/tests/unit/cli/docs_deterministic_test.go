@@ -19,6 +19,7 @@ func TestDocumentationDeterministic(t *testing.T) {
 
 	// Create temporary directories for each run
 	tempDirs := make([]string, numRuns)
+
 	defer func() {
 		// Clean up all temp directories
 		for _, dir := range tempDirs {
@@ -30,19 +31,22 @@ func TestDocumentationDeterministic(t *testing.T) {
 
 	// Generate documentation 5 times
 	successfulRuns := 0
+
 	for i := range numRuns {
 		tempDir, err := os.MkdirTemp("", fmt.Sprintf("osprey-docs-test-%d-", i))
 		if err != nil {
 			t.Fatalf("Failed to create temp directory for run %d: %v", i, err)
 		}
+
 		tempDirs[i] = tempDir
 
 		// Generate documentation
-		result := cli.RunCommand("", "docs", tempDir, false, cli.NewDefaultSecurityConfig())
+		result := cli.RunCommand("", "docs", tempDir, false)
 		if !result.Success {
 			t.Logf("Documentation generation failed on run %d: %s (continuing test)", i, result.ErrorMsg)
 			// Create empty directory so hash comparison doesn't fail
-			if err := os.MkdirAll(tempDir, 0o755); err != nil {
+			err := os.MkdirAll(tempDir, 0o755)
+			if err != nil {
 				t.Logf("Failed to create empty temp dir %d: %v", i, err)
 			}
 		} else {
@@ -80,6 +84,7 @@ func TestFunctionsIndexDeterministic(t *testing.T) {
 
 	// Store file contents from each run
 	var contents []string
+
 	successfulRuns := 0
 
 	for i := range numRuns {
@@ -87,13 +92,16 @@ func TestFunctionsIndexDeterministic(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create temp directory for run %d: %v", i, err)
 		}
+
 		defer func() { _ = os.RemoveAll(tempDir) }()
 
 		// Generate documentation
-		result := cli.RunCommand("", "docs", tempDir, false, cli.NewDefaultSecurityConfig())
+		result := cli.RunCommand("", "docs", tempDir, false)
 		if !result.Success {
 			t.Logf("Documentation generation failed on run %d: %s (continuing test)", i, result.ErrorMsg)
+
 			contents = append(contents, "") // Add empty content
+
 			continue
 		}
 
@@ -101,10 +109,13 @@ func TestFunctionsIndexDeterministic(t *testing.T) {
 
 		// Read the functions index file
 		functionsIndexPath := filepath.Join(tempDir, "functions", "index.md")
+
 		content, err := os.ReadFile(functionsIndexPath)
 		if err != nil {
 			t.Logf("Failed to read functions index file on run %d: %v (continuing test)", i, err)
+
 			contents = append(contents, "") // Add empty content
+
 			continue
 		}
 
@@ -116,12 +127,16 @@ func TestFunctionsIndexDeterministic(t *testing.T) {
 	}
 
 	// Compare all runs against the first successful run
-	var firstContent string
-	var firstIndex int
+	var (
+		firstContent string
+		firstIndex   int
+	)
+
 	for i, content := range contents {
 		if content != "" {
 			firstContent = content
 			firstIndex = i + 1
+
 			break
 		}
 	}
@@ -152,15 +167,18 @@ func getDirectoryHashes(t *testing.T, dirPath string) map[string]string {
 	hashes := make(map[string]string)
 
 	// Check if directory exists, create it if it doesn't
-	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+	_, err := os.Stat(dirPath)
+	if os.IsNotExist(err) {
 		t.Logf("Directory %s doesn't exist, creating it", dirPath)
-		if err := os.MkdirAll(dirPath, 0o755); err != nil {
+
+		err := os.MkdirAll(dirPath, 0o755)
+		if err != nil {
 			t.Logf("Failed to create directory %s: %v", dirPath, err)
 			return hashes // Return empty map instead of failing
 		}
 	}
 
-	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			t.Logf("Warning: Error accessing %s: %v", path, err)
 			return nil // Continue walking instead of failing
@@ -188,6 +206,7 @@ func getDirectoryHashes(t *testing.T, dirPath string) map[string]string {
 		}
 
 		hashes[relPath] = hex.EncodeToString(hash[:])
+
 		return nil
 	})
 	if err != nil {
@@ -246,5 +265,6 @@ func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
+
 	return s[:maxLen]
 }

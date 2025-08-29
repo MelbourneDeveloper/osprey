@@ -1,10 +1,10 @@
 ---
 layout: page
-title: "webSocketKeepAlive (Function)"
+title: "websocketKeepAlive (Function)"
 description: "⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation)."
 ---
 
-**Signature:** `webSocketKeepAlive() -> Unit`
+**Signature:** `websocketKeepAlive() -> Unit`
 
 **Description:** ⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).
 
@@ -13,5 +13,5 @@ description: "⚠️ SPEC VIOLATION: Current implementation returns int instead 
 ## Example
 
 ```osprey
-webSocketKeepAlive()  // Blocks until Ctrl+C
+websocketKeepAlive()  // Blocks until Ctrl+C
 ```

@@ -1,0 +1,8 @@
+// This should fail compilation: Unknown constructor
+// Tests: ErrUnknownConstructor, WrapUnknownConstructor
+// Error: unknown constructor
+
+type Result = Success { value: Int } | Error { message: String }
+
+let result = NonExistingConstructor { data: 42 }  // Unknown constructor 
+print(result)

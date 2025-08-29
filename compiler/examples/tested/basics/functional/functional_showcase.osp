@@ -43,12 +43,12 @@ range(10, 13) |> forEach(print)
 print("Example 6: Range 0 to 4")
 range(0, 5) |> forEach(print)
 
-// Example 7: Fold operations on single values
+// Example 7: Fold operations on iterators
 print("Example 7: Fold operations")
-let sumResult = fold(10, 5, sum)
+let sumResult = range(1, 6) |> fold(0, sum)
 print(sumResult)
 
-let multiplyResult = fold(6, 7, multiply)
+let multiplyResult = range(1, 4) |> fold(1, multiply)
 print(multiplyResult)
 
 // Example 8: More single value operations

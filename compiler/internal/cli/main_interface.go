@@ -98,6 +98,7 @@ func HandleSpecialModes(args []string) (string, string, string) {
 				break
 			}
 		}
+
 		return "", OutputModeDocs, docsDir
 	}
 
@@ -106,8 +107,10 @@ func HandleSpecialModes(args []string) (string, string, string) {
 		if len(args) < MinHoverArgs {
 			fmt.Println("Error: --hover requires an element name")
 			fmt.Println("Example: osprey --hover print")
+
 			return "", "", ""
 		}
+
 		return args[MinArgs], OutputModeHover, ""
 	}
 
@@ -180,6 +183,7 @@ func ParseSecurityArg(arg string, security *SecurityConfig) bool {
 	case "--no-fs":
 		security.AllowFileRead = false
 		security.AllowFileWrite = false
+
 		return true
 	case "--no-ffi":
 		security.AllowFFI = false
@@ -196,9 +200,19 @@ func RunMainWithArgs(args []string) CommandResult {
 		return CommandResult{Success: true, Output: ""}
 	}
 
-	// ALWAYS use security-aware command execution
-	// The security config handles both permissive and restrictive modes
-	return RunCommand(filename, outputMode, docsDir, quiet, security)
+	var result CommandResult
+
+	// Use security-aware functions if security settings are non-default
+	if security != nil && (security.SandboxMode || !security.AllowHTTP || !security.AllowWebSocket ||
+		!security.AllowFileRead || !security.AllowFileWrite || !security.AllowFFI) {
+		// Use security-aware command execution
+		result = RunCommandWithSecurity(filename, outputMode, quiet, security)
+	} else {
+		// Use regular command execution for default/permissive mode
+		result = RunCommand(filename, outputMode, docsDir, quiet)
+	}
+
+	return result
 }
 
 // RunMainFromOS runs the main function using os.Args

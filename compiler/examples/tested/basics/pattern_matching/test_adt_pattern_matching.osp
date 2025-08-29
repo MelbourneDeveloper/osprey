@@ -1,0 +1,82 @@
+// Test file to check if ADT pattern matching with fields works
+
+// Single-variant type with fields
+type Person = PersonData { name: string, age: int }
+
+// Multi-variant union type with fields  
+type Shape = Circle { radius: int }
+           | Point { x: int, y: int }
+
+let person = PersonData { name: "Alice", age: 30 }
+let bob = PersonData { name: "Bob", age: 25 }
+
+// Test single-variant pattern matching with field destructuring
+let result1 = match person {
+    PersonData { name, age } => "Person: Alice is 30 years old"
+    _ => "Unknown"
+}
+
+// Test single-variant pattern matching with different field order
+let result2 = match bob {
+    PersonData { age, name } => "Name: Bob, Age: 25"
+    _ => "No info"  
+}
+
+// Test multi-variant pattern matching
+let circle = Circle { radius: 5 }
+let point = Point { x: 3, y: 7 }
+
+let shape_result1 = match circle {
+    Circle { radius } => "Circle: 5"
+    Point { x, y } => "Point: (3,7)"
+}
+
+let shape_result2 = match point {
+    Circle { radius } => "Circle: 5"  
+    Point { x, y } => "Point: (3,7)"
+}
+
+// Test type annotation patterns
+let type_result = match person {
+    p: PersonData => "Got PersonData type"
+    _ => "Not PersonData"
+}
+
+// Function that returns union types to test inference  
+fn getShape(kind) = match kind {
+    "circle" => Circle { radius: 7 }
+    _ => Point { x: 1, y: 2 }
+}
+
+// Test function returning union type
+let dynamic_shape = getShape("circle")
+let dynamic_result = match dynamic_shape {
+    Circle { radius } => "Dynamic Circle"
+    Point { x, y } => "Dynamic Point"
+}
+
+// Function with union type parameter
+fn describeShape(s: Shape) -> string = match s {
+    Circle { radius } => "A circle"
+    Point { x, y } => "A point"
+}
+
+let shape_description = describeShape(circle)
+
+// Force union type unification by passing return value of one union function to another
+fn processAnyShape(s) = match s {
+    Circle { radius } => "Processing circle"
+    Point { x, y } => "Processing point"
+}
+
+// This should trigger unifyUnionTypes when getShape returns Shape and processAnyShape expects Shape
+let unification_test = processAnyShape(getShape("circle"))
+
+print(result1)
+print(result2)
+print(shape_result1)
+print(shape_result2)
+print(type_result)
+print(dynamic_result)
+print(shape_description)
+print(unification_test)

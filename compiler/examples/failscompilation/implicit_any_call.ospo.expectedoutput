@@ -1,1 +1,1 @@
-line 2:0: validation error: Function 'process' requires explicit return type annotation - type cannot be inferred from body
+line 2:15: undefined variable 'someUnknownFunction': undefined variable

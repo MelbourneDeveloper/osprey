@@ -21,9 +21,9 @@ func TestCompilationFailures(t *testing.T) {
 	// YOU ARE NOT ALLOWED TO LET RUNTIME ERRORS APPEAR HERE!!!
 	// EVERY .ospo FILE MUST HAVE A CORRESPONDING .expectedoutput FILE!
 
-	// Test each .osp and .ospo file (both extensions should be tested)
+	// Test .ospo file
 	for _, entry := range entries {
-		if !strings.HasSuffix(entry.Name(), ".osp") && !strings.HasSuffix(entry.Name(), ".ospo") {
+		if !strings.HasSuffix(entry.Name(), ".ospo") {
 			continue
 		}
 

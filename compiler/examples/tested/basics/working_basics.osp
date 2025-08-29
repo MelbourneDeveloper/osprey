@@ -4,9 +4,13 @@ let name = "Alice"
 
 fn double(n: int) -> Result<int, MathError> = n * 2
 fn greet(name: string) -> string = name
+fn multiply(a, b) = a * b        // Test inference: (int, int) -> Result<int, MathError>
+fn isEven(n) = n % 2 == 0        // Test inference: int -> bool (from modulo and comparison)
 
 let result = double(21)
 let greeting = greet("Hello")
+let multResult = multiply(a: 6, b: 7)  // Test inferred Result type
+let evenCheck = isEven(10)             // Test inferred bool return
 
 print("x = ${x}")
 print("name = ${name}")
@@ -18,6 +22,11 @@ match result {
 }
 
 print("greeting = ${greeting}")
+
+// Test inferred functions
+let multValue = multResult ?: 0
+print("multiply(6, 7) = ${multValue}")
+print("isEven(10) = ${toString(evenCheck)}")
 
 // Compound expressions return single Result
 let sum = 10 + 5

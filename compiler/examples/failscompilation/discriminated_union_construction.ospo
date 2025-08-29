@@ -1,0 +1,28 @@
+// This file is designed to fail compilation until discriminated union support is fixed.
+
+// Declaration of a discriminated union with fields
+type Character = 
+    | Warrior { health: Int, strength: Int } 
+    | Mage { mana:Int, intelligence: Int }
+    | Rogue { agility: Int, dexterity: Int }
+
+// Main function to test construction of discriminated union variants
+fn main() -> Int {
+    // Construction of a Warrior variant - THIS SHOULD COMPILE
+    let warrior = Warrior { health: 100, strength: 50 }
+
+    // Construction of a Mage variant - THIS SHOULD COMPILE
+    let mage = Mage { mana: 120, intelligence: 70 }
+
+    // TODO: Add pattern matching test once constructor is fixed
+    // let result = match warrior {
+    //     | Warrior { health, strength } => health + strength
+    //     | Mage { mana, intelligence } => mana + intelligence
+    //     | Rogue { agility, dexterity } => agility + dexterity
+    // }
+
+    // Invalid field access - THIS SHOULD FAIL COMPILATION
+    // let bad_access = warrior.mana 
+
+    return 0
+} 

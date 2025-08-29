@@ -30,6 +30,8 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLiteral(ctx.Literal())
 	case ctx.LambdaExpr() != nil:
 		return b.buildLambdaExpr(ctx.LambdaExpr())
+	case ctx.ObjectLiteral() != nil:
+		return b.buildObjectLiteral(ctx.ObjectLiteral())
 	case ctx.ID(0) != nil && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
 		// Array indexing: ID[INT]
 		return b.buildListAccess(ctx)
@@ -243,6 +245,7 @@ func (b *Builder) buildTypeConstructor(ctx *parser.TypeConstructorContext) Expre
 
 	// Build field assignments
 	fieldAssignments := make(map[string]Expression)
+
 	if ctx.FieldAssignments() != nil {
 		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
 			fieldName := fieldCtx.ID().GetText()
@@ -271,6 +274,7 @@ func (b *Builder) buildTypeConstructor(ctx *parser.TypeConstructorContext) Expre
 	return &TypeConstructorExpression{
 		TypeName: typeName,
 		Fields:   fieldAssignments,
+		Position: b.getPositionFromContext(ctx),
 	}
 }
 
@@ -290,6 +294,7 @@ func (b *Builder) buildBlockExpression(ctx parser.IBlockExprContext) Expression 
 
 	// Build all statements in the block
 	statements := make([]Statement, 0)
+
 	for _, stmtCtx := range blockBody.AllStatement() {
 		stmt := b.buildStatement(stmtCtx)
 		if stmt != nil {
@@ -316,6 +321,7 @@ func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExp
 	operationName := ctx.ID(1).GetText()
 
 	var arguments []Expression
+
 	if ctx.ArgList() != nil {
 		args, _ := b.buildArguments(ctx.ArgList()) // Ignore named args for now
 		arguments = args
@@ -326,6 +332,29 @@ func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExp
 		OperationName: operationName,
 		Arguments:     arguments,
 		Position:      b.getPositionFromContext(ctx),
+	}
+}
+
+// buildObjectLiteral builds an ObjectLiteral from an object literal context.
+func (b *Builder) buildObjectLiteral(ctx parser.IObjectLiteralContext) Expression {
+	if ctx == nil {
+		return nil
+	}
+
+	// Build field assignments
+	fieldAssignments := make(map[string]Expression)
+
+	if ctx.FieldAssignments() != nil {
+		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
+			fieldName := fieldCtx.ID().GetText()
+			fieldValue := b.buildExpression(fieldCtx.Expr())
+			fieldAssignments[fieldName] = fieldValue
+		}
+	}
+
+	return &ObjectLiteral{
+		Fields:   fieldAssignments,
+		Position: b.getPositionFromContext(ctx),
 	}
 }
 
@@ -341,11 +370,13 @@ func (b *Builder) buildHandlerExpression(ctx parser.IPrimaryContext) *HandlerExp
 
 	// Build handler arms
 	handlers := make([]HandlerArm, 0)
+
 	for _, armCtx := range handlerCtx.AllHandlerArm() {
 		operationName := armCtx.ID().GetText()
 
 		// Get parameters if present
 		var parameters []string
+
 		if armCtx.HandlerParams() != nil {
 			for _, idCtx := range armCtx.HandlerParams().AllID() {
 				parameters = append(parameters, idCtx.GetText())

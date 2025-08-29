@@ -2,7 +2,7 @@
 print("=== Fiber Test ===")
 
 // Test 1: Parallel computation - calculate fibonacci numbers concurrently
-fn fibonacci(n: Int) -> Int = match n {
+fn fibonacci(n: int) -> int = match n {
     0 => 0
     1 => 1
     _ => fibonacci(n - 1) + fibonacci(n - 2)
@@ -15,8 +15,8 @@ print("Fib(10) = ${await(fib10)}")
 print("Fib(15) = ${await(fib15)}")
 
 // Test 2: Producer/Consumer pattern simulation
-fn produce(item: Int) -> Int = item * 3 + 7  // Simulate production cost
-fn consume(item: Int) -> Int = item / 2      // Simulate consumption
+fn produce(item: int) -> int = item * 3 + 7  // Simulate production cost
+fn consume(item: int) -> int = item / 2      // Simulate consumption
 
 let producer1 = spawn produce(100)
 let producer2 = spawn produce(200)
@@ -47,8 +47,8 @@ let priority = select {
 print("\nSelect returned priority value: ${priority}")
 
 // Test 5: Real async computation pattern
-fn processData(size: Int) -> Int = size * 2 + 10
-fn validateData(data: Int) -> Int = match data {
+fn processData(size: int) -> int = size * 2 + 10
+fn validateData(data: int) -> int = match data {
     0 => 0
     _ => 1  // Valid
 }

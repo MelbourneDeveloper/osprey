@@ -1,7 +1,7 @@
-fn isGreater(x: int, y: int) -> Result<bool, MathError> = x > y
-fn isEqual(x: int, y: int) -> Result<bool, MathError> = x == y
-fn getTrue() -> bool = true
-fn getFalse() -> bool = false
+fn isGreater(x, y) = x > y
+fn isEqual(x, y) = x == y
+fn getTrue() = true
+fn getFalse() = false
 
 let result1 = isGreater(x: 5, y: 3)
 let result2 = isEqual(x: 10, y: 10)

@@ -1,0 +1,8 @@
+// This should fail compilation: Function arity mismatch
+// Tests: ErrFunctionArityMismatch, WrapFunctionArityMismatch
+// Error: function arity mismatch
+
+fn add(x, y) = x + y
+
+let result = add(10)  // Function expects 2 args, got 1
+print(result)

@@ -1,0 +1,7 @@
+// This should fail compilation: Type mismatch 
+// Tests: ErrTypeMismatch, WrapTypeMismatchWithPos
+// Error: type mismatch in assignment
+
+let x: Int = 42
+let y: String = x  // Type mismatch: cannot assign Int to String
+print(y)

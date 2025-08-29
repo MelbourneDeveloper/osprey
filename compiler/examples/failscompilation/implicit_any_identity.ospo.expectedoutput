@@ -1,1 +1,1 @@
-line 2:0: validation error: Function 'identity' requires explicit return type annotation - type cannot be inferred from body
+line 2:17: undefined variable 'someUndefinedVariable': undefined variable

@@ -61,10 +61,7 @@ fn testNestedHandlers() -> int ![Logger, State, Exception] = {
 // Main function demonstrating nested handlers from spec! ✅
 fn main() -> Unit = {
     handle Exception
-        raise msg => {
-            print("[EXCEPTION] " + msg)
-            -1
-        }
+        raise msg => print("[EXCEPTION] " + msg)
     in
         handle Logger  
             log msg => print("[LOG] " + msg)

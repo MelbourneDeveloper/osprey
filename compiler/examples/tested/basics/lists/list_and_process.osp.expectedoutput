@@ -1,0 +1,29 @@
+=== Array Access Test ===
+
+Created empty array
+
+Created array with 3 commands
+
+Testing array access with pattern matching:
+
+✅ commands[0] = \
+echo hello
+"
+
+✅ commands[1] = \
+echo world
+"
+
+✅ commands[2] = \
+echo test
+"
+
+Testing empty array access:
+
+✅ Correctly caught empty array access: empty_commands[0] -> Error
+
+Testing out-of-bounds access:
+
+✅ Correctly caught out-of-bounds: commands[5] -> Error
+
+=== Array Test Complete ===

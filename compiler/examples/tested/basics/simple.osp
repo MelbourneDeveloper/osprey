@@ -1,6 +1,0 @@
-let x = 42
-let greeting = "hello"
-
-print("Simple test:")
-print("x = ${x}")
-print("greeting = ${greeting}") 

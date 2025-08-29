@@ -1,5 +1,9 @@
 print("=== Array Access Test ===\n")
 
+// Test empty array literal creation
+let empty_commands = []
+print("Created empty array\n")
+
 // Test array literal creation
 let commands = ["echo hello", "echo world", "echo test"]
 print("Created array with 3 commands\n")
@@ -49,6 +53,20 @@ match third_result {
     print("❌ Error accessing commands[2]: ")
     print(message)
     print("\n")
+  }
+}
+
+// Test empty array access (should return Error)
+print("Testing empty array access:\n")
+let empty_result = empty_commands[0]
+match empty_result {
+  Success { value } => {
+    print("❌ UNEXPECTED: empty_commands[0] should have failed but got: \"")
+    print(value)
+    print("\"\n")
+  }
+  Error { message } => {
+    print("✅ Correctly caught empty array access: empty_commands[0] -> Error\n")
   }
 }
 

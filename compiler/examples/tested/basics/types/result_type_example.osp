@@ -1,5 +1,5 @@
 // Result Type for Error Handling
-type Result = Ok { value: String } | Error { message: String }
+type Result = Ok { value: string } | Error { message: string }
 
 type Status = Success | Failure 
 

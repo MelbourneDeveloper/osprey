@@ -1,0 +1,56 @@
+// Consolidated Boolean Test - includes functionality from removed tests
+// Tests function equality, simple comparisons, and comprehensive boolean operations
+
+fn getBool() = true
+fn getFalse() = false
+fn isEqual(x, y) = x == y
+
+let flag = false
+let truthy = true
+let comparison = 5 > 3
+let equality = 10 == 10
+let inequality = 5 != 3
+let lessEqual = 10 <= 15
+let greaterEqual = 8 >= 8
+
+print("=== Boolean Test ===")
+print("Function returning true:")
+print(getBool())
+print("Function returning false:")
+print(getFalse())
+print("Boolean literals:")
+print(flag)
+print(truthy)
+print("Comparisons:")
+print(comparison)
+print(equality)
+print(inequality)
+print(lessEqual)
+print(greaterEqual)
+
+print("Function equality test:")
+let result = isEqual(x: 5, y: 5)
+match result {
+    true => print("Equal")
+    false => print("Not Equal")
+}
+
+print("Simple comparison:")
+let simple_result = 5 > 3
+print(toString(simple_result))
+
+print("Logical operators:")
+let and_result = true && false
+let or_result = true || false
+let complex_logic = (5 > 3) && (10 == 10)
+let complex_or = (5 < 3) || (10 != 5)
+print("true && false = ${toString(and_result)}")
+print("true || false = ${toString(or_result)}")
+print("(5 > 3) && (10 == 10) = ${toString(complex_logic)}")
+print("(5 < 3) || (10 != 5) = ${toString(complex_or)}")
+
+print("Short-circuit evaluation:")
+let short_and = false && true
+let short_or = true || false  
+print("false && true = ${toString(short_and)}")
+print("true || false = ${toString(short_or)}")

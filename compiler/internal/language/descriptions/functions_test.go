@@ -24,15 +24,19 @@ func TestDocumentationCompleteness(t *testing.T) {
 		if desc.Name == "" {
 			t.Errorf("Function %s is missing Name field", name)
 		}
+
 		if desc.Signature == "" {
 			t.Errorf("Function %s is missing Signature field", name)
 		}
+
 		if desc.Description == "" {
 			t.Errorf("Function %s is missing Description field", name)
 		}
+
 		if desc.ReturnType == "" {
 			t.Errorf("Function %s is missing ReturnType field", name)
 		}
+
 		if desc.Example == "" {
 			t.Errorf("Function %s is missing Example field", name)
 		}

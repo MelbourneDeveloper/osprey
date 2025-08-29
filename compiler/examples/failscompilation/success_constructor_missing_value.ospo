@@ -1,0 +1,8 @@
+// This should fail compilation: Success constructor missing value field
+// Tests: ErrSuccessConstructorMissingValue, WrapSuccessConstructorMissingValue
+// Error: success constructor requires 'value' field
+
+type Result = Success { value: Int } | Error { message: String }
+
+let result = Success { data: 42 }  // Missing 'value' field
+print(result)

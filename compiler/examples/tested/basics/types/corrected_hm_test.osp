@@ -1,0 +1,49 @@
+// CORRECTED HINDLEY-MILNER TYPE INFERENCE TEST  
+// Tests what HM inference CAN do with proper type design
+
+print("=== CORRECTED HINDLEY-MILNER TEST ===")
+
+// Test 1: Simple polymorphic functions
+print("Test 1: Simple polymorphic functions")
+fn identity(x) = x              // HM infers: <T>(T) -> T
+
+let intId = identity(42)        // identity<int>
+let stringId = identity("test") // identity<string>  
+let boolId = identity(true)     // identity<bool>
+
+print("identity(42) = ${intId}")
+print("identity(\"test\") = ${stringId}") 
+print("identity(true) = ${boolId}")
+print("")
+
+// Test 2: Polymorphic functions with consistent record types
+print("Test 2: Polymorphic functions with homogeneous types")
+type IntPoint = { x: int, y: int }
+type StringPair = { first: string, second: string }
+
+fn makeIntPoint(a, b) = IntPoint { x: a, y: b }      // (int, int) -> IntPoint
+fn makeStringPair(a, b) = StringPair { first: a, second: b }  // HM infers (string, string) -> StringPair
+
+let intPoint1 = makeIntPoint(a: 1, b: 2)
+let intPoint2 = makeIntPoint(a: 3, b: 4)
+let stringPair1 = makeStringPair(a: "hello", b: "world")
+let stringPair2 = makeStringPair(a: "foo", b: "bar")
+
+print("makeIntPoint(1, 2) = {${intPoint1.x}, ${intPoint1.y}}")
+print("makeIntPoint(3, 4) = {${intPoint2.x}, ${intPoint2.y}}")
+print("makeStringPair = {${stringPair1.first}, ${stringPair1.second}}")
+print("")
+
+// Test 3: Higher-order polymorphic functions
+print("Test 3: Higher-order polymorphism")  
+fn apply(f, x) = f(x)           // <A, B>((A) -> B, A) -> B
+
+let applied1 = apply(f: identity, x: 99)        // int
+let applied2 = apply(f: identity, x: 123)       // int
+
+print("apply(identity, 99) = ${applied1}")
+print("apply(identity, 123) = ${applied2}")
+print("")
+
+print("=== CORRECTED HINDLEY-MILNER TEST COMPLETE ===")
+print("All types properly inferred with consistent record types!")

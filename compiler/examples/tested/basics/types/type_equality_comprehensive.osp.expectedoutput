@@ -1,0 +1,20 @@
+=== COMPREHENSIVE TYPE EQUALITY TEST ===
+Test 1: Generic Type Equality
+Container<int> values: 42, 99
+Container<string> value: text
+Pair<int,string> first values: 1, 2
+
+Test 2: Function Type Equality
+Same function type results: 11, 20
+Same function type results: test!, test?
+Different function types: 42, 12
+
+Test 3: Union Type Pattern Testing
+Success values (same type): 42, 99
+Error message: failed
+
+Test 4: Simple Additional Generic Tests
+Additional Container<int> values: 123, 456
+
+=== COMPREHENSIVE TYPE EQUALITY TEST COMPLETE ===
+This test exercises GenericType.Equals, FunctionType.Equals patterns!

@@ -1,0 +1,10 @@
+---
+description: main rules for Osprey grammar/syntax
+alwaysApply: true
+---
+
+- CONSISTENCY! - the language has drifted in a few different directions but we need to bring it back to a consistent style with FEWER curly braces and semicolons. More ML style
+- Elegance -> Safety -> Performance in that order of priority
+- Avoid visual noise
+- Keep it concise
+- Avoid obscure operator characters 

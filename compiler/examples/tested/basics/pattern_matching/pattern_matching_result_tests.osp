@@ -1,0 +1,28 @@
+// Result Pattern Matching and Ternary Tests  
+// Tests: Built-in Result type ternary syntax, arithmetic Result handling
+
+// SECTION 1: Arithmetic operations return Result<int, MathError>
+let calculation = 10 + 5
+print("Arithmetic calculation created")
+
+// SECTION 2: Test simple boolean ternary first
+let testBool = true
+let boolResult = testBool ? 42 : -1
+print(boolResult)
+
+// SECTION 3: Result Elvis operator - automatically extracts Success value or uses default on Error
+let successValue = calculation ?: -1  // Should extract 15 from Success, or -1 on Error
+print(successValue)
+
+// SECTION 4: Function returning Result type
+fn divide(a, b) = a / b
+
+// SECTION 5: Test Result Elvis operator - success case
+let divisionGood = divide(a: 10, b: 2)
+let goodResult = divisionGood ?: -1  // Should extract 5 from Success, or -1 on Error
+print(goodResult)
+
+// SECTION 6: Test Result Elvis operator - error case  
+let divisionBad = divide(a: 10, b: 0)
+let badResult = divisionBad ?: -1  // Should return -1 on Error, or extract value on Success
+print(badResult)

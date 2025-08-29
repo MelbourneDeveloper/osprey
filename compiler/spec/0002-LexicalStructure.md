@@ -63,6 +63,19 @@ let pair = [x, y]  // Fixed size: 2 elements
 
 **CRITICAL**: All arithmetic operators return Result types to handle overflow, underflow, and division by zero.
 
+#### Comparison Operators
+- `==` Equality
+- `!=` Inequality  
+- `<` Less than
+- `>` Greater than
+- `<=` Less than or equal
+- `>=` Greater than or equal
+
+#### Logical Operators
+- `&&` Logical AND (short-circuit evaluation)
+- `||` Logical OR (short-circuit evaluation)
+- `!` Logical NOT
+
 #### Assignment Operator
 - `=` Assignment
 

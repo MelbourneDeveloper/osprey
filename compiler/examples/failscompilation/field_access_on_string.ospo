@@ -1,0 +1,7 @@
+// This should fail compilation: Field access on string type  
+// Tests: ErrFieldAccessOnString, WrapFieldAccessOnString
+// Error: cannot access field on string type
+
+let name = "test"
+let field = name.length  // Cannot access field on string
+print(field)

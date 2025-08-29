@@ -1,0 +1,9 @@
+// Test that triggers unifyUnionTypes error
+type Shape = Circle | Square
+type Color = Red | Blue
+
+fn processShape(s: Shape) -> string = "shape"
+
+// This should cause a union type mismatch and trigger unifyUnionTypes
+let color: Color = Red
+let result = processShape(color)

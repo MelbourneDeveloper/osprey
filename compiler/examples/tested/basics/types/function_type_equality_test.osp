@@ -1,0 +1,89 @@
+// FUNCTION TYPE EQUALITY TESTING
+// Tests specifically designed to exercise FunctionType.Equals method
+
+print("=== FUNCTION TYPE EQUALITY TEST ===")
+
+// Test 1: Functions with identical signatures should have equal types
+print("Test 1: Same Function Signature Types")
+
+fn addOne(x) = x + 1
+fn multiplyByTwo(x) = x * 2
+fn subtractOne(x) = x - 1
+
+fn concatExclamation(s) = s + "!"
+fn concatQuestion(s) = s + "?"
+
+// Higher-order functions that will force function type comparison
+fn applyIntOperation(op, value) = op(value)
+fn applyStringOperation(op, text) = op(text)
+
+// These calls force FunctionType.Equals to be called during type unification
+let result1 = applyIntOperation(op: addOne, value: 10)        // (int) -> int function type
+let result2 = applyIntOperation(op: multiplyByTwo, value: 10) // (int) -> int function type - same
+let result3 = applyIntOperation(op: subtractOne, value: 10)   // (int) -> int function type - same
+
+let strResult1 = applyStringOperation(op: concatExclamation, text: "hello") // (string) -> string 
+let strResult2 = applyStringOperation(op: concatQuestion, text: "hello")    // (string) -> string - same
+
+print("Int operations (same function type): ${result1}, ${result2}, ${result3}")
+print("String operations (same function type): ${strResult1}, ${strResult2}")
+print("")
+
+// Test 2: Functions with different signatures should have different types
+print("Test 2: Different Function Signature Types")
+
+fn twoParamAdd(a, b) = a + b          // (int, int) -> int
+fn threeParamAdd(a, b, c) = a + b + c // (int, int, int) -> int
+fn intToString(x) = toString(x)       // int -> string
+
+fn applyTwoInt(op, x, y) = op(a: x, b: y)
+fn applyThreeInt(op, x, y, z) = op(a: x, b: y, c: z)
+
+// Different parameter counts
+let twoParamResult = applyTwoInt(op: twoParamAdd, x: 5, y: 7)        // (int, int) -> int
+let threeParamResult = applyThreeInt(op: threeParamAdd, x: 1, y: 2, z: 3) // (int, int, int) -> int
+
+// Different return types  
+let intToStringResult = intToString(42)  // int -> string (different from int -> int)
+
+print("Two param result: ${twoParamResult}")
+print("Three param result: ${threeParamResult}")  
+print("Int to string result: ${intToStringResult}")
+print("")
+
+// Test 3: Generic function types
+print("Test 3: Generic Function Types")
+
+fn identity(x) = x
+fn duplicate(x) = x  // Same implementation but different function
+
+// Direct calls to avoid higher-order function complexity for now
+// Force monomorphization and type comparison
+let identityInt1 = identity(42)        // identity<int>
+let identityInt2 = duplicate(99)       // duplicate<int> - same type signature
+let identityStr1 = identity("test")    // identity<string>
+let identityStr2 = duplicate("hello")  // duplicate<string> - same type signature
+
+print("Generic int functions (same type): ${identityInt1}, ${identityInt2}")
+print("Generic string functions (same type): ${identityStr1}, ${identityStr2}")
+print("")
+
+// Test 4: Function composition testing type equality
+print("Test 4: Function Composition")
+
+// Functions to compose  
+fn addTen(x) = x + 10
+fn multiplyThree(x) = x * 3
+fn makeUppercase(s) = s  // Simplified - just return as is for now
+
+// Test composition with same-type functions - manual composition
+let temp1 = multiplyThree(5)        // int
+let composed1 = addTen(temp1)       // int -> int composed
+let temp2 = addTen(5)               // int  
+let composed2 = multiplyThree(temp2) // int -> int composed - same types
+
+print("Composed results (same underlying types): ${composed1}, ${composed2}")
+print("")
+
+print("=== FUNCTION TYPE EQUALITY TEST COMPLETE ===")
+print("This test exercises FunctionType.Equals through type unification!")

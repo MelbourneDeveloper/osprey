@@ -1,0 +1,10 @@
+=== CURRENT HM CAPABILITIES ===
+Working HM inference: multiply(6,7)=42, compare(10,5)=true, subtract(20,8)=12
+Current: explicit record types work: Point{x:3, y:4}
+=== PURE HM WOULD ENABLE ===
+// Pure HM syntax (not yet supported):
+// type Point = { x, y }  // No explicit types!
+// let intPoint = Point { x: 1, y: 2 }     // HM infers Point<int, int>
+// let floatPoint = Point { x: 1.5, y: 2.5 } // HM infers Point<float, float>
+// fn identity(x) = x  // HM infers polymorphic <T>(T) -> T
+=== DEMONSTRATION COMPLETE ===

@@ -11,6 +11,10 @@
 
 ## 8. Pattern Matching
 
+**🔥 CRITICAL SPECIFICATION**: Pattern matching in Osprey MUST use **FIELD NAME MATCHING ONLY**. Pattern matching on record types is based on **structural equivalence by field names**, never field ordering or positioning.
+
+**IMPLEMENTATION REQUIREMENT**: The compiler MUST implement pattern matching using field name lookup and structural type unification as specified in the Hindley-Milner Type Inference requirements (see [Type System](0005-TypeSystem.md#50-hindley-milner-type-inference-foundation)).
+
 ### 8.1 Basic Patterns
 
 ```osprey
@@ -209,3 +213,87 @@ match step1 {
 ```
 
 ## 8.6 Match Expression Type Safety Rules
+
+```
+
+## 8.7 Ternary Match Expression (Syntactic Sugar)
+
+To reduce verbosity for common two-armed match scenarios, Osprey provides a concise ternary match expression. This is **purely syntactic sugar** and desugars to a standard `match` expression internally.
+
+**Syntax:**
+`<expression> { <pattern> } ? <then_expr> : <else_expr>`
+
+This is exactly equivalent to:
+```osprey
+match <expression> {
+    { <pattern> } => <then_expr>
+    _ => <else_expr>
+}
+```
+
+### Breakdown
+
+- **`<expression>`**: The value to be matched.
+- **`{ <pattern> }`**: A structural pattern to match against the expression. This can be used for destructuring.
+- **`? <then_expr>`**: The expression to evaluate if the pattern matches.
+- **`: <else_expr>`**: The expression to evaluate if the pattern does not match.
+
+### Examples
+
+**Example 1: Handling Built-in `Result` Types**
+
+The built-in `Result<T, E>` type uses `Success { value: T }` and `Error { message: E }` constructors.
+
+```osprey
+// Arithmetic operations return Result<int, MathError>
+let calculation = 10 + 5  // Result<int, MathError>
+
+// Extracts value using the structural ternary match
+let message = calculation { value } ? value : -1
+// message is now 15
+
+// Function returning Result type  
+fn divide(a: int, b: int) -> Result<int, MathError> = a / b
+let result = divide(a: 10, b: 2)
+let safeValue = result { value } ? value : 0
+// safeValue is now 5
+```
+
+**Example 2: Handling Booleans**
+
+The ternary match can also work with boolean values by matching on the implicit structure of a `true` value.
+
+```osprey
+let is_active = true
+let status_text = is_active ? "Active" : "Inactive"
+// status_text is now "Active"
+```
+
+**Example 3: Handling Result Types with Ternary**
+
+For Result types, the ternary operator provides a clean way to extract success values or provide defaults:
+
+```osprey
+// Arithmetic operations return Result<int, MathError>
+let calculation = 10 + 5  // Result<int, MathError>
+
+// Result ternary: automatically extracts Success value or uses default on Error
+let value = calculation ?: -1  // 15 (extracts value from Success) or -1 (on Error)
+
+// Function returning Result type
+fn divide(a: int, b: int) -> Result<int, MathError> = a / b
+
+let goodResult = divide(a: 10, b: 2)
+let safeValue = goodResult ?: -1  // 5 (extracts value from Success) or -1 (on Error)
+
+let badResult = divide(a: 10, b: 0)  
+let errorValue = badResult ?: -1  // -1 (Error case, uses default)
+```
+
+This is syntactic sugar for:
+```osprey
+let value = match calculation {
+    Success { value } => value
+    Error { message } => -1
+}
+```

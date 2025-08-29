@@ -1,0 +1,7 @@
+// This should fail compilation: Field access on boolean type
+// Tests: ErrFieldAccessOnBoolean, WrapFieldAccessOnBoolean  
+// Error: cannot access field on boolean type
+
+let flag = true
+let field = flag.value  // Cannot access field on boolean
+print(field)

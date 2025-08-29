@@ -1,0 +1,17 @@
+=== CORRECTED HINDLEY-MILNER TEST ===
+Test 1: Simple polymorphic functions
+identity(42) = 42
+identity("test") = test
+identity(true) = true
+
+Test 2: Polymorphic functions with homogeneous types
+makeIntPoint(1, 2) = {1, 2}
+makeIntPoint(3, 4) = {3, 4}
+makeStringPair = {hello, world}
+
+Test 3: Higher-order polymorphism
+apply(identity, 99) = 99
+apply(identity, 123) = 123
+
+=== CORRECTED HINDLEY-MILNER TEST COMPLETE ===
+All types properly inferred with consistent record types!

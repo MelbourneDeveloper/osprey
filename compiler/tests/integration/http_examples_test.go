@@ -7,7 +7,7 @@ import (
 )
 
 // TestHTTPExamples tests HTTP and WebSocket examples in the examples/tested/http directory.
-func TestHTTPExaNOmples(t *testing.T) {
+func TestHTTPExamples(t *testing.T) {
 	checkLLVMTools(t)
 
 	runTestExamplesRecursive(t, "../../examples/tested/http", getHTTPExpectedOutputs())

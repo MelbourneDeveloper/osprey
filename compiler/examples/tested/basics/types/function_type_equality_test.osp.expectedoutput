@@ -1,0 +1,19 @@
+=== FUNCTION TYPE EQUALITY TEST ===
+Test 1: Same Function Signature Types
+Int operations (same function type): 11, 20, 9
+String operations (same function type): hello!, hello?
+
+Test 2: Different Function Signature Types
+Two param result: 12
+Three param result: 6
+Int to string result: 42
+
+Test 3: Generic Function Types
+Generic int functions (same type): 42, 99
+Generic string functions (same type): test, hello
+
+Test 4: Function Composition
+Composed results (same underlying types): 25, 45
+
+=== FUNCTION TYPE EQUALITY TEST COMPLETE ===
+This test exercises FunctionType.Equals through type unification!

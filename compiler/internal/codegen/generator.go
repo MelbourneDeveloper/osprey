@@ -11,23 +11,22 @@ import (
 
 // LLVMGenerator generates LLVM IR from AST.
 type LLVMGenerator struct {
-	module              *ir.Module
-	builder             *ir.Block
-	function            *ir.Func
-	variables           map[string]value.Value
-	variableTypes       map[string]string // Track variable types: "string" or "int"
-	mutableVariables    map[string]bool   // Track which variables were declared as mutable
-	functions           map[string]*ir.Func
-	functionReturnTypes map[string]string   // Track function return types: "string" or "int"
-	functionParameters  map[string][]string // Track function parameter names for named argument reordering
-	typeMap             map[string]types.Type
+	module             *ir.Module
+	builder            *ir.Block
+	function           *ir.Func
+	variables          map[string]value.Value
+	mutableVariables   map[string]bool // Track which variables were declared as mutable
+	functions          map[string]*ir.Func
+	functionParameters map[string][]string // Track function parameter names for named argument reordering
+	typeMap            map[string]types.Type
 	// Union type tracking
 	typeDeclarations map[string]*ast.TypeDeclaration // Track all type declarations
 	unionVariants    map[string]int64                // Track union variants and their discriminant values
+	// Monomorphization tracking
+	monomorphizedInstances map[string]string                   // Track monomorphized function instances
+	functionDeclarations   map[string]*ast.FunctionDeclaration // Track original function declarations
 	// Fiber closure counter
 	closureCounter int
-	// Temporary parameter types for return type analysis
-	currentFunctionParameterTypes map[string]string
 	// Result pattern matching support
 	currentResultValue value.Value // Current Result value being pattern matched
 	// Security configuration
@@ -39,7 +38,13 @@ type LLVMGenerator struct {
 	// Real algebraic effects system
 	effectCodegen *EffectCodegen
 	// Context for type-aware literal generation
-	expectedReturnType types.Type
+	expectedReturnType    types.Type
+	expectedParameterType types.Type
+	// Hindley-Milner type inference system
+	typeInferer *TypeInferer
+	// HINDLEY-MILNER FIX: Single source of truth for record field mappings
+	// Maps record type name to field name -> LLVM index mapping
+	recordFieldMappings map[string]map[string]int
 }
 
 // SecurityConfig defines security policies for the code generator.
@@ -51,6 +56,7 @@ type SecurityConfig struct {
 	AllowFileWrite        bool
 	AllowFFI              bool
 	AllowProcessExecution bool
+	SandboxMode           bool
 }
 
 // NewLLVMGenerator creates a new LLVM IR generator with default (permissive) security.
@@ -62,6 +68,7 @@ func NewLLVMGenerator() *LLVMGenerator {
 		AllowFileWrite:        true,
 		AllowFFI:              true,
 		AllowProcessExecution: true,
+		SandboxMode:           false,
 	})
 }
 
@@ -76,14 +83,12 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 	}
 
 	generator := &LLVMGenerator{
-		module:              module,
-		variables:           make(map[string]value.Value),
-		variableTypes:       make(map[string]string),
-		mutableVariables:    make(map[string]bool),
-		functions:           make(map[string]*ir.Func),
-		functionReturnTypes: make(map[string]string),
-		functionParameters:  make(map[string][]string),
-		typeMap:             typeMap,
+		module:             module,
+		variables:          make(map[string]value.Value),
+		mutableVariables:   make(map[string]bool),
+		functions:          make(map[string]*ir.Func),
+		functionParameters: make(map[string][]string),
+		typeMap:            typeMap,
 		// Initialize union type tracking
 		typeDeclarations: make(map[string]*ast.TypeDeclaration),
 		unionVariants:    make(map[string]int64),
@@ -93,16 +98,20 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		currentResultValue:    nil,
 		currentFunction:       nil,
 		currentFunctionParams: make(map[string]value.Value),
+		// Initialize Hindley-Milner type inference system
+		typeInferer: NewTypeInferer(),
+		// HINDLEY-MILNER FIX: Initialize record field mappings
+		recordFieldMappings: make(map[string]map[string]int),
 	}
 
 	// Declare external functions for FFI
 	generator.declareExternalFunctions()
 
-	// Register built-in function return types
-	generator.registerBuiltInFunctionReturnTypes()
-
 	// Register built-in types
 	generator.registerBuiltInTypes()
+
+	// Set the generator reference in the type inferer for constraint checking
+	generator.typeInferer.SetGenerator(generator)
 
 	// Initialize fiber runtime declarations will happen on first use
 
@@ -124,6 +133,7 @@ func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration)
 	if g.effectCodegen == nil {
 		g.InitializeEffects()
 	}
+
 	return g.effectCodegen.RegisterEffect(effect)
 }
 
@@ -132,6 +142,7 @@ func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpres
 	if g.effectCodegen == nil {
 		g.InitializeEffects()
 	}
+
 	return g.effectCodegen.GeneratePerformExpression(perform)
 }
 
@@ -179,63 +190,6 @@ func (g *LLVMGenerator) declareExternalFunctions() {
 		ir.NewParam("n", types.I64),
 	)
 	g.functions["memcpy"] = memcpy
-}
-
-// registerBuiltInFunctionReturnTypes registers return types for built-in functions.
-func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
-	// TODO: Most of these are WRONG!
-	// Anything that COULD fail MUST return a RESULT
-	// Especially IO functions like readFile, writeFile, etc.
-	// DON'T IGNORE THIS!!! FIX IT!!
-
-	// Core functions
-	g.functionReturnTypes["toString"] = TypeString
-	g.functionReturnTypes["print"] = TypeInt // Returns exit code
-	g.functionReturnTypes["input"] = TypeInt // Returns input as integer
-	g.functionReturnTypes["range"] = TypeInt // Returns range object (simplified as int)
-	// STRING FUNCTIONS RETURN RESULT TYPES - THEY CAN FAIL!
-	g.functionReturnTypes["length"] = TypeResult + "<Int, string>"       // Returns Result<Int, string>
-	g.functionReturnTypes["contains"] = TypeResult + "<Bool, string>"    // Returns Result<Bool, string>
-	g.functionReturnTypes["substring"] = TypeResult + "<String, string>" // Returns Result<String, string>
-
-	// Process and file functions - MUST return Result types per spec
-	// Process functions
-	g.functionReturnTypes["spawnProcess"] = TypeResult + "<ProcessHandle, string>"
-	g.functionReturnTypes["awaitProcess"] = TypeInt
-	g.functionReturnTypes["cleanupProcess"] = TypeInt
-
-	// File I/O functions
-	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"
-	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"
-	g.functionReturnTypes["deleteFile"] = TypeResult + "<Success, string>"
-
-	// HTTP functions
-	g.functionReturnTypes["httpCreateServer"] = TypeInt // Returns server ID
-	g.functionReturnTypes["httpListen"] = TypeInt       // Returns status code
-	g.functionReturnTypes["httpStopServer"] = TypeInt   // Returns status code
-	g.functionReturnTypes["httpCreateClient"] = TypeInt // Returns client ID
-	g.functionReturnTypes["httpGet"] = TypeInt          // Returns status code
-	g.functionReturnTypes["httpPost"] = TypeInt         // Returns status code
-	g.functionReturnTypes["httpPut"] = TypeInt          // Returns status code
-	g.functionReturnTypes["httpDelete"] = TypeInt       // Returns status code
-	g.functionReturnTypes["httpRequest"] = TypeInt      // Returns status code
-	g.functionReturnTypes["httpCloseClient"] = TypeInt  // Returns status code
-
-	// WebSocket functions
-	g.functionReturnTypes["webSocketConnect"] = TypeInt         // Returns connection ID
-	g.functionReturnTypes["webSocketSend"] = TypeInt            // Returns status code
-	g.functionReturnTypes["webSocketClose"] = TypeInt           // Returns status code
-	g.functionReturnTypes["webSocketCreateServer"] = TypeInt    // Returns server ID
-	g.functionReturnTypes["webSocketServerListen"] = TypeInt    // Returns status code
-	g.functionReturnTypes["webSocketServerBroadcast"] = TypeInt // Returns status code
-	g.functionReturnTypes["webSocketStopServer"] = TypeInt      // Returns status code
-	g.functionReturnTypes["webSocketKeepAlive"] = TypeInt       // Returns status code
-
-	// Functional programming functions return various types
-	g.functionReturnTypes["forEach"] = TypeInt // Returns status/count
-	g.functionReturnTypes["map"] = TypeInt     // Returns transformed array (simplified as int)
-	g.functionReturnTypes["filter"] = TypeInt  // Returns filtered array (simplified as int)
-	g.functionReturnTypes["fold"] = TypeInt    // Returns accumulated value (could be any type, simplified as int)
 }
 
 // registerBuiltInTypes registers built-in types in the type system.

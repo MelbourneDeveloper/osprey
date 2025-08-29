@@ -143,13 +143,9 @@ print("")
 // Battle calculation
 let totalDamageNeeded = enemyHealth
 let attacksNeeded = totalDamageNeeded / playerDamage
-let attacksNeededValue = match attacksNeeded {
-    Success => attacksNeeded.value
-    Err => 999
-}
 
 print("⚡ BATTLE COMMENCES! ⚡")
-print("You need ${attacksNeededValue} successful attacks to defeat the ${enemyName}!")
+print("You need ${attacksNeeded} successful attacks to defeat the ${enemyName}!")
 print("")
 
 // Simulate battle rounds

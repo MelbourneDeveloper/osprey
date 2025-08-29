@@ -57,6 +57,7 @@ func handleBasicFlags(args []string) *cli.CommandResult {
 		fmt.Println("Osprey Compiler 1.0.0")
 		return &cli.CommandResult{Success: true, Output: ""}
 	}
+
 	return nil
 }
 
@@ -68,14 +69,15 @@ func handleSpecialModes(args []string) *cli.CommandResult {
 	case HoverFlag:
 		return handleHoverMode(args)
 	}
+
 	return nil
 }
 
 // handleDocsMode processes the --docs flag
 func handleDocsMode(args []string) *cli.CommandResult {
-	// Find --docs-dir argument
-	docsDir := ""
-	for i := 1; i < len(args); i++ {
+	var docsDir string
+	// Check for --docs-dir argument (REQUIRED)
+	for i := MinArgs; i < len(args); i++ {
 		if args[i] == DocsDirFlag && i+1 < len(args) {
 			docsDir = args[i+1]
 			break
@@ -89,7 +91,8 @@ func handleDocsMode(args []string) *cli.CommandResult {
 		}
 	}
 
-	result := cli.RunCommand("", cli.OutputModeDocs, docsDir, false, cli.NewDefaultSecurityConfig())
+	result := cli.RunCommand("", cli.OutputModeDocs, docsDir, false)
+
 	return &result
 }
 
@@ -98,9 +101,12 @@ func handleHoverMode(args []string) *cli.CommandResult {
 	if len(args) < MinHoverArgs {
 		fmt.Println("Error: --hover requires an element name")
 		fmt.Println("Example: osprey --hover print")
+
 		return &cli.CommandResult{Success: false, ErrorMsg: "Missing element name for --hover"}
 	}
-	result := cli.RunCommand(args[2], cli.OutputModeHover, "", false, cli.NewDefaultSecurityConfig())
+
+	result := cli.RunCommand(args[2], cli.OutputModeHover, "", false)
+
 	return &result
 }
 
@@ -131,12 +137,13 @@ func handleFileBasedOperations(args []string) cli.CommandResult {
 	if parsedMode != "" {
 		outputMode = parsedMode
 	}
+
 	if parsedDocsDir != "" {
 		docsDir = parsedDocsDir
 	}
 
 	// Execute the command with appropriate security settings
-	return executeCommand(filename, outputMode, docsDir, quiet, security)
+	return executeCommandWithSecurity(filename, outputMode, docsDir, quiet, security)
 }
 
 // parseArgumentsForFile parses command line arguments for file-based operations
@@ -175,6 +182,7 @@ func parseOutputMode(arg string) string {
 		DocsFlag:    cli.OutputModeDocs,
 		HoverFlag:   cli.OutputModeHover,
 	}
+
 	return modes[arg]
 }
 
@@ -193,6 +201,7 @@ func parseSecurityMode(arg string, security *cli.SecurityConfig) bool {
 	case "--no-fs":
 		security.AllowFileRead = false
 		security.AllowFileWrite = false
+
 		return true
 	case "--no-ffi":
 		security.AllowFFI = false
@@ -202,14 +211,21 @@ func parseSecurityMode(arg string, security *cli.SecurityConfig) bool {
 	}
 }
 
-// executeCommand executes the command with the given security settings
-func executeCommand(
+// executeCommandWithSecurity executes the command with appropriate security settings
+func executeCommandWithSecurity(
 	filename, outputMode, docsDir string,
 	quiet bool,
 	security *cli.SecurityConfig,
 ) cli.CommandResult {
-	// Just call the merged function - it handles all security modes
-	return cli.RunCommand(filename, outputMode, docsDir, quiet, security)
+	// Use security-aware functions if security settings are non-default
+	if security.SandboxMode || !security.AllowHTTP || !security.AllowWebSocket ||
+		!security.AllowFileRead || !security.AllowFileWrite || !security.AllowFFI {
+		// Use security-aware command execution
+		return cli.RunCommandWithSecurity(filename, outputMode, quiet, security)
+	}
+
+	// Use regular command execution for default/permissive mode
+	return cli.RunCommand(filename, outputMode, docsDir, quiet)
 }
 
 // ShowHelp displays the help message for the Osprey compiler
@@ -250,91 +266,7 @@ func ShowHelp() {
 	fmt.Println("  osprey program.osp --no-http     # Compile without HTTP functions")
 }
 
-// ParseArgs parses command line arguments and returns parsed values
-func ParseArgs(args []string) (string, string, string, *cli.SecurityConfig) {
-	if len(args) < MinArgs {
-		ShowHelp()
-		return "", "", "", nil
-	}
-
-	// Handle help flags
-	if args[1] == "--help" || args[1] == "-h" {
-		ShowHelp()
-		return "", "", "", nil
-	}
-
-	// Handle special modes (docs, hover)
-	if filename, outputMode, docsDir := HandleSpecialModes(args); filename != "" || outputMode != "" {
-		return filename, outputMode, docsDir, nil
-	}
-
-	// Regular file-based operations need at least 2 args
-	if len(args) < MinArgs {
-		ShowHelp()
-		return "", "", "", nil
-	}
-
-	filename := args[1]
-	outputMode, docsDir, security := ParseFileBasedArgs(args)
-
-	return filename, outputMode, docsDir, security
-}
-
-// HandleSpecialModes handles special command modes like docs and hover
-func HandleSpecialModes(args []string) (string, string, string) {
-	// Handle docs flag (no file required)
-	if args[1] == DocsFlag {
-		var docsDir string
-		// Check for --docs-dir argument (REQUIRED)
-		for i := MinArgs; i < len(args); i++ {
-			if args[i] == DocsDirFlag && i+1 < len(args) {
-				docsDir = args[i+1]
-				break
-			}
-		}
-		return "", cli.OutputModeDocs, docsDir
-	}
-
-	// Handle hover flag (element name required)
-	if args[1] == HoverFlag {
-		if len(args) < MinHoverArgs {
-			fmt.Println("Error: --hover requires an element name")
-			fmt.Println("Example: osprey --hover print")
-			return "", "", ""
-		}
-		return args[2], cli.OutputModeHover, ""
-	}
-
-	return "", "", ""
-}
-
-// ParseFileBasedArgs parses arguments for file-based operations
-func ParseFileBasedArgs(args []string) (string, string, *cli.SecurityConfig) {
-	outputMode := cli.OutputModeLLVM // default to LLVM IR
-	docsDir := ""
-
-	// Create security config with defaults
-	security := cli.NewDefaultSecurityConfig()
-
-	// Parse remaining arguments
-	for i := MinArgs; i < len(args); i++ {
-		arg := args[i]
-
-		if ParseOutputModeArg(arg) != "" {
-			outputMode = ParseOutputModeArg(arg)
-		} else if arg == DocsDirFlag && i+1 < len(args) {
-			docsDir = args[i+1]
-			i++ // Skip next argument since we consumed it
-		} else if !ParseSecurityArg(arg, security) {
-			fmt.Printf("Unknown option: %s\n", arg)
-			return "", "", nil
-		}
-	}
-
-	return outputMode, docsDir, security
-}
-
-// ParseOutputModeArg parses output mode arguments
+// ParseOutputModeArg parses output mode arguments (internal for testing)
 func ParseOutputModeArg(arg string) string {
 	switch arg {
 	case "--ast":
@@ -356,7 +288,7 @@ func ParseOutputModeArg(arg string) string {
 	}
 }
 
-// ParseSecurityArg parses security-related arguments
+// ParseSecurityArg parses security-related arguments (internal for testing)
 func ParseSecurityArg(arg string, security *cli.SecurityConfig) bool {
 	switch arg {
 	case "--sandbox":
@@ -371,6 +303,7 @@ func ParseSecurityArg(arg string, security *cli.SecurityConfig) bool {
 	case "--no-fs":
 		security.AllowFileRead = false
 		security.AllowFileWrite = false
+
 		return true
 	case "--no-ffi":
 		security.AllowFFI = false
@@ -381,20 +314,17 @@ func ParseSecurityArg(arg string, security *cli.SecurityConfig) bool {
 }
 
 func main() {
-	result := RunMain(os.Args)
+	result := RunCLI(os.Args)
 	if !result.Success {
 		fmt.Fprintf(os.Stderr, "%s\n", result.ErrorMsg)
 		os.Exit(1)
 	}
+
 	if result.Output != "" {
 		fmt.Print(result.Output)
 	}
+
 	if result.OutputFile != "" {
 		fmt.Printf("Output written to: %s\n", result.OutputFile)
 	}
-}
-
-// RunMain is the testable main function that takes args as parameter
-func RunMain(args []string) cli.CommandResult {
-	return RunCLI(args)
 }

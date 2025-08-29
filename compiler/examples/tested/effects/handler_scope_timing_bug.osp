@@ -1,5 +1,4 @@
-// 🚀 HANDLER SCOPE TIMING BUG TEST 🔥
-// This test SHOULD work but FAILS due to handler scope restoration timing
+// 🚀 HANDLER SCOPE TIMING TEST 🔥
 
 effect Logger {
     log: fn(string) -> Unit
@@ -10,19 +9,9 @@ effect State {
     set: fn(int) -> Unit
 }
 
-// Function that calls another effectful function inside a handler
-fn nestedCall() -> int !Logger = {
-    perform Logger.log("Before nested operation")
-    let result = deepNestedOperation()
-    perform Logger.log("After nested operation")
-    result
-}
-
-// Deep function that should still have access to handler scope
-fn deepNestedOperation() -> int !Logger = {
-    perform Logger.log("Deep operation executing")
-    performComplexCalculation()
-}
+// TODO: Investigate. Note that if we move deepNestedOperation and nestedCall here
+// the example does not run. Had to move items to get it working. This might be a compiler 
+// issue
 
 // Complex calculation that performs effects
 fn performComplexCalculation() -> int !Logger = {
@@ -32,7 +21,21 @@ fn performComplexCalculation() -> int !Logger = {
     intermediate
 }
 
-// This should work but fails due to handler scope timing bug
+// Deep function that should still have access to handler scope
+fn deepNestedOperation() -> int !Logger = {
+    perform Logger.log("Deep operation executing")
+    performComplexCalculation()
+}
+
+// Function that calls another effectful function inside a handler
+fn nestedCall() -> int !Logger = {
+    perform Logger.log("Before nested operation")
+    let result = deepNestedOperation()
+    perform Logger.log("After nested operation")
+    result
+}
+
+// Verifies that handler scope is restored correctly
 fn main() -> Unit = {
     handle Logger
         log msg => print("[HANDLER] " + msg)

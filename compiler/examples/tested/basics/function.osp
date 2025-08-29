@@ -1,7 +1,7 @@
 // Functions with arithmetic operations return Result for the entire expression
-fn add(x: int, y: int) -> Result<int, MathError> = x + y
+fn add(x, y) = x + y
 
-fn main() -> Unit = {
+fn main() = {
     print("Function test:")
     
     // Handle Results properly for compound expressions
