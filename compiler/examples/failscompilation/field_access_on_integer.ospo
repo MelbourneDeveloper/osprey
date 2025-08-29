@@ -1,0 +1,7 @@
+// This should fail compilation: Field access on integer type
+// Tests: ErrFieldAccessOnInteger, WrapFieldAccessOnInteger
+// Error: cannot access field on integer type
+
+let x = 42
+let field = x.value  // Cannot access field on integer
+print(field)

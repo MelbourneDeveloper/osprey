@@ -1,0 +1,187 @@
+// 🚀 COMPREHENSIVE ALGEBRAIC EFFECTS - ALL SYNTAX FEATURES! 🔥
+
+// Multiple effect declarations
+effect IO {
+    read: fn() -> string
+    write: fn(string) -> Unit
+}
+
+effect FileIO {
+    writeFile: fn(string, string) -> Unit
+    readFile: fn(string) -> string
+    deleteFile: fn(string) -> Unit
+}
+
+effect State {
+    get: fn() -> int
+    set: fn(int) -> Unit
+}
+
+effect Logger {
+    log: fn(string) -> Unit
+    error: fn(string) -> Unit
+}
+
+effect Counter {
+    increment: fn() -> Unit
+    getValue: fn() -> int
+    reset: fn() -> Unit
+}
+
+// Pure functions work fine
+fn doubleValue(x: int) -> int = x * 2
+
+fn concatenateStrings(a: string, b: string) -> string = a + b
+
+// Functions with single effects
+fn loggedIncrement(message: string) -> Unit ![Logger, Counter] = {
+    perform Logger.log("Incrementing: ${message}")
+    perform Counter.increment()
+}
+
+// Pattern matching with effects
+fn processItems(count: int) -> int ![Logger, Counter] = match count {
+    0 => {
+        perform Logger.log("Base case reached")
+        perform Counter.getValue()
+    }
+    _ => match count > 10 {
+        true => {
+            perform Logger.error("Count too high: ${toString(count)}")
+            perform Counter.reset()
+            0
+        }
+        false => {
+            perform Logger.log("Processing item ${toString(count)}")
+            perform Counter.increment()
+            processItems(count - 1)
+        }
+    }
+}
+
+// Fiber integration with effects
+fn asyncProcessing(taskId: int) -> int ![Logger, Counter] = {
+    perform Logger.log("Starting async task ${toString(taskId)}")
+    let fiber1 = spawn {
+        perform Logger.log("Fiber1 executing")
+        sleep(10)
+        doubleValue(10)
+    }
+    let fiber2 = spawn {
+        sleep(10)
+        perform Logger.log("Fiber2 running")
+        15
+    }
+    let result1 = await(fiber1)
+    let result2 = await(fiber2)
+    perform Counter.increment()
+    perform Logger.log("Tasks completed: ${toString(result1)}, ${toString(result2)}")
+    result1 + result2
+}
+
+// Complex calculation with multiple effects
+fn calculation(x: int) -> int ![Logger, State] = {
+    perform Logger.log("Starting calculation for: ${toString(x)}")
+    let current = perform State.get()
+    let result = x * 2 + current
+    perform State.set(result)
+    perform Logger.log("Calculation complete: ${toString(x)} -> ${toString(result)}")
+    result
+}
+
+// Error handling with pattern matching
+fn errorProne(value: int) -> int !Logger = match value {
+    -5 => {
+        perform Logger.error("Negative value detected: ${toString(value)}")
+        0
+    }
+    0 => {
+        perform Logger.error("Zero value not allowed")
+        1
+    }
+    _ => match value > 100 {
+        true => {
+            perform Logger.error("Value too large: ${toString(value)}")
+            100
+        }
+        false => {
+            perform Logger.log("Processing valid value: ${toString(value)}")
+            value * 2
+        }
+    }
+}
+
+// File I/O operations with effects
+fn writeConfigFile(configName: string, data: string) -> Unit ![FileIO, Logger] = {
+    let filename = "config_" + configName + ".txt"
+    perform Logger.log("Writing config file: ${filename}")
+    perform FileIO.writeFile(filename, data)
+    perform Logger.log("Config file written successfully")
+}
+
+fn readAndProcessLogFile(logFile: string) -> string ![FileIO, Logger] = {
+    perform Logger.log("Reading log file: ${logFile}")
+    let content = perform FileIO.readFile(logFile)
+    perform Logger.log("Processing log content, length: ${toString(length(content))}")
+    let processedContent = "PROCESSED: " + content + " [END]"
+    processedContent
+}
+
+fn generateReport(reportId: int, data: string) -> Unit ![FileIO, Logger, State] = {
+    let reportFile = "report_" + toString(reportId) + ".txt"
+    let currentState = perform State.get()
+    let reportContent = "=== REPORT ${toString(reportId)} ===\n" +
+                       "State: ${toString(currentState)}\n" +
+                       "Data: ${data}\n" +
+                       "Timestamp: ${toString(reportId * 1000)}\n" +
+                       "=== END REPORT ===\n"
+    
+    perform Logger.log("Generating report: ${reportFile}")
+    perform FileIO.writeFile(reportFile, reportContent)
+    perform State.set(currentState + 1)
+    perform Logger.log("Report generated and state updated")
+}
+
+fn cleanupTempFiles() -> Unit ![FileIO, Logger] = {
+    perform Logger.log("Cleaning up temporary files")
+    perform FileIO.deleteFile("temp_data.txt")
+    perform FileIO.deleteFile("temp_logs.txt")
+    perform Logger.log("Temporary files cleaned up")
+}
+
+// Main function demonstrating all features
+fn main() -> Unit = {
+    handle Counter
+        increment => print("⬆️ Counter incremented")
+        getValue => 42
+        reset => print("🔄 Counter reset to 0")
+    in handle State
+        get => 10
+        set newVal => print("📊 State updated to: " + toString(newVal))
+    in handle Logger
+        log msg => print("📝 LOG: " + msg)
+        error msg => print("❌ ERROR: " + msg)  
+    in handle FileIO
+        writeFile filename content => print("💾 Writing file: " + filename)
+        readFile filename => "mock file content"
+        deleteFile filename => print("🗑️ Deleting file: " + filename)
+    in {
+        print("🚀 Starting Comprehensive Effects Test")
+        
+        // Test basic calculation
+        let calcResult = calculation(21)
+        
+        // Test pattern matching with effects
+        let processResult = processItems(3)
+        
+        // Test error handling patterns
+        let errorResult1 = errorProne(-5)
+        let errorResult2 = errorProne(150)
+        let errorResult3 = errorProne(25)
+        
+        // Test async processing with fibers
+        let asyncResult = asyncProcessing(5)
+        
+        print("🎯 Final Results: Calc=" + toString(calcResult) + ", Process=" + toString(processResult) + ", Errors=[" + toString(errorResult1) + "," + toString(errorResult2) + "," + toString(errorResult3) + "], Async=" + toString(asyncResult) + " 🎉")
+    }
+} 

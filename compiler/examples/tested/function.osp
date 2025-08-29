@@ -1,5 +1,0 @@
-fn add(x, y) = x + y
-
-print("Function test:")
-print("add(3, 7) = ${add(x: 3, y: 7)}")
-print("add(10, 20) = ${add(x: 10, y: 20)}") 

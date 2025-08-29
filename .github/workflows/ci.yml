@@ -76,11 +76,50 @@ jobs:
           fi
           echo "✅ Directory structure verified"
 
-      - name: Run all tests
+      - name: Run C Runtime Linting with MAXIMUM STRICTNESS
         working-directory: "./compiler"
         run: |
-          echo "🚀 Running all tests..."
-          make test-all
+          make c-lint
+
+      - name: Run C Runtime Tests
+        working-directory: "./compiler"
+        run: |
+          make c-test
+          
+      - name: Run tests & enforce coverage threshold
+        working-directory: "./compiler"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq bc
+
+          echo "🚀 Executing full test-suite with coverage…"
+          ./coverage_report.sh
+
+          # Extract the total percentage (numeric, no % sign)
+          CURRENT_COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')
+          MINIMUM_COVERAGE="${{ vars.TEST_COVERAGE_COMPILER }}"
+
+          echo "Current coverage : ${CURRENT_COVERAGE}%"
+          echo "Required minimum : ${MINIMUM_COVERAGE}%"
+
+          # Fail if coverage dropped below threshold
+          if [ "$(echo "$CURRENT_COVERAGE < $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
+            echo "❌ Coverage dropped below threshold!"
+            exit 1
+          fi
+
+          # Try to update threshold if coverage improved (ignore failures)
+          if [ "$(echo "$CURRENT_COVERAGE > $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
+            echo "🚀 Coverage improved! Attempting to update threshold..."
+            if gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE" 2>/dev/null; then
+              echo "✅ Updated threshold to ${CURRENT_COVERAGE}%"
+            else
+              echo "⚠️ Could not update threshold (permissions issue - ignoring)"
+            fi
+          fi
+
+          echo "✅ Coverage check passed"
 
       - name: Test example compilation and execution
         working-directory: "./compiler"
@@ -89,15 +128,11 @@ jobs:
 
           # Test arithmetic interpolation example
           echo "Testing interpolation_math.osp..."
-          ./bin/osprey examples/tested/interpolation_math.osp --run
+          ./bin/osprey examples/tested/basics/math/interpolation_math.osp --run
 
           # Test comprehensive example
           echo "Testing comprehensive.osp..."
-          ./bin/osprey examples/tested/comprehensive.osp --run
-
-          # Test basic hello world
-          echo "Testing hello.osp..."
-          ./bin/osprey examples/tested/hello.osp --run
+          ./bin/osprey examples/tested/basics/comprehensive.osp --run
 
           echo "✅ All example compilations and executions successful!"
 
@@ -108,50 +143,30 @@ jobs:
           ./bin/osprey --help
           echo "✅ Binary verification successful!"
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: osprey-binary
-          path: "compiler/bin/osprey"
-          retention-days: 30
-
-      - name: Test Web Compiler with Docker Compose
+      - name: Test Web Compiler
         run: |
-          echo "🐳 Testing Web Compiler with Docker Compose..."
           cd webcompiler
-
-          # Build and start the web compiler service
-          echo "🔨 Building and starting web compiler..."
-          docker compose up --build -d
-
-          # Wait for service to be ready
-          echo "⏳ Waiting for web compiler to be ready..."
-          timeout=60
-          while [ $timeout -gt 0 ]; do
-            if curl -s http://localhost:3001/api > /dev/null; then
-              echo "✅ Web compiler is ready!"
-              break
-            fi
-            echo "⏳ Waiting for service... ($timeout seconds remaining)"
-            sleep 2
-            timeout=$((timeout - 2))
-          done
-
-          if [ $timeout -le 0 ]; then
-            echo "❌ Web compiler failed to start within timeout"
-            echo "📋 Docker logs:"
-            docker compose logs
-            docker compose down
-            exit 1
-          fi
-
-          # Run the test script
-          echo "🧪 Running web compiler tests..."
+          
+          # Build the Docker image
+          docker build -t osprey-web-compiler-ci -f Dockerfile ..
+          
+          # Run the container in detached mode
+          docker run -d \
+            --name osprey-web-compiler-ci \
+            -p 3001:3001 \
+            -e NODE_ENV=production \
+            -e PORT=3001 \
+            --memory=256m \
+            --memory-reservation=256m \
+            osprey-web-compiler-ci
+          
+          # Wait for container to be ready
+          sleep 15
+          
+          # Run the test
           chmod +x test.sh
           ./test.sh
-
-          # Clean up
-          echo "🧹 Cleaning up Docker containers..."
-          docker compose down
-
-          echo "✅ Web compiler tests completed successfully!"
+          
+          # Cleanup
+          docker stop osprey-web-compiler-ci
+          docker rm osprey-web-compiler-ci

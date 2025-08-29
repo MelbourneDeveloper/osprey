@@ -1,3 +1,0 @@
-fn isEven(x: int) = (x % 2) == 0
-print(isEven(4))
-print(isEven(5)) 

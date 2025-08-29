@@ -2,7 +2,7 @@
   "name": "osprey-language-support",
   "displayName": "Osprey Language Support",
   "description": "Syntax highlighting and language server for Osprey programming language",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "christianfindlay",
   "repository": {
     "type": "git",
@@ -10,7 +10,7 @@
   },
   "engines": {
     "vscode": "^1.96.0",
-    "node": "20.19.2"
+    "node": ">=20.0.0"
   },
   "categories": [
     "Programming Languages",
@@ -193,7 +193,6 @@
     "typescript": "^5.8.3"
   },
   "scripts": {
-    "preinstall": "node -e \"if(process.version !== 'v20.19.2') { console.error('ERROR: This project requires Node.js v20.19.2 exactly. Current version: ' + process.version); process.exit(1); }\"",
     "compile": "tsc -b",
     "watch": "tsc -b -w",
     "package": "vsce package",

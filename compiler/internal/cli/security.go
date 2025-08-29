@@ -140,6 +140,7 @@ func (sc *SecurityConfig) GetSecuritySummary() string {
 	if len(allowed) > 0 {
 		summary += " Available=[" + strings.Join(allowed, ",") + "]"
 	}
+
 	if len(blocked) > 0 {
 		summary += " Unavailable=[" + strings.Join(blocked, ",") + "]"
 	}

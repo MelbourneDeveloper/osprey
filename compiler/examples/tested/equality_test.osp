@@ -1,2 +1,0 @@
-fn isEqual(x, y) = x == y
-print(toString(isEqual(x: 5, y: 5)))

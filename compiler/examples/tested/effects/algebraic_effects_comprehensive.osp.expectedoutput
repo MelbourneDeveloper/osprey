@@ -1,0 +1,20 @@
+🚀 Starting Comprehensive Effects Test
+📝 LOG: Starting calculation for: 21
+📊 State updated to: 52
+📝 LOG: Calculation complete: 21 -> 52
+📝 LOG: Processing item 3
+⬆️ Counter incremented
+📝 LOG: Processing item 2
+⬆️ Counter incremented
+📝 LOG: Processing item 1
+⬆️ Counter incremented
+📝 LOG: Base case reached
+❌ ERROR: Negative value detected: -5
+❌ ERROR: Value too large: 150
+📝 LOG: Processing valid value: 25
+📝 LOG: Starting async task 5
+📝 LOG: Fiber1 executing
+📝 LOG: Fiber2 running
+⬆️ Counter incremented
+📝 LOG: Tasks completed: 20, 15
+🎯 Final Results: Calc=52, Process=42, Errors=[0,100,50], Async=35 🎉 

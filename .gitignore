@@ -2,3 +2,9 @@
 .DS_Store
 
 compiler/examples/rust_integration/librust_utils.a
+
+webcompiler/src/outputs/
+
+*.txt
+
+compiler/examples/tested/effects/test_data/

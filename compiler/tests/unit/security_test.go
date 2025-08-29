@@ -15,13 +15,14 @@ print(serverID)`
 
 	// Create test file
 	testFile := createTestFile(t, "test_http.osp", source)
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	// Create sandbox security configuration
 	security := cli.NewSandboxSecurityConfig()
 
 	// Try to compile with sandbox mode
-	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, security)
+	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, false, security)
 
 	// Should fail because httpCreateServer function doesn't exist in sandbox mode
 	if result.Success {
@@ -41,13 +42,14 @@ print(wsID)`
 
 	// Create test file
 	testFile := createTestFile(t, "test_ws.osp", source)
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	// Create sandbox security configuration
 	security := cli.NewSandboxSecurityConfig()
 
 	// Try to compile with sandbox mode
-	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, security)
+	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, false, security)
 
 	// Should fail because websocketConnect function doesn't exist in sandbox mode
 	if result.Success {
@@ -67,13 +69,14 @@ print(x)`
 
 	// Create test file
 	testFile := createTestFile(t, "test_safe.osp", source)
+
 	defer func() { _ = os.Remove(testFile) }()
 
 	// Create default (permissive) security configuration
 	security := cli.NewDefaultSecurityConfig()
 
 	// Should succeed with default security
-	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, security)
+	result := cli.RunCommandWithSecurity(testFile, cli.OutputModeLLVM, false, security)
 
 	if !result.Success {
 		t.Errorf("Expected compilation to succeed with default security, but it failed: %s", result.ErrorMsg)
@@ -119,12 +122,14 @@ func TestBlockedFunctionsList(t *testing.T) {
 	httpFunctions := []string{"httpCreateServer", "httpListen", "httpGet", "httpPost"}
 	for _, fn := range httpFunctions {
 		found := false
+
 		for _, blocked := range blocked {
 			if blocked == fn {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("Expected function %s to be unavailable in sandbox mode", fn)
 		}
@@ -134,12 +139,14 @@ func TestBlockedFunctionsList(t *testing.T) {
 	wsFunctions := []string{"websocketConnect", "websocketSend", "websocketClose"}
 	for _, fn := range wsFunctions {
 		found := false
+
 		for _, blocked := range blocked {
 			if blocked == fn {
 				found = true
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("Expected function %s to be unavailable in sandbox mode", fn)
 		}

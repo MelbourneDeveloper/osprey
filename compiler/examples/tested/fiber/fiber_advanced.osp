@@ -2,8 +2,8 @@
 print("=== Advanced Fiber Examples ===")
 
 // Example 1: Map-Reduce pattern for data analysis
-fn mapPhase(data: Int) -> Int = data * data  // Square each element
-fn reducePhase(acc: Int, val: Int) -> Int = acc + val
+fn mapPhase(data: int) -> int = data * data  // Square each element
+fn reducePhase(acc: int, val: int) -> int = acc + val
 
 let data1 = spawn mapPhase(10)
 let data2 = spawn mapPhase(20)
@@ -18,8 +18,8 @@ print("Mapped values: ${mapped1}, ${mapped2}, ${mapped3}")
 print("Reduced total: ${total}")
 
 // Example 2: Parallel file processing simulation
-fn processFile(fileSize: Int) -> Int = fileSize / 1024  // Convert to KB
-fn compressFile(size: Int) -> Int = size / 4            // 4:1 compression
+fn processFile(fileSize: int) -> int = fileSize / 1024  // Convert to KB
+fn compressFile(size: int) -> int = size / 4            // 4:1 compression
 
 let file1 = spawn processFile(1048576)   // 1MB file
 let file2 = spawn processFile(2097152)   // 2MB file
@@ -32,8 +32,8 @@ let kb3 = await(file3)
 print("File sizes in KB: ${kb1}, ${kb2}, ${kb3}")
 
 // Example 3: Concurrent API requests simulation
-fn fetchUserData(userId: Int) -> Int = userId * 1000 + 123
-fn fetchOrderData(userId: Int) -> Int = userId * 100 + 45
+fn fetchUserData(userId: int) -> int = userId * 1000 + 123
+fn fetchOrderData(userId: int) -> int = userId * 100 + 45
 
 let userData = spawn fetchUserData(5)
 let orderData = spawn fetchOrderData(5)
@@ -53,9 +53,9 @@ print("Medium priority task ID: ${mediumPriority}")
 print("Low priority task ID: ${lowPriority}")
 
 // Example 5: Pipeline processing pattern
-fn stage1(input: Int) -> Int = input + 100
-fn stage2(input: Int) -> Int = input * 2
-fn stage3(input: Int) -> Int = input - 50
+fn stage1(input: int) -> int = input + 100
+fn stage2(input: int) -> int = input * 2
+fn stage3(input: int) -> int = input - 50
 
 let pipeline = await(spawn stage3(await(spawn stage2(await(spawn stage1(25))))))
 print("\nPipeline result: ${pipeline}")

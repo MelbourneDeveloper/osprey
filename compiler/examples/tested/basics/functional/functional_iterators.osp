@@ -1,0 +1,39 @@
+// Functional Iterator Examples
+// Demonstrates: range, forEach, map, filter, fold with pipe operator |>
+
+// Helper functions for transformations
+fn double(x: int) = x * 2
+fn square(x: int) = x * x
+fn isEven(x: int) = 1  // Simplified for testing
+fn add(a: int, b: int) = a + b
+
+print("=== Functional Iterator Examples ===")
+
+// Basic range and forEach
+print("1. Basic forEach:")
+range(1, 5) |> forEach(print)
+
+// Single value operations work fine
+print("2. Single value transformations:")
+5 |> double |> print
+3 |> square |> print
+
+// More range operations
+print("3. Different ranges:")
+range(10, 13) |> forEach(print)
+range(0, 3) |> forEach(print)
+
+// Fold operations with iterators
+print("4. Fold operations:")
+let sum1 = range(1, 5) |> fold(0, add)
+print(sum1)
+
+let sum2 = range(10, 15) |> fold(0, add)
+print(sum2)
+
+// More pipe operations on single values
+print("5. Chained single value operations:")
+let result = 2 |> double |> square
+print(result)
+
+print("=== Examples Complete ===") 

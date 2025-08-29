@@ -18,11 +18,8 @@ RUN apt-get update && apt-get upgrade -y \
 COPY compiler /workspace
 WORKDIR /workspace
 
-# Build fiber runtime first
-RUN make fiber-runtime
-
-# Build HTTP runtime
-RUN make http-runtime
+# Build all runtime libraries
+RUN make fiber-runtime http-runtime websocket-runtime system-runtime
 
 # Build the Osprey compiler directly without linting
 RUN go build -o bin/osprey ./cmd/osprey
@@ -47,6 +44,7 @@ RUN apt-get update \
     wget \
     llvm-14 \
     llvm-14-dev \
+    clang-14 \
     gcc \
     build-essential \
     libssl-dev \
@@ -54,7 +52,8 @@ RUN apt-get update \
     openssl \
     pkg-config \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 60
 
 # Add LLVM14 tools to PATH so Osprey compiler can find them
 ENV PATH="/usr/lib/llvm-14/bin:${PATH}"
@@ -69,9 +68,11 @@ WORKDIR /app
 # Copy built Osprey compiler from the build stage
 COPY --from=osprey-builder /workspace/bin/osprey /usr/local/bin/osprey
 
-# Copy built runtime libraries to system location
-COPY --from=osprey-builder /workspace/bin/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
-COPY --from=osprey-builder /workspace/bin/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
+# Copy built runtime libraries from the lib directory (not bin)
+COPY --from=osprey-builder /workspace/lib/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
+COPY --from=osprey-builder /workspace/lib/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
+COPY --from=osprey-builder /workspace/lib/libwebsocket_runtime.a /usr/local/lib/libwebsocket_runtime.a
+COPY --from=osprey-builder /workspace/lib/libsystem_runtime.a /usr/local/lib/libsystem_runtime.a
 
 # Copy built LSP server
 COPY --from=lsp-builder /workspace/vscode-extension/server /app/server
@@ -94,6 +95,7 @@ RUN chmod +x /usr/local/bin/osprey
 # Set environment variables
 ENV DOCKER_ENV=true
 ENV NODE_ENV=production
+ENV PORT=3001
 
 # Switch to non-root user
 USER osprey
@@ -102,7 +104,7 @@ USER osprey
 EXPOSE 3001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api || exit 1
 
 # Start the server

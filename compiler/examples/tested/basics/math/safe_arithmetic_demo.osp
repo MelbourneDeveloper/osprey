@@ -1,0 +1,36 @@
+type MathError = DivisionByZero | Overflow
+
+// For now, we demonstrate the concept with current syntax
+// In the future: fn safeDivide(a: Int, b: Int) -> Result<Int, MathError>
+fn performDivision(a: int, b: int) -> int = match b {
+  0 => 999999  // Error sentinel value (future: Err { error: DivisionByZero })
+  _ => a / b    // Normal result (future: Ok { value: a / b })
+}
+
+fn isError(result: int) -> int = match result {
+  999999 => 1  // Error detected
+  _ => 0         // Success
+}
+
+fn showResult(result: int, a: int, b: int) -> Unit = match result {
+  999999 => print("Error: Cannot divide ${a} by ${b}!")
+  _ => print("${a} / ${b} = ${result}")
+}
+
+print("=== Type-Safe Arithmetic Demo ===")
+print("Future: All operators return Result<T, Error>")
+print("")
+
+// Test cases showing safe division
+let result1 = performDivision(a: 10, b: 2)
+showResult(result: result1, a: 10, b: 2)
+
+let result2 = performDivision(a: 15, b: 0)  // Division by zero
+showResult(result: result2, a: 15, b: 0)
+
+let result3 = performDivision(a: 20, b: 4)
+showResult(result: result3, a: 20, b: 4)
+
+print("")
+print("✅ No panics! All division operations handled safely")
+print("🔮 Future: Built-in Result<T, E> types for all fallible operations")

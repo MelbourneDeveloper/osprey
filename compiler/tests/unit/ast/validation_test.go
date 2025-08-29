@@ -44,6 +44,8 @@ func TestValidateProgram(t *testing.T) {
 	})
 
 	t.Run("program_with_invalid_function", func(t *testing.T) {
+		// With Hindley-Milner type inference, validation is handled by the type system
+		// AST validation no longer rejects missing type annotations
 		program := &ast.Program{
 			Statements: []ast.Statement{
 				&ast.FunctionDeclaration{
@@ -56,8 +58,8 @@ func TestValidateProgram(t *testing.T) {
 		}
 
 		err := ast.ValidateProgram(program)
-		if err == nil {
-			t.Error("Invalid function should fail validation")
+		if err != nil {
+			t.Errorf("With HM type inference, AST validation should pass, got: %v", err)
 		}
 	})
 }
@@ -105,6 +107,8 @@ func TestValidateFunctionDeclaration(t *testing.T) {
 	})
 
 	t.Run("function_without_return_type_not_inferrable", func(t *testing.T) {
+		// With Hindley-Milner type inference, the type system handles all inference
+		// AST validation no longer requires explicit type annotations
 		fn := &ast.FunctionDeclaration{
 			Name:       "mystery",
 			Parameters: []ast.Parameter{{Name: "x", Type: &ast.TypeExpression{Name: "int"}}},
@@ -113,12 +117,8 @@ func TestValidateFunctionDeclaration(t *testing.T) {
 		}
 
 		err := ast.ValidateProgram(&ast.Program{Statements: []ast.Statement{fn}})
-		if err == nil {
-			t.Error("Function with non-inferrable return type should fail validation")
-		}
-
-		if !containsText(err.Error(), "requires explicit return type annotation") {
-			t.Errorf("Error should mention return type annotation, got: %v", err)
+		if err != nil {
+			t.Errorf("With HM type inference, AST validation should pass, got: %v", err)
 		}
 	})
 
@@ -143,6 +143,8 @@ func TestValidateFunctionDeclaration(t *testing.T) {
 	})
 
 	t.Run("parameter_without_type_not_inferrable", func(t *testing.T) {
+		// With Hindley-Milner type inference, the type system handles all inference
+		// AST validation no longer requires explicit type annotations
 		fn := &ast.FunctionDeclaration{
 			Name: "unknown_func",
 			Parameters: []ast.Parameter{
@@ -153,36 +155,30 @@ func TestValidateFunctionDeclaration(t *testing.T) {
 		}
 
 		err := ast.ValidateProgram(&ast.Program{Statements: []ast.Statement{fn}})
-		if err == nil {
-			t.Error("Function with non-inferrable parameter type should fail validation")
-		}
-
-		if !containsText(err.Error(), "requires explicit type annotation") {
-			t.Errorf("Error should mention type annotation, got: %v", err)
+		if err != nil {
+			t.Errorf("With HM type inference, AST validation should pass, got: %v", err)
 		}
 	})
 }
 
 func TestCanInferReturnType(t *testing.T) {
+	// With Hindley-Milner type inference, all type inference is handled by the type system
+	// AST validation always passes regardless of whether types can be inferred
 	tests := []struct {
-		name     string
-		body     ast.Expression
-		expected bool
+		name string
+		body ast.Expression
 	}{
 		{
-			name:     "integer_literal",
-			body:     &ast.IntegerLiteral{Value: 42},
-			expected: true,
+			name: "integer_literal",
+			body: &ast.IntegerLiteral{Value: 42},
 		},
 		{
-			name:     "string_literal",
-			body:     &ast.StringLiteral{Value: "hello"},
-			expected: true,
+			name: "string_literal",
+			body: &ast.StringLiteral{Value: "hello"},
 		},
 		{
-			name:     "boolean_literal",
-			body:     &ast.BooleanLiteral{Value: true},
-			expected: true,
+			name: "boolean_literal",
+			body: &ast.BooleanLiteral{Value: true},
 		},
 		{
 			name: "arithmetic_expression",
@@ -191,7 +187,6 @@ func TestCanInferReturnType(t *testing.T) {
 				Operator: "+",
 				Right:    &ast.IntegerLiteral{Value: 2},
 			},
-			expected: true,
 		},
 		{
 			name: "non_arithmetic_expression",
@@ -200,37 +195,32 @@ func TestCanInferReturnType(t *testing.T) {
 				Operator: "==",
 				Right:    &ast.IntegerLiteral{Value: 2},
 			},
-			expected: true,
 		},
 		{
 			name: "successful_result_expression",
 			body: &ast.ResultExpression{
-				IsSuccess: true,
+				Success: true,
 				Value: &ast.BinaryExpression{
 					Left:     &ast.IntegerLiteral{Value: 5},
 					Operator: "*",
 					Right:    &ast.IntegerLiteral{Value: 3},
 				},
 			},
-			expected: true,
 		},
 		{
 			name: "failed_result_expression",
 			body: &ast.ResultExpression{
-				IsSuccess: false,
-				Value:     &ast.StringLiteral{Value: "error"},
+				Success: false,
+				Value:   &ast.StringLiteral{Value: "error"},
 			},
-			expected: false,
 		},
 		{
-			name:     "call_expression",
-			body:     &ast.CallExpression{Function: &ast.Identifier{Name: "unknown"}},
-			expected: false,
+			name: "call_expression",
+			body: &ast.CallExpression{Function: &ast.Identifier{Name: "unknown"}},
 		},
 		{
-			name:     "identifier",
-			body:     &ast.Identifier{Name: "param"},
-			expected: false,
+			name: "identifier",
+			body: &ast.Identifier{Name: "param"},
 		},
 	}
 
@@ -245,23 +235,22 @@ func TestCanInferReturnType(t *testing.T) {
 			}
 
 			err := ast.ValidateProgram(&ast.Program{Statements: []ast.Statement{fn}})
-			canInfer := err == nil
-
-			if canInfer != test.expected {
-				t.Errorf("Expected can infer return type = %v, got %v (error: %v)",
-					test.expected, canInfer, err)
+			// With HM type inference, AST validation always passes
+			if err != nil {
+				t.Errorf("With HM type inference, AST validation should always pass, got: %v", err)
 			}
 		})
 	}
 }
 
 func TestCanInferParameterType(t *testing.T) {
+	// With Hindley-Milner type inference, all type inference is handled by the type system
+	// AST validation always passes regardless of whether types can be inferred
 	tests := []struct {
 		name       string
 		param      string
 		body       ast.Expression
 		returnType *ast.TypeExpression
-		expected   bool
 	}{
 		{
 			name:  "parameter_used_in_arithmetic",
@@ -272,34 +261,30 @@ func TestCanInferParameterType(t *testing.T) {
 				Right:    &ast.IntegerLiteral{Value: 1},
 			},
 			returnType: nil,
-			expected:   true,
 		},
 		{
 			name:       "parameter_directly_returned_with_type",
 			param:      "value",
 			body:       &ast.Identifier{Name: "value"},
 			returnType: &ast.TypeExpression{Name: "int"},
-			expected:   true,
 		},
 		{
 			name:       "parameter_directly_returned_without_type",
 			param:      "value",
 			body:       &ast.Identifier{Name: "value"},
 			returnType: nil,
-			expected:   false,
 		},
 		{
 			name:       "parameter_not_used",
 			param:      "unused",
 			body:       &ast.IntegerLiteral{Value: 42},
 			returnType: &ast.TypeExpression{Name: "int"},
-			expected:   false,
 		},
 		{
 			name:  "parameter_in_result_expression",
 			param: "num",
 			body: &ast.ResultExpression{
-				IsSuccess: true,
+				Success: true,
 				Value: &ast.BinaryExpression{
 					Left:     &ast.Identifier{Name: "num"},
 					Operator: "*",
@@ -307,7 +292,6 @@ func TestCanInferParameterType(t *testing.T) {
 				},
 			},
 			returnType: nil,
-			expected:   true,
 		},
 	}
 
@@ -323,11 +307,9 @@ func TestCanInferParameterType(t *testing.T) {
 			}
 
 			err := ast.ValidateProgram(&ast.Program{Statements: []ast.Statement{fn}})
-			canInfer := err == nil
-
-			if canInfer != test.expected {
-				t.Errorf("Expected can infer parameter type = %v, got %v (error: %v)",
-					test.expected, canInfer, err)
+			// With HM type inference, AST validation always passes
+			if err != nil {
+				t.Errorf("With HM type inference, AST validation should always pass, got: %v", err)
 			}
 		})
 	}
@@ -418,20 +400,4 @@ func TestArithmeticOperators(t *testing.T) {
 			}
 		})
 	}
-}
-
-func containsText(text, substring string) bool {
-	return len(text) > 0 && len(substring) > 0 &&
-		len(text) >= len(substring) &&
-		indexOf(text, substring) >= 0
-}
-
-func indexOf(text, substring string) int {
-	for i := 0; i <= len(text)-len(substring); i++ {
-		if text[i:i+len(substring)] == substring {
-			return i
-		}
-	}
-
-	return -1
 }

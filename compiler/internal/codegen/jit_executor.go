@@ -2,6 +2,7 @@
 package codegen
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,17 +24,45 @@ func NewJITExecutor() *JITExecutor {
 // CompileAndRunInMemory compiles LLVM IR and runs it without external dependencies.
 func (j *JITExecutor) CompileAndRunInMemory(ir string) error {
 	// For immediate solution: use embedded compilation approach
-
 	return j.compileAndRunEmbedded(ir)
 }
 
-// compileAndRunEmbedded uses an embedded approach with built-in LLVM tools detection.
-func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
-	tempDir, err := j.createTempDir()
+// CompileAndCaptureOutput compiles LLVM IR and captures the program's output
+func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
+	// Setup compilation environment
+	tempDir, irFile, exeFile, err := j.setupCompilation(ir)
 	if err != nil {
-		return err
+		return "", err
 	}
+
 	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Compile IR to object file
+	objFile, err := j.compileToObject(irFile, tempDir)
+	if err != nil {
+		return "", err
+	}
+
+	// Setup linking arguments
+	linkArgs := j.setupLinkArgs(exeFile, objFile)
+
+	// Link to executable
+	err = j.linkExecutable(linkArgs)
+	if err != nil {
+		return "", err
+	}
+
+	// Execute and capture output
+	return j.executeProgramWithCapture(exeFile)
+}
+
+// setupCompilation creates temp directory and writes IR file
+func (j *JITExecutor) setupCompilation(ir string) (string, string, string, error) {
+	// Create temporary directory for compilation
+	tempDir, err := os.MkdirTemp("", "osprey_compile_*")
+	if err != nil {
+		return "", "", "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to create temp directory: %w", err)
+	}
 
 	irFile, err := j.writeIRFile(tempDir, ir)
 	if err != nil {
@@ -65,14 +94,26 @@ func (j *JITExecutor) createTempDir() (string, error) {
 // writeIRFile writes IR content to a file
 func (j *JITExecutor) writeIRFile(tempDir, ir string) (string, error) {
 	irFile := filepath.Join(tempDir, "program.ll")
-	if err := os.WriteFile(irFile, []byte(ir), FilePermissionsLess); err != nil {
-		return "", fmt.Errorf("failed to write IR file: %w", err)
+
+	writeErr := os.WriteFile(irFile, []byte(ir), FilePermissionsLess)
+	if writeErr != nil {
+		return "", "", "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to write IR file: %w", writeErr)
 	}
 	return irFile, nil
 }
 
-// compileToObject compiles IR to object file
+	// Determine executable file name
+	exeFile := filepath.Join(tempDir, "program")
+	if runtime.GOOS == "windows" {
+		exeFile += ".exe"
+	}
+
+	return tempDir, irFile, exeFile, nil
+}
+
+// compileToObject compiles LLVM IR to object file
 func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
+	// Find LLVM tools in common locations
 	llcPath, err := j.findLLVMTool("llc")
 	if err != nil {
 		return "", fmt.Errorf("LLVM tools not found. Please install LLVM or use a different execution method: %w", err)
@@ -80,149 +121,206 @@ func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
 
 	objFile := filepath.Join(tempDir, "program.o")
 	// #nosec G204 - llcPath is validated through findLLVMTool
-	llcCmd := exec.Command(llcPath, "-filetype=obj", "-o", objFile, irFile)
+	llcCmd := exec.CommandContext(context.Background(), llcPath, "-filetype=obj", "-o", objFile, irFile)
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("failed to compile IR: %w\nOutput: %s", err, string(llcOutput))
+		return "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to compile IR: %w\nOutput: %s", err, string(llcOutput))
 	}
 	return objFile, nil
 }
 
-// linkExecutable links object file to executable
-func (j *JITExecutor) linkExecutable(objFile, tempDir string) (string, error) {
-	compilerPath, err := j.findCompiler()
-	if err != nil {
-		return "", fmt.Errorf("no suitable compiler found for linking: %w", err)
-	}
-
-	exeFile := filepath.Join(tempDir, "program")
-	if runtime.GOOS == "windows" {
-		exeFile += ".exe"
-	}
-
-	linkArgs := j.buildLinkArgs(objFile, exeFile)
-
-	// #nosec G204 - compilerPath is validated through findCompiler
-	linkCmd := exec.Command(compilerPath, linkArgs...)
-
-	linkOutput, err := linkCmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to link executable: %w\nOutput: %s", err, string(linkOutput))
-	}
-	return exeFile, nil
+	return objFile, nil
 }
 
-// buildLinkArgs builds the linking arguments
-func (j *JITExecutor) buildLinkArgs(objFile, exeFile string) []string {
+// setupLinkArgs builds the linking arguments for the executable
+func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) []string {
 	var linkArgs []string
+
 	linkArgs = append(linkArgs, "-o", exeFile, objFile)
 
-	// Add runtime libraries
-	linkArgs = j.addRuntimeLibraries(linkArgs)
+	// Find and add runtime libraries (order matters: dependents before dependencies)
+	linkArgs = j.findAndAddRuntimeLibrary("http_runtime", linkArgs)
+	linkArgs = j.findAndAddRuntimeLibrary("fiber_runtime", linkArgs)
+	linkArgs = j.findAndAddRuntimeLibrary("rust_utils", linkArgs)
+
 	linkArgs = append(linkArgs, "-lpthread")
 
 	// Add OpenSSL libraries
-	linkArgs = j.addOpenSSLLibraries(linkArgs)
+	linkArgs = j.addOpenSSLFlags(linkArgs)
 
 	return linkArgs
 }
 
-// addRuntimeLibraries adds fiber and HTTP runtime libraries
-func (j *JITExecutor) addRuntimeLibraries(linkArgs []string) []string {
-	fiberLib := j.findRuntimeLibrary("libfiber_runtime.a")
-	if fiberLib != "" {
-		linkArgs = append(linkArgs, fiberLib)
-		fmt.Fprintf(os.Stderr, "Found fiber runtime library: %s\n", fiberLib)
-	} else {
-		fmt.Fprintf(os.Stderr, "Warning: Fiber runtime library not found\n")
-	}
+// findAndAddRuntimeLibrary finds a runtime library and adds it to link args
+func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string) []string {
+	paths := j.buildRuntimeLibraryPaths(libName)
 
-	httpLib := j.findRuntimeLibrary("libhttp_runtime.a")
-	if httpLib != "" {
-		linkArgs = append(linkArgs, httpLib)
-		fmt.Fprintf(os.Stderr, "Found HTTP runtime library: %s\n", httpLib)
-	} else {
-		fmt.Fprintf(os.Stderr, "Warning: HTTP runtime library not found\n")
-	}
-
-	return linkArgs
-}
-
-// findRuntimeLibrary finds a runtime library in common paths
-func (j *JITExecutor) findRuntimeLibrary(libName string) string {
-	paths := []string{
-		"bin/" + libName,
-		"./bin/" + libName,
-		filepath.Join(filepath.Dir(os.Args[0]), "..", libName),
-	}
-
-	// Add working directory based paths
-	if wd, err := os.Getwd(); err == nil {
-		paths = append(paths,
-			filepath.Join(wd, "bin", libName),
-			filepath.Join(wd, "..", "bin", libName),
-			filepath.Join(wd, "..", "..", "bin", libName),
-		)
-	}
+	var foundLib string
 
 	for _, libPath := range paths {
-		if _, err := os.Stat(libPath); err == nil {
-			return libPath
+		_, err := os.Stat(libPath)
+		if err == nil {
+			linkArgs = append(linkArgs, libPath)
+			foundLib = libPath
+
+			break
 		}
 	}
 	return ""
 }
 
-// addOpenSSLLibraries adds OpenSSL linking flags
-func (j *JITExecutor) addOpenSSLLibraries(linkArgs []string) []string {
-	// Use pkg-config when available
-	cmd := exec.Command("pkg-config", "--libs", "openssl")
-	if output, err := cmd.Output(); err == nil {
+	// Debug output - only show warnings if libraries not found
+	if foundLib == "" {
+		fmt.Fprintf(os.Stderr, "Warning: %s runtime library not found in any of: %v\n", libName, paths)
+	}
+
+	return linkArgs
+}
+
+// buildRuntimeLibraryPaths builds search paths for a specific runtime library
+func (j *JITExecutor) buildRuntimeLibraryPaths(libName string) []string {
+	paths := []string{
+		fmt.Sprintf("bin/lib%s.a", libName),
+		fmt.Sprintf("./bin/lib%s.a", libName),
+		fmt.Sprintf("lib/lib%s.a", libName),          // For rust interop libraries
+		fmt.Sprintf("./lib/lib%s.a", libName),        // For rust interop libraries
+		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
+		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
+		fmt.Sprintf("../../lib/lib%s.a", libName),    // For rust interop in tests/integration
+		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
+		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
+		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
+	}
+
+	// Add working directory based paths
+	wd, err := os.Getwd()
+	if err == nil {
+		paths = append(paths,
+			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
+			filepath.Join(wd, "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "lib", fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(wd, "..", "..", "..", "lib", fmt.Sprintf("lib%s.a", libName)), // For test directories
+		)
+	}
+
+	return paths
+}
+
+// addOpenSSLFlags adds OpenSSL linking flags
+func (j *JITExecutor) addOpenSSLFlags(linkArgs []string) []string {
+	// Use pkg-config to get proper OpenSSL flags when available
+	cmd := exec.CommandContext(context.Background(), "pkg-config", "--libs", "openssl")
+	output, err := cmd.Output()
+	if err == nil {
+		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
-		fmt.Fprintf(os.Stderr, "DEBUG: JIT pkg-config openssl flags: %v\n", flags)
 		return append(linkArgs, flags...)
 	}
 
-	fmt.Fprintf(os.Stderr, "DEBUG: JIT pkg-config failed, using fallback\n")
-	return j.addFallbackOpenSSLLibraries(linkArgs)
-}
-
-// addFallbackOpenSSLLibraries adds platform-specific OpenSSL fallback flags
-func (j *JITExecutor) addFallbackOpenSSLLibraries(linkArgs []string) []string {
+	// Fallback to standard OpenSSL flags for different platforms
 	if runtime.GOOS == "darwin" {
-		return j.addDarwinOpenSSLLibraries(linkArgs)
+		// macOS with Homebrew OpenSSL - try multiple common paths
+		possiblePaths := []string{
+			"/opt/homebrew/opt/openssl@3/lib",
+			"/opt/homebrew/lib",
+			"/usr/local/opt/openssl@3/lib",
+			"/usr/local/lib",
+		}
+
+		opensslLibPath := ""
+
+		for _, path := range possiblePaths {
+			_, err := os.Stat(filepath.Join(path, "libssl.dylib"))
+			if err == nil {
+				opensslLibPath = path
+				break
+			}
+		}
+
+		if opensslLibPath != "" {
+			return append(linkArgs, "-L"+opensslLibPath, "-lssl", "-lcrypto")
+		}
+		// Final fallback
+		return append(linkArgs, "-L/opt/homebrew/lib", "-lssl", "-lcrypto")
 	}
 	// Linux and other systems
 	return append(linkArgs, "-lssl", "-lcrypto")
 }
 
-// addDarwinOpenSSLLibraries adds macOS-specific OpenSSL flags
-func (j *JITExecutor) addDarwinOpenSSLLibraries(linkArgs []string) []string {
-	possiblePaths := []string{
-		"/opt/homebrew/opt/openssl@3/lib",
-		"/opt/homebrew/lib",
-		"/usr/local/opt/openssl@3/lib",
-		"/usr/local/lib",
+// linkExecutable links the object file into an executable
+func (j *JITExecutor) linkExecutable(linkArgs []string) error {
+	// Find compiler for linking
+	compilerPath, err := j.findCompiler()
+	if err != nil {
+		return fmt.Errorf("no suitable compiler found for linking: %w", err)
 	}
 
-	for _, path := range possiblePaths {
-		if _, err := os.Stat(filepath.Join(path, "libssl.dylib")); err == nil {
-			return append(linkArgs, "-L"+path, "-lssl", "-lcrypto")
-		}
+	// #nosec G204 - compilerPath is validated through findCompiler
+	linkCmd := exec.CommandContext(context.Background(), compilerPath, linkArgs...)
+
+	linkOutput, err := linkCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable: %w\nOutput: %s", err, string(linkOutput))
 	}
 
-	// Final fallback
-	return append(linkArgs, "-L/opt/homebrew/lib", "-lssl", "-lcrypto")
+	return nil
 }
 
-// runExecutable executes the compiled program
-func (j *JITExecutor) runExecutable(exeFile string) error {
+// executeProgram runs the compiled executable
+func (j *JITExecutor) executeProgram(exeFile string) error {
 	// #nosec G204 - exeFile is created in controlled temp directory
-	runCmd := exec.Command(exeFile)
+	runCmd := exec.CommandContext(context.Background(), exeFile)
 	runCmd.Stdout = os.Stdout
 	runCmd.Stderr = os.Stderr
 	return runCmd.Run()
+}
+
+// executeProgramWithCapture runs the compiled executable and captures its output
+func (j *JITExecutor) executeProgramWithCapture(exeFile string) (string, error) {
+	// #nosec G204 - exeFile is created in controlled temp directory
+	runCmd := exec.CommandContext(context.Background(), exeFile)
+
+	// CAPTURE STDOUT instead of outputting directly to terminal
+	output, err := runCmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(output), nil
+}
+
+// compileAndRunEmbedded uses an embedded approach with built-in LLVM tools detection.
+func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
+	// Setup compilation environment
+	tempDir, irFile, exeFile, err := j.setupCompilation(ir)
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Compile IR to object file
+	objFile, err := j.compileToObject(irFile, tempDir)
+	if err != nil {
+		return err
+	}
+
+	// Setup linking arguments
+	linkArgs := j.setupLinkArgs(exeFile, objFile)
+
+	// Link to executable
+	err = j.linkExecutable(linkArgs)
+	if err != nil {
+		return err
+	}
+
+	// Execute the program
+	return j.executeProgram(exeFile)
 }
 
 // findLLVMTool finds LLVM tools in common installation locations.
@@ -237,13 +335,15 @@ func (j *JITExecutor) findLLVMTool(toolName string) (string, error) {
 	}
 
 	// First check if it's in PATH
-	if path, err := exec.LookPath(toolName); err == nil {
+	path, err := exec.LookPath(toolName)
+	if err == nil {
 		return path, nil
 	}
 
 	// Check common installation locations
 	for _, path := range commonPaths {
-		if _, err := os.Stat(path); err == nil {
+		_, err := os.Stat(path)
+		if err == nil {
 			return path, nil
 		}
 	}
@@ -264,7 +364,8 @@ func (j *JITExecutor) findCompiler() (string, error) {
 
 	// First check PATH
 	for _, compiler := range compilers {
-		if path, err := exec.LookPath(compiler); err == nil {
+		path, err := exec.LookPath(compiler)
+		if err == nil {
 			return path, nil
 		}
 	}
@@ -273,7 +374,8 @@ func (j *JITExecutor) findCompiler() (string, error) {
 	for _, basePath := range commonPaths {
 		for _, compiler := range compilers {
 			fullPath := basePath + compiler
-			if _, err := os.Stat(fullPath); err == nil {
+			_, err := os.Stat(fullPath)
+			if err == nil {
 				return fullPath, nil
 			}
 		}
@@ -307,4 +409,31 @@ func CompileAndRunJITWithSecurity(source string, security SecurityConfig) error 
 	executor := NewJITExecutor()
 
 	return executor.CompileAndRunInMemory(ir)
+}
+
+// CompileAndCaptureJIT compiles and captures program output with default (permissive) security.
+func CompileAndCaptureJIT(source string) (string, error) {
+	return CompileAndCaptureJITWithSecurity(source, SecurityConfig{
+		AllowHTTP:             true,
+		AllowWebSocket:        true,
+		AllowFileRead:         true,
+		AllowFileWrite:        true,
+		AllowFFI:              true,
+		AllowProcessExecution: true,
+		SandboxMode:           false,
+	})
+}
+
+// CompileAndCaptureJITWithSecurity compiles and captures program output with specified security configuration.
+func CompileAndCaptureJITWithSecurity(source string, security SecurityConfig) (string, error) {
+	// Generate LLVM IR with security configuration
+	ir, err := CompileToLLVMWithSecurity(source, security)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate LLVM IR: %w", err)
+	}
+
+	// Use JIT executor to compile and capture output
+	executor := NewJITExecutor()
+
+	return executor.CompileAndCaptureOutput(ir)
 }

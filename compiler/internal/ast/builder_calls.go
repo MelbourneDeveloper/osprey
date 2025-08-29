@@ -40,6 +40,7 @@ func (b *Builder) buildChainedCall(ctx parser.ICallExprContext, primary Expressi
 		if i >= len(ctx.AllID()) || ctx.ID(i) == nil {
 			continue
 		}
+
 		fieldName := ctx.ID(i).GetText()
 		result = b.buildChainElement(ctx, result, fieldName, i)
 	}
@@ -67,6 +68,7 @@ func (b *Builder) buildChainElement(
 	return &FieldAccessExpression{
 		Object:    object,
 		FieldName: fieldName,
+		Position:  b.getPositionFromContext(ctx),
 	}
 }
 
@@ -79,8 +81,11 @@ func (b *Builder) buildModuleAccess(
 ) Expression {
 	if b.isMethodCallAtIndex(ctx, index) {
 		// Get arguments if this is a function call
-		var args []Expression
-		var namedArgs []NamedArgument
+		var (
+			args      []Expression
+			namedArgs []NamedArgument
+		)
+
 		if index < len(ctx.AllArgList()) && ctx.ArgList(index) != nil {
 			args, namedArgs = b.buildArguments(ctx.ArgList(index))
 		}
@@ -90,6 +95,7 @@ func (b *Builder) buildModuleAccess(
 			MemberName:     fieldName,
 			Arguments:      args,
 			NamedArguments: namedArgs,
+			Position:       b.getPositionFromContext(ctx),
 		}
 	}
 
@@ -97,6 +103,7 @@ func (b *Builder) buildModuleAccess(
 	return &ModuleAccessExpression{
 		ModuleName: ident.Name,
 		MemberName: fieldName,
+		Position:   b.getPositionFromContext(ctx),
 	}
 }
 
@@ -112,8 +119,10 @@ func (b *Builder) buildMethodCallAtIndex(
 	methodName string,
 	index int,
 ) Expression {
-	var args []Expression
-	var namedArgs []NamedArgument
+	var (
+		args      []Expression
+		namedArgs []NamedArgument
+	)
 
 	if index < len(ctx.AllArgList()) && ctx.ArgList(index) != nil {
 		args, namedArgs = b.buildArguments(ctx.ArgList(index))
@@ -124,6 +133,7 @@ func (b *Builder) buildMethodCallAtIndex(
 		MethodName:     methodName,
 		Arguments:      args,
 		NamedArguments: namedArgs,
+		Position:       b.getPositionFromContext(ctx),
 	}
 }
 
@@ -133,8 +143,10 @@ func (b *Builder) buildSimpleCall(ctx parser.ICallExprContext, primary Expressio
 		return primary
 	}
 
-	var args []Expression
-	var namedArgs []NamedArgument
+	var (
+		args      []Expression
+		namedArgs []NamedArgument
+	)
 
 	if ctx.ArgList(0) != nil {
 		args, namedArgs = b.buildArguments(ctx.ArgList(0))
@@ -145,6 +157,7 @@ func (b *Builder) buildSimpleCall(ctx parser.ICallExprContext, primary Expressio
 			Function:       ident,
 			Arguments:      args,
 			NamedArguments: namedArgs,
+			Position:       b.getPositionFromContext(ctx),
 		}
 	}
 

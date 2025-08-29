@@ -1,0 +1,38 @@
+// 🔗 Function Composition Test
+// Tests passing functions as arguments to other functions
+
+print("=== Function Composition Test ===")
+
+// Define some simple functions
+fn double(x: int) -> int = x * 2
+fn triple(x: int) -> int = x * 3
+fn add5(x: int) -> int = x + 5
+
+// Function composition test showing higher-order functions with strong typing
+print("Testing function composition...")
+
+fn square(x: int) -> int = x * x
+
+// Higher-order function with proper function typing instead of 'any'
+fn applyFunction(value: int, func: (int) -> int) -> int = func(value)
+
+// Test function composition
+let testValue = 10
+print("Starting value: ${testValue}")
+
+// Test passing different functions - use named arguments
+let doubled = applyFunction(value: testValue, func: double)
+print("After double: ${doubled}")
+
+let tripled = applyFunction(value: testValue, func: triple)  
+print("After triple: ${tripled}")
+
+let added = applyFunction(value: testValue, func: add5)
+print("After add5: ${added}")
+
+let squared = applyFunction(value: 5, func: square)
+print("square(5) = ${squared}")
+
+print("Function composition working correctly!")
+
+print("=== Function Composition Test Complete ===") 

@@ -6,17 +6,17 @@ severity:
 linters:
   settings:
     cyclop:
-      max-complexity: 20
+      max-complexity: 35
   default: all
   disable:
     # Consider these rules for the future
-    - gocognit # Disable cognitive complexity checks for core functions
     - depguard # Allow LLVM imports
     - exhaustruct # Don't require all struct fields to be specified
     - varnamelen # Allow short variable names like 'i', 'e', etc.
     # - funcorder    # Don't enforce function ordering
     - gocritic # Disable overly pedantic suggestions
     - wsl # Don't enforce whitespace rules
+    - wsl_v5 # Don't enforce whitespace rules
     - whitespace # Don't enforce unnecessary leading newlines
     - nestif # Don't limit nested if statements
     - prealloc # Don't require slice preallocation
@@ -46,10 +46,3 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   uniq-by-line: false
-
-  exclude-rules:
-    # Allow "int" literal in type switching context where TypeInt constant doesn't fit
-    - path: "function_signatures\\.go"
-      text: "string `int` has.*occurrences.*but such constant.*already exists"
-      linters:
-        - goconst

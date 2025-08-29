@@ -1,0 +1,19 @@
+// 🚀 SUPREMO ALGEBRAIC EFFECTS WITH PERFORM! 🔥
+
+// Effect declaration for logging
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+// Effectful function that uses perform
+fn testLogging() -> Unit !Logger = {
+    perform Logger.log("Testing perform expression!")
+}
+
+// Main function 
+fn main() -> Unit = {
+    print("Testing perform expression parsing...")
+    testLogging()
+    print("🎉 PERFORM TEST COMPLETE! 🎉")
+    print("Value: " + toString(finalUndefinedVariable))  // This should cause compilation error!
+} 

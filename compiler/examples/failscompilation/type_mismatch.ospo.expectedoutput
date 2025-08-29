@@ -1,0 +1,1 @@
+line 5:0: type mismatch: cannot assign int to variable 'x' of type Int

@@ -92,7 +92,6 @@ examples/rust_integration/minimal_rust_osprey_demo
 
 # Debug and temporary osprey files
 debug_*.osp
-test_*.osp
 temp_*.osp
 *.tmp.osp
 
@@ -109,4 +108,8 @@ coverage_report.out
 node_modules/
 
 bin/
+lib/
 bin
+
+
+/compiler/runtime/test_system_runtime

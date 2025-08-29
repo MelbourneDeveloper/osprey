@@ -428,13 +428,10 @@ document.addEventListener('DOMContentLoaded', () => {
   new MobileNav();
   new MagneticHover();
   new SmoothScroll();
+  new TypeWriter();
   new GlitchEffect();
   new CursorGlow();
-
-  // Initialize typing animation with delay
-  setTimeout(() => {
-    new TypeWriter();
-  }, 500);
+  new TabManager();
 
   // Add loaded class for animations
   document.body.classList.add('loaded');
@@ -469,4 +466,42 @@ lazyImages.forEach(img => imageObserver.observe(img));
 // Add some console easter eggs
 console.log('%c🦅 Welcome to Osprey!', 'font-size: 24px; font-weight: bold; color: #667eea;');
 console.log('%cBuilding the future of programming, one function at a time.', 'font-size: 14px; color: #764ba2;');
-console.log('%cInterested in contributing? Check out https://github.com/MelbourneDeveloper/osprey', 'font-size: 12px; color: #666;'); 
+console.log('%cInterested in contributing? Check out https://github.com/MelbourneDeveloper/osprey', 'font-size: 12px; color: #666;');
+
+// Tab Management for Examples
+class TabManager {
+  constructor() {
+    this.tabButtons = document.querySelectorAll('.tab-btn');
+    this.tabContents = document.querySelectorAll('.tab-content');
+    this.init();
+  }
+
+  init() {
+    if (this.tabButtons.length === 0) return;
+
+    this.tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const tabId = button.getAttribute('data-tab');
+        this.switchTab(tabId);
+      });
+    });
+  }
+
+  switchTab(activeTabId) {
+    // Update buttons
+    this.tabButtons.forEach(button => {
+      button.classList.remove('active');
+      if (button.getAttribute('data-tab') === activeTabId) {
+        button.classList.add('active');
+      }
+    });
+
+    // Update content
+    this.tabContents.forEach(content => {
+      content.classList.remove('active');
+      if (content.id === activeTabId) {
+        content.classList.add('active');
+      }
+    });
+  }
+} 

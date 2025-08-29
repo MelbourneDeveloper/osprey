@@ -1,0 +1,43 @@
+print("=== Advanced Block Statements Test ===")
+
+// Test 1: Block in function definition
+fn compute() = {
+    let base = 10
+    let multiplier = 3
+    base * multiplier
+}
+print("Test 1 - Function block: ${compute()}")
+
+// Test 2: Nested blocks with shadowing
+let outer = 100
+let result2 = {
+    let outer = 50
+    let inner = {
+        let outer = 25
+        outer * 2
+    }
+    outer + inner
+}
+print("Test 2 - Nested with shadowing: ${result2}")
+
+// Test 3: Block with conditional logic
+let value = 42
+let result3 = {
+    let doubled = value * 2
+    match doubled {
+        84 => doubled + 10
+        _ => 0
+    }
+}
+print("Test 3 - Block with match: ${result3}")
+
+// Test 4: Function returning block
+fn processData(input) = {
+    let step1 = input * 2
+    let step2 = step1 + 10
+    let step3 = step2 / 2
+    step3
+}
+print("Test 4 - Complex function: ${processData(5)}")
+
+print("=== Advanced Block Statements Complete ===") 

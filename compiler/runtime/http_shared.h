@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/evp.h>
@@ -39,6 +40,20 @@ typedef enum {
   HTTP_OPTIONS = 6
 } HttpMethod;
 
+// HTTP Response structure (matches Osprey HttpResponse type - REMOVED REDUNDANT LENGTH FIELDS)
+typedef struct HttpResponse {
+  int64_t status;
+  char *headers;
+  char *contentType;
+  int64_t streamFd;
+  bool isComplete;
+  char *partialBody;  // Runtime automatically calculates length using strlen()
+} HttpResponse;
+
+// Function pointer type for HTTP request handlers
+typedef HttpResponse *(*HttpRequestHandler)(char *method, char *path,
+                                            char *headers, char *body);
+
 // HTTP Server structure
 typedef struct {
   int64_t id;
@@ -48,6 +63,7 @@ typedef struct {
   bool is_listening;
   pthread_t server_thread;
   pthread_mutex_t mutex;
+  HttpRequestHandler handler; // Function pointer to Osprey callback
 } HttpServer;
 
 // HTTP Client structure

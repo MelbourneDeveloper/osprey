@@ -1,35 +1,45 @@
 #!/bin/bash
-
 set -e
 
-echo "🧪 Running comprehensive code coverage analysis..."
+echo "Running tests with coverage..."
 
-# Clean up any previous coverage files
-rm -f coverage.out coverage.html
+# Clean and rebuild
+make clean && make build
 
-# Run tests with coverage for all packages (excluding ANTLR-generated parser files)
-echo "📊 Running tests with coverage..."
-go test -v -coverprofile=coverage.out -covermode=atomic -coverpkg=./cmd/...,./internal/...,./examples/... ./...
+# Get packages for testing and coverage
+TEST_PKGS=$(go list ./... | grep -v "/parser$")
+# Only include source packages in coverpkg, not test packages
+COVERPKG=$(go list ./... | grep -v "/parser$" | grep -v "/tests/" | tr '\n' ',' | sed 's/,$//')
 
-# Generate HTML coverage report
-echo "📄 Generating HTML coverage report..."
-go tool cover -html=coverage.out -o coverage.html
-
-# Show coverage summary
-echo "📈 Coverage Summary:"
-go tool cover -func=coverage.out
-
-# Show total coverage percentage
-TOTAL_COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
-echo ""
-echo "🎯 Total Coverage: $TOTAL_COVERAGE"
-
-# Open HTML report if on macOS
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "🌐 Opening HTML coverage report in browser..."
-    open coverage.html
+# Run tests - fail fast (suppress verbose output for cleaner CI)
+# First run with normal output to capture the result
+if ! go test -covermode=atomic -coverpkg="$COVERPKG" -coverprofile=coverage.out $TEST_PKGS 2>&1 | tee test_output.tmp; then
+    echo ""
+    echo "❌ TESTS FAILED!"
+    echo ""
+    echo "=== FAILURE DETAILS ==="
+    # Show the specific test failures with context
+    grep -A 5 -B 2 "--- FAIL:" test_output.tmp || true
+    # Also show any runtime errors/panics
+    grep -E "(panic:|runtime error:|signal:|core dumped)" test_output.tmp || true
+    # Show any assertion failures
+    grep -E "(Expected:|Got:|Error:|Failed to|Output mismatch)" test_output.tmp | head -20 || true
+    echo "==================="
+    rm -f test_output.tmp
+    exit 1
 fi
+rm -f test_output.tmp
 
-echo "✅ Coverage analysis complete!"
-echo "📁 HTML report saved to: coverage.html"
-echo "📁 Raw coverage data saved to: coverage.out" 
+echo "✅ All tests passed"
+
+# Show coverage summary only
+echo ""
+echo "📊 Coverage Summary:"
+go tool cover -func=coverage.out | grep -E "(total:|\.go:)"
+TOTAL=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
+echo ""
+echo "🎯 Total Coverage: $TOTAL"
+
+# Generate HTML
+go tool cover -html=coverage.out -o coverage.html
+echo "HTML report: coverage.html"

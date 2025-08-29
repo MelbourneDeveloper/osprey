@@ -1,0 +1,33 @@
+// Fine - simple variable with literal
+let x = 42 
+
+// Fine because return type was specified as int, and this we also know
+// that the parameter must be an int
+fn testGood(x) -> int = x
+
+// Fine because return type is integer (inferred from literal)
+fn getIntResult() = 42
+
+// Fine because return type is string (inferred from literal)
+fn getStringResult() = "asd"
+
+// Fine because parameter type can be inferred from arithmetic usage
+fn addOne(x) = x + 1
+
+// Additional HM inference tests - parameter types inferred from operations
+fn double(n) = n * 2          // HM infers: (int) -> Result<int, MathError>
+fn isPositive(x) = x > 0      // HM infers: (int) -> bool
+
+print("Basic test results:")
+print("x = ${x}")
+print("testGood(10) = ${testGood(10)}")
+print("getIntResult() = ${getIntResult()}")
+print("getStringResult() = ${getStringResult()}")
+print("addOne(5) = ${addOne(5)}")
+
+// Test HM inferred functions
+let doubled = double(7) ?: 0
+let positive = isPositive(10)
+let negative = isPositive(-3)
+
+print("HM inferred: double(7)=${doubled}, isPositive(10)=${toString(positive)}, isPositive(-3)=${toString(negative)}")

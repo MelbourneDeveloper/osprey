@@ -1,0 +1,7 @@
+// Test case that should fail - trying to call undefined function
+// This should trigger undefined variable error
+
+fn main() {
+    let result = someUndefinedFunction()  // This doesn't exist
+    print("This should not compile")
+} 

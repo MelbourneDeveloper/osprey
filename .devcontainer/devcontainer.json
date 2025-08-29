@@ -1,76 +1,55 @@
 {
-  "name": "Osprey Programming Language Dev Environment",
+  "name": "Osprey Dev Environment",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": "..",
-    "target": "development"
+    "context": ".."
   },
-  "mounts": [
-    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
-    "source=vscode-extensions,target=/root/.vscode-server/extensions,type=volume",
-    "source=go-cache,target=/go/pkg,type=volume",
-    "source=cargo-cache,target=/root/.cargo/registry,type=volume"
-  ],
+  
+  "remoteUser": "vscode",
+  "containerUser": "vscode",
+  
   "customizations": {
     "vscode": {
-      "settings": {
-        "go.useLanguageServer": true,
-        "go.formatTool": "goimports",
-        "go.lintOnSave": "package",
-        "go.testFlags": [
-          "-v"
-        ],
-        "go.toolsManagement.checkForUpdates": "local",
-        "go.goroot": "/usr/local/go",
-        "go.gopath": "/go",
-        "go.testWorkingDirectory": "${workspaceFolder}/compiler",
-        "go.testExplorer.enable": true,
-        "go.testExplorer.packageDisplayMode": "nested",
-        "go.testExplorer.showDynamicSubtestsInEditor": true,
-        "rust-analyzer.check.command": "clippy",
-        "rust-analyzer.cargo.buildScripts.enable": true,
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.organizeImports": "explicit"
-        },
-        "terminal.integrated.defaultProfile.linux": "bash",
-        "git.autofetch": true,
-        "git.confirmSync": false,
-        "testExplorer.useNativeTesting": true,
-        "testExplorer.mergeSuites": true,
-        "testExplorer.showCollapseButton": true,
-        "testExplorer.showExpandButton": true,
-        "testExplorer.showOnRun": true,
-        "mochaExplorer.files": "vscode-extension/test/**/*.test.{js,ts}",
-        "mochaExplorer.env": {},
-        "mochaExplorer.cwd": "${workspaceFolder}/vscode-extension",
-        "jestTestExplorer.rootPath": "webcompiler"
-      },
       "extensions": [
         "golang.go",
+        "ms-vscode.cpptools",
+        "mike-lischke.vscode-antlr4",
         "rust-lang.rust-analyzer",
-        "antlr.antlr4",
-        "llvm-vs-code-extensions.vscode-clangd",
-        "ms-vscode.makefile-tools",
-        "ms-vscode.test-adapter-converter",
-        "ms-vscode.vscode-json",
-        "redhat.vscode-yaml",
-        "ms-vscode.vscode-markdown",
-        "streetsidesoftware.code-spell-checker",
-        "ms-vscode.hexeditor",
-        "hbenl.vscode-test-explorer",
-        "hbenl.vscode-jest-test-adapter",
-        "kondratiev.vscode-rust-test-adapter",
-        "premparihar.gotestexplorer"
-      ]
+        "ms-vscode.makefile-tools"
+      ],
+      "settings": {
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintOnSave": "package",
+        "editor.formatOnSave": true,
+        "go.testWorkingDirectory": "${workspaceFolder}/compiler",
+        "C_Cpp.default.cStandard": "c11",
+        "C_Cpp.default.compilerPath": "/usr/bin/clang",
+        "C_Cpp.default.includePath": [
+          "${workspaceFolder}/compiler/runtime"
+        ],
+        "workbench.colorCustomizations": {
+          "titleBar.activeBackground": "#2E7D32",
+          "titleBar.activeForeground": "#FFFFFF",
+          "titleBar.inactiveBackground": "#1B5E20",
+          "titleBar.inactiveForeground": "#CCCCCC",
+          "activityBar.background": "#2E7D32",
+          "activityBar.foreground": "#FFFFFF"
+        }
+      }
     }
   },
-  "workspaceFolder": "/workspace",
-  "remoteUser": "root",
-  "forwardPorts": [
-    3001,
-    8080
+
+  "postCreateCommand": "/bin/bash .devcontainer/post-create.sh",
+  
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
   ],
+  
+  "workspaceFolder": "/workspace",
+  
+  "forwardPorts": [3001, 8080],
+  
   "portsAttributes": {
     "3001": {
       "label": "Web Compiler",

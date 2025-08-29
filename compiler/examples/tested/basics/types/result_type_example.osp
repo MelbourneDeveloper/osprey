@@ -1,0 +1,14 @@
+// Result Type for Error Handling
+type Result = Ok { value: string } | Error { message: string }
+
+type Status = Success | Failure 
+
+fn getResult() = 42
+
+// Demonstrate that Result types can be defined
+let number = getResult()
+print("Result type defined successfully")
+print(number) 
+
+//TODO: test both arms of the result type
+//TODO: verify that number is typed as a result<int>

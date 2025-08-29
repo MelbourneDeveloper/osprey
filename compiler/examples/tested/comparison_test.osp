@@ -1,2 +1,0 @@
-let result = 5 > 3
-print(toString(result))

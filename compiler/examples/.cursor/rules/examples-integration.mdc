@@ -1,0 +1,17 @@
+---
+alwaysApply: true
+---
+# Examples Integration Rules
+
+- **EXAMPLES ARE INTEGRATION TESTS** - They prove compiler works with real, runnable code
+- **NEVER DISABLE DELETE EXAMPLES, OR REDUCE ASSERTIONS** - The only exception is when consolidating examples into one file
+- **TESTED EXAMPLES PRIMARY** - Examples in `tested/` folders with expected outputs
+- **INCLUDE EXPECTED OUTPUTS** - All examples need corresponding expected output files .osp.expectedoutput
+- **MINIMIZE PRINT STATEMENTS** - Only include prints to prove the functionality is working. NO CONSECUTIVE prints. Use string interpolation
+- **CONSOLIDATE BY FUNCTIONALITY** - Group related examples into FOLDERs, avoid many tiny files
+- **SLEEP STATEMENTS LESS THAN OR EQUAL TO 10ms** no long waits for no reason
+- **MEATY EXAMPLES** - Demonstrate substantial functionality, not trivial "hello world" and mix syntax together
+- **SHOW REAL-WORLD PATTERNS** - Mirror how developers will USE the language
+- **FAILSCOMPILATION EXAMPLES** - Demonstrate proper compiler error handling with LINE AND CHARACTER NUMBERS so the IDE can display the error correctly
+- **COMPREHENSIVE COVERAGE** - Each example should thoroughly demonstrate target functionality
+- **USE VARIED INPUTS** - Don't use 42 or "Hello world". Varied data.

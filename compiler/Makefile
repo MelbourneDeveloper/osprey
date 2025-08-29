@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-coverage test-basic test-functions test-errors test-types test-rust-interop lint lint-fix lint-install fiber-runtime http-runtime ensure-built
+.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime websocket-runtime system-runtime rust-interop c-lint c-test test-runtime
 
 # Install golangci-lint
 lint-install:
@@ -10,7 +10,7 @@ lint-install:
 	fi
 
 # Run golangci-lint
-lint: lint-install
+lint:
 	@echo "🔍 Running golangci-lint..."
 	golangci-lint run --config .golangci.yml
 
@@ -20,46 +20,42 @@ lint-fix: lint-install
 	golangci-lint run --config .golangci.yml --fix
 
 # Build the osprey compiler with linting
-build: lint fiber-runtime http-runtime
+build: lint c-lint fiber-runtime http-runtime rust-interop
 	@echo "🏗️  Building osprey compiler..."
 	go build -o bin/osprey ./cmd/osprey
 
-# Build the osprey compiler without linting (for faster test builds)
-build-no-lint: fiber-runtime http-runtime
+# Don't ever user this unless it's a life or death situation
+build-no-lint: fiber-runtime http-runtime rust-interop
 	@echo "🏗️  Building osprey compiler (skipping lint for speed)..."
 	go build -o bin/osprey ./cmd/osprey
 
-# Ensure compiler is built (only build if binary doesn't exist)
-ensure-built:
-	@if [ ! -f bin/osprey ]; then \
-		echo "🔍 Compiler not found, building..."; \
-		$(MAKE) build; \
-	else \
-		echo "✅ Compiler already built at bin/osprey"; \
-	fi
-
-# Build fiber runtime library
+# Build fiber runtime library - WARNINGS ARE ERRORS!!!
 fiber-runtime:
 	@echo "🔨 Building fiber runtime library..."
-	@mkdir -p bin
-	gcc -c -fPIC -O2 runtime/fiber_runtime.c -o bin/fiber_runtime.o
-	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o
-	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a"
+	@mkdir -p bin lib
+	gcc -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
+	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o
+	cp bin/libfiber_runtime.a lib/libfiber_runtime.a
+	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a and lib/libfiber_runtime.a"
+
+
 
 # Build HTTP runtime library with TITANIUM-ARMORED MILITARY-GRADE SECURITY 🛡️💀
 http-runtime:
 	@echo "🔨 Building HTTP runtime with OpenSSL 3.5.0+ support..."
-	@echo "⚠️  DEPLOYING MILITARY-GRADE PROTECTIONS..."
-	@mkdir -p bin
-	gcc -c -fPIC -O2 \
+	@mkdir -p bin lib
+	@echo "🔧 Building http_shared.o..."
+	@gcc -c -fPIC -O2 \
 		-D_FORTIFY_SOURCE=2 \
 		-fstack-protector-strong \
+		-Werror \
+		-Wall -Wextra \
 		-Wformat \
 		-Werror=format-security \
 		-Werror=implicit-function-declaration \
 		-Werror=incompatible-pointer-types \
 		-Werror=int-conversion \
-		-Wall -Wextra \
 		-Warray-bounds \
 		-ftrapv \
 		-fno-delete-null-pointer-checks \
@@ -72,12 +68,48 @@ http-runtime:
 		-Wno-deprecated-declarations \
 		`pkg-config --cflags openssl 2>/dev/null || echo ""` \
 		-o bin/http_shared.o runtime/http_shared.c
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_client_runtime.c -o bin/http_client_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
-	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_client_runtime.c -o bin/http_client_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
+	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o
+	cp bin/libhttp_runtime.a lib/libhttp_runtime.a
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
+
+# Build WebSocket runtime library (included in HTTP runtime but separate for Docker compatibility)
+websocket-runtime: http-runtime
+	@echo "🔨 Building WebSocket runtime library..."
+	@mkdir -p lib
+	@if [ -f bin/libhttp_runtime.a ]; then \
+		cp bin/libhttp_runtime.a lib/libwebsocket_runtime.a; \
+		echo "✅ WebSocket runtime library copied: lib/libwebsocket_runtime.a"; \
+	else \
+		echo "❌ Error: HTTP runtime must be built first"; \
+		exit 1; \
+	fi
+
+# Build System runtime library
+system-runtime:
+	@echo "🔨 Building System runtime library..."
+	@mkdir -p bin lib
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
+	ar rcs bin/libsystem_runtime.a bin/system_runtime.o
+	cp bin/libsystem_runtime.a lib/libsystem_runtime.a
+	@echo "✅ System runtime library built: bin/libsystem_runtime.a and lib/libsystem_runtime.a"
+
+# Build Rust interop library
+rust-interop:
+	@echo "🦀 Building Rust interop library..."
+	@if command -v cargo >/dev/null 2>&1; then \
+		mkdir -p lib bin; \
+		cd examples/rust_integration && cargo build --release; \
+		cp target/release/libosprey_math_utils.a ../../lib/librust_utils.a; \
+		cp target/release/libosprey_math_utils.a ../../bin/librust_utils.a; \
+		echo "✅ Rust interop library built and copied to lib/ and bin/"; \
+	else \
+		echo "⚠️  Rust not found, skipping Rust interop build"; \
+	fi
 
 # Install the osprey compiler globally
 install: build
@@ -87,6 +119,10 @@ install: build
 	sudo mkdir -p /usr/local/lib
 	sudo cp bin/libfiber_runtime.a /usr/local/lib/
 	sudo cp bin/libhttp_runtime.a /usr/local/lib/
+	@if [ -f lib/librust_utils.a ]; then \
+		sudo cp lib/librust_utils.a /usr/local/lib/; \
+		echo "✅ Rust interop library installed"; \
+	fi
 	@echo "✅ osprey compiler installed! You can now use 'osprey' from anywhere."
 	@echo "Test with: osprey --help"
 
@@ -96,6 +132,7 @@ uninstall:
 	sudo rm -f /usr/local/bin/osprey
 	sudo rm -f /usr/local/lib/libfiber_runtime.a
 	sudo rm -f /usr/local/lib/libhttp_runtime.a
+	sudo rm -f /usr/local/lib/librust_utils.a
 	@echo "✅ osprey compiler uninstalled."
 
 # Install dependencies
@@ -105,87 +142,86 @@ install-deps:
 # Clean build artifacts
 clean:
 	rm -rf bin/
+	rm -rf lib/
 	rm -rf outputs/
 	rm -rf internal/codegen/bin
 	find /tmp -name "*osprey*" -delete 2>/dev/null || true
 	find /tmp -name "*TestHTTP*" -delete 2>/dev/null || true
 	find /tmp -name "*TestManual*" -delete 2>/dev/null || true
-
-# Test with example files
-test: test-all
+	@if [ -d examples/rust_integration/target ]; then \
+		cd examples/rust_integration && cargo clean; \
+	fi
 
 # ========== TEST SUITE ==========
 
-# Run all tests
-test-all: test-ast test-llvm test-integration test-http test-websocket test-fiber test-cli test-rust-interop
-	@echo "✅ All tests passed!"
+# Run runtime tests (C tests that verify no segfaults)
+test-runtime: build
+	@echo "🧪 Running C Runtime Tests to verify segfault fixes..."
+	@echo "📦 Compiling fiber runtime tests..."
+	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c runtime/system_runtime.c -pthread -std=gnu11 -Werror -Wall -Wextra -D_GNU_SOURCE
+	@echo "🚀 Running fiber runtime tests..."
+	./runtime/fiber_runtime_test
+	@echo ""
+	@echo "📦 Creating HTTP test stub for missing bridge functions..."
+	@echo '#include <stddef.h>' > runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_http_request(int server_id, char *method, char *full_url, char *raw_headers, char *body, size_t body_length, int *response_status, char **response_headers, char **response_body, size_t *response_body_length) { (void)server_id; (void)method; (void)full_url; (void)raw_headers; (void)body; (void)body_length; (void)response_status; (void)response_headers; (void)response_body; (void)response_body_length; return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'char* osprey_handle_websocket_message(int server_id, int connection_id, char *message, size_t message_length) { (void)server_id; (void)connection_id; (void)message; (void)message_length; return NULL; }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_websocket_connection(int server_id, int connection_id, char *client_ip) { (void)server_id; (void)connection_id; (void)client_ip; return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'int osprey_handle_websocket_disconnect(int server_id, int connection_id) { (void)server_id; (void)connection_id; return -1; }' >> runtime/http_bridge_stub.c
+	@echo 'void osprey_free_websocket_response(char *response) { (void)response; }' >> runtime/http_bridge_stub.c
+	@echo "📦 Compiling HTTP runtime tests with stub functions..."
+	gcc -o runtime/http_runtime_test runtime/http_runtime_tests.c \
+		runtime/http_shared.c \
+		runtime/http_client_runtime.c \
+		runtime/http_server_runtime.c \
+		runtime/websocket_client_runtime.c \
+		runtime/websocket_server_runtime.c \
+		runtime/fiber_runtime.c \
+		runtime/system_runtime.c \
+		runtime/http_bridge_stub.c \
+		-pthread -Werror -Wall -Wextra -D_GNU_SOURCE `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
+	@echo "🚀 Running HTTP runtime tests..."
+	@echo "⚠️  NOTE: HTTP server tests focus on core runtime functionality"
+	./runtime/http_runtime_test
+	@echo ""
+	@echo "🧹 Cleaning up test executables..."
+	rm -f runtime/fiber_runtime_test runtime/http_runtime_test runtime/http_bridge_stub.c
+	@echo "✅ Runtime tests passed - no segfaults detected!"
 
-# Run LLVM IR generation tests
-test-llvm: fiber-runtime http-runtime
-	@echo "🔧 Running LLVM IR generation tests..."
-	@cd internal/codegen && ln -sf ../../bin bin 2>/dev/null || true
-	go test ./internal/codegen -v
+# Run all tests without coverage (fast feedback)
+test: build test-runtime c-test
+	@go test ./... -p 1 -v
 
-# Run AST parsing tests for interpolation
-test-ast:
-	@echo "🌳 Running AST interpolation parsing tests..."
-	go test ./internal/ast -v
+c-lint:
+	@cd runtime && clang \
+		-Wall -Wextra -Werror -Wpedantic \
+		-Wformat=2 -Wconversion -Wsign-conversion \
+		-Wnull-dereference -Wdouble-promotion \
+		-Wshadow -Wunreachable-code -Wcast-qual \
+		-Wwrite-strings \
+		-Wstrict-prototypes -Wundef -Wredundant-decls \
+		-Winit-self -Wswitch-default -Wswitch-enum \
+		-Wfloat-equal -Wbad-function-cast \
+		-Wstrict-overflow=5 -Wstack-protector \
+		-Winline -Wdisabled-optimization \
+		-std=c11 -D_GNU_SOURCE -fsyntax-only \
+		system_runtime.c fiber_runtime.c test_system_runtime.c fiber_runtime_tests.c
+	@echo "✅ No C lint errors found"
 
-# Run end-to-end integration tests
-test-integration: ensure-built fiber-runtime http-runtime
-	@echo "🚀 Running core integration tests..."
-	go test -v ./tests/integration/ -run "TestRootLevelExamples|TestLanguageFeatures|TestBasicCompilation|TestErrorHandling|TestFunctionArguments|TestCompilationFailures"
-
-# Run HTTP integration tests
-test-http: fiber-runtime http-runtime
-	@echo "🌐 Running HTTP integration tests..."
-	go test -v ./tests/integration/ -run "TestHttpExamples"
-
-# Run WebSocket integration tests
-test-websocket: fiber-runtime http-runtime
-	@echo "🔌 Running WebSocket integration tests..."
-	go test -v ./tests/integration/ -run "TestWebsoxExamples"
-
-# Run Fiber integration tests
-test-fiber: fiber-runtime http-runtime
-	@echo "🧵 Running Fiber integration tests..."
-	go test -v ./tests/integration/ -run "TestFiberExamples|TestFiberFeatures|TestFiberErrorHandling|TestFiberModuleIsolation|TestFiberIntegration"
-
-# Run CLI integration tests
-test-cli: ensure-built
-	@echo "⌨️  Running CLI integration tests..."
-	go test -v ./tests/integration/ -run "TestCLI"
-
-# Run tests with coverage
-test-coverage:
-	@echo "📊 Running tests with coverage..."
-	mkdir -p outputs
-	go test -coverprofile=outputs/coverage.out ./internal/... ./tests/integration/
-	@if [ -f outputs/coverage.out ]; then \
-		go tool cover -html=outputs/coverage.out -o outputs/coverage.html; \
-		echo "📊 Coverage report generated: outputs/coverage.html"; \
-	else \
-		echo "⚠️  No coverage data generated (packages may have no statements)"; \
-		touch outputs/coverage.html; \
-		echo "<html><body><h1>No Coverage Data</h1><p>No coverage data was generated. This may happen when packages have no statements to cover.</p></body></html>" > outputs/coverage.html; \
-	fi
-
-# Test Rust interop functionality
-test-rust-interop: ensure-built
-	@echo "🦀 Testing Rust interop functionality..."
-	@if ! command -v rustc >/dev/null 2>&1; then \
-		echo "❌ RUST COMPILER NOT FOUND! Install Rust: https://rustup.rs/"; \
-		exit 1; \
-	fi
-	@if ! command -v cargo >/dev/null 2>&1; then \
-		echo "❌ CARGO NOT FOUND! Install Rust toolchain: https://rustup.rs/"; \
-		exit 1; \
-	fi
-	@echo "✅ Rust tools found, running Rust interop tests..."
-	go test -v ./tests/integration/ -run "TestRustInterop|TestRustInteropCompilationOnly|TestRustInteropSimple"
-	cd examples/rust_integration && chmod +x run.sh && ./run.sh
-
-# ========== DEVELOPMENT ==========
+# C TESTS - Vanilla C Tests with standard assert() - WARNINGS ARE ERRORS!!!
+c-test:
+	@echo "🧪 RUNNING C RUNTIME TESTS..."
+	@cd runtime && echo "📦 Compiling system runtime tests..."
+	@cd runtime && clang -o test_system_runtime test_system_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
+	@cd runtime && echo "🚀 Running system runtime tests..."
+	@cd runtime && ./test_system_runtime
+	@cd runtime && echo "📦 Compiling fiber runtime tests..."
+	@cd runtime && clang -o test_fiber_runtime fiber_runtime_tests.c fiber_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
+	@cd runtime && echo "🚀 Running fiber runtime tests..."
+	@cd runtime && ./test_fiber_runtime
+	@cd runtime && echo "🧹 Cleaning up test executables..."
+	@cd runtime && rm -f test_system_runtime test_fiber_runtime
+	@echo "✅ ALL C RUNTIME TESTS PASSED!"
 
 # Regenerate parser from grammar (requires ANTLR)
 regenerate-parser:
@@ -194,4 +230,4 @@ regenerate-parser:
 # Run the parser on a file
 run:
 	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=<path>"; exit 1; fi
-	go run cmd/osprey/main.go $(FILE) 
+	go run cmd/osprey/main.go $(FILE)

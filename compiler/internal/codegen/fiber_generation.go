@@ -20,56 +20,97 @@ const (
 // CRITICAL: NO PLACEHOLDERS ALLOWED IN THIS FILE
 // EVERY FUNCTION MUST HAVE REAL IMPLEMENTATION
 
-// initFiberRuntime declares external runtime functions.
+// FiberRuntimeFunction represents a fiber runtime function configuration
+type FiberRuntimeFunction struct {
+	Name       string
+	ReturnType types.Type
+	Params     []types.Type
+	Linkage    enum.Linkage
+}
+
+// initFiberRuntime declares external runtime functions using consolidated approach
 func (g *LLVMGenerator) initFiberRuntime() {
-	// fiber_spawn: Create and schedule a fiber
-	fiberSpawn := g.module.NewFunc("fiber_spawn",
-		types.I64, // returns fiber ID
-		ir.NewParam("fn", types.NewPointer(types.NewFunc(types.I64))), // function pointer
-	)
-	fiberSpawn.Linkage = enum.LinkageExternal
-	g.functions["fiber_spawn"] = fiberSpawn
+	fiberFunctions := []FiberRuntimeFunction{
+		{
+			Name:       "fiber_spawn",
+			ReturnType: types.I64,
+			Params:     []types.Type{types.NewPointer(types.NewFunc(types.I64))},
+			Linkage:    enum.LinkageExternal,
+		},
+		{
+			Name:       "fiber_await",
+			ReturnType: types.I64,
+			Params:     []types.Type{types.I64},
+			Linkage:    enum.LinkageExternal,
+		},
+		{
+			Name:       "fiber_yield",
+			ReturnType: types.I64,
+			Params:     []types.Type{types.I64},
+			Linkage:    enum.LinkageExternal,
+		},
+		{
+			Name:       "fiber_sleep",
+			ReturnType: types.I64,
+			Params:     []types.Type{types.I64},
+			Linkage:    enum.LinkageExternal,
+		},
+		{
+			Name:       "channel_create",
+			ReturnType: types.I64,
+			Params:     []types.Type{types.I64},
+			Linkage:    enum.LinkageExternal,
+		},
+		{
+			Name:       "channel_send",
+			ReturnType: types.I64,
+			Params:     []types.Type{types.I64, types.I64},
+			Linkage:    enum.LinkageExternal,
+		},
+		{
+			Name:       "channel_recv",
+			ReturnType: types.I64,
+			Params:     []types.Type{types.I64},
+			Linkage:    enum.LinkageExternal,
+		},
+	}
 
-	// fiber_await: Wait for fiber completion
-	fiberAwait := g.module.NewFunc("fiber_await",
-		types.I64,                          // returns fiber result
-		ir.NewParam("fiber_id", types.I64), // fiber ID
-	)
-	fiberAwait.Linkage = enum.LinkageExternal
-	g.functions["fiber_await"] = fiberAwait
+	for _, fn := range fiberFunctions {
+		params := make([]*ir.Param, len(fn.Params))
+		for i, paramType := range fn.Params {
+			params[i] = ir.NewParam(fmt.Sprintf("arg%d", i), paramType)
+		}
 
-	// fiber_yield: Yield control with value
-	fiberYield := g.module.NewFunc("fiber_yield",
-		types.I64,                       // returns yielded value
-		ir.NewParam("value", types.I64), // value to yield
-	)
-	fiberYield.Linkage = enum.LinkageExternal
-	g.functions["fiber_yield"] = fiberYield
+		llvmFunc := g.module.NewFunc(fn.Name, fn.ReturnType, params...)
+		llvmFunc.Linkage = fn.Linkage
+		g.functions[fn.Name] = llvmFunc
+	}
+}
 
-	// channel_create: Create a channel
-	channelCreate := g.module.NewFunc("channel_create",
-		types.I64,                          // returns channel ID
-		ir.NewParam("capacity", types.I64), // channel capacity
-	)
-	channelCreate.Linkage = enum.LinkageExternal
-	g.functions["channel_create"] = channelCreate
+// generateFiberRuntimeCall generates calls to fiber runtime functions using builtin registry
+func (g *LLVMGenerator) generateFiberRuntimeCall(builtinName string, runtimeName string,
+	args []value.Value) (value.Value, error) {
+	// Validate using builtin registry
+	builtinFunc, exists := GlobalBuiltInRegistry.GetFunction(builtinName)
+	if !exists {
+		return nil, fmt.Errorf("builtin function %s: %w", builtinName, ErrFunctionNotFound)
+	}
 
-	// channel_send: Send value to channel
-	channelSend := g.module.NewFunc("channel_send",
-		types.I64,                            // returns success (1) or failure (0)
-		ir.NewParam("channel_id", types.I64), // channel ID
-		ir.NewParam("value", types.I64),      // value to send
-	)
-	channelSend.Linkage = enum.LinkageExternal
-	g.functions["channel_send"] = channelSend
+	// Validate argument count
+	expectedArgs := len(builtinFunc.ParameterTypes)
+	if len(args) != expectedArgs {
+		return nil, fmt.Errorf("function %s: %w", builtinName, ErrWrongArgCount)
+	}
 
-	// channel_recv: Receive from channel
-	channelRecv := g.module.NewFunc("channel_recv",
-		types.I64,                            // returns received value
-		ir.NewParam("channel_id", types.I64), // channel ID
-	)
-	channelRecv.Linkage = enum.LinkageExternal
-	g.functions["channel_recv"] = channelRecv
+	// Get or initialize runtime function
+	runtimeFunc := g.functions[runtimeName]
+	if runtimeFunc == nil {
+		g.initFiberRuntime()
+		runtimeFunc = g.functions[runtimeName]
+	}
+
+	// Generate the runtime call
+	return g.builder.NewCall(runtimeFunc, args...), nil
 }
 
 // generateSpawnExpression generates REAL fiber spawning with concurrency.
@@ -88,7 +129,8 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	g.function = closureFunc
 	entry := closureFunc.NewBlock("entry")
 	g.builder = entry
-	g.variables = make(map[string]value.Value)
+	// Don't reset variables - preserve function parameters for the closure
+	// g.variables = make(map[string]value.Value)
 
 	// Generate the expression inside the closure
 	result, err := g.generateExpression(spawn.Expression)
@@ -104,17 +146,8 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	g.builder = prevBuilder
 	g.variables = prevVars
 
-	// Get runtime spawn function
-	spawnFunc := g.functions["fiber_spawn"]
-	if spawnFunc == nil {
-		g.initFiberRuntime()
-		spawnFunc = g.functions["fiber_spawn"]
-	}
-
-	// Call fiber_spawn with the closure
-	fiberID := g.builder.NewCall(spawnFunc, closureFunc)
-
-	return fiberID, nil
+	// Call fiber_spawn with the closure using consolidated approach
+	return g.generateFiberRuntimeCall("fiber_spawn", "fiber_spawn", []value.Value{closureFunc})
 }
 
 // generateAwaitExpression generates REAL fiber await with blocking.
@@ -125,25 +158,18 @@ func (g *LLVMGenerator) generateAwaitExpression(await *ast.AwaitExpression) (val
 		return nil, err
 	}
 
-	// Get runtime await function
-	awaitFunc := g.functions["fiber_await"]
-	if awaitFunc == nil {
-		g.initFiberRuntime()
-		awaitFunc = g.functions["fiber_await"]
-	}
-
-	// Call fiber_await to block until completion
-	result := g.builder.NewCall(awaitFunc, fiberID)
-
-	return result, nil
+	// Call fiber_await using consolidated approach
+	return g.generateFiberRuntimeCall("fiber_await", "fiber_await", []value.Value{fiberID})
 }
 
 // generateYieldExpression generates REAL yield with scheduler cooperation.
 func (g *LLVMGenerator) generateYieldExpression(yield *ast.YieldExpression) (value.Value, error) {
 	// Get the value to yield
 	var yieldValue value.Value
+
 	if yield.Value != nil {
 		var err error
+
 		yieldValue, err = g.generateExpression(yield.Value)
 		if err != nil {
 			return nil, err
@@ -152,67 +178,44 @@ func (g *LLVMGenerator) generateYieldExpression(yield *ast.YieldExpression) (val
 		yieldValue = constant.NewInt(types.I64, 0)
 	}
 
-	// Get runtime yield function
-	yieldFunc := g.functions["fiber_yield"]
-	if yieldFunc == nil {
-		g.initFiberRuntime()
-		yieldFunc = g.functions["fiber_yield"]
-	}
-
-	// Call fiber_yield
-	result := g.builder.NewCall(yieldFunc, yieldValue)
-
-	return result, nil
+	// Call fiber_yield using consolidated approach
+	return g.generateFiberRuntimeCall("fiber_yield", "fiber_yield", []value.Value{yieldValue})
 }
 
 // generateChannelExpression generates REAL channel creation.
 func (g *LLVMGenerator) generateChannelExpression(channel *ast.ChannelExpression) (value.Value, error) {
 	// Get capacity
 	var capacity value.Value = constant.NewInt(types.I64, defaultChannelCapacity)
+
 	if channel.Capacity != nil {
 		var err error
+
 		capacity, err = g.generateExpression(channel.Capacity)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// Get runtime channel create function
-	createFunc := g.functions["channel_create"]
-	if createFunc == nil {
-		g.initFiberRuntime()
-		createFunc = g.functions["channel_create"]
-	}
-
-	// Call channel_create
-	channelID := g.builder.NewCall(createFunc, capacity)
-
-	return channelID, nil
+	// Call channel_create using consolidated approach
+	return g.generateFiberRuntimeCall("Channel", "channel_create", []value.Value{capacity})
 }
 
 // generateChannelCreateExpression generates REAL channel creation using type constructor syntax.
 func (g *LLVMGenerator) generateChannelCreateExpression(channel *ast.ChannelCreateExpression) (value.Value, error) {
 	// Get capacity
 	var capacity value.Value = constant.NewInt(types.I64, defaultChannelCapacity)
+
 	if channel.Capacity != nil {
 		var err error
+
 		capacity, err = g.generateExpression(channel.Capacity)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// Get runtime channel create function
-	createFunc := g.functions["channel_create"]
-	if createFunc == nil {
-		g.initFiberRuntime()
-		createFunc = g.functions["channel_create"]
-	}
-
-	// Call channel_create
-	channelID := g.builder.NewCall(createFunc, capacity)
-
-	return channelID, nil
+	// Call channel_create using consolidated approach
+	return g.generateFiberRuntimeCall("Channel", "channel_create", []value.Value{capacity})
 }
 
 // generateChannelSendExpression generates REAL channel send with blocking.
@@ -229,17 +232,8 @@ func (g *LLVMGenerator) generateChannelSendExpression(send *ast.ChannelSendExpre
 		return nil, err
 	}
 
-	// Get runtime send function
-	sendFunc := g.functions["channel_send"]
-	if sendFunc == nil {
-		g.initFiberRuntime()
-		sendFunc = g.functions["channel_send"]
-	}
-
-	// Call channel_send
-	result := g.builder.NewCall(sendFunc, channelID, sendValue)
-
-	return result, nil
+	// Call channel_send using consolidated approach
+	return g.generateFiberRuntimeCall("send", "channel_send", []value.Value{channelID, sendValue})
 }
 
 // generateChannelRecvExpression generates REAL channel receive with blocking.
@@ -250,30 +244,55 @@ func (g *LLVMGenerator) generateChannelRecvExpression(recv *ast.ChannelRecvExpre
 		return nil, err
 	}
 
-	// Get runtime recv function
-	recvFunc := g.functions["channel_recv"]
-	if recvFunc == nil {
-		g.initFiberRuntime()
-		recvFunc = g.functions["channel_recv"]
+	// Call channel_recv using consolidated approach
+	return g.generateFiberRuntimeCall("recv", "channel_recv", []value.Value{channelID})
+}
+
+// generateChannelFunctionCall generates channel function calls using builtin registry
+func (g *LLVMGenerator) generateChannelFunctionCall(builtinName string, runtimeName string,
+	callExpr *ast.CallExpression) (value.Value, error) {
+	// Generate arguments
+	args := make([]value.Value, len(callExpr.Arguments))
+
+	for i, arg := range callExpr.Arguments {
+		var err error
+
+		args[i], err = g.generateExpression(arg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// Call channel_recv
-	result := g.builder.NewCall(recvFunc, channelID)
+	// Call the appropriate channel function using consolidated approach
+	return g.generateFiberRuntimeCall(builtinName, runtimeName, args)
+}
 
-	return result, nil
+// generateChannelSendCall generates channel send from built-in function call
+func (g *LLVMGenerator) generateChannelSendCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.generateChannelFunctionCall("send", "channel_send", callExpr)
+}
+
+// generateChannelRecvCall generates channel receive from built-in function call
+func (g *LLVMGenerator) generateChannelRecvCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.generateChannelFunctionCall("recv", "channel_recv", callExpr)
+}
+
+// generateChannelCreateCall generates channel creation from built-in function call
+func (g *LLVMGenerator) generateChannelCreateCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.generateChannelFunctionCall("Channel", "channel_create", callExpr)
 }
 
 // generateSelectExpression generates select with proper channel multiplexing.
 func (g *LLVMGenerator) generateSelectExpression(selectExpr *ast.SelectExpression) (value.Value, error) {
 	// For now, implement basic select that evaluates first ready channel
 	// TODO: Implement proper non-deterministic select with runtime support
-
 	if len(selectExpr.Arms) == 0 {
 		return constant.NewInt(types.I64, 0), nil
 	}
 
 	// For simplicity, evaluate first arm
 	firstArm := selectExpr.Arms[0]
+
 	result, err := g.generateExpression(firstArm.Expression)
 	if err != nil {
 		return nil, err
@@ -294,4 +313,19 @@ func (g *LLVMGenerator) generateModuleAccessExpression(_ *ast.ModuleAccessExpres
 	// TODO: Implement proper module state isolation per fiber
 	// For now, return a placeholder value
 	return constant.NewInt(types.I64, moduleAccessPlaceholder), nil
+}
+
+// generateSpawnCall generates fiber spawn from built-in function call
+func (g *LLVMGenerator) generateSpawnCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.generateChannelFunctionCall("fiber_spawn", "fiber_spawn", callExpr)
+}
+
+// generateYieldCall generates fiber yield from built-in function call
+func (g *LLVMGenerator) generateYieldCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.generateChannelFunctionCall("fiber_yield", "fiber_yield", callExpr)
+}
+
+// generateAwaitCall generates fiber await from built-in function call
+func (g *LLVMGenerator) generateAwaitCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.generateChannelFunctionCall("fiber_await", "fiber_await", callExpr)
 }

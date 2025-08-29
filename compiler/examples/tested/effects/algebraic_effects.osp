@@ -1,0 +1,15 @@
+// 🚀 SUPREMO BASIC ALGEBRAIC EFFECTS! 🔥
+
+// Basic algebraic effects
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+// Pure function - no effects
+fn double(x: int) -> int = x * 2
+
+// Main function to test
+fn main() -> Unit = {
+    let doubled = double(21)
+    print(toString(doubled))
+} 

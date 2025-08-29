@@ -1,22 +1,28 @@
 {
   "name": "osprey-website",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "Official website for the Osprey Programming Language",
   "main": "index.js",
   "scripts": {
-    "start": "npm run copy-spec && npm run generate-docs && eleventy --serve",
-    "dev": "npm run copy-spec && npm run generate-docs && eleventy --serve --watch",
-    "build": "npm run generate-docs && eleventy",
+    "start": "npm run update-playground && npm run copy-spec && npm run generate-docs && eleventy --serve",
+    "dev": "npm run update-playground && npm run copy-spec && npm run generate-docs && eleventy --serve --watch",
+    "build": "npm run update-playground && npm run generate-docs && eleventy",
     "copy-spec": "node scripts/copy-spec.js",
-    "generate-docs": "./scripts/generate-docs.sh",
+    "generate-docs": "bash scripts/generate-docs.sh",
+    "update-playground": "node scripts/update-playground.js",
     "clean": "rm -rf _site",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["osprey", "programming-language", "website", "eleventy"],
+  "keywords": [
+    "osprey",
+    "programming-language",
+    "website",
+    "eleventy"
+  ],
   "author": "Christian Findlay",
   "license": "MIT",
   "devDependencies": {
-    "@11ty/eleventy": "^3.1.0",
+    "@11ty/eleventy": "^3.1.2",
     "@11ty/eleventy-plugin-syntaxhighlight": "^5.0.1",
     "luxon": "^3.6.1",
     "markdown-it": "^14.1.0",

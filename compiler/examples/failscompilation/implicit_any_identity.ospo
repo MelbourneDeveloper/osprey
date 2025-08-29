@@ -1,4 +1,4 @@
-// This should fail - function would implicitly return 'any' type
-fn identity(x) = x
+// This should fail - function references undefined variable
+fn identity(x) = someUndefinedVariable
 
 print("This should not compile") 

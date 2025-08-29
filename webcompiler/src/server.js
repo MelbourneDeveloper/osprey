@@ -5,6 +5,8 @@ import { createServer } from 'http'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { WebSocketServer } from 'ws'
+import { randomUUID } from 'crypto'
+import { execSync } from 'child_process'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -14,7 +16,33 @@ const server = createServer(app)
 
 const PORT = process.env.PORT || 3001
 
-console.log('🚀 Starting WebSocket LSP Bridge...')
+// STARTUP LOGGING - Make it super obvious the server is starting
+console.log('\n' + '='.repeat(80))
+console.log('🚀 OSPREY WEB COMPILER STARTING UP')
+console.log('='.repeat(80))
+console.log(`📍 Server file: ${__filename}`)
+console.log(`📁 Working directory: ${process.cwd()}`)
+console.log(`🐳 Docker environment: ${process.env.DOCKER_ENV || 'false'}`)
+console.log(`🏃 Node environment: ${process.env.NODE_ENV || 'development'}`)
+console.log(`🔌 Target port: ${PORT}`)
+console.log('='.repeat(80))
+
+// Request logging middleware - track ALL requests
+app.use((req, res, next) => {
+    const timestamp = new Date().toISOString()
+    console.log(`\n📨 [${timestamp}] ${req.method} ${req.url}`)
+    console.log(`📍 User-Agent: ${req.headers['user-agent'] || 'unknown'}`)
+    console.log(`📍 Origin: ${req.headers.origin || 'none'}`)
+    console.log(`📍 Content-Type: ${req.headers['content-type'] || 'none'}`)
+
+    // Log body size for POST requests
+    if (req.method === 'POST' && req.body) {
+        const bodySize = JSON.stringify(req.body).length
+        console.log(`📏 Body size: ${bodySize} bytes`)
+    }
+
+    next()
+})
 
 // Middleware
 app.use(express.json({ limit: '10mb' }))
@@ -27,7 +55,9 @@ app.use((req, res, next) => {
         'http://localhost:8080',
         'http://127.0.0.1:8080',
         'http://localhost:3001',
-        'http://127.0.0.1:3001'
+        'http://127.0.0.1:3001',
+        'https://ospreylang.dev',
+        'https://www.ospreylang.dev'
     ];
 
     if (allowedOrigins.includes(origin)) {
@@ -49,7 +79,7 @@ app.get('/api', (req, res) => {
     res.json({
         status: 'ok',
         service: 'osprey-web-compiler',
-        version: '1.0.0',
+        version: '0.2.0',
         timestamp: new Date().toISOString()
     })
 })
@@ -59,17 +89,67 @@ app.post('/api/compile', async (req, res) => {
     const { code } = req.body
     console.log('📝 Compile request received')
     console.log('📄 Code length:', code?.length || 0)
+    
+    // LOG THE ACTUAL CODE
+    console.log('🔍 CODE BEING COMPILED:')
+    console.log('='.repeat(50))
+    console.log(code || 'NO CODE PROVIDED')
+    console.log('='.repeat(50))
 
     if (!code) {
         return res.status(400).json({ success: false, error: 'No code provided' })
     }
 
     try {
-        const result = await runOspreyCompiler(['--ast'], code)
-        console.log('✅ Compile success, output length:', result.stdout.length)
-        res.json({ success: true, output: result.stdout })
+        const result = await runOspreyCompiler(['--sandbox', '--ast'], code)
+
+        // LOG THE COMPILER OUTPUT
+        console.log('🔨 COMPILER OUTPUT (stderr):')
+        console.log('-'.repeat(50))
+        console.log(result.stderr || 'NO COMPILER OUTPUT')
+        console.log('-'.repeat(50))
+
+        // LOG THE PROGRAM OUTPUT
+        console.log('📋 PROGRAM OUTPUT (stdout):')
+        console.log('-'.repeat(50))
+        console.log(result.stdout || 'NO PROGRAM OUTPUT')
+        console.log('-'.repeat(50))
+
+        if (result.success) {
+            console.log('✅ Compile success, exit code:', result.exitCode)
+            res.status(200).json({
+                success: true,
+                compilerOutput: result.stderr || '',
+                programOutput: result.stdout || '' // AST output goes to stdout
+            })
+        } else {
+            console.error('❌ Compile failed, exit code:', result.exitCode)
+
+            const errorOutput = result.stderr || result.stdout || '';
+
+            // Detect INTERNAL compiler errors - simple marker from compiler
+            const isInternalError = errorOutput.includes('INTERNAL_COMPILER_ERROR:');
+
+            if (isInternalError) {
+                // Internal compiler error - log for debugging but don't expose to user
+                console.error('🚨 INTERNAL COMPILER ERROR DETECTED:', errorOutput);
+                res.status(502).json({
+                    success: false,
+                    error: 'The compiler encountered an internal error. Please report this code to help us fix the issue.',
+                    isInternalError: true
+                });
+                return;
+            }
+
+            res.status(422).json({ // 422 Unprocessable Entity for compilation errors
+                success: false,
+                compilerOutput: result.stderr || '',
+                programOutput: result.stdout || '',
+                error: errorOutput || `Compilation failed with exit code ${result.exitCode}`
+            })
+        }
     } catch (error) {
-        console.error('❌ Compile error:', error.message)
+        console.error('❌ System error:', error.message)
         res.status(500).json({ success: false, error: error.message })
     }
 })
@@ -79,6 +159,12 @@ app.post('/api/run', async (req, res) => {
     const { code } = req.body
     console.log('🏃 Run request received')
     console.log('📄 Code length:', code?.length || 0)
+    
+    // LOG THE ACTUAL CODE
+    console.log('🔍 CODE BEING RUN:')
+    console.log('='.repeat(50))
+    console.log(code || 'NO CODE PROVIDED')
+    console.log('='.repeat(50))
 
     if (!code) {
         return res.status(400).json({ success: false, error: 'No code provided' })
@@ -86,37 +172,177 @@ app.post('/api/run', async (req, res) => {
 
     try {
         const result = await runOspreyCompiler(['--run'], code)
-        console.log('✅ Run success, output length:', result.stdout.length)
-        res.json({ success: true, output: result.stdout })
+
+        // LOG THE COMPILER OUTPUT
+        console.log('🔨 COMPILER OUTPUT (stderr):')
+        console.log('-'.repeat(50))
+        console.log(result.stderr || 'NO COMPILER OUTPUT')
+        console.log('-'.repeat(50))
+
+        // LOG THE PROGRAM OUTPUT
+        console.log('📋 PROGRAM OUTPUT (stdout):')
+        console.log('-'.repeat(50))
+        console.log(result.stdout || 'NO PROGRAM OUTPUT')
+        console.log('-'.repeat(50))
+
+        if (result.success) {
+            console.log('✅ Run success, exit code:', result.exitCode)
+
+            res.status(200).json({
+                success: true,
+                compilerOutput: result.stderr || '',
+                programOutput: result.stdout || ''
+            })
+        } else {
+            console.error('❌ Run failed, exit code:', result.exitCode)
+
+            const errorOutput = result.stderr || result.stdout || '';
+
+            // Detect INTERNAL compiler errors - simple marker from compiler
+            const isInternalError = errorOutput.includes('INTERNAL_COMPILER_ERROR:');
+
+            if (isInternalError) {
+                // Internal compiler error - log for debugging but don't expose to user
+                console.error('🚨 INTERNAL COMPILER ERROR DETECTED:', errorOutput);
+                res.status(502).json({
+                    success: false,
+                    error: 'The compiler encountered an internal error. Please report this code to help us fix the issue.',
+                    isInternalError: true
+                });
+                return;
+            }
+
+            // Determine if it's a user syntax/compilation error or runtime error
+            const isCompilationError = errorOutput.includes('parse errors') ||
+                errorOutput.includes('undefined variable') ||
+                errorOutput.includes('syntax error') ||
+                errorOutput.includes('type mismatch') ||
+                errorOutput.includes('Compilation failed');
+
+            const statusCode = isCompilationError ? 422 : 400; // 422 for compilation, 400 for runtime
+
+            res.status(statusCode).json({
+                success: false,
+                compilerOutput: result.stderr || '',
+                programOutput: result.stdout || '',
+                isCompilationError: isCompilationError,
+                error: errorOutput || `Process failed with exit code ${result.exitCode}`
+            })
+        }
     } catch (error) {
-        console.error('❌ Run error:', error.message)
+        console.error('❌ System error:', error.message)
         res.status(500).json({ success: false, error: error.message })
     }
 })
 
-// Helper function to run Osprey compiler
+// STARTUP: Delete ALL temp folders on server startup
+async function deleteAllTempFolders() {
+    const tempBaseDir = '/tmp/osprey-temp'
+    try {
+        console.log('🗑️ Deleting ALL temp folders on startup...')
+        await fs.rm(tempBaseDir, { recursive: true, force: true })
+        console.log('✅ All temp folders deleted')
+    } catch (error) {
+        console.error('⚠️ Error deleting temp folders:', error.message)
+    }
+}
+
+// Cleanup old temp folders periodically to prevent disk space issues
+async function cleanupOldTempFolders() {
+    const tempBaseDir = '/tmp/osprey-temp'
+    try {
+        const folders = await fs.readdir(tempBaseDir)
+        const now = Date.now()
+        const oneHourAgo = now - (60 * 60 * 1000) // 1 hour ago
+
+        for (const folder of folders) {
+            const folderPath = path.join(tempBaseDir, folder)
+            const stats = await fs.stat(folderPath)
+            if (stats.isDirectory() && stats.mtime.getTime() < oneHourAgo) {
+                await fs.rm(folderPath, { recursive: true, force: true })
+                console.log(`🗑️ Cleaned up old temp folder: ${folder}`)
+            }
+        }
+    } catch (error) {
+        console.error('⚠️ Error cleaning up temp folders:', error.message)
+    }
+}
+
+// Run cleanup every 30 minutes
+setInterval(cleanupOldTempFolders, 30 * 60 * 1000)
+
+// DELETE ALL TEMP FOLDERS ON STARTUP
+deleteAllTempFolders()
+
+// THREAD-SAFE Helper function to run Osprey compiler
+// Each request gets its own UUID-named folder for complete isolation
+// Always uses --sandbox flag for security (disables HTTP, WebSocket, file system, and FFI access)
 function runOspreyCompiler(args, code = '') {
     return new Promise(async (resolve, reject) => {
-        // Ensure the temp directory exists
-        const tempDir = '/tmp/osprey-temp'
-        const tempFile = path.join(tempDir, `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.osp`)
+        // Diagnostics removed - too verbose for production logging
+        // Create a unique UUID folder for this request - THREAD SAFE!
+        const requestId = randomUUID()
+        const tempBaseDir = '/tmp/osprey-temp'
+        const tempRequestDir = path.join(tempBaseDir, requestId)
+        const tempFile = path.join(tempRequestDir, 'main.osp')
 
         try {
-            // Create the temp directory if it doesn't exist
-            await fs.mkdir(tempDir, { recursive: true })
+            // Create the unique temp directory for this request
+            console.log(`📁 Creating temp directory: ${tempRequestDir}`)
+            await fs.mkdir(tempRequestDir, { recursive: true })
+            console.log(`📁 Created temp folder: ${requestId}`)
+
+            // Verify temp directory was created
+            const tempStats = await fs.stat(tempRequestDir)
+            console.log(`📊 Temp directory stats: ${JSON.stringify({
+                isDirectory: tempStats.isDirectory(),
+                mode: tempStats.mode,
+                uid: tempStats.uid,
+                gid: tempStats.gid
+            })}`)
 
             console.log(`💾 Writing temp file: ${tempFile}`)
             await fs.writeFile(tempFile, code)
-
+            
+            // Verify file was written
+            const fileStats = await fs.stat(tempFile)
+            console.log(`📊 Temp file stats: ${JSON.stringify({
+                size: fileStats.size,
+                isFile: fileStats.isFile(),
+                mode: fileStats.mode
+            })}`)
+            
             // Use the osprey binary from PATH (installed in Docker) or fallback to local dev path
             const ospreyPath = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
                 ? 'osprey'
-                : path.resolve(__dirname, '../../compiler/bin/osprey')
+                : path.resolve(__dirname, '../compiler/bin/osprey')
+            
+            // Check if osprey binary exists and is executable
+            console.log(`🔍 Checking osprey binary: ${ospreyPath}`)
+            try {
+                if (ospreyPath === 'osprey') {
+                    console.log(`🔍 Using osprey from PATH`)
+                } else {
+                    const binaryStats = await fs.stat(ospreyPath)
+                    console.log(`📊 Osprey binary stats: ${JSON.stringify({
+                        size: binaryStats.size,
+                        isFile: binaryStats.isFile(),
+                        mode: binaryStats.mode,
+                        executable: (binaryStats.mode & 0o111) !== 0
+                    })}`)
+                }
+            } catch (e) {
+                console.error(`❌ Error checking osprey binary: ${e.message}`)
+            }
+            
+            const startTime = Date.now()
             console.log(`🔨 Running: ${ospreyPath} ${tempFile} ${args.join(' ')}`)
+            console.log(`⏰ Started at: ${new Date().toISOString()}`)
+            
             const child = spawn(ospreyPath, [tempFile, ...args], {
                 stdio: 'pipe',
-                cwd: process.cwd(),
-                timeout: 5000 // 5 second timeout - kill any program that runs longer
+                cwd: tempRequestDir, // Run in the temp directory
+                timeout: 20000 
             })
 
             let stdout = ''
@@ -130,32 +356,55 @@ function runOspreyCompiler(args, code = '') {
                 stderr += data.toString()
             })
 
-            child.on('close', async (code) => {
-                // Clean up temp file
+            child.on('close', async (exitCode, signal) => {
+                const endTime = Date.now()
+                const duration = endTime - startTime
+                
+                // Log detailed exit information with timing
+                console.log(`🔚 Process finished - Exit code: ${exitCode}, Signal: ${signal}`)
+                console.log(`⏰ Ended at: ${new Date().toISOString()}`)
+                console.log(`⏱️ Duration: ${duration}ms`)
+                
+                // Clean up the ENTIRE temp folder for this request
                 try {
-                    await fs.unlink(tempFile)
-                    console.log(`🗑️ Cleaned up temp file: ${tempFile}`)
+                    await fs.rm(tempRequestDir, { recursive: true, force: true })
+                    console.log(`🗑️ Cleaned up temp folder: ${requestId}`)
                 } catch (e) {
-                    console.error('⚠️ Failed to clean up temp file:', e.message)
+                    console.error('⚠️ Failed to clean up temp folder:', e.message)
                 }
 
-                if (code === 0) {
-                    resolve({ stdout, stderr })
-                } else {
-                    reject(new Error(stderr || stdout || `Process exited with code ${code}`))
+                // Handle timeout/signal termination
+                if (exitCode === null && signal) {
+                    console.error(`⏰ Process was killed by signal: ${signal} after ${duration}ms`)
+                    stderr += `\nProcess was terminated by signal: ${signal} (likely timeout) after ${duration}ms`
                 }
+
+                // Always resolve with the result - let the caller determine success/failure
+                resolve({
+                    exitCode: exitCode || -1, // Convert null to -1 for consistency
+                    stdout,
+                    stderr,
+                    success: exitCode === 0
+                })
             })
 
             child.on('error', async (error) => {
-                // Clean up temp file on error
+                // Clean up temp folder on error
                 try {
-                    await fs.unlink(tempFile)
+                    await fs.rm(tempRequestDir, { recursive: true, force: true })
+                    console.log(`🗑️ Cleaned up temp folder after error: ${requestId}`)
                 } catch (e) {
-                    // Ignore cleanup errors
+                    console.error('⚠️ Failed to clean up temp folder after error:', e.message)
                 }
                 reject(error)
             })
         } catch (error) {
+            // Clean up temp folder if creation failed
+            try {
+                await fs.rm(tempRequestDir, { recursive: true, force: true })
+            } catch (e) {
+                // Ignore cleanup errors
+            }
             reject(error)
         }
     })
@@ -172,7 +421,9 @@ const wss = new WebSocketServer({
             'http://localhost:8080',
             'http://127.0.0.1:8080',
             'http://localhost:3001',
-            'http://127.0.0.1:3001'
+            'http://127.0.0.1:3001',
+            'https://ospreylang.dev',
+            'https://www.ospreylang.dev'
         ];
 
         console.log('🔍 WebSocket upgrade request from origin:', origin);

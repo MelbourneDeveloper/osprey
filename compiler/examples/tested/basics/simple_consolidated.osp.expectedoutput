@@ -1,0 +1,10 @@
+Basic test results:
+x = 42
+message = Hello, World!
+greeting = hello
+Hello from function!
+Minimal test:
+y = 5
+Simple test:
+x = 42
+greeting = hello

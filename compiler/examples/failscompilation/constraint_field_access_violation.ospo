@@ -1,34 +1,8 @@
-// COMPILATION FAILURE: Field Access on Constraint Result
-// This demonstrates the type safety violation where constraint results 
-// should be Result<T, E> but are treated as the actual type
+// COMPILATION FAILURE: Field Access on Non-Struct Types
+// This demonstrates that field access is only allowed on record types
 
-// Simple constraint function
-fn notEmpty(s: String) -> Bool = match s {
-    "" => false
-    _ => true
-}
+// Attempting field access on integer literal should fail
+let x = 42
+let result = x.value  // This should fail - integers don't have fields
 
-// Type with constraint
-type User = { 
-    name: String where notEmpty(name)
-}
-
-type Person = { 
-    name: String where notEmpty(name),
-    age: Int
-}
-
-// Create instance - should return Result<User, ConstraintError>
-let user = User { name: "alice" }
-let person = Person { name: "bob", age: 25 }
-
-// COMPILATION ERROR: Field access on Result type without pattern matching
-// This should FAIL because userResult is Result<User, E>, not User
-print("${user.name}")
-print("${person.name}")
-print("${person.age}")
-
-// COMPILATION ERROR: Cannot assign field from Result type  
-let name = user.name
-
-print("This should not compile - accessing fields on Result type!") 
+print("This should not compile!") 

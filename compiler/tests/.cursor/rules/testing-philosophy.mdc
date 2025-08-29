@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Testing Philosophy
+
+- **DO NOT DELETE, SKIP, OR WATER DOWN TESTS!!!** - Never reduce assertions. Only monotonically increasing assertions
+- **INTEGRATION TESTS PRIMARY** - Prove compiler works end-to-end, main focus
+- **EXAMPLES ARE TESTS** - Examples in `compiler/examples/tested/` with expected outputs
+- **UNIT TESTS FOR ISOLATION** - Use sparingly, only when integration can't isolate problems
+- **FAIL HARD ON PROBLEMS** - Make dependency failures obvious, don't fail silently
+- **ALL TESTS AUTOMATED** - No manual intervention required
+- **FAST FEEDBACK LOOPS** - Tests should run quickly during development
+- **FULL CODE COVERAGE** - All code covered by tests, uncovered code may be dead code
+- **TEST PARSING TO STDOUT** - Don't run compiled binary except for CLI tests
+- **CLEAN UP AFTER TESTS** - Always clean temporary files, processes, state
+- **NO FLAKY TESTS** - Fix them or delete them, flaky tests erode confidence

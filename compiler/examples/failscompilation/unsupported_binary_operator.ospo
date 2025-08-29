@@ -1,0 +1,8 @@
+// This should fail compilation: Unsupported binary operator
+// Tests: ErrUnsupportedBinaryOperator, WrapUnsupportedBinaryOpWithPos
+// Error: unsupported binary operator
+
+let x = 10
+let y = 20  
+let result = x ** y  // Power operator not supported
+print(result)

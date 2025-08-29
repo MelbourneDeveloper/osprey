@@ -22,6 +22,7 @@ func GetBuiltinTypeDescriptions() map[string]*BuiltinTypeDesc {
 				"interpolation and escape sequences.",
 			Example: `let greeting: String = "Hello, World!"\nlet name = "Alice"\nlet message = "Hello, ${name}!"`,
 		},
+		//WRONG! MUST BE LOWERCASE - bool
 		"Bool": {
 			Name: "Bool",
 			Description: "A boolean type that can be either true or false. Used for " +
@@ -34,6 +35,34 @@ func GetBuiltinTypeDescriptions() map[string]*BuiltinTypeDesc {
 				"programming but should be used carefully as it bypasses type checking.",
 			Example: `let value: Any = 42\nlet text: Any = "Hello"`,
 		},
+		"HttpResponse": {
+			Name: "HttpResponse",
+			Description: "A built-in type representing an HTTP response with status code, " +
+				"headers, content type, body, and streaming capabilities. Used by HTTP server " +
+				"handlers to return structured responses to clients.",
+			Example: `HttpResponse {` + "\n" +
+				`    status: 200,` + "\n" +
+				`    headers: "Content-Type: application/json",` + "\n" +
+				`    contentType: "application/json",` + "\n" +
+				`    streamFd: -1,` + "\n" +
+				`    isComplete: true,` + "\n" +
+				`    partialBody: "{\"message\": \"Hello\"}"` + "\n" +
+				`}`,
+		},
+		"ProcessHandle": {
+			Name: "ProcessHandle",
+			Description: "A handle to a spawned async process. Contains the process ID and allows " +
+				"waiting for completion and cleanup. Process output is delivered via callbacks " +
+				"registered with the runtime.",
+			Example: `let result = spawnProcess("echo hello")` + "\n" +
+				`match result {` + "\n" +
+				`    Success { value } => {` + "\n" +
+				`        let exitCode = awaitProcess(value)` + "\n" +
+				`        cleanupProcess(value)` + "\n" +
+				`    }` + "\n" +
+				`    Error { message } => print("Process failed")` + "\n" +
+				`}`,
+		},
 	}
 }
 
@@ -43,5 +72,6 @@ func GetBuiltinTypeDescription(name string) *BuiltinTypeDesc {
 	if desc, exists := descriptions[name]; exists {
 		return desc
 	}
+
 	return nil
 }

@@ -18,30 +18,33 @@ description: "Osprey's design principles and language philosophy"
       <div class="content">
         <h2>The Vision</h2>
         <p>
-          Osprey was born from the belief that elegance <strong>is</strong> the best defence against bugs. Too many hours are wasted debugging null pointer exceptions, handling unexpected panics, and tracking down race conditions. Osprey is different.
+          Osprey was born from the belief that elegance <strong>is</strong> the best defence against bugs. Too many
+          hours are wasted debugging null pointer exceptions, handling unexpected panics, and tracking down race
+          conditions. Osprey is different.
         </p>
         <p>
-          Osprey's type system aims to prevent entire classes of bugs at compile time, make concurrency safe by default, and keep your code maintainable for years to come.
+          Osprey's type system aims to prevent entire classes of bugs at compile time, make concurrency safe by default,
+          and keep your code maintainable for years to come.
         </p>
       </div>
       <div class="visual typewriter-enabled">
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">
-type User = {
-  email: String where isValidEmail(email),
-  age: Int where between(age, 0, 150)
-}
+          <pre class="language-osprey"><code class="language-osprey">// Simple, clean function definitions
+fn double(n: int) -> int = n * 2
 
-// Result type ensures error handling
-let user = User {
-  email: "alice@example.com",
-  age: 25
-}
+// String interpolation that works
+let x = 42
+let name = "Alice"
+print("x = ${x}")
+print("name = ${name}")
 
-match user {
-  Ok { value } => welcomeUser(value),
-  Err { error } => showValidationError(error)
-}</code></pre>
+// Pattern matching on values
+let result = match x {
+  42 => "The answer!"
+  0 => "Zero"
+  _ => "Something else"
+}
+print("Result: ${result}")</code></pre>
         </div>
       </div>
     </div>
@@ -119,17 +122,17 @@ match user {
         <h3>Referential Transparency</h3>
         <p>Functions return the same output for the same input. Side effects are explicit.</p>
       </div>
-      
+
       <div class="card">
         <h3>Immutability by Default</h3>
         <p>Data immutable unless explicitly marked mutable. Safe sharing across fibers.</p>
       </div>
-      
+
       <div class="card">
         <h3>Explicit Error Handling</h3>
         <p>No exceptions or panics. All failures return Result types.</p>
       </div>
-      
+
       <div class="card">
         <h3>Zero-Cost Abstractions</h3>
         <p>High-level features compile to optimal machine code.</p>
@@ -189,67 +192,52 @@ match user {
       <div class="card-code">
         <h3>Fiber-Isolated Modules</h3>
         <p>
-          Revolutionary approach to concurrency where each fiber gets its own isolated instances of modules. Eliminates data races while maintaining clean encapsulation.
+          Revolutionary approach to concurrency where each fiber gets its own isolated instances of modules. Eliminates
+          data races while maintaining clean encapsulation.
         </p>
         <div class="code-example typewriter-enabled">
-          <pre class="language-osprey"><code class="language-osprey">module Counter {
-  let mut count = 0
-  fn increment() = { count = count + 1; count }
-}
+          <pre class="language-osprey"><code class="language-osprey">// Fiber Example
+fn compute(value: int) -> int = value * 2
 
-// Each fiber has its own Counter instance
-let fiber1 = Fiber<Int> { 
-  computation: fn() => Counter.increment() 
-}
-let fiber2 = Fiber<Int> { 
-  computation: fn() => Counter.increment() 
-}
+// Each fiber runs independently  
+let fiber1 = spawn compute(5)
+let fiber2 = spawn compute(10)
 
-// Both return 1, not 1 and 2
-await(fiber1)  // 1
-await(fiber2)  // 1 (separate instance)</code></pre>
+print("Fiber 1 result: ${fiber1}")  
+print("Fiber 2 result: ${fiber2}")
+
+// Background processing with yield
+let job1 = yield 10
+print("Processed ${job1} items")
+
+print("=== Fiber Example Complete ===")</code></pre>
         </div>
       </div>
 
       <div class="card-code">
-        <h3>Constraint-Based Types</h3>
+        <h3>Pattern Matching</h3>
         <p>
-          Type constructors with WHERE constraints ensure data validity at creation time. Invalid data simply cannot exist in your program.
+          Exhaustive pattern matching ensures all cases are handled at compile time. No forgotten branches, no runtime
+          surprises.
         </p>
         <div class="code-example typewriter-enabled">
-          <pre class="language-osprey"><code class="language-osprey">type Person = {
-  name: String where notEmpty(name),
-  age: Int where between(age, 0, 150),
-  email: String where validateEmail(email)
+          <pre class="language-osprey"><code class="language-osprey">fn analyzeNumber(n: int) -> string = match n {
+    0 => "Zero"
+    1 => "One" 
+    42 => "The answer to everything!"
+    _ => "Some other number"
 }
 
-// Returns Result<Person, ValidationError>
-let person = Person { 
-  name: "Alice", 
-  age: 25, 
-  email: "alice@example.com" 
-}</code></pre>
-        </div>
-      </div>
+fn getCategory(score: int) -> string = match score {
+    100 => "Perfect!"
+    95 => "Excellent"
+    75 => "Good"
+    _ => "Needs Improvement"
+}
 
-      <div class="card-code">
-        <h3>Safe Arithmetic by Default</h3>
-        <p>
-          All arithmetic operations return Result types to handle overflow, underflow, and division by zero. Math errors are impossible to ignore.
-        </p>
-        <div class="code-example typewriter-enabled">
-          <pre class="language-osprey"><code class="language-osprey">// Safe division that cannot panic
-fn divide(a: Int, b: Int) -> Result<Int, MathError> = 
-  match b {
-    0 => Err { error: DivisionByZero }
-    _ => Ok { value: a / b }
-  }
-
-// Must handle the result
-match divide(a: 10, b: 0) {
-  Ok { value } => print("Result: ${value}")
-  Err { error } => print("Cannot divide by zero")
-}</code></pre>
+print("Number analysis:")
+print("42 is ${analyzeNumber(42)}")
+print("Score 95: ${getCategory(95)}")</code></pre>
         </div>
       </div>
     </div>
@@ -259,29 +247,31 @@ match divide(a: 10, b: 0) {
 <section class="future">
   <div class="container">
     <h2 class="section-title">The Future</h2>
-    <p style="text-align: center; font-size: var(--font-size-xl); margin-bottom: var(--space-12); color: var(--color-text-secondary); max-width: 800px; margin-left: auto; margin-right: auto;">
+    <p
+      style="text-align: center; font-size: var(--font-size-xl); margin-bottom: var(--space-12); color: var(--color-text-secondary); max-width: 800px; margin-left: auto; margin-right: auto;">
       We are just getting started. We're building a complete ecosystem for safe, concurrent programming.
     </p>
-    
+
     <div class="features-grid">
       <div class="card">
         <div class="card-icon">🔗</div>
         <h3>Haskell Integration</h3>
-        <p>Future interoperability with Haskell for formal verification and mathematical proofs of program correctness.</p>
+        <p>Future interoperability with Haskell for formal verification and mathematical proofs of program correctness.
+        </p>
       </div>
-      
+
       <div class="card">
         <div class="card-icon">📦</div>
         <h3>Package Ecosystem</h3>
         <p>Growing library ecosystem with built-in safety guarantees and comprehensive documentation.</p>
       </div>
-      
+
       <div class="card">
         <div class="card-icon">🛠️</div>
         <h3>Development Tooling</h3>
         <p>Advanced IDE support, intelligent debuggers, and powerful development tools for productive programming.</p>
       </div>
-      
+
       <div class="card">
         <div class="card-icon">🎓</div>
         <h3>Education & Learning</h3>
@@ -289,13 +279,13 @@ match divide(a: 10, b: 0) {
       </div>
     </div>
 
-    <div class="cta-section">
-      <h3>Join the Revolution</h3>
-      <p>Help us build the future of programming. Safe, fast, and elegant code for everyone.</p>
-      <div class="cta-buttons">
-        <a href="/playground/" class="btn btn-primary">Try Osprey Now</a>
-        <a href="/docs/" class="btn btn-secondary">Read the Docs</a>
+    <div class="blue-box">
+      <h3>Build It With Us</h3>
+      <p>AI assistants have democratized compiler development. If you can build apps with Claude or Cursor, you can help build Osprey.</p>
+      <div class="blue-box-buttons">
+        <a href="https://github.com/MelbourneDeveloper/osprey/blob/main/CONTRIBUTING.md" class="btn btn-primary">Start Contributing</a>
+        <a href="/playground/" class="btn btn-secondary">Try Osprey Now</a>
       </div>
     </div>
   </div>
-</section> 
+</section>

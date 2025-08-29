@@ -1,0 +1,19 @@
+Explicit any return type works
+getDynamicValue() = 42
+processAnyValue(5) = 15
+Any values stored without auto-conversion
+testArgs result: value positive
+processAny(42): Processed any
+processAny("hello"): Processed any
+processAny(true): Processed any
+Extracted any values:
+test data
+123
+false
+Type comparisons:
+Type comparison tested
+Type comparison tested
+Type comparison tested
+Status types:
+active
+inactive

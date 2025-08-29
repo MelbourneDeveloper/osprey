@@ -1,5 +1,0 @@
-fn greet(name: string) -> unit = print("Hello from function!")
-
-let message = "Hello, World!"
-print(message)
-greet("Osprey") 

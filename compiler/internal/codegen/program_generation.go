@@ -22,6 +22,9 @@ func (g *LLVMGenerator) GenerateProgram(program *ast.Program) (*ir.Module, error
 		return nil, err
 	}
 
+	// CRITICAL: Resolve all type variables before code generation
+	g.typeInferer.ResolveAllEnvironmentTypes()
+
 	// Create main function
 	err = g.createMainFunction(mainFunc, topLevelStatements)
 	if err != nil {
@@ -39,56 +42,80 @@ func (g *LLVMGenerator) GenerateProgram(program *ast.Program) (*ir.Module, error
 
 // collectDeclarations collects function declarations and top-level statements.
 func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.FunctionDeclaration, []ast.Statement, error) {
-	var mainFunc *ast.FunctionDeclaration
-	var topLevelStatements []ast.Statement
+	var (
+		mainFunc           *ast.FunctionDeclaration
+		topLevelStatements []ast.Statement
+	)
+
+	// FIRST PASS: Declare ALL types and externs first
 
 	for _, stmt := range program.Statements {
-		main, topLevel, err := g.processStatement(stmt)
-		if err != nil {
-			return nil, nil, err
+		switch s := stmt.(type) {
+		case *ast.ExternDeclaration:
+			// Process extern declarations in the first pass
+			err := g.generateExternDeclaration(s)
+			if err != nil {
+				return nil, nil, err
+			}
+		case *ast.TypeDeclaration:
+			g.declareType(s)
+		case *ast.EffectDeclaration:
+			// Process effect declarations in the first pass!
+			// This populates the effect registry before any handlers are generated
+			err := g.generateEffectDeclaration(s)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-		if main != nil {
-			mainFunc = main
-		}
-		if topLevel {
-			topLevelStatements = append(topLevelStatements, stmt)
+	}
+
+	// SECOND PASS: Declare function signatures after types are available
+	for _, stmt := range program.Statements {
+		switch s := stmt.(type) {
+		case *ast.FunctionDeclaration:
+			if s.Name == MainFunctionName {
+				mainFunc = s
+				// Also declare main function signature so other code can reference it
+				err := g.declareFunctionSignature(s)
+				if err != nil {
+					return nil, nil, err
+				}
+			} else {
+				err := g.declareFunctionSignature(s)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+		default:
+			// Only add non-type, non-function, non-extern, non-effect statements
+			if g.isTopLevelStatement(s) {
+				topLevelStatements = append(topLevelStatements, stmt)
+			}
 		}
 	}
 
 	return mainFunc, topLevelStatements, nil
 }
 
-func (g *LLVMGenerator) processStatement(stmt ast.Statement) (*ast.FunctionDeclaration, bool, error) {
-	switch s := stmt.(type) {
-	case *ast.FunctionDeclaration:
-		main, err := g.processFunctionDeclaration(s)
-		return main, false, err
-	case *ast.PluginFunctionDeclaration:
-		err := g.generatePluginFunctionDeclaration(s)
-		return nil, false, err
-	case *ast.ExternDeclaration:
-		err := g.generateExternDeclaration(s)
-		return nil, false, err
-	case *ast.TypeDeclaration:
-		g.declareType(s)
-		return nil, false, nil
-	default:
-		return nil, true, nil
-	}
-}
-
-func (g *LLVMGenerator) processFunctionDeclaration(s *ast.FunctionDeclaration) (*ast.FunctionDeclaration, error) {
-	if s.Name == MainFunctionName {
-		if err := g.declareFunctionSignature(s); err != nil {
-			return nil, err
-		}
-		return s, nil
+// isTopLevelStatement checks if a statement should be added to top-level statements
+func (g *LLVMGenerator) isTopLevelStatement(stmt ast.Statement) bool {
+	if _, isType := stmt.(*ast.TypeDeclaration); isType {
+		return false
 	}
 
-	if err := g.declareFunctionSignature(s); err != nil {
-		return nil, err
+	if _, isExtern := stmt.(*ast.ExternDeclaration); isExtern {
+		return false
 	}
-	return nil, nil
+
+	if _, isEffect := stmt.(*ast.EffectDeclaration); isEffect {
+		return false
+	}
+
+	if _, isFunc := stmt.(*ast.FunctionDeclaration); isFunc {
+		return false
+	}
+
+	return true
 }
 
 // createMainFunction creates the main function based on user definition or top-level statements.
@@ -108,7 +135,8 @@ func (g *LLVMGenerator) createMainFunction(
 
 	// Process top-level statements in the main function
 	for _, stmt := range topLevelStatements {
-		if err := g.generateStatement(stmt); err != nil {
+		err := g.generateStatement(stmt)
+		if err != nil {
 			return err
 		}
 	}
@@ -126,7 +154,8 @@ func (g *LLVMGenerator) createMainFunction(
 func (g *LLVMGenerator) generateUserFunctions(program *ast.Program) error {
 	for _, stmt := range program.Statements {
 		if fnDecl, ok := stmt.(*ast.FunctionDeclaration); ok && fnDecl.Name != MainFunctionName {
-			if err := g.generateFunctionDeclaration(fnDecl); err != nil {
+			err := g.generateFunctionDeclaration(fnDecl)
+			if err != nil {
 				return err
 			}
 		}

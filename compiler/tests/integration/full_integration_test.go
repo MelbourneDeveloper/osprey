@@ -4,67 +4,32 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
-// TestMain runs before all tests in this package.
-func TestMain(m *testing.M) {
-	// Clean and rebuild everything before running any tests
-	cleanAndRebuildAll()
+// ErrTestExecutionTimeout is returned when a test execution times out
+var ErrTestExecutionTimeout = errors.New("test execution timeout (30s) - no hanging allowed")
 
+// TestMain runs before all tests in this package and builds the compiler ONCE.
+func TestMain(m *testing.M) {
+	// Note: Individual tests now handle their own setup with testSetup(t)
+	// This approach gives better error reporting and isolation
 	// Run all tests
 	code := m.Run()
 
 	// Exit with the test result code
 	os.Exit(code)
-}
-
-// cleanAndRebuildAll cleans and rebuilds all dependencies.
-func cleanAndRebuildAll() {
-	// Get project root
-	wd, err := os.Getwd()
-	if err != nil {
-		panic("Failed to get working directory: " + err.Error())
-	}
-	projectRoot := filepath.Join(wd, "..", "..")
-
-	// Clean everything including Rust
-	cmd := exec.Command("make", "clean")
-	cmd.Dir = projectRoot
-	if output, err := cmd.CombinedOutput(); err != nil {
-		panic("Failed to clean: " + err.Error() + "\nOutput: " + string(output))
-	}
-	// Rebuild runtime libraries
-	cmd = exec.Command("make", "fiber-runtime", "http-runtime")
-	cmd.Dir = projectRoot
-	if output, err := cmd.CombinedOutput(); err != nil {
-		panic("Failed to build runtime libraries: " + err.Error() + "\nOutput: " + string(output))
-	}
-
-	// Build Rust interop library
-	rustDir := filepath.Join(projectRoot, "examples", "rust_integration")
-	if _, err := os.Stat(rustDir); err == nil {
-		cmd = exec.Command("cargo", "build")
-		cmd.Dir = rustDir
-		if output, err := cmd.CombinedOutput(); err != nil {
-			panic("Failed to build Rust interop: " + err.Error() + "\nOutput: " + string(output))
-		}
-	}
-
-	// Build compiler (skip linting for tests)
-	cmd = exec.Command("go", "build", "-o", "bin/osprey", "./cmd/osprey")
-	cmd.Dir = projectRoot
-	if output, err := cmd.CombinedOutput(); err != nil {
-		panic("Failed to build compiler: " + err.Error() + "\nOutput: " + string(output))
-	}
 }
 
 // ErrRustToolsNotFound indicates that Rust tools could not be located.
@@ -81,12 +46,14 @@ func checkLLVMTools(t *testing.T) {
 	t.Helper()
 
 	// Check for llc
-	if _, err := exec.LookPath("llc"); err != nil {
+	_, err := exec.LookPath("llc")
+	if err != nil {
 		t.Fatalf("llc not found in PATH - required for integration tests. Install LLVM tools: brew install llvm")
 	}
 
 	// Check for clang
-	if _, err := exec.LookPath("clang"); err != nil {
+	_, err = exec.LookPath("clang")
+	if err != nil {
 		t.Fatalf("clang not found in PATH - required for integration tests. Install clang: brew install llvm")
 	}
 }
@@ -97,15 +64,35 @@ func captureJITOutput(source string) (string, error) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := codegen.CompileAndRunJIT(source)
+	// Add timeout to prevent hanging tests!
+	done := make(chan error, 1)
+
+	var execErr error
+
+	go func() {
+		done <- codegen.CompileAndRunJIT(source)
+	}()
+
+	// Wait for completion or timeout (30 seconds max)
+	select {
+	case execErr = <-done:
+		// Execution completed normally
+	case <-time.After(30 * time.Second):
+		// FAIL HARD: No fucking hanging tests allowed!
+		_ = w.Close()
+		os.Stdout = old
+
+		return "", ErrTestExecutionTimeout
+	}
 
 	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
+
 	_, _ = io.Copy(&buf, r)
 
-	return buf.String(), err
+	return buf.String(), execErr
 }
 
 // TestBasicCompilation tests that basic syntax compiles without errors.
@@ -206,17 +193,22 @@ func findRustTools() (string, string, error) {
 		rustcPath := filepath.Join(path, "rustc")
 		cargoPath := filepath.Join(path, "cargo")
 
-		if _, err := os.Stat(rustcPath); err == nil {
+		_, err := os.Stat(rustcPath)
+		if err == nil {
 			rustc = rustcPath
 		}
-		if _, err := os.Stat(cargoPath); err == nil {
+
+		_, err = os.Stat(cargoPath)
+		if err == nil {
 			cargo = cargoPath
 		}
 
 		if rustc != "" && cargo != "" {
 			// Update PATH to include this directory
 			newPath := path + ":" + currentPath
-			if err := os.Setenv("PATH", newPath); err != nil {
+
+			err := os.Setenv("PATH", newPath)
+			if err != nil {
 				return "", "", err
 			}
 
@@ -225,8 +217,10 @@ func findRustTools() (string, string, error) {
 	}
 
 	// Try using exec.LookPath as fallback
-	if rustcPath, err := exec.LookPath("rustc"); err == nil {
-		if cargoPath, err := exec.LookPath("cargo"); err == nil {
+	rustcPath, err := exec.LookPath("rustc")
+	if err == nil {
+		cargoPath, err := exec.LookPath("cargo")
+		if err == nil {
 			return rustcPath, cargoPath, nil
 		}
 	}
@@ -237,7 +231,6 @@ func findRustTools() (string, string, error) {
 // TestRustInterop tests the Rust-Osprey interop functionality.
 func TestRustInterop(t *testing.T) {
 	// Ensure compiler is built before running the test
-
 	// Force the test to be visible in test explorers
 	t.Log("🦀 Starting Rust interop test")
 
@@ -250,49 +243,76 @@ func TestRustInterop(t *testing.T) {
 	t.Logf("✅ Found Rust tools: rustc=%s, cargo=%s", rustc, cargo)
 
 	// Check for clang
-	if _, err := exec.LookPath("clang"); err != nil {
+	_, err = exec.LookPath("clang")
+	if err != nil {
 		t.Fatalf("❌ CLANG NOT FOUND - TEST FAILED. Install LLVM/Clang - Error: %v", err)
 	}
 
 	t.Log("✅ All required tools found")
 
 	// Navigate to rust integration directory
-	rustDir := "../../examples/rust_integration"
+	currentDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("❌ FAILED TO GET CURRENT DIR: %v", err)
+	}
+
+	var rustDir string
+	if strings.HasSuffix(currentDir, "tests/integration") {
+		rustDir = "../../examples/rust_integration"
+	} else if strings.HasSuffix(currentDir, "compiler") {
+		rustDir = "examples/rust_integration"
+	} else {
+		// Try to find the examples directory relative to compiler root
+		rustDir = "examples/rust_integration"
+	}
 
 	// Check if directory exists
-	if _, err := os.Stat(rustDir); os.IsNotExist(err) {
-		t.Fatalf("❌ RUST INTEGRATION DIRECTORY NOT FOUND: %s", rustDir)
+	_, err = os.Stat(rustDir)
+	if os.IsNotExist(err) {
+		t.Fatalf("❌ RUST INTEGRATION DIRECTORY NOT FOUND: %s (current dir: %s)", rustDir, currentDir)
 	}
 
 	// Clean up any previous build artifacts first
 	t.Log("🧹 Cleaning up previous Rust build artifacts...")
-	cleanCmd := exec.Command("cargo", "clean")
+
+	cleanCmd := exec.CommandContext(context.Background(), "cargo", "clean")
+
 	cleanCmd.Dir = rustDir
-	if output, err := cleanCmd.CombinedOutput(); err != nil {
+	output, err := cleanCmd.CombinedOutput()
+	if err != nil {
 		t.Logf("⚠️ Warning: Failed to clean Rust artifacts: %v\nOutput: %s", err, output)
 	}
 
 	// Build the Rust library
 	t.Log("🦀 Building Rust library...")
-	buildCmd := exec.Command(cargo, "build", "--release")
+
+	targetDir := filepath.Join(os.TempDir(), "osprey_rust_target_"+strconv.Itoa(os.Getpid()))
+	buildCmd := exec.CommandContext(context.Background(), cargo,
+		"build", "--release", "--target-dir", targetDir, "-j", "1")
+
 	buildCmd.Dir = rustDir
-	if output, err := buildCmd.CombinedOutput(); err != nil {
+	output, err = buildCmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("❌ FAILED TO BUILD RUST LIBRARY: %v\nOutput: %s", err, output)
 	}
+
 	t.Log("✅ Rust library built successfully")
 
 	// Verify the Rust library was created
-	rustLibPath := filepath.Join(rustDir, "target/release/libosprey_math_utils.a")
+	rustLibPath := filepath.Join(targetDir, "release", "libosprey_math_utils.a")
 	if !fileExists(rustLibPath) {
 		t.Fatalf("❌ RUST LIBRARY NOT FOUND AT: %s", rustLibPath)
 	}
+
 	t.Log("✅ Rust library verified at:", rustLibPath)
 
 	// Test the interop by running the demo script
 	t.Log("🚀 Running Rust interop demo...")
-	runCmd := exec.Command("./run.sh")
+
+	runCmd := exec.CommandContext(context.Background(), "bash", "run.sh")
 	runCmd.Dir = rustDir
-	output, err := runCmd.CombinedOutput()
+
+	output, err = runCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("❌ FAILED TO RUN RUST INTEROP DEMO: %v\nOutput: %s", err, output)
 	}
@@ -322,8 +342,8 @@ func TestRustInteropCompilationOnly(t *testing.T) {
 	checkLLVMTools(t)
 
 	rustInteropSource := `
-extern fn rust_add(a: Int, b: Int) -> Int
-extern fn rust_multiply(a: Int, b: Int) -> Int
+extern fn rust_add(a: int, b: int) -> int
+extern fn rust_multiply(a: int, b: int) -> int
 
 let result1 = rust_add(a: 10, b: 20)
 let result2 = rust_multiply(a: 5, b: 6)
@@ -386,4 +406,46 @@ print("Product: ${result2}")
 	}
 
 	t.Log("✅ Rust interop compilation test passed")
+}
+
+// TestSystemLibraryInstallation tests that runtime libraries can be found from system locations
+func TestSystemLibraryInstallation(t *testing.T) {
+	checkLLVMTools(t)
+
+	// Test that system-installed libraries work from any directory
+	tempDir := t.TempDir()
+
+	// Change to temp directory to simulate VSCode working from file directory
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	err = os.Chdir(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
+
+	// Test with a simple example that requires runtime linking
+	source := `print("System libraries work!")`
+
+	_, err = codegen.CompileToLLVM(source)
+	if err != nil {
+		t.Fatalf("Failed to compile from temp directory: %v", err)
+	}
+
+	// Test execution which requires runtime library linking
+	output, err := captureJITOutput(source)
+	if err != nil {
+		t.Fatalf("Failed to execute from temp directory: %v", err)
+	}
+
+	expected := "System libraries work!\n"
+	if output != expected {
+		t.Errorf("Output mismatch: expected %q, got %q", expected, output)
+	}
+
+	t.Logf("✅ System library installation test passed from directory: %s", tempDir)
 }

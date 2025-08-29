@@ -7,9 +7,11 @@ program         : statement* EOF ;
 statement
     : importStmt
     | letDecl
+    | assignStmt
     | fnDecl
     | externDecl
     | typeDecl
+    | effectDecl
     | moduleDecl
     | exprStmt
     ;
@@ -18,16 +20,9 @@ importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
 
-fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE)                    // Regular function
-                | docComment? FN ID ID LPAREN paramList? RPAREN pluginReturnType? EQ pluginContent        // Plugin function: fn pluginName functionName(...) = content;
-                ;
+assignStmt       : ID EQ expr ;
 
-pluginContent   : pluginToken+ SEMI ;
-pluginToken     : ~SEMI | ANY_CHAR ;
-
-pluginReturnType : ARROW type          // -> Type (existing type)
-                 | AS type             // as Type (generate type)
-                 ;
+fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | LBRACE blockBody RBRACE) ;
 
 externDecl      : docComment? EXTERN FN ID LPAREN externParamList? RPAREN (ARROW type)? ;
 
@@ -39,7 +34,7 @@ paramList       : param (COMMA param)* ;
 
 param           : ID (COLON type)? ;
 
-typeDecl        : docComment? TYPE ID (LT typeParamList GT)? EQ (unionType | recordType) ;
+typeDecl        : docComment? TYPE ID (LT typeParamList GT)? EQ (unionType | recordType) typeValidation? ;
 
 typeParamList   : ID (COMMA ID)* ;
 
@@ -50,9 +45,25 @@ recordType      : LBRACE fieldDeclarations RBRACE ;
 variant         : ID (LBRACE fieldDeclarations RBRACE)? ;
 
 fieldDeclarations : fieldDeclaration (COMMA fieldDeclaration)* ;
-fieldDeclaration  : ID COLON type constraint? ;
+fieldDeclaration  : ID COLON type (WHERE functionCall)? ;
 
-constraint      : WHERE functionCall ;
+typeValidation  : WHERE ID ;
+
+// Effect declarations
+effectDecl      : docComment? EFFECT ID LBRACE opDecl* RBRACE ;
+opDecl          : ID COLON type ;
+
+// Effect sets for function types
+effectSet       : NOT_OP ID                              // Single effect: !Effect
+                | NOT_OP LSQUARE effectList RSQUARE      // Multiple effects: ![Effect1, Effect2]
+                ;
+
+effectList      : ID (COMMA ID)* ;
+
+// Handler expressions - implementing spec syntax
+handlerExpr     : HANDLE ID handlerArm+ IN expr ;              // handle Logger log msg => ... in expr
+handlerArm      : ID handlerParams? LAMBDA expr ;
+handlerParams   : ID+ ;
 
 functionCall    : ID LPAREN argList? RPAREN ;
 
@@ -61,10 +72,11 @@ booleanExpr     : comparisonExpr ;
 fieldList       : field (COMMA field)* ;
 field           : ID COLON type ;
 
-type            : ID (LT typeList GT)? LSQUARE RSQUARE  // Array types like Type[]
-                | ID (LT typeList GT)?                     // Generic types like Result<String, Error>
-                | ID LSQUARE type RSQUARE                  // Legacy array types like [String]
-                ;
+type            : LPAREN typeList? RPAREN ARROW type  // Function types like (Int, String) -> Bool
+                | FN LPAREN typeList? RPAREN ARROW type  // Function types like fn(Int, String) -> Bool
+                | ID (LT typeList GT)?  // Generic types like Result<String, Error>
+                | ID LSQUARE type RSQUARE  // Array types like [String]
+                | ID ;
 
 typeList        : type (COMMA type)* ;
 
@@ -72,13 +84,16 @@ exprStmt        : expr ;
 
 expr
     : matchExpr
+    | loopExpr
     ;
 
 matchExpr
-    : MATCH expr LBRACE matchArm+ RBRACE
+    : MATCH binaryExpr LBRACE matchArm* RBRACE
     | selectExpr
     | binaryExpr
     ;
+
+
 
 selectExpr
     : SELECT LBRACE selectArm+ RBRACE
@@ -90,11 +105,28 @@ selectArm
     ;
 
 binaryExpr
-    : comparisonExpr
+    : ternaryExpr
     ;
 
+ternaryExpr
+    : cond=comparisonExpr LBRACE pat=fieldPattern RBRACE QUESTION thenExpr=ternaryExpr COLON elseExpr=ternaryExpr    // expr { pattern } ? then : else
+    | comparisonExpr QUESTION thenExpr=ternaryExpr COLON elseExpr=ternaryExpr                                        // expr ? then : else
+    | comparisonExpr QUESTION COLON elseExpr=ternaryExpr                                                             // expr ?: else (Elvis operator)
+    | comparisonExpr
+    ;
+
+
+
 comparisonExpr
-    : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP) addExpr)*
+    : logicalOrExpr
+    ;
+
+logicalOrExpr
+    : logicalAndExpr (OR_OP logicalAndExpr)*
+    ;
+
+logicalAndExpr
+    : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP | AND_OP) addExpr)*
     ;
 
 addExpr
@@ -139,13 +171,22 @@ primary
     | SEND LPAREN expr COMMA expr RPAREN          // send(channel, value)
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
+    | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
+    | handlerExpr                                 // handle EffectName ... in expr
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
+    | objectLiteral                               // Anonymous object literal { field: value }
     | blockExpr                                   // Block expressions
     | literal                                     // String, number, boolean literals
     | lambdaExpr                                  // Lambda expressions
+    | ID LSQUARE INT RSQUARE                      // List access: list[0] -> Result<T, IndexError>
     | ID                                          // Variable reference
     | LPAREN expr RPAREN                          // Parenthesized expression
+    ;
+
+// Anonymous object literal: { field: value, field2: value2 }
+objectLiteral
+    : LBRACE fieldAssignments RBRACE
     ;
 
 // Type construction for Fiber<T> { ... } and Channel<T> { ... }
@@ -185,7 +226,12 @@ literal
     | STRING
     | INTERPOLATED_STRING
     | TRUE
-    | FALSE ;
+    | FALSE
+    | listLiteral
+    ;
+
+listLiteral
+    : LSQUARE (expr (COMMA expr)*)? RSQUARE ;
 
 docComment      : DOC_COMMENT+ ;
 
@@ -214,19 +260,33 @@ fieldPattern    : ID (COMMA ID)* ;
 blockBody       : statement* expr? ;
 
 // ---------- LEXER RULES ----------
+// Keywords MUST come before ID to ensure proper tokenization
 
-PIPE        : '|>';
+// Control flow keywords
 MATCH       : 'match';
+IF          : 'if';
+ELSE        : 'else';
+SELECT      : 'select';
+
+// Function keywords  
 FN          : 'fn';
 EXTERN      : 'extern';
+
+// Declaration keywords
 IMPORT      : 'import';
 TYPE        : 'type';
 MODULE      : 'module';
 LET         : 'let';
 MUT         : 'mut';
-IF          : 'if';
-ELSE        : 'else';
-LOOP        : 'loop';
+
+// Effect system keywords - CRITICAL ORDER FOR PROPER TOKENIZATION
+EFFECT      : 'effect';
+PERFORM     : 'perform';
+HANDLE      : 'handle';
+IN          : 'in';
+DO          : 'do';
+
+// Concurrency keywords
 SPAWN       : 'spawn';
 YIELD       : 'yield';
 AWAIT       : 'await';
@@ -234,12 +294,16 @@ FIBER       : 'fiber';
 CHANNEL     : 'channel';
 SEND        : 'send';
 RECV        : 'recv';
-SELECT      : 'select';
+
+// Boolean keywords
 TRUE        : 'true';
 FALSE       : 'false';
-WHERE       : 'where';
-AS          : 'as';
 
+// Constraint keyword
+WHERE       : 'where';
+
+// Operators and symbols
+PIPE        : '|>';
 ARROW       : '->';
 LAMBDA      : '=>';
 UNDERSCORE  : '_';
@@ -249,6 +313,8 @@ EQ_OP       : '==';
 NE_OP       : '!=';
 LE_OP       : '<=';
 GE_OP       : '>=';
+AND_OP      : '&&';
+OR_OP       : '||';
 NOT_OP      : '!';
 MOD_OP      : '%';
 COLON       : ':';
@@ -264,20 +330,20 @@ LBRACE      : '{';
 RBRACE      : '}';
 LSQUARE     : '[';
 RSQUARE     : ']';
+QUESTION    : '?';
 
 PLUS        : '+';
 MINUS       : '-';
 STAR        : '*';
 SLASH       : '/';
 
+// Literals and identifiers - MUST come after keywords
 INT         : [0-9]+ ;
 INTERPOLATED_STRING : '"' (~["\\$] | '\\' . | '$' ~[{])* ('${' ~[}]* '}' (~["\\$] | '\\' . | '$' ~[{])*)+ '"' ;
 STRING      : '"' (~["\\] | '\\' .)* '"' ;
 ID          : [a-zA-Z_][a-zA-Z0-9_]* ;
 
+// Whitespace and comments - MUST be at the end
 WS          : [ \t\r\n]+ -> skip ;
 DOC_COMMENT : '///' ~[\r\n]* ;
 COMMENT     : '//' ~[\r\n]* -> skip ;
-// Catch any character for plugin content - must be last
-ANY_CHAR    : . ;
-

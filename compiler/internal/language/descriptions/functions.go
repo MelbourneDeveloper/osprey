@@ -1,4 +1,9 @@
+// Package descriptions provides comprehensive documentation for built-in functions.
 package descriptions
+
+import (
+	"github.com/christianfindlay/osprey/internal/codegen"
+)
 
 // BuiltinFunctionDesc represents documentation for a built-in function.
 type BuiltinFunctionDesc struct {
@@ -17,153 +22,33 @@ type ParameterDesc struct {
 	Description string
 }
 
-// GetBuiltinFunctionDescriptions returns all built-in function descriptions.
+// GetBuiltinFunctionDescriptions returns all built-in function descriptions from the unified registry.
 func GetBuiltinFunctionDescriptions() map[string]*BuiltinFunctionDesc {
-	return map[string]*BuiltinFunctionDesc{
-		"print": {
-			Name:      "print",
-			Signature: "print(value: any) -> int",
-			Description: "Prints a value to the console. " +
-				"Automatically converts the value to a string representation.",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "value",
-					Type:        "any",
-					Description: "The value to print",
-				},
-			},
-			ReturnType: "int",
-			Example: `print("Hello, World!")  // Prints: Hello, World!\n` +
-				`print(42)             // Prints: 42\n` +
-				`print(true)           // Prints: true`,
-		},
-		"input": {
-			Name:        "input",
-			Signature:   "input() -> int",
-			Description: "Reads an integer from the user's input.",
-			Parameters:  []ParameterDesc{},
-			ReturnType:  "int",
-			Example:     `let userInput = input()\nprint(userInput)`,
-		},
-		"toString": {
-			Name:        "toString",
-			Signature:   "toString(value: any) -> string",
-			Description: "Converts a value to its string representation.",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "value",
-					Type:        "any",
-					Description: "The value to convert to string",
-				},
-			},
-			ReturnType: "string",
-			Example:    `let str = toString(42)\nprint(str)  // Prints: 42`,
-		},
-		"range": {
-			Name:      "range",
-			Signature: "range(start: int, end: int) -> iterator",
-			Description: "Creates an iterator that generates numbers from start to end " +
-				"(exclusive).",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "start",
-					Type:        "int",
-					Description: "The starting number (inclusive)",
-				},
-				{
-					Name:        "end",
-					Type:        "int",
-					Description: "The ending number (exclusive)",
-				},
-			},
-			ReturnType: "iterator",
-			Example:    `forEach(range(0, 5), fn(x) { print(x) })  // Prints: 0, 1, 2, 3, 4`,
-		},
-		"forEach": {
-			Name:        "forEach",
-			Signature:   "forEach(iterator: iterator, fn: function) -> int",
-			Description: "Applies a function to each element in an iterator.",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "iterator",
-					Type:        "iterator",
-					Description: "The iterator to process",
-				},
-				{
-					Name:        "fn",
-					Type:        "function",
-					Description: "The function to apply to each element",
-				},
-			},
-			ReturnType: "int",
-			Example:    `forEach(range(1, 4), fn(x) { print(x * 2) })  // Prints: 2, 4, 6`,
-		},
-		"map": {
-			Name:      "map",
-			Signature: "map(iterator: iterator, fn: function) -> iterator",
-			Description: "Transforms each element in an iterator using a function, " +
-				"returning a new iterator.",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "iterator",
-					Type:        "iterator",
-					Description: "The iterator to transform",
-				},
-				{
-					Name:        "fn",
-					Type:        "function",
-					Description: "The transformation function",
-				},
-			},
-			ReturnType: "iterator",
-			Example:    `let doubled = map(range(1, 4), fn(x) { x * 2 })\nforEach(doubled, print)  // Prints: 2, 4, 6`,
-		},
-		"filter": {
-			Name:        "filter",
-			Signature:   "filter(iterator: iterator, predicate: function) -> iterator",
-			Description: "Filters elements in an iterator based on a predicate function.",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "iterator",
-					Type:        "iterator",
-					Description: "The iterator to filter",
-				},
-				{
-					Name: "predicate",
-					Type: "function",
-					Description: "The predicate function that returns true for " +
-						"elements to keep",
-				},
-			},
-			ReturnType: "iterator",
-			Example:    `let evens = filter(range(1, 6), fn(x) { x % 2 == 0 })\nforEach(evens, print)  // Prints: 2, 4`,
-		},
-		"fold": {
-			Name:        "fold",
-			Signature:   "fold(iterator: iterator, initial: any, fn: function) -> any",
-			Description: "Reduces an iterator to a single value using an accumulator function.",
-			Parameters: []ParameterDesc{
-				{
-					Name:        "iterator",
-					Type:        "iterator",
-					Description: "The iterator to reduce",
-				},
-				{
-					Name:        "initial",
-					Type:        "any",
-					Description: "The initial value for the accumulator",
-				},
-				{
-					Name: "fn",
-					Type: "function",
-					Description: "The reduction function that takes (accumulator, current) " +
-						"and returns new accumulator",
-				},
-			},
-			ReturnType: "any",
-			Example:    `let sum = fold(range(1, 5), 0, fn(acc, x) { acc + x })\nprint(sum)  // Prints: 10`,
-		},
+	// Convert from the unified registry format to the legacy format
+	descriptions := make(map[string]*BuiltinFunctionDesc)
+
+	for _, fn := range codegen.GlobalBuiltInRegistry.GetAllFunctions() {
+		// Convert parameters
+		params := make([]ParameterDesc, len(fn.ParameterTypes))
+		for i, param := range fn.ParameterTypes {
+			params[i] = ParameterDesc{
+				Name:        param.Name,
+				Type:        param.Type.String(),
+				Description: param.Description,
+			}
+		}
+
+		descriptions[fn.Name] = &BuiltinFunctionDesc{
+			Name:        fn.Name,
+			Signature:   fn.Signature,
+			Description: fn.Description,
+			Parameters:  params,
+			ReturnType:  fn.ReturnType.String(),
+			Example:     fn.Example,
+		}
 	}
+
+	return descriptions
 }
 
 // GetBuiltinFunctionDescription returns description for a single built-in function.
@@ -172,5 +57,44 @@ func GetBuiltinFunctionDescription(name string) *BuiltinFunctionDesc {
 	if desc, exists := descriptions[name]; exists {
 		return desc
 	}
+
 	return nil
+}
+
+// ValidateAllBuiltinFunctionsDocumented checks that all built-in functions are documented.
+// This function should be called during build/test to ensure documentation completeness.
+func ValidateAllBuiltinFunctionsDocumented() []string {
+	// Get the authoritative list of built-in functions from the compiler's constants
+	builtinFunctions := GetCompilerBuiltinFunctionNames()
+
+	descriptions := GetBuiltinFunctionDescriptions()
+
+	var missing []string
+
+	for _, funcName := range builtinFunctions {
+		if _, exists := descriptions[funcName]; !exists {
+			missing = append(missing, funcName)
+		}
+	}
+
+	return missing
+}
+
+// GetCompilerBuiltinFunctionNames returns all built-in function names from the unified registry.
+// This is the authoritative source - it reads directly from the unified built-in function registry.
+func GetCompilerBuiltinFunctionNames() []string {
+	return codegen.GlobalBuiltInRegistry.GetFunctionNames()
+}
+
+// GetAllBuiltinFunctionNames returns all documented built-in function names.
+// This can be used to cross-check against the actual compiler implementation.
+func GetAllBuiltinFunctionNames() []string {
+	descriptions := GetBuiltinFunctionDescriptions()
+
+	var names []string
+	for name := range descriptions {
+		names = append(names, name)
+	}
+
+	return names
 }

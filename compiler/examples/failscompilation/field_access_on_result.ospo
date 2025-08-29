@@ -1,0 +1,7 @@
+// This should fail compilation - field access on primitive types
+// Field access is only allowed on record types, not primitives
+
+let stringVar = "hello"
+let result = stringVar.length  // This should fail - strings don't have field access
+
+print("This should not compile!") 

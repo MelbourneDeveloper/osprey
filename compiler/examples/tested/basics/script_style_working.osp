@@ -1,0 +1,11 @@
+// Script style - no main function needed
+print("Script starting...")
+
+fn factorial(n) = match n {
+    0 => 1
+    1 => 1
+    n => n * factorial(n - 1)
+}
+
+let result = factorial(5)
+print("Factorial computed!") 

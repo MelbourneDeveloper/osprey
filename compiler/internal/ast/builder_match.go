@@ -5,10 +5,14 @@ import (
 	"github.com/christianfindlay/osprey/parser"
 )
 
+const (
+	unknownPatternConstructor = "unknown"
+)
+
 func (b *Builder) buildMatchExpr(ctx parser.IMatchExprContext) Expression {
 	if ctx.MATCH() != nil {
 		// This is a match expression
-		expr := b.buildExpression(ctx.Expr())
+		expr := b.buildBinaryExpr(ctx.BinaryExpr())
 
 		arms := make([]MatchArm, 0)
 
@@ -20,6 +24,7 @@ func (b *Builder) buildMatchExpr(ctx parser.IMatchExprContext) Expression {
 		return &MatchExpression{
 			Expression: expr,
 			Arms:       arms,
+			Position:   b.getPositionFromContext(ctx),
 		}
 	}
 
@@ -42,27 +47,34 @@ func (b *Builder) buildMatchArm(ctx parser.IMatchArmContext) MatchArm {
 	}
 }
 
+// buildPattern converts a pattern parse tree into the corresponding AST node.
 func (b *Builder) buildPattern(ctx parser.IPatternContext) Pattern {
 	// Handle unary expressions (like negative numbers)
 	if ctx.UnaryExpr() != nil {
-		return b.buildUnaryPattern(ctx.UnaryExpr())
+		return b.buildUnaryExprPattern(ctx.UnaryExpr())
 	}
 
 	// Handle wildcard pattern
 	if ctx.UNDERSCORE() != nil {
-		return b.buildWildcardPattern()
+		return Pattern{
+			Constructor: "_",
+			Variable:    "",
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  true,
+		}
 	}
 
 	// Handle identifier patterns
-	return b.buildIdentifierPattern(ctx.AllID())
+	return b.buildIdentifierPattern(ctx)
 }
 
-// buildUnaryPattern handles unary expression patterns
-func (b *Builder) buildUnaryPattern(unaryCtx parser.IUnaryExprContext) Pattern {
+// buildUnaryExprPattern handles unary expression patterns like negative numbers.
+func (b *Builder) buildUnaryExprPattern(unaryCtx parser.IUnaryExprContext) Pattern {
 	// Check if it's a negative number
 	if unaryCtx.MINUS() != nil && unaryCtx.PipeExpr() != nil {
-		if pattern := b.buildNegativeNumberPattern(unaryCtx.PipeExpr()); pattern != nil {
-			return *pattern
+		if pattern := b.tryBuildNegativeNumberPattern(unaryCtx.PipeExpr()); pattern.Constructor != unknownPatternConstructor {
+			return pattern
 		}
 	}
 
@@ -71,16 +83,22 @@ func (b *Builder) buildUnaryPattern(unaryCtx parser.IUnaryExprContext) Pattern {
 		return b.buildPipeExprPattern(unaryCtx.PipeExpr())
 	}
 
-	return b.buildUnknownPattern()
+	return Pattern{
+		Constructor: unknownPatternConstructor,
+		Variable:    "",
+		Fields:      nil,
+		Nested:      nil,
+		IsWildcard:  false,
+	}
 }
 
-// buildNegativeNumberPattern handles negative number patterns like -1
-func (b *Builder) buildNegativeNumberPattern(pipeCtx parser.IPipeExprContext) *Pattern {
+// tryBuildNegativeNumberPattern attempts to build a negative number pattern.
+func (b *Builder) tryBuildNegativeNumberPattern(pipeCtx parser.IPipeExprContext) Pattern {
 	if callCtx := pipeCtx.CallExpr(0); callCtx != nil {
 		if primaryCtx := callCtx.Primary(); primaryCtx != nil {
 			if literalCtx := primaryCtx.Literal(); literalCtx != nil {
 				if literalCtx.INT() != nil {
-					return &Pattern{
+					return Pattern{
 						Constructor: "-" + literalCtx.INT().GetText(),
 						Variable:    "",
 						Fields:      nil,
@@ -91,17 +109,18 @@ func (b *Builder) buildNegativeNumberPattern(pipeCtx parser.IPipeExprContext) *P
 			}
 		}
 	}
-	return nil
+
+	return Pattern{Constructor: unknownPatternConstructor}
 }
 
-// buildPipeExprPattern handles pipe expression patterns
+// buildPipeExprPattern builds patterns from pipe expressions.
 func (b *Builder) buildPipeExprPattern(pipeCtx parser.IPipeExprContext) Pattern {
 	if callCtx := pipeCtx.CallExpr(0); callCtx != nil {
 		if primaryCtx := callCtx.Primary(); primaryCtx != nil {
 			// Check for simple identifier (like Red, Green, Blue)
-			if primaryCtx.ID() != nil {
+			if primaryCtx.ID(0) != nil {
 				return Pattern{
-					Constructor: primaryCtx.ID().GetText(),
+					Constructor: primaryCtx.ID(0).GetText(),
 					Variable:    "",
 					Fields:      nil,
 					Nested:      nil,
@@ -118,11 +137,38 @@ func (b *Builder) buildPipeExprPattern(pipeCtx parser.IPipeExprContext) Pattern 
 	return b.buildUnknownPattern()
 }
 
-// buildLiteralPattern handles literal patterns
+	return Pattern{Constructor: unknownPatternConstructor}
+}
+
+// buildLiteralPattern builds patterns from literal contexts.
 func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern {
 	if literalCtx.INT() != nil {
 		return Pattern{
 			Constructor: literalCtx.INT().GetText(),
+			Variable:    "",
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
+	} else if literalCtx.STRING() != nil {
+		return Pattern{
+			Constructor: literalCtx.STRING().GetText(),
+			Variable:    "",
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
+	} else if literalCtx.TRUE() != nil {
+		return Pattern{
+			Constructor: literalCtx.TRUE().GetText(),
+			Variable:    "",
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
+	} else if literalCtx.FALSE() != nil {
+		return Pattern{
+			Constructor: literalCtx.FALSE().GetText(),
 			Variable:    "",
 			Fields:      nil,
 			Nested:      nil,
@@ -141,19 +187,31 @@ func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern
 	return b.buildUnknownPattern()
 }
 
-// buildWildcardPattern builds a wildcard pattern
-func (b *Builder) buildWildcardPattern() Pattern {
-	return Pattern{
-		Constructor: "_",
-		Variable:    "",
-		Fields:      nil,
-		Nested:      nil,
-		IsWildcard:  true,
-	}
+	return Pattern{Constructor: unknownPatternConstructor}
 }
 
-// buildIdentifierPattern handles identifier patterns
-func (b *Builder) buildIdentifierPattern(ids []antlr.TerminalNode) Pattern {
+// buildIdentifierPattern handles identifier patterns including field patterns.
+func (b *Builder) buildIdentifierPattern(ctx parser.IPatternContext) Pattern {
+	ids := ctx.AllID()
+
+	// Handle constructor with field pattern (like: Success { value } => ...)
+	if len(ids) == OneIdentifier && ctx.LBRACE() != nil && ctx.FieldPattern() != nil {
+		return b.buildFieldPattern(ids[0].GetText(), ctx.FieldPattern())
+	}
+
+	// Handle type annotation pattern (like: p: PersonData => ...)
+	if len(ids) == OneIdentifier && ctx.COLON() != nil && ctx.Type_() != nil {
+		typeName := b.buildTypeFromContext(ctx.Type_())
+
+		return Pattern{
+			Constructor: typeName,
+			Variable:    ids[0].GetText(),
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
+	}
+
 	if len(ids) == OneIdentifier {
 		// Single identifier is a constructor pattern (like: Red => ...)
 		return Pattern{
@@ -180,10 +238,41 @@ func (b *Builder) buildIdentifierPattern(ids []antlr.TerminalNode) Pattern {
 // buildUnknownPattern builds a fallback unknown pattern
 func (b *Builder) buildUnknownPattern() Pattern {
 	return Pattern{
-		Constructor: "unknown",
+		Constructor: unknownPatternConstructor,
 		Variable:    "",
 		Fields:      nil,
 		Nested:      nil,
 		IsWildcard:  false,
 	}
+}
+
+// buildFieldPattern builds a pattern with field bindings.
+func (b *Builder) buildFieldPattern(constructor string, fieldPattern parser.IFieldPatternContext) Pattern {
+	fields := make([]string, 0)
+
+	// Extract all field names from the field pattern
+	for _, fieldID := range fieldPattern.AllID() {
+		fields = append(fields, fieldID.GetText())
+	}
+
+	return Pattern{
+		Constructor: constructor,
+		Variable:    "",
+		Fields:      fields,
+		Nested:      nil,
+		IsWildcard:  false,
+	}
+}
+
+// buildTypeFromContext extracts type name from a type context
+func (b *Builder) buildTypeFromContext(ctx parser.ITypeContext) string {
+	if ctx == nil {
+		return unknownPatternConstructor
+	}
+	// For simple type ID patterns like "PersonData", just return the ID text
+	if ctx.ID() != nil {
+		return ctx.ID().GetText()
+	}
+
+	return unknownPatternConstructor
 }

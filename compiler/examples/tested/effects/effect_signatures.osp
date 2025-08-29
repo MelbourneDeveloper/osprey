@@ -1,0 +1,20 @@
+// 🚀 EFFECT SIGNATURES SIMPLE TEST! 🔥
+
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+// Function that performs an effect
+fn greetWithEffect(name: string) -> Unit !Logger = {
+    perform Logger.log("Hello " + name + "! 🦅")
+}
+
+// Main function with handler
+fn main() -> Unit = {
+    handle Logger
+        log msg => print("[HANDLED] " + msg)
+    in {
+        greetWithEffect("Osprey")
+        print("🎉 HANDLER TEST COMPLETE! 🎉")
+    }
+} 

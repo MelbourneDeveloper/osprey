@@ -1,0 +1,16 @@
+// Simple, clean function definitions
+fn double(n: int) -> int = n * 2
+
+// String interpolation that works
+let x = 42
+let name = "Alice"
+print("x = ${x}")
+print("name = ${name}")
+
+// Pattern matching on values
+let result = match x {
+  42 => "The answer!"
+  0 => "Zero"
+  _ => "Something else"
+}
+print("Result: ${result}") 
