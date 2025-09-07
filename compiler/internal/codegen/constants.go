@@ -48,6 +48,8 @@ const (
 	TypeFunction     = "Function"
 	TypeFiber        = "Fiber"
 	TypeChannel      = "Channel"
+	TypeList         = "List"
+	TypeMap          = "Map"
 )
 
 // Function names.
@@ -66,6 +68,8 @@ const (
 	LengthFunc    = "length"
 	ContainsFunc  = "contains"
 	SubstringFunc = "substring"
+	ParseIntFunc  = "parseInt"
+	JoinFunc      = "join"
 
 	// Process and system functions
 	SpawnProcessFunc = "spawnProcess"

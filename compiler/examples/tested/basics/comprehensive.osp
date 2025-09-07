@@ -1,12 +1,16 @@
 // Comprehensive Osprey Language Feature Showcase
-// This example demonstrates major language features working with current implementation
+// Enhanced with Map and List types using Hindley-Milner inference
 
 // 1. Type Definitions - Simple union types  
 type Grade = A | B | C | D | F
 
-// 2. Function Definitions
+// 2. Function Definitions with polymorphic inference
 fn double(x) = x * 2
 fn add(x, y) = x + y
+fn getFirst(list) = match list[0] {
+    Success { value } => value
+    Error { message } => "empty"
+}
 
 // 3. Pattern Matching Functions
 fn gradeMessage(grade: Grade) -> string = match grade {
@@ -38,8 +42,38 @@ print("Doubled score: ${doubledScore}")
 let currentGrade = A
 print(gradeMessage(currentGrade))
 
+// List operations with Hindley-Milner inference
+print("=== List & Map Operations ===")
+let scores = [85, 92, 78, 96, 88]
+print("Score list created via HM inference")
+
+let firstScore = getFirst(scores)
+print("First score: ${firstScore}")
+
+// Hindley-Milner type inference with lists
+let bonusScore = add(x: 85, y: 5)
+print("Bonus computation works: ${toString(bonusScore)}")
+
+match scores[1] {
+    Success { value } => print("Second score: ${toString(value)}")
+    Error { message } => print("Error accessing score")
+}
+
+// Map creation requires type context for HM inference
+// let studentGrades = Map() would fail without usage context
+// Hindley-Milner needs constraints to infer K, V types
+
+// Mixed type list showing polymorphic inference
+let mixedData = ["Alice", "Bob", "Charlie"]
+print("Student names list created")
+
+match mixedData[2] {
+    Success { value } => print("Third student: ${value}")
+    Error { message } => print("Error accessing student name")
+}
+
 // Simple string output instead of complex match
-print("Status: System operational")
+print("Status: System operational with collections")
 
 // Arithmetic operations
 let calculation = double(42)

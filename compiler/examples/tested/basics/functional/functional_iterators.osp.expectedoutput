@@ -1,0 +1,30 @@
+=== Functional Iterator Examples ===
+1. Basic forEach:
+1
+2
+3
+4
+2. Single value transformations:
+10
+9
+3. Different ranges:
+10
+11
+12
+0
+1
+2
+4. Fold operations:
+10
+50
+5. List operations:
+List created with HM inference
+Third element: 30
+6. Map operations would need constraints:
+HM needs type constraints for Map<K,V> inference
+7. List with functional operations:
+Base numbers created
+Fourth number squared: 16
+8. Chained single value operations:
+16
+=== Examples Complete ===

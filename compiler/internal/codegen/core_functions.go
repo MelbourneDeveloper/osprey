@@ -559,3 +559,79 @@ func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (val
 
 	return result, nil
 }
+
+// generateParseIntCall handles parseInt(s: string) -> Result<int, string> function calls.
+func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (value.Value, error) {
+	err := validateBuiltInArgs(ParseIntFunc, callExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	str, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the atoll function (ASCII to long long)
+	atollFunc, ok := g.functions["atoll"]
+	if !ok {
+		atollFunc = g.module.NewFunc("atoll", types.I64, ir.NewParam("str", types.I8Ptr))
+		g.functions["atoll"] = atollFunc
+	}
+
+	// Call atoll(str) to convert string to integer
+	parsedValue := g.builder.NewCall(atollFunc, str)
+
+	// TODO: Add proper error checking - atoll returns 0 for invalid strings
+	// For now, assume parsing always succeeds
+	
+	// Create a Result<int, string>
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Store the parsed integer in the value field
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(parsedValue, valuePtr)
+
+	// Store the discriminant (0 for Success)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
+	return result, nil
+}
+
+// generateJoinCall handles join(list: List<string>, separator: string) -> string function calls.
+func (g *LLVMGenerator) generateJoinCall(callExpr *ast.CallExpression) (value.Value, error) {
+	err := validateBuiltInArgs(JoinFunc, callExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	// For now, return a placeholder implementation
+	// TODO: Implement proper list handling once List<T> type is fully supported
+	
+	separator, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the separator as a placeholder result
+	// In a real implementation, we would iterate through the list and join with separator
+	return separator, nil
+}
+
+// generateListConstructorCall handles List() constructor calls.
+func (g *LLVMGenerator) generateListConstructorCall(_ *ast.CallExpression) (value.Value, error) {
+	// For now, return a simple placeholder (null pointer)
+	// TODO: Implement proper dynamic list structure
+	return constant.NewNull(types.I8Ptr), nil
+}
+
+// generateMapConstructorCall handles Map() constructor calls.
+func (g *LLVMGenerator) generateMapConstructorCall(_ *ast.CallExpression) (value.Value, error) {
+	// For now, return a simple placeholder (null pointer)
+	// TODO: Implement proper dynamic map structure
+	return constant.NewNull(types.I8Ptr), nil
+}
