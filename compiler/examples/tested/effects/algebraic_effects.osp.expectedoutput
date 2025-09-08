@@ -1,1 +1,6 @@
-42 
+LOG: Processing score: 21
+LOG: Doubled result: 42
+LOG: Processing student: Alice
+LOG: Student grade: 95
+Score result: 42
+Student result: 95 

@@ -8,8 +8,47 @@ effect Logger {
 // Pure function - no effects
 fn double(x: int) -> int = x * 2
 
+// Function using lists with effects
+fn processScores(scores) = {
+    let first = match scores[0] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let doubled = double(first)
+    log("Processing score: ${toString(first)}")
+    log("Doubled result: ${toString(doubled)}")
+    doubled
+}
+
+// Function using maps with effects
+fn processStudent(student) = {
+    let name = match student["name"] {
+        Success { value } => value
+        Error { message } => "Unknown"
+    }
+    let grade = match student["grade"] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    log("Processing student: ${name}")
+    log("Student grade: ${toString(grade)}")
+    grade
+}
+
 // Main function to test
 fn main() -> Unit = {
-    let doubled = double(21)
-    print(toString(doubled))
+    let scores = [21, 42, 63]
+    let studentData = { "name": "Alice", "grade": 95 }
+    
+    handle {
+        let result1 = processScores(scores)
+        let result2 = processStudent(studentData)
+        print("Score result: ${toString(result1)}")
+        print("Student result: ${toString(result2)}")
+    } with {
+        log(message) -> {
+            print("LOG: ${message}")
+            resume(Unit)
+        }
+    }
 } 

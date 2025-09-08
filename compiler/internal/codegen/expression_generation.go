@@ -226,6 +226,10 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 	case *ast.StringLiteral:
 		elementType = types.I8Ptr
 		elementSize = 8 // pointer size
+	case *ast.ListLiteral:
+		// For nested lists, element type is a pointer to the array struct type
+		elementType = types.NewPointer(types.NewStruct(types.I64, types.I8Ptr))
+		elementSize = 8 // pointer size
 	default:
 		elementType = types.I64
 		elementSize = 8 // i64 size
@@ -252,6 +256,7 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 			return nil, err
 		}
 
+
 		// Get pointer to element position
 		elementPtr := g.builder.NewGetElementPtr(elementType, arrayPtr, constant.NewInt(types.I64, int64(i)))
 		g.builder.NewStore(elementValue, elementPtr)
@@ -273,6 +278,7 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 
 	return arrayStruct, nil
 }
+
 
 // generateMapLiteral generates LLVM IR for map literals like { "key": value, 42: "answer" }.
 func (g *LLVMGenerator) generateMapLiteral(lit *ast.MapLiteral) (value.Value, error) {
@@ -486,6 +492,7 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	if err != nil {
 		return nil, fmt.Errorf("failed to infer collection type: %w", err)
 	}
+	
 	
 	var boundsOk value.Value
 	if genericType, ok := collectionType.(*GenericType); ok && genericType.name == TypeMap {

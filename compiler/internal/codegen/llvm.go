@@ -1916,6 +1916,9 @@ func (g *LLVMGenerator) generateSuccessBlock(
 		// Bind the Result value to the pattern variable
 		fieldName := successArm.Pattern.Fields[0] // First field is the value
 
+		// Bind the extracted value type to the pattern variable
+		g.bindPatternVariableType(fieldName, matchExpr.Expression)
+
 		// Get the Result value from the matched expression
 		// The Result struct has: [value, discriminant]
 		// We need to extract the value field (index 0)
@@ -2050,6 +2053,22 @@ func (g *LLVMGenerator) generateErrorBlock(
 	}
 
 	return errorValue, nil
+}
+
+// bindPatternVariableType binds the correct type for a pattern variable extracted from a Result
+func (g *LLVMGenerator) bindPatternVariableType(fieldName string, matchedExpr ast.Expression) {
+	// Infer the type of the matched expression to get the Result type
+	matchedExprType, err := g.typeInferer.InferType(matchedExpr)
+	if err == nil {
+		resolvedType := g.typeInferer.ResolveType(matchedExprType)
+		if genericType, ok := resolvedType.(*GenericType); ok {
+			if genericType.name == TypeResult && len(genericType.typeArgs) >= 1 {
+				// Extract the success type (first type argument of Result<T, E>)
+				successType := genericType.typeArgs[0]
+				g.typeInferer.env.Set(fieldName, successType)
+			}
+		}
+	}
 }
 
 // findSuccessArm finds the success match arm.

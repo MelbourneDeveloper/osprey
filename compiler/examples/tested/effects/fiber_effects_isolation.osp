@@ -1,36 +1,65 @@
-// 🔒 HANDLER ISOLATION SIMPLE TEST 🔒
+// 🔒 HANDLER ISOLATION SIMPLE TEST WITH COLLECTIONS 🔒
 
 effect Logger {
     log: fn(string) -> Unit
 }
 
-// Main function with different handlers
-fn main() -> Unit = {
-    print("🔒 Testing Handler Isolation")
+// Function to process collections with effects and fibers
+fn processWithFiber(data) = {
+    let task = match data["task"] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let multiplier = match data["multiplier"] {
+        Success { value } => value
+        Error { message } => 1
+    }
     
-    // Production handler
+    perform Logger.log("Fiber processing task: " + toString(task))
+    let fiberResult = spawn (task * multiplier)
+    let result = await(fiberResult)
+    perform Logger.log("Fiber result: " + toString(result))
+    result
+}
+
+// Function to process list data
+fn processList(items) = {
+    let first = match items[0] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    perform Logger.log("List processing: " + toString(first))
+    first * 2
+}
+
+// Main function with different handlers and collections
+fn main() -> Unit = {
+    print("🔒 Testing Handler Isolation with Collections & Fibers")
+    
+    // Production handler with map data
+    let prodData = { "task": 5, "multiplier": 2 }
     let result1 = handle Logger
         log msg => print("[PROD] " + msg)
-    in {
-        perform Logger.log("Processing task: 5")
-        10
-    }
+    in processWithFiber(prodData)
     
-    // Debug handler
+    // Debug handler with list data  
+    let testList = [12, 24, 36]
     let result2 = handle Logger
         log msg => print("[TEST] " + msg)
-    in {
-        perform Logger.log("Processing task: 12")
-        24
-    }
+    in processList(testList)
     
-    // Silent handler
+    // Silent handler with mixed collections
+    let mixedData = { "task": 0, "multiplier": 3 }
     let result3 = handle Logger
         log msg => 0
-    in {
-        perform Logger.log("Processing task: 0")
-        0
-    }
+    in processWithFiber(mixedData)
+    
+    // Final coordination with all results
+    let finalList = [result1, result2, result3]
+    let sum = match finalList[0] { Success { value } => value; Error { message } => 0 } +
+              match finalList[1] { Success { value } => value; Error { message } => 0 } +
+              match finalList[2] { Success { value } => value; Error { message } => 0 }
     
     print("📊 Results: Prod=" + toString(result1) + ", Test=" + toString(result2) + ", Silent=" + toString(result3))
+    print("📈 Total Sum: " + toString(sum))
 } 

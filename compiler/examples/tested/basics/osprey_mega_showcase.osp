@@ -26,33 +26,73 @@ effect Metrics {
 type TaskResult = Success | Warning | Failed
 type TaskPriority = Urgent | High | Medium | Low
 
-// 🧠 Hindley-Milner Type Inference - These functions have NO type annotations!
+// 🧠 Hindley-Milner Type Inference with Collections - NO type annotations!
 // The compiler infers ALL types through constraint solving and unification
 
-// Pure calculation functions (types fully inferred)
-// Pure calculation functions - using single parameter versions for HM inference
-fn calculateComplexity(priority) = match priority {
-    Urgent => 750  // 150 * 5
-    High => 450    // 150 * 3  
-    Medium => 600  // 200 * 2 (average)
-    Low => 75      // 75 * 1
-}
-
-fn calculateTime(complexity) = complexity / 10 + 5
-
-fn calculateEfficiency(duration) = match duration < 50 {
-    true => 100
-    false => match duration < 100 {
-        true => 75
-        false => 50
+// Pure calculation functions using maps for configuration (types fully inferred)
+fn calculateComplexity(priority) = {
+    let complexityMap = { "Urgent": 750, "High": 450, "Medium": 600, "Low": 75 }
+    let priorityStr = match priority {
+        Urgent => "Urgent"
+        High => "High"
+        Medium => "Medium" 
+        Low => "Low"
+    }
+    match complexityMap[priorityStr] {
+        Success { value } => value
+        Error { message } => 100
     }
 }
 
-// Data transformation pipeline (all types inferred through HM)
-fn preprocessData(rawData) = rawData * 2 + 100
-fn validateData(data) = data > 50
-fn transformData(data) = data * 3
-fn aggregateResults(result1, result2, result3) = result1 + result2 + result3
+fn calculateTime(complexity) = {
+    let timeFactors = [10, 5]
+    let divisor = match timeFactors[0] { Success { value } => value; Error { message } => 10 }
+    let offset = match timeFactors[1] { Success { value } => value; Error { message } => 5 }
+    complexity / divisor + offset
+}
+
+fn calculateEfficiency(duration) = {
+    let thresholds = [50, 100]
+    let scores = [100, 75, 50]
+    let t1 = match thresholds[0] { Success { value } => value; Error { message } => 50 }
+    let t2 = match thresholds[1] { Success { value } => value; Error { message } => 100 }
+    
+    match duration < t1 {
+        true => match scores[0] { Success { value } => value; Error { message } => 100 }
+        false => match duration < t2 {
+            true => match scores[1] { Success { value } => value; Error { message } => 75 }
+            false => match scores[2] { Success { value } => value; Error { message } => 50 }
+        }
+    }
+}
+
+// Data transformation pipeline using lists (all types inferred through HM)
+fn preprocessData(rawData) = {
+    let operations = [2, 100]
+    let mult = match operations[0] { Success { value } => value; Error { message } => 1 }
+    let add = match operations[1] { Success { value } => value; Error { message } => 0 }
+    rawData * mult + add
+}
+
+fn validateData(data) = {
+    let validationConfig = { "minValue": 50 }
+    let minVal = match validationConfig["minValue"] { Success { value } => value; Error { message } => 0 }
+    data > minVal
+}
+
+fn transformData(data) = {
+    let transformFactors = [3]
+    let factor = match transformFactors[0] { Success { value } => value; Error { message } => 1 }
+    data * factor
+}
+
+fn aggregateResults(result1, result2, result3) = {
+    let results = [result1, result2, result3]
+    let r1 = match results[0] { Success { value } => value; Error { message } => 0 }
+    let r2 = match results[1] { Success { value } => value; Error { message } => 0 }
+    let r3 = match results[2] { Success { value } => value; Error { message } => 0 }
+    r1 + r2 + r3
+}
 
 // 🔄 Effectful Task Processing - Combining effects with pattern matching
 fn processTask(taskId: string, dataSize: int, priority: TaskPriority) -> TaskResult ![Logger, Metrics] = {
@@ -276,11 +316,27 @@ fn main() -> Unit = {
         let report = analyzeTaskResults(results: totalResults, processingTime: processingTime)
         print(report)
         
-        // Demonstrate functional programming patterns
+        // Demonstrate functional programming patterns with collections
         let systemMetrics = [100, 200, 150, 300, 250]
-        print("📊 System Metrics Analysis:")
+        let batchSummary = { 
+            "alpha": results1, 
+            "beta": results2, 
+            "gamma": results3,
+            "total": totalResults 
+        }
+        
+        print("📊 System Metrics Analysis with Collections:")
         print("Total throughput: " + toString(totalResults) + " units")
         print("Average batch size: " + toString(totalResults / 3) + " units")
+        
+        let alphaResult = match batchSummary["alpha"] { Success { value } => value; Error { message } => 0 }
+        let betaResult = match batchSummary["beta"] { Success { value } => value; Error { message } => 0 }
+        let gammaResult = match batchSummary["gamma"] { Success { value } => value; Error { message } => 0 }
+        
+        print("Batch breakdown: Alpha=" + toString(alphaResult) + ", Beta=" + toString(betaResult) + ", Gamma=" + toString(gammaResult))
+        
+        let topMetric = match systemMetrics[3] { Success { value } => value; Error { message } => 0 }
+        print("Peak metric value: " + toString(topMetric) + " from monitoring array")
         
         print("═════════════════════════════════════════════")
         print("🎉 COMPREHENSIVE DEMO COMPLETE! 🎉")

@@ -8,8 +8,8 @@ type JsonString = { value: string }
 type JsonNumber = { value: int }
 type JsonBoolean = { value: bool }
 type JsonNull = {}
-type JsonArray = { values: list<JsonValue> }
-type JsonObject = { fields: list<ObjectField> }
+type JsonArray = { values: List<JsonValue> }
+type JsonObject = { fields: Map<> }
 
 type JsonValue = 
     JsonString

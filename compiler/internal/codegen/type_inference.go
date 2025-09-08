@@ -759,29 +759,15 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 		return
 	}
 
-	// Special handling for Result type patterns
+	// Handle Result type patterns
 	if pattern.Constructor == "Success" && discriminantType != nil {
-		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
-			// Extract the success type from Result<T, E>
-			successType := ti.extractResultSuccessType(ct.name)
-			if len(pattern.Fields) > 0 {
-				// Bind the first field to the success type
-				ti.env.Set(pattern.Fields[0], successType)
-			}
-
+		if ti.bindSuccessPattern(pattern, discriminantType) {
 			return
 		}
 	}
 
 	if pattern.Constructor == "Error" && discriminantType != nil {
-		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
-			// Extract the error type from Result<T, E>
-			errorType := ti.extractResultErrorType(ct.name)
-			if len(pattern.Fields) > 0 {
-				// Bind the first field to the error type
-				ti.env.Set(pattern.Fields[0], errorType)
-			}
-
+		if ti.bindErrorPattern(pattern, discriminantType) {
 			return
 		}
 	}
@@ -790,6 +776,48 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 	for _, field := range pattern.Fields {
 		ti.env.Set(field, ti.Fresh())
 	}
+}
+
+// bindSuccessPattern binds pattern fields for Success constructor
+func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType Type) bool {
+	// Handle GenericType Result<T, E>
+	if gt, ok := discriminantType.(*GenericType); ok && gt.name == "Result" && len(gt.typeArgs) >= 1 {
+		successType := gt.typeArgs[0]
+		if len(pattern.Fields) > 0 {
+			ti.env.Set(pattern.Fields[0], successType)
+		}
+		return true
+	}
+	// Handle ConcreteType Result<T, E> (legacy string-based approach)
+	if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
+		successType := ti.extractResultSuccessType(ct.name)
+		if len(pattern.Fields) > 0 {
+			ti.env.Set(pattern.Fields[0], successType)
+		}
+		return true
+	}
+	return false
+}
+
+// bindErrorPattern binds pattern fields for Error constructor
+func (ti *TypeInferer) bindErrorPattern(pattern ast.Pattern, discriminantType Type) bool {
+	// Handle GenericType Result<T, E>
+	if gt, ok := discriminantType.(*GenericType); ok && gt.name == "Result" && len(gt.typeArgs) >= 2 {
+		errorType := gt.typeArgs[1]
+		if len(pattern.Fields) > 0 {
+			ti.env.Set(pattern.Fields[0], errorType)
+		}
+		return true
+	}
+	// Handle ConcreteType Result<T, E> (legacy string-based approach)
+	if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
+		errorType := ti.extractResultErrorType(ct.name)
+		if len(pattern.Fields) > 0 {
+			ti.env.Set(pattern.Fields[0], errorType)
+		}
+		return true
+	}
+	return false
 }
 
 // extractResultSuccessType extracts the success type T from Result<T, E>
@@ -2235,6 +2263,8 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 	if err != nil {
 		return nil, err
 	}
+	
+	resolvedCollectionType := ti.ResolveType(collectionType)
 
 	indexType, err := ti.InferType(e.Index)
 	if err != nil {
@@ -2242,7 +2272,7 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 	}
 
 	// Determine element type based on collection type
-	elementType, err := ti.inferCollectionElementType(collectionType, indexType)
+	elementType, err := ti.inferCollectionElementType(resolvedCollectionType, indexType)
 	if err != nil {
 		return nil, err
 	}

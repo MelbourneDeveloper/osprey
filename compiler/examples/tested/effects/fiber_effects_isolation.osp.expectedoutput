@@ -1,4 +1,6 @@
-🔒 Testing Handler Isolation
-[PROD] Processing task: 5
-[TEST] Processing task: 12
-📊 Results: Prod=10, Test=24, Silent=0 
+🔒 Testing Handler Isolation with Collections & Fibers
+[PROD] Fiber processing task: 5
+[PROD] Fiber result: 10
+[TEST] List processing: 12
+📊 Results: Prod=10, Test=24, Silent=0
+📈 Total Sum: 34 

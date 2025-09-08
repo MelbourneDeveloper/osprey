@@ -1,0 +1,23 @@
+=== Advanced Fiber Examples ===
+Map-Reduce pattern with collections:
+Mapped values: 100, 400, 900
+Reduced total: 1400
+
+Parallel file processing with maps:
+File sizes in KB: 1024, 2048, 5120
+
+Concurrent API calls with collections:
+User data response: 5123
+Order data response: 545
+
+Task scheduling with priority maps:
+High priority task ID: 1
+Medium priority task ID: 2
+Low priority task ID: 3
+
+Pipeline with config list (input 25): 200
+
+Fiber coordination results: 50, 15, -5
+
+Testing advanced fiber patterns with collections...
+=== Fiber Tests Complete ===

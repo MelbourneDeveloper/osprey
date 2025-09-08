@@ -1,43 +1,88 @@
 print("=== Advanced Block Statements Test ===")
 
-// Test 1: Block in function definition
+// Test 1: Block in function definition with list processing
 fn compute() = {
-    let base = 10
+    let numbers = [5, 10, 15]
+    let base = match numbers[1] {
+        Success { value } => value
+        Error { message } => 10
+    }
     let multiplier = 3
     base * multiplier
 }
-print("Test 1 - Function block: ${compute()}")
+print("Test 1 - Function block with list: ${compute()}")
 
-// Test 2: Nested blocks with shadowing
+// Test 2: Nested blocks with shadowing and maps
 let outer = 100
 let result2 = {
-    let outer = 50
+    let config = { "multiplier": 2, "offset": 25 }
+    let outer = match config["offset"] {
+        Success { value } => value
+        Error { message } => 50
+    }
     let inner = {
-        let outer = 25
+        let listData = [10, 20, 30]
+        let outer = match listData[2] {
+            Success { value } => value
+            Error { message } => 25
+        }
         outer * 2
     }
     outer + inner
 }
-print("Test 2 - Nested with shadowing: ${result2}")
+print("Test 2 - Nested with shadowing, maps & lists: ${result2}")
 
-// Test 3: Block with conditional logic
+// Test 3: Block with conditional logic using collections
 let value = 42
 let result3 = {
+    let scoreMap = { "test1": 84, "test2": 90 }
     let doubled = value * 2
     match doubled {
-        84 => doubled + 10
+        84 => match scoreMap["test1"] {
+            Success { value } => value + 10
+            Error { message } => 0
+        }
         _ => 0
     }
 }
-print("Test 3 - Block with match: ${result3}")
+print("Test 3 - Block with match and map: ${result3}")
 
-// Test 4: Function returning block
+// Test 4: Function returning block with list operations
 fn processData(input) = {
-    let step1 = input * 2
-    let step2 = step1 + 10
-    let step3 = step2 / 2
+    let steps = [2, 10, 2]
+    let step1 = input * match steps[0] {
+        Success { value } => value
+        Error { message } => 1
+    }
+    let step2 = step1 + match steps[1] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let step3 = step2 / match steps[2] {
+        Success { value } => value
+        Error { message } => 1
+    }
     step3
 }
-print("Test 4 - Complex function: ${processData(5)}")
+print("Test 4 - Complex function with lists: ${processData(5)}")
+
+// Test 5: Block with mixed collections operations
+let mixedTest = {
+    let data = [1, 2, 3, 4, 5]
+    let lookup = { "key1": 10, "key2": 20 }
+    let sum = match data[0] {
+        Success { value } => value
+        Error { message } => 0
+    } + match data[1] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let multiplier = match lookup["key1"] {
+        Success { value } => value
+        Error { message } => 1
+    }
+    sum * multiplier
+}
+print("Test 5 - Mixed collections block: ${mixedTest}")
 
 print("=== Advanced Block Statements Complete ===") 

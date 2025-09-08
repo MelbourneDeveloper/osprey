@@ -77,12 +77,60 @@ match mixedData[2] {
     Error { message } => print("Error accessing student name")
 }
 
+// Complex nested collections
+let classData = {
+    "Math": { "students": [85, 92, 78], "average": 85 },
+    "Science": { "students": [88, 91, 94], "average": 91 }
+}
+print("Nested class data created")
+
+match classData["Math"] {
+    Success { value } => {
+        match value["students"] {
+            Success { students } => {
+                match students[1] {
+                    Success { score } => print("Math student 2 score: ${toString(score)}")
+                    Error { message } => print("Math student access error")
+                }
+            }
+            Error { message } => print("Math students access error")
+        }
+    }
+    Error { message } => print("Math class not found")
+}
+
+// List of maps for complex data structures
+let allStudents = [
+    { "name": "Alice", "grade": 95, "subject": "Math" },
+    { "name": "Bob", "grade": 87, "subject": "Science" },
+    { "name": "Charlie", "grade": 91, "subject": "Math" }
+]
+
+match allStudents[0] {
+    Success { student } => {
+        match student["name"] {
+            Success { name } => {
+                match student["grade"] {
+                    Success { grade } => print("Student ${name} has grade ${toString(grade)}")
+                    Error { message } => print("Grade access error")
+                }
+            }
+            Error { message } => print("Name access error")
+        }
+    }
+    Error { message } => print("Student access error")
+}
+
 // Simple string output instead of complex match
 print("Status: System operational with collections")
 
-// Arithmetic operations
-let calculation = double(42)
-print("Double of 42: ${calculation}")
+// Arithmetic operations with collections
+let numbers = [21, 42, 84]
+let calculation = match numbers[1] {
+    Success { value } => double(value)
+    Error { message } => 0
+}
+print("Double of middle number: ${calculation}")
 
 // Another student with named arguments
 print(formatScore(name: "Bob", score: 92))
