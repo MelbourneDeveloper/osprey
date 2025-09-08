@@ -84,7 +84,8 @@ Osprey's type system puts type safety and expressiveness as the top priorities. 
 - `bool`: Boolean values (`true`, `false`)
 - `unit`: Type for functions that don't return a meaningful value
 - `Result<T, E>`: Built-in generic type for error handling
-- `List<T, N>`: Immutable fixed-size lists with N elements of type T
+- `List<T>`: Immutable collections with compile-time safety and zero-cost abstractions
+- `Map<K, V>`: Immutable key-value collections with functional operations
 - `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
 - `Record Types`: Immutable structured data types with named fields
 
@@ -392,6 +393,299 @@ counter.value = 5    // Compilation error
 
 // CORRECT: Create new instance with updated value
 let newCounter = counter { value: 5 }
+```
+
+#### Collection Types (List and Map)
+
+**🔥 CRITICAL SPECIFICATION**: Osprey implements **immutable**, **persistent collections** with **zero-cost abstractions** and **compile-time safety**. Collections are **COMPLETELY IMMUTABLE** - operations return new collections without modifying originals.
+
+##### List<T> - Immutable Sequential Collections
+
+**Core Properties:**
+- **Complete Immutability**: Lists cannot be modified after creation
+- **Structural Sharing**: Efficient memory usage through persistent data structures  
+- **Type Safety**: Elements must be homogeneous (same type T)
+- **Bounds Checking**: Array access returns `Result<T, IndexError>` for safety
+- **Zero-Cost Abstraction**: Compiled to efficient native code via C runtime
+
+**List Literal Syntax:**
+```osprey
+// Homogeneous lists with complete type inference - NO ANNOTATIONS NEEDED
+let numbers = [1, 2, 3, 4, 5]           // List<int> - inferred from elements
+let names = ["Alice", "Bob", "Charlie"]  // List<string> - inferred from elements
+let flags = [true, false, true]         // List<bool> - inferred from elements
+
+// Empty lists only need annotation when inference is impossible
+let empty = []                          // ERROR: Cannot infer element type
+let empty: List<int> = []               // Explicit annotation required for empty lists
+let strings: List<string> = []          // Explicit annotation required for empty lists
+
+// BUT: Empty lists can be inferred from usage context
+fn processNumbers(nums: List<int>) = fold(0, (+), nums)
+let result = processNumbers([])         // [] inferred as List<int> from function signature
+```
+
+**Type-Safe Array Access:**
+```osprey
+let scores = [85, 92, 78, 96, 88]
+
+// Array access returns Result for safety
+match scores[0] {
+    Success { value } => print("First score: ${toString(value)}")
+    Error { message } => print("Index error: ${message}")
+}
+
+// Bounds checking prevents runtime errors
+match scores[10] {  // Out of bounds
+    Success { value } => print("Never reached") 
+    Error { message } => print("Index out of bounds")  // This executes
+}
+```
+
+**Functional Operations:**
+```osprey
+// Core functional list operations
+let doubled = map(x => x * 2, numbers)        // [2, 4, 6, 8, 10]
+let evens = filter(x => x % 2 == 0, numbers)  // [2, 4]
+let sum = fold(0, (acc, x) => acc + x, numbers)  // 15
+
+// List concatenation (creates new list)
+let combined = numbers + [6, 7, 8]            // [1, 2, 3, 4, 5, 6, 7, 8]
+
+// forEach for side effects
+forEach(x => print(toString(x)), numbers)    // Prints: 1, 2, 3, 4, 5
+```
+
+**Pattern Matching with Lists:**
+```osprey
+fn processScores(scores: List<int>) -> string = match scores {
+    [] => "No scores"
+    [single] => "Single score: ${toString(single)}"
+    [first, second] => "Two scores: ${toString(first)}, ${toString(second)}"
+    [head, ...tail] => "Multiple scores, first: ${toString(head)}"
+}
+
+// Advanced list matching
+fn analyzeGrades(grades: List<string>) -> string = match grades {
+    ["A", ...rest] => "Starts with A+ performance"
+    [..._, "F"] => "Ends with failing grade" 
+    grades when length(grades) > 10 => "Large class"
+    _ => "Regular class"
+}
+```
+
+**List Construction and Deconstruction:**
+```osprey
+// List builders and comprehensions
+let squares = [x * x for x in range(1, 5)]     // [1, 4, 9, 16, 25]
+let filtered = [x for x in numbers if x > 3]   // [4, 5]
+
+// Destructuring assignment
+let [first, second, ...rest] = [1, 2, 3, 4, 5]
+// first = 1, second = 2, rest = [3, 4, 5]
+
+// Head/tail decomposition
+let [head, ...tail] = numbers
+// head = 1, tail = [2, 3, 4, 5]
+```
+
+##### Map<K, V> - Immutable Key-Value Collections
+
+**Core Properties:**
+- **Immutable**: Maps cannot be modified after creation
+- **Persistent Structure**: Efficient updates create new maps with structural sharing
+- **Type Safety**: Keys type K, values type V with compile-time verification
+- **Hash-Based**: O(log n) lookup, insert, and delete operations
+- **Functional Operations**: map, filter, fold operations preserve immutability
+
+**Map Literal Syntax:**
+```osprey
+// Map literals with complete type inference - NO ANNOTATIONS NEEDED
+let ages = {
+    "Alice": 25,
+    "Bob": 30, 
+    "Charlie": 35
+}  // Map<string, int> - inferred from key/value types
+
+let settings = {
+    "debug": true,
+    "timeout": 5000,
+    "retries": 3
+}  // Map<string, int | bool> - Union type inferred from mixed values
+
+// Empty maps only need annotation when inference is impossible
+let empty = {}                          // ERROR: Cannot infer key/value types
+let scores: Map<string, int> = {}       // Explicit annotation required for empty maps
+let flags: Map<int, bool> = {}          // Explicit annotation required for empty maps
+
+// BUT: Empty maps can be inferred from usage context
+fn processAges(ageMap: Map<string, int>) = length(ageMap)
+let result = processAges({})            // {} inferred as Map<string, int> from function signature
+```
+
+**Safe Map Access:**
+```osprey
+// Map access returns Result for safety
+match ages["Alice"] {
+    Success { value } => print("Alice is ${toString(value)} years old")
+    Error { message } => print("Alice not found")
+}
+
+// Checking for key existence
+let hasAlice = contains(ages, "Alice")  // bool
+let ageCount = length(ages)            // int
+```
+
+**Functional Map Operations:**
+```osprey
+// Transform values while preserving keys
+let incrementedAges = mapValues(age => age + 1, ages)
+// { "Alice": 26, "Bob": 31, "Charlie": 36 }
+
+// Transform keys while preserving values  
+let uppercased = mapKeys(name => toUpperCase(name), ages)
+// { "ALICE": 25, "BOB": 30, "CHARLIE": 35 }
+
+// Filter key-value pairs
+let thirties = filter((name, age) => age >= 30, ages)
+// { "Bob": 30, "Charlie": 35 }
+
+// Fold over key-value pairs
+let totalAge = fold(0, (acc, name, age) => acc + age, ages)  // 90
+```
+
+**Map Updates (Non-destructive):**
+```osprey
+// Add new key-value pairs (creates new map)
+let withDave = ages + { "Dave": 28 }
+// { "Alice": 25, "Bob": 30, "Charlie": 35, "Dave": 28 }
+
+// Update existing values (creates new map)
+let updated = ages { "Alice": 26 }  // Only Alice's age changes
+// { "Alice": 26, "Bob": 30, "Charlie": 35 }
+
+// Multiple updates
+let multiUpdate = ages { 
+    "Alice": 26,
+    "Bob": 31,
+    "Eve": 22  // New entry
+}
+
+// Remove keys (creates new map)
+let withoutBob = removeKey(ages, "Bob")
+// { "Alice": 25, "Charlie": 35 }
+```
+
+**Pattern Matching with Maps:**
+```osprey
+fn analyzeAges(people: Map<string, int>) -> string = match people {
+    {} => "No people"
+    { "Alice": age } => "Only Alice, age ${toString(age)}"
+    { "Alice": aliceAge, "Bob": bobAge } => "Alice and Bob present"
+    people when length(people) > 5 => "Large group"
+    _ => "Regular group"
+}
+
+// Advanced map patterns
+fn checkTeam(team: Map<string, string>) -> bool = match team {
+    { "lead": _, "dev": _, "tester": _ } => true  // Has all key roles
+    { "lead": name, ...others } when length(others) >= 2 => true  // Lead plus 2+ others
+    _ => false  // Incomplete team
+}
+```
+
+**Collection Interoperability:**
+```osprey
+// Convert between collections
+let names = keys(ages)        // List<string> = ["Alice", "Bob", "Charlie"]  
+let ageList = values(ages)    // List<int> = [25, 30, 35]
+let pairs = entries(ages)     // List<(string, int)> = [("Alice", 25), ...]
+
+// Build map from lists
+let nameList = ["Alice", "Bob", "Charlie"]
+let ageList = [25, 30, 35]
+let peopleMap = zipToMap(nameList, ageList)  // Map<string, int>
+
+// Group by operation
+let students = [
+    { name: "Alice", grade: "A" },
+    { name: "Bob", grade: "B" },  
+    { name: "Charlie", grade: "A" }
+]
+let byGrade = groupBy(student => student.grade, students)
+// Map<string, List<Student>> = { "A": [Alice, Charlie], "B": [Bob] }
+```
+
+**Performance Characteristics:**
+
+**🔥 HIGH-PERFORMANCE C Runtime Integration:**
+
+**List Operations:**
+- **Element Access**: O(1) - direct memory access via C runtime
+- **Concatenation**: O(n) - optimized memory copying in C
+- **Functional Ops**: O(n) - zero-overhead iteration in C
+- **Pattern Matching**: O(1) - compiled to efficient native comparisons
+
+**Map Operations:**
+- **Lookup**: O(log n) - persistent hash trie in C runtime
+- **Insert/Update**: O(log n) - structural sharing, minimal allocations
+- **Iteration**: O(n) - cache-friendly traversal patterns
+- **Pattern Matching**: O(log n) - optimized key presence checks
+
+**Memory Management:**
+- **Garbage Collection**: Not required - deterministic cleanup via C runtime
+- **Structural Sharing**: Immutable collections share common structure
+- **Copy-on-Write**: Minimal memory overhead for updates
+- **Stack Allocation**: Small collections optimized for stack storage
+
+**Compile-Time Optimizations:**
+```osprey
+// These are optimized at compile time:
+let result = map(x => x * 2, filter(x => x > 5, numbers))
+// Fused into single-pass operation - no intermediate allocations
+
+let lookup = myMap["key"]  
+// Bounds checking eliminated when key presence proven at compile time
+
+let [head, ...tail] = [1, 2, 3]
+// Pattern matching compiled to zero-cost field access
+```
+
+**Safety Guarantees:**
+- **No Buffer Overflows**: All access bounds-checked at compile time or runtime
+- **No Memory Leaks**: Automatic cleanup via C runtime integration
+- **No Race Conditions**: Immutability prevents concurrent modification issues
+- **Type Safety**: All collection operations preserve element types
+
+**Integration with Effects System:**
+```osprey
+// Collections work seamlessly with algebraic effects
+effect Logger {
+    fn log(message: string): unit
+}
+
+fn processItems(items: List<string>) -> unit !Logger = {
+    forEach(item => perform log("Processing: ${item}"), items)
+    perform log("Processed ${toString(length(items))} items")
+}
+
+// Map operations with effects
+fn validateUsers(users: Map<string, User>) -> Map<string, User> !Validator = 
+    mapValues(user => perform validate(user), users)
+```
+
+**LLVM Code Generation:**
+```osprey
+// This Osprey code:
+let numbers = [1, 2, 3, 4, 5]
+let first = numbers[0]
+
+// Compiles to efficient LLVM IR:
+// %array = alloca { i64, i8* }
+// %data = call i8* @malloc(i64 40)  // 5 * 8 bytes
+// %first_ptr = getelementptr i64, i64* %data, i64 0
+// %first_val = load i64, i64* %first_ptr
+// Returns: Result<i64, IndexError>
 ```
 
 ### 5.2 Built-in Error Types

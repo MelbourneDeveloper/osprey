@@ -190,6 +190,12 @@ type ospreyListener interface {
 	// EnterListLiteral is called when entering the listLiteral production.
 	EnterListLiteral(c *ListLiteralContext)
 
+	// EnterMapLiteral is called when entering the mapLiteral production.
+	EnterMapLiteral(c *MapLiteralContext)
+
+	// EnterMapEntry is called when entering the mapEntry production.
+	EnterMapEntry(c *MapEntryContext)
+
 	// EnterDocComment is called when entering the docComment production.
 	EnterDocComment(c *DocCommentContext)
 
@@ -396,6 +402,12 @@ type ospreyListener interface {
 
 	// ExitListLiteral is called when exiting the listLiteral production.
 	ExitListLiteral(c *ListLiteralContext)
+
+	// ExitMapLiteral is called when exiting the mapLiteral production.
+	ExitMapLiteral(c *MapLiteralContext)
+
+	// ExitMapEntry is called when exiting the mapEntry production.
+	ExitMapEntry(c *MapEntryContext)
 
 	// ExitDocComment is called when exiting the docComment production.
 	ExitDocComment(c *DocCommentContext)

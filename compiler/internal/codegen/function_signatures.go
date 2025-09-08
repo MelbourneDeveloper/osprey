@@ -870,13 +870,27 @@ func (g *LLVMGenerator) getLLVMGenericType(gt *GenericType) types.Type {
 		}
 
 		return types.I64 // fallback
-	case "List":
+	case TypeList:
 		if len(gt.typeArgs) >= 1 {
-			// List<T> - for now, represent as pointer to dynamic array
-			return types.I8Ptr // TODO: implement proper list types
+			// List<T> - represent as pointer to array struct { i64 length, i8* data }
+			arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+			return types.NewPointer(arrayStructType)
 		}
 
-		return types.I8Ptr // fallback
+		// Fallback - empty list type
+		arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+		return types.NewPointer(arrayStructType)
+	case TypeMap:
+		if len(gt.typeArgs) >= TwoTypeArgs {
+			// Map<K, V> - represent as pointer to map struct { i64 length, i8* data }
+			// For now, use the same structure as List - will be enhanced with C runtime
+			mapStructType := types.NewStruct(types.I64, types.I8Ptr)
+			return types.NewPointer(mapStructType)
+		}
+
+		// Fallback - empty map type
+		mapStructType := types.NewStruct(types.I64, types.I8Ptr)
+		return types.NewPointer(mapStructType)
 	default:
 		// Unknown generic type, fallback to i64
 		return types.I64

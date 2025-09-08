@@ -386,6 +386,18 @@ func (s *BaseospreyListener) EnterListLiteral(ctx *ListLiteralContext) {}
 // ExitListLiteral is called when production listLiteral is exited.
 func (s *BaseospreyListener) ExitListLiteral(ctx *ListLiteralContext) {}
 
+// EnterMapLiteral is called when production mapLiteral is entered.
+func (s *BaseospreyListener) EnterMapLiteral(ctx *MapLiteralContext) {}
+
+// ExitMapLiteral is called when production mapLiteral is exited.
+func (s *BaseospreyListener) ExitMapLiteral(ctx *MapLiteralContext) {}
+
+// EnterMapEntry is called when production mapEntry is entered.
+func (s *BaseospreyListener) EnterMapEntry(ctx *MapEntryContext) {}
+
+// ExitMapEntry is called when production mapEntry is exited.
+func (s *BaseospreyListener) ExitMapEntry(ctx *MapEntryContext) {}
+
 // EnterDocComment is called when production docComment is entered.
 func (s *BaseospreyListener) EnterDocComment(ctx *DocCommentContext) {}
 

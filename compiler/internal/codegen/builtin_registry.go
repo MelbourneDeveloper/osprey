@@ -336,8 +336,8 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 // registerCollectionFunctions registers collection type constructors and functions
 func (r *BuiltInFunctionRegistry) registerCollectionFunctions() {
 	// List constructor - for now, just empty list
-	r.functions["List"] = &BuiltInFunction{
-		Name:        "List",
+	r.functions[TypeList] = &BuiltInFunction{
+		Name:        TypeList,
 		Signature:   "List() -> List<T>",
 		Description: "Creates a new empty list.",
 		ParameterTypes: []BuiltInParameter{},

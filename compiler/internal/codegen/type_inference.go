@@ -660,6 +660,8 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return ti.inferResultExpression(e)
 	case *ast.ListLiteral:
 		return ti.inferListLiteral(e)
+	case *ast.MapLiteral:
+		return ti.inferMapLiteral(e)
 	case *ast.ObjectLiteral:
 		return ti.inferObjectLiteral(e)
 	case *ast.BlockExpression:
@@ -2015,7 +2017,7 @@ func (ti *TypeInferer) inferListLiteral(e *ast.ListLiteral) (Type, error) {
 	if len(e.Elements) == 0 {
 		// Empty list - create fresh element type variable
 		elementType := ti.Fresh()
-		return &ConcreteType{name: fmt.Sprintf("List<%s>", elementType.String())}, nil
+		return NewGenericType(TypeList, []Type{elementType}), nil
 	}
 
 	// Infer type of first element
@@ -2037,7 +2039,53 @@ func (ti *TypeInferer) inferListLiteral(e *ast.ListLiteral) (Type, error) {
 		}
 	}
 
-	return &ConcreteType{name: fmt.Sprintf("List<%s>", firstType.String())}, nil
+	return NewGenericType(TypeList, []Type{firstType}), nil
+}
+
+// inferMapLiteral infers types for map literal expressions
+func (ti *TypeInferer) inferMapLiteral(e *ast.MapLiteral) (Type, error) {
+	if len(e.Entries) == 0 {
+		// Empty map - create fresh key and value type variables
+		keyType := ti.Fresh()
+		valueType := ti.Fresh()
+		return NewGenericType(TypeMap, []Type{keyType, valueType}), nil
+	}
+
+	// Infer type of first entry
+	firstKey, err := ti.InferType(e.Entries[0].Key)
+	if err != nil {
+		return nil, fmt.Errorf("error inferring first map key type: %w", err)
+	}
+
+	firstValue, err := ti.InferType(e.Entries[0].Value)
+	if err != nil {
+		return nil, fmt.Errorf("error inferring first map value type: %w", err)
+	}
+
+	// All keys must have the same type, all values must have the same type
+	for i := 1; i < len(e.Entries); i++ {
+		keyType, err := ti.InferType(e.Entries[i].Key)
+		if err != nil {
+			return nil, fmt.Errorf("error inferring map key %d type: %w", i, err)
+		}
+
+		valueType, err := ti.InferType(e.Entries[i].Value)
+		if err != nil {
+			return nil, fmt.Errorf("error inferring map value %d type: %w", i, err)
+		}
+
+		err = ti.Unify(firstKey, keyType)
+		if err != nil {
+			return nil, fmt.Errorf("map key %d type mismatch: %w", i, err)
+		}
+
+		err = ti.Unify(firstValue, valueType)
+		if err != nil {
+			return nil, fmt.Errorf("map value %d type mismatch: %w", i, err)
+		}
+	}
+
+	return NewGenericType(TypeMap, []Type{firstKey, firstValue}), nil
 }
 
 // inferObjectLiteral infers types for object literal expressions
@@ -2181,9 +2229,9 @@ func CreateResultType(successType, errorType Type) Type {
 	return NewGenericType(TypeResult, []Type{successType, errorType})
 }
 
-// inferListAccess infers types for list access expressions
+// inferListAccess infers types for list/map access expressions
 func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error) {
-	_, err := ti.InferType(e.List)
+	collectionType, err := ti.InferType(e.List)
 	if err != nil {
 		return nil, err
 	}
@@ -2193,21 +2241,117 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 		return nil, err
 	}
 
-	// Index must be Int
+	// Determine element type based on collection type
+	elementType, err := ti.inferCollectionElementType(collectionType, indexType)
+	if err != nil {
+		return nil, err
+	}
+
+	// Collection access returns Result<T, Error> for safety
+	errorType := &ConcreteType{name: "Error"}
+	return CreateResultType(elementType, errorType), nil
+}
+
+// inferCollectionElementType determines the element type for collection access
+func (ti *TypeInferer) inferCollectionElementType(collectionType, indexType Type) (Type, error) {
+	if genericType, ok := collectionType.(*GenericType); ok {
+		return ti.inferGenericCollectionElement(genericType, indexType, collectionType)
+	}
+	return ti.inferUnknownCollectionElement(collectionType, indexType)
+}
+
+// inferGenericCollectionElement handles known generic collection types
+func (ti *TypeInferer) inferGenericCollectionElement(
+	genericType *GenericType, 
+	indexType, 
+	collectionType Type,
+) (Type, error) {
+	switch genericType.name {
+	case TypeList:
+		return ti.inferListElement(genericType, indexType)
+	case TypeMap:
+		return ti.inferMapElement(genericType, indexType, collectionType)
+	default:
+		return nil, WrapUnsupportedCollectionType(genericType.name)
+	}
+}
+
+// inferListElement handles List<T> element type inference
+func (ti *TypeInferer) inferListElement(genericType *GenericType, indexType Type) (Type, error) {
 	intType := &ConcreteType{name: TypeInt}
-	err = ti.Unify(indexType, intType)
+	err := ti.Unify(indexType, intType)
 	if err != nil {
 		return nil, fmt.Errorf("list index must be Int: %w", err)
 	}
+	
+	if len(genericType.typeArgs) >= 1 {
+		return genericType.typeArgs[0], nil
+	}
+	return ti.Fresh(), nil
+}
 
-	// For now, create a fresh type variable for element type
-	// In a full implementation, this would extract the element type from List<T>
+// inferMapElement handles Map<K,V> element type inference
+func (ti *TypeInferer) inferMapElement(genericType *GenericType, indexType, collectionType Type) (Type, error) {
+	if len(genericType.typeArgs) >= TwoTypeArgs {
+		keyType := genericType.typeArgs[0]
+		err := ti.Unify(indexType, keyType)
+		if err != nil {
+			return nil, fmt.Errorf("map key type mismatch: %w", err)
+		}
+		return genericType.typeArgs[1], nil
+	}
+	
+	return ti.inferFreshMapElement(indexType, collectionType)
+}
+
+// inferFreshMapElement creates fresh Map<K,V> types when not fully specified
+func (ti *TypeInferer) inferFreshMapElement(indexType, collectionType Type) (Type, error) {
+	keyType := ti.Fresh()
+	valueType := ti.Fresh()
+	
+	err := ti.Unify(indexType, keyType)
+	if err != nil {
+		return nil, fmt.Errorf("map key type mismatch: %w", err)
+	}
+	
+	expectedMapType := NewGenericType(TypeMap, []Type{keyType, valueType})
+	err = ti.Unify(collectionType, expectedMapType)
+	if err != nil {
+		return nil, fmt.Errorf("expected Map type for map access: %w", err)
+	}
+	
+	return valueType, nil
+}
+
+// inferUnknownCollectionElement handles collection types that aren't explicitly generic
+func (ti *TypeInferer) inferUnknownCollectionElement(collectionType, indexType Type) (Type, error) {
+	if indexType.String() == TypeInt {
+		return ti.inferAsListAccess(collectionType)
+	}
+	return ti.inferAsMapAccess(collectionType, indexType)
+}
+
+// inferAsListAccess assumes integer index means List access
+func (ti *TypeInferer) inferAsListAccess(collectionType Type) (Type, error) {
 	elementType := ti.Fresh()
+	expectedListType := NewGenericType(TypeList, []Type{elementType})
+	err := ti.Unify(collectionType, expectedListType)
+	if err != nil {
+		return nil, fmt.Errorf("expected List type for array access: %w", err)
+	}
+	return elementType, nil
+}
 
-	// List access returns Result<T, Error> for safety
-	errorType := &ConcreteType{name: "Error"}
-
-	return CreateResultType(elementType, errorType), nil
+// inferAsMapAccess assumes non-integer index means Map access
+func (ti *TypeInferer) inferAsMapAccess(collectionType, indexType Type) (Type, error) {
+	keyType := indexType
+	valueType := ti.Fresh()
+	expectedMapType := NewGenericType(TypeMap, []Type{keyType, valueType})
+	err := ti.Unify(collectionType, expectedMapType)
+	if err != nil {
+		return nil, fmt.Errorf("expected Map type for map access: %w", err)
+	}
+	return valueType, nil
 }
 
 // inferPerformExpression infers types for perform expressions

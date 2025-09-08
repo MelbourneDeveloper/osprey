@@ -32,8 +32,8 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLambdaExpr(ctx.LambdaExpr())
 	case ctx.ObjectLiteral() != nil:
 		return b.buildObjectLiteral(ctx.ObjectLiteral())
-	case ctx.ID(0) != nil && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
-		// Array indexing: ID[INT]
+	case ctx.ID(0) != nil && ctx.LSQUARE() != nil && ctx.Expr(0) != nil && ctx.RSQUARE() != nil:
+		// List/Map access: ID[expr]
 		return b.buildListAccess(ctx)
 	case ctx.ID(0) != nil:
 		return &Identifier{
@@ -115,6 +115,8 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 		}
 	case ctx.ListLiteral() != nil:
 		return b.buildListLiteral(ctx.ListLiteral())
+	case ctx.MapLiteral() != nil:
+		return b.buildMapLiteral(ctx.MapLiteral())
 	}
 
 	return nil
@@ -160,25 +162,47 @@ func (b *Builder) buildListLiteral(ctx parser.IListLiteralContext) Expression {
 	}
 }
 
-// buildListAccess builds a ListAccessExpression from array indexing syntax.
-func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
-	if ctx == nil || ctx.ID(0) == nil || ctx.INT() == nil {
+// buildMapLiteral builds a MapLiteral from a map literal context.
+func (b *Builder) buildMapLiteral(ctx parser.IMapLiteralContext) Expression {
+	if ctx == nil {
 		return nil
 	}
 
-	// Get the list identifier
+	entries := make([]MapEntry, 0)
+
+	// Build each key-value pair in the map
+	for _, entryCtx := range ctx.AllMapEntry() {
+		key := b.buildExpression(entryCtx.AllExpr()[0])
+		value := b.buildExpression(entryCtx.AllExpr()[1])
+		
+		if key != nil && value != nil {
+			entries = append(entries, MapEntry{
+				Key:   key,
+				Value: value,
+			})
+		}
+	}
+
+	return &MapLiteral{
+		Entries:  entries,
+		Position: b.getPositionFromContext(ctx),
+	}
+}
+
+// buildListAccess builds a ListAccessExpression from array/map indexing syntax.
+func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
+	if ctx == nil || ctx.ID(0) == nil || ctx.Expr(0) == nil {
+		return nil
+	}
+
+	// Get the list/map identifier
 	listExpr := &Identifier{
 		Name:     ctx.ID(0).GetText(),
 		Position: b.getPosition(ctx.ID(0).GetSymbol()),
 	}
 
-	// Parse the index
-	indexText := ctx.INT().GetText()
-	indexValue, _ := strconv.ParseInt(indexText, 10, 64)
-	indexExpr := &IntegerLiteral{
-		Value:    indexValue,
-		Position: b.getPosition(ctx.INT().GetSymbol()),
-	}
+	// Parse the index expression (could be integer, string, or any expression)
+	indexExpr := b.buildExpression(ctx.Expr(0))
 
 	return &ListAccessExpression{
 		List:     listExpr,

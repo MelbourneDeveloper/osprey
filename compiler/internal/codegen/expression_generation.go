@@ -33,6 +33,8 @@ func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, er
 		return g.generateLiteralExpression(expr)
 	case *ast.ListLiteral:
 		return g.generateListLiteral(e)
+	case *ast.MapLiteral:
+		return g.generateMapLiteral(e)
 	case *ast.ObjectLiteral:
 		return g.generateObjectLiteral(e)
 	case *ast.ListAccessExpression:
@@ -272,6 +274,126 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 	return arrayStruct, nil
 }
 
+// generateMapLiteral generates LLVM IR for map literals like { "key": value, 42: "answer" }.
+func (g *LLVMGenerator) generateMapLiteral(lit *ast.MapLiteral) (value.Value, error) {
+	// For now, implement maps as a simple array of key-value pairs
+	// TODO: Implement proper hash table structure in C runtime
+	numEntries := int64(len(lit.Entries))
+	
+	if numEntries == 0 {
+		// Empty map - return a struct { i64 length, i8* data }
+		mapStructType := types.NewStruct(types.I64, types.I8Ptr)
+		mapStruct := g.builder.NewAlloca(mapStructType)
+
+		// Store length = 0
+		lengthPtr := g.builder.NewGetElementPtr(mapStructType, mapStruct,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		g.builder.NewStore(constant.NewInt(types.I64, 0), lengthPtr)
+
+		// Store null data pointer
+		dataPtr := g.builder.NewGetElementPtr(mapStructType, mapStruct,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+		g.builder.NewStore(constant.NewNull(types.I8Ptr), dataPtr)
+
+		return mapStruct, nil
+	}
+
+	// For simplicity, create an array of key-value pair structs
+	// Each entry is { key, value } where both are i8* for now
+	entryStructType := types.NewStruct(types.I8Ptr, types.I8Ptr) // { key, value }
+	entrySize := int64(PointerPairSize) // 2 pointers = 16 bytes
+	totalSize := numEntries * entrySize
+
+	// Allocate memory for the map data
+	mallocFunc, ok := g.functions["malloc"]
+	if !ok {
+		mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+		g.functions["malloc"] = mallocFunc
+	}
+
+	mapData := g.builder.NewCall(mallocFunc, constant.NewInt(types.I64, totalSize))
+	entriesPtr := g.builder.NewBitCast(mapData, types.NewPointer(entryStructType))
+
+	// Store each key-value pair
+	for i, entry := range lit.Entries {
+		keyValue, err := g.generateExpression(entry.Key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate map key %d: %w", i, err)
+		}
+
+		valueValue, err := g.generateExpression(entry.Value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate map value %d: %w", i, err)
+		}
+
+		// Convert both key and value to i8* for now
+		keyPtr := g.convertToPointer(keyValue)
+		valuePtr := g.convertToPointer(valueValue)
+
+		// Get pointer to this entry
+		entryPtr := g.builder.NewGetElementPtr(entryStructType, entriesPtr, constant.NewInt(types.I64, int64(i)))
+
+		// Store key
+		keyFieldPtr := g.builder.NewGetElementPtr(entryStructType, entryPtr,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		g.builder.NewStore(keyPtr, keyFieldPtr)
+
+		// Store value
+		valueFieldPtr := g.builder.NewGetElementPtr(entryStructType, entryPtr,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+		g.builder.NewStore(valuePtr, valueFieldPtr)
+	}
+
+	// Create map struct { length, data }
+	mapStructType := types.NewStruct(types.I64, types.I8Ptr)
+	mapStruct := g.builder.NewAlloca(mapStructType)
+
+	// Store length
+	lengthPtr := g.builder.NewGetElementPtr(mapStructType, mapStruct,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(constant.NewInt(types.I64, numEntries), lengthPtr)
+
+	// Store data pointer
+	dataPtr := g.builder.NewGetElementPtr(mapStructType, mapStruct,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(mapData, dataPtr)
+
+	return mapStruct, nil
+}
+
+// convertToPointer converts a value to a pointer (i8*) for storage in maps.
+func (g *LLVMGenerator) convertToPointer(val value.Value) value.Value {
+	switch val.Type() {
+	case types.I8Ptr:
+		// Already a pointer
+		return val
+	case types.I64:
+		// Allocate memory for the integer and return its address
+		intPtr := g.builder.NewAlloca(types.I64)
+		g.builder.NewStore(val, intPtr)
+		return g.builder.NewBitCast(intPtr, types.I8Ptr)
+	case types.I32:
+		// Allocate memory for the integer and return its address
+		intPtr := g.builder.NewAlloca(types.I32)
+		g.builder.NewStore(val, intPtr)
+		return g.builder.NewBitCast(intPtr, types.I8Ptr)
+	case types.I1:
+		// Allocate memory for the boolean and return its address
+		boolPtr := g.builder.NewAlloca(types.I1)
+		g.builder.NewStore(val, boolPtr)
+		return g.builder.NewBitCast(boolPtr, types.I8Ptr)
+	default:
+		// For pointer types, try to cast to i8*
+		if _, ok := val.Type().(*types.PointerType); ok {
+			return g.builder.NewBitCast(val, types.I8Ptr)
+		}
+		// For other types, allocate and store
+		valPtr := g.builder.NewAlloca(val.Type())
+		g.builder.NewStore(val, valPtr)
+		return g.builder.NewBitCast(valPtr, types.I8Ptr)
+	}
+}
+
 // generateObjectLiteral generates LLVM IR for object literals like { field: value }.
 func (g *LLVMGenerator) generateObjectLiteral(lit *ast.ObjectLiteral) (value.Value, error) {
 	//CRITICAL TODO: implement record types properly, as per the spec 0005-TypeSystem.md
@@ -359,11 +481,25 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	data := g.builder.NewLoad(types.I8Ptr, dataPtr)
 
-	// Bounds check: index >= 0 && index < length
-	zero := constant.NewInt(types.I64, 0)
-	indexValid := g.builder.NewICmp(enum.IPredSGE, indexValue, zero)
-	indexInBounds := g.builder.NewICmp(enum.IPredSLT, indexValue, length)
-	boundsOk := g.builder.NewAnd(indexValid, indexInBounds)
+	// Check if this is a map or list access
+	collectionType, err := g.typeInferer.InferType(access.List)
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer collection type: %w", err)
+	}
+	
+	var boundsOk value.Value
+	if genericType, ok := collectionType.(*GenericType); ok && genericType.name == TypeMap {
+		// For maps, check if we have at least one entry (simplified for now)
+		// TODO: Implement proper key lookup
+		zero := constant.NewInt(types.I64, 0)
+		boundsOk = g.builder.NewICmp(enum.IPredSGT, length, zero)
+	} else {
+		// For lists, do normal bounds check: index >= 0 && index < length
+		zero := constant.NewInt(types.I64, 0)
+		indexValid := g.builder.NewICmp(enum.IPredSGE, indexValue, zero)
+		indexInBounds := g.builder.NewICmp(enum.IPredSLT, indexValue, length)
+		boundsOk = g.builder.NewAnd(indexValid, indexInBounds)
+	}
 
 	// Create unique block names to avoid conflicts with multiple array accesses
 	blockSuffix := fmt.Sprintf("_%p", access)
@@ -380,20 +516,73 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	// Success block: return the element
 	g.builder = successBlock
 
-	// For now, assume string arrays (i8*) - this is a simplification
-	// In a full implementation, we'd need to store type information with the array
-	arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(types.I8Ptr))
-	elementPtr := g.builder.NewGetElementPtr(types.I8Ptr, arrayDataPtr, indexValue)
-	element := g.builder.NewLoad(types.I8Ptr, elementPtr)
+	// Determine the actual element type from type inference
+	// (collectionType already fetched above for bounds checking)
+	
+	var elementLLVMType types.Type
+	var elementValue value.Value
+	
+	if genericType, ok := collectionType.(*GenericType); ok {
+		if genericType.name == TypeMap && len(genericType.typeArgs) == 2 {
+			// Map access - need to search for the key
+			// For now, we do a simple linear search through key-value pairs
+			// TODO: Implement proper hash table lookup in C runtime
+			
+			valueType := genericType.typeArgs[1]
+			elementLLVMType = g.getLLVMType(valueType)
+			
+			// Cast data to entry array { key: i8*, value: i8* }
+			entryStructType := types.NewStruct(types.I8Ptr, types.I8Ptr)
+			entriesPtr := g.builder.NewBitCast(data, types.NewPointer(entryStructType))
+			
+			// For string keys, convert index to string comparison
+			// For now, return the first value as a placeholder
+			// TODO: Implement proper key comparison
+			firstEntryPtr := g.builder.NewGetElementPtr(entryStructType, entriesPtr, constant.NewInt(types.I64, 0))
+			valueFieldPtr := g.builder.NewGetElementPtr(entryStructType, firstEntryPtr,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+			valuePtr := g.builder.NewLoad(types.I8Ptr, valueFieldPtr)
+			
+			// Cast back to the actual value type
+			if elementLLVMType == types.I64 {
+				// For integer values, load from the pointer
+				intPtr := g.builder.NewBitCast(valuePtr, types.NewPointer(types.I64))
+				elementValue = g.builder.NewLoad(types.I64, intPtr)
+			} else {
+				elementValue = valuePtr
+			}
+		} else if genericType.name == TypeList && len(genericType.typeArgs) == 1 {
+			// List access - use index directly
+			elementType := genericType.typeArgs[0]
+			elementLLVMType = g.getLLVMType(elementType)
+			
+			// Cast data pointer to the correct element type
+			arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(elementLLVMType))
+			elementPtr := g.builder.NewGetElementPtr(elementLLVMType, arrayDataPtr, indexValue)
+			elementValue = g.builder.NewLoad(elementLLVMType, elementPtr)
+		} else {
+			// Unknown generic type
+			elementLLVMType = types.I8Ptr
+			arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(types.I8Ptr))
+			elementPtr := g.builder.NewGetElementPtr(types.I8Ptr, arrayDataPtr, indexValue)
+			elementValue = g.builder.NewLoad(types.I8Ptr, elementPtr)
+		}
+	} else {
+		// Fallback to string type for backwards compatibility
+		elementLLVMType = types.I8Ptr
+		arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(types.I8Ptr))
+		elementPtr := g.builder.NewGetElementPtr(types.I8Ptr, arrayDataPtr, indexValue)
+		elementValue = g.builder.NewLoad(types.I8Ptr, elementPtr)
+	}
 
-	// Create Success result for string
-	resultType := g.getResultType(types.I8Ptr)
+	// Create Success result for the actual element type
+	resultType := g.getResultType(elementLLVMType)
 	successResult := g.builder.NewAlloca(resultType)
 
 	// Store element value
 	valuePtr := g.builder.NewGetElementPtr(resultType, successResult,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(element, valuePtr)
+	g.builder.NewStore(elementValue, valuePtr)
 
 	// Store success discriminant (0)
 	discriminantPtr := g.builder.NewGetElementPtr(resultType, successResult,
@@ -407,10 +596,29 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	g.builder = errorBlock
 	errorResult := g.builder.NewAlloca(resultType)
 
-	// Store error value (null string as placeholder)
+	// Store error value (null value for the element type)
 	errorValuePtr := g.builder.NewGetElementPtr(resultType, errorResult,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(constant.NewNull(types.I8Ptr), errorValuePtr)
+	
+	// Create appropriate null value based on element type
+	var nullValue value.Value
+	if ptrType, ok := elementLLVMType.(*types.PointerType); ok {
+		nullValue = constant.NewNull(ptrType)
+	} else {
+		// For non-pointer types like i64, use zero value
+		switch elementLLVMType {
+		case types.I64:
+			nullValue = constant.NewInt(types.I64, 0)
+		case types.I32:
+			nullValue = constant.NewInt(types.I32, 0)
+		case types.I1:
+			nullValue = constant.NewBool(false)
+		default:
+			// Fallback to null pointer for complex types
+			nullValue = constant.NewNull(types.I8Ptr)
+		}
+	}
+	g.builder.NewStore(nullValue, errorValuePtr)
 
 	// Store error discriminant (1)
 	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, errorResult,

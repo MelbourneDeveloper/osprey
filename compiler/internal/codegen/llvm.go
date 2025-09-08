@@ -1997,7 +1997,12 @@ func (g *LLVMGenerator) generateErrorBlock(
 		// Bind the Result error message to the pattern variable
 		fieldName := errorArm.Pattern.Fields[0] // First field is the message
 		// Create a unique global string for the error message
-		blockSuffix := fmt.Sprintf("_%p", matchExpr)
+		// Include function context to ensure uniqueness across monomorphized instances
+		funcContext := ""
+		if g.function != nil {
+			funcContext = g.function.Name()
+		}
+		blockSuffix := fmt.Sprintf("_%s_%p", funcContext, matchExpr)
 		errorStr := g.module.NewGlobalDef("error_msg"+blockSuffix, constant.NewCharArrayFromString("Error occurred\\x00"))
 		errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
 			constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))

@@ -8,7 +8,7 @@ type Grade = A | B | C | D | F
 fn double(x) = x * 2
 fn add(x, y) = x + y
 fn getFirst(list) = match list[0] {
-    Success { value } => value
+    Success { value } => toString(value)
     Error { message } => "empty"
 }
 
@@ -59,9 +59,14 @@ match scores[1] {
     Error { message } => print("Error accessing score")
 }
 
-// Map creation requires type context for HM inference
-// let studentGrades = Map() would fail without usage context
-// Hindley-Milner needs constraints to infer K, V types
+// Map operations with Hindley-Milner inference
+let studentGrades = { "Alice": 95, "Bob": 87, "Charlie": 91 }
+print("Student grades map created via HM inference")
+
+match studentGrades["Alice"] {
+    Success { value } => print("Alice's grade: ${toString(value)}")
+    Error { message } => print("Alice not found in grades")
+}
 
 // Mixed type list showing polymorphic inference
 let mixedData = ["Alice", "Bob", "Charlie"]

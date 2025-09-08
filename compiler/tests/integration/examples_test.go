@@ -149,7 +149,10 @@ func getExpectedOutputs() map[string]string {
 			"Example 4: Range forEach\n42\n43\n44\n" +
 			"Example 5: Small range\n10\n11\n12\n" +
 			"Example 6: Range 0 to 4\n0\n1\n2\n3\n4\n" +
-			"Example 7: Fold operations\n15\n6\n" +
+			"Example 7: Fold operations\n15\n" +
+			"Example 8: Map collections\n" +
+			"Created price map and inventory map via HM inference\n" +
+			"Apple price: 2\n6\n" +
 			"Example 8: Chained single value operations\n21\n" +
 			"Example 9: Conditional operations\n1\n0\n=== Showcase Complete ===\n",
 		"explicit_any_allowed.osp": "Explicit any return type works\n" +
@@ -161,7 +164,10 @@ func getExpectedOutputs() map[string]string {
 			"2. Single value transformations:\n10\n9\n" +
 			"3. Different ranges:\n10\n11\n12\n0\n1\n2\n" +
 			"4. Fold operations:\n10\n60\n" +
-			"5. Chained single value operations:\n16\n" +
+			"5. List operations:\nList created with HM inference\nThird element: 30\n" +
+			"6. Map operations would need constraints:\nHM needs type constraints for Map<K,V> inference\n" +
+			"7. List with functional operations:\nBase numbers created\nFourth number squared: 16\n" +
+			"8. Chained single value operations:\n16\n" +
 			"=== Examples Complete ===\n",
 		"documentation_test.osp": "Testing documentation\n1\n2\n3\n4\n",
 		// Boolean examples that work with current parser
@@ -179,7 +185,16 @@ func getExpectedOutputs() map[string]string {
 			"Student Alice scored 95 points\n" +
 			"Doubled score: 190\n" +
 			"Excellent!\n" +
-			"Status: System operational\n" +
+			"=== List & Map Operations ===\n" +
+			"Score list created via HM inference\n" +
+			"First score: 85\n" +
+			"Bonus computation works: 90\n" +
+			"Second score: 92\n" +
+			"Student grades map created via HM inference\n" +
+			"Alice's grade: 95\n" +
+			"Student names list created\n" +
+			"Third student: Charlie\n" +
+			"Status: System operational with collections\n" +
 			"Double of 42: 84\n" +
 			"Student Bob scored 92 points\n" +
 			"=== Demo Complete ===\n",

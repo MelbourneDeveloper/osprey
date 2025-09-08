@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
 - **NO CONSECUTIVE PRINT CALLS IN OSP** - Use string interpolation! Consolidate consecutive prints into singular interpolated strings!!!
 - **RUN LINTING AUTOFIXES** - Most lints can be easily fixed with auto fix. Don't try to fix them yourself
+- **PREFER EXPANDING EXISTING EXAMPLES AND TESTS** - Don't add new examples/tests
 - **SEARCH BEFORE ADDING** - Check for existing code before creating new functions/constants
 - **Do not use source control** - unless explicitly requested
 - **MAKE EXAMPLES (TESTS) CONCISE AND MIX WITH MANY LANGUAGE CONSTRUCTS** - Don't create many files with overlapping functionality

@@ -52,6 +52,16 @@ const (
 	TypeMap          = "Map"
 )
 
+// Type argument counts.
+const (
+	TwoTypeArgs = 2
+)
+
+// Size constants.
+const (
+	PointerPairSize = 16 // Size of two pointers (key, value) in bytes
+)
+
 // Function names.
 const (
 	ToStringFunc     = "toString"

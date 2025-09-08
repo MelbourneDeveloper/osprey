@@ -178,7 +178,7 @@ primary
     | blockExpr                                   // Block expressions
     | literal                                     // String, number, boolean literals
     | lambdaExpr                                  // Lambda expressions
-    | ID LSQUARE INT RSQUARE                      // List access: list[0] -> Result<T, IndexError>
+    | ID LSQUARE expr RSQUARE                    // List/Map access: list[0] or map["key"] -> Result<T, Error>
     | ID                                          // Variable reference
     | LPAREN expr RPAREN                          // Parenthesized expression
     ;
@@ -227,10 +227,17 @@ literal
     | TRUE
     | FALSE
     | listLiteral
+    | mapLiteral
     ;
 
 listLiteral
     : LSQUARE (expr (COMMA expr)*)? RSQUARE ;
+
+mapLiteral
+    : LBRACE (mapEntry (COMMA mapEntry)*)? RBRACE ;
+
+mapEntry
+    : expr COLON expr ;
 
 docComment      : DOC_COMMENT+ ;
 
