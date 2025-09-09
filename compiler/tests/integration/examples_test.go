@@ -419,7 +419,7 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 	}
 
 	if actualOutput != expectedOutput {
-		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, actualOutput)
+		t.Fatalf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, actualOutput)
 	}
 
 	t.Logf("✅ Example %s executed and output verified", filepath.Base(filePath))

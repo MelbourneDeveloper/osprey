@@ -50,18 +50,18 @@ print("Test 3 - Block with match and map: ${result3}")
 // Test 4: Function returning block with list operations
 fn processData(input) = {
     let steps = [2, 10, 2]
-    let step1 = input * match steps[0] {
+    let step1 = input * (match steps[0] {
         Success { value } => value
         Error { message } => 1
-    }
-    let step2 = step1 + match steps[1] {
+    })
+    let step2 = step1 + (match steps[1] {
         Success { value } => value
         Error { message } => 0
-    }
-    let step3 = step2 / match steps[2] {
+    })
+    let step3 = step2 / (match steps[2] {
         Success { value } => value
         Error { message } => 1
-    }
+    })
     step3
 }
 print("Test 4 - Complex function with lists: ${processData(5)}")
@@ -70,13 +70,13 @@ print("Test 4 - Complex function with lists: ${processData(5)}")
 let mixedTest = {
     let data = [1, 2, 3, 4, 5]
     let lookup = { "key1": 10, "key2": 20 }
-    let sum = match data[0] {
+    let sum = (match data[0] {
         Success { value } => value
         Error { message } => 0
-    } + match data[1] {
+    }) + (match data[1] {
         Success { value } => value
         Error { message } => 0
-    }
+    })
     let multiplier = match lookup["key1"] {
         Success { value } => value
         Error { message } => 1

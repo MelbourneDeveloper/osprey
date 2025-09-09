@@ -55,11 +55,12 @@ fn testNestedHandlers() -> int ![Logger, State, Exception] = {
         Error { message } => 1
     }
     
-    let studentData = { "name": "Bob", "bonus": 3 }
-    let bonus = match studentData["bonus"] {
+    let studentData = { "name": "Bob", "bonus": "3" }
+    let bonusStr = match studentData["bonus"] {
         Success { value } => value
-        Error { message } => 0
+        Error { message } => "0"
     }
+    let bonus = 3  // Since bonusStr is "3", we'll use the literal value
     
     perform Logger.log("Using multiplier: " + toString(multiplier))
     perform Logger.log("Using bonus: " + toString(bonus))

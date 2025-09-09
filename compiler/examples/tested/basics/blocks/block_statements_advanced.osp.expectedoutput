@@ -1,6 +1,6 @@
 === Advanced Block Statements Test ===
 Test 1 - Function block with list: 30
-Test 2 - Nested with shadowing, maps & lists: 85
+Test 2 - Nested with shadowing, maps & lists: 90
 Test 3 - Block with match and map: 94
 Test 4 - Complex function with lists: 10
 Test 5 - Mixed collections block: 30

@@ -46,22 +46,22 @@ fn calculateComplexity(priority) = {
 
 fn calculateTime(complexity) = {
     let timeFactors = [10, 5]
-    let divisor = match timeFactors[0] { Success { value } => value; Error { message } => 10 }
-    let offset = match timeFactors[1] { Success { value } => value; Error { message } => 5 }
+    let divisor = match timeFactors[0] { Success { value } => value Error { message } => 10 }
+    let offset = match timeFactors[1] { Success { value } => value Error { message } => 5 }
     complexity / divisor + offset
 }
 
 fn calculateEfficiency(duration) = {
     let thresholds = [50, 100]
     let scores = [100, 75, 50]
-    let t1 = match thresholds[0] { Success { value } => value; Error { message } => 50 }
-    let t2 = match thresholds[1] { Success { value } => value; Error { message } => 100 }
+    let t1 = match thresholds[0] { Success { value } => value Error { message } => 50 }
+    let t2 = match thresholds[1] { Success { value } => value Error { message } => 100 }
     
     match duration < t1 {
-        true => match scores[0] { Success { value } => value; Error { message } => 100 }
+        true => match scores[0] { Success { value } => value Error { message } => 100 }
         false => match duration < t2 {
-            true => match scores[1] { Success { value } => value; Error { message } => 75 }
-            false => match scores[2] { Success { value } => value; Error { message } => 50 }
+            true => match scores[1] { Success { value } => value Error { message } => 75 }
+            false => match scores[2] { Success { value } => value Error { message } => 50 }
         }
     }
 }
@@ -69,28 +69,28 @@ fn calculateEfficiency(duration) = {
 // Data transformation pipeline using lists (all types inferred through HM)
 fn preprocessData(rawData) = {
     let operations = [2, 100]
-    let mult = match operations[0] { Success { value } => value; Error { message } => 1 }
-    let add = match operations[1] { Success { value } => value; Error { message } => 0 }
+    let mult = match operations[0] { Success { value } => value Error { message } => 1 }
+    let add = match operations[1] { Success { value } => value Error { message } => 0 }
     rawData * mult + add
 }
 
 fn validateData(data) = {
     let validationConfig = { "minValue": 50 }
-    let minVal = match validationConfig["minValue"] { Success { value } => value; Error { message } => 0 }
+    let minVal = match validationConfig["minValue"] { Success { value } => value Error { message } => 0 }
     data > minVal
 }
 
 fn transformData(data) = {
     let transformFactors = [3]
-    let factor = match transformFactors[0] { Success { value } => value; Error { message } => 1 }
+    let factor = match transformFactors[0] { Success { value } => value Error { message } => 1 }
     data * factor
 }
 
 fn aggregateResults(result1, result2, result3) = {
     let results = [result1, result2, result3]
-    let r1 = match results[0] { Success { value } => value; Error { message } => 0 }
-    let r2 = match results[1] { Success { value } => value; Error { message } => 0 }
-    let r3 = match results[2] { Success { value } => value; Error { message } => 0 }
+    let r1 = match results[0] { Success { value } => value Error { message } => 0 }
+    let r2 = match results[1] { Success { value } => value Error { message } => 0 }
+    let r3 = match results[2] { Success { value } => value Error { message } => 0 }
     r1 + r2 + r3
 }
 
@@ -329,13 +329,13 @@ fn main() -> Unit = {
         print("Total throughput: " + toString(totalResults) + " units")
         print("Average batch size: " + toString(totalResults / 3) + " units")
         
-        let alphaResult = match batchSummary["alpha"] { Success { value } => value; Error { message } => 0 }
-        let betaResult = match batchSummary["beta"] { Success { value } => value; Error { message } => 0 }
-        let gammaResult = match batchSummary["gamma"] { Success { value } => value; Error { message } => 0 }
+        let alphaResult = match batchSummary["alpha"] { Success { value } => value Error { message } => 0 }
+        let betaResult = match batchSummary["beta"] { Success { value } => value Error { message } => 0 }
+        let gammaResult = match batchSummary["gamma"] { Success { value } => value Error { message } => 0 }
         
         print("Batch breakdown: Alpha=" + toString(alphaResult) + ", Beta=" + toString(betaResult) + ", Gamma=" + toString(gammaResult))
         
-        let topMetric = match systemMetrics[3] { Success { value } => value; Error { message } => 0 }
+        let topMetric = match systemMetrics[3] { Success { value } => value Error { message } => 0 }
         print("Peak metric value: " + toString(topMetric) + " from monitoring array")
         
         print("═════════════════════════════════════════════")

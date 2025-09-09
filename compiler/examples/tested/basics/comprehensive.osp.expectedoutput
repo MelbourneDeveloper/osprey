@@ -11,9 +11,9 @@ Student grades map created via HM inference
 Alice's grade: 95
 Student names list created
 Third student: Charlie
-Nested class data created
+Class scores map created with List[int] values
 Math student 2 score: 92
-Student Alice has grade 95
+Student Alice studies Math
 Status: System operational with collections
 Double of middle number: 84
 Student Bob scored 92 points

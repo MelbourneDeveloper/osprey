@@ -421,3 +421,17 @@ char *extract_code(char *json_string) {
   const char *code_field = "code";
   return extract_json_field(json_string, code_field);
 }
+
+// String comparison function for map key lookups
+// Returns 0 if strings are equal, non-zero otherwise
+int osprey_strcmp(const char* s1, const char* s2) {
+    if (s1 == NULL || s2 == NULL) {
+        return (s1 == s2) ? 0 : -1;
+    }
+    
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}

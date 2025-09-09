@@ -77,42 +77,44 @@ match mixedData[2] {
     Error { message } => print("Error accessing student name")
 }
 
-// Complex nested collections
-let classData = {
-    "Math": { "students": [85, 92, 78], "average": 85 },
-    "Science": { "students": [88, 91, 94], "average": 91 }
+// Complex nested collections - using homogeneous types for strong typing
+let mathScores = [85, 92, 78]
+let scienceScores = [88, 91, 94]
+let classScores = {
+    "Math": mathScores,
+    "Science": scienceScores
 }
-print("Nested class data created")
+print("Class scores map created with List[int] values")
 
-match classData["Math"] {
-    Success { value } => {
-        match value["students"] {
-            Success { students } => {
-                match students[1] {
-                    Success { score } => print("Math student 2 score: ${toString(score)}")
-                    Error { message } => print("Math student access error")
-                }
-            }
-            Error { message } => print("Math students access error")
+match classScores["Math"] {
+    Success { scores } => {
+        match scores[1] {
+            Success { score } => print("Math student 2 score: ${toString(score)}")
+            Error { message } => print("Math student access error")
         }
     }
     Error { message } => print("Math class not found")
 }
 
-// List of maps for complex data structures
-let allStudents = [
-    { "name": "Alice", "grade": 95, "subject": "Math" },
-    { "name": "Bob", "grade": 87, "subject": "Science" },
-    { "name": "Charlie", "grade": 91, "subject": "Math" }
+// List of maps for student names (homogeneous string values)
+let studentNames = [
+    { "first": "Alice", "last": "Smith", "subject": "Math" },
+    { "first": "Bob", "last": "Jones", "subject": "Science" },
+    { "first": "Charlie", "last": "Brown", "subject": "Math" }
 ]
 
-match allStudents[0] {
+// Separate list of maps for student grades (homogeneous int values)
+let studentGradesList = [
+    { "Alice": 95, "Bob": 87, "Charlie": 91 }
+]
+
+match studentNames[0] {
     Success { student } => {
-        match student["name"] {
-            Success { name } => {
-                match student["grade"] {
-                    Success { grade } => print("Student ${name} has grade ${toString(grade)}")
-                    Error { message } => print("Grade access error")
+        match student["first"] {
+            Success { firstName } => {
+                match student["subject"] {
+                    Success { subject } => print("Student ${firstName} studies ${subject}")
+                    Error { message } => print("Subject access error")
                 }
             }
             Error { message } => print("Name access error")

@@ -32,9 +32,6 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLambdaExpr(ctx.LambdaExpr())
 	case ctx.ObjectLiteral() != nil:
 		return b.buildObjectLiteral(ctx.ObjectLiteral())
-	case ctx.ID(0) != nil && ctx.LSQUARE() != nil && ctx.Expr(0) != nil && ctx.RSQUARE() != nil:
-		// List/Map access: ID[expr]
-		return b.buildListAccess(ctx)
 	case ctx.ID(0) != nil:
 		return &Identifier{
 			Name:     ctx.ID(0).GetText(),
@@ -189,27 +186,6 @@ func (b *Builder) buildMapLiteral(ctx parser.IMapLiteralContext) Expression {
 	}
 }
 
-// buildListAccess builds a ListAccessExpression from array/map indexing syntax.
-func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
-	if ctx == nil || ctx.ID(0) == nil || ctx.Expr(0) == nil {
-		return nil
-	}
-
-	// Get the list/map identifier
-	listExpr := &Identifier{
-		Name:     ctx.ID(0).GetText(),
-		Position: b.getPosition(ctx.ID(0).GetSymbol()),
-	}
-
-	// Parse the index expression (could be integer, string, or any expression)
-	indexExpr := b.buildExpression(ctx.Expr(0))
-
-	return &ListAccessExpression{
-		List:     listExpr,
-		Index:    indexExpr,
-		Position: b.getPositionFromContext(ctx),
-	}
-}
 
 // buildLambdaExpr builds a LambdaExpression from a lambda context.
 func (b *Builder) buildLambdaExpr(ctx parser.ILambdaExprContext) Expression {

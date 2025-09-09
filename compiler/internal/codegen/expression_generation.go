@@ -27,6 +27,11 @@ const (
 	MinResultFieldCount = 2
 )
 
+// Static error definitions
+var (
+	ErrInvalidMapTypeArgs = errors.New("map type should have exactly 2 type arguments")
+)
+
 func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, error) {
 	switch e := expr.(type) {
 	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
@@ -230,6 +235,10 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 		// For nested lists, element type is a pointer to the array struct type
 		elementType = types.NewPointer(types.NewStruct(types.I64, types.I8Ptr))
 		elementSize = 8 // pointer size
+	case *ast.MapLiteral:
+		// For maps, element type is a pointer to the map struct type  
+		elementType = types.NewPointer(types.NewStruct(types.I64, types.I8Ptr))
+		elementSize = 8 // pointer size
 	default:
 		elementType = types.I64
 		elementSize = 8 // i64 size
@@ -389,7 +398,7 @@ func (g *LLVMGenerator) convertToPointer(val value.Value) value.Value {
 		g.builder.NewStore(val, boolPtr)
 		return g.builder.NewBitCast(boolPtr, types.I8Ptr)
 	default:
-		// For pointer types, try to cast to i8*
+		// For pointer types (including pointers to structs like lists/maps), just cast to i8*
 		if _, ok := val.Type().(*types.PointerType); ok {
 			return g.builder.NewBitCast(val, types.I8Ptr)
 		}
@@ -493,20 +502,16 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 		return nil, fmt.Errorf("failed to infer collection type: %w", err)
 	}
 	
-	
-	var boundsOk value.Value
+	// Handle maps separately from lists
 	if genericType, ok := collectionType.(*GenericType); ok && genericType.name == TypeMap {
-		// For maps, check if we have at least one entry (simplified for now)
-		// TODO: Implement proper key lookup
-		zero := constant.NewInt(types.I64, 0)
-		boundsOk = g.builder.NewICmp(enum.IPredSGT, length, zero)
-	} else {
-		// For lists, do normal bounds check: index >= 0 && index < length
-		zero := constant.NewInt(types.I64, 0)
-		indexValid := g.builder.NewICmp(enum.IPredSGE, indexValue, zero)
-		indexInBounds := g.builder.NewICmp(enum.IPredSLT, indexValue, length)
-		boundsOk = g.builder.NewAnd(indexValid, indexInBounds)
+		return g.generateMapAccess(access, arrayValue, indexValue, genericType)
 	}
+	
+	// For lists, do normal bounds check: index >= 0 && index < length
+	zero := constant.NewInt(types.I64, 0)
+	indexValid := g.builder.NewICmp(enum.IPredSGE, indexValue, zero)
+	indexInBounds := g.builder.NewICmp(enum.IPredSLT, indexValue, length)
+	boundsOk := g.builder.NewAnd(indexValid, indexInBounds)
 
 	// Create unique block names to avoid conflicts with multiple array accesses
 	blockSuffix := fmt.Sprintf("_%p", access)
@@ -526,47 +531,29 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	// Determine the actual element type from type inference
 	// (collectionType already fetched above for bounds checking)
 	
+	// For lists, determine the actual element type from type inference
 	var elementLLVMType types.Type
 	var elementValue value.Value
 	
 	if genericType, ok := collectionType.(*GenericType); ok {
-		if genericType.name == TypeMap && len(genericType.typeArgs) == 2 {
-			// Map access - need to search for the key
-			// For now, we do a simple linear search through key-value pairs
-			// TODO: Implement proper hash table lookup in C runtime
-			
-			valueType := genericType.typeArgs[1]
-			elementLLVMType = g.getLLVMType(valueType)
-			
-			// Cast data to entry array { key: i8*, value: i8* }
-			entryStructType := types.NewStruct(types.I8Ptr, types.I8Ptr)
-			entriesPtr := g.builder.NewBitCast(data, types.NewPointer(entryStructType))
-			
-			// For string keys, convert index to string comparison
-			// For now, return the first value as a placeholder
-			// TODO: Implement proper key comparison
-			firstEntryPtr := g.builder.NewGetElementPtr(entryStructType, entriesPtr, constant.NewInt(types.I64, 0))
-			valueFieldPtr := g.builder.NewGetElementPtr(entryStructType, firstEntryPtr,
-				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-			valuePtr := g.builder.NewLoad(types.I8Ptr, valueFieldPtr)
-			
-			// Cast back to the actual value type
-			if elementLLVMType == types.I64 {
-				// For integer values, load from the pointer
-				intPtr := g.builder.NewBitCast(valuePtr, types.NewPointer(types.I64))
-				elementValue = g.builder.NewLoad(types.I64, intPtr)
-			} else {
-				elementValue = valuePtr
-			}
-		} else if genericType.name == TypeList && len(genericType.typeArgs) == 1 {
+		if genericType.name == TypeList && len(genericType.typeArgs) == 1 {
 			// List access - use index directly
 			elementType := genericType.typeArgs[0]
-			elementLLVMType = g.getLLVMType(elementType)
 			
-			// Cast data pointer to the correct element type
-			arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(elementLLVMType))
-			elementPtr := g.builder.NewGetElementPtr(elementLLVMType, arrayDataPtr, indexValue)
-			elementValue = g.builder.NewLoad(elementLLVMType, elementPtr)
+			// For nested lists, elements are stored as pointers to list structs
+			if _, isNestedList := elementType.(*GenericType); isNestedList {
+				// Element is itself a list - stored as pointer to list struct
+				elementLLVMType = types.NewPointer(types.NewStruct(types.I64, types.I8Ptr))
+				arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(elementLLVMType))
+				elementPtr := g.builder.NewGetElementPtr(elementLLVMType, arrayDataPtr, indexValue)
+				elementValue = g.builder.NewLoad(elementLLVMType, elementPtr)
+			} else {
+				// Simple element type
+				elementLLVMType = g.getLLVMType(elementType)
+				arrayDataPtr := g.builder.NewBitCast(data, types.NewPointer(elementLLVMType))
+				elementPtr := g.builder.NewGetElementPtr(elementLLVMType, arrayDataPtr, indexValue)
+				elementValue = g.builder.NewLoad(elementLLVMType, elementPtr)
+			}
 		} else {
 			// Unknown generic type
 			elementLLVMType = types.I8Ptr
@@ -589,6 +576,11 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	// Store element value
 	valuePtr := g.builder.NewGetElementPtr(resultType, successResult,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	
+	// Debug: Print types for mismatch investigation (commented out)
+	// fmt.Printf("DEBUG: elementLLVMType: %s, elementValue type: %T %s, valuePtr type: %T %s\n", 
+	//	elementLLVMType, elementValue.Type(), elementValue.Type(), valuePtr.Type(), valuePtr.Type())
+	
 	g.builder.NewStore(elementValue, valuePtr)
 
 	// Store success discriminant (0)
@@ -2159,4 +2151,199 @@ func (g *LLVMGenerator) generateResultFieldAccessAsMatch(
 	}
 
 	return nil, errors.New("result field access failed: invalid Result type structure") //nolint:err113
+}
+// generateMapAccess generates LLVM IR for map key lookup
+func (g *LLVMGenerator) generateMapAccess(
+	access *ast.ListAccessExpression, arrayValue, indexValue value.Value, mapType *GenericType,
+) (value.Value, error) {
+	// Extract length and data from map struct
+	arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+	
+	// Get length
+	lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	length := g.builder.NewLoad(types.I64, lengthPtr)
+	
+	// Get data pointer
+	dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	data := g.builder.NewLoad(types.I8Ptr, dataPtr)
+	
+	// Check if map has entries
+	zero := constant.NewInt(types.I64, 0)
+	hasEntries := g.builder.NewICmp(enum.IPredSGT, length, zero)
+	
+	// Create blocks for map access
+	blockSuffix := fmt.Sprintf("_%p", access)
+	mapHasEntriesBlock := g.function.NewBlock("map_has_entries" + blockSuffix)
+	mapEmptyBlock := g.function.NewBlock("map_empty" + blockSuffix)
+	mapEndBlock := g.function.NewBlock("map_end" + blockSuffix)
+	
+	// Branch based on whether map has entries
+	g.builder.NewCondBr(hasEntries, mapHasEntriesBlock, mapEmptyBlock)
+	
+	// Map has entries - do key search
+	g.builder = mapHasEntriesBlock
+	
+	// Get element type for Result creation
+	const expectedMapTypeArgs = 2
+	if len(mapType.typeArgs) != expectedMapTypeArgs {
+		return nil, ErrInvalidMapTypeArgs
+	}
+	valueType := mapType.typeArgs[1]
+	elementLLVMType := g.getLLVMType(valueType)
+	
+	// Cast data to entry array { key: i8*, value: i8* }
+	entryStructType := types.NewStruct(types.I8Ptr, types.I8Ptr)
+	entriesPtr := g.builder.NewBitCast(data, types.NewPointer(entryStructType))
+	
+	// Declare osprey_strcmp function (only once)
+	strcmpFunc, ok := g.functions["osprey_strcmp"]
+	if !ok {
+		strcmpFunc = g.module.NewFunc("osprey_strcmp", types.I32,
+			ir.NewParam("s1", types.I8Ptr),
+			ir.NewParam("s2", types.I8Ptr))
+		g.functions["osprey_strcmp"] = strcmpFunc
+	}
+	
+	// Convert search key (indexValue) to string pointer
+	searchKeyPtr := g.builder.NewBitCast(indexValue, types.I8Ptr)
+	
+	// Create basic blocks for loop structure
+	loopHeader := g.function.NewBlock("map_search_loop" + blockSuffix)
+	loopBody := g.function.NewBlock("map_search_body" + blockSuffix)
+	loopIncrement := g.function.NewBlock("map_search_continue" + blockSuffix)
+	keyFound := g.function.NewBlock("map_key_found" + blockSuffix)
+	keyNotFound := g.function.NewBlock("map_key_not_found" + blockSuffix)
+	
+	// Initialize loop counter
+	counterAlloca := g.builder.NewAlloca(types.I64)
+	g.builder.NewStore(constant.NewInt(types.I64, 0), counterAlloca)
+	
+	// Jump to loop header
+	g.builder.NewBr(loopHeader)
+	
+	// Loop header with bounds check
+	g.builder = loopHeader
+	counter := g.builder.NewLoad(types.I64, counterAlloca)
+	inBounds := g.builder.NewICmp(enum.IPredSLT, counter, length)
+	g.builder.NewCondBr(inBounds, loopBody, keyNotFound)
+	
+	// Loop body with key comparison
+	g.builder = loopBody
+	
+	// Get current entry
+	entryPtr := g.builder.NewGetElementPtr(entryStructType, entriesPtr, counter)
+	keyFieldPtr := g.builder.NewGetElementPtr(entryStructType, entryPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	currentKeyPtr := g.builder.NewLoad(types.I8Ptr, keyFieldPtr)
+	
+	// Compare keys using osprey_strcmp
+	cmpResult := g.builder.NewCall(strcmpFunc, currentKeyPtr, searchKeyPtr)
+	keyMatches := g.builder.NewICmp(enum.IPredEQ, cmpResult, constant.NewInt(types.I32, 0))
+	
+	// Branch on key match
+	g.builder.NewCondBr(keyMatches, keyFound, loopIncrement)
+	
+	// Loop increment
+	g.builder = loopIncrement
+	nextCounter := g.builder.NewAdd(counter, constant.NewInt(types.I64, 1))
+	g.builder.NewStore(nextCounter, counterAlloca)
+	g.builder.NewBr(loopHeader)
+	
+	// Key found block - create success result and jump to end
+	g.builder = keyFound
+	valueFieldPtr := g.builder.NewGetElementPtr(entryStructType, entryPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	foundValuePtr := g.builder.NewLoad(types.I8Ptr, valueFieldPtr)
+	
+	// Cast back to the actual value type
+	var actualValue value.Value
+	if elementLLVMType == types.I64 {
+		// For integer values, load from the pointer
+		intPtr := g.builder.NewBitCast(foundValuePtr, types.NewPointer(types.I64))
+		actualValue = g.builder.NewLoad(types.I64, intPtr)
+	} else if elementLLVMType.String() == "{ i64, i8* }*" {
+		// For list values stored as pointers to list structs
+		actualValue = g.builder.NewBitCast(foundValuePtr, elementLLVMType)
+	} else {
+		actualValue = foundValuePtr
+	}
+	
+	// Create Success result for found key
+	resultType := g.getResultType(elementLLVMType)
+	
+	// Create appropriate null value based on element type (used in error cases)
+	var nullValue value.Value
+	if ptrType, ok := elementLLVMType.(*types.PointerType); ok {
+		nullValue = constant.NewNull(ptrType)
+	} else {
+		// For non-pointer types like i64, use zero value
+		switch elementLLVMType {
+		case types.I64:
+			nullValue = constant.NewInt(types.I64, 0)
+		case types.I32:
+			nullValue = constant.NewInt(types.I32, 0)
+		case types.I1:
+			nullValue = constant.NewBool(false)
+		default:
+			// Fallback to null pointer for complex types
+			nullValue = constant.NewNull(types.I8Ptr)
+		}
+	}
+	
+	foundSuccessResult := g.builder.NewAlloca(resultType)
+	
+	// Store actual value
+	foundResultValuePtr := g.builder.NewGetElementPtr(resultType, foundSuccessResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(actualValue, foundResultValuePtr)
+	
+	// Store success discriminant (0)
+	foundDiscriminantPtr := g.builder.NewGetElementPtr(resultType, foundSuccessResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), foundDiscriminantPtr)
+	g.builder.NewBr(mapEndBlock)
+	
+	// Key not found block - create error result and jump to end
+	g.builder = keyNotFound
+	
+	// Create Error result for missing key
+	notFoundErrorResult := g.builder.NewAlloca(resultType)
+	
+	// Store error value (null value for the element type)
+	notFoundValuePtr := g.builder.NewGetElementPtr(resultType, notFoundErrorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(nullValue, notFoundValuePtr)
+	
+	// Store error discriminant (1)
+	notFoundDiscriminantPtr := g.builder.NewGetElementPtr(resultType, notFoundErrorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), notFoundDiscriminantPtr)
+	g.builder.NewBr(mapEndBlock)
+	
+	// Map empty block - create error result
+	g.builder = mapEmptyBlock
+	emptyErrorResult := g.builder.NewAlloca(resultType)
+	
+	// Store error value (null value for the element type)
+	emptyValuePtr := g.builder.NewGetElementPtr(resultType, emptyErrorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(nullValue, emptyValuePtr)
+	
+	// Store error discriminant (1)
+	emptyDiscriminantPtr := g.builder.NewGetElementPtr(resultType, emptyErrorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), emptyDiscriminantPtr)
+	g.builder.NewBr(mapEndBlock)
+	
+	// End block with PHI node to select the result
+	g.builder = mapEndBlock
+	mapPhi := mapEndBlock.NewPhi(
+		ir.NewIncoming(foundSuccessResult, keyFound),
+		ir.NewIncoming(notFoundErrorResult, keyNotFound),
+		ir.NewIncoming(emptyErrorResult, mapEmptyBlock),
+	)
+	
+	return mapPhi, nil
 }
