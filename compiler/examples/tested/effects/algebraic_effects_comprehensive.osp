@@ -4,6 +4,7 @@
 effect IO {
     read: fn() -> string
     write: fn(string) -> Unit
+    input: fn() -> Result<string, Error>  // Mock input for testing
 }
 
 effect FileIO {
@@ -149,6 +150,17 @@ fn cleanupTempFiles() -> Unit ![FileIO, Logger] = {
     perform Logger.log("Temporary files cleaned up")
 }
 
+// Test mocked input via effects - NO real input() call!
+fn testMockedInput() -> Unit ![IO, Logger] = {
+    perform Logger.log("Testing mocked input via effects")
+    let mockInput = perform IO.input()
+    match mockInput {
+        Success { value } => perform Logger.log("Mock input success: ${value}")
+        Error { message } => perform Logger.log("Mock input error: ${message}")
+    }
+    perform Logger.log("Mock input toString: ${toString(mockInput)}")
+}
+
 // Main function demonstrating all features
 fn main() -> Unit = {
     handle Counter
@@ -165,6 +177,10 @@ fn main() -> Unit = {
         writeFile filename content => print("💾 Writing file: " + filename)
         readFile filename => "mock file content"
         deleteFile filename => print("🗑️ Deleting file: " + filename)
+    in handle IO
+        read => "mock read data"
+        write msg => print("📤 IO Write: " + msg)
+        input => Success { value: "mocked user input" }
     in {
         print("🚀 Starting Comprehensive Effects Test")
         
@@ -182,6 +198,9 @@ fn main() -> Unit = {
         // Test async processing with fibers
         let asyncResult = asyncProcessing(5)
         
+        // Test mocked input functionality
+        testMockedInput()
+        
         print("🎯 Final Results: Calc=" + toString(calcResult) + ", Process=" + toString(processResult) + ", Errors=[" + toString(errorResult1) + "," + toString(errorResult2) + "," + toString(errorResult3) + "], Async=" + toString(asyncResult) + " 🎉")
     }
-} 
+}

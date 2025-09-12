@@ -1714,6 +1714,20 @@ func (g *LLVMGenerator) createMatchResult(
 		return validIncomings[0].X, nil
 	}
 
+	// BUGFIX: Don't create PHI with void values - check if all values are void
+	allVoid = true
+	for _, incoming := range validIncomings {
+		if !isVoidType(incoming.X.Type()) {
+			allVoid = false
+			break
+		}
+	}
+	
+	if allVoid && len(validIncomings) > 0 {
+		// All arms return void - return nil to represent void, don't create PHI
+		return nil, nil
+	}
+
 	phi := endBlock.NewPhi(validIncomings...)
 
 	// The end block now has a PHI node and the builder is set to this block.
@@ -2102,12 +2116,18 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 
 	// Check if the actual success block has a terminator and branches to end
 	if actualSuccessBlock != nil && actualSuccessBlock.Term != nil && successValue != nil {
-		validPredecessors = append(validPredecessors, ir.NewIncoming(successValue, actualSuccessBlock))
+		// Don't add void values to PHI predecessors
+		if !isVoidType(successValue.Type()) {
+			validPredecessors = append(validPredecessors, ir.NewIncoming(successValue, actualSuccessBlock))
+		}
 	}
 
 	// Check if the actual error block has a terminator and branches to end
 	if actualErrorBlock != nil && actualErrorBlock.Term != nil && errorValue != nil {
-		validPredecessors = append(validPredecessors, ir.NewIncoming(errorValue, actualErrorBlock))
+		// Don't add void values to PHI predecessors
+		if !isVoidType(errorValue.Type()) {
+			validPredecessors = append(validPredecessors, ir.NewIncoming(errorValue, actualErrorBlock))
+		}
 	}
 
 	// If we don't have valid predecessors, return a default value
@@ -2121,10 +2141,35 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 		return validPredecessors[0].X, nil
 	}
 
+	// BUGFIX: Check if both values are void (Unit) - can't create PHI with void values
+	if successValue != nil && errorValue != nil {
+		// Check if both are void types (nil represents void/Unit)
+		successIsVoid := (successValue == nil) || isVoidType(successValue.Type())
+		errorIsVoid := (errorValue == nil) || isVoidType(errorValue.Type())
+		
+		if successIsVoid && errorIsVoid {
+			// Both arms return Unit - return nil to represent void, don't create PHI
+			return nil, nil
+		}
+	}
+
 	// Create PHI node with valid predecessors
 	phi := blocks.End.NewPhi(validPredecessors...)
 
 	return phi, nil
+}
+
+// isVoidType checks if a type represents void/Unit
+func isVoidType(t types.Type) bool {
+	// In LLVM, void is represented as nil or specific void type
+	if t == nil {
+		return true
+	}
+	// Check if it's LLVM void type
+	if _, ok := t.(*types.VoidType); ok {
+		return true
+	}
+	return false
 }
 
 // reInferReturnType re-infers the return type of a function with concrete parameter types
