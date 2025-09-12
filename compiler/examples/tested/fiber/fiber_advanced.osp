@@ -60,5 +60,33 @@ fn stage3(input: int) -> int = input - 50
 let pipeline = await(spawn stage3(await(spawn stage2(await(spawn stage1(25))))))
 print("\nPipeline result: ${pipeline}")
 
+// Example 6: Collection processing with fibers
+let numbers = [1, 2, 3, 4, 5]
+print("\nCollection access results:")
+let firstFiber = spawn mapPhase(1)  // Using literal values to avoid closure issues
+let secondFiber = spawn mapPhase(2)
+let thirdFiber = spawn mapPhase(3)
+match numbers[0] {
+    Success { value } => {
+        let result = await(firstFiber)
+        print("Element ${value} squared: ${result}")
+    }
+    Error { message } => print("Error accessing first element")
+}
+match numbers[1] {
+    Success { value } => {
+        let result = await(secondFiber)  
+        print("Element ${value} squared: ${result}")
+    }
+    Error { message } => print("Error accessing second element")
+}
+match numbers[2] {
+    Success { value } => {
+        let result = await(thirdFiber)
+        print("Element ${value} squared: ${result}")
+    }
+    Error { message } => print("Error accessing third element")
+}
+
 print("\nTesting advanced fiber patterns...")
 print("=== Fiber Tests Complete ===") 
