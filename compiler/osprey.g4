@@ -84,6 +84,7 @@ exprStmt        : expr ;
 
 expr
     : matchExpr
+    | handlerExpr
     ;
 
 matchExpr

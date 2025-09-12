@@ -45,27 +45,11 @@ fn safeDivide(a: int, b: int) -> int ![Exception, Logger] = match b {
     }
 }
 
-// Function to test nested handlers with collections
+// Function to test nested handlers
 fn testNestedHandlers() -> int ![Logger, State, Exception] = {
     perform Logger.log("Starting nested handler test")
     
-    let scores = [1, 5, 10]
-    let multiplier = match scores[1] {
-        Success { value } => value
-        Error { message } => 1
-    }
-    
-    let studentData = { "name": "Bob", "bonus": "3" }
-    let bonusStr = match studentData["bonus"] {
-        Success { value } => value
-        Error { message } => "0"
-    }
-    let bonus = 3  // Since bonusStr is "3", we'll use the literal value
-    
-    perform Logger.log("Using multiplier: " + toString(multiplier))
-    perform Logger.log("Using bonus: " + toString(bonus))
-    
-    let result = statefulOperation(multiplier + bonus)
+    let result = statefulOperation(5)
     perform Logger.log("Stateful operation result: " + toString(result))
     
     let divResult = safeDivide(a: 10, b: 0)

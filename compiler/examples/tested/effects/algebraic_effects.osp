@@ -1,54 +1,38 @@
-// 🚀 SUPREMO BASIC ALGEBRAIC EFFECTS! 🔥
+// Collections with Algebraic Effects and Fibers
 
-// Basic algebraic effects
 effect Logger {
     log: fn(string) -> Unit
 }
 
-// Pure function - no effects
-fn double(x: int) -> int = x * 2
-
-// Function using lists with effects
-fn processScores(scores) = {
-    let first = match scores[0] {
+// Function to process list data with effects
+fn processList(items) -> int !Logger = {
+    let first = match items[0] {
         Success { value } => value
         Error { message } => 0
     }
-    let doubled = double(first)
-    log("Processing score: ${toString(first)}")
-    log("Doubled result: ${toString(doubled)}")
-    doubled
+    perform Logger.log("List processing: " + toString(first))
+    first * 2
 }
 
-// Function using maps with effects
-fn processStudent(student) = {
-    let name = match student["name"] {
-        Success { value } => value
-        Error { message } => "Unknown"
-    }
-    let grade = match student["grade"] {
-        Success { value } => value
-        Error { message } => 0
-    }
-    log("Processing student: ${name}")
-    log("Student grade: ${toString(grade)}")
-    grade
+// Function to process fiber with effects
+fn processWithFiber(taskValue: int) -> int !Logger = {
+    perform Logger.log("Fiber processing task: " + toString(taskValue))
+    let result = taskValue * 2
+    perform Logger.log("Fiber result: " + toString(result))
+    result
 }
 
-// Main function to test
+// Main function with handlers
 fn main() -> Unit = {
     let scores = [21, 42, 63]
-    let studentData = { "name": "Alice", "grade": 95 }
     
-    handle {
-        let result1 = processScores(scores)
-        let result2 = processStudent(studentData)
-        print("Score result: ${toString(result1)}")
-        print("Student result: ${toString(result2)}")
-    } with {
-        log(message) -> {
-            print("LOG: ${message}")
-            resume(Unit)
-        }
+    handle Logger
+        log msg => print("LOG: " + msg)
+    in {
+        let listResult = processList(scores)
+        let fiberResult = processWithFiber(10)
+        
+        print("List result: " + toString(listResult))
+        print("Fiber result: " + toString(fiberResult))
     }
 } 

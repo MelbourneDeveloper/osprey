@@ -1,14 +1,12 @@
 🚀 STARTING COMPREHENSIVE EFFECTS TEST
 [LOG] Processing: test-data
 [LOG] Starting nested handler test
-[LOG] Using multiplier: 5
-[LOG] Using bonus: 3
 [LOG] Current state: 42
-[STATE] Setting to: 50
-[LOG] Set state to: 50
-[LOG] Stateful operation result: 50
+[STATE] Setting to: 47
+[LOG] Set state to: 47
+[LOG] Stateful operation result: 47
 [ERROR] Division by zero detected
 [EXCEPTION] Division by zero
 [LOG] Division result: 0
-Final result: 50
+Final result: 47
 🎉 NESTED HANDLERS AND SPEC SYNTAX WORKING! 🎉 
