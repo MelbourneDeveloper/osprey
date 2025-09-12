@@ -4,4 +4,8 @@ true
 false
 true
 true
-false 
+false
+Testing Result<bool> toString:
+<Result[bool, MathError]>
+<Result[bool, MathError]>
+<Result[bool, MathError]>
