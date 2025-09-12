@@ -383,20 +383,39 @@ func (g *LLVMGenerator) convertToPointer(val value.Value) value.Value {
 		// Already a pointer
 		return val
 	case types.I64:
-		// Allocate memory for the integer and return its address
-		intPtr := g.builder.NewAlloca(types.I64)
-		g.builder.NewStore(val, intPtr)
-		return g.builder.NewBitCast(intPtr, types.I8Ptr)
+		// Allocate HEAP memory for the integer and return its address
+		// Use malloc instead of alloca to prevent dangling pointers when function returns
+		mallocFunc, ok := g.functions["malloc"]
+		if !ok {
+			mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+			g.functions["malloc"] = mallocFunc
+		}
+		heapPtr := g.builder.NewCall(mallocFunc, constant.NewInt(types.I64, 8)) //nolint:mnd // 8 bytes for i64
+		typedPtr := g.builder.NewBitCast(heapPtr, types.NewPointer(types.I64))
+		g.builder.NewStore(val, typedPtr)
+		return heapPtr
 	case types.I32:
-		// Allocate memory for the integer and return its address
-		intPtr := g.builder.NewAlloca(types.I32)
-		g.builder.NewStore(val, intPtr)
-		return g.builder.NewBitCast(intPtr, types.I8Ptr)
+		// Allocate HEAP memory for the integer and return its address
+		mallocFunc, ok := g.functions["malloc"]
+		if !ok {
+			mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+			g.functions["malloc"] = mallocFunc
+		}
+		heapPtr := g.builder.NewCall(mallocFunc, constant.NewInt(types.I64, 4)) //nolint:mnd // 4 bytes for i32
+		typedPtr := g.builder.NewBitCast(heapPtr, types.NewPointer(types.I32))
+		g.builder.NewStore(val, typedPtr)
+		return heapPtr
 	case types.I1:
-		// Allocate memory for the boolean and return its address
-		boolPtr := g.builder.NewAlloca(types.I1)
-		g.builder.NewStore(val, boolPtr)
-		return g.builder.NewBitCast(boolPtr, types.I8Ptr)
+		// Allocate HEAP memory for the boolean and return its address
+		mallocFunc, ok := g.functions["malloc"]
+		if !ok {
+			mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
+			g.functions["malloc"] = mallocFunc
+		}
+		heapPtr := g.builder.NewCall(mallocFunc, constant.NewInt(types.I64, 1)) // 1 byte for i1
+		typedPtr := g.builder.NewBitCast(heapPtr, types.NewPointer(types.I1))
+		g.builder.NewStore(val, typedPtr)
+		return heapPtr
 	default:
 		// For pointer types (including pointers to structs like lists/maps), just cast to i8*
 		if _, ok := val.Type().(*types.PointerType); ok {
@@ -1889,7 +1908,33 @@ func (g *LLVMGenerator) extractStringFromValue(val value.Value) value.Value {
 			valuePtr := g.builder.NewGetElementPtr(structType, val,
 				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 
-			return g.builder.NewLoad(structType.Fields[0], valuePtr)
+			extractedValue := g.builder.NewLoad(structType.Fields[0], valuePtr)
+			
+			// If the extracted value is not a string, convert it to string
+			if extractedValue.Type() != types.I8Ptr {
+				// Convert the value to string using the same logic as toString()
+				switch extractedValue.Type() {
+				case types.I64, types.I32:
+					strVal, err := g.generateIntToString(extractedValue)
+					if err != nil {
+						// Return the original value on error - this will likely cause a type error later
+						return extractedValue
+					}
+					return strVal
+				case types.I1:
+					strVal, err := g.generateBoolToString(extractedValue)
+					if err != nil {
+						// Return the original value on error - this will likely cause a type error later
+						return extractedValue
+					}
+					return strVal
+				default:
+					// For other types, return the extracted value as-is
+					return extractedValue
+				}
+			}
+			
+			return extractedValue
 		}
 	}
 
@@ -2203,6 +2248,7 @@ func (g *LLVMGenerator) generateMapAccess(
 		strcmpFunc = g.module.NewFunc("osprey_strcmp", types.I32,
 			ir.NewParam("s1", types.I8Ptr),
 			ir.NewParam("s2", types.I8Ptr))
+		strcmpFunc.Linkage = enum.LinkageExternal
 		g.functions["osprey_strcmp"] = strcmpFunc
 	}
 	

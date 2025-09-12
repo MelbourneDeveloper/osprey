@@ -125,12 +125,29 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	prevBuilder := g.builder
 	prevVars := g.variables
 
+	// Capture variables by value BEFORE creating the closure context
+	capturedValues := make(map[string]value.Value)
+	g.captureVariablesInExpression(spawn.Expression, capturedValues)
+	
+
 	// Create new context for closure
 	g.function = closureFunc
 	entry := closureFunc.NewBlock("entry")
 	g.builder = entry
-	// Don't reset variables - preserve function parameters for the closure
-	// g.variables = make(map[string]value.Value)
+	
+	// Create new variable scope with captured values + preserved globals
+	// We need to merge captured values with the original variables to support nested spawns
+	g.variables = make(map[string]value.Value)
+	
+	// First, copy all original variables (this preserves global scope for nested spawns)
+	for name, val := range prevVars {
+		g.variables[name] = val
+	}
+	
+	// Then, override with captured values (this ensures proper closure semantics)
+	for name, val := range capturedValues {
+		g.variables[name] = val
+	}
 
 	// Generate the expression inside the closure
 	result, err := g.generateExpression(spawn.Expression)
@@ -324,6 +341,30 @@ func (g *LLVMGenerator) generateSpawnCall(callExpr *ast.CallExpression) (value.V
 func (g *LLVMGenerator) generateYieldCall(callExpr *ast.CallExpression) (value.Value, error) {
 	return g.generateChannelFunctionCall("fiber_yield", "fiber_yield", callExpr)
 }
+
+// captureVariablesInExpression captures variables used in an expression by copying their values
+func (g *LLVMGenerator) captureVariablesInExpression(expr ast.Expression, captured map[string]value.Value) {
+	switch e := expr.(type) {
+	case *ast.Identifier:
+		// If this identifier refers to a local variable, capture its current value
+		if val, exists := g.variables[e.Name]; exists {
+			captured[e.Name] = val
+		}
+	case *ast.CallExpression:
+		// Recursively capture variables in function arguments
+		g.captureVariablesInExpression(e.Function, captured)
+		for _, arg := range e.Arguments {
+			g.captureVariablesInExpression(arg, captured)
+		}
+	case *ast.BinaryExpression:
+		g.captureVariablesInExpression(e.Left, captured)
+		g.captureVariablesInExpression(e.Right, captured)
+	case *ast.UnaryExpression:
+		g.captureVariablesInExpression(e.Operand, captured)
+	// Add more cases as needed
+	}
+}
+
 
 // generateAwaitCall generates fiber await from built-in function call
 func (g *LLVMGenerator) generateAwaitCall(callExpr *ast.CallExpression) (value.Value, error) {

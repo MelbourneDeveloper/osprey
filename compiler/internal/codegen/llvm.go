@@ -720,56 +720,30 @@ func (g *LLVMGenerator) generateIntToString(arg value.Value) (value.Value, error
 }
 
 func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, error) {
-	// Create blocks for true/false cases
-	blockSuffix := fmt.Sprintf("_%p", arg) // Use pointer address for uniqueness
-	currentBlock := g.builder
-
-	trueBlock := g.function.NewBlock("bool_true" + blockSuffix)
-	falseBlock := g.function.NewBlock("bool_false" + blockSuffix)
-	endBlock := g.function.NewBlock("bool_end" + blockSuffix)
-
-	// Check if arg == 1 (true) or 0 (false)
-	// Use the correct zero value type based on the argument type
-	var (
-		zero   value.Value
-		isTrue value.Value
-	)
-
-	if arg.Type() == types.I1 {
-		// For i1 (boolean) types, compare against i1 false
-		zero = constant.NewBool(false)
-		isTrue = currentBlock.NewICmp(enum.IPredNE, arg, zero)
-	} else {
-		// For i64 types, compare against i64 zero
-		zero = constant.NewInt(types.I64, 0)
-		isTrue = currentBlock.NewICmp(enum.IPredNE, arg, zero)
-	}
-
-	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
-
-	// True case - return "true"
-	g.builder = trueBlock
+	// Create string constants for "true" and "false"
 	trueStr := constant.NewCharArrayFromString("true\x00")
 	trueGlobal := g.module.NewGlobalDef("", trueStr)
-	truePtr := trueBlock.NewGetElementPtr(trueStr.Typ, trueGlobal,
+	truePtr := g.builder.NewGetElementPtr(trueStr.Typ, trueGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
-	trueBlock.NewBr(endBlock)
-
-	// False case - return "false"
-	g.builder = falseBlock
 	falseStr := constant.NewCharArrayFromString("false\x00")
 	falseGlobal := g.module.NewGlobalDef("", falseStr)
-	falsePtr := falseBlock.NewGetElementPtr(falseStr.Typ, falseGlobal,
+	falsePtr := g.builder.NewGetElementPtr(falseStr.Typ, falseGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
-	falseBlock.NewBr(endBlock)
+	// Create condition based on argument type
+	var condition value.Value
+	if arg.Type() == types.I1 {
+		// For i1 (boolean) types, use directly
+		condition = arg
+	} else {
+		// For i64 types, compare against zero
+		zero := constant.NewInt(types.I64, 0)
+		condition = g.builder.NewICmp(enum.IPredNE, arg, zero)
+	}
 
-	// Create PHI node in end block
-	g.builder = endBlock
-	phi := endBlock.NewPhi(ir.NewIncoming(truePtr, trueBlock), ir.NewIncoming(falsePtr, falseBlock))
-
-	return phi, nil
+	// Use select instruction: select condition, trueValue, falseValue
+	return g.builder.NewSelect(condition, truePtr, falsePtr), nil
 }
 
 func (g *LLVMGenerator) generateMatchExpression(matchExpr *ast.MatchExpression) (value.Value, error) {
