@@ -25,6 +25,7 @@ func getHTTPExpectedOutputs() map[string]string {
 		"http_server_example.osp": "=== Comprehensive HTTP API Test ===\n" +
 			"Creating HTTP server on port 8080...\n" +
 			"Server created with ID: 1\n" +
+			"Starting server listener with callback handler...\n" +
 			"HTTP server listening on 127.0.0.1:8080\n" +
 			"Server listening on http://127.0.0.1:8080\n" +
 			"Creating HTTP client...\n" +
@@ -38,7 +39,7 @@ func getHTTPExpectedOutputs() map[string]string {
 			"GET /health result: 200\n" +
 			"POST /api/users\n" +
 			"🌐 HTTP Request: POST /api/users\n" +
-			"POST /api/users result: 200\n" +
+			"POST /api/users result: 201\n" +
 			"POST /api/auth/login\n" +
 			"🌐 HTTP Request: POST /api/auth/login\n" +
 			"POST /api/auth/login result: 200\n" +
