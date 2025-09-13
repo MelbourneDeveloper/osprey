@@ -8,8 +8,8 @@
 
 The `Result` type is a generic union type with two variants:
 
-- `Success { value: T }`: Represents a successful result, containing the value of type `T`.
-- `Error E`: Represents an error, containing an error value of type `E`.
+- `Success { value: T }`: Represents a successful result. Success **IS A STRUCT** with a `value` field of type `T`.
+- `Error E`: Represents an error. Error **CONTAINS A DIRECT VALUE** of type `E` (not a struct).
 
 **Example:**
 ```osprey
@@ -20,13 +20,17 @@ The compiler **MUST** enforce that `Result` types are always handled with a `mat
 
 **String Representation**: When converting a `Result` type to a string using `toString()`, the format is:
 - `Success(value)`: For successful results, where `value` is the string representation of the contained value
-- `Error(message)`: For error results, where `message` is the error message
+- `Error(message)`: For error results, where `message` is the error value
+
+**Pattern Matching Structure**:
+- `Success { value }` - Success is a struct, use braces to destructure the `value` field
+- `Error message` - Error contains direct value, no braces needed
 
 ```osprey
 let result = someFunctionThatCanFail()
 
 match result {
-    Success { value } => print("Success: ${value}")
+    Success value => print("Success: ${value}")
     Error message => print("Error: ${message}")
 }
 ```

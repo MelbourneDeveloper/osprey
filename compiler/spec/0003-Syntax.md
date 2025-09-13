@@ -264,7 +264,7 @@ let numbers = [1, 2, 3, 4]
 let firstResult = numbers[0]  // Returns Result<Int, IndexError>
 match firstResult {
     Success { value } => print("First: ${value}")
-    Error { message } => print("Index out of bounds: ${message}")
+    Error message => print("Index out of bounds: ${message}")
 }
 
 // ✅ CORRECT: Inline pattern matching
@@ -280,7 +280,7 @@ match commands[0] {
         print("Executing: ${value}")
         spawnProcess(value)
     }
-    Error { message } => print("No command at index 0: ${message}")
+    Error message => print("No command at index 0: ${message}")
 }
 ```
 

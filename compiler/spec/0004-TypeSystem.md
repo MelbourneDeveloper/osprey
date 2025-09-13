@@ -55,7 +55,7 @@ All primitive types use lowercase names:
 - `string`: UTF-8 encoded strings  
 - `bool`: Boolean values (`true`, `false`)
 - `unit`: Type for functions that don't return a meaningful value
-- `Result<T, E>`: Built-in generic type for error handling
+- `Result<T, E>`: Built-in generic type for error handling with structural Success and direct Error values
 - `List<T>`: Immutable collections with compile-time safety and zero-cost abstractions
 - `Map<K, V>`: Immutable key-value collections with functional operations
 - `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`

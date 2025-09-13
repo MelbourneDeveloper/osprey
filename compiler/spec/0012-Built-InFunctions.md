@@ -44,7 +44,7 @@ Returns string length. Requires pattern matching for safety.
 ```osprey
 match length("hello") {
     Success { value } => print("Length: ${value}")
-    Error { message } => print("Error: ${message}")
+    Error message => print("Error: ${message}")
 }
 ```
 
@@ -54,7 +54,7 @@ Checks if a string contains a substring.
 ```osprey
 match contains("hello", "ell") {
     Success { value } => print("Found: ${value}")
-    Error { message } => print("Error: ${message}")
+    Error message => print("Error: ${message}")
 }
 ```
 
@@ -245,7 +245,7 @@ fn main() -> Int = {
         range(1, 4) |> forEach(fn(_) => {
             match recv(ch) {
                 Success { value } => print("Received: ${value}")
-                Error { message } => print("Error: ${message}")
+                Error message => print("Error: ${message}")
             }
         })
     }
