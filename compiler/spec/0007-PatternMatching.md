@@ -149,7 +149,7 @@ let calculation = 1 + 3 + (300 / 5)  // Result<int, MathError>
 
 match calculation {
     Success { value } => print("Result: ${value}")
-    Error { message } => print("Math error: ${message}")
+    Error message => print("Math error: ${message}")
 }
 ```
 
@@ -163,17 +163,17 @@ let nested = ((a + b) * c) / (d - e)   // Result<int, MathError>
 // Handle ALL of them the SAME WAY
 match simple {
     Success { value } => print("10 + 5 = ${value}")
-    Error { message } => print("Failed: ${message}")
+    Error message => print("Failed: ${message}")
 }
 
 match complex {
     Success { value } => print("Complex calc = ${value}")
-    Error { message } => print("Overflow/error: ${message}")
+    Error message => print("Overflow/error: ${message}")
 }
 
 match nested {
     Success { value } => print("Nested result = ${value}")
-    Error { message } => print("Division by zero or overflow: ${message}")
+    Error message => print("Division by zero or overflow: ${message}")
 }
 ```
 

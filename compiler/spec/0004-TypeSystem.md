@@ -323,7 +323,7 @@ let name = personResult.name    // Compilation error
 // CORRECT: Pattern match on Result first
 let name = match personResult {
     Success { value } => value.name
-    Error { message } => "error"
+    Error message => "error"
 }
 ```
 
@@ -404,13 +404,13 @@ let scores = [85, 92, 78, 96, 88]
 // Array access returns Result for safety
 match scores[0] {
     Success { value } => print("First score: ${toString(value)}")
-    Error { message } => print("Index error: ${message}")
+    Error message => print("Index error: ${message}")
 }
 
 // Bounds checking prevents runtime errors
 match scores[10] {  // Out of bounds
-    Success { value } => print("Never reached") 
-    Error { message } => print("Index out of bounds")  // This executes
+    Success { value } => print("Never reached")
+    Error message => print("Index out of bounds")  // This executes
 }
 ```
 
@@ -500,7 +500,7 @@ let result = processAges({})            // {} inferred as Map<string, int> from 
 // Map access returns Result for safety
 match ages["Alice"] {
     Success { value } => print("Alice is ${toString(value)} years old")
-    Error { message } => print("Alice not found")
+    Error message => print("Alice not found")
 }
 
 // Checking for key existence
@@ -1129,7 +1129,7 @@ fn complexOperation(data: String, count: Int) = processData(data, count)
 fn parseValue<T>(input: String) -> Result<T, ParseError> = ...
 
 // Union types with fields require explicit typing
-type Result<T, E> = Ok { value: T } | Err { error: E }
+type Result<T, E> = Success { value: T } | Error E
 ```
 
 #### Compilation Errors for Type Ambiguity
@@ -1147,15 +1147,15 @@ The compiler **MUST** emit errors when:
 ```osprey
 // REQUIRED: Safe division that cannot panic
 fn safeDivide(a: Int, b: Int) -> Result<Int, MathError> = match b {
-  0 => Err { error: DivisionByZero }
-  _ => Ok { value: a / b }
+  0 => Error DivisionByZero
+  _ => Success { value: a / b }
 }
 
 // REQUIRED: All results must be handled
 let result = safeDivide(a: 10, b: 2)
 match result {
-  Ok { value } => print("Result: ${value}")
-  Err { error } => handleError(error)
+  Success { value } => print("Result: ${value}")
+  Error error => handleError(error)
 }
 ```
 
@@ -1196,7 +1196,7 @@ match product {
         print("Product: ${value.name}")
         print("Price: ${value.price}")
     }
-    Error { message } => {
+    Error message => {
         print("Validation failed: ${message}")
     }
 }
@@ -1205,7 +1205,7 @@ match product {
 let invalid = Product { name: "", price: -10 }  // Returns Error variant
 match invalid {
     Success { value } => print("This won't execute")
-    Error { message } => print("Expected error: ${message}")
+    Error message => print("Expected error: ${message}")
 }
 ```
 
@@ -1221,7 +1221,7 @@ let name = product.name  // Compilation error - pattern matching required
 // CORRECT: Field access after unwrapping
 match product {
     Success { value } => print("Name: ${value.name}")  // Valid field access
-    Error { message } => print("Error: ${message}")
+    Error message => print("Error: ${message}")
 }
 ```
 

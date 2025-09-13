@@ -9,11 +9,11 @@
 The `Result` type is a generic union type with two variants:
 
 - `Success { value: T }`: Represents a successful result, containing the value of type `T`.
-- `Error { message: E }`: Represents an error, containing an error message or object of type `E`.
+- `Error E`: Represents an error, containing an error value of type `E`.
 
 **Example:**
 ```osprey
-type Result<T, E> = Success { value: T } | Error { message: E }
+type Result<T, E> = Success { value: T } | Error E
 ```
 
 The compiler **MUST** enforce that `Result` types are always handled with a `match` expression, preventing direct access to the underlying value and ensuring that all possible outcomes are considered.
@@ -27,7 +27,7 @@ let result = someFunctionThatCanFail()
 
 match result {
     Success { value } => print("Success: ${value}")
-    Error { message } => print("Error: ${message}")
+    Error message => print("Error: ${message}")
 }
 ```
 
@@ -77,7 +77,7 @@ let calculation = 1000000 * 1000000 + 50 / 2  // Result<int, MathError>
 
 match calculation {
     Success { value } => print("Final result: ${value}")
-    Error { message } => print("Calculation failed: ${message}")
+    Error message => print("Calculation failed: ${message}")
 }
 ```
 
