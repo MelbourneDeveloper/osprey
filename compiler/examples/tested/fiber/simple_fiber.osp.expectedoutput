@@ -1,0 +1,11 @@
+=== Simple Fiber ===
+Handling request 1, response code: 1
+Database query returned user data: 123000
+Starting background job processing...
+Processed 10 items
+Processed 25 more items, total: 35
+Sent message to channel
+Received message from channel: 42
+Spawned fiber task: 4
+Yield result: 123
+=== Complete ===

@@ -994,7 +994,7 @@ func (r *BuiltInFunctionRegistry) registerFiberFunctions() {
 		Signature:   "fiber_spawn(fn: () -> any) -> Fiber",
 		Description: "Spawns a new fiber to execute the given function concurrently.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "fn", Type: &ConcreteType{name: "function"}, Description: "The function to execute in the fiber"},
+			{Name: "fn", Type: &ConcreteType{name: "() -> any"}, Description: "The function to execute in the fiber"},
 		},
 		ReturnType:   &ConcreteType{name: "Fiber"},
 		Category:     CategoryFiber,

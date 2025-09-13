@@ -60,7 +60,37 @@ fn stage3(input: int) -> int = input - 50
 let pipeline = await(spawn stage3(await(spawn stage2(await(spawn stage1(25))))))
 print("\nPipeline result: ${pipeline}")
 
-// Example 6: Collection processing with fibers
+// Example 6: Channel-based producer-consumer
+let producerChannel = Channel(1)
+let consumerChannel = Channel(1)
+
+print("\nChannel-based communication:")
+send(producerChannel, 100)
+let produced = recv(producerChannel)
+print("Producer created: ${produced}")
+
+send(consumerChannel, produced * 2)
+let consumed = recv(consumerChannel)
+print("Consumer processed: ${consumed}")
+
+// Example 7: Lambda expressions for functional programming
+let doubler = fn(x: int) -> int => x * 2
+let tripler = fn(x: int) -> int => x * 3
+let adder = fn(a: int, b: int) -> int => a + b
+
+print("\nLambda expression results:")
+print("Double 10: ${doubler(10)}")
+print("Triple 7: ${tripler(7)}")
+print("Add 5 + 8: ${adder(5, 8)}")
+
+// Example 8: Advanced fiber operations - temporarily commented out due to type system bug
+// let advancedSpawn = fiber_spawn(fn() => mapPhase(15))
+// print("Advanced spawn result: ${advancedSpawn}")
+
+let advancedYield = fiber_yield(200)
+print("Advanced yield result: ${advancedYield}")
+
+// Example 9: Collection processing with fibers
 let numbers = [1, 2, 3, 4, 5]
 print("\nCollection access results:")
 let firstFiber = spawn mapPhase(1)  // Using literal values to avoid closure issues
@@ -75,7 +105,7 @@ match numbers[0] {
 }
 match numbers[1] {
     Success { value } => {
-        let result = await(secondFiber)  
+        let result = await(secondFiber)
         print("Element ${value} squared: ${result}")
     }
     Error { message } => print("Error accessing second element")

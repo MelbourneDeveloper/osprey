@@ -318,11 +318,56 @@ func (g *LLVMGenerator) generateSelectExpression(selectExpr *ast.SelectExpressio
 	return result, nil
 }
 
-// generateLambdaExpression generates lambda with proper closure support.
+// generateLambdaExpression generates lambda with basic support.
 func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (value.Value, error) {
-	// For now, evaluate lambda body immediately
-	// TODO: Implement proper closure creation with captured variables
-	return g.generateExpression(lambda.Body)
+	// Create a simple function for the lambda
+	funcName := fmt.Sprintf("lambda_%d", len(g.module.Funcs))
+
+	// Create parameters with names
+	var params []*ir.Param
+	for _, param := range lambda.Parameters {
+		llvmParam := ir.NewParam(param.Name, types.I64) // Assume int type for now
+		params = append(params, llvmParam)
+	}
+
+	// Create function with parameters
+	lambdaFunc := g.module.NewFunc(funcName, types.I64, params...)
+
+	// Create entry block
+	entryBlock := lambdaFunc.NewBlock("entry")
+
+	// Save current builder and switch to lambda
+	oldBuilder := g.builder
+	g.builder = entryBlock
+
+	// Save current variables and create new scope
+	savedVars := make(map[string]value.Value)
+	for k, v := range g.variables {
+		savedVars[k] = v
+	}
+
+	// Add lambda parameters to scope
+	for i, param := range lambda.Parameters {
+		if i < len(lambdaFunc.Params) {
+			g.variables[param.Name] = lambdaFunc.Params[i]
+		}
+	}
+
+	// Generate lambda body
+	bodyValue, err := g.generateExpression(lambda.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate lambda body: %w", err)
+	}
+
+	// Create return instruction
+	entryBlock.NewRet(bodyValue)
+
+	// Restore context
+	g.variables = savedVars
+	g.builder = oldBuilder
+
+	// Return the function
+	return lambdaFunc, nil
 }
 
 // generateModuleAccessExpression generates module access with fiber isolation.
