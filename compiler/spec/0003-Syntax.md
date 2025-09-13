@@ -172,7 +172,7 @@ let point = Point { x: 10, y: 20 }
 let person = Person { name: "Alice", age: 25 }
 ```
 
-For complete record type semantics, construction rules, field access, constraints, and validation behavior, see [Type System - Record Types](0005-TypeSystem.md#record-types).
+For complete record type semantics, construction rules, field access, constraints, and validation behavior, see [Type System - Record Types](0004-TypeSystem.md#record-types).
 
 ### Expressions
 
@@ -653,3 +653,25 @@ let result = match status {
     _ => "Unknown"
 }
 ```
+
+## Language Semantics
+
+### Variable Binding
+
+- `let` creates immutable bindings
+- `mut` creates mutable bindings
+- Variables must be initialized at declaration
+- Shadowing is allowed in nested scopes
+
+### Function Semantics
+
+- Functions are first-class values
+- All functions are pure (no side effects except I/O)
+- Recursive functions are supported
+- Tail recursion is optimized
+
+### Evaluation Order
+
+- Expressions are evaluated left-to-right
+- Function arguments are evaluated before the function call
+- Short-circuit evaluation for logical operators
