@@ -48,6 +48,18 @@ print("Example 7: Fold operations")
 let sumResult = range(1, 6) |> fold(0, sum)
 print(sumResult)
 
+// Example 8: Map collections with HM inference
+print("Example 8: Map collections")
+let prices = { "apple": 2, "banana": 3, "cherry": 5 }
+let inventory = { "widgets": 100, "gadgets": 50 }
+print("Created price map and inventory map via HM inference")
+
+// Safe map access with pattern matching
+match prices["apple"] {
+    Success { value } => print("Apple price: ${toString(value)}")
+    Error { message } => print("Apple not found")
+}
+
 let multiplyResult = range(1, 4) |> fold(1, multiply)
 print(multiplyResult)
 

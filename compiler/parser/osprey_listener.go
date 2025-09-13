@@ -112,6 +112,9 @@ type ospreyListener interface {
 	// EnterMatchExpr is called when entering the matchExpr production.
 	EnterMatchExpr(c *MatchExprContext)
 
+	// EnterNonTernaryExpr is called when entering the nonTernaryExpr production.
+	EnterNonTernaryExpr(c *NonTernaryExprContext)
+
 	// EnterSelectExpr is called when entering the selectExpr production.
 	EnterSelectExpr(c *SelectExprContext)
 
@@ -189,6 +192,12 @@ type ospreyListener interface {
 
 	// EnterListLiteral is called when entering the listLiteral production.
 	EnterListLiteral(c *ListLiteralContext)
+
+	// EnterMapLiteral is called when entering the mapLiteral production.
+	EnterMapLiteral(c *MapLiteralContext)
+
+	// EnterMapEntry is called when entering the mapEntry production.
+	EnterMapEntry(c *MapEntryContext)
 
 	// EnterDocComment is called when entering the docComment production.
 	EnterDocComment(c *DocCommentContext)
@@ -319,6 +328,9 @@ type ospreyListener interface {
 	// ExitMatchExpr is called when exiting the matchExpr production.
 	ExitMatchExpr(c *MatchExprContext)
 
+	// ExitNonTernaryExpr is called when exiting the nonTernaryExpr production.
+	ExitNonTernaryExpr(c *NonTernaryExprContext)
+
 	// ExitSelectExpr is called when exiting the selectExpr production.
 	ExitSelectExpr(c *SelectExprContext)
 
@@ -396,6 +408,12 @@ type ospreyListener interface {
 
 	// ExitListLiteral is called when exiting the listLiteral production.
 	ExitListLiteral(c *ListLiteralContext)
+
+	// ExitMapLiteral is called when exiting the mapLiteral production.
+	ExitMapLiteral(c *MapLiteralContext)
+
+	// ExitMapEntry is called when exiting the mapEntry production.
+	ExitMapEntry(c *MapEntryContext)
 
 	// ExitDocComment is called when exiting the docComment production.
 	ExitDocComment(c *DocCommentContext)

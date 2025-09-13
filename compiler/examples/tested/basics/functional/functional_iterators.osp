@@ -1,5 +1,6 @@
 // Functional Iterator Examples
 // Demonstrates: range, forEach, map, filter, fold with pipe operator |>
+// Enhanced: List and Map types with Hindley-Milner inference
 
 // Helper functions for transformations
 fn double(x: int) = x * 2
@@ -31,8 +32,36 @@ print(sum1)
 let sum2 = range(10, 15) |> fold(0, add)
 print(sum2)
 
+// List operations with Hindley-Milner inference
+print("5. List operations:")
+let data = [10, 20, 30, 40, 50]
+print("List created with HM inference")
+
+match data[2] {
+    Success { value } => print("Third element: ${toString(value)}")
+    Error { message } => print("Error accessing element")
+}
+
+// Map operations require usage context for HM inference
+print("6. Map operations would need constraints:")
+// let cache = Map() - HM can't infer K,V without usage!
+print("HM needs type constraints for Map<K,V> inference")
+
+// List operations with functional style
+print("7. List with functional operations:")
+let baseNumbers = [1, 2, 3, 4]
+print("Base numbers created")
+
+match baseNumbers[3] {
+    Success { value } => {
+        let squared = square(value)
+        print("Fourth number squared: ${toString(squared)}")
+    }
+    Error { message } => print("Error accessing number")
+}
+
 // More pipe operations on single values
-print("5. Chained single value operations:")
+print("8. Chained single value operations:")
 let result = 2 |> double |> square
 print(result)
 

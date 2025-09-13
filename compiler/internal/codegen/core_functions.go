@@ -45,6 +45,10 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 				return g.convertResultToString(arg, structType)
 			}
 		}
+		// Handle struct value directly (not pointer)
+		if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+			return g.convertResultToString(arg, structType)
+		}
 	}
 
 	inferredType, err := g.typeInferer.InferType(callExpr.Arguments[0])
@@ -146,12 +150,22 @@ func (g *LLVMGenerator) convertValueToStringByType(
 
 // convertResultToString extracts the value from a Result type and converts it to string
 func (g *LLVMGenerator) convertResultToString(
-	resultPtr value.Value, structType *types.StructType,
+	result value.Value, structType *types.StructType,
 ) (value.Value, error) {
-	// Check the discriminant first to see if it's Success or Error
-	discriminantPtr := g.builder.NewGetElementPtr(structType, resultPtr,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	discriminant := g.builder.NewLoad(types.I8, discriminantPtr)
+	var discriminant value.Value
+	var resultValue value.Value
+
+	// Handle both pointer and value cases
+	if _, ok := result.Type().(*types.PointerType); ok {
+		// Pointer case: use getelementptr and load
+		discriminantPtr := g.builder.NewGetElementPtr(structType, result,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+		discriminant = g.builder.NewLoad(types.I8, discriminantPtr)
+	} else {
+		// Struct value case: use extractvalue
+		discriminant = g.builder.NewExtractValue(result, 1)
+		resultValue = g.builder.NewExtractValue(result, 0)
+	}
 
 	// Check if discriminant == 0 (Success)
 	zero := constant.NewInt(types.I8, 0)
@@ -171,44 +185,82 @@ func (g *LLVMGenerator) convertResultToString(
 
 	// Success case: extract and convert the value
 	g.builder = successBlock
-	valuePtr := g.builder.NewGetElementPtr(structType, resultPtr,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	resultValue := g.builder.NewLoad(structType.Fields[0], valuePtr)
+
+	// Get the value - handle both pointer and struct cases
+	if _, ok := result.Type().(*types.PointerType); ok {
+		// Pointer case: use getelementptr and load
+		valuePtr := g.builder.NewGetElementPtr(structType, result,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		resultValue = g.builder.NewLoad(structType.Fields[0], valuePtr)
+	}
+	// Struct value case: resultValue was already extracted above with NewExtractValue
 
 	var (
 		successStr value.Value
 		err        error
 	)
 
-	// Convert based on the value type
-
+	// Convert based on the value type and format as Success(value)
+	var valueStr value.Value
 	switch structType.Fields[0] {
 	case types.I64:
 		// Check if this i64 should be treated as a boolean
 		// For Result<bool, Error> types, the inner value is i64 but semantically boolean
 		if g.isResultValueSemanticBoolean(resultValue) {
-			successStr, err = g.generateBoolToString(resultValue)
+			valueStr, err = g.generateBoolToString(resultValue)
 		} else {
-			successStr, err = g.generateIntToString(resultValue)
+			valueStr, err = g.generateIntToString(resultValue)
 		}
 	case types.I1:
-		successStr, err = g.generateBoolToString(resultValue)
+		valueStr, err = g.generateBoolToString(resultValue)
 	case types.I8Ptr:
-		successStr = resultValue // Already a string
+		valueStr = resultValue // Already a string
 	default:
 		// For complex types (like ProcessHandle), convert to a generic string
-		successStr = g.createGlobalString("Success")
+		valueStr = g.createGlobalString("complex_value")
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
+	// Format as "Success(value)" using sprintf
+	successFormatStr := g.createGlobalString("Success(%s)")
+	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
+	successBuffer := g.builder.NewCall(g.functions["malloc"], bufferSize)
+	g.builder.NewCall(g.functions["sprintf"], successBuffer, successFormatStr, valueStr)
+	successStr = successBuffer
+
 	successBlock.NewBr(endBlock)
 
-	// Error case: return "Error"
+	// Error case: format as "Error(message)"
 	g.builder = errorBlock
-	errorStr := g.createGlobalString("Error")
+
+	// Extract the error message from the Result struct
+	var errorMsg value.Value
+	if _, ok := result.Type().(*types.PointerType); ok {
+		// Pointer case: use getelementptr and load
+		errorMsgPtr := g.builder.NewGetElementPtr(structType, result,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		errorMsg = g.builder.NewLoad(structType.Fields[0], errorMsgPtr)
+	} else {
+		// Struct value case: extract the value field
+		errorMsg = g.builder.NewExtractValue(result, 0)
+	}
+
+	// Format as "Error(message)" - handle different error message types
+	var errorStr value.Value
+	if structType.Fields[0] == types.I8Ptr {
+		// String error message - format as Error(message)
+		errorFormatStr := g.createGlobalString("Error(%s)")
+		errorBuffer := g.builder.NewCall(g.functions["malloc"], bufferSize)
+		g.builder.NewCall(g.functions["sprintf"], errorBuffer, errorFormatStr, errorMsg)
+		errorStr = errorBuffer
+	} else {
+		// Non-string error - just use "Error" for now
+		// TODO: Handle other error types properly
+		errorStr = g.createGlobalString("Error")
+	}
 
 	errorBlock.NewBr(endBlock)
 
@@ -558,4 +610,80 @@ func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (val
 	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
 
 	return result, nil
+}
+
+// generateParseIntCall handles parseInt(s: string) -> Result<int, string> function calls.
+func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (value.Value, error) {
+	err := validateBuiltInArgs(ParseIntFunc, callExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	str, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the atoll function (ASCII to long long)
+	atollFunc, ok := g.functions["atoll"]
+	if !ok {
+		atollFunc = g.module.NewFunc("atoll", types.I64, ir.NewParam("str", types.I8Ptr))
+		g.functions["atoll"] = atollFunc
+	}
+
+	// Call atoll(str) to convert string to integer
+	parsedValue := g.builder.NewCall(atollFunc, str)
+
+	// TODO: Add proper error checking - atoll returns 0 for invalid strings
+	// For now, assume parsing always succeeds
+
+	// Create a Result<int, string>
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Store the parsed integer in the value field
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(parsedValue, valuePtr)
+
+	// Store the discriminant (0 for Success)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
+	return result, nil
+}
+
+// generateJoinCall handles join(list: List<string>, separator: string) -> string function calls.
+func (g *LLVMGenerator) generateJoinCall(callExpr *ast.CallExpression) (value.Value, error) {
+	err := validateBuiltInArgs(JoinFunc, callExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	// For now, return a placeholder implementation
+	// TODO: Implement proper list handling once List<T> type is fully supported
+
+	separator, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the separator as a placeholder result
+	// In a real implementation, we would iterate through the list and join with separator
+	return separator, nil
+}
+
+// generateListConstructorCall handles List() constructor calls.
+func (g *LLVMGenerator) generateListConstructorCall(_ *ast.CallExpression) (value.Value, error) {
+	// For now, return a simple placeholder (null pointer)
+	// TODO: Implement proper dynamic list structure
+	return constant.NewNull(types.I8Ptr), nil
+}
+
+// generateMapConstructorCall handles Map() constructor calls.
+func (g *LLVMGenerator) generateMapConstructorCall(_ *ast.CallExpression) (value.Value, error) {
+	// For now, return a simple placeholder (null pointer)
+	// TODO: Implement proper dynamic map structure
+	return constant.NewNull(types.I8Ptr), nil
 }

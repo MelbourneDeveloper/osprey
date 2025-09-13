@@ -53,5 +53,17 @@ match result3 {
     Error { message } => print("✗ Process spawn unexpectedly failed")
 }
 
+// Test 4: Result<ProcessHandle> toString conversion
+print("--- Test 4: ProcessHandle Result toString ---")
+let result4 = spawnProcess("echo 'Testing toString'", processEventHandler)
+print("ProcessHandle Result toString: ${toString(result4)}")  // Tests convertResultToString for ProcessHandle
+match result4 {
+    Success { value } => {
+        awaitProcess(value)
+        cleanupProcess(value)
+    }
+    Error { message } => print("Process 4 failed")
+}
+
 print("=== Async Process Management Demo Complete ===")
 print("Note: Process output appears via C runtime callbacks during execution") 

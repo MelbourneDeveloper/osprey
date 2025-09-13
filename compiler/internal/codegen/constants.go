@@ -48,6 +48,18 @@ const (
 	TypeFunction     = "Function"
 	TypeFiber        = "Fiber"
 	TypeChannel      = "Channel"
+	TypeList         = "List"
+	TypeMap          = "Map"
+)
+
+// Type argument counts.
+const (
+	TwoTypeArgs = 2
+)
+
+// Size constants.
+const (
+	PointerPairSize = 16 // Size of two pointers (key, value) in bytes
 )
 
 // Function names.
@@ -66,6 +78,8 @@ const (
 	LengthFunc    = "length"
 	ContainsFunc  = "contains"
 	SubstringFunc = "substring"
+	ParseIntFunc  = "parseInt"
+	JoinFunc      = "join"
 
 	// Process and system functions
 	SpawnProcessFunc = "spawnProcess"

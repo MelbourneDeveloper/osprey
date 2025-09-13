@@ -8,10 +8,19 @@ const (
 	unknownPatternConstructor = "unknown"
 )
 
+// buildNonTernaryExpr builds a non-ternary expression (used in match to avoid conflicts).
+func (b *Builder) buildNonTernaryExpr(ctx parser.INonTernaryExprContext) Expression {
+	if ctx == nil {
+		return nil
+	}
+
+	return b.buildComparisonExpr(ctx.ComparisonExpr())
+}
+
 func (b *Builder) buildMatchExpr(ctx parser.IMatchExprContext) Expression {
 	if ctx.MATCH() != nil {
 		// This is a match expression
-		expr := b.buildBinaryExpr(ctx.BinaryExpr())
+		expr := b.buildNonTernaryExpr(ctx.NonTernaryExpr())
 
 		arms := make([]MatchArm, 0)
 

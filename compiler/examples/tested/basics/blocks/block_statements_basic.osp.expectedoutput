@@ -1,5 +1,6 @@
 === Basic Block Statements Test ===
-Test 1 - Simple block: 42
-Test 2 - Block computation: 20
-Test 3 - Multiple statements: 15
+Test 1 - Block with list: 42
+Test 2 - Block with map computation: 20
+Test 3 - Multiple statements with collections: 15
+Test 4 - Nested collections: 20
 === Basic Block Statements Complete === 

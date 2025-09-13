@@ -1,15 +1,38 @@
-// 🚀 SUPREMO BASIC ALGEBRAIC EFFECTS! 🔥
+// Collections with Algebraic Effects and Fibers
 
-// Basic algebraic effects
 effect Logger {
     log: fn(string) -> Unit
 }
 
-// Pure function - no effects
-fn double(x: int) -> int = x * 2
+// Function to process list data with effects
+fn processList(items) -> int !Logger = {
+    let first = match items[0] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    perform Logger.log("List processing: " + toString(first))
+    first * 2
+}
 
-// Main function to test
+// Function to process fiber with effects
+fn processWithFiber(taskValue: int) -> int !Logger = {
+    perform Logger.log("Fiber processing task: " + toString(taskValue))
+    let result = taskValue * 2
+    perform Logger.log("Fiber result: " + toString(result))
+    result
+}
+
+// Main function with handlers
 fn main() -> Unit = {
-    let doubled = double(21)
-    print(toString(doubled))
+    let scores = [21, 42, 63]
+    
+    handle Logger
+        log msg => print("LOG: " + msg)
+    in {
+        let listResult = processList(scores)
+        let fiberResult = processWithFiber(10)
+        
+        print("List result: " + toString(listResult))
+        print("Fiber result: " + toString(fiberResult))
+    }
 } 
