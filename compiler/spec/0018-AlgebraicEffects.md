@@ -1,14 +1,14 @@
-## 18. Algebraic Effects
+## Algebraic Effects
 
 **Based on Plotkin & Pretnar's foundational work on algebraic effects and handlers**
 
 Osprey has a first class effects system.
 
-### 18.0 IMPLEMENTATION STATUS
+### IMPLEMENTATION STATUS
 
 **PARTIALLY IMPLEMENTED** - Effect declarations, perform expressions, and **COMPILE-TIME SAFETY** are fully working! Handler expressions parsing is implemented but handler execution needs completion.
 
-### 18.1 Theoretical Foundation
+### Theoretical Foundation
 
 Algebraic effects are computational effects that can be represented by:
 1. **A set of operations** that produce the effects
@@ -22,13 +22,13 @@ The **free model** of the equational theory generates the computational monad fo
 
 **Key insight from Plotkin & Pretnar**: Handlers are **effect deconstructors** that provide interpretations, while operations are **effect constructors** that produce effects.
 
-### 18.2 New Keywords
+### New Keywords
 
 ```
 effect perform handler with do
 ```
 
-### 18.3 Effect Declarations
+### Effect Declarations
 
 An effect declares a set of operations in the algebraic theory:
 
@@ -48,7 +48,7 @@ effect State {
 
 This declares a **State** effect with operations `get` and `set`. No equations are specified (free theory).
 
-### 18.4 Effectful Function Types
+### Effectful Function Types
 
 Functions declare their effect dependencies with `!EffectSet`:
 
@@ -60,7 +60,7 @@ fn fetch(url: String) -> String ![IO, Net] = ...
 
 The effect annotation declares that this function may perform operations from the specified effects.
 
-### 18.5 Performing Operations
+### Performing Operations
 
 ```
 perform EffectName.operation(args...)
@@ -79,7 +79,7 @@ fn incrementTwice() -> Int !State = {
 
 **CRITICAL COMPILE-TIME SAFETY**: If no handler intercepts the call, the compiler produces a **compilation error**. Unhandled effects are **NEVER** permitted at runtime.
 
-### 18.6 Handlers - Models of the Effect Theory
+### Handlers - Models of the Effect Theory
 
 A handler provides a **model** of the effect theory by specifying how each operation should be interpreted:
 
@@ -104,7 +104,7 @@ in
 
 The `handle...in` construct applies the **unique homomorphism** from the free model (where `incrementTwice` lives) to the handler model.
 
-### 18.7 Handler Correctness
+### Handler Correctness
 
 From Plotkin & Pretnar: A handler is **correct** if its interpretation holds in the corresponding model of the effect theory.
 
@@ -113,7 +113,7 @@ In Osprey:
 - **Type checking** ensures handler signatures match operation signatures  
 - **Effect inference** computes minimal effect sets for expressions
 
-### 18.8 Nested Handlers and Composition
+### Nested Handlers and Composition
 
 Handlers can be nested. The **innermost handler** wins for each effect:
 
@@ -127,7 +127,7 @@ in
     perform Logger.log "test"  // Prints "[INNER] test"
 ```
 
-### 18.9 Effect Sets and Inference
+### Effect Sets and Inference
 
 * The compiler **infers the minimal effect set** for every expression
 * Functions must **declare** their effects or be **pure**  
@@ -140,7 +140,7 @@ fn loggedCalculation<E>(x: Int) -> Int !E = {
 }
 ```
 
-### 18.10 Compilation Model
+### Compilation Model
 
 1. **Effect Verification**: Front-end verifies all effects are handled
 2. **Handler Registration**: Build handler stack during type checking
@@ -149,7 +149,7 @@ fn loggedCalculation<E>(x: Int) -> Int !E = {
 
 **Revolutionary Safety**: Unlike other effect systems, unhandled effects cause **compile-time errors**, never runtime crashes.
 
-### 18.11 Comparison with Research
+### Comparison with Research
 
 | Aspect                | Plotkin & Pretnar Theory | Osprey Implementation         |
 | --------------------- | ------------------------ | ----------------------------- |
@@ -158,7 +158,7 @@ fn loggedCalculation<E>(x: Int) -> Int !E = {
 | **Handling**          | Unique homomorphisms     | Compile-time dispatch         |
 | **Safety**            | Theoretical correctness  | **Compile-time verification** |
 
-### 18.12 Examples
+### Examples
 
 ```osprey
 effect Exception {
@@ -201,9 +201,9 @@ in
 
 ---
 
-## 21. **OSPREY'S REVOLUTIONARY EFFECT SAFETY - BEYOND THE RESEARCH**
+## **OSPREY'S REVOLUTIONARY EFFECT SAFETY - BEYOND THE RESEARCH**
 
-### 21.1 **COMPILE-TIME EFFECT VERIFICATION**
+### **COMPILE-TIME EFFECT VERIFICATION**
 
 While Plotkin & Pretnar established the theoretical foundation, Osprey implements **the first practical effect system with complete compile-time safety**:
 
@@ -219,7 +219,7 @@ fn main() -> Unit = {
 
 **Error**: `COMPILATION ERROR: Unhandled effect 'Logger.log' - all effects must be explicitly handled or forwarded in function signatures.`
 
-### 21.2 **SUPERIORITY TO OTHER IMPLEMENTATIONS**
+### **SUPERIORITY TO OTHER IMPLEMENTATIONS**
 
 | System            | Theoretical Basis       | Runtime Safety | Compile-time Safety         |
 | ----------------- | ----------------------- | -------------- | --------------------------- |
@@ -228,7 +228,7 @@ fn main() -> Unit = {
 | **Koka Effects**  | Plotkin & Pretnar       | ❌ Aborts       | ⚠️ Effect inference          |
 | **🔥 OSPREY 🔥**    | **Plotkin & Pretnar +** | ✅ **Safe**     | ✅ **Complete verification** |
 
-### 21.3 **IMPLEMENTATION INNOVATION**
+### **IMPLEMENTATION INNOVATION**
 
 Osprey extends the theoretical foundation with:
 
@@ -239,9 +239,9 @@ Osprey extends the theoretical foundation with:
 
 **🚀 OSPREY: ALGEBRAIC EFFECTS THEORY REALIZED WITH TOTAL SAFETY! 🚀**
 
-## 22. **CIRCULAR DEPENDENCY DETECTION - REVOLUTIONARY SAFETY**
+## **CIRCULAR DEPENDENCY DETECTION - REVOLUTIONARY SAFETY**
 
-### 22.1 **COMPILE-TIME CIRCULAR DEPENDENCY DETECTION**
+### **COMPILE-TIME CIRCULAR DEPENDENCY DETECTION**
 
 Osprey implements **the world's first effect system with complete circular dependency detection** at compile time:
 
@@ -266,7 +266,7 @@ fn main() -> Unit =
 
 **Error**: `COMPILATION ERROR: Circular effect dependency detected - handler StateA.getFromB calls function that performs StateB.getFromA, which is handled by calling StateA.getFromB (infinite recursion detected)`
 
-### 22.2 **INFINITE HANDLER RECURSION DETECTION**
+### **INFINITE HANDLER RECURSION DETECTION**
 
 **🚨 HANDLERS CALLING THEMSELVES = COMPILATION ERROR! 🚨**
 
@@ -284,7 +284,7 @@ fn main() -> Unit =
 
 **Error**: `COMPILATION ERROR: Infinite handler recursion detected - handler Counter.increment calls function that performs the same effect it handles (infinite recursion detected)`
 
-### 22.3 **SAFETY GUARANTEES**
+### **SAFETY GUARANTEES**
 
 | **Safety Check**          | **Osprey**      | **Other Languages** |
 | ------------------------- | --------------- | ------------------- |
@@ -293,7 +293,7 @@ fn main() -> Unit =
 | **Handler Recursion**     | ✅ Compile Error | ❌ Infinite Loop     |
 | **Effect Type Safety**    | ✅ Complete      | ⚠️ Partial           |
 
-### 22.4 **STATIC ANALYSIS ALGORITHM**
+### **STATIC ANALYSIS ALGORITHM**
 
 Osprey's compiler performs **static call graph analysis** to detect:
 

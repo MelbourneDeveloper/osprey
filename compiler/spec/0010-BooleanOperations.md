@@ -1,8 +1,8 @@
 10. [Boolean Operations](0010-BooleanOperations.md)
-    - [Boolean Pattern Matching](#101-boolean-pattern-matching)
-    - [Boolean Operators](#102-boolean-operators)
+    - [Boolean Pattern Matching](#boolean-pattern-matching)
+    - [Boolean Operators](#boolean-operators)
 
-# 10. Boolean Operations
+# Boolean Operations
 
 Use pattern matching for conditional logic:
 
@@ -19,7 +19,7 @@ let max = match a > b {
 }
 ```
 
-## 10.1 Boolean Pattern Matching
+## Boolean Pattern Matching
 
 Osprey uses pattern matching instead of traditional if-else statements for boolean operations. This ensures exhaustive handling of both true and false cases.
 
@@ -45,7 +45,7 @@ let category = match score >= 90 {
 }
 ```
 
-## 10.2 Boolean Operators
+## Boolean Operators
 
 - `&&` - Logical AND
 - `||` - Logical OR  

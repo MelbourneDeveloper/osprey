@@ -1,8 +1,8 @@
 14. [Error Handling](0015-ErrorHandling.md)
-    - [The Result Type](#151-the-result-type)
+    - [The Result Type](#the-result-type)
 
-## 14. Error Handling
-### 14.1 The Result Type
+## Error Handling
+### The Result Type
 
 **CRITICAL**: All functions that can fail **MUST** return a `Result` type. There are no exceptions, panics, or nulls. This is a core design principle of the language to ensure safety and eliminate entire classes of runtime errors.
 
@@ -33,7 +33,7 @@ match result {
 
 This approach guarantees that error handling is explicit, robust, and checked at compile time.
 
-### 14.2 Compound Expression Result Propagation
+### Compound Expression Result Propagation
 
 **🚨 CRITICAL DESIGN PRINCIPLE 🚨**: When multiple arithmetic operations are combined in a single expression, the **entire expression** returns a single `Result` type, not each individual operation.
 

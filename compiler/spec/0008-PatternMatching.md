@@ -1,21 +1,21 @@
 8. [Pattern Matching](0008-PatternMatching.md)
-   - [Basic Patterns](#81-basic-patterns)
-   - [Union Type Patterns](#82-union-type-patterns)
-   - [Wildcard Patterns](#83-wildcard-patterns)
-   - [Type Annotation Patterns](#84-type-annotation-patterns)
-       - [Type Annotation Patterns](#1-type-annotation-patterns)
-       - [Anonymous Structural Matching](#2-anonymous-structural-matching)
-       - [Named Structural Matching](#3-named-structural-matching)
-       - [Mixed Type and Structural Patterns](#4-mixed-type-and-structural-patterns)
-   - [Match Expression Type Safety Rules](#85-match-expression-type-safety-rules)
+   - [Basic Patterns](#basic-patterns)
+   - [Union Type Patterns](#union-type-patterns)
+   - [Wildcard Patterns](#wildcard-patterns)
+   - [Type Annotation Patterns](#type-annotation-patterns)
+       - [Type Annotation Patterns](#type-annotation-patterns)
+       - [Anonymous Structural Matching](#anonymous-structural-matching)
+       - [Named Structural Matching](#named-structural-matching)
+       - [Mixed Type and Structural Patterns](#mixed-type-and-structural-patterns)
+   - [Match Expression Type Safety Rules](#match-expression-type-safety-rules)
 
-## 8. Pattern Matching
+## Pattern Matching
 
 **🔥 CRITICAL SPECIFICATION**: Pattern matching in Osprey MUST use **FIELD NAME MATCHING ONLY**. Pattern matching on record types is based on **structural equivalence by field names**, never field ordering or positioning.
 
-**IMPLEMENTATION REQUIREMENT**: The compiler MUST implement pattern matching using field name lookup and structural type unification as specified in the Hindley-Milner Type Inference requirements (see [Type System](0005-TypeSystem.md#50-hindley-milner-type-inference-foundation)).
+**IMPLEMENTATION REQUIREMENT**: The compiler MUST implement pattern matching using field name lookup and structural type unification as specified in the Hindley-Milner Type Inference requirements (see [Type System](0005-TypeSystem.md#hindley-milner-type-inference-foundation)).
 
-### 8.1 Basic Patterns
+### Basic Patterns
 
 ```osprey
 let result = match value {
@@ -25,7 +25,7 @@ let result = match value {
 }
 ```
 
-## 8.2 Union Type Patterns
+## Union Type Patterns
 
 ```osprey
 type Option = Some { value: Int } | None
@@ -36,7 +36,7 @@ let message = match option {
 }
 ```
 
-## 8.3 Wildcard Patterns
+## Wildcard Patterns
 
 The underscore `_` matches any value:
 
@@ -48,7 +48,7 @@ let category = match score {
 }
 ```
 
-## 8.4 Type Annotation Patterns
+## Type Annotation Patterns
 
 Type annotation patterns use the `:` operator to match values of specific types. This is **REQUIRED** for `any` types.
 
@@ -139,7 +139,7 @@ match anyValue {
 }
 ```
 
-## 8.5 Result Type Pattern Matching (Arithmetic Expressions)
+## Result Type Pattern Matching (Arithmetic Expressions)
 
 **🔥 CRITICAL**: All arithmetic expressions return `Result<T, MathError>`. You **MUST** handle them with pattern matching.
 
@@ -212,11 +212,11 @@ match step1 {
 }
 ```
 
-## 8.6 Match Expression Type Safety Rules
+## Match Expression Type Safety Rules
 
 ```
 
-## 8.7 Ternary Match Expression (Syntactic Sugar)
+## Ternary Match Expression (Syntactic Sugar)
 
 To reduce verbosity for common two-armed match scenarios, Osprey provides a concise ternary match expression. This is **purely syntactic sugar** and desugars to a standard `match` expression internally.
 

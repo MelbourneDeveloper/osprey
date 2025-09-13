@@ -1,9 +1,9 @@
 9. [Block Expressions](0009-BlockExpressions.md)
-   - [Block Scoping Rules](#91-block-scoping-rules)
-   - [Block Return Values](#92-block-return-values)
-   - [Performance Characteristics](#93-performance-characteristics)
+   - [Block Scoping Rules](#block-scoping-rules)
+   - [Block Return Values](#block-return-values)
+   - [Performance Characteristics](#performance-characteristics)
 
-# 9. Block Expressions
+# Block Expressions
 
 Block expressions allow grouping multiple statements together and returning a value from the final expression. They create a new scope for variable declarations and enable sequential execution with proper scoping rules.
 
@@ -42,7 +42,7 @@ let calc = {
 print("Calculation: ${calc}")  // prints "Calculation: 30"
 ```
 
-## 9.1 Block Scoping Rules
+## Block Scoping Rules
 
 Block expressions create a new lexical scope:
 - Variables declared inside a block are only visible within that block
@@ -63,14 +63,14 @@ print("Outer x: ${x}")      // 100 (unchanged)
 // print("${y}")            // ERROR: y not in scope
 ```
 
-## 9.2 Block Return Values
+## Block Return Values
 
 Block expressions return the value of their final expression:
 - If the block ends with an expression, that value is returned
 - If the block has no final expression, it returns the unit type
 - The block's type is determined by the type of the final expression
 
-## 9.3 Performance Characteristics
+## Performance Characteristics
 
 Block expressions are zero-cost abstractions:
 - **Compile-time scoping**: All variable scoping resolved at compile time

@@ -1,19 +1,19 @@
 13. [Built-in Functions](0013-Built-InFunctions.md)
-    - [Basic I/O Functions](#131-basic-io-functions)
-    - [File System Functions](#132-file-system-functions)
-    - [Process Operations](#133-process-operations)
-    - [Functional Programming](#134-functional-programming)
-    - [HTTP Functions](#135-http-functions)
-    - [WebSocket Functions](#136-websocket-functions)
-    - [Fiber and Concurrency Functions](#137-fiber-and-concurrency-functions)
+    - [Basic I/O Functions](#basic-io-functions)
+    - [File System Functions](#file-system-functions)
+    - [Process Operations](#process-operations)
+    - [Functional Programming](#functional-programming)
+    - [HTTP Functions](#http-functions)
+    - [WebSocket Functions](#websocket-functions)
+    - [Fiber and Concurrency Functions](#fiber-and-concurrency-functions)
 
-# 13. Built-in Functions
+# Built-in Functions
 
 🚀 **IMPLEMENTATION STATUS**: HTTP and basic I/O functions are implemented and working. WebSocket functions are implemented but undergoing testing. Fiber operations are partially implemented.
 
 Osprey provides built-in functions for I/O, networking, concurrency, and functional programming. All functions follow Osprey's functional programming paradigms with Result types for error handling.
 
-## 13.1 Basic I/O Functions
+## Basic I/O Functions
 
 ```osprey
 print(value: int | string | bool) -> int
@@ -61,7 +61,7 @@ match contains("hello", "ell") {
 #### `substring(s: string, start: int, end: int) -> Result<string, StringError>`
 Extracts a substring from start to end.
 
-## 13.2 File System Functions
+## File System Functions
 
 ### `writeFile(path: string, content: string) -> Result<Success, string>`
 Writes content to a file.
@@ -78,7 +78,7 @@ Creates a directory.
 ### `fileExists(path: string) -> bool`
 Checks if file exists.
 
-## 13.3 Process Operations
+## Process Operations
 
 ### `spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessResult, string>`
 Spawns external process with asynchronous stdout/stderr collection via callbacks.
@@ -102,7 +102,7 @@ Waits for process completion and returns exit code.
 ### `cleanupProcess(processId: int) -> void`
 Cleans up process resources after completion.
 
-## 13.4 Functional Programming
+## Functional Programming
 
 ### Iterator Functions
 
@@ -150,15 +150,15 @@ The pipe operator passes the left expression as the first argument to the right 
 range(1, 10) |> map(square) |> filter(isEven) |> forEach(print)
 ```
 
-## 13.5 HTTP Functions
+## HTTP Functions
 
 HTTP functions for server and client operations are documented in [Chapter 15 - HTTP](0015-HTTP.md).
 
-## 13.6 WebSocket Functions
+## WebSocket Functions
 
 WebSocket functions for real-time bidirectional communication are documented in [Chapter 16 - WebSockets](0016-WebSockets.md).
 
-## 13.7 Fiber and Concurrency Functions
+## Fiber and Concurrency Functions
 
 Osprey provides lightweight concurrency through fibers.
 
@@ -214,7 +214,7 @@ await(producer)
 await(consumer)
 ```
 
-## 13.8 Functional Programming Examples
+## Functional Programming Examples
 
 Combining functional programming capabilities for data processing:
 

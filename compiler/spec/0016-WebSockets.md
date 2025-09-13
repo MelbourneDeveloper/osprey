@@ -1,22 +1,22 @@
-## 16. WebSocket Functions
+# WebSocket Functions
 
 🔒 **IMPLEMENTATION STATUS**: WebSocket functions are implemented with security features but have critical design flaws that violate Osprey's functional programming principles.
 
 ### Table of Contents
-- [16. WebSocket Functions](#16-websocket-functions)
+- [16. WebSocket Functions](#websocket-functions)
   - [Table of Contents](#table-of-contents)
-  - [16.1 WebSocket Core Types](#161-websocket-core-types)
-  - [16.2 WebSocket Security Implementation](#162-websocket-security-implementation)
-  - [16.3 WebSocket Client Functions](#163-websocket-client-functions)
+  - [16.1 WebSocket Core Types](#websocket-core-types)
+  - [16.2 WebSocket Security Implementation](#websocket-security-implementation)
+  - [16.3 WebSocket Client Functions](#websocket-client-functions)
     - [`websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`](#websocketconnecturl-string-messagehandler-fnstring---resultsuccess-string---resultwebsocketid-string)
     - [`websocketSend(wsID: Int, message: String) -> Result<Success, String>`](#websocketsendwsid-int-message-string---resultsuccess-string)
     - [`websocketClose(wsID: Int) -> Result<Success, String>`](#websocketclosewsid-int---resultsuccess-string)
-  - [16.4 WebSocket Server Functions](#164-websocket-server-functions)
+  - [16.4 WebSocket Server Functions](#websocket-server-functions)
     - [`websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`](#websocketcreateserverport-int-address-string-path-string---resultserverid-string)
     - [`websocketServerListen(serverID: Int) -> Result<Success, String>`](#websocketserverlistenserverid-int---resultsuccess-string)
     - [`websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>`](#websocketserverbroadcastserverid-int-message-string---resultsuccess-string)
     - [`websocketStopServer(serverID: Int) -> Result<Success, String>`](#websocketstopserverserverid-int---resultsuccess-string)
-  - [16.5 Complete WebSocket Example](#165-complete-websocket-example)
+  - [16.5 Complete WebSocket Example](#complete-websocket-example)
 
 WebSockets provide real-time, bidirectional communication between client and server. Osprey implements WebSocket support following functional programming principles with comprehensive error handling through Result types.
 
@@ -26,7 +26,7 @@ All WebSocket functions comply with:
 - **Immutable message handling** with functional callbacks
 - **Type safety** through structured error handling
 
-### 16.1 WebSocket Core Types
+## WebSocket Core Types
 
 ```osprey
 type WebSocketID = Int
@@ -45,7 +45,7 @@ type WebSocketConnection = {
 }
 ```
 
-### 16.2 WebSocket Security Implementation
+## WebSocket Security Implementation
 
 Osprey's WebSocket implementation follows **OWASP WebSocket Security Guidelines** with multiple security layers:
 
@@ -59,7 +59,7 @@ Osprey's WebSocket implementation follows **OWASP WebSocket Security Guidelines*
 - **Buffer length validation**: Maximum limits prevent DoS attacks
 - **Memory boundary checking**: No buffer overruns possible
 
-### 16.3 WebSocket Client Functions
+## WebSocket Client Functions
 
 #### `websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`
 
@@ -137,7 +137,7 @@ match closeResult {
 }
 ```
 
-### 16.4 WebSocket Server Functions
+## WebSocket Server Functions
 
 #### `websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`
 
@@ -230,7 +230,7 @@ match stopResult {
 }
 ```
 
-### 16.5 Complete WebSocket Example
+## Complete WebSocket Example
 
 A practical WebSocket server and client implementation demonstrating real-time communication:
 
