@@ -80,7 +80,7 @@ let mega = 1 + 2 * 3 - 4 / 2 + 5       // mega: Result<int, MathError>
 let calculation = 1000000 * 1000000 + 50 / 2  // Result<int, MathError>
 
 match calculation {
-    Success { value } => print("Final result: ${value}")
+    Success value => print("Final result: ${value}")
     Error message => print("Calculation failed: ${message}")
 }
 ```

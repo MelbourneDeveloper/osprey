@@ -322,7 +322,7 @@ let name = personResult.name    // Compilation error
 
 // CORRECT: Pattern match on Result first
 let name = match personResult {
-    Success { value } => value.name
+    Success value => value.name
     Error message => "error"
 }
 ```
