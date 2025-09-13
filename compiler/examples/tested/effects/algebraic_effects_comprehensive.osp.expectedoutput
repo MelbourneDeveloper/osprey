@@ -18,6 +18,6 @@
 ⬆️ Counter incremented
 📝 LOG: Tasks completed: 20, 15
 📝 LOG: Testing mocked input via effects
-📝 LOG: Mock input received: mocked user input
-📝 LOG: Mock input toString: mocked user input
+📝 LOG: Mock input success: mocked user input
+📝 LOG: Mock input toString: Success(mocked user input)
 🎯 Final Results: Calc=52, Process=42, Errors=[0,100,50], Async=35 🎉 

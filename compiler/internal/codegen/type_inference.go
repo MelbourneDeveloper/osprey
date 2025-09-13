@@ -781,7 +781,7 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 // bindSuccessPattern binds pattern fields for Success constructor
 func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType Type) bool {
 	// Handle GenericType Result<T, E>
-	if gt, ok := discriminantType.(*GenericType); ok && gt.name == "Result" && len(gt.typeArgs) >= 1 {
+	if gt, ok := discriminantType.(*GenericType); ok && gt.name == TypeResult && len(gt.typeArgs) >= 1 {
 		successType := gt.typeArgs[0]
 		if len(pattern.Fields) > 0 {
 			ti.env.Set(pattern.Fields[0], successType)

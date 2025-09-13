@@ -6,6 +6,6 @@ true
 true
 false
 Testing Result<bool> toString:
-<Result[bool, MathError]>
-<Result[bool, MathError]>
-<Result[bool, MathError]>
+Success(true)
+Success(false)
+Success(false)

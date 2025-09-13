@@ -820,6 +820,12 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 	case "any":
 		return types.I64 // any type is represented as i64
 	default:
+		// Parser truncates generic parameters, so "Result" without parameters
+		// defaults to Result<string, Error> for now
+		if ct.name == TypeResult {
+			return g.getResultType(types.I8Ptr)
+		}
+		
 		// Handle Result types like "Result<int, MathError>"
 		if strings.HasPrefix(ct.name, "Result<") {
 			// Result types are represented as structs with { value, discriminant }
@@ -829,6 +835,10 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 
 			if ct.name == "Result<bool, MathError>" {
 				return g.getResultType(types.I64)
+			}
+			
+			if ct.name == "Result<string, Error>" {
+				return g.getResultType(types.I8Ptr)
 			}
 			// Add other Result type mappings as needed
 		}
