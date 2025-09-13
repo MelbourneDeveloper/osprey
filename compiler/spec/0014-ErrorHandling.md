@@ -18,6 +18,10 @@ type Result<T, E> = Success { value: T } | Error { message: E }
 
 The compiler **MUST** enforce that `Result` types are always handled with a `match` expression, preventing direct access to the underlying value and ensuring that all possible outcomes are considered.
 
+**String Representation**: When converting a `Result` type to a string using `toString()`, the format is:
+- `Success(value)`: For successful results, where `value` is the string representation of the contained value
+- `Error(message)`: For error results, where `message` is the error message
+
 ```osprey
 let result = someFunctionThatCanFail()
 
