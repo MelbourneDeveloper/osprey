@@ -233,10 +233,34 @@ func (g *LLVMGenerator) convertResultToString(
 
 	successBlock.NewBr(endBlock)
 
-	// Error case: format as "Error(message)" 
+	// Error case: format as "Error(message)"
 	g.builder = errorBlock
-	// For now, just use "Error" - we could extract the error message if needed
-	errorStr := g.createGlobalString("Error")
+
+	// Extract the error message from the Result struct
+	var errorMsg value.Value
+	if _, ok := result.Type().(*types.PointerType); ok {
+		// Pointer case: use getelementptr and load
+		errorMsgPtr := g.builder.NewGetElementPtr(structType, result,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		errorMsg = g.builder.NewLoad(structType.Fields[0], errorMsgPtr)
+	} else {
+		// Struct value case: extract the value field
+		errorMsg = g.builder.NewExtractValue(result, 0)
+	}
+
+	// Format as "Error(message)" - handle different error message types
+	var errorStr value.Value
+	if structType.Fields[0] == types.I8Ptr {
+		// String error message - format as Error(message)
+		errorFormatStr := g.createGlobalString("Error(%s)")
+		errorBuffer := g.builder.NewCall(g.functions["malloc"], bufferSize)
+		g.builder.NewCall(g.functions["sprintf"], errorBuffer, errorFormatStr, errorMsg)
+		errorStr = errorBuffer
+	} else {
+		// Non-string error - just use "Error" for now
+		// TODO: Handle other error types properly
+		errorStr = g.createGlobalString("Error")
+	}
 
 	errorBlock.NewBr(endBlock)
 
