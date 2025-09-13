@@ -78,7 +78,7 @@ func captureJITOutput(source string) (string, error) {
 	case execErr = <-done:
 		// Execution completed normally
 	case <-time.After(30 * time.Second):
-		// FAIL HARD: No fucking hanging tests allowed!
+		// FAIL HARD: No hanging tests allowed!
 		_ = w.Close()
 		os.Stdout = old
 
@@ -112,7 +112,7 @@ func TestBasicCompilation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, err := codegen.CompileToLLVM(source)
 			if err != nil {
-				t.Errorf("Basic syntax %s failed to compile: %v", name, err)
+				t.Fatalf("Basic syntax %s failed to compile: %v", name, err)
 			}
 		})
 	}
@@ -133,7 +133,7 @@ func TestErrorHandling(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, err := codegen.CompileToLLVM(source)
 			if err == nil {
-				t.Errorf("Invalid syntax %s should have failed to compile", name)
+				t.Fatalf("Invalid syntax %s should have failed to compile", name)
 			}
 		})
 	}
@@ -152,7 +152,7 @@ func TestFunctionArguments(t *testing.T) {
 		t.Run("valid_"+name, func(t *testing.T) {
 			_, err := codegen.CompileToLLVM(source)
 			if err != nil {
-				t.Errorf("Valid case %s should compile: %v", name, err)
+				t.Fatalf("Valid case %s should compile: %v", name, err)
 			}
 		})
 	}
@@ -167,7 +167,7 @@ func TestFunctionArguments(t *testing.T) {
 		t.Run("invalid_"+name, func(t *testing.T) {
 			_, err := codegen.CompileToLLVM(source)
 			if err == nil {
-				t.Errorf("Invalid case %s should have failed", name)
+				t.Fatalf("Invalid case %s should have failed", name)
 			}
 		})
 	}
@@ -330,7 +330,7 @@ func TestRustInterop(t *testing.T) {
 
 	for _, expected := range expectedSubstrings {
 		if !strings.Contains(outputStr, expected) {
-			t.Errorf("❌ EXPECTED OUTPUT MISSING: %q\nFull output:\n%s", expected, outputStr)
+			t.Fatalf("❌ EXPECTED OUTPUT MISSING: %q\nFull output:\n%s", expected, outputStr)
 		}
 	}
 
@@ -389,7 +389,7 @@ print("Product: ${result2}")
 
 	for _, expected := range expectedDeclarations {
 		if !strings.Contains(llvmIR, expected) {
-			t.Errorf("LLVM IR should contain declaration: %s", expected)
+			t.Fatalf("LLVM IR should contain declaration: %s", expected)
 		}
 	}
 
@@ -401,7 +401,7 @@ print("Product: ${result2}")
 
 	for _, expected := range expectedCalls {
 		if !strings.Contains(llvmIR, expected) {
-			t.Errorf("LLVM IR should contain function call: %s", expected)
+			t.Fatalf("LLVM IR should contain function call: %s", expected)
 		}
 	}
 
@@ -444,7 +444,7 @@ func TestSystemLibraryInstallation(t *testing.T) {
 
 	expected := "System libraries work!\n"
 	if output != expected {
-		t.Errorf("Output mismatch: expected %q, got %q", expected, output)
+		t.Fatalf("Output mismatch: expected %q, got %q", expected, output)
 	}
 
 	t.Logf("✅ System library installation test passed from directory: %s", tempDir)

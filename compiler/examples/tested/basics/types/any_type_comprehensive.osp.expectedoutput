@@ -17,3 +17,10 @@ Type comparison tested
 Status types:
 active
 inactive
+Simple union:
+Got A
+Got B
+Got C
+Union equality tests:
+Both red
+Different colors

@@ -1,10 +1,9 @@
-1. [Introduction](0001-Introduction.md)
-   - [Completeness](#11-completeness)
-   - [Principles](#12-principles)
+# Introduction
 
-## 1. Introduction
+- [Completeness](#completeness)
+- [Core Principles](#core-principles)
 
-Osprey is a modern functional programming oriented language designed for elegance, safety, and performance.. It emphasizes:
+Osprey is a modern functional programming language designed for elegance, safety, and performance. It emphasizes:
 
 - **Named arguments** for multi-parameter functions to improve readability
 - **Strong type inference** to reduce boilerplate while maintaining safety
@@ -14,11 +13,11 @@ Osprey is a modern functional programming oriented language designed for eleganc
 - **Fast HTTP servers and clients** with built-in streaming support
 - **WebSocket support** for real-time two-way communication
 
-## 1.1 Completeness
+## Completeness
 
-🚧 **IMPLEMENTATION STATUS**: The Osprey language and compiler are not complete. The documentation here does not represent the language at this present time. This specification represents the design aims for the language, a description of the syntax and a description of where the roadmap is taking the language. Developers should pay attention to the spec first are foremost as the single source of truth in regards to the syntax.
+**Note**: The Osprey language and compiler are under active development. This specification represents design goals and planned features. The spec is the authoritative source for syntax and behavior.
 
-## 1.2 Principles
+## Core Principles
 
 - Elegance (simplicity, ergonomics, efficiency), safety (fewer footguns, security at every level), performance (uses the most efficient approach and allows the use of Rust interop for extreme performance)
 - No more than 1 way to do anything

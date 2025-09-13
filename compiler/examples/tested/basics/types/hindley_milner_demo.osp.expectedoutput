@@ -1,6 +1,9 @@
 === CURRENT HM CAPABILITIES ===
 Working HM inference: multiply(6,7)=42, compare(10,5)=true, subtract(20,8)=12
 Current: explicit record types work: Point{x:3, y:4}
+HM infers List<int> from: [95, 87, 92]
+HM infers Map<string, int> from: { "Alice": 95, "Bob": 87 }
+Map access works! Alice: 95
 === PURE HM WOULD ENABLE ===
 // Pure HM syntax (not yet supported):
 // type Point = { x, y }  // No explicit types!

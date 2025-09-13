@@ -84,12 +84,18 @@ exprStmt        : expr ;
 
 expr
     : matchExpr
+    | handlerExpr
     ;
 
 matchExpr
-    : MATCH binaryExpr LBRACE matchArm* RBRACE
+    : MATCH nonTernaryExpr LBRACE matchArm* RBRACE
     | selectExpr
     | binaryExpr
+    ;
+
+// Expression without ternary patterns to avoid conflict with match braces
+nonTernaryExpr
+    : comparisonExpr
     ;
 
 
@@ -146,7 +152,8 @@ pipeExpr
 
 callExpr
     : primary (DOT ID)+ (LPAREN argList? RPAREN)?  // Field access with optional final method call: obj.field or obj.field.method()
-    | primary (DOT ID (LPAREN argList? RPAREN))+   // Method chaining: obj.method().chain() (at least one method call)
+    | primary (DOT ID (LPAREN argList? RPAREN))+   // Method chaining: obj.method().chain() (at least one method call)  
+    | primary (LSQUARE expr RSQUARE)+              // Array/Map access: expr[0] or expr["key"] -> Result<T, Error>
     | primary (LPAREN argList? RPAREN)?            // Function call with optional parentheses
     ;
 
@@ -174,11 +181,10 @@ primary
     | handlerExpr                                 // handle EffectName ... in expr
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
+    | blockExpr                                   // Block expressions (try before object/map literals)
     | objectLiteral                               // Anonymous object literal { field: value }
-    | blockExpr                                   // Block expressions
     | literal                                     // String, number, boolean literals
     | lambdaExpr                                  // Lambda expressions
-    | ID LSQUARE INT RSQUARE                      // List access: list[0] -> Result<T, IndexError>
     | ID                                          // Variable reference
     | LPAREN expr RPAREN                          // Parenthesized expression
     ;
@@ -227,10 +233,18 @@ literal
     | TRUE
     | FALSE
     | listLiteral
+    | mapLiteral
     ;
 
 listLiteral
     : LSQUARE (expr (COMMA expr)*)? RSQUARE ;
+
+mapLiteral
+    : LBRACE mapEntry (COMMA mapEntry)* RBRACE     // Require at least one entry
+    | LBRACE RBRACE ;                              // Empty map
+
+mapEntry
+    : expr COLON expr ;
 
 docComment      : DOC_COMMENT+ ;
 

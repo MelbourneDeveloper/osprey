@@ -1,12 +1,16 @@
 // Comprehensive Osprey Language Feature Showcase
-// This example demonstrates major language features working with current implementation
+// Enhanced with Map and List types using Hindley-Milner inference
 
 // 1. Type Definitions - Simple union types  
 type Grade = A | B | C | D | F
 
-// 2. Function Definitions
+// 2. Function Definitions with polymorphic inference
 fn double(x) = x * 2
 fn add(x, y) = x + y
+fn getFirst(list) = match list[0] {
+    Success { value } => toString(value)
+    Error { message } => "empty"
+}
 
 // 3. Pattern Matching Functions
 fn gradeMessage(grade: Grade) -> string = match grade {
@@ -38,12 +42,97 @@ print("Doubled score: ${doubledScore}")
 let currentGrade = A
 print(gradeMessage(currentGrade))
 
-// Simple string output instead of complex match
-print("Status: System operational")
+// List operations with Hindley-Milner inference
+print("=== List & Map Operations ===")
+let scores = [85, 92, 78, 96, 88]
+print("Score list created via HM inference")
 
-// Arithmetic operations
-let calculation = double(42)
-print("Double of 42: ${calculation}")
+let firstScore = getFirst(scores)
+print("First score: ${firstScore}")
+
+// Hindley-Milner type inference with lists
+let bonusScore = add(x: 85, y: 5)
+print("Bonus computation works: ${toString(bonusScore)}")
+
+match scores[1] {
+    Success { value } => print("Second score: ${toString(value)}")
+    Error { message } => print("Error accessing score")
+}
+
+// Map operations with Hindley-Milner inference
+let studentGrades = { "Alice": 95, "Bob": 87, "Charlie": 91 }
+print("Student grades map created via HM inference")
+
+match studentGrades["Alice"] {
+    Success { value } => print("Alice's grade: ${toString(value)}")
+    Error { message } => print("Alice not found in grades")
+}
+
+// Mixed type list showing polymorphic inference
+let mixedData = ["Alice", "Bob", "Charlie"]
+print("Student names list created")
+
+match mixedData[2] {
+    Success { value } => print("Third student: ${value}")
+    Error { message } => print("Error accessing student name")
+}
+
+// Complex nested collections - using homogeneous types for strong typing
+let mathScores = [85, 92, 78]
+let scienceScores = [88, 91, 94]
+let classScores = {
+    "Math": mathScores,
+    "Science": scienceScores
+}
+print("Class scores map created with List[int] values")
+
+match classScores["Math"] {
+    Success { scores } => {
+        match scores[1] {
+            Success { score } => print("Math student 2 score: ${toString(score)}")
+            Error { message } => print("Math student access error")
+        }
+    }
+    Error { message } => print("Math class not found")
+}
+
+// List of maps for student names (homogeneous string values)
+let studentNames = [
+    { "first": "Alice", "last": "Smith", "subject": "Math" },
+    { "first": "Bob", "last": "Jones", "subject": "Science" },
+    { "first": "Charlie", "last": "Brown", "subject": "Math" }
+]
+
+// Separate list of maps for student grades (homogeneous int values)
+let studentGradesList = [
+    { "Alice": 95, "Bob": 87, "Charlie": 91 }
+]
+
+match studentNames[0] {
+    Success { student } => {
+        match student["first"] {
+            Success { firstName } => {
+                match student["subject"] {
+                    Success { subject } => print("Student ${firstName} studies ${subject}")
+                    Error { message } => print("Subject access error")
+                }
+            }
+            Error { message } => print("Name access error")
+        }
+    }
+    Error { message } => print("Student access error")
+}
+
+// Simple string output instead of complex match
+print("Status: System operational with collections")
+
+// Arithmetic operations with collections
+let numbers = [21, 42, 84]
+let calculation = match numbers[1] {
+    Success { value } => double(value)
+    Error { message } => 0
+}
+print("Double of middle number: ${calculation}")
 
 // Another student with named arguments
 print(formatScore(name: "Bob", score: 92))

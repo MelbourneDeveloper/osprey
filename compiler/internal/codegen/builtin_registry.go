@@ -170,6 +170,9 @@ func (r *BuiltInFunctionRegistry) initializeFunctions() {
 	// Functional programming functions
 	r.registerFunctionalFunctions()
 
+	// Collection functions
+	r.registerCollectionFunctions()
+
 	// File I/O functions
 	r.registerFileIOFunctions()
 
@@ -294,6 +297,70 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateSubstringCall,
 		Example:      `let sub = substring("hello", 1, 4)\nprint(sub)  // Prints: Result containing "ell"`,
+	}
+
+	// parseInt function
+	r.functions[ParseIntFunc] = &BuiltInFunction{
+		Name:        ParseIntFunc,
+		Signature:   "parseInt(s: string) -> Result<int, string>",
+		Description: "Parses a string to an integer, returns error if parsing fails.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to parse"},
+		},
+		ReturnType:   &ConcreteType{name: "Result<int, string>"},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateParseIntCall,
+		Example:      `let num = parseInt("42")\nprint(num)  // Prints: Success { value: 42 }`,
+	}
+
+	// join function
+	r.functions[JoinFunc] = &BuiltInFunction{
+		Name:        JoinFunc,
+		Signature:   "join(list: list<string>, separator: string) -> string",
+		Description: "Joins a list of strings with a separator.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "list", Type: &ConcreteType{name: "List<string>"}, Description: "List of strings to join"},
+			{Name: "separator", Type: &ConcreteType{name: TypeString}, Description: "Separator string"},
+		},
+		ReturnType:   &ConcreteType{name: TypeString},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateJoinCall,
+		Example:      `let result = join(["hello", "world"], " ")\nprint(result)  // Prints: "hello world"`,
+	}
+}
+
+// registerCollectionFunctions registers collection type constructors and functions
+func (r *BuiltInFunctionRegistry) registerCollectionFunctions() {
+	// List constructor - for now, just empty list
+	r.functions[TypeList] = &BuiltInFunction{
+		Name:           TypeList,
+		Signature:      "List() -> List<T>",
+		Description:    "Creates a new empty list.",
+		ParameterTypes: []BuiltInParameter{},
+		ReturnType:     &ConcreteType{name: TypeList},
+		Category:       CategoryFunctional,
+		IsProtected:    false,
+		SecurityFlag:   PermissionNone,
+		Generator:      (*LLVMGenerator).generateListConstructorCall,
+		Example:        `let myList = List()\nprint("Created empty list")`,
+	}
+
+	// Map constructor
+	r.functions["Map"] = &BuiltInFunction{
+		Name:           "Map",
+		Signature:      "Map() -> Map<K, V>",
+		Description:    "Creates a new empty map.",
+		ParameterTypes: []BuiltInParameter{},
+		ReturnType:     &ConcreteType{name: TypeMap},
+		Category:       CategoryFunctional,
+		IsProtected:    false,
+		SecurityFlag:   PermissionNone,
+		Generator:      (*LLVMGenerator).generateMapConstructorCall,
+		Example:        `let myMap = Map()\nprint("Created empty map")`,
 	}
 }
 
@@ -927,7 +994,7 @@ func (r *BuiltInFunctionRegistry) registerFiberFunctions() {
 		Signature:   "fiber_spawn(fn: () -> any) -> Fiber",
 		Description: "Spawns a new fiber to execute the given function concurrently.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "fn", Type: &ConcreteType{name: "function"}, Description: "The function to execute in the fiber"},
+			{Name: "fn", Type: &ConcreteType{name: "() -> any"}, Description: "The function to execute in the fiber"},
 		},
 		ReturnType:   &ConcreteType{name: "Fiber"},
 		Category:     CategoryFiber,

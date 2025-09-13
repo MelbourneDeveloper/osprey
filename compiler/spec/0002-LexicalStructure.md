@@ -1,47 +1,44 @@
-2. [Lexical Structure](0002-LexicalStructure)
-   - [Identifiers](#21-identifiers)
-   - [Keywords](#22-keywords)
-   - [Literals](#23-literals)
-   - [Operators](#24-operators)
-   - [Delimiters](#25-delimiters)
+# Lexical Structure
 
-## 2. Lexical Structure
+- [Identifiers](#identifiers)
+- [Keywords](#keywords)
+- [Literals](#literals)
+- [Operators](#operators)
+- [Delimiters](#delimiters)
 
-### 2.1 Identifiers
+## Identifiers
 
-Identifiers must start with a letter or underscore, followed by letters, digits, or underscores:
-
+Start with letter or underscore, followed by letters, digits, or underscores.
 ```
 ID := [a-zA-Z_][a-zA-Z0-9_]*
 ```
 
-### 2.2 Keywords
+## Keywords
 
-Reserved keywords:
 ```
 fn let mut type import match if then else case of extern
 ```
 
-### 2.3 Literals
+## Literals
 
-#### Integer Literals
+### Integer Literals
 ```
 INTEGER := [0-9]+
 ```
 
-#### String Literals
+### String Literals
 ```
 STRING := '"' (CHAR | ESCAPE_SEQUENCE)* '"'
 ESCAPE_SEQUENCE := '\n' | '\t' | '\r' | '\\' | '\"'
 ```
 
-#### Interpolated String Literals
+### Interpolated String Literals
 ```
 INTERPOLATED_STRING := '"' (CHAR | INTERPOLATION)* '"'
 INTERPOLATION := '${' EXPRESSION '}'
 ```
 
-#### Immutable List Literals
+### List Literals
 ```
 LIST := '[' (expression (',' expression)*)? ']'
 ```
@@ -53,17 +50,17 @@ let names = ["Alice", "Bob", "Charlie"]  // Fixed size: 3 elements
 let pair = [x, y]  // Fixed size: 2 elements
 ```
 
-### 2.4 Operators
+## Operators
 
-#### Arithmetic Operators (All Safe by Default)
+### Arithmetic Operators
 - `+` Addition: `(Int, Int) -> Result<Int, MathError>`
 - `-` Subtraction: `(Int, Int) -> Result<Int, MathError>`
 - `*` Multiplication: `(Int, Int) -> Result<Int, MathError>`
 - `/` Division: `(Int, Int) -> Result<Int, MathError>`
 
-**CRITICAL**: All arithmetic operators return Result types to handle overflow, underflow, and division by zero.
+All arithmetic operators return Result types to handle overflow, underflow, and division by zero.
 
-#### Comparison Operators
+### Comparison Operators
 - `==` Equality
 - `!=` Inequality  
 - `<` Less than
@@ -71,20 +68,20 @@ let pair = [x, y]  // Fixed size: 2 elements
 - `<=` Less than or equal
 - `>=` Greater than or equal
 
-#### Logical Operators
+### Logical Operators
 - `&&` Logical AND (short-circuit evaluation)
 - `||` Logical OR (short-circuit evaluation)
 - `!` Logical NOT
 
-#### Assignment Operator
+### Assignment Operator
 - `=` Assignment
 
-#### Other Operators
+### Other Operators
 - `=>` Lambda/Match arm arrow
 - `|` Union type separator
 - `::` Type annotation
 
-### 2.5 Delimiters
+## Delimiters
 
 - `(` `)` Parentheses
 - `{` `}` Braces

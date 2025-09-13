@@ -1,1 +1,5 @@
-42 
+LOG: List processing: 21
+LOG: Fiber processing task: 10
+LOG: Fiber result: 20
+List result: 42
+Fiber result: 20 

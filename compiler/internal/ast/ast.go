@@ -471,6 +471,22 @@ type ObjectLiteral struct {
 
 func (o *ObjectLiteral) isExpression() {}
 
+// MapLiteral represents a map literal like { "key": value, 42: "answer" }.
+type MapLiteral struct {
+	Entries []MapEntry
+
+	// Position information
+	Position *Position
+}
+
+func (m *MapLiteral) isExpression() {}
+
+// MapEntry represents a key-value pair in a map literal.
+type MapEntry struct {
+	Key   Expression
+	Value Expression
+}
+
 // ListAccessExpression represents safe list access like list[0] -> Result<T, IndexError>.
 type ListAccessExpression struct {
 	List  Expression

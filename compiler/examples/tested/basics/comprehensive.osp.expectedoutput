@@ -1,0 +1,20 @@
+=== Comprehensive Osprey Demo ===
+Student Alice scored 95 points
+Doubled score: 190
+Excellent!
+=== List & Map Operations ===
+Score list created via HM inference
+First score: 85
+Bonus computation works: 90
+Second score: 92
+Student grades map created via HM inference
+Alice's grade: 95
+Student names list created
+Third student: Charlie
+Class scores map created with List[int] values
+Math student 2 score: 92
+Student Alice studies Math
+Status: System operational with collections
+Double of middle number: 84
+Student Bob scored 92 points
+=== Demo Complete ===

@@ -104,11 +104,14 @@ func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 
 	// Parse actual operation signatures from the AST
 	for _, operation := range effect.Operations {
+
 		paramTypes := make([]types.Type, len(operation.Parameters))
 
 		for i, param := range operation.Parameters {
 			if param.Type != nil {
-				paramTypes[i] = ec.stringTypeToLLVMType(param.Type.Name)
+				// Use the generator's proper type conversion instead of string parsing
+				concreteParamType := &ConcreteType{name: param.Type.Name}
+				paramTypes[i] = ec.generator.getLLVMConcreteType(concreteParamType)
 			} else {
 				// INTERNAL COMPILER ERROR: Function type parsing should have extracted parameter types
 				// from declarations like `log: fn(string) -> Unit`
@@ -124,7 +127,9 @@ func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 				ErrParseReturnType, effect.Name, operation.Name)
 		}
 
-		returnType := ec.stringTypeToLLVMType(operation.ReturnType)
+		// Use the generator's proper type conversion instead of string parsing
+		concreteReturnType := &ConcreteType{name: operation.ReturnType}
+		returnType := ec.generator.getLLVMConcreteType(concreteReturnType)
 
 		effectType.Operations[operation.Name] = &EffectOp{
 			Name:       operation.Name,
@@ -226,22 +231,6 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	return result, nil
 }
 
-// stringTypeToLLVMType converts string type names to LLVM types
-func (ec *EffectCodegen) stringTypeToLLVMType(typeName string) types.Type {
-	switch typeName {
-	case TypeString:
-		return types.I8Ptr
-	case TypeInt:
-		return types.I64
-	case TypeBool:
-		return types.I1
-	case TypeUnit:
-		return types.Void
-	default:
-		return types.I64 // Default fallback
-	}
-}
-
 // inferOperationTypes determines parameter and return types for an operation
 func (ec *EffectCodegen) inferOperationTypes(
 	effectName string, operationName string, paramCount int,
@@ -252,21 +241,16 @@ func (ec *EffectCodegen) inferOperationTypes(
 		return effectType.Operations[operationName].ParamTypes, effectType.Operations[operationName].ReturnType
 	}
 
-	// Fallback logic was completely backwards!
-	// Operations are NOT found in registry - this should be a loud error, not silent fallback
+	// Effect not found in registry - this indicates a registration bug
+
 	// But for now, provide sensible defaults until we fix the registry issue
 
+	// Fallback for other cases
 	paramTypes := make([]types.Type, paramCount)
 	for i := range paramTypes {
-		paramTypes[i] = types.I8Ptr // Default to string for now (most common)
+		paramTypes[i] = types.I8Ptr
 	}
 
-	// CRITICAL ERROR: Operation not found in registry!
-	// This should be a compile-time error, not a silent fallback
-	// The effect system should NOT know about built-in functions like readFile/writeFile
-	// Those are just normal functions that handlers can call from their code blocks
-
-	// TODO: Make this a proper compile-time error once registry is fixed
 	return paramTypes, types.I64
 }
 

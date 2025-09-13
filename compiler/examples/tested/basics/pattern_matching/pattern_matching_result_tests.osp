@@ -26,3 +26,10 @@ print(goodResult)
 let divisionBad = divide(a: 10, b: 0)
 let badResult = divisionBad ?: -1  // Should return -1 on Error, or extract value on Success
 print(badResult)
+
+// SECTION 7: Test Result<int> toString conversion
+print("Testing Result<int> toString:")
+let goodCalc = 20 + 30  // Result<int, MathError>
+print("Result<int> Success: ${toString(goodCalc)}")  // Should print "50"
+let zeroDivision = 10 / 0  // Result<int, MathError>  
+print("Result<int> Error: ${toString(zeroDivision)}")  // Should print "Error"

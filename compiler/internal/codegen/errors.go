@@ -83,6 +83,9 @@ var (
 	ErrInputNoArgs    = errors.New("input function takes no arguments")
 	ErrNoToStringImpl = errors.New("no toString implementation found")
 
+	// Collection access errors
+	ErrUnsupportedCollectionType = errors.New("unsupported collection type for access")
+
 	// Additional error constants expected by tests
 	ErrUnsupportedStatement = errors.New("unsupported statement")
 	ErrUndefinedVariable    = errors.New("undefined variable")
@@ -449,6 +452,11 @@ func WrapPrintWrongArgs(argCount int) error {
 // WrapUnsupportedCallExpressionSecurity wraps errors for security violations
 func WrapUnsupportedCallExpressionSecurity(funcName string) error {
 	return fmt.Errorf("%w: %s", ErrUnsupportedCallExpressionSecurity, funcName)
+}
+
+// WrapUnsupportedCollectionType wraps errors for unsupported collection types
+func WrapUnsupportedCollectionType(collectionType string) error {
+	return fmt.Errorf("%w: %s", ErrUnsupportedCollectionType, collectionType)
 }
 
 // WrapMethodCallNotImplemented wraps errors for method calls not implemented

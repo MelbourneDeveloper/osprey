@@ -8,4 +8,43 @@ fn factorial(n) = match n {
 }
 
 let result = factorial(5)
-print("Factorial computed!") 
+print("Factorial computed!")
+
+// Test string functions that we've successfully added
+let str = "hello"
+let strLen = length(str)
+print("String length works")
+
+// Test parseInt function
+match parseInt("123") {
+    Success { value } => print("parseInt works")
+    Error { message } => print("parseInt failed")
+}
+
+// Test Map would need usage context for HM inference
+// let scores = Map() would fail - no type info!
+// Instead we focus on Lists where type can be inferred
+
+// Test List literal with type inference
+let numbers = [1, 2, 3, 4, 5]
+print("List literal created")
+
+// Test first element access with Result handling
+match numbers[0] {
+    Success { value } => print("First number: ${toString(value)}")
+    Error { message } => print("Error accessing first element")
+}
+
+// Test Hindley-Milner polymorphic functions
+fn double(x) = x * 2
+let doubledValue = double(5)
+print("Polymorphic function works: ${toString(doubledValue)}")
+
+// Test another list with different type
+let names = ["alice", "bob", "charlie"]
+print("String list created")
+
+match names[1] {
+    Success { value } => print("Second name: ${value}")
+    Error { message } => print("Error accessing second name")
+} 

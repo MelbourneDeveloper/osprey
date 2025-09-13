@@ -1,24 +1,62 @@
 print("=== Basic Block Statements Test ===")
 
-// Test 1: Simple block returning a value
+// Test 1: Simple block with list access
 let result1 = {
-    42
+    let nums = [42, 84, 126]
+    match nums[0] {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
-print("Test 1 - Simple block: ${result1}")
+print("Test 1 - Block with list: ${result1}")
 
-// Test 2: Block with computation
+// Test 2: Block with computation using map
 let result2 = {
-    let x = 10
-    x * 2
+    let config = { "factor": 2, "base": 10 }
+    let x = match config["base"] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let factor = match config["factor"] {
+        Success { value } => value
+        Error { message } => 1
+    }
+    x * factor
 }
-print("Test 2 - Block computation: ${result2}")
+print("Test 2 - Block with map computation: ${result2}")
 
-// Test 3: Block with multiple statements
+// Test 3: Block with multiple statements using collections
 let result3 = {
-    let a = 5
-    let b = 10
-    a + b
+    let data = [5, 10, 15]
+    let lookup = { "multiplier": 1 }
+    let a = match data[0] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let b = match data[1] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let mult = match lookup["multiplier"] {
+        Success { value } => value
+        Error { message } => 1
+    }
+    (a + b) * mult
 }
-print("Test 3 - Multiple statements: ${result3}")
+print("Test 3 - Multiple statements with collections: ${result3}")
+
+// Test 4: Block with nested collections
+let result4 = {
+    let matrix = [[1, 2], [3, 4]]
+    let first_row = match matrix[0] {
+        Success { value } => value
+        Error { message } => [0]
+    }
+    match first_row[1] {
+        Success { value } => value * 10
+        Error { message } => 0
+    }
+}
+print("Test 4 - Nested collections: ${result4}")
 
 print("=== Basic Block Statements Complete ===") 

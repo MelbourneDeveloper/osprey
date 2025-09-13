@@ -19,6 +19,18 @@ type Point = { x: int, y: int }
 let point = Point { x: 3, y: 4 }
 print("Current: explicit record types work: Point{x:${point.x}, y:${point.y}}")
 
+// NEW: Map and List inference WITHOUT type annotations!
+let scores = [95, 87, 92]  // HM infers: List<int>
+let grades = { "Alice": 95, "Bob": 87 }  // HM infers: Map<string, int>
+print("HM infers List<int> from: [95, 87, 92]")
+print("HM infers Map<string, int> from: { \"Alice\": 95, \"Bob\": 87 }")
+
+// Map access with Result type
+match grades["Alice"] {
+    Success { value } => print("Map access works! Alice: ${toString(value)}")
+    Error { message } => print("Map access error")
+}
+
 print("=== PURE HM WOULD ENABLE ===")
 print("// Pure HM syntax (not yet supported):")
 print("// type Point = { x, y }  // No explicit types!")

@@ -43,3 +43,9 @@ match positiveResult2 {
 
 print(toString(isValidAge(25)))         // Should be true
 print(toString(isValidAge(200)))        // Should be false 
+
+// Test Result<bool> to string conversion
+print("Testing Result<bool> toString:")
+print(toString(isPositive(5)))          // Should print "true" 
+print(toString(isPositive(-5)))         // Should print "false"
+print(toString(isPositive(0)))          // Should print "false" 

@@ -720,56 +720,30 @@ func (g *LLVMGenerator) generateIntToString(arg value.Value) (value.Value, error
 }
 
 func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, error) {
-	// Create blocks for true/false cases
-	blockSuffix := fmt.Sprintf("_%p", arg) // Use pointer address for uniqueness
-	currentBlock := g.builder
-
-	trueBlock := g.function.NewBlock("bool_true" + blockSuffix)
-	falseBlock := g.function.NewBlock("bool_false" + blockSuffix)
-	endBlock := g.function.NewBlock("bool_end" + blockSuffix)
-
-	// Check if arg == 1 (true) or 0 (false)
-	// Use the correct zero value type based on the argument type
-	var (
-		zero   value.Value
-		isTrue value.Value
-	)
-
-	if arg.Type() == types.I1 {
-		// For i1 (boolean) types, compare against i1 false
-		zero = constant.NewBool(false)
-		isTrue = currentBlock.NewICmp(enum.IPredNE, arg, zero)
-	} else {
-		// For i64 types, compare against i64 zero
-		zero = constant.NewInt(types.I64, 0)
-		isTrue = currentBlock.NewICmp(enum.IPredNE, arg, zero)
-	}
-
-	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
-
-	// True case - return "true"
-	g.builder = trueBlock
+	// Create string constants for "true" and "false"
 	trueStr := constant.NewCharArrayFromString("true\x00")
 	trueGlobal := g.module.NewGlobalDef("", trueStr)
-	truePtr := trueBlock.NewGetElementPtr(trueStr.Typ, trueGlobal,
+	truePtr := g.builder.NewGetElementPtr(trueStr.Typ, trueGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
-	trueBlock.NewBr(endBlock)
-
-	// False case - return "false"
-	g.builder = falseBlock
 	falseStr := constant.NewCharArrayFromString("false\x00")
 	falseGlobal := g.module.NewGlobalDef("", falseStr)
-	falsePtr := falseBlock.NewGetElementPtr(falseStr.Typ, falseGlobal,
+	falsePtr := g.builder.NewGetElementPtr(falseStr.Typ, falseGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
-	falseBlock.NewBr(endBlock)
+	// Create condition based on argument type
+	var condition value.Value
+	if arg.Type() == types.I1 {
+		// For i1 (boolean) types, use directly
+		condition = arg
+	} else {
+		// For i64 types, compare against zero
+		zero := constant.NewInt(types.I64, 0)
+		condition = g.builder.NewICmp(enum.IPredNE, arg, zero)
+	}
 
-	// Create PHI node in end block
-	g.builder = endBlock
-	phi := endBlock.NewPhi(ir.NewIncoming(truePtr, trueBlock), ir.NewIncoming(falsePtr, falseBlock))
-
-	return phi, nil
+	// Use select instruction: select condition, trueValue, falseValue
+	return g.builder.NewSelect(condition, truePtr, falsePtr), nil
 }
 
 func (g *LLVMGenerator) generateMatchExpression(matchExpr *ast.MatchExpression) (value.Value, error) {
@@ -1740,6 +1714,20 @@ func (g *LLVMGenerator) createMatchResult(
 		return validIncomings[0].X, nil
 	}
 
+	// BUGFIX: Don't create PHI with void values - check if all values are void
+	allVoid = true
+	for _, incoming := range validIncomings {
+		if !isVoidType(incoming.X.Type()) {
+			allVoid = false
+			break
+		}
+	}
+
+	if allVoid && len(validIncomings) > 0 {
+		// All arms return void - return nil to represent void, don't create PHI
+		return nil, nil
+	}
+
 	phi := endBlock.NewPhi(validIncomings...)
 
 	// The end block now has a PHI node and the builder is set to this block.
@@ -1916,6 +1904,9 @@ func (g *LLVMGenerator) generateSuccessBlock(
 		// Bind the Result value to the pattern variable
 		fieldName := successArm.Pattern.Fields[0] // First field is the value
 
+		// Bind the extracted value type to the pattern variable
+		g.bindPatternVariableType(fieldName, matchExpr.Expression)
+
 		// Get the Result value from the matched expression
 		// The Result struct has: [value, discriminant]
 		// We need to extract the value field (index 0)
@@ -1997,7 +1988,12 @@ func (g *LLVMGenerator) generateErrorBlock(
 		// Bind the Result error message to the pattern variable
 		fieldName := errorArm.Pattern.Fields[0] // First field is the message
 		// Create a unique global string for the error message
-		blockSuffix := fmt.Sprintf("_%p", matchExpr)
+		// Include function context to ensure uniqueness across monomorphized instances
+		funcContext := ""
+		if g.function != nil {
+			funcContext = g.function.Name()
+		}
+		blockSuffix := fmt.Sprintf("_%s_%p", funcContext, matchExpr)
 		errorStr := g.module.NewGlobalDef("error_msg"+blockSuffix, constant.NewCharArrayFromString("Error occurred\\x00"))
 		errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
 			constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
@@ -2045,6 +2041,22 @@ func (g *LLVMGenerator) generateErrorBlock(
 	}
 
 	return errorValue, nil
+}
+
+// bindPatternVariableType binds the correct type for a pattern variable extracted from a Result
+func (g *LLVMGenerator) bindPatternVariableType(fieldName string, matchedExpr ast.Expression) {
+	// Infer the type of the matched expression to get the Result type
+	matchedExprType, err := g.typeInferer.InferType(matchedExpr)
+	if err == nil {
+		resolvedType := g.typeInferer.ResolveType(matchedExprType)
+		if genericType, ok := resolvedType.(*GenericType); ok {
+			if genericType.name == TypeResult && len(genericType.typeArgs) >= 1 {
+				// Extract the success type (first type argument of Result<T, E>)
+				successType := genericType.typeArgs[0]
+				g.typeInferer.env.Set(fieldName, successType)
+			}
+		}
+	}
 }
 
 // findSuccessArm finds the success match arm.
@@ -2104,12 +2116,18 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 
 	// Check if the actual success block has a terminator and branches to end
 	if actualSuccessBlock != nil && actualSuccessBlock.Term != nil && successValue != nil {
-		validPredecessors = append(validPredecessors, ir.NewIncoming(successValue, actualSuccessBlock))
+		// Don't add void values to PHI predecessors
+		if !isVoidType(successValue.Type()) {
+			validPredecessors = append(validPredecessors, ir.NewIncoming(successValue, actualSuccessBlock))
+		}
 	}
 
 	// Check if the actual error block has a terminator and branches to end
 	if actualErrorBlock != nil && actualErrorBlock.Term != nil && errorValue != nil {
-		validPredecessors = append(validPredecessors, ir.NewIncoming(errorValue, actualErrorBlock))
+		// Don't add void values to PHI predecessors
+		if !isVoidType(errorValue.Type()) {
+			validPredecessors = append(validPredecessors, ir.NewIncoming(errorValue, actualErrorBlock))
+		}
 	}
 
 	// If we don't have valid predecessors, return a default value
@@ -2123,10 +2141,35 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 		return validPredecessors[0].X, nil
 	}
 
+	// BUGFIX: Check if both values are void (Unit) - can't create PHI with void values
+	if successValue != nil && errorValue != nil {
+		// Check if both are void types (nil represents void/Unit)
+		successIsVoid := (successValue == nil) || isVoidType(successValue.Type())
+		errorIsVoid := (errorValue == nil) || isVoidType(errorValue.Type())
+
+		if successIsVoid && errorIsVoid {
+			// Both arms return Unit - return nil to represent void, don't create PHI
+			return nil, nil
+		}
+	}
+
 	// Create PHI node with valid predecessors
 	phi := blocks.End.NewPhi(validPredecessors...)
 
 	return phi, nil
+}
+
+// isVoidType checks if a type represents void/Unit
+func isVoidType(t types.Type) bool {
+	// In LLVM, void is represented as nil or specific void type
+	if t == nil {
+		return true
+	}
+	// Check if it's LLVM void type
+	if _, ok := t.(*types.VoidType); ok {
+		return true
+	}
+	return false
 }
 
 // reInferReturnType re-infers the return type of a function with concrete parameter types
