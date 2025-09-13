@@ -429,7 +429,7 @@ fn main() -> Unit = {
 	if !strings.Contains(errorMsg, "circular") && !strings.Contains(errorMsg, "recursion") {
 		t.Logf("Error message: %s", errorMsg)
 		// For now, just log that we need to implement circular dependency detection
-		t.Log("⚠️  NOTE: Circular dependency detection not yet implemented - this will be added later")
+		t.Fatalf("⚠️  NOTE: Circular dependency detection not yet implemented - this will be added later")
 	} else {
 		t.Log("✅ Circular dependency correctly detected!")
 	}
