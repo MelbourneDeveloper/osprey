@@ -825,7 +825,7 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 		if ct.name == TypeResult {
 			return g.getResultType(types.I8Ptr)
 		}
-		
+
 		// Handle Result types like "Result<int, MathError>"
 		if strings.HasPrefix(ct.name, "Result<") {
 			// Result types are represented as structs with { value, discriminant }
@@ -836,7 +836,7 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 			if ct.name == "Result<bool, MathError>" {
 				return g.getResultType(types.I64)
 			}
-			
+
 			if ct.name == "Result<string, Error>" {
 				return g.getResultType(types.I8Ptr)
 			}

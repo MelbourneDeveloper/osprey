@@ -154,7 +154,7 @@ func (g *LLVMGenerator) convertResultToString(
 ) (value.Value, error) {
 	var discriminant value.Value
 	var resultValue value.Value
-	
+
 	// Handle both pointer and value cases
 	if _, ok := result.Type().(*types.PointerType); ok {
 		// Pointer case: use getelementptr and load
@@ -185,7 +185,7 @@ func (g *LLVMGenerator) convertResultToString(
 
 	// Success case: extract and convert the value
 	g.builder = successBlock
-	
+
 	// Get the value - handle both pointer and struct cases
 	if _, ok := result.Type().(*types.PointerType); ok {
 		// Pointer case: use getelementptr and load
@@ -223,7 +223,7 @@ func (g *LLVMGenerator) convertResultToString(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Format as "Success(value)" using sprintf
 	successFormatStr := g.createGlobalString("Success(%s)")
 	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
@@ -636,7 +636,7 @@ func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (valu
 
 	// TODO: Add proper error checking - atoll returns 0 for invalid strings
 	// For now, assume parsing always succeeds
-	
+
 	// Create a Result<int, string>
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
@@ -663,7 +663,7 @@ func (g *LLVMGenerator) generateJoinCall(callExpr *ast.CallExpression) (value.Va
 
 	// For now, return a placeholder implementation
 	// TODO: Implement proper list handling once List<T> type is fully supported
-	
+
 	separator, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err

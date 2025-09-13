@@ -1722,7 +1722,7 @@ func (g *LLVMGenerator) createMatchResult(
 			break
 		}
 	}
-	
+
 	if allVoid && len(validIncomings) > 0 {
 		// All arms return void - return nil to represent void, don't create PHI
 		return nil, nil
@@ -2146,7 +2146,7 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 		// Check if both are void types (nil represents void/Unit)
 		successIsVoid := (successValue == nil) || isVoidType(successValue.Type())
 		errorIsVoid := (errorValue == nil) || isVoidType(errorValue.Type())
-		
+
 		if successIsVoid && errorIsVoid {
 			// Both arms return Unit - return nil to represent void, don't create PHI
 			return nil, nil

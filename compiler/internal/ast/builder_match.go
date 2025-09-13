@@ -13,7 +13,7 @@ func (b *Builder) buildNonTernaryExpr(ctx parser.INonTernaryExprContext) Express
 	if ctx == nil {
 		return nil
 	}
-	
+
 	return b.buildComparisonExpr(ctx.ComparisonExpr())
 }
 

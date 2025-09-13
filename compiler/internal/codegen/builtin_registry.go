@@ -337,9 +337,9 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 func (r *BuiltInFunctionRegistry) registerCollectionFunctions() {
 	// List constructor - for now, just empty list
 	r.functions[TypeList] = &BuiltInFunction{
-		Name:        TypeList,
-		Signature:   "List() -> List<T>",
-		Description: "Creates a new empty list.",
+		Name:           TypeList,
+		Signature:      "List() -> List<T>",
+		Description:    "Creates a new empty list.",
 		ParameterTypes: []BuiltInParameter{},
 		ReturnType:     &ConcreteType{name: TypeList},
 		Category:       CategoryFunctional,
@@ -351,9 +351,9 @@ func (r *BuiltInFunctionRegistry) registerCollectionFunctions() {
 
 	// Map constructor
 	r.functions["Map"] = &BuiltInFunction{
-		Name:        "Map",
-		Signature:   "Map() -> Map<K, V>",
-		Description: "Creates a new empty map.",
+		Name:           "Map",
+		Signature:      "Map() -> Map<K, V>",
+		Description:    "Creates a new empty map.",
 		ParameterTypes: []BuiltInParameter{},
 		ReturnType:     &ConcreteType{name: TypeMap},
 		Category:       CategoryFunctional,

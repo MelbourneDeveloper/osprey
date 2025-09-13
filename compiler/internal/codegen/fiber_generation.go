@@ -128,22 +128,21 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	// Capture variables by value BEFORE creating the closure context
 	capturedValues := make(map[string]value.Value)
 	g.captureVariablesInExpression(spawn.Expression, capturedValues)
-	
 
 	// Create new context for closure
 	g.function = closureFunc
 	entry := closureFunc.NewBlock("entry")
 	g.builder = entry
-	
+
 	// Create new variable scope with captured values + preserved globals
 	// We need to merge captured values with the original variables to support nested spawns
 	g.variables = make(map[string]value.Value)
-	
+
 	// First, copy all original variables (this preserves global scope for nested spawns)
 	for name, val := range prevVars {
 		g.variables[name] = val
 	}
-	
+
 	// Then, override with captured values (this ensures proper closure semantics)
 	for name, val := range capturedValues {
 		g.variables[name] = val
@@ -406,10 +405,9 @@ func (g *LLVMGenerator) captureVariablesInExpression(expr ast.Expression, captur
 		g.captureVariablesInExpression(e.Right, captured)
 	case *ast.UnaryExpression:
 		g.captureVariablesInExpression(e.Operand, captured)
-	// Add more cases as needed
+		// Add more cases as needed
 	}
 }
-
 
 // generateAwaitCall generates fiber await from built-in function call
 func (g *LLVMGenerator) generateAwaitCall(callExpr *ast.CallExpression) (value.Value, error) {
