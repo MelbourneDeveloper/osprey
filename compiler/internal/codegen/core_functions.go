@@ -223,13 +223,6 @@ func (g *LLVMGenerator) convertResultToString(
 	if err != nil {
 		return nil, err
 	}
-	
-	// Format as "Success(value)" using sprintf
-	successFormatStr := g.createGlobalString("Success(%s)")
-	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
-	successBuffer := g.builder.NewCall(g.functions["malloc"], bufferSize)
-	g.builder.NewCall(g.functions["sprintf"], successBuffer, successFormatStr, valueStr)
-	successStr = successBuffer
 
 	// Format as "Success(value)" using sprintf
 	successFormatStr := g.createGlobalString("Success(%s)")

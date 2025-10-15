@@ -2263,8 +2263,6 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 	if err != nil {
 		return nil, err
 	}
-	
-	resolvedCollectionType := ti.ResolveType(collectionType)
 
 	resolvedCollectionType := ti.ResolveType(collectionType)
 
@@ -2315,12 +2313,6 @@ func (ti *TypeInferer) inferListElement(genericType *GenericType, indexType Type
 	if err != nil {
 		return nil, fmt.Errorf("list index must be Int: %w", err)
 	}
-	
-	if len(genericType.typeArgs) >= 1 {
-		return genericType.typeArgs[0], nil
-	}
-	return ti.Fresh(), nil
-}
 
 	if len(genericType.typeArgs) >= 1 {
 		return genericType.typeArgs[0], nil

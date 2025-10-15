@@ -186,7 +186,6 @@ func (b *Builder) buildMapLiteral(ctx parser.IMapLiteralContext) Expression {
 	}
 }
 
-
 // buildLambdaExpr builds a LambdaExpression from a lambda context.
 func (b *Builder) buildLambdaExpr(ctx parser.ILambdaExprContext) Expression {
 	if ctx == nil {

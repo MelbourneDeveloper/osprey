@@ -265,7 +265,6 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 			return nil, err
 		}
 
-
 		// Get pointer to element position
 		elementPtr := g.builder.NewGetElementPtr(elementType, arrayPtr, constant.NewInt(types.I64, int64(i)))
 		g.builder.NewStore(elementValue, elementPtr)
