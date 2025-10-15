@@ -390,30 +390,30 @@ effect StateA {
 }
 
 effect StateB {
-    getFromA: fn() -> int  
+    getFromA: fn() -> int
     setInB: fn(int) -> Unit
 }
 
-fn circularEffectA() -> int !StateA, StateB = {
+fn circularEffectA() -> int ![StateA, StateB] = {
     let bValue = perform StateB.getFromA()
     perform StateA.setInA(bValue + 1)
     perform StateA.getFromB()
 }
 
-fn circularEffectB() -> int !StateA, StateB = {
+fn circularEffectB() -> int ![StateA, StateB] = {
     let aValue = perform StateA.getFromA()
     perform StateB.setInB(aValue + 1)
     perform StateB.getFromA()
 }
 
 fn main() -> Unit = {
-    with handler StateA
-        getFromB() => circularEffectB()
-        setInA(x) => print("StateA set: " + toString(x))
-    with handler StateB  
-        getFromA() => circularEffectA()
-        setInB(x) => print("StateB set: " + toString(x))
-    {
+    handle StateA
+        getFromB => circularEffectB()
+        setInA x => print("StateA set: " + toString(x))
+    in handle StateB
+        getFromA => circularEffectA()
+        setInB x => print("StateB set: " + toString(x))
+    in {
         let result = circularEffectA()
         print("Result: " + toString(result))
     }
@@ -426,10 +426,11 @@ fn main() -> Unit = {
 
 	// Check that the error message mentions circular dependencies
 	errorMsg := err.Error()
+	t.Logf("Actual error message: %s", errorMsg)
+
 	if !strings.Contains(errorMsg, "circular") && !strings.Contains(errorMsg, "recursion") {
-		t.Logf("Error message: %s", errorMsg)
 		// For now, just log that we need to implement circular dependency detection
-		t.Log("⚠️  NOTE: Circular dependency detection not yet implemented - this will be added later")
+		t.Fatalf("⚠️  NOTE: Circular dependency detection not yet implemented - this will be added later")
 	} else {
 		t.Log("✅ Circular dependency correctly detected!")
 	}

@@ -167,12 +167,6 @@
       }
     }
   },
-  "activationEvents": [
-    "onLanguage:osprey",
-    "onCommand:osprey.compile",
-    "onCommand:osprey.run",
-    "onCommand:osprey.setLanguage"
-  ],
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
