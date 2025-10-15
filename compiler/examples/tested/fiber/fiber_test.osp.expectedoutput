@@ -1,0 +1,31 @@
+=== Fiber Test ===
+Computing Fibonacci numbers in parallel...
+Fib(10) = 55
+Fib(15) = 610
+
+Producer/Consumer pattern:
+Producer 1 created: 307
+Producer 2 created: 607
+Producer 3 created: 907
+
+Cooperative multitasking with yield:
+Task 1 progress: 25%
+Task 2 progress: 50%
+Task 3 progress: 75%
+All tasks complete: 100%
+
+Select returned priority value: 1000
+
+Testing channel operations:
+Sent 42, received: 42
+Sent 123, received: 123
+
+Lambda computation result: 35
+Fiber task result: 123
+
+Async data processing pipeline:
+Processed data size: 2058
+Validation result: 1
+
+Basic fiber functionality test
+=== Test Complete ===

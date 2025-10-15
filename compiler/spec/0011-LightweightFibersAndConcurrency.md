@@ -1,5 +1,5 @@
 12. [Lightweight Fibers and Concurrency](0012-LightweightFibersAndConcurrency.md)
-    - [Fiber Types and Concurrency](#121-fiber-types-and-concurrency)
+    - [Fiber Types and Concurrency](#fiber-types-and-concurrency)
         - [Core Fiber Types](#core-fiber-types)
         - [Fiber Construction](#fiber-construction)
         - [Spawn Syntax Sugar](#spawn-syntax-sugar)
@@ -8,28 +8,28 @@
         - [Complete Fiber Example](#complete-fiber-example)
         - [Select Expression for Channel Multiplexing](#select-expression-for-channel-multiplexing)
         - [Rust Interoperability](#rust-interoperability)
-    - [Fiber-Isolated Module System](#122-fiber-isolated-module-system)
+    - [Fiber-Isolated Module System](#fiber-isolated-module-system)
         - [Module Isolation Principles](#module-isolation-principles)
         - [Module Declaration Syntax](#module-declaration-syntax)
         - [Fiber Isolation Behavior](#fiber-isolation-behavior)
         - [Memory and Performance Characteristics](#memory-and-performance-characteristics)
         - [Inter-Fiber Communication](#inter-fiber-communication)
-    - [Server Applications and Long-Running Processes](#123-server-applications-and-long-running-processes)
-        - [Functional Approaches to Server Persistence](#1231-functional-approaches-to-server-persistence)
-            - [Fiber-Based Server Persistence](#12311-fiber-based-server-persistence)
-            - [Recursive Function Patterns](#12312-recursive-function-patterns)
-            - [Event-Driven Architecture with Channels](#12313-event-driven-architecture-with-channels)
-            - [Functional Iterator-Based Processing](#12314-functional-iterator-based-processing)
-        - [Why No Imperative Loops?](#1232-why-no-imperative-loops)
-        - [Performance Considerations](#1233-performance-considerations)
+    - [Server Applications and Long-Running Processes](#server-applications-and-long-running-processes)
+        - [Functional Approaches to Server Persistence](#functional-approaches-to-server-persistence)
+            - [Fiber-Based Server Persistence](#fiber-based-server-persistence)
+            - [Recursive Function Patterns](#recursive-function-patterns)
+            - [Event-Driven Architecture with Channels](#event-driven-architecture-with-channels)
+            - [Functional Iterator-Based Processing](#functional-iterator-based-processing)
+        - [Why No Imperative Loops?](#why-no-imperative-loops)
+        - [Performance Considerations](#performance-considerations)
 
-## 12. Lightweight Fibers and Concurrency
+## Lightweight Fibers and Concurrency
 
 🚧 **IMPLEMENTATION STATUS**: Fiber syntax is partially implemented. Basic fiber operations (`spawn`, `await`, `yield`) are in the grammar but runtime support is limited.
 
 ❌ **NOT IMPLEMENTED**: The fiber-isolated module system is a design goal but not yet implemented. Current module support is basic.
 
-### 12.1 Fiber Types and Concurrency
+### Fiber Types and Concurrency
 
 Osprey provides lightweight concurrency through fiber types. Unlike traditional function-based approaches, fibers are proper type instances constructed using Osprey's standard type construction syntax.
 
@@ -181,7 +181,7 @@ let osprey_task = Fiber<Int> {
 let result = await(osprey_task)
 ```
 
-## 12.2 Fiber-Isolated Module System
+## Fiber-Isolated Module System
 
 ❌ **NOT IMPLEMENTED**: The fiber-isolated module system is a design goal but not yet implemented. Current module support is basic.
 
@@ -276,13 +276,13 @@ let worker2 = spawn {
 
 This design ensures that concurrent access to modules is always safe without requiring explicit synchronization.
 
-## 12.3 Server Applications and Long-Running Processes
+## Server Applications and Long-Running Processes
 
-### 12.3.1 Functional Approaches to Server Persistence
+### Functional Approaches to Server Persistence
 
 **Osprey is a functional language and does NOT support imperative loop constructs.** Server applications that need to stay alive should use functional patterns instead:
 
-#### 12.3.1.1 Fiber-Based Server Persistence
+#### Fiber-Based Server Persistence
 
 Use fibers to handle concurrent requests and keep the server process alive:
 
@@ -308,7 +308,7 @@ fn serverMain() -> Unit = {
 }
 ```
 
-#### 12.3.1.2 Recursive Function Patterns
+#### Recursive Function Patterns
 
 Use tail-recursive functions for continuous processing:
 
@@ -327,7 +327,7 @@ fn main() -> Unit = {
 }
 ```
 
-#### 12.3.1.3 Event-Driven Architecture with Channels
+#### Event-Driven Architecture with Channels
 
 Use channels for event-driven server architectures:
 
@@ -360,7 +360,7 @@ fn serverWithEvents() -> Unit = {
 }
 ```
 
-#### 12.3.1.4 Functional Iterator-Based Processing
+#### Functional Iterator-Based Processing
 
 Use functional iterators for continuous data processing:
 
@@ -386,7 +386,7 @@ fn webSocketServer() -> Unit = {
 }
 ```
 
-### 12.3.2 Why No Imperative Loops?
+### Why No Imperative Loops?
 
 **Functional Superiority:**
 1. **Composability** - Functional iterators can be chained with `|>`
@@ -413,7 +413,7 @@ fn serverHandler() -> Unit = {
 }
 ```
 
-### 12.3.3 Performance Considerations
+### Performance Considerations
 
 Functional approaches in Osprey are optimized for:
 - **Tail call optimization** prevents stack overflow in recursive functions

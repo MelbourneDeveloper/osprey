@@ -104,7 +104,7 @@ func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 
 	// Parse actual operation signatures from the AST
 	for _, operation := range effect.Operations {
-		
+
 		paramTypes := make([]types.Type, len(operation.Parameters))
 
 		for i, param := range operation.Parameters {
@@ -130,7 +130,7 @@ func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 		// Use the generator's proper type conversion instead of string parsing
 		concreteReturnType := &ConcreteType{name: operation.ReturnType}
 		returnType := ec.generator.getLLVMConcreteType(concreteReturnType)
-		
+
 		effectType.Operations[operation.Name] = &EffectOp{
 			Name:       operation.Name,
 			ParamTypes: paramTypes,
@@ -231,7 +231,6 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	return result, nil
 }
 
-
 // inferOperationTypes determines parameter and return types for an operation
 func (ec *EffectCodegen) inferOperationTypes(
 	effectName string, operationName string, paramCount int,
@@ -246,11 +245,10 @@ func (ec *EffectCodegen) inferOperationTypes(
 
 	// But for now, provide sensible defaults until we fix the registry issue
 
-
 	// Fallback for other cases
 	paramTypes := make([]types.Type, paramCount)
 	for i := range paramTypes {
-		paramTypes[i] = types.I8Ptr 
+		paramTypes[i] = types.I8Ptr
 	}
 
 	return paramTypes, types.I64

@@ -1,17 +1,17 @@
-# 17. Security and Sandboxing
+# Security and Sandboxing
 
-- [Security Flags](#171-security-flags)
-- [Security Policies](#172-security-policies)
-- [Blocked Functions by Category](#173-blocked-functions-by-category)
-- [Function Availability](#174-function-availability)
-- [Programming Best Practices](#175-programming-best-practices)
-- [Implementation Details](#176-implementation-details)
+- [Security Flags](#security-flags)
+- [Security Policies](#security-policies)
+- [Blocked Functions by Category](#blocked-functions-by-category)
+- [Function Availability](#function-availability)
+- [Programming Best Practices](#programming-best-practices)
+- [Implementation Details](#implementation-details)
 
-## 17. Security and Sandboxing
+## Security and Sandboxing
 
 The Osprey compiler includes built-in security controls to restrict access to potentially dangerous functionality like network operations and file system access. This is essential for safe code execution in environments like web compilers where untrusted code may be executed.
 
-## 17.1 Security Flags
+## Security Flags
 
 #### `--sandbox`
 Enables sandbox mode, which disables all potentially risky operations:
@@ -47,7 +47,7 @@ osprey program.osp --no-http --no-websocket --run
 osprey program.osp --no-fs --llvm
 ```
 
-## 17.2 Security Policies
+## Security Policies
 
 #### Default Security (Permissive)
 By default, all operations are allowed for backward compatibility and normal development use.
@@ -59,7 +59,7 @@ When `--sandbox` is used, all potentially dangerous functions are unavailable. T
 - Educational environments
 - Code review systems
 
-## 17.3 Blocked Functions by Category
+## Blocked Functions by Category
 
 #### HTTP Functions
 When HTTP access is disabled (`--no-http` or `--sandbox`), these functions are unavailable:
@@ -93,7 +93,7 @@ When file system access is disabled (`--no-fs` or `--sandbox`), these functions 
 - `createDirectory` - Create directory
 - `listDirectory` - List directory contents
 
-## 17.4 Function Availability
+## Function Availability
 
 In different security modes, certain functions are simply not available in the language:
 
@@ -104,7 +104,7 @@ In different security modes, certain functions are simply not available in the l
 **Default Mode**: All functions are available.
 - A human-readable explanation
 
-## 17.5 Programming Best Practices
+## Programming Best Practices
 
 #### For Safe Code
 Write code that doesn't use security-sensitive functions:
@@ -124,7 +124,7 @@ When writing network code, be aware that it may be restricted:
 let serverID = httpCreateServer(port: 8080, address: "127.0.0.1")
 ```
 
-## 17.6 Implementation Details
+## Implementation Details
 
 #### Security Configuration
 Security settings are configured at compilation time and cannot be bypassed by the compiled program. The security checks happen during the LLVM IR generation phase, preventing security-sensitive functions from being included in the generated code.

@@ -17,6 +17,16 @@ Low priority task ID: 3
 
 Pipeline result: 200
 
+Channel-based communication:
+Producer created: 100
+Consumer processed: 200
+
+Lambda expression results:
+Double 10: 20
+Triple 7: 21
+Add 5 + 8: 13
+Advanced yield result: 200
+
 Collection access results:
 Element 1 squared: 1
 Element 2 squared: 4

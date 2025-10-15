@@ -27,7 +27,7 @@ func (b *Builder) buildCallFromPrimary(ctx parser.ICallExprContext, primary Expr
 	if len(ctx.AllLSQUARE()) > 0 {
 		return b.buildArrayAccess(ctx, primary)
 	}
-	
+
 	if len(ctx.AllDOT()) > 0 {
 		return b.buildChainedCall(ctx, primary)
 	}
@@ -182,24 +182,24 @@ func (b *Builder) isModuleName(name string) bool {
 // buildArrayAccess handles array/map access expressions like expr[index].
 func (b *Builder) buildArrayAccess(ctx parser.ICallExprContext, primary Expression) Expression {
 	result := primary
-	
+
 	// Handle multiple array accesses: arr[0][1][2]
 	for i := range ctx.AllLSQUARE() {
 		if i >= len(ctx.AllExpr()) || ctx.Expr(i) == nil {
 			continue
 		}
-		
+
 		indexExpr := b.buildExpression(ctx.Expr(i))
 		if indexExpr == nil {
 			continue
 		}
-		
+
 		result = &ListAccessExpression{
 			List:     result,
 			Index:    indexExpr,
 			Position: b.getPositionFromContext(ctx),
 		}
 	}
-	
+
 	return result
 }

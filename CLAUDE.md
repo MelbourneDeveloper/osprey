@@ -6,18 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **NEVER DUPLICATE CODE** - Edit in place, never create new versions
 - **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
+
+⛔️ This is completely illegal
+```go
+// For now, just log that we need to implement circular dependency detection
+t.Log("⚠️  NOTE: Circular dependency detection not yet implemented - this will be added later")
+```
+
+✅ Correct - Fail hard!!!!
+```go
+t.Fatalf("⚠️ NOTE: Circular dependency detection not yet implemented. Implement it!")
+```
+
 - **NO CONSECUTIVE PRINT CALLS IN OSP** - Use string interpolation! Consolidate consecutive prints into singular interpolated strings!!!
-- **RUN LINTING AUTOFIXES** - Most lints can be easily fixed with auto fix. Don't try to fix them yourself
+- **RUN LINTING AUTOFIXES AND make line ROUTINELY** - Most lints can be easily fixed with auto fix. Don't try to fix them yourself
 - **PREFER EXPANDING EXISTING EXAMPLES AND TESTS** - Don't add new examples/tests
 - **SEARCH BEFORE ADDING** - Check for existing code before creating new functions/constants
-- **Do not use source control** - unless explicitly requested
+- **DO NOT USE SOURCE CONTROL - ESPECIALLY WRITES** - unless explicitly requested
 - **MAKE EXAMPLES (TESTS) CONCISE AND MIX WITH MANY LANGUAGE CONSTRUCTS** - Don't create many files with overlapping functionality
 - **NEVER IGNORE FAILING TESTS** - Don't reduce assertions to make tests pass, fail loudly
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules 
-- **RUN LINTER REGULARLY** - lints are strict. Obey them!! DO NOT TURN THEM OFF!!!!
 - **FP STYLE CODE** - pure functions over OOP style
-- **NEVER COMMIT/PUSH** unless explicitly requested
-- **FOLLOW STATIC ANALYSIS** - Pay attention to linters and fix issues
 - **USE CONSTANTS** - Name values meaningfully instead of using literals
 
 ## Commands

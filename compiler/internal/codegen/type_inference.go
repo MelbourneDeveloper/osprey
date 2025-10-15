@@ -2266,6 +2266,8 @@ func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error
 	
 	resolvedCollectionType := ti.ResolveType(collectionType)
 
+	resolvedCollectionType := ti.ResolveType(collectionType)
+
 	indexType, err := ti.InferType(e.Index)
 	if err != nil {
 		return nil, err
@@ -2292,8 +2294,8 @@ func (ti *TypeInferer) inferCollectionElementType(collectionType, indexType Type
 
 // inferGenericCollectionElement handles known generic collection types
 func (ti *TypeInferer) inferGenericCollectionElement(
-	genericType *GenericType, 
-	indexType, 
+	genericType *GenericType,
+	indexType,
 	collectionType Type,
 ) (Type, error) {
 	switch genericType.name {
@@ -2320,6 +2322,12 @@ func (ti *TypeInferer) inferListElement(genericType *GenericType, indexType Type
 	return ti.Fresh(), nil
 }
 
+	if len(genericType.typeArgs) >= 1 {
+		return genericType.typeArgs[0], nil
+	}
+	return ti.Fresh(), nil
+}
+
 // inferMapElement handles Map<K,V> element type inference
 func (ti *TypeInferer) inferMapElement(genericType *GenericType, indexType, collectionType Type) (Type, error) {
 	if len(genericType.typeArgs) >= TwoTypeArgs {
@@ -2330,7 +2338,7 @@ func (ti *TypeInferer) inferMapElement(genericType *GenericType, indexType, coll
 		}
 		return genericType.typeArgs[1], nil
 	}
-	
+
 	return ti.inferFreshMapElement(indexType, collectionType)
 }
 
@@ -2338,18 +2346,18 @@ func (ti *TypeInferer) inferMapElement(genericType *GenericType, indexType, coll
 func (ti *TypeInferer) inferFreshMapElement(indexType, collectionType Type) (Type, error) {
 	keyType := ti.Fresh()
 	valueType := ti.Fresh()
-	
+
 	err := ti.Unify(indexType, keyType)
 	if err != nil {
 		return nil, fmt.Errorf("map key type mismatch: %w", err)
 	}
-	
+
 	expectedMapType := NewGenericType(TypeMap, []Type{keyType, valueType})
 	err = ti.Unify(collectionType, expectedMapType)
 	if err != nil {
 		return nil, fmt.Errorf("expected Map type for map access: %w", err)
 	}
-	
+
 	return valueType, nil
 }
 

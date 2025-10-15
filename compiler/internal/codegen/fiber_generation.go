@@ -128,22 +128,21 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	// Capture variables by value BEFORE creating the closure context
 	capturedValues := make(map[string]value.Value)
 	g.captureVariablesInExpression(spawn.Expression, capturedValues)
-	
 
 	// Create new context for closure
 	g.function = closureFunc
 	entry := closureFunc.NewBlock("entry")
 	g.builder = entry
-	
+
 	// Create new variable scope with captured values + preserved globals
 	// We need to merge captured values with the original variables to support nested spawns
 	g.variables = make(map[string]value.Value)
-	
+
 	// First, copy all original variables (this preserves global scope for nested spawns)
 	for name, val := range prevVars {
 		g.variables[name] = val
 	}
-	
+
 	// Then, override with captured values (this ensures proper closure semantics)
 	for name, val := range capturedValues {
 		g.variables[name] = val
@@ -318,11 +317,56 @@ func (g *LLVMGenerator) generateSelectExpression(selectExpr *ast.SelectExpressio
 	return result, nil
 }
 
-// generateLambdaExpression generates lambda with proper closure support.
+// generateLambdaExpression generates lambda with basic support.
 func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (value.Value, error) {
-	// For now, evaluate lambda body immediately
-	// TODO: Implement proper closure creation with captured variables
-	return g.generateExpression(lambda.Body)
+	// Create a simple function for the lambda
+	funcName := fmt.Sprintf("lambda_%d", len(g.module.Funcs))
+
+	// Create parameters with names
+	var params []*ir.Param
+	for _, param := range lambda.Parameters {
+		llvmParam := ir.NewParam(param.Name, types.I64) // Assume int type for now
+		params = append(params, llvmParam)
+	}
+
+	// Create function with parameters
+	lambdaFunc := g.module.NewFunc(funcName, types.I64, params...)
+
+	// Create entry block
+	entryBlock := lambdaFunc.NewBlock("entry")
+
+	// Save current builder and switch to lambda
+	oldBuilder := g.builder
+	g.builder = entryBlock
+
+	// Save current variables and create new scope
+	savedVars := make(map[string]value.Value)
+	for k, v := range g.variables {
+		savedVars[k] = v
+	}
+
+	// Add lambda parameters to scope
+	for i, param := range lambda.Parameters {
+		if i < len(lambdaFunc.Params) {
+			g.variables[param.Name] = lambdaFunc.Params[i]
+		}
+	}
+
+	// Generate lambda body
+	bodyValue, err := g.generateExpression(lambda.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate lambda body: %w", err)
+	}
+
+	// Create return instruction
+	entryBlock.NewRet(bodyValue)
+
+	// Restore context
+	g.variables = savedVars
+	g.builder = oldBuilder
+
+	// Return the function
+	return lambdaFunc, nil
 }
 
 // generateModuleAccessExpression generates module access with fiber isolation.
@@ -361,10 +405,9 @@ func (g *LLVMGenerator) captureVariablesInExpression(expr ast.Expression, captur
 		g.captureVariablesInExpression(e.Right, captured)
 	case *ast.UnaryExpression:
 		g.captureVariablesInExpression(e.Operand, captured)
-	// Add more cases as needed
+		// Add more cases as needed
 	}
 }
-
 
 // generateAwaitCall generates fiber await from built-in function call
 func (g *LLVMGenerator) generateAwaitCall(callExpr *ast.CallExpression) (value.Value, error) {

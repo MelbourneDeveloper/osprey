@@ -1,14 +1,14 @@
 7. [String Interpolation](0007-StringInterpolation.md)
-   - [Syntax](#71-syntax)
-   - [Expression Support](#72-expression-support)
-   - [Type Handling](#73-type-handling)
-   - [Implementation](#74-implementation)
+   - [Syntax](#syntax)
+   - [Expression Support](#expression-support)
+   - [Type Handling](#type-handling)
+   - [Implementation](#implementation)
 
-## 7. String Interpolation
+# String Interpolation
 
 ✅ **IMPLEMENTED**: String interpolation is fully implemented and working with comprehensive test coverage.
 
-### 7.1 Syntax
+## Syntax
 
 String interpolation uses `${}` syntax within double-quoted strings:
 
@@ -18,7 +18,7 @@ let age = 30
 let message = "Hello ${name}, you are ${age} years old"
 ```
 
-### 7.2 Expression Support
+## Expression Support
 
 Any expression is valid inside interpolation:
 
@@ -30,13 +30,13 @@ print("Product: ${x * y}")
 print("Complex: ${(x + y) * 2 - 1}")
 ```
 
-### 7.3 Type Handling
+## Type Handling
 
 - **String variables**: Use `%s` format specifier
 - **Integer expressions**: Use `%ld` format specifier  
 - **Function calls**: Supported for single-parameter functions
 
-### 7.4 Implementation
+## Implementation
 
 Interpolated strings are compiled to:
 1. Allocate a buffer (`alloca [1024 x i8]`)

@@ -1,12 +1,12 @@
 6. [Function Calls](0006-FunctionCalls.md)
-   - [Named Arguments Requirement](#61-named-arguments-requirement)
+   - [Named Arguments Requirement](#named-arguments-requirement)
        - [Valid Function Calls](#valid-function-calls)
        - [Invalid Function Calls](#invalid-function-calls)
-   - [Function Call Compilation Rules](#62-function-call-compilation-rules)
+   - [Function Call Compilation Rules](#function-call-compilation-rules)
 
-## 6. Function Calls
+## Function Calls
 
-### 6.1 Named Arguments Requirement
+### Named Arguments Requirement
 
 **CRITICAL RULE**: Functions with more than one parameter **MUST** be called with named arguments.
 
@@ -40,7 +40,7 @@ let sum = add(10, 20)  // ❌ Compilation error
 let sum = add(10, y: 20)  // ❌ Compilation error
 ```
 
-### 6.2 Function Call Compilation Rules
+### Function Call Compilation Rules
 
 1. **Single Parameter Functions**: May use positional arguments
 2. **Zero Parameter Functions**: Called with empty parentheses `()`

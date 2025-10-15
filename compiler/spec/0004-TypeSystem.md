@@ -1,83 +1,55 @@
-5. [Type System](0005-TypeSystem.md)
-   - [Hindley-Milner Type Inference Foundation](#50-hindley-milner-type-inference-foundation)
-   - [Built-in Types](#51-built-in-types)
-       - [Function Types](#function-types)
-       - [Record Types](#record-types)
-   - [Built-in Error Types](#52-built-in-error-types)
-   - [Hindley-Milner Type Inference](#53-hindley-milner-type-inference)
-       - [Function Return Types](#function-return-types)
-       - [Parameter Types](#parameter-types)
-       - [Type Inference Examples](#type-inference-examples)
-       - [Rationale](#rationale)
-       - [Function Return Type "any" Restriction](#function-return-type-any-restriction)
-       - [Common Validation Fixes](#common-validation-fixes)
-   - [Type Safety and Explicit Typing](#54-type-safety-and-explicit-typing)
-       - [Mandatory Type Safety](#mandatory-type-safety)
-   - [Any Type Handling and Pattern Matching Requirement](#55-any-type-handling-and-pattern-matching-requirement)
-       - [Forbidden Operations on `any` Types](#forbidden-operations-on-any-types)
-       - [Legal Operations on `any` Types](#legal-operations-on-any-types)
-       - [Pattern Matching Requirement](#pattern-matching-requirement)
-       - [Direct Access Compilation Errors](#direct-access-compilation-errors)
-       - [Function Return Type Handling](#function-return-type-handling)
-       - [Type Annotation Pattern Syntax](#type-annotation-pattern-syntax)
-       - [Compilation Error Messages](#compilation-error-messages)
-       - [Exhaustiveness Checking for Any Types](#exhaustiveness-checking-for-any-types)
-       - [Default Wildcard Behavior for Any Types](#default-wildcard-behavior-for-any-types)
-       - [Type Constraint Checking](#type-constraint-checking)
-       - [Context-Aware Type Validation](#context-aware-type-validation)
-       - [Compilation Errors for Impossible Types](#compilation-errors-for-impossible-types)
-       - [Performance and Safety Characteristics](#performance-and-safety-characteristics)
-       - [Type Annotation Requirements](#type-annotation-requirements)
-       - [Compilation Errors for Type Ambiguity](#compilation-errors-for-type-ambiguity)
-       - [Error Handling Requirements](#error-handling-requirements)
-   - [Type Compatibility](#56-type-compatibility)
+# Type System
 
-## 5. Type System
+- [Hindley-Milner Type Inference](#hindley-milner-type-inference)
+- [Built-in Types](#built-in-types)
+  - [Function Types](#function-types)
+  - [Record Types](#record-types)
+  - [Collection Types (List and Map)](#collection-types-list-and-map)
+- [Built-in Error Types](#built-in-error-types)
+- [Hindley-Milner Type Inference](#hindley-milner-type-inference-1)
+  - [Hindley-Milner Function Inference](#hindley-milner-function-inference)
+  - [Constraint-Based Type Inference](#constraint-based-type-inference)
+  - [Hindley-Milner Implementation Examples](#hindley-milner-implementation-examples)
+  - [Hindley-Milner Benefits](#hindley-milner-benefits)
+  - [Record Type Structural Equivalence](#record-type-structural-equivalence)
+  - [Polymorphic Type Variables vs Any Type](#polymorphic-type-variables-vs-any-type)
+  - [Hindley-Milner Constraint Resolution](#hindley-milner-constraint-resolution)
+- [Type Safety and Explicit Typing](#type-safety-and-explicit-typing)
+  - [Mandatory Type Safety](#mandatory-type-safety)
+- [Any Type Handling and Pattern Matching Requirement](#any-type-handling-and-pattern-matching-requirement)
+  - [Forbidden Operations on `any` Types](#forbidden-operations-on-any-types)
+  - [Legal Operations on `any` Types](#legal-operations-on-any-types)
+  - [Pattern Matching Requirement](#pattern-matching-requirement)
+  - [Direct Access Compilation Errors](#direct-access-compilation-errors)
+  - [Function Return Type Handling](#function-return-type-handling)
+  - [Type Annotation Pattern Syntax](#type-annotation-pattern-syntax)
+  - [Compilation Error Messages](#compilation-error-messages)
+  - [Exhaustiveness Checking for Any Types](#exhaustiveness-checking-for-any-types)
+  - [Default Wildcard Behavior for Any Types](#default-wildcard-behavior-for-any-types)
+  - [Type Constraint Checking](#type-constraint-checking)
+  - [Context-Aware Type Validation](#context-aware-type-validation)
+  - [Compilation Errors for Impossible Types](#compilation-errors-for-impossible-types)
+  - [Performance and Safety Characteristics](#performance-and-safety-characteristics)
+  - [Type Annotation Requirements](#type-annotation-requirements)
+  - [Compilation Errors for Type Ambiguity](#compilation-errors-for-type-ambiguity)
+  - [Error Handling Requirements](#error-handling-requirements)
+  - [Type-Level Validation](#type-level-validation)
+- [Type Compatibility](#type-compatibility)
 
-### 5.0 Hindley-Milner Type Inference Foundation
+## Hindley-Milner Type Inference
 
-**🔥 CORE SPECIFICATION**: Osprey implements complete **Hindley-Milner type inference** as its foundational type system. This is a **MANDATORY REQUIREMENT** for compiler implementation.
+Osprey implements Hindley-Milner type inference as its foundational type system. This provides:
 
-**Academic Foundation & Implementation Requirements:**
-- **Hindley, R. (1969)**: "The Principal Type-Scheme of an Object in Combinatory Logic" - Communications of the ACM 12(12):719-721
-- **Milner, R. (1978)**: "A Theory of Type Polymorphism in Programming" - Journal of Computer and System Sciences 17:348-375  
-- **Damas, L. & Milner, R. (1982)**: "Principal type-schemes for functional programs" - POPL '82
+1. **Complete type inference**: Variables and functions can be declared without explicit type annotations
+2. **Principal types**: Every well-typed expression has a unique most general type
+3. **Compile-time safety**: No runtime type errors if program type-checks
+4. **Decidability**: Type inference always terminates
 
-**🔥 CRITICAL IMPLEMENTATION MANDATES:**
+The type system emphasizes safety and expressiveness, making illegal states unrepresentable through static verification.
 
-1. **COMPLETE TYPE INFERENCE**: Variables and functions MAY be declared without type annotations when types can be inferred through Hindley-Milner unification
-2. **PRINCIPAL TYPES**: Every well-typed expression MUST have a unique most general (polymorphic) type
-3. **SOUNDNESS GUARANTEE**: If type checker accepts a program, NO runtime type errors can occur
-4. **COMPLETENESS GUARANTEE**: If a program has a valid typing, the type system MUST find it
-5. **DECIDABILITY GUARANTEE**: Type inference MUST always terminate with definitive results
+## Built-in Types
 
-**🔥 STRUCTURAL TYPE REQUIREMENTS:**
-- **Record Type Unification**: MUST use structural equivalence based on **FIELD NAMES ONLY**
-- **Field Access**: MUST be **STRICTLY BY NAME** - never by position or ordering
-- **Type Environment (Γ)**: MUST maintain consistent field name-to-type mappings
-- **Substitution Application**: MUST apply substitutions consistently across all type expressions
-
-**Hindley-Milner Algorithm Implementation Steps (MANDATORY):**
-1. **Type Variable Generation**: Assign fresh type variables (α, β, γ) to untyped expressions
-2. **Constraint Collection**: Gather type equality constraints from expression structure  
-3. **Unification**: Solve constraints using Robinson's unification algorithm with occurs check
-4. **Generalization**: Generalize types to introduce polymorphism at let-bindings
-5. **Instantiation**: Create fresh instances of polymorphic types at usage sites
-
-**Implementation References (REQUIRED READING):**
-- **Robinson, J.A. (1965)**: "A Machine-Oriented Logic Based on the Resolution Principle" - Unification algorithm
-- **Cardelli, L. (1987)**: "Basic Polymorphic Typechecking" - Implementation techniques  
-- **Jones, M.P. (1995)**: "Functional Programming with Overloading and Higher-Order Polymorphism" - Advanced HM features
-
-**🔥 COMPILER CORRECTNESS REQUIREMENT**: The implementation MUST pass all Hindley-Milner theoretical guarantees. Failure to implement proper HM inference is a **CRITICAL COMPILER BUG**.
-
----
-
-Osprey's type system puts type safety and expressiveness as the top priorities. It is built upon the solid theoretical foundation of Hindley-Milner type inference, inspired by ML and Haskell. The type system aims towards making illegal states unrepresentable through complete static verification.
-
-### 5.1 Built-in Types
-
-**IMPORTANT**: All primitive types use lowercase names - `int`, `string`, `bool`. Capitalized forms (`Int`, `String`, `Bool`) are invalid.
+All primitive types use lowercase names:
 
 - `int`: 64-bit signed integers
 - `string`: UTF-8 encoded strings  
@@ -674,44 +646,15 @@ fn validateUsers(users: Map<string, User>) -> Map<string, User> !Validator =
     mapValues(user => perform validate(user), users)
 ```
 
-**LLVM Code Generation:**
-```osprey
-// This Osprey code:
-let numbers = [1, 2, 3, 4, 5]
-let first = numbers[0]
 
-// Compiles to efficient LLVM IR:
-// %array = alloca { i64, i8* }
-// %data = call i8* @malloc(i64 40)  // 5 * 8 bytes
-// %first_ptr = getelementptr i64, i64* %data, i64 0
-// %first_val = load i64, i64* %first_ptr
-// Returns: Result<i64, IndexError>
-```
-
-### 5.2 Built-in Error Types
+## Built-in Error Types
 
 - `MathError`: For arithmetic operations (DivisionByZero, Overflow, Underflow)
 - `ParseError`: For string parsing operations  
 - `IndexError`: For list/string indexing operations (OutOfBounds)
 - `Success`: Successful result wrapper
 
-### 5.3 Hindley-Milner Type Inference
-
-**Core Implementation**: Osprey implements complete Hindley-Milner type inference (Hindley 1969, Milner 1978) enabling polymorphic type inference without explicit type annotations.
-
-**Academic Foundation**:
-- **Hindley, R. (1969)**: "The Principal Type-Scheme of an Object in Combinatory Logic" - Communications of the ACM 12(12):719-721
-- **Milner, R. (1978)**: "A Theory of Type Polymorphism in Programming" - Journal of Computer and System Sciences 17:348-375
-- **Damas, L. & Milner, R. (1982)**: "Principal type-schemes for functional programs" - POPL '82
-
-**Implementation Principle**: Variables may be declared without type annotations when their types can be inferred through unification and constraint solving. The system performs automatic generalization and instantiation of polymorphic types.
-
-**Hindley-Milner Algorithm Steps**:
-1. **Type Variable Generation**: Assign fresh type variables to untyped expressions
-2. **Constraint Collection**: Gather type equality constraints from expression structure
-3. **Unification**: Solve constraints using Robinson's unification algorithm
-4. **Generalization**: Generalize types to introduce polymorphism at let-bindings
-5. **Instantiation**: Create fresh instances of polymorphic types at usage sites
+## Type Inference Examples
 
 #### Hindley-Milner Function Inference
 
@@ -847,26 +790,12 @@ fn complex<T>(x: T, pred: (T) -> bool) -> Option<T> =
     if pred(x) then Some(x) else None
 ```
 
-#### Hindley-Milner Benefits
+#### Type Inference Benefits
 
-**Academic Guarantees (Milner 1978, Damas & Milner 1982)**:
-1. **Principal Types**: Every well-typed expression has a unique most general type
-2. **Completeness**: If a program has a type, Hindley-Milner will find it
-3. **Soundness**: All inferred types are correct - no runtime type errors
-4. **Decidability**: Type inference always terminates with definitive result
-
-**Practical Benefits**:
-- **Zero Annotation Burden**: Write polymorphic functions without type signatures
-- **Maximum Reusability**: Functions automatically work with all compatible types
-- **Compile-time Safety**: All type errors caught before execution
-- **Performance**: Monomorphization enables optimal code generation
-
-**Implementation References**:
-- **Robinson, J.A. (1965)**: "A Machine-Oriented Logic Based on the Resolution Principle" - Unification algorithm
-- **Cardelli, L. (1987)**: "Basic Polymorphic Typechecking" - Implementation techniques
-- **Jones, M.P. (1995)**: "Functional Programming with Overloading and Higher-Order Polymorphism" - Advanced HM features
-
-**Hindley-Milner Principle**: "Type annotations are optional for all expressions where types can be inferred through constraint unification. The system automatically finds the most general (polymorphic) type for each expression."
+- **Zero annotations needed**: Write polymorphic functions without type signatures
+- **Maximum reusability**: Functions work with all compatible types
+- **Compile-time safety**: All type errors caught before execution
+- **Principal types**: Every expression has a unique most general type
 
 #### 🔥 CRITICAL: Record Type Structural Equivalence
 
@@ -968,7 +897,7 @@ fn greet(name: string) -> string = "Hello, " + name  // Explicit for clarity
 fn identity<T>(x: T) -> T = x                        // Explicit polymorphism
 ```
 
-### 5.4 Type Safety and Explicit Typing
+## Type Safety and Explicit Typing
 
 **CRITICAL RULE**: Osprey is fully type-safe with no exceptions.
 
@@ -977,7 +906,7 @@ fn identity<T>(x: T) -> T = x                        // Explicit polymorphism
 - **No runtime type errors** - all type issues caught at compile time
 - **No panics or exceptions** - all error conditions must be handled explicitly
 
-### 5.5 Any Type Handling and Pattern Matching Requirement
+## Any Type Handling and Pattern Matching Requirement
 
 🔄 **IMPLEMENTATION STATUS**: `any` type validation is partially implemented. Basic validation for function arguments is working, but complete pattern matching enforcement is in progress.
 
@@ -1296,7 +1225,7 @@ match product {
 }
 ```
 
-### 5.6 Type Compatibility
+## Type Compatibility
 
 - Pattern matching for type discrimination
 - Union types for representing alternatives

@@ -1,20 +1,19 @@
-3. [Syntax](0003-Syntax.md)
-   - [Program Structure](#31-program-structure)
-   - [Import Statements](#32-import-statements)
-   - [Let Declarations](#33-let-declarations)
-   - [Function Declarations](#34-function-declarations)
-   - [Extern Declarations](#35-extern-declarations)
-   - [Type Declarations](#36-type-declarations)
-   - [Record Types and Type Constructors](#37-record-types-and-type-constructors)
-   - [Expressions](#38-expressions)
-   - [Block Expressions](#39-block-expressions)
-   - [Match Expressions](#310-match-expressions)
+# Syntax
 
-## 3. Syntax
+- [Program Structure](#program-structure)
+- [Import Statements](#import-statements)
+- [Let Declarations](#let-declarations)
+- [Function Declarations](#function-declarations)
+- [Extern Declarations](#extern-declarations)
+- [Type Declarations](#type-declarations)
+- [Record Types and Type Constructors](#record-types-and-type-constructors)
+- [Expressions](#expressions)
+- [Block Expressions](#block-expressions)
+- [Match Expressions](#match-expressions)
 
-### 3.1 Program Structure
+## Program Structure
 
-A Osprey program consists of a sequence of top-level statements and modules.
+An Osprey program consists of a sequence of top-level statements and modules.
 
 ```
 program := statement* EOF
@@ -28,9 +27,9 @@ statement := importStmt
           | exprStmt
 ```
 
-### 3.2 Import Statements
+## Import Statements
 
-🚧 **PARTIAL IMPLEMENTATION**: Basic import parsing is implemented but module resolution is limited.
+Basic import parsing is implemented but module resolution is limited.
 
 ```
 importStmt := IMPORT ID (DOT ID)*
@@ -43,7 +42,7 @@ import std.io
 import graphics.canvas
 ```
 
-### 3.3 Let Declarations
+### Let Declarations
 
 ```
 letDecl := (LET | MUT) ID (COLON type)? EQ expr
@@ -57,7 +56,7 @@ mut counter = 0
 let result = calculateValue(input: data)
 ```
 
-### 3.4 Function Declarations
+### Function Declarations
 
 ```
 fnDecl := docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE)
@@ -74,7 +73,7 @@ fn greet(name) = "Hello " + name
 fn getValue() = 42
 ```
 
-### 3.5 Extern Declarations
+### Extern Declarations
 
 Extern declarations allow Osprey programs to call functions implemented in other languages (such as Rust, C, or C++). These declarations specify the interface for external functions without providing an implementation.
 
@@ -121,7 +120,7 @@ let formatted = rust_format_number(42)
 - Functions must be marked with `#[no_mangle]` in Rust
 - Static libraries must be linked during compilation
 
-### 3.6 Type Declarations
+### Type Declarations
 
 ```
 typeDecl := docComment? TYPE ID (LT typeParamList GT)? EQ (unionType | recordType)
@@ -148,7 +147,7 @@ type Result = Success { value: string }
             | Error { message: string }
 ```
 
-### 3.7 Record Types and Type Constructors
+### Record Types and Type Constructors
 
 Record types define structured data with named fields using the following syntax:
 
@@ -173,9 +172,9 @@ let point = Point { x: 10, y: 20 }
 let person = Person { name: "Alice", age: 25 }
 ```
 
-For complete record type semantics, construction rules, field access, constraints, and validation behavior, see [Type System - Record Types](0005-TypeSystem.md#record-types).
+For complete record type semantics, construction rules, field access, constraints, and validation behavior, see [Type System - Record Types](0004-TypeSystem.md#record-types).
 
-### 3.8 Expressions
+### Expressions
 
 #### Binary Expressions
 ```
@@ -412,7 +411,7 @@ primary_expression := literal | list_literal | identifier | '(' expression ')'
                    | list_access | field_access | lambda_expression | block_expression | match_expression
 ```
 
-### 3.9 Block Expressions
+### Block Expressions
 
 Block expressions allow grouping multiple statements together and returning a value from the final expression. They create a new scope for variable declarations and enable sequential execution with proper scoping rules.
 
@@ -451,7 +450,7 @@ let calc = {
 print("Calculation: ${calc}")  // prints "Calculation: 30"
 ```
 
-#### 3.9.1 Block Scoping Rules
+#### Block Scoping Rules
 
 Block expressions create a new lexical scope:
 - Variables declared inside a block are only visible within that block
@@ -472,7 +471,7 @@ print("Outer x: ${x}")      // 100 (unchanged)
 // print("${y}")            // ERROR: y not in scope
 ```
 
-#### 3.9.2 Block Return Values
+#### Block Return Values
 
 Block expressions return the value of their final expression:
 - If the block ends with an expression, that value is returned
@@ -503,7 +502,7 @@ let side_effect = {
 }
 ```
 
-#### 3.9.3 Block Expressions in Match Arms
+#### Block Expressions in Match Arms
 
 Block expressions are particularly useful in match expressions for complex logic:
 
@@ -523,7 +522,7 @@ let result = match status {
 }
 ```
 
-#### 3.9.4 Function Bodies as Blocks
+#### Function Bodies as Blocks
 
 Functions can use block expressions as their body instead of single expressions:
 
@@ -540,7 +539,7 @@ fn processData(input: string) -> string =
     formatOutput(transformData(validateInput(cleanInput(input))))
 ```
 
-#### 3.9.5 Type Safety and Inference
+#### Type Safety and Inference
 
 Block expressions follow Osprey's type safety rules:
 - The block's type is inferred from the final expression
@@ -570,7 +569,7 @@ let wrong: int = {
 }
 ```
 
-#### 3.9.6 Performance Characteristics
+#### Performance Characteristics
 
 Block expressions are zero-cost abstractions:
 - **Compile-time scoping**: All variable scoping resolved at compile time
@@ -578,7 +577,7 @@ Block expressions are zero-cost abstractions:
 - **Stack allocation**: Local variables allocated on the stack
 - **Optimized away**: Simple blocks with no local variables are optimized away
 
-#### 3.9.7 Best Practices
+#### Best Practices
 
 **Use block expressions when:**
 - You need local variables for complex calculations
@@ -627,7 +626,7 @@ let also_bad = {
 // Better: let also_bad = x + y
 ```
 
-### 3.10 Match Expressions
+### Match Expressions
 
 ```
 matchExpr := MATCH expr LBRACE matchArm+ RBRACE
@@ -654,3 +653,25 @@ let result = match status {
     _ => "Unknown"
 }
 ```
+
+## Language Semantics
+
+### Variable Binding
+
+- `let` creates immutable bindings
+- `mut` creates mutable bindings
+- Variables must be initialized at declaration
+- Shadowing is allowed in nested scopes
+
+### Function Semantics
+
+- Functions are first-class values
+- All functions are pure (no side effects except I/O)
+- Recursive functions are supported
+- Tail recursion is optimized
+
+### Evaluation Order
+
+- Expressions are evaluated left-to-right
+- Function arguments are evaluated before the function call
+- Short-circuit evaluation for logical operators

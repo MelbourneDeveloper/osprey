@@ -154,7 +154,7 @@ func (g *LLVMGenerator) convertResultToString(
 ) (value.Value, error) {
 	var discriminant value.Value
 	var resultValue value.Value
-	
+
 	// Handle both pointer and value cases
 	if _, ok := result.Type().(*types.PointerType); ok {
 		// Pointer case: use getelementptr and load
@@ -185,7 +185,7 @@ func (g *LLVMGenerator) convertResultToString(
 
 	// Success case: extract and convert the value
 	g.builder = successBlock
-	
+
 	// Get the value - handle both pointer and struct cases
 	if _, ok := result.Type().(*types.PointerType); ok {
 		// Pointer case: use getelementptr and load
@@ -231,12 +231,43 @@ func (g *LLVMGenerator) convertResultToString(
 	g.builder.NewCall(g.functions["sprintf"], successBuffer, successFormatStr, valueStr)
 	successStr = successBuffer
 
+	// Format as "Success(value)" using sprintf
+	successFormatStr := g.createGlobalString("Success(%s)")
+	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
+	successBuffer := g.builder.NewCall(g.functions["malloc"], bufferSize)
+	g.builder.NewCall(g.functions["sprintf"], successBuffer, successFormatStr, valueStr)
+	successStr = successBuffer
+
 	successBlock.NewBr(endBlock)
 
-	// Error case: format as "Error(message)" 
+	// Error case: format as "Error(message)"
 	g.builder = errorBlock
-	// For now, just use "Error" - we could extract the error message if needed
-	errorStr := g.createGlobalString("Error")
+
+	// Extract the error message from the Result struct
+	var errorMsg value.Value
+	if _, ok := result.Type().(*types.PointerType); ok {
+		// Pointer case: use getelementptr and load
+		errorMsgPtr := g.builder.NewGetElementPtr(structType, result,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		errorMsg = g.builder.NewLoad(structType.Fields[0], errorMsgPtr)
+	} else {
+		// Struct value case: extract the value field
+		errorMsg = g.builder.NewExtractValue(result, 0)
+	}
+
+	// Format as "Error(message)" - handle different error message types
+	var errorStr value.Value
+	if structType.Fields[0] == types.I8Ptr {
+		// String error message - format as Error(message)
+		errorFormatStr := g.createGlobalString("Error(%s)")
+		errorBuffer := g.builder.NewCall(g.functions["malloc"], bufferSize)
+		g.builder.NewCall(g.functions["sprintf"], errorBuffer, errorFormatStr, errorMsg)
+		errorStr = errorBuffer
+	} else {
+		// Non-string error - just use "Error" for now
+		// TODO: Handle other error types properly
+		errorStr = g.createGlobalString("Error")
+	}
 
 	errorBlock.NewBr(endBlock)
 
@@ -612,7 +643,7 @@ func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (valu
 
 	// TODO: Add proper error checking - atoll returns 0 for invalid strings
 	// For now, assume parsing always succeeds
-	
+
 	// Create a Result<int, string>
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
@@ -639,7 +670,7 @@ func (g *LLVMGenerator) generateJoinCall(callExpr *ast.CallExpression) (value.Va
 
 	// For now, return a placeholder implementation
 	// TODO: Implement proper list handling once List<T> type is fully supported
-	
+
 	separator, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err

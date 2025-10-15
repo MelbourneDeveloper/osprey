@@ -171,7 +171,7 @@ func (b *Builder) buildMapLiteral(ctx parser.IMapLiteralContext) Expression {
 	for _, entryCtx := range ctx.AllMapEntry() {
 		key := b.buildExpression(entryCtx.AllExpr()[0])
 		value := b.buildExpression(entryCtx.AllExpr()[1])
-		
+
 		if key != nil && value != nil {
 			entries = append(entries, MapEntry{
 				Key:   key,

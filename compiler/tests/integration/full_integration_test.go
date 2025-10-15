@@ -78,7 +78,7 @@ func captureJITOutput(source string) (string, error) {
 	case execErr = <-done:
 		// Execution completed normally
 	case <-time.After(30 * time.Second):
-		// FAIL HARD: No fucking hanging tests allowed!
+		// FAIL HARD: No hanging tests allowed!
 		_ = w.Close()
 		os.Stdout = old
 
