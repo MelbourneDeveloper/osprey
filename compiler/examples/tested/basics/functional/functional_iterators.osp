@@ -32,8 +32,20 @@ print(sum1)
 let sum2 = range(10, 15) |> fold(0, add)
 print(sum2)
 
+// Map operations - transform each element
+print("5. Map operations:")
+range(1, 5) |> map(double) |> forEach(print)
+
+// Filter operations - select elements
+print("6. Filter operations:")
+range(1, 10) |> filter(isEven) |> forEach(print)
+
+// Chained map and filter
+print("7. Chained map and filter:")
+range(1, 6) |> map(double) |> filter(isEven) |> forEach(print)
+
 // List operations with Hindley-Milner inference
-print("5. List operations:")
+print("8. List operations:")
 let data = [10, 20, 30, 40, 50]
 print("List created with HM inference")
 
@@ -43,12 +55,12 @@ match data[2] {
 }
 
 // Map operations require usage context for HM inference
-print("6. Map operations would need constraints:")
+print("9. Map operations would need constraints:")
 // let cache = Map() - HM can't infer K,V without usage!
 print("HM needs type constraints for Map<K,V> inference")
 
 // List operations with functional style
-print("7. List with functional operations:")
+print("10. List with functional operations:")
 let baseNumbers = [1, 2, 3, 4]
 print("Base numbers created")
 
@@ -61,7 +73,7 @@ match baseNumbers[3] {
 }
 
 // More pipe operations on single values
-print("8. Chained single value operations:")
+print("11. Chained single value operations:")
 let result = 2 |> double |> square
 print(result)
 

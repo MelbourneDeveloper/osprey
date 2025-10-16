@@ -112,9 +112,10 @@ func (g *LLVMGenerator) extractRangeBounds(rangeValue value.Value) (value.Value,
 
 // ForEachLoopBlocks holds the basic blocks for a forEach loop.
 type ForEachLoopBlocks struct {
-	LoopCond *ir.Block
-	LoopBody *ir.Block
-	LoopEnd  *ir.Block
+	LoopCond      *ir.Block
+	LoopBody      *ir.Block
+	LoopIncrement *ir.Block
+	LoopEnd       *ir.Block
 }
 
 // createForEachLoopBlocks creates the basic blocks needed for a forEach loop.
@@ -122,13 +123,15 @@ func (g *LLVMGenerator) createForEachLoopBlocks(callExpr *ast.CallExpression) *F
 	blockSuffix := fmt.Sprintf("_%p", callExpr)
 
 	return &ForEachLoopBlocks{
-		LoopCond: g.function.NewBlock("loop_cond" + blockSuffix),
-		LoopBody: g.function.NewBlock("loop_body" + blockSuffix),
-		LoopEnd:  g.function.NewBlock("loop_end" + blockSuffix),
+		LoopCond:      g.function.NewBlock("loop_cond" + blockSuffix),
+		LoopBody:      g.function.NewBlock("loop_body" + blockSuffix),
+		LoopIncrement: g.function.NewBlock("loop_increment" + blockSuffix),
+		LoopEnd:       g.function.NewBlock("loop_end" + blockSuffix),
 	}
 }
 
-// generateForEachLoop generates the actual loop logic for forEach.
+// generateForEachLoop generates the actual loop logic for forEach with stream fusion.
+// Applies pending map/filter transformations inline for zero-cost abstractions.
 func (g *LLVMGenerator) generateForEachLoop(
 	start, end value.Value,
 	funcIdent *ast.Identifier,
@@ -147,11 +150,55 @@ func (g *LLVMGenerator) generateForEachLoop(
 	g.builder = blocks.LoopBody
 	counterValue := g.builder.NewLoad(types.I64, counterPtr)
 
-	_, err := g.callFunctionWithValue(funcIdent, counterValue)
-	if err != nil {
-		return err
+	// STREAM FUSION: Apply pending transformations inline
+	var processedValue value.Value = counterValue
+
+	// Apply map transformation if present
+	if g.pendingMapFunc != nil {
+		mapped, err := g.callFunctionWithValue(g.pendingMapFunc, processedValue)
+		if err != nil {
+			return err
+		}
+		processedValue = mapped
 	}
 
+	// Apply filter transformation if present
+	if g.pendingFilterFunc != nil {
+		predicateResult, err := g.callFunctionWithValue(g.pendingFilterFunc, counterValue)
+		if err != nil {
+			return err
+		}
+		// Check if predicate returned non-zero (true)
+		zero := constant.NewInt(types.I64, 0)
+		// Create conditional blocks for filter with unique names
+		blockSuffix := fmt.Sprintf("_%p", blocks)
+		filterPassBlock := g.function.NewBlock("filter_pass" + blockSuffix)
+		filterSkipBlock := g.function.NewBlock("filter_skip" + blockSuffix)
+		isNonZero := g.builder.NewICmp(enum.IPredNE, predicateResult, zero)
+		g.builder.NewCondBr(isNonZero, filterPassBlock, filterSkipBlock)
+
+		// Filter pass: call the function
+		g.builder = filterPassBlock
+		_, err = g.callFunctionWithValue(funcIdent, processedValue)
+		if err != nil {
+			return err
+		}
+		g.builder.NewBr(blocks.LoopIncrement)
+
+		// Filter skip: just continue
+		g.builder = filterSkipBlock
+		g.builder.NewBr(blocks.LoopIncrement)
+	} else {
+		// No filter, always call the function
+		_, err := g.callFunctionWithValue(funcIdent, processedValue)
+		if err != nil {
+			return err
+		}
+		g.builder.NewBr(blocks.LoopIncrement)
+	}
+
+	// Increment counter in the common increment block
+	g.builder = blocks.LoopIncrement
 	one := constant.NewInt(types.I64, 1)
 	incrementedValue := g.builder.NewAdd(counterValue, one)
 	g.builder.NewStore(incrementedValue, counterPtr)
@@ -160,45 +207,69 @@ func (g *LLVMGenerator) generateForEachLoop(
 
 	g.builder = blocks.LoopEnd
 
+	// STREAM FUSION: Clear pending transformations after consuming
+	g.pendingMapFunc = nil
+	g.pendingFilterFunc = nil
+
 	return nil
 }
 
-// generateMapCall handles map function calls.
+// generateMapCall handles map function calls using stream fusion.
+// Stores the transformation function and returns the range unchanged.
+// The transformation will be fused into forEach/fold when they consume the iterator.
 func (g *LLVMGenerator) generateMapCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapBuiltInFunctionWrongArgs(MapFunc, len(callExpr.Arguments))
+	err := validateBuiltInArgs(MapFunc, callExpr)
+	if err != nil {
+		return nil, err
 	}
 
+	// Get the range struct from first argument (iterator)
 	rangeValue, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
 
-	if _, ok := callExpr.Arguments[1].(*ast.Identifier); !ok {
+	// Get the transformation function
+	funcArg := callExpr.Arguments[1]
+
+	funcIdent, ok := funcArg.(*ast.Identifier)
+	if !ok {
 		return nil, ErrMapNotFunction
 	}
 
-	// TODO: Implement proper lazy map
+	// STREAM FUSION: Store the map function for later fusion with forEach/fold
+	g.pendingMapFunc = funcIdent
+
 	return rangeValue, nil
 }
 
-// generateFilterCall handles filter function calls.
+// generateFilterCall handles filter function calls using stream fusion.
+// Stores the predicate function and returns the range unchanged.
+// The filter will be fused into forEach/fold when they consume the iterator.
 func (g *LLVMGenerator) generateFilterCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != TwoArgs {
-		return nil, WrapBuiltInFunctionWrongArgs(FilterFunc, len(callExpr.Arguments))
-	}
-
-	iterator, err := g.generateExpression(callExpr.Arguments[0])
+	err := validateBuiltInArgs(FilterFunc, callExpr)
 	if err != nil {
 		return nil, err
 	}
 
-	funcArg := callExpr.Arguments[1]
-	if funcIdent, ok := funcArg.(*ast.Identifier); ok {
-		return g.callFunctionWithValue(funcIdent, iterator)
+	// Get the range struct from first argument (iterator)
+	rangeValue, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, ErrFilterNotFunction
+	// Get the predicate function
+	funcArg := callExpr.Arguments[1]
+
+	funcIdent, ok := funcArg.(*ast.Identifier)
+	if !ok {
+		return nil, ErrFilterNotFunction
+	}
+
+	// STREAM FUSION: Store the filter predicate for later fusion with forEach/fold
+	g.pendingFilterFunc = funcIdent
+
+	return rangeValue, nil
 }
 
 // generateFoldCall handles fold function calls.

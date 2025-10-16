@@ -1,0 +1,58 @@
+=== Functional Programming Showcase ===
+Example 1: Basic range iteration
+1
+2
+3
+4
+5
+Example 2: Single value pipe operations
+18
+Example 3: Business logic pipeline
+88
+Example 4: Range forEach
+42
+43
+44
+Example 5: Small range
+10
+11
+12
+Example 6: Range 0 to 4
+0
+1
+2
+3
+4
+Example 7: Fold operations
+15
+Example 7a: Map transformations
+3
+6
+9
+12
+Example 7b: Filter selections
+1
+2
+3
+4
+5
+6
+7
+8
+9
+Example 7c: Combined map and filter
+3
+6
+9
+12
+15
+Example 8: Map collections
+Created price map and inventory map via HM inference
+Apple price: 2
+6
+Example 8: Chained single value operations
+21
+Example 9: Conditional operations
+1
+0
+=== Showcase Complete ===
