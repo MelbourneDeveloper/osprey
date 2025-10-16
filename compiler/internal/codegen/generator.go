@@ -45,6 +45,9 @@ type LLVMGenerator struct {
 	// HINDLEY-MILNER FIX: Single source of truth for record field mappings
 	// Maps record type name to field name -> LLVM index mapping
 	recordFieldMappings map[string]map[string]int
+	// Stream Fusion: Track pending transformations for map/filter
+	pendingMapFunc    *ast.Identifier // Pending map transformation function
+	pendingFilterFunc *ast.Identifier // Pending filter predicate function
 }
 
 // SecurityConfig defines security policies for the code generator.

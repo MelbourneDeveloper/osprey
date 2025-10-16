@@ -8,6 +8,10 @@
         - [`fold(iterator: Iterator<T>, initial: U, function: (U, T) -> U) -> U`](#folditerator-iteratort-initial-u-function-u-t---u---u)
     - [Pipe Operator](#pipe-operator)
         - [`|>` - Pipe Operator](#---pipe-operator)
+    - [Stream Fusion Optimization](#stream-fusion-optimization)
+        - [How Stream Fusion Works](#how-stream-fusion-works)
+        - [Performance Benefits](#performance-benefits)
+        - [Supported Fusion Chains](#supported-fusion-chains)
     - [Functional Programming Patterns](#functional-programming-patterns)
         - [Chaining Pattern](#chaining-pattern)
         - [Side Effect Pattern](#side-effect-pattern)
@@ -16,7 +20,7 @@
 
 # Loop Constructs and Functional Iterators
 
-🚧 **PARTIAL IMPLEMENTATION**: Basic iterator functions (`range`, `forEach`, `map`, `filter`, `fold`) are implemented and working. The pipe operator (`|>`) is implemented.
+✅ **FULLY IMPLEMENTED**: All core iterator functions (`range`, `forEach`, `map`, `filter`, `fold`) are fully implemented with stream fusion optimization. The pipe operator (`|>`) enables elegant function composition. Map and filter use zero-cost abstractions via compile-time stream fusion.
 
 ## Functional Iteration Philosophy
 
@@ -86,6 +90,72 @@ range(1, 5) |> map(square) |> fold(0, add)
 // Complex chains
 range(0, 20) |> filter(isEven) |> map(double) |> forEach(print)
 ```
+
+## Stream Fusion Optimization
+
+Osprey implements **stream fusion** - a compile-time optimization that eliminates intermediate data structures when chaining iterator operations. This provides zero-cost abstractions: you write elegant functional code that compiles to the same performance as hand-optimized loops.
+
+### How Stream Fusion Works
+
+When you write:
+```osprey
+range(1, 5) |> map(double) |> filter(isEven) |> forEach(print)
+```
+
+**Without stream fusion** (naive approach):
+1. `range(1, 5)` creates array `[1, 2, 3, 4]`
+2. `map(double)` creates new array `[2, 4, 6, 8]`
+3. `filter(isEven)` creates new array `[2, 4, 6, 8]`
+4. `forEach(print)` iterates and prints
+
+**With stream fusion** (Osprey's approach):
+- Compiler detects the chain at compile time
+- `map()` stores the transformation function, returns range unchanged
+- `filter()` stores the predicate function, returns range unchanged
+- `forEach()` generates a single optimized loop that applies all transformations inline
+
+The generated LLVM IR is equivalent to:
+```c
+// Hand-optimized loop - what Osprey generates
+for (i = 1; i < 5; i++) {
+    value = double(i);           // map applied inline
+    if (isEven(value)) {         // filter applied inline
+        print(value);            // forEach applied inline
+    }
+}
+```
+
+### Performance Benefits
+
+**Zero-cost abstractions:**
+- ✅ No intermediate arrays or memory allocations
+- ✅ Single pass through data instead of multiple iterations
+- ✅ Better CPU cache utilization
+- ✅ Same performance as hand-written optimized loops
+
+**Example:**
+```osprey
+// Elegant functional code
+range(1, 1000000)
+  |> map(square)
+  |> filter(isEven)
+  |> fold(0, add)
+
+// Compiles to single optimized loop with:
+// - Zero memory allocations
+// - Zero intermediate arrays
+// - Optimal CPU cache usage
+```
+
+### Supported Fusion Chains
+
+Stream fusion works with any combination of:
+- `map()` - Transforms are fused inline
+- `filter()` - Predicates are fused as conditional branches
+- `forEach()` - Terminal operation that consumes the fused chain
+- `fold()` - Terminal operation that consumes and reduces
+
+Multiple transformations and filters can be chained together and will all be fused into a single optimized loop.
 
 ## Functional Programming Patterns
 

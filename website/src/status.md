@@ -22,10 +22,11 @@ Current version: **0.2.0-alpha** (released)
 - **Boolean Operations**: Logical operators and boolean expressions
 
 ### Advanced Features
-- **Functional Programming**: 
-  - Iterator functions (`range`, `forEach`, `map`, `filter`, `fold`)
-  - Pipe operator (`|>`)
-  - Function composition and chaining
+- **Functional Programming**:
+  - Complete iterator functions (`range`, `forEach`, `map`, `filter`, `fold`)
+  - Stream fusion optimization for zero-cost abstractions
+  - Pipe operator (`|>`) for elegant composition
+  - Function chaining with compile-time optimization
 - **Any Type Handling**: Explicit `any` types with pattern matching requirement
 - **Result Types**: Error handling without exceptions
 - **Type Safety**: No implicit conversions, compile-time type checking

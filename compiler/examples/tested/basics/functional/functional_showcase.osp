@@ -48,6 +48,18 @@ print("Example 7: Fold operations")
 let sumResult = range(1, 6) |> fold(0, sum)
 print(sumResult)
 
+// Example 7a: Map transformations
+print("Example 7a: Map transformations")
+range(1, 5) |> map(triple) |> forEach(print)
+
+// Example 7b: Filter selections
+print("Example 7b: Filter selections")
+range(1, 10) |> filter(isPositive) |> forEach(print)
+
+// Example 7c: Combined map and filter
+print("Example 7c: Combined map and filter")
+range(1, 6) |> map(triple) |> filter(isPositive) |> forEach(print)
+
 // Example 8: Map collections with HM inference
 print("Example 8: Map collections")
 let prices = { "apple": 2, "banana": 3, "cherry": 5 }
