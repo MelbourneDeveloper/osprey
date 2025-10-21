@@ -17,14 +17,35 @@
 4. Fold operations:
 10
 60
-5. List operations:
+5. Map operations:
+2
+4
+6
+8
+6. Filter operations:
+1
+2
+3
+4
+5
+6
+7
+8
+9
+7. Chained map and filter:
+2
+4
+6
+8
+10
+8. List operations:
 List created with HM inference
 Third element: 30
-6. Map operations would need constraints:
+9. Map operations would need constraints:
 HM needs type constraints for Map<K,V> inference
-7. List with functional operations:
+10. List with functional operations:
 Base numbers created
 Fourth number squared: 16
-8. Chained single value operations:
+11. Chained single value operations:
 16
 === Examples Complete ===
