@@ -27,6 +27,7 @@ Current version: **0.2.0-alpha** (released)
   - Stream fusion optimization for zero-cost abstractions
   - Pipe operator (`|>`) for elegant composition
   - Function chaining with compile-time optimization
+- **Union Types**: Algebraic data types with pattern matching and exhaustiveness checking
 - **Any Type Handling**: Explicit `any` types with pattern matching requirement
 - **Result Types**: Error handling without exceptions
 - **Type Safety**: No implicit conversions, compile-time type checking
@@ -61,13 +62,12 @@ Current version: **0.2.0-alpha** (released)
 
 ### Type System Extensions
 - **Record Types with Constraints**: `where` clause validation (partially implemented)
-- **Union Types**: Complex algebraic data types with destructuring
 - **Generic Types**: Type parameters and polymorphism
 - **Module System**: Fiber-isolated modules with proper imports
 
 ### Advanced Language Features
 - **Extern Declarations**: Full Rust/C interoperability (syntax ready)
-- **Advanced Pattern Matching**: Constructor patterns, guards, exhaustiveness checking
+- **Advanced Pattern Matching**: Constructor patterns with guards
 - **Select Expressions**: Channel multiplexing for concurrent operations
 - **Streaming Responses**: Large HTTP response streaming
 
