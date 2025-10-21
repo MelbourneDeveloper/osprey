@@ -2,7 +2,7 @@ package codegen
 
 import (
 	"fmt"
-	"strings"
+	"strconv"
 
 	"github.com/christianfindlay/osprey/internal/ast"
 )
@@ -167,19 +167,66 @@ func (g *LLVMGenerator) validateMatchArmWithTypeAndPosition(
 func (g *LLVMGenerator) validateMatchPatternWithTypeAndPosition(
 	pattern ast.Pattern, discriminantType string, matchPos *ast.Position,
 ) error {
-	// Infer pattern type with position context
-	_, err := g.typeInferer.InferPattern(pattern)
-	if err != nil {
-		// Check if this is an unknown constructor error and enhance it with position info
-		if strings.Contains(err.Error(), "unknown constructor") {
-			// Extract the constructor name from the pattern
-			constructorName := pattern.Constructor
-			// Use the provided discriminant type instead of hardcoded "Color"
-			return WrapUnknownVariantWithPos(constructorName, discriminantType, matchPos)
-		}
-
-		return err
+	// Wildcard patterns and variable patterns are always valid
+	if pattern.Constructor == "_" || pattern.Constructor == "" {
+		return nil
 	}
 
+	// Literal patterns (integers, strings, booleans) are always valid for their type
+	if isLiteralPattern(pattern.Constructor) {
+		return nil
+	}
+
+	// Special constructors that are always allowed (Result types, etc.)
+	if isSpecialConstructor(pattern.Constructor) {
+		return nil
+	}
+
+	// Check if this pattern matches a variant of the discriminant's union type
+	if typeDecl, exists := g.typeDeclarations[discriminantType]; exists {
+		// Check if the pattern constructor is a valid variant of this type
+		isValidVariant := false
+		for _, variant := range typeDecl.Variants {
+			if variant.Name == pattern.Constructor {
+				isValidVariant = true
+				break
+			}
+		}
+
+		// If not a valid variant, return error
+		if !isValidVariant {
+			return WrapUnknownVariantWithPos(pattern.Constructor, discriminantType, matchPos)
+		}
+	}
+
+	// Pattern validation is complete - type inference and variable binding
+	// happen during the match expression type inference phase, not here
 	return nil
+}
+
+// isLiteralPattern checks if a pattern constructor is a literal value
+func isLiteralPattern(constructor string) bool {
+	// Boolean literals
+	if constructor == "true" || constructor == "false" {
+		return true
+	}
+
+	// Integer literals (try parsing)
+	_, err := strconv.ParseInt(constructor, 10, 64)
+	if err == nil {
+		return true
+	}
+
+	// String literals (quoted)
+	if len(constructor) >= 2 && constructor[0] == '"' && constructor[len(constructor)-1] == '"' {
+		return true
+	}
+
+	return false
+}
+
+// isSpecialConstructor checks if a constructor is a special built-in constructor
+func isSpecialConstructor(constructor string) bool {
+	// Result type constructors
+	return constructor == SuccessPattern || constructor == ErrorPattern
 }

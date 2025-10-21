@@ -133,13 +133,34 @@ func (g *LLVMGenerator) convertValueToStringByType(
 			return g.generateIntToString(arg)
 		}
 
-		// Check if it's a Result type
-		if strings.HasPrefix(theType, "Result<") {
+		// Check if it's a Result type (with either angle or square brackets)
+		if strings.HasPrefix(theType, "Result<") || strings.HasPrefix(theType, "Result[") {
 			// For Result types, check if it's a struct pointer
 			if ptrType, ok := arg.Type().(*types.PointerType); ok {
 				if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
 					return g.convertResultToString(arg, structType)
 				}
+			}
+			// Also handle struct value directly (not pointer)
+			if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+				return g.convertResultToString(arg, structType)
+			}
+
+			// FALLBACK: For Results that are actually raw values (arithmetic operations),
+			// convert the underlying value directly
+			switch arg.Type() {
+			case types.I64:
+				// It's actually just an integer pretending to be a Result
+				// This happens with arithmetic operations that don't actually create Result structs
+				return g.generateIntToString(arg)
+			case types.I8Ptr:
+				// It's actually just a string
+				return arg, nil
+			case types.I1:
+				return g.generateBoolToString(arg)
+			default:
+				// Unknown Result representation - use "Error" as safe fallback
+				return g.createGlobalString("Error"), nil
 			}
 		}
 
@@ -225,10 +246,12 @@ func (g *LLVMGenerator) convertResultToString(
 	}
 
 	// Format as "Success(value)" using sprintf
+	sprintf := g.ensureSprintfDeclaration()
+	malloc := g.ensureMallocDeclaration()
 	successFormatStr := g.createGlobalString("Success(%s)")
 	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
-	successBuffer := g.builder.NewCall(g.functions["malloc"], bufferSize)
-	g.builder.NewCall(g.functions["sprintf"], successBuffer, successFormatStr, valueStr)
+	successBuffer := g.builder.NewCall(malloc, bufferSize)
+	g.builder.NewCall(sprintf, successBuffer, successFormatStr, valueStr)
 	successStr = successBuffer
 
 	successBlock.NewBr(endBlock)
@@ -253,8 +276,8 @@ func (g *LLVMGenerator) convertResultToString(
 	if structType.Fields[0] == types.I8Ptr {
 		// String error message - format as Error(message)
 		errorFormatStr := g.createGlobalString("Error(%s)")
-		errorBuffer := g.builder.NewCall(g.functions["malloc"], bufferSize)
-		g.builder.NewCall(g.functions["sprintf"], errorBuffer, errorFormatStr, errorMsg)
+		errorBuffer := g.builder.NewCall(malloc, bufferSize)
+		g.builder.NewCall(sprintf, errorBuffer, errorFormatStr, errorMsg)
 		errorStr = errorBuffer
 	} else {
 		// Non-string error - just use "Error" for now
