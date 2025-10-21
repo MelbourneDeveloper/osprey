@@ -1898,6 +1898,13 @@ func (g *LLVMGenerator) generateSuccessBlock(
 ) (value.Value, error) {
 	g.builder = blocks.Success
 
+	// Save the current type environment and create a new scope for this match arm
+	oldEnv := g.typeInferer.env
+	g.typeInferer.env = g.typeInferer.env.Clone()
+	defer func() {
+		g.typeInferer.env = oldEnv
+	}()
+
 	// Find the success arm and bind pattern variables
 	successArm := g.findSuccessArm(matchExpr)
 	if successArm != nil && len(successArm.Pattern.Fields) > 0 {
@@ -1982,11 +1989,36 @@ func (g *LLVMGenerator) generateErrorBlock(
 ) (value.Value, error) {
 	g.builder = blocks.Error
 
+	// Save the current type environment and create a new scope for this match arm
+	oldEnv := g.typeInferer.env
+	g.typeInferer.env = g.typeInferer.env.Clone()
+	defer func() {
+		g.typeInferer.env = oldEnv
+	}()
+
 	// Find the Error arm and bind pattern variables
 	errorArm := g.findErrorArm(matchExpr)
 	if errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
 		// Bind the Result error message to the pattern variable
 		fieldName := errorArm.Pattern.Fields[0] // First field is the message
+
+		// Bind the error type to the pattern variable in the type environment
+		matchedExprType, err := g.typeInferer.InferType(matchExpr.Expression)
+		if err == nil {
+			resolvedType := g.typeInferer.ResolveType(matchedExprType)
+			if genericType, ok := resolvedType.(*GenericType); ok {
+				if genericType.name == TypeResult && len(genericType.typeArgs) >= 2 {
+					// Extract the error type (second type argument of Result<T, E>)
+					errorType := genericType.typeArgs[1]
+					g.typeInferer.env.Set(fieldName, errorType)
+				}
+			} else {
+				// If the matched expression is not a Result type, it gets auto-wrapped in Success
+				// The Error arm should never be reached, but bind String type for safety
+				g.typeInferer.env.Set(fieldName, &ConcreteType{name: TypeString})
+			}
+		}
+
 		// Create a unique global string for the error message
 		// Include function context to ensure uniqueness across monomorphized instances
 		funcContext := ""
@@ -2054,8 +2086,32 @@ func (g *LLVMGenerator) bindPatternVariableType(fieldName string, matchedExpr as
 				// Extract the success type (first type argument of Result<T, E>)
 				successType := genericType.typeArgs[0]
 				g.typeInferer.env.Set(fieldName, successType)
+				return
 			}
 		}
+
+		// Check for ConcreteType that represents a Result (e.g., from built-in functions)
+		if concreteType, ok := resolvedType.(*ConcreteType); ok {
+			// Check if this is a Result<T, E> type represented as a concrete type string
+			if len(concreteType.name) > 7 && concreteType.name[:6] == "Result" && concreteType.name[6] == '<' {
+				// Parse "Result<int, string>" to extract "int"
+				// Simple extraction: find first type arg between < and ,
+				startIdx := 7 // After "Result<"
+				endIdx := startIdx
+				for endIdx < len(concreteType.name) && concreteType.name[endIdx] != ',' {
+					endIdx++
+				}
+				if endIdx > startIdx {
+					successTypeName := concreteType.name[startIdx:endIdx]
+					g.typeInferer.env.Set(fieldName, &ConcreteType{name: successTypeName})
+					return
+				}
+			}
+		}
+
+		// If the matched expression is not a Result type, it gets auto-wrapped
+		// In this case, the success value type is the matched expression's type itself
+		g.typeInferer.env.Set(fieldName, resolvedType)
 	}
 }
 
@@ -2143,9 +2199,9 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 
 	// BUGFIX: Check if both values are void (Unit) - can't create PHI with void values
 	if successValue != nil && errorValue != nil {
-		// Check if both are void types (nil represents void/Unit)
-		successIsVoid := (successValue == nil) || isVoidType(successValue.Type())
-		errorIsVoid := (errorValue == nil) || isVoidType(errorValue.Type())
+		// Check if both are void types
+		successIsVoid := isVoidType(successValue.Type())
+		errorIsVoid := isVoidType(errorValue.Type())
 
 		if successIsVoid && errorIsVoid {
 			// Both arms return Unit - return nil to represent void, don't create PHI
