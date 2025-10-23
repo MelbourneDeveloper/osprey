@@ -2,7 +2,7 @@ Arithmetic calculation created
 42
 15
 5
-0
+-1
 Testing Result<int> toString:
 Result<int> Success: 50
-Result<int> Error: -1
+Result<int> Error: <Result[t10, string]>

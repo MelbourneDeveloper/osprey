@@ -216,6 +216,9 @@ print(toString(result))`
 }
 
 func TestComplexArithmetic(t *testing.T) {
+
+	//FIX THIS!!!
+	//t.Skip("TODO: Nested arithmetic with division not yet supported - division returns Result, other ops expect Int")
 	source := `let result = ((5 + 3) * 2) - (4 / 2)
 print(toString(result))`
 	testCompileAndRunWithOutput(t, source, "14", "complex arithmetic")
@@ -312,7 +315,7 @@ func TestAllOperators(t *testing.T) {
 		{
 			name:   "division_result",
 			source: "print(toString(15 / 3))",
-			output: "5",
+			output: "Success(5)",
 		},
 	}
 

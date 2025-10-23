@@ -747,12 +747,149 @@ func (g *LLVMGenerator) generateArithmeticOperationWithPos(
 	case "*":
 		return g.builder.NewMul(left, right), nil
 	case "/":
-		return g.builder.NewSDiv(left, right), nil
+		return g.generateDivisionWithZeroCheck(left, right)
 	case "%":
-		return g.builder.NewSRem(left, right), nil
+		return g.generateModuloWithZeroCheck(left, right)
 	default:
 		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
+}
+
+// generateDivisionWithZeroCheck generates division with runtime zero check
+// Returns Error Result on division by zero, plain i64 on success
+func (g *LLVMGenerator) generateDivisionWithZeroCheck(left, right value.Value) (value.Value, error) {
+	// Check if divisor is zero at runtime
+	zero := constant.NewInt(types.I64, 0)
+	isZero := g.builder.NewICmp(enum.IPredEQ, right, zero)
+
+	// Create blocks for zero and non-zero cases
+	zeroBlock := g.function.NewBlock("div_zero")
+	nonZeroBlock := g.function.NewBlock("div_nonzero")
+	endBlock := g.function.NewBlock("div_end")
+
+	// Current block branches based on zero check
+	g.builder.NewCondBr(isZero, zeroBlock, nonZeroBlock)
+
+	// Zero block: Create Error Result with DivisionByZero
+	g.builder = zeroBlock
+	errorResult := g.createDivisionByZeroError()
+	g.builder.NewBr(endBlock)
+
+	// Non-zero block: Perform division and wrap in Success Result
+	g.builder = nonZeroBlock
+	quotient := g.builder.NewSDiv(left, right)
+	successResult := g.createSuccessResult(quotient)
+	g.builder.NewBr(endBlock)
+
+	// End block: PHI to select either error or success Result
+	g.builder = endBlock
+	phi := g.builder.NewPhi(
+		ir.NewIncoming(errorResult, zeroBlock),
+		ir.NewIncoming(successResult, nonZeroBlock),
+	)
+
+	return phi, nil
+}
+
+// generateModuloWithZeroCheck generates modulo with runtime zero check
+// Returns Error Result on modulo by zero, plain i64 on success
+func (g *LLVMGenerator) generateModuloWithZeroCheck(left, right value.Value) (value.Value, error) {
+	// Check if divisor is zero at runtime
+	zero := constant.NewInt(types.I64, 0)
+	isZero := g.builder.NewICmp(enum.IPredEQ, right, zero)
+
+	// Create blocks for zero and non-zero cases
+	zeroBlock := g.function.NewBlock("mod_zero")
+	nonZeroBlock := g.function.NewBlock("mod_nonzero")
+	endBlock := g.function.NewBlock("mod_end")
+
+	// Current block branches based on zero check
+	g.builder.NewCondBr(isZero, zeroBlock, nonZeroBlock)
+
+	// Zero block: Create Error Result with DivisionByZero
+	g.builder = zeroBlock
+	errorResult := g.createDivisionByZeroError()
+	g.builder.NewBr(endBlock)
+
+	// Non-zero block: Perform modulo and wrap in Success Result
+	g.builder = nonZeroBlock
+	remainder := g.builder.NewSRem(left, right)
+	successResult := g.createSuccessResult(remainder)
+	g.builder.NewBr(endBlock)
+
+	// End block: PHI to select either error or success Result
+	g.builder = endBlock
+	phi := g.builder.NewPhi(
+		ir.NewIncoming(errorResult, zeroBlock),
+		ir.NewIncoming(successResult, nonZeroBlock),
+	)
+
+	return phi, nil
+}
+
+// createSuccessResult creates a Success Result<int, MathError> struct
+func (g *LLVMGenerator) createSuccessResult(value value.Value) value.Value {
+	// Result struct for Success: {value: i64, is_error: i8}
+	// For Success: value = actual result, is_error = 0
+	resultStructType := types.NewStruct(types.I64, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set the value
+	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
+	// Set is_error flag to 0 (Success)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
+	return resultComplete
+}
+
+// createDivisionByZeroError creates an Error Result<int, MathError> struct for division by zero
+func (g *LLVMGenerator) createDivisionByZeroError() value.Value {
+	// Result struct for Error: {error_discriminant: i64, is_error: i8}
+	// For DivisionByZero: error_discriminant = 0, is_error = 1
+	resultStructType := types.NewStruct(types.I64, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set error discriminant to 0 (DivisionByZero is first variant of MathError)
+	resultWithError := g.builder.NewInsertValue(undefStruct, constant.NewInt(types.I64, 0), 0)
+	// Set is_error flag to 1
+	resultComplete := g.builder.NewInsertValue(resultWithError, constant.NewInt(types.I8, 1), 1)
+	return resultComplete
+}
+
+// unwrapResultValue extracts the success value from a Result type.
+// If the value is not a Result, returns it unchanged.
+// If the value is an error Result at runtime, the program will crash.
+func (g *LLVMGenerator) unwrapResultValue(val value.Value) value.Value {
+	// If not a Result type, return as-is
+	if !g.isResultType(val) {
+		return val
+	}
+
+	// Extract discriminant (field 1: 0 = Success, 1 = Error)
+	discriminant := g.builder.NewExtractValue(val, 1)
+
+	// Check if it's an error (discriminant == 1)
+	isError := g.builder.NewICmp(enum.IPredEQ, discriminant, constant.NewInt(types.I8, 1))
+
+	// Create blocks for error and success cases
+	errorBlock := g.function.NewBlock("result_unwrap_error")
+	successBlock := g.function.NewBlock("result_unwrap_success")
+	continueBlock := g.function.NewBlock("result_unwrap_continue")
+
+	// Branch based on error check
+	g.builder.NewCondBr(isError, errorBlock, successBlock)
+
+	// Error block: Crash the program (unreachable instruction)
+	// TODO: Could print an error message here before crashing
+	g.builder = errorBlock
+	g.builder.NewUnreachable()
+
+	// Success block: Extract value (field 0)
+	g.builder = successBlock
+	extractedValue := g.builder.NewExtractValue(val, 0)
+	g.builder.NewBr(continueBlock)
+
+	// Continue block: Return the extracted value
+	g.builder = continueBlock
+
+	return extractedValue
 }
 
 // generateComparisonOperationWithPos generates LLVM comparison operations with position info.

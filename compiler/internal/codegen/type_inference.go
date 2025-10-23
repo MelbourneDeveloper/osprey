@@ -1643,7 +1643,7 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 			return ti.inferPlusOperation(leftType, rightType)
 		}
 
-		// Other arithmetic operations (-, *, /, %) require Int operands and return Int
+		// All arithmetic operations require Int operands
 		intType := &ConcreteType{name: TypeInt}
 
 		// Both operands must be Int
@@ -1655,6 +1655,12 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 		err = ti.Unify(rightType, intType)
 		if err != nil {
 			return nil, fmt.Errorf("right operand of %s must be Int: %w", e.Operator, err)
+		}
+
+		// Division and modulo return Result<int, MathError> (can fail with division by zero)
+		// Other arithmetic operations (-, *) return Int
+		if e.Operator == "/" || e.Operator == "%" {
+			return &ConcreteType{name: "Result<int, MathError>"}, nil
 		}
 
 		// TODO: we need other number types like float.

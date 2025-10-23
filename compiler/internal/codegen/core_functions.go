@@ -145,22 +145,14 @@ func (g *LLVMGenerator) convertValueToStringByType(
 			if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
 				return g.convertResultToString(arg, structType)
 			}
+		}
 
-			// FALLBACK: For Results that are actually raw values (arithmetic operations),
-			// convert the underlying value directly
-			switch arg.Type() {
-			case types.I64:
-				// It's actually just an integer pretending to be a Result
-				// This happens with arithmetic operations that don't actually create Result structs
-				return g.generateIntToString(arg)
-			case types.I8Ptr:
-				// It's actually just a string
-				return arg, nil
-			case types.I1:
-				return g.generateBoolToString(arg)
-			default:
-				// Unknown Result representation - use "Error" as safe fallback
-				return g.createGlobalString("Error"), nil
+		// Fallback: Check LLVM type directly for Result-like structs (2-field struct with i64 and i8)
+		// This handles cases where type inference has unresolved type variables
+		if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+			// Check if it looks like a Result struct: {i64, i8}
+			if structType.Fields[1] == types.I8 {
+				return g.convertResultToString(arg, structType)
 			}
 		}
 
@@ -326,9 +318,9 @@ func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bo
 	}
 
 	// If it's not a constant, we need better detection
-	// For the working constraint test, we know isPositive returns boolean
-	// This is a temporary heuristic until proper generic type inference is implemented
-	return true // Assume boolean for now to fix the immediate issue
+	// For now, default to integer (most common case for arithmetic Results)
+	// TODO: Implement proper generic type tracking to detect boolean Results
+	return false
 }
 
 // generatePrintCall handles print function calls.

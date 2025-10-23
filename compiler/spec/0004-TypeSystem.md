@@ -51,8 +51,9 @@ The type system emphasizes safety and expressiveness, making illegal states unre
 
 All primitive types use lowercase names:
 
-- `int`: 64-bit signed integers
-- `string`: UTF-8 encoded strings  
+- `int`: 64-bit signed integers (maps to LLVM i64)
+- `float`: 64-bit IEEE 754 floating-point numbers (maps to LLVM f64)
+- `string`: UTF-8 encoded strings
 - `bool`: Boolean values (`true`, `false`)
 - `unit`: Type for functions that don't return a meaningful value
 - `Result<T, E>`: Built-in generic type for error handling
@@ -60,6 +61,11 @@ All primitive types use lowercase names:
 - `Map<K, V>`: Immutable key-value collections with functional operations
 - `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
 - `Record Types`: Immutable structured data types with named fields
+
+**Numeric Types:**
+- **int**: Used for whole numbers, counts, array indices. Integer division returns quotient only.
+- **float**: Used for decimal numbers, scientific calculations. Provides IEEE 754 semantics.
+- **Conversion**: Use `toFloat(int)` to convert int to float, `toInt(float)` to truncate float to int.
 
 #### Function Types
 
@@ -670,6 +676,8 @@ fn identity(x) = x              // Infers: <T>(T) -> T
 // Arithmetic functions
 fn add(a, b) = a + b           // Infers: (int, int) -> Result<int, MathError>
 fn increment(x) = x + 1        // Infers: (int) -> Result<int, MathError>
+fn addFloats(a, b) = a + b     // Infers: (float, float) -> Result<float, MathError>
+fn divide(x, y) = x / y        // Infers: (int, int) -> Result<int, MathError> (integer division)
 
 // String operations  
 fn concat(s1, s2) = s1 + s2    // Infers: (string, string) -> string
