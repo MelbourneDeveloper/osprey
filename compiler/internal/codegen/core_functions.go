@@ -213,38 +213,33 @@ func (g *LLVMGenerator) convertResultToString(
 		err        error
 	)
 
-	// Convert based on the value type and format as Success(value)
-	var valueStr value.Value
+	// Convert the success value to string
+	// For arithmetic Results (from division/modulo), just show the value without "Success()" wrapper
+	// This makes string interpolation cleaner: "${x / y}" shows "5.0" not "Success(5.0)"
 	switch structType.Fields[0] {
 	case types.I64:
 		// Check if this i64 should be treated as a boolean
 		// For Result<bool, Error> types, the inner value is i64 but semantically boolean
 		if g.isResultValueSemanticBoolean(resultValue) {
-			valueStr, err = g.generateBoolToString(resultValue)
+			successStr, err = g.generateBoolToString(resultValue)
 		} else {
-			valueStr, err = g.generateIntToString(resultValue)
+			successStr, err = g.generateIntToString(resultValue)
 		}
+	case types.Double:
+		// Float value - convert to string
+		successStr, err = g.generateFloatToString(resultValue)
 	case types.I1:
-		valueStr, err = g.generateBoolToString(resultValue)
+		successStr, err = g.generateBoolToString(resultValue)
 	case types.I8Ptr:
-		valueStr = resultValue // Already a string
+		successStr = resultValue // Already a string
 	default:
 		// For complex types (like ProcessHandle), convert to a generic string
-		valueStr = g.createGlobalString("complex_value")
+		successStr = g.createGlobalString("complex_value")
 	}
 
 	if err != nil {
 		return nil, err
 	}
-
-	// Format as "Success(value)" using sprintf
-	sprintf := g.ensureSprintfDeclaration()
-	malloc := g.ensureMallocDeclaration()
-	successFormatStr := g.createGlobalString("Success(%s)")
-	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
-	successBuffer := g.builder.NewCall(malloc, bufferSize)
-	g.builder.NewCall(sprintf, successBuffer, successFormatStr, valueStr)
-	successStr = successBuffer
 
 	successBlock.NewBr(endBlock)
 
@@ -262,6 +257,11 @@ func (g *LLVMGenerator) convertResultToString(
 		// Struct value case: extract the value field
 		errorMsg = g.builder.NewExtractValue(result, 0)
 	}
+
+	// Declare sprintf and malloc for error formatting
+	sprintf := g.ensureSprintfDeclaration()
+	malloc := g.ensureMallocDeclaration()
+	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
 
 	// Format as "Error(message)" - handle different error message types
 	var errorStr value.Value

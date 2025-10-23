@@ -677,7 +677,7 @@ fn identity(x) = x              // Infers: <T>(T) -> T
 fn add(a, b) = a + b           // Infers: (int, int) -> Result<int, MathError>
 fn increment(x) = x + 1        // Infers: (int) -> Result<int, MathError>
 fn addFloats(a, b) = a + b     // Infers: (float, float) -> Result<float, MathError>
-fn divide(x, y) = x / y        // Infers: (int, int) -> Result<int, MathError> (integer division)
+fn divide(x, y) = x / y        // Infers: (int, int) -> Result<float, MathError> (auto-promotes to float)
 
 // String operations  
 fn concat(s1, s2) = s1 + s2    // Infers: (string, string) -> string

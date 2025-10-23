@@ -28,6 +28,7 @@ t.Fatalf("⚠️ NOTE: Circular dependency detection not yet implemented. Implem
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules 
 - **FP STYLE CODE** - pure functions over OOP style
 - **USE CONSTANTS** - Name values meaningfully instead of using literals
+- ACTIVELY FIX RULE VIOLATIONS AS A HIGH PRIORITY
 
 ## Commands
 

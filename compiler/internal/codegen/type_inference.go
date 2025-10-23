@@ -852,6 +852,39 @@ func (ti *TypeInferer) extractResultErrorType(resultTypeName string) Type {
 	return &ConcreteType{name: TypeString} // fallback
 }
 
+// isIntOrResultInt checks if a type is Int or Result<int, E> for some error type E.
+// This is used for arithmetic operations that can accept both plain Int and Result<int>.
+func (ti *TypeInferer) isIntOrResultInt(t Type) bool {
+	// Resolve type to handle type variables
+	resolved := ti.prune(t)
+
+	// Type variables are allowed - they will be unified with Int later
+	if _, ok := resolved.(*TypeVar); ok {
+		return true
+	}
+
+	// Check if it's a concrete type
+	concrete, ok := resolved.(*ConcreteType)
+	if !ok {
+		return false
+	}
+
+	typeName := concrete.String()
+
+	// Check if it's plain Int
+	if typeName == TypeInt {
+		return true
+	}
+
+	// Check if it's Result<int, ...>
+	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
+		successType := ti.extractResultSuccessType(typeName)
+		return successType.String() == TypeInt
+	}
+
+	return false
+}
+
 // unifyPrimitiveTypes handles unification of primitive types
 func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 	if ti.unifyConcreteTypes(t1, t2) {
@@ -1643,28 +1676,48 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 			return ti.inferPlusOperation(leftType, rightType)
 		}
 
-		// All arithmetic operations require Int operands
+		// All arithmetic operations require Int or Result<int> operands
+		// Result types are automatically unwrapped during code generation
 		intType := &ConcreteType{name: TypeInt}
 
-		// Both operands must be Int
-		err := ti.Unify(leftType, intType)
-		if err != nil {
-			return nil, fmt.Errorf("left operand of %s must be Int: %w", e.Operator, err)
+		// For type variables, unify with Int
+		// For concrete types, check if they're Int or Result<int>
+		if !ti.isIntOrResultInt(leftType) {
+			return nil, WrapArithmeticTypeMismatch(e.Operator, "left", "Int or Result<int>", leftType.String())
 		}
 
-		err = ti.Unify(rightType, intType)
-		if err != nil {
-			return nil, fmt.Errorf("right operand of %s must be Int: %w", e.Operator, err)
+		// If left is a type variable, unify it with Int
+		if _, ok := ti.prune(leftType).(*TypeVar); ok {
+			err := ti.Unify(leftType, intType)
+			if err != nil {
+				return nil, WrapArithmeticTypeMismatch(e.Operator, "left", "Int", leftType.String())
+			}
 		}
 
-		// Division and modulo return Result<int, MathError> (can fail with division by zero)
-		// Other arithmetic operations (-, *) return Int
-		if e.Operator == "/" || e.Operator == "%" {
+		if !ti.isIntOrResultInt(rightType) {
+			return nil, WrapArithmeticTypeMismatch(e.Operator, "right", "Int or Result<int>", rightType.String())
+		}
+
+		// If right is a type variable, unify it with Int
+		if _, ok := ti.prune(rightType).(*TypeVar); ok {
+			err := ti.Unify(rightType, intType)
+			if err != nil {
+				return nil, WrapArithmeticTypeMismatch(e.Operator, "right", "Int", rightType.String())
+			}
+		}
+
+		// Division returns Result<float, MathError> (auto-promotes to float)
+		// Modulo returns Result<int, MathError> (integer remainder operation)
+		// Both can fail with division by zero
+		if e.Operator == "/" {
+			return &ConcreteType{name: "Result<float, MathError>"}, nil
+		}
+		if e.Operator == "%" {
 			return &ConcreteType{name: "Result<int, MathError>"}, nil
 		}
 
-		// TODO: we need other number types like float.
-		return intType, nil
+		// Other arithmetic operations (-, *) return Int
+		return &ConcreteType{name: TypeInt}, nil
 
 	case isComparisonOp(e.Operator):
 		// Comparison operations require operands of same type and return Bool

@@ -559,6 +559,8 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 		g.builder.NewRet(constant.NewInt(types.I32, 0))
 	} else {
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
+		// Unwrap Result types if function return type is not a Result
+		finalReturnValue = g.maybeUnwrapResult(finalReturnValue, fnDecl)
 		g.builder.NewRet(finalReturnValue)
 	}
 
@@ -714,6 +716,29 @@ func (g *LLVMGenerator) generateIntToString(arg value.Value) (value.Value, error
 	bufferPtr := g.builder.NewCall(malloc, bufferSize)
 
 	// Call sprintf(buffer, "%ld", arg)
+	g.builder.NewCall(sprintf, bufferPtr, formatPtr, arg)
+
+	return bufferPtr, nil
+}
+
+//nolint:unparam // error return kept for consistency with generateIntToString
+func (g *LLVMGenerator) generateFloatToString(arg value.Value) (value.Value, error) {
+	// Ensure sprintf and malloc are declared
+	sprintf := g.ensureSprintfDeclaration()
+	malloc := g.ensureMallocDeclaration()
+
+	// Create format string for float conversion
+	// Use %.10g for clean representation (removes trailing zeros, uses scientific notation for large/small numbers)
+	formatStr := constant.NewCharArrayFromString("%.10g\x00")
+	formatGlobal := g.module.NewGlobalDef("", formatStr)
+	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
+		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
+
+	// Allocate buffer for result string using malloc (64 bytes should be enough for any double)
+	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
+	bufferPtr := g.builder.NewCall(malloc, bufferSize)
+
+	// Call sprintf(buffer, "%.10g", arg)
 	g.builder.NewCall(sprintf, bufferPtr, formatPtr, arg)
 
 	return bufferPtr, nil

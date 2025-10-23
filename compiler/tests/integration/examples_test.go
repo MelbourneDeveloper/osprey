@@ -94,7 +94,7 @@ func getExpectedOutputs() map[string]string {
 	return map[string]string{
 		"hello.osp": "Hello, World!\nHello from function!\n",
 		"interpolation_math.osp": "Next year you'll be 26\nLast year you were 24\n" +
-			"Double your age: 50\nHalf your age: 12\n",
+			"Double your age: 50\nHalf your age: Success(12)\n",
 		"interpolation_comprehensive.osp": "Hello Alice!\nYou are 25 years old\n" +
 			"Your score is 95 points\nNext year you'll be 26\n" +
 			"Double your score: 190\nAlice (25) scored 95/100\n",

@@ -85,7 +85,7 @@ All arithmetic operators are type-preserving and return `Result` types to handle
 - `+` Addition: `(int, int) -> Result<int, MathError>`
 - `-` Subtraction: `(int, int) -> Result<int, MathError>`
 - `*` Multiplication: `(int, int) -> Result<int, MathError>`
-- `/` Division: `(int, int) -> Result<int, MathError>` - Returns quotient only (10 / 3 = 3)
+- `/` Division: `(int, int) -> Result<float, MathError>` - Auto-promotes to float (10 / 3 = 3.333...)
 - `%` Modulo: `(int, int) -> Result<int, MathError>` - Returns remainder (10 % 3 = 1)
 
 **Floating-Point Arithmetic:**
@@ -104,18 +104,19 @@ All arithmetic operators are type-preserving and return `Result` types to handle
 ```osprey
 // Integer arithmetic
 let sum = 5 + 3           // Result<int, MathError> - Success(8)
-let quotient = 10 / 3     // Result<int, MathError> - Success(3)
+let quotient = 10 / 3     // Result<float, MathError> - Success(3.333...) - Auto-promotes to float!
 let remainder = 10 % 3    // Result<int, MathError> - Success(1)
 
 // Floating-point arithmetic
 let precise = 10.0 / 3.0  // Result<float, MathError> - Success(3.333...)
 let area = 3.14 * 2.5     // Result<float, MathError> - Success(7.85)
 
-// Mixed requires explicit conversion
-let mixed = toFloat(10) / 3.0  // Result<float, MathError> - Success(3.333...)
+// Division always returns float
+let intDiv = 10 / 2       // Result<float, MathError> - Success(5.0) - Float result!
+let mixedDiv = 10 / 3     // Result<float, MathError> - Success(3.333...)
 
 // Error cases
-let divZero = 10 / 0      // Result<int, MathError> - Error(DivisionByZero)
+let divZero = 10 / 0      // Result<float, MathError> - Error(DivisionByZero)
 ```
 
 ### Comparison Operators

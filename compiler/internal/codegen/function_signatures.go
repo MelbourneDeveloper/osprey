@@ -641,6 +641,8 @@ func (g *LLVMGenerator) generateReturnInstruction(
 		g.builder.NewRet(constant.NewInt(types.I32, 0))
 	} else {
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
+		// Unwrap Result types if function return type is not a Result
+		finalReturnValue = g.maybeUnwrapResult(finalReturnValue, fnDecl)
 		g.builder.NewRet(finalReturnValue)
 	}
 }
@@ -709,6 +711,36 @@ func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
 	return resultComplete
 }
 
+// maybeUnwrapResult unwraps a Result value if the function return type is not a Result
+func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.FunctionDeclaration) value.Value {
+	// Check INFERRED return type from type environment
+	// This handles both explicit type annotations and inferred types
+	if fnType, exists := g.typeInferer.env.Get(fnDecl.Name); exists {
+		if funcType, ok := fnType.(*FunctionType); ok {
+			// Prune to resolve any type variables
+			returnType := g.typeInferer.prune(funcType.returnType)
+
+			// Check if the return type is a Result type
+			if concrete, ok := returnType.(*ConcreteType); ok {
+				typeName := concrete.String()
+				// If return type is Result (or Result<...>), don't unwrap
+				if typeName == TypeResult ||
+					(strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">")) {
+					return bodyValue
+				}
+			}
+		}
+	}
+
+	// If the body value is a Result struct, unwrap it
+	if g.isResultType(bodyValue) {
+		return g.unwrapResultValue(bodyValue)
+	}
+
+	// Not a Result, return as-is
+	return bodyValue
+}
+
 // canImplicitlyConvert checks if we can implicitly convert from one type to another
 func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, _ *ast.FunctionDeclaration) bool {
 	// Handle the case where Result types are still ConcreteType due to type inference issues
@@ -718,6 +750,16 @@ func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, _ *ast.Funct
 			if (fromConcrete.name == TypeInt || fromConcrete.name == TypeBool) &&
 				toConcrete.name == TypeResult {
 				return true
+			}
+
+			// Check for Result<T> to T conversion (auto-unwrapping)
+			// e.g., Result<int, MathError> can be converted to int
+			if strings.HasPrefix(fromConcrete.name, "Result<") &&
+				strings.HasSuffix(fromConcrete.name, ">") {
+				// Extract the success type from Result<T, E>
+				successType := g.typeInferer.extractResultSuccessType(fromConcrete.name)
+				// Check if success type matches the target type
+				return successType.String() == toConcrete.name
 			}
 		}
 	}
@@ -831,6 +873,10 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 			// Result types are represented as structs with { value, discriminant }
 			if ct.name == "Result<int, MathError>" {
 				return g.getResultType(types.I64)
+			}
+
+			if ct.name == "Result<float, MathError>" {
+				return g.getResultType(types.Double)
 			}
 
 			if ct.name == "Result<bool, MathError>" {
