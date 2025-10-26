@@ -21,7 +21,11 @@ let result2 = {
         Success { value } => value
         Error { message } => 1
     }
-    x * factor
+    let mult = x * factor
+    match mult {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 print("Test 2 - Block with map computation: ${result2}")
 
@@ -41,7 +45,16 @@ let result3 = {
         Success { value } => value
         Error { message } => 1
     }
-    (a + b) * mult
+    let sum = a + b
+    let sumValue = match sum {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let product = sumValue * mult
+    match product {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 print("Test 3 - Multiple statements with collections: ${result3}")
 
@@ -53,7 +66,13 @@ let result4 = {
         Error { message } => [0]
     }
     match first_row[1] {
-        Success { value } => value * 10
+        Success { value } => {
+            let mult = value * 10
+            match mult {
+                Success { result } => result
+                Error { message } => 0
+            }
+        }
         Error { message } => 0
     }
 }

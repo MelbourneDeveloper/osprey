@@ -3,10 +3,19 @@
 // Enhanced: List and Map types with Hindley-Milner inference
 
 // Helper functions for transformations
-fn double(x: int) = x * 2
-fn square(x: int) = x * x
-fn isEven(x: int) = 1  // Simplified for testing
-fn add(a: int, b: int) = a + b
+fn double(x) = match x * 2 {
+    Success { value } => value
+    Error { message } => 0
+}
+fn square(x) = match x * x {
+    Success { value } => value
+    Error { message } => 0
+}
+fn isEven(x) = 1  // Simplified for testing
+fn add(a: int, b: int) -> int = match a + b {
+    Success { value } => value
+    Error { message } => 0
+}
 
 print("=== Functional Iterator Examples ===")
 

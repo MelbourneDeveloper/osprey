@@ -63,9 +63,54 @@ All primitive types use lowercase names:
 - `Record Types`: Immutable structured data types with named fields
 
 **Numeric Types:**
-- **int**: Used for whole numbers, counts, array indices. Integer division returns quotient only.
-- **float**: Used for decimal numbers, scientific calculations. Provides IEEE 754 semantics.
+- **int**: Used for whole numbers, counts, array indices. 64-bit signed integers.
+- **float**: Used for decimal numbers, scientific calculations. 64-bit IEEE 754 double precision.
 - **Conversion**: Use `toFloat(int)` to convert int to float, `toInt(float)` to truncate float to int.
+
+**Numeric Type Promotion Rules:**
+
+Osprey uses automatic type promotion for mixed numeric operations to ensure mathematical correctness:
+
+**Promotion Rules:**
+- **int ⊕ int** → Result<int, MathError> (where ⊕ is +, -, *, %) - Can overflow/underflow
+- **float ⊕ float** → Result<float, MathError> - Can overflow/underflow
+- **int ⊕ float** → Result<float, MathError> (int promoted to float)
+- **float ⊕ int** → Result<float, MathError> (int promoted to float)
+- **int / int** → Result<**float**, MathError> (division ALWAYS returns float!)
+
+**Examples:**
+```osprey
+// Integer arithmetic - ALL return Result types
+let a = 10 + 5       // a: Result<int, MathError> - Could overflow
+let b = 10 * 2       // b: Result<int, MathError> - Could overflow
+let c = 10 - 3       // c: Result<int, MathError> - Could underflow
+
+// Float arithmetic - ALL return Result types
+let d = 3.14 + 2.86  // d: Result<float, MathError> - Could overflow
+let e = 2.5 * 4.0    // e: Result<float, MathError> - Could overflow
+
+// Mixed arithmetic (automatic promotion to float)
+let f = 10 + 5.5     // f: Result<float, MathError> (10 promoted to 10.0)
+let g = 3.14 * 2     // g: Result<float, MathError> (2 promoted to 2.0)
+
+// Division and modulo
+let h = 10 / 2       // h: Result<float, MathError> = Success(5.0)
+let i = 15 / 4       // i: Result<float, MathError> = Success(3.75)
+let j = 10 / 0       // j: Result<float, MathError> = Error(DivisionByZero)
+let k = 10 % 3       // k: Result<int, MathError> = Success(1)
+
+// Using arithmetic results requires pattern matching
+match a {
+    Success { value } => print("Sum: ${value}")
+    Error { message } => print("Overflow: ${message}")
+}
+```
+
+**Rationale:**
+- **Safety**: ALL arithmetic can fail (overflow, underflow, division by zero) - Result types prevent panics
+- **Consistency**: Division naturally produces rational numbers, so it always returns float
+- **Precision**: Mixed operations promote to float to prevent precision loss
+- **Explicitness**: Pattern matching forces error handling at compile time
 
 #### Function Types
 

@@ -18,10 +18,7 @@ type Result<T, E> = Success { value: T } | Error { message: E }
 
 The compiler **MUST** enforce that `Result` types are always handled with a `match` expression, preventing direct access to the underlying value and ensuring that all possible outcomes are considered.
 
-**String Representation**: When converting a `Result` type to a string using `toString()`, the format is:
-- `Success(value)`: For successful results, where `value` is the string representation of the contained value
-- `Error(message)`: For error results, where `message` is the error message
-
+**Pattern Matching Results:**
 ```osprey
 let result = someFunctionThatCanFail()
 
@@ -33,59 +30,99 @@ match result {
 
 This approach guarantees that error handling is explicit, robust, and checked at compile time.
 
-### Compound Expression Result Propagation
+### Arithmetic Safety and Result Types
 
-**🚨 CRITICAL DESIGN PRINCIPLE 🚨**: When multiple arithmetic operations are combined in a single expression, the **entire expression** returns a single `Result` type, not each individual operation.
+**🚨 CRITICAL DESIGN PRINCIPLE 🚨**: ALL arithmetic operations (`+`, `-`, `*`, `/`, `%`) return `Result<T, MathError>` because they can **ALL** fail (overflow, underflow, division by zero).
 
 ## **THE GOLDEN RULE:**
+
+**ALL Arithmetic Operations Return Result Types:**
+- `+` Addition: `(int, int) -> Result<int, MathError>` - Can overflow
+- `-` Subtraction: `(int, int) -> Result<int, MathError>` - Can underflow
+- `*` Multiplication: `(int, int) -> Result<int, MathError>` - Can overflow
+- `/` Division: `(int, int) -> Result<float, MathError>` - Can divide by zero, ALWAYS returns float
+- `%` Modulo: `(int, int) -> Result<int, MathError>` - Can divide by zero
+
+**Why ALL operations return Result:**
+- **Addition/Subtraction**: Can overflow/underflow (e.g., MAX_INT + 1)
+- **Multiplication**: Can overflow (e.g., 1000000 * 1000000)
+- **Division**: Can divide by zero, ALWAYS returns float for mathematical correctness
+- **Modulo**: Can divide by zero
+
+**Type Promotion Rules:**
+- `int ⊕ int` → `Result<int, MathError>` (where ⊕ is +, -, *, %)
+- `float ⊕ float` → `Result<float, MathError>`
+- `int ⊕ float` → `Result<float, MathError>` (int promoted to float)
+- `int / int` → `Result<float, MathError>` (division ALWAYS returns float!)
+
+#### Arithmetic Examples
+
 ```osprey
-let a = 1 + 3                    // ✅ a: Result<int, MathError>
-let a = 1 + 3 + (300 / 5)        // ✅ a: Result<int, MathError> (WHOLE EXPRESSION)
-// Individual operations inside are AUTOMATICALLY PROPAGATED
+// ALL arithmetic returns Result types
+let sum = 1 + 3                    // Result<int, MathError> - could overflow
+let diff = 10 - 5                  // Result<int, MathError> - could underflow
+let product = 2 * 4                // Result<int, MathError> - could overflow
+let quotient = 10 / 2              // Result<float, MathError> - could divide by zero
+let remainder = 10 % 3             // Result<int, MathError> - could divide by zero
+
+// Float arithmetic also returns Result
+let fsum = 3.14 + 2.86             // Result<float, MathError>
+let fproduct = 2.5 * 4.0           // Result<float, MathError>
+
+// Type promotion
+let mixed = 10 + 5.5               // Result<float, MathError> (int promoted)
 ```
 
-#### Individual Operations (Each Returns Result)
+#### Working with Arithmetic Results
+
 ```osprey
-let a = 1 + 3          // a: Result<int, MathError>
-let b = 300 / 5        // b: Result<int, MathError>
-let c = 2 * 4          // c: Result<int, MathError>
-```
-
-#### Compound Expressions (Single Result, Auto-Propagation)
-```osprey
-let result = 1 + 3 + (300 / 5)         // result: Result<int, MathError>
-let complex = (a * b) + (c / d) - 10   // complex: Result<int, MathError>
-let nested = ((x + y) * z) / (a - b)   // nested: Result<int, MathError>
-let mega = 1 + 2 * 3 - 4 / 2 + 5       // mega: Result<int, MathError>
-```
-
-## **WHAT THIS MEANS:**
-- ❌ **NO**: You don't handle Results for each `+`, `-`, `*`, `/` inside an expression
-- ✅ **YES**: You handle the Result **ONCE** for the entire compound expression
-- ⚡ **AUTO**: If any operation fails → whole expression fails
-- ⚡ **AUTO**: If all operations succeed → expression returns Success with final value
-
-#### Error Propagation Rules
-- **Any operation fails** → **Entire expression fails**
-- **All operations succeed** → **Expression returns Success with final value**
-- **Individual operations** inside compound expressions **don't need explicit Result handling**
-
-#### Example Behavior
-```osprey
-// If any operation overflows, the whole expression fails
-let calculation = 1000000 * 1000000 + 50 / 2  // Result<int, MathError>
+// Must pattern match to extract values
+let calculation = 10 + 5           // Result<int, MathError>
 
 match calculation {
-    Success { value } => print("Final result: ${value}")
-    Error { message } => print("Calculation failed: ${message}")
+    Success { value } => print("Result: ${value}")
+    Error { message } => print("Error: ${message}")
 }
+
+// Chaining arithmetic requires nested matches or Result operators
+let step1 = 10 + 5                 // Result<int, MathError>
+match step1 {
+    Success { val1 } => {
+        let step2 = val1 * 2       // Result<int, MathError>
+        match step2 {
+            Success { val2 } => print("Final: ${val2}")
+            Error { message } => print("Multiplication error: ${message}")
+        }
+    }
+    Error { message } => print("Addition error: ${message}")
+}
+
+// Printing Result types directly
+print(10 + 5)                      // Outputs: Success(15)
+print(10 / 0)                      // Outputs: Error(DivisionByZero)
 ```
 
-#### Rationale
-This design provides:
-- **Ergonomic code**: No need to unwrap Results for every operation
-- **Safety**: All potential arithmetic errors are still caught
-- **Clarity**: Single error handling point for compound expressions
-- **Performance**: Runtime can optimize arithmetic chains
+### Result Type toString Format
 
-**KEY INSIGHT**: You handle the Result **once** for the entire expression, not for each individual operation within it.
+When converting a `Result` type to a string using `toString()`, the format **MUST ALWAYS** be:
+- **`Success(value)`**: For successful results
+- **`Error(message)`**: For error results
+
+**Examples:**
+```osprey
+let divisionResult = 15 / 3              // Result<float, MathError>
+print(toString(divisionResult))          // Outputs: "Success(5)"
+
+let divisionByZero = 10 / 0              // Result<float, MathError>
+print(toString(divisionByZero))          // Outputs: "Error(DivisionByZero)"
+
+let calculation = 10 + 5                 // Result<int, MathError>
+print(toString(calculation))             // Outputs: "Success(15)"
+```
+
+**ABSOLUTE RULES:**
+- ✅ **ALWAYS** wrap values in `Success(...)` or `Error(...)`
+- ❌ **NEVER** output raw values without the wrapper
+- ❌ **NEVER** use different formats for different Result types
+
+This ensures consistent, predictable string representations of Result types across the entire language.

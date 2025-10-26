@@ -638,19 +638,37 @@ func (g *LLVMGenerator) generateInterpolatedString(interpStr *ast.InterpolatedSt
 
 	for _, part := range interpStr.Parts {
 		if part.IsExpression {
-			// Auto-call toString() on all expressions in string interpolation
-			toStringCall := &ast.CallExpression{
-				Function:  &ast.Identifier{Name: "toString"},
-				Arguments: []ast.Expression{part.Expression},
-			}
-
-			// Generate the toString call which will return a string
-			val, err := g.generateExpression(toStringCall)
+			// AUTO-PROPAGATION FOR INTERPOLATION:
+			// Generate expression, unwrap if Result, then call toString
+			exprVal, err := g.generateExpression(part.Expression)
 			if err != nil {
 				return nil, err
 			}
 
-			args = append(args, val)
+			// Unwrap Results for cleaner output in string interpolation
+			exprVal = g.unwrapIfResult(exprVal)
+
+			// Call the appropriate toString conversion based on unwrapped type
+			var stringVal value.Value
+			if exprVal.Type() == types.I8Ptr {
+				// Already a string, use as-is
+				stringVal = exprVal
+			} else {
+				// Infer the type for proper toString conversion
+				inferredType, err := g.typeInferer.InferType(part.Expression)
+				if err != nil {
+					// Fallback to determining type from LLVM value
+					inferredType = &ConcreteType{name: TypeInt}
+				}
+
+				// Convert primitive to string using existing logic
+				stringVal, err = g.convertPrimitiveToString(exprVal, inferredType)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			args = append(args, stringVal)
 
 			// All expressions become %s since toString() always returns string
 			formatParts = append(formatParts, "%s")
@@ -721,7 +739,6 @@ func (g *LLVMGenerator) generateIntToString(arg value.Value) (value.Value, error
 	return bufferPtr, nil
 }
 
-//nolint:unparam // error return kept for consistency with generateIntToString
 func (g *LLVMGenerator) generateFloatToString(arg value.Value) (value.Value, error) {
 	// Ensure sprintf and malloc are declared
 	sprintf := g.ensureSprintfDeclaration()

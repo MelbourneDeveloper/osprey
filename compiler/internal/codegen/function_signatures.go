@@ -732,12 +732,12 @@ func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.Fun
 		}
 	}
 
-	// If the body value is a Result struct, unwrap it
+	// AUTO-PROPAGATION: If body returns Result but function declares non-Result return,
+	// unwrap the Result value. This allows: fn add(a,b)->int = a+b (body is Result<int>)
 	if g.isResultType(bodyValue) {
-		return g.unwrapResultValue(bodyValue)
+		return g.unwrapIfResult(bodyValue)
 	}
 
-	// Not a Result, return as-is
 	return bodyValue
 }
 
@@ -824,6 +824,8 @@ func (g *LLVMGenerator) getLLVMPrimitiveType(pt *PrimitiveType) types.Type {
 	switch pt.name {
 	case TypeInt:
 		return types.I64
+	case TypeFloat:
+		return types.Double
 	case TypeString:
 		return types.I8Ptr
 	case TypeBool:
@@ -840,6 +842,8 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 	switch ct.name {
 	case TypeInt:
 		return types.I64
+	case TypeFloat:
+		return types.Double
 	case TypeString:
 		return types.I8Ptr
 	case TypeBool:

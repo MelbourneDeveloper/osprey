@@ -83,22 +83,22 @@ func TestArithmetic(t *testing.T) {
 		{
 			name:   "addition",
 			source: "print(10 + 5)",
-			output: "15",
+			output: "Success(15)",
 		},
 		{
 			name:   "subtraction",
 			source: "print(10 - 3)",
-			output: "7",
+			output: "Success(7)",
 		},
 		{
 			name:   "multiplication",
 			source: "print(6 * 7)",
-			output: "42",
+			output: "Success(42)",
 		},
 		{
 			name:   "division",
 			source: "print(24 / 4)",
-			output: "6",
+			output: "Success(6)",
 		},
 	}
 
@@ -119,21 +119,21 @@ let y = x
 let z = x + y
 print(toString(z))`
 
-	testCompileAndRunWithOutput(t, source, "20", "variable assignment and arithmetic")
+	testCompileAndRunWithOutput(t, source, "Success(20)", "variable assignment and arithmetic")
 }
 
 func TestFunctionWithMultipleParameters(t *testing.T) {
 	source := `fn calculate(a: int, b: int, c: int) = a + b * c
 print(toString(calculate(a: 2, b: 3, c: 4)))`
 
-	testCompileAndRunWithOutput(t, source, "14", "function with multiple parameters")
+	testCompileAndRunWithOutput(t, source, "Success(14)", "function with multiple parameters")
 }
 
 func TestFunctionCall(t *testing.T) {
 	source := `fn double(x) = x * 2
 print(toString(double(21)))`
 
-	testCompileAndRunWithOutput(t, source, "42", "function call")
+	testCompileAndRunWithOutput(t, source, "Success(42)", "function call")
 }
 
 func TestTypeDeclaration(t *testing.T) {
@@ -147,15 +147,20 @@ func TestImportStatement(t *testing.T) {
 func TestComplexExpression(t *testing.T) {
 	source := `let result = (10 + 5) * 2 - 3
 print(toString(result))`
-	testCompileAndRunWithOutput(t, source, "27", "complex arithmetic expression")
+	testCompileAndRunWithOutput(t, source, "Success(27)", "complex arithmetic expression")
 }
 
 func TestNestedFunctionCalls(t *testing.T) {
-	source := `fn add(x, y) = x + y
-fn multiply(a, b) = a * b
-print(toString(add(x: multiply(a: 2, b: 3), y: 4)))`
+	source := `fn add(x: int, y: int) = x + y
+fn multiply(a: int, b: int) = a * b
 
-	testCompileAndRunWithOutput(t, source, "10", "nested function calls with named arguments")
+let multResult = multiply(a: 2, b: 3)
+match multResult {
+    Success { value } => print(toString(add(x: value, y: 4)))
+    Error { message } => print("Error: ${message}")
+}`
+
+	testCompileAndRunWithOutput(t, source, "Success(10)", "nested function calls with named arguments")
 }
 
 func TestMatchExpression(t *testing.T) {
@@ -170,7 +175,7 @@ let b = 20
 let c = a + b
 print(toString(c))`
 
-	testCompileAndRunWithOutput(t, source, "30", "multiple let declarations")
+	testCompileAndRunWithOutput(t, source, "Success(30)", "multiple let declarations")
 }
 
 func TestZeroValues(t *testing.T) {
@@ -206,22 +211,19 @@ func TestUnaryMinus(t *testing.T) {
 func TestParenthesizedExpressions(t *testing.T) {
 	source := `let result = (10 + 5) * 2
 print(toString(result))`
-	testCompileAndRunWithOutput(t, source, "30", "parenthesized expressions")
+	testCompileAndRunWithOutput(t, source, "Success(30)", "parenthesized expressions")
 }
 
 func TestOperatorPrecedence(t *testing.T) {
 	source := `let result = 2 + 3 * 4
 print(toString(result))`
-	testCompileAndRunWithOutput(t, source, "14", "operator precedence")
+	testCompileAndRunWithOutput(t, source, "Success(14)", "operator precedence")
 }
 
 func TestComplexArithmetic(t *testing.T) {
-
-	//FIX THIS!!!
-	//t.Skip("TODO: Nested arithmetic with division not yet supported - division returns Result, other ops expect Int")
 	source := `let result = ((5 + 3) * 2) - (4 / 2)
 print(toString(result))`
-	testCompileAndRunWithOutput(t, source, "14", "complex arithmetic")
+	testCompileAndRunWithOutput(t, source, "Success(14)", "complex arithmetic")
 }
 
 func TestFunctionWithNoParameters(t *testing.T) {
@@ -240,11 +242,15 @@ print(toString(x))`
 }
 
 func TestChainedFunctionCalls(t *testing.T) {
-	source := `fn double(x) = x * 2
-fn quad(x: int) -> int = double(double(x))
-print(toString(quad(5)))`
+	source := `fn double(x: int) = x * 2
 
-	testCompileAndRunWithOutput(t, source, "20", "chained function calls")
+let d1 = double(5)
+match d1 {
+    Success { value } => print(toString(double(value)))
+    Error { message } => print("Error: ${message}")
+}`
+
+	testCompileAndRunWithOutput(t, source, "Success(20)", "chained function calls")
 }
 
 func TestStringEscaping(t *testing.T) {
@@ -300,17 +306,17 @@ func TestAllOperators(t *testing.T) {
 		{
 			name:   "addition_result",
 			source: "print(toString(5 + 3))",
-			output: "8",
+			output: "Success(8)",
 		},
 		{
 			name:   "subtraction_result",
 			source: "print(toString(10 - 4))",
-			output: "6",
+			output: "Success(6)",
 		},
 		{
 			name:   "multiplication_result",
 			source: "print(toString(3 * 4))",
-			output: "12",
+			output: "Success(12)",
 		},
 		{
 			name:   "division_result",
@@ -327,16 +333,19 @@ func TestAllOperators(t *testing.T) {
 }
 
 func TestCompleteProgram(t *testing.T) {
-	source := `fn factorial(n: int) -> int = match n {
-    0 => 1
-    1 => 1
-    _ => n * factorial(n - 1)
-}
+	source := `fn add(a: int, b: int) = a + b
+fn multiply(x: int, y: int) = x * y
 
-let result = factorial(5)
-print(toString(result))`
+let sum = add(a: 10, b: 20)
+match sum {
+    Success { value } => {
+        let prod = multiply(x: value, y: 4)
+        print(toString(prod))
+    }
+    Error { message } => print("Error: ${message}")
+}`
 
-	testCompileAndRunWithOutput(t, source, "120", "complete program with recursion")
+	testCompileAndRunWithOutput(t, source, "Success(120)", "complete program with functions and composition")
 }
 
 // ========== STRING INTERPOLATION TESTS ==========

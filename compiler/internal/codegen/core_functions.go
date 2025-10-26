@@ -79,6 +79,8 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 			switch arg.Type() {
 			case types.I64:
 				argType = TypeInt
+			case types.Double:
+				argType = TypeFloat
 			case types.I8Ptr:
 				argType = TypeString
 			case types.I1:
@@ -117,12 +119,14 @@ func (g *LLVMGenerator) convertValueToStringByType(
 		return g.generateIntToString(arg)
 	case TypeBool:
 		return g.generateBoolToString(arg)
+	case TypeFloat:
+		return g.generateFloatToString(arg)
 	case TypeUnit:
 		// Unit type should return "()"
 		return g.createGlobalString("()"), nil
 	default:
 		// Check if it's a Fiber type - show the fiber ID, not await the result
-		if theType == TypeFiber {
+		if theType == TypeFiber || strings.HasPrefix(theType, TypeFiber+"[") {
 			// Fiber is just an integer ID, convert it to string
 			return g.generateIntToString(arg)
 		}
@@ -196,6 +200,11 @@ func (g *LLVMGenerator) convertResultToString(
 
 	g.builder.NewCondBr(isSuccess, successBlock, errorBlock)
 
+	// Declare sprintf and malloc for formatting (used by both success and error cases)
+	sprintf := g.ensureSprintfDeclaration()
+	malloc := g.ensureMallocDeclaration()
+	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
+
 	// Success case: extract and convert the value
 	g.builder = successBlock
 
@@ -213,33 +222,33 @@ func (g *LLVMGenerator) convertResultToString(
 		err        error
 	)
 
-	// Convert the success value to string
-	// For arithmetic Results (from division/modulo), just show the value without "Success()" wrapper
-	// This makes string interpolation cleaner: "${x / y}" shows "5.0" not "Success(5.0)"
+	// Convert the success value to string and wrap in Success(...)
+	// CRITICAL: Result types MUST always format as "Success(value)" or "Error(message)"
+	var innerValueStr value.Value
 	switch structType.Fields[0] {
 	case types.I64:
-		// Check if this i64 should be treated as a boolean
-		// For Result<bool, Error> types, the inner value is i64 but semantically boolean
-		if g.isResultValueSemanticBoolean(resultValue) {
-			successStr, err = g.generateBoolToString(resultValue)
-		} else {
-			successStr, err = g.generateIntToString(resultValue)
-		}
+		innerValueStr, err = g.generateIntToString(resultValue)
 	case types.Double:
 		// Float value - convert to string
-		successStr, err = g.generateFloatToString(resultValue)
+		innerValueStr, err = g.generateFloatToString(resultValue)
 	case types.I1:
-		successStr, err = g.generateBoolToString(resultValue)
+		innerValueStr, err = g.generateBoolToString(resultValue)
 	case types.I8Ptr:
-		successStr = resultValue // Already a string
+		innerValueStr = resultValue // Already a string
 	default:
 		// For complex types (like ProcessHandle), convert to a generic string
-		successStr = g.createGlobalString("complex_value")
+		innerValueStr = g.createGlobalString("complex_value")
 	}
 
 	if err != nil {
 		return nil, err
 	}
+
+	// Wrap the value in Success(...) format
+	successFormatStr := g.createGlobalString("Success(%s)")
+	successBuffer := g.builder.NewCall(malloc, bufferSize)
+	g.builder.NewCall(sprintf, successBuffer, successFormatStr, innerValueStr)
+	successStr = successBuffer
 
 	successBlock.NewBr(endBlock)
 
@@ -257,11 +266,6 @@ func (g *LLVMGenerator) convertResultToString(
 		// Struct value case: extract the value field
 		errorMsg = g.builder.NewExtractValue(result, 0)
 	}
-
-	// Declare sprintf and malloc for error formatting
-	sprintf := g.ensureSprintfDeclaration()
-	malloc := g.ensureMallocDeclaration()
-	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
 
 	// Format as "Error(message)" - handle different error message types
 	var errorStr value.Value
@@ -307,22 +311,6 @@ func (g *LLVMGenerator) isSemanticBooleanType(inferredType Type) bool {
 	return false
 }
 
-// isResultValueSemanticBoolean checks if a Result value contains a semantic boolean
-func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bool {
-	// Check if this is a value that's known to be from a boolean-returning function
-	// This is a heuristic approach until we have better generic type tracking
-	// For now, check if the value is constrained to 0 or 1 (typical boolean values)
-	if constant, ok := resultValue.(*constant.Int); ok {
-		val := constant.X.Int64()
-		return val == 0 || val == 1
-	}
-
-	// If it's not a constant, we need better detection
-	// For now, default to integer (most common case for arithmetic Results)
-	// TODO: Implement proper generic type tracking to detect boolean Results
-	return false
-}
-
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(PrintFunc, callExpr)
@@ -331,47 +319,68 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 	}
 
 	argExpr := callExpr.Arguments[0]
-
 	arg, err := g.generateExpression(argExpr)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if the expression is semantically a boolean using type inference
 	inferredType, err := g.typeInferer.InferType(argExpr)
 	if err != nil {
 		return nil, err
 	}
 
-	var stringArg value.Value
-
-	switch arg.Type().(type) {
-	case *types.PointerType: // Assuming i8* is string
-		stringArg = arg
-	case *types.IntType:
-		// Check if this is a boolean by bit size OR by inferred type
-		if arg.Type().(*types.IntType).BitSize == 1 || g.isSemanticBooleanType(inferredType) {
-			stringArg, err = g.generateBoolToString(arg)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			stringArg, err = g.generateIntToString(arg)
-			if err != nil {
-				return nil, err
-			}
-		}
-	default:
-		return nil, ErrPrintCannotConvert
+	stringArg, err := g.convertValueToStringForPrint(arg, inferredType)
+	if err != nil {
+		return nil, err
 	}
 
 	puts := g.functions["puts"]
 	g.builder.NewCall(puts, stringArg)
-
-	// Print returns Unit according to the registry, so return a Unit value
-	// Since Unit is represented as void in LLVM, we don't return a value
-	// The caller will handle the void appropriately
 	return nil, nil
+}
+
+// convertValueToStringForPrint converts any value to a string for printing.
+func (g *LLVMGenerator) convertValueToStringForPrint(arg value.Value, inferredType Type) (value.Value, error) {
+	if g.isResultType(arg) {
+		return g.convertResultValueToString(arg)
+	}
+	return g.convertPrimitiveToString(arg, inferredType)
+}
+
+// convertResultValueToString handles Result type conversion to string.
+func (g *LLVMGenerator) convertResultValueToString(arg value.Value) (value.Value, error) {
+	if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+		return g.convertResultToString(arg, structType)
+	}
+	if ptrType, ok := arg.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+			return g.convertResultToString(arg, structType)
+		}
+	}
+	return nil, ErrPrintCannotConvert
+}
+
+// convertPrimitiveToString handles primitive type conversion to string.
+func (g *LLVMGenerator) convertPrimitiveToString(arg value.Value, inferredType Type) (value.Value, error) {
+	switch arg.Type().(type) {
+	case *types.PointerType:
+		return arg, nil
+	case *types.IntType:
+		return g.convertIntTypeToString(arg, inferredType)
+	case *types.FloatType:
+		return g.generateFloatToString(arg)
+	default:
+		return nil, ErrPrintCannotConvert
+	}
+}
+
+// convertIntTypeToString handles int type conversion, distinguishing between bool and int.
+func (g *LLVMGenerator) convertIntTypeToString(arg value.Value, inferredType Type) (value.Value, error) {
+	intType := arg.Type().(*types.IntType)
+	if intType.BitSize == 1 || g.isSemanticBooleanType(inferredType) {
+		return g.generateBoolToString(arg)
+	}
+	return g.generateIntToString(arg)
 }
 
 // generateInputCall handles input function calls.

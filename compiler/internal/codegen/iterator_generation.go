@@ -360,8 +360,24 @@ func (g *LLVMGenerator) generateFoldLoop(
 		return nil, err
 	}
 
+	// Check if newAccumulator is a Result type and extract value if needed
+	valueToStore := newAccumulator
+	if structType, ok := newAccumulator.Type().(*types.StructType); ok {
+		// Check if this looks like a Result struct: {i64, i8}
+		const resultTypeFieldCount = 2
+		if len(structType.Fields) == resultTypeFieldCount {
+			if _, ok := structType.Fields[0].(*types.IntType); ok {
+				const errorFlagBitSize = 8
+				if intType, ok := structType.Fields[1].(*types.IntType); ok && intType.BitSize == errorFlagBitSize {
+					// This is a Result type - extract the value field (index 0)
+					valueToStore = g.builder.NewExtractValue(newAccumulator, 0)
+				}
+			}
+		}
+	}
+
 	// Store the new accumulator value
-	g.builder.NewStore(newAccumulator, accumulatorPtr)
+	g.builder.NewStore(valueToStore, accumulatorPtr)
 
 	// Increment counter
 	one := constant.NewInt(types.I64, 1)

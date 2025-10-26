@@ -3,9 +3,18 @@
 fn power(base: int, exp: int) -> int = match exp {
     0 => 1
     1 => base
-    2 => base * base
-    3 => base * base * base
-    _ => base * base * base * base
+    2 => match base * base {
+        Success { value } => value
+        Error { message } => 0
+    }
+    3 => match base * base * base {
+        Success { value } => value
+        Error { message } => 0
+    }
+    _ => match base * base * base * base {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 
 fn factorial(n: int) -> int = match n {

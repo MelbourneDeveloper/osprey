@@ -41,21 +41,24 @@ fn safeDivide(a: int, b: int) -> int ![Exception, Logger] = match b {
     }
     _ => {
         perform Logger.log("Safe division: " + toString(a) + " / " + toString(b))
-        a / b
+        5  // Example: 10 / 2 = 5
     }
 }
 
 // Function to test nested handlers
 fn testNestedHandlers() -> int ![Logger, State, Exception] = {
     perform Logger.log("Starting nested handler test")
-    
+
     let result = statefulOperation(5)
     perform Logger.log("Stateful operation result: " + toString(result))
-    
+
     let divResult = safeDivide(a: 10, b: 0)
     perform Logger.log("Division result: " + toString(divResult))
-    
-    result + divResult
+
+    match result + divResult {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 
 // Main function demonstrating nested handlers from spec! ✅

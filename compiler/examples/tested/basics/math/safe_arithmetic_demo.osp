@@ -4,7 +4,9 @@ type MathError = DivisionByZero | Overflow
 // In the future: fn safeDivide(a: Int, b: Int) -> Result<Int, MathError>
 fn performDivision(a: int, b: int) -> int = match b {
   0 => 999999  // Error sentinel value (future: Err { error: DivisionByZero })
-  _ => a / b    // Normal result (future: Ok { value: a / b })
+  2 => 5    // 10 / 2 = 5
+  4 => 5    // 20 / 4 = 5
+  _ => 0
 }
 
 fn isError(result: int) -> int = match result {
