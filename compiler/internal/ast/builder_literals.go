@@ -80,6 +80,14 @@ func (b *Builder) buildEffectExpression(ctx parser.IPrimaryContext) Expression {
 
 func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 	switch {
+	case ctx.FLOAT() != nil:
+		text := ctx.FLOAT().GetText()
+		value, _ := strconv.ParseFloat(text, 64)
+
+		return &FloatLiteral{
+			Value:    value,
+			Position: b.getPosition(ctx.FLOAT().GetSymbol()),
+		}
 	case ctx.INT() != nil:
 		text := ctx.INT().GetText()
 		value, _ := strconv.ParseInt(text, 10, 64)

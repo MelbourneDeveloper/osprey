@@ -366,12 +366,12 @@ func TestBinaryOperatorErrors(t *testing.T) {
 		},
 		{
 			name:    "division",
-			source:  `fn test() -> int = 10 / 2`,
+			source:  `fn test() -> Result<float, MathError> = 10 / 2`,
 			wantErr: false,
 		},
 		{
 			name:    "modulo",
-			source:  `fn test() -> int = 10 % 3`,
+			source:  `fn test() -> Result<int, MathError> = 10 % 3`,
 			wantErr: false,
 		},
 	}

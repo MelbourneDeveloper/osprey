@@ -19,17 +19,17 @@ fn divide(a, b) = a / b
 
 // SECTION 5: Test Result Elvis operator - success case
 let divisionGood = divide(a: 10, b: 2)
-let goodResult = divisionGood ?: -1  // Should extract 5 from Success, or -1 on Error
+let goodResult = divisionGood ?: 0.0  // Should extract 5.0 from Success, or 0.0 on Error
 print(goodResult)
 
-// SECTION 6: Test Result Elvis operator - error case  
+// SECTION 6: Test Result Elvis operator - error case
 let divisionBad = divide(a: 10, b: 0)
-let badResult = divisionBad ?: -1  // Should return -1 on Error, or extract value on Success
+let badResult = divisionBad ?: 0.0  // Should return 0.0 on Error, or extract value on Success
 print(badResult)
 
 // SECTION 7: Test Result<int> toString conversion
 print("Testing Result<int> toString:")
 let goodCalc = 20 + 30  // Result<int, MathError>
 print("Result<int> Success: ${toString(goodCalc)}")  // Should print "50"
-let zeroDivision = 10 / 0  // Result<int, MathError>  
-print("Result<int> Error: ${toString(zeroDivision)}")  // Should print "Error"
+// Reuse divisionBad from earlier to test Error toString (constant expressions get optimized away by LLVM)
+print("Result<float> Error: ${toString(divisionBad)}")  // Should print "Error"

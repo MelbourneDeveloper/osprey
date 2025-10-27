@@ -66,6 +66,11 @@ func TestFiberExamples(t *testing.T) {
 			"Task 3 progress: 75%\n" +
 			"All tasks complete: 100%\n\n" +
 			"Select returned priority value: 1000\n\n" +
+			"Testing channel operations:\n" +
+			"Sent 42, received: 42\n" +
+			"Sent 123, received: 123\n\n" +
+			"Lambda computation result: 35\n" +
+			"Fiber task result: 123\n\n" +
 			"Async data processing pipeline:\n" +
 			"Processed data size: 2058\n" +
 			"Validation result: 1\n\n" +

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Core Development Principles
 
-- **NEVER DUPLICATE CODE** - Edit in place, never create new versions. Actively remove duplicate code and always aim for conciseness. Always do a search before adding new code.
+- **NEVER DUPLICATE CODE** - Edit in place, never create new versions. Actively remove duplicate code, even test code and always aim for conciseness. Always do a search before adding new code.
 - **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
 
 ⛔️ This is completely illegal
@@ -28,6 +28,7 @@ t.Fatalf("⚠️ NOTE: Circular dependency detection not yet implemented. Implem
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules 
 - **FP STYLE CODE** - pure functions over OOP style
 - **USE CONSTANTS** - Name values meaningfully instead of using literals
+- ACTIVELY FIX RULE VIOLATIONS AS A HIGH PRIORITY
 
 ## Commands
 

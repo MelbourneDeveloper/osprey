@@ -476,13 +476,13 @@ func (r *BuiltInFunctionRegistry) registerFileIOFunctions() {
 	// writeFile function
 	r.functions[WriteFileFunc] = &BuiltInFunction{
 		Name:        WriteFileFunc,
-		Signature:   "writeFile(filename: string, content: string) -> Result<Unit, Error>",
-		Description: "Writes content to a file. Creates the file if it doesn't exist.",
+		Signature:   "writeFile(filename: string, content: string) -> Result<int, Error>",
+		Description: "Writes content to a file. Creates the file if it doesn't exist. Returns number of bytes written.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "filename", Type: &ConcreteType{name: TypeString}, Description: "Path to the file to write"},
 			{Name: "content", Type: &ConcreteType{name: TypeString}, Description: "Content to write to the file"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<Unit, Error>"},
+		ReturnType:   &ConcreteType{name: "Result<int, Error>"},
 		Category:     CategoryFile,
 		IsProtected:  true,
 		SecurityFlag: PermissionFileWrite,

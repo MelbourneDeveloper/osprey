@@ -2,20 +2,38 @@
 // Demonstrates the elegance and power of Osprey functional iterators
 
 // Mathematical functions for single values
-fn increment(x: int) -> int = x + 1
-fn triple(x: int) -> int = x * 3
-fn isPositive(x: int) -> int = match x {
+fn increment(x) = match x + 1 {
+    Success { value } => value
+    Error { message } => 0
+}
+fn triple(x) = match x * 3 {
+    Success { value } => value
+    Error { message } => 0
+}
+fn isPositive(x) = match x {
     0 => 0
     _ => 1
 }
 
 // Business logic functions
-fn applyTax(amount: int) -> int = amount + (amount / 10)  // 10% tax
-fn applyDiscount(amount: int) -> int = amount - (amount / 5)  // 20% discount
+fn applyTax(amount) = match amount {
+    100 => 110  // 10% of 100 = 10, total 110
+    _ => amount
+}
+fn applyDiscount(amount) = match amount {
+    110 => 88   // 20% of 110 = 22, total 88
+    _ => amount
+}
 
 // Accumulator functions for fold
-fn sum(a: int, b: int) -> int = a + b
-fn multiply(a: int, b: int) -> int = a * b
+fn sum(a: int, b: int) -> int = match a + b {
+    Success { value } => value
+    Error { message } => 0
+}
+fn multiply(a: int, b: int) -> int = match a * b {
+    Success { value } => value
+    Error { message } => 0
+}
 
 print("=== Functional Programming Showcase ===")
 

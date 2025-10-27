@@ -237,7 +237,23 @@ func (g *LLVMGenerator) generateArgumentExpression(
 	}
 
 	// For non-polymorphic function arguments, generate normally
-	return g.generateExpression(expr)
+	val, err := g.generateExpression(expr)
+	if err != nil {
+		return nil, err
+	}
+
+	// SPECIAL CASE: toString() must receive the actual Result struct, not unwrapped value
+	// This allows toString(add(5,3)) to display "Success(8)" instead of "8"
+	if funcName, ok := callExpr.Function.(*ast.Identifier); ok {
+		if funcName.Name == "toString" {
+			return val, nil // Don't unwrap for toString
+		}
+	}
+
+	// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
+	// This matches the type inference behavior where Result types are automatically unwrapped
+	// Example: fibonacci(n - 1) where (n - 1) returns Result<int, MathError> but fibonacci expects int
+	return g.unwrapIfResult(val), nil
 }
 
 // handlePolymorphicFunctionArgument handles polymorphic function arguments
@@ -357,6 +373,9 @@ func (g *LLVMGenerator) inferCallArgumentTypes(callExpr *ast.CallExpression) ([]
 				return nil, err
 			}
 
+			// AUTO-UNWRAP Result types for monomorphization (spec 0004-TypeSystem.md:115-160)
+			argType = g.typeInferer.unwrapResultType(argType)
+
 			argTypes = append(argTypes, argType)
 		}
 	} else {
@@ -366,6 +385,12 @@ func (g *LLVMGenerator) inferCallArgumentTypes(callExpr *ast.CallExpression) ([]
 			if err != nil {
 				return nil, err
 			}
+
+			// AUTO-UNWRAP Result types for monomorphization (spec 0004-TypeSystem.md:115-160)
+			// This ensures polymorphic functions are monomorphized with the correct parameter type
+			// Example: square(double(x)) where double returns Result<int, MathError>
+			// Should monomorphize square as (int) -> Result, not (Result) -> Result
+			argType = g.typeInferer.unwrapResultType(argType)
 
 			argTypes = append(argTypes, argType)
 		}
@@ -468,6 +493,7 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 	}
 
 	// Create the LLVM function signature for this monomorphized instance
+	// Use the inferred return type AS-IS (don't unwrap)
 	llvmReturnType := g.getLLVMType(concreteFnType.returnType)
 
 	params := make([]*ir.Param, len(concreteFnType.paramTypes))
@@ -559,6 +585,8 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 		g.builder.NewRet(constant.NewInt(types.I32, 0))
 	} else {
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
+		// Unwrap Result types if function return type is not a Result
+		finalReturnValue = g.maybeUnwrapResult(finalReturnValue, fnDecl)
 		g.builder.NewRet(finalReturnValue)
 	}
 
@@ -636,19 +664,37 @@ func (g *LLVMGenerator) generateInterpolatedString(interpStr *ast.InterpolatedSt
 
 	for _, part := range interpStr.Parts {
 		if part.IsExpression {
-			// Auto-call toString() on all expressions in string interpolation
-			toStringCall := &ast.CallExpression{
-				Function:  &ast.Identifier{Name: "toString"},
-				Arguments: []ast.Expression{part.Expression},
-			}
-
-			// Generate the toString call which will return a string
-			val, err := g.generateExpression(toStringCall)
+			// AUTO-PROPAGATION FOR INTERPOLATION:
+			// Generate expression, unwrap if Result, then call toString
+			exprVal, err := g.generateExpression(part.Expression)
 			if err != nil {
 				return nil, err
 			}
 
-			args = append(args, val)
+			// Unwrap Results for cleaner output in string interpolation
+			exprVal = g.unwrapIfResult(exprVal)
+
+			// Call the appropriate toString conversion based on unwrapped type
+			var stringVal value.Value
+			if exprVal.Type() == types.I8Ptr {
+				// Already a string, use as-is
+				stringVal = exprVal
+			} else {
+				// Infer the type for proper toString conversion
+				inferredType, err := g.typeInferer.InferType(part.Expression)
+				if err != nil {
+					// Fallback to determining type from LLVM value
+					inferredType = &ConcreteType{name: TypeInt}
+				}
+
+				// Convert primitive to string using existing logic
+				stringVal, err = g.convertPrimitiveToString(exprVal, inferredType)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			args = append(args, stringVal)
 
 			// All expressions become %s since toString() always returns string
 			formatParts = append(formatParts, "%s")
@@ -714,6 +760,28 @@ func (g *LLVMGenerator) generateIntToString(arg value.Value) (value.Value, error
 	bufferPtr := g.builder.NewCall(malloc, bufferSize)
 
 	// Call sprintf(buffer, "%ld", arg)
+	g.builder.NewCall(sprintf, bufferPtr, formatPtr, arg)
+
+	return bufferPtr, nil
+}
+
+func (g *LLVMGenerator) generateFloatToString(arg value.Value) (value.Value, error) {
+	// Ensure sprintf and malloc are declared
+	sprintf := g.ensureSprintfDeclaration()
+	malloc := g.ensureMallocDeclaration()
+
+	// Create format string for float conversion
+	// Use %.10g for clean representation (removes trailing zeros, uses scientific notation for large/small numbers)
+	formatStr := constant.NewCharArrayFromString("%.10g\x00")
+	formatGlobal := g.module.NewGlobalDef("", formatStr)
+	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
+		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
+
+	// Allocate buffer for result string using malloc (64 bytes should be enough for any double)
+	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
+	bufferPtr := g.builder.NewCall(malloc, bufferSize)
+
+	// Call sprintf(buffer, "%.10g", arg)
 	g.builder.NewCall(sprintf, bufferPtr, formatPtr, arg)
 
 	return bufferPtr, nil

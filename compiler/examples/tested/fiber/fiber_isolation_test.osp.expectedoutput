@@ -1,0 +1,31 @@
+=== Fiber Module Isolation Test ===
+
+Test 1: Concurrent execution order test:
+Task 3 result: 300
+Task 1 result: 100
+Task 2 result: 200
+
+Test 2: Channel communication test:
+Consumer 1: 15
+Consumer 2: 25
+Consumer 3: 35
+
+Test 3: Yield behavior test:
+Yield sequence: 10, 20, 30
+
+Test 4: Complex fiber interactions:
+
+Test 4: Module access from different fibers:
+Fiber 1 got: 1000
+Fiber 2 got: 2000
+Fiber 3 got: 3000
+Transform 1: 142
+Transform 2: 242
+
+=== CONCURRENCY VERIFICATION ===
+✅ Multiple fibers can be spawned
+✅ Await can happen in any order
+✅ Yield returns control values
+✅ Module functions accessible from fibers
+⚠️  NOTE: True concurrency requires runtime support!
+=== Test Complete ===

@@ -4,9 +4,18 @@
 fn power(base: int, exp: int) -> int = match exp {
     0 => 1
     1 => base
-    2 => base * base
-    3 => base * base * base
-    _ => base * base * base * base
+    2 => match base * base {
+        Success { value } => value
+        Error { message } => 0
+    }
+    3 => match base * base * base {
+        Success { value } => value
+        Error { message } => 0
+    }
+    _ => match base * base * base * base {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 
 fn factorial(n: int) -> int = match n {
@@ -19,7 +28,10 @@ fn factorial(n: int) -> int = match n {
     _ => 720
 }
 
-fn factorial_iter(n: int, acc: int) -> int = n * acc
+fn factorial_iter(n: int, acc: int) -> int = match n * acc {
+    Success { value } => value
+    Error { message } => 0
+}
 
 fn fibonacci(n: int) -> int = match n {
     0 => 0
@@ -31,9 +43,15 @@ fn fibonacci(n: int) -> int = match n {
     _ => 8
 }
 
-fn fibonacci_simple(n: int) -> int = n + n + n
+fn fibonacci_simple(n: int) -> int = match n + n + n {
+    Success { value } => value
+    Error { message } => 0
+}
 
-fn add_complex(a: int, b: int) -> int = (a * 2) + (b * 3) - 1
+fn add_complex(a: int, b: int) -> int = match (a * 2) + (b * 3) - 1 {
+    Success { value } => value
+    Error { message } => 0
+}
 
 fn classify_number(n: int) -> Unit = match n {
     0 => print("Zero!")
