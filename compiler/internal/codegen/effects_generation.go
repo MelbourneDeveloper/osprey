@@ -515,6 +515,7 @@ func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value
 }
 
 // generatePerformArguments generates arguments for perform expressions
+// AUTO-UNWRAPPING: Unwraps Result types from arithmetic operations before passing to handlers
 func (ec *EffectCodegen) generatePerformArguments(perform *ast.PerformExpression) ([]value.Value, error) {
 	args := make([]value.Value, len(perform.Arguments))
 
@@ -523,6 +524,11 @@ func (ec *EffectCodegen) generatePerformArguments(perform *ast.PerformExpression
 		if err != nil {
 			return nil, err
 		}
+
+		// AUTO-UNWRAP: If this is a Result type from arithmetic, unwrap the value
+		// This allows: perform State.set(currentValue + 1) where currentValue + 1 returns Result<int, MathError>
+		// The handler receives the unwrapped int value, not the Result struct
+		argVal = ec.generator.unwrapIfResult(argVal)
 
 		args[i] = argVal
 	}
@@ -641,6 +647,11 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 		if err != nil {
 			return nil, err
 		}
+
+		// AUTO-UNWRAP: If this is a Result type from arithmetic, unwrap the value
+		// This allows: perform State.set(currentValue + 1) where currentValue + 1 returns Result<int, MathError>
+		// The handler receives the unwrapped int value, not the Result struct
+		argVal = ec.generator.unwrapIfResult(argVal)
 
 		args[i] = argVal
 	}

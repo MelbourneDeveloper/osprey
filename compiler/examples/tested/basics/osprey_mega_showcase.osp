@@ -44,18 +44,18 @@ fn calculateComplexity(priority) = {
     }
 }
 
-fn calculateTime(complexity) = {
-    let timeFactors = [10, 5]
-    let divisor = match timeFactors[0] { Success { value } => value Error { message } => 10 }
-    let offset = match timeFactors[1] { Success { value } => value Error { message } => 5 }
+fn calculateTime(complexity) -> float = {
+    let timeFactors = [10.0, 5.0]
+    let divisor = match timeFactors[0] { Success { value } => value Error { message } => 10.0 }
+    let offset = match timeFactors[1] { Success { value } => value Error { message } => 5.0 }
     complexity / divisor + offset
 }
 
-fn calculateEfficiency(duration) = {
-    let thresholds = [50, 100]
+fn calculateEfficiency(duration: float) = {
+    let thresholds = [50.0, 100.0]
     let scores = [100, 75, 50]
-    let t1 = match thresholds[0] { Success { value } => value Error { message } => 50 }
-    let t2 = match thresholds[1] { Success { value } => value Error { message } => 100 }
+    let t1 = match thresholds[0] { Success { value } => value Error { message } => 50.0 }
+    let t2 = match thresholds[1] { Success { value } => value Error { message } => 100.0 }
     
     match duration < t1 {
         true => match scores[0] { Success { value } => value Error { message } => 100 }
@@ -71,7 +71,10 @@ fn preprocessData(rawData) = {
     let operations = [2, 100]
     let mult = match operations[0] { Success { value } => value Error { message } => 1 }
     let add = match operations[1] { Success { value } => value Error { message } => 0 }
-    rawData * mult + add
+    match rawData * mult + add {
+        Success { value } => value
+        Error { message } => rawData
+    }
 }
 
 fn validateData(data) = {
@@ -83,7 +86,10 @@ fn validateData(data) = {
 fn transformData(data) = {
     let transformFactors = [3]
     let factor = match transformFactors[0] { Success { value } => value Error { message } => 1 }
-    data * factor
+    match data * factor {
+        Success { value } => value
+        Error { message } => data
+    }
 }
 
 fn aggregateResults(result1, result2, result3) = {
@@ -91,7 +97,10 @@ fn aggregateResults(result1, result2, result3) = {
     let r1 = match results[0] { Success { value } => value Error { message } => 0 }
     let r2 = match results[1] { Success { value } => value Error { message } => 0 }
     let r3 = match results[2] { Success { value } => value Error { message } => 0 }
-    r1 + r2 + r3
+    match r1 + r2 + r3 {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 
 // 🔄 Effectful Task Processing - Combining effects with pattern matching
@@ -108,7 +117,10 @@ fn processTask(taskId: string, dataSize: int, priority: TaskPriority) -> TaskRes
     match isValid {
         true => {
             let processed = transformData(preprocessed)
-            let actualTime = expectedTime + 2
+            let actualTime = match expectedTime + 2.0 {
+                Success { value } => value
+                Error { message } => expectedTime
+            }
             let efficiency = calculateEfficiency(actualTime)
             
             perform Metrics.recordSuccess(taskId, processed)
@@ -327,7 +339,7 @@ fn main() -> Unit = {
         
         print("📊 System Metrics Analysis with Collections:")
         print("Total throughput: " + toString(totalResults) + " units")
-        print("Average batch size: " + toString(totalResults / 3) + " units")
+        print("Average batch size: ${totalResults / 3.0} units")
         
         let alphaResult = match batchSummary["alpha"] { Success { value } => value Error { message } => 0 }
         let betaResult = match batchSummary["beta"] { Success { value } => value Error { message } => 0 }

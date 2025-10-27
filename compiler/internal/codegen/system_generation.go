@@ -283,11 +283,11 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
-	// Success case: store the bytes written
+	// Success case: store the number of bytes written
 	g.builder = successBlock
 	valuePtr := g.builder.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(writeResult, valuePtr)
+	g.builder.NewStore(writeResult, valuePtr) // Store bytes written
 	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success

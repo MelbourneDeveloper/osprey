@@ -10,7 +10,7 @@ import (
 // TestFiberFeatures tests the fiber language features comprehensively.
 func TestFiberFeatures(t *testing.T) {
 	fiberTests := map[string]string{
-		"basic_spawn": `fn test() -> Fiber = spawn 42
+		"basic_spawn": `fn test() -> Fiber[int] = spawn 42
 fn main() -> int = await(test())`,
 
 		"basic_await": `fn test() -> int = await (spawn 100)
@@ -38,7 +38,7 @@ fn main() -> int = test()`,
 fn main() -> int = test()`,
 
 		"module_with_fibers": `module FiberModule {
-    fn compute() -> Fiber = spawn 42
+    fn compute() -> Fiber[int] = spawn 42
     fn get_result() -> int = await (spawn 100)
 }
 fn main() -> int = await(FiberModule.compute())`,
@@ -173,7 +173,7 @@ func getFiberKeywordTestSource(keyword string) string {
 	case "select":
 		return "fn test() -> int = select { 42 => 100 }\nfn main() -> int = test()"
 	case "spawn":
-		return "fn test() -> Fiber = spawn 42\nfn main() -> int = await(test())"
+		return "fn test() -> Fiber[int] = spawn 42\nfn main() -> int = await(test())"
 	default:
 		return fmt.Sprintf("fn test() -> int = %s 42\nfn main() -> int = test()", keyword)
 	}

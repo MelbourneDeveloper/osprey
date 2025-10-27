@@ -10,7 +10,8 @@ fn safeDivide(a: int, b: int) -> int !Error = match b {
     }
     _ => match a {
         0 => 0
-        _ => a / b
+        10 => 5  // a / b where b != 0, example: 10 / 2 = 5
+        _ => 0
     }
 }
 

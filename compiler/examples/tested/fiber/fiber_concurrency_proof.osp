@@ -44,7 +44,10 @@ print("Received value: ${recvValue}") // Should be 100
 // Test 4: Yield operations
 print("\nTest 4: Real yield operations:")
 
-fn yieldingFunction() -> int = yield(42) + yield(84) + yield(126)
+fn yieldingFunction() -> int = match yield(42) + yield(84) + yield(126) {
+    Success { value } => value
+    Error { message } => 0
+}
 
 let yieldFiber = spawn yieldingFunction()
 print("Yield fiber result: ${await(yieldFiber)}")  // Should be 42+84+126=252
@@ -52,7 +55,16 @@ print("Yield fiber result: ${await(yieldFiber)}")  // Should be 42+84+126=252
 // Test 5: Complex concurrent pattern
 print("\nTest 5: Complex fiber interaction:")
 
-fn complexTask(id: int) -> int = yield(id * 10) + (id * 100)
+fn complexTask(id: int) -> int = match id * 10 {
+    Success { yieldVal } => match id * 100 {
+        Success { addVal } => match yield(yieldVal) + addVal {
+            Success { value } => value
+            Error { message } => 0
+        }
+        Error { message } => 0
+    }
+    Error { message } => 0
+}
 
 let complexFiber1 = spawn complexTask(1)
 let complexFiber2 = spawn complexTask(2)

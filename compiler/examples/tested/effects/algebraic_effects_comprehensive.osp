@@ -30,9 +30,15 @@ effect Counter {
 }
 
 // Pure functions work fine
-fn doubleValue(x: int) -> int = x * 2
+fn doubleValue(x: int) -> int = match x * 2 {
+    Success { value } => value
+    Error { message } => 0
+}
 
-fn concatenateStrings(a: string, b: string) -> string = a + b
+fn concatenateStrings(a: string, b: string) -> string = match a + b {
+    Success { value } => value
+    Error { message } => ""
+}
 
 // Functions with single effects
 fn loggedIncrement(message: string) -> Unit ![Logger, Counter] = {
@@ -55,7 +61,11 @@ fn processItems(count: int) -> int ![Logger, Counter] = match count {
         false => {
             perform Logger.log("Processing item ${toString(count)}")
             perform Counter.increment()
-            processItems(count - 1)
+            let nextCount = match count - 1 {
+                Success { value } => value
+                Error { message } => 0
+            }
+            processItems(nextCount)
         }
     }
 }
@@ -77,14 +87,20 @@ fn asyncProcessing(taskId: int) -> int ![Logger, Counter] = {
     let result2 = await(fiber2)
     perform Counter.increment()
     perform Logger.log("Tasks completed: ${toString(result1)}, ${toString(result2)}")
-    result1 + result2
+    match result1 + result2 {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 
 // Complex calculation with multiple effects
 fn calculation(x: int) -> int ![Logger, State] = {
     perform Logger.log("Starting calculation for: ${toString(x)}")
     let current = perform State.get()
-    let result = x * 2 + current
+    let result = match x * 2 + current {
+        Success { value } => value
+        Error { message } => 0
+    }
     perform State.set(result)
     perform Logger.log("Calculation complete: ${toString(x)} -> ${toString(result)}")
     result
@@ -107,14 +123,20 @@ fn errorProne(value: int) -> int !Logger = match value {
         }
         false => {
             perform Logger.log("Processing valid value: ${toString(value)}")
-            value * 2
+            match value * 2 {
+                Success { value } => value
+                Error { message } => 0
+            }
         }
     }
 }
 
 // File I/O operations with effects
 fn writeConfigFile(configName: string, data: string) -> Unit ![FileIO, Logger] = {
-    let filename = "config_" + configName + ".txt"
+    let filename = match "config_" + configName + ".txt" {
+        Success { value } => value
+        Error { message } => "config.txt"
+    }
     perform Logger.log("Writing config file: ${filename}")
     perform FileIO.writeFile(filename, data)
     perform Logger.log("Config file written successfully")
@@ -124,22 +146,39 @@ fn readAndProcessLogFile(logFile: string) -> string ![FileIO, Logger] = {
     perform Logger.log("Reading log file: ${logFile}")
     let content = perform FileIO.readFile(logFile)
     perform Logger.log("Processing log content, length: ${toString(length(content))}")
-    let processedContent = "PROCESSED: " + content + " [END]"
+    let processedContent = match "PROCESSED: " + content + " [END]" {
+        Success { value } => value
+        Error { message } => content
+    }
     processedContent
 }
 
 fn generateReport(reportId: int, data: string) -> Unit ![FileIO, Logger, State] = {
-    let reportFile = "report_" + toString(reportId) + ".txt"
+    let reportFile = match "report_" + toString(reportId) + ".txt" {
+        Success { value } => value
+        Error { message } => "report.txt"
+    }
     let currentState = perform State.get()
-    let reportContent = "=== REPORT ${toString(reportId)} ===\n" +
+    let timestamp = match reportId * 1000 {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let reportContent = match "=== REPORT ${toString(reportId)} ===\n" +
                        "State: ${toString(currentState)}\n" +
                        "Data: ${data}\n" +
-                       "Timestamp: ${toString(reportId * 1000)}\n" +
-                       "=== END REPORT ===\n"
-    
+                       "Timestamp: ${toString(timestamp)}\n" +
+                       "=== END REPORT ===\n" {
+        Success { value } => value
+        Error { message } => ""
+    }
+
     perform Logger.log("Generating report: ${reportFile}")
     perform FileIO.writeFile(reportFile, reportContent)
-    perform State.set(currentState + 1)
+    let newState = match currentState + 1 {
+        Success { value } => value
+        Error { message } => currentState
+    }
+    perform State.set(newState)
     perform Logger.log("Report generated and state updated")
 }
 

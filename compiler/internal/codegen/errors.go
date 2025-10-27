@@ -121,6 +121,7 @@ var (
 	ErrMissingField                  = errors.New("missing field")
 	ErrHTTPStopServerUnknownNamedArg = errors.New("unknown named argument for httpStopServer")
 	ErrImmutableAssignmentError      = errors.New("cannot assign to immutable variable")
+	ErrArithmeticTypeMismatch        = errors.New("arithmetic operand type mismatch")
 
 	// Security-related errors
 	ErrUnsupportedCallExpressionSecurity = errors.New("unsupported call expression in current security mode")
@@ -524,4 +525,10 @@ func WrapTypeMismatchWithPos(valueType, varName, annotatedType string, pos inter
 	//nolint:err113 // Dynamic error needed for exact test format matching
 	return fmt.Errorf("type mismatch: cannot assign %s to variable '%s' of type %s",
 		valueType, varName, annotatedType)
+}
+
+// WrapArithmeticTypeMismatch wraps arithmetic type mismatch errors
+func WrapArithmeticTypeMismatch(operator, operand, expectedType, actualType string) error {
+	return fmt.Errorf("%w: %s operand of %s must be %s: got %s",
+		ErrArithmeticTypeMismatch, operand, operator, expectedType, actualType)
 }

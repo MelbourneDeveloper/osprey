@@ -100,13 +100,19 @@ print("")
 // Explore multiple rooms
 print("🚪 Room 1: You enter ${exploreRoom(1)}")
 let room1Gold = getRoomTreasure(1)
-let newGold1 = goldCoins + room1Gold
+let newGold1 = match goldCoins + room1Gold {
+    Success { value } => value
+    Error { message } => goldCoins
+}
 print("You find ${room1Gold} gold coins! Total: ${newGold1} 💰")
 print("")
 
 print("📚 Room 2: You discover ${exploreRoom(2)}")
 let room2Gold = getRoomTreasure(2)
-let newGold2 = newGold1 + room2Gold
+let newGold2 = match newGold1 + room2Gold {
+    Success { value } => value
+    Error { message } => newGold1
+}
 let foundKey = hasRoomKey(2)
 print("You find ${room2Gold} gold coins and acquire a mysterious key! 🗝️")
 print("Total gold: ${newGold2} 💰")
@@ -150,12 +156,18 @@ print("")
 
 // Simulate battle rounds
 print("🥊 Round 1: You strike for ${playerDamage} damage!")
-let remainingHealth1 = enemyHealth - playerDamage
+let remainingHealth1 = match enemyHealth - playerDamage {
+    Success { value } => value
+    Error { message } => enemyHealth
+}
 print("Dragon health remaining: ${remainingHealth1}")
 print("")
 
 print("🥊 Round 2: Another powerful blow for ${playerDamage} damage!")
-let remainingHealth2 = remainingHealth1 - playerDamage
+let remainingHealth2 = match remainingHealth1 - playerDamage {
+    Success { value } => value
+    Error { message } => remainingHealth1
+}
 print("Dragon health remaining: ${remainingHealth2}")
 print("")
 
@@ -165,11 +177,17 @@ print("Critical hit for ${finalDamage} damage!")
 print("")
 
 // Victory and level progression
-let newMonstersDefeated = monstersDefeated + 1
+let newMonstersDefeated = match monstersDefeated + 1 {
+    Success { value } => value
+    Error { message } => monstersDefeated
+}
 let newLevel = calculatePlayerLevel(newMonstersDefeated)
 let newTitle = getPlayerTitle(newLevel)
 let victoryGold = 200
-let finalGold = newGold2 + victoryGold
+let finalGold = match newGold2 + victoryGold {
+    Success { value } => value
+    Error { message } => newGold2
+}
 
 print("🎉 VICTORY! 🎉")
 print("The ${enemyName} has been defeated!")
@@ -185,7 +203,10 @@ print("")
 // Final treasure room
 print("🏆 Room 4: You enter ${exploreRoom(4)}")
 let treasureGold = getRoomTreasure(4)
-let ultimateGold = finalGold + treasureGold
+let ultimateGold = match finalGold + treasureGold {
+    Success { value } => value
+    Error { message } => finalGold
+}
 print("You discover the legendary treasure chest!")
 print("Inside: ${treasureGold} gold coins! 💎")
 print("Your final wealth: ${ultimateGold} 💰")

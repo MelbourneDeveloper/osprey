@@ -4,7 +4,13 @@ print("Script starting...")
 fn factorial(n) = match n {
     0 => 1
     1 => 1
-    n => n * factorial(n - 1)
+    n => match n - 1 {
+        Success { nMinus1 } => match n * factorial(nMinus1) {
+            Success { value } => value
+            Error { message } => 0
+        }
+        Error { message } => 0
+    }
 }
 
 let result = factorial(5)

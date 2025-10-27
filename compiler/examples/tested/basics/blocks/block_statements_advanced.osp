@@ -8,7 +8,11 @@ fn compute() = {
         Error { message } => 10
     }
     let multiplier = 3
-    base * multiplier
+    let result = base * multiplier
+    match result {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 print("Test 1 - Function block with list: ${compute()}")
 
@@ -26,9 +30,17 @@ let result2 = {
             Success { value } => value
             Error { message } => 25
         }
-        outer * 2
+        let mult = outer * 2
+        match mult {
+            Success { value } => value
+            Error { message } => 0
+        }
     }
-    outer + inner
+    let sum = outer + inner
+    match sum {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 print("Test 2 - Nested with shadowing, maps & lists: ${result2}")
 
@@ -38,31 +50,50 @@ let result3 = {
     let scoreMap = { "test1": 84, "test2": 90 }
     let doubled = value * 2
     match doubled {
-        84 => match scoreMap["test1"] {
-            Success { value } => value + 10
-            Error { message } => 0
+        Success { dValue } => match dValue {
+            84 => match scoreMap["test1"] {
+                Success { sValue } => {
+                    let added = sValue + 10
+                    match added {
+                        Success { value } => value
+                        Error { message } => 0
+                    }
+                }
+                Error { message } => 0
+            }
+            _ => 0
         }
-        _ => 0
+        Error { message } => 0
     }
 }
 print("Test 3 - Block with match and map: ${result3}")
 
 // Test 4: Function returning block with list operations
-fn processData(input) = {
+fn processData(input: int) = {
     let steps = [2, 10, 2]
-    let step1 = input * (match steps[0] {
+    let step0 = match steps[0] {
         Success { value } => value
         Error { message } => 1
-    })
-    let step2 = step1 + (match steps[1] {
+    }
+    let mult = input * step0
+    let step1Value = match mult {
         Success { value } => value
         Error { message } => 0
-    })
-    let step3 = step2 / (match steps[2] {
+    }
+    let step1Idx = match steps[1] {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let add = step1Value + step1Idx
+    let step2Value = match add {
+        Success { value } => value
+        Error { message } => 0
+    }
+    let step2Idx = match steps[2] {
         Success { value } => value
         Error { message } => 1
-    })
-    step3
+    }
+    step2Value / step2Idx
 }
 print("Test 4 - Complex function with lists: ${processData(5)}")
 
@@ -70,18 +101,26 @@ print("Test 4 - Complex function with lists: ${processData(5)}")
 let mixedTest = {
     let data = [1, 2, 3, 4, 5]
     let lookup = { "key1": 10, "key2": 20 }
-    let sum = (match data[0] {
+    let addResult = (match data[0] {
         Success { value } => value
         Error { message } => 0
     }) + (match data[1] {
         Success { value } => value
         Error { message } => 0
     })
+    let sum = match addResult {
+        Success { value } => value
+        Error { message } => 0
+    }
     let multiplier = match lookup["key1"] {
         Success { value } => value
         Error { message } => 1
     }
-    sum * multiplier
+    let multResult = sum * multiplier
+    match multResult {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 print("Test 5 - Mixed collections block: ${mixedTest}")
 

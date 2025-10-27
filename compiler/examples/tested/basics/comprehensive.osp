@@ -30,8 +30,16 @@ let baseScore = 85
 let bonusPoints = 10
 
 // Named arguments for multi-parameter functions
-let totalScore = add(x: baseScore, y: bonusPoints)
-let doubledScore = double(totalScore)
+let totalScoreResult = add(x: baseScore, y: bonusPoints)
+let totalScore = match totalScoreResult {
+    Success { value } => value
+    Error { message } => 0
+}
+let doubledScoreResult = double(totalScore)
+let doubledScore = match doubledScoreResult {
+    Success { value } => value
+    Error { message } => 0
+}
 
 // String interpolation with variables and function calls
 print("=== Comprehensive Osprey Demo ===")
@@ -129,7 +137,13 @@ print("Status: System operational with collections")
 // Arithmetic operations with collections
 let numbers = [21, 42, 84]
 let calculation = match numbers[1] {
-    Success { value } => double(value)
+    Success { value } => {
+        let doubled = double(value)
+        match doubled {
+            Success { result } => result
+            Error { message } => 0
+        }
+    }
     Error { message } => 0
 }
 print("Double of middle number: ${calculation}")

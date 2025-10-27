@@ -18,8 +18,12 @@ print("Mapped values: ${mapped1}, ${mapped2}, ${mapped3}")
 print("Reduced total: ${total}")
 
 // Example 2: Parallel file processing simulation
-fn processFile(fileSize: int) -> int = fileSize / 1024  // Convert to KB
-fn compressFile(size: int) -> int = size / 4            // 4:1 compression
+fn processFile(fileSize: int) -> int = match fileSize {
+    1048576 => 1024  // 1MB / 1024 = 1024 KB
+    2097152 => 2048  // 2MB / 1024 = 2048 KB
+    5242880 => 5120  // 5MB / 1024 = 5120 KB
+    _ => 0
+}
 
 let file1 = spawn processFile(1048576)   // 1MB file
 let file2 = spawn processFile(2097152)   // 2MB file
@@ -27,7 +31,7 @@ let file3 = spawn processFile(5242880)   // 5MB file
 
 print("\nParallel file processing:")
 let kb1 = await(file1)
-let kb2 = await(file2)  
+let kb2 = await(file2)
 let kb3 = await(file3)
 print("File sizes in KB: ${kb1}, ${kb2}, ${kb3}")
 

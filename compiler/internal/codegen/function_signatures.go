@@ -202,6 +202,8 @@ func (g *LLVMGenerator) unifyBodyWithReturnType(
 
 // createLLVMFunctionSignature creates the LLVM function signature
 func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclaration, finalFnType *FunctionType) error {
+	// Use the inferred return type AS-IS (don't unwrap)
+	// If the function body returns Result, the signature should be Result
 	llvmReturnType := g.getLLVMType(finalFnType.returnType)
 
 	if fnDecl.Name == MainFunctionName {
@@ -641,6 +643,8 @@ func (g *LLVMGenerator) generateReturnInstruction(
 		g.builder.NewRet(constant.NewInt(types.I32, 0))
 	} else {
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
+		// Unwrap Result types if function return type is not a Result
+		finalReturnValue = g.maybeUnwrapResult(finalReturnValue, fnDecl)
 		g.builder.NewRet(finalReturnValue)
 	}
 }
@@ -709,6 +713,43 @@ func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
 	return resultComplete
 }
 
+// maybeUnwrapResult unwraps a Result value if the function return type is not a Result
+func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.FunctionDeclaration) value.Value {
+	// FIRST: Check explicit declaration (highest priority)
+	if fnDecl.ReturnType != nil && fnDecl.ReturnType.Name == TypeResult {
+		// Function explicitly declares Result return type - don't unwrap
+		return bodyValue
+	}
+
+	// SECOND: Check INFERRED return type from type environment
+	// If a function body contains arithmetic, it infers Result<T, MathError> and should KEEP it
+	// This ensures: fn add(x, y) = x + y returns Result<int, MathError>, not unwrapped int
+	if fnType, exists := g.typeInferer.env.Get(fnDecl.Name); exists {
+		if funcType, ok := fnType.(*FunctionType); ok {
+			// Prune to resolve any type variables
+			returnType := g.typeInferer.prune(funcType.returnType)
+
+			// Check if the return type is a Result type
+			if concrete, ok := returnType.(*ConcreteType); ok {
+				typeName := concrete.String()
+				// If return type is Result (or Result<...>), don't unwrap
+				if typeName == TypeResult ||
+					(strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">")) {
+					return bodyValue
+				}
+			}
+		}
+	}
+
+	// ONLY UNWRAP if body is Result but neither explicit nor inferred type is Result
+	// This handles edge cases where Result is wrapped but shouldn't be
+	if g.isResultType(bodyValue) {
+		return g.unwrapIfResult(bodyValue)
+	}
+
+	return bodyValue
+}
+
 // canImplicitlyConvert checks if we can implicitly convert from one type to another
 func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, _ *ast.FunctionDeclaration) bool {
 	// Handle the case where Result types are still ConcreteType due to type inference issues
@@ -718,6 +759,16 @@ func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, _ *ast.Funct
 			if (fromConcrete.name == TypeInt || fromConcrete.name == TypeBool) &&
 				toConcrete.name == TypeResult {
 				return true
+			}
+
+			// Check for Result<T> to T conversion (auto-unwrapping)
+			// e.g., Result<int, MathError> can be converted to int
+			if strings.HasPrefix(fromConcrete.name, "Result<") &&
+				strings.HasSuffix(fromConcrete.name, ">") {
+				// Extract the success type from Result<T, E>
+				successType := g.typeInferer.extractResultSuccessType(fromConcrete.name)
+				// Check if success type matches the target type
+				return successType.String() == toConcrete.name
 			}
 		}
 	}
@@ -782,6 +833,8 @@ func (g *LLVMGenerator) getLLVMPrimitiveType(pt *PrimitiveType) types.Type {
 	switch pt.name {
 	case TypeInt:
 		return types.I64
+	case TypeFloat:
+		return types.Double
 	case TypeString:
 		return types.I8Ptr
 	case TypeBool:
@@ -798,6 +851,8 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 	switch ct.name {
 	case TypeInt:
 		return types.I64
+	case TypeFloat:
+		return types.Double
 	case TypeString:
 		return types.I8Ptr
 	case TypeBool:
@@ -831,6 +886,10 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 			// Result types are represented as structs with { value, discriminant }
 			if ct.name == "Result<int, MathError>" {
 				return g.getResultType(types.I64)
+			}
+
+			if ct.name == "Result<float, MathError>" {
+				return g.getResultType(types.Double)
 			}
 
 			if ct.name == "Result<bool, MathError>" {

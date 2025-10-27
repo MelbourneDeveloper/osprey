@@ -499,6 +499,12 @@ func (ti *TypeInferer) Unify(t1, t2 Type) error {
 		return nil
 	}
 
+	// Handle ConcreteType vs GenericType before routing by category
+	// This handles cases like Result<float> vs Result[float]
+	if ti.unifyConcreteWithGeneric(t1, t2) {
+		return nil
+	}
+
 	// Handle types by category
 	switch t1.Category() {
 	case PrimitiveTypeCategory:
@@ -628,7 +634,7 @@ func isLogicalOp(op string) bool {
 // InferType performs type inference on an expression
 func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 	switch e := expr.(type) {
-	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
+	case *ast.FloatLiteral, *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
 		return ti.inferLiteralType(e)
 	case *ast.Identifier:
 		return ti.inferIdentifierType(e)
@@ -852,6 +858,116 @@ func (ti *TypeInferer) extractResultErrorType(resultTypeName string) Type {
 	return &ConcreteType{name: TypeString} // fallback
 }
 
+// unwrapResultType unwraps a Result<T, E> type to just T
+// If the type is not a Result, returns it as-is
+func (ti *TypeInferer) unwrapResultType(t Type) Type {
+	resolved := ti.prune(t)
+
+	concrete, ok := resolved.(*ConcreteType)
+	if !ok {
+		return resolved
+	}
+
+	typeName := concrete.String()
+
+	// Check if it's a Result type
+	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
+		return ti.extractResultSuccessType(typeName)
+	}
+
+	// Not a Result type, return as-is
+	return resolved
+}
+
+// isIntOrResultInt checks if a type is Int or Result<int, E> for some error type E.
+// This is used for arithmetic operations that can accept both plain Int and Result<int>.
+func (ti *TypeInferer) isIntOrResultInt(t Type) bool {
+	// Resolve type to handle type variables
+	resolved := ti.prune(t)
+
+	// Type variables are allowed - they will be unified with Int later
+	if _, ok := resolved.(*TypeVar); ok {
+		return true
+	}
+
+	// Check if it's a concrete type
+	concrete, ok := resolved.(*ConcreteType)
+	if !ok {
+		return false
+	}
+
+	typeName := concrete.String()
+
+	// Check if it's plain Int
+	if typeName == TypeInt {
+		return true
+	}
+
+	// Check if it's Result<int, ...>
+	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
+		successType := ti.extractResultSuccessType(typeName)
+		return successType.String() == TypeInt
+	}
+
+	return false
+}
+
+// isFloatType checks if a type is float
+func (ti *TypeInferer) isFloatType(t Type) bool {
+	resolved := ti.prune(t)
+
+	concrete, ok := resolved.(*ConcreteType)
+	if !ok {
+		return false
+	}
+
+	typeName := concrete.String()
+
+	// Check for plain float
+	if typeName == TypeFloat {
+		return true
+	}
+
+	// Check for Result<float, ...>
+	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
+		successType := ti.extractResultSuccessType(typeName)
+		return successType.String() == TypeFloat
+	}
+
+	return false
+}
+
+// isNumericType checks if a type is numeric (int or float) or Result<numeric>
+func (ti *TypeInferer) isNumericType(t Type) bool {
+	resolved := ti.prune(t)
+
+	// Type variables are allowed
+	if _, ok := resolved.(*TypeVar); ok {
+		return true
+	}
+
+	concrete, ok := resolved.(*ConcreteType)
+	if !ok {
+		return false
+	}
+
+	typeName := concrete.String()
+
+	// Check if it's plain int or float
+	if typeName == TypeInt || typeName == TypeFloat {
+		return true
+	}
+
+	// Check if it's Result<int> or Result<float>
+	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
+		successType := ti.extractResultSuccessType(typeName)
+		successTypeName := successType.String()
+		return successTypeName == TypeInt || successTypeName == TypeFloat
+	}
+
+	return false
+}
+
 // unifyPrimitiveTypes handles unification of primitive types
 func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 	if ti.unifyConcreteTypes(t1, t2) {
@@ -867,6 +983,11 @@ func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 	}
 
 	if ti.unifyGenericCompatibleTypes(t1, t2) {
+		return nil
+	}
+
+	// Handle ConcreteType vs GenericType for Result types
+	if ti.unifyConcreteWithGeneric(t1, t2) {
 		return nil
 	}
 
@@ -924,6 +1045,53 @@ func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
 	}
 
 	return ti.isGenericTypeCompatible(ct1.name, ct2.name)
+}
+
+// unifyConcreteWithGeneric handles unification between ConcreteType and GenericType
+// This is needed for Result types where division returns ConcreteType but annotations are GenericType
+func (ti *TypeInferer) unifyConcreteWithGeneric(t1, t2 Type) bool {
+	// Try ConcreteType vs GenericType
+	if ct, ok := t1.(*ConcreteType); ok {
+		if gt, ok := t2.(*GenericType); ok {
+			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
+			// This allows: fn test() -> Fiber = spawn 42 (where spawn 42 creates Fiber[int])
+			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
+				return true // Bare type acts as wildcard
+			}
+
+			// Normalize: GenericType uses [] but ConcreteType uses <>
+			// Convert GenericType string representation to use <> for comparison
+			gtString := gt.String()
+			gtNormalized := strings.ReplaceAll(gtString, "[", "<")
+			gtNormalized = strings.ReplaceAll(gtNormalized, "]", ">")
+			// Also normalize whitespace - remove spaces around commas
+			gtNormalized = strings.ReplaceAll(gtNormalized, ", ", ",")
+			ctNormalized := strings.ReplaceAll(ct.name, ", ", ",")
+			return ctNormalized == gtNormalized
+		}
+	}
+
+	// Try GenericType vs ConcreteType
+	if gt, ok := t1.(*GenericType); ok {
+		if ct, ok := t2.(*ConcreteType); ok {
+			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
+			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
+				return true // Bare type acts as wildcard
+			}
+
+			// Normalize: GenericType uses [] but ConcreteType uses <>
+			// Convert GenericType string representation to use <> for comparison
+			gtString := gt.String()
+			gtNormalized := strings.ReplaceAll(gtString, "[", "<")
+			gtNormalized = strings.ReplaceAll(gtNormalized, "]", ">")
+			// Also normalize whitespace - remove spaces around commas
+			gtNormalized = strings.ReplaceAll(gtNormalized, ", ", ",")
+			ctNormalized := strings.ReplaceAll(ct.name, ", ", ",")
+			return gtNormalized == ctNormalized
+		}
+	}
+
+	return false
 }
 
 // unifyGenericTypes handles unification of generic types
@@ -1273,6 +1441,8 @@ func (ti *TypeInferer) getFreeVars(t Type) []int {
 // inferLiteralType infers types for literal expressions
 func (ti *TypeInferer) inferLiteralType(expr ast.Expression) (Type, error) {
 	switch expr.(type) {
+	case *ast.FloatLiteral:
+		return &ConcreteType{name: TypeFloat}, nil
 	case *ast.IntegerLiteral:
 		return &ConcreteType{name: TypeInt}, nil
 	case *ast.StringLiteral:
@@ -1400,6 +1570,11 @@ func (ti *TypeInferer) inferNamedArguments(namedArgs []ast.NamedArgument) ([]Typ
 			return nil, err
 		}
 
+		// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
+		// This allows fibonacci(n - 1) where (n - 1) returns Result<int, MathError>
+		// The unwrapped type is used for type inference, actual unwrapping happens at codegen
+		argType = ti.unwrapResultType(argType)
+
 		argTypes = append(argTypes, argType)
 	}
 
@@ -1415,6 +1590,11 @@ func (ti *TypeInferer) inferRegularArguments(args []ast.Expression) ([]Type, err
 		if err != nil {
 			return nil, err
 		}
+
+		// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
+		// This allows fibonacci(n - 1) where (n - 1) returns Result<int, MathError>
+		// The unwrapped type is used for type inference, actual unwrapping happens at codegen
+		argType = ti.unwrapResultType(argType)
 
 		argTypes = append(argTypes, argType)
 	}
@@ -1464,6 +1644,8 @@ func (ti *TypeInferer) getNamedArgumentPosition(namedArg ast.NamedArgument, defa
 	switch v := namedArg.Value.(type) {
 	case *ast.Identifier:
 		return v.Position
+	case *ast.FloatLiteral:
+		return v.Position
 	case *ast.IntegerLiteral:
 		return v.Position
 	case *ast.StringLiteral:
@@ -1481,6 +1663,8 @@ func (ti *TypeInferer) getRegularArgumentPosition(argExpr ast.Expression, defaul
 
 	switch v := argExpr.(type) {
 	case *ast.Identifier:
+		return v.Position
+	case *ast.FloatLiteral:
 		return v.Position
 	case *ast.IntegerLiteral:
 		return v.Position
@@ -1528,8 +1712,13 @@ func (ti *TypeInferer) unifyCallTypes(funcType Type, argTypes []Type) (Type, err
 func (ti *TypeInferer) inferConcurrencyExpression(expr ast.Expression) (Type, error) {
 	switch e := expr.(type) {
 	case *ast.SpawnExpression:
-		// spawn returns a fiber handle
-		return &ConcreteType{name: "Fiber"}, nil
+		// Infer the return type of the spawned expression
+		exprType, err := ti.InferType(e.Expression)
+		if err != nil {
+			return nil, err
+		}
+		// spawn returns Fiber<T> where T is the type of the spawned expression
+		return &GenericType{name: TypeFiber, typeArgs: []Type{exprType}}, nil
 	case *ast.YieldExpression:
 		// yield returns the type of the yielded value
 		if e.Value != nil {
@@ -1545,12 +1734,15 @@ func (ti *TypeInferer) inferConcurrencyExpression(expr ast.Expression) (Type, er
 			return nil, err
 		}
 
-		// Check if we're awaiting a Fiber type
+		// Check if we're awaiting a Fiber<T> generic type
+		if genericType, ok := fiberType.(*GenericType); ok && genericType.name == TypeFiber && len(genericType.typeArgs) > 0 {
+			// Return the inner type T from Fiber<T>
+			return genericType.typeArgs[0], nil
+		}
+
+		// Check if we're awaiting a Fiber type (non-generic, legacy)
 		if concreteType, ok := fiberType.(*ConcreteType); ok && concreteType.name == "Fiber" {
-			// For now, we need to track what type the fiber produces
-			// Since we don't have generic types yet, we'll use a heuristic:
-			// Most fibers in the current examples produce Int values
-			// TODO: Implement proper generic types for Fiber<T>
+			// Default to Int for non-generic Fiber types
 			return &ConcreteType{name: TypeInt}, nil
 		}
 
@@ -1638,118 +1830,225 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 
 	switch {
 	case isArithmeticOp(e.Operator):
-		// Handle operator overloading for + operator
-		if e.Operator == "+" {
-			return ti.inferPlusOperation(leftType, rightType)
-		}
-
-		// Other arithmetic operations (-, *, /, %) require Int operands and return Int
-		intType := &ConcreteType{name: TypeInt}
-
-		// Both operands must be Int
-		err := ti.Unify(leftType, intType)
-		if err != nil {
-			return nil, fmt.Errorf("left operand of %s must be Int: %w", e.Operator, err)
-		}
-
-		err = ti.Unify(rightType, intType)
-		if err != nil {
-			return nil, fmt.Errorf("right operand of %s must be Int: %w", e.Operator, err)
-		}
-
-		// TODO: we need other number types like float.
-		return intType, nil
-
+		return ti.inferArithmeticOperation(e.Operator, leftType, rightType)
 	case isComparisonOp(e.Operator):
-		// Comparison operations require operands of same type and return Bool
-		err := ti.Unify(leftType, rightType)
-		if err != nil {
-			return nil, fmt.Errorf("comparison operands must have same type: %w", err)
-		}
-
-		return &ConcreteType{name: TypeBool}, nil
-
+		return ti.inferComparisonOperation(leftType, rightType)
 	case isLogicalOp(e.Operator):
-		// Logical operations require Bool operands and return Bool
-		boolType := &ConcreteType{name: TypeBool}
-
-		err := ti.Unify(leftType, boolType)
-		if err != nil {
-			return nil, fmt.Errorf("left operand of %s must be Bool: %w", e.Operator, err)
-		}
-
-		err = ti.Unify(rightType, boolType)
-		if err != nil {
-			return nil, fmt.Errorf("right operand of %s must be Bool: %w", e.Operator, err)
-		}
-
-		return boolType, nil
-
+		return ti.inferLogicalOperation(e.Operator, leftType, rightType)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedBinaryOp, e.Operator)
 	}
 }
 
+// inferArithmeticOperation handles type inference for arithmetic operators (+, -, *, /, %).
+func (ti *TypeInferer) inferArithmeticOperation(operator string, leftType, rightType Type) (Type, error) {
+	if operator == "+" {
+		return ti.inferPlusOperation(leftType, rightType)
+	}
+	if operator == "/" {
+		return ti.inferDivisionOperation(leftType, rightType)
+	}
+	if operator == "%" {
+		return ti.inferModuloOperation(leftType, rightType)
+	}
+	return ti.inferBasicArithmeticOperation(operator, leftType, rightType)
+}
+
+// inferDivisionOperation handles type inference for division operator.
+// Division ALWAYS returns Result<float, MathError> per language spec.
+func (ti *TypeInferer) inferDivisionOperation(leftType, rightType Type) (Type, error) {
+	if !ti.isNumericType(leftType) {
+		return nil, WrapArithmeticTypeMismatch("/", "left", "numeric (int or float)", leftType.String())
+	}
+	if !ti.isNumericType(rightType) {
+		return nil, WrapArithmeticTypeMismatch("/", "right", "numeric (int or float)", rightType.String())
+	}
+	// Division ALWAYS returns float, even for int/int (10/2 = 5.0)
+	return &ConcreteType{name: "Result<float, MathError>"}, nil
+}
+
+// inferModuloOperation handles type inference for modulo operator.
+// Modulo returns Result<int, MathError> (can fail with modulo by zero).
+func (ti *TypeInferer) inferModuloOperation(leftType, rightType Type) (Type, error) {
+	if !ti.isIntOrResultInt(leftType) {
+		return nil, WrapArithmeticTypeMismatch("%", "left", "Int", leftType.String())
+	}
+	if !ti.isIntOrResultInt(rightType) {
+		return nil, WrapArithmeticTypeMismatch("%", "right", "Int", rightType.String())
+	}
+	return &ConcreteType{name: "Result<int, MathError>"}, nil
+}
+
+// inferBasicArithmeticOperation handles type inference for -, * operators.
+// ALL arithmetic operations return Result<T, MathError> due to overflow/underflow.
+func (ti *TypeInferer) inferBasicArithmeticOperation(operator string, leftType, rightType Type) (Type, error) {
+	if !ti.isNumericType(leftType) {
+		return nil, WrapArithmeticTypeMismatch(operator, "left", "numeric (int or float)", leftType.String())
+	}
+	if !ti.isNumericType(rightType) {
+		return nil, WrapArithmeticTypeMismatch(operator, "right", "numeric (int or float)", rightType.String())
+	}
+
+	if ti.isFloatType(leftType) || ti.isFloatType(rightType) {
+		return &ConcreteType{name: "Result<float, MathError>"}, nil
+	}
+	return &ConcreteType{name: "Result<int, MathError>"}, nil
+}
+
+// inferComparisonOperation handles type inference for comparison operators.
+func (ti *TypeInferer) inferComparisonOperation(leftType, rightType Type) (Type, error) {
+	leftUnwrapped := ti.unwrapResultType(leftType)
+	rightUnwrapped := ti.unwrapResultType(rightType)
+
+	err := ti.Unify(leftUnwrapped, rightUnwrapped)
+	if err != nil {
+		return nil, fmt.Errorf("comparison operands must have same type: %w", err)
+	}
+	return &ConcreteType{name: TypeBool}, nil
+}
+
+// inferLogicalOperation handles type inference for logical operators (&&, ||).
+func (ti *TypeInferer) inferLogicalOperation(operator string, leftType, rightType Type) (Type, error) {
+	boolType := &ConcreteType{name: TypeBool}
+
+	err := ti.Unify(leftType, boolType)
+	if err != nil {
+		return nil, fmt.Errorf("left operand of %s must be Bool: %w", operator, err)
+	}
+
+	err = ti.Unify(rightType, boolType)
+	if err != nil {
+		return nil, fmt.Errorf("right operand of %s must be Bool: %w", operator, err)
+	}
+	return boolType, nil
+}
+
 // inferPlusOperation handles operator overloading for the + operator
-// Supports both Int + Int (arithmetic) and String + String (concatenation)
+// Supports: String + String (concatenation), Int + Int (int), Float + Float (float),
+// and mixed numeric operations with type promotion (Int + Float → Float)
 func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error) {
-	// Resolve types to their concrete forms
+	leftType = ti.unwrapResultType(leftType)
+	rightType = ti.unwrapResultType(rightType)
+
 	leftResolved := ti.prune(leftType)
 	rightResolved := ti.prune(rightType)
 
-	// Check if both operands are concrete string types
-	if leftConcrete, ok := leftResolved.(*ConcreteType); ok {
-		if rightConcrete, ok := rightResolved.(*ConcreteType); ok {
-			// Both are concrete types - check for string concatenation
-			if leftConcrete.name == TypeString && rightConcrete.name == TypeString {
-				return &ConcreteType{name: TypeString}, nil
-			}
-
-			// TODO: we need other number types like float.
-			if leftConcrete.name == TypeInt && rightConcrete.name == TypeInt {
-				return &ConcreteType{name: TypeInt}, nil
-			}
-		}
+	// Try concrete type inference first
+	if result, ok := ti.inferPlusForConcreteTypes(leftResolved, rightResolved); ok {
+		return result, nil
 	}
 
-	// Try string concatenation first if one operand is clearly a string
-	if ti.isStringType(leftResolved) || ti.isStringType(rightResolved) {
-		stringType := &ConcreteType{name: TypeString}
-
-		err := ti.Unify(leftType, stringType)
-		if err == nil {
-			err := ti.Unify(rightType, stringType)
-			if err == nil {
-				return stringType, nil
-			}
-		}
+	// Try string concatenation
+	if result, ok := ti.tryStringConcatenation(leftType, rightType, leftResolved, rightResolved); ok {
+		return result, nil
 	}
 
-	// Try integer addition if one operand is clearly an integer
-	if ti.isIntType(leftResolved) || ti.isIntType(rightResolved) {
-		intType := &ConcreteType{name: TypeInt}
-
-		err := ti.Unify(leftType, intType)
-		if err == nil {
-			err := ti.Unify(rightType, intType)
-			if err == nil {
-				//TODO: we need other number types like float.
-				return intType, nil
-			}
-		}
+	// Try numeric addition
+	if result, ok := ti.tryNumericAddition(leftType, rightType, leftResolved, rightResolved); ok {
+		return result, nil
 	}
 
-	// HINDLEY-MILNER FIX: Default case for type variables
-	// If we reach here, we have type variables that could be either int or string
-	// Create a constraint that both operands must have the same type
-	err := ti.Unify(leftType, rightType)
+	// Default: unify types and return fresh type variable
+	return ti.handlePolymorphicPlus(leftType, rightType)
+}
+
+// inferPlusForConcreteTypes handles + operation for concrete types.
+func (ti *TypeInferer) inferPlusForConcreteTypes(leftResolved, rightResolved Type) (Type, bool) {
+	leftConcrete, leftOk := leftResolved.(*ConcreteType)
+	rightConcrete, rightOk := rightResolved.(*ConcreteType)
+
+	if !leftOk || !rightOk {
+		return nil, false
+	}
+
+	// String concatenation (does NOT return Result - string concat cannot fail)
+	if leftConcrete.name == TypeString && rightConcrete.name == TypeString {
+		return &ConcreteType{name: TypeString}, true
+	}
+
+	// Numeric operations with type promotion - ALL return Result due to overflow
+	leftIsNumeric := leftConcrete.name == TypeInt || leftConcrete.name == TypeFloat
+	rightIsNumeric := rightConcrete.name == TypeInt || rightConcrete.name == TypeFloat
+
+	if leftIsNumeric && rightIsNumeric {
+		if leftConcrete.name == TypeFloat || rightConcrete.name == TypeFloat {
+			return &ConcreteType{name: "Result<float, MathError>"}, true
+		}
+		return &ConcreteType{name: "Result<int, MathError>"}, true
+	}
+
+	return nil, false
+}
+
+// tryStringConcatenation attempts string concatenation type inference.
+func (ti *TypeInferer) tryStringConcatenation(leftType, rightType, leftResolved, rightResolved Type) (Type, bool) {
+	if !ti.isStringType(leftResolved) && !ti.isStringType(rightResolved) {
+		return nil, false
+	}
+
+	stringType := &ConcreteType{name: TypeString}
+	err := ti.Unify(leftType, stringType)
 	if err != nil {
+		return nil, false
+	}
+	err = ti.Unify(rightType, stringType)
+	if err != nil {
+		return nil, false
+	}
+	return stringType, true
+}
+
+// tryNumericAddition attempts numeric addition type inference with type promotion.
+// Returns Result<T, MathError> due to overflow possibility.
+func (ti *TypeInferer) tryNumericAddition(leftType, rightType, leftResolved, rightResolved Type) (Type, bool) {
+	leftIsNumeric := ti.isIntType(leftResolved) || ti.isFloatType(leftResolved)
+	rightIsNumeric := ti.isIntType(rightResolved) || ti.isFloatType(rightResolved)
+
+	if !leftIsNumeric && !rightIsNumeric {
+		return nil, false
+	}
+
+	// Promote to float if either operand is float - returns Result
+	if ti.isFloatType(leftResolved) || ti.isFloatType(rightResolved) {
+		return &ConcreteType{name: "Result<float, MathError>"}, true
+	}
+
+	// Try int unification - returns Result
+	intType := &ConcreteType{name: TypeInt}
+	err := ti.Unify(leftType, intType)
+	if err == nil {
+		err = ti.Unify(rightType, intType)
+		if err == nil {
+			return &ConcreteType{name: "Result<int, MathError>"}, true
+		}
+	}
+
+	return nil, false
+}
+
+// handlePolymorphicPlus handles polymorphic + operator for type variables.
+// This is called as a last resort when concrete type inference fails.
+func (ti *TypeInferer) handlePolymorphicPlus(leftType, rightType Type) (Type, error) {
+	// Ensure both types are unwrapped before unification to avoid circular references
+	leftUnwrapped := ti.unwrapResultType(leftType)
+	rightUnwrapped := ti.unwrapResultType(rightType)
+
+	// Prune to resolve type variables before unification
+	leftPruned := ti.prune(leftUnwrapped)
+	rightPruned := ti.prune(rightUnwrapped)
+
+	err := ti.Unify(leftPruned, rightPruned)
+	if err != nil {
+		// If unification fails due to recursive types, assume numeric addition
+		// This handles cases where type variables create circular dependencies
+		if errors.Is(err, ErrRecursiveType) {
+			// Default to Result<int, MathError> for arithmetic operations
+			return &ConcreteType{name: "Result<int, MathError>"}, nil
+		}
 		return nil, fmt.Errorf("operands of + must have the same type: %w", err)
 	}
-
-	// For polymorphic + operator, we can't determine the result type yet
-	// Return a fresh type variable that will be unified later based on usage context
-	// The actual type (int or string) will be determined when the function is called
+	// For polymorphic addition, we don't know the result type yet
+	// Return a fresh type variable that will be resolved later
 	return ti.Fresh(), nil
 }
 
