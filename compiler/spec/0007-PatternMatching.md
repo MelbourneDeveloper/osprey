@@ -141,6 +141,8 @@ match anyValue {
 
 All arithmetic expressions return `Result<T, MathError>` and must be handled with pattern matching. The compiler automatically unwraps intermediate Results in nested arithmetic, so only the final result requires pattern matching.
 
+**✨ KEY INSIGHT**: Nested arithmetic expressions do NOT require nested pattern matching! The compiler automatically unwraps intermediate Results, so you only pattern match the final result.
+
 ### Simple Arithmetic Result Handling
 ```osprey
 let calculation = 1 + 3 + (300 / 5)  // Result<int, MathError>
