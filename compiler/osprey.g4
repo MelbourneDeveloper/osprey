@@ -227,7 +227,8 @@ blockExpr
     ;
 
 literal
-    : INT
+    : FLOAT
+    | INT
     | STRING
     | INTERPOLATED_STRING
     | TRUE
@@ -351,6 +352,7 @@ STAR        : '*';
 SLASH       : '/';
 
 // Literals and identifiers - MUST come after keywords
+FLOAT       : [0-9]+ '.' [0-9]+ ;
 INT         : [0-9]+ ;
 INTERPOLATED_STRING : '"' (~["\\$] | '\\' . | '$' ~[{])* ('${' ~[}]* '}' (~["\\$] | '\\' . | '$' ~[{])*)+ '"' ;
 STRING      : '"' (~["\\] | '\\' .)* '"' ;

@@ -39,6 +39,7 @@ const (
 const (
 	TypeString       = "string"
 	TypeInt          = "int"
+	TypeFloat        = "float"
 	TypeBool         = "bool"
 	TypeAny          = "any"
 	TypeUnit         = "Unit"

@@ -51,8 +51,9 @@ The type system emphasizes safety and expressiveness, making illegal states unre
 
 All primitive types use lowercase names:
 
-- `int`: 64-bit signed integers
-- `string`: UTF-8 encoded strings  
+- `int`: 64-bit signed integers (maps to LLVM i64)
+- `float`: 64-bit IEEE 754 floating-point numbers (maps to LLVM f64)
+- `string`: UTF-8 encoded strings
 - `bool`: Boolean values (`true`, `false`)
 - `unit`: Type for functions that don't return a meaningful value
 - `Result<T, E>`: Built-in generic type for error handling with structural Success and direct Error values
@@ -60,6 +61,144 @@ All primitive types use lowercase names:
 - `Map<K, V>`: Immutable key-value collections with functional operations
 - `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
 - `Record Types`: Immutable structured data types with named fields
+
+**Numeric Types:**
+- **int**: Used for whole numbers, counts, array indices. 64-bit signed integers.
+- **float**: Used for decimal numbers, scientific calculations. 64-bit IEEE 754 double precision.
+- **Conversion**: Use `toFloat(int)` to convert int to float, `toInt(float)` to truncate float to int.
+
+**Numeric Type Promotion Rules:**
+
+Osprey uses automatic type promotion for mixed numeric operations to ensure mathematical correctness:
+
+**Promotion Rules:**
+- **int ⊕ int** → Result<int, MathError> (where ⊕ is +, -, *, %) - Can overflow/underflow
+- **float ⊕ float** → Result<float, MathError> - Can overflow/underflow
+- **int ⊕ float** → Result<float, MathError> (int promoted to float)
+- **float ⊕ int** → Result<float, MathError> (int promoted to float)
+- **int / int** → Result<**float**, MathError> (division ALWAYS returns float!)
+
+**Examples:**
+```osprey
+// Integer arithmetic - ALL return Result types
+let a = 10 + 5       // a: Result<int, MathError> - Could overflow
+let b = 10 * 2       // b: Result<int, MathError> - Could overflow
+let c = 10 - 3       // c: Result<int, MathError> - Could underflow
+
+// Float arithmetic - ALL return Result types
+let d = 3.14 + 2.86  // d: Result<float, MathError> - Could overflow
+let e = 2.5 * 4.0    // e: Result<float, MathError> - Could overflow
+
+// Mixed arithmetic (automatic promotion to float)
+let f = 10 + 5.5     // f: Result<float, MathError> (10 promoted to 10.0)
+let g = 3.14 * 2     // g: Result<float, MathError> (2 promoted to 2.0)
+
+// Division and modulo
+let h = 10 / 2       // h: Result<float, MathError> = Success(5.0)
+let i = 15 / 4       // i: Result<float, MathError> = Success(3.75)
+let j = 10 / 0       // j: Result<float, MathError> = Error(DivisionByZero)
+let k = 10 % 3       // k: Result<int, MathError> = Success(1)
+
+// Using arithmetic results requires pattern matching
+match a {
+    Success { value } => print("Sum: ${value}")
+    Error { message } => print("Overflow: ${message}")
+}
+```
+
+**Rationale:**
+- **Safety**: ALL arithmetic can fail (overflow, underflow, division by zero) - Result types prevent panics
+- **Consistency**: Division naturally produces rational numbers, so it always returns float
+- **Precision**: Mixed operations promote to float to prevent precision loss
+- **Explicitness**: Pattern matching forces error handling at compile time
+
+### Result Auto-Unwrapping and Nested Arithmetic
+
+**Key Principle:** Arithmetic expressions return Result types, but nested arithmetic automatically unwraps Results to avoid nested pattern matching.
+
+**How It Works:**
+- A single arithmetic expression like `let x = 10 + 5` returns `Result<int, MathError>`
+- Nested expressions like `(10 + 5) * 2` automatically unwrap the inner Result
+- Only the final result needs pattern matching - no nested matching required
+- Error propagation happens at runtime - if any operation fails, the entire chain fails
+
+**Examples:**
+```osprey
+// Simple arithmetic - returns Result<int, MathError>
+let x = 10 + 5
+match x {
+    Success { value } => print(value)  // Prints: 15
+    Error { message } => print(message)
+}
+
+// Nested arithmetic - automatic unwrapping
+let y = (10 + 5) * 2  // Returns Result<int, MathError>, NOT Result<Result<...>>
+// The (10 + 5) Result is auto-unwrapped before multiplication
+match y {
+    Success { value } => print(value)  // Prints: 30
+    Error { message } => print(message)
+}
+
+// Complex chains work seamlessly
+let z = (10 + 5) * (20 - 3) + 7  // Single Result, not nested
+// Each intermediate Result is unwrapped automatically
+
+// Functions can leverage this for clean code
+fn addOne(x: int) -> int =
+    match x + 1 {
+        Success { value } => value  // Extract value for non-Result return
+        Error { message } => 0      // Handle error case
+    }
+
+// Or declare Result return type and skip unwrapping
+fn addOneResult(x: int) -> Result<int, MathError> = x + 1  // Returns Result directly
+```
+
+**Pattern Matching Requirement:**
+- Top-level arithmetic results MUST be pattern matched or stored as Result types
+- Nested/intermediate Results are automatically unwrapped by the compiler
+- This design balances safety (all errors handled) with ergonomics (no nested matching)
+
+**Result Auto-Unwrapping Behavior:**
+
+Result types auto-unwrap in specific contexts to enable ergonomic code:
+
+1. **Arithmetic Operations**: Results unwrap when used in nested arithmetic
+   ```osprey
+   let x = add(5, 3)        // Returns Result<int, MathError>
+   let doubled = x * 2      // x auto-unwraps for multiplication
+   ```
+
+2. **Function Arguments**: Results unwrap when passed to user functions
+   ```osprey
+   fn add(a, b) = a + b
+   fn double(x) = x * 2
+   let result = double(add(5, 3))  // add result unwraps before passing to double
+   ```
+
+3. **Fiber Operations**: Results unwrap for spawn, yield, and channel operations
+   ```osprey
+   let computation = spawn add(5, 3)   // Result unwraps before storing in fiber
+   ```
+
+**IMPORTANT EXCEPTIONS - Do NOT Auto-Unwrap:**
+
+1. **toString() Builtin**: Receives the actual Result struct
+   ```osprey
+   fn add(x, y) = x + y
+   let result = add(5, 3)
+   print(toString(result))   // Prints: Success(8), not "8"
+   ```
+
+2. **Function Return Types**: Functions keep their inferred Result type
+   ```osprey
+   fn add(x, y) = x + y      // Returns Result<int, MathError> struct
+   fn compute() -> int = 5   // Returns plain int
+   ```
+
+**Result toString Format:**
+- Success: `Success(value)` - e.g., `Success(42)`, `Success(3.14)`, `Success(true)`
+- Error: `Error(message)` - e.g., `Error(DivisionByZero)`, `Error(Overflow)`
 
 #### Function Types
 
@@ -670,6 +809,8 @@ fn identity(x) = x              // Infers: <T>(T) -> T
 // Arithmetic functions
 fn add(a, b) = a + b           // Infers: (int, int) -> Result<int, MathError>
 fn increment(x) = x + 1        // Infers: (int) -> Result<int, MathError>
+fn addFloats(a, b) = a + b     // Infers: (float, float) -> Result<float, MathError>
+fn divide(x, y) = x / y        // Infers: (int, int) -> Result<float, MathError> (auto-promotes to float)
 
 // String operations  
 fn concat(s1, s2) = s1 + s2    // Infers: (string, string) -> string

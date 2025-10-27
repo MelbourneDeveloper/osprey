@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **DO NOT COMMIT/PUSH CODE** unless explicitly requested
 - **NEVER DUPLICATE CODE** - Edit in place, **SEARCH** for code **BEFORE** creating new functions/constants
 - **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
+- **AVOID SPECIFYING TYPES EXPLICITLY IN OSPREY** - Use Hindley Milner type inference!
 - **NEVER IGNORE TESTS** - Don't reduce assertions to make tests pass, fail loudly
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules  
 - **FOLLOW STATIC ANALYSIS** - Pay attention to linters and fix issues

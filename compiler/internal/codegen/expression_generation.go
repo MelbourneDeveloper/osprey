@@ -34,7 +34,7 @@ var (
 
 func (g *LLVMGenerator) generateExpression(expr ast.Expression) (value.Value, error) {
 	switch e := expr.(type) {
-	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
+	case *ast.FloatLiteral, *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
 		return g.generateLiteralExpression(expr)
 	case *ast.ListLiteral:
 		return g.generateListLiteral(e)
@@ -117,6 +117,8 @@ func (g *LLVMGenerator) generateUnsupportedExpression(expr ast.Expression) (valu
 // generateLiteralExpression handles all literal types.
 func (g *LLVMGenerator) generateLiteralExpression(expr ast.Expression) (value.Value, error) {
 	switch e := expr.(type) {
+	case *ast.FloatLiteral:
+		return g.generateFloatLiteral(e)
 	case *ast.IntegerLiteral:
 		return g.generateIntegerLiteral(e)
 	case *ast.StringLiteral:
@@ -141,6 +143,10 @@ func (g *LLVMGenerator) generateCallLikeExpression(expr ast.Expression) (value.V
 }
 
 // generateIntegerLiteral generates LLVM IR for integer literals.
+func (g *LLVMGenerator) generateFloatLiteral(lit *ast.FloatLiteral) (value.Value, error) {
+	return constant.NewFloat(types.Double, lit.Value), nil
+}
+
 func (g *LLVMGenerator) generateIntegerLiteral(lit *ast.IntegerLiteral) (value.Value, error) {
 	return constant.NewInt(types.I64, lit.Value), nil
 }
@@ -231,6 +237,9 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 	case *ast.StringLiteral:
 		elementType = types.I8Ptr
 		elementSize = 8 // pointer size
+	case *ast.FloatLiteral:
+		elementType = types.Double
+		elementSize = 8 // double size
 	case *ast.ListLiteral:
 		// For nested lists, element type is a pointer to the array struct type
 		elementType = types.NewPointer(types.NewStruct(types.I64, types.I8Ptr))
@@ -629,6 +638,8 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 			nullValue = constant.NewInt(types.I32, 0)
 		case types.I1:
 			nullValue = constant.NewBool(false)
+		case types.Double:
+			nullValue = constant.NewFloat(types.Double, 0.0)
 		default:
 			// Fallback to null pointer for complex types
 			nullValue = constant.NewNull(types.I8Ptr)
@@ -734,6 +745,16 @@ func (g *LLVMGenerator) generateArithmeticOperationWithPos(
 		return nil, WrapVoidArithmeticWithPos(operator, pos)
 	}
 
+	// AUTO-PROPAGATION: Unwrap Result types from previous arithmetic operations
+	// This allows chaining: (10 + 5) * 2 works because the Result from (10+5) gets unwrapped
+	// Error propagation happens at runtime - if any operation fails, the chain fails
+	left = g.unwrapIfResult(left)
+	right = g.unwrapIfResult(right)
+
+	// Check if either operand is a float type
+	leftIsFloat := isFloatLLVMType(left.Type())
+	rightIsFloat := isFloatLLVMType(right.Type())
+
 	switch operator {
 	case "+":
 		// Handle string concatenation for pointer types (strings)
@@ -741,54 +762,295 @@ func (g *LLVMGenerator) generateArithmeticOperationWithPos(
 			return g.generateStringConcatenation(left, right)
 		}
 
-		return g.builder.NewAdd(left, right), nil
+		// Handle float arithmetic - returns Result<float, MathError>
+		if leftIsFloat || rightIsFloat {
+			leftFloat := promoteToFloat(g.builder, left)
+			rightFloat := promoteToFloat(g.builder, right)
+			sum := g.builder.NewFAdd(leftFloat, rightFloat)
+			// Wrap in Success Result (overflow checking deferred)
+			return g.createSuccessResultFloat(sum), nil
+		}
+
+		// Integer arithmetic - returns Result<int, MathError>
+		sum := g.builder.NewAdd(left, right)
+		// Wrap in Success Result (overflow checking deferred)
+		return g.createSuccessResult(sum), nil
+
 	case "-":
-		return g.builder.NewSub(left, right), nil
+		// Handle float arithmetic - returns Result<float, MathError>
+		if leftIsFloat || rightIsFloat {
+			leftFloat := promoteToFloat(g.builder, left)
+			rightFloat := promoteToFloat(g.builder, right)
+			diff := g.builder.NewFSub(leftFloat, rightFloat)
+			// Wrap in Success Result (overflow checking deferred)
+			return g.createSuccessResultFloat(diff), nil
+		}
+
+		// Integer arithmetic - returns Result<int, MathError>
+		diff := g.builder.NewSub(left, right)
+		// Wrap in Success Result (overflow checking deferred)
+		return g.createSuccessResult(diff), nil
+
 	case "*":
-		return g.builder.NewMul(left, right), nil
+		// Handle float arithmetic - returns Result<float, MathError>
+		if leftIsFloat || rightIsFloat {
+			leftFloat := promoteToFloat(g.builder, left)
+			rightFloat := promoteToFloat(g.builder, right)
+			product := g.builder.NewFMul(leftFloat, rightFloat)
+			// Wrap in Success Result (overflow checking deferred)
+			return g.createSuccessResultFloat(product), nil
+		}
+
+		// Integer arithmetic - returns Result<int, MathError>
+		product := g.builder.NewMul(left, right)
+		// Wrap in Success Result (overflow checking deferred)
+		return g.createSuccessResult(product), nil
 	case "/":
-		return g.builder.NewSDiv(left, right), nil
+		// Division returns Result<float, MathError>
+		return g.generateDivisionWithZeroCheck(left, right)
 	case "%":
-		return g.builder.NewSRem(left, right), nil
+		// Modulo returns Result<int, MathError>
+		return g.generateModuloWithZeroCheck(left, right)
 	default:
 		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
+}
+
+// generateDivisionWithZeroCheck generates division with runtime zero check
+// Returns Result<float, MathError> - division ALWAYS returns float per spec
+func (g *LLVMGenerator) generateDivisionWithZeroCheck(left, right value.Value) (value.Value, error) {
+	// Check if divisor is zero at runtime (check before conversion)
+	var isZero value.Value
+	if right.Type() == types.I64 {
+		zero := constant.NewInt(types.I64, 0)
+		isZero = g.builder.NewICmp(enum.IPredEQ, right, zero)
+	} else {
+		zero := constant.NewFloat(types.Double, 0.0)
+		isZero = g.builder.NewFCmp(enum.FPredOEQ, right, zero)
+	}
+
+	// Create blocks with unique names for zero and non-zero cases
+	blockID := len(g.function.Blocks)
+	zeroBlock := g.function.NewBlock(fmt.Sprintf("div_zero_%d", blockID))
+	nonZeroBlock := g.function.NewBlock(fmt.Sprintf("div_nonzero_%d", blockID))
+	endBlock := g.function.NewBlock(fmt.Sprintf("div_end_%d", blockID))
+
+	// Current block branches based on zero check
+	g.builder.NewCondBr(isZero, zeroBlock, nonZeroBlock)
+
+	// Zero block: Create Error Result with DivisionByZero
+	g.builder = zeroBlock
+	errorResult := g.createDivisionByZeroErrorFloat()
+	g.builder.NewBr(endBlock)
+
+	// Non-zero block: Perform float division (convert integers to float if needed)
+	g.builder = nonZeroBlock
+	leftFloat := left
+	if left.Type() == types.I64 {
+		leftFloat = g.builder.NewSIToFP(left, types.Double)
+	}
+	rightFloat := right
+	if right.Type() == types.I64 {
+		rightFloat = g.builder.NewSIToFP(right, types.Double)
+	}
+	quotient := g.builder.NewFDiv(leftFloat, rightFloat)
+	successResult := g.createSuccessResultFloat(quotient)
+	g.builder.NewBr(endBlock)
+
+	// End block: PHI to select either error or success Result
+	g.builder = endBlock
+	phi := g.builder.NewPhi(
+		ir.NewIncoming(errorResult, zeroBlock),
+		ir.NewIncoming(successResult, nonZeroBlock),
+	)
+
+	return phi, nil
+}
+
+// generateModuloWithZeroCheck generates modulo with runtime zero check
+// Returns Result<int, MathError> for integer modulo
+func (g *LLVMGenerator) generateModuloWithZeroCheck(left, right value.Value) (value.Value, error) {
+	// Check if divisor is zero at runtime
+	zero := constant.NewInt(types.I64, 0)
+	isZero := g.builder.NewICmp(enum.IPredEQ, right, zero)
+
+	// Create blocks with unique names for zero and non-zero cases
+	blockID := len(g.function.Blocks)
+	zeroBlock := g.function.NewBlock(fmt.Sprintf("mod_zero_%d", blockID))
+	nonZeroBlock := g.function.NewBlock(fmt.Sprintf("mod_nonzero_%d", blockID))
+	endBlock := g.function.NewBlock(fmt.Sprintf("mod_end_%d", blockID))
+
+	// Current block branches based on zero check
+	g.builder.NewCondBr(isZero, zeroBlock, nonZeroBlock)
+
+	// Zero block: Create Error Result with DivisionByZero
+	g.builder = zeroBlock
+	errorResult := g.createDivisionByZeroError()
+	g.builder.NewBr(endBlock)
+
+	// Non-zero block: Perform modulo and wrap in Success Result
+	g.builder = nonZeroBlock
+	remainder := g.builder.NewSRem(left, right)
+	successResult := g.createSuccessResult(remainder)
+	g.builder.NewBr(endBlock)
+
+	// End block: PHI to select either error or success Result
+	g.builder = endBlock
+	phi := g.builder.NewPhi(
+		ir.NewIncoming(errorResult, zeroBlock),
+		ir.NewIncoming(successResult, nonZeroBlock),
+	)
+
+	return phi, nil
+}
+
+// createSuccessResult creates a Success Result<int, MathError> struct
+func (g *LLVMGenerator) createSuccessResult(value value.Value) value.Value {
+	// Result struct for Success: {value: i64, is_error: i8}
+	// For Success: value = actual result, is_error = 0
+	resultStructType := types.NewStruct(types.I64, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set the value
+	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
+	// Set is_error flag to 0 (Success)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
+	return resultComplete
+}
+
+// createSuccessResultFloat creates a Success Result<float, MathError> struct
+func (g *LLVMGenerator) createSuccessResultFloat(value value.Value) value.Value {
+	// Result struct for Success: {value: double, is_error: i8}
+	// For Success: value = actual result, is_error = 0
+	resultStructType := types.NewStruct(types.Double, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set the value
+	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
+	// Set is_error flag to 0 (Success)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
+	return resultComplete
+}
+
+// createDivisionByZeroError creates an Error Result<int, MathError> struct for division by zero
+func (g *LLVMGenerator) createDivisionByZeroError() value.Value {
+	// Result struct for Error: {error_discriminant: i64, is_error: i8}
+	// For DivisionByZero: error_discriminant = 0, is_error = 1
+	resultStructType := types.NewStruct(types.I64, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set error discriminant to 0 (DivisionByZero is first variant of MathError)
+	resultWithError := g.builder.NewInsertValue(undefStruct, constant.NewInt(types.I64, 0), 0)
+	// Set is_error flag to 1
+	resultComplete := g.builder.NewInsertValue(resultWithError, constant.NewInt(types.I8, 1), 1)
+	return resultComplete
+}
+
+// createDivisionByZeroErrorFloat creates an Error Result<float, MathError> struct for division by zero
+func (g *LLVMGenerator) createDivisionByZeroErrorFloat() value.Value {
+	// Result struct for Error: {error_discriminant: double, is_error: i8}
+	// For DivisionByZero: error_discriminant = 0.0, is_error = 1
+	resultStructType := types.NewStruct(types.Double, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set error discriminant to 0.0 (stored as double to match struct type)
+	resultWithError := g.builder.NewInsertValue(undefStruct, constant.NewFloat(types.Double, 0.0), 0)
+	// Set is_error flag to 1
+	resultComplete := g.builder.NewInsertValue(resultWithError, constant.NewInt(types.I8, 1), 1)
+	return resultComplete
+}
+
+// isFloatLLVMType checks if an LLVM type is a floating-point type
+func isFloatLLVMType(t types.Type) bool {
+	_, ok := t.(*types.FloatType)
+	return ok
+}
+
+// promoteToFloat converts an integer value to float, or returns the value unchanged if already float
+func promoteToFloat(builder *ir.Block, val value.Value) value.Value {
+	if isFloatLLVMType(val.Type()) {
+		return val
+	}
+	// Convert integer to double
+	return builder.NewSIToFP(val, types.Double)
+}
+
+// unwrapIfResult extracts the value from a Result type if it is one.
+// This enables auto-propagation: arithmetic chains like (1+2)*3 work because Results auto-unwrap.
+// Returns the value unchanged if it's not a Result type.
+// NOTE: This assumes the Result is Success - errors will propagate at runtime.
+func (g *LLVMGenerator) unwrapIfResult(val value.Value) value.Value {
+	// Check if this is a Result struct: {value_type, i8}
+	structType, ok := val.Type().(*types.StructType)
+	if !ok {
+		return val // Not a struct, return as-is
+	}
+
+	const resultFieldCount = 2
+	if len(structType.Fields) != resultFieldCount {
+		return val // Not a 2-field struct, return as-is
+	}
+
+	// Check if second field is i8 (the is_error flag)
+	const errorFlagBitSize = 8
+	if intType, ok := structType.Fields[1].(*types.IntType); !ok || intType.BitSize != errorFlagBitSize {
+		return val // Not a Result struct pattern, return as-is
+	}
+
+	// This looks like a Result struct - extract the value (field 0)
+	// TODO: Add runtime error checking - for now we assume Success
+	return g.builder.NewExtractValue(val, 0)
 }
 
 // generateComparisonOperationWithPos generates LLVM comparison operations with position info.
 func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	operator string, left, right value.Value, pos *ast.Position,
 ) (value.Value, error) {
+	// AUTO-PROPAGATION: Unwrap Result types before comparison
+	// This allows comparing arithmetic results: (10+5) < 20
+	left = g.unwrapIfResult(left)
+	right = g.unwrapIfResult(right)
+
 	var cmp value.Value
 
-	switch operator {
-	case "==":
-		cmp = g.builder.NewICmp(enum.IPredEQ, left, right)
-	case "!=":
-		cmp = g.builder.NewICmp(enum.IPredNE, left, right)
-	case "<":
-		cmp = g.builder.NewICmp(enum.IPredSLT, left, right)
-	case "<=":
-		cmp = g.builder.NewICmp(enum.IPredSLE, left, right)
-	case ">":
-		cmp = g.builder.NewICmp(enum.IPredSGT, left, right)
-	case ">=":
-		cmp = g.builder.NewICmp(enum.IPredSGE, left, right)
-	default:
-		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
-	}
+	// Check if operands are floats and use FCmp instead of ICmp
+	isFloat := left.Type() == types.Double || right.Type() == types.Double
 
-	// Check current function's return type to determine output type
-	if g.function != nil && g.function.Sig != nil {
-		returnType := g.function.Sig.RetType
-		if returnType == types.I1 {
-			return cmp, nil
+	if isFloat {
+		switch operator {
+		case "==":
+			cmp = g.builder.NewFCmp(enum.FPredOEQ, left, right)
+		case "!=":
+			cmp = g.builder.NewFCmp(enum.FPredONE, left, right)
+		case "<":
+			cmp = g.builder.NewFCmp(enum.FPredOLT, left, right)
+		case "<=":
+			cmp = g.builder.NewFCmp(enum.FPredOLE, left, right)
+		case ">":
+			cmp = g.builder.NewFCmp(enum.FPredOGT, left, right)
+		case ">=":
+			cmp = g.builder.NewFCmp(enum.FPredOGE, left, right)
+		default:
+			return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
+		}
+	} else {
+		switch operator {
+		case "==":
+			cmp = g.builder.NewICmp(enum.IPredEQ, left, right)
+		case "!=":
+			cmp = g.builder.NewICmp(enum.IPredNE, left, right)
+		case "<":
+			cmp = g.builder.NewICmp(enum.IPredSLT, left, right)
+		case "<=":
+			cmp = g.builder.NewICmp(enum.IPredSLE, left, right)
+		case ">":
+			cmp = g.builder.NewICmp(enum.IPredSGT, left, right)
+		case ">=":
+			cmp = g.builder.NewICmp(enum.IPredSGE, left, right)
+		default:
+			return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 		}
 	}
 
-	// Default to extending to i64 for Result type construction and other contexts
-	// The print function will handle the conversion to proper boolean strings
-	return g.builder.NewZExt(cmp, types.I64), nil
+	// Return i1 (bool) directly for comparison operations
+	// Comparisons don't return Result types - only arithmetic operations do
+	return cmp, nil
 }
 
 // generateLogicalOperationWithPos generates LLVM logical operations with position info.

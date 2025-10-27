@@ -143,6 +143,8 @@ match anyValue {
 
 **🔥 CRITICAL**: All arithmetic expressions return `Result<T, MathError>`. You **MUST** handle them with pattern matching.
 
+**✨ KEY INSIGHT**: Nested arithmetic expressions do NOT require nested pattern matching! The compiler automatically unwraps intermediate Results, so you only pattern match the final result.
+
 ### Simple Arithmetic Result Handling
 ```osprey
 let calculation = 1 + 3 + (300 / 5)  // Result<int, MathError>
@@ -156,11 +158,12 @@ match calculation {
 ### Compound Expression Examples (CRYSTAL CLEAR)
 ```osprey
 // Each of these returns a SINGLE Result for the ENTIRE expression
-let simple = 10 + 5                    // Result<int, MathError>
-let complex = 1 + 2 * 3 - 4 / 2        // Result<int, MathError>
-let nested = ((a + b) * c) / (d - e)   // Result<int, MathError>
+// NO nested Results - auto-unwrapping handles intermediate operations!
+let simple = 10 + 5                    // Result<int, MathError> - NOT Result<Result<...>>
+let complex = 1 + 2 * 3 - 4 / 2        // Result<int, MathError> - NOT Result<Result<...>>
+let nested = ((a + b) * c) / (d - e)   // Result<int, MathError> - NOT Result<Result<...>>
 
-// Handle ALL of them the SAME WAY
+// Handle ALL of them the SAME WAY - single pattern match!
 match simple {
     Success value => print("10 + 5 = ${value}")
     Error message => print("Failed: ${message}")
@@ -175,6 +178,52 @@ match nested {
     Success value => print("Nested result = ${value}")
     Error message => print("Division by zero or overflow: ${message}")
 }
+```
+
+### Auto-Unwrapping Explained
+```osprey
+// Example: (10 + 5) * 2
+// Step 1: 10 + 5 produces Result<int, MathError>
+// Step 2: Compiler auto-unwraps the Result to get the int value
+// Step 3: Multiply the unwrapped value by 2
+// Step 4: Wrap in a new Result<int, MathError>
+// Final: ONE Result, not nested!
+
+let example = (10 + 5) * 2  // Result<int, MathError>
+match example {
+    Success { value } => print(value)  // Prints: 30
+    Error { message } => print(message)
+}
+
+// NO nested matching required!
+// ❌ WRONG - you do NOT need this:
+// match (10 + 5) {
+//     Success { innerValue } => {
+//         match innerValue * 2 {
+//             Success { value } => print(value)
+//             ...
+//         }
+//     }
+// }
+
+// ✅ CORRECT - just match the final result:
+let result = (10 + 5) * 2
+match result {
+    Success { value } => print(value)
+    Error { message } => print(message)
+}
+```
+
+### Result toString Format
+```osprey
+let x = 10 + 5  // Result<int, MathError>
+print(x)        // Prints: Success(15)
+
+let y = 10 / 0  // Result<float, MathError>
+print(y)        // Prints: Error(DivisionByZero)
+
+// Success format: Success(value)
+// Error format: Error(message)
 ```
 
 ### Function Return Results

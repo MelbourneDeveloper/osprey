@@ -173,6 +173,16 @@ type IntegerLiteral struct {
 
 func (i *IntegerLiteral) isExpression() {}
 
+// FloatLiteral represents a floating-point literal.
+type FloatLiteral struct {
+	Value float64
+
+	// Position information
+	Position *Position
+}
+
+func (f *FloatLiteral) isExpression() {}
+
 // StringLiteral represents a string literal.
 type StringLiteral struct {
 	Value string

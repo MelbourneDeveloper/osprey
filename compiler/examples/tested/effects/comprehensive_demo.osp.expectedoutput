@@ -3,7 +3,7 @@
 [LOG] Starting nested handler test
 [LOG] Current state: 42
 [STATE] Setting to: 47
-[LOG] Set state to: 47
+[LOG] Set state to: Success(47)
 [LOG] Stateful operation result: 47
 [ERROR] Division by zero detected
 [EXCEPTION] Division by zero

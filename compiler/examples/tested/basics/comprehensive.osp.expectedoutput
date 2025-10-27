@@ -5,7 +5,7 @@ Excellent!
 === List & Map Operations ===
 Score list created via HM inference
 First score: 85
-Bonus computation works: 90
+Bonus computation works: Success(90)
 Second score: 92
 Student grades map created via HM inference
 Alice's grade: 95

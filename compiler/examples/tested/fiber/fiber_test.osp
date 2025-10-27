@@ -5,7 +5,10 @@ print("=== Fiber Test ===")
 fn fibonacci(n: int) -> int = match n {
     0 => 0
     1 => 1
-    _ => fibonacci(n - 1) + fibonacci(n - 2)
+    _ => match fibonacci(n - 1) + fibonacci(n - 2) {
+        Success { value } => value
+        Error { message } => 0
+    }
 }
 
 let fib10 = spawn fibonacci(10)
@@ -15,8 +18,7 @@ print("Fib(10) = ${await(fib10)}")
 print("Fib(15) = ${await(fib15)}")
 
 // Test 2: Producer/Consumer pattern simulation
-fn produce(item: int) -> int = item * 3 + 7  // Simulate production cost
-fn consume(item: int) -> int = item / 2      // Simulate consumption
+fn produce(item: int) = item * 3 + 7
 
 let producer1 = spawn produce(100)
 let producer2 = spawn produce(200)
@@ -60,7 +62,8 @@ let received2 = recv(channel2)
 print("Sent 123, received: ${received2}")
 
 // Test 6: Lambda expressions with channels
-let lambda_compute = fn(x: int) -> int => x * x + 10
+let lambda_compute = fn(x: int) => x * x + 10
+
 let lambda_result = lambda_compute(5)
 print("\nLambda computation result: ${lambda_result}")
 
@@ -70,7 +73,7 @@ let fiberResult = fiber_yield(123)
 print("Fiber task result: ${fiberResult}")
 
 // Test 8: Real async computation pattern
-fn processData(size: int) -> int = size * 2 + 10
+fn processData(size: int) = size * 2 + 10
 fn validateData(data: int) -> int = match data {
     0 => 0
     _ => 1  // Valid
