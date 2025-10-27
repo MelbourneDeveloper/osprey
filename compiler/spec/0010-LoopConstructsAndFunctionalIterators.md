@@ -20,16 +20,11 @@
 
 # Loop Constructs and Functional Iterators
 
-✅ **FULLY IMPLEMENTED**: All core iterator functions (`range`, `forEach`, `map`, `filter`, `fold`) are fully implemented with stream fusion optimization. The pipe operator (`|>`) enables elegant function composition. Map and filter use zero-cost abstractions via compile-time stream fusion.
+Osprey is a functional language without imperative loop constructs. Iteration uses functional patterns with the core functions `range`, `forEach`, `map`, `filter`, and `fold`, composed with the pipe operator `|>`.
 
-## Functional Iteration Philosophy
+## Functional Iteration
 
-**Osprey is a functional language and does NOT support imperative loop constructs.** Instead, Osprey provides powerful functional iteration patterns that are:
-
-1. **Composable** - Functional iterators can be chained with `|>`
-2. **Safe** - No mutable state, no infinite loop bugs
-3. **Concurrent** - Fibers provide better parallelism than loops
-4. **Testable** - Pure functions are easier to test than stateful loops
+Functional iteration provides composable, safe patterns without mutable state. Fibers handle concurrent iteration, and pure functions simplify testing.
 
 ## Core Iterator Functions
 
@@ -188,25 +183,15 @@ input()
   |> print
 ```
 
-## Why No Imperative Loops?
+## Alternative to Imperative Loops
 
-**Anti-Pattern:**
-```osprey
-// ❌ WRONG - Imperative loops (NOT SUPPORTED)
-loop {
-    let request = getRequest()
-    processRequest(request)
-}
-```
+Use functional patterns instead of imperative loops:
 
-**Functional Pattern:**
 ```osprey
-// ✅ CORRECT - Functional approach
-fn serverHandler() -> Unit = {
-    requestStream() 
+// Functional approach
+fn serverHandler() -> unit = {
+    requestStream()
     |> map(processRequest)
     |> forEach(sendResponse)
 }
-```
-
-This functional approach provides better maintainability, testability, and performance than traditional imperative loops. 
+``` 
