@@ -2,38 +2,8 @@
 
 - [Hindley-Milner Type Inference](#hindley-milner-type-inference)
 - [Built-in Types](#built-in-types)
-  - [Function Types](#function-types)
-  - [Record Types](#record-types)
-  - [Collection Types (List and Map)](#collection-types-list-and-map)
-- [Built-in Error Types](#built-in-error-types)
-- [Hindley-Milner Type Inference](#hindley-milner-type-inference-1)
-  - [Hindley-Milner Function Inference](#hindley-milner-function-inference)
-  - [Constraint-Based Type Inference](#constraint-based-type-inference)
-  - [Hindley-Milner Implementation Examples](#hindley-milner-implementation-examples)
-  - [Hindley-Milner Benefits](#hindley-milner-benefits)
-  - [Record Type Structural Equivalence](#record-type-structural-equivalence)
-  - [Polymorphic Type Variables vs Any Type](#polymorphic-type-variables-vs-any-type)
-  - [Hindley-Milner Constraint Resolution](#hindley-milner-constraint-resolution)
-- [Type Safety and Explicit Typing](#type-safety-and-explicit-typing)
-  - [Mandatory Type Safety](#mandatory-type-safety)
-- [Any Type Handling and Pattern Matching Requirement](#any-type-handling-and-pattern-matching-requirement)
-  - [Forbidden Operations on `any` Types](#forbidden-operations-on-any-types)
-  - [Legal Operations on `any` Types](#legal-operations-on-any-types)
-  - [Pattern Matching Requirement](#pattern-matching-requirement)
-  - [Direct Access Compilation Errors](#direct-access-compilation-errors)
-  - [Function Return Type Handling](#function-return-type-handling)
-  - [Type Annotation Pattern Syntax](#type-annotation-pattern-syntax)
-  - [Compilation Error Messages](#compilation-error-messages)
-  - [Exhaustiveness Checking for Any Types](#exhaustiveness-checking-for-any-types)
-  - [Default Wildcard Behavior for Any Types](#default-wildcard-behavior-for-any-types)
-  - [Type Constraint Checking](#type-constraint-checking)
-  - [Context-Aware Type Validation](#context-aware-type-validation)
-  - [Compilation Errors for Impossible Types](#compilation-errors-for-impossible-types)
-  - [Performance and Safety Characteristics](#performance-and-safety-characteristics)
-  - [Type Annotation Requirements](#type-annotation-requirements)
-  - [Compilation Errors for Type Ambiguity](#compilation-errors-for-type-ambiguity)
-  - [Error Handling Requirements](#error-handling-requirements)
-  - [Type-Level Validation](#type-level-validation)
+- [Type Safety](#type-safety)
+- [Any Type Handling](#any-type-handling)
 - [Type Compatibility](#type-compatibility)
 
 ## Hindley-Milner Type Inference
@@ -382,50 +352,29 @@ let result = ValidatedPerson { name: "Bob", age: 25, email: "bob@example.com" }
 
 **Field Access Rules:**
 
-**🔥 CRITICAL SPECIFICATION: FIELD ACCESS IS STRICTLY BY NAME ONLY**
+Record field access is strictly by name only. Field ordering is not significant and must not be relied upon by the compiler implementation.
 
-**ABSOLUTE REQUIREMENT**: Record field access is **EXCLUSIVELY BY NAME**. Field ordering, positioning, or indexing is **COMPLETELY FORBIDDEN** and must **NEVER** be relied upon by the compiler implementation.
-
-**✅ ALLOWED - Field Access on Record Types (BY NAME ONLY):**
 ```osprey
 type User = { id: int, name: string, email: string }
 let user = User { id: 1, name: "Alice", email: "alice@example.com" }
 
-let userId = user.id          // ✅ VALID: direct field access BY NAME
-let userName = user.name      // ✅ VALID: direct field access BY NAME  
-let userEmail = user.email    // ✅ VALID: direct field access BY NAME
+// Field access by name
+let userId = user.id
+let userName = user.name
 
-// Field order during construction is IRRELEVANT
-let user2 = User { 
-    email: "bob@example.com",  // Different order - PERFECTLY VALID
-    name: "Bob",               // Field position does NOT matter
-    id: 2                      // Only field NAMES matter
+// Field order during construction is irrelevant
+let user2 = User {
+    email: "bob@example.com",
+    name: "Bob",
+    id: 2
 }
-let bobName = user2.name      // ✅ VALID: name-based access works regardless of declaration order
 ```
 
-**❌ ABSOLUTELY FORBIDDEN - Positional or Indexed Access:**
-```osprey
-// NEVER ALLOWED - These are COMPILATION ERRORS
-let value1 = user[0]          // ❌ FORBIDDEN: No indexed access  
-let value2 = user.fields[1]   // ❌ FORBIDDEN: No positional access
-let value3 = getFieldAt(user, 0)  // ❌ FORBIDDEN: No position-based access
-
-// COMPILER IMPLEMENTATION MUST NEVER:
-// - Rely on field declaration order for LLVM struct generation
-// - Use field positioning for type unification
-// - Access fields by index in any internal operation
-// - Generate code that depends on field ordering
-```
-
-**🔥 COMPILER IMPLEMENTATION REQUIREMENT:**
-The Osprey compiler **MUST** implement field access using **FIELD NAME LOOKUP ONLY**:
-- ✅ Field-to-LLVM-index mapping by name
-- ✅ Type unification based on field name matching  
-- ✅ Pattern matching using field names
-- ❌ **NEVER** field ordering dependencies
-- ❌ **NEVER** positional field access in codegen
-- ❌ **NEVER** field index assumptions
+**Compiler Implementation Requirements:**
+- Field-to-LLVM-index mapping must use field name lookup
+- Type unification must be based on field name matching
+- Pattern matching must use field names
+- Positional field access is forbidden in codegen
 
 **❌ FORBIDDEN - Field Access on `any` Types:**
 ```osprey
@@ -508,16 +457,15 @@ let newCounter = counter { value: 5 }
 
 #### Collection Types (List and Map)
 
-**🔥 CRITICAL SPECIFICATION**: Osprey implements **immutable**, **persistent collections** with **zero-cost abstractions** and **compile-time safety**. Collections are **COMPLETELY IMMUTABLE** - operations return new collections without modifying originals.
+Osprey provides immutable, persistent collections with compile-time safety and zero-cost abstractions.
 
 ##### List<T> - Immutable Sequential Collections
 
-**Core Properties:**
-- **Complete Immutability**: Lists cannot be modified after creation
-- **Structural Sharing**: Efficient memory usage through persistent data structures  
-- **Type Safety**: Elements must be homogeneous (same type T)
-- **Bounds Checking**: Array access returns `Result<T, IndexError>` for safety
-- **Zero-Cost Abstraction**: Compiled to efficient native code via C runtime
+**Properties:**
+- Complete immutability with structural sharing
+- Type-safe with homogeneous elements
+- Bounds-checked access returns `Result<T, IndexError>`
+- Compiled to efficient native code
 
 **List Literal Syntax:**
 ```osprey
@@ -727,63 +675,14 @@ let byGrade = groupBy(student => student.grade, students)
 // Map<string, List<Student>> = { "A": [Alice, Charlie], "B": [Bob] }
 ```
 
-**Performance Characteristics:**
+**Performance:**
 
-**🔥 HIGH-PERFORMANCE C Runtime Integration:**
+List operations: O(1) element access, O(n) concatenation and functional operations.
+Map operations: O(log n) lookup/insert/update, O(n) iteration.
 
-**List Operations:**
-- **Element Access**: O(1) - direct memory access via C runtime
-- **Concatenation**: O(n) - optimized memory copying in C
-- **Functional Ops**: O(n) - zero-overhead iteration in C
-- **Pattern Matching**: O(1) - compiled to efficient native comparisons
+Memory management uses structural sharing for efficiency, deterministic cleanup without garbage collection, and stack allocation for small collections.
 
-**Map Operations:**
-- **Lookup**: O(log n) - persistent hash trie in C runtime
-- **Insert/Update**: O(log n) - structural sharing, minimal allocations
-- **Iteration**: O(n) - cache-friendly traversal patterns
-- **Pattern Matching**: O(log n) - optimized key presence checks
-
-**Memory Management:**
-- **Garbage Collection**: Not required - deterministic cleanup via C runtime
-- **Structural Sharing**: Immutable collections share common structure
-- **Copy-on-Write**: Minimal memory overhead for updates
-- **Stack Allocation**: Small collections optimized for stack storage
-
-**Compile-Time Optimizations:**
-```osprey
-// These are optimized at compile time:
-let result = map(x => x * 2, filter(x => x > 5, numbers))
-// Fused into single-pass operation - no intermediate allocations
-
-let lookup = myMap["key"]  
-// Bounds checking eliminated when key presence proven at compile time
-
-let [head, ...tail] = [1, 2, 3]
-// Pattern matching compiled to zero-cost field access
-```
-
-**Safety Guarantees:**
-- **No Buffer Overflows**: All access bounds-checked at compile time or runtime
-- **No Memory Leaks**: Automatic cleanup via C runtime integration
-- **No Race Conditions**: Immutability prevents concurrent modification issues
-- **Type Safety**: All collection operations preserve element types
-
-**Integration with Effects System:**
-```osprey
-// Collections work seamlessly with algebraic effects
-effect Logger {
-    fn log(message: string): unit
-}
-
-fn processItems(items: List<string>) -> unit !Logger = {
-    forEach(item => perform log("Processing: ${item}"), items)
-    perform log("Processed ${toString(length(items))} items")
-}
-
-// Map operations with effects
-fn validateUsers(users: Map<string, User>) -> Map<string, User> !Validator = 
-    mapValues(user => perform validate(user), users)
-```
+Safety: bounds checking prevents overflows, immutability prevents race conditions, type safety enforced throughout.
 
 
 ## Built-in Error Types
@@ -938,80 +837,44 @@ fn complex<T>(x: T, pred: (T) -> bool) -> Option<T> =
 - **Compile-time safety**: All type errors caught before execution
 - **Principal types**: Every expression has a unique most general type
 
-#### 🔥 CRITICAL: Record Type Structural Equivalence
+#### Record Type Structural Equivalence
 
-**MANDATORY REQUIREMENT**: Osprey's Hindley-Milner implementation MUST treat record types using **structural equivalence based EXCLUSIVELY on field names**.
+Osprey's Hindley-Milner implementation uses structural equivalence based on field names only, not field order.
 
-**✅ CORRECT Structural Unification:**
 ```osprey
-// These record types are structurally equivalent (same field names and types)
+// These record types are structurally equivalent
 type PersonA = { name: string, age: int }
-type PersonB = { age: int, name: string }  // Different field ORDER - still equivalent
+type PersonB = { age: int, name: string }  // Different order, same structure
 
-// Hindley-Milner MUST unify these as the same structural type
-fn processA(p: PersonA) = p.name
-fn processB(p: PersonB) = p.name
-
-// These functions MUST be considered type-compatible
-let result1 = processA(PersonB { age: 25, name: "Alice" })  // ✅ MUST work
-let result2 = processB(PersonA { name: "Bob", age: 30 })    // ✅ MUST work
+fn getName(record) = record.name  // Infers: ∀α. {name: string, ...α} -> string
 ```
 
-**✅ POLYMORPHIC Field Access Inference:**
-```osprey
-// Generic field accessor - inferred type based on field NAME only
-fn getName(record) = record.name           // Infers: ∀α. {name: string, ...α} -> string
-fn getAge(record) = record.age            // Infers: ∀α. {age: int, ...α} -> int
+**Unification Algorithm:**
+Record types unify if and only if they have the same field names with matching types. Field order is irrelevant:
 
-// Works with ANY record type that has the named field
-let name1 = getName(Person { name: "Alice", age: 25 })      // ✅ Valid
-let name2 = getName(User { name: "Bob", id: 1, email: "bob@example.com" })  // ✅ Valid
-let age1 = getAge(Person { name: "Alice", age: 25 })       // ✅ Valid
 ```
-
-**❌ FORBIDDEN Implementation Approaches:**
-```
-// NEVER ALLOWED in compiler implementation:
-struct_field_0 = llvm_get_field_by_index(record, 0)  // ❌ Positional access
-field_type = type_signature.params[field_position]   // ❌ Position-based type lookup
-unify_by_field_order(record1, record2)              // ❌ Order-dependent unification
-```
-
-**🔥 UNIFICATION ALGORITHM REQUIREMENT:**
-```
-unify(RecordType1, RecordType2) := 
+unify(RecordType1, RecordType2) :=
     if field_names(RecordType1) ≠ field_names(RecordType2) then FAIL
     else ∀ field_name ∈ field_names(RecordType1):
         unify(field_type(RecordType1, field_name), field_type(RecordType2, field_name))
-        
-// Field ordering is IRRELEVANT - only field names and their types matter
 ```
 
 #### Polymorphic Type Variables vs Any Type
 
-**CRITICAL DISTINCTION**: Hindley-Milner infers polymorphic type variables (α, β, γ), NOT the `any` type.
+Hindley-Milner infers polymorphic type variables (α, β, γ), not the `any` type:
 
-**✅ HINDLEY-MILNER POLYMORPHISM:**
 ```osprey
-fn identity(x) = x                    // Infers: <T>(T) -> T (polymorphic)
-fn getFirst(p) = p.first             // Infers: <A, B>(Pair<A, B>) -> A
-fn apply(f, x) = f(x)                // Infers: <A, B>((A) -> B, A) -> B
+fn identity(x) = x           // Infers: <T>(T) -> T
+fn apply(f, x) = f(x)        // Infers: <A, B>((A) -> B, A) -> B
 ```
 
-**❌ ANY TYPE (Requires Explicit Declaration):**
+The `any` type requires explicit declaration:
+
 ```osprey
-fn parseValue(input: string) -> any = processInput(input)  // Explicit any
-fn getDynamicValue() -> any = readFromConfig()             // Explicit any
+fn parseValue(input: string) -> any = processInput(input)
 ```
 
-**Type Variable Instantiation**: Polymorphic type variables are instantiated to concrete types at usage sites:
-```osprey
-let intId = identity(42)        // T := int
-let stringId = identity("test") // T := string
-let boolId = identity(true)     // T := bool
-```
-
-**Safety Guarantee**: Polymorphic types are statically safe - all type checking occurs at compile time with no runtime type uncertainty.
+Polymorphic type variables are instantiated at call sites and checked statically at compile time.
 
 #### Hindley-Milner Constraint Resolution
 

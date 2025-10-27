@@ -11,9 +11,7 @@
 
 ## Pattern Matching
 
-**🔥 CRITICAL SPECIFICATION**: Pattern matching in Osprey MUST use **FIELD NAME MATCHING ONLY**. Pattern matching on record types is based on **structural equivalence by field names**, never field ordering or positioning.
-
-**IMPLEMENTATION REQUIREMENT**: The compiler MUST implement pattern matching using field name lookup and structural type unification as specified in the Hindley-Milner Type Inference requirements (see [Type System](0004-TypeSystem.md#hindley-milner-type-inference)).
+Pattern matching in Osprey uses field name matching only. Record type patterns are based on structural equivalence by field names, not field order. See [Type System](0004-TypeSystem.md#hindley-milner-type-inference) for complete type unification rules.
 
 ### Basic Patterns
 
@@ -141,7 +139,7 @@ match anyValue {
 
 ## Result Type Pattern Matching (Arithmetic Expressions)
 
-**🔥 CRITICAL**: All arithmetic expressions return `Result<T, MathError>`. You **MUST** handle them with pattern matching.
+All arithmetic expressions return `Result<T, MathError>` and must be handled with pattern matching. The compiler automatically unwraps intermediate Results in nested arithmetic, so only the final result requires pattern matching.
 
 **✨ KEY INSIGHT**: Nested arithmetic expressions do NOT require nested pattern matching! The compiler automatically unwraps intermediate Results, so you only pattern match the final result.
 
@@ -155,61 +153,28 @@ match calculation {
 }
 ```
 
-### Compound Expression Examples (CRYSTAL CLEAR)
+### Compound Arithmetic Expressions
+
+Nested arithmetic expressions return a single Result, not nested Results:
+
 ```osprey
-// Each of these returns a SINGLE Result for the ENTIRE expression
-// NO nested Results - auto-unwrapping handles intermediate operations!
-let simple = 10 + 5                    // Result<int, MathError> - NOT Result<Result<...>>
-let complex = 1 + 2 * 3 - 4 / 2        // Result<int, MathError> - NOT Result<Result<...>>
-let nested = ((a + b) * c) / (d - e)   // Result<int, MathError> - NOT Result<Result<...>>
+let simple = 10 + 5                    // Result<int, MathError>
+let complex = 1 + 2 * 3 - 4 / 2        // Result<int, MathError>
+let nested = ((a + b) * c) / (d - e)   // Result<int, MathError>
 
-// Handle ALL of them the SAME WAY - single pattern match!
+// All handled the same way
 match simple {
-    Success value => print("10 + 5 = ${value}")
-    Error message => print("Failed: ${message}")
-}
-
-match complex {
-    Success value => print("Complex calc = ${value}")
-    Error message => print("Overflow/error: ${message}")
-}
-
-match nested {
-    Success value => print("Nested result = ${value}")
-    Error message => print("Division by zero or overflow: ${message}")
+    Success { value } => print("Result: ${value}")
+    Error { message } => print("Error: ${message}")
 }
 ```
 
-### Auto-Unwrapping Explained
+The compiler auto-unwraps intermediate Results in arithmetic chains:
+
 ```osprey
-// Example: (10 + 5) * 2
-// Step 1: 10 + 5 produces Result<int, MathError>
-// Step 2: Compiler auto-unwraps the Result to get the int value
-// Step 3: Multiply the unwrapped value by 2
-// Step 4: Wrap in a new Result<int, MathError>
-// Final: ONE Result, not nested!
-
-let example = (10 + 5) * 2  // Result<int, MathError>
+let example = (10 + 5) * 2  // Single Result<int, MathError>
 match example {
-    Success { value } => print(value)  // Prints: 30
-    Error { message } => print(message)
-}
-
-// NO nested matching required!
-// ❌ WRONG - you do NOT need this:
-// match (10 + 5) {
-//     Success { innerValue } => {
-//         match innerValue * 2 {
-//             Success { value } => print(value)
-//             ...
-//         }
-//     }
-// }
-
-// ✅ CORRECT - just match the final result:
-let result = (10 + 5) * 2
-match result {
-    Success { value } => print(value)
+    Success { value } => print(value)  // 30
     Error { message } => print(message)
 }
 ```
