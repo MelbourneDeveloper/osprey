@@ -79,43 +79,30 @@ let pair = [x, y]  // Fixed size: 2 elements
 
 ### Arithmetic Operators
 
-All arithmetic operators are type-preserving and return `Result` types to handle errors (overflow, underflow, division by zero).
+All arithmetic operators return `Result` types to handle overflow, underflow, and division by zero.
 
-**Integer Arithmetic:**
+**Integer Operations:**
 - `+` Addition: `(int, int) -> Result<int, MathError>`
 - `-` Subtraction: `(int, int) -> Result<int, MathError>`
 - `*` Multiplication: `(int, int) -> Result<int, MathError>`
-- `/` Division: `(int, int) -> Result<float, MathError>` - Auto-promotes to float (10 / 3 = 3.333...)
-- `%` Modulo: `(int, int) -> Result<int, MathError>` - Returns remainder (10 % 3 = 1)
+- `/` Division: `(int, int) -> Result<float, MathError>` — always returns float
+- `%` Modulo: `(int, int) -> Result<int, MathError>`
 
-**Floating-Point Arithmetic:**
-- `+` Addition: `(float, float) -> Result<float, MathError>`
-- `-` Subtraction: `(float, float) -> Result<float, MathError>`
-- `*` Multiplication: `(float, float) -> Result<float, MathError>`
-- `/` Division: `(float, float) -> Result<float, MathError>` - IEEE 754 division (10.0 / 3.0 = 3.333...)
-- `%` Modulo: `(float, float) -> Result<float, MathError>` - IEEE 754 remainder
+**Floating-Point Operations:**
+- `+`, `-`, `*`, `/`, `%`: `(float, float) -> Result<float, MathError>`
 
 **Type Safety:**
-- No automatic type promotion: cannot mix int and float in operations
-- Use `toFloat(int)` to convert int to float: `toFloat(10) / 3.0`
-- Use `toInt(float)` to truncate float to int: `toInt(3.7) = 3`
+- No automatic type promotion between int and float
+- Use `toFloat(int)` and `toInt(float)` for explicit conversion
+- Division `/` always returns float, even for integer operands
 
 **Examples:**
 ```osprey
-// Integer arithmetic
-let sum = 5 + 3           // Result<int, MathError> - Success(8)
-let quotient = 10 / 3     // Result<float, MathError> - Success(3.333...) - Auto-promotes to float!
-let remainder = 10 % 3    // Result<int, MathError> - Success(1)
+let sum = 5 + 3           // Result<int, MathError>
+let quotient = 10 / 3     // Result<float, MathError> - returns 3.333...
+let remainder = 10 % 3    // Result<int, MathError> - returns 1
 
-// Floating-point arithmetic
-let precise = 10.0 / 3.0  // Result<float, MathError> - Success(3.333...)
-let area = 3.14 * 2.5     // Result<float, MathError> - Success(7.85)
-
-// Division always returns float
-let intDiv = 10 / 2       // Result<float, MathError> - Success(5.0) - Float result!
-let mixedDiv = 10 / 3     // Result<float, MathError> - Success(3.333...)
-
-// Error cases
+let precise = 10.0 / 3.0  // Result<float, MathError>
 let divZero = 10 / 0      // Result<float, MathError> - Error(DivisionByZero)
 ```
 

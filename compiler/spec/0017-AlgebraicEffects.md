@@ -147,16 +147,16 @@ fn loggedCalculation<E>(x: Int) -> Int !E = {
 3. **Operation Resolution**: Each `perform` resolves to its handler
 4. **Code Generation**: Generate efficient handler dispatch
 
-**Revolutionary Safety**: Unlike other effect systems, unhandled effects cause **compile-time errors**, never runtime crashes.
+Unhandled effects cause compile-time errors, ensuring safety.
 
 ### Comparison with Research
 
-| Aspect                | Plotkin & Pretnar Theory | Osprey Implementation         |
-| --------------------- | ------------------------ | ----------------------------- |
-| **Effect Operations** | Free algebraic theory    | `effect` declarations         |
-| **Handlers**          | Models of the theory     | `handle...in` expressions     |
-| **Handling**          | Unique homomorphisms     | Compile-time dispatch         |
-| **Safety**            | Theoretical correctness  | **Compile-time verification** |
+| Aspect                | Plotkin & Pretnar Theory | Osprey Implementation     |
+| --------------------- | ------------------------ | ------------------------- |
+| **Effect Operations** | Free algebraic theory    | `effect` declarations     |
+| **Handlers**          | Models of the theory     | `handle...in` expressions |
+| **Handling**          | Unique homomorphisms     | Compile-time dispatch     |
+| **Safety**            | Theoretical correctness  | Compile-time verification |
 
 ### Examples
 
@@ -201,51 +201,34 @@ in
 
 ---
 
-## **OSPREY'S REVOLUTIONARY EFFECT SAFETY - BEYOND THE RESEARCH**
+## Compile-Time Effect Verification
 
-### **COMPILE-TIME EFFECT VERIFICATION**
-
-While Plotkin & Pretnar established the theoretical foundation, Osprey implements **the first practical effect system with complete compile-time safety**:
-
-**🚨 UNHANDLED EFFECTS = COMPILATION ERROR (NOT RUNTIME ERROR!) 🚨**
+Osprey provides complete compile-time safety for algebraic effects. Unhandled effects produce compilation errors, not runtime failures:
 
 ```osprey
-effect Logger { log: fn(String) -> Unit }
+effect Logger { log: fn(string) -> unit }
 
-fn main() -> Unit = {
-    perform Logger.log("This will fail compilation!")  // ❌ COMPILATION ERROR
+fn main() -> unit = {
+    perform Logger.log("This will fail compilation!")  // Compilation error
 }
 ```
 
-**Error**: `COMPILATION ERROR: Unhandled effect 'Logger.log' - all effects must be explicitly handled or forwarded in function signatures.`
+**Error**: Unhandled effect 'Logger.log' - all effects must be explicitly handled or forwarded in function signatures.
 
-### **SUPERIORITY TO OTHER IMPLEMENTATIONS**
+### Comparison with Other Effect Systems
 
-| System            | Theoretical Basis       | Runtime Safety | Compile-time Safety         |
-| ----------------- | ----------------------- | -------------- | --------------------------- |
-| **OCaml Effects** | Plotkin & Pretnar       | ❌ Crashes      | ❌ No verification           |
-| **Eff Language**  | Plotkin & Pretnar       | ❌ Exceptions   | ❌ Partial checking          |
-| **Koka Effects**  | Plotkin & Pretnar       | ❌ Aborts       | ⚠️ Effect inference          |
-| **🔥 OSPREY 🔥**    | **Plotkin & Pretnar +** | ✅ **Safe**     | ✅ **Complete verification** |
+| System        | Theoretical Basis | Runtime Safety | Compile-time Safety       |
+| ------------- | ----------------- | -------------- | ------------------------- |
+| OCaml Effects | Plotkin & Pretnar | Crashes        | No verification           |
+| Eff Language  | Plotkin & Pretnar | Exceptions     | Partial checking          |
+| Koka Effects  | Plotkin & Pretnar | Aborts         | Effect inference          |
+| Osprey        | Plotkin & Pretnar | Safe           | Complete verification     |
 
-### **IMPLEMENTATION INNOVATION**
+Osprey extends the theoretical foundation with complete static verification, effect inference, efficient compilation, and composable handlers.
 
-Osprey extends the theoretical foundation with:
+## Circular Dependency Detection
 
-1. **Complete static verification** - No unhandled effects reach runtime
-2. **Effect inference** - Minimal effect annotations required  
-3. **Efficient compilation** - Zero-cost when no handlers present
-4. **Composable handlers** - Clean nesting and effect forwarding
-
-**🚀 OSPREY: ALGEBRAIC EFFECTS THEORY REALIZED WITH TOTAL SAFETY! 🚀**
-
-## **CIRCULAR DEPENDENCY DETECTION - REVOLUTIONARY SAFETY**
-
-### **COMPILE-TIME CIRCULAR DEPENDENCY DETECTION**
-
-Osprey implements **the world's first effect system with complete circular dependency detection** at compile time:
-
-**🚨 CIRCULAR EFFECT DEPENDENCIES = COMPILATION ERROR (NOT RUNTIME STACK OVERFLOW!) 🚨**
+Osprey detects circular effect dependencies at compile time:
 
 ```osprey
 effect StateA { getFromB: fn() -> int }
@@ -264,11 +247,9 @@ fn main() -> Unit =
           circularA  // Would cause infinite recursion
 ```
 
-**Error**: `COMPILATION ERROR: Circular effect dependency detected - handler StateA.getFromB calls function that performs StateB.getFromA, which is handled by calling StateA.getFromB (infinite recursion detected)`
+**Error**: Circular effect dependency detected - handler StateA.getFromB calls function that performs StateB.getFromA, which is handled by calling StateA.getFromB (infinite recursion detected)
 
-### **INFINITE HANDLER RECURSION DETECTION**
-
-**🚨 HANDLERS CALLING THEMSELVES = COMPILATION ERROR! 🚨**
+### Infinite Handler Recursion Detection
 
 ```osprey
 effect Counter { increment: fn(int) -> int }
@@ -282,29 +263,27 @@ fn main() -> Unit =
         performIncrement 5  // Would cause stack overflow
 ```
 
-**Error**: `COMPILATION ERROR: Infinite handler recursion detected - handler Counter.increment calls function that performs the same effect it handles (infinite recursion detected)`
+**Error**: Infinite handler recursion detected - handler Counter.increment calls function that performs the same effect it handles (infinite recursion detected)
 
-### **SAFETY GUARANTEES**
+### Safety Guarantees
 
-| **Safety Check**          | **Osprey**      | **Other Languages** |
-| ------------------------- | --------------- | ------------------- |
-| **Unhandled Effects**     | ✅ Compile Error | ❌ Runtime Crash     |
-| **Circular Dependencies** | ✅ Compile Error | ❌ Stack Overflow    |
-| **Handler Recursion**     | ✅ Compile Error | ❌ Infinite Loop     |
-| **Effect Type Safety**    | ✅ Complete      | ⚠️ Partial           |
+| Safety Check          | Osprey         | Other Languages |
+| --------------------- | -------------- | --------------- |
+| Unhandled Effects     | Compile Error  | Runtime Crash   |
+| Circular Dependencies | Compile Error  | Stack Overflow  |
+| Handler Recursion     | Compile Error  | Infinite Loop   |
+| Effect Type Safety    | Complete       | Partial         |
 
-### **STATIC ANALYSIS ALGORITHM**
+### Static Analysis
 
-Osprey's compiler performs **static call graph analysis** to detect:
+The compiler performs static call graph analysis:
 
-1. **Effect Dependency Graphs** - Maps which effects depend on which others
-2. **Handler Call Chains** - Traces handler execution paths
-3. **Cycle Detection** - Uses topological sorting to find circular dependencies
-4. **Recursion Analysis** - Detects when handlers call functions that perform the same effect
+1. Effect dependency graphs map which effects depend on others
+2. Handler call chains trace execution paths
+3. Cycle detection uses topological sorting
+4. Recursion analysis detects handlers calling functions that perform the same effect
 
-**Revolutionary Result**: **NO EFFECT-RELATED RUNTIME ERRORS ARE POSSIBLE**
-
-**🔥 OSPREY: THE ONLY LANGUAGE WITH MATHEMATICALLY PROVEN EFFECT SAFETY! 🔥**
+This ensures no effect-related runtime errors are possible.
 
 [1]: https://www.ospreylang.dev/spec/ "Osprey Language Specification - Osprey Programming Language"
 
@@ -321,138 +300,115 @@ https://en.wikipedia.org/wiki/Effect_system
 https://dl.acm.org/doi/pdf/10.1145/3290319
 
 
-## Completeness Report
+## Implementation Status
 
-## 📋 ALGEBRAIC EFFECTS VERIFICATION REPORT
+Analysis of Osprey's implementation against Plotkin & Pretnar's algebraic effects theory:
 
-Based on:
-https://arxiv.org/pdf/1312.1399
+## Correctly Implemented
 
-After thorough analysis of Osprey's implementation against Plotkin & Pretnar's paper, here's my comprehensive verification:
-
-## ✅ CORRECTLY IMPLEMENTED ASPECTS
-
-### 1. **Effect Declarations** ✅
+### Effect Declarations
 - **Paper**: `op : α → β` (operation signatures)
 - **Osprey**: `effect EffectName { operationName: fn(α) -> β }`
-- **Verdict**: ✅ CORRECT - Perfect mapping to the paper's operation signatures
+- **Status**: Correct mapping to paper's operation signatures
 
-### 2. **Perform Expressions** ✅
+### Perform Expressions
 - **Paper**: `opV(x : β. M)` (operation with continuation)
 - **Osprey**: `perform EffectName.operationName(args)`
-- **Verdict**: ✅ CORRECT - Implicit continuation handling matches theory
+- **Status**: Correct - implicit continuation handling matches theory
 
-### 3. **Handler Syntax** ✅
+### Handler Syntax
 - **Paper**: `{opx : α(k : β → C) → Mop}`
 - **Osprey**: `handle EffectName operationName params => body in expr`
-- **Verdict**: ✅ CORRECT - Clean syntax mapping to theoretical foundation
+- **Status**: Correct syntax mapping to theoretical foundation
 
-### 4. **Compile-Time Safety** ✅ **REVOLUTIONARY**
+### Compile-Time Safety
 - **Paper**: Theoretical foundation only
-- **Osprey**: **WORLD-FIRST** compile-time unhandled effect detection
-- **Verdict**: ✅ EXCEEDS PAPER - Osprey goes beyond theory with revolutionary safety
+- **Osprey**: Compile-time unhandled effect detection
+- **Status**: Exceeds paper - goes beyond theory with compile-time verification
 
-### 5. **Effect Type System** ✅
+### Effect Type System
 - **Paper**: Effect annotations and inference
 - **Osprey**: `fn name() -> Type !Effect` syntax
-- **Verdict**: ✅ CORRECT - Proper effect type annotations
+- **Status**: Correct effect type annotations
 
-### 6. **Nested Handlers** ✅
+### Nested Handlers
 - **Paper**: Handler composition and nesting
 - **Osprey**: Multiple nested `handle...in` expressions
-- **Verdict**: ✅ CORRECT - Proper lexical scoping
+- **Status**: Correct lexical scoping
 
-## ❌ CRITICAL MISSING FEATURES
+## Missing Features
 
-### 1. **Continuation/Resume Operations** ❌ **CRITICAL GAP**
+### Continuation/Resume Operations
 - **Paper**: Handlers have `k : β → C` continuations, explicit `resume(value)`
 - **Osprey**: **MISSING** - No `resume` operations implemented
 - **Impact**: **MAJOR** - This is fundamental to algebraic effects theory
 - **Status**: Documented as "COMING SOON" in README
 
-### 2. **Proper Handler Semantics** ❌ **THEORETICAL VIOLATION**
+### Handler Semantics
 - **Paper**: Handlers must handle the continuation explicitly
-- **Osprey**: Current handlers are just simple value substitutions
-- **Impact**: **CRITICAL** - Not true algebraic effects without continuations
-- **Example Missing**:
-  ```osprey
-  handle State
-    get k => k(42)        // Should resume with value
-    set value k => k(())  // Should resume with unit
-  ```
+- **Osprey**: Current handlers use simple value substitutions
+- **Status**: Not fully implementing true algebraic effects without continuations
 
-### 3. **CPS Transformation** ❌ **IMPLEMENTATION GAP**
+### CPS Transformation
 - **Paper**: Requires continuation-passing style transformation
-- **Osprey**: Infrastructure exists but not complete
-- **Impact**: **MAJOR** - Cannot properly suspend/resume computation
+- **Osprey**: Infrastructure exists but incomplete
+- **Status**: Cannot properly suspend/resume computation
 
-## ⚠️ PARTIALLY IMPLEMENTED FEATURES
+## Partially Implemented
 
-### 1. **Handler Execution** ⚠️
-- **Status**: Parsing works, but execution is incomplete
-- **Issue**: No proper continuation capture/restoration
-- **Evidence**: Multiple examples in `failscompilation/` directory
+### Handler Execution
+- Parsing works, but execution is incomplete
+- No proper continuation capture/restoration
+- Multiple examples in `failscompilation/` directory
 
-### 2. **Multi-Effect Composition** ⚠️
-- **Status**: `![Effect1, Effect2]` syntax exists
-- **Issue**: Complex interaction semantics not fully implemented
+### Multi-Effect Composition
+- `![Effect1, Effect2]` syntax exists
+- Complex interaction semantics not fully implemented
 
-## 🔥 OSPREY'S REVOLUTIONARY INNOVATIONS
+## Osprey's Innovations
 
-### 1. **Compile-Time Effect Safety** 🚀
-- **WORLD-FIRST**: 100% compile-time unhandled effect detection
-- **SUPERIORITY**: Other languages crash at runtime, Osprey prevents compilation
-- **EVIDENCE**: Comprehensive test suite in `failscompilation/`
+### Compile-Time Effect Safety
+- 100% compile-time unhandled effect detection
+- Other languages crash at runtime; Osprey prevents compilation
+- Comprehensive test suite in `failscompilation/`
 
-### 2. **Circular Dependency Detection** 🚀
-- **INNOVATION**: Static analysis prevents infinite handler recursion
-- **SAFETY**: Detects circular effect dependencies at compile time
-- **UNIQUE**: No other language has this level of effect safety
+### Circular Dependency Detection
+- Static analysis prevents infinite handler recursion
+- Detects circular effect dependencies at compile time
 
-### 3. **Fiber Integration** 🚀
-- **INNOVATION**: Effects system integrated with lightweight fibers
-- **BENEFIT**: Type-safe concurrency with effect tracking
-- **EVIDENCE**: Multiple fiber+effects examples working
+### Fiber Integration
+- Effects system integrated with lightweight fibers
+- Type-safe concurrency with effect tracking
 
-## 📊 OVERALL ASSESSMENT
+## Overall Assessment
 
-| Aspect | Paper Requirement | Osprey Status | Grade |
-|--------|------------------|---------------|--------|
-| **Effect Declarations** | ✅ Required | ✅ Complete | **A+** |
-| **Perform Operations** | ✅ Required | ✅ Complete | **A+** |
-| **Handler Syntax** | ✅ Required | ✅ Complete | **A+** |
-| **Continuations/Resume** | ✅ **CRITICAL** | ❌ **MISSING** | **F** |
-| **Handler Semantics** | ✅ **CRITICAL** | ❌ **INCOMPLETE** | **D** |
-| **CPS Transformation** | ✅ Required | ⚠️ Partial | **C** |
-| **Compile-Time Safety** | ⚠️ Not specified | ✅ **REVOLUTIONARY** | **A++** |
-| **Effect Type System** | ✅ Required | ✅ Complete | **A+** |
+| Aspect                    | Paper Requirement | Osprey Status | Assessment |
+| ------------------------- | ----------------- | ------------- | ---------- |
+| Effect Declarations       | Required          | Complete      | Correct    |
+| Perform Operations        | Required          | Complete      | Correct    |
+| Handler Syntax            | Required          | Complete      | Correct    |
+| Continuations/Resume      | Critical          | Missing       | Gap        |
+| Handler Semantics         | Critical          | Incomplete    | Gap        |
+| CPS Transformation        | Required          | Partial       | Gap        |
+| Compile-Time Safety       | Not specified     | Complete      | Innovation |
+| Effect Type System        | Required          | Complete      | Correct    |
 
-## 🎯 FINAL VERDICT
+## Summary
 
-**OSPREY'S ALGEBRAIC EFFECTS: PARTIALLY CORRECT WITH REVOLUTIONARY INNOVATIONS**
+**Strengths:**
+- Correct syntax mapping to Plotkin & Pretnar theory
+- Compile-time safety exceeds theoretical requirements
+- Strong type system integration
+- Comprehensive test coverage for implemented features
 
-### ✅ **STRENGTHS**
-- **Perfect syntax mapping** to Plotkin & Pretnar theory
-- **Revolutionary compile-time safety** (world-first)
-- **Excellent type system** integration
-- **Comprehensive test coverage** for implemented features
+**Gaps:**
+- Missing continuation/resume operations (fundamental to algebraic effects)
+- Incomplete handler semantics (not full algebraic effects without continuations)
+- CPS transformation incomplete (cannot properly suspend/resume)
 
-### ❌ **CRITICAL GAPS**
-- **Missing continuation/resume operations** (fundamental to algebraic effects)
-- **Incomplete handler semantics** (not true algebraic effects without continuations)
-- **CPS transformation incomplete** (cannot properly suspend/resume)
+**Innovations:**
+- Complete compile-time effect safety
+- Circular dependency detection
+- Fiber integration with effects
 
-### 🚀 **REVOLUTIONARY ASPECTS**
-- **100% compile-time effect safety** (exceeds all other implementations)
-- **Circular dependency detection** (unique innovation)
-- **Fiber integration** (novel combination)
-
-## 🔥 **RECOMMENDATION**
-
-**OSPREY NEEDS TO IMPLEMENT CONTINUATIONS/RESUME TO BE THEORETICALLY CORRECT**
-
-While Osprey has revolutionary safety features that exceed the paper's requirements, the **missing continuation mechanism is a fundamental theoretical gap**. The current implementation is more like "effect substitution" than true algebraic effects.
-
-**Priority Fix**: Implement `resume(value)` operations in handlers to enable proper continuation-based semantics as defined in Plotkin & Pretnar's paper.
-
-**Bottom Line**: Osprey is **80% theoretically correct** with **revolutionary practical innovations** that surpass all other implementations in safety guarantees.
+Osprey provides approximately 80% theoretical correctness with practical innovations that surpass other implementations in safety guarantees. Full algebraic effects support requires implementing `resume(value)` operations in handlers for proper continuation-based semantics.

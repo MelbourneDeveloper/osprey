@@ -1,48 +1,61 @@
-6. [Function Calls](0006-FunctionCalls.md)
-   - [Named Arguments Requirement](#named-arguments-requirement)
-       - [Valid Function Calls](#valid-function-calls)
-       - [Invalid Function Calls](#invalid-function-calls)
-   - [Function Call Compilation Rules](#function-call-compilation-rules)
+# Function Calls
 
-## Function Calls
+## Named Arguments Requirement
 
-### Named Arguments Requirement
+Functions with more than one parameter must be called with named arguments.
 
-**CRITICAL RULE**: Functions with more than one parameter **MUST** be called with named arguments.
-
-#### Valid Function Calls
+### Valid Function Calls
 
 ```osprey
+// Zero parameters
+fn getValue() = 42
+let value = getValue()
+
 // Single parameter - positional allowed
 fn double(x) = x * 2
 let result = double(5)
-
-// Zero parameters - no arguments
-fn getValue() = 42
-let value = getValue()
 
 // Multiple parameters - named arguments required
 fn add(x, y) = x + y
 let sum = add(x: 10, y: 20)
 
-// Multiple parameters - order doesn't matter with named args
+// Order doesn't matter with named arguments
 let sum2 = add(y: 20, x: 10)
+
+// Works with type annotations
+fn multiply(a: int, b: int) -> int = a * b
+let product = multiply(a: 5, b: 3)
 ```
 
-#### Invalid Function Calls
+### Invalid Function Calls
 
 ```osprey
 // ERROR: Multi-parameter function with positional arguments
 fn add(x, y) = x + y
-let sum = add(10, 20)  // ❌ Compilation error
+let sum = add(10, 20)  // Compilation error
 
 // ERROR: Mixed positional and named arguments
-let sum = add(10, y: 20)  // ❌ Compilation error
+let sum = add(10, y: 20)  // Compilation error
+
+// ERROR: Missing parameter name
+let result = multiply(5, b: 3)  // Compilation error
 ```
 
-### Function Call Compilation Rules
+## Compilation Rules
 
-1. **Single Parameter Functions**: May use positional arguments
-2. **Zero Parameter Functions**: Called with empty parentheses `()`
-3. **Multi-Parameter Functions**: Must use named arguments for ALL parameters
-4. **Argument Reordering**: Named arguments are reordered to match parameter declaration order
+1. **Zero parameters**: Called with empty parentheses `()`
+2. **Single parameter**: May use positional or named argument
+3. **Multiple parameters**: All arguments must be named
+4. **Argument order**: Named arguments are reordered to match parameter declaration order during compilation
+
+## Rationale
+
+Named arguments improve readability and prevent argument order errors in multi-parameter functions:
+
+```osprey
+// Clear intent with named arguments
+httpGet(clientID: client, path: "/users", headers: "")
+
+// Unclear with positional arguments (forbidden)
+httpGet(client, "/users", "")  // What does "" mean?
+```

@@ -30,30 +30,22 @@ match result {
 
 This approach guarantees that error handling is explicit, robust, and checked at compile time.
 
-### Arithmetic Safety and Result Types
+### Arithmetic Operations and Result Types
 
-**🚨 CRITICAL DESIGN PRINCIPLE 🚨**: ALL arithmetic operations (`+`, `-`, `*`, `/`, `%`) return `Result<T, MathError>` because they can **ALL** fail (overflow, underflow, division by zero).
+All arithmetic operations return `Result<T, MathError>` to handle overflow, underflow, and division by zero:
 
-## **THE GOLDEN RULE:**
+**Operator Signatures:**
+- `+` Addition: `(int, int) -> Result<int, MathError>`
+- `-` Subtraction: `(int, int) -> Result<int, MathError>`
+- `*` Multiplication: `(int, int) -> Result<int, MathError>`
+- `/` Division: `(int, int) -> Result<float, MathError>` — always returns float
+- `%` Modulo: `(int, int) -> Result<int, MathError>`
 
-**ALL Arithmetic Operations Return Result Types:**
-- `+` Addition: `(int, int) -> Result<int, MathError>` - Can overflow
-- `-` Subtraction: `(int, int) -> Result<int, MathError>` - Can underflow
-- `*` Multiplication: `(int, int) -> Result<int, MathError>` - Can overflow
-- `/` Division: `(int, int) -> Result<float, MathError>` - Can divide by zero, ALWAYS returns float
-- `%` Modulo: `(int, int) -> Result<int, MathError>` - Can divide by zero
-
-**Why ALL operations return Result:**
-- **Addition/Subtraction**: Can overflow/underflow (e.g., MAX_INT + 1)
-- **Multiplication**: Can overflow (e.g., 1000000 * 1000000)
-- **Division**: Can divide by zero, ALWAYS returns float for mathematical correctness
-- **Modulo**: Can divide by zero
-
-**Type Promotion Rules:**
+**Type Promotion:**
 - `int ⊕ int` → `Result<int, MathError>` (where ⊕ is +, -, *, %)
 - `float ⊕ float` → `Result<float, MathError>`
 - `int ⊕ float` → `Result<float, MathError>` (int promoted to float)
-- `int / int` → `Result<float, MathError>` (division ALWAYS returns float!)
+- `int / int` → `Result<float, MathError>` (division always returns float)
 
 #### Arithmetic Examples
 
@@ -104,25 +96,17 @@ print(10 / 0)                      // Outputs: Error(DivisionByZero)
 
 ### Result Type toString Format
 
-When converting a `Result` type to a string using `toString()`, the format **MUST ALWAYS** be:
-- **`Success(value)`**: For successful results
-- **`Error(message)`**: For error results
+Result types convert to strings in the format `Success(value)` or `Error(message)`:
 
-**Examples:**
 ```osprey
 let divisionResult = 15 / 3              // Result<float, MathError>
-print(toString(divisionResult))          // Outputs: "Success(5)"
+print(toString(divisionResult))          // "Success(5)"
 
 let divisionByZero = 10 / 0              // Result<float, MathError>
-print(toString(divisionByZero))          // Outputs: "Error(DivisionByZero)"
+print(toString(divisionByZero))          // "Error(DivisionByZero)"
 
 let calculation = 10 + 5                 // Result<int, MathError>
-print(toString(calculation))             // Outputs: "Success(15)"
+print(toString(calculation))             // "Success(15)"
 ```
 
-**ABSOLUTE RULES:**
-- ✅ **ALWAYS** wrap values in `Success(...)` or `Error(...)`
-- ❌ **NEVER** output raw values without the wrapper
-- ❌ **NEVER** use different formats for different Result types
-
-This ensures consistent, predictable string representations of Result types across the entire language.
+This format is consistent across all Result types.

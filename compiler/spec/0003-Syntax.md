@@ -249,42 +249,29 @@ let max = match a > b {
 }
 ```
 
-#### List Access (Safe)
+#### List Access
+
 ```
 list_access := expression '[' INT ']'  // Returns Result<T, IndexError>
 ```
 
-🚨 **CRITICAL SAFETY GUARANTEE**: List access **ALWAYS** returns `Result<T, IndexError>` - **NO PANICS, NO NULLS, NO EXCEPTIONS**
+List access always returns `Result<T, IndexError>` for bounds safety and must be handled with pattern matching:
 
-**MANDATORY PATTERN MATCHING REQUIRED:**
 ```osprey
 let numbers = [1, 2, 3, 4]
 
-// ✅ CORRECT: Pattern matching required
-let firstResult = numbers[0]  // Returns Result<Int, IndexError>
+let firstResult = numbers[0]  // Result<int, IndexError>
 match firstResult {
     Success { value } => print("First: ${value}")
-    Error { message } => print("Index out of bounds: ${message}")
+    Error { message } => print("Index error: ${message}")
 }
 
-// ✅ CORRECT: Inline pattern matching
+// Inline pattern matching
 let second = match numbers[1] {
     Success { value } => value
-    Error { _ } => -1  // Default value for out-of-bounds
-}
-
-// ✅ CORRECT: Bounds-safe iteration
-let commands = ["echo hello", "echo world"]
-match commands[0] {
-    Success { value } => {
-        print("Executing: ${value}")
-        spawnProcess(value)
-    }
-    Error { message } => print("No command at index 0: ${message}")
+    Error { _ } => -1
 }
 ```
-
-**FUNDAMENTAL SAFETY PRINCIPLE**: Array access can fail (index out of bounds), therefore it MUST return Result types to enforce explicit error handling and prevent runtime crashes.
 
 #### Field Access
 
@@ -311,54 +298,33 @@ print("Age: ${person.age}")
 sendEmail(to: person.name, subject: "Hello")
 ```
 
-#### Field Access Rules and Restrictions
+#### Field Access Rules
 
-**✅ ALLOWED - Field Access on Record Types:**
+Field access is allowed on record types:
+
 ```osprey
-type User = { id: Int, name: String, email: String }
-let user = User { id: 1, name: "Alice", email: "alice@example.com" }
-
-let userId = user.id          // Valid: direct field access
-let userName = user.name      // Valid: direct field access
-let userEmail = user.email    // Valid: direct field access
+type User = { id: int, name: string }
+let user = User { id: 1, name: "Alice" }
+let userId = user.id          // Valid
+let userName = user.name      // Valid
 ```
 
-**❌ FORBIDDEN - Field Access on `any` Types:**
-```osprey
-fn processAnyValue(value: any) -> String = {
-    // ERROR: Cannot access fields on 'any' type
-    let result = value.name   // Compilation error
-    return result
-}
+Field access requires pattern matching for:
+- **`any` types**: Extract fields through structural patterns
+- **Result types**: Unwrap Result before accessing fields
+- **Union types**: Match variant before accessing fields
 
-// CORRECT: Use pattern matching for 'any' types
-fn processAnyValue(value: any) -> String = match value {
-    person: { name } => person.name        // Extract field via pattern matching
-    user: User { name } => name           // Type-specific pattern matching
+```osprey
+// any type - use pattern matching
+fn processAny(value: any) -> string = match value {
+    person: { name } => person.name
     _ => "unknown"
 }
-```
 
-**❌ FORBIDDEN - Field Access on Result Types:**
-```osprey
-type Person = { 
-    name: String
-} where validatePerson
-
-fn validatePerson(person: Person) -> Result<Person, String> = match person.name {
-    "" => Error("Name cannot be empty")
-    _ => Success(person)
-}
-
-let personResult = Person { name: "Alice" }  // Returns Result<Person, String>
-
-// ERROR: Cannot access field on Result type
-let name = personResult.name   // Compilation error
-
-// CORRECT: Use pattern matching on Result types
+// Result type - unwrap first
 match personResult {
-    Ok { value } => print("Name: ${value.name}")    // Access field after unwrapping
-    Err { error } => print("Construction failed: ${error}")
+    Success { value } => print("Name: ${value.name}")
+    Error { message } => print("Error: ${message}")
 }
 ```
 
@@ -569,62 +535,7 @@ let wrong: int = {
 }
 ```
 
-#### Performance Characteristics
-
-Block expressions are zero-cost abstractions:
-- **Compile-time scoping**: All variable scoping resolved at compile time
-- **No runtime overhead**: Blocks compile to sequential instructions
-- **Stack allocation**: Local variables allocated on the stack
-- **Optimized away**: Simple blocks with no local variables are optimized away
-
-#### Best Practices
-
-**Use block expressions when:**
-- You need local variables for complex calculations
-- Breaking down complex expressions into readable steps
-- Implementing complex match arm logic
-- Creating temporary scopes to avoid variable name conflicts
-
-**Avoid block expressions when:**
-- A simple expression would suffice
-- The block only contains a single expression
-- Creating unnecessary nesting levels
-
-**Good Examples:**
-```osprey
-// Good: Complex calculation with intermediate steps
-let result = {
-    let base = getUserInput()
-    let squared = base * base
-    let doubled = squared * 2
-    squared + doubled
-}
-
-// Good: Complex match logic
-let response = match request.method {
-    POST => {
-        let body = parseBody(request.body)
-        let validated = validateData(body)
-        processCreation(validated)
-    }
-    _ => "Method not allowed"
-}
-```
-
-**Bad Examples:**
-```osprey
-// Bad: Unnecessary block for simple expression
-let bad = {
-    42
-}
-// Better: let bad = 42
-
-// Bad: Single operation doesn't need block
-let also_bad = {
-    x + y
-}
-// Better: let also_bad = x + y
-```
+Block expressions are zero-cost abstractions: scoping is resolved at compile time, and simple blocks are optimized away. See [Block Expressions](0008-BlockExpressions.md) for complete details on semantics and usage patterns.
 
 ### Match Expressions
 
