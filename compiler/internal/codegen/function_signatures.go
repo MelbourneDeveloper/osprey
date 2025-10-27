@@ -202,6 +202,8 @@ func (g *LLVMGenerator) unifyBodyWithReturnType(
 
 // createLLVMFunctionSignature creates the LLVM function signature
 func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclaration, finalFnType *FunctionType) error {
+	// Use the inferred return type AS-IS (don't unwrap)
+	// If the function body returns Result, the signature should be Result
 	llvmReturnType := g.getLLVMType(finalFnType.returnType)
 
 	if fnDecl.Name == MainFunctionName {
@@ -720,7 +722,8 @@ func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.Fun
 	}
 
 	// SECOND: Check INFERRED return type from type environment
-	// This handles inferred types for functions without explicit annotations
+	// If a function body contains arithmetic, it infers Result<T, MathError> and should KEEP it
+	// This ensures: fn add(x, y) = x + y returns Result<int, MathError>, not unwrapped int
 	if fnType, exists := g.typeInferer.env.Get(fnDecl.Name); exists {
 		if funcType, ok := fnType.(*FunctionType); ok {
 			// Prune to resolve any type variables
@@ -738,8 +741,8 @@ func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.Fun
 		}
 	}
 
-	// AUTO-PROPAGATION: If body returns Result but function declares non-Result return,
-	// unwrap the Result value. This allows: fn add(a,b)->int = a+b (body is Result<int>)
+	// ONLY UNWRAP if body is Result but neither explicit nor inferred type is Result
+	// This handles edge cases where Result is wrapped but shouldn't be
 	if g.isResultType(bodyValue) {
 		return g.unwrapIfResult(bodyValue)
 	}

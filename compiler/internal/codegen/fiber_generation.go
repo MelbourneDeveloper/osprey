@@ -154,6 +154,8 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	if err != nil {
 		return nil, err
 	}
+	// AUTO-UNWRAP Result types for fiber operations per spec (0004-TypeSystem.md:115-160)
+	result = g.unwrapIfResult(result)
 
 	// Convert the result to i64 for the fiber runtime if needed
 	// The fiber runtime always expects i64, so we need to convert other types
@@ -206,7 +208,10 @@ func (g *LLVMGenerator) generateAwaitExpression(await *ast.AwaitExpression) (val
 
 	if genericType, ok := resolvedType.(*GenericType); ok && genericType.name == TypeFiber &&
 		len(genericType.typeArgs) > 0 {
-		expectedReturnType = g.getLLVMType(genericType.typeArgs[0])
+		// AUTO-UNWRAP: The Fiber type argument might be Result<T, E> due to inference,
+		// but the actual value is unwrapped T. Unwrap the type before getting LLVM type.
+		unwrappedType := g.typeInferer.unwrapResultType(genericType.typeArgs[0])
+		expectedReturnType = g.getLLVMType(unwrappedType)
 	}
 
 	// Convert from i64 to the actual return type if needed
@@ -233,6 +238,8 @@ func (g *LLVMGenerator) generateYieldExpression(yield *ast.YieldExpression) (val
 		if err != nil {
 			return nil, err
 		}
+		// AUTO-UNWRAP Result types for fiber operations per spec (0004-TypeSystem.md:115-160)
+		yieldValue = g.unwrapIfResult(yieldValue)
 	} else {
 		yieldValue = constant.NewInt(types.I64, 0)
 	}
@@ -290,6 +297,8 @@ func (g *LLVMGenerator) generateChannelSendExpression(send *ast.ChannelSendExpre
 	if err != nil {
 		return nil, err
 	}
+	// AUTO-UNWRAP Result types for fiber operations per spec (0004-TypeSystem.md:115-160)
+	sendValue = g.unwrapIfResult(sendValue)
 
 	// Call channel_send using consolidated approach
 	return g.generateFiberRuntimeCall("send", "channel_send", []value.Value{channelID, sendValue})
@@ -320,6 +329,8 @@ func (g *LLVMGenerator) generateChannelFunctionCall(builtinName string, runtimeN
 		if err != nil {
 			return nil, err
 		}
+		// AUTO-UNWRAP Result types for fiber operations per spec (0004-TypeSystem.md:115-160)
+		args[i] = g.unwrapIfResult(args[i])
 	}
 
 	// Call the appropriate channel function using consolidated approach
@@ -372,8 +383,18 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 		params = append(params, llvmParam)
 	}
 
+	// Determine return type from explicit annotation or default to i64
+	var llvmReturnType types.Type
+	var explicitReturnType Type
+	if lambda.ReturnType != nil {
+		explicitReturnType = g.typeExpressionToInferenceType(lambda.ReturnType)
+		llvmReturnType = g.getLLVMType(explicitReturnType)
+	} else {
+		llvmReturnType = types.I64
+	}
+
 	// Create function with parameters
-	lambdaFunc := g.module.NewFunc(funcName, types.I64, params...)
+	lambdaFunc := g.module.NewFunc(funcName, llvmReturnType, params...)
 
 	// Create entry block
 	entryBlock := lambdaFunc.NewBlock("entry")
@@ -399,6 +420,25 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 	bodyValue, err := g.generateExpression(lambda.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate lambda body: %w", err)
+	}
+
+	// Apply Result unwrapping logic similar to maybeUnwrapResult
+	// If lambda has explicit non-Result return type, unwrap Result body values
+	// If lambda has no explicit return type, unwrap Result body values
+	// If lambda has explicit Result return type, keep Result body values
+	shouldUnwrap := false
+	if lambda.ReturnType != nil {
+		// Check if explicit return type is Result
+		if lambda.ReturnType.Name != TypeResult {
+			shouldUnwrap = true
+		}
+	} else {
+		// No explicit return type - unwrap Results for ergonomic usage
+		shouldUnwrap = true
+	}
+
+	if shouldUnwrap && g.isResultType(bodyValue) {
+		bodyValue = g.unwrapIfResult(bodyValue)
 	}
 
 	// Create return instruction

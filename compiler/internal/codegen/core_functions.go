@@ -103,6 +103,7 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 
 // TODO: This is wrong. We cannot convert fibers to string unless they return a String or
 // there is a toString implementation
+//nolint:gocognit // TODO: Refactor this function to reduce complexity
 func (g *LLVMGenerator) convertValueToStringByType(
 	//TODO: types must not be passed around as strings. This is wrong.
 	theType string, arg value.Value) (value.Value, error) {
@@ -132,7 +133,7 @@ func (g *LLVMGenerator) convertValueToStringByType(
 		}
 
 		// Check if it's a Channel type - show the channel ID, not a generic string
-		if theType == "Channel" {
+		if theType == TypeChannel {
 			// Channel is just an integer ID, convert it to string
 			return g.generateIntToString(arg)
 		}
@@ -148,6 +149,21 @@ func (g *LLVMGenerator) convertValueToStringByType(
 			// Also handle struct value directly (not pointer)
 			if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
 				return g.convertResultToString(arg, structType)
+			}
+
+			// AUTO-UNWRAP FIX: If inferred type is Result but actual LLVM value is NOT a Result struct,
+			// the value has been auto-unwrapped per spec (0004-TypeSystem.md:115-160).
+			// Convert the unwrapped value directly based on its LLVM type.
+			// Example: fn double(x) = x * 2 returns unwrapped i64, not Result struct
+			switch arg.Type() {
+			case types.I64:
+				return g.generateIntToString(arg)
+			case types.Double:
+				return g.generateFloatToString(arg)
+			case types.I8Ptr:
+				return arg, nil // Already a string
+			case types.I1:
+				return g.generateBoolToString(arg)
 			}
 		}
 

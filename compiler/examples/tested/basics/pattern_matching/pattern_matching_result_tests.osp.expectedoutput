@@ -5,4 +5,4 @@ Arithmetic calculation created
 0
 Testing Result<int> toString:
 Result<int> Success: Success(50)
-Result<float> Error: <Result[t15, string]>
+Result<float> Error: Error

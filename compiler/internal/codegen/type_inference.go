@@ -1053,6 +1053,12 @@ func (ti *TypeInferer) unifyConcreteWithGeneric(t1, t2 Type) bool {
 	// Try ConcreteType vs GenericType
 	if ct, ok := t1.(*ConcreteType); ok {
 		if gt, ok := t2.(*GenericType); ok {
+			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
+			// This allows: fn test() -> Fiber = spawn 42 (where spawn 42 creates Fiber[int])
+			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
+				return true // Bare type acts as wildcard
+			}
+
 			// Normalize: GenericType uses [] but ConcreteType uses <>
 			// Convert GenericType string representation to use <> for comparison
 			gtString := gt.String()
@@ -1068,6 +1074,11 @@ func (ti *TypeInferer) unifyConcreteWithGeneric(t1, t2 Type) bool {
 	// Try GenericType vs ConcreteType
 	if gt, ok := t1.(*GenericType); ok {
 		if ct, ok := t2.(*ConcreteType); ok {
+			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
+			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
+				return true // Bare type acts as wildcard
+			}
+
 			// Normalize: GenericType uses [] but ConcreteType uses <>
 			// Convert GenericType string representation to use <> for comparison
 			gtString := gt.String()
@@ -1559,6 +1570,11 @@ func (ti *TypeInferer) inferNamedArguments(namedArgs []ast.NamedArgument) ([]Typ
 			return nil, err
 		}
 
+		// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
+		// This allows fibonacci(n - 1) where (n - 1) returns Result<int, MathError>
+		// The unwrapped type is used for type inference, actual unwrapping happens at codegen
+		argType = ti.unwrapResultType(argType)
+
 		argTypes = append(argTypes, argType)
 	}
 
@@ -1574,6 +1590,11 @@ func (ti *TypeInferer) inferRegularArguments(args []ast.Expression) ([]Type, err
 		if err != nil {
 			return nil, err
 		}
+
+		// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
+		// This allows fibonacci(n - 1) where (n - 1) returns Result<int, MathError>
+		// The unwrapped type is used for type inference, actual unwrapping happens at codegen
+		argType = ti.unwrapResultType(argType)
 
 		argTypes = append(argTypes, argType)
 	}

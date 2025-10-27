@@ -237,7 +237,23 @@ func (g *LLVMGenerator) generateArgumentExpression(
 	}
 
 	// For non-polymorphic function arguments, generate normally
-	return g.generateExpression(expr)
+	val, err := g.generateExpression(expr)
+	if err != nil {
+		return nil, err
+	}
+
+	// SPECIAL CASE: toString() must receive the actual Result struct, not unwrapped value
+	// This allows toString(add(5,3)) to display "Success(8)" instead of "8"
+	if funcName, ok := callExpr.Function.(*ast.Identifier); ok {
+		if funcName.Name == "toString" {
+			return val, nil // Don't unwrap for toString
+		}
+	}
+
+	// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
+	// This matches the type inference behavior where Result types are automatically unwrapped
+	// Example: fibonacci(n - 1) where (n - 1) returns Result<int, MathError> but fibonacci expects int
+	return g.unwrapIfResult(val), nil
 }
 
 // handlePolymorphicFunctionArgument handles polymorphic function arguments
@@ -357,6 +373,9 @@ func (g *LLVMGenerator) inferCallArgumentTypes(callExpr *ast.CallExpression) ([]
 				return nil, err
 			}
 
+			// AUTO-UNWRAP Result types for monomorphization (spec 0004-TypeSystem.md:115-160)
+			argType = g.typeInferer.unwrapResultType(argType)
+
 			argTypes = append(argTypes, argType)
 		}
 	} else {
@@ -366,6 +385,12 @@ func (g *LLVMGenerator) inferCallArgumentTypes(callExpr *ast.CallExpression) ([]
 			if err != nil {
 				return nil, err
 			}
+
+			// AUTO-UNWRAP Result types for monomorphization (spec 0004-TypeSystem.md:115-160)
+			// This ensures polymorphic functions are monomorphized with the correct parameter type
+			// Example: square(double(x)) where double returns Result<int, MathError>
+			// Should monomorphize square as (int) -> Result, not (Result) -> Result
+			argType = g.typeInferer.unwrapResultType(argType)
 
 			argTypes = append(argTypes, argType)
 		}
@@ -468,6 +493,7 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 	}
 
 	// Create the LLVM function signature for this monomorphized instance
+	// Use the inferred return type AS-IS (don't unwrap)
 	llvmReturnType := g.getLLVMType(concreteFnType.returnType)
 
 	params := make([]*ir.Param, len(concreteFnType.paramTypes))

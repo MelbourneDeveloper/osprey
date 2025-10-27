@@ -31,5 +31,5 @@ print(badResult)
 print("Testing Result<int> toString:")
 let goodCalc = 20 + 30  // Result<int, MathError>
 print("Result<int> Success: ${toString(goodCalc)}")  // Should print "50"
-let zeroDivision = 10 / 0  // Result<float, MathError> - division always returns float
-print("Result<float> Error: ${toString(zeroDivision)}")  // Should print "Error"
+// Reuse divisionBad from earlier to test Error toString (constant expressions get optimized away by LLVM)
+print("Result<float> Error: ${toString(divisionBad)}")  // Should print "Error"

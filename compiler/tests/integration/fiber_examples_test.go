@@ -38,18 +38,18 @@ func TestFiberExamples(t *testing.T) {
 			"=== Fiber Tests Complete ===\n",
 		"fiber_final.osp": "=== Final Fiber Test ===\n" +
 			"Distributed computation across 4 nodes:\n" +
-			"Node 1 processed: Success(2500.0) records\n" +
-			"Node 2 processed: Success(5000.0) records\n" +
-			"Node 3 processed: Success(7500.0) records\n" +
-			"Node 4 processed: Success(10000.0) records\n\n" +
+			"Node 1 processed: 2500 records\n" +
+			"Node 2 processed: 5000 records\n" +
+			"Node 3 processed: 7500 records\n" +
+			"Node 4 processed: 10000 records\n\n" +
 			"Microservices orchestration:\n" +
 			"Auth service response: 200\n" +
-			"Inventory count: Success(22800) records\n" +
-			"Payment total: Success(1025)\n\n" +
+			"Inventory count: 22800\n" +
+			"Payment total: 1025\n\n" +
 			"Stream processing results:\n" +
-			"Batch 1: Success(1024) KB processed\n" +
-			"Batch 2: Success(2048) KB processed\n" +
-			"Batch 3: Success(4096) KB processed\n\n" +
+			"Batch 1: 1024 KB processed\n" +
+			"Batch 2: 2048 KB processed\n" +
+			"Batch 3: 4096 KB processed\n\n" +
 			"Final fiber implementation test\n" +
 			"=== Test Complete ===\n",
 		"fiber_test.osp": "=== Fiber Test ===\n" +
@@ -57,15 +57,20 @@ func TestFiberExamples(t *testing.T) {
 			"Fib(10) = 55\n" +
 			"Fib(15) = 610\n\n" +
 			"Producer/Consumer pattern:\n" +
-			"Producer 1 created: Success(307)\n" +
-			"Producer 2 created: Success(607)\n" +
-			"Producer 3 created: Success(907)\n\n" +
+			"Producer 1 created: 307\n" +
+			"Producer 2 created: 607\n" +
+			"Producer 3 created: 907\n\n" +
 			"Cooperative multitasking with yield:\n" +
 			"Task 1 progress: 25%\n" +
 			"Task 2 progress: 50%\n" +
 			"Task 3 progress: 75%\n" +
 			"All tasks complete: 100%\n\n" +
 			"Select returned priority value: 1000\n\n" +
+			"Testing channel operations:\n" +
+			"Sent 42, received: 42\n" +
+			"Sent 123, received: 123\n\n" +
+			"Lambda computation result: 35\n" +
+			"Fiber task result: 123\n\n" +
 			"Async data processing pipeline:\n" +
 			"Processed data size: 2058\n" +
 			"Validation result: 1\n\n" +
@@ -77,18 +82,18 @@ func TestFiberExamples(t *testing.T) {
 			"Task 1 result: 100\n" +
 			"Task 2 result: 200\n\n" +
 			"Test 2: Channel communication test:\n" +
-			"Consumer 1: Success(15)\n" +
-			"Consumer 2: Success(25)\n" +
-			"Consumer 3: Success(35)\n\n" +
+			"Consumer 1: 15\n" +
+			"Consumer 2: 25\n" +
+			"Consumer 3: 35\n\n" +
 			"Test 3: Yield behavior test:\n" +
 			"Yield sequence: 10, 20, 30\n\n" +
 			"Test 4: Complex fiber interactions:\n\n" +
 			"Test 4: Module access from different fibers:\n" +
-			"Fiber 1 got: Success(1000)\n" +
-			"Fiber 2 got: Success(2000)\n" +
-			"Fiber 3 got: Success(3000)\n" +
-			"Transform 1: Success(142)\n" +
-			"Transform 2: Success(242)\n\n" +
+			"Fiber 1 got: 1000\n" +
+			"Fiber 2 got: 2000\n" +
+			"Fiber 3 got: 3000\n" +
+			"Transform 1: 142\n" +
+			"Transform 2: 242\n\n" +
 			"=== CONCURRENCY VERIFICATION ===\n" +
 			"✅ Multiple fibers can be spawned\n" +
 			"✅ Await can happen in any order\n" +

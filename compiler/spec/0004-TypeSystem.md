@@ -159,6 +159,43 @@ fn addOneResult(x: int) -> Result<int, MathError> = x + 1  // Returns Result dir
 - Nested/intermediate Results are automatically unwrapped by the compiler
 - This design balances safety (all errors handled) with ergonomics (no nested matching)
 
+**Result Auto-Unwrapping Behavior:**
+
+Result types auto-unwrap in specific contexts to enable ergonomic code:
+
+1. **Arithmetic Operations**: Results unwrap when used in nested arithmetic
+   ```osprey
+   let x = add(5, 3)        // Returns Result<int, MathError>
+   let doubled = x * 2      // x auto-unwraps for multiplication
+   ```
+
+2. **Function Arguments**: Results unwrap when passed to user functions
+   ```osprey
+   fn add(a, b) = a + b
+   fn double(x) = x * 2
+   let result = double(add(5, 3))  // add result unwraps before passing to double
+   ```
+
+3. **Fiber Operations**: Results unwrap for spawn, yield, and channel operations
+   ```osprey
+   let computation = spawn add(5, 3)   // Result unwraps before storing in fiber
+   ```
+
+**IMPORTANT EXCEPTIONS - Do NOT Auto-Unwrap:**
+
+1. **toString() Builtin**: Receives the actual Result struct
+   ```osprey
+   fn add(x, y) = x + y
+   let result = add(5, 3)
+   print(toString(result))   // Prints: Success(8), not "8"
+   ```
+
+2. **Function Return Types**: Functions keep their inferred Result type
+   ```osprey
+   fn add(x, y) = x + y      // Returns Result<int, MathError> struct
+   fn compute() -> int = 5   // Returns plain int
+   ```
+
 **Result toString Format:**
 - Success: `Success(value)` - e.g., `Success(42)`, `Success(3.14)`, `Success(true)`
 - Error: `Error(message)` - e.g., `Error(DivisionByZero)`, `Error(Overflow)`

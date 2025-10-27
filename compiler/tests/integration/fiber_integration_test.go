@@ -38,7 +38,7 @@ fn main() -> int = test()`,
 fn main() -> int = test()`,
 
 		"module_with_fibers": `module FiberModule {
-    fn compute() -> Fiber = spawn 42
+    fn compute() -> Fiber[int] = spawn 42
     fn get_result() -> int = await (spawn 100)
 }
 fn main() -> int = await(FiberModule.compute())`,
