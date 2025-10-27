@@ -2006,11 +2006,28 @@ func (ti *TypeInferer) tryNumericAddition(leftType, rightType, leftResolved, rig
 }
 
 // handlePolymorphicPlus handles polymorphic + operator for type variables.
+// This is called as a last resort when concrete type inference fails.
 func (ti *TypeInferer) handlePolymorphicPlus(leftType, rightType Type) (Type, error) {
-	err := ti.Unify(leftType, rightType)
+	// Ensure both types are unwrapped before unification to avoid circular references
+	leftUnwrapped := ti.unwrapResultType(leftType)
+	rightUnwrapped := ti.unwrapResultType(rightType)
+
+	// Prune to resolve type variables before unification
+	leftPruned := ti.prune(leftUnwrapped)
+	rightPruned := ti.prune(rightUnwrapped)
+
+	err := ti.Unify(leftPruned, rightPruned)
 	if err != nil {
+		// If unification fails due to recursive types, assume numeric addition
+		// This handles cases where type variables create circular dependencies
+		if errors.Is(err, ErrRecursiveType) {
+			// Default to Result<int, MathError> for arithmetic operations
+			return &ConcreteType{name: "Result<int, MathError>"}, nil
+		}
 		return nil, fmt.Errorf("operands of + must have the same type: %w", err)
 	}
+	// For polymorphic addition, we don't know the result type yet
+	// Return a fresh type variable that will be resolved later
 	return ti.Fresh(), nil
 }
 

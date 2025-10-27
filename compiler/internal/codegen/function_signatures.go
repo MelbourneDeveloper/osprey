@@ -713,8 +713,14 @@ func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
 
 // maybeUnwrapResult unwraps a Result value if the function return type is not a Result
 func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.FunctionDeclaration) value.Value {
-	// Check INFERRED return type from type environment
-	// This handles both explicit type annotations and inferred types
+	// FIRST: Check explicit declaration (highest priority)
+	if fnDecl.ReturnType != nil && fnDecl.ReturnType.Name == TypeResult {
+		// Function explicitly declares Result return type - don't unwrap
+		return bodyValue
+	}
+
+	// SECOND: Check INFERRED return type from type environment
+	// This handles inferred types for functions without explicit annotations
 	if fnType, exists := g.typeInferer.env.Get(fnDecl.Name); exists {
 		if funcType, ok := fnType.(*FunctionType); ok {
 			// Prune to resolve any type variables

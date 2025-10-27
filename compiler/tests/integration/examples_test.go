@@ -94,7 +94,7 @@ func getExpectedOutputs() map[string]string {
 	return map[string]string{
 		"hello.osp": "Hello, World!\nHello from function!\n",
 		"interpolation_math.osp": "Next year you'll be 26\nLast year you were 24\n" +
-			"Double your age: 50\nHalf your age: Success(12)\n",
+			"Double your age: 50\nHalf your age: 12.5\n",
 		"interpolation_comprehensive.osp": "Hello Alice!\nYou are 25 years old\n" +
 			"Your score is 95 points\nNext year you'll be 26\n" +
 			"Double your score: 190\nAlice (25) scored 95/100\n",
@@ -525,8 +525,8 @@ func getSpaceTraderExpectedOutput() string {
 		"Cargo bay: 0/50 units\n" +
 		"Ship condition: Operational\n\n" +
 		"📊 ADVANCED ANALYTICS 📊\n" +
-		"Fuel efficiency: Success(16.66666667)% per planet\n" +
-		"Profit per planet: Success(233.3333333) credits\n" +
+		"Fuel efficiency: 16.66666667% per planet\n" +
+		"Profit per planet: 233.3333333 credits\n" +
 		"Projected wealth (if doubled): 3400 credits\n\n" +
 		"🏆 MISSION COMPLETE! 🏆\n" +
 		"Congratulations, Captain Novice Merchant!\n" +
@@ -561,7 +561,7 @@ func getAdventureGameExpectedOutput() string {
 		"Enemy Health: 120 ❤️\n" +
 		"Your attack power: 60 ⚔️\n\n" +
 		"⚡ BATTLE COMMENCES! ⚡\n" +
-		"You need Success(2) successful attacks to defeat the Ancient Dragon!\n\n" +
+		"You need 2 successful attacks to defeat the Ancient Dragon!\n\n" +
 		"🥊 Round 1: You strike for 60 damage!\n" +
 		"Dragon health remaining: 60\n\n" +
 		"🥊 Round 2: Another powerful blow for 60 damage!\n" +

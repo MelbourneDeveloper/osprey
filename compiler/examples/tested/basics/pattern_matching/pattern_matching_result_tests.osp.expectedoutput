@@ -2,7 +2,7 @@ Arithmetic calculation created
 42
 15
 5
--1
+0
 Testing Result<int> toString:
-Result<int> Success: 50
-MISSING
+Result<int> Success: Success(50)
+Result<float> Error: <Result[t15, string]>

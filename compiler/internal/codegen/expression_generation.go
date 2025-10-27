@@ -1049,17 +1049,9 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 		}
 	}
 
-	// Check current function's return type to determine output type
-	if g.function != nil && g.function.Sig != nil {
-		returnType := g.function.Sig.RetType
-		if returnType == types.I1 {
-			return cmp, nil
-		}
-	}
-
-	// Default to extending to i64 for Result type construction and other contexts
-	// The print function will handle the conversion to proper boolean strings
-	return g.builder.NewZExt(cmp, types.I64), nil
+	// Return i1 (bool) directly for comparison operations
+	// Comparisons don't return Result types - only arithmetic operations do
+	return cmp, nil
 }
 
 // generateLogicalOperationWithPos generates LLVM logical operations with position info.

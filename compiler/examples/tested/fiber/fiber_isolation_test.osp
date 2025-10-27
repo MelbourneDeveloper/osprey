@@ -28,10 +28,7 @@ print("Task 2 result: ${r2}")
 // Test 2: Channel communication between fibers
 print("\nTest 2: Channel communication test:")
 
-fn producer(id: int) -> int = match id * 100 + 50 {
-    Success { value } => value
-    Error { message } => 0
-}
+fn producer(id: int) = id * 100 + 50
 fn consumer(data: int) -> int = match data {
     150 => 15  // 150 / 10 = 15
     250 => 25  // 250 / 10 = 25
@@ -67,14 +64,8 @@ print("\nTest 4: Complex fiber interactions:")
 // Test 4: Module access from fibers
 print("\nTest 4: Module access from different fibers:")
 
-fn getValue(key: int) -> int = match key * 1000 {
-    Success { value } => value
-    Error { message } => 0
-}
-fn transform(val: int) -> int = match val + 42 {
-    Success { value } => value
-    Error { message } => 0
-}
+fn getValue(key: int) = key * 1000
+fn transform(val: int) = val + 42
 
 let access1 = spawn getValue(1)
 let access2 = spawn getValue(2)

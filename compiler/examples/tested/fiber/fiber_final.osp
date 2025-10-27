@@ -2,7 +2,7 @@
 print("=== Final Fiber Test ===")
 
 // Distributed computing simulation
-fn computePartition(partitionId: int, dataSize: int) -> int = 
+fn computePartition(partitionId: int, dataSize: int) =
     partitionId * (dataSize / 4)  // Each partition processes 1/4 of data
 
 // Spawn multiple compute nodes

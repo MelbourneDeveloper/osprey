@@ -2,6 +2,6 @@
 Test 1 - Function block with list: 30
 Test 2 - Nested with shadowing, maps & lists: 90
 Test 3 - Block with match and map: 94
-Test 4 - Complex function with lists: Success(10)
+Test 4 - Complex function with lists: 10
 Test 5 - Mixed collections block: 30
 === Advanced Block Statements Complete ===

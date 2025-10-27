@@ -112,6 +112,57 @@ match a {
 - **Precision**: Mixed operations promote to float to prevent precision loss
 - **Explicitness**: Pattern matching forces error handling at compile time
 
+### Result Auto-Unwrapping and Nested Arithmetic
+
+**Key Principle:** Arithmetic expressions return Result types, but nested arithmetic automatically unwraps Results to avoid nested pattern matching.
+
+**How It Works:**
+- A single arithmetic expression like `let x = 10 + 5` returns `Result<int, MathError>`
+- Nested expressions like `(10 + 5) * 2` automatically unwrap the inner Result
+- Only the final result needs pattern matching - no nested matching required
+- Error propagation happens at runtime - if any operation fails, the entire chain fails
+
+**Examples:**
+```osprey
+// Simple arithmetic - returns Result<int, MathError>
+let x = 10 + 5
+match x {
+    Success { value } => print(value)  // Prints: 15
+    Error { message } => print(message)
+}
+
+// Nested arithmetic - automatic unwrapping
+let y = (10 + 5) * 2  // Returns Result<int, MathError>, NOT Result<Result<...>>
+// The (10 + 5) Result is auto-unwrapped before multiplication
+match y {
+    Success { value } => print(value)  // Prints: 30
+    Error { message } => print(message)
+}
+
+// Complex chains work seamlessly
+let z = (10 + 5) * (20 - 3) + 7  // Single Result, not nested
+// Each intermediate Result is unwrapped automatically
+
+// Functions can leverage this for clean code
+fn addOne(x: int) -> int =
+    match x + 1 {
+        Success { value } => value  // Extract value for non-Result return
+        Error { message } => 0      // Handle error case
+    }
+
+// Or declare Result return type and skip unwrapping
+fn addOneResult(x: int) -> Result<int, MathError> = x + 1  // Returns Result directly
+```
+
+**Pattern Matching Requirement:**
+- Top-level arithmetic results MUST be pattern matched or stored as Result types
+- Nested/intermediate Results are automatically unwrapped by the compiler
+- This design balances safety (all errors handled) with ergonomics (no nested matching)
+
+**Result toString Format:**
+- Success: `Success(value)` - e.g., `Success(42)`, `Success(3.14)`, `Success(true)`
+- Error: `Error(message)` - e.g., `Error(DivisionByZero)`, `Error(Overflow)`
+
 #### Function Types
 
 Function types represent functions as first-class values, enabling higher-order functions and function composition.

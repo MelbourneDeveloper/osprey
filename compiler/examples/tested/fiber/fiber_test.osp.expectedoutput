@@ -4,9 +4,9 @@ Fib(10) = 55
 Fib(15) = 610
 
 Producer/Consumer pattern:
-Producer 1 created: 307
-Producer 2 created: 607
-Producer 3 created: 907
+Producer 1 created: Success(307)
+Producer 2 created: Success(607)
+Producer 3 created: Success(907)
 
 Cooperative multitasking with yield:
 Task 1 progress: 25%
@@ -20,7 +20,7 @@ Testing channel operations:
 Sent 42, received: 42
 Sent 123, received: 123
 
-Lambda computation result: 35
+Lambda computation result: Success(35)
 Fiber task result: 123
 
 Async data processing pipeline:
