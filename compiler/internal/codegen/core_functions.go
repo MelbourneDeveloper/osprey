@@ -103,6 +103,7 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 
 // TODO: This is wrong. We cannot convert fibers to string unless they return a String or
 // there is a toString implementation
+//
 //nolint:gocognit // TODO: Refactor this function to reduce complexity
 func (g *LLVMGenerator) convertValueToStringByType(
 	//TODO: types must not be passed around as strings. This is wrong.

@@ -998,7 +998,6 @@ func (g *LLVMGenerator) unwrapIfResult(val value.Value) value.Value {
 	return g.builder.NewExtractValue(val, 0)
 }
 
-
 // generateComparisonOperationWithPos generates LLVM comparison operations with position info.
 func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	operator string, left, right value.Value, pos *ast.Position,
