@@ -8,12 +8,12 @@
 
 The `Result` type is a generic union type with two variants:
 
-- `Success { value: T }`: Represents a successful result. Success **IS A STRUCT** with a `value` field of type `T`.
-- `Error E`: Represents an error. Error **CONTAINS A DIRECT VALUE** of type `E` (not a struct).
+- `Success { value: T }`: Represents a successful result, containing the value of type `T`.
+- `Error { message: E }`: Represents an error, containing an error message or object of type `E`.
 
 **Example:**
 ```osprey
-type Result<T, E> = Success { value: T } | Error E
+type Result<T, E> = Success { value: T } | Error { message: E }
 ```
 
 The compiler **MUST** enforce that `Result` types are always handled with a `match` expression, preventing direct access to the underlying value and ensuring that all possible outcomes are considered.
@@ -23,8 +23,8 @@ The compiler **MUST** enforce that `Result` types are always handled with a `mat
 let result = someFunctionThatCanFail()
 
 match result {
-    Success value => print("Success: ${value}")
-    Error message => print("Error: ${message}")
+    Success { value } => print("Success: ${value}")
+    Error { message } => print("Error: ${message}")
 }
 ```
 

@@ -26,7 +26,7 @@ All primitive types use lowercase names:
 - `string`: UTF-8 encoded strings
 - `bool`: Boolean values (`true`, `false`)
 - `unit`: Type for functions that don't return a meaningful value
-- `Result<T, E>`: Built-in generic type for error handling with structural Success and direct Error values
+- `Result<T, E>`: Built-in generic type for error handling
 - `List<T>`: Immutable collections with compile-time safety and zero-cost abstractions
 - `Map<K, V>`: Immutable key-value collections with functional operations
 - `Function Types`: First-class function types with syntax `(T1, T2, ...) -> R`
@@ -410,8 +410,8 @@ let name = personResult.name    // Compilation error
 
 // CORRECT: Pattern match on Result first
 let name = match personResult {
-    Success value => value.name
-    Error message => "error"
+    Success { value } => value.name
+    Error { message } => "error"
 }
 ```
 
@@ -491,13 +491,13 @@ let scores = [85, 92, 78, 96, 88]
 // Array access returns Result for safety
 match scores[0] {
     Success { value } => print("First score: ${toString(value)}")
-    Error message => print("Index error: ${message}")
+    Error { message } => print("Index error: ${message}")
 }
 
 // Bounds checking prevents runtime errors
 match scores[10] {  // Out of bounds
     Success { value } => print("Never reached")
-    Error message => print("Index out of bounds")  // This executes
+    Error { message } => print("Index out of bounds")  // This executes
 }
 ```
 
@@ -587,7 +587,7 @@ let result = processAges({})            // {} inferred as Map<string, int> from 
 // Map access returns Result for safety
 match ages["Alice"] {
     Success { value } => print("Alice is ${toString(value)} years old")
-    Error message => print("Alice not found")
+    Error { message } => print("Alice not found")
 }
 
 // Checking for key existence
@@ -1133,7 +1133,7 @@ fn complexOperation(data: String, count: Int) = processData(data, count)
 fn parseValue<T>(input: String) -> Result<T, ParseError> = ...
 
 // Union types with fields require explicit typing
-type Result<T, E> = Success { value: T } | Error E
+type Result<T, E> = Ok { value: T } | Err { error: E }
 ```
 
 #### Compilation Errors for Type Ambiguity
@@ -1151,15 +1151,15 @@ The compiler **MUST** emit errors when:
 ```osprey
 // REQUIRED: Safe division that cannot panic
 fn safeDivide(a: Int, b: Int) -> Result<Int, MathError> = match b {
-  0 => Error DivisionByZero
-  _ => Success { value: a / b }
+  0 => Err { error: DivisionByZero }
+  _ => Ok { value: a / b }
 }
 
 // REQUIRED: All results must be handled
 let result = safeDivide(a: 10, b: 2)
 match result {
-  Success { value } => print("Result: ${value}")
-  Error error => handleError(error)
+  Ok { value } => print("Result: ${value}")
+  Err { error } => handleError(error)
 }
 ```
 
@@ -1200,7 +1200,7 @@ match product {
         print("Product: ${value.name}")
         print("Price: ${value.price}")
     }
-    Error message => {
+    Error { message } => {
         print("Validation failed: ${message}")
     }
 }
@@ -1209,7 +1209,7 @@ match product {
 let invalid = Product { name: "", price: -10 }  // Returns Error variant
 match invalid {
     Success { value } => print("This won't execute")
-    Error message => print("Expected error: ${message}")
+    Error { message } => print("Expected error: ${message}")
 }
 ```
 
@@ -1225,7 +1225,7 @@ let name = product.name  // Compilation error - pattern matching required
 // CORRECT: Field access after unwrapping
 match product {
     Success { value } => print("Name: ${value.name}")  // Valid field access
-    Error message => print("Error: ${message}")
+    Error { message } => print("Error: ${message}")
 }
 ```
 

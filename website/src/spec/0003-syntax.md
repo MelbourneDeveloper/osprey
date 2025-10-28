@@ -160,7 +160,7 @@ type Result = Success { value: String }
 
 ### 3.7 Record Types and Type Constructors
 
-❌ **NOT FULLY IMPLEMENTED**: Record types with constraints are a design goal but not yet implemented. Basic type declarations work but constraint validation is not implemented.
+⚠️ **PARTIALLY IMPLEMENTED**: Basic record types with non-destructive updates are fully implemented. Field-level WHERE constraint validation is not yet implemented (type-level validation works).
 
 #### 3.7.1 Record Type Declaration
 
@@ -267,6 +267,8 @@ match Person { name: "", age: 25 } {
 ```
 
 #### 3.7.4 Non-Destructive Mutation (Structural Updates)
+
+✅ **IMPLEMENTED**: Non-destructive record updates are fully functional. Constraint validation on updates is TODO.
 
 Records support elegant non-destructive updates that create modified copies:
 

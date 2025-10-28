@@ -679,6 +679,8 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return nil, ErrMethodCallsNotImplemented
 	case *ast.ListAccessExpression:
 		return ti.inferListAccess(e)
+	case *ast.UpdateExpression:
+		return ti.inferUpdateExpression(e)
 	case *ast.PerformExpression:
 		return ti.inferPerformExpression(e)
 	case *ast.HandlerExpression:
@@ -2181,8 +2183,76 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 	return nil, WrapFieldAccessOnNonRecord(e.FieldName, resolvedObjectType.String())
 }
 
+// checkRecordUpdateDisambiguation checks if a type constructor expression is actually a record update.
+// Returns (inferredType, true) if it's a record update, (nil, false) if it's a type constructor.
+func (ti *TypeInferer) checkRecordUpdateDisambiguation(e *ast.TypeConstructorExpression) (Type, bool, error) {
+	// Check if TypeName refers to a variable instead of a type
+	varType, exists := ti.env.Get(e.TypeName)
+	if !exists {
+		return nil, false, nil // It's a type constructor
+	}
+
+	// Check if the variable is a record type
+	if _, isRecord := varType.(*RecordType); !isRecord {
+		return nil, false, nil // Variable exists but not a record, treat as type constructor
+	}
+
+	// This is a record update, not a type constructor
+	updateExpr := &ast.UpdateExpression{
+		Target: &ast.Identifier{
+			Name:     e.TypeName,
+			Position: e.Position,
+		},
+		Fields:   e.Fields,
+		Position: e.Position,
+	}
+
+	inferredType, err := ti.inferUpdateExpression(updateExpr)
+	if err != nil {
+		return nil, true, err
+	}
+
+	return inferredType, true, nil
+}
+
+// inferAndUnifyRecordFields infers and unifies field types for record constructors
+func (ti *TypeInferer) inferAndUnifyRecordFields(
+	e *ast.TypeConstructorExpression,
+	recordType *RecordType,
+) (map[string]Type, error) {
+	fieldTypes := make(map[string]Type)
+
+	// Infer the type of each field from the constructor expression
+	for fieldName, fieldExpr := range e.Fields {
+		fieldType, err := ti.InferType(fieldExpr)
+		if err != nil {
+			return nil, err
+		}
+
+		// CRITICAL: Unify the inferred field type with the expected field type from record definition
+		// This ensures type variables (like function parameters) get constrained to the correct types
+		if expectedFieldType, exists := recordType.fields[fieldName]; exists {
+			err := ti.Unify(fieldType, expectedFieldType)
+			if err != nil {
+				return nil, fmt.Errorf("field %s type mismatch in %s constructor: %w",
+					fieldName, recordType.name, err)
+			}
+		}
+
+		// Use the pruned type after unification
+		fieldTypes[fieldName] = ti.prune(fieldType)
+	}
+
+	return fieldTypes, nil
+}
+
 // inferTypeConstructor infers types for type constructor expressions
 func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (Type, error) {
+	// DISAMBIGUATION: Check if this is actually a record update
+	if updateType, isUpdate, err := ti.checkRecordUpdateDisambiguation(e); isUpdate {
+		return updateType, err
+	}
+
 	// Special handling for Success constructor
 	if e.TypeName == "Success" {
 		valueExpr, exists := e.Fields["value"]
@@ -2225,17 +2295,9 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 	if t, ok := ti.env.Get(e.TypeName); ok {
 		// Check if this is a record type
 		if recordType, isRecord := t.(*RecordType); isRecord {
-			// Create a new record type with fields instantiated from the constructor values
-			fieldTypes := make(map[string]Type)
-
-			// Infer the type of each field from the constructor expression
-			for fieldName, fieldExpr := range e.Fields {
-				fieldType, err := ti.InferType(fieldExpr)
-				if err != nil {
-					return nil, err
-				}
-
-				fieldTypes[fieldName] = fieldType
+			fieldTypes, err := ti.inferAndUnifyRecordFields(e, recordType)
+			if err != nil {
+				return nil, err
 			}
 
 			// Create a monomorphic instance of the record type
@@ -2457,6 +2519,35 @@ func (ti *TypeInferer) inferObjectLiteral(e *ast.ObjectLiteral) (Type, error) {
 	ti.nextID++
 
 	return NewRecordType(recordTypeName, fieldTypes), nil
+}
+
+// inferUpdateExpression infers the type for record update expressions.
+// The updated record has the same type as the original.
+func (ti *TypeInferer) inferUpdateExpression(e *ast.UpdateExpression) (Type, error) {
+	// Infer the type of the target being updated
+	targetType, err := ti.InferType(e.Target)
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer target type for update: %w", err)
+	}
+
+	// Resolve the target type to get the actual record type
+	resolvedType := ti.ResolveType(targetType)
+
+	// Ensure it's a record type
+	recordType, ok := resolvedType.(*RecordType)
+	if !ok {
+		return nil, WrapCannotUpdateNonRecord(resolvedType.String())
+	}
+
+	// Validate that updated fields exist in the record
+	for fieldName := range e.Fields {
+		if _, exists := recordType.fields[fieldName]; !exists {
+			return nil, WrapFieldNotInRecordType(fieldName, recordType.String())
+		}
+	}
+
+	// The update expression preserves the type of the target (the full record type)
+	return recordType, nil
 }
 
 // inferBlockExpression infers types for block expressions

@@ -47,8 +47,15 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		return err
 	}
 
+	// CRITICAL: Prune ALL parameter types to resolve substitutions BEFORE restoring state
+	// This ensures type unifications from body inference (e.g., record field unification) are preserved
+	prunedParamTypes := make([]Type, len(paramTypes))
+	for i, paramType := range paramTypes {
+		prunedParamTypes[i] = g.typeInferer.prune(paramType)
+	}
+
 	finalFnType := &FunctionType{
-		paramTypes: paramTypes,
+		paramTypes: prunedParamTypes,
 		returnType: g.typeInferer.prune(returnTypeVar),
 	}
 
@@ -56,8 +63,26 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 
 	// HINDLEY-MILNER: Generalize the function type to create a type scheme
 	// This allows the function to be polymorphic across multiple call sites
-	scheme := g.typeInferer.Generalize(finalFnType)
-	g.typeInferer.env.Set(fnDecl.Name, scheme)
+	// But only generalize if there are actually unresolved type variables (after pruning)
+	hasTypeVars := false
+	for _, paramType := range finalFnType.paramTypes {
+		if _, isTypeVar := paramType.(*TypeVar); isTypeVar {
+			hasTypeVars = true
+			break
+		}
+	}
+	if _, isTypeVar := finalFnType.returnType.(*TypeVar); isTypeVar {
+		hasTypeVars = true
+	}
+
+	if hasTypeVars {
+		// Has type variables - create a type scheme for polymorphism
+		scheme := g.typeInferer.Generalize(finalFnType)
+		g.typeInferer.env.Set(fnDecl.Name, scheme)
+	} else {
+		// All types are concrete - this is a monomorphic function
+		g.typeInferer.env.Set(fnDecl.Name, finalFnType)
+	}
 
 	err = g.createLLVMFunctionSignature(fnDecl, finalFnType)
 	if err != nil {
@@ -216,7 +241,10 @@ func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclarat
 
 	params := make([]*ir.Param, len(finalFnType.paramTypes))
 	for i, paramType := range finalFnType.paramTypes {
-		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType))
+		// CRITICAL: For polymorphic functions, parameter types may still be TypeVars
+		// These should have been unified during body type inference
+		prunedParamType := g.typeInferer.prune(paramType)
+		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(prunedParamType))
 	}
 
 	fn := g.module.NewFunc(mangledName, llvmReturnType, params...)
@@ -381,6 +409,22 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		return err
 	}
 
+	// HINDLEY-MILNER: Skip generating body for polymorphic base functions with TypeVars
+	// Only monomorphized instances (with concrete types) should have their bodies generated
+	hasTypeVars := false
+	for _, paramType := range finalFnType.paramTypes {
+		if _, isTypeVar := paramType.(*TypeVar); isTypeVar {
+			hasTypeVars = true
+			break
+		}
+	}
+
+	if hasTypeVars {
+		// This is a polymorphic base function - skip body generation
+		// The body will be generated for monomorphized instances when they're created
+		return nil
+	}
+
 	err = g.generateFunctionBody(fnDecl, fn, finalFnType)
 	if err != nil {
 		return err
@@ -501,8 +545,15 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 		}
 	}
 
+	// CRITICAL: Prune ALL parameter types to resolve substitutions BEFORE restoring env
+	// This ensures type unifications from body inference are preserved
+	prunedParamTypes := make([]Type, len(paramTypes))
+	for i, paramType := range paramTypes {
+		prunedParamTypes[i] = g.typeInferer.prune(paramType)
+	}
+
 	finalFnType := &FunctionType{
-		paramTypes: paramTypes,
+		paramTypes: prunedParamTypes,
 		returnType: g.typeInferer.prune(returnTypeVar),
 	}
 

@@ -19,7 +19,7 @@ Osprey is a functional programming language designed for safety, performance, an
 - **Simplicity**: One idiomatic way to accomplish each task
 - **Performance**: LLVM compilation with Rust interop for performance-critical code
 - **Functional**: Referential transparency, immutable data structures, pure functions
-- **Type Safety**: Strong static typing with Hindley-Milner inference; `any` type requires explicit declaration
+- **Type Safety**: Strong static typing with Hindley-Milner inference; `any` type requires explicit declaration, and accessing values on `any` requires pattern matching
 - **No Exceptions**: All error cases return Result types, enforced at compile time
 - **ML Heritage**: Syntax and semantics inspired by ML family languages
 

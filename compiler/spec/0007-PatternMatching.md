@@ -148,8 +148,8 @@ All arithmetic expressions return `Result<T, MathError>` and must be handled wit
 let calculation = 1 + 3 + (300 / 5)  // Result<int, MathError>
 
 match calculation {
-    Success value => print("Result: ${value}")
-    Error message => print("Math error: ${message}")
+    Success { value } => print("Result: ${value}")
+    Error { message } => print("Math error: ${message}")
 }
 ```
 
@@ -197,8 +197,8 @@ fn calculate(x: int, y: int) -> Result<int, MathError> = x + y * 2 - 5
 
 let result = calculate(10, 3)  // Result<int, MathError>
 match result {
-    Success value => print("Function result: ${value}")
-    Error message => print("Function failed: ${message}")
+    Success { value } => print("Function result: ${value}")
+    Error { message } => print("Function failed: ${message}")
 }
 ```
 
@@ -210,19 +210,19 @@ let step2 = 200 * 3         // Result<int, MathError>
 
 // Handle each step
 match step1 {
-    Success value1 => {
+    Success { value1 } => {
         match step2 {
-            Success value2 => {
+            Success { value2 } => {
                 let final = value1 + value2  // This is also Result<int, MathError>!
                 match final {
-                    Success total => print("Final: ${total}")
-                    Error message => print("Final calc failed: ${message}")
+                    Success { total } => print("Final: ${total}")
+                    Error { message } => print("Final calc failed: ${message}")
                 }
             }
-            Error message => print("Step 2 failed: ${message}")
+            Error { message } => print("Step 2 failed: ${message}")
         }
     }
-    Error message => print("Step 1 failed: ${message}")
+    Error { message } => print("Step 1 failed: ${message}")
 }
 ```
 
@@ -256,7 +256,7 @@ match <expression> {
 
 **Example 1: Handling Built-in `Result` Types**
 
-The built-in `Result<T, E>` type uses `Success { value: T }` and `Error E` constructors.
+The built-in `Result<T, E>` type uses `Success { value: T }` and `Error { message: E }` constructors.
 
 ```osprey
 // Arithmetic operations return Result<int, MathError>
@@ -308,6 +308,6 @@ This is syntactic sugar for:
 ```osprey
 let value = match calculation {
     Success { value } => value
-    Error message => -1
+    Error { message } => -1
 }
 ```

@@ -45,6 +45,11 @@ print("")
 print("Test 5 - Non-destructive updates:")
 let counter = Counter { count: 0 }
 print("Original count: ${counter.count}")
+let incremented = counter { count: counter.count }
+print("After update: ${incremented.count}")
+let movedPoint = point { x: 100, y: 200 }
+print("Updated point: (${movedPoint.x}, ${movedPoint.y})")
+print("Original point unchanged: (${point.x}, ${point.y})")
 print("")
 
 // Test 6 - Complex expressions with field access

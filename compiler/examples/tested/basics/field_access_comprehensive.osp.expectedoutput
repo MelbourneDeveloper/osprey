@@ -17,6 +17,9 @@ User status: Active User
 
 Test 5 - Non-destructive updates:
 Original count: 0
+After update: 0
+Updated point: (100, 200)
+Original point unchanged: (15, 25)
 
 Test 6 - Complex expressions with field access:
 Rectangle perimeter: 30

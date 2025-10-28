@@ -30,6 +30,8 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLiteral(ctx.Literal())
 	case ctx.LambdaExpr() != nil:
 		return b.buildLambdaExpr(ctx.LambdaExpr())
+	case ctx.UpdateExpr() != nil:
+		return b.buildUpdateExpression(ctx.UpdateExpr())
 	case ctx.ObjectLiteral() != nil:
 		return b.buildObjectLiteral(ctx.ObjectLiteral())
 	case ctx.ID(0) != nil:
@@ -360,6 +362,36 @@ func (b *Builder) buildObjectLiteral(ctx parser.IObjectLiteralContext) Expressio
 	}
 
 	return &ObjectLiteral{
+		Fields:   fieldAssignments,
+		Position: b.getPositionFromContext(ctx),
+	}
+}
+
+// buildUpdateExpression builds an UpdateExpression for non-destructive record updates.
+func (b *Builder) buildUpdateExpression(ctx parser.IUpdateExprContext) Expression {
+	if ctx == nil {
+		return nil
+	}
+
+	// Get the target identifier name
+	targetName := ctx.ID().GetText()
+
+	// Build field assignments for the update
+	fieldAssignments := make(map[string]Expression)
+
+	if ctx.FieldAssignments() != nil {
+		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
+			fieldName := fieldCtx.ID().GetText()
+			fieldValue := b.buildExpression(fieldCtx.Expr())
+			fieldAssignments[fieldName] = fieldValue
+		}
+	}
+
+	return &UpdateExpression{
+		Target: &Identifier{
+			Name:     targetName,
+			Position: b.getPosition(ctx.ID().GetSymbol()),
+		},
 		Fields:   fieldAssignments,
 		Position: b.getPositionFromContext(ctx),
 	}

@@ -61,6 +61,10 @@ var (
 	ErrFieldAccessOnLegacyRecord  = errors.New("field access on legacy record type not supported")
 	ErrFieldNotFoundOnType        = errors.New("field not found on type")
 
+	// Record update errors
+	ErrCannotUpdateNonRecord = errors.New("cannot update non-record type")
+	ErrFieldNotInRecordType  = errors.New("field does not exist in record type")
+
 	// Parse errors
 	ErrParseTreeNil   = errors.New("parse tree is nil")
 	ErrASTBuildFailed = errors.New("AST build failed")
@@ -271,6 +275,16 @@ func WrapFieldAccessOnNonRecord(field, typeStr string) error {
 // WrapFieldAccessOnLegacyRecord wraps the legacy record field access error
 func WrapFieldAccessOnLegacyRecord(field, typeName string) error {
 	return fmt.Errorf("%w, field '%s' on type %s", ErrFieldAccessOnLegacyRecord, field, typeName)
+}
+
+// WrapCannotUpdateNonRecord wraps the cannot update non-record error with context
+func WrapCannotUpdateNonRecord(typeStr string) error {
+	return fmt.Errorf("%w: %s", ErrCannotUpdateNonRecord, typeStr)
+}
+
+// WrapFieldNotInRecordType wraps the field not in record type error with context
+func WrapFieldNotInRecordType(field, recordType string) error {
+	return fmt.Errorf("%w '%s' in record type %s", ErrFieldNotInRecordType, field, recordType)
 }
 
 // WrapUndefinedType wraps errors for undefined types
