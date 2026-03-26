@@ -193,6 +193,26 @@ func (g *LLVMGenerator) declareExternalFunctions() {
 		ir.NewParam("n", types.I64),
 	)
 	g.functions["memcpy"] = memcpy
+
+	// Declare effect runtime functions for dynamic handler resolution
+	// i32 @__osprey_handler_push(i8* %effect_name, i8* %operation_name, i8* %handler_func_ptr)
+	handlerPush := g.module.NewFunc("__osprey_handler_push", types.I32,
+		ir.NewParam("effect_name", types.I8Ptr),
+		ir.NewParam("operation_name", types.I8Ptr),
+		ir.NewParam("handler_func_ptr", types.I8Ptr),
+	)
+	g.functions["__osprey_handler_push"] = handlerPush
+
+	// i32 @__osprey_handler_pop()
+	handlerPop := g.module.NewFunc("__osprey_handler_pop", types.I32)
+	g.functions["__osprey_handler_pop"] = handlerPop
+
+	// i8* @__osprey_handler_lookup(i8* %effect_name, i8* %operation_name)
+	handlerLookup := g.module.NewFunc("__osprey_handler_lookup", types.I8Ptr,
+		ir.NewParam("effect_name", types.I8Ptr),
+		ir.NewParam("operation_name", types.I8Ptr),
+	)
+	g.functions["__osprey_handler_lookup"] = handlerLookup
 }
 
 // registerBuiltInTypes registers built-in types in the type system.

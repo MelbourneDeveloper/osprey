@@ -47,11 +47,18 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		return err
 	}
 
-	// CRITICAL: Prune ALL parameter types to resolve substitutions BEFORE restoring state
+	// CRITICAL: Prune parameter types to resolve substitutions BEFORE restoring state
 	// This ensures type unifications from body inference (e.g., record field unification) are preserved
+	// BUT: Only prune parameters WITHOUT explicit type annotations to preserve explicit types like "any"
 	prunedParamTypes := make([]Type, len(paramTypes))
 	for i, paramType := range paramTypes {
-		prunedParamTypes[i] = g.typeInferer.prune(paramType)
+		if i < len(fnDecl.Parameters) && fnDecl.Parameters[i].Type != nil {
+			// Parameter has explicit type annotation - don't prune to preserve the explicit type
+			prunedParamTypes[i] = paramType
+		} else {
+			// Parameter has no explicit type - prune to resolve inferred type
+			prunedParamTypes[i] = g.typeInferer.prune(paramType)
+		}
 	}
 
 	finalFnType := &FunctionType{
@@ -243,8 +250,16 @@ func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclarat
 	for i, paramType := range finalFnType.paramTypes {
 		// CRITICAL: For polymorphic functions, parameter types may still be TypeVars
 		// These should have been unified during body type inference
-		prunedParamType := g.typeInferer.prune(paramType)
-		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(prunedParamType))
+		// BUT: Don't prune parameters with explicit type annotations to preserve types like "any"
+		var llvmParamType Type
+		if i < len(fnDecl.Parameters) && fnDecl.Parameters[i].Type != nil {
+			// Parameter has explicit type annotation - use it directly
+			llvmParamType = paramType
+		} else {
+			// Parameter has no explicit type - prune to resolve inferred type
+			llvmParamType = g.typeInferer.prune(paramType)
+		}
+		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(llvmParamType))
 	}
 
 	fn := g.module.NewFunc(mangledName, llvmReturnType, params...)
@@ -545,11 +560,18 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 		}
 	}
 
-	// CRITICAL: Prune ALL parameter types to resolve substitutions BEFORE restoring env
+	// CRITICAL: Prune parameter types to resolve substitutions BEFORE restoring env
 	// This ensures type unifications from body inference are preserved
+	// BUT: Only prune parameters WITHOUT explicit type annotations to preserve explicit types like "any"
 	prunedParamTypes := make([]Type, len(paramTypes))
 	for i, paramType := range paramTypes {
-		prunedParamTypes[i] = g.typeInferer.prune(paramType)
+		if i < len(fnDecl.Parameters) && fnDecl.Parameters[i].Type != nil {
+			// Parameter has explicit type annotation - don't prune to preserve the explicit type
+			prunedParamTypes[i] = paramType
+		} else {
+			// Parameter has no explicit type - prune to resolve inferred type
+			prunedParamTypes[i] = g.typeInferer.prune(paramType)
+		}
 	}
 
 	finalFnType := &FunctionType{
