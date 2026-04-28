@@ -1,0 +1,14 @@
+{
+  "_agent_pmo": "74cf183",
+  "recommendations": [
+    "nimblesite.commandtree",
+    "nimblesite.too-many-cooks",
+    "nimblesite.typeDiagram",
+    "golang.go",
+    "ms-vscode.vscode-typescript-next",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "GitHub.copilot",
+    "GitHub.vscode-pull-request-github"
+  ]
+}
