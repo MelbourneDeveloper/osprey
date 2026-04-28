@@ -41,7 +41,7 @@ build:
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
 test:
 	@echo "==> Testing (fail-fast + coverage + threshold)..."
-	cd compiler && $(MAKE) _test
+	$(MAKE) _test
 	$(MAKE) _coverage_check
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.

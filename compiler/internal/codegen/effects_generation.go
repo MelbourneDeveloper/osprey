@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -186,6 +187,10 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	// BUG FIX: This should ONLY be a fallback - if handlers exist for this effect,
 	// they should have been found above and we should NOT reach here
 	if ec.hasDeclaredEffect(perform.EffectName) {
+		if ec.isLikelyCircularDependency(perform.EffectName) {
+			return nil, ec.createUnhandledEffectError(perform)
+		}
+
 		return ec.generateDeclaredEffectCall(perform)
 	}
 
@@ -630,6 +635,18 @@ func (ec *EffectCodegen) detectCircularDependency(effectName string) error {
 	return nil
 }
 
+func (ec *EffectCodegen) hasGeneratedHandler(effectName string, operationName string) bool {
+	handlerPattern := fmt.Sprintf("__handler_%s_%s_", effectName, operationName)
+
+	for _, fn := range ec.generator.module.Funcs {
+		if strings.HasPrefix(fn.Name(), handlerPattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // pushProcessingEffect adds an effect to the processing stack for circular dependency detection
 func (ec *EffectCodegen) pushProcessingEffect(effectName string) {
 	ec.processingStack = append(ec.processingStack, effectName)
@@ -674,6 +691,10 @@ func (g *LLVMGenerator) generateEffectDeclaration(effect *ast.EffectDeclaration)
 // However, at RUNTIME, the function might be called from within a handler scope.
 // Therefore, we need to check handlerStack (which persists across function boundaries) instead.
 func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpression) (value.Value, error) {
+	if !ec.hasGeneratedHandler(perform.EffectName, perform.OperationName) {
+		return nil, ec.createUnhandledEffectError(perform)
+	}
+
 	// Generate arguments for the perform expression
 	args := make([]value.Value, len(perform.Arguments))
 

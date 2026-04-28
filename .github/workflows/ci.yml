@@ -37,6 +37,10 @@ jobs:
       - name: Setup Osprey Compiler
         uses: ./.github/actions/setup-osprey-compiler
 
+      - name: Install VS Code extension dependencies
+        run: npm ci
+        working-directory: ./vscode-extension
+
       - name: Install jq
         run: sudo apt-get install -y jq
 
