@@ -3,6 +3,8 @@ package codegen
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -294,6 +296,19 @@ func NewConcreteType(name string) *ConcreteType {
 	return &ConcreteType{name: name}
 }
 
+// isKnownConcreteType returns true if the type name is a known primitive or built-in type,
+// as opposed to a generic type parameter name like "T", "U", "V".
+func isKnownConcreteType(name string) bool {
+	switch name {
+	case TypeInt, TypeString, TypeBool, TypeFloat, TypeUnit, TypeResult,
+		TypeAny, TypeMathError, TypeHTTPResponse, TypeFunction, TypeFiber,
+		TypeChannel, TypeList, TypeMap, "Int", "String", "Bool", "Float",
+		ErrorPattern, SuccessPattern:
+		return true
+	}
+	return false
+}
+
 func (ct *ConcreteType) String() string {
 	return ct.name
 }
@@ -381,9 +396,7 @@ func (env *TypeEnv) Set(name string, t Type) {
 // GetAllVars returns a copy of all variables in the environment
 func (env *TypeEnv) GetAllVars() map[string]Type {
 	result := make(map[string]Type)
-	for k, v := range env.vars {
-		result[k] = v
-	}
+	maps.Copy(result, env.vars)
 
 	return result
 }
@@ -463,11 +476,8 @@ func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
 
 		for _, envType := range ti.env.GetAllVars() {
 			envFreeVars := ti.getFreeVars(envType)
-			for _, envVar := range envFreeVars {
-				if envVar == v {
-					inEnv = true
-					break
-				}
+			if slices.Contains(envFreeVars, v) {
+				inEnv = true
 			}
 
 			if inEnv {
@@ -2187,6 +2197,13 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 // Returns (inferredType, true) if it's a record update, (nil, false) if it's a type constructor.
 func (ti *TypeInferer) checkRecordUpdateDisambiguation(e *ast.TypeConstructorExpression) (Type, bool, error) {
 	// Check if TypeName refers to a variable instead of a type
+	// If the name refers to a known type declaration, it's always a type constructor
+	if ti.generator != nil {
+		if _, isTypeDecl := ti.generator.typeDeclarations[e.TypeName]; isTypeDecl {
+			return nil, false, nil
+		}
+	}
+
 	varType, exists := ti.env.Get(e.TypeName)
 	if !exists {
 		return nil, false, nil // It's a type constructor
@@ -2229,13 +2246,16 @@ func (ti *TypeInferer) inferAndUnifyRecordFields(
 			return nil, err
 		}
 
-		// CRITICAL: Unify the inferred field type with the expected field type from record definition
-		// This ensures type variables (like function parameters) get constrained to the correct types
+		// Unify the inferred field type with the expected field type from record definition,
+		// but only when the expected type is a concrete type (not a generic type parameter).
+		// Generic type parameters are represented as ConcreteType with unrecognized names (e.g., "T", "U").
 		if expectedFieldType, exists := recordType.fields[fieldName]; exists {
-			err := ti.Unify(fieldType, expectedFieldType)
-			if err != nil {
-				return nil, fmt.Errorf("field %s type mismatch in %s constructor: %w",
-					fieldName, recordType.name, err)
+			if ct, ok := expectedFieldType.(*ConcreteType); !ok || isKnownConcreteType(ct.name) {
+				err := ti.Unify(fieldType, expectedFieldType)
+				if err != nil {
+					return nil, fmt.Errorf("field %s type mismatch in %s constructor: %w",
+						fieldName, recordType.name, err)
+				}
 			}
 		}
 

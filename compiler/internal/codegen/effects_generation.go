@@ -3,6 +3,7 @@ package codegen
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -424,13 +425,7 @@ func (ec *EffectCodegen) hasDeclaredEffect(effectName string) bool {
 		return false
 	}
 
-	for _, declaredEffect := range ec.currentFunctionEffects {
-		if declaredEffect == effectName {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(ec.currentFunctionEffects, effectName)
 }
 
 // tryCurrentScopeHandlers attempts to handle perform using current scope handlers (lexical scoping)
@@ -625,13 +620,11 @@ func (ec *EffectCodegen) isLikelyCircularDependency(effectName string) bool {
 // detectCircularDependency checks if processing this effect would create a circular dependency
 func (ec *EffectCodegen) detectCircularDependency(effectName string) error {
 	// Check if this effect is already in the processing stack
-	for _, processingEffect := range ec.processingStack {
-		if processingEffect == effectName {
-			errorMsg := "Circular effect dependency detected - " +
-				"effects cannot have circular references that would cause infinite recursion"
+	if slices.Contains(ec.processingStack, effectName) {
+		errorMsg := "Circular effect dependency detected - " +
+			"effects cannot have circular references that would cause infinite recursion"
 
-			return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
-		}
+		return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 	}
 
 	return nil

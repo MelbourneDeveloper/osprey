@@ -264,7 +264,7 @@ func (b *Builder) buildMulExpr(ctx parser.IMulExprContext) Expression {
 	operators := make([]string, len(unaryExprs)-1)
 	starIdx, slashIdx, modIdx := 0, 0, 0
 
-	for i := 0; i < len(operators); i++ {
+	for i := range operators {
 		starPos := -1
 		slashPos := -1
 		modPos := -1

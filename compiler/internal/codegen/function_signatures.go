@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -109,9 +110,7 @@ type typeInferenceState struct {
 // saveTypeInferenceState saves the current type inference state
 func (g *LLVMGenerator) saveTypeInferenceState() *typeInferenceState {
 	oldSubst := make(Substitution)
-	for k, v := range g.typeInferer.subst {
-		oldSubst[k] = v
-	}
+	maps.Copy(oldSubst, g.typeInferer.subst)
 
 	var oldEffects []string
 	if g.effectCodegen != nil {

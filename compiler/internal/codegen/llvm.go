@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -535,9 +536,7 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 	oldBuilder := g.builder
 
 	oldVariables := make(map[string]value.Value)
-	for k, v := range g.variables {
-		oldVariables[k] = v
-	}
+	maps.Copy(oldVariables, g.variables)
 
 	oldExpectedReturnType := g.expectedReturnType
 
@@ -1057,9 +1056,7 @@ func (g *LLVMGenerator) processMatchArmWithoutBinding(arm ast.MatchArm) (value.V
 // saveVariableScope saves the current variable scope
 func (g *LLVMGenerator) saveVariableScope() map[string]value.Value {
 	oldVariables := make(map[string]value.Value)
-	for k, v := range g.variables {
-		oldVariables[k] = v
-	}
+	maps.Copy(oldVariables, g.variables)
 
 	return oldVariables
 }
