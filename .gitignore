@@ -33,6 +33,7 @@ htmlcov/
 .coverage
 coverage.xml
 coverage.out
+coverage.out.raw
 coverage-summary.json
 TestResults/
 mutants.out/

@@ -79,10 +79,14 @@ setup:
 # Internal helpers — NOT public targets, NOT in .PHONY
 # ---------------------------------------------------------------------------
 
-# Implements [TEST-RULES] — fail-fast Go tests with coverage
+# Implements [TEST-RULES] — fail-fast Go tests with coverage.
+# -coverpkg=./... instruments ALL packages so integration tests
+# (which call codegen via Go API) contribute to coverage.
+# Generated code (ANTLR parser) is excluded from coverage.out before threshold check.
 _test:
-	cd compiler && go test -failfast -covermode=atomic -coverprofile=coverage.out ./... -p 1
-	cd compiler && go tool cover -func=coverage.out
+	cd compiler && go test -failfast -covermode=atomic -coverpkg=./... -coverprofile=coverage.out.raw ./... -p 1
+	cd compiler && grep -v '/parser/osprey_' coverage.out.raw > coverage.out
+	cd compiler && go tool cover -func=coverage.out | tail -1
 
 # Implements [COVERAGE-THRESHOLDS-JSON] — reads coverage-thresholds.json, fails below threshold
 _coverage_check:
