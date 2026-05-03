@@ -129,3 +129,48 @@ void __osprey_handler_stack_cleanup(void) {
         g_handler_stack = NULL;
     }
 }
+
+// HandlerSnapshot for copying handler state across fiber boundaries
+typedef struct {
+    HandlerEntry entries[MAX_HANDLER_STACK_DEPTH];
+    int count;
+} HandlerSnapshot;
+
+// Snapshot the current thread's handler stack (called in parent before fiber_spawn)
+// Returns a heap-allocated snapshot that the caller must pass to __osprey_handler_restore
+HandlerSnapshot *__osprey_handler_snapshot(void) {
+    ensure_handler_stack_initialized();
+
+    HandlerSnapshot *snap = (HandlerSnapshot *)malloc(sizeof(HandlerSnapshot));
+    if (snap == NULL) {
+        fprintf(stderr, "FATAL: Failed to allocate handler snapshot\n");
+        abort();
+    }
+
+    pthread_mutex_lock(&g_handler_stack->lock);
+    int depth = g_handler_stack->top + 1;
+    snap->count = depth;
+    for (int i = 0; i < depth; i++) {
+        snap->entries[i] = g_handler_stack->stack[i];
+    }
+    pthread_mutex_unlock(&g_handler_stack->lock);
+
+    return snap;
+}
+
+// Restore a snapshot into the current thread's handler stack (called at fiber thread start)
+// Frees the snapshot after restoring.
+void __osprey_handler_restore(HandlerSnapshot *snap) {
+    if (snap == NULL) return;
+
+    ensure_handler_stack_initialized();
+
+    pthread_mutex_lock(&g_handler_stack->lock);
+    for (int i = 0; i < snap->count && i < MAX_HANDLER_STACK_DEPTH; i++) {
+        g_handler_stack->stack[i] = snap->entries[i];
+    }
+    g_handler_stack->top = snap->count - 1;
+    pthread_mutex_unlock(&g_handler_stack->lock);
+
+    free(snap);
+}

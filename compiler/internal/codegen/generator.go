@@ -2,11 +2,14 @@
 package codegen
 
 import (
+	"log/slog"
+
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
 	"github.com/christianfindlay/osprey/internal/ast"
+	"github.com/christianfindlay/osprey/internal/logging"
 )
 
 // LLVMGenerator generates LLVM IR from AST.
@@ -42,6 +45,8 @@ type LLVMGenerator struct {
 	expectedParameterType types.Type
 	// Hindley-Milner type inference system
 	typeInferer *TypeInferer
+	// Structured diagnostics
+	logger *slog.Logger
 	// HINDLEY-MILNER FIX: Single source of truth for record field mappings
 	// Maps record type name to field name -> LLVM index mapping
 	recordFieldMappings map[string]map[string]int
@@ -103,6 +108,7 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		currentFunctionParams: make(map[string]value.Value),
 		// Initialize Hindley-Milner type inference system
 		typeInferer: NewTypeInferer(),
+		logger:      logging.Logger("codegen"),
 		// HINDLEY-MILNER FIX: Initialize record field mappings
 		recordFieldMappings: make(map[string]map[string]int),
 	}

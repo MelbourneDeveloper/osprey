@@ -100,25 +100,68 @@ func (g *LLVMGenerator) validateFunctionCall(funcName string, callExpr *ast.Call
 
 // resolveFunctionValue resolves the function value for user-defined functions
 func (g *LLVMGenerator) resolveFunctionValue(funcName string, callExpr *ast.CallExpression) (value.Value, error) {
+	g.logTrace("resolve function value started",
+		"phase", "function_resolution",
+		"function", funcName,
+		"argument_count", len(callExpr.Arguments),
+		"named_argument_count", len(callExpr.NamedArguments))
+
 	if funcName == "" {
 		// Not an identifier (e.g., lambda or function parameter), generate normally
+		g.logTrace("resolving non-identifier call expression",
+			"phase", "function_resolution")
+
 		return g.generateExpression(callExpr.Function)
 	}
 
 	// Check if this function name is a parameter (not a declared function)
 	if val, isParam := g.variables[funcName]; isParam {
 		// This is a function parameter being called
+		g.logDebug("resolved function parameter",
+			"phase", "function_resolution",
+			"function", funcName,
+			"llvm_value", llvmValueName(val),
+			"llvm_type", llvmValueType(val))
+
 		return val, nil
 	}
 
 	// Infer the argument types to determine which monomorphized instance to use
 	argTypes, err := g.inferCallArgumentTypes(callExpr)
 	if err != nil {
+		g.logDebug("failed to infer call argument types",
+			"phase", "function_resolution",
+			"function", funcName,
+			"error", err.Error())
+
 		return nil, err
 	}
 
+	g.logTrace("inferred call argument types",
+		"phase", "function_resolution",
+		"function", funcName,
+		"arg_types", g.typeNames(argTypes))
+
 	// Get the correct monomorphized function
-	return g.resolveMonomorphizedFunction(funcName, argTypes)
+	funcValue, err := g.resolveMonomorphizedFunction(funcName, argTypes)
+	if err != nil {
+		g.logDebug("failed to resolve function value",
+			"phase", "function_resolution",
+			"function", funcName,
+			"arg_types", g.typeNames(argTypes),
+			"error", err.Error())
+
+		return nil, err
+	}
+
+	g.logDebug("resolved function value",
+		"phase", "function_resolution",
+		"function", funcName,
+		"arg_types", g.typeNames(argTypes),
+		"llvm_value", llvmValueName(funcValue),
+		"llvm_type", llvmValueType(funcValue))
+
+	return funcValue, nil
 }
 
 // validateCallableType validates that a value is callable (function or function pointer)
@@ -402,21 +445,54 @@ func (g *LLVMGenerator) inferCallArgumentTypes(callExpr *ast.CallExpression) ([]
 
 // resolveMonomorphizedFunction finds or creates the correct monomorphized instance
 func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes []Type) (value.Value, error) {
+	g.logTrace("resolve monomorphized function started",
+		"phase", "monomorphization",
+		"function", funcName,
+		"arg_types", g.typeNames(argTypes))
+
 	// Check if we have the function type in the environment
 	funcTypeFromEnv, exists := g.typeInferer.env.Get(funcName)
 	if !exists {
 		// Fallback to existing function lookup
 		if fn, exists := g.functions[funcName]; exists {
+			g.logDebug("resolved function from llvm function table without type environment entry",
+				"phase", "monomorphization",
+				"function", funcName,
+				"llvm_value", llvmValueName(fn),
+				"llvm_type", llvmValueType(fn))
+
 			return fn, nil
 		}
+
+		g.logDebug("function not declared during monomorphization",
+			"phase", "monomorphization",
+			"function", funcName)
 
 		return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, funcName)
 	}
 
+	g.logTrace("found function type in environment",
+		"phase", "monomorphization",
+		"function", funcName,
+		"env_type_kind", typeKind(funcTypeFromEnv),
+		"env_type", typeName(funcTypeFromEnv))
+
 	// Handle TypeScheme (polymorphic function)
 	if scheme, ok := funcTypeFromEnv.(*TypeScheme); ok {
+		g.logDebug("resolving polymorphic function type scheme",
+			"phase", "monomorphization",
+			"function", funcName,
+			"scheme", scheme.String(),
+			"arg_types", g.typeNames(argTypes))
+
 		// Instantiate the scheme to get a concrete function type
 		instantiated := g.typeInferer.Instantiate(scheme)
+		g.logTrace("instantiated polymorphic function type scheme",
+			"phase", "monomorphization",
+			"function", funcName,
+			"instantiated_type_kind", typeKind(instantiated),
+			"instantiated_type", typeName(instantiated))
+
 		if fnType, ok := instantiated.(*FunctionType); ok {
 			// Unify the argument types to determine the concrete instantiation
 			expectedFnType := &FunctionType{
@@ -426,8 +502,21 @@ func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes [
 
 			err := g.typeInferer.Unify(fnType, expectedFnType)
 			if err != nil {
+				g.logDebug("failed to unify polymorphic function call",
+					"phase", "monomorphization",
+					"function", funcName,
+					"function_type", typeName(fnType),
+					"expected_function_type", typeName(expectedFnType),
+					"error", err.Error())
+
 				return nil, fmt.Errorf("function call type mismatch: %w", err)
 			}
+
+			g.logTrace("unified polymorphic function call",
+				"phase", "monomorphization",
+				"function", funcName,
+				"function_type", typeName(fnType),
+				"expected_function_type", typeName(expectedFnType))
 
 			// Use the declared return type from the function declaration if available
 			fnDecl, exists := g.functionDeclarations[funcName]
@@ -436,6 +525,10 @@ func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes [
 			if exists && fnDecl.ReturnType != nil {
 				// Use the declared return type for functions with explicit return type annotations
 				concreteReturnType = g.typeExpressionToInferenceType(fnDecl.ReturnType)
+				g.logTrace("using declared return type for monomorphized function",
+					"phase", "monomorphization",
+					"function", funcName,
+					"return_type", typeName(concreteReturnType))
 			} else {
 				// Re-infer the return type with concrete parameter types for accurate monomorphization
 				var err error
@@ -444,6 +537,16 @@ func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes [
 				if err != nil {
 					// Fallback to original return type if re-inference fails
 					concreteReturnType = g.typeInferer.prune(expectedFnType.returnType)
+					g.logDebug("failed to re-infer return type for monomorphized function",
+						"phase", "monomorphization",
+						"function", funcName,
+						"fallback_return_type", typeName(concreteReturnType),
+						"error", err.Error())
+				} else {
+					g.logTrace("re-inferred return type for monomorphized function",
+						"phase", "monomorphization",
+						"function", funcName,
+						"return_type", typeName(concreteReturnType))
 				}
 			}
 
@@ -452,24 +555,62 @@ func (g *LLVMGenerator) resolveMonomorphizedFunction(funcName string, argTypes [
 				paramTypes: argTypes,
 				returnType: concreteReturnType,
 			}
+			g.logTrace("resolved concrete function type",
+				"phase", "monomorphization",
+				"function", funcName,
+				"concrete_function_type", typeName(concreteFnType),
+				"concrete_param_types", g.typeNames(concreteFnType.paramTypes),
+				"concrete_return_type", typeName(concreteFnType.returnType))
 
 			// Get the monomorphized name
 			mangledName := g.getMonomorphizedName(funcName, concreteFnType)
+			g.logDebug("selected monomorphized function name",
+				"phase", "monomorphization",
+				"function", funcName,
+				"mangled_name", mangledName,
+				"uses_base_name", mangledName == funcName)
 
 			// Check if we already have this monomorphized instance
 			if fn, exists := g.functions[mangledName]; exists {
+				g.logDebug("using cached monomorphized function",
+					"phase", "monomorphization",
+					"function", funcName,
+					"mangled_name", mangledName,
+					"llvm_value", llvmValueName(fn),
+					"llvm_type", llvmValueType(fn))
+
 				return fn, nil
 			}
 
 			// If not, we need to generate it on-demand
 			return g.generateMonomorphizedInstance(funcName, concreteFnType)
 		}
+
+		g.logDebug("instantiated type scheme was not a function",
+			"phase", "monomorphization",
+			"function", funcName,
+			"instantiated_type_kind", typeKind(instantiated),
+			"instantiated_type", typeName(instantiated))
 	}
 
 	// For non-polymorphic functions, just return the existing function
 	if fn, exists := g.functions[funcName]; exists {
+		g.logDebug("using monomorphic function",
+			"phase", "monomorphization",
+			"function", funcName,
+			"env_type_kind", typeKind(funcTypeFromEnv),
+			"env_type", typeName(funcTypeFromEnv),
+			"llvm_value", llvmValueName(fn),
+			"llvm_type", llvmValueType(fn))
+
 		return fn, nil
 	}
+
+	g.logDebug("monomorphized function lookup failed",
+		"phase", "monomorphization",
+		"function", funcName,
+		"env_type_kind", typeKind(funcTypeFromEnv),
+		"env_type", typeName(funcTypeFromEnv))
 
 	return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, funcName)
 }
@@ -479,9 +620,20 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 	baseFuncName string,
 	concreteFnType *FunctionType,
 ) (value.Value, error) {
+	g.logDebug("generating monomorphized function instance",
+		"phase", "monomorphization",
+		"function", baseFuncName,
+		"concrete_function_type", typeName(concreteFnType),
+		"concrete_param_types", g.typeNames(concreteFnType.paramTypes),
+		"concrete_return_type", typeName(concreteFnType.returnType))
+
 	// Get the original function declaration
 	fnDecl, exists := g.functionDeclarations[baseFuncName]
 	if !exists {
+		g.logDebug("cannot generate monomorphized function without declaration",
+			"phase", "monomorphization",
+			"function", baseFuncName)
+
 		return nil, fmt.Errorf("%w: %s", ErrFunctionNotDeclared, baseFuncName)
 	}
 
@@ -490,6 +642,13 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 
 	// Check if it was already generated (race condition protection)
 	if fn, exists := g.functions[mangledName]; exists {
+		g.logDebug("monomorphized function was already generated",
+			"phase", "monomorphization",
+			"function", baseFuncName,
+			"mangled_name", mangledName,
+			"llvm_value", llvmValueName(fn),
+			"llvm_type", llvmValueType(fn))
+
 		return fn, nil
 	}
 
@@ -505,6 +664,12 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 	// Create the LLVM function
 	fn := g.module.NewFunc(mangledName, llvmReturnType, params...)
 	g.functions[mangledName] = fn
+	g.logTrace("created llvm function for monomorphized instance",
+		"phase", "monomorphization",
+		"function", baseFuncName,
+		"mangled_name", mangledName,
+		"llvm_return_type", llvmReturnType.String(),
+		"llvm_param_count", len(params))
 
 	// Store parameter names for this instance
 	g.functionParameters[mangledName] = make([]string, len(fnDecl.Parameters))
@@ -518,9 +683,21 @@ func (g *LLVMGenerator) generateMonomorphizedInstance(
 		// Clean up on error
 		delete(g.functions, mangledName)
 		delete(g.functionParameters, mangledName)
+		g.logDebug("failed to generate monomorphized function body",
+			"phase", "monomorphization",
+			"function", baseFuncName,
+			"mangled_name", mangledName,
+			"error", err.Error())
 
 		return nil, err
 	}
+
+	g.logDebug("generated monomorphized function instance",
+		"phase", "monomorphization",
+		"function", baseFuncName,
+		"mangled_name", mangledName,
+		"llvm_value", llvmValueName(fn),
+		"llvm_type", llvmValueType(fn))
 
 	return fn, nil
 }

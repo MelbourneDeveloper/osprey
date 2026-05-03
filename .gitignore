@@ -51,6 +51,7 @@ mutants.out/
 tmp/
 temp/
 scratch/
+*.log
 
 # Go build artifacts
 compiler/bin/

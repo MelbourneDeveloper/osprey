@@ -949,6 +949,71 @@ func (ti *TypeInferer) isFloatType(t Type) bool {
 	return false
 }
 
+// constrainNumericTypeVarToInt unifies a TypeVar with int only when the other operand is concretely int.
+// Used for division where we don't want to force float onto an unknown operand.
+func (ti *TypeInferer) constrainNumericTypeVarToInt(left, right Type) {
+	leftPruned := ti.prune(left)
+	rightPruned := ti.prune(right)
+
+	isConcreteInt := func(t Type) bool {
+		ct, ok := t.(*ConcreteType)
+		if !ok {
+			return false
+		}
+		name := ct.String()
+		return name == TypeInt || name == "Result<int, MathError>"
+	}
+
+	if _, ok := leftPruned.(*TypeVar); ok {
+		if isConcreteInt(rightPruned) {
+			_ = ti.Unify(leftPruned, &ConcreteType{name: TypeInt})
+		}
+	}
+	if _, ok := rightPruned.(*TypeVar); ok {
+		if isConcreteInt(leftPruned) {
+			_ = ti.Unify(rightPruned, &ConcreteType{name: TypeInt})
+		}
+	}
+}
+
+// constrainNumericTypeVar unifies a TypeVar with the numeric type of its counterpart operand.
+// This ensures parameters used in arithmetic get a concrete type instead of staying as TypeVars.
+func (ti *TypeInferer) constrainNumericTypeVar(left, right Type) {
+	leftPruned := ti.prune(left)
+	rightPruned := ti.prune(right)
+
+	leftIsTV := func() bool { _, ok := leftPruned.(*TypeVar); return ok }
+	rightIsTV := func() bool { _, ok := rightPruned.(*TypeVar); return ok }
+
+	concreteNumericType := func(t Type) Type {
+		switch ct := t.(type) {
+		case *ConcreteType:
+			name := ct.String()
+			if name == TypeInt || name == TypeFloat {
+				return ct
+			}
+			if strings.HasPrefix(name, "Result<float") {
+				return &ConcreteType{name: TypeFloat}
+			}
+			if strings.HasPrefix(name, "Result<int") {
+				return &ConcreteType{name: TypeInt}
+			}
+		}
+		return nil
+	}
+
+	if leftIsTV() {
+		if concrete := concreteNumericType(rightPruned); concrete != nil {
+			_ = ti.Unify(leftPruned, concrete)
+		}
+	}
+	if rightIsTV() {
+		if concrete := concreteNumericType(leftPruned); concrete != nil {
+			_ = ti.Unify(rightPruned, concrete)
+		}
+	}
+}
+
 // isNumericType checks if a type is numeric (int or float) or Result<numeric>
 func (ti *TypeInferer) isNumericType(t Type) bool {
 	resolved := ti.prune(t)
@@ -1875,6 +1940,10 @@ func (ti *TypeInferer) inferDivisionOperation(leftType, rightType Type) (Type, e
 	if !ti.isNumericType(rightType) {
 		return nil, WrapArithmeticTypeMismatch("/", "right", "numeric (int or float)", rightType.String())
 	}
+	// Division accepts int or float on both sides - only constrain if the other side is int.
+	// (float/float also works but we don't want to force a TypeVar to float
+	// when the actual call site may pass int.)
+	ti.constrainNumericTypeVarToInt(leftType, rightType)
 	// Division ALWAYS returns float, even for int/int (10/2 = 5.0)
 	return &ConcreteType{name: "Result<float, MathError>"}, nil
 }
@@ -1900,6 +1969,8 @@ func (ti *TypeInferer) inferBasicArithmeticOperation(operator string, leftType, 
 	if !ti.isNumericType(rightType) {
 		return nil, WrapArithmeticTypeMismatch(operator, "right", "numeric (int or float)", rightType.String())
 	}
+	// Constrain any unresolved TypeVars to a concrete numeric type from the other operand.
+	ti.constrainNumericTypeVar(leftType, rightType)
 
 	if ti.isFloatType(leftType) || ti.isFloatType(rightType) {
 		return &ConcreteType{name: "Result<float, MathError>"}, nil
@@ -2362,10 +2433,17 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 		ti.env = newEnv
 
 		// Infer the pattern type and bind its variables
-		_, err := ti.InferPatternWithType(arm.Pattern, discriminantType)
+		patternType, err := ti.InferPatternWithType(arm.Pattern, discriminantType)
 		if err != nil {
 			ti.env = oldEnv
 			return nil, err
+		}
+		// Unify pattern type with discriminant type so the matched variable gets constrained.
+		// This propagates the concrete type (e.g. TaskPriority) back to unresolved TypeVars.
+		if discriminantType != nil && patternType != nil {
+			if _, isTV := ti.prune(discriminantType).(*TypeVar); isTV {
+				_ = ti.Unify(discriminantType, patternType)
+			}
 		}
 
 		// Infer the expression type in the context of the bound pattern variables
