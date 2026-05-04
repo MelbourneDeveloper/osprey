@@ -13,7 +13,9 @@ concurrency:
 
 jobs:
   ci:
-    name: CI
+    # IMPORTANT: this name is the required status check on `main` (ruleset 6154907).
+    # Renaming it will break branch protection — coordinate with the ruleset update.
+    name: Test, Format, Build & Validate
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: full compiler build + C runtime compile + Go tests + Docker web compiler test requires ~15 min
     timeout-minutes: 30
