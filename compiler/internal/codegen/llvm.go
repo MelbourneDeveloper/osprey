@@ -264,7 +264,41 @@ func (g *LLVMGenerator) generateSingleArgument(
 	g.setParameterTypeContext(funcValue, index)
 	defer g.clearParameterTypeContext()
 
-	return g.generateTypedArgumentExpression(expr, index, callExpr, funcValue)
+	val, err := g.generateTypedArgumentExpression(expr, index, callExpr, funcValue)
+	if err != nil {
+		return nil, err
+	}
+
+	// Coerce the argument to match the parameter type if needed.
+	// Required for `any`-typed parameters (declared as i64) when the call site
+	// passes a string (i8*) or bool (i1) — without coercion llc rejects the IR.
+	return g.coerceArgumentToParamType(val, funcValue, index), nil
+}
+
+// coerceArgumentToParamType inserts a bitcast / ptrtoint / zext to make val
+// match the function's declared parameter type at index. No-op if types match
+// or the function signature is not statically known.
+func (g *LLVMGenerator) coerceArgumentToParamType(
+	val value.Value, funcValue value.Value, index int,
+) value.Value {
+	irFunc, ok := funcValue.(*ir.Func)
+	if !ok || index >= len(irFunc.Sig.Params) {
+		return val
+	}
+	expected := irFunc.Sig.Params[index]
+	actual := val.Type()
+	if expected.Equal(actual) {
+		return val
+	}
+	switch {
+	case expected.Equal(types.I64) && actual.Equal(types.I8Ptr):
+		return g.builder.NewPtrToInt(val, types.I64)
+	case expected.Equal(types.I64) && actual.Equal(types.I1):
+		return g.builder.NewZExt(val, types.I64)
+	case expected.Equal(types.I8Ptr) && actual.Equal(types.I64):
+		return g.builder.NewIntToPtr(val, types.I8Ptr)
+	}
+	return val
 }
 
 // generateArgumentExpression generates an argument value, handling polymorphic functions specially
