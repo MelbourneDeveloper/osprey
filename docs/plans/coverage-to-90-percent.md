@@ -2,11 +2,14 @@
 
 ## Current State
 
-- **Total coverage**: ~70% (after excluding generated parser).
-- **Threshold**: 69% (current achievable; ratchets up only).
-- **Aim**: 90%.
-- **Excluded from measurement**: `compiler/parser/osprey_*.go` (ANTLR-generated; see `Makefile` `_test` target).
-- **Coverage configuration**: `go test -coverpkg=./...` is required so integration tests (which call `codegen.CompileAndRunJIT` directly) instrument all packages, not just the package under test.
+Coverage is enforced **per project** via [`coverage-thresholds.json`](../../coverage-thresholds.json). Each project has its own threshold and `make test` fails hard if any project drops below its threshold. Use `make ratchet` after improving coverage to update the thresholds to (measured - 1).
+
+| Project | Threshold | Measured | Notes |
+|---|---:|---:|---|
+| `compiler` | 77% | ~78% | Generated parser (`compiler/parser/osprey_*.go`) excluded from measurement. `-coverpkg=./...` is set so integration tests instrument all packages. |
+| `vscode-extension` | 0% | (not measured yet) | Tests run a real VS Code Electron with the freshly-built `osprey` binary on `PATH`. Coverage instrumentation via c8 / `NODE_V8_COVERAGE` is still TODO; see Stage-0 below. |
+
+**Aim**: 90% for every project.
 
 ## Coverage Gaps by File (avg per file, < 90%)
 
@@ -80,7 +83,15 @@ Go's coverage tool only instruments calls made from Go. C-to-Go calls bypass ins
 
 Each step below should land as a single PR raising `default_threshold` in `coverage-thresholds.json`. The rule "monotonically increasing — only ratchet UP" means we never go below the previous threshold.
 
-### Stage 1 — 69% → 75% (quick wins)
+### Stage 0 — Wire vscode-extension coverage instrumentation
+
+The vscode-extension tests run a real VS Code Electron and call into the LSP server, which spawns the `osprey` compiler binary. Coverage of the TypeScript code is not yet collected because the test child process is forked by Electron. To instrument:
+
+1. Set `NODE_V8_COVERAGE=$(pwd)/coverage/v8` before running `npm test`. Both Electron's main process and the language-server child process inherit it and write per-process coverage files there.
+2. After tests finish, run `npx c8 report --reporter json-summary --reporter text-summary` to merge those V8 profiles into `coverage/coverage-summary.json`.
+3. The `_coverage_check_vscode_extension` Makefile target already reads `coverage/coverage-summary.json` if present and enforces the threshold; once data lands, run `make ratchet` to set a real floor.
+
+### Stage 1 — 77% → 80% (compiler quick wins)
 
 - Add unit tests for `internal/logging/logging.go` (49% → 90%+). 6 functions, all pure.
 - Add unit tests for `internal/language/descriptions/functions.go` exported getters (77% → 100%).
@@ -106,19 +117,22 @@ Each step below should land as a single PR raising `default_threshold` in `cover
 
 ## TODOs
 
+- [ ] Stage 0a: wire `NODE_V8_COVERAGE` into `vscode-extension/.vscode-test.cjs` so c8 collects coverage from the Electron child process during integration tests.
+- [ ] Stage 0b: add `npx c8 report --reporter json-summary` post-test step that produces `vscode-extension/coverage/coverage-summary.json`.
+- [ ] Stage 0c: run `make ratchet` to set the vscode-extension threshold to (measured - 1).
 - [ ] Stage 1a: add unit tests for `internal/logging/logging.go` (target: lift file coverage from 49% to 90%+).
 - [ ] Stage 1b: add unit tests for `internal/language/descriptions/functions.go` exported getters.
 - [ ] Stage 1c: add unit tests for `internal/cli/main_interface.go` flag-combination branches.
-- [ ] Ratchet `default_threshold` from 69 to 75 once Stage 1 lands.
+- [ ] Ratchet compiler threshold from 77 to 80 once Stage 1 lands.
 - [ ] Stage 2a: write `.osp` examples covering missing branches in `expression_generation.go`.
 - [ ] Stage 2b: write `.osp` examples covering missing branches in `type_inference.go`.
 - [ ] Stage 2c: write `.osp` examples covering shallow-handler / resumption paths in `effects_generation.go`.
 - [ ] Stage 2d: add unit tests for `errors.go` wrapper formatting.
-- [ ] Ratchet `default_threshold` from 75 to 82 once Stage 2 lands.
+- [ ] Ratchet compiler threshold from 80 to 85 once Stage 2 lands.
 - [ ] Stage 3a: add HTTP server/client `.osp` examples to lift `http_generation.go` above 80%.
 - [ ] Stage 3b: add channel-select `.osp` examples to lift `fiber_generation.go` above 80%.
 - [ ] Stage 3c: add process-spawn variant `.osp` examples for `system_generation.go`.
-- [ ] Ratchet `default_threshold` from 82 to 90 once Stage 3 lands.
+- [ ] Ratchet compiler threshold from 85 to 90 once Stage 3 lands.
 - [ ] Stage 4a: refactor AST marker methods (`isStatement`/`isExpression`) into an embedded marker, OR exclude `internal/ast/ast.go` and `internal/ast/expressions.go` marker-only sections from coverage.
 - [ ] Stage 4b: write Go-level WebSocket integration test that exercises `websocket_bridge.go` end-to-end.
 - [ ] Stage 4c: extend `_test` Makefile filter to drop confirmed-untestable bridge files (alongside the generated parser exclusion).

@@ -41,16 +41,17 @@ jobs:
         run: npm ci
         working-directory: ./vscode-extension
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
+      - name: Install jq and Xvfb
+        run: sudo apt-get install -y jq xvfb
 
       - name: Lint
         run: make lint
 
-      # make test = fail-fast + coverage + threshold enforcement ([TEST-RULES]).
+      # make test = fail-fast + per-project coverage + threshold enforcement.
       # Thresholds live in coverage-thresholds.json ([COVERAGE-THRESHOLDS-JSON]).
+      # Xvfb is needed because vscode-extension tests spawn a real VS Code Electron build.
       - name: Test
-        run: make test
+        run: xvfb-run -a make test
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -59,6 +60,7 @@ jobs:
           name: coverage-report
           path: |
             compiler/coverage.out
+            vscode-extension/coverage/
           retention-days: 7
 
       - name: Build

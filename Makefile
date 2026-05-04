@@ -5,7 +5,7 @@
 # Primary language: Go (compiler/), with TypeScript sub-projects
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup
+.PHONY: build test lint fmt clean ci setup ratchet
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -37,12 +37,24 @@ build:
 	cd compiler && $(MAKE) build
 	cd vscode-extension && npm run compile
 
-## test: Fail-fast tests + coverage + threshold enforcement.
+## test: Fail-fast tests + coverage + per-project threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
+##       Each project listed in coverage-thresholds.json is tested separately.
 test:
-	@echo "==> Testing (fail-fast + coverage + threshold)..."
-	$(MAKE) _test
-	$(MAKE) _coverage_check
+	@echo "==> Testing (fail-fast + coverage + per-project thresholds)..."
+	$(MAKE) _test_compiler
+	$(MAKE) _coverage_check_compiler
+	$(MAKE) _test_vscode_extension
+	$(MAKE) _coverage_check_vscode_extension
+
+## ratchet: Update each project's coverage threshold in coverage-thresholds.json
+##          to (measured - 1) so the next run requires at least the current level.
+##          Run after improving coverage; commit the resulting JSON change.
+ratchet:
+	@echo "==> Ratcheting thresholds to (measured - 1)..."
+	$(MAKE) _ratchet_compiler
+	$(MAKE) _ratchet_vscode_extension
+	@echo "==> Updated $(COVERAGE_THRESHOLDS_FILE). Review and commit."
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
 lint:
@@ -79,26 +91,87 @@ setup:
 # Internal helpers — NOT public targets, NOT in .PHONY
 # ---------------------------------------------------------------------------
 
+# --- compiler -------------------------------------------------------------
 # Implements [TEST-RULES] — fail-fast Go tests with coverage.
 # -coverpkg=./... instruments ALL packages so integration tests
 # (which call codegen via Go API) contribute to coverage.
 # Generated code (ANTLR parser) is excluded from coverage.out before threshold check.
-_test:
+_test_compiler:
+	@echo "==> [compiler] running tests..."
 	cd compiler && go test -failfast -covermode=atomic -coverpkg=./... -coverprofile=coverage.out.raw ./... -p 1
 	cd compiler && grep -v '/parser/osprey_' coverage.out.raw > coverage.out
 	cd compiler && go tool cover -func=coverage.out | tail -1
 
-# Implements [COVERAGE-THRESHOLDS-JSON] — reads coverage-thresholds.json, fails below threshold
-_coverage_check:
+_coverage_check_compiler:
 	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
-	THRESHOLD=$$(jq -r '.default_threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	THRESHOLD=$$(jq -r '.projects.compiler.threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
 	PCT=$$(cd compiler && go tool cover -func=coverage.out | awk '/^total:/{print $$3}' | tr -d '%'); \
 	PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
-	echo "Line coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
+	echo "[compiler] coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
 	if [ "$$PCT_INT" -lt "$${THRESHOLD}" ]; then \
-	  echo "FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; \
+	  echo "[compiler] FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; \
 	else \
-	  echo "OK: $${PCT}% >= $${THRESHOLD}%"; \
+	  echo "[compiler] OK: $${PCT}% >= $${THRESHOLD}%"; \
+	fi
+
+_ratchet_compiler:
+	@if [ ! -f "compiler/coverage.out" ]; then echo "Run 'make test' first to produce coverage.out"; exit 1; fi; \
+	PCT=$$(cd compiler && go tool cover -func=coverage.out | awk '/^total:/{print $$3}' | tr -d '%'); \
+	PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
+	NEW_THRESHOLD=$$((PCT_INT - 1)); \
+	if [ "$$NEW_THRESHOLD" -lt 0 ]; then NEW_THRESHOLD=0; fi; \
+	OLD=$$(jq -r '.projects.compiler.threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	if [ "$$NEW_THRESHOLD" -le "$$OLD" ]; then \
+	  echo "[compiler] threshold unchanged: $${OLD} (measured $${PCT}%, ratchet would set $${NEW_THRESHOLD})"; \
+	else \
+	  jq ".projects.compiler.threshold = $$NEW_THRESHOLD" "$(COVERAGE_THRESHOLDS_FILE)" > "$(COVERAGE_THRESHOLDS_FILE).tmp" && mv "$(COVERAGE_THRESHOLDS_FILE).tmp" "$(COVERAGE_THRESHOLDS_FILE)"; \
+	  echo "[compiler] threshold $${OLD} -> $${NEW_THRESHOLD} (measured $${PCT}%)"; \
+	fi
+
+# --- vscode-extension -----------------------------------------------------
+# The extension's LSP server spawns the `osprey` binary at runtime, so the
+# integration tests need the real compiler on PATH. Build it first, then run
+# vscode-test with PATH augmented to include compiler/bin.
+_test_vscode_extension:
+	@echo "==> [vscode-extension] building compiler for LSP integration..."
+	cd compiler && $(MAKE) build
+	@echo "==> [vscode-extension] running tests with real compiler..."
+	cd vscode-extension && PATH="$(CURDIR)/compiler/bin:$$PATH" npm test
+
+_coverage_check_vscode_extension:
+	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
+	THRESHOLD=$$(jq -r '.projects["vscode-extension"].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	if [ -f "vscode-extension/coverage/coverage-summary.json" ]; then \
+	  PCT=$$(jq -r '.total.lines.pct' "vscode-extension/coverage/coverage-summary.json"); \
+	  PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
+	  echo "[vscode-extension] coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
+	  if [ "$$PCT_INT" -lt "$${THRESHOLD}" ]; then \
+	    echo "[vscode-extension] FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; \
+	  else \
+	    echo "[vscode-extension] OK: $${PCT}% >= $${THRESHOLD}%"; \
+	  fi; \
+	else \
+	  echo "[vscode-extension] coverage report not produced — instrumentation TODO; threshold $${THRESHOLD}% requires coverage data"; \
+	  if [ "$$THRESHOLD" -gt 0 ]; then \
+	    echo "[vscode-extension] FAIL: threshold > 0 but no coverage data"; exit 1; \
+	  fi; \
+	fi
+
+_ratchet_vscode_extension:
+	@if [ ! -f "vscode-extension/coverage/coverage-summary.json" ]; then \
+	  echo "[vscode-extension] no coverage report — skipping ratchet"; \
+	else \
+	  PCT=$$(jq -r '.total.lines.pct' "vscode-extension/coverage/coverage-summary.json"); \
+	  PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
+	  NEW_THRESHOLD=$$((PCT_INT - 1)); \
+	  if [ "$$NEW_THRESHOLD" -lt 0 ]; then NEW_THRESHOLD=0; fi; \
+	  OLD=$$(jq -r '.projects["vscode-extension"].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	  if [ "$$NEW_THRESHOLD" -le "$$OLD" ]; then \
+	    echo "[vscode-extension] threshold unchanged: $${OLD} (measured $${PCT}%)"; \
+	  else \
+	    jq ".projects[\"vscode-extension\"].threshold = $$NEW_THRESHOLD" "$(COVERAGE_THRESHOLDS_FILE)" > "$(COVERAGE_THRESHOLDS_FILE).tmp" && mv "$(COVERAGE_THRESHOLDS_FILE).tmp" "$(COVERAGE_THRESHOLDS_FILE)"; \
+	    echo "[vscode-extension] threshold $${OLD} -> $${NEW_THRESHOLD} (measured $${PCT}%)"; \
+	  fi; \
 	fi
 
 # =============================================================================
