@@ -1,8 +1,8 @@
-// Package ast provides validation rules for the Osprey AST.
 package ast
 
 import (
 	"fmt"
+	"slices"
 )
 
 // ValidationError represents a validation error with optional position information.
@@ -48,12 +48,10 @@ func validateFunctionDeclaration(fn *FunctionDeclaration) error {
 	// Only validate basic language constraints, not type inference capabilities
 	// Check for built-in function redefinition
 	builtinFunctions := []string{"toString", "print", "length", "readFile"}
-	for _, builtin := range builtinFunctions {
-		if fn.Name == builtin {
-			return &ValidationError{
-				Message:  fmt.Sprintf("cannot redefine built-in function '%s'", fn.Name),
-				Position: fn.Position,
-			}
+	if slices.Contains(builtinFunctions, fn.Name) {
+		return &ValidationError{
+			Message:  fmt.Sprintf("cannot redefine built-in function '%s'", fn.Name),
+			Position: fn.Position,
 		}
 	}
 

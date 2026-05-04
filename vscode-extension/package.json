@@ -188,6 +188,7 @@
   },
   "scripts": {
     "compile": "tsc -b",
+    "lint": "tsc -p ./ --noEmit",
     "watch": "tsc -b -w",
     "package": "vsce package",
     "install-extension": "code --install-extension osprey-language-support-0.1.0.vsix",

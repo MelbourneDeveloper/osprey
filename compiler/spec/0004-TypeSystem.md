@@ -496,7 +496,7 @@ match scores[0] {
 
 // Bounds checking prevents runtime errors
 match scores[10] {  // Out of bounds
-    Success { value } => print("Never reached") 
+    Success { value } => print("Never reached")
     Error { message } => print("Index out of bounds")  // This executes
 }
 ```

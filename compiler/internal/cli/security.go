@@ -1,4 +1,3 @@
-// Package cli provides security configuration for the Osprey compiler.
 package cli
 
 import (

@@ -5,6 +5,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+// Forward declarations for effect handler snapshot/restore
+typedef struct HandlerSnapshot HandlerSnapshot;
+HandlerSnapshot *__osprey_handler_snapshot(void);
+void __osprey_handler_restore(HandlerSnapshot *snap);
+
 // Fiber runtime implementation in C for linking with LLVM-generated code
 
 typedef struct Fiber {
@@ -15,7 +20,8 @@ typedef struct Fiber {
   pthread_t thread;
   pthread_mutex_t mutex;
   pthread_cond_t cond;
-  bool uses_thread; // Track if this fiber uses threading
+  bool uses_thread;
+  HandlerSnapshot *handler_snapshot; // Inherited effect handlers from parent
 } Fiber;
 
 typedef struct Channel {
@@ -53,6 +59,10 @@ void fiber_set_deterministic_mode(bool enabled) {
 
 // Execute a fiber directly (for deterministic mode)
 static void execute_fiber_directly(Fiber *fiber) {
+  if (fiber->handler_snapshot != NULL) {
+    __osprey_handler_restore(fiber->handler_snapshot);
+    fiber->handler_snapshot = NULL;
+  }
   fiber->result = fiber->function();
   fiber->completed = true;
 }
@@ -60,6 +70,12 @@ static void execute_fiber_directly(Fiber *fiber) {
 // Thread function for executing fibers
 static void *fiber_thread_func(void *arg) {
   Fiber *fiber = (Fiber *)arg;
+
+  // Restore parent's effect handlers so perform calls work inside the fiber
+  if (fiber->handler_snapshot != NULL) {
+    __osprey_handler_restore(fiber->handler_snapshot);
+    fiber->handler_snapshot = NULL;
+  }
 
   // Execute the fiber function
   fiber->result = fiber->function();
@@ -99,7 +115,8 @@ int64_t fiber_spawn(int64_t (*fn)(void)) {
   fiber->function = fn;
   fiber->completed = false;
   fiber->uses_thread = false;
-  
+  fiber->handler_snapshot = __osprey_handler_snapshot();
+
   if (!deterministic_mode) {
     // Normal concurrent mode - use threads
     pthread_mutex_init(&fiber->mutex, NULL);

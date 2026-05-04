@@ -104,6 +104,8 @@ func (g *LLVMGenerator) generateChannelOrUnsupportedExpression(expr ast.Expressi
 		return g.generateChannelRecvExpression(e)
 	case *ast.TypeConstructorExpression:
 		return g.generateTypeConstructorExpression(e)
+	case *ast.UpdateExpression:
+		return g.generateUpdateExpression(e)
 	default:
 		return g.generateUnsupportedExpression(expr)
 	}
@@ -1415,6 +1417,21 @@ func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallE
 func (g *LLVMGenerator) generateTypeConstructorExpression(
 	typeConstructor *ast.TypeConstructorExpression,
 ) (value.Value, error) {
+	// DISAMBIGUATION: Check if TypeName refers to a variable instead of a type
+	// If it's a variable, this is actually a record update expression
+	if _, exists := g.variables[typeConstructor.TypeName]; exists {
+		// This is a record update, not a type constructor
+		updateExpr := &ast.UpdateExpression{
+			Target: &ast.Identifier{
+				Name:     typeConstructor.TypeName,
+				Position: typeConstructor.Position,
+			},
+			Fields:   typeConstructor.Fields,
+			Position: typeConstructor.Position,
+		}
+		return g.generateUpdateExpression(updateExpr)
+	}
+
 	// Check if this is a built-in type first
 	if typeConstructor.TypeName == TypeHTTPResponse {
 		return g.generateHTTPResponseConstructor(typeConstructor)
@@ -2012,6 +2029,101 @@ func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedTy
 // NOTE: Old field-level constraint validation functions removed.
 // Type-level validation is now handled by user-defined validation functions
 // that return Result<T, String> types.
+
+// generateUpdateExpression generates LLVM IR for non-destructive record updates.
+// Syntax: record { field: newValue } creates a new record with updated fields.
+func (g *LLVMGenerator) generateUpdateExpression(updateExpr *ast.UpdateExpression) (value.Value, error) {
+	// Get the original record value
+	originalValue, err := g.generateExpression(updateExpr.Target)
+	if err != nil {
+		return nil, err
+	}
+
+	// Infer the type of the target to get record structure
+	targetType, err := g.typeInferer.InferType(updateExpr.Target)
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer target type for update: %w", err)
+	}
+
+	// Get the record type information
+	recordType, ok := targetType.(*RecordType)
+	if !ok {
+		// Target is not a record type - this is a type error
+		return nil, fmt.Errorf("%w: cannot update non-record type %s", ErrTypeMismatch, targetType.String())
+	}
+
+	// Get consistent field mapping for this record type
+	fieldMapping := g.getOrCreateRecordFieldMapping(recordType.name, recordType.fields)
+
+	// Determine the struct type from the original value
+	var structType *types.StructType
+	var originalPtr value.Value
+
+	// Check if originalValue is already a pointer
+	if ptrType, isPtrType := originalValue.Type().(*types.PointerType); isPtrType {
+		structType, ok = ptrType.ElemType.(*types.StructType)
+		if !ok {
+			return nil, fmt.Errorf("%w: expected struct pointer type, got %T", ErrTypeMismatch, ptrType.ElemType)
+		}
+		originalPtr = originalValue
+	} else {
+		// If it's a struct value, we need to allocate it first to get a pointer
+		if st, isStruct := originalValue.Type().(*types.StructType); isStruct {
+			structType = st
+			tempPtr := g.builder.NewAlloca(structType)
+			g.builder.NewStore(originalValue, tempPtr)
+			originalPtr = tempPtr
+		} else {
+			return nil, fmt.Errorf("%w: expected struct or pointer to struct, got %T", ErrTypeMismatch, originalValue.Type())
+		}
+	}
+
+	// Validate struct type has correct number of fields
+	if len(structType.Fields) != len(fieldMapping) {
+		return nil, fmt.Errorf("%w: struct has %d fields but record type expects %d fields",
+			ErrTypeMismatch, len(structType.Fields), len(fieldMapping))
+	}
+
+	// Create a new struct with the same type
+	newStruct := g.builder.NewAlloca(structType)
+
+	// Copy all fields from the original struct
+	for fieldName, fieldIndex := range fieldMapping {
+		// Validate field index is within bounds
+		if fieldIndex < 0 || fieldIndex >= len(structType.Fields) {
+			return nil, fmt.Errorf("%w: field index %d out of bounds for struct with %d fields",
+				ErrTypeMismatch, fieldIndex, len(structType.Fields))
+		}
+		// Check if this field is being updated
+		if newValue, isUpdated := updateExpr.Fields[fieldName]; isUpdated {
+			// Generate the new field value
+			fieldValue, err := g.generateExpression(newValue)
+			if err != nil {
+				return nil, err
+			}
+
+			// Store the new value in the new struct
+			fieldPtr := g.builder.NewGetElementPtr(structType, newStruct,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, int64(fieldIndex)))
+			g.builder.NewStore(fieldValue, fieldPtr)
+		} else {
+			// Copy the original field value
+			originalFieldPtr := g.builder.NewGetElementPtr(structType, originalPtr,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, int64(fieldIndex)))
+			originalFieldValue := g.builder.NewLoad(structType.Fields[fieldIndex], originalFieldPtr)
+
+			// Store in new struct
+			newFieldPtr := g.builder.NewGetElementPtr(structType, newStruct,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, int64(fieldIndex)))
+			g.builder.NewStore(originalFieldValue, newFieldPtr)
+		}
+	}
+
+	// TODO: If the record type has constraints, validate them and return Result<T, E>
+	// For now, return the updated struct directly (unconstrained case)
+
+	return newStruct, nil
+}
 
 func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) (value.Value, error) {
 	// If the block has statements, execute all but the last one

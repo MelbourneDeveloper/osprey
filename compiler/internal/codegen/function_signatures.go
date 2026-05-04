@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 // Type mangling constants for generating unique function names
 const (
 	TypeManglingInt64   = "i64"
+	TypeManglingFloat   = "float"
 	TypeManglingStr     = "str"
 	TypeManglingBool    = "bool"
 	TypeManglingI32     = "i32"
@@ -47,17 +49,41 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		return err
 	}
 
-	finalFnType := &FunctionType{
-		paramTypes: paramTypes,
-		returnType: g.typeInferer.prune(returnTypeVar),
-	}
+	// CRITICAL: Prune parameter types to resolve substitutions BEFORE restoring state
+	// This ensures type unifications from body inference (e.g., record field unification) are preserved
+	// BUT: Only prune parameters WITHOUT explicit type annotations to preserve explicit types like "any"
+	finalFnType := g.buildFinalFunctionType(fnDecl, paramTypes, returnTypeVar)
 
 	g.restoreTypeInferenceState(state)
 
 	// HINDLEY-MILNER: Generalize the function type to create a type scheme
 	// This allows the function to be polymorphic across multiple call sites
-	scheme := g.typeInferer.Generalize(finalFnType)
-	g.typeInferer.env.Set(fnDecl.Name, scheme)
+	// But only generalize if there are actually unresolved type variables (after pruning)
+	hasTypeVars := functionTypeHasTypeVars(finalFnType)
+	g.logTrace("declared function signature inferred",
+		"phase", "function_signature",
+		"function", fnDecl.Name,
+		"function_type", typeName(finalFnType),
+		"param_types", g.typeNames(finalFnType.paramTypes),
+		"return_type", typeName(finalFnType.returnType),
+		"has_type_vars", hasTypeVars)
+
+	if hasTypeVars {
+		// Has type variables - create a type scheme for polymorphism
+		scheme := g.typeInferer.Generalize(finalFnType)
+		g.typeInferer.env.Set(fnDecl.Name, scheme)
+		g.logDebug("stored generalized function signature",
+			"phase", "function_signature",
+			"function", fnDecl.Name,
+			"scheme", scheme.String())
+	} else {
+		// All types are concrete - this is a monomorphic function
+		g.typeInferer.env.Set(fnDecl.Name, finalFnType)
+		g.logDebug("stored concrete function signature",
+			"phase", "function_signature",
+			"function", fnDecl.Name,
+			"function_type", typeName(finalFnType))
+	}
 
 	err = g.createLLVMFunctionSignature(fnDecl, finalFnType)
 	if err != nil {
@@ -77,9 +103,7 @@ type typeInferenceState struct {
 // saveTypeInferenceState saves the current type inference state
 func (g *LLVMGenerator) saveTypeInferenceState() *typeInferenceState {
 	oldSubst := make(Substitution)
-	for k, v := range g.typeInferer.subst {
-		oldSubst[k] = v
-	}
+	maps.Copy(oldSubst, g.typeInferer.subst)
 
 	var oldEffects []string
 	if g.effectCodegen != nil {
@@ -216,7 +240,18 @@ func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclarat
 
 	params := make([]*ir.Param, len(finalFnType.paramTypes))
 	for i, paramType := range finalFnType.paramTypes {
-		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType))
+		// CRITICAL: For polymorphic functions, parameter types may still be TypeVars
+		// These should have been unified during body type inference
+		// BUT: Don't prune parameters with explicit type annotations to preserve types like "any"
+		var llvmParamType Type
+		if i < len(fnDecl.Parameters) && fnDecl.Parameters[i].Type != nil {
+			// Parameter has explicit type annotation - use it directly
+			llvmParamType = paramType
+		} else {
+			// Parameter has no explicit type - prune to resolve inferred type
+			llvmParamType = g.typeInferer.prune(paramType)
+		}
+		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(llvmParamType))
 	}
 
 	fn := g.module.NewFunc(mangledName, llvmReturnType, params...)
@@ -239,12 +274,23 @@ func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclarat
 func (g *LLVMGenerator) getMonomorphizedName(baseName string, fnType *FunctionType) string {
 	// For non-polymorphic or first instance, use original name
 	if !g.isPolymorphicFunction(baseName, fnType) {
+		g.logTrace("using base function name for monomorphized lookup",
+			"phase", "monomorphization",
+			"function", baseName,
+			"function_type", typeName(fnType))
+
 		return baseName
 	}
 
 	// Create a type signature for mangling
 	typeSignature := g.createTypeSignature(fnType)
 	mangledName := fmt.Sprintf("%s_%s", baseName, typeSignature)
+	g.logTrace("created monomorphized function name",
+		"phase", "monomorphization",
+		"function", baseName,
+		"mangled_name", mangledName,
+		"type_signature", typeSignature,
+		"function_type", typeName(fnType))
 
 	// Track this monomorphization
 	if g.monomorphizedInstances == nil {
@@ -262,6 +308,11 @@ func (g *LLVMGenerator) isPolymorphicFunction(name string, fnType *FunctionType)
 	// Always monomorphize if there are already monomorphized instances
 	for existingName := range g.functions {
 		if strings.HasPrefix(existingName, name+"_") {
+			g.logTrace("function requires monomorphization because an instance already exists",
+				"phase", "monomorphization",
+				"function", name,
+				"existing_instance", existingName)
+
 			return true
 		}
 	}
@@ -269,6 +320,11 @@ func (g *LLVMGenerator) isPolymorphicFunction(name string, fnType *FunctionType)
 	// Check if this function has a type scheme in the environment (polymorphic)
 	if funcTypeFromEnv, exists := g.typeInferer.env.Get(name); exists {
 		if _, isScheme := funcTypeFromEnv.(*TypeScheme); isScheme {
+			g.logTrace("function requires monomorphization because environment stores a type scheme",
+				"phase", "monomorphization",
+				"function", name,
+				"env_type", typeName(funcTypeFromEnv))
+
 			return true
 		}
 	}
@@ -278,9 +334,21 @@ func (g *LLVMGenerator) isPolymorphicFunction(name string, fnType *FunctionType)
 		// Compare signatures - if they differ, this is a polymorphic instantiation
 		existingSignature := g.getFunctionTypeSignature(existingFn)
 		newSignature := g.createTypeSignature(fnType)
+		isPolymorphic := existingSignature != newSignature
+		g.logTrace("compared llvm function signature for monomorphization",
+			"phase", "monomorphization",
+			"function", name,
+			"existing_signature", existingSignature,
+			"new_signature", newSignature,
+			"is_polymorphic", isPolymorphic)
 
-		return existingSignature != newSignature
+		return isPolymorphic
 	}
+
+	g.logTrace("function does not require monomorphization",
+		"phase", "monomorphization",
+		"function", name,
+		"function_type", typeName(fnType))
 
 	return false
 }
@@ -352,6 +420,8 @@ func (g *LLVMGenerator) getLLVMTypeString(t types.Type) string {
 	switch t {
 	case types.I64:
 		return TypeManglingInt64
+	case types.Double:
+		return TypeManglingFloat
 	case types.I8Ptr:
 		return TypeManglingStr
 	case types.I1:
@@ -379,6 +449,21 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	finalFnType, err := g.inferAndValidateTypes(fnDecl, paramTypes, returnTypeVar, fnEnv)
 	if err != nil {
 		return err
+	}
+
+	// HINDLEY-MILNER: Skip generating body for polymorphic base functions with TypeVars
+	// Only monomorphized instances (with concrete types) should have their bodies generated
+	hasTypeVars := functionTypeHasParamTypeVars(finalFnType)
+
+	if hasTypeVars {
+		// This is a polymorphic base function - skip body generation
+		// The body will be generated for monomorphized instances when they're created
+		g.logDebug("skipping polymorphic base function body generation",
+			"phase", "function_signature",
+			"function", fnDecl.Name,
+			"function_type", typeName(finalFnType))
+
+		return nil
 	}
 
 	err = g.generateFunctionBody(fnDecl, fn, finalFnType)
@@ -449,6 +534,48 @@ func (g *LLVMGenerator) determineReturnType(fnDecl *ast.FunctionDeclaration) Typ
 	return g.typeInferer.Fresh()
 }
 
+func (g *LLVMGenerator) buildFinalFunctionType(
+	fnDecl *ast.FunctionDeclaration,
+	paramTypes []Type,
+	returnTypeVar Type,
+) *FunctionType {
+	prunedParamTypes := make([]Type, len(paramTypes))
+	for i, paramType := range paramTypes {
+		if i < len(fnDecl.Parameters) && fnDecl.Parameters[i].Type != nil {
+			// Parameter has explicit type annotation - don't prune to preserve the explicit type.
+			prunedParamTypes[i] = paramType
+			continue
+		}
+
+		prunedParamTypes[i] = g.typeInferer.prune(paramType)
+	}
+
+	return &FunctionType{
+		paramTypes: prunedParamTypes,
+		returnType: g.typeInferer.prune(returnTypeVar),
+	}
+}
+
+func functionTypeHasTypeVars(fnType *FunctionType) bool {
+	if functionTypeHasParamTypeVars(fnType) {
+		return true
+	}
+
+	_, isTypeVar := fnType.returnType.(*TypeVar)
+
+	return isTypeVar
+}
+
+func functionTypeHasParamTypeVars(fnType *FunctionType) bool {
+	for _, paramType := range fnType.paramTypes {
+		if _, isTypeVar := paramType.(*TypeVar); isTypeVar {
+			return true
+		}
+	}
+
+	return false
+}
+
 // inferAndValidateTypes performs type inference and validation for the function
 func (g *LLVMGenerator) inferAndValidateTypes(
 	fnDecl *ast.FunctionDeclaration,
@@ -456,6 +583,12 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 	returnTypeVar Type,
 	fnEnv *TypeEnv,
 ) (*FunctionType, error) {
+	g.logTrace("infer and validate function types started",
+		"phase", "function_signature",
+		"function", fnDecl.Name,
+		"param_types", g.typeNames(paramTypes),
+		"return_type", typeName(returnTypeVar))
+
 	oldEnv := g.typeInferer.env
 
 	fnType := &FunctionType{
@@ -472,18 +605,7 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 	}
 
 	// CRUCIAL: After type inference, update parameter types which may now be constrained
-	for i, param := range fnDecl.Parameters {
-		if param.Type == nil { // Only for parameters without explicit types
-			if paramType, exists := g.typeInferer.env.Get(param.Name); exists {
-				prunedType := g.typeInferer.prune(paramType)
-				g.typeInferer.env.Set(param.Name, prunedType)
-				// Update the parameter type in the function's paramTypes
-				if i < len(paramTypes) {
-					paramTypes[i] = prunedType
-				}
-			}
-		}
-	}
+	g.updateInferredParameterTypes(fnDecl, paramTypes)
 
 	if !g.canImplicitlyConvert(inferredReturnType, returnTypeVar, fnDecl) {
 		err := g.typeInferer.Unify(returnTypeVar, inferredReturnType)
@@ -501,15 +623,84 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 		}
 	}
 
-	finalFnType := &FunctionType{
-		paramTypes: paramTypes,
-		returnType: g.typeInferer.prune(returnTypeVar),
-	}
+	// CRITICAL: Prune parameter types to resolve substitutions BEFORE restoring env
+	// This ensures type unifications from body inference are preserved
+	// BUT: Only prune parameters WITHOUT explicit type annotations to preserve explicit types like "any"
+	finalFnType := g.buildFinalFunctionType(fnDecl, paramTypes, returnTypeVar)
 
 	g.typeInferer.env = oldEnv
-	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
+	g.setFunctionTypeInEnv(fnDecl.Name, finalFnType)
+
+	g.logTrace("infer and validate function types completed",
+		"phase", "function_signature",
+		"function", fnDecl.Name,
+		"function_type", typeName(finalFnType),
+		"param_types", g.typeNames(finalFnType.paramTypes),
+		"return_type", typeName(finalFnType.returnType))
 
 	return finalFnType, nil
+}
+
+func (g *LLVMGenerator) updateInferredParameterTypes(
+	fnDecl *ast.FunctionDeclaration,
+	paramTypes []Type,
+) {
+	for i, param := range fnDecl.Parameters {
+		if param.Type != nil {
+			continue
+		}
+
+		paramType, exists := g.typeInferer.env.Get(param.Name)
+		if !exists {
+			continue
+		}
+
+		prunedType := g.typeInferer.prune(paramType)
+		g.typeInferer.env.Set(param.Name, prunedType)
+		if i < len(paramTypes) {
+			paramTypes[i] = prunedType
+		}
+
+		g.logTrace("updated inferred function parameter type",
+			"phase", "function_signature",
+			"function", fnDecl.Name,
+			"parameter", param.Name,
+			"parameter_index", i,
+			"parameter_type", typeName(prunedType))
+	}
+}
+
+// setFunctionTypeInEnv stores the function type, preserving TypeScheme for polymorphic functions.
+// If the type still has TypeVar parameters, it must be stored as a TypeScheme so that
+// resolveMonomorphizedFunction can instantiate it correctly at each call site.
+func (g *LLVMGenerator) setFunctionTypeInEnv(name string, fnType *FunctionType) {
+	if functionTypeHasParamTypeVars(fnType) {
+		if existing, ok := g.typeInferer.env.Get(name); ok {
+			if _, isScheme := existing.(*TypeScheme); isScheme {
+				g.logDebug("preserved existing generalized function type",
+					"phase", "function_signature",
+					"function", name,
+					"function_type", typeName(fnType))
+
+				return
+			}
+		}
+
+		scheme := g.typeInferer.Generalize(fnType)
+		g.typeInferer.env.Set(name, scheme)
+		g.logDebug("stored generalized function type after validation",
+			"phase", "function_signature",
+			"function", name,
+			"scheme", scheme.String())
+
+		return
+	}
+
+	g.typeInferer.env.Set(name, fnType)
+	g.logDebug("stored concrete function type after validation",
+		"phase", "function_signature",
+		"function", name,
+		"function_type", typeName(fnType))
 }
 
 // generateFunctionBody generates the LLVM instructions for the function body

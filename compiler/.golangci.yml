@@ -41,6 +41,7 @@ linters:
     # Ignore these rules
     - nlreturn # This rule is not beneficial for this codebase
     - godot # Comment period enforcement disabled for better readability
+    - nonamedreturns # CGo-exported functions with multiple returns trigger false positives
 
 issues:
   max-issues-per-linter: 0

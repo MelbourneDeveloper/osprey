@@ -1,4 +1,5 @@
 # CLAUDE.md
+<!-- agent-pmo:74cf183 -->
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -141,3 +142,30 @@ npm install && npm start         # Start web-based compiler service
 - Use VS Code Dev Container for consistent development environment
 
 This is a functional programming language compiler with algebraic effects, fiber-based concurrency, and strong compile-time safety guarantees.
+
+## Standard Build Commands
+
+```bash
+make build        # Build compiler + VSCode extension
+make test         # Fail-fast tests + coverage + threshold (coverage-thresholds.json)
+make lint         # Run all linters (golangci-lint + ESLint)
+make fmt          # Format all code in-place
+make clean        # Remove build artifacts
+make ci           # lint + test + build (full CI simulation)
+make setup        # Post-create dev environment setup
+```
+
+## Spec IDs
+
+Spec IDs are hierarchical descriptive slugs in the format `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]`. NEVER use numbered IDs (`[SPEC-001]`). Code implementing a spec section MUST reference its ID in a comment. Example: `// Implements [PARSER-EFFECTS-HANDLE]`.
+
+## Branch Naming
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Feature | `feature/[ISSUE]-[slug]` | `feature/42-add-pattern-matching` |
+| Bug fix | `fix/[ISSUE]-[slug]` | `fix/17-null-ref-effects` |
+| Chore | `chore/[slug]` | `chore/update-deps` |
+| Claude agent | `claude/[slug]-[random5]` | `claude/refactor-XYZab` |
+
+All changes via PR — no direct pushes to `main`. Squash-merge preferred.
