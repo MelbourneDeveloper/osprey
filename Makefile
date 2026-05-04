@@ -110,8 +110,13 @@ _coverage_check_compiler:
 	echo "[compiler] coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
 	if [ "$$PCT_INT" -lt "$${THRESHOLD}" ]; then \
 	  echo "[compiler] FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; \
-	else \
-	  echo "[compiler] OK: $${PCT}% >= $${THRESHOLD}%"; \
+	fi; \
+	echo "[compiler] OK: $${PCT}% >= $${THRESHOLD}%"; \
+	NEW_THRESHOLD=$$((PCT_INT - 1)); \
+	if [ "$$NEW_THRESHOLD" -lt 0 ]; then NEW_THRESHOLD=0; fi; \
+	if [ "$$NEW_THRESHOLD" -gt "$$THRESHOLD" ]; then \
+	  jq ".projects.compiler.threshold = $$NEW_THRESHOLD" "$(COVERAGE_THRESHOLDS_FILE)" > "$(COVERAGE_THRESHOLDS_FILE).tmp" && mv "$(COVERAGE_THRESHOLDS_FILE).tmp" "$(COVERAGE_THRESHOLDS_FILE)"; \
+	  echo "[compiler] auto-ratchet: threshold $${THRESHOLD} -> $${NEW_THRESHOLD} (measured $${PCT}%)"; \
 	fi
 
 _ratchet_compiler:
@@ -131,30 +136,40 @@ _ratchet_compiler:
 # --- vscode-extension -----------------------------------------------------
 # The extension's LSP server spawns the `osprey` binary at runtime, so the
 # integration tests need the real compiler on PATH. Build it first, then run
-# vscode-test with PATH augmented to include compiler/bin.
+# vscode-test with PATH augmented to include compiler/bin and
+# NODE_V8_COVERAGE set so the Electron Extension Host writes V8 coverage
+# profiles for the extension code (client + server). After the run, c8
+# merges those profiles into coverage/coverage-summary.json.
 _test_vscode_extension:
 	@echo "==> [vscode-extension] building compiler for LSP integration..."
 	cd compiler && $(MAKE) build
-	@echo "==> [vscode-extension] running tests with real compiler..."
-	cd vscode-extension && PATH="$(CURDIR)/compiler/bin:$$PATH" npm test
+	@echo "==> [vscode-extension] running tests with real compiler + V8 coverage..."
+	rm -rf vscode-extension/coverage
+	cd vscode-extension && \
+	  PATH="$(CURDIR)/compiler/bin:$$PATH" \
+	  npm run pretest && \
+	  PATH="$(CURDIR)/compiler/bin:$$PATH" \
+	  ./node_modules/.bin/vscode-test --coverage --coverage-output coverage \
+	    --coverage-reporter text-summary --coverage-reporter json-summary --coverage-reporter html
 
 _coverage_check_vscode_extension:
 	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
 	THRESHOLD=$$(jq -r '.projects["vscode-extension"].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
-	if [ -f "vscode-extension/coverage/coverage-summary.json" ]; then \
-	  PCT=$$(jq -r '.total.lines.pct' "vscode-extension/coverage/coverage-summary.json"); \
-	  PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
-	  echo "[vscode-extension] coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
-	  if [ "$$PCT_INT" -lt "$${THRESHOLD}" ]; then \
-	    echo "[vscode-extension] FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; \
-	  else \
-	    echo "[vscode-extension] OK: $${PCT}% >= $${THRESHOLD}%"; \
-	  fi; \
-	else \
-	  echo "[vscode-extension] coverage report not produced — instrumentation TODO; threshold $${THRESHOLD}% requires coverage data"; \
-	  if [ "$$THRESHOLD" -gt 0 ]; then \
-	    echo "[vscode-extension] FAIL: threshold > 0 but no coverage data"; exit 1; \
-	  fi; \
+	if [ ! -f "vscode-extension/coverage/coverage-summary.json" ]; then \
+	  echo "[vscode-extension] FAIL: coverage-summary.json not produced — c8 report failed"; exit 1; \
+	fi; \
+	PCT=$$(jq -r '.total.lines.pct' "vscode-extension/coverage/coverage-summary.json"); \
+	PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
+	echo "[vscode-extension] coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
+	if [ "$$PCT_INT" -lt "$${THRESHOLD}" ]; then \
+	  echo "[vscode-extension] FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; \
+	fi; \
+	echo "[vscode-extension] OK: $${PCT}% >= $${THRESHOLD}%"; \
+	NEW_THRESHOLD=$$((PCT_INT - 1)); \
+	if [ "$$NEW_THRESHOLD" -lt 0 ]; then NEW_THRESHOLD=0; fi; \
+	if [ "$$NEW_THRESHOLD" -gt "$$THRESHOLD" ]; then \
+	  jq ".projects[\"vscode-extension\"].threshold = $$NEW_THRESHOLD" "$(COVERAGE_THRESHOLDS_FILE)" > "$(COVERAGE_THRESHOLDS_FILE).tmp" && mv "$(COVERAGE_THRESHOLDS_FILE).tmp" "$(COVERAGE_THRESHOLDS_FILE)"; \
+	  echo "[vscode-extension] auto-ratchet: threshold $${THRESHOLD} -> $${NEW_THRESHOLD} (measured $${PCT}%)"; \
 	fi
 
 _ratchet_vscode_extension:
