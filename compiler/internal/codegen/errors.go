@@ -10,12 +10,10 @@ import (
 
 // Static error definitions for the codegen package
 var (
-	// Variable-related errors
 	ErrUndefinedIdentifier  = errors.New("undefined identifier")
 	ErrVariableNotInRuntime = errors.New("variable exists in type environment but not in runtime")
 	ErrUnknownParameterName = errors.New("unknown parameter name")
 
-	// Type-related errors
 	ErrTypeMismatch              = errors.New("type mismatch")
 	ErrAnyTypeMismatch           = errors.New("cannot pass 'any' type to function expecting specific type")
 	ErrRecursiveType             = errors.New("recursive type detected")
@@ -29,25 +27,20 @@ var (
 	ErrUnsupportedUnaryOperator  = errors.New("unsupported unary operator")
 	ErrMethodCallsNotImplemented = errors.New("method calls are not implemented")
 
-	// Result constructor errors
 	ErrSuccessConstructorMissingValue = errors.New("success constructor requires 'value' field")
 	ErrErrorConstructorMissingMessage = errors.New("error constructor requires 'message' field")
 
-	// Function-related errors
 	ErrFunctionNotDeclared = errors.New("function not declared")
 	ErrNotAFunction        = errors.New("type is not a function")
 
-	// Union/variant-related errors
 	ErrNoVariantFound     = errors.New("no variant found matching field structure")
 	ErrNoVariantsFound    = errors.New("no variants found for type")
 	ErrVariantNotFound    = errors.New("variant not found")
 	ErrUnknownConstructor = errors.New("unknown constructor")
 
-	// Pattern matching errors
 	ErrInvalidEmptyPattern = errors.New("invalid empty pattern")
 	ErrMatchNoArms         = errors.New("match expression must have at least one arm")
 
-	// Field access errors
 	ErrCannotExtractField         = errors.New("cannot extract field from non-struct type")
 	ErrDiscriminantNotPointer     = errors.New("discriminant is not a pointer type")
 	ErrDiscriminantNotTaggedUnion = errors.New("discriminant is not a tagged union")
@@ -61,32 +54,28 @@ var (
 	ErrFieldAccessOnLegacyRecord  = errors.New("field access on legacy record type not supported")
 	ErrFieldNotFoundOnType        = errors.New("field not found on type")
 
-	// Parse errors
+	ErrCannotUpdateNonRecord = errors.New("cannot update non-record type")
+	ErrFieldNotInRecordType  = errors.New("field does not exist in record type")
+
 	ErrParseTreeNil   = errors.New("parse tree is nil")
 	ErrASTBuildFailed = errors.New("AST build failed")
 
-	// Core function errors
 	ErrPrintCannotConvert = errors.New("cannot convert value for printing")
 	ErrUnsupportedCall    = errors.New("unsupported function call")
 	ErrToStringReserved   = errors.New("toString is a reserved function name")
 
-	// WebSocket errors
 	ErrWebSocketKeepAliveWrongArgs = errors.New("websocketKeepAlive function has wrong number of arguments")
 
-	// Iterator errors
 	ErrForEachNotFunction = errors.New("forEach callback is not a function")
 	ErrMapNotFunction     = errors.New("map callback is not a function")
 	ErrFilterNotFunction  = errors.New("filter callback is not a function")
 	ErrFoldNotFunction    = errors.New("fold callback is not a function")
 
-	// System errors
 	ErrInputNoArgs    = errors.New("input function takes no arguments")
 	ErrNoToStringImpl = errors.New("no toString implementation found")
 
-	// Collection access errors
 	ErrUnsupportedCollectionType = errors.New("unsupported collection type for access")
 
-	// Additional error constants expected by tests
 	ErrUnsupportedStatement = errors.New("unsupported statement")
 	ErrUndefinedVariable    = errors.New("undefined variable")
 	ErrUnsupportedBinaryOp  = errors.New("unsupported binary operator") // Alias for ErrUnsupportedBinaryOperator
@@ -113,7 +102,6 @@ var (
 	ErrBuiltInRedefine  = errors.New("cannot redefine built-in function")
 	ErrFunctionNotFound = errors.New("function not found")
 
-	// Consolidated error constants
 	ErrVoidArithmetic                = errors.New("arithmetic operation on void type")
 	ErrFieldAccessOnResult           = errors.New("field access on result type")
 	ErrConstraintResultFieldAccess   = errors.New("constraint result field access not allowed")
@@ -123,19 +111,15 @@ var (
 	ErrImmutableAssignmentError      = errors.New("cannot assign to immutable variable")
 	ErrArithmeticTypeMismatch        = errors.New("arithmetic operand type mismatch")
 
-	// Security-related errors
 	ErrUnsupportedCallExpressionSecurity = errors.New("unsupported call expression in current security mode")
 	ErrMethodCallNotImplemented          = errors.New("method call not implemented")
 
-	// Fiber-related errors
 	ErrAwaitTypeMismatch = errors.New("await can only be used on Fiber types")
 
-	// Channel-related errors
 	ErrChannelSendFunctionNotFound  = errors.New("channel send function not found")
 	ErrChannelRecvFunctionNotFound  = errors.New("channel recv function not found")
 	ErrChannelCreateInvalidArgCount = errors.New("channel create invalid argument count")
 
-	// Record type errors
 	ErrRecordFieldTypeMismatch = errors.New("record field type mismatch")
 )
 
@@ -189,7 +173,7 @@ func WrapNoToStringImpl(typeName string) error {
 }
 
 // WrapFunctionArgsWithPos is a consolidated function for all "wrong arguments" errors
-func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos interface{}) error {
+func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		// Try to get parameter names from the built-in function registry
 		paramNames := ""
@@ -214,22 +198,22 @@ func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos inte
 }
 
 // WrapUnsupportedExpression wraps errors for unsupported expressions
-func WrapUnsupportedExpression(expr interface{}) error {
+func WrapUnsupportedExpression(expr any) error {
 	return fmt.Errorf("%w: %T", ErrUnsupportedExpression, expr)
 }
 
 // WrapUndefinedVariableWithPos wraps errors for undefined variables
-func WrapUndefinedVariableWithPos(varName string, pos interface{}) error {
+func WrapUndefinedVariableWithPos(varName string, pos any) error {
 	return WrapSimpleErrorWithPos(ErrUndefinedVariable, varName, pos)
 }
 
 // WrapUnsupportedBinaryOpWithPos wraps errors for unsupported binary operators
-func WrapUnsupportedBinaryOpWithPos(op string, pos interface{}) error {
+func WrapUnsupportedBinaryOpWithPos(op string, pos any) error {
 	return WrapSimpleErrorWithPos(ErrUnsupportedBinaryOp, op, pos)
 }
 
 // WrapVoidArithmeticWithPos wraps errors for arithmetic on void types
-func WrapVoidArithmeticWithPos(op string, pos interface{}) error {
+func WrapVoidArithmeticWithPos(op string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w %s", position.Line, position.Column, ErrVoidArithmetic, op)
 	}
@@ -238,7 +222,7 @@ func WrapVoidArithmeticWithPos(op string, pos interface{}) error {
 }
 
 // WrapUnsupportedUnaryOpWithPos wraps errors for unsupported unary operators
-func WrapUnsupportedUnaryOpWithPos(op string, pos interface{}) error {
+func WrapUnsupportedUnaryOpWithPos(op string, pos any) error {
 	return WrapSimpleErrorWithPos(ErrUnsupportedUnaryOperator, op, pos)
 }
 
@@ -248,7 +232,7 @@ func WrapFieldAccessOnResult(field string, resultType string) error {
 }
 
 // WrapConstraintResultFieldAccessWithPos wraps errors for constraint result field access
-func WrapConstraintResultFieldAccessWithPos(field string, pos interface{}) error {
+func WrapConstraintResultFieldAccessWithPos(field string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrConstraintResultFieldAccess, field)
 	}
@@ -273,13 +257,23 @@ func WrapFieldAccessOnLegacyRecord(field, typeName string) error {
 	return fmt.Errorf("%w, field '%s' on type %s", ErrFieldAccessOnLegacyRecord, field, typeName)
 }
 
+// WrapCannotUpdateNonRecord wraps the cannot update non-record error with context
+func WrapCannotUpdateNonRecord(typeStr string) error {
+	return fmt.Errorf("%w: %s", ErrCannotUpdateNonRecord, typeStr)
+}
+
+// WrapFieldNotInRecordType wraps the field not in record type error with context
+func WrapFieldNotInRecordType(field, recordType string) error {
+	return fmt.Errorf("%w '%s' in record type %s", ErrFieldNotInRecordType, field, recordType)
+}
+
 // WrapUndefinedType wraps errors for undefined types
 func WrapUndefinedType(typeName string) error {
 	return WrapSimpleError(ErrUndefinedType, typeName)
 }
 
 // WrapUndefinedTypeWithPos wraps errors for undefined types with position
-func WrapUndefinedTypeWithPos(typeName string, pos interface{}) error {
+func WrapUndefinedTypeWithPos(typeName string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		//nolint:err113 // Dynamic error needed for exact test format matching
 		return fmt.Errorf("line %d:%d: undefined type: %s",
@@ -322,7 +316,7 @@ func WrapSimpleError(baseErr error, arg string) error {
 }
 
 // WrapSimpleErrorWithPos wraps a base error with position and single string argument
-func WrapSimpleErrorWithPos(baseErr error, arg string, pos interface{}) error {
+func WrapSimpleErrorWithPos(baseErr error, arg string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, baseErr, arg)
 	}
@@ -348,12 +342,12 @@ func WrapNoSuitableCompiler(compilers []string) error {
 }
 
 // WrapUnsupportedStatement wraps errors for unsupported statements
-func WrapUnsupportedStatement(stmt interface{}) error {
+func WrapUnsupportedStatement(stmt any) error {
 	return fmt.Errorf("%w: %T", ErrUnsupportedStatement, stmt)
 }
 
 // WrapImmutableAssignmentErrorWithPos wraps errors for immutable assignment
-func WrapImmutableAssignmentErrorWithPos(varName string, pos interface{}) error {
+func WrapImmutableAssignmentErrorWithPos(varName string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s", position.Line, position.Column, ErrImmutableAssignmentError, varName)
 	}
@@ -402,7 +396,7 @@ func WrapMissingArgument(argName string, funcName string) error {
 }
 
 // WrapMissingArgumentWithPos wraps missing argument errors with position
-func WrapMissingArgumentWithPos(argName string, funcName string, pos interface{}) error {
+func WrapMissingArgumentWithPos(argName string, funcName string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: %s for function %s",
 			position.Line, position.Column, ErrMissingArgument, argName, funcName)
@@ -466,12 +460,12 @@ func WrapMethodCallNotImplemented(method string) error {
 }
 
 // WrapMethodCallNotImplementedWithPos wraps errors for method calls not implemented with position
-func WrapMethodCallNotImplementedWithPos(method string, pos interface{}) error {
+func WrapMethodCallNotImplementedWithPos(method string, pos any) error {
 	return WrapSimpleErrorWithPos(ErrMethodCallNotImplemented, method, pos)
 }
 
 // WrapFunctionRequiresNamedArgsWithPos wraps errors for functions requiring named arguments
-func WrapFunctionRequiresNamedArgsWithPos(funcName string, paramCount int, pos interface{}) error {
+func WrapFunctionRequiresNamedArgsWithPos(funcName string, paramCount int, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		//nolint:err113 // Dynamic error needed for exact test format matching
 		return fmt.Errorf("line %d:%d: function requires named arguments '%s' has %d parameters "+
@@ -484,7 +478,7 @@ func WrapFunctionRequiresNamedArgsWithPos(funcName string, paramCount int, pos i
 }
 
 // WrapMatchNotExhaustiveWithPos wraps errors for non-exhaustive match expressions
-func WrapMatchNotExhaustiveWithPos(missingPatterns []string, pos interface{}) error {
+func WrapMatchNotExhaustiveWithPos(missingPatterns []string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: missing patterns: %v",
 			position.Line, position.Column, ErrMatchNotExhaustive, missingPatterns)
@@ -494,7 +488,7 @@ func WrapMatchNotExhaustiveWithPos(missingPatterns []string, pos interface{}) er
 }
 
 // WrapMatchTypeMismatchWithPos wraps errors for match expression type mismatches
-func WrapMatchTypeMismatchWithPos(armIndex int, returnType, expectedType string, pos interface{}) error {
+func WrapMatchTypeMismatchWithPos(armIndex int, returnType, expectedType string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: arm %d returns '%s' but expected '%s'",
 			position.Line, position.Column, ErrMatchTypeMismatch, armIndex, returnType, expectedType)
@@ -505,7 +499,7 @@ func WrapMatchTypeMismatchWithPos(armIndex int, returnType, expectedType string,
 }
 
 // WrapUnknownVariantWithPos wraps errors for unknown variants in match expressions
-func WrapUnknownVariantWithPos(variantName, typeName string, pos interface{}) error {
+func WrapUnknownVariantWithPos(variantName, typeName string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		return fmt.Errorf("line %d:%d: %w: variant '%s' is not defined in type '%s'",
 			position.Line, position.Column, ErrUnknownVariant, variantName, typeName)
@@ -516,7 +510,7 @@ func WrapUnknownVariantWithPos(variantName, typeName string, pos interface{}) er
 }
 
 // WrapTypeMismatchWithPos wraps type mismatch errors with position and detailed context
-func WrapTypeMismatchWithPos(valueType, varName, annotatedType string, pos interface{}) error {
+func WrapTypeMismatchWithPos(valueType, varName, annotatedType string, pos any) error {
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		//nolint:err113 // Dynamic error needed for exact test format matching
 		return fmt.Errorf("line %d:%d: type mismatch: cannot assign %s to variable '%s' of type %s",

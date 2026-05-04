@@ -41,7 +41,7 @@ The underscore `_` matches any value:
 ```osprey
 let category = match score {
     100 => "perfect"
-    90 => "excellent" 
+    90 => "excellent"
     _ => "good"
 }
 ```

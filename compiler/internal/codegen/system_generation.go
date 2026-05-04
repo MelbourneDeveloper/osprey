@@ -38,12 +38,7 @@ func (g *LLVMGenerator) callFunctionWithValue(
 		return g.generateTestAnyCall()
 	}
 
-	// User-defined function.
-	if fn, ok := g.functions[funcIdent.Name]; ok {
-		return g.builder.NewCall(fn, val), nil
-	}
-
-	return nil, WrapUndefinedFunction(funcIdent.Name)
+	return g.callUserFunctionWithValues(funcIdent, val)
 }
 
 // callFunctionWithTwoValues is similar to callFunctionWithValue but passes two
@@ -60,11 +55,39 @@ func (g *LLVMGenerator) callFunctionWithTwoValues(
 		return nil, WrapBuiltInTwoArgs(funcIdent.Name)
 	}
 
-	if fn, ok := g.functions[funcIdent.Name]; ok {
-		return g.builder.NewCall(fn, val1, val2), nil
+	return g.callUserFunctionWithValues(funcIdent, val1, val2)
+}
+
+func (g *LLVMGenerator) callUserFunctionWithValues(
+	funcIdent *ast.Identifier,
+	args ...value.Value,
+) (value.Value, error) {
+	argTypes := make([]Type, len(args))
+	for i, arg := range args {
+		argTypes[i] = g.inferenceTypeFromLLVMValue(arg)
 	}
 
-	return nil, WrapUndefinedFunction(funcIdent.Name)
+	fn, err := g.resolveMonomorphizedFunction(funcIdent.Name, argTypes)
+	if err != nil {
+		return nil, err
+	}
+
+	return g.builder.NewCall(fn, args...), nil
+}
+
+func (g *LLVMGenerator) inferenceTypeFromLLVMValue(v value.Value) Type {
+	switch t := v.Type().(type) {
+	case *types.IntType:
+		if t.BitSize == 1 {
+			return &ConcreteType{name: TypeBool}
+		}
+
+		return &ConcreteType{name: TypeInt}
+	case *types.PointerType:
+		return &ConcreteType{name: TypeString}
+	default:
+		return &ConcreteType{name: TypeAny}
+	}
 }
 
 // callBuiltInPrint prints a single LLVM IR value using the C library puts

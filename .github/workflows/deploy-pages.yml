@@ -1,17 +1,16 @@
+# agent-pmo:74cf183
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  # Triggered by release.yml after a release is published.
+  # Also supports manual dispatch for emergency deploys.
   workflow_dispatch:
 
-# Sets permissions for GitHub Pages deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -20,6 +19,7 @@ jobs:
   build-and-deploy:
     name: Build Documentation and Deploy to GitHub Pages
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -46,10 +46,7 @@ jobs:
 
       - name: Build website
         working-directory: ./website
-        run: |
-          echo "🏗️ Building website with Eleventy..."
-          npm run build
-          echo "✅ Website built successfully"
+        run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

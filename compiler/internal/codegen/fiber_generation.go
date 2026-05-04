@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -140,14 +141,10 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	g.variables = make(map[string]value.Value)
 
 	// First, copy all original variables (this preserves global scope for nested spawns)
-	for name, val := range prevVars {
-		g.variables[name] = val
-	}
+	maps.Copy(g.variables, prevVars)
 
 	// Then, override with captured values (this ensures proper closure semantics)
-	for name, val := range capturedValues {
-		g.variables[name] = val
-	}
+	maps.Copy(g.variables, capturedValues)
 
 	// Generate the expression inside the closure
 	result, err := g.generateExpression(spawn.Expression)
@@ -405,9 +402,7 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 
 	// Save current variables and create new scope
 	savedVars := make(map[string]value.Value)
-	for k, v := range g.variables {
-		savedVars[k] = v
-	}
+	maps.Copy(savedVars, g.variables)
 
 	// Add lambda parameters to scope
 	for i, param := range lambda.Parameters {

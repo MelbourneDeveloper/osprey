@@ -97,7 +97,7 @@ type ParseErrorListener struct {
 // SyntaxError handles syntax errors during parsing.
 func (p *ParseErrorListener) SyntaxError(
 	_ antlr.Recognizer,
-	_ interface{},
+	_ any,
 	line, column int,
 	msg string,
 	_ antlr.RecognitionException,

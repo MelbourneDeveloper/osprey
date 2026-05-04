@@ -1,4 +1,3 @@
-// Package codegen provides code generation and execution capabilities for Osprey.
 package codegen
 
 import (

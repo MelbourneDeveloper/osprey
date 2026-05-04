@@ -3,6 +3,8 @@ package codegen
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -294,6 +296,19 @@ func NewConcreteType(name string) *ConcreteType {
 	return &ConcreteType{name: name}
 }
 
+// isKnownConcreteType returns true if the type name is a known primitive or built-in type,
+// as opposed to a generic type parameter name like "T", "U", "V".
+func isKnownConcreteType(name string) bool {
+	switch name {
+	case TypeInt, TypeString, TypeBool, TypeFloat, TypeUnit, TypeResult,
+		TypeAny, TypeMathError, TypeHTTPResponse, TypeFunction, TypeFiber,
+		TypeChannel, TypeList, TypeMap, "Int", "String", "Bool", "Float",
+		ErrorPattern, SuccessPattern:
+		return true
+	}
+	return false
+}
+
 func (ct *ConcreteType) String() string {
 	return ct.name
 }
@@ -381,9 +396,7 @@ func (env *TypeEnv) Set(name string, t Type) {
 // GetAllVars returns a copy of all variables in the environment
 func (env *TypeEnv) GetAllVars() map[string]Type {
 	result := make(map[string]Type)
-	for k, v := range env.vars {
-		result[k] = v
-	}
+	maps.Copy(result, env.vars)
 
 	return result
 }
@@ -463,11 +476,8 @@ func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
 
 		for _, envType := range ti.env.GetAllVars() {
 			envFreeVars := ti.getFreeVars(envType)
-			for _, envVar := range envFreeVars {
-				if envVar == v {
-					inEnv = true
-					break
-				}
+			if slices.Contains(envFreeVars, v) {
+				inEnv = true
 			}
 
 			if inEnv {
@@ -679,6 +689,8 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return nil, ErrMethodCallsNotImplemented
 	case *ast.ListAccessExpression:
 		return ti.inferListAccess(e)
+	case *ast.UpdateExpression:
+		return ti.inferUpdateExpression(e)
 	case *ast.PerformExpression:
 		return ti.inferPerformExpression(e)
 	case *ast.HandlerExpression:
@@ -935,6 +947,71 @@ func (ti *TypeInferer) isFloatType(t Type) bool {
 	}
 
 	return false
+}
+
+// constrainNumericTypeVarToInt unifies a TypeVar with int only when the other operand is concretely int.
+// Used for division where we don't want to force float onto an unknown operand.
+func (ti *TypeInferer) constrainNumericTypeVarToInt(left, right Type) {
+	leftPruned := ti.prune(left)
+	rightPruned := ti.prune(right)
+
+	isConcreteInt := func(t Type) bool {
+		ct, ok := t.(*ConcreteType)
+		if !ok {
+			return false
+		}
+		name := ct.String()
+		return name == TypeInt || name == "Result<int, MathError>"
+	}
+
+	if _, ok := leftPruned.(*TypeVar); ok {
+		if isConcreteInt(rightPruned) {
+			_ = ti.Unify(leftPruned, &ConcreteType{name: TypeInt})
+		}
+	}
+	if _, ok := rightPruned.(*TypeVar); ok {
+		if isConcreteInt(leftPruned) {
+			_ = ti.Unify(rightPruned, &ConcreteType{name: TypeInt})
+		}
+	}
+}
+
+// constrainNumericTypeVar unifies a TypeVar with the numeric type of its counterpart operand.
+// This ensures parameters used in arithmetic get a concrete type instead of staying as TypeVars.
+func (ti *TypeInferer) constrainNumericTypeVar(left, right Type) {
+	leftPruned := ti.prune(left)
+	rightPruned := ti.prune(right)
+
+	leftIsTV := func() bool { _, ok := leftPruned.(*TypeVar); return ok }
+	rightIsTV := func() bool { _, ok := rightPruned.(*TypeVar); return ok }
+
+	concreteNumericType := func(t Type) Type {
+		switch ct := t.(type) {
+		case *ConcreteType:
+			name := ct.String()
+			if name == TypeInt || name == TypeFloat {
+				return ct
+			}
+			if strings.HasPrefix(name, "Result<float") {
+				return &ConcreteType{name: TypeFloat}
+			}
+			if strings.HasPrefix(name, "Result<int") {
+				return &ConcreteType{name: TypeInt}
+			}
+		}
+		return nil
+	}
+
+	if leftIsTV() {
+		if concrete := concreteNumericType(rightPruned); concrete != nil {
+			_ = ti.Unify(leftPruned, concrete)
+		}
+	}
+	if rightIsTV() {
+		if concrete := concreteNumericType(leftPruned); concrete != nil {
+			_ = ti.Unify(rightPruned, concrete)
+		}
+	}
 }
 
 // isNumericType checks if a type is numeric (int or float) or Result<numeric>
@@ -1863,6 +1940,10 @@ func (ti *TypeInferer) inferDivisionOperation(leftType, rightType Type) (Type, e
 	if !ti.isNumericType(rightType) {
 		return nil, WrapArithmeticTypeMismatch("/", "right", "numeric (int or float)", rightType.String())
 	}
+	// Division accepts int or float on both sides - only constrain if the other side is int.
+	// (float/float also works but we don't want to force a TypeVar to float
+	// when the actual call site may pass int.)
+	ti.constrainNumericTypeVarToInt(leftType, rightType)
 	// Division ALWAYS returns float, even for int/int (10/2 = 5.0)
 	return &ConcreteType{name: "Result<float, MathError>"}, nil
 }
@@ -1888,6 +1969,8 @@ func (ti *TypeInferer) inferBasicArithmeticOperation(operator string, leftType, 
 	if !ti.isNumericType(rightType) {
 		return nil, WrapArithmeticTypeMismatch(operator, "right", "numeric (int or float)", rightType.String())
 	}
+	// Constrain any unresolved TypeVars to a concrete numeric type from the other operand.
+	ti.constrainNumericTypeVar(leftType, rightType)
 
 	if ti.isFloatType(leftType) || ti.isFloatType(rightType) {
 		return &ConcreteType{name: "Result<float, MathError>"}, nil
@@ -2181,8 +2264,86 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 	return nil, WrapFieldAccessOnNonRecord(e.FieldName, resolvedObjectType.String())
 }
 
+// checkRecordUpdateDisambiguation checks if a type constructor expression is actually a record update.
+// Returns (inferredType, true) if it's a record update, (nil, false) if it's a type constructor.
+func (ti *TypeInferer) checkRecordUpdateDisambiguation(e *ast.TypeConstructorExpression) (Type, bool, error) {
+	// Check if TypeName refers to a variable instead of a type
+	// If the name refers to a known type declaration, it's always a type constructor
+	if ti.generator != nil {
+		if _, isTypeDecl := ti.generator.typeDeclarations[e.TypeName]; isTypeDecl {
+			return nil, false, nil
+		}
+	}
+
+	varType, exists := ti.env.Get(e.TypeName)
+	if !exists {
+		return nil, false, nil // It's a type constructor
+	}
+
+	// Check if the variable is a record type
+	if _, isRecord := varType.(*RecordType); !isRecord {
+		return nil, false, nil // Variable exists but not a record, treat as type constructor
+	}
+
+	// This is a record update, not a type constructor
+	updateExpr := &ast.UpdateExpression{
+		Target: &ast.Identifier{
+			Name:     e.TypeName,
+			Position: e.Position,
+		},
+		Fields:   e.Fields,
+		Position: e.Position,
+	}
+
+	inferredType, err := ti.inferUpdateExpression(updateExpr)
+	if err != nil {
+		return nil, true, err
+	}
+
+	return inferredType, true, nil
+}
+
+// inferAndUnifyRecordFields infers and unifies field types for record constructors
+func (ti *TypeInferer) inferAndUnifyRecordFields(
+	e *ast.TypeConstructorExpression,
+	recordType *RecordType,
+) (map[string]Type, error) {
+	fieldTypes := make(map[string]Type)
+
+	// Infer the type of each field from the constructor expression
+	for fieldName, fieldExpr := range e.Fields {
+		fieldType, err := ti.InferType(fieldExpr)
+		if err != nil {
+			return nil, err
+		}
+
+		// Unify the inferred field type with the expected field type from record definition,
+		// but only when the expected type is a concrete type (not a generic type parameter).
+		// Generic type parameters are represented as ConcreteType with unrecognized names (e.g., "T", "U").
+		if expectedFieldType, exists := recordType.fields[fieldName]; exists {
+			if ct, ok := expectedFieldType.(*ConcreteType); !ok || isKnownConcreteType(ct.name) {
+				err := ti.Unify(fieldType, expectedFieldType)
+				if err != nil {
+					return nil, fmt.Errorf("field %s type mismatch in %s constructor: %w",
+						fieldName, recordType.name, err)
+				}
+			}
+		}
+
+		// Use the pruned type after unification
+		fieldTypes[fieldName] = ti.prune(fieldType)
+	}
+
+	return fieldTypes, nil
+}
+
 // inferTypeConstructor infers types for type constructor expressions
 func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (Type, error) {
+	// DISAMBIGUATION: Check if this is actually a record update
+	if updateType, isUpdate, err := ti.checkRecordUpdateDisambiguation(e); isUpdate {
+		return updateType, err
+	}
+
 	// Special handling for Success constructor
 	if e.TypeName == "Success" {
 		valueExpr, exists := e.Fields["value"]
@@ -2225,17 +2386,9 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 	if t, ok := ti.env.Get(e.TypeName); ok {
 		// Check if this is a record type
 		if recordType, isRecord := t.(*RecordType); isRecord {
-			// Create a new record type with fields instantiated from the constructor values
-			fieldTypes := make(map[string]Type)
-
-			// Infer the type of each field from the constructor expression
-			for fieldName, fieldExpr := range e.Fields {
-				fieldType, err := ti.InferType(fieldExpr)
-				if err != nil {
-					return nil, err
-				}
-
-				fieldTypes[fieldName] = fieldType
+			fieldTypes, err := ti.inferAndUnifyRecordFields(e, recordType)
+			if err != nil {
+				return nil, err
 			}
 
 			// Create a monomorphic instance of the record type
@@ -2280,10 +2433,17 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 		ti.env = newEnv
 
 		// Infer the pattern type and bind its variables
-		_, err := ti.InferPatternWithType(arm.Pattern, discriminantType)
+		patternType, err := ti.InferPatternWithType(arm.Pattern, discriminantType)
 		if err != nil {
 			ti.env = oldEnv
 			return nil, err
+		}
+		// Unify pattern type with discriminant type so the matched variable gets constrained.
+		// This propagates the concrete type (e.g. TaskPriority) back to unresolved TypeVars.
+		if discriminantType != nil && patternType != nil {
+			if _, isTV := ti.prune(discriminantType).(*TypeVar); isTV {
+				_ = ti.Unify(discriminantType, patternType)
+			}
 		}
 
 		// Infer the expression type in the context of the bound pattern variables
@@ -2457,6 +2617,35 @@ func (ti *TypeInferer) inferObjectLiteral(e *ast.ObjectLiteral) (Type, error) {
 	ti.nextID++
 
 	return NewRecordType(recordTypeName, fieldTypes), nil
+}
+
+// inferUpdateExpression infers the type for record update expressions.
+// The updated record has the same type as the original.
+func (ti *TypeInferer) inferUpdateExpression(e *ast.UpdateExpression) (Type, error) {
+	// Infer the type of the target being updated
+	targetType, err := ti.InferType(e.Target)
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer target type for update: %w", err)
+	}
+
+	// Resolve the target type to get the actual record type
+	resolvedType := ti.ResolveType(targetType)
+
+	// Ensure it's a record type
+	recordType, ok := resolvedType.(*RecordType)
+	if !ok {
+		return nil, WrapCannotUpdateNonRecord(resolvedType.String())
+	}
+
+	// Validate that updated fields exist in the record
+	for fieldName := range e.Fields {
+		if _, exists := recordType.fields[fieldName]; !exists {
+			return nil, WrapFieldNotInRecordType(fieldName, recordType.String())
+		}
+	}
+
+	// The update expression preserves the type of the target (the full record type)
+	return recordType, nil
 }
 
 // inferBlockExpression infers types for block expressions

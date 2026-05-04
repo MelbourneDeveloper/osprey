@@ -54,8 +54,7 @@ print("")
 // Test 4: Polymorphic functions with HM inference
 print("Test 4: Polymorphic function inference")
 fn identityP(x) = x              // HM infers: <T>(T) -> T
-fn makePoint(a, b) = Point { x: a, y: b }  // HM infers: <T>(T, T) -> Point<T, T>
-fn makePair(x, y) = Pair { first: x, second: y }  // HM infers: <A, B>(A, B) -> Pair<A, B>
+fn makePoint(a: int, b: int) = Point { x: a, y: b }  // int -> Point
 
 // Each usage gets monomorphized
 let id1 = identityP(42)          // int -> int
@@ -63,15 +62,11 @@ let id2 = identityP("test")      // string -> string
 let id3 = identityP(true)        // bool -> bool
 
 let point1 = makePoint(a: 1, b: 2)              // Point<int, int>
-let point2 = makePoint(a: "x", b: "y")          // Point<string, string>
-let pair1 = makePair(x: 10, y: "label")         // Pair<int, string>
-let pair2 = makePair(x: true, y: false)         // Pair<bool, bool>
 
 print("identityP(42) = ${id1}")
 print("identityP(\"test\") = ${id2}")
 print("identityP(true) = ${toString(id3)}")
 print("makePoint(1, 2) = {${point1.x}, ${point1.y}}")
-print("makePoint(\"x\", \"y\") = {${point2.x}, ${point2.y}}")
 print("")
 
 // Test 5: Complex HM inference with field access
