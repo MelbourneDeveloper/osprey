@@ -4,4 +4,8 @@ true
 false
 true
 true
-false 
+false
+Testing Result<bool> toString:
+Success(true)
+Success(false)
+Success(false)

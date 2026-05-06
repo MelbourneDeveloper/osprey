@@ -1,0 +1,16 @@
+{
+  "all": true,
+  "src": ["client/src", "server/src"],
+  "include": ["client/src/**/*.ts", "server/src/**/*.ts"],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.js",
+    "test/**",
+    "out/**",
+    "node_modules/**",
+    "scripts/**"
+  ],
+  "reporter": ["text-summary", "json-summary", "html"],
+  "reports-dir": "coverage",
+  "temp-directory": "coverage/v8"
+}

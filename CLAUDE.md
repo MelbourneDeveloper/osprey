@@ -1,23 +1,35 @@
 # CLAUDE.md
+<!-- agent-pmo:74cf183 -->
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Core Development Principles
 
-- **NEVER DUPLICATE CODE** - Edit in place, never create new versions
+- **NEVER DUPLICATE CODE** - Edit in place, never create new versions. Actively remove duplicate code, even test code and always aim for conciseness. Always do a search before adding new code.
 - **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
+
+⛔️ This is completely illegal
+```go
+// For now, just log that we need to implement circular dependency detection
+t.Log("⚠️  NOTE: Circular dependency detection not yet implemented - this will be added later")
+```
+
+✅ Correct - Fail hard!!!!
+```go
+t.Fatalf("⚠️ NOTE: Circular dependency detection not yet implemented. Implement it!")
+```
+
 - **NO CONSECUTIVE PRINT CALLS IN OSP** - Use string interpolation! Consolidate consecutive prints into singular interpolated strings!!!
-- **RUN LINTING AUTOFIXES** - Most lints can be easily fixed with auto fix. Don't try to fix them yourself
+- **RUN LINTING AUTOFIXES AND make line ROUTINELY** - Most lints can be easily fixed with auto fix. Don't try to fix them yourself
+- **PREFER EXPANDING EXISTING EXAMPLES AND TESTS** - Don't add new examples/tests
 - **SEARCH BEFORE ADDING** - Check for existing code before creating new functions/constants
-- **Do not use source control** - unless explicitly requested
+- **DO NOT USE SOURCE CONTROL - ESPECIALLY WRITES** - unless explicitly requested
 - **MAKE EXAMPLES (TESTS) CONCISE AND MIX WITH MANY LANGUAGE CONSTRUCTS** - Don't create many files with overlapping functionality
 - **NEVER IGNORE FAILING TESTS** - Don't reduce assertions to make tests pass, fail loudly
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules 
-- **RUN LINTER REGULARLY** - lints are strict. Obey them!! DO NOT TURN THEM OFF!!!!
 - **FP STYLE CODE** - pure functions over OOP style
-- **NEVER COMMIT/PUSH** unless explicitly requested
-- **FOLLOW STATIC ANALYSIS** - Pay attention to linters and fix issues
 - **USE CONSTANTS** - Name values meaningfully instead of using literals
+- ACTIVELY FIX RULE VIOLATIONS AS A HIGH PRIORITY
 
 ## Commands
 
@@ -130,3 +142,30 @@ npm install && npm start         # Start web-based compiler service
 - Use VS Code Dev Container for consistent development environment
 
 This is a functional programming language compiler with algebraic effects, fiber-based concurrency, and strong compile-time safety guarantees.
+
+## Standard Build Commands
+
+```bash
+make build        # Build compiler + VSCode extension
+make test         # Fail-fast tests + coverage + threshold (coverage-thresholds.json)
+make lint         # Run all linters (golangci-lint + ESLint)
+make fmt          # Format all code in-place
+make clean        # Remove build artifacts
+make ci           # lint + test + build (full CI simulation)
+make setup        # Post-create dev environment setup
+```
+
+## Spec IDs
+
+Spec IDs are hierarchical descriptive slugs in the format `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]`. NEVER use numbered IDs (`[SPEC-001]`). Code implementing a spec section MUST reference its ID in a comment. Example: `// Implements [PARSER-EFFECTS-HANDLE]`.
+
+## Branch Naming
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Feature | `feature/[ISSUE]-[slug]` | `feature/42-add-pattern-matching` |
+| Bug fix | `fix/[ISSUE]-[slug]` | `fix/17-null-ref-effects` |
+| Chore | `chore/[slug]` | `chore/update-deps` |
+| Claude agent | `claude/[slug]-[random5]` | `claude/refactor-XYZab` |
+
+All changes via PR — no direct pushes to `main`. Squash-merge preferred.

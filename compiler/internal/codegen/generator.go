@@ -2,11 +2,14 @@
 package codegen
 
 import (
+	"log/slog"
+
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
 	"github.com/christianfindlay/osprey/internal/ast"
+	"github.com/christianfindlay/osprey/internal/logging"
 )
 
 // LLVMGenerator generates LLVM IR from AST.
@@ -42,9 +45,14 @@ type LLVMGenerator struct {
 	expectedParameterType types.Type
 	// Hindley-Milner type inference system
 	typeInferer *TypeInferer
+	// Structured diagnostics
+	logger *slog.Logger
 	// HINDLEY-MILNER FIX: Single source of truth for record field mappings
 	// Maps record type name to field name -> LLVM index mapping
 	recordFieldMappings map[string]map[string]int
+	// Stream Fusion: Track pending transformations for map/filter
+	pendingMapFunc    *ast.Identifier // Pending map transformation function
+	pendingFilterFunc *ast.Identifier // Pending filter predicate function
 }
 
 // SecurityConfig defines security policies for the code generator.
@@ -100,6 +108,7 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		currentFunctionParams: make(map[string]value.Value),
 		// Initialize Hindley-Milner type inference system
 		typeInferer: NewTypeInferer(),
+		logger:      logging.Logger("codegen"),
 		// HINDLEY-MILNER FIX: Initialize record field mappings
 		recordFieldMappings: make(map[string]map[string]int),
 	}
@@ -190,6 +199,26 @@ func (g *LLVMGenerator) declareExternalFunctions() {
 		ir.NewParam("n", types.I64),
 	)
 	g.functions["memcpy"] = memcpy
+
+	// Declare effect runtime functions for dynamic handler resolution
+	// i32 @__osprey_handler_push(i8* %effect_name, i8* %operation_name, i8* %handler_func_ptr)
+	handlerPush := g.module.NewFunc("__osprey_handler_push", types.I32,
+		ir.NewParam("effect_name", types.I8Ptr),
+		ir.NewParam("operation_name", types.I8Ptr),
+		ir.NewParam("handler_func_ptr", types.I8Ptr),
+	)
+	g.functions["__osprey_handler_push"] = handlerPush
+
+	// i32 @__osprey_handler_pop()
+	handlerPop := g.module.NewFunc("__osprey_handler_pop", types.I32)
+	g.functions["__osprey_handler_pop"] = handlerPop
+
+	// i8* @__osprey_handler_lookup(i8* %effect_name, i8* %operation_name)
+	handlerLookup := g.module.NewFunc("__osprey_handler_lookup", types.I8Ptr,
+		ir.NewParam("effect_name", types.I8Ptr),
+		ir.NewParam("operation_name", types.I8Ptr),
+	)
+	g.functions["__osprey_handler_lookup"] = handlerLookup
 }
 
 // registerBuiltInTypes registers built-in types in the type system.

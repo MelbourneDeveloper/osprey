@@ -1,47 +1,69 @@
-2. [Lexical Structure](0002-LexicalStructure)
-   - [Identifiers](#21-identifiers)
-   - [Keywords](#22-keywords)
-   - [Literals](#23-literals)
-   - [Operators](#24-operators)
-   - [Delimiters](#25-delimiters)
+# Lexical Structure
 
-## 2. Lexical Structure
+- [Identifiers](#identifiers)
+- [Keywords](#keywords)
+- [Literals](#literals)
+- [Operators](#operators)
+- [Delimiters](#delimiters)
 
-### 2.1 Identifiers
+## Identifiers
 
-Identifiers must start with a letter or underscore, followed by letters, digits, or underscores:
-
+Start with letter or underscore, followed by letters, digits, or underscores.
 ```
 ID := [a-zA-Z_][a-zA-Z0-9_]*
 ```
 
-### 2.2 Keywords
+## Keywords
 
-Reserved keywords:
 ```
 fn let mut type import match if then else case of extern
 ```
 
-### 2.3 Literals
+## Literals
 
-#### Integer Literals
+### Integer Literals
 ```
 INTEGER := [0-9]+
 ```
 
-#### String Literals
+**Examples:**
+```osprey
+let count = 42
+let negative = -17
+let zero = 0
+```
+
+### Float Literals
+```
+FLOAT := [0-9]+ '.' [0-9]+ ([eE] [+-]? [0-9]+)?
+       | [0-9]+ [eE] [+-]? [0-9]+
+```
+
+**Examples:**
+```osprey
+let pi = 3.14159
+let temperature = -273.15
+let scientific = 6.022e23
+let small = 1.5e-10
+```
+
+**Type Inference:**
+- Integer literals without decimal point infer to `int`
+- Literals with decimal point or scientific notation infer to `float`
+
+### String Literals
 ```
 STRING := '"' (CHAR | ESCAPE_SEQUENCE)* '"'
 ESCAPE_SEQUENCE := '\n' | '\t' | '\r' | '\\' | '\"'
 ```
 
-#### Interpolated String Literals
+### Interpolated String Literals
 ```
 INTERPOLATED_STRING := '"' (CHAR | INTERPOLATION)* '"'
 INTERPOLATION := '${' EXPRESSION '}'
 ```
 
-#### Immutable List Literals
+### List Literals
 ```
 LIST := '[' (expression (',' expression)*)? ']'
 ```
@@ -53,17 +75,38 @@ let names = ["Alice", "Bob", "Charlie"]  // Fixed size: 3 elements
 let pair = [x, y]  // Fixed size: 2 elements
 ```
 
-### 2.4 Operators
+## Operators
 
-#### Arithmetic Operators (All Safe by Default)
-- `+` Addition: `(Int, Int) -> Result<Int, MathError>`
-- `-` Subtraction: `(Int, Int) -> Result<Int, MathError>`
-- `*` Multiplication: `(Int, Int) -> Result<Int, MathError>`
-- `/` Division: `(Int, Int) -> Result<Int, MathError>`
+### Arithmetic Operators
 
-**CRITICAL**: All arithmetic operators return Result types to handle overflow, underflow, and division by zero.
+All arithmetic operators return `Result` types to handle overflow, underflow, and division by zero.
 
-#### Comparison Operators
+**Integer Operations:**
+- `+` Addition: `(int, int) -> Result<int, MathError>`
+- `-` Subtraction: `(int, int) -> Result<int, MathError>`
+- `*` Multiplication: `(int, int) -> Result<int, MathError>`
+- `/` Division: `(int, int) -> Result<float, MathError>` — always returns float
+- `%` Modulo: `(int, int) -> Result<int, MathError>`
+
+**Floating-Point Operations:**
+- `+`, `-`, `*`, `/`, `%`: `(float, float) -> Result<float, MathError>`
+
+**Type Safety:**
+- No automatic type promotion between int and float
+- Use `toFloat(int)` and `toInt(float)` for explicit conversion
+- Division `/` always returns float, even for integer operands
+
+**Examples:**
+```osprey
+let sum = 5 + 3           // Result<int, MathError>
+let quotient = 10 / 3     // Result<float, MathError> - returns 3.333...
+let remainder = 10 % 3    // Result<int, MathError> - returns 1
+
+let precise = 10.0 / 3.0  // Result<float, MathError>
+let divZero = 10 / 0      // Result<float, MathError> - Error(DivisionByZero)
+```
+
+### Comparison Operators
 - `==` Equality
 - `!=` Inequality  
 - `<` Less than
@@ -71,20 +114,20 @@ let pair = [x, y]  // Fixed size: 2 elements
 - `<=` Less than or equal
 - `>=` Greater than or equal
 
-#### Logical Operators
+### Logical Operators
 - `&&` Logical AND (short-circuit evaluation)
 - `||` Logical OR (short-circuit evaluation)
 - `!` Logical NOT
 
-#### Assignment Operator
+### Assignment Operator
 - `=` Assignment
 
-#### Other Operators
+### Other Operators
 - `=>` Lambda/Match arm arrow
 - `|` Union type separator
 - `::` Type annotation
 
-### 2.5 Delimiters
+## Delimiters
 
 - `(` `)` Parentheses
 - `{` `}` Braces

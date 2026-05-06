@@ -19,10 +19,19 @@ print("Processed ${job1} items")
 let job2 = yield 25  // Process 25 more
 print("Processed ${job2} more items, total: ${job1 + job2}")
 
-// Simple message queue simulation
-fn sendMessage(queueSize: int) -> int = queueSize + 1
-let messageQueue = 5  // Initial queue size
-let newQueueSize = sendMessage(messageQueue)
-print("Message queue size: ${newQueueSize}")
+// Simple channel-based message passing
+let messageChannel = Channel(1)
+send(messageChannel, 42)
+print("Sent message to channel")
+let message = recv(messageChannel)
+print("Received message from channel: ${message}")
+
+// Test spawn expression and fiber functions
+let spawnedTask = spawn handleRequest(999)
+print("Spawned fiber task: ${spawnedTask}")
+
+// Test yield functionality
+let yieldResult = fiber_yield(123)
+print("Yield result: ${yieldResult}")
 
 print("=== Complete ===") 

@@ -1,4 +1,3 @@
-// Package descriptions provides comprehensive documentation for built-in functions.
 package descriptions
 
 import (

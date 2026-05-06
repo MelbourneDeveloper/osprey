@@ -30,11 +30,10 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLiteral(ctx.Literal())
 	case ctx.LambdaExpr() != nil:
 		return b.buildLambdaExpr(ctx.LambdaExpr())
+	case ctx.UpdateExpr() != nil:
+		return b.buildUpdateExpression(ctx.UpdateExpr())
 	case ctx.ObjectLiteral() != nil:
 		return b.buildObjectLiteral(ctx.ObjectLiteral())
-	case ctx.ID(0) != nil && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
-		// Array indexing: ID[INT]
-		return b.buildListAccess(ctx)
 	case ctx.ID(0) != nil:
 		return &Identifier{
 			Name:     ctx.ID(0).GetText(),
@@ -83,6 +82,14 @@ func (b *Builder) buildEffectExpression(ctx parser.IPrimaryContext) Expression {
 
 func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 	switch {
+	case ctx.FLOAT() != nil:
+		text := ctx.FLOAT().GetText()
+		value, _ := strconv.ParseFloat(text, 64)
+
+		return &FloatLiteral{
+			Value:    value,
+			Position: b.getPosition(ctx.FLOAT().GetSymbol()),
+		}
 	case ctx.INT() != nil:
 		text := ctx.INT().GetText()
 		value, _ := strconv.ParseInt(text, 10, 64)
@@ -115,6 +122,8 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 		}
 	case ctx.ListLiteral() != nil:
 		return b.buildListLiteral(ctx.ListLiteral())
+	case ctx.MapLiteral() != nil:
+		return b.buildMapLiteral(ctx.MapLiteral())
 	}
 
 	return nil
@@ -160,29 +169,29 @@ func (b *Builder) buildListLiteral(ctx parser.IListLiteralContext) Expression {
 	}
 }
 
-// buildListAccess builds a ListAccessExpression from array indexing syntax.
-func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
-	if ctx == nil || ctx.ID(0) == nil || ctx.INT() == nil {
+// buildMapLiteral builds a MapLiteral from a map literal context.
+func (b *Builder) buildMapLiteral(ctx parser.IMapLiteralContext) Expression {
+	if ctx == nil {
 		return nil
 	}
 
-	// Get the list identifier
-	listExpr := &Identifier{
-		Name:     ctx.ID(0).GetText(),
-		Position: b.getPosition(ctx.ID(0).GetSymbol()),
+	entries := make([]MapEntry, 0)
+
+	// Build each key-value pair in the map
+	for _, entryCtx := range ctx.AllMapEntry() {
+		key := b.buildExpression(entryCtx.AllExpr()[0])
+		value := b.buildExpression(entryCtx.AllExpr()[1])
+
+		if key != nil && value != nil {
+			entries = append(entries, MapEntry{
+				Key:   key,
+				Value: value,
+			})
+		}
 	}
 
-	// Parse the index
-	indexText := ctx.INT().GetText()
-	indexValue, _ := strconv.ParseInt(indexText, 10, 64)
-	indexExpr := &IntegerLiteral{
-		Value:    indexValue,
-		Position: b.getPosition(ctx.INT().GetSymbol()),
-	}
-
-	return &ListAccessExpression{
-		List:     listExpr,
-		Index:    indexExpr,
+	return &MapLiteral{
+		Entries:  entries,
 		Position: b.getPositionFromContext(ctx),
 	}
 }
@@ -353,6 +362,36 @@ func (b *Builder) buildObjectLiteral(ctx parser.IObjectLiteralContext) Expressio
 	}
 
 	return &ObjectLiteral{
+		Fields:   fieldAssignments,
+		Position: b.getPositionFromContext(ctx),
+	}
+}
+
+// buildUpdateExpression builds an UpdateExpression for non-destructive record updates.
+func (b *Builder) buildUpdateExpression(ctx parser.IUpdateExprContext) Expression {
+	if ctx == nil {
+		return nil
+	}
+
+	// Get the target identifier name
+	targetName := ctx.ID().GetText()
+
+	// Build field assignments for the update
+	fieldAssignments := make(map[string]Expression)
+
+	if ctx.FieldAssignments() != nil {
+		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
+			fieldName := fieldCtx.ID().GetText()
+			fieldValue := b.buildExpression(fieldCtx.Expr())
+			fieldAssignments[fieldName] = fieldValue
+		}
+	}
+
+	return &UpdateExpression{
+		Target: &Identifier{
+			Name:     targetName,
+			Position: b.getPosition(ctx.ID().GetSymbol()),
+		},
 		Fields:   fieldAssignments,
 		Position: b.getPositionFromContext(ctx),
 	}

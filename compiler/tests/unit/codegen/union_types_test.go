@@ -80,22 +80,25 @@ func TestMatchExhaustivenessShouldPass(t *testing.T) {
 	}
 }
 
-func TestUnknownVariantInMatchShouldPass(t *testing.T) {
-	// This currently passes but ideally should fail with better validation
+func TestUnknownVariantInMatchShouldFail(t *testing.T) {
+	// This should fail with unknown variant error
 	source := `
 		type Color = Red | Green | Blue
 		let color = Red
 		let description = match color {
 			Red => "red"
-			Green => "green"  
+			Green => "green"
 			Blue => "blue"
 			Purple => "invalid"
 		}
 	`
 
 	_, err := codegen.CompileToLLVM(source)
-	// Note: This currently passes but should eventually fail with proper validation
-	if err != nil {
-		t.Logf("Got expected error for unknown variant: %v", err)
+	if err == nil {
+		t.Errorf("Expected unknown variant 'Purple' to cause compilation failure")
+	}
+
+	if !strings.Contains(err.Error(), "Purple") || !strings.Contains(err.Error(), "not defined in type") {
+		t.Errorf("Expected 'unknown variant' error for Purple, got: %v", err)
 	}
 }

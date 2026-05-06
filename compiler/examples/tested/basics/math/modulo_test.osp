@@ -1,13 +1,4 @@
-fn isEven(x: int) -> Result<bool, MathError> = (x % 2) == 0
+fn isEven(x: int) -> bool = (x % 2) == 0
 
-let result1 = isEven(4)
-match result1 {
-    Success { value } => print(value)
-    Error { message } => print("Error: ${message}")
-}
-
-let result2 = isEven(5)
-match result2 {
-    Success { value } => print(value)
-    Error { message } => print("Error: ${message}")
-} 
+print(isEven(4))
+print(isEven(5)) 

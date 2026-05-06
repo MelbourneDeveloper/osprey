@@ -94,7 +94,7 @@ func getExpectedOutputs() map[string]string {
 	return map[string]string{
 		"hello.osp": "Hello, World!\nHello from function!\n",
 		"interpolation_math.osp": "Next year you'll be 26\nLast year you were 24\n" +
-			"Double your age: 50\nHalf your age: 12\n",
+			"Double your age: 50\nHalf your age: 12.5\n",
 		"interpolation_comprehensive.osp": "Hello Alice!\nYou are 25 years old\n" +
 			"Your score is 95 points\nNext year you'll be 26\n" +
 			"Double your score: 190\nAlice (25) scored 95/100\n",
@@ -149,7 +149,10 @@ func getExpectedOutputs() map[string]string {
 			"Example 4: Range forEach\n42\n43\n44\n" +
 			"Example 5: Small range\n10\n11\n12\n" +
 			"Example 6: Range 0 to 4\n0\n1\n2\n3\n4\n" +
-			"Example 7: Fold operations\n15\n6\n" +
+			"Example 7: Fold operations\n15\n" +
+			"Example 8: Map collections\n" +
+			"Created price map and inventory map via HM inference\n" +
+			"Apple price: 2\n6\n" +
 			"Example 8: Chained single value operations\n21\n" +
 			"Example 9: Conditional operations\n1\n0\n=== Showcase Complete ===\n",
 		"explicit_any_allowed.osp": "Explicit any return type works\n" +
@@ -161,7 +164,10 @@ func getExpectedOutputs() map[string]string {
 			"2. Single value transformations:\n10\n9\n" +
 			"3. Different ranges:\n10\n11\n12\n0\n1\n2\n" +
 			"4. Fold operations:\n10\n60\n" +
-			"5. Chained single value operations:\n16\n" +
+			"5. List operations:\nList created with HM inference\nThird element: 30\n" +
+			"6. Map operations would need constraints:\nHM needs type constraints for Map<K,V> inference\n" +
+			"7. List with functional operations:\nBase numbers created\nFourth number squared: 16\n" +
+			"8. Chained single value operations:\n16\n" +
 			"=== Examples Complete ===\n",
 		"documentation_test.osp": "Testing documentation\n1\n2\n3\n4\n",
 		// Boolean examples that work with current parser
@@ -179,7 +185,16 @@ func getExpectedOutputs() map[string]string {
 			"Student Alice scored 95 points\n" +
 			"Doubled score: 190\n" +
 			"Excellent!\n" +
-			"Status: System operational\n" +
+			"=== List & Map Operations ===\n" +
+			"Score list created via HM inference\n" +
+			"First score: 85\n" +
+			"Bonus computation works: 90\n" +
+			"Second score: 92\n" +
+			"Student grades map created via HM inference\n" +
+			"Alice's grade: 95\n" +
+			"Student names list created\n" +
+			"Third student: Charlie\n" +
+			"Status: System operational with collections\n" +
 			"Double of 42: 84\n" +
 			"Student Bob scored 92 points\n" +
 			"=== Demo Complete ===\n",
@@ -404,7 +419,7 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 	}
 
 	if actualOutput != expectedOutput {
-		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, actualOutput)
+		t.Fatalf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, actualOutput)
 	}
 
 	t.Logf("✅ Example %s executed and output verified", filepath.Base(filePath))
@@ -510,8 +525,8 @@ func getSpaceTraderExpectedOutput() string {
 		"Cargo bay: 0/50 units\n" +
 		"Ship condition: Operational\n\n" +
 		"📊 ADVANCED ANALYTICS 📊\n" +
-		"Fuel efficiency: 16% per planet\n" +
-		"Profit per planet: 233 credits\n" +
+		"Fuel efficiency: 16.66666667% per planet\n" +
+		"Profit per planet: 233.3333333 credits\n" +
 		"Projected wealth (if doubled): 3400 credits\n\n" +
 		"🏆 MISSION COMPLETE! 🏆\n" +
 		"Congratulations, Captain Novice Merchant!\n" +

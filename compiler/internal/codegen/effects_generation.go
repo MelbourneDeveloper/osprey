@@ -3,9 +3,12 @@ package codegen
 import (
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
@@ -104,11 +107,14 @@ func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 
 	// Parse actual operation signatures from the AST
 	for _, operation := range effect.Operations {
+
 		paramTypes := make([]types.Type, len(operation.Parameters))
 
 		for i, param := range operation.Parameters {
 			if param.Type != nil {
-				paramTypes[i] = ec.stringTypeToLLVMType(param.Type.Name)
+				// Use the generator's proper type conversion instead of string parsing
+				concreteParamType := &ConcreteType{name: param.Type.Name}
+				paramTypes[i] = ec.generator.getLLVMConcreteType(concreteParamType)
 			} else {
 				// INTERNAL COMPILER ERROR: Function type parsing should have extracted parameter types
 				// from declarations like `log: fn(string) -> Unit`
@@ -124,7 +130,9 @@ func (ec *EffectCodegen) RegisterEffect(effect *ast.EffectDeclaration) error {
 				ErrParseReturnType, effect.Name, operation.Name)
 		}
 
-		returnType := ec.stringTypeToLLVMType(operation.ReturnType)
+		// Use the generator's proper type conversion instead of string parsing
+		concreteReturnType := &ConcreteType{name: operation.ReturnType}
+		returnType := ec.generator.getLLVMConcreteType(concreteReturnType)
 
 		effectType.Operations[operation.Name] = &EffectOp{
 			Name:       operation.Name,
@@ -150,23 +158,39 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	ec.pushProcessingEffect(perform.EffectName)
 	defer ec.popProcessingEffect()
 
-	// When in handler scope, try handlers FIRST regardless of declared effects
+	// ALGEBRAIC EFFECT SEMANTICS: Handlers are lexically scoped and ALWAYS take priority
+	// Try handlers FIRST, regardless of whether effects are declared in function signatures
+	var handlerResult value.Value
+	var handlerErr error
+
 	if len(ec.currentHandlers) > 0 || len(ec.handlerStack) > 0 {
 		// PRIORITY 1: Check for lexically scoped handlers
-		result, err := ec.tryCurrentScopeHandlers(perform)
-		if err != nil || result != nil {
-			return result, err
+		handlerResult, handlerErr = ec.tryCurrentScopeHandlers(perform)
+		if handlerErr != nil {
+			return nil, handlerErr
+		}
+		if handlerResult != nil {
+			return handlerResult, nil
 		}
 
 		// PRIORITY 2: Check global handler stack
-		result, err = ec.tryStackHandlers(perform)
-		if err != nil || result != nil {
-			return result, err
+		handlerResult, handlerErr = ec.tryStackHandlers(perform)
+		if handlerErr != nil {
+			return nil, handlerErr
+		}
+		if handlerResult != nil {
+			return handlerResult, nil
 		}
 	}
 
-	// EVIDENCE PASSING: For functions with declared effects, use evidence parameters as fallback
+	// EVIDENCE PASSING FALLBACK: Only use declared effects when NO handlers were found
+	// BUG FIX: This should ONLY be a fallback - if handlers exist for this effect,
+	// they should have been found above and we should NOT reach here
 	if ec.hasDeclaredEffect(perform.EffectName) {
+		if ec.isLikelyCircularDependency(perform.EffectName) {
+			return nil, ec.createUnhandledEffectError(perform)
+		}
+
 		return ec.generateDeclaredEffectCall(perform)
 	}
 
@@ -210,8 +234,37 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	// EVIDENCE PASSING: Also track on global stack for cross-function evidence passing
 	ec.handlerStack = append(ec.handlerStack, handlerFrame)
 
+	// RUNTIME HANDLER RESOLUTION: Push handlers onto runtime stack
+	// This enables dynamic handler resolution for nested handlers
+	handlerPushFunc := ec.generator.functions["__osprey_handler_push"]
+	for operationName, handlerFunc := range handlerFrame.Operations {
+		// Create string constants for effect name and operation name
+		effectNameStr := ec.generator.builder.NewGetElementPtr(
+			types.NewArray(uint64(len(effectName)+1), types.I8),
+			ec.generator.module.NewGlobalDef("", constant.NewCharArrayFromString(effectName+"\x00")),
+			constant.NewInt(types.I64, 0), constant.NewInt(types.I32, 0),
+		)
+		operationNameStr := ec.generator.builder.NewGetElementPtr(
+			types.NewArray(uint64(len(operationName)+1), types.I8),
+			ec.generator.module.NewGlobalDef("", constant.NewCharArrayFromString(operationName+"\x00")),
+			constant.NewInt(types.I64, 0), constant.NewInt(types.I32, 0),
+		)
+
+		// Cast handler function pointer to i8*
+		handlerPtr := ec.generator.builder.NewBitCast(handlerFunc, types.I8Ptr)
+
+		// Call __osprey_handler_push(effect_name, operation_name, handler_func_ptr)
+		ec.generator.builder.NewCall(handlerPushFunc, effectNameStr, operationNameStr, handlerPtr)
+	}
+
 	// Generate the do body with the handler active
 	result, err := ec.generator.generateExpression(handler.Body)
+
+	// RUNTIME HANDLER RESOLUTION: Pop handlers from runtime stack
+	handlerPopFunc := ec.generator.functions["__osprey_handler_pop"]
+	for range handlerFrame.Operations {
+		ec.generator.builder.NewCall(handlerPopFunc)
+	}
 
 	// CRITICAL BUG FIX: Restore BOTH currentHandlers AND handlerStack for proper lexical scoping
 	ec.currentHandlers = ec.currentHandlers[:currentHandlersLength]
@@ -226,22 +279,6 @@ func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpressio
 	return result, nil
 }
 
-// stringTypeToLLVMType converts string type names to LLVM types
-func (ec *EffectCodegen) stringTypeToLLVMType(typeName string) types.Type {
-	switch typeName {
-	case TypeString:
-		return types.I8Ptr
-	case TypeInt:
-		return types.I64
-	case TypeBool:
-		return types.I1
-	case TypeUnit:
-		return types.Void
-	default:
-		return types.I64 // Default fallback
-	}
-}
-
 // inferOperationTypes determines parameter and return types for an operation
 func (ec *EffectCodegen) inferOperationTypes(
 	effectName string, operationName string, paramCount int,
@@ -252,21 +289,16 @@ func (ec *EffectCodegen) inferOperationTypes(
 		return effectType.Operations[operationName].ParamTypes, effectType.Operations[operationName].ReturnType
 	}
 
-	// Fallback logic was completely backwards!
-	// Operations are NOT found in registry - this should be a loud error, not silent fallback
+	// Effect not found in registry - this indicates a registration bug
+
 	// But for now, provide sensible defaults until we fix the registry issue
 
+	// Fallback for other cases
 	paramTypes := make([]types.Type, paramCount)
 	for i := range paramTypes {
-		paramTypes[i] = types.I8Ptr // Default to string for now (most common)
+		paramTypes[i] = types.I8Ptr
 	}
 
-	// CRITICAL ERROR: Operation not found in registry!
-	// This should be a compile-time error, not a silent fallback
-	// The effect system should NOT know about built-in functions like readFile/writeFile
-	// Those are just normal functions that handlers can call from their code blocks
-
-	// TODO: Make this a proper compile-time error once registry is fixed
 	return paramTypes, types.I64
 }
 
@@ -398,13 +430,7 @@ func (ec *EffectCodegen) hasDeclaredEffect(effectName string) bool {
 		return false
 	}
 
-	for _, declaredEffect := range ec.currentFunctionEffects {
-		if declaredEffect == effectName {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(ec.currentFunctionEffects, effectName)
 }
 
 // tryCurrentScopeHandlers attempts to handle perform using current scope handlers (lexical scoping)
@@ -531,6 +557,7 @@ func (ec *EffectCodegen) tryStackHandlers(perform *ast.PerformExpression) (value
 }
 
 // generatePerformArguments generates arguments for perform expressions
+// AUTO-UNWRAPPING: Unwraps Result types from arithmetic operations before passing to handlers
 func (ec *EffectCodegen) generatePerformArguments(perform *ast.PerformExpression) ([]value.Value, error) {
 	args := make([]value.Value, len(perform.Arguments))
 
@@ -539,6 +566,11 @@ func (ec *EffectCodegen) generatePerformArguments(perform *ast.PerformExpression
 		if err != nil {
 			return nil, err
 		}
+
+		// AUTO-UNWRAP: If this is a Result type from arithmetic, unwrap the value
+		// This allows: perform State.set(currentValue + 1) where currentValue + 1 returns Result<int, MathError>
+		// The handler receives the unwrapped int value, not the Result struct
+		argVal = ec.generator.unwrapIfResult(argVal)
 
 		args[i] = argVal
 	}
@@ -593,16 +625,26 @@ func (ec *EffectCodegen) isLikelyCircularDependency(effectName string) bool {
 // detectCircularDependency checks if processing this effect would create a circular dependency
 func (ec *EffectCodegen) detectCircularDependency(effectName string) error {
 	// Check if this effect is already in the processing stack
-	for _, processingEffect := range ec.processingStack {
-		if processingEffect == effectName {
-			errorMsg := "Circular effect dependency detected - " +
-				"effects cannot have circular references that would cause infinite recursion"
+	if slices.Contains(ec.processingStack, effectName) {
+		errorMsg := "Circular effect dependency detected - " +
+			"effects cannot have circular references that would cause infinite recursion"
 
-			return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
-		}
+		return fmt.Errorf("%w: %s", ErrUnhandledEffect, errorMsg)
 	}
 
 	return nil
+}
+
+func (ec *EffectCodegen) hasGeneratedHandler(effectName string, operationName string) bool {
+	handlerPattern := fmt.Sprintf("__handler_%s_%s_", effectName, operationName)
+
+	for _, fn := range ec.generator.module.Funcs {
+		if strings.HasPrefix(fn.Name(), handlerPattern) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // pushProcessingEffect adds an effect to the processing stack for circular dependency detection
@@ -644,11 +686,15 @@ func (g *LLVMGenerator) generateEffectDeclaration(effect *ast.EffectDeclaration)
 }
 
 // generateDeclaredEffectCall generates calls for effects declared in function signatures
+// BUG FIX: This function is called when generating standalone function bodies that declare effects.
+// At that point, currentHandlers is empty because we're not inside a handler scope.
+// However, at RUNTIME, the function might be called from within a handler scope.
+// Therefore, we need to check handlerStack (which persists across function boundaries) instead.
 func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpression) (value.Value, error) {
-	// CRITICAL TODO: The real bug is that functions with declared effects are being called
-	// when currentHandlers=0, stack=0. This means the handler context is not being preserved
-	// across function calls. The issue is NOT in this function, but in how handlers are
-	// maintained when calling functions with declared effects.
+	if !ec.hasGeneratedHandler(perform.EffectName, perform.OperationName) {
+		return nil, ec.createUnhandledEffectError(perform)
+	}
+
 	// Generate arguments for the perform expression
 	args := make([]value.Value, len(perform.Arguments))
 
@@ -658,32 +704,111 @@ func (ec *EffectCodegen) generateDeclaredEffectCall(perform *ast.PerformExpressi
 			return nil, err
 		}
 
+		// AUTO-UNWRAP: If this is a Result type from arithmetic, unwrap the value
+		// This allows: perform State.set(currentValue + 1) where currentValue + 1 returns Result<int, MathError>
+		// The handler receives the unwrapped int value, not the Result struct
+		argVal = ec.generator.unwrapIfResult(argVal)
+
 		args[i] = argVal
 	}
 
-	// Find the most recent handler for this effect operation
-	handlerPattern := fmt.Sprintf("__handler_%s_%s_", perform.EffectName, perform.OperationName)
+	// RUNTIME HANDLER RESOLUTION: Look up handler dynamically from runtime stack
+	// This implements proper algebraic effects semantics as described in:
+	// - "Programming and Reasoning with Algebraic Effects and Dependent Types" (Brady, 2013)
+	// - "Algebraic Effects and Effect Handlers for Idioms and Arrows" (Lindley, 2018)
+	// - "Eff: Extensible Effects for OCaml" (Pretnar & Bauer)
+	//
+	// Implementation:
+	// 1. Handlers are pushed/popped on a runtime stack when entering/exiting handler scopes
+	// 2. Effect operations look up handlers from the runtime stack dynamically
+	// 3. Inner handlers dynamically shadow outer handlers at runtime
 
-	var candidateHandlers []*ir.Func
+	// Create string constants for effect name and operation name
+	effectNameStr := ec.generator.builder.NewGetElementPtr(
+		types.NewArray(uint64(len(perform.EffectName)+1), types.I8),
+		ec.generator.module.NewGlobalDef("", constant.NewCharArrayFromString(perform.EffectName+"\x00")),
+		constant.NewInt(types.I64, 0), constant.NewInt(types.I32, 0),
+	)
+	operationNameStr := ec.generator.builder.NewGetElementPtr(
+		types.NewArray(uint64(len(perform.OperationName)+1), types.I8),
+		ec.generator.module.NewGlobalDef("", constant.NewCharArrayFromString(perform.OperationName+"\x00")),
+		constant.NewInt(types.I64, 0), constant.NewInt(types.I32, 0),
+	)
 
-	for _, fn := range ec.generator.module.Funcs {
-		fnName := fn.Name()
-		if len(fnName) > len(handlerPattern) && fnName[:len(handlerPattern)] == handlerPattern {
-			candidateHandlers = append(candidateHandlers, fn)
-		}
+	// Call __osprey_handler_lookup to get handler function pointer from runtime stack
+	handlerLookupFunc := ec.generator.functions["__osprey_handler_lookup"]
+	handlerPtr := ec.generator.builder.NewCall(handlerLookupFunc, effectNameStr, operationNameStr)
+
+	// Check if handler was found (NULL check)
+	nullPtr := constant.NewNull(types.I8Ptr)
+	isNull := ec.generator.builder.NewICmp(enum.IPredEQ, handlerPtr, nullPtr)
+
+	// Create blocks for null check with unique names
+	blockID := len(ec.generator.function.Blocks)
+	notNullBlock := ec.generator.function.NewBlock(fmt.Sprintf("handler_found_%d", blockID))
+	nullBlock := ec.generator.function.NewBlock(fmt.Sprintf("handler_not_found_%d", blockID))
+	continueBlock := ec.generator.function.NewBlock(fmt.Sprintf("after_handler_%d", blockID))
+
+	ec.generator.builder.NewCondBr(isNull, nullBlock, notNullBlock)
+
+	// Handler not found - this should never happen if compile-time verification worked
+	ec.generator.builder = nullBlock
+	// For now, abort with error message
+	putsFunc := ec.generator.functions["puts"]
+	errorMsg := fmt.Sprintf("RUNTIME ERROR: Handler not found for %s.%s (compile-time verification failed)",
+		perform.EffectName, perform.OperationName)
+	errorMsgStr := ec.generator.builder.NewGetElementPtr(
+		types.NewArray(uint64(len(errorMsg)+1), types.I8),
+		ec.generator.module.NewGlobalDef("", constant.NewCharArrayFromString(errorMsg+"\x00")),
+		constant.NewInt(types.I64, 0), constant.NewInt(types.I32, 0),
+	)
+	ec.generator.builder.NewCall(putsFunc, errorMsgStr)
+	// Determine return type for default value
+	paramTypes, returnType := ec.inferOperationTypes(perform.EffectName, perform.OperationName, len(args))
+	// Create default value based on return type
+	var defaultValue value.Value
+	switch rt := returnType.(type) {
+	case *types.IntType:
+		defaultValue = constant.NewInt(rt, 0)
+	case *types.PointerType:
+		defaultValue = constant.NewNull(rt)
+	case *types.StructType:
+		// For struct types, use zero struct
+		defaultValue = constant.NewZeroInitializer(rt)
+	default:
+		// Fallback to null pointer
+		defaultValue = constant.NewNull(types.I8Ptr)
+	}
+	ec.generator.builder.NewBr(continueBlock)
+
+	// Handler found - cast to proper function type and call
+	ec.generator.builder = notNullBlock
+
+	// Create function pointer type
+	handlerFuncType := types.NewFunc(returnType, paramTypes...)
+	handlerFuncPtrType := types.NewPointer(handlerFuncType)
+
+	// Bitcast i8* to proper function pointer type
+	typedHandlerPtr := ec.generator.builder.NewBitCast(handlerPtr, handlerFuncPtrType)
+
+	// Make indirect call through function pointer
+	handlerResult := ec.generator.builder.NewCall(typedHandlerPtr, args...)
+	ec.generator.builder.NewBr(continueBlock)
+
+	// Continue block
+	ec.generator.builder = continueBlock
+
+	// Special handling for void/Unit return type - can't create phi node for void
+	if returnType == types.Void {
+		// Both paths return void, so just return void
+		return nil, nil
 	}
 
-	// Use the LAST handler (most recently defined)
-	if len(candidateHandlers) > 0 {
-		handlerFunc := candidateHandlers[len(candidateHandlers)-1]
-		// Execute the handler function and return its result
-		handlerResult := ec.generator.builder.NewCall(handlerFunc, args...)
-		// Return the actual handler result, not Unit
-		return handlerResult, nil
-	}
+	// Create phi node for non-void return types
+	resultPhi := continueBlock.NewPhi(
+		ir.NewIncoming(handlerResult, notNullBlock),
+		ir.NewIncoming(defaultValue, nullBlock),
+	)
 
-	// 🔥 CRITICAL COMPILER SAFETY FIX: NO MORE FALLBACK TO DEBUG MESSAGES!
-	// If no handler is found, this is an UNHANDLED EFFECT and should FAIL COMPILATION
-	// This makes the compiler strict and catches the errors that should be caught
-	return nil, ec.createUnhandledEffectError(perform)
+	return resultPhi, nil
 }

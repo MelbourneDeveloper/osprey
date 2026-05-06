@@ -185,6 +185,16 @@ type IntegerLiteral struct {
 
 func (i *IntegerLiteral) isExpression() {}
 
+// FloatLiteral represents a floating-point literal.
+type FloatLiteral struct {
+	Value float64
+
+	// Position information
+	Position *Position
+}
+
+func (f *FloatLiteral) isExpression() {}
+
 // StringLiteral represents a string literal.
 type StringLiteral struct {
 	Value string
@@ -482,6 +492,22 @@ type ObjectLiteral struct {
 }
 
 func (o *ObjectLiteral) isExpression() {}
+
+// MapLiteral represents a map literal like { "key": value, 42: "answer" }.
+type MapLiteral struct {
+	Entries []MapEntry
+
+	// Position information
+	Position *Position
+}
+
+func (m *MapLiteral) isExpression() {}
+
+// MapEntry represents a key-value pair in a map literal.
+type MapEntry struct {
+	Key   Expression
+	Value Expression
+}
 
 // ListAccessExpression represents safe list access like list[0] -> Result<T, IndexError>.
 type ListAccessExpression struct {

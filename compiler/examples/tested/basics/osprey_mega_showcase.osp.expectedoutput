@@ -43,15 +43,17 @@
 Batch Results: 8100 data units
 Processing Time: 45ms
 System Total: 2500 units processed
-Efficiency Score: 81000/1000
+Efficiency Score: Success(81000)/1000
 Performance Category: OUTSTANDING 🌟
 Queue Status: Active with concurrent workers
 ══════════════════════════════════════
 ✨ System operating at optimal capacity! ✨
 
-📊 System Metrics Analysis:
+📊 System Metrics Analysis with Collections:
 Total throughput: 8100 units
 Average batch size: 2700 units
+Batch breakdown: Alpha=2700, Beta=2700, Gamma=2700
+Peak metric value: 300 from monitoring array
 ═════════════════════════════════════════════
 🎉 COMPREHENSIVE DEMO COMPLETE! 🎉
 ✅ Hindley-Milner Type Inference: Functions with NO type annotations!

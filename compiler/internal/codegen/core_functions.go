@@ -45,6 +45,10 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 				return g.convertResultToString(arg, structType)
 			}
 		}
+		// Handle struct value directly (not pointer)
+		if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+			return g.convertResultToString(arg, structType)
+		}
 	}
 
 	inferredType, err := g.typeInferer.InferType(callExpr.Arguments[0])
@@ -75,6 +79,8 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 			switch arg.Type() {
 			case types.I64:
 				argType = TypeInt
+			case types.Double:
+				argType = TypeFloat
 			case types.I8Ptr:
 				argType = TypeString
 			case types.I1:
@@ -97,6 +103,8 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 
 // TODO: This is wrong. We cannot convert fibers to string unless they return a String or
 // there is a toString implementation
+//
+//nolint:gocognit // TODO: Refactor this function to reduce complexity
 func (g *LLVMGenerator) convertValueToStringByType(
 	//TODO: types must not be passed around as strings. This is wrong.
 	theType string, arg value.Value) (value.Value, error) {
@@ -113,29 +121,59 @@ func (g *LLVMGenerator) convertValueToStringByType(
 		return g.generateIntToString(arg)
 	case TypeBool:
 		return g.generateBoolToString(arg)
+	case TypeFloat:
+		return g.generateFloatToString(arg)
 	case TypeUnit:
 		// Unit type should return "()"
 		return g.createGlobalString("()"), nil
 	default:
 		// Check if it's a Fiber type - show the fiber ID, not await the result
-		if theType == TypeFiber {
+		if theType == TypeFiber || strings.HasPrefix(theType, TypeFiber+"[") {
 			// Fiber is just an integer ID, convert it to string
 			return g.generateIntToString(arg)
 		}
 
 		// Check if it's a Channel type - show the channel ID, not a generic string
-		if theType == "Channel" {
+		if theType == TypeChannel {
 			// Channel is just an integer ID, convert it to string
 			return g.generateIntToString(arg)
 		}
 
-		// Check if it's a Result type
-		if strings.HasPrefix(theType, "Result<") {
+		// Check if it's a Result type (with either angle or square brackets)
+		if strings.HasPrefix(theType, "Result<") || strings.HasPrefix(theType, "Result[") {
 			// For Result types, check if it's a struct pointer
 			if ptrType, ok := arg.Type().(*types.PointerType); ok {
 				if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
 					return g.convertResultToString(arg, structType)
 				}
+			}
+			// Also handle struct value directly (not pointer)
+			if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+				return g.convertResultToString(arg, structType)
+			}
+
+			// AUTO-UNWRAP FIX: If inferred type is Result but actual LLVM value is NOT a Result struct,
+			// the value has been auto-unwrapped per spec (0004-TypeSystem.md:115-160).
+			// Convert the unwrapped value directly based on its LLVM type.
+			// Example: fn double(x) = x * 2 returns unwrapped i64, not Result struct
+			switch arg.Type() {
+			case types.I64:
+				return g.generateIntToString(arg)
+			case types.Double:
+				return g.generateFloatToString(arg)
+			case types.I8Ptr:
+				return arg, nil // Already a string
+			case types.I1:
+				return g.generateBoolToString(arg)
+			}
+		}
+
+		// Fallback: Check LLVM type directly for Result-like structs (2-field struct with i64 and i8)
+		// This handles cases where type inference has unresolved type variables
+		if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+			// Check if it looks like a Result struct: {i64, i8}
+			if structType.Fields[1] == types.I8 {
+				return g.convertResultToString(arg, structType)
 			}
 		}
 
@@ -146,12 +184,22 @@ func (g *LLVMGenerator) convertValueToStringByType(
 
 // convertResultToString extracts the value from a Result type and converts it to string
 func (g *LLVMGenerator) convertResultToString(
-	resultPtr value.Value, structType *types.StructType,
+	result value.Value, structType *types.StructType,
 ) (value.Value, error) {
-	// Check the discriminant first to see if it's Success or Error
-	discriminantPtr := g.builder.NewGetElementPtr(structType, resultPtr,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	discriminant := g.builder.NewLoad(types.I8, discriminantPtr)
+	var discriminant value.Value
+	var resultValue value.Value
+
+	// Handle both pointer and value cases
+	if _, ok := result.Type().(*types.PointerType); ok {
+		// Pointer case: use getelementptr and load
+		discriminantPtr := g.builder.NewGetElementPtr(structType, result,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+		discriminant = g.builder.NewLoad(types.I8, discriminantPtr)
+	} else {
+		// Struct value case: use extractvalue
+		discriminant = g.builder.NewExtractValue(result, 1)
+		resultValue = g.builder.NewExtractValue(result, 0)
+	}
 
 	// Check if discriminant == 0 (Success)
 	zero := constant.NewInt(types.I8, 0)
@@ -169,46 +217,86 @@ func (g *LLVMGenerator) convertResultToString(
 
 	g.builder.NewCondBr(isSuccess, successBlock, errorBlock)
 
+	// Declare sprintf and malloc for formatting (used by both success and error cases)
+	sprintf := g.ensureSprintfDeclaration()
+	malloc := g.ensureMallocDeclaration()
+	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
+
 	// Success case: extract and convert the value
 	g.builder = successBlock
-	valuePtr := g.builder.NewGetElementPtr(structType, resultPtr,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	resultValue := g.builder.NewLoad(structType.Fields[0], valuePtr)
+
+	// Get the value - handle both pointer and struct cases
+	if _, ok := result.Type().(*types.PointerType); ok {
+		// Pointer case: use getelementptr and load
+		valuePtr := g.builder.NewGetElementPtr(structType, result,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		resultValue = g.builder.NewLoad(structType.Fields[0], valuePtr)
+	}
+	// Struct value case: resultValue was already extracted above with NewExtractValue
 
 	var (
 		successStr value.Value
 		err        error
 	)
 
-	// Convert based on the value type
-
+	// Convert the success value to string and wrap in Success(...)
+	// CRITICAL: Result types MUST always format as "Success(value)" or "Error(message)"
+	var innerValueStr value.Value
 	switch structType.Fields[0] {
 	case types.I64:
-		// Check if this i64 should be treated as a boolean
-		// For Result<bool, Error> types, the inner value is i64 but semantically boolean
-		if g.isResultValueSemanticBoolean(resultValue) {
-			successStr, err = g.generateBoolToString(resultValue)
-		} else {
-			successStr, err = g.generateIntToString(resultValue)
-		}
+		innerValueStr, err = g.generateIntToString(resultValue)
+	case types.Double:
+		// Float value - convert to string
+		innerValueStr, err = g.generateFloatToString(resultValue)
 	case types.I1:
-		successStr, err = g.generateBoolToString(resultValue)
+		innerValueStr, err = g.generateBoolToString(resultValue)
 	case types.I8Ptr:
-		successStr = resultValue // Already a string
+		innerValueStr = resultValue // Already a string
 	default:
 		// For complex types (like ProcessHandle), convert to a generic string
-		successStr = g.createGlobalString("Success")
+		innerValueStr = g.createGlobalString("complex_value")
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
+	// Wrap the value in Success(...) format
+	successFormatStr := g.createGlobalString("Success(%s)")
+	successBuffer := g.builder.NewCall(malloc, bufferSize)
+	g.builder.NewCall(sprintf, successBuffer, successFormatStr, innerValueStr)
+	successStr = successBuffer
+
 	successBlock.NewBr(endBlock)
 
-	// Error case: return "Error"
+	// Error case: format as "Error(message)"
 	g.builder = errorBlock
-	errorStr := g.createGlobalString("Error")
+
+	// Extract the error message from the Result struct
+	var errorMsg value.Value
+	if _, ok := result.Type().(*types.PointerType); ok {
+		// Pointer case: use getelementptr and load
+		errorMsgPtr := g.builder.NewGetElementPtr(structType, result,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		errorMsg = g.builder.NewLoad(structType.Fields[0], errorMsgPtr)
+	} else {
+		// Struct value case: extract the value field
+		errorMsg = g.builder.NewExtractValue(result, 0)
+	}
+
+	// Format as "Error(message)" - handle different error message types
+	var errorStr value.Value
+	if structType.Fields[0] == types.I8Ptr {
+		// String error message - format as Error(message)
+		errorFormatStr := g.createGlobalString("Error(%s)")
+		errorBuffer := g.builder.NewCall(malloc, bufferSize)
+		g.builder.NewCall(sprintf, errorBuffer, errorFormatStr, errorMsg)
+		errorStr = errorBuffer
+	} else {
+		// Non-string error - just use "Error" for now
+		// TODO: Handle other error types properly
+		errorStr = g.createGlobalString("Error")
+	}
 
 	errorBlock.NewBr(endBlock)
 
@@ -240,22 +328,6 @@ func (g *LLVMGenerator) isSemanticBooleanType(inferredType Type) bool {
 	return false
 }
 
-// isResultValueSemanticBoolean checks if a Result value contains a semantic boolean
-func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bool {
-	// Check if this is a value that's known to be from a boolean-returning function
-	// This is a heuristic approach until we have better generic type tracking
-	// For now, check if the value is constrained to 0 or 1 (typical boolean values)
-	if constant, ok := resultValue.(*constant.Int); ok {
-		val := constant.X.Int64()
-		return val == 0 || val == 1
-	}
-
-	// If it's not a constant, we need better detection
-	// For the working constraint test, we know isPositive returns boolean
-	// This is a temporary heuristic until proper generic type inference is implemented
-	return true // Assume boolean for now to fix the immediate issue
-}
-
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(PrintFunc, callExpr)
@@ -264,47 +336,68 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 	}
 
 	argExpr := callExpr.Arguments[0]
-
 	arg, err := g.generateExpression(argExpr)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if the expression is semantically a boolean using type inference
 	inferredType, err := g.typeInferer.InferType(argExpr)
 	if err != nil {
 		return nil, err
 	}
 
-	var stringArg value.Value
-
-	switch arg.Type().(type) {
-	case *types.PointerType: // Assuming i8* is string
-		stringArg = arg
-	case *types.IntType:
-		// Check if this is a boolean by bit size OR by inferred type
-		if arg.Type().(*types.IntType).BitSize == 1 || g.isSemanticBooleanType(inferredType) {
-			stringArg, err = g.generateBoolToString(arg)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			stringArg, err = g.generateIntToString(arg)
-			if err != nil {
-				return nil, err
-			}
-		}
-	default:
-		return nil, ErrPrintCannotConvert
+	stringArg, err := g.convertValueToStringForPrint(arg, inferredType)
+	if err != nil {
+		return nil, err
 	}
 
 	puts := g.functions["puts"]
 	g.builder.NewCall(puts, stringArg)
-
-	// Print returns Unit according to the registry, so return a Unit value
-	// Since Unit is represented as void in LLVM, we don't return a value
-	// The caller will handle the void appropriately
 	return nil, nil
+}
+
+// convertValueToStringForPrint converts any value to a string for printing.
+func (g *LLVMGenerator) convertValueToStringForPrint(arg value.Value, inferredType Type) (value.Value, error) {
+	if g.isResultType(arg) {
+		return g.convertResultValueToString(arg)
+	}
+	return g.convertPrimitiveToString(arg, inferredType)
+}
+
+// convertResultValueToString handles Result type conversion to string.
+func (g *LLVMGenerator) convertResultValueToString(arg value.Value) (value.Value, error) {
+	if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+		return g.convertResultToString(arg, structType)
+	}
+	if ptrType, ok := arg.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+			return g.convertResultToString(arg, structType)
+		}
+	}
+	return nil, ErrPrintCannotConvert
+}
+
+// convertPrimitiveToString handles primitive type conversion to string.
+func (g *LLVMGenerator) convertPrimitiveToString(arg value.Value, inferredType Type) (value.Value, error) {
+	switch arg.Type().(type) {
+	case *types.PointerType:
+		return arg, nil
+	case *types.IntType:
+		return g.convertIntTypeToString(arg, inferredType)
+	case *types.FloatType:
+		return g.generateFloatToString(arg)
+	default:
+		return nil, ErrPrintCannotConvert
+	}
+}
+
+// convertIntTypeToString handles int type conversion, distinguishing between bool and int.
+func (g *LLVMGenerator) convertIntTypeToString(arg value.Value, inferredType Type) (value.Value, error) {
+	intType := arg.Type().(*types.IntType)
+	if intType.BitSize == 1 || g.isSemanticBooleanType(inferredType) {
+		return g.generateBoolToString(arg)
+	}
+	return g.generateIntToString(arg)
 }
 
 // generateInputCall handles input function calls.
@@ -558,4 +651,80 @@ func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (val
 	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
 
 	return result, nil
+}
+
+// generateParseIntCall handles parseInt(s: string) -> Result<int, string> function calls.
+func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (value.Value, error) {
+	err := validateBuiltInArgs(ParseIntFunc, callExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	str, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+
+	// Declare or get the atoll function (ASCII to long long)
+	atollFunc, ok := g.functions["atoll"]
+	if !ok {
+		atollFunc = g.module.NewFunc("atoll", types.I64, ir.NewParam("str", types.I8Ptr))
+		g.functions["atoll"] = atollFunc
+	}
+
+	// Call atoll(str) to convert string to integer
+	parsedValue := g.builder.NewCall(atollFunc, str)
+
+	// TODO: Add proper error checking - atoll returns 0 for invalid strings
+	// For now, assume parsing always succeeds
+
+	// Create a Result<int, string>
+	resultType := g.getResultType(types.I64)
+	result := g.builder.NewAlloca(resultType)
+
+	// Store the parsed integer in the value field
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(parsedValue, valuePtr)
+
+	// Store the discriminant (0 for Success)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
+	return result, nil
+}
+
+// generateJoinCall handles join(list: List<string>, separator: string) -> string function calls.
+func (g *LLVMGenerator) generateJoinCall(callExpr *ast.CallExpression) (value.Value, error) {
+	err := validateBuiltInArgs(JoinFunc, callExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	// For now, return a placeholder implementation
+	// TODO: Implement proper list handling once List<T> type is fully supported
+
+	separator, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the separator as a placeholder result
+	// In a real implementation, we would iterate through the list and join with separator
+	return separator, nil
+}
+
+// generateListConstructorCall handles List() constructor calls.
+func (g *LLVMGenerator) generateListConstructorCall(_ *ast.CallExpression) (value.Value, error) {
+	// For now, return a simple placeholder (null pointer)
+	// TODO: Implement proper dynamic list structure
+	return constant.NewNull(types.I8Ptr), nil
+}
+
+// generateMapConstructorCall handles Map() constructor calls.
+func (g *LLVMGenerator) generateMapConstructorCall(_ *ast.CallExpression) (value.Value, error) {
+	// For now, return a simple placeholder (null pointer)
+	// TODO: Implement proper dynamic map structure
+	return constant.NewNull(types.I8Ptr), nil
 }

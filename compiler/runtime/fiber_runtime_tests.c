@@ -112,23 +112,23 @@ void test_fiber_sleep(void) {
 void test_fiber_stress(void) {
   printf("Testing fiber stress (memory management)...\n");
 
-  const int num_fibers = 50; // Reduced from 100 to be reasonable
-  int64_t fiber_ids[num_fibers];
+#define NUM_FIBERS 50
+  int64_t fiber_ids[NUM_FIBERS];
 
   // Spawn many fibers
-  for (int i = 0; i < num_fibers; i++) {
+  for (int i = 0; i < NUM_FIBERS; i++) {
     fiber_ids[i] = fiber_spawn(test_function_1);
     assert(fiber_ids[i] > 0 && "FAIL: Each fiber should have valid ID");
   }
 
   // Wait for all fibers
-  for (int i = 0; i < num_fibers; i++) {
+  for (int i = 0; i < NUM_FIBERS; i++) {
     int64_t result = fiber_await(fiber_ids[i]);
     assert(result == 42 && "FAIL: Each fiber should return 42");
   }
 
   printf("✅ PASS: Stress test with %d fibers completed successfully\n",
-         num_fibers);
+         NUM_FIBERS);
 }
 
 // Test concurrent execution

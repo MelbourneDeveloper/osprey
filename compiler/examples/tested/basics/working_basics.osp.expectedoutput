@@ -1,0 +1,9 @@
+x = 42
+name = Alice
+double(21) = 42
+greeting = Hello
+multiply(6, 7) = 42
+20 / 5 = 4
+10 + 5 = 15
+6 * 7 = 42
+match 42 = 1

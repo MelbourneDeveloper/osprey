@@ -1,172 +1,97 @@
+# agent-pmo:74cf183
 name: CI
 
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test-and-build:
+  ci:
+    # IMPORTANT: this name is the required status check on `main` (ruleset 6154907).
+    # Renaming it will break branch protection — coordinate with the ruleset update.
     name: Test, Format, Build & Validate
     runs-on: ubuntu-latest
-
+    # TIMEOUT EXCEPTION: full compiler build + C runtime compile + Go tests + Docker web compiler test requires ~15 min
+    timeout-minutes: 30
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            vscode-extension/package-lock.json
+            webcompiler/package-lock.json
+            website/package-lock.json
 
       - name: Setup Osprey Compiler
         uses: ./.github/actions/setup-osprey-compiler
 
-      - name: Debug workspace structure
-        working-directory: "./compiler"
-        run: |
-          echo "🔍 Debugging workspace structure..."
-          echo "Current working directory: $(pwd)"
-          echo "Contents of current directory:"
-          ls -la
-          echo "Contents of cmd directory:"
-          ls -la cmd/ || echo "cmd directory not found"
-          echo "Contents of cmd/osprey directory:"
-          ls -la cmd/osprey/ || echo "cmd/osprey directory not found"
-          echo "Checking if main.go exists:"
-          if [ -f "cmd/osprey/main.go" ]; then
-            echo "✅ main.go found"
-            head -5 cmd/osprey/main.go
-          else
-            echo "❌ main.go not found"
-          fi
+      - name: Install VS Code extension dependencies
+        run: npm ci
+        working-directory: ./vscode-extension
 
-      - name: Check Go formatting
-        working-directory: "./compiler"
-        run: |
-          echo "🔍 Checking Go code formatting..."
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "❌ The following files are not properly formatted:"
-            echo "$unformatted"
-            echo "Run 'gofmt -w .' to fix formatting issues"
-            exit 1
-          fi
-          echo "✅ All Go files are properly formatted"
+      - name: Install jq and Xvfb
+        run: sudo apt-get install -y jq xvfb
 
-      - name: Check Go modules are tidy
-        working-directory: "./compiler"
-        run: |
-          echo "🔍 Checking if go.mod and go.sum are tidy..."
-          go mod tidy
-          if ! git diff --exit-code go.mod go.sum; then
-            echo "❌ go.mod or go.sum are not tidy. Run 'go mod tidy' and commit the changes."
-            exit 1
-          fi
-          echo "✅ go.mod and go.sum are tidy"
+      - name: Lint
+        run: make lint
 
-      - name: Run linter
-        working-directory: "./compiler"
-        run: |
-          echo "🔧 Running linter..."
-          echo "Verifying cmd/osprey directory exists..."
-          if [ ! -d "cmd/osprey" ]; then
-            echo "❌ cmd/osprey directory not found!"
-            echo "Current directory structure:"
-            find . -name "*.go" -type f | head -10
-            exit 1
-          fi
-          if [ ! -f "cmd/osprey/main.go" ]; then
-            echo "❌ cmd/osprey/main.go not found!"
-            exit 1
-          fi
-          echo "✅ Directory structure verified"
+      # make test = fail-fast + per-project coverage + threshold enforcement.
+      # Thresholds live in coverage-thresholds.json ([COVERAGE-THRESHOLDS-JSON]).
+      # Xvfb is needed because vscode-extension tests spawn a real VS Code Electron build.
+      - name: Test
+        run: xvfb-run -a make test
 
-      - name: Run C Runtime Linting with MAXIMUM STRICTNESS
-        working-directory: "./compiler"
-        run: |
-          make c-lint
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            compiler/coverage.out
+            vscode-extension/coverage/
+          retention-days: 7
 
-      - name: Run C Runtime Tests
-        working-directory: "./compiler"
-        run: |
-          make c-test
-          
-      - name: Run tests & enforce coverage threshold
-        working-directory: "./compiler"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq bc
+      - name: Build
+        run: make build
 
-          echo "🚀 Executing full test-suite with coverage…"
-          ./coverage_report.sh
-
-          # Extract the total percentage (numeric, no % sign)
-          CURRENT_COVERAGE=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')
-          MINIMUM_COVERAGE="${{ vars.TEST_COVERAGE_COMPILER }}"
-
-          echo "Current coverage : ${CURRENT_COVERAGE}%"
-          echo "Required minimum : ${MINIMUM_COVERAGE}%"
-
-          # Fail if coverage dropped below threshold
-          if [ "$(echo "$CURRENT_COVERAGE < $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
-            echo "❌ Coverage dropped below threshold!"
-            exit 1
-          fi
-
-          # Try to update threshold if coverage improved (ignore failures)
-          if [ "$(echo "$CURRENT_COVERAGE > $MINIMUM_COVERAGE" | bc -l)" -eq 1 ]; then
-            echo "🚀 Coverage improved! Attempting to update threshold..."
-            if gh variable set TEST_COVERAGE_COMPILER --body "$CURRENT_COVERAGE" 2>/dev/null; then
-              echo "✅ Updated threshold to ${CURRENT_COVERAGE}%"
-            else
-              echo "⚠️ Could not update threshold (permissions issue - ignoring)"
-            fi
-          fi
-
-          echo "✅ Coverage check passed"
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            compiler/bin/
+            vscode-extension/out/
+          retention-days: 7
 
       - name: Test example compilation and execution
-        working-directory: "./compiler"
+        working-directory: ./compiler
         run: |
-          echo "🎯 Testing example compilation and execution..."
-
-          # Test arithmetic interpolation example
-          echo "Testing interpolation_math.osp..."
           ./bin/osprey examples/tested/basics/math/interpolation_math.osp --run
-
-          # Test comprehensive example
-          echo "Testing comprehensive.osp..."
           ./bin/osprey examples/tested/basics/comprehensive.osp --run
-
-          echo "✅ All example compilations and executions successful!"
-
-      - name: Verify binary works
-        working-directory: "./compiler"
-        run: |
-          echo "🔍 Verifying osprey binary functionality..."
-          ./bin/osprey --help
-          echo "✅ Binary verification successful!"
 
       - name: Test Web Compiler
         run: |
           cd webcompiler
-          
-          # Build the Docker image
           docker build -t osprey-web-compiler-ci -f Dockerfile ..
-          
-          # Run the container in detached mode
-          docker run -d \
-            --name osprey-web-compiler-ci \
-            -p 3001:3001 \
-            -e NODE_ENV=production \
-            -e PORT=3001 \
-            --memory=256m \
-            --memory-reservation=256m \
+          docker run -d --name osprey-web-compiler-ci -p 3001:3001 \
+            -e NODE_ENV=production -e PORT=3001 \
+            --memory=256m --memory-reservation=256m \
             osprey-web-compiler-ci
-          
-          # Wait for container to be ready
           sleep 15
-          
-          # Run the test
-          chmod +x test.sh
-          ./test.sh
-          
-          # Cleanup
+          chmod +x test.sh && ./test.sh
           docker stop osprey-web-compiler-ci
           docker rm osprey-web-compiler-ci

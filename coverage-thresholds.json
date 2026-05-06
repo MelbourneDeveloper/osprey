@@ -1,0 +1,14 @@
+{
+  "_agent_pmo": "74cf183",
+  "_doc": "Per-project coverage thresholds. Each entry is a project directory; tests for that project must measure at least its threshold or `make test` fails hard. Generated parser code (compiler/parser/osprey_*.go) is excluded before measurement. To raise a threshold after improving coverage, run `make ratchet` — it updates each project's threshold to (measured - 1) for rounding margin. Aim is 90% for every project; see docs/plans/coverage-to-90-percent.md.",
+  "projects": {
+    "compiler": {
+      "threshold": 77,
+      "language": "go"
+    },
+    "vscode-extension": {
+      "threshold": 51,
+      "language": "typescript"
+    }
+  }
+}

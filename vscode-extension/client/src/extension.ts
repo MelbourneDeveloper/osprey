@@ -26,13 +26,25 @@ export function activate(context: ExtensionContext) {
     return;
   }
 
-  // Server options - use the TypeScript language server
-  const serverModule = context.asAbsolutePath(path.join('server', 'out', 'src', 'server.js'));
-  outputChannel.appendLine(`Server module path: ${serverModule}`);
-  
-  // Check if server file exists
-  if (!fs.existsSync(serverModule)) {
-    const errorMsg = `Server module not found at: ${serverModule}`;
+  // Server options - use the TypeScript language server.
+  // Try both layouts: top-level tsc -b (out/server/src/server.js) and the
+  // server/tsconfig.json layout (server/out/src/server.js).
+  const candidatePaths = [
+    path.join('out', 'server', 'src', 'server.js'),
+    path.join('server', 'out', 'src', 'server.js')
+  ];
+  let serverModule = '';
+  for (const candidate of candidatePaths) {
+    const abs = context.asAbsolutePath(candidate);
+    if (fs.existsSync(abs)) {
+      serverModule = abs;
+      break;
+    }
+  }
+  outputChannel.appendLine(`Server module path: ${serverModule || '(not found)'}`);
+
+  if (!serverModule) {
+    const errorMsg = `Server module not found in any of: ${candidatePaths.join(', ')}`;
     outputChannel.appendLine(`ERROR: ${errorMsg}`);
     window.showErrorMessage(errorMsg);
     return;

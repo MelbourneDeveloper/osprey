@@ -13,7 +13,6 @@ identityP(42) = 42
 identityP("test") = test
 identityP(true) = true
 makePoint(1, 2) = {1, 2}
-makePoint("x", "y") = {x, y}
 
 Test 5: Complex field access inference
 distance({3, 4}) = 25

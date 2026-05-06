@@ -39,6 +39,7 @@ const (
 const (
 	TypeString       = "string"
 	TypeInt          = "int"
+	TypeFloat        = "float"
 	TypeBool         = "bool"
 	TypeAny          = "any"
 	TypeUnit         = "Unit"
@@ -48,6 +49,18 @@ const (
 	TypeFunction     = "Function"
 	TypeFiber        = "Fiber"
 	TypeChannel      = "Channel"
+	TypeList         = "List"
+	TypeMap          = "Map"
+)
+
+// Type argument counts.
+const (
+	TwoTypeArgs = 2
+)
+
+// Size constants.
+const (
+	PointerPairSize = 16 // Size of two pointers (key, value) in bytes
 )
 
 // Function names.
@@ -62,12 +75,12 @@ const (
 	FoldFunc         = "fold"
 	MainFunctionName = "main"
 
-	// String utility functions
 	LengthFunc    = "length"
 	ContainsFunc  = "contains"
 	SubstringFunc = "substring"
+	ParseIntFunc  = "parseInt"
+	JoinFunc      = "join"
 
-	// Process and system functions
 	SpawnProcessFunc = "spawnProcess"
 
 	WriteFileFunc  = "writeFile"
@@ -75,7 +88,6 @@ const (
 	DeleteFileFunc = "deleteFile"
 	SleepFunc      = "sleep"
 
-	// Process management functions
 	AwaitProcessFunc   = "awaitProcess"
 	CleanupProcessFunc = "cleanupProcess"
 )
@@ -83,12 +95,10 @@ const (
 // Osprey HTTP Function names.
 // These are the names of the functions at the Osprey level.
 const (
-	// HTTP Server functions.
 	HTTPCreateServerOsprey = "httpCreateServer"
 	HTTPListenOsprey       = "httpListen"
 	HTTPStopServerOsprey   = "httpStopServer"
 
-	// HTTP Client functions.
 	HTTPCreateClientOsprey = "httpCreateClient"
 	HTTPGetOsprey          = "httpGet"
 	HTTPPostOsprey         = "httpPost"
@@ -97,12 +107,10 @@ const (
 	HTTPRequestOsprey      = "httpRequest"
 	HTTPCloseClientOsprey  = "httpCloseClient"
 
-	// WebSocket functions.
 	WebSocketConnectOsprey = "websocketConnect"
 	WebSocketSendOsprey    = "websocketSend"
 	WebSocketCloseOsprey   = "websocketClose"
 
-	// WebSocket Server functions.
 	WebSocketCreateServerOsprey    = "websocketCreateServer"
 	WebSocketServerListenOsprey    = "websocketServerListen"
 	WebSocketServerSendOsprey      = "websocketServerSend"
@@ -115,12 +123,10 @@ const (
 // These are the names of the functions at the C level.
 // There are NOT the Osprey function names
 const (
-	// HTTP Server functions.
 	HTTPCreateServerFunc = "http_create_server"
 	HTTPListenFunc       = "http_listen"
 	HTTPStopServerFunc   = "http_stop_server"
 
-	// HTTP Client functions.
 	HTTPCreateClientFunc = "http_create_client"
 	HTTPGetFunc          = "http_get"
 	HTTPPostFunc         = "http_post"
@@ -129,12 +135,10 @@ const (
 	HTTPRequestFunc      = "http_request"
 	HTTPCloseClientFunc  = "http_close_client"
 
-	// WebSocket functions.
 	WebSocketConnectFunc = "websocket_connect"
 	WebSocketSendFunc    = "websocket_send"
 	WebSocketCloseFunc   = "websocket_close"
 
-	// WebSocket Server functions.
 	WebSocketCreateServerFunc    = "websocket_create_server"
 	WebSocketServerListenFunc    = "websocket_server_listen"
 	WebSocketServerSendFunc      = "websocket_server_send"

@@ -3,3 +3,6 @@ Arithmetic calculation created
 15
 5
 0
+Testing Result<int> toString:
+Result<int> Success: Success(50)
+Result<float> Error: Error

@@ -59,7 +59,7 @@ type VexErrorListener struct {
 // SyntaxError handles syntax errors during parsing.
 func (v *VexErrorListener) SyntaxError(
 	_ antlr.Recognizer,
-	_ interface{},
+	_ any,
 	line, column int,
 	msg string,
 	_ antlr.RecognitionException,
@@ -717,7 +717,7 @@ func generateMainIndex(docsDir string) error {
 	for _, name := range functionNames {
 		doc := functionDocs[name]
 		linkName := strings.ToLower(name)
-		content.WriteString(fmt.Sprintf("| [%s](functions/%s/) | %s |\n", name, linkName, doc.Description))
+		fmt.Fprintf(&content, "| [%s](functions/%s/) | %s |\n", name, linkName, doc.Description)
 	}
 
 	content.WriteString("\n")
@@ -739,7 +739,7 @@ func generateMainIndex(docsDir string) error {
 	for _, name := range typeNames {
 		doc := typeDocs[name]
 		linkName := strings.ToLower(name)
-		content.WriteString(fmt.Sprintf("| [%s](types/%s/) | %s |\n", name, linkName, doc.Description))
+		fmt.Fprintf(&content, "| [%s](types/%s/) | %s |\n", name, linkName, doc.Description)
 	}
 
 	content.WriteString("\n")
@@ -761,7 +761,7 @@ func generateMainIndex(docsDir string) error {
 	for _, symbol := range operatorSymbols {
 		doc := operatorDocs[symbol]
 		filename := getOperatorFilename(symbol)
-		content.WriteString(fmt.Sprintf("| [%s](operators/%s/) | %s | %s |\n", symbol, filename, doc.Name, doc.Description))
+		fmt.Fprintf(&content, "| [%s](operators/%s/) | %s | %s |\n", symbol, filename, doc.Name, doc.Description)
 	}
 
 	content.WriteString("\n")
@@ -783,7 +783,7 @@ func generateMainIndex(docsDir string) error {
 	for _, name := range keywordNames {
 		doc := keywordDocs[name]
 		linkName := strings.ToLower(name)
-		content.WriteString(fmt.Sprintf("| [%s](keywords/%s/) | %s |\n", name, linkName, doc.Description))
+		fmt.Fprintf(&content, "| [%s](keywords/%s/) | %s |\n", name, linkName, doc.Description)
 	}
 
 	content.WriteString("\n")
@@ -815,8 +815,8 @@ func generateFunctionIndex(docsDir string) error {
 
 	for _, name := range functionNames {
 		doc := functionDocs[name]
-		content.WriteString(fmt.Sprintf("## [%s](%s/)\n\n", doc.Name, strings.ToLower(doc.Name)))
-		content.WriteString(fmt.Sprintf("**Signature:** `%s`\n\n", doc.Signature))
+		fmt.Fprintf(&content, "## [%s](%s/)\n\n", doc.Name, strings.ToLower(doc.Name))
+		fmt.Fprintf(&content, "**Signature:** `%s`\n\n", doc.Signature)
 		content.WriteString(doc.Description + "\n\n")
 	}
 
@@ -847,7 +847,7 @@ func generateTypeIndex(docsDir string) error {
 
 	for _, name := range typeNames {
 		doc := typeDocs[name]
-		content.WriteString(fmt.Sprintf("## [%s](%s/)\n\n", doc.Name, strings.ToLower(doc.Name)))
+		fmt.Fprintf(&content, "## [%s](%s/)\n\n", doc.Name, strings.ToLower(doc.Name))
 		content.WriteString(doc.Description + "\n\n")
 	}
 
@@ -879,7 +879,7 @@ func generateOperatorIndex(docsDir string) error {
 	for _, symbol := range operatorSymbols {
 		doc := operatorDocs[symbol]
 		filename := getOperatorFilename(symbol)
-		content.WriteString(fmt.Sprintf("## [%s](%s/) - %s\n\n", doc.Symbol, filename, doc.Name))
+		fmt.Fprintf(&content, "## [%s](%s/) - %s\n\n", doc.Symbol, filename, doc.Name)
 		content.WriteString(doc.Description + "\n\n")
 	}
 
@@ -910,7 +910,7 @@ func generateKeywordIndex(docsDir string) error {
 
 	for _, name := range keywordNames {
 		doc := keywordDocs[name]
-		content.WriteString(fmt.Sprintf("## [%s](%s/)\n\n", doc.Keyword, strings.ToLower(doc.Keyword)))
+		fmt.Fprintf(&content, "## [%s](%s/)\n\n", doc.Keyword, strings.ToLower(doc.Keyword))
 		content.WriteString(doc.Description + "\n\n")
 	}
 
@@ -924,23 +924,23 @@ func generateFunctionMarkdown(doc *descriptions.BuiltinFunctionDesc) string {
 
 	content.WriteString("---\n")
 	content.WriteString("layout: page\n")
-	content.WriteString(fmt.Sprintf("title: \"%s (Function)\"\n", doc.Name))
-	content.WriteString(fmt.Sprintf("description: \"%s\"\n", doc.Description))
+	fmt.Fprintf(&content, "title: \"%s (Function)\"\n", doc.Name)
+	fmt.Fprintf(&content, "description: \"%s\"\n", doc.Description)
 	content.WriteString("---\n\n")
-	content.WriteString(fmt.Sprintf("**Signature:** `%s`\n\n", doc.Signature))
-	content.WriteString(fmt.Sprintf("**Description:** %s\n\n", doc.Description))
+	fmt.Fprintf(&content, "**Signature:** `%s`\n\n", doc.Signature)
+	fmt.Fprintf(&content, "**Description:** %s\n\n", doc.Description)
 
 	if len(doc.Parameters) > 0 {
 		content.WriteString("## Parameters\n\n")
 
 		for _, param := range doc.Parameters {
-			content.WriteString(fmt.Sprintf("- **%s** (%s): %s\n", param.Name, param.Type, param.Description))
+			fmt.Fprintf(&content, "- **%s** (%s): %s\n", param.Name, param.Type, param.Description)
 		}
 
 		content.WriteString("\n")
 	}
 
-	content.WriteString(fmt.Sprintf("**Returns:** %s\n\n", doc.ReturnType))
+	fmt.Fprintf(&content, "**Returns:** %s\n\n", doc.ReturnType)
 
 	if doc.Example != "" {
 		content.WriteString("## Example\n\n")
@@ -957,10 +957,10 @@ func generateTypeMarkdown(doc *descriptions.BuiltinTypeDesc) string {
 
 	content.WriteString("---\n")
 	content.WriteString("layout: page\n")
-	content.WriteString(fmt.Sprintf("title: \"%s (Type)\"\n", doc.Name))
-	content.WriteString(fmt.Sprintf("description: \"%s\"\n", doc.Description))
+	fmt.Fprintf(&content, "title: \"%s (Type)\"\n", doc.Name)
+	fmt.Fprintf(&content, "description: \"%s\"\n", doc.Description)
 	content.WriteString("---\n\n")
-	content.WriteString(fmt.Sprintf("**Description:** %s\n\n", doc.Description))
+	fmt.Fprintf(&content, "**Description:** %s\n\n", doc.Description)
 
 	if doc.Example != "" {
 		content.WriteString("## Example\n\n")
@@ -977,10 +977,10 @@ func generateOperatorMarkdown(doc *descriptions.OperatorDesc) string {
 
 	content.WriteString("---\n")
 	content.WriteString("layout: page\n")
-	content.WriteString(fmt.Sprintf("title: \"%s (%s Operator)\"\n", doc.Symbol, doc.Name))
-	content.WriteString(fmt.Sprintf("description: \"%s\"\n", doc.Description))
+	fmt.Fprintf(&content, "title: \"%s (%s Operator)\"\n", doc.Symbol, doc.Name)
+	fmt.Fprintf(&content, "description: \"%s\"\n", doc.Description)
 	content.WriteString("---\n\n")
-	content.WriteString(fmt.Sprintf("**Description:** %s\n\n", doc.Description))
+	fmt.Fprintf(&content, "**Description:** %s\n\n", doc.Description)
 
 	if doc.Example != "" {
 		content.WriteString("## Example\n\n")
@@ -997,10 +997,10 @@ func generateKeywordMarkdown(doc *descriptions.KeywordDesc) string {
 
 	content.WriteString("---\n")
 	content.WriteString("layout: page\n")
-	content.WriteString(fmt.Sprintf("title: \"%s (Keyword)\"\n", doc.Keyword))
-	content.WriteString(fmt.Sprintf("description: \"%s\"\n", doc.Description))
+	fmt.Fprintf(&content, "title: \"%s (Keyword)\"\n", doc.Keyword)
+	fmt.Fprintf(&content, "description: \"%s\"\n", doc.Description)
 	content.WriteString("---\n\n")
-	content.WriteString(fmt.Sprintf("**Description:** %s\n\n", doc.Description))
+	fmt.Fprintf(&content, "**Description:** %s\n\n", doc.Description)
 
 	if doc.Example != "" {
 		content.WriteString("## Example\n\n")

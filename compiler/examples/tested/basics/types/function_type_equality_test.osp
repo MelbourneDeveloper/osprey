@@ -6,12 +6,27 @@ print("=== FUNCTION TYPE EQUALITY TEST ===")
 // Test 1: Functions with identical signatures should have equal types
 print("Test 1: Same Function Signature Types")
 
-fn addOne(x) = x + 1
-fn multiplyByTwo(x) = x * 2
-fn subtractOne(x) = x - 1
+fn addOne(x) = match x + 1 {
+    Success { value } => value
+    Error { message } => 0
+}
+fn multiplyByTwo(x) = match x * 2 {
+    Success { value } => value
+    Error { message } => 0
+}
+fn subtractOne(x) = match x - 1 {
+    Success { value } => value
+    Error { message } => 0
+}
 
-fn concatExclamation(s) = s + "!"
-fn concatQuestion(s) = s + "?"
+fn concatExclamation(s) = match s + "!" {
+    Success { value } => value
+    Error { message } => ""
+}
+fn concatQuestion(s) = match s + "?" {
+    Success { value } => value
+    Error { message } => ""
+}
 
 // Higher-order functions that will force function type comparison
 fn applyIntOperation(op, value) = op(value)
@@ -32,8 +47,14 @@ print("")
 // Test 2: Functions with different signatures should have different types
 print("Test 2: Different Function Signature Types")
 
-fn twoParamAdd(a, b) = a + b          // (int, int) -> int
-fn threeParamAdd(a, b, c) = a + b + c // (int, int, int) -> int
+fn twoParamAdd(a, b) = match a + b {
+    Success { value } => value
+    Error { message } => 0
+}          // (int, int) -> int
+fn threeParamAdd(a, b, c) = match a + b + c {
+    Success { value } => value
+    Error { message } => 0
+} // (int, int, int) -> int
 fn intToString(x) = toString(x)       // int -> string
 
 fn applyTwoInt(op, x, y) = op(a: x, b: y)
@@ -71,9 +92,15 @@ print("")
 // Test 4: Function composition testing type equality
 print("Test 4: Function Composition")
 
-// Functions to compose  
-fn addTen(x) = x + 10
-fn multiplyThree(x) = x * 3
+// Functions to compose
+fn addTen(x) = match x + 10 {
+    Success { value } => value
+    Error { message } => 0
+}
+fn multiplyThree(x) = match x * 3 {
+    Success { value } => value
+    Error { message } => 0
+}
 fn makeUppercase(s) = s  // Simplified - just return as is for now
 
 // Test composition with same-type functions - manual composition
