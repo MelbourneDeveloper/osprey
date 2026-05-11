@@ -73,12 +73,12 @@ Arithmetic returns `Result<T, MathError>`. The full operator-by-operand table an
 A bare arithmetic expression has type `Result<T, MathError>`. The compiler auto-unwraps the inner `Result` in three contexts so authors do not write nested `match` chains:
 
 1. **Nested arithmetic.** `(10 + 5) * 2` has type `Result<int, MathError>`, not `Result<Result<int, MathError>, MathError>`. If any sub-expression errors, the chain errors.
-2. **User function arguments.** Passing a `Result`-typed expression to a function that expects the underlying type unwraps it. `double(add(5, 3))` is well-typed when `add` returns `Result<int, MathError>` and `double` expects `int`.
+2. **User function arguments.** Passing a `Result`-typed expression to a function that expects the underlying type unwraps it. `double(add(a: 5, b: 3))` is well-typed when `add` returns `Result<int, MathError>` and `double` expects `int`.
 3. **Fiber operations.** `spawn`, `await`, `send`, and `recv` unwrap `Result` arguments before storing them.
 
 Auto-unwrap does **not** apply to:
 
-- `toString`. `toString(add(5, 3))` produces `"Success(8)"`, never `"8"`. Use `toString` to inspect the `Result` itself.
+- `toString`. `toString(add(a: 5, b: 3))` produces `"Success(8)"`, never `"8"`. Use `toString` to inspect the `Result` itself.
 - A function's declared return type. `fn add(x, y) = x + y` returns `Result<int, MathError>`; `fn compute() -> int = 5` returns `int`.
 
 The top-level value of an arithmetic expression must still be either matched or stored as a `Result`.
@@ -230,14 +230,14 @@ match numbers[0] {
 }
 ```
 
-Operations:
+Operations (see [Iterators and Iteration](0010-LoopConstructsAndFunctionalIterators.md) for full signatures):
 
 ```osprey
-let doubled  = map(x => x * 2, numbers)
-let evens    = filter(x => x % 2 == 0, numbers)
-let total    = fold(0, (acc, x) => acc + x, numbers)
-let combined = numbers + [6, 7, 8]               // concatenation produces a new list
-forEach(x => print(toString(x)), numbers)
+let doubled  = numbers |> map(x => x * 2)
+let evens    = numbers |> filter(x => x % 2 == 0)
+let total    = numbers |> fold(initial: 0, function: (acc, x) => acc + x)
+let combined = numbers + [6, 7, 8]                       // concatenation produces a new list
+numbers |> forEach(x => print(toString(x)))
 ```
 
 Patterns:
@@ -254,7 +254,7 @@ fn classify(xs: List<int>) -> string = match xs {
 List comprehensions and head/tail destructuring:
 
 ```osprey
-let squares  = [x * x for x in range(1, 5)]      // [1, 4, 9, 16, 25]
+let squares  = [x * x for x in range(start: 1, end: 5)]   // [1, 4, 9, 16, 25]
 let filtered = [x for x in numbers if x > 3]
 let [head, ...tail] = numbers
 ```
@@ -277,20 +277,20 @@ match ages["Alice"] {
     Error   { message } => print(message)
 }
 
-let hasAlice = contains(ages, "Alice")
+let hasAlice = contains(map: ages, key: "Alice")
 let n        = length(ages)
 ```
 
 Operations:
 
 ```osprey
-let bumped     = mapValues(age => age + 1, ages)
-let upper      = mapKeys(name => toUpperCase(name), ages)
-let thirties   = filter((name, age) => age >= 30, ages)
-let totalAge   = fold(0, (acc, name, age) => acc + age, ages)
+let bumped     = ages |> mapValues(age => age + 1)
+let upper      = ages |> mapKeys(name => toUpperCase(name))
+let thirties   = ages |> filter((name, age) => age >= 30)
+let totalAge   = ages |> fold(initial: 0, function: (acc, name, age) => acc + age)
 let withDave   = ages + { "Dave": 28 }
 let updated    = ages { "Alice": 26 }                       // single-key update
-let withoutBob = removeKey(ages, "Bob")
+let withoutBob = removeKey(map: ages, key: "Bob")
 ```
 
 Patterns:
@@ -308,11 +308,11 @@ fn analyze(p: Map<string, int>) -> string = match p {
 Conversions:
 
 ```osprey
-let names    = keys(ages)                          // List<string>
-let agesList = values(ages)                        // List<int>
-let pairs    = entries(ages)                       // List<(string, int)>
-let m        = zipToMap(names, agesList)
-let byGrade  = groupBy(s => s.grade, students)     // Map<string, List<Student>>
+let names    = keys(ages)                                       // List<string>
+let agesList = values(ages)                                     // List<int>
+let pairs    = entries(ages)                                    // List<(string, int)>
+let m        = zipToMap(keys: names, values: agesList)
+let byGrade  = groupBy(items: students, function: s => s.grade) // Map<string, List<Student>>
 ```
 
 ### Performance

@@ -7,7 +7,7 @@
       "language": "go"
     },
     "vscode-extension": {
-      "threshold": 53,
+      "threshold": 57,
       "language": "typescript"
     }
   }

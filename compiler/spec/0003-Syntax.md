@@ -226,10 +226,12 @@ fieldPattern::= ID ("," ID)*
 ```
 
 ```osprey
-let result = match status {
-    Success    => "OK"
-    Error msg  => "Failed: " + msg
-    _          => "Unknown"
+type Status = Ready | Running | Done { code: int }
+
+let label = match status {
+    Ready          => "ready"
+    Running        => "running"
+    Done { code }  => "done (${code})"
 }
 ```
 

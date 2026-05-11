@@ -4,45 +4,43 @@ Osprey has no `for`, `while`, or `loop` construct. Iteration is expressed as com
 
 ## Core Iterator Functions
 
+All multi-argument iterator functions are intended to be used through the pipe; their full signatures are listed for reference. Direct calls require named arguments per [Function Calls](0005-FunctionCalls.md).
+
 ### `range(start: int, end: int) -> Iterator<int>`
-Creates an iterator that generates integers from start (inclusive) to end (exclusive).
+Generates integers from `start` (inclusive) to `end` (exclusive).
 
 ```osprey
-range(1, 5)    // generates 1, 2, 3, 4
-range(0, 3)    // generates 0, 1, 2
-range(10, 13)  // generates 10, 11, 12
+range(start: 1,  end: 5)    // 1, 2, 3, 4
+range(start: 0,  end: 3)    // 0, 1, 2
+range(start: 10, end: 13)   // 10, 11, 12
 ```
 
-### `forEach(iterator: Iterator<T>, function: T -> U) -> T`
-Applies a function to each element in an iterator for side effects.
+### `forEach(iterator: Iterator<T>, function: fn(T) -> U) -> unit`
+Applies `function` to each element for its side effects.
 
 ```osprey
-range(1, 5) |> forEach(print)          // prints 1, 2, 3, 4
-forEach(range(0, 3), double)           // calls double(0), double(1), double(2)
+range(start: 1, end: 5) |> forEach(print)
 ```
 
-### `map(iterator: Iterator<T>, function: T -> U) -> U`
-Transforms each element in an iterator by applying a function.
+### `map(iterator: Iterator<T>, function: fn(T) -> U) -> Iterator<U>`
+Transforms each element.
 
 ```osprey
-range(1, 5) |> map(double)    // applies double to 1, 2, 3, 4
-map(range(0, 3), square)      // applies square to 0, 1, 2
+range(start: 1, end: 5) |> map(double)
 ```
 
-### `filter(iterator: Iterator<T>, predicate: T -> bool) -> T`
-Selects elements from an iterator based on a predicate function.
+### `filter(iterator: Iterator<T>, predicate: fn(T) -> bool) -> Iterator<T>`
+Keeps elements that satisfy `predicate`.
 
 ```osprey
-range(1, 10) |> filter(isEven)
-filter(range(0, 20), isPositive)
+range(start: 1, end: 10) |> filter(isEven)
 ```
 
-### `fold(iterator: Iterator<T>, initial: U, function: (U, T) -> U) -> U`
-Reduces an iterator to a single value by repeatedly applying a function.
+### `fold(iterator: Iterator<T>, initial: U, function: fn(U, T) -> U) -> U`
+Reduces an iterator to a single value.
 
 ```osprey
-range(1, 5) |> fold(0, add)          // sum: 0+1+2+3+4 = 10
-fold(range(1, 6), 1, multiply)       // product: 1*1*2*3*4*5 = 120
+range(start: 1, end: 5) |> fold(initial: 0, function: add)   // 0+1+2+3+4 = 10
 ```
 
 ## Pipe Operator
@@ -50,9 +48,9 @@ fold(range(1, 6), 1, multiply)       // product: 1*1*2*3*4*5 = 120
 `|>` passes its left operand as the first argument to the function on its right.
 
 ```osprey
-5 |> double |> print                                       // print(double(5))
-range(1, 10) |> forEach(print)
-range(0, 20) |> filter(isEven) |> map(double) |> forEach(print)
+5 |> double |> print                                                 // print(double(5))
+range(start: 1, end: 10) |> forEach(print)
+range(start: 0, end: 20) |> filter(isEven) |> map(double) |> forEach(print)
 ```
 
 ## Stream Fusion
@@ -60,7 +58,7 @@ range(0, 20) |> filter(isEven) |> map(double) |> forEach(print)
 Chains of `map`, `filter`, `forEach`, and `fold` over an iterator are fused at compile time into a single loop with no intermediate collections. The chain
 
 ```osprey
-range(1, 5) |> map(double) |> filter(isEven) |> forEach(print)
+range(start: 1, end: 5) |> map(double) |> filter(isEven) |> forEach(print)
 ```
 
 compiles to one loop that applies `double`, the `isEven` test, and `print` per element — equivalent to:
@@ -78,10 +76,10 @@ Fusion applies to any chain of `map` and `filter` terminated by `forEach` or `fo
 
 ```osprey
 // Transform → filter → aggregate
-range(1, 20)
+range(start: 1, end: 20)
   |> map(square)
   |> filter(isEven)
-  |> fold(0, add)
+  |> fold(initial: 0, function: add)
   |> print
 
 // Pipeline of named stages

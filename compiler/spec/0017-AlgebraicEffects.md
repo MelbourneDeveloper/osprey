@@ -134,16 +134,20 @@ in
 
 ## Worked Example
 
+`x * 2` returns `Result<int, MathError>`; the function below performs `Exception` on overflow and `State` to record the success.
+
 ```osprey
 effect Exception { raise: fn(string) -> unit }
 effect State     { get: fn() -> int, set: fn(int) -> unit }
 
-fn safeDivide(a: int, b: int) -> int ![Exception, State] = match b == 0 {
-    true  => { perform Exception.raise("division by zero"); 0 }
-    false => {
-        let result = a / b
-        perform State.set(result)
-        result
+fn doubleAndStore(x: int) -> int ![Exception, State] = match x * 2 {
+    Success { value }   => {
+        perform State.set(value)
+        value
+    }
+    Error   { message } => {
+        perform Exception.raise(message)
+        0
     }
 }
 
@@ -154,6 +158,6 @@ in
         get        => 0
         set newVal => print("state: " + toString(newVal))
     in
-        let result = safeDivide(a: 10, b: 0)
+        let result = doubleAndStore(21)
         print("result: " + toString(result))
 ```

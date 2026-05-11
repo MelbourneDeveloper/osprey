@@ -14,12 +14,14 @@ let result = match value {
 
 ## Union Type Patterns
 
+A union pattern names the variant. Variants with fields are destructured using `{ field, ... }`; variants without fields are matched by name alone.
+
 ```osprey
 type Option = Some { value: int } | None
 
 let message = match option {
-    Some x => "Value: " + toString(x.value)
-    None   => "No value"
+    Some { value } => "Value: " + toString(value)
+    None           => "No value"
 }
 ```
 
@@ -78,8 +80,8 @@ match anyValue {
 
 // Type pattern with destructuring of a known constructor
 match result {
-    success: Success { value, timestamp } => processSuccess(value, timestamp)
-    error:   Error   { code, message }    => handleError(code, message)
+    success: Success { value, timestamp } => processSuccess(value: value, timestamp: timestamp)
+    error:   Error   { code, message }    => handleError(code: code, message: message)
     _                                     => defaultHandler()
 }
 ```

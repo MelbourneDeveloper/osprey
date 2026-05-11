@@ -53,16 +53,24 @@ let buf    = Channel<string> { capacity: 10 }   // buffered
 let ch = Channel<int> { capacity: 3 }
 
 let producer = spawn {
-    send(ch, 1)
-    send(ch, 2)
-    send(ch, 3)
+    send(channel: ch, value: 1)
+    send(channel: ch, value: 2)
+    send(channel: ch, value: 3)
 }
 
 let consumer = spawn {
-    let a = recv(ch)
-    let b = recv(ch)
-    let c = recv(ch)
-    print("got: ${a}, ${b}, ${c}")
+    match recv(ch) {
+        Success { value } => print("got ${value}")
+        Error   { message } => print("recv error: ${message}")
+    }
+    match recv(ch) {
+        Success { value } => print("got ${value}")
+        Error   { message } => print("recv error: ${message}")
+    }
+    match recv(ch) {
+        Success { value } => print("got ${value}")
+        Error   { message } => print("recv error: ${message}")
+    }
 }
 
 await(producer)

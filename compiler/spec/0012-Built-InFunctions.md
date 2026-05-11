@@ -41,14 +41,14 @@ match length("hello") {
 Checks if a string contains a substring.
 
 ```osprey
-match contains("hello", "ell") {
-    Success { value } => print("Found: ${value}")
-    Error { message } => print("Error: ${message}")
+match contains(haystack: "hello", needle: "ell") {
+    Success { value }   => print("Found: ${value}")
+    Error   { message } => print("Error: ${message}")
 }
 ```
 
 #### `substring(s: string, start: int, end: int) -> Result<string, StringError>`
-Extracts a substring from start to end.
+Extracts a substring from `start` (inclusive) to `end` (exclusive).
 
 ## File System Functions
 
@@ -80,7 +80,7 @@ fn processEventHandler(processID: int, eventType: int, data: string) -> unit = m
     _ => print("[UNKNOWN] ${data}")
 }
 
-let result = spawnProcess("echo 'Hello'", processEventHandler)
+let result = spawnProcess(command: "echo 'Hello'", callback: processEventHandler)
 ```
 
 ### `awaitProcess(processId: int) -> int`
