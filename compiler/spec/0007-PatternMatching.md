@@ -2,7 +2,7 @@
 
 `match` is the only branching construct in Osprey. Record patterns are matched structurally by field name, not by field order. See [Type System](0004-TypeSystem.md) for type unification rules.
 
-### Basic Patterns
+## Basic Patterns
 
 ```osprey
 let result = match value {
@@ -15,11 +15,11 @@ let result = match value {
 ## Union Type Patterns
 
 ```osprey
-type Option = Some { value: Int } | None
+type Option = Some { value: int } | None
 
 let message = match option {
     Some x => "Value: " + toString(x.value)
-    None => "No value"
+    None   => "No value"
 }
 ```
 
@@ -37,48 +37,50 @@ let category = match score {
 
 ## Type Annotation Patterns
 
-Type annotation patterns use the `:` operator to match values of specific types. This is **REQUIRED** for `any` types.
+A pattern of the form `name: type` matches when the value has the named type and binds it. This is the required form for narrowing an `any` value.
 
-```
-type_pattern := ID ':' type
-structural_pattern := ID ':' '{' field_list '}'
-anonymous_structural_pattern := '{' field_list '}'
-constructor_pattern := ID ('(' pattern (',' pattern)* ')')?
-variable_pattern := ID
-wildcard_pattern := '_'
+```ebnf
+typePattern              ::= ID ":" type
+structuralPattern        ::= ID ":" "{" fieldList "}"
+anonymousStructuralPattern ::= "{" fieldList "}"
+constructorPattern       ::= ID ("(" pattern ("," pattern)* ")")?
+variablePattern          ::= ID
+wildcardPattern          ::= "_"
 ```
 
-**Examples:**
 ```osprey
-// Required for any types
+// Narrowing an any value
 match anyValue {
-    num: Int => num + 1
-    text: String => length(text)
-    flag: Bool => if flag then 1 else 0
+    n: int    => n + 1
+    s: string => length(s)
+    b: bool   => match b {
+        true  => 1
+        false => 0
+    }
     _ => 0
 }
 
-// Structural matching - matches any type with these fields
+// Structural matching: any type with these field names
 match anyValue {
-    { name, age } => print("${name}: ${age}")           // Anonymous structural
-    p: { name, age } => print("Person ${p.name}: ${p.age}")  // Named structural
-    u: User { id } => print("User ${id}")               // Traditional typed
-    _ => print("Unknown")
+    { name, age }       => print("${name}: ${age}")
+    p: { name, age }    => print("person ${p.name}: ${p.age}")   // bind whole + destructure
+    u: User { id }      => print("user ${id}")                   // typed structural
+    _                   => print("unknown")
 }
 
-// Advanced structural patterns
+// Type-narrowed structural fields
 match anyValue {
-    { x, y } => print("Point: (${x}, ${y})")           // Any type with x, y fields
-    p: { name } => print("Named thing: ${p.name}")     // Any type with name field
-    { id, email, active: Bool } => print("Active user: ${id}")  // Mixed field patterns
-    _ => print("No match")
+    { x, y }                       => print("point: (${x}, ${y})")
+    p: { name }                    => print("named: ${p.name}")
+    { id, email, active: bool }    => print("active user: ${id}")
+    _                              => print("no match")
 }
 
-// Type patterns with field destructuring
+// Type pattern with destructuring of a known constructor
 match result {
     success: Success { value, timestamp } => processSuccess(value, timestamp)
-    error: Error { code, message } => handleError(code, message)
-    _ => defaultHandler()
+    error:   Error   { code, message }    => handleError(code, message)
+    _                                     => defaultHandler()
 }
 ```
 

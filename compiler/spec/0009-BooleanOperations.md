@@ -1,6 +1,6 @@
 # Boolean Operations
 
-Osprey has no `if`/`else` statement. All conditional logic uses `match` on a boolean expression, which forces both arms to be considered.
+Osprey has no `if`/`else` statement. Conditional logic is written as a `match` on a boolean (which forces both arms to be considered) or as the ternary shorthand `cond ? then : else`, which desugars to the same `match`. The ternary is defined in [Pattern Matching](0007-PatternMatching.md#ternary-match-syntactic-sugar).
 
 ```osprey
 let status = match isValid {

@@ -69,27 +69,25 @@ Checks if file exists.
 
 ## Process Operations
 
-### `spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessResult, string>`
-Spawns external process with asynchronous stdout/stderr collection via callbacks.
+### `spawnProcess(command: string, callback: fn(int, int, string) -> unit) -> Result<ProcessResult, string>`
+Spawns an external process. The callback is invoked for each stdout/stderr line and on exit.
 
 ```osprey
-fn processEventHandler(processID: int, eventType: int, data: string) -> Unit = {
-    match eventType {
-        1 => print("[STDOUT] ${data}")
-        2 => print("[STDERR] ${data}")
-        3 => print("[EXIT] Code: ${data}")
-        _ => print("[UNKNOWN] ${data}")
-    }
+fn processEventHandler(processID: int, eventType: int, data: string) -> unit = match eventType {
+    1 => print("[STDOUT] ${data}")
+    2 => print("[STDERR] ${data}")
+    3 => print("[EXIT] Code: ${data}")
+    _ => print("[UNKNOWN] ${data}")
 }
 
 let result = spawnProcess("echo 'Hello'", processEventHandler)
 ```
 
 ### `awaitProcess(processId: int) -> int`
-Waits for process completion and returns exit code.
+Waits for process completion and returns the exit code.
 
-### `cleanupProcess(processId: int) -> void`
-Cleans up process resources after completion.
+### `cleanupProcess(processId: int) -> unit`
+Releases process resources.
 
 ## Iterators and Pipe
 
