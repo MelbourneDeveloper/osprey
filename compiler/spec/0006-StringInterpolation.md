@@ -74,9 +74,3 @@ Supported escape sequences:
 - `\"` - Double quote
 - `\${` - Literal `${` (prevents interpolation)
 
-## Implementation
-
-Interpolated strings compile to efficient buffer operations:
-1. Allocate a buffer (`alloca [1024 x i8]`)
-2. Use `sprintf` with appropriate format specifiers (`%s`, `%ld`, etc.)
-3. Return the formatted string for use in expressions
