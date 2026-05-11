@@ -1,0 +1,4 @@
+// The SQL plugin must reject this at compile time: the function declares `wrongName`
+// but the body references `$missing`. Catching this mismatch is the whole point of
+// running the plugin during codegen — silently emitting bad code would be a footgun.
+fn sql badQuery(wrongName: string) = SELECT * FROM users WHERE name = $missing;

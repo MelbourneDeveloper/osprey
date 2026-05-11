@@ -1,0 +1,3 @@
+SELECT id, name FROM users
+SELECT * FROM users WHERE id = 42
+SELECT id FROM users WHERE status = active LIMIT 10

@@ -1,0 +1,12 @@
+// Exercises the language plugin system end-to-end with the SQL plugin.
+// The SQL plugin runs at compile time to validate each query and reject parameter
+// mismatches. At runtime the plugin function returns the validated query string
+// with `$paramName` placeholders replaced by the call's argument values.
+
+fn sql allUsers() = SELECT id, name FROM users;
+fn sql userById(userId: int) = SELECT * FROM users WHERE id = $userId;
+fn sql search(status: string, limit: int) = SELECT id FROM users WHERE status = $status LIMIT $limit;
+
+print(allUsers())
+print(userById(42))
+print(search(status: "active", limit: 10))

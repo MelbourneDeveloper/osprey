@@ -1,7 +1,10 @@
 package codegen
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -9,6 +12,29 @@ import (
 	"github.com/llir/llvm/ir/value"
 
 	"github.com/christianfindlay/osprey/internal/ast"
+)
+
+// pluginParamPlaceholderRegex matches `$paramName` placeholders inside a plugin language body
+// (e.g. SQL: `WHERE id = $userId`). Letters/digits/underscore are accepted to match the
+// SQL plugin's parameter validation regex.
+var pluginParamPlaceholderRegex = regexp.MustCompile(`\$(\w+)`)
+
+// Sentinel errors for plugin codegen. We wrap these with %w so callers can errors.Is
+// against them while still getting a context-rich message.
+var (
+	ErrPluginSystemUninit       = errors.New("plugin system not initialised")
+	ErrPluginValidation         = errors.New("plugin failed to validate function")
+	ErrPluginPlaceholderUnbound = errors.New("plugin body references parameter not declared on function")
+	ErrPluginParamType          = errors.New("unsupported plugin parameter type")
+)
+
+const (
+	// sprintfInt64Spec is the printf-family format specifier for an i64 value.
+	// Plugin functions promote bool/i32/etc. up to i64 before printing.
+	sprintfInt64Spec = "%lld"
+	// int64BitSize is the bit width of LLVM i64 — used to decide when an integer
+	// parameter needs sign-extending before being passed to sprintf.
+	int64BitSize = 64
 )
 
 func (g *LLVMGenerator) generateStatement(stmt ast.Statement) error {
@@ -98,70 +124,179 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 	return nil
 }
 
+// generatePluginFunctionDeclaration compiles a `fn <plugin> <name>(...) = <body>` declaration.
+//
+// What it does at COMPILE TIME:
+//  1. Invokes the named plugin as a subprocess (via PluginSystem), passing the function name,
+//     parameters, and language body as JSON over stdin.
+//  2. If the plugin reports an error (e.g. unknown SQL operation, parameter referenced in the
+//     body but not declared on the function), compilation FAILS — no placeholder, no silent pass.
+//
+// What it emits as RUNTIME code:
+//
+//	An LLVM function returning i8* (string). The body uses sprintf to splice the function's
+//	parameter values into the validated language body at the `$paramName` placeholders.
+//	For SQL, that means `fn sql q(id: Int) = SELECT * FROM users WHERE id = $id` called with
+//	id=42 returns the string "SELECT * FROM users WHERE id = 42" — ready to hand to a SQL driver.
+//
+// This is the bridge between compile-time plugin validation and runtime use.
 func (g *LLVMGenerator) generatePluginFunctionDeclaration(pluginDecl *ast.PluginFunctionDeclaration) error {
-	// Generate LLVM function that represents a plugin function call
-
-	// Build parameter list for LLVM function signature
-	var params []*ir.Param
-	var paramNames []string
-
-	for _, param := range pluginDecl.Parameters {
-		paramType := g.typeExpressionToLLVMType(param.Type)
-		params = append(params, ir.NewParam(param.Name, paramType))
-		paramNames = append(paramNames, param.Name)
+	if g.pluginSystem == nil {
+		return fmt.Errorf("%w: function %q", ErrPluginSystemUninit, pluginDecl.FunctionName)
 	}
 
-	// Plugin functions return strings for now (would be Result<T, Error> in full implementation)
-	returnType := types.I8Ptr // String type
+	// Invoke the plugin at compile time. Failure here MUST fail compilation —
+	// silently emitting a placeholder would mask real validation errors (per CLAUDE.md).
+	_, pluginErr := g.pluginSystem.ProcessPluginFunction(pluginDecl, "", 0)
+	if pluginErr != nil {
+		return fmt.Errorf("plugin %q failed to validate function %q: %w",
+			pluginDecl.PluginName, pluginDecl.FunctionName, pluginErr)
+	}
 
-	// Create the plugin function
-	pluginFunc := g.module.NewFunc(pluginDecl.FunctionName, returnType, params...)
+	params := make([]*ir.Param, 0, len(pluginDecl.Parameters))
+	paramNames := make([]string, 0, len(pluginDecl.Parameters))
+	paramInferTypes := make([]Type, 0, len(pluginDecl.Parameters))
+	for _, param := range pluginDecl.Parameters {
+		params = append(params, ir.NewParam(param.Name, g.typeExpressionToLLVMType(param.Type)))
+		paramNames = append(paramNames, param.Name)
+		paramInferTypes = append(paramInferTypes, g.typeExpressionToInferenceType(param.Type))
+	}
+
+	pluginFunc := g.module.NewFunc(pluginDecl.FunctionName, types.I8Ptr, params...)
 	g.functions[pluginDecl.FunctionName] = pluginFunc
 	g.functionParameters[pluginDecl.FunctionName] = paramNames
 
-	// Save current builder context (might be nil during first pass)
-	savedBuilder := g.builder
+	// Register the plugin function in the type environment so call sites can resolve it.
+	// Plugin functions always return String (the language body with placeholders filled in).
+	g.typeInferer.env.Set(
+		pluginDecl.FunctionName,
+		NewFunctionType(paramInferTypes, NewPrimitiveType(TypeString)),
+	)
 
-	// Create function body
+	savedBuilder := g.builder
 	entry := pluginFunc.NewBlock("entry")
 	g.builder = entry
 
-	// Generate plugin call representation
-	pluginResult := g.generatePluginCallResult(pluginDecl)
-
-	// Return the result
-	entry.NewRet(pluginResult)
-
-	// Restore original builder context (only if it wasn't nil)
-	if savedBuilder != nil {
+	result, err := g.emitPluginLanguageBody(pluginDecl, pluginFunc)
+	if err != nil {
 		g.builder = savedBuilder
-	} else {
-		g.builder = nil
+		return err
 	}
-
+	entry.NewRet(result)
+	g.builder = savedBuilder
 	return nil
 }
 
-func (g *LLVMGenerator) generatePluginCallResult(pluginDecl *ast.PluginFunctionDeclaration) value.Value {
-	// Generate a result string that represents the plugin function call
-	// In a full implementation, this would:
-	// 1. Call the plugin system runtime
-	// 2. Serialize parameters to JSON
-	// 3. Execute the plugin executable
-	// 4. Handle the JSON response
-	// 5. Return Result<T, PluginError>
+// emitPluginLanguageBody generates LLVM IR that builds the plugin's language body string
+// at runtime, substituting `$paramName` placeholders with the current parameter values.
+//
+// When the body has no placeholders we emit a single global string constant. When it does,
+// we build a sprintf format string by replacing each `$name` with the format specifier that
+// matches that parameter's LLVM type, then call sprintf into a stack buffer.
+func (g *LLVMGenerator) emitPluginLanguageBody(
+	pluginDecl *ast.PluginFunctionDeclaration, pluginFunc *ir.Func,
+) (value.Value, error) {
+	matches := pluginParamPlaceholderRegex.FindAllStringSubmatchIndex(pluginDecl.PluginContent, -1)
+	if len(matches) == 0 {
+		return g.emitStaticString(pluginDecl.PluginContent), nil
+	}
 
-	// For now, create a descriptive string
-	pluginInfo := fmt.Sprintf("[Plugin %s:%s]", pluginDecl.PluginName, pluginDecl.FunctionName)
+	paramIndex := make(map[string]int, len(pluginDecl.Parameters))
+	for i, p := range pluginDecl.Parameters {
+		paramIndex[p.Name] = i
+	}
 
-	// Create a global string constant using the same approach as string literals
-	str := constant.NewCharArrayFromString(pluginInfo + StringTerminator)
+	var formatParts []string
+	args := make([]value.Value, 0, len(matches))
+	cursor := 0
+	for _, m := range matches {
+		start, end, nameStart, nameEnd := m[0], m[1], m[2], m[3]
+		formatParts = append(formatParts, escapeSprintfLiteral(pluginDecl.PluginContent[cursor:start]))
+
+		paramName := pluginDecl.PluginContent[nameStart:nameEnd]
+		idx, ok := paramIndex[paramName]
+		if !ok {
+			// Plugin should have caught this, but be defensive — fail compilation rather than emit bad IR.
+			return nil, fmt.Errorf("%w: plugin %q, function %q, placeholder $%s",
+				ErrPluginPlaceholderUnbound, pluginDecl.PluginName, pluginDecl.FunctionName, paramName)
+		}
+
+		paramVal := pluginFunc.Params[idx]
+		spec, arg, specErr := g.sprintfSpecForParam(paramVal)
+		if specErr != nil {
+			return nil, fmt.Errorf("plugin %q, function %q, parameter %q: %w",
+				pluginDecl.PluginName, pluginDecl.FunctionName, paramName, specErr)
+		}
+		formatParts = append(formatParts, spec)
+		args = append(args, arg)
+		cursor = end
+	}
+	formatParts = append(formatParts, escapeSprintfLiteral(pluginDecl.PluginContent[cursor:]))
+
+	return g.callSprintfInto(strings.Join(formatParts, ""), args), nil
+}
+
+// emitStaticString creates a global string constant and returns an i8* pointer into it.
+func (g *LLVMGenerator) emitStaticString(s string) value.Value {
+	str := constant.NewCharArrayFromString(s + StringTerminator)
 	global := g.module.NewGlobalDef("", str)
-
-	// Return pointer to the string
 	return g.builder.NewGetElementPtr(str.Typ, global,
 		constant.NewInt(types.I32, ArrayIndexZero),
 		constant.NewInt(types.I32, ArrayIndexZero))
+}
+
+// sprintfSpecForParam returns the printf-family format specifier for an LLVM parameter
+// value and the (possibly converted) argument to feed sprintf alongside it.
+func (g *LLVMGenerator) sprintfSpecForParam(param *ir.Param) (string, value.Value, error) {
+	switch t := param.Type().(type) {
+	case *types.IntType:
+		if t.BitSize == 1 {
+			// LLVM bool — promote to i64 and let sprintf print 0/1.
+			return sprintfInt64Spec, g.builder.NewZExt(param, types.I64), nil
+		}
+		if t.BitSize < int64BitSize {
+			return sprintfInt64Spec, g.builder.NewSExt(param, types.I64), nil
+		}
+		return sprintfInt64Spec, param, nil
+	case *types.FloatType:
+		return "%g", param, nil
+	case *types.PointerType:
+		// String (i8*) or other pointer — render as a string.
+		return "%s", param, nil
+	default:
+		return "", nil, fmt.Errorf("%w: %v", ErrPluginParamType, t)
+	}
+}
+
+// callSprintfInto allocates a stack buffer, calls sprintf with the supplied format string
+// and arguments, and returns the i8* pointing at the populated buffer.
+func (g *LLVMGenerator) callSprintfInto(formatString string, args []value.Value) value.Value {
+	sprintf := g.ensureSprintfDeclaration()
+
+	formatConst := constant.NewCharArrayFromString(formatString + StringTerminator)
+	formatGlobal := g.module.NewGlobalDef("", formatConst)
+	formatPtr := g.builder.NewGetElementPtr(formatConst.Typ, formatGlobal,
+		constant.NewInt(types.I32, ArrayIndexZero),
+		constant.NewInt(types.I32, ArrayIndexZero))
+
+	bufferType := types.NewArray(BufferSize1KB, types.I8)
+	buffer := g.builder.NewAlloca(bufferType)
+	bufferPtr := g.builder.NewGetElementPtr(bufferType, buffer,
+		constant.NewInt(types.I32, ArrayIndexZero),
+		constant.NewInt(types.I32, ArrayIndexZero))
+
+	sprintfArgs := make([]value.Value, 0, len(args)+TwoArgs)
+	sprintfArgs = append(sprintfArgs, bufferPtr, formatPtr)
+	sprintfArgs = append(sprintfArgs, args...)
+	g.builder.NewCall(sprintf, sprintfArgs...)
+
+	return bufferPtr
+}
+
+// escapeSprintfLiteral escapes `%` so a literal segment of the plugin body cannot be
+// interpreted as a sprintf directive.
+func escapeSprintfLiteral(s string) string {
+	return strings.ReplaceAll(s, "%", "%%")
 }
 
 // typeExpressionToLLVMType converts an Osprey TypeExpression to an LLVM type.

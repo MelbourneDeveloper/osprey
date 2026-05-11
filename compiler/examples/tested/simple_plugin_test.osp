@@ -1,2 +1,0 @@
-/// Simple plugin test with SQL
-fn sql test() = SELECT 1 

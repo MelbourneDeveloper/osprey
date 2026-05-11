@@ -3,6 +3,8 @@ package codegen
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/types"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/christianfindlay/osprey/internal/logging"
+	"github.com/christianfindlay/osprey/internal/plugins"
 )
 
 // LLVMGenerator generates LLVM IR from AST.
@@ -53,6 +56,8 @@ type LLVMGenerator struct {
 	// Stream Fusion: Track pending transformations for map/filter
 	pendingMapFunc    *ast.Identifier // Pending map transformation function
 	pendingFilterFunc *ast.Identifier // Pending filter predicate function
+	// Language plugin system — invoked during codegen for `fn <plugin> <name>(...) = <body>` declarations
+	pluginSystem *plugins.PluginSystem
 }
 
 // SecurityConfig defines security policies for the code generator.
@@ -113,6 +118,13 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		recordFieldMappings: make(map[string]map[string]int),
 	}
 
+	// Initialize the language plugin system, rooted at the compiler directory
+	// where the plugins/ directory lives. Resolution order:
+	//   1) OSPREY_COMPILER_DIR env var (explicit override)
+	//   2) parent of the running osprey binary's directory (binary lives in <compilerDir>/bin/)
+	//   3) current working directory (covers `go test ./...` from compiler/)
+	generator.pluginSystem = plugins.NewPluginSystem(resolveCompilerDir())
+
 	// Declare external functions for FFI
 	generator.declareExternalFunctions()
 
@@ -125,6 +137,29 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 	// Initialize fiber runtime declarations will happen on first use
 
 	return generator
+}
+
+// resolveCompilerDir locates the compiler directory containing plugins/.
+// Returns the working directory as a last resort so the plugin system is always usable.
+func resolveCompilerDir() string {
+	if dir := os.Getenv("OSPREY_COMPILER_DIR"); dir != "" {
+		return dir
+	}
+
+	if exe, err := os.Executable(); err == nil {
+		// Binary lives in <compilerDir>/bin/osprey, so the compiler dir is two levels up.
+		if dir := filepath.Dir(filepath.Dir(exe)); dir != "" && dir != "." {
+			if _, err := os.Stat(filepath.Join(dir, "plugins")); err == nil {
+				return dir
+			}
+		}
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return wd
 }
 
 // GenerateIR returns the LLVM IR as a string.

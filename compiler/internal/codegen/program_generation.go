@@ -9,13 +9,12 @@ import (
 )
 
 // GenerateProgram generates LLVM IR for a complete program.
+//
+// Plugin function declarations (`fn <plugin> <name>(...) = <body>`) are emitted during the
+// first pass (collectDeclarations) so they're available for forward calls — the plugin runs
+// at compile time to validate the body, and the resulting LLVM function builds the language
+// string at runtime via sprintf with the call's argument values spliced into the placeholders.
 func (g *LLVMGenerator) GenerateProgram(program *ast.Program) (*ir.Module, error) {
-	// Skip plugin processing for now
-	// processedProgram, err := g.processPlugins(program)
-	// if err != nil {
-	//     return nil, err
-	// }
-
 	// First pass: collect ALL function declarations and types (including main)
 	mainFunc, topLevelStatements, err := g.collectDeclarations(program)
 	if err != nil {
@@ -86,6 +85,13 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 					return nil, nil, err
 				}
 			}
+		case *ast.PluginFunctionDeclaration:
+			// Generate plugin functions up-front so call sites later in the file can resolve
+			// them. The plugin is invoked here (compile-time validation), and the LLVM
+			// function emitted captures the runtime parameter splicing logic.
+			if err := g.generatePluginFunctionDeclaration(s); err != nil {
+				return nil, nil, err
+			}
 		default:
 			// Only add non-type, non-function, non-extern, non-effect statements
 			if g.isTopLevelStatement(s) {
@@ -112,6 +118,10 @@ func (g *LLVMGenerator) isTopLevelStatement(stmt ast.Statement) bool {
 	}
 
 	if _, isFunc := stmt.(*ast.FunctionDeclaration); isFunc {
+		return false
+	}
+
+	if _, isPlugin := stmt.(*ast.PluginFunctionDeclaration); isPlugin {
 		return false
 	}
 
@@ -146,9 +156,6 @@ func (g *LLVMGenerator) createMainFunction(
 
 	return nil
 }
-
-// NOTE: Plugin system temporarily removed to fix tests
-// TODO: Re-implement plugin system properly
 
 // generateUserFunctions generates code for user-defined functions (excluding main).
 func (g *LLVMGenerator) generateUserFunctions(program *ast.Program) error {

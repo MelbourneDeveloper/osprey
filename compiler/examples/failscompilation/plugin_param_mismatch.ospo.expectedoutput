@@ -1,0 +1,1 @@
+plugin "sql" failed to validate function "badQuery": plugin execution failed: plugin error: query parameter $missing not found in function parameters
