@@ -89,8 +89,9 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 			// Generate plugin functions up-front so call sites later in the file can resolve
 			// them. The plugin is invoked here (compile-time validation), and the LLVM
 			// function emitted captures the runtime parameter splicing logic.
-			if err := g.generatePluginFunctionDeclaration(s); err != nil {
-				return nil, nil, err
+			pluginErr := g.generatePluginFunctionDeclaration(s)
+			if pluginErr != nil {
+				return nil, nil, pluginErr
 			}
 		default:
 			// Only add non-type, non-function, non-extern, non-effect statements

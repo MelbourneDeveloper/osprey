@@ -140,26 +140,60 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 }
 
 // resolveCompilerDir locates the compiler directory containing plugins/.
-// Returns the working directory as a last resort so the plugin system is always usable.
+// Resolution order, falling through to the working directory as a last resort:
+//  1. OSPREY_COMPILER_DIR (explicit override — used by tests and packaged installs)
+//  2. <compilerDir>/bin/osprey — derived from os.Executable() (covers `./bin/osprey`)
+//  3. Walk up from the working directory looking for a `plugins/` dir
+//     (covers `go test ./...` from any subdir under compiler/)
+//  4. Working directory
+//
+// Step 3 matters because the Go test runner sets cwd to the test package's directory,
+// not the compiler root — without the walk, `go test ./tests/integration/...` would
+// look for plugins under tests/integration/plugins.
 func resolveCompilerDir() string {
-	if dir := os.Getenv("OSPREY_COMPILER_DIR"); dir != "" {
+	dir := os.Getenv("OSPREY_COMPILER_DIR")
+	if dir != "" {
 		return dir
 	}
 
-	if exe, err := os.Executable(); err == nil {
-		// Binary lives in <compilerDir>/bin/osprey, so the compiler dir is two levels up.
-		if dir := filepath.Dir(filepath.Dir(exe)); dir != "" && dir != "." {
-			if _, err := os.Stat(filepath.Join(dir, "plugins")); err == nil {
-				return dir
-			}
+	exe, exeErr := os.Executable()
+	if exeErr == nil {
+		candidate := filepath.Dir(filepath.Dir(exe))
+		if candidate != "" && candidate != "." && hasPluginsDir(candidate) {
+			return candidate
 		}
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
+	wd, wdErr := os.Getwd()
+	if wdErr != nil {
 		return "."
 	}
+
+	if ancestor := walkUpForPluginsDir(wd); ancestor != "" {
+		return ancestor
+	}
 	return wd
+}
+
+func hasPluginsDir(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "plugins"))
+	return err == nil
+}
+
+// walkUpForPluginsDir ascends from start looking for a directory that contains a
+// plugins/ subdirectory. Returns "" if none is found before reaching the filesystem root.
+func walkUpForPluginsDir(start string) string {
+	current := start
+	for {
+		if hasPluginsDir(current) {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return ""
+		}
+		current = parent
+	}
 }
 
 // GenerateIR returns the LLVM IR as a string.

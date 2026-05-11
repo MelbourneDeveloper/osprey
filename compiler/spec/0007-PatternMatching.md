@@ -1,17 +1,6 @@
-8. [Pattern Matching](0008-PatternMatching.md)
-   - [Basic Patterns](#basic-patterns)
-   - [Union Type Patterns](#union-type-patterns)
-   - [Wildcard Patterns](#wildcard-patterns)
-   - [Type Annotation Patterns](#type-annotation-patterns)
-       - [Type Annotation Patterns](#type-annotation-patterns)
-       - [Anonymous Structural Matching](#anonymous-structural-matching)
-       - [Named Structural Matching](#named-structural-matching)
-       - [Mixed Type and Structural Patterns](#mixed-type-and-structural-patterns)
-   - [Match Expression Type Safety Rules](#match-expression-type-safety-rules)
+# Pattern Matching
 
-## Pattern Matching
-
-Pattern matching in Osprey uses field name matching only. Record type patterns are based on structural equivalence by field names, not field order. See [Type System](0004-TypeSystem.md#hindley-milner-type-inference) for complete type unification rules.
+`match` is the only branching construct in Osprey. Record patterns are matched structurally by field name, not by field order. See [Type System](0004-TypeSystem.md) for type unification rules.
 
 ### Basic Patterns
 
@@ -93,221 +82,55 @@ match result {
 }
 ```
 
-## Pattern Matching Features
+## Result Patterns
 
-#### **1. Type Annotation Patterns**
-```osprey
-match anyValue {
-    i: Int => i * 2                    // Bind as 'i' if Int
-    s: String => s + "!"               // Bind as 's' if String
-    user: User => user.name            // Bind as 'user' if User type
-}
-```
+`Result<T, E>` is matched the same way as any other union. See [Error Handling](0013-ErrorHandling.md) for the type and arithmetic semantics.
 
-#### **2. Anonymous Structural Matching**
-Match on structure without requiring specific type names:
-```osprey
-match anyValue {
-    { name, age } => print("${name} is ${age}")        // ANY type with name, age
-    { x, y, z } => print("3D point: ${x},${y},${z}")   // ANY type with x, y, z
-    { id } => print("Has ID: ${id}")                    // ANY type with id field
-}
-```
-
-#### **3. Named Structural Matching**
-Bind the whole object AND destructure fields:
-```osprey
-match anyValue {
-    person: { name, age } => {
-        print("Person: ${person}")      // Access whole object
-        print("Name: ${name}")          // Access destructured field
-        print("Age: ${age}")            // Access destructured field
-    }
-    point: { x, y } => calculateDistance(point, origin)
-}
-```
-
-#### **4. Mixed Type and Structural Patterns**
-```osprey
-match anyValue {
-    user: User { id, name } => print("User ${id}: ${name}")     // Explicit type
-    { email, active } => print("Has email: ${email}")           // Structural only
-    data: { values: Array<Int> } => processArray(data.values)   // Nested types
-    _ => print("Unknown structure")
-}
-```
-
-## Result Type Pattern Matching (Arithmetic Expressions)
-
-All arithmetic expressions return `Result<T, MathError>` and must be handled with pattern matching. The compiler automatically unwraps intermediate Results in nested arithmetic, so only the final result requires pattern matching.
-
-**✨ KEY INSIGHT**: Nested arithmetic expressions do NOT require nested pattern matching! The compiler automatically unwraps intermediate Results, so you only pattern match the final result.
-
-### Simple Arithmetic Result Handling
 ```osprey
 let calculation = 1 + 3 + (300 / 5)  // Result<int, MathError>
 
 match calculation {
-    Success { value } => print("Result: ${value}")
-    Error { message } => print("Math error: ${message}")
+    Success { value }   => print("Result: ${value}")
+    Error   { message } => print("Math error: ${message}")
 }
 ```
 
-### Compound Arithmetic Expressions
+Compound arithmetic expressions yield a single `Result`, not nested `Result`s; the compiler unwraps intermediate values inside the chain. Only the final value needs to be matched.
 
-Nested arithmetic expressions return a single Result, not nested Results:
+## Ternary Match (Syntactic Sugar)
+
+A two-arm match has a shorthand. Two equivalent forms exist:
+
+```ebnf
+ternary ::= expr "{" pattern "}" "?" expr ":" expr   (* structural form *)
+          | expr "?:" expr                            (* Result default form *)
+```
+
+Structural form — pick out a field, fall back if the pattern fails:
 
 ```osprey
-let simple = 10 + 5                    // Result<int, MathError>
-let complex = 1 + 2 * 3 - 4 / 2        // Result<int, MathError>
-let nested = ((a + b) * c) / (d - e)   // Result<int, MathError>
+let calculation = 10 + 5
+let value = calculation { value } ? value : -1   // 15
+```
 
-// All handled the same way
-match simple {
-    Success { value } => print("Result: ${value}")
-    Error { message } => print("Error: ${message}")
+Desugars to:
+
+```osprey
+match calculation {
+    { value } => value
+    _         => -1
 }
 ```
 
-The compiler auto-unwraps intermediate Results in arithmetic chains:
+Result-default form — extract `Success { value }` or use the default on `Error`:
 
 ```osprey
-let example = (10 + 5) * 2  // Single Result<int, MathError>
-match example {
-    Success { value } => print(value)  // 30
-    Error { message } => print(message)
-}
+let safeValue = divide(a: 10, b: 2) ?: -1   // 5
+let errorVal  = divide(a: 10, b: 0) ?: -1   // -1
 ```
 
-### Result toString Format
-```osprey
-let x = 10 + 5  // Result<int, MathError>
-print(x)        // Prints: Success(15)
-
-let y = 10 / 0  // Result<float, MathError>
-print(y)        // Prints: Error(DivisionByZero)
-
-// Success format: Success(value)
-// Error format: Error(message)
-```
-
-### Function Return Results
-```osprey
-fn calculate(x: int, y: int) -> Result<int, MathError> = x + y * 2 - 5
-
-let result = calculate(10, 3)  // Result<int, MathError>
-match result {
-    Success { value } => print("Function result: ${value}")
-    Error { message } => print("Function failed: ${message}")
-}
-```
-
-### Advanced Result Chains
-```osprey
-// Multiple Results in sequence
-let step1 = 100 + 50        // Result<int, MathError>
-let step2 = 200 * 3         // Result<int, MathError>
-
-// Handle each step
-match step1 {
-    Success { value1 } => {
-        match step2 {
-            Success { value2 } => {
-                let final = value1 + value2  // This is also Result<int, MathError>!
-                match final {
-                    Success { total } => print("Final: ${total}")
-                    Error { message } => print("Final calc failed: ${message}")
-                }
-            }
-            Error { message } => print("Step 2 failed: ${message}")
-        }
-    }
-    Error { message } => print("Step 1 failed: ${message}")
-}
-```
-
-## Match Expression Type Safety Rules
-
-```
-
-## Ternary Match Expression (Syntactic Sugar)
-
-To reduce verbosity for common two-armed match scenarios, Osprey provides a concise ternary match expression. This is **purely syntactic sugar** and desugars to a standard `match` expression internally.
-
-**Syntax:**
-`<expression> { <pattern> } ? <then_expr> : <else_expr>`
-
-This is exactly equivalent to:
-```osprey
-match <expression> {
-    { <pattern> } => <then_expr>
-    _ => <else_expr>
-}
-```
-
-### Breakdown
-
-- **`<expression>`**: The value to be matched.
-- **`{ <pattern> }`**: A structural pattern to match against the expression. This can be used for destructuring.
-- **`? <then_expr>`**: The expression to evaluate if the pattern matches.
-- **`: <else_expr>`**: The expression to evaluate if the pattern does not match.
-
-### Examples
-
-**Example 1: Handling Built-in `Result` Types**
-
-The built-in `Result<T, E>` type uses `Success { value: T }` and `Error { message: E }` constructors.
+A boolean expression with `?:` works because `true`/`false` desugar to the same match:
 
 ```osprey
-// Arithmetic operations return Result<int, MathError>
-let calculation = 10 + 5  // Result<int, MathError>
-
-// Extracts value using the structural ternary match
-let message = calculation { value } ? value : -1
-// message is now 15
-
-// Function returning Result type  
-fn divide(a: int, b: int) -> Result<int, MathError> = a / b
-let result = divide(a: 10, b: 2)
-let safeValue = result { value } ? value : 0
-// safeValue is now 5
-```
-
-**Example 2: Handling Booleans**
-
-The ternary match can also work with boolean values by matching on the implicit structure of a `true` value.
-
-```osprey
-let is_active = true
-let status_text = is_active ? "Active" : "Inactive"
-// status_text is now "Active"
-```
-
-**Example 3: Handling Result Types with Ternary**
-
-For Result types, the ternary operator provides a clean way to extract success values or provide defaults:
-
-```osprey
-// Arithmetic operations return Result<int, MathError>
-let calculation = 10 + 5  // Result<int, MathError>
-
-// Result ternary: automatically extracts Success value or uses default on Error
-let value = calculation ?: -1  // 15 (extracts value from Success) or -1 (on Error)
-
-// Function returning Result type
-fn divide(a: int, b: int) -> Result<int, MathError> = a / b
-
-let goodResult = divide(a: 10, b: 2)
-let safeValue = goodResult ?: -1  // 5 (extracts value from Success) or -1 (on Error)
-
-let badResult = divide(a: 10, b: 0)  
-let errorValue = badResult ?: -1  // -1 (Error case, uses default)
-```
-
-This is syntactic sugar for:
-```osprey
-let value = match calculation {
-    Success { value } => value
-    Error { message } => -1
-}
+let status = isActive ? "Active" : "Inactive"
 ```
