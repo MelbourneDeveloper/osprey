@@ -1,9 +1,6 @@
 package ast
 
-import (
-	"github.com/antlr4-go/antlr/v4"
-	"github.com/christianfindlay/osprey/parser"
-)
+import "github.com/christianfindlay/osprey/parser"
 
 const (
 	unknownPatternConstructor = "unknown"
@@ -146,9 +143,6 @@ func (b *Builder) buildPipeExprPattern(pipeCtx parser.IPipeExprContext) Pattern 
 	return b.buildUnknownPattern()
 }
 
-	return Pattern{Constructor: unknownPatternConstructor}
-}
-
 // buildLiteralPattern builds patterns from literal contexts.
 func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern {
 	if literalCtx.INT() != nil {
@@ -194,9 +188,6 @@ func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern
 		}
 	}
 	return b.buildUnknownPattern()
-}
-
-	return Pattern{Constructor: unknownPatternConstructor}
 }
 
 // buildIdentifierPattern handles identifier patterns including field patterns.

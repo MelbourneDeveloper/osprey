@@ -63,43 +63,13 @@ func (j *JITExecutor) setupCompilation(ir string) (string, string, string, error
 		return "", "", "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to create temp directory: %w", err)
 	}
 
-	irFile, err := j.writeIRFile(tempDir, ir)
-	if err != nil {
-		return err
-	}
-
-	objFile, err := j.compileToObject(irFile, tempDir)
-	if err != nil {
-		return err
-	}
-
-	exeFile, err := j.linkExecutable(objFile, tempDir)
-	if err != nil {
-		return err
-	}
-
-	return j.runExecutable(exeFile)
-}
-
-// createTempDir creates a temporary directory for compilation
-func (j *JITExecutor) createTempDir() (string, error) {
-	tempDir, err := os.MkdirTemp("", "osprey_compile_*")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
-	}
-	return tempDir, nil
-}
-
-// writeIRFile writes IR content to a file
-func (j *JITExecutor) writeIRFile(tempDir, ir string) (string, error) {
+	// Write IR to file
 	irFile := filepath.Join(tempDir, "program.ll")
 
 	writeErr := os.WriteFile(irFile, []byte(ir), FilePermissionsLess)
 	if writeErr != nil {
 		return "", "", "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to write IR file: %w", writeErr)
 	}
-	return irFile, nil
-}
 
 	// Determine executable file name
 	exeFile := filepath.Join(tempDir, "program")
@@ -126,8 +96,6 @@ func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to compile IR: %w\nOutput: %s", err, string(llcOutput))
 	}
-	return objFile, nil
-}
 
 	return objFile, nil
 }
@@ -166,8 +134,6 @@ func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string
 			break
 		}
 	}
-	return ""
-}
 
 	// Debug output - only show warnings if libraries not found
 	if foundLib == "" {

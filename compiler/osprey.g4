@@ -22,7 +22,23 @@ letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
 
 assignStmt       : ID EQ expr ;
 
-fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | LBRACE blockBody RBRACE) ;
+fnDecl
+    : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | LBRACE blockBody RBRACE)
+    | docComment? FN ID ID LPAREN paramList? RPAREN pluginReturnType? EQ pluginContent SEMI
+    ;
+
+pluginReturnType
+    : ARROW type
+    | AS type
+    ;
+
+pluginContent
+    : pluginToken+
+    ;
+
+pluginToken
+    : ~SEMI
+    ;
 
 externDecl      : docComment? EXTERN FN ID LPAREN externParamList? RPAREN (ARROW type)? ;
 
@@ -84,7 +100,7 @@ exprStmt        : expr ;
 
 expr
     : matchExpr
-    | loopExpr
+    | handlerExpr
     ;
 
 matchExpr
@@ -315,6 +331,7 @@ FALSE       : 'false';
 
 // Constraint keyword
 WHERE       : 'where';
+AS          : 'as';
 
 // Operators and symbols
 PIPE        : '|>';
@@ -362,3 +379,4 @@ ID          : [a-zA-Z_][a-zA-Z0-9_]* ;
 WS          : [ \t\r\n]+ -> skip ;
 DOC_COMMENT : '///' ~[\r\n]* ;
 COMMENT     : '//' ~[\r\n]* -> skip ;
+ANY_CHAR    : . ;

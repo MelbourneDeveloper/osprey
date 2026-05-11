@@ -199,8 +199,6 @@ func checkLibraryAvailability() (bool, bool) {
 			break
 		}
 	}
-	return []string{"-lssl", "-lcrypto"}
-}
 
 	// Check if any HTTP runtime library was found
 	for _, libPath := range buildLibraryPaths("http_runtime") {
@@ -219,11 +217,18 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 	var clangCommands [][]string
 
 	if fiberExists || httpExists {
-		return [][]string{
-			append([]string{"clang"}, linkArgs...),
-			append([]string{"/usr/bin/clang"}, linkArgs...),
-			append([]string{"/opt/homebrew/bin/clang"}, linkArgs...),
-			append([]string{"gcc"}, linkArgs...),
+		clangCommands = [][]string{
+			append([]string{"clang"}, linkArgs...),                   // System clang
+			append([]string{"/usr/bin/clang"}, linkArgs...),          // System path clang
+			append([]string{"/opt/homebrew/bin/clang"}, linkArgs...), // Homebrew clang
+			append([]string{"gcc"}, linkArgs...),                     // Fallback to gcc
+		}
+	} else {
+		clangCommands = [][]string{
+			{"clang", "-o", outputPath, objFile},                   // System clang
+			{"/usr/bin/clang", "-o", outputPath, objFile},          // System path clang
+			{"/opt/homebrew/bin/clang", "-o", outputPath, objFile}, // Homebrew clang
+			{"gcc", "-o", outputPath, objFile},                     // Fallback to gcc
 		}
 	}
 
@@ -240,7 +245,6 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 		lastErr = fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with %s: %w\nOutput: %s",
 			cmd[0], err, string(linkOutput))
 	}
-}
 
 	return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with any available compiler: %w", lastErr)
 }

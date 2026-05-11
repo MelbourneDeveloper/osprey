@@ -125,23 +125,29 @@ func collectLibraryFlags(linkArgs []string) map[string]bool {
 		}
 	}
 
-	if !hasHTTPLib {
+	return flags
+}
+
+func checkRequiredLibraries(t *testing.T, libFlags map[string]bool) {
+	t.Helper()
+
+	if !libFlags["http"] {
 		t.Fatal("Missing HTTP runtime library")
 	}
 
-	if !hasFiberLib {
+	if !libFlags["fiber"] {
 		t.Fatal("Missing fiber runtime library")
 	}
 
-	if !hasSSL {
+	if !libFlags["ssl"] {
 		t.Fatal("Missing -lssl")
 	}
 
-	if !hasCrypto {
+	if !libFlags["crypto"] {
 		t.Fatal("Missing -lcrypto")
 	}
 
-	if !hasPthread {
+	if !libFlags["pthread"] {
 		t.Fatal("Missing -lpthread")
 	}
 }

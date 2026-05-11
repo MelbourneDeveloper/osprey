@@ -2,7 +2,9 @@ package ast
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/antlr4-go/antlr/v4"
 	"github.com/christianfindlay/osprey/parser"
 )
 
@@ -46,11 +48,12 @@ func (b *Builder) buildAssignStmt(ctx parser.IAssignStmtContext) *AssignmentStat
 	}
 }
 
-func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
-	name := ctx.ID().GetText()
+func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) Statement {
+	allIDs := ctx.AllID()
+	params := b.buildParameterList(ctx.ParamList())
 
-	// Check if this is a plugin function (has 2 IDs and pluginContent rule)
-	if len(allIDs) == 2 && ctx.PluginContent() != nil {
+	// Plugin declarations start with two IDs: plugin name and function name.
+	if ctx.PluginContent() != nil && len(allIDs) >= 2 {
 		pluginName := allIDs[0].GetText()
 		functionName := allIDs[1].GetText()
 		return b.buildPluginFunctionDeclaration(ctx, pluginName, functionName, params)
@@ -106,16 +109,7 @@ func (b *Builder) buildPluginFunctionDeclaration(
 	// Get the plugin content from the pluginContent rule (excluding the semicolon)
 	var pluginContent string
 	if ctx.PluginContent() != nil {
-		// Get the text from the pluginContent rule
-		fullText := ctx.PluginContent().GetText()
-		// Remove the trailing semicolon
-		if strings.HasSuffix(fullText, ";") {
-			pluginContent = strings.TrimSuffix(fullText, ";")
-		} else {
-			pluginContent = fullText
-		}
-		// Trim any leading/trailing whitespace
-		pluginContent = strings.TrimSpace(pluginContent)
+		pluginContent = strings.TrimSpace(b.rawText(ctx.PluginContent()))
 	}
 
 	return &PluginFunctionDeclaration{
@@ -126,6 +120,19 @@ func (b *Builder) buildPluginFunctionDeclaration(
 		IsTypeGeneration: isTypeGeneration,
 		PluginContent:    pluginContent,
 	}
+}
+
+func (b *Builder) rawText(ctx antlr.ParserRuleContext) string {
+	if ctx == nil || ctx.GetStart() == nil || ctx.GetStop() == nil {
+		return ""
+	}
+
+	stream := ctx.GetStart().GetInputStream()
+	if stream == nil {
+		return ctx.GetText()
+	}
+
+	return stream.GetText(ctx.GetStart().GetStart(), ctx.GetStop().GetStop())
 }
 
 func (b *Builder) buildRegularFunctionDeclaration(

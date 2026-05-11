@@ -429,8 +429,6 @@ func (g *LLVMGenerator) generateTypedArgumentExpression(
 			}
 		}
 	}
-	return nil
-}
 
 	// For non-boolean literals or when type is not i1, use the polymorphic function handling
 	val, err := g.generateArgumentExpression(expr, argIndex, callExpr)

@@ -56,6 +56,12 @@ func (s *BaseospreyListener) EnterFnDecl(ctx *FnDeclContext) {}
 // ExitFnDecl is called when production fnDecl is exited.
 func (s *BaseospreyListener) ExitFnDecl(ctx *FnDeclContext) {}
 
+// EnterPluginReturnType is called when production pluginReturnType is entered.
+func (s *BaseospreyListener) EnterPluginReturnType(ctx *PluginReturnTypeContext) {}
+
+// ExitPluginReturnType is called when production pluginReturnType is exited.
+func (s *BaseospreyListener) ExitPluginReturnType(ctx *PluginReturnTypeContext) {}
+
 // EnterPluginContent is called when production pluginContent is entered.
 func (s *BaseospreyListener) EnterPluginContent(ctx *PluginContentContext) {}
 
@@ -67,12 +73,6 @@ func (s *BaseospreyListener) EnterPluginToken(ctx *PluginTokenContext) {}
 
 // ExitPluginToken is called when production pluginToken is exited.
 func (s *BaseospreyListener) ExitPluginToken(ctx *PluginTokenContext) {}
-
-// EnterPluginReturnType is called when production pluginReturnType is entered.
-func (s *BaseospreyListener) EnterPluginReturnType(ctx *PluginReturnTypeContext) {}
-
-// ExitPluginReturnType is called when production pluginReturnType is exited.
-func (s *BaseospreyListener) ExitPluginReturnType(ctx *PluginReturnTypeContext) {}
 
 // EnterExternDecl is called when production externDecl is entered.
 func (s *BaseospreyListener) EnterExternDecl(ctx *ExternDeclContext) {}

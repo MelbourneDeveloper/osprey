@@ -117,7 +117,6 @@ func (g *LLVMGenerator) generatePluginFunctionDeclaration(pluginDecl *ast.Plugin
 	// Create the plugin function
 	pluginFunc := g.module.NewFunc(pluginDecl.FunctionName, returnType, params...)
 	g.functions[pluginDecl.FunctionName] = pluginFunc
-	g.functionReturnTypes[pluginDecl.FunctionName] = TypeString
 	g.functionParameters[pluginDecl.FunctionName] = paramNames
 
 	// Save current builder context (might be nil during first pass)

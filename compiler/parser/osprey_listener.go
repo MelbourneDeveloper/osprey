@@ -25,14 +25,14 @@ type ospreyListener interface {
 	// EnterFnDecl is called when entering the fnDecl production.
 	EnterFnDecl(c *FnDeclContext)
 
+	// EnterPluginReturnType is called when entering the pluginReturnType production.
+	EnterPluginReturnType(c *PluginReturnTypeContext)
+
 	// EnterPluginContent is called when entering the pluginContent production.
 	EnterPluginContent(c *PluginContentContext)
 
 	// EnterPluginToken is called when entering the pluginToken production.
 	EnterPluginToken(c *PluginTokenContext)
-
-	// EnterPluginReturnType is called when entering the pluginReturnType production.
-	EnterPluginReturnType(c *PluginReturnTypeContext)
 
 	// EnterExternDecl is called when entering the externDecl production.
 	EnterExternDecl(c *ExternDeclContext)
@@ -250,14 +250,14 @@ type ospreyListener interface {
 	// ExitFnDecl is called when exiting the fnDecl production.
 	ExitFnDecl(c *FnDeclContext)
 
+	// ExitPluginReturnType is called when exiting the pluginReturnType production.
+	ExitPluginReturnType(c *PluginReturnTypeContext)
+
 	// ExitPluginContent is called when exiting the pluginContent production.
 	ExitPluginContent(c *PluginContentContext)
 
 	// ExitPluginToken is called when exiting the pluginToken production.
 	ExitPluginToken(c *PluginTokenContext)
-
-	// ExitPluginReturnType is called when exiting the pluginReturnType production.
-	ExitPluginReturnType(c *PluginReturnTypeContext)
 
 	// ExitExternDecl is called when exiting the externDecl production.
 	ExitExternDecl(c *ExternDeclContext)

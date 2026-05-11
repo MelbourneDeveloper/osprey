@@ -2,6 +2,7 @@
 package plugins
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,12 +82,10 @@ func (ps *PluginSystem) ProcessPluginFunction(
 	filePath string,
 	lineNumber int,
 ) (*PluginResponse, error) {
-	// Find plugin executable
-	pluginExe := filepath.Join(ps.pluginDir, pluginFn.PluginName, fmt.Sprintf("osprey-%s-plugin", pluginFn.PluginName))
-
-	// Check if plugin exists
-	if _, err := os.Stat(pluginExe); os.IsNotExist(err) {
-		return nil, fmt.Errorf("%w: plugin '%s' not found at %s", ErrPluginNotFound, pluginFn.PluginName, pluginExe)
+	pluginPath := filepath.Join(ps.pluginDir, pluginFn.PluginName)
+	_, err := os.Stat(pluginPath)
+	if os.IsNotExist(err) {
+		return nil, fmt.Errorf("%w: plugin '%s' not found at %s", ErrPluginNotFound, pluginFn.PluginName, pluginPath)
 	}
 
 	// Convert parameters to ParameterInfo
@@ -113,7 +112,7 @@ func (ps *PluginSystem) ProcessPluginFunction(
 	}
 
 	// Execute plugin
-	response, err := ps.executePlugin(pluginExe, request)
+	response, err := ps.executePlugin(pluginFn.PluginName, request)
 	if err != nil {
 		return nil, fmt.Errorf("plugin execution failed: %w", err)
 	}
@@ -122,15 +121,17 @@ func (ps *PluginSystem) ProcessPluginFunction(
 }
 
 // executePlugin executes the plugin with the given request
-func (ps *PluginSystem) executePlugin(pluginExe string, request PluginRequest) (*PluginResponse, error) {
+func (ps *PluginSystem) executePlugin(pluginName string, request PluginRequest) (*PluginResponse, error) {
 	// Convert request to JSON
 	requestJSON, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Execute plugin
-	cmd := exec.Command(pluginExe)
+	cmd, err := ps.pluginCommand(pluginName)
+	if err != nil {
+		return nil, err
+	}
 
 	// Write request to stdin
 	stdin, err := cmd.StdinPipe()
@@ -143,25 +144,31 @@ func (ps *PluginSystem) executePlugin(pluginExe string, request PluginRequest) (
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	if err != nil {
 		return nil, fmt.Errorf("failed to start plugin: %w", err)
 	}
 
 	// Send request
-	if _, err := stdin.Write(requestJSON); err != nil {
+	_, err = stdin.Write(requestJSON)
+	if err != nil {
 		return nil, fmt.Errorf("failed to write request to plugin: %w", err)
 	}
-	if err := stdin.Close(); err != nil {
+
+	err = stdin.Close()
+	if err != nil {
 		return nil, fmt.Errorf("failed to close stdin: %w", err)
 	}
 
 	// Read response
 	var response PluginResponse
-	if err := json.NewDecoder(stdout).Decode(&response); err != nil {
+	err = json.NewDecoder(stdout).Decode(&response)
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode plugin response: %w", err)
 	}
 
-	if err := cmd.Wait(); err != nil {
+	err = cmd.Wait()
+	if err != nil {
 		return nil, fmt.Errorf("plugin execution error: %w", err)
 	}
 
@@ -170,6 +177,31 @@ func (ps *PluginSystem) executePlugin(pluginExe string, request PluginRequest) (
 	}
 
 	return &response, nil
+}
+
+func (ps *PluginSystem) pluginCommand(pluginName string) (*exec.Cmd, error) {
+	pluginPath := filepath.Join(ps.pluginDir, pluginName)
+	pluginExe := filepath.Join(pluginPath, fmt.Sprintf("osprey-%s-plugin", pluginName))
+
+	_, err := os.Stat(pluginExe)
+	if err == nil {
+		return exec.CommandContext(context.Background(), pluginExe), nil
+	}
+
+	_, err = os.Stat(filepath.Join(pluginPath, "go.mod"))
+	if err == nil {
+		cmd := exec.CommandContext(context.Background(), "go", "run", ".")
+		cmd.Dir = pluginPath
+
+		return cmd, nil
+	}
+
+	return nil, fmt.Errorf(
+		"%w: plugin '%s' has no executable or Go source at %s",
+		ErrPluginNotFound,
+		pluginName,
+		pluginPath,
+	)
 }
 
 // getPluginContext returns context information for the plugin

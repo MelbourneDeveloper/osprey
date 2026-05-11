@@ -113,12 +113,7 @@ func (g *LLVMGenerator) generateChannelOrUnsupportedExpression(expr ast.Expressi
 
 // generateUnsupportedExpression handles unsupported expression types.
 func (g *LLVMGenerator) generateUnsupportedExpression(expr ast.Expression) (value.Value, error) {
-	switch e := expr.(type) {
-	case *ast.LoopExpression:
-		return g.generateLoopExpression(e)
-	default:
-		return nil, WrapUnsupportedExpression(expr)
-	}
+	return nil, WrapUnsupportedExpression(expr)
 }
 
 // generateLiteralExpression handles all literal types.

@@ -59,6 +59,7 @@ compiler/bin/
 compiler/lib/
 compiler/outputs/
 compiler/internal/codegen/bin/
+compiler/plugins/*/osprey-*-plugin
 *.exe
 *.exe~
 *.dll

@@ -2,6 +2,7 @@ package integration
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -229,14 +230,7 @@ func validateSuccessResponseDetails(t *testing.T, tc struct {
 func validateImports(t *testing.T, response *plugins.PluginResponse) {
 	expectedImports := []string{"std.database", "std.sql", "std.fiber"}
 	for _, expectedImport := range expectedImports {
-		found := false
-		for _, actualImport := range response.GeneratedCode.Imports {
-			if actualImport == expectedImport {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(response.GeneratedCode.Imports, expectedImport) {
 			t.Errorf("Missing expected import: %s", expectedImport)
 		}
 	}
