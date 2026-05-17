@@ -1,15 +1,6 @@
 # Security and Sandboxing
 
-- [Security Flags](#security-flags)
-- [Security Policies](#security-policies)
-- [Blocked Functions by Category](#blocked-functions-by-category)
-- [Function Availability](#function-availability)
-- [Programming Best Practices](#programming-best-practices)
-- [Implementation Details](#implementation-details)
-
-## Security and Sandboxing
-
-The Osprey compiler includes built-in security controls to restrict access to potentially dangerous functionality like network operations and file system access. This is essential for safe code execution in environments like web compilers where untrusted code may be executed.
+The compiler can disable categories of built-in functions at compile time. Restricted functions are not lowered into the program at all — calls to them produce "undefined function" compile errors. There is no runtime overhead.
 
 ## Security Flags
 
@@ -47,18 +38,6 @@ osprey program.osp --no-http --no-websocket --run
 osprey program.osp --no-fs --llvm
 ```
 
-## Security Policies
-
-#### Default Security (Permissive)
-By default, all operations are allowed for backward compatibility and normal development use.
-
-#### Sandbox Security (Restrictive)
-When `--sandbox` is used, all potentially dangerous functions are unavailable. This is recommended for:
-- Web-based code execution
-- Untrusted code evaluation
-- Educational environments
-- Code review systems
-
 ## Blocked Functions by Category
 
 #### HTTP Functions
@@ -93,82 +72,13 @@ When file system access is disabled (`--no-fs` or `--sandbox`), these functions 
 - `createDirectory` - Create directory
 - `listDirectory` - List directory contents
 
-## Function Availability
+## Compiler Output
 
-In different security modes, certain functions are simply not available in the language:
+When restrictions are active the compiler prints a summary line:
 
-**Sandbox Mode**: Only safe functions like `print`, `toString`, `range`, etc. are available. Dangerous functions like `httpCreateServer` or `websocketConnect` result in "undefined function" compile errors.
-
-**Partial Restrictions**: When specific categories are disabled (e.g., `--no-http`), those functions are unavailable while others remain accessible.
-
-**Default Mode**: All functions are available.
-- A human-readable explanation
-
-## Programming Best Practices
-
-#### For Safe Code
-Write code that doesn't use security-sensitive functions:
-```osprey
-// Safe operations - work in all security modes
-let x = 42
-let y = 24
-let sum = x + y
-print("Sum: ")
-print(sum)
 ```
-
-#### For Network Code
-When writing network code, be aware that it may be restricted:
-```osprey
-// This will fail in sandbox mode or with --no-http
-let serverID = httpCreateServer(port: 8080, address: "127.0.0.1")
-```
-
-## Implementation Details
-
-#### Security Configuration
-Security settings are configured at compilation time and cannot be bypassed by the compiled program. The security checks happen during the LLVM IR generation phase, preventing security-sensitive functions from being included in the generated code.
-
-#### Performance Impact
-Security checks add minimal overhead during compilation and no runtime overhead, as restricted functions are simply not compiled into the final program.
-
-#### Backward Compatibility
-All existing code continues to work with default settings. Security restrictions are opt-in and don't affect normal development workflows.
-
-#### Integration with Web Compiler
-The security features are designed specifically for web compiler integration:
-
-```javascript
-// Example web compiler usage
-const result = await compileOsprey(sourceCode, {
-    mode: 'sandbox',  // Enable sandbox mode
-    outputFormat: 'llvm'
-});
-```
-
-#### Security Summary
-When using security restrictions, the compiler will display a security summary:
-
-```bash
-# Sandbox mode
 Security: SANDBOX MODE - All risky operations disabled
-
-# Partial restrictions
 Security: Allowed=[FileRead,FileWrite,FFI] Blocked=[HTTP,WebSocket]
 ```
 
----
-
-## Summary
-
-Osprey is a modern functional programming language with:
-
-- **Type Safety**: No runtime panics, all errors handled explicitly via Result types
-- **Named Arguments**: Multi-parameter functions require named arguments for clarity
-- **Functional Programming**: Powerful iterator functions with pipe operator
-- **Lightweight Fibers**: Zero-cost concurrency with Rust-like async/await
-- **Fiber-Isolated Modules**: No global state, each fiber gets its own module instances
-- **Rust Interoperability**: Seamless integration with Rust libraries
-- **Memory Safety**: No shared mutable state between fibers
-
-**Key Innovation**: The fiber-isolated module system eliminates data races by design while maintaining clean encapsulation through accessor patterns.
+Restrictions cannot be bypassed by the compiled program; the relevant runtime functions are never linked in.

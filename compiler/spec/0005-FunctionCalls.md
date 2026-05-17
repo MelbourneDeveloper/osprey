@@ -41,21 +41,10 @@ let sum = add(10, y: 20)  // Compilation error
 let result = multiply(5, b: 3)  // Compilation error
 ```
 
-## Compilation Rules
+## Rules
 
-1. **Zero parameters**: Called with empty parentheses `()`
-2. **Single parameter**: May use positional or named argument
-3. **Multiple parameters**: All arguments must be named
-4. **Argument order**: Named arguments are reordered to match parameter declaration order during compilation
+1. Zero parameters: empty parentheses, `f()`.
+2. One parameter: positional or named.
+3. Two or more parameters: every argument must be named. Mixing positional and named arguments is a compilation error.
 
-## Rationale
-
-Named arguments improve readability and prevent argument order errors in multi-parameter functions:
-
-```osprey
-// Clear intent with named arguments
-httpGet(clientID: client, path: "/users", headers: "")
-
-// Unclear with positional arguments (forbidden)
-httpGet(client, "/users", "")  // What does "" mean?
-```
+Argument order at the call site is independent of declaration order; the compiler reorders by name.

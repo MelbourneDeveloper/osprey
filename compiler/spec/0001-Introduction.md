@@ -1,28 +1,18 @@
 # Introduction
 
-Osprey is a functional programming language designed for safety, performance, and expressiveness.
+Osprey is a statically-typed functional language in the ML family. It compiles to native code via LLVM.
 
 ## Core Features
 
-- Named arguments for multi-parameter functions
-- Hindley-Milner type inference with strong static typing
-- Pattern matching for all conditional logic
-- Immutable-by-default with explicit mutability
-- Algebraic effects with compile-time safety
-- Result types for all error cases (no exceptions or panics)
-- Built-in HTTP/WebSocket support with streaming
-- Lightweight fiber-based concurrency
+- Hindley-Milner type inference; explicit annotations are optional.
+- Pattern matching as the only conditional construct (no `if`/`else`).
+- Immutable bindings by default; `mut` opts in to mutability.
+- Algebraic effects checked at compile time.
+- `Result<T, E>` for all fallible operations; no exceptions, panics, or null.
+- Named arguments required for functions of two or more parameters.
+- Lightweight fibers and channel-based concurrency.
+- Built-in HTTP and WebSocket support.
 
-## Design Principles
+## Status
 
-- **Safety**: Make illegal states unrepresentable through static verification
-- **Simplicity**: One idiomatic way to accomplish each task
-- **Performance**: LLVM compilation with Rust interop for performance-critical code
-- **Functional**: Referential transparency, immutable data structures, pure functions
-- **Type Safety**: Strong static typing with Hindley-Milner inference; `any` type requires explicit declaration, and accessing values on `any` requires pattern matching
-- **No Exceptions**: All error cases return Result types, enforced at compile time
-- **ML Heritage**: Syntax and semantics inspired by ML family languages
-
-## Development Status
-
-This specification is the authoritative source for Osprey syntax and behavior. The language and compiler are under active development; implementation status is noted where relevant.
+This specification is the authoritative source for Osprey syntax and behaviour. The language and compiler are under active development; implementation status is called out per chapter where it diverges from the specification.
