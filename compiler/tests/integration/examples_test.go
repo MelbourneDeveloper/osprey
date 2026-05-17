@@ -3,6 +3,7 @@ package integration
 // DO NOT EVER SKIP TESTS!!!!
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -90,7 +91,27 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 }
 
 // getExpectedOutputs returns the map of expected outputs for each test file.
+// Groups are split into helpers so this top-level function stays well within
+// maintainability-index limits.
 func getExpectedOutputs() map[string]string {
+	groups := []map[string]string{
+		getBasicExpectedOutputs(),
+		getIteratorExpectedOutputs(),
+		getBoolAndMiscExpectedOutputs(),
+		getConstraintExpectedOutputs(),
+		getWebsiteExpectedOutputs(),
+		getBlockAndProcessExpectedOutputs(),
+		getStringExpectedOutputs(),
+		getEffectsAndRustExpectedOutputs(),
+	}
+	merged := make(map[string]string)
+	for _, g := range groups {
+		maps.Copy(merged, g)
+	}
+	return merged
+}
+
+func getBasicExpectedOutputs() map[string]string {
 	return map[string]string{
 		"hello.osp": "Hello, World!\nHello from function!\n",
 		"interpolation_math.osp": "Next year you'll be 26\nLast year you were 24\n" +
@@ -125,6 +146,11 @@ func getExpectedOutputs() map[string]string {
 			"=== Calculator Complete ===\n",
 		"space_trader.osp":   getSpaceTraderExpectedOutput(),
 		"adventure_game.osp": getAdventureGameExpectedOutput(),
+	}
+}
+
+func getIteratorExpectedOutputs() map[string]string {
+	return map[string]string{
 		"basic_iterator_test.osp": "=== Basic Iterator Test ===\n" +
 			"Test 1: Simple pipe with double\n10\n\n" +
 			"Test 2: Range 1 to 5 with double function\n\n" +
@@ -170,6 +196,11 @@ func getExpectedOutputs() map[string]string {
 			"8. Chained single value operations:\n16\n" +
 			"=== Examples Complete ===\n",
 		"documentation_test.osp": "Testing documentation\n1\n2\n3\n4\n",
+	}
+}
+
+func getBoolAndMiscExpectedOutputs() map[string]string {
+	return map[string]string{
 		// Boolean examples that work with current parser
 		"comparison_test.osp": "1\n",    // Prints result of 5 > 3
 		"equality_test.osp":   "true\n", // Prints result of isEqual(5, 5)
@@ -211,7 +242,11 @@ func getExpectedOutputs() map[string]string {
 			"=== Function Composition Test Complete ===\n",
 		"minimal_test.osp": "Minimal test:\nx = 5\n",
 		"simple.osp":       "Simple test:\nx = 42\ngreeting = hello\n",
-		// Constraint validation test files
+	}
+}
+
+func getConstraintExpectedOutputs() map[string]string {
+	return map[string]string{
 		"constraint_validation_test.osp": "=== CONSTRAINT VALIDATION WITH FAILURE DETECTION ===\n" +
 			"Test 1: Valid Person construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
 			"Test 2: Invalid Person - empty name constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
@@ -275,7 +310,11 @@ func getExpectedOutputs() map[string]string {
 			"=== WHERE CONSTRAINT VALIDATION COMPLETE ===\n",
 		"proper_validation_test.osp": "Testing validation functions:\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\n",
 		"match_type_mismatch.osp":    "none\n",
-		// Website examples
+	}
+}
+
+func getWebsiteExpectedOutputs() map[string]string {
+	return map[string]string{
 		"website_hero_example.osp": "x = 42\nname = Alice\nResult: The answer!\n",
 		"website_type_safe_example.osp": "Testing functions:\nZero\nThe answer!\nSomething else\n" +
 			"5 doubled is 10\n10 squared is 100\n",
@@ -286,7 +325,11 @@ func getExpectedOutputs() map[string]string {
 		"website_functional_programming_example.osp": "100\nRange operations:\n1\n2\n3\n4\n5\n6\n7\n8\n9\n",
 		"website_fiber_isolation_example.osp": "Fiber 1 result: 1\nFiber 2 result: 2\n" +
 			"Processed 10 items\n=== Fiber Example Complete ===\n",
-		// Block statement examples
+	}
+}
+
+func getBlockAndProcessExpectedOutputs() map[string]string {
+	return map[string]string{
 		"block_statements_basic.osp": "=== Basic Block Statements Test ===\n" +
 			"Test 1 - Simple block: 0\n" +
 			"Test 2 - Block computation: 0\n" +
@@ -343,6 +386,11 @@ func getExpectedOutputs() map[string]string {
 			"Result 2: 0\n" +
 			"Fiber ID: 1\n" +
 			"=== Test Complete ===\n",
+	}
+}
+
+func getStringExpectedOutputs() map[string]string {
+	return map[string]string{
 		// Updated for [BUILTIN-STRING-*]: length/contains return raw values.
 		"result_type_workflow.osp": "=== Result Type Workflow Test ===\n\n" +
 			"Length: 5\n\nContains 'ell': true\n\nContains 'xyz': false\n\n",
@@ -417,6 +465,11 @@ func getExpectedOutputs() map[string]string {
 			"✅ commands[1] = \\\necho world\n\"\n\n✅ commands[2] = \\\necho test\n\"\n\n" +
 			"Testing out-of-bounds access:\n\n✅ Correctly caught out-of-bounds: commands[5] -> Error\n\n" +
 			"=== Array Test Complete ===\n\n",
+	}
+}
+
+func getEffectsAndRustExpectedOutputs() map[string]string {
+	return map[string]string{
 		// Effects examples
 		"algebraic_effects.osp": "Pure function result: 42\n🎉 BASIC TEST COMPLETE! 🎉",
 		// Rust integration examples
