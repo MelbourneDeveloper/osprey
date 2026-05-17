@@ -1,0 +1,58 @@
+// list_large — build large lists via recursion; verify lengths at every
+// trie growth boundary (32 → 33, 1024 → 1025).
+// Spec: 0004-TypeSystem.md#performance-type-list-perf
+print("[list_large]\n")
+
+// Build [0..target) onto l. Arithmetic in Osprey returns Result, so we
+// unwrap via nested match.
+fn build_to(l, target, i) = match i {
+    target => l
+    _ => match i + 1 {
+        Success { value } => build_to(l: listAppend(l, i), target: target, i: value)
+        Error { message } => l
+    }
+}
+
+let l30 = build_to(l: List(), target: 30, i: 0)
+print("len 30: ")
+print(listLength(l30))
+print("\n")
+
+let l32 = build_to(l: List(), target: 32, i: 0)
+print("len 32 (tail full): ")
+print(listLength(l32))
+print("\n")
+
+let l33 = build_to(l: List(), target: 33, i: 0)
+print("len 33 (first push to tree): ")
+print(listLength(l33))
+print("\n")
+
+let l100 = build_to(l: List(), target: 100, i: 0)
+print("len 100: ")
+print(listLength(l100))
+print("\n")
+
+let l1024 = build_to(l: List(), target: 1024, i: 0)
+print("len 1024 (level-1 capacity): ")
+print(listLength(l1024))
+print("\n")
+
+let l1025 = build_to(l: List(), target: 1025, i: 0)
+print("len 1025 (forces level-2): ")
+print(listLength(l1025))
+print("\n")
+
+// Reverse a 100-element list.
+let r100 = listReverse(l100)
+print("reverse(100) len: ")
+print(listLength(r100))
+print("\n")
+
+// Concat two 100-element lists.
+let c200 = l100 + l100
+print("100+100 len: ")
+print(listLength(c200))
+print("\n")
+
+print("[list_large done]\n")

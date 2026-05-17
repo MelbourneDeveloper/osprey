@@ -218,7 +218,8 @@ c-lint:
 		-Winline -Wdisabled-optimization \
 		-std=c11 -D_GNU_SOURCE -fsyntax-only \
 		system_runtime.c fiber_runtime.c test_system_runtime.c fiber_runtime_tests.c \
-		list_runtime.c map_runtime.c map_runtime_hamt.c collection_tests.c
+		list_runtime.c map_runtime.c map_runtime_hamt.c collection_tests.c list_tests.c map_tests.c \
+		string_runtime.c string_runtime_list.c string_runtime_tests.c
 	@echo "✅ No C lint errors found"
 
 # C TESTS - Vanilla C Tests with standard assert() - WARNINGS ARE ERRORS!!!
@@ -233,11 +234,15 @@ c-test:
 	@cd runtime && echo "🚀 Running fiber runtime tests..."
 	@cd runtime && ./test_fiber_runtime
 	@cd runtime && echo "📦 Compiling collection runtime tests..."
-	@cd runtime && clang -o test_collection collection_tests.c list_runtime.c map_runtime.c map_runtime_hamt.c -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
+	@cd runtime && clang -o test_collection collection_tests.c list_tests.c map_tests.c list_runtime.c map_runtime.c map_runtime_hamt.c -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
 	@cd runtime && echo "🚀 Running collection runtime tests..."
 	@cd runtime && ./test_collection
+	@cd runtime && echo "📦 Compiling string runtime tests..."
+	@cd runtime && clang -o test_string_runtime string_runtime_tests.c string_runtime.c string_runtime_list.c -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
+	@cd runtime && echo "🚀 Running string runtime tests..."
+	@cd runtime && ./test_string_runtime
 	@cd runtime && echo "🧹 Cleaning up test executables..."
-	@cd runtime && rm -f test_system_runtime test_fiber_runtime test_collection
+	@cd runtime && rm -f test_system_runtime test_fiber_runtime test_collection test_string_runtime
 	@echo "✅ ALL C RUNTIME TESTS PASSED!"
 
 # Regenerate parser from grammar (requires ANTLR)

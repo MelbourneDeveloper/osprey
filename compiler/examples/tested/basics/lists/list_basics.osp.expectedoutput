@@ -1,0 +1,46 @@
+[list_basics]
+
+PASS empty length=
+0
+
+
+PASS 3 elements length=
+3
+
+
+PASS b1 length=
+1
+
+PASS b2 length=
+2
+
+PASS b3 length=
+3
+
+
+PASS reverse length=
+3
+
+
+PASS reverse-of-reverse length=
+3
+
+
+PASS concat a+a length=
+6
+
+
+PASS concat a+empty length=
+3
+
+
+PASS concat empty+a length=
+3
+
+
+PASS a+a via +operator length=
+6
+
+
+[list_basics done]
+
