@@ -161,6 +161,34 @@ Grammar and AST are already in place ([compiler/osprey.g4:154-155](../../compile
 - [x] B4.1 `ufcs_string.osp` (pipe == UFCS == direct)
 - [x] B4.2 `failscompilation/ufcs_field_collision.ospo`
 
+### Test coverage
+
+- [x] **C unit tests with hard assertions** — [`runtime/string_runtime_tests.c`](../../compiler/runtime/string_runtime_tests.c)
+  exercises every `osp_string_*` helper. Each function covers the happy
+  path, every documented error case, NULL inputs, and boundary values
+  (empty strings, n=0, n<0, n>len, prefix/suffix longer than s, INT64_MIN,
+  INT64_MAX, overflow). Compiled with `-Werror -Wall -Wextra -ftrapv
+  -fsanitize=signed-integer-overflow` so any signed-overflow bug aborts
+  the test before the linker. Wired into `compiler/Makefile`'s `c-lint`
+  (under the full pedantic flag stack) and `c-test`. 19 test groups, all
+  green.
+- [x] **E2E edge-case proof** — [`examples/tested/basics/strings/string_edge_cases.osp`](../../compiler/examples/tested/basics/strings/string_edge_cases.osp)
+  runs every error path and boundary through the actual compiled
+  pipeline (Osprey source → LLVM IR → linked binary → stdout). The
+  integration runner compares the full stdout to the expected output
+  verbatim — any deviation in any builtin causes a mismatch failure.
+  Catches `INT64_MIN` parsing as well as the empty-needle/negative-n/
+  empty-fill/out-of-range/inverted-range/overflow rejections.
+- [x] **E2E happy-path proof** — [`string_pipeline.osp`](../../compiler/examples/tested/basics/strings/string_pipeline.osp),
+  [`ufcs_string.osp`](../../compiler/examples/tested/basics/strings/ufcs_string.osp),
+  [`route_match.osp`](../../compiler/examples/tested/basics/strings/route_match.osp),
+  [`string_utils_combined.osp`](../../compiler/examples/tested/basics/strings/string_utils_combined.osp),
+  and [`result_type_workflow.osp`](../../compiler/examples/tested/basics/types/result_type_workflow.osp)
+  all exact-match-asserted in `tests/integration/examples_test.go`.
+- [x] **Negative compilation test** —
+  [`examples/failscompilation/ufcs_field_collision.ospo`](../../compiler/examples/failscompilation/ufcs_field_collision.ospo)
+  has a `.expectedoutput` file enforcing the exact error message.
+
 ### Drive-by fixes uncovered during implementation
 These weren't on the original plan but were blockers found while
 implementing the above. Documenting here for traceability.
@@ -186,6 +214,16 @@ implementing the above. Documenting here for traceability.
   return type but never produced an Error — bad indices silently returned
   garbage. Rewritten to delegate bounds-checking to the C helper
   `osp_string_substring`, which returns NULL → wrapped as Error.
+
+- [x] **`parseInt` of `INT64_MIN` no longer traps under `-ftrapv`.**
+  Initial `osp_parse_int_strict` accumulated in `int64_t` and would
+  overflow on `"-9223372036854775808"` (magnitude is INT64_MAX+1) before
+  the negation could rescue it — the trap fired inside the linked
+  runtime even though the standalone C test (without `-ftrapv`) passed.
+  Rewrote the accumulator in `uint64_t`, special-cased INT64_MIN, and
+  added `-ftrapv -fsanitize=signed-integer-overflow` to the C test
+  compile so this category of bug surfaces during `make c-test` instead
+  of during a runtime crash.
 
 ### Spec divergences from this implementation
 

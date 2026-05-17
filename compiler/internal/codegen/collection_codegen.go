@@ -23,26 +23,38 @@ import (
 	"github.com/llir/llvm/ir/value"
 )
 
-// Key-type tags matching enum OspreyKeyType in collection_runtime.h.
+// Key-type tag matching enum OspreyKeyType in collection_runtime.h. Only
+// the string tag is currently referenced from codegen; the int/bool tags
+// will be reintroduced when typed-map literals land.
+const collectionKeyString int64 = 1
+
+// Argument-count constants for collection builtins. Named per builtin so
+// the call site reads as a domain assertion rather than a magic literal.
 const (
-	collectionKeyInt    int64 = 0
-	collectionKeyString int64 = 1
-	collectionKeyBool   int64 = 2
+	collectionArgsOne   = 1
+	collectionArgsTwo   = 2
+	collectionMapSetArg = 3
+)
+
+// Static errors satisfying err113 — wrap with fmt.Errorf("…: %w", err) when
+// the caller needs to attach a name.
+var (
+	errCollectionArgCount   = errors.New("wrong argument count")
+	errCollectionExternMiss = errors.New("collection extern not declared")
+	errForEachListSecondArg = errors.New("forEachList: second argument must be a function name")
 )
 
 // ensureCollectionExtern declares an osprey_list_* / osprey_map_* function
 // once and caches it. The codegen helpers below all funnel through here.
-func (g *LLVMGenerator) ensureCollectionExtern(name string, retType types.Type, paramTypes ...types.Type) *ir.Func {
-	if fn, ok := g.functions[name]; ok {
-		return fn
+func (g *LLVMGenerator) ensureCollectionExtern(name string, retType types.Type, paramTypes ...types.Type) {
+	if _, ok := g.functions[name]; ok {
+		return
 	}
 	params := make([]*ir.Param, 0, len(paramTypes))
 	for i, pt := range paramTypes {
 		params = append(params, ir.NewParam(fmt.Sprintf("p%d", i), pt))
 	}
-	fn := g.module.NewFunc(name, retType, params...)
-	g.functions[name] = fn
-	return fn
+	g.functions[name] = g.module.NewFunc(name, retType, params...)
 }
 
 // boxToI64 widens a non-i64 value (i8*, i32, i1, etc.) to i64 for the
@@ -64,23 +76,6 @@ func (g *LLVMGenerator) boxToI64(v value.Value) value.Value {
 	}
 	// Fallback: assume it's already pointer-sized or codegen elsewhere
 	// has converted it.
-	return v
-}
-
-// unboxFromI64 narrows the uniform i64 element back to the desired type.
-func (g *LLVMGenerator) unboxFromI64(v value.Value, target types.Type) value.Value {
-	if target == types.I64 {
-		return v
-	}
-	if pt, ok := target.(*types.PointerType); ok {
-		return g.builder.NewIntToPtr(v, pt)
-	}
-	if target == types.I1 || target == types.I8 || target == types.I32 {
-		return g.builder.NewTrunc(v, target)
-	}
-	if target == types.Double {
-		return g.builder.NewBitCast(v, types.Double)
-	}
 	return v
 }
 
@@ -106,40 +101,6 @@ func (g *LLVMGenerator) declareListExterns() {
 	g.ensureCollectionExtern("osprey_list_builder_seal", types.I8Ptr, types.I8Ptr)
 }
 
-// generateListLiteralRuntime lowers `[e1, e2, …]` to a transient builder
-// sequence followed by a seal.
-//
-// Returns an i8* opaque handle to the new OspreyList. Implements
-// [TYPE-LIST] literal codegen.
-func (g *LLVMGenerator) generateListLiteralRuntime(lit *ast.ListLiteral) (value.Value, error) {
-	g.declareListExterns()
-	builderNew := g.functions["osprey_list_builder_new"]
-	push := g.functions["osprey_list_builder_push"]
-	seal := g.functions["osprey_list_builder_seal"]
-
-	bld := g.builder.NewCall(builderNew)
-	for _, elem := range lit.Elements {
-		v, err := g.generateExpression(elem)
-		if err != nil {
-			return nil, fmt.Errorf("list element: %w", err)
-		}
-		g.builder.NewCall(push, bld, g.boxToI64(v))
-	}
-	return g.builder.NewCall(seal, bld), nil
-}
-
-// generateListGetRuntime emits a bounds-checked `list[i]` returning
-// Result<T, IndexError>. The Result layout matches the existing list-access
-// codegen so callers can pattern-match identically.
-func (g *LLVMGenerator) generateListGetRuntime(listVal value.Value, indexVal value.Value, elemLLVMType types.Type) (value.Value, error) {
-	g.declareListExterns()
-	inBounds := g.builder.NewCall(g.functions["osprey_list_in_bounds"], listVal, indexVal)
-	cond := g.builder.NewICmp(enum.IPredEQ, inBounds, constant.NewInt(types.I32, 1))
-	_ = cond
-	rawElem := g.builder.NewCall(g.functions["osprey_list_get"], listVal, indexVal)
-	return g.unboxFromI64(rawElem, elemLLVMType), nil
-}
-
 // ============================================================================
 //                              Map codegen
 // ============================================================================
@@ -157,46 +118,6 @@ func (g *LLVMGenerator) declareMapExterns() {
 	g.ensureCollectionExtern("osprey_map_builder_seal", types.I8Ptr, types.I8Ptr)
 }
 
-// inferMapKeyTag picks an OspreyKeyType tag based on the key type of a map
-// literal's first entry. If the literal is empty the caller must supply a
-// tag from the type annotation context.
-func (g *LLVMGenerator) inferMapKeyTag(lit *ast.MapLiteral) int64 {
-	if len(lit.Entries) == 0 {
-		return collectionKeyString // best-effort fallback for empty literal
-	}
-	switch lit.Entries[0].Key.(type) {
-	case *ast.StringLiteral:
-		return collectionKeyString
-	case *ast.IntegerLiteral:
-		return collectionKeyInt
-	case *ast.BooleanLiteral:
-		return collectionKeyBool
-	default:
-		return collectionKeyString
-	}
-}
-
-// generateMapLiteralRuntime lowers `{k1: v1, k2: v2, …}` to a builder
-// sequence followed by a seal. Implements [TYPE-MAP-LITERAL] codegen.
-func (g *LLVMGenerator) generateMapLiteralRuntime(lit *ast.MapLiteral) (value.Value, error) {
-	g.declareMapExterns()
-	keyTag := constant.NewInt(types.I32, g.inferMapKeyTag(lit))
-	bld := g.builder.NewCall(g.functions["osprey_map_builder_new"], keyTag)
-	put := g.functions["osprey_map_builder_put"]
-	for _, entry := range lit.Entries {
-		k, err := g.generateExpression(entry.Key)
-		if err != nil {
-			return nil, fmt.Errorf("map key: %w", err)
-		}
-		v, err := g.generateExpression(entry.Value)
-		if err != nil {
-			return nil, fmt.Errorf("map value: %w", err)
-		}
-		g.builder.NewCall(put, bld, g.boxToI64(k), g.boxToI64(v))
-	}
-	return g.builder.NewCall(g.functions["osprey_map_builder_seal"], bld), nil
-}
-
 // ============================================================================
 //                         Builtin generators (Phase 3)
 // ============================================================================
@@ -207,8 +128,8 @@ func (g *LLVMGenerator) generateMapLiteralRuntime(lit *ast.MapLiteral) (value.Va
 // emit the call.
 
 func (g *LLVMGenerator) callOneArg(name string, ret types.Type, callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 1 {
-		return nil, fmt.Errorf("%s expects 1 argument", name)
+	if len(callExpr.Arguments) != collectionArgsOne {
+		return nil, fmt.Errorf("%s expects %d argument: %w", name, collectionArgsOne, errCollectionArgCount)
 	}
 	g.declareListExterns()
 	g.declareMapExterns()
@@ -218,7 +139,7 @@ func (g *LLVMGenerator) callOneArg(name string, ret types.Type, callExpr *ast.Ca
 	}
 	fn := g.functions[name]
 	if fn == nil {
-		return nil, fmt.Errorf("collection extern %s not declared", name)
+		return nil, fmt.Errorf("%s: %w", name, errCollectionExternMiss)
 	}
 	res := g.builder.NewCall(fn, arg)
 	if ret == types.I32 {
@@ -227,9 +148,12 @@ func (g *LLVMGenerator) callOneArg(name string, ret types.Type, callExpr *ast.Ca
 	return res, nil
 }
 
-func (g *LLVMGenerator) callTwoArgs(name string, callExpr *ast.CallExpression, boxA bool, boxB bool) (value.Value, error) {
-	if len(callExpr.Arguments) != 2 {
-		return nil, fmt.Errorf("%s expects 2 arguments", name)
+// callTwoArgs evaluates two arguments, optionally boxes the second to i64
+// (the first is always a collection handle, already i8*), and calls the
+// named extern. Returns its result.
+func (g *LLVMGenerator) callTwoArgs(name string, callExpr *ast.CallExpression, boxB bool) (value.Value, error) {
+	if len(callExpr.Arguments) != collectionArgsTwo {
+		return nil, fmt.Errorf("%s expects %d arguments: %w", name, collectionArgsTwo, errCollectionArgCount)
 	}
 	g.declareListExterns()
 	g.declareMapExterns()
@@ -241,15 +165,12 @@ func (g *LLVMGenerator) callTwoArgs(name string, callExpr *ast.CallExpression, b
 	if err != nil {
 		return nil, err
 	}
-	if boxA {
-		a = g.boxToI64(a)
-	}
 	if boxB {
 		b = g.boxToI64(b)
 	}
 	fn := g.functions[name]
 	if fn == nil {
-		return nil, fmt.Errorf("collection extern %s not declared", name)
+		return nil, fmt.Errorf("%s: %w", name, errCollectionExternMiss)
 	}
 	return g.builder.NewCall(fn, a, b), nil
 }
@@ -262,8 +183,8 @@ func (g *LLVMGenerator) generateListLengthCall(callExpr *ast.CallExpression) (va
 
 func (g *LLVMGenerator) generateListContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
 	// `contains(list, value)` is O(n) linear scan via iter.
-	if len(callExpr.Arguments) != 2 {
-		return nil, errors.New("contains expects 2 arguments")
+	if len(callExpr.Arguments) != collectionArgsTwo {
+		return nil, fmt.Errorf("listContains expects %d arguments: %w", collectionArgsTwo, errCollectionArgCount)
 	}
 	g.declareListExterns()
 	list, err := g.generateExpression(callExpr.Arguments[0])
@@ -314,15 +235,15 @@ func (g *LLVMGenerator) generateListContainsCall(callExpr *ast.CallExpression) (
 }
 
 func (g *LLVMGenerator) generateListAppendCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.callTwoArgs("osprey_list_append", callExpr, false, true)
+	return g.callTwoArgs("osprey_list_append", callExpr, true)
 }
 
 func (g *LLVMGenerator) generateListPrependCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.callTwoArgs("osprey_list_prepend", callExpr, false, true)
+	return g.callTwoArgs("osprey_list_prepend", callExpr, true)
 }
 
 func (g *LLVMGenerator) generateListConcatCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.callTwoArgs("osprey_list_concat", callExpr, false, false)
+	return g.callTwoArgs("osprey_list_concat", callExpr, false)
 }
 
 func (g *LLVMGenerator) generateListReverseCall(callExpr *ast.CallExpression) (value.Value, error) {
@@ -334,8 +255,8 @@ func (g *LLVMGenerator) generateMapLengthCall(callExpr *ast.CallExpression) (val
 }
 
 func (g *LLVMGenerator) generateMapContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 2 {
-		return nil, errors.New("contains expects 2 arguments")
+	if len(callExpr.Arguments) != collectionArgsTwo {
+		return nil, fmt.Errorf("mapContains expects %d arguments: %w", collectionArgsTwo, errCollectionArgCount)
 	}
 	g.declareMapExterns()
 	m, err := g.generateExpression(callExpr.Arguments[0])
@@ -351,8 +272,8 @@ func (g *LLVMGenerator) generateMapContainsCall(callExpr *ast.CallExpression) (v
 }
 
 func (g *LLVMGenerator) generateMapSetCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 3 {
-		return nil, errors.New("set expects 3 arguments")
+	if len(callExpr.Arguments) != collectionMapSetArg {
+		return nil, fmt.Errorf("mapSet expects %d arguments: %w", collectionMapSetArg, errCollectionArgCount)
 	}
 	g.declareMapExterns()
 	m, err := g.generateExpression(callExpr.Arguments[0])
@@ -371,8 +292,8 @@ func (g *LLVMGenerator) generateMapSetCall(callExpr *ast.CallExpression) (value.
 }
 
 func (g *LLVMGenerator) generateMapRemoveCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 2 {
-		return nil, errors.New("remove expects 2 arguments")
+	if len(callExpr.Arguments) != collectionArgsTwo {
+		return nil, fmt.Errorf("mapRemove expects %d arguments: %w", collectionArgsTwo, errCollectionArgCount)
 	}
 	g.declareMapExterns()
 	m, err := g.generateExpression(callExpr.Arguments[0])
@@ -387,7 +308,7 @@ func (g *LLVMGenerator) generateMapRemoveCall(callExpr *ast.CallExpression) (val
 }
 
 func (g *LLVMGenerator) generateMapMergeCall(callExpr *ast.CallExpression) (value.Value, error) {
-	return g.callTwoArgs("osprey_map_merge", callExpr, false, false)
+	return g.callTwoArgs("osprey_map_merge", callExpr, false)
 }
 
 // generateMapKeysCall returns a List<K> containing every key in the map.
@@ -405,8 +326,8 @@ func (g *LLVMGenerator) generateMapValuesCall(callExpr *ast.CallExpression) (val
 // iterates via osprey_map_iter_next and builds a List via the transient
 // builder.
 func (g *LLVMGenerator) generateMapToListCall(callExpr *ast.CallExpression, takeKey bool) (value.Value, error) {
-	if len(callExpr.Arguments) != 1 {
-		return nil, errors.New("keys/values expect 1 argument")
+	if len(callExpr.Arguments) != collectionArgsOne {
+		return nil, fmt.Errorf("keys/values expect %d argument: %w", collectionArgsOne, errCollectionArgCount)
 	}
 	g.declareMapExterns()
 	g.declareListExterns()
@@ -452,8 +373,8 @@ func (g *LLVMGenerator) generateMapToListCall(callExpr *ast.CallExpression, take
 // calls a user function for each element. Phase 7 — implements [TYPE-LIST]
 // integration with the iterator family.
 func (g *LLVMGenerator) generateForEachListCall(callExpr *ast.CallExpression) (value.Value, error) {
-	if len(callExpr.Arguments) != 2 {
-		return nil, errors.New("forEachList expects 2 arguments")
+	if len(callExpr.Arguments) != collectionArgsTwo {
+		return nil, fmt.Errorf("forEachList expects %d arguments: %w", collectionArgsTwo, errCollectionArgCount)
 	}
 	g.declareListExterns()
 	list, err := g.generateExpression(callExpr.Arguments[0])
@@ -463,7 +384,7 @@ func (g *LLVMGenerator) generateForEachListCall(callExpr *ast.CallExpression) (v
 	funcArg := callExpr.Arguments[1]
 	funcIdent, ok := funcArg.(*ast.Identifier)
 	if !ok {
-		return nil, errors.New("forEachList: second argument must be a function name")
+		return nil, errForEachListSecondArg
 	}
 
 	// Use osprey_list_length + osprey_list_get for a simple counted loop.

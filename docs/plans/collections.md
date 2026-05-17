@@ -271,10 +271,22 @@ Wire-up: 1-line addition to `NewBuiltInFunctionRegistry` in `builtin_registry.go
 | `compiler/runtime/map_runtime.c` | 175 | HAMT public API + iterator + builder |
 | `compiler/runtime/map_runtime_hamt.c` | 320 | HAMT internals: hashing, assoc, lookup, remove |
 | `compiler/runtime/map_runtime_internal.h` | 70 | Shared types for the two map TUs |
-| `compiler/runtime/collection_tests.c` | 300 | 15 unit tests (persistence, tree growth, hash collisions) |
+| `compiler/runtime/collection_tests.c` | 31 | Test entry point (calls into list_tests.c + map_tests.c) |
+| `compiler/runtime/list_tests.c` | 263 | 16 List unit tests (persistence, tree growth at 32/33/1024/1025, 10k stress, drop, reverse, builder/incremental equivalence) |
+| `compiler/runtime/map_tests.c` | 246 | 17 Map unit tests (int/string/bool keys, prefix-distinguishing strings, overwrite, remove + clear-all, merge variations, 5000 stress, iter immutability) |
 | `compiler/internal/codegen/collection_codegen.go` | 499 | LLVM-IR generators: literals, get, builtins, `forEachList`, `mapKeys`/`mapValues` |
 | `compiler/internal/codegen/collection_registry.go` | 183 | Registry entries for 13 collection builtins |
-| `compiler/examples/tested/basics/lists/persistent_collections.osp` | 95 | End-to-end smoke test |
+| `compiler/examples/tested/basics/lists/persistent_collections.osp` | 95 | End-to-end smoke test (List + Map + `+` operator + forEachList + mapKeys/Values) |
+| `compiler/examples/tested/basics/lists/list_basics.osp` | 55 | Happy-path: length, append, reverse, concat (via builtin + `+`) |
+| `compiler/examples/tested/basics/lists/list_persistence.osp` | 68 | 5-generation chains, branching, post-concat / post-reverse persistence |
+| `compiler/examples/tested/basics/lists/list_large.osp` | 87 | Crosses trie tail boundary (31 → 32 → 33), 35-element + reverse + concat |
+| `compiler/examples/tested/basics/lists/list_concat.osp` | 64 | All concat permutations + forEachList ordering proof |
+| `compiler/examples/tested/basics/lists/list_iter.osp` | 32 | forEachList: empty, small, post-concat, post-reverse |
+| `compiler/examples/tested/basics/lists/map_basics.osp` | 50 | set, contains, overwrite, persistence |
+| `compiler/examples/tested/basics/lists/map_persistence.osp` | 70 | 5-gen chain, branching, remove (+ remove-absent no-op) |
+| `compiler/examples/tested/basics/lists/map_merge.osp` | 60 | Right-biased union + every empty-edge + merge-with-self |
+| `compiler/examples/tested/basics/lists/map_iter.osp` | 35 | mapKeys / mapValues lengths under set/remove |
+| `compiler/examples/tested/basics/lists/collection_mixed.osp` | 50 | Lists and maps side-by-side, cross-mutation independence, keys-as-list |
 
 Wire-up touches: 1 line in `builtin_registry.go::initializeFunctions`; constructor bodies in `core_functions.go`; `tryCollectionPlus` helper in `expression_generation.go::generateBinaryExpression`; Makefile (4 lines added to `fiber-runtime`, `http-runtime`, `c-lint`, `c-test`).
 
