@@ -380,6 +380,25 @@ func getExpectedOutputs() map[string]string {
 			"201 created\n\n" +
 			"404 not-found\n\n" +
 			"405 method-not-allowed\n\n",
+		// Implements [BUILTIN-STRING-*] edge-case proof. Every error path
+		// and boundary the spec promises is verified by exact-string match.
+		"string_edge_cases.osp": "empty-emp=true\n\nempty-x=false\n\n" +
+			"starts-empty=true\n\nends-empty=true\n\n" +
+			"starts-long=false\n\nends-long=false\n\n" +
+			"take-neg=\"\"\n\ntake-big=\"hi\"\n\n" +
+			"drop-neg=\"hi\"\n\ndrop-big=\"\"\n\n" +
+			"trim-allws=\"\"\n\ntrim-empty=\"\"\n\n" +
+			"sub-empty=\"\"\n\nsub-full=\"hi\"\n\n" +
+			"sub-neg rejected\n\nsub-over rejected\n\nsub-inverted rejected\n\n" +
+			"idx-empty=0\n\nidx-missing rejected\n\n" +
+			"rep-empty rejected\n\nrep-shrink=\"heo\"\n\n" +
+			"rep0=\"\"\n\nrep-neg rejected\n\n" +
+			"padS-empty rejected\n\npadE-empty rejected\n\n" +
+			"padS-noop=\"hi\"\n\npadS-multi=\"aba42\"\n\n" +
+			"pf-empty rejected\n\npf-trailing rejected\n\n" +
+			"pi-overflow rejected\n\npi-min=-9223372036854775808\n\n" +
+			"pi-leading-space rejected\n\n" +
+			"=== Edge Cases Complete ===\n\n",
 		"file_io_json_workflow.osp": "=== File I/O Workflow Test ===\n" +
 			"-- Step 1: Writing to file --\n" +
 			"File written successfully!\n" +

@@ -1,0 +1,81 @@
+// map_persistence — old map versions must remain valid after every mutation.
+// Spec: 0004-TypeSystem.md#mapk-v--type-map
+print("[map_persistence]\n")
+
+let g0 = Map()
+let g1 = mapSet(g0, "k1", 1)
+let g2 = mapSet(g1, "k2", 2)
+let g3 = mapSet(g2, "k3", 3)
+let g4 = mapSet(g3, "k4", 4)
+let g5 = mapSet(g4, "k5", 5)
+
+print("len g0: ")
+print(mapLength(g0))
+print("\nlen g1: ")
+print(mapLength(g1))
+print("\nlen g2: ")
+print(mapLength(g2))
+print("\nlen g3: ")
+print(mapLength(g3))
+print("\nlen g4: ")
+print(mapLength(g4))
+print("\nlen g5: ")
+print(mapLength(g5))
+print("\n")
+
+// After g5, g2 must still have only k1+k2.
+print("g2 still has k1: ")
+print(mapContains(g2, "k1"))
+print("\ng2 still has k2: ")
+print(mapContains(g2, "k2"))
+print("\ng2 NOT have k3: ")
+print(mapContains(g2, "k3"))
+print("\ng2 NOT have k4: ")
+print(mapContains(g2, "k4"))
+print("\n")
+
+// Branching: two divergent updates from g3.
+let xa = mapSet(g3, "X", 100)
+let xb = mapSet(g3, "Y", 200)
+print("xa len: ")
+print(mapLength(xa))
+print("\nxb len: ")
+print(mapLength(xb))
+print("\nxa has X: ")
+print(mapContains(xa, "X"))
+print("\nxa has Y: ")
+print(mapContains(xa, "Y"))
+print("\nxb has X: ")
+print(mapContains(xb, "X"))
+print("\nxb has Y: ")
+print(mapContains(xb, "Y"))
+print("\n")
+
+// g3 unchanged after branching.
+print("g3 len after branching: ")
+print(mapLength(g3))
+print("\ng3 has X: ")
+print(mapContains(g3, "X"))
+print("\ng3 has Y: ")
+print(mapContains(g3, "Y"))
+print("\n")
+
+// Remove from g5 — g5 unchanged, derived new map has fewer.
+let removed = mapRemove(g5, "k3")
+print("removed len: ")
+print(mapLength(removed))
+print("\nremoved has k3: ")
+print(mapContains(removed, "k3"))
+print("\ng5 still has k3: ")
+print(mapContains(g5, "k3"))
+print("\ng5 len still: ")
+print(mapLength(g5))
+print("\n")
+
+// Remove absent key is no-op.
+let same = mapRemove(g5, "nonexistent")
+print("remove absent — same len: ")
+print(mapLength(same))
+print("\n")
+
+print("[map_persistence done]\n")

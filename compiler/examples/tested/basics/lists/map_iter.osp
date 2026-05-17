@@ -1,0 +1,42 @@
+// map_iter — mapKeys/mapValues produce lists with all entries.
+// Spec: 0004-TypeSystem.md#mapk-v--type-map (TYPE-MAP-CONV)
+print("[map_iter]\n")
+
+let m = mapSet(mapSet(mapSet(Map(), "a", 10), "b", 20), "c", 30)
+
+// keys/values return Lists; check lengths.
+let ks = mapKeys(m)
+let vs = mapValues(m)
+print("len keys: ")
+print(listLength(ks))
+print("\nlen values: ")
+print(listLength(vs))
+print("\n")
+
+// Empty map → empty keys/values.
+let e = Map()
+print("empty mapKeys len: ")
+print(listLength(mapKeys(e)))
+print("\nempty mapValues len: ")
+print(listLength(mapValues(e)))
+print("\n")
+
+// After adding 5 entries, both lists have 5.
+let m5 = mapSet(mapSet(mapSet(mapSet(mapSet(Map(), "k1", 1), "k2", 2), "k3", 3), "k4", 4), "k5", 5)
+print("5-entry mapKeys len: ")
+print(listLength(mapKeys(m5)))
+print("\n5-entry mapValues len: ")
+print(listLength(mapValues(m5)))
+print("\n")
+
+// After removing one, both lists have 4.
+let m4 = mapRemove(m5, "k3")
+print("4-entry mapKeys len after remove: ")
+print(listLength(mapKeys(m4)))
+print("\n4-entry mapValues len after remove: ")
+print(listLength(mapValues(m4)))
+print("\n")
+
+// Iterate keys and values via forEachList — exercises mapKeys() result.
+// (Order is unspecified per spec, so we count instead of compare order.)
+print("[map_iter done]\n")

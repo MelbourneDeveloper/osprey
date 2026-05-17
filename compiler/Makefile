@@ -238,7 +238,7 @@ c-test:
 	@cd runtime && echo "🚀 Running collection runtime tests..."
 	@cd runtime && ./test_collection
 	@cd runtime && echo "📦 Compiling string runtime tests..."
-	@cd runtime && clang -o test_string_runtime string_runtime_tests.c string_runtime.c string_runtime_list.c -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
+	@cd runtime && clang -o test_string_runtime string_runtime_tests.c string_runtime.c string_runtime_list.c -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra -ftrapv -fsanitize=signed-integer-overflow
 	@cd runtime && echo "🚀 Running string runtime tests..."
 	@cd runtime && ./test_string_runtime
 	@cd runtime && echo "🧹 Cleaning up test executables..."

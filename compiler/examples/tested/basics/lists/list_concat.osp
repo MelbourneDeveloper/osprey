@@ -1,0 +1,64 @@
+// list_concat — every variation of List concat, both via listConcat and `+`.
+// Spec: 0004-TypeSystem.md#listt--type-list
+print("[list_concat]\n")
+
+let e = List()
+let a = listAppend(listAppend(listAppend(List(), 1), 2), 3)
+let b = listAppend(listAppend(List(), 10), 20)
+
+// empty + empty
+print("empty + empty len: ")
+print(listLength(listConcat(e, e)))
+print("\n")
+
+// empty + a
+print("empty + a len: ")
+print(listLength(listConcat(e, a)))
+print("\n")
+
+// a + empty
+print("a + empty len: ")
+print(listLength(listConcat(a, e)))
+print("\n")
+
+// a + b (3 + 2 = 5)
+print("a + b len: ")
+print(listLength(listConcat(a, b)))
+print("\n")
+
+// b + a (also 5, but iteration order should differ)
+print("b + a len: ")
+print(listLength(listConcat(b, a)))
+print("\n")
+
+// (a + b) + a (5 + 3 = 8)
+print("(a+b) + a len: ")
+print(listLength(listConcat(listConcat(a, b), a)))
+print("\n")
+
+// Same via + operator
+print("(a+b)+a via op len: ")
+print(listLength(a + b + a))
+print("\n")
+
+// a + a (3 + 3 = 6)
+print("a + a len: ")
+print(listLength(a + a))
+print("\n")
+
+// Iterate a+b — verifies left-then-right order.
+print("forEachList(a+b):\n")
+forEachList(a + b, print)
+print("forEachList(b+a):\n")
+forEachList(b + a, print)
+
+// Original lists unaffected.
+print("a still ")
+print(listLength(a))
+print("\nb still ")
+print(listLength(b))
+print("\ne still ")
+print(listLength(e))
+print("\n")
+
+print("[list_concat done]\n")

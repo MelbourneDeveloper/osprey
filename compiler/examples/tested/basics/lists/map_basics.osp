@@ -1,0 +1,46 @@
+// map_basics — happy-path coverage for Map<K, V>.
+// Spec: 0004-TypeSystem.md#mapk-v--type-map
+print("[map_basics]\n")
+
+let e = Map()
+print("empty length: ")
+print(mapLength(e))
+print("\nempty contains nothing: ")
+print(mapContains(e, "missing"))
+print("\n")
+
+let m1 = mapSet(e, "alice", 25)
+let m2 = mapSet(m1, "bob", 30)
+let m3 = mapSet(m2, "charlie", 35)
+print("after 1 set: ")
+print(mapLength(m1))
+print("\nafter 2 sets: ")
+print(mapLength(m2))
+print("\nafter 3 sets: ")
+print(mapLength(m3))
+print("\n")
+
+print("contains alice: ")
+print(mapContains(m3, "alice"))
+print("\ncontains bob: ")
+print(mapContains(m3, "bob"))
+print("\ncontains charlie: ")
+print(mapContains(m3, "charlie"))
+print("\ncontains dave: ")
+print(mapContains(m3, "dave"))
+print("\n")
+
+// Overwrite — length stays the same.
+let m4 = mapSet(m3, "alice", 99)
+print("after overwrite, length: ")
+print(mapLength(m4))
+print("\nalice in m4: ")
+print(mapContains(m4, "alice"))
+print("\n")
+
+// Original m3 unaffected (persistence) — still length 3.
+print("m3 unchanged length: ")
+print(mapLength(m3))
+print("\n")
+
+print("[map_basics done]\n")

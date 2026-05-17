@@ -1,0 +1,82 @@
+[map_persistence]
+
+len g0: 
+0
+
+len g1: 
+1
+
+len g2: 
+2
+
+len g3: 
+3
+
+len g4: 
+4
+
+len g5: 
+5
+
+
+g2 still has k1: 
+true
+
+g2 still has k2: 
+true
+
+g2 NOT have k3: 
+false
+
+g2 NOT have k4: 
+false
+
+
+xa len: 
+4
+
+xb len: 
+4
+
+xa has X: 
+true
+
+xa has Y: 
+false
+
+xb has X: 
+false
+
+xb has Y: 
+true
+
+
+g3 len after branching: 
+3
+
+g3 has X: 
+false
+
+g3 has Y: 
+false
+
+
+removed len: 
+4
+
+removed has k3: 
+false
+
+g5 still has k3: 
+true
+
+g5 len still: 
+5
+
+
+remove absent — same len: 
+5
+
+
+[map_persistence done]
+
