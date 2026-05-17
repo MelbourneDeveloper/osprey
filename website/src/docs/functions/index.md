@@ -6,23 +6,71 @@ description: "Complete reference for all built-in functions in Osprey"
 
 All built-in functions available in Osprey.
 
+## [Channel](channel/)
+
+**Signature:** `Channel(capacity: int) -> Channel`
+
+Creates a new channel with the specified capacity.
+
+## [List](list/)
+
+**Signature:** `List() -> List<T>`
+
+Creates a new empty list.
+
+## [Map](map/)
+
+**Signature:** `Map() -> Map<K, V>`
+
+Creates a new empty map.
+
 ## [awaitProcess](awaitprocess/)
 
-**Signature:** `awaitProcess(handle: ProcessHandle) -> int`
+**Signature:** `awaitProcess(handle: int) -> int`
 
 Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes.
 
 ## [cleanupProcess](cleanupprocess/)
 
-**Signature:** `cleanupProcess(handle: ProcessHandle) -> void`
+**Signature:** `cleanupProcess(handle: int) -> Unit`
 
 Cleans up resources associated with a completed process. Should be called after awaitProcess.
 
 ## [contains](contains/)
 
-**Signature:** `contains(haystack: string, needle: string) -> bool`
+**Signature:** `contains(s: string, needle: string) -> bool`
 
-Checks if a string contains a substring.
+True if needle appears anywhere in s. Empty needle returns true.
+
+## [drop](drop/)
+
+**Signature:** `drop(s: string, n: int) -> string`
+
+Returns s without its first n bytes. Clamps; never fails.
+
+## [endsWith](endswith/)
+
+**Signature:** `endsWith(s: string, suffix: string) -> bool`
+
+True if s ends with suffix.
+
+## [fiber_await](fiber_await/)
+
+**Signature:** `fiber_await(fiber: Fiber) -> any`
+
+Waits for a fiber to complete and returns its result.
+
+## [fiber_spawn](fiber_spawn/)
+
+**Signature:** `fiber_spawn(fn: () -> any) -> Fiber`
+
+Spawns a new fiber to execute the given function concurrently.
+
+## [fiber_yield](fiber_yield/)
+
+**Signature:** `fiber_yield(value: any) -> any`
+
+Yields control to the fiber scheduler with an optional value.
 
 ## [filter](filter/)
 
@@ -32,15 +80,21 @@ Filters elements in an iterator based on a predicate function.
 
 ## [fold](fold/)
 
-**Signature:** `fold(iterator: iterator, initial: any, fn: function) -> any`
+**Signature:** `fold(iterator: Iterator<T>, initial: U, function: (U, T) -> U) -> U`
 
-Reduces an iterator to a single value using an accumulator function.
+Reduces an iterator to a single value by repeatedly applying a function.
 
 ## [forEach](foreach/)
 
-**Signature:** `forEach(iterator: iterator, fn: function) -> int`
+**Signature:** `forEach(iterator: iterator, function: function) -> int`
 
 Applies a function to each element in an iterator.
+
+## [forEachList](foreachlist/)
+
+**Signature:** `forEachList(list: List<T>, function: fn(T) -> Unit) -> List<T>`
+
+Apply function to every element of list. Phase 7 of collections plan.
 
 ## [httpCloseClient](httpcloseclient/)
 
@@ -50,7 +104,7 @@ Closes the HTTP client and cleans up resources.
 
 ## [httpCreateClient](httpcreateclient/)
 
-**Signature:** `httpCreateClient(baseUrl: string, timeout: int) -> int`
+**Signature:** `httpCreateClient(base_url: string, timeout: int) -> int`
 
 Creates an HTTP client for making requests to a base URL.
 
@@ -74,7 +128,7 @@ Makes an HTTP GET request to the specified path.
 
 ## [httpListen](httplisten/)
 
-**Signature:** `httpListen(serverID: int, handler: function) -> int`
+**Signature:** `httpListen(serverID: int, handler: (string, string, string, string) -> HttpResponse) -> int`
 
 Starts the HTTP server listening for requests with a handler function.
 
@@ -102,17 +156,77 @@ Makes a generic HTTP request with any method.
 
 Stops the HTTP server and closes all connections.
 
+## [indexOf](indexof/)
+
+**Signature:** `indexOf(s: string, needle: string) -> Result<int, StringError>`
+
+Returns byte-index of first occurrence of needle, or Error(NotFound).
+
 ## [input](input/)
 
-**Signature:** `input() -> int`
+**Signature:** `input() -> Result<string, Error>`
 
-Reads an integer from the user's input.
+Reads a string from the user's input.
+
+## [isEmpty](isempty/)
+
+**Signature:** `isEmpty(s: string) -> bool`
+
+True if string has zero length.
+
+## [join](join/)
+
+**Signature:** `join(parts: List<string>, separator: string) -> string`
+
+Concatenates parts with separator between each pair.
 
 ## [length](length/)
 
 **Signature:** `length(s: string) -> int`
 
-Returns the length of a string.
+Returns the byte length of a string. Total — never fails.
+
+## [lines](lines/)
+
+**Signature:** `lines(s: string) -> List<string>`
+
+Splits on '\n'. A trailing newline does not produce an empty entry.
+
+## [listAppend](listappend/)
+
+**Signature:** `listAppend(list: List<T>, value: T) -> List<T>`
+
+Returns a new list with value at the end. O(log32 n) amortised.
+
+## [listConcat](listconcat/)
+
+**Signature:** `listConcat(left: List<T>, right: List<T>) -> List<T>`
+
+Returns left ++ right. Same as left + right.
+
+## [listContains](listcontains/)
+
+**Signature:** `listContains(list: List<T>, value: T) -> bool`
+
+True iff some element equals value. O(n).
+
+## [listLength](listlength/)
+
+**Signature:** `listLength(list: List<T>) -> int`
+
+Returns the number of elements in a list. O(1).
+
+## [listPrepend](listprepend/)
+
+**Signature:** `listPrepend(list: List<T>, value: T) -> List<T>`
+
+Returns a new list with value at the front. O(n).
+
+## [listReverse](listreverse/)
+
+**Signature:** `listReverse(list: List<T>) -> List<T>`
+
+Returns a new list in reverse order.
 
 ## [map](map/)
 
@@ -120,9 +234,75 @@ Returns the length of a string.
 
 Transforms each element in an iterator using a function, returning a new iterator.
 
+## [mapContains](mapcontains/)
+
+**Signature:** `mapContains(map: Map<K, V>, key: K) -> bool`
+
+True iff key is present in map.
+
+## [mapKeys](mapkeys/)
+
+**Signature:** `mapKeys(map: Map<K, V>) -> List<K>`
+
+All keys of the map as a list. Order unspecified.
+
+## [mapLength](maplength/)
+
+**Signature:** `mapLength(map: Map<K, V>) -> int`
+
+Returns the number of entries in a map. O(1).
+
+## [mapMerge](mapmerge/)
+
+**Signature:** `mapMerge(left: Map<K, V>, right: Map<K, V>) -> Map<K, V>`
+
+Right-biased union. Same as left + right.
+
+## [mapRemove](mapremove/)
+
+**Signature:** `mapRemove(map: Map<K, V>, key: K) -> Map<K, V>`
+
+Returns a new map without key. No-op if key is absent.
+
+## [mapSet](mapset/)
+
+**Signature:** `mapSet(map: Map<K, V>, key: K, value: V) -> Map<K, V>`
+
+Returns a new map with key bound to value (replaces prior binding).
+
+## [mapValues](mapvalues/)
+
+**Signature:** `mapValues(map: Map<K, V>) -> List<V>`
+
+All values of the map as a list. Order matches mapKeys.
+
+## [padEnd](padend/)
+
+**Signature:** `padEnd(s: string, targetLength: int, fill: string) -> Result<string, StringError>`
+
+Pads s on the right with copies of fill to reach targetLength bytes.
+
+## [padStart](padstart/)
+
+**Signature:** `padStart(s: string, targetLength: int, fill: string) -> Result<string, StringError>`
+
+Pads s on the left with copies of fill to reach targetLength bytes.
+
+## [parseFloat](parsefloat/)
+
+**Signature:** `parseFloat(s: string) -> Result<float, StringError>`
+
+Strict base-10 floating-point parser. No whitespace tolerance.
+
+## [parseInt](parseint/)
+
+**Signature:** `parseInt(s: string) -> Result<int, StringError>`
+
+Strict base-10 signed-int parser. No whitespace tolerance.
+
 ## [print](print/)
 
-**Signature:** `print(value: any) -> int`
+**Signature:** `print(value: any) -> Unit`
 
 Prints a value to the console. Automatically converts the value to a string representation.
 
@@ -134,9 +314,39 @@ Creates an iterator that generates numbers from start to end (exclusive).
 
 ## [readFile](readfile/)
 
-**Signature:** `readFile(filename: string) -> Result<string, string>`
+**Signature:** `readFile(filename: string) -> Result<string, Error>`
 
 Reads the entire contents of a file as a string.
+
+## [recv](recv/)
+
+**Signature:** `recv(channel: Channel) -> any`
+
+Receives a value from a channel.
+
+## [repeat](repeat/)
+
+**Signature:** `repeat(s: string, n: int) -> Result<string, StringError>`
+
+Concatenates s with itself n times. Error(InvalidArgument) on negative n.
+
+## [replace](replace/)
+
+**Signature:** `replace(s: string, needle: string, replacement: string) -> Result<string, StringError>`
+
+Replaces every occurrence of needle. Error(InvalidArgument) on empty needle.
+
+## [reverse](reverse/)
+
+**Signature:** `reverse(s: string) -> string`
+
+Reverses byte order. Grapheme-cluster reversal is future work.
+
+## [send](send/)
+
+**Signature:** `send(channel: Channel, value: any) -> int`
+
+Sends a value to a channel. Returns 1 for success, 0 for failure.
 
 ## [sleep](sleep/)
 
@@ -146,15 +356,39 @@ Pauses execution for the specified number of milliseconds.
 
 ## [spawnProcess](spawnprocess/)
 
-**Signature:** `spawnProcess(command: string, callback: fn(int, int, string) -> Unit) -> Result<ProcessHandle, string>`
+**Signature:** `spawnProcess(command: string, callback: (int, int, string) -> Unit) -> Result<ProcessHandle, string>`
 
 Spawns an external async process with MANDATORY callback for stdout/stderr capture. The callback function receives (processID: int, eventType: int, data: string) and is called for stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING!
 
+## [split](split/)
+
+**Signature:** `split(s: string, separator: string) -> Result<List<string>, StringError>`
+
+Splits s on separator. Error(InvalidArgument) on empty separator.
+
+## [startsWith](startswith/)
+
+**Signature:** `startsWith(s: string, prefix: string) -> bool`
+
+True if s begins with prefix.
+
 ## [substring](substring/)
 
-**Signature:** `substring(s: string, start: int, end: int) -> string`
+**Signature:** `substring(s: string, start: int, end: int) -> Result<string, StringError>`
 
-Extracts a substring from start to end index.
+Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end.
+
+## [take](take/)
+
+**Signature:** `take(s: string, n: int) -> string`
+
+Returns at most the first n bytes of s. Clamps; never fails.
+
+## [toLowerCase](tolowercase/)
+
+**Signature:** `toLowerCase(s: string) -> string`
+
+ASCII-aware lowercase.
 
 ## [toString](tostring/)
 
@@ -162,11 +396,29 @@ Extracts a substring from start to end index.
 
 Converts a value to its string representation.
 
-## [websocketKeepAlive](websocketKeepAlive/)
+## [toUpperCase](touppercase/)
 
-**Signature:** `websocketKeepAlive() -> Unit`
+**Signature:** `toUpperCase(s: string) -> string`
 
-⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).
+ASCII-aware uppercase. Unicode simple case mapping is a future addition.
+
+## [trim](trim/)
+
+**Signature:** `trim(s: string) -> string`
+
+Removes leading and trailing whitespace.
+
+## [trimEnd](trimend/)
+
+**Signature:** `trimEnd(s: string) -> string`
+
+Removes trailing whitespace.
+
+## [trimStart](trimstart/)
+
+**Signature:** `trimStart(s: string) -> string`
+
+Removes leading whitespace.
 
 ## [websocketClose](websocketclose/)
 
@@ -176,7 +428,7 @@ Converts a value to its string representation.
 
 ## [websocketConnect](websocketconnect/)
 
-**Signature:** `websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`
+**Signature:** `websocketConnect(url: String, messageHandler: (String) -> Result<Success, String>) -> Result<WebSocketID, String>`
 
 ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback.
 
@@ -185,6 +437,12 @@ Converts a value to its string representation.
 **Signature:** `websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`
 
 ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path.
+
+## [websocketKeepAlive](websocketkeepalive/)
+
+**Signature:** `websocketKeepAlive() -> Unit`
+
+⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).
 
 ## [websocketSend](websocketsend/)
 
@@ -210,9 +468,15 @@ Converts a value to its string representation.
 
 ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections.
 
+## [words](words/)
+
+**Signature:** `words(s: string) -> List<string>`
+
+Splits on runs of whitespace; empty results dropped.
+
 ## [writeFile](writefile/)
 
-**Signature:** `writeFile(filename: string, content: string) -> Result<Success, string>`
+**Signature:** `writeFile(filename: string, content: string) -> Result<int, Error>`
 
-Writes content to a file. Creates the file if it doesn't exist.
+Writes content to a file. Creates the file if it doesn't exist. Returns number of bytes written.
 

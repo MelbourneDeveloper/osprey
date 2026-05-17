@@ -212,9 +212,13 @@ Field access on a validated value is only legal after matching on the `Result`.
 
 ## Collection Types
 
-### `List<T>`
+`List<T>` and `Map<K, V>` are the two built-in collection types. Both are **immutable persistent** structures: every operation that would mutate returns a new collection that shares structure with the original. There is no mutable variant. `Set<T>` is reserved for a future revision and is **not** part of this spec; use `Map<K, unit>` if a set-like semantic is required in the meantime.
 
-Immutable, homogeneous, with structural sharing. Index access is bounds-checked and returns `Result<T, IndexError>`.
+Builtin signatures referenced below are specified in [Built-in Functions](0012-Built-InFunctions.md) under "Collection Functions". Iterator operations (`map`, `filter`, `fold`, `forEach`) are specified in [Iterators and Iteration](0010-LoopConstructsAndFunctionalIterators.md) and work uniformly on lists, maps, and ranges via the implicit `Iterable` constraint.
+
+### `List<T>` — [TYPE-LIST]
+
+`List<T>` is an immutable, homogeneous, indexed sequence with structural sharing. The implementation MUST provide the asymptotic bounds listed under [Performance](#performance-type-list-perf); a bitmapped vector trie (branching factor 32) is the recommended baseline, with an upgrade path to an RRB-tree for O(log n) concatenation. Index access is bounds-checked and returns `Result<T, IndexError>`.
 
 ```osprey
 let numbers = [1, 2, 3, 4, 5]            // List<int>
@@ -230,7 +234,7 @@ match numbers[0] {
 }
 ```
 
-Operations (see [Iterators and Iteration](0010-LoopConstructsAndFunctionalIterators.md) for full signatures):
+#### Operations — [TYPE-LIST-OPS]
 
 ```osprey
 let doubled  = numbers |> map(x => x * 2)
@@ -240,7 +244,9 @@ let combined = numbers + [6, 7, 8]                       // concatenation produc
 numbers |> forEach(x => print(toString(x)))
 ```
 
-Patterns:
+The `+` operator is defined on `(List<T>, List<T>) -> List<T>` and returns a new list. Chains of `map`/`filter` terminated by `forEach`/`fold` are fused per [Stream Fusion](0010-LoopConstructsAndFunctionalIterators.md#stream-fusion); no intermediate list is materialised.
+
+#### Patterns — [TYPE-LIST-PATTERNS]
 
 ```osprey
 fn classify(xs: List<int>) -> string = match xs {
@@ -251,7 +257,9 @@ fn classify(xs: List<int>) -> string = match xs {
 }
 ```
 
-List comprehensions and head/tail destructuring:
+A list pattern matches a list of exactly the listed length unless the final element is a rest binder (`...name`). The rest binder is itself a `List<T>` and is `[]` when the underlying list has exactly the prefix length.
+
+#### Comprehensions — [TYPE-LIST-COMP]
 
 ```osprey
 let squares  = [x * x for x in range(start: 1, end: 5)]   // [1, 4, 9, 16, 25]
@@ -259,9 +267,15 @@ let filtered = [x for x in numbers if x > 3]
 let [head, ...tail] = numbers
 ```
 
-### `Map<K, V>`
+Comprehensions desugar to `map` + `filter` over the source iterator and are subject to the same stream-fusion rules.
 
-Immutable, persistent. Lookup, insert, and remove are O(log n) and return new maps.
+### `Map<K, V>` — [TYPE-MAP]
+
+`Map<K, V>` is an immutable, persistent associative collection keyed by `K`. The implementation MUST provide the asymptotic bounds listed under [Performance](#performance-type-map-perf); a hash array mapped trie (HAMT, branching factor 32) per Bagwell (2000) is the recommended baseline. Iteration order is **unspecified** and MUST NOT be relied upon; programs that need a deterministic order MUST sort the result of `keys(map)` or `entries(map)`.
+
+Keys MUST be of a type for which the runtime provides a total hash and equality. The set of permitted key types in this revision is `int`, `string`, and `bool`; structurally-compared records and unions are reserved for a later revision and will fail type-checking until then.
+
+#### Literals — [TYPE-MAP-LITERAL]
 
 ```osprey
 let ages = {
@@ -269,55 +283,87 @@ let ages = {
     "Bob":     30,
     "Charlie": 35
 }                                                 // Map<string, int>
+```
 
-let scores: Map<string, int> = {}                 // empty needs annotation
+The empty map literal `{}` is parsed as a `Map<K, V>` literal **only** at expression positions where a block expression is disallowed (e.g. RHS of `=` in a `let`, function argument). At ambiguous positions an explicit type annotation is required:
 
+```osprey
+let scores: Map<string, int> = {}                 // ok: typed empty map
+let always_a_block          = { 1 }               // block expression returning 1
+```
+
+Duplicate keys in a literal are a **compile-time error**.
+
+#### Lookup — [TYPE-MAP-LOOKUP]
+
+Index lookup returns `Result<V, IndexError>`:
+
+```osprey
 match ages["Alice"] {
     Success { value }   => print(toString(value))
     Error   { message } => print(message)
 }
-
-let hasAlice = contains(map: ages, key: "Alice")
-let n        = length(ages)
 ```
 
-Operations:
+#### Operations — [TYPE-MAP-OPS]
+
+All operations return a new map and never mutate the receiver.
 
 ```osprey
-let bumped     = ages |> mapValues(age => age + 1)
-let upper      = ages |> mapKeys(name => toUpperCase(name))
-let thirties   = ages |> filter((name, age) => age >= 30)
-let totalAge   = ages |> fold(initial: 0, function: (acc, name, age) => acc + age)
-let withDave   = ages + { "Dave": 28 }
-let updated    = ages { "Alice": 26 }                       // single-key update
-let withoutBob = removeKey(map: ages, key: "Bob")
+let bumped     = ages |> mapValues(fn: age => age + 1)
+let upper      = ages |> mapKeys(fn: name => toUpperCase(name))
+let thirties   = ages |> filterEntries(fn: (k, v) => v >= 30)
+let totalAge   = ages |> foldEntries(initial: 0, function: (acc, k, v) => acc + v)
+let merged     = ages + { "Dave": 28 }                      // right-biased union
+let updated    = set(map: ages, key: "Alice", value: 26)    // single-key update
+let withoutBob = remove(map: ages, key: "Bob")
 ```
 
-Patterns:
+Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than a tuple, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `(K, V)` tuple per element.
+
+The `+` operator on `(Map<K, V>, Map<K, V>) -> Map<K, V>` is **right-biased** (the right-hand side wins on conflicting keys).
+
+#### Patterns — [TYPE-MAP-PATTERNS]
+
+A map pattern is **subset-matching**: it matches any map whose entries are a superset of the listed entries. Map patterns are distinguished from record patterns by the presence of string-literal (or int-literal) keys; record patterns use bare identifiers.
 
 ```osprey
 fn analyze(p: Map<string, int>) -> string = match p {
-    {}                                       => "none"
-    { "Alice": age }                         => "only Alice (${age})"
-    { "Alice": _, "Bob": _ }                 => "Alice and Bob"
-    p when length(p) > 5                     => "large"
+    p when length(map: p) == 0               => "none"
+    { "Alice": age }                         => "only Alice (${age}) or Alice + others"
+    { "Alice": _, "Bob": _ }                 => "contains both Alice and Bob"
+    p when length(map: p) > 5                => "large"
     _                                        => "other"
 }
 ```
 
-Conversions:
+The literal `{}` is disallowed as a pattern (it would match every map). Match emptiness explicitly with a guard: `p when length(map: p) == 0`.
+
+#### Conversions — [TYPE-MAP-CONV]
 
 ```osprey
-let names    = keys(ages)                                       // List<string>
-let agesList = values(ages)                                     // List<int>
-let pairs    = entries(ages)                                    // List<(string, int)>
-let m        = zipToMap(keys: names, values: agesList)
+let names    = keys(map: ages)                                  // List<string>, order unspecified
+let agesList = values(map: ages)                                // List<int>,    order unspecified
+let pairs    = entries(map: ages)                               // List<(string, int)>
+let m        = zipToMap(keys: names, values: agesList)          // Result<Map<K,V>, IndexError> if lengths differ
 let byGrade  = groupBy(items: students, function: s => s.grade) // Map<string, List<Student>>
 ```
 
+`zipToMap` returns a `Result` because mismatched lengths are an error. `groupBy` preserves the relative order of items within each bucket.
+
 ### Performance
 
-`List<T>`: O(1) indexed access, O(n) concatenation and bulk transforms. `Map<K, V>`: O(log n) lookup/insert/update, O(n) iteration. Both use structural sharing; small collections may be stack-allocated.
+| Operation             | `List<T>` (bitmapped trie) | `Map<K, V>` (HAMT)                                |
+| --------------------- | -------------------------- | ------------------------------------------------- |
+| Index / lookup        | O(log₃₂ n)                 | O(log₃₂ n) expected, O(n) worst case under collisions |
+| Insert / update       | O(log₃₂ n)                 | O(log₃₂ n) expected                               |
+| Remove                | O(log₃₂ n)                 | O(log₃₂ n) expected                               |
+| Concatenation (`+`)   | O(n + m)                   | O(min(n, m) · log₃₂ max(n, m))                    |
+| `map` / `filter`      | O(n) (fused, no intermediate) | O(n) (fused, no intermediate)                  |
+| `length`              | O(1)                       | O(1)                                              |
+| Iteration             | O(n)                       | O(n), order unspecified                           |
+
+A future revision MAY upgrade `List<T>` to an RRB-tree (Bagwell & Rompf 2011; Stucki & Rompf 2015) to bring concatenation to O(log n) without changing the API. Both collections use structural sharing — `O(log₃₂ n)` path-copying per update — so old versions remain valid in O(1) space relative to a modification.
 
 ## Built-in Error Types
 

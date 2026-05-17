@@ -4,15 +4,15 @@ title: "cleanupProcess (Function)"
 description: "Cleans up resources associated with a completed process. Should be called after awaitProcess."
 ---
 
-**Signature:** `cleanupProcess(handle: ProcessHandle) -> void`
+**Signature:** `cleanupProcess(handle: int) -> Unit`
 
 **Description:** Cleans up resources associated with a completed process. Should be called after awaitProcess.
 
 ## Parameters
 
-- **handle** (ProcessHandle): Process handle from spawnProcess
+- **handle** (int): Process ID from spawnProcess
 
-**Returns:** void
+**Returns:** Unit
 
 ## Example
 

@@ -25,19 +25,79 @@
     <!-- Favicons -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦅</text></svg>">
     
+    <!-- Canonical -->
+    <link rel="canonical" href="{{ site.url }}{{ page.url }}">
+
     <!-- Open Graph -->
     <meta property="og:title" content="{{ title or site.title }}">
     <meta property="og:description" content="{{ description or site.description }}">
-    <meta property="og:type" content="website">
+    <meta property="og:type" content="{% if tags and 'blog' in tags %}article{% else %}website{% endif %}">
     <meta property="og:url" content="{{ site.url }}{{ page.url }}">
     <meta property="og:image" content="{{ site.url }}/assets/images/og-image.png">
-    
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="Osprey Programming Language">
+    {% if tags and 'blog' in tags %}
+    <meta property="article:published_time" content="{{ page.date | rssDate }}">
+    {% if author %}<meta property="article:author" content="{{ author }}">{% endif %}
+    {% endif %}
+
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="{{ site.twitter }}">
     <meta name="twitter:title" content="{{ title or site.title }}">
     <meta name="twitter:description" content="{{ description or site.description }}">
     <meta name="twitter:image" content="{{ site.url }}/assets/images/twitter-card.png">
+
+    <!-- Structured Data -->
+    {% if tags and 'blog' in tags %}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": {{ title | dump | safe }},
+      "description": {{ (description or excerpt or site.description) | dump | safe }},
+      "datePublished": "{{ page.date | rssDate }}",
+      "author": {
+        "@type": "Person",
+        "name": "{{ author or 'Christian Findlay' }}",
+        "url": "https://www.christianfindlay.com"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Osprey Programming Language",
+        "url": "{{ site.url }}",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "{{ site.url }}/assets/images/logo.png"
+        }
+      },
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "{{ site.url }}{{ page.url }}"
+      }
+    }
+    </script>
+    {% else %}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Osprey Programming Language",
+      "url": "{{ site.url }}",
+      "description": {{ site.description | dump | safe }},
+      "publisher": {
+        "@type": "Organization",
+        "name": "Osprey",
+        "url": "{{ site.url }}",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "{{ site.url }}/assets/images/logo.png"
+        }
+      }
+    }
+    </script>
+    {% endif %}
 </head>
 <body>
     <a href="#main" class="skip-link">Skip to content</a>
@@ -119,7 +179,7 @@
             </div>
             
             <div class="footer-bottom">
-                <p>&copy; {% year %} Osprey Programming Language. Built by <a href="https://www.christianfindlay.com">Christian Findlay</a></p>
+                <p>&copy; {% year %} Osprey Programming Language. Built by <a href="https://www.christianfindlay.com">Christian Findlay</a> at <a href="https://nimblesite.co" rel="noopener">Nimblesite</a>.</p>
             </div>
         </div>
     </footer>

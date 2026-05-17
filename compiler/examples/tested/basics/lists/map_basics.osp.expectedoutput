@@ -1,0 +1,45 @@
+[map_basics]
+
+empty length: 
+0
+
+empty contains nothing: 
+false
+
+
+after 1 set: 
+1
+
+after 2 sets: 
+2
+
+after 3 sets: 
+3
+
+
+contains alice: 
+true
+
+contains bob: 
+true
+
+contains charlie: 
+true
+
+contains dave: 
+false
+
+
+after overwrite, length: 
+3
+
+alice in m4: 
+true
+
+
+m3 unchanged length: 
+3
+
+
+[map_basics done]
+

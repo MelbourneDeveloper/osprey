@@ -10,7 +10,7 @@ description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t 
 
 ## Parameters
 
-- **wsID** (Int): WebSocket identifier to close
+- **wsID** (int): WebSocket identifier to close
 
 **Returns:** Result<Success, String>
 

@@ -703,6 +703,15 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 }
 
 func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) (value.Value, error) {
+	// Phase 4 — collection-aware `+`: route List<T> + List<T> through
+	// osprey_list_concat and Map<K,V> + Map<K,V> through osprey_map_merge
+	// (right-biased), per spec 0004-TypeSystem.md#performance.
+	if binExpr.Operator == "+" {
+		if v, handled, err := g.tryCollectionPlus(binExpr); handled {
+			return v, err
+		}
+	}
+
 	left, err := g.generateExpression(binExpr.Left)
 	if err != nil {
 		return nil, err
@@ -714,6 +723,47 @@ func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) 
 	}
 
 	return g.generateBinaryOperationWithPos(binExpr.Operator, left, right, binExpr.Position)
+}
+
+// tryCollectionPlus dispatches `+` on List/Map operands to the appropriate
+// runtime function. Returns (value, handled, error). When handled == false
+// the caller falls through to the generic arithmetic path.
+func (g *LLVMGenerator) tryCollectionPlus(binExpr *ast.BinaryExpression) (value.Value, bool, error) {
+	leftType, lerr := g.typeInferer.InferType(binExpr.Left)
+	if lerr != nil {
+		return nil, false, nil
+	}
+	name := collectionTypeName(leftType)
+	if name != TypeList && name != TypeMap {
+		return nil, false, nil
+	}
+	left, err := g.generateExpression(binExpr.Left)
+	if err != nil {
+		return nil, true, err
+	}
+	right, err := g.generateExpression(binExpr.Right)
+	if err != nil {
+		return nil, true, err
+	}
+	if name == TypeList {
+		g.declareListExterns()
+		return g.builder.NewCall(g.functions["osprey_list_concat"], left, right), true, nil
+	}
+	g.declareMapExterns()
+	return g.builder.NewCall(g.functions["osprey_map_merge"], left, right), true, nil
+}
+
+// collectionTypeName returns "List" or "Map" if t is a list/map type (in
+// either *GenericType or *ConcreteType wrapping), else "".
+func collectionTypeName(t Type) string {
+	switch tt := t.(type) {
+	case *GenericType:
+		return tt.name
+	case *ConcreteType:
+		return tt.name
+	default:
+		return ""
+	}
 }
 
 // generateBinaryOperationWithPos generates the appropriate LLVM operation for the given operator with position info.
@@ -1406,11 +1456,36 @@ func (g *LLVMGenerator) generateRecordFieldAccess(
 	return fieldValue, nil
 }
 
+// generateMethodCallExpression implements Uniform Function Call Syntax (UFCS):
+// `x.f(a, b)` desugars to `f(x, a, b)`. See spec/0012-Built-InFunctions.md
+// "Calling Style". Implements [BUILTIN-STRING-UFCS] and docs/plans/string-manipulation.md
+// workstream B.
+//
+// Disambiguation rule: if `x` has a record field named `f`, field access
+// wins — but that case is parsed as a different AST node (field access
+// followed by call), so this generator is only reached when the parser
+// already chose method-call syntax. Anything reaching here is an unambiguous
+// UFCS request.
 func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) (value.Value, error) {
-	// For now, method calls are not fully implemented
-	// This is a placeholder for future elegant method chaining like obj.method()
-	// We could implement this to support chaining operations on values
-	return nil, WrapMethodCallNotImplementedWithPos(methodCall.MethodName, methodCall.Position)
+	if methodCall == nil {
+		return nil, WrapMethodCallNotImplementedWithPos("<nil>", nil)
+	}
+	rewritten := &ast.CallExpression{
+		Function: &ast.Identifier{
+			Name:     methodCall.MethodName,
+			Position: methodCall.Position,
+		},
+		Arguments:      append([]ast.Expression{methodCall.Object}, methodCall.Arguments...),
+		NamedArguments: methodCall.NamedArguments,
+		Position:       methodCall.Position,
+	}
+	v, err := g.generateCallExpression(rewritten)
+	if err != nil {
+		// Hint at the UFCS rewrite so the user can see where to look.
+		return nil, fmt.Errorf("UFCS call `_.%s(...)` rewrites to `%s(_, ...)`: %w",
+			methodCall.MethodName, methodCall.MethodName, err)
+	}
+	return v, nil
 }
 
 // generateTypeConstructorExpression generates LLVM IR for type construction with constraint validation.

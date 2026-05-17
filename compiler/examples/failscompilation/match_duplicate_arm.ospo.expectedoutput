@@ -1,1 +1,1 @@
-line 5:17: contains expects exactly 2 arguments (haystack, needle), got 0
+line 5:17: contains expects exactly 2 arguments (s, needle), got 0

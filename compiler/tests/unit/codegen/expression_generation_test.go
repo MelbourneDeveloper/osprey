@@ -44,20 +44,35 @@ func TestUnaryExpressionGeneration(t *testing.T) {
 	}
 }
 
+// TestMethodCallExpression verifies UFCS — Uniform Function Call Syntax.
+// `obj.f(args)` desugars to `f(obj, args)`. See
+// spec/0012-Built-InFunctions.md "Calling Style".
 func TestMethodCallExpression(t *testing.T) {
-	// Test method call expressions (should fail with WrapMethodNotImpl)
+	// Happy path: `42.toString()` desugars to `toString(42)`, a real builtin.
 	source := `
 		let obj = 42
-		obj.toString()
+		let s = obj.toString()
 	`
-
 	_, err := codegen.CompileToLLVM(source)
-	if err == nil {
-		t.Error("Expected error for method call")
+	if err != nil {
+		t.Errorf("UFCS call should succeed: %v", err)
 	}
 
-	if !strings.Contains(err.Error(), "method call not implemented") {
-		t.Error("Expected method call error message")
+	// Negative path: unknown method surfaces a UFCS-aware error so the
+	// user can see where to look.
+	badSource := `
+		let obj = 42
+		let dropped = obj.unknownMethod()
+	`
+	_, err = codegen.CompileToLLVM(badSource)
+	if err == nil {
+		t.Fatal("expected error for unknown method")
+	}
+	if !strings.Contains(err.Error(), "UFCS call") {
+		t.Errorf("expected UFCS-aware error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknownMethod") {
+		t.Errorf("expected error to mention method name, got: %v", err)
 	}
 }
 

@@ -81,6 +81,52 @@ const (
 	ParseIntFunc  = "parseInt"
 	JoinFunc      = "join"
 
+	// IsEmptyFunc is the Osprey name for the isEmpty(s) builtin. Implements [BUILTIN-STRING-INSPECTION].
+	IsEmptyFunc = "isEmpty"
+
+	// StartsWithFunc is the Osprey name for startsWith(s, prefix). Implements [BUILTIN-STRING-SEARCH].
+	StartsWithFunc = "startsWith"
+	// EndsWithFunc is the Osprey name for endsWith(s, suffix). Implements [BUILTIN-STRING-SEARCH].
+	EndsWithFunc = "endsWith"
+	// IndexOfFunc is the Osprey name for indexOf(s, needle). Implements [BUILTIN-STRING-SEARCH].
+	IndexOfFunc = "indexOf"
+
+	// TakeFunc is the Osprey name for take(s, n). Implements [BUILTIN-STRING-SUBSTRINGS].
+	TakeFunc = "take"
+	// DropFunc is the Osprey name for drop(s, n). Implements [BUILTIN-STRING-SUBSTRINGS].
+	DropFunc = "drop"
+
+	// ToUpperCaseFunc is the Osprey name for toUpperCase(s). Implements [BUILTIN-STRING-TRANSFORM].
+	ToUpperCaseFunc = "toUpperCase"
+	// ToLowerCaseFunc is the Osprey name for toLowerCase(s). Implements [BUILTIN-STRING-TRANSFORM].
+	ToLowerCaseFunc = "toLowerCase"
+	// TrimFunc is the Osprey name for trim(s). Implements [BUILTIN-STRING-TRANSFORM].
+	TrimFunc = "trim"
+	// TrimStartFunc is the Osprey name for trimStart(s). Implements [BUILTIN-STRING-TRANSFORM].
+	TrimStartFunc = "trimStart"
+	// TrimEndFunc is the Osprey name for trimEnd(s). Implements [BUILTIN-STRING-TRANSFORM].
+	TrimEndFunc = "trimEnd"
+	// ReverseFunc is the Osprey name for reverse(s). Implements [BUILTIN-STRING-TRANSFORM].
+	ReverseFunc = "reverse"
+	// ReplaceFunc is the Osprey name for replace(s, needle, replacement). Implements [BUILTIN-STRING-TRANSFORM].
+	ReplaceFunc = "replace"
+	// RepeatFunc is the Osprey name for repeat(s, n). Implements [BUILTIN-STRING-TRANSFORM].
+	RepeatFunc = "repeat"
+	// PadStartFunc is the Osprey name for padStart(s, target, fill). Implements [BUILTIN-STRING-TRANSFORM].
+	PadStartFunc = "padStart"
+	// PadEndFunc is the Osprey name for padEnd(s, target, fill). Implements [BUILTIN-STRING-TRANSFORM].
+	PadEndFunc = "padEnd"
+
+	// ParseFloatFunc is the Osprey name for parseFloat(s). Implements [BUILTIN-STRING-PARSING].
+	ParseFloatFunc = "parseFloat"
+
+	// SplitFunc is the Osprey name for split(s, sep). Implements [BUILTIN-STRING-LIST].
+	SplitFunc = "split"
+	// LinesFunc is the Osprey name for lines(s). Implements [BUILTIN-STRING-LIST].
+	LinesFunc = "lines"
+	// WordsFunc is the Osprey name for words(s). Implements [BUILTIN-STRING-LIST].
+	WordsFunc = "words"
+
 	SpawnProcessFunc = "spawnProcess"
 
 	WriteFileFunc  = "writeFile"

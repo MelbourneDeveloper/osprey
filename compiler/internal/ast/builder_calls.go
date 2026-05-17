@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"github.com/antlr4-go/antlr/v4"
+
 	"github.com/christianfindlay/osprey/parser"
 )
 
@@ -117,6 +119,13 @@ func (b *Builder) isMethodCallAtIndex(ctx parser.ICallExprContext, index int) bo
 }
 
 // buildMethodCallAtIndex builds a method call at the given index.
+//
+// NOTE: `ctx.ArgList(i)` returns the i-th *present* ArgList — empty arg
+// lists are skipped — so naively indexing by chain position lines up
+// wrong as soon as one method in the chain has no args and another does.
+// We walk the children in source order and find the ArgList that lives
+// between LPAREN(index) and the matching RPAREN. Fixes UFCS chains like
+// `s.trim().take(3)`.
 func (b *Builder) buildMethodCallAtIndex(
 	ctx parser.ICallExprContext,
 	object Expression,
@@ -128,8 +137,8 @@ func (b *Builder) buildMethodCallAtIndex(
 		namedArgs []NamedArgument
 	)
 
-	if index < len(ctx.AllArgList()) && ctx.ArgList(index) != nil {
-		args, namedArgs = b.buildArguments(ctx.ArgList(index))
+	if argList := b.argListForChainElement(ctx, index); argList != nil {
+		args, namedArgs = b.buildArguments(argList)
 	}
 
 	return &MethodCallExpression{
@@ -139,6 +148,38 @@ func (b *Builder) buildMethodCallAtIndex(
 		NamedArguments: namedArgs,
 		Position:       b.getPositionFromContext(ctx),
 	}
+}
+
+// argListForChainElement returns the ArgList sitting inside the
+// chainIndex-th `(...)` of the call expression, or nil if that call has
+// no arguments. Walks children in source order to be robust to optional
+// args being absent for some chain elements.
+func (b *Builder) argListForChainElement(
+	ctx parser.ICallExprContext,
+	chainIndex int,
+) parser.IArgListContext {
+	lparenCount := -1
+	insideTarget := false
+	for _, child := range ctx.GetChildren() {
+		if term, ok := child.(antlr.TerminalNode); ok {
+			switch term.GetText() {
+			case "(":
+				lparenCount++
+				if lparenCount == chainIndex {
+					insideTarget = true
+				}
+			case ")":
+				if insideTarget {
+					return nil // matching `)` reached without an ArgList
+				}
+			}
+			continue
+		}
+		if argList, ok := child.(parser.IArgListContext); ok && insideTarget {
+			return argList
+		}
+	}
+	return nil
 }
 
 // buildSimpleCall handles simple function calls.
@@ -168,15 +209,22 @@ func (b *Builder) buildSimpleCall(ctx parser.ICallExprContext, primary Expressio
 	return primary
 }
 
-// isModuleName checks if the given name is a known module name.
-// For now, we'll use a simple heuristic: module names start with uppercase
-// In a full implementation, this would check against a registry of declared modules.
+// isModuleName checks if `name` was declared as `module Name { ... }`
+// somewhere in this program. Populated by the pre-pass in BuildProgram.
+//
+// The previous "uppercase identifier == module" heuristic stole every
+// `UppercaseVar.method()` call from the UFCS path (buildChainElement)
+// and routed it to a placeholder that always returned 42. The actual
+// module set is what we want — and effect-handler syntax
+// `perform Logger.info(...)` takes a different grammar rule, so it is
+// unaffected.
+//
+// Implements [BUILTIN-STRING-UFCS] disambiguation rule.
 func (b *Builder) isModuleName(name string) bool {
-	if len(name) == 0 {
+	if b.moduleNames == nil {
 		return false
 	}
-
-	return name[0] >= 'A' && name[0] <= 'Z'
+	return b.moduleNames[name]
 }
 
 // buildArrayAccess handles array/map access expressions like expr[index].

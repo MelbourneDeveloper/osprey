@@ -1,1 +1,1 @@
-line 8:13: method call not implemented: unknownMethod
+UFCS call `_.unknownMethod(...)` rewrites to `unknownMethod(_, ...)`: function not declared: unknownMethod

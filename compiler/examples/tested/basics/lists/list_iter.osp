@@ -1,0 +1,30 @@
+// list_iter — forEachList must visit every element in order.
+// Phase 7 integration with the iterator family.
+print("[list_iter]\n")
+
+// Iterate an empty list — prints nothing between the markers.
+print("BEGIN_EMPTY\n")
+forEachList(List(), print)
+print("END_EMPTY\n")
+
+// Iterate [10, 20, 30]
+let small = listAppend(listAppend(listAppend(List(), 10), 20), 30)
+print("BEGIN_SMALL\n")
+forEachList(small, print)
+print("END_SMALL\n")
+
+// Iterate after concat — order should be left-then-right.
+let left = listAppend(listAppend(List(), 1), 2)
+let right = listAppend(listAppend(List(), 3), 4)
+let combined = left + right
+print("BEGIN_COMBINED\n")
+forEachList(combined, print)
+print("END_COMBINED\n")
+
+// Iterate after reverse — order should flip.
+let rev = listReverse(small)
+print("BEGIN_REVERSED\n")
+forEachList(rev, print)
+print("END_REVERSED\n")
+
+print("[list_iter done]\n")

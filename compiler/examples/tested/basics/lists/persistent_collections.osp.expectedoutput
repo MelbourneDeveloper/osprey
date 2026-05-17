@@ -1,0 +1,80 @@
+=== Persistent Collections ===
+
+xs length: 
+0
+
+xs3 length: 
+3
+
+
+xs1 length (should still be 1): 
+1
+
+
+xs4 length: 
+4
+
+xs5 length: 
+4
+
+xs3 length (still 3 after two extensions): 
+3
+
+
+reverse length: 
+3
+
+
+concat length (3 + 4 = 7): 
+7
+
+
+m length: 
+0
+
+m3 length: 
+3
+
+
+contains alice: 
+true
+
+contains dave: 
+false
+
+
+after remove bob — m4 length: 
+2
+
+m3 length (still 3): 
+3
+
+
+merge length (x, y, z = 3): 
+3
+
+
+Iterating xs3 with forEachList:
+
+10
+20
+30
+
+
+xs3 + xs4 length: 
+7
+
+
+mA + mB length: 
+3
+
+
+keys length (should be 3): 
+3
+
+values length (should be 3): 
+3
+
+
+=== Done ===
+

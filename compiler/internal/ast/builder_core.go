@@ -17,15 +17,34 @@ const (
 // Builder builds an AST from the ANTLR parse tree.
 type Builder struct {
 	parser.BaseospreyListener
+
+	// moduleNames records every `module Name { ... }` declared in the
+	// program. Populated by a pre-pass in BuildProgram so that
+	// `isModuleName` in builder_calls.go can disambiguate
+	// `Foo.bar()` (module access) from `record.method()` (UFCS).
+	// Implements [BUILTIN-STRING-UFCS] disambiguation rule.
+	moduleNames map[string]bool
 }
 
 // NewBuilder creates a new AST builder instance.
 func NewBuilder() *Builder {
-	return &Builder{}
+	return &Builder{moduleNames: make(map[string]bool)}
 }
 
 // BuildProgram builds an AST from a parse tree.
 func (b *Builder) BuildProgram(tree parser.IProgramContext) *Program {
+	// Pre-pass: record every `module Name { ... }` so call-chain building
+	// can route `Name.member` to ModuleAccessExpression. Without this
+	// pre-pass, UFCS would steal those calls and re-route them through
+	// the function namespace, breaking the fiber-module tests.
+	for _, stmtCtx := range tree.AllStatement() {
+		if mod := stmtCtx.ModuleDecl(); mod != nil {
+			if id := mod.ID(); id != nil {
+				b.moduleNames[id.GetText()] = true
+			}
+		}
+	}
+
 	statements := make([]Statement, 0)
 
 	for _, stmtCtx := range tree.AllStatement() {

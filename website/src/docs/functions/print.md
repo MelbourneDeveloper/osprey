@@ -4,7 +4,7 @@ title: "print (Function)"
 description: "Prints a value to the console. Automatically converts the value to a string representation."
 ---
 
-**Signature:** `print(value: any) -> int`
+**Signature:** `print(value: any) -> Unit`
 
 **Description:** Prints a value to the console. Automatically converts the value to a string representation.
 
@@ -12,7 +12,7 @@ description: "Prints a value to the console. Automatically converts the value to
 
 - **value** (any): The value to print
 
-**Returns:** int
+**Returns:** Unit
 
 ## Example
 

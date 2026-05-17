@@ -1,12 +1,12 @@
 ---
 layout: page
 title: "length (Function)"
-description: "Returns the length of a string."
+description: "Returns the byte length of a string. Total — never fails."
 ---
 
 **Signature:** `length(s: string) -> int`
 
-**Description:** Returns the length of a string.
+**Description:** Returns the byte length of a string. Total — never fails.
 
 ## Parameters
 
@@ -17,6 +17,5 @@ description: "Returns the length of a string."
 ## Example
 
 ```osprey
-let len = length("hello")
-print(len)  // Prints: 5
+let len = length("hello")  // 5
 ```

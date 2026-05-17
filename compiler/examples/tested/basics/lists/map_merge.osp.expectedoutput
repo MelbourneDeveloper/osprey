@@ -1,0 +1,60 @@
+[map_merge]
+
+a len: 
+3
+
+b len: 
+3
+
+
+merge len (4 distinct keys): 
+4
+
+
+m has x: 
+true
+
+m has y: 
+true
+
+m has z: 
+true
+
+m has w: 
+true
+
+
+a+b len via op: 
+4
+
+
+merge(b, a) len: 
+4
+
+
+m2 has w: 
+true
+
+
+merge(empty, a) len: 
+3
+
+merge(a, empty) len: 
+3
+
+merge(empty, empty) len: 
+0
+
+merge(a, a) len: 
+3
+
+
+a still: 
+3
+
+b still: 
+3
+
+
+[map_merge done]
+

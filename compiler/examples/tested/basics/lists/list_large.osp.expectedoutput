@@ -1,0 +1,52 @@
+[list_large]
+
+step lengths 0..5:
+
+0
+
+
+1
+
+
+2
+
+
+3
+
+
+4
+
+
+5
+
+
+b31 len (tail nearly full): 
+31
+
+b32 len (tail full, last in-tail slot): 
+32
+
+b33 len (first element in tree after tail push): 
+33
+
+b35 len: 
+35
+
+
+b15 still 15: 
+15
+
+b1 still 1: 
+1
+
+
+reverse(35) len: 
+35
+
+
+35+35 len: 
+70
+
+
+[list_large done]
+

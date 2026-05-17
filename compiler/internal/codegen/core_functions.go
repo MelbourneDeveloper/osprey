@@ -532,7 +532,9 @@ func (g *LLVMGenerator) getResultType(valueType types.Type) *types.StructType {
 	return types.NewStruct(valueType, types.I8)
 }
 
-// generateContainsCall handles contains(haystack: string, needle: string) -> bool function calls.
+// generateContainsCall: contains(s: string, needle: string) -> bool.
+// Implements [BUILTIN-STRING-SEARCH]. Returns the raw bool (no Result wrap);
+// rationale in spec/0012-Built-InFunctions.md "Design Principles".
 func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(ContainsFunc, callExpr)
 	if err != nil {
@@ -549,7 +551,6 @@ func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (valu
 		return nil, err
 	}
 
-	// Declare or get the strstr function
 	strstrFunc, ok := g.functions["strstr"]
 	if !ok {
 		strstrFunc = g.module.NewFunc("strstr", types.I8Ptr,
@@ -558,140 +559,76 @@ func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (valu
 		g.functions["strstr"] = strstrFunc
 	}
 
-	// Call strstr(haystack, needle)
 	resultPtr := g.builder.NewCall(strstrFunc, haystack, needle)
-
-	// Check if result is not null (convert to bool)
-	nullPtr := constant.NewNull(types.I8Ptr)
-	isNotNull := g.builder.NewICmp(enum.IPredNE, resultPtr, nullPtr)
-
-	// Create a Result<Bool, NoError>
-	resultType := g.getResultType(types.I1)
-	result := g.builder.NewAlloca(resultType)
-
-	// Store the boolean in the value field
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(isNotNull, valuePtr)
-
-	// Store the discriminant (0 for Success)
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-
-	return result, nil
+	return g.builder.NewICmp(enum.IPredNE, resultPtr, constant.NewNull(types.I8Ptr)), nil
 }
 
+// generateSubstringCall: substring(s, start, end) -> Result<string, StringError>.
+// Implements [BUILTIN-STRING-SUBSTRINGS]. Delegates bounds-checking to the
+// C helper which returns NULL on invalid indices; we wrap NULL as Error.
 func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(SubstringFunc, callExpr)
 	if err != nil {
 		return nil, err
 	}
-
 	str, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
-
 	start, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err
 	}
-
 	end, err := g.generateExpression(callExpr.Arguments[2])
 	if err != nil {
 		return nil, err
 	}
-
-	// Calculate length: end - start
-	length := g.builder.NewSub(end, start)
-
-	// Allocate memory for the substring (length + 1 for null terminator)
-	lengthPlusOne := g.builder.NewAdd(length, constant.NewInt(types.I64, 1))
-
-	mallocFunc, ok := g.functions["malloc"]
-	if !ok {
-		mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
-		g.functions["malloc"] = mallocFunc
-	}
-
-	newStr := g.builder.NewCall(mallocFunc, lengthPlusOne)
-
-	// Calculate source pointer: str + start
-	srcPtr := g.builder.NewGetElementPtr(types.I8, str, start)
-
-	// Copy the substring using memcpy
-	memcpyFunc, ok := g.functions["memcpy"]
-	if !ok {
-		memcpyFunc = g.module.NewFunc("memcpy", types.I8Ptr,
-			ir.NewParam("dest", types.I8Ptr),
-			ir.NewParam("src", types.I8Ptr),
-			ir.NewParam("n", types.I64))
-		g.functions["memcpy"] = memcpyFunc
-	}
-
-	g.builder.NewCall(memcpyFunc, newStr, srcPtr, length)
-
-	// Null-terminate the new string
-	endPtr := g.builder.NewGetElementPtr(types.I8, newStr, length)
-	g.builder.NewStore(constant.NewInt(types.I8, 0), endPtr)
-
-	// Create a Result<String, NoError>
-	resultType := g.getResultType(types.I8Ptr)
-	result := g.builder.NewAlloca(resultType)
-
-	// Store the new string in the value field
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(newStr, valuePtr)
-
-	// Store the discriminant (0 for Success)
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-
-	return result, nil
+	fn := g.declareStringRuntime("osp_string_substring", types.I8Ptr,
+		ir.NewParam("s", types.I8Ptr),
+		ir.NewParam("start", types.I64),
+		ir.NewParam("end", types.I64))
+	ptr := g.builder.NewCall(fn, str, start, end)
+	return g.resultFromNullableString(ptr), nil
 }
 
-// generateParseIntCall handles parseInt(s: string) -> Result<int, string> function calls.
+// generateParseIntCall: parseInt(s) -> Result<int, StringError>.
+// Implements [BUILTIN-STRING-PARSING]. Delegates to strict C helper which
+// rejects non-numeric input, leading/trailing whitespace, and overflow.
 func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(ParseIntFunc, callExpr)
 	if err != nil {
 		return nil, err
 	}
-
 	str, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
 
-	// Declare or get the atoll function (ASCII to long long)
-	atollFunc, ok := g.functions["atoll"]
+	parseFn, ok := g.functions["osp_parse_int_strict"]
 	if !ok {
-		atollFunc = g.module.NewFunc("atoll", types.I64, ir.NewParam("str", types.I8Ptr))
-		g.functions["atoll"] = atollFunc
+		parseFn = g.module.NewFunc("osp_parse_int_strict", types.I64,
+			ir.NewParam("s", types.I8Ptr),
+			ir.NewParam("out", types.NewPointer(types.I64)))
+		g.functions["osp_parse_int_strict"] = parseFn
 	}
 
-	// Call atoll(str) to convert string to integer
-	parsedValue := g.builder.NewCall(atollFunc, str)
+	outSlot := g.builder.NewAlloca(types.I64)
+	g.builder.NewStore(constant.NewInt(types.I64, 0), outSlot)
+	rc := g.builder.NewCall(parseFn, str, outSlot)
+	parsed := g.builder.NewLoad(types.I64, outSlot)
 
-	// TODO: Add proper error checking - atoll returns 0 for invalid strings
-	// For now, assume parsing always succeeds
-
-	// Create a Result<int, string>
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
+	isErr := g.builder.NewICmp(enum.IPredNE, rc, constant.NewInt(types.I64, 0))
+	disc := g.builder.NewSelect(isErr, constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
+	val := g.builder.NewSelect(isErr, constant.NewInt(types.I64, 0), parsed)
 
-	// Store the parsed integer in the value field
 	valuePtr := g.builder.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(parsedValue, valuePtr)
-
-	// Store the discriminant (0 for Success)
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+	g.builder.NewStore(val, valuePtr)
+	discPtr := g.builder.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-
+	g.builder.NewStore(disc, discPtr)
 	return result, nil
 }
 
@@ -715,16 +652,17 @@ func (g *LLVMGenerator) generateJoinCall(callExpr *ast.CallExpression) (value.Va
 	return separator, nil
 }
 
-// generateListConstructorCall handles List() constructor calls.
+// generateListConstructorCall handles List() constructor calls — returns
+// an empty persistent list via the C runtime.
 func (g *LLVMGenerator) generateListConstructorCall(_ *ast.CallExpression) (value.Value, error) {
-	// For now, return a simple placeholder (null pointer)
-	// TODO: Implement proper dynamic list structure
-	return constant.NewNull(types.I8Ptr), nil
+	g.declareListExterns()
+	return g.builder.NewCall(g.functions["osprey_list_empty"]), nil
 }
 
-// generateMapConstructorCall handles Map() constructor calls.
+// generateMapConstructorCall handles Map() constructor calls — returns an
+// empty persistent map. Defaults to string keys; see spec §[TYPE-MAP].
 func (g *LLVMGenerator) generateMapConstructorCall(_ *ast.CallExpression) (value.Value, error) {
-	// For now, return a simple placeholder (null pointer)
-	// TODO: Implement proper dynamic map structure
-	return constant.NewNull(types.I8Ptr), nil
+	g.declareMapExterns()
+	return g.builder.NewCall(g.functions["osprey_map_empty"],
+		constant.NewInt(types.I32, collectionKeyString)), nil
 }
