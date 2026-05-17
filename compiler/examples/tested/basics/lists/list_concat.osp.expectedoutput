@@ -25,7 +25,7 @@ b + a len:
 
 
 (a+b)+a via op len: 
-773
+8
 
 
 a + a len: 
@@ -57,4 +57,3 @@ e still
 
 
 [list_concat done]
-

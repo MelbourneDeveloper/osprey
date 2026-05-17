@@ -42,5 +42,21 @@ PASS a+a via +operator length=
 6
 
 
-[list_basics done]
+PASS prepend length=
+4
 
+PASS prepend src unchanged=
+3
+
+
+PASS contains 2 in a=
+true
+
+PASS contains 99 in a=
+false
+
+PASS contains 1 in empty=
+false
+
+
+[list_basics done]

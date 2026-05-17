@@ -61,4 +61,21 @@ print("PASS a+a via +operator length=")
 print(listLength(cplus))
 print("\n")
 
+// listPrepend grows the front; original is unchanged.
+let p1 = listPrepend(a, 0)
+print("PASS prepend length=")
+print(listLength(p1))
+print("\nPASS prepend src unchanged=")
+print(listLength(a))
+print("\n")
+
+// listContains: present, absent, empty list.
+print("PASS contains 2 in a=")
+print(listContains(a, 2))
+print("\nPASS contains 99 in a=")
+print(listContains(a, 99))
+print("\nPASS contains 1 in empty=")
+print(listContains(List(), 1))
+print("\n")
+
 print("[list_basics done]\n")

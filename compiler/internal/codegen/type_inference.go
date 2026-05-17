@@ -2059,6 +2059,17 @@ func (ti *TypeInferer) inferPlusForConcreteTypes(leftResolved, rightResolved Typ
 		return &ConcreteType{name: TypeString}, true
 	}
 
+	// Collection `+`: List + List → List (concat), Map + Map → Map (merge).
+	// Lets `tryCollectionPlus` route chained collection `+` to the right
+	// runtime call — without this the outer `+` in `a + b + c` infers a
+	// fresh TypeVar and falls through to integer codegen.
+	if leftConcrete.name == TypeList && rightConcrete.name == TypeList {
+		return &ConcreteType{name: TypeList}, true
+	}
+	if leftConcrete.name == TypeMap && rightConcrete.name == TypeMap {
+		return &ConcreteType{name: TypeMap}, true
+	}
+
 	// Numeric operations with type promotion - ALL return Result due to overflow
 	leftIsNumeric := leftConcrete.name == TypeInt || leftConcrete.name == TypeFloat
 	rightIsNumeric := rightConcrete.name == TypeInt || rightConcrete.name == TypeFloat
