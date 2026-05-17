@@ -16,7 +16,7 @@ ID := [a-zA-Z_][a-zA-Z0-9_]*
 ## Keywords
 
 ```
-fn let mut type import match if then else case of extern
+fn let mut type match extern import effect perform handle in as
 ```
 
 ## Literals
@@ -68,43 +68,17 @@ INTERPOLATION := '${' EXPRESSION '}'
 LIST := '[' (expression (',' expression)*)? ']'
 ```
 
-**Examples:**
 ```osprey
-let numbers = [1, 2, 3, 4]  // Fixed size: 4 elements
-let names = ["Alice", "Bob", "Charlie"]  // Fixed size: 3 elements
-let pair = [x, y]  // Fixed size: 2 elements
+let numbers = [1, 2, 3, 4]
+let names   = ["Alice", "Bob", "Charlie"]
+let pair    = [x, y]
 ```
 
 ## Operators
 
 ### Arithmetic Operators
 
-All arithmetic operators return `Result` types to handle overflow, underflow, and division by zero.
-
-**Integer Operations:**
-- `+` Addition: `(int, int) -> Result<int, MathError>`
-- `-` Subtraction: `(int, int) -> Result<int, MathError>`
-- `*` Multiplication: `(int, int) -> Result<int, MathError>`
-- `/` Division: `(int, int) -> Result<float, MathError>` — always returns float
-- `%` Modulo: `(int, int) -> Result<int, MathError>`
-
-**Floating-Point Operations:**
-- `+`, `-`, `*`, `/`, `%`: `(float, float) -> Result<float, MathError>`
-
-**Type Safety:**
-- No automatic type promotion between int and float
-- Use `toFloat(int)` and `toInt(float)` for explicit conversion
-- Division `/` always returns float, even for integer operands
-
-**Examples:**
-```osprey
-let sum = 5 + 3           // Result<int, MathError>
-let quotient = 10 / 3     // Result<float, MathError> - returns 3.333...
-let remainder = 10 % 3    // Result<int, MathError> - returns 1
-
-let precise = 10.0 / 3.0  // Result<float, MathError>
-let divZero = 10 / 0      // Result<float, MathError> - Error(DivisionByZero)
-```
+`+`, `-`, `*`, `/`, `%`. All arithmetic returns `Result`; full signatures and semantics are in [Error Handling](0013-ErrorHandling.md).
 
 ### Comparison Operators
 - `==` Equality
@@ -123,9 +97,11 @@ let divZero = 10 / 0      // Result<float, MathError> - Error(DivisionByZero)
 - `=` Assignment
 
 ### Other Operators
-- `=>` Lambda/Match arm arrow
+- `->` Function return type
+- `=>` Lambda body and match arm
 - `|` Union type separator
-- `::` Type annotation
+- `|>` Pipe
+- `!` Effect-set marker on a function type
 
 ## Delimiters
 

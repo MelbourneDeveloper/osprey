@@ -1,11 +1,6 @@
-9. [Block Expressions](0009-BlockExpressions.md)
-   - [Block Scoping Rules](#block-scoping-rules)
-   - [Block Return Values](#block-return-values)
-   - [Performance Characteristics](#performance-characteristics)
-
 # Block Expressions
 
-Block expressions allow grouping multiple statements together and returning a value from the final expression. They create a new scope for variable declarations and enable sequential execution with proper scoping rules.
+A block expression groups statements and returns the value of its final expression. Each block introduces a new lexical scope.
 
 ```
 block_expression := '{' statement* expression? '}'
@@ -65,15 +60,4 @@ print("Outer x: ${x}")      // 100 (unchanged)
 
 ## Block Return Values
 
-Block expressions return the value of their final expression:
-- If the block ends with an expression, that value is returned
-- If the block has no final expression, it returns the unit type
-- The block's type is determined by the type of the final expression
-
-## Performance Characteristics
-
-Block expressions are zero-cost abstractions:
-- **Compile-time scoping**: All variable scoping resolved at compile time
-- **No runtime overhead**: Blocks compile to sequential instructions
-- **Stack allocation**: Local variables allocated on the stack
-- **Optimized away**: Simple blocks with no local variables are optimized away 
+A block ending with an expression returns that expression's value and adopts its type. A block ending with a statement returns `unit`.
