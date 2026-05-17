@@ -685,8 +685,18 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 	case *ast.UnaryExpression:
 		return ti.inferUnaryExpression(e)
 	case *ast.MethodCallExpression:
-		// Method calls are not supported in the grammar
-		return nil, ErrMethodCallsNotImplemented
+		// UFCS: `x.f(a, b)` is type-equivalent to `f(x, a, b)`.
+		// Implements [BUILTIN-STRING-UFCS]. See spec/0012-Built-InFunctions.md.
+		rewritten := &ast.CallExpression{
+			Function: &ast.Identifier{
+				Name:     e.MethodName,
+				Position: e.Position,
+			},
+			Arguments:      append([]ast.Expression{e.Object}, e.Arguments...),
+			NamedArguments: e.NamedArguments,
+			Position:       e.Position,
+		}
+		return ti.inferCallExpression(rewritten)
 	case *ast.ListAccessExpression:
 		return ti.inferListAccess(e)
 	case *ast.UpdateExpression:

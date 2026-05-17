@@ -173,6 +173,9 @@ func (r *BuiltInFunctionRegistry) initializeFunctions() {
 	// Collection functions
 	r.registerCollectionFunctions()
 
+	// List<T> and Map<K, V> builtins (length, append, set, remove, merge, …)
+	r.registerListMapBuiltins()
+
 	// File I/O functions
 	r.registerFileIOFunctions()
 
@@ -246,82 +249,373 @@ func (r *BuiltInFunctionRegistry) registerCoreIOFunctions() {
 	}
 }
 
-// registerStringFunctions registers string manipulation functions
+// registerStringFunctions registers string manipulation functions.
+// Implements [BUILTIN-STRING-*]. Design rationale and full API in
+// compiler/spec/0012-Built-InFunctions.md.
+//
+//nolint:funlen // single declarative registry; splitting hurts grep-ability
 func (r *BuiltInFunctionRegistry) registerStringFunctions() {
-	// length function
+	r.registerStringInspection()
+	r.registerStringSearch()
+	r.registerStringSubstrings()
+	r.registerStringTransform()
+	r.registerStringParsing()
+	r.registerStringListFunctions()
+}
+
+func (r *BuiltInFunctionRegistry) registerStringInspection() {
 	r.functions[LengthFunc] = &BuiltInFunction{
 		Name:        LengthFunc,
-		Signature:   "length(text: string) -> int",
-		Description: "Returns the length of a string.",
+		Signature:   "length(s: string) -> int",
+		Description: "Returns the byte length of a string. Total — never fails.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "text", Type: &ConcreteType{name: TypeString}, Description: "The string to measure"},
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to measure"},
 		},
 		ReturnType:   &ConcreteType{name: TypeInt},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateLengthCall,
-		Example:      `let len = length("hello")\nprint(len)  // Prints: 5`,
+		Example:      `let len = length("hello")  // 5`,
 	}
 
-	// contains function
+	r.functions[IsEmptyFunc] = &BuiltInFunction{
+		Name:        IsEmptyFunc,
+		Signature:   "isEmpty(s: string) -> bool",
+		Description: "True if string has zero length.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to test"},
+		},
+		ReturnType:   &ConcreteType{name: TypeBool},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateIsEmptyCall,
+		Example:      `let blank = isEmpty("")  // true`,
+	}
+}
+
+func (r *BuiltInFunctionRegistry) registerStringSearch() {
 	r.functions[ContainsFunc] = &BuiltInFunction{
 		Name:        ContainsFunc,
-		Signature:   "contains(haystack: string, needle: string) -> bool",
-		Description: "Checks if a string contains a substring.",
+		Signature:   "contains(s: string, needle: string) -> bool",
+		Description: "True if needle appears anywhere in s. Empty needle returns true.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "haystack", Type: &ConcreteType{name: TypeString}, Description: "The string to search in"},
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to search in"},
 			{Name: "needle", Type: &ConcreteType{name: TypeString}, Description: "The substring to search for"},
 		},
-		ReturnType:   CreateResultType(&ConcreteType{name: TypeBool}, &ConcreteType{name: "Error"}),
+		ReturnType:   &ConcreteType{name: TypeBool},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateContainsCall,
-		Example:      `let found = contains("hello world", "world")\nprint(found)  // Prints: true`,
+		Example:      `let found = contains("hello world", "world")  // true`,
 	}
 
-	// substring function
+	r.functions[StartsWithFunc] = &BuiltInFunction{
+		Name:        StartsWithFunc,
+		Signature:   "startsWith(s: string, prefix: string) -> bool",
+		Description: "True if s begins with prefix.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to test"},
+			{Name: "prefix", Type: &ConcreteType{name: TypeString}, Description: "The prefix to look for"},
+		},
+		ReturnType:   &ConcreteType{name: TypeBool},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateStartsWithCall,
+		Example:      `startsWith("GET /api", "GET ")  // true`,
+	}
+
+	r.functions[EndsWithFunc] = &BuiltInFunction{
+		Name:        EndsWithFunc,
+		Signature:   "endsWith(s: string, suffix: string) -> bool",
+		Description: "True if s ends with suffix.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to test"},
+			{Name: "suffix", Type: &ConcreteType{name: TypeString}, Description: "The suffix to look for"},
+		},
+		ReturnType:   &ConcreteType{name: TypeBool},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateEndsWithCall,
+		Example:      `endsWith("image.png", ".png")  // true`,
+	}
+
+	r.functions[IndexOfFunc] = &BuiltInFunction{
+		Name:        IndexOfFunc,
+		Signature:   "indexOf(s: string, needle: string) -> Result<int, StringError>",
+		Description: "Returns byte-index of first occurrence of needle, or Error(NotFound).",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to search in"},
+			{Name: "needle", Type: &ConcreteType{name: TypeString}, Description: "The substring to locate"},
+		},
+		ReturnType:   &ConcreteType{name: "Result<int, StringError>"},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateIndexOfCall,
+		Example:      `match indexOf("foo=bar", "=") { Success { value } => print(value) ... }`,
+	}
+}
+
+func (r *BuiltInFunctionRegistry) registerStringSubstrings() {
+	r.functions[TakeFunc] = &BuiltInFunction{
+		Name:        TakeFunc,
+		Signature:   "take(s: string, n: int) -> string",
+		Description: "Returns at most the first n bytes of s. Clamps; never fails.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The source string"},
+			{Name: "n", Type: &ConcreteType{name: TypeInt}, Description: "How many bytes to take"},
+		},
+		ReturnType:   &ConcreteType{name: TypeString},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateTakeCall,
+		Example:      `take("hello", 3)  // "hel"`,
+	}
+
+	r.functions[DropFunc] = &BuiltInFunction{
+		Name:        DropFunc,
+		Signature:   "drop(s: string, n: int) -> string",
+		Description: "Returns s without its first n bytes. Clamps; never fails.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The source string"},
+			{Name: "n", Type: &ConcreteType{name: TypeInt}, Description: "How many bytes to drop"},
+		},
+		ReturnType:   &ConcreteType{name: TypeString},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateDropCall,
+		Example:      `drop("hello", 3)  // "lo"`,
+	}
+
 	r.functions[SubstringFunc] = &BuiltInFunction{
 		Name:        SubstringFunc,
-		Signature:   "substring(s: string, start: int, end: int) -> Result<string, Error>",
-		Description: "Extracts a substring from start to end index, or returns an error if indices are invalid.",
+		Signature:   "substring(s: string, start: int, end: int) -> Result<string, StringError>",
+		Description: "Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The source string"},
 			{Name: "start", Type: &ConcreteType{name: TypeInt}, Description: "Starting index (inclusive)"},
 			{Name: "end", Type: &ConcreteType{name: TypeInt}, Description: "Ending index (exclusive)"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<string, Error>"},
+		ReturnType:   &ConcreteType{name: "Result<string, StringError>"},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateSubstringCall,
-		Example:      `let sub = substring("hello", 1, 4)\nprint(sub)  // Prints: Result containing "ell"`,
+		Example:      `substring("hello", 1, 4)  // Success { value: "ell" }`,
 	}
+}
 
-	// parseInt function
+//nolint:funlen // tight cluster of related registrations; splitting hurts grep-ability
+func (r *BuiltInFunctionRegistry) registerStringTransform() {
+	r.functions[ToUpperCaseFunc] = &BuiltInFunction{
+		Name: ToUpperCaseFunc, Signature: "toUpperCase(s: string) -> string",
+		Description: "ASCII-aware uppercase. Unicode simple case mapping is a future addition.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to transform"},
+		},
+		ReturnType: &ConcreteType{name: TypeString}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generateToUpperCaseCall,
+		Example:   `toUpperCase("hello")  // "HELLO"`,
+	}
+	r.functions[ToLowerCaseFunc] = &BuiltInFunction{
+		Name: ToLowerCaseFunc, Signature: "toLowerCase(s: string) -> string",
+		Description: "ASCII-aware lowercase.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to transform"},
+		},
+		ReturnType: &ConcreteType{name: TypeString}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generateToLowerCaseCall,
+		Example:   `toLowerCase("HELLO")  // "hello"`,
+	}
+	r.functions[TrimFunc] = &BuiltInFunction{
+		Name: TrimFunc, Signature: "trim(s: string) -> string",
+		Description: "Removes leading and trailing whitespace.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to trim"},
+		},
+		ReturnType: &ConcreteType{name: TypeString}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generateTrimCall,
+		Example:   `trim("  hi  ")  // "hi"`,
+	}
+	r.functions[TrimStartFunc] = &BuiltInFunction{
+		Name: TrimStartFunc, Signature: "trimStart(s: string) -> string",
+		Description: "Removes leading whitespace.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to trim"},
+		},
+		ReturnType: &ConcreteType{name: TypeString}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generateTrimStartCall,
+		Example:   `trimStart("  hi  ")  // "hi  "`,
+	}
+	r.functions[TrimEndFunc] = &BuiltInFunction{
+		Name: TrimEndFunc, Signature: "trimEnd(s: string) -> string",
+		Description: "Removes trailing whitespace.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to trim"},
+		},
+		ReturnType: &ConcreteType{name: TypeString}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generateTrimEndCall,
+		Example:   `trimEnd("  hi  ")  // "  hi"`,
+	}
+	r.functions[ReverseFunc] = &BuiltInFunction{
+		Name: ReverseFunc, Signature: "reverse(s: string) -> string",
+		Description: "Reverses byte order. Grapheme-cluster reversal is future work.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to reverse"},
+		},
+		ReturnType: &ConcreteType{name: TypeString}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generateReverseCall,
+		Example:   `reverse("abc")  // "cba"`,
+	}
+	r.functions[ReplaceFunc] = &BuiltInFunction{
+		Name: ReplaceFunc,
+		Signature: "replace(s: string, needle: string, replacement: string) -> " +
+			"Result<string, StringError>",
+		Description: "Replaces every occurrence of needle. Error(InvalidArgument) on empty needle.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The source string"},
+			{Name: "needle", Type: &ConcreteType{name: TypeString}, Description: "The substring to find"},
+			{Name: "replacement", Type: &ConcreteType{name: TypeString}, Description: "The replacement string"},
+		},
+		ReturnType: &ConcreteType{name: "Result<string, StringError>"}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generateReplaceCall,
+		Example:   `replace("a-b-c", "-", "_")  // Success { value: "a_b_c" }`,
+	}
+	r.functions[RepeatFunc] = &BuiltInFunction{
+		Name: RepeatFunc, Signature: "repeat(s: string, n: int) -> Result<string, StringError>",
+		Description: "Concatenates s with itself n times. Error(InvalidArgument) on negative n.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to repeat"},
+			{Name: "n", Type: &ConcreteType{name: TypeInt}, Description: "Repeat count, must be >= 0"},
+		},
+		ReturnType: &ConcreteType{name: "Result<string, StringError>"}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generateRepeatCall,
+		Example:   `repeat("ab", 3)  // Success { value: "ababab" }`,
+	}
+	r.functions[PadStartFunc] = &BuiltInFunction{
+		Name: PadStartFunc, Signature: "padStart(s: string, targetLength: int, fill: string) -> Result<string, StringError>",
+		Description: "Pads s on the left with copies of fill to reach targetLength bytes.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to pad"},
+			{Name: "targetLength", Type: &ConcreteType{name: TypeInt}, Description: "Desired total length"},
+			{Name: "fill", Type: &ConcreteType{name: TypeString}, Description: "Padding string (non-empty)"},
+		},
+		ReturnType: &ConcreteType{name: "Result<string, StringError>"}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generatePadStartCall,
+		Example:   `padStart("7", 3, "0")  // Success { value: "007" }`,
+	}
+	r.functions[PadEndFunc] = &BuiltInFunction{
+		Name: PadEndFunc, Signature: "padEnd(s: string, targetLength: int, fill: string) -> Result<string, StringError>",
+		Description: "Pads s on the right with copies of fill to reach targetLength bytes.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to pad"},
+			{Name: "targetLength", Type: &ConcreteType{name: TypeInt}, Description: "Desired total length"},
+			{Name: "fill", Type: &ConcreteType{name: TypeString}, Description: "Padding string (non-empty)"},
+		},
+		ReturnType: &ConcreteType{name: "Result<string, StringError>"}, Category: CategoryString,
+		IsProtected: true, SecurityFlag: PermissionNone,
+		Generator: (*LLVMGenerator).generatePadEndCall,
+		Example:   `padEnd("7", 3, ".")  // Success { value: "7.." }`,
+	}
+}
+
+func (r *BuiltInFunctionRegistry) registerStringParsing() {
 	r.functions[ParseIntFunc] = &BuiltInFunction{
 		Name:        ParseIntFunc,
-		Signature:   "parseInt(s: string) -> Result<int, string>",
-		Description: "Parses a string to an integer, returns error if parsing fails.",
+		Signature:   "parseInt(s: string) -> Result<int, StringError>",
+		Description: "Strict base-10 signed-int parser. No whitespace tolerance.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to parse"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<int, string>"},
+		ReturnType:   &ConcreteType{name: "Result<int, StringError>"},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateParseIntCall,
-		Example:      `let num = parseInt("42")\nprint(num)  // Prints: Success { value: 42 }`,
+		Example:      `parseInt("42")  // Success { value: 42 }`,
 	}
+	r.functions[ParseFloatFunc] = &BuiltInFunction{
+		Name:        ParseFloatFunc,
+		Signature:   "parseFloat(s: string) -> Result<float, StringError>",
+		Description: "Strict base-10 floating-point parser. No whitespace tolerance.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to parse"},
+		},
+		ReturnType:   &ConcreteType{name: "Result<float, StringError>"},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateParseFloatCall,
+		Example:      `parseFloat("3.14")  // Success { value: 3.14 }`,
+	}
+}
 
-	// join function
+func (r *BuiltInFunctionRegistry) registerStringListFunctions() {
+	r.functions[SplitFunc] = &BuiltInFunction{
+		Name:        SplitFunc,
+		Signature:   "split(s: string, separator: string) -> Result<List<string>, StringError>",
+		Description: "Splits s on separator. Error(InvalidArgument) on empty separator.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to split"},
+			{Name: "separator", Type: &ConcreteType{name: TypeString}, Description: "Non-empty separator"},
+		},
+		ReturnType:   &ConcreteType{name: "Result<List<string>, StringError>"},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateSplitCall,
+		Example:      `split("a,b,c", ",")  // Success { value: ["a","b","c"] }`,
+	}
+	r.functions[LinesFunc] = &BuiltInFunction{
+		Name:        LinesFunc,
+		Signature:   "lines(s: string) -> List<string>",
+		Description: "Splits on '\\n'. A trailing newline does not produce an empty entry.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to split"},
+		},
+		ReturnType:   &ConcreteType{name: "List<string>"},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateLinesCall,
+		Example:      `lines("a\\nb\\nc")  // ["a","b","c"]`,
+	}
+	r.functions[WordsFunc] = &BuiltInFunction{
+		Name:        WordsFunc,
+		Signature:   "words(s: string) -> List<string>",
+		Description: "Splits on runs of whitespace; empty results dropped.",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to split"},
+		},
+		ReturnType:   &ConcreteType{name: "List<string>"},
+		Category:     CategoryString,
+		IsProtected:  true,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateWordsCall,
+		Example:      `words("a  b\\tc")  // ["a","b","c"]`,
+	}
 	r.functions[JoinFunc] = &BuiltInFunction{
 		Name:        JoinFunc,
-		Signature:   "join(list: list<string>, separator: string) -> string",
-		Description: "Joins a list of strings with a separator.",
+		Signature:   "join(parts: List<string>, separator: string) -> string",
+		Description: "Concatenates parts with separator between each pair.",
 		ParameterTypes: []BuiltInParameter{
-			{Name: "list", Type: &ConcreteType{name: "List<string>"}, Description: "List of strings to join"},
+			{Name: "parts", Type: &ConcreteType{name: "List<string>"}, Description: "Strings to join"},
 			{Name: "separator", Type: &ConcreteType{name: TypeString}, Description: "Separator string"},
 		},
 		ReturnType:   &ConcreteType{name: TypeString},
@@ -329,7 +623,7 @@ func (r *BuiltInFunctionRegistry) registerStringFunctions() {
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
 		Generator:    (*LLVMGenerator).generateJoinCall,
-		Example:      `let result = join(["hello", "world"], " ")\nprint(result)  // Prints: "hello world"`,
+		Example:      `join(["a","b","c"], "-")  // "a-b-c"`,
 	}
 }
 

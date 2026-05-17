@@ -1,0 +1,54 @@
+// Implements [BUILTIN-STRING-*] end-to-end demo.
+// Showcases the full string API via the pipe operator (preferred form per
+// spec/0012-Built-InFunctions.md "Calling Style").
+
+fn main() -> int {
+  print("=== String Pipeline Demo ===\n")
+
+  // ----- Inspection and search (total) -----
+  let raw = "  GET /api/users?name=alice&age=30  "
+  print("raw=\"${raw}\" len=${raw |> length}\n")
+  print("isEmpty=${raw |> isEmpty}\n")
+
+  // Pipe chain: trim, lowercase, prefix check.
+  let normalized = raw |> trim |> toLowerCase
+  print("normalized=\"${normalized}\"\n")
+  print("isGetRequest=${normalized |> startsWith("get ")}\n")
+
+  // ----- Substring (fallible) -----
+  match indexOf(raw, "?") {
+    Success { value }   => print("query starts at ${value}\n")
+    Error   { message } => print("no query string\n")
+  }
+
+  // ----- Transformation (fallible) -----
+  match replace("a-b-c-d", "-", "/") {
+    Success { value }   => print("replaced=\"${value}\"\n")
+    Error   { message } => print("replace failed\n")
+  }
+  match repeat("ab", 4) {
+    Success { value }   => print("repeated=\"${value}\"\n")
+    Error   { message } => print("repeat failed\n")
+  }
+  match padStart("42", 5, "0") {
+    Success { value }   => print("padded=\"${value}\"\n")
+    Error   { message } => print("pad failed\n")
+  }
+
+  // ----- Parsing (fallible) -----
+  match parseInt("123") {
+    Success { value }   => print("parsed int=${value}\n")
+    Error   { message } => print("parseInt failed\n")
+  }
+  match parseInt("oops") {
+    Success { value }   => print("unexpected: ${value}\n")
+    Error   { message } => print("parseInt strict: rejects 'oops'\n")
+  }
+
+  // ----- UFCS form equivalence -----
+  // Same as `raw |> trim |> length` but via dot syntax.
+  print("ufcs len after trim=${raw.trim().length()}\n")
+
+  print("=== Demo Complete ===\n")
+  0
+}

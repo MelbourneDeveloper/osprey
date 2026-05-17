@@ -343,19 +343,55 @@ func getExpectedOutputs() map[string]string {
 			"Result 2: 0\n" +
 			"Fiber ID: 1\n" +
 			"=== Test Complete ===\n",
+		// Updated for [BUILTIN-STRING-*]: length/contains return raw values.
 		"result_type_workflow.osp": "=== Result Type Workflow Test ===\n\n" +
-			"Length: \n5\n\n\n" +
-			"Contains 'ell': \ntrue\n\n\n" +
-			"Contains 'xyz': \nfalse\n\n\n",
+			"Length: 5\n\nContains 'ell': true\n\nContains 'xyz': false\n\n",
+		// Implements [BUILTIN-STRING-*] end-to-end demo.
+		"string_pipeline.osp": "=== String Pipeline Demo ===\n\n" +
+			"raw=\"  GET /api/users?name=alice&age=30  \" len=36\n\n" +
+			"isEmpty=false\n\n" +
+			"normalized=\"get /api/users?name=alice&age=30\"\n\n" +
+			"isGetRequest=true\n\n" +
+			"query starts at 16\n\n" +
+			"replaced=\"a/b/c/d\"\n\n" +
+			"repeated=\"abababab\"\n\n" +
+			"padded=\"00042\"\n\n" +
+			"parsed int=123\n\n" +
+			"parseInt strict: rejects 'oops'\n\n" +
+			"ufcs len after trim=32\n\n" +
+			"=== Demo Complete ===\n\n",
+		// Implements [BUILTIN-STRING-UFCS] — pipe == UFCS == direct.
+		"ufcs_string.osp": "len  pipe=16  ufcs=16\n\n" +
+			"empt pipe=true  ufcs=true\n\n" +
+			"ctns pipe=true  ufcs=true\n\n" +
+			"strt pipe=true  ufcs=true\n\n" +
+			"ends pipe=true  ufcs=true\n\n" +
+			"trim ufcs=\"Hello, World\"\n\n" +
+			"uppr ufcs=\"HI\"\n\n" +
+			"lowr ufcs=\"hi\"\n\n" +
+			"take ufcs=\"hel\"\n\n" +
+			"drop ufcs=\"lo\"\n\n" +
+			"revr ufcs=\"cba\"\n\n" +
+			"chain=\"hello\"\n\n",
+		// Implements [BUILTIN-STRING-SEARCH] in HTTP-routing shape.
+		"route_match.osp": "200 ok\n\n" +
+			"200 user-detail 42\n\n" +
+			"200 api-fallback\n\n" +
+			"201 created\n\n" +
+			"404 not-found\n\n" +
+			"405 method-not-allowed\n\n",
 		"file_io_json_workflow.osp": "=== File I/O Workflow Test ===\n" +
 			"-- Step 1: Writing to file --\n" +
 			"File written successfully!\n" +
 			"-- Step 2: Reading from file --\n" +
 			"Read successful!\n" +
 			"=== Test Complete ===\n",
-		"string_utils_combined.osp": "=== String Utils Test ===\n\nOriginal: \\\nhello world\n\"\n\n" +
-			"Length: \n11\n\n\nContains 'world': \ntrue\n\n\nContains 'galaxy': \nfalse\n\n\n" +
-			"Substring(6, 11): \\\nworld\n\"\n\nSubstring(0, 20): \\\nhello world\n\"\n\n" +
+		// Updated for [BUILTIN-STRING-*]: length/contains now return raw values
+		// (no Result wrap); substring now actually rejects out-of-range indices.
+		"string_utils_combined.osp": "=== String Utils Test ===\n\nOriginal: \"hello world\"\n\n" +
+			"Length: 11\n\nContains 'world': true\n\nContains 'galaxy': false\n\n" +
+			"Substring(6, 11): \"world\"\n\n" +
+			"Substring error: Error occurred\\x00\n\n" +
 			"=== Test Complete ===\n\n",
 		"list_and_process.osp": "=== Array Access Test ===\n\nCreated array with 3 commands\n\n" +
 			"Testing array access with pattern matching:\n\n✅ commands[0] = \\\necho hello\n\"\n\n" +

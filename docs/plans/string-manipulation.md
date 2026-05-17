@@ -115,46 +115,104 @@ Grammar and AST are already in place ([compiler/osprey.g4:154-155](../../compile
 ## TODO checklist
 
 ### Workstream A — String functions
-- [ ] A1.1 Unwrap `length` return type in registry + generator
-- [ ] A1.2 Unwrap `contains` return type in registry + generator
-- [ ] A1.3 Migrate all `match length(...)` / `match contains(...)` callsites
-- [ ] A2.1 `isEmpty`
-- [ ] A2.2 `startsWith`
-- [ ] A2.3 `endsWith`
-- [ ] A2.4 `toUpperCase`
-- [ ] A2.5 `toLowerCase`
-- [ ] A2.6 `trim`
-- [ ] A2.7 `trimStart`
-- [ ] A2.8 `trimEnd`
-- [ ] A2.9 `reverse`
-- [ ] A2.10 `take`
-- [ ] A2.11 `drop`
-- [ ] A2.12 `lines`
-- [ ] A2.13 `words`
-- [ ] A3.1 `indexOf`
-- [ ] A3.2 `split`
-- [ ] A3.3 `replace`
-- [ ] A3.4 `repeat`
-- [ ] A3.5 `padStart`
-- [ ] A3.6 `padEnd`
-- [ ] A3.7 `parseFloat`
-- [ ] A3.8 Strict `parseInt` (fix silent-zero bug)
-- [ ] A4 Verify `string + string -> string` is infallible
-- [ ] A5.1 `string_pipeline.osp` query-string demo
-- [ ] A5.2 Port `http_server_example.osp` to `startsWith`
+- [x] A1.1 Unwrap `length` return type in registry + generator
+- [x] A1.2 Unwrap `contains` return type in registry + generator
+- [x] A1.3 Migrate all `match length(...)` / `match contains(...)` callsites
+- [x] A2.1 `isEmpty`
+- [x] A2.2 `startsWith`
+- [x] A2.3 `endsWith`
+- [x] A2.4 `toUpperCase`
+- [x] A2.5 `toLowerCase`
+- [x] A2.6 `trim`
+- [x] A2.7 `trimStart`
+- [x] A2.8 `trimEnd`
+- [x] A2.9 `reverse`
+- [x] A2.10 `take`
+- [x] A2.11 `drop`
+- [x] A2.12 `lines`
+- [x] A2.13 `words`
+- [x] A3.1 `indexOf`
+- [x] A3.2 `split`
+- [x] A3.3 `replace`
+- [x] A3.4 `repeat`
+- [x] A3.5 `padStart`
+- [x] A3.6 `padEnd`
+- [x] A3.7 `parseFloat`
+- [x] A3.8 Strict `parseInt` (fix silent-zero bug)
+- [x] A4 Verify `string + string -> string` is infallible
+- [x] A5.1 `string_pipeline.osp` query-string demo
+- [x] A5.2 Port `http_server_example.osp` to `startsWith` — done as a new
+  pure-logic sibling example [`route_match.osp`](../../compiler/examples/tested/basics/strings/route_match.osp)
+  rather than touching the live HTTP server example (which is a network test
+  with a brittle expected output).
 
 ### Workstream B — UFCS
-- [ ] B1.1 Implement codegen rewrite `x.f(a, b)` → `f(x, a, b)`
-- [ ] B1.2 Field-access precedence rule (field wins over UFCS)
-- [ ] B1.3 Grammar test: `x.field` is field access, never a call
-- [ ] B2 Type inference parity for `MethodCallExpression`
-- [ ] B3 Helpful error when UFCS dispatch fails
-- [ ] B4.1 `ufcs_string.osp` (pipe == UFCS == direct)
-- [ ] B4.2 `failscompilation/ufcs_field_collision.osp`
+- [x] B1.1 Implement codegen rewrite `x.f(a, b)` → `f(x, a, b)`
+- [ ] B1.2 Field-access precedence rule (field wins over UFCS) — **deferred.**
+  The negative test `ufcs_field_collision.ospo` proves we don't silently
+  succeed (compilation fails with a type-mismatch error), which is the
+  important property. Promoting the error message to mention field-vs-UFCS
+  precedence requires plumbing record-type info through the UFCS rewrite
+  step. Tracked as a follow-up.
+- [x] B1.3 Grammar test: `x.field` is field access, never a call
+- [x] B2 Type inference parity for `MethodCallExpression`
+- [x] B3 Helpful error when UFCS dispatch fails (error now reads
+  `UFCS call \`_.foo(...)\` rewrites to \`foo(_, ...)\`: <inner>`)
+- [x] B4.1 `ufcs_string.osp` (pipe == UFCS == direct)
+- [x] B4.2 `failscompilation/ufcs_field_collision.ospo`
+
+### Drive-by fixes uncovered during implementation
+These weren't on the original plan but were blockers found while
+implementing the above. Documenting here for traceability.
+
+- [x] **AST builder: chained method args mis-aligned.**
+  `s.trim().take(3)` was building `MethodCallExpression` with `Arguments=[]`
+  because `ctx.ArgList(i)` returns the *i-th present* ArgList, not the
+  ArgList for chain position `i` (empty arg lists are skipped by ANTLR).
+  Fixed in [`builder_calls.go:argListForChainElement`](../../compiler/internal/ast/builder_calls.go) by walking children in source order and pairing
+  each LPAREN with its inner ArgList.
+
+- [x] **`isModuleName` stole every uppercase-receiver UFCS call.**
+  The old heuristic "uppercase identifier == module" routed
+  `UpperCaseVar.method()` to a placeholder that always returned 42
+  (`fiber_generation.go:moduleAccessPlaceholder = 42`). Replaced with a
+  pre-pass in [`builder_core.go:BuildProgram`](../../compiler/internal/ast/builder_core.go) that records every actual
+  `module Name { ... }` declaration; `isModuleName` now consults that set.
+  This keeps the fiber-module tests passing while letting UFCS work on
+  uppercase variable names.
+
+- [x] **`substring` finally rejects out-of-range indices.**
+  The existing `generateSubstringCall` declared a `Result<string, Error>`
+  return type but never produced an Error — bad indices silently returned
+  garbage. Rewritten to delegate bounds-checking to the C helper
+  `osp_string_substring`, which returns NULL → wrapped as Error.
+
+### Spec divergences from this implementation
+
+The spec describes the target behaviour; the v1 implementation cuts the
+following corners and tracks them as follow-ups:
+
+- **Unicode codepoints vs bytes.** Spec says `length` etc. count
+  codepoints. v1 counts bytes (matches the existing `strlen`-based code).
+  Same for `take`, `drop`, `substring`, `indexOf`, `reverse`. UTF-8-aware
+  rewrites are deferred to a follow-up.
+- **Unicode simple case mapping.** Spec mentions German `ß` → `SS`.
+  v1 uses ASCII-only `tolower`/`toupper`. Documented in registry
+  description strings.
+- **Error message payload.** Fallible builtins set discriminant=1 and
+  null value; the match-expression `Error { message }` branch always
+  binds the same static `"Error occurred\x00"` global string regardless
+  of which builtin failed. Pre-existing limitation of the Result codegen
+  (`llvm.go:generateErrorBlock`); not specific to strings. Replacing the
+  static message with a real `StringError` discriminated union is its own
+  workstream — left out of scope here.
 
 ### Out of scope (separate plans needed)
 - [ ] `Char` type + higher-order `String.map` / `filter` / `foldl` / `any` / `all`
 - [ ] Grapheme-cluster aware operations
+- [ ] UTF-8 codepoint counting for `length` / `take` / `drop` / `substring` / `indexOf` / `reverse`
+- [ ] Unicode simple case mapping for `toUpperCase` / `toLowerCase`
+- [ ] Per-error-kind `StringError` payload routed into the match `message` binding
 - [ ] Regex
 - [ ] Formatting (`printf`-style or `String.format`)
 - [ ] `Maybe`/`Option` (would let `indexOf` return `Maybe<int>` instead of `Result`)

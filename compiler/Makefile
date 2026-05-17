@@ -36,7 +36,12 @@ fiber-runtime:
 	gcc -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/effects_runtime.c -o bin/effects_runtime.o
-	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/string_runtime.c -o bin/string_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/string_runtime_list.c -o bin/string_runtime_list.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/list_runtime.c -o bin/list_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/map_runtime.c -o bin/map_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/map_runtime_hamt.c -o bin/map_runtime_hamt.o
+	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o
 	cp bin/libfiber_runtime.a lib/libfiber_runtime.a
 	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a and lib/libfiber_runtime.a"
 
@@ -75,7 +80,12 @@ http-runtime:
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
 	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/effects_runtime.c -o bin/effects_runtime.o
-	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o bin/effects_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/string_runtime.c -o bin/string_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/string_runtime_list.c -o bin/string_runtime_list.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/list_runtime.c -o bin/list_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/map_runtime.c -o bin/map_runtime.o
+	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/map_runtime_hamt.c -o bin/map_runtime_hamt.o
+	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o
 	cp bin/libhttp_runtime.a lib/libhttp_runtime.a
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
 
@@ -207,7 +217,8 @@ c-lint:
 		-Wstrict-overflow=5 -Wstack-protector \
 		-Winline -Wdisabled-optimization \
 		-std=c11 -D_GNU_SOURCE -fsyntax-only \
-		system_runtime.c fiber_runtime.c test_system_runtime.c fiber_runtime_tests.c
+		system_runtime.c fiber_runtime.c test_system_runtime.c fiber_runtime_tests.c \
+		list_runtime.c map_runtime.c map_runtime_hamt.c collection_tests.c
 	@echo "✅ No C lint errors found"
 
 # C TESTS - Vanilla C Tests with standard assert() - WARNINGS ARE ERRORS!!!
@@ -221,8 +232,12 @@ c-test:
 	@cd runtime && clang -o test_fiber_runtime fiber_runtime_tests.c fiber_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
 	@cd runtime && echo "🚀 Running fiber runtime tests..."
 	@cd runtime && ./test_fiber_runtime
+	@cd runtime && echo "📦 Compiling collection runtime tests..."
+	@cd runtime && clang -o test_collection collection_tests.c list_runtime.c map_runtime.c map_runtime_hamt.c -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
+	@cd runtime && echo "🚀 Running collection runtime tests..."
+	@cd runtime && ./test_collection
 	@cd runtime && echo "🧹 Cleaning up test executables..."
-	@cd runtime && rm -f test_system_runtime test_fiber_runtime
+	@cd runtime && rm -f test_system_runtime test_fiber_runtime test_collection
 	@echo "✅ ALL C RUNTIME TESTS PASSED!"
 
 # Regenerate parser from grammar (requires ANTLR)
