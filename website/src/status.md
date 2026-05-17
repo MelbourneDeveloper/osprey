@@ -58,6 +58,13 @@ Current version: **0.2.0-alpha** (released)
 - **Functional Iterators**: Complete pipe operator support
 - **Safe Math**: All arithmetic operations return `Result` types
 
+### Persistent Collections (new)
+- **`List<T>`**: 32-way bitmapped vector trie with tail buffer (Bagwell 2000; Hickey, *Clojure*). Append is O(log₃₂ n) amortised; structural sharing means old versions remain valid.
+- **`Map<K, V>`**: 32-way Hash Array Mapped Trie (HAMT) with bitmap-packed children and collision nodes. Lookup, insert and remove are O(log₃₂ n) expected. Keys: `int`, `string`, `bool`.
+- **Builtins**: `listLength`, `listAppend`, `listPrepend`, `listConcat`, `listReverse`, `listContains`, `forEachList`, `mapLength`, `mapContains`, `mapSet`, `mapRemove`, `mapMerge`, `mapKeys`, `mapValues`.
+- **`+` operator**: `List<T> + List<T>` concatenates; `Map<K,V> + Map<K,V>` is a right-biased union.
+- **Test coverage**: 33 C-level assertions (10k-element stress, hash collisions, structural-sharing invariants) plus 12 e2e Osprey programs in [`compiler/examples/tested/basics/lists/`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tested/basics/lists) with byte-exact expected-output verification.
+
 ## 🚧 Roadmap Features
 
 ### Type System Extensions

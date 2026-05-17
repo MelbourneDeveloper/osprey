@@ -351,7 +351,7 @@ let byGrade  = groupBy(items: students, function: s => s.grade) // Map<string, L
 
 `zipToMap` returns a `Result` because mismatched lengths are an error. `groupBy` preserves the relative order of items within each bucket.
 
-### Performance {#performance-type-list-perf}
+### Performance
 
 | Operation             | `List<T>` (bitmapped trie) | `Map<K, V>` (HAMT)                                |
 | --------------------- | -------------------------- | ------------------------------------------------- |
@@ -362,8 +362,6 @@ let byGrade  = groupBy(items: students, function: s => s.grade) // Map<string, L
 | `map` / `filter`      | O(n) (fused, no intermediate) | O(n) (fused, no intermediate)                  |
 | `length`              | O(1)                       | O(1)                                              |
 | Iteration             | O(n)                       | O(n), order unspecified                           |
-
-{#performance-type-map-perf}
 
 A future revision MAY upgrade `List<T>` to an RRB-tree (Bagwell & Rompf 2011; Stucki & Rompf 2015) to bring concatenation to O(log n) without changing the API. Both collections use structural sharing — `O(log₃₂ n)` path-copying per update — so old versions remain valid in O(1) space relative to a modification.
 

@@ -2,7 +2,7 @@
 layout: page
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
-date: 2025-07-06
+date: 2026-05-17
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/"
@@ -11,7 +11,7 @@ permalink: "/spec/"
 # Osprey Language Specification
 
 **Version:** 0.2.0-alpha  
-**Date:** 2025-07-06  
+**Date:** 2026-05-17  
 **Author:** Christian Findlay
 
 ## Table of Contents
@@ -19,21 +19,20 @@ permalink: "/spec/"
 1. [Introduction](/spec/0001-introduction/)
 2. [Lexical Structure](/spec/0002-lexicalstructure/)
 3. [Syntax](/spec/0003-syntax/)
-4. [Semantics](/spec/0004-semantics/)
-5. [Type System](/spec/0005-typesystem/)
-6. [Function Calls](/spec/0006-functioncalls/)
-7. [String Interpolation](/spec/0007-stringinterpolation/)
-8. [Pattern Matching](/spec/0008-patternmatching/)
-9. [Block Expressions](/spec/0009-blockexpressions/)
-10. [Boolean Operations](/spec/0010-booleanoperations/)
-11. [Loop Constructs and Functional Iterators](/spec/0011-loopconstructsandfunctionaliterators/)
-12. [Lightweight Fibers and Concurrency](/spec/0012-lightweightfibersandconcurrency/)
-13. [Built-in Functions](/spec/0013-built-infunctions/)
-14. [Error Handling](/spec/0014-errorhandling/)
-15. [HTTP](/spec/0015-http/)
-16. [WebSocket Functions](/spec/0016-websockets/)
-17. [Security and Sandboxing](/spec/0017-securityandsandboxing/)
-18. [Algebraic Effects](/spec/0018-algebraiceffects/)
+4. [Type System](/spec/0004-typesystem/)
+5. [Function Calls](/spec/0005-functioncalls/)
+6. [String Interpolation](/spec/0006-stringinterpolation/)
+7. [Pattern Matching](/spec/0007-patternmatching/)
+8. [Block Expressions](/spec/0008-blockexpressions/)
+9. [Boolean Operations](/spec/0009-booleanoperations/)
+10. [Iterators and Iteration](/spec/0010-loopconstructsandfunctionaliterators/)
+11. [Fibers and Concurrency](/spec/0011-lightweightfibersandconcurrency/)
+12. [Built-in Functions](/spec/0012-built-infunctions/)
+13. [Error Handling](/spec/0013-errorhandling/)
+14. [HTTP](/spec/0014-http/)
+15. [WebSockets](/spec/0015-websockets/)
+16. [Security and Sandboxing](/spec/0016-securityandsandboxing/)
+17. [Algebraic Effects](/spec/0017-algebraiceffects/)
 
 ## About This Specification
 

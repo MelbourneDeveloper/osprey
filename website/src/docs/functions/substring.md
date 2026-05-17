@@ -1,12 +1,12 @@
 ---
 layout: page
 title: "substring (Function)"
-description: "Extracts a substring from start to end index."
+description: "Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end."
 ---
 
-**Signature:** `substring(s: string, start: int, end: int) -> string`
+**Signature:** `substring(s: string, start: int, end: int) -> Result<string, StringError>`
 
-**Description:** Extracts a substring from start to end index.
+**Description:** Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end.
 
 ## Parameters
 
@@ -14,11 +14,10 @@ description: "Extracts a substring from start to end index."
 - **start** (int): Starting index (inclusive)
 - **end** (int): Ending index (exclusive)
 
-**Returns:** string
+**Returns:** Result<string, StringError>
 
 ## Example
 
 ```osprey
-let sub = substring("hello", 1, 4)
-print(sub)  // Prints: ell
+substring("hello", 1, 4)  // Success { value: "ell" }
 ```

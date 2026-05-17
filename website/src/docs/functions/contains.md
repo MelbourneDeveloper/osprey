@@ -1,16 +1,16 @@
 ---
 layout: page
 title: "contains (Function)"
-description: "Checks if a string contains a substring."
+description: "True if needle appears anywhere in s. Empty needle returns true."
 ---
 
-**Signature:** `contains(haystack: string, needle: string) -> bool`
+**Signature:** `contains(s: string, needle: string) -> bool`
 
-**Description:** Checks if a string contains a substring.
+**Description:** True if needle appears anywhere in s. Empty needle returns true.
 
 ## Parameters
 
-- **haystack** (string): The string to search in
+- **s** (string): The string to search in
 - **needle** (string): The substring to search for
 
 **Returns:** bool
@@ -18,6 +18,5 @@ description: "Checks if a string contains a substring."
 ## Example
 
 ```osprey
-let found = contains("hello world", "world")
-print(found)  // Prints: true
+let found = contains("hello world", "world")  // true
 ```

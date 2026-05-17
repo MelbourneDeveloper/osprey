@@ -10,8 +10,8 @@ description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t 
 
 ## Parameters
 
-- **serverID** (Int): Server identifier
-- **message** (String): Message to broadcast to all clients
+- **serverID** (int): Server identifier
+- **message** (string): Message to broadcast to all clients
 
 **Returns:** Result<Success, String>
 

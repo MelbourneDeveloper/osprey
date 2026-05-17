@@ -10,10 +10,10 @@ description: "Filters elements in an iterator based on a predicate function."
 
 ## Parameters
 
-- **iterator** (iterator): The iterator to filter
-- **predicate** (function): The predicate function that returns true for elements to keep
+- **iterator** (Iterator<T>): The iterator to filter
+- **predicate** (T -> bool): The predicate function that returns true for elements to keep
 
-**Returns:** iterator
+**Returns:** Iterator<T>
 
 ## Example
 

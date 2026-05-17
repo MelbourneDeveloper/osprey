@@ -191,6 +191,44 @@ range(1, 10) |> forEach(print)</code></pre>
   </div>
 </section>
 
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">Persistent Collections</h2>
+
+    <div class="two-column">
+      <div class="visual">
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">// List&lt;T&gt; — 32-way bitmapped vector trie
+let xs = listAppend(listAppend(List(), 10), 20)
+let ys = listAppend(xs, 99)
+
+listLength(xs)              // 2  — xs untouched
+listLength(ys)              // 3
+xs + ys                     // O(n+m) concat
+
+// Map&lt;K,V&gt; — Hash Array Mapped Trie (HAMT)
+let m = mapSet(Map(), "alice", 25)
+let m2 = mapSet(m, "bob", 30)
+
+mapContains(m,  "bob")      // false
+mapContains(m2, "bob")      // true
+m + m2                      // right-biased union</code></pre>
+        </div>
+      </div>
+      <div class="content">
+        <h3>Built on FP foundations</h3>
+        <p>Immutable <code>List&lt;T&gt;</code> and <code>Map&lt;K, V&gt;</code> backed by structural sharing, so "modifying" a collection never copies the whole thing — old versions stay valid in O(1) extra space relative to the change.</p>
+        <ul>
+          <li><strong>List</strong>: 32-way bitmapped vector trie (<a href="https://lampwww.epfl.ch/papers/idealhashtrees.pdf" rel="noopener">Bagwell 2000</a>; Clojure's PersistentVector). O(log₃₂ n) point ops.</li>
+          <li><strong>Map</strong>: Hash Array Mapped Trie with bitmap-packed children. O(log₃₂ n) expected for lookup, insert and remove.</li>
+          <li><strong><code>+</code> operator</strong> dispatches to <code>listConcat</code> for lists and <code>mapMerge</code> (right-biased) for maps.</li>
+          <li>Backed by 33 C-level assertions and 12 byte-exact end-to-end test programs.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="blue-box">
   <div class="container">
     <div class="grid">

@@ -129,6 +129,7 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("src/css");
   eleventyConfig.addPassthroughCopy("src/js");
   eleventyConfig.addPassthroughCopy("src/playground");
+  eleventyConfig.addPassthroughCopy("src/robots.txt");
 
   // Watch targets
   eleventyConfig.addWatchTarget("src/css/");
@@ -141,6 +142,11 @@ module.exports = function (eleventyConfig) {
 
   eleventyConfig.addFilter('htmlDateString', (dateObj) => {
     return DateTime.fromJSDate(dateObj, { zone: 'utc' }).toFormat('yyyy-LL-dd');
+  });
+
+  // ISO 8601 with time, used by sitemap.xml lastmod and OG article:published_time.
+  eleventyConfig.addFilter('rssDate', (dateObj) => {
+    return DateTime.fromJSDate(dateObj, { zone: 'utc' }).toISO();
   });
 
   // Layout aliases - make all markdown files use blog layout by default

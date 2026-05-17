@@ -10,7 +10,7 @@ description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t 
 
 ## Parameters
 
-- **serverID** (Int): Server identifier to stop
+- **serverID** (int): Server identifier to stop
 
 **Returns:** Result<Success, String>
 

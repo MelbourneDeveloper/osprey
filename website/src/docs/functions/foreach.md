@@ -4,16 +4,16 @@ title: "forEach (Function)"
 description: "Applies a function to each element in an iterator."
 ---
 
-**Signature:** `forEach(iterator: iterator, fn: function) -> int`
+**Signature:** `forEach(iterator: iterator, function: function) -> int`
 
 **Description:** Applies a function to each element in an iterator.
 
 ## Parameters
 
-- **iterator** (iterator): The iterator to process
-- **fn** (function): The function to apply to each element
+- **iterator** (Iterator<T>): The iterator to process
+- **function** (T -> Unit): The function to apply to each element
 
-**Returns:** int
+**Returns:** Unit
 
 ## Example
 

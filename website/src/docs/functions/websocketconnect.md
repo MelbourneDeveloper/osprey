@@ -4,14 +4,14 @@ title: "websocketConnect (Function)"
 description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback."
 ---
 
-**Signature:** `websocketConnect(url: String, messageHandler: fn(String) -> Result<Success, String>) -> Result<WebSocketID, String>`
+**Signature:** `websocketConnect(url: String, messageHandler: (String) -> Result<Success, String>) -> Result<WebSocketID, String>`
 
 **Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback.
 
 ## Parameters
 
-- **url** (String): WebSocket URL (e.g., "ws://localhost:8080/chat")
-- **messageHandler** (fn(String) -> Result<Success, String>): Callback function to handle incoming messages
+- **url** (string): WebSocket URL (e.g., "ws://localhost:8080/chat")
+- **messageHandler** ((string) -> Result<Success, String>): Callback function to handle incoming messages
 
 **Returns:** Result<WebSocketID, String>
 

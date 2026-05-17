@@ -4,7 +4,7 @@ title: "readFile (Function)"
 description: "Reads the entire contents of a file as a string."
 ---
 
-**Signature:** `readFile(filename: string) -> Result<string, string>`
+**Signature:** `readFile(filename: string) -> Result<string, Error>`
 
 **Description:** Reads the entire contents of a file as a string.
 
@@ -12,7 +12,7 @@ description: "Reads the entire contents of a file as a string."
 
 - **filename** (string): Path to the file to read
 
-**Returns:** Result<string, string>
+**Returns:** Result<string, Error>
 
 ## Example
 
