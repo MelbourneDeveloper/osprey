@@ -10,10 +10,10 @@ description: "Transforms each element in an iterator using a function, returning
 
 ## Parameters
 
-- **iterator** (iterator): The iterator to transform
-- **fn** (function): The transformation function
+- **iterator** (Iterator<T>): The iterator to transform
+- **fn** (T -> U): The transformation function
 
-**Returns:** iterator
+**Returns:** Iterator<U>
 
 ## Example
 

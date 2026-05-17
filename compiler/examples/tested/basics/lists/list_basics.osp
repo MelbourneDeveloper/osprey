@@ -1,0 +1,81 @@
+// list_basics — happy-path coverage for List<T>.
+// Spec: 0004-TypeSystem.md#listt--type-list
+// Every assertion prints "PASS:" followed by the actual computed value so a
+// regression diverges from the .expectedoutput file byte-for-byte.
+
+print("[list_basics]\n")
+
+// length on empty
+let e = List()
+print("PASS empty length=")
+print(listLength(e))
+print("\n")
+
+// length after append
+let a = listAppend(listAppend(listAppend(List(), 1), 2), 3)
+print("PASS 3 elements length=")
+print(listLength(a))
+print("\n")
+
+// append-then-length, increasing
+let b1 = listAppend(List(), 100)
+let b2 = listAppend(b1, 200)
+let b3 = listAppend(b2, 300)
+print("PASS b1 length=")
+print(listLength(b1))
+print("\nPASS b2 length=")
+print(listLength(b2))
+print("\nPASS b3 length=")
+print(listLength(b3))
+print("\n")
+
+// reverse changes order but preserves length
+let r = listReverse(a)
+print("PASS reverse length=")
+print(listLength(r))
+print("\n")
+
+// reverse of reverse = original (length check)
+let rr = listReverse(r)
+print("PASS reverse-of-reverse length=")
+print(listLength(rr))
+print("\n")
+
+// concat lengths
+let c1 = listConcat(a, a)
+print("PASS concat a+a length=")
+print(listLength(c1))
+print("\n")
+let c2 = listConcat(a, List())
+print("PASS concat a+empty length=")
+print(listLength(c2))
+print("\n")
+let c3 = listConcat(List(), a)
+print("PASS concat empty+a length=")
+print(listLength(c3))
+print("\n")
+
+// concat via + operator (same dispatch)
+let cplus = a + a
+print("PASS a+a via +operator length=")
+print(listLength(cplus))
+print("\n")
+
+// listPrepend grows the front; original is unchanged.
+let p1 = listPrepend(a, 0)
+print("PASS prepend length=")
+print(listLength(p1))
+print("\nPASS prepend src unchanged=")
+print(listLength(a))
+print("\n")
+
+// listContains: present, absent, empty list.
+print("PASS contains 2 in a=")
+print(listContains(a, 2))
+print("\nPASS contains 99 in a=")
+print(listContains(a, 99))
+print("\nPASS contains 1 in empty=")
+print(listContains(List(), 1))
+print("\n")
+
+print("[list_basics done]\n")

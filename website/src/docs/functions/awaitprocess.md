@@ -4,13 +4,13 @@ title: "awaitProcess (Function)"
 description: "Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes."
 ---
 
-**Signature:** `awaitProcess(handle: ProcessHandle) -> int`
+**Signature:** `awaitProcess(handle: int) -> int`
 
 **Description:** Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes.
 
 ## Parameters
 
-- **handle** (ProcessHandle): Process handle from spawnProcess
+- **handle** (int): Process ID from spawnProcess
 
 **Returns:** int
 

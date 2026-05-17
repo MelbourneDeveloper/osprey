@@ -1,0 +1,14 @@
+// Implements [BUILTIN-STRING-UFCS] negative test.
+//
+// `record.trim()` where `trim` is a string-typed record field should fail
+// rather than silently invoking the UFCS `trim(record)`. The rule from
+// spec/0012-Built-InFunctions.md "Calling Style" is: field-access wins.
+// Strings are not callable; the compiler must reject calling a string.
+
+type Box = { trim: string }
+
+fn main() -> int {
+  let b = Box { trim: "hello" }
+  let _x = b.trim()
+  0
+}

@@ -17,6 +17,8 @@ ifeq ($(OS),Windows_NT)
   MKDIR = New-Item -ItemType Directory -Force
   HOME ?= $(USERPROFILE)
 else
+  # bash needed for `pipefail` in tee'd test recipes; Ubuntu's /bin/sh is dash.
+  SHELL := /bin/bash
   RM = rm -rf
   MKDIR = mkdir -p
 endif
@@ -98,7 +100,7 @@ setup:
 # Generated code (ANTLR parser) is excluded from coverage.out before threshold check.
 _test_compiler:
 	@echo "==> [compiler] running tests..."
-	cd compiler && go test -failfast -covermode=atomic -coverpkg=./... -coverprofile=coverage.out.raw ./... -p 1
+	cd compiler && set -o pipefail && go test -failfast -covermode=atomic -coverpkg=./... -coverprofile=coverage.out.raw ./... -p 1 2>&1 | tee test.log
 	cd compiler && grep -v '/parser/osprey_' coverage.out.raw > coverage.out
 	cd compiler && go tool cover -func=coverage.out | tail -1
 
@@ -145,12 +147,12 @@ _test_vscode_extension:
 	cd compiler && $(MAKE) build
 	@echo "==> [vscode-extension] running tests with real compiler + V8 coverage..."
 	rm -rf vscode-extension/coverage
-	cd vscode-extension && \
+	cd vscode-extension && set -o pipefail && \
 	  PATH="$(CURDIR)/compiler/bin:$$PATH" \
-	  npm run pretest && \
+	  npm run pretest 2>&1 | tee test.log && \
 	  PATH="$(CURDIR)/compiler/bin:$$PATH" \
 	  ./node_modules/.bin/vscode-test --coverage --coverage-output coverage \
-	    --coverage-reporter text-summary --coverage-reporter json-summary --coverage-reporter html
+	    --coverage-reporter text-summary --coverage-reporter json-summary --coverage-reporter html 2>&1 | tee -a test.log
 
 _coverage_check_vscode_extension:
 	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \

@@ -10,7 +10,7 @@ description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t 
 
 ## Parameters
 
-- **serverID** (Int): Server identifier from websocketCreateServer
+- **serverID** (int): Server identifier from websocketCreateServer
 
 **Returns:** Result<Success, String>
 

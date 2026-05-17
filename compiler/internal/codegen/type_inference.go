@@ -685,8 +685,18 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 	case *ast.UnaryExpression:
 		return ti.inferUnaryExpression(e)
 	case *ast.MethodCallExpression:
-		// Method calls are not supported in the grammar
-		return nil, ErrMethodCallsNotImplemented
+		// UFCS: `x.f(a, b)` is type-equivalent to `f(x, a, b)`.
+		// Implements [BUILTIN-STRING-UFCS]. See spec/0012-Built-InFunctions.md.
+		rewritten := &ast.CallExpression{
+			Function: &ast.Identifier{
+				Name:     e.MethodName,
+				Position: e.Position,
+			},
+			Arguments:      append([]ast.Expression{e.Object}, e.Arguments...),
+			NamedArguments: e.NamedArguments,
+			Position:       e.Position,
+		}
+		return ti.inferCallExpression(rewritten)
 	case *ast.ListAccessExpression:
 		return ti.inferListAccess(e)
 	case *ast.UpdateExpression:
@@ -2047,6 +2057,17 @@ func (ti *TypeInferer) inferPlusForConcreteTypes(leftResolved, rightResolved Typ
 	// String concatenation (does NOT return Result - string concat cannot fail)
 	if leftConcrete.name == TypeString && rightConcrete.name == TypeString {
 		return &ConcreteType{name: TypeString}, true
+	}
+
+	// Collection `+`: List + List → List (concat), Map + Map → Map (merge).
+	// Lets `tryCollectionPlus` route chained collection `+` to the right
+	// runtime call — without this the outer `+` in `a + b + c` infers a
+	// fresh TypeVar and falls through to integer codegen.
+	if leftConcrete.name == TypeList && rightConcrete.name == TypeList {
+		return &ConcreteType{name: TypeList}, true
+	}
+	if leftConcrete.name == TypeMap && rightConcrete.name == TypeMap {
+		return &ConcreteType{name: TypeMap}, true
 	}
 
 	// Numeric operations with type promotion - ALL return Result due to overflow

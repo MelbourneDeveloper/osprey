@@ -15,12 +15,21 @@ description: "Complete reference documentation for the Osprey programming langua
 
 | Function | Description |
 |----------|-------------|
+| [Channel](functions/channel/) | Creates a new channel with the specified capacity. |
+| [List](functions/list/) | Creates a new empty list. |
+| [Map](functions/map/) | Creates a new empty map. |
 | [awaitProcess](functions/awaitprocess/) | Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes. |
 | [cleanupProcess](functions/cleanupprocess/) | Cleans up resources associated with a completed process. Should be called after awaitProcess. |
-| [contains](functions/contains/) | Checks if a string contains a substring. |
+| [contains](functions/contains/) | True if needle appears anywhere in s. Empty needle returns true. |
+| [drop](functions/drop/) | Returns s without its first n bytes. Clamps; never fails. |
+| [endsWith](functions/endswith/) | True if s ends with suffix. |
+| [fiber_await](functions/fiber_await/) | Waits for a fiber to complete and returns its result. |
+| [fiber_spawn](functions/fiber_spawn/) | Spawns a new fiber to execute the given function concurrently. |
+| [fiber_yield](functions/fiber_yield/) | Yields control to the fiber scheduler with an optional value. |
 | [filter](functions/filter/) | Filters elements in an iterator based on a predicate function. |
-| [fold](functions/fold/) | Reduces an iterator to a single value using an accumulator function. |
+| [fold](functions/fold/) | Reduces an iterator to a single value by repeatedly applying a function. |
 | [forEach](functions/foreach/) | Applies a function to each element in an iterator. |
+| [forEachList](functions/foreachlist/) | Apply function to every element of list. Phase 7 of collections plan. |
 | [httpCloseClient](functions/httpcloseclient/) | Closes the HTTP client and cleans up resources. |
 | [httpCreateClient](functions/httpcreateclient/) | Creates an HTTP client for making requests to a base URL. |
 | [httpCreateServer](functions/httpcreateserver/) | Creates an HTTP server bound to the specified port and address. |
@@ -31,25 +40,60 @@ description: "Complete reference documentation for the Osprey programming langua
 | [httpPut](functions/httpput/) | Makes an HTTP PUT request with a request body. |
 | [httpRequest](functions/httprequest/) | Makes a generic HTTP request with any method. |
 | [httpStopServer](functions/httpstopserver/) | Stops the HTTP server and closes all connections. |
-| [input](functions/input/) | Reads an integer from the user's input. |
-| [length](functions/length/) | Returns the length of a string. |
+| [indexOf](functions/indexof/) | Returns byte-index of first occurrence of needle, or Error(NotFound). |
+| [input](functions/input/) | Reads a string from the user's input. |
+| [isEmpty](functions/isempty/) | True if string has zero length. |
+| [join](functions/join/) | Concatenates parts with separator between each pair. |
+| [length](functions/length/) | Returns the byte length of a string. Total — never fails. |
+| [lines](functions/lines/) | Splits on '\n'. A trailing newline does not produce an empty entry. |
+| [listAppend](functions/listappend/) | Returns a new list with value at the end. O(log32 n) amortised. |
+| [listConcat](functions/listconcat/) | Returns left ++ right. Same as left + right. |
+| [listContains](functions/listcontains/) | True iff some element equals value. O(n). |
+| [listLength](functions/listlength/) | Returns the number of elements in a list. O(1). |
+| [listPrepend](functions/listprepend/) | Returns a new list with value at the front. O(n). |
+| [listReverse](functions/listreverse/) | Returns a new list in reverse order. |
 | [map](functions/map/) | Transforms each element in an iterator using a function, returning a new iterator. |
+| [mapContains](functions/mapcontains/) | True iff key is present in map. |
+| [mapKeys](functions/mapkeys/) | All keys of the map as a list. Order unspecified. |
+| [mapLength](functions/maplength/) | Returns the number of entries in a map. O(1). |
+| [mapMerge](functions/mapmerge/) | Right-biased union. Same as left + right. |
+| [mapRemove](functions/mapremove/) | Returns a new map without key. No-op if key is absent. |
+| [mapSet](functions/mapset/) | Returns a new map with key bound to value (replaces prior binding). |
+| [mapValues](functions/mapvalues/) | All values of the map as a list. Order matches mapKeys. |
+| [padEnd](functions/padend/) | Pads s on the right with copies of fill to reach targetLength bytes. |
+| [padStart](functions/padstart/) | Pads s on the left with copies of fill to reach targetLength bytes. |
+| [parseFloat](functions/parsefloat/) | Strict base-10 floating-point parser. No whitespace tolerance. |
+| [parseInt](functions/parseint/) | Strict base-10 signed-int parser. No whitespace tolerance. |
 | [print](functions/print/) | Prints a value to the console. Automatically converts the value to a string representation. |
 | [range](functions/range/) | Creates an iterator that generates numbers from start to end (exclusive). |
 | [readFile](functions/readfile/) | Reads the entire contents of a file as a string. |
+| [recv](functions/recv/) | Receives a value from a channel. |
+| [repeat](functions/repeat/) | Concatenates s with itself n times. Error(InvalidArgument) on negative n. |
+| [replace](functions/replace/) | Replaces every occurrence of needle. Error(InvalidArgument) on empty needle. |
+| [reverse](functions/reverse/) | Reverses byte order. Grapheme-cluster reversal is future work. |
+| [send](functions/send/) | Sends a value to a channel. Returns 1 for success, 0 for failure. |
 | [sleep](functions/sleep/) | Pauses execution for the specified number of milliseconds. |
 | [spawnProcess](functions/spawnprocess/) | Spawns an external async process with MANDATORY callback for stdout/stderr capture. The callback function receives (processID: int, eventType: int, data: string) and is called for stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING! |
-| [substring](functions/substring/) | Extracts a substring from start to end index. |
+| [split](functions/split/) | Splits s on separator. Error(InvalidArgument) on empty separator. |
+| [startsWith](functions/startswith/) | True if s begins with prefix. |
+| [substring](functions/substring/) | Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end. |
+| [take](functions/take/) | Returns at most the first n bytes of s. Clamps; never fails. |
+| [toLowerCase](functions/tolowercase/) | ASCII-aware lowercase. |
 | [toString](functions/tostring/) | Converts a value to its string representation. |
-| [websocketKeepAlive](functions/websocketkeepalive/) | ⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation). |
+| [toUpperCase](functions/touppercase/) | ASCII-aware uppercase. Unicode simple case mapping is a future addition. |
+| [trim](functions/trim/) | Removes leading and trailing whitespace. |
+| [trimEnd](functions/trimend/) | Removes trailing whitespace. |
+| [trimStart](functions/trimstart/) | Removes leading whitespace. |
 | [websocketClose](functions/websocketclose/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources. |
 | [websocketConnect](functions/websocketconnect/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback. |
 | [websocketCreateServer](functions/websocketcreateserver/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path. |
+| [websocketKeepAlive](functions/websocketkeepalive/) | ⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation). |
 | [websocketSend](functions/websocketsend/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection. |
 | [websocketServerBroadcast](functions/websocketserverbroadcast/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients sent to) instead of Result<Success, String>. Broadcasts a message to all connected WebSocket clients. |
 | [websocketServerListen](functions/websocketserverlisten/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections. |
 | [websocketStopServer](functions/websocketstopserver/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections. |
-| [writeFile](functions/writefile/) | Writes content to a file. Creates the file if it doesn't exist. |
+| [words](functions/words/) | Splits on runs of whitespace; empty results dropped. |
+| [writeFile](functions/writefile/) | Writes content to a file. Creates the file if it doesn't exist. Returns number of bytes written. |
 
 ## Type Reference
 

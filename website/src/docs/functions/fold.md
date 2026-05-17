@@ -1,24 +1,23 @@
 ---
 layout: page
 title: "fold (Function)"
-description: "Reduces an iterator to a single value using an accumulator function."
+description: "Reduces an iterator to a single value by repeatedly applying a function."
 ---
 
-**Signature:** `fold(iterator: iterator, initial: any, fn: function) -> any`
+**Signature:** `fold(iterator: Iterator<T>, initial: U, function: (U, T) -> U) -> U`
 
-**Description:** Reduces an iterator to a single value using an accumulator function.
+**Description:** Reduces an iterator to a single value by repeatedly applying a function.
 
 ## Parameters
 
-- **iterator** (iterator): The iterator to reduce
+- **iterator** (any): The iterator to reduce
 - **initial** (any): The initial value for the accumulator
-- **fn** (function): The reduction function that takes (accumulator, current) and returns new accumulator
+- **fn** (any): The reduction function that takes (accumulator, current) and returns new accumulator
 
 **Returns:** any
 
 ## Example
 
 ```osprey
-let sum = fold(range(1, 5), 0, fn(acc, x) { acc + x })
-print(sum)  // Prints: 10
+range(1, 5) |> fold(0, add)  // sum: 0+1+2+3+4 = 10
 ```

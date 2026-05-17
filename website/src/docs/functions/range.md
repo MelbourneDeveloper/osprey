@@ -13,7 +13,7 @@ description: "Creates an iterator that generates numbers from start to end (excl
 - **start** (int): The starting number (inclusive)
 - **end** (int): The ending number (exclusive)
 
-**Returns:** iterator
+**Returns:** Iterator<int>
 
 ## Example
 

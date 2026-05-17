@@ -10,9 +10,9 @@ description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t 
 
 ## Parameters
 
-- **port** (Int): Port number to bind to (1-65535)
-- **address** (String): IP address to bind to (e.g., "127.0.0.1", "0.0.0.0")
-- **path** (String): WebSocket endpoint path (e.g., "/chat", "/live")
+- **port** (int): Port number to bind to (1-65535)
+- **address** (string): IP address to bind to (e.g., "127.0.0.1", "0.0.0.0")
+- **path** (string): WebSocket endpoint path (e.g., "/chat", "/live")
 
 **Returns:** Result<ServerID, String>
 

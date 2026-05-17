@@ -1,0 +1,58 @@
+[list_persistence]
+
+len(g0)=
+0
+
+len(g1)=
+1
+
+len(g2)=
+2
+
+len(g3)=
+3
+
+len(g4)=
+4
+
+len(g5)=
+5
+
+
+g2 still len 2 after g5: 
+2
+
+
+len(x)=
+4
+
+len(y)=
+4
+
+len(y2)=
+5
+
+
+g3 unchanged after branching: 
+3
+
+
+concat len=
+8
+
+g3 still 
+3
+
+y2 still 
+5
+
+
+rev len=
+8
+
+concat still 
+8
+
+
+[list_persistence done]
+

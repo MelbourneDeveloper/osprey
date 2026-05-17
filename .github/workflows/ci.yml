@@ -55,6 +55,17 @@ jobs:
       - name: Test
         run: xvfb-run -a make test
 
+      - name: Upload test logs on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-logs
+          path: |
+            compiler/test.log
+            vscode-extension/test.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         if: always()

@@ -1,0 +1,59 @@
+[list_concat]
+
+empty + empty len: 
+0
+
+
+empty + a len: 
+3
+
+
+a + empty len: 
+3
+
+
+a + b len: 
+5
+
+
+b + a len: 
+5
+
+
+(a+b) + a len: 
+8
+
+
+(a+b)+a via op len: 
+8
+
+
+a + a len: 
+6
+
+
+forEachList(a+b):
+
+1
+2
+3
+10
+20
+forEachList(b+a):
+
+10
+20
+1
+2
+3
+a still 
+3
+
+b still 
+2
+
+e still 
+0
+
+
+[list_concat done]

@@ -10,8 +10,8 @@ description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t 
 
 ## Parameters
 
-- **wsID** (Int): WebSocket identifier from websocketConnect
-- **message** (String): Message to send
+- **wsID** (int): WebSocket identifier from websocketConnect
+- **message** (string): Message to send
 
 **Returns:** Result<Success, String>
 

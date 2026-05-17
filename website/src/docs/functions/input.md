@@ -1,14 +1,14 @@
 ---
 layout: page
 title: "input (Function)"
-description: "Reads an integer from the user's input."
+description: "Reads a string from the user's input."
 ---
 
-**Signature:** `input() -> int`
+**Signature:** `input() -> Result<string, Error>`
 
-**Description:** Reads an integer from the user's input.
+**Description:** Reads a string from the user's input.
 
-**Returns:** int
+**Returns:** Result<string, Error>
 
 ## Example
 
