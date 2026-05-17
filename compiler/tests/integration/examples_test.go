@@ -415,6 +415,8 @@ func getStringExpectedOutputs() map[string]string {
 			"strt pipe=true  ufcs=true\n\n" +
 			"ends pipe=true  ufcs=true\n\n" +
 			"trim ufcs=\"Hello, World\"\n\n" +
+			"trimS ufcs=\"Hello, World  \"\n\n" +
+			"trimE ufcs=\"  Hello, World\"\n\n" +
 			"uppr ufcs=\"HI\"\n\n" +
 			"lowr ufcs=\"hi\"\n\n" +
 			"take ufcs=\"hel\"\n\n" +

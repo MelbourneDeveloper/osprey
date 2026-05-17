@@ -1,0 +1,19 @@
+// Implements [BUILTIN-STRING-LIST] — lines, words, split return list types.
+// Spec: 0012-Built-InFunctions.md#string-functions
+fn main() -> int {
+  let multi = "a\nb\nc"
+  print("lines count=${listLength(lines(multi))}\n")
+
+  let spaced = "  hello   world  "
+  print("words count=${listLength(words(spaced))}\n")
+
+  match split("a,b,c", ",") {
+    Success { value } => print("split count=${listLength(value)}\n")
+    Error { message } => print("split unexpected error\n")
+  }
+  match split("anything", "") {
+    Success { value } => print("split empty-sep unexpected\n")
+    Error { message } => print("split empty-sep rejected\n")
+  }
+  0
+}
