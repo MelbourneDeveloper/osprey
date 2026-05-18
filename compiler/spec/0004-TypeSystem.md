@@ -5,6 +5,7 @@
 - [Result Auto-Unwrapping](#result-auto-unwrapping)
 - [Function Types](#function-types)
 - [Record Types](#record-types)
+- [Union Types](#union-types)
 - [Validated Records (`where`)](#validated-records-where)
 - [Collection Types](#collection-types)
 - [Built-in Error Types](#built-in-error-types)
@@ -106,6 +107,25 @@ fn createAdder(n: int) -> (int) -> int = fn(x: int) => x + n
 
 Multi-argument call syntax (named arguments are required for two or more parameters) is in [Function Calls](0005-FunctionCalls.md).
 
+### Closures — [TYPE-FN-CLOSURE]
+
+A lambda (`fn(...) => expr` or `|x| => expr`) captures every free identifier from its enclosing lexical scope by reference to its value at capture time. Captured bindings are immutable, so by-reference and by-value capture are observationally identical and the implementation MAY choose either. A captured binding outlives the surrounding stack frame: a closure returned from a function remains callable and continues to read the captured values.
+
+```osprey
+fn makeAdder(n: int) -> (int) -> int = fn(x: int) => x + n   // captures n
+
+let add5    = makeAdder(5)
+let add10   = makeAdder(10)
+print(add5(3))     // 8
+print(add10(3))    // 13
+
+let prefix  = "hello "
+let greet   = fn(name: string) => prefix + name              // captures prefix
+print(greet("world"))                                         // "hello world"
+```
+
+Closures and named functions are interchangeable wherever a function type is expected, including as higher-order arguments (`map`, `filter`, `fold`, `forEach`) and as the function field of records. A closure that captures no free variables is equivalent to a top-level function and the implementation SHOULD lower it to one.
+
 ## Record Types
 
 ```ebnf
@@ -181,6 +201,37 @@ let company = Company {
 
 let companyCity = company.address.city
 ```
+
+## Union Types
+
+A union type (also "sum type", "tagged union", "discriminated union") declares a closed set of named variants. Each variant is either nullary (no payload) or carries a record-style payload. Grammar in [Syntax](0003-Syntax.md#type-declarations); pattern-matching rules in [Pattern Matching](0007-PatternMatching.md).
+
+```osprey
+type Color  = Red | Green | Blue
+type Shape  = Circle    { radius: float }
+            | Rectangle { width:  float, height: float }
+            | Triangle  { a: float, b: float, c: float }
+```
+
+A union value carries a runtime discriminant identifying its variant; the compiler emits one branch per variant in any `match`. Field access on a union requires `match` to narrow it to a single variant first.
+
+### Recursive Variants — [TYPE-UNION-REC]
+
+A variant's payload MAY reference the union type itself, either directly or through a built-in collection. This is the foundation of every tree-shaped data structure (AST, file tree, scene graph, parsed JSON).
+
+```osprey
+type Tree = Leaf | Node { value: int, left: Tree, right: Tree }
+
+type JsonValue =
+    JNull
+    | JBool { v: bool }
+    | JNum  { v: float }
+    | JStr  { v: string }
+    | JArr  { items:   List<JsonValue> }
+    | JObj  { entries: Map<string, JsonValue> }
+```
+
+A recursive union is laid out indirectly — variant payloads referencing the same type, or containing a `List<Self>` / `Map<K, Self>`, MUST be stored behind a pointer so the type's size is finite. This requirement is invisible to the user: construction, pattern-matching, and field access read the same as for any other variant. Mutually recursive unions follow the same rule.
 
 ## Validated Records (`where`)
 

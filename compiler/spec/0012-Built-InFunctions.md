@@ -101,6 +101,35 @@ contains("hello", "")             // true
 #### `indexOf(s: string, needle: string) -> Result<int, StringError>`
 Returns the codepoint index of the first occurrence of `needle`, or `Error(NotFound)` if absent. An empty `needle` returns `Success { value: 0 }`.
 
+### Cursor Access (total, O(1))
+
+These primitives expose `string` as a random-access byte/codepoint buffer without allocating. They exist so user-written parsers (JSON, query strings, CSV, log formats) can run in linear time instead of the O(n²) imposed by chaining `substring`/`take`/`drop`. They are the lowest-level string operations in the language; everything above is implementable in pure Osprey on top of them.
+
+#### `byteLength(s: string) -> int`
+Byte length of the underlying UTF-8 storage. Equal to `length(s)` only for ASCII strings. O(1).
+
+#### `byteAt(s: string, i: int) -> Result<int, StringError>`
+Returns the UTF-8 byte at index `i` as an `int` in `[0, 255]`, or `Error(IndexOutOfRange)` if `i < 0` or `i >= byteLength(s)`. O(1). Does **not** allocate.
+
+#### `codePointAt(s: string, byteIndex: int) -> Result<int, StringError>`
+Decodes the UTF-8 codepoint starting at `byteIndex` and returns it as an `int`. Returns `Error(IndexOutOfRange)` if `byteIndex` is out of range, or `Error(InvalidArgument)` if it does not land on a codepoint boundary or the bytes are malformed. O(1) (at most 4 bytes read). Pair with `codePointWidth` to advance:
+
+```osprey
+fn nextChar(s: string, i: int) -> Result<(int, int), StringError> = match codePointAt(s, i) {
+    Success { value: cp } => match codePointWidth(cp) {
+        Success { value: w } => Success { value: (cp, i + w) }
+        Error   { message }  => Error { message }
+    }
+    Error { message } => Error { message }
+}
+```
+
+#### `codePointWidth(codepoint: int) -> Result<int, StringError>`
+Returns the number of UTF-8 bytes the codepoint encodes to (1–4), or `Error(InvalidArgument)` if `codepoint` is not a valid Unicode scalar value.
+
+#### `fromCodePoint(codepoint: int) -> Result<string, StringError>`
+Builds a single-codepoint `string`. Inverse of `codePointAt`. `Error(InvalidArgument)` for invalid scalar values.
+
 ### Substrings
 
 #### `substring(s: string, start: int, end: int) -> Result<string, StringError>`
