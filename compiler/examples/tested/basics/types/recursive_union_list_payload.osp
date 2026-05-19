@@ -1,0 +1,33 @@
+// Phase 1.1 of docs/plans/recursive-union-payloads.md
+// Spec: 0004-TypeSystem.md [TYPE-UNION-REC]
+// Recursive union whose variant payload is List<Self>.
+
+type JsonValue =
+    JNull
+    | JBool { v: bool }
+    | JNum  { v: int }
+    | JStr  { v: string }
+    | JArr  { items: List<JsonValue> }
+
+fn describe(v: JsonValue) -> string = match v {
+    JNull        => "null"
+    JBool { v }  => "bool"
+    JNum  { v }  => "num"
+    JStr  { v }  => "str"
+    JArr  { items } => "arr"
+}
+
+let a = JNum  { v: 42 }
+let b = JStr  { v: "hi" }
+let c = JBool { v: true }
+let inner = List() |> listAppend(a) |> listAppend(b) |> listAppend(c)
+let arr = JArr { items: inner }
+
+print(describe(arr))
+print(describe(a))
+print(describe(JNull))
+
+match arr {
+    JArr { items } => print(toString(listLength(items)))
+    _              => print("not arr")
+}

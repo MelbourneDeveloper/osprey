@@ -6,7 +6,7 @@ package ast
 
 import "testing"
 
-func TestStatementMarkerInvocations(t *testing.T) {
+func TestStatementMarkerInvocations(_ *testing.T) {
 	(&ImportStatement{}).isStatement()
 	(&LetDeclaration{}).isStatement()
 	(&AssignmentStatement{}).isStatement()
@@ -18,7 +18,7 @@ func TestStatementMarkerInvocations(t *testing.T) {
 	(&ModuleDeclaration{}).isStatement()
 }
 
-func TestExpressionMarkerInvocations(t *testing.T) {
+func TestExpressionMarkerInvocations(_ *testing.T) {
 	(&FunctionCallExpression{}).isExpression()
 	(&IntegerLiteral{}).isExpression()
 	(&FloatLiteral{}).isExpression()

@@ -1,0 +1,34 @@
+// Phase 3.1 of docs/plans/recursive-union-payloads.md
+// Spec: 0004-TypeSystem.md [TYPE-UNION-REC]
+// Two mutually recursive unions: Expr refers to Stmt, Stmt refers to Expr.
+
+type Expr =
+    ENum   { v: int }
+    | EAdd { args: List<Expr> }
+    | EBlk { body: Stmt }
+
+type Stmt =
+    SLet     { name: string, value: Expr }
+    | SRet   { value: Expr }
+
+fn descExpr(e: Expr) -> string = match e {
+    ENum { v }    => "num"
+    EAdd { args } => "add"
+    EBlk { body } => "blk"
+}
+
+fn descStmt(s: Stmt) -> string = match s {
+    SLet { name, value } => "let"
+    SRet { value }       => "ret"
+}
+
+let two   = ENum { v: 2 }
+let three = ENum { v: 3 }
+let sum   = EAdd { args: List() |> listAppend(two) |> listAppend(three) }
+let stmt  = SRet { value: sum }
+let outer = EBlk { body: stmt }
+
+print(descExpr(two))
+print(descExpr(sum))
+print(descExpr(outer))
+print(descStmt(stmt))

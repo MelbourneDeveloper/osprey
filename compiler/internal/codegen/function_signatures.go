@@ -1488,8 +1488,22 @@ func (g *LLVMGenerator) getFieldType(fieldType string) types.Type {
 		//ALWAYS LOWERCASE!
 	case TypeBool: // "bool"
 		return types.I1
+	case TypeList, TypeMap:
+		// Collections are opaque handles owned by the C runtime
+		// (collection_runtime.h); storing them inline would lose the
+		// indirection their persistent layout requires. See
+		// spec/0004-TypeSystem.md [TYPE-UNION-REC].
+		return types.I8Ptr
 	default:
-		return types.I64 // default to i64
+		// User-defined types (records, unions, possibly recursive) are
+		// represented at runtime as a pointer to a heap struct. Inline
+		// storage would not terminate for recursive payloads. See
+		// spec/0004-TypeSystem.md [TYPE-UNION-REC].
+		if _, exists := g.typeMap[fieldType]; exists {
+			return types.I8Ptr
+		}
+
+		return types.I64
 	}
 }
 

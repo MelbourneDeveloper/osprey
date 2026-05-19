@@ -671,6 +671,26 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, error) {
 	// Check for union type variants (constants) first
 	if discriminant, exists := g.unionVariants[ident.Name]; exists {
+		// If this variant belongs to a multi-variant discriminated union laid
+		// out as { i8 tag, [N x i8] data }, allocate the union shape and tag
+		// it. Otherwise (simple all-no-fields enum lowered to i64) keep the
+		// legacy integer encoding.
+		if typeDecl := g.findTypeDeclarationByVariant(ident.Name); typeDecl != nil {
+			if unionType, exists := g.typeMap[typeDecl.Name]; exists {
+				if structType, ok := unionType.(*types.StructType); ok && len(structType.Fields) == 2 {
+					unionValue := g.builder.NewAlloca(structType)
+					tagPtr := g.builder.NewGetElementPtr(
+						structType,
+						unionValue,
+						constant.NewInt(types.I32, 0),
+						constant.NewInt(types.I32, 0),
+					)
+					g.builder.NewStore(constant.NewInt(types.I8, discriminant), tagPtr)
+					return unionValue, nil
+				}
+			}
+		}
+
 		return constant.NewInt(types.I64, discriminant), nil
 	}
 
@@ -1879,46 +1899,52 @@ func (g *LLVMGenerator) generateDiscriminatedUnionConstructor(
 	return unionValue, nil
 }
 
-// findVariantByConstructorCall finds which variant matches the constructor call
+// findVariantByConstructorCall finds which variant matches the constructor call.
+// Variants are identified by their NAME (typeConstructor.TypeName). Field-set
+// matching is a last-resort fallback: when two variants share the same field
+// names (e.g. `JBool {v}`, `JNum {v}`, `JStr {v}`) it picks the first one and
+// silently mis-routes the value into the wrong slot — see
+// docs/plans/recursive-union-payloads.md.
 func (g *LLVMGenerator) findVariantByConstructorCall(
 	typeConstructor *ast.TypeConstructorExpression,
 	typeDecl *ast.TypeDeclaration,
 ) (*ast.TypeVariant, int, error) {
-	// The constructor call should be in the form: VariantName { field1: value1, field2: value2 }
-	// We need to find which variant matches by looking at the discriminant of the variant name
-	// First, try to find a variant by matching field names if fields are provided
+	// Primary: name match. The parser always populates TypeName from the
+	// source-level constructor (`JArr` in `JArr { items: ... }`).
+	if typeConstructor.TypeName != "" {
+		for i, variant := range typeDecl.Variants {
+			if variant.Name == typeConstructor.TypeName {
+				return &variant, i, nil
+			}
+		}
+	}
+
+	// Fallback: field-name set match. Only reached when the constructor has no
+	// TypeName (legacy AST paths) or when the name doesn't correspond to any
+	// declared variant. Preserved for backward compatibility.
 	if len(typeConstructor.Fields) > 0 {
 		for i, variant := range typeDecl.Variants {
-			if len(variant.Fields) == len(typeConstructor.Fields) {
-				// Check if all constructor fields match variant fields
-				allMatch := true
+			if len(variant.Fields) != len(typeConstructor.Fields) {
+				continue
+			}
 
-				for _, variantField := range variant.Fields {
-					if _, exists := typeConstructor.Fields[variantField.Name]; !exists {
-						allMatch = false
-						break
-					}
-				}
+			allMatch := true
 
-				if allMatch {
-					return &variant, i, nil
+			for _, variantField := range variant.Fields {
+				if _, exists := typeConstructor.Fields[variantField.Name]; !exists {
+					allMatch = false
+					break
 				}
+			}
+
+			if allMatch {
+				return &variant, i, nil
 			}
 		}
 
 		return nil, -1, fmt.Errorf("%w for type %s", ErrNoVariantFound, typeDecl.Name)
 	}
 
-	// If no fields provided, this might be a simple enum variant
-	// Try to find variant by checking if typeConstructor.TypeName matches any variant name
-	for i, variant := range typeDecl.Variants {
-		if variant.Name == typeConstructor.TypeName {
-			return &variant, i, nil
-		}
-	}
-
-	// If we still haven't found it, return the first variant as a fallback
-	// This handles cases where we're constructing by type name rather than variant name
 	if len(typeDecl.Variants) > 0 {
 		return &typeDecl.Variants[0], 0, nil
 	}
@@ -2039,6 +2065,14 @@ func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedTy
 	if ptrType, ok := expectedType.(*types.PointerType); ok {
 		// If expected type is a pointer and we have a different type, try to convert via casting
 		if currentType != expectedType {
+			// Pointer-to-pointer: bitcast safely. This is the path for storing
+			// a discriminated-union value (e.g. `{i8, [N x i8]}*`) into an
+			// `i8*` payload slot of another union — recursive payloads from
+			// spec/0004-TypeSystem.md [TYPE-UNION-REC].
+			if _, srcIsPtr := currentType.(*types.PointerType); srcIsPtr {
+				return g.builder.NewBitCast(value, expectedType)
+			}
+
 			// Don't try to cast between fundamentally incompatible types
 			if currentType == types.I8Ptr && ptrType.ElemType != types.I8 {
 				// This is a string being stored in a non-string pointer field - likely an error

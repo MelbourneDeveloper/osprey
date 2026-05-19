@@ -1,0 +1,29 @@
+// Phase 2.1 of docs/plans/recursive-union-payloads.md
+// Spec: 0004-TypeSystem.md [TYPE-UNION-REC]
+// Recursive union whose variant payload is Map<string, Self>.
+
+type JsonValue =
+    JNull
+    | JBool { v: bool }
+    | JNum  { v: int }
+    | JStr  { v: string }
+    | JArr  { items:   List<JsonValue> }
+    | JObj  { entries: Map<string, JsonValue> }
+
+let obj = JObj {
+    entries: Map() |> mapSet("name", JStr { v: "alice" })
+                   |> mapSet("age",  JNum { v: 30 })
+}
+
+match obj {
+    JObj { entries } => print(toString(mapLength(entries)))
+    _                => print("not obj")
+}
+
+match obj {
+    JObj { entries } => match mapContains(entries, "name") {
+        true  => print("has name")
+        false => print("missing name")
+    }
+    _ => print("not obj")
+}
