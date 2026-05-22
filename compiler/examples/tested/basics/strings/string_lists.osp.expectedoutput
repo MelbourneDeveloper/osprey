@@ -1,8 +1,0 @@
-lines count=3
-
-words count=2
-
-split count=3
-
-split empty-sep rejected
-
