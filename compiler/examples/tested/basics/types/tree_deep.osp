@@ -26,6 +26,21 @@ fn rightRootValue(t: Tree) -> int = match t {
     Node { value, left, right} => rootValue(right)
 }
 
+// 3-level: read t.right.right.value. Proves the recursive payload survives
+// being loaded, re-matched, and dereferenced twice on the same axis.
+fn rightRightValue(t: Tree) -> int = match t {
+    Leaf                       => 0
+    Node { value, left, right} => rightRootValue(right)
+}
+
+// 3-level: read t.left.right.value. Mirrors rightRightValue but crosses
+// a left↔right boundary, so it cannot succeed by accident if a single
+// field were aliased to its sibling.
+fn leftRightValue(t: Tree) -> int = match t {
+    Leaf                       => 0
+    Node { value, left, right} => rightRootValue(left)
+}
+
 // Balanced depth-3 tree, hand-built:
 //             4
 //           /   \
@@ -48,3 +63,5 @@ print(leftLabel(root))              // node  (root.left == n2)
 print(leftLabel(n1))                // leaf  (n1.left == Leaf)
 print(toString(rightRootValue(root))) // 6   (root.right == n6, n6.value == 6)
 print(toString(rightRootValue(n6)))   // 7   (n6.right == n7, n7.value == 7)
+print(toString(rightRightValue(root))) // 7  (root.right == n6, n6.right == n7, n7.value == 7)
+print(toString(leftRightValue(root)))  // 3  (root.left == n2, n2.right == n3, n3.value == 3)

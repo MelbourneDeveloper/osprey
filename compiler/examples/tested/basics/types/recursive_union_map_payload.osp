@@ -10,9 +10,22 @@ type JsonValue =
     | JArr  { items:   List<JsonValue> }
     | JObj  { entries: Map<string, JsonValue> }
 
+fn describe(v: JsonValue) -> string = match v {
+    JNull           => "null"
+    JBool { v }     => "bool"
+    JNum  { v }     => "num"
+    JStr  { v }     => "str"
+    JArr  { items } => "arr"
+    JObj  { entries } => "obj"
+}
+
+fn announce(v: JsonValue) -> Unit = print(describe(v))
+
+let nameVal = JStr { v: "alice" }
+let ageVal  = JNum { v: 30 }
 let obj = JObj {
-    entries: Map() |> mapSet("name", JStr { v: "alice" })
-                   |> mapSet("age",  JNum { v: 30 })
+    entries: Map() |> mapSet("name", nameVal)
+                   |> mapSet("age",  ageVal)
 }
 
 match obj {
@@ -26,4 +39,36 @@ match obj {
         false => print("missing name")
     }
     _ => print("not obj")
+}
+
+// Deeper assertion: pull values out via mapValues and walk them.
+// Each stored payload must round-trip with its variant tag intact, even
+// though it is held by a Map<string, Self> inside a recursive variant.
+match obj {
+    JObj { entries } => forEachList(mapValues(entries), announce)
+    _                => print("not obj")
+}
+
+// Identity round-trip on values: the exact JStr/JNum objects we stored
+// must reappear in mapValues. listContains compares slots; a corrupted
+// recursive-union boxing would lose these.
+match obj {
+    JObj { entries } => match listContains(mapValues(entries), nameVal) {
+        true  => print("hasName")
+        false => print("lostName")
+    }
+    _ => print("not obj")
+}
+match obj {
+    JObj { entries } => match listContains(mapValues(entries), ageVal) {
+        true  => print("hasAge")
+        false => print("lostAge")
+    }
+    _ => print("not obj")
+}
+
+// Keys must survive too: mapKeys should list both "name" and "age".
+match obj {
+    JObj { entries } => print(toString(listLength(mapKeys(entries))))
+    _                => print("not obj")
 }
