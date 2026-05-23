@@ -805,6 +805,7 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
 		// Unwrap Result types if function return type is not a Result
 		finalReturnValue = g.maybeUnwrapResult(finalReturnValue, fnDecl)
+		finalReturnValue = g.coerceReturnToRetType(finalReturnValue, fn.Sig.RetType)
 		g.builder.NewRet(finalReturnValue)
 	}
 

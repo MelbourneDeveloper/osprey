@@ -836,8 +836,30 @@ func (g *LLVMGenerator) generateReturnInstruction(
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
 		// Unwrap Result types if function return type is not a Result
 		finalReturnValue = g.maybeUnwrapResult(finalReturnValue, fnDecl)
+		// Pointer-to-pointer return-type bitcast: when a recursive-union field
+		// stored as i8* (see [TYPE-UNION-REC]) is matched out and returned, the
+		// value is i8* but the function's declared return type is the concrete
+		// union-struct pointer. Strict llc rejects this; mirror the call-site
+		// coercion in coerceArgumentToParamType.
+		finalReturnValue = g.coerceReturnToRetType(finalReturnValue, fn.Sig.RetType)
 		g.builder.NewRet(finalReturnValue)
 	}
+}
+
+// coerceReturnToRetType bitcasts val to expected if both are pointers and the
+// types differ. No-op otherwise. Required for recursive-union payloads that
+// round-trip through i8* storage; see coerceArgumentToParamType for the
+// argument-side analog.
+func (g *LLVMGenerator) coerceReturnToRetType(val value.Value, expected types.Type) value.Value {
+	if val == nil || expected == nil || expected.Equal(val.Type()) {
+		return val
+	}
+	if _, expectedIsPtr := expected.(*types.PointerType); expectedIsPtr {
+		if _, actualIsPtr := val.Type().(*types.PointerType); actualIsPtr {
+			return g.builder.NewBitCast(val, expected)
+		}
+	}
+	return val
 }
 
 // maybeWrapInResult wraps a plain value in a Result structure if the function declares a Result return type
