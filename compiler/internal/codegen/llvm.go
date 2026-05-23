@@ -305,6 +305,17 @@ func (g *LLVMGenerator) coerceArgumentToParamType(
 		if _, actualIsPtr := actual.(*types.PointerType); actualIsPtr {
 			return g.builder.NewBitCast(val, expected)
 		}
+		// i64 → concrete pointer: hits when osprey_list_get hands an i64
+		// element (storage slot for an i8* boxed union pointer) to a user
+		// function declared with the concrete union-struct pointer type.
+		// Round-trip through i8* so the bitcast is well-typed.
+		if actual.Equal(types.I64) {
+			asI8Ptr := g.builder.NewIntToPtr(val, types.I8Ptr)
+			if expected.Equal(types.I8Ptr) {
+				return asI8Ptr
+			}
+			return g.builder.NewBitCast(asI8Ptr, expected)
+		}
 	}
 	return val
 }
