@@ -298,6 +298,14 @@ func (g *LLVMGenerator) coerceArgumentToParamType(
 	case expected.Equal(types.I8Ptr) && actual.Equal(types.I64):
 		return g.builder.NewIntToPtr(val, types.I8Ptr)
 	}
+	// Pointer-to-pointer: bitcast. Hits when a recursive-union field stored as
+	// i8* (see [TYPE-UNION-REC]) is loaded and then passed back to a function
+	// declared with the concrete union-struct pointer type.
+	if _, expectedIsPtr := expected.(*types.PointerType); expectedIsPtr {
+		if _, actualIsPtr := actual.(*types.PointerType); actualIsPtr {
+			return g.builder.NewBitCast(val, expected)
+		}
+	}
 	return val
 }
 

@@ -1,0 +1,19 @@
+// Implements [BUILTIN-STRING-LIST] — split returns Result<List<string>, _>.
+// lines / words return raw osp_string_list and are exercised purely for
+// compile/run coverage; consuming their length is blocked on the runtime
+// list-type unification (see bugs tracker).
+fn main() -> int {
+  let _l = lines("a\nb\nc")
+  let _w = words("  hello   world  ")
+  print("lines+words compiled\n")
+
+  match split("a,b,c", ",") {
+    Success { value } => print("split count=${listLength(value)}\n")
+    Error { message } => print("split unexpected error\n")
+  }
+  match split("anything", "") {
+    Success { value } => print("split empty-sep unexpected\n")
+    Error { message } => print("split empty-sep rejected\n")
+  }
+  0
+}
