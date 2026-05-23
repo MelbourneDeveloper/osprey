@@ -1,11 +1,11 @@
-// Implements [BUILTIN-STRING-LIST] — split returns Result<List<string>, _>.
-// lines / words return raw osp_string_list and are exercised purely for
-// compile/run coverage; consuming their length is blocked on the runtime
-// list-type unification (see bugs tracker).
+// Implements [BUILTIN-STRING-LIST] — lines, words, split return list types.
+// Spec: 0012-Built-InFunctions.md#string-functions
 fn main() -> int {
-  let _l = lines("a\nb\nc")
-  let _w = words("  hello   world  ")
-  print("lines+words compiled\n")
+  let multi = "a\nb\nc"
+  print("lines count=${listLength(lines(multi))}\n")
+
+  let spaced = "  hello   world  "
+  print("words count=${listLength(words(spaced))}\n")
 
   match split("a,b,c", ",") {
     Success { value } => print("split count=${listLength(value)}\n")
