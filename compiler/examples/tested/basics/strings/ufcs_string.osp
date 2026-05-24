@@ -20,6 +20,8 @@ fn main() -> int {
   let hello = "hello"
   let abc = "abc"
   print("trim ufcs=\"${s.trim()}\"\n")
+  print("trimS ufcs=\"${s.trimStart()}\"\n")
+  print("trimE ufcs=\"${s.trimEnd()}\"\n")
   print("uppr ufcs=\"${hi.toUpperCase()}\"\n")
   print("lowr ufcs=\"${HI.toLowerCase()}\"\n")
   print("take ufcs=\"${hello.take(3)}\"\n")

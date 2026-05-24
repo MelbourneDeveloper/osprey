@@ -1,0 +1,85 @@
+// Phase 3.1 of docs/plans/recursive-union-payloads.md
+// Spec: 0004-TypeSystem.md [TYPE-UNION-REC]
+// Two mutually recursive unions: Expr refers to Stmt, Stmt refers to Expr.
+
+type Expr =
+    ENum   { v: int }
+    | EAdd { args: List<Expr> }
+    | EBlk { body: Stmt }
+
+type Stmt =
+    SLet     { name: string, value: Expr }
+    | SRet   { value: Expr }
+
+fn descExpr(e: Expr) -> string = match e {
+    ENum { v }    => "num"
+    EAdd { args } => "add"
+    EBlk { body } => "blk"
+}
+
+fn descStmt(s: Stmt) -> string = match s {
+    SLet { name, value } => "let"
+    SRet { value }       => "ret"
+}
+
+// Extract leaf int from an ENum; sentinel 999 means the chain dropped its
+// payload (should never happen for our tree, which is all ENum at the leaves).
+fn numValue(e: Expr) -> int = match e {
+    ENum { v }    => v
+    EAdd { args } => 999
+    EBlk { body } => 999
+}
+
+// Walker used by forEachList over the args of an EAdd; proves that elements
+// stored inside EAdd's List<Expr> payload retain ENum identity after a full
+// Stmt → Expr → List<Expr> unwind.
+fn announceExpr(e: Expr) -> Unit = print(descExpr(e))
+fn announceNum(e: Expr)  -> Unit = print(toString(numValue(e)))
+
+let two   = ENum { v: 2 }
+let three = ENum { v: 3 }
+let sum   = EAdd { args: List() |> listAppend(two) |> listAppend(three) }
+let stmt  = SRet { value: sum }
+let outer = EBlk { body: stmt }
+
+print(descExpr(two))
+print(descExpr(sum))
+print(descExpr(outer))
+print(descStmt(stmt))
+
+// Deeper assertion: walk the full mutual-recursion chain.
+// outer (EBlk) → body (Stmt) → SRet → value (Expr) → EAdd → args (List<Expr>)
+// → forEachList over [ENum 2, ENum 3].
+//
+// Each helper crosses a mutually-recursive boundary; if recursive-union
+// storage flattened payloads or lost variant tags, the chain would hit a
+// sentinel ("expected …") instead of unwrapping to args.
+fn unwrapBlk(e: Expr) -> Stmt = match e {
+    EBlk { body } => body
+    _             => SRet { value: ENum { v: 0 } }
+}
+
+fn unwrapRet(s: Stmt) -> Expr = match s {
+    SRet { value } => value
+    _              => ENum { v: 0 }
+}
+
+fn unwrapAddLen(e: Expr) -> int = match e {
+    EAdd { args } => listLength(args)
+    _             => 999
+}
+
+let unwrappedStmt = unwrapBlk(outer)
+print(descStmt(unwrappedStmt))           // "ret"
+let unwrappedExpr = unwrapRet(unwrappedStmt)
+print(descExpr(unwrappedExpr))           // "add"
+print(toString(unwrapAddLen(unwrappedExpr)))  // "2"
+
+// Walk the args list pulled all the way out of EBlk(SRet(EAdd(...))).
+match unwrappedExpr {
+    EAdd { args } => {
+        forEachList(args, announceExpr)  // "num", "num"
+        forEachList(args, announceNum)   // "2", "3"
+    }
+    _ => print("expected EAdd")
+}

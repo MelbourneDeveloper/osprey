@@ -72,7 +72,16 @@ func (g *LLVMGenerator) callUserFunctionWithValues(
 		return nil, err
 	}
 
-	return g.builder.NewCall(fn, args...), nil
+	// Coerce each arg to the function's declared parameter type. forEachList
+	// hands us i64-typed elements out of osprey_list_get; a user function
+	// that takes a union struct pointer needs intToPtr + bitcast or strict
+	// llc rejects the call site. Mirrors coerceArgumentToParamType used by
+	// the direct-call path.
+	coerced := make([]value.Value, len(args))
+	for i, arg := range args {
+		coerced[i] = g.coerceArgumentToParamType(arg, fn, i)
+	}
+	return g.builder.NewCall(fn, coerced...), nil
 }
 
 func (g *LLVMGenerator) inferenceTypeFromLLVMValue(v value.Value) Type {

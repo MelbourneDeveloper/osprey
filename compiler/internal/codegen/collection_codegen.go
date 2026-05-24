@@ -141,11 +141,26 @@ func (g *LLVMGenerator) callOneArg(name string, ret types.Type, callExpr *ast.Ca
 	if fn == nil {
 		return nil, fmt.Errorf("%s: %w", name, errCollectionExternMiss)
 	}
+	arg = g.coerceToI8Ptr(arg)
 	res := g.builder.NewCall(fn, arg)
 	if ret == types.I32 {
 		return g.builder.NewICmp(enum.IPredNE, res, constant.NewInt(types.I32, 0)), nil
 	}
 	return res, nil
+}
+
+// coerceToI8Ptr bitcasts a pointer value to i8* so it can be passed to a
+// collection extern that takes an opaque handle. No-op if already i8* or
+// not a pointer. Needed when an expression returns a typed pointer
+// (e.g. osp_string_list*) that the runtime treats as an opaque list handle.
+func (g *LLVMGenerator) coerceToI8Ptr(v value.Value) value.Value {
+	if v.Type() == types.I8Ptr {
+		return v
+	}
+	if _, isPtr := v.Type().(*types.PointerType); isPtr {
+		return g.builder.NewBitCast(v, types.I8Ptr)
+	}
+	return v
 }
 
 // callTwoArgs evaluates two arguments, optionally boxes the second to i64
@@ -168,6 +183,7 @@ func (g *LLVMGenerator) callTwoArgs(name string, callExpr *ast.CallExpression, b
 	if boxB {
 		b = g.boxToI64(b)
 	}
+	a = g.coerceToI8Ptr(a)
 	fn := g.functions[name]
 	if fn == nil {
 		return nil, fmt.Errorf("%s: %w", name, errCollectionExternMiss)

@@ -408,6 +408,8 @@ func getStringExpectedOutputs() map[string]string {
 			"parseInt strict: rejects 'oops'\n\n" +
 			"ufcs len after trim=32\n\n" +
 			"=== Demo Complete ===\n\n",
+		// Implements [BUILTIN-STRING-LIST] — lines/words/split return List<string>.
+		"string_lists.osp": "lines count=3\n\nwords count=2\n\nsplit count=3\n\nsplit empty-sep rejected\n\n",
 		// Implements [BUILTIN-STRING-UFCS] — pipe == UFCS == direct.
 		"ufcs_string.osp": "len  pipe=16  ufcs=16\n\n" +
 			"empt pipe=true  ufcs=true\n\n" +
@@ -415,6 +417,8 @@ func getStringExpectedOutputs() map[string]string {
 			"strt pipe=true  ufcs=true\n\n" +
 			"ends pipe=true  ufcs=true\n\n" +
 			"trim ufcs=\"Hello, World\"\n\n" +
+			"trimS ufcs=\"Hello, World  \"\n\n" +
+			"trimE ufcs=\"  Hello, World\"\n\n" +
 			"uppr ufcs=\"HI\"\n\n" +
 			"lowr ufcs=\"hi\"\n\n" +
 			"take ufcs=\"hel\"\n\n" +

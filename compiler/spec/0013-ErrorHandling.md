@@ -61,3 +61,17 @@ A `Result` formats as `Success(<value>)` or `Error(<message>)`:
 print(toString(15 / 3))   // "Success(5)"
 print(toString(10 / 0))   // "Error(DivisionByZero)"
 ```
+
+## Error Payload Propagation — [ERR-PAYLOAD]
+
+When a function produces `Error { message: E }`, the value bound to `message` in the caller's `match` arm MUST be the exact `E` value that the producer wrote — never a placeholder, never a static string, never a default. The discriminant ("this `Result` is an `Error`") and the payload ("what went wrong") are both part of the value; throwing away one defeats the type.
+
+```osprey
+match split("abc", "") {
+    Success { value }   => forEach(value, print)
+    Error   { message } => print(message)   // MUST print "separator is empty",
+                                            // not "Error occurred"
+}
+```
+
+This requirement applies uniformly across arithmetic, string, list, map, file-I/O, HTTP, and user-defined fallible functions, and to nested `Result` chains (auto-unwrap MUST preserve the original error payload). Implementations that lose the payload — for example by binding the pattern variable to a static global — are non-conforming.
