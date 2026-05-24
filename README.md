@@ -1,7 +1,7 @@
 # Osprey Programming Language
 
 A modern functional programming language designed for elegance, safety, and performance. Written in Go, outputs to LLVM.
-
+ 
 ⭐ **[Star us on GitHub](https://github.com/MelbourneDeveloper/osprey)** to support the project and allow us to submit to Homebrew! ⭐
 
 ## Installation

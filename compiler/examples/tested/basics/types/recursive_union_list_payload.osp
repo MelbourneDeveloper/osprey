@@ -1,0 +1,70 @@
+// Phase 1.1 of docs/plans/recursive-union-payloads.md
+// Spec: 0004-TypeSystem.md [TYPE-UNION-REC]
+// Recursive union whose variant payload is List<Self>.
+
+type JsonValue =
+    JNull
+    | JBool { v: bool }
+    | JNum  { v: int }
+    | JStr  { v: string }
+    | JArr  { items: List<JsonValue> }
+
+fn describe(v: JsonValue) -> string = match v {
+    JNull        => "null"
+    JBool { v }  => "bool"
+    JNum  { v }  => "num"
+    JStr  { v }  => "str"
+    JArr  { items } => "arr"
+}
+
+// Used by forEachList to walk a List<JsonValue> stored inside a recursive
+// variant; proves each element survives storage with its variant tag intact.
+fn announce(v: JsonValue) -> Unit = print(describe(v))
+
+let a = JNum  { v: 42 }
+let b = JStr  { v: "hi" }
+let c = JBool { v: true }
+let inner = List() |> listAppend(a) |> listAppend(b) |> listAppend(c)
+let arr = JArr { items: inner }
+
+print(describe(arr))
+print(describe(a))
+print(describe(JNull))
+
+match arr {
+    JArr { items } => print(toString(listLength(items)))
+    _              => print("not arr")
+}
+
+// Deeper assertion: unwrap items from inside JArr and walk every element.
+// If any element's variant tag is corrupted by storage in a recursive-union
+// payload, describe() will return the wrong string here.
+match arr {
+    JArr { items } => forEachList(items, announce)
+    _              => print("not arr")
+}
+
+// Round-trip: the exact value we stored must still be findable by identity.
+// listContains compares stored slots; this fails if the recursive-union
+// boxing replaces or rewrites the pointer between append and lookup.
+match arr {
+    JArr { items } => match listContains(items, a) {
+        true  => print("hasA")
+        false => print("lostA")
+    }
+    _ => print("not arr")
+}
+match arr {
+    JArr { items } => match listContains(items, b) {
+        true  => print("hasB")
+        false => print("lostB")
+    }
+    _ => print("not arr")
+}
+match arr {
+    JArr { items } => match listContains(items, c) {
+        true  => print("hasC")
+        false => print("lostC")
+    }
+    _ => print("not arr")
+}

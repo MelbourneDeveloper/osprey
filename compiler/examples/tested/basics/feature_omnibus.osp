@@ -1,0 +1,26 @@
+type Pri = Low | Med | High
+
+fn priWeight(p: Pri) -> int = match p {
+  Low  => 1
+  Med  => 5
+  High => 9
+}
+
+fn main() -> int {
+  print("=== omnibus ===")
+  print(priWeight(High))
+  print(priWeight(Med))
+  print(priWeight(Low))
+
+  let a = listAppend(listAppend(List(), 10), 20)
+  let b = listAppend(List(), 99)
+  print(listLength(a + b))
+  print(listContains(a, 20))
+
+  let s = "  hi  "
+  print(s.trim())
+  print(s.toUpperCase())
+
+  print("=== omnibus done ===")
+  0
+}

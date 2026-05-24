@@ -298,6 +298,25 @@ func (g *LLVMGenerator) coerceArgumentToParamType(
 	case expected.Equal(types.I8Ptr) && actual.Equal(types.I64):
 		return g.builder.NewIntToPtr(val, types.I8Ptr)
 	}
+	// Pointer-to-pointer: bitcast. Hits when a recursive-union field stored as
+	// i8* (see [TYPE-UNION-REC]) is loaded and then passed back to a function
+	// declared with the concrete union-struct pointer type.
+	if _, expectedIsPtr := expected.(*types.PointerType); expectedIsPtr {
+		if _, actualIsPtr := actual.(*types.PointerType); actualIsPtr {
+			return g.builder.NewBitCast(val, expected)
+		}
+		// i64 → concrete pointer: hits when osprey_list_get hands an i64
+		// element (storage slot for an i8* boxed union pointer) to a user
+		// function declared with the concrete union-struct pointer type.
+		// Round-trip through i8* so the bitcast is well-typed.
+		if actual.Equal(types.I64) {
+			asI8Ptr := g.builder.NewIntToPtr(val, types.I8Ptr)
+			if expected.Equal(types.I8Ptr) {
+				return asI8Ptr
+			}
+			return g.builder.NewBitCast(asI8Ptr, expected)
+		}
+	}
 	return val
 }
 
@@ -797,6 +816,7 @@ func (g *LLVMGenerator) generateMonomorphizedFunctionBody(
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
 		// Unwrap Result types if function return type is not a Result
 		finalReturnValue = g.maybeUnwrapResult(finalReturnValue, fnDecl)
+		finalReturnValue = g.coerceReturnToRetType(finalReturnValue, fn.Sig.RetType)
 		g.builder.NewRet(finalReturnValue)
 	}
 
@@ -1961,8 +1981,11 @@ func (g *LLVMGenerator) createMatchResult(
 		return constant.NewUndef(types.Void), nil
 	}
 
-	// Check if we need type coercion
-	coercedValues, err := g.coerceArmValuesToCommonType(armValues)
+	// Check if we need type coercion. predecessorBlocks let us emit
+	// pointer-to-pointer bitcasts inside each arm (before its terminator)
+	// instead of in the end-block — required so the phi's incoming values
+	// are textually defined before the phi node consumes them.
+	coercedValues, err := g.coerceArmValuesToCommonTypeInBlocks(armValues, predecessorBlocks)
 	if err != nil {
 		return nil, err
 	}
@@ -2013,15 +2036,38 @@ func (g *LLVMGenerator) createMatchResult(
 	return phi, nil
 }
 
-// coerceArmValuesToCommonType ensures all arm values have compatible types.
-func (g *LLVMGenerator) coerceArmValuesToCommonType(armValues []value.Value) ([]value.Value, error) {
+// coerceArmValuesToCommonTypeInBlocks unifies match-arm value types ahead of
+// a phi node. Bitcasts land inside each arm's predecessor block so that
+// phi-node incoming values are textually defined before the phi that
+// consumes them. Falls back to in-place coercion when block info is missing.
+func (g *LLVMGenerator) coerceArmValuesToCommonTypeInBlocks(
+	armValues []value.Value, predecessorBlocks []*ir.Block,
+) ([]value.Value, error) {
 	expectedType := armValues[0].Type()
-
 	if !g.needsTypeCoercion(armValues, expectedType) {
 		return armValues, nil
 	}
-
-	return g.performTypeCoercion(armValues, expectedType)
+	coerced := make([]value.Value, len(armValues))
+	for i, val := range armValues {
+		if val.Type() == expectedType {
+			coerced[i] = val
+			continue
+		}
+		if i < len(predecessorBlocks) && predecessorBlocks[i] != nil {
+			c, err := g.coerceValueToTypeInBlock(val, expectedType, predecessorBlocks[i])
+			if err != nil {
+				return nil, err
+			}
+			coerced[i] = c
+			continue
+		}
+		c, err := g.coerceValueToType(val, expectedType)
+		if err != nil {
+			return nil, err
+		}
+		coerced[i] = c
+	}
+	return coerced, nil
 }
 
 // needsTypeCoercion checks if type coercion is needed for arm values.
@@ -2035,28 +2081,21 @@ func (g *LLVMGenerator) needsTypeCoercion(armValues []value.Value, expectedType 
 	return false
 }
 
-// performTypeCoercion converts all values to the expected type.
-func (g *LLVMGenerator) performTypeCoercion(armValues []value.Value, expectedType types.Type) ([]value.Value, error) {
-	coercedValues := make([]value.Value, len(armValues))
-
-	for i, val := range armValues {
-		if val.Type() == expectedType {
-			coercedValues[i] = val
-		} else {
-			coercedVal, err := g.coerceValueToType(val, expectedType)
-			if err != nil {
-				return nil, err
-			}
-
-			coercedValues[i] = coercedVal
-		}
-	}
-
-	return coercedValues, nil
-}
-
 // coerceValueToType converts a single value to the target type.
 func (g *LLVMGenerator) coerceValueToType(val value.Value, targetType types.Type) (value.Value, error) {
+	// Pointer-to-pointer bitcast: the cast itself is emitted here on g.builder,
+	// which lives in the match's end-block — that produces a textual forward
+	// reference (the cast appears before its operand's definition). For phi
+	// inputs, use coerceValueToTypeInBlock with the predecessor block so the
+	// cast lands inside the arm before its terminator. This fallback is for
+	// non-phi callers and matching pointer types only.
+	if _, targetIsPtr := targetType.(*types.PointerType); targetIsPtr {
+		if _, valIsPtr := val.Type().(*types.PointerType); valIsPtr {
+			if val.Type().Equal(targetType) {
+				return val, nil
+			}
+		}
+	}
 	switch targetType {
 	case types.I8Ptr:
 		return g.convertToString(val)
@@ -2065,6 +2104,29 @@ func (g *LLVMGenerator) coerceValueToType(val value.Value, targetType types.Type
 	default:
 		return val, nil
 	}
+}
+
+// coerceValueToTypeInBlock is the phi-aware variant of coerceValueToType. It
+// emits any required pointer-to-pointer bitcast into predBlock (before its
+// terminator) instead of g.builder, so the cast textually precedes the phi
+// node that consumes it. Required for recursive-union match expressions
+// whose arms return pointers of different concrete types.
+func (g *LLVMGenerator) coerceValueToTypeInBlock(
+	val value.Value, targetType types.Type, predBlock *ir.Block,
+) (value.Value, error) {
+	if _, targetIsPtr := targetType.(*types.PointerType); targetIsPtr {
+		if _, valIsPtr := val.Type().(*types.PointerType); valIsPtr {
+			if val.Type().Equal(targetType) {
+				return val, nil
+			}
+			savedBuilder := g.builder
+			g.builder = predBlock
+			cast := g.builder.NewBitCast(val, targetType)
+			g.builder = savedBuilder
+			return cast, nil
+		}
+	}
+	return g.coerceValueToType(val, targetType)
 }
 
 // convertToString converts a value to string type.
