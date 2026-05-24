@@ -61,11 +61,15 @@ For the *plain* self-recursive case (`Node { left: Tree }`), Phase 3 widens this
   - `convertValueToExpectedType` extended with a pointer-to-pointer bitcast path so storing a struct pointer into an `i8*` slot no longer silently produces NULL (`expression_generation.go`).
   - Bare variant identifiers like `JNull` now allocate a tagged union value when the variant belongs to a multi-variant discriminated union (`generateIdentifier` in `expression_generation.go`); previously they were lowered to `i64` discriminants and crashed when passed to a function expecting the union shape.
 - [x] **1.4** Test passes; panic gone; full `TestBasicsExamples` suite green.
+- [x] **1.5** Strict-llc round-trip fixes (Linux CI surfaced three additional layers the macOS JIT silently accepted; needed once tests started extracting recursive-union payloads back out):
+  - `coerceReturnToRetType` (`function_signatures.go`, `llvm.go`) bitcasts the function return value when expected and actual types are both pointers but differ. Fires when a function returns a union field stored as `i8*` and the declared return type is the concrete union-struct pointer.
+  - `coerceArmValuesToCommonTypeInBlocks` + `coerceValueToTypeInBlock` (`llvm.go`) emit phi-arm pointer-to-pointer bitcasts inside each arm's predecessor block (before its terminator), so phi-incoming values are textually defined before the phi consumes them. Fixes `instruction forward referenced with type 'i8*'`.
+  - `coerceArgumentToParamType` extended with an `i64 → concrete-pointer` case that round-trips through `i8*`, and `callUserFunctionWithValues` (`system_generation.go`) now routes call args through it. Fixes `forEachList(items, userFn)` where `osprey_list_get` returns `i64` but `userFn` is declared with a concrete union-struct parameter.
 
 ## Phase 2 — Map<K, Self> case
 
-- [x] **2.1** Test checked in at `examples/tested/basics/types/recursive_union_map_payload.osp`. Asserts `mapLength(entries) == 2` and `mapContains(entries, "name") == true` under `match`.
-- [x] **2.2** Passes; the Phase 1 fixes covered Map identically.
+- [x] **2.1** Test checked in at `examples/tested/basics/types/recursive_union_map_payload.osp`. Asserts `mapLength(entries) == 2` and `mapContains(entries, "name") == true` under `match`. Extended to walk `mapValues(entries)` with `forEachList` + a user `describe`, and to round-trip each stored payload via `listContains(mapValues(...), original)` — proves both variant tag and identity survive storage inside a `Map<K, Self>` payload.
+- [x] **2.2** Passes; the Phase 1 fixes covered Map identically. Round-trip assertions required the Phase 1.5 strict-llc fixes.
 
 ## Phase 3 — Mutually recursive unions
 
@@ -76,12 +80,12 @@ Spec ([TYPE-UNION-REC]) says: mutually recursive unions follow the same rule.
   type Expr = ENum { v: int } | EAdd { args: List<Expr> } | EBlk { body: Stmt }
   type Stmt = SLet { name: string, value: Expr } | SRet { value: Expr }
   ```
-  Builds `Expr.EBlk { body: Stmt.SRet { value: Expr.EAdd { args: [ENum, ENum] } } }` and pattern-matches both directions.
-- [x] **3.2** Both directions resolve correctly. The same `getFieldType`-via-`g.typeMap` indirection that fixed `List<Self>` covered cross-type recursion.
+  Builds `Expr.EBlk { body: Stmt.SRet { value: Expr.EAdd { args: [ENum, ENum] } } }` and pattern-matches both directions. Extended with `unwrapBlk` / `unwrapRet` / `unwrapAddLen` helpers that walk the full chain `EBlk → Stmt → SRet → Expr → EAdd → List<Expr>` and then `forEachList(args, announceNum)` extracts each leaf `ENum.v` — proving payload values (not just variant tags) survive the mutual-recursion boundary.
+- [x] **3.2** Both directions resolve correctly. The same `getFieldType`-via-`g.typeMap` indirection that fixed `List<Self>` covered cross-type recursion. The unwrap helpers required all three Phase 1.5 strict-llc fixes (return-side coercion for `unwrapBlk`/`unwrapRet`, phi-arm coercion for the `_` sentinel arms, and call-site coercion for `forEachList`).
 
 ## Phase 4 — Plain self-recursive payload stress
 
-- [x] **4.1** Test checked in at `examples/tested/basics/types/tree_deep.osp`. A 7-node balanced tree (depth 3) hand-built, with functions that recursively walk left and right children; verifies value propagation across two levels of recursion. (Note: the original 1024-node iterative-construction variant was reduced because Osprey lacks the iteration primitive to build that programmatically without separate dependencies. The 7-node test exercises the same code paths.)
+- [x] **4.1** Test checked in at `examples/tested/basics/types/tree_deep.osp`. A 7-node balanced tree (depth 3) hand-built, with functions that recursively walk left and right children; verifies value propagation across two and three levels of recursion (`rightRightValue(root) == 7`, `leftRightValue(root) == 3` — the second crosses left↔right so a sibling-aliasing bug cannot pass). (Note: the original 1024-node iterative-construction variant was reduced because Osprey lacks the iteration primitive to build that programmatically without separate dependencies. The 7-node test exercises the same code paths.)
 
 ## Phase 5 — Negative tests
 
@@ -102,6 +106,7 @@ Spec ([TYPE-UNION-REC]) says: mutually recursive unions follow the same rule.
 - [x] 1.2 Diagnostic confirmed root cause was variant-by-field-set matching, not the recursive payload
 - [x] 1.3 Fix landed (4 sub-fixes; see Phase 1 above)
 - [x] 1.4 Test passes; panic gone
+- [x] 1.5 Strict-llc round-trip fixes (return-side coercion, phi-arm coercion in predecessor blocks, `i64 → ptr` call-site coercion); see Phase 1.5 above
 
 ### Phase 2 — `Map<K, Self>` payload
 - [x] 2.1 Failing test `recursive_union_map_payload.osp`
