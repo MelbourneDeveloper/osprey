@@ -1,5 +1,4 @@
-// Phase 1.1 of docs/plans/recursive-union-payloads.md
-// Spec: 0004-TypeSystem.md [TYPE-UNION-REC]
+// Spec: 0004-TypeSystem.md [TYPE-UNION-REC] — recursive union payload List<Self>.
 // Recursive union whose variant payload is List<Self>.
 
 type JsonValue =

@@ -9,7 +9,7 @@ A probe in this session ([/tmp/probe_recursive_union.osp](../../tmp/probe_recurs
 | # | Primitive | Status | Plan |
 |---|---|---|---|
 | 1 | Lambdas at all (`fn(x) => x + 1`) | ❌ codegen broken: `undefined variable: x` | [`closures.md`](closures.md) |
-| 2 | Recursive unions with `List<Self>` / `Map<K,Self>` payload | ❌ codegen panics: `store operands are not compatible: src=i8*; dst=i1*` at [expression_generation.go:1631](../../compiler/internal/codegen/expression_generation.go#L1631) | [`recursive-union-payloads.md`](recursive-union-payloads.md) |
+| 2 | Recursive unions with `List<Self>` / `Map<K,Self>` payload | ✅ shipped (PR #67): all union-payload constructors compile; `List<Self>`, `Map<K,Self>`, mutual recursion, and `Tree`-style self-recursion all round-trip end-to-end under strict llc per [TYPE-UNION-REC] | — |
 | 3 | Error message payload threading through `Result<T, E>` | ❌ hardcoded `"Error occurred"` global at [llvm.go:2305](../../compiler/internal/codegen/llvm.go#L2305) | [`error-payloads.md`](error-payloads.md) |
 | 4 | O(1) codepoint/byte cursor over `string` | ❌ no `byteAt` / `codePointAt`; every existing op (`take`/`drop`/`substring`) allocates | [`string-cursor.md`](string-cursor.md) |
 | 5 | List patterns (`[head, ...tail]`) | ❌ spec'd at [TYPE-LIST-PATTERNS] but no AST node / no codegen — escalated to critical-path | [`list-patterns.md`](list-patterns.md) |
@@ -32,7 +32,7 @@ The five plans are **independent at the implementation level** but have a natura
 
 1. **`error-payloads.md`** first — smallest, most contained, unblocks meaningful error messages everywhere immediately.
 2. **`closures.md`** second — small surface, but every higher-order primitive (`map`, `filter`, `fold`, parser combinators) depends on it.
-3. **`recursive-union-payloads.md`** third — unblocks `JsonValue`, tree types, ASTs.
+3. ~~`recursive-union-payloads.md`~~ — shipped in PR #67; `JsonValue`, tree types, and ASTs now compile and round-trip per [TYPE-UNION-REC].
 4. **`string-cursor.md`** fourth — adds the C primitives that the JSON parser will sit on top of.
 5. **`list-patterns.md`** fifth — wraps the parser in idiomatic recursive descent (`[head, ...tail]`).
 
@@ -42,7 +42,7 @@ After all four land, the proof point is one tested example: `examples/tested/jso
 
 - [ ] Land `error-payloads.md` Phase 1 (runtime threading) and Phase 2 (codegen rewrite).
 - [ ] Land `closures.md` Phase 1 (lambda param binding fix) and Phase 2 (capture).
-- [ ] Land `recursive-union-payloads.md` Phase 1 (layout) and Phase 2 (codegen).
+- [x] Land recursive-union-payloads Phase 1–5 (layout, codegen, mutual recursion, deep-tree stress, strict-llc round-trip fixes); see PR #67. Plan file deleted now that all sub-items are checked.
 - [ ] Land `string-cursor.md` Phase 1 (C runtime) and Phase 2 (builtins + registry).
 - [ ] Land `list-patterns.md` Phase 1–3 (grammar, codegen, `osprey_list_drop` runtime).
 - [ ] Land `examples/tested/json/json_parser.osp` written in pure Osprey, using only the above primitives plus existing `List`/`Map`/`match`. Must round-trip RFC 8259 conforming inputs.

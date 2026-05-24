@@ -1,5 +1,4 @@
-// Phase 3.1 of docs/plans/recursive-union-payloads.md
-// Spec: 0004-TypeSystem.md [TYPE-UNION-REC]
+// Spec: 0004-TypeSystem.md [TYPE-UNION-REC] — mutually recursive unions.
 // Two mutually recursive unions: Expr refers to Stmt, Stmt refers to Expr.
 
 type Expr =

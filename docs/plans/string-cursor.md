@@ -85,10 +85,10 @@ Today, the registry's "Result<T, StringError>" is mostly a lie — see [`error-p
 
 ## Phase 5 — The canary
 
-Once all of `error-payloads.md`, `closures.md`, `recursive-union-payloads.md`, and this plan ship, the JSON-parser canary in [`production-primitives.md`](production-primitives.md) is the cross-cutting acceptance test.
+Once all of `error-payloads.md`, `closures.md`, and this plan ship — and now that recursive-union-payloads shipped in PR #67 ([TYPE-UNION-REC]) — the JSON-parser canary in [`production-primitives.md`](production-primitives.md) is the cross-cutting acceptance test.
 
 - [ ] **5.1** Land `examples/tested/json/json_parser.osp` written in pure Osprey:
-  - Uses `JsonValue` (recursive-union-payloads) as its output type.
+  - Uses `JsonValue` (per [TYPE-UNION-REC]) as its output type.
   - Uses `codePointAt`/`codePointWidth` (this plan) to walk the input.
   - Uses closures (closures.md) for parser-combinator style helpers OR plain top-level functions (your call; both must work).
   - Uses real error messages (`error-payloads.md`) reporting `"unexpected '}' at byte 47"` style failures.

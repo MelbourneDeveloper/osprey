@@ -1903,8 +1903,7 @@ func (g *LLVMGenerator) generateDiscriminatedUnionConstructor(
 // Variants are identified by their NAME (typeConstructor.TypeName). Field-set
 // matching is a last-resort fallback: when two variants share the same field
 // names (e.g. `JBool {v}`, `JNum {v}`, `JStr {v}`) it picks the first one and
-// silently mis-routes the value into the wrong slot — see
-// docs/plans/recursive-union-payloads.md.
+// silently mis-routes the value into the wrong slot — see [TYPE-UNION-REC].
 func (g *LLVMGenerator) findVariantByConstructorCall(
 	typeConstructor *ast.TypeConstructorExpression,
 	typeDecl *ast.TypeDeclaration,

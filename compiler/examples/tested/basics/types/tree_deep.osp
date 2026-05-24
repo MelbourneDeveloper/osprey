@@ -1,5 +1,4 @@
-// Phase 4.1 of docs/plans/recursive-union-payloads.md
-// Spec: 0004-TypeSystem.md [TYPE-UNION-REC]
+// Spec: 0004-TypeSystem.md [TYPE-UNION-REC] — plain self-recursive union.
 // Plain self-recursive union (no collection wrapper).
 // Builds a 7-node balanced tree and walks it, proving recursive structure
 // preserves both shape and field values across multiple levels of nesting.

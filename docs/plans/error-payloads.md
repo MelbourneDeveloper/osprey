@@ -76,7 +76,7 @@ match split(s, "") {
 }
 ```
 
-- [ ] **3.1** Decide: ship Phase 3 in this plan, or defer? **Recommend defer** — Phase 1+2 unblocks JSON-parser canary with `Result<T, string>`. Phase 3 needs union-type runtime layout work that overlaps with [`recursive-union-payloads.md`](recursive-union-payloads.md). Land Phase 3 only after recursive-union-payloads ships.
+- [ ] **3.1** Decide: ship Phase 3 in this plan, or defer? **Recommend defer** — Phase 1+2 unblocks JSON-parser canary with `Result<T, string>`. Phase 3 needs union-type runtime layout work; the recursive-union prerequisite shipped in PR #67 (see [TYPE-UNION-REC]), so Phase 3 is no longer blocked.
 - [ ] **3.2** When deferred work resumes: update runtime helpers to construct `StringError` values; update codegen so the Result payload slot holds a union pointer rather than a string pointer; update the registry signatures for fallible string functions from `Result<T, string>` to `Result<T, StringError>`; migrate the examples.
 
 ## Phase 4 — Auto-unwrap preserves the payload
@@ -119,7 +119,7 @@ User code constructs Error values directly: `Error { message: "name cannot be em
 - [ ] 2.3 Replace with GEP+load of the message slot
 - [ ] 2.4 Test passes
 
-### Phase 3 — `Result<T, StringError>` (deferred until recursive-union-payloads lands)
+### Phase 3 — `Result<T, StringError>` (prerequisite shipped: union payloads work per [TYPE-UNION-REC])
 - [ ] 3.1 Decision: defer or include in this iteration
 - [ ] 3.2 Migration plan from `string` → `StringError` once union payloads work
 
