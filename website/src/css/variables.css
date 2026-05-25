@@ -34,6 +34,12 @@
   /* BlueDark with transparency */
   --glass-blur: blur(10px);
 
+  /* Navigation Background Colors */
+  --nav-bg-default: rgba(255, 255, 255, 1.0);
+  --nav-bg-scrolled: rgba(255, 255, 255, 1.0);
+  --nav-border-default: rgba(0, 92, 156, 0.6);
+  --nav-border-scrolled: var(--color-border-light);
+
   /* Enhanced Shadows - Using brand colors */
   --shadow-sm: 0 2px 4px rgba(11, 58, 94, 0.05);
   --shadow-md: 0 4px 12px rgba(11, 58, 94, 0.08);
@@ -217,5 +223,11 @@
     /* BlueDark with transparency */
     --glass-border: rgba(119, 215, 244, 0.1);
     /* Aqua with transparency */
+
+    /* Navigation Background Colors - Dark Mode */
+    --nav-bg-default: rgba(11, 58, 94, 1.0);
+    --nav-bg-scrolled: rgba(11, 58, 94, 1.0);
+    --nav-border-default: rgba(119, 215, 244, 0.6);
+    --nav-border-scrolled: rgba(119, 215, 244, 0.7);
   }
 }
