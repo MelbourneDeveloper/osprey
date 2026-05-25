@@ -153,7 +153,28 @@ func (g *LLVMGenerator) callOneArg(name string, ret types.Type, callExpr *ast.Ca
 // collection extern that takes an opaque handle. No-op if already i8* or
 // not a pointer. Needed when an expression returns a typed pointer
 // (e.g. osp_string_list*) that the runtime treats as an opaque list handle.
+//
+// Result-wrapped lists (`split(...)` returns Result<osp_string_list*>)
+// are auto-unwrapped first per spec 0004-TypeSystem.md — without this,
+// `listLength(splitResult)` bit-cast the *Result struct* pointer
+// straight to i8* and the runtime then read garbage from the
+// {ptr, disc} layout, returning a huge wrong length.
 func (g *LLVMGenerator) coerceToI8Ptr(v value.Value) value.Value {
+	if v.Type() == types.I8Ptr {
+		return v
+	}
+	const errorFlagBitSize = 8
+	if ptrTy, isPtr := v.Type().(*types.PointerType); isPtr {
+		if structTy, isStruct := ptrTy.ElemType.(*types.StructType); isStruct {
+			if len(structTy.Fields) == ResultFieldCount {
+				if intTy, ok := structTy.Fields[1].(*types.IntType); ok && intTy.BitSize == errorFlagBitSize {
+					vp := g.builder.NewGetElementPtr(structTy, v,
+						constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+					v = g.builder.NewLoad(structTy.Fields[0], vp)
+				}
+			}
+		}
+	}
 	if v.Type() == types.I8Ptr {
 		return v
 	}
