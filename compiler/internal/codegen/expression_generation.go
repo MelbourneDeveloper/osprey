@@ -283,6 +283,16 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 			return nil, err
 		}
 
+		// Reject element types that don't fit the i64-or-pointer slot
+		// (function pointers, multi-field aggregates). Without this guard
+		// llir's NewStore panics with "store operands are not compatible:
+		// src=i64 (i64)*; dst=i64*", taking down the compiler. Mirrors the
+		// up-front TypeConstructorExpression check; here we catch the cases
+		// where the AST shape doesn't telegraph the LLVM mismatch.
+		if !isListLiteralElementCompatible(elementValue.Type(), elementType) {
+			return nil, ErrListLiteralAggregateElem
+		}
+
 		// Get pointer to element position
 		elementPtr := g.builder.NewGetElementPtr(elementType, arrayPtr, constant.NewInt(types.I64, int64(i)))
 		g.builder.NewStore(elementValue, elementPtr)
@@ -303,6 +313,28 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 	g.builder.NewStore(arrayData, dataPtr)
 
 	return arrayStruct, nil
+}
+
+// isListLiteralElementCompatible reports whether actual can be stored into a
+// slot of expected without bitcast-on-the-fly. The list literal codegen lays
+// out elements as raw i64 / i8* / double slots; anything else (a function
+// pointer like i64(i64)*, a multi-field record struct, a typed pointer that
+// disagrees with the slot's pointee) would panic in llir's NewStore. This
+// gate lets us emit a clean error instead.
+func isListLiteralElementCompatible(actual, expected types.Type) bool {
+	if actual == expected {
+		return true
+	}
+	// Pointer-to-pointer is fine when both are pointer-shaped (8 bytes); the
+	// slot is i64 / i8* by design and any plain pointer fits.
+	if _, expectedIsPtr := expected.(*types.PointerType); expectedIsPtr {
+		_, actualIsPtr := actual.(*types.PointerType)
+
+		return actualIsPtr
+	}
+	// Scalar slots (i64 / double) require an exact type match; function
+	// pointers, structs, and other aggregates do not pass.
+	return false
 }
 
 // generateMapLiteral generates LLVM IR for map literals like { "key": value, 42: "answer" }.
