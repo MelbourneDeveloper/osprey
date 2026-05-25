@@ -32,17 +32,17 @@ rm -f test_output.tmp
 
 echo "✅ All tests passed"
 
-# Exclude AST files from coverage report
-./exclude-from-code-coverage.sh
+# Filter out AST interface methods from coverage report
+grep -v "isStatement\|isExpression" coverage.out > coverage_filtered.out || cp coverage.out coverage_filtered.out
 
 # Show coverage summary only
 echo ""
 echo "📊 Coverage Summary:"
-go tool cover -func=coverage.out | grep -E "(total:|\.go:)"
-TOTAL=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
+go tool cover -func=coverage_filtered.out | grep -E "(total:|\.go:)"
+TOTAL=$(go tool cover -func=coverage_filtered.out | awk '/^total:/ {print $3}')
 echo ""
 echo "🎯 Total Coverage: $TOTAL"
 
 # Generate HTML
-go tool cover -html=coverage.out -o coverage.html
+go tool cover -html=coverage_filtered.out -o coverage.html
 echo "HTML report: coverage.html"
