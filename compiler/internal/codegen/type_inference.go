@@ -791,6 +791,22 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 			return t, nil
 		}
 
+		// Variable-bind pattern on a primitive discriminant. The AST
+		// builder produces Constructor="n", Variable="" for `n => …`
+		// because at parse time a bare ID is ambiguous between a union
+		// variant and a fresh binding. When the discriminant is
+		// int/float/string (no named variants), bind the name to the
+		// discriminant type so the body can reference it.
+		if discriminantType != nil {
+			if ct, ok := ti.prune(discriminantType).(*ConcreteType); ok {
+				switch ct.name {
+				case TypeInt, TypeFloat, TypeString, TypeBool:
+					ti.env.Set(pattern.Constructor, ct)
+					return ct, nil
+				}
+			}
+		}
+
 		return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, pattern.Constructor)
 	}
 }
