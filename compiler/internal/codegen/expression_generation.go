@@ -1368,9 +1368,12 @@ func (g *LLVMGenerator) generateResultExpression(resultExpr *ast.ResultExpressio
 		// Generate the actual value
 		return g.generateExpression(resultExpr.Value)
 	}
-	// Return error sentinel value
-
-	return constant.NewInt(types.I64, -1), nil
+	// Return a real Error Result struct rather than a bare i64 sentinel.
+	// The AST builder wraps `10 / 0` in a `ResultExpression{Success:false,
+	// ErrorType:"DivisionByZero"}`; if we returned just `-1` the match
+	// codegen would later wrap it in Success(...) and the Error arm would
+	// never fire.
+	return g.createDivisionByZeroError(), nil
 }
 
 func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpression) (value.Value, error) {
