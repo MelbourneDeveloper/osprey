@@ -201,11 +201,21 @@ func WrapFunctionArgsWithPos(funcName string, expected int, actual int, pos any)
 		}
 
 		//nolint:err113 // Dynamic error needed for exact test format matching
-		return fmt.Errorf("line %d:%d: %s expects exactly %d arguments%s, got %d",
-			position.Line, position.Column, funcName, expected, paramNames, actual)
+		return fmt.Errorf("line %d:%d: %s expects exactly %d %s%s, got %d",
+			position.Line, position.Column, funcName, expected, pluralArgs(expected), paramNames, actual)
 	}
 
 	return WrapWrongArgCount(funcName, expected, actual)
+}
+
+// pluralArgs picks "argument" / "arguments" so error messages don't
+// emit "expects exactly 1 arguments".
+func pluralArgs(n int) string {
+	if n == 1 {
+		return "argument"
+	}
+
+	return "arguments"
 }
 
 // WrapUnsupportedExpression wraps errors for unsupported expressions
@@ -421,7 +431,8 @@ func WrapHTTPFunctionMissingNamedArg(funcName, argName string) error {
 
 // WrapWrongArgCount wraps wrong argument count errors
 func WrapWrongArgCount(funcName string, expected, actual int) error {
-	return fmt.Errorf("function %s expects %d arguments, got %d: %w", funcName, expected, actual, ErrWrongArgCount)
+	return fmt.Errorf("function %s expects %d %s, got %d: %w",
+		funcName, expected, pluralArgs(expected), actual, ErrWrongArgCount)
 }
 
 // WrapMissingArgument wraps missing argument errors
