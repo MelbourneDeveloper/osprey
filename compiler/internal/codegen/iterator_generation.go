@@ -396,8 +396,20 @@ func (g *LLVMGenerator) generateFoldLoop(
 	counterValue := g.builder.NewLoad(types.I64, counterPtr)
 	currentAccumulator := g.builder.NewLoad(types.I64, accumulatorPtr)
 
+	// STREAM FUSION: apply a pending map() transformation inline before
+	// folding. Without this `xs |> map(double) |> fold(0, add)` ignored
+	// double and returned sum(xs) — fold only saw the raw counter values.
+	processedValue := value.Value(counterValue)
+	if g.pendingMapFunc != nil {
+		mapped, err := g.callFunctionWithValue(g.pendingMapFunc, processedValue)
+		if err != nil {
+			return nil, err
+		}
+		processedValue = mapped
+	}
+
 	// Call the fold function with (accumulator, currentValue)
-	newAccumulator, err := g.callFunctionWithTwoValues(funcIdent, currentAccumulator, counterValue)
+	newAccumulator, err := g.callFunctionWithTwoValues(funcIdent, currentAccumulator, processedValue)
 	if err != nil {
 		return nil, err
 	}
@@ -432,6 +444,10 @@ func (g *LLVMGenerator) generateFoldLoop(
 	// Loop end block
 	g.builder = blocks.LoopEnd
 	finalResult := g.builder.NewLoad(types.I64, accumulatorPtr)
+
+	// STREAM FUSION: clear pending transformations now that fold consumed them.
+	g.pendingMapFunc = nil
+	g.pendingFilterFunc = nil
 
 	return finalResult, nil
 }
