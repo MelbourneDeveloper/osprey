@@ -583,3 +583,151 @@ func (g *LLVMGenerator) generateForEachListCall(callExpr *ast.CallExpression) (v
 	g.builder = loopEnd
 	return list, nil
 }
+
+// generateMapListCall builds a new List<T> by applying a transform
+// function to each element. Mirrors generateForEachListCall's counted
+// loop but pushes each f(x) into an osprey_list_builder.
+func (g *LLVMGenerator) generateMapListCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.generateListBuilderLoop(callExpr, "mapList", false /* filter */)
+}
+
+// generateFilterListCall builds a new List<T> containing only elements
+// where the predicate returns truthy.
+func (g *LLVMGenerator) generateFilterListCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.generateListBuilderLoop(callExpr, "filterList", true /* filter */)
+}
+
+// generateListBuilderLoop implements both mapList and filterList. The
+// `filter` flag flips whether the callback's return value is the new
+// element (map) or a bool that decides whether to push the original
+// element (filter).
+func (g *LLVMGenerator) generateListBuilderLoop(
+	callExpr *ast.CallExpression, name string, filter bool,
+) (value.Value, error) {
+	if len(callExpr.Arguments) != collectionArgsTwo {
+		return nil, fmt.Errorf("%s expects %d arguments: %w", name, collectionArgsTwo, errCollectionArgCount)
+	}
+	g.declareListExterns()
+	list, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+	if list.Type() != types.I8Ptr {
+		return nil, fmt.Errorf("%w: %s currently requires a runtime-allocated list "+
+			"(built with List() / listAppend / split / ...)",
+			errCollectionExternMiss, name)
+	}
+	funcIdent, err := g.resolveCallbackIdent(callExpr.Arguments[1], errForEachListSecondArg)
+	if err != nil {
+		return nil, err
+	}
+
+	lenFn := g.functions["osprey_list_length"]
+	getFn := g.functions["osprey_list_get"]
+	pushFn := g.functions["osprey_list_builder_push"]
+	sealFn := g.functions["osprey_list_builder_seal"]
+	bld := g.builder.NewCall(g.functions["osprey_list_builder_new"])
+	listLen := g.builder.NewCall(lenFn, list)
+	idxPtr := g.builder.NewAlloca(types.I64)
+	g.builder.NewStore(constant.NewInt(types.I64, 0), idxPtr)
+
+	loopCond := g.function.NewBlock(fmt.Sprintf("%s_cond_%p", name, callExpr))
+	loopBody := g.function.NewBlock(fmt.Sprintf("%s_body_%p", name, callExpr))
+	loopEnd := g.function.NewBlock(fmt.Sprintf("%s_end_%p", name, callExpr))
+	g.builder.NewBr(loopCond)
+
+	g.builder = loopCond
+	idx := g.builder.NewLoad(types.I64, idxPtr)
+	g.builder.NewCondBr(g.builder.NewICmp(enum.IPredSLT, idx, listLen), loopBody, loopEnd)
+
+	g.builder = loopBody
+	elem := g.builder.NewCall(getFn, list, idx)
+	cbResult, err := g.callFunctionWithValue(funcIdent, elem)
+	if err != nil {
+		return nil, err
+	}
+	if filter {
+		// Push elem when predicate truthy. Predicate result may be i1 or
+		// i64 — compare against zero of its own int width.
+		intTy, ok := cbResult.Type().(*types.IntType)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s predicate must return int/bool", errCollectionExternMiss, name)
+		}
+		isTrue := g.builder.NewICmp(enum.IPredNE, cbResult, constant.NewInt(intTy, 0))
+		pushBlock := g.function.NewBlock(fmt.Sprintf("%s_push_%p", name, callExpr))
+		skipBlock := g.function.NewBlock(fmt.Sprintf("%s_skip_%p", name, callExpr))
+		g.builder.NewCondBr(isTrue, pushBlock, skipBlock)
+		g.builder = pushBlock
+		g.builder.NewCall(pushFn, bld, elem)
+		g.builder.NewBr(skipBlock)
+		g.builder = skipBlock
+	} else {
+		// Map: push the transformed value (boxed to i64).
+		g.builder.NewCall(pushFn, bld, g.boxToI64(cbResult))
+	}
+	next := g.builder.NewAdd(idx, constant.NewInt(types.I64, 1))
+	g.builder.NewStore(next, idxPtr)
+	g.builder.NewBr(loopCond)
+
+	g.builder = loopEnd
+	return g.builder.NewCall(sealFn, bld), nil
+}
+
+// generateFoldListCall reduces a List<T> with an accumulator via the
+// user's combining function. Mirrors the range-fold loop in
+// iterator_generation.go, but reads list elements via
+// osprey_list_get instead of a counter.
+func (g *LLVMGenerator) generateFoldListCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != collectionMapSetArg { // 3 args: list, initial, fn
+		return nil, fmt.Errorf("foldList expects %d arguments: %w", collectionMapSetArg, errCollectionArgCount)
+	}
+	g.declareListExterns()
+	list, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+	if list.Type() != types.I8Ptr {
+		return nil, fmt.Errorf("%w: foldList currently requires a runtime-allocated list "+
+			"(built with List() / listAppend / split / ...)",
+			errCollectionExternMiss)
+	}
+	initial, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+	funcIdent, err := g.resolveCallbackIdent(callExpr.Arguments[2], errForEachListSecondArg)
+	if err != nil {
+		return nil, err
+	}
+
+	lenFn := g.functions["osprey_list_length"]
+	getFn := g.functions["osprey_list_get"]
+	listLen := g.builder.NewCall(lenFn, list)
+	accPtr := g.builder.NewAlloca(types.I64)
+	g.builder.NewStore(g.boxToI64(initial), accPtr)
+	idxPtr := g.builder.NewAlloca(types.I64)
+	g.builder.NewStore(constant.NewInt(types.I64, 0), idxPtr)
+
+	loopCond := g.function.NewBlock(fmt.Sprintf("foldlist_cond_%p", callExpr))
+	loopBody := g.function.NewBlock(fmt.Sprintf("foldlist_body_%p", callExpr))
+	loopEnd := g.function.NewBlock(fmt.Sprintf("foldlist_end_%p", callExpr))
+	g.builder.NewBr(loopCond)
+
+	g.builder = loopCond
+	idx := g.builder.NewLoad(types.I64, idxPtr)
+	g.builder.NewCondBr(g.builder.NewICmp(enum.IPredSLT, idx, listLen), loopBody, loopEnd)
+
+	g.builder = loopBody
+	elem := g.builder.NewCall(getFn, list, idx)
+	acc := g.builder.NewLoad(types.I64, accPtr)
+	newAcc, err := g.callFunctionWithTwoValues(funcIdent, acc, elem)
+	if err != nil {
+		return nil, err
+	}
+	g.builder.NewStore(g.boxToI64(newAcc), accPtr)
+	g.builder.NewStore(g.builder.NewAdd(idx, constant.NewInt(types.I64, 1)), idxPtr)
+	g.builder.NewBr(loopCond)
+
+	g.builder = loopEnd
+	return g.builder.NewLoad(types.I64, accPtr), nil
+}
