@@ -1235,10 +1235,12 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 		// Unary plus is a no-op
 		return operand, nil
 	case "-":
-		// Unary minus
-		zero := constant.NewInt(types.I64, 0)
+		// Unary minus — accept either i64 or double operand.
+		if operand.Type() == types.Double {
+			return g.builder.NewFSub(constant.NewFloat(types.Double, 0), operand), nil
+		}
 
-		return g.builder.NewSub(zero, operand), nil
+		return g.builder.NewSub(constant.NewInt(types.I64, 0), operand), nil
 	case "!":
 		// Boolean NOT: check operand type and return appropriate type
 		if operand.Type() == types.I1 {

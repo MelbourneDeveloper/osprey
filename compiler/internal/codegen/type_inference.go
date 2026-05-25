@@ -2761,12 +2761,16 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 
 	switch e.Operator {
 	case "+", "-":
-		// Unary plus and minus require Int operand and return Int
+		// Unary plus and minus accept Int or Float and return the same type.
+		resolved := ti.prune(operandType)
+		if concrete, ok := resolved.(*ConcreteType); ok && concrete.name == TypeFloat {
+			return concrete, nil
+		}
 		intType := &ConcreteType{name: TypeInt}
 
 		err := ti.Unify(operandType, intType)
 		if err != nil {
-			return nil, fmt.Errorf("operand of %s must be Int: %w", e.Operator, err)
+			return nil, fmt.Errorf("operand of %s must be Int or Float: %w", e.Operator, err)
 		}
 
 		return intType, nil

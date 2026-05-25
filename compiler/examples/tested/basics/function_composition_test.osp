@@ -102,4 +102,9 @@ print("Hi \"${nm}\"")
 // `\\n` would match the inner `\n` first and produce a real newline.
 print("lit: ab\\nc")
 
+// Unary minus on a float was rejected ("operand of - must be Int") and
+// codegen always lowered to i64 sub even when operand was a double.
+let nf = -2.5
+print(toString(nf))
+
 print("=== Function Composition Test Complete ===")
