@@ -85,6 +85,15 @@ type ospreyListener interface {
 	// EnterHandlerParams is called when entering the handlerParams production.
 	EnterHandlerParams(c *HandlerParamsContext)
 
+	// EnterHandlerCase is called when entering the handlerCase production.
+	EnterHandlerCase(c *HandlerCaseContext)
+
+	// EnterResumeBlockExpr is called when entering the resumeBlockExpr production.
+	EnterResumeBlockExpr(c *ResumeBlockExprContext)
+
+	// EnterResumeBlockBody is called when entering the resumeBlockBody production.
+	EnterResumeBlockBody(c *ResumeBlockBodyContext)
+
 	// EnterFunctionCall is called when entering the functionCall production.
 	EnterFunctionCall(c *FunctionCallContext)
 
@@ -300,6 +309,15 @@ type ospreyListener interface {
 
 	// ExitHandlerParams is called when exiting the handlerParams production.
 	ExitHandlerParams(c *HandlerParamsContext)
+
+	// ExitHandlerCase is called when exiting the handlerCase production.
+	ExitHandlerCase(c *HandlerCaseContext)
+
+	// ExitResumeBlockExpr is called when exiting the resumeBlockExpr production.
+	ExitResumeBlockExpr(c *ResumeBlockExprContext)
+
+	// ExitResumeBlockBody is called when exiting the resumeBlockBody production.
+	ExitResumeBlockBody(c *ResumeBlockBodyContext)
 
 	// ExitFunctionCall is called when exiting the functionCall production.
 	ExitFunctionCall(c *FunctionCallContext)

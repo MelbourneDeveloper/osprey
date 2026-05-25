@@ -30,8 +30,6 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLiteral(ctx.Literal())
 	case ctx.LambdaExpr() != nil:
 		return b.buildLambdaExpr(ctx.LambdaExpr())
-	case ctx.UpdateExpr() != nil:
-		return b.buildUpdateExpression(ctx.UpdateExpr())
 	case ctx.ObjectLiteral() != nil:
 		return b.buildObjectLiteral(ctx.ObjectLiteral())
 	case ctx.ID(0) != nil:
@@ -82,14 +80,6 @@ func (b *Builder) buildEffectExpression(ctx parser.IPrimaryContext) Expression {
 
 func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 	switch {
-	case ctx.FLOAT() != nil:
-		text := ctx.FLOAT().GetText()
-		value, _ := strconv.ParseFloat(text, 64)
-
-		return &FloatLiteral{
-			Value:    value,
-			Position: b.getPosition(ctx.FLOAT().GetSymbol()),
-		}
 	case ctx.INT() != nil:
 		text := ctx.INT().GetText()
 		value, _ := strconv.ParseInt(text, 10, 64)
@@ -181,7 +171,7 @@ func (b *Builder) buildMapLiteral(ctx parser.IMapLiteralContext) Expression {
 	for _, entryCtx := range ctx.AllMapEntry() {
 		key := b.buildExpression(entryCtx.AllExpr()[0])
 		value := b.buildExpression(entryCtx.AllExpr()[1])
-
+		
 		if key != nil && value != nil {
 			entries = append(entries, MapEntry{
 				Key:   key,
@@ -195,6 +185,7 @@ func (b *Builder) buildMapLiteral(ctx parser.IMapLiteralContext) Expression {
 		Position: b.getPositionFromContext(ctx),
 	}
 }
+
 
 // buildLambdaExpr builds a LambdaExpression from a lambda context.
 func (b *Builder) buildLambdaExpr(ctx parser.ILambdaExprContext) Expression {
@@ -367,79 +358,176 @@ func (b *Builder) buildObjectLiteral(ctx parser.IObjectLiteralContext) Expressio
 	}
 }
 
-// buildUpdateExpression builds an UpdateExpression for non-destructive record updates.
-func (b *Builder) buildUpdateExpression(ctx parser.IUpdateExprContext) Expression {
-	if ctx == nil {
-		return nil
-	}
-
-	// Get the target identifier name
-	targetName := ctx.ID().GetText()
-
-	// Build field assignments for the update
-	fieldAssignments := make(map[string]Expression)
-
-	if ctx.FieldAssignments() != nil {
-		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
-			fieldName := fieldCtx.ID().GetText()
-			fieldValue := b.buildExpression(fieldCtx.Expr())
-			fieldAssignments[fieldName] = fieldValue
-		}
-	}
-
-	return &UpdateExpression{
-		Target: &Identifier{
-			Name:     targetName,
-			Position: b.getPosition(ctx.ID().GetSymbol()),
-		},
-		Fields:   fieldAssignments,
-		Position: b.getPositionFromContext(ctx),
-	}
-}
-
-// buildHandlerExpression builds a HandlerExpression from handle...in syntax.
+// buildHandlerExpression builds a HandlerExpression from handle...with syntax.
 func (b *Builder) buildHandlerExpression(ctx parser.IPrimaryContext) *HandlerExpression {
 	handlerCtx := ctx.HandlerExpr()
 	if handlerCtx == nil {
 		return nil
 	}
 
-	// Get effect name
-	effectName := handlerCtx.ID().GetText()
+	// Build the body block expression
+	bodyExpr := b.buildBlockExpression(handlerCtx.BlockExpr())
 
-	// Build handler arms
+	// Build handler cases
 	handlers := make([]HandlerArm, 0)
 
-	for _, armCtx := range handlerCtx.AllHandlerArm() {
-		operationName := armCtx.ID().GetText()
+	for _, caseCtx := range handlerCtx.AllHandlerCase() {
+		operationName := caseCtx.ID().GetText()
 
-		// Get parameters if present
+		// Get parameters
 		var parameters []string
-
-		if armCtx.HandlerParams() != nil {
-			for _, idCtx := range armCtx.HandlerParams().AllID() {
-				parameters = append(parameters, idCtx.GetText())
+		if caseCtx.ParamList() != nil {
+			for _, paramCtx := range caseCtx.ParamList().AllParam() {
+				parameters = append(parameters, paramCtx.ID().GetText())
 			}
 		}
 
-		// Build handler body
-		body := b.buildExpression(armCtx.Expr())
+		// Build handler body from resumeBlockExpr
+		var body Expression
+		if resumeCtx := caseCtx.ResumeBlockExpr(); resumeCtx != nil {
+			body = b.buildResumeBlockExpression(resumeCtx)
+		}
 
 		handlers = append(handlers, HandlerArm{
 			OperationName: operationName,
 			Parameters:    parameters,
 			Body:          body,
-			Position:      b.getPositionFromContext(armCtx),
+			Position:      b.getPositionFromContext(caseCtx),
 		})
 	}
 
-	// Build the expression that the handler wraps
-	bodyExpr := b.buildExpression(handlerCtx.Expr())
+	// Infer the effect name from the operations being handled
+	// We look at the perform operations in the body to determine which effect is being handled
+	effectName := b.inferEffectNameFromBody(bodyExpr, handlers)
 
 	return &HandlerExpression{
 		EffectName: effectName,
 		Handlers:   handlers,
 		Body:       bodyExpr,
 		Position:   b.getPositionFromContext(ctx),
+	}
+}
+
+// inferEffectNameFromBody analyzes the body and handler operations to determine the effect name
+func (b *Builder) inferEffectNameFromBody(body Expression, handlers []HandlerArm) string {
+	// Find ALL perform operations in the body
+	performs := b.findAllPerforms(body)
+	
+	// Match performs with handler operations to identify the effect
+	for _, perform := range performs {
+		for _, handler := range handlers {
+			if handler.OperationName == perform.OperationName {
+				// Found a match! This handler handles this perform's effect
+				return perform.EffectName
+			}
+		}
+	}
+	
+	// If no direct match found, we have an error - handlers must match performs
+	// Return empty and let the type checker produce a proper error
+	return ""
+}
+
+// findAllPerforms recursively searches for all perform expressions in the body
+func (b *Builder) findAllPerforms(body Expression) []*PerformExpression {
+	var performs []*PerformExpression
+	
+	var collectPerforms func(Expression)
+	collectPerforms = func(expr Expression) {
+		if expr == nil {
+			return
+		}
+		
+		switch e := expr.(type) {
+		case *PerformExpression:
+			performs = append(performs, e)
+		case *BlockExpression:
+			// Search in block statements
+			for _, stmt := range e.Statements {
+				switch s := stmt.(type) {
+				case *ExpressionStatement:
+					collectPerforms(s.Expression)
+				case *LetDeclaration:
+					collectPerforms(s.Value)
+				}
+			}
+			if e.Expression != nil {
+				collectPerforms(e.Expression)
+			}
+		case *FunctionCallExpression:
+			// Check arguments
+			for _, arg := range e.Arguments {
+				collectPerforms(arg)
+			}
+		case *MatchExpression:
+			collectPerforms(e.Expression)
+			for _, arm := range e.Arms {
+				collectPerforms(arm.Expression)
+			}
+		case *BinaryExpression:
+			collectPerforms(e.Left)
+			collectPerforms(e.Right)
+		case *UnaryExpression:
+			collectPerforms(e.Operand)
+		case *ListLiteral:
+			for _, elem := range e.Elements {
+				collectPerforms(elem)
+			}
+		case *MapLiteral:
+			for _, entry := range e.Entries {
+				collectPerforms(entry.Key)
+				collectPerforms(entry.Value)
+			}
+		}
+	}
+	
+	collectPerforms(body)
+	return performs
+}
+
+// buildResumeBlockExpression builds a block expression that may contain resume
+func (b *Builder) buildResumeBlockExpression(ctx parser.IResumeBlockExprContext) Expression {
+	if ctx == nil {
+		return nil
+	}
+
+	blockBodyCtx := ctx.ResumeBlockBody()
+	if blockBodyCtx == nil {
+		return nil
+	}
+
+	var statements []Statement
+	for _, stmtCtx := range blockBodyCtx.AllStatement() {
+		stmt := b.buildStatement(stmtCtx)
+		if stmt != nil {
+			statements = append(statements, stmt)
+		}
+	}
+
+	// Check if there's a resume or final expression
+	if blockBodyCtx.RESUME() != nil && blockBodyCtx.Expr() != nil {
+		// Handle resume(value) as a function call
+		resumeValue := b.buildExpression(blockBodyCtx.Expr())
+		// Create a function call to resume
+		resumeCall := &FunctionCallExpression{
+			Function:  "resume",
+			Arguments: []Expression{resumeValue},
+		}
+		return &BlockExpression{
+			Statements: statements,
+			Expression: resumeCall,
+		}
+	} else if blockBodyCtx.Expr() != nil {
+		// Regular expression
+		returnExpr := b.buildExpression(blockBodyCtx.Expr())
+		return &BlockExpression{
+			Statements: statements,
+			Expression: returnExpr,
+		}
+	}
+
+	// Just statements, no return
+	return &BlockExpression{
+		Statements: statements,
 	}
 }

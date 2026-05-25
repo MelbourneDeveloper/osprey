@@ -16,10 +16,13 @@ fn safeDivide(a: int, b: int) -> int !Error = match b {
 }
 
 fn main() -> Unit = {
-    handle Error
-        fail msg => print("❌ Error: " + msg)
-    in {
+    handle {
         let result = safeDivide(a: 10, b: 0)
         print("✅ Result: " + toString(result))
+    } with {
+        fail(msg) -> {
+            print("❌ Error: " + msg)
+            resume(Unit)
+        }
     }
 } 

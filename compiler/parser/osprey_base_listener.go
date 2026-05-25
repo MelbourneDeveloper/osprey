@@ -176,6 +176,24 @@ func (s *BaseospreyListener) EnterHandlerParams(ctx *HandlerParamsContext) {}
 // ExitHandlerParams is called when production handlerParams is exited.
 func (s *BaseospreyListener) ExitHandlerParams(ctx *HandlerParamsContext) {}
 
+// EnterHandlerCase is called when production handlerCase is entered.
+func (s *BaseospreyListener) EnterHandlerCase(ctx *HandlerCaseContext) {}
+
+// ExitHandlerCase is called when production handlerCase is exited.
+func (s *BaseospreyListener) ExitHandlerCase(ctx *HandlerCaseContext) {}
+
+// EnterResumeBlockExpr is called when production resumeBlockExpr is entered.
+func (s *BaseospreyListener) EnterResumeBlockExpr(ctx *ResumeBlockExprContext) {}
+
+// ExitResumeBlockExpr is called when production resumeBlockExpr is exited.
+func (s *BaseospreyListener) ExitResumeBlockExpr(ctx *ResumeBlockExprContext) {}
+
+// EnterResumeBlockBody is called when production resumeBlockBody is entered.
+func (s *BaseospreyListener) EnterResumeBlockBody(ctx *ResumeBlockBodyContext) {}
+
+// ExitResumeBlockBody is called when production resumeBlockBody is exited.
+func (s *BaseospreyListener) ExitResumeBlockBody(ctx *ResumeBlockBodyContext) {}
+
 // EnterFunctionCall is called when production functionCall is entered.
 func (s *BaseospreyListener) EnterFunctionCall(ctx *FunctionCallContext) {}
 

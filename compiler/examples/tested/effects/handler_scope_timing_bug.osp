@@ -37,12 +37,15 @@ fn nestedCall() -> int !Logger = {
 
 // Verifies that handler scope is restored correctly
 fn main() -> Unit = {
-    handle Logger
-        log msg => print("[HANDLER] " + msg)
-    in {
+    handle {
         print("=== Testing Handler Scope Timing ===")
         let result = nestedCall()
         print("Final result: " + toString(result))
         print("=== Test Complete ===")
+    } with {
+        log(msg) -> {
+            print("[HANDLER] " + msg)
+            resume(Unit)
+        }
     }
 } 

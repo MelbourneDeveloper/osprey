@@ -60,10 +60,17 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 
 effectList      : ID (COMMA ID)* ;
 
-// Handler expressions - implementing spec syntax
-handlerExpr     : HANDLE ID handlerArm+ IN expr ;              // handle Logger log msg => ... in expr
+// Handler expressions - implementing spec syntax  
+handlerExpr     : HANDLE ID handlerArm+ IN expr                           // handle EffectName op params => ... in expr
+                | HANDLE blockExpr WITH LBRACE handlerCase+ RBRACE        // handle { ... } with { log(msg) -> { ... } }
+                ;
 handlerArm      : ID handlerParams? LAMBDA expr ;
 handlerParams   : ID+ ;
+handlerCase     : ID LPAREN paramList? RPAREN ARROW resumeBlockExpr ;     // log(msg) -> { ... }
+
+resumeBlockExpr : LBRACE resumeBlockBody RBRACE ;
+
+resumeBlockBody : statement* (RESUME LPAREN expr RPAREN | expr)? ;
 
 functionCall    : ID LPAREN argList? RPAREN ;
 
@@ -256,7 +263,8 @@ moduleBody      : moduleStatement* ;
 moduleStatement : letDecl | fnDecl | typeDecl ;
 
 matchArm
-    : pattern LAMBDA expr ;
+    : pattern LAMBDA expr
+    ;
 
 pattern
     : unaryExpr                                   // Support negative numbers: -1, +42, etc.
@@ -298,6 +306,8 @@ EFFECT      : 'effect';
 PERFORM     : 'perform';
 HANDLE      : 'handle';
 IN          : 'in';
+WITH        : 'with';
+RESUME      : 'resume';
 DO          : 'do';
 
 // Concurrency keywords

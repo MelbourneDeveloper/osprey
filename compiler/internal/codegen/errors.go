@@ -121,6 +121,7 @@ var (
 	ErrChannelCreateInvalidArgCount = errors.New("channel create invalid argument count")
 
 	ErrRecordFieldTypeMismatch = errors.New("record field type mismatch")
+	ErrEmptyRecordAccess       = errors.New("cannot access fields of empty record")
 )
 
 // Static error definitions for match expressions

@@ -2492,15 +2492,15 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 	for i := 1; i < len(armTypes); i++ {
 		err := ti.Unify(firstArmType, armTypes[i])
 		if err != nil {
-			// Include position info and proper formatting
-			expectedType := firstArmType.String()
-			actualType := armTypes[i].String()
+			// Resolve types after unification to apply substitutions
+			expectedType := ti.ResolveType(firstArmType).String()
+			actualType := ti.ResolveType(armTypes[i]).String()
 
 			return nil, WrapMatchTypeMismatchWithPos(i, actualType, expectedType, e.Position)
 		}
 	}
 
-	return firstArmType, nil
+	return ti.ResolveType(firstArmType), nil
 }
 
 // inferResultExpression infers types for result expressions
@@ -2871,6 +2871,11 @@ func (ti *TypeInferer) inferFreshMapElement(indexType, collectionType Type) (Typ
 
 // inferUnknownCollectionElement handles collection types that aren't explicitly generic
 func (ti *TypeInferer) inferUnknownCollectionElement(collectionType, indexType Type) (Type, error) {
+	// Check if it's record field access with string key
+	if recordType, ok := collectionType.(*RecordType); ok && indexType.String() == TypeString {
+		return ti.inferAsRecordAccess(recordType, indexType)
+	}
+	
 	if indexType.String() == TypeInt {
 		return ti.inferAsListAccess(collectionType)
 	}
@@ -2898,6 +2903,39 @@ func (ti *TypeInferer) inferAsMapAccess(collectionType, indexType Type) (Type, e
 		return nil, fmt.Errorf("expected Map type for map access: %w", err)
 	}
 	return valueType, nil
+}
+
+// inferAsRecordAccess handles record field access with string keys
+func (ti *TypeInferer) inferAsRecordAccess(recordType *RecordType, _ Type) (Type, error) {
+	// For record access, we need to create a type that represents the union of all field types
+	// since we don't know which field will be accessed at compile time
+	if len(recordType.fields) == 0 {
+		return nil, ErrEmptyRecordAccess
+	}
+	
+	// If all field types are the same, return that type
+	var firstFieldType Type
+	allSame := true
+	
+	for _, fieldType := range recordType.fields {
+		if firstFieldType == nil {
+			firstFieldType = fieldType
+		} else {
+			// Try to unify with the first field type
+			err := ti.Unify(firstFieldType, fieldType)
+			if err != nil {
+				allSame = false
+				break
+			}
+		}
+	}
+	
+	if allSame && firstFieldType != nil {
+		return ti.ResolveType(firstFieldType), nil
+	}
+	
+	// If field types are different, return 'any' type for dynamic access
+	return &ConcreteType{name: TypeAny}, nil
 }
 
 // inferPerformExpression infers types for perform expressions
