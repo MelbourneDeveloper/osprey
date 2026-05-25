@@ -1,2 +1,6 @@
 parseInt: input is not a valid integer
 substring: index out of range
+user int boom
+user float boom
+ok int: 7
+parseInt: input is not a valid integer

@@ -5,6 +5,18 @@
 // Before [ERR-PAYLOAD] all paths shared one hardcoded global; now each
 // callsite contributes its own message via the Result struct's payload slot.
 
+fn failInt() -> Result<int, string> = Error { message: "user int boom" }
+fn failFloat() -> Result<float, string> = Error { message: "user float boom" }
+fn okInt() -> Result<int, string> = Success { value: 7 }
+
+// Re-throw: match a builtin's Result and forward its message via a
+// user-constructed Error. Verifies the err_msg slot survives the
+// Builtin → user-Error → match-arm round trip per [ERR-PAYLOAD] Phase 5.
+fn rethrowInt(s) = match parseInt(s) {
+    Success { value } => Success { value: value }
+    Error   { message } => Error { message: message }
+}
+
 match parseInt("oops") {
     Success { value }   => print("unreachable: ${value}")
     Error   { message } => print(message)
@@ -12,5 +24,25 @@ match parseInt("oops") {
 
 match substring("abc", 5, 10) {
     Success { value }   => print("unreachable: ${value}")
+    Error   { message } => print(message)
+}
+
+match failInt() {
+    Success { value }   => print("unreachable int: ${value}")
+    Error   { message } => print(message)
+}
+
+match failFloat() {
+    Success { value }   => print("unreachable flt: ${value}")
+    Error   { message } => print(message)
+}
+
+match okInt() {
+    Success { value }   => print("ok int: ${value}")
+    Error   { message } => print("unreachable err: ${message}")
+}
+
+match rethrowInt("nope") {
+    Success { value }   => print("unreachable rethrow: ${value}")
     Error   { message } => print(message)
 }

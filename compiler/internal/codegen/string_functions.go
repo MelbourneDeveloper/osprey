@@ -29,7 +29,7 @@ func (g *LLVMGenerator) declareStringRuntime(name string, retType types.Type, pa
 	return fn
 }
 
-// resultFromNullableString returns Result<string, StringError>:
+// resultFromNullableString returns Result<string, string>:
 // if ptr is NULL → Error; otherwise → Success { value: ptr }.
 // Implements [ERR-PAYLOAD]: err_msg slot carries `msg` on the Error path.
 func (g *LLVMGenerator) resultFromNullableString(ptr value.Value, msg string) value.Value {
@@ -110,7 +110,7 @@ func (g *LLVMGenerator) generateEndsWithCall(callExpr *ast.CallExpression) (valu
 
 // ===== SEARCH (fallible) =====
 
-// generateIndexOfCall: indexOf(s, needle) -> Result<int, StringError>.
+// generateIndexOfCall: indexOf(s, needle) -> Result<int, string>.
 // C returns -1 on not-found; we wrap accordingly.
 func (g *LLVMGenerator) generateIndexOfCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(IndexOfFunc, callExpr)
@@ -299,7 +299,7 @@ func (g *LLVMGenerator) generatePadCall(
 
 // ===== PARSING =====
 
-// generateParseFloatCall: parseFloat(s) -> Result<float, StringError>.
+// generateParseFloatCall: parseFloat(s) -> Result<float, string>.
 // C returns 0 on success and writes through out-ptr, 1 on failure.
 func (g *LLVMGenerator) generateParseFloatCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(ParseFloatFunc, callExpr)
@@ -369,7 +369,7 @@ func (g *LLVMGenerator) generateWordsCall(callExpr *ast.CallExpression) (value.V
 	return g.builder.NewCall(fn, s), nil
 }
 
-// generateSplitCall: split(s, sep) -> Result<List<string>, StringError>.
+// generateSplitCall: split(s, sep) -> Result<List<string>, string>.
 // C returns NULL when sep is empty.
 func (g *LLVMGenerator) generateSplitCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(SplitFunc, callExpr)

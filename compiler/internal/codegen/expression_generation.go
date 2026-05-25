@@ -2556,11 +2556,13 @@ func (g *LLVMGenerator) generateSuccessConstructor(
 }
 
 // generateErrorConstructor generates LLVM IR for Error { message: E } constructor.
-// Implements [ERR-PAYLOAD]: the message is stored in the err_msg slot (index 2).
-// The value slot (index 0) holds the user-supplied message as a placeholder so
-// the Result struct type stays consistent across this codepath; downstream
-// pattern-matching reads index 2 for the bound `message` variable. The Phase-3
-// migration to typed payload slots (Result<T, StringError>) supersedes this.
+// Implements [ERR-PAYLOAD] (Phase 5): the message goes into the err_msg slot
+// (index 2) and slot 0 (value) is zero-initialised with the *expected* success
+// type, picked from the surrounding context (function return type, current
+// match-arm expected type). Picking the slot-0 type from context rather than
+// from the message expression lets a `Result<int, string>` function ship
+// `Error { message: "boom" }` without the Error/Success arms producing
+// incompatible struct types.
 func (g *LLVMGenerator) generateErrorConstructor(
 	typeConstructor *ast.TypeConstructorExpression,
 ) (value.Value, error) {
@@ -2574,14 +2576,64 @@ func (g *LLVMGenerator) generateErrorConstructor(
 		return nil, err
 	}
 
-	// Pre-[ERR-PAYLOAD] this stored the message in slot 0 (value); the new layout
-	// requires us to *also* place it in slot 2 so generateErrorBlock can read it
-	// uniformly with builtin-produced Errors. Slot 0 retains the message-typed
-	// placeholder pending Phase 5 (Result<T, E> with proper value-slot typing).
-	if message.Type() == types.I8Ptr {
-		return g.makeResultValue(message, 1, message), nil
+	valueSlotType := g.inferErrorValueSlotType(message.Type())
+	defaultVal := zeroValueForType(valueSlotType)
+	errMsg := g.errorMessagePtr(message)
+	return g.makeResultValue(defaultVal, 1, errMsg), nil
+}
+
+// inferErrorValueSlotType picks the type to use for an Error constructor's
+// value slot. Preference order: (1) the value-slot type of the function's
+// declared Result return type, (2) the message expression's own type — the
+// pre-Phase-5 behaviour, retained as a fallback so standalone `Error { … }`
+// expressions outside a typed context keep compiling.
+func (g *LLVMGenerator) inferErrorValueSlotType(msgType types.Type) types.Type {
+	if g.expectedReturnType != nil {
+		if structType, ok := g.expectedReturnType.(*types.StructType); ok {
+			if len(structType.Fields) == ResultFieldCount {
+				return structType.Fields[resultValueFieldIdx]
+			}
+		}
 	}
-	return g.makeResultValue(message, 1, g.nullErrorMessage()), nil
+	return msgType
+}
+
+// errorMessagePtr coerces the message expression into an i8* pointer suitable
+// for the err_msg slot. When the message is a pointer to i8 (a string literal
+// / string-typed binding) we store it directly; otherwise we fall back to the
+// null pointer — non-string `E` types are routed through the Phase-3
+// `Result<T, StringError>` path documented in the plan.
+//
+// We compare via type-assertion on PointerType.ElemType rather than `==
+// types.I8Ptr`, because llir computes a fresh PointerType for each GEP /
+// load value rather than aliasing the I8Ptr singleton, so the singleton
+// comparison silently misses every real i8* the codegen produces.
+func (g *LLVMGenerator) errorMessagePtr(message value.Value) value.Value {
+	if ptrType, ok := message.Type().(*types.PointerType); ok {
+		const byteBitSize = 8
+		if intType, ok := ptrType.ElemType.(*types.IntType); ok && intType.BitSize == byteBitSize {
+			return message
+		}
+	}
+	return g.nullErrorMessage()
+}
+
+// zeroValueForType produces a Value of the given LLVM type whose bits are
+// zero. Used as a typed placeholder for Result.value when constructing Errors
+// — slot 0 is unread at the Error discriminant but its type must still match
+// the surrounding success branch's value slot for the Result struct types to
+// unify at PHI / return sites.
+func zeroValueForType(t types.Type) value.Value {
+	switch tt := t.(type) {
+	case *types.IntType:
+		return constant.NewInt(tt, 0)
+	case *types.FloatType:
+		return constant.NewFloat(tt, 0)
+	case *types.PointerType:
+		return constant.NewNull(tt)
+	default:
+		return constant.NewZeroInitializer(t)
+	}
 }
 
 // generateResultFieldAccessAsMatch converts Result field access to pattern matching

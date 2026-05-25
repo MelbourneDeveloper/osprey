@@ -921,7 +921,12 @@ func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.Fun
 			// Prune to resolve any type variables
 			returnType := g.typeInferer.prune(funcType.returnType)
 
-			// Check if the return type is a Result type
+			// Check if the return type is a Result type.
+			// HM may model Result as either *ConcreteType (legacy string-name) or
+			// *GenericType (post-typevar resolution); honour both.
+			if generic, ok := returnType.(*GenericType); ok && generic.name == TypeResult {
+				return bodyValue
+			}
 			if concrete, ok := returnType.(*ConcreteType); ok {
 				typeName := concrete.String()
 				// If return type is Result (or Result<...>), don't unwrap

@@ -346,13 +346,13 @@ func (r *BuiltInFunctionRegistry) registerStringSearch() {
 
 	r.functions[IndexOfFunc] = &BuiltInFunction{
 		Name:        IndexOfFunc,
-		Signature:   "indexOf(s: string, needle: string) -> Result<int, StringError>",
+		Signature:   "indexOf(s: string, needle: string) -> Result<int, string>",
 		Description: "Returns byte-index of first occurrence of needle, or Error(NotFound).",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to search in"},
 			{Name: "needle", Type: &ConcreteType{name: TypeString}, Description: "The substring to locate"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<int, StringError>"},
+		ReturnType:   &ConcreteType{name: "Result<int, string>"},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
@@ -396,14 +396,14 @@ func (r *BuiltInFunctionRegistry) registerStringSubstrings() {
 
 	r.functions[SubstringFunc] = &BuiltInFunction{
 		Name:        SubstringFunc,
-		Signature:   "substring(s: string, start: int, end: int) -> Result<string, StringError>",
+		Signature:   "substring(s: string, start: int, end: int) -> Result<string, string>",
 		Description: "Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The source string"},
 			{Name: "start", Type: &ConcreteType{name: TypeInt}, Description: "Starting index (inclusive)"},
 			{Name: "end", Type: &ConcreteType{name: TypeInt}, Description: "Ending index (exclusive)"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<string, StringError>"},
+		ReturnType:   &ConcreteType{name: "Result<string, string>"},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
@@ -482,53 +482,52 @@ func (r *BuiltInFunctionRegistry) registerStringTransform() {
 	}
 	r.functions[ReplaceFunc] = &BuiltInFunction{
 		Name: ReplaceFunc,
-		Signature: "replace(s: string, needle: string, replacement: string) -> " +
-			"Result<string, StringError>",
+		Signature: "replace(s: string, needle: string, replacement: string) -> Result<string, string>",
 		Description: "Replaces every occurrence of needle. Error(InvalidArgument) on empty needle.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The source string"},
 			{Name: "needle", Type: &ConcreteType{name: TypeString}, Description: "The substring to find"},
 			{Name: "replacement", Type: &ConcreteType{name: TypeString}, Description: "The replacement string"},
 		},
-		ReturnType: &ConcreteType{name: "Result<string, StringError>"}, Category: CategoryString,
+		ReturnType: &ConcreteType{name: "Result<string, string>"}, Category: CategoryString,
 		IsProtected: true, SecurityFlag: PermissionNone,
 		Generator: (*LLVMGenerator).generateReplaceCall,
 		Example:   `replace("a-b-c", "-", "_")  // Success { value: "a_b_c" }`,
 	}
 	r.functions[RepeatFunc] = &BuiltInFunction{
-		Name: RepeatFunc, Signature: "repeat(s: string, n: int) -> Result<string, StringError>",
+		Name: RepeatFunc, Signature: "repeat(s: string, n: int) -> Result<string, string>",
 		Description: "Concatenates s with itself n times. Error(InvalidArgument) on negative n.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to repeat"},
 			{Name: "n", Type: &ConcreteType{name: TypeInt}, Description: "Repeat count, must be >= 0"},
 		},
-		ReturnType: &ConcreteType{name: "Result<string, StringError>"}, Category: CategoryString,
+		ReturnType: &ConcreteType{name: "Result<string, string>"}, Category: CategoryString,
 		IsProtected: true, SecurityFlag: PermissionNone,
 		Generator: (*LLVMGenerator).generateRepeatCall,
 		Example:   `repeat("ab", 3)  // Success { value: "ababab" }`,
 	}
 	r.functions[PadStartFunc] = &BuiltInFunction{
-		Name: PadStartFunc, Signature: "padStart(s: string, targetLength: int, fill: string) -> Result<string, StringError>",
+		Name: PadStartFunc, Signature: "padStart(s: string, targetLength: int, fill: string) -> Result<string, string>",
 		Description: "Pads s on the left with copies of fill to reach targetLength bytes.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to pad"},
 			{Name: "targetLength", Type: &ConcreteType{name: TypeInt}, Description: "Desired total length"},
 			{Name: "fill", Type: &ConcreteType{name: TypeString}, Description: "Padding string (non-empty)"},
 		},
-		ReturnType: &ConcreteType{name: "Result<string, StringError>"}, Category: CategoryString,
+		ReturnType: &ConcreteType{name: "Result<string, string>"}, Category: CategoryString,
 		IsProtected: true, SecurityFlag: PermissionNone,
 		Generator: (*LLVMGenerator).generatePadStartCall,
 		Example:   `padStart("7", 3, "0")  // Success { value: "007" }`,
 	}
 	r.functions[PadEndFunc] = &BuiltInFunction{
-		Name: PadEndFunc, Signature: "padEnd(s: string, targetLength: int, fill: string) -> Result<string, StringError>",
+		Name: PadEndFunc, Signature: "padEnd(s: string, targetLength: int, fill: string) -> Result<string, string>",
 		Description: "Pads s on the right with copies of fill to reach targetLength bytes.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to pad"},
 			{Name: "targetLength", Type: &ConcreteType{name: TypeInt}, Description: "Desired total length"},
 			{Name: "fill", Type: &ConcreteType{name: TypeString}, Description: "Padding string (non-empty)"},
 		},
-		ReturnType: &ConcreteType{name: "Result<string, StringError>"}, Category: CategoryString,
+		ReturnType: &ConcreteType{name: "Result<string, string>"}, Category: CategoryString,
 		IsProtected: true, SecurityFlag: PermissionNone,
 		Generator: (*LLVMGenerator).generatePadEndCall,
 		Example:   `padEnd("7", 3, ".")  // Success { value: "7.." }`,
@@ -538,12 +537,12 @@ func (r *BuiltInFunctionRegistry) registerStringTransform() {
 func (r *BuiltInFunctionRegistry) registerStringParsing() {
 	r.functions[ParseIntFunc] = &BuiltInFunction{
 		Name:        ParseIntFunc,
-		Signature:   "parseInt(s: string) -> Result<int, StringError>",
+		Signature:   "parseInt(s: string) -> Result<int, string>",
 		Description: "Strict base-10 signed-int parser. No whitespace tolerance.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to parse"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<int, StringError>"},
+		ReturnType:   &ConcreteType{name: "Result<int, string>"},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
@@ -552,12 +551,12 @@ func (r *BuiltInFunctionRegistry) registerStringParsing() {
 	}
 	r.functions[ParseFloatFunc] = &BuiltInFunction{
 		Name:        ParseFloatFunc,
-		Signature:   "parseFloat(s: string) -> Result<float, StringError>",
+		Signature:   "parseFloat(s: string) -> Result<float, string>",
 		Description: "Strict base-10 floating-point parser. No whitespace tolerance.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to parse"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<float, StringError>"},
+		ReturnType:   &ConcreteType{name: "Result<float, string>"},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,
@@ -569,13 +568,13 @@ func (r *BuiltInFunctionRegistry) registerStringParsing() {
 func (r *BuiltInFunctionRegistry) registerStringListFunctions() {
 	r.functions[SplitFunc] = &BuiltInFunction{
 		Name:        SplitFunc,
-		Signature:   "split(s: string, separator: string) -> Result<List<string>, StringError>",
+		Signature:   "split(s: string, separator: string) -> Result<List<string>, string>",
 		Description: "Splits s on separator. Error(InvalidArgument) on empty separator.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "s", Type: &ConcreteType{name: TypeString}, Description: "The string to split"},
 			{Name: "separator", Type: &ConcreteType{name: TypeString}, Description: "Non-empty separator"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<List<string>, StringError>"},
+		ReturnType:   &ConcreteType{name: "Result<List<string>, string>"},
 		Category:     CategoryString,
 		IsProtected:  true,
 		SecurityFlag: PermissionNone,

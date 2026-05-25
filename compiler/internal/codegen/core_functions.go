@@ -540,7 +540,11 @@ func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (valu
 	return g.builder.NewICmp(enum.IPredNE, resultPtr, constant.NewNull(types.I8Ptr)), nil
 }
 
-// generateSubstringCall: substring(s, start, end) -> Result<string, StringError>.
+// generateSubstringCall: substring(s, start, end) -> Result<string, string>.
+// Spec note: `StringError` is the eventual typed payload — see Phase 3 of
+// docs/plans/error-payloads.md. Today both type signature and runtime
+// payload are plain `string`; once Phase 3 ships the registry will
+// re-tighten to `Result<T, StringError>` without touching this generator.
 // Implements [BUILTIN-STRING-SUBSTRINGS]. Delegates bounds-checking to the
 // C helper which returns NULL on invalid indices; we wrap NULL as Error.
 func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (value.Value, error) {
@@ -568,7 +572,7 @@ func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (val
 	return g.resultFromNullableString(ptr, "substring: index out of range"), nil
 }
 
-// generateParseIntCall: parseInt(s) -> Result<int, StringError>.
+// generateParseIntCall: parseInt(s) -> Result<int, string>.
 // Implements [BUILTIN-STRING-PARSING]. Delegates to strict C helper which
 // rejects non-numeric input, leading/trailing whitespace, and overflow.
 func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (value.Value, error) {
