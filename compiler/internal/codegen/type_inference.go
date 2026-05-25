@@ -764,14 +764,16 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 		return &ConcreteType{name: TypeBool}, nil
 	default:
 		// Check if it's an integer literal pattern
-		if _, err := strconv.ParseInt(pattern.Constructor, 10, 64); err == nil {
+		_, intErr := strconv.ParseInt(pattern.Constructor, 10, 64)
+		if intErr == nil {
 			return &ConcreteType{name: TypeInt}, nil
 		}
 
 		// Check if it's a float literal pattern (e.g. `3.14`). Added so
 		// `match f { 3.14 => … }` infers as float instead of failing
 		// with "unknown constructor".
-		if _, err := strconv.ParseFloat(pattern.Constructor, 64); err == nil {
+		_, floatErr := strconv.ParseFloat(pattern.Constructor, 64)
+		if floatErr == nil {
 			return &ConcreteType{name: TypeFloat}, nil
 		}
 

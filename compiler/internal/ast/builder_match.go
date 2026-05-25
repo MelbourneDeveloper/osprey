@@ -114,6 +114,16 @@ func (b *Builder) tryBuildNegativeNumberPattern(pipeCtx parser.IPipeExprContext)
 						IsWildcard:  false,
 					}
 				}
+				// Negative float literal — same shape on FLOAT.
+				if literalCtx.FLOAT() != nil {
+					return Pattern{
+						Constructor: "-" + literalCtx.FLOAT().GetText(),
+						Variable:    "",
+						Fields:      nil,
+						Nested:      nil,
+						IsWildcard:  false,
+					}
+				}
 			}
 		}
 	}

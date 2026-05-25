@@ -1613,7 +1613,8 @@ func (g *LLVMGenerator) createPatternCondition(
 	}
 
 	// Float literal pattern — emit an FCmp against the literal constant.
-	if floatValue, ferr := strconv.ParseFloat(pattern.Constructor, 64); ferr == nil {
+	floatValue, ferr := strconv.ParseFloat(pattern.Constructor, 64)
+	if ferr == nil {
 		return currentBlock.NewFCmp(enum.FPredOEQ, discriminant, constant.NewFloat(types.Double, floatValue))
 	}
 
