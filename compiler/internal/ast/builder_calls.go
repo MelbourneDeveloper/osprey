@@ -197,9 +197,25 @@ func (b *Builder) buildSimpleCall(ctx parser.ICallExprContext, primary Expressio
 		args, namedArgs = b.buildArguments(ctx.ArgList(0))
 	}
 
+	// Identifier callee (the common path) — wrap in CallExpression.
 	if ident, ok := primary.(*Identifier); ok {
 		return &CallExpression{
 			Function:       ident,
+			Arguments:      args,
+			NamedArguments: namedArgs,
+			Position:       b.getPositionFromContext(ctx),
+		}
+	}
+
+	// Immediately-invoked lambdas and other parenthesized callee
+	// expressions: `(fn(x: int) => x * 10)(5)`. Previously this dropped
+	// the (5) args and returned just the lambda, so print(lambda)(5)
+	// silently puts'd the lambda's function pointer. Wrap in
+	// CallExpression — codegen's resolveFunctionValue handles the
+	// non-identifier case via funcName=="" → generateExpression(Function).
+	if _, isLambda := primary.(*LambdaExpression); isLambda {
+		return &CallExpression{
+			Function:       primary,
 			Arguments:      args,
 			NamedArguments: namedArgs,
 			Position:       b.getPositionFromContext(ctx),
