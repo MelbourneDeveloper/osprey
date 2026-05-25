@@ -852,15 +852,13 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 
 	// Handle Result type patterns
 	if pattern.Constructor == "Success" && discriminantType != nil {
-		if ti.bindSuccessPattern(pattern, discriminantType) {
-			return
-		}
+		ti.bindSuccessPattern(pattern, discriminantType)
+		return
 	}
 
 	if pattern.Constructor == "Error" && discriminantType != nil {
-		if ti.bindErrorPattern(pattern, discriminantType) {
-			return
-		}
+		ti.bindErrorPattern(pattern, discriminantType)
+		return
 	}
 
 	// Default behavior: assign fresh type variables
@@ -880,44 +878,68 @@ func patternBindName(pattern ast.Pattern) string {
 	return pattern.Variable
 }
 
-// bindSuccessPattern binds pattern fields for Success constructor
-func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType Type) bool {
+// bindSuccessPattern binds pattern fields for Success constructor.
+// Codegen auto-wraps non-Result discriminants in Success (see
+// generateMatchExpressionWithDiscriminant), so a `Success v` arm always
+// binds — Result<T,E> maps v to T; a primitive discriminant maps v to
+// its own type. Type variables / unresolved discriminants get a fresh
+// tyvar so the arm-body unifier still has room to converge.
+// Without the primitive fallback, `match int_expr { Success v => v }`
+// raised "undefined variable v" during arm-body inference.
+func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType Type) {
 	name := patternBindName(pattern)
-	// Handle GenericType Result<T, E>
 	if gt, ok := discriminantType.(*GenericType); ok && gt.name == TypeResult && len(gt.typeArgs) >= 1 {
 		if name != "" {
 			ti.env.Set(name, gt.typeArgs[0])
 		}
-		return true
+		return
 	}
-	// Handle ConcreteType Result<T, E> (legacy string-based approach)
 	if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
 		if name != "" {
 			ti.env.Set(name, ti.extractResultSuccessType(ct.name))
 		}
-		return true
+		return
 	}
-	return false
+	if name == "" {
+		return
+	}
+	// Bind primitive discriminants directly; otherwise hand out a fresh
+	// tyvar so the arm body can unify it against the Error arm without
+	// being constrained to the (possibly polymorphic) discriminant
+	// itself.
+	if ct, ok := discriminantType.(*ConcreteType); ok {
+		switch ct.name {
+		case TypeInt, TypeFloat, TypeString, TypeBool:
+			ti.env.Set(name, ct)
+			return
+		}
+	}
+	ti.env.Set(name, ti.Fresh())
 }
 
-// bindErrorPattern binds pattern fields for Error constructor
-func (ti *TypeInferer) bindErrorPattern(pattern ast.Pattern, discriminantType Type) bool {
+// bindErrorPattern binds pattern fields for Error constructor.
+// Result<T,E> binds to E; otherwise hand out a fresh tyvar so the
+// arm body can unify without prematurely committing to a type.
+// The auto-wrap path never reaches the Error branch at runtime for
+// non-Result discriminants, but the inferer still needs the name in
+// scope so the body type-checks.
+func (ti *TypeInferer) bindErrorPattern(pattern ast.Pattern, discriminantType Type) {
 	name := patternBindName(pattern)
-	// Handle GenericType Result<T, E>
 	if gt, ok := discriminantType.(*GenericType); ok && gt.name == "Result" && len(gt.typeArgs) >= 2 {
 		if name != "" {
 			ti.env.Set(name, gt.typeArgs[1])
 		}
-		return true
+		return
 	}
-	// Handle ConcreteType Result<T, E> (legacy string-based approach)
 	if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
 		if name != "" {
 			ti.env.Set(name, ti.extractResultErrorType(ct.name))
 		}
-		return true
+		return
 	}
-	return false
+	if name != "" {
+		ti.env.Set(name, ti.Fresh())
+	}
 }
 
 // extractResultSuccessType extracts the success type T from Result<T, E>
