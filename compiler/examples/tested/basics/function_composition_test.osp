@@ -48,4 +48,17 @@ print(toString(innerLam(5)))
 let inlineApplied = applyFunction(value: 10, func: fn(x: int) => x + 100)
 print(toString(inlineApplied))
 
+// String equality must compare contents (strcmp), not the i8* pointer
+let strA = "hi"
+let strB = "hi"
+let strC = "no"
+match strA == strB {
+    true => print("strEq=hi")
+    false => print("strEq=fail")
+}
+match strA == strC {
+    true => print("strNe=fail")
+    false => print("strNe=ok")
+}
+
 print("=== Function Composition Test Complete ===")

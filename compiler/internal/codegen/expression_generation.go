@@ -1079,6 +1079,13 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	left = g.unwrapIfResult(left)
 	right = g.unwrapIfResult(right)
 
+	// String comparison must use strcmp on byte contents — comparing the raw
+	// i8* pointers (which is what NewICmp does) returns false for two separately
+	// allocated globals holding the same text.
+	if isStringValue(left) && isStringValue(right) && (operator == "==" || operator == "!=") {
+		return g.generateStringComparison(operator, left, right, pos)
+	}
+
 	var cmp value.Value
 
 	// Check if operands are floats and use FCmp instead of ICmp
@@ -1123,6 +1130,37 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	// Return i1 (bool) directly for comparison operations
 	// Comparisons don't return Result types - only arithmetic operations do
 	return cmp, nil
+}
+
+// isStringValue reports whether an LLVM value looks like an Osprey string
+// (i.e. an i8* pointer). Strings are emitted as @global char arrays GEP'd
+// down to i8*, so the runtime representation is always a pointer to i8.
+func isStringValue(v value.Value) bool {
+	ptrType, ok := v.Type().(*types.PointerType)
+	if !ok {
+		return false
+	}
+	intType, ok := ptrType.ElemType.(*types.IntType)
+	return ok && intType.BitSize == 8
+}
+
+// generateStringComparison emits a strcmp-based comparison for the `==` and
+// `!=` operators on i8* string operands. NewICmp on raw pointers would
+// otherwise compare addresses, which fails for two separately allocated
+// globals holding the same text.
+func (g *LLVMGenerator) generateStringComparison(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
+	strcmp, ok := g.functions["strcmp"]
+	if !ok {
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
+	}
+	cmp := g.builder.NewCall(strcmp, left, right)
+	zero := constant.NewInt(types.I32, 0)
+	if operator == "==" {
+		return g.builder.NewICmp(enum.IPredEQ, cmp, zero), nil
+	}
+	return g.builder.NewICmp(enum.IPredNE, cmp, zero), nil
 }
 
 // generateLogicalOperationWithPos generates LLVM logical operations with position info.
