@@ -1477,14 +1477,39 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 		}
 	}
 
-	// If we can't find a record type, this is an error
+	// If we can't find a record type, this is an error. Append a hint
+	// when the field name matches a known function / builtin — users
+	// often type `s.length` expecting UFCS but bare-field access on a
+	// primitive type just fails without context.
+	hint := g.suggestFunctionForFieldAccess(fieldAccess.FieldName, fieldAccess.Object)
 	if fieldAccess.Position != nil {
-		return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on non-struct type", //nolint:err113
-			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
+		return nil, fmt.Errorf("line %d:%d: cannot access field '%s' on non-struct type%s", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName, hint)
 	}
 
-	return nil, fmt.Errorf("cannot access field '%s' on non-struct type", //nolint:err113
-		fieldAccess.FieldName)
+	return nil, fmt.Errorf("cannot access field '%s' on non-struct type%s", //nolint:err113
+		fieldAccess.FieldName, hint)
+}
+
+// suggestFunctionForFieldAccess returns a "did you mean" hint when a
+// function/method with the same name exists; empty string otherwise.
+// Triggered from the non-struct field-access error path so e.g.
+// `s.length` on a string surfaces "did you mean `length(s)` or
+// `s.length()`?" instead of just "cannot access field".
+func (g *LLVMGenerator) suggestFunctionForFieldAccess(name string, object ast.Expression) string {
+	if g == nil || name == "" {
+		return ""
+	}
+	if _, ok := g.functions[name]; !ok {
+		if _, ok := GlobalBuiltInRegistry.GetFunction(name); !ok {
+			return ""
+		}
+	}
+	subject := "x"
+	if ident, ok := object.(*ast.Identifier); ok && ident.Name != "" {
+		subject = ident.Name
+	}
+	return fmt.Sprintf(" - did you mean `%s(%s)` or `%s.%s()`?", name, subject, subject, name)
 }
 
 // tryGetStructType extracts a struct type from an LLVM type
