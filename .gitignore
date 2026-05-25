@@ -96,3 +96,6 @@ compiler/examples/tested/effects/test_data/
 compiler/processed_log.txt
 compiler/system_report.txt
 compiler/temp_test.txt
+
+# `make test` log (#56)
+compiler/test.log
