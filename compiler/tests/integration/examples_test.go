@@ -556,7 +556,7 @@ func getCallbackStdoutDemoExpectedOutput() string {
 			"✓ Process cleaned up\n" +
 			"--- Test 2: Multiple Lines Callback ---\n" +
 			"✓ Multi-line process spawned with ID: 2\n" +
-			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+			"[CALLBACK] Process 2 STDOUT: Line 1\nLine 2\nLine 3\n\n" +
 			"[CALLBACK] Process 2 EXIT: 0\n" +
 			"✓ Multi-line process finished\n" +
 			"--- Test 3: Error Process Callback ---\n" +
@@ -578,7 +578,7 @@ func getCallbackStdoutDemoExpectedOutput() string {
 		"✓ Process cleaned up\n" +
 		"--- Test 2: Multiple Lines Callback ---\n" +
 		"✓ Multi-line process spawned with ID: 2\n" +
-		"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+		"[CALLBACK] Process 2 STDOUT: Line 1\nLine 2\nLine 3\n\n" +
 		"[CALLBACK] Process 2 EXIT: 0\n" +
 		"✓ Multi-line process finished\n" +
 		"--- Test 3: Error Process Callback ---\n" +
