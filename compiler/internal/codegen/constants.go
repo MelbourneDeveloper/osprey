@@ -22,18 +22,7 @@ const (
 	MinArgs              = 2  // Minimum command line arguments
 	ExpressionOffset     = 2  // Offset for expression parsing
 	DefaultPlaceholder   = 42 // Default placeholder value for LLVM constants
-	ResultFieldCount = 3 // Number of fields in Result type struct (value, discriminant, err_msg).
-	// Implements [ERR-PAYLOAD]: every Result carries an i8* error-message slot.
-	// For Success this slot is null; for Error it points to a static C string
-	// owned by the program image (lifetime = process). See generateErrorBlock
-	// for the read side and result_helpers.go for the construction helpers.
-
-	// UnionFieldCount is the number of fields in a tagged-union struct: {i8 tag, [N x i8] data}.
-	// Kept distinct from ResultFieldCount so changes to the Result layout don't accidentally
-	// reroute union pattern-matching through the wrong dispatch arm (see PR for [ERR-PAYLOAD]
-	// — a previous shared constant silently broke `createUnionPatternCondition` when Result
-	// grew its err_msg slot).
-	UnionFieldCount = 2
+	ResultFieldCount     = 2  // Number of fields in Result type struct (value, discriminant)
 )
 
 // String constants.
@@ -50,96 +39,34 @@ const (
 const (
 	TypeString       = "string"
 	TypeInt          = "int"
-	TypeFloat        = "float"
 	TypeBool         = "bool"
 	TypeAny          = "any"
 	TypeUnit         = "Unit"
 	TypeResult       = "Result"
-	TypeMathError    = "MathError"
 	TypeHTTPResponse = "HttpResponse"
 	TypeFunction     = "Function"
 	TypeFiber        = "Fiber"
 	TypeChannel      = "Channel"
-	TypeState        = "State"
-	TypeService      = "Service"
-	TypeList         = "List"
-	TypeMap          = "Map"
-)
-
-// Type argument counts.
-const (
-	TwoTypeArgs = 2
-)
-
-// Size constants.
-const (
-	PointerPairSize = 16 // Size of two pointers (key, value) in bytes
 )
 
 // Function names.
 const (
-	ToStringFunc     = "toString"
-	PrintFunc        = "print"
-	InputFunc        = "input"
-	RangeFunc        = "range"
-	ForEachFunc      = "forEach"
-	MapFunc          = "map"
-	FilterFunc       = "filter"
-	FoldFunc         = "fold"
-	MainFunctionName = "main"
+	ToStringFunc       = "toString"
+	PrintFunc          = "print"
+	InputFunc          = "input"
+	RangeFunc          = "range"
+	ForEachFunc        = "forEach"
+	MapFunc            = "map"
+	FilterFunc         = "filter"
+	FoldFunc           = "fold"
+	MainFunctionName   = "main"
 
+	// String utility functions
 	LengthFunc    = "length"
 	ContainsFunc  = "contains"
 	SubstringFunc = "substring"
-	ParseIntFunc  = "parseInt"
-	JoinFunc      = "join"
 
-	// IsEmptyFunc is the Osprey name for the isEmpty(s) builtin. Implements [BUILTIN-STRING-INSPECTION].
-	IsEmptyFunc = "isEmpty"
-
-	// StartsWithFunc is the Osprey name for startsWith(s, prefix). Implements [BUILTIN-STRING-SEARCH].
-	StartsWithFunc = "startsWith"
-	// EndsWithFunc is the Osprey name for endsWith(s, suffix). Implements [BUILTIN-STRING-SEARCH].
-	EndsWithFunc = "endsWith"
-	// IndexOfFunc is the Osprey name for indexOf(s, needle). Implements [BUILTIN-STRING-SEARCH].
-	IndexOfFunc = "indexOf"
-
-	// TakeFunc is the Osprey name for take(s, n). Implements [BUILTIN-STRING-SUBSTRINGS].
-	TakeFunc = "take"
-	// DropFunc is the Osprey name for drop(s, n). Implements [BUILTIN-STRING-SUBSTRINGS].
-	DropFunc = "drop"
-
-	// ToUpperCaseFunc is the Osprey name for toUpperCase(s). Implements [BUILTIN-STRING-TRANSFORM].
-	ToUpperCaseFunc = "toUpperCase"
-	// ToLowerCaseFunc is the Osprey name for toLowerCase(s). Implements [BUILTIN-STRING-TRANSFORM].
-	ToLowerCaseFunc = "toLowerCase"
-	// TrimFunc is the Osprey name for trim(s). Implements [BUILTIN-STRING-TRANSFORM].
-	TrimFunc = "trim"
-	// TrimStartFunc is the Osprey name for trimStart(s). Implements [BUILTIN-STRING-TRANSFORM].
-	TrimStartFunc = "trimStart"
-	// TrimEndFunc is the Osprey name for trimEnd(s). Implements [BUILTIN-STRING-TRANSFORM].
-	TrimEndFunc = "trimEnd"
-	// ReverseFunc is the Osprey name for reverse(s). Implements [BUILTIN-STRING-TRANSFORM].
-	ReverseFunc = "reverse"
-	// ReplaceFunc is the Osprey name for replace(s, needle, replacement). Implements [BUILTIN-STRING-TRANSFORM].
-	ReplaceFunc = "replace"
-	// RepeatFunc is the Osprey name for repeat(s, n). Implements [BUILTIN-STRING-TRANSFORM].
-	RepeatFunc = "repeat"
-	// PadStartFunc is the Osprey name for padStart(s, target, fill). Implements [BUILTIN-STRING-TRANSFORM].
-	PadStartFunc = "padStart"
-	// PadEndFunc is the Osprey name for padEnd(s, target, fill). Implements [BUILTIN-STRING-TRANSFORM].
-	PadEndFunc = "padEnd"
-
-	// ParseFloatFunc is the Osprey name for parseFloat(s). Implements [BUILTIN-STRING-PARSING].
-	ParseFloatFunc = "parseFloat"
-
-	// SplitFunc is the Osprey name for split(s, sep). Implements [BUILTIN-STRING-LIST].
-	SplitFunc = "split"
-	// LinesFunc is the Osprey name for lines(s). Implements [BUILTIN-STRING-LIST].
-	LinesFunc = "lines"
-	// WordsFunc is the Osprey name for words(s). Implements [BUILTIN-STRING-LIST].
-	WordsFunc = "words"
-
+	// Process and system functions
 	SpawnProcessFunc = "spawnProcess"
 
 	WriteFileFunc  = "writeFile"
@@ -147,6 +74,7 @@ const (
 	DeleteFileFunc = "deleteFile"
 	SleepFunc      = "sleep"
 
+	// Process management functions
 	AwaitProcessFunc   = "awaitProcess"
 	CleanupProcessFunc = "cleanupProcess"
 )
@@ -154,10 +82,12 @@ const (
 // Osprey HTTP Function names.
 // These are the names of the functions at the Osprey level.
 const (
+	// HTTP Server functions.
 	HTTPCreateServerOsprey = "httpCreateServer"
 	HTTPListenOsprey       = "httpListen"
 	HTTPStopServerOsprey   = "httpStopServer"
 
+	// HTTP Client functions.
 	HTTPCreateClientOsprey = "httpCreateClient"
 	HTTPGetOsprey          = "httpGet"
 	HTTPPostOsprey         = "httpPost"
@@ -166,26 +96,31 @@ const (
 	HTTPRequestOsprey      = "httpRequest"
 	HTTPCloseClientOsprey  = "httpCloseClient"
 
+	// WebSocket functions.
 	WebSocketConnectOsprey = "websocketConnect"
 	WebSocketSendOsprey    = "websocketSend"
 	WebSocketCloseOsprey   = "websocketClose"
 
+	// WebSocket Server functions.
 	WebSocketCreateServerOsprey    = "websocketCreateServer"
 	WebSocketServerListenOsprey    = "websocketServerListen"
 	WebSocketServerSendOsprey      = "websocketServerSend"
 	WebSocketServerBroadcastOsprey = "websocketServerBroadcast"
 	WebSocketStopServerOsprey      = "websocketStopServer"
 	WebSocketKeepAliveOsprey       = "websocketKeepAlive"
+
 )
 
 // C Runtime HTTP Function names.
 // These are the names of the functions at the C level.
 // There are NOT the Osprey function names
 const (
+	// HTTP Server functions.
 	HTTPCreateServerFunc = "http_create_server"
 	HTTPListenFunc       = "http_listen"
 	HTTPStopServerFunc   = "http_stop_server"
 
+	// HTTP Client functions.
 	HTTPCreateClientFunc = "http_create_client"
 	HTTPGetFunc          = "http_get"
 	HTTPPostFunc         = "http_post"
@@ -194,10 +129,12 @@ const (
 	HTTPRequestFunc      = "http_request"
 	HTTPCloseClientFunc  = "http_close_client"
 
+	// WebSocket functions.
 	WebSocketConnectFunc = "websocket_connect"
 	WebSocketSendFunc    = "websocket_send"
 	WebSocketCloseFunc   = "websocket_close"
 
+	// WebSocket Server functions.
 	WebSocketCreateServerFunc    = "websocket_create_server"
 	WebSocketServerListenFunc    = "websocket_server_listen"
 	WebSocketServerSendFunc      = "websocket_server_send"
@@ -223,6 +160,7 @@ const (
 	HTTPErrorParse      = -4
 	HTTPErrorServer     = -5
 )
+
 
 // NOTE: Function argument counts have been moved to the unified built-in function registry
 // (builtin_registry.go). Use len(GlobalBuiltInRegistry.GetFunction(name).ParameterTypes) instead.

@@ -36,14 +36,12 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 
 	// Validate any type usage in function calls
 	if funcName != "" {
-		err := g.validateFunctionCallArguments(funcName, callExpr)
-		if err != nil {
+		if err := g.validateFunctionCallArguments(funcName, callExpr); err != nil {
 			return nil, err
 		}
 
 		// Validate named arguments requirement for multi-parameter functions
-		err = g.validateNamedArguments(funcName, callExpr)
-		if err != nil {
+		if err := g.validateNamedArguments(funcName, callExpr); err != nil {
 			return nil, err
 		}
 	}
@@ -56,7 +54,6 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 
 	// Generate arguments
 	var args []value.Value
-
 	if len(callExpr.NamedArguments) > 0 {
 		// Handle named arguments
 		reorderedExprs, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
@@ -70,7 +67,6 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 			if err != nil {
 				return nil, err
 			}
-
 			args[i] = val
 		}
 	} else {
@@ -81,7 +77,6 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 			if err != nil {
 				return nil, err
 			}
-
 			args[i] = val
 		}
 	}
@@ -102,14 +97,12 @@ func (g *LLVMGenerator) validateFunctionCallArguments(funcName string, callExpr 
 	if fnType, ok := funcType.(*FunctionType); ok {
 		// Get the arguments to check
 		var args []ast.Expression
-
 		if len(callExpr.NamedArguments) > 0 {
 			// Reorder named arguments to match parameter order
 			reorderedExprs, err := g.reorderNamedArguments(funcName, callExpr.NamedArguments)
 			if err != nil {
 				return err
 			}
-
 			args = reorderedExprs
 		} else {
 			args = callExpr.Arguments
@@ -124,8 +117,7 @@ func (g *LLVMGenerator) validateFunctionCallArguments(funcName string, callExpr 
 			paramType := fnType.paramTypes[i]
 
 			// Check for any type mismatch, passing function name and parameter index for better error messages
-			err := g.checkAnyTypeMismatchParam(arg, paramType, callExpr.Position, funcName, i)
-			if err != nil {
+			if err := g.checkAnyTypeMismatchParam(arg, paramType, callExpr.Position, funcName, i); err != nil {
 				return err
 			}
 		}
@@ -167,7 +159,6 @@ func (g *LLVMGenerator) checkAnyTypeMismatchParam(
 					return fmt.Errorf("line %d:%d: %w - pattern matching required: function '%s' expecting '%s'",
 						identPos.Line, identPos.Column, ErrAnyTypeMismatch, funcName, paramName)
 				}
-
 				return fmt.Errorf("%w - pattern matching required: function '%s' expecting '%s'",
 					ErrAnyTypeMismatch, funcName, paramName)
 			}
@@ -185,7 +176,6 @@ func (g *LLVMGenerator) getParameterName(funcName string, paramIndex int) string
 			return paramNames[paramIndex]
 		}
 	}
-
 	return ""
 }
 
@@ -348,11 +338,9 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 
 	// Check if arg == 1 (true) or 0 (false)
 	// Use the correct zero value type based on the argument type
-	var (
-		zero   value.Value
-		isTrue value.Value
-	)
-
+	var zero value.Value
+	var isTrue value.Value
+	
 	if arg.Type() == types.I1 {
 		// For i1 (boolean) types, compare against i1 false
 		zero = constant.NewBool(false)
@@ -362,7 +350,7 @@ func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, erro
 		zero = constant.NewInt(types.I64, 0)
 		isTrue = currentBlock.NewICmp(enum.IPredNE, arg, zero)
 	}
-
+	
 	currentBlock.NewCondBr(isTrue, trueBlock, falseBlock)
 
 	// True case - return "true"
@@ -414,10 +402,9 @@ func (g *LLVMGenerator) generateMatchExpressionWithDiscriminant(
 		if g.isResultType(discriminant) {
 			return g.generateResultMatchExpression(matchExpr, discriminant)
 		}
-
+		
 		// If not a Result type, wrap it in a Success Result automatically
 		wrappedDiscriminant := g.wrapInSuccessResult(discriminant)
-
 		return g.generateResultMatchExpression(matchExpr, wrappedDiscriminant)
 	}
 
@@ -439,175 +426,37 @@ func (g *LLVMGenerator) hasResultPatterns(arms []ast.MatchArm) bool {
 	return false
 }
 
+
 // wrapInSuccessResult wraps a value in a Success Result automatically
 func (g *LLVMGenerator) wrapInSuccessResult(discriminant value.Value) value.Value {
 	// Create a Result struct with the discriminant value as the success value
 	// Result struct: [value, discriminant] where discriminant=0 for success
 	resultType := types.NewStruct(discriminant.Type(), types.I8)
-
+	
 	// Allocate memory for the result
 	resultPtr := g.builder.NewAlloca(resultType)
-
+	
 	// Store the value in the first field
 	valuePtr := g.builder.NewGetElementPtr(resultType, resultPtr,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 	g.builder.NewStore(discriminant, valuePtr)
-
+	
 	// Store 0 (success) in the discriminant field
 	discriminantPtr := g.builder.NewGetElementPtr(resultType, resultPtr,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-
+	
 	return resultPtr
 }
 
-// isResultType checks if a value is a Result type (struct with two fields or pointer to such struct)
+// isResultType checks if a value is a Result type (pointer to struct with two fields)
 func (g *LLVMGenerator) isResultType(val value.Value) bool {
-	// Check for pointer to struct (legacy pointer semantics)
 	if ptrType, ok := val.Type().(*types.PointerType); ok {
 		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
 			return len(structType.Fields) == ResultFieldCount
 		}
 	}
-	// Check for struct value directly (value semantics)
-	if structType, ok := val.Type().(*types.StructType); ok {
-		return len(structType.Fields) == ResultFieldCount
-	}
-
 	return false
-}
-
-// inferSuccessTypeFromExtractedValue infers the type from an already extracted value
-func (g *LLVMGenerator) inferSuccessTypeFromExtractedValue(extractedValue value.Value) Type {
-	// Try to get type from direct function lookup
-	if resultType := g.tryDirectFunctionLookup(extractedValue); resultType != nil {
-		return resultType
-	}
-
-	// Try more aggressive search through type environment
-	if resultType := g.tryAggressiveTypeSearch(extractedValue); resultType != nil {
-		return resultType
-	}
-
-	// Final fallback based on LLVM type
-	return g.getFallbackType(extractedValue)
-}
-
-// tryDirectFunctionLookup attempts to get type from direct function lookup
-func (g *LLVMGenerator) tryDirectFunctionLookup(extractedValue value.Value) Type {
-	extractInst, ok := extractedValue.(*ir.InstExtractValue)
-	if !ok {
-		return nil
-	}
-
-	callInst, ok := extractInst.X.(*ir.InstCall)
-	if !ok {
-		return nil
-	}
-
-	function, ok := callInst.Callee.(*ir.Func)
-	if !ok {
-		return nil
-	}
-
-	funcName := function.GlobalName
-
-	funcType, exists := g.typeInferer.env.Get(funcName)
-	if !exists {
-		return nil
-	}
-
-	return g.extractTypeFromFunctionType(funcType)
-}
-
-// tryAggressiveTypeSearch searches through the entire type environment
-func (g *LLVMGenerator) tryAggressiveTypeSearch(extractedValue value.Value) Type {
-	extractInst, ok := extractedValue.(*ir.InstExtractValue)
-	if !ok {
-		return nil
-	}
-
-	callInst, ok := extractInst.X.(*ir.InstCall)
-	if !ok {
-		return nil
-	}
-
-	function, ok := callInst.Callee.(*ir.Func)
-	if !ok {
-		return nil
-	}
-
-	funcName := function.GlobalName
-	for name, envType := range g.typeInferer.env.vars {
-		if name == funcName {
-			return g.extractTypeFromFunctionType(envType)
-		}
-	}
-
-	return nil
-}
-
-// extractTypeFromFunctionType extracts result type from a function type
-func (g *LLVMGenerator) extractTypeFromFunctionType(funcType Type) Type {
-	var actualType Type
-	if scheme, ok := funcType.(*TypeScheme); ok {
-		actualType = g.typeInferer.Instantiate(scheme)
-	} else {
-		actualType = funcType
-	}
-
-	if fnType, ok := actualType.(*FunctionType); ok {
-		return g.extractSuccessTypeFromResultType(fnType.returnType)
-	}
-
-	return nil
-}
-
-// getFallbackType returns a fallback type based on LLVM type
-func (g *LLVMGenerator) getFallbackType(extractedValue value.Value) Type {
-	switch extractedValue.Type() {
-	case types.I64:
-		return &ConcreteType{name: "int"}
-	case types.I8Ptr:
-		return &ConcreteType{name: "string"}
-	case types.I1:
-		return &ConcreteType{name: "bool"}
-	default:
-		return &ConcreteType{name: "int"}
-	}
-}
-
-// extractSuccessTypeFromResultType extracts T from Result<T, E>
-func (g *LLVMGenerator) extractSuccessTypeFromResultType(resultType Type) Type {
-	// Proper type inference: Result types should be GenericType with type arguments
-	if genericType, ok := resultType.(*GenericType); ok {
-		if genericType.name == TypeResult && len(genericType.typeArgs) >= 1 {
-			// Return the first type argument (success type T from Result<T, E>)
-			return genericType.typeArgs[0]
-		}
-	}
-
-	// Handle non-generic Result types (fallback for backwards compatibility)
-	if concreteType, ok := resultType.(*ConcreteType); ok {
-		// Try to extract from concrete Result type names like "Result<int, MathError>"
-		if strings.HasPrefix(concreteType.name, "Result<") {
-			// Extract the first type parameter
-			start := strings.Index(concreteType.name, "<") + 1
-
-			end := strings.Index(concreteType.name[start:], ",")
-			if end == -1 {
-				end = strings.Index(concreteType.name[start:], ">")
-			}
-
-			if end != -1 {
-				successTypeName := strings.TrimSpace(concreteType.name[start : start+end])
-				return &ConcreteType{name: successTypeName}
-			}
-		}
-	}
-
-	// If we can't extract the type, default to int (common case)
-	return &PrimitiveType{name: "int"}
 }
 
 // generateStandardMatchExpression generates a standard (non-result) match expression.
@@ -649,10 +498,8 @@ func (g *LLVMGenerator) generateMatchArmValues(
 	endBlock *ir.Block,
 	discriminant value.Value,
 ) ([]value.Value, []*ir.Block, error) {
-	var (
-		armValues         []value.Value
-		predecessorBlocks []*ir.Block
-	)
+	var armValues []value.Value
+	var predecessorBlocks []*ir.Block
 
 	for i, arm := range arms {
 		// Set builder to the arm block at the start of each iteration
@@ -679,7 +526,6 @@ func (g *LLVMGenerator) processMatchArm(arm ast.MatchArm, discriminant value.Val
 	if arm.Pattern.Variable != "" || len(arm.Pattern.Fields) > 0 {
 		return g.processMatchArmWithBinding(arm, discriminant)
 	}
-
 	return g.processMatchArmWithoutBinding(arm)
 }
 
@@ -727,7 +573,6 @@ func (g *LLVMGenerator) saveVariableScope() map[string]value.Value {
 	for k, v := range g.variables {
 		oldVariables[k] = v
 	}
-
 	return oldVariables
 }
 
@@ -768,7 +613,6 @@ func (g *LLVMGenerator) extractRecordTypeFields(pattern ast.Pattern, discriminan
 			}
 		}
 	}
-
 	return false
 }
 
@@ -789,7 +633,6 @@ func (g *LLVMGenerator) extractDiscriminatedUnionTypeFields(pattern ast.Pattern,
 		// If field extraction fails, bind fields to zero values
 		g.bindFieldsToZeroValues(pattern.Fields)
 	}
-
 	return true
 }
 
@@ -804,7 +647,6 @@ func (g *LLVMGenerator) isMultiVariantType(constructorName string) bool {
 			}
 		}
 	}
-
 	return false
 }
 
@@ -817,7 +659,6 @@ func (g *LLVMGenerator) extractStructuralFields(fields []string, discriminant va
 			// If field extraction fails, bind to null/zero value
 			fieldValue = constant.NewNull(types.I8Ptr)
 		}
-
 		g.variables[fieldName] = fieldValue
 	}
 }
@@ -833,11 +674,8 @@ func (g *LLVMGenerator) bindFieldsToZeroValues(fields []string) {
 func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant value.Value, variant ast.TypeVariant) {
 	// For record types, the discriminant is a pointer to the struct
 	discriminantType := discriminant.Type()
-
-	var (
-		structType *types.StructType
-		isPointer  bool
-	)
+	var structType *types.StructType
+	var isPointer bool
 
 	if ptrType, ok := discriminantType.(*types.PointerType); ok {
 		if st, ok := ptrType.ElemType.(*types.StructType); ok {
@@ -891,39 +729,10 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 			g.variables[patternFieldName] = fieldValue
 
 			// Also register the variable in the Hindley-Milner type environment
-			// For Result types, try to infer the semantic type of the value field
-			var semanticType string
-			if patternFieldName == "value" && pattern.Constructor == SuccessPattern {
-				// This is likely a value extracted from a Result<T, E>
-				// Try to infer the original type T from the context
-				semanticType = g.inferResultValueType(discriminant, field.Type)
-			} else {
-				semanticType = field.Type
-			}
-
-			concreteType := &ConcreteType{name: semanticType}
+			concreteType := &ConcreteType{name: field.Type}
 			g.typeInferer.env.Set(patternFieldName, concreteType)
 		}
 	}
-}
-
-// inferResultValueType tries to infer the semantic type of a value extracted from a Result type
-func (g *LLVMGenerator) inferResultValueType(_ value.Value, fieldType string) string {
-	// Try to track back to the source of this Result value to determine the generic type parameter
-	// This is a complex problem that requires proper generic type tracking
-
-	// For now, we'll use heuristics based on the field type
-	// Check if the field type suggests this could be a boolean value
-
-	// Simple heuristic: if the field type suggests it could be boolean (i64 that might be boolean)
-	// and this is a Success pattern match, assume it's a boolean
-	// This handles the common case of Result<bool, Error> from comparison functions
-	if fieldType == TypeInt || fieldType == "" {
-		// This is likely a boolean value stored as i64 in the Result
-		return TypeBool
-	}
-
-	return fieldType // Otherwise use the original field type
 }
 
 // normalizeArmValue handles Unit expressions in match arms
@@ -933,7 +742,6 @@ func (g *LLVMGenerator) normalizeArmValue(armValue value.Value) value.Value {
 	if armValue == nil || armValue.Type() == types.Void {
 		armValue = constant.NewUndef(types.Void)
 	}
-
 	return armValue
 }
 
@@ -950,7 +758,6 @@ func (g *LLVMGenerator) addBranchTermination(endBlock *ir.Block) *ir.Block {
 	if currentBuilderBlock.Term == nil {
 		currentBuilderBlock.NewBr(endBlock)
 	}
-
 	return currentBuilderBlock
 }
 
@@ -1003,44 +810,15 @@ func (g *LLVMGenerator) createPatternCondition(
 
 	// Handle boolean patterns for ternary expressions
 	if pattern.Constructor == "true" {
-		// Check discriminant type and handle appropriately
-		if _, isStruct := discriminant.Type().(*types.StructType); isStruct {
-			// Boolean is represented as struct - need to extract the value
-			// For now, assume boolean structs always match true pattern
-			return constant.NewBool(true)
-		}
-		// For integer types, check if discriminant is true (non-zero)
-		if intType, isInt := discriminant.Type().(*types.IntType); isInt {
-			zero := constant.NewInt(intType, 0)
-			return currentBlock.NewICmp(enum.IPredNE, discriminant, zero)
-		}
-		// For boolean types, compare directly
-		if discriminant.Type() == types.I1 {
-			return discriminant
-		}
-		// Default fallback
-		return constant.NewBool(true)
+		// Check if discriminant is true (non-zero)
+		zero := constant.NewInt(types.I64, 0)
+		return currentBlock.NewICmp(enum.IPredNE, discriminant, zero)
 	}
 
 	if pattern.Constructor == "false" {
-		// Check discriminant type and handle appropriately
-		if _, isStruct := discriminant.Type().(*types.StructType); isStruct {
-			// Boolean is represented as struct - need to extract the value
-			// For now, assume boolean structs never match false pattern
-			return constant.NewBool(false)
-		}
-		// For integer types, check if discriminant is false (zero)
-		if intType, isInt := discriminant.Type().(*types.IntType); isInt {
-			zero := constant.NewInt(intType, 0)
-			return currentBlock.NewICmp(enum.IPredEQ, discriminant, zero)
-		}
-		// For boolean types, negate
-		if discriminant.Type() == types.I1 {
-			// Create NOT of the discriminant
-			return currentBlock.NewXor(discriminant, constant.NewBool(true))
-		}
-		// Default fallback
-		return constant.NewBool(false)
+		// Check if discriminant is false (zero)
+		zero := constant.NewInt(types.I64, 0)
+		return currentBlock.NewICmp(enum.IPredEQ, discriminant, zero)
 	}
 
 	// Check if it's a union type variant
@@ -1059,14 +837,12 @@ func (g *LLVMGenerator) createPatternCondition(
 
 				// Convert discriminant value to i8 for comparison
 				patternConst := constant.NewInt(types.I8, discriminantValue)
-
 				return currentBlock.NewICmp(enum.IPredEQ, tagValue, patternConst)
 			}
 		}
 
 		// Fallback: simple enum discriminant (i64)
 		patternConst := constant.NewInt(types.I64, discriminantValue)
-
 		return currentBlock.NewICmp(enum.IPredEQ, discriminant, patternConst)
 	}
 
@@ -1084,11 +860,8 @@ func (g *LLVMGenerator) createPatternCondition(
 func (g *LLVMGenerator) extractFieldFromObject(objectValue value.Value, fieldName string) (value.Value, error) {
 	// Check if this is a pointer to a struct
 	objectType := objectValue.Type()
-
-	var (
-		structType *types.StructType
-		isPointer  bool
-	)
+	var structType *types.StructType
+	var isPointer bool
 
 	if ptrType, ok := objectType.(*types.PointerType); ok {
 		if st, ok := ptrType.ElemType.(*types.StructType); ok {
@@ -1146,7 +919,6 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 ) error {
 	// Check if this is a tagged union (pointer to struct with tag + data)
 	discriminantType := discriminant.Type()
-
 	ptrType, ok := discriminantType.(*types.PointerType)
 	if !ok {
 		return ErrDiscriminantNotPointer
@@ -1175,7 +947,6 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 					break
 				}
 			}
-
 			if variant != nil {
 				break
 			}
@@ -1196,7 +967,6 @@ func (g *LLVMGenerator) extractDiscriminatedUnionFields(
 	for i, field := range variant.Fields {
 		// Check if this field position has a corresponding pattern field
 		var patternFieldName string
-
 		fieldRequested := false
 
 		if i < len(pattern.Fields) {
@@ -1278,7 +1048,6 @@ func (g *LLVMGenerator) createMatchResult(
 	// Check if all arm values are void type
 	// PHI nodes cannot be created with void values
 	allVoid := true
-
 	for _, val := range armValues {
 		if val.Type() != types.Void {
 			allVoid = false
@@ -1299,7 +1068,6 @@ func (g *LLVMGenerator) createMatchResult(
 
 	// Only include predecessors that actually have terminators
 	var validIncomings []*ir.Incoming
-
 	for i, val := range coercedValues {
 		// Skip void values in PHI nodes
 		if val.Type() != types.Void {
@@ -1363,7 +1131,6 @@ func (g *LLVMGenerator) performTypeCoercion(armValues []value.Value, expectedTyp
 			if err != nil {
 				return nil, err
 			}
-
 			coercedValues[i] = coercedVal
 		}
 	}
@@ -1375,10 +1142,13 @@ func (g *LLVMGenerator) performTypeCoercion(armValues []value.Value, expectedTyp
 func (g *LLVMGenerator) coerceValueToType(val value.Value, targetType types.Type) (value.Value, error) {
 	switch targetType {
 	case types.I8Ptr:
+
 		return g.convertToString(val)
 	case types.I64:
+
 		return constant.NewInt(types.I64, 0), nil
 	default:
+
 		return val, nil
 	}
 }
@@ -1404,14 +1174,11 @@ func (g *LLVMGenerator) generateResultMatchExpression(
 	g.generateResultMatchCondition(discriminant, blocks)
 
 	// Track which blocks actually branch to the end
-	var (
-		actualSuccessBlock *ir.Block
-		actualErrorBlock   *ir.Block
-	)
+	var actualSuccessBlock *ir.Block
+	var actualErrorBlock *ir.Block
 
 	// Generate success block and track the actual ending block
 	g.builder = blocks.Success
-
 	successValue, err := g.generateSuccessBlock(matchExpr, blocks)
 	if err != nil {
 		return nil, err
@@ -1421,7 +1188,6 @@ func (g *LLVMGenerator) generateResultMatchExpression(
 
 	// Generate error block and track the actual ending block
 	g.builder = blocks.Error
-
 	errorValue, err := g.generateErrorBlock(matchExpr, blocks)
 	if err != nil {
 		return nil, err
@@ -1453,7 +1219,7 @@ func (g *LLVMGenerator) createResultMatchBlocks(matchExpr *ast.MatchExpression) 
 
 // generateResultMatchCondition generates the condition for result matching.
 func (g *LLVMGenerator) generateResultMatchCondition(discriminant value.Value, blocks *ResultMatchBlocks) {
-	// Handle both struct values and pointers to structs
+	// Check if the discriminant is a pointer to a struct (Result type) or just an integer
 	if ptrType, ok := discriminant.Type().(*types.PointerType); ok {
 		// Extract the discriminant field from the Result struct
 		// Result struct: [value, discriminant] where discriminant is at index 1
@@ -1461,15 +1227,6 @@ func (g *LLVMGenerator) generateResultMatchCondition(discriminant value.Value, b
 		discriminantPtr := g.builder.NewGetElementPtr(resultType, discriminant,
 			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 		discriminantValue := g.builder.NewLoad(discriminantPtr.Type().(*types.PointerType).ElemType, discriminantPtr)
-
-		// 0 = Success, 1 = Error
-		zero := constant.NewInt(types.I8, 0)
-		isSuccess := g.builder.NewICmp(enum.IPredEQ, discriminantValue, zero)
-		g.builder.NewCondBr(isSuccess, blocks.Success, blocks.Error)
-	} else if _, ok := discriminant.Type().(*types.StructType); ok {
-		// Handle struct value directly (for value semantics)
-		// Extract discriminant field (index 1) from struct value
-		discriminantValue := g.builder.NewExtractValue(discriminant, 1)
 
 		// 0 = Success, 1 = Error
 		zero := constant.NewInt(types.I8, 0)
@@ -1506,18 +1263,6 @@ func (g *LLVMGenerator) generateSuccessBlock(
 					constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 				extractedValue := g.builder.NewLoad(valuePtr.Type().(*types.PointerType).ElemType, valuePtr)
 				g.variables[fieldName] = extractedValue
-			} else if _, ok := g.currentResultValue.Type().(*types.StructType); ok {
-				// Handle struct value directly (for value semantics)
-				// Extract value field (index 0) from struct value
-				extractedValue := g.builder.NewExtractValue(g.currentResultValue, 0)
-				g.variables[fieldName] = extractedValue
-
-				// Store semantic type information for the extracted value
-				// This is critical for proper boolean printing in pattern matching
-				successType := g.inferSuccessTypeFromExtractedValue(extractedValue)
-				if successType != nil {
-					g.typeInferer.env.Set(fieldName, successType)
-				}
 			} else {
 				// Fallback: use the discriminant value directly
 				g.variables[fieldName] = g.currentResultValue
@@ -1526,16 +1271,13 @@ func (g *LLVMGenerator) generateSuccessBlock(
 	}
 
 	successExpr := g.findSuccessValue(matchExpr)
-
 	var successValue value.Value
-
 	if successExpr != nil {
 		// Generate the expression (which might be a nested match)
 		val, err := g.generateExpression(successExpr)
 		if err != nil {
 			return nil, err
 		}
-
 		successValue = val
 
 		// After generating a nested expression, the builder might have changed
@@ -1591,16 +1333,13 @@ func (g *LLVMGenerator) generateErrorBlock(
 	}
 
 	errorExpr := g.findErrorValue(matchExpr)
-
 	var errorValue value.Value
-
 	if errorExpr != nil {
 		// Generate the expression (which might be a nested match)
 		val, err := g.generateExpression(errorExpr)
 		if err != nil {
 			return nil, err
 		}
-
 		errorValue = val
 
 		// After generating a nested expression, the builder might have changed
