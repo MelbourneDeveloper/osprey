@@ -101,7 +101,7 @@ func TestBasicCompilation(t *testing.T) {
 		"simple_let":             `let x = 42`,
 		"simple_function":        `fn double(x) = x * 2`,
 		"simple_print":           `print(42)`,
-		"basic_match":            `let x = match 42 { 42 => 1 }`,
+		"basic_match":            "let x = match 42 { 42 => 1\n _ => 0 }",
 		"function_call":          `fn add(x, y) = x + y` + "\n" + `let result = add(x: 1, y: 2)`,
 		"string_interpolation":   `let name = "Alice"` + "\n" + `print("Hello ${name}")`,
 		"valid_type_declaration": `type Color = Red | Green | Blue`,
