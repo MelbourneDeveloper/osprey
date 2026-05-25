@@ -53,7 +53,26 @@ type LLVMGenerator struct {
 	// Stream Fusion: Track pending transformations for map/filter
 	pendingMapFunc    *ast.Identifier // Pending map transformation function
 	pendingFilterFunc *ast.Identifier // Pending filter predicate function
+	// Ordered pipeline ops. forEach/fold replay them so that
+	// `xs |> map(f) |> filter(p)` filters on f(x), and
+	// `xs |> filter(p) |> map(f)` filters on x.
+	pendingIterOps []pendingIterOp
 }
+
+// pendingIterOp captures one pipeline stage (map or filter) plus its
+// callback. Stored in pendingIterOps in source order so the consumer
+// (forEach/fold) can replay them correctly.
+type pendingIterOp struct {
+	kind iterOpKind
+	fn   *ast.Identifier
+}
+
+type iterOpKind int
+
+const (
+	iterOpMap iterOpKind = iota
+	iterOpFilter
+)
 
 // SecurityConfig defines security policies for the code generator.
 // This is a copy of the SecurityConfig from cli package to avoid circular dependencies.
