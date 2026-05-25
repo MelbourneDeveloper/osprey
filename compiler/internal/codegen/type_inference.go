@@ -1134,15 +1134,30 @@ func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
 	return ti.isGenericTypeCompatible(ct1.name, ct2.name)
 }
 
+// isBuiltInWildcardTypeName reports whether a bare type name should match
+// any parameterised instance of the same kind. Built-in registries use the
+// bare name in parameter signatures (Fiber, Channel, List, Map) so call
+// sites that pass values with concrete type args still type-check.
+func isBuiltInWildcardTypeName(name string) bool {
+	switch name {
+	case TypeFiber, TypeChannel, TypeList, TypeMap:
+		return true
+	default:
+		return false
+	}
+}
+
 // unifyConcreteWithGeneric handles unification between ConcreteType and GenericType
 // This is needed for Result types where division returns ConcreteType but annotations are GenericType
 func (ti *TypeInferer) unifyConcreteWithGeneric(t1, t2 Type) bool {
 	// Try ConcreteType vs GenericType
 	if ct, ok := t1.(*ConcreteType); ok {
 		if gt, ok := t2.(*GenericType); ok {
-			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
-			// This allows: fn test() -> Fiber = spawn 42 (where spawn 42 creates Fiber[int])
-			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
+			// WILDCARD TYPES: bare Fiber/Channel/List/Map names match their
+			// parameterised counterparts (Fiber[T], List[T], Map[K,V], …).
+			// Built-in registries declare parameters with the bare name so
+			// `listLength(xs)` where xs : List[int] should type-check.
+			if ct.name == gt.name && isBuiltInWildcardTypeName(ct.name) {
 				return true // Bare type acts as wildcard
 			}
 
