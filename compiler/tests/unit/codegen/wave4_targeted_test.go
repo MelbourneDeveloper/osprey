@@ -85,10 +85,12 @@ func TestCompileAndRun(t *testing.T) {
 // still partial. These are all compile-only — no execution.
 func TestWave4ExtraSmokes(t *testing.T) {
 	programs := map[string]string{
-		// generateJoinCall — was 0%.
+		// generateJoinCall — was 0%. List literals lower to a struct
+		// value that doesn't satisfy the runtime-allocated list
+		// contract — use listAppend to get an OspreyList handle.
 		"join_call": `
 fn main() -> int {
-  let parts = ["a", "b", "c"]
+  let parts = listAppend(listAppend(listAppend(List(), "a"), "b"), "c")
   let s = join(parts, ",")
   print(s)
   0
