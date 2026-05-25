@@ -177,6 +177,22 @@ func (g *LLVMGenerator) convertValueToStringByType(
 			}
 		}
 
+		// Last-resort LLVM-type fallback: if type inference produced an
+		// unresolved generic parameter name (e.g. `T` from `Box<T>` when
+		// constructed with an int) we still know the runtime shape from the
+		// LLVM value. Pick the appropriate primitive formatter rather than
+		// printing the literal "<T>".
+		switch arg.Type() {
+		case types.I64:
+			return g.generateIntToString(arg)
+		case types.Double:
+			return g.generateFloatToString(arg)
+		case types.I8Ptr:
+			return arg, nil
+		case types.I1:
+			return g.generateBoolToString(arg)
+		}
+
 		// For other complex types, return a generic representation
 		return g.createGlobalString(fmt.Sprintf("<%s>", theType)), nil
 	}

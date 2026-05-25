@@ -35,4 +35,76 @@ print("square(5) = ${squared}")
 
 print("Function composition working correctly!")
 
-print("=== Function Composition Test Complete ===") 
+// Inline string-typed lambda exercises non-i64 lambda parameter codegen
+let exclaim = fn(s: string) => s + "!"
+print(exclaim("hi"))
+
+// Nested lambda - inner lambda calls outer lambda (auto-unwrapped Result body)
+let outerLam = fn(x: int) => x * 2
+let innerLam = fn(y: int) => outerLam(y) + 1
+print(toString(innerLam(5)))
+
+// Higher-order: inline lambda flows into (int)->int slot; body returns Result auto-unwrap
+let inlineApplied = applyFunction(value: 10, func: fn(x: int) => x + 100)
+print(toString(inlineApplied))
+
+// String equality must compare contents (strcmp), not the i8* pointer
+let strA = "hi"
+let strB = "hi"
+let strC = "no"
+match strA == strB {
+    true => print("strEq=hi")
+    false => print("strEq=fail")
+}
+match strA == strC {
+    true => print("strNe=fail")
+    false => print("strNe=ok")
+}
+
+// String ordering must use strcmp lexicographically, not raw pointer order
+let zStr = "zebra"
+let aStr = "apple"
+match aStr < zStr {
+    true => print("strLt=ok")
+    false => print("strLt=fail")
+}
+match zStr < aStr {
+    true => print("strLt2=fail")
+    false => print("strLt2=ok")
+}
+
+// mut + auto-unwrap: counter is int, RHS is Result<int,MathError>; spec says auto-unwrap
+mut counter = 0
+counter = counter + 1
+counter = counter + 1
+counter = counter + 1
+print(toString(counter))
+
+// Generic union variant payload was rendering as "<T>" because toString hit the
+// fallback formatter for an unresolved type-variable name even though the LLVM
+// runtime value was a plain i64.
+type Box<T> = Empty | Full { value: T }
+let bx = Full { value: 7 }
+match bx {
+    Full { value } => print(toString(value))
+    Empty => print("empty")
+}
+
+// strings.Trim on the lexer token was greedy; "Quote: \"hi\"" lost its closing
+// quote and gained a stray trailing backslash. Surrounding-quote strip is now
+// single-step via TrimPrefix/TrimSuffix. Same bug existed on the interpolated
+// string path.
+print("Quote: \"hi\"")
+let nm = "Bob"
+print("Hi \"${nm}\"")
+
+// Escape processor used to scan multiple times in the wrong order, so
+// `\\n` would match the inner `\n` first and produce a real newline.
+print("lit: ab\\nc")
+
+// Unary minus on a float was rejected ("operand of - must be Int") and
+// codegen always lowered to i64 sub even when operand was a double.
+let nf = -2.5
+print(toString(nf))
+
+print("=== Function Composition Test Complete ===")

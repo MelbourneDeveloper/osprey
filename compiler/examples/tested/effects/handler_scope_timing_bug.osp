@@ -1,4 +1,7 @@
-// 🚀 HANDLER SCOPE TIMING TEST 🔥
+// Handler scope timing test - helpers declared AFTER main to exercise the
+// forward-reference pre-pass in collectDeclarations. Each helper performs a
+// Logger effect; the single handle/in block in main must catch every perform
+// across the call chain (nestedCall -> deepNestedOperation -> performComplexCalculation).
 
 effect Logger {
     log: fn(string) -> Unit
@@ -9,9 +12,17 @@ effect State {
     set: fn(int) -> Unit
 }
 
-// TODO: Investigate. Note that if we move deepNestedOperation and nestedCall here
-// the example does not run. Had to move items to get it working. This might be a compiler 
-// issue
+// Verifies that handler scope is restored correctly
+fn main() -> Unit = {
+    handle Logger
+        log msg => print("[HANDLER] " + msg)
+    in {
+        print("=== Testing Handler Scope Timing ===")
+        let result = nestedCall()
+        print("Final result: " + toString(result))
+        print("=== Test Complete ===")
+    }
+}
 
 // Complex calculation that performs effects
 fn performComplexCalculation() -> int !Logger = {
@@ -34,15 +45,3 @@ fn nestedCall() -> int !Logger = {
     perform Logger.log("After nested operation")
     result
 }
-
-// Verifies that handler scope is restored correctly
-fn main() -> Unit = {
-    handle Logger
-        log msg => print("[HANDLER] " + msg)
-    in {
-        print("=== Testing Handler Scope Timing ===")
-        let result = nestedCall()
-        print("Final result: " + toString(result))
-        print("=== Test Complete ===")
-    }
-} 

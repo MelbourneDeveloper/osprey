@@ -397,7 +397,7 @@ func (b *Builder) buildPipeExpr(ctx parser.IPipeExprContext) Expression {
 	for i := 1; i < len(callExprs); i++ {
 		right := b.buildCallExpr(callExprs[i])
 
-		// Handle both CallExpression and Identifier cases
+		// Handle CallExpression, Identifier, and inline LambdaExpression on the RHS.
 		switch rightExpr := right.(type) {
 		case *CallExpression:
 			// Create a call where the left expression is the first argument
@@ -412,6 +412,14 @@ func (b *Builder) buildPipeExpr(ctx parser.IPipeExprContext) Expression {
 			}
 		case *Identifier:
 			// Convert identifier to call expression with piped argument
+			result = &CallExpression{
+				Function:       rightExpr,
+				Arguments:      []Expression{result},
+				NamedArguments: nil,
+			}
+		case *LambdaExpression:
+			// `x |> fn(a) => …` invokes the lambda with x as the sole argument.
+			// Without this, the lambda was dropped and the chain returned x.
 			result = &CallExpression{
 				Function:       rightExpr,
 				Arguments:      []Expression{result},

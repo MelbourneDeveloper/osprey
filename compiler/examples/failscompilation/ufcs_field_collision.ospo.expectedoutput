@@ -1,1 +1,1 @@
-function call type mismatch: actual=(string) -> string, expected=({trim: string}) -> t0: parameter 0 unification failed: string vs {trim: string}: type mismatch: string != {trim: string}
+function call type mismatch: actual=(string) -> string, expected=({trim: string}) -> t1: parameter 0 unification failed: string vs {trim: string}: type mismatch: string != {trim: string}

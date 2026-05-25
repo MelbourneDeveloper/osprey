@@ -1124,6 +1124,17 @@ func (ti *TypeInferer) unifyMixedTypes(t1, t2 Type) bool {
 
 // unifyGenericCompatibleTypes handles generic type compatibility
 func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
+	// Builtin function-arg signatures are stored as ConcreteType with names
+	// like "T -> Unit" / "T -> U" / "T -> bool"; call sites infer real
+	// FunctionType. Treat the placeholders as wildcards against any
+	// matching-shape FunctionType so generic-iterator builtins compose.
+	if ti.unifyBuiltinFunctionPlaceholder(t1, t2) {
+		return true
+	}
+	if ti.unifyBuiltinFunctionPlaceholder(t2, t1) {
+		return true
+	}
+
 	ct1, ok1 := t1.(*ConcreteType)
 	ct2, ok2 := t2.(*ConcreteType)
 
@@ -1134,15 +1145,75 @@ func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
 	return ti.isGenericTypeCompatible(ct1.name, ct2.name)
 }
 
+// Built-in registry function-arg placeholder type names. Stored as
+// ConcreteType in the registry but conceptually generic function shapes.
+const (
+	builtinFnTypeUnit = "T -> Unit"
+	builtinFnTypeBool = "T -> bool"
+	builtinFnTypeUToU = "T -> U"
+)
+
+// unifyBuiltinFunctionPlaceholder matches a ConcreteType holding one of the
+// placeholder names above against any FunctionType whose return shape fits.
+// Bridges string-named generic placeholders in the builtin registry to real
+// function types at call sites.
+func (ti *TypeInferer) unifyBuiltinFunctionPlaceholder(placeholder, candidate Type) bool {
+	ct, ok := placeholder.(*ConcreteType)
+	if !ok {
+		return false
+	}
+	ft, ok := candidate.(*FunctionType)
+	if !ok {
+		return false
+	}
+	switch ct.name {
+	case builtinFnTypeUnit:
+		retType := ti.prune(ft.returnType)
+		if retConcrete, ok := retType.(*ConcreteType); ok && retConcrete.name == TypeUnit {
+			return true
+		}
+		return false
+	case builtinFnTypeBool:
+		retType := ti.prune(ft.returnType)
+		if retConcrete, ok := retType.(*ConcreteType); ok && retConcrete.name == TypeBool {
+			return true
+		}
+		// Existing tests use int-returning predicates as truthy booleans.
+		if retConcrete, ok := retType.(*ConcreteType); ok && retConcrete.name == TypeInt {
+			return true
+		}
+		return false
+	case builtinFnTypeUToU:
+		// Any one-arg function with a single return.
+		return len(ft.paramTypes) == 1
+	}
+	return false
+}
+
+// isBuiltInWildcardTypeName reports whether a bare type name should match
+// any parameterised instance of the same kind. Built-in registries use the
+// bare name in parameter signatures (Fiber, Channel, List, Map) so call
+// sites that pass values with concrete type args still type-check.
+func isBuiltInWildcardTypeName(name string) bool {
+	switch name {
+	case TypeFiber, TypeChannel, TypeList, TypeMap:
+		return true
+	default:
+		return false
+	}
+}
+
 // unifyConcreteWithGeneric handles unification between ConcreteType and GenericType
 // This is needed for Result types where division returns ConcreteType but annotations are GenericType
 func (ti *TypeInferer) unifyConcreteWithGeneric(t1, t2 Type) bool {
 	// Try ConcreteType vs GenericType
 	if ct, ok := t1.(*ConcreteType); ok {
 		if gt, ok := t2.(*GenericType); ok {
-			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
-			// This allows: fn test() -> Fiber = spawn 42 (where spawn 42 creates Fiber[int])
-			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
+			// WILDCARD TYPES: bare Fiber/Channel/List/Map names match their
+			// parameterised counterparts (Fiber[T], List[T], Map[K,V], …).
+			// Built-in registries declare parameters with the bare name so
+			// `listLength(xs)` where xs : List[int] should type-check.
+			if ct.name == gt.name && isBuiltInWildcardTypeName(ct.name) {
 				return true // Bare type acts as wildcard
 			}
 
@@ -1161,8 +1232,12 @@ func (ti *TypeInferer) unifyConcreteWithGeneric(t1, t2 Type) bool {
 	// Try GenericType vs ConcreteType
 	if gt, ok := t1.(*GenericType); ok {
 		if ct, ok := t2.(*ConcreteType); ok {
-			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
-			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
+			// WILDCARD TYPES: bare Fiber/Channel/List/Map names match their
+			// parameterised counterparts in either direction (mirrors the
+			// ConcreteType-on-the-left branch above). Without this, sites like
+			// `forEachList(splitResult, print)` fail because the value side is
+			// GenericType List[string] and the registry signature is bare List.
+			if ct.name == gt.name && isBuiltInWildcardTypeName(ct.name) {
 				return true // Bare type acts as wildcard
 			}
 
@@ -1318,6 +1393,17 @@ func (ti *TypeInferer) unifyFunctionTypes(t1, t2 Type) error {
 
 	err := ti.Unify(ft1.returnType, ft2.returnType)
 	if err != nil {
+		// Spec auto-unwrap rule (0004-TypeSystem.md): a lambda body that produces
+		// Result<T, E> may flow into a position expecting T (or vice-versa).
+		// Without this retry, `applyFn(value, fn(x: int) => x + 100)` fails
+		// because `x + 100` is Result<int, MathError> while the param wants
+		// `(int) -> int`.
+		unwrapped1 := ti.unwrapResultType(ft1.returnType)
+		unwrapped2 := ti.unwrapResultType(ft2.returnType)
+		unwrapErr := ti.Unify(unwrapped1, unwrapped2)
+		if unwrapErr == nil {
+			return nil
+		}
 		return fmt.Errorf("return type unification failed: %s vs %s: %w",
 			ft1.returnType.String(), ft2.returnType.String(), err)
 	}
@@ -2194,6 +2280,22 @@ func (ti *TypeInferer) isGenericTypeCompatible(t1, t2 string) bool {
 		return true
 	}
 
+	// `T -> U` is the builtin map's generic function-arg signature; treat
+	// it as a wildcard against any concrete `<T> -> <U>` shape. Same for
+	// `T -> bool` against any predicate `(...) -> bool`.
+	if t1 == "T -> U" && strings.Contains(t2, " -> ") {
+		return true
+	}
+	if t2 == "T -> U" && strings.Contains(t1, " -> ") {
+		return true
+	}
+	if t1 == "T -> bool" && strings.HasSuffix(t2, " -> bool") {
+		return true
+	}
+	if t2 == "T -> bool" && strings.HasSuffix(t1, " -> bool") {
+		return true
+	}
+
 	// Handle generic type variables
 	if t1 == "T" || t1 == "U" {
 		return true
@@ -2735,12 +2837,16 @@ func (ti *TypeInferer) inferUnaryExpression(e *ast.UnaryExpression) (Type, error
 
 	switch e.Operator {
 	case "+", "-":
-		// Unary plus and minus require Int operand and return Int
+		// Unary plus and minus accept Int or Float and return the same type.
+		resolved := ti.prune(operandType)
+		if concrete, ok := resolved.(*ConcreteType); ok && concrete.name == TypeFloat {
+			return concrete, nil
+		}
 		intType := &ConcreteType{name: TypeInt}
 
 		err := ti.Unify(operandType, intType)
 		if err != nil {
-			return nil, fmt.Errorf("operand of %s must be Int: %w", e.Operator, err)
+			return nil, fmt.Errorf("operand of %s must be Int or Float: %w", e.Operator, err)
 		}
 
 		return intType, nil

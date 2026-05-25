@@ -26,6 +26,26 @@ const (
 	TypeManglingUnknown = "unknown"
 )
 
+// preDeclareFunctionPlaceholder registers a fresh polymorphic FunctionType in
+// the shared type environment so body inference of any function can resolve
+// references to functions declared later in source order.
+//
+// The placeholder uses fresh type variables sized to the parameter list. When
+// declareFunctionSignature later runs for the same function it overwrites this
+// entry with the fully-inferred type scheme; the placeholder only exists to
+// keep forward references from failing the identifier lookup.
+func (g *LLVMGenerator) preDeclareFunctionPlaceholder(fnDecl *ast.FunctionDeclaration) {
+	paramTypes := make([]Type, len(fnDecl.Parameters))
+	for i := range fnDecl.Parameters {
+		paramTypes[i] = g.typeInferer.Fresh()
+	}
+
+	g.typeInferer.env.Set(fnDecl.Name, &FunctionType{
+		paramTypes: paramTypes,
+		returnType: g.typeInferer.Fresh(),
+	})
+}
+
 func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration) error {
 	if fnDecl.Name == ToStringFunc {
 		return ErrToStringReserved

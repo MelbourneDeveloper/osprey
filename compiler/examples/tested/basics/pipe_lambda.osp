@@ -1,0 +1,14 @@
+// Regression: pipe (`|>`) into an inline lambda used to silently drop the
+// lambda and just return the left operand. AST builder now wraps a
+// LambdaExpression RHS as a one-arg call site.
+//
+// Note: parens are needed around each inline lambda so the lambda body
+// does not greedily consume the trailing `|>` chain.
+
+fn main() -> Unit = {
+    let r = 5 |> (fn(x: int) => x + 100) |> (fn(x: int) => x * 2)
+    print(toString(r))
+
+    let single = 7 |> fn(x: int) => x * 3
+    print(toString(single))
+}

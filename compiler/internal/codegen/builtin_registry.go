@@ -1167,10 +1167,11 @@ match closeResult {
 	r.functions[WebSocketCreateServerOsprey] = &BuiltInFunction{
 		Name:      WebSocketCreateServerOsprey,
 		CName:     WebSocketCreateServerFunc,
-		Signature: "websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>",
+		Signature: "websocketCreateServer(port: Int, address: String, path: String) -> Result<Int, String>",
 		Description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of " +
-			"Result<ServerID, String> and has critical runtime issues with port binding failures. " +
-			"Creates a WebSocket server bound to the specified port, address, and path.",
+			"Result<Int, String> and has critical runtime issues with port binding failures. " +
+			"Creates a WebSocket server bound to the specified port, address, and path. " +
+			"The success payload is a server-id int matching ServerID = Int per spec/0015-WebSockets.md.",
 		ParameterTypes: []BuiltInParameter{
 			{Name: "port", Type: &ConcreteType{name: TypeInt}, Description: "Port number to bind to (1-65535)"},
 			{Name: "address", Type: &ConcreteType{name: TypeString},
@@ -1178,7 +1179,7 @@ match closeResult {
 			{Name: "path", Type: &ConcreteType{name: TypeString},
 				Description: "WebSocket endpoint path (e.g., \"/chat\", \"/live\")"},
 		},
-		ReturnType:   &ConcreteType{name: "Result<ServerID, String>"},
+		ReturnType:   &ConcreteType{name: "Result<int, String>"},
 		Category:     CategoryWebSocket,
 		IsProtected:  true,
 		SecurityFlag: PermissionWebSocket,

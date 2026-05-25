@@ -1,0 +1,6 @@
+Starting Fiber + Effects Integration
+[LOG] Processing: 5
+[LOG] Processing: 10
+Direct result: 10
+Fiber result: 20
+Integration Complete
