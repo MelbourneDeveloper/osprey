@@ -1168,15 +1168,29 @@ func (g *LLVMGenerator) isResultType(val value.Value) bool {
 	// Check for pointer to struct (legacy pointer semantics)
 	if ptrType, ok := val.Type().(*types.PointerType); ok {
 		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
-			return len(structType.Fields) == ResultFieldCount
+			return isResultStructShape(structType)
 		}
 	}
 	// Check for struct value directly (value semantics)
 	if structType, ok := val.Type().(*types.StructType); ok {
-		return len(structType.Fields) == ResultFieldCount
+		return isResultStructShape(structType)
 	}
 
 	return false
+}
+
+// isResultStructShape reports whether a struct matches the Result<T, E>
+// codegen layout: 2 fields where the second is the i8 discriminant tag.
+// Records with two fields (e.g. `type Point = { x: int, y: int }` →
+// `{i64, i64}`) used to satisfy the old length-only check and were
+// silently formatted as `Error` by convertResultToString. The tag-byte
+// check distinguishes them.
+func isResultStructShape(st *types.StructType) bool {
+	if len(st.Fields) != ResultFieldCount {
+		return false
+	}
+
+	return st.Fields[1] == types.I8 || st.Fields[1] == types.I1
 }
 
 // generateStandardMatchExpression generates a standard (non-result) match expression.
