@@ -51,7 +51,7 @@ Queue Status: Active with concurrent workers
 
 📊 System Metrics Analysis with Collections:
 Total throughput: 8100 units
-Average batch size: 2700 units
+Average batch size: 2700.0 units
 Batch breakdown: Alpha=2700, Beta=2700, Gamma=2700
 Peak metric value: 300 from monitoring array
 ═════════════════════════════════════════════
