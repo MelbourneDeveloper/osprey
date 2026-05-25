@@ -86,4 +86,15 @@ print("11. Chained single value operations:")
 let result = 2 |> double |> square
 print(result)
 
+// Map-then-filter must filter on the *mapped* value (regression check
+// for the stream-fusion ordering bug).
+fn gtFour(x: int) -> bool = x > 4
+print("12. map-then-filter sees the mapped value:")
+range(1, 5) |> map(double) |> filter(gtFour) |> forEach(print)
+
+// Filter-then-map must filter on the *raw* value, then map.
+fn ltThree(x: int) -> bool = x < 3
+print("13. filter-then-map sees the raw value:")
+range(1, 6) |> filter(ltThree) |> map(double) |> forEach(print)
+
 print("=== Examples Complete ===") 
