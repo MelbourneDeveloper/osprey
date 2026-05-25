@@ -31,13 +31,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 
 # Continue with the same image for Rust installation
 
-# Install Rust (as root first, then copy to vscode user)
-ENV RUSTUP_HOME=/opt/rust
-ENV CARGO_HOME=/opt/rust
-ENV PATH="/opt/rust/bin:${PATH}"
-
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal \
-    && /opt/rust/bin/rustup component add clippy rustfmt
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && . ~/.cargo/env \
+    && rustup component add clippy rustfmt
 
 # Install ANTLR
 RUN wget -q https://www.antlr.org/download/antlr-4.13.2-complete.jar -O /usr/local/lib/antlr.jar \
@@ -51,26 +48,24 @@ RUN go install golang.org/x/tools/gopls@v0.16.2 \
     && go install golang.org/x/tools/cmd/goimports@latest
 
 # Install golangci-lint
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.1.6
 
-# Create vscode user and set up Rust for the user
+# Create vscode user
 RUN apt-get update && apt-get install -y sudo \
     && groupadd --gid 1000 vscode \
     && useradd --uid 1000 --gid vscode --shell /bin/bash --create-home vscode \
     && mkdir -p /etc/sudoers.d \
     && echo 'vscode ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/50-vscode \
     && mkdir -p /home/vscode/.cargo /home/vscode/.rustup \
-    && ln -s /opt/rust /home/vscode/.cargo \
-    && ln -s /opt/rust /home/vscode/.rustup \
-    && chown -R vscode:vscode /opt/rust \
-    && echo 'export PATH="/opt/rust/bin:$PATH"' >> /home/vscode/.bashrc \
-    && echo 'export CARGO_HOME="/opt/rust"' >> /home/vscode/.bashrc \
-    && echo 'export RUSTUP_HOME="/opt/rust"' >> /home/vscode/.bashrc
+    && cp -r /root/.cargo/* /home/vscode/.cargo/ || true \
+    && cp -r /root/.rustup/* /home/vscode/.rustup/ || true \
+    && chown -R vscode:vscode /home/vscode \
+    && echo 'source ~/.cargo/env' >> /home/vscode/.bashrc
 
 # Set environment variables
 ENV JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"
 ENV CLASSPATH=".:/usr/local/lib/antlr.jar"
-ENV PATH="/opt/rust/bin:/usr/lib/llvm-14/bin:${PATH}"
+ENV PATH="/home/vscode/.cargo/bin:/usr/lib/llvm-14/bin:${PATH}"
 
 # Set working directory
 WORKDIR /workspace
