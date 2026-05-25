@@ -143,6 +143,49 @@ func (r *BuiltInFunctionRegistry) registerListBuiltins() {
 		Generator:   (*LLVMGenerator).generateForEachListCall,
 		Example:     `forEachList(xs, print)`,
 	}
+	r.functions["mapList"] = &BuiltInFunction{
+		Name:        "mapList",
+		Signature:   "mapList(list: List<T>, function: fn(T) -> U) -> List<U>",
+		Description: "Returns a new list with function applied to every element. O(n).",
+		ParameterTypes: []BuiltInParameter{
+			listParam,
+			{Name: "function", Type: anyT, Description: "Transform applied per element"},
+		},
+		ReturnType:  list,
+		Category:    CategoryFunctional,
+		IsProtected: true,
+		Generator:   (*LLVMGenerator).generateMapListCall,
+		Example:     `mapList(xs, fn(x: int) => x * 2)`,
+	}
+	r.functions["filterList"] = &BuiltInFunction{
+		Name:        "filterList",
+		Signature:   "filterList(list: List<T>, predicate: fn(T) -> bool) -> List<T>",
+		Description: "Returns a new list with only elements where predicate is true. O(n).",
+		ParameterTypes: []BuiltInParameter{
+			listParam,
+			{Name: "predicate", Type: anyT, Description: "Bool-valued predicate"},
+		},
+		ReturnType:  list,
+		Category:    CategoryFunctional,
+		IsProtected: true,
+		Generator:   (*LLVMGenerator).generateFilterListCall,
+		Example:     `filterList(xs, fn(x: int) => x > 0)`,
+	}
+	r.functions["foldList"] = &BuiltInFunction{
+		Name:        "foldList",
+		Signature:   "foldList(list: List<T>, initial: U, fn: fn(U, T) -> U) -> U",
+		Description: "Reduces the list to a single value, starting from initial. O(n).",
+		ParameterTypes: []BuiltInParameter{
+			listParam,
+			{Name: "initial", Type: anyT, Description: "Initial accumulator value"},
+			{Name: "function", Type: anyT, Description: "Combining function (acc, elem) -> acc"},
+		},
+		ReturnType:  anyT,
+		Category:    CategoryFunctional,
+		IsProtected: true,
+		Generator:   (*LLVMGenerator).generateFoldListCall,
+		Example:     `foldList(xs, 0, fn(acc, x) => acc + x)`,
+	}
 	// `contains` on List is registered here; the Map version below would
 	// otherwise clash on name. The codegen helper inspects the inferred
 	// receiver type to dispatch.

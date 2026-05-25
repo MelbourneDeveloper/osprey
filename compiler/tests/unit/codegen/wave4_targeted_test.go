@@ -137,6 +137,33 @@ fn main() -> int {
   print("name=${name} n=${n} b=${b}")
   0
 }`,
+		// mapList / filterList / foldList builtins — covers
+		// generateListBuilderLoop (shared by map+filter) and
+		// generateFoldListCall counted-loop.
+		"map_list": `
+fn main() -> int {
+  let xs = listAppend(listAppend(List(), 10), 20)
+  let doubled = mapList(xs, fn(x: int) => x * 2)
+  forEachList(doubled, print)
+  0
+}`,
+		"filter_list": `
+fn main() -> int {
+  let xs = listAppend(listAppend(listAppend(List(), 1), 2), 3)
+  let kept = filterList(xs, fn(x: int) => x > 1)
+  forEachList(kept, print)
+  0
+}`,
+		"fold_list": `
+fn main() -> int {
+  let xs = listAppend(listAppend(listAppend(List(), 1), 2), 3)
+  let total = foldList(xs, 0, fn(acc: int, x: int) => match acc + x {
+    Success v => v
+    Error e => acc
+  })
+  print(total)
+  0
+}`,
 	}
 
 	for name, src := range programs {
