@@ -54,7 +54,8 @@ print("")
 // Test 4: Polymorphic functions with HM inference
 print("Test 4: Polymorphic function inference")
 fn identityP(x) = x              // HM infers: <T>(T) -> T
-fn makePoint(a: int, b: int) = Point { x: a, y: b }  // int -> Point
+fn makePoint(a, b) = Point { x: a, y: b }  // HM infers: <T>(T, T) -> Point<T, T>
+fn makePair(x, y) = Pair { first: x, second: y }  // HM infers: <A, B>(A, B) -> Pair<A, B>
 
 // Each usage gets monomorphized
 let id1 = identityP(42)          // int -> int
@@ -62,11 +63,15 @@ let id2 = identityP("test")      // string -> string
 let id3 = identityP(true)        // bool -> bool
 
 let point1 = makePoint(a: 1, b: 2)              // Point<int, int>
+let point2 = makePoint(a: "x", b: "y")          // Point<string, string>
+let pair1 = makePair(x: 10, y: "label")         // Pair<int, string>
+let pair2 = makePair(x: true, y: false)         // Pair<bool, bool>
 
 print("identityP(42) = ${id1}")
 print("identityP(\"test\") = ${id2}")
 print("identityP(true) = ${toString(id3)}")
 print("makePoint(1, 2) = {${point1.x}, ${point1.y}}")
+print("makePoint(\"x\", \"y\") = {${point2.x}, ${point2.y}}")
 print("")
 
 // Test 5: Complex HM inference with field access
@@ -154,9 +159,9 @@ print("Test 9: Method call type inference")
 type StringWrapper = { content: string }
 
 // Add a method-like function that takes self
-fn getLength(self: StringWrapper) = 42  // Need explicit type for self parameter
+fn getLength(self: StringWrapper) -> int = 42  // Return a dummy length
 
-fn uppercase(self: StringWrapper) = self.content + "_UPPER"
+fn uppercase(self: StringWrapper) -> string = self.content + "_UPPER"
 
 let wrapper = StringWrapper { content: "hello" }
 
@@ -199,9 +204,9 @@ print("")
 print("Test 11: Type equality and String methods")
 
 // This will exercise the String() and Equals() methods on various types
-fn typeTest1(x) = x * 2
-fn typeTest2(s: string) = s + s  // Need explicit type for string concatenation
-fn typeTest3(b) = !b
+fn typeTest1(x: int) -> int = x * 2
+fn typeTest2(s: string) -> string = s + s
+fn typeTest3(b: bool) -> bool = !b
 
 let typeResult1 = typeTest1(21)
 let typeResult2 = typeTest2("hi")

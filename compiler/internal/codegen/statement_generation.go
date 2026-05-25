@@ -198,7 +198,6 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 					// For now, use the field's declared type or default to int
 					// This should ideally be more sophisticated type resolution
 					var fieldType Type
-
 					switch field.Type {
 					case TypeInt:
 						fieldType = &ConcreteType{name: TypeInt}
@@ -233,24 +232,22 @@ func (g *LLVMGenerator) generateLetDeclaration(letDecl *ast.LetDeclaration) (val
 
 	// Use explicit type annotation if present, otherwise infer from value
 	var varType Type
-
 	if letDecl.Type != nil {
 		// Use the explicit type annotation, but validate it matches the value
 		annotatedType := g.typeExpressionToInferenceType(letDecl.Type)
-
+		
 		// Infer the actual type of the value
 		valueType, err := g.typeInferer.InferType(letDecl.Value)
 		if err != nil {
 			return nil, err
 		}
-
+		
 		// Check if the value type is compatible with the annotation
-		err = g.typeInferer.Unify(annotatedType, valueType)
-		if err != nil {
+		if err := g.typeInferer.Unify(annotatedType, valueType); err != nil {
 			return nil, WrapTypeMismatchWithPos(
 				valueType.String(), letDecl.Name, annotatedType.String(), letDecl.Position)
 		}
-
+		
 		varType = annotatedType
 	} else {
 		// Use unified type inference system for untyped declarations
@@ -297,8 +294,7 @@ func (g *LLVMGenerator) generateAssignmentStatement(assignStmt *ast.AssignmentSt
 
 	// Verify type compatibility using unification
 	existingType := g.typeInferer.env.vars[assignStmt.Name]
-	err = g.typeInferer.Unify(existingType, inferredType)
-	if err != nil {
+	if err := g.typeInferer.Unify(existingType, inferredType); err != nil {
 		return fmt.Errorf("type mismatch in assignment: %w", err)
 	}
 

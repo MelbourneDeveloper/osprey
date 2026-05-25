@@ -61,16 +61,9 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 effectList      : ID (COMMA ID)* ;
 
 // Handler expressions - implementing spec syntax
-handlerExpr     : HANDLE ID handlerArm+ IN expr                // handle Logger log msg => ... in expr
-                | HANDLE blockExpr WITH LBRACE handlerCase+ RBRACE  // handle { ... } with { log(msg) -> { ... } }
-                ;
+handlerExpr     : HANDLE ID handlerArm+ IN expr ;              // handle Logger log msg => ... in expr
 handlerArm      : ID handlerParams? LAMBDA expr ;
 handlerParams   : ID+ ;
-handlerCase     : ID LPAREN paramList? RPAREN ARROW resumeBlockExpr ;  // log(msg) -> { ... }
-
-resumeBlockExpr : LBRACE resumeBlockBody RBRACE ;
-
-resumeBlockBody : statement* (RESUME LPAREN expr RPAREN | expr)? ;
 
 functionCall    : ID LPAREN argList? RPAREN ;
 
@@ -94,14 +87,9 @@ expr
     ;
 
 matchExpr
-    : MATCH nonTernaryExpr LBRACE matchArm* RBRACE
+    : MATCH binaryExpr LBRACE matchArm* RBRACE
     | selectExpr
     | binaryExpr
-    ;
-
-// Expression without ternary patterns to avoid conflict with match braces
-nonTernaryExpr
-    : comparisonExpr
     ;
 
 
@@ -158,8 +146,7 @@ pipeExpr
 
 callExpr
     : primary (DOT ID)+ (LPAREN argList? RPAREN)?  // Field access with optional final method call: obj.field or obj.field.method()
-    | primary (DOT ID (LPAREN argList? RPAREN))+   // Method chaining: obj.method().chain() (at least one method call)  
-    | primary (LSQUARE expr RSQUARE)+              // Array/Map access: expr[0] or expr["key"] -> Result<T, Error>
+    | primary (DOT ID (LPAREN argList? RPAREN))+   // Method chaining: obj.method().chain() (at least one method call)
     | primary (LPAREN argList? RPAREN)?            // Function call with optional parentheses
     ;
 
@@ -187,10 +174,11 @@ primary
     | handlerExpr                                 // handle EffectName ... in expr
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
-    | blockExpr                                   // Block expressions (try before object/map literals)
     | objectLiteral                               // Anonymous object literal { field: value }
+    | blockExpr                                   // Block expressions
     | literal                                     // String, number, boolean literals
     | lambdaExpr                                  // Lambda expressions
+    | ID LSQUARE INT RSQUARE                      // List access: list[0] -> Result<T, IndexError>
     | ID                                          // Variable reference
     | LPAREN expr RPAREN                          // Parenthesized expression
     ;
@@ -239,18 +227,10 @@ literal
     | TRUE
     | FALSE
     | listLiteral
-    | mapLiteral
     ;
 
 listLiteral
     : LSQUARE (expr (COMMA expr)*)? RSQUARE ;
-
-mapLiteral
-    : LBRACE mapEntry (COMMA mapEntry)* RBRACE     // Require at least one entry
-    | LBRACE RBRACE ;                              // Empty map
-
-mapEntry
-    : expr COLON expr ;
 
 docComment      : DOC_COMMENT+ ;
 
@@ -261,8 +241,7 @@ moduleBody      : moduleStatement* ;
 moduleStatement : letDecl | fnDecl | typeDecl ;
 
 matchArm
-    : pattern LAMBDA expr
-    ;
+    : pattern LAMBDA expr ;
 
 pattern
     : unaryExpr                                   // Support negative numbers: -1, +42, etc.
@@ -304,8 +283,6 @@ EFFECT      : 'effect';
 PERFORM     : 'perform';
 HANDLE      : 'handle';
 IN          : 'in';
-WITH        : 'with';
-RESUME      : 'resume';
 DO          : 'do';
 
 // Concurrency keywords

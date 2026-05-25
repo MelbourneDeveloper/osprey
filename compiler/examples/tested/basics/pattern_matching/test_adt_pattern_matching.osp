@@ -43,7 +43,7 @@ let type_result = match person {
 }
 
 // Function that returns union types to test inference  
-fn getShape(kind) = match kind {
+fn getShape(kind: string) -> Shape = match kind {
     "circle" => Circle { radius: 7 }
     _ => Point { x: 1, y: 2 }
 }
@@ -64,7 +64,7 @@ fn describeShape(s: Shape) -> string = match s {
 let shape_description = describeShape(circle)
 
 // Force union type unification by passing return value of one union function to another
-fn processAnyShape(s) = match s {
+fn processAnyShape(s: Shape) -> string = match s {
     Circle { radius } => "Processing circle"
     Point { x, y } => "Processing point"
 }

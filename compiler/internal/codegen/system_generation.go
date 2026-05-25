@@ -38,7 +38,12 @@ func (g *LLVMGenerator) callFunctionWithValue(
 		return g.generateTestAnyCall()
 	}
 
-	return g.callUserFunctionWithValues(funcIdent, val)
+	// User-defined function.
+	if fn, ok := g.functions[funcIdent.Name]; ok {
+		return g.builder.NewCall(fn, val), nil
+	}
+
+	return nil, WrapUndefinedFunction(funcIdent.Name)
 }
 
 // callFunctionWithTwoValues is similar to callFunctionWithValue but passes two
@@ -55,48 +60,11 @@ func (g *LLVMGenerator) callFunctionWithTwoValues(
 		return nil, WrapBuiltInTwoArgs(funcIdent.Name)
 	}
 
-	return g.callUserFunctionWithValues(funcIdent, val1, val2)
-}
-
-func (g *LLVMGenerator) callUserFunctionWithValues(
-	funcIdent *ast.Identifier,
-	args ...value.Value,
-) (value.Value, error) {
-	argTypes := make([]Type, len(args))
-	for i, arg := range args {
-		argTypes[i] = g.inferenceTypeFromLLVMValue(arg)
+	if fn, ok := g.functions[funcIdent.Name]; ok {
+		return g.builder.NewCall(fn, val1, val2), nil
 	}
 
-	fn, err := g.resolveMonomorphizedFunction(funcIdent.Name, argTypes)
-	if err != nil {
-		return nil, err
-	}
-
-	// Coerce each arg to the function's declared parameter type. forEachList
-	// hands us i64-typed elements out of osprey_list_get; a user function
-	// that takes a union struct pointer needs intToPtr + bitcast or strict
-	// llc rejects the call site. Mirrors coerceArgumentToParamType used by
-	// the direct-call path.
-	coerced := make([]value.Value, len(args))
-	for i, arg := range args {
-		coerced[i] = g.coerceArgumentToParamType(arg, fn, i)
-	}
-	return g.builder.NewCall(fn, coerced...), nil
-}
-
-func (g *LLVMGenerator) inferenceTypeFromLLVMValue(v value.Value) Type {
-	switch t := v.Type().(type) {
-	case *types.IntType:
-		if t.BitSize == 1 {
-			return &ConcreteType{name: TypeBool}
-		}
-
-		return &ConcreteType{name: TypeInt}
-	case *types.PointerType:
-		return &ConcreteType{name: TypeString}
-	default:
-		return &ConcreteType{name: TypeAny}
-	}
+	return nil, WrapUndefinedFunction(funcIdent.Name)
 }
 
 // callBuiltInPrint prints a single LLVM IR value using the C library puts
@@ -161,8 +129,7 @@ func (g *LLVMGenerator) generateTestAnyCall() (value.Value, error) {
 // generateSpawnProcessCall emits a call to the simple process spawning function
 // that uses a default callback for stdout/stderr events.
 func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(SpawnProcessFunc, callExpr)
-	if err != nil {
+	if err := validateBuiltInArgs(SpawnProcessFunc, callExpr); err != nil {
 		return nil, err
 	}
 
@@ -203,26 +170,38 @@ func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
 
+	// Initialize the result struct with default values
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+
 	// Check if the process ID is negative (error)
 	zero := constant.NewInt(types.I64, 0)
 	isError := g.builder.NewICmp(enum.IPredSLT, processID, zero)
 
 	// Create blocks with unique names to avoid conflicts
-	blockID := len(g.function.Blocks)
-	successBlock := g.function.NewBlock(fmt.Sprintf("spawn_success_%d", blockID))
-	errorBlock := g.function.NewBlock(fmt.Sprintf("spawn_error_%d", blockID))
-	continueBlock := g.function.NewBlock(fmt.Sprintf("spawn_continue_%d", blockID))
+	blockID := len(g.function.Blocks) // Use block count as unique ID
+	successBlockName := fmt.Sprintf("spawn_success_%d", blockID)
+	errorBlockName := fmt.Sprintf("spawn_error_%d", blockID)
+	continueBlockName := fmt.Sprintf("spawn_continue_%d", blockID)
+
+	successBlock := g.function.NewBlock(successBlockName)
+	errorBlock := g.function.NewBlock(errorBlockName)
+	continueBlock := g.function.NewBlock(continueBlockName)
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
+	// Success case: store the process ID
 	g.builder = successBlock
-	g.storeResultFields(result, processID,
-		constant.NewInt(types.I8, 0), g.nullErrorMessage())
+	g.builder.NewStore(processID, valuePtr)
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
 	g.builder.NewBr(continueBlock)
 
+	// Error case: store error indicator (we'll use -1 as the "error value")
 	g.builder = errorBlock
-	g.storeResultFields(result, constant.NewInt(types.I64, -1),
-		constant.NewInt(types.I8, 1), g.internErrorMessage("spawnProcess: failed to spawn process"))
+	g.builder.NewStore(constant.NewInt(types.I64, -1), valuePtr)
+	g.builder.NewStore(constant.NewInt(types.I8, 1), discriminantPtr) // 1 = Error
 	g.builder.NewBr(continueBlock)
 
 	// Continue execution
@@ -255,8 +234,7 @@ func (g *LLVMGenerator) generateSleepCall(callExpr *ast.CallExpression) (value.V
 // generateWriteFileCall writes data to a file via an external helper returning
 // a Result<Success, string> type.
 func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(WriteFileFunc, callExpr)
-	if err != nil {
+	if err := validateBuiltInArgs(WriteFileFunc, callExpr); err != nil {
 		return nil, err
 	}
 
@@ -303,25 +281,36 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
+	// Success case: store the bytes written
 	g.builder = successBlock
-	g.storeResultFields(result, writeResult,
-		constant.NewInt(types.I8, 0), g.nullErrorMessage())
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(writeResult, valuePtr)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
 	g.builder.NewBr(continueBlock)
 
+	// Error case: store error value
 	g.builder = errorBlock
-	g.storeResultFields(result, constant.NewInt(types.I64, -1),
-		constant.NewInt(types.I8, 1), g.internErrorMessage("writeFile: failed to write file"))
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(constant.NewInt(types.I64, -1), errorValuePtr)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
 	g.builder.NewBr(continueBlock)
 
+	// Continue execution
 	g.builder = continueBlock
+
 	return result, nil
 }
 
 // generateReadFileCall reads the entire contents of the specified file and
 // returns a Result<string, string> type.
 func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(ReadFileFunc, callExpr)
-	if err != nil {
+	if err := validateBuiltInArgs(ReadFileFunc, callExpr); err != nil {
 		return nil, err
 	}
 
@@ -361,14 +350,29 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
+	// Success case: store the file content
 	g.builder = successBlock
-	g.storeResultFields(result, readResult,
-		constant.NewInt(types.I8, 0), g.nullErrorMessage())
+	valuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(readResult, valuePtr)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
 	g.builder.NewBr(continueBlock)
 
+	// Error case: store error placeholder
 	g.builder = errorBlock
-	g.storeResultFields(result, constant.NewNull(types.I8Ptr),
-		constant.NewInt(types.I8, 1), g.internErrorMessage("readFile: failed to read file"))
+	// Create unique global name to avoid redefinition
+	globalName := fmt.Sprintf("read_error_msg_%p", callExpr)
+	errorStr := g.module.NewGlobalDef(globalName, constant.NewCharArrayFromString("File read error\x00"))
+	errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
+		constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(errorPtr, errorValuePtr)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
 	g.builder.NewBr(continueBlock)
 
 	// Continue execution
