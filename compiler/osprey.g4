@@ -60,13 +60,13 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 
 effectList      : ID (COMMA ID)* ;
 
-// Handler expressions - implementing spec syntax  
-handlerExpr     : HANDLE ID handlerArm+ IN expr                           // handle EffectName op params => ... in expr
-                | HANDLE blockExpr WITH LBRACE handlerCase+ RBRACE        // handle { ... } with { log(msg) -> { ... } }
+// Handler expressions - implementing spec syntax
+handlerExpr     : HANDLE ID handlerArm+ IN expr                // handle Logger log msg => ... in expr
+                | HANDLE blockExpr WITH LBRACE handlerCase+ RBRACE  // handle { ... } with { log(msg) -> { ... } }
                 ;
 handlerArm      : ID handlerParams? LAMBDA expr ;
 handlerParams   : ID+ ;
-handlerCase     : ID LPAREN paramList? RPAREN ARROW resumeBlockExpr ;     // log(msg) -> { ... }
+handlerCase     : ID LPAREN paramList? RPAREN ARROW resumeBlockExpr ;  // log(msg) -> { ... }
 
 resumeBlockExpr : LBRACE resumeBlockBody RBRACE ;
 
@@ -91,7 +91,6 @@ exprStmt        : expr ;
 
 expr
     : matchExpr
-    | handlerExpr
     ;
 
 matchExpr
@@ -234,8 +233,7 @@ blockExpr
     ;
 
 literal
-    : FLOAT
-    | INT
+    : INT
     | STRING
     | INTERPOLATED_STRING
     | TRUE
@@ -362,7 +360,6 @@ STAR        : '*';
 SLASH       : '/';
 
 // Literals and identifiers - MUST come after keywords
-FLOAT       : [0-9]+ '.' [0-9]+ ;
 INT         : [0-9]+ ;
 INTERPOLATED_STRING : '"' (~["\\$] | '\\' . | '$' ~[{])* ('${' ~[}]* '}' (~["\\$] | '\\' . | '$' ~[{])*)+ '"' ;
 STRING      : '"' (~["\\] | '\\' .)* '"' ;
