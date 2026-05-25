@@ -199,6 +199,18 @@ func (ec *EffectCodegen) GeneratePerformExpression(perform *ast.PerformExpressio
 	return nil, ec.createUnhandledEffectError(perform)
 }
 
+// isScalarLLVMType reports whether the LLVM type is one of the simple
+// scalars (i64 / float64 / i1 / i8*) that the codegen treats as the
+// "unwrapped" representation. Used to decide whether to strip a Result
+// wrapper off a handler's body value before returning.
+func isScalarLLVMType(t types.Type) bool {
+	switch t {
+	case types.I64, types.Double, types.I1, types.I8Ptr:
+		return true
+	}
+	return false
+}
+
 // GenerateHandlerExpression generates code for handler expressions
 func (ec *EffectCodegen) GenerateHandlerExpression(handler *ast.HandlerExpression) (value.Value, error) {
 	effectName := handler.EffectName
@@ -345,7 +357,14 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 	if returnType == types.Void {
 		ec.generator.builder.NewRet(nil)
 	} else if bodyResult != nil {
-		// Just return the body result directly - no double wrapping!
+		// Handler body may produce a Result-shaped value (arithmetic on
+		// int returns Result<int>). Only unwrap when the *declared*
+		// return type is a non-Result scalar (i64 / f64 / i1 / i8*),
+		// otherwise we'd strip a real Result that the handler is meant
+		// to return verbatim.
+		if isScalarLLVMType(returnType) && ec.generator.isResultType(bodyResult) {
+			bodyResult = ec.generator.unwrapIfResult(bodyResult)
+		}
 		ec.generator.builder.NewRet(bodyResult)
 	} else {
 		// Handle default return values for different types
