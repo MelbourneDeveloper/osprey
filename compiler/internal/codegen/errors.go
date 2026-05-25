@@ -30,8 +30,9 @@ var (
 	ErrSuccessConstructorMissingValue = errors.New("success constructor requires 'value' field")
 	ErrErrorConstructorMissingMessage = errors.New("error constructor requires 'message' field")
 
-	ErrFunctionNotDeclared = errors.New("function not declared")
-	ErrNotAFunction        = errors.New("type is not a function")
+	ErrFunctionNotDeclared    = errors.New("function not declared")
+	ErrFunctionAlreadyDeclared = errors.New("function already declared")
+	ErrNotAFunction           = errors.New("type is not a function")
 
 	ErrNoVariantFound     = errors.New("no variant found matching field structure")
 	ErrNoVariantsFound    = errors.New("no variants found for type")
@@ -391,6 +392,17 @@ func WrapBuiltInTwoArgs(funcName string) error {
 // WrapFunctionNotDeclared wraps function not declared errors
 func WrapFunctionNotDeclared(funcName string) error {
 	return WrapSimpleError(ErrFunctionNotDeclared, funcName)
+}
+
+// WrapFunctionAlreadyDeclared wraps the duplicate-declaration error with
+// position info so the user sees the second declaration site.
+func WrapFunctionAlreadyDeclared(funcName string, pos any) error {
+	if position, ok := pos.(*ast.Position); ok && position != nil {
+		return fmt.Errorf("line %d:%d: %w: %s",
+			position.Line, position.Column, ErrFunctionAlreadyDeclared, funcName)
+	}
+
+	return fmt.Errorf("%w: %s", ErrFunctionAlreadyDeclared, funcName)
 }
 
 // WrapUndefinedVariable wraps undefined variable errors
