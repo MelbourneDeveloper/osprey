@@ -115,6 +115,13 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 func (g *LLVMGenerator) convertValueToStringByType(
 	//TODO: types must not be passed around as strings. This is wrong.
 	theType string, arg value.Value) (value.Value, error) {
+	// Opaque-pointer collection / handle types share the i8* LLVM shape
+	// with string, so the i8*-fallback below would silently hand the raw
+	// runtime pointer to puts/printf and print garbage. Reject early so
+	// callers see a clear error instead.
+	if isOpaqueCollectionType(theType) {
+		return nil, fmt.Errorf("%w: type was '%s'", ErrToStringOpaque, theType)
+	}
 	// TODO: unhard code this!!! DO NOT IGNORE THIS! FIX IT!!
 	// but the actual LLVM value is a plain int, treat as int
 	if theType == "Result<int, Error>" && arg.Type() == types.I64 {
@@ -203,6 +210,22 @@ func (g *LLVMGenerator) convertValueToStringByType(
 		// For other complex types, return a generic representation
 		return g.createGlobalString(fmt.Sprintf("<%s>", theType)), nil
 	}
+}
+
+// isOpaqueCollectionType reports whether `theType` is one of the
+// runtime-backed types (List, Map) whose LLVM shape is i8* (an opaque
+// handle into the C runtime). These cannot be passed straight to puts
+// /printf as a string, so toString must refuse them rather than silently
+// emit a garbage-pointer load.
+func isOpaqueCollectionType(theType string) bool {
+	for _, prefix := range []string{TypeList, TypeMap} {
+		if theType == prefix ||
+			strings.HasPrefix(theType, prefix+"<") ||
+			strings.HasPrefix(theType, prefix+"[") {
+			return true
+		}
+	}
+	return false
 }
 
 // convertResultToString extracts the value from a Result type and converts it to string

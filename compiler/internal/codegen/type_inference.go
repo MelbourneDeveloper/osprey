@@ -1146,7 +1146,26 @@ func (ti *TypeInferer) unifyConcreteTypes(t1, t2 Type) bool {
 		return false
 	}
 
-	return ct1.name == ct2.name || ct1.name == TypeAny || ct2.name == TypeAny
+	if ct1.name == ct2.name || ct1.name == TypeAny || ct2.name == TypeAny {
+		return true
+	}
+
+	// WILDCARD: bare List/Map/Fiber/Channel unifies with its parameterised form
+	// represented as a ConcreteType like "List<string>". Built-in registries
+	// (collection_registry.go) declare signatures with the bare name so call
+	// sites passing e.g. List<string> (the unwrapped Success type of split())
+	// must still type-check.
+	return isWildcardConcreteMatch(ct1.name, ct2.name) || isWildcardConcreteMatch(ct2.name, ct1.name)
+}
+
+// isWildcardConcreteMatch reports whether bare matches a parameterised form
+// of the same wildcard kind, e.g. "List" matches "List<string>".
+func isWildcardConcreteMatch(bare, parameterised string) bool {
+	if !isBuiltInWildcardTypeName(bare) {
+		return false
+	}
+
+	return strings.HasPrefix(parameterised, bare+"<") && strings.HasSuffix(parameterised, ">")
 }
 
 // unifyPrimitiveTypesPair handles unification of PrimitiveType pairs
