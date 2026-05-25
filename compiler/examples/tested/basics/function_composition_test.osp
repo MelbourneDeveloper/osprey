@@ -80,4 +80,14 @@ counter = counter + 1
 counter = counter + 1
 print(toString(counter))
 
+// Generic union variant payload was rendering as "<T>" because toString hit the
+// fallback formatter for an unresolved type-variable name even though the LLVM
+// runtime value was a plain i64.
+type Box<T> = Empty | Full { value: T }
+let bx = Full { value: 7 }
+match bx {
+    Full { value } => print(toString(value))
+    Empty => print("empty")
+}
+
 print("=== Function Composition Test Complete ===")
