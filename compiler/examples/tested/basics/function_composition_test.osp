@@ -98,4 +98,8 @@ print("Quote: \"hi\"")
 let nm = "Bob"
 print("Hi \"${nm}\"")
 
+// Escape processor used to scan multiple times in the wrong order, so
+// `\\n` would match the inner `\n` first and produce a real newline.
+print("lit: ab\\nc")
+
 print("=== Function Composition Test Complete ===")
