@@ -3,6 +3,7 @@ package codegen
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/christianfindlay/osprey/internal/ast"
 )
@@ -203,7 +204,8 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 	for _, arg := range args {
 		pos, exists := paramPositions[arg.Name]
 		if !exists {
-			return nil, fmt.Errorf("%w: %s", ErrUnknownParameterName, arg.Name)
+			return nil, fmt.Errorf("%w '%s' for function '%s'; valid parameters: %s",
+				ErrUnknownParameterName, arg.Name, fnName, strings.Join(paramNames, ", "))
 		}
 
 		reorderedArgs[pos] = arg.Value
