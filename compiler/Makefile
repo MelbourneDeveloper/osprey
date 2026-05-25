@@ -201,9 +201,11 @@ test-runtime: build
 	rm -f runtime/fiber_runtime_test runtime/http_runtime_test runtime/http_bridge_stub.c
 	@echo "✅ Runtime tests passed - no segfaults detected!"
 
-# Run all tests without coverage (fast feedback)
+# Run all tests without coverage (fast feedback).
+# Tees output to compiler/test.log so a subsequent agent / CI artifact can
+# inspect failures without re-running the (multi-minute) suite. See #56.
 test: build test-runtime c-test
-	@go test ./... -p 1 -v
+	@set -o pipefail; go test ./... -p 1 -v 2>&1 | tee test.log
 
 c-lint:
 	@cd runtime && clang \
