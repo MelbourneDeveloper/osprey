@@ -2255,11 +2255,12 @@ func (g *LLVMGenerator) generateSuccessBlock(
 		g.typeInferer.env = oldEnv
 	}()
 
-	// Find the success arm and bind pattern variables
+	// Find the success arm and bind pattern variables. Accept both
+	// destructure form `Success { value }` (Pattern.Fields) and
+	// variable-bind form `Success v` (Pattern.Variable); previously
+	// only Fields was honoured, so `Success v => v` reported v undefined.
 	successArm := g.findSuccessArm(matchExpr)
-	if successArm != nil && len(successArm.Pattern.Fields) > 0 {
-		// Bind the Result value to the pattern variable
-		fieldName := successArm.Pattern.Fields[0] // First field is the value
+	if fieldName := resultArmBindName(successArm); fieldName != "" {
 
 		// Bind the extracted value type to the pattern variable
 		g.bindPatternVariableType(fieldName, matchExpr.Expression)
@@ -2313,8 +2314,7 @@ func (g *LLVMGenerator) generateSuccessBlock(
 	}
 
 	// Fallback: use the bound variable from pattern matching
-	if successArm := g.findSuccessArm(matchExpr); successArm != nil && len(successArm.Pattern.Fields) > 0 {
-		fieldName := successArm.Pattern.Fields[0]
+	if fieldName := resultArmBindName(g.findSuccessArm(matchExpr)); fieldName != "" {
 		if extractedValue, exists := g.variables[fieldName]; exists {
 			successValue = extractedValue
 		} else {
@@ -2346,11 +2346,11 @@ func (g *LLVMGenerator) generateErrorBlock(
 		g.typeInferer.env = oldEnv
 	}()
 
-	// Find the Error arm and bind pattern variables
+	// Find the Error arm and bind pattern variables. Accept both
+	// destructure form `Error { message }` and variable-bind form
+	// `Error e`; previously only Fields was honoured.
 	errorArm := g.findErrorArm(matchExpr)
-	if errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
-		// Bind the Result error message to the pattern variable
-		fieldName := errorArm.Pattern.Fields[0] // First field is the message
+	if fieldName := resultArmBindName(errorArm); fieldName != "" {
 
 		// Bind the error type to the pattern variable in the type environment
 		matchedExprType, err := g.typeInferer.InferType(matchExpr.Expression)
@@ -2413,8 +2413,7 @@ func (g *LLVMGenerator) generateErrorBlock(
 	}
 
 	// Fallback: use the bound variable from pattern matching
-	if errorArm := g.findErrorArm(matchExpr); errorArm != nil && len(errorArm.Pattern.Fields) > 0 {
-		fieldName := errorArm.Pattern.Fields[0]
+	if fieldName := resultArmBindName(g.findErrorArm(matchExpr)); fieldName != "" {
 		if extractedError, exists := g.variables[fieldName]; exists {
 			errorValue = extractedError
 		} else {
@@ -2470,6 +2469,21 @@ func (g *LLVMGenerator) bindPatternVariableType(fieldName string, matchedExpr as
 		// In this case, the success value type is the matched expression's type itself
 		g.typeInferer.env.Set(fieldName, resolvedType)
 	}
+}
+
+// resultArmBindName returns the binding name a Success/Error arm
+// introduces — either the first destructured field
+// (`Success { value }` → "value") or the constructor's variable bind
+// (`Success v` → "v"). Returns "" when the arm has neither (e.g.
+// `Success => 0`), so callers can skip binding.
+func resultArmBindName(arm *ast.MatchArm) string {
+	if arm == nil {
+		return ""
+	}
+	if len(arm.Pattern.Fields) > 0 {
+		return arm.Pattern.Fields[0]
+	}
+	return arm.Pattern.Variable
 }
 
 // findSuccessArm finds the success match arm.
