@@ -18,11 +18,9 @@ func validateBuiltInArgs(funcName string, callExpr *ast.CallExpression) error {
 	if !exists {
 		return WrapFunctionNotFound(funcName)
 	}
-
 	if len(callExpr.Arguments) != len(fn.ParameterTypes) {
 		return WrapFunctionArgsWithPos(funcName, len(fn.ParameterTypes), len(callExpr.Arguments), callExpr.Position)
 	}
-
 	return nil
 }
 
@@ -58,37 +56,8 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 	resolvedType := g.typeInferer.ResolveType(inferredType)
 	argType := resolvedType.String()
 
-	// If the resolved type is still a type variable (like t16), fall back to LLVM type
-	if strings.HasPrefix(argType, "t") && len(argType) > 1 {
-		// Check if it's a type variable (starts with 't' followed by digits)
-		isTypeVar := true
-
-		for _, c := range argType[1:] {
-			if c < '0' || c > '9' {
-				isTypeVar = false
-				break
-			}
-		}
-
-		if isTypeVar {
-			// Fallback to determine type from LLVM value
-			switch arg.Type() {
-			case types.I64:
-				argType = TypeInt
-			case types.I8Ptr:
-				argType = TypeString
-			case types.I1:
-				argType = TypeBool
-			default:
-				// Default to int for unknown types
-				argType = TypeInt
-			}
-		}
-	}
-
-	// Check if the resolved type IS boolean (not Result<bool, Error>!)
-	isBooleanType := g.isSemanticBooleanType(resolvedType)
-	if isBooleanType {
+	// Check if this should be treated as a boolean (e.g., extracted from Result<bool, E>)
+	if argType == TypeInt && g.shouldTreatAsBoolean(arg, callExpr.Arguments[0]) {
 		argType = TypeBool
 	}
 
@@ -187,13 +156,10 @@ func (g *LLVMGenerator) convertResultToString(
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 	resultValue := g.builder.NewLoad(structType.Fields[0], valuePtr)
 
-	var (
-		successStr value.Value
-		err        error
-	)
+	var successStr value.Value
+	var err error
 
 	// Convert based on the value type
-
 	switch structType.Fields[0] {
 	case types.I64:
 		// Check if this i64 should be treated as a boolean
@@ -221,7 +187,6 @@ func (g *LLVMGenerator) convertResultToString(
 	// Error case: return "Error"
 	g.builder = errorBlock
 	errorStr := g.createGlobalString("Error")
-
 	errorBlock.NewBr(endBlock)
 
 	// End block: PHI node to select result
@@ -238,7 +203,6 @@ func (g *LLVMGenerator) convertResultToString(
 func (g *LLVMGenerator) createGlobalString(str string) value.Value {
 	strConstant := constant.NewCharArrayFromString(str + "\x00")
 	global := g.module.NewGlobalDef("", strConstant)
-
 	return g.builder.NewGetElementPtr(strConstant.Typ, global,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 }
@@ -248,7 +212,6 @@ func (g *LLVMGenerator) isSemanticBooleanType(inferredType Type) bool {
 	if concrete, ok := inferredType.(*ConcreteType); ok {
 		return concrete.name == TypeBool
 	}
-
 	return false
 }
 
@@ -256,17 +219,35 @@ func (g *LLVMGenerator) isSemanticBooleanType(inferredType Type) bool {
 func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bool {
 	// Check if this is a value that's known to be from a boolean-returning function
 	// This is a heuristic approach until we have better generic type tracking
-
+	
 	// For now, check if the value is constrained to 0 or 1 (typical boolean values)
 	if constant, ok := resultValue.(*constant.Int); ok {
 		val := constant.X.Int64()
 		return val == 0 || val == 1
 	}
-
+	
 	// If it's not a constant, we need better detection
 	// For the working constraint test, we know isPositive returns boolean
 	// This is a temporary heuristic until proper generic type inference is implemented
 	return true // Assume boolean for now to fix the immediate issue
+}
+
+// shouldTreatAsBoolean determines if an i64 value should be treated as a boolean when printing
+func (g *LLVMGenerator) shouldTreatAsBoolean(_ value.Value, argExpr ast.Expression) bool {
+	// Check if the expression is an identifier (variable)
+	if ident, ok := argExpr.(*ast.Identifier); ok {
+		// Check the semantic type from the type inference environment
+		if typeInfo, exists := g.typeInferer.env.Get(ident.Name); exists {
+			if concreteType, ok := typeInfo.(*ConcreteType); ok {
+				// Check if the type is semantically boolean
+				return concreteType.name == TypeBool
+			}
+		}
+		
+	}
+	
+	// For now, return false for non-identifier expressions
+	return false
 }
 
 // generatePrintCall handles print function calls.
@@ -276,7 +257,6 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 	}
 
 	argExpr := callExpr.Arguments[0]
-
 	arg, err := g.generateExpression(argExpr)
 	if err != nil {
 		return nil, err
@@ -287,9 +267,8 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 	if err != nil {
 		return nil, err
 	}
-
+	
 	var stringArg value.Value
-
 	switch arg.Type().(type) {
 	case *types.PointerType: // Assuming i8* is string
 		stringArg = arg
@@ -301,9 +280,18 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 				return nil, err
 			}
 		} else {
-			stringArg, err = g.generateIntToString(arg)
-			if err != nil {
-				return nil, err
+			// For i64 values, check if they should be treated as boolean
+			// This handles cases where boolean values are extracted from Result types
+			if g.shouldTreatAsBoolean(arg, argExpr) {
+				stringArg, err = g.generateBoolToString(arg)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				stringArg, err = g.generateIntToString(arg)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	default:
@@ -321,8 +309,7 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 
 // generateInputCall handles input function calls.
 func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(InputFunc, callExpr)
-	if err != nil {
+	if err := validateBuiltInArgs(InputFunc, callExpr); err != nil {
 		return nil, err
 	}
 
@@ -493,13 +480,11 @@ func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (val
 
 	// Allocate memory for the substring (length + 1 for null terminator)
 	lengthPlusOne := g.builder.NewAdd(length, constant.NewInt(types.I64, 1))
-
 	mallocFunc, ok := g.functions["malloc"]
 	if !ok {
 		mallocFunc = g.module.NewFunc("malloc", types.I8Ptr, ir.NewParam("size", types.I64))
 		g.functions["malloc"] = mallocFunc
 	}
-
 	newStr := g.builder.NewCall(mallocFunc, lengthPlusOne)
 
 	// Calculate source pointer: str + start
@@ -514,7 +499,6 @@ func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (val
 			ir.NewParam("n", types.I64))
 		g.functions["memcpy"] = memcpyFunc
 	}
-
 	g.builder.NewCall(memcpyFunc, newStr, srcPtr, length)
 
 	// Null-terminate the new string
