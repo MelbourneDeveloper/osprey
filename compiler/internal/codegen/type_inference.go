@@ -1318,6 +1318,16 @@ func (ti *TypeInferer) unifyFunctionTypes(t1, t2 Type) error {
 
 	err := ti.Unify(ft1.returnType, ft2.returnType)
 	if err != nil {
+		// Spec auto-unwrap rule (0004-TypeSystem.md): a lambda body that produces
+		// Result<T, E> may flow into a position expecting T (or vice-versa).
+		// Without this retry, `applyFn(value, fn(x: int) => x + 100)` fails
+		// because `x + 100` is Result<int, MathError> while the param wants
+		// `(int) -> int`.
+		unwrapped1 := ti.unwrapResultType(ft1.returnType)
+		unwrapped2 := ti.unwrapResultType(ft2.returnType)
+		if unwrapErr := ti.Unify(unwrapped1, unwrapped2); unwrapErr == nil {
+			return nil
+		}
 		return fmt.Errorf("return type unification failed: %s vs %s: %w",
 			ft1.returnType.String(), ft2.returnType.String(), err)
 	}

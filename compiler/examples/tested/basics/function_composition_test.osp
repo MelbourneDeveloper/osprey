@@ -44,4 +44,8 @@ let outerLam = fn(x: int) => x * 2
 let innerLam = fn(y: int) => outerLam(y) + 1
 print(toString(innerLam(5)))
 
+// Higher-order: inline lambda flows into (int)->int slot; body returns Result auto-unwrap
+let inlineApplied = applyFunction(value: 10, func: fn(x: int) => x + 100)
+print(toString(inlineApplied))
+
 print("=== Function Composition Test Complete ===")
