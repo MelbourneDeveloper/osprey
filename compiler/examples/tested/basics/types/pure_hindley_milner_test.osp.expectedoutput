@@ -13,6 +13,7 @@ identityP(42) = 42
 identityP("test") = test
 identityP(true) = true
 makePoint(1, 2) = {1, 2}
+makePoint("x", "y") = {x, y}
 
 Test 5: Complex field access inference
 distance({3, 4}) = 25
@@ -34,6 +35,9 @@ Generic type equality test - gen2.data = 99
 Generic type equality test - gen3.data = test
 Generic type equality test - gen4.first = 1
 Generic type equality test - gen5.first = 3
+Test 8: Result type extraction tests
+safeDiv(10, 2) = Success: 5
+safeDiv(10, 0) = Error: Division by zero
 
 Test 9: Method call type inference
 wrapper.length() equivalent = 42

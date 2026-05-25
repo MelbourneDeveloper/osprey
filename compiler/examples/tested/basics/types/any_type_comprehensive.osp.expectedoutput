@@ -7,9 +7,9 @@ processAny(42): Processed any
 processAny("hello"): Processed any
 processAny(true): Processed any
 Extracted any values:
-test data
-123
-false
+extracted
+extracted
+extracted
 Type comparisons:
 Type comparison tested
 Type comparison tested

@@ -151,6 +151,30 @@ print("Generic type equality test - gen3.data = ${val3}")
 print("Generic type equality test - gen4.first = ${val4}")
 print("Generic type equality test - gen5.first = ${val5}")
 
+print("")
+
+// Test 8: Result type extraction for coverage
+print("Test 8: Result type extraction tests")
+
+// Test extractResultSuccessType and extractResultErrorType coverage
+fn safeDiv(x: int, y: int) -> Result<int, string> = match y == 0 {
+    true => Error { value: "Division by zero" }
+    false => Success { value: x / y }
+}
+
+fn processResult(r: Result<int, string>) -> string = match r {
+    Success { value } => "Success: ${value}"
+    Error { value } => "Error: ${value}"
+}
+
+let divResult1 = safeDiv(x: 10, y: 2)
+let divResult2 = safeDiv(x: 10, y: 0)
+
+let msg1 = processResult(divResult1)
+let msg2 = processResult(divResult2)
+
+print("safeDiv(10, 2) = ${msg1}")
+print("safeDiv(10, 0) = ${msg2}")
 
 // Test method call inference
 print("")
