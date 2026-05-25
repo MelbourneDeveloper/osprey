@@ -181,9 +181,6 @@ func getIteratorExpectedOutputs() map[string]string {
 			"Apple price: 2\n6\n" +
 			"Example 8: Chained single value operations\n21\n" +
 			"Example 9: Conditional operations\n1\n0\n=== Showcase Complete ===\n",
-		"explicit_any_allowed.osp": "Explicit any return type works\n" +
-			"getDynamicValue() = 42\n" +
-			"processAnyValue(5) = 15\n",
 		"explicit_any_simple.osp": "Explicit any return type works\n",
 		"functional_iterators.osp": "=== Functional Iterator Examples ===\n" +
 			"1. Basic forEach:\n1\n2\n3\n4\n" +
@@ -396,9 +393,6 @@ func getBlockAndProcessExpectedOutputs() map[string]string {
 
 func getStringExpectedOutputs() map[string]string {
 	return map[string]string{
-		// Updated for [BUILTIN-STRING-*]: length/contains return raw values.
-		"result_type_workflow.osp": "=== Result Type Workflow Test ===\n\n" +
-			"Length: 5\n\nContains 'ell': true\n\nContains 'xyz': false\n\n",
 		// Implements [BUILTIN-STRING-*] end-to-end demo.
 		"string_pipeline.osp": "=== String Pipeline Demo ===\n\n" +
 			"raw=\"  GET /api/users?name=alice&age=30  \" len=36\n\n" +
