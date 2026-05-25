@@ -1252,11 +1252,34 @@ func (g *LLVMGenerator) generateMatchArmValues(
 
 // processMatchArm handles the processing of a single match arm
 func (g *LLVMGenerator) processMatchArm(arm ast.MatchArm, discriminant value.Value) (value.Value, error) {
-	if arm.Pattern.Variable != "" || len(arm.Pattern.Fields) > 0 {
+	if arm.Pattern.Variable != "" || len(arm.Pattern.Fields) > 0 || isPrimitiveVarBind(arm.Pattern, g) {
 		return g.processMatchArmWithBinding(arm, discriminant)
 	}
 
 	return g.processMatchArmWithoutBinding(arm)
+}
+
+// isPrimitiveVarBind reports whether `pattern` is a bare identifier
+// (Constructor="n", no Variable, no Fields) that's actually a
+// variable-bind catch-all on a primitive match — the AST builder
+// can't tell apart a constructor name from a fresh binding at parse
+// time. Treated as variable bind when the name doesn't resolve to any
+// known union variant or function.
+func isPrimitiveVarBind(pattern ast.Pattern, g *LLVMGenerator) bool {
+	if pattern.Constructor == "" || pattern.Constructor == "_" {
+		return false
+	}
+	if isLiteralPattern(pattern.Constructor) || isSpecialConstructor(pattern.Constructor) {
+		return false
+	}
+	for _, td := range g.typeDeclarations {
+		for _, v := range td.Variants {
+			if v.Name == pattern.Constructor {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // processMatchArmWithBinding handles match arms that have variable binding
@@ -1267,6 +1290,24 @@ func (g *LLVMGenerator) processMatchArmWithBinding(arm ast.MatchArm, discriminan
 	// Bind the pattern variable to the discriminant value
 	if arm.Pattern.Variable != "" {
 		g.variables[arm.Pattern.Variable] = discriminant
+	} else if isPrimitiveVarBind(arm.Pattern, g) {
+		// `n => …` on a primitive match: Constructor carries the name.
+		// Bind on both the codegen value map (so loads work) and the
+		// type inferer env (so the inferer can resolve `n` inside the
+		// arm body).
+		g.variables[arm.Pattern.Constructor] = discriminant
+		if g.typeInferer != nil && g.typeInferer.env != nil {
+			switch discriminant.Type() {
+			case types.I64:
+				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: TypeInt})
+			case types.Double:
+				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: TypeFloat})
+			case types.I8Ptr:
+				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: TypeString})
+			case types.I1:
+				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: TypeBool})
+			}
+		}
 	}
 
 	// Handle field extraction for structural matching and discriminated unions
