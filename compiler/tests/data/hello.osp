@@ -1,1 +1,8 @@
-print("Hello, World!")
+fn hello() -> Unit = print("Hello, World!")
+
+fn greeting() -> Unit = print("Hello from function!")
+
+fn main() -> Unit = {
+    hello()
+    greeting()
+} 

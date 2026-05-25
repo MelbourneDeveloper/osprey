@@ -1,0 +1,84 @@
+// 🚀 COMPREHENSIVE ALGEBRAIC EFFECTS BUGS DEMO 🔥
+// This test demonstrates handler scoping and multiple effects
+
+effect Logger {
+    log: fn(string) -> Unit
+    error: fn(string) -> Unit  
+    debug: fn(string) -> Unit
+}
+
+effect FileSystem {
+    read: fn(string) -> string
+    write: fn(string, string) -> Unit
+}
+
+effect Network {
+    request: fn(string) -> string
+    upload: fn(string, string) -> Unit
+}
+
+// Simple function with single effect
+fn logMessage(msg: string) -> Unit !Logger = {
+    perform Logger.log(msg)
+}
+
+// Function with multiple effects  
+fn readAndLog(filename: string) -> string ![Logger, FileSystem] = {
+    perform Logger.log("Reading file: " + filename)
+    let content = perform FileSystem.read(filename)
+    perform Logger.debug("File content: " + content)
+    content
+}
+
+// Function with all three effects
+fn uploadFile(filename: string, url: string) -> Unit ![Logger, FileSystem, Network] = {
+    perform Logger.log("Starting upload")
+    let content = perform FileSystem.read(filename)
+    perform Network.upload(url, content)
+    perform Logger.log("Upload complete")
+}
+
+// Test nested handler scoping
+fn testNestedHandlers() -> Unit !Logger = {
+    perform Logger.log("Outer scope")
+    
+    with handler Logger
+        log(msg) => print("[INNER] " + msg)
+        error(msg) => print("[INNER-ERROR] " + msg)
+        debug(msg) => print("[INNER-DEBUG] " + msg)
+    {
+        perform Logger.log("Inner scope")
+    }
+    
+    perform Logger.log("Back to outer scope")
+}
+
+fn main() -> Unit = with handler Logger
+    log(msg) => print("[MAIN-LOG] " + msg)
+    error(msg) => print("[MAIN-ERROR] " + msg)
+    debug(msg) => print("[MAIN-DEBUG] " + msg)
+{
+    with handler FileSystem
+        read(filename) => "file content from " + filename
+        write(filename, content) => print("Writing to " + filename + ": " + content)
+    {
+        with handler Network
+            request(url) => "response from " + url
+            upload(url, content) => print("Uploading to " + url + ": " + content)
+        {
+            print("=== Comprehensive Effects Bug Demo ===")
+            
+            print("Test 1: Handler scope timing")
+            testNestedHandlers()
+            
+            print("Test 2: Multiple effects composition")
+            uploadFile("data.txt", "https://api.example.com/upload")
+            
+            print("Test 3: Complex nested scenarios")
+            let result = readAndLog("final.txt")
+            perform Logger.log("Final result: " + result)
+            
+            print("=== Test Complete ===")
+        }
+    }
+} 

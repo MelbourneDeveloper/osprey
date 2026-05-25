@@ -7,7 +7,6 @@ program         : statement* EOF ;
 statement
     : importStmt
     | letDecl
-    | assignStmt
     | fnDecl
     | externDecl
     | typeDecl
@@ -19,8 +18,6 @@ statement
 importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
-
-assignStmt       : ID EQ expr ;
 
 fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | LBRACE blockBody RBRACE) ;
 
@@ -34,7 +31,7 @@ paramList       : param (COMMA param)* ;
 
 param           : ID (COLON type)? ;
 
-typeDecl        : docComment? TYPE ID (LT typeParamList GT)? EQ (unionType | recordType) typeValidation? ;
+typeDecl        : docComment? TYPE ID (LT typeParamList GT)? EQ (unionType | recordType) ;
 
 typeParamList   : ID (COMMA ID)* ;
 
@@ -45,9 +42,9 @@ recordType      : LBRACE fieldDeclarations RBRACE ;
 variant         : ID (LBRACE fieldDeclarations RBRACE)? ;
 
 fieldDeclarations : fieldDeclaration (COMMA fieldDeclaration)* ;
-fieldDeclaration  : ID COLON type (WHERE functionCall)? ;
+fieldDeclaration  : ID COLON type constraint? ;
 
-typeValidation  : WHERE ID ;
+constraint      : WHERE functionCall ;
 
 // Effect declarations
 effectDecl      : docComment? EFFECT ID LBRACE opDecl* RBRACE ;
@@ -60,10 +57,9 @@ effectSet       : NOT_OP ID                              // Single effect: !Effe
 
 effectList      : ID (COMMA ID)* ;
 
-// Handler expressions - implementing spec syntax
-handlerExpr     : HANDLE ID handlerArm+ IN expr ;              // handle Logger log msg => ... in expr
-handlerArm      : ID handlerParams? LAMBDA expr ;
-handlerParams   : ID+ ;
+// Handler expressions - cleaner ML-style syntax without redundant 'do'
+handlerExpr     : HANDLER ID handlerArm+ ;
+handlerArm      : ID (LPAREN ID? RPAREN)? LAMBDA expr ;
 
 functionCall    : ID LPAREN argList? RPAREN ;
 
@@ -87,7 +83,7 @@ expr
     ;
 
 matchExpr
-    : MATCH binaryExpr LBRACE matchArm* RBRACE
+    : MATCH expr LBRACE matchArm+ RBRACE
     | selectExpr
     | binaryExpr
     ;
@@ -104,28 +100,11 @@ selectArm
     ;
 
 binaryExpr
-    : ternaryExpr
+    : comparisonExpr
     ;
-
-ternaryExpr
-    : cond=comparisonExpr LBRACE pat=fieldPattern RBRACE QUESTION thenExpr=ternaryExpr COLON elseExpr=ternaryExpr    // expr { pattern } ? then : else
-    | comparisonExpr QUESTION thenExpr=ternaryExpr COLON elseExpr=ternaryExpr                                        // expr ? then : else
-    | comparisonExpr QUESTION COLON elseExpr=ternaryExpr                                                             // expr ?: else (Elvis operator)
-    | comparisonExpr
-    ;
-
-
 
 comparisonExpr
-    : logicalOrExpr
-    ;
-
-logicalOrExpr
-    : logicalAndExpr (OR_OP logicalAndExpr)*
-    ;
-
-logicalAndExpr
-    : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP | AND_OP) addExpr)*
+    : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP) addExpr)*
     ;
 
 addExpr
@@ -171,21 +150,15 @@ primary
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
     | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
-    | handlerExpr                                 // handle EffectName ... in expr
+    | WITH handlerExpr blockExpr                  // with handler EffectName arms { body }
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
-    | objectLiteral                               // Anonymous object literal { field: value }
     | blockExpr                                   // Block expressions
     | literal                                     // String, number, boolean literals
     | lambdaExpr                                  // Lambda expressions
     | ID LSQUARE INT RSQUARE                      // List access: list[0] -> Result<T, IndexError>
     | ID                                          // Variable reference
     | LPAREN expr RPAREN                          // Parenthesized expression
-    ;
-
-// Anonymous object literal: { field: value, field2: value2 }
-objectLiteral
-    : LBRACE fieldAssignments RBRACE
     ;
 
 // Type construction for Fiber<T> { ... } and Channel<T> { ... }
@@ -226,8 +199,7 @@ literal
     | INTERPOLATED_STRING
     | TRUE
     | FALSE
-    | listLiteral
-    ;
+    | listLiteral ;
 
 listLiteral
     : LSQUARE (expr (COMMA expr)*)? RSQUARE ;
@@ -259,33 +231,18 @@ fieldPattern    : ID (COMMA ID)* ;
 blockBody       : statement* expr? ;
 
 // ---------- LEXER RULES ----------
-// Keywords MUST come before ID to ensure proper tokenization
 
-// Control flow keywords
+PIPE        : '|>';
 MATCH       : 'match';
-IF          : 'if';
-ELSE        : 'else';
-SELECT      : 'select';
-
-// Function keywords  
 FN          : 'fn';
 EXTERN      : 'extern';
-
-// Declaration keywords
 IMPORT      : 'import';
 TYPE        : 'type';
 MODULE      : 'module';
 LET         : 'let';
 MUT         : 'mut';
-
-// Effect system keywords - CRITICAL ORDER FOR PROPER TOKENIZATION
-EFFECT      : 'effect';
-PERFORM     : 'perform';
-HANDLE      : 'handle';
-IN          : 'in';
-DO          : 'do';
-
-// Concurrency keywords
+IF          : 'if';
+ELSE        : 'else';
 SPAWN       : 'spawn';
 YIELD       : 'yield';
 AWAIT       : 'await';
@@ -293,16 +250,16 @@ FIBER       : 'fiber';
 CHANNEL     : 'channel';
 SEND        : 'send';
 RECV        : 'recv';
-
-// Boolean keywords
+SELECT      : 'select';
 TRUE        : 'true';
 FALSE       : 'false';
-
-// Constraint keyword
 WHERE       : 'where';
+EFFECT      : 'effect';
+PERFORM     : 'perform';
+HANDLER     : 'handler';
+WITH        : 'with';
+DO          : 'do';
 
-// Operators and symbols
-PIPE        : '|>';
 ARROW       : '->';
 LAMBDA      : '=>';
 UNDERSCORE  : '_';
@@ -312,8 +269,6 @@ EQ_OP       : '==';
 NE_OP       : '!=';
 LE_OP       : '<=';
 GE_OP       : '>=';
-AND_OP      : '&&';
-OR_OP       : '||';
 NOT_OP      : '!';
 MOD_OP      : '%';
 COLON       : ':';
@@ -329,20 +284,17 @@ LBRACE      : '{';
 RBRACE      : '}';
 LSQUARE     : '[';
 RSQUARE     : ']';
-QUESTION    : '?';
 
 PLUS        : '+';
 MINUS       : '-';
 STAR        : '*';
 SLASH       : '/';
 
-// Literals and identifiers - MUST come after keywords
 INT         : [0-9]+ ;
 INTERPOLATED_STRING : '"' (~["\\$] | '\\' . | '$' ~[{])* ('${' ~[}]* '}' (~["\\$] | '\\' . | '$' ~[{])*)+ '"' ;
 STRING      : '"' (~["\\] | '\\' .)* '"' ;
 ID          : [a-zA-Z_][a-zA-Z0-9_]* ;
 
-// Whitespace and comments - MUST be at the end
 WS          : [ \t\r\n]+ -> skip ;
 DOC_COMMENT : '///' ~[\r\n]* ;
 COMMENT     : '//' ~[\r\n]* -> skip ;

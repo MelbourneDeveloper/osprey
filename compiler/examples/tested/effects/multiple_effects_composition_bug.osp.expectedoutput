@@ -1,0 +1,7 @@
+=== Testing Multiple Effects Composition ===
+[LOG] Dual effect task starting
+[LOG] Counter value: 5
+[LOG] Starting multi-effect operation
+[LOG] Operation complete with value: 15
+Final result: 15
+=== Test Complete === 

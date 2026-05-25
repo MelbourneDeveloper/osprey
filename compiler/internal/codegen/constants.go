@@ -7,8 +7,6 @@ const (
 	FourArgs             = 4
 	FiveArgs             = 5
 	OneArg               = 1
-	HTTPMethodGet        = 0
-	HTTPMethodPost       = 1
 	HTTPMethodPut        = 2
 	HTTPMethodDelete     = 3
 	BufferSize1KB        = 1024
@@ -22,7 +20,6 @@ const (
 	MinArgs              = 2  // Minimum command line arguments
 	ExpressionOffset     = 2  // Offset for expression parsing
 	DefaultPlaceholder   = 42 // Default placeholder value for LLVM constants
-	ResultFieldCount     = 2  // Number of fields in Result type struct (value, discriminant)
 )
 
 // String constants.
@@ -41,12 +38,9 @@ const (
 	TypeInt          = "int"
 	TypeBool         = "bool"
 	TypeAny          = "any"
-	TypeUnit         = "Unit"
 	TypeResult       = "Result"
 	TypeHTTPResponse = "HttpResponse"
-	TypeFunction     = "Function"
-	TypeFiber        = "Fiber"
-	TypeChannel      = "Channel"
+	TypeFunction     = "function"
 )
 
 // Function names.
@@ -60,6 +54,7 @@ const (
 	FilterFunc         = "filter"
 	FoldFunc           = "fold"
 	MainFunctionName   = "main"
+	WebSocketKeepAlive = "webSocketKeepAlive"
 
 	// String utility functions
 	LengthFunc    = "length"
@@ -69,78 +64,46 @@ const (
 	// Process and system functions
 	SpawnProcessFunc = "spawnProcess"
 
-	WriteFileFunc  = "writeFile"
-	ReadFileFunc   = "readFile"
-	DeleteFileFunc = "deleteFile"
-	SleepFunc      = "sleep"
+	WriteFileFunc = "writeFile"
+	ReadFileFunc  = "readFile"
+	SleepFunc     = "sleep"
 
 	// Process management functions
 	AwaitProcessFunc   = "awaitProcess"
 	CleanupProcessFunc = "cleanupProcess"
+
+	// JSON functions
+	ParseJSONFunc   = "parseJSON"
+	ExtractCodeFunc = "extractCode"
 )
 
-// Osprey HTTP Function names.
-// These are the names of the functions at the Osprey level.
+// HTTP Function names.
 const (
 	// HTTP Server functions.
-	HTTPCreateServerOsprey = "httpCreateServer"
-	HTTPListenOsprey       = "httpListen"
-	HTTPStopServerOsprey   = "httpStopServer"
+	HTTPCreateServerFunc = "httpCreateServer"
+	HTTPListenFunc       = "httpListen"
+	HTTPStopServerFunc   = "httpStopServer"
 
 	// HTTP Client functions.
-	HTTPCreateClientOsprey = "httpCreateClient"
-	HTTPGetOsprey          = "httpGet"
-	HTTPPostOsprey         = "httpPost"
-	HTTPPutOsprey          = "httpPut"
-	HTTPDeleteOsprey       = "httpDelete"
-	HTTPRequestOsprey      = "httpRequest"
-	HTTPCloseClientOsprey  = "httpCloseClient"
+	HTTPCreateClientFunc = "httpCreateClient"
+	HTTPGetFunc          = "httpGet"
+	HTTPPostFunc         = "httpPost"
+	HTTPPutFunc          = "httpPut"
+	HTTPDeleteFunc       = "httpDelete"
+	HTTPRequestFunc      = "httpRequest"
+	HTTPCloseClientFunc  = "httpCloseClient"
 
 	// WebSocket functions.
-	WebSocketConnectOsprey = "websocketConnect"
-	WebSocketSendOsprey    = "websocketSend"
-	WebSocketCloseOsprey   = "websocketClose"
+	WebSocketConnectFunc = "websocketConnect"
+	WebSocketSendFunc    = "websocketSend"
+	WebSocketCloseFunc   = "websocketClose"
 
 	// WebSocket Server functions.
-	WebSocketCreateServerOsprey    = "websocketCreateServer"
-	WebSocketServerListenOsprey    = "websocketServerListen"
-	WebSocketServerSendOsprey      = "websocketServerSend"
-	WebSocketServerBroadcastOsprey = "websocketServerBroadcast"
-	WebSocketStopServerOsprey      = "websocketStopServer"
-	WebSocketKeepAliveOsprey       = "websocketKeepAlive"
-
-)
-
-// C Runtime HTTP Function names.
-// These are the names of the functions at the C level.
-// There are NOT the Osprey function names
-const (
-	// HTTP Server functions.
-	HTTPCreateServerFunc = "http_create_server"
-	HTTPListenFunc       = "http_listen"
-	HTTPStopServerFunc   = "http_stop_server"
-
-	// HTTP Client functions.
-	HTTPCreateClientFunc = "http_create_client"
-	HTTPGetFunc          = "http_get"
-	HTTPPostFunc         = "http_post"
-	HTTPPutFunc          = "http_put"
-	HTTPDeleteFunc       = "http_delete"
-	HTTPRequestFunc      = "http_request"
-	HTTPCloseClientFunc  = "http_close_client"
-
-	// WebSocket functions.
-	WebSocketConnectFunc = "websocket_connect"
-	WebSocketSendFunc    = "websocket_send"
-	WebSocketCloseFunc   = "websocket_close"
-
-	// WebSocket Server functions.
-	WebSocketCreateServerFunc    = "websocket_create_server"
-	WebSocketServerListenFunc    = "websocket_server_listen"
-	WebSocketServerSendFunc      = "websocket_server_send"
-	WebSocketServerBroadcastFunc = "websocket_server_broadcast"
-	WebSocketStopServerFunc      = "websocket_stop_server"
-	WebSocketKeepAliveFunc       = "websocket_keep_alive"
+	WebSocketCreateServerFunc    = "websocketCreateServer"
+	WebSocketServerListenFunc    = "websocketServerListen"
+	WebSocketServerSendFunc      = "websocketServerSend"
+	WebSocketServerBroadcastFunc = "websocketServerBroadcast"
+	WebSocketStopServerFunc      = "websocketStopServer"
 )
 
 // Pattern matching constants.
@@ -149,6 +112,13 @@ const (
 	WildcardPattern = "_"
 	SuccessPattern  = "Success"
 	ErrorPattern    = "Error"
+)
+
+// Type name constants for case variations.
+const (
+	StringTypeName = "String"
+	IntTypeName    = "Int"
+	BoolTypeName   = "Bool"
 )
 
 // HTTP Error codes (matching C runtime).
@@ -161,6 +131,16 @@ const (
 	HTTPErrorServer     = -5
 )
 
+// Any type validation operation types.
+const (
+	AnyOpArithmetic       = "arithmetic"
+	AnyOpFieldAccess      = "field_access"
+	AnyOpFunctionArgument = "function_argument"
+	AnyOpVariableAccess   = "variable_access"
+)
 
-// NOTE: Function argument counts have been moved to the unified built-in function registry
-// (builtin_registry.go). Use len(GlobalBuiltInRegistry.GetFunction(name).ParameterTypes) instead.
+// Effect constants.
+const (
+	StateEffect  = "State"
+	LoggerEffect = "Logger"
+)

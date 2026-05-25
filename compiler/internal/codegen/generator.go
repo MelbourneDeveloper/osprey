@@ -2,34 +2,31 @@
 package codegen
 
 import (
-	"log/slog"
-
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
 	"github.com/christianfindlay/osprey/internal/ast"
-	"github.com/christianfindlay/osprey/internal/logging"
 )
 
 // LLVMGenerator generates LLVM IR from AST.
 type LLVMGenerator struct {
-	module             *ir.Module
-	builder            *ir.Block
-	function           *ir.Func
-	variables          map[string]value.Value
-	mutableVariables   map[string]bool // Track which variables were declared as mutable
-	functions          map[string]*ir.Func
-	functionParameters map[string][]string // Track function parameter names for named argument reordering
-	typeMap            map[string]types.Type
+	module              *ir.Module
+	builder             *ir.Block
+	function            *ir.Func
+	variables           map[string]value.Value
+	variableTypes       map[string]string // Track variable types: "string" or "int"
+	functions           map[string]*ir.Func
+	functionReturnTypes map[string]string   // Track function return types: "string" or "int"
+	functionParameters  map[string][]string // Track function parameter names for named argument reordering
+	typeMap             map[string]types.Type
 	// Union type tracking
 	typeDeclarations map[string]*ast.TypeDeclaration // Track all type declarations
 	unionVariants    map[string]int64                // Track union variants and their discriminant values
-	// Monomorphization tracking
-	monomorphizedInstances map[string]string                   // Track monomorphized function instances
-	functionDeclarations   map[string]*ast.FunctionDeclaration // Track original function declarations
 	// Fiber closure counter
 	closureCounter int
+	// Temporary parameter types for return type analysis
+	currentFunctionParameterTypes map[string]string
 	// Result pattern matching support
 	currentResultValue value.Value // Current Result value being pattern matched
 	// Security configuration
@@ -38,21 +35,8 @@ type LLVMGenerator struct {
 	stringConstants       map[string]value.Value
 	currentFunction       *ir.Func
 	currentFunctionParams map[string]value.Value
-	// Real algebraic effects system
+	// Algebraic effects support
 	effectCodegen *EffectCodegen
-	// Context for type-aware literal generation
-	expectedReturnType    types.Type
-	expectedParameterType types.Type
-	// Hindley-Milner type inference system
-	typeInferer *TypeInferer
-	// Structured diagnostics
-	logger *slog.Logger
-	// HINDLEY-MILNER FIX: Single source of truth for record field mappings
-	// Maps record type name to field name -> LLVM index mapping
-	recordFieldMappings map[string]map[string]int
-	// Stream Fusion: Track pending transformations for map/filter
-	pendingMapFunc    *ast.Identifier // Pending map transformation function
-	pendingFilterFunc *ast.Identifier // Pending filter predicate function
 }
 
 // SecurityConfig defines security policies for the code generator.
@@ -91,12 +75,13 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 	}
 
 	generator := &LLVMGenerator{
-		module:             module,
-		variables:          make(map[string]value.Value),
-		mutableVariables:   make(map[string]bool),
-		functions:          make(map[string]*ir.Func),
-		functionParameters: make(map[string][]string),
-		typeMap:            typeMap,
+		module:              module,
+		variables:           make(map[string]value.Value),
+		variableTypes:       make(map[string]string),
+		functions:           make(map[string]*ir.Func),
+		functionReturnTypes: make(map[string]string),
+		functionParameters:  make(map[string][]string),
+		typeMap:             typeMap,
 		// Initialize union type tracking
 		typeDeclarations: make(map[string]*ast.TypeDeclaration),
 		unionVariants:    make(map[string]int64),
@@ -106,21 +91,16 @@ func NewLLVMGeneratorWithSecurity(security SecurityConfig) *LLVMGenerator {
 		currentResultValue:    nil,
 		currentFunction:       nil,
 		currentFunctionParams: make(map[string]value.Value),
-		// Initialize Hindley-Milner type inference system
-		typeInferer: NewTypeInferer(),
-		logger:      logging.Logger("codegen"),
-		// HINDLEY-MILNER FIX: Initialize record field mappings
-		recordFieldMappings: make(map[string]map[string]int),
 	}
 
 	// Declare external functions for FFI
 	generator.declareExternalFunctions()
 
+	// Register built-in function return types
+	generator.registerBuiltInFunctionReturnTypes()
+
 	// Register built-in types
 	generator.registerBuiltInTypes()
-
-	// Set the generator reference in the type inferer for constraint checking
-	generator.typeInferer.SetGenerator(generator)
 
 	// Initialize fiber runtime declarations will happen on first use
 
@@ -132,9 +112,11 @@ func (g *LLVMGenerator) GenerateIR() string {
 	return g.module.String()
 }
 
-// InitializeEffects initializes the effect system for the generator
+// InitializeEffects initializes the algebraic effects system
 func (g *LLVMGenerator) InitializeEffects() {
-	g.effectCodegen = g.NewEffectCodegen()
+	if g.effectCodegen == nil {
+		g.effectCodegen = g.NewEffectCodegen()
+	}
 }
 
 // RegisterEffectDeclaration registers an effect declaration with the effect system
@@ -142,18 +124,11 @@ func (g *LLVMGenerator) RegisterEffectDeclaration(effect *ast.EffectDeclaration)
 	if g.effectCodegen == nil {
 		g.InitializeEffects()
 	}
-
-	return g.effectCodegen.RegisterEffect(effect)
+	g.effectCodegen.RegisterEffect(effect)
+	return nil
 }
 
-// generateRealPerformExpression generates real algebraic effects perform expressions
-func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpression) (value.Value, error) {
-	if g.effectCodegen == nil {
-		g.InitializeEffects()
-	}
-
-	return g.effectCodegen.GeneratePerformExpression(perform)
-}
+// Unexported helper methods (moved after exported methods for funcorder compliance)
 
 // declareExternalFunctions declares external C library functions.
 func (g *LLVMGenerator) declareExternalFunctions() {
@@ -199,42 +174,90 @@ func (g *LLVMGenerator) declareExternalFunctions() {
 		ir.NewParam("n", types.I64),
 	)
 	g.functions["memcpy"] = memcpy
+}
 
-	// Declare effect runtime functions for dynamic handler resolution
-	// i32 @__osprey_handler_push(i8* %effect_name, i8* %operation_name, i8* %handler_func_ptr)
-	handlerPush := g.module.NewFunc("__osprey_handler_push", types.I32,
-		ir.NewParam("effect_name", types.I8Ptr),
-		ir.NewParam("operation_name", types.I8Ptr),
-		ir.NewParam("handler_func_ptr", types.I8Ptr),
-	)
-	g.functions["__osprey_handler_push"] = handlerPush
+// registerBuiltInFunctionReturnTypes registers return types for built-in functions.
+func (g *LLVMGenerator) registerBuiltInFunctionReturnTypes() {
+	// TODO: Most of these are WRONG!
+	// Anything that COULD fail MUST return a RESULT
+	// Especially IO functions like readFile, writeFile, etc.
+	// DON'T IGNORE THIS!!! FIX IT!!
 
-	// i32 @__osprey_handler_pop()
-	handlerPop := g.module.NewFunc("__osprey_handler_pop", types.I32)
-	g.functions["__osprey_handler_pop"] = handlerPop
+	// Core functions
+	g.functionReturnTypes["toString"] = TypeString
+	g.functionReturnTypes["print"] = TypeInt // Returns exit code
+	g.functionReturnTypes["input"] = TypeInt // Returns input as integer
+	g.functionReturnTypes["range"] = TypeInt // Returns range object (simplified as int)
+	// STRING FUNCTIONS RETURN RESULT TYPES - THEY CAN FAIL!
+	g.functionReturnTypes["length"] = TypeResult + "<Int, string>"       // Returns Result<Int, string>
+	g.functionReturnTypes["contains"] = TypeResult + "<Bool, string>"    // Returns Result<Bool, string>
+	g.functionReturnTypes["substring"] = TypeResult + "<String, string>" // Returns Result<String, string>
 
-	// i8* @__osprey_handler_lookup(i8* %effect_name, i8* %operation_name)
-	handlerLookup := g.module.NewFunc("__osprey_handler_lookup", types.I8Ptr,
-		ir.NewParam("effect_name", types.I8Ptr),
-		ir.NewParam("operation_name", types.I8Ptr),
-	)
-	g.functions["__osprey_handler_lookup"] = handlerLookup
+	// Process and file functions - MUST return Result types per spec
+	// Process functions
+	g.functionReturnTypes["spawnProcess"] = TypeResult + "<ProcessHandle, string>"
+	g.functionReturnTypes["awaitProcess"] = TypeInt
+	g.functionReturnTypes["cleanupProcess"] = TypeInt
+
+	// File I/O functions
+	g.functionReturnTypes["writeFile"] = TypeResult + "<Success, string>"
+	g.functionReturnTypes["readFile"] = TypeResult + "<string, string>"
+	g.functionReturnTypes["parseJSON"] = TypeResult + "<string, string>"
+	g.functionReturnTypes["extractCode"] = TypeResult + "<string, string>"
+
+	// HTTP functions
+	g.functionReturnTypes["httpCreateServer"] = TypeInt // Returns server ID
+	g.functionReturnTypes["httpListen"] = TypeInt       // Returns status code
+	g.functionReturnTypes["httpStopServer"] = TypeInt   // Returns status code
+	g.functionReturnTypes["httpCreateClient"] = TypeInt // Returns client ID
+	g.functionReturnTypes["httpGet"] = TypeInt          // Returns status code
+	g.functionReturnTypes["httpPost"] = TypeInt         // Returns status code
+	g.functionReturnTypes["httpPut"] = TypeInt          // Returns status code
+	g.functionReturnTypes["httpDelete"] = TypeInt       // Returns status code
+	g.functionReturnTypes["httpRequest"] = TypeInt      // Returns status code
+	g.functionReturnTypes["httpCloseClient"] = TypeInt  // Returns status code
+
+	// WebSocket functions
+	g.functionReturnTypes["webSocketConnect"] = TypeInt         // Returns connection ID
+	g.functionReturnTypes["webSocketSend"] = TypeInt            // Returns status code
+	g.functionReturnTypes["webSocketClose"] = TypeInt           // Returns status code
+	g.functionReturnTypes["webSocketCreateServer"] = TypeInt    // Returns server ID
+	g.functionReturnTypes["webSocketServerListen"] = TypeInt    // Returns status code
+	g.functionReturnTypes["webSocketServerBroadcast"] = TypeInt // Returns status code
+	g.functionReturnTypes["webSocketStopServer"] = TypeInt      // Returns status code
+	g.functionReturnTypes["webSocketKeepAlive"] = TypeInt       // Returns status code
+
+	// Functional programming functions return various types
+	g.functionReturnTypes["forEach"] = TypeInt // Returns status/count
+	g.functionReturnTypes["map"] = TypeInt     // Returns transformed array (simplified as int)
+	g.functionReturnTypes["filter"] = TypeInt  // Returns filtered array (simplified as int)
+	g.functionReturnTypes["fold"] = TypeInt    // Returns accumulated value (could be any type, simplified as int)
 }
 
 // registerBuiltInTypes registers built-in types in the type system.
 func (g *LLVMGenerator) registerBuiltInTypes() {
-	// Register HttpResponse as a built-in struct type (REMOVED REDUNDANT LENGTH FIELDS)
+	// Register HttpResponse as a built-in struct type
 	httpResponseType := types.NewStruct(
 		types.I64,   // status: Int
 		types.I8Ptr, // headers: String
 		types.I8Ptr, // contentType: String
+		types.I64,   // contentLength: Int
 		types.I64,   // streamFd: Int
 		types.I1,    // isComplete: Bool
-		types.I8Ptr, // partialBody: String (runtime calculates length automatically)
+		types.I8Ptr, // partialBody: String
+		types.I64,   // partialLength: Int
 	)
 
 	g.typeMap[TypeHTTPResponse] = httpResponseType
 
 	// Register ProcessHandle as Int64 (process ID)
 	g.typeMap["ProcessHandle"] = types.I64
+}
+
+// generateRealPerformExpression generates LLVM IR for perform expressions using the real effects system
+func (g *LLVMGenerator) generateRealPerformExpression(perform *ast.PerformExpression) (value.Value, error) {
+	if g.effectCodegen == nil {
+		g.InitializeEffects()
+	}
+	return g.effectCodegen.GeneratePerformExpression(perform)
 }

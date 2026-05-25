@@ -1,4 +1,13 @@
-🔒 Testing Handler Isolation
-[PROD] Processing task: 5
-[TEST] Processing task: 12
-📊 Results: Prod=10, Test=24, Silent=0 
+🔒 Testing Effect Handler Isolation
+=== Production Handler ===
+[PROD] Task Production processing: 5
+[PROD] Task Production result: 25
+=== Debug Handler ===
+[DEBUG] Task Debug processing: 7
+[DEBUG] Task Debug result: 49
+=== Silent Handler ===
+📊 Results:
+  Production: 25
+  Debug: 49
+  Silent: 81
+🎉 Handler Isolation Test Complete! 

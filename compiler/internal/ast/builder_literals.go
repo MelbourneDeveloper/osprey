@@ -30,16 +30,11 @@ func (b *Builder) buildPrimary(ctx parser.IPrimaryContext) Expression {
 		return b.buildLiteral(ctx.Literal())
 	case ctx.LambdaExpr() != nil:
 		return b.buildLambdaExpr(ctx.LambdaExpr())
-	case ctx.ObjectLiteral() != nil:
-		return b.buildObjectLiteral(ctx.ObjectLiteral())
 	case ctx.ID(0) != nil && ctx.LSQUARE() != nil && ctx.INT() != nil && ctx.RSQUARE() != nil:
 		// Array indexing: ID[INT]
 		return b.buildListAccess(ctx)
 	case ctx.ID(0) != nil:
-		return &Identifier{
-			Name:     ctx.ID(0).GetText(),
-			Position: b.getPosition(ctx.ID(0).GetSymbol()),
-		}
+		return &Identifier{Name: ctx.ID(0).GetText()}
 	case ctx.Expr(0) != nil:
 		return b.buildExpression(ctx.Expr(0))
 	}
@@ -74,8 +69,8 @@ func (b *Builder) buildEffectExpression(ctx parser.IPrimaryContext) Expression {
 	switch {
 	case ctx.PERFORM() != nil:
 		return b.buildPerformExpression(ctx)
-	case ctx.HandlerExpr() != nil:
-		return b.buildHandlerExpression(ctx)
+	case ctx.WITH() != nil:
+		return b.buildWithHandlerExpression(ctx)
 	}
 
 	return nil
@@ -87,32 +82,20 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 		text := ctx.INT().GetText()
 		value, _ := strconv.ParseInt(text, 10, 64)
 
-		return &IntegerLiteral{
-			Value:    value,
-			Position: b.getPosition(ctx.INT().GetSymbol()),
-		}
+		return &IntegerLiteral{Value: value}
 	case ctx.STRING() != nil:
 		text := ctx.STRING().GetText()
 		// Remove quotes and process escape sequences
 		value := strings.Trim(text, "\"")
 		value = b.processEscapeSequences(value)
 
-		return &StringLiteral{
-			Value:    value,
-			Position: b.getPosition(ctx.STRING().GetSymbol()),
-		}
+		return &StringLiteral{Value: value}
 	case ctx.INTERPOLATED_STRING() != nil:
 		return b.buildInterpolatedString(ctx.INTERPOLATED_STRING().GetText())
 	case ctx.TRUE() != nil:
-		return &BooleanLiteral{
-			Value:    true,
-			Position: b.getPosition(ctx.TRUE().GetSymbol()),
-		}
+		return &BooleanLiteral{Value: true}
 	case ctx.FALSE() != nil:
-		return &BooleanLiteral{
-			Value:    false,
-			Position: b.getPosition(ctx.FALSE().GetSymbol()),
-		}
+		return &BooleanLiteral{Value: false}
 	case ctx.ListLiteral() != nil:
 		return b.buildListLiteral(ctx.ListLiteral())
 	}
@@ -132,10 +115,7 @@ func (b *Builder) buildInterpolatedString(text string) Expression {
 		}
 	}
 
-	return &InterpolatedStringLiteral{
-		Parts:    parts,
-		Position: nil, // Position will be set by caller if available
-	}
+	return &InterpolatedStringLiteral{Parts: parts}
 }
 
 // buildListLiteral builds a ListLiteral from a list literal context.
@@ -154,10 +134,7 @@ func (b *Builder) buildListLiteral(ctx parser.IListLiteralContext) Expression {
 		}
 	}
 
-	return &ListLiteral{
-		Elements: elements,
-		Position: b.getPositionFromContext(ctx),
-	}
+	return &ListLiteral{Elements: elements}
 }
 
 // buildListAccess builds a ListAccessExpression from array indexing syntax.
@@ -167,23 +144,16 @@ func (b *Builder) buildListAccess(ctx parser.IPrimaryContext) Expression {
 	}
 
 	// Get the list identifier
-	listExpr := &Identifier{
-		Name:     ctx.ID(0).GetText(),
-		Position: b.getPosition(ctx.ID(0).GetSymbol()),
-	}
+	listExpr := &Identifier{Name: ctx.ID(0).GetText()}
 
 	// Parse the index
 	indexText := ctx.INT().GetText()
 	indexValue, _ := strconv.ParseInt(indexText, 10, 64)
-	indexExpr := &IntegerLiteral{
-		Value:    indexValue,
-		Position: b.getPosition(ctx.INT().GetSymbol()),
-	}
+	indexExpr := &IntegerLiteral{Value: indexValue}
 
 	return &ListAccessExpression{
-		List:     listExpr,
-		Index:    indexExpr,
-		Position: b.getPositionFromContext(ctx),
+		List:  listExpr,
+		Index: indexExpr,
 	}
 }
 
@@ -245,7 +215,6 @@ func (b *Builder) buildTypeConstructor(ctx *parser.TypeConstructorContext) Expre
 
 	// Build field assignments
 	fieldAssignments := make(map[string]Expression)
-
 	if ctx.FieldAssignments() != nil {
 		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
 			fieldName := fieldCtx.ID().GetText()
@@ -293,7 +262,6 @@ func (b *Builder) buildBlockExpression(ctx parser.IBlockExprContext) Expression 
 
 	// Build all statements in the block
 	statements := make([]Statement, 0)
-
 	for _, stmtCtx := range blockBody.AllStatement() {
 		stmt := b.buildStatement(stmtCtx)
 		if stmt != nil {
@@ -320,7 +288,6 @@ func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExp
 	operationName := ctx.ID(1).GetText()
 
 	var arguments []Expression
-
 	if ctx.ArgList() != nil {
 		args, _ := b.buildArguments(ctx.ArgList()) // Ignore named args for now
 		arguments = args
@@ -330,56 +297,26 @@ func (b *Builder) buildPerformExpression(ctx parser.IPrimaryContext) *PerformExp
 		EffectName:    effectName,
 		OperationName: operationName,
 		Arguments:     arguments,
-		Position:      b.getPositionFromContext(ctx),
 	}
 }
 
-// buildObjectLiteral builds an ObjectLiteral from an object literal context.
-func (b *Builder) buildObjectLiteral(ctx parser.IObjectLiteralContext) Expression {
-	if ctx == nil {
-		return nil
-	}
-
-	// Build field assignments
-	fieldAssignments := make(map[string]Expression)
-
-	if ctx.FieldAssignments() != nil {
-		for _, fieldCtx := range ctx.FieldAssignments().AllFieldAssignment() {
-			fieldName := fieldCtx.ID().GetText()
-			fieldValue := b.buildExpression(fieldCtx.Expr())
-			fieldAssignments[fieldName] = fieldValue
-		}
-	}
-
-	return &ObjectLiteral{
-		Fields:   fieldAssignments,
-		Position: b.getPositionFromContext(ctx),
-	}
-}
-
-// buildHandlerExpression builds a HandlerExpression from handle...in syntax.
-func (b *Builder) buildHandlerExpression(ctx parser.IPrimaryContext) *HandlerExpression {
+// buildWithHandlerExpression builds a HandlerExpression from with handler block syntax.
+func (b *Builder) buildWithHandlerExpression(ctx parser.IPrimaryContext) *HandlerExpression {
+	// WITH handlerExpr blockExpr (new ML-style syntax without DO)
 	handlerCtx := ctx.HandlerExpr()
-	if handlerCtx == nil {
-		return nil
-	}
+	blockExpr := b.buildBlockExpression(ctx.BlockExpr())
 
-	// Get effect name
 	effectName := handlerCtx.ID().GetText()
-
-	// Build handler arms
 	handlers := make([]HandlerArm, 0)
 
+	// Build handler arms
 	for _, armCtx := range handlerCtx.AllHandlerArm() {
-		operationName := armCtx.ID().GetText()
+		operationName := armCtx.ID(0).GetText()
 
-		// Get parameters if present
+		// Get parameter name if present (for operations like captureStdout(data))
 		var parameters []string
-
-		if armCtx.HandlerParams() != nil {
-			for _, idCtx := range armCtx.HandlerParams().AllID() {
-				parameters = append(parameters, idCtx.GetText())
-			}
+		if armCtx.LPAREN() != nil && len(armCtx.AllID()) > 1 {
+			parameters = append(parameters, armCtx.ID(1).GetText())
 		}
 
 		// Build handler body
@@ -389,17 +326,12 @@ func (b *Builder) buildHandlerExpression(ctx parser.IPrimaryContext) *HandlerExp
 			OperationName: operationName,
 			Parameters:    parameters,
 			Body:          body,
-			Position:      b.getPositionFromContext(armCtx),
 		})
 	}
-
-	// Build the expression that the handler wraps
-	bodyExpr := b.buildExpression(handlerCtx.Expr())
 
 	return &HandlerExpression{
 		EffectName: effectName,
 		Handlers:   handlers,
-		Body:       bodyExpr,
-		Position:   b.getPositionFromContext(ctx),
+		Body:       blockExpr,
 	}
 }
