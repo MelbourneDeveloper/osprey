@@ -266,9 +266,12 @@ func WrapFieldNotFoundInRecord(field, recordType string) error {
 	return fmt.Errorf("%w '%s' in record type %s", ErrFieldNotFoundInRecord, field, recordType)
 }
 
-// WrapFieldAccessOnNonRecord wraps the non-record field access error with context
+// WrapFieldAccessOnNonRecord wraps the non-record field access error with context.
+// Sentinel already contains "on non-record type"; just append the field name and
+// the offending type so the message reads as one sentence instead of duplicating
+// the phrase ("...non-record type 'length' on non-record type string").
 func WrapFieldAccessOnNonRecord(field, typeStr string) error {
-	return fmt.Errorf("%w '%s' on non-record type %s", ErrFieldAccessOnNonRecord, field, typeStr)
+	return fmt.Errorf("%w '%s' (%s)", ErrFieldAccessOnNonRecord, field, typeStr)
 }
 
 // WrapFieldAccessOnLegacyRecord wraps the legacy record field access error
