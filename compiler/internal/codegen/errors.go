@@ -81,6 +81,10 @@ var (
 	ErrUndefinedVariable        = errors.New("undefined variable")
 	ErrUnsupportedBinaryOp      = errors.New("unsupported binary operator") // Alias for ErrUnsupportedBinaryOperator
 	ErrStructComparisonNotImpl  = errors.New("structural comparison on records/unions is not yet implemented")
+	ErrListLiteralAggregateElem = errors.New(
+		"list literals with record/union elements are not yet supported; " +
+			"use listAppend(List(), record) to build the list element-by-element",
+	)
 
 	ErrMethodNotImpl         = errors.New("method not implemented")
 	ErrNoToStringForFunc     = errors.New("no toString implementation for function")

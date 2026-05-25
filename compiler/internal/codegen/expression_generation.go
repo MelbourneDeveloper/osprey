@@ -256,8 +256,7 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 		// ~281 would crash with "store operands are not compatible: src={...};
 		// dst=i64*". Treat aggregate-element lists as not-yet-supported with
 		// a clear error rather than a runtime panic.
-		return nil, fmt.Errorf("list literals with record/union elements " +
-			"are not yet supported; use listAppend(List(), record) to build the list element-by-element")
+		return nil, ErrListLiteralAggregateElem
 	default:
 		elementType = types.I64
 		elementSize = 8 // i64 size
