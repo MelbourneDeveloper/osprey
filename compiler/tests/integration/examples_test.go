@@ -245,6 +245,7 @@ func getBoolAndMiscExpectedOutputs() map[string]string {
 			"3\n" +
 			"7\n" +
 			"Quote: \"hi\"\n" +
+			"Hi \"Bob\"\n" +
 			"=== Function Composition Test Complete ===\n",
 		"minimal_test.osp": "Minimal test:\nx = 5\n",
 		"simple.osp":       "Simple test:\nx = 42\ngreeting = hello\n",

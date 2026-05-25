@@ -92,7 +92,10 @@ match bx {
 
 // strings.Trim on the lexer token was greedy; "Quote: \"hi\"" lost its closing
 // quote and gained a stray trailing backslash. Surrounding-quote strip is now
-// single-step via TrimPrefix/TrimSuffix.
+// single-step via TrimPrefix/TrimSuffix. Same bug existed on the interpolated
+// string path.
 print("Quote: \"hi\"")
+let nm = "Bob"
+print("Hi \"${nm}\"")
 
 print("=== Function Composition Test Complete ===")

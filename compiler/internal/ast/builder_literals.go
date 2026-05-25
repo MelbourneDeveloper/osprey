@@ -134,7 +134,9 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 
 // buildInterpolatedString parses an interpolated string like "Hello ${name}!".
 func (b *Builder) buildInterpolatedString(text string) Expression {
-	text = strings.Trim(text, "\"")
+	// strings.Trim was greedy and ate trailing escape `\"` sequences along
+	// with the closing quote — see the matching fix in the STRING branch.
+	text = strings.TrimSuffix(strings.TrimPrefix(text, "\""), "\"")
 	parts := b.parseInterpolatedParts(text)
 
 	// Process escape sequences in text parts
