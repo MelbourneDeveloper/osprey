@@ -60,6 +60,8 @@ const (
 	TypeFunction     = "Function"
 	TypeFiber        = "Fiber"
 	TypeChannel      = "Channel"
+	TypeState        = "State"
+	TypeService      = "Service"
 	TypeList         = "List"
 	TypeMap          = "Map"
 )

@@ -2921,7 +2921,7 @@ func (ti *TypeInferer) inferPerformExpression(e *ast.PerformExpression) (Type, e
 			// getValue returns int
 			return &ConcreteType{name: TypeInt}, nil
 		}
-	case "State":
+	case TypeState:
 		switch e.OperationName {
 		case "set":
 			// State set operations typically return Unit
