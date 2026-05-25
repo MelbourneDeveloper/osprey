@@ -3,8 +3,6 @@ package codegen
 import (
 	"errors"
 	"fmt"
-	"maps"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -296,19 +294,6 @@ func NewConcreteType(name string) *ConcreteType {
 	return &ConcreteType{name: name}
 }
 
-// isKnownConcreteType returns true if the type name is a known primitive or built-in type,
-// as opposed to a generic type parameter name like "T", "U", "V".
-func isKnownConcreteType(name string) bool {
-	switch name {
-	case TypeInt, TypeString, TypeBool, TypeFloat, TypeUnit, TypeResult,
-		TypeAny, TypeMathError, TypeHTTPResponse, TypeFunction, TypeFiber,
-		TypeChannel, TypeList, TypeMap, "Int", "String", "Bool", "Float",
-		ErrorPattern, SuccessPattern:
-		return true
-	}
-	return false
-}
-
 func (ct *ConcreteType) String() string {
 	return ct.name
 }
@@ -334,7 +319,6 @@ type TypeScheme struct {
 }
 
 func (ts *TypeScheme) String() string {
-	fmt.Printf("🔥 DEBUG: TypeScheme.String() called with vars=%v, typ=%v\n", ts.vars, ts.typ)
 	if len(ts.vars) == 0 {
 		return ts.typ.String()
 	}
@@ -349,13 +333,11 @@ func (ts *TypeScheme) String() string {
 
 // Category returns the category of the type scheme
 func (ts *TypeScheme) Category() TypeCategory {
-	fmt.Printf("🔥 DEBUG: TypeScheme.Category() called with vars=%v, typ=%v\n", ts.vars, ts.typ)
 	return ts.typ.Category()
 }
 
 // Equals checks if two type schemes are equal
 func (ts *TypeScheme) Equals(other Type) bool {
-	fmt.Printf("🔥 DEBUG: TypeScheme.Equals() called with vars=%v, typ=%v, other=%T\n", ts.vars, ts.typ, other)
 	if otherTs, ok := other.(*TypeScheme); ok {
 		if len(ts.vars) != len(otherTs.vars) {
 			return false
@@ -399,7 +381,9 @@ func (env *TypeEnv) Set(name string, t Type) {
 // GetAllVars returns a copy of all variables in the environment
 func (env *TypeEnv) GetAllVars() map[string]Type {
 	result := make(map[string]Type)
-	maps.Copy(result, env.vars)
+	for k, v := range env.vars {
+		result[k] = v
+	}
 
 	return result
 }
@@ -469,9 +453,7 @@ func (ti *TypeInferer) Instantiate(scheme *TypeScheme) Type {
 
 // Generalize creates a type scheme by quantifying free type variables
 func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
-	fmt.Printf("🔥 DEBUG: Generalize() called with type: %T = %v\n", t, t)
 	freeVars := ti.getFreeVars(t)
-	fmt.Printf("🔥 DEBUG: Generalize() found free vars: %v\n", freeVars)
 
 	// Remove vars that are already in the environment
 	var schemeVars []int
@@ -481,8 +463,11 @@ func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
 
 		for _, envType := range ti.env.GetAllVars() {
 			envFreeVars := ti.getFreeVars(envType)
-			if slices.Contains(envFreeVars, v) {
-				inEnv = true
+			for _, envVar := range envFreeVars {
+				if envVar == v {
+					inEnv = true
+					break
+				}
 			}
 
 			if inEnv {
@@ -495,16 +480,13 @@ func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
 		}
 	}
 
-	scheme := &TypeScheme{vars: schemeVars, typ: t}
-	fmt.Printf("🔥 DEBUG: Generalize() created TypeScheme with vars=%v, typ=%v\n", schemeVars, t)
-	return scheme
+	return &TypeScheme{vars: schemeVars, typ: t}
 }
 
 // Unify performs type unification between two types
 func (ti *TypeInferer) Unify(t1, t2 Type) error {
 	t1 = ti.prune(t1)
 	t2 = ti.prune(t2)
-
 
 	// Handle type variables
 	err := ti.unifyTypeVariables(t1, t2)
@@ -517,21 +499,11 @@ func (ti *TypeInferer) Unify(t1, t2 Type) error {
 		return nil
 	}
 
-	// Handle ConcreteType vs GenericType before routing by category
-	// This handles cases like Result<float> vs Result[float]
-	if ti.unifyConcreteWithGeneric(t1, t2) {
-		return nil
-	}
-
 	// Handle types by category
 	switch t1.Category() {
 	case PrimitiveTypeCategory:
 		return ti.unifyPrimitiveTypes(t1, t2)
 	case GenericTypeCategory:
-		if t2.Category() != GenericTypeCategory {
-			return fmt.Errorf("%w: cannot unify generic type %s with %+v type %s", 
-				ErrTypeMismatch, t1.String(), t2.Category(), t2.String())
-		}
 		return ti.unifyGenericTypes(t1, t2)
 	case FunctionTypeCategory:
 		return ti.unifyFunctionTypes(t1, t2)
@@ -656,7 +628,7 @@ func isLogicalOp(op string) bool {
 // InferType performs type inference on an expression
 func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 	switch e := expr.(type) {
-	case *ast.FloatLiteral, *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
+	case *ast.IntegerLiteral, *ast.StringLiteral, *ast.BooleanLiteral:
 		return ti.inferLiteralType(e)
 	case *ast.Identifier:
 		return ti.inferIdentifierType(e)
@@ -668,7 +640,7 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return &ConcreteType{name: TypeString}, nil
 	case *ast.SpawnExpression, *ast.AwaitExpression, *ast.YieldExpression:
 		return ti.inferConcurrencyExpression(e)
-	case *ast.ChannelCreateExpression:
+	case *ast.ChannelExpression, *ast.ChannelCreateExpression:
 		return ti.inferChannelExpression(e)
 	case *ast.ChannelSendExpression, *ast.ChannelRecvExpression:
 		return ti.inferChannelOperationExpression(e)
@@ -688,8 +660,6 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return ti.inferResultExpression(e)
 	case *ast.ListLiteral:
 		return ti.inferListLiteral(e)
-	case *ast.MapLiteral:
-		return ti.inferMapLiteral(e)
 	case *ast.ObjectLiteral:
 		return ti.inferObjectLiteral(e)
 	case *ast.BlockExpression:
@@ -697,22 +667,10 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 	case *ast.UnaryExpression:
 		return ti.inferUnaryExpression(e)
 	case *ast.MethodCallExpression:
-		// UFCS: `x.f(a, b)` is type-equivalent to `f(x, a, b)`.
-		// Implements [BUILTIN-STRING-UFCS]. See spec/0012-Built-InFunctions.md.
-		rewritten := &ast.CallExpression{
-			Function: &ast.Identifier{
-				Name:     e.MethodName,
-				Position: e.Position,
-			},
-			Arguments:      append([]ast.Expression{e.Object}, e.Arguments...),
-			NamedArguments: e.NamedArguments,
-			Position:       e.Position,
-		}
-		return ti.inferCallExpression(rewritten)
+		// Method calls are not supported in the grammar
+		return nil, ErrMethodCallsNotImplemented
 	case *ast.ListAccessExpression:
 		return ti.inferListAccess(e)
-	case *ast.UpdateExpression:
-		return ti.inferUpdateExpression(e)
 	case *ast.PerformExpression:
 		return ti.inferPerformExpression(e)
 	case *ast.HandlerExpression:
@@ -784,8 +742,6 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 
 // handlePatternFieldBindings handles field bindings in patterns with proper type extraction
 func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discriminantType Type) {
-	fmt.Printf("DEBUG: handlePatternFieldBindings called - pattern: %+v, discriminantType: %+v\n", 
-		pattern, discriminantType)
 	// Special handling for structural patterns (constructor "*")
 	if pattern.Constructor == "*" && discriminantType != nil {
 		// For structural patterns, try to extract field types from the discriminant type
@@ -801,15 +757,29 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 		return
 	}
 
-	// Handle Result type patterns
+	// Special handling for Result type patterns
 	if pattern.Constructor == "Success" && discriminantType != nil {
-		if ti.bindSuccessPattern(pattern, discriminantType) {
+		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
+			// Extract the success type from Result<T, E>
+			successType := ti.extractResultSuccessType(ct.name)
+			if len(pattern.Fields) > 0 {
+				// Bind the first field to the success type
+				ti.env.Set(pattern.Fields[0], successType)
+			}
+
 			return
 		}
 	}
 
 	if pattern.Constructor == "Error" && discriminantType != nil {
-		if ti.bindErrorPattern(pattern, discriminantType) {
+		if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
+			// Extract the error type from Result<T, E>
+			errorType := ti.extractResultErrorType(ct.name)
+			if len(pattern.Fields) > 0 {
+				// Bind the first field to the error type
+				ti.env.Set(pattern.Fields[0], errorType)
+			}
+
 			return
 		}
 	}
@@ -818,50 +788,6 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 	for _, field := range pattern.Fields {
 		ti.env.Set(field, ti.Fresh())
 	}
-}
-
-// bindSuccessPattern binds pattern fields for Success constructor
-func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType Type) bool {
-	// Handle GenericType Result<T, E>
-	if gt, ok := discriminantType.(*GenericType); ok && gt.name == TypeResult && len(gt.typeArgs) >= 1 {
-		successType := gt.typeArgs[0]
-		if len(pattern.Fields) > 0 {
-			fmt.Printf("DEBUG: bindSuccessPattern - Setting %s to %+v (discriminantType: %+v)\n", 
-				pattern.Fields[0], successType, discriminantType)
-			ti.env.Set(pattern.Fields[0], successType)
-		}
-		return true
-	}
-	// Handle ConcreteType Result<T, E> (legacy string-based approach)
-	if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
-		successType := ti.extractResultSuccessType(ct.name)
-		if len(pattern.Fields) > 0 {
-			ti.env.Set(pattern.Fields[0], successType)
-		}
-		return true
-	}
-	return false
-}
-
-// bindErrorPattern binds pattern fields for Error constructor
-func (ti *TypeInferer) bindErrorPattern(pattern ast.Pattern, discriminantType Type) bool {
-	// Handle GenericType Result<T, E>
-	if gt, ok := discriminantType.(*GenericType); ok && gt.name == "Result" && len(gt.typeArgs) >= 2 {
-		errorType := gt.typeArgs[1]
-		if len(pattern.Fields) > 0 {
-			ti.env.Set(pattern.Fields[0], errorType)
-		}
-		return true
-	}
-	// Handle ConcreteType Result<T, E> (legacy string-based approach)
-	if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
-		errorType := ti.extractResultErrorType(ct.name)
-		if len(pattern.Fields) > 0 {
-			ti.env.Set(pattern.Fields[0], errorType)
-		}
-		return true
-	}
-	return false
 }
 
 // extractResultSuccessType extracts the success type T from Result<T, E>
@@ -896,181 +822,6 @@ func (ti *TypeInferer) extractResultErrorType(resultTypeName string) Type {
 	return &ConcreteType{name: TypeString} // fallback
 }
 
-// unwrapResultType unwraps a Result<T, E> type to just T
-// If the type is not a Result, returns it as-is
-func (ti *TypeInferer) unwrapResultType(t Type) Type {
-	resolved := ti.prune(t)
-
-	concrete, ok := resolved.(*ConcreteType)
-	if !ok {
-		return resolved
-	}
-
-	typeName := concrete.String()
-
-	// Check if it's a Result type
-	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
-		return ti.extractResultSuccessType(typeName)
-	}
-
-	// Not a Result type, return as-is
-	return resolved
-}
-
-// isIntOrResultInt checks if a type is Int or Result<int, E> for some error type E.
-// This is used for arithmetic operations that can accept both plain Int and Result<int>.
-func (ti *TypeInferer) isIntOrResultInt(t Type) bool {
-	// Resolve type to handle type variables
-	resolved := ti.prune(t)
-
-	// Type variables are allowed - they will be unified with Int later
-	if _, ok := resolved.(*TypeVar); ok {
-		return true
-	}
-
-	// Check if it's a concrete type
-	concrete, ok := resolved.(*ConcreteType)
-	if !ok {
-		return false
-	}
-
-	typeName := concrete.String()
-
-	// Check if it's plain Int
-	if typeName == TypeInt {
-		return true
-	}
-
-	// Check if it's Result<int, ...>
-	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
-		successType := ti.extractResultSuccessType(typeName)
-		return successType.String() == TypeInt
-	}
-
-	return false
-}
-
-// isFloatType checks if a type is float
-func (ti *TypeInferer) isFloatType(t Type) bool {
-	resolved := ti.prune(t)
-
-	concrete, ok := resolved.(*ConcreteType)
-	if !ok {
-		return false
-	}
-
-	typeName := concrete.String()
-
-	// Check for plain float
-	if typeName == TypeFloat {
-		return true
-	}
-
-	// Check for Result<float, ...>
-	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
-		successType := ti.extractResultSuccessType(typeName)
-		return successType.String() == TypeFloat
-	}
-
-	return false
-}
-
-// constrainNumericTypeVarToInt unifies a TypeVar with int only when the other operand is concretely int.
-// Used for division where we don't want to force float onto an unknown operand.
-func (ti *TypeInferer) constrainNumericTypeVarToInt(left, right Type) {
-	leftPruned := ti.prune(left)
-	rightPruned := ti.prune(right)
-
-	isConcreteInt := func(t Type) bool {
-		ct, ok := t.(*ConcreteType)
-		if !ok {
-			return false
-		}
-		name := ct.String()
-		return name == TypeInt || name == "Result<int, MathError>"
-	}
-
-	if _, ok := leftPruned.(*TypeVar); ok {
-		if isConcreteInt(rightPruned) {
-			_ = ti.Unify(leftPruned, &ConcreteType{name: TypeInt})
-		}
-	}
-	if _, ok := rightPruned.(*TypeVar); ok {
-		if isConcreteInt(leftPruned) {
-			_ = ti.Unify(rightPruned, &ConcreteType{name: TypeInt})
-		}
-	}
-}
-
-// constrainNumericTypeVar unifies a TypeVar with the numeric type of its counterpart operand.
-// This ensures parameters used in arithmetic get a concrete type instead of staying as TypeVars.
-func (ti *TypeInferer) constrainNumericTypeVar(left, right Type) {
-	leftPruned := ti.prune(left)
-	rightPruned := ti.prune(right)
-
-	leftIsTV := func() bool { _, ok := leftPruned.(*TypeVar); return ok }
-	rightIsTV := func() bool { _, ok := rightPruned.(*TypeVar); return ok }
-
-	concreteNumericType := func(t Type) Type {
-		switch ct := t.(type) {
-		case *ConcreteType:
-			name := ct.String()
-			if name == TypeInt || name == TypeFloat {
-				return ct
-			}
-			if strings.HasPrefix(name, "Result<float") {
-				return &ConcreteType{name: TypeFloat}
-			}
-			if strings.HasPrefix(name, "Result<int") {
-				return &ConcreteType{name: TypeInt}
-			}
-		}
-		return nil
-	}
-
-	if leftIsTV() {
-		if concrete := concreteNumericType(rightPruned); concrete != nil {
-			_ = ti.Unify(leftPruned, concrete)
-		}
-	}
-	if rightIsTV() {
-		if concrete := concreteNumericType(leftPruned); concrete != nil {
-			_ = ti.Unify(rightPruned, concrete)
-		}
-	}
-}
-
-// isNumericType checks if a type is numeric (int or float) or Result<numeric>
-func (ti *TypeInferer) isNumericType(t Type) bool {
-	resolved := ti.prune(t)
-
-	// Type variables are allowed
-	if _, ok := resolved.(*TypeVar); ok {
-		return true
-	}
-
-	concrete, ok := resolved.(*ConcreteType)
-	if !ok {
-		return false
-	}
-
-	typeName := concrete.String()
-
-	// Check if it's plain int or float
-	if typeName == TypeInt || typeName == TypeFloat {
-		return true
-	}
-
-	// Check if it's Result<int> or Result<float>
-	if strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">") {
-		successType := ti.extractResultSuccessType(typeName)
-		successTypeName := successType.String()
-		return successTypeName == TypeInt || successTypeName == TypeFloat
-	}
-
-	return false
-}
-
 // unifyPrimitiveTypes handles unification of primitive types
 func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 	if ti.unifyConcreteTypes(t1, t2) {
@@ -1086,11 +837,6 @@ func (ti *TypeInferer) unifyPrimitiveTypes(t1, t2 Type) error {
 	}
 
 	if ti.unifyGenericCompatibleTypes(t1, t2) {
-		return nil
-	}
-
-	// Handle ConcreteType vs GenericType for Result types
-	if ti.unifyConcreteWithGeneric(t1, t2) {
 		return nil
 	}
 
@@ -1148,53 +894,6 @@ func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
 	}
 
 	return ti.isGenericTypeCompatible(ct1.name, ct2.name)
-}
-
-// unifyConcreteWithGeneric handles unification between ConcreteType and GenericType
-// This is needed for Result types where division returns ConcreteType but annotations are GenericType
-func (ti *TypeInferer) unifyConcreteWithGeneric(t1, t2 Type) bool {
-	// Try ConcreteType vs GenericType
-	if ct, ok := t1.(*ConcreteType); ok {
-		if gt, ok := t2.(*GenericType); ok {
-			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
-			// This allows: fn test() -> Fiber = spawn 42 (where spawn 42 creates Fiber[int])
-			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
-				return true // Bare type acts as wildcard
-			}
-
-			// Normalize: GenericType uses [] but ConcreteType uses <>
-			// Convert GenericType string representation to use <> for comparison
-			gtString := gt.String()
-			gtNormalized := strings.ReplaceAll(gtString, "[", "<")
-			gtNormalized = strings.ReplaceAll(gtNormalized, "]", ">")
-			// Also normalize whitespace - remove spaces around commas
-			gtNormalized = strings.ReplaceAll(gtNormalized, ", ", ",")
-			ctNormalized := strings.ReplaceAll(ct.name, ", ", ",")
-			return ctNormalized == gtNormalized
-		}
-	}
-
-	// Try GenericType vs ConcreteType
-	if gt, ok := t1.(*GenericType); ok {
-		if ct, ok := t2.(*ConcreteType); ok {
-			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
-			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
-				return true // Bare type acts as wildcard
-			}
-
-			// Normalize: GenericType uses [] but ConcreteType uses <>
-			// Convert GenericType string representation to use <> for comparison
-			gtString := gt.String()
-			gtNormalized := strings.ReplaceAll(gtString, "[", "<")
-			gtNormalized = strings.ReplaceAll(gtNormalized, "]", ">")
-			// Also normalize whitespace - remove spaces around commas
-			gtNormalized = strings.ReplaceAll(gtNormalized, ", ", ",")
-			ctNormalized := strings.ReplaceAll(ct.name, ", ", ",")
-			return gtNormalized == ctNormalized
-		}
-	}
-
-	return false
 }
 
 // unifyGenericTypes handles unification of generic types
@@ -1544,8 +1243,6 @@ func (ti *TypeInferer) getFreeVars(t Type) []int {
 // inferLiteralType infers types for literal expressions
 func (ti *TypeInferer) inferLiteralType(expr ast.Expression) (Type, error) {
 	switch expr.(type) {
-	case *ast.FloatLiteral:
-		return &ConcreteType{name: TypeFloat}, nil
 	case *ast.IntegerLiteral:
 		return &ConcreteType{name: TypeInt}, nil
 	case *ast.StringLiteral:
@@ -1673,11 +1370,6 @@ func (ti *TypeInferer) inferNamedArguments(namedArgs []ast.NamedArgument) ([]Typ
 			return nil, err
 		}
 
-		// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
-		// This allows fibonacci(n - 1) where (n - 1) returns Result<int, MathError>
-		// The unwrapped type is used for type inference, actual unwrapping happens at codegen
-		argType = ti.unwrapResultType(argType)
-
 		argTypes = append(argTypes, argType)
 	}
 
@@ -1693,11 +1385,6 @@ func (ti *TypeInferer) inferRegularArguments(args []ast.Expression) ([]Type, err
 		if err != nil {
 			return nil, err
 		}
-
-		// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
-		// This allows fibonacci(n - 1) where (n - 1) returns Result<int, MathError>
-		// The unwrapped type is used for type inference, actual unwrapping happens at codegen
-		argType = ti.unwrapResultType(argType)
 
 		argTypes = append(argTypes, argType)
 	}
@@ -1747,8 +1434,6 @@ func (ti *TypeInferer) getNamedArgumentPosition(namedArg ast.NamedArgument, defa
 	switch v := namedArg.Value.(type) {
 	case *ast.Identifier:
 		return v.Position
-	case *ast.FloatLiteral:
-		return v.Position
 	case *ast.IntegerLiteral:
 		return v.Position
 	case *ast.StringLiteral:
@@ -1766,8 +1451,6 @@ func (ti *TypeInferer) getRegularArgumentPosition(argExpr ast.Expression, defaul
 
 	switch v := argExpr.(type) {
 	case *ast.Identifier:
-		return v.Position
-	case *ast.FloatLiteral:
 		return v.Position
 	case *ast.IntegerLiteral:
 		return v.Position
@@ -1815,13 +1498,8 @@ func (ti *TypeInferer) unifyCallTypes(funcType Type, argTypes []Type) (Type, err
 func (ti *TypeInferer) inferConcurrencyExpression(expr ast.Expression) (Type, error) {
 	switch e := expr.(type) {
 	case *ast.SpawnExpression:
-		// Infer the return type of the spawned expression
-		exprType, err := ti.InferType(e.Expression)
-		if err != nil {
-			return nil, err
-		}
-		// spawn returns Fiber<T> where T is the type of the spawned expression
-		return &GenericType{name: TypeFiber, typeArgs: []Type{exprType}}, nil
+		// spawn returns a fiber handle
+		return &ConcreteType{name: "Fiber"}, nil
 	case *ast.YieldExpression:
 		// yield returns the type of the yielded value
 		if e.Value != nil {
@@ -1837,15 +1515,12 @@ func (ti *TypeInferer) inferConcurrencyExpression(expr ast.Expression) (Type, er
 			return nil, err
 		}
 
-		// Check if we're awaiting a Fiber<T> generic type
-		if genericType, ok := fiberType.(*GenericType); ok && genericType.name == TypeFiber && len(genericType.typeArgs) > 0 {
-			// Return the inner type T from Fiber<T>
-			return genericType.typeArgs[0], nil
-		}
-
-		// Check if we're awaiting a Fiber type (non-generic, legacy)
+		// Check if we're awaiting a Fiber type
 		if concreteType, ok := fiberType.(*ConcreteType); ok && concreteType.name == "Fiber" {
-			// Default to Int for non-generic Fiber types
+			// For now, we need to track what type the fiber produces
+			// Since we don't have generic types yet, we'll use a heuristic:
+			// Most fibers in the current examples produce Int values
+			// TODO: Implement proper generic types for Fiber<T>
 			return &ConcreteType{name: TypeInt}, nil
 		}
 
@@ -1933,242 +1608,118 @@ func (ti *TypeInferer) inferBinaryExpression(e *ast.BinaryExpression) (Type, err
 
 	switch {
 	case isArithmeticOp(e.Operator):
-		return ti.inferArithmeticOperation(e.Operator, leftType, rightType)
+		// Handle operator overloading for + operator
+		if e.Operator == "+" {
+			return ti.inferPlusOperation(leftType, rightType)
+		}
+
+		// Other arithmetic operations (-, *, /, %) require Int operands and return Int
+		intType := &ConcreteType{name: TypeInt}
+
+		// Both operands must be Int
+		err := ti.Unify(leftType, intType)
+		if err != nil {
+			return nil, fmt.Errorf("left operand of %s must be Int: %w", e.Operator, err)
+		}
+
+		err = ti.Unify(rightType, intType)
+		if err != nil {
+			return nil, fmt.Errorf("right operand of %s must be Int: %w", e.Operator, err)
+		}
+
+		// TODO: we need other number types like float.
+		return intType, nil
+
 	case isComparisonOp(e.Operator):
-		return ti.inferComparisonOperation(leftType, rightType)
+		// Comparison operations require operands of same type and return Bool
+		err := ti.Unify(leftType, rightType)
+		if err != nil {
+			return nil, fmt.Errorf("comparison operands must have same type: %w", err)
+		}
+
+		return &ConcreteType{name: TypeBool}, nil
+
 	case isLogicalOp(e.Operator):
-		return ti.inferLogicalOperation(e.Operator, leftType, rightType)
+		// Logical operations require Bool operands and return Bool
+		boolType := &ConcreteType{name: TypeBool}
+
+		err := ti.Unify(leftType, boolType)
+		if err != nil {
+			return nil, fmt.Errorf("left operand of %s must be Bool: %w", e.Operator, err)
+		}
+
+		err = ti.Unify(rightType, boolType)
+		if err != nil {
+			return nil, fmt.Errorf("right operand of %s must be Bool: %w", e.Operator, err)
+		}
+
+		return boolType, nil
+
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedBinaryOp, e.Operator)
 	}
 }
 
-// inferArithmeticOperation handles type inference for arithmetic operators (+, -, *, /, %).
-func (ti *TypeInferer) inferArithmeticOperation(operator string, leftType, rightType Type) (Type, error) {
-	if operator == "+" {
-		return ti.inferPlusOperation(leftType, rightType)
-	}
-	if operator == "/" {
-		return ti.inferDivisionOperation(leftType, rightType)
-	}
-	if operator == "%" {
-		return ti.inferModuloOperation(leftType, rightType)
-	}
-	return ti.inferBasicArithmeticOperation(operator, leftType, rightType)
-}
-
-// inferDivisionOperation handles type inference for division operator.
-// Division ALWAYS returns Result<float, MathError> per language spec.
-func (ti *TypeInferer) inferDivisionOperation(leftType, rightType Type) (Type, error) {
-	if !ti.isNumericType(leftType) {
-		return nil, WrapArithmeticTypeMismatch("/", "left", "numeric (int or float)", leftType.String())
-	}
-	if !ti.isNumericType(rightType) {
-		return nil, WrapArithmeticTypeMismatch("/", "right", "numeric (int or float)", rightType.String())
-	}
-	// Division accepts int or float on both sides - only constrain if the other side is int.
-	// (float/float also works but we don't want to force a TypeVar to float
-	// when the actual call site may pass int.)
-	ti.constrainNumericTypeVarToInt(leftType, rightType)
-	// Division ALWAYS returns float, even for int/int (10/2 = 5.0)
-	return &ConcreteType{name: "Result<float, MathError>"}, nil
-}
-
-// inferModuloOperation handles type inference for modulo operator.
-// Modulo returns Result<int, MathError> (can fail with modulo by zero).
-func (ti *TypeInferer) inferModuloOperation(leftType, rightType Type) (Type, error) {
-	if !ti.isIntOrResultInt(leftType) {
-		return nil, WrapArithmeticTypeMismatch("%", "left", "Int", leftType.String())
-	}
-	if !ti.isIntOrResultInt(rightType) {
-		return nil, WrapArithmeticTypeMismatch("%", "right", "Int", rightType.String())
-	}
-	return &ConcreteType{name: "Result<int, MathError>"}, nil
-}
-
-// inferBasicArithmeticOperation handles type inference for -, * operators.
-// ALL arithmetic operations return Result<T, MathError> due to overflow/underflow.
-func (ti *TypeInferer) inferBasicArithmeticOperation(operator string, leftType, rightType Type) (Type, error) {
-	if !ti.isNumericType(leftType) {
-		return nil, WrapArithmeticTypeMismatch(operator, "left", "numeric (int or float)", leftType.String())
-	}
-	if !ti.isNumericType(rightType) {
-		return nil, WrapArithmeticTypeMismatch(operator, "right", "numeric (int or float)", rightType.String())
-	}
-	// Constrain any unresolved TypeVars to a concrete numeric type from the other operand.
-	ti.constrainNumericTypeVar(leftType, rightType)
-
-	if ti.isFloatType(leftType) || ti.isFloatType(rightType) {
-		return &ConcreteType{name: "Result<float, MathError>"}, nil
-	}
-	return &ConcreteType{name: "Result<int, MathError>"}, nil
-}
-
-// inferComparisonOperation handles type inference for comparison operators.
-func (ti *TypeInferer) inferComparisonOperation(leftType, rightType Type) (Type, error) {
-	leftUnwrapped := ti.unwrapResultType(leftType)
-	rightUnwrapped := ti.unwrapResultType(rightType)
-
-	err := ti.Unify(leftUnwrapped, rightUnwrapped)
-	if err != nil {
-		return nil, fmt.Errorf("comparison operands must have same type: %w", err)
-	}
-	return &ConcreteType{name: TypeBool}, nil
-}
-
-// inferLogicalOperation handles type inference for logical operators (&&, ||).
-func (ti *TypeInferer) inferLogicalOperation(operator string, leftType, rightType Type) (Type, error) {
-	boolType := &ConcreteType{name: TypeBool}
-
-	err := ti.Unify(leftType, boolType)
-	if err != nil {
-		return nil, fmt.Errorf("left operand of %s must be Bool: %w", operator, err)
-	}
-
-	err = ti.Unify(rightType, boolType)
-	if err != nil {
-		return nil, fmt.Errorf("right operand of %s must be Bool: %w", operator, err)
-	}
-	return boolType, nil
-}
-
 // inferPlusOperation handles operator overloading for the + operator
-// Supports: String + String (concatenation), Int + Int (int), Float + Float (float),
-// and mixed numeric operations with type promotion (Int + Float → Float)
+// Supports both Int + Int (arithmetic) and String + String (concatenation)
 func (ti *TypeInferer) inferPlusOperation(leftType, rightType Type) (Type, error) {
-	leftType = ti.unwrapResultType(leftType)
-	rightType = ti.unwrapResultType(rightType)
-
+	// Resolve types to their concrete forms
 	leftResolved := ti.prune(leftType)
 	rightResolved := ti.prune(rightType)
 
-	// Try concrete type inference first
-	if result, ok := ti.inferPlusForConcreteTypes(leftResolved, rightResolved); ok {
-		return result, nil
-	}
+	// Check if both operands are concrete string types
+	if leftConcrete, ok := leftResolved.(*ConcreteType); ok {
+		if rightConcrete, ok := rightResolved.(*ConcreteType); ok {
+			// Both are concrete types - check for string concatenation
+			if leftConcrete.name == TypeString && rightConcrete.name == TypeString {
+				return &ConcreteType{name: TypeString}, nil
+			}
 
-	// Try string concatenation
-	if result, ok := ti.tryStringConcatenation(leftType, rightType, leftResolved, rightResolved); ok {
-		return result, nil
-	}
-
-	// Try numeric addition
-	if result, ok := ti.tryNumericAddition(leftType, rightType, leftResolved, rightResolved); ok {
-		return result, nil
-	}
-
-	// Default: unify types and return fresh type variable
-	return ti.handlePolymorphicPlus(leftType, rightType)
-}
-
-// inferPlusForConcreteTypes handles + operation for concrete types.
-func (ti *TypeInferer) inferPlusForConcreteTypes(leftResolved, rightResolved Type) (Type, bool) {
-	leftConcrete, leftOk := leftResolved.(*ConcreteType)
-	rightConcrete, rightOk := rightResolved.(*ConcreteType)
-
-	if !leftOk || !rightOk {
-		return nil, false
-	}
-
-	// String concatenation (does NOT return Result - string concat cannot fail)
-	if leftConcrete.name == TypeString && rightConcrete.name == TypeString {
-		return &ConcreteType{name: TypeString}, true
-	}
-
-	// Collection `+`: List + List → List (concat), Map + Map → Map (merge).
-	// Lets `tryCollectionPlus` route chained collection `+` to the right
-	// runtime call — without this the outer `+` in `a + b + c` infers a
-	// fresh TypeVar and falls through to integer codegen.
-	if leftConcrete.name == TypeList && rightConcrete.name == TypeList {
-		return &ConcreteType{name: TypeList}, true
-	}
-	if leftConcrete.name == TypeMap && rightConcrete.name == TypeMap {
-		return &ConcreteType{name: TypeMap}, true
-	}
-
-	// Numeric operations with type promotion - ALL return Result due to overflow
-	leftIsNumeric := leftConcrete.name == TypeInt || leftConcrete.name == TypeFloat
-	rightIsNumeric := rightConcrete.name == TypeInt || rightConcrete.name == TypeFloat
-
-	if leftIsNumeric && rightIsNumeric {
-		if leftConcrete.name == TypeFloat || rightConcrete.name == TypeFloat {
-			return &ConcreteType{name: "Result<float, MathError>"}, true
+			// TODO: we need other number types like float.
+			if leftConcrete.name == TypeInt && rightConcrete.name == TypeInt {
+				return &ConcreteType{name: TypeInt}, nil
+			}
 		}
-		return &ConcreteType{name: "Result<int, MathError>"}, true
 	}
 
-	return nil, false
-}
+	// Try string concatenation first if one operand is clearly a string
+	if ti.isStringType(leftResolved) || ti.isStringType(rightResolved) {
+		stringType := &ConcreteType{name: TypeString}
 
-// tryStringConcatenation attempts string concatenation type inference.
-func (ti *TypeInferer) tryStringConcatenation(leftType, rightType, leftResolved, rightResolved Type) (Type, bool) {
-	if !ti.isStringType(leftResolved) && !ti.isStringType(rightResolved) {
-		return nil, false
-	}
-
-	stringType := &ConcreteType{name: TypeString}
-	err := ti.Unify(leftType, stringType)
-	if err != nil {
-		return nil, false
-	}
-	err = ti.Unify(rightType, stringType)
-	if err != nil {
-		return nil, false
-	}
-	return stringType, true
-}
-
-// tryNumericAddition attempts numeric addition type inference with type promotion.
-// Returns Result<T, MathError> due to overflow possibility.
-func (ti *TypeInferer) tryNumericAddition(leftType, rightType, leftResolved, rightResolved Type) (Type, bool) {
-	leftIsNumeric := ti.isIntType(leftResolved) || ti.isFloatType(leftResolved)
-	rightIsNumeric := ti.isIntType(rightResolved) || ti.isFloatType(rightResolved)
-
-	if !leftIsNumeric && !rightIsNumeric {
-		return nil, false
-	}
-
-	// Promote to float if either operand is float - returns Result
-	if ti.isFloatType(leftResolved) || ti.isFloatType(rightResolved) {
-		return &ConcreteType{name: "Result<float, MathError>"}, true
-	}
-
-	// Try int unification - returns Result
-	intType := &ConcreteType{name: TypeInt}
-	err := ti.Unify(leftType, intType)
-	if err == nil {
-		err = ti.Unify(rightType, intType)
+		err := ti.Unify(leftType, stringType)
 		if err == nil {
-			return &ConcreteType{name: "Result<int, MathError>"}, true
+			err := ti.Unify(rightType, stringType)
+			if err == nil {
+				return stringType, nil
+			}
 		}
 	}
 
-	return nil, false
-}
+	// Try integer addition if one operand is clearly an integer
+	if ti.isIntType(leftResolved) || ti.isIntType(rightResolved) {
+		intType := &ConcreteType{name: TypeInt}
 
-// handlePolymorphicPlus handles polymorphic + operator for type variables.
-// This is called as a last resort when concrete type inference fails.
-func (ti *TypeInferer) handlePolymorphicPlus(leftType, rightType Type) (Type, error) {
-	// Ensure both types are unwrapped before unification to avoid circular references
-	leftUnwrapped := ti.unwrapResultType(leftType)
-	rightUnwrapped := ti.unwrapResultType(rightType)
-
-	// Prune to resolve type variables before unification
-	leftPruned := ti.prune(leftUnwrapped)
-	rightPruned := ti.prune(rightUnwrapped)
-
-	err := ti.Unify(leftPruned, rightPruned)
-	if err != nil {
-		// If unification fails due to recursive types, assume numeric addition
-		// This handles cases where type variables create circular dependencies
-		if errors.Is(err, ErrRecursiveType) {
-			// Default to Result<int, MathError> for arithmetic operations
-			return &ConcreteType{name: "Result<int, MathError>"}, nil
+		err := ti.Unify(leftType, intType)
+		if err == nil {
+			err := ti.Unify(rightType, intType)
+			if err == nil {
+				//TODO: we need other number types like float.
+				return intType, nil
+			}
 		}
+	}
+
+	// HINDLEY-MILNER FIX: Default case for type variables
+	// If we reach here, we have type variables that could be either int or string
+	// Create a constraint that both operands must have the same type
+	err := ti.Unify(leftType, rightType)
+	if err != nil {
 		return nil, fmt.Errorf("operands of + must have the same type: %w", err)
 	}
-	// For polymorphic addition, we don't know the result type yet
-	// Return a fresh type variable that will be resolved later
+
+	// For polymorphic + operator, we can't determine the result type yet
+	// Return a fresh type variable that will be unified later based on usage context
+	// The actual type (int or string) will be determined when the function is called
 	return ti.Fresh(), nil
 }
 
@@ -2301,86 +1852,8 @@ func (ti *TypeInferer) inferFieldAccess(e *ast.FieldAccessExpression) (Type, err
 	return nil, WrapFieldAccessOnNonRecord(e.FieldName, resolvedObjectType.String())
 }
 
-// checkRecordUpdateDisambiguation checks if a type constructor expression is actually a record update.
-// Returns (inferredType, true) if it's a record update, (nil, false) if it's a type constructor.
-func (ti *TypeInferer) checkRecordUpdateDisambiguation(e *ast.TypeConstructorExpression) (Type, bool, error) {
-	// Check if TypeName refers to a variable instead of a type
-	// If the name refers to a known type declaration, it's always a type constructor
-	if ti.generator != nil {
-		if _, isTypeDecl := ti.generator.typeDeclarations[e.TypeName]; isTypeDecl {
-			return nil, false, nil
-		}
-	}
-
-	varType, exists := ti.env.Get(e.TypeName)
-	if !exists {
-		return nil, false, nil // It's a type constructor
-	}
-
-	// Check if the variable is a record type
-	if _, isRecord := varType.(*RecordType); !isRecord {
-		return nil, false, nil // Variable exists but not a record, treat as type constructor
-	}
-
-	// This is a record update, not a type constructor
-	updateExpr := &ast.UpdateExpression{
-		Target: &ast.Identifier{
-			Name:     e.TypeName,
-			Position: e.Position,
-		},
-		Fields:   e.Fields,
-		Position: e.Position,
-	}
-
-	inferredType, err := ti.inferUpdateExpression(updateExpr)
-	if err != nil {
-		return nil, true, err
-	}
-
-	return inferredType, true, nil
-}
-
-// inferAndUnifyRecordFields infers and unifies field types for record constructors
-func (ti *TypeInferer) inferAndUnifyRecordFields(
-	e *ast.TypeConstructorExpression,
-	recordType *RecordType,
-) (map[string]Type, error) {
-	fieldTypes := make(map[string]Type)
-
-	// Infer the type of each field from the constructor expression
-	for fieldName, fieldExpr := range e.Fields {
-		fieldType, err := ti.InferType(fieldExpr)
-		if err != nil {
-			return nil, err
-		}
-
-		// Unify the inferred field type with the expected field type from record definition,
-		// but only when the expected type is a concrete type (not a generic type parameter).
-		// Generic type parameters are represented as ConcreteType with unrecognized names (e.g., "T", "U").
-		if expectedFieldType, exists := recordType.fields[fieldName]; exists {
-			if ct, ok := expectedFieldType.(*ConcreteType); !ok || isKnownConcreteType(ct.name) {
-				err := ti.Unify(fieldType, expectedFieldType)
-				if err != nil {
-					return nil, fmt.Errorf("field %s type mismatch in %s constructor: %w",
-						fieldName, recordType.name, err)
-				}
-			}
-		}
-
-		// Use the pruned type after unification
-		fieldTypes[fieldName] = ti.prune(fieldType)
-	}
-
-	return fieldTypes, nil
-}
-
 // inferTypeConstructor infers types for type constructor expressions
 func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (Type, error) {
-	// DISAMBIGUATION: Check if this is actually a record update
-	if updateType, isUpdate, err := ti.checkRecordUpdateDisambiguation(e); isUpdate {
-		return updateType, err
-	}
-
 	// Special handling for Success constructor
 	if e.TypeName == "Success" {
 		valueExpr, exists := e.Fields["value"]
@@ -2423,9 +1896,17 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 	if t, ok := ti.env.Get(e.TypeName); ok {
 		// Check if this is a record type
 		if recordType, isRecord := t.(*RecordType); isRecord {
-			fieldTypes, err := ti.inferAndUnifyRecordFields(e, recordType)
-			if err != nil {
-				return nil, err
+			// Create a new record type with fields instantiated from the constructor values
+			fieldTypes := make(map[string]Type)
+
+			// Infer the type of each field from the constructor expression
+			for fieldName, fieldExpr := range e.Fields {
+				fieldType, err := ti.InferType(fieldExpr)
+				if err != nil {
+					return nil, err
+				}
+
+				fieldTypes[fieldName] = fieldType
 			}
 
 			// Create a monomorphic instance of the record type
@@ -2470,17 +1951,10 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 		ti.env = newEnv
 
 		// Infer the pattern type and bind its variables
-		patternType, err := ti.InferPatternWithType(arm.Pattern, discriminantType)
+		_, err := ti.InferPatternWithType(arm.Pattern, discriminantType)
 		if err != nil {
 			ti.env = oldEnv
 			return nil, err
-		}
-		// Unify pattern type with discriminant type so the matched variable gets constrained.
-		// This propagates the concrete type (e.g. TaskPriority) back to unresolved TypeVars.
-		if discriminantType != nil && patternType != nil {
-			if _, isTV := ti.prune(discriminantType).(*TypeVar); isTV {
-				_ = ti.Unify(discriminantType, patternType)
-			}
 		}
 
 		// Infer the expression type in the context of the bound pattern variables
@@ -2501,15 +1975,15 @@ func (ti *TypeInferer) inferMatchExpression(e *ast.MatchExpression) (Type, error
 	for i := 1; i < len(armTypes); i++ {
 		err := ti.Unify(firstArmType, armTypes[i])
 		if err != nil {
-			// Resolve types after unification to apply substitutions
-			expectedType := ti.ResolveType(firstArmType).String()
-			actualType := ti.ResolveType(armTypes[i]).String()
+			// Include position info and proper formatting
+			expectedType := firstArmType.String()
+			actualType := armTypes[i].String()
 
 			return nil, WrapMatchTypeMismatchWithPos(i, actualType, expectedType, e.Position)
 		}
 	}
 
-	return ti.ResolveType(firstArmType), nil
+	return firstArmType, nil
 }
 
 // inferResultExpression infers types for result expressions
@@ -2541,7 +2015,7 @@ func (ti *TypeInferer) inferListLiteral(e *ast.ListLiteral) (Type, error) {
 	if len(e.Elements) == 0 {
 		// Empty list - create fresh element type variable
 		elementType := ti.Fresh()
-		return NewGenericType(TypeList, []Type{elementType}), nil
+		return &ConcreteType{name: fmt.Sprintf("List<%s>", elementType.String())}, nil
 	}
 
 	// Infer type of first element
@@ -2563,53 +2037,7 @@ func (ti *TypeInferer) inferListLiteral(e *ast.ListLiteral) (Type, error) {
 		}
 	}
 
-	return NewGenericType(TypeList, []Type{firstType}), nil
-}
-
-// inferMapLiteral infers types for map literal expressions
-func (ti *TypeInferer) inferMapLiteral(e *ast.MapLiteral) (Type, error) {
-	if len(e.Entries) == 0 {
-		// Empty map - create fresh key and value type variables
-		keyType := ti.Fresh()
-		valueType := ti.Fresh()
-		return NewGenericType(TypeMap, []Type{keyType, valueType}), nil
-	}
-
-	// Infer type of first entry
-	firstKey, err := ti.InferType(e.Entries[0].Key)
-	if err != nil {
-		return nil, fmt.Errorf("error inferring first map key type: %w", err)
-	}
-
-	firstValue, err := ti.InferType(e.Entries[0].Value)
-	if err != nil {
-		return nil, fmt.Errorf("error inferring first map value type: %w", err)
-	}
-
-	// All keys must have the same type, all values must have the same type
-	for i := 1; i < len(e.Entries); i++ {
-		keyType, err := ti.InferType(e.Entries[i].Key)
-		if err != nil {
-			return nil, fmt.Errorf("error inferring map key %d type: %w", i, err)
-		}
-
-		valueType, err := ti.InferType(e.Entries[i].Value)
-		if err != nil {
-			return nil, fmt.Errorf("error inferring map value %d type: %w", i, err)
-		}
-
-		err = ti.Unify(firstKey, keyType)
-		if err != nil {
-			return nil, fmt.Errorf("map key %d type mismatch: %w", i, err)
-		}
-
-		err = ti.Unify(firstValue, valueType)
-		if err != nil {
-			return nil, fmt.Errorf("map value %d type mismatch: %w", i, err)
-		}
-	}
-
-	return NewGenericType(TypeMap, []Type{firstKey, firstValue}), nil
+	return &ConcreteType{name: fmt.Sprintf("List<%s>", firstType.String())}, nil
 }
 
 // inferObjectLiteral infers types for object literal expressions
@@ -2654,35 +2082,6 @@ func (ti *TypeInferer) inferObjectLiteral(e *ast.ObjectLiteral) (Type, error) {
 	ti.nextID++
 
 	return NewRecordType(recordTypeName, fieldTypes), nil
-}
-
-// inferUpdateExpression infers the type for record update expressions.
-// The updated record has the same type as the original.
-func (ti *TypeInferer) inferUpdateExpression(e *ast.UpdateExpression) (Type, error) {
-	// Infer the type of the target being updated
-	targetType, err := ti.InferType(e.Target)
-	if err != nil {
-		return nil, fmt.Errorf("failed to infer target type for update: %w", err)
-	}
-
-	// Resolve the target type to get the actual record type
-	resolvedType := ti.ResolveType(targetType)
-
-	// Ensure it's a record type
-	recordType, ok := resolvedType.(*RecordType)
-	if !ok {
-		return nil, WrapCannotUpdateNonRecord(resolvedType.String())
-	}
-
-	// Validate that updated fields exist in the record
-	for fieldName := range e.Fields {
-		if _, exists := recordType.fields[fieldName]; !exists {
-			return nil, WrapFieldNotInRecordType(fieldName, recordType.String())
-		}
-	}
-
-	// The update expression preserves the type of the target (the full record type)
-	return recordType, nil
 }
 
 // inferBlockExpression infers types for block expressions
@@ -2782,169 +2181,33 @@ func CreateResultType(successType, errorType Type) Type {
 	return NewGenericType(TypeResult, []Type{successType, errorType})
 }
 
-// inferListAccess infers types for list/map access expressions
+// inferListAccess infers types for list access expressions
 func (ti *TypeInferer) inferListAccess(e *ast.ListAccessExpression) (Type, error) {
-	collectionType, err := ti.InferType(e.List)
+	_, err := ti.InferType(e.List)
 	if err != nil {
 		return nil, err
 	}
-
-	resolvedCollectionType := ti.ResolveType(collectionType)
 
 	indexType, err := ti.InferType(e.Index)
 	if err != nil {
 		return nil, err
 	}
 
-	// Determine element type based on collection type
-	elementType, err := ti.inferCollectionElementType(resolvedCollectionType, indexType)
-	if err != nil {
-		return nil, err
-	}
-
-	// Collection access returns Result<T, Error> for safety
-	errorType := &ConcreteType{name: "Error"}
-	return CreateResultType(elementType, errorType), nil
-}
-
-// inferCollectionElementType determines the element type for collection access
-func (ti *TypeInferer) inferCollectionElementType(collectionType, indexType Type) (Type, error) {
-	if genericType, ok := collectionType.(*GenericType); ok {
-		return ti.inferGenericCollectionElement(genericType, indexType, collectionType)
-	}
-	return ti.inferUnknownCollectionElement(collectionType, indexType)
-}
-
-// inferGenericCollectionElement handles known generic collection types
-func (ti *TypeInferer) inferGenericCollectionElement(
-	genericType *GenericType,
-	indexType,
-	collectionType Type,
-) (Type, error) {
-	switch genericType.name {
-	case TypeList:
-		return ti.inferListElement(genericType, indexType)
-	case TypeMap:
-		return ti.inferMapElement(genericType, indexType, collectionType)
-	default:
-		return nil, WrapUnsupportedCollectionType(genericType.name)
-	}
-}
-
-// inferListElement handles List<T> element type inference
-func (ti *TypeInferer) inferListElement(genericType *GenericType, indexType Type) (Type, error) {
+	// Index must be Int
 	intType := &ConcreteType{name: TypeInt}
-	err := ti.Unify(indexType, intType)
+	err = ti.Unify(indexType, intType)
 	if err != nil {
 		return nil, fmt.Errorf("list index must be Int: %w", err)
 	}
 
-	if len(genericType.typeArgs) >= 1 {
-		return genericType.typeArgs[0], nil
-	}
-	return ti.Fresh(), nil
-}
-
-// inferMapElement handles Map<K,V> element type inference
-func (ti *TypeInferer) inferMapElement(genericType *GenericType, indexType, collectionType Type) (Type, error) {
-	if len(genericType.typeArgs) >= TwoTypeArgs {
-		keyType := genericType.typeArgs[0]
-		err := ti.Unify(indexType, keyType)
-		if err != nil {
-			return nil, fmt.Errorf("map key type mismatch: %w", err)
-		}
-		return genericType.typeArgs[1], nil
-	}
-
-	return ti.inferFreshMapElement(indexType, collectionType)
-}
-
-// inferFreshMapElement creates fresh Map<K,V> types when not fully specified
-func (ti *TypeInferer) inferFreshMapElement(indexType, collectionType Type) (Type, error) {
-	keyType := ti.Fresh()
-	valueType := ti.Fresh()
-
-	err := ti.Unify(indexType, keyType)
-	if err != nil {
-		return nil, fmt.Errorf("map key type mismatch: %w", err)
-	}
-
-	expectedMapType := NewGenericType(TypeMap, []Type{keyType, valueType})
-	err = ti.Unify(collectionType, expectedMapType)
-	if err != nil {
-		return nil, fmt.Errorf("expected Map type for map access: %w", err)
-	}
-
-	return valueType, nil
-}
-
-// inferUnknownCollectionElement handles collection types that aren't explicitly generic
-func (ti *TypeInferer) inferUnknownCollectionElement(collectionType, indexType Type) (Type, error) {
-	// Check if it's record field access with string key
-	if recordType, ok := collectionType.(*RecordType); ok && indexType.String() == TypeString {
-		return ti.inferAsRecordAccess(recordType, indexType)
-	}
-	
-	if indexType.String() == TypeInt {
-		return ti.inferAsListAccess(collectionType)
-	}
-	return ti.inferAsMapAccess(collectionType, indexType)
-}
-
-// inferAsListAccess assumes integer index means List access
-func (ti *TypeInferer) inferAsListAccess(collectionType Type) (Type, error) {
+	// For now, create a fresh type variable for element type
+	// In a full implementation, this would extract the element type from List<T>
 	elementType := ti.Fresh()
-	expectedListType := NewGenericType(TypeList, []Type{elementType})
-	err := ti.Unify(collectionType, expectedListType)
-	if err != nil {
-		return nil, fmt.Errorf("expected List type for array access: %w", err)
-	}
-	return elementType, nil
-}
 
-// inferAsMapAccess assumes non-integer index means Map access
-func (ti *TypeInferer) inferAsMapAccess(collectionType, indexType Type) (Type, error) {
-	keyType := indexType
-	valueType := ti.Fresh()
-	expectedMapType := NewGenericType(TypeMap, []Type{keyType, valueType})
-	err := ti.Unify(collectionType, expectedMapType)
-	if err != nil {
-		return nil, fmt.Errorf("expected Map type for map access: %w", err)
-	}
-	return valueType, nil
-}
+	// List access returns Result<T, Error> for safety
+	errorType := &ConcreteType{name: "Error"}
 
-// inferAsRecordAccess handles record field access with string keys
-func (ti *TypeInferer) inferAsRecordAccess(recordType *RecordType, _ Type) (Type, error) {
-	// For record access, we need to create a type that represents the union of all field types
-	// since we don't know which field will be accessed at compile time
-	if len(recordType.fields) == 0 {
-		return nil, ErrEmptyRecordAccess
-	}
-	
-	// If all field types are the same, return that type
-	var firstFieldType Type
-	allSame := true
-	
-	for _, fieldType := range recordType.fields {
-		if firstFieldType == nil {
-			firstFieldType = fieldType
-		} else {
-			// Try to unify with the first field type
-			err := ti.Unify(firstFieldType, fieldType)
-			if err != nil {
-				allSame = false
-				break
-			}
-		}
-	}
-	
-	if allSame && firstFieldType != nil {
-		return ti.ResolveType(firstFieldType), nil
-	}
-	
-	// If field types are different, return 'any' type for dynamic access
-	return &ConcreteType{name: TypeAny}, nil
+	return CreateResultType(elementType, errorType), nil
 }
 
 // inferPerformExpression infers types for perform expressions
@@ -2975,7 +2238,7 @@ func (ti *TypeInferer) inferPerformExpression(e *ast.PerformExpression) (Type, e
 			// getValue returns int
 			return &ConcreteType{name: TypeInt}, nil
 		}
-	case TypeState:
+	case "State":
 		switch e.OperationName {
 		case "set":
 			// State set operations typically return Unit

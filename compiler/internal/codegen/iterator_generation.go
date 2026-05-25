@@ -112,10 +112,9 @@ func (g *LLVMGenerator) extractRangeBounds(rangeValue value.Value) (value.Value,
 
 // ForEachLoopBlocks holds the basic blocks for a forEach loop.
 type ForEachLoopBlocks struct {
-	LoopCond      *ir.Block
-	LoopBody      *ir.Block
-	LoopIncrement *ir.Block
-	LoopEnd       *ir.Block
+	LoopCond *ir.Block
+	LoopBody *ir.Block
+	LoopEnd  *ir.Block
 }
 
 // createForEachLoopBlocks creates the basic blocks needed for a forEach loop.
@@ -123,15 +122,13 @@ func (g *LLVMGenerator) createForEachLoopBlocks(callExpr *ast.CallExpression) *F
 	blockSuffix := fmt.Sprintf("_%p", callExpr)
 
 	return &ForEachLoopBlocks{
-		LoopCond:      g.function.NewBlock("loop_cond" + blockSuffix),
-		LoopBody:      g.function.NewBlock("loop_body" + blockSuffix),
-		LoopIncrement: g.function.NewBlock("loop_increment" + blockSuffix),
-		LoopEnd:       g.function.NewBlock("loop_end" + blockSuffix),
+		LoopCond: g.function.NewBlock("loop_cond" + blockSuffix),
+		LoopBody: g.function.NewBlock("loop_body" + blockSuffix),
+		LoopEnd:  g.function.NewBlock("loop_end" + blockSuffix),
 	}
 }
 
-// generateForEachLoop generates the actual loop logic for forEach with stream fusion.
-// Applies pending map/filter transformations inline for zero-cost abstractions.
+// generateForEachLoop generates the actual loop logic for forEach.
 func (g *LLVMGenerator) generateForEachLoop(
 	start, end value.Value,
 	funcIdent *ast.Identifier,
@@ -150,55 +147,11 @@ func (g *LLVMGenerator) generateForEachLoop(
 	g.builder = blocks.LoopBody
 	counterValue := g.builder.NewLoad(types.I64, counterPtr)
 
-	// STREAM FUSION: Apply pending transformations inline
-	var processedValue value.Value = counterValue
-
-	// Apply map transformation if present
-	if g.pendingMapFunc != nil {
-		mapped, err := g.callFunctionWithValue(g.pendingMapFunc, processedValue)
-		if err != nil {
-			return err
-		}
-		processedValue = mapped
+	_, err := g.callFunctionWithValue(funcIdent, counterValue)
+	if err != nil {
+		return err
 	}
 
-	// Apply filter transformation if present
-	if g.pendingFilterFunc != nil {
-		predicateResult, err := g.callFunctionWithValue(g.pendingFilterFunc, counterValue)
-		if err != nil {
-			return err
-		}
-		// Check if predicate returned non-zero (true)
-		zero := constant.NewInt(types.I64, 0)
-		// Create conditional blocks for filter with unique names
-		blockSuffix := fmt.Sprintf("_%p", blocks)
-		filterPassBlock := g.function.NewBlock("filter_pass" + blockSuffix)
-		filterSkipBlock := g.function.NewBlock("filter_skip" + blockSuffix)
-		isNonZero := g.builder.NewICmp(enum.IPredNE, predicateResult, zero)
-		g.builder.NewCondBr(isNonZero, filterPassBlock, filterSkipBlock)
-
-		// Filter pass: call the function
-		g.builder = filterPassBlock
-		_, err = g.callFunctionWithValue(funcIdent, processedValue)
-		if err != nil {
-			return err
-		}
-		g.builder.NewBr(blocks.LoopIncrement)
-
-		// Filter skip: just continue
-		g.builder = filterSkipBlock
-		g.builder.NewBr(blocks.LoopIncrement)
-	} else {
-		// No filter, always call the function
-		_, err := g.callFunctionWithValue(funcIdent, processedValue)
-		if err != nil {
-			return err
-		}
-		g.builder.NewBr(blocks.LoopIncrement)
-	}
-
-	// Increment counter in the common increment block
-	g.builder = blocks.LoopIncrement
 	one := constant.NewInt(types.I64, 1)
 	incrementedValue := g.builder.NewAdd(counterValue, one)
 	g.builder.NewStore(incrementedValue, counterPtr)
@@ -207,69 +160,45 @@ func (g *LLVMGenerator) generateForEachLoop(
 
 	g.builder = blocks.LoopEnd
 
-	// STREAM FUSION: Clear pending transformations after consuming
-	g.pendingMapFunc = nil
-	g.pendingFilterFunc = nil
-
 	return nil
 }
 
-// generateMapCall handles map function calls using stream fusion.
-// Stores the transformation function and returns the range unchanged.
-// The transformation will be fused into forEach/fold when they consume the iterator.
+// generateMapCall handles map function calls.
 func (g *LLVMGenerator) generateMapCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(MapFunc, callExpr)
-	if err != nil {
-		return nil, err
+	if len(callExpr.Arguments) != TwoArgs {
+		return nil, WrapBuiltInFunctionWrongArgs(MapFunc, len(callExpr.Arguments))
 	}
 
-	// Get the range struct from first argument (iterator)
 	rangeValue, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the transformation function
-	funcArg := callExpr.Arguments[1]
-
-	funcIdent, ok := funcArg.(*ast.Identifier)
-	if !ok {
+	if _, ok := callExpr.Arguments[1].(*ast.Identifier); !ok {
 		return nil, ErrMapNotFunction
 	}
 
-	// STREAM FUSION: Store the map function for later fusion with forEach/fold
-	g.pendingMapFunc = funcIdent
-
+	// TODO: Implement proper lazy map
 	return rangeValue, nil
 }
 
-// generateFilterCall handles filter function calls using stream fusion.
-// Stores the predicate function and returns the range unchanged.
-// The filter will be fused into forEach/fold when they consume the iterator.
+// generateFilterCall handles filter function calls.
 func (g *LLVMGenerator) generateFilterCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(FilterFunc, callExpr)
+	if len(callExpr.Arguments) != TwoArgs {
+		return nil, WrapBuiltInFunctionWrongArgs(FilterFunc, len(callExpr.Arguments))
+	}
+
+	iterator, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the range struct from first argument (iterator)
-	rangeValue, err := g.generateExpression(callExpr.Arguments[0])
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the predicate function
 	funcArg := callExpr.Arguments[1]
-
-	funcIdent, ok := funcArg.(*ast.Identifier)
-	if !ok {
-		return nil, ErrFilterNotFunction
+	if funcIdent, ok := funcArg.(*ast.Identifier); ok {
+		return g.callFunctionWithValue(funcIdent, iterator)
 	}
 
-	// STREAM FUSION: Store the filter predicate for later fusion with forEach/fold
-	g.pendingFilterFunc = funcIdent
-
-	return rangeValue, nil
+	return nil, ErrFilterNotFunction
 }
 
 // generateFoldCall handles fold function calls.
@@ -360,24 +289,8 @@ func (g *LLVMGenerator) generateFoldLoop(
 		return nil, err
 	}
 
-	// Check if newAccumulator is a Result type and extract value if needed
-	valueToStore := newAccumulator
-	if structType, ok := newAccumulator.Type().(*types.StructType); ok {
-		// Check if this looks like a Result struct: {i64, i8}
-		const resultTypeFieldCount = 2
-		if len(structType.Fields) == resultTypeFieldCount {
-			if _, ok := structType.Fields[0].(*types.IntType); ok {
-				const errorFlagBitSize = 8
-				if intType, ok := structType.Fields[1].(*types.IntType); ok && intType.BitSize == errorFlagBitSize {
-					// This is a Result type - extract the value field (index 0)
-					valueToStore = g.builder.NewExtractValue(newAccumulator, 0)
-				}
-			}
-		}
-	}
-
 	// Store the new accumulator value
-	g.builder.NewStore(valueToStore, accumulatorPtr)
+	g.builder.NewStore(newAccumulator, accumulatorPtr)
 
 	// Increment counter
 	one := constant.NewInt(types.I64, 1)
