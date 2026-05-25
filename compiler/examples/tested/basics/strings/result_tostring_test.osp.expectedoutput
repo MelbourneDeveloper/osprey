@@ -1,0 +1,4 @@
+contains result as string: true
+contains result2 as string: false
+substring result as string: hello
+length: 11

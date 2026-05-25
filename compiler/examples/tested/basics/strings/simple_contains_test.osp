@@ -1,0 +1,27 @@
+// Simple contains test to exercise core_functions.go
+
+fn main() -> int {
+    let text = "hello world"
+    
+    // Test contains function - should exercise generateContainsCall
+    let result1 = contains(text, "world")
+    match result1 {
+        Success { value } => match value {
+            true => print("Found 'world' in text")
+            false => print("Did not find 'world' in text") 
+        }
+        Error { message } => print("Error in contains")
+    }
+    
+    // Test with substring not found
+    let result2 = contains(text, "xyz")
+    match result2 {
+        Success { value } => match value {
+            true => print("Found 'xyz' in text")
+            false => print("Did not find 'xyz' in text")
+        }
+        Error { message } => print("Error in contains")
+    }
+    
+    0
+}

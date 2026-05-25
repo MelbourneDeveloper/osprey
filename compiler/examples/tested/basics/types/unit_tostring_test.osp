@@ -1,0 +1,18 @@
+// Test toString on Unit type to exercise createGlobalString for "()"
+
+fn returnsUnit() -> Unit = {
+    print("function that returns unit")
+}
+
+fn testUnitToString() -> Unit {
+    let unit = returnsUnit()
+    let unitStr = toString(unit)
+    print("unit as string: ${unitStr}")
+    
+    // Also test toString on print result (which returns Unit)
+    let printResult = print("testing print result")
+    let printStr = toString(printResult)
+    print("print result as string: ${printStr}")
+}
+
+testUnitToString()

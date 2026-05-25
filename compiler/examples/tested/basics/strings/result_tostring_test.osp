@@ -1,0 +1,26 @@
+// Test toString on Result types to exercise convertResultToString, createGlobalString, etc.
+
+fn testResultToString() -> Unit {
+    let s = "hello world"
+    
+    // Test toString on contains result (Result<bool, Error>)
+    let containsResult = contains(s, "world")
+    let containsStr = toString(containsResult)
+    print("contains result as string: ${containsStr}")
+    
+    // Test toString on another contains result
+    let containsResult2 = contains(s, "xyz") 
+    let containsStr2 = toString(containsResult2)
+    print("contains result2 as string: ${containsStr2}")
+    
+    // Test toString on substring result (Result<string, Error>)
+    let subResult = substring(s, 0, 5)
+    let subStr = toString(subResult)
+    print("substring result as string: ${subStr}")
+    
+    // Test length function (returns int directly)
+    let len = length(s)
+    print("length: ${toString(len)}")
+}
+
+testResultToString()
