@@ -1558,6 +1558,9 @@ func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallE
 	v, err := g.generateCallExpression(rewritten)
 	if err != nil {
 		// Hint at the UFCS rewrite so the user can see where to look.
+		// (Issue #61's field-vs-UFCS shadowing message is produced by the
+		// type inferer's MethodCallExpression branch — this codegen path
+		// is only reached for downstream errors after inference passes.)
 		return nil, fmt.Errorf("UFCS call `_.%s(...)` rewrites to `%s(_, ...)`: %w",
 			methodCall.MethodName, methodCall.MethodName, err)
 	}
