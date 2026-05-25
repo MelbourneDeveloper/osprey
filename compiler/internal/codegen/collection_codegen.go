@@ -397,6 +397,17 @@ func (g *LLVMGenerator) generateForEachListCall(callExpr *ast.CallExpression) (v
 	if err != nil {
 		return nil, err
 	}
+	// List literals (`[1, 2, 3]`) lower to an inline `{i64, i8*}` struct
+	// on the stack, but forEachList expects an opaque `i8*` handle backed
+	// by the C runtime's OspreyList. Without this guard the runtime
+	// segfaults at osprey_list_length. Use listAppend(List(), …) instead
+	// for now until [TYPE-LIST-LITERAL] is rewired to the C runtime.
+	if list.Type() != types.I8Ptr {
+		return nil, fmt.Errorf("%w: forEachList currently requires a "+
+			"runtime-allocated list (built with List() / listAppend / split / ...). "+
+			"List literals like [1, 2, 3] aren't wired through the C list runtime yet",
+			errCollectionExternMiss)
+	}
 	// Accept either a named-fn identifier or an inline lambda (matches the
 	// resolveCallbackIdent helper used by forEach / map / filter / fold).
 	funcArg := callExpr.Arguments[1]
