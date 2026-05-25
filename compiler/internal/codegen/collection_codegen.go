@@ -308,6 +308,44 @@ func (g *LLVMGenerator) generateMapContainsCall(callExpr *ast.CallExpression) (v
 	return g.builder.NewICmp(enum.IPredNE, res, constant.NewInt(types.I32, 0)), nil
 }
 
+// generateMapGetCall emits `match mapGet(m, k)` machinery:
+// - osprey_map_contains tells us whether the key exists
+// - on hit, osprey_map_get returns the stored i64 value (already boxed)
+// - wraps the value in a Result struct {i64, i8} where discriminant=0
+//   is Success and discriminant=1 is Error (key missing)
+func (g *LLVMGenerator) generateMapGetCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != collectionArgsTwo {
+		return nil, fmt.Errorf("mapGet expects %d arguments: %w", collectionArgsTwo, errCollectionArgCount)
+	}
+	g.declareMapExterns()
+	m, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+	k, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+	boxedKey := g.boxToI64(k)
+	contains := g.builder.NewCall(g.functions["osprey_map_contains"], m, boxedKey)
+	got := g.builder.NewCall(g.functions["osprey_map_get"], m, boxedKey)
+	// Result<i64, *> struct: {value, disc}. disc=1 (Error) when contains==0,
+	// else 0 (Success). Value field is osprey_map_get's raw i64 — already
+	// 0 on miss, but downstream code shouldn't read it through the Error
+	// arm anyway.
+	resultTy := types.NewStruct(types.I64, types.I8)
+	resultPtr := g.builder.NewAlloca(resultTy)
+	isMiss := g.builder.NewICmp(enum.IPredEQ, contains, constant.NewInt(types.I32, 0))
+	disc := g.builder.NewSelect(isMiss, constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
+	vp := g.builder.NewGetElementPtr(resultTy, resultPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(got, vp)
+	dp := g.builder.NewGetElementPtr(resultTy, resultPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(disc, dp)
+	return resultPtr, nil
+}
+
 func (g *LLVMGenerator) generateMapSetCall(callExpr *ast.CallExpression) (value.Value, error) {
 	if len(callExpr.Arguments) != collectionMapSetArg {
 		return nil, fmt.Errorf("mapSet expects %d arguments: %w", collectionMapSetArg, errCollectionArgCount)
