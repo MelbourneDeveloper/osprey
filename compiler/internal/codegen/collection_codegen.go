@@ -258,7 +258,11 @@ func (g *LLVMGenerator) generateListContainsCall(callExpr *ast.CallExpression) (
 	// because the appended string and the literal \"a\" lived at
 	// different malloc'd addresses.
 	var eq value.Value
-	if needle.Type() == types.I8Ptr {
+	// Compare via String() — llir's I8Ptr global isn't always the same
+	// pointer-equal *types.PointerType as the runtime value's type, so
+	// the obvious `needle.Type() == types.I8Ptr` mis-routes string
+	// arguments to the integer-equality branch.
+	if needle.Type().String() == types.I8Ptr.String() {
 		elemPtr := g.builder.NewIntToPtr(elem, types.I8Ptr)
 		cmp := g.builder.NewCall(g.functions["strcmp"], elemPtr, needle)
 		eq = g.builder.NewICmp(enum.IPredEQ, cmp, constant.NewInt(types.I32, 0))

@@ -35,6 +35,10 @@ const (
 	PercentEscape      = "%%"
 )
 
+// GOOSDarwin is the runtime.GOOS value for macOS, extracted as a const
+// to satisfy goconst (three+ call sites use it).
+const GOOSDarwin = "darwin"
+
 // Type names.
 const (
 	TypeString       = "string"

@@ -57,6 +57,9 @@ type LLVMGenerator struct {
 	// `xs |> map(f) |> filter(p)` filters on f(x), and
 	// `xs |> filter(p) |> map(f)` filters on x.
 	pendingIterOps []pendingIterOp
+	// Cache of declared module globals (e.g. external `@stdin`) so we
+	// don't redeclare on the second call site, which LLVM rejects.
+	globals map[string]*ir.Global
 }
 
 // pendingIterOp captures one pipeline stage (map or filter) plus its
