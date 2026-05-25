@@ -32,6 +32,9 @@ rm -f test_output.tmp
 
 echo "✅ All tests passed"
 
+# Exclude AST files from coverage report
+./exclude-from-code-coverage.sh
+
 # Show coverage summary only
 echo ""
 echo "📊 Coverage Summary:"
