@@ -250,6 +250,14 @@ func (g *LLVMGenerator) generateListLiteral(lit *ast.ListLiteral) (value.Value, 
 		// For maps, element type is a pointer to the map struct type
 		elementType = types.NewPointer(types.NewStruct(types.I64, types.I8Ptr))
 		elementSize = 8 // pointer size
+	case *ast.TypeConstructorExpression:
+		// Record / union-variant literals lower to multi-field structs that
+		// don't fit the i64-or-pointer assumption below. The store at line
+		// ~281 would crash with "store operands are not compatible: src={...};
+		// dst=i64*". Treat aggregate-element lists as not-yet-supported with
+		// a clear error rather than a runtime panic.
+		return nil, fmt.Errorf("list literals with record/union elements " +
+			"are not yet supported; use listAppend(List(), record) to build the list element-by-element")
 	default:
 		elementType = types.I64
 		elementSize = 8 // i64 size
