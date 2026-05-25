@@ -253,7 +253,22 @@ func (g *LLVMGenerator) generateListContainsCall(callExpr *ast.CallExpression) (
 
 	g.builder = body
 	elem := g.builder.NewCall(getFn, list, idxLoad)
-	eq := g.builder.NewICmp(enum.IPredEQ, elem, g.boxToI64(needle))
+	// String needles want content-equality, not pointer-equality —
+	// without this, listContains([\"a\",\"b\"], \"a\") returned false
+	// because the appended string and the literal \"a\" lived at
+	// different malloc'd addresses.
+	var eq value.Value
+	// Compare via String() — llir's I8Ptr global isn't always the same
+	// pointer-equal *types.PointerType as the runtime value's type, so
+	// the obvious `needle.Type() == types.I8Ptr` mis-routes string
+	// arguments to the integer-equality branch.
+	if needle.Type().String() == types.I8Ptr.String() {
+		elemPtr := g.builder.NewIntToPtr(elem, types.I8Ptr)
+		cmp := g.builder.NewCall(g.functions["strcmp"], elemPtr, needle)
+		eq = g.builder.NewICmp(enum.IPredEQ, cmp, constant.NewInt(types.I32, 0))
+	} else {
+		eq = g.builder.NewICmp(enum.IPredEQ, elem, g.boxToI64(needle))
+	}
 	foundBlock := g.function.NewBlock(fmt.Sprintf("contains_found_%p", callExpr))
 	contBlock := g.function.NewBlock(fmt.Sprintf("contains_cont_%p", callExpr))
 	g.builder.NewCondBr(eq, foundBlock, contBlock)
