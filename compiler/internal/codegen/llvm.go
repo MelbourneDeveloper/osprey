@@ -1282,6 +1282,28 @@ func isPrimitiveVarBind(pattern ast.Pattern, g *LLVMGenerator) bool {
 	return true
 }
 
+// primitiveInferType maps an LLVM value type back to the Osprey primitive
+// type name string used in the type inferer's environment. Returns "" for
+// non-primitive shapes (aggregates, pointers to other things). Used by the
+// variable-bind match path so a `s => …` arm on a string discriminant
+// makes `s` visible to subsequent inferer lookups even though the GEP
+// result isn't the I8Ptr singleton.
+func primitiveInferType(t types.Type) string {
+	switch t {
+	case types.I64:
+		return TypeInt
+	case types.Double:
+		return TypeFloat
+	case types.I1:
+		return TypeBool
+	}
+	if pt, ok := t.(*types.PointerType); ok && pt.ElemType == types.I8 {
+		return TypeString
+	}
+
+	return ""
+}
+
 // processMatchArmWithBinding handles match arms that have variable binding
 func (g *LLVMGenerator) processMatchArmWithBinding(arm ast.MatchArm, discriminant value.Value) (value.Value, error) {
 	// Save the current variable scope
@@ -1297,15 +1319,12 @@ func (g *LLVMGenerator) processMatchArmWithBinding(arm ast.MatchArm, discriminan
 		// arm body).
 		g.variables[arm.Pattern.Constructor] = discriminant
 		if g.typeInferer != nil && g.typeInferer.env != nil {
-			switch discriminant.Type() {
-			case types.I64:
-				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: TypeInt})
-			case types.Double:
-				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: TypeFloat})
-			case types.I8Ptr:
-				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: TypeString})
-			case types.I1:
-				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: TypeBool})
+			// LLVM type identity is unreliable here: GEP into [N x i8] yields a
+			// fresh *PointerType{ElemType:I8}, not the package singleton
+			// types.I8Ptr, so `discriminant.Type() == types.I8Ptr` is false for
+			// string literals. Compare by shape via primitiveInferType.
+			if t := primitiveInferType(discriminant.Type()); t != "" {
+				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: t})
 			}
 		}
 	}
