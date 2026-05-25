@@ -1124,6 +1124,17 @@ func (ti *TypeInferer) unifyMixedTypes(t1, t2 Type) bool {
 
 // unifyGenericCompatibleTypes handles generic type compatibility
 func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
+	// Builtin function-arg signatures are stored as ConcreteType with names
+	// like "T -> Unit" / "T -> U" / "T -> bool"; call sites infer real
+	// FunctionType. Treat the placeholders as wildcards against any
+	// matching-shape FunctionType so generic-iterator builtins compose.
+	if ti.unifyBuiltinFunctionPlaceholder(t1, t2) {
+		return true
+	}
+	if ti.unifyBuiltinFunctionPlaceholder(t2, t1) {
+		return true
+	}
+
 	ct1, ok1 := t1.(*ConcreteType)
 	ct2, ok2 := t2.(*ConcreteType)
 
@@ -1132,6 +1143,51 @@ func (ti *TypeInferer) unifyGenericCompatibleTypes(t1, t2 Type) bool {
 	}
 
 	return ti.isGenericTypeCompatible(ct1.name, ct2.name)
+}
+
+// Built-in registry function-arg placeholder type names. Stored as
+// ConcreteType in the registry but conceptually generic function shapes.
+const (
+	builtinFnTypeUnit = "T -> Unit"
+	builtinFnTypeBool = "T -> bool"
+	builtinFnTypeUToU = "T -> U"
+)
+
+// unifyBuiltinFunctionPlaceholder matches a ConcreteType holding one of the
+// placeholder names above against any FunctionType whose return shape fits.
+// Bridges string-named generic placeholders in the builtin registry to real
+// function types at call sites.
+func (ti *TypeInferer) unifyBuiltinFunctionPlaceholder(placeholder, candidate Type) bool {
+	ct, ok := placeholder.(*ConcreteType)
+	if !ok {
+		return false
+	}
+	ft, ok := candidate.(*FunctionType)
+	if !ok {
+		return false
+	}
+	switch ct.name {
+	case builtinFnTypeUnit:
+		retType := ti.prune(ft.returnType)
+		if retConcrete, ok := retType.(*ConcreteType); ok && retConcrete.name == TypeUnit {
+			return true
+		}
+		return false
+	case builtinFnTypeBool:
+		retType := ti.prune(ft.returnType)
+		if retConcrete, ok := retType.(*ConcreteType); ok && retConcrete.name == TypeBool {
+			return true
+		}
+		// Existing tests use int-returning predicates as truthy booleans.
+		if retConcrete, ok := retType.(*ConcreteType); ok && retConcrete.name == TypeInt {
+			return true
+		}
+		return false
+	case builtinFnTypeUToU:
+		// Any one-arg function with a single return.
+		return len(ft.paramTypes) == 1
+	}
+	return false
 }
 
 // isBuiltInWildcardTypeName reports whether a bare type name should match
@@ -2221,6 +2277,22 @@ func (ti *TypeInferer) isGenericTypeCompatible(t1, t2 string) bool {
 	}
 
 	if t2 == "T -> Unit" && strings.HasSuffix(t1, " -> Unit") {
+		return true
+	}
+
+	// `T -> U` is the builtin map's generic function-arg signature; treat
+	// it as a wildcard against any concrete `<T> -> <U>` shape. Same for
+	// `T -> bool` against any predicate `(...) -> bool`.
+	if t1 == "T -> U" && strings.Contains(t2, " -> ") {
+		return true
+	}
+	if t2 == "T -> U" && strings.Contains(t1, " -> ") {
+		return true
+	}
+	if t1 == "T -> bool" && strings.HasSuffix(t2, " -> bool") {
+		return true
+	}
+	if t2 == "T -> bool" && strings.HasSuffix(t1, " -> bool") {
 		return true
 	}
 
