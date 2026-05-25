@@ -2516,11 +2516,17 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 			return result, nil
 		}
 
-		// Execute the last statement (it's not an expression statement)
+		// Execute the last statement (it's not an expression statement —
+		// e.g. assignment, let, …). These statements produce no value; the
+		// block's result is Unit. Return nil so callers that introspect the
+		// result (lambda body / function body) emit `ret void` instead of
+		// `ret i64 0`, which llc rejects when the function signature is
+		// void: "value doesn't match function result type 'void'".
 		err := g.generateStatement(lastStmt)
 		if err != nil {
 			return nil, err
 		}
+		return nil, nil
 	}
 
 	// Return the final expression value if present
@@ -2528,8 +2534,9 @@ func (g *LLVMGenerator) generateBlockExpression(blockExpr *ast.BlockExpression) 
 		return g.generateExpression(blockExpr.Expression)
 	}
 
-	// If no explicit expression and no expression statements, return Unit (0)
-	return constant.NewInt(types.I64, 0), nil
+	// Empty block — no statements, no expression. Treat as Unit and
+	// return nil so the surrounding context emits a `ret void`.
+	return nil, nil
 }
 
 // generateHTTPResponseConstructor generates LLVM IR for HttpResponse construction.
