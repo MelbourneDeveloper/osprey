@@ -164,7 +164,10 @@ match multResult {
 }
 
 func TestMatchExpression(t *testing.T) {
-	source := `let x = match 42 { 42 => 1 }
+	source := `let x = match 42 {
+  42 => 1
+  _ => 0
+}
 print(toString(x))`
 	testCompileAndRunWithOutput(t, source, "1", "match expression")
 }
