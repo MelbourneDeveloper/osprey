@@ -418,9 +418,15 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 	// Create entry block
 	entryBlock := lambdaFunc.NewBlock("entry")
 
-	// Save current builder and switch to lambda
+	// Save current builder + function and switch to lambda. The function
+	// must be swapped too — match expressions / blocks call g.function.NewBlock
+	// to materialise extra basic blocks, and without this swap those blocks
+	// end up appended to the OUTER function (the caller of the lambda) and
+	// the lambda's body block is left without a terminator.
 	oldBuilder := g.builder
+	oldFunction := g.function
 	g.builder = entryBlock
+	g.function = lambdaFunc
 
 	// Save current variables and create new scope
 	savedVars := make(map[string]value.Value)
@@ -470,23 +476,37 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 	}
 
 	// A Unit-valued body (e.g. an effectful lambda whose last expression is
-	// `print(...)`) returns nil here; emit a Void ret so the function is
-	// well-formed.
+	// `print(...)` or a void-arm match) returns nil here; emit a Void ret so
+	// the function is well-formed. Use the current builder block — the body
+	// may have left it pointing at a match_end that still needs a terminator.
 	if bodyValue == nil || bodyValue.Type() == types.Void {
-		entryBlock.NewRet(nil)
+		retBlock := g.builder
+		if retBlock == nil || retBlock.Term != nil {
+			retBlock = entryBlock
+		}
+		retBlock.NewRet(nil)
 		g.variables = savedVars
 		g.typeInferer.env = savedTypeEnv
 		g.builder = oldBuilder
+		g.function = oldFunction
 		return lambdaFunc, nil
 	}
 
-	// Create return instruction
-	entryBlock.NewRet(bodyValue)
+	// Create return instruction. Use the current builder block, not entryBlock,
+	// because the body may have branched (e.g. a match expression leaves the
+	// builder pointing at its match_end block); writing the ret to entryBlock
+	// would leave the match_end without a terminator.
+	retBlock := g.builder
+	if retBlock == nil || retBlock.Term != nil {
+		retBlock = entryBlock
+	}
+	retBlock.NewRet(bodyValue)
 
 	// Restore context
 	g.variables = savedVars
 	g.typeInferer.env = savedTypeEnv
 	g.builder = oldBuilder
+	g.function = oldFunction
 
 	// Return the function
 	return lambdaFunc, nil

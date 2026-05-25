@@ -130,8 +130,14 @@ logicalOrExpr
     : logicalAndExpr (OR_OP logicalAndExpr)*
     ;
 
+// `&&` binds looser than comparison so `a > 0 && b > 0` parses as
+// `(a > 0) && (b > 0)` (matches every C-family language).
 logicalAndExpr
-    : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP | AND_OP) addExpr)*
+    : equalityExpr (AND_OP equalityExpr)*
+    ;
+
+equalityExpr
+    : addExpr ((EQ_OP | NE_OP | LT | GT | LE_OP | GE_OP) addExpr)*
     ;
 
 addExpr
