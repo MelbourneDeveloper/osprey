@@ -136,6 +136,9 @@ type ospreyListener interface {
 	// EnterLogicalAndExpr is called when entering the logicalAndExpr production.
 	EnterLogicalAndExpr(c *LogicalAndExprContext)
 
+	// EnterEqualityExpr is called when entering the equalityExpr production.
+	EnterEqualityExpr(c *EqualityExprContext)
+
 	// EnterAddExpr is called when entering the addExpr production.
 	EnterAddExpr(c *AddExprContext)
 
@@ -351,6 +354,9 @@ type ospreyListener interface {
 
 	// ExitLogicalAndExpr is called when exiting the logicalAndExpr production.
 	ExitLogicalAndExpr(c *LogicalAndExprContext)
+
+	// ExitEqualityExpr is called when exiting the equalityExpr production.
+	ExitEqualityExpr(c *EqualityExprContext)
 
 	// ExitAddExpr is called when exiting the addExpr production.
 	ExitAddExpr(c *AddExprContext)
