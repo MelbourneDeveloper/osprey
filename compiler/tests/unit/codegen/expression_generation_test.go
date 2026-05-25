@@ -166,13 +166,13 @@ func TestToStringConversions(t *testing.T) {
 			name:    "wrong arg count",
 			source:  `toString()`,
 			wantErr: true,
-			errMsg:  "function toString expects 1 arguments, got 0",
+			errMsg:  "function toString expects 1 argument, got 0",
 		},
 		{
 			name:    "too many args",
 			source:  `toString(1, 2)`,
 			wantErr: true,
-			errMsg:  "function toString expects 1 arguments, got 2",
+			errMsg:  "function toString expects 1 argument, got 2",
 		},
 	}
 
@@ -234,13 +234,13 @@ print(x)`,
 			name:    "print wrong args",
 			source:  `print()`,
 			wantErr: true,
-			errMsg:  "print expects exactly 1 arguments (value), got 0",
+			errMsg:  "print expects exactly 1 argument (value), got 0",
 		},
 		{
 			name:    "print too many args",
 			source:  `print(1, 2)`,
 			wantErr: true,
-			errMsg:  "print expects exactly 1 arguments (value), got 2",
+			errMsg:  "print expects exactly 1 argument (value), got 2",
 		},
 	}
 
