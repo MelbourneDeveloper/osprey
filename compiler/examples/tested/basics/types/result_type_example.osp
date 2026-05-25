@@ -1,14 +1,25 @@
-// Result Type for Error Handling
-type Result = Ok { value: string } | Error { message: string }
+// User-defined sum types: exercises construction + pattern matching on
+// both arms, including arms that carry payload fields. Renamed away from
+// the built-in `Result` so this file documents user-defined unions and
+// not the Result<T, E> shape that ships with the language.
 
-type Status = Success | Failure 
+type Outcome = Ok { value: string } | Err { message: string }
 
-fn getResult() = 42
+type Status = Active | Inactive
 
-// Demonstrate that Result types can be defined
-let number = getResult()
-print("Result type defined successfully")
-print(number) 
+fn describe(o: Outcome) -> string = match o {
+    Ok { value } => "ok: " + value
+    Err { message } => "err: " + message
+}
 
-//TODO: test both arms of the result type
-//TODO: verify that number is typed as a result<int>
+fn label(s: Status) -> string = match s {
+    Active => "active"
+    Inactive => "inactive"
+}
+
+fn main() -> Unit = {
+    print(describe(Ok { value: "loaded" }))
+    print(describe(Err { message: "missing" }))
+    print(label(Active))
+    print(label(Inactive))
+}

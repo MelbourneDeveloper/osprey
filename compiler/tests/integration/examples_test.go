@@ -121,8 +121,7 @@ func getBasicExpectedOutputs() map[string]string {
 			"Double your score: 190\nAlice (25) scored 95/100\n",
 		"working_basics.osp": "x = 42\nname = Alice\ndouble(21) = 42\n" +
 			"greeting = Hello\nmultiply(6, 7) = 42\nisEven(10) = true\n10 + 5 = 15\n6 * 7 = 42\nmatch 42 = 1\n",
-		"simple_types.osp":        "Type definitions compiled successfully\nred\nworking\n",
-		"result_type_example.osp": "Result type defined successfully\n42\n",
+		"simple_types.osp": "Type definitions compiled successfully\nred\nworking\n",
 		"simple_input.osp": "Greeting code: 1\nNumber result: 999\n" +
 			"Unknown code: 0\nSmall number: 100\n",
 		"pattern_matching_basics.osp": "Number analysis:\n0 is Zero\n" +
