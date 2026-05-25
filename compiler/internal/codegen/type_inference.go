@@ -189,6 +189,14 @@ func (rt *RecordType) Category() TypeCategory {
 	return RecordTypeCategory
 }
 
+// HasField reports whether the record carries a field with the given name.
+// Used to detect UFCS field-vs-method shadowing for clearer error messages
+// (see [BUILTIN-STRING-UFCS] and issue #61).
+func (rt *RecordType) HasField(name string) bool {
+	_, ok := rt.fields[name]
+	return ok
+}
+
 // Equals checks if two record types are equal
 func (rt *RecordType) Equals(other Type) bool {
 	if otherRt, ok := other.(*RecordType); ok {
@@ -1175,11 +1183,15 @@ func (ti *TypeInferer) unifyBuiltinFunctionPlaceholder(placeholder, candidate Ty
 		return false
 	case builtinFnTypeBool:
 		retType := ti.prune(ft.returnType)
-		if retConcrete, ok := retType.(*ConcreteType); ok && retConcrete.name == TypeBool {
-			return true
+		if retConcrete, ok := retType.(*ConcreteType); ok {
+			// Existing tests use int-returning predicates as truthy booleans;
+			// accept Bool and Int alike.
+			return retConcrete.name == TypeBool || retConcrete.name == TypeInt
 		}
-		// Existing tests use int-returning predicates as truthy booleans.
-		if retConcrete, ok := retType.(*ConcreteType); ok && retConcrete.name == TypeInt {
+		// An unresolved type variable (e.g. an inline lambda body like `x`
+		// whose return type isn't yet pinned) is treated as compatible —
+		// the unifier downstream will pin it to bool/int as needed.
+		if _, ok := retType.(*TypeVar); ok {
 			return true
 		}
 		return false
