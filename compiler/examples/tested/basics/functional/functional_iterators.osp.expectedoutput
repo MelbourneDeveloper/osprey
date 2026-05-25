@@ -48,4 +48,10 @@ Base numbers created
 Fourth number squared: 16
 11. Chained single value operations:
 16
+12. map-then-filter sees the mapped value:
+6
+8
+13. filter-then-map sees the raw value:
+2
+4
 === Examples Complete ===

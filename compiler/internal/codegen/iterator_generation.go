@@ -192,52 +192,18 @@ func (g *LLVMGenerator) generateForEachLoop(
 	g.builder = blocks.LoopBody
 	counterValue := g.builder.NewLoad(types.I64, counterPtr)
 
-	// STREAM FUSION: Apply pending transformations inline
-	var processedValue value.Value = counterValue
-
-	// Apply map transformation if present
-	if g.pendingMapFunc != nil {
-		mapped, err := g.callFunctionWithValue(g.pendingMapFunc, processedValue)
-		if err != nil {
-			return err
-		}
-		processedValue = mapped
+	// Replay pipeline ops (map / filter) in source order so that
+	// `xs |> map(f) |> filter(p)` filters on f(x), not on x.
+	processedValue, err := g.applyPendingIterOps(counterValue, blocks.LoopIncrement, fmt.Sprintf("_%p", blocks))
+	if err != nil {
+		return err
 	}
 
-	// Apply filter transformation if present
-	if g.pendingFilterFunc != nil {
-		predicateResult, err := g.callFunctionWithValue(g.pendingFilterFunc, counterValue)
-		if err != nil {
-			return err
-		}
-		// Check if predicate returned non-zero (true)
-		zero := constant.NewInt(types.I64, 0)
-		// Create conditional blocks for filter with unique names
-		blockSuffix := fmt.Sprintf("_%p", blocks)
-		filterPassBlock := g.function.NewBlock("filter_pass" + blockSuffix)
-		filterSkipBlock := g.function.NewBlock("filter_skip" + blockSuffix)
-		isNonZero := g.builder.NewICmp(enum.IPredNE, predicateResult, zero)
-		g.builder.NewCondBr(isNonZero, filterPassBlock, filterSkipBlock)
-
-		// Filter pass: call the function
-		g.builder = filterPassBlock
-		_, err = g.callFunctionWithValue(funcIdent, processedValue)
-		if err != nil {
-			return err
-		}
-		g.builder.NewBr(blocks.LoopIncrement)
-
-		// Filter skip: just continue
-		g.builder = filterSkipBlock
-		g.builder.NewBr(blocks.LoopIncrement)
-	} else {
-		// No filter, always call the function
-		_, err := g.callFunctionWithValue(funcIdent, processedValue)
-		if err != nil {
-			return err
-		}
-		g.builder.NewBr(blocks.LoopIncrement)
+	_, err = g.callFunctionWithValue(funcIdent, processedValue)
+	if err != nil {
+		return err
 	}
+	g.builder.NewBr(blocks.LoopIncrement)
 
 	// Increment counter in the common increment block
 	g.builder = blocks.LoopIncrement
@@ -252,8 +218,48 @@ func (g *LLVMGenerator) generateForEachLoop(
 	// STREAM FUSION: Clear pending transformations after consuming
 	g.pendingMapFunc = nil
 	g.pendingFilterFunc = nil
+	g.pendingIterOps = nil
 
 	return nil
+}
+
+// applyPendingIterOps replays the recorded map/filter pipeline stages in
+// source order on `v`. Filter stages branch to skipBlock when the
+// predicate returns zero (so the consumer is bypassed for that
+// element). Returns the final transformed value, with the builder
+// positioned in the block that should hold the consumer call.
+func (g *LLVMGenerator) applyPendingIterOps(
+	v value.Value, skipBlock *ir.Block, blockSuffix string,
+) (value.Value, error) {
+	current := v
+	for i, op := range g.pendingIterOps {
+		switch op.kind {
+		case iterOpMap:
+			mapped, err := g.callFunctionWithValue(op.fn, current)
+			if err != nil {
+				return nil, err
+			}
+			current = mapped
+		case iterOpFilter:
+			predicate, err := g.callFunctionWithValue(op.fn, current)
+			if err != nil {
+				return nil, err
+			}
+			passBlock := g.function.NewBlock(fmt.Sprintf("filter_pass_%d%s", i, blockSuffix))
+			// Compare to a zero of the predicate's own int type so an
+			// i1 (bool) result doesn't crash IR-emit against an i64 zero.
+			intT, ok := predicate.Type().(*types.IntType)
+			if !ok {
+				return nil, fmt.Errorf("%w: predicate must return int/bool, got %s",
+					ErrFilterNotFunction, predicate.Type())
+			}
+			zero := constant.NewInt(intT, 0)
+			isNonZero := g.builder.NewICmp(enum.IPredNE, predicate, zero)
+			g.builder.NewCondBr(isNonZero, passBlock, skipBlock)
+			g.builder = passBlock
+		}
+	}
+	return current, nil
 }
 
 // generateMapCall handles map function calls using stream fusion.
@@ -281,6 +287,7 @@ func (g *LLVMGenerator) generateMapCall(callExpr *ast.CallExpression) (value.Val
 
 	// STREAM FUSION: Store the map function for later fusion with forEach/fold
 	g.pendingMapFunc = funcIdent
+	g.pendingIterOps = append(g.pendingIterOps, pendingIterOp{kind: iterOpMap, fn: funcIdent})
 
 	return rangeValue, nil
 }
@@ -310,6 +317,7 @@ func (g *LLVMGenerator) generateFilterCall(callExpr *ast.CallExpression) (value.
 
 	// STREAM FUSION: Store the filter predicate for later fusion with forEach/fold
 	g.pendingFilterFunc = funcIdent
+	g.pendingIterOps = append(g.pendingIterOps, pendingIterOp{kind: iterOpFilter, fn: funcIdent})
 
 	return rangeValue, nil
 }
@@ -396,41 +404,26 @@ func (g *LLVMGenerator) generateFoldLoop(
 	counterValue := g.builder.NewLoad(types.I64, counterPtr)
 	currentAccumulator := g.builder.NewLoad(types.I64, accumulatorPtr)
 
-	// STREAM FUSION: a pending filter() short-circuits both map and fold
-	// when the predicate rejects the element. Same shape as forEach uses.
-	if g.pendingFilterFunc != nil {
-		predicate, err := g.callFunctionWithValue(g.pendingFilterFunc, counterValue)
-		if err != nil {
-			return nil, err
-		}
-		zero := constant.NewInt(types.I64, 0)
-		blockSuffix := fmt.Sprintf("_%p", blocks)
-		passBlock := g.function.NewBlock("fold_filter_pass" + blockSuffix)
-		skipBlock := g.function.NewBlock("fold_filter_skip" + blockSuffix)
-		isNonZero := g.builder.NewICmp(enum.IPredNE, predicate, zero)
-		g.builder.NewCondBr(isNonZero, passBlock, skipBlock)
-
+	// Build a skip block that bumps the counter past a filter-rejected
+	// element and loops back without touching the accumulator. Created
+	// up-front so applyPendingIterOps can branch to it.
+	blockSuffix := fmt.Sprintf("_%p", blocks)
+	skipBlock := g.function.NewBlock("fold_filter_skip" + blockSuffix)
+	{
+		savedBuilder := g.builder
 		g.builder = skipBlock
-		// Increment counter and loop back without touching the accumulator.
 		one := constant.NewInt(types.I64, 1)
 		next := g.builder.NewAdd(counterValue, one)
 		g.builder.NewStore(next, counterPtr)
 		g.builder.NewBr(blocks.LoopCond)
-
-		// Continue codegen in the pass block for the rest of the body.
-		g.builder = passBlock
+		g.builder = savedBuilder
 	}
 
-	// STREAM FUSION: apply a pending map() transformation inline before
-	// folding. Without this `xs |> map(double) |> fold(0, add)` ignored
-	// double and returned sum(xs) — fold only saw the raw counter values.
-	processedValue := value.Value(counterValue)
-	if g.pendingMapFunc != nil {
-		mapped, err := g.callFunctionWithValue(g.pendingMapFunc, processedValue)
-		if err != nil {
-			return nil, err
-		}
-		processedValue = mapped
+	// Replay pipeline ops (map / filter) in source order so that
+	// `xs |> map(f) |> filter(p)` filters on f(x), not on x.
+	processedValue, err := g.applyPendingIterOps(counterValue, skipBlock, blockSuffix)
+	if err != nil {
+		return nil, err
 	}
 
 	// Call the fold function with (accumulator, currentValue)
@@ -473,6 +466,7 @@ func (g *LLVMGenerator) generateFoldLoop(
 	// STREAM FUSION: clear pending transformations now that fold consumed them.
 	g.pendingMapFunc = nil
 	g.pendingFilterFunc = nil
+	g.pendingIterOps = nil
 
 	return finalResult, nil
 }
