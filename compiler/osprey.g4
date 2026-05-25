@@ -169,7 +169,7 @@ argList
     ;
 
 namedArgList
-    : namedArg (COMMA namedArg)+                  // At least 2 named args
+    : namedArg (COMMA namedArg)*                  // 1+ named args (single named arg is fine — disambiguates from positional via the `:` after the ID)
     ;
 
 namedArg
