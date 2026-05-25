@@ -1743,8 +1743,11 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 		return nil, err
 	}
 
-	// Validate argument types (no 'any' types allowed)
-	err = ti.validateArgumentTypes(e, argTypes)
+	// Validate argument types (no 'any' types allowed) — except when the
+	// called function explicitly accepts `any` at that position (e.g.
+	// toString(value: any) -> string), in which case forwarding an `any`
+	// must be allowed without forcing the caller to pattern-match first.
+	err = ti.validateArgumentTypes(e, argTypes, funcType)
 	if err != nil {
 		return nil, err
 	}
@@ -1818,14 +1821,37 @@ func (ti *TypeInferer) inferRegularArguments(args []ast.Expression) ([]Type, err
 	return argTypes, nil
 }
 
-// validateArgumentTypes validates that no arguments have 'any' type
-func (ti *TypeInferer) validateArgumentTypes(e *ast.CallExpression, argTypes []Type) error {
+// validateArgumentTypes validates that no arguments have 'any' type. The
+// callee's funcType is consulted so that calls into functions that
+// explicitly accept `any` (toString, print, etc.) are allowed to forward
+// any-typed arguments without forcing a redundant pattern match.
+func (ti *TypeInferer) validateArgumentTypes(e *ast.CallExpression, argTypes []Type, funcType Type) error {
+	paramTypes := paramTypesOf(funcType)
 	for i, argType := range argTypes {
-		if ti.isAnyType(argType) {
-			return ti.createAnyTypeError(e, i)
+		if !ti.isAnyType(argType) {
+			continue
 		}
+		if i < len(paramTypes) && ti.isAnyType(paramTypes[i]) {
+			continue
+		}
+		return ti.createAnyTypeError(e, i)
 	}
 
+	return nil
+}
+
+// paramTypesOf returns the parameter types declared by `funcType` if it's a
+// FunctionType, else nil. Used by validateArgumentTypes to skip the
+// any-rejection at positions where the callee is fine with any.
+func paramTypesOf(funcType Type) []Type {
+	if ft, ok := funcType.(*FunctionType); ok {
+		return ft.paramTypes
+	}
+	if scheme, ok := funcType.(*TypeScheme); ok {
+		if ft, ok := scheme.typ.(*FunctionType); ok {
+			return ft.paramTypes
+		}
+	}
 	return nil
 }
 

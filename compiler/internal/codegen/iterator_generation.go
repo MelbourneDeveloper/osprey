@@ -396,8 +396,45 @@ func (g *LLVMGenerator) generateFoldLoop(
 	counterValue := g.builder.NewLoad(types.I64, counterPtr)
 	currentAccumulator := g.builder.NewLoad(types.I64, accumulatorPtr)
 
+	// STREAM FUSION: a pending filter() short-circuits both map and fold
+	// when the predicate rejects the element. Same shape as forEach uses.
+	if g.pendingFilterFunc != nil {
+		predicate, err := g.callFunctionWithValue(g.pendingFilterFunc, counterValue)
+		if err != nil {
+			return nil, err
+		}
+		zero := constant.NewInt(types.I64, 0)
+		blockSuffix := fmt.Sprintf("_%p", blocks)
+		passBlock := g.function.NewBlock("fold_filter_pass" + blockSuffix)
+		skipBlock := g.function.NewBlock("fold_filter_skip" + blockSuffix)
+		isNonZero := g.builder.NewICmp(enum.IPredNE, predicate, zero)
+		g.builder.NewCondBr(isNonZero, passBlock, skipBlock)
+
+		g.builder = skipBlock
+		// Increment counter and loop back without touching the accumulator.
+		one := constant.NewInt(types.I64, 1)
+		next := g.builder.NewAdd(counterValue, one)
+		g.builder.NewStore(next, counterPtr)
+		g.builder.NewBr(blocks.LoopCond)
+
+		// Continue codegen in the pass block for the rest of the body.
+		g.builder = passBlock
+	}
+
+	// STREAM FUSION: apply a pending map() transformation inline before
+	// folding. Without this `xs |> map(double) |> fold(0, add)` ignored
+	// double and returned sum(xs) — fold only saw the raw counter values.
+	processedValue := value.Value(counterValue)
+	if g.pendingMapFunc != nil {
+		mapped, err := g.callFunctionWithValue(g.pendingMapFunc, processedValue)
+		if err != nil {
+			return nil, err
+		}
+		processedValue = mapped
+	}
+
 	// Call the fold function with (accumulator, currentValue)
-	newAccumulator, err := g.callFunctionWithTwoValues(funcIdent, currentAccumulator, counterValue)
+	newAccumulator, err := g.callFunctionWithTwoValues(funcIdent, currentAccumulator, processedValue)
 	if err != nil {
 		return nil, err
 	}
@@ -432,6 +469,10 @@ func (g *LLVMGenerator) generateFoldLoop(
 	// Loop end block
 	g.builder = blocks.LoopEnd
 	finalResult := g.builder.NewLoad(types.I64, accumulatorPtr)
+
+	// STREAM FUSION: clear pending transformations now that fold consumed them.
+	g.pendingMapFunc = nil
+	g.pendingFilterFunc = nil
 
 	return finalResult, nil
 }
