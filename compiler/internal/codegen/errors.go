@@ -480,17 +480,40 @@ func WrapMethodCallNotImplementedWithPos(method string, pos any) error {
 	return WrapSimpleErrorWithPos(ErrMethodCallNotImplemented, method, pos)
 }
 
-// WrapFunctionRequiresNamedArgsWithPos wraps errors for functions requiring named arguments
-func WrapFunctionRequiresNamedArgsWithPos(funcName string, paramCount int, pos any) error {
+// WrapFunctionRequiresNamedArgsWithPos wraps errors for functions requiring named arguments.
+// paramNames is the actual list of parameter names; when present the hint
+// uses them instead of generic `x:`, `y:` placeholders so the user sees
+// the exact call form to type.
+func WrapFunctionRequiresNamedArgsWithPos(funcName string, paramNames []string, pos any) error {
+	hint := namedArgUsageHint(funcName, paramNames)
 	if position, ok := pos.(*ast.Position); ok && position != nil {
 		//nolint:err113 // Dynamic error needed for exact test format matching
 		return fmt.Errorf("line %d:%d: function requires named arguments '%s' has %d parameters "+
-			"and requires named arguments. Use: %s(x: value, y: value)",
-			position.Line, position.Column, funcName, paramCount, funcName)
+			"and requires named arguments. Use: %s",
+			position.Line, position.Column, funcName, len(paramNames), hint)
 	}
 	//nolint:err113 // Dynamic error needed for exact test format matching
-	return fmt.Errorf("function requires named arguments '%s' has %d parameters and requires named arguments",
-		funcName, paramCount)
+	return fmt.Errorf("function requires named arguments '%s' has %d parameters and requires named arguments. Use: %s",
+		funcName, len(paramNames), hint)
+}
+
+// namedArgUsageHint formats `funcName(param1: value, param2: value, ...)`
+// using the real parameter names. Falls back to generic `x:`, `y:`, `z:`
+// placeholders if names aren't available, preserving the legacy message
+// when callers haven't been updated.
+func namedArgUsageHint(funcName string, paramNames []string) string {
+	parts := make([]string, len(paramNames))
+	if len(paramNames) == 0 {
+		// Backstop for callers that still don't have parameter info.
+		return funcName + "(x: value, y: value)"
+	}
+	for i, name := range paramNames {
+		if name == "" {
+			name = fmt.Sprintf("arg%d", i+1)
+		}
+		parts[i] = name + ": value"
+	}
+	return fmt.Sprintf("%s(%s)", funcName, strings.Join(parts, ", "))
 }
 
 // WrapMatchNotExhaustiveWithPos wraps errors for non-exhaustive match expressions
