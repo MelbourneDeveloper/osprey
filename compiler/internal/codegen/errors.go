@@ -76,9 +76,10 @@ var (
 
 	ErrUnsupportedCollectionType = errors.New("unsupported collection type for access")
 
-	ErrUnsupportedStatement = errors.New("unsupported statement")
-	ErrUndefinedVariable    = errors.New("undefined variable")
-	ErrUnsupportedBinaryOp  = errors.New("unsupported binary operator") // Alias for ErrUnsupportedBinaryOperator
+	ErrUnsupportedStatement     = errors.New("unsupported statement")
+	ErrUndefinedVariable        = errors.New("undefined variable")
+	ErrUnsupportedBinaryOp      = errors.New("unsupported binary operator") // Alias for ErrUnsupportedBinaryOperator
+	ErrStructComparisonNotImpl  = errors.New("structural comparison on records/unions is not yet implemented")
 
 	ErrMethodNotImpl         = errors.New("method not implemented")
 	ErrNoToStringForFunc     = errors.New("no toString implementation for function")
@@ -210,6 +211,15 @@ func WrapUndefinedVariableWithPos(varName string, pos any) error {
 // WrapUnsupportedBinaryOpWithPos wraps errors for unsupported binary operators
 func WrapUnsupportedBinaryOpWithPos(op string, pos any) error {
 	return WrapSimpleErrorWithPos(ErrUnsupportedBinaryOp, op, pos)
+}
+
+// WrapStructComparisonUnsupportedWithPos wraps the error fired when a record
+// or union value flows into `==` / `<` / etc. before structural comparison
+// is implemented. Used to swap llir's "invalid icmp operand type" panic for
+// an actionable compile error.
+func WrapStructComparisonUnsupportedWithPos(op, leftType, rightType string, pos any) error {
+	detail := fmt.Sprintf("%s on %s and %s", op, leftType, rightType)
+	return WrapSimpleErrorWithPos(ErrStructComparisonNotImpl, detail, pos)
 }
 
 // WrapVoidArithmeticWithPos wraps errors for arithmetic on void types

@@ -1117,6 +1117,31 @@ func (g *LLVMGenerator) unwrapIfResult(val value.Value) value.Value {
 	return g.builder.NewExtractValue(val, 0)
 }
 
+// rejectStructComparison returns an error when one of the comparison operands
+// is a struct-shaped value (record, union variant). Without this guard llir's
+// NewICmp panics with "invalid icmp operand type" because it only accepts
+// integer, pointer or vector operands. Field-wise structural equality on
+// records is a future feature; for now we fail loud with a useful message.
+func rejectStructComparison(operator string, left, right value.Value, pos *ast.Position) error {
+	if !isStructShape(left.Type()) && !isStructShape(right.Type()) {
+		return nil
+	}
+	return WrapStructComparisonUnsupportedWithPos(operator, left.Type().String(), right.Type().String(), pos)
+}
+
+// isStructShape returns true for direct struct values and pointers-to-struct.
+// Both shapes blow up NewICmp.
+func isStructShape(t types.Type) bool {
+	if _, ok := t.(*types.StructType); ok {
+		return true
+	}
+	if pt, ok := t.(*types.PointerType); ok {
+		_, ok := pt.ElemType.(*types.StructType)
+		return ok
+	}
+	return false
+}
+
 // generateComparisonOperationWithPos generates LLVM comparison operations with position info.
 func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	operator string, left, right value.Value, pos *ast.Position,
@@ -1125,6 +1150,15 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	// This allows comparing arithmetic results: (10+5) < 20
 	left = g.unwrapIfResult(left)
 	right = g.unwrapIfResult(right)
+
+	// Reject struct / record / union comparison up-front with a clear error.
+	// llir's NewICmp panics on struct operands ("invalid icmp operand type")
+	// so a record like `Point{x:1,y:2} == Point{x:1,y:2}` used to crash the
+	// compiler. Field-wise structural equality is a future feature.
+	structErr := rejectStructComparison(operator, left, right, pos)
+	if structErr != nil {
+		return nil, structErr
+	}
 
 	// String comparison must use strcmp on byte contents — comparing the raw
 	// i8* pointers (which is what NewICmp does) is meaningless: == returns false
