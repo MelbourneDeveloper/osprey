@@ -1947,6 +1947,14 @@ func (g *LLVMGenerator) generateRecordField(
 		return nil, nil, err
 	}
 
+	// Auto-unwrap Result-typed field values into the declared primitive
+	// field slot — `Pt { x: p.x + dx }` produces Result<int, MathError>
+	// even though field x is declared i64. Without this the struct ends up
+	// nested {{i64,i8}, ...} and llc rejects.
+	if declaredLLVMType != nil && declaredLLVMType != fieldValue.Type() && g.isResultType(fieldValue) {
+		fieldValue = g.unwrapIfResult(fieldValue)
+	}
+
 	// Use actual field value type for polymorphic records
 	return fieldValue, fieldValue.Type(), nil
 }
