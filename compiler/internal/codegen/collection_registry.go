@@ -152,6 +152,19 @@ func (r *BuiltInFunctionRegistry) registerMapBuiltins() {
 		Generator:  (*LLVMGenerator).generateMapContainsCall,
 		Example:    `mapContains({"a": 1}, "a")  // true`,
 	}
+	r.functions["mapGet"] = &BuiltInFunction{
+		Name:        "mapGet",
+		Signature:   "mapGet(map: Map<K, V>, key: K) -> Result<V, string>",
+		Description: "Returns Success(value) when key is present, Error(...) otherwise.",
+		ParameterTypes: []BuiltInParameter{
+			mapParam,
+			{Name: "key", Type: anyT, Description: "Key to look up"},
+		},
+		ReturnType: anyT, // Result<V, string>; resolved via type inference.
+		Category:   CategoryFunctional,
+		Generator:  (*LLVMGenerator).generateMapGetCall,
+		Example:    `match mapGet(m, "k") { Success v => print(v); Error e => print("missing") }`,
+	}
 	r.functions["mapSet"] = &BuiltInFunction{
 		Name:        "mapSet",
 		Signature:   "mapSet(map: Map<K, V>, key: K, value: V) -> Map<K, V>",
