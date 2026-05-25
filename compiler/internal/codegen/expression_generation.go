@@ -1887,6 +1887,21 @@ func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 
 	variant := &typeDecl.Variants[0] // Record types have one variant
 
+	// Reject typo / unknown field names. Without this, `Point { x: 1,
+	// z: 99 }` (typo z) reports only "missing field: y" and silently
+	// drops `z`, leaving the user wondering why the type checker
+	// doesn't mention z at all.
+	declared := make(map[string]bool, len(variant.Fields))
+	for _, f := range variant.Fields {
+		declared[f.Name] = true
+	}
+	for name := range typeConstructor.Fields {
+		if !declared[name] {
+			return nil, fmt.Errorf("%w: record '%s' has no field named '%s'",
+				ErrFieldNotInRecordType, typeDecl.Name, name)
+		}
+	}
+
 	// Build field map and get consistent field mapping
 	fieldMap := g.buildFieldMapFromVariant(variant)
 	fieldMapping := g.getOrCreateRecordFieldMapping(typeDecl.Name, fieldMap)
@@ -2189,6 +2204,21 @@ func (g *LLVMGenerator) serializeVariantFields(
 	unionPtr value.Value,
 	_ string,
 ) error {
+	// Reject unknown field names the user supplied — without this,
+	// `Point { x: 1, z: 99 }` reports only "missing field: y" and
+	// silently drops `z`, leaving the user to guess that the real
+	// problem is the typo.
+	declared := make(map[string]bool, len(variant.Fields))
+	for _, f := range variant.Fields {
+		declared[f.Name] = true
+	}
+	for name := range fieldValues {
+		if !declared[name] {
+			return fmt.Errorf("%w: variant '%s' has no field named '%s'",
+				ErrFieldNotInRecordType, variant.Name, name)
+		}
+	}
+
 	// Get pointer to the data area (second field in the tagged union)
 	unionType := unionPtr.Type().(*types.PointerType).ElemType
 	dataPtr := g.builder.NewGetElementPtr(
