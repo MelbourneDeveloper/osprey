@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,6 +13,11 @@ const (
 	// MinParametersForNamedArgs is the minimum number of parameters required to enforce named arguments
 	MinParametersForNamedArgs = 2
 )
+
+// errUnsupportedPatternSyntax surfaces when the AST builder fell off
+// its pattern-shape cases and emitted Constructor="unknown".
+var errUnsupportedPatternSyntax = errors.New("unsupported pattern syntax — only literals, _, ID, ID name, " +
+	"and `Variant { field, field }` destructuring are supported")
 
 // validateMatchExpressionWithType validates match expressions with discriminant type information
 func (g *LLVMGenerator) validateMatchExpressionWithType(expr *ast.MatchExpression, discriminantType string) error {
@@ -266,6 +272,21 @@ func (g *LLVMGenerator) validateMatchPatternWithTypeAndPosition(
 	// Wildcard patterns and variable patterns are always valid
 	if pattern.Constructor == "_" || pattern.Constructor == "" {
 		return nil
+	}
+
+	// The AST builder emits Constructor="unknown" when it falls off the
+	// end of its pattern-shape cases (e.g. for unsupported syntax like
+	// `Some { value: v }` field-rename destructure). Without this branch
+	// the user hits a baffling "variant 'unknown' is not defined" — make
+	// the parser-level limitation visible instead.
+	if pattern.Constructor == "unknown" {
+		if matchPos != nil {
+			return fmt.Errorf( //nolint:err113
+				"line %d:%d: unsupported pattern syntax — only literals, _, ID, ID name, "+
+					"and `Variant { field, field }` destructuring are supported",
+				matchPos.Line, matchPos.Column)
+		}
+		return errUnsupportedPatternSyntax
 	}
 
 	// Literal patterns (integers, strings, booleans) are always valid for their type
