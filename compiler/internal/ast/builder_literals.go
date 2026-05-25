@@ -100,8 +100,11 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 		}
 	case ctx.STRING() != nil:
 		text := ctx.STRING().GetText()
-		// Remove quotes and process escape sequences
-		value := strings.Trim(text, "\"")
+		// Remove the surrounding quotes and process escape sequences. Using
+		// strings.Trim was a bug — `"Quote: \"hi\""` ended with `\"` followed
+		// by the closing `"`, and Trim greedily stripped the `\"`'s `"` as
+		// well, leaving a stray backslash and dropping the closing quote.
+		value := strings.TrimSuffix(strings.TrimPrefix(text, "\""), "\"")
 		value = b.processEscapeSequences(value)
 
 		return &StringLiteral{

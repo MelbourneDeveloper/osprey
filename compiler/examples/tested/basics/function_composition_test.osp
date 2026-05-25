@@ -90,4 +90,9 @@ match bx {
     Empty => print("empty")
 }
 
+// strings.Trim on the lexer token was greedy; "Quote: \"hi\"" lost its closing
+// quote and gained a stray trailing backslash. Surrounding-quote strip is now
+// single-step via TrimPrefix/TrimSuffix.
+print("Quote: \"hi\"")
+
 print("=== Function Composition Test Complete ===")
