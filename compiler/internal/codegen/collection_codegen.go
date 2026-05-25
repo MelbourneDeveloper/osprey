@@ -397,10 +397,12 @@ func (g *LLVMGenerator) generateForEachListCall(callExpr *ast.CallExpression) (v
 	if err != nil {
 		return nil, err
 	}
+	// Accept either a named-fn identifier or an inline lambda (matches the
+	// resolveCallbackIdent helper used by forEach / map / filter / fold).
 	funcArg := callExpr.Arguments[1]
-	funcIdent, ok := funcArg.(*ast.Identifier)
-	if !ok {
-		return nil, errForEachListSecondArg
+	funcIdent, err := g.resolveCallbackIdent(funcArg, errForEachListSecondArg)
+	if err != nil {
+		return nil, err
 	}
 
 	// Use osprey_list_length + osprey_list_get for a simple counted loop.
