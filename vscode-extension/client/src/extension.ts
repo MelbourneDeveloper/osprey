@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { workspace, ExtensionContext, window, ConfigurationChangeEvent, commands, Uri, debug, languages } from 'vscode';
+import { workspace, ExtensionContext, window, ConfigurationChangeEvent, commands, Uri, debug, languages, OutputChannel } from 'vscode';
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import {
@@ -9,7 +9,7 @@ import {
   ServerOptions,
   TransportKind
 } from 'vscode-languageclient/node';
-import { activateShipwright, type ActivationResult } from '@nimblesite/shipwright-vscode';
+import type { ActivationResult } from '@nimblesite/shipwright-vscode' with { 'resolution-mode': 'import' };
 
 let client: LanguageClient;
 // Resolved by Shipwright on activation. All subsequent execFile calls use this
@@ -335,4 +335,42 @@ export function deactivate(): Promise<void> | undefined {
     return undefined;
   }
   return client.stop();
-} 
+}
+
+// resolveOspreyBinary runs the Shipwright host resolver against the
+// vendored shipwright.json. The resolved bundled binary path is stored in the
+// module-level ospreyBinaryPath so command handlers and the LSP server use it
+// without ever falling through to PATH (SWR-IDE bundling rule).
+async function resolveOspreyBinary(
+  context: ExtensionContext,
+  outputChannel: OutputChannel
+): Promise<ActivationResult> {
+  // shipwright-vscode ships as ESM, so the CommonJS extension bundle has to
+  // pull it in via dynamic import. The cast satisfies the structural
+  // VscodeApiLike type while keeping the real `vscode` API at runtime.
+  const { activateShipwright } = await import('@nimblesite/shipwright-vscode');
+  type ShipwrightVscodeArg = NonNullable<Parameters<typeof activateShipwright>[1]>['vscode'];
+  const result = await activateShipwright(context, { vscode: vscode as unknown as ShipwrightVscodeArg });
+
+  for (const diagnostic of result.diagnostics) {
+    const tag = diagnostic.blocking ? 'BLOCKING' : 'info';
+    outputChannel.appendLine(`[shipwright/${tag}] ${diagnostic.componentId}: ${diagnostic.message}`);
+    const resolution = diagnostic.resolution;
+    if (resolution.path) {
+      outputChannel.appendLine(`  -> source=${resolution.source ?? 'unknown'} path=${resolution.path} version=${resolution.version ?? 'unknown'}`);
+    }
+    if (diagnostic.componentId === 'osprey' && resolution.status === 'ok' && resolution.path) {
+      ospreyBinaryPath = resolution.path;
+    }
+  }
+
+  if (!result.ok) {
+    const blockingMessages = result.diagnostics
+      .filter((d: ActivationResult['diagnostics'][number]) => d.blocking)
+      .map((d: ActivationResult['diagnostics'][number]) => d.message)
+      .join('\n');
+    window.showErrorMessage(blockingMessages || 'Osprey: bundled binary resolution failed.');
+  }
+
+  return result;
+}

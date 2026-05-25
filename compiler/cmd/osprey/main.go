@@ -55,7 +55,8 @@ func handleBasicFlags(args []string) *cli.CommandResult {
 		ShowHelp()
 		return &cli.CommandResult{Success: true, Output: ""}
 	case "--version":
-		if err := printVersion(args); err != nil {
+		err := printVersion(args)
+		if err != nil {
 			return &cli.CommandResult{Success: false, ErrorMsg: err.Error()}
 		}
 		return &cli.CommandResult{Success: true, Output: ""}

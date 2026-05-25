@@ -1,48 +1,72 @@
-# Source files
-client/src/**
-server/src/**
-*.ts
-tsconfig.json
+# .vscodeignore for per-platform Shipwright VSIX bundling (SWR-VSIX-LAYOUT).
+#
+# Per `docs/specs/vsix-platform-bundling.md` Pattern B, each platform-specific
+# VSIX must contain only its own `bin/<vsceTarget>/` directory. The CI workflow
+# stages exactly one platform under bin/ on a fresh checkout before packaging,
+# so this file does not need per-platform branching: it simply excludes all of
+# bin/ and re-includes it at the end. Foreign platform directories never reach
+# the runner, so the re-include is a no-op for them.
 
-# Build and development files
-.vscode-test/**
-.vscode-test.js
+# Source files
+client/**
+server/src/**
 test/**
 scripts/**
+syntaxes/**.ts
+*.ts
+**/*.ts.map
+**/*.js.map
+tsconfig.json
 
-# Exclude development dependencies but keep production dependencies
-node_modules/@types/**
-node_modules/@vscode/**
-node_modules/mocha/**
-node_modules/sinon/**
-node_modules/ts-node/**
-node_modules/typescript/**
-
-# Exclude test and cache files from all node_modules
-node_modules/**/.cache
-node_modules/**/test
-node_modules/**/tests
-node_modules/**/*.test.js
-node_modules/**/*.spec.js
-node_modules/**/.*
-
-# Documentation and development files
-TESTING.md
-FEATURES.md
+# Build/dev tooling that vsce should never publish
+.vscode-test/**
+.vscode-test.js
+.vscode/**
+.cursor/**
+.github/**
+.git/**
 build.sh
 run-tests.sh
 test-runner.js
+test.log
 .nvmrc
 .gitignore
+.c8rc.json
+coverage/**
+TESTING.md
+FEATURES.md
 
-# Keep only essential files
+# Drop dev-only node_modules; keep production deps via the re-includes below.
+node_modules/**
+
+# Whitelist the runtime payload required by the activated extension:
+# - compiled extension entry and LSP server
+# - declarative contributions
+# - the Shipwright manifest
+# - the per-platform bundled binaries
+# - the production node_modules the activation path actually requires
 !out/**
 !server/out/**
 !syntaxes/**
 !language-configuration/**
 !package.json
+!shipwright.json
 !README.md
 !LICENSE
+!icon.png
+!bin/**
+!node_modules/@nimblesite/shipwright-core/dist/**
+!node_modules/@nimblesite/shipwright-core/package.json
+!node_modules/@nimblesite/shipwright-vscode/dist/**
+!node_modules/@nimblesite/shipwright-vscode/package.json
 !node_modules/vscode-languageclient/**
 !node_modules/vscode-languageserver/**
-!node_modules/vscode-languageserver-textdocument/** 
+!node_modules/vscode-languageserver-textdocument/**
+!node_modules/vscode-jsonrpc/**
+!node_modules/vscode-languageserver-protocol/**
+!node_modules/vscode-languageserver-types/**
+!node_modules/semver/**
+!node_modules/minimatch/**
+!node_modules/lru-cache/**
+!node_modules/balanced-match/**
+!node_modules/brace-expansion/**

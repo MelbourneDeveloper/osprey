@@ -41,7 +41,7 @@ This is the opposite of the JSON-as-builtin shortcut. Builtins here are the *min
 All five live in [`compiler/runtime/string_runtime.c`](../../compiler/runtime/string_runtime.c) and [`string_runtime.h`](../../compiler/runtime/string_runtime.h). The file is currently 279 LOC; adding five small functions keeps it well under the 500-LOC cap.
 
 - [ ] **1.1** `int64_t osp_string_byte_length(const char *s)` — `s == NULL` → 0; otherwise `strlen(s)`. Wraps to `i64`.
-- [ ] **1.2** `osp_result_int osp_string_byte_at(const char *s, int64_t i)` — bounds-check `i ∈ [0, byteLen)`; on success return `(unsigned char)s[i]` as `int64_t`; on failure populate the result's error message per [`error-payloads.md`](error-payloads.md) Phase 1.
+- [ ] **1.2** `osp_result_int osp_string_byte_at(const char *s, int64_t i)` — bounds-check `i ∈ [0, byteLen)`; on success return `(unsigned char)s[i]` as `int64_t`; on failure populate the result's error message via [`g.makeErrorValueWithMessage`](../../compiler/internal/codegen/result_helpers.go) per [ERR-PAYLOAD].
 - [ ] **1.3** `osp_result_int osp_string_codepoint_at(const char *s, int64_t byte_index)` — decode UTF-8 starting at `byte_index`. Validate: first byte's high bits select the width (0xxx → 1B, 110x → 2B, 1110 → 3B, 11110 → 4B); each continuation byte must be `10xx`; `byte_index + width <= byteLen`. Return the decoded scalar value. Error on any failure with a specific message (`"codePointAt: invalid UTF-8 lead byte"`, `"codePointAt: truncated codepoint"`, `"codePointAt: invalid continuation byte"`, `"codePointAt: index out of range"`).
 - [ ] **1.4** `osp_result_int osp_string_codepoint_width(int64_t cp)` — return 1 if `cp <= 0x7F`; 2 if `cp <= 0x7FF`; 3 if `cp <= 0xFFFF` (excluding surrogates `0xD800..0xDFFF`); 4 if `cp <= 0x10FFFF`; otherwise Error.
 - [ ] **1.5** `char *osp_string_from_codepoint(int64_t cp)` — encode `cp` to a new heap-allocated, null-terminated UTF-8 string (1–4 bytes plus terminator). Returns NULL on invalid scalar value (caller wraps as Error). Verify the existing memory model frees this (every other `osp_string_*` allocator returns malloc'd memory; assume same convention).
@@ -64,9 +64,9 @@ All five live in [`compiler/runtime/string_runtime.c`](../../compiler/runtime/st
 
 ## Phase 3 — Result payload caveat
 
-Today, the registry's "Result<T, StringError>" is mostly a lie — see [`error-payloads.md`](error-payloads.md). The error message slot is hardcoded `"Error occurred"` regardless of which builtin failed.
+[ERR-PAYLOAD] has shipped end-to-end: the Result struct now carries an `err_msg` slot (`{value, i8 disc, i8* err_msg}`), and every fallible builtin stores a per-call message string in that slot via the helpers in [`internal/codegen/result_helpers.go`](../../compiler/internal/codegen/result_helpers.go). The registry signature has been narrowed from the spec's eventual `Result<T, StringError>` to `Result<T, string>` while the typed-union payload work is deferred.
 
-- [ ] **3.1** Implement the five generators against the **post-[`error-payloads.md`](error-payloads.md)-Phase-2** runtime contract from day one. If `error-payloads.md` hasn't shipped yet, sequence: ship Phase 1 of error-payloads first (runtime contract), then string-cursor Phase 1+2 on top of it. The cursor builtins are the first new fallible builtins to land; they should not perpetuate the hardcoded-message hack.
+- [ ] **3.1** Implement the five cursor generators using the same pattern — call `g.makeSuccessValue(...)` for the OK path and `g.makeErrorValueWithMessage(<zero>, "<cursor-specific message>")` for the failure path. Each Error message must be unique to its builtin (e.g. `"byteAt: index out of range"`, `"codePointAt: index out of range"`). The `error_payload_test.go` integration test should grow one row per new cursor failure so a regression to a generic/null message fails the build.
 
 ## Phase 4 — End-to-end tests
 
@@ -85,13 +85,13 @@ Today, the registry's "Result<T, StringError>" is mostly a lie — see [`error-p
 
 ## Phase 5 — The canary
 
-Once all of `error-payloads.md`, `closures.md`, and this plan ship — and now that recursive-union-payloads shipped in PR #67 ([TYPE-UNION-REC]) — the JSON-parser canary in [`production-primitives.md`](production-primitives.md) is the cross-cutting acceptance test.
+Once `closures.md` and this plan ship — and now that recursive-union-payloads shipped in PR #67 ([TYPE-UNION-REC]) and [ERR-PAYLOAD] is fully wired — the JSON-parser canary in [`production-primitives.md`](production-primitives.md) is the cross-cutting acceptance test.
 
 - [ ] **5.1** Land `examples/tested/json/json_parser.osp` written in pure Osprey:
   - Uses `JsonValue` (per [TYPE-UNION-REC]) as its output type.
   - Uses `codePointAt`/`codePointWidth` (this plan) to walk the input.
   - Uses closures (closures.md) for parser-combinator style helpers OR plain top-level functions (your call; both must work).
-  - Uses real error messages (`error-payloads.md`) reporting `"unexpected '}' at byte 47"` style failures.
+  - Uses real per-builtin error messages per [ERR-PAYLOAD] (e.g. `"byteAt: index out of range"`) and JSON-parser-level wrappers reporting `"unexpected '}' at byte 47"`.
   - Round-trips at least `{"name": "alice", "age": 30, "tags": [1, true, null, "x"]}`.
   - **Asserts**: the parser file is under 500 LOC. If it isn't, we missed a primitive — open a follow-up issue rather than splitting the file.
 
@@ -120,8 +120,8 @@ Once all of `error-payloads.md`, `closures.md`, and this plan ship — and now t
 - [ ] 2.3 `string_cursor.go` generators
 - [ ] 2.4 Wire `registerStringCursorBuiltins` from `initializeFunctions`
 
-### Phase 3 — Coordinate with error-payloads
-- [ ] 3.1 Land on top of `error-payloads.md` Phase 1 runtime contract — do not perpetuate the static-message hack
+### Phase 3 — Coordinate with [ERR-PAYLOAD]
+- [ ] 3.1 Land on top of the shipped `result_helpers.go` contract — every fallible cursor builtin populates its own message via `makeErrorValueWithMessage`, and gets a row in `tests/integration/error_payload_test.go` asserting the exact text
 
 ### Phase 4 — E2E tests
 - [ ] 4.1 `cursor_basic.osp` happy-path

@@ -38,9 +38,9 @@ func PrintPlain(w io.Writer) error {
 	return err
 }
 
-// VersionManifest is the JSON shape mandated by
+// Manifest is the JSON shape mandated by
 // `schemas/version-manifest.schema.json` (SWR-VERSION JSON output).
-type VersionManifest struct {
+type Manifest struct {
 	ManifestVersion int    `json:"manifestVersion"`
 	Name            string `json:"name"`
 	Version         string `json:"version"`
@@ -50,7 +50,7 @@ type VersionManifest struct {
 
 // PrintJSON writes the SWR-VERSION JSON contract to w.
 func PrintJSON(w io.Writer) error {
-	manifest := VersionManifest{
+	manifest := Manifest{
 		ManifestVersion: 1,
 		Name:            ComponentID,
 		Version:         Version,

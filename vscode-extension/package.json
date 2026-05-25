@@ -23,17 +23,6 @@
     "language"
   ],
   "main": "./out/client/src/extension.js",
-  "files": [
-    "out",
-    "bin",
-    "language-configuration",
-    "syntaxes",
-    "shipwright.json",
-    "package.json",
-    "README.md",
-    "LICENSE",
-    "icon.png"
-  ],
   "contributes": {
     "languages": [
       {

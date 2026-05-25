@@ -176,7 +176,8 @@ func executableRelativeLibPaths(libName string) []string {
 			filepath.Join(execDir, "..", "lib", fmt.Sprintf("lib%s.a", libName)),
 		)
 	}
-	if exe, err := os.Executable(); err == nil {
+	exe, err := os.Executable()
+	if err == nil {
 		addExecutableLibPaths(exe)
 	}
 	if os.Args[0] != "" {

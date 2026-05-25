@@ -1,0 +1,240 @@
+# Shipwright per-platform VSIX release workflow for the Osprey extension.
+#
+# Implements the canonical Microsoft + Shipwright bundling pipeline:
+#   docs/specs/vsix-platform-bundling.md (SWR-VSIX-*)
+#   docs/specs/ide-extension-deployment.md (SWR-IDE-*)
+#   docs/specs/binary-version-contract.md (SWR-VERSION-*)
+#
+# Matrix shape follows the official Microsoft platform-specific sample:
+#   https://github.com/microsoft/vscode-platform-specific-sample/blob/main/.github/workflows/ci.yml
+#
+# Each leg builds the osprey Go compiler + C runtime archives for one platform,
+# stages them into `vscode-extension/bin/<vsceTarget>/`, runs `vsce package
+# --target <vsceTarget>`, verifies the binary is present in the produced VSIX,
+# and uploads the artifact. On tag pushes the publish job downloads every
+# platform artifact and publishes them all in a single `vsce publish` call.
+
+name: release-vsix
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Override version (defaults to tag, or 0.0.0-dev for manual runs)'
+        required: false
+        type: string
+
+concurrency:
+  group: release-vsix-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+    steps:
+      - id: compute
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            ref="${GITHUB_REF#refs/tags/}"
+            version="${ref#v}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          else
+            version="0.0.0-dev"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: $version"
+
+  build:
+    needs: resolve-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            npm_config_arch: arm64
+            goos: darwin
+            goarch: arm64
+          - os: macos-13
+            platform: darwin
+            arch: x64
+            npm_config_arch: x64
+            goos: darwin
+            goarch: amd64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            npm_config_arch: x64
+            goos: linux
+            goarch: amd64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # node-version: 22.x — from official MS sample ci.yml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      # npm install in the extension dir with npm_config_arch matching the
+      # target — required for any native node modules to resolve their
+      # platform package. Same pattern as the MS sample's `npm install` step.
+      - name: Install extension dependencies
+        working-directory: ./vscode-extension
+        run: npm install
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_arch: ${{ matrix.npm_config_arch }}
+
+      # SWR-VERSION-BUILD-STAMPING — stamp the release version into every
+      # deployed manifest before any compile / package step runs.
+      - name: Stamp release version
+        shell: bash
+        env:
+          OSPREY_RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+            const fs = require('fs');
+            const path = require('path');
+            const version = process.env.OSPREY_RELEASE_VERSION;
+            if (!version) throw new Error('OSPREY_RELEASE_VERSION must be set');
+
+            const updateJson = (file, mutate) => {
+              const text = fs.readFileSync(file, 'utf8');
+              const data = JSON.parse(text);
+              mutate(data);
+              fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n');
+              console.log(`stamped ${file} -> ${version}`);
+            };
+
+            updateJson('vscode-extension/package.json', (pkg) => { pkg.version = version; });
+            updateJson('vscode-extension/shipwright.json', (sw) => {
+              sw.product.version = version;
+              for (const c of sw.components || []) {
+                if (typeof c.expectedVersion === 'string' && c.expectedVersion.includes('${PRODUCT_VERSION}')) {
+                  continue;
+                }
+                c.expectedVersion = version;
+              }
+            });
+          NODE
+
+      - name: Install LLVM (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm clang pkg-config libssl-dev
+
+      - name: Install LLVM (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm openssl@3 pkg-config
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+      # Build osprey + C runtime archives, stamping the version into the
+      # binary via -ldflags so `osprey --version` reports the tag.
+      - name: Build osprey compiler and runtime libraries
+        working-directory: ./compiler
+        env:
+          OSPREY_RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          make fiber-runtime http-runtime
+          go build \
+            -ldflags "-X github.com/christianfindlay/osprey/internal/version.Version=${OSPREY_RELEASE_VERSION}" \
+            -o bin/osprey ./cmd/osprey
+
+      # SWR-VERSION contract — first stdout line must be "<id> <semver>".
+      # Every matrix leg builds for its host (no cross-compilation), so the
+      # binary is always executable on the runner that produced it.
+      - name: Verify binary version contract
+        working-directory: ./compiler
+        run: |
+          set -euo pipefail
+          actual=$(./bin/osprey --version | head -n1)
+          expected="osprey ${{ needs.resolve-version.outputs.version }}"
+          if [ "$actual" != "$expected" ]; then
+            echo "SWR-VERSION contract violation: expected '$expected', got '$actual'" >&2
+            exit 1
+          fi
+
+      # SWR-VSIX-STAGING — stage the per-platform binary + runtime archives
+      # into the vscode-extension bundle directory.
+      - name: Stage binaries into VSIX
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ matrix.platform }}-${{ matrix.arch }}"
+          exe=""
+          if [ "${{ runner.os }}" = "Windows" ]; then exe=".exe"; fi
+          dest="vscode-extension/bin/${target}"
+          mkdir -p "${dest}"
+          cp "compiler/bin/osprey${exe}" "${dest}/"
+          for lib in compiler/bin/libfiber_runtime.a compiler/bin/libhttp_runtime.a compiler/bin/librust_utils.a; do
+            [ -f "$lib" ] && cp "$lib" "${dest}/" || true
+          done
+          ls -la "${dest}"
+          echo "target=${target}" >> "$GITHUB_ENV"
+
+      # The extension `out/` dir needs to exist before `vsce package` runs.
+      - name: Compile extension
+        working-directory: ./vscode-extension
+        run: npm run compile
+
+      # SWR-VSIX-PACKAGE — single platform-specific VSIX per target.
+      - name: Package VSIX
+        working-directory: ./vscode-extension
+        run: npx vsce package --target "${{ env.target }}"
+
+      # SWR-VSIX-VERIFY — assert the binary really shipped in the VSIX.
+      - name: Verify VSIX contents
+        shell: bash
+        working-directory: ./vscode-extension
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ runner.os }}" = "Windows" ]; then exe=".exe"; fi
+          unzip -l ./*.vsix | grep -F "bin/${{ env.target }}/osprey${exe}"
+          unzip -l ./*.vsix | grep -F "shipwright.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.target }}
+          path: vscode-extension/*.vsix
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [resolve-version, build]
+    if: success() && startsWith(github.ref, 'refs/tags/')
+    environment: release
+    steps:
+      - uses: actions/download-artifact@v4
+
+      # Same form as official MS sample: no quotes around the glob.
+      - name: Publish to VS Code Marketplace
+        run: npx vsce publish --packagePath $(find . -iname *.vsix)
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}

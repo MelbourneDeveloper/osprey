@@ -89,10 +89,21 @@ let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasDiagnosticRelatedInformationCapability = false;
 
+// Resolved by the extension via Shipwright and passed in initializationOptions.
+// The server never falls back to PATH per SWR-IDE bundling rules; this default
+// is overwritten on initialize.
+let resolvedOspreyBinaryPath: string | undefined;
+
 connection.onInitialize((params: InitializeParams) => {
   connection.console.log('🎯 Initialize request received');
   connection.console.log(`Client capabilities: ${JSON.stringify(params.capabilities, null, 2)}`);
-  
+
+  const initOptions = params.initializationOptions as { ospreyBinaryPath?: string } | undefined;
+  if (initOptions?.ospreyBinaryPath) {
+    resolvedOspreyBinaryPath = initOptions.ospreyBinaryPath;
+    connection.console.log(`🔗 Shipwright-resolved osprey binary: ${resolvedOspreyBinaryPath}`);
+  }
+
   try {
     const capabilities = params.capabilities;
 
@@ -210,6 +221,20 @@ const defaultSettings: OspreySettings = {
   enableDiagnostics: true
 };
 
+// effectiveCompilerPath enforces SWR-IDE precedence: an explicit
+// user setting wins, otherwise the Shipwright-resolved bundled binary path
+// passed in initializationOptions is used. The legacy literal 'osprey' is
+// treated as unset so the bundled path takes effect.
+function effectiveCompilerPath(configured: string | undefined): string {
+  if (configured && configured !== 'osprey' && configured.trim().length > 0) {
+    return configured;
+  }
+  if (resolvedOspreyBinaryPath) {
+    return resolvedOspreyBinaryPath;
+  }
+  return configured && configured.trim().length > 0 ? configured : 'osprey';
+}
+
 let globalSettings: OspreySettings = defaultSettings;
 
 // Cache the settings of all open documents
@@ -240,7 +265,9 @@ function getDocumentSettings(resource: string): Promise<OspreySettings> {
       section: 'osprey'
     }).then((config: any) => {
       return {
-        compilerPath: config.server?.compilerPath || config.server?.path || 'osprey',
+        compilerPath: effectiveCompilerPath(
+          config.binaries?.osprey || config.server?.compilerPath || config.server?.path
+        ),
         enableDiagnostics: config.diagnostics?.enabled !== false
       };
     });
@@ -374,7 +401,7 @@ async function analyzeDocument(textDocument: TextDocument, settings: OspreySetti
 
 function runOspreyCompiler(filePath: string, compilerPath: string): Promise<{stdout: string, stderr: string, error?: Error}> {
   return new Promise((resolve) => {
-    execFile('osprey', [filePath], (error: any, stdout: any, stderr: any) => {
+    execFile(effectiveCompilerPath(compilerPath), [filePath], (error: any, stdout: any, stderr: any) => {
       // Don't treat non-zero exit codes as errors - they might just be syntax errors
       resolve({ stdout, stderr, error: undefined });
     });
@@ -393,10 +420,10 @@ async function getSymbolsFromCompiler(sourceCode: string, uri: string): Promise<
     
     fs.writeFileSync(tempFile, sourceCode);
     
-    // Get compiler path from settings
+    // Get compiler path from settings (Shipwright-resolved when unset).
     const settings = await getDocumentSettings('');
-    const compilerPath = settings.compilerPath || 'osprey';
-    
+    const compilerPath = effectiveCompilerPath(settings.compilerPath);
+
     // Run compiler with --symbols flag
     const result = await new Promise<{stdout: string, stderr: string, error?: Error}>((resolve) => {
       execFile(compilerPath, [tempFile, '--symbols'], (error: any, stdout: any, stderr: any) => {
@@ -457,10 +484,10 @@ async function getSymbolsFromCompiler(sourceCode: string, uri: string): Promise<
 
 async function getBuiltinHoverDocumentation(elementName: string): Promise<string | null> {
   try {
-    // Get compiler path from settings
+    // Get compiler path from settings (Shipwright-resolved when unset).
     const settings = await getDocumentSettings('');
-    const compilerPath = settings.compilerPath || 'osprey';
-    
+    const compilerPath = effectiveCompilerPath(settings.compilerPath);
+
     // Call compiler with hover flag
     const result = await new Promise<{stdout: string, stderr: string, error?: Error}>((resolve) => {
       execFile(compilerPath, ['--hover', elementName], (error: any, stdout: any, stderr: any) => {
