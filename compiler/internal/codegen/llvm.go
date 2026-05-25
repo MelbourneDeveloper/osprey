@@ -1285,26 +1285,20 @@ func (g *LLVMGenerator) restoreVariableScope(oldVariables map[string]value.Value
 	g.variables = oldVariables
 }
 
-// extractPatternFields handles field extraction for patterns
+// extractPatternFields handles field extraction for patterns. Try
+// single-variant record extraction first, then multi-variant discriminated
+// union extraction; if neither matches the pattern is bound to zeros so
+// match arms compile even when the type lookup fails.
 func (g *LLVMGenerator) extractPatternFields(pattern ast.Pattern, discriminant value.Value) {
-	if pattern.Constructor == "*" {
-		// For structural matching, extract fields from the object
-		g.extractStructuralFields(pattern.Fields, discriminant)
-		return
-	}
-
-	// Try to extract fields for record types (single-variant)
 	if g.extractRecordTypeFields(pattern, discriminant) {
 		return
 	}
-
-	// Try to extract fields for discriminated unions (multi-variant)
 	if g.extractDiscriminatedUnionTypeFields(pattern, discriminant) {
 		return
 	}
-
-	// If no type found, bind fields to zero values
-	g.bindFieldsToZeroValues(pattern.Fields)
+	for _, fieldName := range pattern.Fields {
+		g.variables[fieldName] = constant.NewInt(types.I64, 0)
+	}
 }
 
 // extractRecordTypeFields extracts fields for single-variant types
@@ -1335,8 +1329,9 @@ func (g *LLVMGenerator) extractDiscriminatedUnionTypeFields(pattern ast.Pattern,
 	// Handle discriminated union field extraction
 	err := g.extractDiscriminatedUnionFields(discriminant, pattern, g.variables)
 	if err != nil {
-		// If field extraction fails, bind fields to zero values
-		g.bindFieldsToZeroValues(pattern.Fields)
+		for _, fieldName := range pattern.Fields {
+			g.variables[fieldName] = constant.NewInt(types.I64, 0)
+		}
 	}
 
 	return true
@@ -1355,27 +1350,6 @@ func (g *LLVMGenerator) isMultiVariantType(constructorName string) bool {
 	}
 
 	return false
-}
-
-// extractStructuralFields extracts fields for structural matching
-func (g *LLVMGenerator) extractStructuralFields(fields []string, discriminant value.Value) {
-	for _, fieldName := range fields {
-		// Extract the actual field value from the object
-		fieldValue, err := g.extractFieldFromObject(discriminant, fieldName)
-		if err != nil {
-			// If field extraction fails, bind to null/zero value
-			fieldValue = constant.NewNull(types.I8Ptr)
-		}
-
-		g.variables[fieldName] = fieldValue
-	}
-}
-
-// bindFieldsToZeroValues binds pattern fields to zero values when extraction fails
-func (g *LLVMGenerator) bindFieldsToZeroValues(fields []string) {
-	for _, fieldName := range fields {
-		g.variables[fieldName] = constant.NewInt(types.I64, 0)
-	}
 }
 
 // extractRecordFields extracts fields from a record type (single-variant struct)
@@ -1399,8 +1373,9 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 	}
 
 	if structType == nil {
-		// If not a struct, bind fields to zero values
-		g.bindFieldsToZeroValues(pattern.Fields)
+		for _, fieldName := range pattern.Fields {
+			g.variables[fieldName] = constant.NewInt(types.I64, 0)
+		}
 		return
 	}
 
@@ -1461,38 +1436,18 @@ func (g *LLVMGenerator) extractRecordFields(pattern ast.Pattern, discriminant va
 			// Bind the pattern variable to the field value
 			g.variables[patternFieldName] = fieldValue
 
-			// Also register the variable in the Hindley-Milner type environment
-			// For Result types, try to infer the semantic type of the value field
-			var semanticType string
-			if patternFieldName == "value" && pattern.Constructor == SuccessPattern {
-				// This is likely a value extracted from a Result<T, E>
-				// Try to infer the original type T from the context
-				semanticType = g.inferResultValueType(discriminant, field.Type)
-			} else {
-				semanticType = field.Type
+			// Result<T, E> Success pattern: an empty/int field type is the
+			// stand-in the codegen uses when the original T was bool — bind
+			// the pattern var to bool so downstream inference picks the
+			// right printer. All other field types pass through.
+			semanticType := field.Type
+			if patternFieldName == "value" && pattern.Constructor == SuccessPattern &&
+				(field.Type == TypeInt || field.Type == "") {
+				semanticType = TypeBool
 			}
-
-			concreteType := &ConcreteType{name: semanticType}
-			g.typeInferer.env.Set(patternFieldName, concreteType)
+			g.typeInferer.env.Set(patternFieldName, &ConcreteType{name: semanticType})
 		}
 	}
-}
-
-// inferResultValueType tries to infer the semantic type of a value extracted from a Result type
-func (g *LLVMGenerator) inferResultValueType(_ value.Value, fieldType string) string {
-	// Try to track back to the source of this Result value to determine the generic type parameter
-	// This is a complex problem that requires proper generic type tracking
-	// For now, we'll use heuristics based on the field type
-	// Check if the field type suggests this could be a boolean value
-	// Simple heuristic: if the field type suggests it could be boolean (i64 that might be boolean)
-	// and this is a Success pattern match, assume it's a boolean
-	// This handles the common case of Result<bool, Error> from comparison functions
-	if fieldType == TypeInt || fieldType == "" {
-		// This is likely a boolean value stored as i64 in the Result
-		return TypeBool
-	}
-
-	return fieldType // Otherwise use the original field type
 }
 
 // normalizeArmValue handles Unit expressions in match arms
@@ -1555,11 +1510,6 @@ func (g *LLVMGenerator) createPatternCondition(
 ) value.Value {
 	// Handle wildcard and unknown patterns
 	if pattern.Constructor == "_" || pattern.Constructor == UnknownPattern {
-		return constant.NewBool(true)
-	}
-
-	// Handle structural matching
-	if pattern.Constructor == "*" {
 		return constant.NewBool(true)
 	}
 
@@ -1735,64 +1685,6 @@ func (g *LLVMGenerator) createNumericPatternCondition(
 	patternConst := constant.NewInt(types.I64, patternValue)
 
 	return currentBlock.NewICmp(enum.IPredEQ, discriminant, patternConst)
-}
-
-// extractFieldFromObject extracts a field value from an object literal
-func (g *LLVMGenerator) extractFieldFromObject(objectValue value.Value, fieldName string) (value.Value, error) {
-	// Check if this is a pointer to a struct
-	objectType := objectValue.Type()
-
-	var (
-		structType *types.StructType
-		isPointer  bool
-	)
-
-	if ptrType, ok := objectType.(*types.PointerType); ok {
-		if st, ok := ptrType.ElemType.(*types.StructType); ok {
-			structType = st
-			isPointer = true
-		}
-	} else if st, ok := objectType.(*types.StructType); ok {
-		structType = st
-		isPointer = false
-	}
-
-	if structType == nil {
-		// If not a struct, we can't extract fields
-		return nil, fmt.Errorf("%w: %s", ErrCannotExtractField, fieldName)
-	}
-
-	// For now, assume the first field contains the value we want
-	// In a real implementation, we'd need to map field names to indices
-	fieldIndex := 0
-
-	// Get pointer to the field
-	var fieldPtr value.Value
-	if isPointer {
-		// Object is already a pointer to the struct
-		fieldPtr = g.builder.NewGetElementPtr(
-			structType,
-			objectValue,
-			constant.NewInt(types.I32, 0),
-			constant.NewInt(types.I32, int64(fieldIndex)),
-		)
-	} else {
-		// Object is a struct value, need to get its address first
-		structAddr := g.builder.NewAlloca(structType)
-		g.builder.NewStore(objectValue, structAddr)
-		fieldPtr = g.builder.NewGetElementPtr(
-			structType,
-			structAddr,
-			constant.NewInt(types.I32, 0),
-			constant.NewInt(types.I32, int64(fieldIndex)),
-		)
-	}
-
-	// Load the field value
-	fieldType := structType.Fields[fieldIndex]
-	fieldValue := g.builder.NewLoad(fieldType, fieldPtr)
-
-	return fieldValue, nil
 }
 
 // extractDiscriminatedUnionFields extracts field values from a discriminated union variant

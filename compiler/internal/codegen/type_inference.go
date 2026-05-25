@@ -656,7 +656,7 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 		return &ConcreteType{name: TypeString}, nil
 	case *ast.SpawnExpression, *ast.AwaitExpression, *ast.YieldExpression:
 		return ti.inferConcurrencyExpression(e)
-	case *ast.ChannelExpression, *ast.ChannelCreateExpression:
+	case *ast.ChannelCreateExpression:
 		return ti.inferChannelExpression(e)
 	case *ast.ChannelSendExpression, *ast.ChannelRecvExpression:
 		return ti.inferChannelOperationExpression(e)

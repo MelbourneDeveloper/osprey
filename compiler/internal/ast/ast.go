@@ -398,14 +398,6 @@ type YieldExpression struct {
 
 func (y *YieldExpression) isExpression() {}
 
-// ChannelExpression represents channel creation.
-type ChannelExpression struct {
-	ElementType TypeExpression
-	Capacity    Expression // Optional capacity expression
-}
-
-func (c *ChannelExpression) isExpression() {}
-
 // ChannelSendExpression represents sending to a channel.
 type ChannelSendExpression struct {
 	Channel Expression

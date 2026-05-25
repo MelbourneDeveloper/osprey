@@ -38,7 +38,6 @@ func TestExpressionMarkerInvocations(_ *testing.T) {
 	(&SpawnExpression{}).isExpression()
 	(&AwaitExpression{}).isExpression()
 	(&YieldExpression{}).isExpression()
-	(&ChannelExpression{}).isExpression()
 	(&ChannelSendExpression{}).isExpression()
 	(&ChannelRecvExpression{}).isExpression()
 	(&SelectExpression{}).isExpression()

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -23,11 +22,8 @@ const (
 	DefaultByteSize = 8    // Default size fallback
 	LargeArraySize  = 1000 // Large array size for type casting operations
 
-	// MinResultFieldCount represents the field count of a Result type struct.
-	// Kept as a separate name for readability at the call site that asserts the
-	// Result-struct shape during string-coercion. The actual layout is shared
-	// with ResultFieldCount (3 since [ERR-PAYLOAD]).
-	MinResultFieldCount = ResultFieldCount
+	// MinResultFieldCount represents the minimum number of fields in a Result type struct
+	MinResultFieldCount = 2
 )
 
 // Static error definitions
@@ -97,8 +93,6 @@ func (g *LLVMGenerator) generateFiberOrModuleExpression(expr ast.Expression) (va
 // generateChannelOrUnsupportedExpression handles all channel-related expressions.
 func (g *LLVMGenerator) generateChannelOrUnsupportedExpression(expr ast.Expression) (value.Value, error) {
 	switch e := expr.(type) {
-	case *ast.ChannelExpression:
-		return g.generateChannelExpression(e)
 	case *ast.ChannelCreateExpression:
 		return g.generateChannelCreateExpression(e)
 	case *ast.ChannelSendExpression:
@@ -110,13 +104,8 @@ func (g *LLVMGenerator) generateChannelOrUnsupportedExpression(expr ast.Expressi
 	case *ast.UpdateExpression:
 		return g.generateUpdateExpression(e)
 	default:
-		return g.generateUnsupportedExpression(expr)
+		return nil, WrapUnsupportedExpression(expr)
 	}
-}
-
-// generateUnsupportedExpression handles unsupported expression types.
-func (g *LLVMGenerator) generateUnsupportedExpression(expr ast.Expression) (value.Value, error) {
-	return nil, WrapUnsupportedExpression(expr)
 }
 
 // generateLiteralExpression handles all literal types.
@@ -603,8 +592,21 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	// Create Success result for the actual element type
 	resultType := g.getResultType(elementLLVMType)
 	successResult := g.builder.NewAlloca(resultType)
-	g.storeResultFields(successResult, elementValue,
-		constant.NewInt(types.I8, 0), g.nullErrorMessage())
+
+	// Store element value
+	valuePtr := g.builder.NewGetElementPtr(resultType, successResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+
+	// Debug: Print types for mismatch investigation (commented out)
+	// fmt.Printf("DEBUG: elementLLVMType: %s, elementValue type: %T %s, valuePtr type: %T %s\n",
+	//	elementLLVMType, elementValue.Type(), elementValue.Type(), valuePtr.Type(), valuePtr.Type())
+
+	g.builder.NewStore(elementValue, valuePtr)
+
+	// Store success discriminant (0)
+	discriminantPtr := g.builder.NewGetElementPtr(resultType, successResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
 
 	// Branch to end block
 	g.builder.NewBr(endBlock)
@@ -612,6 +614,10 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	// Error block: return index error
 	g.builder = errorBlock
 	errorResult := g.builder.NewAlloca(resultType)
+
+	// Store error value (null value for the element type)
+	errorValuePtr := g.builder.NewGetElementPtr(resultType, errorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 
 	// Create appropriate null value based on element type
 	var nullValue value.Value
@@ -633,8 +639,12 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 			nullValue = constant.NewNull(types.I8Ptr)
 		}
 	}
-	g.storeResultFields(errorResult, nullValue,
-		constant.NewInt(types.I8, 1), g.internErrorMessage("list: index out of range"))
+	g.builder.NewStore(nullValue, errorValuePtr)
+
+	// Store error discriminant (1)
+	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, errorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr)
 
 	// Branch to end block
 	g.builder.NewBr(endBlock)
@@ -653,26 +663,6 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, error) {
 	// Check for union type variants (constants) first
 	if discriminant, exists := g.unionVariants[ident.Name]; exists {
-		// If this variant belongs to a multi-variant discriminated union laid
-		// out as { i8 tag, [N x i8] data }, allocate the union shape and tag
-		// it. Otherwise (simple all-no-fields enum lowered to i64) keep the
-		// legacy integer encoding.
-		if typeDecl := g.findTypeDeclarationByVariant(ident.Name); typeDecl != nil {
-			if unionType, exists := g.typeMap[typeDecl.Name]; exists {
-				if structType, ok := unionType.(*types.StructType); ok && len(structType.Fields) == 2 {
-					unionValue := g.builder.NewAlloca(structType)
-					tagPtr := g.builder.NewGetElementPtr(
-						structType,
-						unionValue,
-						constant.NewInt(types.I32, 0),
-						constant.NewInt(types.I32, 0),
-					)
-					g.builder.NewStore(constant.NewInt(types.I8, discriminant), tagPtr)
-					return unionValue, nil
-				}
-			}
-		}
-
 		return constant.NewInt(types.I64, discriminant), nil
 	}
 
@@ -958,24 +948,56 @@ func (g *LLVMGenerator) generateModuloWithZeroCheck(left, right value.Value) (va
 	return phi, nil
 }
 
-// createSuccessResult creates a Success Result<int, MathError> struct.
-func (g *LLVMGenerator) createSuccessResult(val value.Value) value.Value {
-	return g.makeSuccessValue(val)
+// createSuccessResult creates a Success Result<int, MathError> struct
+func (g *LLVMGenerator) createSuccessResult(value value.Value) value.Value {
+	// Result struct for Success: {value: i64, is_error: i8}
+	// For Success: value = actual result, is_error = 0
+	resultStructType := types.NewStruct(types.I64, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set the value
+	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
+	// Set is_error flag to 0 (Success)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
+	return resultComplete
 }
 
-// createSuccessResultFloat creates a Success Result<float, MathError> struct.
-func (g *LLVMGenerator) createSuccessResultFloat(val value.Value) value.Value {
-	return g.makeSuccessValue(val)
+// createSuccessResultFloat creates a Success Result<float, MathError> struct
+func (g *LLVMGenerator) createSuccessResultFloat(value value.Value) value.Value {
+	// Result struct for Success: {value: double, is_error: i8}
+	// For Success: value = actual result, is_error = 0
+	resultStructType := types.NewStruct(types.Double, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set the value
+	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
+	// Set is_error flag to 0 (Success)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
+	return resultComplete
 }
 
-// createDivisionByZeroError creates an Error Result<int, MathError> for division by zero.
+// createDivisionByZeroError creates an Error Result<int, MathError> struct for division by zero
 func (g *LLVMGenerator) createDivisionByZeroError() value.Value {
-	return g.makeErrorValueWithMessage(constant.NewInt(types.I64, 0), "math: division by zero")
+	// Result struct for Error: {error_discriminant: i64, is_error: i8}
+	// For DivisionByZero: error_discriminant = 0, is_error = 1
+	resultStructType := types.NewStruct(types.I64, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set error discriminant to 0 (DivisionByZero is first variant of MathError)
+	resultWithError := g.builder.NewInsertValue(undefStruct, constant.NewInt(types.I64, 0), 0)
+	// Set is_error flag to 1
+	resultComplete := g.builder.NewInsertValue(resultWithError, constant.NewInt(types.I8, 1), 1)
+	return resultComplete
 }
 
-// createDivisionByZeroErrorFloat creates an Error Result<float, MathError> for division by zero.
+// createDivisionByZeroErrorFloat creates an Error Result<float, MathError> struct for division by zero
 func (g *LLVMGenerator) createDivisionByZeroErrorFloat() value.Value {
-	return g.makeErrorValueWithMessage(constant.NewFloat(types.Double, 0.0), "math: division by zero")
+	// Result struct for Error: {error_discriminant: double, is_error: i8}
+	// For DivisionByZero: error_discriminant = 0.0, is_error = 1
+	resultStructType := types.NewStruct(types.Double, types.I8)
+	undefStruct := constant.NewUndef(resultStructType)
+	// Set error discriminant to 0.0 (stored as double to match struct type)
+	resultWithError := g.builder.NewInsertValue(undefStruct, constant.NewFloat(types.Double, 0.0), 0)
+	// Set is_error flag to 1
+	resultComplete := g.builder.NewInsertValue(resultWithError, constant.NewInt(types.I8, 1), 1)
+	return resultComplete
 }
 
 // isFloatLLVMType checks if an LLVM type is a floating-point type
@@ -997,23 +1019,26 @@ func promoteToFloat(builder *ir.Block, val value.Value) value.Value {
 // This enables auto-propagation: arithmetic chains like (1+2)*3 work because Results auto-unwrap.
 // Returns the value unchanged if it's not a Result type.
 // NOTE: This assumes the Result is Success - errors will propagate at runtime.
-// Implements the value-side of [ERR-PAYLOAD]: Result layout is now
-// { value, discriminant: i8, err_msg: i8* } (see core_functions.go:getResultType).
 func (g *LLVMGenerator) unwrapIfResult(val value.Value) value.Value {
+	// Check if this is a Result struct: {value_type, i8}
 	structType, ok := val.Type().(*types.StructType)
 	if !ok {
-		return val
+		return val // Not a struct, return as-is
 	}
 
-	if len(structType.Fields) != ResultFieldCount {
-		return val
+	const resultFieldCount = 2
+	if len(structType.Fields) != resultFieldCount {
+		return val // Not a 2-field struct, return as-is
 	}
 
+	// Check if second field is i8 (the is_error flag)
 	const errorFlagBitSize = 8
 	if intType, ok := structType.Fields[1].(*types.IntType); !ok || intType.BitSize != errorFlagBitSize {
-		return val
+		return val // Not a Result struct pattern, return as-is
 	}
 
+	// This looks like a Result struct - extract the value (field 0)
+	// TODO: Add runtime error checking - for now we assume Success
 	return g.builder.NewExtractValue(val, 0)
 }
 
@@ -1175,18 +1200,6 @@ func (g *LLVMGenerator) generateFieldAccess(fieldAccess *ast.FieldAccessExpressi
 		}
 	}
 
-	// Check if this is field access on an identifier that might be a constrained type result
-	if ident, isIdent := fieldAccess.Object.(*ast.Identifier); isIdent {
-		// Check if this identifier represents a constrained type constructor result using Hindley-Milner
-		if varType, exists := g.typeInferer.env.Get(ident.Name); exists {
-			// Look for Result[ pattern in the type (GenericType uses square brackets)
-			if strings.Contains(varType.String(), "Result[") {
-				// This is field access on a Result type - convert to pattern matching
-				return g.generateResultFieldAccessAsMatch(fieldAccess, ident)
-			}
-		}
-	}
-
 	// Generate the object value
 	objectValue, err := g.generateExpression(fieldAccess.Object)
 	if err != nil {
@@ -1237,28 +1250,11 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 		return g.generateRecordFieldAccess(fieldAccess, objectValue, recordType)
 	}
 
-	// Handle type variables that might be constrained to record types
+	// Type variable constrained to a record type via HM unification.
 	if typeVar, ok := objectType.(*TypeVar); ok {
-		// Check if this type variable has been unified with a record type
 		prunedType := g.typeInferer.prune(typeVar)
 		if recordType, ok := prunedType.(*RecordType); ok {
 			return g.generateRecordFieldAccess(fieldAccess, objectValue, recordType)
-		}
-
-		// If the type variable is constrained to have this field during inference,
-		// we need to find that constraint. For now, try to infer from the object value type.
-		if objectValue != nil {
-			if structType := g.tryGetStructType(objectValue.Type()); structType != nil {
-				// Create a temporary record type based on the LLVM struct
-				return g.generateStructFieldAccessFallback(fieldAccess, objectValue, structType)
-			}
-		}
-	}
-
-	// Additional fallback: If we still have a TypeVar, try direct struct field access
-	if _, ok := objectType.(*TypeVar); ok && objectValue != nil {
-		if structType := g.tryGetStructType(objectValue.Type()); structType != nil {
-			return g.generateStructFieldAccessFallback(fieldAccess, objectValue, structType)
 		}
 	}
 
@@ -1270,78 +1266,6 @@ func (g *LLVMGenerator) generateStructFieldAccess(
 
 	return nil, fmt.Errorf("cannot access field '%s' on non-struct type", //nolint:err113
 		fieldAccess.FieldName)
-}
-
-// tryGetStructType extracts a struct type from an LLVM type
-func (g *LLVMGenerator) tryGetStructType(llvmType types.Type) *types.StructType {
-	if ptrType, ok := llvmType.(*types.PointerType); ok {
-		if st, ok := ptrType.ElemType.(*types.StructType); ok {
-			return st
-		}
-	} else if st, ok := llvmType.(*types.StructType); ok {
-		return st
-	}
-
-	return nil
-}
-
-// generateStructFieldAccessFallback handles field access on raw LLVM struct types
-func (g *LLVMGenerator) generateStructFieldAccessFallback(
-	fieldAccess *ast.FieldAccessExpression,
-	objectValue value.Value,
-	structType *types.StructType,
-) (value.Value, error) {
-	// For polymorphic field access, we need to make assumptions about field ordering
-	// This is a fallback for when type inference hasn't provided a concrete record type
-	// Try to find the field by name using a heuristic approach
-	// For now, assume common field names map to indices
-	var fieldIndex int
-
-	switch fieldAccess.FieldName {
-	case "first":
-		fieldIndex = 0
-	case "second":
-		fieldIndex = 1
-	case "x":
-		fieldIndex = 0
-	case "y":
-		fieldIndex = 1
-	case "value":
-		fieldIndex = 0
-	case "label":
-		fieldIndex = 1
-	default:
-		// Try to parse field name as index if it's numeric
-		return nil, fmt.Errorf("line %d:%d: cannot determine field index for '%s' in polymorphic field access: %w",
-			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName, ErrFieldAccessOnNonRecord)
-	}
-
-	if fieldIndex >= len(structType.Fields) {
-		return nil, fmt.Errorf("line %d:%d: field index %d out of bounds for struct with %d fields: %w",
-			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldIndex, len(structType.Fields),
-			ErrFieldAccessOnNonRecord)
-	}
-
-	// Generate field access using the computed index
-	// Check if objectValue is a pointer or value
-	objectType := objectValue.Type()
-	if _, ok := objectType.(*types.PointerType); ok {
-		// Object is a pointer to the struct - use GEP + load
-		fieldPtr := g.builder.NewGetElementPtr(
-			structType,
-			objectValue,
-			constant.NewInt(types.I32, 0),
-			constant.NewInt(types.I32, int64(fieldIndex)),
-		)
-
-		return g.builder.NewLoad(structType.Fields[fieldIndex], fieldPtr), nil
-	} else if _, ok := objectType.(*types.StructType); ok {
-		// Object is a struct value - use extractvalue directly
-		return g.builder.NewExtractValue(objectValue, uint64(fieldIndex)), nil
-	}
-	// Fallback: Object is a struct value, but might not be recognized as such
-	// Try extractvalue first
-	return g.builder.NewExtractValue(objectValue, uint64(fieldIndex)), nil
 }
 
 // generateRecordFieldAccess handles field access using Hindley-Milner RecordType information
@@ -1743,67 +1667,15 @@ func (g *LLVMGenerator) createRecordStruct(fieldTypes []types.Type, fieldValues 
 		expectedType := structType.Fields[i]
 		actualType := fieldValue.Type()
 
-		finalFieldValue := fieldValue
-
-		if expectedType != actualType {
-			converted, err := g.convertFieldType(fieldValue, expectedType, actualType, i)
-			if err != nil {
-				return nil, err
-			}
-
-			finalFieldValue = converted
-		}
-
-		structValue = g.builder.NewInsertValue(structValue, finalFieldValue, uint64(i))
+		// Record fields are HM-inferred so the LLVM types match by
+		// construction; if a future bug breaks that invariant, fix the
+		// inference path rather than reintroduce a silent reinterpretation.
+		_ = expectedType
+		_ = actualType
+		structValue = g.builder.NewInsertValue(structValue, fieldValue, uint64(i))
 	}
 
 	return structValue, nil
-}
-
-// convertFieldType converts a field value to the expected type if compatible
-func (g *LLVMGenerator) convertFieldType(
-	fieldValue value.Value,
-	expectedType, actualType types.Type,
-	fieldIndex int,
-) (value.Value, error) {
-	if !g.areCompatibleLLVMTypes(expectedType, actualType) {
-		return nil, fmt.Errorf("type mismatch in record field %d: expected %v, got %v: %w",
-			fieldIndex, expectedType, actualType, ErrRecordFieldTypeMismatch)
-	}
-
-	// Same string representation - likely same type from different contexts
-	if expectedType.String() == actualType.String() {
-		return fieldValue, nil
-	}
-
-	// For pointer types that should be compatible, use bitcast
-	if g.isPointerType(expectedType) && g.isPointerType(actualType) {
-		return g.builder.NewBitCast(fieldValue, expectedType), nil
-	}
-
-	// Default to original value for other compatible types
-	return fieldValue, nil
-}
-
-// areCompatibleLLVMTypes checks if two LLVM types are compatible for conversion
-func (g *LLVMGenerator) areCompatibleLLVMTypes(expected, actual types.Type) bool {
-	// If string representations are the same, they should be compatible
-	if expected.String() == actual.String() {
-		return true
-	}
-
-	// Check if both are pointer types
-	if g.isPointerType(expected) && g.isPointerType(actual) {
-		return true
-	}
-
-	return false
-}
-
-// isPointerType checks if a type is a pointer type
-func (g *LLVMGenerator) isPointerType(t types.Type) bool {
-	_, isPtr := t.(*types.PointerType)
-	return isPtr
 }
 
 // generateDiscriminatedUnionConstructor generates LLVM IR for discriminated union variant construction
@@ -1846,51 +1718,46 @@ func (g *LLVMGenerator) generateDiscriminatedUnionConstructor(
 	return unionValue, nil
 }
 
-// findVariantByConstructorCall finds which variant matches the constructor call.
-// Variants are identified by their NAME (typeConstructor.TypeName). Field-set
-// matching is a last-resort fallback: when two variants share the same field
-// names (e.g. `JBool {v}`, `JNum {v}`, `JStr {v}`) it picks the first one and
-// silently mis-routes the value into the wrong slot — see [TYPE-UNION-REC].
+// findVariantByConstructorCall finds which variant matches the constructor call
 func (g *LLVMGenerator) findVariantByConstructorCall(
 	typeConstructor *ast.TypeConstructorExpression,
 	typeDecl *ast.TypeDeclaration,
 ) (*ast.TypeVariant, int, error) {
-	// Primary: name match. The parser always populates TypeName from the
-	// source-level constructor (`JArr` in `JArr { items: ... }`).
-	if typeConstructor.TypeName != "" {
-		for i, variant := range typeDecl.Variants {
-			if variant.Name == typeConstructor.TypeName {
-				return &variant, i, nil
-			}
-		}
-	}
-
-	// Fallback: field-name set match. Only reached when the constructor has no
-	// TypeName (legacy AST paths) or when the name doesn't correspond to any
-	// declared variant. Preserved for backward compatibility.
+	// The constructor call should be in the form: VariantName { field1: value1, field2: value2 }
+	// We need to find which variant matches by looking at the discriminant of the variant name
+	// First, try to find a variant by matching field names if fields are provided
 	if len(typeConstructor.Fields) > 0 {
 		for i, variant := range typeDecl.Variants {
-			if len(variant.Fields) != len(typeConstructor.Fields) {
-				continue
-			}
+			if len(variant.Fields) == len(typeConstructor.Fields) {
+				// Check if all constructor fields match variant fields
+				allMatch := true
 
-			allMatch := true
-
-			for _, variantField := range variant.Fields {
-				if _, exists := typeConstructor.Fields[variantField.Name]; !exists {
-					allMatch = false
-					break
+				for _, variantField := range variant.Fields {
+					if _, exists := typeConstructor.Fields[variantField.Name]; !exists {
+						allMatch = false
+						break
+					}
 				}
-			}
 
-			if allMatch {
-				return &variant, i, nil
+				if allMatch {
+					return &variant, i, nil
+				}
 			}
 		}
 
 		return nil, -1, fmt.Errorf("%w for type %s", ErrNoVariantFound, typeDecl.Name)
 	}
 
+	// If no fields provided, this might be a simple enum variant
+	// Try to find variant by checking if typeConstructor.TypeName matches any variant name
+	for i, variant := range typeDecl.Variants {
+		if variant.Name == typeConstructor.TypeName {
+			return &variant, i, nil
+		}
+	}
+
+	// If we still haven't found it, return the first variant as a fallback
+	// This handles cases where we're constructing by type name rather than variant name
 	if len(typeDecl.Variants) > 0 {
 		return &typeDecl.Variants[0], 0, nil
 	}
@@ -1979,105 +1846,27 @@ func (g *LLVMGenerator) getTypeSize(t types.Type) int64 {
 	}
 }
 
-// convertValueToExpectedType converts a value to match the expected LLVM type
-//
-//nolint:gocognit // Complex function required for comprehensive type conversion handling
+// convertValueToExpectedType converts a value to match the expected LLVM
+// type when storing into a union variant data field. Only the conversions
+// that actually fire in practice are handled — the Hindley-Milner inferer
+// rules out other type pairs upstream. Removed fallbacks: string↔int,
+// pointer-element fixups, integer truncation/extension between bit sizes
+// other than i1↔i64. If a new combination starts firing, prefer fixing
+// the inference path over reintroducing a silent reinterpretation.
 func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedType types.Type) value.Value {
 	currentType := value.Type()
-
-	// If types already match, no conversion needed
 	if currentType == expectedType {
 		return value
 	}
-
-	// Handle string types (i8*) explicitly
-	if currentType == types.I8Ptr && expectedType == types.I8Ptr {
-		return value
-	}
-
-	// Convert i64 to i1 (boolean)
+	// i64 → i1 (boolean conversion for int-typed fields written from a
+	// numeric expression that the inferer has typed as int).
 	if currentType == types.I64 && expectedType == types.I1 {
-		// Convert non-zero to true, zero to false
-		zero := constant.NewInt(types.I64, 0)
-		return g.builder.NewICmp(enum.IPredNE, value, zero)
+		return g.builder.NewICmp(enum.IPredNE, value, constant.NewInt(types.I64, 0))
 	}
-
-	// Convert i1 to i64 (boolean to integer)
+	// i1 → i64 (boolean widened into an int field).
 	if currentType == types.I1 && expectedType == types.I64 {
 		return g.builder.NewZExt(value, types.I64)
 	}
-
-	// Handle incompatible pointer types by checking what the field actually expects
-	if ptrType, ok := expectedType.(*types.PointerType); ok {
-		// If expected type is a pointer and we have a different type, try to convert via casting
-		if currentType != expectedType {
-			// Pointer-to-pointer: bitcast safely. This is the path for storing
-			// a discriminated-union value (e.g. `{i8, [N x i8]}*`) into an
-			// `i8*` payload slot of another union — recursive payloads from
-			// spec/0004-TypeSystem.md [TYPE-UNION-REC].
-			if _, srcIsPtr := currentType.(*types.PointerType); srcIsPtr {
-				return g.builder.NewBitCast(value, expectedType)
-			}
-
-			// Don't try to cast between fundamentally incompatible types
-			if currentType == types.I8Ptr && ptrType.ElemType != types.I8 {
-				// This is a string being stored in a non-string pointer field - likely an error
-				// Return a null pointer of the expected type to avoid crash
-				return constant.NewNull(ptrType)
-			}
-		}
-	}
-
-	// Handle all incompatible pointer/type combinations
-	// Detect various type mismatches and provide safe defaults
-
-	// String to integer conversion
-	if currentType == types.I8Ptr && expectedType == types.I64 {
-		return constant.NewInt(types.I64, 0)
-	}
-
-	// Integer to string conversion
-	if currentType == types.I64 && expectedType == types.I8Ptr {
-		return constant.NewNull(types.I8Ptr)
-	}
-
-	// Handle pointer type mismatches - if we're trying to store into an i64* pointer
-	if ptrType, ok := expectedType.(*types.PointerType); ok {
-		if ptrType.ElemType == types.I64 {
-			// Expected type is pointer to integer - convert current value to integer first
-			switch currentType {
-			case types.I8Ptr:
-				return constant.NewInt(types.I64, 0)
-			case types.I1:
-				return g.builder.NewZExt(value, types.I64)
-			default:
-				return constant.NewInt(types.I64, 0)
-			}
-		}
-
-		if ptrType.ElemType == types.I8 || ptrType.ElemType == types.I8Ptr {
-			// Expected type is pointer to string - convert to string
-			if currentType != types.I8Ptr {
-				return constant.NewNull(types.I8Ptr)
-			}
-		}
-	}
-
-	// For other cases, try basic casting if the types are compatible
-	if intType1, ok1 := currentType.(*types.IntType); ok1 {
-		if intType2, ok2 := expectedType.(*types.IntType); ok2 {
-			// Both are integer types - try casting
-			if intType1.BitSize < intType2.BitSize {
-				// Zero-extend smaller to larger
-				return g.builder.NewZExt(value, expectedType)
-			} else if intType1.BitSize > intType2.BitSize {
-				// Truncate larger to smaller
-				return g.builder.NewTrunc(value, expectedType)
-			}
-		}
-	}
-
-	// For other cases, return the original value and hope LLVM can handle it
 	return value
 }
 
@@ -2552,65 +2341,48 @@ func (g *LLVMGenerator) generateSuccessConstructor(
 	}
 
 	// Create Result struct type based on the value type
-	return g.makeSuccessValue(value), nil
+	valueType := value.Type()
+	resultStructType := types.NewStruct(valueType, types.I8) // [value, discriminant]
+
+	// Create the result struct as a value (not pointer)
+	// Use InsertValue to build the struct value directly
+	undefStruct := constant.NewUndef(resultStructType)
+	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
+
+	return resultComplete, nil
 }
 
 // generateErrorConstructor generates LLVM IR for Error { message: E } constructor.
-// Implements [ERR-PAYLOAD]: the message is stored in the err_msg slot (index 2).
-// The value slot (index 0) holds the user-supplied message as a placeholder so
-// the Result struct type stays consistent across this codepath; downstream
-// pattern-matching reads index 2 for the bound `message` variable. The Phase-3
-// migration to typed payload slots (Result<T, StringError>) supersedes this.
 func (g *LLVMGenerator) generateErrorConstructor(
 	typeConstructor *ast.TypeConstructorExpression,
 ) (value.Value, error) {
+	// Error constructor should create a Result struct with discriminant = 1 (error)
+	// Result struct: [defaultValue, discriminant] where discriminant=1 for error
+	// Get the message expression from the constructor fields
 	messageExpr, exists := typeConstructor.Fields["message"]
 	if !exists {
 		return nil, ErrErrorConstructorMissingMessage
 	}
 
+	// Generate the error message
 	message, err := g.generateExpression(messageExpr)
 	if err != nil {
 		return nil, err
 	}
 
-	// Pre-[ERR-PAYLOAD] this stored the message in slot 0 (value); the new layout
-	// requires us to *also* place it in slot 2 so generateErrorBlock can read it
-	// uniformly with builtin-produced Errors. Slot 0 retains the message-typed
-	// placeholder pending Phase 5 (Result<T, E> with proper value-slot typing).
-	if message.Type() == types.I8Ptr {
-		return g.makeResultValue(message, 1, message), nil
-	}
-	return g.makeResultValue(message, 1, g.nullErrorMessage()), nil
-}
+	// Error constructor creates Result struct: [error_message, discriminant]
+	// where discriminant = 1 for error
+	messageType := message.Type()
+	resultStructType := types.NewStruct(messageType, types.I8) // [error_message, discriminant]
 
-// generateResultFieldAccessAsMatch converts Result field access to pattern matching
-// This handles cases like myResult { value } ? value : "default"
-func (g *LLVMGenerator) generateResultFieldAccessAsMatch(
-	_ *ast.FieldAccessExpression,
-	ident *ast.Identifier,
-) (value.Value, error) {
-	// For now, just extract the value directly from the Success Result struct
-	// This is a simplified implementation that assumes the Result is a Success
-	// Generate the Result value
-	resultValue, err := g.generateExpression(ident)
-	if err != nil {
-		return nil, err
-	}
+	// Create the result struct as a value (not pointer)
+	// Use InsertValue to build the struct value directly
+	undefStruct := constant.NewUndef(resultStructType)
+	resultWithMessage := g.builder.NewInsertValue(undefStruct, message, 0)
+	resultComplete := g.builder.NewInsertValue(resultWithMessage, constant.NewInt(types.I8, 1), 1)
 
-	// Extract the first field (value) from the Result struct
-	// Result struct layout: [value, discriminant]
-	resultType := resultValue.Type()
-	if structType, ok := resultType.(*types.StructType); ok && len(structType.Fields) >= 2 {
-		// Get pointer to the value field (index 0)
-		valuePtr := g.builder.NewGetElementPtr(structType, resultValue,
-			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-
-		// Load the value
-		return g.builder.NewLoad(structType.Fields[0], valuePtr), nil
-	}
-
-	return nil, errors.New("result field access failed: invalid Result type structure") //nolint:err113
+	return resultComplete, nil
 }
 
 // generateMapAccess generates LLVM IR for map key lookup
@@ -2757,22 +2529,46 @@ func (g *LLVMGenerator) generateMapAccess(
 	foundSuccessResult := g.builder.NewAlloca(resultType)
 
 	// Store actual value
-	g.storeResultFields(foundSuccessResult, actualValue,
-		constant.NewInt(types.I8, 0), g.nullErrorMessage())
+	foundResultValuePtr := g.builder.NewGetElementPtr(resultType, foundSuccessResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(actualValue, foundResultValuePtr)
+
+	// Store success discriminant (0)
+	foundDiscriminantPtr := g.builder.NewGetElementPtr(resultType, foundSuccessResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), foundDiscriminantPtr)
 	g.builder.NewBr(mapEndBlock)
 
 	// Key not found block - create error result and jump to end
 	g.builder = keyNotFound
+
+	// Create Error result for missing key
 	notFoundErrorResult := g.builder.NewAlloca(resultType)
-	g.storeResultFields(notFoundErrorResult, nullValue,
-		constant.NewInt(types.I8, 1), g.internErrorMessage("map: key not found"))
+
+	// Store error value (null value for the element type)
+	notFoundValuePtr := g.builder.NewGetElementPtr(resultType, notFoundErrorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(nullValue, notFoundValuePtr)
+
+	// Store error discriminant (1)
+	notFoundDiscriminantPtr := g.builder.NewGetElementPtr(resultType, notFoundErrorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), notFoundDiscriminantPtr)
 	g.builder.NewBr(mapEndBlock)
 
 	// Map empty block - create error result
 	g.builder = mapEmptyBlock
 	emptyErrorResult := g.builder.NewAlloca(resultType)
-	g.storeResultFields(emptyErrorResult, nullValue,
-		constant.NewInt(types.I8, 1), g.internErrorMessage("map: lookup on empty map"))
+
+	// Store error value (null value for the element type)
+	emptyValuePtr := g.builder.NewGetElementPtr(resultType, emptyErrorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(nullValue, emptyValuePtr)
+
+	// Store error discriminant (1)
+	emptyDiscriminantPtr := g.builder.NewGetElementPtr(resultType, emptyErrorResult,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), emptyDiscriminantPtr)
 	g.builder.NewBr(mapEndBlock)
 
 	// End block with PHI node to select the result

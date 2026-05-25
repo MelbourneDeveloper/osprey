@@ -245,24 +245,6 @@ func (g *LLVMGenerator) generateYieldExpression(yield *ast.YieldExpression) (val
 	return g.generateFiberRuntimeCall("fiber_yield", "fiber_yield", []value.Value{yieldValue})
 }
 
-// generateChannelExpression generates REAL channel creation.
-func (g *LLVMGenerator) generateChannelExpression(channel *ast.ChannelExpression) (value.Value, error) {
-	// Get capacity
-	var capacity value.Value = constant.NewInt(types.I64, defaultChannelCapacity)
-
-	if channel.Capacity != nil {
-		var err error
-
-		capacity, err = g.generateExpression(channel.Capacity)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Call channel_create using consolidated approach
-	return g.generateFiberRuntimeCall("Channel", "channel_create", []value.Value{capacity})
-}
-
 // generateChannelCreateExpression generates REAL channel creation using type constructor syntax.
 func (g *LLVMGenerator) generateChannelCreateExpression(channel *ast.ChannelCreateExpression) (value.Value, error) {
 	// Get capacity

@@ -49,7 +49,6 @@ func TestExpressionMarkers(t *testing.T) {
 		&ast.SpawnExpression{},
 		&ast.AwaitExpression{},
 		&ast.YieldExpression{},
-		&ast.ChannelExpression{},
 		&ast.ChannelSendExpression{},
 		&ast.ChannelRecvExpression{},
 		&ast.SelectExpression{},
