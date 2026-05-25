@@ -2516,8 +2516,17 @@ func (ti *TypeInferer) inferAndUnifyRecordFields(
 			if ct, ok := expectedFieldType.(*ConcreteType); !ok || isKnownConcreteType(ct.name) {
 				err := ti.Unify(fieldType, expectedFieldType)
 				if err != nil {
-					return nil, fmt.Errorf("field %s type mismatch in %s constructor: %w",
-						fieldName, recordType.name, err)
+					// Spec auto-unwrap: a Result<T,E> field value flows into
+					// a T-typed field slot (e.g. `Pt { x: p.x + dx }` where
+					// `+` produces Result<int, MathError>). Retry unification
+					// with the inferred field type unwrapped.
+					unwrappedFieldType := ti.unwrapResultType(fieldType)
+					retryErr := ti.Unify(unwrappedFieldType, expectedFieldType)
+					if retryErr != nil {
+						return nil, fmt.Errorf("field %s type mismatch in %s constructor: %w",
+							fieldName, recordType.name, err)
+					}
+					fieldType = unwrappedFieldType
 				}
 			}
 		}
