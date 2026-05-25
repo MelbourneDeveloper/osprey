@@ -5,13 +5,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
-
-	"github.com/christianfindlay/osprey/internal/ast"
 )
 
 func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (value.Value, error) {
@@ -27,13 +26,12 @@ func (g *LLVMGenerator) generateCallExpression(callExpr *ast.CallExpression) (va
 			return g.generateUserFunctionCall(ident.Name, fn, callExpr)
 		}
 
-		// NEW: Handle function composition - calling a function stored in a variable
-		// This enables function composition by allowing calls to function references
-		if varValue, exists := g.variables[ident.Name]; exists {
-			// Check if this variable contains a function reference
-			if varType, typeExists := g.variableTypes[ident.Name]; typeExists && varType == TypeFunction {
-				// This is a function stored in a function type variable - enable function composition
-				return g.generateFunctionCompositionCall(ident.Name, varValue, callExpr)
+		// Handle function references stored in variables (function parameters)
+		if fnValue, exists := g.variables[ident.Name]; exists {
+			// Check if this variable holds a function reference
+			if varType, exists := g.variableTypes[ident.Name]; exists && (varType == TypeAny || varType == TypeFunction) {
+				// This is a function passed as 'any' or function parameter - call it indirectly
+				return g.generateIndirectFunctionCall(ident.Name, fnValue, callExpr)
 			}
 		}
 	}
@@ -68,26 +66,6 @@ func (g *LLVMGenerator) handleBuiltInFunction(name string, callExpr *ast.CallExp
 
 // handleCoreFunctions handles core built-in functions like print, toString, etc.
 func (g *LLVMGenerator) handleCoreFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
-	// Try core system functions first
-	if result, err := g.handleSystemFunctions(name, callExpr); err != nil || result != nil {
-		return result, err
-	}
-
-	// Try string/functional programming functions
-	if result, err := g.handleStringAndFunctionalFunctions(name, callExpr); err != nil || result != nil {
-		return result, err
-	}
-
-	// Try file/JSON functions
-	if result, err := g.handleFileAndJSONFunctions(name, callExpr); err != nil || result != nil {
-		return result, err
-	}
-
-	return nil, nil
-}
-
-// handleSystemFunctions handles basic system and I/O functions.
-func (g *LLVMGenerator) handleSystemFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
 	switch name {
 	case ToStringFunc:
 		return g.generateToStringCall(callExpr)
@@ -95,25 +73,6 @@ func (g *LLVMGenerator) handleSystemFunctions(name string, callExpr *ast.CallExp
 		return g.generatePrintCall(callExpr)
 	case InputFunc:
 		return g.generateInputCall(callExpr)
-	case SleepFunc:
-		return g.generateSleepCall(callExpr)
-	case SpawnProcessFunc:
-		return g.generateSpawnProcessCall(callExpr)
-	case AwaitProcessFunc:
-		return g.generateAwaitProcessCall(callExpr)
-	case CleanupProcessFunc:
-		return g.generateCleanupProcessCall(callExpr)
-	default:
-		return nil, nil
-	}
-}
-
-// handleStringAndFunctionalFunctions handles string manipulation and functional programming functions.
-func (g *LLVMGenerator) handleStringAndFunctionalFunctions(
-	name string,
-	callExpr *ast.CallExpression,
-) (value.Value, error) {
-	switch name {
 	case RangeFunc:
 		return g.generateRangeCall(callExpr)
 	case ForEachFunc:
@@ -130,14 +89,10 @@ func (g *LLVMGenerator) handleStringAndFunctionalFunctions(
 		return g.generateContainsCall(callExpr)
 	case SubstringFunc:
 		return g.generateSubstringCall(callExpr)
-	default:
-		return nil, nil
-	}
-}
-
-// handleFileAndJSONFunctions handles file I/O and JSON processing functions.
-func (g *LLVMGenerator) handleFileAndJSONFunctions(name string, callExpr *ast.CallExpression) (value.Value, error) {
-	switch name {
+	case SpawnProcessFunc:
+		return g.generateSpawnProcessCall(callExpr)
+	case SleepFunc:
+		return g.generateSleepCall(callExpr)
 	case WriteFileFunc:
 		return g.generateWriteFileCall(callExpr)
 	case ReadFileFunc:
@@ -209,20 +164,21 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 	fn *ir.Func,
 	callExpr *ast.CallExpression,
 ) (value.Value, error) {
-	// VALIDATION: Multi-parameter functions require named arguments
-	// BUT: Functions with evidence parameters are exempt from this rule
-	regularParamCount := len(fn.Params)
+	// Check if function has multiple parameters and enforce named arguments
+	params, paramExists := g.functionParameters[funcName]
+	if paramExists && len(params) > 1 {
+		// Multi-parameter function - MUST use named arguments
+		if len(callExpr.NamedArguments) == 0 {
+			example := g.buildNamedArgumentsExample(params)
 
-	// EVIDENCE PASSING: Check if this function has evidence parameters
-	// Evidence parameters are added automatically, so don't count them for validation
-	if len(callExpr.Arguments) > 0 && len(callExpr.Arguments) < len(fn.Params) {
-		// Assume the extra parameters are evidence parameters
-		// The evidence passing logic will handle adding them
-		regularParamCount = len(callExpr.Arguments)
-	}
+			return nil, WrapFunctionRequiresNamed(funcName, len(params), example)
+		}
 
-	if regularParamCount > 1 && len(callExpr.NamedArguments) == 0 && len(callExpr.Arguments) > 0 {
-		return nil, WrapFunctionRequiresNamed(funcName, regularParamCount, g.generateNamedArgsSuggestion(funcName))
+		if len(callExpr.Arguments) > 0 {
+			example := g.buildNamedArgumentsExample(params)
+
+			return nil, WrapFunctionRequiresNamed(funcName, len(params), example)
+		}
 	}
 
 	// Handle named arguments vs positional arguments
@@ -233,26 +189,13 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 			return nil, err
 		}
 
-		// PHASE A4: EVIDENCE PASSING - Add evidence arguments for named argument calls too
-		finalArgs, err := g.addEvidenceArguments(funcName, args)
-		if err != nil {
-			return nil, err
-		}
-
-		return g.builder.NewCall(fn, finalArgs...), nil
+		return g.builder.NewCall(fn, args...), nil
 	}
 
 	// Positional arguments (traditional)
 	args := make([]value.Value, len(callExpr.Arguments))
 
 	for i, arg := range callExpr.Arguments {
-		// STRONG TYPING: Validate that 'any' type cannot be passed to non-function parameters
-		// This preserves type safety while allowing function composition
-		paramName := "unknown" // We don't have parameter names for positional args
-		if err := g.validateFunctionArgument(arg, funcName, paramName); err != nil {
-			return nil, err
-		}
-
 		val, err := g.generateExpression(arg)
 		if err != nil {
 			return nil, err
@@ -261,168 +204,7 @@ func (g *LLVMGenerator) generateUserFunctionCall(
 		args[i] = val
 	}
 
-	// PHASE A4: EVIDENCE PASSING - Add evidence arguments for functions with declared effects
-	finalArgs, err := g.addEvidenceArguments(funcName, args)
-	if err != nil {
-		return nil, err
-	}
-
-	return g.builder.NewCall(fn, finalArgs...), nil
-}
-
-// generateNamedArgsSuggestion generates a helpful suggestion for named arguments.
-func (g *LLVMGenerator) generateNamedArgsSuggestion(funcName string) string {
-	if paramNames, exists := g.functionParameters[funcName]; exists {
-		suggestions := make([]string, len(paramNames))
-		for i, paramName := range paramNames {
-			suggestions[i] = paramName + ": value"
-		}
-		return strings.Join(suggestions, ", ")
-	}
-	return "param1: value, param2: value"
-}
-
-// generateFunctionCompositionCall handles calling a function stored in a variable (function composition)
-func (g *LLVMGenerator) generateFunctionCompositionCall(
-	_ string, // varName is unused but kept for interface consistency
-	functionRef value.Value,
-	callExpr *ast.CallExpression,
-) (value.Value, error) {
-	// For function composition, we assume the function reference stored in the function variable
-	// is actually a pointer to a real function. At runtime, we need to call it.
-
-	// Since functions are stored as function pointers when passed as arguments,
-	// we can directly call the function reference
-
-	// Generate arguments for the function call
-	args := make([]value.Value, len(callExpr.Arguments))
-	for i, arg := range callExpr.Arguments {
-		val, err := g.generateExpression(arg)
-		if err != nil {
-			return nil, err
-		}
-		args[i] = val
-	}
-
-	// Handle named arguments (convert to positional for the underlying function call)
-	if len(callExpr.NamedArguments) > 0 {
-		// For function composition, we'll treat named arguments as positional for simplicity
-		// This is a limitation but works for basic function composition
-		namedArgs := make([]value.Value, len(callExpr.NamedArguments))
-		for i, namedArg := range callExpr.NamedArguments {
-			val, err := g.generateExpression(namedArg.Value)
-			if err != nil {
-				return nil, err
-			}
-			namedArgs[i] = val
-		}
-		// Use a new slice to avoid makezero linting error
-		allArgs := make([]value.Value, 0, len(args)+len(namedArgs))
-		allArgs = append(allArgs, args...)
-		allArgs = append(allArgs, namedArgs...)
-		args = allArgs
-	}
-
-	// Call the function stored in the variable
-	// The function reference should be a function pointer that we can call directly
-	return g.builder.NewCall(functionRef, args...), nil
-}
-
-// addEvidenceArguments adds evidence arguments for functions with declared effects
-func (g *LLVMGenerator) addEvidenceArguments(funcName string, regularArgs []value.Value) ([]value.Value, error) {
-	// PHASE A4: Check if function has declared effects by looking up function declaration
-	// For now, we'll use a simple approach: check if the function has more parameters than regular arguments
-	if fn, exists := g.functions[funcName]; exists {
-		expectedParams := len(fn.Params)
-		providedArgs := len(regularArgs)
-
-		// If function expects more parameters than provided, these are likely evidence parameters
-		if expectedParams > providedArgs {
-			evidenceCount := expectedParams - providedArgs
-
-			// CRITICAL FIX: Check if we're in a handler scope first
-			// If handlers are available, don't require evidence parameters
-			if g.effectCodegen != nil && len(g.effectCodegen.currentHandlers) > 0 {
-				// We're in a handler scope - use null evidence placeholders
-				// The actual handler calls will be resolved by the effects system
-				evidenceArgs := make([]value.Value, evidenceCount)
-				for i := range evidenceCount {
-					// Create null function pointers - these will be replaced by actual handlers
-					paramTypes := []types.Type{types.I8Ptr}
-					returnType := types.Void
-					funcType := types.NewFunc(returnType, paramTypes...)
-					evidenceType := types.NewPointer(funcType)
-					evidenceArgs[i] = constant.NewNull(evidenceType)
-				}
-
-				// Combine regular arguments with placeholder evidence arguments
-				finalArgs := make([]value.Value, 0, expectedParams)
-				finalArgs = append(finalArgs, regularArgs...)
-				finalArgs = append(finalArgs, evidenceArgs...)
-
-				return finalArgs, nil
-			}
-
-			// No handler scope - try to find evidence parameters
-			evidenceArgs, err := g.findEvidenceArguments(funcName, evidenceCount)
-			if err != nil {
-				// Check if this is a critical system error vs missing handlers
-				if strings.Contains(err.Error(), "effects system not available") {
-					return nil, err // Propagate system errors
-				}
-
-				// CRITICAL COMPILE-TIME SAFETY: Return compilation error for missing handlers
-				// This ensures unhandled effects are caught at compile time, not runtime
-				return nil, fmt.Errorf("no handler found for effect: function '%s' has declared effects but no handlers are available in current scope", funcName)
-			}
-
-			// Combine regular arguments with evidence arguments
-			finalArgs := make([]value.Value, 0, expectedParams)
-			finalArgs = append(finalArgs, regularArgs...)
-			finalArgs = append(finalArgs, evidenceArgs...)
-
-			return finalArgs, nil
-		}
-	}
-
-	// No evidence needed - return regular arguments unchanged
-	return regularArgs, nil
-}
-
-// findEvidenceArguments finds handler functions to use as evidence arguments
-func (g *LLVMGenerator) findEvidenceArguments(funcName string, evidenceCount int) ([]value.Value, error) {
-	// CRITICAL FIX: Initialize effects system if not available
-	if g.effectCodegen == nil {
-		g.InitializeEffects()
-	}
-
-	if g.effectCodegen == nil {
-		return nil, WrapEffectsSystemUnavailable(funcName)
-	}
-
-	evidenceArgs := make([]value.Value, evidenceCount)
-
-	// For each required evidence argument, find the corresponding handler function
-	// This is a simplified approach - in a full implementation, we'd need to know
-	// which effects the function declares and match them to available handlers
-	for i := range evidenceCount {
-		// Try to find any available handler function from current scope
-		if len(g.effectCodegen.currentHandlers) > 0 {
-			// Use the first available handler function (simplified)
-			frame := g.effectCodegen.currentHandlers[len(g.effectCodegen.currentHandlers)-1]
-			for _, handlerFunc := range frame.Operations {
-				// Convert handler function to evidence argument (function pointer)
-				evidenceArgs[i] = handlerFunc
-				break
-			}
-		} else {
-			// No handlers available - this should be an error
-			return nil, WrapHandlerNotAvailable(i, funcName,
-				len(g.effectCodegen.currentHandlers), len(g.effectCodegen.handlerStack))
-		}
-	}
-
-	return evidenceArgs, nil
+	return g.builder.NewCall(fn, args...), nil
 }
 
 // generateInterpolatedString generates LLVM IR for interpolated strings by concatenating parts.
@@ -633,7 +415,15 @@ func (g *LLVMGenerator) generateStandardMatchExpression(
 		return nil, err
 	}
 
-	return g.createMatchResult(armValues, predecessorBlocks, endBlock)
+	// Create the match result - this sets g.builder to endBlock
+	result, err := g.createMatchResult(armValues, predecessorBlocks, endBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	// The builder is now pointing to endBlock, which is correct
+	// The function generation will add a return statement to this block
+	return result, nil
 }
 
 // createMatchArmBlocks creates LLVM blocks for each match arm.
@@ -655,9 +445,9 @@ func (g *LLVMGenerator) generateMatchArmValues(
 ) ([]value.Value, []*ir.Block, error) {
 	var armValues []value.Value
 	var predecessorBlocks []*ir.Block
+	oldBuilder := g.builder
 
 	for i, arm := range arms {
-		// Set builder to the arm block at the start of each iteration
 		g.builder = armBlocks[i]
 
 		// Handle variable binding in patterns
@@ -691,19 +481,14 @@ func (g *LLVMGenerator) generateMatchArmValues(
 			armValues = append(armValues, armValue)
 		}
 
-		// TODO: FIX THIS! DON'T IGNORE IT!!
-		// CRITICAL FIX: After generating the expression (which might be a nested match),
-		// the builder might be pointing to a different block. We need to ensure the
-		// branch comes from the current builder block (where the expression ended),
-		// but ONLY if that block doesn't already have a terminator.
-		currentBuilderBlock := g.builder
-
-		// Check if the current block already has a terminator instruction
-		if currentBuilderBlock.Term == nil {
-			currentBuilderBlock.NewBr(endBlock)
-		}
-		predecessorBlocks = append(predecessorBlocks, currentBuilderBlock)
+		// IMPORTANT: After generating the arm expression, the builder might be pointing to a different block
+		// (e.g., if the arm expression was a nested match expression, the builder is now at the nested match's end block)
+		// We need to add a branch from the current builder block to the outer match's end block
+		g.builder.NewBr(endBlock)
+		predecessorBlocks = append(predecessorBlocks, g.builder)
 	}
+
+	g.builder = oldBuilder
 
 	return armValues, predecessorBlocks, nil
 }
@@ -723,13 +508,20 @@ func (g *LLVMGenerator) generateMatchConditions(
 		condition := g.createPatternCondition(arm.Pattern, discriminant, currentBlock)
 
 		if i == len(arms)-1 {
+			// Last arm - branch directly to its block
 			currentBlock.NewBr(armBlocks[i])
 		} else {
+			// Create next check block and conditional branch
 			nextCheckBlock := g.function.NewBlock(fmt.Sprintf("match_check_%d%s", i+1, blockSuffix))
 			currentBlock.NewCondBr(condition, armBlocks[i], nextCheckBlock)
 			currentBlock = nextCheckBlock
 		}
 	}
+
+	// Important: After generating all conditions, set the builder back to the original block
+	// This ensures that any subsequent code generation happens in the right context
+	// However, for match expressions used as function bodies, we need the builder to end up
+	// at the end block so the function can add a return statement
 }
 
 // createPatternCondition creates a condition for pattern matching.
@@ -796,7 +588,6 @@ func (g *LLVMGenerator) createMatchResult(
 	g.builder = endBlock
 
 	if len(armValues) == 1 {
-		// For single arm, we still need to set the builder but don't need PHI
 		return armValues[0], nil
 	}
 
@@ -811,13 +602,7 @@ func (g *LLVMGenerator) createMatchResult(
 		incomings = append(incomings, ir.NewIncoming(val, predecessorBlocks[i]))
 	}
 
-	phi := endBlock.NewPhi(incomings...)
-
-	// The end block now has a PHI node and the builder is set to this block.
-	// The calling function (like generateStandardMatchExpression) should handle
-	// adding any necessary terminator when the match is used in a larger context.
-
-	return phi, nil
+	return endBlock.NewPhi(incomings...), nil
 }
 
 // coerceArmValuesToCommonType ensures all arm values have compatible types.
@@ -992,10 +777,7 @@ func (g *LLVMGenerator) generateSuccessBlock(
 		successValue = val
 	}
 
-	// Only add branch if the current block doesn't already have a terminator
-	if g.builder.Term == nil {
-		g.builder.NewBr(blocks.End)
-	}
+	blocks.Success.NewBr(blocks.End)
 
 	return successValue, nil
 }
@@ -1032,10 +814,7 @@ func (g *LLVMGenerator) generateErrorBlock(
 		errorValue = val
 	}
 
-	// Only add branch if the current block doesn't already have a terminator
-	if g.builder.Term == nil {
-		g.builder.NewBr(blocks.End)
-	}
+	blocks.Error.NewBr(blocks.End)
 
 	return errorValue, nil
 }
@@ -1126,4 +905,30 @@ func (g *LLVMGenerator) createResultMatchPhi(
 	)
 
 	return phi, nil
+}
+
+// generateIndirectFunctionCall handles calling functions that are passed as parameters or stored in variables
+func (g *LLVMGenerator) generateIndirectFunctionCall(
+	_ string,
+	fnValue value.Value,
+	callExpr *ast.CallExpression,
+) (value.Value, error) {
+	// Generate arguments first
+	args := make([]value.Value, len(callExpr.Arguments))
+	for i, arg := range callExpr.Arguments {
+		val, err := g.generateExpression(arg)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = val
+	}
+
+	// When a function is passed as 'any' parameter, it gets converted to i64
+	// We need to convert it back to a function pointer to call it
+	// For now, assume it's a function that takes i64 and returns i64
+	functionType := types.NewFunc(types.I64, types.I64)
+	functionPtr := g.builder.NewIntToPtr(fnValue, types.NewPointer(functionType))
+
+	// Call the function through the pointer
+	return g.builder.NewCall(functionPtr, args...), nil
 }

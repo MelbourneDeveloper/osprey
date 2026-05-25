@@ -432,7 +432,7 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 
 	// Check for function references - new functionality for function composition
 	if fn, exists := g.functions[ident.Name]; exists {
-		// Return the function as a function pointer value
+		// When a function is used as a value (not called), return the function pointer directly
 		// This enables passing functions as arguments to other functions
 		return fn, nil
 	}

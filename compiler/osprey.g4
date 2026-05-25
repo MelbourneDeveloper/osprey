@@ -10,7 +10,6 @@ statement
     | fnDecl
     | externDecl
     | typeDecl
-    | effectDecl
     | moduleDecl
     | exprStmt
     ;
@@ -19,10 +18,7 @@ importStmt      : IMPORT ID (DOT ID)* ;
 
 letDecl         : (LET | MUT) ID (COLON type)? EQ expr ;
 
-fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? effectSet? (EQ expr | EQ withHandlerBlock | LBRACE blockBody RBRACE) ;
-
-// Support for "fn main() = with handler Effect arms { body }" syntax without redundant braces
-withHandlerBlock : WITH handlerExpr blockExpr ;
+fnDecl          : docComment? FN ID LPAREN paramList? RPAREN (ARROW type)? (EQ expr | LBRACE blockBody RBRACE) ;
 
 externDecl      : docComment? EXTERN FN ID LPAREN externParamList? RPAREN (ARROW type)? ;
 
@@ -49,22 +45,6 @@ fieldDeclaration  : ID COLON type constraint? ;
 
 constraint      : WHERE functionCall ;
 
-// Effect declarations
-effectDecl      : docComment? EFFECT ID LBRACE opDecl* RBRACE ;
-opDecl          : ID COLON type ;
-
-// Effect sets for function types
-effectSet       : NOT_OP ID                              // Single effect: !Effect
-                | NOT_OP LSQUARE effectList RSQUARE      // Multiple effects: ![Effect1, Effect2]
-                ;
-
-effectList      : ID (COMMA ID)* ;
-
-// Handler expressions - support indented syntax
-handlerExpr     : HANDLER ID handlerArm+                          // handler Logger log(msg) => ... error(msg) => ...
-                ;
-handlerArm      : ID (LPAREN paramList? RPAREN)? LAMBDA expr ;    // Support multiple parameters
-
 functionCall    : ID LPAREN argList? RPAREN ;
 
 booleanExpr     : comparisonExpr ;
@@ -72,8 +52,7 @@ booleanExpr     : comparisonExpr ;
 fieldList       : field (COMMA field)* ;
 field           : ID COLON type ;
 
-type            : LPAREN typeList? RPAREN ARROW type  // Function types like (Int, String) -> Bool
-                | FN LPAREN typeList? RPAREN ARROW type  // Function types like fn(Int, String) -> Bool
+type            : LPAREN typeList? RPAREN ARROW type  // Function types: (int, string) -> bool
                 | ID (LT typeList GT)?  // Generic types like Result<String, Error>
                 | ID LSQUARE type RSQUARE  // Array types like [String]
                 | ID ;
@@ -91,8 +70,6 @@ matchExpr
     | selectExpr
     | binaryExpr
     ;
-
-
 
 selectExpr
     : SELECT LBRACE selectArm+ RBRACE
@@ -153,8 +130,6 @@ primary
     | SEND LPAREN expr COMMA expr RPAREN          // send(channel, value)
     | RECV LPAREN expr RPAREN                     // recv(channel)
     | SELECT selectExpr                           // select { ... }
-    | PERFORM ID DOT ID LPAREN argList? RPAREN    // perform EffectName.operation(args)
-    | WITH handlerExpr blockExpr                  // with handler EffectName arms { body }
     | typeConstructor                             // Type construction (Fiber<T> { ... })
     | updateExpr                                  // Non-destructive update (record { field: newValue })
     | blockExpr                                   // Block expressions
@@ -258,11 +233,6 @@ SELECT      : 'select';
 TRUE        : 'true';
 FALSE       : 'false';
 WHERE       : 'where';
-EFFECT      : 'effect';
-PERFORM     : 'perform';
-HANDLER     : 'handler';
-WITH        : 'with';
-DO          : 'do';
 
 ARROW       : '->';
 LAMBDA      : '=>';

@@ -38,6 +38,7 @@ const (
 	TypeInt          = "int"
 	TypeBool         = "bool"
 	TypeAny          = "any"
+	TypeFunction     = "function"
 	TypeResult       = "Result"
 	TypeHTTPResponse = "HttpResponse"
 	TypeFunction     = "function"

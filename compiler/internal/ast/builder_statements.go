@@ -47,14 +47,11 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		}
 	}
 
-	// Handle expression bodies (= expr), handler blocks (= with handler...), and block bodies ({ ... })
+	// Handle both expression bodies (= expr) and block bodies ({ ... })
 	var body Expression
 	if ctx.Expr() != nil {
 		// Expression-bodied function: fn name() = expr
 		body = b.buildExpression(ctx.Expr())
-	} else if ctx.WithHandlerBlock() != nil {
-		// Handler block function: fn name() = with handler Effect arms { body }
-		body = b.buildWithHandlerBlock(ctx.WithHandlerBlock())
 	} else if ctx.BlockBody() != nil {
 		// Block-bodied function: fn name() { statements }
 		body = b.buildBlockBody(ctx.BlockBody())
@@ -66,57 +63,11 @@ func (b *Builder) buildFnDecl(ctx parser.IFnDeclContext) *FunctionDeclaration {
 		returnType = b.buildTypeExpression(ctx.Type_())
 	}
 
-	// CRITICAL FIX: Parse effect signatures (!Logger, ![IO, Net])
-	var effects []string
-	if ctx.EffectSet() != nil {
-		effects = b.buildEffectSet(ctx.EffectSet())
-	}
-
 	return &FunctionDeclaration{
 		Name:       name,
 		Parameters: params,
 		ReturnType: returnType,
-		Effects:    effects, // CRITICAL: Include parsed effects
 		Body:       body,
-	}
-}
-
-// buildWithHandlerBlock builds a HandlerExpression from withHandlerBlock syntax.
-// This handles "fn name() = with handler Effect arms { body }" syntax
-func (b *Builder) buildWithHandlerBlock(ctx parser.IWithHandlerBlockContext) *HandlerExpression {
-	// WITH handlerExpr blockExpr
-	handlerCtx := ctx.HandlerExpr()
-	blockExpr := b.buildBlockExpression(ctx.BlockExpr())
-
-	effectName := handlerCtx.ID().GetText()
-	handlers := make([]HandlerArm, 0)
-
-	// Build handler arms
-	for _, armCtx := range handlerCtx.AllHandlerArm() {
-		operationName := armCtx.ID().GetText()
-
-		// Get parameter names if present (for operations like log(msg))
-		var parameters []string
-		if armCtx.LPAREN() != nil && armCtx.ParamList() != nil {
-			for _, paramCtx := range armCtx.ParamList().AllParam() {
-				parameters = append(parameters, paramCtx.ID().GetText())
-			}
-		}
-
-		// Build handler body
-		body := b.buildExpression(armCtx.Expr())
-
-		handlers = append(handlers, HandlerArm{
-			OperationName: operationName,
-			Parameters:    parameters,
-			Body:          body,
-		})
-	}
-
-	return &HandlerExpression{
-		EffectName: effectName,
-		Handlers:   handlers,
-		Body:       blockExpr,
 	}
 }
 
@@ -239,12 +190,12 @@ func (b *Builder) buildTypeExpression(ctx parser.ITypeContext) *TypeExpression {
 		return nil
 	}
 
-	// Check if this is a function type: (Type, Type, ...) -> Type
-	if ctx.LPAREN() != nil && ctx.ARROW() != nil {
-		// This is a function type
+	// Check if this is a function type: (paramTypes) -> returnType
+	if ctx.LPAREN() != nil && ctx.RPAREN() != nil && ctx.ARROW() != nil {
+		// Function type
 		var paramTypes []TypeExpression
 
-		// Parse parameter types from TypeList
+		// Parse parameter types
 		if ctx.TypeList() != nil {
 			for _, typeCtx := range ctx.TypeList().AllType_() {
 				paramType := b.buildTypeExpression(typeCtx)
@@ -254,8 +205,12 @@ func (b *Builder) buildTypeExpression(ctx parser.ITypeContext) *TypeExpression {
 			}
 		}
 
-		// Parse return type (the Type_ after the arrow)
-		returnType := b.buildTypeExpression(ctx.Type_())
+		// Parse return type
+		var returnType *TypeExpression
+		if ctx.Type_() != nil {
+			// The return type after ARROW
+			returnType = b.buildTypeExpression(ctx.Type_())
+		}
 
 		return &TypeExpression{
 			IsFunction:     true,
@@ -264,37 +219,11 @@ func (b *Builder) buildTypeExpression(ctx parser.ITypeContext) *TypeExpression {
 		}
 	}
 
-	// Regular type (ID-based)
-	if ctx.ID() == nil {
-		// If no ID, this might be a nested function type or error case
-		return nil
+	// Regular type (not function type)
+	return &TypeExpression{
+		Name: ctx.ID().GetText(),
+		// TODO: Add support for generic types and arrays when needed
 	}
-
-	typeName := ctx.ID().GetText()
-	typeExpr := &TypeExpression{
-		Name: typeName,
-	}
-
-	// Handle generic types like Result<String, Error>
-	if ctx.LT() != nil && ctx.GT() != nil && ctx.TypeList() != nil {
-		for _, typeCtx := range ctx.TypeList().AllType_() {
-			genericParam := b.buildTypeExpression(typeCtx)
-			if genericParam != nil {
-				typeExpr.GenericParams = append(typeExpr.GenericParams, *genericParam)
-			}
-		}
-	}
-
-	// Handle array types like [String]
-	if ctx.LSQUARE() != nil && ctx.RSQUARE() != nil {
-		typeExpr.IsArray = true
-		if ctx.Type_() != nil {
-			arrayElement := b.buildTypeExpression(ctx.Type_())
-			typeExpr.ArrayElement = arrayElement
-		}
-	}
-
-	return typeExpr
 }
 
 // buildModuleDecl builds a ModuleDeclaration from a parser module context.
@@ -368,51 +297,4 @@ func (b *Builder) buildBlockBody(ctx parser.IBlockBodyContext) *BlockExpression 
 		Statements: statements,
 		Expression: expr,
 	}
-}
-
-// buildEffectDecl builds an EffectDeclaration from parser context - ALGEBRAIC EFFECTS SUPREMO!
-func (b *Builder) buildEffectDecl(ctx parser.IEffectDeclContext) *EffectDeclaration {
-	if ctx == nil {
-		return nil
-	}
-
-	name := ctx.ID().GetText()
-	operations := make([]EffectOperation, 0)
-
-	// Parse effect operations
-	for _, opCtx := range ctx.AllOpDecl() {
-		operation := EffectOperation{
-			Name: opCtx.ID().GetText(),
-			Type: opCtx.Type_().GetText(), // Parse type as string for now
-		}
-		operations = append(operations, operation)
-	}
-
-	return &EffectDeclaration{
-		Name:       name,
-		Operations: operations,
-	}
-}
-
-// buildEffectSet parses effect signatures like !Logger or ![IO, Net]
-func (b *Builder) buildEffectSet(ctx parser.IEffectSetContext) []string {
-	if ctx == nil {
-		return nil
-	}
-
-	effects := make([]string, 0)
-
-	// Single effect: !Effect
-	if ctx.ID() != nil {
-		effects = append(effects, ctx.ID().GetText())
-	}
-
-	// Multiple effects: ![Effect1, Effect2]
-	if ctx.EffectList() != nil {
-		for _, idNode := range ctx.EffectList().AllID() {
-			effects = append(effects, idNode.GetText())
-		}
-	}
-
-	return effects
 }

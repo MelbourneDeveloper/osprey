@@ -2,7 +2,6 @@ package codegen
 
 import (
 	"github.com/llir/llvm/ir"
-	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 
@@ -33,10 +32,6 @@ func (g *LLVMGenerator) generateStatement(stmt ast.Statement) error {
 	case *ast.TypeDeclaration:
 		// Type declarations are handled in first pass
 		return nil
-
-	case *ast.EffectDeclaration:
-		err := g.generateEffectDeclaration(s)
-		return err
 
 	case *ast.ExpressionStatement:
 		_, err := g.generateExpression(s.Expression)
@@ -82,27 +77,6 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 
 // typeExpressionToLLVMType converts an Osprey TypeExpression to an LLVM type.
 func (g *LLVMGenerator) typeExpressionToLLVMType(typeExpr *ast.TypeExpression) types.Type {
-	// Handle function types
-	if typeExpr.IsFunction {
-		// Build parameter types
-		paramTypes := make([]types.Type, len(typeExpr.ParameterTypes))
-		for i, paramType := range typeExpr.ParameterTypes {
-			paramTypes[i] = g.typeExpressionToLLVMType(&paramType)
-		}
-
-		// Build return type
-		var returnType types.Type = types.I64 // Default to int
-		if typeExpr.ReturnType != nil {
-			returnType = g.typeExpressionToLLVMType(typeExpr.ReturnType)
-		}
-
-		// Create function signature
-		funcSig := types.NewFunc(returnType, paramTypes...)
-
-		// Return pointer to function (function pointer type)
-		return types.NewPointer(funcSig)
-	}
-
 	switch typeExpr.Name {
 	case "Int":
 		return types.I64
@@ -208,11 +182,6 @@ func (g *LLVMGenerator) inferCallExpressionType(expr *ast.CallExpression) string
 
 // inferIdentifierType determines the type of an identifier expression.
 func (g *LLVMGenerator) inferIdentifierType(expr *ast.Identifier) string {
-	// Check if it's a function name - this enables function composition
-	if _, exists := g.functions[expr.Name]; exists {
-		return TypeFunction
-	}
-
 	// Check if it's a union variant
 	if _, exists := g.unionVariants[expr.Name]; exists {
 		return g.findUnionTypeForVariant(expr.Name)
@@ -251,79 +220,13 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	oldVars := g.variables
 	oldTypes := g.variableTypes
 
-	// CRITICAL FIX: Reset handler stacks for each function to ensure proper lexical scoping
-	// Functions with declared effects should use runtime lookup, not inherit handlers from other functions
-	if g.effectCodegen != nil {
-		// Reset handler stacks to ensure clean function boundaries
-		g.effectCodegen.handlerStack = nil    // Reset to empty slice
-		g.effectCodegen.currentHandlers = nil // Reset to empty slice
-		g.effectCodegen.currentLexicalDepth = 0
-	}
-
 	// Set up function context
 	g.function = fn
 	g.builder = fn.NewBlock("")
 	g.variables = make(map[string]value.Value)
 	g.variableTypes = make(map[string]string)
 
-	// CRITICAL FIX: Set up effects context for functions with effect signatures
-	if g.effectCodegen != nil && len(fnDecl.Effects) > 0 {
-		// Save old effects context
-		oldEffects := g.effectCodegen.currentFunctionEffects
-
-		// CRITICAL: DON'T clear handler context! Functions with declared effects
-		// should inherit handlers from calling scope for proper cross-function scoping
-		// The handler stack must remain available for fallback resolution
-
-		// Set current function effects - this makes hasDeclaredEffect() work!
-		g.effectCodegen.currentFunctionEffects = fnDecl.Effects
-
-		// PHASE A2 FIX: Preserve handler context across function boundaries
-		// Functions with declared effects inherit the handler scope they're called from
-		// This enables: main() { with handler Logger { greetWithEffect() } }
-
-		// PHASE A3: Set up evidence parameters for effect forwarding
-		// Evidence parameters are function pointers passed from calling context
-		oldEvidenceParams := g.effectCodegen.currentEvidenceParams
-		g.effectCodegen.currentEvidenceParams = make(map[string]*ir.Param)
-
-		// Map each declared effect to its operation-specific evidence parameters
-		baseIndex := len(fnDecl.Parameters)
-		evidenceIndex := baseIndex
-		for _, effectName := range fnDecl.Effects {
-			switch effectName {
-			case StateEffect:
-				// State.get evidence parameter
-				g.effectCodegen.currentEvidenceParams["State_get"] = fn.Params[evidenceIndex]
-				evidenceIndex++
-				// State.set evidence parameter
-				g.effectCodegen.currentEvidenceParams["State_set"] = fn.Params[evidenceIndex]
-				evidenceIndex++
-			case LoggerEffect:
-				// Logger evidence parameter (generic for now)
-				if evidenceIndex < len(fn.Params) {
-					g.effectCodegen.currentEvidenceParams["Logger_log"] = fn.Params[evidenceIndex]
-					evidenceIndex++
-				}
-			default:
-				// Generic effect evidence parameter
-				g.effectCodegen.currentEvidenceParams[effectName] = fn.Params[evidenceIndex]
-				evidenceIndex++
-			}
-		}
-
-		// Restore evidence parameters when function generation is complete
-		defer func() {
-			g.effectCodegen.currentEvidenceParams = oldEvidenceParams
-		}()
-
-		// Restore effects context when function generation is complete
-		defer func() {
-			g.effectCodegen.currentFunctionEffects = oldEffects
-		}()
-	}
-
-	// Add parameters to variable scope for ALL functions - ensure we don't go out of bounds
+	// Add parameters to variable scope - ensure we don't go out of bounds
 	minLen := len(fn.Params)
 	if len(fnDecl.Parameters) < minLen {
 		minLen = len(fnDecl.Parameters)
@@ -332,65 +235,43 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	for i := range minLen {
 		g.variables[fnDecl.Parameters[i].Name] = fn.Params[i]
 
-		// Track parameter types - use explicit parameter type if available
-		var paramType string
+		// Track parameter types based on the original AST parameter type, not LLVM type
 		if fnDecl.Parameters[i].Type != nil {
-			// Check if this is a function type
 			if fnDecl.Parameters[i].Type.IsFunction {
-				paramType = TypeFunction
+				g.variableTypes[fnDecl.Parameters[i].Name] = TypeFunction
 			} else {
-				// Use explicit type annotation for regular types
 				switch fnDecl.Parameters[i].Type.Name {
 				case TypeString, StringTypeName:
-					paramType = TypeString
+					g.variableTypes[fnDecl.Parameters[i].Name] = TypeString
 				case TypeInt, IntTypeName:
-					paramType = TypeInt
-				case "bool", "Bool":
-					paramType = TypeBool
+					g.variableTypes[fnDecl.Parameters[i].Name] = TypeInt
+				case TypeBool, BoolTypeName:
+					g.variableTypes[fnDecl.Parameters[i].Name] = TypeBool
 				case TypeAny:
-					paramType = TypeAny
+					g.variableTypes[fnDecl.Parameters[i].Name] = TypeAny
 				default:
 					// Check if it's a user-defined union type
 					if _, exists := g.typeDeclarations[fnDecl.Parameters[i].Type.Name]; exists {
-						paramType = TypeInt // Union types are represented as integers
+						g.variableTypes[fnDecl.Parameters[i].Name] = TypeInt // Union types are represented as integers
 					} else {
-						paramType = TypeInt // Default fallback
+						g.variableTypes[fnDecl.Parameters[i].Name] = TypeInt // Default fallback
 					}
 				}
 			}
 		} else {
-			// Fall back to LLVM type inference
+			// If no explicit type, fall back to LLVM type inference
 			if fn.Params[i].Type() == types.I8Ptr {
-				paramType = TypeString
+				g.variableTypes[fnDecl.Parameters[i].Name] = TypeString
 			} else {
-				paramType = TypeInt
+				g.variableTypes[fnDecl.Parameters[i].Name] = TypeInt
 			}
 		}
-
-		g.variableTypes[fnDecl.Parameters[i].Name] = paramType
 	}
 
 	// Generate function body
 	bodyValue, err := g.generateExpression(fnDecl.Body)
 	if err != nil {
 		return err
-	}
-
-	// Handle return type based on function declaration
-	var returnType string
-	if fnDecl.ReturnType != nil {
-		returnType = fnDecl.ReturnType.Name
-	} else {
-		// Get stored return type
-		if storedType, exists := g.functionReturnTypes[fnDecl.Name]; exists {
-			returnType = storedType
-		}
-	}
-
-	// Special handling for Unit functions: return dummy i64 value (0)
-	if returnType == "Unit" {
-		// For Unit functions, ignore the body value and return 0
-		bodyValue = constant.NewInt(types.I64, 0)
 	}
 
 	// Special handling for main function: cast i64 to i32
@@ -401,10 +282,7 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 		}
 	}
 
-	// CRITICAL FIX: After generating the body expression (which might be a match expression),
-	// the builder might be pointing to a different block (like a match end block).
-	// We need to ensure the return statement is added to the current block the builder is pointing to.
-	// For match expressions, this will be the end block, which is exactly what we want.
+	// Add return statement - this should work for all expression types
 	g.builder.NewRet(bodyValue)
 
 	// Restore context

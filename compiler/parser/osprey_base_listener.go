@@ -1,4 +1,4 @@
-// Code generated from osprey.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from osprey.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // osprey
 import "github.com/antlr4-go/antlr/v4"
@@ -44,23 +44,11 @@ func (s *BaseospreyListener) EnterLetDecl(ctx *LetDeclContext) {}
 // ExitLetDecl is called when production letDecl is exited.
 func (s *BaseospreyListener) ExitLetDecl(ctx *LetDeclContext) {}
 
-// EnterAssignStmt is called when production assignStmt is entered.
-func (s *BaseospreyListener) EnterAssignStmt(ctx *AssignStmtContext) {}
-
-// ExitAssignStmt is called when production assignStmt is exited.
-func (s *BaseospreyListener) ExitAssignStmt(ctx *AssignStmtContext) {}
-
 // EnterFnDecl is called when production fnDecl is entered.
 func (s *BaseospreyListener) EnterFnDecl(ctx *FnDeclContext) {}
 
 // ExitFnDecl is called when production fnDecl is exited.
 func (s *BaseospreyListener) ExitFnDecl(ctx *FnDeclContext) {}
-
-// EnterWithHandlerBlock is called when production withHandlerBlock is entered.
-func (s *BaseospreyListener) EnterWithHandlerBlock(ctx *WithHandlerBlockContext) {}
-
-// ExitWithHandlerBlock is called when production withHandlerBlock is exited.
-func (s *BaseospreyListener) ExitWithHandlerBlock(ctx *WithHandlerBlockContext) {}
 
 // EnterExternDecl is called when production externDecl is entered.
 func (s *BaseospreyListener) EnterExternDecl(ctx *ExternDeclContext) {}
@@ -134,71 +122,11 @@ func (s *BaseospreyListener) EnterFieldDeclaration(ctx *FieldDeclarationContext)
 // ExitFieldDeclaration is called when production fieldDeclaration is exited.
 func (s *BaseospreyListener) ExitFieldDeclaration(ctx *FieldDeclarationContext) {}
 
-// EnterTypeValidation is called when production typeValidation is entered.
-func (s *BaseospreyListener) EnterTypeValidation(ctx *TypeValidationContext) {}
+// EnterConstraint is called when production constraint is entered.
+func (s *BaseospreyListener) EnterConstraint(ctx *ConstraintContext) {}
 
-// ExitTypeValidation is called when production typeValidation is exited.
-func (s *BaseospreyListener) ExitTypeValidation(ctx *TypeValidationContext) {}
-
-// EnterEffectDecl is called when production effectDecl is entered.
-func (s *BaseospreyListener) EnterEffectDecl(ctx *EffectDeclContext) {}
-
-// ExitEffectDecl is called when production effectDecl is exited.
-func (s *BaseospreyListener) ExitEffectDecl(ctx *EffectDeclContext) {}
-
-// EnterOpDecl is called when production opDecl is entered.
-func (s *BaseospreyListener) EnterOpDecl(ctx *OpDeclContext) {}
-
-// ExitOpDecl is called when production opDecl is exited.
-func (s *BaseospreyListener) ExitOpDecl(ctx *OpDeclContext) {}
-
-// EnterEffectSet is called when production effectSet is entered.
-func (s *BaseospreyListener) EnterEffectSet(ctx *EffectSetContext) {}
-
-// ExitEffectSet is called when production effectSet is exited.
-func (s *BaseospreyListener) ExitEffectSet(ctx *EffectSetContext) {}
-
-// EnterEffectList is called when production effectList is entered.
-func (s *BaseospreyListener) EnterEffectList(ctx *EffectListContext) {}
-
-// ExitEffectList is called when production effectList is exited.
-func (s *BaseospreyListener) ExitEffectList(ctx *EffectListContext) {}
-
-// EnterHandlerExpr is called when production handlerExpr is entered.
-func (s *BaseospreyListener) EnterHandlerExpr(ctx *HandlerExprContext) {}
-
-// ExitHandlerExpr is called when production handlerExpr is exited.
-func (s *BaseospreyListener) ExitHandlerExpr(ctx *HandlerExprContext) {}
-
-// EnterHandlerArm is called when production handlerArm is entered.
-func (s *BaseospreyListener) EnterHandlerArm(ctx *HandlerArmContext) {}
-
-// ExitHandlerArm is called when production handlerArm is exited.
-func (s *BaseospreyListener) ExitHandlerArm(ctx *HandlerArmContext) {}
-
-// EnterHandlerParams is called when production handlerParams is entered.
-func (s *BaseospreyListener) EnterHandlerParams(ctx *HandlerParamsContext) {}
-
-// ExitHandlerParams is called when production handlerParams is exited.
-func (s *BaseospreyListener) ExitHandlerParams(ctx *HandlerParamsContext) {}
-
-// EnterHandlerCase is called when production handlerCase is entered.
-func (s *BaseospreyListener) EnterHandlerCase(ctx *HandlerCaseContext) {}
-
-// ExitHandlerCase is called when production handlerCase is exited.
-func (s *BaseospreyListener) ExitHandlerCase(ctx *HandlerCaseContext) {}
-
-// EnterResumeBlockExpr is called when production resumeBlockExpr is entered.
-func (s *BaseospreyListener) EnterResumeBlockExpr(ctx *ResumeBlockExprContext) {}
-
-// ExitResumeBlockExpr is called when production resumeBlockExpr is exited.
-func (s *BaseospreyListener) ExitResumeBlockExpr(ctx *ResumeBlockExprContext) {}
-
-// EnterResumeBlockBody is called when production resumeBlockBody is entered.
-func (s *BaseospreyListener) EnterResumeBlockBody(ctx *ResumeBlockBodyContext) {}
-
-// ExitResumeBlockBody is called when production resumeBlockBody is exited.
-func (s *BaseospreyListener) ExitResumeBlockBody(ctx *ResumeBlockBodyContext) {}
+// ExitConstraint is called when production constraint is exited.
+func (s *BaseospreyListener) ExitConstraint(ctx *ConstraintContext) {}
 
 // EnterFunctionCall is called when production functionCall is entered.
 func (s *BaseospreyListener) EnterFunctionCall(ctx *FunctionCallContext) {}
@@ -254,12 +182,6 @@ func (s *BaseospreyListener) EnterMatchExpr(ctx *MatchExprContext) {}
 // ExitMatchExpr is called when production matchExpr is exited.
 func (s *BaseospreyListener) ExitMatchExpr(ctx *MatchExprContext) {}
 
-// EnterNonTernaryExpr is called when production nonTernaryExpr is entered.
-func (s *BaseospreyListener) EnterNonTernaryExpr(ctx *NonTernaryExprContext) {}
-
-// ExitNonTernaryExpr is called when production nonTernaryExpr is exited.
-func (s *BaseospreyListener) ExitNonTernaryExpr(ctx *NonTernaryExprContext) {}
-
 // EnterSelectExpr is called when production selectExpr is entered.
 func (s *BaseospreyListener) EnterSelectExpr(ctx *SelectExprContext) {}
 
@@ -278,29 +200,11 @@ func (s *BaseospreyListener) EnterBinaryExpr(ctx *BinaryExprContext) {}
 // ExitBinaryExpr is called when production binaryExpr is exited.
 func (s *BaseospreyListener) ExitBinaryExpr(ctx *BinaryExprContext) {}
 
-// EnterTernaryExpr is called when production ternaryExpr is entered.
-func (s *BaseospreyListener) EnterTernaryExpr(ctx *TernaryExprContext) {}
-
-// ExitTernaryExpr is called when production ternaryExpr is exited.
-func (s *BaseospreyListener) ExitTernaryExpr(ctx *TernaryExprContext) {}
-
 // EnterComparisonExpr is called when production comparisonExpr is entered.
 func (s *BaseospreyListener) EnterComparisonExpr(ctx *ComparisonExprContext) {}
 
 // ExitComparisonExpr is called when production comparisonExpr is exited.
 func (s *BaseospreyListener) ExitComparisonExpr(ctx *ComparisonExprContext) {}
-
-// EnterLogicalOrExpr is called when production logicalOrExpr is entered.
-func (s *BaseospreyListener) EnterLogicalOrExpr(ctx *LogicalOrExprContext) {}
-
-// ExitLogicalOrExpr is called when production logicalOrExpr is exited.
-func (s *BaseospreyListener) ExitLogicalOrExpr(ctx *LogicalOrExprContext) {}
-
-// EnterLogicalAndExpr is called when production logicalAndExpr is entered.
-func (s *BaseospreyListener) EnterLogicalAndExpr(ctx *LogicalAndExprContext) {}
-
-// ExitLogicalAndExpr is called when production logicalAndExpr is exited.
-func (s *BaseospreyListener) ExitLogicalAndExpr(ctx *LogicalAndExprContext) {}
 
 // EnterAddExpr is called when production addExpr is entered.
 func (s *BaseospreyListener) EnterAddExpr(ctx *AddExprContext) {}
@@ -356,12 +260,6 @@ func (s *BaseospreyListener) EnterPrimary(ctx *PrimaryContext) {}
 // ExitPrimary is called when production primary is exited.
 func (s *BaseospreyListener) ExitPrimary(ctx *PrimaryContext) {}
 
-// EnterObjectLiteral is called when production objectLiteral is entered.
-func (s *BaseospreyListener) EnterObjectLiteral(ctx *ObjectLiteralContext) {}
-
-// ExitObjectLiteral is called when production objectLiteral is exited.
-func (s *BaseospreyListener) ExitObjectLiteral(ctx *ObjectLiteralContext) {}
-
 // EnterTypeConstructor is called when production typeConstructor is entered.
 func (s *BaseospreyListener) EnterTypeConstructor(ctx *TypeConstructorContext) {}
 
@@ -415,18 +313,6 @@ func (s *BaseospreyListener) EnterListLiteral(ctx *ListLiteralContext) {}
 
 // ExitListLiteral is called when production listLiteral is exited.
 func (s *BaseospreyListener) ExitListLiteral(ctx *ListLiteralContext) {}
-
-// EnterMapLiteral is called when production mapLiteral is entered.
-func (s *BaseospreyListener) EnterMapLiteral(ctx *MapLiteralContext) {}
-
-// ExitMapLiteral is called when production mapLiteral is exited.
-func (s *BaseospreyListener) ExitMapLiteral(ctx *MapLiteralContext) {}
-
-// EnterMapEntry is called when production mapEntry is entered.
-func (s *BaseospreyListener) EnterMapEntry(ctx *MapEntryContext) {}
-
-// ExitMapEntry is called when production mapEntry is exited.
-func (s *BaseospreyListener) ExitMapEntry(ctx *MapEntryContext) {}
 
 // EnterDocComment is called when production docComment is entered.
 func (s *BaseospreyListener) EnterDocComment(ctx *DocCommentContext) {}

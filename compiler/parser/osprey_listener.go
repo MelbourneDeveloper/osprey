@@ -1,4 +1,4 @@
-// Code generated from osprey.g4 by ANTLR 4.13.2. DO NOT EDIT.
+// Code generated from osprey.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // osprey
 import "github.com/antlr4-go/antlr/v4"
@@ -19,14 +19,8 @@ type ospreyListener interface {
 	// EnterLetDecl is called when entering the letDecl production.
 	EnterLetDecl(c *LetDeclContext)
 
-	// EnterAssignStmt is called when entering the assignStmt production.
-	EnterAssignStmt(c *AssignStmtContext)
-
 	// EnterFnDecl is called when entering the fnDecl production.
 	EnterFnDecl(c *FnDeclContext)
-
-	// EnterWithHandlerBlock is called when entering the withHandlerBlock production.
-	EnterWithHandlerBlock(c *WithHandlerBlockContext)
 
 	// EnterExternDecl is called when entering the externDecl production.
 	EnterExternDecl(c *ExternDeclContext)
@@ -64,38 +58,8 @@ type ospreyListener interface {
 	// EnterFieldDeclaration is called when entering the fieldDeclaration production.
 	EnterFieldDeclaration(c *FieldDeclarationContext)
 
-	// EnterTypeValidation is called when entering the typeValidation production.
-	EnterTypeValidation(c *TypeValidationContext)
-
-	// EnterEffectDecl is called when entering the effectDecl production.
-	EnterEffectDecl(c *EffectDeclContext)
-
-	// EnterOpDecl is called when entering the opDecl production.
-	EnterOpDecl(c *OpDeclContext)
-
-	// EnterEffectSet is called when entering the effectSet production.
-	EnterEffectSet(c *EffectSetContext)
-
-	// EnterEffectList is called when entering the effectList production.
-	EnterEffectList(c *EffectListContext)
-
-	// EnterHandlerExpr is called when entering the handlerExpr production.
-	EnterHandlerExpr(c *HandlerExprContext)
-
-	// EnterHandlerArm is called when entering the handlerArm production.
-	EnterHandlerArm(c *HandlerArmContext)
-
-	// EnterHandlerParams is called when entering the handlerParams production.
-	EnterHandlerParams(c *HandlerParamsContext)
-
-	// EnterHandlerCase is called when entering the handlerCase production.
-	EnterHandlerCase(c *HandlerCaseContext)
-
-	// EnterResumeBlockExpr is called when entering the resumeBlockExpr production.
-	EnterResumeBlockExpr(c *ResumeBlockExprContext)
-
-	// EnterResumeBlockBody is called when entering the resumeBlockBody production.
-	EnterResumeBlockBody(c *ResumeBlockBodyContext)
+	// EnterConstraint is called when entering the constraint production.
+	EnterConstraint(c *ConstraintContext)
 
 	// EnterFunctionCall is called when entering the functionCall production.
 	EnterFunctionCall(c *FunctionCallContext)
@@ -124,9 +88,6 @@ type ospreyListener interface {
 	// EnterMatchExpr is called when entering the matchExpr production.
 	EnterMatchExpr(c *MatchExprContext)
 
-	// EnterNonTernaryExpr is called when entering the nonTernaryExpr production.
-	EnterNonTernaryExpr(c *NonTernaryExprContext)
-
 	// EnterSelectExpr is called when entering the selectExpr production.
 	EnterSelectExpr(c *SelectExprContext)
 
@@ -136,17 +97,8 @@ type ospreyListener interface {
 	// EnterBinaryExpr is called when entering the binaryExpr production.
 	EnterBinaryExpr(c *BinaryExprContext)
 
-	// EnterTernaryExpr is called when entering the ternaryExpr production.
-	EnterTernaryExpr(c *TernaryExprContext)
-
 	// EnterComparisonExpr is called when entering the comparisonExpr production.
 	EnterComparisonExpr(c *ComparisonExprContext)
-
-	// EnterLogicalOrExpr is called when entering the logicalOrExpr production.
-	EnterLogicalOrExpr(c *LogicalOrExprContext)
-
-	// EnterLogicalAndExpr is called when entering the logicalAndExpr production.
-	EnterLogicalAndExpr(c *LogicalAndExprContext)
 
 	// EnterAddExpr is called when entering the addExpr production.
 	EnterAddExpr(c *AddExprContext)
@@ -175,9 +127,6 @@ type ospreyListener interface {
 	// EnterPrimary is called when entering the primary production.
 	EnterPrimary(c *PrimaryContext)
 
-	// EnterObjectLiteral is called when entering the objectLiteral production.
-	EnterObjectLiteral(c *ObjectLiteralContext)
-
 	// EnterTypeConstructor is called when entering the typeConstructor production.
 	EnterTypeConstructor(c *TypeConstructorContext)
 
@@ -204,12 +153,6 @@ type ospreyListener interface {
 
 	// EnterListLiteral is called when entering the listLiteral production.
 	EnterListLiteral(c *ListLiteralContext)
-
-	// EnterMapLiteral is called when entering the mapLiteral production.
-	EnterMapLiteral(c *MapLiteralContext)
-
-	// EnterMapEntry is called when entering the mapEntry production.
-	EnterMapEntry(c *MapEntryContext)
 
 	// EnterDocComment is called when entering the docComment production.
 	EnterDocComment(c *DocCommentContext)
@@ -247,14 +190,8 @@ type ospreyListener interface {
 	// ExitLetDecl is called when exiting the letDecl production.
 	ExitLetDecl(c *LetDeclContext)
 
-	// ExitAssignStmt is called when exiting the assignStmt production.
-	ExitAssignStmt(c *AssignStmtContext)
-
 	// ExitFnDecl is called when exiting the fnDecl production.
 	ExitFnDecl(c *FnDeclContext)
-
-	// ExitWithHandlerBlock is called when exiting the withHandlerBlock production.
-	ExitWithHandlerBlock(c *WithHandlerBlockContext)
 
 	// ExitExternDecl is called when exiting the externDecl production.
 	ExitExternDecl(c *ExternDeclContext)
@@ -292,38 +229,8 @@ type ospreyListener interface {
 	// ExitFieldDeclaration is called when exiting the fieldDeclaration production.
 	ExitFieldDeclaration(c *FieldDeclarationContext)
 
-	// ExitTypeValidation is called when exiting the typeValidation production.
-	ExitTypeValidation(c *TypeValidationContext)
-
-	// ExitEffectDecl is called when exiting the effectDecl production.
-	ExitEffectDecl(c *EffectDeclContext)
-
-	// ExitOpDecl is called when exiting the opDecl production.
-	ExitOpDecl(c *OpDeclContext)
-
-	// ExitEffectSet is called when exiting the effectSet production.
-	ExitEffectSet(c *EffectSetContext)
-
-	// ExitEffectList is called when exiting the effectList production.
-	ExitEffectList(c *EffectListContext)
-
-	// ExitHandlerExpr is called when exiting the handlerExpr production.
-	ExitHandlerExpr(c *HandlerExprContext)
-
-	// ExitHandlerArm is called when exiting the handlerArm production.
-	ExitHandlerArm(c *HandlerArmContext)
-
-	// ExitHandlerParams is called when exiting the handlerParams production.
-	ExitHandlerParams(c *HandlerParamsContext)
-
-	// ExitHandlerCase is called when exiting the handlerCase production.
-	ExitHandlerCase(c *HandlerCaseContext)
-
-	// ExitResumeBlockExpr is called when exiting the resumeBlockExpr production.
-	ExitResumeBlockExpr(c *ResumeBlockExprContext)
-
-	// ExitResumeBlockBody is called when exiting the resumeBlockBody production.
-	ExitResumeBlockBody(c *ResumeBlockBodyContext)
+	// ExitConstraint is called when exiting the constraint production.
+	ExitConstraint(c *ConstraintContext)
 
 	// ExitFunctionCall is called when exiting the functionCall production.
 	ExitFunctionCall(c *FunctionCallContext)
@@ -352,9 +259,6 @@ type ospreyListener interface {
 	// ExitMatchExpr is called when exiting the matchExpr production.
 	ExitMatchExpr(c *MatchExprContext)
 
-	// ExitNonTernaryExpr is called when exiting the nonTernaryExpr production.
-	ExitNonTernaryExpr(c *NonTernaryExprContext)
-
 	// ExitSelectExpr is called when exiting the selectExpr production.
 	ExitSelectExpr(c *SelectExprContext)
 
@@ -364,17 +268,8 @@ type ospreyListener interface {
 	// ExitBinaryExpr is called when exiting the binaryExpr production.
 	ExitBinaryExpr(c *BinaryExprContext)
 
-	// ExitTernaryExpr is called when exiting the ternaryExpr production.
-	ExitTernaryExpr(c *TernaryExprContext)
-
 	// ExitComparisonExpr is called when exiting the comparisonExpr production.
 	ExitComparisonExpr(c *ComparisonExprContext)
-
-	// ExitLogicalOrExpr is called when exiting the logicalOrExpr production.
-	ExitLogicalOrExpr(c *LogicalOrExprContext)
-
-	// ExitLogicalAndExpr is called when exiting the logicalAndExpr production.
-	ExitLogicalAndExpr(c *LogicalAndExprContext)
 
 	// ExitAddExpr is called when exiting the addExpr production.
 	ExitAddExpr(c *AddExprContext)
@@ -403,9 +298,6 @@ type ospreyListener interface {
 	// ExitPrimary is called when exiting the primary production.
 	ExitPrimary(c *PrimaryContext)
 
-	// ExitObjectLiteral is called when exiting the objectLiteral production.
-	ExitObjectLiteral(c *ObjectLiteralContext)
-
 	// ExitTypeConstructor is called when exiting the typeConstructor production.
 	ExitTypeConstructor(c *TypeConstructorContext)
 
@@ -432,12 +324,6 @@ type ospreyListener interface {
 
 	// ExitListLiteral is called when exiting the listLiteral production.
 	ExitListLiteral(c *ListLiteralContext)
-
-	// ExitMapLiteral is called when exiting the mapLiteral production.
-	ExitMapLiteral(c *MapLiteralContext)
-
-	// ExitMapEntry is called when exiting the mapEntry production.
-	ExitMapEntry(c *MapEntryContext)
 
 	// ExitDocComment is called when exiting the docComment production.
 	ExitDocComment(c *DocCommentContext)

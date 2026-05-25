@@ -75,29 +75,13 @@ func (g *LLVMGenerator) createAndStoreFunctionSignature(fnDecl *ast.FunctionDecl
 
 // createFunctionParameters creates LLVM parameters for a function declaration.
 func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration) []*ir.Param {
-	// PHASE A3: Calculate total parameters including evidence parameters
-	// Some effects need multiple evidence parameters (e.g., State needs get and set)
-	evidenceParamCount := 0
-	for _, effectName := range fnDecl.Effects {
-		switch effectName {
-		case "State":
-			evidenceParamCount += 2 // get and set
-		case "Logger":
-			evidenceParamCount++ // dynamic based on actual operations
-		default:
-			evidenceParamCount++ // default one parameter per effect
-		}
-	}
-	totalParams := len(fnDecl.Parameters) + evidenceParamCount
-	params := make([]*ir.Param, totalParams)
+	params := make([]*ir.Param, len(fnDecl.Parameters))
 
-	// Add regular function parameters first
 	for i, param := range fnDecl.Parameters {
 		var paramType string
 
 		// Use explicit parameter type if provided
 		if param.Type != nil {
-			// Check if this is a function type
 			if param.Type.IsFunction {
 				paramType = TypeFunction
 			} else {
@@ -108,6 +92,8 @@ func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration
 					paramType = TypeInt
 				case TypeBool, BoolTypeName:
 					paramType = TypeBool
+				case TypeAny:
+					paramType = TypeAny
 				default:
 					// Check if it's a user-defined union type
 					if _, exists := g.typeDeclarations[param.Type.Name]; exists {
@@ -128,82 +114,25 @@ func (g *LLVMGenerator) createFunctionParameters(fnDecl *ast.FunctionDeclaration
 			}
 		}
 
-		llvmParamType := g.getLLVMParameterType(paramType, param.Type)
+		llvmParamType := g.getLLVMParameterType(paramType)
 		params[i] = ir.NewParam(param.Name, llvmParamType)
 	}
-
-	// PHASE A3: Add evidence parameters for declared effects
-	// Evidence parameters are operation-specific function pointers
-	baseIndex := len(fnDecl.Parameters)
-	evidenceIndex := baseIndex
-	for _, effectName := range fnDecl.Effects {
-		// CRITICAL FIX: Create operation-specific evidence parameters
-		// Instead of one generic parameter per effect, create specific parameters per operation
-		switch effectName {
-		case "State":
-			// State.get: () -> i64
-			getParamTypes := []types.Type{}
-			getReturnType := types.I64
-			getFuncType := types.NewFunc(getReturnType, getParamTypes...)
-			getEvidenceType := types.NewPointer(getFuncType)
-			params[evidenceIndex] = ir.NewParam("__evidence_State_get", getEvidenceType)
-			evidenceIndex++
-
-			// Expand params slice if needed
-			if evidenceIndex >= len(params) {
-				newParams := make([]*ir.Param, evidenceIndex+1)
-				copy(newParams, params)
-				params = newParams
-			}
-
-			// State.set: (i64) -> void
-			setParamTypes := []types.Type{types.I64}
-			setReturnType := types.Void
-			setFuncType := types.NewFunc(setReturnType, setParamTypes...)
-			setEvidenceType := types.NewPointer(setFuncType)
-			params[evidenceIndex] = ir.NewParam("__evidence_State_set", setEvidenceType)
-			evidenceIndex++
-
-		case "Logger":
-			// Logger.log: (i8*) -> void
-			logParamTypes := []types.Type{types.I8Ptr}
-			logReturnType := types.Void
-			logFuncType := types.NewFunc(logReturnType, logParamTypes...)
-			logEvidenceType := types.NewPointer(logFuncType)
-			params[evidenceIndex] = ir.NewParam("__evidence_Logger_log", logEvidenceType)
-			evidenceIndex++
-
-		default:
-			// Fallback for unknown effects: (i8*) -> void
-			paramTypes := []types.Type{types.I8Ptr}
-			returnType := types.Void
-			funcType := types.NewFunc(returnType, paramTypes...)
-			evidenceType := types.NewPointer(funcType)
-			params[evidenceIndex] = ir.NewParam("__evidence_"+effectName, evidenceType)
-			evidenceIndex++
-		}
-	}
-
-	// Resize params slice to actual size
-	actualParams := make([]*ir.Param, evidenceIndex)
-	copy(actualParams, params)
-	params = actualParams
 
 	return params
 }
 
 // getLLVMParameterType converts a parameter type string to LLVM type.
-func (g *LLVMGenerator) getLLVMParameterType(paramType string, paramTypeExpr *ast.TypeExpression) types.Type {
-	if paramType == TypeString {
+func (g *LLVMGenerator) getLLVMParameterType(paramType string) types.Type {
+	switch paramType {
+	case TypeString:
 		return types.I8Ptr
+	case TypeFunction:
+		// Function types are function pointers - for now use generic i64 (i64)* type
+		funcType := types.NewFunc(types.I64, types.I64)
+		return types.NewPointer(funcType)
+	default:
+		return types.I64
 	}
-
-	if paramType == TypeFunction && paramTypeExpr != nil {
-		// Use the type expression to LLVM type conversion for function types
-		return g.typeExpressionToLLVMType(paramTypeExpr)
-	}
-
-	return types.I64
 }
 
 // getLLVMReturnType converts a return type string to LLVM type and stores it.
@@ -231,12 +160,6 @@ func (g *LLVMGenerator) getLLVMReturnType(returnType, functionName string) types
 		g.functionReturnTypes[functionName] = TypeAny
 
 		return types.I64 // any types are represented as i64 at LLVM level
-	}
-
-	if returnType == "Unit" {
-		g.functionReturnTypes[functionName] = "Unit"
-
-		return types.I64 // Unit functions return dummy i64 value (0)
 	}
 
 	if returnType == TypeHTTPResponse {
