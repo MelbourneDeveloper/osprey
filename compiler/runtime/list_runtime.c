@@ -97,6 +97,15 @@ static int64_t tail_offset(OspreyList *l) {
 }
 
 int64_t osprey_list_get(OspreyList *l, int64_t i) {
+  /* Out-of-range indices (negative or past end) used to walk the trie
+   * with garbage shifts and dereference NULL/uninit nodes — SIGSEGV.
+   * Codegen calls osprey_list_in_bounds first to set the Result
+   * discriminant, but the value-side call still ran with the OOB
+   * index. Return 0 here so the caller's in-bounds check picks the
+   * Error variant cleanly. */
+  if (l == NULL || i < 0 || i >= l->length) {
+    return 0;
+  }
   int64_t off = tail_offset(l);
   if (i >= off) {
     return l->tail->slots[i - off];
