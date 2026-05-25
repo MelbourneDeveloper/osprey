@@ -51,7 +51,7 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 
 	// Check for parse errors before proceeding
 	if len(errorListener.Errors) > 0 {
-		return "", WrapParseErrors(errorListener.Errors)
+		return "", WrapParseErrors(strings.Join(errorListener.Errors, "\n"))
 	}
 
 	// Check if parse tree is valid
@@ -68,10 +68,9 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 		return "", ErrASTBuildFailed
 	}
 
-	// Run AST validation before type inference
-	// This catches issues like missing type annotations that the tests expect
+	// Validate AST for type inference rules
 	if err := ast.ValidateProgram(program); err != nil {
-		return "", err
+		return "", fmt.Errorf("validation error: %w", err)
 	}
 
 	// Generate LLVM IR with security configuration
@@ -88,7 +87,6 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 // ParseErrorListener collects parse errors instead of panicking.
 type ParseErrorListener struct {
 	antlr.DefaultErrorListener
-
 	Errors []string
 }
 
@@ -117,89 +115,110 @@ func CompileToExecutable(source, outputPath string) error {
 	})
 }
 
-// buildLibraryPaths builds the search paths for runtime libraries
-func buildLibraryPaths(libName string) []string {
-	paths := []string{
-		fmt.Sprintf("bin/lib%s.a", libName),
-		fmt.Sprintf("./bin/lib%s.a", libName),
-		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
-		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
-		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
-		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
+// CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.
+func CompileToExecutableWithSecurity(source, outputPath string, security SecurityConfig) error {
+	// Ensure the output directory exists
+	outputDir := filepath.Dir(outputPath)
+	if err := os.MkdirAll(outputDir, DirPermissions); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Add working directory based paths
-	if wd, err := os.Getwd(); err == nil {
-		paths = append(paths,
-			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
-		)
+	// Generate LLVM IR with security configuration
+	ir, err := CompileToLLVMWithSecurity(source, security)
+	if err != nil {
+		return fmt.Errorf("failed to generate LLVM IR: %w", err)
 	}
 
-	return paths
-}
+	// Write IR to temporary file
+	irFile := outputPath + ".ll"
+	if err := os.WriteFile(irFile, []byte(ir), FilePermissions); err != nil {
+		return WrapWriteIRFile(err)
+	}
+	defer func() { _ = os.Remove(irFile) }() // Clean up temp file
 
-// findAndAddLibrary finds a library in the given paths and adds it to linkArgs
-func findAndAddLibrary(libName string, linkArgs []string) []string {
-	paths := buildLibraryPaths(libName)
-	for _, libPath := range paths {
+	// Compile IR to object file using llc
+	objFile := outputPath + ".o"
+	llcCmd := exec.Command("llc", "-filetype=obj", "-o", objFile, irFile) // #nosec G204 - args are controlled
+
+	llcOutput, err := llcCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to compile IR to object file: %w\nllc output: %s", err, string(llcOutput))
+	}
+
+	defer func() { _ = os.Remove(objFile) }() // Clean up temp file
+
+	// Try multiple paths for runtime libraries - local builds first, then system installs
+	fiberRuntimePaths := []string{
+		"bin/libfiber_runtime.a",
+		"./bin/libfiber_runtime.a",
+		"/usr/local/lib/libfiber_runtime.a", // System install location
+	}
+	httpRuntimePaths := []string{
+		"bin/libhttp_runtime.a",
+		"./bin/libhttp_runtime.a",
+		"/usr/local/lib/libhttp_runtime.a", // System install location
+	}
+
+	// Build link arguments with runtime libraries
+	var linkArgs []string
+	linkArgs = append(linkArgs, "-o", outputPath, objFile)
+
+	// Find and link fiber runtime library
+	for _, libPath := range fiberRuntimePaths {
 		if _, err := os.Stat(libPath); err == nil {
-			return append(linkArgs, libPath)
+			linkArgs = append(linkArgs, libPath)
+			break
 		}
 	}
 
-	return linkArgs
-}
+	// Find and link HTTP runtime library
+	for _, libPath := range httpRuntimePaths {
+		if _, err := os.Stat(libPath); err == nil {
+			linkArgs = append(linkArgs, libPath)
+			break
+		}
+	}
 
-// addOpenSSLFlags adds OpenSSL linking flags using pkg-config or platform-specific fallbacks
-func addOpenSSLFlags(linkArgs []string) []string {
+	linkArgs = append(linkArgs, "-lpthread")
+
+	// Add OpenSSL libraries with platform-specific paths
 	// Use pkg-config to get proper OpenSSL flags when available
 	cmd := exec.Command("pkg-config", "--libs", "openssl")
 	if output, err := cmd.Output(); err == nil {
 		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
-
-		return append(linkArgs, flags...)
+		linkArgs = append(linkArgs, flags...)
+	} else {
+		// Fallback to standard OpenSSL flags for different platforms
+		if runtime.GOOS == "darwin" {
+			// macOS with Homebrew OpenSSL
+			linkArgs = append(linkArgs, "-L/opt/homebrew/lib", "-lssl", "-lcrypto")
+		} else {
+			// Linux and other systems
+			linkArgs = append(linkArgs, "-lssl", "-lcrypto")
+		}
 	}
 
-	// Fallback to standard OpenSSL flags for different platforms
-	if runtime.GOOS == "darwin" {
-		// macOS with Homebrew OpenSSL
-		return append(linkArgs, "-L/opt/homebrew/lib", "-lssl", "-lcrypto")
-	}
-	// Linux and other systems
-	return append(linkArgs, "-lssl", "-lcrypto")
-}
-
-// checkLibraryAvailability checks if any runtime libraries are available
-func checkLibraryAvailability() (bool, bool) {
+	// Try multiple clang options for linking
+	var clangCommands [][]string
 	fiberExists := false
 	httpExists := false
 
-	// Check if any fiber runtime library was found
-	for _, libPath := range buildLibraryPaths("fiber_runtime") {
+	// Check if any fiber runtime library exists
+	for _, libPath := range fiberRuntimePaths {
 		if _, err := os.Stat(libPath); err == nil {
 			fiberExists = true
 			break
 		}
 	}
 
-	// Check if any HTTP runtime library was found
-	for _, libPath := range buildLibraryPaths("http_runtime") {
+	// Check if any HTTP runtime library exists
+	for _, libPath := range httpRuntimePaths {
 		if _, err := os.Stat(libPath); err == nil {
 			httpExists = true
 			break
 		}
 	}
-
-	return fiberExists, httpExists
-}
-
-// tryLinkWithCompilers attempts to link the executable using multiple compiler options
-func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberExists, httpExists bool) error {
-	var clangCommands [][]string
 
 	if fiberExists || httpExists {
 		clangCommands = [][]string{
@@ -227,65 +246,10 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 			return nil // Success!
 		}
 
-		lastErr = fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with %s: %w\nOutput: %s",
-			cmd[0], err, string(linkOutput))
+		lastErr = fmt.Errorf("failed to link executable with %s: %w\nOutput: %s", cmd[0], err, string(linkOutput))
 	}
 
-	return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with any available compiler: %w", lastErr)
-}
-
-// CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.
-func CompileToExecutableWithSecurity(source, outputPath string, security SecurityConfig) error {
-	// Ensure the output directory exists
-	outputDir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(outputDir, DirPermissions); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
-	}
-
-	// Generate LLVM IR with security configuration
-	ir, err := CompileToLLVMWithSecurity(source, security)
-	if err != nil {
-		return fmt.Errorf("failed to generate LLVM IR: %w", err)
-	}
-
-	// Write IR to temporary file
-	irFile := outputPath + ".ll"
-	if err := os.WriteFile(irFile, []byte(ir), FilePermissions); err != nil {
-		return WrapWriteIRFile(err)
-	}
-
-	defer func() { _ = os.Remove(irFile) }() // Clean up temp file
-
-	// Compile IR to object file using llc
-	objFile := outputPath + ".o"
-	llcCmd := exec.Command("llc", "-filetype=obj", "-o", objFile, irFile) // #nosec G204 - args are controlled
-
-	llcOutput, err := llcCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to compile IR to object file: %w\nllc output: %s",
-			err, string(llcOutput))
-	}
-
-	defer func() { _ = os.Remove(objFile) }() // Clean up temp file
-
-	// Build link arguments with runtime libraries
-	var linkArgs []string
-
-	linkArgs = append(linkArgs, "-o", outputPath, objFile)
-
-	// Find and add runtime libraries (order matters: dependents before dependencies)
-	linkArgs = findAndAddLibrary("http_runtime", linkArgs)
-	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
-
-	linkArgs = append(linkArgs, "-lpthread")
-
-	// Add OpenSSL libraries with platform-specific paths
-	linkArgs = addOpenSSLFlags(linkArgs)
-
-	// Check library availability and try linking
-	fiberExists, httpExists := checkLibraryAvailability()
-
-	return tryLinkWithCompilers(outputPath, objFile, linkArgs, fiberExists, httpExists)
+	return fmt.Errorf("failed to link executable with any available compiler: %w", lastErr)
 }
 
 // CompileAndRun compiles and runs source code using smart JIT execution with default (permissive) security.
@@ -305,14 +269,4 @@ func CompileAndRun(source string) error {
 func CompileAndRunWithSecurity(source string, security SecurityConfig) error {
 	// Try JIT execution first (smart tool detection)
 	return CompileAndRunJITWithSecurity(source, security)
-}
-
-// CompileAndCapture compiles and captures program output with default (permissive) security.
-func CompileAndCapture(source string) (string, error) {
-	return CompileAndCaptureJIT(source)
-}
-
-// CompileAndCaptureWithSecurity compiles and captures program output with specified security configuration.
-func CompileAndCaptureWithSecurity(source string, security SecurityConfig) (string, error) {
-	return CompileAndCaptureJITWithSecurity(source, security)
 }
