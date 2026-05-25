@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/christianfindlay/osprey/internal/ast"
@@ -11,6 +12,20 @@ import (
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 )
+
+// stdinGlobalName returns the platform-specific external symbol name for
+// libc's stdin FILE*. macOS / *BSD export it as `__stdinp` (with double
+// underscore) via the C library's struct-of-three-FILEs idiom; glibc on
+// Linux and most others use plain `stdin`. Hardcoding "stdin" produced
+// `Undefined symbols: _stdin` at link time on macOS.
+func stdinGlobalName() string {
+	switch runtime.GOOS {
+	case GOOSDarwin, "freebsd", "netbsd", "openbsd", "dragonfly":
+		return "__stdinp"
+	default:
+		return "stdin"
+	}
+}
 
 // validateBuiltInArgs validates argument count for built-in functions using the registry
 func validateBuiltInArgs(funcName string, callExpr *ast.CallExpression) error {
@@ -468,8 +483,24 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 		g.functions["fgets"] = fgetsFunc
 	}
 
-	// Use stdin directly - it's an external global in libc
-	stdinGlobal := g.module.NewGlobalDef("stdin", constant.NewNull(types.I8Ptr))
+	// `stdin` must be an *external* global so libc's FILE* is linked in.
+	// The previous NewGlobalDef(..., null) defined our own zero-initialised
+	// `i8** @stdin`, shadowing libc and handing fgets a NULL FILE* →
+	// SIGSEGV on the first read. The symbol name is platform-specific:
+	// macOS/*BSD export `__stdinp`; Linux/glibc uses `stdin`. Cache by
+	// name so repeated input() calls reuse one declaration.
+	stdinName := stdinGlobalName()
+	stdinGlobal, gok := g.globals[stdinName]
+	if !gok {
+		stdinGlobal = g.module.NewGlobal(stdinName, types.I8Ptr)
+		stdinGlobal.Linkage = enum.LinkageExternal
+
+		if g.globals == nil {
+			g.globals = make(map[string]*ir.Global)
+		}
+
+		g.globals[stdinName] = stdinGlobal
+	}
 
 	// Allocate buffer for input string (256 chars should be enough)
 	const inputBufferSize = 256
@@ -481,8 +512,14 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 	bufferPtr := g.builder.NewGetElementPtr(types.NewArray(inputBufferSize, types.I8), inputBuffer,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 
+	// fgets takes the FILE* value, not a pointer-to-FILE*: load @stdin
+	// before passing it. The previous code handed the *address* of the
+	// global to fgets, which (combined with the null-init) made the
+	// segfault even more reliable.
+	stdinValue := g.builder.NewLoad(types.I8Ptr, stdinGlobal)
+
 	// Call fgets to read the string
-	fgetsResult := g.builder.NewCall(fgetsFunc, bufferPtr, bufferSize, stdinGlobal)
+	fgetsResult := g.builder.NewCall(fgetsFunc, bufferPtr, bufferSize, stdinValue)
 
 	// Create a Result<String, Error>
 	resultType := g.getResultType(types.I8Ptr)
