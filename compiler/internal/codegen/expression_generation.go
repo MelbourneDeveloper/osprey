@@ -768,7 +768,7 @@ func (g *LLVMGenerator) generateShortCircuitBoolean(binExpr *ast.BinaryExpressio
 		return nil, err
 	}
 
-	leftBool := g.builder.NewICmp(enum.IPredNE, left, constant.NewInt(types.I64, 0))
+	leftBool := truthy(g.builder, left)
 	leftBlock := g.builder
 	blockSuffix := fmt.Sprintf("_%p", binExpr)
 	rightBlock := g.function.NewBlock("shortcircuit_rhs" + blockSuffix)
@@ -786,17 +786,32 @@ func (g *LLVMGenerator) generateShortCircuitBoolean(binExpr *ast.BinaryExpressio
 	if err != nil {
 		return nil, err
 	}
-	rightBool := g.builder.NewICmp(enum.IPredNE, right, constant.NewInt(types.I64, 0))
+	rightBool := truthy(g.builder, right)
 	rhsExitBlock := g.builder
 	g.builder.NewBr(endBlock)
 
 	g.builder = endBlock
-	phi := g.builder.NewPhi(
+	// Result is i1 — matches both `fn(...) -> bool` returns (which lower to
+	// i1) and call sites that pass the result on to another comparison /
+	// branch. Comparable to the i1 NewICmp returns.
+	return g.builder.NewPhi(
 		ir.NewIncoming(leftBool, leftBlock),
 		ir.NewIncoming(rightBool, rhsExitBlock),
-	)
+	), nil
+}
 
-	return g.builder.NewZExt(phi, types.I64), nil
+// truthy converts a value to an i1 by comparing to its type's zero. Lets
+// short-circuit booleans accept either an i1 (from a `>` / `==` etc.) or
+// an i64 (from an arithmetic expression) on either side.
+func truthy(b *ir.Block, v value.Value) value.Value {
+	if intType, ok := v.Type().(*types.IntType); ok && intType.BitSize == 1 {
+		return v
+	}
+	if intType, ok := v.Type().(*types.IntType); ok {
+		return b.NewICmp(enum.IPredNE, v, constant.NewInt(intType, 0))
+	}
+	// Fallback: assume i64 (existing default elsewhere in this file).
+	return b.NewICmp(enum.IPredNE, v, constant.NewInt(types.I64, 0))
 }
 
 // tryCollectionPlus dispatches `+` on List/Map operands to the appropriate
