@@ -1159,6 +1159,12 @@ func (g *LLVMGenerator) wrapInSuccessResult(discriminant value.Value) value.Valu
 
 // isResultType checks if a value is a Result type (struct with two fields or pointer to such struct)
 func (g *LLVMGenerator) isResultType(val value.Value) bool {
+	// Unit-returning builtins (e.g. print) hand back a nil value; treat as
+	// not-a-Result so callers like toString can fail loud instead of
+	// crashing the compiler dereferencing a nil interface.
+	if val == nil {
+		return false
+	}
 	// Check for pointer to struct (legacy pointer semantics)
 	if ptrType, ok := val.Type().(*types.PointerType); ok {
 		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
