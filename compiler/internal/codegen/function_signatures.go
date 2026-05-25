@@ -64,9 +64,17 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		return protectedErr
 	}
 
-	// Store function declaration for monomorphization
+	// Store function declaration for monomorphization. Reject duplicate
+	// declarations up-front — without this the second `fn foo(...)` silently
+	// overwrites the first in the inferer env, then both compete during
+	// codegen and LLC fails with the cryptic "invalid redefinition of
+	// function 'foo'" INTERNAL_COMPILER_ERROR. Surface a clean source-level
+	// error instead.
 	if g.functionDeclarations == nil {
 		g.functionDeclarations = make(map[string]*ast.FunctionDeclaration)
+	}
+	if _, exists := g.functionDeclarations[fnDecl.Name]; exists {
+		return WrapFunctionAlreadyDeclared(fnDecl.Name, fnDecl.Position)
 	}
 
 	g.functionDeclarations[fnDecl.Name] = fnDecl
