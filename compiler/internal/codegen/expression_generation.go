@@ -1080,10 +1080,14 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	right = g.unwrapIfResult(right)
 
 	// String comparison must use strcmp on byte contents — comparing the raw
-	// i8* pointers (which is what NewICmp does) returns false for two separately
-	// allocated globals holding the same text.
-	if isStringValue(left) && isStringValue(right) && (operator == "==" || operator == "!=") {
-		return g.generateStringComparison(operator, left, right, pos)
+	// i8* pointers (which is what NewICmp does) is meaningless: == returns false
+	// for two separately allocated globals with the same text, and ordering
+	// operators return whichever global was allocated first.
+	if isStringValue(left) && isStringValue(right) {
+		switch operator {
+		case "==", "!=", "<", "<=", ">", ">=":
+			return g.generateStringComparison(operator, left, right, pos)
+		}
 	}
 
 	var cmp value.Value
@@ -1144,10 +1148,10 @@ func isStringValue(v value.Value) bool {
 	return ok && intType.BitSize == 8
 }
 
-// generateStringComparison emits a strcmp-based comparison for the `==` and
-// `!=` operators on i8* string operands. NewICmp on raw pointers would
-// otherwise compare addresses, which fails for two separately allocated
-// globals holding the same text.
+// generateStringComparison emits a strcmp-based comparison for `==`, `!=`,
+// `<`, `<=`, `>`, `>=` on i8* string operands. NewICmp on raw pointers would
+// otherwise compare addresses, which is wrong for content equality and yields
+// allocation-order junk for ordering.
 func (g *LLVMGenerator) generateStringComparison(
 	operator string, left, right value.Value, pos *ast.Position,
 ) (value.Value, error) {
@@ -1157,10 +1161,22 @@ func (g *LLVMGenerator) generateStringComparison(
 	}
 	cmp := g.builder.NewCall(strcmp, left, right)
 	zero := constant.NewInt(types.I32, 0)
-	if operator == "==" {
+	switch operator {
+	case "==":
 		return g.builder.NewICmp(enum.IPredEQ, cmp, zero), nil
+	case "!=":
+		return g.builder.NewICmp(enum.IPredNE, cmp, zero), nil
+	case "<":
+		return g.builder.NewICmp(enum.IPredSLT, cmp, zero), nil
+	case "<=":
+		return g.builder.NewICmp(enum.IPredSLE, cmp, zero), nil
+	case ">":
+		return g.builder.NewICmp(enum.IPredSGT, cmp, zero), nil
+	case ">=":
+		return g.builder.NewICmp(enum.IPredSGE, cmp, zero), nil
+	default:
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
 	}
-	return g.builder.NewICmp(enum.IPredNE, cmp, zero), nil
 }
 
 // generateLogicalOperationWithPos generates LLVM logical operations with position info.

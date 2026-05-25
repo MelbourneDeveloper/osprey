@@ -61,4 +61,16 @@ match strA == strC {
     false => print("strNe=ok")
 }
 
+// String ordering must use strcmp lexicographically, not raw pointer order
+let zStr = "zebra"
+let aStr = "apple"
+match aStr < zStr {
+    true => print("strLt=ok")
+    false => print("strLt=fail")
+}
+match zStr < aStr {
+    true => print("strLt2=fail")
+    false => print("strLt2=ok")
+}
+
 print("=== Function Composition Test Complete ===")
