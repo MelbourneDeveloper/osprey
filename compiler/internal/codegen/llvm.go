@@ -1325,6 +1325,13 @@ func (g *LLVMGenerator) processMatchArmWithBinding(arm ast.MatchArm, discriminan
 			// string literals. Compare by shape via primitiveInferType.
 			if t := primitiveInferType(discriminant.Type()); t != "" {
 				g.typeInferer.env.Set(arm.Pattern.Constructor, &ConcreteType{name: t})
+			} else {
+				// Non-primitive discriminant (Result struct, record, …): bind
+				// to a fresh TypeVar so inferer lookups in the arm body don't
+				// fail with "undefined variable". The runtime value lives in
+				// g.variables already; toString / pattern destructuring resolve
+				// off the LLVM type, not the inferer name.
+				g.typeInferer.env.Set(arm.Pattern.Constructor, g.typeInferer.Fresh())
 			}
 		}
 	}
