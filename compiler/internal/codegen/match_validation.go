@@ -64,6 +64,17 @@ func (g *LLVMGenerator) validateMatchExhaustiveness(expr *ast.MatchExpression) e
 		return ensureBoolMatchExhaustive(expr)
 	}
 
+	// Same rationale for unbounded primitive types: int / float / string
+	// matches over literals fall through to the last arm at runtime if
+	// no wildcard / variable-bind catch-all is present, so
+	// `match x { 1 => "one" }` silently returns "one" for every input.
+	// Require an explicit catch-all to make the partial intent loud.
+	if typeName == TypeInt || typeName == TypeFloat || typeName == TypeString {
+		if !hasResultArms(expr) {
+			return ensurePrimitiveMatchHasCatchAll(expr, typeName)
+		}
+	}
+
 	// Check if this is a union type
 	typeDecl, exists := g.typeDeclarations[typeName]
 	if !exists {
@@ -123,6 +134,35 @@ func hasResultArms(expr *ast.MatchExpression) bool {
 		}
 	}
 	return false
+}
+
+// ensurePrimitiveMatchHasCatchAll errors when a match on an unbounded
+// primitive type (int / float / string) has no `_` or variable-bind
+// catch-all arm. Without one the lowered IR unconditionally branches to
+// the last arm, so `match x { 1 => "one" }` silently returns "one" for
+// every input — the same hazard ensureBoolMatchExhaustive fixed for bool.
+//
+// Variable-bind arms like `n => print("Many!")` parse as
+// `Constructor: "n", Variable: ""` (the AST builder can't tell at
+// parse time whether `n` names a union variant or binds a fresh
+// variable), so we treat any non-literal single identifier as a
+// catch-all for primitive matches — int/float/string have no named
+// variants.
+func ensurePrimitiveMatchHasCatchAll(expr *ast.MatchExpression, typeName string) error {
+	for _, arm := range expr.Arms {
+		if arm.Pattern.Constructor == "_" {
+			return nil
+		}
+		if arm.Pattern.Constructor == "" && arm.Pattern.Variable != "" {
+			return nil
+		}
+		// Non-literal single identifier on a primitive match = variable bind.
+		if arm.Pattern.Constructor != "" && !isLiteralPattern(arm.Pattern.Constructor) {
+			return nil
+		}
+	}
+	missing := fmt.Sprintf("_ (catch-all for %s)", typeName)
+	return WrapMatchNotExhaustiveWithPos([]string{missing}, expr.Position)
 }
 
 // ensureBoolMatchExhaustive errors when a boolean match misses either
