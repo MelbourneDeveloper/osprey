@@ -65,13 +65,11 @@ func (g *LLVMGenerator) generateExternDeclaration(externDecl *ast.ExternDeclarat
 
 	// Declare the external function. If the compiler has already emitted a
 	// declaration with the same name (e.g. strlen / printf / malloc — used
-	// internally for built-in lowering), reuse it instead of emitting a
-	// duplicate "declare" line that llc rejects with
+	// internally for built-in lowering), keep that declaration instead of
+	// emitting a duplicate "declare" line that llc rejects with
 	// "invalid redefinition of function".
-	externFunc, exists := g.functions[externDecl.Name]
-	if !exists {
-		externFunc = g.module.NewFunc(externDecl.Name, returnType, params...)
-		g.functions[externDecl.Name] = externFunc
+	if _, exists := g.functions[externDecl.Name]; !exists {
+		g.functions[externDecl.Name] = g.module.NewFunc(externDecl.Name, returnType, params...)
 	}
 	// Built-in functions are handled by Hindley-Milner type inference
 	g.functionParameters[externDecl.Name] = paramNames
