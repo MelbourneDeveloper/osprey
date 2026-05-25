@@ -1176,8 +1176,12 @@ func (ti *TypeInferer) unifyConcreteWithGeneric(t1, t2 Type) bool {
 	// Try GenericType vs ConcreteType
 	if gt, ok := t1.(*GenericType); ok {
 		if ct, ok := t2.(*ConcreteType); ok {
-			// WILDCARD TYPES: Bare Fiber/Channel types match Fiber[T]/Channel[T] for any T
-			if ct.name == gt.name && (ct.name == TypeFiber || ct.name == TypeChannel) {
+			// WILDCARD TYPES: bare Fiber/Channel/List/Map names match their
+			// parameterised counterparts in either direction (mirrors the
+			// ConcreteType-on-the-left branch above). Without this, sites like
+			// `forEachList(splitResult, print)` fail because the value side is
+			// GenericType List[string] and the registry signature is bare List.
+			if ct.name == gt.name && isBuiltInWildcardTypeName(ct.name) {
 				return true // Bare type acts as wildcard
 			}
 
