@@ -246,8 +246,20 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 	// Create new argument slice in correct order
 	reorderedArgs := make([]ast.Expression, len(args))
 
-	// Handle named arguments
+	// Handle named arguments. Duplicate names (e.g. `add(a: 1, a: 2)`)
+	// used to silently overwrite the earlier slot and leave another slot
+	// nil, so codegen later barfed with "unsupported expression: <nil>".
+	// Flag the duplicate up-front with a useful message.
+	seen := make(map[string]bool, len(args))
+
 	for _, arg := range args {
+		if seen[arg.Name] {
+			return nil, fmt.Errorf("%w: duplicate named argument '%s' for function '%s'",
+				ErrUnknownParameterName, arg.Name, fnName)
+		}
+
+		seen[arg.Name] = true
+
 		pos, exists := paramPositions[arg.Name]
 		if !exists {
 			return nil, fmt.Errorf("%w '%s' for function '%s'; valid parameters: %s",
