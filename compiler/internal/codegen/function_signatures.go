@@ -51,6 +51,19 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		return ErrToStringReserved
 	}
 
+	// Reject redefining a protected builtin (`contains`, `length`,
+	// `print`, …). Without this the user's body still type-checks and
+	// the symbol gets registered, but the call-site arg validator
+	// matches the builtin's parameter names — so e.g.
+	// `fn contains(t: int, target: int)` then `contains(t: 5, target: 5)`
+	// fails with the misleading "contains expects exactly 2 arguments
+	// (s, needle), got 0" because the validator is using the builtin's
+	// signature. Fail loudly at declaration time instead.
+	protectedErr := CheckProtectedFunction(fnDecl)
+	if protectedErr != nil {
+		return protectedErr
+	}
+
 	// Store function declaration for monomorphization
 	if g.functionDeclarations == nil {
 		g.functionDeclarations = make(map[string]*ast.FunctionDeclaration)
