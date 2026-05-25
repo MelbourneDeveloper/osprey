@@ -505,6 +505,7 @@ func (ti *TypeInferer) Unify(t1, t2 Type) error {
 	t1 = ti.prune(t1)
 	t2 = ti.prune(t2)
 
+
 	// Handle type variables
 	err := ti.unifyTypeVariables(t1, t2)
 	if !errors.Is(err, ErrNotTypeVariable) {
@@ -527,6 +528,10 @@ func (ti *TypeInferer) Unify(t1, t2 Type) error {
 	case PrimitiveTypeCategory:
 		return ti.unifyPrimitiveTypes(t1, t2)
 	case GenericTypeCategory:
+		if t2.Category() != GenericTypeCategory {
+			return fmt.Errorf("%w: cannot unify generic type %s with %+v type %s", 
+				ErrTypeMismatch, t1.String(), t2.Category(), t2.String())
+		}
 		return ti.unifyGenericTypes(t1, t2)
 	case FunctionTypeCategory:
 		return ti.unifyFunctionTypes(t1, t2)
@@ -779,6 +784,8 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 
 // handlePatternFieldBindings handles field bindings in patterns with proper type extraction
 func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discriminantType Type) {
+	fmt.Printf("DEBUG: handlePatternFieldBindings called - pattern: %+v, discriminantType: %+v\n", 
+		pattern, discriminantType)
 	// Special handling for structural patterns (constructor "*")
 	if pattern.Constructor == "*" && discriminantType != nil {
 		// For structural patterns, try to extract field types from the discriminant type
@@ -819,6 +826,8 @@ func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType 
 	if gt, ok := discriminantType.(*GenericType); ok && gt.name == TypeResult && len(gt.typeArgs) >= 1 {
 		successType := gt.typeArgs[0]
 		if len(pattern.Fields) > 0 {
+			fmt.Printf("DEBUG: bindSuccessPattern - Setting %s to %+v (discriminantType: %+v)\n", 
+				pattern.Fields[0], successType, discriminantType)
 			ti.env.Set(pattern.Fields[0], successType)
 		}
 		return true
