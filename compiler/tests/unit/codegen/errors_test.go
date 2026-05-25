@@ -515,17 +515,17 @@ func TestErrorWrappingWithoutPosition(t *testing.T) {
 		{
 			"WrapFunctionArgsWithPos nil position for print",
 			func() error { return codegen.WrapFunctionArgsWithPos("print", 1, 2, nil) },
-			"function print expects 1 arguments, got 2: wrong argument count",
+			"function print expects 1 argument, got 2: wrong argument count",
 		},
 		{
 			"WrapFunctionArgsWithPos nil position for length",
 			func() error { return codegen.WrapFunctionArgsWithPos("length", 1, 2, nil) },
-			"function length expects 1 arguments, got 2: wrong argument count",
+			"function length expects 1 argument, got 2: wrong argument count",
 		},
 		{
 			"WrapToStringWrongArgs",
 			func() error { return codegen.WrapToStringWrongArgs(2) },
-			"function toString expects 1 arguments, got 2: wrong argument count",
+			"function toString expects 1 argument, got 2: wrong argument count",
 		},
 		{
 			"WrapMissingArgument",

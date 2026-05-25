@@ -345,14 +345,38 @@ func (g *LLVMGenerator) convertResultToString(
 		errorMsg = g.builder.NewExtractValue(result, 0)
 	}
 
-	// Format as "Error(message)" - handle different error message types
+	// Format as "Error(message)" - handle different error message types.
+	// When the runtime stores a NULL string in the Error payload
+	// (e.g. split returning Result<list, _>'s Error case stores nil),
+	// sprintf %s would print "(null)" — so substring's Error showed
+	// "Error((null))". Branch on null at runtime and fall back to a
+	// bare "Error" when the message pointer is NULL.
 	var errorStr value.Value
 	if structType.Fields[0] == types.I8Ptr {
-		// String error message - format as Error(message)
+		stringFormatBlock := g.function.NewBlock(fmt.Sprintf("error_str_fmt_%d", blockID))
+		nullErrorBlock := g.function.NewBlock(fmt.Sprintf("error_null_%d", blockID))
+		errorJoinBlock := g.function.NewBlock(fmt.Sprintf("error_join_%d", blockID))
+		isNull := g.builder.NewICmp(enum.IPredEQ, errorMsg, constant.NewNull(types.I8Ptr))
+		g.builder.NewCondBr(isNull, nullErrorBlock, stringFormatBlock)
+
+		// Non-null message → format with payload.
+		g.builder = stringFormatBlock
 		errorFormatStr := g.createGlobalString("Error(%s)")
 		errorBuffer := g.builder.NewCall(malloc, bufferSize)
 		g.builder.NewCall(sprintf, errorBuffer, errorFormatStr, errorMsg)
-		errorStr = errorBuffer
+		g.builder.NewBr(errorJoinBlock)
+
+		// Null message → bare "Error".
+		g.builder = nullErrorBlock
+		nullErrorStr := g.createGlobalString("Error")
+		g.builder.NewBr(errorJoinBlock)
+
+		g.builder = errorJoinBlock
+		errorStr = g.builder.NewPhi(
+			ir.NewIncoming(errorBuffer, stringFormatBlock),
+			ir.NewIncoming(nullErrorStr, nullErrorBlock),
+		)
+		errorBlock = errorJoinBlock
 	} else {
 		// Non-string error - just use "Error" for now
 		// TODO: Handle other error types properly
