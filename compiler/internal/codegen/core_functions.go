@@ -684,23 +684,133 @@ func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (valu
 }
 
 // generateJoinCall handles join(list: List<string>, separator: string) -> string function calls.
+// Walks the list via osprey_list_get + osprey_list_length and concatenates
+// each element with the separator using a strlen / malloc / memcpy loop.
+// Previously this returned the separator as a placeholder, so
+// `join(xs, "-")` for any xs yielded just "-" — silently wrong.
 func (g *LLVMGenerator) generateJoinCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(JoinFunc, callExpr)
 	if err != nil {
 		return nil, err
 	}
+	g.declareListExterns()
 
-	// For now, return a placeholder implementation
-	// TODO: Implement proper list handling once List<T> type is fully supported
-
-	separator, err := g.generateExpression(callExpr.Arguments[1])
+	list, err := g.generateExpression(callExpr.Arguments[0])
 	if err != nil {
 		return nil, err
 	}
+	sep, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+	// split/lines/words return osp_string_list* which has a different
+	// C layout from OspreyList — bit-casting it and reading via
+	// osprey_list_get segfaults. Reject with a clear error until the
+	// converter lands.
+	if ptrTy, ok := list.Type().(*types.PointerType); ok {
+		if _, isStruct := ptrTy.ElemType.(*types.StructType); isStruct {
+			return nil, fmt.Errorf(
+				"%w: join() on the result of split/lines/words isn't supported yet — " +
+					"build a runtime List with listAppend(List(), str) instead",
+				errCollectionExternMiss,
+			)
+		}
+	}
+	list = g.coerceToI8Ptr(list)
 
-	// Return the separator as a placeholder result
-	// In a real implementation, we would iterate through the list and join with separator
-	return separator, nil
+	// Build the joined string via the C library calls we already have
+	// declared (strlen / malloc / memcpy). The implementation is a
+	// straight-line loop that mirrors what the C runtime's
+	// osp_string_join does for osp_string_list.
+	listLen := g.builder.NewCall(g.functions["osprey_list_length"], list)
+	sepLen := g.builder.NewCall(g.functions["strlen"], sep)
+
+	// First pass: total length = sum(strlen(item)) + sepLen * (n - 1).
+	// Use an i64 alloca'd accumulator.
+	totalPtr := g.builder.NewAlloca(types.I64)
+	g.builder.NewStore(constant.NewInt(types.I64, 0), totalPtr)
+	iPtr := g.builder.NewAlloca(types.I64)
+	g.builder.NewStore(constant.NewInt(types.I64, 0), iPtr)
+
+	suffix := fmt.Sprintf("_join_%p", callExpr)
+	lenCond := g.function.NewBlock("len_cond" + suffix)
+	lenBody := g.function.NewBlock("len_body" + suffix)
+	lenEnd := g.function.NewBlock("len_end" + suffix)
+	g.builder.NewBr(lenCond)
+
+	g.builder = lenCond
+	iCur := g.builder.NewLoad(types.I64, iPtr)
+	g.builder.NewCondBr(g.builder.NewICmp(enum.IPredSLT, iCur, listLen), lenBody, lenEnd)
+
+	g.builder = lenBody
+	itemI := g.builder.NewCall(g.functions["osprey_list_get"], list, iCur)
+	itemPtr := g.builder.NewIntToPtr(itemI, types.I8Ptr)
+	itemLen := g.builder.NewCall(g.functions["strlen"], itemPtr)
+	cur := g.builder.NewLoad(types.I64, totalPtr)
+	g.builder.NewStore(g.builder.NewAdd(cur, itemLen), totalPtr)
+	g.builder.NewStore(g.builder.NewAdd(iCur, constant.NewInt(types.I64, 1)), iPtr)
+	g.builder.NewBr(lenCond)
+
+	g.builder = lenEnd
+	// Add sepLen * (listLen - 1) if listLen > 1. Use a select to avoid negative.
+	one := constant.NewInt(types.I64, 1)
+	hasSep := g.builder.NewICmp(enum.IPredSGT, listLen, one)
+	gapCount := g.builder.NewSub(listLen, one)
+	sepTotal := g.builder.NewMul(sepLen, gapCount)
+	extra := g.builder.NewSelect(hasSep, sepTotal, constant.NewInt(types.I64, 0))
+	totalLen := g.builder.NewAdd(g.builder.NewLoad(types.I64, totalPtr), extra)
+	bufLen := g.builder.NewAdd(totalLen, one) // +1 for NUL
+
+	buf := g.builder.NewCall(g.functions["malloc"], bufLen)
+	// Pre-NUL terminate so the partial buffer is a valid C string we can
+	// extend with memcpy + offset arithmetic.
+	g.builder.NewStore(constant.NewInt(types.I8, 0), buf)
+
+	// Second pass: copy each item (and sep before items 1..n-1) into buf.
+	posPtr := g.builder.NewAlloca(types.I64)
+	g.builder.NewStore(constant.NewInt(types.I64, 0), posPtr)
+	g.builder.NewStore(constant.NewInt(types.I64, 0), iPtr)
+
+	copyCond := g.function.NewBlock("copy_cond" + suffix)
+	copyBody := g.function.NewBlock("copy_body" + suffix)
+	copyEnd := g.function.NewBlock("copy_end" + suffix)
+	g.builder.NewBr(copyCond)
+
+	g.builder = copyCond
+	iCur2 := g.builder.NewLoad(types.I64, iPtr)
+	g.builder.NewCondBr(g.builder.NewICmp(enum.IPredSLT, iCur2, listLen), copyBody, copyEnd)
+
+	g.builder = copyBody
+	// Insert separator before items after the first.
+	needSep := g.builder.NewICmp(enum.IPredSGT, iCur2, constant.NewInt(types.I64, 0))
+	sepBlock := g.function.NewBlock("copy_sep" + suffix)
+	itemBlock := g.function.NewBlock("copy_item" + suffix)
+	g.builder.NewCondBr(needSep, sepBlock, itemBlock)
+
+	g.builder = sepBlock
+	posSep := g.builder.NewLoad(types.I64, posPtr)
+	dstSep := g.builder.NewGetElementPtr(types.I8, buf, posSep)
+	g.builder.NewCall(g.functions["memcpy"], dstSep, sep, sepLen)
+	g.builder.NewStore(g.builder.NewAdd(posSep, sepLen), posPtr)
+	g.builder.NewBr(itemBlock)
+
+	g.builder = itemBlock
+	itemI2 := g.builder.NewCall(g.functions["osprey_list_get"], list, iCur2)
+	itemPtr2 := g.builder.NewIntToPtr(itemI2, types.I8Ptr)
+	itemLen2 := g.builder.NewCall(g.functions["strlen"], itemPtr2)
+	posCur := g.builder.NewLoad(types.I64, posPtr)
+	dstItem := g.builder.NewGetElementPtr(types.I8, buf, posCur)
+	g.builder.NewCall(g.functions["memcpy"], dstItem, itemPtr2, itemLen2)
+	g.builder.NewStore(g.builder.NewAdd(posCur, itemLen2), posPtr)
+	g.builder.NewStore(g.builder.NewAdd(iCur2, one), iPtr)
+	g.builder.NewBr(copyCond)
+
+	g.builder = copyEnd
+	// NUL-terminate.
+	finalPos := g.builder.NewLoad(types.I64, posPtr)
+	tail := g.builder.NewGetElementPtr(types.I8, buf, finalPos)
+	g.builder.NewStore(constant.NewInt(types.I8, 0), tail)
+	return buf, nil
 }
 
 // generateListConstructorCall handles List() constructor calls — returns
