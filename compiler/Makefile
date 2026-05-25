@@ -170,7 +170,7 @@ clean:
 test-runtime: build
 	@echo "🧪 Running C Runtime Tests to verify segfault fixes..."
 	@echo "📦 Compiling fiber runtime tests..."
-	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c runtime/system_runtime.c -pthread -std=gnu11 -Werror -Wall -Wextra -D_GNU_SOURCE
+	gcc -o runtime/fiber_runtime_test runtime/fiber_runtime_tests.c runtime/fiber_runtime.c runtime/system_runtime.c runtime/effects_runtime.c -pthread -std=gnu11 -Werror -Wall -Wextra -D_GNU_SOURCE
 	@echo "🚀 Running fiber runtime tests..."
 	./runtime/fiber_runtime_test
 	@echo ""
@@ -190,6 +190,7 @@ test-runtime: build
 		runtime/websocket_server_runtime.c \
 		runtime/fiber_runtime.c \
 		runtime/system_runtime.c \
+		runtime/effects_runtime.c \
 		runtime/http_bridge_stub.c \
 		-pthread -Werror -Wall -Wextra -D_GNU_SOURCE `pkg-config --cflags --libs openssl 2>/dev/null || echo "-lssl -lcrypto"`
 	@echo "🚀 Running HTTP runtime tests..."
@@ -230,7 +231,7 @@ c-test:
 	@cd runtime && echo "🚀 Running system runtime tests..."
 	@cd runtime && ./test_system_runtime
 	@cd runtime && echo "📦 Compiling fiber runtime tests..."
-	@cd runtime && clang -o test_fiber_runtime fiber_runtime_tests.c fiber_runtime.c system_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
+	@cd runtime && clang -o test_fiber_runtime fiber_runtime_tests.c fiber_runtime.c system_runtime.c effects_runtime.c -pthread -std=c11 -D_GNU_SOURCE -g -Werror -Wall -Wextra
 	@cd runtime && echo "🚀 Running fiber runtime tests..."
 	@cd runtime && ./test_fiber_runtime
 	@cd runtime && echo "📦 Compiling collection runtime tests..."
