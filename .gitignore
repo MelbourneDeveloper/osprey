@@ -91,3 +91,8 @@ compiler/examples/tested/effects/test_data/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Ad-hoc compiler artefacts written into the working tree by manual runs
+compiler/processed_log.txt
+compiler/system_report.txt
+compiler/temp_test.txt
