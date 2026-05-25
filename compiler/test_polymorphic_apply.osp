@@ -1,0 +1,19 @@
+// Test case for polymorphic apply pattern that should trigger alternative resolution
+
+fn apply(f, x) = f(x)
+
+// Define some polymorphic functions
+fn identity(x) = x        // <T>(T) -> T
+fn double(x) = x + x      // This should be int -> int when used
+
+// TEST CASE 1: Pass polymorphic function as first positional argument
+// This should trigger the alternative resolution path
+let result1 = apply(identity, 42)     // Should resolve identity to int -> int
+print("apply(identity, 42) = ${result1}")
+
+// TEST CASE 2: More complex polymorphic function
+fn stringify(x) = toString(x)         // <T>(T) -> string
+let result2 = apply(stringify, 123)   // Should resolve stringify to int -> string  
+print("apply(stringify, 123) = ${result2}")
+
+print("Polymorphic apply test complete")
