@@ -53,6 +53,16 @@ func (g *LLVMGenerator) validateMatchExhaustiveness(expr *ast.MatchExpression) e
 	resolvedType := g.typeInferer.ResolveType(exprType)
 	typeName := resolvedType.String()
 
+	// Spec 0009-BooleanOperations.md: "match on a boolean ... forces both
+	// arms to be considered." Without this check the lowered IR
+	// unconditionally branches to the last arm, so `b=false; match b { true => … }`
+	// silently runs the true arm. Skip when the arms use Result-style
+	// patterns (Success/Error) — the codegen auto-wraps the bool into a
+	// Result there and the user's intent is to match Result, not bool.
+	if typeName == TypeBool && !hasResultArms(expr) {
+		return ensureBoolMatchExhaustive(expr)
+	}
+
 	// Check if this is a union type
 	typeDecl, exists := g.typeDeclarations[typeName]
 	if !exists {
@@ -100,6 +110,50 @@ func (g *LLVMGenerator) validateMatchExhaustiveness(expr *ast.MatchExpression) e
 	}
 
 	return nil
+}
+
+// hasResultArms reports whether any arm of the match uses a Success or
+// Error pattern. Used to skip bool-exhaustiveness on matches whose intent
+// is Result destructuring (the codegen auto-wraps the discriminant).
+func hasResultArms(expr *ast.MatchExpression) bool {
+	for _, arm := range expr.Arms {
+		if arm.Pattern.Constructor == SuccessPattern || arm.Pattern.Constructor == ErrorPattern {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureBoolMatchExhaustive errors when a boolean match misses either
+// `true` or `false` and has no wildcard / variable catch-all. Per spec
+// 0009-BooleanOperations.md both arms must be present.
+func ensureBoolMatchExhaustive(expr *ast.MatchExpression) error {
+	seenTrue, seenFalse := false, false
+	for _, arm := range expr.Arms {
+		switch arm.Pattern.Constructor {
+		case "_":
+			return nil
+		case TruePattern:
+			seenTrue = true
+		case FalsePattern:
+			seenFalse = true
+		case "":
+			if arm.Pattern.Variable != "" {
+				return nil // variable-bind catch-all
+			}
+		}
+	}
+	var missing []string
+	if !seenTrue {
+		missing = append(missing, TruePattern)
+	}
+	if !seenFalse {
+		missing = append(missing, FalsePattern)
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return WrapMatchNotExhaustiveWithPos(missing, expr.Position)
 }
 
 // validateNamedArguments validates that multi-parameter functions require named arguments
