@@ -373,21 +373,37 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 	// Create a simple function for the lambda
 	funcName := fmt.Sprintf("lambda_%d", len(g.module.Funcs))
 
-	// Create parameters with names
+	// Create parameters with names. When the lambda has an explicit type annotation
+	// on a parameter, honour it; otherwise fall back to i64 (the no-annotation case
+	// relies on Hindley-Milner inferring an int-shaped type at the call site).
 	var params []*ir.Param
 	for _, param := range lambda.Parameters {
-		llvmParam := ir.NewParam(param.Name, types.I64) // Assume int type for now
+		paramLLVMType := types.Type(types.I64)
+		if param.Type != nil {
+			paramLLVMType = g.getLLVMType(g.typeExpressionToInferenceType(param.Type))
+		}
+		llvmParam := ir.NewParam(param.Name, paramLLVMType)
 		params = append(params, llvmParam)
 	}
 
-	// Determine return type from explicit annotation or default to i64
+	// Determine return type from explicit annotation, otherwise ask the type inferer.
+	// Falling back to i64 made `fn(s: string) => s + "!"` blow up at llc because the
+	// body produced an i8* that didn't match the hardcoded i64 ret signature.
 	var llvmReturnType types.Type
 	var explicitReturnType Type
 	if lambda.ReturnType != nil {
 		explicitReturnType = g.typeExpressionToInferenceType(lambda.ReturnType)
 		llvmReturnType = g.getLLVMType(explicitReturnType)
 	} else {
-		llvmReturnType = types.I64
+		inferred, err := g.typeInferer.InferType(lambda)
+		if err == nil {
+			if fnType, ok := inferred.(*FunctionType); ok {
+				llvmReturnType = g.getLLVMType(g.typeInferer.prune(fnType.returnType))
+			}
+		}
+		if llvmReturnType == nil {
+			llvmReturnType = types.I64
+		}
 	}
 
 	// Create function with parameters

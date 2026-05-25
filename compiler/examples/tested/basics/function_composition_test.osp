@@ -35,4 +35,8 @@ print("square(5) = ${squared}")
 
 print("Function composition working correctly!")
 
-print("=== Function Composition Test Complete ===") 
+// Inline string-typed lambda exercises non-i64 lambda parameter codegen
+let exclaim = fn(s: string) => s + "!"
+print(exclaim("hi"))
+
+print("=== Function Composition Test Complete ===")
