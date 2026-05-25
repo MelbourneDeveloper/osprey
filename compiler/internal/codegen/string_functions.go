@@ -31,24 +31,21 @@ func (g *LLVMGenerator) declareStringRuntime(name string, retType types.Type, pa
 
 // resultFromNullableString returns Result<string, StringError>:
 // if ptr is NULL → Error; otherwise → Success { value: ptr }.
-func (g *LLVMGenerator) resultFromNullableString(ptr value.Value) value.Value {
+// Implements [ERR-PAYLOAD]: err_msg slot carries `msg` on the Error path.
+func (g *LLVMGenerator) resultFromNullableString(ptr value.Value, msg string) value.Value {
 	resultType := g.getResultType(types.I8Ptr)
 	result := g.builder.NewAlloca(resultType)
 
 	isErr := g.builder.NewICmp(enum.IPredEQ, ptr, constant.NewNull(types.I8Ptr))
-	// discriminant = 1 if err else 0
 	disc := g.builder.NewSelect(isErr,
 		constant.NewInt(types.I8, 1),
 		constant.NewInt(types.I8, 0))
-	// value = null if err else ptr
 	val := g.builder.NewSelect(isErr, constant.NewNull(types.I8Ptr), ptr)
+	errMsg := g.builder.NewSelect(isErr,
+		g.internErrorMessage(msg),
+		g.nullErrorMessage())
 
-	vp := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(val, vp)
-	dp := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(disc, dp)
+	g.storeResultFields(result, val, disc, errMsg)
 	return result
 }
 
@@ -138,12 +135,10 @@ func (g *LLVMGenerator) generateIndexOfCall(callExpr *ast.CallExpression) (value
 	disc := g.builder.NewSelect(isErr,
 		constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
 	val := g.builder.NewSelect(isErr, constant.NewInt(types.I64, 0), idx)
-	vp := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(val, vp)
-	dp := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(disc, dp)
+	errMsg := g.builder.NewSelect(isErr,
+		g.internErrorMessage("indexOf: needle not found"),
+		g.nullErrorMessage())
+	g.storeResultFields(result, val, disc, errMsg)
 	return result, nil
 }
 
@@ -244,7 +239,7 @@ func (g *LLVMGenerator) generateReplaceCall(callExpr *ast.CallExpression) (value
 		ir.NewParam("needle", types.I8Ptr),
 		ir.NewParam("replacement", types.I8Ptr))
 	ptr := g.builder.NewCall(fn, s, needle, replacement)
-	return g.resultFromNullableString(ptr), nil
+	return g.resultFromNullableString(ptr, "replace: needle must not be empty"), nil
 }
 
 func (g *LLVMGenerator) generateRepeatCall(callExpr *ast.CallExpression) (value.Value, error) {
@@ -263,7 +258,7 @@ func (g *LLVMGenerator) generateRepeatCall(callExpr *ast.CallExpression) (value.
 	fn := g.declareStringRuntime("osp_string_repeat", types.I8Ptr,
 		ir.NewParam("s", types.I8Ptr), ir.NewParam("n", types.I64))
 	ptr := g.builder.NewCall(fn, s, n)
-	return g.resultFromNullableString(ptr), nil
+	return g.resultFromNullableString(ptr, "repeat: count must be non-negative"), nil
 }
 
 func (g *LLVMGenerator) generatePadStartCall(callExpr *ast.CallExpression) (value.Value, error) {
@@ -299,7 +294,7 @@ func (g *LLVMGenerator) generatePadCall(
 		ir.NewParam("target_length", types.I64),
 		ir.NewParam("fill", types.I8Ptr))
 	ptr := g.builder.NewCall(fn, s, target, fill)
-	return g.resultFromNullableString(ptr), nil
+	return g.resultFromNullableString(ptr, ospName+": fill must not be empty"), nil
 }
 
 // ===== PARSING =====
@@ -328,12 +323,10 @@ func (g *LLVMGenerator) generateParseFloatCall(callExpr *ast.CallExpression) (va
 	disc := g.builder.NewSelect(isErr,
 		constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
 	val := g.builder.NewSelect(isErr, constant.NewFloat(types.Double, 0.0), parsed)
-	vp := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(val, vp)
-	dp := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(disc, dp)
+	errMsg := g.builder.NewSelect(isErr,
+		g.internErrorMessage("parseFloat: input is not a valid number"),
+		g.nullErrorMessage())
+	g.storeResultFields(result, val, disc, errMsg)
 	return result, nil
 }
 
@@ -403,11 +396,9 @@ func (g *LLVMGenerator) generateSplitCall(callExpr *ast.CallExpression) (value.V
 	disc := g.builder.NewSelect(isErr,
 		constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
 	val := g.builder.NewSelect(isErr, constant.NewNull(listPtrTy), listPtr)
-	vp := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(val, vp)
-	dp := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(disc, dp)
+	errMsg := g.builder.NewSelect(isErr,
+		g.internErrorMessage("split: separator must not be empty"),
+		g.nullErrorMessage())
+	g.storeResultFields(result, val, disc, errMsg)
 	return result, nil
 }

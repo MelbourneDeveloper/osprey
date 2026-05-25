@@ -23,8 +23,11 @@ const (
 	DefaultByteSize = 8    // Default size fallback
 	LargeArraySize  = 1000 // Large array size for type casting operations
 
-	// MinResultFieldCount represents the minimum number of fields in a Result type struct
-	MinResultFieldCount = 2
+	// MinResultFieldCount represents the field count of a Result type struct.
+	// Kept as a separate name for readability at the call site that asserts the
+	// Result-struct shape during string-coercion. The actual layout is shared
+	// with ResultFieldCount (3 since [ERR-PAYLOAD]).
+	MinResultFieldCount = ResultFieldCount
 )
 
 // Static error definitions
@@ -600,21 +603,8 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	// Create Success result for the actual element type
 	resultType := g.getResultType(elementLLVMType)
 	successResult := g.builder.NewAlloca(resultType)
-
-	// Store element value
-	valuePtr := g.builder.NewGetElementPtr(resultType, successResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-
-	// Debug: Print types for mismatch investigation (commented out)
-	// fmt.Printf("DEBUG: elementLLVMType: %s, elementValue type: %T %s, valuePtr type: %T %s\n",
-	//	elementLLVMType, elementValue.Type(), elementValue.Type(), valuePtr.Type(), valuePtr.Type())
-
-	g.builder.NewStore(elementValue, valuePtr)
-
-	// Store success discriminant (0)
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, successResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+	g.storeResultFields(successResult, elementValue,
+		constant.NewInt(types.I8, 0), g.nullErrorMessage())
 
 	// Branch to end block
 	g.builder.NewBr(endBlock)
@@ -622,10 +612,6 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	// Error block: return index error
 	g.builder = errorBlock
 	errorResult := g.builder.NewAlloca(resultType)
-
-	// Store error value (null value for the element type)
-	errorValuePtr := g.builder.NewGetElementPtr(resultType, errorResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 
 	// Create appropriate null value based on element type
 	var nullValue value.Value
@@ -647,12 +633,8 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 			nullValue = constant.NewNull(types.I8Ptr)
 		}
 	}
-	g.builder.NewStore(nullValue, errorValuePtr)
-
-	// Store error discriminant (1)
-	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, errorResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr)
+	g.storeResultFields(errorResult, nullValue,
+		constant.NewInt(types.I8, 1), g.internErrorMessage("list: index out of range"))
 
 	// Branch to end block
 	g.builder.NewBr(endBlock)
@@ -976,56 +958,24 @@ func (g *LLVMGenerator) generateModuloWithZeroCheck(left, right value.Value) (va
 	return phi, nil
 }
 
-// createSuccessResult creates a Success Result<int, MathError> struct
-func (g *LLVMGenerator) createSuccessResult(value value.Value) value.Value {
-	// Result struct for Success: {value: i64, is_error: i8}
-	// For Success: value = actual result, is_error = 0
-	resultStructType := types.NewStruct(types.I64, types.I8)
-	undefStruct := constant.NewUndef(resultStructType)
-	// Set the value
-	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
-	// Set is_error flag to 0 (Success)
-	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
-	return resultComplete
+// createSuccessResult creates a Success Result<int, MathError> struct.
+func (g *LLVMGenerator) createSuccessResult(val value.Value) value.Value {
+	return g.makeSuccessValue(val)
 }
 
-// createSuccessResultFloat creates a Success Result<float, MathError> struct
-func (g *LLVMGenerator) createSuccessResultFloat(value value.Value) value.Value {
-	// Result struct for Success: {value: double, is_error: i8}
-	// For Success: value = actual result, is_error = 0
-	resultStructType := types.NewStruct(types.Double, types.I8)
-	undefStruct := constant.NewUndef(resultStructType)
-	// Set the value
-	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
-	// Set is_error flag to 0 (Success)
-	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
-	return resultComplete
+// createSuccessResultFloat creates a Success Result<float, MathError> struct.
+func (g *LLVMGenerator) createSuccessResultFloat(val value.Value) value.Value {
+	return g.makeSuccessValue(val)
 }
 
-// createDivisionByZeroError creates an Error Result<int, MathError> struct for division by zero
+// createDivisionByZeroError creates an Error Result<int, MathError> for division by zero.
 func (g *LLVMGenerator) createDivisionByZeroError() value.Value {
-	// Result struct for Error: {error_discriminant: i64, is_error: i8}
-	// For DivisionByZero: error_discriminant = 0, is_error = 1
-	resultStructType := types.NewStruct(types.I64, types.I8)
-	undefStruct := constant.NewUndef(resultStructType)
-	// Set error discriminant to 0 (DivisionByZero is first variant of MathError)
-	resultWithError := g.builder.NewInsertValue(undefStruct, constant.NewInt(types.I64, 0), 0)
-	// Set is_error flag to 1
-	resultComplete := g.builder.NewInsertValue(resultWithError, constant.NewInt(types.I8, 1), 1)
-	return resultComplete
+	return g.makeErrorValueWithMessage(constant.NewInt(types.I64, 0), "math: division by zero")
 }
 
-// createDivisionByZeroErrorFloat creates an Error Result<float, MathError> struct for division by zero
+// createDivisionByZeroErrorFloat creates an Error Result<float, MathError> for division by zero.
 func (g *LLVMGenerator) createDivisionByZeroErrorFloat() value.Value {
-	// Result struct for Error: {error_discriminant: double, is_error: i8}
-	// For DivisionByZero: error_discriminant = 0.0, is_error = 1
-	resultStructType := types.NewStruct(types.Double, types.I8)
-	undefStruct := constant.NewUndef(resultStructType)
-	// Set error discriminant to 0.0 (stored as double to match struct type)
-	resultWithError := g.builder.NewInsertValue(undefStruct, constant.NewFloat(types.Double, 0.0), 0)
-	// Set is_error flag to 1
-	resultComplete := g.builder.NewInsertValue(resultWithError, constant.NewInt(types.I8, 1), 1)
-	return resultComplete
+	return g.makeErrorValueWithMessage(constant.NewFloat(types.Double, 0.0), "math: division by zero")
 }
 
 // isFloatLLVMType checks if an LLVM type is a floating-point type
@@ -1047,26 +997,23 @@ func promoteToFloat(builder *ir.Block, val value.Value) value.Value {
 // This enables auto-propagation: arithmetic chains like (1+2)*3 work because Results auto-unwrap.
 // Returns the value unchanged if it's not a Result type.
 // NOTE: This assumes the Result is Success - errors will propagate at runtime.
+// Implements the value-side of [ERR-PAYLOAD]: Result layout is now
+// { value, discriminant: i8, err_msg: i8* } (see core_functions.go:getResultType).
 func (g *LLVMGenerator) unwrapIfResult(val value.Value) value.Value {
-	// Check if this is a Result struct: {value_type, i8}
 	structType, ok := val.Type().(*types.StructType)
 	if !ok {
-		return val // Not a struct, return as-is
+		return val
 	}
 
-	const resultFieldCount = 2
-	if len(structType.Fields) != resultFieldCount {
-		return val // Not a 2-field struct, return as-is
+	if len(structType.Fields) != ResultFieldCount {
+		return val
 	}
 
-	// Check if second field is i8 (the is_error flag)
 	const errorFlagBitSize = 8
 	if intType, ok := structType.Fields[1].(*types.IntType); !ok || intType.BitSize != errorFlagBitSize {
-		return val // Not a Result struct pattern, return as-is
+		return val
 	}
 
-	// This looks like a Result struct - extract the value (field 0)
-	// TODO: Add runtime error checking - for now we assume Success
 	return g.builder.NewExtractValue(val, 0)
 }
 
@@ -2605,48 +2552,36 @@ func (g *LLVMGenerator) generateSuccessConstructor(
 	}
 
 	// Create Result struct type based on the value type
-	valueType := value.Type()
-	resultStructType := types.NewStruct(valueType, types.I8) // [value, discriminant]
-
-	// Create the result struct as a value (not pointer)
-	// Use InsertValue to build the struct value directly
-	undefStruct := constant.NewUndef(resultStructType)
-	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
-	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
-
-	return resultComplete, nil
+	return g.makeSuccessValue(value), nil
 }
 
 // generateErrorConstructor generates LLVM IR for Error { message: E } constructor.
+// Implements [ERR-PAYLOAD]: the message is stored in the err_msg slot (index 2).
+// The value slot (index 0) holds the user-supplied message as a placeholder so
+// the Result struct type stays consistent across this codepath; downstream
+// pattern-matching reads index 2 for the bound `message` variable. The Phase-3
+// migration to typed payload slots (Result<T, StringError>) supersedes this.
 func (g *LLVMGenerator) generateErrorConstructor(
 	typeConstructor *ast.TypeConstructorExpression,
 ) (value.Value, error) {
-	// Error constructor should create a Result struct with discriminant = 1 (error)
-	// Result struct: [defaultValue, discriminant] where discriminant=1 for error
-	// Get the message expression from the constructor fields
 	messageExpr, exists := typeConstructor.Fields["message"]
 	if !exists {
 		return nil, ErrErrorConstructorMissingMessage
 	}
 
-	// Generate the error message
 	message, err := g.generateExpression(messageExpr)
 	if err != nil {
 		return nil, err
 	}
 
-	// Error constructor creates Result struct: [error_message, discriminant]
-	// where discriminant = 1 for error
-	messageType := message.Type()
-	resultStructType := types.NewStruct(messageType, types.I8) // [error_message, discriminant]
-
-	// Create the result struct as a value (not pointer)
-	// Use InsertValue to build the struct value directly
-	undefStruct := constant.NewUndef(resultStructType)
-	resultWithMessage := g.builder.NewInsertValue(undefStruct, message, 0)
-	resultComplete := g.builder.NewInsertValue(resultWithMessage, constant.NewInt(types.I8, 1), 1)
-
-	return resultComplete, nil
+	// Pre-[ERR-PAYLOAD] this stored the message in slot 0 (value); the new layout
+	// requires us to *also* place it in slot 2 so generateErrorBlock can read it
+	// uniformly with builtin-produced Errors. Slot 0 retains the message-typed
+	// placeholder pending Phase 5 (Result<T, E> with proper value-slot typing).
+	if message.Type() == types.I8Ptr {
+		return g.makeResultValue(message, 1, message), nil
+	}
+	return g.makeResultValue(message, 1, g.nullErrorMessage()), nil
 }
 
 // generateResultFieldAccessAsMatch converts Result field access to pattern matching
@@ -2822,46 +2757,22 @@ func (g *LLVMGenerator) generateMapAccess(
 	foundSuccessResult := g.builder.NewAlloca(resultType)
 
 	// Store actual value
-	foundResultValuePtr := g.builder.NewGetElementPtr(resultType, foundSuccessResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(actualValue, foundResultValuePtr)
-
-	// Store success discriminant (0)
-	foundDiscriminantPtr := g.builder.NewGetElementPtr(resultType, foundSuccessResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), foundDiscriminantPtr)
+	g.storeResultFields(foundSuccessResult, actualValue,
+		constant.NewInt(types.I8, 0), g.nullErrorMessage())
 	g.builder.NewBr(mapEndBlock)
 
 	// Key not found block - create error result and jump to end
 	g.builder = keyNotFound
-
-	// Create Error result for missing key
 	notFoundErrorResult := g.builder.NewAlloca(resultType)
-
-	// Store error value (null value for the element type)
-	notFoundValuePtr := g.builder.NewGetElementPtr(resultType, notFoundErrorResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(nullValue, notFoundValuePtr)
-
-	// Store error discriminant (1)
-	notFoundDiscriminantPtr := g.builder.NewGetElementPtr(resultType, notFoundErrorResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 1), notFoundDiscriminantPtr)
+	g.storeResultFields(notFoundErrorResult, nullValue,
+		constant.NewInt(types.I8, 1), g.internErrorMessage("map: key not found"))
 	g.builder.NewBr(mapEndBlock)
 
 	// Map empty block - create error result
 	g.builder = mapEmptyBlock
 	emptyErrorResult := g.builder.NewAlloca(resultType)
-
-	// Store error value (null value for the element type)
-	emptyValuePtr := g.builder.NewGetElementPtr(resultType, emptyErrorResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(nullValue, emptyValuePtr)
-
-	// Store error discriminant (1)
-	emptyDiscriminantPtr := g.builder.NewGetElementPtr(resultType, emptyErrorResult,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 1), emptyDiscriminantPtr)
+	g.storeResultFields(emptyErrorResult, nullValue,
+		constant.NewInt(types.I8, 1), g.internErrorMessage("map: lookup on empty map"))
 	g.builder.NewBr(mapEndBlock)
 
 	// End block with PHI node to select the result

@@ -1135,25 +1135,13 @@ func (g *LLVMGenerator) hasResultPatterns(arms []ast.MatchArm) bool {
 	return false
 }
 
-// wrapInSuccessResult wraps a value in a Success Result automatically
+// wrapInSuccessResult wraps a value in a Success Result automatically, returning
+// a pointer to the allocated Result. Implements [ERR-PAYLOAD]: err_msg slot is null.
 func (g *LLVMGenerator) wrapInSuccessResult(discriminant value.Value) value.Value {
-	// Create a Result struct with the discriminant value as the success value
-	// Result struct: [value, discriminant] where discriminant=0 for success
-	resultType := types.NewStruct(discriminant.Type(), types.I8)
-
-	// Allocate memory for the result
+	resultType := g.getResultType(discriminant.Type())
 	resultPtr := g.builder.NewAlloca(resultType)
-
-	// Store the value in the first field
-	valuePtr := g.builder.NewGetElementPtr(resultType, resultPtr,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(discriminant, valuePtr)
-
-	// Store 0 (success) in the discriminant field
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, resultPtr,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
-
+	g.storeResultFields(resultPtr, discriminant,
+		constant.NewInt(types.I8, 0), g.nullErrorMessage())
 	return resultPtr
 }
 
@@ -1680,9 +1668,10 @@ func (g *LLVMGenerator) createUnionPatternCondition(
 ) value.Value {
 	discriminantType := discriminant.Type()
 
-	// Handle tagged union (pointer to struct with tag + data)
+	// Handle tagged union (pointer to struct with tag + data).
+	// Layout is {i8 tag, [N x i8] data} — see UnionFieldCount note.
 	if ptrType, ok := discriminantType.(*types.PointerType); ok {
-		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == UnionFieldCount {
 			return g.createTaggedUnionCondition(
 				discriminantValue, discriminant, structType, currentBlock,
 			)
@@ -2144,39 +2133,45 @@ func (g *LLVMGenerator) generateResultMatchExpression(
 ) (value.Value, error) {
 	blocks := g.createResultMatchBlocks(matchExpr)
 
-	// Store the Result value for pattern binding
+	// Save and restore g.currentResultValue around arm generation. Nested matches
+	// inside the success arm would otherwise mutate it before generateErrorBlock
+	// runs and load the err_msg slot from the wrong Result — and worse, from a
+	// value defined in a non-dominating sibling block. Implements [ERR-PAYLOAD]
+	// correctness for nested Result matches.
+	prevResultValue := g.currentResultValue
 	g.currentResultValue = discriminant
+	defer func() { g.currentResultValue = prevResultValue }()
 
 	g.generateResultMatchCondition(discriminant, blocks)
 
-	// Track which blocks actually branch to the end
 	var (
 		actualSuccessBlock *ir.Block
 		actualErrorBlock   *ir.Block
 	)
 
-	// Generate success block and track the actual ending block
 	g.builder = blocks.Success
-
 	successValue, err := g.generateSuccessBlock(matchExpr, blocks)
 	if err != nil {
 		return nil, err
 	}
-	// The builder is now pointing to the block that will branch to the end
 	actualSuccessBlock = g.builder
 
-	// Generate error block and track the actual ending block
-	g.builder = blocks.Error
+	// Restore the outer discriminant before generating the error block. Without
+	// this, a nested success-arm match would leak its discriminant outward and
+	// generateErrorBlock would GEP into the wrong Result.
+	g.currentResultValue = discriminant
 
+	g.builder = blocks.Error
 	errorValue, err := g.generateErrorBlock(matchExpr, blocks)
 	if err != nil {
 		return nil, err
 	}
-	// The builder is now pointing to the block that will branch to the end
 	actualErrorBlock = g.builder
 
-	// Create PHI with the actual predecessor blocks
-	return g.createResultMatchPhiWithActualBlocks(successValue, errorValue, actualSuccessBlock, actualErrorBlock, blocks)
+	phi := g.createResultMatchPhiWithActualBlocks(
+		successValue, errorValue, actualSuccessBlock, actualErrorBlock, blocks,
+	)
+	return phi, nil
 }
 
 // ResultMatchBlocks holds the blocks for result match expressions.
@@ -2357,17 +2352,11 @@ func (g *LLVMGenerator) generateErrorBlock(
 			}
 		}
 
-		// Create a unique global string for the error message
-		// Include function context to ensure uniqueness across monomorphized instances
-		funcContext := ""
-		if g.function != nil {
-			funcContext = g.function.Name()
-		}
-		blockSuffix := fmt.Sprintf("_%s_%p", funcContext, matchExpr)
-		errorStr := g.module.NewGlobalDef("error_msg"+blockSuffix, constant.NewCharArrayFromString("Error occurred\\x00"))
-		errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
-			constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
-		g.variables[fieldName] = errorPtr
+		// Implements [ERR-PAYLOAD]: load the message from the Result's err_msg slot
+		// (index 2 — see getResultType in core_functions.go). Before this change every
+		// match arm aliased a static "Error occurred" global regardless of which
+		// builtin produced the Error.
+		g.variables[fieldName] = g.loadResultErrorMessage(g.currentResultValue)
 	}
 
 	errorExpr := g.findErrorValue(matchExpr)
@@ -2502,55 +2491,36 @@ func (g *LLVMGenerator) createResultMatchPhiWithActualBlocks(
 	successValue, errorValue value.Value,
 	actualSuccessBlock, actualErrorBlock *ir.Block,
 	blocks *ResultMatchBlocks,
-) (value.Value, error) {
+) value.Value {
 	g.builder = blocks.End
 
-	// Use the actual blocks that branch to the end
 	var validPredecessors []*ir.Incoming
 
-	// Check if the actual success block has a terminator and branches to end
-	if actualSuccessBlock != nil && actualSuccessBlock.Term != nil && successValue != nil {
-		// Don't add void values to PHI predecessors
-		if !isVoidType(successValue.Type()) {
-			validPredecessors = append(validPredecessors, ir.NewIncoming(successValue, actualSuccessBlock))
-		}
+	if actualSuccessBlock != nil && actualSuccessBlock.Term != nil && successValue != nil &&
+		!isVoidType(successValue.Type()) {
+		validPredecessors = append(validPredecessors, ir.NewIncoming(successValue, actualSuccessBlock))
 	}
 
-	// Check if the actual error block has a terminator and branches to end
-	if actualErrorBlock != nil && actualErrorBlock.Term != nil && errorValue != nil {
-		// Don't add void values to PHI predecessors
-		if !isVoidType(errorValue.Type()) {
-			validPredecessors = append(validPredecessors, ir.NewIncoming(errorValue, actualErrorBlock))
-		}
+	if actualErrorBlock != nil && actualErrorBlock.Term != nil && errorValue != nil &&
+		!isVoidType(errorValue.Type()) {
+		validPredecessors = append(validPredecessors, ir.NewIncoming(errorValue, actualErrorBlock))
 	}
 
-	// If we don't have valid predecessors, return a default value
 	if len(validPredecessors) == 0 {
-		// Return the success value as a fallback
-		return successValue, nil
+		return successValue
 	}
 
-	// If we only have one valid predecessor, don't create a PHI
 	if len(validPredecessors) == 1 {
-		return validPredecessors[0].X, nil
+		return validPredecessors[0].X
 	}
 
-	// BUGFIX: Check if both values are void (Unit) - can't create PHI with void values
-	if successValue != nil && errorValue != nil {
-		// Check if both are void types
-		successIsVoid := isVoidType(successValue.Type())
-		errorIsVoid := isVoidType(errorValue.Type())
-
-		if successIsVoid && errorIsVoid {
-			// Both arms return Unit - return nil to represent void, don't create PHI
-			return nil, nil
-		}
+	// BUGFIX: both Unit arms can't create PHI with void values; signal void by nil.
+	if successValue != nil && errorValue != nil &&
+		isVoidType(successValue.Type()) && isVoidType(errorValue.Type()) {
+		return nil
 	}
 
-	// Create PHI node with valid predecessors
-	phi := blocks.End.NewPhi(validPredecessors...)
-
-	return phi, nil
+	return blocks.End.NewPhi(validPredecessors...)
 }
 
 // isVoidType checks if a type represents void/Unit

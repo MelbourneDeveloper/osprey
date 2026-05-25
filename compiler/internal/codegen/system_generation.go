@@ -203,38 +203,26 @@ func (g *LLVMGenerator) generateSpawnProcessCall(callExpr *ast.CallExpression) (
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
 
-	// Initialize the result struct with default values
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-
 	// Check if the process ID is negative (error)
 	zero := constant.NewInt(types.I64, 0)
 	isError := g.builder.NewICmp(enum.IPredSLT, processID, zero)
 
 	// Create blocks with unique names to avoid conflicts
-	blockID := len(g.function.Blocks) // Use block count as unique ID
-	successBlockName := fmt.Sprintf("spawn_success_%d", blockID)
-	errorBlockName := fmt.Sprintf("spawn_error_%d", blockID)
-	continueBlockName := fmt.Sprintf("spawn_continue_%d", blockID)
-
-	successBlock := g.function.NewBlock(successBlockName)
-	errorBlock := g.function.NewBlock(errorBlockName)
-	continueBlock := g.function.NewBlock(continueBlockName)
+	blockID := len(g.function.Blocks)
+	successBlock := g.function.NewBlock(fmt.Sprintf("spawn_success_%d", blockID))
+	errorBlock := g.function.NewBlock(fmt.Sprintf("spawn_error_%d", blockID))
+	continueBlock := g.function.NewBlock(fmt.Sprintf("spawn_continue_%d", blockID))
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
-	// Success case: store the process ID
 	g.builder = successBlock
-	g.builder.NewStore(processID, valuePtr)
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.storeResultFields(result, processID,
+		constant.NewInt(types.I8, 0), g.nullErrorMessage())
 	g.builder.NewBr(continueBlock)
 
-	// Error case: store error indicator (we'll use -1 as the "error value")
 	g.builder = errorBlock
-	g.builder.NewStore(constant.NewInt(types.I64, -1), valuePtr)
-	g.builder.NewStore(constant.NewInt(types.I8, 1), discriminantPtr) // 1 = Error
+	g.storeResultFields(result, constant.NewInt(types.I64, -1),
+		constant.NewInt(types.I8, 1), g.internErrorMessage("spawnProcess: failed to spawn process"))
 	g.builder.NewBr(continueBlock)
 
 	// Continue execution
@@ -315,29 +303,17 @@ func (g *LLVMGenerator) generateWriteFileCall(callExpr *ast.CallExpression) (val
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
-	// Success case: store the number of bytes written
 	g.builder = successBlock
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(writeResult, valuePtr) // Store bytes written
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.storeResultFields(result, writeResult,
+		constant.NewInt(types.I8, 0), g.nullErrorMessage())
 	g.builder.NewBr(continueBlock)
 
-	// Error case: store error value
 	g.builder = errorBlock
-	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(constant.NewInt(types.I64, -1), errorValuePtr)
-	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
+	g.storeResultFields(result, constant.NewInt(types.I64, -1),
+		constant.NewInt(types.I8, 1), g.internErrorMessage("writeFile: failed to write file"))
 	g.builder.NewBr(continueBlock)
 
-	// Continue execution
 	g.builder = continueBlock
-
 	return result, nil
 }
 
@@ -385,29 +361,14 @@ func (g *LLVMGenerator) generateReadFileCall(callExpr *ast.CallExpression) (valu
 
 	g.builder.NewCondBr(isError, errorBlock, successBlock)
 
-	// Success case: store the file content
 	g.builder = successBlock
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(readResult, valuePtr)
-	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 = Success
+	g.storeResultFields(result, readResult,
+		constant.NewInt(types.I8, 0), g.nullErrorMessage())
 	g.builder.NewBr(continueBlock)
 
-	// Error case: store error placeholder
 	g.builder = errorBlock
-	// Create unique global name to avoid redefinition
-	globalName := fmt.Sprintf("read_error_msg_%p", callExpr)
-	errorStr := g.module.NewGlobalDef(globalName, constant.NewCharArrayFromString("File read error\x00"))
-	errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
-		constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
-	errorValuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(errorPtr, errorValuePtr)
-	errorDiscriminantPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 = Error
+	g.storeResultFields(result, constant.NewNull(types.I8Ptr),
+		constant.NewInt(types.I8, 1), g.internErrorMessage("readFile: failed to read file"))
 	g.builder.NewBr(continueBlock)
 
 	// Continue execution

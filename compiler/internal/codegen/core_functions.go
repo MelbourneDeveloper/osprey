@@ -269,34 +269,14 @@ func (g *LLVMGenerator) convertResultToString(
 
 	successBlock.NewBr(endBlock)
 
-	// Error case: format as "Error(message)"
+	// Error case: format as "Error(message)" using the err_msg slot (index 2).
+	// Implements [ERR-PAYLOAD]: every Result now carries the message in slot 2.
 	g.builder = errorBlock
-
-	// Extract the error message from the Result struct
-	var errorMsg value.Value
-	if _, ok := result.Type().(*types.PointerType); ok {
-		// Pointer case: use getelementptr and load
-		errorMsgPtr := g.builder.NewGetElementPtr(structType, result,
-			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-		errorMsg = g.builder.NewLoad(structType.Fields[0], errorMsgPtr)
-	} else {
-		// Struct value case: extract the value field
-		errorMsg = g.builder.NewExtractValue(result, 0)
-	}
-
-	// Format as "Error(message)" - handle different error message types
-	var errorStr value.Value
-	if structType.Fields[0] == types.I8Ptr {
-		// String error message - format as Error(message)
-		errorFormatStr := g.createGlobalString("Error(%s)")
-		errorBuffer := g.builder.NewCall(malloc, bufferSize)
-		g.builder.NewCall(sprintf, errorBuffer, errorFormatStr, errorMsg)
-		errorStr = errorBuffer
-	} else {
-		// Non-string error - just use "Error" for now
-		// TODO: Handle other error types properly
-		errorStr = g.createGlobalString("Error")
-	}
+	errorMsg := g.loadResultErrorMessage(result)
+	errorFormatStr := g.createGlobalString("Error(%s)")
+	errorBuffer := g.builder.NewCall(malloc, bufferSize)
+	g.builder.NewCall(sprintf, errorBuffer, errorFormatStr, errorMsg)
+	errorStr := errorBuffer
 
 	errorBlock.NewBr(endBlock)
 
@@ -478,23 +458,16 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 	charToStore := successBlock.NewSelect(isNewline, nullChar, lastChar)
 	successBlock.NewStore(charToStore, lastCharPtr)
 
-	valuePtr := successBlock.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	successBlock.NewStore(bufferPtr, valuePtr)
-	discriminantPtr := successBlock.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	successBlock.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 for Success
+	// Success: bufferPtr + null err_msg
+	g.builder = successBlock
+	g.storeResultFields(result, bufferPtr,
+		constant.NewInt(types.I8, 0), g.nullErrorMessage())
 	successBlock.NewBr(endBlock)
 
-	// Error case: store error discriminant
+	// Error: null value + interned err_msg
 	g.builder = errorBlock
-	errorDiscriminantPtr := errorBlock.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	errorBlock.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 for Error
-	// Set value to null for error case
-	errorValuePtr := errorBlock.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	errorBlock.NewStore(nullPtr, errorValuePtr)
+	g.storeResultFields(result, nullPtr,
+		constant.NewInt(types.I8, 1), g.internErrorMessage("input: failed to read line"))
 	errorBlock.NewBr(endBlock)
 
 	// Continue with end block
@@ -527,9 +500,13 @@ func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.
 	return length, nil
 }
 
+// getResultType returns the Result struct layout for a given success-value type.
+// Implements [ERR-PAYLOAD]: Result is { value: T, discriminant: i8, err_msg: i8* }.
+// err_msg is null when discriminant == 0 (Success); when discriminant == 1
+// (Error) it points to a null-terminated static string in .rodata. Construction
+// helpers live in result_helpers.go.
 func (g *LLVMGenerator) getResultType(valueType types.Type) *types.StructType {
-	// A Result is a struct { value, discriminant }
-	return types.NewStruct(valueType, types.I8)
+	return types.NewStruct(valueType, types.I8, types.I8Ptr)
 }
 
 // generateContainsCall: contains(s: string, needle: string) -> bool.
@@ -588,7 +565,7 @@ func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (val
 		ir.NewParam("start", types.I64),
 		ir.NewParam("end", types.I64))
 	ptr := g.builder.NewCall(fn, str, start, end)
-	return g.resultFromNullableString(ptr), nil
+	return g.resultFromNullableString(ptr, "substring: index out of range"), nil
 }
 
 // generateParseIntCall: parseInt(s) -> Result<int, StringError>.
@@ -622,13 +599,11 @@ func (g *LLVMGenerator) generateParseIntCall(callExpr *ast.CallExpression) (valu
 	isErr := g.builder.NewICmp(enum.IPredNE, rc, constant.NewInt(types.I64, 0))
 	disc := g.builder.NewSelect(isErr, constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
 	val := g.builder.NewSelect(isErr, constant.NewInt(types.I64, 0), parsed)
+	errMsg := g.builder.NewSelect(isErr,
+		g.internErrorMessage("parseInt: input is not a valid integer"),
+		g.nullErrorMessage())
 
-	valuePtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(val, valuePtr)
-	discPtr := g.builder.NewGetElementPtr(resultType, result,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(disc, discPtr)
+	g.storeResultFields(result, val, disc, errMsg)
 	return result, nil
 }
 

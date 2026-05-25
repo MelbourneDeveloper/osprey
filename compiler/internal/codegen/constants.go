@@ -22,7 +22,18 @@ const (
 	MinArgs              = 2  // Minimum command line arguments
 	ExpressionOffset     = 2  // Offset for expression parsing
 	DefaultPlaceholder   = 42 // Default placeholder value for LLVM constants
-	ResultFieldCount     = 2  // Number of fields in Result type struct (value, discriminant)
+	ResultFieldCount = 3 // Number of fields in Result type struct (value, discriminant, err_msg).
+	// Implements [ERR-PAYLOAD]: every Result carries an i8* error-message slot.
+	// For Success this slot is null; for Error it points to a static C string
+	// owned by the program image (lifetime = process). See generateErrorBlock
+	// for the read side and result_helpers.go for the construction helpers.
+
+	// UnionFieldCount is the number of fields in a tagged-union struct: {i8 tag, [N x i8] data}.
+	// Kept distinct from ResultFieldCount so changes to the Result layout don't accidentally
+	// reroute union pattern-matching through the wrong dispatch arm (see PR for [ERR-PAYLOAD]
+	// — a previous shared constant silently broke `createUnionPatternCondition` when Result
+	// grew its err_msg slot).
+	UnionFieldCount = 2
 )
 
 // String constants.

@@ -891,39 +891,18 @@ func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.Fun
 	return bodyValue
 }
 
-// wrapInMathResult wraps a plain int value in a Result<int, MathError> structure
+// wrapInMathResult wraps a plain int value in a Result<int, MathError> structure.
 func (g *LLVMGenerator) wrapInMathResult(intValue value.Value) value.Value {
-	// Create Result<int, MathError> structure by value
-	resultType := g.getResultType(types.I64)
-
-	// Use InsertValue to build the struct value directly
-	undefStruct := constant.NewUndef(resultType)
-	resultWithValue := g.builder.NewInsertValue(undefStruct, intValue, 0)
-	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
-
-	return resultComplete
+	return g.makeSuccessValue(intValue)
 }
 
-// wrapInBoolResult wraps a plain bool value in a Result<bool, MathError> structure
+// wrapInBoolResult wraps a plain bool value in a Result<bool, MathError> structure.
 func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
-	// Create Result<bool, MathError> structure (using i1 as the value type for booleans)
-	resultType := g.getResultType(types.I1)
-
-	// Ensure we store the correct type - if value is i64, convert to i1
-	var valueToStore value.Value
+	valueToStore := boolValue
 	if boolValue.Type() == types.I64 {
-		// Truncate i64 to i1 for boolean values
 		valueToStore = g.builder.NewTrunc(boolValue, types.I1)
-	} else {
-		valueToStore = boolValue
 	}
-
-	// Use InsertValue to build the struct value directly
-	undefStruct := constant.NewUndef(resultType)
-	resultWithValue := g.builder.NewInsertValue(undefStruct, valueToStore, 0)
-	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
-
-	return resultComplete
+	return g.makeSuccessValue(valueToStore)
 }
 
 // maybeUnwrapResult unwraps a Result value if the function return type is not a Result

@@ -1,0 +1,16 @@
+// Spec: 0013-ErrorHandling.md [ERR-PAYLOAD] — Error { message } must bind
+// the real, function-specific error string, not a generic placeholder.
+//
+// Runtime error paths feed `g.variables[fieldName]` in generateErrorBlock.
+// Before [ERR-PAYLOAD] all paths shared one hardcoded global; now each
+// callsite contributes its own message via the Result struct's payload slot.
+
+match parseInt("oops") {
+    Success { value }   => print("unreachable: ${value}")
+    Error   { message } => print(message)
+}
+
+match substring("abc", 5, 10) {
+    Success { value }   => print("unreachable: ${value}")
+    Error   { message } => print(message)
+}

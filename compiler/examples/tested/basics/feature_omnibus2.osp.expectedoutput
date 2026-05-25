@@ -1,6 +1,6 @@
 === omnibus2 ===
 1.5
-Error occurred\x00true
+parseInt: input is not a valid integer
 true
 false
 hi world

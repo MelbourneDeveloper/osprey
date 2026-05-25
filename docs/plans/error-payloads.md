@@ -37,30 +37,72 @@ The fix has three pieces:
 
 ## Phase 1 — Runtime contract for `Result<T, string>`
 
-Most fallible builtins today return `Result<T, string>` (file I/O, parseInt, parseFloat, http*). They are the easiest target because the payload is a single `char*`.
+**Implementation chose codegen-side messages over a runtime contract.** The C
+runtime never produced `Result` structs directly (it returned raw `char*` /
+status `int64_t`); codegen wraps every return. So instead of a new
+`runtime/result_runtime.c`, the wrapping sites in
+[`internal/codegen/`](../../compiler/internal/codegen/) intern function-specific
+static messages and store them in the new err_msg slot. This keeps the C ABI
+unchanged and avoids a parallel struct layout in `string_runtime.h`.
 
-- [ ] **1.1** Document the layout in [`compiler/runtime/string_runtime.h`](../../compiler/runtime/string_runtime.h):
-  ```c
-  // Layout of Result<T, char*> when returned from C runtime to Osprey:
-  //   { i64 discriminant, T value, char* error_message }
-  // discriminant == 0: value valid, error_message ignored.
-  // discriminant == 1: value zeroed, error_message points to a null-terminated
-  //   string owned by the runtime (static or heap; runtime guarantees liveness
-  //   for the lifetime of the Result).
-  ```
-- [ ] **1.2** Add `osp_result_make_error(const char *msg)` and `osp_result_make_ok(<value>)` helpers in `runtime/result_runtime.c` (new file, ≤200 LOC) so runtime functions don't open-code the struct layout.
-- [ ] **1.3** Audit every `osp_*` function that returns a Result and verify it populates the message slot on the error path. Specific files:
-  - [`runtime/string_runtime.c`](../../compiler/runtime/string_runtime.c) — `osp_string_substring`, `osp_parse_int_strict`, `osp_parse_float_strict`, `osp_string_split`, `osp_string_replace`, `osp_string_repeat`, `osp_string_pad_*`, `osp_string_index_of`. Each must pass a meaningful message (e.g., `"substring: start index out of range"`, `"parseInt: non-numeric input"`).
-  - [`runtime/system_runtime.c`](../../compiler/runtime/system_runtime.c) — `osp_read_file`, `osp_write_file`, etc.
-  - [`runtime/http_client_runtime.c`](../../compiler/runtime/http_client_runtime.c) — HTTP error paths.
-- [ ] **1.4** Strings used as error messages MUST be either static-string constants in the .rodata segment (lifetime = process) or `strdup`'d heap allocations attached to the Result (lifetime managed by whoever frees the Result). Pick one per function; document inline.
+- [x] **1.1** Layout decision shipped: extended `getResultType` in
+  [`core_functions.go:528`](../../compiler/internal/codegen/core_functions.go#L528)
+  from `{value, discriminant}` to `{value, discriminant, err_msg: i8*}`.
+  `ResultFieldCount = 3` in [`constants.go`](../../compiler/internal/codegen/constants.go).
+  `UnionFieldCount = 2` introduced alongside to keep tagged-union dispatch
+  separate from Result detection (a previous shared `len==2` check silently
+  routed unions through `createSimpleEnumCondition` mid-implementation —
+  fixed once observed; covered by `recursive_union_list_payload.osp` and
+  friends).
+- [x] **1.2** Helpers shipped in
+  [`internal/codegen/result_helpers.go`](../../compiler/internal/codegen/result_helpers.go):
+  `makeSuccessValue`, `makeErrorValueWithMessage`, `storeResultFields`,
+  `loadResultErrorMessage`, `internErrorMessage`. The intern table reuses
+  the previously-unused `stringConstants` map on `LLVMGenerator` so repeated
+  messages share one global (`@osp_err_msg_N`).
+- [x] **1.3** Builtins audited and updated (per-callsite, in codegen — not in C):
+  - `parseInt` → `"parseInt: input is not a valid integer"`
+  - `parseFloat` → `"parseFloat: input is not a valid number"`
+  - `substring` → `"substring: index out of range"`
+  - `split` → `"split: separator must not be empty"`
+  - `replace` → `"replace: needle must not be empty"`
+  - `repeat` → `"repeat: count must be non-negative"`
+  - `padStart` / `padEnd` → `"<name>: fill must not be empty"`
+  - `indexOf` → `"indexOf: needle not found"`
+  - `input` → `"input: failed to read line"`
+  - `readFile` / `writeFile` → `"<name>: failed to <op> file"`
+  - `spawnProcess` → `"spawnProcess: failed to spawn process"`
+  - list `[idx]` out-of-bounds → `"list: index out of range"`
+  - map `[key]` missing / empty → `"map: key not found"` / `"map: lookup on empty map"`
+  - integer / float division by zero → `"math: division by zero"`
+- [x] **1.4** All shipped messages are .rodata static strings. The intern
+  helper marks each global as `Immutable`. No `strdup`/heap path is needed
+  for any current builtin.
 
 ## Phase 2 — Codegen reads the slot
 
-- [ ] **2.1** Delete the global-creation lines at [`llvm.go:2298-2308`](../../compiler/internal/codegen/llvm.go#L2298-L2308). Replace with: load the message pointer from the Result struct of the matched expression (the second/third field per Phase 1.1's layout).
-- [ ] **2.2** The matched expression's LLVM value is already live — it's the discriminant test that drives the match. Reuse that value (or its alloca) to GEP into the message slot. Look at how `generateSuccessBlock` (nearby in `llvm.go`) extracts the success value — the error path mirrors it.
-- [ ] **2.3** Type the loaded pointer as `i8*` and bind it to `g.variables[fieldName]`. Downstream code that uses `message` as a string already knows how to read `i8*`.
-- [ ] **2.4** Failing test FIRST: `examples/tested/types/error_payload.osp` calls `split("abc", "")` and asserts the printed message is `"split: separator must not be empty"` (or whatever specific string Phase 1.3 chose). The `.expectedoutput` pins the exact text.
+- [x] **2.1** Failing test landed at
+  [`examples/tested/basics/types/error_payload.osp`](../../compiler/examples/tested/basics/types/error_payload.osp)
+  exercising `parseInt("oops")` and `substring("abc", 5, 10)`. The
+  `.expectedoutput` pins the exact text per the messages in 1.3.
+- [x] **2.2** Hardcoded global removed from
+  [`llvm.go`](../../compiler/internal/codegen/llvm.go) `generateErrorBlock`.
+  Replaced with `g.variables[fieldName] = g.loadResultErrorMessage(g.currentResultValue)`.
+- [x] **2.3** Loaded pointer typed as `i8*` (matches the new slot 2 layout).
+- [x] **2.4** Test passes; same fix incidentally made `feature_omnibus2`,
+  `file_io_json_workflow`, `pattern_matching_result_tests`, and
+  `string_utils_combined` report real messages — their `.expectedoutput`
+  files were updated to assert the new text.
+
+### Implementation note — nested Result matches
+
+`g.currentResultValue` is a single field on the generator. When a Result match's
+success arm contains another Result match, the inner match overwrites
+`currentResultValue` and the *outer* error block was then loading from a
+non-dominating sibling block (`llc` rejected with "Instruction does not
+dominate all uses"). Fixed in `generateResultMatchExpression` by
+save/restore around success-arm generation; covered by
+`script_style_working.osp`'s nested `factorial`.
 
 ## Phase 3 — Discriminated-union payload types (e.g. `StringError`)
 
@@ -108,16 +150,16 @@ User code constructs Error values directly: `Error { message: "name cannot be em
 ## TODO checklist
 
 ### Phase 1 — Runtime contract for `Result<T, string>`
-- [ ] 1.1 Document layout in `string_runtime.h`
-- [ ] 1.2 `runtime/result_runtime.c` with `osp_result_make_error` / `osp_result_make_ok`
-- [ ] 1.3 Audit and fix every `osp_*` Result-returning function to populate message slot
-- [ ] 1.4 Decide static-string vs strdup per function; document inline
+- [x] 1.1 Layout extended in codegen (`getResultType`), not in C runtime header
+- [x] 1.2 Helpers in `internal/codegen/result_helpers.go` (codegen-side, not C)
+- [x] 1.3 Per-callsite messages wired in codegen for all listed builtins
+- [x] 1.4 All messages are .rodata static strings; intern table dedupes
 
 ### Phase 2 — Codegen reads the slot
-- [ ] 2.1 Failing test `examples/tested/types/error_payload.osp` with exact expected output
-- [ ] 2.2 Delete hardcoded global at `llvm.go:2298-2308`
-- [ ] 2.3 Replace with GEP+load of the message slot
-- [ ] 2.4 Test passes
+- [x] 2.1 Failing test landed at `examples/tested/basics/types/error_payload.osp`
+- [x] 2.2 Hardcoded global removed
+- [x] 2.3 GEP+load of the new err_msg slot (index 2) wired
+- [x] 2.4 Test passes; four other expected-outputs updated to assert real messages
 
 ### Phase 3 — `Result<T, StringError>` (prerequisite shipped: union payloads work per [TYPE-UNION-REC])
 - [ ] 3.1 Decision: defer or include in this iteration
@@ -136,6 +178,10 @@ User code constructs Error values directly: `Error { message: "name cannot be em
 - [ ] 6.2 Update `string_edge_cases.osp` to specific messages
 
 ### Acceptance
-- [ ] Every existing test still passes.
-- [ ] No more `"Error occurred"` global emitted anywhere by `osprey` for any input.
-- [ ] The JSON-parser canary in [`production-primitives.md`](production-primitives.md) reports `line N column M: expected ':'` (or equivalent) on malformed input — not `"Error occurred"`.
+- [x] Every existing test still passes (`go test ./... -count=1` clean across `compiler/{cmd,internal,tests/...}`; preexisting C-runtime fiber-tests linker failure on `main` is unrelated).
+- [x] No more `"Error occurred"` global emitted by `osprey` for any input (the literal global allocation was deleted from `generateErrorBlock`; see grep on `internal/codegen/`).
+- [ ] The JSON-parser canary in [`production-primitives.md`](production-primitives.md) reports `line N column M: expected ':'` (or equivalent) — pending. Phase 1+2 unblock real messages from builtins; the JSON parser still needs `closures.md` + `string-cursor.md` + `list-patterns.md` to be written in pure Osprey.
+
+## Now next
+
+With Phase 1+2 shipped, **Phase 5 (user-constructed `Error { message: "literal" }`)** is the next contained slice. A latent bug surfaced during this work: a function returning `Result<int, string>` whose Error arm uses the `Error { message: "boom" }` constructor produces struct type `{i8*, i8, i8*}` from the Error branch but `{i64, i8, i8*}` from a Success branch — these don't unify at LLVM level, so `llc` rejects the function. That's the third sub-test that was scoped out of [`error_payload.osp`](../../compiler/examples/tested/basics/types/error_payload.osp). Fixing it requires the Error constructor to pick the value-slot type from the *inferred Result success type at the construction site*, not from the message expression's type. After that, the user-defined-Error test can be re-enabled and Phase 5 ticked off.
