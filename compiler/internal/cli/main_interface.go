@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"os"
+
+	"github.com/christianfindlay/osprey/internal/version"
 )
 
 const (
@@ -63,9 +65,9 @@ func ParseArgs(args []string) (string, string, string, bool, *SecurityConfig) {
 		return "", "", "", false, nil
 	}
 
-	// Handle version flag
+	// Handle version flag (SWR-VERSION contract).
 	if args[1] == "--version" {
-		fmt.Println("Osprey Compiler 1.0.0")
+		emitVersion(args)
 		return "", "", "", false, nil
 	}
 
@@ -84,6 +86,19 @@ func ParseArgs(args []string) (string, string, string, bool, *SecurityConfig) {
 	outputMode, docsDir, quiet, security := ParseFileBasedArgs(args)
 
 	return filename, outputMode, docsDir, quiet, security
+}
+
+// emitVersion writes the Shipwright SWR-VERSION contract output to stdout.
+// `--version --json` selects the JSON form, the bare flag prints the plain
+// first-line "<component-id> <semver>" form.
+func emitVersion(args []string) {
+	for i := MinArgs; i < len(args); i++ {
+		if args[i] == "--json" {
+			_ = version.PrintJSON(os.Stdout)
+			return
+		}
+	}
+	_ = version.PrintPlain(os.Stdout)
 }
 
 // HandleSpecialModes handles special command modes like docs and hover

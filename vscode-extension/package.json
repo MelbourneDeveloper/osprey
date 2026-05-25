@@ -23,6 +23,17 @@
     "language"
   ],
   "main": "./out/client/src/extension.js",
+  "files": [
+    "out",
+    "bin",
+    "language-configuration",
+    "syntaxes",
+    "shipwright.json",
+    "package.json",
+    "README.md",
+    "LICENSE",
+    "icon.png"
+  ],
   "contributes": {
     "languages": [
       {
@@ -149,25 +160,36 @@
           "default": true,
           "description": "Enable/disable the Osprey language server"
         },
+        "osprey.binaries.path": {
+          "type": "string",
+          "default": "",
+          "description": "Directory containing matching Osprey binaries. Used by the Shipwright resolver as an external override over the VSIX-bundled binary."
+        },
+        "osprey.binaries.osprey": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to an external Osprey compiler binary. Overrides the VSIX-bundled binary."
+        },
         "osprey.server.path": {
           "type": "string",
           "default": "",
-          "description": "Path to the Osprey compiler (if not in PATH)"
+          "description": "Deprecated: use osprey.binaries.osprey instead. Path to the Osprey compiler (if not in PATH)."
+        },
+        "osprey.server.compilerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Deprecated: use osprey.binaries.osprey instead. Path to the Osprey compiler executable."
         },
         "osprey.diagnostics.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable/disable diagnostic messages"
-        },
-        "osprey.server.compilerPath": {
-          "type": "string",
-          "default": "osprey",
-          "description": "Path to the Osprey compiler executable"
         }
       }
     }
   },
   "dependencies": {
+    "@nimblesite/shipwright-vscode": "^0.2.0",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"

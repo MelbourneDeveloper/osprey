@@ -46,3 +46,22 @@ match rethrowInt("nope") {
     Success { value }   => print("unreachable rethrow: ${value}")
     Error   { message } => print(message)
 }
+
+// Auto-unwrap propagation: arithmetic on a failed parseInt() must surface the
+// inner parseInt error message, not a generic placeholder. [ERR-PAYLOAD] Phase 4.
+match parseInt("nope") + 5 {
+    Success { value }   => print("unreachable arith-prop: ${value}")
+    Error   { message } => print(message)
+}
+
+// Chained arithmetic still propagates the original message across multiple ops.
+match (parseInt("nope") * 3) - 1 {
+    Success { value }   => print("unreachable arith-chain: ${value}")
+    Error   { message } => print(message)
+}
+
+// Successful arithmetic on parseInt's Success result reaches the Success arm.
+match parseInt("12") + 8 {
+    Success { value }   => print("arith-ok: ${value}")
+    Error   { message } => print("unreachable arith-ok err: ${message}")
+}

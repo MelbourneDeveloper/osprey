@@ -396,9 +396,15 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 	// Create entry block
 	entryBlock := lambdaFunc.NewBlock("entry")
 
-	// Save current builder and switch to lambda
+	// Save current builder and function, then switch to lambda. g.function
+	// drives g.function.NewBlock — without swapping it any block emitted by
+	// body generation (e.g. arithmetic propagation per [ERR-PAYLOAD] Phase 4)
+	// lands in the *outer* function and the lambda's entry block ends with a
+	// branch to a label that doesn't exist in lambdaFunc.
 	oldBuilder := g.builder
+	oldFunction := g.function
 	g.builder = entryBlock
+	g.function = lambdaFunc
 
 	// Save current variables and create new scope
 	savedVars := make(map[string]value.Value)
@@ -436,12 +442,16 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 		bodyValue = g.unwrapIfResult(bodyValue)
 	}
 
-	// Create return instruction
-	entryBlock.NewRet(bodyValue)
+	// Create return instruction on the *current* block. Body generation may
+	// have appended new blocks (e.g. arithmetic error-propagation per
+	// [ERR-PAYLOAD] Phase 4) — terminating `entryBlock` instead would
+	// double-terminate it and leave the trailing block dangling.
+	g.builder.NewRet(bodyValue)
 
 	// Restore context
 	g.variables = savedVars
 	g.builder = oldBuilder
+	g.function = oldFunction
 
 	// Return the function
 	return lambdaFunc, nil

@@ -1,0 +1,39 @@
+{
+  "$comment": "Shipwright product manifest for the Osprey VS Code extension. See https://github.com/nimblesite/Shipwright docs/specs/ide-extension-deployment.md (SWR-IDE-*) and docs/specs/binary-version-contract.md (SWR-VERSION-*). The source-controlled version is the SWR-VERSION-BUILD-STAMPING placeholder and is overwritten by shipwright-version-stamp at release time.",
+  "manifestVersion": 1,
+  "product": {
+    "id": "osprey",
+    "displayName": "Osprey",
+    "version": "0.0.0-dev"
+  },
+  "components": [
+    {
+      "id": "osprey",
+      "kind": "cli",
+      "language": "go",
+      "binaryName": "osprey",
+      "expectedVersion": "${PRODUCT_VERSION}",
+      "platforms": ["darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "win32-x64", "win32-arm64"],
+      "bundled": {
+        "bundlePath": "bin/${platform}/${binaryName}${exe}",
+        "perPlatformArtifact": true
+      },
+      "sources": ["user-setting", "env", "bundled"],
+      "userSetting": "osprey.binaries.osprey",
+      "env": {
+        "pathVar": "OSPREY_PATH",
+        "dirVar": "OSPREY_BINARY_DIR"
+      },
+      "verifyStartup": true,
+      "versionCheckStrategy": "version-flag",
+      "required": true
+    }
+  ],
+  "hosts": {
+    "vscode": {
+      "artifact": "vsix-per-platform",
+      "activationVerifies": ["osprey"],
+      "onMismatch": "error"
+    }
+  }
+}

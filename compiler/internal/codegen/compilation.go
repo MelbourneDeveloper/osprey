@@ -14,6 +14,11 @@ import (
 	"github.com/christianfindlay/osprey/parser"
 )
 
+// libExecutableCandidates is the maximum number of executable-relative
+// runtime-library candidate paths considered before falling back to
+// project-relative and system install locations.
+const libExecutableCandidates = 4
+
 // CompileToLLVM compiles source code directly to LLVM IR string with default (permissive) security.
 // This is a convenience function that encapsulates the entire compilation pipeline.
 func CompileToLLVM(source string) (string, error) {
@@ -119,9 +124,15 @@ func CompileToExecutable(source, outputPath string) error {
 	})
 }
 
-// buildLibraryPaths builds the search paths for runtime libraries
+// buildLibraryPaths builds the search paths for runtime libraries.
+//
+// The Shipwright VSIX bundle layout places the runtime archives next to the
+// `osprey` binary inside `<extension>/bin/<platform>/`, so the executable's
+// own directory is searched first. See `shipwright.json` and SWR-IDE-* in
+// `/Users/christianfindlay/Documents/Code/Shipwright/docs/specs/`.
 func buildLibraryPaths(libName string) []string {
-	paths := []string{
+	paths := executableRelativeLibPaths(libName)
+	paths = append(paths,
 		fmt.Sprintf("bin/lib%s.a", libName),
 		fmt.Sprintf("./bin/lib%s.a", libName),
 		fmt.Sprintf("lib/lib%s.a", libName),          // For rust interop libraries
@@ -132,7 +143,7 @@ func buildLibraryPaths(libName string) []string {
 		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
 		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
 		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
-	}
+	)
 
 	// Add working directory based paths
 	wd, err := os.Getwd()
@@ -150,6 +161,28 @@ func buildLibraryPaths(libName string) []string {
 	}
 
 	return paths
+}
+
+// executableRelativeLibPaths returns the candidate library locations that sit
+// next to or alongside the running osprey binary. The Shipwright bundled VSIX
+// places `osprey` and its runtime archives in the same per-platform directory,
+// so the same-directory path is the highest-priority match.
+func executableRelativeLibPaths(libName string) []string {
+	candidates := make([]string, 0, libExecutableCandidates)
+	addExecutableLibPaths := func(execPath string) {
+		execDir := filepath.Dir(execPath)
+		candidates = append(candidates,
+			filepath.Join(execDir, fmt.Sprintf("lib%s.a", libName)),
+			filepath.Join(execDir, "..", "lib", fmt.Sprintf("lib%s.a", libName)),
+		)
+	}
+	if exe, err := os.Executable(); err == nil {
+		addExecutableLibPaths(exe)
+	}
+	if os.Args[0] != "" {
+		addExecutableLibPaths(os.Args[0])
+	}
+	return candidates
 }
 
 // findAndAddLibrary finds a library in the given paths and adds it to linkArgs

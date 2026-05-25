@@ -144,9 +144,15 @@ func (j *JITExecutor) findAndAddRuntimeLibrary(libName string, linkArgs []string
 	return linkArgs
 }
 
-// buildRuntimeLibraryPaths builds search paths for a specific runtime library
+// buildRuntimeLibraryPaths builds search paths for a specific runtime library.
+//
+// The first candidates are relative to the running osprey binary so that the
+// Shipwright VSIX layout (`<extension>/bin/<platform>/{osprey,libfiber_runtime.a,...}`)
+// resolves without any project-relative fallback. See SWR-IDE-* in
+// `/Users/christianfindlay/Documents/Code/Shipwright/docs/specs/`.
 func (j *JITExecutor) buildRuntimeLibraryPaths(libName string) []string {
-	paths := []string{
+	paths := executableRelativeLibPaths(libName)
+	paths = append(paths,
 		fmt.Sprintf("bin/lib%s.a", libName),
 		fmt.Sprintf("./bin/lib%s.a", libName),
 		fmt.Sprintf("lib/lib%s.a", libName),          // For rust interop libraries
@@ -157,7 +163,7 @@ func (j *JITExecutor) buildRuntimeLibraryPaths(libName string) []string {
 		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
 		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
 		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
-	}
+	)
 
 	// Add working directory based paths
 	wd, err := os.Getwd()

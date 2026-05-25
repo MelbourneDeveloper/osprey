@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/christianfindlay/osprey/internal/cli"
+	"github.com/christianfindlay/osprey/internal/version"
 )
 
 const (
@@ -54,11 +55,25 @@ func handleBasicFlags(args []string) *cli.CommandResult {
 		ShowHelp()
 		return &cli.CommandResult{Success: true, Output: ""}
 	case "--version":
-		fmt.Println("Osprey Compiler 1.0.0")
+		if err := printVersion(args); err != nil {
+			return &cli.CommandResult{Success: false, ErrorMsg: err.Error()}
+		}
 		return &cli.CommandResult{Success: true, Output: ""}
 	}
 
 	return nil
+}
+
+// printVersion emits the Shipwright SWR-VERSION contract output on stdout.
+// `--version --json` selects the JSON form; the bare flag prints the plain
+// "<component-id> <semver>" line.
+func printVersion(args []string) error {
+	for i := 2; i < len(args); i++ {
+		if args[i] == "--json" {
+			return version.PrintJSON(os.Stdout)
+		}
+	}
+	return version.PrintPlain(os.Stdout)
 }
 
 // handleSpecialModes processes docs and hover modes

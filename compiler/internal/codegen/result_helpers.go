@@ -12,7 +12,9 @@ package codegen
 import (
 	"fmt"
 
+	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 )
@@ -121,4 +123,143 @@ func (g *LLVMGenerator) storeResultFields(
 	errMsgPtr := g.builder.NewGetElementPtr(resultType, resultPtr,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, resultErrMsgFieldIdx))
 	g.builder.NewStore(errMsg, errMsgPtr)
+}
+
+// extractResultDiscriminant reads the discriminant slot (index 1) from a
+// Result value (struct value or pointer-to-struct).
+func (g *LLVMGenerator) extractResultDiscriminant(result value.Value) value.Value {
+	if ptrType, ok := result.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
+			discPtr := g.builder.NewGetElementPtr(structType, result,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, resultDiscFieldIdx))
+			return g.builder.NewLoad(structType.Fields[resultDiscFieldIdx], discPtr)
+		}
+	}
+	return g.builder.NewExtractValue(result, resultDiscFieldIdx)
+}
+
+// extractResultValueSlot reads the value slot (index 0) from a Result value.
+// Mirrors extractResultDiscriminant for struct-value vs pointer-to-struct.
+func (g *LLVMGenerator) extractResultValueSlot(result value.Value) value.Value {
+	if ptrType, ok := result.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
+			vPtr := g.builder.NewGetElementPtr(structType, result,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, resultValueFieldIdx))
+			return g.builder.NewLoad(structType.Fields[resultValueFieldIdx], vPtr)
+		}
+	}
+	return g.builder.NewExtractValue(result, resultValueFieldIdx)
+}
+
+// withResultErrorPropagation runs `compute` only if neither operand is an
+// Error Result. If either operand is an Error, the surrounding arithmetic
+// short-circuits to that Error — preserving the err_msg slot — and `compute`
+// is not invoked. `compute` receives the operands with any Result wrapping
+// already stripped, and must return a value of type
+// Result<resultElemType, string>.
+//
+// Implements the auto-unwrap propagation requirement of spec [ERR-PAYLOAD]
+// for binary arithmetic chains (see docs/plans/error-payloads.md Phase 4).
+func (g *LLVMGenerator) withResultErrorPropagation(
+	left, right value.Value,
+	resultElemType types.Type,
+	compute func(l, r value.Value) (value.Value, error),
+) (value.Value, error) {
+	leftIsRes := g.isResultType(left)
+	rightIsRes := g.isResultType(right)
+	if !leftIsRes && !rightIsRes {
+		return compute(left, right)
+	}
+
+	blockID := len(g.function.Blocks)
+	propBlock := g.function.NewBlock(fmt.Sprintf("arith_prop_%d", blockID))
+	okBlock := g.function.NewBlock(fmt.Sprintf("arith_ok_%d", blockID))
+	endBlock := g.function.NewBlock(fmt.Sprintf("arith_end_%d", blockID))
+
+	errDisc := constant.NewInt(types.I8, 1)
+	falseVal := constant.NewBool(false)
+	var leftDiscIsErr, rightDiscIsErr value.Value = falseVal, falseVal
+	if leftIsRes {
+		leftDiscIsErr = g.builder.NewICmp(enum.IPredEQ,
+			g.extractResultDiscriminant(left), errDisc)
+	}
+	if rightIsRes {
+		rightDiscIsErr = g.builder.NewICmp(enum.IPredEQ,
+			g.extractResultDiscriminant(right), errDisc)
+	}
+	anyErr := g.builder.NewOr(leftDiscIsErr, rightDiscIsErr)
+	g.builder.NewCondBr(anyErr, propBlock, okBlock)
+
+	g.builder = propBlock
+	propResult := g.buildPropagatedErrorResult(
+		left, right, leftIsRes, rightIsRes, leftDiscIsErr, resultElemType,
+	)
+	propLastBlock := g.builder
+	g.builder.NewBr(endBlock)
+
+	g.builder = okBlock
+	leftExtracted := left
+	if leftIsRes {
+		leftExtracted = g.extractResultValueSlot(left)
+	}
+	rightExtracted := right
+	if rightIsRes {
+		rightExtracted = g.extractResultValueSlot(right)
+	}
+	okResult, err := compute(leftExtracted, rightExtracted)
+	if err != nil {
+		return nil, err
+	}
+	okLastBlock := g.builder
+	if g.builder.Term == nil {
+		g.builder.NewBr(endBlock)
+	}
+
+	g.builder = endBlock
+	phi := g.builder.NewPhi(
+		ir.NewIncoming(propResult, propLastBlock),
+		ir.NewIncoming(okResult, okLastBlock),
+	)
+	return phi, nil
+}
+
+// buildPropagatedErrorResult constructs the Result that withResultErrorPropagation
+// emits in its propagation block. The err_msg comes from the leftmost Error
+// operand (or the only Result operand if just one is a Result). The value
+// slot is a typed zero of resultElemType so the propagation block's Result
+// type unifies with the success block's at the trailing PHI.
+func (g *LLVMGenerator) buildPropagatedErrorResult(
+	left, right value.Value,
+	leftIsRes, rightIsRes bool,
+	leftDiscIsErr value.Value,
+	resultElemType types.Type,
+) value.Value {
+	var propMsg value.Value
+	switch {
+	case leftIsRes && rightIsRes:
+		leftMsg := g.extractErrMsgSlot(left)
+		rightMsg := g.extractErrMsgSlot(right)
+		propMsg = g.builder.NewSelect(leftDiscIsErr, leftMsg, rightMsg)
+	case leftIsRes:
+		propMsg = g.extractErrMsgSlot(left)
+	default:
+		propMsg = g.extractErrMsgSlot(right)
+	}
+	defaultVal := zeroValueForType(resultElemType)
+	return g.makeResultValue(defaultVal, 1, propMsg)
+}
+
+// extractErrMsgSlot reads the err_msg slot (index 2) without going through
+// the generic loadResultErrorMessage path, which is wired for read-back at
+// match arms; here we're reading directly off a Result-typed operand to
+// propagate it through arithmetic.
+func (g *LLVMGenerator) extractErrMsgSlot(result value.Value) value.Value {
+	if ptrType, ok := result.Type().(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok {
+			msgPtr := g.builder.NewGetElementPtr(structType, result,
+				constant.NewInt(types.I32, 0), constant.NewInt(types.I32, resultErrMsgFieldIdx))
+			return g.builder.NewLoad(types.I8Ptr, msgPtr)
+		}
+	}
+	return g.builder.NewExtractValue(result, resultErrMsgFieldIdx)
 }

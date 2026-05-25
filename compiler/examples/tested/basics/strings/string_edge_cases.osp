@@ -35,17 +35,18 @@ fn main() -> int {
     Success { value }   => print("sub-full=\"${value}\"\n")
     Error   { message } => print("sub-full FAILED\n")
   }
+  // ---- substring errors: bind & print the real message per [ERR-PAYLOAD] ----
   match substring("hi", -1, 2) {
     Success { value }   => print("sub-neg unexpected\n")
-    Error   { message } => print("sub-neg rejected\n")
+    Error   { message } => print("sub-neg=${message}\n")
   }
   match substring("hi", 0, 99) {
     Success { value }   => print("sub-over unexpected\n")
-    Error   { message } => print("sub-over rejected\n")
+    Error   { message } => print("sub-over=${message}\n")
   }
   match substring("hi", 2, 0) {
     Success { value }   => print("sub-inverted unexpected\n")
-    Error   { message } => print("sub-inverted rejected\n")
+    Error   { message } => print("sub-inverted=${message}\n")
   }
 
   // ---- indexOf empty needle and not-found ----
@@ -55,13 +56,13 @@ fn main() -> int {
   }
   match indexOf("hello", "xyz") {
     Success { value }   => print("idx-missing unexpected\n")
-    Error   { message } => print("idx-missing rejected\n")
+    Error   { message } => print("idx-missing=${message}\n")
   }
 
   // ---- replace empty needle rejected ----
   match replace("hello", "", "x") {
     Success { value }   => print("rep-empty unexpected\n")
-    Error   { message } => print("rep-empty rejected\n")
+    Error   { message } => print("rep-empty=${message}\n")
   }
   // replace shrinking
   match replace("hello", "l", "") {
@@ -76,17 +77,17 @@ fn main() -> int {
   }
   match repeat("ab", -1) {
     Success { value }   => print("rep-neg unexpected\n")
-    Error   { message } => print("rep-neg rejected\n")
+    Error   { message } => print("rep-neg=${message}\n")
   }
 
   // ---- padStart / padEnd empty fill rejected ----
   match padStart("hi", 5, "") {
     Success { value }   => print("padS-empty unexpected\n")
-    Error   { message } => print("padS-empty rejected\n")
+    Error   { message } => print("padS-empty=${message}\n")
   }
   match padEnd("hi", 5, "") {
     Success { value }   => print("padE-empty unexpected\n")
-    Error   { message } => print("padE-empty rejected\n")
+    Error   { message } => print("padE-empty=${message}\n")
   }
   // target <= len → no padding
   match padStart("hi", 1, "x") {
@@ -102,17 +103,17 @@ fn main() -> int {
   // ---- parseFloat rejects junk ----
   match parseFloat("") {
     Success { value }   => print("pf-empty unexpected\n")
-    Error   { message } => print("pf-empty rejected\n")
+    Error   { message } => print("pf-empty=${message}\n")
   }
   match parseFloat("3.14x") {
     Success { value }   => print("pf-trailing unexpected\n")
-    Error   { message } => print("pf-trailing rejected\n")
+    Error   { message } => print("pf-trailing=${message}\n")
   }
 
   // ---- parseInt overflow ----
   match parseInt("99999999999999999999") {
     Success { value }   => print("pi-overflow unexpected\n")
-    Error   { message } => print("pi-overflow rejected\n")
+    Error   { message } => print("pi-overflow=${message}\n")
   }
   match parseInt("-9223372036854775808") {
     Success { value }   => print("pi-min=${value}\n")
@@ -120,7 +121,7 @@ fn main() -> int {
   }
   match parseInt(" 42") {
     Success { value }   => print("pi-leading-space unexpected\n")
-    Error   { message } => print("pi-leading-space rejected\n")
+    Error   { message } => print("pi-leading-space=${message}\n")
   }
 
   print("=== Edge Cases Complete ===\n")

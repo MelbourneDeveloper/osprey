@@ -441,15 +441,21 @@ func getStringExpectedOutputs() map[string]string {
 			"drop-neg=\"hi\"\n\ndrop-big=\"\"\n\n" +
 			"trim-allws=\"\"\n\ntrim-empty=\"\"\n\n" +
 			"sub-empty=\"\"\n\nsub-full=\"hi\"\n\n" +
-			"sub-neg rejected\n\nsub-over rejected\n\nsub-inverted rejected\n\n" +
-			"idx-empty=0\n\nidx-missing rejected\n\n" +
-			"rep-empty rejected\n\nrep-shrink=\"heo\"\n\n" +
-			"rep0=\"\"\n\nrep-neg rejected\n\n" +
-			"padS-empty rejected\n\npadE-empty rejected\n\n" +
+			"sub-neg=substring: index out of range\n\n" +
+			"sub-over=substring: index out of range\n\n" +
+			"sub-inverted=substring: index out of range\n\n" +
+			"idx-empty=0\n\nidx-missing=indexOf: needle not found\n\n" +
+			"rep-empty=replace: needle must not be empty\n\n" +
+			"rep-shrink=\"heo\"\n\n" +
+			"rep0=\"\"\n\nrep-neg=repeat: count must be non-negative\n\n" +
+			"padS-empty=padStart: fill must not be empty\n\n" +
+			"padE-empty=padEnd: fill must not be empty\n\n" +
 			"padS-noop=\"hi\"\n\npadS-multi=\"aba42\"\n\n" +
-			"pf-empty rejected\n\npf-trailing rejected\n\n" +
-			"pi-overflow rejected\n\npi-min=-9223372036854775808\n\n" +
-			"pi-leading-space rejected\n\n" +
+			"pf-empty=parseFloat: input is not a valid number\n\n" +
+			"pf-trailing=parseFloat: input is not a valid number\n\n" +
+			"pi-overflow=parseInt: input is not a valid integer\n\n" +
+			"pi-min=-9223372036854775808\n\n" +
+			"pi-leading-space=parseInt: input is not a valid integer\n\n" +
 			"=== Edge Cases Complete ===\n\n",
 		"file_io_json_workflow.osp": "=== File I/O Workflow Test ===\n" +
 			"-- Step 1: Writing to file --\n" +

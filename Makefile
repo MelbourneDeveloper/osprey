@@ -5,7 +5,7 @@
 # Primary language: Go (compiler/), with TypeScript sub-projects
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup ratchet
+.PHONY: build test lint fmt clean ci setup install vsix website-dev website-build
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -29,6 +29,16 @@ endif
 # ---------------------------------------------------------------------------
 COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
+# ---------------------------------------------------------------------------
+# VSIX (VSCode extension) — macOS only.
+# Profile auto-discovery reads names from globalStorage/storage.json so
+# `make vsix` installs into the default profile AND every named profile.
+# ---------------------------------------------------------------------------
+EXT_DIR         := vscode-extension
+EXT_ID          := christianfindlay.osprey-language-support
+VSCODE_USER_DIR := $(HOME)/Library/Application Support/Code/User
+VSCODE_STORAGE  := $(VSCODE_USER_DIR)/globalStorage/storage.json
+
 # =============================================================================
 # Standard Targets
 # =============================================================================
@@ -37,7 +47,7 @@ COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 build:
 	@echo "==> Building..."
 	cd compiler && $(MAKE) build
-	cd vscode-extension && npm run compile
+	cd $(EXT_DIR) && npm run compile
 
 ## test: Fail-fast tests + coverage + per-project threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
@@ -49,32 +59,23 @@ test:
 	$(MAKE) _test_vscode_extension
 	$(MAKE) _coverage_check_vscode_extension
 
-## ratchet: Update each project's coverage threshold in coverage-thresholds.json
-##          to (measured - 1) so the next run requires at least the current level.
-##          Run after improving coverage; commit the resulting JSON change.
-ratchet:
-	@echo "==> Ratcheting thresholds to (measured - 1)..."
-	$(MAKE) _ratchet_compiler
-	$(MAKE) _ratchet_vscode_extension
-	@echo "==> Updated $(COVERAGE_THRESHOLDS_FILE). Review and commit."
-
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
 lint:
 	@echo "==> Linting..."
 	cd compiler && golangci-lint run --config .golangci.yml
-	cd vscode-extension && npm run lint
+	cd $(EXT_DIR) && npm run lint
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 fmt:
 	@echo "==> Formatting$(if $(CHECK), (check mode),)..."
 	gofmt$(if $(CHECK), -l compiler/... | grep . && exit 1 || true, -w compiler/...)
-	cd vscode-extension && npx prettier$(if $(CHECK), --check, --write) .
+	cd $(EXT_DIR) && npx prettier$(if $(CHECK), --check, --write) .
 
 ## clean: Remove all build artifacts
 clean:
 	@echo "==> Cleaning..."
 	cd compiler && $(MAKE) clean
-	cd vscode-extension && $(RM) out dist
+	cd $(EXT_DIR) && $(RM) out dist
 
 ## ci: lint + test + build (full CI simulation)
 ci: lint test build
@@ -84,14 +85,41 @@ setup:
 	@echo "==> Setting up development environment..."
 	cd compiler && go mod download
 	cd compiler && go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.1.6
-	cd vscode-extension && npm ci
+	cd $(EXT_DIR) && npm ci
 	cd webcompiler && npm ci
 	cd website && npm ci
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
-# ---------------------------------------------------------------------------
+## install: Install osprey compiler globally
+install:
+	cd compiler && $(MAKE) install
+
+## vsix: Clean → uninstall → build → package → install (every VSCode profile)
+##       Discovers profiles from $(VSCODE_STORAGE) and uses `code --profile`
+##       to install into each one. macOS only.
+vsix:
+	@echo "==> [vsix] clean"
+	$(MAKE) _vsix_clean
+	@echo "==> [vsix] uninstall (all profiles)"
+	$(MAKE) _vsix_uninstall
+	@echo "==> [vsix] build"
+	$(MAKE) _vsix_build
+	@echo "==> [vsix] package"
+	$(MAKE) _vsix_package
+	@echo "==> [vsix] install (all profiles)"
+	$(MAKE) _vsix_install
+
+## website-dev: Start local website development server
+website-dev:
+	cd website && npm run dev
+
+## website-build: Build static site
+website-build:
+	cd website && npm run build
+
+# =============================================================================
 # Internal helpers — NOT public targets, NOT in .PHONY
-# ---------------------------------------------------------------------------
+# =============================================================================
 
 # --- compiler -------------------------------------------------------------
 # Implements [TEST-RULES] — fail-fast Go tests with coverage.
@@ -146,8 +174,8 @@ _test_vscode_extension:
 	@echo "==> [vscode-extension] building compiler for LSP integration..."
 	cd compiler && $(MAKE) build
 	@echo "==> [vscode-extension] running tests with real compiler + V8 coverage..."
-	rm -rf vscode-extension/coverage
-	cd vscode-extension && set -o pipefail && \
+	rm -rf $(EXT_DIR)/coverage
+	cd $(EXT_DIR) && set -o pipefail && \
 	  PATH="$(CURDIR)/compiler/bin:$$PATH" \
 	  npm run pretest 2>&1 | tee test.log && \
 	  PATH="$(CURDIR)/compiler/bin:$$PATH" \
@@ -157,10 +185,10 @@ _test_vscode_extension:
 _coverage_check_vscode_extension:
 	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
 	THRESHOLD=$$(jq -r '.projects["vscode-extension"].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
-	if [ ! -f "vscode-extension/coverage/coverage-summary.json" ]; then \
+	if [ ! -f "$(EXT_DIR)/coverage/coverage-summary.json" ]; then \
 	  echo "[vscode-extension] FAIL: coverage-summary.json not produced — c8 report failed"; exit 1; \
 	fi; \
-	PCT=$$(jq -r '.total.lines.pct' "vscode-extension/coverage/coverage-summary.json"); \
+	PCT=$$(jq -r '.total.lines.pct' "$(EXT_DIR)/coverage/coverage-summary.json"); \
 	PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
 	echo "[vscode-extension] coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
 	if [ "$$PCT_INT" -lt "$${THRESHOLD}" ]; then \
@@ -175,10 +203,10 @@ _coverage_check_vscode_extension:
 	fi
 
 _ratchet_vscode_extension:
-	@if [ ! -f "vscode-extension/coverage/coverage-summary.json" ]; then \
+	@if [ ! -f "$(EXT_DIR)/coverage/coverage-summary.json" ]; then \
 	  echo "[vscode-extension] no coverage report — skipping ratchet"; \
 	else \
-	  PCT=$$(jq -r '.total.lines.pct' "vscode-extension/coverage/coverage-summary.json"); \
+	  PCT=$$(jq -r '.total.lines.pct' "$(EXT_DIR)/coverage/coverage-summary.json"); \
 	  PCT_INT=$$(echo "$$PCT" | awk '{printf "%d", $$1}'); \
 	  NEW_THRESHOLD=$$((PCT_INT - 1)); \
 	  if [ "$$NEW_THRESHOLD" -lt 0 ]; then NEW_THRESHOLD=0; fi; \
@@ -191,33 +219,56 @@ _ratchet_vscode_extension:
 	  fi; \
 	fi
 
-# =============================================================================
-# Repo-Specific Targets
-# =============================================================================
+# --- ratchet (manual, runs after `make test` produced coverage) -----------
+_ratchet:
+	@echo "==> Ratcheting thresholds to (measured - 1)..."
+	$(MAKE) _ratchet_compiler
+	$(MAKE) _ratchet_vscode_extension
+	@echo "==> Updated $(COVERAGE_THRESHOLDS_FILE). Review and commit."
 
-.PHONY: install uninstall regenerate-parser run website-dev website-build
-
-## install: Install osprey compiler globally
-install:
-	cd compiler && $(MAKE) install
-
-## uninstall: Remove osprey compiler from system
-uninstall:
+# --- compiler install/uninstall/regen/run (rare developer commands) ------
+_uninstall:
 	cd compiler && $(MAKE) uninstall
 
-## regenerate-parser: Regenerate ANTLR parser from grammar
-regenerate-parser:
+_regenerate-parser:
 	cd compiler && $(MAKE) regenerate-parser
 
-## run: Run compiler on a specific file (usage: make run FILE=<path>)
-run:
-	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=<path>"; exit 1; fi
+_run:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make _run FILE=<path>"; exit 1; fi
 	cd compiler && go run cmd/osprey/main.go $(FILE)
 
-## website-dev: Start local website development server
-website-dev:
-	cd website && npm run dev
+# --- vsix sub-targets -----------------------------------------------------
+_vsix_clean:
+	cd $(EXT_DIR) && $(RM) out dist *.vsix
 
-## website-build: Build static site
-website-build:
-	cd website && npm run build
+# Uninstall from default profile + every named profile in storage.json.
+# `code --uninstall-extension` exits non-zero when the extension isn't
+# present; we swallow that since uninstall-before-install must be idempotent.
+_vsix_uninstall:
+	-@code --uninstall-extension $(EXT_ID) >/dev/null 2>&1 && echo "  [default] uninstalled" || echo "  [default] not installed"
+	@jq -r '.userDataProfiles[]?.name' "$(VSCODE_STORAGE)" 2>/dev/null | while IFS= read -r prof; do \
+	  [ -z "$$prof" ] && continue; \
+	  if code --profile "$$prof" --uninstall-extension $(EXT_ID) >/dev/null 2>&1; then \
+	    echo "  [$$prof] uninstalled"; \
+	  else \
+	    echo "  [$$prof] not installed"; \
+	  fi; \
+	done
+
+_vsix_build:
+	cd $(EXT_DIR) && npm run compile
+
+_vsix_package:
+	cd $(EXT_DIR) && npm run package
+
+# Install latest *.vsix to default profile + every named profile.
+# --force lets `code` reinstall over an existing version without prompting.
+_vsix_install:
+	@VSIX=$$(ls -t $(EXT_DIR)/*.vsix 2>/dev/null | head -1); \
+	if [ -z "$$VSIX" ]; then echo "FAIL: no .vsix in $(EXT_DIR)/ — did _vsix_package run?"; exit 1; fi; \
+	echo "  vsix: $$VSIX"; \
+	code --install-extension "$$VSIX" --force && echo "  [default] installed"; \
+	jq -r '.userDataProfiles[]?.name' "$(VSCODE_STORAGE)" 2>/dev/null | while IFS= read -r prof; do \
+	  [ -z "$$prof" ] && continue; \
+	  code --profile "$$prof" --install-extension "$$VSIX" --force && echo "  [$$prof] installed"; \
+	done

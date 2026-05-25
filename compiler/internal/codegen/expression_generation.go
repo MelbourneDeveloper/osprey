@@ -786,84 +786,102 @@ func (g *LLVMGenerator) generateBinaryOperationWithPos(
 }
 
 // generateArithmeticOperationWithPos generates LLVM arithmetic operations with position info.
+// Implements [ERR-PAYLOAD] Phase 4 auto-unwrap error propagation: if either
+// operand is a Result whose discriminant is Error, the surrounding arithmetic
+// short-circuits to that Error and the err_msg slot survives the chain.
+// String concatenation (`+` on i8*) bypasses propagation — it's not arithmetic
+// and never produces a Result wrapping; routed straight to the concat helper.
 func (g *LLVMGenerator) generateArithmeticOperationWithPos(
 	operator string, left, right value.Value, pos *ast.Position,
 ) (value.Value, error) {
-	// Check for nil values before accessing type information
 	if left == nil || right == nil {
 		return nil, ErrNilOperand
 	}
-
-	// Check for void types before arithmetic operations
 	if left.Type() == types.Void || right.Type() == types.Void {
 		return nil, WrapVoidArithmeticWithPos(operator, pos)
 	}
 
-	// AUTO-PROPAGATION: Unwrap Result types from previous arithmetic operations
-	// This allows chaining: (10 + 5) * 2 works because the Result from (10+5) gets unwrapped
-	// Error propagation happens at runtime - if any operation fails, the chain fails
-	left = g.unwrapIfResult(left)
-	right = g.unwrapIfResult(right)
+	if operator == "+" {
+		if _, isPtr := left.Type().(*types.PointerType); isPtr {
+			if intType, ok := left.Type().(*types.PointerType).ElemType.(*types.IntType); ok && intType.BitSize == 8 {
+				return g.generateStringConcatenation(left, right)
+			}
+		}
+	}
 
-	// Check if either operand is a float type
+	resultElemType := arithmeticResultElemType(operator, left, right)
+	return g.withResultErrorPropagation(left, right, resultElemType,
+		func(l, r value.Value) (value.Value, error) {
+			return g.computeArithmeticOnExtracted(operator, l, r, pos)
+		})
+}
+
+// arithmeticResultElemType determines the value-slot type of the Result that
+// a given arithmetic operator + operand pair will produce. Mirrors the
+// promotion logic in computeArithmeticOnExtracted so the propagation block
+// can build a typed-zero placeholder whose type matches the success branch's
+// at the trailing PHI.
+func arithmeticResultElemType(operator string, left, right value.Value) types.Type {
+	if operator == "/" {
+		return types.Double
+	}
+	leftElem := unwrapResultElemType(left.Type())
+	rightElem := unwrapResultElemType(right.Type())
+	if isFloatLLVMType(leftElem) || isFloatLLVMType(rightElem) {
+		return types.Double
+	}
+	return types.I64
+}
+
+// unwrapResultElemType peels one layer of Result-struct wrapping off a type,
+// returning the value-slot type if the input is a Result and the type
+// unchanged otherwise.
+func unwrapResultElemType(t types.Type) types.Type {
+	if structType, ok := t.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+		return structType.Fields[resultValueFieldIdx]
+	}
+	if ptrType, ok := t.(*types.PointerType); ok {
+		if structType, ok := ptrType.ElemType.(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
+			return structType.Fields[resultValueFieldIdx]
+		}
+	}
+	return t
+}
+
+// computeArithmeticOnExtracted runs the per-operator codegen on operands that
+// have already had any Result wrapping stripped (by withResultErrorPropagation).
+// Returns a Result-typed value.
+func (g *LLVMGenerator) computeArithmeticOnExtracted(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
 	leftIsFloat := isFloatLLVMType(left.Type())
 	rightIsFloat := isFloatLLVMType(right.Type())
 
 	switch operator {
 	case "+":
-		// Handle string concatenation for pointer types (strings)
-		if _, isPtr := left.Type().(*types.PointerType); isPtr {
-			return g.generateStringConcatenation(left, right)
-		}
-
-		// Handle float arithmetic - returns Result<float, MathError>
 		if leftIsFloat || rightIsFloat {
-			leftFloat := promoteToFloat(g.builder, left)
-			rightFloat := promoteToFloat(g.builder, right)
-			sum := g.builder.NewFAdd(leftFloat, rightFloat)
-			// Wrap in Success Result (overflow checking deferred)
-			return g.createSuccessResultFloat(sum), nil
+			lf := promoteToFloat(g.builder, left)
+			rf := promoteToFloat(g.builder, right)
+			return g.createSuccessResultFloat(g.builder.NewFAdd(lf, rf)), nil
 		}
-
-		// Integer arithmetic - returns Result<int, MathError>
-		sum := g.builder.NewAdd(left, right)
-		// Wrap in Success Result (overflow checking deferred)
-		return g.createSuccessResult(sum), nil
-
+		return g.createSuccessResult(g.builder.NewAdd(left, right)), nil
 	case "-":
-		// Handle float arithmetic - returns Result<float, MathError>
 		if leftIsFloat || rightIsFloat {
-			leftFloat := promoteToFloat(g.builder, left)
-			rightFloat := promoteToFloat(g.builder, right)
-			diff := g.builder.NewFSub(leftFloat, rightFloat)
-			// Wrap in Success Result (overflow checking deferred)
-			return g.createSuccessResultFloat(diff), nil
+			lf := promoteToFloat(g.builder, left)
+			rf := promoteToFloat(g.builder, right)
+			return g.createSuccessResultFloat(g.builder.NewFSub(lf, rf)), nil
 		}
-
-		// Integer arithmetic - returns Result<int, MathError>
-		diff := g.builder.NewSub(left, right)
-		// Wrap in Success Result (overflow checking deferred)
-		return g.createSuccessResult(diff), nil
-
+		return g.createSuccessResult(g.builder.NewSub(left, right)), nil
 	case "*":
-		// Handle float arithmetic - returns Result<float, MathError>
 		if leftIsFloat || rightIsFloat {
-			leftFloat := promoteToFloat(g.builder, left)
-			rightFloat := promoteToFloat(g.builder, right)
-			product := g.builder.NewFMul(leftFloat, rightFloat)
-			// Wrap in Success Result (overflow checking deferred)
-			return g.createSuccessResultFloat(product), nil
+			lf := promoteToFloat(g.builder, left)
+			rf := promoteToFloat(g.builder, right)
+			return g.createSuccessResultFloat(g.builder.NewFMul(lf, rf)), nil
 		}
-
-		// Integer arithmetic - returns Result<int, MathError>
-		product := g.builder.NewMul(left, right)
-		// Wrap in Success Result (overflow checking deferred)
-		return g.createSuccessResult(product), nil
+		return g.createSuccessResult(g.builder.NewMul(left, right)), nil
 	case "/":
-		// Division returns Result<float, MathError>
 		return g.generateDivisionWithZeroCheck(left, right)
 	case "%":
-		// Modulo returns Result<int, MathError>
 		return g.generateModuloWithZeroCheck(left, right)
 	default:
 		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)

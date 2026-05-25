@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { workspace, ExtensionContext, window, ConfigurationChangeEvent, commands, Uri, debug, languages } from 'vscode';
 import { execFile } from 'child_process';
 import * as fs from 'fs';
@@ -8,10 +9,14 @@ import {
   ServerOptions,
   TransportKind
 } from 'vscode-languageclient/node';
+import { activateShipwright, type ActivationResult } from '@nimblesite/shipwright-vscode';
 
 let client: LanguageClient;
+// Resolved by Shipwright on activation. All subsequent execFile calls use this
+// path; falling back to PATH is forbidden by SWR-IDE-* in the VSIX bundle path.
+let ospreyBinaryPath = 'osprey';
 
-export function activate(context: ExtensionContext) {
+export async function activate(context: ExtensionContext): Promise<void> {
   console.log('Osprey extension is now active!');
   
   // Create output channel for diagnostics
@@ -23,6 +28,17 @@ export function activate(context: ExtensionContext) {
   const config = workspace.getConfiguration('osprey');
   if (!config.get('server.enabled', true)) {
     outputChannel.appendLine('Language server is disabled in configuration');
+    return;
+  }
+
+  // Resolve the bundled `osprey` binary via Shipwright before starting the LSP.
+  // SWR-IDE rules forbid PATH/global-install fallback for VS Code native-binary
+  // extensions, so the per-platform bundle inside the VSIX is the only normal
+  // startup source. User settings (osprey.binaries.*) override the bundled
+  // binary; a mismatch fails activation instead of being silently masked.
+  const shipwright = await resolveOspreyBinary(context, outputChannel);
+  if (!shipwright.ok) {
+    outputChannel.appendLine('Shipwright resolution failed; aborting activation.');
     return;
   }
 
@@ -68,6 +84,12 @@ export function activate(context: ExtensionContext) {
     documentSelector: [{ scheme: 'file', language: 'osprey' }],
     synchronize: {
       fileEvents: workspace.createFileSystemWatcher('**/*.osp')
+    },
+    // The LSP server reads ospreyBinaryPath via params.initializationOptions
+    // and uses it for every execFile call. Resolution happens once in the
+    // extension host via Shipwright; the server never falls back to PATH.
+    initializationOptions: {
+      ospreyBinaryPath
     },
     outputChannelName: 'Osprey Language Server',
     revealOutputChannelOn: 4, // Error
@@ -220,9 +242,9 @@ function compileCurrentFile() {
     // Get the directory containing the file (no workspace required)
     const fileDir = path.dirname(document.fileName);
     
-    // Use the installed osprey compiler
-    execFile('osprey', [document.fileName], 
-      { cwd: fileDir }, 
+    // Use the Shipwright-resolved osprey compiler (bundled-or-override).
+    execFile(ospreyBinaryPath, [document.fileName],
+      { cwd: fileDir },
       (error: any, stdout: any, stderr: any) => {
         outputChannel.appendLine(`=== COMPILATION OUTPUT ===`);
         
@@ -275,9 +297,9 @@ function compileAndRunCurrentFile() {
     // Get the directory containing the file (no workspace required)
     const fileDir = path.dirname(document.fileName);
     
-    // Use the installed osprey compiler with --run flag
-    execFile('osprey', [document.fileName, '--run'], 
-      { cwd: fileDir }, 
+    // Use the Shipwright-resolved osprey compiler with --run flag.
+    execFile(ospreyBinaryPath, [document.fileName, '--run'],
+      { cwd: fileDir },
       (error: any, stdout: any, stderr: any) => {
         outputChannel.appendLine(`=== COMPILE AND RUN OUTPUT ===`);
         
