@@ -2231,6 +2231,26 @@ func (g *LLVMGenerator) getTypeSize(t types.Type) int64 {
 	}
 }
 
+// tryUnwrapResultIntoExpected returns the inner value when v is a
+// Result struct {T, i8} and `expectedType` matches the inner T (per
+// spec 0004-TypeSystem.md auto-unwrap). Returns nil otherwise so the
+// caller can fall through to its other coercions.
+func (g *LLVMGenerator) tryUnwrapResultIntoExpected(v value.Value, expectedType types.Type) value.Value {
+	const errorFlagBitSize = 8
+	structTy, ok := v.Type().(*types.StructType)
+	if !ok || len(structTy.Fields) != ResultFieldCount {
+		return nil
+	}
+	intTy, ok := structTy.Fields[1].(*types.IntType)
+	if !ok || intTy.BitSize != errorFlagBitSize {
+		return nil
+	}
+	if structTy.Fields[0] != expectedType {
+		return nil
+	}
+	return g.builder.NewExtractValue(v, 0)
+}
+
 // convertValueToExpectedType converts a value to match the expected LLVM type
 //
 //nolint:gocognit // Complex function required for comprehensive type conversion handling
@@ -2240,6 +2260,14 @@ func (g *LLVMGenerator) convertValueToExpectedType(value value.Value, expectedTy
 	// If types already match, no conversion needed
 	if currentType == expectedType {
 		return value
+	}
+
+	// Auto-unwrap a Result struct {T, i8} when the target slot expects
+	// T. Without this, a sibling match arm that returns Result<int>
+	// widens the variant's inferred field type and constructing the
+	// *other* variant with a plain literal panics in serializeVariantFields.
+	if unwrapped := g.tryUnwrapResultIntoExpected(value, expectedType); unwrapped != nil {
+		return unwrapped
 	}
 
 	// Handle string types (i8*) explicitly
