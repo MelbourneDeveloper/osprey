@@ -985,6 +985,13 @@ func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.Fun
 
 // canImplicitlyConvert checks if we can implicitly convert from one type to another
 func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, _ *ast.FunctionDeclaration) bool {
+	// Any body type can flow into a Unit-typed return slot — the value is
+	// simply discarded. This is what users mean when they write a side-effect
+	// `main() -> Unit = { xs |> forEachList(print) }` whose final expression
+	// happens to evaluate to a List.
+	if toConcrete, ok := toType.(*ConcreteType); ok && toConcrete.name == TypeUnit {
+		return true
+	}
 	// Handle the case where Result types are still ConcreteType due to type inference issues
 	if fromConcrete, ok := fromType.(*ConcreteType); ok {
 		if toConcrete, ok := toType.(*ConcreteType); ok {

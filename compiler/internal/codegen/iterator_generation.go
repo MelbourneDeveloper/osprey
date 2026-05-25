@@ -11,6 +11,48 @@ import (
 	"github.com/llir/llvm/ir/value"
 )
 
+// resolveCallbackIdent normalises an iterator callback argument into a
+// named-function identifier the loop generators can call back into.
+//
+//   - *ast.Identifier  → used as-is (the existing path).
+//   - *ast.LambdaExpression → emitted as a fresh top-level function and
+//     synthesised as an Identifier pointing at the generated name, so
+//     `forEach(xs, fn(x) => print(x))` works alongside the named-fn form.
+//   - anything else → returns notFnErr (the original "callback is not a
+//     function" rejection).
+func (g *LLVMGenerator) resolveCallbackIdent(
+	funcArg ast.Expression,
+	notFnErr error,
+) (*ast.Identifier, error) {
+	switch v := funcArg.(type) {
+	case *ast.Identifier:
+		return v, nil
+	case *ast.LambdaExpression:
+		// Run the inferer first so the lambda body's identifiers (including
+		// parameters) resolve once the codegen path below kicks in.
+		_, err := g.typeInferer.InferType(v)
+		if err != nil {
+			return nil, err
+		}
+		lambdaValue, err := g.generateLambdaExpression(v)
+		if err != nil {
+			return nil, err
+		}
+		lambdaFunc, ok := lambdaValue.(*ir.Func)
+		if !ok {
+			return nil, notFnErr
+		}
+		// Register under the generated mangled name so the existing
+		// callFunctionWithValue / monomorphisation paths can resolve it.
+		if g.functions == nil {
+			g.functions = make(map[string]*ir.Func)
+		}
+		g.functions[lambdaFunc.Name()] = lambdaFunc
+		return &ast.Identifier{Name: lambdaFunc.Name()}, nil
+	}
+	return nil, notFnErr
+}
+
 // generateRangeCall handles range function calls - creates an iterator from start to end.
 func (g *LLVMGenerator) generateRangeCall(callExpr *ast.CallExpression) (value.Value, error) {
 	err := validateBuiltInArgs(RangeFunc, callExpr)
@@ -61,9 +103,9 @@ func (g *LLVMGenerator) generateForEachCall(callExpr *ast.CallExpression) (value
 	// Get the function to apply from second argument
 	funcArg := callExpr.Arguments[1]
 
-	funcIdent, ok := funcArg.(*ast.Identifier)
-	if !ok {
-		return nil, ErrForEachNotFunction
+	funcIdent, err := g.resolveCallbackIdent(funcArg, ErrForEachNotFunction)
+	if err != nil {
+		return nil, err
 	}
 
 	// Extract range bounds
@@ -232,9 +274,9 @@ func (g *LLVMGenerator) generateMapCall(callExpr *ast.CallExpression) (value.Val
 	// Get the transformation function
 	funcArg := callExpr.Arguments[1]
 
-	funcIdent, ok := funcArg.(*ast.Identifier)
-	if !ok {
-		return nil, ErrMapNotFunction
+	funcIdent, err := g.resolveCallbackIdent(funcArg, ErrMapNotFunction)
+	if err != nil {
+		return nil, err
 	}
 
 	// STREAM FUSION: Store the map function for later fusion with forEach/fold
@@ -261,9 +303,9 @@ func (g *LLVMGenerator) generateFilterCall(callExpr *ast.CallExpression) (value.
 	// Get the predicate function
 	funcArg := callExpr.Arguments[1]
 
-	funcIdent, ok := funcArg.(*ast.Identifier)
-	if !ok {
-		return nil, ErrFilterNotFunction
+	funcIdent, err := g.resolveCallbackIdent(funcArg, ErrFilterNotFunction)
+	if err != nil {
+		return nil, err
 	}
 
 	// STREAM FUSION: Store the filter predicate for later fusion with forEach/fold
@@ -293,9 +335,9 @@ func (g *LLVMGenerator) generateFoldCall(callExpr *ast.CallExpression) (value.Va
 	// Get the fold function
 	funcArg := callExpr.Arguments[2]
 
-	funcIdent, ok := funcArg.(*ast.Identifier)
-	if !ok {
-		return nil, ErrFoldNotFunction
+	funcIdent, err := g.resolveCallbackIdent(funcArg, ErrFoldNotFunction)
+	if err != nil {
+		return nil, err
 	}
 
 	// Extract range bounds
