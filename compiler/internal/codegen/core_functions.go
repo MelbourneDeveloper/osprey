@@ -37,6 +37,13 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 		return nil, err
 	}
 
+	// Unit-returning calls (print, …) hand back nil. Reject toString of
+	// such values up-front with a clear error rather than crashing the
+	// compiler in downstream type checks (was: nil-deref in isResultType).
+	if arg == nil {
+		return nil, ErrToStringOnUnit
+	}
+
 	// TODO: check if result type. The value should have type info attached to it
 	// If not, something has gone wrong
 	if g.isResultType(arg) {
@@ -374,6 +381,11 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 
 // convertValueToStringForPrint converts any value to a string for printing.
 func (g *LLVMGenerator) convertValueToStringForPrint(arg value.Value, inferredType Type) (value.Value, error) {
+	// Unit-returning calls (print, …) hand back nil. Reject up-front rather
+	// than dereferencing nil downstream in convertPrimitiveToString.
+	if arg == nil {
+		return nil, ErrPrintOnUnit
+	}
 	if g.isResultType(arg) {
 		return g.convertResultValueToString(arg)
 	}

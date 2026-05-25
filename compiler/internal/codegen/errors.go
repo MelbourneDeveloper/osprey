@@ -63,6 +63,8 @@ var (
 	ErrPrintCannotConvert = errors.New("cannot convert value for printing")
 	ErrUnsupportedCall    = errors.New("unsupported function call")
 	ErrToStringReserved   = errors.New("toString is a reserved function name")
+	ErrToStringOnUnit     = errors.New("toString does not accept a Unit-returning expression (e.g. print)")
+	ErrPrintOnUnit        = errors.New("print does not accept a Unit-typed value (e.g. the result of another print)")
 
 	ErrWebSocketKeepAliveWrongArgs = errors.New("websocketKeepAlive function has wrong number of arguments")
 
@@ -80,6 +82,10 @@ var (
 	ErrUndefinedVariable        = errors.New("undefined variable")
 	ErrUnsupportedBinaryOp      = errors.New("unsupported binary operator") // Alias for ErrUnsupportedBinaryOperator
 	ErrStructComparisonNotImpl  = errors.New("structural comparison on records/unions is not yet implemented")
+	ErrListLiteralAggregateElem = errors.New(
+		"list literals with record/union elements are not yet supported; " +
+			"use listAppend(List(), record) to build the list element-by-element",
+	)
 
 	ErrMethodNotImpl         = errors.New("method not implemented")
 	ErrNoToStringForFunc     = errors.New("no toString implementation for function")
