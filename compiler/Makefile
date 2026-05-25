@@ -157,6 +157,7 @@ clean:
 	rm -rf lib/
 	rm -rf outputs/
 	rm -rf internal/codegen/bin
+	rm -f test.log
 	find /tmp -name "*osprey*" -delete 2>/dev/null || true
 	find /tmp -name "*TestHTTP*" -delete 2>/dev/null || true
 	find /tmp -name "*TestManual*" -delete 2>/dev/null || true
