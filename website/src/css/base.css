@@ -32,10 +32,12 @@ main {
   /* Height of fixed header */
 }
 
+/* Enhanced container */
 .container {
   width: 100%;
   max-width: var(--container-2xl);
   margin: 0 auto;
+  padding: 0 var(--space-6);
 }
 
 /* ========================================================================
@@ -116,24 +118,24 @@ h6 {
 .page-header h4,
 .page-header h5,
 .page-header h6,
+.blog-header h1,
+.blog-header h2,
+.blog-header h3,
+.blog-header h4,
+.blog-header h5,
+.blog-header h6,
 .footer h1,
 .footer h2,
 .footer h3,
 .footer h4,
 .footer h5,
 .footer h6,
-.blue-box h1,
-.blue-box h2,
-.blue-box h3,
-.blue-box h4,
-.blue-box h5,
-.blue-box h6,
-.blue-box-installation h1,
-.blue-box-installation h2,
-.blue-box-installation h3,
-.blue-box-installation h4,
-.blue-box-installation h5,
-.blue-box-installation h6 {
+.cta-section h1,
+.cta-section h2,
+.cta-section h3,
+.cta-section h4,
+.cta-section h5,
+.cta-section h6 {
   color: white !important;
 }
 
@@ -174,8 +176,7 @@ h2.section-title {
   color: var(--color-text-secondary) !important;
 }
 
-.blue-box h3,
-.blue-box-installation h3 {
+.cta-section h3 {
   font-size: var(--font-size-3xl) !important;
 }
 
@@ -366,21 +367,6 @@ code:hover {
   p {
     padding: 0 var(--space-3);
   }
-
-  /* Don't add padding to paragraphs that are inside containers that already have padding */
-  .container p,
-  .card p,
-  .hero p,
-  .page-hero p,
-  .blue-box p,
-  .blue-box-installation p,
-  .footer p,
-  .footer-content p,
-  .footer-section p,
-  .footer-bottom p {
-    padding-left: 0;
-    padding-right: 0;
-  }
 }
 
 @media (max-width: 480px) {
@@ -478,12 +464,7 @@ code:hover {
   .card p,
   .hero p,
   .page-hero p,
-  .blue-box p,
-  .blue-box-installation p,
-  .footer p,
-  .footer-content p,
-  .footer-section p,
-  .footer-bottom p {
+  .cta-section p {
     padding-left: 0;
     padding-right: 0;
   }
