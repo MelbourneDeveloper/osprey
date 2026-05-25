@@ -996,25 +996,18 @@ func (g *LLVMGenerator) generateIntToString(arg value.Value) (value.Value, error
 }
 
 func (g *LLVMGenerator) generateFloatToString(arg value.Value) (value.Value, error) {
-	// Ensure sprintf and malloc are declared
-	sprintf := g.ensureSprintfDeclaration()
-	malloc := g.ensureMallocDeclaration()
+	// Delegate to the C runtime so whole-valued floats keep a visible ".0"
+	// (sprintf("%.10g", 3.0) drops the decimal, making 3.0 indistinguishable
+	// from int 3 in user output). osp_float_to_string handles the re-append
+	// plus NaN / inf passthrough; see runtime/string_runtime.c.
+	fn, ok := g.functions["osp_float_to_string"]
+	if !ok {
+		fn = g.module.NewFunc("osp_float_to_string", types.I8Ptr,
+			ir.NewParam("d", types.Double))
+		g.functions["osp_float_to_string"] = fn
+	}
 
-	// Create format string for float conversion
-	// Use %.10g for clean representation (removes trailing zeros, uses scientific notation for large/small numbers)
-	formatStr := constant.NewCharArrayFromString("%.10g\x00")
-	formatGlobal := g.module.NewGlobalDef("", formatStr)
-	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
-		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
-
-	// Allocate buffer for result string using malloc (64 bytes should be enough for any double)
-	bufferSize := constant.NewInt(types.I64, BufferSize64Bytes)
-	bufferPtr := g.builder.NewCall(malloc, bufferSize)
-
-	// Call sprintf(buffer, "%.10g", arg)
-	g.builder.NewCall(sprintf, bufferPtr, formatPtr, arg)
-
-	return bufferPtr, nil
+	return g.builder.NewCall(fn, arg), nil
 }
 
 func (g *LLVMGenerator) generateBoolToString(arg value.Value) (value.Value, error) {
