@@ -171,7 +171,7 @@ func (g *LLVMGenerator) validateNamedArguments(funcName string, callExpr *ast.Ca
 
 	// If the function has 2 or more parameters and positional arguments are used, require named arguments
 	if len(callExpr.Arguments) > 0 && len(callExpr.NamedArguments) == 0 {
-		return WrapFunctionRequiresNamedArgsWithPos(funcName, len(paramNames), callExpr.Position)
+		return WrapFunctionRequiresNamedArgsWithPos(funcName, paramNames, callExpr.Position)
 	}
 
 	return nil
