@@ -151,15 +151,28 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	if err != nil {
 		return nil, err
 	}
-	// AUTO-UNWRAP Result types for fiber operations per spec (0004-TypeSystem.md:115-160)
-	result = g.unwrapIfResult(result)
+	// Unit-returning spawn bodies (e.g. `spawn doit()` where doit returns
+	// Unit via print) leave us with a nil or void-typed value. The fiber
+	// closure signature is `i64()` so a `ret void` would fail llc with
+	// "value doesn't match function result type 'i64'". Return a zero
+	// placeholder for Unit so the fiber's await result is 0 / discardable.
+	var resultForRuntime value.Value
+	switch {
+	case result == nil:
+		resultForRuntime = constant.NewInt(types.I64, 0)
+	case result.Type().Equal(types.Void):
+		resultForRuntime = constant.NewInt(types.I64, 0)
+	default:
+		// AUTO-UNWRAP Result types for fiber operations per spec (0004-TypeSystem.md:115-160)
+		result = g.unwrapIfResult(result)
 
-	// Convert the result to i64 for the fiber runtime if needed
-	// The fiber runtime always expects i64, so we need to convert other types
-	resultForRuntime := result
-	if floatType, ok := result.Type().(*types.FloatType); ok && floatType == types.Double {
-		// Convert double to i64 using bitcast to preserve the bits
-		resultForRuntime = g.builder.NewBitCast(result, types.I64)
+		// Convert the result to i64 for the fiber runtime if needed
+		// The fiber runtime always expects i64, so we need to convert other types
+		resultForRuntime = result
+		if floatType, ok := result.Type().(*types.FloatType); ok && floatType == types.Double {
+			// Convert double to i64 using bitcast to preserve the bits
+			resultForRuntime = g.builder.NewBitCast(result, types.I64)
+		}
 	}
 
 	// Return the result
