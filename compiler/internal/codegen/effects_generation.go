@@ -424,7 +424,8 @@ func (ec *EffectCodegen) createHandlerFunction(
 }
 
 // hasDeclaredEffect checks if the current function declares the given effect
-// TODO: This will be used for proper effect forwarding in the future
+// in its `!Effect` list; used by performExpression to allow forwarding a
+// perform up the call chain without an immediate handler.
 func (ec *EffectCodegen) hasDeclaredEffect(effectName string) bool {
 	if ec.currentFunctionEffects == nil {
 		return false
@@ -578,8 +579,9 @@ func (ec *EffectCodegen) generatePerformArguments(perform *ast.PerformExpression
 	return args, nil
 }
 
-// createUnhandledEffectError creates a proper error for unhandled effects
-// TODO: This will be used for proper compile-time effect checking in the future
+// createUnhandledEffectError creates a position-aware compile error for
+// performExpressions that have no live handler. Includes a special-case
+// hint when the chain looks like circular effect dependency.
 func (ec *EffectCodegen) createUnhandledEffectError(perform *ast.PerformExpression) error {
 	// Check if this is potentially a circular dependency scenario
 	if ec.isLikelyCircularDependency(perform.EffectName) {
