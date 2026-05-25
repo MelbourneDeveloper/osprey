@@ -290,6 +290,67 @@ func (g *LLVMGenerator) generateListAppendCall(callExpr *ast.CallExpression) (va
 	return g.callTwoArgs("osprey_list_append", callExpr, true)
 }
 
+// generateListGetCall returns Result<T, string>. The runtime exposes
+// osprey_list_in_bounds + osprey_list_get separately; we use the
+// in-bounds check to gate the Success/Error discriminant.
+func (g *LLVMGenerator) generateListGetCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != collectionArgsTwo {
+		return nil, fmt.Errorf("listGet expects %d arguments: %w", collectionArgsTwo, errCollectionArgCount)
+	}
+	g.declareListExterns()
+	list, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+	idx, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+	list = g.coerceToI8Ptr(list)
+	idxI64 := g.boxToI64(idx)
+	inBounds := g.builder.NewCall(g.functions["osprey_list_in_bounds"], list, idxI64)
+	val := g.builder.NewCall(g.functions["osprey_list_get"], list, idxI64)
+	resultTy := types.NewStruct(types.I64, types.I8)
+	resultPtr := g.builder.NewAlloca(resultTy)
+	isOOB := g.builder.NewICmp(enum.IPredEQ, inBounds, constant.NewInt(types.I32, 0))
+	disc := g.builder.NewSelect(isOOB, constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
+	vp := g.builder.NewGetElementPtr(resultTy, resultPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(val, vp)
+	dp := g.builder.NewGetElementPtr(resultTy, resultPtr,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(disc, dp)
+	return resultPtr, nil
+}
+
+// generateListSetCall returns a new list with the element at index
+// replaced. Out-of-range is a runtime no-op per the C runtime.
+func (g *LLVMGenerator) generateListSetCall(callExpr *ast.CallExpression) (value.Value, error) {
+	if len(callExpr.Arguments) != collectionMapSetArg {
+		return nil, fmt.Errorf("listSet expects %d arguments: %w", collectionMapSetArg, errCollectionArgCount)
+	}
+	g.declareListExterns()
+	list, err := g.generateExpression(callExpr.Arguments[0])
+	if err != nil {
+		return nil, err
+	}
+	idx, err := g.generateExpression(callExpr.Arguments[1])
+	if err != nil {
+		return nil, err
+	}
+	v, err := g.generateExpression(callExpr.Arguments[2])
+	if err != nil {
+		return nil, err
+	}
+	list = g.coerceToI8Ptr(list)
+	return g.builder.NewCall(g.functions["osprey_list_set"], list, g.boxToI64(idx), g.boxToI64(v)), nil
+}
+
+// generateListDropCall drops the leading N elements.
+func (g *LLVMGenerator) generateListDropCall(callExpr *ast.CallExpression) (value.Value, error) {
+	return g.callTwoArgs("osprey_list_drop", callExpr, true)
+}
+
 func (g *LLVMGenerator) generateListPrependCall(callExpr *ast.CallExpression) (value.Value, error) {
 	return g.callTwoArgs("osprey_list_prepend", callExpr, true)
 }

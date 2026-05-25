@@ -40,6 +40,46 @@ func (r *BuiltInFunctionRegistry) registerListBuiltins() {
 		Generator:      (*LLVMGenerator).generateListLengthCall,
 		Example:        `listLength([1, 2, 3])  // 3`,
 	}
+	r.functions["listGet"] = &BuiltInFunction{
+		Name:        "listGet",
+		Signature:   "listGet(list: List<T>, index: int) -> Result<T, string>",
+		Description: "Returns Success(value) for an in-range index, Error otherwise. O(log32 n).",
+		ParameterTypes: []BuiltInParameter{
+			listParam,
+			{Name: "index", Type: intT, Description: "Zero-based element index"},
+		},
+		ReturnType: anyT, // Result<T, string>; element type via inference.
+		Category:   CategoryFunctional,
+		Generator:  (*LLVMGenerator).generateListGetCall,
+		Example:    `match listGet(xs, 0) { Success v => v; Error e => 0 }`,
+	}
+	r.functions["listSet"] = &BuiltInFunction{
+		Name:        "listSet",
+		Signature:   "listSet(list: List<T>, index: int, value: T) -> List<T>",
+		Description: "Returns a new list with the element at index replaced. Out-of-range is a no-op. O(log32 n).",
+		ParameterTypes: []BuiltInParameter{
+			listParam,
+			{Name: "index", Type: intT, Description: "Zero-based element index"},
+			{Name: "value", Type: anyT, Description: "Replacement value"},
+		},
+		ReturnType: list,
+		Category:   CategoryFunctional,
+		Generator:  (*LLVMGenerator).generateListSetCall,
+		Example:    `listSet([1, 2, 3], 1, 99)  // [1, 99, 3]`,
+	}
+	r.functions["listDrop"] = &BuiltInFunction{
+		Name:        "listDrop",
+		Signature:   "listDrop(list: List<T>, n: int) -> List<T>",
+		Description: "Returns a new list with the first n elements removed. O(log32 n).",
+		ParameterTypes: []BuiltInParameter{
+			listParam,
+			{Name: "n", Type: intT, Description: "Number of leading elements to drop"},
+		},
+		ReturnType: list,
+		Category:   CategoryFunctional,
+		Generator:  (*LLVMGenerator).generateListDropCall,
+		Example:    `listDrop([1, 2, 3, 4], 2)  // [3, 4]`,
+	}
 	r.functions["listAppend"] = &BuiltInFunction{
 		Name:        "listAppend",
 		Signature:   "listAppend(list: List<T>, value: T) -> List<T>",
