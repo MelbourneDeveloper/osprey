@@ -425,11 +425,22 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 	// Save current variables and create new scope
 	savedVars := make(map[string]value.Value)
 	maps.Copy(savedVars, g.variables)
+	savedTypeEnv := g.typeInferer.env.Clone()
 
-	// Add lambda parameters to scope
+	// Add lambda parameters to BOTH runtime scope and type-inference env.
+	// Without the type-env entry, any inferer call triggered while lowering
+	// the body (e.g. nested call-expression argument inference) raises
+	// "undefined variable" on a parameter that is in g.variables.
 	for i, param := range lambda.Parameters {
 		if i < len(lambdaFunc.Params) {
 			g.variables[param.Name] = lambdaFunc.Params[i]
+			var paramTI Type
+			if param.Type != nil {
+				paramTI = g.typeExpressionToInferenceType(param.Type)
+			} else {
+				paramTI = g.typeInferer.Fresh()
+			}
+			g.typeInferer.env.Set(param.Name, paramTI)
 		}
 	}
 
@@ -454,8 +465,19 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 		shouldUnwrap = true
 	}
 
-	if shouldUnwrap && g.isResultType(bodyValue) {
+	if shouldUnwrap && bodyValue != nil && g.isResultType(bodyValue) {
 		bodyValue = g.unwrapIfResult(bodyValue)
+	}
+
+	// A Unit-valued body (e.g. an effectful lambda whose last expression is
+	// `print(...)`) returns nil here; emit a Void ret so the function is
+	// well-formed.
+	if bodyValue == nil || bodyValue.Type() == types.Void {
+		entryBlock.NewRet(nil)
+		g.variables = savedVars
+		g.typeInferer.env = savedTypeEnv
+		g.builder = oldBuilder
+		return lambdaFunc, nil
 	}
 
 	// Create return instruction
@@ -463,6 +485,7 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 
 	// Restore context
 	g.variables = savedVars
+	g.typeInferer.env = savedTypeEnv
 	g.builder = oldBuilder
 
 	// Return the function
