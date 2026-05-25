@@ -63,6 +63,7 @@ var (
 	ErrPrintCannotConvert = errors.New("cannot convert value for printing")
 	ErrUnsupportedCall    = errors.New("unsupported function call")
 	ErrToStringReserved   = errors.New("toString is a reserved function name")
+	ErrToStringOnUnit     = errors.New("toString does not accept a Unit-returning expression (e.g. print)")
 
 	ErrWebSocketKeepAliveWrongArgs = errors.New("websocketKeepAlive function has wrong number of arguments")
 
