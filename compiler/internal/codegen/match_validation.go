@@ -268,8 +268,15 @@ func isLiteralPattern(constructor string) bool {
 	}
 
 	// Integer literals (try parsing)
-	_, err := strconv.ParseInt(constructor, 10, 64)
-	if err == nil {
+	_, intErr := strconv.ParseInt(constructor, 10, 64)
+	if intErr == nil {
+		return true
+	}
+
+	// Float literals (e.g. `3.14`) — added so `match f { 3.14 => … }`
+	// passes the validator alongside int literals.
+	_, floatErr := strconv.ParseFloat(constructor, 64)
+	if floatErr == nil {
 		return true
 	}
 

@@ -114,6 +114,16 @@ func (b *Builder) tryBuildNegativeNumberPattern(pipeCtx parser.IPipeExprContext)
 						IsWildcard:  false,
 					}
 				}
+				// Negative float literal — same shape on FLOAT.
+				if literalCtx.FLOAT() != nil {
+					return Pattern{
+						Constructor: "-" + literalCtx.FLOAT().GetText(),
+						Variable:    "",
+						Fields:      nil,
+						Nested:      nil,
+						IsWildcard:  false,
+					}
+				}
 			}
 		}
 	}
@@ -175,6 +185,17 @@ func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern
 	} else if literalCtx.FALSE() != nil {
 		return Pattern{
 			Constructor: literalCtx.FALSE().GetText(),
+			Variable:    "",
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
+	} else if literalCtx.FLOAT() != nil {
+		// `match f { 3.14 => … }` previously fell through and produced
+		// 'unknown constructor: unknown'. Capture the float text so
+		// match codegen + inferer can recognise it as a literal.
+		return Pattern{
+			Constructor: literalCtx.FLOAT().GetText(),
 			Variable:    "",
 			Fields:      nil,
 			Nested:      nil,
