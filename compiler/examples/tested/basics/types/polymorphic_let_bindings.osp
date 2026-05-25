@@ -1,0 +1,26 @@
+// Polymorphic function definitions to trigger TypeScheme generalization
+fn identity(x) {
+    x
+}
+
+fn first(x, y) {
+    x
+}
+
+fn main() {
+    // Use polymorphic functions with different types
+    // This should trigger TypeScheme.String(), Category(), Equals() during type inference
+    let intResult = identity(42)
+    let stringResult = identity("hello")
+    let boolResult = identity(true)
+
+    print(toString(intResult))
+    print(stringResult)
+    print(toString(boolResult))
+
+    let firstInt = first(x: 1, y: 2)
+    let firstStr = first(x: "a", y: "b")
+
+    print(toString(firstInt))
+    print(firstStr)
+}
