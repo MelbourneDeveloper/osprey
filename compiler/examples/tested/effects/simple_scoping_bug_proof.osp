@@ -1,0 +1,37 @@
+// 🚀 SIMPLE NESTED HANDLER SCOPING BUG PROOF 🔥
+// This test PROVES the bug: runtime handler lookup ignores lexical scoping
+
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+// Function that should use whatever handler is in scope
+fn testFunction() -> Unit !Logger = {
+    perform Logger.log("TEST MESSAGE")
+}
+
+// This test SHOULD work but FAILS due to nested handler scoping bug
+fn main() -> Unit = with handler Logger
+    log(msg) => print("[OUTER] " + msg)
+{
+    print("=== Scoping Bug Proof ===")
+    
+    // This should use OUTER handler and print "[OUTER] TEST MESSAGE"
+    testFunction()
+    
+    // Enter inner scope with different handler
+    with handler Logger
+        log(msg) => print("[INNER] " + msg)
+    {
+        // This should use INNER handler and print "[INNER] TEST MESSAGE"
+        testFunction()
+    }
+    
+    // Back to outer scope - this should use OUTER handler again
+    // BUT DUE TO THE BUG, this will use INNER handler!
+    // EXPECTED: "[OUTER] TEST MESSAGE"
+    // ACTUAL BUG: "[INNER] TEST MESSAGE"  ← PROVES THE BUG!
+    testFunction()
+    
+    print("=== End Test ===")
+} 

@@ -1,0 +1,5 @@
+=== Scoping Bug Proof ===
+[OUTER] TEST MESSAGE
+[INNER] TEST MESSAGE
+[OUTER] TEST MESSAGE
+=== End Test === 

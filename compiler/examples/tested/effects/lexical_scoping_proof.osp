@@ -1,0 +1,43 @@
+// 🔥 LEXICAL SCOPING PROOF TEST 🔥
+// This test PROVES that handler resolution must respect lexical scoping
+
+effect Logger {
+    log: fn(string) -> Unit
+}
+
+fn testLog(msg: string) -> Unit !Logger = {
+    perform Logger.log(msg)
+}
+
+fn main() -> Unit = with handler Logger
+    log(msg) => print("[OUTER] " + msg)
+{
+    print("=== Lexical Scoping Test ===")
+    
+    // Call 1: Should use OUTER handler
+    testLog("Call 1")
+    
+    // Enter inner scope with different handler
+    with handler Logger  
+        log(msg) => print("[INNER] " + msg)
+    {
+        // Call 2: Should use INNER handler
+        testLog("Call 2")
+        
+        // Nested scope with third handler
+        with handler Logger
+            log(msg) => print("[NESTED] " + msg) 
+        {
+            // Call 3: Should use NESTED handler
+            testLog("Call 3")
+        }
+        
+        // Call 4: Back to INNER scope - should use INNER handler again
+        testLog("Call 4")
+    }
+    
+    // Call 5: Back to OUTER scope - should use OUTER handler again
+    testLog("Call 5")
+    
+    print("=== Test Complete ===")
+} 

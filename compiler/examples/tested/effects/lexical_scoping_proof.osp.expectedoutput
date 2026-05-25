@@ -1,0 +1,7 @@
+=== Lexical Scoping Test ===
+[OUTER] Call 1
+[INNER] Call 2
+[NESTED] Call 3
+[INNER] Call 4
+[OUTER] Call 5
+=== Test Complete === 

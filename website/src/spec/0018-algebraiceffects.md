@@ -316,6 +316,249 @@ Osprey's compiler performs **static call graph analysis** to detect:
 
 **🔥 OSPREY: THE ONLY LANGUAGE WITH MATHEMATICALLY PROVEN EFFECT SAFETY! 🔥**
 
+---
+
+## 23. **HANDLER LOOKUP MECHANISMS - RESEARCH AND IMPLEMENTATION OPTIONS**
+
+### 23.1 **THE LEXICAL SCOPING CHALLENGE**
+
+Proper algebraic effects require **lexical scoping** for handler resolution - the innermost lexically enclosing handler should handle each effect operation, not the most recently defined handler.
+
+**Problem**: "Last defined wins" vs. "Innermost lexical scope wins"
+
+```osprey
+effect Logger { log: fn(String) -> Unit }
+
+fn testLog(msg: String) -> Unit !Logger = perform Logger.log(msg)
+
+fn main() -> Unit = {
+    with handler Logger                    // OUTER scope
+        log(msg) => print("[OUTER] " + msg)
+    {
+        testLog("Call 1")  // Should print [OUTER] Call 1
+        
+        with handler Logger                // INNER scope  
+            log(msg) => print("[INNER] " + msg)
+        {
+            testLog("Call 2")  // Should print [INNER] Call 2
+        }
+        
+        testLog("Call 3")  // Should print [OUTER] Call 3
+    }
+}
+```
+
+**Expected Output**: `[OUTER] Call 1`, `[INNER] Call 2`, `[OUTER] Call 3`
+**Wrong Output** (last-wins): `[INNER] Call 1`, `[INNER] Call 2`, `[INNER] Call 3`
+
+### 23.2 **HANDLER LOOKUP APPROACHES FROM RESEARCH**
+
+#### 23.2.1 **Evidence Passing (Koka's Approach)**
+
+**Most Sophisticated**: Compile-time transformation to explicit handler evidence.
+
+**Mechanism**:
+- Compiler transforms effectful code to pass handler "evidence" as hidden parameters
+- Effect operations become **O(1) direct function calls** via evidence
+- Lexical scope preserved through compile-time analysis
+
+**Advantages**:
+- ✅ **O(1) handler lookup** (fastest possible)
+- ✅ **Perfect lexical scoping** preservation
+- ✅ **Compile-time optimization** opportunities
+- ✅ **Static verification** of handler availability
+
+**Disadvantages**:
+- ❌ **Complex compiler implementation**
+- ❌ **Larger generated code** (extra parameters everywhere)
+- ❌ **Limited runtime flexibility**
+
+#### 23.2.2 **Runtime Handler Stack (Eff/OCaml/Unison)**
+
+**Most Common**: Dynamic lookup through runtime handler stack.
+
+**Mechanism**:
+- Maintain runtime stack/chain of active handlers
+- Effect operations search up the stack for matching handler
+- Push handlers on entry, pop on exit
+
+**Advantages**:
+- ✅ **Simple to implement**
+- ✅ **Runtime flexibility** (dynamic handler installation)
+- ✅ **Multi-shot continuations** possible
+- ✅ **Natural exception-like semantics**
+
+**Disadvantages**:
+- ❌ **O(n) handler lookup** (where n = handler stack depth)
+- ❌ **Runtime overhead** for frequent effects
+- ❌ **Complex interaction** with native call stacks
+
+#### 23.2.3 **Multi-Prompt Delimited Control (libmprompt)**
+
+**Most General**: Effect operations as prompt/continuation operations.
+
+**Mechanism**:
+- Each handler gets unique prompt marker identifying its lexical scope
+- Effect operations unwind to correct prompt based on lexical nesting
+- Continuation capture includes correct lexical context
+
+**Advantages**:
+- ✅ **Theoretically complete** (can express any control flow)
+- ✅ **Perfect lexical scoping** through prompt markers
+- ✅ **Composable with exceptions** and other control flow
+- ✅ **Multi-shot continuations** naturally supported
+
+**Disadvantages**:
+- ❌ **Complex runtime implementation** (stack copying/growing)
+- ❌ **Platform-specific** (requires low-level stack manipulation)
+- ❌ **Memory overhead** per prompt
+
+#### 23.2.4 **Hybrid Static-Dynamic Approaches**
+
+**Best of Both**: Combine compile-time analysis with runtime efficiency.
+
+**Mechanism**:
+- **Static analysis** determines which handlers might be needed
+- **Runtime dispatch** uses optimized lookup based on static analysis  
+- **Scope preservation** ensures runtime respects lexical boundaries
+
+**Advantages**:
+- ✅ **Good performance** (better than pure dynamic)
+- ✅ **Lexical correctness** (compile-time verification)
+- ✅ **Implementation flexibility** (easier than pure static)
+- ✅ **Runtime adaptability** when needed
+
+**Disadvantages**:
+- ❌ **Moderate complexity** in both compiler and runtime
+- ❌ **Still has runtime overhead** (though reduced)
+
+### 23.3 **OSPREY ALGEBRAIC EFFECTS IMPLEMENTATION SPECIFICATION**
+
+#### 23.3.1 **MANDATED APPROACH: Lexical Handler Stack**
+
+**SPECIFICATION**: Osprey MUST implement algebraic effects using a lexical handler stack approach that preserves proper lexical scoping semantics.
+
+**CORE ALGORITHM**:
+```osprey
+// Handler Frame Structure (REQUIRED)
+struct HandlerFrame {
+    effect_name: String,
+    operations: Map<String, Function>,
+    lexical_depth: Int,
+    scope_id: Int
+}
+
+// Global Handler Stack (REQUIRED)
+static HANDLER_STACK: List<HandlerFrame> = []
+static CURRENT_LEXICAL_DEPTH: Int = 0
+
+// Handler Resolution Algorithm (REQUIRED)
+fn resolve_effect_handler(effect_name: String, operation: String) -> Function {
+    // Search from innermost to outermost (highest lexical_depth first)
+    for frame in HANDLER_STACK.reverse() {
+        if frame.effect_name == effect_name && frame.operations.contains(operation) {
+            return frame.operations[operation]  // INNERMOST WINS
+        }
+    }
+    throw CompileTimeError("Unhandled effect: " + effect_name + "." + operation)
+}
+```
+
+#### 23.3.2 **LEXICAL SCOPING RULES (MANDATORY)**
+
+1. **INNERMOST HANDLER WINS**: When multiple handlers for the same effect are in scope, the innermost (highest lexical depth) handler MUST be selected
+2. **LEXICAL DEPTH TRACKING**: Each handler frame MUST track its lexical nesting depth at compile time
+3. **SCOPE PRESERVATION**: Handler stacks MUST maintain lexical scope information across function boundaries
+4. **PROPER CLEANUP**: Handler frames MUST be removed when exiting their lexical scope
+
+#### 23.3.3 **IMPLEMENTATION REQUIREMENTS**
+
+**REQUIRED BEHAVIOR**:
+```osprey
+fn main() -> Unit = {
+    with handler Logger                    // DEPTH 1
+        log(msg) => print("[OUTER] " + msg)
+    do {
+        testLog("Call 1")                 // MUST use OUTER handler
+        
+        with handler Logger                // DEPTH 2  
+            log(msg) => print("[INNER] " + msg)
+        do {
+            testLog("Call 2")             // MUST use INNER handler (innermost)
+            
+            with handler Logger            // DEPTH 3
+                log(msg) => print("[NESTED] " + msg)  
+            do {
+                testLog("Call 3")         // MUST use NESTED handler (innermost)
+            }
+            
+            testLog("Call 4")             // MUST use INNER handler (depth 2)
+        }
+        
+        testLog("Call 5")                 // MUST use OUTER handler (depth 1)
+    }
+}
+
+fn testLog(msg: String) -> Unit !Logger = perform Logger.log(msg)
+```
+
+**EXPECTED OUTPUT (MANDATORY)**:
+```
+[OUTER] Call 1
+[INNER] Call 2
+[NESTED] Call 3
+[INNER] Call 4
+[OUTER] Call 5
+```
+
+#### 23.3.4 **COMPILATION STRATEGY**
+
+**HANDLER REGISTRATION**: 
+- Each `with handler` expression increments lexical depth
+- Handler functions are registered with current lexical depth
+- Handler stack maintains insertion order for same-depth handlers
+
+**EFFECT RESOLUTION**:
+- `perform` expressions generate handler lookup calls
+- Lookup searches handler stack from highest to lowest lexical depth
+- First matching handler at deepest lexical level wins
+
+**SCOPE MANAGEMENT**:
+- Handler frames pushed when entering `with` expression
+- Handler frames popped when exiting `with` expression scope
+- Cross-function calls preserve handler stack context
+
+### 23.4 **IMPLEMENTATION STATUS**
+
+**CURRENT STATUS**: ❌ Broken - "last defined wins" instead of lexical scoping
+**REQUIRED FIX**: Implement lexical depth tracking and innermost-first handler resolution
+**TARGET**: All lexical scoping tests MUST pass with correct output
+
+### 23.5 **RESEARCH REFERENCES AND FURTHER READING**
+
+**Foundational Papers**:
+- Plotkin & Pretnar: "Algebraic Effects and Handlers" (1312.1399)
+- Xie & Leijen: "Effect Handlers, Evidently" (Evidence passing)
+- Leijen: "Koka Programming with Row Polymorphic Effect Types" (1807.05923)
+
+**Implementation Studies**:
+- Koka: Evidence passing with compile-time resolution
+- OCaml 5: Runtime handler stack with continuation support  
+- Eff: Multi-prompt delimited control semantics
+- Unison: Abilities with first-class handler names
+
+**Handler Lookup Mechanisms**:
+- **Evidence Passing**: O(1) lookup, complex compilation
+- **Runtime Stack**: O(n) lookup, simple implementation  
+- **Multi-Prompt**: Full generality, platform complexity
+- **Hybrid**: Balanced trade-offs, moderate complexity
+
+**Key Insight**: The choice of handler lookup mechanism is an **implementation detail** that should not affect the **language semantics** visible to programmers. All approaches must preserve **lexical scoping** and **effect safety**.
+
+---
+
+**🚀 OSPREY: ALGEBRAIC EFFECTS WITH IMPLEMENTATION FLEXIBILITY! 🚀**
+
 [1]: https://www.ospreylang.dev/spec/ "Osprey Language Specification - Osprey Programming Language"
 
 https://arxiv.org/pdf/1312.1399

@@ -25,6 +25,9 @@ type ospreyListener interface {
 	// EnterFnDecl is called when entering the fnDecl production.
 	EnterFnDecl(c *FnDeclContext)
 
+	// EnterWithHandlerBlock is called when entering the withHandlerBlock production.
+	EnterWithHandlerBlock(c *WithHandlerBlockContext)
+
 	// EnterExternDecl is called when entering the externDecl production.
 	EnterExternDecl(c *ExternDeclContext)
 
@@ -249,6 +252,9 @@ type ospreyListener interface {
 
 	// ExitFnDecl is called when exiting the fnDecl production.
 	ExitFnDecl(c *FnDeclContext)
+
+	// ExitWithHandlerBlock is called when exiting the withHandlerBlock production.
+	ExitWithHandlerBlock(c *WithHandlerBlockContext)
 
 	// ExitExternDecl is called when exiting the externDecl production.
 	ExitExternDecl(c *ExternDeclContext)
