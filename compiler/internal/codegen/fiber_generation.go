@@ -398,7 +398,13 @@ func (g *LLVMGenerator) generateLambdaExpression(lambda *ast.LambdaExpression) (
 		inferred, err := g.typeInferer.InferType(lambda)
 		if err == nil {
 			if fnType, ok := inferred.(*FunctionType); ok {
-				llvmReturnType = g.getLLVMType(g.typeInferer.prune(fnType.returnType))
+				// Body codegen auto-unwraps Result for ergonomic lambdas (see
+				// shouldUnwrap branch below). The signature must match — otherwise
+				// nested lambda calls fail llc with "value doesn't match function
+				// result type '{ i64, i8 }'".
+				retType := g.typeInferer.prune(fnType.returnType)
+				retType = g.typeInferer.unwrapResultType(retType)
+				llvmReturnType = g.getLLVMType(retType)
 			}
 		}
 		if llvmReturnType == nil {
