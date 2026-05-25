@@ -156,9 +156,17 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 
 		if ctx.RecordType().FieldDeclarations() != nil {
 			for _, fieldCtx := range ctx.RecordType().FieldDeclarations().AllFieldDeclaration() {
+				// Function-typed fields and array/generic types have no top-level
+				// ID() — fall back to the verbatim source text so we don't nil-deref.
+				typeText := ""
+				if idNode := fieldCtx.Type_().ID(); idNode != nil {
+					typeText = idNode.GetText()
+				} else {
+					typeText = fieldCtx.Type_().GetText()
+				}
 				field := TypeField{
 					Name: fieldCtx.ID().GetText(),
-					Type: fieldCtx.Type_().ID().GetText(),
+					Type: typeText,
 				}
 
 				// Parse WHERE constraint if present
@@ -213,9 +221,17 @@ func (b *Builder) buildVariant(ctx parser.IVariantContext) TypeVariant {
 
 	if ctx.FieldDeclarations() != nil {
 		for _, fieldCtx := range ctx.FieldDeclarations().AllFieldDeclaration() {
+			// Function-typed fields and array/generic types have no top-level
+			// ID() — fall back to the verbatim source text so we don't nil-deref.
+			typeText := ""
+			if idNode := fieldCtx.Type_().ID(); idNode != nil {
+				typeText = idNode.GetText()
+			} else {
+				typeText = fieldCtx.Type_().GetText()
+			}
 			field := TypeField{
 				Name: fieldCtx.ID().GetText(),
-				Type: fieldCtx.Type_().ID().GetText(),
+				Type: typeText,
 			}
 
 			// Parse WHERE constraint if present
