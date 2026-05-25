@@ -249,11 +249,20 @@ func (g *LLVMGenerator) generateLetDeclaration(letDecl *ast.LetDeclaration) (val
 			return nil, err
 		}
 
-		// Check if the value type is compatible with the annotation
+		// Check if the value type is compatible with the annotation.
+		// Spec auto-unwrap (0004-TypeSystem.md) allows Result<T,E> to flow
+		// into a T-typed slot — mirror the mut-assign path so e.g.
+		// `let r: int = 5 + 3` (RHS is Result<int, MathError>) succeeds.
 		err = g.typeInferer.Unify(annotatedType, valueType)
 		if err != nil {
-			return nil, WrapTypeMismatchWithPos(
-				valueType.String(), letDecl.Name, annotatedType.String(), letDecl.Position)
+			unwrappedValue := g.typeInferer.unwrapResultType(valueType)
+			unwrapErr := g.typeInferer.Unify(annotatedType, unwrappedValue)
+			if unwrapErr != nil {
+				return nil, WrapTypeMismatchWithPos(
+					valueType.String(), letDecl.Name, annotatedType.String(), letDecl.Position)
+			}
+			value = g.unwrapIfResult(value)
+			g.variables[letDecl.Name] = value
 		}
 
 		varType = annotatedType
