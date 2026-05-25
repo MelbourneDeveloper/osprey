@@ -381,6 +381,11 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 
 // convertValueToStringForPrint converts any value to a string for printing.
 func (g *LLVMGenerator) convertValueToStringForPrint(arg value.Value, inferredType Type) (value.Value, error) {
+	// Unit-returning calls (print, …) hand back nil. Reject up-front rather
+	// than dereferencing nil downstream in convertPrimitiveToString.
+	if arg == nil {
+		return nil, ErrPrintOnUnit
+	}
 	if g.isResultType(arg) {
 		return g.convertResultValueToString(arg)
 	}

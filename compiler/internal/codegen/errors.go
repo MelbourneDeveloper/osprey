@@ -64,6 +64,7 @@ var (
 	ErrUnsupportedCall    = errors.New("unsupported function call")
 	ErrToStringReserved   = errors.New("toString is a reserved function name")
 	ErrToStringOnUnit     = errors.New("toString does not accept a Unit-returning expression (e.g. print)")
+	ErrPrintOnUnit        = errors.New("print does not accept a Unit-typed value (e.g. the result of another print)")
 
 	ErrWebSocketKeepAliveWrongArgs = errors.New("websocketKeepAlive function has wrong number of arguments")
 
