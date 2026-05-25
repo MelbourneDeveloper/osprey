@@ -4,7 +4,6 @@ package integration
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"os"
@@ -25,6 +24,7 @@ var ErrTestExecutionTimeout = errors.New("test execution timeout (30s) - no hang
 func TestMain(m *testing.M) {
 	// Note: Individual tests now handle their own setup with testSetup(t)
 	// This approach gives better error reporting and isolation
+
 	// Run all tests
 	code := m.Run()
 
@@ -46,14 +46,12 @@ func checkLLVMTools(t *testing.T) {
 	t.Helper()
 
 	// Check for llc
-	_, err := exec.LookPath("llc")
-	if err != nil {
+	if _, err := exec.LookPath("llc"); err != nil {
 		t.Fatalf("llc not found in PATH - required for integration tests. Install LLVM tools: brew install llvm")
 	}
 
 	// Check for clang
-	_, err = exec.LookPath("clang")
-	if err != nil {
+	if _, err := exec.LookPath("clang"); err != nil {
 		t.Fatalf("clang not found in PATH - required for integration tests. Install clang: brew install llvm")
 	}
 }
@@ -78,7 +76,7 @@ func captureJITOutput(source string) (string, error) {
 	case execErr = <-done:
 		// Execution completed normally
 	case <-time.After(30 * time.Second):
-		// FAIL HARD: No hanging tests allowed!
+		// FAIL HARD: No fucking hanging tests allowed!
 		_ = w.Close()
 		os.Stdout = old
 
@@ -112,7 +110,7 @@ func TestBasicCompilation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, err := codegen.CompileToLLVM(source)
 			if err != nil {
-				t.Fatalf("Basic syntax %s failed to compile: %v", name, err)
+				t.Errorf("Basic syntax %s failed to compile: %v", name, err)
 			}
 		})
 	}
@@ -133,7 +131,7 @@ func TestErrorHandling(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, err := codegen.CompileToLLVM(source)
 			if err == nil {
-				t.Fatalf("Invalid syntax %s should have failed to compile", name)
+				t.Errorf("Invalid syntax %s should have failed to compile", name)
 			}
 		})
 	}
@@ -152,7 +150,7 @@ func TestFunctionArguments(t *testing.T) {
 		t.Run("valid_"+name, func(t *testing.T) {
 			_, err := codegen.CompileToLLVM(source)
 			if err != nil {
-				t.Fatalf("Valid case %s should compile: %v", name, err)
+				t.Errorf("Valid case %s should compile: %v", name, err)
 			}
 		})
 	}
@@ -167,7 +165,7 @@ func TestFunctionArguments(t *testing.T) {
 		t.Run("invalid_"+name, func(t *testing.T) {
 			_, err := codegen.CompileToLLVM(source)
 			if err == nil {
-				t.Fatalf("Invalid case %s should have failed", name)
+				t.Errorf("Invalid case %s should have failed", name)
 			}
 		})
 	}
@@ -193,13 +191,11 @@ func findRustTools() (string, string, error) {
 		rustcPath := filepath.Join(path, "rustc")
 		cargoPath := filepath.Join(path, "cargo")
 
-		_, err := os.Stat(rustcPath)
-		if err == nil {
+		if _, err := os.Stat(rustcPath); err == nil {
 			rustc = rustcPath
 		}
 
-		_, err = os.Stat(cargoPath)
-		if err == nil {
+		if _, err := os.Stat(cargoPath); err == nil {
 			cargo = cargoPath
 		}
 
@@ -217,10 +213,8 @@ func findRustTools() (string, string, error) {
 	}
 
 	// Try using exec.LookPath as fallback
-	rustcPath, err := exec.LookPath("rustc")
-	if err == nil {
-		cargoPath, err := exec.LookPath("cargo")
-		if err == nil {
+	if rustcPath, err := exec.LookPath("rustc"); err == nil {
+		if cargoPath, err := exec.LookPath("cargo"); err == nil {
 			return rustcPath, cargoPath, nil
 		}
 	}
@@ -231,6 +225,7 @@ func findRustTools() (string, string, error) {
 // TestRustInterop tests the Rust-Osprey interop functionality.
 func TestRustInterop(t *testing.T) {
 	// Ensure compiler is built before running the test
+
 	// Force the test to be visible in test explorers
 	t.Log("🦀 Starting Rust interop test")
 
@@ -243,8 +238,7 @@ func TestRustInterop(t *testing.T) {
 	t.Logf("✅ Found Rust tools: rustc=%s, cargo=%s", rustc, cargo)
 
 	// Check for clang
-	_, err = exec.LookPath("clang")
-	if err != nil {
+	if _, err := exec.LookPath("clang"); err != nil {
 		t.Fatalf("❌ CLANG NOT FOUND - TEST FAILED. Install LLVM/Clang - Error: %v", err)
 	}
 
@@ -267,19 +261,17 @@ func TestRustInterop(t *testing.T) {
 	}
 
 	// Check if directory exists
-	_, err = os.Stat(rustDir)
-	if os.IsNotExist(err) {
+	if _, err := os.Stat(rustDir); os.IsNotExist(err) {
 		t.Fatalf("❌ RUST INTEGRATION DIRECTORY NOT FOUND: %s (current dir: %s)", rustDir, currentDir)
 	}
 
 	// Clean up any previous build artifacts first
 	t.Log("🧹 Cleaning up previous Rust build artifacts...")
 
-	cleanCmd := exec.CommandContext(context.Background(), "cargo", "clean")
+	cleanCmd := exec.Command("cargo", "clean")
 
 	cleanCmd.Dir = rustDir
-	output, err := cleanCmd.CombinedOutput()
-	if err != nil {
+	if output, err := cleanCmd.CombinedOutput(); err != nil {
 		t.Logf("⚠️ Warning: Failed to clean Rust artifacts: %v\nOutput: %s", err, output)
 	}
 
@@ -287,12 +279,10 @@ func TestRustInterop(t *testing.T) {
 	t.Log("🦀 Building Rust library...")
 
 	targetDir := filepath.Join(os.TempDir(), "osprey_rust_target_"+strconv.Itoa(os.Getpid()))
-	buildCmd := exec.CommandContext(context.Background(), cargo,
-		"build", "--release", "--target-dir", targetDir, "-j", "1")
+	buildCmd := exec.Command(cargo, "build", "--release", "--target-dir", targetDir, "-j", "1")
 
 	buildCmd.Dir = rustDir
-	output, err = buildCmd.CombinedOutput()
-	if err != nil {
+	if output, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("❌ FAILED TO BUILD RUST LIBRARY: %v\nOutput: %s", err, output)
 	}
 
@@ -309,10 +299,10 @@ func TestRustInterop(t *testing.T) {
 	// Test the interop by running the demo script
 	t.Log("🚀 Running Rust interop demo...")
 
-	runCmd := exec.CommandContext(context.Background(), "bash", "run.sh")
+	runCmd := exec.Command("bash", "run.sh")
 	runCmd.Dir = rustDir
 
-	output, err = runCmd.CombinedOutput()
+	output, err := runCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("❌ FAILED TO RUN RUST INTEROP DEMO: %v\nOutput: %s", err, output)
 	}
@@ -330,7 +320,7 @@ func TestRustInterop(t *testing.T) {
 
 	for _, expected := range expectedSubstrings {
 		if !strings.Contains(outputStr, expected) {
-			t.Fatalf("❌ EXPECTED OUTPUT MISSING: %q\nFull output:\n%s", expected, outputStr)
+			t.Errorf("❌ EXPECTED OUTPUT MISSING: %q\nFull output:\n%s", expected, outputStr)
 		}
 	}
 
@@ -389,7 +379,7 @@ print("Product: ${result2}")
 
 	for _, expected := range expectedDeclarations {
 		if !strings.Contains(llvmIR, expected) {
-			t.Fatalf("LLVM IR should contain declaration: %s", expected)
+			t.Errorf("LLVM IR should contain declaration: %s", expected)
 		}
 	}
 
@@ -401,7 +391,7 @@ print("Product: ${result2}")
 
 	for _, expected := range expectedCalls {
 		if !strings.Contains(llvmIR, expected) {
-			t.Fatalf("LLVM IR should contain function call: %s", expected)
+			t.Errorf("LLVM IR should contain function call: %s", expected)
 		}
 	}
 
@@ -423,8 +413,7 @@ func TestSystemLibraryInstallation(t *testing.T) {
 
 	defer func() { _ = os.Chdir(oldWd) }()
 
-	err = os.Chdir(tempDir)
-	if err != nil {
+	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 
@@ -444,7 +433,7 @@ func TestSystemLibraryInstallation(t *testing.T) {
 
 	expected := "System libraries work!\n"
 	if output != expected {
-		t.Fatalf("Output mismatch: expected %q, got %q", expected, output)
+		t.Errorf("Output mismatch: expected %q, got %q", expected, output)
 	}
 
 	t.Logf("✅ System library installation test passed from directory: %s", tempDir)

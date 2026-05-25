@@ -4,7 +4,7 @@
 lint-install:
 	@echo "📦 Installing golangci-lint..."
 	@if ! command -v golangci-lint >/dev/null 2>&1; then \
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v2.1.6; \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v2.4.0; \
 	else \
 		echo "✅ golangci-lint already installed"; \
 	fi

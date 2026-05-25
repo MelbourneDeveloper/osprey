@@ -61,7 +61,7 @@ func TestRunCommand_Symbols(t *testing.T) {
 	}
 
 	// Validate JSON output
-	var symbols []any
+	var symbols []interface{}
 
 	err := json.Unmarshal([]byte(result.Output), &symbols)
 	if err != nil {

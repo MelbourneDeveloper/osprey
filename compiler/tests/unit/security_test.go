@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"os"
-	"slices"
 	"strings"
 	"testing"
 
@@ -122,7 +121,14 @@ func TestBlockedFunctionsList(t *testing.T) {
 	// Should block HTTP functions
 	httpFunctions := []string{"httpCreateServer", "httpListen", "httpGet", "httpPost"}
 	for _, fn := range httpFunctions {
-		found := slices.Contains(blocked, fn)
+		found := false
+
+		for _, blocked := range blocked {
+			if blocked == fn {
+				found = true
+				break
+			}
+		}
 
 		if !found {
 			t.Errorf("Expected function %s to be unavailable in sandbox mode", fn)
@@ -132,7 +138,14 @@ func TestBlockedFunctionsList(t *testing.T) {
 	// Should block WebSocket functions
 	wsFunctions := []string{"websocketConnect", "websocketSend", "websocketClose"}
 	for _, fn := range wsFunctions {
-		found := slices.Contains(blocked, fn)
+		found := false
+
+		for _, blocked := range blocked {
+			if blocked == fn {
+				found = true
+				break
+			}
+		}
 
 		if !found {
 			t.Errorf("Expected function %s to be unavailable in sandbox mode", fn)

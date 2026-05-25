@@ -1,7 +1,6 @@
 package codegen
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -71,15 +70,14 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 
 	// Run AST validation before type inference
 	// This catches issues like missing type annotations that the tests expect
-	err := ast.ValidateProgram(program)
-	if err != nil {
+	if err := ast.ValidateProgram(program); err != nil {
 		return "", err
 	}
 
 	// Generate LLVM IR with security configuration
 	generator := NewLLVMGeneratorWithSecurity(security)
 
-	_, err = generator.GenerateProgram(program)
+	_, err := generator.GenerateProgram(program)
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +95,7 @@ type ParseErrorListener struct {
 // SyntaxError handles syntax errors during parsing.
 func (p *ParseErrorListener) SyntaxError(
 	_ antlr.Recognizer,
-	_ any,
+	_ interface{},
 	line, column int,
 	msg string,
 	_ antlr.RecognitionException,
@@ -124,28 +122,19 @@ func buildLibraryPaths(libName string) []string {
 	paths := []string{
 		fmt.Sprintf("bin/lib%s.a", libName),
 		fmt.Sprintf("./bin/lib%s.a", libName),
-		fmt.Sprintf("lib/lib%s.a", libName),          // For rust interop libraries
-		fmt.Sprintf("./lib/lib%s.a", libName),        // For rust interop libraries
 		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
 		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
-		fmt.Sprintf("../../lib/lib%s.a", libName),    // For rust interop in tests/integration
-		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
 		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
 		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
 	}
 
 	// Add working directory based paths
-	wd, err := os.Getwd()
-	if err == nil {
+	if wd, err := os.Getwd(); err == nil {
 		paths = append(paths,
 			filepath.Join(wd, "bin", fmt.Sprintf("lib%s.a", libName)),
 			filepath.Join(wd, "..", "bin", fmt.Sprintf("lib%s.a", libName)),
 			filepath.Join(wd, "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)),
 			filepath.Join(wd, "..", "..", "..", "bin", fmt.Sprintf("lib%s.a", libName)), // For test directories
-			filepath.Join(wd, "lib", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "lib", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "lib", fmt.Sprintf("lib%s.a", libName)),
-			filepath.Join(wd, "..", "..", "..", "lib", fmt.Sprintf("lib%s.a", libName)), // For test directories
 		)
 	}
 
@@ -156,8 +145,7 @@ func buildLibraryPaths(libName string) []string {
 func findAndAddLibrary(libName string, linkArgs []string) []string {
 	paths := buildLibraryPaths(libName)
 	for _, libPath := range paths {
-		_, err := os.Stat(libPath)
-		if err == nil {
+		if _, err := os.Stat(libPath); err == nil {
 			return append(linkArgs, libPath)
 		}
 	}
@@ -168,9 +156,8 @@ func findAndAddLibrary(libName string, linkArgs []string) []string {
 // addOpenSSLFlags adds OpenSSL linking flags using pkg-config or platform-specific fallbacks
 func addOpenSSLFlags(linkArgs []string) []string {
 	// Use pkg-config to get proper OpenSSL flags when available
-	cmd := exec.CommandContext(context.Background(), "pkg-config", "--libs", "openssl")
-	output, err := cmd.Output()
-	if err == nil {
+	cmd := exec.Command("pkg-config", "--libs", "openssl")
+	if output, err := cmd.Output(); err == nil {
 		// Parse pkg-config output and add flags
 		flags := strings.Fields(strings.TrimSpace(string(output)))
 
@@ -193,8 +180,7 @@ func checkLibraryAvailability() (bool, bool) {
 
 	// Check if any fiber runtime library was found
 	for _, libPath := range buildLibraryPaths("fiber_runtime") {
-		_, err := os.Stat(libPath)
-		if err == nil {
+		if _, err := os.Stat(libPath); err == nil {
 			fiberExists = true
 			break
 		}
@@ -202,8 +188,7 @@ func checkLibraryAvailability() (bool, bool) {
 
 	// Check if any HTTP runtime library was found
 	for _, libPath := range buildLibraryPaths("http_runtime") {
-		_, err := os.Stat(libPath)
-		if err == nil {
+		if _, err := os.Stat(libPath); err == nil {
 			httpExists = true
 			break
 		}
@@ -235,7 +220,7 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 	var lastErr error
 
 	for _, cmd := range clangCommands {
-		linkCmd := exec.CommandContext(context.Background(), cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
+		linkCmd := exec.Command(cmd[0], cmd[1:]...) // #nosec G204 - predefined safe commands
 
 		linkOutput, err := linkCmd.CombinedOutput()
 		if err == nil {
@@ -253,8 +238,7 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 func CompileToExecutableWithSecurity(source, outputPath string, security SecurityConfig) error {
 	// Ensure the output directory exists
 	outputDir := filepath.Dir(outputPath)
-	err := os.MkdirAll(outputDir, DirPermissions)
-	if err != nil {
+	if err := os.MkdirAll(outputDir, DirPermissions); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -266,8 +250,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	// Write IR to temporary file
 	irFile := outputPath + ".ll"
-	err = os.WriteFile(irFile, []byte(ir), FilePermissions)
-	if err != nil {
+	if err := os.WriteFile(irFile, []byte(ir), FilePermissions); err != nil {
 		return WrapWriteIRFile(err)
 	}
 
@@ -275,8 +258,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 
 	// Compile IR to object file using llc
 	objFile := outputPath + ".o"
-	// #nosec G204 - args are controlled
-	llcCmd := exec.CommandContext(context.Background(), "llc", "-filetype=obj", "-o", objFile, irFile)
+	llcCmd := exec.Command("llc", "-filetype=obj", "-o", objFile, irFile) // #nosec G204 - args are controlled
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
@@ -294,7 +276,6 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	// Find and add runtime libraries (order matters: dependents before dependencies)
 	linkArgs = findAndAddLibrary("http_runtime", linkArgs)
 	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
-	linkArgs = findAndAddLibrary("rust_utils", linkArgs)
 
 	linkArgs = append(linkArgs, "-lpthread")
 

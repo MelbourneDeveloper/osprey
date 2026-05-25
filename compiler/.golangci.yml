@@ -37,6 +37,9 @@ linters:
     - funlen # Disable function length checks (test functions need comprehensive cases)
     - gosec # Disable security checks (test files need file operations and exec calls)
     - dupword # Disable duplicate word detection (test output strings may have repeated words)
+    - noctx # Allow exec.Command without context (would require significant refactoring)
+    - gocognit # Allow higher cognitive complexity for complex type inference
+    - noinlineerr # Allow inline error handling for readability
 
     # Ignore these rules
     - nlreturn # This rule is not beneficial for this codebase

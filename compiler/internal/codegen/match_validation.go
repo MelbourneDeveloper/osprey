@@ -12,27 +12,16 @@ const (
 	MinParametersForNamedArgs = 2
 )
 
-
-// validateMatchExpressionWithType validates match expressions with discriminant type information
-func (g *LLVMGenerator) validateMatchExpressionWithType(expr *ast.MatchExpression, discriminantType string) error {
-	// Check if match expression has no arms
-	if len(expr.Arms) == 0 {
-		if expr.Position != nil {
-			//nolint:err113 // Dynamic error needed for exact test format matching
-			return fmt.Errorf("line %d:%d: match expression must have at least one arm",
-				expr.Position.Line, expr.Position.Column)
-		}
-		return ErrMatchNoArms
-	}
-
+// validateMatchExpression validates match expressions for exhaustiveness and unknown variants.
+func (g *LLVMGenerator) validateMatchExpression(expr *ast.MatchExpression) error {
 	for _, arm := range expr.Arms {
-		err := g.validateMatchArmWithTypeAndPosition(arm, discriminantType, expr.Position)
+		err := g.validateMatchArmWithPosition(arm, expr.Position)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Check for exhaustiveness (using the existing function)
+	// Check for exhaustiveness
 	err := g.validateMatchExhaustiveness(expr)
 	if err != nil {
 		return err
@@ -158,17 +147,11 @@ func (g *LLVMGenerator) reorderNamedArguments(fnName string, args []ast.NamedArg
 	return reorderedArgs, nil
 }
 
-
-func (g *LLVMGenerator) validateMatchArmWithTypeAndPosition(
-	arm ast.MatchArm, discriminantType string, matchPos *ast.Position,
-) error {
-	return g.validateMatchPatternWithTypeAndPosition(arm.Pattern, discriminantType, matchPos)
+func (g *LLVMGenerator) validateMatchArmWithPosition(arm ast.MatchArm, matchPos *ast.Position) error {
+	return g.validateMatchPatternWithPosition(arm.Pattern, matchPos)
 }
 
-
-func (g *LLVMGenerator) validateMatchPatternWithTypeAndPosition(
-	pattern ast.Pattern, discriminantType string, matchPos *ast.Position,
-) error {
+func (g *LLVMGenerator) validateMatchPatternWithPosition(pattern ast.Pattern, matchPos *ast.Position) error {
 	// Infer pattern type with position context
 	_, err := g.typeInferer.InferPattern(pattern)
 	if err != nil {
@@ -176,8 +159,7 @@ func (g *LLVMGenerator) validateMatchPatternWithTypeAndPosition(
 		if strings.Contains(err.Error(), "unknown constructor") {
 			// Extract the constructor name from the pattern
 			constructorName := pattern.Constructor
-			// Use the provided discriminant type instead of hardcoded "Color"
-			return WrapUnknownVariantWithPos(constructorName, discriminantType, matchPos)
+			return WrapUnknownVariantWithPos(constructorName, "Color", matchPos)
 		}
 
 		return err

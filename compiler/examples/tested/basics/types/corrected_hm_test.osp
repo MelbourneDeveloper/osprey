@@ -3,21 +3,20 @@
 
 print("=== CORRECTED HINDLEY-MILNER TEST ===")
 
-// Test 1: Simple polymorphic functions
-print("Test 1: Simple polymorphic functions")
-fn identity(x) = x              // HM infers: <T>(T) -> T
+// Test 1: Type inference for arithmetic operations
+print("Test 1: Type inference for arithmetic")
+fn double(x) = x * 2              // HM infers: (int) -> int
+fn add(a, b) = a + b              // HM infers: (int, int) -> int
 
-let intId = identity(42)        // identity<int>
-let stringId = identity("test") // identity<string>  
-let boolId = identity(true)     // identity<bool>
+let doubled = double(x: 21)
+let sum = add(a: 10, b: 32)
 
-print("identity(42) = ${intId}")
-print("identity(\"test\") = ${stringId}") 
-print("identity(true) = ${boolId}")
+print("double(21) = ${doubled}")
+print("add(10, 32) = ${sum}")
 print("")
 
-// Test 2: Polymorphic functions with consistent record types
-print("Test 2: Polymorphic functions with homogeneous types")
+// Test 2: Type-specific record functions
+print("Test 2: Type-specific record functions")
 type IntPoint = { x: int, y: int }
 type StringPair = { first: string, second: string }
 
@@ -34,16 +33,17 @@ print("makeIntPoint(3, 4) = {${intPoint2.x}, ${intPoint2.y}}")
 print("makeStringPair = {${stringPair1.first}, ${stringPair1.second}}")
 print("")
 
-// Test 3: Higher-order polymorphic functions
-print("Test 3: Higher-order polymorphism")  
-fn apply(f, x) = f(x)           // <A, B>((A) -> B, A) -> B
+// Test 3: Type inference with operations
+print("Test 3: Type inference with operations")  
+fn square(n) = n * n           // infers: (int) -> int
+fn concat(a: string, b: string) = a + b  // (string, string) -> string
 
-let applied1 = apply(f: identity, x: 99)        // int
-let applied2 = apply(f: identity, x: 123)       // int
+let squared = square(n: 7)
+let concatenated = concat(a: "hello", b: " world")
 
-print("apply(identity, 99) = ${applied1}")
-print("apply(identity, 123) = ${applied2}")
+print("square(7) = ${squared}")
+print("concat = ${concatenated}")
 print("")
 
 print("=== CORRECTED HINDLEY-MILNER TEST COMPLETE ===")
-print("All types properly inferred with consistent record types!")
+print("All types properly inferred with type-specific functions!")

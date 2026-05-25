@@ -1,0 +1,16 @@
+=== CORRECTED HINDLEY-MILNER TEST ===
+Test 1: Type inference for arithmetic
+double(21) = 42
+add(10, 32) = 42
+
+Test 2: Type-specific record functions
+makeIntPoint(1, 2) = {1, 2}
+makeIntPoint(3, 4) = {3, 4}
+makeStringPair = {hello, world}
+
+Test 3: Type inference with operations
+square(7) = 49
+concat = hello world
+
+=== CORRECTED HINDLEY-MILNER TEST COMPLETE ===
+All types properly inferred with type-specific functions!

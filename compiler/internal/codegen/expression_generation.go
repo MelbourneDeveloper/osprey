@@ -167,13 +167,6 @@ func (g *LLVMGenerator) generateBooleanLiteral(lit *ast.BooleanLiteral) (value.V
 		}
 	}
 
-	// 3. Check expected parameter type context (for function arguments)
-	if g.expectedParameterType != nil {
-		if g.expectedParameterType == types.I1 {
-			targetType = types.I1
-		}
-	}
-
 	if lit.Value {
 		if targetType == types.I1 {
 			return constant.NewBool(true), nil
@@ -282,28 +275,13 @@ func (g *LLVMGenerator) generateObjectLiteral(lit *ast.ObjectLiteral) (value.Val
 		fieldValues []value.Value
 	)
 
-	// HINDLEY-MILNER FIX: Use consistent field ordering
-	// Infer the record type to get consistent field mapping
-	objType, err := g.typeInferer.InferType(lit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to infer object literal type: %w", err)
+	// Sort field names to ensure consistent ordering
+	fieldNames := make([]string, 0, len(lit.Fields))
+	for fieldName := range lit.Fields {
+		fieldNames = append(fieldNames, fieldName)
 	}
 
-	recordType, ok := objType.(*RecordType)
-	if !ok {
-		return nil, fmt.Errorf("%w: object literal did not infer to record type", ErrTypeMismatch)
-	}
-
-	// Get consistent field mapping
-	fieldMapping := g.getOrCreateRecordFieldMapping(recordType.name, recordType.fields)
-
-	// Create ordered field names based on mapping
-	fieldNames := make([]string, len(lit.Fields))
-	for fieldName, index := range fieldMapping {
-		if index < len(fieldNames) {
-			fieldNames[index] = fieldName
-		}
-	}
+	sort.Strings(fieldNames)
 
 	// Process fields in sorted order
 	for _, fieldName := range fieldNames {
@@ -631,17 +609,9 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 
 		return g.builder.NewSub(zero, operand), nil
 	case "!":
-		// Boolean NOT: check operand type and return appropriate type
-		if operand.Type() == types.I1 {
-			// If operand is already boolean, just invert it
-			return g.builder.NewICmp(enum.IPredEQ, operand, constant.NewBool(false)), nil
-		}
-		// If operand is integer, compare with 0 and return boolean
+		// Boolean NOT: convert to 0/1 and XOR with 1
 		cmp := g.builder.NewICmp(enum.IPredEQ, operand, constant.NewInt(types.I64, 0))
-		// Check if we need boolean or integer result based on context
-		if g.expectedReturnType == types.I1 {
-			return cmp, nil
-		}
+
 		return g.builder.NewZExt(cmp, types.I64), nil
 	default:
 		return nil, WrapUnsupportedUnaryOpWithPos(unaryExpr.Operator, unaryExpr.Position)
@@ -880,13 +850,24 @@ func (g *LLVMGenerator) generateRecordFieldAccess(
 			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName)
 	}
 
-	// HINDLEY-MILNER FIX: Use consistent field mapping
-	fieldMapping := g.getOrCreateRecordFieldMapping(recordType.name, recordType.fields)
+	// Find the field index using the original type declaration order
+	fieldIndex := -1
 
-	fieldIndex, exists := fieldMapping[fieldAccess.FieldName]
-	if !exists {
-		return nil, fmt.Errorf("line %d:%d: field '%s' not found in record type '%s'", //nolint:err113
-			fieldAccess.Position.Line, fieldAccess.Position.Column, fieldAccess.FieldName, recordType.name)
+	// Get the type name from the record type
+	typeName := recordType.name
+	if typeDecl, exists := g.typeDeclarations[typeName]; exists && len(typeDecl.Variants) > 0 {
+		// For record types, use the first (and only) variant
+		variant := &typeDecl.Variants[0]
+		for i, field := range variant.Fields {
+			if field.Name == fieldAccess.FieldName {
+				fieldIndex = i
+				break
+			}
+		}
+	} else {
+		// Fallback: if we can't find the type declaration, return an error
+		return nil, fmt.Errorf("line %d:%d: cannot find type declaration for record type '%s'", //nolint:err113
+			fieldAccess.Position.Line, fieldAccess.Position.Column, typeName)
 	}
 
 	if fieldIndex == -1 || fieldIndex >= len(structType.Fields) {
@@ -1024,37 +1005,15 @@ func (g *LLVMGenerator) generateConstrainedRecordConstructor(
 		// Call the validation function with the struct
 		validationResult := g.builder.NewCall(validationFunc, structValue)
 
-		// The validation function returns a bool (true for valid, false for invalid)
-		// Convert to integer: 1 for success (valid), -1 for failure (invalid)
-		// Generate unique block names to avoid conflicts with multiple constraint validations
-		blockSuffix := fmt.Sprintf("_%p", typeConstructor)
-		validBlock := g.function.NewBlock("valid" + blockSuffix)
-		invalidBlock := g.function.NewBlock("invalid" + blockSuffix)
-		mergeBlock := g.function.NewBlock("merge" + blockSuffix)
+		// For boolean validation: return 1 for success, -1 for failure
+		// Use a simpler approach with select instruction instead of branches
+		successValue := constant.NewInt(types.I32, 1)
+		failureValue := constant.NewInt(types.I32, -1)
 
-		// Branch based on validation result
-		g.builder.NewCondBr(validationResult, validBlock, invalidBlock)
+		// Use LLVM select: result = validationResult ? 1 : -1
+		resultValue := g.builder.NewSelect(validationResult, successValue, failureValue)
 
-		// Valid case: return 1
-		g.builder = validBlock
-		successValue := constant.NewInt(types.I64, 1)
-
-		g.builder.NewBr(mergeBlock)
-
-		// Invalid case: return -1
-		g.builder = invalidBlock
-		failureValue := constant.NewInt(types.I64, -1)
-
-		g.builder.NewBr(mergeBlock)
-
-		// Merge point - use PHI to select the result
-		g.builder = mergeBlock
-		phi := g.builder.NewPhi(
-			ir.NewIncoming(successValue, validBlock),
-			ir.NewIncoming(failureValue, invalidBlock),
-		)
-
-		return phi, nil
+		return resultValue, nil
 	}
 
 	// No validation function - just return the struct
@@ -1072,187 +1031,88 @@ func (g *LLVMGenerator) generateUnconstrainedRecordConstructor(
 
 	variant := &typeDecl.Variants[0] // Record types have one variant
 
-	// Build field map and get consistent field mapping
-	fieldMap := g.buildFieldMapFromVariant(variant)
-	fieldMapping := g.getOrCreateRecordFieldMapping(typeDecl.Name, fieldMap)
+	// Create lists for field types and values, maintaining declaration order
+	var (
+		fieldTypes  []types.Type
+		fieldValues []value.Value
+	)
 
-	// Process fields and build struct
-	fieldTypes, fieldValues, err := g.processRecordFields(typeConstructor, variant, fieldMapping)
-	if err != nil {
-		return nil, err
-	}
+	// Process fields in declaration order (not sorted)
 
-	// Create and populate struct
-	return g.createRecordStruct(fieldTypes, fieldValues)
-}
-
-// buildFieldMapFromVariant converts variant fields to Type system
-func (g *LLVMGenerator) buildFieldMapFromVariant(variant *ast.TypeVariant) map[string]Type {
-	fieldMap := make(map[string]Type)
 	for _, field := range variant.Fields {
-		var fieldType Type
-		switch field.Type {
+		fieldName := field.Name
+		// Find the field value in the constructor
+		fieldExpr, exists := typeConstructor.Fields[fieldName]
+		if !exists {
+			return nil, WrapMissingField(fieldName)
+		}
+
+		// Use the declared field type from the type declaration
+		declaredFieldTypeName := field.Type
+
+		// Convert declared type name to LLVM type
+		var declaredLLVMType types.Type
+
+		switch declaredFieldTypeName {
 		case TypeInt:
-			fieldType = NewPrimitiveType(TypeInt)
+			declaredLLVMType = types.I64
 		case TypeString:
-			fieldType = NewPrimitiveType(TypeString)
+			declaredLLVMType = types.I8Ptr
 		case TypeBool:
-			fieldType = NewPrimitiveType(TypeBool)
+			declaredLLVMType = types.I1
 		default:
-			fieldType = NewConcreteType(field.Type)
+			// For complex types, we'll determine after generation
+			declaredLLVMType = nil
 		}
-		fieldMap[field.Name] = fieldType
-	}
-	return fieldMap
-}
 
-// processRecordFields generates field values in the correct order
-func (g *LLVMGenerator) processRecordFields(
-	typeConstructor *ast.TypeConstructorExpression,
-	variant *ast.TypeVariant,
-	fieldMapping map[string]int,
-) ([]types.Type, []value.Value, error) {
-	fieldTypes := make([]types.Type, len(fieldMapping))
-	fieldValues := make([]value.Value, len(fieldMapping))
+		// Set expected type context for proper literal generation
+		oldExpectedType := g.expectedReturnType
+		g.expectedReturnType = declaredLLVMType
 
-	// Get sorted field names for consistent processing
-	sortedFieldNames := make([]string, 0, len(fieldMapping))
-	for fieldName := range fieldMapping {
-		sortedFieldNames = append(sortedFieldNames, fieldName)
-	}
-	sort.Strings(sortedFieldNames)
-
-	// Process each field
-	for _, fieldName := range sortedFieldNames {
-		fieldValue, fieldType, err := g.generateRecordField(fieldName, typeConstructor, variant)
+		// Generate the field value with the expected type context
+		fieldValue, err := g.generateExpression(fieldExpr)
 		if err != nil {
-			return nil, nil, err
+			g.expectedReturnType = oldExpectedType
+			return nil, err
 		}
 
-		fieldIndex := fieldMapping[fieldName]
-		fieldValues[fieldIndex] = fieldValue
-		fieldTypes[fieldIndex] = fieldType
-	}
+		// Restore previous expected type
+		g.expectedReturnType = oldExpectedType
 
-	return fieldTypes, fieldValues, nil
-}
+		fieldValues = append(fieldValues, fieldValue)
 
-// generateRecordField generates a single record field value
-func (g *LLVMGenerator) generateRecordField(
-	fieldName string,
-	typeConstructor *ast.TypeConstructorExpression,
-	variant *ast.TypeVariant,
-) (value.Value, types.Type, error) {
-	// Find field declaration type
-	var declaredFieldTypeName string
-	for _, field := range variant.Fields {
-		if field.Name == fieldName {
-			declaredFieldTypeName = field.Type
-			break
+		// Use declared type if known, otherwise use inferred type
+		if declaredLLVMType != nil {
+			fieldTypes = append(fieldTypes, declaredLLVMType)
+		} else {
+			fieldTypes = append(fieldTypes, fieldValue.Type())
 		}
 	}
 
-	// Get field expression
-	fieldExpr, exists := typeConstructor.Fields[fieldName]
-	if !exists {
-		return nil, nil, WrapMissingField(fieldName)
-	}
-
-	// Convert to LLVM type
-	var declaredLLVMType types.Type
-	switch declaredFieldTypeName {
-	case TypeInt:
-		declaredLLVMType = types.I64
-	case TypeString:
-		declaredLLVMType = types.I8Ptr
-	case TypeBool:
-		declaredLLVMType = types.I1
-	default:
-		declaredLLVMType = nil
-	}
-
-	// Generate field value with expected type context
-	oldExpectedType := g.expectedReturnType
-	g.expectedReturnType = declaredLLVMType
-	defer func() { g.expectedReturnType = oldExpectedType }()
-
-	fieldValue, err := g.generateExpression(fieldExpr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Use actual field value type for polymorphic records
-	return fieldValue, fieldValue.Type(), nil
-}
-
-// createRecordStruct creates and populates the struct value
-func (g *LLVMGenerator) createRecordStruct(fieldTypes []types.Type, fieldValues []value.Value) (value.Value, error) {
+	// Create struct type and initialize with values
 	structType := types.NewStruct(fieldTypes...)
-	var structValue value.Value = constant.NewUndef(structType)
 
+	// Create the struct value by inserting field values into an undef struct
+	var structValue value.Value = constant.NewUndef(structType)
 	for i, fieldValue := range fieldValues {
+		// Ensure the field value type matches the expected struct field type
 		expectedType := structType.Fields[i]
 		actualType := fieldValue.Type()
 
 		finalFieldValue := fieldValue
+
 		if expectedType != actualType {
-			converted, err := g.convertFieldType(fieldValue, expectedType, actualType, i)
-			if err != nil {
-				return nil, err
-			}
-			finalFieldValue = converted
+			// Type mismatch - we need conversion or this is an error
+			// For now, don't insert mismatched types to avoid panic
+			// This needs better type inference in the function parameters
+			return nil, fmt.Errorf("type mismatch in record field %d: expected %v, got %v: %w",
+				i, expectedType, actualType, ErrRecordFieldTypeMismatch)
 		}
 
 		structValue = g.builder.NewInsertValue(structValue, finalFieldValue, uint64(i))
 	}
 
 	return structValue, nil
-}
-
-// convertFieldType converts a field value to the expected type if compatible
-func (g *LLVMGenerator) convertFieldType(
-	fieldValue value.Value,
-	expectedType, actualType types.Type,
-	fieldIndex int,
-) (value.Value, error) {
-	if !g.areCompatibleLLVMTypes(expectedType, actualType) {
-		return nil, fmt.Errorf("type mismatch in record field %d: expected %v, got %v: %w",
-			fieldIndex, expectedType, actualType, ErrRecordFieldTypeMismatch)
-	}
-
-	// Same string representation - likely same type from different contexts
-	if expectedType.String() == actualType.String() {
-		return fieldValue, nil
-	}
-
-	// For pointer types that should be compatible, use bitcast
-	if g.isPointerType(expectedType) && g.isPointerType(actualType) {
-		return g.builder.NewBitCast(fieldValue, expectedType), nil
-	}
-
-	// Default to original value for other compatible types
-	return fieldValue, nil
-}
-
-// areCompatibleLLVMTypes checks if two LLVM types are compatible for conversion
-func (g *LLVMGenerator) areCompatibleLLVMTypes(expected, actual types.Type) bool {
-	// If string representations are the same, they should be compatible
-	if expected.String() == actual.String() {
-		return true
-	}
-
-	// Check if both are pointer types
-	if g.isPointerType(expected) && g.isPointerType(actual) {
-		return true
-	}
-
-	return false
-}
-
-// isPointerType checks if a type is a pointer type
-func (g *LLVMGenerator) isPointerType(t types.Type) bool {
-	_, isPtr := t.(*types.PointerType)
-	return isPtr
 }
 
 // generateDiscriminatedUnionConstructor generates LLVM IR for discriminated union variant construction
@@ -1768,61 +1628,7 @@ func (g *LLVMGenerator) ensureBuiltinFunctionDeclaration(ospreyName string) *ir.
 	fn := g.module.NewFunc(llvmFunctionName, returnType, params...)
 	g.functions[ospreyName] = fn
 
-	// For certain built-in functions that can be used as first-class values,
-	// we need to generate the actual function body
-	if ospreyName == "toString" {
-		g.generateToStringFunctionBody(fn)
-	}
-
 	return fn
-}
-
-// generateToStringFunctionBody generates the function body for toString built-in function
-func (g *LLVMGenerator) generateToStringFunctionBody(fn *ir.Func) {
-	// Save current context
-	oldFunction := g.function
-	oldBuilder := g.builder
-
-	// Set up function context
-	entry := fn.NewBlock("")
-	g.builder = entry
-	g.function = fn
-
-	// Get the argument value
-	valueParam := fn.Params[0] // toString takes one parameter
-
-	// Simple toString implementation for integers
-	// Use sprintf to convert integer to string
-	sprintf := g.ensureSprintfDeclaration()
-	malloc := g.ensureMallocDeclaration()
-
-	// Format string for integer conversion
-	formatStr := constant.NewCharArrayFromString("%ld\x00")
-	formatGlobal := g.module.NewGlobalDef("", formatStr)
-	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-
-	// Allocate buffer on heap for result string (64 bytes should be enough for any 64-bit integer)
-	const bufferSizeBytes = 64
-
-	bufferSize := constant.NewInt(types.I64, bufferSizeBytes)
-	bufferPtr := g.builder.NewCall(malloc, bufferSize)
-
-	// Call sprintf(buffer, "%ld", value)
-	g.builder.NewCall(sprintf, bufferPtr, formatPtr, valueParam)
-
-	// Ensure null termination by explicitly setting the last byte to 0
-	// (sprintf should handle this, but let's be safe)
-	// bufferPtr is already i8*, so we just need to get element at index 63
-	lastBytePtr := g.builder.NewGetElementPtr(types.I8, bufferPtr,
-		constant.NewInt(types.I32, bufferSizeBytes-1))
-	g.builder.NewStore(constant.NewInt(types.I8, 0), lastBytePtr)
-
-	g.builder.NewRet(bufferPtr)
-
-	// Restore context
-	g.function = oldFunction
-	g.builder = oldBuilder
 }
 
 // findTypeDeclarationByVariant finds the type declaration that contains the given variant name
@@ -1867,13 +1673,20 @@ func (g *LLVMGenerator) generateSuccessConstructor(
 	valueType := value.Type()
 	resultStructType := types.NewStruct(valueType, types.I8) // [value, discriminant]
 
-	// Create the result struct as a value (not pointer)
-	// Use InsertValue to build the struct value directly
-	undefStruct := constant.NewUndef(resultStructType)
-	resultWithValue := g.builder.NewInsertValue(undefStruct, value, 0)
-	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
+	// Create the result struct
+	result := g.builder.NewAlloca(resultStructType)
 
-	return resultComplete, nil
+	// Store the success value
+	valuePtr := g.builder.NewGetElementPtr(resultStructType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(value, valuePtr)
+
+	// Store discriminant = 0 for success
+	discriminantPtr := g.builder.NewGetElementPtr(resultStructType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 0), discriminantPtr)
+
+	return result, nil
 }
 
 // generateErrorConstructor generates LLVM IR for Error { message: E } constructor.
@@ -1900,13 +1713,20 @@ func (g *LLVMGenerator) generateErrorConstructor(
 	messageType := message.Type()
 	resultStructType := types.NewStruct(messageType, types.I8) // [error_message, discriminant]
 
-	// Create the result struct as a value (not pointer)
-	// Use InsertValue to build the struct value directly
-	undefStruct := constant.NewUndef(resultStructType)
-	resultWithMessage := g.builder.NewInsertValue(undefStruct, message, 0)
-	resultComplete := g.builder.NewInsertValue(resultWithMessage, constant.NewInt(types.I8, 1), 1)
+	// Create the result struct
+	result := g.builder.NewAlloca(resultStructType)
 
-	return resultComplete, nil
+	// Store the error message in the first field
+	messagePtr := g.builder.NewGetElementPtr(resultStructType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	g.builder.NewStore(message, messagePtr)
+
+	// Store discriminant = 1 for error
+	discriminantPtr := g.builder.NewGetElementPtr(resultStructType, result,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	g.builder.NewStore(constant.NewInt(types.I8, 1), discriminantPtr)
+
+	return result, nil
 }
 
 // generateResultFieldAccessAsMatch converts Result field access to pattern matching

@@ -16,7 +16,7 @@ import (
 func validateBuiltInArgs(funcName string, callExpr *ast.CallExpression) error {
 	fn, exists := GlobalBuiltInRegistry.GetFunction(funcName)
 	if !exists {
-		return WrapUndefinedFunction(funcName)
+		return WrapFunctionNotFound(funcName)
 	}
 
 	if len(callExpr.Arguments) != len(fn.ParameterTypes) {
@@ -90,6 +90,18 @@ func (g *LLVMGenerator) generateToStringCall(callExpr *ast.CallExpression) (valu
 	isBooleanType := g.isSemanticBooleanType(resolvedType)
 	if isBooleanType {
 		argType = TypeBool
+	}
+
+	if err != nil {
+		// Fallback for literals without explicit type info
+		switch arg.Type().(type) {
+		case *types.IntType:
+			argType = TypeInt
+		case *types.PointerType:
+			argType = TypeString
+		default:
+			return nil, err
+		}
 	}
 
 	return g.convertValueToStringByType(argType, arg)
@@ -244,6 +256,7 @@ func (g *LLVMGenerator) isSemanticBooleanType(inferredType Type) bool {
 func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bool {
 	// Check if this is a value that's known to be from a boolean-returning function
 	// This is a heuristic approach until we have better generic type tracking
+
 	// For now, check if the value is constrained to 0 or 1 (typical boolean values)
 	if constant, ok := resultValue.(*constant.Int); ok {
 		val := constant.X.Int64()
@@ -258,8 +271,7 @@ func (g *LLVMGenerator) isResultValueSemanticBoolean(resultValue value.Value) bo
 
 // generatePrintCall handles print function calls.
 func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(PrintFunc, callExpr)
-	if err != nil {
+	if err := validateBuiltInArgs(PrintFunc, callExpr); err != nil {
 		return nil, err
 	}
 
@@ -314,80 +326,49 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 		return nil, err
 	}
 
-	// Declare fgets function if not already declared
-	fgetsFunc, ok := g.functions["fgets"]
+	// Declare scanf function if not already declared
+	scanfFunc, ok := g.functions["scanf"]
 	if !ok {
-		fgetsFunc = g.module.NewFunc("fgets", types.I8Ptr,
-			ir.NewParam("str", types.I8Ptr),
-			ir.NewParam("size", types.I32),
-			ir.NewParam("stream", types.I8Ptr))
-		g.functions["fgets"] = fgetsFunc
+		scanfFunc = g.module.NewFunc("scanf", types.I32, ir.NewParam("format", types.I8Ptr))
+		scanfFunc.Sig.Variadic = true
+		g.functions["scanf"] = scanfFunc
 	}
 
-	// Use stdin directly - it's an external global in libc
-	stdinGlobal := g.module.NewGlobalDef("stdin", constant.NewNull(types.I8Ptr))
-
-	// Allocate buffer for input string (256 chars should be enough)
-	const inputBufferSize = 256
-
-	bufferSize := constant.NewInt(types.I32, inputBufferSize)
-	inputBuffer := g.builder.NewAlloca(types.NewArray(inputBufferSize, types.I8))
-
-	// Cast array to i8* for fgets
-	bufferPtr := g.builder.NewGetElementPtr(types.NewArray(inputBufferSize, types.I8), inputBuffer,
+	// Create format string for reading an integer
+	formatStr := constant.NewCharArrayFromString("%ld\x00")
+	formatGlobal := g.module.NewGlobalDef("", formatStr)
+	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 
-	// Call fgets to read the string
-	fgetsResult := g.builder.NewCall(fgetsFunc, bufferPtr, bufferSize, stdinGlobal)
+	// Allocate space for the input value
+	inputVar := g.builder.NewAlloca(types.I64)
 
-	// Create a Result<String, Error>
-	resultType := g.getResultType(types.I8Ptr)
+	// Call scanf to read the integer
+	scanfResult := g.builder.NewCall(scanfFunc, formatPtr, inputVar)
+
+	// Load the input value
+	inputValue := g.builder.NewLoad(types.I64, inputVar)
+
+	// Create a Result<Int, Error>
+	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
 
-	// Check if fgets succeeded (returns non-null pointer)
-	nullPtr := constant.NewNull(types.I8Ptr)
-	fgetsSucceeded := g.builder.NewICmp(enum.IPredNE, fgetsResult, nullPtr)
+	// Check if scanf succeeded (returns 1 for successful read)
+	one := constant.NewInt(types.I32, 1)
+	scanfSucceeded := g.builder.NewICmp(enum.IPredEQ, scanfResult, one)
 
 	// Create blocks for success and error cases
 	successBlock := g.function.NewBlock("input_success")
 	errorBlock := g.function.NewBlock("input_error")
 	endBlock := g.function.NewBlock("input_end")
 
-	g.builder.NewCondBr(fgetsSucceeded, successBlock, errorBlock)
+	g.builder.NewCondBr(scanfSucceeded, successBlock, errorBlock)
 
-	// Success case: store the input string
+	// Success case: store the input value
 	g.builder = successBlock
-
-	// Remove trailing newline if present using strlen and string manipulation
-	strlenFunc, ok := g.functions["strlen"]
-	if !ok {
-		strlenFunc = g.module.NewFunc("strlen", types.I64, ir.NewParam("str", types.I8Ptr))
-		g.functions["strlen"] = strlenFunc
-	}
-
-	// Get string length
-	strLength := successBlock.NewCall(strlenFunc, bufferPtr)
-
-	// Check if last character is newline (ASCII 10) and remove it
-	one := constant.NewInt(types.I64, 1)
-	lastCharIdx := successBlock.NewSub(strLength, one)
-	lastCharPtr := successBlock.NewGetElementPtr(types.I8, bufferPtr, lastCharIdx)
-	lastChar := successBlock.NewLoad(types.I8, lastCharPtr)
-
-	const asciiNewline = 10
-
-	newlineChar := constant.NewInt(types.I8, asciiNewline) // ASCII newline
-	isNewline := successBlock.NewICmp(enum.IPredEQ, lastChar, newlineChar)
-
-	// Replace newline with null terminator if it exists
-	nullChar := constant.NewInt(types.I8, 0)
-	// Conditionally replace the newline character with null terminator
-	charToStore := successBlock.NewSelect(isNewline, nullChar, lastChar)
-	successBlock.NewStore(charToStore, lastCharPtr)
-
 	valuePtr := successBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	successBlock.NewStore(bufferPtr, valuePtr)
+	successBlock.NewStore(inputValue, valuePtr)
 	discriminantPtr := successBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	successBlock.NewStore(constant.NewInt(types.I8, 0), discriminantPtr) // 0 for Success
@@ -398,10 +379,10 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 	errorDiscriminantPtr := errorBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	errorBlock.NewStore(constant.NewInt(types.I8, 1), errorDiscriminantPtr) // 1 for Error
-	// Set value to null for error case
+	// Set value to 0 for error case
 	errorValuePtr := errorBlock.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	errorBlock.NewStore(nullPtr, errorValuePtr)
+	errorBlock.NewStore(constant.NewInt(types.I64, 0), errorValuePtr)
 	errorBlock.NewBr(endBlock)
 
 	// Continue with end block
@@ -411,8 +392,7 @@ func (g *LLVMGenerator) generateInputCall(callExpr *ast.CallExpression) (value.V
 }
 
 func (g *LLVMGenerator) generateLengthCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(LengthFunc, callExpr)
-	if err != nil {
+	if err := validateBuiltInArgs(LengthFunc, callExpr); err != nil {
 		return nil, err
 	}
 
@@ -441,8 +421,7 @@ func (g *LLVMGenerator) getResultType(valueType types.Type) *types.StructType {
 
 // generateContainsCall handles contains(haystack: string, needle: string) -> bool function calls.
 func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(ContainsFunc, callExpr)
-	if err != nil {
+	if err := validateBuiltInArgs(ContainsFunc, callExpr); err != nil {
 		return nil, err
 	}
 
@@ -490,8 +469,7 @@ func (g *LLVMGenerator) generateContainsCall(callExpr *ast.CallExpression) (valu
 }
 
 func (g *LLVMGenerator) generateSubstringCall(callExpr *ast.CallExpression) (value.Value, error) {
-	err := validateBuiltInArgs(SubstringFunc, callExpr)
-	if err != nil {
+	if err := validateBuiltInArgs(SubstringFunc, callExpr); err != nil {
 		return nil, err
 	}
 
