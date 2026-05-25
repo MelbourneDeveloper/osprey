@@ -679,7 +679,7 @@ func getAdventureGameExpectedOutput() string {
 		"Enemy Health: 120 ❤️\n" +
 		"Your attack power: 60 ⚔️\n\n" +
 		"⚡ BATTLE COMMENCES! ⚡\n" +
-		"You need 2 successful attacks to defeat the Ancient Dragon!\n\n" +
+		"You need 2.0 successful attacks to defeat the Ancient Dragon!\n\n" +
 		"🥊 Round 1: You strike for 60 damage!\n" +
 		"Dragon health remaining: 60\n\n" +
 		"🥊 Round 2: Another powerful blow for 60 damage!\n" +

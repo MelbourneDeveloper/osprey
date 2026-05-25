@@ -98,7 +98,7 @@ func TestArithmetic(t *testing.T) {
 		{
 			name:   "division",
 			source: "print(24 / 4)",
-			output: "Success(6)",
+			output: "Success(6.0)",
 		},
 	}
 
@@ -223,7 +223,7 @@ print(toString(result))`
 func TestComplexArithmetic(t *testing.T) {
 	source := `let result = ((5 + 3) * 2) - (4 / 2)
 print(toString(result))`
-	testCompileAndRunWithOutput(t, source, "Success(14)", "complex arithmetic")
+	testCompileAndRunWithOutput(t, source, "Success(14.0)", "complex arithmetic")
 }
 
 func TestFunctionWithNoParameters(t *testing.T) {
@@ -321,7 +321,7 @@ func TestAllOperators(t *testing.T) {
 		{
 			name:   "division_result",
 			source: "print(toString(15 / 3))",
-			output: "Success(5)",
+			output: "Success(5.0)",
 		},
 	}
 

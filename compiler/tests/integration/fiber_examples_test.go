@@ -38,10 +38,10 @@ func TestFiberExamples(t *testing.T) {
 			"=== Fiber Tests Complete ===\n",
 		"fiber_final.osp": "=== Final Fiber Test ===\n" +
 			"Distributed computation across 4 nodes:\n" +
-			"Node 1 processed: 2500 records\n" +
-			"Node 2 processed: 5000 records\n" +
-			"Node 3 processed: 7500 records\n" +
-			"Node 4 processed: 10000 records\n\n" +
+			"Node 1 processed: 2500.0 records\n" +
+			"Node 2 processed: 5000.0 records\n" +
+			"Node 3 processed: 7500.0 records\n" +
+			"Node 4 processed: 10000.0 records\n\n" +
 			"Microservices orchestration:\n" +
 			"Auth service response: 200\n" +
 			"Inventory count: 22800\n" +

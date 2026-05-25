@@ -39,6 +39,7 @@ char *osp_string_pad_start(const char *s, int64_t target_length, const char *fil
 char *osp_string_pad_end(const char *s, int64_t target_length, const char *fill);
 int64_t osp_parse_int_strict(const char *s, int64_t *out);
 int64_t osp_parse_float_strict(const char *s, double *out);
+char *osp_float_to_string(double d);
 
 /* list API — see string_runtime_list.c */
 osp_string_list *osp_string_split(const char *s, const char *sep);
