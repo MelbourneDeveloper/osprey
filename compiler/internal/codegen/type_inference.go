@@ -853,21 +853,31 @@ func (ti *TypeInferer) handlePatternFieldBindings(pattern ast.Pattern, discrimin
 	}
 }
 
+// patternBindName returns the binding name a Success/Error arm
+// introduces — destructure form `Success { value }` (Fields[0]) or
+// variable-bind form `Success v` (Variable). Returns "" when neither
+// is present (e.g. `Success => 0`).
+func patternBindName(pattern ast.Pattern) string {
+	if len(pattern.Fields) > 0 {
+		return pattern.Fields[0]
+	}
+	return pattern.Variable
+}
+
 // bindSuccessPattern binds pattern fields for Success constructor
 func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType Type) bool {
+	name := patternBindName(pattern)
 	// Handle GenericType Result<T, E>
 	if gt, ok := discriminantType.(*GenericType); ok && gt.name == TypeResult && len(gt.typeArgs) >= 1 {
-		successType := gt.typeArgs[0]
-		if len(pattern.Fields) > 0 {
-			ti.env.Set(pattern.Fields[0], successType)
+		if name != "" {
+			ti.env.Set(name, gt.typeArgs[0])
 		}
 		return true
 	}
 	// Handle ConcreteType Result<T, E> (legacy string-based approach)
 	if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
-		successType := ti.extractResultSuccessType(ct.name)
-		if len(pattern.Fields) > 0 {
-			ti.env.Set(pattern.Fields[0], successType)
+		if name != "" {
+			ti.env.Set(name, ti.extractResultSuccessType(ct.name))
 		}
 		return true
 	}
@@ -876,19 +886,18 @@ func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType 
 
 // bindErrorPattern binds pattern fields for Error constructor
 func (ti *TypeInferer) bindErrorPattern(pattern ast.Pattern, discriminantType Type) bool {
+	name := patternBindName(pattern)
 	// Handle GenericType Result<T, E>
 	if gt, ok := discriminantType.(*GenericType); ok && gt.name == "Result" && len(gt.typeArgs) >= 2 {
-		errorType := gt.typeArgs[1]
-		if len(pattern.Fields) > 0 {
-			ti.env.Set(pattern.Fields[0], errorType)
+		if name != "" {
+			ti.env.Set(name, gt.typeArgs[1])
 		}
 		return true
 	}
 	// Handle ConcreteType Result<T, E> (legacy string-based approach)
 	if ct, ok := discriminantType.(*ConcreteType); ok && strings.HasPrefix(ct.name, "Result<") {
-		errorType := ti.extractResultErrorType(ct.name)
-		if len(pattern.Fields) > 0 {
-			ti.env.Set(pattern.Fields[0], errorType)
+		if name != "" {
+			ti.env.Set(name, ti.extractResultErrorType(ct.name))
 		}
 		return true
 	}
