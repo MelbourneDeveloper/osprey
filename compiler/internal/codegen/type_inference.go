@@ -334,6 +334,7 @@ type TypeScheme struct {
 }
 
 func (ts *TypeScheme) String() string {
+	fmt.Printf("🔥 DEBUG: TypeScheme.String() called with vars=%v, typ=%v\n", ts.vars, ts.typ)
 	if len(ts.vars) == 0 {
 		return ts.typ.String()
 	}
@@ -348,11 +349,13 @@ func (ts *TypeScheme) String() string {
 
 // Category returns the category of the type scheme
 func (ts *TypeScheme) Category() TypeCategory {
+	fmt.Printf("🔥 DEBUG: TypeScheme.Category() called with vars=%v, typ=%v\n", ts.vars, ts.typ)
 	return ts.typ.Category()
 }
 
 // Equals checks if two type schemes are equal
 func (ts *TypeScheme) Equals(other Type) bool {
+	fmt.Printf("🔥 DEBUG: TypeScheme.Equals() called with vars=%v, typ=%v, other=%T\n", ts.vars, ts.typ, other)
 	if otherTs, ok := other.(*TypeScheme); ok {
 		if len(ts.vars) != len(otherTs.vars) {
 			return false
@@ -466,7 +469,9 @@ func (ti *TypeInferer) Instantiate(scheme *TypeScheme) Type {
 
 // Generalize creates a type scheme by quantifying free type variables
 func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
+	fmt.Printf("🔥 DEBUG: Generalize() called with type: %T = %v\n", t, t)
 	freeVars := ti.getFreeVars(t)
+	fmt.Printf("🔥 DEBUG: Generalize() found free vars: %v\n", freeVars)
 
 	// Remove vars that are already in the environment
 	var schemeVars []int
@@ -490,7 +495,9 @@ func (ti *TypeInferer) Generalize(t Type) *TypeScheme {
 		}
 	}
 
-	return &TypeScheme{vars: schemeVars, typ: t}
+	scheme := &TypeScheme{vars: schemeVars, typ: t}
+	fmt.Printf("🔥 DEBUG: Generalize() created TypeScheme with vars=%v, typ=%v\n", schemeVars, t)
+	return scheme
 }
 
 // Unify performs type unification between two types

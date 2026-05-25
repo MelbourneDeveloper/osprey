@@ -1,0 +1,11 @@
+// Test polymorphic function to trigger TypeScheme usage
+fn identity(x) {
+    x
+}
+
+fn main() {
+    let intResult = identity(42)
+    let stringResult = identity("hello")
+    print(toString(intResult))
+    print(stringResult)
+}

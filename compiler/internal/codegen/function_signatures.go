@@ -2,7 +2,6 @@ package codegen
 
 import (
 	"fmt"
-	"maps"
 	"sort"
 	"strings"
 
@@ -17,7 +16,6 @@ import (
 // Type mangling constants for generating unique function names
 const (
 	TypeManglingInt64   = "i64"
-	TypeManglingFloat   = "float"
 	TypeManglingStr     = "str"
 	TypeManglingBool    = "bool"
 	TypeManglingI32     = "i32"
@@ -49,41 +47,17 @@ func (g *LLVMGenerator) declareFunctionSignature(fnDecl *ast.FunctionDeclaration
 		return err
 	}
 
-	// CRITICAL: Prune parameter types to resolve substitutions BEFORE restoring state
-	// This ensures type unifications from body inference (e.g., record field unification) are preserved
-	// BUT: Only prune parameters WITHOUT explicit type annotations to preserve explicit types like "any"
-	finalFnType := g.buildFinalFunctionType(fnDecl, paramTypes, returnTypeVar)
+	finalFnType := &FunctionType{
+		paramTypes: paramTypes,
+		returnType: g.typeInferer.prune(returnTypeVar),
+	}
 
 	g.restoreTypeInferenceState(state)
 
 	// HINDLEY-MILNER: Generalize the function type to create a type scheme
 	// This allows the function to be polymorphic across multiple call sites
-	// But only generalize if there are actually unresolved type variables (after pruning)
-	hasTypeVars := functionTypeHasTypeVars(finalFnType)
-	g.logTrace("declared function signature inferred",
-		"phase", "function_signature",
-		"function", fnDecl.Name,
-		"function_type", typeName(finalFnType),
-		"param_types", g.typeNames(finalFnType.paramTypes),
-		"return_type", typeName(finalFnType.returnType),
-		"has_type_vars", hasTypeVars)
-
-	if hasTypeVars {
-		// Has type variables - create a type scheme for polymorphism
-		scheme := g.typeInferer.Generalize(finalFnType)
-		g.typeInferer.env.Set(fnDecl.Name, scheme)
-		g.logDebug("stored generalized function signature",
-			"phase", "function_signature",
-			"function", fnDecl.Name,
-			"scheme", scheme.String())
-	} else {
-		// All types are concrete - this is a monomorphic function
-		g.typeInferer.env.Set(fnDecl.Name, finalFnType)
-		g.logDebug("stored concrete function signature",
-			"phase", "function_signature",
-			"function", fnDecl.Name,
-			"function_type", typeName(finalFnType))
-	}
+	scheme := g.typeInferer.Generalize(finalFnType)
+	g.typeInferer.env.Set(fnDecl.Name, scheme)
 
 	err = g.createLLVMFunctionSignature(fnDecl, finalFnType)
 	if err != nil {
@@ -103,7 +77,9 @@ type typeInferenceState struct {
 // saveTypeInferenceState saves the current type inference state
 func (g *LLVMGenerator) saveTypeInferenceState() *typeInferenceState {
 	oldSubst := make(Substitution)
-	maps.Copy(oldSubst, g.typeInferer.subst)
+	for k, v := range g.typeInferer.subst {
+		oldSubst[k] = v
+	}
 
 	var oldEffects []string
 	if g.effectCodegen != nil {
@@ -226,8 +202,6 @@ func (g *LLVMGenerator) unifyBodyWithReturnType(
 
 // createLLVMFunctionSignature creates the LLVM function signature
 func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclaration, finalFnType *FunctionType) error {
-	// Use the inferred return type AS-IS (don't unwrap)
-	// If the function body returns Result, the signature should be Result
 	llvmReturnType := g.getLLVMType(finalFnType.returnType)
 
 	if fnDecl.Name == MainFunctionName {
@@ -240,18 +214,7 @@ func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclarat
 
 	params := make([]*ir.Param, len(finalFnType.paramTypes))
 	for i, paramType := range finalFnType.paramTypes {
-		// CRITICAL: For polymorphic functions, parameter types may still be TypeVars
-		// These should have been unified during body type inference
-		// BUT: Don't prune parameters with explicit type annotations to preserve types like "any"
-		var llvmParamType Type
-		if i < len(fnDecl.Parameters) && fnDecl.Parameters[i].Type != nil {
-			// Parameter has explicit type annotation - use it directly
-			llvmParamType = paramType
-		} else {
-			// Parameter has no explicit type - prune to resolve inferred type
-			llvmParamType = g.typeInferer.prune(paramType)
-		}
-		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(llvmParamType))
+		params[i] = ir.NewParam(fnDecl.Parameters[i].Name, g.getLLVMType(paramType))
 	}
 
 	fn := g.module.NewFunc(mangledName, llvmReturnType, params...)
@@ -274,23 +237,12 @@ func (g *LLVMGenerator) createLLVMFunctionSignature(fnDecl *ast.FunctionDeclarat
 func (g *LLVMGenerator) getMonomorphizedName(baseName string, fnType *FunctionType) string {
 	// For non-polymorphic or first instance, use original name
 	if !g.isPolymorphicFunction(baseName, fnType) {
-		g.logTrace("using base function name for monomorphized lookup",
-			"phase", "monomorphization",
-			"function", baseName,
-			"function_type", typeName(fnType))
-
 		return baseName
 	}
 
 	// Create a type signature for mangling
 	typeSignature := g.createTypeSignature(fnType)
 	mangledName := fmt.Sprintf("%s_%s", baseName, typeSignature)
-	g.logTrace("created monomorphized function name",
-		"phase", "monomorphization",
-		"function", baseName,
-		"mangled_name", mangledName,
-		"type_signature", typeSignature,
-		"function_type", typeName(fnType))
 
 	// Track this monomorphization
 	if g.monomorphizedInstances == nil {
@@ -308,23 +260,15 @@ func (g *LLVMGenerator) isPolymorphicFunction(name string, fnType *FunctionType)
 	// Always monomorphize if there are already monomorphized instances
 	for existingName := range g.functions {
 		if strings.HasPrefix(existingName, name+"_") {
-			g.logTrace("function requires monomorphization because an instance already exists",
-				"phase", "monomorphization",
-				"function", name,
-				"existing_instance", existingName)
-
 			return true
 		}
 	}
 
 	// Check if this function has a type scheme in the environment (polymorphic)
 	if funcTypeFromEnv, exists := g.typeInferer.env.Get(name); exists {
+		fmt.Printf("🔥 DEBUG: Found function %s in env with type %T = %v\n", name, funcTypeFromEnv, funcTypeFromEnv)
 		if _, isScheme := funcTypeFromEnv.(*TypeScheme); isScheme {
-			g.logTrace("function requires monomorphization because environment stores a type scheme",
-				"phase", "monomorphization",
-				"function", name,
-				"env_type", typeName(funcTypeFromEnv))
-
+			fmt.Printf("🔥 DEBUG: Function %s is polymorphic (TypeScheme)!\n", name)
 			return true
 		}
 	}
@@ -334,21 +278,9 @@ func (g *LLVMGenerator) isPolymorphicFunction(name string, fnType *FunctionType)
 		// Compare signatures - if they differ, this is a polymorphic instantiation
 		existingSignature := g.getFunctionTypeSignature(existingFn)
 		newSignature := g.createTypeSignature(fnType)
-		isPolymorphic := existingSignature != newSignature
-		g.logTrace("compared llvm function signature for monomorphization",
-			"phase", "monomorphization",
-			"function", name,
-			"existing_signature", existingSignature,
-			"new_signature", newSignature,
-			"is_polymorphic", isPolymorphic)
 
-		return isPolymorphic
+		return existingSignature != newSignature
 	}
-
-	g.logTrace("function does not require monomorphization",
-		"phase", "monomorphization",
-		"function", name,
-		"function_type", typeName(fnType))
 
 	return false
 }
@@ -420,8 +352,6 @@ func (g *LLVMGenerator) getLLVMTypeString(t types.Type) string {
 	switch t {
 	case types.I64:
 		return TypeManglingInt64
-	case types.Double:
-		return TypeManglingFloat
 	case types.I8Ptr:
 		return TypeManglingStr
 	case types.I1:
@@ -449,21 +379,6 @@ func (g *LLVMGenerator) generateFunctionDeclaration(fnDecl *ast.FunctionDeclarat
 	finalFnType, err := g.inferAndValidateTypes(fnDecl, paramTypes, returnTypeVar, fnEnv)
 	if err != nil {
 		return err
-	}
-
-	// HINDLEY-MILNER: Skip generating body for polymorphic base functions with TypeVars
-	// Only monomorphized instances (with concrete types) should have their bodies generated
-	hasTypeVars := functionTypeHasParamTypeVars(finalFnType)
-
-	if hasTypeVars {
-		// This is a polymorphic base function - skip body generation
-		// The body will be generated for monomorphized instances when they're created
-		g.logDebug("skipping polymorphic base function body generation",
-			"phase", "function_signature",
-			"function", fnDecl.Name,
-			"function_type", typeName(finalFnType))
-
-		return nil
 	}
 
 	err = g.generateFunctionBody(fnDecl, fn, finalFnType)
@@ -534,48 +449,6 @@ func (g *LLVMGenerator) determineReturnType(fnDecl *ast.FunctionDeclaration) Typ
 	return g.typeInferer.Fresh()
 }
 
-func (g *LLVMGenerator) buildFinalFunctionType(
-	fnDecl *ast.FunctionDeclaration,
-	paramTypes []Type,
-	returnTypeVar Type,
-) *FunctionType {
-	prunedParamTypes := make([]Type, len(paramTypes))
-	for i, paramType := range paramTypes {
-		if i < len(fnDecl.Parameters) && fnDecl.Parameters[i].Type != nil {
-			// Parameter has explicit type annotation - don't prune to preserve the explicit type.
-			prunedParamTypes[i] = paramType
-			continue
-		}
-
-		prunedParamTypes[i] = g.typeInferer.prune(paramType)
-	}
-
-	return &FunctionType{
-		paramTypes: prunedParamTypes,
-		returnType: g.typeInferer.prune(returnTypeVar),
-	}
-}
-
-func functionTypeHasTypeVars(fnType *FunctionType) bool {
-	if functionTypeHasParamTypeVars(fnType) {
-		return true
-	}
-
-	_, isTypeVar := fnType.returnType.(*TypeVar)
-
-	return isTypeVar
-}
-
-func functionTypeHasParamTypeVars(fnType *FunctionType) bool {
-	for _, paramType := range fnType.paramTypes {
-		if _, isTypeVar := paramType.(*TypeVar); isTypeVar {
-			return true
-		}
-	}
-
-	return false
-}
-
 // inferAndValidateTypes performs type inference and validation for the function
 func (g *LLVMGenerator) inferAndValidateTypes(
 	fnDecl *ast.FunctionDeclaration,
@@ -583,12 +456,6 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 	returnTypeVar Type,
 	fnEnv *TypeEnv,
 ) (*FunctionType, error) {
-	g.logTrace("infer and validate function types started",
-		"phase", "function_signature",
-		"function", fnDecl.Name,
-		"param_types", g.typeNames(paramTypes),
-		"return_type", typeName(returnTypeVar))
-
 	oldEnv := g.typeInferer.env
 
 	fnType := &FunctionType{
@@ -605,7 +472,18 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 	}
 
 	// CRUCIAL: After type inference, update parameter types which may now be constrained
-	g.updateInferredParameterTypes(fnDecl, paramTypes)
+	for i, param := range fnDecl.Parameters {
+		if param.Type == nil { // Only for parameters without explicit types
+			if paramType, exists := g.typeInferer.env.Get(param.Name); exists {
+				prunedType := g.typeInferer.prune(paramType)
+				g.typeInferer.env.Set(param.Name, prunedType)
+				// Update the parameter type in the function's paramTypes
+				if i < len(paramTypes) {
+					paramTypes[i] = prunedType
+				}
+			}
+		}
+	}
 
 	if !g.canImplicitlyConvert(inferredReturnType, returnTypeVar, fnDecl) {
 		err := g.typeInferer.Unify(returnTypeVar, inferredReturnType)
@@ -623,84 +501,15 @@ func (g *LLVMGenerator) inferAndValidateTypes(
 		}
 	}
 
-	// CRITICAL: Prune parameter types to resolve substitutions BEFORE restoring env
-	// This ensures type unifications from body inference are preserved
-	// BUT: Only prune parameters WITHOUT explicit type annotations to preserve explicit types like "any"
-	finalFnType := g.buildFinalFunctionType(fnDecl, paramTypes, returnTypeVar)
+	finalFnType := &FunctionType{
+		paramTypes: paramTypes,
+		returnType: g.typeInferer.prune(returnTypeVar),
+	}
 
 	g.typeInferer.env = oldEnv
-	g.setFunctionTypeInEnv(fnDecl.Name, finalFnType)
-
-	g.logTrace("infer and validate function types completed",
-		"phase", "function_signature",
-		"function", fnDecl.Name,
-		"function_type", typeName(finalFnType),
-		"param_types", g.typeNames(finalFnType.paramTypes),
-		"return_type", typeName(finalFnType.returnType))
+	g.typeInferer.env.Set(fnDecl.Name, finalFnType)
 
 	return finalFnType, nil
-}
-
-func (g *LLVMGenerator) updateInferredParameterTypes(
-	fnDecl *ast.FunctionDeclaration,
-	paramTypes []Type,
-) {
-	for i, param := range fnDecl.Parameters {
-		if param.Type != nil {
-			continue
-		}
-
-		paramType, exists := g.typeInferer.env.Get(param.Name)
-		if !exists {
-			continue
-		}
-
-		prunedType := g.typeInferer.prune(paramType)
-		g.typeInferer.env.Set(param.Name, prunedType)
-		if i < len(paramTypes) {
-			paramTypes[i] = prunedType
-		}
-
-		g.logTrace("updated inferred function parameter type",
-			"phase", "function_signature",
-			"function", fnDecl.Name,
-			"parameter", param.Name,
-			"parameter_index", i,
-			"parameter_type", typeName(prunedType))
-	}
-}
-
-// setFunctionTypeInEnv stores the function type, preserving TypeScheme for polymorphic functions.
-// If the type still has TypeVar parameters, it must be stored as a TypeScheme so that
-// resolveMonomorphizedFunction can instantiate it correctly at each call site.
-func (g *LLVMGenerator) setFunctionTypeInEnv(name string, fnType *FunctionType) {
-	if functionTypeHasParamTypeVars(fnType) {
-		if existing, ok := g.typeInferer.env.Get(name); ok {
-			if _, isScheme := existing.(*TypeScheme); isScheme {
-				g.logDebug("preserved existing generalized function type",
-					"phase", "function_signature",
-					"function", name,
-					"function_type", typeName(fnType))
-
-				return
-			}
-		}
-
-		scheme := g.typeInferer.Generalize(fnType)
-		g.typeInferer.env.Set(name, scheme)
-		g.logDebug("stored generalized function type after validation",
-			"phase", "function_signature",
-			"function", name,
-			"scheme", scheme.String())
-
-		return
-	}
-
-	g.typeInferer.env.Set(name, fnType)
-	g.logDebug("stored concrete function type after validation",
-		"phase", "function_signature",
-		"function", name,
-		"function_type", typeName(fnType))
 }
 
 // generateFunctionBody generates the LLVM instructions for the function body
@@ -784,8 +593,10 @@ func (g *LLVMGenerator) getParameterType(paramType *ast.TypeExpression) Type {
 // setInferredParameterType sets the type for a parameter without explicit type annotation
 func (g *LLVMGenerator) setInferredParameterType(fnName, paramName string, paramIndex int) {
 	if fnType, exists := g.typeInferer.env.Get(fnName); exists {
+		fmt.Printf("🔥 DEBUG: setInferredParameterType for %s found type %T = %v\n", fnName, fnType, fnType)
 		// Check if it's a type scheme and instantiate it
 		if scheme, ok := fnType.(*TypeScheme); ok {
+			fmt.Printf("🔥 DEBUG: Instantiating TypeScheme for %s\n", fnName)
 			instantiated := g.typeInferer.Instantiate(scheme)
 			if ft, ok := instantiated.(*FunctionType); ok && paramIndex < len(ft.paramTypes) {
 				g.typeInferer.env.Set(paramName, ft.paramTypes[paramIndex])
@@ -834,32 +645,8 @@ func (g *LLVMGenerator) generateReturnInstruction(
 		g.builder.NewRet(constant.NewInt(types.I32, 0))
 	} else {
 		finalReturnValue := g.maybeWrapInResult(bodyValue, fnDecl)
-		// Unwrap Result types if function return type is not a Result
-		finalReturnValue = g.maybeUnwrapResult(finalReturnValue, fnDecl)
-		// Pointer-to-pointer return-type bitcast: when a recursive-union field
-		// stored as i8* (see [TYPE-UNION-REC]) is matched out and returned, the
-		// value is i8* but the function's declared return type is the concrete
-		// union-struct pointer. Strict llc rejects this; mirror the call-site
-		// coercion in coerceArgumentToParamType.
-		finalReturnValue = g.coerceReturnToRetType(finalReturnValue, fn.Sig.RetType)
 		g.builder.NewRet(finalReturnValue)
 	}
-}
-
-// coerceReturnToRetType bitcasts val to expected if both are pointers and the
-// types differ. No-op otherwise. Required for recursive-union payloads that
-// round-trip through i8* storage; see coerceArgumentToParamType for the
-// argument-side analog.
-func (g *LLVMGenerator) coerceReturnToRetType(val value.Value, expected types.Type) value.Value {
-	if val == nil || expected == nil || expected.Equal(val.Type()) {
-		return val
-	}
-	if _, expectedIsPtr := expected.(*types.PointerType); expectedIsPtr {
-		if _, actualIsPtr := val.Type().(*types.PointerType); actualIsPtr {
-			return g.builder.NewBitCast(val, expected)
-		}
-	}
-	return val
 }
 
 // maybeWrapInResult wraps a plain value in a Result structure if the function declares a Result return type
@@ -891,55 +678,39 @@ func (g *LLVMGenerator) maybeWrapInResult(bodyValue value.Value, fnDecl *ast.Fun
 	return bodyValue
 }
 
-// wrapInMathResult wraps a plain int value in a Result<int, MathError> structure.
+// wrapInMathResult wraps a plain int value in a Result<int, MathError> structure
 func (g *LLVMGenerator) wrapInMathResult(intValue value.Value) value.Value {
-	return g.makeSuccessValue(intValue)
+	// Create Result<int, MathError> structure by value
+	resultType := g.getResultType(types.I64)
+
+	// Use InsertValue to build the struct value directly
+	undefStruct := constant.NewUndef(resultType)
+	resultWithValue := g.builder.NewInsertValue(undefStruct, intValue, 0)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
+
+	return resultComplete
 }
 
-// wrapInBoolResult wraps a plain bool value in a Result<bool, MathError> structure.
+// wrapInBoolResult wraps a plain bool value in a Result<bool, MathError> structure
 func (g *LLVMGenerator) wrapInBoolResult(boolValue value.Value) value.Value {
-	valueToStore := boolValue
+	// Create Result<bool, MathError> structure (using i1 as the value type for booleans)
+	resultType := g.getResultType(types.I1)
+
+	// Ensure we store the correct type - if value is i64, convert to i1
+	var valueToStore value.Value
 	if boolValue.Type() == types.I64 {
+		// Truncate i64 to i1 for boolean values
 		valueToStore = g.builder.NewTrunc(boolValue, types.I1)
-	}
-	return g.makeSuccessValue(valueToStore)
-}
-
-// maybeUnwrapResult unwraps a Result value if the function return type is not a Result
-func (g *LLVMGenerator) maybeUnwrapResult(bodyValue value.Value, fnDecl *ast.FunctionDeclaration) value.Value {
-	// FIRST: Check explicit declaration (highest priority)
-	if fnDecl.ReturnType != nil && fnDecl.ReturnType.Name == TypeResult {
-		// Function explicitly declares Result return type - don't unwrap
-		return bodyValue
+	} else {
+		valueToStore = boolValue
 	}
 
-	// SECOND: Check INFERRED return type from type environment
-	// If a function body contains arithmetic, it infers Result<T, MathError> and should KEEP it
-	// This ensures: fn add(x, y) = x + y returns Result<int, MathError>, not unwrapped int
-	if fnType, exists := g.typeInferer.env.Get(fnDecl.Name); exists {
-		if funcType, ok := fnType.(*FunctionType); ok {
-			// Prune to resolve any type variables
-			returnType := g.typeInferer.prune(funcType.returnType)
+	// Use InsertValue to build the struct value directly
+	undefStruct := constant.NewUndef(resultType)
+	resultWithValue := g.builder.NewInsertValue(undefStruct, valueToStore, 0)
+	resultComplete := g.builder.NewInsertValue(resultWithValue, constant.NewInt(types.I8, 0), 1)
 
-			// Check if the return type is a Result type
-			if concrete, ok := returnType.(*ConcreteType); ok {
-				typeName := concrete.String()
-				// If return type is Result (or Result<...>), don't unwrap
-				if typeName == TypeResult ||
-					(strings.HasPrefix(typeName, "Result<") && strings.HasSuffix(typeName, ">")) {
-					return bodyValue
-				}
-			}
-		}
-	}
-
-	// ONLY UNWRAP if body is Result but neither explicit nor inferred type is Result
-	// This handles edge cases where Result is wrapped but shouldn't be
-	if g.isResultType(bodyValue) {
-		return g.unwrapIfResult(bodyValue)
-	}
-
-	return bodyValue
+	return resultComplete
 }
 
 // canImplicitlyConvert checks if we can implicitly convert from one type to another
@@ -951,16 +722,6 @@ func (g *LLVMGenerator) canImplicitlyConvert(fromType, toType Type, _ *ast.Funct
 			if (fromConcrete.name == TypeInt || fromConcrete.name == TypeBool) &&
 				toConcrete.name == TypeResult {
 				return true
-			}
-
-			// Check for Result<T> to T conversion (auto-unwrapping)
-			// e.g., Result<int, MathError> can be converted to int
-			if strings.HasPrefix(fromConcrete.name, "Result<") &&
-				strings.HasSuffix(fromConcrete.name, ">") {
-				// Extract the success type from Result<T, E>
-				successType := g.typeInferer.extractResultSuccessType(fromConcrete.name)
-				// Check if success type matches the target type
-				return successType.String() == toConcrete.name
 			}
 		}
 	}
@@ -1025,8 +786,6 @@ func (g *LLVMGenerator) getLLVMPrimitiveType(pt *PrimitiveType) types.Type {
 	switch pt.name {
 	case TypeInt:
 		return types.I64
-	case TypeFloat:
-		return types.Double
 	case TypeString:
 		return types.I8Ptr
 	case TypeBool:
@@ -1043,8 +802,6 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 	switch ct.name {
 	case TypeInt:
 		return types.I64
-	case TypeFloat:
-		return types.Double
 	case TypeString:
 		return types.I8Ptr
 	case TypeBool:
@@ -1072,7 +829,7 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 		if ct.name == TypeResult {
 			return g.getResultType(types.I8Ptr)
 		}
-
+		
 		// Handle Result types like "Result<int, MathError>"
 		if strings.HasPrefix(ct.name, "Result<") {
 			// Result types are represented as structs with { value, discriminant }
@@ -1080,14 +837,10 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 				return g.getResultType(types.I64)
 			}
 
-			if ct.name == "Result<float, MathError>" {
-				return g.getResultType(types.Double)
-			}
-
 			if ct.name == "Result<bool, MathError>" {
 				return g.getResultType(types.I64)
 			}
-
+			
 			if ct.name == "Result<string, Error>" {
 				return g.getResultType(types.I8Ptr)
 			}
@@ -1489,22 +1242,8 @@ func (g *LLVMGenerator) getFieldType(fieldType string) types.Type {
 		//ALWAYS LOWERCASE!
 	case TypeBool: // "bool"
 		return types.I1
-	case TypeList, TypeMap:
-		// Collections are opaque handles owned by the C runtime
-		// (collection_runtime.h); storing them inline would lose the
-		// indirection their persistent layout requires. See
-		// spec/0004-TypeSystem.md [TYPE-UNION-REC].
-		return types.I8Ptr
 	default:
-		// User-defined types (records, unions, possibly recursive) are
-		// represented at runtime as a pointer to a heap struct. Inline
-		// storage would not terminate for recursive payloads. See
-		// spec/0004-TypeSystem.md [TYPE-UNION-REC].
-		if _, exists := g.typeMap[fieldType]; exists {
-			return types.I8Ptr
-		}
-
-		return types.I64
+		return types.I64 // default to i64
 	}
 }
 
