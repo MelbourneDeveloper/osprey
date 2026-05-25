@@ -73,4 +73,11 @@ match zStr < aStr {
     false => print("strLt2=ok")
 }
 
+// mut + auto-unwrap: counter is int, RHS is Result<int,MathError>; spec says auto-unwrap
+mut counter = 0
+counter = counter + 1
+counter = counter + 1
+counter = counter + 1
+print(toString(counter))
+
 print("=== Function Composition Test Complete ===")

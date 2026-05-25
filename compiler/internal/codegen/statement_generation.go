@@ -295,17 +295,30 @@ func (g *LLVMGenerator) generateAssignmentStatement(assignStmt *ast.AssignmentSt
 		return err
 	}
 
-	// Verify type compatibility using unification
+	// Verify type compatibility using unification. Spec auto-unwrap rules
+	// (0004-TypeSystem.md) allow Result<T,E> RHS to flow into a T-typed mut
+	// slot — without this, `counter = counter + 1` fails because the RHS is
+	// Result<int, MathError> while counter is int. When the unwrapped types
+	// unify, also unwrap the runtime value so subsequent reads see a raw T,
+	// not a Result struct.
 	existingType := g.typeInferer.env.vars[assignStmt.Name]
+	finalType := inferredType
 	err = g.typeInferer.Unify(existingType, inferredType)
 	if err != nil {
-		return fmt.Errorf("type mismatch in assignment: %w", err)
+		unwrappedExisting := g.typeInferer.unwrapResultType(existingType)
+		unwrappedInferred := g.typeInferer.unwrapResultType(inferredType)
+		unwrapErr := g.typeInferer.Unify(unwrappedExisting, unwrappedInferred)
+		if unwrapErr != nil {
+			return fmt.Errorf("type mismatch in assignment: %w", err)
+		}
+		newValue = g.unwrapIfResult(newValue)
+		finalType = unwrappedInferred
 	}
 
 	// Update the variable
 	g.variables[assignStmt.Name] = newValue
 	// Update type in Hindley-Milner environment
-	g.typeInferer.env.Set(assignStmt.Name, inferredType)
+	g.typeInferer.env.Set(assignStmt.Name, finalType)
 
 	return nil
 }
