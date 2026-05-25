@@ -1,4 +1,4 @@
-.PHONY: build clean test regenerate-parser install-deps install uninstall test-llvm test-interpolation test-ast test-integration test-all test-stress test-basic test-functions test-errors test-types lint lint-fix lint-install fiber-runtime http-runtime websocket-runtime system-runtime rust-interop c-lint c-test test-runtime
+.PHONY: build build-no-lint clean test test-runtime regenerate-parser install-deps install uninstall lint lint-fix lint-install c-lint c-test fiber-runtime http-runtime websocket-runtime system-runtime rust-interop run
 
 # Install golangci-lint
 lint-install:
