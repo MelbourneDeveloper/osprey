@@ -180,6 +180,17 @@ func (b *Builder) buildLiteralPattern(literalCtx parser.ILiteralContext) Pattern
 			Nested:      nil,
 			IsWildcard:  false,
 		}
+	} else if literalCtx.FLOAT() != nil {
+		// `match f { 3.14 => … }` previously fell through and produced
+		// 'unknown constructor: unknown'. Capture the float text so
+		// match codegen + inferer can recognise it as a literal.
+		return Pattern{
+			Constructor: literalCtx.FLOAT().GetText(),
+			Variable:    "",
+			Fields:      nil,
+			Nested:      nil,
+			IsWildcard:  false,
+		}
 	}
 
 	return Pattern{Constructor: unknownPatternConstructor}

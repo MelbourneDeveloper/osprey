@@ -1606,10 +1606,15 @@ func (g *LLVMGenerator) createPatternCondition(
 		return g.createUnionPatternCondition(discriminantValue, discriminant, currentBlock)
 	}
 
-	// Handle numeric literals
+	// Handle numeric literals (int first — fastest path).
 	patternValue, err := strconv.ParseInt(pattern.Constructor, 10, 64)
 	if err == nil {
 		return g.createNumericPatternCondition(patternValue, discriminant, currentBlock)
+	}
+
+	// Float literal pattern — emit an FCmp against the literal constant.
+	if floatValue, ferr := strconv.ParseFloat(pattern.Constructor, 64); ferr == nil {
+		return currentBlock.NewFCmp(enum.FPredOEQ, discriminant, constant.NewFloat(types.Double, floatValue))
 	}
 
 	// Default to string pattern condition
