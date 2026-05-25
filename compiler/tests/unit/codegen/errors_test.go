@@ -593,3 +593,4 @@ func TestErrorWrapping(t *testing.T) {
 		t.Errorf("Expected wrapped error to be instance of %v", baseErr)
 	}
 }
+

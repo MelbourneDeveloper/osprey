@@ -401,3 +401,70 @@ func TestArithmeticOperators(t *testing.T) {
 		})
 	}
 }
+
+func TestASTStatementInterfaceMethods(t *testing.T) {
+	// Test that all statement types implement the isStatement() method
+	statements := []ast.Statement{
+		&ast.ImportStatement{Module: []string{"test"}},
+		&ast.LetDeclaration{Name: "x", Value: &ast.IntegerLiteral{Value: 42}},
+		&ast.AssignmentStatement{Name: "x", Value: &ast.IntegerLiteral{Value: 10}},
+		&ast.FunctionDeclaration{Name: "test", Body: &ast.IntegerLiteral{Value: 1}},
+		&ast.ExternDeclaration{Name: "extern_func"},
+		&ast.ExpressionStatement{Expression: &ast.IntegerLiteral{Value: 5}},
+		&ast.TypeDeclaration{Name: "MyType"},
+		&ast.EffectDeclaration{Name: "MyEffect"},
+	}
+	
+	for i, stmt := range statements {
+		// Verify they can be used as statements in a program
+		program := &ast.Program{Statements: []ast.Statement{stmt}}
+		_ = program // Use the program
+		
+		t.Logf("Statement %d implements Statement interface", i)
+	}
+}
+
+func TestASTExpressionInterfaceMethods(t *testing.T) {
+	// Test that expression types implement the isExpression() method
+	expressions := []ast.Expression{
+		&ast.IntegerLiteral{Value: 42},
+		&ast.StringLiteral{Value: "test"},
+		&ast.BooleanLiteral{Value: true},
+		&ast.InterpolatedStringLiteral{Parts: []ast.InterpolatedPart{}},
+		&ast.Identifier{Name: "x"},
+		&ast.BinaryExpression{Left: &ast.IntegerLiteral{Value: 1}, Operator: "+", Right: &ast.IntegerLiteral{Value: 2}},
+		&ast.UnaryExpression{Operator: "-", Operand: &ast.IntegerLiteral{Value: 5}},
+		&ast.CallExpression{Function: &ast.Identifier{Name: "func"}},
+		&ast.FunctionCallExpression{Function: "test", Arguments: []ast.Expression{}},
+		&ast.ResultExpression{Success: true, Value: &ast.IntegerLiteral{Value: 1}},
+		&ast.FieldAccessExpression{Object: &ast.Identifier{Name: "obj"}, FieldName: "field"},
+		&ast.MatchExpression{Expression: &ast.Identifier{Name: "x"}, Arms: []ast.MatchArm{}},
+		&ast.LambdaExpression{Parameters: []ast.Parameter{}},
+		&ast.YieldExpression{Value: &ast.IntegerLiteral{Value: 1}},
+		&ast.AwaitExpression{Expression: &ast.Identifier{Name: "fiber"}},
+		&ast.SpawnExpression{Expression: &ast.Identifier{Name: "task"}},
+		&ast.MethodCallExpression{Object: &ast.Identifier{Name: "obj"}, MethodName: "method"},
+		&ast.ModuleAccessExpression{ModuleName: "module", MemberName: "member"},
+		&ast.ChannelExpression{ElementType: ast.TypeExpression{Name: "int"}},
+		&ast.ChannelSendExpression{Channel: &ast.Identifier{Name: "ch"}, Value: &ast.IntegerLiteral{Value: 1}},
+		&ast.ChannelRecvExpression{Channel: &ast.Identifier{Name: "ch"}},
+		&ast.SelectExpression{Arms: []ast.SelectArm{}},
+		&ast.ChannelCreateExpression{Capacity: &ast.IntegerLiteral{Value: 10}},
+		&ast.TypeConstructorExpression{TypeName: "MyType", Fields: map[string]ast.Expression{}},
+		&ast.BlockExpression{Statements: []ast.Statement{}},
+		&ast.ListLiteral{Elements: []ast.Expression{}},
+		&ast.ObjectLiteral{Fields: map[string]ast.Expression{}},
+		&ast.MapLiteral{Entries: []ast.MapEntry{}},
+		&ast.ListAccessExpression{List: &ast.Identifier{Name: "list"}, Index: &ast.IntegerLiteral{Value: 0}},
+		&ast.UpdateExpression{Target: &ast.Identifier{Name: "obj"}, Fields: map[string]ast.Expression{}},
+	}
+	
+	for i, expr := range expressions {
+		// Verify they can be used as expressions
+		letDecl := &ast.LetDeclaration{Name: "temp", Value: expr}
+		program := &ast.Program{Statements: []ast.Statement{letDecl}}
+		_ = program // Use the program
+		
+		t.Logf("Expression %d implements Expression interface", i)
+	}
+}

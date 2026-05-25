@@ -123,4 +123,11 @@ match numbers[2] {
 }
 
 print("\nTesting advanced fiber patterns...")
+
+// Example 7: Additional calculation pattern
+let x = 10
+let y = 20
+let calculation = x + y * 2
+print("Calculation result: ${calculation}")
+
 print("=== Fiber Tests Complete ===") 
