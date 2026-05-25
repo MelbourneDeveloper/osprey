@@ -1325,7 +1325,8 @@ func (ti *TypeInferer) unifyFunctionTypes(t1, t2 Type) error {
 		// `(int) -> int`.
 		unwrapped1 := ti.unwrapResultType(ft1.returnType)
 		unwrapped2 := ti.unwrapResultType(ft2.returnType)
-		if unwrapErr := ti.Unify(unwrapped1, unwrapped2); unwrapErr == nil {
+		unwrapErr := ti.Unify(unwrapped1, unwrapped2)
+		if unwrapErr == nil {
 			return nil
 		}
 		return fmt.Errorf("return type unification failed: %s vs %s: %w",
