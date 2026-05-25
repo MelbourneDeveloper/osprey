@@ -29,7 +29,8 @@ RUN apt-get update && apt-get install -y \
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# Continue with the same image for Rust installation
+# Rust stage - install Rust toolchain
+FROM base AS rust-stage
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
@@ -56,11 +57,9 @@ RUN apt-get update && apt-get install -y sudo \
     && useradd --uid 1000 --gid vscode --shell /bin/bash --create-home vscode \
     && mkdir -p /etc/sudoers.d \
     && echo 'vscode ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/50-vscode \
-    && mkdir -p /home/vscode/.cargo /home/vscode/.rustup \
-    && cp -r /root/.cargo/* /home/vscode/.cargo/ || true \
-    && cp -r /root/.rustup/* /home/vscode/.rustup/ || true \
-    && chown -R vscode:vscode /home/vscode \
-    && echo 'source ~/.cargo/env' >> /home/vscode/.bashrc
+    && mkdir -p /home/vscode/.cargo \
+    && cp -r /root/.cargo/* /home/vscode/.cargo/ \
+    && chown -R vscode:vscode /home/vscode
 
 # Set environment variables
 ENV JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"
