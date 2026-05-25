@@ -465,7 +465,7 @@ func getStringExpectedOutputs() map[string]string {
 		"string_utils_combined.osp": "=== String Utils Test ===\n\nOriginal: \"hello world\"\n\n" +
 			"Length: 11\n\nContains 'world': true\n\nContains 'galaxy': false\n\n" +
 			"Substring(6, 11): \"world\"\n\n" +
-			"Substring error: Error occurred\\x00\n\n" +
+			"Substring error: Error occurred\n\n" +
 			"=== Test Complete ===\n\n",
 		"list_and_process.osp": "=== Array Access Test ===\n\nCreated array with 3 commands\n\n" +
 			"Testing array access with pattern matching:\n\n✅ commands[0] = \\\necho hello\n\"\n\n" +

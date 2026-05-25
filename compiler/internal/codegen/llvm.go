@@ -2364,7 +2364,11 @@ func (g *LLVMGenerator) generateErrorBlock(
 			funcContext = g.function.Name()
 		}
 		blockSuffix := fmt.Sprintf("_%s_%p", funcContext, matchExpr)
-		errorStr := g.module.NewGlobalDef("error_msg"+blockSuffix, constant.NewCharArrayFromString("Error occurred\\x00"))
+		// NOTE: the runtime payload slot for Result error messages is not yet
+		// threaded through (see docs/plans/error-payloads.md), so codegen still
+		// substitutes a static stand-in. The previous spelling used a literal
+		// backslash sequence which leaked the chars "\x00" into output.
+		errorStr := g.module.NewGlobalDef("error_msg"+blockSuffix, constant.NewCharArrayFromString("Error occurred"+StringTerminator))
 		errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
 			constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
 		g.variables[fieldName] = errorPtr
