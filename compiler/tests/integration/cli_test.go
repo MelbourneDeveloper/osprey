@@ -28,7 +28,6 @@ func TestCLI(t *testing.T) {
 func testHelpOutputViaCLI(t *testing.T) {
 	// Test help via CLI interface
 	args := []string{"osprey", "--help"}
-
 	result := cli.RunMainWithArgs(args)
 	if !result.Success {
 		t.Error("CLI with --help should succeed")
@@ -96,7 +95,6 @@ func testCompileModeViaCLI(t *testing.T) {
 
 	// The compiler creates outputs/filename (without extension) relative to source file
 	expectedOutput := filepath.Join(testDataDir, "outputs", "hello")
-
 	defer func() { _ = os.RemoveAll(filepath.Join(testDataDir, "outputs")) }() // Cleanup
 
 	args := []string{"osprey", testFile, "--compile"}
@@ -121,12 +119,10 @@ func testSymbolsOutputViaCLI(t *testing.T) {
 		// Create a simple test file for symbols
 		testFile = "/tmp/symbols_test.osp"
 		testContent := `fn add(a, b) = a + b`
-
 		err := os.WriteFile(testFile, []byte(testContent), 0o644)
 		if err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
-
 		defer func() { _ = os.Remove(testFile) }()
 	}
 
@@ -191,12 +187,10 @@ func testSyntaxErrorHandlingViaCLI(t *testing.T) {
 	// Create a file with syntax errors
 	testFile := "/tmp/syntax_error_test.osp"
 	testContent := `fn broken_syntax( = invalid`
-
 	err := os.WriteFile(testFile, []byte(testContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-
 	defer func() { _ = os.Remove(testFile) }()
 
 	args := []string{"osprey", testFile, "--ast"}
@@ -264,7 +258,6 @@ func testCLIInterfaceFunctions(t *testing.T) {
 	if !cli.ParseSecurityArg("--sandbox", security) {
 		t.Error("ParseSecurityArg should return true for --sandbox")
 	}
-
 	if !security.SandboxMode {
 		t.Error("--sandbox should enable SandboxMode")
 	}
@@ -274,7 +267,6 @@ func testCLIInterfaceFunctions(t *testing.T) {
 	if !cli.ParseSecurityArg("--no-http", security) {
 		t.Error("ParseSecurityArg should return true for --no-http")
 	}
-
 	if security.AllowHTTP {
 		t.Error("--no-http should disable AllowHTTP")
 	}

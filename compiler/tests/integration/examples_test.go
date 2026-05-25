@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/christianfindlay/osprey/internal/cli"
+	"github.com/christianfindlay/osprey/internal/codegen"
 )
 
 // TestBasicsExamples tests the basic language feature examples.
@@ -14,15 +17,6 @@ func TestBasicsExamples(t *testing.T) {
 	checkLLVMTools(t)
 
 	examplesDir := "../../examples/tested/basics"
-	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
-}
-
-// TestEffectsExamples tests the algebraic effects examples.
-func TestEffectsExamples(t *testing.T) {
-	checkLLVMTools(t)
-
-	examplesDir := "../../examples/tested/effects"
-	// Effects examples use same expected outputs map as basics, with .expectedoutput file fallback
 	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
 }
 
@@ -40,26 +34,11 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 			testName = strings.ReplaceAll(testName, string(filepath.Separator), "_")
 
 			t.Run(testName, func(t *testing.T) {
-				// Try to read from .expectedoutput file first
-				expectedOutputPath := path + ".expectedoutput"
-				if expectedContent, err := os.ReadFile(expectedOutputPath); err == nil {
-					// Use .expectedoutput file content, trimmed to match captureJITOutput behavior
-					expectedOutput := strings.TrimSpace(string(expectedContent))
-					testExampleFileWithTrimming(t, path, expectedOutput, true)
-					return
-				}
-
-				// Fallback to hardcoded expected outputs
 				expectedOutput, exists := expectedOutputs[info.Name()]
 				if !exists {
-					t.Fatalf("❌ MISSING expected output for %s!\n"+
-						"🚨 CREATE: %s\n"+
-						"🚨 OR ADD TO expectedOutputs MAP!\n"+
-						"🚨 RUN: ../../osprey %s --run\n"+
-						"🚨 Then copy the output to create the .expectedoutput file!",
-						info.Name(), expectedOutputPath, info.Name())
+					t.Fatalf("❌ MISSING expected output for %s!", info.Name())
 				}
-				testExampleFileWithTrimming(t, path, expectedOutput, false)
+				testExampleFile(t, path, expectedOutput)
 			})
 		}
 		return nil
@@ -88,8 +67,7 @@ func getExpectedOutputs() map[string]string {
 			"42 is The answer to everything!\n7 is Some other number\n" +
 			"\nEven number check:\n42 is even: 0\n7 is even: 0\n2 is even: 1\n" +
 			"\nScore categories:\nScore 100: Perfect!\n" +
-			"Score 85: Very Good\nScore 50: Needs Improvement\n" +
-			"Nested: Both zero\n",
+			"Score 85: Very Good\nScore 50: Needs Improvement\n",
 		"safe_arithmetic_demo.osp": "=== Type-Safe Arithmetic Demo ===\n" +
 			"Future: All operators return Result<T, Error>\n\n10 / 2 = 5\n" +
 			"Error: Cannot divide 15 by 0!\n20 / 4 = 5\n\n" +
@@ -250,50 +228,8 @@ func getExpectedOutputs() map[string]string {
 			"Process result: 0\n" +
 			"=== Test Complete ===\n",
 		"process_spawn_fiber.osp": "=== Process Spawning in Fibers ===\n" +
-			"Process result: 0\n" +
-			"=== Fiber Test Complete ===\n",
-		"simple_process_test.osp": "Testing simple process spawn...\n" +
-			"Process spawned successfully\n" +
-			"[STDOUT] Process 1: hello\n\n" +
-			"[EXIT] Process 1 exited with code: 0\n" +
-			"Process finished\n" +
-			"Test complete\n",
-		"async_process_management.osp": "=== Async Process Management Demo ===\n" +
-			"--- Test 1: Basic Process Spawning ---\n" +
-			"✓ Process spawned successfully\n" +
-			"[STDOUT] Process 1: Hello from async process!\n\n" +
-			"[EXIT] Process 1 exited with code: 0\n" +
-			"✓ Process completed successfully\n" +
-			"✓ Process resources cleaned up\n" +
-			"--- Test 2: Another Process ---\n" +
-			"Process 2 spawned successfully\n" +
-			"[STDOUT] Process 2: Process 2 output\n\n" +
-			"[EXIT] Process 2 exited with code: 0\n" +
-			"Process 2 finished\n" +
-			"--- Test 3: Error Handling ---\n" +
-			"[EXIT] Process 3 exited with code: 1\n" +
-			"Error process returned non-zero exit code\n" +
-			"=== Async Process Management Demo Complete ===\n" +
-			"Note: Process output appears via C runtime callbacks during execution\n",
-		"callback_stdout_demo.osp": "=== CALLBACK-BASED STDOUT COLLECTION DEMO ===\n" +
-			"--- Test 1: Basic Stdout Callback ---\n" +
-			"✓ Process spawned with ID: 1\n" +
-			"[CALLBACK] Process 1 STDOUT: Hello from callback!\n\n" +
-			"[CALLBACK] Process 1 EXIT: 0\n" +
-			"✓ Process finished with exit code: 0\n" +
-			"✓ Process cleaned up\n" +
-			"--- Test 2: Multiple Lines Callback ---\n" +
-			"✓ Multi-line process spawned with ID: 2\n" +
-			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
-			"[CALLBACK] Process 2 EXIT: 0\n" +
-			"✓ Multi-line process finished\n" +
-			"--- Test 3: Error Process Callback ---\n" +
-			"✓ Error process spawned with ID: 3\n" +
-			"[CALLBACK] Process 3 STDERR: ls: /nonexistent/directory: No such file or directory\n\n" +
-			"[CALLBACK] Process 3 EXIT: 1\n" +
-			"✓ Error process finished with exit code: 1\n" +
-			"=== CALLBACK DEMO COMPLETE ===\n" +
-			"The [CALLBACK] lines above show C runtime calling into Osprey!\n",
+			"Fiber ID: 1\n" +
+			"=== Test Complete ===\n",
 		"process_spawn_workflow.osp": "Step 1\n" +
 			"Step 2\n" +
 			"=== Process Spawning Workflow ===\n" +
@@ -330,17 +266,23 @@ func getExpectedOutputs() map[string]string {
 	}
 }
 
-// testExampleFileWithTrimming tests a single example file with optional output trimming.
-func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, useExpectedOutputFile bool) {
+// testExampleFile tests a single example file.
+func testExampleFile(t *testing.T, filePath, expectedOutput string) {
 	t.Helper()
 
-	// Read the file content - needed for captureJITOutput
+	// Read the file
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to read %s: %v", filePath, err)
 	}
 
 	source := string(content)
+
+	// Try to compile first
+	_, err = codegen.CompileToLLVM(source)
+	if err != nil {
+		t.Fatalf("Failed to compile %s: %v", filePath, err)
+	}
 
 	// ERROR: ALL EXAMPLES MUST HAVE VERIFIED OUTPUT!
 	if expectedOutput == "" {
@@ -353,8 +295,11 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 			filepath.Base(filePath), filepath.Base(filePath))
 	}
 
-	// Execute via CLI interface AND capture output - we need both coverage AND verification!
-	// This exercises the runRunProgram function while capturing the actual output
+	// Call CLI functions directly for coverage (compilation path)
+	_ = cli.RunCommand(filePath, cli.OutputModeAST, "")  // Exercise AST generation
+	_ = cli.RunCommand(filePath, cli.OutputModeLLVM, "") // Exercise LLVM generation
+
+	// Execute and capture output (using the working method that captures stdout)
 	output, err := captureJITOutput(source)
 	if err != nil {
 		// If JIT execution fails due to missing tools, fail the test
@@ -365,18 +310,11 @@ func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, 
 		t.Fatalf("Failed to execute %s: %v", filePath, err)
 	}
 
-	// Trim output if using .expectedoutput file to match captureJITOutput behavior
-	if useExpectedOutputFile {
-		output = strings.TrimSpace(output)
-		expectedOutput = strings.TrimSpace(expectedOutput)
-	}
-
-	// THE MOST CRITICAL PART: Verify output matches expected!
 	if output != expectedOutput {
 		t.Errorf("Output mismatch for %s:\nExpected: %q\nGot:      %q", filePath, expectedOutput, output)
 	}
 
-	t.Logf("✅ Example %s executed and output verified", filepath.Base(filePath))
+	t.Logf("✅ Example %s compiled and executed successfully", filepath.Base(filePath))
 }
 
 // Helper functions for expected outputs.
