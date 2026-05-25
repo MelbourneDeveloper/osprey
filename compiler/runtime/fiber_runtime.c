@@ -304,7 +304,7 @@ int64_t fiber_sleep(int64_t milliseconds) {
 // These functions integrate process spawning with the fiber runtime
 
 // External process functions from system_runtime.c
-extern int64_t spawn_process_with_handler(char *command,
+extern int64_t spawn_process_with_handler(const char *command,
                                           void (*handler)(int64_t, int64_t,
                                                           char *));
 extern int64_t await_process(int64_t process_id);
@@ -346,7 +346,7 @@ int64_t fiber_spawn_process(char *command) {
 }
 
 // Spawn a process with custom handler - for advanced use cases
-int64_t fiber_spawn_process_with_handler(char *command,
+int64_t fiber_spawn_process_with_handler(const char *command,
                                          void (*handler)(int64_t, int64_t,
                                                          char *)) {
   if (!command || !handler) {
