@@ -63,6 +63,15 @@ func (g *LLVMGenerator) collectDeclarations(program *ast.Program) (*ast.Function
 		}
 	}
 
+	// PRE-PASS: Register placeholder function types for ALL functions so that
+	// body inference inside any one function can resolve forward references to
+	// any other top-level function (regardless of source order).
+	for _, stmt := range program.Statements {
+		if fnDecl, ok := stmt.(*ast.FunctionDeclaration); ok {
+			g.preDeclareFunctionPlaceholder(fnDecl)
+		}
+	}
+
 	// SECOND PASS: Declare function signatures after types are available
 	for _, stmt := range program.Statements {
 		switch s := stmt.(type) {

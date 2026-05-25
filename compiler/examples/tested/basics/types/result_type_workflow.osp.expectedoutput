@@ -1,0 +1,8 @@
+=== Result Type Workflow Test ===
+
+Length: 5
+
+Contains 'ell': true
+
+Contains 'xyz': false
+

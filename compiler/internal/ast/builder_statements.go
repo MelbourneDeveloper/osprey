@@ -151,43 +151,7 @@ func (b *Builder) buildTypeDecl(ctx parser.ITypeDeclContext) *TypeDeclaration {
 
 	// Handle record types (which are essentially single variants)
 	if ctx.RecordType() != nil {
-		// Create a single variant with the type name and record fields
-		fields := make([]TypeField, 0)
-
-		if ctx.RecordType().FieldDeclarations() != nil {
-			for _, fieldCtx := range ctx.RecordType().FieldDeclarations().AllFieldDeclaration() {
-				field := TypeField{
-					Name: fieldCtx.ID().GetText(),
-					Type: fieldCtx.Type_().ID().GetText(),
-				}
-
-				// Parse WHERE constraint if present
-				if fieldCtx.FunctionCall() != nil {
-					constraint := &FunctionCallExpression{
-						Function:  fieldCtx.FunctionCall().ID().GetText(),
-						Arguments: make([]Expression, 0),
-					}
-
-					// Parse function call arguments if any
-					if fieldCtx.FunctionCall().ArgList() != nil {
-						for _, argCtx := range fieldCtx.FunctionCall().ArgList().AllExpr() {
-							arg := b.buildExpression(argCtx)
-							constraint.Arguments = append(constraint.Arguments, arg)
-						}
-					}
-
-					field.Constraint = constraint
-				}
-
-				fields = append(fields, field)
-			}
-		}
-
-		variant := TypeVariant{
-			Name:   name, // Use the type name as the variant name for record types
-			Fields: fields,
-		}
-		variants = append(variants, variant)
+		variants = append(variants, b.buildRecordVariant(name, ctx.RecordType()))
 	}
 
 	// Handle optional type validation
@@ -215,25 +179,11 @@ func (b *Builder) buildVariant(ctx parser.IVariantContext) TypeVariant {
 		for _, fieldCtx := range ctx.FieldDeclarations().AllFieldDeclaration() {
 			field := TypeField{
 				Name: fieldCtx.ID().GetText(),
-				Type: fieldCtx.Type_().ID().GetText(),
+				Type: fieldTypeText(fieldCtx.Type_()),
 			}
 
-			// Parse WHERE constraint if present
 			if fieldCtx.FunctionCall() != nil {
-				constraint := &FunctionCallExpression{
-					Function:  fieldCtx.FunctionCall().ID().GetText(),
-					Arguments: make([]Expression, 0),
-				}
-
-				// Parse function call arguments if any
-				if fieldCtx.FunctionCall().ArgList() != nil {
-					for _, argCtx := range fieldCtx.FunctionCall().ArgList().AllExpr() {
-						arg := b.buildExpression(argCtx)
-						constraint.Arguments = append(constraint.Arguments, arg)
-					}
-				}
-
-				field.Constraint = constraint
+				field.Constraint = b.buildFieldConstraint(fieldCtx.FunctionCall())
 			}
 
 			fields = append(fields, field)
@@ -431,4 +381,59 @@ func (b *Builder) buildEffectSet(ctx parser.IEffectSetContext) []string {
 	}
 
 	return effects
+}
+
+// fieldTypeText returns the source text representation of a field's type.
+// Simple ID types (int, string, MyType) use the ID; function types,
+// generics, and arrays fall back to the full source text so we don't
+// nil-deref on `.ID().GetText()`.
+func fieldTypeText(typeCtx parser.ITypeContext) string {
+	if idNode := typeCtx.ID(); idNode != nil {
+		return idNode.GetText()
+	}
+	return typeCtx.GetText()
+}
+
+// buildRecordVariant builds the single TypeVariant a record-typed type decl
+// produces. Extracted from buildTypeDecl to keep cognitive complexity below
+// the lint threshold.
+func (b *Builder) buildRecordVariant(name string, recordCtx parser.IRecordTypeContext) TypeVariant {
+	fields := make([]TypeField, 0)
+
+	if recordCtx.FieldDeclarations() != nil {
+		for _, fieldCtx := range recordCtx.FieldDeclarations().AllFieldDeclaration() {
+			field := TypeField{
+				Name: fieldCtx.ID().GetText(),
+				Type: fieldTypeText(fieldCtx.Type_()),
+			}
+
+			if fieldCtx.FunctionCall() != nil {
+				field.Constraint = b.buildFieldConstraint(fieldCtx.FunctionCall())
+			}
+
+			fields = append(fields, field)
+		}
+	}
+
+	return TypeVariant{
+		Name:   name, // Record types use the type name as the variant name
+		Fields: fields,
+	}
+}
+
+// buildFieldConstraint translates a `WHERE someFn(args...)` clause into a
+// FunctionCallExpression suitable for storage on a TypeField.
+func (b *Builder) buildFieldConstraint(callCtx parser.IFunctionCallContext) *FunctionCallExpression {
+	constraint := &FunctionCallExpression{
+		Function:  callCtx.ID().GetText(),
+		Arguments: make([]Expression, 0),
+	}
+
+	if callCtx.ArgList() != nil {
+		for _, argCtx := range callCtx.ArgList().AllExpr() {
+			constraint.Arguments = append(constraint.Arguments, b.buildExpression(argCtx))
+		}
+	}
+
+	return constraint
 }

@@ -6,15 +6,15 @@ Created array with 3 commands
 
 Testing array access with pattern matching:
 
-✅ commands[0] = \
+✅ commands[0] = "
 echo hello
 "
 
-✅ commands[1] = \
+✅ commands[1] = "
 echo world
 "
 
-✅ commands[2] = \
+✅ commands[2] = "
 echo test
 "
 
@@ -27,3 +27,4 @@ Testing out-of-bounds access:
 ✅ Correctly caught out-of-bounds: commands[5] -> Error
 
 === Array Test Complete ===
+

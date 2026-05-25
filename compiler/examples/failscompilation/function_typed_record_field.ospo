@@ -1,0 +1,11 @@
+// Function-typed record fields are not yet a runnable feature
+// (closure capture isn't implemented yet), but they must NOT panic
+// the compiler at AST-build time.
+type Adder = {
+    add: (int) -> int
+}
+
+fn main() -> Unit = {
+    let a = Adder { add: fn(x: int) => x + 5 }
+    print(toString(a.add(10)))
+}

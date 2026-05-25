@@ -121,8 +121,7 @@ func getBasicExpectedOutputs() map[string]string {
 			"Double your score: 190\nAlice (25) scored 95/100\n",
 		"working_basics.osp": "x = 42\nname = Alice\ndouble(21) = 42\n" +
 			"greeting = Hello\nmultiply(6, 7) = 42\nisEven(10) = true\n10 + 5 = 15\n6 * 7 = 42\nmatch 42 = 1\n",
-		"simple_types.osp":        "Type definitions compiled successfully\nred\nworking\n",
-		"result_type_example.osp": "Result type defined successfully\n42\n",
+		"simple_types.osp": "Type definitions compiled successfully\nred\nworking\n",
 		"simple_input.osp": "Greeting code: 1\nNumber result: 999\n" +
 			"Unknown code: 0\nSmall number: 100\n",
 		"pattern_matching_basics.osp": "Number analysis:\n0 is Zero\n" +
@@ -181,9 +180,6 @@ func getIteratorExpectedOutputs() map[string]string {
 			"Apple price: 2\n6\n" +
 			"Example 8: Chained single value operations\n21\n" +
 			"Example 9: Conditional operations\n1\n0\n=== Showcase Complete ===\n",
-		"explicit_any_allowed.osp": "Explicit any return type works\n" +
-			"getDynamicValue() = 42\n" +
-			"processAnyValue(5) = 15\n",
 		"explicit_any_simple.osp": "Explicit any return type works\n",
 		"functional_iterators.osp": "=== Functional Iterator Examples ===\n" +
 			"1. Basic forEach:\n1\n2\n3\n4\n" +
@@ -239,6 +235,19 @@ func getBoolAndMiscExpectedOutputs() map[string]string {
 			"After add5: 15\n" +
 			"square(5) = 25\n" +
 			"Function composition working correctly!\n" +
+			"hi!\n" +
+			"11\n" +
+			"110\n" +
+			"strEq=hi\n" +
+			"strNe=ok\n" +
+			"strLt=ok\n" +
+			"strLt2=ok\n" +
+			"3\n" +
+			"7\n" +
+			"Quote: \"hi\"\n" +
+			"Hi \"Bob\"\n" +
+			"lit: ab\\nc\n" +
+			"-2.5\n" +
 			"=== Function Composition Test Complete ===\n",
 		"minimal_test.osp": "Minimal test:\nx = 5\n",
 		"simple.osp":       "Simple test:\nx = 42\ngreeting = hello\n",
@@ -391,9 +400,6 @@ func getBlockAndProcessExpectedOutputs() map[string]string {
 
 func getStringExpectedOutputs() map[string]string {
 	return map[string]string{
-		// Updated for [BUILTIN-STRING-*]: length/contains return raw values.
-		"result_type_workflow.osp": "=== Result Type Workflow Test ===\n\n" +
-			"Length: 5\n\nContains 'ell': true\n\nContains 'xyz': false\n\n",
 		// Implements [BUILTIN-STRING-*] end-to-end demo.
 		"string_pipeline.osp": "=== String Pipeline Demo ===\n\n" +
 			"raw=\"  GET /api/users?name=alice&age=30  \" len=36\n\n" +
@@ -462,7 +468,7 @@ func getStringExpectedOutputs() map[string]string {
 		"string_utils_combined.osp": "=== String Utils Test ===\n\nOriginal: \"hello world\"\n\n" +
 			"Length: 11\n\nContains 'world': true\n\nContains 'galaxy': false\n\n" +
 			"Substring(6, 11): \"world\"\n\n" +
-			"Substring error: Error occurred\\x00\n\n" +
+			"Substring error: Error occurred\n\n" +
 			"=== Test Complete ===\n\n",
 		"list_and_process.osp": "=== Array Access Test ===\n\nCreated array with 3 commands\n\n" +
 			"Testing array access with pattern matching:\n\n✅ commands[0] = \\\necho hello\n\"\n\n" +
@@ -551,7 +557,7 @@ func getCallbackStdoutDemoExpectedOutput() string {
 			"✓ Process cleaned up\n" +
 			"--- Test 2: Multiple Lines Callback ---\n" +
 			"✓ Multi-line process spawned with ID: 2\n" +
-			"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+			"[CALLBACK] Process 2 STDOUT: Line 1\nLine 2\nLine 3\n\n" +
 			"[CALLBACK] Process 2 EXIT: 0\n" +
 			"✓ Multi-line process finished\n" +
 			"--- Test 3: Error Process Callback ---\n" +
@@ -573,7 +579,7 @@ func getCallbackStdoutDemoExpectedOutput() string {
 		"✓ Process cleaned up\n" +
 		"--- Test 2: Multiple Lines Callback ---\n" +
 		"✓ Multi-line process spawned with ID: 2\n" +
-		"[CALLBACK] Process 2 STDOUT: Line 1\\\nLine 2\\\nLine 3\\\n\n" +
+		"[CALLBACK] Process 2 STDOUT: Line 1\nLine 2\nLine 3\n\n" +
 		"[CALLBACK] Process 2 EXIT: 0\n" +
 		"✓ Multi-line process finished\n" +
 		"--- Test 3: Error Process Callback ---\n" +

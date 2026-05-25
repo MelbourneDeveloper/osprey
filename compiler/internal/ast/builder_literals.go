@@ -100,8 +100,11 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 		}
 	case ctx.STRING() != nil:
 		text := ctx.STRING().GetText()
-		// Remove quotes and process escape sequences
-		value := strings.Trim(text, "\"")
+		// Remove the surrounding quotes and process escape sequences. Using
+		// strings.Trim was a bug — `"Quote: \"hi\""` ended with `\"` followed
+		// by the closing `"`, and Trim greedily stripped the `\"`'s `"` as
+		// well, leaving a stray backslash and dropping the closing quote.
+		value := strings.TrimSuffix(strings.TrimPrefix(text, "\""), "\"")
 		value = b.processEscapeSequences(value)
 
 		return &StringLiteral{
@@ -131,7 +134,9 @@ func (b *Builder) buildLiteral(ctx parser.ILiteralContext) Expression {
 
 // buildInterpolatedString parses an interpolated string like "Hello ${name}!".
 func (b *Builder) buildInterpolatedString(text string) Expression {
-	text = strings.Trim(text, "\"")
+	// strings.Trim was greedy and ate trailing escape `\"` sequences along
+	// with the closing quote — see the matching fix in the STRING branch.
+	text = strings.TrimSuffix(strings.TrimPrefix(text, "\""), "\"")
 	parts := b.parseInterpolatedParts(text)
 
 	// Process escape sequences in text parts
@@ -238,14 +243,42 @@ func (b *Builder) buildLambdaExpr(ctx parser.ILambdaExprContext) Expression {
 }
 
 // processEscapeSequences processes common escape sequences in string literals.
+// Walks the input once, left to right, so that `\\n` is correctly read as
+// literal backslash + n (the previous ReplaceAll cascade replaced the inner
+// `\n` first and produced a real newline).
 func (b *Builder) processEscapeSequences(input string) string {
-	result := strings.ReplaceAll(input, "\\n", "\n")
-	result = strings.ReplaceAll(result, "\\t", "\t")
-	result = strings.ReplaceAll(result, "\\r", "\r")
-	result = strings.ReplaceAll(result, "\\\\", "\\")
-	result = strings.ReplaceAll(result, "\\\"", "\"")
+	var sb strings.Builder
+	sb.Grow(len(input))
 
-	return result
+	for i := 0; i < len(input); i++ {
+		c := input[i]
+		if c != '\\' || i+1 >= len(input) {
+			sb.WriteByte(c)
+			continue
+		}
+		next := input[i+1]
+		switch next {
+		case 'n':
+			sb.WriteByte('\n')
+		case 't':
+			sb.WriteByte('\t')
+		case 'r':
+			sb.WriteByte('\r')
+		case '0':
+			sb.WriteByte(0)
+		case '\\':
+			sb.WriteByte('\\')
+		case '"':
+			sb.WriteByte('"')
+		default:
+			// Unknown escape — preserve verbatim so users can spot the typo.
+			sb.WriteByte(c)
+			sb.WriteByte(next)
+		}
+		i++
+	}
+
+	return sb.String()
 }
 
 // buildTypeConstructor builds type constructor expressions like Fiber<Int> { computation: fn() => 42 }.

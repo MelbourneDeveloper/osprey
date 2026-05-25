@@ -1079,6 +1079,17 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	left = g.unwrapIfResult(left)
 	right = g.unwrapIfResult(right)
 
+	// String comparison must use strcmp on byte contents — comparing the raw
+	// i8* pointers (which is what NewICmp does) is meaningless: == returns false
+	// for two separately allocated globals with the same text, and ordering
+	// operators return whichever global was allocated first.
+	if isStringValue(left) && isStringValue(right) {
+		switch operator {
+		case "==", "!=", "<", "<=", ">", ">=":
+			return g.generateStringComparison(operator, left, right, pos)
+		}
+	}
+
 	var cmp value.Value
 
 	// Check if operands are floats and use FCmp instead of ICmp
@@ -1123,6 +1134,49 @@ func (g *LLVMGenerator) generateComparisonOperationWithPos(
 	// Return i1 (bool) directly for comparison operations
 	// Comparisons don't return Result types - only arithmetic operations do
 	return cmp, nil
+}
+
+// isStringValue reports whether an LLVM value looks like an Osprey string
+// (i.e. an i8* pointer). Strings are emitted as @global char arrays GEP'd
+// down to i8*, so the runtime representation is always a pointer to i8.
+func isStringValue(v value.Value) bool {
+	ptrType, ok := v.Type().(*types.PointerType)
+	if !ok {
+		return false
+	}
+	intType, ok := ptrType.ElemType.(*types.IntType)
+	return ok && intType.BitSize == 8
+}
+
+// generateStringComparison emits a strcmp-based comparison for `==`, `!=`,
+// `<`, `<=`, `>`, `>=` on i8* string operands. NewICmp on raw pointers would
+// otherwise compare addresses, which is wrong for content equality and yields
+// allocation-order junk for ordering.
+func (g *LLVMGenerator) generateStringComparison(
+	operator string, left, right value.Value, pos *ast.Position,
+) (value.Value, error) {
+	strcmp, ok := g.functions["strcmp"]
+	if !ok {
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
+	}
+	cmp := g.builder.NewCall(strcmp, left, right)
+	zero := constant.NewInt(types.I32, 0)
+	switch operator {
+	case "==":
+		return g.builder.NewICmp(enum.IPredEQ, cmp, zero), nil
+	case "!=":
+		return g.builder.NewICmp(enum.IPredNE, cmp, zero), nil
+	case "<":
+		return g.builder.NewICmp(enum.IPredSLT, cmp, zero), nil
+	case "<=":
+		return g.builder.NewICmp(enum.IPredSLE, cmp, zero), nil
+	case ">":
+		return g.builder.NewICmp(enum.IPredSGT, cmp, zero), nil
+	case ">=":
+		return g.builder.NewICmp(enum.IPredSGE, cmp, zero), nil
+	default:
+		return nil, WrapUnsupportedBinaryOpWithPos(operator, pos)
+	}
 }
 
 // generateLogicalOperationWithPos generates LLVM logical operations with position info.
@@ -1181,10 +1235,12 @@ func (g *LLVMGenerator) generateUnaryExpression(unaryExpr *ast.UnaryExpression) 
 		// Unary plus is a no-op
 		return operand, nil
 	case "-":
-		// Unary minus
-		zero := constant.NewInt(types.I64, 0)
+		// Unary minus — accept either i64 or double operand.
+		if operand.Type() == types.Double {
+			return g.builder.NewFSub(constant.NewFloat(types.Double, 0), operand), nil
+		}
 
-		return g.builder.NewSub(zero, operand), nil
+		return g.builder.NewSub(constant.NewInt(types.I64, 0), operand), nil
 	case "!":
 		// Boolean NOT: check operand type and return appropriate type
 		if operand.Type() == types.I1 {
