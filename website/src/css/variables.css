@@ -26,10 +26,10 @@
   --gradient-hero: linear-gradient(135deg, #005C9C 0%, #0B3A5E 50%, #38A1DB 100%);
   --gradient-dark: linear-gradient(135deg, #0B3A5E 0%, #1F1F1F 50%, #000000 100%);
 
-  /* Glass Morphism - Always Dark Mode */
-  --glass-bg: rgba(11, 58, 94, 0.2);
-  --glass-border: rgba(119, 215, 244, 0.1);
-  /* Aqua with transparency */
+  /* Glass Morphism - Updated for brand colors */
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(0, 92, 156, 0.2);
+  /* BlueMid with transparency */
   --glass-shadow: 0 8px 32px 0 rgba(11, 58, 94, 0.37);
   /* BlueDark with transparency */
   --glass-blur: blur(10px);
@@ -72,26 +72,28 @@
   /* Aqua */
   --color-accent-orange: #f97316;
 
-  /* Background Colors - Always Dark Mode */
-  --color-bg-primary: #1F1F1F;
-  /* DarkGrey */
-  --color-bg-secondary: #262626;
-  --color-bg-tertiary: #404040;
+  /* Background Colors - Using design system colors */
+  --color-bg-primary: #FDFDFD;
+  /* OffWhite */
+  --color-bg-secondary: #F2F2F2;
+  /* LightGrey */
+  --color-bg-tertiary: #FFFFFF;
+  /* White */
   --color-bg-dark: #1F1F1F;
   /* DarkGrey */
 
-  /* Text Colors - Always Dark Mode */
-  --color-text-primary: #FDFDFD;
-  /* OffWhite */
-  --color-text-secondary: #F2F2F2;
-  /* LightGrey */
-  --color-text-tertiary: #A3A3A3;
-  --color-text-inverse: #1F1F1F;
+  /* Text Colors - Using design system colors */
+  --color-text-primary: #1F1F1F;
   /* DarkGrey */
+  --color-text-secondary: #0B3A5E;
+  /* BlueDark */
+  --color-text-tertiary: #525252;
+  --color-text-inverse: #FDFDFD;
+  /* OffWhite */
 
-  /* Border Colors - Always Dark Mode */
-  --color-border-light: #404040;
-  --color-border-medium: #525252;
+  /* Border Colors - From Design System */
+  --color-border-light: #E8E8E8;
+  --color-border-medium: #D4D4D4;
   --color-border-primary: #005C9C;
   /* BlueMid */
 
@@ -197,10 +199,23 @@
   --backdrop-blur-md: blur(8px);
   --backdrop-blur-lg: blur(16px);
   --backdrop-blur-xl: blur(24px);
+}
 
-  /* Navigation Colors - Always Dark Mode */
-  --nav-bg-default: rgba(11, 58, 94, 1.0);
-  --nav-bg-scrolled: rgba(11, 58, 94, 1.0);
-  --nav-border-default: rgba(119, 215, 244, 0.6);
-  --nav-border-scrolled: rgba(119, 215, 244, 0.7);
+/* Dark mode variables - Updated for design system */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-primary: #1F1F1F;
+    /* DarkGrey */
+    --color-bg-secondary: #262626;
+    --color-bg-tertiary: #404040;
+    --color-text-primary: #FDFDFD;
+    /* OffWhite */
+    --color-text-secondary: #F2F2F2;
+    /* LightGrey */
+    --color-text-tertiary: #A3A3A3;
+    --glass-bg: rgba(11, 58, 94, 0.2);
+    /* BlueDark with transparency */
+    --glass-border: rgba(119, 215, 244, 0.1);
+    /* Aqua with transparency */
+  }
 }
