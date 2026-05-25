@@ -119,8 +119,15 @@ func CompileToExecutable(source, outputPath string) error {
 	})
 }
 
-// buildLibraryPaths builds the search paths for runtime libraries
+// buildLibraryPaths builds the search paths for runtime libraries.
+// Compiler-binary-relative paths (binDir/bin and binDir/../lib) are
+// checked before the /usr/local/lib system install. Without this, a
+// freshly built osprey run from outside the repo resolves stale system
+// libs (missing new runtime symbols added since the last `make install`)
+// and the link fails with "undefined symbol" for osp_string_to_upper /
+// osprey_list_concat etc.
 func buildLibraryPaths(libName string) []string {
+	binaryDir := filepath.Dir(os.Args[0])
 	paths := []string{
 		fmt.Sprintf("bin/lib%s.a", libName),
 		fmt.Sprintf("./bin/lib%s.a", libName),
@@ -130,7 +137,10 @@ func buildLibraryPaths(libName string) []string {
 		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
 		fmt.Sprintf("../../lib/lib%s.a", libName),    // For rust interop in tests/integration
 		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
-		filepath.Join(filepath.Dir(os.Args[0]), "..", fmt.Sprintf("lib%s.a", libName)),
+		filepath.Join(binaryDir, fmt.Sprintf("lib%s.a", libName)),       // binary/lib*.a
+		filepath.Join(binaryDir, "..", "lib", fmt.Sprintf("lib%s.a", libName)),   // binary/../lib/lib*.a
+		filepath.Join(binaryDir, "..", "bin", fmt.Sprintf("lib%s.a", libName)),   // binary/../bin/lib*.a
+		filepath.Join(binaryDir, "..", fmt.Sprintf("lib%s.a", libName)),
 		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
 	}
 
