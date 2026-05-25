@@ -1,8 +1,8 @@
 {
-  "name": "Osprey Programming Language Dev Environment (ARM64 - Local Development)",
+  "name": "Osprey Programming Language Dev Environment (AMD64 - GitHub Codespaces Default)",
   "dockerComposeFile": "docker-compose.yml",
-  "service": "osprey-dev-arm64",
-  "runArgs": ["--platform=linux/arm64"],
+  "service": "osprey-dev-amd64",
+  "runArgs": ["--platform=linux/amd64"],
   "workspaceFolder": "/workspace",
   "shutdownAction": "stopCompose",
   "customizations": {
@@ -71,5 +71,5 @@
       "onAutoForward": "notify"
     }
   },
-  "postCreateCommand": "echo 'ARM64 development container ready for local development!' && echo 'Killing any processes on port 3001...' && (docker ps -q --filter 'publish=3001' | xargs -r docker stop || true) && echo 'Port 3001 cleared.'"
+  "postCreateCommand": "echo 'AMD64 development container ready for GitHub Codespaces!' && echo 'Killing any processes on port 3001...' && (docker ps -q --filter 'publish=3001' | xargs -r docker stop || true) && echo 'Port 3001 cleared.'"
 }

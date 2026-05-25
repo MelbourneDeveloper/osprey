@@ -1,0 +1,59 @@
+services:
+  # ARM64 development container (for Apple Silicon Macs)
+  osprey-dev-arm64:
+    build:
+      context: ../
+      dockerfile: .devcontainer/Dockerfile
+      target: development
+      platforms:
+        - linux/arm64
+      args:
+        TARGETARCH: arm64
+        TARGETPLATFORM: linux/arm64
+    volumes:
+      - ../:/workspace:cached
+      - vscode-extensions:/root/.vscode-server/extensions
+      - go-cache:/go/pkg
+      - cargo-cache:/root/.cargo/registry
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /workspace
+    command: sleep infinity
+    ports:
+      - "8080"
+      - "3001"
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+    profiles:
+      - arm64
+
+  # AMD64 development container (for GitHub Codespaces and x64 systems)
+  osprey-dev-amd64:
+    build:
+      context: ../
+      dockerfile: .devcontainer/Dockerfile
+      target: development
+      platforms:
+        - linux/amd64
+      args:
+        TARGETARCH: amd64
+        TARGETPLATFORM: linux/amd64
+    volumes:
+      - ../:/workspace:cached
+      - vscode-extensions:/root/.vscode-server/extensions
+      - go-cache:/go/pkg
+      - cargo-cache:/root/.cargo/registry
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /workspace
+    command: sleep infinity
+    ports:
+      - "8080"
+      - "3001"
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+    profiles:
+      - amd64
+
+volumes:
+  vscode-extensions:
+  go-cache:
+  cargo-cache:

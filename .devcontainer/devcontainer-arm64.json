@@ -71,5 +71,5 @@
       "onAutoForward": "notify"
     }
   },
-  "postCreateCommand": "echo 'ARM64 development container ready for local development!' && echo 'Killing any processes on port 3001...' && (docker ps -q --filter 'publish=3001' | xargs -r docker stop || true) && echo 'Port 3001 cleared.'"
+  "postCreateCommand": "echo 'ARM64 development container ready for local development!'"
 }

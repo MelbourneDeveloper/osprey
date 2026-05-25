@@ -1,124 +1,69 @@
-# Osprey Development Container
+# Osprey Dev Container
 
-This directory contains configuration for a development container that provides all necessary dependencies for the Osprey compiler and VS Code extension development.
-This directory contains configuration for a development container that provides all necessary dependencies for Osprey compiler and VS Code extension development.
+This directory contains the development container configuration for the Osprey programming language project.
+
+## Fixed Issues
+
+✅ **Port Conflict Resolution**: The dev container now uses dynamic port allocation to avoid conflicts with other services running on ports 3001 and 8080.
+
+## Quick Start
+
+### ARM64 (Apple Silicon Macs)
+```bash
+# Use the convenient startup script
+./.devcontainer/start-dev-container.sh
+
+# Or manually with Docker Compose
+docker compose -f .devcontainer/docker-compose.yml --profile arm64 up -d
+```
+
+### AMD64 (GitHub Codespaces / x64 systems)
+```bash
+docker compose -f .devcontainer/docker-compose.yml --profile amd64 up -d
+```
 
 ## Features
 
-- **Go 1.23.4** for compiler development
-- **LLVM 14** for IR generation and compilation  
-- **ANTLR 4.13.1** for parser generation
-- **Node.js 20.17.0** for VS Code extension development
-- **Rust** for the rust_integration examples
-- **Java 17** for ANTLR runtime
-- **All necessary VS Code extensions** pre-installed
+- **Multi-architecture support**: ARM64 and AMD64 configurations
+- **Dynamic port allocation**: No more port conflicts!
+- **Complete development environment**: Go, Rust, Node.js, Java, ANTLR, C/C++ tools
+- **VS Code integration**: Pre-configured extensions and settings
+- **Persistent volumes**: Go cache, Cargo cache, and VS Code extensions
 
-## Getting Started
+## Port Information
 
-### Prerequisites
+The dev container exposes two ports with dynamic allocation:
+- **Port 3001**: Web Compiler service
+- **Port 8080**: Development server
 
-- [Docker](https://www.docker.com/products/docker-desktop)
-- [Visual Studio Code](https://code.visualstudio.com/)
-- [Dev Containers extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-
-### Opening the Project in the Dev Container
-
-1. Open the `osprey.code-workspace` file in VS Code
-2. When prompted to "Reopen in Container", click "Reopen in Container"
-   - Alternatively, press F1, type "Dev Containers: Reopen in Container" and press Enter
-
-The container will automatically run the post-create script which sets up both the compiler and VS Code extension.
-
-## Available Scripts
-
-### Individual Scripts
-- `build-compiler.sh` - Builds the Osprey compiler
-- `test-setup.sh` - Tests that all tools are working correctly
-
-### Running Scripts
-```bash
-# Build the compiler
-.devcontainer/build-compiler.sh
-
-# Build VS Code extension (use the proper build script)
-cd vscode-extension && ./build.sh
-```
-
-## Development Tasks
-
-### Compiler Development
-
-Navigate to the compiler directory and use make commands:
-```bash
-cd /compiler
-make build          # Build the compiler
-make test           # Run all tests
-make test-llvm      # Run LLVM tests only
-make lint           # Run linter
-make clean          # Clean build artifacts
-```
-
-### VS Code Extension Development
-
-Navigate to the extension directory:
-```bash
-cd /vscode-extension
-npm install         # Install dependencies
-npm run compile     # Compile the extension
-npm run watch       # Watch for changes
-npm run package     # Package the extension
-```
-
-To debug the extension:
-1. Open the Run and Debug view in VS Code (Ctrl+Shift+D)
-2. Select "Run Extension"
-3. Press F5
-
-## Project Structure
-
-```
-/osprey/
-├── compiler/           # Osprey compiler (Go + ANTLR + LLVM)
-├── vscode-extension/   # VS Code extension (TypeScript)
-├── webcompiler/        # Web compiler (ignored in dev container)
-└── .devcontainer/      # Dev container configuration
-```
+When you start the container, the actual port numbers will be displayed in the output.
 
 ## Troubleshooting
 
-### Container Build Issues
-If you encounter issues building the container:
+If you encounter any issues:
 
-1. Try rebuilding: F1 → "Dev Containers: Rebuild Container"
-2. Clear Docker cache: `docker system prune -a`
-3. Check Docker logs for specific errors
+1. **Container won't start**: Try rebuilding the image:
+   ```bash
+   docker compose -f .devcontainer/docker-compose.yml --profile arm64 build --no-cache
+   ```
 
-### WSL Issues (Windows)
-If you see WSL-related errors:
+2. **Port conflicts**: The new dynamic port allocation should prevent this, but if you still have issues, stop conflicting containers:
+   ```bash
+   docker ps | grep :3001
+   docker stop <container-id>
+   ```
 
-1. Restart Docker Desktop
-2. Update WSL2: `wsl --update`
-3. Restart VS Code
+3. **Clean restart**: Stop and remove everything:
+   ```bash
+   docker compose -f .devcontainer/docker-compose.yml --profile arm64 down
+   docker system prune -f
+   ```
 
-### Node.js/npm Issues
-The container uses Node.js 20.17.0 which is compatible with the latest npm. If you encounter version conflicts, the setup scripts handle the compatibility automatically.
+## Files
 
-## Manual Testing
-
-After the container starts, you can verify everything works:
-
-```bash
-# Test individual components
-go version              # Go
-antlr -version         # ANTLR  
-llc --version          # LLVM
-node --version         # Node.js
-npm --version          # npm
-rustc --version        # Rust
-```
-
-## Notes
-
-- The container uses a non-root user `vscode` to avoid permission issues
-- All tools are pre-configured and ready to use
-- The post-create script automatically sets up both projects
+- `devcontainer.json` - ARM64 dev container configuration
+- `devcontainer-amd64.json` - AMD64 dev container configuration  
+- `docker-compose.yml` - Multi-architecture container definitions
+- `Dockerfile` - Container image definition
+- `start-dev-container.sh` - Convenient startup script for ARM64
+- `startup.sh` - Legacy startup script (deprecated)

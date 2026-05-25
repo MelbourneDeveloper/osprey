@@ -2,32 +2,26 @@
 # Base stage with common tools
 FROM golang:1.24-bookworm AS base
 
+# Set architecture-specific variables
+ARG TARGETARCH
+ARG TARGETPLATFORM
+
 # Install basic tools and build dependencies
-RUN echo 'Acquire::AllowInsecureRepositories "true";' > /etc/apt/apt.conf.d/99allow-insecure \
-    && echo 'Acquire::AllowDowngradeToInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99allow-insecure \
-    && echo 'APT::Get::AllowUnauthenticated "true";' >> /etc/apt/apt.conf.d/99allow-insecure \
-    && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* \
-    && apt-get update --allow-unauthenticated \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --allow-unauthenticated -o APT::Keep-Downloaded-Packages=false \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         git \
         curl \
         wget \
         build-essential \
         ca-certificates \
-        gnupg \
-        lsb-release \
-        apt-transport-https \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* \
-    && mkdir -p /etc/apt/keyrings
+    && rm -rf /var/lib/apt/lists/*
 
 # Node.js stage - install Node.js and npm
 FROM base AS node-stage
 
-# Install Node.js 20.x with GPG key handling
-RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
+# Install Node.js 20.x
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
 # Rust stage - install Rust toolchain
@@ -41,8 +35,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
 # Java stage - install Java and ANTLR
 FROM base AS java-stage
 
-RUN apt-get update --allow-unauthenticated \
-    && apt-get install -y --no-install-recommends --allow-unauthenticated \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         openjdk-17-jdk \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -56,10 +50,8 @@ RUN wget -q https://www.antlr.org/download/antlr-4.13.2-complete.jar -O /usr/loc
 # Final development stage
 FROM base AS development
 
-# Install Node.js directly in development stage with GPG key handling
-RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
+# Install Node.js directly in development stage
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
 # Copy Rust installation from rust-stage
@@ -73,9 +65,8 @@ COPY --from=java-stage /usr/local/bin/antlr /usr/local/bin/antlr
 COPY --from=java-stage /usr/local/bin/grun /usr/local/bin/grun
 
 # Install additional dev tools that weren't in base
-RUN apt-get update --allow-unauthenticated \
-    && apt-get install -y --no-install-recommends --allow-unauthenticated \
-        sudo \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         vim \
         nano \
         tree \
@@ -114,26 +105,40 @@ RUN apt-get update --allow-unauthenticated \
     && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 60
 
 # Install Docker CLI (client only - talks to host daemon via socket)
-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
     && apt-get install -y docker-ce-cli \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
     && apt-get update \
     && apt-get install gh -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up environment variables
-ENV PATH="/root/.cargo/bin:/usr/lib/llvm-14/bin:/usr/lib/jvm/java-17-openjdk-arm64/bin:${PATH}"
-ENV CLASSPATH=".:/usr/local/lib/antlr.jar:$CLASSPATH"
-ENV JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"
+# Set up environment variables dynamically based on architecture
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        echo 'export PATH="/root/.cargo/bin:/usr/lib/llvm-14/bin:/usr/lib/jvm/java-17-openjdk-arm64/bin:${PATH}"' >> /root/.bashrc && \
+        echo 'export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"' >> /root/.bashrc; \
+    else \
+        echo 'export PATH="/root/.cargo/bin:/usr/lib/llvm-14/bin:/usr/lib/jvm/java-17-openjdk-amd64/bin:${PATH}"' >> /root/.bashrc && \
+        echo 'export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"' >> /root/.bashrc; \
+    fi
+
+ENV PATH="/root/.cargo/bin:/usr/lib/llvm-14/bin:${PATH}"
+ENV CLASSPATH=".:/usr/local/lib/antlr.jar:${CLASSPATH}"
+
+# Set JAVA_HOME dynamically based on architecture
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"; \
+    else \
+        export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"; \
+    fi
 
 # Set working directory
 WORKDIR /workspace
@@ -148,9 +153,6 @@ RUN go install golang.org/x/tools/gopls@latest \
 
 # Install golangci-lint
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.1.6
-
-RUN sudo npm install -g \
-  @anthropic-ai/claude-code 
 
 # Install additional C testing tools and frameworks
 RUN git clone https://github.com/ThrowTheSwitch/Unity.git /tmp/unity \
@@ -187,4 +189,3 @@ RUN curl -L https://fly.io/install.sh | sh \
 # Set up Git configuration for development
 RUN git config --global init.defaultBranch main \
     && git config --global advice.detachedHead false
-
