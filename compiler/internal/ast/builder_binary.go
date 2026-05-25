@@ -176,31 +176,51 @@ func (b *Builder) buildLogicalOrExpr(ctx parser.ILogicalOrExprContext) Expressio
 }
 
 func (b *Builder) buildLogicalAndExpr(ctx parser.ILogicalAndExprContext) Expression {
+	eqExprs := ctx.AllEqualityExpr()
+	if len(eqExprs) == 1 {
+		return b.buildEqualityExpr(eqExprs[0])
+	}
+
+	// Left-associative chain of `&&` over equalityExpr operands.
+	left := b.buildEqualityExpr(eqExprs[0])
+	for i := 1; i < len(eqExprs); i++ {
+		right := b.buildEqualityExpr(eqExprs[i])
+		left = &BinaryExpression{
+			Left:     left,
+			Operator: "&&",
+			Right:    right,
+			Position: b.getPositionFromContext(ctx),
+		}
+	}
+
+	return left
+}
+
+// buildEqualityExpr builds `a (==|!=|<|<=|>|>=) b` chains, left-associative.
+// Sits between addExpr and logicalAndExpr in the precedence ladder so that
+// `a > 0 && b > 0` parses as `(a > 0) && (b > 0)`.
+func (b *Builder) buildEqualityExpr(ctx parser.IEqualityExprContext) Expression {
 	addExprs := ctx.AllAddExpr()
 	if len(addExprs) == 1 {
 		return b.buildAddExpr(addExprs[0])
 	}
 
-	// Build left-associative logical AND and comparison expressions
 	left := b.buildAddExpr(addExprs[0])
-
 	for i := 1; i < len(addExprs); i++ {
 		right := b.buildAddExpr(addExprs[i])
 
-		// Determine operator
 		operator := "=="
-		if ctx.NE_OP(i-1) != nil {
+		switch {
+		case ctx.NE_OP(i-1) != nil:
 			operator = "!="
-		} else if ctx.LT(i-1) != nil {
+		case ctx.LT(i-1) != nil:
 			operator = "<"
-		} else if ctx.GT(i-1) != nil {
+		case ctx.GT(i-1) != nil:
 			operator = ">"
-		} else if ctx.LE_OP(i-1) != nil {
+		case ctx.LE_OP(i-1) != nil:
 			operator = "<="
-		} else if ctx.GE_OP(i-1) != nil {
+		case ctx.GE_OP(i-1) != nil:
 			operator = ">="
-		} else if ctx.AND_OP(i-1) != nil {
-			operator = "&&"
 		}
 
 		left = &BinaryExpression{

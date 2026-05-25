@@ -732,6 +732,13 @@ func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) 
 		}
 	}
 
+	// Short-circuit boolean operators must defer codegen of the right operand
+	// until the left's truthiness is known at runtime. See spec
+	// 0009-BooleanOperations.md (`&&` and `||` short-circuit).
+	if binExpr.Operator == "&&" || binExpr.Operator == "||" {
+		return g.generateShortCircuitBoolean(binExpr)
+	}
+
 	left, err := g.generateExpression(binExpr.Left)
 	if err != nil {
 		return nil, err
@@ -743,6 +750,46 @@ func (g *LLVMGenerator) generateBinaryExpression(binExpr *ast.BinaryExpression) 
 	}
 
 	return g.generateBinaryOperationWithPos(binExpr.Operator, left, right, binExpr.Position)
+}
+
+// generateShortCircuitBoolean emits a branching implementation of `&&` and
+// `||` so the right-hand operand is only evaluated when its result is
+// observable. Mirrors the behaviour every other strict language gives.
+func (g *LLVMGenerator) generateShortCircuitBoolean(binExpr *ast.BinaryExpression) (value.Value, error) {
+	left, err := g.generateExpression(binExpr.Left)
+	if err != nil {
+		return nil, err
+	}
+
+	leftBool := g.builder.NewICmp(enum.IPredNE, left, constant.NewInt(types.I64, 0))
+	leftBlock := g.builder
+	blockSuffix := fmt.Sprintf("_%p", binExpr)
+	rightBlock := g.function.NewBlock("shortcircuit_rhs" + blockSuffix)
+	endBlock := g.function.NewBlock("shortcircuit_end" + blockSuffix)
+
+	// `&&` only evaluates RHS when LHS is true; `||` only when LHS is false.
+	if binExpr.Operator == "&&" {
+		g.builder.NewCondBr(leftBool, rightBlock, endBlock)
+	} else {
+		g.builder.NewCondBr(leftBool, endBlock, rightBlock)
+	}
+
+	g.builder = rightBlock
+	right, err := g.generateExpression(binExpr.Right)
+	if err != nil {
+		return nil, err
+	}
+	rightBool := g.builder.NewICmp(enum.IPredNE, right, constant.NewInt(types.I64, 0))
+	rhsExitBlock := g.builder
+	g.builder.NewBr(endBlock)
+
+	g.builder = endBlock
+	phi := g.builder.NewPhi(
+		ir.NewIncoming(leftBool, leftBlock),
+		ir.NewIncoming(rightBool, rhsExitBlock),
+	)
+
+	return g.builder.NewZExt(phi, types.I64), nil
 }
 
 // tryCollectionPlus dispatches `+` on List/Map operands to the appropriate
@@ -1558,6 +1605,9 @@ func (g *LLVMGenerator) generateMethodCallExpression(methodCall *ast.MethodCallE
 	v, err := g.generateCallExpression(rewritten)
 	if err != nil {
 		// Hint at the UFCS rewrite so the user can see where to look.
+		// (Issue #61's field-vs-UFCS shadowing message is produced by the
+		// type inferer's MethodCallExpression branch — this codegen path
+		// is only reached for downstream errors after inference passes.)
 		return nil, fmt.Errorf("UFCS call `_.%s(...)` rewrites to `%s(_, ...)`: %w",
 			methodCall.MethodName, methodCall.MethodName, err)
 	}

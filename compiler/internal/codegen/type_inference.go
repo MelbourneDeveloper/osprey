@@ -704,7 +704,16 @@ func (ti *TypeInferer) InferType(expr ast.Expression) (Type, error) {
 			NamedArguments: e.NamedArguments,
 			Position:       e.Position,
 		}
-		return ti.inferCallExpression(rewritten)
+		result, callErr := ti.inferCallExpression(rewritten)
+		if callErr != nil && ti.receiverHasField(e.Object, e.MethodName) {
+			// Issue #61: surface the field-vs-UFCS precedence rule.
+			return nil, fmt.Errorf(
+				"UFCS call `_.%s(...)` is rejected because the receiver has a field "+
+					"named `%s`; field access wins over UFCS dispatch per spec "+
+					"[BUILTIN-STRING-UFCS], and `%s` is not callable: %w",
+				e.MethodName, e.MethodName, e.MethodName, callErr)
+		}
+		return result, callErr
 	case *ast.ListAccessExpression:
 		return ti.inferListAccess(e)
 	case *ast.UpdateExpression:
@@ -776,6 +785,28 @@ func (ti *TypeInferer) InferPatternWithType(pattern ast.Pattern, discriminantTyp
 
 		return nil, fmt.Errorf("%w: %s", ErrUnknownConstructor, pattern.Constructor)
 	}
+}
+
+// receiverHasField returns true when the inferred type of the UFCS receiver
+// is a record carrying a field with the same name as the method call. The
+// inference uses a saved-then-restored substitution snapshot so the probe
+// does not leak state into the outer call site that already failed.
+func (ti *TypeInferer) receiverHasField(object ast.Expression, fieldName string) bool {
+	if ti == nil || object == nil {
+		return false
+	}
+	savedSubst := make(Substitution, len(ti.subst))
+	maps.Copy(savedSubst, ti.subst)
+	defer func() { ti.subst = savedSubst }()
+
+	objectType, err := ti.InferType(object)
+	if err != nil {
+		return false
+	}
+	if record, ok := ti.prune(objectType).(*RecordType); ok {
+		return record.HasField(fieldName)
+	}
+	return false
 }
 
 // handlePatternFieldBindings handles field bindings in patterns with proper type extraction

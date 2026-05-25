@@ -278,6 +278,12 @@ func (s *BaseospreyListener) EnterLogicalAndExpr(ctx *LogicalAndExprContext) {}
 // ExitLogicalAndExpr is called when production logicalAndExpr is exited.
 func (s *BaseospreyListener) ExitLogicalAndExpr(ctx *LogicalAndExprContext) {}
 
+// EnterEqualityExpr is called when production equalityExpr is entered.
+func (s *BaseospreyListener) EnterEqualityExpr(ctx *EqualityExprContext) {}
+
+// ExitEqualityExpr is called when production equalityExpr is exited.
+func (s *BaseospreyListener) ExitEqualityExpr(ctx *EqualityExprContext) {}
+
 // EnterAddExpr is called when production addExpr is entered.
 func (s *BaseospreyListener) EnterAddExpr(ctx *AddExprContext) {}
 
