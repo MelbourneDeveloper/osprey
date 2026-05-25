@@ -34,4 +34,32 @@ print("Spawned fiber task: ${spawnedTask}")
 let yieldResult = fiber_yield(123)
 print("Yield result: ${yieldResult}")
 
+// === Comprehensive Fiber Testing ===
+print("=== Comprehensive Fiber Testing ===")
+
+// Test fiber spawn and await
+fn fiberTask() -> int = 42
+
+let fiber1 = spawn fiberTask()
+print("Spawned fiber1")
+
+let result1 = await(fiber1)
+print("fiber1 result:")
+print(toString(result1))
+
+// Test simple async computation
+fn computeAsync(x: int) -> int = x * 2 + 10
+
+let computation = spawn computeAsync(25)
+let computeResult = await(computation)
+print("Async computation result:")
+print(toString(computeResult))
+
+// Test yield standalone
+print("Testing standalone yield...")
+let yieldResult = yield 777
+print("Yield result:")
+print(toString(yieldResult))
+
+print("Comprehensive Fiber Test Complete")
 print("=== Complete ===") 

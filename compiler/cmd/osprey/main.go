@@ -146,6 +146,7 @@ func ShowHelp() {
 	fmt.Println("  --docs-dir <directory> Output directory for documentation (used with --docs)")
 	fmt.Println("  --hover    Get hover documentation for language element")
 	fmt.Println("  --help, -h Show this help message")
+	fmt.Println("  --version  Show version information")
 	fmt.Println()
 	fmt.Println("Security Options:")
 	fmt.Println("  --sandbox      Enable sandbox mode (disable all risky operations)")
@@ -174,6 +175,13 @@ func ParseArgs(args []string) (string, string, string, *cli.SecurityConfig) {
 	// Handle help flags
 	if args[1] == "--help" || args[1] == "-h" {
 		ShowHelp()
+		return "", "", "", nil
+	}
+
+	// Handle version flag
+	if os.Args[1] == "--version" {
+		fmt.Println("Osprey Compiler v1.0.0")
+		os.Exit(0)
 		return "", "", "", nil
 	}
 

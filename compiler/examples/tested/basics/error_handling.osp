@@ -1,0 +1,41 @@
+// Error Handling Test
+
+// Test division with proper error handling using match
+fn safeDivide(a: int, b: int) -> int = match b {
+    0 => -1  // Return error indicator for division by zero
+    _ => a / b
+}
+
+let result1 = safeDivide(a: 10, b: 2)
+match result1 {
+    -1 => print("Division failed: division by zero")
+    _ => print("Division succeeded: ${result1}")
+}
+
+let result2 = safeDivide(a: 10, b: 0)
+match result2 {
+    -1 => print("Division failed: division by zero")
+    _ => print("Division succeeded: ${result2}")
+}
+
+// Test string validation using match
+fn validateString(s: string) -> int = match s {
+    "" => 0  // Return 0 for empty string
+    _ => 1   // Return 1 for valid string
+}
+
+let stringResult1 = validateString("valid")
+match stringResult1 {
+    0 => print("String validation failed: empty string")
+    1 => print("String validation succeeded")
+    _ => print("String validation: unknown result")
+}
+
+let stringResult2 = validateString("")
+match stringResult2 {
+    0 => print("String validation failed: empty string")
+    1 => print("String validation succeeded") 
+    _ => print("String validation: unknown result")
+}
+
+print("Error Handling Test Complete") 

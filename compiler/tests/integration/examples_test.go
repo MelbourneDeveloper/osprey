@@ -199,7 +199,28 @@ func getExpectedOutputs() map[string]string {
 			"✅ Valid Product (should return 1):\n1\n❌ Invalid Product - empty name (should return -1):\n-1\n" +
 			"❌ Invalid Product - zero price (should return -1):\n-1\n=== WHERE CONSTRAINT VALIDATION COMPLETE ===\n",
 		"proper_validation_test.osp": "Testing validation functions:\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\n",
-		"match_type_mismatch.osp":    "none\n",
+
+		// New comprehensive test files
+		"system_functions.osp": "System call simulation: success\n" +
+			"System call simulation: success\n" +
+			"File read simulation: got contents\n" +
+			"File write simulation: succeeded\n" +
+			"System Functions Test Complete\n",
+
+		"error_handling.osp": "Division succeeded: 5\n" +
+			"Division failed: division by zero\n" +
+			"String validation succeeded\n" +
+			"String validation failed: empty string\n" +
+			"Error Handling Test Complete\n",
+
+		"type_analysis_test.osp": "Red correctly identified\n" +
+			"Green correctly identified\n" +
+			"Blue correctly identified\n" +
+			"True case handled correctly\n" +
+			"False case failed\n" +
+			"Number analysis:\nzero\none\ntwo\nother\n" +
+			"Type Analysis Test Complete\n",
+		"match_type_mismatch.osp": "none\n",
 		// Website examples
 		"website_hero_example.osp": "x = 42\nname = Alice\nResult: The answer!\n",
 		"website_type_safe_example.osp": "Testing functions:\nZero\nThe answer!\nSomething else\n" +

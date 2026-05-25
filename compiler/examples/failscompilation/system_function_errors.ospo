@@ -1,0 +1,14 @@
+// This should fail - wrong number of arguments to spawnProcess
+let badProcess = spawnProcess()
+
+// This should fail - wrong argument types
+let badFileWrite = writeFile(123, 456)
+
+// This should fail - wrong number of arguments to readFile  
+let badFileRead = readFile()
+
+// This should fail - wrong argument types to parseJSON
+let badJson = parseJSON(123)
+
+// This should fail - wrong number of arguments to extractCode
+let badExtract = extractCode() 

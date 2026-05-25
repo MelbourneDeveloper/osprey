@@ -1,0 +1,63 @@
+// Type Analysis Test
+
+// Test basic pattern matching with different types
+type Color = Red | Green | Blue
+
+fn analyzeColor(color: Color) -> int = match color {
+    Red => 1
+    Green => 2  
+    Blue => 3
+}
+
+// Test the pattern matching
+let redResult = analyzeColor(Red)
+match redResult {
+    1 => print("Red correctly identified")
+    _ => print("Red identification failed")
+}
+
+let greenResult = analyzeColor(Green)
+match greenResult {
+    2 => print("Green correctly identified")
+    _ => print("Green identification failed")
+}
+
+let blueResult = analyzeColor(Blue)
+match blueResult {
+    3 => print("Blue correctly identified")
+    _ => print("Blue identification failed")
+}
+
+// Test boolean pattern matching
+fn analyzeBool(flag: bool) -> int = match flag {
+    true => 100
+    false => 0
+}
+
+let trueResult = analyzeBool(true)
+match trueResult {
+    100 => print("True case handled correctly")
+    _ => print("True case failed")
+}
+
+let falseResult = analyzeBool(false)
+match falseResult {
+    0 => print("False case handled correctly")
+    _ => print("False case failed")
+}
+
+// Test integer pattern matching
+fn analyzeNumber(n: int) -> string = match n {
+    0 => "zero"
+    1 => "one"
+    2 => "two"
+    _ => "other"
+}
+
+print("Number analysis:")
+print(analyzeNumber(0))
+print(analyzeNumber(1))
+print(analyzeNumber(2))
+print(analyzeNumber(99))
+
+print("Type Analysis Test Complete") 

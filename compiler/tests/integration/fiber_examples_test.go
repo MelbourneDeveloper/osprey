@@ -19,6 +19,13 @@ func TestFiberExamples(t *testing.T) {
 			"Processed 10 items\n" +
 			"Processed 25 more items, total: 35\n" +
 			"Message queue size: 6\n" +
+			"=== Comprehensive Fiber Testing ===\n" +
+			"Spawned fiber1\n" +
+			"fiber1 result:\n42\n" +
+			"Async computation result:\n60\n" +
+			"Testing standalone yield...\n" +
+			"Yield result:\n777\n" +
+			"Comprehensive Fiber Test Complete\n" +
 			"=== Complete ===\n",
 		"fiber_advanced.osp": "=== Advanced Fiber Examples ===\n" +
 			"Map-Reduce pattern:\n" +

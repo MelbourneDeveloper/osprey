@@ -1,0 +1,14 @@
+// This should fail - trying to await invalid fiber ID
+let badAwait = await 999999
+
+// This should fail - trying to send to invalid channel
+let badSend = invalidChannel <- 42
+
+// This should fail - trying to receive from invalid channel  
+let badRecv = <-invalidChannel
+
+// This should fail - wrong yield syntax
+yield 
+
+// This should fail - spawn with invalid expression
+let badSpawn = spawn invalidFunction() 

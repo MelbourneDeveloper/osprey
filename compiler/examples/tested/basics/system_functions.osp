@@ -1,0 +1,48 @@
+// System Functions Test
+
+// Note: System functions exist but Result pattern matching is not fully implemented yet
+// For now, just test basic pattern matching functionality
+
+// Test pattern matching with integers
+fn testSystemReturn(success: bool) -> int = match success {
+    true => 0   // Success indicator
+    false => -1 // Error indicator
+}
+
+let test1 = testSystemReturn(true)
+match test1 {
+    0 => print("System call simulation: success")
+    -1 => print("System call simulation: failed") 
+    _ => print("System call simulation: unknown")
+}
+
+let test2 = testSystemReturn(false) 
+match test2 {
+    0 => print("System call simulation: success")
+    -1 => print("System call simulation: failed")
+    _ => print("System call simulation: unknown")
+}
+
+// Test pattern matching with strings for system operations
+fn simulateFileOp(operation: string) -> string = match operation {
+    "read" => "file_contents"
+    "write" => "success"
+    "delete" => "removed"
+    _ => "unknown_operation"
+}
+
+let readOp = simulateFileOp("read")
+match readOp {
+    "file_contents" => print("File read simulation: got contents")
+    "error" => print("File read simulation: failed")
+    _ => print("File read simulation: unknown result")
+}
+
+let writeOp = simulateFileOp("write")
+match writeOp {
+    "success" => print("File write simulation: succeeded")
+    "error" => print("File write simulation: failed")
+    _ => print("File write simulation: unknown result")
+}
+
+print("System Functions Test Complete") 
