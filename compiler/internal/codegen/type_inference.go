@@ -881,10 +881,11 @@ func patternBindName(pattern ast.Pattern) string {
 // bindSuccessPattern binds pattern fields for Success constructor.
 // Codegen auto-wraps non-Result discriminants in Success (see
 // generateMatchExpressionWithDiscriminant), so a `Success v` arm always
-// binds — Result<T,E> maps v to T; any other discriminant maps v to its
-// own type. Without that fallback,
-// `match int_expr { Success v => double(v) }` raised
-// "undefined variable v" during arm-body inference.
+// binds — Result<T,E> maps v to T; a primitive discriminant maps v to
+// its own type. Type variables / unresolved discriminants get a fresh
+// tyvar so the arm-body unifier still has room to converge.
+// Without the primitive fallback, `match int_expr { Success v => v }`
+// raised "undefined variable v" during arm-body inference.
 func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType Type) {
 	name := patternBindName(pattern)
 	if gt, ok := discriminantType.(*GenericType); ok && gt.name == TypeResult && len(gt.typeArgs) >= 1 {
@@ -899,16 +900,29 @@ func (ti *TypeInferer) bindSuccessPattern(pattern ast.Pattern, discriminantType 
 		}
 		return
 	}
-	if name != "" && discriminantType != nil {
-		ti.env.Set(name, discriminantType)
+	if name == "" {
+		return
 	}
+	// Bind primitive discriminants directly; otherwise hand out a fresh
+	// tyvar so the arm body can unify it against the Error arm without
+	// being constrained to the (possibly polymorphic) discriminant
+	// itself.
+	if ct, ok := discriminantType.(*ConcreteType); ok {
+		switch ct.name {
+		case TypeInt, TypeFloat, TypeString, TypeBool:
+			ti.env.Set(name, ct)
+			return
+		}
+	}
+	ti.env.Set(name, ti.Fresh())
 }
 
 // bindErrorPattern binds pattern fields for Error constructor.
-// Mirrors bindSuccessPattern — Result<T,E> binds to E; a non-Result
-// discriminant binds to a stand-in string (the auto-wrap path never
-// hits the Error branch at runtime, but the inferer still needs the
-// name in scope so the arm body type-checks).
+// Result<T,E> binds to E; otherwise hand out a fresh tyvar so the
+// arm body can unify without prematurely committing to a type.
+// The auto-wrap path never reaches the Error branch at runtime for
+// non-Result discriminants, but the inferer still needs the name in
+// scope so the body type-checks.
 func (ti *TypeInferer) bindErrorPattern(pattern ast.Pattern, discriminantType Type) {
 	name := patternBindName(pattern)
 	if gt, ok := discriminantType.(*GenericType); ok && gt.name == "Result" && len(gt.typeArgs) >= 2 {
@@ -924,7 +938,7 @@ func (ti *TypeInferer) bindErrorPattern(pattern ast.Pattern, discriminantType Ty
 		return
 	}
 	if name != "" {
-		ti.env.Set(name, &ConcreteType{name: TypeString})
+		ti.env.Set(name, ti.Fresh())
 	}
 }
 
