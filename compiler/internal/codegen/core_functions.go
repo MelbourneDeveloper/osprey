@@ -431,7 +431,7 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 		return nil, err
 	}
 
-	stringArg, err := g.convertValueToStringForPrint(arg, inferredType)
+	stringArg, err := g.convertValueToStringForPrint(arg, inferredType, callExpr.Position)
 	if err != nil {
 		return nil, err
 	}
@@ -442,20 +442,26 @@ func (g *LLVMGenerator) generatePrintCall(callExpr *ast.CallExpression) (value.V
 }
 
 // convertValueToStringForPrint converts any value to a string for printing.
-func (g *LLVMGenerator) convertValueToStringForPrint(arg value.Value, inferredType Type) (value.Value, error) {
+// pos is the print call's source position, used to give the unsupported-type
+// error a usable line/column instead of a bare "cannot convert value".
+func (g *LLVMGenerator) convertValueToStringForPrint(
+	arg value.Value, inferredType Type, pos *ast.Position,
+) (value.Value, error) {
 	// Unit-returning calls (print, …) hand back nil. Reject up-front rather
 	// than dereferencing nil downstream in convertPrimitiveToString.
 	if arg == nil {
 		return nil, ErrPrintOnUnit
 	}
 	if g.isResultType(arg) {
-		return g.convertResultValueToString(arg)
+		return g.convertResultValueToString(arg, inferredType, pos)
 	}
-	return g.convertPrimitiveToString(arg, inferredType)
+	return g.convertPrimitiveToString(arg, inferredType, pos)
 }
 
 // convertResultValueToString handles Result type conversion to string.
-func (g *LLVMGenerator) convertResultValueToString(arg value.Value) (value.Value, error) {
+func (g *LLVMGenerator) convertResultValueToString(
+	arg value.Value, inferredType Type, pos *ast.Position,
+) (value.Value, error) {
 	if structType, ok := arg.Type().(*types.StructType); ok && len(structType.Fields) == ResultFieldCount {
 		return g.convertResultToString(arg, structType)
 	}
@@ -464,11 +470,13 @@ func (g *LLVMGenerator) convertResultValueToString(arg value.Value) (value.Value
 			return g.convertResultToString(arg, structType)
 		}
 	}
-	return nil, ErrPrintCannotConvert
+	return nil, WrapPrintCannotConvertWithPos(typeNameForError(inferredType, arg), pos)
 }
 
 // convertPrimitiveToString handles primitive type conversion to string.
-func (g *LLVMGenerator) convertPrimitiveToString(arg value.Value, inferredType Type) (value.Value, error) {
+func (g *LLVMGenerator) convertPrimitiveToString(
+	arg value.Value, inferredType Type, pos *ast.Position,
+) (value.Value, error) {
 	switch arg.Type().(type) {
 	case *types.PointerType:
 		return arg, nil
@@ -477,8 +485,40 @@ func (g *LLVMGenerator) convertPrimitiveToString(arg value.Value, inferredType T
 	case *types.FloatType:
 		return g.generateFloatToString(arg)
 	default:
-		return nil, ErrPrintCannotConvert
+		return nil, WrapPrintCannotConvertWithPos(typeNameForError(inferredType, arg), pos)
 	}
+}
+
+// typeNameForError picks the most descriptive type name for a "can't print
+// this" error. Falls back to the LLVM type string when the inferred type is
+// still an unresolved variable (so the user at least sees "{i64, i64}" or
+// similar instead of a bare "t12").
+func typeNameForError(inferredType Type, arg value.Value) string {
+	if inferredType != nil {
+		name := inferredType.String()
+		if name != "" && !looksLikeTypeVar(name) {
+			return name
+		}
+	}
+	if arg != nil && arg.Type() != nil {
+		return arg.Type().String()
+	}
+	return "<unknown>"
+}
+
+// looksLikeTypeVar reports whether a type-inference name is still an
+// unresolved variable (e.g. "t12") rather than a real type the user
+// would recognise.
+func looksLikeTypeVar(name string) bool {
+	if len(name) < 2 || name[0] != 't' {
+		return false
+	}
+	for _, c := range name[1:] {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // convertIntTypeToString handles int type conversion, distinguishing between bool and int.
