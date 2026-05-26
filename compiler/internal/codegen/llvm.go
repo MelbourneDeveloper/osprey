@@ -918,7 +918,7 @@ func (g *LLVMGenerator) generateInterpolatedString(interpStr *ast.InterpolatedSt
 				}
 
 				// Convert primitive to string using existing logic
-				stringVal, err = g.convertPrimitiveToString(exprVal, inferredType)
+				stringVal, err = g.convertPrimitiveToString(exprVal, inferredType, interpStr.Position)
 				if err != nil {
 					return nil, err
 				}

@@ -357,6 +357,14 @@ func WrapSimpleErrorWithPos(baseErr error, arg string, pos any) error {
 	return fmt.Errorf("%w: %s", baseErr, arg)
 }
 
+// WrapPrintCannotConvertWithPos wraps the print "cannot convert" error with
+// position + the source-level type name. Without this users got a bare
+// "cannot convert value for printing" with no clue which print or which
+// type — `print(somePoint)` failed with the same message as any other.
+func WrapPrintCannotConvertWithPos(typeName string, pos any) error {
+	return WrapSimpleErrorWithPos(ErrPrintCannotConvert, typeName, pos)
+}
+
 // Remaining wrapper functions that are NOT just one-line calls to WrapBuiltInFunctionWrongArgs
 
 // WrapHTTPStopServerUnknownNamedArg wraps errors for unknown named arguments in HTTP stop server
