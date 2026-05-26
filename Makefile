@@ -29,6 +29,16 @@ endif
 # ---------------------------------------------------------------------------
 COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
+# ---------------------------------------------------------------------------
+# VSIX (VSCode extension) — macOS only.
+# Profile auto-discovery reads names from globalStorage/storage.json so
+# `make vsix` installs into the default profile AND every named profile.
+# ---------------------------------------------------------------------------
+EXT_DIR         := vscode-extension
+EXT_ID          := christianfindlay.osprey-language-support
+VSCODE_USER_DIR := $(HOME)/Library/Application Support/Code/User
+VSCODE_STORAGE  := $(VSCODE_USER_DIR)/globalStorage/storage.json
+
 # =============================================================================
 # Standard Targets
 # =============================================================================
@@ -195,7 +205,7 @@ _ratchet_vscode_extension:
 # Repo-Specific Targets
 # =============================================================================
 
-.PHONY: install uninstall regenerate-parser run website-dev website-build
+.PHONY: install uninstall regenerate-parser run website-dev website-build vsix
 
 ## install: Install osprey compiler globally
 install:
@@ -221,3 +231,57 @@ website-dev:
 ## website-build: Build static site
 website-build:
 	cd website && npm run build
+
+## vsix: Clean → uninstall → build → package → install (every VSCode profile)
+##       Compiler is rebuilt cleanly first so the LSP-bundled binary is in sync.
+##       Discovers profiles from $(VSCODE_STORAGE) and uses `code --profile`
+##       to install into each one. macOS only.
+vsix:
+	@echo "==> [vsix] clean"
+	$(MAKE) _vsix_clean
+	@echo "==> [vsix] compiler build (fresh binary + libs)"
+	cd compiler && $(MAKE) build
+	@echo "==> [vsix] uninstall (all profiles)"
+	$(MAKE) _vsix_uninstall
+	@echo "==> [vsix] extension build"
+	$(MAKE) _vsix_build
+	@echo "==> [vsix] package"
+	$(MAKE) _vsix_package
+	@echo "==> [vsix] install (all profiles)"
+	$(MAKE) _vsix_install
+
+# --- vsix sub-targets -----------------------------------------------------
+_vsix_clean:
+	cd $(EXT_DIR) && $(RM) out dist *.vsix
+
+# Uninstall from default profile + every named profile in storage.json.
+# `code --uninstall-extension` exits non-zero when the extension isn't
+# present; we swallow that since uninstall-before-install must be idempotent.
+_vsix_uninstall:
+	-@code --uninstall-extension $(EXT_ID) >/dev/null 2>&1 && echo "  [default] uninstalled" || echo "  [default] not installed"
+	@jq -r '.userDataProfiles[]?.name' "$(VSCODE_STORAGE)" 2>/dev/null | while IFS= read -r prof; do \
+	  [ -z "$$prof" ] && continue; \
+	  if code --profile "$$prof" --uninstall-extension $(EXT_ID) >/dev/null 2>&1; then \
+	    echo "  [$$prof] uninstalled"; \
+	  else \
+	    echo "  [$$prof] not installed"; \
+	  fi; \
+	done
+
+_vsix_build:
+	cd $(EXT_DIR) && npm run compile
+
+_vsix_package:
+	cd $(EXT_DIR) && npm run package
+
+# Install latest *.vsix to default profile + every named profile.
+# --force lets `code` reinstall over an existing version without prompting.
+_vsix_install:
+	@VSIX=$$(ls -t $(EXT_DIR)/*.vsix 2>/dev/null | head -1); \
+	if [ -z "$$VSIX" ]; then echo "FAIL: no .vsix in $(EXT_DIR)/ — did _vsix_package run?"; exit 1; fi; \
+	echo "  vsix: $$VSIX"; \
+	code --install-extension "$$VSIX" --force && echo "  [default] installed"; \
+	jq -r '.userDataProfiles[]?.name' "$(VSCODE_STORAGE)" 2>/dev/null | while IFS= read -r prof; do \
+	  [ -z "$$prof" ] && continue; \
+	  code --profile "$$prof" --install-extension "$$VSIX" --force && echo "  [$$prof] installed"; \
+	done
