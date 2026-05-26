@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -176,9 +177,19 @@ func NewOrderedRecordType(name string, fields map[string]Type, fieldOrder []stri
 }
 
 func (rt *RecordType) String() string {
-	fieldStrings := make([]string, 0, len(rt.fields))
-	for name, t := range rt.fields {
-		fieldStrings = append(fieldStrings, fmt.Sprintf("%s: %s", name, t.String()))
+	// Sort field names so the rendered type is deterministic — Go map
+	// iteration is randomised per run, which made error messages
+	// containing record types diff differently between CI and local
+	// (`{x: int, y: int}` vs `{y: int, x: int}`) and broke
+	// .expectedoutput fixtures non-deterministically.
+	names := make([]string, 0, len(rt.fields))
+	for name := range rt.fields {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	fieldStrings := make([]string, 0, len(names))
+	for _, name := range names {
+		fieldStrings = append(fieldStrings, fmt.Sprintf("%s: %s", name, rt.fields[name].String()))
 	}
 
 	return fmt.Sprintf("{%s}", strings.Join(fieldStrings, ", "))
