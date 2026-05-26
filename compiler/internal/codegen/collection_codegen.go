@@ -42,7 +42,27 @@ var (
 	errCollectionArgCount   = errors.New("wrong argument count")
 	errCollectionExternMiss = errors.New("collection extern not declared")
 	errForEachListSecondArg = errors.New("forEachList: second argument must be a function name")
+	// errMapNonStringKey fires when mapSet/mapGet/mapContains/mapRemove
+	// receive a non-pointer key (int/bool/float). Map() currently always
+	// emits OSPREY_KEY_STRING, so the runtime would dereference the
+	// int-bit-pattern as a char* in hash_string and SIGSEGV. Until typed
+	// Map constructors land, surface the limitation at compile time.
+	errMapNonStringKey = errors.New(
+		"mapSet/mapGet/mapContains/mapRemove require string keys (Map() defaults to string keys); " +
+			"int/bool/float keys would SIGSEGV at runtime")
 )
+
+// rejectNonStringMapKey errors when k's LLVM type is a non-pointer
+// (int / bool / float). Map() defaults to OSPREY_KEY_STRING and the
+// runtime's hash_string would dereference the key's int-bit-pattern as a
+// char* and SIGSEGV. Pointer-typed keys (strings, records bit-cast to
+// i8*) flow through unchanged.
+func rejectNonStringMapKey(k value.Value, op string) error {
+	if _, isPtr := k.Type().(*types.PointerType); isPtr {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", op, errMapNonStringKey)
+}
 
 // ensureCollectionExtern declares an osprey_list_* / osprey_map_* function
 // once and caches it. The codegen helpers below all funnel through here.
@@ -380,6 +400,10 @@ func (g *LLVMGenerator) generateMapContainsCall(callExpr *ast.CallExpression) (v
 	if err != nil {
 		return nil, err
 	}
+	keyErr := rejectNonStringMapKey(k, "mapContains")
+	if keyErr != nil {
+		return nil, keyErr
+	}
 	res := g.builder.NewCall(g.functions["osprey_map_contains"], m, g.boxToI64(k))
 	return g.builder.NewICmp(enum.IPredNE, res, constant.NewInt(types.I32, 0)), nil
 }
@@ -401,6 +425,10 @@ func (g *LLVMGenerator) generateMapGetCall(callExpr *ast.CallExpression) (value.
 	k, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err
+	}
+	keyErr := rejectNonStringMapKey(k, "mapGet")
+	if keyErr != nil {
+		return nil, keyErr
 	}
 	boxedKey := g.boxToI64(k)
 	contains := g.builder.NewCall(g.functions["osprey_map_contains"], m, boxedKey)
@@ -435,6 +463,10 @@ func (g *LLVMGenerator) generateMapSetCall(callExpr *ast.CallExpression) (value.
 	if err != nil {
 		return nil, err
 	}
+	keyErr := rejectNonStringMapKey(k, "mapSet")
+	if keyErr != nil {
+		return nil, keyErr
+	}
 	v, err := g.generateExpression(callExpr.Arguments[2])
 	if err != nil {
 		return nil, err
@@ -454,6 +486,10 @@ func (g *LLVMGenerator) generateMapRemoveCall(callExpr *ast.CallExpression) (val
 	k, err := g.generateExpression(callExpr.Arguments[1])
 	if err != nil {
 		return nil, err
+	}
+	keyErr := rejectNonStringMapKey(k, "mapRemove")
+	if keyErr != nil {
+		return nil, keyErr
 	}
 	return g.builder.NewCall(g.functions["osprey_map_remove"], m, g.boxToI64(k)), nil
 }
