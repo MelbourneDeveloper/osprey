@@ -91,8 +91,8 @@ jobs:
       - name: Test example compilation and execution
         working-directory: ./compiler
         run: |
-          ./bin/osprey examples/tested/basics/math/interpolation_math.osp --run
-          ./bin/osprey examples/tested/basics/comprehensive.osp --run
+          ./bin/osprey examples/tested/basics/math/comprehensive_math.osp --run
+          ./bin/osprey examples/tested/basics/feature_omnibus.osp --run
 
       - name: Test Web Compiler
         run: |
