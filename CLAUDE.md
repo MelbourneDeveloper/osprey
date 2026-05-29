@@ -3,6 +3,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+⚠️ DO NOT USE GIT - ESPECIALLY NOT PUTTING YOUR SIGNATURE ON COMMITS ⚠️
+⚠️ PRACTICE TOKEN ECONOMICS ⚠️
+⚠️ ZERO DUPLICATE CODE ⚠️
+
 ## Core Development Principles
 
 - **NEVER DUPLICATE CODE** - Edit in place, never create new versions. Actively remove duplicate code, even test code and always aim for conciseness. Always do a search before adding new code.
