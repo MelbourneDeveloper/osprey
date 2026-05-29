@@ -251,7 +251,7 @@ func (r *BuiltInFunctionRegistry) registerCoreIOFunctions() {
 
 // registerStringFunctions registers string manipulation functions.
 // Implements [BUILTIN-STRING-*]. Design rationale and full API in
-// compiler/spec/0012-Built-InFunctions.md.
+// docs/specs/0012-Built-InFunctions.md.
 //
 //nolint:funlen // single declarative registry; splitting hurts grep-ability
 func (r *BuiltInFunctionRegistry) registerStringFunctions() {

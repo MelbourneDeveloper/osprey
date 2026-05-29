@@ -79,7 +79,7 @@ fn main() -> Unit = {
 
 ## Documentation
 
-- [Language specification](compiler/spec/)
+- [Language specification](docs/specs/)
 - [API reference](website/src/docs/)
 - [Contributing guide](CONTRIBUTING.md)
 
@@ -102,7 +102,7 @@ make install       # Install locally
 
 🚧 **Alpha**: Core language features implemented. Algebraic effects system working with compile-time safety, but are missing some features. HTTP and advanced features in development.
 
-See [compiler/spec/](compiler/spec/) for implementation status.
+See [docs/specs/](docs/specs/) for implementation status.
 
 ## Recent Major Updates
 

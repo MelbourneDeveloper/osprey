@@ -3,9 +3,9 @@
 Parent: [`production-primitives.md`](production-primitives.md).
 
 Related specs:
-- [`0014-HTTP.md`](../../compiler/spec/0014-HTTP.md) — current HTTP client surface
-- [`0012-Built-InFunctions.md`](../../compiler/spec/0012-Built-InFunctions.md) — builtin registry
-- [`0017-AlgebraicEffects.md`](../../compiler/spec/0017-AlgebraicEffects.md) — effect handler shape used by the TUI abstraction
+- [`0014-HTTP.md`](../specs/0014-HTTP.md) — current HTTP client surface
+- [`0012-Built-InFunctions.md`](../specs/0012-Built-InFunctions.md) — builtin registry
+- [`0017-AlgebraicEffects.md`](../specs/0017-AlgebraicEffects.md) — effect handler shape used by the TUI abstraction
 
 ## Why this exists
 
@@ -93,7 +93,7 @@ Smallest, most contained change. Without this, nothing else matters.
 - [ ] Add `httpResponseHeader(handle: int, name: string) -> Result<string, Error>` (returns first matching header, or error if absent).
 - [ ] Add `httpResponseFree(handle: int) -> Result<bool, Error>`. Double-free must error, not segfault.
 - [ ] Register the new builtins in `internal/codegen/` with correct `Result<T, Error>` type signatures.
-- [ ] Spec update: amend [`0014-HTTP.md`](../../compiler/spec/0014-HTTP.md) to document the new response surface; mark the old "returns status code" behavior as removed.
+- [ ] Spec update: amend [`0014-HTTP.md`](../specs/0014-HTTP.md) to document the new response surface; mark the old "returns status code" behavior as removed.
 - [ ] Migrate every existing [`examples/tested/http`](../../compiler/examples/tested/) example to the new API; delete any that only checked status.
 - [ ] Add `examples/tested/http/http_body_roundtrip.osp` — `GET https://httpbin.org/json`, print the body, assert it contains `"slideshow"`. (Pick a stable test endpoint or use the test HTTP server already in the runtime tests.)
 - [ ] Add C runtime test covering the handle lifecycle: alloc → status read → body read → free → double-free errors cleanly.
@@ -103,7 +103,7 @@ Smallest, most contained change. Without this, nothing else matters.
 - [ ] Add `runtime/json_runtime.c` wrapping a vetted single-file JSON library. Surface: `jsonParse(s: string) -> Result<int, Error>` (handle), `jsonType(h, path: string) -> string` (returns `"null"`/`"bool"`/`"number"`/`"string"`/`"array"`/`"object"`), `jsonGet(h, path) -> Result<string, Error>` (path syntax: `"a.b[0].c"`), `jsonKeys(h, path) -> Result<List<string>, Error>`, `jsonLength(h, path) -> Result<int, Error>` (for arrays), `jsonFree(h) -> Result<bool, Error>`.
 - [ ] Replace the [`extract_json_field` stub](../../compiler/runtime/system_runtime.c#L380-L417) — either delete it or make it forward to `jsonParse`+`jsonGet`.
 - [ ] Register the builtins in `internal/codegen/`.
-- [ ] Spec update: amend [`0012-Built-InFunctions.md`](../../compiler/spec/0012-Built-InFunctions.md) with a `JSON` section. Mark it as "v1 builtin — slated for replacement by Osprey-native parser per `production-primitives.md`."
+- [ ] Spec update: amend [`0012-Built-InFunctions.md`](../specs/0012-Built-InFunctions.md) with a `JSON` section. Mark it as "v1 builtin — slated for replacement by Osprey-native parser per `production-primitives.md`."
 - [ ] Add `examples/tested/http/github_api.osp` — `GET https://api.github.com/users/<known-stable-user>`, parse, print `login` and `public_repos`. Use a recorded fixture if hitting the live API in CI is too flaky.
 - [ ] Document the path syntax (`a.b[0].c`) in the spec, including escape rules for keys containing `.` or `[`.
 
@@ -115,7 +115,7 @@ Smallest, most contained change. Without this, nothing else matters.
   - [ ] `termReadKey() -> Result<string, Error>` — reads one keystroke in raw mode and translates ANSI escape sequences to human-readable strings (`"Up"`, `"Down"`, `"Left"`, `"Right"`, `"Enter"`, `"Esc"`, `"Tab"`, `"Backspace"`, `"Ctrl-C"`, otherwise the literal character). Returns error on EOF.
   - [ ] `termClear()`, `termMoveCursor(row: int, col: int)`, `termHideCursor()`, `termShowCursor()` — write the corresponding ANSI escape and flush.
 - [ ] Register all of the above in `internal/codegen/`.
-- [ ] Spec update: new section in [`0012-Built-InFunctions.md`](../../compiler/spec/0012-Built-InFunctions.md) called "Terminal Control", spec ID `[BUILTIN-TERM]`.
+- [ ] Spec update: new section in [`0012-Built-InFunctions.md`](../specs/0012-Built-InFunctions.md) called "Terminal Control", spec ID `[BUILTIN-TERM]`.
 - [ ] Add pure-Osprey module `examples/lib/ansi.osp` (or wherever stdlib lives) with `red(s)`, `green(s)`, `blue(s)`, `yellow(s)`, `cyan(s)`, `magenta(s)`, `bold(s)`, `dim(s)`, `bgRed(s)`, … — all just string-wrapping helpers. No new builtins.
 - [ ] Add `stringCellWidth(s: string) -> int` builtin that strips ANSI escape sequences (CSI / SGR) before counting cells. Needed so `padEnd(coloredString, 20)` aligns visibly. C implementation: state machine over the bytes, skip `\x1b[...m` runs.
 - [ ] Add a runtime test for `termReadKey` driven by a pty (or skip in CI and have a manual test recipe documented).

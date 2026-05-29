@@ -8,7 +8,7 @@
  * algebra (hashing, assoc, lookup, remove) lives in map_runtime_hamt.c.
  *
  * Implements [TYPE-MAP], [TYPE-MAP-LOOKUP], [TYPE-MAP-OPS] from
- * compiler/spec/0004-TypeSystem.md.
+ * docs/specs/0004-TypeSystem.md.
  */
 
 /* ============ Public API ============ */

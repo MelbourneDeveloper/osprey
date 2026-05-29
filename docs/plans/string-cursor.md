@@ -1,6 +1,6 @@
 # Plan: O(1) String Cursor (`byteAt`, `codePointAt`, friends)
 
-Spec: [`0012-Built-InFunctions.md` — Cursor Access](../../compiler/spec/0012-Built-InFunctions.md#cursor-access-total-o1).
+Spec: [`0012-Built-InFunctions.md` — Cursor Access](../specs/0012-Built-InFunctions.md#cursor-access-total-o1).
 
 Parent: [`production-primitives.md`](production-primitives.md).
 
@@ -20,7 +20,7 @@ This plan adds the first two as builtins. The third is mostly handled today by `
 
 ## Scope
 
-Five builtins, all spec'd in [`0012-Built-InFunctions.md`](../../compiler/spec/0012-Built-InFunctions.md#cursor-access-total-o1):
+Five builtins, all spec'd in [`0012-Built-InFunctions.md`](../specs/0012-Built-InFunctions.md#cursor-access-total-o1):
 
 | Builtin | Signature | Behaviour |
 |---|---|---|
@@ -32,7 +32,7 @@ Five builtins, all spec'd in [`0012-Built-InFunctions.md`](../../compiler/spec/0
 
 ## Why builtins (not pure Osprey)
 
-The spec ([`0012` — Cursor Access](../../compiler/spec/0012-Built-InFunctions.md#cursor-access-total-o1)) says: "they are the lowest-level string operations in the language; everything above is implementable in pure Osprey on top of them." That's literally true — you cannot implement `byteAt` in Osprey without already having a way to address bytes. So these five are the irreducible primitive layer; *everything else* (parsing, validation, encoding) is up for grabs as a user library.
+The spec ([`0012` — Cursor Access](../specs/0012-Built-InFunctions.md#cursor-access-total-o1)) says: "they are the lowest-level string operations in the language; everything above is implementable in pure Osprey on top of them." That's literally true — you cannot implement `byteAt` in Osprey without already having a way to address bytes. So these five are the irreducible primitive layer; *everything else* (parsing, validation, encoding) is up for grabs as a user library.
 
 This is the opposite of the JSON-as-builtin shortcut. Builtins here are the *minimum* C surface, chosen so that user code can do *more* in Osprey, not less.
 

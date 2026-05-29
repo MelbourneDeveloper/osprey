@@ -2,7 +2,7 @@ package codegen
 
 // Registry entries for List<T> and Map<K, V> builtins.
 //
-// Spec: compiler/spec/0012-Built-InFunctions.md#collection-functions.
+// Spec: docs/specs/0012-Built-InFunctions.md#collection-functions.
 //
 // Adds the full surface listed in the spec — length, contains, append,
 // prepend, concat, reverse, set, remove, merge, etc. — to the global
@@ -10,7 +10,7 @@ package codegen
 // `r.registerListMapBuiltins()` from NewBuiltInFunctionRegistry.
 
 // registerListMapBuiltins adds every collection builtin specified in
-// compiler/spec/0012-Built-InFunctions.md#collection-functions.
+// docs/specs/0012-Built-InFunctions.md#collection-functions.
 func (r *BuiltInFunctionRegistry) registerListMapBuiltins() {
 	r.registerListBuiltins()
 	r.registerMapBuiltins()

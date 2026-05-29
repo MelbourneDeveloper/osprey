@@ -17,7 +17,7 @@
  *   path-copying never mutates a published node.
  *
  * Implements [TYPE-LIST], [TYPE-LIST-OPS] from
- * compiler/spec/0004-TypeSystem.md.
+ * docs/specs/0004-TypeSystem.md.
  */
 
 typedef struct OspreyListNode {

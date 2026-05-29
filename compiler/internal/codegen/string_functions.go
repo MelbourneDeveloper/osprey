@@ -1,7 +1,7 @@
 // Implements [BUILTIN-STRING-*]
 //
 // Generators for the string builtins documented in
-// compiler/spec/0012-Built-InFunctions.md, section "String Functions".
+// docs/specs/0012-Built-InFunctions.md, section "String Functions".
 // Most generators are thin wrappers over C runtime helpers declared in
 // compiler/runtime/string_runtime.h. Result-wrapping for fallible
 // operations is built directly in LLVM IR using the same {value, i8 disc}

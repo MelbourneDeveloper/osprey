@@ -40,7 +40,7 @@ make test
 
 ## What to Work On
 
-1. **Language features** - Check [spec.md](compiler/spec.md) for "NOT IMPLEMENTED" 
+1. **Language features** - Check the [language specification](docs/specs/) for "NOT IMPLEMENTED" 
 2. **New operators** - Add arithmetic, comparison, or logical operators
 3. **Pattern matching** - Extend match expressions
 4. **Standard library** - Add built-in functions

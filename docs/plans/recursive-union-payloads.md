@@ -1,6 +1,6 @@
 # Plan: Recursive Union Payloads (`List<Self>`, `Map<K, Self>`)
 
-Spec: [`0004-TypeSystem.md` — Recursive Variants](../../compiler/spec/0004-TypeSystem.md#recursive-variants--type-union-rec) ([TYPE-UNION-REC]).
+Spec: [`0004-TypeSystem.md` — Recursive Variants](../specs/0004-TypeSystem.md#recursive-variants--type-union-rec) ([TYPE-UNION-REC]).
 
 Parent: [`production-primitives.md`](production-primitives.md).
 

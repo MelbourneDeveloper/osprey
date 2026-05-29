@@ -58,7 +58,6 @@ Search for markdown files that contain spec sections with IDs. Look in these loc
 - `SPEC.md`
 - `PLAN.md`
 - `specs/*.md`
-- `compiler/spec/*.md`
 
 Use Glob to find candidate files, then use Grep to confirm they contain spec IDs.
 

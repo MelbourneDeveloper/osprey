@@ -2,7 +2,7 @@
 layout: page
 title: "Iterators and Iteration"
 description: "Osprey Language Specification: Iterators and Iteration"
-date: 2026-05-17
+date: 2026-05-29
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0010-loopconstructsandfunctionaliterators/"

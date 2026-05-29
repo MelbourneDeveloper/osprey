@@ -4,8 +4,8 @@ package codegen
 // compiler/runtime/list_runtime.c and compiler/runtime/map_runtime.c.
 //
 // Implements [TYPE-LIST-OPS], [TYPE-MAP-OPS] from
-// compiler/spec/0004-TypeSystem.md and the builtins in
-// compiler/spec/0012-Built-InFunctions.md#collection-functions.
+// docs/specs/0004-TypeSystem.md and the builtins in
+// docs/specs/0012-Built-InFunctions.md#collection-functions.
 //
 // All collection handles cross the LLVM/C boundary as opaque i8*; the C
 // runtime owns layout. Element values cross as i64; pointers (strings,

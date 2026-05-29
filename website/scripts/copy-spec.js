@@ -1,8 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 
-const specSourceDir = path.resolve(__dirname, '../../compiler/spec');
+const specSourceDir = path.resolve(__dirname, '../../docs/specs');
 const specDestDir = path.resolve(__dirname, '../src/spec');
+
+// README.md in docs/specs/ is a meta-doc for engineers, not a spec section.
+// Skip it so it doesn't end up as a /spec/readme/ page on the website.
+const SKIP_FILES = new Set(['README.md']);
 
 // Ensure destination directory exists
 if (!fs.existsSync(specDestDir)) {
@@ -69,8 +73,9 @@ permalink: "/spec/${slug}/"
 try {
   console.log('📁 Creating spec directory structure...');
 
-  // Read all spec files
-  const specFiles = fs.readdirSync(specSourceDir).filter(file => file.endsWith('.md'));
+  // Read all spec files (skipping meta-docs like README.md)
+  const specFiles = fs.readdirSync(specSourceDir)
+    .filter(file => file.endsWith('.md') && !SKIP_FILES.has(file));
   const specPages = [];
 
   // Process each spec file

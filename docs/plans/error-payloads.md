@@ -1,6 +1,6 @@
 # Plan: Thread Real Error Payloads Through `Result<T, E>`
 
-Spec: [`0013-ErrorHandling.md` — Error Payload Propagation](../../compiler/spec/0013-ErrorHandling.md#error-payload-propagation--err-payload) ([ERR-PAYLOAD]).
+Spec: [`0013-ErrorHandling.md` — Error Payload Propagation](../specs/0013-ErrorHandling.md#error-payload-propagation--err-payload) ([ERR-PAYLOAD]).
 
 Parent: [`production-primitives.md`](production-primitives.md).
 
@@ -64,7 +64,7 @@ Most fallible builtins today return `Result<T, string>` (file I/O, parseInt, par
 
 ## Phase 3 — Discriminated-union payload types (e.g. `StringError`)
 
-Spec defines `StringError` as a discriminated union ([0012-Built-InFunctions.md:67-73](../../compiler/spec/0012-Built-InFunctions.md#L67-L73)). Currently `Error { message }` always binds a `string`, never a `StringError` variant. Once the spec is taken literally, fallible string functions return `Result<T, StringError>` and the match arm binds an actual `StringError` value that the caller pattern-matches:
+Spec defines `StringError` as a discriminated union ([0012-Built-InFunctions.md:67-73](../specs/0012-Built-InFunctions.md#L67-L73)). Currently `Error { message }` always binds a `string`, never a `StringError` variant. Once the spec is taken literally, fallible string functions return `Result<T, StringError>` and the match arm binds an actual `StringError` value that the caller pattern-matches:
 
 ```osprey
 match split(s, "") {
@@ -81,7 +81,7 @@ match split(s, "") {
 
 ## Phase 4 — Auto-unwrap preserves the payload
 
-Spec auto-unwrap rules ([0004-TypeSystem.md:71-77](../../compiler/spec/0004-TypeSystem.md#result-auto-unwrapping)) flatten nested Results. The spec ([ERR-PAYLOAD]) requires the original payload to survive that flattening.
+Spec auto-unwrap rules ([0004-TypeSystem.md:71-77](../specs/0004-TypeSystem.md#result-auto-unwrapping)) flatten nested Results. The spec ([ERR-PAYLOAD]) requires the original payload to survive that flattening.
 
 - [ ] **4.1** Test: `let x = parseInt(parseInt("notanumber") + "5")` — the outer Result must carry the inner parseInt's error message (or a wrapping message that mentions it), not a generic "Error occurred".
 - [ ] **4.2** Audit `maybeUnwrapResult` in [`expression_generation.go`](../../compiler/internal/codegen/expression_generation.go) — when it sees a nested Error, it must propagate the payload, not drop it.
