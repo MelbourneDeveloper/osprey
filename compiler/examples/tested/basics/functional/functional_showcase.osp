@@ -1,110 +1,60 @@
-// 🔄 Functional Programming Showcase
-// Demonstrates the elegance and power of Osprey functional iterators
+// Functional pipeline showcase: range, forEach, map, filter, fold, pipe,
+// stream-fusion ordering (map-then-filter vs filter-then-map), negative
+// ranges, empty ranges, lambdas in the pipeline.
 
-// Mathematical functions for single values
-fn increment(x) = match x + 1 {
-    Success { value } => value
-    Error { message } => 0
-}
-fn triple(x) = match x * 3 {
-    Success { value } => value
-    Error { message } => 0
-}
-fn isPositive(x) = match x {
-    0 => 0
-    _ => 1
-}
+fn dbl(x: int)   -> int  = x * 2
+fn sq(x: int)    -> int  = x * x
+fn inc(x: int)   -> int  = x + 1
+fn gt4(x: int)   -> bool = x > 4
+fn lt3(x: int)   -> bool = x < 3
+fn even(x: int)  -> bool = (x % 2) == 0
+fn add(a: int, b: int) -> int = a + b
+fn mul(a: int, b: int) -> int = a * b
 
-// Business logic functions
-fn applyTax(amount) = match amount {
-    100 => 110  // 10% of 100 = 10, total 110
-    _ => amount
-}
-fn applyDiscount(amount) = match amount {
-    110 => 88   // 20% of 110 = 22, total 88
-    _ => amount
-}
+print("=== Functional Showcase ===")
 
-// Accumulator functions for fold
-fn sum(a: int, b: int) -> int = match a + b {
-    Success { value } => value
-    Error { message } => 0
-}
-fn multiply(a: int, b: int) -> int = match a * b {
-    Success { value } => value
-    Error { message } => 0
-}
-
-print("=== Functional Programming Showcase ===")
-
-// Example 1: Basic range with forEach
-print("Example 1: Basic range iteration")
+// 1. forEach over a range
+print("range 1..6 forEach print:")
 range(1, 6) |> forEach(print)
 
-// Example 2: Single value transformations
-print("Example 2: Single value pipe operations")
-5 |> increment |> triple |> print
+// 2. negative + empty ranges
+print("range -2..3 forEach print:")
+range(-2, 3) |> forEach(print)
+print("range 5..5 (empty):")
+range(5, 5) |> forEach(print)
 
-// Example 3: Business logic on single values
-print("Example 3: Business logic pipeline")
-100 |> applyTax |> applyDiscount |> print
+// 3. map + forEach
+print("map dbl over 1..5:")
+range(1, 5) |> map(dbl) |> forEach(print)
 
-// Example 4: Range operations
-print("Example 4: Range forEach")
-range(42, 45) |> forEach(print)
+// 4. filter + forEach
+print("filter even over 1..7:")
+range(1, 7) |> filter(even) |> forEach(print)
 
-// Example 5: Different range sizes
-print("Example 5: Small range")
-range(10, 13) |> forEach(print)
+// 5. map-then-filter — filter sees mapped value
+print("map dbl |> filter gt4 over 1..5:")
+range(1, 5) |> map(dbl) |> filter(gt4) |> forEach(print)
 
-// Example 6: Another range test
-print("Example 6: Range 0 to 4")
-range(0, 5) |> forEach(print)
+// 6. filter-then-map — map applied after filtering raw values
+print("filter lt3 |> map dbl over 1..6:")
+range(1, 6) |> filter(lt3) |> map(dbl) |> forEach(print)
 
-// Example 7: Fold operations on iterators
-print("Example 7: Fold operations")
-let sumResult = range(1, 6) |> fold(0, sum)
-print(sumResult)
+// 7. fold (sum, product)
+let s = range(1, 6) |> fold(0, add)
+print("sum 1..5 = ${toString(s)}")
+let p = range(1, 5) |> fold(1, mul)
+print("prod 1..4 = ${toString(p)}")
 
-// Example 7a: Map transformations
-print("Example 7a: Map transformations")
-range(1, 5) |> map(triple) |> forEach(print)
+// 8. chained pipes on a single value
+let r = 3 |> inc |> dbl |> sq
+print("3|>inc|>dbl|>sq = ${toString(r)}")
 
-// Example 7b: Filter selections
-print("Example 7b: Filter selections")
-range(1, 10) |> filter(isPositive) |> forEach(print)
+// 9. inline lambda in pipeline
+let lr = 10 |> fn(x: int) => x + 5
+print("10|>(x+5) = ${toString(lr)}")
 
-// Example 7c: Combined map and filter
-print("Example 7c: Combined map and filter")
-range(1, 6) |> map(triple) |> filter(isPositive) |> forEach(print)
-
-// Example 8: Map collections with HM inference
-print("Example 8: Map collections")
-let prices = { "apple": 2, "banana": 3, "cherry": 5 }
-let inventory = { "widgets": 100, "gadgets": 50 }
-print("Created price map and inventory map via HM inference")
-
-// Safe map access with pattern matching
-match prices["apple"] {
-    Success { value } => print("Apple price: ${toString(value)}")
-    Error { message } => print("Apple not found")
-}
-
-let multiplyResult = range(1, 4) |> fold(1, multiply)
-print(multiplyResult)
-
-// Example 8: More single value operations
-print("Example 8: Chained single value operations")
-let chainedResult = 2 |> triple |> increment |> triple
-print(chainedResult)
-
-// Example 9: Conditional operations
-print("Example 9: Conditional operations")
-let positiveTest = 5 |> isPositive
-print(positiveTest)
-
-let zeroTest = 0 |> isPositive
-print(zeroTest)
+// 10. lambda chained twice (parens around each so the chain doesn't get swallowed)
+let lr2 = 5 |> (fn(x: int) => x + 100) |> (fn(x: int) => x * 2)
+print("5|>+100|>*2 = ${toString(lr2)}")
 
 print("=== Showcase Complete ===")
-

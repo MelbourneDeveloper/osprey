@@ -1,113 +1,89 @@
-// COMPREHENSIVE TYPE EQUALITY TESTING
-// Tests to ensure full coverage of Type.Equals methods for:
-// - GenericType.Equals
-// - FunctionType.Equals  
-// - UnionType.Equals
+// Type equality coverage: GenericType.Equals, FunctionType.Equals,
+// UnionType.Equals. Same-shape generics unify; different-shape generics
+// don't. Functions with identical signatures unify when passed through
+// HOFs; differing param count / return type don't. Union variants compare
+// by tag.
 
-print("=== COMPREHENSIVE TYPE EQUALITY TEST ===")
+print("=== TYPE EQUALITY ===")
 
-// Test 1: Generic Type Equality - Different scenarios
-print("Test 1: Generic Type Equality")
-
+// --- Generic type equality ---
 type Container<T> = { value: T }
 type Pair<T, U> = { first: T, second: U }
 type Triple<T, U, V> = { first: T, second: U, third: V }
 
-// Create functions that return generic types to force type comparisons
 fn makeContainer(val) = Container { value: val }
 fn makePair(a, b) = Pair { first: a, second: b }
 fn makeTriple(a, b, c) = Triple { first: a, second: b, third: c }
 
-// Same generic types with same type arguments - should be equal
-let container1 = makeContainer(42)      // Container<int>
-let container2 = makeContainer(99)      // Container<int> - same type
-let pair1 = makePair(a: 1, b: "test")         // Pair<int, string>
-let pair2 = makePair(a: 2, b: "hello")        // Pair<int, string> - same type
+let cInt1   = makeContainer(42)
+let cInt2   = makeContainer(99)
+let cStr    = makeContainer("text")
+let pairIS1 = makePair(a: 1, b: "test")
+let pairIS2 = makePair(a: 2, b: "hello")
+let tIBI    = makeTriple(a: 1, b: "test", c: 42)
 
-// Different generic types - should not be equal
-let container3 = makeContainer("text")   // Container<string> - different type
-let triple1 = makeTriple(a: 1, b: "test", c: 42) // Triple<int, string, int>
-
-// Force type unification through variable assignments
-let val1 = container1.value     // int
-let val2 = container2.value     // int - same type, tests GenericType.Equals
-let val3 = container3.value     // string - different type
-let pairFirst1 = pair1.first    // int
-let pairFirst2 = pair2.first    // int - same type, tests GenericType.Equals
-
-print("Container<int> values: ${val1}, ${val2}")
-print("Container<string> value: ${val3}")
-print("Pair<int,string> first values: ${pairFirst1}, ${pairFirst2}")
+print("C<int>:  ${cInt1.value}, ${cInt2.value}")
+print("C<str>:  ${cStr.value}")
+print("P<I,S>:  ${pairIS1.first}/${pairIS1.second} | ${pairIS2.first}/${pairIS2.second}")
+print("T<I,S,I>: ${tIBI.first}/${tIBI.second}/${tIBI.third}")
 print("")
 
-// Test 2: Function Type Equality
-print("Test 2: Function Type Equality")
+// --- Function type equality via HOFs ---
+fn addOne(x: int)        -> int    = x + 1
+fn timesTwo(x: int)      -> int    = x * 2
+fn minusOne(x: int)      -> int    = x - 1
+fn excl(s: string)       -> string = s + "!"
+fn ques(s: string)       -> string = s + "?"
+fn intToString(x: int)   -> string = toString(x)
+fn twoArgAdd(a: int, b: int) -> int = a + b
+fn threeArgAdd(a: int, b: int, c: int) -> int = a + b + c
 
-// Functions with same signatures - should have equal types
-fn intToInt1(x) = x + 1
-fn intToInt2(x) = x * 2
-fn stringToString1(s) = s + "!"
-fn stringToString2(s) = s + "?"
+fn applyInt(f: (int) -> int, x: int) -> int    = f(x)
+fn applyStr(f: (string) -> string, s: string) -> string = f(s)
+fn applyToStr(f: (int) -> string, x: int) -> string = f(x)
+fn applyTwo(f: (int, int) -> int, a: int, b: int) -> int = f(a, b)
+fn applyThree(f: (int, int, int) -> int, a: int, b: int, c: int) -> int = f(a, b, c)
 
-// Functions with different signatures - should have different types
-fn intToString(x) = toString(x)
-fn twoIntsToInt(a, b) = a + b
+print("=== Same (int)->int passed via HOF ===")
+print(toString(applyInt(f: addOne,   x: 10)))
+print(toString(applyInt(f: timesTwo, x: 10)))
+print(toString(applyInt(f: minusOne, x: 10)))
 
-// Use these functions in higher-order contexts to force FunctionType comparison
-fn applyIntFunc(f, x) = f(x)
-fn applyStringFunc(f, s) = f(s)
+print("=== Same (string)->string passed via HOF ===")
+print(applyStr(f: excl, s: "hi"))
+print(applyStr(f: ques, s: "hi"))
 
-// These calls will force function type equality checks
-let result1 = applyIntFunc(f: intToInt1, x: 10)    // (int) -> int
-let result2 = applyIntFunc(f: intToInt2, x: 10)    // (int) -> int - same type
-let result3 = applyStringFunc(f: stringToString1, s: "test")  // (string) -> string
-let result4 = applyStringFunc(f: stringToString2, s: "test")  // (string) -> string - same type
-
-print("Same function type results: ${result1}, ${result2}")
-print("Same function type results: ${result3}, ${result4}")
-
-// Different function types
-let diffResult1 = intToString(42)       // int -> string (different return type)
-let diffResult2 = twoIntsToInt(a: 5, b: 7)  // (int, int) -> int (different param count)
-
-print("Different function types: ${diffResult1}, ${diffResult2}")
+print("=== Different shapes ===")
+print(applyToStr(f: intToString, x: 42))
+print(toString(applyTwo(f: twoArgAdd, a: 5, b: 7)))
+print(toString(applyThree(f: threeArgAdd, a: 1, b: 2, c: 3)))
 print("")
 
-// Test 3: Union Type Equality (if supported by the language)
-print("Test 3: Union Type Pattern Testing")
+// --- Generic monomorphization via identity-like functions ---
+fn identity(x) = x
+fn duplicate(x) = x
+print(toString(identity(42)))
+print(toString(duplicate(99)))
+print(identity("a"))
+print(duplicate("b"))
 
-// Define types that might be used in union-like patterns
-type Result<T> = { value: T, isSuccess: bool }
-type ErrorResult = { error: string, isSuccess: bool }
+// --- Union type equality (same tag = same, different tag = different) ---
+type Color = Red | Green | Blue
+fn colorName(c: Color) -> string = match c {
+    Red   => "red"
+    Green => "green"
+    Blue  => "blue"
+}
+fn sameColor(a: Color, b: Color) -> bool = match a {
+    Red   => match b { Red   => true _ => false }
+    Green => match b { Green => true _ => false }
+    Blue  => match b { Blue  => true _ => false }
+}
+let c1: Color = Red
+let c2: Color = Red
+let c3: Color = Blue
+print("color1=${colorName(c1)} color3=${colorName(c3)}")
+print("sameRR=${toString(sameColor(a: c1, b: c2))}")
+print("sameRB=${toString(sameColor(a: c1, b: c3))}")
 
-fn makeSuccess(val) = Result { value: val, isSuccess: true }
-fn makeError(msg) = ErrorResult { error: msg, isSuccess: false }
-
-// Create instances that would test union-like type equality
-let success1 = makeSuccess(42)       // Result<int>
-let success2 = makeSuccess(99)       // Result<int> - same type
-let error1 = makeError("failed")     // ErrorResult
-
-// Pattern-like access that would test type equality
-let successValue1 = success1.value   // int
-let successValue2 = success2.value   // int - same type
-let errorMsg = error1.error          // string
-
-print("Success values (same type): ${successValue1}, ${successValue2}")
-print("Error message: ${errorMsg}")
-print("")
-
-// Test 4: Complex nested generic type equality
-print("Test 4: Simple Additional Generic Tests")
-
-// Additional simple generic type tests that should work
-let additionalContainer1 = makeContainer(123)
-let additionalContainer2 = makeContainer(456)
-let additionalVal1 = additionalContainer1.value
-let additionalVal2 = additionalContainer2.value
-
-print("Additional Container<int> values: ${additionalVal1}, ${additionalVal2}")
-print("")
-
-print("=== COMPREHENSIVE TYPE EQUALITY TEST COMPLETE ===")
-print("This test exercises GenericType.Equals, FunctionType.Equals patterns!")
+print("=== TYPE EQUALITY COMPLETE ===")

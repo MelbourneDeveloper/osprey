@@ -1,0 +1,16 @@
+=== handler scoping ===
+[OUTER-LOG] before nested
+[OUTER-LOG] deep op exec
+[OUTER-LOG] complex starting
+[OUTER-LOG] complex intermediate: Success(42)
+[OUTER-LOG] after nested
+forward chain result: 42
+[OUTER-LOG] before inner handler
+[INNER-LOG] inner exec
+[INNER-DEBUG] debug inner
+[INNER-LOG] inner result: 42
+[OUTER-LOG] after inner handler — back to outer
+[OUTER-LOG] outer exec
+[OUTER-DEBUG] debug outer
+[OUTER-LOG] outer result: 21
+=== done ===

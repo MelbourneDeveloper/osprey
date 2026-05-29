@@ -1,0 +1,11 @@
+=== fiber + effects ===
+[LOG] Processing: 5
+[LOG] Processing: 10
+[LOG] list head: 21
+direct = 10
+fiber  = 20
+list   = 42
+[PROD] processing task: 5
+[TEST] processing task: 12
+region results prod=10 test=24 silent=0
+=== done ===

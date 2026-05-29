@@ -1,45 +1,143 @@
-[map_basics]
+[map]
 
-empty length: 
+empty len=
 0
 
-empty contains nothing: 
+empty contains=
 false
 
 
-after 1 set: 
+after 1/2/3 sets:
+
 1
 
-after 2 sets: 
+
 2
 
-after 3 sets: 
+
 3
 
-
-contains alice: 
+contains alice=
 true
 
-contains bob: 
+contains bob=
 true
 
-contains charlie: 
+contains charlie=
 true
 
-contains dave: 
+contains dave=
 false
 
 
-after overwrite, length: 
+after overwrite len=
 3
 
-alice in m4: 
+m3 still len=
+3
+
+
+gen lens 0..5:
+
+0
+
+
+1
+
+
+2
+
+
+3
+
+
+4
+
+
+5
+
+g2 still has k1=
 true
 
+g2 NOT k4=
+false
 
-m3 unchanged length: 
+
+branch xa has X=
+true
+
+branch xa has Y=
+false
+
+branch xb has X=
+false
+
+branch xb has Y=
+true
+
+g3 unchanged len=
 3
 
 
-[map_basics done]
+removed len=
+4
+
+removed has k3=
+false
+
+g5 still has k3=
+true
+
+remove absent — same len=
+5
+
+
+merge a+b len=
+4
+
+merge b+a len=
+4
+
+op a+b len=
+4
+
+merge has w=
+true
+
+merge(empty,a) len=
+3
+
+merge(a,a) len=
+3
+
+
+keys len=
+5
+
+values len=
+5
+
+empty keys len=
+0
+
+
+xs2 len=
+4
+
+mm2 len=
+4
+
+xs still=
+3
+
+g3 still=
+3
+
+keys+xs len=
+6
+
+
+apple=2
+mango missing rejected
+[map done]
 

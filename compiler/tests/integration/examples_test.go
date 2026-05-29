@@ -3,7 +3,6 @@ package integration
 // DO NOT EVER SKIP TESTS!!!!
 
 import (
-	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -90,143 +89,18 @@ func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs 
 	}
 }
 
-// getExpectedOutputs returns the map of expected outputs for each test file.
-// Groups are split into helpers so this top-level function stays well within
-// maintainability-index limits.
+// getExpectedOutputs returns expected outputs for the handful of .osp files
+// that intentionally don't carry a sibling .expectedoutput on disk. New
+// tests should add an .expectedoutput file alongside the .osp rather than
+// extend this map — the file-on-disk path is preferred and platform-aware
+// outputs are kept here only when they need to branch on runtime.GOOS.
 func getExpectedOutputs() map[string]string {
-	groups := []map[string]string{
-		getBasicExpectedOutputs(),
-		getIteratorExpectedOutputs(),
-		getBoolAndMiscExpectedOutputs(),
-		getConstraintExpectedOutputs(),
-		getWebsiteExpectedOutputs(),
-		getBlockAndProcessExpectedOutputs(),
-		getStringExpectedOutputs(),
-		getEffectsAndRustExpectedOutputs(),
-	}
-	merged := make(map[string]string)
-	for _, g := range groups {
-		maps.Copy(merged, g)
-	}
-	return merged
-}
-
-func getBasicExpectedOutputs() map[string]string {
 	return map[string]string{
-		"hello.osp": "Hello, World!\nHello from function!\n",
-		"interpolation_math.osp": "Next year you'll be 26\nLast year you were 24\n" +
-			"Double your age: 50\nHalf your age: 12.5\n",
-		"interpolation_comprehensive.osp": "Hello Alice!\nYou are 25 years old\n" +
-			"Your score is 95 points\nNext year you'll be 26\n" +
-			"Double your score: 190\nAlice (25) scored 95/100\n",
-		"working_basics.osp": "x = 42\nname = Alice\ndouble(21) = 42\n" +
-			"greeting = Hello\nmultiply(6, 7) = 42\nisEven(10) = true\n10 + 5 = 15\n6 * 7 = 42\nmatch 42 = 1\n",
-		"simple_types.osp": "Type definitions compiled successfully\nred\nworking\n",
-		"simple_input.osp": "Greeting code: 1\nNumber result: 999\n" +
-			"Unknown code: 0\nSmall number: 100\n",
-		"pattern_matching_basics.osp": "Number analysis:\n0 is Zero\n" +
-			"42 is The answer to everything!\n7 is Some other number\n" +
-			"\nEven number check:\n42 is even: 0\n7 is even: 0\n2 is even: 1\n" +
-			"\nScore categories:\nScore 100: Perfect!\n" +
-			"Score 85: Very Good\nScore 50: Needs Improvement\n" +
-			"Nested: Both zero\n",
-		"safe_arithmetic_demo.osp": "=== Type-Safe Arithmetic Demo ===\n" +
-			"Future: All operators return Result<T, Error>\n\n10 / 2 = 5\n" +
-			"Error: Cannot divide 15 by 0!\n20 / 4 = 5\n\n" +
-			"✅ No panics! All division operations handled safely\n" +
-			"🔮 Future: Built-in Result<T, E> types for all fallible operations\n",
-		"script_style_working.osp": "Script starting...\nFactorial computed!\n",
-		"calculator_fixed.osp": "=== Osprey Interactive Calculator ===\n" +
-			"Enter a number:\nComputing operations...\nMany!\nAll computations complete!\n",
-		"math_calculator_fixed.osp": "=== Advanced Math Calculator ===\n" +
-			"Enter base number:\nEnter multiplier:\nComputing advanced operations...\n" +
-			"=== Results ===\nBase cubed:\n125\nFactorial approximation:\n15\n" +
-			"Fibonacci approximation:\n15\nComplex formula result:\n2\n" +
-			"=== Calculator Complete ===\n",
-		"space_trader.osp":   getSpaceTraderExpectedOutput(),
+		// Adventure game keeps its expected output inline because it's the
+		// reference exercise of nested matches across rooms.
 		"adventure_game.osp": getAdventureGameExpectedOutput(),
-	}
-}
-
-func getIteratorExpectedOutputs() map[string]string {
-	return map[string]string{
-		"basic_iterator_test.osp": "=== Basic Iterator Test ===\n" +
-			"Test 1: Simple pipe with double\n10\n\n" +
-			"Test 2: Range 1 to 5 with double function\n\n" +
-			"Test 3: Range 1 to 5 with print\n1\n2\n3\n4\n5\n\n" +
-			"Test 4: Range 1 to 4 with square function\n\n" +
-			"Test 5: Chained pipe operations\n400\n\n" +
-			"Test 6: 3 -> addFive -> double -> print\n16\n\n" +
-			"Test 7: Range 0 to 3 with addFive\n\n" +
-			"Test 8: Multiple small ranges\n1\n2\n10\n11\n=== Test Complete ===\n",
-		"comprehensive_iterators.osp": "=== Comprehensive Iterator Test ===\n" +
-			"Test 1: Count 1 to 10\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n\n" +
-			"Test 2: Count 10 to 15\n10\n11\n12\n13\n14\n15\n\n" +
-			"Test 3: Count 0 to 5\n0\n1\n2\n3\n4\n5\n\n" +
-			"Test 4: Count -3 to 3\n-3\n-2\n-1\n0\n1\n2\n3\n\n" +
-			"Test 5: Count 100 to 105\n100\n101\n102\n103\n104\n105\n\n" +
-			"Test 6: Single value 42\n42\n\nTest 7: Empty range (5 to 5)\n" +
-			"=== All Tests Complete ===\n",
-		"functional_showcase.osp": "=== Functional Programming Showcase ===\n" +
-			"Example 1: Basic range iteration\n1\n2\n3\n4\n5\n" +
-			"Example 2: Single value pipe operations\n18\n" +
-			"Example 3: Business logic pipeline\n88\n" +
-			"Example 4: Range forEach\n42\n43\n44\n" +
-			"Example 5: Small range\n10\n11\n12\n" +
-			"Example 6: Range 0 to 4\n0\n1\n2\n3\n4\n" +
-			"Example 7: Fold operations\n15\n" +
-			"Example 8: Map collections\n" +
-			"Created price map and inventory map via HM inference\n" +
-			"Apple price: 2\n6\n" +
-			"Example 8: Chained single value operations\n21\n" +
-			"Example 9: Conditional operations\n1\n0\n=== Showcase Complete ===\n",
-		"explicit_any_simple.osp": "Explicit any return type works\n",
-		"functional_iterators.osp": "=== Functional Iterator Examples ===\n" +
-			"1. Basic forEach:\n1\n2\n3\n4\n" +
-			"2. Single value transformations:\n10\n9\n" +
-			"3. Different ranges:\n10\n11\n12\n0\n1\n2\n" +
-			"4. Fold operations:\n10\n60\n" +
-			"5. List operations:\nList created with HM inference\nThird element: 30\n" +
-			"6. Map operations would need constraints:\nHM needs type constraints for Map<K,V> inference\n" +
-			"7. List with functional operations:\nBase numbers created\nFourth number squared: 16\n" +
-			"8. Chained single value operations:\n16\n" +
-			"=== Examples Complete ===\n",
-		"documentation_test.osp": "Testing documentation\n1\n2\n3\n4\n",
-	}
-}
-
-func getBoolAndMiscExpectedOutputs() map[string]string {
-	return map[string]string{
-		// Boolean examples that work with current parser
-		"comparison_test.osp": "1\n",    // Prints result of 5 > 3
-		"equality_test.osp":   "true\n", // Prints result of isEqual(5, 5)
-		"comprehensive_bool_test.osp": "=== Boolean Test ===\nFunction returning true:\ntrue\n" +
-			"Function returning false:\nfalse\nBoolean literals:\nfalse\ntrue\nComparisons:\ntrue\ntrue\ntrue\ntrue\ntrue\n",
-		"full_bool_test.osp": "=== Boolean Test Results ===\n5 > 3:\ntrue\n" +
-			"10 == 10:\ntrue\ntrue literal:\ntrue\nfalse literal:\nfalse\n",
-		"modulo_test.osp": "true\nfalse\n",
-		// Compilation-only tests (no output expected)
-		"basic.osp": "Basic test results:\nx = 42\ntestGood(10) = 10\n" +
-			"getIntResult() = 42\ngetStringResult() = asd\naddOne(5) = 6\n",
-		"comprehensive.osp": "=== Comprehensive Osprey Demo ===\n" +
-			"Student Alice scored 95 points\n" +
-			"Doubled score: 190\n" +
-			"Excellent!\n" +
-			"=== List & Map Operations ===\n" +
-			"Score list created via HM inference\n" +
-			"First score: 85\n" +
-			"Bonus computation works: 90\n" +
-			"Second score: 92\n" +
-			"Student grades map created via HM inference\n" +
-			"Alice's grade: 95\n" +
-			"Student names list created\n" +
-			"Third student: Charlie\n" +
-			"Status: System operational with collections\n" +
-			"Double of 42: 84\n" +
-			"Student Bob scored 92 points\n" +
-			"=== Demo Complete ===\n",
-		"debug_module.osp": "Debug module test:\nsimple() = 42\n",
-		"function.osp":     "Function test:\nadd(3, 7) = 10\nadd(10, 20) = 30\n",
+		// Lambdas, string compare, mut auto-unwrap, generic union payload,
+		// escape-sequence handling, unary-minus on floats — pinned literal.
 		"function_composition_test.osp": "=== Function Composition Test ===\n" +
 			"Testing function composition...\n" +
 			"Starting value: 10\n" +
@@ -249,197 +123,7 @@ func getBoolAndMiscExpectedOutputs() map[string]string {
 			"lit: ab\\nc\n" +
 			"-2.5\n" +
 			"=== Function Composition Test Complete ===\n",
-		"minimal_test.osp": "Minimal test:\nx = 5\n",
-		"simple.osp":       "Simple test:\nx = 42\ngreeting = hello\n",
-	}
-}
-
-func getConstraintExpectedOutputs() map[string]string {
-	return map[string]string{
-		"constraint_validation_test.osp": "=== CONSTRAINT VALIDATION WITH FAILURE DETECTION ===\n" +
-			"Test 1: Valid Person construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
-			"Test 2: Invalid Person - empty name constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
-			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 3: Invalid Person - zero age constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
-			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 4: Valid Product construction\nResult: 1\nSuccess: 1\nFailure: 0\n\n" +
-			"Test 5: Invalid Product - zero price constraint violation\nResult: 1\nSuccess: 1\nFailure: 0\n" +
-			"Expected: Failure = 1 (constraint violation)\n\n" +
-			"Test 6: Multiple constraint violations\nResult: 1\nSuccess: 1\nFailure: 0\n" +
-			"Expected: Failure = 1 (multiple constraint violations)\n\n" +
-			"=== CONSTRAINT VALIDATION TESTS COMPLETE ===\n" +
-			"This test demonstrates that WHERE constraints work correctly:\n" +
-			"✅ Valid constructions return 1 (success)\n" +
-			"❌ Invalid constructions return -1 (constraint violation)\n" +
-			"✅ notEmpty constraint rejects empty strings\n" +
-			"✅ validAge constraint rejects zero age\n" +
-			"✅ isPositive constraint rejects zero prices\n" +
-			"✅ Multiple violations are properly detected\n\n" +
-			"FUTURE: Should return Result<T, ConstraintError> types for type safety.\n",
-		"working_constraint_test.osp": "=== CONSTRAINT FUNCTION VERIFICATION ===\n" +
-			"Testing notEmpty function:\nnotEmpty(\"\") should be false:\nfalse\n" +
-			"notEmpty(\"alice\") should be true:\ntrue\nTesting isPositive function:\n" +
-			"isPositive(0) should be false:\nfalse\nisPositive(100) should be true:\ntrue\n" +
-			"Testing validAge function:\nvalidAge(0) should be false:\nfalse\n" +
-			"validAge(25) should be true:\ntrue\nTesting validEmail function:\n" +
-			"validEmail(\"\") should be false:\nfalse\nvalidEmail(\"test@email.com\") should be true:\ntrue\n" +
-			"=== CONSTRAINT VALIDATION TEST ===\n" +
-			"Testing current constraint implementation:\n" +
-			"✅ Valid Person (returns 1):\n1\n" +
-			"❌ Invalid Person - empty name (returns -1):\n-1\n" +
-			"❌ Invalid Person - zero age (returns -1):\n-1\n" +
-			"✅ Valid Product (returns 1):\n1\n" +
-			"❌ Invalid Product - empty name (returns -1):\n-1\n" +
-			"❌ Invalid Product - zero price (returns -1):\n-1\n" +
-			"=== TYPE SAFETY ISSUES ===\n" +
-			"PROBLEM: These variables have type 'any' instead of Result<T, E>:\n" +
-			"invalidPersonAge should be Result<Person, ConstraintError>\n" +
-			"But we can treat it as an integer:\n-1\n" +
-			"SOLUTION NEEDED: Proper Result<T, E> types\n" +
-			"Then we would need pattern matching:\n" +
-			"match invalidPersonAge {\n" +
-			"  Ok { value } => use the person\n" +
-			"  Err { error } => handle constraint violation\n" +
-			"}\n" +
-			"=== CONSTRAINT TESTS COMPLETE ===\n" +
-			"=== COMPREHENSIVE WHERE CONSTRAINT TESTS ===\n" +
-			"PERSON CONSTRAINT TESTS:\n" +
-			"✅ Valid Person (should return 1):\n1\n" +
-			"❌ Invalid Person - empty name (should return -1):\n-1\n" +
-			"❌ Invalid Person - zero age (should return -1):\n-1\n" +
-			"USER CONSTRAINT TESTS:\n" +
-			"✅ Valid User (should return 1):\n1\n" +
-			"❌ Invalid User - empty username (should return -1):\n-1\n" +
-			"❌ Invalid User - empty email (should return -1):\n-1\n" +
-			"❌ Invalid User - zero userId (should return -1):\n-1\n" +
-			"PRODUCT CONSTRAINT TESTS:\n" +
-			"✅ Valid Product (should return 1):\n1\n" +
-			"❌ Invalid Product - empty name (should return -1):\n-1\n" +
-			"❌ Invalid Product - zero price (should return -1):\n-1\n" +
-			"=== WHERE CONSTRAINT VALIDATION COMPLETE ===\n",
-		"proper_validation_test.osp": "Testing validation functions:\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\n",
-		"match_type_mismatch.osp":    "none\n",
-	}
-}
-
-func getWebsiteExpectedOutputs() map[string]string {
-	return map[string]string{
-		"website_hero_example.osp": "x = 42\nname = Alice\nResult: The answer!\n",
-		"website_type_safe_example.osp": "Testing functions:\nZero\nThe answer!\nSomething else\n" +
-			"5 doubled is 10\n10 squared is 100\n",
-		"website_string_interpolation_example.osp": "Hello Alice!\nNext year you'll be 26\n" +
-			"Double score: 190\nAlice (25) scored 95/100\n",
-		"website_pattern_matching_grade_example.osp": "Grade for 100: Perfect!\nGrade for 95: Excellent\n" +
-			"Grade for 85: Very Good\nGrade for 75: Good\nGrade for 50: Needs Improvement\n",
-		"website_functional_programming_example.osp": "100\nRange operations:\n1\n2\n3\n4\n5\n6\n7\n8\n9\n",
-		"website_fiber_isolation_example.osp": "Fiber 1 result: 1\nFiber 2 result: 2\n" +
-			"Processed 10 items\n=== Fiber Example Complete ===\n",
-	}
-}
-
-func getBlockAndProcessExpectedOutputs() map[string]string {
-	return map[string]string{
-		"block_statements_basic.osp": "=== Basic Block Statements Test ===\n" +
-			"Test 1 - Simple block: 0\n" +
-			"Test 2 - Block computation: 0\n" +
-			"Test 3 - Multiple statements: 0\n" +
-			"=== Basic Block Statements Complete ===\n",
-		"block_statements_advanced.osp": "=== Advanced Block Statements Test ===\n" +
-			"Test 1 - Function block: 0\n" +
-			"Test 2 - Nested with shadowing: 0\n" +
-			"Test 3 - Block with match: 0\n" +
-			"Test 4 - Complex function: 0\n" +
-			"=== Advanced Block Statements Complete ===\n",
-		"process_spawn_basic.osp": "Hello World\n" +
-			"=== Basic Process Spawning Test ===\n" +
-			"Process result: 0\n" +
-			"=== Test Complete ===\n",
-		"process_spawn_fiber.osp": "=== Process Spawning in Fibers ===\n" +
-			"Process result: 0\n" +
-			"=== Fiber Test Complete ===\n",
-		"simple_process_test.osp": "Testing simple process spawn...\n" +
-			"Process spawned successfully\n" +
-			"[STDOUT] Process 1: hello\n\n" +
-			"[EXIT] Process 1 exited with code: 0\n" +
-			"Process finished\n" +
-			"Test complete\n",
-		"async_process_management.osp": "=== Async Process Management Demo ===\n" +
-			"--- Test 1: Basic Process Spawning ---\n" +
-			"✓ Process spawned successfully\n" +
-			"[STDOUT] Process 1: Hello from async process!\n\n" +
-			"[EXIT] Process 1 exited with code: 0\n" +
-			"✓ Process completed successfully\n" +
-			"✓ Process resources cleaned up\n" +
-			"--- Test 2: Another Process ---\n" +
-			"Process 2 spawned successfully\n" +
-			"[STDOUT] Process 2: Process 2 output\n\n" +
-			"[EXIT] Process 2 exited with code: 0\n" +
-			"Process 2 finished\n" +
-			"--- Test 3: Error Handling ---\n" +
-			"[EXIT] Process 3 exited with code: 1\n" +
-			"Error process returned non-zero exit code\n" +
-			"=== Async Process Management Demo Complete ===\n" +
-			"Note: Process output appears via C runtime callbacks during execution\n",
-		"callback_stdout_demo.osp": getCallbackStdoutDemoExpectedOutput(),
-		"process_spawn_workflow.osp": "Step 1\n" +
-			"Step 2\n" +
-			"=== Process Spawning Workflow ===\n" +
-			"Step 1 result: 0\n" +
-			"Step 2 result: 0\n" +
-			"Fiber result: 1\n" +
-			"=== Workflow Complete ===\n",
-		"process_spawn_simple.osp": "Hello from process!\n" +
-			"2025\n" +
-			"=== Simple Process Spawning ===\n" +
-			"Result 1: 0\n" +
-			"Result 2: 0\n" +
-			"Fiber ID: 1\n" +
-			"=== Test Complete ===\n",
-	}
-}
-
-func getStringExpectedOutputs() map[string]string {
-	return map[string]string{
-		// Implements [BUILTIN-STRING-*] end-to-end demo.
-		"string_pipeline.osp": "=== String Pipeline Demo ===\n\n" +
-			"raw=\"  GET /api/users?name=alice&age=30  \" len=36\n\n" +
-			"isEmpty=false\n\n" +
-			"normalized=\"get /api/users?name=alice&age=30\"\n\n" +
-			"isGetRequest=true\n\n" +
-			"query starts at 16\n\n" +
-			"replaced=\"a/b/c/d\"\n\n" +
-			"repeated=\"abababab\"\n\n" +
-			"padded=\"00042\"\n\n" +
-			"parsed int=123\n\n" +
-			"parseInt strict: rejects 'oops'\n\n" +
-			"ufcs len after trim=32\n\n" +
-			"=== Demo Complete ===\n\n",
-		// Implements [BUILTIN-STRING-LIST] — lines/words/split return List<string>.
-		"string_lists.osp": "lines count=3\n\nwords count=2\n\nsplit count=3\n\nsplit empty-sep rejected\n\n",
-		// Implements [BUILTIN-STRING-UFCS] — pipe == UFCS == direct.
-		"ufcs_string.osp": "len  pipe=16  ufcs=16\n\n" +
-			"empt pipe=true  ufcs=true\n\n" +
-			"ctns pipe=true  ufcs=true\n\n" +
-			"strt pipe=true  ufcs=true\n\n" +
-			"ends pipe=true  ufcs=true\n\n" +
-			"trim ufcs=\"Hello, World\"\n\n" +
-			"trimS ufcs=\"Hello, World  \"\n\n" +
-			"trimE ufcs=\"  Hello, World\"\n\n" +
-			"uppr ufcs=\"HI\"\n\n" +
-			"lowr ufcs=\"hi\"\n\n" +
-			"take ufcs=\"hel\"\n\n" +
-			"drop ufcs=\"lo\"\n\n" +
-			"revr ufcs=\"cba\"\n\n" +
-			"chain=\"hello\"\n\n",
-		// Implements [BUILTIN-STRING-SEARCH] in HTTP-routing shape.
-		"route_match.osp": "200 ok\n\n" +
-			"200 user-detail 42\n\n" +
-			"200 api-fallback\n\n" +
-			"201 created\n\n" +
-			"404 not-found\n\n" +
-			"405 method-not-allowed\n\n",
-		// Implements [BUILTIN-STRING-*] edge-case proof. Every error path
-		// and boundary the spec promises is verified by exact-string match.
+		// Every [BUILTIN-STRING-*] error path and boundary in one pinned blob.
 		"string_edge_cases.osp": "empty-emp=true\n\nempty-x=false\n\n" +
 			"starts-empty=true\n\nends-empty=true\n\n" +
 			"starts-long=false\n\nends-long=false\n\n" +
@@ -457,32 +141,9 @@ func getStringExpectedOutputs() map[string]string {
 			"pi-overflow rejected\n\npi-min=-9223372036854775808\n\n" +
 			"pi-leading-space rejected\n\n" +
 			"=== Edge Cases Complete ===\n\n",
-		"file_io_json_workflow.osp": "=== File I/O Workflow Test ===\n" +
-			"-- Step 1: Writing to file --\n" +
-			"File written successfully!\n" +
-			"-- Step 2: Reading from file --\n" +
-			"Read successful!\n" +
-			"=== Test Complete ===\n",
-		// Updated for [BUILTIN-STRING-*]: length/contains now return raw values
-		// (no Result wrap); substring now actually rejects out-of-range indices.
-		"string_utils_combined.osp": "=== String Utils Test ===\n\nOriginal: \"hello world\"\n\n" +
-			"Length: 11\n\nContains 'world': true\n\nContains 'galaxy': false\n\n" +
-			"Substring(6, 11): \"world\"\n\n" +
-			"Substring error: Error occurred\n\n" +
-			"=== Test Complete ===\n\n",
-		"list_and_process.osp": "=== Array Access Test ===\n\nCreated array with 3 commands\n\n" +
-			"Testing array access with pattern matching:\n\n✅ commands[0] = \\\necho hello\n\"\n\n" +
-			"✅ commands[1] = \\\necho world\n\"\n\n✅ commands[2] = \\\necho test\n\"\n\n" +
-			"Testing out-of-bounds access:\n\n✅ Correctly caught out-of-bounds: commands[5] -> Error\n\n" +
-			"=== Array Test Complete ===\n\n",
-	}
-}
-
-func getEffectsAndRustExpectedOutputs() map[string]string {
-	return map[string]string{
-		// Effects examples
-		"algebraic_effects.osp": "Pure function result: 42\n🎉 BASIC TEST COMPLETE! 🎉",
-		// Rust integration examples
+		// Platform-specific: ls error message + exit code differ across OSes.
+		"callback_stdout_demo.osp": getCallbackStdoutDemoExpectedOutput(),
+		// Rust interop demo (separate TestRustIntegrationExamples runner).
 		"demo.osp": "Rust add(15, 25) = 40\n" +
 			"Rust multiply(6, 7) = 42\n" +
 			"Rust factorial(5) = 120\n" +
@@ -491,6 +152,7 @@ func getEffectsAndRustExpectedOutputs() map[string]string {
 			"✅ Rust-Osprey integration demo completed successfully!\n",
 	}
 }
+
 
 // testExampleFileWithTrimming tests a single example file with optional output trimming.
 func testExampleFileWithTrimming(t *testing.T, filePath, expectedOutput string, trimActualOutput bool) {
@@ -589,74 +251,6 @@ func getCallbackStdoutDemoExpectedOutput() string {
 		"✓ Error process finished with exit code: 2\n" +
 		"=== CALLBACK DEMO COMPLETE ===\n" +
 		"The [CALLBACK] lines above show C runtime calling into Osprey!\n"
-}
-
-func getSpaceTraderExpectedOutput() string {
-	return "🌌 Welcome to the Galactic Trade Network! 🌌\n" +
-		"You are Captain Alex, commander of the starship Osprey-7\n" +
-		"Your mission: Build a trading empire across the galaxy!\n\n" +
-		"🛸 MISSION BRIEFING 🛸\n" +
-		"Ship: Osprey-7 Starfreighter\n" +
-		"Fuel: 100% ⛽\n" +
-		"Credits: 1000 💰\n" +
-		"Cargo Space: 0/50 📦\n" +
-		"Reputation: Unknown Trader\n\n" +
-		"🌍 GALACTIC TRADING SIMULATION 🌍\n\n" +
-		"📍 Arriving at Nebula Prime\n" +
-		"This planet specializes in: Quantum Crystals\n" +
-		"Market price: 50 credits per unit\n" +
-		"Purchasing 10 units of Quantum Crystals\n" +
-		"Total cost: 500 credits\n" +
-		"Remaining credits: 500 💰\n" +
-		"Cargo: 10/50 📦\n\n" +
-		"🚀 Traveling to Crystal Moon...\n" +
-		"Fuel consumed: 20%\n" +
-		"Current fuel: 80% ⛽\n\n" +
-		"📍 Arrived at Crystal Moon\n" +
-		"Local specialty: Space Metal\n" +
-		"Market price: 25 credits per unit\n" +
-		"Selling 10 units of Quantum Crystals\n" +
-		"Sale price: 75 credits per unit\n" +
-		"Revenue: 750 credits 💰\n" +
-		"New balance: 1250 credits\n" +
-		"Cargo space freed: 0/50 📦\n\n" +
-		"Purchasing 15 units of Space Metal\n" +
-		"Cost: 375 credits\n" +
-		"Remaining credits: 875 💰\n\n" +
-		"🚀 Long-range jump to Trade Station Alpha\n" +
-		"Fuel consumed: 30%\n" +
-		"Current fuel: 50% ⛽\n\n" +
-		"📍 Docking at Trade Station Alpha\n" +
-		"This is the galaxy's premier trading hub!\n" +
-		"Selling 15 units of Space Metal\n" +
-		"Hub premium price: 55 credits per unit\n" +
-		"Major revenue: 825 credits! 💰\n" +
-		"New balance: 1700 credits\n\n" +
-		"📈 TRADING RESULTS 📈\n" +
-		"Starting credits: 1000\n" +
-		"Final credits: 1700\n" +
-		"Total profit: 700 credits! 💰\n" +
-		"Planets visited: 3\n" +
-		"New reputation: Novice Merchant\n\n" +
-		"🛸 SHIP STATUS REPORT 🛸\n" +
-		"Fuel level: 50% (Fair)\n" +
-		"Cargo bay: 0/50 units\n" +
-		"Ship condition: Operational\n\n" +
-		"📊 ADVANCED ANALYTICS 📊\n" +
-		"Fuel efficiency: 16.66666667% per planet\n" +
-		"Profit per planet: 233.3333333 credits\n" +
-		"Projected wealth (if doubled): 3400 credits\n\n" +
-		"🏆 MISSION COMPLETE! 🏆\n" +
-		"Congratulations, Captain Novice Merchant!\n" +
-		"You have successfully established trade routes across the galaxy!\n\n" +
-		"Next objectives:\n" +
-		"  ⭐ Explore more distant sectors\n" +
-		"  ⭐ Upgrade ship cargo capacity\n" +
-		"  ⭐ Establish permanent trade agreements\n" +
-		"  ⭐ Recruit specialized crew members\n\n" +
-		"🌟 Your trading empire awaits! 🌟\n" +
-		"End of Galactic Trade Simulation\n" +
-		"Thank you for playing Osprey Space Trader!\n"
 }
 
 func getAdventureGameExpectedOutput() string {

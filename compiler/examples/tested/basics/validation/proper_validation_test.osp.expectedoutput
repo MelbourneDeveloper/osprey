@@ -5,7 +5,10 @@ false
 true
 true
 false
-Testing Result<bool> toString:
+false
+true
 Success(true)
 Success(false)
 Success(false)
+alice ok
+zero person allowed (constraint TODO)

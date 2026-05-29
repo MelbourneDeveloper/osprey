@@ -38,6 +38,10 @@ The five plans are **independent at the implementation level** but have a natura
 
 After all four land, the proof point is one tested example: `examples/tested/json/json_parser.osp` — a JSON parser **written in Osprey** that consumes a real input and produces a `JsonValue`. That example becomes the canary for every future regression in these four areas.
 
+## Sibling plan
+
+[`tui-http-app.md`](tui-http-app.md) — colored TUI that calls ad-hoc HTTP APIs. Independent runtime/builtin work (HTTP response bodies, terminal raw mode, ANSI helpers) but shares the "needs JSON" requirement. The TUI plan ships a C-side JSON builtin as a v1 shortcut and deletes it once this plan's Osprey-native parser lands.
+
 ## Master TODO (across all five plans)
 
 - [ ] Land `error-payloads.md` Phase 1 (runtime threading) and Phase 2 (codegen rewrite).

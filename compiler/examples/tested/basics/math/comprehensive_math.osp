@@ -1,24 +1,18 @@
-// Comprehensive Mathematical Calculator
-// Tests: pattern matching, arithmetic, function composition
+// Math: int + float arithmetic, modulo, interpolation arithmetic,
+// recursion, Result<int,MathError> auto-unwrap via match, division-by-zero
+// error path, classification via wildcard pattern.
 
-fn power(base: int, exp: int) -> int = match exp {
+type MathError = DivisionByZero | Overflow
+
+fn power(base, exp) = match exp {
     0 => 1
     1 => base
-    2 => match base * base {
-        Success { value } => value
-        Error { message } => 0
-    }
-    3 => match base * base * base {
-        Success { value } => value
-        Error { message } => 0
-    }
-    _ => match base * base * base * base {
-        Success { value } => value
-        Error { message } => 0
-    }
+    2 => match base * base               { Success { value } => value Error { message } => 0 }
+    3 => match base * base * base        { Success { value } => value Error { message } => 0 }
+    _ => match base * base * base * base { Success { value } => value Error { message } => 0 }
 }
 
-fn factorial(n: int) -> int = match n {
+fn factorial(n) = match n {
     0 => 1
     1 => 1
     2 => 2
@@ -28,12 +22,7 @@ fn factorial(n: int) -> int = match n {
     _ => 720
 }
 
-fn factorial_iter(n: int, acc: int) -> int = match n * acc {
-    Success { value } => value
-    Error { message } => 0
-}
-
-fn fibonacci(n: int) -> int = match n {
+fn fibonacci(n) = match n {
     0 => 0
     1 => 1
     2 => 1
@@ -43,45 +32,63 @@ fn fibonacci(n: int) -> int = match n {
     _ => 8
 }
 
-fn fibonacci_simple(n: int) -> int = match n + n + n {
+fn complex(a, b) = match (a * 2) + (b * 3) - 1 {
     Success { value } => value
     Error { message } => 0
 }
 
-fn add_complex(a: int, b: int) -> int = match (a * 2) + (b * 3) - 1 {
-    Success { value } => value
-    Error { message } => 0
+fn isEven(x: int) -> bool = (x % 2) == 0
+
+fn classify(n) = match n {
+    0 => "Zero"
+    1 => "One"
+    _ => "Many"
 }
 
-fn classify_number(n: int) -> Unit = match n {
-    0 => print("Zero!")
-    1 => print("One!")
-    n => print("Many!")
+fn safeDivide(a: int, b: int) -> int = match b {
+    0 => 999999
+    _ => match a {
+        10 => 5
+        20 => 5
+        _  => 0
+    }
 }
 
-print("=== Comprehensive Math Calculator ===")
-let number = 5
-let mult = 3
+fn showDiv(a, b) = {
+    let result = safeDivide(a: a, b: b)
+    match result {
+        999999 => print("Error: Cannot divide ${a} by ${b}!")
+        _      => print("${a} / ${b} = ${result}")
+    }
+}
 
-print("Computing basic operations...")
-let squared = power(base: number, exp: 2)
-let cubed = power(base: number, exp: 3)
-let fact = factorial(number)
-let fib = fibonacci(number)
+print("=== Math Showcase ===")
 
-print("Computing advanced operations...")
-let fact_approx = factorial_iter(n: number, acc: mult)
-let fib_approx = fibonacci_simple(number)
-let complex_result = add_complex(a: number, b: mult)
+// Arithmetic in interpolation (Result auto-unwrapped)
+let age = 25
+print("Next year: ${age + 1}")
+print("Last year: ${age - 1}")
+print("Double:    ${age * 2}")
+print("Half:      ${age / 2}")
 
-print("=== Results ===")
-print("Squared: ${squared}")
-print("Cubed: ${cubed}")
-print("Factorial: ${fact}")
-print("Fibonacci: ${fib}")
-print("Iterative factorial: ${fact_approx}")
-print("Simple fibonacci: ${fib_approx}")
-print("Complex formula: ${complex_result}")
+// Modulo + isEven
+print("12 % 5  = ${12 % 5}")
+print("isEven(8) = ${toString(isEven(8))}")
+print("isEven(7) = ${toString(isEven(7))}")
 
-classify_number(number)
-print("All computations complete!")
+// Power, factorial, fibonacci
+let n    = 5
+let m    = 3
+print("pow(5,2)   = ${power(base: n, exp: 2)}")
+print("pow(5,3)   = ${power(base: n, exp: 3)}")
+print("fact(5)    = ${factorial(n)}")
+print("fib(5)     = ${fibonacci(n)}")
+print("complex    = ${complex(a: n, b: m)}")
+
+// Division — both branches
+showDiv(a: 10, b: 2)
+showDiv(a: 15, b: 0)
+showDiv(a: 20, b: 4)
+
+print("classify ${classify(0)} / ${classify(1)} / ${classify(n)}")
+print("=== Math Showcase Complete ===")

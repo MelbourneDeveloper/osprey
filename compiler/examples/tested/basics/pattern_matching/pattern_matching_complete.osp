@@ -1,62 +1,34 @@
-// Complete Pattern Matching Test Suite
-// Tests: basic patterns, functions, nested matches, ternary expressions, structural matching
+// Pattern matching across every shape Osprey supports:
+// literal, wildcard, nested match, named ADT field destructuring (both
+// orders), multi-variant union, type-annotation pattern, dynamic union
+// returned from a function, structural ternary, Elvis ?: on Result,
+// bool ternary, and Result<T,E> toString.
 
-// SECTION 1: Type Definitions
-type Option = Some { value: string } | None
+// --- ADT shapes ---
+type Person = PersonData { name: string, age: int }
+type Shape  = Circle { radius: int }
+            | Square { x: int, y: int }
 
-// SECTION 2: Basic Pattern Matching Functions
-fn analyzeNumber(n) = match n {
-    0 => "Zero"
-    1 => "One" 
-    2 => "Two"
+fn analyze(n) = match n {
+    0  => "Zero"
     42 => "The answer to everything!"
-    _ => "Some other number"
+    _  => "Some other number"
 }
 
 fn isEven(n) = match n {
     0 => 1
     2 => 1
     4 => 1
-    6 => 1
-    8 => 1
     _ => 0
 }
 
-fn getCategory(score) = match score {
+fn category(score) = match score {
     100 => "Perfect!"
-    95 => "Excellent"
-    85 => "Very Good"
-    75 => "Good"
-    65 => "Average"
-    _ => "Needs Improvement"
+    85  => "Very Good"
+    _   => "Needs Improvement"
 }
 
-// SECTION 3: Basic Pattern Usage
-let test1 = 0
-let test2 = 42
-let test3 = 7
-let test4 = 2
-
-print("Number analysis:")
-print("${test1} is ${analyzeNumber(test1)}")
-print("${test2} is ${analyzeNumber(test2)}")
-print("${test3} is ${analyzeNumber(test3)}")
-
-print("\nEven number check:")
-print("${test2} is even: ${isEven(test2)}")
-print("${test3} is even: ${isEven(test3)}")
-print("${test4} is even: ${isEven(test4)}")
-
-print("\nScore categories:")
-let scores = 100
-print("Score ${scores}: ${getCategory(scores)}")
-let scores2 = 85
-print("Score ${scores2}: ${getCategory(scores2)}")
-let scores3 = 50
-print("Score ${scores3}: ${getCategory(scores3)}") 
-
-// SECTION 4: Nested Match Expressions (CRITICAL)
-fn nestedTest(x, y) = match x {
+fn nested(x, y) = match x {
     0 => match y {
         0 => "Both zero"
         _ => "X zero"
@@ -67,26 +39,74 @@ fn nestedTest(x, y) = match x {
     }
 }
 
-let nested = nestedTest(x: 0, y: 0)
-print("Nested: ${nested}")
+fn describe(s: Shape) -> string = match s {
+    Circle { radius }  => "circle r=${toString(radius)}"
+    Square { x, y }    => "square (${toString(x)},${toString(y)})"
+}
 
-// SECTION 5: Ternary Expressions (Boolean)
-let a = { a: true }
-let b = a.a ? "true" : "false"
-print(b)
+fn shapeKind(s: Shape) -> string = match s {
+    Circle { radius } => "dyn circle"
+    Square { x, y }   => "dyn square"
+}
 
-// SECTION 6: Structural Ternary (Working - any type matching structure)
-let v = { value: "It worked" }
-// This is a structural match. It doesn't care about the name of the type
-// It just matches on the structure.
-let message2 = v { value } ? value : "An unknown error occurred"
-print(message2)
+// --- Literal matching ---
+print("Number analysis:")
+print("0 is ${analyze(0)}")
+print("42 is ${analyze(42)}")
+print("7 is ${analyze(7)}")
+print("")
 
-// SECTION 7: Additional Ternary Tests
-let testA = { a: true }
-let testResult = testA.a ? "true" : "false"
-print(testResult)
+print("Even check (1=yes, 0=no):")
+print("42 is even: ${isEven(42)}")
+print("7  is even: ${isEven(7)}")
+print("2  is even: ${isEven(2)}")
+print("")
 
-let testStruct = { value: "It worked" }
-let extractedValue = testStruct { value } ? value : "An unknown error occurred"
-print(extractedValue)
+print("Score categories:")
+print("Score 100: ${category(100)}")
+print("Score 85: ${category(85)}")
+print("Score 50: ${category(50)}")
+
+// --- Nested match ---
+print("Nested 0,0: ${nested(x: 0, y: 0)}")
+print("Nested 0,3: ${nested(x: 0, y: 3)}")
+print("Nested 4,0: ${nested(x: 4, y: 0)}")
+print("Nested 4,5: ${nested(x: 4, y: 5)}")
+
+// --- ADT field destructuring (both orders + type annotation pattern) ---
+let alice = PersonData { name: "Alice", age: 30 }
+let bob   = PersonData { name: "Bob",   age: 25 }
+print(match alice { PersonData { name, age } => "Person: ${name} is ${toString(age)}" })
+print(match bob   { PersonData { age, name } => "Reordered: ${name}/${toString(age)}" })
+print(match alice { p: PersonData => "Got PersonData type" _ => "Other" })
+
+// --- Multi-variant + dynamic via function return ---
+let c: Shape = Circle { radius: 5 }
+let s: Shape = Square { x: 3, y: 7 }
+print(describe(c))
+print(describe(s))
+print(shapeKind(c))
+print(shapeKind(s))
+
+// --- Bool ternary + structural ternary on anonymous record ---
+let flag = { a: true }
+print(flag.a ? "true" : "false")
+let env  = { value: "It worked" }
+print(env { value } ? value : "fallback")
+
+// --- Result<T,E> from arithmetic: Elvis on Success / Error ---
+let okCalc  = 10 + 5
+let okElvis = okCalc ?: -1
+print("ok elvis = ${toString(okElvis)}")
+
+fn divide(a, b) = a / b
+let badDiv  = divide(a: 10, b: 0)
+let badElv  = badDiv ?: 0.0
+print("bad elvis = ${toString(badElv)}")
+let goodDiv = divide(a: 10, b: 2)
+let goodElv = goodDiv ?: 0.0
+print("good elvis = ${toString(goodElv)}")
+
+// --- Result<T,E> toString ---
+print("ok toString  = ${toString(okCalc)}")
+print("bad toString = ${toString(badDiv)}")

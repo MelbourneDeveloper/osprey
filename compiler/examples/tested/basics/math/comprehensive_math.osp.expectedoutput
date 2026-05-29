@@ -1,13 +1,18 @@
-=== Comprehensive Math Calculator ===
-Computing basic operations...
-Computing advanced operations...
-=== Results ===
-Squared: 25
-Cubed: 125
-Factorial: 120
-Fibonacci: 5
-Iterative factorial: 15
-Simple fibonacci: 15
-Complex formula: 2
-Many!
-All computations complete!
+=== Math Showcase ===
+Next year: 26
+Last year: 24
+Double:    50
+Half:      12.5
+12 % 5  = 2
+isEven(8) = true
+isEven(7) = false
+pow(5,2)   = 25
+pow(5,3)   = 125
+fact(5)    = 120
+fib(5)     = 5
+complex    = 2
+10 / 2 = 5
+Error: Cannot divide 15 by 0!
+20 / 4 = 5
+classify Zero / One / Many
+=== Math Showcase Complete ===

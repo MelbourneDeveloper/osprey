@@ -1,56 +1,83 @@
-// Consolidated Boolean Test - includes functionality from removed tests
-// Tests function equality, simple comparisons, and comprehensive boolean operations
+// Boolean operators end-to-end: literals, comparisons (int/float/string),
+// equality, logical && / ||, short-circuit, de Morgan, bool from match,
+// bool from function, ternary, interpolation.
 
-fn getBool() = true
+fn getTrue()  = true
 fn getFalse() = false
 fn isEqual(x, y) = x == y
-
-let flag = false
-let truthy = true
-let comparison = 5 > 3
-let equality = 10 == 10
-let inequality = 5 != 3
-let lessEqual = 10 <= 15
-let greaterEqual = 8 >= 8
+fn xor(a: bool, b: bool) -> bool = (a || b) && !(a && b)
 
 print("=== Boolean Test ===")
-print("Function returning true:")
-print(getBool())
-print("Function returning false:")
-print(getFalse())
-print("Boolean literals:")
-print(flag)
-print(truthy)
-print("Comparisons:")
-print(comparison)
-print(equality)
-print(inequality)
-print(lessEqual)
-print(greaterEqual)
 
-print("Function equality test:")
-let result = isEqual(x: 5, y: 5)
-match result {
-    true => print("Equal")
+// Function-returned bools
+print(getTrue())
+print(getFalse())
+
+// Literals
+print(false)
+print(true)
+
+// Integer comparisons
+print(5 > 3)
+print(10 == 10)
+print(5 != 3)
+print(10 <= 15)
+print(8  >= 8)
+
+// Equality via function (named args)
+match isEqual(x: 5, y: 5) {
+    true  => print("Equal")
     false => print("Not Equal")
 }
 
-print("Simple comparison:")
-let simple_result = 5 > 3
-print(toString(simple_result))
+// Logical operators
+let a = true && false
+let b = true || false
+let c = (5 > 3) && (10 == 10)
+let d = (5 < 3) || (10 != 5)
+print("&& ${toString(a)}  || ${toString(b)}  comp&& ${toString(c)}  comp|| ${toString(d)}")
 
-print("Logical operators:")
-let and_result = true && false
-let or_result = true || false
-let complex_logic = (5 > 3) && (10 == 10)
-let complex_or = (5 < 3) || (10 != 5)
-print("true && false = ${toString(and_result)}")
-print("true || false = ${toString(or_result)}")
-print("(5 > 3) && (10 == 10) = ${toString(complex_logic)}")
-print("(5 < 3) || (10 != 5) = ${toString(complex_or)}")
+// Short-circuit (false && X / true || X never evaluates X)
+print(false && true)
+print(true  || false)
 
-print("Short-circuit evaluation:")
-let short_and = false && true
-let short_or = true || false  
-print("false && true = ${toString(short_and)}")
-print("true || false = ${toString(short_or)}")
+// Negation + de Morgan: !(p && q) == (!p || !q)
+let p = true
+let q = false
+let lhs = !(p && q)
+let rhs = (!p) || (!q)
+print("deMorgan && ${toString(lhs == rhs)}")
+let lhs2 = !(p || q)
+let rhs2 = (!p) && (!q)
+print("deMorgan || ${toString(lhs2 == rhs2)}")
+
+// XOR via composition
+print("xor T T ${toString(xor(a: true,  b: true))}")
+print("xor T F ${toString(xor(a: true,  b: false))}")
+print("xor F F ${toString(xor(a: false, b: false))}")
+
+// Bool from match expression
+let parity = match 4 {
+    0 => true
+    2 => true
+    4 => true
+    _ => false
+}
+print("parity ${toString(parity)}")
+
+// Float comparison
+let f1 = 1.5
+let f2 = 2.5
+print(f1 < f2)
+print(f2 == f2)
+
+// String comparison (strcmp semantics, lexicographic)
+print("apple" < "banana")
+print("hi"    == "hi")
+print("hi"    != "bye")
+
+// Ternary on bool
+let label = (3 < 5) ? "yes" : "no"
+print(label)
+
+print("=== Boolean Test Complete ===")

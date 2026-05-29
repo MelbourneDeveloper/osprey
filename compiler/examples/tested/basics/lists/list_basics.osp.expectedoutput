@@ -1,62 +1,131 @@
-[list_basics]
+[list]
 
-PASS empty length=
+empty len=
+0
+
+a len=
+3
+
+b len=
+2
+
+
+rev len=
+3
+
+rev-of-rev len=
+3
+
+
+concat a+b len=
+5
+
+concat empty+a len=
+3
+
+concat a+empty len=
+3
+
+op a+a len=
+6
+
+op (a+b)+a len=
+8
+
+
+prepend len=
+4
+
+src unchanged=
+3
+
+
+contains 2 in a=
+true
+
+contains 99 in a=
+false
+
+contains 1 in empty=
+false
+
+
+iter a:
+
+1
+2
+3
+iter rev(a):
+
+3
+2
+1
+iter a+b:
+
+1
+2
+3
+10
+20
+gen lens 0..5:
+
 0
 
 
-PASS 3 elements length=
-3
-
-
-PASS b1 length=
 1
 
-PASS b2 length=
+
 2
 
-PASS b3 length=
+
 3
 
 
-PASS reverse length=
-3
-
-
-PASS reverse-of-reverse length=
-3
-
-
-PASS concat a+a length=
-6
-
-
-PASS concat a+empty length=
-3
-
-
-PASS concat empty+a length=
-3
-
-
-PASS a+a via +operator length=
-6
-
-
-PASS prepend length=
 4
 
-PASS prepend src unchanged=
+
+5
+
+g2 still 2 after g5=
+2
+
+
+branch x len=
+4
+
+branch y len=
+4
+
+branch y2 len=
+5
+
+g3 unchanged=
 3
 
 
-PASS contains 2 in a=
-true
+len 10/20/30/35:
 
-PASS contains 99 in a=
-false
-
-PASS contains 1 in empty=
-false
+10
 
 
-[list_basics done]
+20
+
+
+30
+
+
+35
+
+rev(35) len=
+35
+
+35+35 len=
+70
+
+
+cmd[0]=echo hello
+cmd[2]=echo test
+cmd[5] OOB rejected
+empty[0] rejected
+[list done]
+
