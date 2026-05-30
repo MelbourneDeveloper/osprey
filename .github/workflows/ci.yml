@@ -47,8 +47,11 @@ jobs:
         run: sudo apt-get install -y jq xvfb
 
       # [SWR-VERSION-MANIFEST] keep shipwright.json valid against the schema.
+      # Pinned to 0.5.3: the 0.5.4 publish ships without its bundled schemas/
+      # directory and aborts with ENOENT (schemas/shipwright.schema.json). 0.5.3
+      # validates shipwright.json cleanly. Unpin once a fixed release lands.
       - name: Validate deployment manifest
-        run: npx --yes @nimblesite/shipwright-validate-manifest shipwright.json
+        run: npx --yes @nimblesite/shipwright-validate-manifest@0.5.3 shipwright.json
 
       - name: Lint
         run: make lint
