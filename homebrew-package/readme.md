@@ -1,5 +1,19 @@
 # Osprey Homebrew Package
 
+> **⚠️ Legacy / local-dev only.** Official releases are published automatically by
+> the tag-triggered pipeline (`.github/workflows/release.yml`) to
+> [`Nimblesite/homebrew-tap`](https://github.com/Nimblesite/homebrew-tap). Install
+> released builds with:
+>
+> ```bash
+> brew install nimblesite/tap/osprey
+> ```
+>
+> The `osprey.rb`, `build-release.sh`, and `setup-tap.sh` files here are kept for
+> local experimentation and historical reference; they target the old
+> `melbournedeveloper` tap and are **not** used by the release process. See
+> [docs/RELEASING.md](../docs/RELEASING.md).
+
 This directory contains the Homebrew formula for installing the Osprey programming language compiler.
 
 ## Installation

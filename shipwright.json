@@ -1,0 +1,62 @@
+{
+  "manifestVersion": 1,
+  "product": {
+    "id": "osprey",
+    "displayName": "Osprey",
+    "version": "0.0.0-dev",
+    "repository": "https://github.com/MelbourneDeveloper/osprey",
+    "homepage": "https://ospreylang.dev"
+  },
+  "components": [
+    {
+      "id": "osprey-compiler",
+      "kind": "cli",
+      "binaryName": "osprey",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": ["darwin-arm64", "darwin-x64", "linux-x64", "win32-x64"],
+      "sources": ["user-setting", "bundled", "path", "github-release", "pkgmgr"],
+      "userSetting": "osprey.server.compilerPath",
+      "bundled": {
+        "bundlePath": "bin/${platform}/${binaryName}${exe}",
+        "perPlatformArtifact": true
+      },
+      "pkgmgr": {
+        "brew": "osprey",
+        "scoop": "osprey"
+      },
+      "githubRelease": {
+        "repo": "MelbourneDeveloper/osprey",
+        "assetPattern": "osprey-${version}-${platform}.tar.gz",
+        "checksum": true
+      },
+      "verifyStartup": true,
+      "versionCheckStrategy": "version-flag",
+      "required": true
+    },
+    {
+      "id": "osprey-vscode",
+      "kind": "extension-vscode",
+      "language": "typescript",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": ["darwin-arm64", "darwin-x64", "linux-x64", "win32-x64"],
+      "required": true
+    }
+  ],
+  "hosts": {
+    "vscode": {
+      "artifact": "vsix-per-platform",
+      "activationVerifies": ["osprey-compiler"],
+      "onMismatch": "prompt-reinstall"
+    },
+    "cli": {
+      "artifact": "archive",
+      "activationVerifies": ["osprey-compiler"],
+      "onMismatch": "error"
+    },
+    "pkgmgr": {
+      "artifact": "brew-formula",
+      "activationVerifies": ["osprey-compiler"],
+      "onMismatch": "error"
+    }
+  }
+}

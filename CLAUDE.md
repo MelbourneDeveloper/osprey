@@ -159,6 +159,19 @@ make ci           # lint + test + build (full CI simulation)
 make setup        # Post-create dev environment setup
 ```
 
+## Releases & Versioning
+
+- **Releases are tag-triggered only.** Push `vX.Y.Z` → `release.yml` builds all
+  platforms, cuts the GitHub Release, updates the Homebrew tap + Scoop bucket,
+  publishes the VS Code extension (`nimblesite.osprey`), and deploys the website.
+- **CI runs only on PRs to `main`.** Merging to `main` triggers nothing.
+- **Versions are NEVER hard-coded.** Every source version field stays at the
+  placeholder `0.0.0-dev` (`compiler/internal/version/version.go`,
+  `vscode-extension/package.json`, `shipwright.json`); the real version is
+  stamped from the git tag at build time. Changing a placeholder to a real
+  version in source is a defect. Follows the Shipwright contract
+  ([SWR-VERSION-*]). See [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Spec IDs
 
 Spec IDs are hierarchical descriptive slugs in the format `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]`. NEVER use numbered IDs (`[SPEC-001]`). Code implementing a spec section MUST reference its ID in a comment. Example: `// Implements [PARSER-EFFECTS-HANDLE]`.

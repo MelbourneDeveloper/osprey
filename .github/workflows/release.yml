@@ -1,0 +1,365 @@
+name: Release
+
+# Tag-triggered release. THIS is the only thing that publishes Osprey.
+# Pushing a tag like v1.2.3 builds per-platform binaries, cuts a GitHub Release,
+# updates the Homebrew tap + Scoop bucket, publishes the per-platform VSIX to the
+# VS Code Marketplace, and (only on success) deploys the website + web compiler.
+#
+# Trigger rules (see docs/RELEASING.md):
+#   - release  -> ONLY on tag push v*
+#   - CI       -> ONLY on PR to main (ci.yml / ci-windows.yml)
+#   - merge to main -> nothing
+#
+# Version stamping ([SWR-VERSION-BUILD-STAMPING]): the version is derived from
+# the tag and stamped into every artifact. Source stays at 0.0.0-dev.
+#
+# Job shapes follow Shipwright's templates/gh-actions/*.yml (binary-multiplatform,
+# publish-brew-tap, publish-scoop-bucket, publish-vsix-per-platform).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  # Stable identity used across formula/manifest/marketplace.
+  PRODUCT_REPO: MelbourneDeveloper/osprey
+  HOMEPAGE: https://ospreylang.dev
+  DESCRIPTION: "Osprey — a functional language with algebraic effects, fibers, and compile-time safety"
+
+jobs:
+  # --------------------------------------------------------------------------
+  version:
+    name: Resolve version from tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Derive version + validate manifest
+        id: v
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing osprey $version"
+          # [SWR-VERSION-MANIFEST] validate shipwright.json before building anything.
+          npx --yes @nimblesite/shipwright-validate-manifest shipwright.json
+
+  # --------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            os: macos-14
+          - platform: darwin-x64
+            os: macos-13
+          - platform: linux-x64
+            os: ubuntu-latest
+          - platform: win32-x64
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      # ---- Linux: full build (compiler + C runtimes + Rust interop) ----------
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-osprey-compiler
+
+      # ---- macOS: LLVM + OpenSSL via Homebrew, then full build ---------------
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          brew install llvm openssl@3 pkg-config
+          export PATH="$(brew --prefix llvm)/bin:$PATH"
+          export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig"
+          make -C compiler build-no-lint VERSION="${{ needs.version.outputs.version }}"
+
+      # ---- Windows: MSYS2 UCRT64 core build [WINDOWS-PORT-PHASE1] -------------
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          install: >-
+            make
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-llvm
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-openssl
+      - name: Build (Windows core)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: make -C compiler build-windows-core CC=gcc AR=ar VERSION="${{ needs.version.outputs.version }}"
+
+      # ---- Verify version contract [SWR-VERSION-CLI-OUTPUT] ------------------
+      - name: Verify version
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""; [ "${{ runner.os }}" = "Windows" ] && exe=".exe"
+          "compiler/bin/osprey${exe}" --version | grep -Fx "osprey ${{ needs.version.outputs.version }}"
+
+      # ---- Package: binary + runtime libs -> tar.gz + sha256 -----------------
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          plat="${{ matrix.platform }}"
+          exe=""; [ "${{ runner.os }}" = "Windows" ] && exe=".exe"
+          staging="osprey-$v-$plat"
+          mkdir -p "dist/$staging"
+          cp "compiler/bin/osprey${exe}" "dist/$staging/"
+          cp compiler/bin/lib*.a "dist/$staging/" 2>/dev/null || true
+          tar -czf "dist/$staging.tar.gz" -C dist "$staging"
+          ( cd dist && shasum -a 256 "$staging.tar.gz" | tee "$staging.tar.gz.sha256" )
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osprey-${{ matrix.platform }}
+          path: dist/*.tar.gz*
+
+  # --------------------------------------------------------------------------
+  github-release:
+    name: Publish GitHub Release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          files: dist/*.tar.gz
+          fail_on_unmatched_files: true
+
+  # --------------------------------------------------------------------------
+  # Homebrew tap — shape from templates/gh-actions/publish-brew-tap.yml, adapted
+  # to install the runtime libs and depend on llvm (osprey shells out to it).
+  brew:
+    name: Publish Homebrew formula
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: actions/checkout@v4
+        with:
+          repository: Nimblesite/homebrew-tap
+          token: ${{ secrets.TAP_TOKEN }}
+          path: tap
+      - name: Write formula
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${PRODUCT_REPO}/releases/download/v${VERSION}"
+          sha() { cut -d' ' -f1 "dist/osprey-${VERSION}-$1.tar.gz.sha256"; }
+          arm=$(sha darwin-arm64); intel=$(sha darwin-x64); linux=$(sha linux-x64)
+          mkdir -p tap/Formula
+          cat > tap/Formula/osprey.rb <<RUBY
+          # typed: false
+          # frozen_string_literal: true
+          class Osprey < Formula
+            desc "${DESCRIPTION}"
+            homepage "${HOMEPAGE}"
+            version "${VERSION}"
+            depends_on "llvm"
+
+            on_macos do
+              on_arm do
+                url "${base}/osprey-${VERSION}-darwin-arm64.tar.gz"
+                sha256 "${arm}"
+              end
+              on_intel do
+                url "${base}/osprey-${VERSION}-darwin-x64.tar.gz"
+                sha256 "${intel}"
+              end
+            end
+
+            on_linux do
+              url "${base}/osprey-${VERSION}-linux-x64.tar.gz"
+              sha256 "${linux}"
+            end
+
+            def install
+              bin.install "osprey"
+              lib.install Dir["lib*.a"]
+            end
+
+            test do
+              assert_match "osprey ${VERSION}", shell_output("#{bin}/osprey --version")
+            end
+          end
+          RUBY
+      - name: Commit + push
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/osprey.rb
+          git commit -m "osprey ${{ needs.version.outputs.version }}" || exit 0
+          git push
+
+  # --------------------------------------------------------------------------
+  # Scoop bucket — shape from templates/gh-actions/publish-scoop-bucket.yml.
+  # Windows install depends on llvm + gcc (MinGW) since osprey shells out to
+  # llc/clang/gcc at compile time. [WINDOWS-PORT]
+  scoop:
+    name: Publish Scoop manifest
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: actions/checkout@v4
+        with:
+          repository: Nimblesite/scoop-bucket
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          path: bucket
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Write manifest
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          HASH=$(cut -d' ' -f1 "dist/osprey-${VERSION}-win32-x64.tar.gz.sha256")
+          URL="https://github.com/${PRODUCT_REPO}/releases/download/v${VERSION}/osprey-${VERSION}-win32-x64.tar.gz"
+          node - "$URL" "$HASH" <<'NODE'
+          const fs = require("node:fs");
+          const [, , url, hash] = process.argv;
+          const v = process.env.VERSION;
+          const manifest = {
+            version: v,
+            description: process.env.DESCRIPTION,
+            homepage: process.env.HOMEPAGE,
+            license: "MIT",
+            depends: ["llvm", "gcc"],
+            architecture: { "64bit": { url, hash, extract_dir: `osprey-${v}-win32-x64` } },
+            bin: "osprey.exe",
+            checkver: { github: `https://github.com/${process.env.PRODUCT_REPO}` },
+            autoupdate: {
+              architecture: {
+                "64bit": {
+                  url: `https://github.com/${process.env.PRODUCT_REPO}/releases/download/v$version/osprey-$version-win32-x64.tar.gz`,
+                  extract_dir: "osprey-$version-win32-x64",
+                },
+              },
+            },
+          };
+          fs.mkdirSync("bucket/bucket", { recursive: true });
+          fs.writeFileSync("bucket/bucket/osprey.json", JSON.stringify(manifest, null, 2) + "\n");
+          NODE
+      - name: Commit + push
+        working-directory: bucket
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bucket/osprey.json
+          git commit -m "osprey ${{ needs.version.outputs.version }}" || exit 0
+          git push
+
+  # --------------------------------------------------------------------------
+  # Per-platform VSIX — shape from templates/gh-actions/publish-vsix-per-platform.yml
+  # (which follows the official microsoft/vscode-platform-specific-sample). The
+  # matching osprey binary + runtime libs + shipwright.json are bundled so the
+  # extension launches a version-matched compiler verified by @nimblesite/shipwright-vscode.
+  vsix:
+    name: Publish VSIX ${{ matrix.target }}
+    needs: [version, build]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,      target: darwin-arm64, artifact: darwin-arm64 }
+          - { os: macos-13,      target: darwin-x64,   artifact: darwin-x64 }
+          - { os: ubuntu-latest, target: linux-x64,    artifact: linux-x64 }
+          - { os: windows-latest, target: win32-x64,   artifact: win32-x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/download-artifact@v4
+        with:
+          name: osprey-${{ matrix.artifact }}
+          path: dist
+      - name: Stage bundled compiler + manifest
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tar -xzf "dist/osprey-${VERSION}-${{ matrix.target }}.tar.gz" -C dist
+          dest="vscode-extension/bin/${{ matrix.target }}"
+          mkdir -p "$dest"
+          cp -r "dist/osprey-${VERSION}-${{ matrix.target }}/." "$dest/"
+          # Stamp + bundle shipwright.json so the extension can version-check the
+          # bundled binary at activation. [SWR-VERSION-MANIFEST]
+          node -e '
+            const fs=require("fs"); const v=process.env.VERSION;
+            const m=JSON.parse(fs.readFileSync("shipwright.json","utf8"));
+            m.product.version=v;
+            for (const c of m.components) if (c.expectedVersion) c.expectedVersion=v;
+            fs.writeFileSync("vscode-extension/shipwright.json", JSON.stringify(m,null,2)+"\n");
+          '
+      - name: Install deps + stamp package.json
+        working-directory: vscode-extension
+        run: |
+          npm install
+          npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
+          npm run compile
+      - name: Package VSIX
+        working-directory: vscode-extension
+        run: npx vsce package --target ${{ matrix.target }}
+      - name: Verify bundled binary is inside the VSIX
+        shell: bash
+        working-directory: vscode-extension
+        run: |
+          set -euo pipefail
+          exe=""; [ "${{ runner.os }}" = "Windows" ] && exe=".exe"
+          unzip -l *.vsix | grep -F "extension/bin/${{ matrix.target }}/osprey${exe}"
+      - name: Publish to Marketplace
+        if: ${{ vars.SKIP_VSCE_PUBLISH != 'true' }}
+        working-directory: vscode-extension
+        run: npx vsce publish --packagePath $(ls *.vsix)
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+  # --------------------------------------------------------------------------
+  # Website + web compiler deploy — only after everything above succeeds.
+  deploy-site:
+    name: Deploy website + web compiler
+    needs: [github-release, brew, scoop, vsix]
+    uses: ./.github/workflows/deploy-pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+  deploy-webcompiler:
+    name: Deploy web compiler
+    needs: [github-release, brew, scoop, vsix]
+    uses: ./.github/workflows/deploy-webcompiler.yml
+    secrets: inherit

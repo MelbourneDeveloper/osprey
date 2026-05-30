@@ -131,15 +131,15 @@ func buildLibraryPaths(libName string) []string {
 	paths := []string{
 		fmt.Sprintf("bin/lib%s.a", libName),
 		fmt.Sprintf("./bin/lib%s.a", libName),
-		fmt.Sprintf("lib/lib%s.a", libName),          // For rust interop libraries
-		fmt.Sprintf("./lib/lib%s.a", libName),        // For rust interop libraries
-		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
-		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
-		fmt.Sprintf("../../lib/lib%s.a", libName),    // For rust interop in tests/integration
-		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
-		filepath.Join(binaryDir, fmt.Sprintf("lib%s.a", libName)),       // binary/lib*.a
-		filepath.Join(binaryDir, "..", "lib", fmt.Sprintf("lib%s.a", libName)),   // binary/../lib/lib*.a
-		filepath.Join(binaryDir, "..", "bin", fmt.Sprintf("lib%s.a", libName)),   // binary/../bin/lib*.a
+		fmt.Sprintf("lib/lib%s.a", libName),                                    // For rust interop libraries
+		fmt.Sprintf("./lib/lib%s.a", libName),                                  // For rust interop libraries
+		fmt.Sprintf("../../bin/lib%s.a", libName),                              // For tests running from tests/integration
+		fmt.Sprintf("../../../bin/lib%s.a", libName),                           // For deeper test directories
+		fmt.Sprintf("../../lib/lib%s.a", libName),                              // For rust interop in tests/integration
+		fmt.Sprintf("../../../lib/lib%s.a", libName),                           // For rust interop in deeper test directories
+		filepath.Join(binaryDir, fmt.Sprintf("lib%s.a", libName)),              // binary/lib*.a
+		filepath.Join(binaryDir, "..", "lib", fmt.Sprintf("lib%s.a", libName)), // binary/../lib/lib*.a
+		filepath.Join(binaryDir, "..", "bin", fmt.Sprintf("lib%s.a", libName)), // binary/../bin/lib*.a
 		filepath.Join(binaryDir, "..", fmt.Sprintf("lib%s.a", libName)),
 		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
 	}
@@ -194,6 +194,37 @@ func addOpenSSLFlags(linkArgs []string) []string {
 	}
 	// Linux and other systems
 	return append(linkArgs, "-lssl", "-lcrypto")
+}
+
+// llcArgs builds the llc argument list to turn LLVM IR into an object file.
+// On Windows it pins the target triple to the MinGW (GNU) ABI so the emitted
+// COFF object links with MinGW gcc/clang — LLVM.org's llc otherwise defaults to
+// the MSVC ABI, which a MinGW linker cannot consume. [WINDOWS-PORT]
+func llcArgs(objFile, irFile string) []string {
+	args := []string{"-filetype=obj"}
+	if runtime.GOOS == GOOSWindows {
+		args = append(args, "-mtriple=x86_64-w64-windows-gnu")
+	}
+
+	return append(args, "-o", objFile, irFile)
+}
+
+// addPlatformLinkFlags appends the link flags required only when the HTTP /
+// WebSocket runtime is linked: OpenSSL on every platform, plus the Winsock2
+// library (-lws2_32) on Windows. When httpExists is false (e.g. a Windows core
+// build), nothing is added so the core language links without OpenSSL.
+// [WINDOWS-PORT]
+func addPlatformLinkFlags(linkArgs []string, httpExists bool) []string {
+	if !httpExists {
+		return linkArgs
+	}
+
+	linkArgs = addOpenSSLFlags(linkArgs)
+	if runtime.GOOS == GOOSWindows {
+		linkArgs = append(linkArgs, "-lws2_32")
+	}
+
+	return linkArgs
 }
 
 // checkLibraryAvailability checks if any runtime libraries are available
@@ -286,7 +317,7 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	// Compile IR to object file using llc
 	objFile := outputPath + ".o"
 	// #nosec G204 - args are controlled
-	llcCmd := exec.CommandContext(context.Background(), "llc", "-filetype=obj", "-o", objFile, irFile)
+	llcCmd := exec.CommandContext(context.Background(), "llc", llcArgs(objFile, irFile)...)
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
@@ -295,6 +326,10 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	}
 
 	defer func() { _ = os.Remove(objFile) }() // Clean up temp file
+
+	// Check which runtime libraries are available up front so we can gate the
+	// HTTP-only link flags (OpenSSL, Winsock) on the HTTP runtime being present.
+	fiberExists, httpExists := checkLibraryAvailability()
 
 	// Build link arguments with runtime libraries
 	var linkArgs []string
@@ -306,13 +341,13 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	linkArgs = findAndAddLibrary("fiber_runtime", linkArgs)
 	linkArgs = findAndAddLibrary("rust_utils", linkArgs)
 
+	// winpthreads provides -lpthread on Windows (MSYS2/MinGW), so this is portable.
 	linkArgs = append(linkArgs, "-lpthread")
 
-	// Add OpenSSL libraries with platform-specific paths
-	linkArgs = addOpenSSLFlags(linkArgs)
-
-	// Check library availability and try linking
-	fiberExists, httpExists := checkLibraryAvailability()
+	// OpenSSL and Winsock are only pulled in by the HTTP/WebSocket runtime.
+	// Gating on httpExists lets the core language link on systems without
+	// OpenSSL — e.g. a fresh Windows core build. [WINDOWS-PORT]
+	linkArgs = addPlatformLinkFlags(linkArgs, httpExists)
 
 	return tryLinkWithCompilers(outputPath, objFile, linkArgs, fiberExists, httpExists)
 }

@@ -1,12 +1,8 @@
 #ifndef HTTP_SHARED_H
 #define HTTP_SHARED_H
 
-#include <arpa/inet.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <inttypes.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 #include <pthread.h>
@@ -15,10 +11,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+// Sockets: Winsock2 on Windows (via the compat header), BSD sockets elsewhere.
+// [WINDOWS-PORT-PHASE2]
+#ifdef _WIN32
+#include "osprey_win_compat.h"
+#else
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#endif
 
 // Constants
 #define MAX_HTTP_BUFFER 8192

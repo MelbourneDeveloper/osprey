@@ -172,7 +172,9 @@ int64_t http_listen(int64_t server_id, HttpRequestHandler handler) {
 
   // Set socket options
   int opt = 1;
-  if (setsockopt(server->socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt,
+  // optval is `const char *` on Winsock, `const void *` on POSIX; the cast is
+  // portable to both. [WINDOWS-PORT-PHASE2]
+  if (setsockopt(server->socket_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt,
                  sizeof(opt)) < 0) {
     close(server->socket_fd);
     return -3;

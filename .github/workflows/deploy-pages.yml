@@ -2,8 +2,10 @@
 name: Deploy to GitHub Pages
 
 on:
-  # Triggered by release.yml after a release is published.
-  # Also supports manual dispatch for emergency deploys.
+  # Triggered by release.yml after a release is published (workflow_call).
+  # Also supports manual dispatch for emergency deploys. NOT triggered by
+  # pushes to main — only a tagged release deploys the site.
+  workflow_call:
   workflow_dispatch:
 
 permissions:

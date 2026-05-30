@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/christianfindlay/osprey/internal/cli"
+	"github.com/christianfindlay/osprey/internal/version"
 )
 
 const (
@@ -54,7 +56,14 @@ func handleBasicFlags(args []string) *cli.CommandResult {
 		ShowHelp()
 		return &cli.CommandResult{Success: true, Output: ""}
 	case "--version":
-		fmt.Println("Osprey Compiler 1.0.0")
+		// [SWR-VERSION-CLI-OUTPUT] / [SWR-VERSION-JSON-OUTPUT]: print the contract
+		// output without starting any runtime, network, or workspace scanning.
+		if slices.Contains(args, "--json") {
+			fmt.Println(version.JSON())
+		} else {
+			fmt.Println(version.Line())
+		}
+
 		return &cli.CommandResult{Success: true, Output: ""}
 	}
 

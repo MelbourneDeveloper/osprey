@@ -28,6 +28,7 @@ import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { runOspreyCompiler } from './compilerInvocation';
 
 // Symbol and type information tracking
 interface OspreySymbol {
@@ -240,7 +241,12 @@ function getDocumentSettings(resource: string): Promise<OspreySettings> {
       section: 'osprey'
     }).then((config: any) => {
       return {
-        compilerPath: config.server?.compilerPath || config.server?.path || 'osprey',
+        // Resolution order matches the Shipwright `sources` chain for the
+        // osprey-compiler component: explicit user setting, then the
+        // version-checked bundled binary the client injects via
+        // OSPREY_COMPILER_PATH, then a plain `osprey` on PATH.
+        compilerPath: config.server?.compilerPath || config.server?.path ||
+          process.env.OSPREY_COMPILER_PATH || 'osprey',
         enableDiagnostics: config.diagnostics?.enabled !== false
       };
     });
@@ -370,15 +376,6 @@ async function analyzeDocument(textDocument: TextDocument, settings: OspreySetti
   }
 
   return diagnostics;
-}
-
-function runOspreyCompiler(filePath: string, compilerPath: string): Promise<{stdout: string, stderr: string, error?: Error}> {
-  return new Promise((resolve) => {
-    execFile('osprey', [filePath], (error: any, stdout: any, stderr: any) => {
-      // Don't treat non-zero exit codes as errors - they might just be syntax errors
-      resolve({ stdout, stderr, error: undefined });
-    });
-  });
 }
 
 async function getSymbolsFromCompiler(sourceCode: string, uri: string): Promise<OspreySymbol[]> {

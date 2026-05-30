@@ -39,6 +39,9 @@ const (
 // to satisfy goconst (three+ call sites use it).
 const GOOSDarwin = "darwin"
 
+// GOOSWindows is the runtime.GOOS value for Windows. [WINDOWS-PORT]
+const GOOSWindows = "windows"
+
 // Type names.
 const (
 	TypeString       = "string"

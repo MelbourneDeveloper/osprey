@@ -1,109 +1,51 @@
-# Osprey VSCode Extension
+# Osprey for VS Code
 
-VSCode language support for Osprey including syntax highlighting, error diagnostics, and code completion.
+Language support for [Osprey](https://ospreylang.dev) — a functional programming
+language with algebraic effects, fiber-based concurrency, pattern matching, and
+strong compile-time safety.
 
-## Architecture
+## Features
 
-**CRITICAL**: TypeScript for VSCode integration, Go for heavy computation.
+- **Syntax highlighting** for `.osp` files — keywords, types, string
+  interpolation (`"Hello ${name}!"`), operators, and comments.
+- **Live diagnostics** — errors and warnings from the Osprey compiler as you
+  type, inline in the editor.
+- **Compile & run** from the editor:
+  - `Osprey: Compile Osprey File` (`Ctrl/Cmd+Shift+B`)
+  - `Osprey: Compile and Run Osprey File` (`F5`)
+- **Bracket matching, auto-closing, and comment toggling.**
 
-- **TypeScript**: VSCode API, Language Server Protocol, UI interactions
-- **Go**: Parsing, compilation, analysis, performance-critical operations
+## Requirements
 
-## Components
+The extension bundles a version-matched Osprey compiler for your platform and
+verifies it at startup, so syntax checking works out of the box.
 
-### 1. Syntax Highlighting (`syntaxes/osprey.tmGrammar.json`)
-TextMate grammar supporting:
-- Keywords, literals, operators
-- String interpolation (`"Hello ${name}!"`)
-- Function/type declarations
-- Comments
+To **compile and run** programs, Osprey invokes LLVM and a C toolchain, so install:
 
-### 2. Language Configuration (`language-configuration/language-configuration.json`)
-- Bracket matching and auto-closing
-- Comment toggling (`//`)
-- Indentation and word patterns
+- **LLVM** (provides `llc`) — `brew install llvm` / `scoop install llvm`
+- A C compiler — `clang` (macOS/Linux) or MinGW `gcc` (`scoop install gcc`)
 
-### 3. Language Server (`server/src/server.ts`)
-- Real-time error diagnostics via Go compiler
-- Code completion for keywords/built-ins
-- Configuration management
+Or install the full toolchain via a package manager (this also puts `osprey` on
+your `PATH`):
 
-### 4. Client Extension (`client/src/extension.ts`)
-- Extension entry point and lifecycle
-- Status bar integration
-
-## Error Diagnostics Flow
-
-```
-1. User edits .osp file
-2. TypeScript server receives change
-3. Server writes temp file
-4. Server calls: go run cmd/osprey/main.go temp.osp
-5. Server parses stderr for errors
-6. Server sends diagnostics to VSCode
-```
-
-## Development
-
-### Setup
 ```bash
-cd vscode-extension
-npm install
-npm run compile
+brew install nimblesite/tap/osprey            # macOS / Linux
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket && scoop install osprey   # Windows
 ```
 
-### Build & Install
-```bash
-npm run package         # Creates .vsix file
-npm run install-extension
-```
+## Settings
 
-## Configuration
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `osprey.server.enabled` | `true` | Enable/disable the language server. |
+| `osprey.diagnostics.enabled` | `true` | Enable/disable inline diagnostics. |
+| `osprey.server.compilerPath` | `""` | Path to an Osprey compiler. **Leave empty** to use the version-matched compiler bundled with this extension (falling back to `osprey` on `PATH`). |
 
-```json
-{
-  "osprey.server.enabled": true,
-  "osprey.server.path": "/path/to/osprey/compiler",
-  "osprey.diagnostics.enabled": true
-}
-```
+## Links
 
-## Performance Notes
+- Website & docs: <https://ospreylang.dev>
+- Source & issues: <https://github.com/MelbourneDeveloper/osprey>
 
-- Temp files created/cleaned immediately
-- Compilation on document changes (debounced)
-- TypeScript server lightweight, Go handles heavy lifting
-- Async compilation doesn't block UI
+## License
 
-## Future Enhancements
-
-**Go-based** (implement in Go, call from TypeScript):
-- Semantic highlighting, go-to-definition, find references
-- Advanced type checking, refactoring tools
-
-**TypeScript-based** (lightweight UI/UX):
-- Snippet expansion, formatting preferences
-- Theme integration, status indicators
-
-## Troubleshooting
-
-### Language Server Not Starting
-- Check `osprey.server.path` configuration
-- Ensure Go compiler accessible
-- Check VSCode Output → "Osprey Language Server"
-
-### No Error Diagnostics
-- Verify `osprey.diagnostics.enabled` is true
-- Test: `go run cmd/osprey/main.go test.osp`
-- Check temp directory permissions
-
-## File Structure
-
-```
-vscode-extension/
-├── package.json              # Extension manifest
-├── client/src/extension.ts   # Main entry point
-├── server/src/server.ts      # Language server
-├── syntaxes/osprey.tmGrammar.json # Syntax rules
-└── language-configuration/language-configuration.json
-``` 
+See [LICENSE](LICENSE).

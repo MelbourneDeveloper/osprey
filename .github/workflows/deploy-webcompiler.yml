@@ -1,13 +1,10 @@
 name: Deploy Web Compiler to Fly.io
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "webcompiler/**"
-      - "compiler/**"
-      - ".github/workflows/deploy-webcompiler.yml"
+  # Deployed only as part of a tagged release (called by release.yml), or
+  # manually. Merging to main does NOT deploy the web compiler.
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
   deploy:

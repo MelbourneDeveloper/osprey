@@ -1,70 +1,106 @@
-// Fiber + algebraic effect interactions:
-//   1. Effect handler honoured both directly in main and inside a fiber body
-//      (replaces the legacy fiber_effects_channels + algebraic_effects fragment)
-//   2. Region-level handler isolation: three separate handle/in blocks for the
-//      same effect, each with a different impl, each yielding its own scope.
+// Cross-cutting mixup — deliberately NOT isolated. One flow threads together:
+//   - algebraic effects fired inside fiber bodies AND a list helper
+//   - records (Job) built from fiber results, fields read back out
+//   - a union (Outcome) that results are classified into + pattern-matched
+//   - a List<int> and Map<string,int> carrying fiber results, walked with the
+//     functional builtins (listLength/listContains/forEachList/mapValues)
+//   - region-level handler isolation: same effect, different impl per region
+// Replaces the legacy fiber_effects_channels + algebraic_effects fragments and
+// pulls record/union/pattern-match coverage into the SAME program instead of
+// siloing fibers, effects, and types in three separate files.
 
 effect Logger {
     log: fn(string) -> Unit
 }
 
-// --- (1) Effect inside a fiber ---
-fn task(data: int) -> int !Logger = {
-    perform Logger.log("Processing: " + toString(data))
-    data * 2
+type Priority = Low | Med | High
+fn priWeight(p: Priority) -> int = match p {
+    Low  => 1
+    Med  => 5
+    High => 9
 }
 
-// --- (1') Effect inside a list-processing helper ---
-fn processList(items) -> int !Logger = {
-    let first = match items[0] {
-        Success { value }   => value
-        Error   { message } => 0
-    }
-    perform Logger.log("list head: " + toString(first))
-    first * 2
+// Record built from fiber results; fields read back in interpolation.
+type Job = { id: int, score: int }
+
+// Union with int payloads; both variants exercised + matched.
+type Outcome =
+    Done     { score: int }
+    | Failed { code: int }
+
+fn classify(score: int) -> Outcome = match score {
+    0 => Failed { code: 0 - 1 }
+    _ => Done   { score: score }
 }
+
+// (1) Effect inside a fiber-run worker.
+fn runJob(weight: int) -> int !Logger = {
+    perform Logger.log("weight " + toString(weight))
+    weight * weight
+}
+
+// (1') Effect inside a list-processing helper.
+fn report(xs) -> Unit !Logger = perform Logger.log("collected " + toString(listLength(xs)))
+
+fn show(x: int) -> Unit = print("  " + toString(x))
 
 fn main() -> Unit = {
-    print("=== fiber + effects ===")
+    print("=== mixup: fibers + effects + records ===")
 
-    // (1) Direct + fiber bodies both reach the surrounding handler.
     handle Logger
         log msg => print("[LOG] " + msg)
     in {
-        let direct = task(5)
-        let f1     = spawn task(10)
-        let r1     = await(f1)
+        // priorities -> effectful fibers, awaited out of order
+        let fHigh = spawn runJob(priWeight(High))
+        let fMed  = spawn runJob(priWeight(Med))
+        let fLow  = spawn runJob(priWeight(Low))
+        let sHigh = await(fHigh)
+        let sLow  = await(fLow)
+        let sMed  = await(fMed)
 
-        let scores = [21, 42, 63]
-        let listR  = processList(scores)
+        // record from a fiber result, fields read back
+        let top = Job { id: 1, score: sHigh }
+        print("job " + toString(top.id) + " score " + toString(top.score))
 
-        print("direct = " + toString(direct))
-        print("fiber  = " + toString(r1))
-        print("list   = " + toString(listR))
+        // classify a fiber result into a union, then pattern-match it inline
+        let oTop = classify(sHigh)
+        match oTop {
+            Done   { score } => print("outcome done " + toString(score))
+            Failed { code }  => print("outcome failed " + toString(code))
+        }
+        let oZero = classify(0)
+        match oZero {
+            Done   { score } => print("outcome done " + toString(score))
+            Failed { code }  => print("outcome failed " + toString(code))
+        }
+
+        // results into a persistent list, walked with functional builtins
+        let scores = listAppend(listAppend(listAppend(List(), sHigh), sMed), sLow)
+        print("list len " + toString(listLength(scores)))
+        print("has 81 " + toString(listContains(scores, 81)))
+        forEachList(scores, show)
+        report(scores)
+
+        // results into a map keyed by name, walked the same way
+        let m = mapSet(mapSet(mapSet(Map(), "high", sHigh), "med", sMed), "low", sLow)
+        print("map len " + toString(mapLength(m)))
+        print("has high " + toString(mapContains(m, "high")))
+        forEachList(mapValues(m), show)
     }
 
-    // (2) Region-level isolation: each handle/in block scopes its own impl.
+    // region-level isolation: same effect, different impl per region.
     let prodR = handle Logger
         log msg => print("[PROD] " + msg)
     in {
-        perform Logger.log("processing task: 5")
+        perform Logger.log("prod path")
         10
     }
-
-    let testR = handle Logger
-        log msg => print("[TEST] " + msg)
-    in {
-        perform Logger.log("processing task: 12")
-        24
-    }
-
     let silentR = handle Logger
         log msg => 0
     in {
         perform Logger.log("silenced")
         0
     }
-
-    print("region results prod=" + toString(prodR) + " test=" + toString(testR) + " silent=" + toString(silentR))
+    print("regions prod=" + toString(prodR) + " silent=" + toString(silentR))
     print("=== done ===")
 }

@@ -2,11 +2,11 @@
   "name": "osprey",
   "displayName": "Osprey",
   "description": "Syntax highlighting and language server for Osprey programming language",
-  "version": "0.2.0",
+  "version": "0.0.0-dev",
   "publisher": "nimblesite",
   "repository": {
     "type": "git",
-    "url": "https://github.com/osprey/osprey.git"
+    "url": "https://github.com/MelbourneDeveloper/osprey.git"
   },
   "engines": {
     "vscode": "^1.96.0",
@@ -161,13 +161,14 @@
         },
         "osprey.server.compilerPath": {
           "type": "string",
-          "default": "osprey",
-          "description": "Path to the Osprey compiler executable"
+          "default": "",
+          "description": "Path to the Osprey compiler executable. Leave empty to use the version-matched compiler bundled with this extension (falling back to `osprey` on PATH)."
         }
       }
     }
   },
   "dependencies": {
+    "@nimblesite/shipwright-vscode": "^0.5.4",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"
@@ -191,7 +192,7 @@
     "lint": "tsc -p ./ --noEmit",
     "watch": "tsc -b -w",
     "package": "vsce package",
-    "install-extension": "code --install-extension osprey-language-support-0.1.0.vsix",
+    "install-extension": "code --install-extension osprey-0.0.0-dev.vsix",
     "test": "vscode-test",
     "test-compile": "tsc -p ./",
     "pretest": "npm run test-compile && npm run compile",

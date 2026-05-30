@@ -8,6 +8,24 @@
 // OpenSSL 3.5.0+ modern API includes
 #include <openssl/buffer.h>
 
+// Winsock initialisation — [WINDOWS-PORT-PHASE2]. Runs once before main() via a
+// constructor so every socket call is preceded by WSAStartup. No-op elsewhere.
+#ifdef _WIN32
+static void osprey_wsa_init_impl(void) {
+  WSADATA wsa;
+  static bool started = false;
+  if (!started && WSAStartup(MAKEWORD(2, 2), &wsa) == 0) {
+    started = true;
+  }
+}
+
+void osprey_wsa_init(void) { osprey_wsa_init_impl(); }
+
+__attribute__((constructor)) static void osprey_wsa_ctor(void) {
+  osprey_wsa_init_impl();
+}
+#endif
+
 // Global runtime state definitions
 HttpServer *servers[MAX_SERVERS] = {NULL};
 HttpClient *clients[MAX_CLIENTS] = {NULL};
