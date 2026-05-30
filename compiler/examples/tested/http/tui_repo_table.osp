@@ -3,24 +3,23 @@
 // "call an API and render the response" pitch end to end.
 // Implements [HTTP-RESPONSE-HANDLE], [BUILTIN-JSON], [BUILTIN-TERM].
 
-extern fn httpCreateServer(port: Int, address: String) -> Int
-
-fn createResponse(status: Int, headers: String, contentType: String, streamFd: Int, isComplete: Bool, partialBody: String) -> HttpResponse = {
-    HttpResponse { status: status, headers: headers, contentType: contentType, streamFd: streamFd, isComplete: isComplete, partialBody: partialBody }
-}
-
-fn handleRequest(method: String, path: String, headers: String, body: String) -> HttpResponse = {
-    createResponse(200, "", "application/json", 0, true, "[{\"name\":\"osprey\",\"stars\":1200,\"lang\":\"Go\"},{\"name\":\"llvm\",\"stars\":9001,\"lang\":\"C++\"},{\"name\":\"antlr\",\"stars\":4200,\"lang\":\"Java\"}]")
+fn handleRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = HttpResponse {
+    status: 200,
+    headers: "Content-Type: application/json",
+    contentType: "application/json",
+    streamFd: -1,
+    isComplete: true,
+    partialBody: "[{\"name\":\"osprey\",\"stars\":1200,\"lang\":\"Go\"},{\"name\":\"llvm\",\"stars\":9001,\"lang\":\"C++\"},{\"name\":\"antlr\",\"stars\":4200,\"lang\":\"Java\"}]"
 }
 
 // --- color + layout helpers ---
-fn cyan(s: String) -> String = "\e[36m${s}\e[0m"
-fn bold(s: String) -> String = "\e[1m${s}\e[0m"
-fn yellow(s: String) -> String = "\e[33m${s}\e[0m"
-fn dim(s: String) -> String = "\e[2m${s}\e[0m"
-fn green(s: String) -> String = "\e[32m${s}\e[0m"
+fn cyan(s: string) -> string = "\e[36m${s}\e[0m"
+fn bold(s: string) -> string = "\e[1m${s}\e[0m"
+fn yellow(s: string) -> string = "\e[33m${s}\e[0m"
+fn dim(s: string) -> string = "\e[2m${s}\e[0m"
+fn green(s: string) -> string = "\e[32m${s}\e[0m"
 
-fn pad(s: String, n: Int) -> String = {
+fn pad(s: string, n: int) -> string = {
     let r = padEnd(s, n, " ")
     match r {
         Success { value } => value
@@ -28,7 +27,7 @@ fn pad(s: String, n: Int) -> String = {
     }
 }
 
-fn field(doc: Int, path: String) -> String = {
+fn field(doc: int, path: string) -> string = {
     let r = jsonGet(doc, path)
     match r {
         Success { value } => value
@@ -36,15 +35,15 @@ fn field(doc: Int, path: String) -> String = {
     }
 }
 
-fn renderRow(doc: Int, i: Int, n: Int) -> Unit = {
+fn renderRow(doc: int, i: int, n: int) -> Unit = {
     match i < n {
         true => {
             let name = field(doc, "[${i}].name")
             let stars = field(doc, "[${i}].stars")
             let lang = field(doc, "[${i}].lang")
-            let bullet = cyan("●")
+            let bullet = cyan("*")
             let nameCol = bold(pad(name, 12))
-            let starsCol = yellow("★ ${pad(stars, 5)}")
+            let starsCol = yellow("* ${pad(stars, 5)}")
             let langCol = dim(lang)
             print("  ${bullet} ${nameCol} ${starsCol} ${langCol}")
             renderRow(doc, i + 1, n)
@@ -53,14 +52,14 @@ fn renderRow(doc: Int, i: Int, n: Int) -> Unit = {
     }
 }
 
-fn renderTable(doc: Int) -> Unit = {
+fn renderTable(doc: int) -> Unit = {
     let count = jsonLength(doc, "")
     print(green("  Repositories (${count})"))
     print("  ----------------------------")
     renderRow(doc, 0, count)
 }
 
-fn main() -> Unit = {
+fn run() -> Unit = {
     let serverId = httpCreateServer(18099, "127.0.0.1")
     let listenResult = httpListen(serverId, handleRequest)
     let clientId = httpCreateClient("http://127.0.0.1:18099", 5000)
@@ -89,3 +88,5 @@ fn main() -> Unit = {
     let closeResult = httpCloseClient(clientId)
     let stopResult = httpStopServer(serverId)
 }
+
+run()

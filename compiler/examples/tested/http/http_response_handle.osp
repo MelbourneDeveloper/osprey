@@ -1,0 +1,54 @@
+// Exercises the full HTTP response-handle lifecycle against a local server:
+// status read, body read, header lookup, missing-header error, free, and a
+// double-free that must report Error (not crash). Implements [HTTP-RESPONSE-HANDLE].
+
+fn handleRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = HttpResponse {
+    status: 200,
+    headers: "X-Demo: hi\r\n",
+    contentType: "text/plain",
+    streamFd: -1,
+    isComplete: true,
+    partialBody: "hello body"
+}
+
+fn run() -> Unit = {
+    let serverId = httpCreateServer(18095, "127.0.0.1")
+    let listenResult = httpListen(serverId, handleRequest)
+    let clientId = httpCreateClient("http://127.0.0.1:18095", 5000)
+    let resp = httpGetResponse(clientId, "/", "")
+    match resp {
+        Success { value } => {
+            print("status=${httpResponseStatus(value)}")
+            let b = httpResponseBody(value)
+            match b {
+                Success { value } => print("body=${value}")
+                Error { message } => print("nobody")
+            }
+            let h = httpResponseHeader(value, "X-Demo")
+            match h {
+                Success { value } => print("hdr=${value}")
+                Error { message } => print("nohdr")
+            }
+            let miss = httpResponseHeader(value, "Nope")
+            match miss {
+                Success { value } => print("got=${value}")
+                Error { message } => print("missing-ok")
+            }
+            let f1 = httpResponseFree(value)
+            match f1 {
+                Success { value } => print("free1-ok")
+                Error { message } => print("free1-err")
+            }
+            let f2 = httpResponseFree(value)
+            match f2 {
+                Success { value } => print("free2-ok")
+                Error { message } => print("free2-err-double")
+            }
+        }
+        Error { message } => print("reqfail ${message}")
+    }
+    let closeResult = httpCloseClient(clientId)
+    let stopResult = httpStopServer(serverId)
+}
+
+run()

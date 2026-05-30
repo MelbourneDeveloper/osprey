@@ -273,6 +273,15 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 		}
 	}
 
+	// On Windows the object is emitted with the MinGW triple
+	// (x86_64-w64-windows-gnu), so it must be linked by the MinGW gcc. A clang
+	// that defaults to the MSVC toolchain translates -lpthread to pthread.lib and
+	// fails (LNK1181); MinGW gcc resolves -lpthread via winpthreads. Try gcc
+	// first there. [WINDOWS-PORT-PHASE2]
+	if runtime.GOOS == GOOSWindows {
+		clangCommands = preferGCC(clangCommands)
+	}
+
 	var lastErr error
 
 	for _, cmd := range clangCommands {
@@ -288,6 +297,24 @@ func tryLinkWithCompilers(outputPath, objFile string, linkArgs []string, fiberEx
 	}
 
 	return fmt.Errorf("INTERNAL_COMPILER_ERROR: failed to link executable with any available compiler: %w", lastErr)
+}
+
+// preferGCC reorders link commands so the gcc-based ones come first, leaving
+// their relative order otherwise unchanged. Used on Windows where the MinGW gcc
+// is the toolchain that matches the emitted object. [WINDOWS-PORT-PHASE2]
+func preferGCC(cmds [][]string) [][]string {
+	gccCmds := make([][]string, 0, len(cmds))
+	otherCmds := make([][]string, 0, len(cmds))
+
+	for _, cmd := range cmds {
+		if len(cmd) > 0 && cmd[0] == "gcc" {
+			gccCmds = append(gccCmds, cmd)
+		} else {
+			otherCmds = append(otherCmds, cmd)
+		}
+	}
+
+	return append(gccCmds, otherCmds...)
 }
 
 // CompileToExecutableWithSecurity compiles source code to an executable binary with specified security configuration.

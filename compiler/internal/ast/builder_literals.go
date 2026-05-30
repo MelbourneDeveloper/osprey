@@ -242,10 +242,50 @@ func (b *Builder) buildLambdaExpr(ctx parser.ILambdaExprContext) Expression {
 	}
 }
 
+const (
+	// escByte is the ASCII ESC control character emitted by the "\e" escape; it
+	// begins ANSI escape sequences so colored TUIs can be written in Osprey.
+	escByte = 0x1b
+	// hexLetterValue is the value of the first hex letter ('a'/'A' decode to 10).
+	hexLetterValue = 10
+	// hexEscapeDigits is the number of hex digits consumed by a "\xHH" escape.
+	hexEscapeDigits = 2
+)
+
+// hexDigit decodes one ASCII hex digit, reporting whether it was valid.
+func hexDigit(c byte) (int, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0'), true
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + hexLetterValue, true
+	case c >= 'A' && c <= 'F':
+		return int(c-'A') + hexLetterValue, true
+	}
+
+	return 0, false
+}
+
+// parseHexByte decodes the two hex digits at pos into a byte.
+func parseHexByte(s string, pos int) (byte, bool) {
+	if pos+1 >= len(s) {
+		return 0, false
+	}
+
+	hi, okHi := hexDigit(s[pos])
+	lo, okLo := hexDigit(s[pos+1])
+	if !okHi || !okLo {
+		return 0, false
+	}
+
+	return byte(hi<<4 | lo), true
+}
+
 // processEscapeSequences processes common escape sequences in string literals.
 // Walks the input once, left to right, so that `\\n` is correctly read as
 // literal backslash + n (the previous ReplaceAll cascade replaced the inner
-// `\n` first and produced a real newline).
+// `\n` first and produced a real newline). Also supports `\e` (ESC) and
+// `\xHH` (hex byte) so ANSI color codes can be written directly.
 func (b *Builder) processEscapeSequences(input string) string {
 	var sb strings.Builder
 	sb.Grow(len(input))
@@ -270,6 +310,16 @@ func (b *Builder) processEscapeSequences(input string) string {
 			sb.WriteByte('\\')
 		case '"':
 			sb.WriteByte('"')
+		case 'e':
+			sb.WriteByte(escByte)
+		case 'x':
+			if hb, ok := parseHexByte(input, i+hexEscapeDigits); ok {
+				sb.WriteByte(hb)
+				i += hexEscapeDigits // skip the two hex digits; backslash+x consumed below
+			} else {
+				sb.WriteByte(c)
+				sb.WriteByte(next)
+			}
 		default:
 			// Unknown escape — preserve verbatim so users can spot the typo.
 			sb.WriteByte(c)
