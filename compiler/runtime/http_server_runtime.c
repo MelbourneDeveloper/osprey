@@ -54,7 +54,7 @@ static int64_t server_loop_fiber(void) {
         char path[256] = {0};
         sscanf(buffer, "%15s %255s", method, path);
 
-        printf("🌐 HTTP Request: %s %s\n", method, path);
+        fprintf(stderr, "🌐 HTTP Request: %s %s\n", method, path);
 
         // Find the request body (after \r\n\r\n)
         char *body_start = strstr(buffer, "\r\n\r\n");
@@ -208,7 +208,7 @@ int64_t http_listen(int64_t server_id, HttpRequestHandler handler) {
     return -6;
   }
 
-  printf("HTTP server listening on %s:%d\n", server->address, server->port);
+  fprintf(stderr, "HTTP server listening on %s:%d\n", server->address, server->port);
 
   return 0;
 }

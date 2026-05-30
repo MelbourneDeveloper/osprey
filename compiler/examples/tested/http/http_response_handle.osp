@@ -1,6 +1,7 @@
-// Exercises the full HTTP response-handle lifecycle against a local server:
-// status read, body read, header lookup, missing-header error, free, and a
-// double-free that must report Error (not crash). Implements [HTTP-RESPONSE-HANDLE].
+// Exercises the HTTP response-handle lifecycle against a local server: status,
+// body, header lookup, missing-header error, free, and a double-free that must
+// report Error (not crash). Each Result-returning op lives in its own helper so
+// the handle is never reused across a nested match. Implements [HTTP-RESPONSE-HANDLE].
 
 fn handleRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = HttpResponse {
     status: 200,
@@ -11,6 +12,30 @@ fn handleRequest(method: string, path: string, headers: string, body: string) ->
     partialBody: "hello body"
 }
 
+fn bodyLine(h: int) -> string = {
+    let r = httpResponseBody(h)
+    match r {
+        Success { value } => "body=${value}"
+        Error { message } => "nobody"
+    }
+}
+
+fn headerLine(h: int, name: string) -> string = {
+    let r = httpResponseHeader(h, name)
+    match r {
+        Success { value } => "hdr=${value}"
+        Error { message } => "missing-ok"
+    }
+}
+
+fn freeLine(h: int) -> string = {
+    let r = httpResponseFree(h)
+    match r {
+        Success { value } => "free-ok"
+        Error { message } => "free-err-double"
+    }
+}
+
 fn run() -> Unit = {
     let serverId = httpCreateServer(18095, "127.0.0.1")
     let listenResult = httpListen(serverId, handleRequest)
@@ -19,31 +44,11 @@ fn run() -> Unit = {
     match resp {
         Success { value } => {
             print("status=${httpResponseStatus(value)}")
-            let b = httpResponseBody(value)
-            match b {
-                Success { value } => print("body=${value}")
-                Error { message } => print("nobody")
-            }
-            let h = httpResponseHeader(value, "X-Demo")
-            match h {
-                Success { value } => print("hdr=${value}")
-                Error { message } => print("nohdr")
-            }
-            let miss = httpResponseHeader(value, "Nope")
-            match miss {
-                Success { value } => print("got=${value}")
-                Error { message } => print("missing-ok")
-            }
-            let f1 = httpResponseFree(value)
-            match f1 {
-                Success { value } => print("free1-ok")
-                Error { message } => print("free1-err")
-            }
-            let f2 = httpResponseFree(value)
-            match f2 {
-                Success { value } => print("free2-ok")
-                Error { message } => print("free2-err-double")
-            }
+            print(bodyLine(h: value))
+            print(headerLine(h: value, name: "X-Demo"))
+            print(headerLine(h: value, name: "Nope"))
+            print(freeLine(h: value))
+            print(freeLine(h: value))
         }
         Error { message } => print("reqfail ${message}")
     }

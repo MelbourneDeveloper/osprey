@@ -54,11 +54,11 @@ fn field(doc: int, path: string) -> string = {
 fn renderItem(doc: int, i: int, sel: int, n: int) -> Unit = {
     match i < n {
         true => {
-            let name = field(doc, "[${i}].name")
-            let stars = field(doc, "[${i}].stars")
-            let lang = field(doc, "[${i}].lang")
-            let nameP = pad(name, 14)
-            let starP = pad(stars, 7)
+            let name = field(doc: doc, path: "[${i}].name")
+            let stars = field(doc: doc, path: "[${i}].stars")
+            let lang = field(doc: doc, path: "[${i}].lang")
+            let nameP = pad(s: name, n: 14)
+            let starP = pad(s: stars, n: 7)
             let row = "${nameP}* ${starP}${lang}"
             let selected = i == sel
             match selected {
@@ -74,7 +74,7 @@ fn renderItem(doc: int, i: int, sel: int, n: int) -> Unit = {
                     print("    ${nm}${st}${lg}")
                 }
             }
-            renderItem(doc, i + 1, sel, n)
+            renderItem(doc: doc, i: i + 1, sel: sel, n: n)
         }
         false => print("")
     }
@@ -89,17 +89,17 @@ fn drawScreen(doc: int, sel: int, n: int) -> Unit = {
     print(title)
     print(rule)
     print("")
-    renderItem(doc, 0, sel, n)
+    renderItem(doc: doc, i: 0, sel: sel, n: n)
     print(rule)
     print(hint)
 }
 
 fn detailView(doc: int, sel: int) -> Unit = {
     let cleared = termClear()
-    let name = field(doc, "[${sel}].name")
-    let stars = field(doc, "[${sel}].stars")
-    let lang = field(doc, "[${sel}].lang")
-    let desc = field(doc, "[${sel}].desc")
+    let name = field(doc: doc, path: "[${sel}].name")
+    let stars = field(doc: doc, path: "[${sel}].stars")
+    let lang = field(doc: doc, path: "[${sel}].lang")
+    let desc = field(doc: doc, path: "[${sel}].desc")
     let top = magenta("  +-- Repository ------------------------------+")
     let bot = magenta("  +--------------------------------------------+")
     let nameLine = bold(green(name))
@@ -123,17 +123,36 @@ fn detailView(doc: int, sel: int) -> Unit = {
     }
 }
 
-// ---- selection movement ----------------------------------------------------
+// ---- selection movement -----------------------------------------------------
+// Checked arithmetic (+/-) returns Result<int, MathError>; unwrap it explicitly
+// with a fallback so the result is a plain int usable directly in a match arm.
+fn dec(x: int) -> int = {
+    let r = x - 1
+    match r {
+        Success { value } => value
+        Error { message } => x
+    }
+}
+
+fn inc(x: int) -> int = {
+    let r = x + 1
+    match r {
+        Success { value } => value
+        Error { message } => x
+    }
+}
+
 fn moveUp(sel: int) -> int = {
     match sel > 0 {
-        true => sel - 1
+        true => dec(sel)
         false => sel
     }
 }
 
 fn moveDown(sel: int, n: int) -> int = {
-    match sel < n - 1 {
-        true => sel + 1
+    let last = dec(n)
+    match sel < last {
+        true => inc(sel)
         false => sel
     }
 }
@@ -146,10 +165,10 @@ fn endApp() -> Unit = {
 
 // ---- the render / input loop (recursion stands in for a while-loop) ---------
 fn uiLoop(doc: int, sel: int, n: int) -> Unit = {
-    let drawn = drawScreen(doc, sel, n)
+    let drawn = drawScreen(doc: doc, sel: sel, n: n)
     let k = termReadKey()
     match k {
-        Success { value } => handleKey(doc, sel, n, value)
+        Success { value } => handleKey(doc: doc, sel: sel, n: n, key: value)
         Error { message } => endApp()
     }
 }
@@ -158,18 +177,18 @@ fn handleKey(doc: int, sel: int, n: int, key: string) -> Unit = {
     match key {
         "q" => endApp()
         "Esc" => endApp()
-        "Up" => uiLoop(doc, moveUp(sel), n)
-        "k" => uiLoop(doc, moveUp(sel), n)
-        "Down" => uiLoop(doc, moveDown(sel, n), n)
-        "j" => uiLoop(doc, moveDown(sel, n), n)
-        "Enter" => openDetail(doc, sel, n)
-        _ => uiLoop(doc, sel, n)
+        "Up" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
+        "k" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
+        "Down" => uiLoop(doc: doc, sel: moveDown(sel: sel, n: n), n: n)
+        "j" => uiLoop(doc: doc, sel: moveDown(sel: sel, n: n), n: n)
+        "Enter" => openDetail(doc: doc, sel: sel, n: n)
+        _ => uiLoop(doc: doc, sel: sel, n: n)
     }
 }
 
 fn openDetail(doc: int, sel: int, n: int) -> Unit = {
-    let shown = detailView(doc, sel)
-    uiLoop(doc, sel, n)
+    let shown = detailView(doc: doc, sel: sel)
+    uiLoop(doc: doc, sel: sel, n: n)
 }
 
 fn run() -> Unit = {
@@ -188,7 +207,7 @@ fn run() -> Unit = {
                             let n = jsonLength(value, "")
                             let raw = termRawMode(1)
                             let hidden = termHideCursor()
-                            uiLoop(value, 0, n)
+                            uiLoop(doc: value, sel: 0, n: n)
                         }
                         Error { message } => print("JSON parse failed")
                     }

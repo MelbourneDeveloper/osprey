@@ -1,6 +1,7 @@
 // TUI rendering pipeline over HTTP: fetch a JSON body from a local server,
 // parse it, and render a colored, column-aligned table. Proves the
-// "call an API and render the response" pitch end to end.
+// "call an API and render the response" pitch end to end. Each handle op lives
+// in its own helper so a handle is never reused across a nested match.
 // Implements [HTTP-RESPONSE-HANDLE], [BUILTIN-JSON], [BUILTIN-TERM].
 
 fn handleRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = HttpResponse {
@@ -38,15 +39,15 @@ fn field(doc: int, path: string) -> string = {
 fn renderRow(doc: int, i: int, n: int) -> Unit = {
     match i < n {
         true => {
-            let name = field(doc, "[${i}].name")
-            let stars = field(doc, "[${i}].stars")
-            let lang = field(doc, "[${i}].lang")
+            let name = field(doc: doc, path: "[${i}].name")
+            let stars = field(doc: doc, path: "[${i}].stars")
+            let lang = field(doc: doc, path: "[${i}].lang")
             let bullet = cyan("*")
-            let nameCol = bold(pad(name, 12))
-            let starsCol = yellow("* ${pad(stars, 5)}")
+            let nameCol = bold(pad(s: name, n: 12))
+            let starsCol = yellow("* ${pad(s: stars, n: 5)}")
             let langCol = dim(lang)
             print("  ${bullet} ${nameCol} ${starsCol} ${langCol}")
-            renderRow(doc, i + 1, n)
+            renderRow(doc: doc, i: i + 1, n: n)
         }
         false => print("")
     }
@@ -56,7 +57,29 @@ fn renderTable(doc: int) -> Unit = {
     let count = jsonLength(doc, "")
     print(green("  Repositories (${count})"))
     print("  ----------------------------")
-    renderRow(doc, 0, count)
+    renderRow(doc: doc, i: 0, n: count)
+}
+
+fn renderDoc(d: int) -> Unit = {
+    renderTable(d)
+    let fr = jsonFree(d)
+    print(dim("  rendered"))
+}
+
+fn renderBody(bodyText: string) -> Unit = {
+    let doc = jsonParse(bodyText)
+    match doc {
+        Success { value } => renderDoc(value)
+        Error { message } => print("jsonfail")
+    }
+}
+
+fn renderResponse(h: int) -> Unit = {
+    let body = httpResponseBody(h)
+    match body {
+        Success { value } => renderBody(value)
+        Error { message } => print("bodyfail")
+    }
 }
 
 fn run() -> Unit = {
@@ -66,21 +89,7 @@ fn run() -> Unit = {
     let resp = httpGetResponse(clientId, "/repos", "")
     match resp {
         Success { value } => {
-            let body = httpResponseBody(value)
-            match body {
-                Success { value } => {
-                    let doc = jsonParse(value)
-                    match doc {
-                        Success { value } => {
-                            renderTable(value)
-                            let fr = jsonFree(value)
-                            print(dim("  rendered"))
-                        }
-                        Error { message } => print("jsonfail")
-                    }
-                }
-                Error { message } => print("bodyfail")
-            }
+            renderResponse(value)
             let freed = httpResponseFree(value)
         }
         Error { message } => print("reqfail ${message}")
