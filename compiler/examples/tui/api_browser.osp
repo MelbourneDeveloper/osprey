@@ -2,7 +2,7 @@
 //  Osprey TUI showcase: a colored, arrow-key-driven browser that calls an
 //  HTTP API and renders the JSON response. Run it:
 //
-//      osprey examples/tui/api_browser.osp --run --sandbox-http
+//      osprey examples/tui/api_browser.osp --run
 //
 //  Keys:  Up / Down (or k / j) move   Enter open details   q / Esc quit
 //
