@@ -352,6 +352,11 @@ func (j *JITExecutor) findLLVMTool(toolName string) (string, error) {
 // findCompiler finds a suitable C compiler for linking.
 func (j *JITExecutor) findCompiler() (string, error) {
 	compilers := []string{"clang", "gcc", "cc"}
+	if runtime.GOOS == GOOSWindows {
+		// The emitted object is MinGW-ABI; prefer the MinGW gcc over a clang that
+		// would default to MSVC and fail on pthread.lib. [WINDOWS-PORT-PHASE2]
+		compilers = []string{"gcc", "cc", "clang"}
+	}
 
 	// Also check common paths
 	commonPaths := []string{
