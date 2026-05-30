@@ -200,6 +200,63 @@ const (
 	WebSocketKeepAliveFunc       = "websocket_keep_alive"
 )
 
+// Osprey names for the response-handle HTTP API. Implements [HTTP-RESPONSE-HANDLE].
+const (
+	HTTPGetResponseOsprey    = "httpGetResponse"
+	HTTPPostResponseOsprey   = "httpPostResponse"
+	HTTPResponseStatusOsprey = "httpResponseStatus"
+	HTTPResponseBodyOsprey   = "httpResponseBody"
+	HTTPResponseHeaderOsprey = "httpResponseHeader"
+	HTTPResponseFreeOsprey   = "httpResponseFree"
+
+	HTTPGetResponseFunc    = "http_get_response"
+	HTTPPostResponseFunc   = "http_post_response"
+	HTTPResponseStatusFunc = "http_response_status"
+	HTTPResponseBodyFunc   = "http_response_body"
+	HTTPResponseHeaderFunc = "http_response_header"
+	HTTPResponseFreeFunc   = "http_response_free"
+)
+
+// Osprey names for the JSON builtins. Implements [BUILTIN-JSON].
+const (
+	JSONParseOsprey  = "jsonParse"
+	JSONGetOsprey    = "jsonGet"
+	JSONTypeOsprey   = "jsonType"
+	JSONLengthOsprey = "jsonLength"
+	JSONKeysOsprey   = "jsonKeys"
+	JSONFreeOsprey   = "jsonFree"
+
+	JSONParseFunc  = "json_parse"
+	JSONGetFunc    = "json_get"
+	JSONTypeFunc   = "json_type"
+	JSONLengthFunc = "json_length"
+	JSONKeysFunc   = "json_keys"
+	JSONFreeFunc   = "json_free"
+)
+
+// Osprey names for the terminal-control builtins. Implements [BUILTIN-TERM].
+const (
+	TermRawModeOsprey    = "termRawMode"
+	TermColsOsprey       = "termCols"
+	TermRowsOsprey       = "termRows"
+	TermReadKeyOsprey    = "termReadKey"
+	TermClearOsprey      = "termClear"
+	TermMoveCursorOsprey = "termMoveCursor"
+	TermHideCursorOsprey = "termHideCursor"
+	TermShowCursorOsprey = "termShowCursor"
+	StringCellWidthFunc  = "stringCellWidth"
+
+	TermRawModeCFunc     = "term_raw_mode"
+	TermColsCFunc        = "term_cols"
+	TermRowsCFunc        = "term_rows"
+	TermReadKeyCFunc     = "term_read_key"
+	TermClearCFunc       = "term_clear"
+	TermMoveCursorCFunc  = "term_move_cursor"
+	TermHideCursorCFunc  = "term_hide_cursor"
+	TermShowCursorCFunc  = "term_show_cursor"
+	StringCellWidthCFunc = "string_cell_width"
+)
+
 // Pattern matching constants.
 const (
 	UnknownPattern  = "unknown"

@@ -191,6 +191,9 @@ func (r *BuiltInFunctionRegistry) initializeFunctions() {
 	// System functions
 	r.registerSystemFunctions()
 
+	// HTTP response handles, JSON and terminal control builtins.
+	r.registerRuntimeExtensionFunctions()
+
 	// Fiber functions
 	r.registerFiberFunctions()
 }
@@ -1384,6 +1387,108 @@ func (r *BuiltInFunctionRegistry) registerFiberFunctions() {
 		Generator:    (*LLVMGenerator).generateChannelRecvCall,
 		Example:      `let value = recv(ch)`,
 	}
+}
+
+// registerRuntimeExtensionFunctions registers the HTTP response-handle API
+// ([HTTP-RESPONSE-HANDLE]), the JSON builtins ([BUILTIN-JSON]) and the terminal
+// control builtins ([BUILTIN-TERM]). They all share generateRuntimeBuiltinCall.
+//
+//nolint:funlen // one declarative table; splitting hurts grep-ability
+func (r *BuiltInFunctionRegistry) registerRuntimeExtensionFunctions() {
+	str := func(n string) BuiltInParameter {
+		return BuiltInParameter{Name: n, Type: &ConcreteType{name: TypeString}}
+	}
+	intp := func(n string) BuiltInParameter {
+		return BuiltInParameter{Name: n, Type: &ConcreteType{name: TypeInt}}
+	}
+	reg := func(name, cName string, params []BuiltInParameter, ret string,
+		cat FunctionCategory, sec SecurityPermission, sig, desc string) {
+		r.functions[name] = &BuiltInFunction{
+			Name: name, CName: cName, Signature: sig, Description: desc,
+			ParameterTypes: params, ReturnType: &ConcreteType{name: ret},
+			Category: cat, IsProtected: true, SecurityFlag: sec,
+			Generator: (*LLVMGenerator).generateRuntimeBuiltinCall,
+			Example:   sig,
+		}
+	}
+
+	// HTTP response-handle API.
+	reg(HTTPGetResponseOsprey, HTTPGetResponseFunc,
+		[]BuiltInParameter{intp("clientID"), str("path"), str("headers")},
+		"Result<int, Error>", CategoryHTTP, PermissionHTTP,
+		"httpGetResponse(clientID: int, path: string, headers: string) -> Result<int, Error>",
+		"Performs a GET request and returns a response handle for body/status/header access.")
+	reg(HTTPPostResponseOsprey, HTTPPostResponseFunc,
+		[]BuiltInParameter{intp("clientID"), str("path"), str("body"), str("headers")},
+		"Result<int, Error>", CategoryHTTP, PermissionHTTP,
+		"httpPostResponse(clientID: int, path: string, body: string, headers: string) -> Result<int, Error>",
+		"Performs a POST request and returns a response handle.")
+	reg(HTTPResponseStatusOsprey, HTTPResponseStatusFunc,
+		[]BuiltInParameter{intp("handle")}, "int", CategoryHTTP, PermissionHTTP,
+		"httpResponseStatus(handle: int) -> int",
+		"Returns the HTTP status code for a response handle (negative on error).")
+	reg(HTTPResponseBodyOsprey, HTTPResponseBodyFunc,
+		[]BuiltInParameter{intp("handle")}, "Result<string, Error>", CategoryHTTP, PermissionHTTP,
+		"httpResponseBody(handle: int) -> Result<string, Error>",
+		"Returns the response body for a handle.")
+	reg(HTTPResponseHeaderOsprey, HTTPResponseHeaderFunc,
+		[]BuiltInParameter{intp("handle"), str("name")}, "Result<string, Error>", CategoryHTTP, PermissionHTTP,
+		"httpResponseHeader(handle: int, name: string) -> Result<string, Error>",
+		"Returns the first matching response header value.")
+	reg(HTTPResponseFreeOsprey, HTTPResponseFreeFunc,
+		[]BuiltInParameter{intp("handle")}, "Result<int, Error>", CategoryHTTP, PermissionHTTP,
+		"httpResponseFree(handle: int) -> Result<int, Error>",
+		"Frees a response handle. A double free returns Error.")
+
+	// JSON builtins.
+	reg(JSONParseOsprey, JSONParseFunc, []BuiltInParameter{str("json")},
+		"Result<int, Error>", CategorySystem, PermissionNone,
+		"jsonParse(json: string) -> Result<int, Error>",
+		"Parses a JSON document and returns a handle.")
+	reg(JSONGetOsprey, JSONGetFunc, []BuiltInParameter{intp("handle"), str("path")},
+		"Result<string, Error>", CategorySystem, PermissionNone,
+		"jsonGet(handle: int, path: string) -> Result<string, Error>",
+		"Returns the scalar value at a path such as \"a.b[0].c\".")
+	reg(JSONTypeOsprey, JSONTypeFunc, []BuiltInParameter{intp("handle"), str("path")},
+		"Result<string, Error>", CategorySystem, PermissionNone,
+		"jsonType(handle: int, path: string) -> Result<string, Error>",
+		"Returns the JSON type name at a path (object/array/string/number/bool/null).")
+	reg(JSONLengthOsprey, JSONLengthFunc, []BuiltInParameter{intp("handle"), str("path")},
+		"int", CategorySystem, PermissionNone,
+		"jsonLength(handle: int, path: string) -> int",
+		"Returns array/object length at a path, or negative if absent.")
+	reg(JSONKeysOsprey, JSONKeysFunc, []BuiltInParameter{intp("handle"), str("path")},
+		"Result<string, Error>", CategorySystem, PermissionNone,
+		"jsonKeys(handle: int, path: string) -> Result<string, Error>",
+		"Returns comma-separated object keys at a path.")
+	reg(JSONFreeOsprey, JSONFreeFunc, []BuiltInParameter{intp("handle")},
+		"Result<int, Error>", CategorySystem, PermissionNone,
+		"jsonFree(handle: int) -> Result<int, Error>",
+		"Frees a JSON document handle.")
+
+	// Terminal control builtins.
+	reg(TermRawModeOsprey, TermRawModeCFunc, []BuiltInParameter{intp("enabled")},
+		"int", CategorySystem, PermissionNone, "termRawMode(enabled: int) -> int",
+		"Enables (1) or disables (0) raw terminal mode.")
+	reg(TermColsOsprey, TermColsCFunc, []BuiltInParameter{}, "int", CategorySystem,
+		PermissionNone, "termCols() -> int", "Returns the terminal width in columns.")
+	reg(TermRowsOsprey, TermRowsCFunc, []BuiltInParameter{}, "int", CategorySystem,
+		PermissionNone, "termRows() -> int", "Returns the terminal height in rows.")
+	reg(TermReadKeyOsprey, TermReadKeyCFunc, []BuiltInParameter{}, "Result<string, Error>",
+		CategorySystem, PermissionNone, "termReadKey() -> Result<string, Error>",
+		"Reads one keystroke and returns its name (\"Up\", \"Enter\", ...).")
+	reg(TermClearOsprey, TermClearCFunc, []BuiltInParameter{}, "int", CategorySystem,
+		PermissionNone, "termClear() -> int", "Clears the screen and homes the cursor.")
+	reg(TermMoveCursorOsprey, TermMoveCursorCFunc, []BuiltInParameter{intp("row"), intp("col")},
+		"int", CategorySystem, PermissionNone, "termMoveCursor(row: int, col: int) -> int",
+		"Moves the cursor to (row, col), 1-based.")
+	reg(TermHideCursorOsprey, TermHideCursorCFunc, []BuiltInParameter{}, "int", CategorySystem,
+		PermissionNone, "termHideCursor() -> int", "Hides the cursor.")
+	reg(TermShowCursorOsprey, TermShowCursorCFunc, []BuiltInParameter{}, "int", CategorySystem,
+		PermissionNone, "termShowCursor() -> int", "Shows the cursor.")
+	reg(StringCellWidthFunc, StringCellWidthCFunc, []BuiltInParameter{str("s")}, "int",
+		CategoryString, PermissionNone, "stringCellWidth(s: string) -> int",
+		"Returns the visible width of a string, ignoring ANSI escape sequences.")
 }
 
 // GlobalBuiltInRegistry is the global instance of the built-in function registry
