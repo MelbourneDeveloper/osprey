@@ -569,6 +569,15 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 		return nil, fmt.Errorf("failed to infer collection type: %w", err)
 	}
 
+	// A runtime-built map (Map()/mapSet/…) infers to a bare ConcreteType{Map}
+	// and is an opaque OspreyMap* handle — NOT the flat { i64, i8* } layout that
+	// generateMapAccess reads. Index it through the C runtime get (same path as
+	// the mapGet builtin); reading the handle as a flat array segfaults. Map
+	// LITERALS infer to *GenericType{Map} and keep the flat path below.
+	if ct, ok := collectionType.(*ConcreteType); ok && ct.name == TypeMap {
+		return g.emitRuntimeMapGet(arrayValue, indexValue)
+	}
+
 	// Handle maps separately from lists
 	if genericType, ok := collectionType.(*GenericType); ok && genericType.name == TypeMap {
 		return g.generateMapAccess(access, arrayValue, indexValue, genericType)
@@ -717,7 +726,10 @@ func (g *LLVMGenerator) generateIdentifier(ident *ast.Identifier) (value.Value, 
 		if typeDecl := g.findTypeDeclarationByVariant(ident.Name); typeDecl != nil {
 			if unionType, exists := g.typeMap[typeDecl.Name]; exists {
 				if structType, ok := unionType.(*types.StructType); ok && len(structType.Fields) == 2 {
-					unionValue := g.builder.NewAlloca(structType)
+					// Heap-allocate: a nullary variant value (e.g. JNull) is also
+					// returned by pointer and can escape its constructing function;
+					// a stack alloca would dangle. See bugs 2 & 4.
+					unionValue := g.heapAllocStruct(structType)
 					tagPtr := g.builder.NewGetElementPtr(
 						structType,
 						unionValue,
@@ -2104,6 +2116,64 @@ func (g *LLVMGenerator) isPointerType(t types.Type) bool {
 	return isPtr
 }
 
+// heapAllocStruct mallocs storage for a struct and returns a typed pointer to
+// it. Used for discriminated-union values, which are represented BY POINTER and
+// escape their constructor; a stack alloca would dangle after the constructor
+// returns (use-after-return → garbage reads / segfaults). The size is the exact
+// struct width (NOT getTypeSize, which returns 8 for any struct and would
+// under-allocate the { i8, [N x i8] } union, overflowing on the tag/data store).
+func (g *LLVMGenerator) heapAllocStruct(structType *types.StructType) value.Value {
+	malloc := g.ensureMallocDeclaration()
+	size := g.structAllocSize(structType)
+	raw := g.builder.NewCall(malloc, constant.NewInt(types.I64, size))
+
+	return g.builder.NewBitCast(raw, types.NewPointer(structType))
+}
+
+// structAllocSize returns the byte size of a struct rounded up to 8-byte
+// alignment, computed from the actual field widths.
+func (g *LLVMGenerator) structAllocSize(structType *types.StructType) int64 {
+	const alignment = 8
+
+	total := int64(0)
+	for _, field := range structType.Fields {
+		total += g.llvmTypeByteSize(field)
+	}
+
+	if rem := total % alignment; rem != 0 {
+		total += alignment - rem
+	}
+	if total == 0 {
+		total = alignment
+	}
+
+	return total
+}
+
+// llvmTypeByteSize returns the byte size of a primitive/aggregate LLVM type.
+func (g *LLVMGenerator) llvmTypeByteSize(t types.Type) int64 {
+	const (
+		bitsPerByte   = 8
+		pointerBytes  = 8
+		floatNumBytes = 8
+	)
+
+	switch tt := t.(type) {
+	case *types.IntType:
+		return int64((tt.BitSize + bitsPerByte - 1) / bitsPerByte)
+	case *types.ArrayType:
+		return int64(tt.Len) * g.llvmTypeByteSize(tt.ElemType)
+	case *types.PointerType:
+		return pointerBytes
+	case *types.FloatType:
+		return floatNumBytes
+	case *types.StructType:
+		return g.structAllocSize(tt)
+	default:
+		return pointerBytes
+	}
+}
+
 // generateDiscriminatedUnionConstructor generates LLVM IR for discriminated union variant construction
 func (g *LLVMGenerator) generateDiscriminatedUnionConstructor(
 	typeConstructor *ast.TypeConstructorExpression,
@@ -2121,8 +2191,17 @@ func (g *LLVMGenerator) generateDiscriminatedUnionConstructor(
 		return nil, WrapUndefinedTypeWithPos(typeDecl.Name, typeConstructor.Position)
 	}
 
-	// Allocate memory for the tagged union
-	unionValue := g.builder.NewAlloca(unionType)
+	// Heap-allocate the tagged union: it is returned BY POINTER and routinely
+	// escapes this constructor (e.g. `fn classify(...) -> Outcome = ...`). A
+	// stack alloca would dangle once the constructor returns, so a later read
+	// sees garbage (int payload) or dereferences a stale pointer (string
+	// payload → segfault). See bugs 2 & 4.
+	var unionValue value.Value
+	if structType, ok := unionType.(*types.StructType); ok {
+		unionValue = g.heapAllocStruct(structType)
+	} else {
+		unionValue = g.builder.NewAlloca(unionType)
+	}
 
 	// Set the discriminant (tag) field - this is the first field (index 0)
 	tagPtr := g.builder.NewGetElementPtr(
