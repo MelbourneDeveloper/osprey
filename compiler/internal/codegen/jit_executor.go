@@ -73,7 +73,7 @@ func (j *JITExecutor) setupCompilation(ir string) (string, string, string, error
 
 	// Determine executable file name
 	exeFile := filepath.Join(tempDir, "program")
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == GOOSWindows {
 		exeFile += ".exe"
 	}
 
@@ -91,7 +91,7 @@ func (j *JITExecutor) compileToObject(irFile, tempDir string) (string, error) {
 	// Compile IR to object file
 	objFile := filepath.Join(tempDir, "program.o")
 	// #nosec G204 - llcPath is validated through findLLVMTool
-	llcCmd := exec.CommandContext(context.Background(), llcPath, "-filetype=obj", "-o", objFile, irFile)
+	llcCmd := exec.CommandContext(context.Background(), llcPath, llcArgs(objFile, irFile)...)
 
 	llcOutput, err := llcCmd.CombinedOutput()
 	if err != nil {
@@ -107,17 +107,38 @@ func (j *JITExecutor) setupLinkArgs(exeFile, objFile string) []string {
 
 	linkArgs = append(linkArgs, "-o", exeFile, objFile)
 
+	// The HTTP runtime pulls in OpenSSL and (on Windows) Winsock. Check up front
+	// so the core language links on systems without OpenSSL. [WINDOWS-PORT]
+	httpExists := j.runtimeLibraryExists("http_runtime")
+
 	// Find and add runtime libraries (order matters: dependents before dependencies)
 	linkArgs = j.findAndAddRuntimeLibrary("http_runtime", linkArgs)
 	linkArgs = j.findAndAddRuntimeLibrary("fiber_runtime", linkArgs)
 	linkArgs = j.findAndAddRuntimeLibrary("rust_utils", linkArgs)
 
+	// winpthreads provides -lpthread on Windows (MSYS2/MinGW).
 	linkArgs = append(linkArgs, "-lpthread")
 
-	// Add OpenSSL libraries
-	linkArgs = j.addOpenSSLFlags(linkArgs)
+	if httpExists {
+		linkArgs = j.addOpenSSLFlags(linkArgs)
+		if runtime.GOOS == GOOSWindows {
+			linkArgs = append(linkArgs, "-lws2_32")
+		}
+	}
 
 	return linkArgs
+}
+
+// runtimeLibraryExists reports whether the named runtime static lib is found.
+func (j *JITExecutor) runtimeLibraryExists(libName string) bool {
+	for _, libPath := range j.buildRuntimeLibraryPaths(libName) {
+		_, err := os.Stat(libPath)
+		if err == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 // findAndAddRuntimeLibrary finds a runtime library and adds it to link args
@@ -156,15 +177,15 @@ func (j *JITExecutor) buildRuntimeLibraryPaths(libName string) []string {
 	paths := []string{
 		fmt.Sprintf("bin/lib%s.a", libName),
 		fmt.Sprintf("./bin/lib%s.a", libName),
-		fmt.Sprintf("lib/lib%s.a", libName),          // For rust interop libraries
-		fmt.Sprintf("./lib/lib%s.a", libName),        // For rust interop libraries
-		fmt.Sprintf("../../bin/lib%s.a", libName),    // For tests running from tests/integration
-		fmt.Sprintf("../../../bin/lib%s.a", libName), // For deeper test directories
-		fmt.Sprintf("../../lib/lib%s.a", libName),    // For rust interop in tests/integration
-		fmt.Sprintf("../../../lib/lib%s.a", libName), // For rust interop in deeper test directories
-		filepath.Join(binaryDir, fmt.Sprintf("lib%s.a", libName)),       // binary/lib*.a
-		filepath.Join(binaryDir, "..", "lib", fmt.Sprintf("lib%s.a", libName)),   // binary/../lib/lib*.a
-		filepath.Join(binaryDir, "..", "bin", fmt.Sprintf("lib%s.a", libName)),   // binary/../bin/lib*.a
+		fmt.Sprintf("lib/lib%s.a", libName),                                    // For rust interop libraries
+		fmt.Sprintf("./lib/lib%s.a", libName),                                  // For rust interop libraries
+		fmt.Sprintf("../../bin/lib%s.a", libName),                              // For tests running from tests/integration
+		fmt.Sprintf("../../../bin/lib%s.a", libName),                           // For deeper test directories
+		fmt.Sprintf("../../lib/lib%s.a", libName),                              // For rust interop in tests/integration
+		fmt.Sprintf("../../../lib/lib%s.a", libName),                           // For rust interop in deeper test directories
+		filepath.Join(binaryDir, fmt.Sprintf("lib%s.a", libName)),              // binary/lib*.a
+		filepath.Join(binaryDir, "..", "lib", fmt.Sprintf("lib%s.a", libName)), // binary/../lib/lib*.a
+		filepath.Join(binaryDir, "..", "bin", fmt.Sprintf("lib%s.a", libName)), // binary/../bin/lib*.a
 		filepath.Join(binaryDir, "..", fmt.Sprintf("lib%s.a", libName)),
 		fmt.Sprintf("/usr/local/lib/lib%s.a", libName), // System install location
 	}

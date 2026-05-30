@@ -3,6 +3,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+⚠️ DO NOT USE GIT - ESPECIALLY NOT PUTTING YOUR SIGNATURE ON COMMITS ⚠️
+⚠️ PRACTICE TOKEN ECONOMICS ⚠️
+⚠️ ZERO DUPLICATE CODE ⚠️
+
 ## Core Development Principles
 
 - **NEVER DUPLICATE CODE** - Edit in place, never create new versions. Actively remove duplicate code, even test code and always aim for conciseness. Always do a search before adding new code.
@@ -154,6 +158,19 @@ make clean        # Remove build artifacts
 make ci           # lint + test + build (full CI simulation)
 make setup        # Post-create dev environment setup
 ```
+
+## Releases & Versioning
+
+- **Releases are tag-triggered only.** Push `vX.Y.Z` → `release.yml` builds all
+  platforms, cuts the GitHub Release, updates the Homebrew tap + Scoop bucket,
+  publishes the VS Code extension (`nimblesite.osprey`), and deploys the website.
+- **CI runs only on PRs to `main`.** Merging to `main` triggers nothing.
+- **Versions are NEVER hard-coded.** Every source version field stays at the
+  placeholder `0.0.0-dev` (`compiler/internal/version/version.go`,
+  `vscode-extension/package.json`, `shipwright.json`); the real version is
+  stamped from the git tag at build time. Changing a placeholder to a real
+  version in source is a defect. Follows the Shipwright contract
+  ([SWR-VERSION-*]). See [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Spec IDs
 

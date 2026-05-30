@@ -3,6 +3,9 @@ package cli
 import (
 	"fmt"
 	"os"
+	"slices"
+
+	"github.com/christianfindlay/osprey/internal/version"
 )
 
 const (
@@ -63,9 +66,14 @@ func ParseArgs(args []string) (string, string, string, bool, *SecurityConfig) {
 		return "", "", "", false, nil
 	}
 
-	// Handle version flag
+	// Handle version flag — [SWR-VERSION-CLI-OUTPUT] / [SWR-VERSION-JSON-OUTPUT].
 	if args[1] == "--version" {
-		fmt.Println("Osprey Compiler 1.0.0")
+		if slices.Contains(args, "--json") {
+			fmt.Println(version.JSON())
+		} else {
+			fmt.Println(version.Line())
+		}
+
 		return "", "", "", false, nil
 	}
 

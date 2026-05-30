@@ -1,4 +1,23 @@
-.PHONY: build build-no-lint clean test test-runtime regenerate-parser install-deps install uninstall lint lint-fix lint-install c-lint c-test fiber-runtime http-runtime websocket-runtime system-runtime rust-interop run
+.PHONY: build build-no-lint build-windows-core clean test test-runtime regenerate-parser install-deps install uninstall lint lint-fix lint-install c-lint c-test fiber-runtime http-runtime websocket-runtime system-runtime rust-interop run
+
+# Version stamping — [SWR-VERSION-BUILD-STAMPING].
+# Source default is the 0.0.0-dev placeholder; release builds pass VERSION=<tag> in.
+VERSION ?= 0.0.0-dev
+VERSION_PKG := github.com/christianfindlay/osprey/internal/version
+GO_LDFLAGS := -ldflags "-X $(VERSION_PKG).Version=$(VERSION)"
+
+# Toolchain — overridable so MSYS2/MinGW (Windows) can build the C runtime with
+# the same recipes by passing CC=gcc AR=ar. EXE is the executable suffix.
+# CRT_PIE: -fPIE is meaningful for ELF/Mach-O but pointless for Windows archive
+# objects and trips MinGW's -Werror, so it's dropped on Windows.
+CC ?= gcc
+AR ?= ar
+EXE :=
+CRT_PIE := -fPIE
+ifeq ($(OS),Windows_NT)
+  EXE := .exe
+  CRT_PIE :=
+endif
 
 # Install golangci-lint
 lint-install:
@@ -22,26 +41,41 @@ lint-fix: lint-install
 # Build the osprey compiler with linting
 build: lint c-lint fiber-runtime http-runtime rust-interop
 	@echo "🏗️  Building osprey compiler..."
-	go build -o bin/osprey ./cmd/osprey
+	go build $(GO_LDFLAGS) -o bin/osprey$(EXE) ./cmd/osprey
 
 # Don't ever user this unless it's a life or death situation
 build-no-lint: fiber-runtime http-runtime rust-interop
 	@echo "🏗️  Building osprey compiler (skipping lint for speed)..."
-	go build -o bin/osprey ./cmd/osprey
+	go build $(GO_LDFLAGS) -o bin/osprey$(EXE) ./cmd/osprey
+
+# Windows core build — [WINDOWS-PORT-PHASE1]. Fiber runtime + Go binary only;
+# skips http-runtime (Winsock port is phase 2) and rust-interop. Run under MSYS2
+# UCRT64 with CC=gcc AR=ar. No golangci-lint (CI runs lint on Linux).
+build-windows-core: fiber-runtime
+	@echo "🏗️  Building osprey compiler (windows core)..."
+	go build $(GO_LDFLAGS) -o bin/osprey$(EXE) ./cmd/osprey
+
+# Windows full build — core + HTTP/WebSocket (Winsock2). [WINDOWS-PORT-PHASE2].
+# Run under MSYS2 UCRT64 with CC=gcc AR=ar and OpenSSL on the pkg-config path.
+build-windows: fiber-runtime http-runtime
+	@echo "🏗️  Building osprey compiler (windows full: core + HTTP)..."
+	go build $(GO_LDFLAGS) -o bin/osprey$(EXE) ./cmd/osprey
 
 # Build fiber runtime library - WARNINGS ARE ERRORS!!!
 fiber-runtime:
 	@echo "🔨 Building fiber runtime library..."
 	@mkdir -p bin lib
-	gcc -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/effects_runtime.c -o bin/effects_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/string_runtime.c -o bin/string_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/string_runtime_list.c -o bin/string_runtime_list.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/list_runtime.c -o bin/list_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/map_runtime.c -o bin/map_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/map_runtime_hamt.c -o bin/map_runtime_hamt.o
-	ar rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o
+	$(CC) -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -D_GNU_SOURCE runtime/effects_runtime.c -o bin/effects_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -D_GNU_SOURCE runtime/string_runtime.c -o bin/string_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -D_GNU_SOURCE runtime/string_runtime_list.c -o bin/string_runtime_list.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/list_runtime.c -o bin/list_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/map_runtime.c -o bin/map_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/map_runtime_hamt.c -o bin/map_runtime_hamt.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/json_runtime.c -o bin/json_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/term_runtime.c -o bin/term_runtime.o
+	$(AR) rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/term_runtime.o
 	cp bin/libfiber_runtime.a lib/libfiber_runtime.a
 	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a and lib/libfiber_runtime.a"
 
@@ -52,7 +86,7 @@ http-runtime:
 	@echo "🔨 Building HTTP runtime with OpenSSL 3.5.0+ support..."
 	@mkdir -p bin lib
 	@echo "🔧 Building http_shared.o..."
-	@gcc -c -fPIC -O2 \
+	@$(CC) -c -fPIC -O2 \
 		-D_FORTIFY_SOURCE=2 \
 		-fstack-protector-strong \
 		-Werror \
@@ -67,25 +101,27 @@ http-runtime:
 		-fno-delete-null-pointer-checks \
 		-fno-strict-overflow \
 		-fno-strict-aliasing \
-		-fPIE \
+		$(CRT_PIE) \
 		-DWITH_OPENSSL \
 		-DOPENSSL_SUPPRESS_DEPRECATED \
 		-DOPENSSL_API_COMPAT=30000 \
 		-Wno-deprecated-declarations \
 		`pkg-config --cflags openssl 2>/dev/null || echo ""` \
 		-o bin/http_shared.o runtime/http_shared.c
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_client_runtime.c -o bin/http_client_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/effects_runtime.c -o bin/effects_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/string_runtime.c -o bin/string_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE runtime/string_runtime_list.c -o bin/string_runtime_list.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/list_runtime.c -o bin/list_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/map_runtime.c -o bin/map_runtime.o
-	gcc -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -std=c11 -D_GNU_SOURCE runtime/map_runtime_hamt.c -o bin/map_runtime_hamt.o
-	ar rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_client_runtime.c -o bin/http_client_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c -o bin/http_server_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -D_GNU_SOURCE runtime/system_runtime.c -o bin/system_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -D_GNU_SOURCE runtime/effects_runtime.c -o bin/effects_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -D_GNU_SOURCE runtime/string_runtime.c -o bin/string_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -D_GNU_SOURCE runtime/string_runtime_list.c -o bin/string_runtime_list.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/list_runtime.c -o bin/list_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/map_runtime.c -o bin/map_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/map_runtime_hamt.c -o bin/map_runtime_hamt.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/json_runtime.c -o bin/json_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/term_runtime.c -o bin/term_runtime.o
+	$(AR) rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/term_runtime.o
 	cp bin/libhttp_runtime.a lib/libhttp_runtime.a
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
 

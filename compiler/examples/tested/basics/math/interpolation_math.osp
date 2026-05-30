@@ -1,7 +1,0 @@
-// Test arithmetic in interpolated strings
-let age = 25
-
-print("Next year you'll be ${age + 1}")
-print("Last year you were ${age - 1}")
-print("Double your age: ${age * 2}")
-print("Half your age: ${age / 2}") 

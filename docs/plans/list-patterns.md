@@ -1,12 +1,12 @@
 # Plan: List Patterns in `match`
 
-Spec: [`0004-TypeSystem.md` — Patterns (TYPE-LIST-PATTERNS)](../../compiler/spec/0004-TypeSystem.md#patterns--type-list-patterns), [`0007-PatternMatching.md`](../../compiler/spec/0007-PatternMatching.md).
+Spec: [`0004-TypeSystem.md` — Patterns (TYPE-LIST-PATTERNS)](../specs/0004-TypeSystem.md#patterns--type-list-patterns), [`0007-PatternMatching.md`](../specs/0007-PatternMatching.md).
 
 Parent: [`production-primitives.md`](production-primitives.md).
 
 ## Problem
 
-The spec at [TYPE-LIST-PATTERNS](../../compiler/spec/0004-TypeSystem.md#patterns--type-list-patterns) advertises four list-pattern forms:
+The spec at [TYPE-LIST-PATTERNS](../specs/0004-TypeSystem.md#patterns--type-list-patterns) advertises four list-pattern forms:
 
 ```osprey
 fn classify(xs: List<int>) -> string = match xs {
@@ -109,8 +109,8 @@ The list runtime ([`compiler/runtime/list_runtime.c`](../../compiler/runtime/lis
 
 ## Out of scope
 
-- Map patterns (`{ "key": binding }`) — separate workstream; the spec at [TYPE-MAP-PATTERNS](../../compiler/spec/0004-TypeSystem.md#patterns--type-map-patterns) describes them, but they aren't blocking the JSON parser canary.
-- List comprehensions (`[x*x for x in xs]`) — separate workstream; spec at [TYPE-LIST-COMP](../../compiler/spec/0004-TypeSystem.md#comprehensions--type-list-comp).
+- Map patterns (`{ "key": binding }`) — separate workstream; the spec at [TYPE-MAP-PATTERNS](../specs/0004-TypeSystem.md#patterns--type-map-patterns) describes them, but they aren't blocking the JSON parser canary.
+- List comprehensions (`[x*x for x in xs]`) — separate workstream; spec at [TYPE-LIST-COMP](../specs/0004-TypeSystem.md#comprehensions--type-list-comp).
 - Nested-pattern destructuring (`[Some { v: x }, ...]`) — separate workstream; the four forms above all bind via plain identifier patterns at the element positions in this iteration.
 
 ## TODO checklist

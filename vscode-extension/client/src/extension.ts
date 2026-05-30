@@ -9,7 +9,29 @@ import {
   TransportKind
 } from 'vscode-languageclient/node';
 
+// @nimblesite/shipwright-vscode is ESM-only; this extension is CommonJS, so it
+// is loaded via dynamic import() (never a static require) inside activate().
+
 let client: LanguageClient;
+
+// shipwrightPlatform maps the Node platform/arch to the Shipwright platform id
+// (e.g. darwin-arm64, win32-x64) used in the bundled binary path.
+function shipwrightPlatform(): string {
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const os = process.platform === 'win32' ? 'win32'
+    : process.platform === 'darwin' ? 'darwin' : 'linux';
+  return `${os}-${arch}`;
+}
+
+// resolveBundledCompiler returns the absolute path to the version-matched
+// osprey binary bundled in this VSIX for the current platform, or undefined
+// when running unbundled (e.g. a local dev install). The release pipeline
+// stages it at bin/<platform>/osprey[.exe]. [SWR-VERSION-MANIFEST]
+function resolveBundledCompiler(context: ExtensionContext): string | undefined {
+  const exe = process.platform === 'win32' ? '.exe' : '';
+  const bundled = context.asAbsolutePath(path.join('bin', shipwrightPlatform(), `osprey${exe}`));
+  return fs.existsSync(bundled) ? bundled : undefined;
+}
 
 export function activate(context: ExtensionContext) {
   console.log('Osprey extension is now active!');
@@ -25,6 +47,44 @@ export function activate(context: ExtensionContext) {
     outputChannel.appendLine('Language server is disabled in configuration');
     return;
   }
+
+  // Shipwright: verify the bundled osprey compiler matches the version this
+  // extension expects before we launch it for diagnostics. On mismatch the
+  // host surfaces a prompt-reinstall message (hosts.vscode.onMismatch).
+  // [SWR-VERSION-HANDSHAKE] Best-effort: never block activation on it.
+  const manifestPath = context.asAbsolutePath('shipwright.json');
+  if (fs.existsSync(manifestPath)) {
+    // Adapter normalizing VS Code's Thenable-returning API to the Promise-typed
+    // shape the library expects (VscodeApiLike).
+    const vscodeApi = {
+      workspace: { getConfiguration: (s?: string) => workspace.getConfiguration(s) },
+      window: {
+        showErrorMessage: (m: string, o: { modal: boolean }, ...items: string[]) =>
+          Promise.resolve(window.showErrorMessage(m, o, ...items)),
+        showWarningMessage: (m: string, o: { modal: boolean }, ...items: string[]) =>
+          Promise.resolve(window.showWarningMessage(m, o, ...items))
+      }
+    };
+    void (async () => {
+      try {
+        const sw = await import('@nimblesite/shipwright-vscode');
+        const r = await sw.activateShipwright(context, { vscode: vscodeApi, manifestPath, showMessages: true });
+        outputChannel.appendLine(`Shipwright activation: ok=${r.ok}, diagnostics=${r.diagnostics.length}`);
+      } catch (e) {
+        outputChannel.appendLine(`Shipwright activation error: ${e}`);
+      }
+    })();
+  }
+
+  // Prefer the version-matched bundled compiler for the LSP server unless the
+  // user has pointed osprey.server.compilerPath/path at their own build.
+  const bundledCompiler = resolveBundledCompiler(context);
+  if (bundledCompiler) {
+    outputChannel.appendLine(`Bundled compiler: ${bundledCompiler}`);
+  }
+  const serverEnv = bundledCompiler
+    ? { ...process.env, OSPREY_COMPILER_PATH: bundledCompiler }
+    : process.env;
 
   // Server options - use the TypeScript language server.
   // Try both layouts: top-level tsc -b (out/server/src/server.js) and the
@@ -55,11 +115,11 @@ export function activate(context: ExtensionContext) {
   const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
   
   const serverOptions: ServerOptions = {
-    run: { module: serverModule, transport: TransportKind.ipc },
+    run: { module: serverModule, transport: TransportKind.ipc, options: { env: serverEnv } },
     debug: {
       module: serverModule,
       transport: TransportKind.ipc,
-      options: debugOptions
+      options: { ...debugOptions, env: serverEnv }
     }
   };
 

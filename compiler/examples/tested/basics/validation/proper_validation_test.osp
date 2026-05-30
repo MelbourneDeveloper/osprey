@@ -1,51 +1,61 @@
-// Proper validation functions using match expressions
+// Validation: match-based predicates returning bool, Result<bool, MathError>
+// from arithmetic comparison, WHERE-constraint syntax on records (currently
+// always succeeds — both branches kept here as a future-proof smoke test).
 
 fn notEmpty(s: string) -> bool = match s {
-    "" => false
-    _ => true
+    ""  => false
+    _   => true
 }
 
 fn isPositive(n: int) -> Result<bool, MathError> = n > 0
 
 fn isValidAge(age: int) -> bool = match age {
-    0 => false
-    1 => true
-    25 => true
-    50 => true
-    100 => true
-    150 => true
+    0   => false
     200 => false
-    _ => true  // Simplified for now
+    _   => true
 }
 
 fn isValidEmail(email: string) -> bool = match email {
-    "" => false
+    ""        => false
     "invalid" => false
+    _         => true
+}
+
+// Type-level WHERE constraint syntax (validator is forward-referenced)
+fn validatePerson(person: Person) -> bool = match person.age {
+    0 => false
     _ => true
 }
 
-// Test the validation functions
+type Person = {
+    name: string,
+    age: int
+} where validatePerson
+
 print("Testing validation functions:")
-print(toString(notEmpty("")))           // Should be false
-print(toString(notEmpty("test")))       // Should be true
+print(toString(notEmpty("")))
+print(toString(notEmpty("test")))
 
-let positiveResult1 = isPositive(0)
-match positiveResult1 {
-    Success { value } => print(toString(value))  // Should be false
-    Error { message } => print("Error: ${message}")
+match isPositive(0)  { Success { value } => print(toString(value)) Error { message } => print("err") }
+match isPositive(10) { Success { value } => print(toString(value)) Error { message } => print("err") }
+print(toString(isValidAge(25)))
+print(toString(isValidAge(200)))
+print(toString(isValidEmail("")))
+print(toString(isValidEmail("alice@example.com")))
+
+// Result<bool> toString
+print(toString(isPositive(5)))
+print(toString(isPositive(-5)))
+print(toString(isPositive(0)))
+
+// WHERE-constrained construction (both Success+Error branches handled)
+let alice = Person { name: "Alice", age: 25 }
+match alice {
+    Success { value } => print("alice ok")
+    Error   { message } => print("alice rejected")
 }
-
-let positiveResult2 = isPositive(10)
-match positiveResult2 {
-    Success { value } => print(toString(value))  // Should be true
-    Error { message } => print("Error: ${message}")
+let zero = Person { name: "Bob", age: 0 }
+match zero {
+    Success { value } => print("zero person allowed (constraint TODO)")
+    Error   { message } => print("zero rejected")
 }
-
-print(toString(isValidAge(25)))         // Should be true
-print(toString(isValidAge(200)))        // Should be false 
-
-// Test Result<bool> to string conversion
-print("Testing Result<bool> toString:")
-print(toString(isPositive(5)))          // Should print "true" 
-print(toString(isPositive(-5)))         // Should print "false"
-print(toString(isPositive(0)))          // Should print "false" 

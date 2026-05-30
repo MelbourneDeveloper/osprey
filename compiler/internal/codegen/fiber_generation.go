@@ -3,6 +3,7 @@ package codegen
 import (
 	"fmt"
 	"maps"
+	"sort"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -131,6 +132,15 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 	capturedValues := make(map[string]value.Value)
 	g.captureVariablesInExpression(spawn.Expression, capturedValues)
 
+	// The closure is a SEPARATE function, so a captured parent SSA value (a
+	// record struct, a runtime-computed int, …) cannot be referenced inside it
+	// — that produces llc's "use of undefined value". Constants are valid in any
+	// function, so leave them be; spill every non-constant capture through a
+	// per-spawn module global: store it here (parent builder still active) and
+	// reload it inside the closure entry block below. This preserves the fixed
+	// i64()* fiber_spawn ABI and works for any aggregate.
+	reloads := g.spillNonConstantCaptures(capturedValues)
+
 	// Create new context for closure
 	g.function = closureFunc
 	entry := closureFunc.NewBlock("entry")
@@ -145,6 +155,13 @@ func (g *LLVMGenerator) generateSpawnExpression(spawn *ast.SpawnExpression) (val
 
 	// Then, override with captured values (this ensures proper closure semantics)
 	maps.Copy(g.variables, capturedValues)
+
+	// Reload spilled non-constant captures from their globals INSIDE the closure
+	// so identifier lookups in the body resolve to in-closure values, not the
+	// parent function's (out-of-scope) SSA values.
+	for _, r := range reloads {
+		g.variables[r.name] = g.builder.NewLoad(r.typ, r.global)
+	}
 
 	// Generate the expression inside the closure
 	result, err := g.generateExpression(spawn.Expression)
@@ -540,6 +557,46 @@ func (g *LLVMGenerator) generateSpawnCall(callExpr *ast.CallExpression) (value.V
 // generateYieldCall generates fiber yield from built-in function call
 func (g *LLVMGenerator) generateYieldCall(callExpr *ast.CallExpression) (value.Value, error) {
 	return g.generateChannelFunctionCall("fiber_yield", "fiber_yield", callExpr)
+}
+
+// capturedReload records a spilled capture that must be reloaded inside the closure.
+type capturedReload struct {
+	name   string
+	global value.Value
+	typ    types.Type
+}
+
+// spillNonConstantCaptures stores every non-constant captured value into a
+// unique per-spawn module global (using the parent builder, which is still
+// active) and removes it from `captured` so it is not copied into the closure
+// as a cross-function SSA reference. It returns the reloads the caller must emit
+// inside the closure. Constants are left in `captured` untouched.
+func (g *LLVMGenerator) spillNonConstantCaptures(captured map[string]value.Value) []capturedReload {
+	// Deterministic order keeps emitted IR stable across builds.
+	names := make([]string, 0, len(captured))
+	for name := range captured {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	var reloads []capturedReload
+
+	for _, name := range names {
+		val := captured[name]
+		if _, isConst := val.(constant.Constant); isConst {
+			continue
+		}
+
+		globalName := fmt.Sprintf("fiber_capture_%d_%s", g.closureCounter, name)
+		global := g.module.NewGlobalDef(globalName, constant.NewZeroInitializer(val.Type()))
+		g.builder.NewStore(val, global)
+
+		// Don't let the closure copy the parent's SSA value; it reloads instead.
+		delete(captured, name)
+		reloads = append(reloads, capturedReload{name: name, global: global, typ: val.Type()})
+	}
+
+	return reloads
 }
 
 // captureVariablesInExpression captures variables used in an expression by copying their values

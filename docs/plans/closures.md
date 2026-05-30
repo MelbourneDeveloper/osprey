@@ -1,6 +1,6 @@
 # Plan: Closures + Lambda Codegen
 
-Spec: [`0004-TypeSystem.md` — Closures](../../compiler/spec/0004-TypeSystem.md#closures--type-fn-closure) ([TYPE-FN-CLOSURE]).
+Spec: [`0004-TypeSystem.md` — Closures](../specs/0004-TypeSystem.md#closures--type-fn-closure) ([TYPE-FN-CLOSURE]).
 
 Parent: [`production-primitives.md`](production-primitives.md).
 
@@ -18,7 +18,7 @@ Compilation failed
 Execution failed: failed to generate LLVM IR: line 2:22: undefined variable: x
 ```
 
-The parameter `x` is undefined inside the lambda body. Both the no-capture case (`fn(x) => x + 1`) and the capture case (`fn makeAdder(n) = fn(x) => x + n`) fail with the same error. The spec at [0004-TypeSystem.md:102-104](../../compiler/spec/0004-TypeSystem.md#L102-L104) advertises both as working.
+The parameter `x` is undefined inside the lambda body. Both the no-capture case (`fn(x) => x + 1`) and the capture case (`fn makeAdder(n) = fn(x) => x + n`) fail with the same error. The spec at [0004-TypeSystem.md:102-104](../specs/0004-TypeSystem.md#L102-L104) advertises both as working.
 
 Type inference for lambdas DOES bind parameters ([type_inference.go:1570-1574](../../compiler/internal/codegen/type_inference.go#L1570-L1574)) and that pass succeeds. The failure is in codegen.
 

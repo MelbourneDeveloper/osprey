@@ -7,12 +7,19 @@ A modern functional programming language designed for elegance, safety, and perf
 ## Installation
 
 ```bash
-# Add the tap
-brew tap melbournedeveloper/osprey
+# macOS / Linux (Homebrew)
+brew install nimblesite/tap/osprey
 
-# Install Osprey
-brew install osprey
+# Windows (Scoop)
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+scoop install osprey
 ```
+
+Osprey shells out to LLVM (`llc`) and a C compiler at compile time; the package
+managers pull those in as dependencies (`llvm` for brew; `llvm` + `gcc` for scoop).
+
+The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=nimblesite.osprey)
+(`nimblesite.osprey`) bundles a version-matched compiler for syntax checking.
 
 ## Language Features
 
@@ -79,9 +86,10 @@ fn main() -> Unit = {
 
 ## Documentation
 
-- [Language specification](compiler/spec/)
+- [Language specification](docs/specs/)
 - [API reference](website/src/docs/)
 - [Contributing guide](CONTRIBUTING.md)
+- [Release process](docs/RELEASING.md) — tag `v*` to release; CI runs only on PRs to `main`.
 
 ## Development
 
@@ -102,7 +110,7 @@ make install       # Install locally
 
 🚧 **Alpha**: Core language features implemented. Algebraic effects system working with compile-time safety, but are missing some features. HTTP and advanced features in development.
 
-See [compiler/spec/](compiler/spec/) for implementation status.
+See [docs/specs/](docs/specs/) for implementation status.
 
 ## Recent Major Updates
 

@@ -2,7 +2,7 @@
 layout: page
 title: "String Interpolation"
 description: "Osprey Language Specification: String Interpolation"
-date: 2026-05-17
+date: 2026-05-29
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0006-stringinterpolation/"

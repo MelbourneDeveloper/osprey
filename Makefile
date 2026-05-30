@@ -35,7 +35,7 @@ COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 # `make vsix` installs into the default profile AND every named profile.
 # ---------------------------------------------------------------------------
 EXT_DIR         := vscode-extension
-EXT_ID          := christianfindlay.osprey-language-support
+EXT_ID          := nimblesite.osprey
 VSCODE_USER_DIR := $(HOME)/Library/Application Support/Code/User
 VSCODE_STORAGE  := $(VSCODE_USER_DIR)/globalStorage/storage.json
 

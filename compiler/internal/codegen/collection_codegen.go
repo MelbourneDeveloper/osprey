@@ -4,8 +4,8 @@ package codegen
 // compiler/runtime/list_runtime.c and compiler/runtime/map_runtime.c.
 //
 // Implements [TYPE-LIST-OPS], [TYPE-MAP-OPS] from
-// compiler/spec/0004-TypeSystem.md and the builtins in
-// compiler/spec/0012-Built-InFunctions.md#collection-functions.
+// docs/specs/0004-TypeSystem.md and the builtins in
+// docs/specs/0012-Built-InFunctions.md#collection-functions.
 //
 // All collection handles cross the LLVM/C boundary as opaque i8*; the C
 // runtime owns layout. Element values cross as i64; pointers (strings,
@@ -430,6 +430,20 @@ func (g *LLVMGenerator) generateMapGetCall(callExpr *ast.CallExpression) (value.
 	if keyErr != nil {
 		return nil, keyErr
 	}
+	return g.emitRuntimeMapGet(m, k)
+}
+
+// emitRuntimeMapGet emits a runtime map lookup (osprey_map_contains +
+// osprey_map_get) on an already-generated map handle `m` and key `k`, returning
+// a Result<i64, *> struct {value, disc} (disc=1 Error on miss, 0 Success). Used
+// by both the mapGet builtin and `m[key]` indexing of a runtime-built map (the
+// flat-array generateMapAccess only works on map LITERALS).
+func (g *LLVMGenerator) emitRuntimeMapGet(m, k value.Value) (value.Value, error) {
+	g.declareMapExterns()
+	keyErr := rejectNonStringMapKey(k, "mapGet")
+	if keyErr != nil {
+		return nil, keyErr
+	}
 	boxedKey := g.boxToI64(k)
 	contains := g.builder.NewCall(g.functions["osprey_map_contains"], m, boxedKey)
 	got := g.builder.NewCall(g.functions["osprey_map_get"], m, boxedKey)
@@ -447,6 +461,7 @@ func (g *LLVMGenerator) generateMapGetCall(callExpr *ast.CallExpression) (value.
 	dp := g.builder.NewGetElementPtr(resultTy, resultPtr,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
 	g.builder.NewStore(disc, dp)
+
 	return resultPtr, nil
 }
 

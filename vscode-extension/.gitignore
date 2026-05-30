@@ -1,7 +1,12 @@
 node_modules/
 
-osprey-language-support-0.1.0.vsix
+# VSIX build output
+*.vsix
 
 out/
 
 .vscode-test/
+
+# Release-time bundled artifacts (staged into the VSIX by release.yml; never committed)
+bin/
+shipwright.json

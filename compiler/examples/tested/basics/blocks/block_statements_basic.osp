@@ -1,81 +1,119 @@
-print("=== Basic Block Statements Test ===")
+// Block statements as expressions: list & map access via Result-unwrap,
+// multi-statement blocks, nested blocks with shadowing, blocks inside
+// function bodies, nested collections (2D list), conditional logic
+// through match arms producing values out of a block.
 
-// Test 1: Simple block with list access
-let result1 = {
+print("=== Block Statements ===")
+
+// --- 1. Block with list access (single statement) ---
+let r1 = {
     let nums = [42, 84, 126]
     match nums[0] {
-        Success { value } => value
-        Error { message } => 0
+        Success { value }   => value
+        Error   { message } => 0
     }
 }
-print("Test 1 - Block with list: ${result1}")
+print("1 list head: ${r1}")
 
-// Test 2: Block with computation using map
-let result2 = {
+// --- 2. Block with map access + multiplication ---
+let r2 = {
     let config = { "factor": 2, "base": 10 }
-    let x = match config["base"] {
-        Success { value } => value
-        Error { message } => 0
-    }
-    let factor = match config["factor"] {
-        Success { value } => value
-        Error { message } => 1
-    }
-    let mult = x * factor
-    match mult {
-        Success { value } => value
-        Error { message } => 0
+    let x      = match config["base"]   { Success { value } => value Error { message } => 0 }
+    let factor = match config["factor"] { Success { value } => value Error { message } => 1 }
+    let m = x * factor
+    match m {
+        Success { value }   => value
+        Error   { message } => 0
     }
 }
-print("Test 2 - Block with map computation: ${result2}")
+print("2 map factor*base: ${r2}")
 
-// Test 3: Block with multiple statements using collections
-let result3 = {
-    let data = [5, 10, 15]
-    let lookup = { "multiplier": 1 }
-    let a = match data[0] {
+// --- 3. Nested blocks with shadowing ---
+let outer = 100
+let r3 = {
+    let config = { "multiplier": 2, "offset": 25 }
+    let outer = match config["offset"] {
         Success { value } => value
-        Error { message } => 0
+        Error   { message } => 50
     }
-    let b = match data[1] {
-        Success { value } => value
-        Error { message } => 0
+    let inner = {
+        let listData = [10, 20, 30]
+        let outer = match listData[2] {
+            Success { value } => value
+            Error   { message } => 25
+        }
+        let m = outer * 2
+        match m {
+            Success { value } => value
+            Error   { message } => 0
+        }
     }
-    let mult = match lookup["multiplier"] {
+    let s = outer + inner
+    match s {
         Success { value } => value
-        Error { message } => 1
-    }
-    let sum = a + b
-    let sumValue = match sum {
-        Success { value } => value
-        Error { message } => 0
-    }
-    let product = sumValue * mult
-    match product {
-        Success { value } => value
-        Error { message } => 0
+        Error   { message } => 0
     }
 }
-print("Test 3 - Multiple statements with collections: ${result3}")
+print("3 shadowed inner+outer: ${r3}")
 
-// Test 4: Block with nested collections
-let result4 = {
+// --- 4. Block inside a function ---
+fn compute() = {
+    let numbers = [5, 10, 15]
+    let base = match numbers[1] {
+        Success { value } => value
+        Error   { message } => 10
+    }
+    let multiplier = 3
+    let r = base * multiplier
+    match r {
+        Success { value } => value
+        Error   { message } => 0
+    }
+}
+print("4 fn block: ${compute()}")
+
+// --- 5. 2D list inside a block ---
+let r5 = {
     let matrix = [[1, 2], [3, 4]]
-    let first_row = match matrix[0] {
-        Success { value } => value
-        Error { message } => [0]
+    let firstRow = match matrix[0] {
+        Success { value }   => value
+        Error   { message } => [0]
     }
-    match first_row[1] {
+    match firstRow[1] {
         Success { value } => {
-            let mult = value * 10
-            match mult {
+            let m = value * 10
+            match m {
                 Success { result } => result
-                Error { message } => 0
+                Error   { message } => 0
             }
         }
         Error { message } => 0
     }
 }
-print("Test 4 - Nested collections: ${result4}")
+print("5 2D matrix[0][1]*10: ${r5}")
 
-print("=== Basic Block Statements Complete ===") 
+// --- 6. Conditional logic via nested match producing a block result ---
+let value = 42
+let r6 = {
+    let scoreMap = { "test1": 84, "test2": 90 }
+    let doubled = value * 2
+    match doubled {
+        Success { dValue } => match dValue {
+            84 => match scoreMap["test1"] {
+                Success { sValue } => {
+                    let added = sValue + 10
+                    match added {
+                        Success { value }   => value
+                        Error   { message } => 0
+                    }
+                }
+                Error { message } => 0
+            }
+            _ => 0
+        }
+        Error { message } => 0
+    }
+}
+print("6 cond match block: ${r6}")
+
+print("=== Done ===")

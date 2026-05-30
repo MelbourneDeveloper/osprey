@@ -1,81 +1,149 @@
-// list_basics — happy-path coverage for List<T>.
-// Spec: 0004-TypeSystem.md#listt--type-list
-// Every assertion prints "PASS:" followed by the actual computed value so a
-// regression diverges from the .expectedoutput file byte-for-byte.
+// Persistent List<T>: empty, append, prepend, reverse, concat (both via
+// listConcat and `+`), contains, persistence across versions, branching,
+// crossing the 32-element tail boundary, forEachList iteration order.
+// Spec: [TYPE-LIST], [BUILTIN-LIST-*]
 
-print("[list_basics]\n")
+print("[list]\n")
 
-// length on empty
-let e = List()
-print("PASS empty length=")
+// --- empty + tiny build ---
+let e   = List()
+let a   = listAppend(listAppend(listAppend(List(), 1), 2), 3)
+let b   = listAppend(listAppend(List(), 10), 20)
+print("empty len=")
 print(listLength(e))
-print("\n")
-
-// length after append
-let a = listAppend(listAppend(listAppend(List(), 1), 2), 3)
-print("PASS 3 elements length=")
+print("\na len=")
 print(listLength(a))
+print("\nb len=")
+print(listLength(b))
 print("\n")
 
-// append-then-length, increasing
-let b1 = listAppend(List(), 100)
-let b2 = listAppend(b1, 200)
-let b3 = listAppend(b2, 300)
-print("PASS b1 length=")
-print(listLength(b1))
-print("\nPASS b2 length=")
-print(listLength(b2))
-print("\nPASS b3 length=")
-print(listLength(b3))
-print("\n")
-
-// reverse changes order but preserves length
-let r = listReverse(a)
-print("PASS reverse length=")
-print(listLength(r))
-print("\n")
-
-// reverse of reverse = original (length check)
+// --- reverse / reverse-of-reverse ---
+let r  = listReverse(a)
 let rr = listReverse(r)
-print("PASS reverse-of-reverse length=")
+print("rev len=")
+print(listLength(r))
+print("\nrev-of-rev len=")
 print(listLength(rr))
 print("\n")
 
-// concat lengths
-let c1 = listConcat(a, a)
-print("PASS concat a+a length=")
-print(listLength(c1))
-print("\n")
-let c2 = listConcat(a, List())
-print("PASS concat a+empty length=")
-print(listLength(c2))
-print("\n")
-let c3 = listConcat(List(), a)
-print("PASS concat empty+a length=")
-print(listLength(c3))
-print("\n")
-
-// concat via + operator (same dispatch)
-let cplus = a + a
-print("PASS a+a via +operator length=")
-print(listLength(cplus))
+// --- concat via listConcat + `+` operator + identities ---
+print("concat a+b len=")
+print(listLength(listConcat(a, b)))
+print("\nconcat empty+a len=")
+print(listLength(listConcat(e, a)))
+print("\nconcat a+empty len=")
+print(listLength(listConcat(a, e)))
+print("\nop a+a len=")
+print(listLength(a + a))
+print("\nop (a+b)+a len=")
+print(listLength(a + b + a))
 print("\n")
 
-// listPrepend grows the front; original is unchanged.
-let p1 = listPrepend(a, 0)
-print("PASS prepend length=")
-print(listLength(p1))
-print("\nPASS prepend src unchanged=")
+// --- prepend ---
+let p = listPrepend(a, 0)
+print("prepend len=")
+print(listLength(p))
+print("\nsrc unchanged=")
 print(listLength(a))
 print("\n")
 
-// listContains: present, absent, empty list.
-print("PASS contains 2 in a=")
+// --- contains ---
+print("contains 2 in a=")
 print(listContains(a, 2))
-print("\nPASS contains 99 in a=")
+print("\ncontains 99 in a=")
 print(listContains(a, 99))
-print("\nPASS contains 1 in empty=")
+print("\ncontains 1 in empty=")
 print(listContains(List(), 1))
 print("\n")
 
-print("[list_basics done]\n")
+// --- forEachList iteration order ---
+print("iter a:\n")
+forEachList(a, print)
+print("iter rev(a):\n")
+forEachList(r, print)
+print("iter a+b:\n")
+forEachList(a + b, print)
+
+// --- persistence: 5-gen chain + branching ---
+let g0 = List()
+let g1 = listAppend(g0, 10)
+let g2 = listAppend(g1, 20)
+let g3 = listAppend(g2, 30)
+let g4 = listAppend(g3, 40)
+let g5 = listAppend(g4, 50)
+print("gen lens 0..5:\n")
+print(listLength(g0))
+print("\n")
+print(listLength(g1))
+print("\n")
+print(listLength(g2))
+print("\n")
+print(listLength(g3))
+print("\n")
+print(listLength(g4))
+print("\n")
+print(listLength(g5))
+print("\ng2 still 2 after g5=")
+print(listLength(g2))
+print("\n")
+
+let x  = listAppend(g3, 999)
+let y  = listAppend(g3, 888)
+let y2 = listAppend(y, 777)
+print("branch x len=")
+print(listLength(x))
+print("\nbranch y len=")
+print(listLength(y))
+print("\nbranch y2 len=")
+print(listLength(y2))
+print("\ng3 unchanged=")
+print(listLength(g3))
+print("\n")
+
+// --- Crossing the 32-element tail boundary ---
+let t  = listAppend(listAppend(listAppend(listAppend(listAppend(
+         listAppend(listAppend(listAppend(listAppend(listAppend(List(),
+         1), 2), 3), 4), 5), 6), 7), 8), 9), 10)
+let t2 = listAppend(listAppend(listAppend(listAppend(listAppend(
+         listAppend(listAppend(listAppend(listAppend(listAppend(t,
+         11), 12), 13), 14), 15), 16), 17), 18), 19), 20)
+let t3 = listAppend(listAppend(listAppend(listAppend(listAppend(
+         listAppend(listAppend(listAppend(listAppend(listAppend(t2,
+         21), 22), 23), 24), 25), 26), 27), 28), 29), 30)
+let t4 = listAppend(listAppend(listAppend(listAppend(listAppend(t3,
+         31), 32), 33), 34), 35)
+print("len 10/20/30/35:\n")
+print(listLength(t))
+print("\n")
+print(listLength(t2))
+print("\n")
+print(listLength(t3))
+print("\n")
+print(listLength(t4))
+print("\nrev(35) len=")
+print(listLength(listReverse(t4)))
+print("\n35+35 len=")
+print(listLength(t4 + t4))
+print("\n")
+
+// --- List literal + index — returns Result<T,E> ---
+let commands = ["echo hello", "echo world", "echo test"]
+match commands[0] {
+    Success { value } => print("cmd[0]=${value}")
+    Error   { message } => print("cmd[0] err")
+}
+match commands[2] {
+    Success { value } => print("cmd[2]=${value}")
+    Error   { message } => print("cmd[2] err")
+}
+match commands[5] {
+    Success { value } => print("oob ok??")
+    Error   { message } => print("cmd[5] OOB rejected")
+}
+let empty: List<string> = []
+match empty[0] {
+    Success { value } => print("empty ok??")
+    Error   { message } => print("empty[0] rejected")
+}
+
+print("[list done]\n")

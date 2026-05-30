@@ -1,10 +1,10 @@
 # agent-pmo:74cf183
 name: CI
 
+# CI runs ONLY on PRs to main. Merging to main triggers nothing; releases are
+# tag-triggered (release.yml). See docs/RELEASING.md.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
 
 concurrency:
@@ -45,6 +45,10 @@ jobs:
 
       - name: Install jq and Xvfb
         run: sudo apt-get install -y jq xvfb
+
+      # [SWR-VERSION-MANIFEST] keep shipwright.json valid against the schema.
+      - name: Validate deployment manifest
+        run: npx --yes @nimblesite/shipwright-validate-manifest shipwright.json
 
       - name: Lint
         run: make lint
@@ -91,8 +95,8 @@ jobs:
       - name: Test example compilation and execution
         working-directory: ./compiler
         run: |
-          ./bin/osprey examples/tested/basics/math/interpolation_math.osp --run
-          ./bin/osprey examples/tested/basics/comprehensive.osp --run
+          ./bin/osprey examples/tested/basics/math/comprehensive_math.osp --run
+          ./bin/osprey examples/tested/basics/feature_omnibus.osp --run
 
       - name: Test Web Compiler
         run: |

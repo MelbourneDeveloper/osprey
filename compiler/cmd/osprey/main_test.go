@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/christianfindlay/osprey/internal/cli"
+	"github.com/christianfindlay/osprey/internal/version"
 )
 
 const testDataDir = "../../tests/data"
@@ -50,13 +53,67 @@ func testRunCLIHelp(t *testing.T) {
 	}
 }
 
+// testRunCLIVersion verifies the Shipwright version contract
+// [SWR-VERSION-CLI-OUTPUT]: `osprey --version` exits 0 and prints exactly
+// "osprey <version>" as its first stdout line; `--version --json` emits the
+// JSON form. The source-controlled version is the 0.0.0-dev placeholder.
 func testRunCLIVersion(t *testing.T) {
-	args := []string{"osprey", "--version"}
-	result := RunCLI(args)
+	out := captureStdout(t, func() {
+		if result := RunCLI([]string{"osprey", "--version"}); !result.Success {
+			t.Error("RunCLI with --version should succeed")
+		}
+	})
 
-	if !result.Success {
-		t.Error("RunCLI with --version should succeed")
+	firstLine := strings.SplitN(strings.TrimSpace(out), "\n", 2)[0]
+	if firstLine != version.Line() {
+		t.Errorf("--version first line = %q, want %q", firstLine, version.Line())
 	}
+
+	if !strings.HasPrefix(firstLine, version.BinaryName+" ") {
+		t.Errorf("--version line %q must start with %q", firstLine, version.BinaryName+" ")
+	}
+
+	jsonOut := captureStdout(t, func() {
+		if result := RunCLI([]string{"osprey", "--version", "--json"}); !result.Success {
+			t.Error("RunCLI with --version --json should succeed")
+		}
+	})
+
+	var parsed map[string]any
+
+	err := json.Unmarshal([]byte(jsonOut), &parsed)
+	if err != nil {
+		t.Fatalf("--version --json is not valid JSON: %v\noutput: %s", err, jsonOut)
+	}
+
+	if parsed["name"] != version.BinaryName || parsed["version"] != version.Version {
+		t.Errorf("--version --json mismatch: %s", jsonOut)
+	}
+}
+
+// captureStdout runs fn and returns everything it wrote to os.Stdout.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+
+	os.Stdout = w
+
+	defer func() { os.Stdout = orig }()
+
+	fn()
+	_ = w.Close()
+
+	data, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read captured stdout: %v", err)
+	}
+
+	return string(data)
 }
 
 func testRunCLIAST(t *testing.T) {

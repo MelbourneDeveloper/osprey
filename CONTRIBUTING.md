@@ -40,7 +40,7 @@ make test
 
 ## What to Work On
 
-1. **Language features** - Check [spec.md](compiler/spec.md) for "NOT IMPLEMENTED" 
+1. **Language features** - Check the [language specification](docs/specs/) for "NOT IMPLEMENTED" 
 2. **New operators** - Add arithmetic, comparison, or logical operators
 3. **Pattern matching** - Extend match expressions
 4. **Standard library** - Add built-in functions
@@ -65,6 +65,17 @@ Example prompts:
 - Test new features thoroughly
 - Keep changes focused
 - Fix linter errors before submitting
+- **Never hard-code a version.** All version fields stay at `0.0.0-dev` in source;
+  releases stamp the real version from the git tag. See [docs/RELEASING.md](docs/RELEASING.md).
+
+## CI & Releases
+
+- **CI runs only on PRs to `main`** (`ci.yml` + `ci-windows.yml`). Merging to
+  `main` triggers nothing.
+- **Releases are tag-triggered**: push a tag `vX.Y.Z` and `release.yml` builds
+  every platform, cuts the GitHub Release, updates the Homebrew tap + Scoop
+  bucket, publishes the VS Code extension, and deploys the website. Full details
+  in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Getting Help
 

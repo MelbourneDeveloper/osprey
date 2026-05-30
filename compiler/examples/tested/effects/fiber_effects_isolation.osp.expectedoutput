@@ -1,4 +1,0 @@
-🔒 Testing Handler Isolation
-[PROD] Processing task: 5
-[TEST] Processing task: 12
-📊 Results: Prod=10, Test=24, Silent=0 

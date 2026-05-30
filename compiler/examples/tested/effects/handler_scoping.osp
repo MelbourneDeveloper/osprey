@@ -1,0 +1,77 @@
+// Handler scoping regressions:
+//   1. Forward-reference pre-pass: helpers declared AFTER main(), each
+//      performing an effect, must all reach the outer handle/in block.
+//   2. Nested handler override: an inner handle/in for the same effect
+//      replaces the outer handler for its body, then the outer handler is
+//      restored for code that follows.
+
+effect Logger {
+    log:   fn(string) -> Unit
+    debug: fn(string) -> Unit
+}
+
+// ---- nested override helpers ----
+fn innerOp() -> int !Logger = {
+    perform Logger.log("inner exec")
+    perform Logger.debug("debug inner")
+    42
+}
+fn outerOp() -> int !Logger = {
+    perform Logger.log("outer exec")
+    perform Logger.debug("debug outer")
+    21
+}
+fn testNested() -> Unit !Logger = {
+    perform Logger.log("before inner handler")
+
+    let innerResult = handle Logger
+        log msg   => print("[INNER-LOG] " + msg)
+        debug msg => print("[INNER-DEBUG] " + msg)
+    in {
+        let r = innerOp()
+        perform Logger.log("inner result: " + toString(r))
+        r
+    }
+
+    perform Logger.log("after inner handler — back to outer")
+    let outerResult = outerOp()
+    perform Logger.log("outer result: " + toString(outerResult))
+}
+
+fn main() -> Unit = {
+    handle Logger
+        log msg   => print("[OUTER-LOG] " + msg)
+        debug msg => print("[OUTER-DEBUG] " + msg)
+    in {
+        print("=== handler scoping ===")
+        // (1) forward-reference: nestedCall + deepNestedOp + performComplex are
+        // all defined AFTER main; every perform inside their chain must still
+        // reach this outer handle/in block.
+        let r = nestedCall()
+        print("forward chain result: " + toString(r))
+
+        // (2) nested override
+        testNested()
+        print("=== done ===")
+    }
+}
+
+// helpers defined AFTER main — exercises the forward-ref pre-pass
+fn performComplex() -> int !Logger = {
+    perform Logger.log("complex starting")
+    let v = 21 * 2
+    perform Logger.log("complex intermediate: " + toString(v))
+    v
+}
+
+fn deepNestedOp() -> int !Logger = {
+    perform Logger.log("deep op exec")
+    performComplex()
+}
+
+fn nestedCall() -> int !Logger = {
+    perform Logger.log("before nested")
+    let r = deepNestedOp()
+    perform Logger.log("after nested")
+    r
+}

@@ -6,7 +6,7 @@
 /*
  * Shared types and ABI for List<T> and Map<K,V>.
  *
- * Spec: compiler/spec/0004-TypeSystem.md#collection-types
+ * Spec: docs/specs/0004-TypeSystem.md#collection-types
  * Plan: docs/plans/collections.md
  *
  * Implements [TYPE-LIST], [TYPE-MAP], [TYPE-MAP-LOOKUP], [TYPE-MAP-OPS].
