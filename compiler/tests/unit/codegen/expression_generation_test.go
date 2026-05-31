@@ -76,6 +76,29 @@ func TestMethodCallExpression(t *testing.T) {
 	}
 }
 
+func TestRuntimeMapIndexAvoidsFlatMapGEP(t *testing.T) {
+	source := `
+fn main() -> Unit = {
+  let ra = 9
+  let m = mapSet(mapSet(Map(), "a", ra), "b", 16)
+  match m["a"] {
+    Success { value } => print("a=" + toString(value))
+    Error { message } => print("miss")
+  }
+}
+`
+	ir, err := codegen.CompileToLLVM(source)
+	if err != nil {
+		t.Fatalf("runtime map index should compile: %v", err)
+	}
+	if !strings.Contains(ir, "@osprey_map_get") {
+		t.Fatalf("runtime map index should call osprey_map_get:\n%s", ir)
+	}
+	if strings.Contains(ir, "getelementptr { i64, i8* }, i8*") {
+		t.Fatalf("runtime map index emitted flat map GEP over i8*:\n%s", ir)
+	}
+}
+
 func TestFieldAccessExpression(t *testing.T) {
 	tests := []struct {
 		name     string

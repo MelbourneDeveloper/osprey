@@ -549,20 +549,6 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 		return nil, err
 	}
 
-	// Array access returns a Result<T, IndexError> for safety
-	// First, extract length and data from array struct
-	arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
-
-	// Get length
-	lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	length := g.builder.NewLoad(types.I64, lengthPtr)
-
-	// Get data pointer
-	dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
-		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	data := g.builder.NewLoad(types.I8Ptr, dataPtr)
-
 	// Check if this is a map or list access
 	collectionType, err := g.typeInferer.InferType(access.List)
 	if err != nil {
@@ -582,6 +568,20 @@ func (g *LLVMGenerator) generateListAccess(access *ast.ListAccessExpression) (va
 	if genericType, ok := collectionType.(*GenericType); ok && genericType.name == TypeMap {
 		return g.generateMapAccess(access, arrayValue, indexValue, genericType)
 	}
+
+	// Array access returns a Result<T, IndexError> for safety.
+	// Lists use the flat { length, data } layout; runtime maps are handled above.
+	arrayStructType := types.NewStruct(types.I64, types.I8Ptr)
+
+	// Get length
+	lengthPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+	length := g.builder.NewLoad(types.I64, lengthPtr)
+
+	// Get data pointer
+	dataPtr := g.builder.NewGetElementPtr(arrayStructType, arrayValue,
+		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
+	data := g.builder.NewLoad(types.I8Ptr, dataPtr)
 
 	// For lists, do normal bounds check: index >= 0 && index < length
 	zero := constant.NewInt(types.I64, 0)
