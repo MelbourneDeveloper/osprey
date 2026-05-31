@@ -99,6 +99,27 @@ fn main() -> Unit = {
 	}
 }
 
+func TestRuntimeListParameterUsesOpaqueHandle(t *testing.T) {
+	source := `
+fn report(xs) -> Unit = print("len " + toString(listLength(xs)))
+
+fn main() -> Unit = {
+  let scores = listAppend(List(), 81)
+  report(scores)
+}
+`
+	ir, err := codegen.CompileToLLVM(source)
+	if err != nil {
+		t.Fatalf("runtime list helper should compile: %v", err)
+	}
+	if !strings.Contains(ir, "define void @report(i8* %xs)") {
+		t.Fatalf("runtime list helper parameter should be an opaque handle:\n%s", ir)
+	}
+	if strings.Contains(ir, "call i64 @osprey_list_length(i64") {
+		t.Fatalf("runtime list helper called osprey_list_length with i64:\n%s", ir)
+	}
+}
+
 func TestFieldAccessExpression(t *testing.T) {
 	tests := []struct {
 		name     string

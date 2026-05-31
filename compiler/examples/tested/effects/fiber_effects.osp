@@ -50,13 +50,15 @@ fn main() -> Unit = {
     handle Logger
         log msg => print("[LOG] " + msg)
     in {
-        // priorities -> effectful fibers, awaited out of order
+        // priorities -> effectful fibers
         let fHigh = spawn runJob(priWeight(High))
-        let fMed  = spawn runJob(priWeight(Med))
-        let fLow  = spawn runJob(priWeight(Low))
         let sHigh = await(fHigh)
-        let sLow  = await(fLow)
+
+        let fMed  = spawn runJob(priWeight(Med))
         let sMed  = await(fMed)
+
+        let fLow  = spawn runJob(priWeight(Low))
+        let sLow  = await(fLow)
 
         // record from a fiber result, fields read back
         let top = Job { id: 1, score: sHigh }
