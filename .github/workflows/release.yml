@@ -40,6 +40,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: vscode-extension/package-lock.json
+      - name: Install Shipwright validator dependencies
+        working-directory: vscode-extension
+        run: npm ci
       - name: Derive version + validate manifest
         id: v
         run: |
@@ -48,7 +53,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Releasing osprey $version"
           # [SWR-VERSION-MANIFEST] validate shipwright.json before building anything.
-          npx --yes @nimblesite/shipwright-validate-manifest shipwright.json
+          npm run test:shipwright --prefix vscode-extension
 
   # --------------------------------------------------------------------------
   build:
