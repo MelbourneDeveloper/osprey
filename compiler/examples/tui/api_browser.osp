@@ -1,28 +1,24 @@
 // ============================================================================
-//  Osprey TUI showcase: a colored, arrow-key-driven browser that calls an
-//  HTTP API and renders the JSON response. Run it:
+//  Osprey TUI showcase: a colored, arrow-key-driven browser that calls a REAL
+//  HTTP API over TLS and renders the live JSON response. Run it:
 //
 //      osprey examples/tui/api_browser.osp --run
 //
 //  Keys:  Up / Down (or k / j) move   Enter open details   q / Esc quit
 //
-//  Architecture: a local HTTP server stands in for "an arbitrary API" so the
-//  demo is self-contained. The render loop is expressed as recursion (Osprey
-//  has no loop keyword) - each keystroke tail-calls the next frame.
-//  Builtins exercised: httpGetResponse/httpResponseBody [HTTP-RESPONSE-HANDLE],
-//  jsonParse/jsonGet/jsonLength [BUILTIN-JSON], termRawMode/termReadKey/
-//  termClear/termHideCursor/termShowCursor [BUILTIN-TERM], \e ANSI escapes.
+//  It fetches live public repositories from the GitHub REST API
+//  (https://api.github.com/users/<user>/repos) over HTTPS, parses the JSON,
+//  and renders a colored, arrow-key-navigable list on the alternate screen.
+//  The render loop is expressed as recursion (Osprey has no loop keyword) -
+//  each keystroke tail-calls the next frame.
+//  Builtins exercised: httpCreateClient/httpGetResponse/httpResponseBody
+//  [HTTP-RESPONSE-HANDLE], jsonParse/jsonGet/jsonLength [BUILTIN-JSON],
+//  termRawMode/termReadKey/termClear/termHideCursor/termShowCursor
+//  [BUILTIN-TERM], \e ANSI escapes.
 // ============================================================================
 
-// ---- the "API": a local server returning a JSON array of repositories ------
-fn handleRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = HttpResponse {
-    status: 200,
-    headers: "Content-Type: application/json",
-    contentType: "application/json",
-    streamFd: -1,
-    isComplete: true,
-    partialBody: "[{\"name\":\"osprey\",\"stars\":1200,\"lang\":\"Go\",\"desc\":\"A functional language with compile-time algebraic effects\"},{\"name\":\"llvm\",\"stars\":9001,\"lang\":\"C++\",\"desc\":\"Modular compiler and toolchain infrastructure\"},{\"name\":\"antlr\",\"stars\":4200,\"lang\":\"Java\",\"desc\":\"Powerful parser generator for reading and processing text\"},{\"name\":\"ziglang\",\"stars\":3300,\"lang\":\"Zig\",\"desc\":\"A general-purpose language and toolchain for robust software\"}]"
-}
+// Which GitHub account's public repositories to browse.
+fn githubUser() -> string = "MelbourneDeveloper"
 
 // ---- ANSI color helpers (pure string wrappers) -----------------------------
 fn cyan(s: string) -> string = "\e[36m${s}\e[0m"
@@ -55,9 +51,9 @@ fn renderItem(doc: int, i: int, sel: int, n: int) -> Unit = {
     match i < n {
         true => {
             let name = field(doc: doc, path: "[${i}].name")
-            let stars = field(doc: doc, path: "[${i}].stars")
-            let lang = field(doc: doc, path: "[${i}].lang")
-            let nameP = pad(s: name, n: 14)
+            let stars = field(doc: doc, path: "[${i}].stargazers_count")
+            let lang = field(doc: doc, path: "[${i}].language")
+            let nameP = pad(s: name, n: 20)
             let starP = pad(s: stars, n: 7)
             let row = "${nameP}* ${starP}${lang}"
             let selected = i == sel
@@ -82,8 +78,8 @@ fn renderItem(doc: int, i: int, sel: int, n: int) -> Unit = {
 
 fn drawScreen(doc: int, sel: int, n: int) -> Unit = {
     let cleared = termClear()
-    let title = bold(cyan("  OSPREY   -   Repository Browser"))
-    let rule = dim("  ========================================")
+    let title = bold(cyan("  OSPREY  -  GitHub Repos: ${githubUser()}  (live API)"))
+    let rule = dim("  ==================================================")
     let hint = dim("  up/down or j/k move    enter details    q quit")
     print("")
     print(title)
@@ -97,9 +93,9 @@ fn drawScreen(doc: int, sel: int, n: int) -> Unit = {
 fn detailView(doc: int, sel: int) -> Unit = {
     let cleared = termClear()
     let name = field(doc: doc, path: "[${sel}].name")
-    let stars = field(doc: doc, path: "[${sel}].stars")
-    let lang = field(doc: doc, path: "[${sel}].lang")
-    let desc = field(doc: doc, path: "[${sel}].desc")
+    let stars = field(doc: doc, path: "[${sel}].stargazers_count")
+    let lang = field(doc: doc, path: "[${sel}].language")
+    let desc = field(doc: doc, path: "[${sel}].description")
     let top = magenta("  +-- Repository ------------------------------+")
     let bot = magenta("  +--------------------------------------------+")
     let nameLine = bold(green(name))
@@ -191,32 +187,39 @@ fn openDetail(doc: int, sel: int, n: int) -> Unit = {
     uiLoop(doc: doc, sel: sel, n: n)
 }
 
+// startUi parses the fetched JSON, enters raw mode + alternate screen, and runs
+// the interactive loop over the live repository list.
+fn startUi(bodyText: string) -> Unit = {
+    let doc = jsonParse(bodyText)
+    match doc {
+        Success { value } => {
+            let n = jsonLength(value, "")
+            let raw = termRawMode(1)
+            let hidden = termHideCursor()
+            uiLoop(doc: value, sel: 0, n: n)
+        }
+        Error { message } => print("JSON parse failed")
+    }
+}
+
 fn run() -> Unit = {
-    let serverId = httpCreateServer(18097, "127.0.0.1")
-    let listenResult = httpListen(serverId, handleRequest)
-    let clientId = httpCreateClient("http://127.0.0.1:18097", 5000)
-    let resp = httpGetResponse(clientId, "/repos", "")
+    // Real, live HTTPS call to the GitHub REST API. GitHub requires a
+    // User-Agent header and rejects requests without one.
+    let clientId = httpCreateClient("https://api.github.com", 10000)
+    let path = "/users/${githubUser()}/repos?per_page=30&sort=updated"
+    let resp = httpGetResponse(clientId, path, "User-Agent: osprey-tui\r\nAccept: application/vnd.github+json\r\n")
     match resp {
         Success { value } => {
             let body = httpResponseBody(value)
             match body {
-                Success { value } => {
-                    let doc = jsonParse(value)
-                    match doc {
-                        Success { value } => {
-                            let n = jsonLength(value, "")
-                            let raw = termRawMode(1)
-                            let hidden = termHideCursor()
-                            uiLoop(doc: value, sel: 0, n: n)
-                        }
-                        Error { message } => print("JSON parse failed")
-                    }
-                }
+                Success { text } => startUi(bodyText: text)
                 Error { message } => print("Could not read response body")
             }
+            let freed = httpResponseFree(value)
         }
         Error { message } => print("Request failed: ${message}")
     }
+    let closed = httpCloseClient(clientId)
 }
 
 run()

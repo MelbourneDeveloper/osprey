@@ -81,6 +81,7 @@ typedef struct {
   char *host;
   int port;
   bool is_persistent;
+  bool is_https; // true when the base URL scheme is https:// (use TLS)
 } HttpClient;
 
 // WebSocket connection structure

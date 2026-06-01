@@ -1,5 +1,10 @@
 #include "http_shared.h"
 
+#include <strings.h> // strncasecmp
+
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+
 // HTTP client runtime.
 //
 // Two request surfaces share one transport helper (http_perform):
@@ -29,6 +34,8 @@ int64_t http_create_client(char *base_url, int64_t timeout) {
   client->base_url = strdup(base_url);
   client->timeout = (int)timeout;
   client->is_persistent = false;
+  client->is_https = (strncmp(base_url, "https://", 8) == 0) ||
+                     (strncmp(base_url, "wss://", 6) == 0);
 
   // Parse base URL
   char *path;
@@ -46,10 +53,43 @@ int64_t http_create_client(char *base_url, int64_t timeout) {
   return id;
 }
 
+// transport_close tears down the TLS session (if any) and closes the socket.
+static void transport_close(SSL *ssl, SSL_CTX *ctx, int sock) {
+  if (ssl) {
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+  }
+  if (ctx) {
+    SSL_CTX_free(ctx);
+  }
+#ifdef _WIN32
+  closesocket(sock);
+#else
+  close(sock);
+#endif
+}
+
+// transport_send / transport_recv route I/O over TLS when ssl is set, otherwise
+// over the bare socket, so http_perform speaks both http:// and https://.
+static ssize_t transport_send(SSL *ssl, int sock, const char *buf, int len) {
+  if (ssl) {
+    return SSL_write(ssl, buf, len);
+  }
+  return send(sock, buf, (size_t)len, 0);
+}
+
+static ssize_t transport_recv(SSL *ssl, int sock, char *buf, int cap) {
+  if (ssl) {
+    return SSL_read(ssl, buf, cap);
+  }
+  return recv(sock, buf, (size_t)cap, 0);
+}
+
 // http_perform connects, sends the request and reads the ENTIRE response into a
 // freshly allocated, NUL-terminated buffer (the server uses Connection: close,
-// so recv() draining to EOF captures the whole body). Returns 0 on success with
-// *out_raw / *out_len set (caller frees *out_raw), or a negative error code.
+// so recv() draining to EOF captures the whole body). For https:// clients the
+// transport is wrapped in TLS. Returns 0 on success with *out_raw / *out_len
+// set (caller frees *out_raw), or a negative error code.
 static int64_t http_perform(int64_t client_id, int64_t method, char *path,
                             char *headers, char *body, char **out_raw,
                             size_t *out_len) {
@@ -100,14 +140,39 @@ static int64_t http_perform(int64_t client_id, int64_t method, char *path,
     return -5;
   }
 
+  // Establish a TLS session for https:// clients. SNI (the host name) is
+  // mandatory for virtual-hosted endpoints such as api.github.com.
+  SSL_CTX *ctx = NULL;
+  SSL *ssl = NULL;
+  if (client->is_https) {
+    ctx = SSL_CTX_new(TLS_client_method());
+    if (!ctx) {
+      transport_close(NULL, NULL, sock);
+      return -11;
+    }
+    ssl = SSL_new(ctx);
+    if (!ssl) {
+      transport_close(NULL, ctx, sock);
+      return -11;
+    }
+    SSL_set_fd(ssl, sock);
+    SSL_set_tlsext_host_name(ssl, client->host);
+    if (SSL_connect(ssl) != 1) {
+      transport_close(ssl, ctx, sock);
+      return -12;
+    }
+  }
+
   char request[MAX_HTTP_BUFFER];
   const char *method_str = http_method_to_string((HttpMethod)method);
 
+  // The Host header carries the bare host name (no :port) - servers like
+  // GitHub reject "Host: api.github.com:443" with 400.
   int request_len = snprintf(request, sizeof(request),
                              "%s %s HTTP/1.1\r\n"
-                             "Host: %s:%d\r\n"
+                             "Host: %s\r\n"
                              "Connection: close\r\n",
-                             method_str, path, client->host, client->port);
+                             method_str, path, client->host);
 
   if (headers && strlen(headers) > 0) {
     request_len += snprintf(request + request_len, sizeof(request) - request_len,
@@ -122,12 +187,8 @@ static int64_t http_perform(int64_t client_id, int64_t method, char *path,
                             sizeof(request) - request_len, "\r\n");
   }
 
-  if (send(sock, request, request_len, 0) < 0) {
-#ifdef _WIN32
-    closesocket(sock);
-#else
-    close(sock);
-#endif
+  if (transport_send(ssl, sock, request, request_len) < 0) {
+    transport_close(ssl, ctx, sock);
     return -6;
   }
 
@@ -135,11 +196,7 @@ static int64_t http_perform(int64_t client_id, int64_t method, char *path,
   size_t len = 0;
   char *buf = malloc(cap);
   if (!buf) {
-#ifdef _WIN32
-    closesocket(sock);
-#else
-    close(sock);
-#endif
+    transport_close(ssl, ctx, sock);
     return -9;
   }
 
@@ -149,16 +206,12 @@ static int64_t http_perform(int64_t client_id, int64_t method, char *path,
       char *nb = realloc(buf, cap);
       if (!nb) {
         free(buf);
-#ifdef _WIN32
-        closesocket(sock);
-#else
-        close(sock);
-#endif
+        transport_close(ssl, ctx, sock);
         return -9;
       }
       buf = nb;
     }
-    ssize_t n = recv(sock, buf + len, CHUNK_SIZE, 0);
+    ssize_t n = transport_recv(ssl, sock, buf + len, CHUNK_SIZE);
     if (n > 0) {
       len += (size_t)n;
     } else {
@@ -166,11 +219,7 @@ static int64_t http_perform(int64_t client_id, int64_t method, char *path,
     }
   }
 
-#ifdef _WIN32
-  closesocket(sock);
-#else
-  close(sock);
-#endif
+  transport_close(ssl, ctx, sock);
 
   if (len == 0) {
     free(buf);
@@ -181,6 +230,58 @@ static int64_t http_perform(int64_t client_id, int64_t method, char *path,
   *out_raw = buf;
   *out_len = len;
   return 0;
+}
+
+// header_is_chunked reports whether the response header block declares
+// Transfer-Encoding: chunked (case-insensitive header name).
+static bool header_is_chunked(const char *headers) {
+  if (!headers) {
+    return false;
+  }
+  for (const char *p = headers; *p; p++) {
+    if ((p[0] == 'T' || p[0] == 't') &&
+        strncasecmp(p, "Transfer-Encoding:", 18) == 0) {
+      const char *v = p + 18;
+      return strstr(v, "chunked") != NULL || strstr(v, "Chunked") != NULL;
+    }
+  }
+  return false;
+}
+
+// decode_chunked decodes an HTTP/1.1 chunked body in place: each chunk is
+// "<hex-length>\r\n<data>\r\n", terminated by a zero-length chunk. Returns a
+// freshly allocated, NUL-terminated decoded body (caller frees), or NULL.
+static char *decode_chunked(const char *body) {
+  size_t cap = strlen(body) + 1;
+  char *out = malloc(cap);
+  if (!out) {
+    return NULL;
+  }
+  size_t out_len = 0;
+  const char *p = body;
+  for (;;) {
+    char *end = NULL;
+    long chunk = strtol(p, &end, 16); // chunk size in hex
+    if (end == p) {
+      break; // no valid size: stop
+    }
+    const char *line_end = strstr(end, "\r\n");
+    if (!line_end) {
+      break;
+    }
+    const char *data = line_end + 2;
+    if (chunk <= 0) {
+      break; // terminating zero chunk
+    }
+    memcpy(out + out_len, data, (size_t)chunk);
+    out_len += (size_t)chunk;
+    p = data + chunk;
+    if (strncmp(p, "\r\n", 2) == 0) {
+      p += 2; // skip trailing CRLF after the chunk data
+    }
+  }
+  out[out_len] = '\0';
+  return out;
 }
 
 // parse_status_line returns the numeric status from an HTTP status line, or -8.
@@ -284,7 +385,14 @@ int64_t http_request_capture(int64_t client_id, int64_t method, char *path,
     }
   }
 
-  char *resp_body = strdup(body_start);
+  // Decode a chunked body so callers see the real payload, not chunk framing.
+  char *resp_body = NULL;
+  if (header_is_chunked(resp_headers)) {
+    resp_body = decode_chunked(body_start);
+  }
+  if (!resp_body) {
+    resp_body = strdup(body_start);
+  }
   free(raw);
 
   if (!resp_body) {

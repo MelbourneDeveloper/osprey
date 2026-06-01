@@ -70,16 +70,20 @@ int parse_url(const char *url, char **host, int *port, char **path) {
     return -1;
   }
 
-  // Parse URL: http://host:port/path
+  // Parse URL: scheme://host:port/path. Track whether the scheme is a TLS one
+  // so an unspecified port defaults to 443 instead of 80.
   const char *start = url;
+  bool secure = false;
   if (strncmp(url, "http://", 7) == 0) {
     start += 7;
   } else if (strncmp(url, "https://", 8) == 0) {
     start += 8;
+    secure = true;
   } else if (strncmp(url, "ws://", 5) == 0) {
     start += 5;
   } else if (strncmp(url, "wss://", 6) == 0) {
     start += 6;
+    secure = true;
   }
 
   // Find host end
@@ -95,7 +99,7 @@ int parse_url(const char *url, char **host, int *port, char **path) {
     }
   } else {
     host_len = slash ? slash - start : (int)strlen(start);
-    *port = 80; // Default port
+    *port = secure ? 443 : 80; // Default port by scheme
   }
 
   if (host_len <= 0) {
