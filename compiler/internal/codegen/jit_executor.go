@@ -272,6 +272,11 @@ func (j *JITExecutor) linkExecutable(linkArgs []string) error {
 func (j *JITExecutor) executeProgram(exeFile string) error {
 	// #nosec G204 - exeFile is created in controlled temp directory
 	runCmd := exec.CommandContext(context.Background(), exeFile)
+	// Wire stdin through so interactive programs (raw-mode TUIs reading keys via
+	// termReadKey, line input via input()) receive keystrokes. Without this Go
+	// connects the child's stdin to /dev/null, so the first read hits EOF and an
+	// interactive loop exits immediately.
+	runCmd.Stdin = os.Stdin
 	runCmd.Stdout = os.Stdout
 	runCmd.Stderr = os.Stderr
 

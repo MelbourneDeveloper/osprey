@@ -258,8 +258,13 @@ func runRunProgram(source string, quiet bool) CommandResult {
 		fmt.Fprintf(os.Stderr, "Starting compilation...\n")
 	}
 
-	// CAPTURE PROGRAM OUTPUT instead of outputting directly to terminal!
-	programOutput, err := codegen.CompileAndCapture(source)
+	// STREAM the program directly to the terminal (stdin/stdout/stderr wired
+	// through) rather than capturing. Interactive programs - raw-mode TUIs that
+	// read keystrokes via termReadKey, or input() line readers - need a live
+	// stdin and incremental output. Capturing would feed EOF on the first read
+	// and buffer the whole screen until exit. Compilation diagnostics already go
+	// to stderr above, so stdout stays clean.
+	err := codegen.CompileAndRun(source)
 	if err != nil {
 		// ALWAYS show compilation errors regardless of quiet flag
 		fmt.Fprintf(os.Stderr, "Compilation failed\n")
@@ -274,10 +279,7 @@ func runRunProgram(source string, quiet bool) CommandResult {
 		fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
 	}
 
-	return CommandResult{
-		Output:  programOutput, // ✅ RETURN THE ACTUAL PROGRAM OUTPUT!
-		Success: true,
-	}
+	return CommandResult{Success: true}
 }
 
 func runShowSymbols(source, _ string) CommandResult {
@@ -1121,8 +1123,10 @@ func runRunProgramWithSecurity(source string, quiet bool, security *SecurityConf
 	// Convert CLI security config to codegen security config
 	codegenSecurity := convertToCodegenSecurity(security)
 
-	// CAPTURE PROGRAM OUTPUT instead of outputting directly to terminal!
-	programOutput, err := codegen.CompileAndCaptureWithSecurity(source, codegenSecurity)
+	// STREAM the program directly to the terminal (see runRunProgram) so
+	// interactive raw-mode TUIs and input() readers get a live stdin and
+	// incremental output instead of a captured, EOF-on-first-read buffer.
+	err := codegen.CompileAndRunWithSecurity(source, codegenSecurity)
 	if err != nil {
 		// ALWAYS show compilation errors regardless of quiet flag
 		fmt.Fprintf(os.Stderr, "Compilation failed\n")
@@ -1137,10 +1141,7 @@ func runRunProgramWithSecurity(source string, quiet bool, security *SecurityConf
 		fmt.Fprintf(os.Stderr, "Compilation completed successfully\n")
 	}
 
-	return CommandResult{
-		Output:  programOutput, // ✅ RETURN THE ACTUAL PROGRAM OUTPUT!
-		Success: true,
-	}
+	return CommandResult{Success: true}
 }
 
 func runShowSymbolsWithSecurity(source, filename string, _ *SecurityConfig) CommandResult {
