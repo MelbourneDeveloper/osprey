@@ -1,4 +1,4 @@
-.PHONY: build build-no-lint build-windows-core clean test test-runtime regenerate-parser install-deps install uninstall lint lint-fix lint-install c-lint c-test fiber-runtime http-runtime websocket-runtime system-runtime rust-interop run
+.PHONY: build build-no-lint build-windows-core clean test test-runtime regenerate-parser install-deps install uninstall lint lint-fix lint-install c-lint c-test fiber-runtime http-runtime websocket-runtime system-runtime rust-interop run tui
 
 # Version stamping — [SWR-VERSION-BUILD-STAMPING].
 # Source default is the 0.0.0-dev placeholder; release builds pass VERSION=<tag> in.
@@ -293,3 +293,10 @@ regenerate-parser:
 run:
 	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=<path>"; exit 1; fi
 	go run cmd/osprey/main.go $(FILE)
+
+# Rebuild the compiler and launch the interactive TUI demo (live GitHub API
+# browser). Runs the built binary directly so stdin stays a real terminal -
+# the raw-mode key reader needs it.
+tui: build
+	@echo "🚀 Launching TUI: examples/tui/api_browser.osp"
+	./bin/osprey$(EXE) examples/tui/api_browser.osp --run

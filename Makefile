@@ -5,7 +5,7 @@
 # Primary language: Go (compiler/), with TypeScript sub-projects
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup ratchet
+.PHONY: build tui test lint fmt clean ci setup ratchet
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -48,6 +48,13 @@ build:
 	@echo "==> Building..."
 	cd compiler && $(MAKE) build
 	cd vscode-extension && npm run compile
+
+## tui: Rebuild the compiler and launch the interactive TUI demo (live GitHub
+##      API browser). Runs in the current terminal so the raw-mode key reader
+##      gets a real stdin.
+tui:
+	@echo "==> Building compiler + launching TUI..."
+	cd compiler && $(MAKE) tui
 
 ## test: Fail-fast tests + coverage + per-project threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].

@@ -9,8 +9,10 @@
 //  It fetches live public repositories from the GitHub REST API
 //  (https://api.github.com/users/<user>/repos) over HTTPS, parses the JSON,
 //  and renders a colored, arrow-key-navigable list on the alternate screen.
-//  The render loop is expressed as recursion (Osprey has no loop keyword) -
-//  each keystroke tail-calls the next frame.
+//
+//  Everything is expressions: each screen is a STRING built by composing pure
+//  functions, then handed to a single print. The render loop is recursion
+//  (Osprey has no loop keyword) - each keystroke tail-calls the next frame.
 //  Builtins exercised: httpCreateClient/httpGetResponse/httpResponseBody
 //  [HTTP-RESPONSE-HANDLE], jsonParse/jsonGet/jsonLength [BUILTIN-JSON],
 //  termRawMode/termReadKey/termClear/termHideCursor/termShowCursor
@@ -29,69 +31,64 @@ fn bold(s: string) -> string = "\e[1m${s}\e[0m"
 fn dim(s: string) -> string = "\e[2m${s}\e[0m"
 fn invert(s: string) -> string = "\e[7m${s}\e[0m"
 
-// ---- small Result-unwrapping helpers ---------------------------------------
-fn pad(s: string, n: int) -> string = {
-    let r = padEnd(s, n, " ")
-    match r {
-        Success { value } => value
-        Error { message } => s
-    }
+fn rule() -> string = dim("  ==================================================")
+
+// ---- small Result-unwrapping helpers (one expression each) ------------------
+fn pad(s: string, n: int) -> string = match padEnd(s, n, " ") {
+    Success { value } => value
+    Error { message } => s
 }
 
-fn field(doc: int, path: string) -> string = {
-    let r = jsonGet(doc, path)
-    match r {
-        Success { value } => value
-        Error { message } => "?"
-    }
+fn field(doc: int, path: string) -> string = match jsonGet(doc, path) {
+    Success { value } => value
+    Error { message } => "?"
 }
 
-// ---- list rendering --------------------------------------------------------
-fn renderItem(doc: int, i: int, sel: int, n: int) -> Unit = {
-    match i < n {
+// Checked arithmetic (+/-) returns Result<int, MathError>; unwrap with the
+// argument itself as the fallback so callers get a plain int.
+fn dec(x: int) -> int = match x - 1 {
+    Success { value } => value
+    Error { message } => x
+}
+
+fn inc(x: int) -> int = match x + 1 {
+    Success { value } => value
+    Error { message } => x
+}
+
+// ---- list rendering: each row is a string, the list folds via recursion -----
+fn rowText(doc: int, i: int, sel: int) -> string = {
+    let name = field(doc: doc, path: "[${i}].name")
+    let stars = field(doc: doc, path: "[${i}].stargazers_count")
+    let lang = field(doc: doc, path: "[${i}].language")
+    let nameP = pad(s: name, n: 20)
+    let starP = pad(s: stars, n: 7)
+    let row = "${nameP}* ${starP}${lang}"
+    match i == sel {
         true => {
-            let name = field(doc: doc, path: "[${i}].name")
-            let stars = field(doc: doc, path: "[${i}].stargazers_count")
-            let lang = field(doc: doc, path: "[${i}].language")
-            let nameP = pad(s: name, n: 20)
-            let starP = pad(s: stars, n: 7)
-            let row = "${nameP}* ${starP}${lang}"
-            let selected = i == sel
-            match selected {
-                true => {
-                    let arrow = cyan(">")
-                    let hl = invert(" ${row} ")
-                    print("  ${arrow} ${hl}")
-                }
-                false => {
-                    let nm = bold(nameP)
-                    let st = yellow("* ${starP}")
-                    let lg = dim(lang)
-                    print("    ${nm}${st}${lg}")
-                }
-            }
-            renderItem(doc: doc, i: i + 1, sel: sel, n: n)
+            let hl = invert(" ${row} ")
+            "  ${cyan(">")} ${hl}"
         }
-        false => print("")
+        false => {
+            let st = yellow("* ${starP}")
+            "    ${bold(nameP)}${st}${dim(lang)}"
+        }
     }
 }
 
-fn drawScreen(doc: int, sel: int, n: int) -> Unit = {
-    let cleared = termClear()
-    let title = bold(cyan("  OSPREY  -  GitHub Repos: ${githubUser()}  (live API)"))
-    let rule = dim("  ==================================================")
-    let hint = dim("  up/down or j/k move    enter details    q quit")
-    print("")
-    print(title)
-    print(rule)
-    print("")
-    renderItem(doc: doc, i: 0, sel: sel, n: n)
-    print(rule)
-    print(hint)
+fn rowsText(doc: int, i: int, sel: int, n: int) -> string = match i < n {
+    true => "${rowText(doc: doc, i: i, sel: sel)}\n${rowsText(doc: doc, i: inc(i), sel: sel, n: n)}"
+    false => ""
 }
 
-fn detailView(doc: int, sel: int) -> Unit = {
-    let cleared = termClear()
+fn screenText(doc: int, sel: int, n: int) -> string = {
+    let title = bold(cyan("  OSPREY  -  GitHub Repos: ${githubUser()}  (live API)"))
+    let hint = dim("  up/down or j/k move    enter details    q quit")
+    let rows = rowsText(doc: doc, i: 0, sel: sel, n: n)
+    "\n${title}\n${rule()}\n\n${rows}\n${rule()}\n${hint}"
+}
+
+fn detailText(doc: int, sel: int) -> string = {
     let name = field(doc: doc, path: "[${sel}].name")
     let stars = field(doc: doc, path: "[${sel}].stargazers_count")
     let lang = field(doc: doc, path: "[${sel}].language")
@@ -99,87 +96,56 @@ fn detailView(doc: int, sel: int) -> Unit = {
     let top = magenta("  +-- Repository ------------------------------+")
     let bot = magenta("  +--------------------------------------------+")
     let nameLine = bold(green(name))
-    let starsLabel = yellow("Stars")
-    let langLabel = cyan("Lang ")
-    let descLabel = dim("About")
-    print("")
-    print(top)
-    print("  |")
-    print("  |   ${nameLine}")
-    print("  |   ${starsLabel} : ${stars}")
-    print("  |   ${langLabel} : ${lang}")
-    print("  |   ${descLabel} : ${desc}")
-    print("  |")
-    print(bot)
-    print(dim("  press any key to go back"))
-    let k = termReadKey()
-    match k {
-        Success { value } => print("")
-        Error { message } => print("")
-    }
+    "\n${top}\n  |\n  |   ${nameLine}\n  |   ${yellow("Stars")} : ${stars}\n  |   ${cyan("Lang ")} : ${lang}\n  |   ${dim("About")} : ${desc}\n  |\n${bot}\n${dim("  press any key to go back")}"
 }
 
-// ---- selection movement -----------------------------------------------------
-// Checked arithmetic (+/-) returns Result<int, MathError>; unwrap it explicitly
-// with a fallback so the result is a plain int usable directly in a match arm.
-fn dec(x: int) -> int = {
-    let r = x - 1
-    match r {
-        Success { value } => value
-        Error { message } => x
-    }
+// ---- selection movement (pure int -> int) -----------------------------------
+fn moveUp(sel: int) -> int = match sel > 0 {
+    true => dec(sel)
+    false => sel
 }
 
-fn inc(x: int) -> int = {
-    let r = x + 1
-    match r {
-        Success { value } => value
-        Error { message } => x
-    }
+fn moveDown(sel: int, n: int) -> int = match sel < dec(n) {
+    true => inc(sel)
+    false => sel
 }
 
-fn moveUp(sel: int) -> int = {
-    match sel > 0 {
-        true => dec(sel)
-        false => sel
-    }
+// ---- screens: draw is the ONLY place that touches the terminal --------------
+fn drawScreen(doc: int, sel: int, n: int) -> Unit = {
+    let cleared = termClear()
+    print(screenText(doc: doc, sel: sel, n: n))
 }
 
-fn moveDown(sel: int, n: int) -> int = {
-    let last = dec(n)
-    match sel < last {
-        true => inc(sel)
-        false => sel
-    }
+fn detailView(doc: int, sel: int) -> Unit = {
+    let cleared = termClear()
+    let shown = print(detailText(doc: doc, sel: sel))
+    match termReadKey() { _ => print("") }
 }
 
 fn endApp() -> Unit = {
-    let r = termRawMode(0)
-    let s = termShowCursor()
+    let raw = termRawMode(0)
+    let cursor = termShowCursor()
     print(green("  Goodbye!"))
 }
 
 // ---- the render / input loop (recursion stands in for a while-loop) ---------
 fn uiLoop(doc: int, sel: int, n: int) -> Unit = {
     let drawn = drawScreen(doc: doc, sel: sel, n: n)
-    let k = termReadKey()
-    match k {
+    match termReadKey() {
         Success { value } => handleKey(doc: doc, sel: sel, n: n, key: value)
         Error { message } => endApp()
     }
 }
 
-fn handleKey(doc: int, sel: int, n: int, key: string) -> Unit = {
-    match key {
-        "q" => endApp()
-        "Esc" => endApp()
-        "Up" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
-        "k" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
-        "Down" => uiLoop(doc: doc, sel: moveDown(sel: sel, n: n), n: n)
-        "j" => uiLoop(doc: doc, sel: moveDown(sel: sel, n: n), n: n)
-        "Enter" => openDetail(doc: doc, sel: sel, n: n)
-        _ => uiLoop(doc: doc, sel: sel, n: n)
-    }
+fn handleKey(doc: int, sel: int, n: int, key: string) -> Unit = match key {
+    "q" => endApp()
+    "Esc" => endApp()
+    "Up" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
+    "k" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
+    "Down" => uiLoop(doc: doc, sel: moveDown(sel: sel, n: n), n: n)
+    "j" => uiLoop(doc: doc, sel: moveDown(sel: sel, n: n), n: n)
+    "Enter" => openDetail(doc: doc, sel: sel, n: n)
+    _ => uiLoop(doc: doc, sel: sel, n: n)
 }
 
 fn openDetail(doc: int, sel: int, n: int) -> Unit = {
@@ -189,17 +155,14 @@ fn openDetail(doc: int, sel: int, n: int) -> Unit = {
 
 // startUi parses the fetched JSON, enters raw mode + alternate screen, and runs
 // the interactive loop over the live repository list.
-fn startUi(bodyText: string) -> Unit = {
-    let doc = jsonParse(bodyText)
-    match doc {
-        Success { value } => {
-            let n = jsonLength(value, "")
-            let raw = termRawMode(1)
-            let hidden = termHideCursor()
-            uiLoop(doc: value, sel: 0, n: n)
-        }
-        Error { message } => print("JSON parse failed")
+fn startUi(bodyText: string) -> Unit = match jsonParse(bodyText) {
+    Success { value } => {
+        let n = jsonLength(value, "")
+        let raw = termRawMode(1)
+        let hidden = termHideCursor()
+        uiLoop(doc: value, sel: 0, n: n)
     }
+    Error { message } => print("JSON parse failed")
 }
 
 fn run() -> Unit = {
@@ -207,12 +170,13 @@ fn run() -> Unit = {
     // User-Agent header and rejects requests without one.
     let clientId = httpCreateClient("https://api.github.com", 10000)
     let path = "/users/${githubUser()}/repos?per_page=30&sort=updated"
-    let resp = httpGetResponse(clientId, path, "User-Agent: osprey-tui\r\nAccept: application/vnd.github+json\r\n")
+    let headers = "User-Agent: osprey-tui\r\nAccept: application/vnd.github+json\r\n"
+    let resp = httpGetResponse(clientId, path, headers)
     match resp {
         Success { value } => {
             let body = httpResponseBody(value)
             match body {
-                Success { text } => startUi(bodyText: text)
+                Success { text } => startUi(text)
                 Error { message } => print("Could not read response body")
             }
             let freed = httpResponseFree(value)
