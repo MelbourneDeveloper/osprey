@@ -10,13 +10,16 @@
 //  (https://api.github.com/users/<user>/repos) over HTTPS, parses the JSON,
 //  and renders a colored, arrow-key-navigable list on the alternate screen.
 //
-//  Everything is expressions: each screen is a STRING built by composing pure
-//  functions, then handed to a single print. The render loop is recursion
-//  (Osprey has no loop keyword) - each keystroke tail-calls the next frame.
+//  Expression-only: there are NO local bindings. Every screen is a string
+//  built by composing pure functions and concatenating with `+`. A value that
+//  more than one expression needs (the http client, a response handle, a row's
+//  columns) rides as a function PARAMETER instead of a local. Terminal control
+//  is just text - the clear/show-cursor ANSI escapes are folded straight into
+//  the printed string, so only the genuine tcsetattr syscall (termRawMode)
+//  stays a call. The loop is recursion: each keystroke tail-calls the next frame.
 //  Builtins exercised: httpCreateClient/httpGetResponse/httpResponseBody
 //  [HTTP-RESPONSE-HANDLE], jsonParse/jsonGet/jsonLength [BUILTIN-JSON],
-//  termRawMode/termReadKey/termClear/termHideCursor/termShowCursor
-//  [BUILTIN-TERM], \e ANSI escapes.
+//  termRawMode/termReadKey [BUILTIN-TERM], \e ANSI escapes.
 // ============================================================================
 
 // Which GitHub account's public repositories to browse.
@@ -33,7 +36,7 @@ fn invert(s: string) -> string = "\e[7m${s}\e[0m"
 
 fn rule() -> string = dim("  ==================================================")
 
-// ---- small Result-unwrapping helpers (one expression each) ------------------
+// ---- Result-unwrapping helpers (one expression each) ------------------------
 fn pad(s: string, n: int) -> string = match padEnd(s, n, " ") {
     Success { value } => value
     Error { message } => s
@@ -57,47 +60,42 @@ fn inc(x: int) -> int = match x + 1 {
 }
 
 // ---- list rendering: each row is a string, the list folds via recursion -----
-fn rowText(doc: int, i: int, sel: int) -> string = {
-    let name = field(doc: doc, path: "[${i}].name")
-    let stars = field(doc: doc, path: "[${i}].stargazers_count")
-    let lang = field(doc: doc, path: "[${i}].language")
-    let nameP = pad(s: name, n: 20)
-    let starP = pad(s: stars, n: 7)
-    let row = "${nameP}* ${starP}${lang}"
-    match i == sel {
-        true => {
-            let hl = invert(" ${row} ")
-            "  ${cyan(">")} ${hl}"
-        }
-        false => {
-            let st = yellow("* ${starP}")
-            "    ${bold(nameP)}${st}${dim(lang)}"
-        }
-    }
+// rowLine takes the three already-extracted columns as parameters (computed
+// once by rowText) so neither branch recomputes them and no local is needed.
+fn rowLine(i: int, sel: int, nameP: string, starP: string, lang: string) -> string = match i == sel {
+    true => "  " + cyan(">") + " " + invert(" " + nameP + "* " + starP + lang + " ")
+    false => "    " + bold(nameP) + yellow("* " + starP) + dim(lang)
 }
 
+fn rowText(doc: int, i: int, sel: int) -> string = rowLine(
+    i: i,
+    sel: sel,
+    nameP: pad(s: field(doc: doc, path: "[${i}].name"), n: 20),
+    starP: pad(s: field(doc: doc, path: "[${i}].stargazers_count"), n: 7),
+    lang: field(doc: doc, path: "[${i}].language"))
+
 fn rowsText(doc: int, i: int, sel: int, n: int) -> string = match i < n {
-    true => "${rowText(doc: doc, i: i, sel: sel)}\n${rowsText(doc: doc, i: inc(i), sel: sel, n: n)}"
+    true => rowText(doc: doc, i: i, sel: sel) + "\n" + rowsText(doc: doc, i: inc(i), sel: sel, n: n)
     false => ""
 }
 
-fn screenText(doc: int, sel: int, n: int) -> string = {
-    let title = bold(cyan("  OSPREY  -  GitHub Repos: ${githubUser()}  (live API)"))
-    let hint = dim("  up/down or j/k move    enter details    q quit")
-    let rows = rowsText(doc: doc, i: 0, sel: sel, n: n)
-    "\n${title}\n${rule()}\n\n${rows}\n${rule()}\n${hint}"
-}
+fn screenText(doc: int, sel: int, n: int) -> string =
+    "\n" +
+    bold(cyan("  OSPREY  -  GitHub Repos: ${githubUser()}  (live API)")) + "\n" +
+    rule() + "\n\n" +
+    rowsText(doc: doc, i: 0, sel: sel, n: n) + "\n" +
+    rule() + "\n" +
+    dim("  up/down or j/k move    enter details    q quit")
 
-fn detailText(doc: int, sel: int) -> string = {
-    let name = field(doc: doc, path: "[${sel}].name")
-    let stars = field(doc: doc, path: "[${sel}].stargazers_count")
-    let lang = field(doc: doc, path: "[${sel}].language")
-    let desc = field(doc: doc, path: "[${sel}].description")
-    let top = magenta("  +-- Repository ------------------------------+")
-    let bot = magenta("  +--------------------------------------------+")
-    let nameLine = bold(green(name))
-    "\n${top}\n  |\n  |   ${nameLine}\n  |   ${yellow("Stars")} : ${stars}\n  |   ${cyan("Lang ")} : ${lang}\n  |   ${dim("About")} : ${desc}\n  |\n${bot}\n${dim("  press any key to go back")}"
-}
+fn detailText(doc: int, sel: int) -> string =
+    "\n" +
+    magenta("  +-- Repository ------------------------------+") + "\n  |\n  |   " +
+    bold(green(field(doc: doc, path: "[${sel}].name"))) + "\n  |   " +
+    yellow("Stars") + " : " + field(doc: doc, path: "[${sel}].stargazers_count") + "\n  |   " +
+    cyan("Lang ") + " : " + field(doc: doc, path: "[${sel}].language") + "\n  |   " +
+    dim("About") + " : " + field(doc: doc, path: "[${sel}].description") + "\n  |\n" +
+    magenta("  +--------------------------------------------+") + "\n" +
+    dim("  press any key to go back")
 
 // ---- selection movement (pure int -> int) -----------------------------------
 fn moveUp(sel: int) -> int = match sel > 0 {
@@ -110,27 +108,26 @@ fn moveDown(sel: int, n: int) -> int = match sel < dec(n) {
     false => sel
 }
 
-// ---- screens: draw is the ONLY place that touches the terminal --------------
-fn drawScreen(doc: int, sel: int, n: int) -> Unit = {
-    let cleared = termClear()
-    print(screenText(doc: doc, sel: sel, n: n))
-}
+// ---- screens: terminal control is just text -------------------------------
+// \e[2J\e[H clears + homes the cursor; \e[?25h shows it. Folding these escapes
+// into the printed string means a "clear" is a character, not a side effect.
+fn drawScreen(doc: int, sel: int, n: int) -> Unit = print("\e[2J\e[H" + screenText(doc: doc, sel: sel, n: n))
 
 fn detailView(doc: int, sel: int) -> Unit = {
-    let cleared = termClear()
-    let shown = print(detailText(doc: doc, sel: sel))
+    print("\e[2J\e[H" + detailText(doc: doc, sel: sel))
     match termReadKey() { _ => print("") }
 }
 
+// termRawMode is a real tcsetattr syscall (it also toggles the alternate
+// screen), so it stays a call; the show-cursor escape folds into the farewell.
 fn endApp() -> Unit = {
-    let raw = termRawMode(0)
-    let cursor = termShowCursor()
-    print(green("  Goodbye!"))
+    termRawMode(0)
+    print("\e[?25h" + green("  Goodbye!"))
 }
 
 // ---- the render / input loop (recursion stands in for a while-loop) ---------
 fn uiLoop(doc: int, sel: int, n: int) -> Unit = {
-    let drawn = drawScreen(doc: doc, sel: sel, n: n)
+    drawScreen(doc: doc, sel: sel, n: n)
     match termReadKey() {
         Success { value } => handleKey(doc: doc, sel: sel, n: n, key: value)
         Error { message } => endApp()
@@ -149,41 +146,41 @@ fn handleKey(doc: int, sel: int, n: int, key: string) -> Unit = match key {
 }
 
 fn openDetail(doc: int, sel: int, n: int) -> Unit = {
-    let shown = detailView(doc: doc, sel: sel)
+    detailView(doc: doc, sel: sel)
     uiLoop(doc: doc, sel: sel, n: n)
 }
 
-// startUi parses the fetched JSON, enters raw mode + alternate screen, and runs
+// startUi enters raw mode + the alternate screen, hides the cursor, and runs
 // the interactive loop over the live repository list.
 fn startUi(bodyText: string) -> Unit = match jsonParse(bodyText) {
     Success { value } => {
-        let n = jsonLength(value, "")
-        let raw = termRawMode(1)
-        let hidden = termHideCursor()
-        uiLoop(doc: value, sel: 0, n: n)
+        termRawMode(1)
+        termHideCursor()
+        uiLoop(doc: value, sel: 0, n: jsonLength(value, ""))
     }
     Error { message } => print("JSON parse failed")
 }
 
-fn run() -> Unit = {
-    // Real, live HTTPS call to the GitHub REST API. GitHub requires a
-    // User-Agent header and rejects requests without one.
-    let clientId = httpCreateClient("https://api.github.com", 10000)
-    let path = "/users/${githubUser()}/repos?per_page=30&sort=updated"
-    let headers = "User-Agent: osprey-tui\r\nAccept: application/vnd.github+json\r\n"
-    let resp = httpGetResponse(clientId, path, headers)
-    match resp {
-        Success { value } => {
-            let body = httpResponseBody(value)
-            match body {
-                Success { text } => startUi(text)
-                Error { message } => print("Could not read response body")
-            }
-            let freed = httpResponseFree(value)
-        }
+// ---- HTTP plumbing ----------------------------------------------------------
+// The client id and the response handle are each needed twice (request then
+// close; read then free), so they travel as parameters rather than locals.
+fn run() -> Unit = browse(httpCreateClient("https://api.github.com", 10000))
+
+fn browse(clientId: int) -> Unit = {
+    // GitHub requires a User-Agent header and rejects requests without one.
+    match httpGetResponse(clientId, "/users/${githubUser()}/repos?per_page=30&sort=updated", "User-Agent: osprey-tui\r\nAccept: application/vnd.github+json\r\n") {
+        Success { value } => useResponse(value)
         Error { message } => print("Request failed: ${message}")
     }
-    let closed = httpCloseClient(clientId)
+    httpCloseClient(clientId)
+}
+
+fn useResponse(resp: int) -> Unit = {
+    match httpResponseBody(resp) {
+        Success { text } => startUi(text)
+        Error { message } => print("Could not read response body")
+    }
+    httpResponseFree(resp)
 }
 
 run()
