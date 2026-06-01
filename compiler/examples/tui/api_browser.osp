@@ -1,0 +1,222 @@
+// ============================================================================
+//  Osprey TUI showcase: a colored, arrow-key-driven browser that calls an
+//  HTTP API and renders the JSON response. Run it:
+//
+//      osprey examples/tui/api_browser.osp --run
+//
+//  Keys:  Up / Down (or k / j) move   Enter open details   q / Esc quit
+//
+//  Architecture: a local HTTP server stands in for "an arbitrary API" so the
+//  demo is self-contained. The render loop is expressed as recursion (Osprey
+//  has no loop keyword) - each keystroke tail-calls the next frame.
+//  Builtins exercised: httpGetResponse/httpResponseBody [HTTP-RESPONSE-HANDLE],
+//  jsonParse/jsonGet/jsonLength [BUILTIN-JSON], termRawMode/termReadKey/
+//  termClear/termHideCursor/termShowCursor [BUILTIN-TERM], \e ANSI escapes.
+// ============================================================================
+
+// ---- the "API": a local server returning a JSON array of repositories ------
+fn handleRequest(method: string, path: string, headers: string, body: string) -> HttpResponse = HttpResponse {
+    status: 200,
+    headers: "Content-Type: application/json",
+    contentType: "application/json",
+    streamFd: -1,
+    isComplete: true,
+    partialBody: "[{\"name\":\"osprey\",\"stars\":1200,\"lang\":\"Go\",\"desc\":\"A functional language with compile-time algebraic effects\"},{\"name\":\"llvm\",\"stars\":9001,\"lang\":\"C++\",\"desc\":\"Modular compiler and toolchain infrastructure\"},{\"name\":\"antlr\",\"stars\":4200,\"lang\":\"Java\",\"desc\":\"Powerful parser generator for reading and processing text\"},{\"name\":\"ziglang\",\"stars\":3300,\"lang\":\"Zig\",\"desc\":\"A general-purpose language and toolchain for robust software\"}]"
+}
+
+// ---- ANSI color helpers (pure string wrappers) -----------------------------
+fn cyan(s: string) -> string = "\e[36m${s}\e[0m"
+fn green(s: string) -> string = "\e[32m${s}\e[0m"
+fn yellow(s: string) -> string = "\e[33m${s}\e[0m"
+fn magenta(s: string) -> string = "\e[35m${s}\e[0m"
+fn bold(s: string) -> string = "\e[1m${s}\e[0m"
+fn dim(s: string) -> string = "\e[2m${s}\e[0m"
+fn invert(s: string) -> string = "\e[7m${s}\e[0m"
+
+// ---- small Result-unwrapping helpers ---------------------------------------
+fn pad(s: string, n: int) -> string = {
+    let r = padEnd(s, n, " ")
+    match r {
+        Success { value } => value
+        Error { message } => s
+    }
+}
+
+fn field(doc: int, path: string) -> string = {
+    let r = jsonGet(doc, path)
+    match r {
+        Success { value } => value
+        Error { message } => "?"
+    }
+}
+
+// ---- list rendering --------------------------------------------------------
+fn renderItem(doc: int, i: int, sel: int, n: int) -> Unit = {
+    match i < n {
+        true => {
+            let name = field(doc: doc, path: "[${i}].name")
+            let stars = field(doc: doc, path: "[${i}].stars")
+            let lang = field(doc: doc, path: "[${i}].lang")
+            let nameP = pad(s: name, n: 14)
+            let starP = pad(s: stars, n: 7)
+            let row = "${nameP}* ${starP}${lang}"
+            let selected = i == sel
+            match selected {
+                true => {
+                    let arrow = cyan(">")
+                    let hl = invert(" ${row} ")
+                    print("  ${arrow} ${hl}")
+                }
+                false => {
+                    let nm = bold(nameP)
+                    let st = yellow("* ${starP}")
+                    let lg = dim(lang)
+                    print("    ${nm}${st}${lg}")
+                }
+            }
+            renderItem(doc: doc, i: i + 1, sel: sel, n: n)
+        }
+        false => print("")
+    }
+}
+
+fn drawScreen(doc: int, sel: int, n: int) -> Unit = {
+    let cleared = termClear()
+    let title = bold(cyan("  OSPREY   -   Repository Browser"))
+    let rule = dim("  ========================================")
+    let hint = dim("  up/down or j/k move    enter details    q quit")
+    print("")
+    print(title)
+    print(rule)
+    print("")
+    renderItem(doc: doc, i: 0, sel: sel, n: n)
+    print(rule)
+    print(hint)
+}
+
+fn detailView(doc: int, sel: int) -> Unit = {
+    let cleared = termClear()
+    let name = field(doc: doc, path: "[${sel}].name")
+    let stars = field(doc: doc, path: "[${sel}].stars")
+    let lang = field(doc: doc, path: "[${sel}].lang")
+    let desc = field(doc: doc, path: "[${sel}].desc")
+    let top = magenta("  +-- Repository ------------------------------+")
+    let bot = magenta("  +--------------------------------------------+")
+    let nameLine = bold(green(name))
+    let starsLabel = yellow("Stars")
+    let langLabel = cyan("Lang ")
+    let descLabel = dim("About")
+    print("")
+    print(top)
+    print("  |")
+    print("  |   ${nameLine}")
+    print("  |   ${starsLabel} : ${stars}")
+    print("  |   ${langLabel} : ${lang}")
+    print("  |   ${descLabel} : ${desc}")
+    print("  |")
+    print(bot)
+    print(dim("  press any key to go back"))
+    let k = termReadKey()
+    match k {
+        Success { value } => print("")
+        Error { message } => print("")
+    }
+}
+
+// ---- selection movement -----------------------------------------------------
+// Checked arithmetic (+/-) returns Result<int, MathError>; unwrap it explicitly
+// with a fallback so the result is a plain int usable directly in a match arm.
+fn dec(x: int) -> int = {
+    let r = x - 1
+    match r {
+        Success { value } => value
+        Error { message } => x
+    }
+}
+
+fn inc(x: int) -> int = {
+    let r = x + 1
+    match r {
+        Success { value } => value
+        Error { message } => x
+    }
+}
+
+fn moveUp(sel: int) -> int = {
+    match sel > 0 {
+        true => dec(sel)
+        false => sel
+    }
+}
+
+fn moveDown(sel: int, n: int) -> int = {
+    let last = dec(n)
+    match sel < last {
+        true => inc(sel)
+        false => sel
+    }
+}
+
+fn endApp() -> Unit = {
+    let r = termRawMode(0)
+    let s = termShowCursor()
+    print(green("  Goodbye!"))
+}
+
+// ---- the render / input loop (recursion stands in for a while-loop) ---------
+fn uiLoop(doc: int, sel: int, n: int) -> Unit = {
+    let drawn = drawScreen(doc: doc, sel: sel, n: n)
+    let k = termReadKey()
+    match k {
+        Success { value } => handleKey(doc: doc, sel: sel, n: n, key: value)
+        Error { message } => endApp()
+    }
+}
+
+fn handleKey(doc: int, sel: int, n: int, key: string) -> Unit = {
+    match key {
+        "q" => endApp()
+        "Esc" => endApp()
+        "Up" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
+        "k" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
+        "Down" => uiLoop(doc: doc, sel: moveDown(sel: sel, n: n), n: n)
+        "j" => uiLoop(doc: doc, sel: moveDown(sel: sel, n: n), n: n)
+        "Enter" => openDetail(doc: doc, sel: sel, n: n)
+        _ => uiLoop(doc: doc, sel: sel, n: n)
+    }
+}
+
+fn openDetail(doc: int, sel: int, n: int) -> Unit = {
+    let shown = detailView(doc: doc, sel: sel)
+    uiLoop(doc: doc, sel: sel, n: n)
+}
+
+fn run() -> Unit = {
+    let serverId = httpCreateServer(18097, "127.0.0.1")
+    let listenResult = httpListen(serverId, handleRequest)
+    let clientId = httpCreateClient("http://127.0.0.1:18097", 5000)
+    let resp = httpGetResponse(clientId, "/repos", "")
+    match resp {
+        Success { value } => {
+            let body = httpResponseBody(value)
+            match body {
+                Success { value } => {
+                    let doc = jsonParse(value)
+                    match doc {
+                        Success { value } => {
+                            let n = jsonLength(value, "")
+                            let raw = termRawMode(1)
+                            let hidden = termHideCursor()
+                            uiLoop(doc: value, sel: 0, n: n)
+                        }
+                        Error { message } => print("JSON parse failed")
+                    }
+                }
+                Error { message } => print("Could not read response body")
+            }
+        }
+        Error { message } => print("Request failed: ${message}")
+    }
+}
+
+run()

@@ -4,6 +4,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 
+const extensionId = 'nimblesite.osprey';
+
 suite('Osprey Extension Integration Tests', () => {
   let tempDir: string;
   let testFile: string;
@@ -40,7 +42,7 @@ print(result)
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Check that the extension is active
-    const extension = vscode.extensions.getExtension('christianfindlay.osprey-language-support');
+    const extension = vscode.extensions.getExtension(extensionId);
     assert.ok(extension, 'Extension should be found');
     
     if (extension) {
@@ -120,7 +122,7 @@ fn broken syntax here {
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Extension should still be active even with invalid code
-    const extension = vscode.extensions.getExtension('christianfindlay.osprey-language-support');
+    const extension = vscode.extensions.getExtension(extensionId);
     assert.ok(extension?.isActive, 'Extension should remain active with invalid code');
   });
 
@@ -144,7 +146,7 @@ fn broken syntax here {
     // Should still work
     assert.strictEqual(document.languageId, 'osprey');
     
-    const extension = vscode.extensions.getExtension('christianfindlay.osprey-language-support');
+    const extension = vscode.extensions.getExtension(extensionId);
     assert.ok(extension?.isActive, 'Extension should work without workspace');
   });
 
@@ -197,7 +199,7 @@ fn broken syntax here {
     await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Extension should still be active
-    const extension = vscode.extensions.getExtension('christianfindlay.osprey-language-support');
+    const extension = vscode.extensions.getExtension(extensionId);
     assert.ok(extension?.isActive, 'Extension should remain active with language server');
   });
 });
@@ -391,4 +393,4 @@ let x = te
       console.log('Code completion failed:', error);
     }
   });
-}); 
+});

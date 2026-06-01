@@ -942,11 +942,13 @@ func (g *LLVMGenerator) generateInterpolatedString(interpStr *ast.InterpolatedSt
 	formatPtr := g.builder.NewGetElementPtr(formatStr.Typ, formatGlobal,
 		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
 
-	// Allocate buffer for result string (simplified - use fixed size)
-	bufferType := types.NewArray(BufferSize1KB, types.I8) // 1KB buffer
-	buffer := g.builder.NewAlloca(bufferType)
-	bufferPtr := g.builder.NewGetElementPtr(bufferType, buffer,
-		constant.NewInt(types.I32, ArrayIndexZero), constant.NewInt(types.I32, ArrayIndexZero))
+	// Allocate the result buffer on the heap (malloc), not the stack. A stack
+	// alloca dangles the instant the value escapes this frame — when an Osprey
+	// function returns an interpolated string, or a nested/subsequent
+	// interpolation reuses the frame — yielding empty or garbage output. Heap
+	// allocation keeps the pointer valid and matches generateIntToString.
+	malloc := g.ensureMallocDeclaration()
+	bufferPtr := g.builder.NewCall(malloc, constant.NewInt(types.I64, int64(BufferSize1KB)))
 
 	// Call sprintf(buffer, format, args...)
 	sprintfArgs := make([]value.Value, 0, len(args)+TwoArgs)

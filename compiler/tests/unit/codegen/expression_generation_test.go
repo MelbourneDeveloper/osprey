@@ -76,6 +76,50 @@ func TestMethodCallExpression(t *testing.T) {
 	}
 }
 
+func TestRuntimeMapIndexAvoidsFlatMapGEP(t *testing.T) {
+	source := `
+fn main() -> Unit = {
+  let ra = 9
+  let m = mapSet(mapSet(Map(), "a", ra), "b", 16)
+  match m["a"] {
+    Success { value } => print("a=" + toString(value))
+    Error { message } => print("miss")
+  }
+}
+`
+	ir, err := codegen.CompileToLLVM(source)
+	if err != nil {
+		t.Fatalf("runtime map index should compile: %v", err)
+	}
+	if !strings.Contains(ir, "@osprey_map_get") {
+		t.Fatalf("runtime map index should call osprey_map_get:\n%s", ir)
+	}
+	if strings.Contains(ir, "getelementptr { i64, i8* }, i8*") {
+		t.Fatalf("runtime map index emitted flat map GEP over i8*:\n%s", ir)
+	}
+}
+
+func TestRuntimeListParameterUsesOpaqueHandle(t *testing.T) {
+	source := `
+fn report(xs) -> Unit = print("len " + toString(listLength(xs)))
+
+fn main() -> Unit = {
+  let scores = listAppend(List(), 81)
+  report(scores)
+}
+`
+	ir, err := codegen.CompileToLLVM(source)
+	if err != nil {
+		t.Fatalf("runtime list helper should compile: %v", err)
+	}
+	if !strings.Contains(ir, "define void @report(i8* %xs)") {
+		t.Fatalf("runtime list helper parameter should be an opaque handle:\n%s", ir)
+	}
+	if strings.Contains(ir, "call i64 @osprey_list_length(i64") {
+		t.Fatalf("runtime list helper called osprey_list_length with i64:\n%s", ir)
+	}
+}
+
 func TestFieldAccessExpression(t *testing.T) {
 	tests := []struct {
 		name     string

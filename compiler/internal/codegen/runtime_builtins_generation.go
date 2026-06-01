@@ -1,8 +1,6 @@
 package codegen
 
 import (
-	"fmt"
-
 	"github.com/christianfindlay/osprey/internal/ast"
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
@@ -65,7 +63,7 @@ func (g *LLVMGenerator) generateRuntimeBuiltinCall(callExpr *ast.CallExpression)
 
 	switch retName {
 	case runtimeRetResultString:
-		return g.wrapStringResult(call, name), nil
+		return g.wrapStringResult(call, g.createGlobalString(name+" failed")), nil
 	case runtimeRetResultInt:
 		return g.wrapIntResult(call), nil
 	default:
@@ -94,74 +92,48 @@ func (g *LLVMGenerator) ensureRawCFunction(cName string, retType types.Type,
 }
 
 // wrapStringResult turns an i8* C return into Result<string, Error>: NULL maps
-// to Error, anything else to Success. Mirrors generateReadFileCall.
-func (g *LLVMGenerator) wrapStringResult(callValue value.Value, label string) value.Value {
+// to Error (carrying errMsg), anything else to Success. Built with select
+// instructions (no extra basic blocks) so it composes cleanly when used
+// repeatedly inside match arms.
+func (g *LLVMGenerator) wrapStringResult(callValue, errMsg value.Value) value.Value {
 	resultType := g.getResultType(types.I8Ptr)
 	result := g.builder.NewAlloca(resultType)
 
-	nullPtr := constant.NewNull(types.I8Ptr)
-	isError := g.builder.NewICmp(enum.IPredEQ, callValue, nullPtr)
+	isError := g.builder.NewICmp(enum.IPredEQ, callValue, constant.NewNull(types.I8Ptr))
 
-	blockID := len(g.function.Blocks)
-	successBlock := g.function.NewBlock(fmt.Sprintf("rt_str_succ_%d", blockID))
-	errorBlock := g.function.NewBlock(fmt.Sprintf("rt_str_err_%d", blockID))
-	continueBlock := g.function.NewBlock(fmt.Sprintf("rt_str_cont_%d", blockID))
+	valueField := g.builder.NewSelect(isError, errMsg, callValue)
+	discriminant := g.builder.NewSelect(isError,
+		constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
 
-	g.builder.NewCondBr(isError, errorBlock, successBlock)
-
-	g.builder = successBlock
-	g.storeResultFields(resultType, result, callValue, 0)
-	g.builder.NewBr(continueBlock)
-
-	g.builder = errorBlock
-	errMsg := g.createGlobalString(label + " failed")
-	g.storeResultFields(resultType, result, errMsg, 1)
-	g.builder.NewBr(continueBlock)
-
-	g.builder = continueBlock
+	g.storeResult(resultType, result, valueField, discriminant)
 
 	return result
 }
 
 // wrapIntResult turns an i64 C return into Result<int, Error>: a negative value
-// maps to Error (the code is preserved), zero or positive to Success. Mirrors
-// generateWriteFileCall.
+// maps to Error (the code is preserved in the value field), zero or positive to
+// Success. Built with select instructions (no extra basic blocks).
 func (g *LLVMGenerator) wrapIntResult(callValue value.Value) value.Value {
 	resultType := g.getResultType(types.I64)
 	result := g.builder.NewAlloca(resultType)
 
-	zero := constant.NewInt(types.I64, 0)
-	isError := g.builder.NewICmp(enum.IPredSLT, callValue, zero)
+	isError := g.builder.NewICmp(enum.IPredSLT, callValue, constant.NewInt(types.I64, 0))
+	discriminant := g.builder.NewSelect(isError,
+		constant.NewInt(types.I8, 1), constant.NewInt(types.I8, 0))
 
-	blockID := len(g.function.Blocks)
-	successBlock := g.function.NewBlock(fmt.Sprintf("rt_int_succ_%d", blockID))
-	errorBlock := g.function.NewBlock(fmt.Sprintf("rt_int_err_%d", blockID))
-	continueBlock := g.function.NewBlock(fmt.Sprintf("rt_int_cont_%d", blockID))
-
-	g.builder.NewCondBr(isError, errorBlock, successBlock)
-
-	g.builder = successBlock
-	g.storeResultFields(resultType, result, callValue, 0)
-	g.builder.NewBr(continueBlock)
-
-	g.builder = errorBlock
-	g.storeResultFields(resultType, result, callValue, 1)
-	g.builder.NewBr(continueBlock)
-
-	g.builder = continueBlock
+	g.storeResult(resultType, result, callValue, discriminant)
 
 	return result
 }
 
-// storeResultFields writes the value field and the discriminant (0=Success,
-// 1=Error) of a Result struct allocation.
-func (g *LLVMGenerator) storeResultFields(resultType *types.StructType,
-	result value.Value, fieldValue value.Value, discriminant int64) {
+// storeResult writes the value field and the discriminant of a Result struct.
+func (g *LLVMGenerator) storeResult(resultType *types.StructType,
+	result, valueField, discriminant value.Value) {
 	valuePtr := g.builder.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
-	g.builder.NewStore(fieldValue, valuePtr)
+	g.builder.NewStore(valueField, valuePtr)
 
 	discriminantPtr := g.builder.NewGetElementPtr(resultType, result,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	g.builder.NewStore(constant.NewInt(types.I8, discriminant), discriminantPtr)
+	g.builder.NewStore(discriminant, discriminantPtr)
 }

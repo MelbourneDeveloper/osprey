@@ -46,9 +46,12 @@ jobs:
       - name: Install jq and Xvfb
         run: sudo apt-get install -y jq xvfb
 
-      # [SWR-VERSION-MANIFEST] keep shipwright.json valid against the schema.
+      # [SWR-VERSION-MANIFEST] keep shipwright.json valid against the in-repo
+      # Shipwright schema. Do not use @nimblesite/shipwright-validate-manifest:
+      # published versions currently ship without their bundled schemas.
       - name: Validate deployment manifest
-        run: npx --yes @nimblesite/shipwright-validate-manifest shipwright.json
+        run: npm run test:shipwright
+        working-directory: ./vscode-extension
 
       - name: Lint
         run: make lint

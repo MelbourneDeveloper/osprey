@@ -1120,6 +1120,11 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 		return types.I1
 	case TypeUnit:
 		return types.Void
+	case TypeList, TypeMap:
+		// Concrete List()/Map() values are runtime-owned opaque handles.
+		// Generic list/map literals keep their flat typed layouts in
+		// getLLVMGenericType below.
+		return types.I8Ptr
 	case TypeHTTPResponse:
 		// Return pointer to HttpResponse struct
 		if httpResponseType, exists := g.typeMap[TypeHTTPResponse]; exists {
