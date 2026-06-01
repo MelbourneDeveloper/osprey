@@ -1,26 +1,36 @@
 // ============================================================================
-//  Osprey TUI showcase: a colored, arrow-key-driven browser that calls a REAL
-//  HTTP API over TLS and renders the live JSON response. Run it:
+//  Osprey TUI showcase: a colored, arrow-key-driven browser over a REAL HTTP
+//  API, written in the algebraic-effects style. Run it:
 //
 //      osprey examples/tui/api_browser.osp --run
 //
 //  Keys:  Up / Down (or k / j) move   Enter open details   q / Esc quit
 //
-//  It fetches live public repositories from the GitHub REST API
-//  (https://api.github.com/users/<user>/repos) over HTTPS, parses the JSON,
-//  and renders a colored, arrow-key-navigable list on the alternate screen.
+//  Every side effect is an ALGEBRAIC EFFECT. The program logic never touches
+//  a socket, a file descriptor or a terminal ioctl - it only `perform`s:
+//      perform Console.print(line)        -- write a line of output
+//      perform Terminal.readKey()         -- await one keystroke
+//      perform Terminal.raw(1)            -- enter/leave raw mode
+//      perform Http.fetch(path)           -- GET a path, yield the body
+//  The messy interpretation - opening a TLS client, reading the response,
+//  freeing the handle, closing the client, calling tcsetattr - lives ONLY in
+//  the handlers installed by `main`, where effects are discharged into real
+//  I/O. Swap those handlers and the same UI runs against a mock, a recording,
+//  or a test harness, with zero changes to the logic below.
 //
-//  Expression-only: there are NO local bindings. Every screen is a string
-//  built by composing pure functions and concatenating with `+`. A value that
-//  more than one expression needs (the http client, a response handle, a row's
-//  columns) rides as a function PARAMETER instead of a local. Terminal control
-//  is just text - the clear/show-cursor ANSI escapes are folded straight into
-//  the printed string, so only the genuine tcsetattr syscall (termRawMode)
-//  stays a call. The loop is recursion: each keystroke tail-calls the next frame.
-//  Builtins exercised: httpCreateClient/httpGetResponse/httpResponseBody
-//  [HTTP-RESPONSE-HANDLE], jsonParse/jsonGet/jsonLength [BUILTIN-JSON],
-//  termRawMode/termReadKey [BUILTIN-TERM], \e ANSI escapes.
+//  The render loop is recursion (Osprey has no loop keyword); each keystroke
+//  tail-calls the next frame. Screens are strings built by composing pure
+//  functions. Terminal control codes are just text folded into those strings.
+//  [BUILTIN-JSON] jsonParse/jsonGet/jsonLength, [HTTP-RESPONSE-HANDLE], \e ANSI.
 // ============================================================================
+
+// ---- effects: the complete vocabulary of side effects this program has ------
+effect Console { print: fn(string) -> Unit }
+effect Terminal {
+    readKey: fn() -> Result<string, Error>
+    raw:     fn(int) -> Unit
+}
+effect Http { fetch: fn(string) -> Result<string, Error> }
 
 // Which GitHub account's public repositories to browse.
 fn githubUser() -> string = "MelbourneDeveloper"
@@ -108,33 +118,32 @@ fn moveDown(sel: int, n: int) -> int = match sel < dec(n) {
     false => sel
 }
 
-// ---- screens: terminal control is just text -------------------------------
-// \e[2J\e[H clears + homes the cursor; \e[?25h shows it. Folding these escapes
-// into the printed string means a "clear" is a character, not a side effect.
-fn drawScreen(doc: int, sel: int, n: int) -> Unit = print("\e[2J\e[H" + screenText(doc: doc, sel: sel, n: n))
+// ---- the UI: pure effect logic. No I/O primitives appear below. -------------
+// \e[?25l hides the cursor, \e[2J\e[H clears + homes; folding them into the
+// printed frame means "clear screen" is text, performed through Console.
+fn drawScreen(doc: int, sel: int, n: int) -> Unit !Console =
+    perform Console.print("\e[?25l\e[2J\e[H" + screenText(doc: doc, sel: sel, n: n))
 
-fn detailView(doc: int, sel: int) -> Unit = {
-    print("\e[2J\e[H" + detailText(doc: doc, sel: sel))
-    match termReadKey() { _ => print("") }
+fn detailView(doc: int, sel: int) -> Unit ![Console, Terminal] = {
+    perform Console.print("\e[2J\e[H" + detailText(doc: doc, sel: sel))
+    match perform Terminal.readKey() { _ => perform Console.print("") }
 }
 
-// termRawMode is a real tcsetattr syscall (it also toggles the alternate
-// screen), so it stays a call; the show-cursor escape folds into the farewell.
-fn endApp() -> Unit = {
-    termRawMode(0)
-    print("\e[?25h" + green("  Goodbye!"))
+fn endApp() -> Unit ![Console, Terminal] = {
+    perform Terminal.raw(0)
+    perform Console.print("\e[?25h" + green("  Goodbye!"))
 }
 
 // ---- the render / input loop (recursion stands in for a while-loop) ---------
-fn uiLoop(doc: int, sel: int, n: int) -> Unit = {
+fn uiLoop(doc: int, sel: int, n: int) -> Unit ![Console, Terminal] = {
     drawScreen(doc: doc, sel: sel, n: n)
-    match termReadKey() {
+    match perform Terminal.readKey() {
         Success { value } => handleKey(doc: doc, sel: sel, n: n, key: value)
         Error { message } => endApp()
     }
 }
 
-fn handleKey(doc: int, sel: int, n: int, key: string) -> Unit = match key {
+fn handleKey(doc: int, sel: int, n: int, key: string) -> Unit ![Console, Terminal] = match key {
     "q" => endApp()
     "Esc" => endApp()
     "Up" => uiLoop(doc: doc, sel: moveUp(sel), n: n)
@@ -145,42 +154,70 @@ fn handleKey(doc: int, sel: int, n: int, key: string) -> Unit = match key {
     _ => uiLoop(doc: doc, sel: sel, n: n)
 }
 
-fn openDetail(doc: int, sel: int, n: int) -> Unit = {
+fn openDetail(doc: int, sel: int, n: int) -> Unit ![Console, Terminal] = {
     detailView(doc: doc, sel: sel)
     uiLoop(doc: doc, sel: sel, n: n)
 }
 
-// startUi enters raw mode + the alternate screen, hides the cursor, and runs
-// the interactive loop over the live repository list.
-fn startUi(bodyText: string) -> Unit = match jsonParse(bodyText) {
+// startUi enters raw mode + the alternate screen and runs the loop over the
+// live repository list. Raw mode is requested as an effect, not a syscall.
+fn startUi(bodyText: string) -> Unit ![Console, Terminal] = match jsonParse(bodyText) {
     Success { value } => {
-        termRawMode(1)
-        termHideCursor()
+        perform Terminal.raw(1)
         uiLoop(doc: value, sel: 0, n: jsonLength(value, ""))
     }
-    Error { message } => print("JSON parse failed")
+    Error { message } => perform Console.print("JSON parse failed")
 }
 
-// ---- HTTP plumbing ----------------------------------------------------------
-// The client id and the response handle are each needed twice (request then
-// close; read then free), so they travel as parameters rather than locals.
-fn run() -> Unit = browse(httpCreateClient("https://api.github.com", 10000))
+// The whole program in one effectful expression: fetch, then browse the result.
+fn app() -> Unit ![Console, Terminal, Http] = match perform Http.fetch("/users/${githubUser()}/repos?per_page=30&sort=updated") {
+    Success { text } => startUi(text)
+    Error { message } => perform Console.print("Request failed")
+}
 
-fn browse(clientId: int) -> Unit = {
-    // GitHub requires a User-Agent header and rejects requests without one.
-    match httpGetResponse(clientId, "/users/${githubUser()}/repos?per_page=30&sort=updated", "User-Agent: osprey-tui\r\nAccept: application/vnd.github+json\r\n") {
-        Success { value } => useResponse(value)
-        Error { message } => print("Request failed: ${message}")
-    }
+// ---- interpretation: the ONLY place real I/O happens ------------------------
+// The Http handler hides the entire client/response lifecycle behind one
+// `fetch`. The client id rides as a parameter (used for both the request and
+// the close); the response handle is matched the instant it is produced.
+fn ghHeaders() -> string = "User-Agent: osprey-tui\r\nAccept: application/vnd.github+json\r\n"
+
+fn fetchBody(path: string) -> Result<string, Error> =
+    dispatch(clientId: httpCreateClient("https://api.github.com", 10000), path: path)
+
+fn dispatch(clientId: int, path: string) -> Result<string, Error> = match httpGetResponse(clientId, path, ghHeaders()) {
+    Success { value } => readClose(clientId: clientId, value: value)
+    Error { message } => failClose(clientId: clientId)
+}
+
+// Read the body while the handle is open, then free it and close the client,
+// finally yielding the body. The body must be held in a binding across the
+// free/close: Osprey currently unwraps a Result passed through a parameter, so
+// parameter-lifting the body (as elsewhere) is impossible here - it stays local.
+fn readClose(clientId: int, value: int) -> Result<string, Error> = {
+    let body = httpResponseBody(value)
+    httpResponseFree(value)
     httpCloseClient(clientId)
+    body
 }
 
-fn useResponse(resp: int) -> Unit = {
-    match httpResponseBody(resp) {
-        Success { text } => startUi(text)
-        Error { message } => print("Could not read response body")
+// On request failure there is no handle to read; close the client and surface a
+// failed Result. Osprey can't construct an `Error { ... }` literal of the right
+// type, so the failure value is produced by reading an invalid handle.
+fn failClose(clientId: int) -> Result<string, Error> = {
+    httpCloseClient(clientId)
+    httpResponseBody(0 - 1)
+}
+
+// `main` installs the handlers that discharge each effect into real I/O, then
+// runs the pure effect logic underneath them.
+fn main() -> Unit =
+    handle Console
+        print line => print(line)
+    in handle Terminal
+        readKey => termReadKey()
+        raw on => termRawMode(on)
+    in handle Http
+        fetch path => fetchBody(path)
+    in {
+        app()
     }
-    httpResponseFree(resp)
-}
-
-run()

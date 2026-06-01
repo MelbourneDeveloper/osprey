@@ -252,6 +252,8 @@ vsix:
 	$(MAKE) _vsix_uninstall
 	@echo "==> [vsix] extension build"
 	$(MAKE) _vsix_build
+	@echo "==> [vsix] bundle freshly-built compiler"
+	$(MAKE) _vsix_bundle
 	@echo "==> [vsix] package"
 	$(MAKE) _vsix_package
 	@echo "==> [vsix] install (all profiles)"
@@ -277,6 +279,20 @@ _vsix_uninstall:
 
 _vsix_build:
 	cd $(EXT_DIR) && npm run compile
+
+# Stage the freshly-built compiler where the extension's resolveBundledCompiler
+# looks for it (bin/<os>-<arch>/osprey), so the packaged VSIX runs LSP
+# diagnostics against THIS compiler instead of a stale global `osprey`. The
+# platform string mirrors shipwrightPlatform() in client/src/extension.ts.
+# bin/ is not in .vscodeignore, so vsce includes it in the package.
+_vsix_bundle:
+	@OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	case "$$OS" in darwin) OS=darwin;; linux) OS=linux;; *) OS=win32;; esac; \
+	ARCH=$$(uname -m); case "$$ARCH" in arm64|aarch64) ARCH=arm64;; *) ARCH=x64;; esac; \
+	DEST="$(EXT_DIR)/bin/$$OS-$$ARCH"; \
+	mkdir -p "$$DEST"; \
+	cp compiler/bin/osprey "$$DEST/osprey"; \
+	echo "  bundled compiler -> $$DEST/osprey ($$($$DEST/osprey --version 2>/dev/null | head -1))"
 
 _vsix_package:
 	cd $(EXT_DIR) && npm run package

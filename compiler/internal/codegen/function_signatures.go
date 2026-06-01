@@ -895,6 +895,24 @@ func (g *LLVMGenerator) coerceReturnToRetType(val value.Value, expected types.Ty
 	if val == nil || expected == nil || expected.Equal(val.Type()) {
 		return val
 	}
+	// By-value struct return from a pointer: a Result-returning function whose
+	// body builds the Result in an alloca (e.g. the body is itself a Result, as
+	// in `fn f() -> Result<string, Error> = httpResponseBody(h)`) hands back a
+	// pointer to the struct, but the function returns the struct by value. Load
+	// it — strict llc rejects `ret {..}* %p` where the result type is `{..}`.
+	// The stored struct may use typed pointers ({i8*, i8}) while the declared
+	// return type uses opaque ({ptr, i8}); bitcast the pointer first so the load
+	// type matches, then load the expected struct value.
+	if expectedStruct, ok := expected.(*types.StructType); ok {
+		if _, ok := val.Type().(*types.PointerType); ok {
+			ptr := val
+			wantPtr := types.NewPointer(expectedStruct)
+			if !ptr.Type().Equal(wantPtr) {
+				ptr = g.builder.NewBitCast(ptr, wantPtr)
+			}
+			return g.builder.NewLoad(expectedStruct, ptr)
+		}
+	}
 	if _, expectedIsPtr := expected.(*types.PointerType); expectedIsPtr {
 		if _, actualIsPtr := val.Type().(*types.PointerType); actualIsPtr {
 			return g.builder.NewBitCast(val, expected)

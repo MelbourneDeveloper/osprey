@@ -10,5 +10,10 @@
     "//2": "so the Make Targets panel shows ONLY root targets - not the compiler/",
     "//3": "sub-makefile or its parsed variables.",
     "makefile.makefilePath": "Makefile",
-    "makefile.makeDirectory": "."
+    "makefile.makeDirectory": ".",
+    "//4": "Use the freshly-built dev compiler for LSP diagnostics so the editor",
+    "//5": "matches `make`/`./bin/osprey` instead of a stale global `osprey`. The",
+    "//6": "server execs this path verbatim (no variable substitution), so it is",
+    "//7": "absolute. Run `make build` to refresh it; see `make vsix` for packaging.",
+    "osprey.server.compilerPath": "/Users/christianfindlay/Documents/Code/osprey/compiler/bin/osprey"
 }
