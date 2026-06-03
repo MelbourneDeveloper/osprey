@@ -9,6 +9,7 @@
 // Include the fiber runtime functions
 extern int64_t fiber_spawn(int64_t (*fn)(void));
 extern int64_t fiber_await(int64_t fiber_id);
+extern int64_t fiber_done(int64_t fiber_id);
 extern int64_t fiber_sleep(int64_t milliseconds);
 extern int64_t channel_create(int64_t capacity);
 extern int64_t channel_send(int64_t channel_id, int64_t value);
@@ -152,6 +153,29 @@ void test_concurrent_execution(void) {
   printf("✅ PASS: Concurrent execution works correctly\n");
 }
 
+// Test the non-blocking completion probe used by the animated-loader pattern.
+void test_fiber_done(void) {
+  printf("Testing non-blocking fiber_done probe...\n");
+
+  assert(fiber_done(99999) == -1 &&
+         "FAIL: fiber_done should return -1 for invalid fiber ID");
+  assert(fiber_done(-1) == -1 &&
+         "FAIL: fiber_done should return -1 for negative fiber ID");
+
+  // A slow fiber is still running immediately after spawn.
+  int64_t slow_fiber = fiber_spawn(slow_function);
+  assert(fiber_done(slow_fiber) == 0 &&
+         "FAIL: fiber_done should report 0 while the fiber is still running");
+
+  // After await it has completed and the probe must report ready.
+  int64_t slow_result = fiber_await(slow_fiber);
+  assert(slow_result == 999 && "FAIL: Slow fiber should return 999");
+  assert(fiber_done(slow_fiber) == 1 &&
+         "FAIL: fiber_done should report 1 once the fiber has completed");
+
+  printf("✅ PASS: fiber_done reports completion without blocking\n");
+}
+
 // Main test runner
 void run_all_fiber_tests(void) {
   printf("\n=== FIBER RUNTIME TESTS ===\n");
@@ -163,6 +187,7 @@ void run_all_fiber_tests(void) {
   test_multiple_fibers();
   test_fiber_bounds_checking();
   test_fiber_sleep();
+  test_fiber_done();
   test_concurrent_execution();
   test_fiber_stress();
 

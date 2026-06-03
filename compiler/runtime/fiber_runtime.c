@@ -357,6 +357,35 @@ int64_t fiber_spawn_process_with_handler(char *command,
 }
 
 // Await process completion in fiber context
+// Non-blocking completion probe. Returns 1 if the fiber has finished, 0 if it
+// is still running, -1 for an invalid id. Lets a caller animate (sleep + redraw)
+// while a fiber does real work, then `fiber_await` it the instant it reports
+// done - without ever blocking the animating thread on a join or condvar.
+int64_t fiber_done(int64_t fiber_id) {
+  if (fiber_id < 1 || fiber_id >= 1000) {
+    return -1;
+  }
+
+  pthread_mutex_lock(&runtime_mutex);
+  Fiber *fiber = fibers[fiber_id];
+  bool is_deterministic = deterministic_mode;
+  pthread_mutex_unlock(&runtime_mutex);
+
+  if (!fiber)
+    return -1;
+
+  // Deterministic fibers only run when awaited, so report "ready" immediately;
+  // the subsequent fiber_await drives execution. Avoids an infinite spin.
+  if (is_deterministic)
+    return 1;
+
+  pthread_mutex_lock(&fiber->mutex);
+  bool done = fiber->completed;
+  pthread_mutex_unlock(&fiber->mutex);
+
+  return done ? 1 : 0;
+}
+
 int64_t fiber_await_process(int64_t process_id) {
   return await_process(process_id);
 }

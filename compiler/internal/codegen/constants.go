@@ -257,6 +257,12 @@ const (
 	StringCellWidthCFunc = "string_cell_width"
 )
 
+// Osprey + C names for the non-blocking fiber completion probe.
+const (
+	FiberDoneOsprey = "fiberDone"
+	FiberDoneCFunc  = "fiber_done"
+)
+
 // Pattern matching constants.
 const (
 	UnknownPattern  = "unknown"

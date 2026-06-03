@@ -1336,6 +1336,23 @@ func (r *BuiltInFunctionRegistry) registerFiberFunctions() {
 		Example:      `let result = fiber_await(fiberHandle)`,
 	}
 
+	// fiber_done function - non-blocking completion probe for animated waits.
+	r.functions[FiberDoneOsprey] = &BuiltInFunction{
+		Name:        FiberDoneOsprey,
+		CName:       FiberDoneCFunc,
+		Signature:   "fiberDone(fiber: Fiber) -> int",
+		Description: "Returns 1 if the fiber has completed, 0 if still running (non-blocking).",
+		ParameterTypes: []BuiltInParameter{
+			{Name: "fiber", Type: &ConcreteType{name: "Fiber"}, Description: "The fiber to probe"},
+		},
+		ReturnType:   &ConcreteType{name: TypeInt},
+		Category:     CategoryFiber,
+		IsProtected:  false,
+		SecurityFlag: PermissionNone,
+		Generator:    (*LLVMGenerator).generateRuntimeBuiltinCall,
+		Example:      `match fiberDone(f) { 1 => await(f) _ => { sleep(70) retry } }`,
+	}
+
 	// Channel function
 	r.functions["Channel"] = &BuiltInFunction{
 		Name:        "Channel",
