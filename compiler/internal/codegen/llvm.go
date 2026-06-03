@@ -298,6 +298,22 @@ func (g *LLVMGenerator) coerceArgumentToParamType(
 	case expected.Equal(types.I8Ptr) && actual.Equal(types.I64):
 		return g.builder.NewIntToPtr(val, types.I8Ptr)
 	}
+	// By-value struct parameter fed a pointer-to-struct: a Result built in an
+	// alloca (or otherwise handed back as a pointer) passed into a Result
+	// parameter. Load it so the struct is passed by value. Mirror of
+	// coerceReturnToRetType; the stored struct may use typed pointers while the
+	// parameter uses opaque, so bitcast the pointer to match before loading.
+	if expectedStruct, ok := expected.(*types.StructType); ok {
+		if _, actualIsPtr := actual.(*types.PointerType); actualIsPtr {
+			ptr := val
+			wantPtr := types.NewPointer(expectedStruct)
+			if !ptr.Type().Equal(wantPtr) {
+				ptr = g.builder.NewBitCast(ptr, wantPtr)
+			}
+
+			return g.builder.NewLoad(expectedStruct, ptr)
+		}
+	}
 	// Pointer-to-pointer: bitcast. Hits when a recursive-union field stored as
 	// i8* (see [TYPE-UNION-REC]) is loaded and then passed back to a function
 	// declared with the concrete union-struct pointer type.
@@ -350,7 +366,34 @@ func (g *LLVMGenerator) generateArgumentExpression(
 	// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
 	// This matches the type inference behavior where Result types are automatically unwrapped
 	// Example: fibonacci(n - 1) where (n - 1) returns Result<int, MathError> but fibonacci expects int
+	// SUPPRESSED when the callee's parameter explicitly expects a Result, so the
+	// Result passes through intact (mirrors maybeUnwrapArg in type inference).
+	if g.calleeParamIsResult(callExpr, argIndex) {
+		return val, nil
+	}
+
 	return g.unwrapIfResult(val), nil
+}
+
+// calleeParamIsResult reports whether the function called by callExpr declares a
+// Result type at parameter argIndex. Named arguments must appear in declaration
+// order, so positional alignment holds. Used to suppress Result auto-unwrapping
+// of an argument destined for a Result parameter.
+func (g *LLVMGenerator) calleeParamIsResult(callExpr *ast.CallExpression, argIndex int) bool {
+	ident, ok := callExpr.Function.(*ast.Identifier)
+	if !ok {
+		return false
+	}
+	funcType, ok := g.typeInferer.env.Get(ident.Name)
+	if !ok {
+		return false
+	}
+	params := paramTypesOf(funcType)
+	if argIndex >= len(params) {
+		return false
+	}
+
+	return g.typeInferer.isResultType(params[argIndex])
 }
 
 // handlePolymorphicFunctionArgument handles polymorphic function arguments
@@ -2408,6 +2451,45 @@ func (g *LLVMGenerator) generateSuccessBlock(
 	return successValue, nil
 }
 
+// bindResultPayload binds fieldName to field 0 of the currently-matched Result
+// (the value/message slot) when that slot is a string pointer (i8*), returning
+// true. Used by the Error arm to surface the real message string; the Success
+// arm inlines the same extraction. Returns false when no Result is in scope or
+// the payload slot is not a string pointer (so the caller uses a stand-in).
+func (g *LLVMGenerator) bindResultPayload(fieldName string) bool {
+	if g.currentResultValue == nil {
+		return false
+	}
+
+	switch t := g.currentResultValue.Type().(type) {
+	case *types.PointerType:
+		st, ok := t.ElemType.(*types.StructType)
+		if !ok || len(st.Fields) == 0 {
+			return false
+		}
+		if _, isPtr := st.Fields[0].(*types.PointerType); !isPtr {
+			return false
+		}
+		payloadPtr := g.builder.NewGetElementPtr(st, g.currentResultValue,
+			constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
+		g.variables[fieldName] = g.builder.NewLoad(st.Fields[0], payloadPtr)
+
+		return true
+	case *types.StructType:
+		if len(t.Fields) == 0 {
+			return false
+		}
+		if _, isPtr := t.Fields[0].(*types.PointerType); !isPtr {
+			return false
+		}
+		g.variables[fieldName] = g.builder.NewExtractValue(g.currentResultValue, 0)
+
+		return true
+	default:
+		return false
+	}
+}
+
 // generateErrorBlock generates the error block for result matching.
 func (g *LLVMGenerator) generateErrorBlock(
 	matchExpr *ast.MatchExpression,
@@ -2445,24 +2527,26 @@ func (g *LLVMGenerator) generateErrorBlock(
 			}
 		}
 
-		// Create a unique global string for the error message
-		// Include function context to ensure uniqueness across monomorphized instances
-		funcContext := ""
-		if g.function != nil {
-			funcContext = g.function.Name()
+		// Bind `message` to the real error payload (field 0 of the Result
+		// struct), mirroring the Success arm — this propagates the string from
+		// `Error { message: ... }` instead of a stand-in. Only when that slot is
+		// a string pointer (i8*); for a non-string payload (e.g. Result<int, E>)
+		// the slot is not a message string, so fall back to a static stand-in.
+		// See docs/plans/error-payloads.md.
+		if !g.bindResultPayload(fieldName) {
+			funcContext := ""
+			if g.function != nil {
+				funcContext = g.function.Name()
+			}
+			blockSuffix := fmt.Sprintf("_%s_%p", funcContext, matchExpr)
+			errorStr := g.module.NewGlobalDef(
+				"error_msg"+blockSuffix,
+				constant.NewCharArrayFromString("Error occurred"+StringTerminator),
+			)
+			errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
+				constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
+			g.variables[fieldName] = errorPtr
 		}
-		blockSuffix := fmt.Sprintf("_%s_%p", funcContext, matchExpr)
-		// NOTE: the runtime payload slot for Result error messages is not yet
-		// threaded through (see docs/plans/error-payloads.md), so codegen still
-		// substitutes a static stand-in. The previous spelling used a literal
-		// backslash sequence which leaked the chars "\x00" into output.
-		errorStr := g.module.NewGlobalDef(
-			"error_msg"+blockSuffix,
-			constant.NewCharArrayFromString("Error occurred"+StringTerminator),
-		)
-		errorPtr := g.builder.NewGetElementPtr(errorStr.ContentType, errorStr,
-			constant.NewInt(types.I64, 0), constant.NewInt(types.I64, 0))
-		g.variables[fieldName] = errorPtr
 	}
 
 	errorExpr := g.findErrorValue(matchExpr)

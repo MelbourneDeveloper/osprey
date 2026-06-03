@@ -985,6 +985,23 @@ func (ti *TypeInferer) extractResultErrorType(resultTypeName string) Type {
 	return &ConcreteType{name: TypeString} // fallback
 }
 
+// isResultType reports whether t denotes a Result<...> type, in either the
+// ConcreteType-with-stringified-name form (used for builtin return types and
+// type annotations) or a GenericType named Result. Used to decide when NOT to
+// auto-unwrap a Result argument: a parameter that explicitly expects a Result
+// must receive it intact (so `fn f(r: Result<string, Error>)` is callable).
+func (ti *TypeInferer) isResultType(t Type) bool {
+	resolved := ti.prune(t)
+	if gt, ok := resolved.(*GenericType); ok {
+		return gt.name == TypeResult
+	}
+	if ct, ok := resolved.(*ConcreteType); ok {
+		return strings.HasPrefix(ct.String(), TypeResult+"<")
+	}
+
+	return false
+}
+
 // unwrapResultType unwraps a Result<T, E> type to just T
 // If the type is not a Result, returns it as-is
 func (ti *TypeInferer) unwrapResultType(t Type) Type {
@@ -1822,8 +1839,11 @@ func (ti *TypeInferer) inferCallExpression(e *ast.CallExpression) (Type, error) 
 		return nil, err
 	}
 
-	// Infer argument types
-	argTypes, err := ti.inferCallArguments(e)
+	// Infer argument types. The callee's parameter types steer Result
+	// auto-unwrapping: a Result argument is unwrapped to its success type for a
+	// plain parameter (so fibonacci(n - 1) works), but kept intact when the
+	// parameter explicitly expects a Result.
+	argTypes, err := ti.inferCallArguments(e, paramTypesOf(funcType))
 	if err != nil {
 		return nil, err
 	}
@@ -1855,55 +1875,62 @@ func (ti *TypeInferer) validateBuiltInCall(e *ast.CallExpression) error {
 	return ti.validateBuiltInFunctionArgs(ident.Name, argCount, e.Position)
 }
 
-// inferCallArguments infers types for all call arguments
-func (ti *TypeInferer) inferCallArguments(e *ast.CallExpression) ([]Type, error) {
+// inferCallArguments infers types for all call arguments. paramTypes are the
+// callee's declared parameter types (positionally aligned — named arguments
+// must appear in declaration order), used to decide per-argument whether a
+// Result is auto-unwrapped.
+func (ti *TypeInferer) inferCallArguments(e *ast.CallExpression, paramTypes []Type) ([]Type, error) {
 	if len(e.NamedArguments) > 0 {
-		return ti.inferNamedArguments(e.NamedArguments)
+		return ti.inferNamedArguments(e.NamedArguments, paramTypes)
 	}
 
-	return ti.inferRegularArguments(e.Arguments)
+	return ti.inferRegularArguments(e.Arguments, paramTypes)
 }
 
 // inferNamedArguments infers types for named arguments
-func (ti *TypeInferer) inferNamedArguments(namedArgs []ast.NamedArgument) ([]Type, error) {
+func (ti *TypeInferer) inferNamedArguments(namedArgs []ast.NamedArgument, paramTypes []Type) ([]Type, error) {
 	var argTypes []Type
 
-	for _, namedArg := range namedArgs {
+	for i, namedArg := range namedArgs {
 		argType, err := ti.InferType(namedArg.Value)
 		if err != nil {
 			return nil, err
 		}
 
-		// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
-		// This allows fibonacci(n - 1) where (n - 1) returns Result<int, MathError>
-		// The unwrapped type is used for type inference, actual unwrapping happens at codegen
-		argType = ti.unwrapResultType(argType)
-
-		argTypes = append(argTypes, argType)
+		argTypes = append(argTypes, ti.maybeUnwrapArg(argType, paramTypes, i))
 	}
 
 	return argTypes, nil
 }
 
 // inferRegularArguments infers types for regular arguments
-func (ti *TypeInferer) inferRegularArguments(args []ast.Expression) ([]Type, error) {
+func (ti *TypeInferer) inferRegularArguments(args []ast.Expression, paramTypes []Type) ([]Type, error) {
 	var argTypes []Type
 
-	for _, arg := range args {
+	for i, arg := range args {
 		argType, err := ti.InferType(arg)
 		if err != nil {
 			return nil, err
 		}
 
-		// AUTO-UNWRAP Result types for function arguments per spec (0004-TypeSystem.md:115-160)
-		// This allows fibonacci(n - 1) where (n - 1) returns Result<int, MathError>
-		// The unwrapped type is used for type inference, actual unwrapping happens at codegen
-		argType = ti.unwrapResultType(argType)
-
-		argTypes = append(argTypes, argType)
+		argTypes = append(argTypes, ti.maybeUnwrapArg(argType, paramTypes, i))
 	}
 
 	return argTypes, nil
+}
+
+// maybeUnwrapArg applies the Result auto-unwrap rule (0004-TypeSystem.md:115-160)
+// to argument i: a Result<T, E> argument is unwrapped to T so calls like
+// fibonacci(n - 1) — where (n - 1) is Result<int, MathError> — type-check. The
+// unwrap is SUPPRESSED when the matching parameter explicitly expects a Result,
+// so a Result can be passed through a parameter intact. Actual value unwrapping
+// still happens at codegen.
+func (ti *TypeInferer) maybeUnwrapArg(argType Type, paramTypes []Type, i int) Type {
+	if i < len(paramTypes) && ti.isResultType(paramTypes[i]) {
+		return argType
+	}
+
+	return ti.unwrapResultType(argType)
 }
 
 // validateArgumentTypes validates that no arguments have 'any' type. The
@@ -2643,10 +2670,11 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 			return nil, err
 		}
 
-		// Create Result<T, string> type where T is the value type
-		errorType := &ConcreteType{name: "string"}
-
-		return CreateResultType(valueType, errorType), nil
+		// A Success carries no error, so the error type is left polymorphic (a
+		// fresh variable). It unifies with whatever error type the context — a
+		// return annotation or surrounding match — requires (Error, StringError,
+		// MathError, …), instead of being pinned to one concrete type.
+		return CreateResultType(valueType, ti.Fresh()), nil
 	}
 
 	// Special handling for Error constructor
@@ -2656,16 +2684,18 @@ func (ti *TypeInferer) inferTypeConstructor(e *ast.TypeConstructorExpression) (T
 			return nil, ErrErrorConstructorMissingMessage
 		}
 
-		// Infer the type of the message
-		messageType, err := ti.InferType(messageExpr)
+		// Validate the message expression (catches undefined references etc.).
+		// The constructed value's error type is the standard Error type — NOT
+		// the message's type — and the success type is left polymorphic so it
+		// unifies with the context's success type. This is what lets
+		// `fn f() -> Result<string, Error> = Error { message: m }` type-check
+		// and propagate the real message.
+		_, err := ti.InferType(messageExpr)
 		if err != nil {
 			return nil, err
 		}
 
-		// Create Result<T, E> type where E is the message type and T is a fresh type variable
-		valueType := ti.Fresh()
-
-		return CreateResultType(valueType, messageType), nil
+		return CreateResultType(ti.Fresh(), &ConcreteType{name: ErrorPattern}), nil
 	}
 
 	// Look up constructor in environment

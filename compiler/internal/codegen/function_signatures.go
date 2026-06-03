@@ -35,14 +35,32 @@ const (
 // entry with the fully-inferred type scheme; the placeholder only exists to
 // keep forward references from failing the identifier lookup.
 func (g *LLVMGenerator) preDeclareFunctionPlaceholder(fnDecl *ast.FunctionDeclaration) {
+	// Use explicitly-annotated parameter and return types in the placeholder so
+	// a forward reference resolves to the real signature, not a bare type
+	// variable. Without this, calling a function declared later in source —
+	// e.g. one returning Result<string, Error> — yields a fresh return var, and
+	// sibling match arms calling it fail to unify. Unannotated slots stay fresh
+	// (inferred when declareFunctionSignature runs and overwrites this entry).
 	paramTypes := make([]Type, len(fnDecl.Parameters))
-	for i := range fnDecl.Parameters {
-		paramTypes[i] = g.typeInferer.Fresh()
+	for i, param := range fnDecl.Parameters {
+		switch {
+		case param.Type == nil:
+			paramTypes[i] = g.typeInferer.Fresh()
+		case param.Type.IsFunction:
+			paramTypes[i] = g.buildFunctionTypeFromAST(param.Type)
+		default:
+			paramTypes[i] = g.typeExpressionToInferenceType(param.Type)
+		}
+	}
+
+	var returnType Type = g.typeInferer.Fresh()
+	if fnDecl.ReturnType != nil {
+		returnType = g.typeExpressionToInferenceType(fnDecl.ReturnType)
 	}
 
 	g.typeInferer.env.Set(fnDecl.Name, &FunctionType{
 		paramTypes: paramTypes,
-		returnType: g.typeInferer.Fresh(),
+		returnType: returnType,
 	})
 }
 

@@ -172,40 +172,33 @@ fn startUi(bodyText: string) -> Unit ![Console, Terminal] = match jsonParse(body
 // The whole program in one effectful expression: fetch, then browse the result.
 fn app() -> Unit ![Console, Terminal, Http] = match perform Http.fetch("/users/${githubUser()}/repos?per_page=30&sort=updated") {
     Success { text } => startUi(text)
-    Error { message } => perform Console.print("Request failed")
+    Error { message } => perform Console.print("Request failed: ${message}")
 }
 
 // ---- interpretation: the ONLY place real I/O happens ------------------------
 // The Http handler hides the entire client/response lifecycle behind one
-// `fetch`. The client id rides as a parameter (used for both the request and
-// the close); the response handle is matched the instant it is produced.
+// `fetch`. Resource ordering falls out of eager argument evaluation: the body
+// is read while the handle is open, then `freeAfter` frees the handle, then
+// `closeAfter` closes the client - each threading the body Result through
+// untouched. No locals: the Result rides through as a parameter.
 fn ghHeaders() -> string = "User-Agent: osprey-tui\r\nAccept: application/vnd.github+json\r\n"
 
 fn fetchBody(path: string) -> Result<string, Error> =
     dispatch(clientId: httpCreateClient("https://api.github.com", 10000), path: path)
 
 fn dispatch(clientId: int, path: string) -> Result<string, Error> = match httpGetResponse(clientId, path, ghHeaders()) {
-    Success { value } => readClose(clientId: clientId, value: value)
-    Error { message } => failClose(clientId: clientId)
+    Success { value } => closeAfter(clientId: clientId, result: freeAfter(value: value, result: httpResponseBody(value)))
+    Error { message } => closeAfter(clientId: clientId, result: Error { message: message })
 }
 
-// Read the body while the handle is open, then free it and close the client,
-// finally yielding the body. The body must be held in a binding across the
-// free/close: Osprey currently unwraps a Result passed through a parameter, so
-// parameter-lifting the body (as elsewhere) is impossible here - it stays local.
-fn readClose(clientId: int, value: int) -> Result<string, Error> = {
-    let body = httpResponseBody(value)
+fn freeAfter(value: int, result: Result<string, Error>) -> Result<string, Error> = {
     httpResponseFree(value)
-    httpCloseClient(clientId)
-    body
+    result
 }
 
-// On request failure there is no handle to read; close the client and surface a
-// failed Result. Osprey can't construct an `Error { ... }` literal of the right
-// type, so the failure value is produced by reading an invalid handle.
-fn failClose(clientId: int) -> Result<string, Error> = {
+fn closeAfter(clientId: int, result: Result<string, Error>) -> Result<string, Error> = {
     httpCloseClient(clientId)
-    httpResponseBody(0 - 1)
+    result
 }
 
 // `main` installs the handlers that discharge each effect into real I/O, then
