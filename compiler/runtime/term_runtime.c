@@ -25,6 +25,13 @@ static bool g_raw_active = false;
 #define ANSI_SHOW_CURSOR "\x1b[?25h"
 #define ANSI_HIDE_CURSOR "\x1b[?25l"
 #define ANSI_CLEAR "\x1b[2J\x1b[H"
+// Alternate screen buffer (what vim/htop/less use): a separate, no-scrollback
+// surface. Entering it gives a clean canvas where clear+home redraws truly in
+// place; leaving it restores the user's previous terminal contents verbatim.
+#define ANSI_ALT_SCREEN_ON "\x1b[?1049h"
+#define ANSI_ALT_SCREEN_OFF "\x1b[?1049l"
+
+static bool g_alt_screen = false;
 
 static void restore_terminal(void) {
   if (g_orig_saved && g_raw_active) {
@@ -32,12 +39,18 @@ static void restore_terminal(void) {
     g_raw_active = false;
   }
   fputs(ANSI_SHOW_CURSOR, stdout);
+  if (g_alt_screen) {
+    fputs(ANSI_ALT_SCREEN_OFF, stdout);
+    g_alt_screen = false;
+  }
   fflush(stdout);
 }
 
-// term_raw_mode(1) enables raw mode (no canonical line buffering, no echo);
-// term_raw_mode(0) restores cooked mode. ISIG stays enabled so Ctrl-C always
-// terminates and the atexit handler can never leave the terminal stuck.
+// term_raw_mode(1) enables raw mode (no canonical line buffering, no echo) and
+// switches to the alternate screen buffer so the TUI redraws in place without
+// piling frames into scrollback; term_raw_mode(0) restores cooked mode and the
+// original screen. ISIG stays enabled so Ctrl-C always terminates and the atexit
+// handler can never leave the terminal stuck.
 int64_t term_raw_mode(int64_t on) {
   if (on) {
     if (!g_orig_saved) {
@@ -55,6 +68,10 @@ int64_t term_raw_mode(int64_t on) {
       return -2;
     }
     g_raw_active = true;
+    fputs(ANSI_ALT_SCREEN_ON, stdout);
+    fputs(ANSI_CLEAR, stdout);
+    fflush(stdout);
+    g_alt_screen = true;
     return 0;
   }
   if (g_orig_saved) {
@@ -63,6 +80,11 @@ int64_t term_raw_mode(int64_t on) {
     }
   }
   g_raw_active = false;
+  if (g_alt_screen) {
+    fputs(ANSI_ALT_SCREEN_OFF, stdout);
+    fflush(stdout);
+    g_alt_screen = false;
+  }
   return 0;
 }
 

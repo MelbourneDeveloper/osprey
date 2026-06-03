@@ -35,14 +35,32 @@ const (
 // entry with the fully-inferred type scheme; the placeholder only exists to
 // keep forward references from failing the identifier lookup.
 func (g *LLVMGenerator) preDeclareFunctionPlaceholder(fnDecl *ast.FunctionDeclaration) {
+	// Use explicitly-annotated parameter and return types in the placeholder so
+	// a forward reference resolves to the real signature, not a bare type
+	// variable. Without this, calling a function declared later in source —
+	// e.g. one returning Result<string, Error> — yields a fresh return var, and
+	// sibling match arms calling it fail to unify. Unannotated slots stay fresh
+	// (inferred when declareFunctionSignature runs and overwrites this entry).
 	paramTypes := make([]Type, len(fnDecl.Parameters))
-	for i := range fnDecl.Parameters {
-		paramTypes[i] = g.typeInferer.Fresh()
+	for i, param := range fnDecl.Parameters {
+		switch {
+		case param.Type == nil:
+			paramTypes[i] = g.typeInferer.Fresh()
+		case param.Type.IsFunction:
+			paramTypes[i] = g.buildFunctionTypeFromAST(param.Type)
+		default:
+			paramTypes[i] = g.typeExpressionToInferenceType(param.Type)
+		}
+	}
+
+	var returnType Type = g.typeInferer.Fresh()
+	if fnDecl.ReturnType != nil {
+		returnType = g.typeExpressionToInferenceType(fnDecl.ReturnType)
 	}
 
 	g.typeInferer.env.Set(fnDecl.Name, &FunctionType{
 		paramTypes: paramTypes,
-		returnType: g.typeInferer.Fresh(),
+		returnType: returnType,
 	})
 }
 
@@ -894,6 +912,24 @@ func (g *LLVMGenerator) generateReturnInstruction(
 func (g *LLVMGenerator) coerceReturnToRetType(val value.Value, expected types.Type) value.Value {
 	if val == nil || expected == nil || expected.Equal(val.Type()) {
 		return val
+	}
+	// By-value struct return from a pointer: a Result-returning function whose
+	// body builds the Result in an alloca (e.g. the body is itself a Result, as
+	// in `fn f() -> Result<string, Error> = httpResponseBody(h)`) hands back a
+	// pointer to the struct, but the function returns the struct by value. Load
+	// it — strict llc rejects `ret {..}* %p` where the result type is `{..}`.
+	// The stored struct may use typed pointers ({i8*, i8}) while the declared
+	// return type uses opaque ({ptr, i8}); bitcast the pointer first so the load
+	// type matches, then load the expected struct value.
+	if expectedStruct, ok := expected.(*types.StructType); ok {
+		if _, ok := val.Type().(*types.PointerType); ok {
+			ptr := val
+			wantPtr := types.NewPointer(expectedStruct)
+			if !ptr.Type().Equal(wantPtr) {
+				ptr = g.builder.NewBitCast(ptr, wantPtr)
+			}
+			return g.builder.NewLoad(expectedStruct, ptr)
+		}
 	}
 	if _, expectedIsPtr := expected.(*types.PointerType); expectedIsPtr {
 		if _, actualIsPtr := val.Type().(*types.PointerType); actualIsPtr {

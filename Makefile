@@ -5,7 +5,7 @@
 # Primary language: Go (compiler/), with TypeScript sub-projects
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup ratchet
+.PHONY: build tui test lint fmt clean ci setup ratchet
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -48,6 +48,13 @@ build:
 	@echo "==> Building..."
 	cd compiler && $(MAKE) build
 	cd vscode-extension && npm run compile
+
+## tui: Rebuild the compiler and launch the interactive TUI demo (live GitHub
+##      API browser). Runs in the current terminal so the raw-mode key reader
+##      gets a real stdin.
+tui:
+	@echo "==> Building compiler + launching TUI..."
+	cd compiler && $(MAKE) tui
 
 ## test: Fail-fast tests + coverage + per-project threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
@@ -245,6 +252,8 @@ vsix:
 	$(MAKE) _vsix_uninstall
 	@echo "==> [vsix] extension build"
 	$(MAKE) _vsix_build
+	@echo "==> [vsix] bundle freshly-built compiler"
+	$(MAKE) _vsix_bundle
 	@echo "==> [vsix] package"
 	$(MAKE) _vsix_package
 	@echo "==> [vsix] install (all profiles)"
@@ -270,6 +279,20 @@ _vsix_uninstall:
 
 _vsix_build:
 	cd $(EXT_DIR) && npm run compile
+
+# Stage the freshly-built compiler where the extension's resolveBundledCompiler
+# looks for it (bin/<os>-<arch>/osprey), so the packaged VSIX runs LSP
+# diagnostics against THIS compiler instead of a stale global `osprey`. The
+# platform string mirrors shipwrightPlatform() in client/src/extension.ts.
+# bin/ is not in .vscodeignore, so vsce includes it in the package.
+_vsix_bundle:
+	@OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	case "$$OS" in darwin) OS=darwin;; linux) OS=linux;; *) OS=win32;; esac; \
+	ARCH=$$(uname -m); case "$$ARCH" in arm64|aarch64) ARCH=arm64;; *) ARCH=x64;; esac; \
+	DEST="$(EXT_DIR)/bin/$$OS-$$ARCH"; \
+	mkdir -p "$$DEST"; \
+	cp compiler/bin/osprey "$$DEST/osprey"; \
+	echo "  bundled compiler -> $$DEST/osprey ($$($$DEST/osprey --version 2>/dev/null | head -1))"
 
 _vsix_package:
 	cd $(EXT_DIR) && npm run package

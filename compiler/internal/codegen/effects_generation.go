@@ -365,6 +365,10 @@ func (ec *EffectCodegen) generateHandlerFunctionBody(
 		if isScalarLLVMType(returnType) && ec.generator.isResultType(bodyResult) {
 			bodyResult = ec.generator.unwrapIfResult(bodyResult)
 		}
+		// A handler arm returning a Result (e.g. `readKey => termReadKey()`)
+		// produces a pointer to the Result struct; the handler returns the
+		// struct by value. Load it so llc accepts the `ret`.
+		bodyResult = ec.generator.coerceReturnToRetType(bodyResult, returnType)
 		ec.generator.builder.NewRet(bodyResult)
 	} else {
 		// Handle default return values for different types
