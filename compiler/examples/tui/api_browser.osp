@@ -9,7 +9,7 @@
 //  Drill into any directory and open a file to read its source, downloaded
 //  live; navigation depth is just the call stack (descend = recurse, back =
 //  return), so there is no mutable path state anywhere.
-//
+// 
 //  Every side effect is an ALGEBRAIC EFFECT. The program logic never touches
 //  a socket, a file descriptor or a terminal ioctl - it only `perform`s:
 //      perform Console.print(line)        -- write a line of output
