@@ -44,6 +44,8 @@ func (j *JITExecutor) CompileAndCaptureOutput(ir string) (string, error) {
 
 	// Setup linking arguments
 	linkArgs := j.setupLinkArgs(exeFile, objFile)
+	// Third-party C libraries requested via `// @link:` FFI directives (carried in the IR).
+	linkArgs = append(linkArgs, linkLibFlags(ir)...)
 
 	// Link to executable
 	err = j.linkExecutable(linkArgs)
@@ -315,6 +317,8 @@ func (j *JITExecutor) compileAndRunEmbedded(ir string) error {
 
 	// Setup linking arguments
 	linkArgs := j.setupLinkArgs(exeFile, objFile)
+	// Third-party C libraries requested via `// @link:` FFI directives (carried in the IR).
+	linkArgs = append(linkArgs, linkLibFlags(ir)...)
 
 	// Link to executable
 	err = j.linkExecutable(linkArgs)

@@ -17,7 +17,7 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 | Layer | Adds | Plan | Compiler work |
 |---|---|---|---|
 | **L0** | General closure capture (gates composable middleware) | [`closures.md`](closures.md) | Large (codegen) |
-| **L1** | Generic C interop (FFI) → SQLite bound via `extern fn`; `Database` effect on top | [`database-effect.md`](database-effect.md) | Medium (FFI: generic linking + opaque `Ptr`) |
+| **L1** | Generic C interop (FFI) → SQLite bound via `extern fn`; `Database` effect on top | [`ffi-sqlite.md`](ffi-sqlite.md) | Medium (FFI: generic linking + opaque `Ptr`) |
 | **L2** | shelf-style framework: `Handler`/`Middleware`, `Request`/`Response`, router | [`http-framework.md`](http-framework.md) | None for v0; L0 for v1 |
 | **L3** | DataProvider YAML → typed records + CRUD + named SQL; migrations | [`orm-dataprovider.md`](orm-dataprovider.md) | Medium (Go generator) |
 
@@ -45,10 +45,10 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 
 ## Master TODO
 
-- [ ] **L1** [`database-effect.md`](database-effect.md): generic FFI (linking + `Ptr`) → SQLite `extern fn` lib → `Database` effect.
+- [x] **L1** [`ffi-sqlite.md`](ffi-sqlite.md): generic FFI (`// @link` linking + `Ptr` + pointer cells) → SQLite `extern fn` round-trip **verified**. Remaining: `Database` effect wrapper + CI test wiring.
 - [ ] **L0** [`closures.md`](closures.md): Phase 2 capture + Phase 5 UFCS/field-call disambiguation.
 - [ ] **L2** [`http-framework.md`](http-framework.md): v0 (router + Request/Response) → v1 (middleware).
 - [ ] **L3** [`orm-dataprovider.md`](orm-dataprovider.md): YAML → records + CRUD → named SQL queries.
-- [ ] **L1+** [`database-effect.md`](database-effect.md): Postgres by binding libpq via the **same** FFI.
+- [ ] **L1+** [`ffi-sqlite.md`](ffi-sqlite.md): Postgres by binding libpq via the **same** FFI.
 - [ ] Spec: add `0018` (HTTP framework) / `0019` (Database effect) / `0020` (ORM) as layers land. DB access is FFI (`--no-ffi`), not a hardcoded capability.
 - [ ] One end-to-end golden example `examples/tested/http/todo_service.osp` (HTTP + ORM + SQLite).

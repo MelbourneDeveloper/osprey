@@ -46,25 +46,42 @@ extern fn sqlite3_close(db: Ptr) -> int
 A thin Osprey module wraps these into `Result`-returning, bound-parameter helpers. The **`Database` effect**
 (L1 Phase 3) is an Osprey-level abstraction over that module — still no compiler DB code.
 
+## Status
+
+**Phase 1 + 2 landed and verified** via `./bin/osprey examples/tested/db/sqlite_basics.osp --run`: a typed,
+bound-parameter SQLite round-trip (`:memory:` → DDL → two bound inserts → ordered `SELECT` → typed int+text
+columns → close) from pure Osprey `extern fn` — zero hardcoded DB builtins. Build/lint (Go + C) + codegen
+unit tests green.
+
 ## TODO
 
-### Phase 1 — generic FFI buildout
-- [ ] 1.1 Generic library linking: declare/link an external lib by name; resolve system libs (`-lsqlite3`),
-  generalizing `findAndAddLibrary` ([compilation.go:165+](../../compiler/internal/codegen/compilation.go#L165))
-  beyond the hardcoded `rust_utils` + JIT path ([jit_executor.go:117](../../compiler/internal/codegen/jit_executor.go#L117)).
-- [ ] 1.2 Opaque `Ptr` type + out-param convention in `extern` lowering
-  ([statement_generation.go:101-141](../../compiler/internal/codegen/statement_generation.go#L101-L141)); grammar if needed.
-- [ ] 1.3 Golden FFI example proving 1.1+1.2 against a tiny C lib (extend the `rust_utils` example, don't fork).
+### Phase 1 — generic FFI buildout  ✅ DONE
+- [x] 1.1 Generic library linking via the `// @link: <lib>` source directive → `-l<lib>`, carried in the IR
+  as a `; osprey-link:` marker so it survives both `--compile` and JIT. New
+  [ffi_linking.go](../../compiler/internal/codegen/ffi_linking.go); wired into
+  [compilation.go](../../compiler/internal/codegen/compilation.go) +
+  [jit_executor.go](../../compiler/internal/codegen/jit_executor.go). Lib names validated (no flag/shell injection).
+- [x] 1.2 Opaque `Ptr` type (→ i8*) across extern + user-fn signatures (`TypePtr` in
+  [constants.go](../../compiler/internal/codegen/constants.go),
+  [statement_generation.go](../../compiler/internal/codegen/statement_generation.go),
+  [function_signatures.go](../../compiler/internal/codegen/function_signatures.go)); C out-params via generic
+  pointer cells in [ffi_runtime.c](../../compiler/runtime/ffi_runtime.c)
+  (`osprey_ffi_cell`/`deref`/`free`/`null`/`transient`), archived into both runtimes (Makefile).
+- [x] 1.3 Proven against SQLite (a real system lib): `// @link: sqlite3` + `sqlite3_libversion()`.
 
 ### Phase 2 — SQLite binding (pure Osprey `extern fn`)
-- [ ] 2.1 `extern fn` decls for `sqlite3_open_v2`/`prepare_v2`/`bind_*`/`step`/`column_*`/`finalize`/`close`.
-- [ ] 2.2 Osprey wrapper module: `Result`-returning, bound-param `open`/`exec`/`query`/`row`/`column`/`close`.
-- [ ] 2.3 Golden `examples/tested/db/sqlite_basics.osp`: open → DDL → param insert → query → match rows → close.
+- [x] 2.1 `extern fn` decls: `sqlite3_open`/`exec`/`prepare_v2`/`bind_int`/`bind_text`/`step`/`column_int`/`column_text`/`finalize`/`close`.
+- [x] 2.3 Golden [examples/tested/db/sqlite_basics.osp](../../compiler/examples/tested/db/sqlite_basics.osp)
+  (+ `.expectedoutput`) — **verified locally**.
+- [ ] 2.2 Factor extern decls + helpers into a reusable `Result`-returning module (blocked on a module/import
+  story; inline in the example for now).
+- [ ] 2.4 Wire the example into a test suite — **needs `libsqlite3-dev` on CI runners** (harness forbids skips);
+  gated on a CI-dependency decision so CI stays green.
 
 ### Phase 3 — Database effect + Postgres
 - [ ] 3.1 Osprey `Database` effect wrapping the SQLite module; spec `0019-Database.md`.
-- [ ] 3.2 Postgres: bind `libpq` (`PQconnectdb`/`PQexecParams`/`PQgetvalue`/`PQfinish`) via the **same** FFI,
-  same `Database` effect — engine chosen by connection string. (Pure-Osprey wire-protocol client = future.)
+- [ ] 3.2 Postgres: bind `libpq` (`PQconnectdb`/`PQexecParams`/`PQgetvalue`/`PQfinish`) via the **same** FFI
+  (`// @link: pq`), same `Database` effect — engine chosen by connection string. (Pure-Osprey wire client = future.)
 
 ## Authorities
 

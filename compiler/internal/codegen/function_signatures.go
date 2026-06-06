@@ -1134,6 +1134,8 @@ func (g *LLVMGenerator) getLLVMPrimitiveType(pt *PrimitiveType) types.Type {
 		return types.Double
 	case TypeString:
 		return types.I8Ptr
+	case TypePtr:
+		return types.I8Ptr
 	case TypeBool:
 		return types.I1
 	case TypeUnit:
@@ -1151,6 +1153,9 @@ func (g *LLVMGenerator) getLLVMConcreteType(ct *ConcreteType) types.Type {
 	case TypeFloat:
 		return types.Double
 	case TypeString:
+		return types.I8Ptr
+	case TypePtr:
+		// Opaque foreign pointer (C void*) for the generic FFI layer.
 		return types.I8Ptr
 	case TypeBool:
 		return types.I1

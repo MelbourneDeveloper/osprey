@@ -74,8 +74,9 @@ fiber-runtime:
 	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/map_runtime.c -o bin/map_runtime.o
 	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/map_runtime_hamt.c -o bin/map_runtime_hamt.o
 	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/json_runtime.c -o bin/json_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/ffi_runtime.c -o bin/ffi_runtime.o
 	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/term_runtime.c -o bin/term_runtime.o
-	$(AR) rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/term_runtime.o
+	$(AR) rcs bin/libfiber_runtime.a bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
 	cp bin/libfiber_runtime.a lib/libfiber_runtime.a
 	@echo "✅ Fiber runtime library built: bin/libfiber_runtime.a and lib/libfiber_runtime.a"
 
@@ -120,8 +121,9 @@ http-runtime:
 	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/map_runtime.c -o bin/map_runtime.o
 	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/map_runtime_hamt.c -o bin/map_runtime_hamt.o
 	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/json_runtime.c -o bin/json_runtime.o
+	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/ffi_runtime.c -o bin/ffi_runtime.o
 	$(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv $(CRT_PIE) -std=c11 -D_GNU_SOURCE runtime/term_runtime.c -o bin/term_runtime.o
-	$(AR) rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/term_runtime.o
+	$(AR) rcs bin/libhttp_runtime.a bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o bin/system_runtime.o bin/fiber_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
 	cp bin/libhttp_runtime.a lib/libhttp_runtime.a
 	@echo "💀 HTTP RUNTIME LIBRARY ASSEMBLED WITH MAXIMUM FIREPOWER! 💀"
 

@@ -75,7 +75,7 @@ When file system access is disabled (`--no-fs` or `--sandbox`), these functions 
 #### Third-Party C Libraries (FFI)
 Database access is **not** a hardcoded builtin category. Osprey reaches SQLite (and any C library)
 through the generic **FFI / interop** layer — `extern fn` declarations bound to the linked library
-(plan: [`database-effect.md`](../plans/database-effect.md)). It is therefore gated by `--no-ffi`
+(plan: [`ffi-sqlite.md`](../plans/ffi-sqlite.md)). It is therefore gated by `--no-ffi`
 (`PermissionFFI`), exactly like any other foreign call. When FFI is disabled, `extern` declarations and
 any library they bind (e.g. `libsqlite3`) are unavailable; no DB-specific permission exists.
 

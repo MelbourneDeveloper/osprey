@@ -84,7 +84,9 @@ func CompileToLLVMWithSecurity(source string, security SecurityConfig) (string, 
 		return "", err
 	}
 
-	return generator.GenerateIR(), nil
+	// Carry any `// @link: <lib>` FFI directives into the IR as comment markers so
+	// the link step (which only sees the IR in the JIT path) can recover them.
+	return injectLinkMarkers(generator.GenerateIR(), source), nil
 }
 
 // ParseErrorListener collects parse errors instead of panicking.
@@ -375,6 +377,9 @@ func CompileToExecutableWithSecurity(source, outputPath string, security Securit
 	// Gating on httpExists lets the core language link on systems without
 	// OpenSSL — e.g. a fresh Windows core build. [WINDOWS-PORT]
 	linkArgs = addPlatformLinkFlags(linkArgs, httpExists)
+
+	// Third-party C libraries requested via `// @link:` FFI directives.
+	linkArgs = append(linkArgs, linkLibFlags(ir)...)
 
 	return tryLinkWithCompilers(outputPath, objFile, linkArgs, fiberExists, httpExists)
 }
