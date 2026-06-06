@@ -17,7 +17,7 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 | Layer | Adds | Plan | Compiler work |
 |---|---|---|---|
 | **L0** | General closure capture (gates composable middleware) | [`closures.md`](closures.md) | Large (codegen) |
-| **L1** | `Database` effect + SQLite driver, parameterized, `Result`-typed | [`database-effect.md`](database-effect.md) | Small (C shim + 1 permission, **no codegen**) |
+| **L1** | Generic C interop (FFI) → SQLite bound via `extern fn`; `Database` effect on top | [`database-effect.md`](database-effect.md) | Medium (FFI: generic linking + opaque `Ptr`) |
 | **L2** | shelf-style framework: `Handler`/`Middleware`, `Request`/`Response`, router | [`http-framework.md`](http-framework.md) | None for v0; L0 for v1 |
 | **L3** | DataProvider YAML → typed records + CRUD + named SQL; migrations | [`orm-dataprovider.md`](orm-dataprovider.md) | Medium (Go generator) |
 
@@ -31,7 +31,8 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 
 ## Build order (least resistance)
 
-1. **L1 SQLite** — self-contained, no codegen, demoable now. Unblocks the ORM runtime. **Start here.**
+1. **L1 generic FFI → SQLite** — bind `libsqlite3` via `extern fn` (no DB builtins). The FFI buildout
+   (generic linking + opaque `Ptr`) is reusable for any C lib and unblocks the ORM runtime. **Start here.**
 2. **L0 closures** — gates elegant middleware + record ergonomics.
 3. **L2 framework** — v0 today → v1 middleware after L0.
 4. **L3 ORM generator** — ties HTTP+DB over real schema.
@@ -44,10 +45,10 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 
 ## Master TODO
 
-- [ ] **L1** [`database-effect.md`](database-effect.md): SQLite shim + `Database` effect + `PermissionDatabase`.
+- [ ] **L1** [`database-effect.md`](database-effect.md): generic FFI (linking + `Ptr`) → SQLite `extern fn` lib → `Database` effect.
 - [ ] **L0** [`closures.md`](closures.md): Phase 2 capture + Phase 5 UFCS/field-call disambiguation.
 - [ ] **L2** [`http-framework.md`](http-framework.md): v0 (router + Request/Response) → v1 (middleware).
 - [ ] **L3** [`orm-dataprovider.md`](orm-dataprovider.md): YAML → records + CRUD → named SQL queries.
-- [ ] **L1+** [`database-effect.md`](database-effect.md): Postgres via libpq.
-- [ ] Spec: `0016` Database capability + `0012` Database builtins (done); add `0018`/`0019`/`0020` as layers land.
+- [ ] **L1+** [`database-effect.md`](database-effect.md): Postgres by binding libpq via the **same** FFI.
+- [ ] Spec: add `0018` (HTTP framework) / `0019` (Database effect) / `0020` (ORM) as layers land. DB access is FFI (`--no-ffi`), not a hardcoded capability.
 - [ ] One end-to-end golden example `examples/tested/http/todo_service.osp` (HTTP + ORM + SQLite).

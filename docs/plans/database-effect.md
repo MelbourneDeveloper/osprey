@@ -1,74 +1,74 @@
-# Plan: Database Effect + Driver (L1)
+# Plan: Generic C Interop → SQLite Driver (L1)
 
-Parent: [`backend-framework.md`](backend-framework.md). Spec: [`0016`](../specs/0016-SecurityAndSandboxing.md)
-Database capability + [`0012`](../specs/0012-Built-InFunctions.md) Database builtins (added); new `0019-Database.md`
-lands with the effect. **Start here** — self-contained, no codegen.
+Parent: [`backend-framework.md`](backend-framework.md). Gated by the existing **FFI** capability
+(`--no-ffi` / `PermissionFFI`) — see [`0016`](../specs/0016-SecurityAndSandboxing.md). New `0019-Database.md`
+(the Osprey-level `Database` effect) lands with Phase 3.
 
-## Goal
+## The decision (one mechanism, not hardcoded DB functions)
 
-A typed, capability-gated `Database` effect with full SQL flexibility and **mandatory bound parameters**
-(injection structurally impossible). SQLite first (embedded = least resistance); Postgres later via libpq,
-behind the **same** effect. Today there is no DB layer — only `readFile`/`writeFile`.
+The ORM needs ONE of: a C network layer to speak Postgres, **or** a generic C interop layer to call SQLite.
+**Choose the generic interop layer + SQLite** — least resistance (embedded; no socket/auth/wire protocol).
 
-## Key decisions
+**There are NO `db*` compiler builtins.** SQLite is reached the same way any C library is: through generic
+**`extern fn`** declarations bound to `libsqlite3`. The DB driver is an **Osprey library**, not compiler
+code. This also subsumes Postgres later (bind `libpq` via the same FFI) — a from-scratch network layer is
+only needed for a *pure-Osprey* Postgres client, which is optional/future.
 
-- **SQLite via C shim, not raw `extern fn`.** The `json`/`http` builtin-shim pattern gives `Result`-typed
-  returns with **zero new codegen**: `generateRuntimeBuiltinCall`
-  ([runtime_builtins_generation.go:25-73](../../compiler/internal/codegen/runtime_builtins_generation.go#L25-L73))
-  already wraps `int64` handles (neg → `Error`) and `char*`/NULL (NULL → `Error`).
-- **Never hand-roll Postgres wire protocol / SCRAM** ([RFC 7677](https://datatracker.ietf.org/doc/html/rfc7677)) —
-  `-lpq` gives protocol v3 + auth + TLS for free.
-- **Parameter-only API** — no interpolated-SQL function exists ([OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Query_Parameterization_Cheat_Sheet.html)).
-- **Row model:** typed column accessors primary (SQLite `sqlite3_column_type`/`_name`; PG `PQftype`/`PQfname`/
-  `PQgetisnull`); rows-as-JSON `queryJson` as the dynamic escape hatch.
+## What the generic FFI layer needs (reusable for any C lib)
 
-## Effect surface (engine-agnostic)
+Today `extern fn` already marshals `int` (i64), `string` (i8*/char*), struct pointers, and i64 opaque
+handles ([statement_generation.go:101-141](../../compiler/internal/codegen/statement_generation.go#L101-L141)),
+but linking is **hardcoded** to bundled `lib<name>.a` for `rust_utils`
+([compilation.go:129-163](../../compiler/internal/codegen/compilation.go#L129-L163),
+[:369](../../compiler/internal/codegen/compilation.go#L369)). Gaps to close, all generic:
+
+1. **Arbitrary library linking from source** — a way to say "link `sqlite3`" (a CLI `-l`/link directive or
+   an `extern`/annotation form), resolving **system libraries** (`-lsqlite3`), not just bundled archives.
+2. **Opaque pointers + out-parameters** — `sqlite3_open_v2(path, &db, …)` and `sqlite3_prepare_v2(db, sql,
+   n, &stmt, …)` take pointer-to-pointer out-params. Need a generic opaque `Ptr` (i8*) value Osprey can hold
+   and pass, plus a convention for `&out` results (return the pointer, or a tiny generic alloc/deref).
+3. **Param binding marshalling** — pass Osprey `int`/`string` into `sqlite3_bind_int64`/`sqlite3_bind_text`
+   (bound params only — [OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Query_Parameterization_Cheat_Sheet.html)).
+
+These are language-level FFI improvements — every future C binding (compression, crypto, libpq) reuses them.
+
+## SQLite driver = Osprey `extern fn` library
 
 ```osprey
-effect Database {
-  open  : fn(string) -> Result<int, Error>                 // conn str; sqlite://… | postgres://…
-  exec  : fn(int, string, [Param]) -> Result<int, Error>   // DML/DDL → rows affected
-  query : fn(int, string, [Param]) -> Result<int, Error>   // SELECT → result-set handle
-  close : fn(int) -> Result<int, Error>
-}
+extern fn sqlite3_open(path: string, ppDb: Ptr) -> int
+extern fn sqlite3_prepare_v2(db: Ptr, sql: string, n: int, ppStmt: Ptr, tail: Ptr) -> int
+extern fn sqlite3_bind_text(stmt: Ptr, idx: int, val: string, n: int, destructor: Ptr) -> int
+extern fn sqlite3_step(stmt: Ptr) -> int
+extern fn sqlite3_column_text(stmt: Ptr, col: int) -> string
+extern fn sqlite3_finalize(stmt: Ptr) -> int
+extern fn sqlite3_close(db: Ptr) -> int
 ```
-`Param = PInt | PFloat | PText | PBlob | PNull`. Engine selected by conn string, not signatures.
+A thin Osprey module wraps these into `Result`-returning, bound-parameter helpers. The **`Database` effect**
+(L1 Phase 3) is an Osprey-level abstraction over that module — still no compiler DB code.
 
 ## TODO
 
-### Phase 1 — SQLite (no codegen)
-- [ ] 1.1 `compiler/runtime/database_runtime.c` mirroring [json_runtime.c](../../compiler/runtime/json_runtime.c):
-  mutex-guarded handle tables; `db_open/db_exec/db_query/db_row/db_column/db_free_result/db_close` over
-  `sqlite3_open_v2`/`prepare_v2`/`bind_*`(`SQLITE_TRANSIENT`)/`step`/`column_*`/`finalize`; `strdup` strings.
-- [ ] 1.2 `Makefile`: compile `database_runtime.c` in both runtime targets ([:76](../../compiler/Makefile#L76),
-  [:122](../../compiler/Makefile#L122)); archive `.o` ([:78](../../compiler/Makefile#L78), [:124](../../compiler/Makefile#L124));
-  `-lsqlite3` after [compilation.go:369](../../compiler/internal/codegen/compilation.go#L369) (+ JIT
-  [jit_executor.go:117](../../compiler/internal/codegen/jit_executor.go#L117)) with Homebrew `-L` fallback.
-- [ ] 1.3 `constants.go` `DB*Osprey`/`DB*Func` block beside JSON ([:220-235](../../compiler/internal/codegen/constants.go#L220-L235)).
-- [ ] 1.4 `builtin_registry.go` Database group after JSON ([:1484](../../compiler/internal/codegen/builtin_registry.go#L1484))
-  via `reg`/`str`/`intp`; return-type strings exactly `"Result<int, Error>"`/`"Result<string, Error>"`;
-  `SecurityFlag: PermissionDatabase`; add `CategoryDatabase`.
-- [ ] 1.5 `PermissionDatabase` in the enum ([:72-90](../../compiler/internal/codegen/builtin_registry.go#L72-L90));
-  thread `AllowDatabase` through `checkSecurityPermission` ([llvm.go:894-913](../../compiler/internal/codegen/llvm.go#L894-L913)),
-  `SecurityConfig` ([generator.go:82-90](../../compiler/internal/codegen/generator.go#L82-L90)),
-  CLI + `--no-db` ([security.go:10-61](../../compiler/internal/cli/security.go#L10-L61)).
-- [ ] 1.6 C runtime test for the handle table (mirror fiber/json test style); run `make c-test`.
-- [ ] 1.7 Golden `examples/tested/db/sqlite_basics.osp`: open → DDL → param insert → typed query → match rows → close.
+### Phase 1 — generic FFI buildout
+- [ ] 1.1 Generic library linking: declare/link an external lib by name; resolve system libs (`-lsqlite3`),
+  generalizing `findAndAddLibrary` ([compilation.go:165+](../../compiler/internal/codegen/compilation.go#L165))
+  beyond the hardcoded `rust_utils` + JIT path ([jit_executor.go:117](../../compiler/internal/codegen/jit_executor.go#L117)).
+- [ ] 1.2 Opaque `Ptr` type + out-param convention in `extern` lowering
+  ([statement_generation.go:101-141](../../compiler/internal/codegen/statement_generation.go#L101-L141)); grammar if needed.
+- [ ] 1.3 Golden FFI example proving 1.1+1.2 against a tiny C lib (extend the `rust_utils` example, don't fork).
 
-### Phase 2 — Postgres (same effect)
-- [ ] 2.1 `database_pg_runtime.c` (~8 fns): `PQconnectdb`/`PQexecParams`(text)/`PQntuples`/`PQfname`/`PQgetvalue`/`PQfinish`; `-lpq`.
-- [ ] 2.2 Prefer `PQexecParams` over `PQprepare` (survives transaction-pooled [PgBouncer](https://www.pgbouncer.org/features.html)).
-- [ ] 2.3 Example switches only the connection string.
+### Phase 2 — SQLite binding (pure Osprey `extern fn`)
+- [ ] 2.1 `extern fn` decls for `sqlite3_open_v2`/`prepare_v2`/`bind_*`/`step`/`column_*`/`finalize`/`close`.
+- [ ] 2.2 Osprey wrapper module: `Result`-returning, bound-param `open`/`exec`/`query`/`row`/`column`/`close`.
+- [ ] 2.3 Golden `examples/tested/db/sqlite_basics.osp`: open → DDL → param insert → query → match rows → close.
 
-### Phase 3 — ergonomics
-- [ ] 3.1 Typed column-accessor row API + `queryJson` escape hatch
-- [ ] 3.2 Transaction helpers (`begin`/`commit`/`rollback`)
+### Phase 3 — Database effect + Postgres
+- [ ] 3.1 Osprey `Database` effect wrapping the SQLite module; spec `0019-Database.md`.
+- [ ] 3.2 Postgres: bind `libpq` (`PQconnectdb`/`PQexecParams`/`PQgetvalue`/`PQfinish`) via the **same** FFI,
+  same `Database` effect — engine chosen by connection string. (Pure-Osprey wire-protocol client = future.)
 
 ## Authorities
 
 [SQLite C API](https://sqlite.org/cintro.html) ([bind](https://www.sqlite.org/c3ref/bind_blob.html),
-[column](https://www.sqlite.org/c3ref/column_blob.html), [threading](https://www.sqlite.org/threadsafe.html)),
-[OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Query_Parameterization_Cheat_Sheet.html),
-[libpq](https://www.postgresql.org/docs/current/libpq-exec.html),
-[PG protocol](https://www.postgresql.org/docs/current/protocol.html),
-[RFC 7677](https://datatracker.ietf.org/doc/html/rfc7677).
+[column](https://www.sqlite.org/c3ref/column_blob.html), [open_v2](https://www.sqlite.org/c3ref/open.html)),
+[OWASP Query Parameterization](https://cheatsheetseries.owasp.org/cheatsheets/Query_Parameterization_Cheat_Sheet.html),
+[libpq](https://www.postgresql.org/docs/current/libpq-exec.html).
