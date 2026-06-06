@@ -109,6 +109,8 @@ Goal: closures work as arguments to `map`, `filter`, `fold`, `forEach`, and as r
 ## Phase 5 — UFCS vs. function-field-call disambiguation
 
 Goal: `obj.fnField(args)` **calls the function-valued field** instead of erroring `function not declared`.
+This rule is **already specified** — [0012-Built-InFunctions.md:60](../specs/0012-Built-InFunctions.md#L60):
+"If a record has a field named `f`, field access wins; UFCS is the fallback." The codegen is non-conforming.
 
 Today `obj.fnField(args)` is unconditionally built as a `MethodCallExpression` at parse time (purely because
 an `LPAREN` follows the field — [builder_calls.go:69,117](../../compiler/internal/ast/builder_calls.go#L69)),
