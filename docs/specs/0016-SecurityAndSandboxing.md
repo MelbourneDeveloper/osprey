@@ -25,6 +25,7 @@ For more granular control, you can disable specific categories of operations:
 - `--no-websocket`: Disable WebSocket client and server functions  
 - `--no-fs`: Disable file system read/write operations
 - `--no-ffi`: Disable foreign function interface
+- `--no-db`: Disable database functions
 
 **Examples:**
 ```bash
@@ -71,6 +72,16 @@ When file system access is disabled (`--no-fs` or `--sandbox`), these functions 
 - `deleteFile` - Delete file
 - `createDirectory` - Create directory
 - `listDirectory` - List directory contents
+
+#### Database Functions (Planned)
+When database access is disabled (`--no-db` or `--sandbox`), these functions will be unavailable
+(plan: [`database-effect.md`](../plans/database-effect.md)). Database access is a distinct capability
+(`PermissionDatabase`), not covered by `--no-fs`:
+- `dbOpen` - Open a database connection
+- `dbExec` - Execute a parameterized statement (DML/DDL)
+- `dbQuery` - Run a parameterized query, returning a result-set handle
+- `dbRow` / `dbColumn` - Read the current row / a named column
+- `dbFreeResult` / `dbClose` - Release a result set / connection
 
 ## Compiler Output
 

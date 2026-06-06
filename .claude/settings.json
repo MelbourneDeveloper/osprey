@@ -21,5 +21,6 @@
   },
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1"
-  }
+  },
+  "autoMemoryEnabled": false
 }

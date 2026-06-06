@@ -8,7 +8,7 @@ A probe in this session ([/tmp/probe_recursive_union.osp](../../tmp/probe_recurs
 
 | # | Primitive | Status | Plan |
 |---|---|---|---|
-| 1 | Lambdas at all (`fn(x) => x + 1`) | ❌ codegen broken: `undefined variable: x` | [`closures.md`](closures.md) |
+| 1 | Lambdas at all (`fn(x) => x + 1`) | ✅ no-capture lambdas land; ❌ **capture** still broken (`use of undefined value '%n'`) | [`closures.md`](closures.md) |
 | 2 | Recursive unions with `List<Self>` / `Map<K,Self>` payload | ❌ codegen panics: `store operands are not compatible: src=i8*; dst=i1*` at [expression_generation.go:1631](../../compiler/internal/codegen/expression_generation.go#L1631) | [`recursive-union-payloads.md`](recursive-union-payloads.md) |
 | 3 | Error message payload threading through `Result<T, E>` | ❌ hardcoded `"Error occurred"` global at [llvm.go:2305](../../compiler/internal/codegen/llvm.go#L2305) | [`error-payloads.md`](error-payloads.md) |
 | 4 | O(1) codepoint/byte cursor over `string` | ❌ no `byteAt` / `codePointAt`; every existing op (`take`/`drop`/`substring`) allocates | [`string-cursor.md`](string-cursor.md) |
@@ -38,7 +38,11 @@ The five plans are **independent at the implementation level** but have a natura
 
 After all four land, the proof point is one tested example: `examples/tested/json/json_parser.osp` — a JSON parser **written in Osprey** that consumes a real input and produces a `JsonValue`. That example becomes the canary for every future regression in these four areas.
 
-## Sibling plan
+## Sibling plans
+
+[`backend-framework.md`](backend-framework.md) — the industrial HTTP framework + typed DB/ORM ecosystem
+that sits **on top** of these primitives (its composable middleware is gated on [`closures.md`](closures.md)
+Phase 2).
 
 [`tui-http-app.md`](tui-http-app.md) — colored TUI that calls ad-hoc HTTP APIs. Independent runtime/builtin work (HTTP response bodies, terminal raw mode, ANSI helpers) but shares the "needs JSON" requirement. The TUI plan ships a C-side JSON builtin as a v1 shortcut and deletes it once this plan's Osprey-native parser lands.
 
