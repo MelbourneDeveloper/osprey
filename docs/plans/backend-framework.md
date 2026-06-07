@@ -45,10 +45,10 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 
 ## Master TODO
 
-- [x] **L1** [`ffi-sqlite.md`](ffi-sqlite.md): generic FFI (`// @link` linking + `Ptr` + pointer cells) → SQLite `extern fn` round-trip **verified**. Remaining: `Database` effect wrapper + CI test wiring.
+- [x] **L1 COMPLETE** [`ffi-sqlite.md`](ffi-sqlite.md): generic FFI (`// @link`/`// @linkdir` + `Ptr` + pointer cells), SQLite `extern fn` round-trip, `Database` effect, spec [0019](../specs/0019-Database.md), CI-tested. Postgres binds via the same FFI.
 - [ ] **L0** [`closures.md`](closures.md): Phase 2 capture + Phase 5 UFCS/field-call disambiguation.
 - [ ] **L2** [`http-framework.md`](http-framework.md): v0 (router + Request/Response) → v1 (middleware).
 - [ ] **L3** [`orm-dataprovider.md`](orm-dataprovider.md): YAML → records + CRUD → named SQL queries.
-- [ ] **L1+** [`ffi-sqlite.md`](ffi-sqlite.md): Postgres by binding libpq via the **same** FFI.
+- [x] **L1+** [`ffi-sqlite.md`](ffi-sqlite.md): Postgres binding via the **same** FFI verified (libpq `PQlibVersion`); full server round-trip needs a live DB.
 - [ ] Spec: add `0018` (HTTP framework) / `0019` (Database effect) / `0020` (ORM) as layers land. DB access is FFI (`--no-ffi`), not a hardcoded capability.
 - [ ] One end-to-end golden example `examples/tested/http/todo_service.osp` (HTTP + ORM + SQLite).
