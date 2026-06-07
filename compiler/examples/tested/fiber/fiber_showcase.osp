@@ -27,6 +27,7 @@ fn streamProcessor(b: int) -> int = b * 8
 fn stage1(x: int) -> int = x + 100
 fn stage2(x: int) -> int = x * 2
 fn stage3(x: int) -> int = x - 50
+fn combine(a: int, b: int) -> int = a * 100 + b
 
 print("=== Fiber Showcase ===")
 
@@ -103,5 +104,12 @@ print("req=${req} db=${await(db)}")
 let u = spawn fetchUserData(5)
 let o = spawn fetchOrderData(5)
 print("user=${await(u)} order=${await(o)}")
+
+// --- Captured-variable spawn + non-blocking completion probe ---
+// `capArg` is a local captured into the spawned closure through a NAMED
+// argument; fiberDone reports completion without blocking.
+let capArg = 7
+let capF = spawn combine(a: capArg, b: 5)
+print("captured spawn = ${await(capF)} done=${fiberDone(capF)}")
 
 print("=== Fiber Showcase Complete ===")

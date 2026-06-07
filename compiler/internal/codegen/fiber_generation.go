@@ -608,10 +608,16 @@ func (g *LLVMGenerator) captureVariablesInExpression(expr ast.Expression, captur
 			captured[e.Name] = val
 		}
 	case *ast.CallExpression:
-		// Recursively capture variables in function arguments
+		// Recursively capture variables in function arguments. Both positional
+		// and named arguments must be traversed - a `spawn f(x: outer)` whose
+		// named-arg value goes uncaptured leaks the parent's SSA value into the
+		// closure (llc: "use of undefined value").
 		g.captureVariablesInExpression(e.Function, captured)
 		for _, arg := range e.Arguments {
 			g.captureVariablesInExpression(arg, captured)
+		}
+		for _, named := range e.NamedArguments {
+			g.captureVariablesInExpression(named.Value, captured)
 		}
 	case *ast.BinaryExpression:
 		g.captureVariablesInExpression(e.Left, captured)

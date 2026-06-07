@@ -43,8 +43,10 @@ jobs:
         run: npm ci
         working-directory: ./vscode-extension
 
-      - name: Install jq and Xvfb
-        run: sudo apt-get install -y jq xvfb
+      - name: Install jq, Xvfb and SQLite dev
+        # libsqlite3-dev provides -lsqlite3 for the FFI database examples
+        # (examples/tested/db, linked via the `// @link: sqlite3` directive).
+        run: sudo apt-get install -y jq xvfb libsqlite3-dev
 
       # [SWR-VERSION-MANIFEST] keep shipwright.json valid against the in-repo
       # Shipwright schema. Do not use @nimblesite/shipwright-validate-manifest:

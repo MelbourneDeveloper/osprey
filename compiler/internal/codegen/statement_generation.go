@@ -125,6 +125,9 @@ func (g *LLVMGenerator) typeExpressionToLLVMType(typeExpr *ast.TypeExpression) t
 		return types.I64
 	case TypeString:
 		return types.I8Ptr
+	case TypePtr:
+		// Opaque foreign pointer (C void*) for the generic FFI layer.
+		return types.I8Ptr
 	case TypeUnit:
 		return types.Void
 	case TypeHTTPResponse:
@@ -185,6 +188,8 @@ func (g *LLVMGenerator) typeExpressionToInferenceType(typeExpr *ast.TypeExpressi
 		return &ConcreteType{name: TypeBool}
 	case TypeUnit:
 		return &ConcreteType{name: TypeUnit}
+	case TypePtr:
+		return &ConcreteType{name: TypePtr}
 	case TypeHTTPResponse:
 		return &ConcreteType{name: TypeHTTPResponse}
 	case TypeFiber:

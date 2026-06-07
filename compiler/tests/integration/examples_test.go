@@ -42,6 +42,15 @@ func TestRustIntegrationExamples(t *testing.T) {
 	runTestExamplesRecursive(t, examplesDir, getExpectedOutputs())
 }
 
+// TestDatabaseExamples tests the SQLite-over-FFI database examples
+// (examples/tested/db). They link libsqlite3 via the `// @link: sqlite3`
+// directive — CI installs libsqlite3-dev; macOS ships it in the SDK.
+func TestDatabaseExamples(t *testing.T) {
+	checkLLVMTools(t)
+
+	runTestExamplesRecursive(t, "../../examples/tested/db", getExpectedOutputs())
+}
+
 func runTestExamplesRecursive(t *testing.T, examplesDir string, expectedOutputs map[string]string) {
 	err := filepath.Walk(examplesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

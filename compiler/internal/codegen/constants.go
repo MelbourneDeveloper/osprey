@@ -56,6 +56,9 @@ const (
 	TypeFunction     = "Function"
 	TypeFiber        = "Fiber"
 	TypeChannel      = "Channel"
+	// TypePtr is the opaque foreign pointer type used by the generic FFI layer
+	// (e.g. a C `void*` / out-parameter cell). Lowers to i8*.
+	TypePtr = "Ptr"
 	TypeList         = "List"
 	TypeMap          = "Map"
 )
@@ -255,6 +258,12 @@ const (
 	TermHideCursorCFunc  = "term_hide_cursor"
 	TermShowCursorCFunc  = "term_show_cursor"
 	StringCellWidthCFunc = "string_cell_width"
+)
+
+// Osprey + C names for the non-blocking fiber completion probe.
+const (
+	FiberDoneOsprey = "fiberDone"
+	FiberDoneCFunc  = "fiber_done"
 )
 
 // Pattern matching constants.
