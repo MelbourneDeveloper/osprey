@@ -151,13 +151,24 @@ the **SharpLsp sidecar pattern already in production**. Phase 3: swap the sideca
 
 ---
 
+## Status (current)
+
+**Phase 0 COMPLETE; Phase 2 front-end landed (AST + CST→AST lowering + runtime-sys
+FFI slice + CLI).** The Rust workspace builds, is `clippy`-clean, and all tests pass:
+`tree-sitter-osprey` parses **45/45 valid examples with 0 ERROR nodes** (+6 corpus
+tests), and `osprey-rs` lowers all 45 to a typed AST. **Not yet started: the hard
+core** — `osprey-types` (HM inference, ~4K Rust LOC) and `osprey-codegen` (LLVM IR
+text, ~10K LOC) — plus the Phase-1 LSP and the Phase-2 differential gate. Those are
+the multi-week items this plan always scoped as "months"; the foundation they build
+on is now in place and verified.
+
 ## TODO
 
-### Phase 0 — grammar (prereq)
-- [ ] 0.1 `tree-sitter-osprey/grammar.js` from [`osprey.g4`](../../compiler/osprey.g4) (12 parser + 28 lexer rules; precedence via `prec.*`)
-- [ ] 0.2 `highlights.scm` / `locals.scm` / `folds.scm` queries
-- [ ] 0.3 Parse-all harness over [`examples/tested/`](../../compiler/examples/tested/) + sanity-parse `failscompilation/` → **0 ERROR nodes on valid files**
-- [ ] 0.4 `corpus/` tree-sitter unit tests for each construct (match, effects, fibers, interpolation, UFCS)
+### Phase 0 — grammar (prereq)  ✅ DONE
+- [x] 0.1 [`tree-sitter-osprey/grammar.js`](../../tree-sitter-osprey/grammar.js) from [`osprey.g4`](../../compiler/osprey.g4) (precedence via `prec.*`; left-recursive postfix call chain; `//` vs `/` and `///` vs `//` lexer precedence fixed). Rust bindings + `cc` build.
+- [x] 0.2 [`highlights.scm`](../../tree-sitter-osprey/queries/highlights.scm) / [`locals.scm`](../../tree-sitter-osprey/queries/locals.scm) / [`folds.scm`](../../tree-sitter-osprey/queries/folds.scm) queries
+- [x] 0.3 Parse-all harness ([`test/parse-all.js`](../../tree-sitter-osprey/test/parse-all.js)) → **45/45 valid examples, 0 ERROR nodes** (`failscompilation/` are `.ospo` error cases)
+- [x] 0.4 [`test/corpus/osprey.txt`](../../tree-sitter-osprey/test/corpus/osprey.txt) — 6 corpus tests (fn, union, effect, lambda, match-destructure, pipe/UFCS), all green
 
 ### Phase 1 — Rust tooling over the Go compiler (ships value)
 - [ ] 1.1 `crates/osprey-lsp`: implement lspkit `EngineApi`; in-process tree-sitter for syntax/outline/highlight/folding
@@ -169,13 +180,13 @@ the **SharpLsp sidecar pattern already in production**. Phase 3: swap the sideca
 - [ ] 1.7 Adopt Shipwright contract: `--version` / `--version --json` on the Rust binaries
 
 ### Phase 2 — port the compiler core (strangler-fig, Go = oracle)
-- [ ] 2.1 `crates/osprey-ast`: enums mirroring [`ast.go`](../../compiler/internal/ast/ast.go)
-- [ ] 2.2 `crates/osprey-syntax`: CST→AST lowering (replaces `internal/ast/builder_*.go`)
-- [ ] 2.3 `crates/osprey-types`: port [`type_inference.go`](../../compiler/internal/codegen/type_inference.go) — **arena + index union-find**, match-exhaustiveness, effect rows
-- [ ] 2.4 `crates/osprey-codegen`: LLVM IR **text** emission — port `llvm.go` + `*_generation.go`; `builtin_registry.go` → const map; shell to `clang`
-- [ ] 2.5 `crates/osprey-runtime-sys`: `cc`-built FFI to `compiler/runtime/*.c` (same hardening flags; **no C rewrite**)
-- [ ] 2.6 `crates/osprey-cli`: clap surface identical to [`cli.go`](../../compiler/internal/cli/cli.go) incl. sandbox flags
-- [ ] 2.7 Differential test harness: Rust vs Go binary vs `.expectedoutput`, byte-for-byte, across all goldens
+- [x] 2.1 [`crates/osprey-ast`](../../crates/osprey-ast/src/lib.rs): `Stmt`/`Expr` enums mirroring [`ast.go`](../../compiler/internal/ast/ast.go) (exhaustively matchable for the checker/codegen ports)
+- [x] 2.2 [`crates/osprey-syntax`](../../crates/osprey-syntax/src/lib.rs): CST→AST lowering (replaces `internal/ast/builder_*.go`) — all core constructs incl. UFCS method calls, named args, string interpolation; lowers **45/45 examples** clean; 7 unit tests
+- [ ] 2.3 `crates/osprey-types`: port [`type_inference.go`](../../compiler/internal/codegen/type_inference.go) — **arena + index union-find**, match-exhaustiveness, effect rows. **(THE hard core — not started; ~4K Rust LOC.)**
+- [ ] 2.4 `crates/osprey-codegen`: LLVM IR **text** emission — port `llvm.go` + `*_generation.go`; `builtin_registry.go` → const map; shell to `clang`. **(Not started; ~10K LOC, mostly transcription.)**
+- [~] 2.5 [`crates/osprey-runtime-sys`](../../crates/osprey-runtime-sys/src/lib.rs): `cc`-built FFI to `compiler/runtime/*.c` (same hardening flags; **no C rewrite**). Self-contained FFI-pointer unit (`ffi_runtime.c`) linked + tested; pthread/OpenSSL units link the same way as their callers land.
+- [~] 2.6 [`crates/osprey-cli`](../../crates/osprey-cli/src/main.rs): `osprey-rs` binary — `--ast` / `--check` / `--version` today; full clap surface (`--llvm --compile --run`, sandbox flags) grows with 2.3/2.4.
+- [ ] 2.7 Differential test harness: Rust vs Go binary vs `.expectedoutput`, byte-for-byte, across all goldens. **(Blocked on 2.4.)**
 - [ ] 2.8 **Gate:** 100% of `tested/` + `failscompilation/` pass; `make c-test` green
 
 ### Phase 3 — flip & retire (Gleam endgame)

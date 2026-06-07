@@ -99,3 +99,5 @@ compiler/temp_test.txt
 
 # `make test` log (#56)
 compiler/test.log
+
+target/

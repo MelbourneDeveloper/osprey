@@ -1,0 +1,21 @@
+{
+  "name": "tree-sitter-osprey",
+  "version": "0.0.0-dev",
+  "description": "Tree-sitter grammar for the Osprey language (single canonical grammar: compiler, LSP, highlighting)",
+  "repository": "https://github.com/MelbourneDeveloper/osprey",
+  "license": "MIT",
+  "main": "bindings/node",
+  "keywords": [
+    "tree-sitter",
+    "parser",
+    "osprey"
+  ],
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test",
+    "parse-all": "node test/parse-all.js"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.24.4"
+  }
+}

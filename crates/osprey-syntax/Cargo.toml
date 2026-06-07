@@ -1,0 +1,12 @@
+[package]
+name = "osprey-syntax"
+description = "Lowers the tree-sitter Osprey CST into the osprey-ast (Rust port of internal/ast/builder_*.go)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+osprey-ast = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-osprey = { workspace = true }

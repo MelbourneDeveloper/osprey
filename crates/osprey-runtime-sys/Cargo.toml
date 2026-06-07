@@ -1,0 +1,11 @@
+[package]
+name = "osprey-runtime-sys"
+description = "FFI bindings to the existing Osprey C runtime (compiler/runtime/*.c), built with cc — no C is rewritten"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+links = "osprey_runtime_ffi"
+
+[build-dependencies]
+cc = "1"
