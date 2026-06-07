@@ -143,20 +143,23 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// Collect positional + named args from an `argument_list` child.
+    /// Collect positional + named args from an `argument_list` child. Named
+    /// arguments live in a single direct `named_argument_list` child; a *direct*
+    /// lookup is essential — descending would steal the named arguments of a
+    /// nested call (`print(cc(c1: .., c2: ..))` must not hoist c1/c2 onto print).
     fn lower_arg_list(&self, node: Node) -> (Vec<Expr>, Vec<NamedArgument>) {
         let Some(list) = self.named_of_kind(node, "argument_list").into_iter().next() else {
             return (Vec::new(), Vec::new());
         };
-        let named: Vec<NamedArgument> = self
-            .descendants_of_kind(list, "named_argument")
-            .iter()
-            .map(|na| NamedArgument {
-                name: self.field_text(*na, "name"),
-                value: self.lower_expr_field(*na, "value"),
-            })
-            .collect();
-        if !named.is_empty() {
+        if let Some(nal) = self.first_child_of_kind(list, "named_argument_list") {
+            let named = self
+                .named_of_kind(nal, "named_argument")
+                .iter()
+                .map(|na| NamedArgument {
+                    name: self.field_text(*na, "name"),
+                    value: self.lower_expr_field(*na, "value"),
+                })
+                .collect();
             return (Vec::new(), named);
         }
         let mut cursor = list.walk();
@@ -184,9 +187,14 @@ impl<'a> Lowerer<'a> {
             .iter()
             .map(|arm| HandlerArm {
                 operation: self.field_text(*arm, "operation"),
-                params: arm
-                    .child_by_field_name("operation")
-                    .map(|_| Vec::new())
+                params: self
+                    .first_child_of_kind(*arm, "handler_params")
+                    .map(|hp| {
+                        self.named_of_kind(hp, "identifier")
+                            .iter()
+                            .map(|n| self.text(*n))
+                            .collect()
+                    })
                     .unwrap_or_default(),
                 body: self.lower_expr_field(*arm, "body"),
             })
@@ -218,6 +226,16 @@ impl<'a> Lowerer<'a> {
                 _ => {}
             }
         }
+        // A block evaluates to its last expression. The grammar sometimes emits
+        // that trailing expression as an `expression_statement`; recover it as
+        // the block value so the type of `{ ...; r }` is the type of `r`.
+        if value.is_none() {
+            if let Some(Stmt::Expr(_)) = statements.last() {
+                if let Some(Stmt::Expr(e)) = statements.pop() {
+                    value = Some(Box::new(e));
+                }
+            }
+        }
         Expr::Block { statements, value }
     }
 
@@ -230,7 +248,17 @@ impl<'a> Lowerer<'a> {
             "integer" => Expr::Integer(self.text(inner).parse().unwrap_or(0)),
             "float" => Expr::Float(self.text(inner).parse().unwrap_or(0.0)),
             "boolean" => Expr::Bool(self.text(inner) == "true"),
-            "string" => Expr::Str(unquote(&self.text(inner))),
+            "string" => {
+                // Equal-length `string`/`interpolated_string` token matches let the
+                // plain `string` rule win, so a `"...${e}..."` can arrive tagged as
+                // `string`. Detect the `${` marker here and interpolate either way.
+                let raw = self.text(inner);
+                if raw.contains("${") {
+                    Expr::InterpolatedStr(self.lower_interpolation(&raw))
+                } else {
+                    Expr::Str(unquote(&raw))
+                }
+            }
             "interpolated_string" => {
                 Expr::InterpolatedStr(self.lower_interpolation(&self.text(inner)))
             }

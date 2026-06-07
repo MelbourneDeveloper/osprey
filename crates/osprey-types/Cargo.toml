@@ -1,0 +1,13 @@
+[package]
+name = "osprey-types"
+description = "Hindley-Milner type inference for Osprey — a Rust port of compiler/internal/codegen/type_inference.go"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+osprey-ast.workspace = true
+
+[dev-dependencies]
+osprey-syntax.workspace = true

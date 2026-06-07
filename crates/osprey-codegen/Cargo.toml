@@ -1,0 +1,13 @@
+[package]
+name = "osprey-codegen"
+description = "LLVM IR (text) code generation for Osprey — a Rust port of compiler/internal/codegen/llvm.go. Emits textual IR handed to clang, exactly as the Go compiler does."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+osprey-ast.workspace = true
+
+[dev-dependencies]
+osprey-syntax.workspace = true

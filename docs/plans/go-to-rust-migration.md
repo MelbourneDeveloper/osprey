@@ -124,8 +124,10 @@ the **SharpLsp sidecar pattern already in production**. Phase 3: swap the sideca
 - **Phase 1 — Rust tooling over the Go compiler (weeks, ships value).** `osprey-lsp`/`osprey-mcp` on lspkit,
   Go binary as semantic sidecar. Retire `server.ts` + TextMate + Monaco. Add Osprey to Deslop. Adopt
   Shipwright versioning. Compiler still Go; fast builds untouched.
-- **Phase 2 — port the compiler core (months, strangler-fig).** `osprey-syntax`→`-ast`→`-types`→`-codegen`
-  →`-runtime-sys`→`-cli`, gated on golden + differential tests vs the Go oracle.
+
+- **Phase 2 — strangler-fig? HELL NO! ONE SHOT!!** `osprey-syntax`→`-ast`→`-types`→`-codegen`
+  →`-runtime-sys`→`-cli`, gated on golden + differential tests vs the Go oracle. GO HARD!!!
+
 - **Phase 3 — flip & retire (the Gleam endgame).** LSP goes in-process; delete Go compiler + `go.mod` +
   ANTLR (grammar count → 1). Add WASM target → playground runs in-browser, retiring `webcompiler/`. One
   binary: compiler + LSP + MCP + formatter.
@@ -153,14 +155,38 @@ the **SharpLsp sidecar pattern already in production**. Phase 3: swap the sideca
 
 ## Status (current)
 
-**Phase 0 COMPLETE; Phase 2 front-end landed (AST + CST→AST lowering + runtime-sys
-FFI slice + CLI).** The Rust workspace builds, is `clippy`-clean, and all tests pass:
-`tree-sitter-osprey` parses **45/45 valid examples with 0 ERROR nodes** (+6 corpus
-tests), and `osprey-rs` lowers all 45 to a typed AST. **Not yet started: the hard
-core** — `osprey-types` (HM inference, ~4K Rust LOC) and `osprey-codegen` (LLVM IR
-text, ~10K LOC) — plus the Phase-1 LSP and the Phase-2 differential gate. Those are
-the multi-week items this plan always scoped as "months"; the foundation they build
-on is now in place and verified.
+**Phase 0 COMPLETE. Phase 2 front-end + type checker + codegen core all landed.**
+The Rust workspace builds, is `clippy`-clean (0 warnings), and all tests pass —
+**43 Rust tests + 6 tree-sitter corpus tests**, with `tree-sitter-osprey` parsing
+**45/45 valid examples, 0 ERROR nodes**.
+
+- **`osprey-types` — the HM core — DONE and verified.** A complete Hindley-Milner
+  engine: enum `Type` language, index-addressed union-find substitution with
+  path-compressed `prune`/occurs-check, unification (with the Osprey rules: `any`
+  wildcard, bare-collection generics, structural records, Result auto-unwrap **and**
+  auto-wrap), let-polymorphism (generalize/instantiate, incl. top-level functions),
+  a builtin registry, full expression/statement inference (arithmetic Result
+  semantics, records, generic unions, lambdas, UFCS, effects), pattern inference and
+  match exhaustiveness. **`osprey-rs --check` type-checks 44/45 valid examples**
+  (the holdout redefines `Success` as a user variant — a real name collision with
+  built-in `Result`). 26 unit/integration tests.
+- **`osprey-codegen` — LLVM-IR-text backend, compute core working END-TO-END.**
+  Emits textual LLVM IR (no inkwell), handed to `clang`. Covers literals,
+  arithmetic & comparison, `print`/`toString`, string interpolation (sprintf),
+  `let`, blocks, `match` (bool/int/string literals → compare-chain + `phi`),
+  recursive functions and calls (named-arg ordering), synthesized `main`.
+  **`osprey-rs --run` compiles and runs real programs** — e.g. recursive
+  `fib(10)=55`, `factorial(5)=120`, arithmetic + interpolation — to a native binary
+  with correct output. Idiomatic Rust, **no panics, `Result<T,E>` throughout**;
+  unsupported nodes (records/unions/effects/lambdas, and string-typed
+  parameters/returns pending type-driven signatures) **fail loudly**, never emit a
+  placeholder or invalid IR. 6 tests.
+
+**Remaining:** widen `osprey-codegen` to type-driven signatures (consume
+`osprey-types` so string/record params and returns codegen), then records/unions/
+effects/lists lowering; the Phase-2 differential gate; and the Phase-1 LSP. The
+hardest intellectual core (HM inference) and the end-to-end pipeline (parse →
+check → LLVM IR → clang → run) are both proven.
 
 ## TODO
 
@@ -182,10 +208,10 @@ on is now in place and verified.
 ### Phase 2 — port the compiler core (strangler-fig, Go = oracle)
 - [x] 2.1 [`crates/osprey-ast`](../../crates/osprey-ast/src/lib.rs): `Stmt`/`Expr` enums mirroring [`ast.go`](../../compiler/internal/ast/ast.go) (exhaustively matchable for the checker/codegen ports)
 - [x] 2.2 [`crates/osprey-syntax`](../../crates/osprey-syntax/src/lib.rs): CST→AST lowering (replaces `internal/ast/builder_*.go`) — all core constructs incl. UFCS method calls, named args, string interpolation; lowers **45/45 examples** clean; 7 unit tests
-- [ ] 2.3 `crates/osprey-types`: port [`type_inference.go`](../../compiler/internal/codegen/type_inference.go) — **arena + index union-find**, match-exhaustiveness, effect rows. **(THE hard core — not started; ~4K Rust LOC.)**
-- [ ] 2.4 `crates/osprey-codegen`: LLVM IR **text** emission — port `llvm.go` + `*_generation.go`; `builtin_registry.go` → const map; shell to `clang`. **(Not started; ~10K LOC, mostly transcription.)**
+- [x] 2.3 [`crates/osprey-types`](../../crates/osprey-types/src/lib.rs): port of [`type_inference.go`](../../compiler/internal/codegen/type_inference.go) — index union-find (`ctx.rs`), unification with the Osprey rules (`unify.rs`), let-polymorphism (`env.rs`), builtin registry (`builtins.rs`), expr/stmt inference (`expr.rs`/`check.rs`), pattern inference + **match-exhaustiveness** (`pattern.rs`). **`--check` passes 44/45 examples; 26 tests.** (Effect *rows* tracked structurally, not yet row-unified — a follow-up.)
+- [~] 2.4 [`crates/osprey-codegen`](../../crates/osprey-codegen/src/lib.rs): LLVM IR **text** emission (port of `llvm.go`/`*_generation.go`); shells to `clang`. **Compute core works end-to-end (`--run`): literals, arithmetic, `print`/interpolation, `match`→phi, recursive functions.** Next: consume `osprey-types` signatures (string/record params + returns), then records/unions/effects/lists, then `builtin_registry.go` → const map. 6 tests.
 - [~] 2.5 [`crates/osprey-runtime-sys`](../../crates/osprey-runtime-sys/src/lib.rs): `cc`-built FFI to `compiler/runtime/*.c` (same hardening flags; **no C rewrite**). Self-contained FFI-pointer unit (`ffi_runtime.c`) linked + tested; pthread/OpenSSL units link the same way as their callers land.
-- [~] 2.6 [`crates/osprey-cli`](../../crates/osprey-cli/src/main.rs): `osprey-rs` binary — `--ast` / `--check` / `--version` today; full clap surface (`--llvm --compile --run`, sandbox flags) grows with 2.3/2.4.
+- [~] 2.6 [`crates/osprey-cli`](../../crates/osprey-cli/src/main.rs): `osprey-rs` binary — `--ast` / `--check` / `--llvm` / `--run` / `--version` today; remaining clap surface (`--compile`, sandbox flags) grows with 2.4.
 - [ ] 2.7 Differential test harness: Rust vs Go binary vs `.expectedoutput`, byte-for-byte, across all goldens. **(Blocked on 2.4.)**
 - [ ] 2.8 **Gate:** 100% of `tested/` + `failscompilation/` pass; `make c-test` green
 
