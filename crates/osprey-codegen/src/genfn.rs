@@ -62,7 +62,12 @@ fn pair_args<'a>(
     } else {
         params
             .iter()
-            .filter_map(|p| named.iter().find(|n| n.name == p.name).map(|n| (p, &n.value)))
+            .filter_map(|p| {
+                named
+                    .iter()
+                    .find(|n| n.name == p.name)
+                    .map(|n| (p, &n.value))
+            })
             .collect()
     }
 }

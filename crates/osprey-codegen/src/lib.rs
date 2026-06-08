@@ -66,10 +66,20 @@ mod tests {
 
     #[test]
     fn emits_arithmetic_function() {
-        let ir = module("fn add(a, b) = a + b\nlet r = add(2, 3)\n");
+        // A monomorphic (annotated) function is emitted as a real definition and
+        // called directly; a generic one would instead inline at its call sites.
+        let ir = module("fn add(a: int, b: int) -> int = a + b\nlet r = add(2, 3)\n");
         assert!(ir.contains("define i64 @add(i64 %a, i64 %b)"));
         assert!(ir.contains("add i64 %a, %b"));
         assert!(ir.contains("call i64 @add(i64 2, i64 3)"));
+    }
+
+    #[test]
+    fn generic_function_inlines_at_call_site() {
+        // A polymorphic function is specialised by inlining, so no monomorphic
+        // definition is emitted; the call computes directly at the use site.
+        let ir = module("fn identity(x) = x\nlet a = identity(7)\nprint(\"v=${a}\")\n");
+        assert!(!ir.contains("@identity"));
     }
 
     #[test]
@@ -81,7 +91,7 @@ mod tests {
 
     #[test]
     fn match_lowers_to_phi() {
-        let ir = module("fn pick(a, b) = match a < b { true => a false => b }\n");
+        let ir = module("fn pick(a: int, b: int) -> int = match a < b { true => a false => b }\n");
         assert!(ir.contains("icmp"));
         assert!(ir.contains("br i1"));
         assert!(ir.contains("phi i64"));

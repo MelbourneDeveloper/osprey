@@ -124,8 +124,18 @@ pub(crate) fn concat_handles(cg: &mut Codegen, a: &Value, b: &Value) -> Value {
 fn list_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let l = handle_arg(cg, args, 0)?;
     let i = boxed_arg(cg, args, 1)?;
-    let inb = cg.call("i32", "osprey_list_in_bounds", "i8*, i64", &[&l.operand, &i.operand]);
-    let val = cg.call("i64", "osprey_list_get", "i8*, i64", &[&l.operand, &i.operand]);
+    let inb = cg.call(
+        "i32",
+        "osprey_list_in_bounds",
+        "i8*, i64",
+        &[&l.operand, &i.operand],
+    );
+    let val = cg.call(
+        "i64",
+        "osprey_list_get",
+        "i8*, i64",
+        &[&l.operand, &i.operand],
+    );
     result_from_flag(cg, &inb, &val)
 }
 
@@ -186,7 +196,12 @@ fn map_set(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 fn map_remove(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let m = handle_arg(cg, args, 0)?;
     let k = boxed_arg(cg, args, 1)?;
-    let r = cg.call("i8*", "osprey_map_remove", "i8*, i64", &[&m.operand, &k.operand]);
+    let r = cg.call(
+        "i8*",
+        "osprey_map_remove",
+        "i8*, i64",
+        &[&m.operand, &k.operand],
+    );
     Ok(Value::handle(r, MAP_OWNER))
 }
 
@@ -194,7 +209,12 @@ fn map_remove(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 fn map_contains(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let m = handle_arg(cg, args, 0)?;
     let k = boxed_arg(cg, args, 1)?;
-    let raw = cg.call("i32", "osprey_map_contains", "i8*, i64", &[&m.operand, &k.operand]);
+    let raw = cg.call(
+        "i32",
+        "osprey_map_contains",
+        "i8*, i64",
+        &[&m.operand, &k.operand],
+    );
     let r = cg.fresh_reg();
     cg.emit(format!("{r} = icmp ne i32 {raw}, 0"));
     Ok(Value::new(r, LType::I1))
@@ -223,7 +243,10 @@ pub(crate) fn list_builder_push(cg: &mut Codegen, bld: &str, elem: &str) {
 }
 
 pub(crate) fn list_builder_seal(cg: &mut Codegen, bld: &str) -> Value {
-    Value::handle(cg.call("i8*", "osprey_list_builder_seal", "i8*", &[bld]), LIST_OWNER)
+    Value::handle(
+        cg.call("i8*", "osprey_list_builder_seal", "i8*", &[bld]),
+        LIST_OWNER,
+    )
 }
 
 /// `mapKeys`/`mapValues` → a `List` built by iterating the map.
@@ -286,7 +309,17 @@ pub(crate) fn gen_map_literal(cg: &mut Codegen, entries: &[osprey_ast::MapEntry]
 
 /// Shared runtime map lookup → `Result<i64, _>` (also used by `m[key]` indexing).
 pub(crate) fn runtime_map_get(cg: &mut Codegen, m: &Value, k: &Value) -> Result<Value> {
-    let has = cg.call("i32", "osprey_map_contains", "i8*, i64", &[&m.operand, &k.operand]);
-    let got = cg.call("i64", "osprey_map_get", "i8*, i64", &[&m.operand, &k.operand]);
+    let has = cg.call(
+        "i32",
+        "osprey_map_contains",
+        "i8*, i64",
+        &[&m.operand, &k.operand],
+    );
+    let got = cg.call(
+        "i64",
+        "osprey_map_get",
+        "i8*, i64",
+        &[&m.operand, &k.operand],
+    );
     result_from_flag(cg, &has, &got)
 }

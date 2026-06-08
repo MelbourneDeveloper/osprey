@@ -356,9 +356,10 @@ fn finish_phi(cg: &mut Codegen, phi_in: &[(Value, String)]) -> Result<Value> {
     // Without this a `match … { Success … Error … }` looks like a bare handle and
     // a `-> Result` function body gets wrapped a second time.
     let result_inner = first_val.result_inner.filter(|first| {
-        phi_in
-            .iter()
-            .all(|(v, _)| v.result_inner.is_some_and(|ri| ri.as_str() == first.as_str()))
+        phi_in.iter().all(|(v, _)| {
+            v.result_inner
+                .is_some_and(|ri| ri.as_str() == first.as_str())
+        })
     });
     let mut out = Value::new(reg, ty)
         .with_owner(common(|v| v.osp_ty.clone()))

@@ -26,7 +26,7 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
             None if cg.is_ctor(name) => crate::aggregate::gen_constructor(cg, name, &[]),
             // A bare top-level function name used as a value is a callback (passed
             // to `spawnProcess`/`httpListen`): take its address as an `i8*`.
-            None if cg.fn_params.contains_key(name) => fn_pointer(cg, name),
+            None if cg.fn_params.contains_key(name) => Ok(fn_pointer(cg, name)),
             None => Err(CodegenError::unknown(name)),
         },
         Expr::Binary { op, left, right } => gen_binary(cg, op, left, right),
@@ -72,10 +72,10 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
 /// same way `gen_function`/`coerce_return` spelled its `define` — so the cast is
 /// well-typed; the C runtime calls back through its own function-pointer cast.
 /// Mirrors the handler-pointer bitcast in `effects::gen_perform`.
-fn fn_pointer(cg: &mut Codegen, name: &str) -> Result<Value> {
+fn fn_pointer(cg: &mut Codegen, name: &str) -> Value {
     let fty = fn_ptr_type(cg, name);
     let reg = cg.emit_reg(format!("bitcast {fty} @{name} to i8*"));
-    Ok(Value::new(reg, LType::Ptr))
+    Value::new(reg, LType::Ptr)
 }
 
 /// The LLVM function-pointer type spelling for a top-level function, e.g.
@@ -477,7 +477,13 @@ pub(crate) fn call_with_values(cg: &mut Codegen, name: &str, args: Vec<Value>) -
 /// Emit a call to `name` returning LLVM type `rty`. A name with no user
 /// definition is a runtime builtin, so synthesize its `declare` (param types
 /// from `coerced`) — the IR stays valid and links only if the symbol exists.
-fn emit_user_call(cg: &mut Codegen, name: &str, rty: &str, coerced: &[Value], typed: &str) -> String {
+fn emit_user_call(
+    cg: &mut Codegen,
+    name: &str,
+    rty: &str,
+    coerced: &[Value],
+    typed: &str,
+) -> String {
     if !cg.fn_params.contains_key(name) {
         let sig = coerced
             .iter()

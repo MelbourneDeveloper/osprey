@@ -73,7 +73,11 @@ pub(crate) fn result_from_i64(cg: &mut Codegen, result: &str) -> Result<Value> {
 /// that constant string so `toString` shows `Error(msg)` (e.g. `readFile`'s
 /// `Error(File read error)`); otherwise the bare (null) pointer is kept and a
 /// plain `Error` is shown.
-pub(crate) fn result_from_nullable(cg: &mut Codegen, ptr: &str, err: Option<&str>) -> Result<Value> {
+pub(crate) fn result_from_nullable(
+    cg: &mut Codegen,
+    ptr: &str,
+    err: Option<&str>,
+) -> Result<Value> {
     let is_null = cg.emit_reg(format!("icmp eq i8* {ptr}, null"));
     let value = match err {
         Some(msg) => {

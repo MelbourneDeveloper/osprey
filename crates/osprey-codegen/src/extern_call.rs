@@ -1,6 +1,6 @@
 //! Runtime/system builtins backed by the prebuilt C archives (file I/O, process
-//! management, HTTP client/server, JSON) — the camelCase Osprey name maps to its
-//! snake_case C symbol with a fixed parameter signature and a return-wrapping
+//! management, HTTP client/server, JSON) — the camel-case Osprey name maps to
+//! its snake-case C symbol with a fixed parameter signature and a return-wrapping
 //! discipline. Ports the call emitters of `system_generation.go` /
 //! `http_generation.go`. A named function passed as a callback (`spawnProcess` /
 //! `httpListen` handler) is lowered to a code pointer by `gen_expr`'s Identifier
@@ -42,7 +42,7 @@ struct Sig {
 /// `Result<int>` builtin shares the `< 0 ⇒ Error` convention, every
 /// `Result<string>` the `null ⇒ Error` one.
 fn lookup(name: &str) -> Option<Sig> {
-    use LType::{I64, Ptr, Str};
+    use LType::{Ptr, Str, I64};
     let sig = |cname, params, ret| Sig { cname, params, ret };
     Some(match name {
         // --- file I/O (system_runtime.c) ---

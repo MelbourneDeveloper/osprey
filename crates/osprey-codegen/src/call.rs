@@ -8,7 +8,13 @@ use crate::builder::Codegen;
 
 /// Render `declare {ret} @{cname}({params})` once (idempotent) and the typed
 /// argument list `{ty} {op}, …` shared by [`Codegen::call`] / [`Codegen::call_void`].
-fn declare_and_args(cg: &mut Codegen, ret: &str, cname: &str, params: &str, args: &[&str]) -> String {
+fn declare_and_args(
+    cg: &mut Codegen,
+    ret: &str,
+    cname: &str,
+    params: &str,
+    args: &[&str],
+) -> String {
     cg.add_extern(format!("declare {ret} @{cname}({params})"));
     params
         .split(',')

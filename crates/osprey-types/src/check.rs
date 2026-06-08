@@ -264,7 +264,10 @@ impl Checker {
     fn record_fn_params<P: ParamName>(&mut self, name: &str, parameters: &[P]) {
         let _ = self.fn_params.insert(
             name.to_string(),
-            parameters.iter().map(|p| p.param_name().to_string()).collect(),
+            parameters
+                .iter()
+                .map(|p| p.param_name().to_string())
+                .collect(),
         );
     }
 
@@ -384,7 +387,12 @@ impl Checker {
         match env.get(name).cloned() {
             Some(scheme) => {
                 let existing = crate::env::instantiate(&mut self.ctx, &scheme);
-                self.unify_or_err(&existing, &value_ty, &format!("assignment to `{name}`"), pos);
+                self.unify_or_err(
+                    &existing,
+                    &value_ty,
+                    &format!("assignment to `{name}`"),
+                    pos,
+                );
             }
             None => self.record_err(
                 TypeError::new(format!("assignment to undeclared `{name}`")),

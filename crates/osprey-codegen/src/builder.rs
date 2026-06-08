@@ -69,8 +69,8 @@ pub struct Codegen {
     pub(crate) call_aliases: HashMap<String, String>,
 }
 
-/// A function value's lowered signature: parameter LTypes, the return LType, and
-/// (when it returns `Result<T, _>`) the success inner type.
+/// A function value's lowered signature: parameter [`LType`]s, the return
+/// [`LType`], and (when it returns `Result<T, _>`) the success inner type.
 pub(crate) type FnSig = (Vec<LType>, LType, Option<LType>);
 
 /// Saved emission state of a suspended function (see [`Codegen::enter_nested_fn`]).

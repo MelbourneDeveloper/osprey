@@ -268,7 +268,12 @@ impl Lowerer<'_> {
     fn lower_name_value<T>(&self, nodes: &[Node<'_>], ctor: impl Fn(String, Expr) -> T) -> Vec<T> {
         nodes
             .iter()
-            .map(|n| ctor(self.field_text(*n, "name"), self.lower_expr_field(*n, "value")))
+            .map(|n| {
+                ctor(
+                    self.field_text(*n, "name"),
+                    self.lower_expr_field(*n, "value"),
+                )
+            })
             .collect()
     }
 
@@ -410,12 +415,12 @@ fn unquote(s: &str) -> String {
             Some('e') => out.push('\u{1b}'),
             Some('0') => out.push('\0'),
             Some('"') => out.push('"'),
-            Some('\\') => out.push('\\'),
+            // An escaped backslash, or a trailing lone backslash at end of input.
+            Some('\\') | None => out.push('\\'),
             Some(other) => {
                 out.push('\\');
                 out.push(other);
             }
-            None => out.push('\\'),
         }
     }
     out
