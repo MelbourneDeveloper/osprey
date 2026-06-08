@@ -21,16 +21,14 @@ pub fn type_expr_to_type(te: &TypeExpr, params: &HashMap<String, Type>) -> Type 
         let ret = te
             .return_type
             .as_ref()
-            .map(|r| type_expr_to_type(r, params))
-            .unwrap_or_else(Type::unit);
+            .map_or_else(Type::unit, |r| type_expr_to_type(r, params));
         return Type::fun(ps, ret);
     }
     if te.is_array {
         let elem = te
             .array_element
             .as_ref()
-            .map(|e| type_expr_to_type(e, params))
-            .unwrap_or_else(Type::any);
+            .map_or_else(Type::any, |e| type_expr_to_type(e, params));
         return Type::list(elem);
     }
     if let Some(var) = params.get(&te.name) {
@@ -91,11 +89,7 @@ fn normalize_named(name: &str) -> Type {
 /// inference types. Tolerant: a malformed string yields `() -> Unit`.
 pub fn parse_fn_sig(s: &str, params: &HashMap<String, Type>) -> (Vec<Type>, Type) {
     let s = s.trim();
-    let s = s
-        .strip_prefix("fn")
-        .map(str::trim_start)
-        .unwrap_or(s)
-        .trim();
+    let s = s.strip_prefix("fn").map_or(s, str::trim_start).trim();
     let Some(open) = s.find('(') else {
         return (Vec::new(), Type::unit());
     };
@@ -114,8 +108,7 @@ pub fn parse_fn_sig(s: &str, params: &HashMap<String, Type>) -> (Vec<Type>, Type
     let ret = s[close + 1..]
         .trim()
         .strip_prefix("->")
-        .map(|r| type_name_to_type(r.trim(), params))
-        .unwrap_or_else(Type::unit);
+        .map_or_else(Type::unit, |r| type_name_to_type(r.trim(), params));
     (ps, ret)
 }
 
@@ -161,6 +154,10 @@ fn split_generic_args(s: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
+#[expect(
+    unused_results,
+    reason = "tests drive inference for its side effects and discard the returned types"
+)]
 mod tests {
     use super::*;
 

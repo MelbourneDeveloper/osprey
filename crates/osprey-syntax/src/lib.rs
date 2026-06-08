@@ -6,7 +6,7 @@
 //! syntax errors discovered by tree-sitter — the front-end never panics on bad
 //! input, matching the Go builder's error tolerance).
 
-use osprey_ast::*;
+use osprey_ast::{Position, Program};
 use tree_sitter::{Node, Parser, Tree};
 
 mod expr;
@@ -17,7 +17,9 @@ pub use lower::Lowerer;
 /// A syntax error located in the source (an ERROR/MISSING node from tree-sitter).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SyntaxError {
+    /// Human-readable description of what went wrong at this location.
     pub message: String,
+    /// Source location (line/column) where the error was detected.
     pub position: Position,
 }
 
@@ -25,13 +27,26 @@ pub struct SyntaxError {
 /// non-empty does not prevent producing a best-effort tree.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parsed {
+    /// The lowered program (best-effort even when errors are present).
     pub program: Program,
+    /// Syntax errors discovered while parsing; empty on a clean parse.
     pub errors: Vec<SyntaxError>,
 }
 
 /// Parse Osprey source into a typed [`Program`].
+#[must_use]
 pub fn parse_program(source: &str) -> Parsed {
-    let tree = parse_tree(source);
+    let Some(tree) = parse_tree(source) else {
+        return Parsed {
+            program: Program {
+                statements: Vec::new(),
+            },
+            errors: vec![SyntaxError {
+                message: "failed to initialize Osprey grammar".to_owned(),
+                position: Position { line: 1, column: 0 },
+            }],
+        };
+    };
     let root = tree.root_node();
     let lowerer = Lowerer::new(source.as_bytes());
     let program = lowerer.lower_program(root);
@@ -41,15 +56,19 @@ pub fn parse_program(source: &str) -> Parsed {
 }
 
 /// Run only the tree-sitter parse (used by tooling that wants the raw CST).
-pub fn parse_tree(source: &str) -> Tree {
+///
+/// Returns [`None`] if the embedded Osprey grammar cannot be loaded or
+/// tree-sitter declines to produce a tree (neither happens for a valid build).
+#[must_use]
+pub fn parse_tree(source: &str) -> Option<Tree> {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_osprey::LANGUAGE.into())
-        .expect("load Osprey grammar");
-    parser.parse(source, None).expect("tree-sitter parse")
+        .ok()?;
+    parser.parse(source, None)
 }
 
-fn collect_errors(node: Node, src: &[u8], out: &mut Vec<SyntaxError>) {
+fn collect_errors(node: Node<'_>, src: &[u8], out: &mut Vec<SyntaxError>) {
     if node.is_error() || node.is_missing() {
         let p = node.start_position();
         out.push(SyntaxError {
@@ -59,8 +78,8 @@ fn collect_errors(node: Node, src: &[u8], out: &mut Vec<SyntaxError>) {
                 format!("syntax error near {:?}", node.utf8_text(src).unwrap_or(""))
             },
             position: Position {
-                line: p.row as u32 + 1,
-                column: p.column as u32,
+                line: u32::try_from(p.row).unwrap_or(u32::MAX).saturating_add(1),
+                column: u32::try_from(p.column).unwrap_or(u32::MAX),
             },
         });
     }
@@ -71,8 +90,13 @@ fn collect_errors(node: Node, src: &[u8], out: &mut Vec<SyntaxError>) {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test assertions: an out-of-bounds index is a test failure, not a production panic"
+)]
 mod tests {
     use super::*;
+    use osprey_ast::{Expr, Pattern, Stmt};
 
     fn one(src: &str) -> Stmt {
         let parsed = parse_program(src);

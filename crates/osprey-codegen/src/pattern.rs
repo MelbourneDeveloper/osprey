@@ -4,6 +4,7 @@
 //!     fallback `disc >= 0` ⇒ Success, matching `generateResultMatchCondition`);
 //!   * user-union variant arms — tag comparison against the heap block's leading
 //!     discriminant, binding the variant's fields.
+//!
 //! Ports the literal + Result + union paths of `generateMatchExpression`.
 
 use crate::builder::Codegen;
@@ -11,17 +12,70 @@ use crate::conv::as_i64;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use osprey_ast::*;
+use osprey_ast::{Expr, MatchArm, Pattern};
 
 pub(crate) fn gen_match(cg: &mut Codegen, value: &Expr, arms: &[MatchArm]) -> Result<Value> {
     let disc = gen_expr(cg, value)?;
+    // `result ?: default` lowers to `match result { true => result  false => default }`.
+    // A Result discriminant matched against bool literals is only ever this Elvis
+    // form, so dispatch it to unwrap-or-default.
+    if disc.result_inner.is_some() && is_bool_elvis(arms) {
+        return gen_result_elvis(cg, &disc, arms);
+    }
     if arms.iter().any(|a| is_result_arm(&a.pattern)) {
         return gen_result_match(cg, disc, arms);
     }
     if let Some(owner) = union_owner(cg, arms) {
-        return gen_union_match(cg, disc, arms, &owner);
+        return gen_union_match(cg, &disc, arms, &owner);
     }
-    gen_literal_match(cg, disc, arms)
+    gen_literal_match(cg, &disc, arms)
+}
+
+/// Whether the arms are the bool-ternary shape (`true => …  false => …`) the
+/// Elvis operator desugars to.
+fn is_bool_elvis(arms: &[MatchArm]) -> bool {
+    arms.len() == 2
+        && arms
+            .iter()
+            .all(|a| matches!(&a.pattern, Pattern::Literal(e) if matches!(**e, Expr::Bool(_))))
+}
+
+/// `result ?: default` — branch on the Result discriminant, yielding the
+/// unwrapped success payload or evaluating the `false` (default) arm.
+fn gen_result_elvis(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Result<Value> {
+    let inner = disc.result_inner.unwrap_or(LType::I64);
+    let default_arm = arms
+        .iter()
+        .find(|a| matches!(&a.pattern, Pattern::Literal(e) if matches!(**e, Expr::Bool(false))));
+    let d = crate::result::load_disc(cg, disc);
+    let is_succ = cg.fresh_reg();
+    cg.emit(format!("{is_succ} = icmp eq i8 {d}, 0"));
+    let sl = cg.fresh_label();
+    let el = cg.fresh_label();
+    let end = cg.fresh_label();
+    cg.emit(format!("br i1 {is_succ}, label %{sl}, label %{el}"));
+
+    cg.start_block(&sl);
+    let succ = crate::result::load_value(cg, disc);
+    let sb = cg.cur_block().to_string();
+    cg.emit(format!("br label %{end}"));
+
+    cg.start_block(&el);
+    let def = match default_arm {
+        Some(a) => gen_expr(cg, &a.body)?,
+        None => Value::unit(),
+    };
+    let def = crate::cast::coerce_to(cg, def, inner)?;
+    let eb = cg.cur_block().to_string();
+    cg.emit(format!("br label %{end}"));
+
+    cg.start_block(&end);
+    let reg = cg.fresh_reg();
+    cg.emit(format!(
+        "{reg} = phi {inner} [ {}, %{sb} ], [ {}, %{eb} ]",
+        succ.operand, def.operand
+    ));
+    Ok(Value::new(reg, inner))
 }
 
 fn is_result_arm(p: &Pattern) -> bool {
@@ -134,7 +188,12 @@ fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<
 
 /// User-union match: read the leading tag of the heap block and branch per
 /// variant, binding that variant's fields.
-fn gen_union_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm], owner: &str) -> Result<Value> {
+fn gen_union_match(
+    cg: &mut Codegen,
+    disc: &Value,
+    arms: &[MatchArm],
+    owner: &str,
+) -> Result<Value> {
     // Load the discriminant tag (every variant block starts with `{ i64 tag, … }`).
     let tagp = cg.fresh_reg();
     cg.emit(format!("{tagp} = bitcast i8* {} to i64*", disc.operand));
@@ -149,7 +208,8 @@ fn gen_union_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm], owner: &str
         if let Some((name, fields)) = pattern_ctor(cg, &arm.pattern) {
             let name = name.to_string();
             let fields = fields.to_vec();
-            let vtag = variants.iter().position(|v| *v == name).unwrap_or(0) as i64;
+            let vpos = variants.iter().position(|v| *v == name).unwrap_or(0);
+            let vtag = i64::try_from(vpos).unwrap_or(0);
             let cond = cg.fresh_reg();
             cg.emit(format!("{cond} = icmp eq i64 {tag}, {vtag}"));
             let body_lbl = cg.fresh_label();
@@ -158,7 +218,7 @@ fn gen_union_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm], owner: &str
                 "br i1 {cond}, label %{body_lbl}, label %{next_lbl}"
             ));
             cg.start_block(&body_lbl);
-            bind_variant_fields(cg, &disc, &name, &fields);
+            bind_variant_fields(cg, disc, &name, &fields);
             let v = gen_expr(cg, &arm.body)?;
             let blk = cg.cur_block().to_string();
             phi_in.push((v, blk));
@@ -193,9 +253,8 @@ fn bind_variant_fields(cg: &mut Codegen, disc: &Value, variant: &str, pat_fields
     let Some(view) = cg.ctor_layout(variant) else {
         return;
     };
-    let struct_ty = match cg.ctor_struct_ty(variant) {
-        Some(s) => s,
-        None => return,
+    let Some(struct_ty) = cg.ctor_struct_ty(variant) else {
+        return;
     };
     if view.fields.is_empty() || pat_fields.is_empty() {
         return;
@@ -205,12 +264,20 @@ fn bind_variant_fields(cg: &mut Codegen, disc: &Value, variant: &str, pat_fields
         "{src} = bitcast i8* {} to {struct_ty}*",
         disc.operand
     ));
-    for (i, (declared, fty)) in view.fields.iter().enumerate() {
-        let Some(bind_name) = pat_fields.get(i) else {
-            break;
+    // Bind each pattern field to the layout slot of the SAME name, so a reordered
+    // destructuring (`PersonData { age, name }`) binds correctly regardless of the
+    // declaration order.
+    for bind_name in pat_fields {
+        let Some((idx, (_, fty))) = view
+            .fields
+            .iter()
+            .enumerate()
+            .find(|(_, (f, _))| f == bind_name)
+        else {
+            continue;
         };
-        let loaded = crate::aggregate::load_field(cg, &struct_ty, src.as_str(), i + 1, *fty);
-        let owner = cg.ctor_field_written(variant, declared);
+        let loaded = crate::aggregate::load_field(cg, &struct_ty, src.as_str(), idx + 1, *fty);
+        let owner = cg.ctor_field_written(variant, bind_name);
         cg.bind(
             bind_name.clone(),
             Value::new(loaded, *fty).with_owner(owner),
@@ -219,7 +286,7 @@ fn bind_variant_fields(cg: &mut Codegen, disc: &Value, variant: &str, pat_fields
 }
 
 /// Literal/catch-all match: compare-and-branch chain joined by a `phi`.
-fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<Value> {
+fn gen_literal_match(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Result<Value> {
     let end = cg.fresh_label();
     let mut phi_in: Vec<(Value, String)> = Vec::new();
     let last = arms.len().saturating_sub(1);
@@ -227,7 +294,7 @@ fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result
     for (i, arm) in arms.iter().enumerate() {
         match &arm.pattern {
             Pattern::Wildcard | Pattern::Binding(_) | Pattern::TypeAnnotated { .. } => {
-                bind_catch_all(cg, &arm.pattern, &disc);
+                bind_catch_all(cg, &arm.pattern, disc);
                 let v = gen_expr(cg, &arm.body)?;
                 let blk = cg.cur_block().to_string();
                 phi_in.push((v, blk));
@@ -235,7 +302,7 @@ fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result
                 break;
             }
             Pattern::Literal(lit) => {
-                let cond = gen_eq(cg, &disc, lit)?;
+                let cond = gen_eq(cg, disc, lit)?;
                 let body_lbl = cg.fresh_label();
                 let next_lbl = cg.fresh_label();
                 cg.emit(format!(
@@ -265,11 +332,15 @@ fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result
 /// one. `Str`/`Ptr` count as the same type (both `i8*`). A common owner /
 /// payload-owner across arms is preserved so a matched handle (record, nested
 /// list) stays field-accessible / indexable.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "kept Result-returning for the uniform generator interface"
+)]
 fn finish_phi(cg: &mut Codegen, phi_in: &[(Value, String)]) -> Result<Value> {
-    if phi_in.is_empty() {
+    let Some((first_val, _)) = phi_in.first() else {
         return Ok(Value::unit());
-    }
-    let ty = phi_in[0].0.ty;
+    };
+    let ty = first_val.ty;
     if phi_in.iter().any(|(v, _)| v.ty.as_str() != ty.as_str()) {
         return Ok(Value::unit());
     }
@@ -281,7 +352,7 @@ fn finish_phi(cg: &mut Codegen, phi_in: &[(Value, String)]) -> Result<Value> {
     let reg = cg.fresh_reg();
     cg.emit(format!("{reg} = phi {ty} {incoming}"));
     let common = |sel: fn(&Value) -> Option<String>| {
-        let first = sel(&phi_in[0].0);
+        let first = sel(first_val);
         phi_in
             .iter()
             .all(|(v, _)| sel(v) == first)
@@ -295,8 +366,9 @@ fn finish_phi(cg: &mut Codegen, phi_in: &[(Value, String)]) -> Result<Value> {
 
 fn bind_catch_all(cg: &mut Codegen, pattern: &Pattern, disc: &Value) {
     match pattern {
-        Pattern::Binding(name) => cg.bind(name.clone(), disc.clone()),
-        Pattern::TypeAnnotated { name, .. } => cg.bind(name.clone(), disc.clone()),
+        Pattern::Binding(name) | Pattern::TypeAnnotated { name, .. } => {
+            cg.bind(name.clone(), disc.clone());
+        }
         _ => {}
     }
 }

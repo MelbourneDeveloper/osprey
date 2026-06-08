@@ -56,7 +56,7 @@ fn callback_name(e: &Expr) -> Result<String> {
     }
 }
 
-fn nth<'a>(args: &'a [Expr], i: usize) -> Result<&'a Expr> {
+fn nth(args: &[Expr], i: usize) -> Result<&Expr> {
     args.get(i)
         .ok_or_else(|| CodegenError::invalid("iterator builtin: missing argument"))
 }
@@ -114,12 +114,18 @@ fn replay(cg: &mut Codegen, v: Value, skip: &str) -> Result<Value> {
     Ok(cur)
 }
 
-/// `forEach(iterator, fn)` — counted loop applying `fn` to each (fused) element.
-fn for_each(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
-    let range = gen_expr(cg, nth(args, 0)?)?;
-    let consumer = callback_name(nth(args, 1)?)?;
-    let (start, end) = bounds(cg, &range);
+/// A counted loop over a range's half-open `[start, end)`, the range analogue of
+/// [`ListLoop`]. After [`open_range_loop`] the builder sits in the body with the
+/// current index in `i`; [`close_range_loop`] emits the increment + back-edge.
+struct RangeLoop {
+    i: String,
+    ctr: String,
+    cond: String,
+    incr: String,
+    endl: String,
+}
 
+fn open_range_loop(cg: &mut Codegen, start: &str, end: &str) -> RangeLoop {
     let ctr = cg.fresh_reg();
     cg.emit(format!("{ctr} = alloca i64"));
     cg.emit(format!("store i64 {start}, i64* {ctr}"));
@@ -137,17 +143,35 @@ fn for_each(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     cg.emit(format!("br i1 {more}, label %{body}, label %{endl}"));
 
     cg.start_block(&body);
-    let elem = replay(cg, Value::new(i.clone(), LType::I64), &incr)?;
-    call_with_values(cg, &consumer, vec![elem])?;
-    cg.emit(format!("br label %{incr}"));
+    RangeLoop {
+        i,
+        ctr,
+        cond,
+        incr,
+        endl,
+    }
+}
 
-    cg.start_block(&incr);
+fn close_range_loop(cg: &mut Codegen, lp: &RangeLoop) {
+    cg.emit(format!("br label %{}", lp.incr));
+    cg.start_block(&lp.incr);
     let next = cg.fresh_reg();
-    cg.emit(format!("{next} = add i64 {i}, 1"));
-    cg.emit(format!("store i64 {next}, i64* {ctr}"));
-    cg.emit(format!("br label %{cond}"));
+    cg.emit(format!("{next} = add i64 {}, 1", lp.i));
+    cg.emit(format!("store i64 {next}, i64* {}", lp.ctr));
+    cg.emit(format!("br label %{}", lp.cond));
+    cg.start_block(&lp.endl);
+}
 
-    cg.start_block(&endl);
+/// `forEach(iterator, fn)` — counted loop applying `fn` to each (fused) element.
+fn for_each(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let range = gen_expr(cg, nth(args, 0)?)?;
+    let consumer = callback_name(nth(args, 1)?)?;
+    let (start, end) = bounds(cg, &range);
+
+    let lp = open_range_loop(cg, &start, &end);
+    let elem = replay(cg, Value::new(lp.i.clone(), LType::I64), &lp.incr)?;
+    let _ = call_with_values(cg, &consumer, vec![elem])?;
+    close_range_loop(cg, &lp);
     Ok(range)
 }
 
@@ -160,42 +184,20 @@ fn fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let combine = callback_name(nth(args, 2)?)?;
     let (start, end) = bounds(cg, &range);
 
-    let ctr = cg.fresh_reg();
-    cg.emit(format!("{ctr} = alloca i64"));
-    cg.emit(format!("store i64 {start}, i64* {ctr}"));
     let acc = cg.fresh_reg();
     cg.emit(format!("{acc} = alloca i64"));
     cg.emit(format!("store i64 {}, i64* {acc}", initial.operand));
-    let cond = cg.fresh_label();
-    let body = cg.fresh_label();
-    let incr = cg.fresh_label();
-    let endl = cg.fresh_label();
-    cg.emit(format!("br label %{cond}"));
 
-    cg.start_block(&cond);
-    let i = cg.fresh_reg();
-    cg.emit(format!("{i} = load i64, i64* {ctr}"));
-    let more = cg.fresh_reg();
-    cg.emit(format!("{more} = icmp slt i64 {i}, {end}"));
-    cg.emit(format!("br i1 {more}, label %{body}, label %{endl}"));
-
-    cg.start_block(&body);
-    let elem = replay(cg, Value::new(i.clone(), LType::I64), &incr)?;
+    let lp = open_range_loop(cg, &start, &end);
+    let elem = replay(cg, Value::new(lp.i.clone(), LType::I64), &lp.incr)?;
     let a = cg.fresh_reg();
     cg.emit(format!("{a} = load i64, i64* {acc}"));
     let new = call_with_values(cg, &combine, vec![Value::new(a, LType::I64), elem])?;
     let new = crate::result::unwrap(cg, new);
     let new = box_to_i64(cg, new);
     cg.emit(format!("store i64 {}, i64* {acc}", new.operand));
-    cg.emit(format!("br label %{incr}"));
+    close_range_loop(cg, &lp);
 
-    cg.start_block(&incr);
-    let next = cg.fresh_reg();
-    cg.emit(format!("{next} = add i64 {i}, 1"));
-    cg.emit(format!("store i64 {next}, i64* {ctr}"));
-    cg.emit(format!("br label %{cond}"));
-
-    cg.start_block(&endl);
     let out = cg.fresh_reg();
     cg.emit(format!("{out} = load i64, i64* {acc}"));
     Ok(Value::new(out, LType::I64))
@@ -275,7 +277,7 @@ fn for_each_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let l = list_arg(cg, args, 0)?;
     let consumer = callback_name(nth(args, 1)?)?;
     let lp = open_list_loop(cg, &l);
-    call_with_values(cg, &consumer, vec![Value::new(lp.elem.clone(), LType::I64)])?;
+    let _ = call_with_values(cg, &consumer, vec![Value::new(lp.elem.clone(), LType::I64)])?;
     close_list_loop(cg, &lp);
     Ok(l)
 }

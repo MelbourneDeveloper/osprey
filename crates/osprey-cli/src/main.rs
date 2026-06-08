@@ -10,18 +10,17 @@ use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
+    let Some(path) = args.get(1) else {
         eprintln!("usage: osprey-rs <file.osp> [--ast | --check | --llvm | --run]");
         return ExitCode::from(2);
-    }
+    };
 
-    if args[1] == "--version" {
+    if path == "--version" {
         println!("osprey-rs 0.0.0-dev");
         return ExitCode::SUCCESS;
     }
 
-    let path = &args[1];
-    let mode = args.get(2).map(String::as_str).unwrap_or("--ast");
+    let mode = args.get(2).map_or("--ast", String::as_str);
 
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
@@ -102,7 +101,8 @@ fn run_program(path: &str, program: &osprey_ast::Program, source: &str) -> ExitC
     }
 
     let mut cmd = Command::new("clang");
-    cmd.arg(&ll)
+    let _ = cmd
+        .arg(&ll)
         .arg("-o")
         .arg(&exe)
         .arg("-Wno-override-module")
@@ -121,7 +121,7 @@ fn run_program(path: &str, program: &osprey_ast::Program, source: &str) -> ExitC
     }
 
     match Command::new(&exe).status() {
-        Ok(s) => ExitCode::from(s.code().unwrap_or(0) as u8),
+        Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(0)).unwrap_or(1)),
         Err(e) => {
             eprintln!("error: could not run {}: {e}", exe.display());
             ExitCode::FAILURE

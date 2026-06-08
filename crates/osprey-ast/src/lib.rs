@@ -445,6 +445,10 @@ pub struct HandlerArm {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test assertions: an out-of-bounds index is a test failure, not a production panic"
+)]
 mod tests {
     use super::*;
 

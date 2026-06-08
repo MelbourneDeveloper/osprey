@@ -86,14 +86,18 @@ mod tests {
     #[test]
     fn named_arguments_are_ordered_by_declaration() {
         // Call sites pass b before a; the emitted call must follow declared order.
+        // `sub`'s `a - b` body infers `Result<int, MathError>`, so the call's
+        // return type is `{ i64, i8 }*`; what matters here is the argument order.
         let ir = module("fn sub(a, b) = a - b\nlet r = sub(b: 1, a: 9)\n");
-        assert!(ir.contains("call i64 @sub(i64 9, i64 1)"));
+        assert!(ir.contains("@sub(i64 9, i64 1)"));
     }
 
     #[test]
     fn unsupported_construct_fails_loudly() {
-        // `perform` is not lowered yet — it must fail loudly, never silently.
-        let parsed = parse_program("perform Logger.log(\"hi\")\n");
+        // A bare lambda used as a runtime value is not lowered (the backend lowers
+        // no closures) — it must fail loudly, never silently (CLAUDE.md: no
+        // placeholders, fail hard).
+        let parsed = parse_program("print(fn(x) => x)\n");
         let err = compile_program(&parsed.program).unwrap_err();
         assert!(matches!(err, CodegenError::Unsupported(_)));
     }

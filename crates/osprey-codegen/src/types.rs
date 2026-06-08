@@ -14,27 +14,25 @@ pub fn ltype_of(ty: &Type) -> LType {
         Type::Con { name, args } => ltype_of_con(name, args),
         // A function reference is a code pointer; values never hold one directly
         // in the lowered programs (calls are direct), so treat as a handle.
-        Type::Fun { .. } => LType::Ptr,
-        // Records, unions and bare variables are runtime handles / machine words.
-        Type::Record { .. } | Type::Union { .. } => LType::Ptr,
+        // Records and unions are runtime handles too.
+        Type::Fun { .. } | Type::Record { .. } | Type::Union { .. } => LType::Ptr,
         Type::Var(_) => LType::I64,
     }
 }
 
 fn ltype_of_con(name: &str, args: &[Type]) -> LType {
     match name {
-        names::INT => LType::I64,
+        // Int, unit and any all travel as a machine word.
+        names::INT | names::UNIT | names::ANY => LType::I64,
         names::FLOAT => LType::Double,
         names::STRING => LType::Str,
         names::BOOL => LType::I1,
-        names::UNIT => LType::I64,
-        names::ANY => LType::I64,
         // Result<T, E> at a value site carries its unwrapped success value (the
         // auto-unwrap the type checker already applied), so it travels as T.
-        names::RESULT => args.first().map(ltype_of).unwrap_or(LType::I64),
+        names::RESULT => args.first().map_or(LType::I64, ltype_of),
         // Collections, fibers, channels, pointers — opaque runtime handles.
-        names::LIST | names::MAP | names::FIBER | names::CHANNEL | names::PTR => LType::Ptr,
-        // A nullary user type name (nominal record/union referenced by name).
+        // A nullary user type name (nominal record/union referenced by name)
+        // is also an opaque handle, so the wildcard covers them all.
         _ => LType::Ptr,
     }
 }
@@ -81,12 +79,10 @@ pub fn ltype_of_name(written: &str) -> LType {
     // A generic application like `List<int>` keeps only its head for layout.
     let head = written.split(['<', '[']).next().unwrap_or(written).trim();
     match head {
-        names::INT => LType::I64,
+        names::INT | names::UNIT | names::ANY => LType::I64,
         names::FLOAT => LType::Double,
         names::STRING => LType::Str,
         names::BOOL => LType::I1,
-        names::UNIT => LType::I64,
-        names::ANY => LType::I64,
         _ => LType::Ptr,
     }
 }

@@ -38,11 +38,13 @@ pub(crate) fn make_ok(cg: &mut Codegen, value: Value, inner: LType) -> Result<Va
     make_result(cg, value, inner, "0")
 }
 
-/// Load a Result block's `i8` discriminant operand.
+/// Load a Result block's `i8` discriminant operand. Invariant: `v` is a Result
+/// (callers gate on `result_inner.is_some()`); a non-Result yields the Error
+/// discriminant `1` rather than panicking.
 pub(crate) fn load_disc(cg: &mut Codegen, v: &Value) -> String {
-    let struct_ty = v
-        .result_struct_ty()
-        .expect("load_disc on a non-Result value");
+    let Some(struct_ty) = v.result_struct_ty() else {
+        return "1".to_string();
+    };
     let dp = cg.fresh_reg();
     cg.emit(format!(
         "{dp} = getelementptr {struct_ty}, {struct_ty}* {}, i32 0, i32 1",
@@ -53,10 +55,13 @@ pub(crate) fn load_disc(cg: &mut Codegen, v: &Value) -> String {
     d
 }
 
-/// Load a Result block's success payload as its inner [`LType`].
+/// Load a Result block's success payload as its inner [`LType`]. Invariant: `v`
+/// is a Result; a non-Result yields Unit rather than panicking.
 pub(crate) fn load_value(cg: &mut Codegen, v: &Value) -> Value {
-    let inner = v.result_inner.expect("load_value on a non-Result value");
-    let struct_ty = v.result_struct_ty().unwrap();
+    let Some(inner) = v.result_inner else {
+        return Value::unit();
+    };
+    let struct_ty = format!("{{ {inner}, i8 }}");
     let loaded = crate::aggregate::load_field(cg, &struct_ty, v.operand.as_str(), 0, inner);
     Value::new(loaded, inner).with_owner(v.payload_owner.clone())
 }

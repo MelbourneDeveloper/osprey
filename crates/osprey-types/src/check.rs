@@ -12,7 +12,10 @@ use crate::env::{generalize, TypeEnv};
 use crate::error::TypeError;
 use crate::ty::{Scheme, Type};
 use crate::unify::{unify, unify_assignable};
-use osprey_ast::*;
+use osprey_ast::{
+    EffectOperation, Expr, ExternParameter, Parameter, Position, Program, Stmt, TypeExpr,
+    TypeVariant,
+};
 use std::collections::HashMap;
 
 /// A constructor (record builder, union variant, or built-in `Success`/`Error`).
@@ -62,7 +65,7 @@ impl Checker {
 
     /// Built-in `Result` constructors `Success { value: T }` / `Error { message: E }`.
     fn register_result_ctors(&mut self) {
-        self.ctors.insert(
+        let _ = self.ctors.insert(
             "Success".into(),
             CtorInfo {
                 owner: "Result".into(),
@@ -74,7 +77,7 @@ impl Checker {
         // `Error { message: <string> }` builds the E side of a `Result<T, E>`;
         // the message is a concrete string, leaving E free to unify with the
         // declared error type (e.g. the nominal `Error`), not pinned to string.
-        self.ctors.insert(
+        let _ = self.ctors.insert(
             "Error".into(),
             CtorInfo {
                 owner: "Result".into(),
@@ -83,10 +86,11 @@ impl Checker {
                 fields: vec![("message".into(), "string".into())],
             },
         );
-        self.union_variants
+        let _ = self
+            .union_variants
             .insert("Result".into(), vec!["Success".into(), "Error".into()]);
         // Built-in HttpResponse record returned by HTTP request handlers.
-        self.ctors.insert(
+        let _ = self.ctors.insert(
             "HttpResponse".into(),
             CtorInfo {
                 owner: "HttpResponse".into(),
@@ -130,14 +134,14 @@ impl Checker {
                 value,
                 position,
                 ..
-            } => self.check_let(name, ty, value, env, *position),
+            } => self.check_let(name, ty.as_ref(), value, env, *position),
             Stmt::Assignment {
                 name,
                 value,
                 position,
             } => self.check_assignment(name, value, env, *position),
             Stmt::Expr(e) => {
-                self.infer_expr(e, env);
+                let _ = self.infer_expr(e, env);
             }
             _ => {}
         }
@@ -158,22 +162,25 @@ impl Checker {
                     name,
                     parameters,
                     return_type,
-                } => self.collect_extern(name, parameters, return_type, env),
+                } => self.collect_extern(name, parameters, return_type.as_ref(), env),
                 Stmt::Function {
                     name,
                     parameters,
                     return_type,
                     ..
-                } => self.collect_function(name, parameters, return_type, env),
+                } => self.collect_function(name, parameters, return_type.as_ref(), env),
                 _ => {}
             }
         }
     }
 
     fn collect_type(&mut self, name: &str, type_params: &[String], variants: &[TypeVariant]) {
-        let is_record = variants.len() == 1 && variants[0].name == name;
+        let is_record = match variants.first() {
+            Some(first) => variants.len() == 1 && first.name == name,
+            None => false,
+        };
         if !is_record {
-            self.union_variants.insert(
+            let _ = self.union_variants.insert(
                 name.to_string(),
                 variants.iter().map(|v| v.name.clone()).collect(),
             );
@@ -184,7 +191,7 @@ impl Checker {
                 .iter()
                 .map(|f| (f.name.clone(), f.ty.clone()))
                 .collect();
-            self.ctors.insert(
+            let _ = self.ctors.insert(
                 v.name.clone(),
                 CtorInfo {
                     owner: name.to_string(),
@@ -200,16 +207,16 @@ impl Checker {
         let mut ops = HashMap::new();
         for op in operations {
             let (_, ret) = parse_fn_sig(&op.ty, &HashMap::new());
-            ops.insert(op.name.clone(), ret);
+            let _ = ops.insert(op.name.clone(), ret);
         }
-        self.effects.insert(name.to_string(), ops);
+        let _ = self.effects.insert(name.to_string(), ops);
     }
 
     fn collect_extern(
         &mut self,
         name: &str,
         parameters: &[ExternParameter],
-        return_type: &Option<TypeExpr>,
+        return_type: Option<&TypeExpr>,
         env: &mut TypeEnv,
     ) {
         let empty = HashMap::new();
@@ -217,11 +224,8 @@ impl Checker {
             .iter()
             .map(|p| type_expr_to_type(&p.ty, &empty))
             .collect();
-        let ret = return_type
-            .as_ref()
-            .map(|r| type_expr_to_type(r, &empty))
-            .unwrap_or_else(Type::unit);
-        self.fn_params.insert(
+        let ret = return_type.map_or_else(Type::unit, |r| type_expr_to_type(r, &empty));
+        let _ = self.fn_params.insert(
             name.to_string(),
             parameters.iter().map(|p| p.name.clone()).collect(),
         );
@@ -232,7 +236,7 @@ impl Checker {
         &mut self,
         name: &str,
         parameters: &[Parameter],
-        return_type: &Option<TypeExpr>,
+        return_type: Option<&TypeExpr>,
         env: &mut TypeEnv,
     ) {
         let empty = HashMap::new();
@@ -247,11 +251,12 @@ impl Checker {
             Some(te) => type_expr_to_type(te, &empty),
             None => self.ctx.fresh(),
         };
-        self.fn_params.insert(
+        let _ = self.fn_params.insert(
             name.to_string(),
             parameters.iter().map(|p| p.name.clone()).collect(),
         );
-        self.fn_sigs
+        let _ = self
+            .fn_sigs
             .insert(name.to_string(), (params.clone(), ret.clone()));
         env.insert(name, Scheme::mono(Type::fun(params, ret)));
     }
@@ -280,14 +285,14 @@ impl Checker {
                     value,
                     position,
                     ..
-                } => self.check_let(name, ty, value, env, *position),
+                } => self.check_let(name, ty.as_ref(), value, env, *position),
                 Stmt::Assignment {
                     name,
                     value,
                     position,
                 } => self.check_assignment(name, value, env, *position),
                 Stmt::Expr(e) => {
-                    self.infer_expr(e, env);
+                    let _ = self.infer_expr(e, env);
                 }
                 _ => {}
             }
@@ -331,7 +336,7 @@ impl Checker {
     fn check_let(
         &mut self,
         name: &str,
-        ty: &Option<TypeExpr>,
+        ty: Option<&TypeExpr>,
         value: &Expr,
         env: &mut TypeEnv,
         pos: Option<Position>,
@@ -384,7 +389,7 @@ impl Checker {
         let mut args = Vec::new();
         for p in &params {
             let v = self.ctx.fresh();
-            pmap.insert(p.clone(), v.clone());
+            let _ = pmap.insert(p.clone(), v.clone());
             args.push(v);
         }
         let fields = raw_fields
@@ -396,6 +401,7 @@ impl Checker {
 }
 
 /// Type-check a program. Returns every type error found (empty ⇒ well-typed).
+#[must_use]
 pub fn check_program(program: &Program) -> Vec<TypeError> {
     let mut checker = Checker::new();
     let mut env = base_env();
@@ -408,6 +414,7 @@ pub fn check_program(program: &Program) -> Vec<TypeError> {
 /// union tags for the code generator. Type errors are intentionally dropped
 /// here — codegen runs after `check_program` has gated correctness — so the
 /// backend always receives the best-effort resolved shape of every declaration.
+#[must_use]
 pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
     use crate::info::{CtorLayout, ProgramTypes};
     let mut checker = Checker::new();

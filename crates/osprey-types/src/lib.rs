@@ -29,6 +29,10 @@ pub use info::{CtorLayout, ProgramTypes};
 pub use ty::{names, Scheme, Type, VarId};
 
 #[cfg(test)]
+#[expect(
+    unused_results,
+    reason = "tests drive checking for its side effects and discard the returned diagnostics"
+)]
 mod tests {
     use super::*;
     use osprey_syntax::parse_program;

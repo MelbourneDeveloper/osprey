@@ -37,11 +37,13 @@ pub struct ProgramTypes {
 
 impl ProgramTypes {
     /// The resolved return type of a named function, if known.
+    #[must_use]
     pub fn return_type(&self, name: &str) -> Option<&Type> {
         self.functions.get(name).map(|(_, ret)| ret)
     }
 
     /// The resolved parameter types of a named function, if known.
+    #[must_use]
     pub fn param_types(&self, name: &str) -> Option<&[Type]> {
         self.functions.get(name).map(|(p, _)| p.as_slice())
     }

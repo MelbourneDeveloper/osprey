@@ -11,7 +11,9 @@ use crate::env::{instantiate, TypeEnv};
 use crate::error::TypeError;
 use crate::ty::{names, Type};
 use crate::unify::unify;
-use osprey_ast::*;
+use osprey_ast::{
+    Expr, FieldAssignment, InterpolatedPart, NamedArgument, Parameter, Stmt, TypeExpr,
+};
 use std::collections::{BTreeMap, HashMap};
 
 fn math_err() -> Type {
@@ -34,7 +36,7 @@ impl Checker {
             Expr::InterpolatedStr(parts) => {
                 for p in parts {
                     if let InterpolatedPart::Expr(inner) = p {
-                        self.infer_expr(inner, env);
+                        let _ = self.infer_expr(inner, env);
                     }
                 }
                 Type::string()
@@ -48,27 +50,8 @@ impl Checker {
                 }
                 Type::list(elem)
             }
-            Expr::Map(entries) => {
-                let (k, v) = (self.ctx.fresh(), self.ctx.fresh());
-                for entry in entries {
-                    let kt = self.infer_expr(&entry.key, env);
-                    let vt = self.infer_expr(&entry.value, env);
-                    self.push_unify(&k, &kt);
-                    self.push_unify(&v, &vt);
-                }
-                Type::map(k, v)
-            }
-            Expr::Object(fields) => {
-                let mut map = BTreeMap::new();
-                for fa in fields {
-                    let t = self.infer_expr(&fa.value, env);
-                    map.insert(fa.name.clone(), t);
-                }
-                Type::Record {
-                    name: String::new(),
-                    fields: map,
-                }
-            }
+            Expr::Map(entries) => self.infer_map(entries, env),
+            Expr::Object(fields) => self.infer_object(fields, env),
             Expr::Binary { op, left, right } => self.infer_binary(op, left, right, env),
             Expr::Unary { op, operand } => {
                 let t = self.infer_expr(operand, env);
@@ -108,7 +91,7 @@ impl Checker {
                 parameters,
                 return_type,
                 body,
-            } => self.infer_lambda(parameters, return_type, body, env),
+            } => self.infer_lambda(parameters, return_type.as_ref(), body, env),
             Expr::Match { value, arms } => self.infer_match(value, arms, env),
             Expr::Block { statements, value } => {
                 self.infer_block(statements, value.as_deref(), env)
@@ -119,26 +102,16 @@ impl Checker {
                 let t = self.infer_expr(inner, env);
                 Type::con(names::FIBER, vec![t])
             }
-            Expr::Await(inner) => {
-                let t = self.infer_expr(inner, env);
-                let elem = self.ctx.fresh();
-                self.push_unify(&t, &Type::con(names::FIBER, vec![elem.clone()]));
-                elem
-            }
-            Expr::Recv(channel) => {
-                let t = self.infer_expr(channel, env);
-                let elem = self.ctx.fresh();
-                self.push_unify(&t, &Type::con(names::CHANNEL, vec![elem.clone()]));
-                elem
-            }
+            Expr::Await(inner) => self.infer_unwrap_con(inner, names::FIBER, env),
+            Expr::Recv(channel) => self.infer_unwrap_con(channel, names::CHANNEL, env),
             Expr::Send { channel, value } => {
-                self.infer_expr(channel, env);
-                self.infer_expr(value, env);
+                let _ = self.infer_expr(channel, env);
+                let _ = self.infer_expr(value, env);
                 Type::unit()
             }
             Expr::Yield(inner) => {
                 if let Some(inner) = inner {
-                    self.infer_expr(inner, env);
+                    let _ = self.infer_expr(inner, env);
                 }
                 Type::unit()
             }
@@ -148,37 +121,88 @@ impl Checker {
                 operation,
                 arguments,
                 named_arguments,
-            } => {
-                for a in arguments {
-                    self.infer_expr(a, env);
-                }
-                for na in named_arguments {
-                    self.infer_expr(&na.value, env);
-                }
-                let ret = self
-                    .effects
-                    .get(effect)
-                    .and_then(|ops| ops.get(operation))
-                    .cloned();
-                ret.unwrap_or_else(|| self.ctx.fresh())
-            }
-            Expr::Handler { arms, body, .. } => {
-                for arm in arms {
-                    let mut local = env.child();
-                    for p in &arm.params {
-                        let fv = self.ctx.fresh();
-                        local.insert(p.clone(), crate::ty::Scheme::mono(fv));
-                    }
-                    self.infer_expr(&arm.body, &local);
-                }
-                self.infer_expr(body, env)
-            }
+            } => self.infer_perform(effect, operation, arguments, named_arguments, env),
+            Expr::Handler { arms, body, .. } => self.infer_handler(arms, body, env),
         }
+    }
+
+    /// Infer a map literal: unify all keys to one type and all values to another.
+    fn infer_map(&mut self, entries: &[osprey_ast::MapEntry], env: &TypeEnv) -> Type {
+        let (k, v) = (self.ctx.fresh(), self.ctx.fresh());
+        for entry in entries {
+            let kt = self.infer_expr(&entry.key, env);
+            let vt = self.infer_expr(&entry.value, env);
+            self.push_unify(&k, &kt);
+            self.push_unify(&v, &vt);
+        }
+        Type::map(k, v)
+    }
+
+    /// Infer an anonymous object literal as an unnamed record of its fields.
+    fn infer_object(&mut self, fields: &[FieldAssignment], env: &TypeEnv) -> Type {
+        let mut map = BTreeMap::new();
+        for fa in fields {
+            let t = self.infer_expr(&fa.value, env);
+            let _ = map.insert(fa.name.clone(), t);
+        }
+        Type::Record {
+            name: String::new(),
+            fields: map,
+        }
+    }
+
+    /// Unwrap `await`/`recv`: unify the inner type with `con<elem>` and yield `elem`.
+    fn infer_unwrap_con(&mut self, inner: &Expr, con: &str, env: &TypeEnv) -> Type {
+        let t = self.infer_expr(inner, env);
+        let elem = self.ctx.fresh();
+        self.push_unify(&t, &Type::con(con, vec![elem.clone()]));
+        elem
+    }
+
+    /// Infer a `perform`: walk its arguments, then yield the operation result type.
+    fn infer_perform(
+        &mut self,
+        effect: &str,
+        operation: &str,
+        arguments: &[Expr],
+        named_arguments: &[NamedArgument],
+        env: &TypeEnv,
+    ) -> Type {
+        for a in arguments {
+            let _ = self.infer_expr(a, env);
+        }
+        for na in named_arguments {
+            let _ = self.infer_expr(&na.value, env);
+        }
+        let ret = self
+            .effects
+            .get(effect)
+            .and_then(|ops| ops.get(operation))
+            .cloned();
+        ret.unwrap_or_else(|| self.ctx.fresh())
+    }
+
+    /// Infer a `handle`: type each arm body in a child scope, then the handled body.
+    fn infer_handler(
+        &mut self,
+        arms: &[osprey_ast::HandlerArm],
+        body: &Expr,
+        env: &TypeEnv,
+    ) -> Type {
+        for arm in arms {
+            let mut local = env.child();
+            for p in &arm.params {
+                let fv = self.ctx.fresh();
+                local.insert(p.clone(), crate::ty::Scheme::mono(fv));
+            }
+            let _ = self.infer_expr(&arm.body, &local);
+        }
+        self.infer_expr(body, env)
     }
 
     fn lookup_ident(&mut self, name: &str, env: &TypeEnv) -> Type {
         // A bare nullary constructor (`Red`, `Empty`) is a value of its owner type.
-        if self.ctors.get(name).map(|i| i.fields.is_empty()) == Some(true) {
+        if self.ctors.get(name).is_some_and(|i| i.fields.is_empty()) {
             if let Some((args, _f, owner, is_record)) = self.ctor_instance(name) {
                 return if is_record {
                     Type::Record {
@@ -210,7 +234,7 @@ impl Checker {
             other => (None, self.infer_expr(other, env)),
         };
         let args = self.ordered_arg_types(fname.as_deref(), arguments, named, env);
-        self.apply_fn(ft, args)
+        self.apply_fn(&ft, args)
     }
 
     fn infer_method_call(
@@ -230,7 +254,7 @@ impl Checker {
         for na in named {
             args.push(self.infer_expr(&na.value, env));
         }
-        self.apply_fn(ft, args)
+        self.apply_fn(&ft, args)
     }
 
     /// Resolve call arguments to types, reordering named arguments to the
@@ -262,8 +286,8 @@ impl Checker {
         arguments.iter().map(|a| self.infer_expr(a, env)).collect()
     }
 
-    fn apply_fn(&mut self, ft: Type, args: Vec<Type>) -> Type {
-        match self.ctx.prune(&ft) {
+    fn apply_fn(&mut self, ft: &Type, args: Vec<Type>) -> Type {
+        match self.ctx.prune(ft) {
             Type::Fun { params, ret } => {
                 if params.len() != args.len() {
                     self.errors.push(TypeError::new(format!(
@@ -294,39 +318,37 @@ impl Checker {
     }
 
     fn infer_pipe(&mut self, left: &Expr, right: &Expr, env: &TypeEnv) -> Type {
-        match right {
-            Expr::Call {
-                function,
-                arguments,
-                named_arguments,
-            } => {
-                let mut args = Vec::with_capacity(arguments.len() + 1);
-                args.push(left.clone());
-                args.extend(arguments.iter().cloned());
-                let call = Expr::Call {
-                    function: function.clone(),
-                    arguments: args,
-                    named_arguments: named_arguments.clone(),
-                };
-                self.infer_expr(&call, env)
-            }
-            _ => {
-                let ft = self.infer_expr(right, env);
-                let lt = self.infer_expr(left, env);
-                self.apply_fn(ft, vec![lt])
-            }
+        if let Expr::Call {
+            function,
+            arguments,
+            named_arguments,
+        } = right
+        {
+            let mut args = Vec::with_capacity(arguments.len() + 1);
+            args.push(left.clone());
+            args.extend(arguments.iter().cloned());
+            let call = Expr::Call {
+                function: function.clone(),
+                arguments: args,
+                named_arguments: named_arguments.clone(),
+            };
+            self.infer_expr(&call, env)
+        } else {
+            let ft = self.infer_expr(right, env);
+            let lt = self.infer_expr(left, env);
+            self.apply_fn(&ft, vec![lt])
         }
     }
 
     fn infer_index(&mut self, target: &Expr, index: &Expr, env: &TypeEnv) -> Type {
         let tt = self.infer_expr(target, env);
-        self.infer_expr(index, env);
+        let _ = self.infer_expr(index, env);
         match self.ctx.prune(&tt) {
             Type::Con { name, args } if name == names::LIST && !args.is_empty() => {
-                res_math_like(args[0].clone())
+                res_math_like(args.first().cloned().unwrap_or_else(|| self.ctx.fresh()))
             }
             Type::Con { name, args } if name == names::MAP && args.len() == 2 => {
-                res_math_like(args[1].clone())
+                res_math_like(args.get(1).cloned().unwrap_or_else(|| self.ctx.fresh()))
             }
             t if t.is_named(names::STRING) => res_math_like(Type::string()),
             _ => {
@@ -339,7 +361,7 @@ impl Checker {
     fn infer_lambda(
         &mut self,
         parameters: &[Parameter],
-        return_type: &Option<TypeExpr>,
+        return_type: Option<&TypeExpr>,
         body: &Expr,
         env: &TypeEnv,
     ) -> Type {
@@ -378,38 +400,35 @@ impl Checker {
     }
 
     fn infer_constructor(&mut self, name: &str, fields: &[FieldAssignment], env: &TypeEnv) -> Type {
-        match self.ctor_instance(name) {
-            Some((args, declared, owner, is_record)) => {
-                let dmap: BTreeMap<String, Type> = declared.into_iter().collect();
-                for fa in fields {
-                    let vt = self.infer_expr(&fa.value, env);
-                    if let Some(dt) = dmap.get(&fa.name) {
-                        self.push_assign(&dt.clone(), &vt);
-                    }
-                }
-                if is_record {
-                    Type::Record {
-                        name: owner,
-                        fields: dmap,
-                    }
-                } else {
-                    Type::con(owner, args)
+        if let Some((args, declared, owner, is_record)) = self.ctor_instance(name) {
+            let dmap: BTreeMap<String, Type> = declared.into_iter().collect();
+            for fa in fields {
+                let vt = self.infer_expr(&fa.value, env);
+                if let Some(dt) = dmap.get(&fa.name) {
+                    self.push_assign(&dt.clone(), &vt);
                 }
             }
-            None => {
-                // The grammar lowers a record update `rec { f: v }` over a
-                // lower-cased binding as a constructor; recover it as an update
-                // when the name resolves to an in-scope record.
-                if env.get(name).is_some() {
-                    return self.infer_update(name, fields, env);
+            if is_record {
+                Type::Record {
+                    name: owner,
+                    fields: dmap,
                 }
-                for fa in fields {
-                    self.infer_expr(&fa.value, env);
-                }
-                self.errors
-                    .push(TypeError::new(format!("unknown constructor `{name}`")));
-                self.ctx.fresh()
+            } else {
+                Type::con(owner, args)
             }
+        } else {
+            // The grammar lowers a record update `rec { f: v }` over a
+            // lower-cased binding as a constructor; recover it as an update
+            // when the name resolves to an in-scope record.
+            if env.get(name).is_some() {
+                return self.infer_update(name, fields, env);
+            }
+            for fa in fields {
+                let _ = self.infer_expr(&fa.value, env);
+            }
+            self.errors
+                .push(TypeError::new(format!("unknown constructor `{name}`")));
+            self.ctx.fresh()
         }
     }
 
@@ -426,7 +445,7 @@ impl Checker {
             }
         } else {
             for fa in fields {
-                self.infer_expr(&fa.value, env);
+                let _ = self.infer_expr(&fa.value, env);
             }
         }
         base_p
@@ -444,7 +463,9 @@ fn both_vars(l: &Type, r: &Type) -> bool {
 /// Operator → result type. Lives free of `self` so the borrow checker is happy.
 fn unwrap_result(t: &Type) -> Type {
     match t {
-        Type::Con { name, args } if name == names::RESULT && !args.is_empty() => args[0].clone(),
+        Type::Con { name, args } if name == names::RESULT => {
+            args.first().cloned().unwrap_or_else(|| t.clone())
+        }
         _ => t.clone(),
     }
 }

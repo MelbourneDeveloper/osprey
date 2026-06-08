@@ -2,11 +2,14 @@
 //! `builder_interpolation.go`).
 
 use crate::lower::Lowerer;
-use osprey_ast::*;
+use osprey_ast::{
+    Expr, FieldAssignment, HandlerArm, InterpolatedPart, MapEntry, MatchArm, NamedArgument,
+    Pattern, Stmt,
+};
 use tree_sitter::Node;
 
-impl<'a> Lowerer<'a> {
-    pub(crate) fn lower_expr_field(&self, node: Node, field: &str) -> Expr {
+impl Lowerer<'_> {
+    pub(crate) fn lower_expr_field(&self, node: Node<'_>, field: &str) -> Expr {
         match node.child_by_field_name(field) {
             Some(n) => self.lower_expr(n),
             None => Expr::Bool(false), // unreachable for well-formed trees
@@ -15,7 +18,7 @@ impl<'a> Lowerer<'a> {
 
     /// Lower an expression node, transparently unwrapping the `expression` and
     /// `primary_expression` wrapper nodes tree-sitter inserts.
-    pub(crate) fn lower_expr(&self, node: Node) -> Expr {
+    pub(crate) fn lower_expr(&self, node: Node<'_>) -> Expr {
         match node.kind() {
             "expression" | "primary_expression" => match self.first_named(node) {
                 Some(inner) => self.lower_expr(inner),
@@ -67,13 +70,18 @@ impl<'a> Lowerer<'a> {
             "recv_call" => Expr::Recv(Box::new(self.lower_inner_expr(node))),
             "send_call" => {
                 let mut cursor = node.walk();
-                let exprs: Vec<Node> = node
+                let mut exprs = node
                     .named_children(&mut cursor)
-                    .filter(|c| c.kind() == "expression")
-                    .collect();
+                    .filter(|c| c.kind() == "expression");
+                let channel = exprs
+                    .next()
+                    .map_or(Expr::Bool(false), |n| self.lower_expr(n));
+                let value = exprs
+                    .next()
+                    .map_or(Expr::Bool(false), |n| self.lower_expr(n));
                 Expr::Send {
-                    channel: Box::new(self.lower_expr(exprs[0])),
-                    value: Box::new(self.lower_expr(exprs[1])),
+                    channel: Box::new(channel),
+                    value: Box::new(value),
                 }
             }
             "lambda_expression" => Expr::Lambda {
@@ -108,8 +116,36 @@ impl<'a> Lowerer<'a> {
     /// `cond ? then : else` desugars to `match cond { true => then  false => else }`
     /// (and the Elvis form `cond ?: else` reuses the condition as the `then`),
     /// so the existing boolean-match lowering carries the runtime semantics.
-    fn lower_ternary(&self, node: Node) -> Expr {
+    fn lower_ternary(&self, node: Node<'_>) -> Expr {
         let condition = self.lower_expr_field(node, "condition");
+        // Structural form `cond { f1, f2 } ? then : else`: bind each field from
+        // `cond` and evaluate `then` — a record/object always carries its declared
+        // fields, so the structural check succeeds. The then/else are the two
+        // positional `expression` children after `condition`.
+        if let Some(fp) = self.first_child_of_kind(node, "field_pattern") {
+            let exprs = self.named_of_kind(node, "expression");
+            let then_expr = exprs
+                .get(1)
+                .map_or(Expr::Bool(false), |n| self.lower_expr(*n));
+            let statements = self
+                .texts_of_kind(fp, "identifier")
+                .into_iter()
+                .map(|f| Stmt::Let {
+                    name: f.clone(),
+                    mutable: false,
+                    ty: None,
+                    value: Expr::FieldAccess {
+                        target: Box::new(condition.clone()),
+                        field: f,
+                    },
+                    position: None,
+                })
+                .collect();
+            return Expr::Block {
+                statements,
+                value: Some(Box::new(then_expr)),
+            };
+        }
         let else_expr = self.lower_expr_field(node, "else");
         let then_expr = match node.child_by_field_name("then") {
             Some(n) => self.lower_expr(n),
@@ -130,14 +166,14 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn lower_inner_expr(&self, node: Node) -> Expr {
+    fn lower_inner_expr(&self, node: Node<'_>) -> Expr {
         match self.first_named(node) {
             Some(n) => self.lower_expr(n),
             None => Expr::Bool(false),
         }
     }
 
-    fn lower_call(&self, node: Node) -> Expr {
+    fn lower_call(&self, node: Node<'_>) -> Expr {
         let callee = self.lower_expr_field(node, "callee");
         if let Some(member) = node.child_by_field_name("member") {
             return Expr::FieldAccess {
@@ -176,7 +212,7 @@ impl<'a> Lowerer<'a> {
     /// arguments live in a single direct `named_argument_list` child; a *direct*
     /// lookup is essential — descending would steal the named arguments of a
     /// nested call (`print(cc(c1: .., c2: ..))` must not hoist c1/c2 onto print).
-    fn lower_arg_list(&self, node: Node) -> (Vec<Expr>, Vec<NamedArgument>) {
+    fn lower_arg_list(&self, node: Node<'_>) -> (Vec<Expr>, Vec<NamedArgument>) {
         let Some(list) = self.named_of_kind(node, "argument_list").into_iter().next() else {
             return (Vec::new(), Vec::new());
         };
@@ -200,37 +236,34 @@ impl<'a> Lowerer<'a> {
         (positional, Vec::new())
     }
 
-    fn lower_arms(&self, node: Node) -> Vec<MatchArm> {
+    fn lower_arms(&self, node: Node<'_>) -> Vec<MatchArm> {
         self.named_of_kind(node, "match_arm")
             .iter()
             .chain(self.named_of_kind(node, "select_arm").iter())
             .map(|arm| MatchArm {
-                pattern: self.lower_pattern(arm.child_by_field_name("pattern").unwrap()),
+                pattern: arm
+                    .child_by_field_name("pattern")
+                    .map_or(Pattern::Wildcard, |p| self.lower_pattern(p)),
                 body: self.lower_expr_field(*arm, "body"),
             })
             .collect()
     }
 
-    fn lower_handler_arms(&self, node: Node) -> Vec<HandlerArm> {
+    fn lower_handler_arms(&self, node: Node<'_>) -> Vec<HandlerArm> {
         self.named_of_kind(node, "handler_arm")
             .iter()
             .map(|arm| HandlerArm {
                 operation: self.field_text(*arm, "operation"),
                 params: self
                     .first_child_of_kind(*arm, "handler_params")
-                    .map(|hp| {
-                        self.named_of_kind(hp, "identifier")
-                            .iter()
-                            .map(|n| self.text(*n))
-                            .collect()
-                    })
+                    .map(|hp| self.texts_of_kind(hp, "identifier"))
                     .unwrap_or_default(),
                 body: self.lower_expr_field(*arm, "body"),
             })
             .collect()
     }
 
-    fn lower_field_assignments(&self, node: Node) -> Vec<FieldAssignment> {
+    fn lower_field_assignments(&self, node: Node<'_>) -> Vec<FieldAssignment> {
         self.descendants_of_kind(node, "field_assignment")
             .iter()
             .map(|fa| FieldAssignment {
@@ -240,7 +273,7 @@ impl<'a> Lowerer<'a> {
             .collect()
     }
 
-    fn lower_block(&self, node: Node) -> Expr {
+    fn lower_block(&self, node: Node<'_>) -> Expr {
         let mut statements = Vec::new();
         let mut value = None;
         let mut cursor = node.walk();
@@ -268,10 +301,9 @@ impl<'a> Lowerer<'a> {
         Expr::Block { statements, value }
     }
 
-    pub(crate) fn lower_literal(&self, node: Node) -> Expr {
-        let inner = match self.first_named(node) {
-            Some(n) => n,
-            None => return Expr::Bool(false),
+    pub(crate) fn lower_literal(&self, node: Node<'_>) -> Expr {
+        let Some(inner) = self.first_named(node) else {
+            return Expr::Bool(false);
         };
         match inner.kind() {
             "integer" => Expr::Integer(self.text(inner).parse().unwrap_or(0)),
@@ -283,20 +315,15 @@ impl<'a> Lowerer<'a> {
                 // `string`. Detect the `${` marker here and interpolate either way.
                 let raw = self.text(inner);
                 if raw.contains("${") {
-                    Expr::InterpolatedStr(self.lower_interpolation(&raw))
+                    Expr::InterpolatedStr(Self::lower_interpolation(&raw))
                 } else {
                     Expr::Str(unquote(&raw))
                 }
             }
             "interpolated_string" => {
-                Expr::InterpolatedStr(self.lower_interpolation(&self.text(inner)))
+                Expr::InterpolatedStr(Self::lower_interpolation(&self.text(inner)))
             }
-            "list_literal" => Expr::List(
-                self.named_of_kind(inner, "expression")
-                    .iter()
-                    .map(|e| self.lower_expr(*e))
-                    .collect(),
-            ),
+            "list_literal" => Expr::List(self.exprs_of_kind(inner, "expression")),
             "map_literal" => Expr::Map(
                 self.named_of_kind(inner, "map_entry")
                     .iter()
@@ -313,23 +340,25 @@ impl<'a> Lowerer<'a> {
     /// Split a `"text ${expr} more"` literal into [`InterpolatedPart`]s, parsing
     /// each embedded expression as an Osprey fragment (port of
     /// `builder_interpolation.go`).
-    fn lower_interpolation(&self, raw: &str) -> Vec<InterpolatedPart> {
+    fn lower_interpolation(raw: &str) -> Vec<InterpolatedPart> {
         let inner = unquote(raw);
         let bytes = inner.as_bytes();
         let mut parts = Vec::new();
         let mut text_start = 0usize;
         let mut i = 0usize;
         while i < bytes.len() {
-            if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
+            if bytes.get(i) == Some(&b'$') && bytes.get(i + 1) == Some(&b'{') {
                 if i > text_start {
-                    parts.push(InterpolatedPart::Text(inner[text_start..i].to_string()));
+                    if let Some(text) = inner.get(text_start..i) {
+                        parts.push(InterpolatedPart::Text(text.to_string()));
+                    }
                 }
                 // Find the `}` that closes this `${`, honouring nested braces so
                 // `${match x { a => 1 b => 2 }}` captures the whole match.
                 let mut depth = 1i32;
                 let mut j = i + 2;
-                while j < bytes.len() {
-                    match bytes[j] {
+                while let Some(byte) = bytes.get(j) {
+                    match byte {
                         b'{' => depth += 1,
                         b'}' => {
                             depth -= 1;
@@ -341,16 +370,19 @@ impl<'a> Lowerer<'a> {
                     }
                     j += 1;
                 }
-                let frag = &inner[i + 2..j];
-                parts.push(InterpolatedPart::Expr(parse_fragment(frag)));
+                if let Some(frag) = inner.get(i + 2..j) {
+                    parts.push(InterpolatedPart::Expr(parse_fragment(frag)));
+                }
                 i = j + 1;
                 text_start = i;
             } else {
                 i += 1;
             }
         }
-        if text_start < bytes.len() {
-            parts.push(InterpolatedPart::Text(inner[text_start..].to_string()));
+        if let Some(text) = inner.get(text_start..) {
+            if !text.is_empty() {
+                parts.push(InterpolatedPart::Text(text.to_string()));
+            }
         }
         parts
     }

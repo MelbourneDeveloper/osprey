@@ -9,7 +9,7 @@ use crate::builder::Codegen;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use osprey_ast::*;
+use osprey_ast::{Expr, FieldAssignment};
 
 /// `Type { field: value, … }` — allocate the heap block, write the tag and each
 /// declared field (in layout order), and return the owner-tagged handle.
@@ -26,10 +26,21 @@ pub(crate) fn gen_constructor(
         }
         return Err(CodegenError::unknown(name));
     }
+    // `Success { value: x }` / `Error { message: m }` build the Result ABI block
+    // `{ inner, i8 disc }` directly (disc 0 = Success), not a generic record —
+    // so they interoperate with `match`, `toString` and effect handlers that
+    // return `Result<…>` (e.g. an `input => Success { value: … }` handler arm).
+    // The field disambiguates from a same-named *nullary* union variant (e.g.
+    // `type TaskResult = Success | …`), which takes the ordinary union path.
+    if (name == "Success" || name == "Error") && !fields.is_empty() {
+        return gen_result_ctor(cg, name, fields);
+    }
     let view = cg
         .ctor_layout(name)
         .ok_or_else(|| CodegenError::unknown(name))?;
-    let struct_ty = cg.ctor_struct_ty(name).unwrap();
+    let struct_ty = cg
+        .ctor_struct_ty(name)
+        .ok_or_else(|| CodegenError::unknown(name))?;
     let obj = cg.malloc_struct(&struct_ty);
 
     // tag
@@ -54,6 +65,47 @@ pub(crate) fn gen_constructor(
     Ok(Value::handle(handle, view.owner))
 }
 
+/// `{ field: value, … }` — an anonymous object literal: the same `{ i64 tag,
+/// fields… }` heap block as a named record, with a synthetic layout registered so
+/// field access can recover the slots.
+pub(crate) fn gen_object(cg: &mut Codegen, fields: &[FieldAssignment]) -> Result<Value> {
+    let mut vals = Vec::with_capacity(fields.len());
+    for fa in fields {
+        let v = gen_expr(cg, &fa.value)?;
+        vals.push((fa.name.clone(), v));
+    }
+    let mut parts = vec!["i64".to_string()];
+    parts.extend(vals.iter().map(|(_, v)| v.ty.as_str().to_string()));
+    let struct_ty = format!("{{ {} }}", parts.join(", "));
+    let layout: Vec<(String, LType)> = vals.iter().map(|(n, v)| (n.clone(), v.ty)).collect();
+    let owner = cg.register_obj_layout(layout);
+
+    let obj = cg.malloc_struct(&struct_ty);
+    let tagp = cg.fresh_reg();
+    cg.emit(format!(
+        "{tagp} = getelementptr {struct_ty}, {struct_ty}* {obj}, i32 0, i32 0"
+    ));
+    cg.emit(format!("store i64 0, i64* {tagp}"));
+    for (i, (_, v)) in vals.iter().enumerate() {
+        store_field(cg, &struct_ty, obj.as_str(), i + 1, v.ty, &v.operand);
+    }
+    let handle = cg.fresh_reg();
+    cg.emit(format!("{handle} = bitcast {struct_ty}* {obj} to i8*"));
+    Ok(Value::handle(handle, owner))
+}
+
+/// Build a `Success`/`Error` value in the Result ABI: the single field becomes
+/// the `{ inner, i8 }` block's payload, with disc `0` (Success) or `1` (Error).
+fn gen_result_ctor(cg: &mut Codegen, name: &str, fields: &[FieldAssignment]) -> Result<Value> {
+    let fa = fields
+        .first()
+        .ok_or_else(|| CodegenError::invalid(format!("`{name}` needs one field")))?;
+    let v = gen_expr(cg, &fa.value)?;
+    let inner = v.ty;
+    let disc = if name == "Success" { "0" } else { "1" };
+    crate::result::make_result(cg, v, inner, disc)
+}
+
 /// `record { field: newValue }` — copy every field of `record` into a fresh
 /// block, overriding the named ones.
 pub(crate) fn gen_update(
@@ -71,7 +123,9 @@ pub(crate) fn gen_update(
     let view = cg
         .ctor_layout(&owner)
         .ok_or_else(|| CodegenError::unknown(&owner))?;
-    let struct_ty = cg.ctor_struct_ty(&owner).unwrap();
+    let struct_ty = cg
+        .ctor_struct_ty(&owner)
+        .ok_or_else(|| CodegenError::unknown(&owner))?;
 
     let src = cg.fresh_reg();
     cg.emit(format!(
@@ -106,26 +160,25 @@ pub(crate) fn gen_update(
 /// load the field.
 pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> Result<Value> {
     let tv = gen_expr(cg, target)?;
-    // Use the statically-known owner when it actually declares `field`; otherwise
-    // (a generic accessor whose parameter infers to a type variable) resolve the
-    // field by name across known layouts — Go's polymorphic field-access fallback.
+    // Use the statically-known owner (a named record or an anonymous object
+    // literal) when it actually declares `field`; otherwise (a generic accessor
+    // whose parameter infers to a type variable) resolve the field by name across
+    // known layouts — Go's polymorphic field-access fallback.
     let known = tv.osp_ty.clone().filter(|o| {
-        cg.ctor_layout(o)
-            .is_some_and(|v| v.fields.iter().any(|(f, _)| f == field))
+        cg.record_layout(o)
+            .is_some_and(|(_, fs)| fs.iter().any(|(f, _)| f == field))
     });
     let owner = known
         .or_else(|| cg.find_field_owner(field))
         .ok_or_else(|| CodegenError::invalid(format!("field `{field}` on a non-record")))?;
-    let view = cg
-        .ctor_layout(&owner)
+    let (struct_ty, fields_layout) = cg
+        .record_layout(&owner)
         .ok_or_else(|| CodegenError::unknown(&owner))?;
-    let struct_ty = cg.ctor_struct_ty(&owner).unwrap();
-    let idx = view
-        .fields
+    let (idx, fty) = fields_layout
         .iter()
-        .position(|(f, _)| f == field)
+        .enumerate()
+        .find_map(|(i, (f, t))| (f == field).then_some((i, *t)))
         .ok_or_else(|| CodegenError::invalid(format!("`{owner}` has no field `{field}`")))?;
-    let fty = view.fields[idx].1;
 
     let src = cg.fresh_reg();
     cg.emit(format!(

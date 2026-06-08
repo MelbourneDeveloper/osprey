@@ -26,14 +26,16 @@ pub enum LType {
 
 impl LType {
     /// The textual LLVM spelling.
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             LType::I64 => "i64",
             LType::I1 => "i1",
-            LType::Str => "i8*",
             LType::I32 => "i32",
             LType::Double => "double",
-            LType::Ptr => "i8*",
+            // `Str` and `Ptr` are semantically distinct handles that share the
+            // same LLVM spelling `i8*`.
+            LType::Str | LType::Ptr => "i8*",
         }
     }
 }
@@ -48,7 +50,10 @@ impl fmt::Display for LType {
 /// result) paired with its LLVM type.
 #[derive(Debug, Clone)]
 pub struct Value {
+    /// The textual LLVM operand: a register (`%3`), a literal (`42`), or an
+    /// instruction result.
     pub operand: String,
+    /// The LLVM type the operand travels as.
     pub ty: LType,
     /// For aggregate handles ([`LType::Ptr`]): the Osprey owner type name
     /// (`Point`, `Shape`, `Result`, …) so field access and `match` can recover
@@ -68,6 +73,7 @@ pub struct Value {
 }
 
 impl Value {
+    /// A plain SSA value: an operand paired with its LLVM type.
     pub fn new(operand: impl Into<String>, ty: LType) -> Value {
         Value {
             operand: operand.into(),
@@ -101,6 +107,7 @@ impl Value {
     }
 
     /// This value re-tagged with an Osprey owner type name.
+    #[must_use]
     pub fn with_owner(mut self, owner: Option<String>) -> Value {
         self.osp_ty = owner;
         self
@@ -108,6 +115,7 @@ impl Value {
 
     /// This Result re-tagged with the owner type of its success payload (so an
     /// unwrapped element keeps its handle identity — e.g. a nested list).
+    #[must_use]
     pub fn with_payload_owner(mut self, owner: Option<String>) -> Value {
         self.payload_owner = owner;
         self
@@ -115,12 +123,14 @@ impl Value {
 
     /// The canonical Unit value — Osprey `Unit` carries no data, so it is the
     /// `i64 0` placeholder a side-effecting expression yields.
+    #[must_use]
     pub fn unit() -> Value {
         Value::new("0", LType::I64)
     }
 
     /// The LLVM type spelling this value travels as — the precise
     /// `{ inner, i8 }*` for a Result block, else the plain [`LType`].
+    #[must_use]
     pub fn llvm_ty(&self) -> String {
         match self.result_inner {
             Some(inner) => format!("{{ {inner}, i8 }}*"),
@@ -129,12 +139,14 @@ impl Value {
     }
 
     /// The `{ inner, i8 }` struct spelling of a Result block (no pointer).
+    #[must_use]
     pub fn result_struct_ty(&self) -> Option<String> {
         self.result_inner.map(|inner| format!("{{ {inner}, i8 }}"))
     }
 
     /// Render as a typed operand, e.g. `i64 %3` — the form arguments and `ret`
     /// take.
+    #[must_use]
     pub fn typed(&self) -> String {
         format!("{} {}", self.llvm_ty(), self.operand)
     }

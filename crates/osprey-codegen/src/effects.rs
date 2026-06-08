@@ -93,8 +93,7 @@ fn parse_ret(ret: &str) -> (LType, Option<LType>) {
             split_top(body)
         })
         .and_then(|args| args.into_iter().next())
-        .map(|a| ltype_of_name(&a))
-        .unwrap_or(LType::I64);
+        .map_or(LType::I64, |a| ltype_of_name(&a));
     (LType::Ptr, Some(inner))
 }
 

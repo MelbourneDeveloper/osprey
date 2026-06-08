@@ -14,13 +14,14 @@ pub struct InferCtx {
 }
 
 impl InferCtx {
+    /// Create an empty context with no allocated type variables.
     pub fn new() -> InferCtx {
         InferCtx::default()
     }
 
     /// Allocate a fresh, unbound type variable (`TypeInferer.Fresh`).
     pub fn fresh(&mut self) -> Type {
-        let id = self.subst.len() as VarId;
+        let id = VarId::try_from(self.subst.len()).unwrap_or(VarId::MAX);
         self.subst.push(None);
         Type::Var(id)
     }
@@ -30,10 +31,12 @@ impl InferCtx {
     /// [`InferCtx::apply`] for a deep walk), matching the Go `prune`.
     pub fn prune(&mut self, t: &Type) -> Type {
         if let Type::Var(id) = t {
-            let idx = *id as usize;
+            let idx = usize::try_from(*id).unwrap_or(usize::MAX);
             if let Some(bound) = self.subst.get(idx).and_then(Option::clone) {
                 let pruned = self.prune(&bound);
-                self.subst[idx] = Some(pruned.clone());
+                if let Some(slot) = self.subst.get_mut(idx) {
+                    *slot = Some(pruned.clone());
+                }
                 return pruned;
             }
         }
@@ -42,7 +45,10 @@ impl InferCtx {
 
     /// Bind a variable to a type. The caller guarantees the occurs-check passed.
     pub fn bind(&mut self, id: VarId, t: Type) {
-        self.subst[id as usize] = Some(t);
+        let idx = usize::try_from(id).unwrap_or(usize::MAX);
+        if let Some(slot) = self.subst.get_mut(idx) {
+            *slot = Some(t);
+        }
     }
 
     /// `occursCheck`: does variable `id` appear anywhere in `t`? Prevents the
@@ -93,7 +99,7 @@ impl InferCtx {
         let t = self.prune(t);
         match &t {
             Type::Var(v) => {
-                out.insert(*v);
+                let _ = out.insert(*v);
             }
             Type::Fun { params, ret } => {
                 for p in params {

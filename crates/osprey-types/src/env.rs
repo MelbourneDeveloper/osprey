@@ -25,11 +25,11 @@ impl TypeEnv {
     }
 
     pub fn insert(&mut self, name: impl Into<String>, scheme: Scheme) {
-        self.vars.insert(name.into(), scheme);
+        let _ = self.vars.insert(name.into(), scheme);
     }
 
     pub fn remove(&mut self, name: &str) {
-        self.vars.remove(name);
+        let _ = self.vars.remove(name);
     }
 
     /// A fresh child scope (a clone — bindings added to the child don't leak).
@@ -45,7 +45,7 @@ impl TypeEnv {
             let mut fv = BTreeSet::new();
             ctx.free_vars(&scheme.ty, &mut fv);
             for q in &scheme.vars {
-                fv.remove(q);
+                let _ = fv.remove(q);
             }
             out.extend(fv);
         }
@@ -98,6 +98,10 @@ fn subst_vars(t: &Type, map: &HashMap<VarId, Type>) -> Type {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test assertions: an out-of-bounds index is a test failure, not a production panic"
+)]
 mod tests {
     use super::*;
     use crate::unify::unify;

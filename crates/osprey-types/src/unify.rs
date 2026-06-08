@@ -88,8 +88,10 @@ pub fn unify_assignable(
     // Unwrap: a `Result<T, E>` value satisfies a concrete `T`.
     if !matches!(expected, Type::Var(_)) && !expected.is_named(names::RESULT) {
         if let Type::Con { name, args } = &actual {
-            if name == names::RESULT && !args.is_empty() {
-                return unify(ctx, &expected, &args[0]);
+            if name == names::RESULT {
+                if let Some(inner) = args.first() {
+                    return unify(ctx, &expected, inner);
+                }
             }
         }
     }
@@ -97,11 +99,12 @@ pub fn unify_assignable(
     // `Success`), e.g. `fn f() -> Result<bool, E> = x > 0`.
     if let Type::Con { name, args } = &expected {
         if name == names::RESULT
-            && !args.is_empty()
             && !matches!(actual, Type::Var(_))
             && !actual.is_named(names::RESULT)
         {
-            return unify(ctx, &args[0], &actual);
+            if let Some(inner) = args.first() {
+                return unify(ctx, inner, &actual);
+            }
         }
     }
     unify(ctx, &expected, &actual)
@@ -170,15 +173,19 @@ fn unify_fn_return(ctx: &mut InferCtx, r1: &Type, r2: &Type) -> Result<(), TypeE
     let p2 = ctx.prune(r2);
     if !matches!(p1, Type::Var(_)) && !p1.is_named(names::RESULT) {
         if let Type::Con { name, args } = &p2 {
-            if name == names::RESULT && !args.is_empty() {
-                return unify(ctx, &p1, &args[0]);
+            if name == names::RESULT {
+                if let Some(inner) = args.first() {
+                    return unify(ctx, &p1, inner);
+                }
             }
         }
     }
     if !matches!(p2, Type::Var(_)) && !p2.is_named(names::RESULT) {
         if let Type::Con { name, args } = &p1 {
-            if name == names::RESULT && !args.is_empty() {
-                return unify(ctx, &args[0], &p2);
+            if name == names::RESULT {
+                if let Some(inner) = args.first() {
+                    return unify(ctx, inner, &p2);
+                }
             }
         }
     }
@@ -225,6 +232,10 @@ fn unify_seq(
 }
 
 #[cfg(test)]
+#[expect(
+    unused_results,
+    reason = "tests drive unification for its side effects and discard the returned types"
+)]
 mod tests {
     use super::*;
 

@@ -10,7 +10,7 @@ use crate::error::{CodegenError, Result};
 use crate::llty::{LType, Value};
 use crate::pattern::gen_match;
 use crate::runtime::{gen_print, to_string_value};
-use osprey_ast::*;
+use osprey_ast::{Expr, InterpolatedPart, NamedArgument, Parameter, Stmt};
 
 pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
     match expr {
@@ -42,6 +42,7 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
         Expr::FieldAccess { target, field } => {
             crate::aggregate::gen_field_access(cg, target, field)
         }
+        Expr::Object(fields) => crate::aggregate::gen_object(cg, fields),
         Expr::List(elements) => crate::listlit::gen_list(cg, elements),
         Expr::Map(entries) => crate::collections::gen_map_literal(cg, entries),
         Expr::Index { target, index } => crate::listlit::gen_index(cg, target, index),
@@ -74,16 +75,17 @@ fn fmt_double(f: f64) -> String {
 }
 
 fn gen_block(cg: &mut Codegen, statements: &[Stmt], value: Option<&Expr>) -> Result<Value> {
-    cg.push_scope();
+    // A block does NOT open a new scope: the Go backend uses a flat per-function
+    // symbol table, so a nested `let` rebinds (and leaks) the name in the
+    // enclosing scope. Replicating that keeps shadowing byte-compatible — e.g.
+    // block_statements' inner `let outer` is visible to the outer `outer + inner`.
     for s in statements {
         crate::lower::gen_local_stmt(cg, s)?;
     }
-    let v = match value {
-        Some(e) => gen_expr(cg, e)?,
-        None => Value::unit(),
-    };
-    cg.pop_scope();
-    Ok(v)
+    match value {
+        Some(e) => gen_expr(cg, e),
+        None => Ok(Value::unit()),
+    }
 }
 
 fn gen_binary(cg: &mut Codegen, op: &str, left: &Expr, right: &Expr) -> Result<Value> {
@@ -118,7 +120,7 @@ fn gen_binary(cg: &mut Codegen, op: &str, left: &Expr, right: &Expr) -> Result<V
 /// Arithmetic. Float if either operand is a float (the other is promoted),
 /// otherwise integer. Division ALWAYS returns float (the Osprey spec — see
 /// `generateDivisionWithZeroCheck`); modulo stays integer. The Result<…,
-/// MathError> wrapper the type system tracks is auto-unwrapped at value sites.
+/// `MathError`> wrapper the type system tracks is auto-unwrapped at value sites.
 fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     // `+` on list handles is concatenation (`a + b` ≡ `listConcat(a, b)`); on
     // map handles it is a right-biased merge (`a + b` ≡ `mapMerge(a, b)`).
@@ -140,14 +142,7 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     // type. The Success wrapper auto-unwraps at value sites (interpolation,
     // comparison, args), but `toString`/`print` show it as `Success(n)`.
     if op == "/" {
-        let ld = as_double(cg, l)?;
-        let rd = as_double(cg, r)?;
-        let reg = cg.fresh_reg();
-        cg.emit(format!(
-            "{reg} = fdiv double {}, {}",
-            ld.operand, rd.operand
-        ));
-        return crate::result::make_ok(cg, Value::new(reg, LType::Double), LType::Double);
+        return gen_division(cg, l, r);
     }
     if l.ty == LType::Double || r.ty == LType::Double {
         let ld = as_double(cg, l)?;
@@ -178,6 +173,43 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     let reg = cg.fresh_reg();
     cg.emit(format!("{reg} = {opc} i64 {}, {}", li.operand, ri.operand));
     crate::result::make_ok(cg, Value::new(reg, LType::I64), LType::I64)
+}
+
+/// Division — always float, with a runtime divide-by-zero check (Go's
+/// `generateDivisionWithZeroCheck`): a zero divisor yields `Error`
+/// (`Result<float, MathError>` disc 1), else `Success(quotient)`.
+fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
+    use crate::result::make_result;
+    let ld = as_double(cg, l)?;
+    let rd = as_double(cg, r)?;
+    let isz = cg.fresh_reg();
+    cg.emit(format!("{isz} = fcmp oeq double {}, 0.0", rd.operand));
+    let zero_bb = cg.fresh_label();
+    let nonzero_bb = cg.fresh_label();
+    let end = cg.fresh_label();
+    cg.emit(format!(
+        "br i1 {isz}, label %{zero_bb}, label %{nonzero_bb}"
+    ));
+
+    cg.start_block(&nonzero_bb);
+    let q = cg.fresh_reg();
+    cg.emit(format!("{q} = fdiv double {}, {}", ld.operand, rd.operand));
+    let ok = make_result(cg, Value::new(q, LType::Double), LType::Double, "0")?;
+    let okb = cg.cur_block().to_string();
+    cg.emit(format!("br label %{end}"));
+
+    cg.start_block(&zero_bb);
+    let err = make_result(cg, Value::new("0.0", LType::Double), LType::Double, "1")?;
+    let errb = cg.cur_block().to_string();
+    cg.emit(format!("br label %{end}"));
+
+    cg.start_block(&end);
+    let reg = cg.fresh_reg();
+    cg.emit(format!(
+        "{reg} = phi {{ double, i8 }}* [ {}, %{okb} ], [ {}, %{errb} ]",
+        ok.operand, err.operand
+    ));
+    Ok(Value::result(reg, LType::Double))
 }
 
 /// String concatenation: `malloc(strlen a + strlen b + 1)` then `strcpy`+`strcat`

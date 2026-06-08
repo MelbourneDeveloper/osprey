@@ -7,10 +7,15 @@ use crate::builder::Codegen;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use osprey_ast::*;
+use osprey_ast::{Expr, Parameter, Program, Stmt};
 
 /// Compile a whole program to an LLVM IR module (text), driven by the inferred
 /// types in [`osprey_types::ProgramTypes`].
+///
+/// # Errors
+///
+/// Returns `Err` if any function body, top-level statement, or `main`
+/// expression contains a construct that cannot be lowered to LLVM IR.
 pub fn compile_program(program: &Program) -> Result<String> {
     let prog = osprey_types::infer_program(program);
     let mut cg = Codegen::with_types(prog);
@@ -22,7 +27,7 @@ pub fn compile_program(program: &Program) -> Result<String> {
             Stmt::Function {
                 name, parameters, ..
             } => {
-                cg.fn_params.insert(
+                let _ = cg.fn_params.insert(
                     name.clone(),
                     parameters.iter().map(|p| p.name.clone()).collect(),
                 );
@@ -57,7 +62,7 @@ pub fn compile_program(program: &Program) -> Result<String> {
 
     cg.begin_function();
     if let Some(body) = user_main {
-        gen_expr(&mut cg, body)?;
+        let _ = gen_expr(&mut cg, body)?;
     } else {
         for stmt in &top_level {
             gen_local_stmt(&mut cg, stmt)?;
@@ -110,7 +115,7 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
         Stmt::Let { name, value, .. } => gen_bind(cg, name, value, false),
         Stmt::Assignment { name, value, .. } => gen_bind(cg, name, value, true),
         Stmt::Expr(e) => {
-            gen_expr(cg, e)?;
+            let _ = gen_expr(cg, e)?;
             Ok(())
         }
         _ => Err(CodegenError::unsupported("statement in block/main")),
@@ -126,7 +131,8 @@ fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<
         parameters, body, ..
     } = value
     {
-        cg.lambdas
+        let _ = cg
+            .lambdas
             .insert(name.to_string(), (parameters.clone(), (**body).clone()));
         return Ok(());
     }

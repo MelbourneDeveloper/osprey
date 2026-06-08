@@ -125,7 +125,7 @@ pub(crate) fn gen_builtin(cg: &mut Codegen, name: &str, args: &[Expr]) -> Result
         // `fiberDone(f)` — always complete (eager eval); printed as the int `1`.
         "fiberDone" => {
             if let Some(a) = args.first() {
-                gen_expr(cg, a)?;
+                let _ = gen_expr(cg, a)?;
             }
             Value::new("1", LType::I64)
         }

@@ -72,6 +72,10 @@ fn boxed_arg(cg: &mut Codegen, args: &[Expr], i: usize) -> Result<Value> {
     Ok(box_to_i64(cg, v))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "kept Result-returning for the uniform generator interface"
+)]
 fn list_empty(cg: &mut Codegen) -> Result<Value> {
     declare(cg, "osprey_list_empty", "i8*", "");
     let r = cg.fresh_reg();
@@ -79,6 +83,10 @@ fn list_empty(cg: &mut Codegen) -> Result<Value> {
     Ok(Value::handle(r, LIST_OWNER))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "kept Result-returning for the uniform generator interface"
+)]
 fn map_empty(cg: &mut Codegen) -> Result<Value> {
     declare(cg, "osprey_map_empty", "i8*", "i32");
     let r = cg.fresh_reg();
@@ -126,6 +134,10 @@ fn list_concat(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 }
 
 /// Emit `osprey_list_concat` on two already-evaluated list handles.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "kept Result-returning for the uniform generator interface"
+)]
 pub(crate) fn concat_handles(cg: &mut Codegen, a: &Value, b: &Value) -> Result<Value> {
     declare(cg, "osprey_list_concat", "i8*", "i8*, i8*");
     let r = cg.fresh_reg();
@@ -293,6 +305,10 @@ fn map_merge(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 }
 
 /// Emit `osprey_map_merge` on two already-evaluated map handles.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "kept Result-returning for the uniform generator interface"
+)]
 pub(crate) fn merge_handles(cg: &mut Codegen, a: &Value, b: &Value) -> Result<Value> {
     declare(cg, "osprey_map_merge", "i8*", "i8*, i8*");
     let r = cg.fresh_reg();

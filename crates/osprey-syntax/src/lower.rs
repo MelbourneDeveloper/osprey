@@ -1,32 +1,46 @@
 //! Statement, type, and pattern lowering (the bulk of `builder_*.go`).
 
-use osprey_ast::*;
+use osprey_ast::{
+    EffectOperation, Expr, ExternParameter, Parameter, Pattern, Position, Program, Stmt, TypeExpr,
+    TypeField, TypeVariant,
+};
 use tree_sitter::Node;
 
 /// Holds the source bytes so node text can be sliced during lowering.
+#[derive(Debug)]
 pub struct Lowerer<'a> {
     src: &'a [u8],
 }
 
 impl<'a> Lowerer<'a> {
+    /// Creates a lowerer over the given source bytes.
+    #[must_use]
     pub fn new(src: &'a [u8]) -> Self {
         Lowerer { src }
     }
 
-    pub(crate) fn text(&self, node: Node) -> String {
+    pub(crate) fn text(&self, node: Node<'_>) -> String {
         node.utf8_text(self.src).unwrap_or("").to_string()
     }
 
-    pub(crate) fn pos(&self, node: Node) -> Position {
+    #[expect(
+        clippy::unused_self,
+        reason = "kept for Lowerer method-call ergonomics"
+    )]
+    pub(crate) fn pos(&self, node: Node<'_>) -> Position {
         let p = node.start_position();
         Position {
-            line: p.row as u32 + 1,
-            column: p.column as u32,
+            line: u32::try_from(p.row).unwrap_or(u32::MAX).saturating_add(1),
+            column: u32::try_from(p.column).unwrap_or(u32::MAX),
         }
     }
 
     /// First *named* child (skips anonymous tokens). Used to unwrap the wrapper
     /// nodes tree-sitter inserts (`statement`, `expression`, `primary_expression`).
+    #[expect(
+        clippy::unused_self,
+        reason = "kept for Lowerer method-call ergonomics"
+    )]
     pub(crate) fn first_named<'t>(&self, node: Node<'t>) -> Option<Node<'t>> {
         let mut cursor = node.walk();
         let found = node.named_children(&mut cursor).next();
@@ -34,13 +48,19 @@ impl<'a> Lowerer<'a> {
     }
 
     /// First named child of a given kind.
+    #[expect(
+        clippy::unused_self,
+        reason = "kept for Lowerer method-call ergonomics"
+    )]
     pub(crate) fn first_child_of_kind<'t>(&self, node: Node<'t>, kind: &str) -> Option<Node<'t>> {
         let mut cursor = node.walk();
         let found = node.named_children(&mut cursor).find(|c| c.kind() == kind);
         found
     }
 
-    pub fn lower_program(&self, root: Node) -> Program {
+    /// Lowers the root `source_file` node into a full program AST.
+    #[must_use]
+    pub fn lower_program(&self, root: Node<'_>) -> Program {
         let mut statements = Vec::new();
         let mut cursor = root.walk();
         for child in root.named_children(&mut cursor) {
@@ -53,21 +73,16 @@ impl<'a> Lowerer<'a> {
         Program { statements }
     }
 
-    pub(crate) fn lower_stmt(&self, node: Node) -> Option<Stmt> {
+    pub(crate) fn lower_stmt(&self, node: Node<'_>) -> Option<Stmt> {
         Some(match node.kind() {
             "import_statement" => Stmt::Import {
-                module: self
-                    .named_of_kind(node, "identifier")
-                    .iter()
-                    .map(|n| self.text(*n))
-                    .collect(),
+                module: self.texts_of_kind(node, "identifier"),
             },
             "let_declaration" => Stmt::Let {
                 name: self.field_text(node, "name"),
                 mutable: node
                     .child_by_field_name("keyword")
-                    .map(|n| self.text(n) == "mut")
-                    .unwrap_or(false),
+                    .is_some_and(|n| self.text(n) == "mut"),
                 ty: node.child_by_field_name("type").map(|n| self.lower_type(n)),
                 value: self.lower_expr_field(node, "value"),
                 position: Some(self.pos(node)),
@@ -108,12 +123,12 @@ impl<'a> Lowerer<'a> {
                     .filter_map(|n| self.lower_stmt(n))
                     .collect(),
             },
-            "expression_statement" => Stmt::Expr(self.lower_expr(self.first_named(node).unwrap())),
+            "expression_statement" => Stmt::Expr(self.lower_expr(self.first_named(node)?)),
             _ => return None,
         })
     }
 
-    fn lower_type_decl(&self, node: Node) -> Stmt {
+    fn lower_type_decl(&self, node: Node<'_>) -> Stmt {
         let def = node.child_by_field_name("definition");
         let variants = match def.map(|d| (d.kind(), d)) {
             Some(("union_type", d)) => self
@@ -131,12 +146,7 @@ impl<'a> Lowerer<'a> {
             name: self.field_text(node, "name"),
             type_params: node
                 .child_by_field_name("type_parameters")
-                .map(|tp| {
-                    self.named_of_kind(tp, "identifier")
-                        .iter()
-                        .map(|n| self.text(*n))
-                        .collect()
-                })
+                .map(|tp| self.texts_of_kind(tp, "identifier"))
                 .unwrap_or_default(),
             variants,
             validation_func: self
@@ -146,7 +156,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn lower_variant(&self, node: Node) -> TypeVariant {
+    fn lower_variant(&self, node: Node<'_>) -> TypeVariant {
         TypeVariant {
             name: self.field_text(node, "name"),
             fields: node
@@ -157,7 +167,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn lower_field_decls(&self, node: Node) -> Vec<TypeField> {
+    fn lower_field_decls(&self, node: Node<'_>) -> Vec<TypeField> {
         let mut out = Vec::new();
         for fd in self.descendants_of_kind(node, "field_declaration") {
             out.push(TypeField {
@@ -172,7 +182,7 @@ impl<'a> Lowerer<'a> {
         out
     }
 
-    fn lower_operations(&self, node: Node) -> Vec<EffectOperation> {
+    fn lower_operations(&self, node: Node<'_>) -> Vec<EffectOperation> {
         self.named_of_kind(node, "operation_declaration")
             .iter()
             .map(|op| EffectOperation {
@@ -187,7 +197,7 @@ impl<'a> Lowerer<'a> {
             .collect()
     }
 
-    pub(crate) fn lower_params(&self, list: Option<Node>) -> Vec<Parameter> {
+    pub(crate) fn lower_params(&self, list: Option<Node<'_>>) -> Vec<Parameter> {
         let Some(list) = list else { return Vec::new() };
         self.named_of_kind(list, "parameter")
             .iter()
@@ -198,7 +208,7 @@ impl<'a> Lowerer<'a> {
             .collect()
     }
 
-    fn lower_extern_params(&self, list: Option<Node>) -> Vec<ExternParameter> {
+    fn lower_extern_params(&self, list: Option<Node<'_>>) -> Vec<ExternParameter> {
         let Some(list) = list else { return Vec::new() };
         self.named_of_kind(list, "extern_parameter")
             .iter()
@@ -206,13 +216,12 @@ impl<'a> Lowerer<'a> {
                 name: self.field_text(*p, "name"),
                 ty: p
                     .child_by_field_name("type")
-                    .map(|n| self.lower_type(n))
-                    .unwrap_or_else(|| TypeExpr::named("")),
+                    .map_or_else(|| TypeExpr::named(""), |n| self.lower_type(n)),
             })
             .collect()
     }
 
-    fn lower_effects(&self, effects: Option<Node>) -> Vec<String> {
+    fn lower_effects(&self, effects: Option<Node<'_>>) -> Vec<String> {
         let Some(effects) = effects else {
             return Vec::new();
         };
@@ -223,7 +232,7 @@ impl<'a> Lowerer<'a> {
     }
 
     /// Lower a `_type` node (function/generic/array/identifier).
-    pub(crate) fn lower_type(&self, node: Node) -> TypeExpr {
+    pub(crate) fn lower_type(&self, node: Node<'_>) -> TypeExpr {
         match node.kind() {
             "type_identifier" => TypeExpr::named(
                 self.first_named(node)
@@ -265,7 +274,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn lower_type_list(&self, list: Node) -> Vec<TypeExpr> {
+    fn lower_type_list(&self, list: Node<'_>) -> Vec<TypeExpr> {
         let mut out = Vec::new();
         let mut cursor = list.walk();
         for child in list.named_children(&mut cursor) {
@@ -276,7 +285,7 @@ impl<'a> Lowerer<'a> {
         out
     }
 
-    fn descendants_type_in(&self, node: Node) -> Option<TypeExpr> {
+    fn descendants_type_in(&self, node: Node<'_>) -> Option<TypeExpr> {
         let mut cursor = node.walk();
         let found = node
             .named_children(&mut cursor)
@@ -284,7 +293,7 @@ impl<'a> Lowerer<'a> {
         found.map(|c| self.lower_type(c))
     }
 
-    fn last_type_child(&self, node: Node) -> Option<TypeExpr> {
+    fn last_type_child(&self, node: Node<'_>) -> Option<TypeExpr> {
         let mut cursor = node.walk();
         let found = node
             .named_children(&mut cursor)
@@ -301,7 +310,7 @@ impl<'a> Lowerer<'a> {
     }
 
     // ---- Patterns ----
-    pub(crate) fn lower_pattern(&self, node: Node) -> Pattern {
+    pub(crate) fn lower_pattern(&self, node: Node<'_>) -> Pattern {
         match node.kind() {
             "pattern" => {
                 if let Some(inner) = self.first_named(node) {
@@ -314,9 +323,18 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn lower_pattern_inner(&self, pat: Node, inner: Node) -> Pattern {
+    fn lower_pattern_inner(&self, pat: Node<'_>, inner: Node<'_>) -> Pattern {
         match inner.kind() {
-            "literal" => Pattern::Literal(Box::new(self.lower_literal(inner))),
+            // A `-N` / `+N` pattern carries the sign in the `operator` field
+            // (grammar: `seq(operator: choice('-','+'), literal)`); fold it into
+            // the literal so `-5` matches `-5`, not `5`.
+            "literal" => {
+                let lit = self.lower_literal(inner);
+                let negated = pat
+                    .child_by_field_name("operator")
+                    .is_some_and(|op| self.text(op) == "-");
+                Pattern::Literal(Box::new(if negated { negate_literal(lit) } else { lit }))
+            }
             "field_pattern" => Pattern::Structural {
                 fields: self.field_pattern_names(inner),
             },
@@ -326,7 +344,8 @@ impl<'a> Lowerer<'a> {
                 let name = self.text(inner);
                 if let Some(fp) = self.first_child_of_kind(pat, "field_pattern") {
                     let fields = self.field_pattern_names(fp);
-                    if pat.child_by_field_name("type").is_some() || self.has_colon_before_brace(pat)
+                    if pat.child_by_field_name("type").is_some()
+                        || Self::has_colon_before_brace(pat)
                     {
                         return Pattern::Constructor {
                             name,
@@ -364,24 +383,25 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    fn has_colon_before_brace(&self, _node: Node) -> bool {
+    fn has_colon_before_brace(_node: Node<'_>) -> bool {
         false
     }
 
-    fn field_pattern_names(&self, fp: Node) -> Vec<String> {
-        self.named_of_kind(fp, "identifier")
-            .iter()
-            .map(|n| self.text(*n))
-            .collect()
+    fn field_pattern_names(&self, fp: Node<'_>) -> Vec<String> {
+        self.texts_of_kind(fp, "identifier")
     }
 
     // ---- small node helpers ----
-    pub(crate) fn field_text(&self, node: Node, field: &str) -> String {
+    pub(crate) fn field_text(&self, node: Node<'_>, field: &str) -> String {
         node.child_by_field_name(field)
             .map(|n| self.text(n))
             .unwrap_or_default()
     }
 
+    #[expect(
+        clippy::unused_self,
+        reason = "kept for Lowerer method-call ergonomics"
+    )]
     pub(crate) fn named_of_kind<'t>(&self, node: Node<'t>, kind: &str) -> Vec<Node<'t>> {
         let mut out = Vec::new();
         let mut cursor = node.walk();
@@ -393,7 +413,27 @@ impl<'a> Lowerer<'a> {
         out
     }
 
+    /// The source text of every named child of `node` of the given `kind`.
+    pub(crate) fn texts_of_kind(&self, node: Node<'_>, kind: &str) -> Vec<String> {
+        self.named_of_kind(node, kind)
+            .iter()
+            .map(|n| self.text(*n))
+            .collect()
+    }
+
+    /// The lowered expression of every named child of `node` of the given `kind`.
+    pub(crate) fn exprs_of_kind(&self, node: Node<'_>, kind: &str) -> Vec<Expr> {
+        self.named_of_kind(node, kind)
+            .iter()
+            .map(|e| self.lower_expr(*e))
+            .collect()
+    }
+
     /// Recursive search for all descendants of a kind (for nested wrappers).
+    #[expect(
+        clippy::self_only_used_in_recursion,
+        reason = "kept for Lowerer method-call ergonomics"
+    )]
     pub(crate) fn descendants_of_kind<'t>(&self, node: Node<'t>, kind: &str) -> Vec<Node<'t>> {
         let mut out = Vec::new();
         let mut cursor = node.walk();
@@ -405,5 +445,14 @@ impl<'a> Lowerer<'a> {
             }
         }
         out
+    }
+}
+
+/// Negate a numeric literal for a `-N` pattern; non-numeric literals pass through.
+fn negate_literal(e: Expr) -> Expr {
+    match e {
+        Expr::Integer(n) => Expr::Integer(-n),
+        Expr::Float(f) => Expr::Float(-f),
+        other => other,
     }
 }

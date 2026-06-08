@@ -55,7 +55,11 @@ pub(crate) fn gen_list(cg: &mut Codegen, elements: &[Expr]) -> Result<Value> {
     for e in elements {
         vals.push(gen_expr(cg, e)?);
     }
-    let elem = match vals[0].ty {
+    // The first element fixes the slot type; non-empty is guaranteed above.
+    let Some(first) = vals.first() else {
+        return Err(CodegenError::unsupported("empty list literal"));
+    };
+    let elem = match first.ty {
         LType::Double => LType::Double,
         LType::I1 => LType::I1,
         LType::Str | LType::Ptr => LType::Str,
@@ -63,7 +67,7 @@ pub(crate) fn gen_list(cg: &mut Codegen, elements: &[Expr]) -> Result<Value> {
     };
     // A handle element (nested list / record) carries its own owner so access can
     // recover it; scalars carry none.
-    let elem_owner = vals[0].osp_ty.clone();
+    let elem_owner = first.osp_ty.clone();
     let n = elements.len();
     cg.add_extern("declare i8* @malloc(i64)");
     let data = cg.fresh_reg();

@@ -1,0 +1,7 @@
+# Restriction lints (unwrap_used / expect_used / panic) are denied workspace-wide
+# for production code, but unwrap/expect/panic are idiomatic in unit tests where a
+# failed assertion *is* the reporting mechanism. Exempt test code so the
+# fail-loudly production rule does not force noise into the test modules.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

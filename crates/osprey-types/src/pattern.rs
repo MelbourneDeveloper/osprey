@@ -13,12 +13,15 @@ use crate::convert::type_expr_to_type;
 use crate::env::TypeEnv;
 use crate::error::TypeError;
 use crate::ty::{names, Scheme, Type};
-use osprey_ast::*;
+use osprey_ast::{Expr, MatchArm, Pattern};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 fn unwrap_result(t: &Type) -> Type {
     match t {
-        Type::Con { name, args } if name == names::RESULT && !args.is_empty() => args[0].clone(),
+        Type::Con { name, args } if name == names::RESULT => match args.first() {
+            Some(first) => first.clone(),
+            None => t.clone(),
+        },
         _ => t.clone(),
     }
 }
@@ -87,7 +90,7 @@ impl Checker {
     /// A bare identifier pattern is either a nullary constructor (matches that
     /// variant) or a fresh variable binding.
     fn bind_binding(&mut self, name: &str, disc: &Type, local: &mut TypeEnv) {
-        if self.ctors.get(name).map(|i| i.fields.is_empty()) == Some(true) {
+        if self.ctors.get(name).is_some_and(|i| i.fields.is_empty()) {
             if let Some((args, _f, owner, is_record)) = self.ctor_instance(name) {
                 let owner_ty = nullary_owner_ty(owner, args, is_record);
                 self.push_unify(&owner_ty, disc);
@@ -120,7 +123,7 @@ impl Checker {
             let dp = self.ctx.prune(disc);
             let ok = match &dp {
                 Type::Con { name, args } if name == names::RESULT && !args.is_empty() => {
-                    args[0].clone()
+                    args.first().cloned().unwrap_or_else(|| dp.clone())
                 }
                 _ => dp.clone(),
             };
@@ -214,11 +217,8 @@ impl Checker {
 
     fn is_catch_all(&self, pattern: &Pattern) -> bool {
         match pattern {
-            Pattern::Wildcard => true,
-            Pattern::TypeAnnotated { .. } => true,
-            Pattern::Binding(name) => {
-                self.ctors.get(name).map(|i| i.fields.is_empty()) != Some(true)
-            }
+            Pattern::Wildcard | Pattern::TypeAnnotated { .. } => true,
+            Pattern::Binding(name) => self.ctors.get(name).is_none_or(|i| !i.fields.is_empty()),
             _ => false,
         }
     }
@@ -226,9 +226,7 @@ impl Checker {
     fn pattern_ctor_name(&self, pattern: &Pattern) -> Option<String> {
         match pattern {
             Pattern::Constructor { name, .. } => Some(name.clone()),
-            Pattern::Binding(name)
-                if self.ctors.get(name).map(|i| i.fields.is_empty()) == Some(true) =>
-            {
+            Pattern::Binding(name) if self.ctors.get(name).is_some_and(|i| i.fields.is_empty()) => {
                 Some(name.clone())
             }
             _ => None,

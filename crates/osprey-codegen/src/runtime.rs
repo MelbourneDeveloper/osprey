@@ -14,12 +14,12 @@ use crate::llty::{LType, Value};
 /// float runtime. A `Result` formats as `Success(value)` / `Error(message)`.
 pub(crate) fn to_string_value(cg: &mut Codegen, v: Value) -> Result<Value> {
     if v.result_inner.is_some() {
-        return result_to_string(cg, v);
+        return result_to_string(cg, &v);
     }
     match v.ty {
         LType::Str | LType::Ptr => Ok(Value::new(v.operand, LType::Str)),
-        LType::I1 => Ok(bool_to_string(cg, v)),
-        LType::Double => Ok(float_to_string(cg, v)),
+        LType::I1 => Ok(bool_to_string(cg, &v)),
+        LType::Double => Ok(float_to_string(cg, &v)),
         LType::I64 | LType::I32 => int_to_string(cg, v),
     }
 }
@@ -27,9 +27,11 @@ pub(crate) fn to_string_value(cg: &mut Codegen, v: Value) -> Result<Value> {
 /// Format a `Result` block as `Success(<value>)` or `Error(<message>)`, branching
 /// on its discriminant — ports `convertResultToString`. A NULL string error
 /// payload prints the bare `Error`.
-fn result_to_string(cg: &mut Codegen, v: Value) -> Result<Value> {
-    let inner = v.result_inner.expect("result_to_string on non-Result");
-    let disc = crate::result::load_disc(cg, &v);
+fn result_to_string(cg: &mut Codegen, v: &Value) -> Result<Value> {
+    let inner = v
+        .result_inner
+        .ok_or_else(|| crate::error::CodegenError::invalid("result_to_string on non-Result"))?;
+    let disc = crate::result::load_disc(cg, v);
     let is_succ = cg.fresh_reg();
     cg.emit(format!("{is_succ} = icmp eq i8 {disc}, 0"));
     let sl = cg.fresh_label();
@@ -38,7 +40,7 @@ fn result_to_string(cg: &mut Codegen, v: Value) -> Result<Value> {
     cg.emit(format!("br i1 {is_succ}, label %{sl}, label %{el}"));
 
     cg.start_block(&sl);
-    let val = crate::result::load_value(cg, &v);
+    let val = crate::result::load_value(cg, v);
     let vs = to_string_value(cg, val)?;
     let succ = sprintf_wrap(cg, "Success(%s)", &vs.operand);
     let sb = cg.cur_block().to_string();
@@ -47,7 +49,7 @@ fn result_to_string(cg: &mut Codegen, v: Value) -> Result<Value> {
     cg.start_block(&el);
     let err = if inner == LType::Str {
         // A runtime-stored NULL payload prints a bare "Error".
-        let payload = crate::result::load_value(cg, &v);
+        let payload = crate::result::load_value(cg, v);
         let isnull = cg.fresh_reg();
         cg.emit(format!("{isnull} = icmp eq i8* {}, null", payload.operand));
         let fl = cg.fresh_label();
@@ -77,8 +79,7 @@ fn result_to_string(cg: &mut Codegen, v: Value) -> Result<Value> {
     cg.start_block(&end);
     let phi = cg.fresh_reg();
     cg.emit(format!(
-        "{phi} = phi i8* [ {}, %{sb} ], [ {err}, %{eb} ]",
-        succ
+        "{phi} = phi i8* [ {succ}, %{sb} ], [ {err}, %{eb} ]"
     ));
     Ok(Value::new(phi, LType::Str))
 }
@@ -125,7 +126,7 @@ pub(crate) fn int_to_string(cg: &mut Codegen, v: Value) -> Result<Value> {
 
 /// Whole-valued floats must print with a trailing `.0`; the runtime handles
 /// that (and NaN/inf) — see `runtime/string_runtime.c`.
-pub(crate) fn float_to_string(cg: &mut Codegen, v: Value) -> Value {
+pub(crate) fn float_to_string(cg: &mut Codegen, v: &Value) -> Value {
     cg.add_extern("declare i8* @osp_float_to_string(double)");
     let reg = cg.fresh_reg();
     cg.emit(format!(
@@ -135,7 +136,7 @@ pub(crate) fn float_to_string(cg: &mut Codegen, v: Value) -> Value {
     Value::new(reg, LType::Str)
 }
 
-pub(crate) fn bool_to_string(cg: &mut Codegen, v: Value) -> Value {
+pub(crate) fn bool_to_string(cg: &mut Codegen, v: &Value) -> Value {
     let t = cg.string_constant("true");
     let f = cg.string_constant("false");
     let reg = cg.fresh_reg();

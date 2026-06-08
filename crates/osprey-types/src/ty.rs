@@ -16,18 +16,31 @@ pub type VarId = u32;
 
 /// Canonical type-constructor names. These MUST match `constants.go`.
 pub mod names {
+    /// The 64-bit integer primitive.
     pub const INT: &str = "int";
+    /// The floating-point primitive.
     pub const FLOAT: &str = "float";
+    /// The string primitive.
     pub const STRING: &str = "string";
+    /// The boolean primitive.
     pub const BOOL: &str = "bool";
+    /// The top type that matches any value.
     pub const ANY: &str = "any";
+    /// The unit type, returned by expressions with no meaningful value.
     pub const UNIT: &str = "Unit";
+    /// The `Result<ok, err>` sum type.
     pub const RESULT: &str = "Result";
+    /// The error type produced by failing arithmetic operations.
     pub const MATH_ERROR: &str = "MathError";
+    /// The `List<elem>` collection type.
     pub const LIST: &str = "List";
+    /// The `Map<key, value>` collection type.
     pub const MAP: &str = "Map";
+    /// The lightweight concurrent execution context type.
     pub const FIBER: &str = "Fiber";
+    /// The inter-fiber message-passing channel type.
     pub const CHANNEL: &str = "Channel";
+    /// The opaque foreign pointer type used for C interop.
     pub const PTR: &str = "Ptr";
 }
 
@@ -39,17 +52,34 @@ pub enum Type {
     /// A named constructor applied to zero+ arguments. Zero args ⇒ a
     /// primitive/nullary type (`int`, `Unit`); arguments make it generic
     /// (`List<t>`, `Result<t, e>`).
-    Con { name: String, args: Vec<Type> },
+    Con {
+        /// The constructor's name.
+        name: String,
+        /// The type arguments applied to the constructor.
+        args: Vec<Type>,
+    },
     /// A function `(p0, p1, ...) -> ret`.
-    Fun { params: Vec<Type>, ret: Box<Type> },
+    Fun {
+        /// The parameter types, in order.
+        params: Vec<Type>,
+        /// The return type.
+        ret: Box<Type>,
+    },
     /// A structural record — equality is by field name+type, never field order
     /// (the HM-correctness fix the Go source calls out).
     Record {
+        /// The record's name.
         name: String,
+        /// The record's fields, keyed by field name (order-independent).
         fields: BTreeMap<String, Type>,
     },
     /// A nominal sum type whose variants are nullary `Con`s or `Record`s.
-    Union { name: String, variants: Vec<Type> },
+    Union {
+        /// The union's name.
+        name: String,
+        /// The union's variant types.
+        variants: Vec<Type>,
+    },
 }
 
 impl Type {
@@ -64,27 +94,43 @@ impl Type {
     pub fn prim(name: impl Into<String>) -> Type {
         Type::con(name, Vec::new())
     }
+    /// The `int` primitive type.
+    #[must_use]
     pub fn int() -> Type {
         Type::prim(names::INT)
     }
+    /// The `float` primitive type.
+    #[must_use]
     pub fn float() -> Type {
         Type::prim(names::FLOAT)
     }
+    /// The `string` primitive type.
+    #[must_use]
     pub fn string() -> Type {
         Type::prim(names::STRING)
     }
+    /// The `bool` primitive type.
+    #[must_use]
     pub fn bool() -> Type {
         Type::prim(names::BOOL)
     }
+    /// The `Unit` primitive type.
+    #[must_use]
     pub fn unit() -> Type {
         Type::prim(names::UNIT)
     }
+    /// The `any` top type.
+    #[must_use]
     pub fn any() -> Type {
         Type::prim(names::ANY)
     }
+    /// The `Ptr` foreign-pointer type.
+    #[must_use]
     pub fn ptr() -> Type {
         Type::prim(names::PTR)
     }
+    /// A function type from the given parameters to the given return type.
+    #[must_use]
     pub fn fun(params: Vec<Type>, ret: Type) -> Type {
         Type::Fun {
             params,
@@ -92,17 +138,23 @@ impl Type {
         }
     }
     /// `Result<ok, err>`.
+    #[must_use]
     pub fn result(ok: Type, err: Type) -> Type {
         Type::con(names::RESULT, vec![ok, err])
     }
+    /// `List<elem>`.
+    #[must_use]
     pub fn list(elem: Type) -> Type {
         Type::con(names::LIST, vec![elem])
     }
+    /// `Map<key, value>`.
+    #[must_use]
     pub fn map(key: Type, value: Type) -> Type {
         Type::con(names::MAP, vec![key, value])
     }
 
     /// True if this is a nullary-or-applied constructor with the given name.
+    #[must_use]
     pub fn is_named(&self, n: &str) -> bool {
         matches!(self, Type::Con { name, .. } if name == n)
     }
@@ -112,12 +164,15 @@ impl Type {
 /// of let-polymorphism: generalize at bindings, instantiate at uses.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scheme {
+    /// The universally quantified type variables.
     pub vars: Vec<VarId>,
+    /// The quantified type body.
     pub ty: Type,
 }
 
 impl Scheme {
     /// A monomorphic scheme — no quantified variables.
+    #[must_use]
     pub fn mono(ty: Type) -> Scheme {
         Scheme {
             vars: Vec::new(),
@@ -125,6 +180,7 @@ impl Scheme {
         }
     }
     /// A polymorphic scheme over the given variables.
+    #[must_use]
     pub fn poly(vars: Vec<VarId>, ty: Type) -> Scheme {
         Scheme { vars, ty }
     }

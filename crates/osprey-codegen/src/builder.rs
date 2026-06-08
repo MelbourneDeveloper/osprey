@@ -7,6 +7,7 @@ use crate::llty::{LType, Value};
 use crate::types::{ltype_of, ltype_of_name};
 use osprey_types::ProgramTypes;
 use std::collections::{BTreeSet, HashMap};
+use std::fmt::Write as _;
 
 /// Accumulates a whole module while lowering one function at a time.
 pub struct Codegen {
@@ -42,6 +43,12 @@ pub struct Codegen {
     pub(crate) effect_ops: HashMap<String, crate::effects::OpSig>,
     /// Monotonic id giving each emitted handler function a unique name.
     pub(crate) handler_count: usize,
+    /// Synthetic layouts of anonymous object literals (`{ a: 1, b: "x" }`),
+    /// keyed by the generated owner name carried on the handle, so field access
+    /// can recover the ordered `(field, LType)` slots.
+    pub(crate) obj_layouts: HashMap<String, Vec<(String, LType)>>,
+    /// Monotonic id giving each object literal a unique synthetic owner name.
+    pub(crate) obj_count: usize,
 }
 
 /// Saved emission state of a suspended function (see [`Codegen::enter_nested_fn`]).
@@ -78,7 +85,30 @@ impl Codegen {
             fiber_table_emitted: false,
             effect_ops: HashMap::new(),
             handler_count: 0,
+            obj_layouts: HashMap::new(),
+            obj_count: 0,
         }
+    }
+
+    /// Register an anonymous object literal's ordered field layout and return the
+    /// synthetic owner name to tag its handle with.
+    pub(crate) fn register_obj_layout(&mut self, fields: Vec<(String, LType)>) -> String {
+        let name = format!("__obj_{}", self.obj_count);
+        self.obj_count += 1;
+        let _ = self.obj_layouts.insert(name.clone(), fields);
+        name
+    }
+
+    /// The struct spelling and ordered fields of an owner — a real constructor or
+    /// a synthetic object literal — for unified field access.
+    pub(crate) fn record_layout(&self, owner: &str) -> Option<(String, Vec<(String, LType)>)> {
+        if let Some(fields) = self.obj_layouts.get(owner) {
+            let mut parts = vec!["i64".to_string()];
+            parts.extend(fields.iter().map(|(_, lt)| lt.as_str().to_string()));
+            return Some((format!("{{ {} }}", parts.join(", ")), fields.clone()));
+        }
+        let view = self.ctor_layout(owner)?;
+        Some((self.ctor_struct_ty(owner)?, view.fields))
     }
 
     /// A fresh, module-unique handler-function id.
@@ -130,7 +160,7 @@ impl Codegen {
 
     /// Register an `effect` operation's parsed signature for `handle`/`perform`.
     pub(crate) fn register_effect_op(&mut self, key: String, sig: crate::effects::OpSig) {
-        self.effect_ops.insert(key, sig);
+        let _ = self.effect_ops.insert(key, sig);
     }
 
     /// The parsed signature of `Effect.operation`, if declared.
@@ -181,12 +211,14 @@ impl Codegen {
     /// record), and ordered `(field, LType)` pairs.
     pub(crate) fn ctor_layout(&self, name: &str) -> Option<CtorView> {
         let c = self.prog.ctors.get(name)?;
-        let tag = self
-            .prog
-            .unions
-            .get(&c.owner)
-            .and_then(|vs| vs.iter().position(|v| v == name))
-            .unwrap_or(0) as i64;
+        let tag = i64::try_from(
+            self.prog
+                .unions
+                .get(&c.owner)
+                .and_then(|vs| vs.iter().position(|v| v == name))
+                .unwrap_or(0),
+        )
+        .unwrap_or(0);
         let fields = c
             .fields
             .iter()
@@ -264,7 +296,7 @@ impl Codegen {
 
     /// The variant constructor names of a union owner, in tag order.
     pub(crate) fn union_variants(&self, owner: &str) -> Option<&[String]> {
-        self.prog.unions.get(owner).map(|v| v.as_slice())
+        self.prog.unions.get(owner).map(std::vec::Vec::as_slice)
     }
 
     // ---- SSA + block naming (function-local) ----
@@ -299,7 +331,7 @@ impl Codegen {
     }
 
     pub(crate) fn add_extern(&mut self, decl: impl Into<String>) {
-        self.externs.insert(decl.into());
+        let _ = self.externs.insert(decl.into());
     }
 
     /// Intern a string literal as a private global and return an `i8*` pointing
@@ -325,12 +357,12 @@ impl Codegen {
     }
 
     pub(crate) fn pop_scope(&mut self) {
-        self.scopes.pop();
+        let _ = self.scopes.pop();
     }
 
     pub(crate) fn bind(&mut self, name: impl Into<String>, value: Value) {
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.into(), value);
+            let _ = scope.insert(name.into(), value);
         }
     }
 
@@ -425,8 +457,10 @@ fn escape_c_string(text: &str) -> (String, usize) {
         match b {
             b'\\' => out.push_str("\\5C"),
             b'"' => out.push_str("\\22"),
-            0x20..=0x7e => out.push(b as char),
-            _ => out.push_str(&format!("\\{b:02X}")),
+            0x20..=0x7e => out.push(char::from(b)),
+            _ => {
+                let _ = write!(out, "\\{b:02X}");
+            }
         }
     }
     out.push_str("\\00");
