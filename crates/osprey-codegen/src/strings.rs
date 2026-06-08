@@ -6,11 +6,10 @@
 //! Implements [BUILTIN-STRING-*].
 
 use crate::builder::Codegen;
-use crate::cast::coerce_to;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use crate::result::make_result;
+use crate::result::make_result_if_err;
 use osprey_ast::{Expr, NamedArgument};
 
 /// Dispatch a string builtin by name, or `None` if `name` is not one.
@@ -93,57 +92,39 @@ fn arg(cg: &mut Codegen, args: &[Expr], i: usize, want: LType) -> Result<Value> 
         .get(i)
         .ok_or_else(|| CodegenError::invalid("string builtin: missing argument"))?;
     let v = gen_expr(cg, e)?;
-    coerce_to(cg, v, want)
+    crate::cast::coerce_to(cg, v, want)
 }
 
-/// Declare a runtime function once (idempotent via the extern set).
-fn declare(cg: &mut Codegen, cname: &str, ret: &str, params: &str) {
-    cg.add_extern(format!("declare {ret} @{cname}({params})"));
+/// Evaluate the listed `(index, LType)` arguments, returning their operands and
+/// the matching LLVM parameter-type list — the shared front half of the runtime
+/// calls whose arity varies (`startsWith`, `replace`, `padStart`, …).
+fn typed_args(cg: &mut Codegen, sig: &[(usize, LType)], args: &[Expr]) -> Result<(Vec<String>, String)> {
+    let mut ops = Vec::with_capacity(sig.len());
+    let mut params = Vec::with_capacity(sig.len());
+    for (i, ty) in sig {
+        ops.push(arg(cg, args, *i, *ty)?.operand);
+        params.push(ty.to_string());
+    }
+    Ok((ops, params.join(", ")))
 }
 
 /// `f(s: string) -> int`.
-fn unary_i64(
-    cg: &mut Codegen,
-    cname: &str,
-    args: &[Expr],
-    _named: &[NamedArgument],
-) -> Result<Value> {
+fn unary_i64(cg: &mut Codegen, cname: &str, args: &[Expr], _named: &[NamedArgument]) -> Result<Value> {
     let s = arg(cg, args, 0, LType::Str)?;
-    declare(cg, cname, "i64", "i8*");
-    let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i64 @{cname}(i8* {})", s.operand));
-    Ok(Value::new(r, LType::I64))
+    Ok(Value::new(cg.call("i64", cname, "i8*", &[&s.operand]), LType::I64))
 }
 
 /// `f(s: string) -> string`.
-fn unary_str(
-    cg: &mut Codegen,
-    cname: &str,
-    args: &[Expr],
-    _named: &[NamedArgument],
-) -> Result<Value> {
+fn unary_str(cg: &mut Codegen, cname: &str, args: &[Expr], _named: &[NamedArgument]) -> Result<Value> {
     let s = arg(cg, args, 0, LType::Str)?;
-    declare(cg, cname, "i8*", "i8*");
-    let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i8* @{cname}(i8* {})", s.operand));
-    Ok(Value::new(r, LType::Str))
+    Ok(Value::new(cg.call("i8*", cname, "i8*", &[&s.operand]), LType::Str))
 }
 
 /// `f(s: string, n: int) -> string`.
-fn str_int_str(
-    cg: &mut Codegen,
-    cname: &str,
-    args: &[Expr],
-    _named: &[NamedArgument],
-) -> Result<Value> {
+fn str_int_str(cg: &mut Codegen, cname: &str, args: &[Expr], _named: &[NamedArgument]) -> Result<Value> {
     let s = arg(cg, args, 0, LType::Str)?;
     let n = arg(cg, args, 1, LType::I64)?;
-    declare(cg, cname, "i8*", "i8*, i64");
-    let r = cg.fresh_reg();
-    cg.emit(format!(
-        "{r} = call i8* @{cname}(i8* {}, i64 {})",
-        s.operand, n.operand
-    ));
+    let r = cg.call("i8*", cname, "i8*, i64", &[&s.operand, &n.operand]);
     Ok(Value::new(r, LType::Str))
 }
 
@@ -156,16 +137,9 @@ fn bool_from_i64(
     args: &[Expr],
     _named: &[NamedArgument],
 ) -> Result<Value> {
-    let mut typed = Vec::new();
-    let mut params = Vec::new();
-    for (i, ty) in sig {
-        let v = arg(cg, args, *i, *ty)?;
-        typed.push(v.typed());
-        params.push(ty.to_string());
-    }
-    declare(cg, cname, "i64", &params.join(", "));
-    let raw = cg.fresh_reg();
-    cg.emit(format!("{raw} = call i64 @{cname}({})", typed.join(", ")));
+    let (ops, params) = typed_args(cg, sig, args)?;
+    let op_refs: Vec<&str> = ops.iter().map(String::as_str).collect();
+    let raw = cg.call("i64", cname, &params, &op_refs);
     let r = cg.fresh_reg();
     cg.emit(format!("{r} = icmp ne i64 {raw}, 0"));
     Ok(Value::new(r, LType::I1))
@@ -175,12 +149,7 @@ fn bool_from_i64(
 fn contains(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result<Value> {
     let s = arg(cg, args, 0, LType::Str)?;
     let needle = arg(cg, args, 1, LType::Str)?;
-    cg.add_extern("declare i8* @strstr(i8*, i8*)");
-    let hit = cg.fresh_reg();
-    cg.emit(format!(
-        "{hit} = call i8* @strstr(i8* {}, i8* {})",
-        s.operand, needle.operand
-    ));
+    let hit = cg.call("i8*", "strstr", "i8*, i8*", &[&s.operand, &needle.operand]);
     let r = cg.fresh_reg();
     cg.emit(format!("{r} = icmp ne i8* {hit}, null"));
     Ok(Value::new(r, LType::I1))
@@ -190,19 +159,12 @@ fn contains(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result
 fn index_of(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result<Value> {
     let s = arg(cg, args, 0, LType::Str)?;
     let needle = arg(cg, args, 1, LType::Str)?;
-    declare(cg, "osp_string_index_of", "i64", "i8*, i8*");
-    let idx = cg.fresh_reg();
-    cg.emit(format!(
-        "{idx} = call i64 @osp_string_index_of(i8* {}, i8* {})",
-        s.operand, needle.operand
-    ));
+    let idx = cg.call("i64", "osp_string_index_of", "i8*, i8*", &[&s.operand, &needle.operand]);
     let iserr = cg.fresh_reg();
     cg.emit(format!("{iserr} = icmp slt i64 {idx}, 0"));
-    let disc = cg.fresh_reg();
-    cg.emit(format!("{disc} = select i1 {iserr}, i8 1, i8 0"));
     let val = cg.fresh_reg();
     cg.emit(format!("{val} = select i1 {iserr}, i64 0, i64 {idx}"));
-    make_result(cg, Value::new(val, LType::I64), LType::I64, &disc)
+    make_result_if_err(cg, Value::new(val, LType::I64), LType::I64, &iserr)
 }
 
 /// `substring(s, start, end) -> Result<string, _>` (NULL ⇒ Error).
@@ -210,12 +172,12 @@ fn substring(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Resul
     let s = arg(cg, args, 0, LType::Str)?;
     let start = arg(cg, args, 1, LType::I64)?;
     let end = arg(cg, args, 2, LType::I64)?;
-    declare(cg, "osp_string_substring", "i8*", "i8*, i64, i64");
-    let ptr = cg.fresh_reg();
-    cg.emit(format!(
-        "{ptr} = call i8* @osp_string_substring(i8* {}, i64 {}, i64 {})",
-        s.operand, start.operand, end.operand
-    ));
+    let ptr = cg.call(
+        "i8*",
+        "osp_string_substring",
+        "i8*, i64, i64",
+        &[&s.operand, &start.operand, &end.operand],
+    );
     result_from_nullable(cg, &ptr)
 }
 
@@ -229,16 +191,10 @@ fn nullable_str(
     args: &[Expr],
     _named: &[NamedArgument],
 ) -> Result<Value> {
-    let mut typed = Vec::new();
-    let mut params = Vec::new();
-    for (i, ty) in argtys.iter().enumerate() {
-        let v = arg(cg, args, i, *ty)?;
-        typed.push(v.typed());
-        params.push(ty.to_string());
-    }
-    declare(cg, cname, "i8*", &params.join(", "));
-    let ptr = cg.fresh_reg();
-    cg.emit(format!("{ptr} = call i8* @{cname}({})", typed.join(", ")));
+    let sig: Vec<(usize, LType)> = argtys.iter().enumerate().map(|(i, t)| (i, *t)).collect();
+    let (ops, params) = typed_args(cg, &sig, args)?;
+    let op_refs: Vec<&str> = ops.iter().map(String::as_str).collect();
+    let ptr = cg.call("i8*", cname, &params, &op_refs);
     result_from_nullable(cg, &ptr)
 }
 
@@ -247,9 +203,7 @@ fn nullable_str(
 fn result_from_nullable(cg: &mut Codegen, ptr: &str) -> Result<Value> {
     let iserr = cg.fresh_reg();
     cg.emit(format!("{iserr} = icmp eq i8* {ptr}, null"));
-    let disc = cg.fresh_reg();
-    cg.emit(format!("{disc} = select i1 {iserr}, i8 1, i8 0"));
-    make_result(cg, Value::new(ptr, LType::Str), LType::Str, &disc)
+    make_result_if_err(cg, Value::new(ptr, LType::Str), LType::Str, &iserr)
 }
 
 /// `parseInt`/`parseFloat`: strict parse writing through an out-slot, returning
@@ -262,23 +216,16 @@ fn parse_strict(
     _named: &[NamedArgument],
 ) -> Result<Value> {
     let s = arg(cg, args, 0, LType::Str)?;
-    declare(cg, cname, "i64", &format!("i8*, {inner}*"));
     let slot = cg.fresh_reg();
     cg.emit(format!("{slot} = alloca {inner}"));
     let zero = if inner == LType::Double { "0.0" } else { "0" };
     cg.emit(format!("store {inner} {zero}, {inner}* {slot}"));
-    let rc = cg.fresh_reg();
-    cg.emit(format!(
-        "{rc} = call i64 @{cname}(i8* {}, {inner}* {slot})",
-        s.operand
-    ));
+    let rc = cg.call("i64", cname, &format!("i8*, {inner}*"), &[&s.operand, &slot]);
     let parsed = cg.fresh_reg();
     cg.emit(format!("{parsed} = load {inner}, {inner}* {slot}"));
     let iserr = cg.fresh_reg();
     cg.emit(format!("{iserr} = icmp ne i64 {rc}, 0"));
-    let disc = cg.fresh_reg();
-    cg.emit(format!("{disc} = select i1 {iserr}, i8 1, i8 0"));
-    make_result(cg, Value::new(parsed, inner), inner, &disc)
+    make_result_if_err(cg, Value::new(parsed, inner), inner, &iserr)
 }
 
 /// `lines`/`words`: split a string into a `List<string>`. The C `osp_string_list`
@@ -286,9 +233,7 @@ fn parse_strict(
 /// it directly; tag the handle as a list.
 fn string_list(cg: &mut Codegen, cname: &str, args: &[Expr]) -> Result<Value> {
     let s = arg(cg, args, 0, LType::Str)?;
-    declare(cg, cname, "i8*", "i8*");
-    let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i8* @{cname}(i8* {})", s.operand));
+    let r = cg.call("i8*", cname, "i8*", &[&s.operand]);
     Ok(Value::handle(r, crate::collections::LIST_OWNER))
 }
 
@@ -296,21 +241,14 @@ fn string_list(cg: &mut Codegen, cname: &str, args: &[Expr]) -> Result<Value> {
 fn split(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let s = arg(cg, args, 0, LType::Str)?;
     let sep = arg(cg, args, 1, LType::Str)?;
-    declare(cg, "osp_string_split", "i8*", "i8*, i8*");
-    let ptr = cg.fresh_reg();
-    cg.emit(format!(
-        "{ptr} = call i8* @osp_string_split(i8* {}, i8* {})",
-        s.operand, sep.operand
-    ));
+    let ptr = cg.call("i8*", "osp_string_split", "i8*, i8*", &[&s.operand, &sep.operand]);
     let iserr = cg.fresh_reg();
     cg.emit(format!("{iserr} = icmp eq i8* {ptr}, null"));
-    let disc = cg.fresh_reg();
-    cg.emit(format!("{disc} = select i1 {iserr}, i8 1, i8 0"));
-    make_result(
+    make_result_if_err(
         cg,
         Value::handle(ptr, crate::collections::LIST_OWNER),
         LType::Ptr,
-        &disc,
+        &iserr,
     )
 }
 
@@ -318,11 +256,6 @@ fn split(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 fn join(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result<Value> {
     let list = arg(cg, args, 0, LType::Ptr)?;
     let sep = arg(cg, args, 1, LType::Str)?;
-    declare(cg, "osp_string_join", "i8*", "i8*, i8*");
-    let r = cg.fresh_reg();
-    cg.emit(format!(
-        "{r} = call i8* @osp_string_join(i8* {}, i8* {})",
-        list.operand, sep.operand
-    ));
+    let r = cg.call("i8*", "osp_string_join", "i8*, i8*", &[&list.operand, &sep.operand]);
     Ok(Value::new(r, LType::Str))
 }

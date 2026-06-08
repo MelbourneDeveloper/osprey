@@ -78,6 +78,26 @@ pub fn unify(ctx: &mut InferCtx, a: &Type, b: &Type) -> Result<(), TypeError> {
 /// Osprey's Result auto-unwrap rule: a `Result<T, E>` value is assignable where
 /// a concrete (non-Result) `T` is expected. Used at call arguments, return
 /// positions and annotated lets, never inside plain `unify`.
+/// The Result auto-unwrap step: when `concrete` is a non-Result, non-var type
+/// and `candidate` is a `Result<inner, _>`, unify `concrete` with `inner` and
+/// return `Some(outcome)`; otherwise `None` so the caller keeps going.
+fn try_unwrap_result(
+    ctx: &mut InferCtx,
+    concrete: &Type,
+    candidate: &Type,
+) -> Option<Result<(), TypeError>> {
+    if !matches!(concrete, Type::Var(_)) && !concrete.is_named(names::RESULT) {
+        if let Type::Con { name, args } = candidate {
+            if name == names::RESULT {
+                if let Some(inner) = args.first() {
+                    return Some(unify(ctx, concrete, inner));
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn unify_assignable(
     ctx: &mut InferCtx,
     expected: &Type,
@@ -86,14 +106,8 @@ pub fn unify_assignable(
     let expected = ctx.prune(expected);
     let actual = ctx.prune(actual);
     // Unwrap: a `Result<T, E>` value satisfies a concrete `T`.
-    if !matches!(expected, Type::Var(_)) && !expected.is_named(names::RESULT) {
-        if let Type::Con { name, args } = &actual {
-            if name == names::RESULT {
-                if let Some(inner) = args.first() {
-                    return unify(ctx, &expected, inner);
-                }
-            }
-        }
+    if let Some(r) = try_unwrap_result(ctx, &expected, &actual) {
+        return r;
     }
     // Wrap: a bare `T` value satisfies a `Result<T, E>` return (implicit
     // `Success`), e.g. `fn f() -> Result<bool, E> = x > 0`.
@@ -171,14 +185,8 @@ fn unify_fun(
 fn unify_fn_return(ctx: &mut InferCtx, r1: &Type, r2: &Type) -> Result<(), TypeError> {
     let p1 = ctx.prune(r1);
     let p2 = ctx.prune(r2);
-    if !matches!(p1, Type::Var(_)) && !p1.is_named(names::RESULT) {
-        if let Type::Con { name, args } = &p2 {
-            if name == names::RESULT {
-                if let Some(inner) = args.first() {
-                    return unify(ctx, &p1, inner);
-                }
-            }
-        }
+    if let Some(r) = try_unwrap_result(ctx, &p1, &p2) {
+        return r;
     }
     if !matches!(p2, Type::Var(_)) && !p2.is_named(names::RESULT) {
         if let Type::Con { name, args } = &p1 {

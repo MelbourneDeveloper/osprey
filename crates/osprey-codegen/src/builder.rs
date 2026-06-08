@@ -323,6 +323,14 @@ impl Codegen {
         self.cur_lines.push(format!("  {}", line.into()));
     }
 
+    /// Emit `r = {rhs}` to a fresh SSA register and return `r` — the ubiquitous
+    /// "name the result of one instruction" step (`zext …`, `icmp …`, `fneg …`).
+    pub(crate) fn emit_reg(&mut self, rhs: impl std::fmt::Display) -> String {
+        let r = self.fresh_reg();
+        self.emit(format!("{r} = {rhs}"));
+        r
+    }
+
     /// Start a new basic block and make it current (its label becomes the
     /// predecessor recorded for any `phi` that follows).
     pub(crate) fn start_block(&mut self, label: &str) {

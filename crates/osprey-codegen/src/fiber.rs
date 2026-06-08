@@ -28,17 +28,24 @@ fn ensure_table(cg: &mut Codegen) {
     cg.add_global_def("@osp_fiber_next = global i64 1");
 }
 
+/// Consume the next id from the shared fiber counter, returning its register —
+/// the sequence `spawn` and `Channel` both draw from so their ids interleave
+/// exactly as the Go runtime's.
+fn next_fiber_id(cg: &mut Codegen) -> String {
+    ensure_table(cg);
+    let id = cg.fresh_reg();
+    cg.emit(format!("{id} = load i64, i64* @osp_fiber_next"));
+    let next = cg.emit_reg(format!("add i64 {id}, 1"));
+    cg.emit(format!("store i64 {next}, i64* @osp_fiber_next"));
+    id
+}
+
 /// `spawn e` — eval `e`, stash the result under a fresh fiber id, return the id.
 pub(crate) fn gen_spawn(cg: &mut Codegen, e: &Expr) -> Result<Value> {
-    ensure_table(cg);
     let v = gen_expr(cg, e)?;
     let v = crate::result::unwrap(cg, v);
     let boxed = box_to_i64(cg, v);
-    let id = cg.fresh_reg();
-    cg.emit(format!("{id} = load i64, i64* @osp_fiber_next"));
-    let next = cg.fresh_reg();
-    cg.emit(format!("{next} = add i64 {id}, 1"));
-    cg.emit(format!("store i64 {next}, i64* @osp_fiber_next"));
+    let id = next_fiber_id(cg);
     let slot = cg.fresh_reg();
     cg.emit(format!(
         "{slot} = getelementptr [{TABLE_SIZE} x i64], [{TABLE_SIZE} x i64]* @osp_fiber_results, i64 0, i64 {id}"
@@ -70,13 +77,17 @@ pub(crate) fn gen_yield(cg: &mut Codegen, e: Option<&Expr>) -> Result<Value> {
     }
 }
 
+/// The `i64*` view of a channel's one-slot buffer (its `i8*` handle bitcast).
+fn channel_slot(cg: &mut Codegen, ch: &str) -> String {
+    cg.emit_reg(format!("bitcast i8* {ch} to i64*"))
+}
+
 /// `send(channel, value)` — store into the one-slot channel buffer.
 pub(crate) fn gen_send(cg: &mut Codegen, channel: &Expr, value: &Expr) -> Result<Value> {
     let ch = gen_expr(cg, channel)?;
     let v = gen_expr(cg, value)?;
     let v = box_to_i64(cg, v);
-    let slot = cg.fresh_reg();
-    cg.emit(format!("{slot} = bitcast i8* {} to i64*", ch.operand));
+    let slot = channel_slot(cg, &ch.operand);
     cg.emit(format!("store i64 {}, i64* {slot}", v.operand));
     Ok(Value::unit())
 }
@@ -84,10 +95,8 @@ pub(crate) fn gen_send(cg: &mut Codegen, channel: &Expr, value: &Expr) -> Result
 /// `recv(channel)` — load from the one-slot channel buffer.
 pub(crate) fn gen_recv(cg: &mut Codegen, channel: &Expr) -> Result<Value> {
     let ch = gen_expr(cg, channel)?;
-    let slot = cg.fresh_reg();
-    cg.emit(format!("{slot} = bitcast i8* {} to i64*", ch.operand));
-    let r = cg.fresh_reg();
-    cg.emit(format!("{r} = load i64, i64* {slot}"));
+    let slot = channel_slot(cg, &ch.operand);
+    let r = cg.emit_reg(format!("load i64, i64* {slot}"));
     Ok(Value::new(r, LType::I64))
 }
 
@@ -107,12 +116,9 @@ pub(crate) fn gen_builtin(cg: &mut Codegen, name: &str, args: &[Expr]) -> Result
         // examples send once before each recv). A channel consumes a fiber id
         // from the shared counter, matching the Go runtime's id sequence.
         "Channel" => {
-            ensure_table(cg);
-            let id = cg.fresh_reg();
-            cg.emit(format!("{id} = load i64, i64* @osp_fiber_next"));
-            let next = cg.fresh_reg();
-            cg.emit(format!("{next} = add i64 {id}, 1"));
-            cg.emit(format!("store i64 {next}, i64* @osp_fiber_next"));
+            // A channel consumes a fiber id from the shared counter (the examples
+            // send once before each recv), then heap-allocates its one-slot buffer.
+            let _ = next_fiber_id(cg);
             let slot = cg.malloc_struct("{ i64 }");
             let h = cg.fresh_reg();
             cg.emit(format!("{h} = bitcast {{ i64 }}* {slot} to i8*"));

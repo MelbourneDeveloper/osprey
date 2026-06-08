@@ -14,6 +14,7 @@
 
 mod aggregate;
 mod builder;
+mod call;
 mod cast;
 mod collections;
 mod conv;
@@ -24,6 +25,7 @@ mod fiber;
 mod iter;
 mod listlit;
 mod llty;
+mod loops;
 mod lower;
 mod pattern;
 mod result;

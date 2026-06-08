@@ -47,15 +47,7 @@ fn gen_result_elvis(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Result
     let default_arm = arms
         .iter()
         .find(|a| matches!(&a.pattern, Pattern::Literal(e) if matches!(**e, Expr::Bool(false))));
-    let d = crate::result::load_disc(cg, disc);
-    let is_succ = cg.fresh_reg();
-    cg.emit(format!("{is_succ} = icmp eq i8 {d}, 0"));
-    let sl = cg.fresh_label();
-    let el = cg.fresh_label();
-    let end = cg.fresh_label();
-    cg.emit(format!("br i1 {is_succ}, label %{sl}, label %{el}"));
-
-    cg.start_block(&sl);
+    let (_sl, el, end) = crate::result::open_result_branch(cg, disc);
     let succ = crate::result::load_value(cg, disc);
     let sb = cg.cur_block().to_string();
     cg.emit(format!("br label %{end}"));
@@ -76,6 +68,15 @@ fn gen_result_elvis(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Result
         succ.operand, def.operand
     ));
     Ok(Value::new(reg, inner))
+}
+
+/// Evaluate a matched arm's body in the current block and record its
+/// `(value, block)` for the closing `phi` — the step every arm shape ends with.
+fn push_arm(cg: &mut Codegen, body: &Expr, phi_in: &mut Vec<(Value, String)>) -> Result<()> {
+    let v = gen_expr(cg, body)?;
+    let blk = cg.cur_block().to_string();
+    phi_in.push((v, blk));
+    Ok(())
 }
 
 fn is_result_arm(p: &Pattern) -> bool {
@@ -155,35 +156,35 @@ fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<
     cg.emit(format!("br i1 {cond}, label %{sl}, label %{el}"));
 
     let mut phi_in: Vec<(Value, String)> = Vec::new();
-
-    cg.start_block(&sl);
-    if let Some(arm) = success {
-        if let Pattern::Constructor { fields, .. } = &arm.pattern {
-            if let Some(f) = fields.first() {
-                cg.bind(f.clone(), succ_val);
-            }
-        }
-        let v = gen_expr(cg, &arm.body)?;
-        let blk = cg.cur_block().to_string();
-        phi_in.push((v, blk));
-    }
-    cg.emit(format!("br label %{end}"));
-
-    cg.start_block(&el);
-    if let Some(arm) = error {
-        if let Pattern::Constructor { fields, .. } = &arm.pattern {
-            if let Some(f) = fields.first() {
-                cg.bind(f.clone(), err_val);
-            }
-        }
-        let v = gen_expr(cg, &arm.body)?;
-        let blk = cg.cur_block().to_string();
-        phi_in.push((v, blk));
-    }
-    cg.emit(format!("br label %{end}"));
+    emit_result_arm(cg, &sl, success, succ_val, &end, &mut phi_in)?;
+    emit_result_arm(cg, &el, error, err_val, &end, &mut phi_in)?;
 
     cg.start_block(&end);
     finish_phi(cg, &phi_in)
+}
+
+/// Emit one Result arm: open `label`, bind the constructor's payload field (if
+/// the arm destructures one) to `bound`, evaluate the body into `phi_in`, then
+/// branch to `end`. A `None` arm just falls through to `end`.
+fn emit_result_arm(
+    cg: &mut Codegen,
+    label: &str,
+    arm: Option<&MatchArm>,
+    bound: Value,
+    end: &str,
+    phi_in: &mut Vec<(Value, String)>,
+) -> Result<()> {
+    cg.start_block(label);
+    if let Some(arm) = arm {
+        if let Pattern::Constructor { fields, .. } = &arm.pattern {
+            if let Some(f) = fields.first() {
+                cg.bind(f.clone(), bound);
+            }
+        }
+        push_arm(cg, &arm.body, phi_in)?;
+    }
+    cg.emit(format!("br label %{end}"));
+    Ok(())
 }
 
 /// User-union match: read the leading tag of the heap block and branch per
@@ -219,9 +220,7 @@ fn gen_union_match(
             ));
             cg.start_block(&body_lbl);
             bind_variant_fields(cg, disc, &name, &fields);
-            let v = gen_expr(cg, &arm.body)?;
-            let blk = cg.cur_block().to_string();
-            phi_in.push((v, blk));
+            push_arm(cg, &arm.body, &mut phi_in)?;
             cg.emit(format!("br label %{end}"));
             cg.start_block(&next_lbl);
         } else {
@@ -232,9 +231,7 @@ fn gen_union_match(
                     {
                         cg.bind(n.clone(), disc.clone());
                     }
-                    let v = gen_expr(cg, &arm.body)?;
-                    let blk = cg.cur_block().to_string();
-                    phi_in.push((v, blk));
+                    push_arm(cg, &arm.body, &mut phi_in)?;
                     cg.emit(format!("br label %{end}"));
                     break;
                 }
@@ -295,9 +292,7 @@ fn gen_literal_match(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Resul
         match &arm.pattern {
             Pattern::Wildcard | Pattern::Binding(_) | Pattern::TypeAnnotated { .. } => {
                 bind_catch_all(cg, &arm.pattern, disc);
-                let v = gen_expr(cg, &arm.body)?;
-                let blk = cg.cur_block().to_string();
-                phi_in.push((v, blk));
+                push_arm(cg, &arm.body, &mut phi_in)?;
                 cg.emit(format!("br label %{end}"));
                 break;
             }
@@ -309,9 +304,7 @@ fn gen_literal_match(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Resul
                     "br i1 {cond}, label %{body_lbl}, label %{next_lbl}"
                 ));
                 cg.start_block(&body_lbl);
-                let v = gen_expr(cg, &arm.body)?;
-                let blk = cg.cur_block().to_string();
-                phi_in.push((v, blk));
+                push_arm(cg, &arm.body, &mut phi_in)?;
                 cg.emit(format!("br label %{end}"));
                 cg.start_block(&next_lbl);
                 if i == last {

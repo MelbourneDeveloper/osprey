@@ -154,20 +154,22 @@ fn link_args(ir: &str, source: &str) -> Vec<String> {
 
     // FFI directives: `// @link: sqlite3` -> `-lsqlite3`, `// @linkdir: P` -> `-LP`.
     for line in source.lines() {
-        let t = line.trim();
-        if let Some(rest) = t
-            .strip_prefix("// @link:")
-            .or_else(|| t.strip_prefix("//@link:"))
-        {
-            args.push(format!("-l{}", rest.trim()));
-        } else if let Some(rest) = t
-            .strip_prefix("// @linkdir:")
-            .or_else(|| t.strip_prefix("//@linkdir:"))
-        {
-            args.push(format!("-L{}", rest.trim()));
+        if let Some(lib) = directive(line, "link") {
+            args.push(format!("-l{lib}"));
+        } else if let Some(dir) = directive(line, "linkdir") {
+            args.push(format!("-L{dir}"));
         }
     }
     args
+}
+
+/// The trimmed value of a `// @<key>:` FFI directive line (accepting the
+/// space-less `//@<key>:` spelling too), or `None` if `line` is not one.
+fn directive<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let t = line.trim();
+    t.strip_prefix(&format!("// @{key}:"))
+        .or_else(|| t.strip_prefix(&format!("//@{key}:")))
+        .map(str::trim)
 }
 
 /// Search the conventional install/build locations for a runtime static lib.

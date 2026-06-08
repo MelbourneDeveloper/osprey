@@ -38,6 +38,42 @@ pub(crate) fn make_ok(cg: &mut Codegen, value: Value, inner: LType) -> Result<Va
     make_result(cg, value, inner, "0")
 }
 
+/// Build a `Result` whose discriminant is Error when `is_err` (an `i1` operand)
+/// holds — folding the ubiquitous `select i1 …, i8 1, i8 0` then [`make_result`]
+/// that every fallible runtime builtin ends with.
+pub(crate) fn make_result_if_err(
+    cg: &mut Codegen,
+    value: Value,
+    inner: LType,
+    is_err: &str,
+) -> Result<Value> {
+    let disc = cg.fresh_reg();
+    cg.emit(format!("{disc} = select i1 {is_err}, i8 1, i8 0"));
+    make_result(cg, value, inner, &disc)
+}
+
+/// `Result<i64, _>` from a runtime `i32` success flag (`0` ⇒ Error) guarding an
+/// `i64` payload — the shared shape of `listGet` / `mapGet`.
+pub(crate) fn result_from_flag(cg: &mut Codegen, flag: &str, value: &str) -> Result<Value> {
+    let err = cg.emit_reg(format!("icmp eq i32 {flag}, 0"));
+    make_result_if_err(cg, Value::new(value, LType::I64), LType::I64, &err)
+}
+
+/// Branch on a Result's discriminant: load it, test `== 0` (Success), and emit
+/// the conditional branch to fresh `(success, error, end)` labels — leaving the
+/// builder positioned at the start of the `success` block. The shared preamble
+/// of every "do one thing on Success, another on Error, `phi` the results" path.
+pub(crate) fn open_result_branch(cg: &mut Codegen, v: &Value) -> (String, String, String) {
+    let d = load_disc(cg, v);
+    let is_succ = cg.emit_reg(format!("icmp eq i8 {d}, 0"));
+    let sl = cg.fresh_label();
+    let el = cg.fresh_label();
+    let end = cg.fresh_label();
+    cg.emit(format!("br i1 {is_succ}, label %{sl}, label %{el}"));
+    cg.start_block(&sl);
+    (sl, el, end)
+}
+
 /// Load a Result block's `i8` discriminant operand. Invariant: `v` is a Result
 /// (callers gate on `result_inner.is_some()`); a non-Result yields the Error
 /// discriminant `1` rather than panicking.

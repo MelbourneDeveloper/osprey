@@ -143,20 +143,10 @@ fn lists(e: &mut TypeEnv) {
     let t = || Type::Var(0);
     // Persistent List<T> API used by the list examples.
     poly(e, "List", vec![0], vec![], Type::list(t()));
-    poly(
-        e,
-        "listAppend",
-        vec![0],
-        vec![Type::list(t()), t()],
-        Type::list(t()),
-    );
-    poly(
-        e,
-        "listPrepend",
-        vec![0],
-        vec![Type::list(t()), t()],
-        Type::list(t()),
-    );
+    // `(List<t>, t) -> List<t>`: append/prepend share one signature.
+    for name in ["listAppend", "listPrepend"] {
+        poly(e, name, vec![0], vec![Type::list(t()), t()], Type::list(t()));
+    }
     poly(
         e,
         "listConcat",
@@ -164,13 +154,7 @@ fn lists(e: &mut TypeEnv) {
         vec![Type::list(t()), Type::list(t())],
         Type::list(t()),
     );
-    poly(
-        e,
-        "listReverse",
-        vec![0],
-        vec![Type::list(t())],
-        Type::list(t()),
-    );
+    poly(e, "listReverse", vec![0], vec![Type::list(t())], Type::list(t()));
     poly(e, "listLength", vec![0], vec![Type::list(t())], i());
     poly(e, "listGet", vec![0], vec![Type::list(t()), i()], res(t()));
     poly(e, "listContains", vec![0], vec![Type::list(t()), t()], b());

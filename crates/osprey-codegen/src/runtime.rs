@@ -31,15 +31,7 @@ fn result_to_string(cg: &mut Codegen, v: &Value) -> Result<Value> {
     let inner = v
         .result_inner
         .ok_or_else(|| crate::error::CodegenError::invalid("result_to_string on non-Result"))?;
-    let disc = crate::result::load_disc(cg, v);
-    let is_succ = cg.fresh_reg();
-    cg.emit(format!("{is_succ} = icmp eq i8 {disc}, 0"));
-    let sl = cg.fresh_label();
-    let el = cg.fresh_label();
-    let end = cg.fresh_label();
-    cg.emit(format!("br i1 {is_succ}, label %{sl}, label %{el}"));
-
-    cg.start_block(&sl);
+    let (_sl, el, end) = crate::result::open_result_branch(cg, v);
     let val = crate::result::load_value(cg, v);
     let vs = to_string_value(cg, val)?;
     let succ = sprintf_wrap(cg, "Success(%s)", &vs.operand);

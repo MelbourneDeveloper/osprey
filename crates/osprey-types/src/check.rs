@@ -18,6 +18,24 @@ use osprey_ast::{
 };
 use std::collections::HashMap;
 
+/// The shared `name` accessor of the two AST parameter node types, so
+/// [`Checker::record_fn_params`] handles both without duplication.
+trait ParamName {
+    fn param_name(&self) -> &str;
+}
+
+impl ParamName for Parameter {
+    fn param_name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl ParamName for ExternParameter {
+    fn param_name(&self) -> &str {
+        &self.name
+    }
+}
+
 /// A constructor (record builder, union variant, or built-in `Success`/`Error`).
 pub(crate) struct CtorInfo {
     pub owner: String,
@@ -225,11 +243,18 @@ impl Checker {
             .map(|p| type_expr_to_type(&p.ty, &empty))
             .collect();
         let ret = return_type.map_or_else(Type::unit, |r| type_expr_to_type(r, &empty));
+        self.record_fn_params(name, parameters);
+        env.insert(name, Scheme::mono(Type::fun(params, ret)));
+    }
+
+    /// Record a function/extern's positional parameter names (for named-argument
+    /// reordering at call sites). Generic over the two parameter node types,
+    /// which both carry a `name`.
+    fn record_fn_params<P: ParamName>(&mut self, name: &str, parameters: &[P]) {
         let _ = self.fn_params.insert(
             name.to_string(),
-            parameters.iter().map(|p| p.name.clone()).collect(),
+            parameters.iter().map(|p| p.param_name().to_string()).collect(),
         );
-        env.insert(name, Scheme::mono(Type::fun(params, ret)));
     }
 
     fn collect_function(
@@ -251,10 +276,7 @@ impl Checker {
             Some(te) => type_expr_to_type(te, &empty),
             None => self.ctx.fresh(),
         };
-        let _ = self.fn_params.insert(
-            name.to_string(),
-            parameters.iter().map(|p| p.name.clone()).collect(),
-        );
+        self.record_fn_params(name, parameters);
         let _ = self
             .fn_sigs
             .insert(name.to_string(), (params.clone(), ret.clone()));
@@ -279,22 +301,9 @@ impl Checker {
                     };
                     self.check(&prog, &mut inner);
                 }
-                Stmt::Let {
-                    name,
-                    ty,
-                    value,
-                    position,
-                    ..
-                } => self.check_let(name, ty.as_ref(), value, env, *position),
-                Stmt::Assignment {
-                    name,
-                    value,
-                    position,
-                } => self.check_assignment(name, value, env, *position),
-                Stmt::Expr(e) => {
-                    let _ = self.infer_expr(e, env);
-                }
-                _ => {}
+                // `let` / assignment / bare-expr statements infer the same way at
+                // top level and inside a block.
+                other => self.infer_block_stmt(other, env),
             }
         }
     }
@@ -316,12 +325,7 @@ impl Checker {
             local.insert(p.name.clone(), Scheme::mono(ty.clone()));
         }
         let body_ty = self.infer_expr(body, &local);
-        if let Err(e) = unify_assignable(&mut self.ctx, &ret, &body_ty) {
-            self.record_err(
-                TypeError::new(format!("function `{name}` body: {}", e.message)),
-                pos,
-            );
-        }
+        self.unify_or_err(&ret, &body_ty, &format!("function `{name}` body"), pos);
         // Generalize the now-constrained signature so later call sites can use
         // the function polymorphically (HM let-generalization for top-level fns).
         // Remove the function's own monomorphic entry first, else its signature
@@ -344,12 +348,18 @@ impl Checker {
         let value_ty = self.infer_expr(value, env);
         if let Some(te) = ty {
             let annotated = type_expr_to_type(te, &HashMap::new());
-            if let Err(e) = unify_assignable(&mut self.ctx, &annotated, &value_ty) {
-                self.record_err(TypeError::new(format!("let `{name}`: {}", e.message)), pos);
-            }
+            self.unify_or_err(&annotated, &value_ty, &format!("let `{name}`"), pos);
         }
         let scheme = generalize(&mut self.ctx, env, &value_ty);
         env.insert(name, scheme);
+    }
+
+    /// Unify `expected` against `actual`, recording a positioned error prefixed
+    /// with `label` (e.g. `` "let `x`" ``) when they don't match.
+    fn unify_or_err(&mut self, expected: &Type, actual: &Type, label: &str, pos: Option<Position>) {
+        if let Err(e) = unify_assignable(&mut self.ctx, expected, actual) {
+            self.record_err(TypeError::new(format!("{label}: {}", e.message)), pos);
+        }
     }
 
     fn check_assignment(
@@ -363,12 +373,7 @@ impl Checker {
         match env.get(name).cloned() {
             Some(scheme) => {
                 let existing = crate::env::instantiate(&mut self.ctx, &scheme);
-                if let Err(e) = unify_assignable(&mut self.ctx, &existing, &value_ty) {
-                    self.record_err(
-                        TypeError::new(format!("assignment to `{name}`: {}", e.message)),
-                        pos,
-                    );
-                }
+                self.unify_or_err(&existing, &value_ty, &format!("assignment to `{name}`"), pos);
             }
             None => self.record_err(
                 TypeError::new(format!("assignment to undeclared `{name}`")),

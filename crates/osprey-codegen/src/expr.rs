@@ -127,10 +127,10 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     let is_list = |v: &Value| v.osp_ty.as_deref() == Some(crate::collections::LIST_OWNER);
     let is_map = |v: &Value| v.osp_ty.as_deref() == Some(crate::collections::MAP_OWNER);
     if op == "+" && (is_list(&l) || is_list(&r)) {
-        return crate::collections::concat_handles(cg, &l, &r);
+        return Ok(crate::collections::concat_handles(cg, &l, &r));
     }
     if op == "+" && (is_map(&l) || is_map(&r)) {
-        return crate::collections::merge_handles(cg, &l, &r);
+        return Ok(crate::collections::merge_handles(cg, &l, &r));
     }
     // `+` with a string operand is concatenation (libc strlen/strcpy/strcat),
     // matching `generateStringConcatenation`.
@@ -154,11 +154,7 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
             "/" => "fdiv",
             _ => "frem",
         };
-        let reg = cg.fresh_reg();
-        cg.emit(format!(
-            "{reg} = {opc} double {}, {}",
-            ld.operand, rd.operand
-        ));
+        let reg = cg.emit_reg(format!("{opc} double {}, {}", ld.operand, rd.operand));
         return crate::result::make_ok(cg, Value::new(reg, LType::Double), LType::Double);
     }
     let li = as_i64(cg, l)?;
@@ -170,8 +166,7 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
         "/" => "sdiv",
         _ => "srem",
     };
-    let reg = cg.fresh_reg();
-    cg.emit(format!("{reg} = {opc} i64 {}, {}", li.operand, ri.operand));
+    let reg = cg.emit_reg(format!("{opc} i64 {}, {}", li.operand, ri.operand));
     crate::result::make_ok(cg, Value::new(reg, LType::I64), LType::I64)
 }
 
@@ -217,79 +212,56 @@ fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
 fn gen_str_concat(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let ls = to_string_value(cg, l)?;
     let rs = to_string_value(cg, r)?;
-    cg.add_extern("declare i64 @strlen(i8*)");
-    cg.add_extern("declare i8* @malloc(i64)");
-    cg.add_extern("declare i8* @strcpy(i8*, i8*)");
-    cg.add_extern("declare i8* @strcat(i8*, i8*)");
-    let ll = cg.fresh_reg();
-    cg.emit(format!("{ll} = call i64 @strlen(i8* {})", ls.operand));
-    let rl = cg.fresh_reg();
-    cg.emit(format!("{rl} = call i64 @strlen(i8* {})", rs.operand));
-    let sum = cg.fresh_reg();
-    cg.emit(format!("{sum} = add i64 {ll}, {rl}"));
-    let total = cg.fresh_reg();
-    cg.emit(format!("{total} = add i64 {sum}, 1"));
-    let buf = cg.fresh_reg();
-    cg.emit(format!("{buf} = call i8* @malloc(i64 {total})"));
-    let cp = cg.fresh_reg();
-    cg.emit(format!(
-        "{cp} = call i8* @strcpy(i8* {buf}, i8* {})",
-        ls.operand
-    ));
-    let ct = cg.fresh_reg();
-    cg.emit(format!(
-        "{ct} = call i8* @strcat(i8* {buf}, i8* {})",
-        rs.operand
-    ));
+    let ll = cg.call("i64", "strlen", "i8*", &[&ls.operand]);
+    let rl = cg.call("i64", "strlen", "i8*", &[&rs.operand]);
+    let sum = cg.emit_reg(format!("add i64 {ll}, {rl}"));
+    let total = cg.emit_reg(format!("add i64 {sum}, 1"));
+    let buf = cg.call("i8*", "malloc", "i64", &[&total]);
+    let _ = cg.call("i8*", "strcpy", "i8*, i8*", &[&buf, &ls.operand]);
+    let _ = cg.call("i8*", "strcat", "i8*, i8*", &[&buf, &rs.operand]);
     Ok(Value::new(buf, LType::Str))
+}
+
+/// The LLVM condition code for a comparison `op`. `float` picks the ordered
+/// `fcmp` codes (`oeq`, `olt`, …); otherwise the signed-integer / `icmp` codes
+/// (`eq`, `slt`, …) — also used on a `strcmp` result.
+fn cmp_code(op: &str, float: bool) -> &'static str {
+    match (op, float) {
+        ("==", false) => "eq",
+        ("!=", false) => "ne",
+        ("<", false) => "slt",
+        ("<=", false) => "sle",
+        (">", false) => "sgt",
+        (_, false) => "sge",
+        ("==", true) => "oeq",
+        ("!=", true) => "one",
+        ("<", true) => "olt",
+        ("<=", true) => "ole",
+        (">", true) => "ogt",
+        (_, true) => "oge",
+    }
 }
 
 fn gen_comparison(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     let reg = cg.fresh_reg();
     let is_str = |t: LType| t == LType::Str || t == LType::Ptr;
     if is_str(l.ty) && is_str(r.ty) {
-        let cc = match op {
-            "==" => "eq",
-            "!=" => "ne",
-            "<" => "slt",
-            "<=" => "sle",
-            ">" => "sgt",
-            _ => "sge",
-        };
-        cg.add_extern("declare i32 @strcmp(i8*, i8*)");
-        let c = cg.fresh_reg();
-        cg.emit(format!(
-            "{c} = call i32 @strcmp(i8* {}, i8* {})",
-            l.operand, r.operand
-        ));
-        cg.emit(format!("{reg} = icmp {cc} i32 {c}, 0"));
+        let c = cg.call("i32", "strcmp", "i8*, i8*", &[&l.operand, &r.operand]);
+        cg.emit(format!("{reg} = icmp {} i32 {c}, 0", cmp_code(op, false)));
         return Ok(Value::new(reg, LType::I1));
     }
     if l.ty == LType::Double || r.ty == LType::Double {
-        let cc = match op {
-            "==" => "oeq",
-            "!=" => "one",
-            "<" => "olt",
-            "<=" => "ole",
-            ">" => "ogt",
-            _ => "oge",
-        };
         let ld = as_double(cg, l)?;
         let rd = as_double(cg, r)?;
         cg.emit(format!(
-            "{reg} = fcmp {cc} double {}, {}",
-            ld.operand, rd.operand
+            "{reg} = fcmp {} double {}, {}",
+            cmp_code(op, true),
+            ld.operand,
+            rd.operand
         ));
         return Ok(Value::new(reg, LType::I1));
     }
-    let cc = match op {
-        "==" => "eq",
-        "!=" => "ne",
-        "<" => "slt",
-        "<=" => "sle",
-        ">" => "sgt",
-        _ => "sge",
-    };
+    let cc = cmp_code(op, false);
     let li = as_i64(cg, l)?;
     let ri = as_i64(cg, r)?;
     cg.emit(format!(
@@ -302,22 +274,23 @@ fn gen_comparison(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Valu
 fn gen_unary(cg: &mut Codegen, op: &str, operand: &Expr) -> Result<Value> {
     let v = gen_expr(cg, operand)?;
     match op {
-        "-" if v.ty == LType::Double => {
-            let reg = cg.fresh_reg();
-            cg.emit(format!("{reg} = fneg double {}", v.operand));
-            Ok(Value::new(reg, LType::Double))
-        }
+        "-" if v.ty == LType::Double => Ok(Value::new(
+            cg.emit_reg(format!("fneg double {}", v.operand)),
+            LType::Double,
+        )),
         "-" => {
             let i = as_i64(cg, v)?;
-            let reg = cg.fresh_reg();
-            cg.emit(format!("{reg} = sub i64 0, {}", i.operand));
-            Ok(Value::new(reg, LType::I64))
+            Ok(Value::new(
+                cg.emit_reg(format!("sub i64 0, {}", i.operand)),
+                LType::I64,
+            ))
         }
         "!" | "not" => {
             let b = as_i1(cg, v)?;
-            let reg = cg.fresh_reg();
-            cg.emit(format!("{reg} = xor i1 {}, true", b.operand));
-            Ok(Value::new(reg, LType::I1))
+            Ok(Value::new(
+                cg.emit_reg(format!("xor i1 {}, true", b.operand)),
+                LType::I1,
+            ))
         }
         other => Err(CodegenError::unsupported(format!(
             "unary operator `{other}`"
@@ -441,32 +414,27 @@ pub(crate) fn call_with_values(cg: &mut Codegen, name: &str, args: Vec<Value>) -
     // A function declared `-> Result<T, E>` hands back a `{ T, i8 }*` block.
     if let Some(inner) = cg.fn_ret_result_inner(name) {
         let rty = format!("{{ {inner}, i8 }}*");
-        if !cg.fn_params.contains_key(name) {
-            let sig = coerced
-                .iter()
-                .map(Value::llvm_ty)
-                .collect::<Vec<_>>()
-                .join(", ");
-            cg.add_extern(format!("declare {rty} @{name}({sig})"));
-        }
-        let reg = cg.fresh_reg();
-        cg.emit(format!("{reg} = call {rty} @{name}({typed})"));
+        let reg = emit_user_call(cg, name, &rty, &coerced, &typed);
         return Ok(Value::result(reg, inner));
     }
     let ret = cg.fn_ret_ltype(name).unwrap_or(LType::I64);
-    // A name with no user definition is a runtime builtin: declare it so the IR
-    // is valid; it links only if the runtime provides the symbol.
+    let reg = emit_user_call(cg, name, ret.as_str(), &coerced, &typed);
+    Ok(Value::new(reg, ret).with_owner(cg.fn_ret_owner(name)))
+}
+
+/// Emit a call to `name` returning LLVM type `rty`. A name with no user
+/// definition is a runtime builtin, so synthesize its `declare` (param types
+/// from `coerced`) — the IR stays valid and links only if the symbol exists.
+fn emit_user_call(cg: &mut Codegen, name: &str, rty: &str, coerced: &[Value], typed: &str) -> String {
     if !cg.fn_params.contains_key(name) {
         let sig = coerced
             .iter()
             .map(Value::llvm_ty)
             .collect::<Vec<_>>()
             .join(", ");
-        cg.add_extern(format!("declare {ret} @{name}({sig})"));
+        cg.add_extern(format!("declare {rty} @{name}({sig})"));
     }
-    let reg = cg.fresh_reg();
-    cg.emit(format!("{reg} = call {ret} @{name}({typed})"));
-    Ok(Value::new(reg, ret).with_owner(cg.fn_ret_owner(name)))
+    cg.emit_reg(format!("call {rty} @{name}({typed})"))
 }
 
 pub(crate) fn ordered_args(

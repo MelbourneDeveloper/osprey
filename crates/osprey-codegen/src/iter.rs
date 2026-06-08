@@ -12,6 +12,7 @@ use crate::conv::{as_i64, box_to_i64};
 use crate::error::{CodegenError, Result};
 use crate::expr::{call_with_values, gen_expr};
 use crate::llty::{LType, Value};
+use crate::loops::{close_list_loop, close_range_loop, open_list_loop, open_range_loop};
 use osprey_ast::{Expr, NamedArgument};
 
 const RANGE_TY: &str = "{ i64, i64 }";
@@ -114,54 +115,6 @@ fn replay(cg: &mut Codegen, v: Value, skip: &str) -> Result<Value> {
     Ok(cur)
 }
 
-/// A counted loop over a range's half-open `[start, end)`, the range analogue of
-/// [`ListLoop`]. After [`open_range_loop`] the builder sits in the body with the
-/// current index in `i`; [`close_range_loop`] emits the increment + back-edge.
-struct RangeLoop {
-    i: String,
-    ctr: String,
-    cond: String,
-    incr: String,
-    endl: String,
-}
-
-fn open_range_loop(cg: &mut Codegen, start: &str, end: &str) -> RangeLoop {
-    let ctr = cg.fresh_reg();
-    cg.emit(format!("{ctr} = alloca i64"));
-    cg.emit(format!("store i64 {start}, i64* {ctr}"));
-    let cond = cg.fresh_label();
-    let body = cg.fresh_label();
-    let incr = cg.fresh_label();
-    let endl = cg.fresh_label();
-    cg.emit(format!("br label %{cond}"));
-
-    cg.start_block(&cond);
-    let i = cg.fresh_reg();
-    cg.emit(format!("{i} = load i64, i64* {ctr}"));
-    let more = cg.fresh_reg();
-    cg.emit(format!("{more} = icmp slt i64 {i}, {end}"));
-    cg.emit(format!("br i1 {more}, label %{body}, label %{endl}"));
-
-    cg.start_block(&body);
-    RangeLoop {
-        i,
-        ctr,
-        cond,
-        incr,
-        endl,
-    }
-}
-
-fn close_range_loop(cg: &mut Codegen, lp: &RangeLoop) {
-    cg.emit(format!("br label %{}", lp.incr));
-    cg.start_block(&lp.incr);
-    let next = cg.fresh_reg();
-    cg.emit(format!("{next} = add i64 {}, 1", lp.i));
-    cg.emit(format!("store i64 {next}, i64* {}", lp.ctr));
-    cg.emit(format!("br label %{}", lp.cond));
-    cg.start_block(&lp.endl);
-}
-
 /// `forEach(iterator, fn)` — counted loop applying `fn` to each (fused) element.
 fn for_each(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let range = gen_expr(cg, nth(args, 0)?)?;
@@ -203,69 +156,6 @@ fn fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     Ok(Value::new(out, LType::I64))
 }
 
-/// Open a counted loop over a runtime list handle `l`, returning
-/// `(index-reg, element-i64-reg, len, cond-label, body-label, incr-label, end-label)`
-/// with the builder positioned in the body. The caller fills the body, then
-/// emits the back-edge via [`close_list_loop`].
-struct ListLoop {
-    idx: String,
-    elem: String,
-    incr: String,
-    cond: String,
-    endl: String,
-}
-
-fn open_list_loop(cg: &mut Codegen, l: &Value) -> ListLoop {
-    cg.add_extern("declare i64 @osprey_list_length(i8*)");
-    cg.add_extern("declare i64 @osprey_list_get(i8*, i64)");
-    let len = cg.fresh_reg();
-    cg.emit(format!(
-        "{len} = call i64 @osprey_list_length(i8* {})",
-        l.operand
-    ));
-    let idx = cg.fresh_reg();
-    cg.emit(format!("{idx} = alloca i64"));
-    cg.emit(format!("store i64 0, i64* {idx}"));
-    let cond = cg.fresh_label();
-    let body = cg.fresh_label();
-    let incr = cg.fresh_label();
-    let endl = cg.fresh_label();
-    cg.emit(format!("br label %{cond}"));
-
-    cg.start_block(&cond);
-    let i = cg.fresh_reg();
-    cg.emit(format!("{i} = load i64, i64* {idx}"));
-    let more = cg.fresh_reg();
-    cg.emit(format!("{more} = icmp slt i64 {i}, {len}"));
-    cg.emit(format!("br i1 {more}, label %{body}, label %{endl}"));
-
-    cg.start_block(&body);
-    let elem = cg.fresh_reg();
-    cg.emit(format!(
-        "{elem} = call i64 @osprey_list_get(i8* {}, i64 {i})",
-        l.operand
-    ));
-    ListLoop {
-        idx,
-        elem,
-        incr,
-        cond,
-        endl,
-    }
-}
-
-fn close_list_loop(cg: &mut Codegen, lp: &ListLoop) {
-    cg.emit(format!("br label %{}", lp.incr));
-    cg.start_block(&lp.incr);
-    let i = cg.fresh_reg();
-    cg.emit(format!("{i} = load i64, i64* {}", lp.idx));
-    let next = cg.fresh_reg();
-    cg.emit(format!("{next} = add i64 {i}, 1"));
-    cg.emit(format!("store i64 {next}, i64* {}", lp.idx));
-    cg.emit(format!("br label %{}", lp.cond));
-    cg.start_block(&lp.endl);
-}
-
 /// The `i`-th positional argument as a list handle.
 fn list_arg(cg: &mut Codegen, args: &[Expr], i: usize) -> Result<Value> {
     let v = gen_expr(cg, nth(args, i)?)?;
@@ -276,7 +166,7 @@ fn list_arg(cg: &mut Codegen, args: &[Expr], i: usize) -> Result<Value> {
 fn for_each_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let l = list_arg(cg, args, 0)?;
     let consumer = callback_name(nth(args, 1)?)?;
-    let lp = open_list_loop(cg, &l);
+    let lp = open_list_loop(cg, &l.operand);
     let _ = call_with_values(cg, &consumer, vec![Value::new(lp.elem.clone(), LType::I64)])?;
     close_list_loop(cg, &lp);
     Ok(l)
@@ -286,12 +176,8 @@ fn for_each_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 fn list_builder(cg: &mut Codegen, args: &[Expr], filter: bool) -> Result<Value> {
     let l = list_arg(cg, args, 0)?;
     let f = callback_name(nth(args, 1)?)?;
-    cg.add_extern("declare i8* @osprey_list_builder_new()");
-    cg.add_extern("declare void @osprey_list_builder_push(i8*, i64)");
-    cg.add_extern("declare i8* @osprey_list_builder_seal(i8*)");
-    let bld = cg.fresh_reg();
-    cg.emit(format!("{bld} = call i8* @osprey_list_builder_new()"));
-    let lp = open_list_loop(cg, &l);
+    let bld = crate::collections::list_builder_new(cg);
+    let lp = open_list_loop(cg, &l.operand);
     let elem = Value::new(lp.elem.clone(), LType::I64);
     if filter {
         let pred = call_with_values(cg, &f, vec![elem.clone()])?;
@@ -303,27 +189,17 @@ fn list_builder(cg: &mut Codegen, args: &[Expr], filter: bool) -> Result<Value> 
         let skip = cg.fresh_label();
         cg.emit(format!("br i1 {nz}, label %{push}, label %{skip}"));
         cg.start_block(&push);
-        cg.emit(format!(
-            "call void @osprey_list_builder_push(i8* {bld}, i64 {})",
-            lp.elem
-        ));
+        crate::collections::list_builder_push(cg, &bld, &lp.elem);
         cg.emit(format!("br label %{skip}"));
         cg.start_block(&skip);
     } else {
         let mapped = call_with_values(cg, &f, vec![elem])?;
         let mapped = crate::result::unwrap(cg, mapped);
         let boxed = box_to_i64(cg, mapped);
-        cg.emit(format!(
-            "call void @osprey_list_builder_push(i8* {bld}, i64 {})",
-            boxed.operand
-        ));
+        crate::collections::list_builder_push(cg, &bld, &boxed.operand);
     }
     close_list_loop(cg, &lp);
-    let sealed = cg.fresh_reg();
-    cg.emit(format!(
-        "{sealed} = call i8* @osprey_list_builder_seal(i8* {bld})"
-    ));
-    Ok(Value::handle(sealed, crate::collections::LIST_OWNER))
+    Ok(crate::collections::list_builder_seal(cg, &bld))
 }
 
 /// `foldList(list, initial, fn)` — reduce a list with `fn(acc, elem)`.
@@ -336,7 +212,7 @@ fn fold_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let acc = cg.fresh_reg();
     cg.emit(format!("{acc} = alloca i64"));
     cg.emit(format!("store i64 {}, i64* {acc}", initial.operand));
-    let lp = open_list_loop(cg, &l);
+    let lp = open_list_loop(cg, &l.operand);
     let a = cg.fresh_reg();
     cg.emit(format!("{a} = load i64, i64* {acc}"));
     let new = call_with_values(
