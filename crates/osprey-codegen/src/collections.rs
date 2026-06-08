@@ -32,7 +32,7 @@ pub(crate) fn gen(
         "listAppend" => list_box2(cg, "osprey_list_append", args)?,
         "listPrepend" => list_box2(cg, "osprey_list_prepend", args)?,
         "listDrop" => list_box2(cg, "osprey_list_drop", args)?,
-        "listConcat" => list_concat(cg, args)?,
+        "listConcat" => binary_handle_op(cg, args, "osprey_list_concat", LIST_OWNER)?,
         "listReverse" => one_list_handle(cg, "osprey_list_reverse", args)?,
         "listGet" => list_get(cg, args)?,
         "listContains" => list_contains(cg, args)?,
@@ -42,7 +42,7 @@ pub(crate) fn gen(
         "mapGet" => map_get(cg, args)?,
         "mapContains" => map_contains(cg, args)?,
         "mapRemove" => map_remove(cg, args)?,
-        "mapMerge" => map_merge(cg, args)?,
+        "mapMerge" => binary_handle_op(cg, args, "osprey_map_merge", MAP_OWNER)?,
         "mapKeys" => map_to_list(cg, args, true)?,
         "mapValues" => map_to_list(cg, args, false)?,
         _ => return Ok(None),
@@ -100,11 +100,12 @@ fn list_box2(cg: &mut Codegen, cname: &str, args: &[Expr]) -> Result<Value> {
     Ok(Value::handle(r, LIST_OWNER))
 }
 
-/// `listConcat(a, b) -> List` — also the lowering of `a + b` on lists.
-fn list_concat(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+/// A binary runtime op on two collection-handle arguments → a new handle
+/// (`listConcat`, `mapMerge`): evaluate both, then [`combine_handles`].
+fn binary_handle_op(cg: &mut Codegen, args: &[Expr], cname: &str, owner: &str) -> Result<Value> {
     let a = handle_arg(cg, args, 0)?;
     let b = handle_arg(cg, args, 1)?;
-    Ok(concat_handles(cg, &a, &b))
+    Ok(combine_handles(cg, &a, &b, cname, owner))
 }
 
 /// A runtime op combining two collection handles into a new one — the body
@@ -204,13 +205,6 @@ fn map_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let m = handle_arg(cg, args, 0)?;
     let k = boxed_arg(cg, args, 1)?;
     runtime_map_get(cg, &m, &k)
-}
-
-/// `mapMerge(a, b) -> Map` (right-biased) — also the lowering of `a + b` on maps.
-fn map_merge(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
-    let a = handle_arg(cg, args, 0)?;
-    let b = handle_arg(cg, args, 1)?;
-    Ok(merge_handles(cg, &a, &b))
 }
 
 /// Emit `osprey_map_merge` on two already-evaluated map handles.

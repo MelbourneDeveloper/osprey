@@ -190,13 +190,11 @@ fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let q = cg.fresh_reg();
     cg.emit(format!("{q} = fdiv double {}, {}", ld.operand, rd.operand));
     let ok = make_result(cg, Value::new(q, LType::Double), LType::Double, "0")?;
-    let okb = cg.cur_block().to_string();
-    cg.emit(format!("br label %{end}"));
+    let okb = cg.snapshot_to(&end);
 
     cg.start_block(&zero_bb);
     let err = make_result(cg, Value::new("0.0", LType::Double), LType::Double, "1")?;
-    let errb = cg.cur_block().to_string();
-    cg.emit(format!("br label %{end}"));
+    let errb = cg.snapshot_to(&end);
 
     cg.start_block(&end);
     let reg = cg.fresh_reg();

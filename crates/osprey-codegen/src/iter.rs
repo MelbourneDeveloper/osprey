@@ -128,32 +128,47 @@ fn for_each(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     Ok(range)
 }
 
-/// `fold(iterator, initial, fn)` — counted loop accumulating `fn(acc, elem)`.
-fn fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
-    let range = gen_expr(cg, nth(args, 0)?)?;
+/// An `i64` accumulator slot seeded with a `fold` builtin's `initial` (the 2nd
+/// argument), evaluated, unwrapped and boxed.
+fn acc_init(cg: &mut Codegen, args: &[Expr]) -> Result<String> {
     let initial = gen_expr(cg, nth(args, 1)?)?;
     let initial = crate::result::unwrap(cg, initial);
     let initial = box_to_i64(cg, initial);
-    let combine = callback_name(nth(args, 2)?)?;
-    let (start, end) = bounds(cg, &range);
-
     let acc = cg.fresh_reg();
     cg.emit(format!("{acc} = alloca i64"));
     cg.emit(format!("store i64 {}, i64* {acc}", initial.operand));
+    Ok(acc)
+}
 
-    let lp = open_range_loop(cg, &start, &end);
-    let elem = replay(cg, Value::new(lp.i.clone(), LType::I64), &lp.incr)?;
-    let a = cg.fresh_reg();
-    cg.emit(format!("{a} = load i64, i64* {acc}"));
-    let new = call_with_values(cg, &combine, vec![Value::new(a, LType::I64), elem])?;
+/// One fold step: load the accumulator, apply `combine(acc, elem)`, box the
+/// result back into the slot.
+fn acc_step(cg: &mut Codegen, acc: &str, combine: &str, elem: Value) -> Result<()> {
+    let a = cg.emit_reg(format!("load i64, i64* {acc}"));
+    let new = call_with_values(cg, combine, vec![Value::new(a, LType::I64), elem])?;
     let new = crate::result::unwrap(cg, new);
     let new = box_to_i64(cg, new);
     cg.emit(format!("store i64 {}, i64* {acc}", new.operand));
+    Ok(())
+}
+
+/// Read the final accumulator value as an `i64`.
+fn acc_result(cg: &mut Codegen, acc: &str) -> Value {
+    Value::new(cg.emit_reg(format!("load i64, i64* {acc}")), LType::I64)
+}
+
+/// `fold(iterator, initial, fn)` — counted loop accumulating `fn(acc, elem)`.
+fn fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let range = gen_expr(cg, nth(args, 0)?)?;
+    let acc = acc_init(cg, args)?;
+    let combine = callback_name(nth(args, 2)?)?;
+    let (start, end) = bounds(cg, &range);
+
+    let lp = open_range_loop(cg, &start, &end);
+    let elem = replay(cg, Value::new(lp.i.clone(), LType::I64), &lp.incr)?;
+    acc_step(cg, &acc, &combine, elem)?;
     close_range_loop(cg, &lp);
 
-    let out = cg.fresh_reg();
-    cg.emit(format!("{out} = load i64, i64* {acc}"));
-    Ok(Value::new(out, LType::I64))
+    Ok(acc_result(cg, &acc))
 }
 
 /// The `i`-th positional argument as a list handle.
@@ -205,29 +220,10 @@ fn list_builder(cg: &mut Codegen, args: &[Expr], filter: bool) -> Result<Value> 
 /// `foldList(list, initial, fn)` — reduce a list with `fn(acc, elem)`.
 fn fold_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let l = list_arg(cg, args, 0)?;
-    let initial = gen_expr(cg, nth(args, 1)?)?;
-    let initial = crate::result::unwrap(cg, initial);
-    let initial = box_to_i64(cg, initial);
+    let acc = acc_init(cg, args)?;
     let combine = callback_name(nth(args, 2)?)?;
-    let acc = cg.fresh_reg();
-    cg.emit(format!("{acc} = alloca i64"));
-    cg.emit(format!("store i64 {}, i64* {acc}", initial.operand));
     let lp = open_list_loop(cg, &l.operand);
-    let a = cg.fresh_reg();
-    cg.emit(format!("{a} = load i64, i64* {acc}"));
-    let new = call_with_values(
-        cg,
-        &combine,
-        vec![
-            Value::new(a, LType::I64),
-            Value::new(lp.elem.clone(), LType::I64),
-        ],
-    )?;
-    let new = crate::result::unwrap(cg, new);
-    let new = box_to_i64(cg, new);
-    cg.emit(format!("store i64 {}, i64* {acc}", new.operand));
+    acc_step(cg, &acc, &combine, Value::new(lp.elem.clone(), LType::I64))?;
     close_list_loop(cg, &lp);
-    let out = cg.fresh_reg();
-    cg.emit(format!("{out} = load i64, i64* {acc}"));
-    Ok(Value::new(out, LType::I64))
+    Ok(acc_result(cg, &acc))
 }

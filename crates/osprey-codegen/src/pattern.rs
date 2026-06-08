@@ -49,8 +49,7 @@ fn gen_result_elvis(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Result
         .find(|a| matches!(&a.pattern, Pattern::Literal(e) if matches!(**e, Expr::Bool(false))));
     let (_sl, el, end) = crate::result::open_result_branch(cg, disc);
     let succ = crate::result::load_value(cg, disc);
-    let sb = cg.cur_block().to_string();
-    cg.emit(format!("br label %{end}"));
+    let sb = cg.snapshot_to(&end);
 
     cg.start_block(&el);
     let def = match default_arm {
@@ -58,8 +57,7 @@ fn gen_result_elvis(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Result
         None => Value::unit(),
     };
     let def = crate::cast::coerce_to(cg, def, inner)?;
-    let eb = cg.cur_block().to_string();
-    cg.emit(format!("br label %{end}"));
+    let eb = cg.snapshot_to(&end);
 
     cg.start_block(&end);
     let reg = cg.fresh_reg();

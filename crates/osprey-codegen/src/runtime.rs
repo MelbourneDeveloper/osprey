@@ -35,8 +35,7 @@ fn result_to_string(cg: &mut Codegen, v: &Value) -> Result<Value> {
     let val = crate::result::load_value(cg, v);
     let vs = to_string_value(cg, val)?;
     let succ = sprintf_wrap(cg, "Success(%s)", &vs.operand);
-    let sb = cg.cur_block().to_string();
-    cg.emit(format!("br label %{end}"));
+    let sb = cg.snapshot_to(&end);
 
     cg.start_block(&el);
     let err = if inner == LType::Str {
@@ -65,8 +64,7 @@ fn result_to_string(cg: &mut Codegen, v: &Value) -> Result<Value> {
     } else {
         cg.string_constant("Error").operand
     };
-    let eb = cg.cur_block().to_string();
-    cg.emit(format!("br label %{end}"));
+    let eb = cg.snapshot_to(&end);
 
     cg.start_block(&end);
     let phi = cg.fresh_reg();

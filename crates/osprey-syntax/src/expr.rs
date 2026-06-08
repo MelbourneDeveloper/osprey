@@ -217,14 +217,8 @@ impl Lowerer<'_> {
             return (Vec::new(), Vec::new());
         };
         if let Some(nal) = self.first_child_of_kind(list, "named_argument_list") {
-            let named = self
-                .named_of_kind(nal, "named_argument")
-                .iter()
-                .map(|na| NamedArgument {
-                    name: self.field_text(*na, "name"),
-                    value: self.lower_expr_field(*na, "value"),
-                })
-                .collect();
+            let nodes = self.named_of_kind(nal, "named_argument");
+            let named = self.lower_name_value(&nodes, |name, value| NamedArgument { name, value });
             return (Vec::new(), named);
         }
         let mut cursor = list.walk();
@@ -264,12 +258,17 @@ impl Lowerer<'_> {
     }
 
     fn lower_field_assignments(&self, node: Node<'_>) -> Vec<FieldAssignment> {
-        self.descendants_of_kind(node, "field_assignment")
+        let nodes = self.descendants_of_kind(node, "field_assignment");
+        self.lower_name_value(&nodes, |name, value| FieldAssignment { name, value })
+    }
+
+    /// Map each node carrying a `name` field and a `value` expression into an AST
+    /// node built by `ctor` — the shared shape of named arguments and record
+    /// field assignments.
+    fn lower_name_value<T>(&self, nodes: &[Node<'_>], ctor: impl Fn(String, Expr) -> T) -> Vec<T> {
+        nodes
             .iter()
-            .map(|fa| FieldAssignment {
-                name: self.field_text(*fa, "name"),
-                value: self.lower_expr_field(*fa, "value"),
-            })
+            .map(|n| ctor(self.field_text(*n, "name"), self.lower_expr_field(*n, "value")))
             .collect()
     }
 

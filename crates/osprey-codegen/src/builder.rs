@@ -338,6 +338,14 @@ impl Codegen {
         self.cur_block = label.to_string();
     }
 
+    /// Snapshot the current block label, then branch to `end` — the predecessor
+    /// a `phi` at `end` reads back. Closes a one-arm path of a Result/match split.
+    pub(crate) fn snapshot_to(&mut self, end: &str) -> String {
+        let block = self.cur_block.clone();
+        self.emit(format!("br label %{end}"));
+        block
+    }
+
     pub(crate) fn add_extern(&mut self, decl: impl Into<String>) {
         let _ = self.externs.insert(decl.into());
     }
