@@ -15,13 +15,20 @@
 mod aggregate;
 mod builder;
 mod cast;
+mod collections;
 mod conv;
+mod effects;
 mod error;
 mod expr;
+mod fiber;
+mod iter;
+mod listlit;
 mod llty;
 mod lower;
 mod pattern;
+mod result;
 mod runtime;
+mod strings;
 mod types;
 
 pub use error::{CodegenError, Result};
@@ -85,7 +92,8 @@ mod tests {
 
     #[test]
     fn unsupported_construct_fails_loudly() {
-        let parsed = parse_program("let xs = [1, 2, 3]\n");
+        // `perform` is not lowered yet — it must fail loudly, never silently.
+        let parsed = parse_program("perform Logger.log(\"hi\")\n");
         let err = compile_program(&parsed.program).unwrap_err();
         assert!(matches!(err, CodegenError::Unsupported(_)));
     }

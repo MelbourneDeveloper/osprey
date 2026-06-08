@@ -42,6 +42,24 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
         Expr::FieldAccess { target, field } => {
             crate::aggregate::gen_field_access(cg, target, field)
         }
+        Expr::List(elements) => crate::listlit::gen_list(cg, elements),
+        Expr::Map(entries) => crate::collections::gen_map_literal(cg, entries),
+        Expr::Index { target, index } => crate::listlit::gen_index(cg, target, index),
+        Expr::Spawn(e) => crate::fiber::gen_spawn(cg, e),
+        Expr::Await(e) => crate::fiber::gen_await(cg, e),
+        Expr::Yield(e) => crate::fiber::gen_yield(cg, e.as_deref()),
+        Expr::Send { channel, value } => crate::fiber::gen_send(cg, channel, value),
+        Expr::Recv(e) => crate::fiber::gen_recv(cg, e),
+        Expr::Select { arms } => crate::fiber::gen_select(cg, arms),
+        Expr::Perform {
+            effect,
+            operation,
+            arguments,
+            ..
+        } => crate::effects::gen_perform(cg, effect, operation, arguments),
+        Expr::Handler { effect, arms, body } => {
+            crate::effects::gen_handler(cg, effect, arms, body)
+        }
         other => Err(CodegenError::unsupported(describe(other))),
     }
 }
@@ -84,8 +102,12 @@ fn gen_binary(cg: &mut Codegen, op: &str, left: &Expr, right: &Expr) -> Result<V
         return Ok(Value::new(reg, LType::I1));
     }
 
+    // Operands auto-unwrap a Result to its success payload before arithmetic or
+    // comparison (mirrors Go's `unwrapIfResult`).
     let l = gen_expr(cg, left)?;
+    let l = crate::result::unwrap(cg, l);
     let r = gen_expr(cg, right)?;
+    let r = crate::result::unwrap(cg, r);
     match op {
         "+" | "-" | "*" | "/" | "%" => gen_arith(cg, op, l, r),
         "==" | "!=" | "<" | "<=" | ">" | ">=" => gen_comparison(cg, op, l, r),
@@ -98,6 +120,16 @@ fn gen_binary(cg: &mut Codegen, op: &str, left: &Expr, right: &Expr) -> Result<V
 /// `generateDivisionWithZeroCheck`); modulo stays integer. The Result<…,
 /// MathError> wrapper the type system tracks is auto-unwrapped at value sites.
 fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
+    // `+` on list handles is concatenation (`a + b` ≡ `listConcat(a, b)`); on
+    // map handles it is a right-biased merge (`a + b` ≡ `mapMerge(a, b)`).
+    let is_list = |v: &Value| v.osp_ty.as_deref() == Some(crate::collections::LIST_OWNER);
+    let is_map = |v: &Value| v.osp_ty.as_deref() == Some(crate::collections::MAP_OWNER);
+    if op == "+" && (is_list(&l) || is_list(&r)) {
+        return crate::collections::concat_handles(cg, &l, &r);
+    }
+    if op == "+" && (is_map(&l) || is_map(&r)) {
+        return crate::collections::merge_handles(cg, &l, &r);
+    }
     // `+` with a string operand is concatenation (libc strlen/strcpy/strcat),
     // matching `generateStringConcatenation`.
     if op == "+" && (l.ty == LType::Str || r.ty == LType::Str) {
@@ -246,9 +278,33 @@ fn gen_call(
     arguments: &[Expr],
     named: &[NamedArgument],
 ) -> Result<Value> {
+    // A directly-applied lambda (`x |> fn(y) => …`, `(fn(y) => …)(x)`) is
+    // beta-reduced inline: bind each parameter to its argument and lower the
+    // body in a fresh scope.
+    if let Expr::Lambda { parameters, body, .. } = function {
+        cg.push_scope();
+        for (p, a) in parameters.iter().zip(arguments) {
+            let av = gen_expr(cg, a)?;
+            cg.bind(p.name.clone(), av);
+        }
+        let v = gen_expr(cg, body);
+        cg.pop_scope();
+        return v;
+    }
     let Expr::Identifier(name) = function else {
         return Err(CodegenError::unsupported("indirect / higher-order call"));
     };
+    // A let-bound lambda is inlined at its call site (no closures lowered).
+    if let Some((params, body)) = cg.lambdas.get(name).cloned() {
+        cg.push_scope();
+        for (p, a) in params.iter().zip(arguments) {
+            let av = gen_expr(cg, a)?;
+            cg.bind(p.name.clone(), av);
+        }
+        let v = gen_expr(cg, &body);
+        cg.pop_scope();
+        return v;
+    }
     match name.as_str() {
         "print" => {
             let arg = first_arg(arguments, named)
@@ -262,7 +318,24 @@ fn gen_call(
             let v = gen_expr(cg, arg)?;
             to_string_value(cg, v)
         }
-        _ => gen_user_call(cg, name, arguments, named),
+        // Runtime builtins take precedence over a same-named user function: the
+        // names below are reserved. Each dispatcher returns `None` when the name
+        // is not its builtin, so the chain falls through to a user call.
+        _ => {
+            if let Some(v) = crate::strings::gen(cg, name, arguments, named)? {
+                return Ok(v);
+            }
+            if let Some(v) = crate::collections::gen(cg, name, arguments, named)? {
+                return Ok(v);
+            }
+            if let Some(v) = crate::iter::gen(cg, name, arguments, named)? {
+                return Ok(v);
+            }
+            if let Some(v) = crate::fiber::gen_builtin(cg, name, arguments)? {
+                return Ok(v);
+            }
+            gen_user_call(cg, name, arguments, named)
+        }
     }
 }
 
@@ -276,6 +349,19 @@ fn gen_user_call(
     named: &[NamedArgument],
 ) -> Result<Value> {
     let args = ordered_args(cg, name, arguments, named)?;
+    call_with_values(cg, name, args)
+}
+
+/// Call `name` with already-evaluated argument values — the shared tail of
+/// `gen_user_call` and the iterator callbacks. Coerces each argument to the
+/// inferred parameter type, declares unknown (runtime) callees, and tags a
+/// `Result`-returning callee's value.
+pub(crate) fn call_with_values(cg: &mut Codegen, name: &str, args: Vec<Value>) -> Result<Value> {
+    // `print` as a first-class callback maps to the print intrinsic.
+    if name == "print" {
+        let v = args.into_iter().next().unwrap_or_else(Value::unit);
+        return gen_print(cg, v);
+    }
     // Coerce each argument to the declared parameter type where known.
     let coerced = match cg.fn_param_ltypes(name) {
         Some(ptys) if ptys.len() == args.len() => args
@@ -290,13 +376,28 @@ fn gen_user_call(
         .map(Value::typed)
         .collect::<Vec<_>>()
         .join(", ");
+    // A function declared `-> Result<T, E>` hands back a `{ T, i8 }*` block.
+    if let Some(inner) = cg.fn_ret_result_inner(name) {
+        let rty = format!("{{ {inner}, i8 }}*");
+        if !cg.fn_params.contains_key(name) {
+            let sig = coerced
+                .iter()
+                .map(Value::llvm_ty)
+                .collect::<Vec<_>>()
+                .join(", ");
+            cg.add_extern(format!("declare {rty} @{name}({sig})"));
+        }
+        let reg = cg.fresh_reg();
+        cg.emit(format!("{reg} = call {rty} @{name}({typed})"));
+        return Ok(Value::result(reg, inner));
+    }
     let ret = cg.fn_ret_ltype(name).unwrap_or(LType::I64);
     // A name with no user definition is a runtime builtin: declare it so the IR
     // is valid; it links only if the runtime provides the symbol.
     if !cg.fn_params.contains_key(name) {
         let sig = coerced
             .iter()
-            .map(|v| v.ty.to_string())
+            .map(Value::llvm_ty)
             .collect::<Vec<_>>()
             .join(", ");
         cg.add_extern(format!("declare {ret} @{name}({sig})"));

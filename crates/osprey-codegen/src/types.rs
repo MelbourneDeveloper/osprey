@@ -65,6 +65,15 @@ pub fn owner_name(ty: &Type) -> Option<String> {
     }
 }
 
+/// When `ty` is `Result<T, E>`, the inner success type `T` as an [`LType`].
+/// Used to carry the `{ T, i8 }*` Result block across call/return boundaries.
+pub fn result_inner(ty: &Type) -> Option<LType> {
+    match ty {
+        Type::Con { name, args } if name == names::RESULT => args.first().map(ltype_of),
+        _ => None,
+    }
+}
+
 /// Map a field/parameter type *as written* (the string forms stored in
 /// constructor layouts: `int`, `string`, `float`, `bool`, `Point`, …) to an
 /// `LType`. Anything not a known scalar is a runtime handle.

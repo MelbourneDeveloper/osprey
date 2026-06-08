@@ -29,6 +29,28 @@ pub struct Codegen {
     pub(crate) fn_params: HashMap<String, Vec<String>>,
     /// Resolved signatures, constructor layouts and union tags from inference.
     pub(crate) prog: ProgramTypes,
+    /// Stream-fusion pipeline: pending `map`/`filter` stages recorded by those
+    /// builtins and replayed (in source order) when `forEach`/`fold` consumes
+    /// the iterator. Cleared after each consumer. Ports `pendingIterOps`.
+    pub(crate) pending_iter_ops: Vec<crate::iter::IterOp>,
+    /// Let-bound lambdas, stored for inline application at their call sites
+    /// (`let f = fn(x) => …` then `f(y)`), since the backend lowers no closures.
+    pub(crate) lambdas: HashMap<String, (Vec<osprey_ast::Parameter>, osprey_ast::Expr)>,
+    /// Whether the fiber-result global table has been emitted yet.
+    pub(crate) fiber_table_emitted: bool,
+    /// Parsed `effect` operation signatures, keyed `"Effect.operation"`.
+    pub(crate) effect_ops: HashMap<String, crate::effects::OpSig>,
+    /// Monotonic id giving each emitted handler function a unique name.
+    pub(crate) handler_count: usize,
+}
+
+/// Saved emission state of a suspended function (see [`Codegen::enter_nested_fn`]).
+pub(crate) struct SavedFn {
+    lines: Vec<String>,
+    block: String,
+    regs: usize,
+    labels: usize,
+    scopes: Vec<HashMap<String, Value>>,
 }
 
 impl Codegen {
@@ -51,7 +73,69 @@ impl Codegen {
             scopes: Vec::new(),
             fn_params: HashMap::new(),
             prog,
+            pending_iter_ops: Vec::new(),
+            lambdas: HashMap::new(),
+            fiber_table_emitted: false,
+            effect_ops: HashMap::new(),
+            handler_count: 0,
         }
+    }
+
+    /// A fresh, module-unique handler-function id.
+    pub(crate) fn next_handler_id(&mut self) -> usize {
+        let id = self.handler_count;
+        self.handler_count += 1;
+        id
+    }
+
+    /// Append a module-level global definition (e.g. the fiber-result table).
+    pub(crate) fn add_global_def(&mut self, def: impl Into<String>) {
+        self.globals.push(def.into());
+    }
+
+    /// Suspend the in-progress function and start a fresh one (a handler function
+    /// emitted while lowering its enclosing `handle`). Returns the saved state to
+    /// hand back to [`Codegen::exit_nested_fn`]. The new function gets its own
+    /// SSA/label counters and an isolated scope stack (handlers capture nothing).
+    pub(crate) fn enter_nested_fn(&mut self) -> SavedFn {
+        let saved = SavedFn {
+            lines: std::mem::take(&mut self.cur_lines),
+            block: std::mem::replace(&mut self.cur_block, String::from("entry")),
+            regs: self.reg_count,
+            labels: self.label_count,
+            scopes: std::mem::take(&mut self.scopes),
+        };
+        self.reg_count = 0;
+        self.label_count = 0;
+        self.cur_lines = vec!["entry:".to_string()];
+        self.scopes = vec![HashMap::new()];
+        saved
+    }
+
+    /// Finish the nested function (append it) and resume the suspended one.
+    pub(crate) fn exit_nested_fn(
+        &mut self,
+        saved: SavedFn,
+        ret: &str,
+        name: &str,
+        params: &[(LType, String)],
+    ) {
+        self.finish_function(ret, name, params);
+        self.cur_lines = saved.lines;
+        self.cur_block = saved.block;
+        self.reg_count = saved.regs;
+        self.label_count = saved.labels;
+        self.scopes = saved.scopes;
+    }
+
+    /// Register an `effect` operation's parsed signature for `handle`/`perform`.
+    pub(crate) fn register_effect_op(&mut self, key: String, sig: crate::effects::OpSig) {
+        self.effect_ops.insert(key, sig);
+    }
+
+    /// The parsed signature of `Effect.operation`, if declared.
+    pub(crate) fn effect_op(&self, key: &str) -> Option<crate::effects::OpSig> {
+        self.effect_ops.get(key).cloned()
     }
 
     // ---- inferred typing ----
@@ -81,6 +165,13 @@ impl Codegen {
     /// The owner type name of a function's return value, if it is a record/union.
     pub(crate) fn fn_ret_owner(&self, name: &str) -> Option<String> {
         self.prog.return_type(name).and_then(crate::types::owner_name)
+    }
+
+    /// The inner [`LType`] when a function is declared to return `Result<T, E>`
+    /// — the success payload's LLVM type — so calls and returns carry the
+    /// `{ T, i8 }*` Result block rather than a bare `T`.
+    pub(crate) fn fn_ret_result_inner(&self, name: &str) -> Option<LType> {
+        crate::types::result_inner(self.prog.return_type(name)?)
     }
 
     /// The full heap layout of a constructor: owning type, whether it is a
@@ -231,8 +322,9 @@ impl Codegen {
         self.cur_lines.push("entry:".to_string());
     }
 
-    /// Render the in-progress function and append it to the module.
-    pub(crate) fn finish_function(&mut self, ret: LType, name: &str, params: &[(LType, String)]) {
+    /// Render the in-progress function and append it to the module. `ret` is the
+    /// already-rendered LLVM return type (`i64`, `{ i1, i8 }*`, …).
+    pub(crate) fn finish_function(&mut self, ret: &str, name: &str, params: &[(LType, String)]) {
         let param_list = params
             .iter()
             .map(|(ty, n)| format!("{ty} %{n}"))

@@ -26,8 +26,10 @@ for f in $(find $EXDIR -name '*.osp' | sort); do
     [[ $VERBOSE -eq 1 ]] && echo "NOEXP  $rel"
     continue
   fi
-  expected=$(cat "$exp" | sed -e 's/[[:space:]]*$//' | cat)
-  # trim leading/trailing whitespace to mirror strings.TrimSpace
+  # Mirror the Go test exactly: compare strings.TrimSpace(actual) to
+  # strings.TrimSpace(expected) — a single whole-string trim on each, never a
+  # per-line strip (which would drop trailing whitespace the program emits).
+  expected=$(cat "$exp")
   actual=$($BIN "$f" --run 2>/tmp/osprey_rs_err.txt)
   rc=$?
   expected_trim="${expected#"${expected%%[![:space:]]*}"}"; expected_trim="${expected_trim%"${expected_trim##*[![:space:]]}"}"

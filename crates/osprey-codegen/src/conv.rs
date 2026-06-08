@@ -47,6 +47,29 @@ pub(crate) fn as_i1(cg: &mut Codegen, v: Value) -> Result<Value> {
     }
 }
 
+/// Widen any value to the uniform `i64` collection-element ABI: pointers
+/// `ptrtoint`, narrow ints `zext`, `double` `bitcast`. Ports `boxToI64`.
+pub(crate) fn box_to_i64(cg: &mut Codegen, v: Value) -> Value {
+    match v.ty {
+        LType::I64 => v,
+        LType::Str | LType::Ptr => {
+            let reg = cg.fresh_reg();
+            cg.emit(format!("{reg} = ptrtoint {} {} to i64", v.ty, v.operand));
+            Value::new(reg, LType::I64)
+        }
+        LType::I1 | LType::I32 => {
+            let reg = cg.fresh_reg();
+            cg.emit(format!("{reg} = zext {} {} to i64", v.ty, v.operand));
+            Value::new(reg, LType::I64)
+        }
+        LType::Double => {
+            let reg = cg.fresh_reg();
+            cg.emit(format!("{reg} = bitcast double {} to i64", v.operand));
+            Value::new(reg, LType::I64)
+        }
+    }
+}
+
 /// Coerce to `double` (promoting an integer operand for mixed arithmetic).
 pub(crate) fn as_double(cg: &mut Codegen, v: Value) -> Result<Value> {
     match v.ty {

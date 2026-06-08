@@ -30,10 +30,13 @@ impl<'a> Lowerer<'a> {
                 op: self.field_text(node, "operator"),
                 operand: Box::new(self.lower_expr_field(node, "operand")),
             },
-            "pipe_expression" => Expr::Pipe {
-                left: Box::new(self.lower_expr_field(node, "left")),
-                right: Box::new(self.lower_expr_field(node, "right")),
-            },
+            // `x |> f` desugars to `f(x)` and `x |> f(a, …)` to `f(x, a, …)` —
+            // the piped value becomes the callee's first positional argument, so
+            // both the type checker and codegen see an ordinary call.
+            "pipe_expression" => pipe_into(
+                self.lower_expr_field(node, "left"),
+                self.lower_expr_field(node, "right"),
+            ),
             "call_expression" => self.lower_call(node),
             "match_expression" => Expr::Match {
                 value: Box::new(self.lower_expr_field(node, "value")),
@@ -148,15 +151,19 @@ impl<'a> Lowerer<'a> {
                 index: Box::new(self.lower_expr(index)),
             };
         }
-        // function/method call
-        let (arguments, named_arguments) = self.lower_arg_list(node);
+        // function/method call. UFCS: `x.f(a, …)` is sugar for `f(x, a, …)`, so a
+        // field-access callee lowers to an ordinary call with the receiver as the
+        // first positional argument — keeping method calls invisible downstream.
+        let (mut arguments, named_arguments) = self.lower_arg_list(node);
         match callee {
-            Expr::FieldAccess { target, field } => Expr::MethodCall {
-                target,
-                method: field,
-                arguments,
-                named_arguments,
-            },
+            Expr::FieldAccess { target, field } => {
+                arguments.insert(0, *target);
+                Expr::Call {
+                    function: Box::new(Expr::Identifier(field)),
+                    arguments,
+                    named_arguments,
+                }
+            }
             other => Expr::Call {
                 function: Box::new(other),
                 arguments,
@@ -368,5 +375,31 @@ fn parse_fragment(frag: &str) -> Expr {
     match parsed.program.statements.into_iter().next() {
         Some(Stmt::Let { value, .. }) => value,
         _ => Expr::Identifier(frag.trim().to_string()),
+    }
+}
+
+/// Fold a piped value into its right-hand callee: `x |> f(a, …)` becomes
+/// `f(x, a, …)` (the piped value is prepended as the first positional
+/// argument). A bare callee `x |> f` becomes `f(x)`. Producing a plain
+/// [`Expr::Call`] keeps pipes invisible to every later stage.
+fn pipe_into(left: Expr, right: Expr) -> Expr {
+    match right {
+        Expr::Call {
+            function,
+            mut arguments,
+            named_arguments,
+        } => {
+            arguments.insert(0, left);
+            Expr::Call {
+                function,
+                arguments,
+                named_arguments,
+            }
+        }
+        callee => Expr::Call {
+            function: Box::new(callee),
+            arguments: vec![left],
+            named_arguments: Vec::new(),
+        },
     }
 }

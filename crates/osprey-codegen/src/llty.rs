@@ -54,6 +54,12 @@ pub struct Value {
     /// (`Point`, `Shape`, `Result`, …) so field access and `match` can recover
     /// the heap layout. `None` for scalars and untyped handles.
     pub osp_ty: Option<String>,
+    /// When `Some(inner)`, this value is a `Result<inner, _>` carried as a
+    /// pointer to a heap block `{ inner, i8 disc }` (disc 0 = Success). Match,
+    /// `toString` and value-site coercion read this to branch on the
+    /// discriminant or auto-unwrap the success payload — mirroring the Go
+    /// backend's `{value, i8}` Result ABI.
+    pub result_inner: Option<LType>,
 }
 
 impl Value {
@@ -62,6 +68,7 @@ impl Value {
             operand: operand.into(),
             ty,
             osp_ty: None,
+            result_inner: None,
         }
     }
 
@@ -71,6 +78,17 @@ impl Value {
             operand: operand.into(),
             ty: LType::Ptr,
             osp_ty: Some(owner.into()),
+            result_inner: None,
+        }
+    }
+
+    /// A `Result<inner, _>` value: `operand` points at a `{ inner, i8 }` block.
+    pub fn result(operand: impl Into<String>, inner: LType) -> Value {
+        Value {
+            operand: operand.into(),
+            ty: LType::Ptr,
+            osp_ty: Some("Result".to_string()),
+            result_inner: Some(inner),
         }
     }
 
@@ -86,9 +104,23 @@ impl Value {
         Value::new("0", LType::I64)
     }
 
+    /// The LLVM type spelling this value travels as — the precise
+    /// `{ inner, i8 }*` for a Result block, else the plain [`LType`].
+    pub fn llvm_ty(&self) -> String {
+        match self.result_inner {
+            Some(inner) => format!("{{ {inner}, i8 }}*"),
+            None => self.ty.to_string(),
+        }
+    }
+
+    /// The `{ inner, i8 }` struct spelling of a Result block (no pointer).
+    pub fn result_struct_ty(&self) -> Option<String> {
+        self.result_inner.map(|inner| format!("{{ {inner}, i8 }}"))
+    }
+
     /// Render as a typed operand, e.g. `i64 %3` — the form arguments and `ret`
     /// take.
     pub fn typed(&self) -> String {
-        format!("{} {}", self.ty, self.operand)
+        format!("{} {}", self.llvm_ty(), self.operand)
     }
 }
