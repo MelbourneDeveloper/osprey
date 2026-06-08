@@ -54,7 +54,7 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        "--run" => run_program(path, &parsed.program),
+        "--run" => run_program(path, &parsed.program, &source),
         _ => {
             println!("{:#?}", parsed.program);
             ExitCode::SUCCESS
@@ -77,9 +77,9 @@ fn run_check(path: &str, program: &osprey_ast::Program) -> ExitCode {
     ExitCode::FAILURE
 }
 
-/// Compile the program to LLVM IR, hand it to clang, and run the resulting
-/// binary — the `--run` end-to-end path.
-fn run_program(path: &str, program: &osprey_ast::Program) -> ExitCode {
+/// Compile the program to LLVM IR, hand it to clang together with the prebuilt
+/// C runtime, and run the resulting binary — the `--run` end-to-end path.
+fn run_program(path: &str, program: &osprey_ast::Program, source: &str) -> ExitCode {
     let ir = match osprey_codegen::compile_program(program) {
         Ok(ir) => ir,
         Err(e) => {
@@ -101,13 +101,14 @@ fn run_program(path: &str, program: &osprey_ast::Program) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    match Command::new("clang")
-        .arg(&ll)
+    let mut cmd = Command::new("clang");
+    cmd.arg(&ll)
         .arg("-o")
         .arg(&exe)
         .arg("-Wno-override-module")
-        .status()
-    {
+        .args(link_args(&ir, source));
+
+    match cmd.status() {
         Ok(s) if s.success() => {}
         Ok(_) => {
             eprintln!("error: clang failed to compile {}", ll.display());
@@ -126,4 +127,73 @@ fn run_program(path: &str, program: &osprey_ast::Program) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Assemble the link arguments: the prebuilt C runtime static library (the HTTP
+/// superset when the program touches HTTP/WebSocket, else the fiber runtime),
+/// OpenSSL for HTTP, and any `// @link:` / `// @linkdir:` FFI directives — the
+/// same surface `jit_executor.go` builds.
+fn link_args(ir: &str, source: &str) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+    let uses_http = ir.contains("@http") || ir.contains("@websocket");
+
+    let lib = if uses_http {
+        "libhttp_runtime.a"
+    } else {
+        "libfiber_runtime.a"
+    };
+    if let Some(p) = find_runtime_lib(lib) {
+        args.push(p);
+    } else if let Some(p) = find_runtime_lib("libfiber_runtime.a") {
+        args.push(p);
+    }
+
+    if uses_http {
+        args.extend(openssl_flags());
+    }
+
+    // FFI directives: `// @link: sqlite3` -> `-lsqlite3`, `// @linkdir: P` -> `-LP`.
+    for line in source.lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("// @link:").or_else(|| t.strip_prefix("//@link:")) {
+            args.push(format!("-l{}", rest.trim()));
+        } else if let Some(rest) = t
+            .strip_prefix("// @linkdir:")
+            .or_else(|| t.strip_prefix("//@linkdir:"))
+        {
+            args.push(format!("-L{}", rest.trim()));
+        }
+    }
+    args
+}
+
+/// Search the conventional install/build locations for a runtime static lib.
+fn find_runtime_lib(lib: &str) -> Option<String> {
+    let mut roots = vec![
+        format!("compiler/bin/{lib}"),
+        format!("bin/{lib}"),
+        format!("../bin/{lib}"),
+        format!("../../bin/{lib}"),
+        format!("/usr/local/lib/{lib}"),
+    ];
+    if let Ok(wd) = std::env::current_dir() {
+        roots.push(wd.join("compiler/bin").join(lib).display().to_string());
+        roots.push(wd.join("bin").join(lib).display().to_string());
+    }
+    roots.into_iter().find(|p| Path::new(p).exists())
+}
+
+/// OpenSSL link flags, mirroring `addOpenSSLFlags`.
+fn openssl_flags() -> Vec<String> {
+    for dir in [
+        "/opt/homebrew/opt/openssl@3/lib",
+        "/opt/homebrew/lib",
+        "/usr/local/opt/openssl@3/lib",
+        "/usr/local/lib",
+    ] {
+        if Path::new(dir).join("libssl.dylib").exists() {
+            return vec![format!("-L{dir}"), "-lssl".into(), "-lcrypto".into()];
+        }
+    }
+    vec!["-lssl".into(), "-lcrypto".into()]
 }

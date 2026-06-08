@@ -16,6 +16,12 @@ pub enum LType {
     Str,
     /// 32-bit integer — `main` return / libc call results.
     I32,
+    /// `double` — Osprey `float`.
+    Double,
+    /// `i8*` carrying a runtime handle/pointer (record, list, map, fiber, …).
+    /// Distinguished from [`LType::Str`] so it is never strcmp'd or printed as
+    /// text directly.
+    Ptr,
 }
 
 impl LType {
@@ -26,6 +32,8 @@ impl LType {
             LType::I1 => "i1",
             LType::Str => "i8*",
             LType::I32 => "i32",
+            LType::Double => "double",
+            LType::Ptr => "i8*",
         }
     }
 }
@@ -42,6 +50,10 @@ impl fmt::Display for LType {
 pub struct Value {
     pub operand: String,
     pub ty: LType,
+    /// For aggregate handles ([`LType::Ptr`]): the Osprey owner type name
+    /// (`Point`, `Shape`, `Result`, …) so field access and `match` can recover
+    /// the heap layout. `None` for scalars and untyped handles.
+    pub osp_ty: Option<String>,
 }
 
 impl Value {
@@ -49,7 +61,23 @@ impl Value {
         Value {
             operand: operand.into(),
             ty,
+            osp_ty: None,
         }
+    }
+
+    /// An aggregate handle tagged with its Osprey owner type name.
+    pub fn handle(operand: impl Into<String>, owner: impl Into<String>) -> Value {
+        Value {
+            operand: operand.into(),
+            ty: LType::Ptr,
+            osp_ty: Some(owner.into()),
+        }
+    }
+
+    /// This value re-tagged with an Osprey owner type name.
+    pub fn with_owner(mut self, owner: Option<String>) -> Value {
+        self.osp_ty = owner;
+        self
     }
 
     /// The canonical Unit value — Osprey `Unit` carries no data, so it is the

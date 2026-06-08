@@ -12,10 +12,17 @@
 //! Public surface: [`compile_program`] turns a parsed [`osprey_ast::Program`]
 //! into a module string.
 
+mod aggregate;
 mod builder;
+mod cast;
+mod conv;
 mod error;
+mod expr;
 mod llty;
 mod lower;
+mod pattern;
+mod runtime;
+mod types;
 
 pub use error::{CodegenError, Result};
 pub use llty::{LType, Value};

@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 osprey-ast.workspace = true
+osprey-types.workspace = true
 
 [dev-dependencies]
 osprey-syntax.workspace = true

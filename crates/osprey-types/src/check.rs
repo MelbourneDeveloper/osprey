@@ -403,3 +403,45 @@ pub fn check_program(program: &Program) -> Vec<TypeError> {
     checker.check(program, &mut env);
     checker.errors
 }
+
+/// Run inference and publish the resolved signatures, constructor layouts and
+/// union tags for the code generator. Type errors are intentionally dropped
+/// here — codegen runs after `check_program` has gated correctness — so the
+/// backend always receives the best-effort resolved shape of every declaration.
+pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
+    use crate::info::{CtorLayout, ProgramTypes};
+    let mut checker = Checker::new();
+    let mut env = base_env();
+    checker.collect(program, &mut env);
+    checker.check(program, &mut env);
+
+    let functions = checker
+        .fn_sigs
+        .iter()
+        .map(|(name, (params, ret))| {
+            let rp = params.iter().map(|t| checker.ctx.apply(t)).collect();
+            let rr = checker.ctx.apply(ret);
+            (name.clone(), (rp, rr))
+        })
+        .collect();
+    let ctors = checker
+        .ctors
+        .iter()
+        .map(|(name, info)| {
+            (
+                name.clone(),
+                CtorLayout {
+                    owner: info.owner.clone(),
+                    owner_is_record: info.owner_is_record,
+                    fields: info.fields.clone(),
+                },
+            )
+        })
+        .collect();
+    let unions = checker.union_variants.clone();
+    ProgramTypes {
+        functions,
+        ctors,
+        unions,
+    }
+}

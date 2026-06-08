@@ -4,6 +4,8 @@
 //! text; the AST-walking lives in `lower.rs`.
 
 use crate::llty::{LType, Value};
+use crate::types::{ltype_of, ltype_of_name};
+use osprey_types::ProgramTypes;
 use std::collections::{BTreeSet, HashMap};
 
 /// Accumulates a whole module while lowering one function at a time.
@@ -25,10 +27,18 @@ pub struct Codegen {
 
     /// Declared parameter names per function, for named-argument ordering.
     pub(crate) fn_params: HashMap<String, Vec<String>>,
+    /// Resolved signatures, constructor layouts and union tags from inference.
+    pub(crate) prog: ProgramTypes,
 }
 
 impl Codegen {
     pub fn new() -> Codegen {
+        Codegen::with_types(ProgramTypes::default())
+    }
+
+    /// Build with the inferred program types that drive parameter/return/value
+    /// typing.
+    pub fn with_types(prog: ProgramTypes) -> Codegen {
         Codegen {
             externs: BTreeSet::new(),
             globals: Vec::new(),
@@ -40,7 +50,102 @@ impl Codegen {
             cur_block: String::from("entry"),
             scopes: Vec::new(),
             fn_params: HashMap::new(),
+            prog,
         }
+    }
+
+    // ---- inferred typing ----
+
+    /// The LLVM return type of a user/runtime function, from inference.
+    pub(crate) fn fn_ret_ltype(&self, name: &str) -> Option<LType> {
+        self.prog.return_type(name).map(ltype_of)
+    }
+
+    /// The LLVM parameter types of a user function, from inference.
+    pub(crate) fn fn_param_ltypes(&self, name: &str) -> Option<Vec<LType>> {
+        self.prog
+            .param_types(name)
+            .map(|ps| ps.iter().map(ltype_of).collect())
+    }
+
+    /// The `(LType, owner)` parameter signature — `owner` tags record/union
+    /// parameters so their fields are reachable inside the body.
+    pub(crate) fn fn_param_sig(&self, name: &str) -> Option<Vec<(LType, Option<String>)>> {
+        self.prog.param_types(name).map(|ps| {
+            ps.iter()
+                .map(|t| (ltype_of(t), crate::types::owner_name(t)))
+                .collect()
+        })
+    }
+
+    /// The owner type name of a function's return value, if it is a record/union.
+    pub(crate) fn fn_ret_owner(&self, name: &str) -> Option<String> {
+        self.prog.return_type(name).and_then(crate::types::owner_name)
+    }
+
+    /// The full heap layout of a constructor: owning type, whether it is a
+    /// record, the discriminant tag (variant index within its union; 0 for a
+    /// record), and ordered `(field, LType)` pairs.
+    pub(crate) fn ctor_layout(&self, name: &str) -> Option<CtorView> {
+        let c = self.prog.ctors.get(name)?;
+        let tag = self
+            .prog
+            .unions
+            .get(&c.owner)
+            .and_then(|vs| vs.iter().position(|v| v == name))
+            .unwrap_or(0) as i64;
+        let fields = c
+            .fields
+            .iter()
+            .map(|(f, t)| (f.clone(), ltype_of_name(t)))
+            .collect();
+        Some(CtorView {
+            owner: c.owner.clone(),
+            owner_is_record: c.owner_is_record,
+            tag,
+            fields,
+        })
+    }
+
+    /// The LLVM struct spelling for a constructor's heap block: `{ i64, f0, … }`
+    /// — a leading `i64` discriminant tag followed by each field's LLVM type.
+    pub(crate) fn ctor_struct_ty(&self, name: &str) -> Option<String> {
+        let view = self.ctor_layout(name)?;
+        let mut parts = vec!["i64".to_string()];
+        for (_, lt) in &view.fields {
+            parts.push(lt.as_str().to_string());
+        }
+        Some(format!("{{ {} }}", parts.join(", ")))
+    }
+
+    /// Whether a name is a known constructor.
+    pub(crate) fn is_ctor(&self, name: &str) -> bool {
+        self.prog.ctors.contains_key(name)
+    }
+
+    /// The owner type name to tag a loaded aggregate field with: the field's
+    /// written type when that type is itself a known record/union, else `None`
+    /// (scalars carry no owner).
+    pub(crate) fn ctor_field_written(&self, owner: &str, field: &str) -> Option<String> {
+        let written = self
+            .prog
+            .ctors
+            .get(owner)?
+            .fields
+            .iter()
+            .find(|(f, _)| f == field)
+            .map(|(_, t)| t.clone())?;
+        let head = written.split(['<', '[']).next().unwrap_or(&written).trim();
+        if self.prog.ctors.contains_key(head) || self.prog.unions.contains_key(head) {
+            Some(head.to_string())
+        } else {
+            None
+        }
+    }
+
+    /// The variant constructor names of a union owner, in tag order.
+    pub(crate) fn union_variants(&self, owner: &str) -> Option<&[String]> {
+        self.prog.unions.get(owner).map(|v| v.as_slice())
     }
 
     // ---- SSA + block naming (function-local) ----
@@ -156,6 +261,32 @@ impl Codegen {
         out.push('\n');
         out
     }
+
+    /// Allocate a heap block sized for the LLVM struct type `struct_ty`, via the
+    /// portable `getelementptr null, 1` sizeof trick, and return the typed
+    /// pointer register (`{TY}*`).
+    pub(crate) fn malloc_struct(&mut self, struct_ty: &str) -> String {
+        self.add_extern("declare i8* @malloc(i64)");
+        let szp = self.fresh_reg();
+        self.emit(format!(
+            "{szp} = getelementptr {struct_ty}, {struct_ty}* null, i64 1"
+        ));
+        let sz = self.fresh_reg();
+        self.emit(format!("{sz} = ptrtoint {struct_ty}* {szp} to i64"));
+        let raw = self.fresh_reg();
+        self.emit(format!("{raw} = call i8* @malloc(i64 {sz})"));
+        let obj = self.fresh_reg();
+        self.emit(format!("{obj} = bitcast i8* {raw} to {struct_ty}*"));
+        obj
+    }
+}
+
+/// The resolved heap layout of a constructor.
+pub(crate) struct CtorView {
+    pub owner: String,
+    pub owner_is_record: bool,
+    pub tag: i64,
+    pub fields: Vec<(String, LType)>,
 }
 
 impl Default for Codegen {

@@ -97,11 +97,33 @@ impl<'a> Lowerer<'a> {
             "block" => self.lower_block(node),
             "literal" => self.lower_literal(node),
             "identifier" => Expr::Identifier(self.text(node)),
-            "ternary_expression" => {
-                // Lower the condition; full ternary semantics handled in a later pass.
-                self.lower_expr_field(node, "condition")
-            }
+            "ternary_expression" => self.lower_ternary(node),
             _ => Expr::Bool(false),
+        }
+    }
+
+    /// `cond ? then : else` desugars to `match cond { true => then  false => else }`
+    /// (and the Elvis form `cond ?: else` reuses the condition as the `then`),
+    /// so the existing boolean-match lowering carries the runtime semantics.
+    fn lower_ternary(&self, node: Node) -> Expr {
+        let condition = self.lower_expr_field(node, "condition");
+        let else_expr = self.lower_expr_field(node, "else");
+        let then_expr = match node.child_by_field_name("then") {
+            Some(n) => self.lower_expr(n),
+            None => condition.clone(), // Elvis `?:`
+        };
+        Expr::Match {
+            value: Box::new(condition),
+            arms: vec![
+                MatchArm {
+                    pattern: Pattern::Literal(Box::new(Expr::Bool(true))),
+                    body: then_expr,
+                },
+                MatchArm {
+                    pattern: Pattern::Literal(Box::new(Expr::Bool(false))),
+                    body: else_expr,
+                },
+            ],
         }
     }
 
@@ -286,29 +308,42 @@ impl<'a> Lowerer<'a> {
     /// `builder_interpolation.go`).
     fn lower_interpolation(&self, raw: &str) -> Vec<InterpolatedPart> {
         let inner = unquote(raw);
-        let mut parts = Vec::new();
-        let mut text = String::new();
         let bytes = inner.as_bytes();
-        let mut i = 0;
+        let mut parts = Vec::new();
+        let mut text_start = 0usize;
+        let mut i = 0usize;
         while i < bytes.len() {
             if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
-                if !text.is_empty() {
-                    parts.push(InterpolatedPart::Text(std::mem::take(&mut text)));
+                if i > text_start {
+                    parts.push(InterpolatedPart::Text(inner[text_start..i].to_string()));
                 }
+                // Find the `}` that closes this `${`, honouring nested braces so
+                // `${match x { a => 1 b => 2 }}` captures the whole match.
+                let mut depth = 1i32;
                 let mut j = i + 2;
-                while j < bytes.len() && bytes[j] != b'}' {
+                while j < bytes.len() {
+                    match bytes[j] {
+                        b'{' => depth += 1,
+                        b'}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
                     j += 1;
                 }
                 let frag = &inner[i + 2..j];
                 parts.push(InterpolatedPart::Expr(parse_fragment(frag)));
                 i = j + 1;
+                text_start = i;
             } else {
-                text.push(bytes[i] as char);
                 i += 1;
             }
         }
-        if !text.is_empty() {
-            parts.push(InterpolatedPart::Text(text));
+        if text_start < bytes.len() {
+            parts.push(InterpolatedPart::Text(inner[text_start..].to_string()));
         }
         parts
     }

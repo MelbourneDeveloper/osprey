@@ -18,12 +18,14 @@ mod ctx;
 mod env;
 mod error;
 mod expr;
+mod info;
 mod pattern;
 mod ty;
 mod unify;
 
-pub use check::check_program;
+pub use check::{check_program, infer_program};
 pub use error::TypeError;
+pub use info::{CtorLayout, ProgramTypes};
 pub use ty::{names, Scheme, Type, VarId};
 
 #[cfg(test)]
