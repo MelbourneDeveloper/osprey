@@ -5,8 +5,8 @@
 
 use crate::llty::{LType, Value};
 use crate::types::{ltype_of, ltype_of_name};
-use osprey_types::ProgramTypes;
-use std::collections::{BTreeSet, HashMap};
+use osprey_types::{ProgramTypes, Type};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 
 /// Accumulates a whole module while lowering one function at a time.
@@ -49,7 +49,29 @@ pub struct Codegen {
     pub(crate) obj_layouts: HashMap<String, Vec<(String, LType)>>,
     /// Monotonic id giving each object literal a unique synthetic owner name.
     pub(crate) obj_count: usize,
+    /// User function `(parameters, body)` defs, for inlining a *generic*
+    /// function at each call site so its type variables monomorphize to the
+    /// concrete argument types there (the Go backend emits a mangled copy per
+    /// instantiation; inlining achieves the same without name mangling).
+    pub(crate) fn_defs: HashMap<String, (Vec<osprey_ast::Parameter>, osprey_ast::Expr)>,
+    /// Generic functions currently being inlined — a re-entry guard so a
+    /// (mutually) recursive generic call falls back to a direct call instead of
+    /// inlining forever.
+    pub(crate) inlining: HashSet<String>,
+    /// Function-typed locals in the current function (a higher-order parameter
+    /// `f: (int) -> int`): name → its signature ([`FnSig`]), so a call `f(x)`
+    /// lowers to an indirect call through the `i8*` handle.
+    pub(crate) fn_ptr_locals: HashMap<String, FnSig>,
+    /// While inlining a generic function, a function-valued parameter bound to a
+    /// callee *by name* (`apply(f: toString, …)`): the parameter redirects to
+    /// that real callee, so `f(x)` in the body becomes `toString(x)`. This keeps
+    /// a builtin or another generic function callable through the parameter.
+    pub(crate) call_aliases: HashMap<String, String>,
 }
+
+/// A function value's lowered signature: parameter LTypes, the return LType, and
+/// (when it returns `Result<T, _>`) the success inner type.
+pub(crate) type FnSig = (Vec<LType>, LType, Option<LType>);
 
 /// Saved emission state of a suspended function (see [`Codegen::enter_nested_fn`]).
 pub(crate) struct SavedFn {
@@ -87,6 +109,45 @@ impl Codegen {
             handler_count: 0,
             obj_layouts: HashMap::new(),
             obj_count: 0,
+            fn_defs: HashMap::new(),
+            inlining: HashSet::new(),
+            fn_ptr_locals: HashMap::new(),
+            call_aliases: HashMap::new(),
+        }
+    }
+
+    /// Whether `name` is a user function whose inferred signature still contains
+    /// a type variable (in a parameter or the return) — i.e. it is polymorphic
+    /// and must be specialised to the concrete call-site types.
+    pub(crate) fn is_generic_fn(&self, name: &str) -> bool {
+        let Some((params, ret)) = self.prog.functions.get(name) else {
+            return false;
+        };
+        params.iter().chain(std::iter::once(ret)).any(has_type_var)
+    }
+
+    /// The declared type parameters of a constructor's owner (`["T"]` for
+    /// `Generic<T>`), used to spot a generic field whose LLVM type is fixed per
+    /// construction rather than by the (placeholder) written type.
+    pub(crate) fn ctor_type_params(&self, name: &str) -> Vec<String> {
+        self.prog
+            .ctors
+            .get(name)
+            .map(|c| c.type_params.clone())
+            .unwrap_or_default()
+    }
+
+    /// The lowered [`FnSig`] of a function-typed value `ty` (a higher-order
+    /// parameter), for the indirect-call bitcast — `None` if `ty` is not a
+    /// function.
+    pub(crate) fn fn_value_sig(ty: &Type) -> Option<FnSig> {
+        match ty {
+            Type::Fun { params, ret } => Some((
+                params.iter().map(ltype_of).collect(),
+                ltype_of(ret),
+                crate::types::result_inner(ret),
+            )),
+            _ => None,
         }
     }
 
@@ -394,6 +455,7 @@ impl Codegen {
         self.label_count = 0;
         self.cur_lines.clear();
         self.cur_block = String::from("entry");
+        self.fn_ptr_locals.clear();
         self.push_scope();
         self.cur_lines.push("entry:".to_string());
     }
@@ -446,6 +508,18 @@ impl Codegen {
         let obj = self.fresh_reg();
         self.emit(format!("{obj} = bitcast i8* {raw} to {struct_ty}*"));
         obj
+    }
+}
+
+/// Whether a (fully substituted) inferred type still mentions a type variable —
+/// the mark of a polymorphic signature the backend must specialise per use.
+fn has_type_var(ty: &Type) -> bool {
+    match ty {
+        Type::Var(_) => true,
+        Type::Con { args, .. } => args.iter().any(has_type_var),
+        Type::Fun { params, ret } => params.iter().any(has_type_var) || has_type_var(ret),
+        Type::Record { fields, .. } => fields.values().any(has_type_var),
+        Type::Union { variants, .. } => variants.iter().any(has_type_var),
     }
 }
 

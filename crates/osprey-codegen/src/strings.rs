@@ -9,7 +9,7 @@ use crate::builder::Codegen;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use crate::result::make_result_if_err;
+use crate::result::{make_result_if_err, result_from_nullable};
 use osprey_ast::{Expr, NamedArgument};
 
 /// Dispatch a string builtin by name, or `None` if `name` is not one.
@@ -178,7 +178,7 @@ fn substring(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Resul
         "i8*, i64, i64",
         &[&s.operand, &start.operand, &end.operand],
     );
-    result_from_nullable(cg, &ptr)
+    result_from_nullable(cg, &ptr, None)
 }
 
 /// A fallible string transform returning a runtime `char*` that is NULL on
@@ -195,15 +195,7 @@ fn nullable_str(
     let (ops, params) = typed_args(cg, &sig, args)?;
     let op_refs: Vec<&str> = ops.iter().map(String::as_str).collect();
     let ptr = cg.call("i8*", cname, &params, &op_refs);
-    result_from_nullable(cg, &ptr)
-}
-
-/// `Result<string, _>` from a possibly-NULL `char*` (`ptr` is an `i8*` register):
-/// NULL ⇒ Error, else Success.
-fn result_from_nullable(cg: &mut Codegen, ptr: &str) -> Result<Value> {
-    let iserr = cg.fresh_reg();
-    cg.emit(format!("{iserr} = icmp eq i8* {ptr}, null"));
-    make_result_if_err(cg, Value::new(ptr, LType::Str), LType::Str, &iserr)
+    result_from_nullable(cg, &ptr, None)
 }
 
 /// `parseInt`/`parseFloat`: strict parse writing through an out-slot, returning

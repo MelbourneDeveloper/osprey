@@ -387,17 +387,38 @@ impl Lowerer<'_> {
     }
 }
 
-/// Strip surrounding quotes and apply basic escape unescaping.
+/// Strip surrounding quotes and resolve backslash escapes in one pass (so a
+/// literal `\\` can never be re-interpreted): `\n` `\r` `\t` newline/CR/tab,
+/// `\e` the ANSI ESC (0x1B, used by the terminal-color helpers), `\0` NUL,
+/// `\"` and `\\` the literals. An unrecognised escape is kept verbatim.
 fn unquote(s: &str) -> String {
     let trimmed = s
         .strip_prefix('"')
         .and_then(|x| x.strip_suffix('"'))
         .unwrap_or(s);
-    trimmed
-        .replace("\\n", "\n")
-        .replace("\\t", "\t")
-        .replace("\\\"", "\"")
-        .replace("\\\\", "\\")
+    let mut out = String::with_capacity(trimmed.len());
+    let mut chars = trimmed.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some('e') => out.push('\u{1b}'),
+            Some('0') => out.push('\0'),
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 /// Parse an interpolation fragment (`${ ... }` contents) into a single [`Expr`].

@@ -59,6 +59,32 @@ pub(crate) fn result_from_flag(cg: &mut Codegen, flag: &str, value: &str) -> Res
     make_result_if_err(cg, Value::new(value, LType::I64), LType::I64, &err)
 }
 
+/// `Result<int, _>` from a C `i64` whose negative values signal failure — the
+/// uniform convention of the file/process/HTTP/JSON runtime (a negative handle,
+/// byte count, status or process id is Error). The success value carried is the
+/// result itself.
+pub(crate) fn result_from_i64(cg: &mut Codegen, result: &str) -> Result<Value> {
+    let err = cg.emit_reg(format!("icmp slt i64 {result}, 0"));
+    make_result_if_err(cg, Value::new(result, LType::I64), LType::I64, &err)
+}
+
+/// `Result<string, _>` from a possibly-NULL C `char*` (`ptr` an `i8*` operand):
+/// NULL ⇒ Error, else Success. When `err` is `Some(msg)`, the error payload is
+/// that constant string so `toString` shows `Error(msg)` (e.g. `readFile`'s
+/// `Error(File read error)`); otherwise the bare (null) pointer is kept and a
+/// plain `Error` is shown.
+pub(crate) fn result_from_nullable(cg: &mut Codegen, ptr: &str, err: Option<&str>) -> Result<Value> {
+    let is_null = cg.emit_reg(format!("icmp eq i8* {ptr}, null"));
+    let value = match err {
+        Some(msg) => {
+            let c = cg.string_constant(msg);
+            cg.emit_reg(format!("select i1 {is_null}, i8* {}, i8* {ptr}", c.operand))
+        }
+        None => ptr.to_string(),
+    };
+    make_result_if_err(cg, Value::new(value, LType::Str), LType::Str, &is_null)
+}
+
 /// Branch on a Result's discriminant: load it, test `== 0` (Success), and emit
 /// the conditional branch to fresh `(success, error, end)` labels — leaving the
 /// builder positioned at the start of the `success` block. The shared preamble

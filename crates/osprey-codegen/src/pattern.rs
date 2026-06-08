@@ -350,9 +350,21 @@ fn finish_phi(cg: &mut Codegen, phi_in: &[(Value, String)]) -> Result<Value> {
             .then_some(first)
             .flatten()
     };
-    Ok(Value::new(reg, ty)
+    // Preserve Result identity across the merge: when every arm is a Result of
+    // the same block layout (Success `{Ptr,i8}` / Error `{Str,i8}` are both
+    // `{i8*,i8}`), the phi *is* a Result, so carry the success arm's inner type.
+    // Without this a `match … { Success … Error … }` looks like a bare handle and
+    // a `-> Result` function body gets wrapped a second time.
+    let result_inner = first_val.result_inner.filter(|first| {
+        phi_in
+            .iter()
+            .all(|(v, _)| v.result_inner.is_some_and(|ri| ri.as_str() == first.as_str()))
+    });
+    let mut out = Value::new(reg, ty)
         .with_owner(common(|v| v.osp_ty.clone()))
-        .with_payload_owner(common(|v| v.payload_owner.clone())))
+        .with_payload_owner(common(|v| v.payload_owner.clone()));
+    out.result_inner = result_inner;
+    Ok(out)
 }
 
 fn bind_catch_all(cg: &mut Codegen, pattern: &Pattern, disc: &Value) {

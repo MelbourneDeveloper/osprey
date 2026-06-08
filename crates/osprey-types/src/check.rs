@@ -114,11 +114,16 @@ impl Checker {
                 owner: "HttpResponse".into(),
                 owner_is_record: true,
                 type_params: Vec::new(),
+                // Field set + order match `struct HttpResponse` in
+                // `runtime/http_shared.h` exactly — the C HTTP runtime reads the
+                // handler's returned struct by this layout.
                 fields: vec![
                     ("status".into(), "int".into()),
                     ("headers".into(), "string".into()),
                     ("contentType".into(), "string".into()),
-                    ("body".into(), "string".into()),
+                    ("streamFd".into(), "int".into()),
+                    ("isComplete".into(), "bool".into()),
+                    ("partialBody".into(), "string".into()),
                 ],
             },
         );
@@ -244,6 +249,12 @@ impl Checker {
             .collect();
         let ret = return_type.map_or_else(Type::unit, |r| type_expr_to_type(r, &empty));
         self.record_fn_params(name, parameters);
+        // Publish the resolved signature so the backend types FFI calls with the
+        // declared parameter/return types (a `Ptr` as `i8*`, not the `i64`
+        // default) — same as `collect_function`.
+        let _ = self
+            .fn_sigs
+            .insert(name.to_string(), (params.clone(), ret.clone()));
         env.insert(name, Scheme::mono(Type::fun(params, ret)));
     }
 
@@ -445,6 +456,7 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
                 CtorLayout {
                     owner: info.owner.clone(),
                     owner_is_record: info.owner_is_record,
+                    type_params: info.type_params.clone(),
                     fields: info.fields.clone(),
                 },
             )

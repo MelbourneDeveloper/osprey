@@ -35,6 +35,21 @@ pub(crate) fn gen_constructor(
     if (name == "Success" || name == "Error") && !fields.is_empty() {
         return gen_result_ctor(cg, name, fields);
     }
+    // `HttpResponse` is handed straight to the C HTTP runtime, so it must use the
+    // C `struct HttpResponse` layout (tag-free, `bool` as `i8`), not the generic
+    // tagged-record block.
+    if name == HTTP_RESPONSE {
+        return gen_http_response(cg, fields);
+    }
+    // A generic *record* (`type R<T> = { … }`) is built with the concrete field
+    // types present at this construction — the same per-instance layout an object
+    // literal gets — so a later `r.field` recovers the real type instead of the
+    // placeholder `T → i8*`. Generic union *variants* keep the tagged path below.
+    let generic_record = !cg.ctor_type_params(name).is_empty()
+        && cg.ctor_layout(name).is_some_and(|v| v.owner_is_record);
+    if generic_record {
+        return gen_object(cg, fields);
+    }
     let view = cg
         .ctor_layout(name)
         .ok_or_else(|| CodegenError::unknown(name))?;
@@ -92,6 +107,52 @@ pub(crate) fn gen_object(cg: &mut Codegen, fields: &[FieldAssignment]) -> Result
     let handle = cg.fresh_reg();
     cg.emit(format!("{handle} = bitcast {struct_ty}* {obj} to i8*"));
     Ok(Value::handle(handle, owner))
+}
+
+/// The built-in HTTP response record name.
+const HTTP_RESPONSE: &str = "HttpResponse";
+
+/// `{ i64 status, i8* headers, i8* contentType, i64 streamFd, i8 isComplete,
+/// i8* partialBody }` — the C `struct HttpResponse` (`runtime/http_shared.h`),
+/// the one record returned across the FFI boundary. Field LLVM types in layout
+/// order; `isComplete` is the C `bool`, an `i8`.
+const HTTP_RESPONSE_STRUCT: &str = "{ i64, i8*, i8*, i64, i8, i8* }";
+const HTTP_RESPONSE_FIELDS: [(&str, &str); 6] = [
+    ("status", "i64"),
+    ("headers", "i8*"),
+    ("contentType", "i8*"),
+    ("streamFd", "i64"),
+    ("isComplete", "i8"),
+    ("partialBody", "i8*"),
+];
+
+/// Construct an `HttpResponse` in the exact C layout and return the `i8*` a
+/// request handler hands back to the runtime. Unlike a generic record there is
+/// **no leading tag**, and the boolean `isComplete` widens to `i8`.
+fn gen_http_response(cg: &mut Codegen, fields: &[FieldAssignment]) -> Result<Value> {
+    let obj = cg.malloc_struct(HTTP_RESPONSE_STRUCT);
+    for (i, (fname, llty)) in HTTP_RESPONSE_FIELDS.iter().enumerate() {
+        let fa = fields.iter().find(|f| &f.name == fname).ok_or_else(|| {
+            CodegenError::invalid(format!("missing field `{fname}` for `{HTTP_RESPONSE}`"))
+        })?;
+        let v = gen_expr(cg, &fa.value)?;
+        let operand = match *llty {
+            // C `bool` is one byte; widen the i1.
+            "i8" => {
+                let b = crate::conv::as_i1(cg, v)?;
+                cg.emit_reg(format!("zext i1 {} to i8", b.operand))
+            }
+            "i64" => crate::conv::as_i64(cg, v)?.operand,
+            _ => crate::cast::coerce_to(cg, v, LType::Str)?.operand,
+        };
+        let p = cg.fresh_reg();
+        cg.emit(format!(
+            "{p} = getelementptr {HTTP_RESPONSE_STRUCT}, {HTTP_RESPONSE_STRUCT}* {obj}, i32 0, i32 {i}"
+        ));
+        cg.emit(format!("store {llty} {operand}, {llty}* {p}"));
+    }
+    let handle = cg.emit_reg(format!("bitcast {HTTP_RESPONSE_STRUCT}* {obj} to i8*"));
+    Ok(Value::handle(handle, HTTP_RESPONSE))
 }
 
 /// Build a `Success`/`Error` value in the Result ABI: the single field becomes

@@ -18,6 +18,10 @@ pub struct CtorLayout {
     pub owner: String,
     /// Whether the owner is a single-variant record (vs. a union variant).
     pub owner_is_record: bool,
+    /// The owner's declared type parameters (`["T"]` for `Generic<T>`), so the
+    /// backend can tell a generic field (`data: T`) — whose concrete LLVM type
+    /// is fixed per construction — from a nominal one (`origin: Point`).
+    pub type_params: Vec<String>,
     /// Ordered `(field name, field type as written)`.
     pub fields: Vec<(String, String)>,
 }

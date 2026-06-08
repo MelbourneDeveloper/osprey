@@ -24,6 +24,9 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
             // A bare name that is a nullary constructor (`Active`, `Red`, …) is a
             // zero-field variant value.
             None if cg.is_ctor(name) => crate::aggregate::gen_constructor(cg, name, &[]),
+            // A bare top-level function name used as a value is a callback (passed
+            // to `spawnProcess`/`httpListen`): take its address as an `i8*`.
+            None if cg.fn_params.contains_key(name) => fn_pointer(cg, name),
             None => Err(CodegenError::unknown(name)),
         },
         Expr::Binary { op, left, right } => gen_binary(cg, op, left, right),
@@ -61,6 +64,36 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
         Expr::Handler { effect, arms, body } => crate::effects::gen_handler(cg, effect, arms, body),
         other => Err(CodegenError::unsupported(describe(other))),
     }
+}
+
+/// A bare top-level function name used as a runtime value (a callback handed to
+/// `spawnProcess`/`httpListen`): emit its address bitcast to `i8*`. The source
+/// type of the bitcast is the function's exact emitted signature — built the
+/// same way `gen_function`/`coerce_return` spelled its `define` — so the cast is
+/// well-typed; the C runtime calls back through its own function-pointer cast.
+/// Mirrors the handler-pointer bitcast in `effects::gen_perform`.
+fn fn_pointer(cg: &mut Codegen, name: &str) -> Result<Value> {
+    let fty = fn_ptr_type(cg, name);
+    let reg = cg.emit_reg(format!("bitcast {fty} @{name} to i8*"));
+    Ok(Value::new(reg, LType::Ptr))
+}
+
+/// The LLVM function-pointer type spelling for a top-level function, e.g.
+/// `i64 (i64, i64, i8*)*` — return type (a `{ T, i8 }*` Result block, or the
+/// inferred scalar; `Unit` rides as `i64`) then its parameter type list.
+fn fn_ptr_type(cg: &Codegen, name: &str) -> String {
+    let params = cg
+        .fn_param_ltypes(name)
+        .unwrap_or_default()
+        .iter()
+        .map(|t| t.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let ret = match cg.fn_ret_result_inner(name) {
+        Some(inner) => format!("{{ {inner}, i8 }}*"),
+        None => cg.fn_ret_ltype(name).unwrap_or(LType::I64).to_string(),
+    };
+    format!("{ret} ({params})*")
 }
 
 /// LLVM requires a decimal point or exponent in a `double` literal; render a
@@ -310,14 +343,27 @@ fn gen_call(
     {
         return apply_lambda(cg, parameters, body, arguments);
     }
-    let Expr::Identifier(name) = function else {
+    let Expr::Identifier(ident) = function else {
         return Err(CodegenError::unsupported("indirect / higher-order call"));
     };
+    // A function-valued parameter (bound while inlining a generic function)
+    // redirects to its real callee, so `f(x)` becomes `toString(x)` / `addOne(x)`.
+    let name: String = cg
+        .call_aliases
+        .get(ident)
+        .cloned()
+        .unwrap_or_else(|| ident.clone());
+    let name = name.as_str();
     // A let-bound lambda is inlined at its call site (no closures lowered).
     if let Some((params, body)) = cg.lambdas.get(name).cloned() {
         return apply_lambda(cg, &params, &body, arguments);
     }
-    match name.as_str() {
+    // A call through a function-typed local (`f(x)` where `f: (int) -> int` is a
+    // higher-order parameter) is an indirect call through its `i8*` handle.
+    if let Some(v) = crate::genfn::try_indirect(cg, name, arguments, named)? {
+        return Ok(v);
+    }
+    match name {
         "print" => {
             let arg = first_arg(arguments, named)
                 .ok_or_else(|| CodegenError::invalid("print needs one argument"))?;
@@ -344,6 +390,14 @@ fn gen_call(
                 return Ok(v);
             }
             if let Some(v) = crate::fiber::gen_builtin(cg, name, arguments)? {
+                return Ok(v);
+            }
+            if let Some(v) = crate::extern_call::gen(cg, name, arguments, named)? {
+                return Ok(v);
+            }
+            // A generic user function is specialised by inlining its body with
+            // the concrete argument types at this call site.
+            if let Some(v) = crate::genfn::try_inline(cg, name, arguments, named)? {
                 return Ok(v);
             }
             gen_user_call(cg, name, arguments, named)

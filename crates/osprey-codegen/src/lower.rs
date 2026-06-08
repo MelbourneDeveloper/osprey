@@ -25,12 +25,22 @@ pub fn compile_program(program: &Program) -> Result<String> {
     for stmt in &program.statements {
         match stmt {
             Stmt::Function {
-                name, parameters, ..
+                name,
+                parameters,
+                body,
+                ..
             } => {
                 let _ = cg.fn_params.insert(
                     name.clone(),
                     parameters.iter().map(|p| p.name.clone()).collect(),
                 );
+                // A polymorphic function is specialised by inlining at each call
+                // site, so keep its body reachable.
+                if cg.is_generic_fn(name) {
+                    let _ = cg
+                        .fn_defs
+                        .insert(name.clone(), (parameters.clone(), body.clone()));
+                }
             }
             Stmt::Effect { name, operations } => {
                 for op in operations {
@@ -49,6 +59,9 @@ pub fn compile_program(program: &Program) -> Result<String> {
     for stmt in &program.statements {
         match stmt {
             Stmt::Function { name, body, .. } if name == "main" => user_main = Some(body),
+            // A generic function is specialised by inlining at each call site
+            // (recorded in `fn_defs`), so it is not emitted as a monomorphic def.
+            Stmt::Function { name, .. } if cg.fn_defs.contains_key(name) => {}
             Stmt::Function {
                 name,
                 parameters,
@@ -80,6 +93,22 @@ fn gen_function(cg: &mut Codegen, name: &str, parameters: &[Parameter], body: &E
         .unwrap_or_else(|| vec![(LType::I64, None); parameters.len()]);
 
     cg.begin_function();
+    // Record any function-typed parameters so a call through one lowers to an
+    // indirect call (the higher-order `f(x)` in `fn apply(f, x) = f(x)`).
+    let fn_ptr_params: Vec<(String, crate::builder::FnSig)> = cg
+        .prog
+        .param_types(name)
+        .map(|ptys| {
+            parameters
+                .iter()
+                .zip(ptys)
+                .filter_map(|(p, t)| Codegen::fn_value_sig(t).map(|s| (p.name.clone(), s)))
+                .collect()
+        })
+        .unwrap_or_default();
+    for (n, s) in fn_ptr_params {
+        let _ = cg.fn_ptr_locals.insert(n, s);
+    }
     let mut params = Vec::new();
     for (p, (pty, owner)) in parameters.iter().zip(param_sig.iter()) {
         let v = Value::new(format!("%{}", p.name), *pty).with_owner(owner.clone());

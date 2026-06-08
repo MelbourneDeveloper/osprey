@@ -18,6 +18,11 @@ pub(crate) fn coerce_to(cg: &mut Codegen, v: Value, want: LType) -> Result<Value
     let owner = v.osp_ty.clone();
     let out = match want {
         LType::Double => as_double(cg, v)?,
+        // A string/handle reaching an `i64` boundary is an `any`/generic value
+        // travelling in the uniform machine-word representation — `ptrtoint`-box
+        // it (the inverse `inttoptr` is the `Str`/`Ptr` arm below). Genuine
+        // type mismatches are already rejected by the checker.
+        LType::I64 if matches!(v.ty, LType::Str | LType::Ptr) => crate::conv::box_to_i64(cg, v),
         LType::I64 => as_i64(cg, v)?,
         LType::I1 => as_i1(cg, v)?,
         // A pointer target. A boxed `i64` element (the uniform collection ABA)
