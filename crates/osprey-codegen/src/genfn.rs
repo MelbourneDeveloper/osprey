@@ -97,11 +97,7 @@ pub(crate) fn try_indirect(
     let Some(handle) = cg.lookup(name) else {
         return Ok(None);
     };
-    let exprs: Vec<&Expr> = if named.is_empty() {
-        args.iter().collect()
-    } else {
-        named.iter().map(|n| &n.value).collect()
-    };
+    let exprs = crate::expr::arg_exprs(args, named);
     let mut typed = Vec::with_capacity(exprs.len());
     for (want, e) in param_tys.iter().zip(exprs) {
         let v = gen_expr(cg, e)?;

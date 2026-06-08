@@ -100,14 +100,9 @@ fn eval_args(
     args: &[Expr],
     named: &[NamedArgument],
 ) -> Result<Vec<String>> {
-    let exprs: Vec<&Expr> = if named.is_empty() {
-        args.iter().collect()
-    } else {
-        named.iter().map(|n| &n.value).collect()
-    };
     sig.params
         .iter()
-        .zip(exprs)
+        .zip(crate::expr::arg_exprs(args, named))
         .map(|(want, e)| {
             let v = gen_expr(cg, e)?;
             Ok(crate::cast::coerce_to(cg, v, *want)?.operand)

@@ -560,6 +560,17 @@ fn first_arg<'a>(arguments: &'a [Expr], named: &'a [NamedArgument]) -> Option<&'
         .or_else(|| named.first().map(|n| &n.value))
 }
 
+/// A call's argument expressions in call order — positional, or named in written
+/// order — for callees with a fixed parameter list (runtime builtins, indirect
+/// calls) that bind by position rather than reordering by parameter name.
+pub(crate) fn arg_exprs<'a>(args: &'a [Expr], named: &'a [NamedArgument]) -> Vec<&'a Expr> {
+    if named.is_empty() {
+        args.iter().collect()
+    } else {
+        named.iter().map(|n| &n.value).collect()
+    }
+}
+
 pub(crate) fn describe(expr: &Expr) -> String {
     let kind = match expr {
         Expr::List(_) => "list literal",
