@@ -58,17 +58,25 @@ fn union_owner(cg: &Codegen, arms: &[MatchArm]) -> Option<String> {
 /// the loaded payload; a bare scalar discriminant falls back to `disc >= 0`
 /// (always Success), preserving the scalar's own type for the binding.
 fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<Value> {
-    let success = arms.iter().find(|a| matches!(&a.pattern,
-        Pattern::Constructor { name, .. } if name == "Success"));
-    let error = arms.iter().find(|a| matches!(&a.pattern,
-        Pattern::Constructor { name, .. } if name == "Error"));
+    let success = arms.iter().find(|a| {
+        matches!(&a.pattern,
+        Pattern::Constructor { name, .. } if name == "Success")
+    });
+    let error = arms.iter().find(|a| {
+        matches!(&a.pattern,
+        Pattern::Constructor { name, .. } if name == "Error")
+    });
 
     // (cond, success-binding, error-binding) by Result shape.
     let (cond, succ_val, err_val) = if disc.result_inner.is_some() {
         let d = crate::result::load_disc(cg, &disc);
         let c = cg.fresh_reg();
         cg.emit(format!("{c} = icmp eq i8 {d}, 0"));
-        (c, crate::result::load_value(cg, &disc), crate::result::load_value(cg, &disc))
+        (
+            c,
+            crate::result::load_value(cg, &disc),
+            crate::result::load_value(cg, &disc),
+        )
     } else if matches!(disc.ty, LType::Str | LType::Ptr) {
         // A handle discriminant (e.g. a WHERE-constrained constructor that
         // currently always succeeds) has no numeric tag — take the Success arm
@@ -80,7 +88,11 @@ fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<
         let di = as_i64(cg, disc)?;
         let c = cg.fresh_reg();
         cg.emit(format!("{c} = icmp sge i64 {}, 0", di.operand));
-        (c, scalar, Value::new(cg.string_constant("").operand, LType::Str))
+        (
+            c,
+            scalar,
+            Value::new(cg.string_constant("").operand, LType::Str),
+        )
     };
 
     let sl = cg.fresh_label();
@@ -122,18 +134,10 @@ fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<
 
 /// User-union match: read the leading tag of the heap block and branch per
 /// variant, binding that variant's fields.
-fn gen_union_match(
-    cg: &mut Codegen,
-    disc: Value,
-    arms: &[MatchArm],
-    owner: &str,
-) -> Result<Value> {
+fn gen_union_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm], owner: &str) -> Result<Value> {
     // Load the discriminant tag (every variant block starts with `{ i64 tag, … }`).
     let tagp = cg.fresh_reg();
-    cg.emit(format!(
-        "{tagp} = bitcast i8* {} to i64*",
-        disc.operand
-    ));
+    cg.emit(format!("{tagp} = bitcast i8* {} to i64*", disc.operand));
     let tag = cg.fresh_reg();
     cg.emit(format!("{tag} = load i64, i64* {tagp}"));
 
@@ -150,7 +154,9 @@ fn gen_union_match(
             cg.emit(format!("{cond} = icmp eq i64 {tag}, {vtag}"));
             let body_lbl = cg.fresh_label();
             let next_lbl = cg.fresh_label();
-            cg.emit(format!("br i1 {cond}, label %{body_lbl}, label %{next_lbl}"));
+            cg.emit(format!(
+                "br i1 {cond}, label %{body_lbl}, label %{next_lbl}"
+            ));
             cg.start_block(&body_lbl);
             bind_variant_fields(cg, &disc, &name, &fields);
             let v = gen_expr(cg, &arm.body)?;
@@ -205,7 +211,10 @@ fn bind_variant_fields(cg: &mut Codegen, disc: &Value, variant: &str, pat_fields
         };
         let loaded = crate::aggregate::load_field(cg, &struct_ty, src.as_str(), i + 1, *fty);
         let owner = cg.ctor_field_written(variant, declared);
-        cg.bind(bind_name.clone(), Value::new(loaded, *fty).with_owner(owner));
+        cg.bind(
+            bind_name.clone(),
+            Value::new(loaded, *fty).with_owner(owner),
+        );
     }
 }
 
@@ -229,7 +238,9 @@ fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result
                 let cond = gen_eq(cg, &disc, lit)?;
                 let body_lbl = cg.fresh_label();
                 let next_lbl = cg.fresh_label();
-                cg.emit(format!("br i1 {cond}, label %{body_lbl}, label %{next_lbl}"));
+                cg.emit(format!(
+                    "br i1 {cond}, label %{body_lbl}, label %{next_lbl}"
+                ));
                 cg.start_block(&body_lbl);
                 let v = gen_expr(cg, &arm.body)?;
                 let blk = cg.cur_block().to_string();

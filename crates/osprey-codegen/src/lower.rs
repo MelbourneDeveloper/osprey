@@ -122,13 +122,20 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
 /// `unwrap` is set (a mutable assignment), a Result value is unwrapped to its
 /// success payload before binding.
 fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<()> {
-    if let Expr::Lambda { parameters, body, .. } = value {
+    if let Expr::Lambda {
+        parameters, body, ..
+    } = value
+    {
         cg.lambdas
             .insert(name.to_string(), (parameters.clone(), (**body).clone()));
         return Ok(());
     }
     let v = gen_expr(cg, value)?;
-    let v = if unwrap { crate::result::unwrap(cg, v) } else { v };
+    let v = if unwrap {
+        crate::result::unwrap(cg, v)
+    } else {
+        v
+    };
     cg.bind(name.to_string(), v);
     Ok(())
 }

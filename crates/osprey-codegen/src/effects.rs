@@ -157,7 +157,10 @@ pub(crate) fn gen_handler(
         let eff_s = cg.string_constant(effect);
         let op_s = cg.string_constant(&arm.operation);
         let fp = cg.fresh_reg();
-        cg.emit(format!("{fp} = bitcast {} @{fn_name} to i8*", sig.fn_ptr_ty()));
+        cg.emit(format!(
+            "{fp} = bitcast {} @{fn_name} to i8*",
+            sig.fn_ptr_ty()
+        ));
         let r = cg.fresh_reg();
         cg.emit(format!(
             "{r} = call i32 @__osprey_handler_push(i8* {}, i8* {}, i8* {fp})",

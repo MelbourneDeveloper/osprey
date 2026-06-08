@@ -41,10 +41,9 @@ pub(crate) fn gen_constructor(
 
     // fields, in declared order
     for (i, (fname, fty)) in view.fields.iter().enumerate() {
-        let fa = fields
-            .iter()
-            .find(|f| &f.name == fname)
-            .ok_or_else(|| CodegenError::invalid(format!("missing field `{fname}` for `{name}`")))?;
+        let fa = fields.iter().find(|f| &f.name == fname).ok_or_else(|| {
+            CodegenError::invalid(format!("missing field `{fname}` for `{name}`"))
+        })?;
         let v = gen_expr(cg, &fa.value)?;
         let v = crate::cast::coerce_to(cg, v, *fty)?;
         store_field(cg, &struct_ty, obj.as_str(), i + 1, *fty, &v.operand);
@@ -62,7 +61,9 @@ pub(crate) fn gen_update(
     record: &str,
     fields: &[FieldAssignment],
 ) -> Result<Value> {
-    let base = cg.lookup(record).ok_or_else(|| CodegenError::unknown(record))?;
+    let base = cg
+        .lookup(record)
+        .ok_or_else(|| CodegenError::unknown(record))?;
     let owner = base
         .osp_ty
         .clone()
@@ -73,7 +74,10 @@ pub(crate) fn gen_update(
     let struct_ty = cg.ctor_struct_ty(&owner).unwrap();
 
     let src = cg.fresh_reg();
-    cg.emit(format!("{src} = bitcast i8* {} to {struct_ty}*", base.operand));
+    cg.emit(format!(
+        "{src} = bitcast i8* {} to {struct_ty}*",
+        base.operand
+    ));
     let obj = cg.malloc_struct(&struct_ty);
 
     let tagp = cg.fresh_reg();
@@ -124,7 +128,10 @@ pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> 
     let fty = view.fields[idx].1;
 
     let src = cg.fresh_reg();
-    cg.emit(format!("{src} = bitcast i8* {} to {struct_ty}*", tv.operand));
+    cg.emit(format!(
+        "{src} = bitcast i8* {} to {struct_ty}*",
+        tv.operand
+    ));
     let loaded = load_field(cg, &struct_ty, src.as_str(), idx + 1, fty);
     let owner = cg.ctor_field_written(&owner, field);
     Ok(Value::new(loaded, fty).with_owner(owner))

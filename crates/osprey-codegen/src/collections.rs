@@ -111,7 +111,10 @@ fn list_box2(cg: &mut Codegen, cname: &str, args: &[Expr]) -> Result<Value> {
     let x = boxed_arg(cg, args, 1)?;
     declare(cg, cname, "i8*", "i8*, i64");
     let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i8* @{cname}(i8* {}, i64 {})", h.operand, x.operand));
+    cg.emit(format!(
+        "{r} = call i8* @{cname}(i8* {}, i64 {})",
+        h.operand, x.operand
+    ));
     Ok(Value::handle(r, LIST_OWNER))
 }
 
@@ -126,7 +129,10 @@ fn list_concat(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 pub(crate) fn concat_handles(cg: &mut Codegen, a: &Value, b: &Value) -> Result<Value> {
     declare(cg, "osprey_list_concat", "i8*", "i8*, i8*");
     let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i8* @osprey_list_concat(i8* {}, i8* {})", a.operand, b.operand));
+    cg.emit(format!(
+        "{r} = call i8* @osprey_list_concat(i8* {}, i8* {})",
+        a.operand, b.operand
+    ));
     Ok(Value::handle(r, LIST_OWNER))
 }
 
@@ -137,9 +143,15 @@ fn list_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     declare(cg, "osprey_list_in_bounds", "i32", "i8*, i64");
     declare(cg, "osprey_list_get", "i64", "i8*, i64");
     let inb = cg.fresh_reg();
-    cg.emit(format!("{inb} = call i32 @osprey_list_in_bounds(i8* {}, i64 {})", l.operand, i.operand));
+    cg.emit(format!(
+        "{inb} = call i32 @osprey_list_in_bounds(i8* {}, i64 {})",
+        l.operand, i.operand
+    ));
     let val = cg.fresh_reg();
-    cg.emit(format!("{val} = call i64 @osprey_list_get(i8* {}, i64 {})", l.operand, i.operand));
+    cg.emit(format!(
+        "{val} = call i64 @osprey_list_get(i8* {}, i64 {})",
+        l.operand, i.operand
+    ));
     let oob = cg.fresh_reg();
     cg.emit(format!("{oob} = icmp eq i32 {inb}, 0"));
     let disc = cg.fresh_reg();
@@ -161,7 +173,10 @@ fn list_contains(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     declare(cg, "osprey_list_length", "i64", "i8*");
     declare(cg, "osprey_list_get", "i64", "i8*, i64");
     let len = cg.fresh_reg();
-    cg.emit(format!("{len} = call i64 @osprey_list_length(i8* {})", l.operand));
+    cg.emit(format!(
+        "{len} = call i64 @osprey_list_length(i8* {})",
+        l.operand
+    ));
     let idx = cg.fresh_reg();
     cg.emit(format!("{idx} = alloca i64"));
     cg.emit(format!("store i64 0, i64* {idx}"));
@@ -185,14 +200,20 @@ fn list_contains(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 
     cg.start_block(&body);
     let elem = cg.fresh_reg();
-    cg.emit(format!("{elem} = call i64 @osprey_list_get(i8* {}, i64 {i})", l.operand));
+    cg.emit(format!(
+        "{elem} = call i64 @osprey_list_get(i8* {}, i64 {i})",
+        l.operand
+    ));
     let eq = cg.fresh_reg();
     if is_str {
         cg.add_extern("declare i32 @strcmp(i8*, i8*)");
         let ep = cg.fresh_reg();
         cg.emit(format!("{ep} = inttoptr i64 {elem} to i8*"));
         let c = cg.fresh_reg();
-        cg.emit(format!("{c} = call i32 @strcmp(i8* {ep}, i8* {})", needle.operand));
+        cg.emit(format!(
+            "{c} = call i32 @strcmp(i8* {ep}, i8* {})",
+            needle.operand
+        ));
         cg.emit(format!("{eq} = icmp eq i32 {c}, 0"));
     } else {
         cg.emit(format!("{eq} = icmp eq i64 {elem}, {}", boxed.operand));
@@ -235,7 +256,10 @@ fn map_remove(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let k = boxed_arg(cg, args, 1)?;
     declare(cg, "osprey_map_remove", "i8*", "i8*, i64");
     let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i8* @osprey_map_remove(i8* {}, i64 {})", m.operand, k.operand));
+    cg.emit(format!(
+        "{r} = call i8* @osprey_map_remove(i8* {}, i64 {})",
+        m.operand, k.operand
+    ));
     Ok(Value::handle(r, MAP_OWNER))
 }
 
@@ -245,7 +269,10 @@ fn map_contains(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let k = boxed_arg(cg, args, 1)?;
     declare(cg, "osprey_map_contains", "i32", "i8*, i64");
     let raw = cg.fresh_reg();
-    cg.emit(format!("{raw} = call i32 @osprey_map_contains(i8* {}, i64 {})", m.operand, k.operand));
+    cg.emit(format!(
+        "{raw} = call i32 @osprey_map_contains(i8* {}, i64 {})",
+        m.operand, k.operand
+    ));
     let r = cg.fresh_reg();
     cg.emit(format!("{r} = icmp ne i32 {raw}, 0"));
     Ok(Value::new(r, LType::I1))
@@ -269,7 +296,10 @@ fn map_merge(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 pub(crate) fn merge_handles(cg: &mut Codegen, a: &Value, b: &Value) -> Result<Value> {
     declare(cg, "osprey_map_merge", "i8*", "i8*, i8*");
     let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i8* @osprey_map_merge(i8* {}, i8* {})", a.operand, b.operand));
+    cg.emit(format!(
+        "{r} = call i8* @osprey_map_merge(i8* {}, i8* {})",
+        a.operand, b.operand
+    ));
     Ok(Value::handle(r, MAP_OWNER))
 }
 
@@ -284,7 +314,10 @@ fn map_to_list(cg: &mut Codegen, args: &[Expr], take_key: bool) -> Result<Value>
     let bld = cg.fresh_reg();
     cg.emit(format!("{bld} = call i8* @osprey_list_builder_new()"));
     let iter = cg.fresh_reg();
-    cg.emit(format!("{iter} = call i8* @osprey_map_iter_new(i8* {})", m.operand));
+    cg.emit(format!(
+        "{iter} = call i8* @osprey_map_iter_new(i8* {})",
+        m.operand
+    ));
     let kp = cg.fresh_reg();
     cg.emit(format!("{kp} = alloca i64"));
     let vp = cg.fresh_reg();
@@ -297,7 +330,9 @@ fn map_to_list(cg: &mut Codegen, args: &[Expr], take_key: bool) -> Result<Value>
 
     cg.start_block(&cond);
     let has = cg.fresh_reg();
-    cg.emit(format!("{has} = call i32 @osprey_map_iter_next(i8* {iter}, i64* {kp}, i64* {vp})"));
+    cg.emit(format!(
+        "{has} = call i32 @osprey_map_iter_next(i8* {iter}, i64* {kp}, i64* {vp})"
+    ));
     let more = cg.fresh_reg();
     cg.emit(format!("{more} = icmp ne i32 {has}, 0"));
     cg.emit(format!("br i1 {more}, label %{body}, label %{endl}"));
@@ -306,12 +341,16 @@ fn map_to_list(cg: &mut Codegen, args: &[Expr], take_key: bool) -> Result<Value>
     let slot = if take_key { &kp } else { &vp };
     let elem = cg.fresh_reg();
     cg.emit(format!("{elem} = load i64, i64* {slot}"));
-    cg.emit(format!("call void @osprey_list_builder_push(i8* {bld}, i64 {elem})"));
+    cg.emit(format!(
+        "call void @osprey_list_builder_push(i8* {bld}, i64 {elem})"
+    ));
     cg.emit(format!("br label %{cond}"));
 
     cg.start_block(&endl);
     let sealed = cg.fresh_reg();
-    cg.emit(format!("{sealed} = call i8* @osprey_list_builder_seal(i8* {bld})"));
+    cg.emit(format!(
+        "{sealed} = call i8* @osprey_list_builder_seal(i8* {bld})"
+    ));
     Ok(Value::handle(sealed, LIST_OWNER))
 }
 
@@ -336,7 +375,9 @@ pub(crate) fn gen_map_literal(cg: &mut Codegen, entries: &[osprey_ast::MapEntry]
         ));
     }
     let sealed = cg.fresh_reg();
-    cg.emit(format!("{sealed} = call i8* @osprey_map_builder_seal(i8* {bld})"));
+    cg.emit(format!(
+        "{sealed} = call i8* @osprey_map_builder_seal(i8* {bld})"
+    ));
     Ok(Value::handle(sealed, MAP_OWNER))
 }
 
@@ -345,9 +386,15 @@ pub(crate) fn runtime_map_get(cg: &mut Codegen, m: &Value, k: &Value) -> Result<
     declare(cg, "osprey_map_contains", "i32", "i8*, i64");
     declare(cg, "osprey_map_get", "i64", "i8*, i64");
     let has = cg.fresh_reg();
-    cg.emit(format!("{has} = call i32 @osprey_map_contains(i8* {}, i64 {})", m.operand, k.operand));
+    cg.emit(format!(
+        "{has} = call i32 @osprey_map_contains(i8* {}, i64 {})",
+        m.operand, k.operand
+    ));
     let got = cg.fresh_reg();
-    cg.emit(format!("{got} = call i64 @osprey_map_get(i8* {}, i64 {})", m.operand, k.operand));
+    cg.emit(format!(
+        "{got} = call i64 @osprey_map_get(i8* {}, i64 {})",
+        m.operand, k.operand
+    ));
     let miss = cg.fresh_reg();
     cg.emit(format!("{miss} = icmp eq i32 {has}, 0"));
     let disc = cg.fresh_reg();

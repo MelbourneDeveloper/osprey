@@ -57,9 +57,7 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
             arguments,
             ..
         } => crate::effects::gen_perform(cg, effect, operation, arguments),
-        Expr::Handler { effect, arms, body } => {
-            crate::effects::gen_handler(cg, effect, arms, body)
-        }
+        Expr::Handler { effect, arms, body } => crate::effects::gen_handler(cg, effect, arms, body),
         other => Err(CodegenError::unsupported(describe(other))),
     }
 }
@@ -111,7 +109,9 @@ fn gen_binary(cg: &mut Codegen, op: &str, left: &Expr, right: &Expr) -> Result<V
     match op {
         "+" | "-" | "*" | "/" | "%" => gen_arith(cg, op, l, r),
         "==" | "!=" | "<" | "<=" | ">" | ">=" => gen_comparison(cg, op, l, r),
-        other => Err(CodegenError::unsupported(format!("binary operator `{other}`"))),
+        other => Err(CodegenError::unsupported(format!(
+            "binary operator `{other}`"
+        ))),
     }
 }
 
@@ -143,7 +143,10 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
         let ld = as_double(cg, l)?;
         let rd = as_double(cg, r)?;
         let reg = cg.fresh_reg();
-        cg.emit(format!("{reg} = fdiv double {}, {}", ld.operand, rd.operand));
+        cg.emit(format!(
+            "{reg} = fdiv double {}, {}",
+            ld.operand, rd.operand
+        ));
         return crate::result::make_ok(cg, Value::new(reg, LType::Double), LType::Double);
     }
     if l.ty == LType::Double || r.ty == LType::Double {
@@ -157,7 +160,10 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
             _ => "frem",
         };
         let reg = cg.fresh_reg();
-        cg.emit(format!("{reg} = {opc} double {}, {}", ld.operand, rd.operand));
+        cg.emit(format!(
+            "{reg} = {opc} double {}, {}",
+            ld.operand, rd.operand
+        ));
         return crate::result::make_ok(cg, Value::new(reg, LType::Double), LType::Double);
     }
     let li = as_i64(cg, l)?;
@@ -194,9 +200,15 @@ fn gen_str_concat(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let buf = cg.fresh_reg();
     cg.emit(format!("{buf} = call i8* @malloc(i64 {total})"));
     let cp = cg.fresh_reg();
-    cg.emit(format!("{cp} = call i8* @strcpy(i8* {buf}, i8* {})", ls.operand));
+    cg.emit(format!(
+        "{cp} = call i8* @strcpy(i8* {buf}, i8* {})",
+        ls.operand
+    ));
     let ct = cg.fresh_reg();
-    cg.emit(format!("{ct} = call i8* @strcat(i8* {buf}, i8* {})", rs.operand));
+    cg.emit(format!(
+        "{ct} = call i8* @strcat(i8* {buf}, i8* {})",
+        rs.operand
+    ));
     Ok(Value::new(buf, LType::Str))
 }
 
@@ -248,7 +260,10 @@ fn gen_comparison(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Valu
     };
     let li = as_i64(cg, l)?;
     let ri = as_i64(cg, r)?;
-    cg.emit(format!("{reg} = icmp {cc} i64 {}, {}", li.operand, ri.operand));
+    cg.emit(format!(
+        "{reg} = icmp {cc} i64 {}, {}",
+        li.operand, ri.operand
+    ));
     Ok(Value::new(reg, LType::I1))
 }
 
@@ -272,7 +287,9 @@ fn gen_unary(cg: &mut Codegen, op: &str, operand: &Expr) -> Result<Value> {
             cg.emit(format!("{reg} = xor i1 {}, true", b.operand));
             Ok(Value::new(reg, LType::I1))
         }
-        other => Err(CodegenError::unsupported(format!("unary operator `{other}`"))),
+        other => Err(CodegenError::unsupported(format!(
+            "unary operator `{other}`"
+        ))),
     }
 }
 
@@ -284,7 +301,10 @@ fn gen_call(
 ) -> Result<Value> {
     // A directly-applied lambda (`x |> fn(y) => …`, `(fn(y) => …)(x)`) is
     // beta-reduced inline.
-    if let Expr::Lambda { parameters, body, .. } = function {
+    if let Expr::Lambda {
+        parameters, body, ..
+    } = function
+    {
         return apply_lambda(cg, parameters, body, arguments);
     }
     let Expr::Identifier(name) = function else {
@@ -477,7 +497,9 @@ fn gen_interpolation(cg: &mut Codegen, parts: &[InterpolatedPart]) -> Result<Val
 }
 
 fn first_arg<'a>(arguments: &'a [Expr], named: &'a [NamedArgument]) -> Option<&'a Expr> {
-    arguments.first().or_else(|| named.first().map(|n| &n.value))
+    arguments
+        .first()
+        .or_else(|| named.first().map(|n| &n.value))
 }
 
 pub(crate) fn describe(expr: &Expr) -> String {

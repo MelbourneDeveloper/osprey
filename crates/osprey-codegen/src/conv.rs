@@ -26,9 +26,9 @@ pub(crate) fn as_i64(cg: &mut Codegen, v: Value) -> Result<Value> {
             cg.emit(format!("{reg} = fptosi double {} to i64", v.operand));
             Ok(Value::new(reg, LType::I64))
         }
-        LType::Str | LType::Ptr => {
-            Err(CodegenError::invalid("expected an integer, found a string/handle"))
-        }
+        LType::Str | LType::Ptr => Err(CodegenError::invalid(
+            "expected an integer, found a string/handle",
+        )),
     }
 }
 
@@ -41,9 +41,7 @@ pub(crate) fn as_i1(cg: &mut Codegen, v: Value) -> Result<Value> {
             cg.emit(format!("{reg} = icmp ne {} {}, 0", v.ty, v.operand));
             Ok(Value::new(reg, LType::I1))
         }
-        LType::Double | LType::Str | LType::Ptr => {
-            Err(CodegenError::invalid("expected a bool"))
-        }
+        LType::Double | LType::Str | LType::Ptr => Err(CodegenError::invalid("expected a bool")),
     }
 }
 
@@ -83,8 +81,6 @@ pub(crate) fn as_double(cg: &mut Codegen, v: Value) -> Result<Value> {
             let i = as_i64(cg, v)?;
             as_double(cg, i)
         }
-        LType::I32 | LType::Str | LType::Ptr => {
-            Err(CodegenError::invalid("expected a number"))
-        }
+        LType::I32 | LType::Str | LType::Ptr => Err(CodegenError::invalid("expected a number")),
     }
 }

@@ -164,7 +164,9 @@ impl Codegen {
 
     /// The owner type name of a function's return value, if it is a record/union.
     pub(crate) fn fn_ret_owner(&self, name: &str) -> Option<String> {
-        self.prog.return_type(name).and_then(crate::types::owner_name)
+        self.prog
+            .return_type(name)
+            .and_then(crate::types::owner_name)
     }
 
     /// The inner [`LType`] when a function is declared to return `Result<T, E>`

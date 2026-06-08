@@ -50,7 +50,9 @@ pub(crate) fn gen(
 fn callback_name(e: &Expr) -> Result<String> {
     match e {
         Expr::Identifier(n) => Ok(n.clone()),
-        _ => Err(CodegenError::unsupported("iterator callback must be a named function")),
+        _ => Err(CodegenError::unsupported(
+            "iterator callback must be a named function",
+        )),
     }
 }
 
@@ -75,7 +77,10 @@ fn range(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 fn record(cg: &mut Codegen, args: &[Expr], is_map: bool) -> Result<Value> {
     let iter = gen_expr(cg, nth(args, 0)?)?;
     let fn_name = callback_name(nth(args, 1)?)?;
-    cg.pending_iter_ops.push(IterOp { map: is_map, fn_name });
+    cg.pending_iter_ops.push(IterOp {
+        map: is_map,
+        fn_name,
+    });
     Ok(iter)
 }
 
@@ -212,7 +217,10 @@ fn open_list_loop(cg: &mut Codegen, l: &Value) -> ListLoop {
     cg.add_extern("declare i64 @osprey_list_length(i8*)");
     cg.add_extern("declare i64 @osprey_list_get(i8*, i64)");
     let len = cg.fresh_reg();
-    cg.emit(format!("{len} = call i64 @osprey_list_length(i8* {})", l.operand));
+    cg.emit(format!(
+        "{len} = call i64 @osprey_list_length(i8* {})",
+        l.operand
+    ));
     let idx = cg.fresh_reg();
     cg.emit(format!("{idx} = alloca i64"));
     cg.emit(format!("store i64 0, i64* {idx}"));
@@ -231,8 +239,17 @@ fn open_list_loop(cg: &mut Codegen, l: &Value) -> ListLoop {
 
     cg.start_block(&body);
     let elem = cg.fresh_reg();
-    cg.emit(format!("{elem} = call i64 @osprey_list_get(i8* {}, i64 {i})", l.operand));
-    ListLoop { idx, elem, incr, cond, endl }
+    cg.emit(format!(
+        "{elem} = call i64 @osprey_list_get(i8* {}, i64 {i})",
+        l.operand
+    ));
+    ListLoop {
+        idx,
+        elem,
+        incr,
+        cond,
+        endl,
+    }
 }
 
 fn close_list_loop(cg: &mut Codegen, lp: &ListLoop) {
@@ -284,18 +301,26 @@ fn list_builder(cg: &mut Codegen, args: &[Expr], filter: bool) -> Result<Value> 
         let skip = cg.fresh_label();
         cg.emit(format!("br i1 {nz}, label %{push}, label %{skip}"));
         cg.start_block(&push);
-        cg.emit(format!("call void @osprey_list_builder_push(i8* {bld}, i64 {})", lp.elem));
+        cg.emit(format!(
+            "call void @osprey_list_builder_push(i8* {bld}, i64 {})",
+            lp.elem
+        ));
         cg.emit(format!("br label %{skip}"));
         cg.start_block(&skip);
     } else {
         let mapped = call_with_values(cg, &f, vec![elem])?;
         let mapped = crate::result::unwrap(cg, mapped);
         let boxed = box_to_i64(cg, mapped);
-        cg.emit(format!("call void @osprey_list_builder_push(i8* {bld}, i64 {})", boxed.operand));
+        cg.emit(format!(
+            "call void @osprey_list_builder_push(i8* {bld}, i64 {})",
+            boxed.operand
+        ));
     }
     close_list_loop(cg, &lp);
     let sealed = cg.fresh_reg();
-    cg.emit(format!("{sealed} = call i8* @osprey_list_builder_seal(i8* {bld})"));
+    cg.emit(format!(
+        "{sealed} = call i8* @osprey_list_builder_seal(i8* {bld})"
+    ));
     Ok(Value::handle(sealed, crate::collections::LIST_OWNER))
 }
 
@@ -315,7 +340,10 @@ fn fold_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let new = call_with_values(
         cg,
         &combine,
-        vec![Value::new(a, LType::I64), Value::new(lp.elem.clone(), LType::I64)],
+        vec![
+            Value::new(a, LType::I64),
+            Value::new(lp.elem.clone(), LType::I64),
+        ],
     )?;
     let new = crate::result::unwrap(cg, new);
     let new = box_to_i64(cg, new);

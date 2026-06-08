@@ -78,7 +78,12 @@ pub(crate) fn gen_list(cg: &mut Codegen, elements: &[Expr]) -> Result<Value> {
             elem.as_str(),
             elem.as_str()
         ));
-        cg.emit(format!("store {} {}, {}* {slot}", elem.as_str(), v.operand, elem.as_str()));
+        cg.emit(format!(
+            "store {} {}, {}* {slot}",
+            elem.as_str(),
+            v.operand,
+            elem.as_str()
+        ));
     }
     let obj = cg.malloc_struct(LIST_STRUCT);
     crate::aggregate::store_field(cg, LIST_STRUCT, &obj, 0, LType::I64, &n.to_string());
@@ -134,7 +139,11 @@ pub(crate) fn gen_index(cg: &mut Codegen, target: &Expr, index: &Expr) -> Result
         idx.operand
     ));
     let val = cg.fresh_reg();
-    cg.emit(format!("{val} = load {}, {}* {slot}", elem.as_str(), elem.as_str()));
+    cg.emit(format!(
+        "{val} = load {}, {}* {slot}",
+        elem.as_str(),
+        elem.as_str()
+    ));
     cg.emit(format!("br label %{cont}"));
 
     cg.start_block(&oob_bb);
@@ -154,5 +163,10 @@ pub(crate) fn gen_index(cg: &mut Codegen, target: &Expr, index: &Expr) -> Result
     ));
     let disc = cg.fresh_reg();
     cg.emit(format!("{disc} = select i1 {ok}, i8 0, i8 1"));
-    make_result(cg, Value::new(phi, elem).with_owner(elem_owner), elem, &disc)
+    make_result(
+        cg,
+        Value::new(phi, elem).with_owner(elem_owner),
+        elem,
+        &disc,
+    )
 }

@@ -24,12 +24,20 @@ pub(crate) fn gen(
         "length" => unary_i64(cg, "strlen", args, named)?,
         "isEmpty" => bool_from_i64(cg, "osp_string_is_empty", &[(0, LType::Str)], args, named)?,
         "contains" => contains(cg, args, named)?,
-        "startsWith" => {
-            bool_from_i64(cg, "osp_string_starts_with", &[(0, LType::Str), (1, LType::Str)], args, named)?
-        }
-        "endsWith" => {
-            bool_from_i64(cg, "osp_string_ends_with", &[(0, LType::Str), (1, LType::Str)], args, named)?
-        }
+        "startsWith" => bool_from_i64(
+            cg,
+            "osp_string_starts_with",
+            &[(0, LType::Str), (1, LType::Str)],
+            args,
+            named,
+        )?,
+        "endsWith" => bool_from_i64(
+            cg,
+            "osp_string_ends_with",
+            &[(0, LType::Str), (1, LType::Str)],
+            args,
+            named,
+        )?,
         "toUpperCase" => unary_str(cg, "osp_string_to_upper", args, named)?,
         "toLowerCase" => unary_str(cg, "osp_string_to_lower", args, named)?,
         "trim" => unary_str(cg, "osp_string_trim", args, named)?,
@@ -40,14 +48,34 @@ pub(crate) fn gen(
         "drop" => str_int_str(cg, "osp_string_drop", args, named)?,
         "indexOf" => index_of(cg, args, named)?,
         "substring" => substring(cg, args, named)?,
-        "replace" => nullable_str(cg, "osp_string_replace", &[LType::Str, LType::Str, LType::Str], args, named)?,
-        "repeat" => nullable_str(cg, "osp_string_repeat", &[LType::Str, LType::I64], args, named)?,
-        "padStart" => {
-            nullable_str(cg, "osp_string_pad_start", &[LType::Str, LType::I64, LType::Str], args, named)?
-        }
-        "padEnd" => {
-            nullable_str(cg, "osp_string_pad_end", &[LType::Str, LType::I64, LType::Str], args, named)?
-        }
+        "replace" => nullable_str(
+            cg,
+            "osp_string_replace",
+            &[LType::Str, LType::Str, LType::Str],
+            args,
+            named,
+        )?,
+        "repeat" => nullable_str(
+            cg,
+            "osp_string_repeat",
+            &[LType::Str, LType::I64],
+            args,
+            named,
+        )?,
+        "padStart" => nullable_str(
+            cg,
+            "osp_string_pad_start",
+            &[LType::Str, LType::I64, LType::Str],
+            args,
+            named,
+        )?,
+        "padEnd" => nullable_str(
+            cg,
+            "osp_string_pad_end",
+            &[LType::Str, LType::I64, LType::Str],
+            args,
+            named,
+        )?,
         "parseInt" => parse_strict(cg, "osp_parse_int_strict", LType::I64, args, named)?,
         "parseFloat" => parse_strict(cg, "osp_parse_float_strict", LType::Double, args, named)?,
         "join" => join(cg, args, named)?,
@@ -112,7 +140,10 @@ fn str_int_str(
     let n = arg(cg, args, 1, LType::I64)?;
     declare(cg, cname, "i8*", "i8*, i64");
     let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i8* @{cname}(i8* {}, i64 {})", s.operand, n.operand));
+    cg.emit(format!(
+        "{r} = call i8* @{cname}(i8* {}, i64 {})",
+        s.operand, n.operand
+    ));
     Ok(Value::new(r, LType::Str))
 }
 
@@ -146,7 +177,10 @@ fn contains(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result
     let needle = arg(cg, args, 1, LType::Str)?;
     cg.add_extern("declare i8* @strstr(i8*, i8*)");
     let hit = cg.fresh_reg();
-    cg.emit(format!("{hit} = call i8* @strstr(i8* {}, i8* {})", s.operand, needle.operand));
+    cg.emit(format!(
+        "{hit} = call i8* @strstr(i8* {}, i8* {})",
+        s.operand, needle.operand
+    ));
     let r = cg.fresh_reg();
     cg.emit(format!("{r} = icmp ne i8* {hit}, null"));
     Ok(Value::new(r, LType::I1))
@@ -158,7 +192,10 @@ fn index_of(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result
     let needle = arg(cg, args, 1, LType::Str)?;
     declare(cg, "osp_string_index_of", "i64", "i8*, i8*");
     let idx = cg.fresh_reg();
-    cg.emit(format!("{idx} = call i64 @osp_string_index_of(i8* {}, i8* {})", s.operand, needle.operand));
+    cg.emit(format!(
+        "{idx} = call i64 @osp_string_index_of(i8* {}, i8* {})",
+        s.operand, needle.operand
+    ));
     let iserr = cg.fresh_reg();
     cg.emit(format!("{iserr} = icmp slt i64 {idx}, 0"));
     let disc = cg.fresh_reg();
@@ -231,7 +268,10 @@ fn parse_strict(
     let zero = if inner == LType::Double { "0.0" } else { "0" };
     cg.emit(format!("store {inner} {zero}, {inner}* {slot}"));
     let rc = cg.fresh_reg();
-    cg.emit(format!("{rc} = call i64 @{cname}(i8* {}, {inner}* {slot})", s.operand));
+    cg.emit(format!(
+        "{rc} = call i64 @{cname}(i8* {}, {inner}* {slot})",
+        s.operand
+    ));
     let parsed = cg.fresh_reg();
     cg.emit(format!("{parsed} = load {inner}, {inner}* {slot}"));
     let iserr = cg.fresh_reg();
@@ -258,12 +298,20 @@ fn split(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let sep = arg(cg, args, 1, LType::Str)?;
     declare(cg, "osp_string_split", "i8*", "i8*, i8*");
     let ptr = cg.fresh_reg();
-    cg.emit(format!("{ptr} = call i8* @osp_string_split(i8* {}, i8* {})", s.operand, sep.operand));
+    cg.emit(format!(
+        "{ptr} = call i8* @osp_string_split(i8* {}, i8* {})",
+        s.operand, sep.operand
+    ));
     let iserr = cg.fresh_reg();
     cg.emit(format!("{iserr} = icmp eq i8* {ptr}, null"));
     let disc = cg.fresh_reg();
     cg.emit(format!("{disc} = select i1 {iserr}, i8 1, i8 0"));
-    make_result(cg, Value::handle(ptr, crate::collections::LIST_OWNER), LType::Ptr, &disc)
+    make_result(
+        cg,
+        Value::handle(ptr, crate::collections::LIST_OWNER),
+        LType::Ptr,
+        &disc,
+    )
 }
 
 /// `join(list: List<string>, separator: string) -> string`.
@@ -272,6 +320,9 @@ fn join(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result<Val
     let sep = arg(cg, args, 1, LType::Str)?;
     declare(cg, "osp_string_join", "i8*", "i8*, i8*");
     let r = cg.fresh_reg();
-    cg.emit(format!("{r} = call i8* @osp_string_join(i8* {}, i8* {})", list.operand, sep.operand));
+    cg.emit(format!(
+        "{r} = call i8* @osp_string_join(i8* {}, i8* {})",
+        list.operand, sep.operand
+    ));
     Ok(Value::new(r, LType::Str))
 }

@@ -155,7 +155,10 @@ fn link_args(ir: &str, source: &str) -> Vec<String> {
     // FFI directives: `// @link: sqlite3` -> `-lsqlite3`, `// @linkdir: P` -> `-LP`.
     for line in source.lines() {
         let t = line.trim();
-        if let Some(rest) = t.strip_prefix("// @link:").or_else(|| t.strip_prefix("//@link:")) {
+        if let Some(rest) = t
+            .strip_prefix("// @link:")
+            .or_else(|| t.strip_prefix("//@link:"))
+        {
             args.push(format!("-l{}", rest.trim()));
         } else if let Some(rest) = t
             .strip_prefix("// @linkdir:")
