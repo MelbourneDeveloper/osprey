@@ -11,3 +11,6 @@ osprey-ast.workspace = true
 
 [dev-dependencies]
 osprey-syntax.workspace = true
+
+[lints]
+workspace = true

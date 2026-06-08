@@ -1,0 +1,20 @@
+# Deslop duplication gate — [CI-DESLOP]
+# Single source of truth for this repo's code-duplication budget. Committed,
+# PR-reviewed, ratcheted DOWN only — never up without a written justification.
+# `make lint` (and therefore `make ci` and CI) runs `deslop .`, which reads this
+# file and exits non-zero — FAILING THE BUILD — when measured duplication exceeds
+# the ceiling below. Deslop parses Rust/C#/Python/Dart, so this gates the Rust
+# workspace (the Go compiler and C runtime are out of scope here).
+# Docs: https://deslop.live/docs/for-ai/
+[threshold]
+# Measured 18.03% when the gate was introduced. Ceiling sits just above to absorb
+# cross-runner float jitter. Ratchet DOWN as duplication is removed — the heavy
+# offenders today are codegen's iter.rs / collections.rs (see deslop-report.html).
+max_duplication_percent = 18.5
+
+[defaults]
+exclude = [
+  "**/tests/**",
+  # Vendored, generated tree-sitter grammar bindings — not hand-written.
+  "tree-sitter-osprey/**",
+]

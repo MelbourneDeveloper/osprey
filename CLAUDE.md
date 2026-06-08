@@ -11,11 +11,12 @@ This file provides guidance for agents when working with code in this repository
 ## Core Development Principles
 
 - **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
-- **RUN LINTING AUTOFIXES AND make line ROUTINELY** - Most lints can be easily fixed with auto fix. Don't try to fix them yourself
+- **RUN make ci ROUTINELY** - Many clippy lints can be easily fixed with auto fix. Don't try to fix them yourself
 - **PREFER EXPANDING EXISTING EXAMPLES AND TESTS** - Don't add new examples/tests
 - **DO NOT USE GIT - IN PARTICULAR, DO NOT STAMP YOURSELF AS COAUTHOR** - unless explicitly requested
 - **MAKE EXAMPLES (TESTS) CONCISE AND MIX WITH MANY LANGUAGE CONSTRUCTS** - Don't create many files with overlapping functionality
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules 
+- **KEEP FUNCTIONS BELOW 20 LOC**
 - **FP STYLE CODE** - pure functions over OOP style
 - **Handle all panics and return Result<T,E>** instead of throwing
 - **USE CONSTANTS** - Name values meaningfully instead of using literals

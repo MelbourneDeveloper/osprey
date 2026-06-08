@@ -1,0 +1,4842 @@
+{
+  "tool_version": "0.5.1",
+  "min_nodes": 30,
+  "files_analysed": 41,
+  "clusters_hidden": 80,
+  "cache_stats": {
+    "hits": 0,
+    "misses": 0
+  },
+  "metrics": {
+    "analysed_loc": 8210,
+    "duplicated_loc": 1480,
+    "duplication_percent": 18.026796589524967,
+    "clusters_total": 191,
+    "duplicated_files": 30,
+    "threshold": {
+      "percent": 0.0,
+      "breached": false,
+      "source": "none"
+    },
+    "per_file": [
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/collections.rs",
+        "analysed_loc": 356,
+        "duplicated_loc": 216,
+        "duplication_percent": 60.67415730337079
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/iter.rs",
+        "analysed_loc": 327,
+        "duplicated_loc": 155,
+        "duplication_percent": 47.40061162079511
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/strings.rs",
+        "analysed_loc": 277,
+        "duplicated_loc": 123,
+        "duplication_percent": 44.4043321299639
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/conv.rs",
+        "analysed_loc": 90,
+        "duplicated_loc": 35,
+        "duplication_percent": 38.88888888888889
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/expr.rs",
+        "analysed_loc": 502,
+        "duplicated_loc": 178,
+        "duplication_percent": 35.45816733067729
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/runtime.rs",
+        "analysed_loc": 147,
+        "duplicated_loc": 49,
+        "duplication_percent": 33.33333333333333
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/pattern.rs",
+        "analysed_loc": 300,
+        "duplicated_loc": 75,
+        "duplication_percent": 25.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/fiber.rs",
+        "analysed_loc": 135,
+        "duplicated_loc": 30,
+        "duplication_percent": 22.22222222222222
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/lib.rs",
+        "analysed_loc": 130,
+        "duplicated_loc": 28,
+        "duplication_percent": 21.53846153846154
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/check.rs",
+        "analysed_loc": 447,
+        "duplicated_loc": 95,
+        "duplication_percent": 21.252796420581653
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/ty.rs",
+        "analysed_loc": 191,
+        "duplicated_loc": 40,
+        "duplication_percent": 20.94240837696335
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/builtins.rs",
+        "analysed_loc": 302,
+        "duplicated_loc": 58,
+        "duplication_percent": 19.205298013245034
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/aggregate.rs",
+        "analysed_loc": 164,
+        "duplicated_loc": 29,
+        "duplication_percent": 17.682926829268293
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-syntax/src/lower.rs",
+        "analysed_loc": 409,
+        "duplicated_loc": 64,
+        "duplication_percent": 15.647921760391197
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-ast/src/lib.rs",
+        "analysed_loc": 339,
+        "duplicated_loc": 50,
+        "duplication_percent": 14.749262536873156
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/listlit.rs",
+        "analysed_loc": 158,
+        "duplicated_loc": 22,
+        "duplication_percent": 13.924050632911392
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/types.rs",
+        "analysed_loc": 92,
+        "duplicated_loc": 12,
+        "duplication_percent": 13.043478260869565
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/convert.rs",
+        "analysed_loc": 187,
+        "duplicated_loc": 21,
+        "duplication_percent": 11.229946524064172
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/expr.rs",
+        "analysed_loc": 542,
+        "duplicated_loc": 57,
+        "duplication_percent": 10.516605166051662
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-syntax/src/expr.rs",
+        "analysed_loc": 405,
+        "duplicated_loc": 41,
+        "duplication_percent": 10.123456790123457
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/result.rs",
+        "analysed_loc": 73,
+        "duplicated_loc": 7,
+        "duplication_percent": 9.58904109589041
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-syntax/src/lib.rs",
+        "analysed_loc": 181,
+        "duplicated_loc": 13,
+        "duplication_percent": 7.18232044198895
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/unify.rs",
+        "analysed_loc": 296,
+        "duplicated_loc": 19,
+        "duplication_percent": 6.418918918918918
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/env.rs",
+        "analysed_loc": 131,
+        "duplicated_loc": 8,
+        "duplication_percent": 6.106870229007633
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/ctx.rs",
+        "analysed_loc": 156,
+        "duplicated_loc": 8,
+        "duplication_percent": 5.128205128205128
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/pattern.rs",
+        "analysed_loc": 248,
+        "duplicated_loc": 12,
+        "duplication_percent": 4.838709677419355
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/llty.rs",
+        "analysed_loc": 141,
+        "duplicated_loc": 6,
+        "duplication_percent": 4.25531914893617
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-cli/src/main.rs",
+        "analysed_loc": 199,
+        "duplicated_loc": 8,
+        "duplication_percent": 4.0201005025125625
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/builder.rs",
+        "analysed_loc": 432,
+        "duplicated_loc": 15,
+        "duplication_percent": 3.4722222222222223
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/effects.rs",
+        "analysed_loc": 244,
+        "duplicated_loc": 6,
+        "duplication_percent": 2.459016393442623
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/compiler/examples/rust_integration/src/lib.rs",
+        "analysed_loc": 95,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/cast.rs",
+        "analysed_loc": 37,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/error.rs",
+        "analysed_loc": 43,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/lib.rs",
+        "analysed_loc": 100,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-codegen/src/lower.rs",
+        "analysed_loc": 134,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-runtime-sys/build.rs",
+        "analysed_loc": 30,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-runtime-sys/src/lib.rs",
+        "analysed_loc": 37,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/error.rs",
+        "analysed_loc": 45,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/crates/osprey-types/src/info.rs",
+        "analysed_loc": 48,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/tree-sitter-osprey/bindings/rust/lib.rs",
+        "analysed_loc": 30,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      },
+      {
+        "path": "/Users/christianfindlay/Documents/Code/osprey/tree-sitter-osprey/build.rs",
+        "analysed_loc": 10,
+        "duplicated_loc": 0,
+        "duplication_percent": 0.0
+      }
+    ]
+  },
+  "schema_doc": "# Deslop Report Context\n\n## What this is\n\nYou are being given a code-duplication report from **Deslop**, a static analysis tool that detects duplicated code using a hybrid pipeline of AST fingerprinting + token MinHash/LSH. The report lists **worst offenders first** — clusters ranked by a duplication-impact score, not just count.\n\n## How it works (so you know what the signals mean)\n\nThe pipeline normalizes each source file's AST (collapsing identifier names, literals, and comments so renamed-identifier clones hash the same), then finds clones through three complementary passes:\n\n1. **Structural (Merkle AST hash)** — bottom-up `blake3` hash of every AST subtree ≥ `min-nodes`. Detects Type-1 (identical) and Type-2 (renamed-identifier) clones. `structural=1.0` means \"these subtrees are identical after normalization.\"\n2. **Sibling-extension** — contiguous sibling windows under a common parent are hashed as groups. Catches near-miss clones where the same sequence of statements appears in different enclosing contexts.\n3. **Token LSH (MinHash over k=5 k-grams of normalized node kinds)** — catches Type-3 clones where structure diverged but the token bag is close. `token_jaccard` is the estimated Jaccard similarity in `[0.0, 1.0]`.\n\nCandidate pairs from all three passes are unioned, filtered to same-language endpoints by default, then transitively closed into clusters. `.deslop.toml` can opt back into cross-language comparison with `[analysis] allow_cross_language_comparison = true`. Boilerplate-only ranges such as imports, C# `using` directives, namespace/package headers, Python route decorators, and equivalent module prologues are filtered before they become clone clusters. Repeated C# `using` directives may appear as a style/action hint suggesting `global using`; they should not be interpreted as duplicate business logic.\n\n## Clone buckets (canonical)\n\nEvery cluster in this report belongs to exactly one of four buckets. The human label is what end-users see in the CLI / HTML / VS Code UI; the academic `Type-N` label is retained here because agents often read the literature. Both labels refer to the **same** bucket.\n\n| Bucket            | Human label                              | Academic ref     | Meaning                                                                                  |\n|-------------------|------------------------------------------|------------------|------------------------------------------------------------------------------------------|\n| `Identical`       | Identical code                           | Type-1, Type-2   | Identical after normalization (ignoring whitespace, comments, renamed identifiers).      |\n| `NearlyIdentical` | Nearly identical code                    | Type-3           | Type-2 + added/removed/modified statements. Small differences may matter — review both.  |\n| `LooselySimilar`  | Loosely similar code                     | weak LSH-only    | Loose textual overlap below the near-miss bar. Treat as a hint, not a directive.         |\n| `SameBehavior`    | Same behavior, different code *(AI)*     | Type-4           | Semantically equivalent, syntactically different. Requires the embedding pass.           |\n\n`SameBehavior` is populated only when the embedding pass ran. If `embedding_cos` is `0.00` across the whole report, the pass was disabled and the `SameBehavior` bucket is empty — structural / token-based clusters (`Identical`, `NearlyIdentical`, `LooselySimilar`) are unaffected.\n\nFull canonical definition including routing thresholds: [taxonomy.md §[CLONE-BUCKETS]](taxonomy.md).\n\n## How to read the report format\n\nEach line starts with `#N` (rank, lower = worse) and looks like:\n\n```\n#1 [abc123def4567890] weight=271716.65 size=20 nodes=825\n  20 copies of a 825-node subtree at path/A.cs:230-5843, path/B.cs:195-5843, path/C.cs:0-5844 (+17 more) [structural=0.00, token_jaccard=0.97, embedding_cos=0.00]\n```\n\nFields:\n\n| Field | Meaning |\n|---|---|\n| `#N` | Rank. `#1` is the worst offender. |\n| `[abc123…]` | Stable 16-char cluster id (hex). Same clone across runs → same id. |\n| `weight` | Ranking score: `node_count × (cluster_size − 1) × log2(1 + total_spanned_bytes)`. Higher = more impact. |\n| `size` | How many copies of this subtree exist. `size=20` means the same pattern appears 20 times. |\n| `nodes` | AST node count of one canonical copy. Bigger subtree = more meaningful clone. |\n| `path:line:column` | Human-readable occurrence location in text/HTML/hover summaries. JSON keeps `start_byte` / `end_byte` for machine navigation. |\n| `structural` | `[0, 1]`. `1.0` = exact Merkle hash match. `0.0` = no exact structural match (found via LSH only). |\n| `token_jaccard` | `[0, 1]`. Estimated Jaccard of normalized k-gram token sets. |\n| `embedding_cos` | `[0, 1]` cosine similarity from the semantic-embedding pass, or `0.00` if that pass was disabled for this run. |\n| `embedding_provenance.indexed_subtrees` | Count of unique successful subtree embeddings fed into ANN. Lower than `attempted_subtrees` when duplicate snippets collapse before indexing. |\n| `embedding_provenance.failed_subtrees` | Count of subtree embeddings the provider rejected. Rejected subtrees are excluded from embedding ANN rather than substituted with zero vectors. |\n| `boilerplate_hints[]` | Optional low-severity import/prologue hygiene hints emitted only when `.deslop.toml` sets `boilerplate.imports = \"report\"`. These carry suppressed byte ranges but are not clone clusters and do not affect `weight` or metrics. |\n\nByte ranges come from `tree-sitter` and remain in JSON/tool payloads. Human-facing summaries derive line and column from the same source bytes so users do not have to read raw byte offsets.\n\n## Reading the signals together\n\n| `structural` | `token_jaccard` | `embedding_cos` | Bucket → human label | What it means |\n|---|---|---|---|---|\n| `1.00` | `1.00` | any | `Identical` → **Identical code** *(Type-1/2)* | Safe candidate for extraction into a shared function/method. |\n| `1.00` | `<1.00` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Same AST shape but slightly different token k-grams. Usually overlapping sibling-extension ranges. |\n| `0.00` | `≥ 0.90` | `<0.80` or disabled | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Similar token content, different structure. Review before merging — may differ in a semantically important way (loop vs recursion, added guard, etc.). |\n| `<0.50` | any | `≥ 0.80` | `SameBehavior` → **Same behavior, different code** *(Type-4, AI match)* | The embedding pass noticed these do the same thing written two syntactically distinct ways. Read both before merging. |\n| `0.00` | `0.70 – 0.90` | `<0.80` or disabled | `LooselySimilar` → **Loosely similar code** | Weak signal. Likely rejected; if present, endpoints were substantial (≥ 40 nodes). Treat as a hint, not a directive. |\n| `0.20 – 0.80` | `≥ 0.95` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Fused cluster spanning multiple exact-clone bands. Transitive closure merged several smaller exact clusters via near-miss links. Usually genuine duplication across a family of variants. |\n\n`SameBehavior` is tested before `NearlyIdentical` when the embedding pass is enabled, so a strong semantic signal on syntactically divergent code gets the AI-match label rather than being absorbed into near-miss. Full routing table: [taxonomy.md §[CLONE-BUCKETS-ROUTING]](taxonomy.md).\n\n## Repo-wide duplication metric\n\nThe report header carries one honest number: `metrics.duplication_percent = 100 × duplicated_loc / analysed_loc`.\n\n- `duplicated_loc` = lines covered by ≥ 2 non-hidden clone occurrences, deduplicated per file so overlapping sibling-extension ranges count once.\n- `analysed_loc` = physical lines across every file in `files_analysed`.\n- Hidden occurrences (built-in generated-code defaults or `.deslop.toml` `report_hide`) are excluded so they cannot inflate the metric.\n- CI gating: `--fail-over <percent>` (or `[threshold] max_duplication_percent` in `.deslop.toml`) exits `3` when `duplication_percent > threshold`. No threshold → no gate. Use this, not the `weight` column, for pass/fail decisions.\n\n## Thresholds (typical defaults)\n\n- `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.\n- `FUSED_THRESHOLD = 0.85` — a pair must score ≥ this on the fused signal (combination of `structural`, `token_jaccard`, `embedding_cos`) to enter a cluster.\n- `LSH_ONLY_MIN_JACCARD = 0.90` and `LSH_ONLY_MIN_NODE_COUNT = 40` — extra gates for LSH-only candidates (no structural anchor), to keep tiny trivial windows from mega-clustering.\n- Cross-language comparison is off by default. Enable `[analysis] allow_cross_language_comparison = true` only when intentionally auditing ports, generated clients, or semantic equivalents across ecosystems.\n\n## What to do with this report\n\n1. **Start at #1 and work down.** The weight formula already prioritises by impact.\n2. **Check if it's generated code.** Generated files (e.g. `.g.cs`, `.generated.cs`, OpenAPI clients, protobuf output) are hidden by default because they duplicate by design; visible generated-handwritten overlap is still worth reviewing.\n3. **Treat import/using-only repetition as hygiene, not duplication.** For C#, the preferred remediation is usually a shared `GlobalUsings.cs` or project-file `<Using Include=\"...\" />`, not extraction.\n4. **Check byte ranges for overlap.** Adjacent/overlapping ranges in the same file mean the sibling-extension pass is firing on several enclosing contexts of the same physical code — count it as one logical clone, not N.\n5. **For `structural=1.00` clusters** — safe to extract. Identical subtree after normalization.\n6. **For `structural=0.00, token_jaccard≥0.95` clusters** — Type-3 candidate. Read both occurrences. The differences are meaningful. Decide whether to (a) unify via a parameter / strategy, or (b) accept them as intentionally divergent.\n7. **Ignore clusters where `weight` is low and `size` is 2 and node counts are tiny.** Those are usually boilerplate (constructors, test setup, property accessors) that don't reward extraction.\n\n## Things to keep in mind when interpreting a report\n\n- **Type-4 detection may be disabled.** If `embedding_cos` is `0.00` across the entire report, the semantic-embedding pass was not run — semantically equivalent but syntactically different code (iterative vs recursive, LINQ vs foreach) will not appear.\n- **Overlapping byte ranges** are expected. The sibling-extension pass emits fingerprints for nested windows of the same physical code. Same cluster id → same clone; different cluster ids over the same bytes → different granularities of the same match.\n- **Only supported languages are analyzed.** Files in languages the tool does not support are skipped silently. The report header lists which languages were active for this run.\n\n## Tool metadata\n\n- Tool: `deslop`. The report header states the tool version.\n- The text report is a pretty-printer over the canonical JSON schema. For machine consumption prefer `--format json`, which includes full `occurrences[]` arrays, per-cluster `signals { structural, token_jaccard, embedding_cos, fused }`, and an agent-oriented `summary` string per cluster.\n",
+  "action_hints": [
+    {
+      "pattern": "bucket=identical",
+      "recommendation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "pattern": "bucket=nearly-identical",
+      "recommendation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "pattern": "bucket=loosely-similar",
+      "recommendation": "Loosely similar code. Loose textual overlap. Treat as a hint. (weak LSH-only signal (sub-Type-3))"
+    },
+    {
+      "pattern": "bucket=same-behavior",
+      "recommendation": "Same behavior, different code. The AI noticed these do the same thing written two ways — read both before merging. (Type-4 semantic clone (AI match))"
+    }
+  ],
+  "boilerplate_hints": [],
+  "embedding_provenance": null,
+  "clusters": [
+    {
+      "id": "71a9ee96ac670465",
+      "weight": 370.0,
+      "size": 11,
+      "canonical_node_count": 37,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4807,
+          "end_byte": 4952,
+          "start_line": 125,
+          "end_line": 129,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 5262,
+          "end_byte": 5407,
+          "start_line": 137,
+          "end_line": 141,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6380,
+          "end_byte": 6525,
+          "start_line": 168,
+          "end_line": 172,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7095,
+          "end_byte": 7240,
+          "start_line": 185,
+          "end_line": 189,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7299,
+          "end_byte": 7448,
+          "start_line": 191,
+          "end_line": 195,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8428,
+          "end_byte": 8573,
+          "start_line": 223,
+          "end_line": 227,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7067,
+          "end_byte": 7216,
+          "start_line": 177,
+          "end_line": 181,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8131,
+          "end_byte": 8276,
+          "start_line": 204,
+          "end_line": 208,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8335,
+          "end_byte": 8484,
+          "start_line": 210,
+          "end_line": 214,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11683,
+          "end_byte": 11876,
+          "start_line": 296,
+          "end_line": 300,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 12283,
+          "end_byte": 12463,
+          "start_line": 310,
+          "end_line": 314,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 11,
+      "occurrences_truncated": false,
+      "summary": "11 copies of a 37-node subtree at crates/osprey-codegen/src/iter.rs:125:5, crates/osprey-codegen/src/iter.rs:137:5, crates/osprey-codegen/src/iter.rs:168:5 (+8 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "942f6a8aa0f64f23",
+      "weight": 296.0,
+      "size": 5,
+      "canonical_node_count": 74,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4807,
+          "end_byte": 5137,
+          "start_line": 125,
+          "end_line": 134,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6380,
+          "end_byte": 6710,
+          "start_line": 168,
+          "end_line": 177,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8428,
+          "end_byte": 8758,
+          "start_line": 223,
+          "end_line": 232,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7067,
+          "end_byte": 7401,
+          "start_line": 177,
+          "end_line": 186,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11683,
+          "end_byte": 12058,
+          "start_line": 296,
+          "end_line": 305,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 5,
+      "occurrences_truncated": false,
+      "summary": "5 copies of a 74-node subtree at crates/osprey-codegen/src/iter.rs:125:5, crates/osprey-codegen/src/iter.rs:168:5, crates/osprey-codegen/src/iter.rs:223:5 (+2 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "74e75251b1938857",
+      "weight": 292.0,
+      "size": 5,
+      "canonical_node_count": 73,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4774,
+          "end_byte": 5109,
+          "start_line": 124,
+          "end_line": 132,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6347,
+          "end_byte": 6682,
+          "start_line": 167,
+          "end_line": 175,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8395,
+          "end_byte": 8730,
+          "start_line": 222,
+          "end_line": 230,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7034,
+          "end_byte": 7373,
+          "start_line": 176,
+          "end_line": 184,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11650,
+          "end_byte": 12030,
+          "start_line": 295,
+          "end_line": 303,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 5,
+      "occurrences_truncated": false,
+      "summary": "5 copies of a 73-node subtree at crates/osprey-codegen/src/iter.rs:124:5, crates/osprey-codegen/src/iter.rs:167:5, crates/osprey-codegen/src/iter.rs:222:5 (+2 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "be5c445055cc4aca",
+      "weight": 276.0,
+      "size": 5,
+      "canonical_node_count": 69,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4741,
+          "end_byte": 5041,
+          "start_line": 123,
+          "end_line": 131,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6314,
+          "end_byte": 6614,
+          "start_line": 166,
+          "end_line": 174,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8362,
+          "end_byte": 8662,
+          "start_line": 221,
+          "end_line": 229,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7001,
+          "end_byte": 7305,
+          "start_line": 175,
+          "end_line": 183,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11617,
+          "end_byte": 11962,
+          "start_line": 294,
+          "end_line": 302,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 5,
+      "occurrences_truncated": false,
+      "summary": "5 copies of a 69-node subtree at crates/osprey-codegen/src/iter.rs:123:5, crates/osprey-codegen/src/iter.rs:166:5, crates/osprey-codegen/src/iter.rs:221:5 (+2 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "a69cc39dc6fcfcf8",
+      "weight": 270.0,
+      "size": 10,
+      "canonical_node_count": 30,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4988,
+          "end_byte": 5137,
+          "start_line": 131,
+          "end_line": 134,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 5412,
+          "end_byte": 5531,
+          "start_line": 142,
+          "end_line": 145,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6561,
+          "end_byte": 6710,
+          "start_line": 174,
+          "end_line": 177,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7245,
+          "end_byte": 7364,
+          "start_line": 190,
+          "end_line": 193,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8609,
+          "end_byte": 8758,
+          "start_line": 229,
+          "end_line": 232,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7252,
+          "end_byte": 7401,
+          "start_line": 183,
+          "end_line": 186,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8084,
+          "end_byte": 8196,
+          "start_line": 203,
+          "end_line": 206,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8281,
+          "end_byte": 8402,
+          "start_line": 209,
+          "end_line": 212,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11912,
+          "end_byte": 12058,
+          "start_line": 302,
+          "end_line": 305,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 12199,
+          "end_byte": 12348,
+          "start_line": 309,
+          "end_line": 312,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 10,
+      "occurrences_truncated": false,
+      "summary": "10 copies of a 30-node subtree at crates/osprey-codegen/src/iter.rs:131:5, crates/osprey-codegen/src/iter.rs:142:5, crates/osprey-codegen/src/iter.rs:174:5 (+7 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b959f8315f669a19",
+      "weight": 260.0,
+      "size": 5,
+      "canonical_node_count": 65,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4708,
+          "end_byte": 4983,
+          "start_line": 122,
+          "end_line": 130,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6281,
+          "end_byte": 6556,
+          "start_line": 165,
+          "end_line": 173,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8329,
+          "end_byte": 8604,
+          "start_line": 220,
+          "end_line": 228,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 6967,
+          "end_byte": 7247,
+          "start_line": 174,
+          "end_line": 182,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11584,
+          "end_byte": 11907,
+          "start_line": 293,
+          "end_line": 301,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 5,
+      "occurrences_truncated": false,
+      "summary": "5 copies of a 65-node subtree at crates/osprey-codegen/src/iter.rs:122:5, crates/osprey-codegen/src/iter.rs:165:5, crates/osprey-codegen/src/iter.rs:220:5 (+2 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "64bdd31fea0416e5",
+      "weight": 210.0,
+      "size": 8,
+      "canonical_node_count": 30,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-syntax/src/expr.rs",
+          "start_byte": 9429,
+          "end_byte": 9592,
+          "start_line": 222,
+          "end_line": 225,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/expr.rs",
+          "start_byte": 12409,
+          "end_byte": 12557,
+          "start_line": 295,
+          "end_line": 298,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 1925,
+          "end_byte": 2087,
+          "start_line": 59,
+          "end_line": 63,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 4671,
+          "end_byte": 4820,
+          "start_line": 119,
+          "end_line": 123,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 5245,
+          "end_byte": 5396,
+          "start_line": 135,
+          "end_line": 138,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 8182,
+          "end_byte": 8308,
+          "start_line": 219,
+          "end_line": 222,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 13091,
+          "end_byte": 13258,
+          "start_line": 349,
+          "end_line": 353,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 13759,
+          "end_byte": 13874,
+          "start_line": 372,
+          "end_line": 375,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 8,
+      "occurrences_truncated": false,
+      "summary": "8 copies of a 30-node subtree at crates/osprey-syntax/src/expr.rs:222:25, crates/osprey-syntax/src/expr.rs:295:17, crates/osprey-syntax/src/lower.rs:59:25 (+5 more) [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "d3253883dbc1c6dd",
+      "weight": 200.0,
+      "size": 6,
+      "canonical_node_count": 40,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 5769,
+          "end_byte": 5970,
+          "start_line": 148,
+          "end_line": 151,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 6312,
+          "end_byte": 6532,
+          "start_line": 160,
+          "end_line": 163,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 10435,
+          "end_byte": 10651,
+          "start_line": 260,
+          "end_line": 263,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 5570,
+          "end_byte": 5776,
+          "start_line": 141,
+          "end_line": 144,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 9620,
+          "end_byte": 9826,
+          "start_line": 247,
+          "end_line": 250,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 14002,
+          "end_byte": 14209,
+          "start_line": 349,
+          "end_line": 352,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 6,
+      "occurrences_truncated": false,
+      "summary": "6 copies of a 40-node subtree at crates/osprey-codegen/src/strings.rs:148:5, crates/osprey-codegen/src/strings.rs:160:5, crates/osprey-codegen/src/strings.rs:260:5 (+3 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "caf0a93b3a3164b7",
+      "weight": 195.0,
+      "size": 4,
+      "canonical_node_count": 65,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4675,
+          "end_byte": 4952,
+          "start_line": 121,
+          "end_line": 129,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6248,
+          "end_byte": 6525,
+          "start_line": 164,
+          "end_line": 172,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8296,
+          "end_byte": 8573,
+          "start_line": 219,
+          "end_line": 227,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 6934,
+          "end_byte": 7216,
+          "start_line": 173,
+          "end_line": 181,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 65-node subtree at crates/osprey-codegen/src/iter.rs:121:5, crates/osprey-codegen/src/iter.rs:164:5, crates/osprey-codegen/src/iter.rs:219:5 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "a1c44859cddb8864",
+      "weight": 185.0,
+      "size": 6,
+      "canonical_node_count": 37,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7245,
+          "end_byte": 7394,
+          "start_line": 190,
+          "end_line": 194,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8609,
+          "end_byte": 8789,
+          "start_line": 229,
+          "end_line": 233,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7252,
+          "end_byte": 7432,
+          "start_line": 183,
+          "end_line": 187,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8084,
+          "end_byte": 8227,
+          "start_line": 203,
+          "end_line": 207,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8281,
+          "end_byte": 8432,
+          "start_line": 209,
+          "end_line": 213,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 12199,
+          "end_byte": 12381,
+          "start_line": 309,
+          "end_line": 313,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 6,
+      "occurrences_truncated": false,
+      "summary": "6 copies of a 37-node subtree at crates/osprey-codegen/src/iter.rs:190:5, crates/osprey-codegen/src/iter.rs:229:5, crates/osprey-codegen/src/collections.rs:183:5 (+3 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "ee53f292b3c0bcf7",
+      "weight": 174.0,
+      "size": 4,
+      "canonical_node_count": 58,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 6312,
+          "end_byte": 6627,
+          "start_line": 160,
+          "end_line": 165,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 10435,
+          "end_byte": 10746,
+          "start_line": 260,
+          "end_line": 265,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 5570,
+          "end_byte": 5869,
+          "start_line": 141,
+          "end_line": 146,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 14002,
+          "end_byte": 14303,
+          "start_line": 349,
+          "end_line": 354,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 58-node subtree at crates/osprey-codegen/src/strings.rs:160:5, crates/osprey-codegen/src/strings.rs:260:5, crates/osprey-codegen/src/collections.rs:141:5 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "31b60caa8a6c2e8b",
+      "weight": 162.0,
+      "size": 4,
+      "canonical_node_count": 54,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 6537,
+          "end_byte": 6794,
+          "start_line": 164,
+          "end_line": 168,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 8313,
+          "end_byte": 8562,
+          "start_line": 211,
+          "end_line": 215,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 5697,
+          "end_byte": 5937,
+          "start_line": 143,
+          "end_line": 147,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 14128,
+          "end_byte": 14371,
+          "start_line": 351,
+          "end_line": 355,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 54-node subtree at crates/osprey-codegen/src/strings.rs:164:5, crates/osprey-codegen/src/strings.rs:211:5, crates/osprey-codegen/src/collections.rs:143:5 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "50e79c92fc5d8a0b",
+      "weight": 160.0,
+      "size": 6,
+      "canonical_node_count": 32,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 2768,
+          "end_byte": 2847,
+          "start_line": 88,
+          "end_line": 89,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 5972,
+          "end_byte": 6069,
+          "start_line": 209,
+          "end_line": 210,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 6801,
+          "end_byte": 6893,
+          "start_line": 223,
+          "end_line": 224,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 7097,
+          "end_byte": 7181,
+          "start_line": 231,
+          "end_line": 232,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 8273,
+          "end_byte": 8366,
+          "start_line": 278,
+          "end_line": 279,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 8580,
+          "end_byte": 8672,
+          "start_line": 286,
+          "end_line": 287,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 6,
+      "occurrences_truncated": false,
+      "summary": "6 copies of a 32-node subtree at crates/osprey-types/src/builtins.rs:88:5, crates/osprey-types/src/builtins.rs:209:5, crates/osprey-types/src/builtins.rs:223:5 (+3 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "8e639e41dd2a84c7",
+      "weight": 144.0,
+      "size": 4,
+      "canonical_node_count": 48,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7245,
+          "end_byte": 7448,
+          "start_line": 190,
+          "end_line": 195,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8084,
+          "end_byte": 8276,
+          "start_line": 203,
+          "end_line": 208,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8281,
+          "end_byte": 8484,
+          "start_line": 209,
+          "end_line": 214,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 12199,
+          "end_byte": 12463,
+          "start_line": 309,
+          "end_line": 314,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 48-node subtree at crates/osprey-codegen/src/iter.rs:190:5, crates/osprey-codegen/src/collections.rs:203:5, crates/osprey-codegen/src/collections.rs:209:5 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "f24416e19251c9be",
+      "weight": 144.0,
+      "size": 4,
+      "canonical_node_count": 48,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 5332,
+          "end_byte": 5531,
+          "start_line": 140,
+          "end_line": 145,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7165,
+          "end_byte": 7364,
+          "start_line": 188,
+          "end_line": 193,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8201,
+          "end_byte": 8402,
+          "start_line": 207,
+          "end_line": 212,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 12112,
+          "end_byte": 12348,
+          "start_line": 307,
+          "end_line": 312,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 48-node subtree at crates/osprey-codegen/src/iter.rs:140:5, crates/osprey-codegen/src/iter.rs:188:5, crates/osprey-codegen/src/collections.rs:207:5 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "61365359e98b6c9d",
+      "weight": 134.0,
+      "size": 3,
+      "canonical_node_count": 67,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 5262,
+          "end_byte": 5531,
+          "start_line": 137,
+          "end_line": 145,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7095,
+          "end_byte": 7364,
+          "start_line": 185,
+          "end_line": 193,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8131,
+          "end_byte": 8402,
+          "start_line": 204,
+          "end_line": 212,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 67-node subtree at crates/osprey-codegen/src/iter.rs:137:5, crates/osprey-codegen/src/iter.rs:185:5, crates/osprey-codegen/src/collections.rs:204:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "64bf6a84029d0527",
+      "weight": 132.0,
+      "size": 3,
+      "canonical_node_count": 66,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7165,
+          "end_byte": 7448,
+          "start_line": 188,
+          "end_line": 195,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8201,
+          "end_byte": 8484,
+          "start_line": 207,
+          "end_line": 214,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 12112,
+          "end_byte": 12463,
+          "start_line": 307,
+          "end_line": 314,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 66-node subtree at crates/osprey-codegen/src/iter.rs:188:5, crates/osprey-codegen/src/collections.rs:207:5, crates/osprey-codegen/src/collections.rs:307:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "a10817418567ac47",
+      "weight": 114.0,
+      "size": 3,
+      "canonical_node_count": 57,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4546,
+          "end_byte": 4802,
+          "start_line": 118,
+          "end_line": 124,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8173,
+          "end_byte": 8423,
+          "start_line": 216,
+          "end_line": 222,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 6778,
+          "end_byte": 7029,
+          "start_line": 168,
+          "end_line": 175,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 57-node subtree at crates/osprey-codegen/src/iter.rs:118:5, crates/osprey-codegen/src/iter.rs:216:5, crates/osprey-codegen/src/collections.rs:168:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "cb38dd1c0b39fdc6",
+      "weight": 110.0,
+      "size": 2,
+      "canonical_node_count": 110,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 4550,
+          "end_byte": 5106,
+          "start_line": 119,
+          "end_line": 131,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 10188,
+          "end_byte": 10732,
+          "start_line": 262,
+          "end_line": 274,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 110-node subtree at crates/osprey-codegen/src/collections.rs:119:1, crates/osprey-codegen/src/collections.rs:262:1 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "304966c9f8b43c29",
+      "weight": 108.0,
+      "size": 3,
+      "canonical_node_count": 54,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 6448,
+          "end_byte": 6726,
+          "start_line": 162,
+          "end_line": 167,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 9280,
+          "end_byte": 9556,
+          "start_line": 235,
+          "end_line": 240,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 8498,
+          "end_byte": 8752,
+          "start_line": 190,
+          "end_line": 195,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 54-node subtree at crates/osprey-codegen/src/strings.rs:162:5, crates/osprey-codegen/src/strings.rs:235:5, crates/osprey-codegen/src/expr.rs:190:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "4e9a556483cf122c",
+      "weight": 105.0,
+      "size": 4,
+      "canonical_node_count": 35,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 3938,
+          "end_byte": 4113,
+          "start_line": 101,
+          "end_line": 104,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 10737,
+          "end_byte": 10900,
+          "start_line": 280,
+          "end_line": 283,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/fiber.rs",
+          "start_byte": 2143,
+          "end_byte": 2386,
+          "start_line": 54,
+          "end_line": 60,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/fiber.rs",
+          "start_byte": 3321,
+          "end_byte": 3481,
+          "start_line": 86,
+          "end_line": 89,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 35-node subtree at crates/osprey-codegen/src/iter.rs:101:13, crates/osprey-codegen/src/iter.rs:280:9, crates/osprey-codegen/src/fiber.rs:54:5 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "6da12c12140a05dd",
+      "weight": 99.0,
+      "size": 2,
+      "canonical_node_count": 99,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 4109,
+          "end_byte": 4504,
+          "start_line": 94,
+          "end_line": 105,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 4509,
+          "end_byte": 4902,
+          "start_line": 106,
+          "end_line": 117,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 99-node subtree at crates/osprey-codegen/src/pattern.rs:94:5, crates/osprey-codegen/src/pattern.rs:106:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "72a055116311a7dc",
+      "weight": 99.0,
+      "size": 4,
+      "canonical_node_count": 33,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 4330,
+          "end_byte": 4431,
+          "start_line": 100,
+          "end_line": 101,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 4727,
+          "end_byte": 4828,
+          "start_line": 112,
+          "end_line": 113,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 6289,
+          "end_byte": 6394,
+          "start_line": 154,
+          "end_line": 155,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 6875,
+          "end_byte": 6988,
+          "start_line": 166,
+          "end_line": 167,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 33-node subtree at crates/osprey-codegen/src/pattern.rs:100:9, crates/osprey-codegen/src/pattern.rs:112:9, crates/osprey-codegen/src/pattern.rs:154:13 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "c46bea3e3f2437de",
+      "weight": 99.0,
+      "size": 2,
+      "canonical_node_count": 99,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 4084,
+          "end_byte": 4478,
+          "start_line": 93,
+          "end_line": 103,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 4484,
+          "end_byte": 4875,
+          "start_line": 105,
+          "end_line": 115,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 99-node subtree at crates/osprey-codegen/src/pattern.rs:93:5, crates/osprey-codegen/src/pattern.rs:105:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "017603e4cb6fd891",
+      "weight": 96.0,
+      "size": 3,
+      "canonical_node_count": 48,
+      "signals": {
+        "structural": 0.375,
+        "token_jaccard": 0.98779296875,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-syntax/src/expr.rs",
+          "start_byte": 8024,
+          "end_byte": 8314,
+          "start_line": 184,
+          "end_line": 191,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/expr.rs",
+          "start_byte": 9836,
+          "end_byte": 10112,
+          "start_line": 233,
+          "end_line": 241,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/expr.rs",
+          "start_byte": 12612,
+          "end_byte": 12938,
+          "start_line": 300,
+          "end_line": 308,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 48-node subtree at crates/osprey-syntax/src/expr.rs:184:25, crates/osprey-syntax/src/expr.rs:233:75, crates/osprey-syntax/src/expr.rs:300:39 [structural=0.38, token_jaccard=0.99, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "18ef4d27e262a31d",
+      "weight": 96.0,
+      "size": 4,
+      "canonical_node_count": 32,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 4325,
+          "end_byte": 4472,
+          "start_line": 113,
+          "end_line": 115,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 4946,
+          "end_byte": 5104,
+          "start_line": 128,
+          "end_line": 130,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 9221,
+          "end_byte": 9377,
+          "start_line": 237,
+          "end_line": 239,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 10575,
+          "end_byte": 10730,
+          "start_line": 271,
+          "end_line": 273,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 32-node subtree at crates/osprey-codegen/src/collections.rs:113:5, crates/osprey-codegen/src/collections.rs:128:5, crates/osprey-codegen/src/collections.rs:237:5 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b41e3e7670034de4",
+      "weight": 92.0,
+      "size": 3,
+      "canonical_node_count": 46,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 3938,
+          "end_byte": 4187,
+          "start_line": 101,
+          "end_line": 105,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/fiber.rs",
+          "start_byte": 2143,
+          "end_byte": 2439,
+          "start_line": 54,
+          "end_line": 61,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/fiber.rs",
+          "start_byte": 3321,
+          "end_byte": 3534,
+          "start_line": 86,
+          "end_line": 90,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 46-node subtree at crates/osprey-codegen/src/iter.rs:101:13, crates/osprey-codegen/src/fiber.rs:54:5, crates/osprey-codegen/src/fiber.rs:86:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "665e9b654016fe6a",
+      "weight": 91.0,
+      "size": 2,
+      "canonical_node_count": 91,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 5467,
+          "end_byte": 5937,
+          "start_line": 140,
+          "end_line": 147,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 13901,
+          "end_byte": 14371,
+          "start_line": 348,
+          "end_line": 355,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 91-node subtree at crates/osprey-codegen/src/collections.rs:140:5, crates/osprey-codegen/src/collections.rs:348:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "10b5c9ea7f781db5",
+      "weight": 90.0,
+      "size": 4,
+      "canonical_node_count": 30,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 1712,
+          "end_byte": 1791,
+          "start_line": 64,
+          "end_line": 65,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 1927,
+          "end_byte": 1994,
+          "start_line": 69,
+          "end_line": 70,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 6246,
+          "end_byte": 6341,
+          "start_line": 214,
+          "end_line": 215,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 8632,
+          "end_byte": 8719,
+          "start_line": 287,
+          "end_line": 288,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 4,
+      "occurrences_truncated": false,
+      "summary": "4 copies of a 30-node subtree at crates/osprey-types/src/builtins.rs:64:5, crates/osprey-types/src/builtins.rs:69:5, crates/osprey-types/src/builtins.rs:214:5 (+1 more) [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "444ee19262914e5b",
+      "weight": 88.0,
+      "size": 3,
+      "canonical_node_count": 44,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 4550,
+          "end_byte": 4725,
+          "start_line": 119,
+          "end_line": 123,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 9930,
+          "end_byte": 10101,
+          "start_line": 255,
+          "end_line": 259,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 10188,
+          "end_byte": 10360,
+          "start_line": 262,
+          "end_line": 266,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 44-node subtree at crates/osprey-codegen/src/collections.rs:119:1, crates/osprey-codegen/src/collections.rs:255:1, crates/osprey-codegen/src/collections.rs:262:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "165718c99f7bc9b4",
+      "weight": 85.0,
+      "size": 2,
+      "canonical_node_count": 85,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4850,
+          "end_byte": 5207,
+          "start_line": 127,
+          "end_line": 135,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6423,
+          "end_byte": 6780,
+          "start_line": 170,
+          "end_line": 178,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 85-node subtree at crates/osprey-codegen/src/iter.rs:127:5, crates/osprey-codegen/src/iter.rs:170:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "509a6a01ebb7d8ae",
+      "weight": 80.0,
+      "size": 3,
+      "canonical_node_count": 40,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 8302,
+          "end_byte": 8493,
+          "start_line": 186,
+          "end_line": 189,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 8757,
+          "end_byte": 8970,
+          "start_line": 196,
+          "end_line": 199,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/listlit.rs",
+          "start_byte": 4782,
+          "end_byte": 4969,
+          "start_line": 112,
+          "end_line": 115,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 40-node subtree at crates/osprey-codegen/src/expr.rs:186:5, crates/osprey-codegen/src/expr.rs:196:5, crates/osprey-codegen/src/listlit.rs:112:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "64d24a386f2bb0a5",
+      "weight": 80.0,
+      "size": 2,
+      "canonical_node_count": 80,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 5437,
+          "end_byte": 5869,
+          "start_line": 139,
+          "end_line": 146,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 13871,
+          "end_byte": 14303,
+          "start_line": 347,
+          "end_line": 354,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 80-node subtree at crates/osprey-codegen/src/collections.rs:139:5, crates/osprey-codegen/src/collections.rs:347:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "66a8153023d79434",
+      "weight": 78.0,
+      "size": 2,
+      "canonical_node_count": 78,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7165,
+          "end_byte": 7484,
+          "start_line": 188,
+          "end_line": 196,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8201,
+          "end_byte": 8519,
+          "start_line": 207,
+          "end_line": 215,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 78-node subtree at crates/osprey-codegen/src/iter.rs:188:5, crates/osprey-codegen/src/collections.rs:207:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b3a6aab05f0524d0",
+      "weight": 78.0,
+      "size": 3,
+      "canonical_node_count": 39,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 9235,
+          "end_byte": 9420,
+          "start_line": 207,
+          "end_line": 214,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 9808,
+          "end_byte": 9995,
+          "start_line": 225,
+          "end_line": 232,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 10244,
+          "end_byte": 10401,
+          "start_line": 241,
+          "end_line": 248,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 39-node subtree at crates/osprey-codegen/src/expr.rs:207:9, crates/osprey-codegen/src/expr.rs:225:9, crates/osprey-codegen/src/expr.rs:241:5 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "ba2d31e484895380",
+      "weight": 78.0,
+      "size": 2,
+      "canonical_node_count": 78,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/unify.rs",
+          "start_byte": 3036,
+          "end_byte": 3448,
+          "start_line": 86,
+          "end_line": 95,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/unify.rs",
+          "start_byte": 5590,
+          "end_byte": 5896,
+          "start_line": 169,
+          "end_line": 177,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 78-node subtree at crates/osprey-types/src/unify.rs:86:5, crates/osprey-types/src/unify.rs:169:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "42ba287e8855f3aa",
+      "weight": 76.0,
+      "size": 3,
+      "canonical_node_count": 38,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 11181,
+          "end_byte": 11403,
+          "start_line": 314,
+          "end_line": 319,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 12264,
+          "end_byte": 12444,
+          "start_line": 342,
+          "end_line": 344,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 12929,
+          "end_byte": 13197,
+          "start_line": 361,
+          "end_line": 366,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 38-node subtree at crates/osprey-types/src/check.rs:314:9, crates/osprey-types/src/check.rs:342:13, crates/osprey-types/src/check.rs:361:17 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "1af10a194ce44939",
+      "weight": 75.0,
+      "size": 2,
+      "canonical_node_count": 75,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8498,
+          "end_byte": 8877,
+          "start_line": 226,
+          "end_line": 234,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7141,
+          "end_byte": 7520,
+          "start_line": 180,
+          "end_line": 188,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 75-node subtree at crates/osprey-codegen/src/iter.rs:226:5, crates/osprey-codegen/src/collections.rs:180:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "1fcc65f9160971fb",
+      "weight": 74.0,
+      "size": 2,
+      "canonical_node_count": 74,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 9165,
+          "end_byte": 9556,
+          "start_line": 233,
+          "end_line": 240,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 8400,
+          "end_byte": 8752,
+          "start_line": 188,
+          "end_line": 195,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 74-node subtree at crates/osprey-codegen/src/strings.rs:233:5, crates/osprey-codegen/src/expr.rs:188:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "d9fc06f7ad297d11",
+      "weight": 74.0,
+      "size": 2,
+      "canonical_node_count": 74,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7095,
+          "end_byte": 7394,
+          "start_line": 185,
+          "end_line": 194,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8131,
+          "end_byte": 8432,
+          "start_line": 204,
+          "end_line": 213,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 74-node subtree at crates/osprey-codegen/src/iter.rs:185:5, crates/osprey-codegen/src/collections.rs:204:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "f976cc116532b9c2",
+      "weight": 74.0,
+      "size": 2,
+      "canonical_node_count": 74,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7138,
+          "end_byte": 7448,
+          "start_line": 187,
+          "end_line": 195,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8174,
+          "end_byte": 8484,
+          "start_line": 206,
+          "end_line": 214,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 74-node subtree at crates/osprey-codegen/src/iter.rs:187:5, crates/osprey-codegen/src/collections.rs:206:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "fd3ee6dece9ecb28",
+      "weight": 74.0,
+      "size": 2,
+      "canonical_node_count": 74,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 9102,
+          "end_byte": 9492,
+          "start_line": 232,
+          "end_line": 239,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11256,
+          "end_byte": 11612,
+          "start_line": 285,
+          "end_line": 293,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 74-node subtree at crates/osprey-codegen/src/strings.rs:232:5, crates/osprey-codegen/src/collections.rs:285:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "4d41785d3148199b",
+      "weight": 72.0,
+      "size": 3,
+      "canonical_node_count": 36,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 6752,
+          "end_byte": 6895,
+          "start_line": 176,
+          "end_line": 179,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 8247,
+          "end_byte": 8375,
+          "start_line": 224,
+          "end_line": 227,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 9044,
+          "end_byte": 9172,
+          "start_line": 250,
+          "end_line": 253,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 36-node subtree at crates/osprey-types/src/check.rs:176:13, crates/osprey-types/src/check.rs:224:9, crates/osprey-types/src/check.rs:250:9 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b047ae4af6d2c45e",
+      "weight": 72.0,
+      "size": 3,
+      "canonical_node_count": 36,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 8658,
+          "end_byte": 8814,
+          "start_line": 221,
+          "end_line": 224,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 9089,
+          "end_byte": 9244,
+          "start_line": 234,
+          "end_line": 237,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 9486,
+          "end_byte": 9645,
+          "start_line": 244,
+          "end_line": 247,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 36-node subtree at crates/osprey-codegen/src/collections.rs:221:5, crates/osprey-codegen/src/collections.rs:234:5, crates/osprey-codegen/src/collections.rs:244:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "52484c95a21224e2",
+      "weight": 71.0,
+      "size": 2,
+      "canonical_node_count": 71,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 6970,
+          "end_byte": 7321,
+          "start_line": 150,
+          "end_line": 160,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 7422,
+          "end_byte": 7721,
+          "start_line": 163,
+          "end_line": 173,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 71-node subtree at crates/osprey-codegen/src/expr.rs:150:9, crates/osprey-codegen/src/expr.rs:163:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b501408832630f1a",
+      "weight": 71.0,
+      "size": 2,
+      "canonical_node_count": 71,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 2669,
+          "end_byte": 2847,
+          "start_line": 86,
+          "end_line": 89,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 6619,
+          "end_byte": 6893,
+          "start_line": 220,
+          "end_line": 224,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 71-node subtree at crates/osprey-types/src/builtins.rs:86:5, crates/osprey-types/src/builtins.rs:220:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "e1a705f2e0f02a44",
+      "weight": 71.0,
+      "size": 2,
+      "canonical_node_count": 71,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 15898,
+          "end_byte": 16269,
+          "start_line": 392,
+          "end_line": 401,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 16533,
+          "end_byte": 16868,
+          "start_line": 407,
+          "end_line": 416,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 71-node subtree at crates/osprey-codegen/src/expr.rs:392:9, crates/osprey-codegen/src/expr.rs:407:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "83010ad5f99f35b9",
+      "weight": 70.0,
+      "size": 2,
+      "canonical_node_count": 70,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8471,
+          "end_byte": 8789,
+          "start_line": 225,
+          "end_line": 233,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7112,
+          "end_byte": 7432,
+          "start_line": 179,
+          "end_line": 187,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 70-node subtree at crates/osprey-codegen/src/iter.rs:225:5, crates/osprey-codegen/src/collections.rs:179:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "f7a1ea6dcf6479a0",
+      "weight": 70.0,
+      "size": 2,
+      "canonical_node_count": 70,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 9808,
+          "end_byte": 10186,
+          "start_line": 225,
+          "end_line": 238,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 10244,
+          "end_byte": 10537,
+          "start_line": 241,
+          "end_line": 251,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 70-node subtree at crates/osprey-codegen/src/expr.rs:225:9, crates/osprey-codegen/src/expr.rs:241:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "f84a7bef2a05eb44",
+      "weight": 69.0,
+      "size": 2,
+      "canonical_node_count": 69,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4576,
+          "end_byte": 4872,
+          "start_line": 119,
+          "end_line": 127,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8203,
+          "end_byte": 8493,
+          "start_line": 217,
+          "end_line": 225,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 69-node subtree at crates/osprey-codegen/src/iter.rs:119:5, crates/osprey-codegen/src/iter.rs:217:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b3cafea56760d7d1",
+      "weight": 68.0,
+      "size": 2,
+      "canonical_node_count": 68,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4546,
+          "end_byte": 4844,
+          "start_line": 118,
+          "end_line": 125,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8173,
+          "end_byte": 8465,
+          "start_line": 216,
+          "end_line": 223,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 68-node subtree at crates/osprey-codegen/src/iter.rs:118:5, crates/osprey-codegen/src/iter.rs:216:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "cc3b13b64db7de3a",
+      "weight": 68.0,
+      "size": 3,
+      "canonical_node_count": 34,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 2032,
+          "end_byte": 2121,
+          "start_line": 74,
+          "end_line": 75,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 2726,
+          "end_byte": 2805,
+          "start_line": 87,
+          "end_line": 88,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 6677,
+          "end_byte": 6846,
+          "start_line": 221,
+          "end_line": 223,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 34-node subtree at crates/osprey-types/src/builtins.rs:74:5, crates/osprey-types/src/builtins.rs:87:5, crates/osprey-types/src/builtins.rs:221:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "ce69316a53ccd8df",
+      "weight": 67.0,
+      "size": 2,
+      "canonical_node_count": 67,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 5077,
+          "end_byte": 5541,
+          "start_line": 127,
+          "end_line": 142,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 10074,
+          "end_byte": 10598,
+          "start_line": 277,
+          "end_line": 292,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 67-node subtree at crates/osprey-types/src/check.rs:127:13, crates/osprey-types/src/check.rs:277:17 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "3a85dd1f0859f079",
+      "weight": 65.0,
+      "size": 2,
+      "canonical_node_count": 65,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11511,
+          "end_byte": 11778,
+          "start_line": 290,
+          "end_line": 299,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/listlit.rs",
+          "start_byte": 4974,
+          "end_byte": 5396,
+          "start_line": 116,
+          "end_line": 127,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 65-node subtree at crates/osprey-codegen/src/collections.rs:290:5, crates/osprey-codegen/src/listlit.rs:116:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "58d11dd187667885",
+      "weight": 65.0,
+      "size": 2,
+      "canonical_node_count": 65,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 8302,
+          "end_byte": 8607,
+          "start_line": 186,
+          "end_line": 192,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/listlit.rs",
+          "start_byte": 4782,
+          "end_byte": 5196,
+          "start_line": 112,
+          "end_line": 121,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 65-node subtree at crates/osprey-codegen/src/expr.rs:186:5, crates/osprey-codegen/src/listlit.rs:112:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b4acfdfadaa74aa6",
+      "weight": 65.0,
+      "size": 2,
+      "canonical_node_count": 65,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4620,
+          "end_byte": 4900,
+          "start_line": 120,
+          "end_line": 128,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8247,
+          "end_byte": 8521,
+          "start_line": 218,
+          "end_line": 226,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 65-node subtree at crates/osprey-codegen/src/iter.rs:120:5, crates/osprey-codegen/src/iter.rs:218:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "92020ee82bb62ff7",
+      "weight": 64.0,
+      "size": 3,
+      "canonical_node_count": 32,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 8060,
+          "end_byte": 8171,
+          "start_line": 274,
+          "end_line": 275,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 8224,
+          "end_byte": 8319,
+          "start_line": 277,
+          "end_line": 278,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 8451,
+          "end_byte": 8627,
+          "start_line": 284,
+          "end_line": 286,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 32-node subtree at crates/osprey-types/src/builtins.rs:274:5, crates/osprey-types/src/builtins.rs:277:5, crates/osprey-types/src/builtins.rs:284:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "5cba72aec8477b04",
+      "weight": 62.0,
+      "size": 3,
+      "canonical_node_count": 31,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-syntax/src/expr.rs",
+          "start_byte": 9403,
+          "end_byte": 9614,
+          "start_line": 221,
+          "end_line": 226,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 5223,
+          "end_byte": 5414,
+          "start_line": 134,
+          "end_line": 139,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 13749,
+          "end_byte": 13880,
+          "start_line": 371,
+          "end_line": 376,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 31-node subtree at crates/osprey-syntax/src/expr.rs:221:31, crates/osprey-syntax/src/lower.rs:134:27, crates/osprey-syntax/src/lower.rs:371:60 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "9d807d6d7276ce44",
+      "weight": 62.0,
+      "size": 3,
+      "canonical_node_count": 31,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6951,
+          "end_byte": 7090,
+          "start_line": 182,
+          "end_line": 184,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 11290,
+          "end_byte": 11480,
+          "start_line": 292,
+          "end_line": 294,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 12480,
+          "end_byte": 12619,
+          "start_line": 320,
+          "end_line": 322,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 31-node subtree at crates/osprey-codegen/src/iter.rs:182:5, crates/osprey-codegen/src/iter.rs:292:9, crates/osprey-codegen/src/iter.rs:320:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "3608d7e70fa84be6",
+      "weight": 60.0,
+      "size": 3,
+      "canonical_node_count": 30,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 15594,
+          "end_byte": 15706,
+          "start_line": 384,
+          "end_line": 388,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 15948,
+          "end_byte": 16092,
+          "start_line": 393,
+          "end_line": 397,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 16579,
+          "end_byte": 16707,
+          "start_line": 408,
+          "end_line": 412,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 30-node subtree at crates/osprey-codegen/src/expr.rs:384:5, crates/osprey-codegen/src/expr.rs:393:13, crates/osprey-codegen/src/expr.rs:408:9 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "4a614b7a7e1ca995",
+      "weight": 60.0,
+      "size": 2,
+      "canonical_node_count": 60,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 5978,
+          "end_byte": 6243,
+          "start_line": 158,
+          "end_line": 163,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/fiber.rs",
+          "start_byte": 1534,
+          "end_byte": 1913,
+          "start_line": 39,
+          "end_line": 46,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 60-node subtree at crates/osprey-codegen/src/iter.rs:158:5, crates/osprey-codegen/src/fiber.rs:39:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "5ddfda61068def40",
+      "weight": 60.0,
+      "size": 3,
+      "canonical_node_count": 30,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/runtime.rs",
+          "start_byte": 1930,
+          "end_byte": 2033,
+          "start_line": 44,
+          "end_line": 47,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/runtime.rs",
+          "start_byte": 2589,
+          "end_byte": 2698,
+          "start_line": 59,
+          "end_line": 61,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/runtime.rs",
+          "start_byte": 3060,
+          "end_byte": 3164,
+          "start_line": 74,
+          "end_line": 77,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 30-node subtree at crates/osprey-codegen/src/runtime.rs:44:5, crates/osprey-codegen/src/runtime.rs:59:9, crates/osprey-codegen/src/runtime.rs:74:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "4efaa2f373f1b9c8",
+      "weight": 58.0,
+      "size": 2,
+      "canonical_node_count": 58,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/fiber.rs",
+          "start_byte": 2143,
+          "end_byte": 2473,
+          "start_line": 54,
+          "end_line": 62,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/fiber.rs",
+          "start_byte": 3321,
+          "end_byte": 3568,
+          "start_line": 86,
+          "end_line": 91,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 58-node subtree at crates/osprey-codegen/src/fiber.rs:54:5, crates/osprey-codegen/src/fiber.rs:86:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "8249fd048bdbcdf5",
+      "weight": 58.0,
+      "size": 2,
+      "canonical_node_count": 58,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 4452,
+          "end_byte": 4703,
+          "start_line": 115,
+          "end_line": 121,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 5885,
+          "end_byte": 6132,
+          "start_line": 155,
+          "end_line": 161,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 58-node subtree at crates/osprey-codegen/src/iter.rs:115:5, crates/osprey-codegen/src/iter.rs:155:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "c0fc39ac58e79856",
+      "weight": 56.0,
+      "size": 2,
+      "canonical_node_count": 56,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 8062,
+          "end_byte": 8324,
+          "start_line": 214,
+          "end_line": 219,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 6544,
+          "end_byte": 6803,
+          "start_line": 163,
+          "end_line": 168,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 56-node subtree at crates/osprey-codegen/src/iter.rs:214:5, crates/osprey-codegen/src/collections.rs:163:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b9a2ad5d96b271e6",
+      "weight": 52.0,
+      "size": 2,
+      "canonical_node_count": 52,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 5769,
+          "end_byte": 6003,
+          "start_line": 148,
+          "end_line": 152,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 9620,
+          "end_byte": 9859,
+          "start_line": 247,
+          "end_line": 251,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 52-node subtree at crates/osprey-codegen/src/strings.rs:148:5, crates/osprey-codegen/src/collections.rs:247:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "4a331fe58b7f66ec",
+      "weight": 49.0,
+      "size": 2,
+      "canonical_node_count": 49,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/pattern.rs",
+          "start_byte": 813,
+          "end_byte": 993,
+          "start_line": 19,
+          "end_line": 24,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/expr.rs",
+          "start_byte": 16096,
+          "end_byte": 16276,
+          "start_line": 445,
+          "end_line": 450,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 49-node subtree at crates/osprey-types/src/pattern.rs:19:1, crates/osprey-types/src/expr.rs:445:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "17949fb1a355ce20",
+      "weight": 48.0,
+      "size": 2,
+      "canonical_node_count": 48,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 8859,
+          "end_byte": 9029,
+          "start_line": 218,
+          "end_line": 220,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 9403,
+          "end_byte": 9573,
+          "start_line": 229,
+          "end_line": 231,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 48-node subtree at crates/osprey-codegen/src/pattern.rs:218:17, crates/osprey-codegen/src/pattern.rs:229:17 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "74e3e26e5fa34671",
+      "weight": 48.0,
+      "size": 2,
+      "canonical_node_count": 48,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/types.rs",
+          "start_byte": 1185,
+          "end_byte": 1389,
+          "start_line": 26,
+          "end_line": 31,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/types.rs",
+          "start_byte": 3539,
+          "end_byte": 3743,
+          "start_line": 84,
+          "end_line": 89,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 48-node subtree at crates/osprey-codegen/src/types.rs:26:9, crates/osprey-codegen/src/types.rs:84:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "c748050b082d210c",
+      "weight": 48.0,
+      "size": 2,
+      "canonical_node_count": 48,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 2682,
+          "end_byte": 2960,
+          "start_line": 65,
+          "end_line": 73,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 3226,
+          "end_byte": 3509,
+          "start_line": 77,
+          "end_line": 85,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 48-node subtree at crates/osprey-types/src/check.rs:65:26, crates/osprey-types/src/check.rs:77:26 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "5488ac7d93ff824c",
+      "weight": 47.0,
+      "size": 2,
+      "canonical_node_count": 47,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 8224,
+          "end_byte": 8366,
+          "start_line": 277,
+          "end_line": 279,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 8451,
+          "end_byte": 8672,
+          "start_line": 284,
+          "end_line": 287,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 47-node subtree at crates/osprey-types/src/builtins.rs:277:5, crates/osprey-types/src/builtins.rs:284:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "69ca59ac885a0b73",
+      "weight": 47.0,
+      "size": 2,
+      "canonical_node_count": 47,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/fiber.rs",
+          "start_byte": 1471,
+          "end_byte": 1705,
+          "start_line": 38,
+          "end_line": 42,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 6729,
+          "end_byte": 6929,
+          "start_line": 167,
+          "end_line": 172,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 47-node subtree at crates/osprey-codegen/src/fiber.rs:38:5, crates/osprey-codegen/src/collections.rs:167:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "ecf0538f9ba97f53",
+      "weight": 47.0,
+      "size": 2,
+      "canonical_node_count": 47,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/conv.rs",
+          "start_byte": 488,
+          "end_byte": 693,
+          "start_line": 13,
+          "end_line": 18,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/conv.rs",
+          "start_byte": 2737,
+          "end_byte": 2955,
+          "start_line": 76,
+          "end_line": 81,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 47-node subtree at crates/osprey-codegen/src/conv.rs:13:9, crates/osprey-codegen/src/conv.rs:76:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "abb3f4a0befcfeb1",
+      "weight": 46.0,
+      "size": 2,
+      "canonical_node_count": 46,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 3882,
+          "end_byte": 4113,
+          "start_line": 100,
+          "end_line": 104,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 10685,
+          "end_byte": 10900,
+          "start_line": 279,
+          "end_line": 283,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 46-node subtree at crates/osprey-codegen/src/iter.rs:100:13, crates/osprey-codegen/src/iter.rs:279:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "17f7db53ed6f7f74",
+      "weight": 45.0,
+      "size": 2,
+      "canonical_node_count": 45,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 8664,
+          "end_byte": 8890,
+          "start_line": 194,
+          "end_line": 198,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 11226,
+          "end_byte": 11463,
+          "start_line": 284,
+          "end_line": 288,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 45-node subtree at crates/osprey-codegen/src/expr.rs:194:5, crates/osprey-codegen/src/collections.rs:284:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "eb959db2b54a1532",
+      "weight": 45.0,
+      "size": 2,
+      "canonical_node_count": 45,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/expr.rs",
+          "start_byte": 14019,
+          "end_byte": 14254,
+          "start_line": 384,
+          "end_line": 389,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/expr.rs",
+          "start_byte": 15473,
+          "end_byte": 15686,
+          "start_line": 421,
+          "end_line": 426,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 45-node subtree at crates/osprey-types/src/expr.rs:384:21, crates/osprey-types/src/expr.rs:421:17 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "4ce1daa33e0ac20d",
+      "weight": 44.0,
+      "size": 2,
+      "canonical_node_count": 44,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 6704,
+          "end_byte": 6899,
+          "start_line": 145,
+          "end_line": 147,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 7215,
+          "end_byte": 7411,
+          "start_line": 159,
+          "end_line": 161,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 44-node subtree at crates/osprey-codegen/src/expr.rs:145:9, crates/osprey-codegen/src/expr.rs:159:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "4e32bf0181e94344",
+      "weight": 44.0,
+      "size": 2,
+      "canonical_node_count": 44,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 6289,
+          "end_byte": 6443,
+          "start_line": 154,
+          "end_line": 156,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 6875,
+          "end_byte": 7045,
+          "start_line": 166,
+          "end_line": 168,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 44-node subtree at crates/osprey-codegen/src/pattern.rs:154:13, crates/osprey-codegen/src/pattern.rs:166:21 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "4efd82ad8ebd9aa3",
+      "weight": 44.0,
+      "size": 2,
+      "canonical_node_count": 44,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 2910,
+          "end_byte": 3015,
+          "start_line": 91,
+          "end_line": 92,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 6074,
+          "end_byte": 6187,
+          "start_line": 211,
+          "end_line": 212,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 44-node subtree at crates/osprey-types/src/builtins.rs:91:5, crates/osprey-types/src/builtins.rs:211:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "33467c8889f20aff",
+      "weight": 43.0,
+      "size": 2,
+      "canonical_node_count": 43,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 5740,
+          "end_byte": 5929,
+          "start_line": 152,
+          "end_line": 155,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 11876,
+          "end_byte": 12065,
+          "start_line": 305,
+          "end_line": 308,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 43-node subtree at crates/osprey-codegen/src/iter.rs:152:5, crates/osprey-codegen/src/iter.rs:305:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "6eb4bd02bc66f23f",
+      "weight": 43.0,
+      "size": 2,
+      "canonical_node_count": 43,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 1637,
+          "end_byte": 1750,
+          "start_line": 62,
+          "end_line": 64,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 7403,
+          "end_byte": 7521,
+          "start_line": 245,
+          "end_line": 247,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 43-node subtree at crates/osprey-types/src/builtins.rs:62:5, crates/osprey-types/src/builtins.rs:245:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "38e8a68d1d784dde",
+      "weight": 42.0,
+      "size": 2,
+      "canonical_node_count": 42,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/ty.rs",
+          "start_byte": 2587,
+          "end_byte": 2786,
+          "start_line": 70,
+          "end_line": 78,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/ty.rs",
+          "start_byte": 2791,
+          "end_byte": 2980,
+          "start_line": 79,
+          "end_line": 87,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 42-node subtree at crates/osprey-types/src/ty.rs:70:5, crates/osprey-types/src/ty.rs:79:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "50f35400a7eeffae",
+      "weight": 41.0,
+      "size": 2,
+      "canonical_node_count": 41,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-ast/src/lib.rs",
+          "start_byte": 1909,
+          "end_byte": 2186,
+          "start_line": 59,
+          "end_line": 70,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lib.rs",
+          "start_byte": 632,
+          "end_byte": 1002,
+          "start_line": 18,
+          "end_line": 30,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 41-node subtree at crates/osprey-ast/src/lib.rs:59:1, crates/osprey-syntax/src/lib.rs:18:1 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "cf04c2dfee08cbc4",
+      "weight": 41.0,
+      "size": 2,
+      "canonical_node_count": 41,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 11313,
+          "end_byte": 11577,
+          "start_line": 282,
+          "end_line": 288,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 9429,
+          "end_byte": 9690,
+          "start_line": 215,
+          "end_line": 221,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 41-node subtree at crates/osprey-codegen/src/pattern.rs:282:9, crates/osprey-codegen/src/expr.rs:215:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "a702506bb1964a9b",
+      "weight": 40.0,
+      "size": 2,
+      "canonical_node_count": 40,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/aggregate.rs",
+          "start_byte": 1320,
+          "end_byte": 1571,
+          "start_line": 33,
+          "end_line": 40,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/aggregate.rs",
+          "start_byte": 2909,
+          "end_byte": 3149,
+          "start_line": 77,
+          "end_line": 83,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 40-node subtree at crates/osprey-codegen/src/aggregate.rs:33:5, crates/osprey-codegen/src/aggregate.rs:77:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "cc0769acc33d4212",
+      "weight": 40.0,
+      "size": 2,
+      "canonical_node_count": 40,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 4420,
+          "end_byte": 4565,
+          "start_line": 110,
+          "end_line": 114,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 4663,
+          "end_byte": 4844,
+          "start_line": 117,
+          "end_line": 121,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 40-node subtree at crates/osprey-types/src/check.rs:110:19, crates/osprey-types/src/check.rs:117:19 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "c9a6a95766f93099",
+      "weight": 39.0,
+      "size": 2,
+      "canonical_node_count": 39,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-cli/src/main.rs",
+          "start_byte": 4946,
+          "end_byte": 5094,
+          "start_line": 158,
+          "end_line": 160,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-cli/src/main.rs",
+          "start_byte": 5103,
+          "end_byte": 5291,
+          "start_line": 160,
+          "end_line": 165,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 39-node subtree at crates/osprey-cli/src/main.rs:158:12, crates/osprey-cli/src/main.rs:160:19 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "11ee91a2e47c286c",
+      "weight": 38.0,
+      "size": 2,
+      "canonical_node_count": 38,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 5796,
+          "end_byte": 5889,
+          "start_line": 203,
+          "end_line": 204,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/builtins.rs",
+          "start_byte": 7000,
+          "end_byte": 7092,
+          "start_line": 229,
+          "end_line": 230,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 38-node subtree at crates/osprey-types/src/builtins.rs:203:5, crates/osprey-types/src/builtins.rs:229:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "2fb1b0b68236a9e9",
+      "weight": 38.0,
+      "size": 2,
+      "canonical_node_count": 38,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/pattern.rs",
+          "start_byte": 1275,
+          "end_byte": 1436,
+          "start_line": 32,
+          "end_line": 34,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/pattern.rs",
+          "start_byte": 1873,
+          "end_byte": 2034,
+          "start_line": 47,
+          "end_line": 49,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 38-node subtree at crates/osprey-types/src/pattern.rs:32:13, crates/osprey-types/src/pattern.rs:47:13 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "e78ce6ebb8124b52",
+      "weight": 38.0,
+      "size": 2,
+      "canonical_node_count": 38,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 3130,
+          "end_byte": 3299,
+          "start_line": 84,
+          "end_line": 85,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/listlit.rs",
+          "start_byte": 4569,
+          "end_byte": 4743,
+          "start_line": 108,
+          "end_line": 109,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 38-node subtree at crates/osprey-codegen/src/iter.rs:84:5, crates/osprey-codegen/src/listlit.rs:108:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "90894dd4219592a9",
+      "weight": 37.0,
+      "size": 2,
+      "canonical_node_count": 37,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 10439,
+          "end_byte": 10583,
+          "start_line": 257,
+          "end_line": 261,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/builder.rs",
+          "start_byte": 13176,
+          "end_byte": 13326,
+          "start_line": 354,
+          "end_line": 358,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 37-node subtree at crates/osprey-codegen/src/pattern.rs:257:5, crates/osprey-codegen/src/builder.rs:354:9 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "086e4a5212d46eea",
+      "weight": 36.0,
+      "size": 2,
+      "canonical_node_count": 36,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/expr.rs",
+          "start_byte": 18740,
+          "end_byte": 18918,
+          "start_line": 508,
+          "end_line": 512,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/expr.rs",
+          "start_byte": 19330,
+          "end_byte": 19508,
+          "start_line": 520,
+          "end_line": 524,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 36-node subtree at crates/osprey-types/src/expr.rs:508:19, crates/osprey-types/src/expr.rs:520:19 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "4424c466a6590d4d",
+      "weight": 36.0,
+      "size": 2,
+      "canonical_node_count": 36,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-ast/src/lib.rs",
+          "start_byte": 5887,
+          "end_byte": 6095,
+          "start_line": 222,
+          "end_line": 231,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-ast/src/lib.rs",
+          "start_byte": 6520,
+          "end_byte": 6708,
+          "start_line": 249,
+          "end_line": 257,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 36-node subtree at crates/osprey-ast/src/lib.rs:222:5, crates/osprey-ast/src/lib.rs:249:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "733ce7579d5fdfa1",
+      "weight": 36.0,
+      "size": 2,
+      "canonical_node_count": 36,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/lib.rs",
+          "start_byte": 1171,
+          "end_byte": 1451,
+          "start_line": 38,
+          "end_line": 45,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/lib.rs",
+          "start_byte": 1584,
+          "end_byte": 1864,
+          "start_line": 50,
+          "end_line": 57,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 36-node subtree at crates/osprey-types/src/lib.rs:38:9, crates/osprey-types/src/lib.rs:50:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "7577e304ce7df150",
+      "weight": 36.0,
+      "size": 2,
+      "canonical_node_count": 36,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/builder.rs",
+          "start_byte": 14415,
+          "end_byte": 14663,
+          "start_line": 388,
+          "end_line": 393,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/builder.rs",
+          "start_byte": 14672,
+          "end_byte": 14874,
+          "start_line": 394,
+          "end_line": 397,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 36-node subtree at crates/osprey-codegen/src/builder.rs:388:9, crates/osprey-codegen/src/builder.rs:394:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "ad76936b0c5d6ea2",
+      "weight": 36.0,
+      "size": 2,
+      "canonical_node_count": 36,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/aggregate.rs",
+          "start_byte": 2641,
+          "end_byte": 2795,
+          "start_line": 70,
+          "end_line": 73,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/aggregate.rs",
+          "start_byte": 4537,
+          "end_byte": 4691,
+          "start_line": 115,
+          "end_line": 118,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 36-node subtree at crates/osprey-codegen/src/aggregate.rs:70:5, crates/osprey-codegen/src/aggregate.rs:115:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "a04ac77ccdbaf007",
+      "weight": 35.0,
+      "size": 2,
+      "canonical_node_count": 35,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-syntax/src/expr.rs",
+          "start_byte": 9397,
+          "end_byte": 9615,
+          "start_line": 221,
+          "end_line": 226,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 5217,
+          "end_byte": 5415,
+          "start_line": 134,
+          "end_line": 139,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 35-node subtree at crates/osprey-syntax/src/expr.rs:221:25, crates/osprey-syntax/src/lower.rs:134:21 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "78c8b9dbbcdf7fcc",
+      "weight": 34.0,
+      "size": 2,
+      "canonical_node_count": 34,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/runtime.rs",
+          "start_byte": 2202,
+          "end_byte": 2378,
+          "start_line": 51,
+          "end_line": 54,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 10773,
+          "end_byte": 10937,
+          "start_line": 281,
+          "end_line": 284,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 34-node subtree at crates/osprey-codegen/src/runtime.rs:51:9, crates/osprey-codegen/src/iter.rs:281:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "9f1056384e3d36c8",
+      "weight": 34.0,
+      "size": 2,
+      "canonical_node_count": 34,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 5816,
+          "end_byte": 5931,
+          "start_line": 127,
+          "end_line": 129,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/expr.rs",
+          "start_byte": 5936,
+          "end_byte": 6048,
+          "start_line": 130,
+          "end_line": 132,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 34-node subtree at crates/osprey-codegen/src/expr.rs:127:5, crates/osprey-codegen/src/expr.rs:130:5 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "ce26b52910e771d5",
+      "weight": 34.0,
+      "size": 2,
+      "canonical_node_count": 34,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 14415,
+          "end_byte": 14556,
+          "start_line": 400,
+          "end_line": 403,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/check.rs",
+          "start_byte": 15021,
+          "end_byte": 15162,
+          "start_line": 413,
+          "end_line": 416,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 34-node subtree at crates/osprey-types/src/check.rs:400:5, crates/osprey-types/src/check.rs:413:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "dd219c2413b0607b",
+      "weight": 34.0,
+      "size": 2,
+      "canonical_node_count": 34,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "nearly_identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-syntax/src/expr.rs",
+          "start_byte": 10391,
+          "end_byte": 10572,
+          "start_line": 249,
+          "end_line": 253,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-syntax/src/lower.rs",
+          "start_byte": 1533,
+          "end_byte": 1704,
+          "start_line": 47,
+          "end_line": 51,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 34-node subtree at crates/osprey-syntax/src/expr.rs:249:32, crates/osprey-syntax/src/lower.rs:47:44 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "f3c72069ba3ac865",
+      "weight": 34.0,
+      "size": 2,
+      "canonical_node_count": 34,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/runtime.rs",
+          "start_byte": 2239,
+          "end_byte": 2413,
+          "start_line": 52,
+          "end_line": 55,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 6181,
+          "end_byte": 6342,
+          "start_line": 163,
+          "end_line": 166,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 34-node subtree at crates/osprey-codegen/src/runtime.rs:52:9, crates/osprey-codegen/src/iter.rs:163:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "4e566db9454a0fd9",
+      "weight": 32.0,
+      "size": 2,
+      "canonical_node_count": 32,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 3378,
+          "end_byte": 3512,
+          "start_line": 72,
+          "end_line": 74,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 2059,
+          "end_byte": 2193,
+          "start_line": 52,
+          "end_line": 54,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 32-node subtree at crates/osprey-codegen/src/strings.rs:72:1, crates/osprey-codegen/src/collections.rs:52:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "5592b409ea2979d5",
+      "weight": 32.0,
+      "size": 2,
+      "canonical_node_count": 32,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 7032,
+          "end_byte": 7160,
+          "start_line": 184,
+          "end_line": 187,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/iter.rs",
+          "start_byte": 11047,
+          "end_byte": 11208,
+          "start_line": 287,
+          "end_line": 289,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 32-node subtree at crates/osprey-codegen/src/iter.rs:184:5, crates/osprey-codegen/src/iter.rs:287:9 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "83b33765abc51643",
+      "weight": 32.0,
+      "size": 2,
+      "canonical_node_count": 32,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/effects.rs",
+          "start_byte": 1260,
+          "end_byte": 1439,
+          "start_line": 30,
+          "end_line": 35,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/llty.rs",
+          "start_byte": 4397,
+          "end_byte": 4572,
+          "start_line": 124,
+          "end_line": 129,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 32-node subtree at crates/osprey-codegen/src/effects.rs:30:8, crates/osprey-codegen/src/llty.rs:124:12 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "850b167b75909b78",
+      "weight": 32.0,
+      "size": 2,
+      "canonical_node_count": 32,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-types/src/ty.rs",
+          "start_byte": 4917,
+          "end_byte": 5101,
+          "start_line": 150,
+          "end_line": 155,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-types/src/ty.rs",
+          "start_byte": 5321,
+          "end_byte": 5439,
+          "start_line": 164,
+          "end_line": 169,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 32-node subtree at crates/osprey-types/src/ty.rs:150:36, crates/osprey-types/src/ty.rs:164:19 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b36ceb2d8e971095",
+      "weight": 32.0,
+      "size": 2,
+      "canonical_node_count": 32,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/strings.rs",
+          "start_byte": 4498,
+          "end_byte": 4651,
+          "start_line": 113,
+          "end_line": 115,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 4282,
+          "end_byte": 4435,
+          "start_line": 112,
+          "end_line": 114,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 32-node subtree at crates/osprey-codegen/src/strings.rs:113:5, crates/osprey-codegen/src/collections.rs:112:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "0704432b9392953d",
+      "weight": 31.0,
+      "size": 2,
+      "canonical_node_count": 31,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 5284,
+          "end_byte": 5432,
+          "start_line": 136,
+          "end_line": 138,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 10888,
+          "end_byte": 11042,
+          "start_line": 278,
+          "end_line": 280,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 31-node subtree at crates/osprey-codegen/src/collections.rs:136:5, crates/osprey-codegen/src/collections.rs:278:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "7f2bb0db72f9225c",
+      "weight": 30.0,
+      "size": 2,
+      "canonical_node_count": 30,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/pattern.rs",
+          "start_byte": 2991,
+          "end_byte": 3120,
+          "start_line": 68,
+          "end_line": 70,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/runtime.rs",
+          "start_byte": 1452,
+          "end_byte": 1588,
+          "start_line": 32,
+          "end_line": 34,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 30-node subtree at crates/osprey-codegen/src/pattern.rs:68:9, crates/osprey-codegen/src/runtime.rs:32:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "b527b9ee225085ce",
+      "weight": 30.0,
+      "size": 2,
+      "canonical_node_count": 30,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-codegen/src/collections.rs",
+          "start_byte": 7988,
+          "end_byte": 8126,
+          "start_line": 200,
+          "end_line": 203,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-codegen/src/listlit.rs",
+          "start_byte": 5770,
+          "end_byte": 5879,
+          "start_line": 138,
+          "end_line": 141,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 30-node subtree at crates/osprey-codegen/src/collections.rs:200:5, crates/osprey-codegen/src/listlit.rs:138:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "id": "f2ed9c6eda3e06f0",
+      "weight": 30.0,
+      "size": 2,
+      "canonical_node_count": 30,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 0.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "structural_only",
+      "occurrences": [
+        {
+          "path": "crates/osprey-ast/src/lib.rs",
+          "start_byte": 5655,
+          "end_byte": 5807,
+          "start_line": 212,
+          "end_line": 220,
+          "hidden": false
+        },
+        {
+          "path": "crates/osprey-ast/src/lib.rs",
+          "start_byte": 6902,
+          "end_byte": 7162,
+          "start_line": 264,
+          "end_line": 273,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 30-node subtree at crates/osprey-ast/src/lib.rs:212:5, crates/osprey-ast/src/lib.rs:264:5 [structural=1.00, token_jaccard=0.00, embedding_cos=0.00]",
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    }
+  ]
+}

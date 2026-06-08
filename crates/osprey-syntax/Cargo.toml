@@ -10,3 +10,6 @@ repository.workspace = true
 osprey-ast = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-osprey = { workspace = true }
+
+[lints]
+workspace = true

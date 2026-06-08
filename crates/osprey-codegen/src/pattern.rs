@@ -88,7 +88,7 @@ fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<
     let end = cg.fresh_label();
     cg.emit(format!("br i1 {cond}, label %{sl}, label %{el}"));
 
-    let mut phi_in: Vec<(String, String, LType)> = Vec::new();
+    let mut phi_in: Vec<(Value, String)> = Vec::new();
 
     cg.start_block(&sl);
     if let Some(arm) = success {
@@ -98,7 +98,8 @@ fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<
             }
         }
         let v = gen_expr(cg, &arm.body)?;
-        phi_in.push((v.operand, cg.cur_block().to_string(), v.ty));
+        let blk = cg.cur_block().to_string();
+        phi_in.push((v, blk));
     }
     cg.emit(format!("br label %{end}"));
 
@@ -110,7 +111,8 @@ fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<
             }
         }
         let v = gen_expr(cg, &arm.body)?;
-        phi_in.push((v.operand, cg.cur_block().to_string(), v.ty));
+        let blk = cg.cur_block().to_string();
+        phi_in.push((v, blk));
     }
     cg.emit(format!("br label %{end}"));
 
@@ -136,7 +138,7 @@ fn gen_union_match(
     cg.emit(format!("{tag} = load i64, i64* {tagp}"));
 
     let end = cg.fresh_label();
-    let mut phi_in: Vec<(String, String, LType)> = Vec::new();
+    let mut phi_in: Vec<(Value, String)> = Vec::new();
     let variants = cg.union_variants(owner).unwrap_or(&[]).to_vec();
 
     for arm in arms {
@@ -152,7 +154,8 @@ fn gen_union_match(
             cg.start_block(&body_lbl);
             bind_variant_fields(cg, &disc, &name, &fields);
             let v = gen_expr(cg, &arm.body)?;
-            phi_in.push((v.operand, cg.cur_block().to_string(), v.ty));
+            let blk = cg.cur_block().to_string();
+            phi_in.push((v, blk));
             cg.emit(format!("br label %{end}"));
             cg.start_block(&next_lbl);
         } else {
@@ -164,7 +167,8 @@ fn gen_union_match(
                         cg.bind(n.clone(), disc.clone());
                     }
                     let v = gen_expr(cg, &arm.body)?;
-                    phi_in.push((v.operand, cg.cur_block().to_string(), v.ty));
+                    let blk = cg.cur_block().to_string();
+                    phi_in.push((v, blk));
                     cg.emit(format!("br label %{end}"));
                     break;
                 }
@@ -208,7 +212,7 @@ fn bind_variant_fields(cg: &mut Codegen, disc: &Value, variant: &str, pat_fields
 /// Literal/catch-all match: compare-and-branch chain joined by a `phi`.
 fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<Value> {
     let end = cg.fresh_label();
-    let mut phi_in: Vec<(String, String, LType)> = Vec::new();
+    let mut phi_in: Vec<(Value, String)> = Vec::new();
     let last = arms.len().saturating_sub(1);
 
     for (i, arm) in arms.iter().enumerate() {
@@ -216,7 +220,8 @@ fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result
             Pattern::Wildcard | Pattern::Binding(_) | Pattern::TypeAnnotated { .. } => {
                 bind_catch_all(cg, &arm.pattern, &disc);
                 let v = gen_expr(cg, &arm.body)?;
-                phi_in.push((v.operand.clone(), cg.cur_block().to_string(), v.ty));
+                let blk = cg.cur_block().to_string();
+                phi_in.push((v, blk));
                 cg.emit(format!("br label %{end}"));
                 break;
             }
@@ -227,7 +232,8 @@ fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result
                 cg.emit(format!("br i1 {cond}, label %{body_lbl}, label %{next_lbl}"));
                 cg.start_block(&body_lbl);
                 let v = gen_expr(cg, &arm.body)?;
-                phi_in.push((v.operand.clone(), cg.cur_block().to_string(), v.ty));
+                let blk = cg.cur_block().to_string();
+                phi_in.push((v, blk));
                 cg.emit(format!("br label %{end}"));
                 cg.start_block(&next_lbl);
                 if i == last {
@@ -243,25 +249,37 @@ fn gen_literal_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result
 }
 
 /// Join the arm values with a `phi`. A single arm needs none. When the arms
-/// disagree on type the match is being used as a statement (its value is
+/// disagree on LLVM type the match is being used as a statement (its value is
 /// discarded) — a `phi` would be ill-typed, so yield Unit instead of emitting
-/// one. Otherwise the common type drives the `phi`.
-fn finish_phi(cg: &mut Codegen, phi_in: &[(String, String, LType)]) -> Result<Value> {
+/// one. `Str`/`Ptr` count as the same type (both `i8*`). A common owner /
+/// payload-owner across arms is preserved so a matched handle (record, nested
+/// list) stays field-accessible / indexable.
+fn finish_phi(cg: &mut Codegen, phi_in: &[(Value, String)]) -> Result<Value> {
     if phi_in.is_empty() {
         return Ok(Value::unit());
     }
-    let ty = phi_in[0].2;
-    if phi_in.iter().any(|(_, _, t)| *t != ty) {
+    let ty = phi_in[0].0.ty;
+    if phi_in.iter().any(|(v, _)| v.ty.as_str() != ty.as_str()) {
         return Ok(Value::unit());
     }
     let incoming = phi_in
         .iter()
-        .map(|(op, blk, _)| format!("[ {op}, %{blk} ]"))
+        .map(|(v, blk)| format!("[ {}, %{blk} ]", v.operand))
         .collect::<Vec<_>>()
         .join(", ");
     let reg = cg.fresh_reg();
     cg.emit(format!("{reg} = phi {ty} {incoming}"));
-    Ok(Value::new(reg, ty))
+    let common = |sel: fn(&Value) -> Option<String>| {
+        let first = sel(&phi_in[0].0);
+        phi_in
+            .iter()
+            .all(|(v, _)| sel(v) == first)
+            .then_some(first)
+            .flatten()
+    };
+    Ok(Value::new(reg, ty)
+        .with_owner(common(|v| v.osp_ty.clone()))
+        .with_payload_owner(common(|v| v.payload_owner.clone())))
 }
 
 fn bind_catch_all(cg: &mut Codegen, pattern: &Pattern, disc: &Value) {

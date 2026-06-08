@@ -15,3 +15,6 @@ osprey-ast = { workspace = true }
 osprey-syntax = { workspace = true }
 osprey-types = { workspace = true }
 osprey-codegen = { workspace = true }
+
+[lints]
+workspace = true

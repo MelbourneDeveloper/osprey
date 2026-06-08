@@ -18,19 +18,27 @@ use osprey_ast::Expr;
 const LIST_LIT: &str = "[]";
 const LIST_STRUCT: &str = "{ i64, i8* }";
 
-/// Tag a flat list-literal handle with its element type.
-fn lit_owner(elem: LType) -> String {
-    format!("{LIST_LIT}{}", elem.as_str())
+/// Tag a flat list-literal handle with its element. A scalar element records its
+/// LLVM spelling (`[]i64`); a handle element (a nested list, a record) records
+/// its own owner so access can recover it (`[][]i64`, `[]Point`).
+fn lit_owner(elem: &Value) -> String {
+    match &elem.osp_ty {
+        Some(o) => format!("{LIST_LIT}{o}"),
+        None => format!("{LIST_LIT}{}", elem.ty.as_str()),
+    }
 }
 
-/// The element type of a flat list-literal handle, if `osp_ty` is one.
-fn lit_elem(osp_ty: Option<&str>) -> Option<LType> {
+/// The element of a flat list-literal handle: its storage [`LType`] and, for a
+/// handle element, the owner type to re-tag the loaded value with (so nested
+/// lists / records stay indexable / field-accessible).
+fn lit_elem(osp_ty: Option<&str>) -> Option<(LType, Option<String>)> {
     let suffix = osp_ty?.strip_prefix(LIST_LIT)?;
     Some(match suffix {
-        "i64" => LType::I64,
-        "double" => LType::Double,
-        "i1" => LType::I1,
-        _ => LType::Str,
+        "i64" => (LType::I64, None),
+        "double" => (LType::Double, None),
+        "i1" => (LType::I1, None),
+        "i8*" => (LType::Str, None),
+        other => (LType::Str, Some(other.to_string())),
     })
 }
 
@@ -40,7 +48,7 @@ pub(crate) fn gen_list(cg: &mut Codegen, elements: &[Expr]) -> Result<Value> {
         let obj = cg.malloc_struct(LIST_STRUCT);
         crate::aggregate::store_field(cg, LIST_STRUCT, &obj, 0, LType::I64, "0");
         crate::aggregate::store_field(cg, LIST_STRUCT, &obj, 1, LType::Str, "null");
-        return Ok(Value::handle(obj, lit_owner(LType::Str)));
+        return Ok(Value::handle(obj, lit_owner(&Value::new("", LType::Str))));
     }
     // Evaluate elements; the first fixes the slot type.
     let mut vals = Vec::with_capacity(elements.len());
@@ -53,6 +61,9 @@ pub(crate) fn gen_list(cg: &mut Codegen, elements: &[Expr]) -> Result<Value> {
         LType::Str | LType::Ptr => LType::Str,
         _ => LType::I64,
     };
+    // A handle element (nested list / record) carries its own owner so access can
+    // recover it; scalars carry none.
+    let elem_owner = vals[0].osp_ty.clone();
     let n = elements.len();
     cg.add_extern("declare i8* @malloc(i64)");
     let data = cg.fresh_reg();
@@ -72,7 +83,10 @@ pub(crate) fn gen_list(cg: &mut Codegen, elements: &[Expr]) -> Result<Value> {
     let obj = cg.malloc_struct(LIST_STRUCT);
     crate::aggregate::store_field(cg, LIST_STRUCT, &obj, 0, LType::I64, &n.to_string());
     crate::aggregate::store_field(cg, LIST_STRUCT, &obj, 1, LType::Str, &data);
-    Ok(Value::handle(obj, lit_owner(elem)))
+    Ok(Value::handle(
+        obj,
+        lit_owner(&Value::new("", elem).with_owner(elem_owner)),
+    ))
 }
 
 /// `target[index]` — flat list-literal access (bounds-checked `Result<T, _>`) or
@@ -87,7 +101,7 @@ pub(crate) fn gen_index(cg: &mut Codegen, target: &Expr, index: &Expr) -> Result
         return crate::collections::runtime_map_get(cg, &tv, &k);
     }
 
-    let elem = lit_elem(tv.osp_ty.as_deref())
+    let (elem, elem_owner) = lit_elem(tv.osp_ty.as_deref())
         .ok_or_else(|| CodegenError::unsupported("index of a non-list/map value"))?;
     let idx = crate::conv::as_i64(cg, iv)?;
 
@@ -140,5 +154,5 @@ pub(crate) fn gen_index(cg: &mut Codegen, target: &Expr, index: &Expr) -> Result
     ));
     let disc = cg.fresh_reg();
     cg.emit(format!("{disc} = select i1 {ok}, i8 0, i8 1"));
-    make_result(cg, Value::new(phi, elem), elem, &disc)
+    make_result(cg, Value::new(phi, elem).with_owner(elem_owner), elem, &disc)
 }

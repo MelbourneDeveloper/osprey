@@ -21,6 +21,7 @@ pub(crate) fn make_result(
     disc: &str,
 ) -> Result<Value> {
     let v = coerce_to(cg, value, inner)?;
+    let payload_owner = v.osp_ty.clone();
     let struct_ty = format!("{{ {inner}, i8 }}");
     let obj = cg.malloc_struct(&struct_ty);
     crate::aggregate::store_field(cg, &struct_ty, obj.as_str(), 0, inner, &v.operand);
@@ -29,7 +30,7 @@ pub(crate) fn make_result(
         "{dp} = getelementptr {struct_ty}, {struct_ty}* {obj}, i32 0, i32 1"
     ));
     cg.emit(format!("store i8 {disc}, i8* {dp}"));
-    Ok(Value::result(obj, inner))
+    Ok(Value::result(obj, inner).with_payload_owner(payload_owner))
 }
 
 /// A Success result wrapping `value` (disc 0).
@@ -57,7 +58,7 @@ pub(crate) fn load_value(cg: &mut Codegen, v: &Value) -> Value {
     let inner = v.result_inner.expect("load_value on a non-Result value");
     let struct_ty = v.result_struct_ty().unwrap();
     let loaded = crate::aggregate::load_field(cg, &struct_ty, v.operand.as_str(), 0, inner);
-    Value::new(loaded, inner)
+    Value::new(loaded, inner).with_owner(v.payload_owner.clone())
 }
 
 /// Auto-unwrap a Result at a value site (arithmetic, `print`, an argument),
