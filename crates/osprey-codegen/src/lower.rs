@@ -104,23 +104,31 @@ fn coerce_return(cg: &mut Codegen, name: &str, body: Value) -> Result<Value> {
 
 pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
     match stmt {
-        // A let-bound lambda is recorded for inline application at its call
-        // sites rather than evaluated to a value (the backend lowers no
-        // closures).
-        Stmt::Let { name, value, .. } | Stmt::Assignment { name, value, .. } => {
-            if let Expr::Lambda { parameters, body, .. } = value {
-                cg.lambdas
-                    .insert(name.clone(), (parameters.clone(), (**body).clone()));
-                return Ok(());
-            }
-            let v = gen_expr(cg, value)?;
-            cg.bind(name.clone(), v);
-            Ok(())
-        }
+        // An immutable `let` keeps a Result wrapper (so `let v = 21 * 2;
+        // toString(v)` shows `Success(42)`); a `mut` reassignment auto-unwraps it
+        // (the cell holds the success payload, matching Go's mut auto-unwrap).
+        Stmt::Let { name, value, .. } => gen_bind(cg, name, value, false),
+        Stmt::Assignment { name, value, .. } => gen_bind(cg, name, value, true),
         Stmt::Expr(e) => {
             gen_expr(cg, e)?;
             Ok(())
         }
         _ => Err(CodegenError::unsupported("statement in block/main")),
     }
+}
+
+/// Bind `name` to `value`. A lambda is recorded for inline application at its
+/// call sites rather than evaluated (the backend lowers no closures). When
+/// `unwrap` is set (a mutable assignment), a Result value is unwrapped to its
+/// success payload before binding.
+fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<()> {
+    if let Expr::Lambda { parameters, body, .. } = value {
+        cg.lambdas
+            .insert(name.to_string(), (parameters.clone(), (**body).clone()));
+        return Ok(());
+    }
+    let v = gen_expr(cg, value)?;
+    let v = if unwrap { crate::result::unwrap(cg, v) } else { v };
+    cg.bind(name.to_string(), v);
+    Ok(())
 }

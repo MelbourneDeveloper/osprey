@@ -135,12 +135,16 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     if op == "+" && (l.ty == LType::Str || r.ty == LType::Str) {
         return gen_str_concat(cg, l, r);
     }
+    // Numeric arithmetic infers `Result<…, MathError>` in Go (`createSuccessResult`
+    // / `createSuccessResultFloat`): `/` always float, the rest follow operand
+    // type. The Success wrapper auto-unwraps at value sites (interpolation,
+    // comparison, args), but `toString`/`print` show it as `Success(n)`.
     if op == "/" {
         let ld = as_double(cg, l)?;
         let rd = as_double(cg, r)?;
         let reg = cg.fresh_reg();
         cg.emit(format!("{reg} = fdiv double {}, {}", ld.operand, rd.operand));
-        return Ok(Value::new(reg, LType::Double));
+        return crate::result::make_ok(cg, Value::new(reg, LType::Double), LType::Double);
     }
     if l.ty == LType::Double || r.ty == LType::Double {
         let ld = as_double(cg, l)?;
@@ -154,7 +158,7 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
         };
         let reg = cg.fresh_reg();
         cg.emit(format!("{reg} = {opc} double {}, {}", ld.operand, rd.operand));
-        return Ok(Value::new(reg, LType::Double));
+        return crate::result::make_ok(cg, Value::new(reg, LType::Double), LType::Double);
     }
     let li = as_i64(cg, l)?;
     let ri = as_i64(cg, r)?;
@@ -167,7 +171,7 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     };
     let reg = cg.fresh_reg();
     cg.emit(format!("{reg} = {opc} i64 {}, {}", li.operand, ri.operand));
-    Ok(Value::new(reg, LType::I64))
+    crate::result::make_ok(cg, Value::new(reg, LType::I64), LType::I64)
 }
 
 /// String concatenation: `malloc(strlen a + strlen b + 1)` then `strcpy`+`strcat`
@@ -279,31 +283,16 @@ fn gen_call(
     named: &[NamedArgument],
 ) -> Result<Value> {
     // A directly-applied lambda (`x |> fn(y) => …`, `(fn(y) => …)(x)`) is
-    // beta-reduced inline: bind each parameter to its argument and lower the
-    // body in a fresh scope.
+    // beta-reduced inline.
     if let Expr::Lambda { parameters, body, .. } = function {
-        cg.push_scope();
-        for (p, a) in parameters.iter().zip(arguments) {
-            let av = gen_expr(cg, a)?;
-            cg.bind(p.name.clone(), av);
-        }
-        let v = gen_expr(cg, body);
-        cg.pop_scope();
-        return v;
+        return apply_lambda(cg, parameters, body, arguments);
     }
     let Expr::Identifier(name) = function else {
         return Err(CodegenError::unsupported("indirect / higher-order call"));
     };
     // A let-bound lambda is inlined at its call site (no closures lowered).
     if let Some((params, body)) = cg.lambdas.get(name).cloned() {
-        cg.push_scope();
-        for (p, a) in params.iter().zip(arguments) {
-            let av = gen_expr(cg, a)?;
-            cg.bind(p.name.clone(), av);
-        }
-        let v = gen_expr(cg, &body);
-        cg.pop_scope();
-        return v;
+        return apply_lambda(cg, &params, &body, arguments);
     }
     match name.as_str() {
         "print" => {
@@ -337,6 +326,27 @@ fn gen_call(
             gen_user_call(cg, name, arguments, named)
         }
     }
+}
+
+/// Beta-reduce a lambda at its application site: bind each parameter to its
+/// argument, lower the body in a fresh scope, then unwrap a `Result` return.
+/// A lambda's inferred return type is its body's success payload, so applying
+/// `fn(x) => x * 2` yields a plain `int` — matching how Go unwraps a call's
+/// `Result<…, MathError>` at a non-Result return boundary (`maybeWrapInResult`).
+fn apply_lambda(
+    cg: &mut Codegen,
+    parameters: &[Parameter],
+    body: &Expr,
+    arguments: &[Expr],
+) -> Result<Value> {
+    cg.push_scope();
+    for (p, a) in parameters.iter().zip(arguments) {
+        let av = gen_expr(cg, a)?;
+        cg.bind(p.name.clone(), av);
+    }
+    let v = gen_expr(cg, body);
+    cg.pop_scope();
+    Ok(crate::result::unwrap(cg, v?))
 }
 
 /// A call to a user-defined or runtime function. Parameter types come from
@@ -437,7 +447,11 @@ fn gen_interpolation(cg: &mut Codegen, parts: &[InterpolatedPart]) -> Result<Val
         match part {
             InterpolatedPart::Text(t) => fmt.push_str(&t.replace('%', "%%")),
             InterpolatedPart::Expr(e) => {
+                // `${expr}` unwraps a Result to its payload before formatting
+                // (Go's `generateInterpolatedString` calls `unwrapIfResult`), so
+                // `${21 * 2}` prints `42`, not `Success(42)`.
                 let v = gen_expr(cg, e)?;
+                let v = crate::result::unwrap(cg, v);
                 let s = to_string_value(cg, v)?;
                 fmt.push_str("%s");
                 args.push(format!("i8* {}", s.operand));

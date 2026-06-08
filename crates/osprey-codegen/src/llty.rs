@@ -60,6 +60,11 @@ pub struct Value {
     /// discriminant or auto-unwrap the success payload — mirroring the Go
     /// backend's `{value, i8}` Result ABI.
     pub result_inner: Option<LType>,
+    /// The Osprey owner type to tag the success payload with when this Result is
+    /// unwrapped — e.g. a `Result<List<int>, _>` from indexing a list-of-lists
+    /// carries `[]i64` so the unwrapped element is itself indexable. `None` for
+    /// scalar payloads.
+    pub payload_owner: Option<String>,
 }
 
 impl Value {
@@ -69,6 +74,7 @@ impl Value {
             ty,
             osp_ty: None,
             result_inner: None,
+            payload_owner: None,
         }
     }
 
@@ -79,6 +85,7 @@ impl Value {
             ty: LType::Ptr,
             osp_ty: Some(owner.into()),
             result_inner: None,
+            payload_owner: None,
         }
     }
 
@@ -89,12 +96,20 @@ impl Value {
             ty: LType::Ptr,
             osp_ty: Some("Result".to_string()),
             result_inner: Some(inner),
+            payload_owner: None,
         }
     }
 
     /// This value re-tagged with an Osprey owner type name.
     pub fn with_owner(mut self, owner: Option<String>) -> Value {
         self.osp_ty = owner;
+        self
+    }
+
+    /// This Result re-tagged with the owner type of its success payload (so an
+    /// unwrapped element keeps its handle identity — e.g. a nested list).
+    pub fn with_payload_owner(mut self, owner: Option<String>) -> Value {
+        self.payload_owner = owner;
         self
     }
 

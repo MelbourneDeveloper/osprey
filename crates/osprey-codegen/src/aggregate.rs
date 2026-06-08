@@ -102,9 +102,15 @@ pub(crate) fn gen_update(
 /// load the field.
 pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> Result<Value> {
     let tv = gen_expr(cg, target)?;
-    let owner = tv
-        .osp_ty
-        .clone()
+    // Use the statically-known owner when it actually declares `field`; otherwise
+    // (a generic accessor whose parameter infers to a type variable) resolve the
+    // field by name across known layouts — Go's polymorphic field-access fallback.
+    let known = tv.osp_ty.clone().filter(|o| {
+        cg.ctor_layout(o)
+            .is_some_and(|v| v.fields.iter().any(|(f, _)| f == field))
+    });
+    let owner = known
+        .or_else(|| cg.find_field_owner(field))
         .ok_or_else(|| CodegenError::invalid(format!("field `{field}` on a non-record")))?;
     let view = cg
         .ctor_layout(&owner)

@@ -511,13 +511,12 @@ impl Checker {
                     res_math(Type::int())
                 }
             }
-            // "-" and "*"
+            // "-" and "*": unlike "+", these have no string/list overload, so
+            // unconstrained operands default to int — `fn square(v) = v * v`
+            // infers `(int) -> Result<int, MathError>`, exactly as the Go engine.
             _ => {
                 if l.is_named(names::FLOAT) || r.is_named(names::FLOAT) {
                     res_math(Type::float())
-                } else if both_vars(&l, &r) {
-                    let _ = unify(&mut self.ctx, lt, rt);
-                    self.ctx.fresh()
                 } else {
                     self.push_assign(&Type::int(), lt);
                     self.push_assign(&Type::int(), rt);

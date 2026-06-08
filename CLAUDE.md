@@ -1,39 +1,41 @@
 # CLAUDE.md
 <!-- agent-pmo:74cf183 -->
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance for agents when working with code in this repository.
 
+⚠️ **NEVER DUPLICATE CODE** - Edit in place, never create new versions. Use deslop - find-similar before adding code, and deslop-top-offenders after modifying code ⚠️
 ⚠️ DO NOT USE GIT - ESPECIALLY NOT PUTTING YOUR SIGNATURE ON COMMITS ⚠️
 ⚠️ PRACTICE TOKEN ECONOMICS ⚠️
 ⚠️ ZERO DUPLICATE CODE ⚠️
 
 ## Core Development Principles
 
-- **NEVER DUPLICATE CODE** - Edit in place, never create new versions. Actively remove duplicate code, even test code and always aim for conciseness. Always do a search before adding new code.
 - **NO PLACEHOLDERS** - Fix existing placeholders or fail with error
-
-⛔️ This is completely illegal
-```go
-// For now, just log that we need to implement circular dependency detection
-t.Log("⚠️  NOTE: Circular dependency detection not yet implemented - this will be added later")
-```
-
-✅ Correct - Fail hard!!!!
-```go
-t.Fatalf("⚠️ NOTE: Circular dependency detection not yet implemented. Implement it!")
-```
-
-- **NO CONSECUTIVE PRINT CALLS IN OSP** - Use string interpolation! Consolidate consecutive prints into singular interpolated strings!!!
 - **RUN LINTING AUTOFIXES AND make line ROUTINELY** - Most lints can be easily fixed with auto fix. Don't try to fix them yourself
 - **PREFER EXPANDING EXISTING EXAMPLES AND TESTS** - Don't add new examples/tests
-- **SEARCH BEFORE ADDING** - Check for existing code before creating new functions/constants
-- **DO NOT USE SOURCE CONTROL - ESPECIALLY WRITES** - unless explicitly requested
+- **DO NOT USE GIT - IN PARTICULAR, DO NOT STAMP YOURSELF AS COAUTHOR** - unless explicitly requested
 - **MAKE EXAMPLES (TESTS) CONCISE AND MIX WITH MANY LANGUAGE CONSTRUCTS** - Don't create many files with overlapping functionality
-- **NEVER IGNORE FAILING TESTS** - Don't reduce assertions to make tests pass, fail loudly
 - **KEEP ALL FILES UNDER 500 LOC** - Break large files into focused modules 
 - **FP STYLE CODE** - pure functions over OOP style
+- **Handle all panics and return Result<T,E>** instead of throwing
 - **USE CONSTANTS** - Name values meaningfully instead of using literals
-- ACTIVELY FIX RULE VIOLATIONS AS A HIGH PRIORITY
+
+## Rust
+
+- **Panics are illegal** Return Result<T,E>
+- **unwrap() and similar are illegal** Use pattern matching
+
+## Osprey
+
+- **Osprey is an FP language** - Use constructs that other FP languages use:
+  - Immutable types
+  - Expressions over statements
+  - Avoid brackets where they are not necessary (ML style)
+  - Use algebraic effects for abstractions
+  - The best function is a single expression with no side effects (pure)
+  - Avoid consecutive statements and assignments, even when assignments add
+    clarity
+- **NO CONSECUTIVE PRINT CALLS IN OSP** - Use string interpolation! Consolidate consecutive prints into singular interpolated strings!!!
 
 ## Commands
 

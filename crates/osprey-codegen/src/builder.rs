@@ -198,6 +198,32 @@ impl Codegen {
         })
     }
 
+    /// Resolve a field name to an owning constructor when the target's static
+    /// type is unknown — polymorphic field access inside a generic accessor like
+    /// `fn getFirst(p) = p.first`, where `p` infers to a type variable. Mirrors
+    /// Go's `generateStructFieldAccessFallback`. Prefers a layout whose field
+    /// type is a concrete scalar (so the load type and `toString` match the
+    /// runtime value), breaking ties by owner name for deterministic output.
+    pub(crate) fn find_field_owner(&self, field: &str) -> Option<String> {
+        let mut candidates: Vec<(&String, LType)> = self
+            .prog
+            .ctors
+            .iter()
+            .filter_map(|(name, c)| {
+                c.fields
+                    .iter()
+                    .find(|(f, _)| f == field)
+                    .map(|(_, t)| (name, ltype_of_name(t)))
+            })
+            .collect();
+        candidates.sort_by(|a, b| a.0.cmp(b.0));
+        candidates
+            .iter()
+            .find(|(_, lt)| *lt != LType::Ptr)
+            .or_else(|| candidates.first())
+            .map(|(name, _)| (*name).clone())
+    }
+
     /// The LLVM struct spelling for a constructor's heap block: `{ i64, f0, … }`
     /// — a leading `i64` discriminant tag followed by each field's LLVM type.
     pub(crate) fn ctor_struct_ty(&self, name: &str) -> Option<String> {
