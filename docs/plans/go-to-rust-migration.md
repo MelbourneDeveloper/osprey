@@ -156,14 +156,34 @@ the **SharpLsp sidecar pattern already in production**. Phase 3: swap the sideca
 ## Status (current)
 
 **Phase 0 COMPLETE. Phase 2 front-end + type checker + codegen all landed and
-running end-to-end.** The differential gate is now **35 / 35** golden cases
+running end-to-end.** The differential gate is now **41 / 41** golden cases
 byte-exact (whole-string `TrimSpace`) against the `.expectedoutput` oracle, via
-[`crates/diff_examples.sh`](../../crates/diff_examples.sh) — every
-`examples/tested` case passes. The whole Rust workspace is green under **maximum
-strictness**: `cargo build --release`, `cargo clippy --workspace --all-targets`
-(clippy::all + pedantic + restriction: no `unwrap`/`expect`/`panic`/`indexing`/
-`as`), `cargo fmt --check`, and `cargo test --workspace` (all unit + corpus
-tests) all pass.
+[`crates/diff_examples.sh`](../../crates/diff_examples.sh) — **every**
+`examples/tested` case passes, with **zero NOEXP**: the six cases the Go test
+verified through in-code maps (`getExpectedOutputs`/`getHTTPExpectedOutputs` —
+`function_composition_test`, `adventure_game`, `string_edge_cases`,
+`http_client_example`, `http_create_client`, and the platform-branching
+`callback_stdout_demo`) now carry on-disk `.expectedoutput` files (a single
+source of truth both the Go file-first path and the Rust harness read;
+`callback_stdout_demo` uses per-`uname` files since its subprocess error text +
+exit code differ by OS). Closing the last of these required two codegen
+additions: **lambda-lifting** (an inline lambda passed to a function-typed
+parameter is lifted to a top-level `@__lambda_*` and passed as a code pointer —
+[`genfn::lift_lambda`](../../crates/osprey-codegen/src/genfn.rs)) and **uniform
+`i64` boxing of generic union-variant payloads** (`Full { value: T }` stores its
+payload in one `i64` slot, matching the Go backend, instead of an `i8*` that
+mis-dispatched `toString` into a segfault). The TUI (`tui_repo_table`) and the
+live HTTP server (`http_server_example`: server + GET/POST/PUT/DELETE + 404 +
+graceful shutdown) were both verified to match the Go binary byte-for-byte. The
+whole Rust workspace is green under **maximum strictness**: `cargo build
+--release`, `cargo clippy --workspace --all-targets` (clippy::all + pedantic +
+restriction: no `unwrap`/`expect`/`panic`/`indexing`/`as`), `cargo fmt --check`,
+and `cargo test --workspace` (all unit + corpus tests) all pass. **CI now runs
+the Rust gate**: a `rust` job in [`ci.yml`](../../.github/workflows/ci.yml)
+(alongside the still-required Go `ci` job, since the Go binary is still the
+released artifact) builds the C runtime archives and runs fmt + clippy
+(`-D warnings`) + workspace tests + the 41/41 differential harness on every PR
+to `main`.
 
 - **`osprey-types` — the HM core — DONE and verified.** A complete Hindley-Milner
   engine: enum `Type` language, index-addressed union-find substitution with
@@ -217,11 +237,11 @@ per-subsystem record.
 - [x] 2.1 [`crates/osprey-ast`](../../crates/osprey-ast/src/lib.rs): `Stmt`/`Expr` enums mirroring [`ast.go`](../../compiler/internal/ast/ast.go) (exhaustively matchable for the checker/codegen ports)
 - [x] 2.2 [`crates/osprey-syntax`](../../crates/osprey-syntax/src/lib.rs): CST→AST lowering (replaces `internal/ast/builder_*.go`) — all core constructs incl. UFCS method calls, named args, string interpolation; lowers **45/45 examples** clean; 7 unit tests
 - [x] 2.3 [`crates/osprey-types`](../../crates/osprey-types/src/lib.rs): port of [`type_inference.go`](../../compiler/internal/codegen/type_inference.go) — index union-find (`ctx.rs`), unification with the Osprey rules (`unify.rs`), let-polymorphism (`env.rs`), builtin registry (`builtins.rs`), expr/stmt inference (`expr.rs`/`check.rs`), pattern inference + **match-exhaustiveness** (`pattern.rs`). **`--check` passes 44/45 examples; 26 tests.** (Effect *rows* tracked structurally, not yet row-unified — a follow-up.)
-- [x] 2.4 [`crates/osprey-codegen`](../../crates/osprey-codegen/src/lib.rs): LLVM IR **text** emission (port of `llvm.go`/`*_generation.go`); shells to `clang`. **Works end-to-end across the language (`--run`):** type-driven signatures (string/record/float params + returns), arithmetic-as-`Result`, `print`/interpolation, `match` (literal/Result/union/Elvis), records & unions, object literals, lists/maps + 2D indexing, iterators, fibers, algebraic effects (`perform`/`handle`), division-by-zero → `Error`, the runtime-builtin table ([`extern_call.rs`](../../crates/osprey-codegen/src/extern_call.rs): file/process/HTTP/JSON), first-class function pointers + indirect higher-order calls + generic-function inlining ([`genfn.rs`](../../crates/osprey-codegen/src/genfn.rs)), and the `HttpResponse` C-struct constructor. Drives **35/35** goldens byte-exact (2.9).
+- [x] 2.4 [`crates/osprey-codegen`](../../crates/osprey-codegen/src/lib.rs): LLVM IR **text** emission (port of `llvm.go`/`*_generation.go`); shells to `clang`. **Works end-to-end across the language (`--run`):** type-driven signatures (string/record/float params + returns), arithmetic-as-`Result`, `print`/interpolation, `match` (literal/Result/union/Elvis), records & unions, object literals, lists/maps + 2D indexing, iterators, fibers, algebraic effects (`perform`/`handle`), division-by-zero → `Error`, the runtime-builtin table ([`extern_call.rs`](../../crates/osprey-codegen/src/extern_call.rs): file/process/HTTP/JSON), first-class function pointers + indirect higher-order calls + generic-function inlining + **lambda-lifting of value-position lambdas** ([`genfn.rs`](../../crates/osprey-codegen/src/genfn.rs)), uniform `i64` boxing of generic union-variant payloads, and the `HttpResponse` C-struct constructor. Drives **41/41** goldens byte-exact (2.9).
 - [~] 2.5 [`crates/osprey-runtime-sys`](../../crates/osprey-runtime-sys/src/lib.rs): `cc`-built FFI to `compiler/runtime/*.c` (same hardening flags; **no C rewrite**). Self-contained FFI-pointer unit (`ffi_runtime.c`) linked + tested; pthread/OpenSSL units link the same way as their callers land.
 - [~] 2.6 [`crates/osprey-cli`](../../crates/osprey-cli/src/main.rs): `osprey-rs` binary — `--ast` / `--check` / `--llvm` / `--run` / `--version` today; remaining clap surface (`--compile`, sandbox flags) grows with 2.4.
-- [x] 2.7 Differential test harness: [`crates/diff_examples.sh`](../../crates/diff_examples.sh) — Rust `--run` vs `.expectedoutput`, whole-string `TrimSpace`, across all goldens. **35/35.**
-- [~] 2.8 **Gate:** 100% of `tested/` **passes (35/35)**; `failscompilation/` + `make c-test` not re-verified this round.
+- [x] 2.7 Differential test harness: [`crates/diff_examples.sh`](../../crates/diff_examples.sh) — Rust `--run` vs `.expectedoutput`, whole-string `TrimSpace`, across all goldens; portable repo-root (runs in CI), per-`uname` fallback for platform-specific outputs. **41/41, 0 NOEXP.**
+- [x] 2.8 **Gate:** 100% of `tested/` **passes (41/41, zero NOEXP)** — including the six cases the Go test held in in-code maps, now materialised as on-disk `.expectedoutput`. **CI runs the Rust gate** (a `rust` job in [`ci.yml`](../../.github/workflows/ci.yml): C-runtime build + fmt + clippy `-D warnings` + `cargo test` + the differential harness, on every PR to `main`). `failscompilation/` + `make c-test` remain out of scope this round.
 - [x] 2.9 **All 11 remaining goldens landed** (see [Remaining examples](#remaining-examplestested--the-last-11)):
   - [x] R2 **files — runtime symbols.** Name-map `readFile`→`read_file` / `writeFile`→`write_file` with the right `Result<…>` wrapping, via the [`extern_call.rs`](../../crates/osprey-codegen/src/extern_call.rs) builtin table. `file_io_json_workflow` passes.
   - [x] R2 **db×2 — sqlite FFI.** Root cause was the type checker never publishing extern signatures (`collect_extern` skipped `fn_sigs`), so every `Ptr` collapsed to `i64`; publishing the signature + propagating `result_inner` through `match` phis (`finish_phi`, which fixed a Result double-wrap) makes `sqlite_basics` and `database_effect` pass.

@@ -115,3 +115,76 @@ jobs:
           chmod +x test.sh && ./test.sh
           docker stop osprey-web-compiler-ci
           docker rm osprey-web-compiler-ci
+
+  # ─── Rust compiler (osprey-rs) — the Phase-2 port's CI gate ──────────────────
+  # Runs the SAME gate the Go→Rust migration is held to locally: format + clippy
+  # (-D warnings: clippy::all + pedantic + restriction) + workspace tests + the
+  # differential harness — every examples/tested case run through `osprey-rs
+  # --run` must match its `.expectedoutput` byte-for-byte (whole-string trim),
+  # the same behavioural contract the Go `ci` job enforces. The Go compiler is
+  # still the released artifact (release.yml), so this runs ALONGSIDE `ci`, it
+  # does not replace it.
+  rust:
+    name: Rust Compiler (fmt, clippy, test, differential)
+    # ubuntu-latest is the most powerful GitHub-hosted runner available to this
+    # public repo by default (4 vCPU / 16 GB). If a larger hosted runner is ever
+    # provisioned for the account, switch this one label (e.g. to
+    # ubuntu-latest-8-cores) — nothing else needs to change.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable + rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-rust-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-rust-
+
+      - name: Install clang/LLVM, OpenSSL, SQLite and zsh
+        # clang links the osprey-rs-emitted IR; libssl-dev/libsqlite3-dev satisfy
+        # the HTTP and FFI-database runtimes the examples link; zsh runs the
+        # differential harness.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libssl-dev libsqlite3-dev pkg-config zsh
+          clang --version
+
+      - name: Build the C runtime archives (pure C — osprey-rs links these)
+        # fiber-runtime + http-runtime emit compiler/bin/lib*_runtime.a, which
+        # osprey-rs links at `--run` time. These targets are plain C ($(CC)/$(AR)),
+        # so no Go toolchain is needed here.
+        working-directory: ./compiler
+        run: make fiber-runtime http-runtime
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      - name: Clippy (all targets, warnings as errors)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build (release)
+        run: cargo build --release --workspace
+
+      - name: Test (workspace)
+        run: cargo test --workspace
+
+      - name: Differential golden tests (osprey-rs --run vs .expectedoutput)
+        # Must be 41/41 with zero examples lacking an expected output.
+        run: |
+          out=$(zsh crates/diff_examples.sh)
+          echo "$out"
+          echo "$out" | grep -Eq 'FAIL=0 '  || { echo '::error::differential test FAILures'; exit 1; }
+          echo "$out" | grep -Eq 'NOEXP=0 ' || { echo '::error::an example has no .expectedoutput'; exit 1; }

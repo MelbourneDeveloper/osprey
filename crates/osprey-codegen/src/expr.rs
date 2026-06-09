@@ -4,7 +4,7 @@
 //! know: function parameter and return types. Unsupported nodes fail loudly via
 //! [`CodegenError::Unsupported`] rather than miscompiling.
 
-use crate::builder::Codegen;
+use crate::builder::{Codegen, FnSig};
 use crate::conv::{as_double, as_i1, as_i64};
 use crate::error::{CodegenError, Result};
 use crate::llty::{LType, Value};
@@ -501,12 +501,24 @@ pub(crate) fn ordered_args(
     arguments: &[Expr],
     named: &[NamedArgument],
 ) -> Result<Vec<Value>> {
+    // The function-value signature of each declared parameter (if it is
+    // function-typed), so an inline-lambda argument is lifted to a code pointer
+    // matching that slot's ABI rather than evaluated as a value.
+    let sigs: Vec<Option<FnSig>> = cg
+        .prog
+        .param_types(name)
+        .map(|ts| ts.iter().map(Codegen::fn_value_sig).collect())
+        .unwrap_or_default();
     if !named.is_empty() {
         if let Some(pnames) = cg.fn_params.get(name).cloned() {
             let mut out = Vec::new();
-            for pn in &pnames {
+            for (i, pn) in pnames.iter().enumerate() {
                 if let Some(na) = named.iter().find(|a| &a.name == pn) {
-                    out.push(gen_expr(cg, &na.value)?);
+                    out.push(eval_arg(
+                        cg,
+                        &na.value,
+                        sigs.get(i).and_then(Option::as_ref),
+                    )?);
                 }
             }
             if out.len() == named.len() {
@@ -515,7 +527,28 @@ pub(crate) fn ordered_args(
         }
         return named.iter().map(|na| gen_expr(cg, &na.value)).collect();
     }
-    arguments.iter().map(|a| gen_expr(cg, a)).collect()
+    arguments
+        .iter()
+        .enumerate()
+        .map(|(i, a)| eval_arg(cg, a, sigs.get(i).and_then(Option::as_ref)))
+        .collect()
+}
+
+/// Lower one call argument. An inline lambda flowing into a function-typed
+/// parameter is lifted to a top-level function (a code pointer); every other
+/// argument — including a value-position lambda with no function-typed slot,
+/// which stays unsupported — goes through `gen_expr`.
+fn eval_arg(cg: &mut Codegen, expr: &Expr, sig: Option<&FnSig>) -> Result<Value> {
+    if let (
+        Expr::Lambda {
+            parameters, body, ..
+        },
+        Some(sig),
+    ) = (expr, sig)
+    {
+        return crate::genfn::lift_lambda(cg, parameters, body, sig);
+    }
+    gen_expr(cg, expr)
 }
 
 fn gen_interpolation(cg: &mut Codegen, parts: &[InterpolatedPart]) -> Result<Value> {

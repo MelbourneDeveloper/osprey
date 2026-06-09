@@ -83,6 +83,21 @@ mod tests {
     }
 
     #[test]
+    fn inline_lambda_argument_is_lifted_to_a_function_pointer() {
+        // An inline lambda flowing into a function-typed parameter is lifted to a
+        // top-level `@__lambda_*` function and passed as an `i8*` code pointer,
+        // not evaluated as a value — so the indirect call inside `apply` reaches
+        // it the same way a bare function name would.
+        let ir = module(
+            "fn apply(value: int, f: (int) -> int) -> int = f(value)\n\
+             let r = apply(value: 10, f: fn(x: int) => x + 1)\n\
+             print(\"r=${r}\")\n",
+        );
+        assert!(ir.contains("define i64 @__lambda_0(i64 %x)"));
+        assert!(ir.contains("@__lambda_0 to i8*"));
+    }
+
+    #[test]
     fn interpolation_uses_sprintf() {
         let ir = module("let x = 7\nprint(\"x=${x}\")\n");
         assert!(ir.contains("@sprintf"));

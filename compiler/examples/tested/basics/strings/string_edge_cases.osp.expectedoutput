@@ -1,0 +1,66 @@
+empty-emp=true
+
+empty-x=false
+
+starts-empty=true
+
+ends-empty=true
+
+starts-long=false
+
+ends-long=false
+
+take-neg=""
+
+take-big="hi"
+
+drop-neg="hi"
+
+drop-big=""
+
+trim-allws=""
+
+trim-empty=""
+
+sub-empty=""
+
+sub-full="hi"
+
+sub-neg rejected
+
+sub-over rejected
+
+sub-inverted rejected
+
+idx-empty=0
+
+idx-missing rejected
+
+rep-empty rejected
+
+rep-shrink="heo"
+
+rep0=""
+
+rep-neg rejected
+
+padS-empty rejected
+
+padE-empty rejected
+
+padS-noop="hi"
+
+padS-multi="aba42"
+
+pf-empty rejected
+
+pf-trailing rejected
+
+pi-overflow rejected
+
+pi-min=-9223372036854775808
+
+pi-leading-space rejected
+
+=== Edge Cases Complete ===
+

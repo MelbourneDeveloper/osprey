@@ -5,7 +5,7 @@
 
 use crate::llty::{LType, Value};
 use crate::types::{ltype_of, ltype_of_name};
-use osprey_types::{ProgramTypes, Type};
+use osprey_types::{CtorLayout, ProgramTypes, Type};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 
@@ -43,6 +43,9 @@ pub struct Codegen {
     pub(crate) effect_ops: HashMap<String, crate::effects::OpSig>,
     /// Monotonic id giving each emitted handler function a unique name.
     pub(crate) handler_count: usize,
+    /// Monotonic id giving each lambda lifted to a top-level function (a lambda
+    /// used as a value, e.g. passed to a function-typed parameter) a unique name.
+    pub(crate) lambda_count: usize,
     /// Synthetic layouts of anonymous object literals (`{ a: 1, b: "x" }`),
     /// keyed by the generated owner name carried on the handle, so field access
     /// can recover the ordered `(field, LType)` slots.
@@ -107,6 +110,7 @@ impl Codegen {
             fiber_table_emitted: false,
             effect_ops: HashMap::new(),
             handler_count: 0,
+            lambda_count: 0,
             obj_layouts: HashMap::new(),
             obj_count: 0,
             fn_defs: HashMap::new(),
@@ -176,6 +180,13 @@ impl Codegen {
     pub(crate) fn next_handler_id(&mut self) -> usize {
         let id = self.handler_count;
         self.handler_count += 1;
+        id
+    }
+
+    /// A fresh, module-unique id for a lifted lambda's function name.
+    pub(crate) fn next_lambda_id(&mut self) -> usize {
+        let id = self.lambda_count;
+        self.lambda_count += 1;
         id
     }
 
@@ -283,7 +294,7 @@ impl Codegen {
         let fields = c
             .fields
             .iter()
-            .map(|(f, t)| (f.clone(), ltype_of_name(t)))
+            .map(|(f, t)| (f.clone(), union_field_ltype(c, t)))
             .collect();
         Some(CtorView {
             owner: c.owner.clone(),
@@ -508,6 +519,21 @@ impl Codegen {
         let obj = self.fresh_reg();
         self.emit(format!("{obj} = bitcast i8* {raw} to {struct_ty}*"));
         obj
+    }
+}
+
+/// The LLVM type of a constructor field. A type-parameter field of a *union
+/// variant* (`Full { value: T }` of a generic union) boxes uniformly through
+/// `i64` — the payload (an int directly, a pointer `ptrtoint`-ed) rides in one
+/// slot regardless of the instantiating type, matching the Go backend, which
+/// stores such payloads as `i64` rather than a per-instance pointer. A generic
+/// *record* instead gets a concrete per-construction layout (via `gen_object`),
+/// so it keeps its written field type here.
+fn union_field_ltype(c: &CtorLayout, written: &str) -> LType {
+    if !c.owner_is_record && c.type_params.iter().any(|tp| tp == written) {
+        LType::I64
+    } else {
+        ltype_of_name(written)
     }
 }
 

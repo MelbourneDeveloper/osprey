@@ -121,12 +121,29 @@ fn run_program(path: &str, program: &osprey_ast::Program, source: &str) -> ExitC
     }
 
     match Command::new(&exe).status() {
-        Ok(s) => ExitCode::from(u8::try_from(s.code().unwrap_or(0)).unwrap_or(1)),
+        Ok(s) => ExitCode::from(child_exit_code(s)),
         Err(e) => {
             eprintln!("error: could not run {}: {e}", exe.display());
             ExitCode::FAILURE
         }
     }
+}
+
+/// The exit code to propagate for a finished child: its own code when it exited
+/// normally, else (Unix) `128 + signal` for a signal death — so a segfaulting
+/// program is NOT masked as success (`status.code()` is `None` for a signal).
+fn child_exit_code(status: std::process::ExitStatus) -> u8 {
+    if let Some(code) = status.code() {
+        return u8::try_from(code).unwrap_or(1);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(sig) = status.signal() {
+            return 128u8.saturating_add(u8::try_from(sig).unwrap_or(0));
+        }
+    }
+    1
 }
 
 /// Assemble the link arguments: the prebuilt C runtime static library (the HTTP
