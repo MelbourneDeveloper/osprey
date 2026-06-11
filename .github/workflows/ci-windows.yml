@@ -1,7 +1,7 @@
 name: CI (Windows)
 
-# Windows build + smoke test for the Osprey compiler. [WINDOWS-PORT-PHASE1]
-# Like ci.yml, this runs ONLY on PRs to main — merging to main triggers nothing.
+# Windows build + smoke test for the Osprey compiler (Rust). Like ci.yml, this
+# runs ONLY on PRs to main — merging to main triggers nothing.
 on:
   pull_request:
     branches: [main]
@@ -16,26 +16,30 @@ jobs:
     name: Windows Core Build & Smoke Test
     runs-on: windows-latest
     timeout-minutes: 25
-    # Run every step in the MSYS2 UCRT64 shell so gcc/llc/make resolve to the
-    # MinGW toolchain. path-type: inherit exposes the actions/setup-go Go.
-    defaults:
-      run:
-        shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-osprey-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-osprey-
+
+      # gcc + winpthreads back the fiber/effects C runtime; llvm provides the
+      # clang the osprey binary shells out to when linking compiled programs.
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
           path-type: inherit
           update: true
-          # gcc + winpthreads (fibers/effects), llvm (llc + clang), make,
-          # pkgconf + openssl are pre-staged for the phase-2 HTTP runtime.
           install: >-
             make
             mingw-w64-ucrt-x86_64-gcc
@@ -43,49 +47,39 @@ jobs:
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-openssl
 
-      # [WINDOWS-PORT] De-risk check: confirm llc's default target is the GNU
-      # ABI. The compiler also passes -mtriple=x86_64-w64-windows-gnu explicitly,
-      # so this is informational, but a surprising default is worth surfacing.
-      - name: Toolchain versions
-        run: |
-          set -euo pipefail
-          go version
-          gcc --version | head -1
-          llc --version | grep -i "default target" || true
+      # Build the C runtime archives with the MinGW toolchain. The root
+      # Makefile's Windows branch targets PowerShell, so override SHELL/MKDIR
+      # to run the recipe under the MSYS2 bash instead.
+      - name: Build C runtime archives (MinGW)
+        shell: msys2 {0}
+        run: make _runtime CC=gcc AR=ar SHELL=/usr/bin/bash MKDIR='mkdir -p'
 
-      - name: Build (windows core)
-        run: make -C compiler build-windows-core CC=gcc AR=ar
+      - name: Build osprey (release)
+        run: cargo build --release -p osprey-cli
 
       - name: Verify version contract
+        shell: msys2 {0}
         run: |
           set -euo pipefail
-          ./compiler/bin/osprey.exe --version | grep -Fx "osprey 0.0.0-dev"
+          ./target/release/osprey.exe --version | grep -Fx "osprey 0.0.0-dev"
 
       # fiber_showcase exercises spawn/await/yield/channels/select — i.e. the
       # winpthreads-backed fiber runtime. feature_omnibus covers lists/maps/
-      # strings/pattern-matching/closures. Neither uses HTTP or process spawning
-      # (not yet ported), so both are valid phase-1 Windows smoke tests.
+      # strings/pattern-matching. Neither uses HTTP, so both are valid core
+      # Windows smoke tests; clang resolves to the MSYS2 LLVM inside this shell.
       - name: Smoke test — fiber showcase
-        working-directory: compiler
+        shell: msys2 {0}
         run: |
           set -euo pipefail
-          ./bin/osprey.exe examples/tested/fiber/fiber_showcase.osp --run --quiet > out.txt
+          ./target/release/osprey.exe compiler/examples/tested/fiber/fiber_showcase.osp --run --quiet > out.txt
           cat out.txt
           grep -Fq "=== Fiber Showcase Complete ===" out.txt
           grep -Fq "map-reduce total = 1400" out.txt
           grep -Fq "pipeline = 200" out.txt
 
       - name: Smoke test — feature omnibus
-        working-directory: compiler
+        shell: msys2 {0}
         run: |
           set -euo pipefail
-          ./bin/osprey.exe examples/tested/basics/feature_omnibus.osp --run --quiet > omni.txt
+          ./target/release/osprey.exe compiler/examples/tested/basics/feature_omnibus.osp --run --quiet > omni.txt
           cat omni.txt
-
-      # [WINDOWS-PORT-PHASE2] Verify the HTTP/WebSocket runtime compiles + links
-      # on Windows via Winsock2. Non-blocking until the Winsock port's runtime
-      # behavior is validated on Windows; flip to a required step (and switch the
-      # release to `build-windows`) once this is consistently green.
-      - name: Build full (core + HTTP/WebSocket via Winsock2) — non-blocking
-        continue-on-error: true
-        run: make -C compiler build-windows CC=gcc AR=ar VERSION=0.0.0-dev

@@ -1,29 +1,94 @@
-//! `osprey-rs` — the Osprey compiler's command-line front end.
+//! `osprey` — the Osprey compiler's command-line front end.
 //!
-//! It parses Osprey and then dumps the AST (`--ast`), reports type errors
-//! (`--check`), emits LLVM IR (`--llvm`), or compiles-and-runs via clang
-//! (`--run`). Every compiling mode gates on Hindley-Milner type inference
-//! first — an ill-typed program never reaches codegen. `--compile`,
-//! `--symbols`, `--docs`, `--hover`, `--quiet` and the sandbox flags are not
+//! Modes: dump the AST (`--ast`, the default), report type errors (`--check`),
+//! emit LLVM IR (`--llvm`), build an executable (`--compile`), or
+//! compile-and-run via clang (`--run`). Every compiling mode gates on
+//! Hindley-Milner type inference first — an ill-typed program never reaches
+//! codegen — and on the capability sandbox (`--sandbox`, `--no-http`,
+//! `--no-websocket`, `--no-fs`, `--no-ffi`). `--quiet` suppresses
+//! non-essential output. `--symbols`, `--docs` and `--hover` are not
 //! implemented yet.
 
-use std::path::Path;
+mod sandbox;
+
+use sandbox::Policy;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().collect();
-    let Some(path) = args.get(1) else {
-        eprintln!("usage: osprey-rs <file.osp> [--ast | --check | --llvm | --run]");
-        return ExitCode::from(2);
-    };
+const USAGE: &str = "usage: osprey <file.osp> [--ast | --check | --llvm | --compile | --run] \
+[--quiet] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]";
 
-    if path == "--version" {
-        println!("osprey-rs 0.0.0-dev");
+/// The parsed invocation: source path, mode flag, and behaviour switches.
+struct Cli {
+    path: String,
+    mode: String,
+    quiet: bool,
+    policy: Policy,
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--version") {
+        // [SWR-VERSION-BUILD-STAMPING] the real version is stamped from the git
+        // tag at release-build time via OSPREY_VERSION; source stays 0.0.0-dev.
+        // [SWR-VERSION-CLI-OUTPUT] `--json` emits the manifest form the VS Code
+        // extension version-checks at activation.
+        let version = option_env!("OSPREY_VERSION").unwrap_or("0.0.0-dev");
+        if args.iter().any(|a| a == "--json") {
+            println!(
+                "{{\"manifestVersion\":1,\"name\":\"osprey\",\"version\":\"{version}\",\
+\"kind\":\"cli\",\"product\":\"osprey\"}}"
+            );
+        } else {
+            println!("osprey {version}");
+        }
         return ExitCode::SUCCESS;
     }
+    let cli = match parse_args(&args) {
+        Ok(cli) => cli,
+        Err(msg) => {
+            eprintln!("{msg}");
+            return ExitCode::from(2);
+        }
+    };
+    run(&cli)
+}
 
-    let mode = args.get(2).map_or("--ast", String::as_str);
+/// Parse the argument list: the first non-flag is the source path; mode flags
+/// select the action (last one wins); the rest toggle behaviour.
+fn parse_args(args: &[String]) -> Result<Cli, String> {
+    let mut path = None;
+    let mut mode = String::from("--ast");
+    let mut quiet = false;
+    let mut policy = Policy::allow_all();
+    for a in args {
+        match a.as_str() {
+            "--ast" | "--check" | "--llvm" | "--compile" | "--run" => mode = a.clone(),
+            "--quiet" => quiet = true,
+            "--sandbox" => policy = Policy::sandbox(),
+            "--no-http" => policy.http = false,
+            "--no-websocket" => policy.websocket = false,
+            "--no-fs" => policy.fs = false,
+            "--no-ffi" => policy.ffi = false,
+            flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}\n{USAGE}")),
+            _ if path.is_none() => path = Some(a.clone()),
+            other => return Err(format!("unexpected argument {other}\n{USAGE}")),
+        }
+    }
+    match path {
+        Some(path) => Ok(Cli {
+            path,
+            mode,
+            quiet,
+            policy,
+        }),
+        None => Err(USAGE.to_string()),
+    }
+}
 
+/// Parse, gate (syntax → sandbox → types), and dispatch the selected mode.
+fn run(cli: &Cli) -> ExitCode {
+    let path = &cli.path;
     let source = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
@@ -31,7 +96,6 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-
     let parsed = osprey_syntax::parse_program(&source);
     if !parsed.errors.is_empty() {
         for err in &parsed.errors {
@@ -42,13 +106,25 @@ fn main() -> ExitCode {
         }
         return ExitCode::FAILURE;
     }
+    let violations = sandbox::violations(&parsed.program, &cli.policy);
+    if !violations.is_empty() {
+        for v in &violations {
+            eprintln!("{path}: {v}");
+        }
+        return ExitCode::FAILURE;
+    }
+    dispatch(cli, &parsed.program, &source)
+}
 
-    // `--llvm` and `--run` gate on the type checker exactly like `--check`:
-    // an ill-typed program must never reach codegen, let alone execute.
-    match mode {
-        "--check" => run_check(path, &parsed.program),
-        "--llvm" | "--run" if report_type_errors(path, &parsed.program) > 0 => ExitCode::FAILURE,
-        "--llvm" => match osprey_codegen::compile_program(&parsed.program) {
+/// Route the type-gated modes: an ill-typed program never reaches codegen.
+fn dispatch(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
+    let path = &cli.path;
+    match cli.mode.as_str() {
+        "--check" => run_check(cli, program),
+        "--llvm" | "--run" | "--compile" if report_type_errors(path, program) > 0 => {
+            ExitCode::FAILURE
+        }
+        "--llvm" => match osprey_codegen::compile_program(program) {
             Ok(ir) => {
                 print!("{ir}");
                 ExitCode::SUCCESS
@@ -58,16 +134,17 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        "--run" => run_program(path, &parsed.program, &source),
+        "--run" => run_program(path, program, source),
+        "--compile" => compile_program_to_disk(cli, program, source),
         _ => {
-            println!("{:#?}", parsed.program);
+            println!("{program:#?}");
             ExitCode::SUCCESS
         }
     }
 }
 
 /// Type-check `program`, print every error in `file:line:col: message` form,
-/// and return how many there were. The shared gate for `--check`/`--llvm`/`--run`.
+/// and return how many there were. The shared gate for every compiling mode.
 fn report_type_errors(path: &str, program: &osprey_ast::Program) -> usize {
     let errors = osprey_types::check_program(program);
     for e in &errors {
@@ -79,58 +156,37 @@ fn report_type_errors(path: &str, program: &osprey_ast::Program) -> usize {
     errors.len()
 }
 
-fn run_check(path: &str, program: &osprey_ast::Program) -> ExitCode {
-    if report_type_errors(path, program) == 0 {
-        println!("{path}: ok ({} statements)", program.statements.len());
+fn run_check(cli: &Cli, program: &osprey_ast::Program) -> ExitCode {
+    if report_type_errors(&cli.path, program) == 0 {
+        if !cli.quiet {
+            println!("{}: ok ({} statements)", cli.path, program.statements.len());
+        }
         return ExitCode::SUCCESS;
     }
     ExitCode::FAILURE
 }
 
-/// Compile the program to LLVM IR, hand it to clang together with the prebuilt
-/// C runtime, and run the resulting binary — the `--run` end-to-end path.
+/// `--compile`: build an executable named after the source file, in the
+/// current directory.
+fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
+    let exe = PathBuf::from(stem_of(&cli.path));
+    match build_executable(&cli.path, program, source, &exe) {
+        Ok(()) => {
+            if !cli.quiet {
+                println!("{}", exe.display());
+            }
+            ExitCode::SUCCESS
+        }
+        Err(code) => code,
+    }
+}
+
+/// Compile to a temp executable and run it — the `--run` end-to-end path.
 fn run_program(path: &str, program: &osprey_ast::Program, source: &str) -> ExitCode {
-    let ir = match osprey_codegen::compile_program(program) {
-        Ok(ir) => ir,
-        Err(e) => {
-            eprintln!("{path}: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
-
-    let stem = Path::new(path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("osprey_rs");
-    let dir = std::env::temp_dir();
-    let ll = dir.join(format!("{stem}.ll"));
-    let exe = dir.join(format!("{stem}.out"));
-
-    if let Err(e) = std::fs::write(&ll, ir.as_bytes()) {
-        eprintln!("error: cannot write IR to {}: {e}", ll.display());
-        return ExitCode::FAILURE;
+    let exe = std::env::temp_dir().join(format!("{}.out", stem_of(path)));
+    if let Err(code) = build_executable(path, program, source, &exe) {
+        return code;
     }
-
-    let mut cmd = Command::new("clang");
-    let _ = cmd
-        .arg(&ll)
-        .arg("-o")
-        .arg(&exe)
-        .arg("-Wno-override-module")
-        .args(link_args(&ir, source));
-
-    match cmd.status() {
-        Ok(s) if s.success() => {}
-        Ok(_) => {
-            eprintln!("error: clang failed to compile {}", ll.display());
-            return ExitCode::FAILURE;
-        }
-        Err(e) => {
-            eprintln!("error: could not invoke clang: {e}");
-            return ExitCode::FAILURE;
-        }
-    }
-
     match Command::new(&exe).status() {
         Ok(s) => ExitCode::from(child_exit_code(s)),
         Err(e) => {
@@ -138,6 +194,55 @@ fn run_program(path: &str, program: &osprey_ast::Program, source: &str) -> ExitC
             ExitCode::FAILURE
         }
     }
+}
+
+/// Lower to LLVM IR and hand it to clang together with the prebuilt C runtime,
+/// producing `exe`.
+fn build_executable(
+    path: &str,
+    program: &osprey_ast::Program,
+    source: &str,
+    exe: &Path,
+) -> Result<(), ExitCode> {
+    let ir = match osprey_codegen::compile_program(program) {
+        Ok(ir) => ir,
+        Err(e) => {
+            eprintln!("{path}: {e}");
+            return Err(ExitCode::FAILURE);
+        }
+    };
+    let ll = std::env::temp_dir().join(format!("{}.ll", stem_of(path)));
+    if let Err(e) = std::fs::write(&ll, ir.as_bytes()) {
+        eprintln!("error: cannot write IR to {}: {e}", ll.display());
+        return Err(ExitCode::FAILURE);
+    }
+    let mut cmd = Command::new("clang");
+    let _ = cmd
+        .arg(&ll)
+        .arg("-o")
+        .arg(exe)
+        .arg("-Wno-override-module")
+        .args(link_args(&ir, source));
+    match cmd.status() {
+        Ok(s) if s.success() => Ok(()),
+        Ok(_) => {
+            eprintln!("error: clang failed to compile {}", ll.display());
+            Err(ExitCode::FAILURE)
+        }
+        Err(e) => {
+            eprintln!("error: could not invoke clang: {e}");
+            Err(ExitCode::FAILURE)
+        }
+    }
+}
+
+/// The source file's stem (`demo` for `examples/demo.osp`).
+fn stem_of(path: &str) -> String {
+    Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("osprey_out")
+        .to_string()
 }
 
 /// The exit code to propagate for a finished child: its own code when it exited
@@ -157,10 +262,10 @@ fn child_exit_code(status: std::process::ExitStatus) -> u8 {
     1
 }
 
-/// Assemble the link arguments — everything a `--run` binary needs beyond libc:
-/// the prebuilt C runtime static library (the HTTP superset when the program
-/// touches HTTP/WebSocket, else the fiber runtime), OpenSSL for HTTP, and any
-/// `// @link:` / `// @linkdir:` FFI directives (e.g. `-lsqlite3`).
+/// Assemble the link arguments — everything a compiled binary needs beyond
+/// libc: the prebuilt C runtime static library (the HTTP superset when the
+/// program touches HTTP/WebSocket, else the fiber runtime), OpenSSL for HTTP,
+/// and any `// @link:` / `// @linkdir:` FFI directives (e.g. `-lsqlite3`).
 fn link_args(ir: &str, source: &str) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     let uses_http = ir.contains("@http") || ir.contains("@websocket");
@@ -200,19 +305,28 @@ fn directive<'a>(line: &'a str, key: &str) -> Option<&'a str> {
         .map(str::trim)
 }
 
-/// Search the conventional install/build locations for a runtime static lib.
+/// Search the conventional install/build locations for a runtime static lib:
+/// the working directory's repo layout, then next to the `osprey` executable
+/// (the release-tarball layout, and `target/release` two levels under the repo
+/// root), then the system lib dir.
 fn find_runtime_lib(lib: &str) -> Option<String> {
     let mut roots = vec![
         format!("compiler/bin/{lib}"),
+        format!("compiler/lib/{lib}"),
         format!("bin/{lib}"),
         format!("../bin/{lib}"),
         format!("../../bin/{lib}"),
-        format!("/usr/local/lib/{lib}"),
     ];
-    if let Ok(wd) = std::env::current_dir() {
-        roots.push(wd.join("compiler/bin").join(lib).display().to_string());
-        roots.push(wd.join("bin").join(lib).display().to_string());
+    if let Some(dir) = std::env::current_exe().ok().and_then(|e| {
+        e.parent()
+            .map(std::path::Path::to_path_buf)
+    }) {
+        roots.push(dir.join(lib).display().to_string());
+        for up in ["../../compiler/lib", "../../compiler/bin"] {
+            roots.push(dir.join(up).join(lib).display().to_string());
+        }
     }
+    roots.push(format!("/usr/local/lib/{lib}"));
     roots.into_iter().find(|p| Path::new(p).exists())
 }
 

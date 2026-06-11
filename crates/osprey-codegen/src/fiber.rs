@@ -184,7 +184,7 @@ pub(crate) fn gen_builtin(cg: &mut Codegen, name: &str, args: &[Expr]) -> Result
 /// harmless: only names bound to a *value* at the spawn site spill (a function
 /// name resolves through the call path, and a name re-bound inside the
 /// expression simply shadows its reload).
-fn free_idents(e: &Expr, out: &mut BTreeSet<String>) {
+pub(crate) fn free_idents(e: &Expr, out: &mut BTreeSet<String>) {
     match e {
         Expr::Integer(_) | Expr::Float(_) | Expr::Str(_) | Expr::Bool(_) => {}
         Expr::Identifier(n) => {

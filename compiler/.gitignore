@@ -9,7 +9,7 @@ dist/
 
 .DS_Store
 
-# Test binary, built with `go test -c`
+# Test binaries
 *.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE

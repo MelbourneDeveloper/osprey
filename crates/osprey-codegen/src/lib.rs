@@ -38,6 +38,32 @@ pub use error::{CodegenError, Result};
 pub use llty::{LType, Value};
 pub use lower::compile_program;
 
+/// Every identifier referenced anywhere in `program` — function bodies, lets,
+/// nested modules. The CLI's capability sandbox uses this to detect gated
+/// builtins (`httpGet`, `readFile`, …) without compiling.
+#[must_use]
+pub fn referenced_idents(program: &osprey_ast::Program) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for s in &program.statements {
+        stmt_idents(s, &mut out);
+    }
+    out
+}
+
+fn stmt_idents(s: &osprey_ast::Stmt, out: &mut std::collections::BTreeSet<String>) {
+    use osprey_ast::Stmt;
+    match s {
+        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } => fiber::free_idents(value, out),
+        Stmt::Expr(e) | Stmt::Function { body: e, .. } => fiber::free_idents(e, out),
+        Stmt::Module { body, .. } => {
+            for inner in body {
+                stmt_idents(inner, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

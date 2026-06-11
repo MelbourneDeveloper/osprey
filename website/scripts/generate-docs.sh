@@ -1,43 +1,46 @@
 #!/bin/bash
 
-# Generate reference documentation from Osprey compiler examples
-# This script extracts symbols from example files and generates markdown documentation
+# Generate reference documentation from the Osprey compiler (`osprey --docs`).
+#
+# The committed docs in src/docs/ are the source of truth for the website
+# build. When a Rust compiler binary (target/release/osprey) is present AND
+# supports the --docs flag, this script regenerates them; otherwise it keeps
+# the committed docs and exits successfully so `npm run build` never requires
+# a Rust toolchain.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEBSITE_DIR="$(dirname "$SCRIPT_DIR")"
-COMPILER_DIR="$WEBSITE_DIR/../compiler"
+REPO_DIR="$(dirname "$WEBSITE_DIR")"
+OSPREY_BIN="$REPO_DIR/target/release/osprey"
 DOCS_DIR="$WEBSITE_DIR/src/docs"
 
 echo "Generating Osprey reference documentation..."
-
-# Always rebuild the compiler for local platform
-echo "Building Osprey compiler for local platform..."
-cd "$COMPILER_DIR"
-make clean
-
-# Validate that all built-in functions are documented before generating docs
-echo "🔍 Validating built-in function documentation completeness..."
-if ! go test ./internal/language/descriptions/ -run TestAllBuiltinFunctionsDocumented; then
-    echo "❌ Documentation validation failed!"
-    echo "Some built-in functions are missing documentation."
-    echo "Please add all missing functions to GetBuiltinFunctionDescriptions() in internal/language/descriptions/functions.go"
-    exit 1
-fi
-echo "✅ All built-in functions are documented!"
-
-make build
-
-# Create reference documentation directory
 mkdir -p "$DOCS_DIR"
 
-# Generate documentation from key example files
-cd "$COMPILER_DIR"
+if [ ! -x "$OSPREY_BIN" ]; then
+    echo "NOTE: $OSPREY_BIN not found (build with: cargo build --release)."
+    echo "Using committed docs in $DOCS_DIR"
+    exit 0
+fi
 
-echo "Generating standard library documentation..."
+# The Rust compiler does not implement --docs yet; detect support at runtime
+# so this script starts regenerating automatically once the flag lands.
+if ! "$OSPREY_BIN" --help 2>&1 | grep -q -- '--docs'; then
+    echo "NOTE: osprey does not support --docs yet; using committed docs in $DOCS_DIR"
+    exit 0
+fi
 
-# Create API reference documentation
+echo "Generating API reference from compiler..."
+"$OSPREY_BIN" --docs --docs-dir "$DOCS_DIR"
+
+if [ ! -f "$DOCS_DIR/index.md" ]; then
+    echo "Error: Documentation generation failed - no docs generated to $DOCS_DIR"
+    exit 1
+fi
+
+# Create the main API reference page from the generated content.
 cat > "$DOCS_DIR/stdlib.md" << 'EOF'
 ---
 title: "API Reference - Osprey Programming Language"
@@ -45,36 +48,14 @@ description: "Complete API reference for built-in functions, types, operators, a
 ---
 
 EOF
+if [ -f "$DOCS_DIR/README.md" ]; then
+    cat "$DOCS_DIR/README.md" >> "$DOCS_DIR/stdlib.md"
+fi
 
-# Generate API reference documentation from the compiler
-echo "Generating API reference from compiler..."
-"$COMPILER_DIR/bin/osprey" --docs --docs-dir "$DOCS_DIR"
-
-# The compiler now generates docs directly to $DOCS_DIR, so no copying needed
-if [ -f "$DOCS_DIR/index.md" ]; then
-    # Create a main API reference page that includes the generated content
-    cat > "$DOCS_DIR/stdlib.md" << 'EOF'
----
-title: "API Reference - Osprey Programming Language"
-description: "Complete API reference for built-in functions, types, operators, and language constructs"
----
-
-EOF
-    
-    # Append the generated README content if it exists
-    if [ -f "$DOCS_DIR/README.md" ]; then
-        tail -n +1 "$DOCS_DIR/README.md" >> "$DOCS_DIR/stdlib.md"
-    fi
-    
-    echo "API reference documentation generated successfully!"
-    echo "Documentation generation complete!"
-    echo "Generated files:"
-    echo "  - $DOCS_DIR/stdlib.md (Main API Reference)"
-    echo "  - $DOCS_DIR/functions/ (Individual function docs)"
-    echo "  - $DOCS_DIR/types/ (Individual type docs)"
-    echo "  - $DOCS_DIR/operators/ (Individual operator docs)"
-    echo "  - $DOCS_DIR/keywords/ (Individual keyword docs)"
-else
-    echo "Error: Documentation generation failed - no docs generated to $DOCS_DIR"
-    exit 1
-fi 
+echo "API reference documentation generated successfully!"
+echo "Generated files:"
+echo "  - $DOCS_DIR/stdlib.md (Main API Reference)"
+echo "  - $DOCS_DIR/functions/ (Individual function docs)"
+echo "  - $DOCS_DIR/types/ (Individual type docs)"
+echo "  - $DOCS_DIR/operators/ (Individual operator docs)"
+echo "  - $DOCS_DIR/keywords/ (Individual keyword docs)"

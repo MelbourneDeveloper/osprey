@@ -54,7 +54,7 @@ temp/
 scratch/
 *.log
 
-# Go build artifacts
+# Build artifacts (C runtime archives + compiled examples)
 compiler/bin/
 compiler/lib/
 compiler/outputs/

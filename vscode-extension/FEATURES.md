@@ -2,7 +2,7 @@
 
 ## 🎨 Syntax Highlighting
 
-Based on the Osprey G4 ANTLR grammar, provides rich syntax highlighting for:
+Based on the Osprey tree-sitter grammar, provides rich syntax highlighting for:
 
 ### Keywords
 - **Control flow**: `match`, `if`, `else`, `loop`, `select`
@@ -118,7 +118,7 @@ Customizable via VSCode settings:
 
 ## 🚀 Performance
 
-- **Lightweight**: TypeScript handles UI, Go handles computation
+- **Lightweight**: TypeScript handles UI, the Rust compiler handles computation
 - **Fast**: Incremental compilation on document changes
 - **Responsive**: Non-blocking error checking
 - **Memory efficient**: Temporary files cleaned up immediately
@@ -216,12 +216,12 @@ The main problem is that VSCode isn't routing language feature requests to our l
 
 - **VSCode**: 1.96.0 or higher
 - **Node.js**: 20.19.2 (exact version required)
-- **Osprey Compiler**: Go-based compiler in PATH
+- **Osprey Compiler**: Rust-based compiler (`osprey`) in PATH or bundled with the extension
 - **Operating System**: Windows, macOS, Linux
 
 ## 🐛 Known Issues
 
-1. **Large Files**: May be slow on files >1000 lines (delegate to Go)
+1. **Large Files**: May be slow on files >1000 lines (delegated to the compiler)
 2. **Complex Types**: Advanced type inference not yet implemented
 3. **Multi-file**: Cross-file analysis limited
 4. **Go to Definition**: VSCode LSP integration needs debugging

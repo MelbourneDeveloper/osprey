@@ -1,6 +1,6 @@
 # Osprey Programming Language
 
-A modern functional programming language designed for elegance, safety, and performance. Written in Go, outputs to LLVM.
+A modern functional programming language designed for elegance, safety, and performance. Written in Rust, outputs to LLVM.
  
 ⭐ **[Star us on GitHub](https://github.com/MelbourneDeveloper/osprey)** to support the project and allow us to submit to Homebrew! ⭐
 
@@ -77,7 +77,9 @@ fn main() -> Unit = {
 
 ## Project Structure
 
-- `compiler/` - Main Osprey compiler (Go + ANTLR)
+- `crates/` - Main Osprey compiler (Rust workspace: osprey-ast, osprey-syntax, osprey-types, osprey-codegen, osprey-runtime-sys, osprey-cli)
+- `tree-sitter-osprey/` - Tree-sitter grammar (parser)
+- `compiler/` - Pure-C runtime sources (`runtime/`) + example programs (`examples/`)
 - `vscode-extension/` - VSCode language support
 - `website/` - Documentation site
 - `webcompiler/` - Browser-based compiler

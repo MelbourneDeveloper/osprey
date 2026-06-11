@@ -1,13 +1,13 @@
 [package]
 name = "osprey-cli"
-description = "The osprey-rs CLI (Rust front-end: parse + AST dump; strangler-fig over the Go compiler)"
+description = "The Osprey compiler command-line front end"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "osprey-rs"
+name = "osprey"
 path = "src/main.rs"
 
 [dependencies]

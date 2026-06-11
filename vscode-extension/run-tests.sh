@@ -17,8 +17,8 @@ fi
 # Check if osprey compiler is available
 if ! command -v osprey &> /dev/null; then
     echo "❌ Error: osprey compiler not found in PATH"
-    echo "   Please build and install the compiler first:"
-    echo "   cd ../compiler && ./build_and_install.sh"
+    echo "   Please build the Rust compiler and put it on PATH first:"
+    echo "   cd .. && cargo build --release   # binary: target/release/osprey"
     exit 1
 fi
 

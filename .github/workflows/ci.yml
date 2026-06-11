@@ -17,15 +17,11 @@ jobs:
     # Renaming it will break branch protection — coordinate with the ruleset update.
     name: Test, Format, Build & Validate
     runs-on: ubuntu-latest
-    # TIMEOUT EXCEPTION: full compiler build + C runtime compile + Go tests + Docker web compiler test requires ~15 min
+    # TIMEOUT EXCEPTION: full compiler build + C runtime compile + extension
+    # tests + Docker web compiler test requires ~15 min
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
 
       - uses: actions/setup-node@v4
         with:
@@ -36,6 +32,7 @@ jobs:
             webcompiler/package-lock.json
             website/package-lock.json
 
+      # Rust toolchain + clang/LLVM + C runtime archives + the osprey binary.
       - name: Setup Osprey Compiler
         uses: ./.github/actions/setup-osprey-compiler
 
@@ -43,10 +40,12 @@ jobs:
         run: npm ci
         working-directory: ./vscode-extension
 
-      - name: Install jq, Xvfb and SQLite dev
-        # libsqlite3-dev provides -lsqlite3 for the FFI database examples
-        # (examples/tested/db, linked via the `// @link: sqlite3` directive).
-        run: sudo apt-get install -y jq xvfb libsqlite3-dev
+      - name: Install jq, Xvfb and coverage tooling
+        # jq reads coverage-thresholds.json; Xvfb backs the VS Code extension
+        # tests; cargo-llvm-cov produces the Rust lcov report `make test` checks.
+        run: |
+          sudo apt-get install -y jq xvfb
+          cargo install cargo-llvm-cov --locked || true
 
       # [SWR-VERSION-MANIFEST] keep shipwright.json valid against the in-repo
       # Shipwright schema. Do not use @nimblesite/shipwright-validate-manifest:
@@ -58,9 +57,10 @@ jobs:
       - name: Lint
         run: make lint
 
-      # make test = fail-fast + per-project coverage + threshold enforcement.
-      # Thresholds live in coverage-thresholds.json ([COVERAGE-THRESHOLDS-JSON]).
-      # Xvfb is needed because vscode-extension tests spawn a real VS Code Electron build.
+      # make test = fail-fast + per-project coverage + threshold enforcement +
+      # the differential golden suite. Thresholds live in coverage-thresholds.json
+      # ([COVERAGE-THRESHOLDS-JSON]). Xvfb is needed because vscode-extension
+      # tests spawn a real VS Code Electron build.
       - name: Test
         run: xvfb-run -a make test
 
@@ -70,7 +70,7 @@ jobs:
         with:
           name: test-logs
           path: |
-            compiler/test.log
+            test.log
             vscode-extension/test.log
           if-no-files-found: ignore
           retention-days: 7
@@ -81,7 +81,7 @@ jobs:
         with:
           name: coverage-report
           path: |
-            compiler/coverage.out
+            lcov.info
             vscode-extension/coverage/
           retention-days: 7
 
@@ -93,15 +93,15 @@ jobs:
         with:
           name: build-artifacts
           path: |
-            compiler/bin/
+            target/release/osprey
+            compiler/lib/
             vscode-extension/out/
           retention-days: 7
 
       - name: Test example compilation and execution
-        working-directory: ./compiler
         run: |
-          ./bin/osprey examples/tested/basics/math/comprehensive_math.osp --run
-          ./bin/osprey examples/tested/basics/feature_omnibus.osp --run
+          target/release/osprey compiler/examples/tested/basics/math/comprehensive_math.osp --run
+          target/release/osprey compiler/examples/tested/basics/feature_omnibus.osp --run
 
       - name: Test Web Compiler
         run: |
@@ -116,20 +116,14 @@ jobs:
           docker stop osprey-web-compiler-ci
           docker rm osprey-web-compiler-ci
 
-  # ─── Rust compiler (osprey-rs) — the Phase-2 port's CI gate ──────────────────
-  # Runs the SAME gate the Go→Rust migration is held to locally: format + clippy
-  # (-D warnings: clippy::all + pedantic + restriction) + workspace tests + the
-  # differential harness — every examples/tested case run through `osprey-rs
-  # --run` must match its `.expectedoutput` byte-for-byte (whole-string trim),
-  # the same behavioural contract the Go `ci` job enforces. The Go compiler is
-  # still the released artifact (release.yml), so this runs ALONGSIDE `ci`, it
-  # does not replace it.
+  # ─── Focused compiler gate ──────────────────────────────────────────────────
+  # Fast signal on the compiler alone: format + clippy (-D warnings: clippy::all
+  # + pedantic + restriction) + workspace tests + the differential harness —
+  # every examples/tested case run through `osprey --run` must match its
+  # .expectedoutput byte-for-byte (whole-string trim), and the must-reject suite
+  # (examples/failscompilation) must stay within the FC_EXPECTED_ESCAPES ratchet.
   rust:
     name: Rust Compiler (fmt, clippy, test, differential)
-    # ubuntu-latest is the most powerful GitHub-hosted runner available to this
-    # public repo by default (4 vCPU / 16 GB). If a larger hosted runner is ever
-    # provisioned for the account, switch this one label (e.g. to
-    # ubuntu-latest-8-cores) — nothing else needs to change.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -154,7 +148,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-rust-
 
       - name: Install clang/LLVM, OpenSSL, SQLite and zsh
-        # clang links the osprey-rs-emitted IR; libssl-dev/libsqlite3-dev satisfy
+        # clang links the osprey-emitted IR; libssl-dev/libsqlite3-dev satisfy
         # the HTTP and FFI-database runtimes the examples link; zsh runs the
         # differential harness.
         run: |
@@ -162,9 +156,7 @@ jobs:
           sudo apt-get install -y clang llvm libssl-dev libsqlite3-dev pkg-config zsh
           clang --version
 
-      - name: Build the C runtime archives (pure C — osprey-rs links these)
-        # Emits compiler/bin/lib*_runtime.a, which osprey-rs links at `--run`
-        # time. Plain C ($(CC)/$(AR)) via the root Makefile — no Go toolchain.
+      - name: Build the C runtime archives (pure C — osprey links these)
         run: make _runtime
 
       - name: Format check
@@ -179,10 +171,9 @@ jobs:
       - name: Test (workspace)
         run: cargo test --workspace
 
-      - name: Differential golden tests (osprey-rs --run vs .expectedoutput)
+      - name: Differential golden tests (osprey --run vs .expectedoutput)
         # Must be 41/41 with zero examples lacking an expected output, and the
-        # must-reject suite (examples/failscompilation) must stay within the
-        # FC_EXPECTED_ESCAPES ratchet declared in the harness.
+        # must-reject ratchet must hold.
         run: |
           out=$(zsh crates/diff_examples.sh)
           echo "$out"

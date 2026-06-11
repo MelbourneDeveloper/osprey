@@ -20,52 +20,6 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githu
 sudo apt-get update
 sudo apt-get install gh -y
 
-# Set up Go workspace and dependencies  
-echo "📦 Setting up Go workspace..."
-cd /workspace/compiler
-
-# Fix Go module cache permissions
-echo "🔧 Fixing Go module cache permissions..."
-sudo chown -R vscode:vscode /go/pkg/mod || true
-
-# Set proper GOPROXY and GOSUMDB for better module resolution
-export GOPROXY=https://proxy.golang.org,direct
-export GOSUMDB=sum.golang.org
-
-go mod download
-go mod tidy
-
-# Build the Osprey compiler
-echo "🔨 Building Osprey compiler..."
-make clean
-make build || echo "⚠️ Initial build failed - this is expected on first setup"
-
-# Install compiler globally
-echo "📦 Installing Osprey compiler globally..."
-make install || echo "⚠️ Installation failed - may need manual intervention"
-
-# Set up VSCode extension dependencies
-if [ -d "/workspace/vscode-extension" ]; then
-  echo "📦 Setting up VSCode extension dependencies..."
-  cd /workspace/vscode-extension
-  npm install
-fi
-
-# Set up website dependencies
-if [ -d "/workspace/website" ]; then
-  echo "📦 Setting up website dependencies..."
-  cd /workspace/website
-  npm install
-fi
-
-# Set up webcompiler dependencies
-if [ -d "/workspace/webcompiler" ]; then
-  echo "📦 Setting up webcompiler dependencies..."
-  cd /workspace/webcompiler
-  npm install
-fi
-
-# Return to workspace root
 cd /workspace
 
 echo "🦀 Setting up Rust for vscode user..."
@@ -78,10 +32,17 @@ fi
 # Source Rust environment and set default toolchain
 source ~/.cargo/env
 rustup default stable
-rustup component add clippy rustfmt
+
+# Toolchain components + npm deps for all sub-projects (vscode-extension,
+# webcompiler, website) — see the root Makefile `setup` target.
+echo "📦 Running make setup..."
+make setup
+
+# Build the Osprey compiler (C runtime archives + Rust workspace)
+echo "🔨 Building Osprey compiler..."
+make build || echo "⚠️ Initial build failed - this is expected on first setup"
 
 echo "🎯 Verifying installation..."
-go version
 node --version
 npm --version
 rustc --version || echo "⚠️ Rust not properly installed"
@@ -90,11 +51,11 @@ claude --version || echo "⚠️ Claude Code not installed"
 
 echo "🎉 Post-creation setup complete!"
 echo ""
-echo "📝 Available commands:"
-echo "  make build      - Build the Osprey compiler"
-echo "  make test       - Run all tests"
-echo "  make lint       - Run Go linter"
-echo "  make install    - Install compiler globally"
-echo "  claude-code     - Run Claude Code"
+echo "📝 Available commands (run from the repo root):"
+echo "  make build      - Build C runtime + Rust compiler + VSCode extension"
+echo "  make test       - Run all tests with coverage thresholds"
+echo "  make lint       - Run all linters (clippy + extension lint)"
+echo "  make install    - Install compiler + runtime archives globally"
+echo "  claude          - Run Claude Code"
 echo ""
 echo "🚀 Ready to develop Osprey!"

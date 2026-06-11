@@ -2,8 +2,8 @@
 # =============================================================================
 # Standard Makefile — osprey
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
-# Primary language: Rust (crates/ workspace → the osprey-rs compiler), with a
-# pure-C runtime (compiler/runtime → lib*_runtime.a, linked by `osprey-rs
+# Primary language: Rust (crates/ workspace → the osprey compiler), with a
+# pure-C runtime (compiler/runtime → lib*_runtime.a, linked by `osprey
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
@@ -34,10 +34,10 @@ endif
 COVERAGE_THRESHOLDS_FILE ?= coverage-thresholds.json
 
 # Toolchain / paths. BIN: the built CLI. RTB: C-runtime archive output dir
-# (osprey-rs searches compiler/bin at --run time).
+# (osprey searches compiler/bin at --run time).
 CC  ?= cc
 AR  ?= ar
-BIN ?= target/release/osprey-rs
+BIN ?= target/release/osprey
 RTB ?= compiler/bin
 
 # VSIX (VSCode extension) — macOS only. Bundles the Rust binary as `osprey`.
@@ -110,7 +110,7 @@ setup:
 # Internal helpers — NOT public targets, NOT in .PHONY
 # ---------------------------------------------------------------------------
 
-# Build the pure-C runtime archives osprey-rs links at `--run` time. One shell
+# Build the pure-C runtime archives osprey links at `--run` time. One shell
 # so `cd` persists; faithful port of the original hardened C recipes.
 _runtime:
 	@echo "==> building C runtime archives ($(RTB)/lib*_runtime.a)"
@@ -161,11 +161,11 @@ _coverage_check_rust:
 	echo "[rust] OK: $${PCT}% >= $${THRESHOLD}%"
 
 # Differential golden harness: every examples/tested/*.osp run through
-# `osprey-rs --run` must match its .expectedoutput byte-for-byte, and the
+# `osprey --run` must match its .expectedoutput byte-for-byte, and the
 # must-reject suite (examples/failscompilation) must stay within the
 # FC_EXPECTED_ESCAPES ratchet declared in the harness.
 _test_differential:
-	@echo "==> [differential] osprey-rs --run vs .expectedoutput..."
+	@echo "==> [differential] osprey --run vs .expectedoutput..."
 	@out=$$(zsh crates/diff_examples.sh); echo "$$out"; \
 	  echo "$$out" | grep -Eq 'FAIL=0 '  || { echo 'FAIL: differential mismatch'; exit 1; }; \
 	  echo "$$out" | grep -Eq 'NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }; \
@@ -177,7 +177,7 @@ _test_differential:
 # `osprey`. vscode-test runs with V8 coverage; c8 merges the profiles into
 # coverage/coverage-summary.json.
 _test_vscode_extension:
-	@echo "==> [vscode-extension] staging osprey-rs as 'osprey' for LSP integration..."
+	@echo "==> [vscode-extension] staging osprey as 'osprey' for LSP integration..."
 	$(MKDIR) target/path-bin
 	cp $(BIN) target/path-bin/osprey
 	@echo "==> [vscode-extension] running tests with V8 coverage..."
@@ -216,14 +216,14 @@ run: build
 	@if [ -z "$(FILE)" ]; then echo "Usage: make run FILE=<path>"; exit 1; fi
 	./$(BIN) $(FILE) --run
 
-## install: Install osprey-rs + runtime archives system-wide
+## install: Install osprey + runtime archives system-wide
 install: build
 	cargo install --path crates/osprey-cli --force
 	sudo $(MKDIR) /usr/local/lib
 	sudo cp $(RTB)/libfiber_runtime.a $(RTB)/libhttp_runtime.a /usr/local/lib/
-	@echo "==> installed osprey-rs and runtime archives."
+	@echo "==> installed osprey and runtime archives."
 
-## uninstall: Remove osprey-rs + runtime archives from the system
+## uninstall: Remove osprey + runtime archives from the system
 uninstall:
 	cargo uninstall osprey-cli 2>/dev/null || true
 	sudo rm -f /usr/local/lib/libfiber_runtime.a /usr/local/lib/libhttp_runtime.a

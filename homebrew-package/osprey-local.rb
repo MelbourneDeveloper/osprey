@@ -23,13 +23,11 @@ class OspreyLocal < Formula
   test do
     # Create a simple Osprey program
     (testpath/"hello.osp").write <<~EOS
-      fun main() -> Void {
-        print("Hello, Homebrew!")
-      }
+      fn main() = print("Hello, Homebrew!")
     EOS
 
-    # Test compilation
-    system bin/"osprey", "compile", testpath/"hello.osp"
+    # Test type checking
+    system bin/"osprey", testpath/"hello.osp", "--check"
     
     # Check that osprey binary exists and is executable
     assert_predicate bin/"osprey", :exist?

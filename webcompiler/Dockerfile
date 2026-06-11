@@ -1,4 +1,4 @@
-# Build stage for the Osprey compiler (Rust: osprey-rs) + the pure-C runtime
+# Build stage for the Osprey compiler (Rust: osprey) + the pure-C runtime
 FROM rust:1-bookworm AS osprey-builder
 
 # Build dependencies: gcc/make for the C runtime archives, OpenSSL for the HTTP runtime
@@ -70,10 +70,10 @@ WORKDIR /app
 
 # Copy the built Osprey compiler (Rust binary, installed under the `osprey`
 # name the server spawns) from the build stage
-COPY --from=osprey-builder /workspace/target/release/osprey-rs /usr/local/bin/osprey
+COPY --from=osprey-builder /workspace/target/release/osprey /usr/local/bin/osprey
 
 # Copy the C runtime archives osprey links at --run time (the HTTP archive is a
-# superset containing the websocket + system objects; osprey-rs links only these two)
+# superset containing the websocket + system objects; osprey links only these two)
 COPY --from=osprey-builder /workspace/compiler/lib/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
 COPY --from=osprey-builder /workspace/compiler/lib/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
 

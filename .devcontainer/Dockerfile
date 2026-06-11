@@ -1,8 +1,9 @@
-# Simple, minimal Dockerfile for Osprey development
-FROM golang:1.23-bookworm
+# Simple, minimal Dockerfile for Osprey development (Rust compiler + C runtime)
+FROM debian:bookworm
 
 # Install basic system packages
 RUN apt-get update && apt-get install -y \
+    ca-certificates \
     curl \
     wget \
     git \
@@ -21,7 +22,6 @@ RUN apt-get update && apt-get install -y \
     jq \
     unzip \
     zip \
-    openjdk-17-jdk \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,26 +29,10 @@ RUN apt-get update && apt-get install -y \
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# Continue with the same image for Rust installation
-
-# Install Rust
+# Install Rust (the compiler toolchain for crates/)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && . ~/.cargo/env \
-    && rustup component add clippy rustfmt
-
-# Install ANTLR
-RUN wget -q https://www.antlr.org/download/antlr-4.13.2-complete.jar -O /usr/local/lib/antlr.jar \
-    && echo '#!/bin/sh\njava -Xmx500M -cp "/usr/local/lib/antlr.jar:$CLASSPATH" org.antlr.v4.Tool "$@"' > /usr/local/bin/antlr \
-    && echo '#!/bin/sh\njava -Xmx500M -cp "/usr/local/lib/antlr.jar:$CLASSPATH" org.antlr.v4.gui.TestRig "$@"' > /usr/local/bin/grun \
-    && chmod +x /usr/local/bin/antlr /usr/local/bin/grun
-
-# Install Go tools
-RUN go install golang.org/x/tools/gopls@v0.16.2 \
-    && go install github.com/go-delve/delve/cmd/dlv@latest \
-    && go install golang.org/x/tools/cmd/goimports@latest
-
-# Install golangci-lint
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
+    && rustup component add clippy rustfmt llvm-tools-preview
 
 # Create vscode user
 RUN apt-get update && apt-get install -y sudo \
@@ -63,8 +47,6 @@ RUN apt-get update && apt-get install -y sudo \
     && echo 'source ~/.cargo/env' >> /home/vscode/.bashrc
 
 # Set environment variables
-ENV JAVA_HOME="/usr/lib/jvm/java-17-openjdk-arm64"
-ENV CLASSPATH=".:/usr/local/lib/antlr.jar"
 ENV PATH="/home/vscode/.cargo/bin:/usr/lib/llvm-14/bin:${PATH}"
 
 # Set working directory
