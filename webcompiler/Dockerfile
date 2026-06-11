@@ -68,14 +68,14 @@ RUN groupadd -g 1001 nodejs && \
 # Create app directory
 WORKDIR /app
 
-# Copy built Osprey compiler from the build stage
-COPY --from=osprey-builder /workspace/bin/osprey /usr/local/bin/osprey
+# Copy the built Osprey compiler (Rust binary, installed under the `osprey`
+# name the server spawns) from the build stage
+COPY --from=osprey-builder /workspace/target/release/osprey-rs /usr/local/bin/osprey
 
-# Copy built runtime libraries from the lib directory (not bin)
-COPY --from=osprey-builder /workspace/lib/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
-COPY --from=osprey-builder /workspace/lib/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
-COPY --from=osprey-builder /workspace/lib/libwebsocket_runtime.a /usr/local/lib/libwebsocket_runtime.a
-COPY --from=osprey-builder /workspace/lib/libsystem_runtime.a /usr/local/lib/libsystem_runtime.a
+# Copy the C runtime archives osprey links at --run time (the HTTP archive is a
+# superset containing the websocket + system objects; osprey-rs links only these two)
+COPY --from=osprey-builder /workspace/compiler/lib/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
+COPY --from=osprey-builder /workspace/compiler/lib/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
 
 # Copy built LSP server
 COPY --from=lsp-builder /workspace/vscode-extension/server /app/server

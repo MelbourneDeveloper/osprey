@@ -163,11 +163,9 @@ jobs:
           clang --version
 
       - name: Build the C runtime archives (pure C — osprey-rs links these)
-        # fiber-runtime + http-runtime emit compiler/bin/lib*_runtime.a, which
-        # osprey-rs links at `--run` time. These targets are plain C ($(CC)/$(AR)),
-        # so no Go toolchain is needed here.
-        working-directory: ./compiler
-        run: make fiber-runtime http-runtime
+        # Emits compiler/bin/lib*_runtime.a, which osprey-rs links at `--run`
+        # time. Plain C ($(CC)/$(AR)) via the root Makefile — no Go toolchain.
+        run: make _runtime
 
       - name: Format check
         run: cargo fmt --all --check
