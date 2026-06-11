@@ -1,10 +1,9 @@
 //! Iterator builtins: integer `range`, the stream-fused higher-order operations
 //! (`map`/`filter`/`forEach`/`fold`) and the eager list operations
-//! (`forEachList`/`mapList`/`filterList`/`foldList`). Ports
-//! `iterator_generation.go` + the list-loop generators in
-//! `collection_codegen.go`. A range is a stack `{ i64, i64 }` (start, end);
-//! `map`/`filter` record a pending stage and pass the range through; the
-//! consuming `forEach`/`fold` emits one counted loop replaying those stages.
+//! (`forEachList`/`mapList`/`filterList`/`foldList`). A range is a stack
+//! `{ i64, i64 }` (start, end); `map`/`filter` record a pending stage and pass
+//! the range through; the consuming `forEach`/`fold` emits one counted loop
+//! replaying those stages, so no intermediate collection is ever materialised.
 //! Implements [BUILTIN-ITER-*].
 
 use crate::builder::Codegen;

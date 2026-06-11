@@ -1,7 +1,7 @@
-//! Program/function/statement orchestration. Ports the top-level walk of
-//! `llvm.go` + `program_generation.go`: emit each user function (parameter and
-//! return types taken from inference), then synthesize `main` from either a
-//! user `main` or the trailing top-level statements.
+//! Program/function/statement orchestration — the top-level walk over the
+//! module: emit each user function (parameter and return types taken from
+//! inference), then synthesize `main` from either a user `main` or the trailing
+//! top-level statements.
 
 use crate::builder::Codegen;
 use crate::error::{CodegenError, Result};
@@ -140,7 +140,7 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
     match stmt {
         // An immutable `let` keeps a Result wrapper (so `let v = 21 * 2;
         // toString(v)` shows `Success(42)`); a `mut` reassignment auto-unwraps it
-        // (the cell holds the success payload, matching Go's mut auto-unwrap).
+        // (the `mut` auto-unwrap rule: the cell holds the success payload).
         Stmt::Let { name, value, .. } => gen_bind(cg, name, value, false),
         Stmt::Assignment { name, value, .. } => gen_bind(cg, name, value, true),
         Stmt::Expr(e) => {

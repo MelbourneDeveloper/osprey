@@ -2,7 +2,7 @@
 //! `toString` per type, `print`, and the numeric→string conversions. Float
 //! formatting is delegated to `osp_float_to_string` (linked from
 //! `libfiber_runtime`) so whole-valued floats keep their visible `.0`, exactly
-//! as `llvm.go`'s `generateFloatToString` does.
+//! as the golden outputs in `examples/tested` expect.
 
 use crate::builder::Codegen;
 use crate::conv::as_i64;
@@ -25,8 +25,8 @@ pub(crate) fn to_string_value(cg: &mut Codegen, v: Value) -> Result<Value> {
 }
 
 /// Format a `Result` block as `Success(<value>)` or `Error(<message>)`, branching
-/// on its discriminant — ports `convertResultToString`. A NULL string error
-/// payload prints the bare `Error`.
+/// on its discriminant — the spelling the golden outputs expect. A NULL string
+/// error payload prints the bare `Error`.
 fn result_to_string(cg: &mut Codegen, v: &Value) -> Result<Value> {
     let inner = v
         .result_inner

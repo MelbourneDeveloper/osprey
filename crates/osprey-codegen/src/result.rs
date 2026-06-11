@@ -1,10 +1,9 @@
 //! The `Result<T, E>` ABI: a heap block `{ T value, i8 disc }` reached by
-//! pointer, `disc == 0` ⇒ Success. Ports the `{value, i8}` layout the Go
-//! backend builds in `getResultType` / `wrapInMathResult` and reads in
-//! `generateResultMatchCondition` / `convertResultToString`. Runtime fallible
-//! builtins (list/map get, string ops) and user functions declared
-//! `-> Result<…>` both produce this shape, so match, `toString` and value-site
-//! coercion handle exactly one representation.
+//! pointer, `disc == 0` ⇒ Success. The builders here construct that block; the
+//! readers branch on or load out of it. Runtime fallible builtins (list/map
+//! get, string ops) and user functions declared `-> Result<…>` both produce
+//! this shape, so match, `toString` and value-site coercion handle exactly one
+//! representation.
 
 use crate::builder::Codegen;
 use crate::cast::coerce_to;
@@ -133,8 +132,7 @@ pub(crate) fn load_value(cg: &mut Codegen, v: &Value) -> Value {
 }
 
 /// Auto-unwrap a Result at a value site (arithmetic, `print`, an argument),
-/// yielding its success payload; a non-Result value passes through. Mirrors Go's
-/// `unwrapIfResult`.
+/// yielding its success payload; a non-Result value passes through.
 pub(crate) fn unwrap(cg: &mut Codegen, v: Value) -> Value {
     if v.result_inner.is_some() {
         load_value(cg, &v)

@@ -1,8 +1,7 @@
 //! The inference context: fresh-variable supply plus the substitution that
-//! backs unification. Ports the `Substitution map[int]Type` + `prune` /
-//! `occursCheck` / `applySubst` machinery of `type_inference.go`, but as an
-//! index-addressed arena (`Vec<Option<Type>>`) — the textbook union-find layout,
-//! with path compression on `prune` exactly as the Go did with `ti.subst[id]`.
+//! backs unification, stored as an index-addressed arena (`Vec<Option<Type>>`)
+//! — the textbook union-find layout. `prune` compresses paths as it resolves,
+//! so a chain of variable bindings is walked once and then answers in one hop.
 
 use crate::ty::{Type, VarId};
 use std::collections::BTreeSet;
@@ -19,7 +18,7 @@ impl InferCtx {
         InferCtx::default()
     }
 
-    /// Allocate a fresh, unbound type variable (`TypeInferer.Fresh`).
+    /// Allocate a fresh, unbound type variable.
     pub fn fresh(&mut self) -> Type {
         let id = VarId::try_from(self.subst.len()).unwrap_or(VarId::MAX);
         self.subst.push(None);
@@ -28,7 +27,7 @@ impl InferCtx {
 
     /// Follow a variable to its representative, compressing the path. Only the
     /// outermost variable is resolved — nested types are left intact (use
-    /// [`InferCtx::apply`] for a deep walk), matching the Go `prune`.
+    /// [`InferCtx::apply`] for a deep walk).
     pub fn prune(&mut self, t: &Type) -> Type {
         if let Type::Var(id) = t {
             let idx = usize::try_from(*id).unwrap_or(usize::MAX);
@@ -51,8 +50,8 @@ impl InferCtx {
         }
     }
 
-    /// `occursCheck`: does variable `id` appear anywhere in `t`? Prevents the
-    /// construction of infinite types like `t0 ~ List<t0>`.
+    /// The occurs check: does variable `id` appear anywhere in `t`? Prevents
+    /// the construction of infinite types like `t0 ~ List<t0>`.
     pub fn occurs(&mut self, id: VarId, t: &Type) -> bool {
         let t = self.prune(t);
         match &t {
@@ -66,8 +65,8 @@ impl InferCtx {
         }
     }
 
-    /// `applySubst`: fully resolve `t` against the current substitution. The
-    /// occurs-check keeps the substitution acyclic, so this terminates.
+    /// Fully resolve `t` against the current substitution. The occurs-check
+    /// keeps the substitution acyclic, so this terminates.
     pub fn apply(&mut self, t: &Type) -> Type {
         let t = self.prune(t);
         match &t {
@@ -94,7 +93,7 @@ impl InferCtx {
         }
     }
 
-    /// Collect the free (unbound) variables of `t` into `out` (`getFreeVars`).
+    /// Collect the free (unbound) variables of `t` into `out`.
     pub fn free_vars(&mut self, t: &Type, out: &mut BTreeSet<VarId>) {
         let t = self.prune(t);
         match &t {

@@ -1,20 +1,22 @@
-//! The Osprey type language — a Rust port of the `Type` interface hierarchy in
-//! `compiler/internal/codegen/type_inference.go`.
+//! The Osprey type language — the representation every stage of the checker
+//! operates on.
 //!
-//! Go modelled types as an interface with six implementations (primitive,
-//! concrete, generic, function, record, union, type-variable). The standard
-//! Hindley-Milner representation collapses primitive/concrete/generic into one
-//! *type-constructor application* (`Con`) — smaller, and exactly what
-//! unification operates on. Names are kept identical to the Go `constants.go`
-//! spellings so inferred types render the same for a differential test.
+//! A single `Type` enum models every type. Following the standard
+//! Hindley-Milner representation, primitives, nullary nominals and generics
+//! collapse into one *type-constructor application* (`Con`) — smaller than a
+//! per-category split, and exactly what unification operates on — while
+//! exhaustive matches over the enum give compiler-enforced totality. Rendered
+//! spellings are the language's canonical ones, so inferred types print
+//! exactly as they appear in source and diagnostics.
 
 use std::collections::BTreeMap;
 use std::fmt;
 
-/// Identifier for an inference type variable (`TypeVar.id` in Go).
+/// Identifier for an inference type variable.
 pub type VarId = u32;
 
-/// Canonical type-constructor names. These MUST match `constants.go`.
+/// The language's canonical type-constructor names. The type checker, builtins
+/// table, and codegen all agree on these exact strings.
 pub mod names {
     /// The 64-bit integer primitive.
     pub const INT: &str = "int";
@@ -65,8 +67,9 @@ pub enum Type {
         /// The return type.
         ret: Box<Type>,
     },
-    /// A structural record — equality is by field name+type, never field order
-    /// (the HM-correctness fix the Go source calls out).
+    /// A structural record — equality is by field name+type, never field order:
+    /// HM unification must accept two spellings of the same record regardless
+    /// of the order their fields were written in.
     Record {
         /// The record's name.
         name: String,
@@ -160,8 +163,8 @@ impl Type {
     }
 }
 
-/// A polymorphic type scheme `forall vars. ty` (`TypeScheme` in Go), the engine
-/// of let-polymorphism: generalize at bindings, instantiate at uses.
+/// A polymorphic type scheme `forall vars. ty` — the engine of
+/// let-polymorphism: generalize at bindings, instantiate at uses.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scheme {
     /// The universally quantified type variables.

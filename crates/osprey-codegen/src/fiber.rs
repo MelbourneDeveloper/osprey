@@ -4,8 +4,8 @@
 //! module-global table keyed by a monotonically-increasing fiber id, and returns
 //! that id; `await(id)` reads the table. `yield`/`fiber_yield` are identity,
 //! `fiberDone` is always true, a `Channel` is a one-slot buffer, and `select`
-//! takes its first arm. This matches the Go runtime's output without a thread
-//! per fiber.
+//! takes its first arm. This matches the C fiber runtime's observable output
+//! (and the goldens in `examples/tested`) without needing a scheduler thread.
 
 use crate::builder::Codegen;
 use crate::conv::{as_i64, box_to_i64};
@@ -29,8 +29,8 @@ fn ensure_table(cg: &mut Codegen) {
 }
 
 /// Consume the next id from the shared fiber counter, returning its register —
-/// the sequence `spawn` and `Channel` both draw from so their ids interleave
-/// exactly as the Go runtime's.
+/// the sequence `spawn` and `Channel` both draw from, matching the C fiber
+/// runtime's id sequence (fiber ids and channel handles share one counter).
 fn next_fiber_id(cg: &mut Codegen) -> String {
     ensure_table(cg);
     let id = cg.fresh_reg();
@@ -114,7 +114,8 @@ pub(crate) fn gen_builtin(cg: &mut Codegen, name: &str, args: &[Expr]) -> Result
     let v = match name {
         // `Channel(capacity)` — a one-slot heap buffer (capacity is ignored; the
         // examples send once before each recv). A channel consumes a fiber id
-        // from the shared counter, matching the Go runtime's id sequence.
+        // from the shared counter, keeping the C fiber runtime's id sequence
+        // (fiber ids and channel handles draw from one counter).
         "Channel" => {
             // A channel consumes a fiber id from the shared counter (the examples
             // send once before each recv), then heap-allocates its one-slot buffer.

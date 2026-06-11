@@ -1,11 +1,9 @@
 //! `match` lowering. Three shapes, dispatched on the arm patterns:
 //!   * literal arms (bool/int/float/string) + catch-all — a compare/branch chain;
-//!   * `Success`/`Error` arms — Result discrimination (the unwrapped-scalar
-//!     fallback `disc >= 0` ⇒ Success, matching `generateResultMatchCondition`);
+//!   * `Success`/`Error` arms — Result discrimination (an already-unwrapped
+//!     scalar scrutinee falls back to `disc >= 0` ⇒ Success);
 //!   * user-union variant arms — tag comparison against the heap block's leading
 //!     discriminant, binding the variant's fields.
-//!
-//! Ports the literal + Result + union paths of `generateMatchExpression`.
 
 use crate::builder::Codegen;
 use crate::conv::as_i64;

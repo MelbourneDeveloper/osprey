@@ -2,8 +2,8 @@
 //! collects every top-level declaration (types + their constructors, effects,
 //! externs, function signatures) so forward references and recursion resolve.
 //! Pass two infers each function body and top-level statement, unifying against
-//! the declared signatures. Ports the orchestration in `type_inference.go`
-//! around `InferType` / `ResolveAllEnvironmentTypes`.
+//! the declared signatures, then resolves everything against the final
+//! substitution.
 
 use crate::builtins::base_env;
 use crate::convert::{parse_fn_sig, type_expr_to_type, type_name_to_type};

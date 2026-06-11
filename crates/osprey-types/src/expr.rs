@@ -1,8 +1,7 @@
-//! Expression inference — `TypeInferer.InferType` and its per-node helpers.
-//! One `infer_expr` dispatch covers every `ast::Expr`. Where a type genuinely
-//! cannot be resolved (an opaque field access, an unknown dynamic builtin) the
-//! inferencer yields a fresh variable rather than a false error, matching the
-//! Go engine's leniency; the structured cases (calls, arithmetic, constructors,
+//! Expression inference. One `infer_expr` dispatch covers every `ast::Expr`.
+//! Where a type genuinely cannot be resolved (an opaque field access, an
+//! unknown dynamic builtin) the inferencer yields a fresh variable rather than
+//! a false error; the structured cases (calls, arithmetic, constructors,
 //! lambdas, match) do real unification.
 
 use crate::check::Checker;
@@ -523,7 +522,7 @@ impl Checker {
                 } else if both_vars(&l, &r) {
                     // Both operands unconstrained: defer (`+` is overloaded over
                     // int/float/string/list). Tie them and yield a fresh result
-                    // so usage context can pick the type, as the Go engine does.
+                    // so usage context can pick the type.
                     let _ = unify(&mut self.ctx, lt, rt);
                     self.ctx.fresh()
                 } else {
@@ -534,7 +533,7 @@ impl Checker {
             }
             // "-" and "*": unlike "+", these have no string/list overload, so
             // unconstrained operands default to int — `fn square(v) = v * v`
-            // infers `(int) -> Result<int, MathError>`, exactly as the Go engine.
+            // infers `(int) -> Result<int, MathError>`.
             _ => {
                 if l.is_named(names::FLOAT) || r.is_named(names::FLOAT) {
                     res_math(Type::float())

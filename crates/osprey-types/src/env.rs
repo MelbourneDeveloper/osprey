@@ -1,15 +1,14 @@
 //! The typing environment and the two operations that make HM polymorphic:
 //! `instantiate` (fresh-rename a scheme's bound vars at each use) and
 //! `generalize` (quantify a let-binding over the vars not free in the
-//! environment). Ports `TypeEnv`, `TypeInferer.Instantiate` and
-//! `TypeInferer.Generalize`.
+//! environment).
 
 use crate::ctx::InferCtx;
 use crate::ty::{Scheme, Type, VarId};
 use std::collections::{BTreeSet, HashMap};
 
 /// Maps names to their type schemes. Cloned to form child scopes (lambda
-/// bodies, match arms) — the same value-semantics the Go `TypeEnv.Clone` gave.
+/// bodies, match arms) — value semantics, so child bindings never leak out.
 #[derive(Debug, Clone, Default)]
 pub struct TypeEnv {
     vars: HashMap<String, Scheme>,

@@ -1,11 +1,11 @@
 //! Runtime/system builtins backed by the prebuilt C archives (file I/O, process
 //! management, HTTP client/server, JSON) — the camel-case Osprey name maps to
 //! its snake-case C symbol with a fixed parameter signature and a return-wrapping
-//! discipline. Ports the call emitters of `system_generation.go` /
-//! `http_generation.go`. A named function passed as a callback (`spawnProcess` /
-//! `httpListen` handler) is lowered to a code pointer by `gen_expr`'s Identifier
-//! arm. Implements [BUILTIN-FILE], [BUILTIN-PROCESS], [BUILTIN-HTTP],
-//! [BUILTIN-JSON].
+//! discipline. The archive symbols (`libfiber_runtime.a` / `libhttp_runtime.a`)
+//! are the contract: each table entry below must match its C signature exactly.
+//! A named function passed as a callback (`spawnProcess` / `httpListen` handler)
+//! is lowered to a code pointer by `gen_expr`'s Identifier arm. Implements
+//! [BUILTIN-FILE], [BUILTIN-PROCESS], [BUILTIN-HTTP], [BUILTIN-JSON].
 
 use crate::builder::Codegen;
 use crate::error::Result;

@@ -1,9 +1,9 @@
 //! Records & union variants. Each constructed value is a heap block laid out as
 //! `{ i64 tag, fields… }` (the leading tag is the variant index within its
 //! union, `0` for a record), handed around as an `i8*` handle that carries its
-//! Osprey owner type so field access and `match` can recover the layout. Ports
-//! the record/union construction + field-access paths of
-//! `expression_generation.go`.
+//! Osprey owner type so field access and `match` can recover the layout.
+//! Construction, record update, field access and anonymous object literals all
+//! share this one block shape.
 
 use crate::builder::Codegen;
 use crate::error::{CodegenError, Result};
@@ -224,7 +224,7 @@ pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> 
     // Use the statically-known owner (a named record or an anonymous object
     // literal) when it actually declares `field`; otherwise (a generic accessor
     // whose parameter infers to a type variable) resolve the field by name across
-    // known layouts — Go's polymorphic field-access fallback.
+    // known layouts — the polymorphic field-access fallback (`find_field_owner`).
     let known = tv.osp_ty.clone().filter(|o| {
         cg.record_layout(o)
             .is_some_and(|(_, fs)| fs.iter().any(|(f, _)| f == field))

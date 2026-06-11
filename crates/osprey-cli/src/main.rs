@@ -1,9 +1,9 @@
-//! `osprey-rs` — the Rust front-end CLI.
+//! `osprey-rs` — the Osprey compiler's command-line front end.
 //!
-//! Strangler-fig stage: it parses Osprey, dumps the AST (`--ast`), runs
-//! Hindley-Milner type inference (`--check`), emits LLVM IR (`--llvm`), or
-//! compiles-and-runs via clang (`--run`). As the port advances this grows the
-//! rest of the Go `cli.go` surface.
+//! It parses Osprey and then dumps the AST (`--ast`), runs Hindley-Milner type
+//! inference (`--check`), emits LLVM IR (`--llvm`), or compiles-and-runs via
+//! clang (`--run`). `--compile`, `--symbols`, `--docs`, `--hover`, `--quiet`
+//! and the sandbox flags are not implemented yet.
 
 use std::path::Path;
 use std::process::{Command, ExitCode};
@@ -146,10 +146,10 @@ fn child_exit_code(status: std::process::ExitStatus) -> u8 {
     1
 }
 
-/// Assemble the link arguments: the prebuilt C runtime static library (the HTTP
-/// superset when the program touches HTTP/WebSocket, else the fiber runtime),
-/// OpenSSL for HTTP, and any `// @link:` / `// @linkdir:` FFI directives — the
-/// same surface `jit_executor.go` builds.
+/// Assemble the link arguments — everything a `--run` binary needs beyond libc:
+/// the prebuilt C runtime static library (the HTTP superset when the program
+/// touches HTTP/WebSocket, else the fiber runtime), OpenSSL for HTTP, and any
+/// `// @link:` / `// @linkdir:` FFI directives (e.g. `-lsqlite3`).
 fn link_args(ir: &str, source: &str) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     let uses_http = ir.contains("@http") || ir.contains("@websocket");
@@ -205,7 +205,7 @@ fn find_runtime_lib(lib: &str) -> Option<String> {
     roots.into_iter().find(|p| Path::new(p).exists())
 }
 
-/// OpenSSL link flags, mirroring `addOpenSSLFlags`.
+/// OpenSSL link flags, searching the conventional Homebrew/system lib dirs.
 fn openssl_flags() -> Vec<String> {
     for dir in [
         "/opt/homebrew/opt/openssl@3/lib",

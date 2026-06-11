@@ -1,9 +1,10 @@
 //! Polymorphism lowering: specialise a generic user function at each call site
 //! by inlining its body with the concrete argument types bound to its
 //! parameters, and lower a call through a function-typed parameter (`f(x)` where
-//! `f: (int) -> int`) to an indirect call. The Go backend emits a name-mangled
-//! monomorphic copy per instantiation (`identity_i64_i64`, `applyInt_fn_i64_i64`);
-//! inlining + indirect calls reach the same runtime behaviour without mangling.
+//! `f: (int) -> int`) to an indirect call. Inlining + indirect calls reach the
+//! same runtime behaviour as emitting a name-mangled monomorphic copy per
+//! instantiation (`identity_i64_i64`, `applyInt_fn_i64_i64`) would — without
+//! the mangling.
 
 use crate::builder::{Codegen, FnSig};
 use crate::error::Result;

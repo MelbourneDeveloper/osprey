@@ -1,5 +1,4 @@
-//! Type errors. Mirrors the wrapped-error style of `compiler/internal/codegen/
-//! errors.go` but as plain located messages — the CLI prints `file:line:col:
+//! Type errors as plain located messages — the CLI prints `file:line:col:
 //! message`, identical to the syntax-error path.
 
 use crate::ty::Type;

@@ -1,11 +1,11 @@
 //! Algebraic effects: `effect` declarations, `handle … in …` and `perform`.
-//! Ports `effects_generation.go`. Each `handle` arm becomes a top-level handler
-//! function; entering the `handle` pushes those functions onto the C runtime's
-//! handler stack (`__osprey_handler_push`, keyed by effect+operation name) and
-//! leaving pops them, so a `perform` in any (even forward-referenced) function
-//! resolves the innermost active handler dynamically via
-//! `__osprey_handler_lookup` and an indirect call. The example handlers never
-//! `resume`, so an arm is an ordinary function returning the operation's result.
+//! Each `handle` arm becomes a top-level handler function; entering the
+//! `handle` pushes those functions onto the C runtime's handler stack
+//! (`__osprey_handler_push`, keyed by effect+operation name) and leaving pops
+//! them, so a `perform` in any (even forward-referenced) function resolves the
+//! innermost active handler dynamically via `__osprey_handler_lookup` and an
+//! indirect call. The example handlers never `resume`, so an arm is an ordinary
+//! function returning the operation's result.
 
 use crate::builder::Codegen;
 use crate::cast::coerce_to;

@@ -1,13 +1,13 @@
-//! The built-in function registry — the Rust counterpart of
-//! `builtin_registry.go`. Each entry is a name bound to a (possibly
-//! polymorphic) scheme. Polymorphic schemes use `Var(0)`, `Var(1)` as their
-//! quantified variables; `instantiate` renames them per use, so the concrete
-//! ids only need to be self-consistent within one scheme.
+//! The canonical table of built-in function signatures. Each entry is a name
+//! bound to a (possibly polymorphic) scheme. Polymorphic schemes use `Var(0)`,
+//! `Var(1)` as their quantified variables; `instantiate` renames them per use,
+//! so the concrete ids only need to be self-consistent within one scheme.
 //!
-//! Signatures favour `any` where the Go runtime accepts heterogeneous input
+//! Signatures favour `any` where the runtime accepts heterogeneous input
 //! (`print`, `toString`, `length`) and stay precise where a wrong type is a
-//! genuine bug. Result-returning builtins return `Result<T, Error>` so the
-//! match/auto-unwrap paths see the same shape they do in Go.
+//! genuine bug. Result-returning builtins return `Result<T, Error>` — the
+//! shape the C runtime actually returns — so the match/auto-unwrap paths agree
+//! with the expected outputs in `compiler/examples/tested`.
 
 use crate::env::TypeEnv;
 use crate::ty::{Scheme, Type};

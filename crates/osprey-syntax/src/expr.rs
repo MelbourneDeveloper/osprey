@@ -1,5 +1,5 @@
-//! Expression lowering (port of `builder_expressions.go` / `builder_calls.go` /
-//! `builder_interpolation.go`).
+//! Expression lowering: every [`Expr`] form — literals, operators, call shapes
+//! and named arguments, match/handler arms, and string interpolation.
 
 use crate::lower::Lowerer;
 use osprey_ast::{
@@ -342,8 +342,7 @@ impl Lowerer<'_> {
     }
 
     /// Split a `"text ${expr} more"` literal into [`InterpolatedPart`]s, parsing
-    /// each embedded expression as an Osprey fragment (port of
-    /// `builder_interpolation.go`).
+    /// each embedded expression as an Osprey fragment.
     fn lower_interpolation(raw: &str) -> Vec<InterpolatedPart> {
         let inner = unquote(raw);
         let bytes = inner.as_bytes();

@@ -1,7 +1,6 @@
-# Cargo workspace for the Osprey compiler's Go -> Rust migration.
-# docs/plans/go-to-rust-migration.md. Small crates keep incremental builds fast
-# (no single crate over ~5K LOC; LLVM stays out of the build — IR is emitted as
-# text and handed to clang, exactly as the Go compiler does today).
+# Cargo workspace for the Osprey compiler (osprey-rs). Small crates keep
+# incremental builds fast (no single crate over ~5K LOC; LLVM stays out of the
+# build — IR is emitted as text and handed to clang).
 [workspace]
 resolver = "2"
 members = [

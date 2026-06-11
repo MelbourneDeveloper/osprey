@@ -3,7 +3,7 @@
 //! is a malloc'd array of element-typed slots — distinct from the runtime
 //! `OspreyList` handle (the two share only their leading `i64 length`, which is
 //! why `listLength` reads both). Index access bounds-checks and returns a
-//! `Result<T, IndexError>`. Ports `generateListLiteral` / `generateListAccess`.
+//! `Result<T, IndexError>`.
 
 use crate::builder::Codegen;
 use crate::cast::coerce_to;

@@ -1,5 +1,5 @@
 //! List<T> and Map<K,V> builtins backed by the C runtime (`osprey_list_*` /
-//! `osprey_map_*` in `libfiber_runtime`). Ports `collection_codegen.go`.
+//! `osprey_map_*` in `libfiber_runtime`, whose signatures are the contract).
 //! Element values cross the boundary as a uniform `i64`; pointers are
 //! `ptrtoint`-boxed. List/Map handles are `i8*` tagged with their owner so the
 //! `+` operator and `toString` can tell them from records. Implements

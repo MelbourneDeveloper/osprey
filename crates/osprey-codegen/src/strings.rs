@@ -1,9 +1,8 @@
-//! String builtins — thin wrappers over the C string runtime declared in
-//! `runtime/string_runtime.h` (linked from `libfiber_runtime`). Ports
-//! `string_functions.go` + the `length`/`contains`/`substring`/`parseInt`/
-//! `join` generators in `core_functions.go`. Total operations return their bare
-//! value; fallible ones return the uniform `{ value, i8 }*` Result block.
-//! Implements [BUILTIN-STRING-*].
+//! String builtins (`length`/`contains`/`substring`/`parseInt`/`join`/…) — thin
+//! wrappers over the C string runtime declared in `runtime/string_runtime.h`
+//! and linked from `libfiber_runtime`, whose symbols fix each builtin's
+//! signature. Total operations return their bare value; fallible ones return
+//! the uniform `{ value, i8 }*` Result block. Implements [BUILTIN-STRING-*].
 
 use crate::builder::Codegen;
 use crate::error::{CodegenError, Result};

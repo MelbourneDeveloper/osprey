@@ -1,12 +1,11 @@
-//! Pattern inference and match exhaustiveness — ports `InferPattern` /
-//! `inferMatchExpression` and `validateMatchExhaustiveness`.
+//! Pattern inference and match exhaustiveness.
 //!
 //! Binding a constructor pattern unifies the discriminant with the
 //! constructor's owner type, so the discriminant's type arguments flow into the
 //! bound field types (`Success { value }` over `Result<int, E>` binds
-//! `value : int`). Exhaustiveness is enforced where it is unambiguous —
-//! `bool` and known union/`Result` discriminants — and otherwise deferred to a
-//! catch-all, mirroring the Go checker's high-confidence rules.
+//! `value : int`). Exhaustiveness is enforced only where the checker can decide
+//! it with confidence — `bool` and known union/`Result` discriminants — and is
+//! otherwise deferred to a catch-all, so it never reports a false positive.
 
 use crate::check::Checker;
 use crate::convert::type_expr_to_type;
@@ -117,8 +116,9 @@ impl Checker {
         };
         // `Result` patterns (`Success`/`Error`) auto-wrap a non-Result
         // discriminant: `match a + b { Success { value } => .. }` over a `string`
-        // binds `value : string` (Go `match_validation` auto-wrap rule). This also
-        // lets validated record constructions be matched without a real Result.
+        // binds `value : string` (the match auto-wrap rule: any value may be
+        // matched as if wrapped in `Success`). This also lets validated record
+        // constructions be matched without a real Result.
         if owner == "Result" {
             let dp = self.ctx.prune(disc);
             let ok = match &dp {

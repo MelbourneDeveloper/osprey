@@ -1,9 +1,9 @@
 //! Bridges Hindley-Milner inference ([`osprey_types`]) to the backend's LLVM
-//! type lattice. The Go compiler interleaves type resolution with emission via
-//! its `typeInferer`; here inference is a finished table ([`ProgramTypes`]) and
-//! this module just maps an inferred [`Type`] to the [`LType`] the value travels
-//! as. Unresolved/polymorphic variables degrade to `i64`, matching the C
-//! runtime's uniform machine-word representation for generic values.
+//! type lattice. Inference runs to completion before emission starts and lands
+//! in a finished table ([`ProgramTypes`]); this module just maps an inferred
+//! [`Type`] to the [`LType`] the value travels as, so emission never threads
+//! inference state. Unresolved/polymorphic variables degrade to `i64`, matching
+//! the C runtime's uniform machine-word representation for generic values.
 
 use crate::llty::LType;
 use osprey_types::{names, Type};

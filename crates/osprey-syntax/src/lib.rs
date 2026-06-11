@@ -1,10 +1,9 @@
-//! CST -> AST lowering. Replaces the listener-based builders in
-//! `compiler/internal/ast/builder_*.go` with an explicit recursive descent over
-//! tree-sitter named nodes (no visitor plumbing, exhaustive matching).
+//! CST -> AST lowering: an explicit recursive descent over tree-sitter named
+//! nodes (no visitor plumbing, exhaustive matching).
 //!
 //! `parse_program` is the public entry: source text in, [`Program`] out (plus any
-//! syntax errors discovered by tree-sitter — the front-end never panics on bad
-//! input, matching the Go builder's error tolerance).
+//! syntax errors discovered by tree-sitter). Errors are collected, never fatal:
+//! the front-end never panics on bad input and always produces a best-effort AST.
 
 use osprey_ast::{Position, Program};
 use tree_sitter::{Node, Parser, Tree};

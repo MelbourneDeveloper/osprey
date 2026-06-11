@@ -2,7 +2,8 @@
 //!
 //! The C is unchanged and keeps running its own memory-safety tests (`make
 //! c-test`). This crate only exposes the symbols so the Rust codegen/runtime can
-//! link them, mirroring how the Go build links the static archives today.
+//! link them — the same C that compiled programs pull in via the static
+//! archives (`libfiber_runtime.a` / `libhttp_runtime.a`).
 
 use std::os::raw::c_void;
 

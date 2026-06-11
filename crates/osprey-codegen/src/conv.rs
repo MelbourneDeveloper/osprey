@@ -36,7 +36,7 @@ pub(crate) fn as_i1(cg: &mut Codegen, v: Value) -> Result<Value> {
 }
 
 /// Widen any value to the uniform `i64` collection-element ABI: pointers
-/// `ptrtoint`, narrow ints `zext`, `double` `bitcast`. Ports `boxToI64`.
+/// `ptrtoint`, narrow ints `zext`, `double` `bitcast`.
 pub(crate) fn box_to_i64(cg: &mut Codegen, v: Value) -> Value {
     let reg = match v.ty {
         LType::I64 => return v,

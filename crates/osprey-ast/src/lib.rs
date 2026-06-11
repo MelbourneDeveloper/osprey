@@ -1,11 +1,11 @@
-//! Osprey abstract syntax tree — a Rust port of `compiler/internal/ast/ast.go`.
+//! The Osprey abstract syntax tree.
 //!
-//! Go used two marker interfaces (`Statement`, `Expression`) plus ~50 structs;
-//! Rust models that as two enums (`Stmt`, `Expr`) with struct-like variants, which
-//! is both more compact and exhaustively matchable (the type checker and codegen
-//! port get compiler-enforced totality for free). Field names track the Go structs.
+//! Two enums (`Stmt`, `Expr`) with struct-like variants model every statement and
+//! expression form in the language. Keeping the tree to two exhaustively-matched
+//! enums means the type checker and codegen get compiler-enforced totality for
+//! free: adding a variant breaks every consumer until it handles the new form.
 
-/// 1-based line, 0-based column — mirrors `ast.Position`.
+/// A source position: 1-based line, 0-based column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Position {
     /// 1-based source line.
@@ -14,15 +14,14 @@ pub struct Position {
     pub column: u32,
 }
 
-/// A parsed program: the sequence of top-level statements (`ast.Program`).
+/// A parsed program: the sequence of top-level statements.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Program {
     /// Top-level statements in source order.
     pub statements: Vec<Stmt>,
 }
 
-/// A type expression — `Result<Int, Error>`, `[String]`, `fn(Int) -> Bool`
-/// (`ast.TypeExpression`).
+/// A type expression — `Result<Int, Error>`, `[String]`, `fn(Int) -> Bool`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeExpr {
     /// The head type name (`Result`, `Int`, the array/function marker aside).
@@ -59,7 +58,7 @@ impl TypeExpr {
     }
 }
 
-/// A function parameter with an optional type annotation (`ast.Parameter`).
+/// A function parameter with an optional type annotation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parameter {
     /// Parameter name.
@@ -68,7 +67,7 @@ pub struct Parameter {
     pub ty: Option<TypeExpr>,
 }
 
-/// An `extern fn` parameter — type annotation required (`ast.ExternParameter`).
+/// An `extern fn` parameter — type annotation required.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExternParameter {
     /// Parameter name.
@@ -77,7 +76,7 @@ pub struct ExternParameter {
     pub ty: TypeExpr,
 }
 
-/// A variant of a union type (`ast.TypeVariant`).
+/// A variant of a union type.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeVariant {
     /// Variant constructor name.
@@ -86,8 +85,7 @@ pub struct TypeVariant {
     pub fields: Vec<TypeField>,
 }
 
-/// A field within a record/variant, with an optional `where` constraint
-/// (`ast.TypeField`).
+/// A field within a record/variant, with an optional `where` constraint.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeField {
     /// Field name.
@@ -98,7 +96,7 @@ pub struct TypeField {
     pub constraint: Option<Box<Expr>>,
 }
 
-/// An operation declared inside an `effect` block (`ast.EffectOperation`).
+/// An operation declared inside an `effect` block.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EffectOperation {
     /// Operation name.
@@ -111,7 +109,8 @@ pub struct EffectOperation {
     pub return_type: String,
 }
 
-/// A statement (`ast.Statement` marker interface).
+/// A statement: every top-level declaration and binding form, plus bare
+/// expressions.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     /// `import a.b.c` — a dotted module path.
@@ -194,7 +193,7 @@ pub enum Stmt {
     Expr(Expr),
 }
 
-/// A named argument `name: value` (`ast.NamedArgument`).
+/// A named argument `name: value` in a call.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NamedArgument {
     /// Argument name.
@@ -203,8 +202,7 @@ pub struct NamedArgument {
     pub value: Expr,
 }
 
-/// A part of an interpolated string — literal text or an embedded expression
-/// (`ast.InterpolatedPart`).
+/// A part of an interpolated string — literal text or an embedded expression.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InterpolatedPart {
     /// Literal text between interpolations.
@@ -213,7 +211,7 @@ pub enum InterpolatedPart {
     Expr(Expr),
 }
 
-/// A match arm `pattern => body` (`ast.MatchArm`).
+/// A match arm `pattern => body`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     /// The arm's pattern.
@@ -222,7 +220,7 @@ pub struct MatchArm {
     pub body: Expr,
 }
 
-/// A pattern in a match/select arm (`ast.Pattern`).
+/// A pattern in a match/select arm.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     /// `_` — matches anything, binds nothing.
@@ -254,8 +252,7 @@ pub enum Pattern {
     Binding(String),
 }
 
-/// A field assignment `name: value` in an object/type constructor
-/// (`ast.FieldAssignment`-style).
+/// A field assignment `name: value` in an object/type constructor.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldAssignment {
     /// Field name.
@@ -264,7 +261,7 @@ pub struct FieldAssignment {
     pub value: Expr,
 }
 
-/// A map entry `key: value` (`ast.MapEntry`).
+/// A map entry `key: value` in a map literal.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapEntry {
     /// Entry key expression.
@@ -273,8 +270,8 @@ pub struct MapEntry {
     pub value: Expr,
 }
 
-/// An expression (`ast.Expression` marker interface). Boxing breaks the recursive
-/// cycle; positions are attached where the Go AST carried them.
+/// An expression. Boxing breaks the recursive cycle; positions are attached
+/// where the parser records them.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     /// Integer literal.

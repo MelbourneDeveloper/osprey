@@ -62,8 +62,8 @@ pub struct Value {
     /// When `Some(inner)`, this value is a `Result<inner, _>` carried as a
     /// pointer to a heap block `{ inner, i8 disc }` (disc 0 = Success). Match,
     /// `toString` and value-site coercion read this to branch on the
-    /// discriminant or auto-unwrap the success payload — mirroring the Go
-    /// backend's `{value, i8}` Result ABI.
+    /// discriminant or auto-unwrap the success payload — every fallible
+    /// producer in the backend builds exactly this block shape.
     pub result_inner: Option<LType>,
     /// The Osprey owner type to tag the success payload with when this Result is
     /// unwrapped — e.g. a `Result<List<int>, _>` from indexing a list-of-lists

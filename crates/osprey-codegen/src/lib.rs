@@ -1,12 +1,11 @@
-//! LLVM IR (text) code generation for Osprey — a Rust port of the textual-IR
-//! emission in `compiler/internal/codegen/llvm.go`.
+//! LLVM IR (text) code generation for Osprey.
 //!
 //! The backend walks the AST and prints LLVM assembly that clang compiles and
-//! links against libc (and, as more is ported, the C runtime in
-//! `compiler/runtime/`). It covers the int/bool/string + functions core:
-//! literals, arithmetic & comparison, `print`/`toString`, string interpolation,
-//! `let`, blocks, `match` over literals, function definitions and calls, and a
-//! synthesized `main`. Constructs it does not lower yet return
+//! links against libc and the prebuilt C runtime archives in `compiler/bin/`
+//! (`libfiber_runtime.a` / `libhttp_runtime.a`). Two anchors define correct
+//! output: the C runtime ABI (those archives' symbols and conventions) and the
+//! golden outputs in `compiler/examples/tested`, exercised end-to-end by
+//! `crates/diff_examples.sh`. Constructs the backend does not lower return
 //! [`CodegenError::Unsupported`] — it never emits a placeholder.
 //!
 //! Public surface: [`compile_program`] turns a parsed [`osprey_ast::Program`]

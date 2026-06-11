@@ -1,6 +1,6 @@
-//! Hindley-Milner type inference for Osprey — a Rust port of
-//! `compiler/internal/codegen/type_inference.go` (and the slices of
-//! `builtin_registry.go` / `match_validation.go` it depends on).
+//! Hindley-Milner type inference for Osprey, together with the built-in
+//! function signatures and the match validation (exhaustiveness, auto-wrap)
+//! the language requires.
 //!
 //! The pipeline is the textbook one: a [`ty::Type`] language, an index-addressed
 //! union-find substitution ([`ctx::InferCtx`]), [`unify`](unify::unify)

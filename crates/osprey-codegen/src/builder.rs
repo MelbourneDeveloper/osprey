@@ -32,7 +32,7 @@ pub struct Codegen {
     pub(crate) prog: ProgramTypes,
     /// Stream-fusion pipeline: pending `map`/`filter` stages recorded by those
     /// builtins and replayed (in source order) when `forEach`/`fold` consumes
-    /// the iterator. Cleared after each consumer. Ports `pendingIterOps`.
+    /// the iterator. Cleared after each consumer.
     pub(crate) pending_iter_ops: Vec<crate::iter::IterOp>,
     /// Let-bound lambdas, stored for inline application at their call sites
     /// (`let f = fn(x) => …` then `f(y)`), since the backend lowers no closures.
@@ -54,8 +54,8 @@ pub struct Codegen {
     pub(crate) obj_count: usize,
     /// User function `(parameters, body)` defs, for inlining a *generic*
     /// function at each call site so its type variables monomorphize to the
-    /// concrete argument types there (the Go backend emits a mangled copy per
-    /// instantiation; inlining achieves the same without name mangling).
+    /// concrete argument types there (specialisation by inlining rather than by
+    /// emitting a name-mangled copy per instantiation).
     pub(crate) fn_defs: HashMap<String, (Vec<osprey_ast::Parameter>, osprey_ast::Expr)>,
     /// Generic functions currently being inlined — a re-entry guard so a
     /// (mutually) recursive generic call falls back to a direct call instead of
@@ -305,11 +305,11 @@ impl Codegen {
     }
 
     /// Resolve a field name to an owning constructor when the target's static
-    /// type is unknown — polymorphic field access inside a generic accessor like
-    /// `fn getFirst(p) = p.first`, where `p` infers to a type variable. Mirrors
-    /// Go's `generateStructFieldAccessFallback`. Prefers a layout whose field
-    /// type is a concrete scalar (so the load type and `toString` match the
-    /// runtime value), breaking ties by owner name for deterministic output.
+    /// type is unknown — the polymorphic field-access fallback for a generic
+    /// accessor like `fn getFirst(p) = p.first`, where `p` infers to a type
+    /// variable. Prefers a layout whose field type is a concrete scalar (so the
+    /// load type and `toString` match the runtime value), breaking ties by
+    /// owner name for deterministic output.
     pub(crate) fn find_field_owner(&self, field: &str) -> Option<String> {
         let mut candidates: Vec<(&String, LType)> = self
             .prog
@@ -525,10 +525,10 @@ impl Codegen {
 /// The LLVM type of a constructor field. A type-parameter field of a *union
 /// variant* (`Full { value: T }` of a generic union) boxes uniformly through
 /// `i64` — the payload (an int directly, a pointer `ptrtoint`-ed) rides in one
-/// slot regardless of the instantiating type, matching the Go backend, which
-/// stores such payloads as `i64` rather than a per-instance pointer. A generic
-/// *record* instead gets a concrete per-construction layout (via `gen_object`),
-/// so it keeps its written field type here.
+/// slot regardless of the instantiating type, so a single block layout serves
+/// every instantiation of the union. A generic *record* instead gets a concrete
+/// per-construction layout (via `gen_object`), so it keeps its written field
+/// type here.
 fn union_field_ltype(c: &CtorLayout, written: &str) -> LType {
     if !c.owner_is_record && c.type_params.iter().any(|tp| tp == written) {
         LType::I64

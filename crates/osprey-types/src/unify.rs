@@ -1,9 +1,10 @@
-//! Unification — the heart of the inferencer. Ports `TypeInferer.Unify` and its
-//! category-specific helpers from `type_inference.go`, including the
+//! Unification — the heart of the inferencer: one entry point plus
+//! category-specific helpers for each pair of type shapes, including the
 //! Osprey-specific rules:
 //!   * `any` unifies with anything;
-//!   * a bare collection name (`List`, `Map`, `Fiber`, `Channel`) unifies with
-//!     its parameterized form (the Go "wildcard generic" rule);
+//!   * the bare-generic wildcard rule: a bare constructor name (`List`, `Map`,
+//!     `Fiber`, `Channel`) unifies with any parameterization of itself
+//!     (`List<T>`);
 //!   * structural record unification by field name+type;
 //!   * Result auto-unwrap at assignment sites (spec 0004), via
 //!     [`unify_assignable`].
@@ -150,8 +151,8 @@ fn unify_con(
         return unify_seq(ctx, a1, a2, a, b);
     }
     // A bare constructor name unifies with its applied form (`Fiber` ~
-    // `Fiber<int>`, `Box` ~ `Box<int>`) — the Go "wildcard generic" rule,
-    // generalized to every nominal type so a bare-named annotation accepts a
+    // `Fiber<int>`, `Box` ~ `Box<int>`) — the bare-generic wildcard rule,
+    // applied to every nominal type so a bare-named annotation accepts a
     // parameterized value.
     if n1 == n2 && (a1.is_empty() || a2.is_empty()) {
         return Ok(());
@@ -181,7 +182,7 @@ fn unify_fun(
 
 /// Function return positions inherit the Result auto-unwrap rule symmetrically:
 /// a lambda whose body is `Result<int, E>` satisfies a `(..) -> int` slot, and
-/// vice-versa (Go `unifyFunctionTypes`, lines 1541-1551).
+/// vice-versa.
 fn unify_fn_return(ctx: &mut InferCtx, r1: &Type, r2: &Type) -> Result<(), TypeError> {
     let p1 = ctx.prune(r1);
     let p2 = ctx.prune(r2);

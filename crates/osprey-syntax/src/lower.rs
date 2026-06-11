@@ -1,4 +1,5 @@
-//! Statement, type, and pattern lowering (the bulk of `builder_*.go`).
+//! Statement, type, and pattern lowering: declarations (`fn`, `let`, `type`,
+//! `effect`, `extern`, `module`), type expressions, and match patterns.
 
 use osprey_ast::{
     EffectOperation, Expr, ExternParameter, Parameter, Pattern, Position, Program, Stmt, TypeExpr,

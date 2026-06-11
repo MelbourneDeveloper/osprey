@@ -1,11 +1,11 @@
-//! Compile the existing C runtime with the *same* hardening flags the Makefile
-//! uses (`-D_FORTIFY_SOURCE=2 -fstack-protector-strong`, warnings-as-errors) via
-//! the `cc` crate. No C is rewritten — this is exactly task 2.5 of
-//! docs/plans/go-to-rust-migration.md.
+//! Compile the C runtime with the *same* hardening flags the Makefile uses
+//! (`-D_FORTIFY_SOURCE=2 -fstack-protector-strong`, warnings-as-errors) via the
+//! `cc` crate. No C is rewritten — the C sources in `compiler/runtime` stay the
+//! single implementation.
 //!
-//! Phase 2 starts with the self-contained, dependency-free units (the generic FFI
-//! pointer cells). The concurrency/HTTP units (pthreads/OpenSSL) link the same way
-//! and are added as their crates come online.
+//! Only the self-contained, dependency-free units are compiled here (the generic
+//! FFI pointer cells). The concurrency/HTTP units (pthreads/OpenSSL) link the
+//! same way and are added as their crates come online.
 
 use std::path::PathBuf;
 

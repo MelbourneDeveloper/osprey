@@ -1,8 +1,7 @@
 //! Resolved type information published for the code generator. Type inference
-//! runs to completion (`type_inference.go`'s `ResolveAllEnvironmentTypes`
-//! equivalent); the resulting concrete signatures, record layouts and union
-//! tags are then frozen into the plain, substitution-free tables below so the
-//! backend can drive codegen off real types instead of guessing `i64`.
+//! runs to completion; the resulting concrete signatures, record layouts and
+//! union tags are then frozen into the plain, substitution-free tables below
+//! so the backend can drive codegen off real types instead of guessing `i64`.
 
 use crate::ty::Type;
 use std::collections::HashMap;

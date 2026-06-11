@@ -1,7 +1,7 @@
-//! Expression lowering — the type-driven walk ported from
-//! `expression_generation.go`. Every node returns a [`Value`] carrying its LLVM
-//! type, seeded by inference (`osprey-types`) for the things a local walk cannot
-//! know: function parameter and return types. Unsupported nodes fail loudly via
+//! Expression lowering — the type-driven walk dispatching on each AST node.
+//! Every node returns a [`Value`] carrying its LLVM type, seeded by inference
+//! (`osprey-types`) for the things a local walk cannot know: function parameter
+//! and return types. Unsupported nodes fail loudly via
 //! [`CodegenError::Unsupported`] rather than miscompiling.
 
 use crate::builder::{Codegen, FnSig};
@@ -108,9 +108,9 @@ fn fmt_double(f: f64) -> String {
 }
 
 fn gen_block(cg: &mut Codegen, statements: &[Stmt], value: Option<&Expr>) -> Result<Value> {
-    // A block does NOT open a new scope: the Go backend uses a flat per-function
+    // A block does NOT open a new scope: locals live in a flat per-function
     // symbol table, so a nested `let` rebinds (and leaks) the name in the
-    // enclosing scope. Replicating that keeps shadowing byte-compatible — e.g.
+    // enclosing scope. The goldens in `examples/tested` rely on this — e.g.
     // block_statements' inner `let outer` is visible to the outer `outer + inner`.
     for s in statements {
         crate::lower::gen_local_stmt(cg, s)?;
@@ -136,7 +136,7 @@ fn gen_binary(cg: &mut Codegen, op: &str, left: &Expr, right: &Expr) -> Result<V
     }
 
     // Operands auto-unwrap a Result to its success payload before arithmetic or
-    // comparison (mirrors Go's `unwrapIfResult`).
+    // comparison — binary operands are value sites.
     let l = gen_expr(cg, left)?;
     let l = crate::result::unwrap(cg, l);
     let r = gen_expr(cg, right)?;
@@ -151,9 +151,9 @@ fn gen_binary(cg: &mut Codegen, op: &str, left: &Expr, right: &Expr) -> Result<V
 }
 
 /// Arithmetic. Float if either operand is a float (the other is promoted),
-/// otherwise integer. Division ALWAYS returns float (the Osprey spec — see
-/// `generateDivisionWithZeroCheck`); modulo stays integer. The Result<…,
-/// `MathError`> wrapper the type system tracks is auto-unwrapped at value sites.
+/// otherwise integer. Division ALWAYS returns float (the Osprey spec); modulo
+/// stays integer. The Result<…, `MathError`> wrapper the type system tracks is
+/// auto-unwrapped at value sites.
 fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     // `+` on list handles is concatenation (`a + b` ≡ `listConcat(a, b)`); on
     // map handles it is a right-biased merge (`a + b` ≡ `mapMerge(a, b)`).
@@ -165,14 +165,14 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     if op == "+" && (is_map(&l) || is_map(&r)) {
         return Ok(crate::collections::merge_handles(cg, &l, &r));
     }
-    // `+` with a string operand is concatenation (libc strlen/strcpy/strcat),
-    // matching `generateStringConcatenation`.
+    // `+` with a string operand is concatenation: libc strlen/strcpy/strcat
+    // into a fresh malloc'd buffer.
     if op == "+" && (l.ty == LType::Str || r.ty == LType::Str) {
         return gen_str_concat(cg, l, r);
     }
-    // Numeric arithmetic infers `Result<…, MathError>` in Go (`createSuccessResult`
-    // / `createSuccessResultFloat`): `/` always float, the rest follow operand
-    // type. The Success wrapper auto-unwraps at value sites (interpolation,
+    // Numeric arithmetic is typed `Result<…, MathError>`, so each operation
+    // builds a Success block: `/` always float, the rest follow operand type.
+    // The Success wrapper auto-unwraps at value sites (interpolation,
     // comparison, args), but `toString`/`print` show it as `Success(n)`.
     if op == "/" {
         return gen_division(cg, l, r);
@@ -203,9 +203,9 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     crate::result::make_ok(cg, Value::new(reg, LType::I64), LType::I64)
 }
 
-/// Division — always float, with a runtime divide-by-zero check (Go's
-/// `generateDivisionWithZeroCheck`): a zero divisor yields `Error`
-/// (`Result<float, MathError>` disc 1), else `Success(quotient)`.
+/// Division — always float, with a runtime divide-by-zero check: a zero
+/// divisor yields `Error` (`Result<float, MathError>` disc 1), else
+/// `Success(quotient)`.
 fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     use crate::result::make_result;
     let ld = as_double(cg, l)?;
@@ -408,8 +408,8 @@ fn gen_call(
 /// Beta-reduce a lambda at its application site: bind each parameter to its
 /// argument, lower the body in a fresh scope, then unwrap a `Result` return.
 /// A lambda's inferred return type is its body's success payload, so applying
-/// `fn(x) => x * 2` yields a plain `int` — matching how Go unwraps a call's
-/// `Result<…, MathError>` at a non-Result return boundary (`maybeWrapInResult`).
+/// `fn(x) => x * 2` yields a plain `int` — the body's `Result<…, MathError>`
+/// is unwrapped at the non-Result return boundary.
 fn apply_lambda(
     cg: &mut Codegen,
     parameters: &[Parameter],
@@ -559,8 +559,8 @@ fn gen_interpolation(cg: &mut Codegen, parts: &[InterpolatedPart]) -> Result<Val
             InterpolatedPart::Text(t) => fmt.push_str(&t.replace('%', "%%")),
             InterpolatedPart::Expr(e) => {
                 // `${expr}` unwraps a Result to its payload before formatting
-                // (Go's `generateInterpolatedString` calls `unwrapIfResult`), so
-                // `${21 * 2}` prints `42`, not `Success(42)`.
+                // (an interpolation hole is a value site), so `${21 * 2}`
+                // prints `42`, not `Success(42)`.
                 let v = gen_expr(cg, e)?;
                 let v = crate::result::unwrap(cg, v);
                 let s = to_string_value(cg, v)?;
