@@ -48,11 +48,11 @@ jobs:
             mingw-w64-ucrt-x86_64-openssl
 
       # Build the C runtime archives with the MinGW toolchain. The root
-      # Makefile's Windows branch targets PowerShell, so override SHELL/MKDIR
-      # to run the recipe under the MSYS2 bash instead.
+      # Makefile auto-detects this MSYS2 shell (via $MSYSTEM) and runs the
+      # recipe under bash; only the compiler/archiver need overriding.
       - name: Build C runtime archives (MinGW)
         shell: msys2 {0}
-        run: make _runtime CC=gcc AR=ar SHELL=/usr/bin/bash MKDIR='mkdir -p'
+        run: make _runtime CC=gcc AR=ar
 
       - name: Build osprey (release)
         run: cargo build --release -p osprey-cli

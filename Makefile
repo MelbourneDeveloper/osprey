@@ -13,11 +13,22 @@
 # OS Detection
 # ---------------------------------------------------------------------------
 ifeq ($(OS),Windows_NT)
-  SHELL := powershell.exe
-  .SHELLFLAGS := -NoProfile -Command
-  RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-  MKDIR = New-Item -ItemType Directory -Force
-  HOME ?= $(USERPROFILE)
+  ifeq ($(MSYSTEM),)
+    # Native Windows: PowerShell. (No MSYS2/MinGW environment present.)
+    SHELL := powershell.exe
+    .SHELLFLAGS := -NoProfile -Command
+    RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    MKDIR = New-Item -ItemType Directory -Force
+    HOME ?= $(USERPROFILE)
+  else
+    # MSYS2/MinGW shell (CI's UCRT64 runtime build). $(OS) is still Windows_NT
+    # here, so without this branch we'd inherit PowerShell's `.SHELLFLAGS`
+    # (`-NoProfile -Command`) and feed `-N` to bash. Force bash + `-c`.
+    SHELL := /usr/bin/bash
+    .SHELLFLAGS := -c
+    RM = rm -rf
+    MKDIR = mkdir -p
+  endif
 else
   # bash needed for `pipefail` in tee'd test recipes; Ubuntu's /bin/sh is dash.
   SHELL := /bin/bash
