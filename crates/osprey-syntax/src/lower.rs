@@ -109,11 +109,13 @@ impl<'a> Lowerer<'a> {
                 return_type: node
                     .child_by_field_name("return_type")
                     .map(|n| self.lower_type(n)),
+                position: Some(self.pos(node)),
             },
             "type_declaration" => self.lower_type_decl(node),
             "effect_declaration" => Stmt::Effect {
                 name: self.field_text(node, "name"),
                 operations: self.lower_operations(node),
+                position: Some(self.pos(node)),
             },
             "module_declaration" => Stmt::Module {
                 name: self.field_text(node, "name"),
@@ -154,6 +156,7 @@ impl<'a> Lowerer<'a> {
                 .first_child_of_kind(node, "type_validation")
                 .and_then(|tv| self.first_named(tv))
                 .map(|n| self.text(n)),
+            position: Some(self.pos(node)),
         }
     }
 

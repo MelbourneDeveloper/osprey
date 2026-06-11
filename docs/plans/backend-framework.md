@@ -19,13 +19,14 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 | **L0** | General closure capture (gates composable middleware) | [`closures.md`](closures.md) | Large (codegen) |
 | **L1** | Generic C interop (FFI) → SQLite bound via `extern fn`; `Database` effect on top | [`ffi-sqlite.md`](ffi-sqlite.md) | Medium (FFI: generic linking + opaque `Ptr`) |
 | **L2** | shelf-style framework: `Handler`/`Middleware`, `Request`/`Response`, router | [`http-framework.md`](http-framework.md) | None for v0; L0 for v1 |
-| **L3** | DataProvider YAML → typed records + CRUD + named SQL; migrations | [`orm-dataprovider.md`](orm-dataprovider.md) | Medium (Go generator) |
+| **L3** | DataProvider YAML → typed records + CRUD + named SQL; migrations | [`orm-dataprovider.md`](orm-dataprovider.md) | Medium (Rust generator) |
 
 ## Two load-bearing constraints (this session's probes)
 
-1. **Closure capture is broken language-wide** (function values are bare pointers, no env slot —
-   [function_signatures.go:1272](../../compiler/internal/codegen/function_signatures.go#L1272)). Gates
-   `Middleware = fn(Handler) -> Handler`. → [`closures.md`](closures.md).
+1. **Escaping closures are unsupported language-wide** (function values are bare lifted pointers, no env
+   slot — `lift_lambda` in [`crates/osprey-codegen/src/genfn.rs`](../../crates/osprey-codegen/src/genfn.rs)
+   documents "the backend lowers no closures"; let-bound capturing lambdas only work because they inline).
+   Gates `Middleware = fn(Handler) -> Handler`. → [`closures.md`](closures.md).
 2. **A handler can't close over a `let`** (top-level `let`s run inside `main`); but top-level `fn`s are
    mutually visible. → L2 v0 router is a top-level dispatch `fn` (zero compiler change). → [`http-framework.md`](http-framework.md).
 

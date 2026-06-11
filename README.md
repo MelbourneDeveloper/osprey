@@ -95,18 +95,21 @@ fn main() -> Unit = {
 
 ## Development
 
-Built on proven tech: Go for the compiler, ANTLR for parsing, and LLVM for code generation.
+Built on proven tech: Rust for the compiler, tree-sitter for parsing, and LLVM for code generation.
 
 **AI-Assisted Development**: Claude Sonnet 4 with Cursor makes implementing language features accessible. Check out [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow.
 
 **Use VS Code Dev Containers** - strongly recommended. Open in VS Code and hit "Reopen in Container".
 
 ```bash
-cd compiler
-make build         # Build compiler
-make test          # Run tests
-make install       # Install locally
+make build         # C runtime archives + cargo build --release + extension
+make test          # Run all tests + coverage thresholds
+make lint          # cargo clippy + extension lint
+make ci            # lint + test + build (full CI simulation)
+make install       # Install compiler + runtime archives locally
 ```
+
+The compiler binary lands at `target/release/osprey`.
 
 ## Status
 

@@ -1,22 +1,24 @@
 //! `osprey` — the Osprey compiler's command-line front end.
 //!
-//! Modes: dump the AST (`--ast`, the default), report type errors (`--check`),
-//! emit LLVM IR (`--llvm`), build an executable (`--compile`), or
-//! compile-and-run via clang (`--run`). Every compiling mode gates on
-//! Hindley-Milner type inference first — an ill-typed program never reaches
-//! codegen — and on the capability sandbox (`--sandbox`, `--no-http`,
-//! `--no-websocket`, `--no-fs`, `--no-ffi`). `--quiet` suppresses
-//! non-essential output. `--symbols`, `--docs` and `--hover` are not
-//! implemented yet.
+//! Modes: report type errors (`--check`, the default — the editor's
+//! diagnostics path), dump the AST (`--ast`), emit LLVM IR (`--llvm`), build
+//! an executable (`--compile`), compile-and-run via clang (`--run`), emit the
+//! document outline as JSON (`--symbols`), or print a built-in's signature as
+//! markdown (`--hover <name>`). Every compiling mode gates on Hindley-Milner
+//! type inference first — an ill-typed program never reaches codegen — and on
+//! the capability sandbox (`--sandbox`, `--no-http`, `--no-websocket`,
+//! `--no-fs`, `--no-ffi`). `--quiet` suppresses non-essential output.
 
+mod lsp;
 mod sandbox;
 
 use sandbox::Policy;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-const USAGE: &str = "usage: osprey <file.osp> [--ast | --check | --llvm | --compile | --run] \
-[--quiet] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]";
+const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --compile | --run | \
+--symbols] [--quiet] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
+       osprey --hover <name>";
 
 /// The parsed invocation: source path, mode flag, and behaviour switches.
 struct Cli {
@@ -51,6 +53,14 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if cli.mode == "--hover" {
+        // The positional is a built-in NAME, not a file. Unknown names print
+        // nothing (the editor simply shows no hover) and still exit 0.
+        if let Some(md) = lsp::builtin_hover(&cli.path) {
+            println!("{md}");
+        }
+        return ExitCode::SUCCESS;
+    }
     run(&cli)
 }
 
@@ -58,12 +68,14 @@ fn main() -> ExitCode {
 /// select the action (last one wins); the rest toggle behaviour.
 fn parse_args(args: &[String]) -> Result<Cli, String> {
     let mut path = None;
-    let mut mode = String::from("--ast");
+    let mut mode = String::from("--check");
     let mut quiet = false;
     let mut policy = Policy::allow_all();
     for a in args {
         match a.as_str() {
-            "--ast" | "--check" | "--llvm" | "--compile" | "--run" => mode = a.clone(),
+            "--ast" | "--check" | "--llvm" | "--compile" | "--run" | "--symbols" | "--hover" => {
+                mode.clone_from(a);
+            }
             "--quiet" => quiet = true,
             "--sandbox" => policy = Policy::sandbox(),
             "--no-http" => policy.http = false,
@@ -106,7 +118,7 @@ fn run(cli: &Cli) -> ExitCode {
         }
         return ExitCode::FAILURE;
     }
-    let violations = sandbox::violations(&parsed.program, &cli.policy);
+    let violations = sandbox::violations(&parsed.program, cli.policy);
     if !violations.is_empty() {
         for v in &violations {
             eprintln!("{path}: {v}");
@@ -121,6 +133,12 @@ fn dispatch(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode 
     let path = &cli.path;
     match cli.mode.as_str() {
         "--check" => run_check(cli, program),
+        // The outline must work for ill-typed (but parsable) files, so
+        // `--symbols` deliberately skips the type gate.
+        "--symbols" => {
+            println!("{}", lsp::symbols_json(program));
+            ExitCode::SUCCESS
+        }
         "--llvm" | "--run" | "--compile" if report_type_errors(path, program) > 0 => {
             ExitCode::FAILURE
         }
@@ -317,10 +335,10 @@ fn find_runtime_lib(lib: &str) -> Option<String> {
         format!("../bin/{lib}"),
         format!("../../bin/{lib}"),
     ];
-    if let Some(dir) = std::env::current_exe().ok().and_then(|e| {
-        e.parent()
-            .map(std::path::Path::to_path_buf)
-    }) {
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(std::path::Path::to_path_buf))
+    {
         roots.push(dir.join(lib).display().to_string());
         for up in ["../../compiler/lib", "../../compiler/bin"] {
             roots.push(dir.join(up).join(lib).display().to_string());

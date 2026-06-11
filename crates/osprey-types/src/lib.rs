@@ -23,6 +23,7 @@ mod pattern;
 mod ty;
 mod unify;
 
+pub use builtins::builtin_signature;
 pub use check::{check_program, infer_program};
 pub use error::TypeError;
 pub use info::{CtorLayout, OpType, ProgramTypes};

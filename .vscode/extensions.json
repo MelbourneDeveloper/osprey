@@ -4,7 +4,7 @@
     "nimblesite.commandtree",
     "nimblesite.too-many-cooks",
     "nimblesite.typeDiagram",
-    "golang.go",
+    "rust-lang.rust-analyzer",
     "ms-vscode.vscode-typescript-next",
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",

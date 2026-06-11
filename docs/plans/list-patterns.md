@@ -34,28 +34,27 @@ Map patterns (`{ "key": binding }`) are a separate workstream — out of scope h
 
 ## Phase 1 — Grammar + AST
 
-- [ ] **1.1** Extend [`compiler/osprey.g4`](../../compiler/osprey.g4): the `pattern` rule grows a list-pattern alternative:
+- [ ] **1.1** Extend the `pattern` rule in [`tree-sitter-osprey/grammar.js`](../../tree-sitter-osprey/grammar.js) with a list-pattern alternative:
   ```
   pattern : '[' (pattern (',' pattern)*)? ( ',' '...' ID )? ']'
           | <existing alternatives>
           ;
   ```
   The `...` rest binder is mandatory at the tail position only; arbitrary middle ellipsis is **not** allowed (matches Haskell and Elm; Scala-style mid-list patterns are too expressive for this iteration).
-- [ ] **1.2** `make regenerate-parser`.
-- [ ] **1.3** Add AST nodes in [`compiler/internal/ast/`](../../compiler/internal/ast/):
-  ```go
-  type ListPattern struct {
-      Position *Position
-      Elements []Pattern      // bindings for the fixed-prefix positions
-      RestName string          // empty if no `...rest`; otherwise the binder name
+- [ ] **1.2** Regenerate the parser (`tree-sitter generate` in `tree-sitter-osprey/`).
+- [ ] **1.3** Add the AST shape in [`crates/osprey-ast`](../../crates/osprey-ast/src/):
+  ```rust
+  ListPattern {
+      elements: Vec<Pattern>,   // bindings for the fixed-prefix positions
+      rest: Option<String>,     // None if no `...rest`; otherwise the binder name
   }
   ```
-  Both `[]` and `[x, y]` use this same node — `Elements` empty / non-empty, `RestName` empty.
-- [ ] **1.4** Update [`compiler/internal/ast/builder_match.go`](../../compiler/internal/ast/builder_match.go) to construct `ListPattern` from the ANTLR parse tree. Walk children in source order to handle the rest binder correctly (cf. the chained-method-args bug fix noted in [`string-manipulation.md` Drive-by fixes](string-manipulation.md#drive-by-fixes-uncovered-during-implementation)).
+  Both `[]` and `[x, y]` use this same node — `elements` empty / non-empty, `rest` `None`.
+- [ ] **1.4** Update the match-arm builder in [`crates/osprey-syntax`](../../crates/osprey-syntax/src/) to construct `ListPattern` from the tree-sitter parse tree, walking children in source order so the rest binder lands correctly.
 
 ## Phase 2 — Match codegen
 
-Add `internal/codegen/list_pattern_codegen.go` (≤300 LOC) covering all four forms. The generation pattern, for each pattern form, is a length-guard branch then per-position binding:
+Extend the match lowering in [`crates/osprey-codegen/src/pattern.rs`](../../crates/osprey-codegen/src/pattern.rs) to cover all four forms. The generation pattern, for each pattern form, is a length-guard branch then per-position binding:
 
 - [ ] **2.1** **Empty pattern `[]`**: emit `icmp eq i64 (osprey_list_length xs), 0` → conditional branch to the arm body if true, fallthrough to next arm if false.
 - [ ] **2.2** **Fixed-length pattern `[x, y, z]`**: emit `icmp eq i64 (osprey_list_length xs), 3`. On true, for each binding, call `osprey_list_get(xs, i)` and bind the unwrapped value (length guard proves bounds, so we can use `osprey_list_get_unchecked` if one exists — otherwise call `osprey_list_get` and assume Success).
@@ -70,7 +69,7 @@ The list runtime ([`compiler/runtime/list_runtime.c`](../../compiler/runtime/lis
 - [ ] **3.1** Add `void *osprey_list_drop(void *list, int64_t n)` to `list_runtime.c`: returns a new persistent list containing elements `[n, length)`. Persistent / structural-sharing — must NOT copy elements. Implementation: if the underlying structure is a bitmapped vector trie, the slice can usually share the suffix subtree and only re-create the path to the new root.
 - [ ] **3.2** `osprey_list_drop(xs, n)` with `n >= length` returns the empty list (matches Haskell `drop`).
 - [ ] **3.3** `osprey_list_drop(xs, n)` with `n < 0` MAY be treated as `n = 0` (no error path — the length-guard in codegen prevents that input anyway).
-- [ ] **3.4** Declare the extern in [`internal/codegen/collection_codegen.go`](../../compiler/internal/codegen/collection_codegen.go) (`declareListExterns`).
+- [ ] **3.4** Declare the extern in [`crates/osprey-codegen/src/collections.rs`](../../crates/osprey-codegen/src/collections.rs) (with the other `osprey_list_*` decls).
 - [ ] **3.5** C unit test in [`runtime/list_tests.c`](../../compiler/runtime/list_tests.c):
   - Empty → drop(0) returns empty; drop(5) returns empty.
   - 10-element list, drop(0) returns the same list; drop(10) returns empty; drop(3) returns the suffix `[3..10)`.
@@ -116,10 +115,10 @@ The list runtime ([`compiler/runtime/list_runtime.c`](../../compiler/runtime/lis
 ## TODO checklist
 
 ### Phase 1 — Grammar + AST
-- [ ] 1.1 Extend `osprey.g4` `pattern` rule with list-pattern alternative
-- [ ] 1.2 `make regenerate-parser`
-- [ ] 1.3 `ListPattern` AST node
-- [ ] 1.4 Builder support in `builder_match.go`
+- [ ] 1.1 Extend the `pattern` rule in `tree-sitter-osprey/grammar.js`
+- [ ] 1.2 `tree-sitter generate`
+- [ ] 1.3 `ListPattern` AST node in `crates/osprey-ast`
+- [ ] 1.4 Builder support in `crates/osprey-syntax`
 
 ### Phase 2 — Match codegen
 - [ ] 2.1 Empty-list pattern
@@ -132,7 +131,7 @@ The list runtime ([`compiler/runtime/list_runtime.c`](../../compiler/runtime/lis
 - [ ] 3.1 Implement in `list_runtime.c` (structural-sharing slice)
 - [ ] 3.2 `n >= length` → empty list
 - [ ] 3.3 Negative `n` → no-op (defensive)
-- [ ] 3.4 Declare extern in `collection_codegen.go`
+- [ ] 3.4 Declare extern in `collections.rs`
 - [ ] 3.5 C unit tests in `list_tests.c` covering all branches + persistence invariant
 
 ### Phase 4 — Tested examples

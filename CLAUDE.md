@@ -40,30 +40,24 @@ This file provides guidance for agents when working with code in this repository
 
 ## Commands
 
-**Primary Development Commands:**
+**Primary Development Commands (run from the repo root):**
 ```bash
-cd compiler
-make build         # Build compiler with linting and C runtime
-make test          # Run all tests including C runtime verification
-make lint          # Run Go linter (golangci-lint)  
-make install       # Install compiler globally to /usr/local/bin
+make build         # C runtime archives + cargo build --release + VSCode extension
+make test          # All tests + coverage thresholds + differential example harness
+make lint          # cargo clippy + extension lint
+make fmt           # Format all code in-place (CHECK=1 for read-only check)
+make ci            # lint + test + build (full CI simulation)
 make clean         # Clean all build artifacts
-```
-
-**Testing Commands:**
-```bash
-make test-runtime  # Run C runtime tests for memory safety
-make c-test        # Run C runtime tests with strict error checking
-make c-lint        # Run C linter with warnings-as-errors
-./coverage_report.sh # Generate HTML coverage report
 ```
 
 **Development Commands:**
 ```bash
-make run FILE=<path>              # Run compiler on specific file
-make regenerate-parser            # Regenerate ANTLR parser from grammar
-make lint-fix                     # Run linter with auto-fix
+make run FILE=<path>       # Compile and run an Osprey file (osprey <file> --run)
+make install               # Install osprey + runtime archives system-wide
+make rebuild-install-vsix  # Rebuild + reinstall the VSCode extension (macOS)
 ```
+
+The compiler binary lands at `target/release/osprey`.
 
 **VSCode Extension:**
 ```bash
@@ -88,18 +82,21 @@ npm install && npm start         # Start web-based compiler service
 ## High-Level Architecture
 
 **Repository Structure:**
-- `compiler/` - Core Osprey compiler (Go + ANTLR → LLVM)
+- `crates/` - Core Osprey compiler (Rust workspace → LLVM)
+- `tree-sitter-osprey/` - Tree-sitter grammar for parsing
+- `compiler/` - Pure-C runtime sources (`runtime/`) + example programs (`examples/`)
 - `vscode-extension/` - VSCode language support with TypeScript
 - `website/` - Documentation site using 11ty static site generator
 - `webcompiler/` - Node.js web service for browser compilation
 - `homebrew-package/` - Homebrew tap for macOS installation
 
-**Compiler Architecture (Go-based):**
-- **Parser**: ANTLR4 grammar (`osprey.g4`) generates Go parser
-- **AST**: Abstract Syntax Tree builders in `internal/ast/`
-- **Type System**: Hindley-Milner type inference in `internal/codegen/type_inference.go`
-- **Code Generation**: LLVM IR generation in `internal/codegen/`
-- **Runtime**: C libraries for fiber concurrency, HTTP/WebSocket, system operations
+**Compiler Architecture (Rust-based):**
+- **Parser**: Tree-sitter grammar (`tree-sitter-osprey/`) consumed by `crates/osprey-syntax`
+- **AST**: Abstract Syntax Tree types in `crates/osprey-ast`
+- **Type System**: Hindley-Milner type inference in `crates/osprey-types`
+- **Code Generation**: LLVM IR generation in `crates/osprey-codegen`
+- **CLI**: `crates/osprey-cli` (the `osprey` binary); `crates/osprey-runtime-sys` links the C runtime
+- **Runtime**: C libraries (`compiler/runtime/`) for fiber concurrency, HTTP/WebSocket, system operations
 
 **Language Features:**
 - **Algebraic Effects**: First-class effects system with compile-time safety
@@ -110,10 +107,9 @@ npm install && npm start         # Start web-based compiler service
 - **Type Safety**: Strong static typing with inference
 
 **Multi-Language Runtime:**
-- **Go**: Compiler frontend, parsing, type checking
-- **C**: Performance-critical runtime (fibers, HTTP, WebSockets)
+- **Rust**: Compiler frontend, parsing, type checking, codegen (`crates/`)
+- **C**: Performance-critical runtime (fibers, HTTP, WebSockets) — stays C
 - **LLVM IR**: Compilation target for optimized execution
-- **Rust Integration**: Optional interop library for math utilities
 
 **Key Technical Patterns:**
 - Effects are declared with `effect` keyword and handled with `handle...in` expressions
@@ -123,11 +119,10 @@ npm install && npm start         # Start web-based compiler service
 - Fiber isolation prevents shared memory bugs through message passing
 
 **Testing Strategy:**
-- `tests/integration/` - Full compiler integration tests
-- `tests/unit/` - Component-specific unit tests  
-- `examples/tested/` - Working code examples with expected outputs
-- `examples/failscompilation/` - Error cases with expected error messages
-- `runtime/` - C tests for memory safety and segfault prevention
+- Unit tests live inside each crate in `crates/`
+- `compiler/examples/tested/` - Working examples run via the differential harness (`crates/diff_examples.sh`); output must match `.expectedoutput` byte-for-byte
+- `compiler/examples/failscompilation/` - Error cases the compiler must reject
+- Coverage thresholds enforced per-project via `coverage-thresholds.json`
 
 **Security Architecture:**
 - Configurable sandboxing for file access, HTTP, and process execution
@@ -136,15 +131,15 @@ npm install && npm start         # Start web-based compiler service
 - Effect system provides capability-based security
 
 **Development Workflow:**
-1. **Grammar Changes**: Edit `osprey.g4`, run `make regenerate-parser`
-2. **Language Features**: Implement in AST builders, then codegen
-3. **Testing**: Add examples to `examples/tested/` and error cases to `examples/failscompilation/`
-4. **Type System**: Extend `type_inference.go` for new type rules
-5. **Runtime**: Add C functions in `runtime/` for system operations
+1. **Grammar Changes**: Edit the tree-sitter grammar in `tree-sitter-osprey/`
+2. **Language Features**: Implement in `osprey-syntax`/`osprey-ast`, then `osprey-codegen`
+3. **Testing**: Add examples to `compiler/examples/tested/` and error cases to `compiler/examples/failscompilation/`
+4. **Type System**: Extend `crates/osprey-types` for new type rules
+5. **Runtime**: Add C functions in `compiler/runtime/` for system operations
 
 **AI-Assisted Development Notes:**
 - This compiler is built using various AI agents and models
-- AI can help with ANTLR grammars, LLVM IR generation, and type inference
+- AI can help with tree-sitter grammars, LLVM IR generation, and type inference
 - The codebase follows clear patterns that AI can recognize and extend
 - Use VS Code Dev Container for consistent development environment
 
@@ -155,7 +150,7 @@ This is a functional programming language compiler with algebraic effects, fiber
 ```bash
 make build        # Build compiler + VSCode extension
 make test         # Fail-fast tests + coverage + threshold (coverage-thresholds.json)
-make lint         # Run all linters (golangci-lint + ESLint)
+make lint         # Run all linters (cargo clippy + extension lint)
 make fmt          # Format all code in-place
 make clean        # Remove build artifacts
 make ci           # lint + test + build (full CI simulation)
@@ -169,7 +164,7 @@ make setup        # Post-create dev environment setup
   publishes the VS Code extension (`nimblesite.osprey`), and deploys the website.
 - **CI runs only on PRs to `main`.** Merging to `main` triggers nothing.
 - **Versions are NEVER hard-coded.** Every source version field stays at the
-  placeholder `0.0.0-dev` (`compiler/internal/version/version.go`,
+  placeholder `0.0.0-dev` (root `Cargo.toml` workspace version,
   `vscode-extension/package.json`, `shipwright.json`); the real version is
   stamped from the git tag at build time. Changing a placeholder to a real
   version in source is a defect. Follows the Shipwright contract

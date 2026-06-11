@@ -275,6 +275,13 @@ fn websocket(e: &mut TypeEnv) {
     mono(e, "websocketClose", vec![i()], u());
 }
 
+/// The rendered signature of a built-in (`name : type`), for editor hover.
+/// `None` when `name` is not a built-in.
+#[must_use]
+pub fn builtin_signature(name: &str) -> Option<String> {
+    base_env().get(name).map(|s| format!("{name} : {}", s.ty))
+}
+
 fn terminal(e: &mut TypeEnv) {
     mono(e, "termReadKey", vec![], res(s()));
     mono(e, "termRawMode", vec![i()], u());

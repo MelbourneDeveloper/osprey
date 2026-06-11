@@ -8,6 +8,10 @@ use osprey_ast::{Program, Stmt};
 
 /// Which capability groups the invocation allows. Everything defaults to on;
 /// `--sandbox` turns every group off at once.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a capability sandbox is by nature a set of independent on/off switches"
+)]
 #[derive(Clone, Copy)]
 pub(crate) struct Policy {
     pub http: bool,
@@ -71,7 +75,7 @@ const PROCESS_FNS: &[&str] = &["spawnProcess", "awaitProcess", "cleanupProcess"]
 
 /// Every policy violation in `program`, as ready-to-print messages. Empty means
 /// the program is allowed to compile under `policy`.
-pub(crate) fn violations(program: &Program, policy: &Policy) -> Vec<String> {
+pub(crate) fn violations(program: &Program, policy: Policy) -> Vec<String> {
     let idents = osprey_codegen::referenced_idents(program);
     let mut out = Vec::new();
     let gated: &[(bool, &[&str], &str)] = &[

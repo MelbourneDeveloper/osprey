@@ -1,6 +1,6 @@
 [package]
 name = "osprey-types"
-description = "Hindley-Milner type inference for Osprey — a Rust port of compiler/internal/codegen/type_inference.go"
+description = "Hindley-Milner type inference for Osprey"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

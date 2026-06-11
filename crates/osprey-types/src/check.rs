@@ -189,11 +189,14 @@ impl Checker {
                     variants,
                     ..
                 } => self.collect_type(name, type_params, variants),
-                Stmt::Effect { name, operations } => self.collect_effect(name, operations),
+                Stmt::Effect {
+                    name, operations, ..
+                } => self.collect_effect(name, operations),
                 Stmt::Extern {
                     name,
                     parameters,
                     return_type,
+                    ..
                 } => self.collect_extern(name, parameters, return_type.as_ref(), env),
                 Stmt::Function {
                     name,

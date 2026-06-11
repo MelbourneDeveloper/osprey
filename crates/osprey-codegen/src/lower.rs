@@ -42,7 +42,9 @@ pub fn compile_program(program: &Program) -> Result<String> {
                         .insert(name.clone(), (parameters.clone(), body.clone()));
                 }
             }
-            Stmt::Effect { name, operations } => {
+            Stmt::Effect {
+                name, operations, ..
+            } => {
                 for op in operations {
                     if let Some(sig) = cg.prog.effects.get(name).and_then(|m| m.get(&op.name)) {
                         cg.register_effect_op(

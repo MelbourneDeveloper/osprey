@@ -1,15 +1,14 @@
 /**
  * tree-sitter-osprey — the single canonical grammar for the Osprey language.
  *
- * Ported from compiler/osprey.g4 (ANTLR). This grammar is the foundation of the
- * Go->Rust migration (docs/plans/go-to-rust-migration.md): it replaces the ANTLR
- * grammar, the VSCode TextMate grammar, and the website Monaco/Monarch grammar —
- * three copies collapsed to one. It also becomes the compiler front-end's parser
- * (crates/osprey-syntax lowers this CST to the AST).
+ * This grammar replaced three earlier copies — the original parser grammar,
+ * the VSCode TextMate grammar, and the website Monaco/Monarch grammar —
+ * collapsed to one (docs/plans/go-to-rust-migration.md). It is the compiler
+ * front-end's parser: crates/osprey-syntax lowers this CST to the AST.
  *
- * ANTLR precedence-climbing (or < and < cmp < add < mul < unary < pipe < call)
- * maps to tree-sitter prec.left/right with the PREC table below (higher = binds
- * tighter), preserving the exact associativity of the original grammar.
+ * Precedence climbs or < and < cmp < add < mul < unary < pipe < call via
+ * tree-sitter prec.left/right with the PREC table below (higher = binds
+ * tighter), preserving the associativity the language has always had.
  */
 
 const PREC = {
@@ -29,7 +28,7 @@ module.exports = grammar({
   name: 'osprey',
 
   // Whitespace + comments are skipped between tokens. DOC_COMMENT (///) is NOT
-  // extra — it is consumed by declarations, mirroring osprey.g4.
+  // extra — it is consumed by declarations.
   extras: ($) => [/\s/, $.line_comment],
 
   word: ($) => $.identifier,
@@ -351,7 +350,7 @@ module.exports = grammar({
     map_entry: ($) => seq(field('key', $.expression), ':', field('value', $.expression)),
 
     // ---------- PATTERNS ----------
-    // Mirrors osprey.g4 `pattern`: literal/number (incl. negative), constructor
+    // The `pattern` forms: literal/number (incl. negative), constructor
     // & destructuring forms, type-annotation, structural, wildcard.
     pattern: ($) =>
       choice(
@@ -379,7 +378,7 @@ module.exports = grammar({
     integer: ($) => /[0-9]+/,
     string: ($) => /"(\\.|[^"\\])*"/,
     // Interpolated string: contains at least one ${...}. Kept as a single token
-    // (the AST builder splits it), matching osprey.g4's INTERPOLATED_STRING.
+    // (the AST builder splits it).
     interpolated_string: ($) =>
       token(
         seq(

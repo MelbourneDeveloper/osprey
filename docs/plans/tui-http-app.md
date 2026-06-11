@@ -11,7 +11,7 @@ Related specs:
 
 The pitch: *a developer can sit down and write an amazing colored TUI in Osprey that calls arbitrary HTTP APIs and renders the responses.* Today that pitch is false. This plan enumerates the exact gaps and lays out the runtime + builtin work to close them.
 
-A survey of the current state (`runtime/`, `internal/codegen/`, `examples/tested/`, `osprey.g4`) found **five hard blockers**, listed below. The first one alone makes "call an API and show the result" impossible.
+A survey of the current state (`compiler/runtime/`, `crates/osprey-codegen/`, `examples/tested/`, `tree-sitter-osprey/grammar.js`) found **five hard blockers**, listed below. The first one alone makes "call an API and show the result" impossible.
 
 ## Current state — what's stopping us
 
@@ -28,7 +28,7 @@ A survey of the current state (`runtime/`, `internal/codegen/`, `examples/tested
 There is no `clearScreen`, `moveCursor`, `getTerminalSize`, `hideCursor`. You can embed `"\x1b[31m"` directly in `print()` strings, but with no `stringCellWidth()` (length of a string after stripping ANSI) you cannot lay out colored text reliably, and with no terminal-size query you cannot redraw on resize.
 
 ### Blocker 5 — Grammar has no loop construct
-Verified in `osprey.g4` — no `for`, `while`, `until`, `loop`. A render loop has to be expressed as recursion (`fn loop() = { render(); handleInput(); loop() }`). This actually works because of TCO/fiber yield, but it's worth naming because every TUI tutorial in the world assumes `while true`. We do **not** propose adding a loop keyword here — recursion is fine — but the docs need to teach the pattern.
+Verified in the grammar (`tree-sitter-osprey/grammar.js`) — no `for`, `while`, `until`, `loop`. A render loop has to be expressed as recursion (`fn loop() = { render(); handleInput(); loop() }`). This actually works because of TCO/fiber yield, but it's worth naming because every TUI tutorial in the world assumes `while true`. We do **not** propose adding a loop keyword here — recursion is fine — but the docs need to teach the pattern.
 
 ## What already works that we're building on
 
@@ -92,7 +92,7 @@ Smallest, most contained change. Without this, nothing else matters.
 - [ ] Add `httpResponseBody(handle: int) -> Result<string, Error>`.
 - [ ] Add `httpResponseHeader(handle: int, name: string) -> Result<string, Error>` (returns first matching header, or error if absent).
 - [ ] Add `httpResponseFree(handle: int) -> Result<bool, Error>`. Double-free must error, not segfault.
-- [ ] Register the new builtins in `internal/codegen/` with correct `Result<T, Error>` type signatures.
+- [ ] Register the new builtins in `crates/osprey-codegen/src/extern_call.rs` + `crates/osprey-types/src/builtins.rs` with correct `Result<T, Error>` type signatures.
 - [ ] Spec update: amend [`0014-HTTP.md`](../specs/0014-HTTP.md) to document the new response surface; mark the old "returns status code" behavior as removed.
 - [ ] Migrate every existing [`examples/tested/http`](../../compiler/examples/tested/) example to the new API; delete any that only checked status.
 - [ ] Add `examples/tested/http/http_body_roundtrip.osp` — `GET https://httpbin.org/json`, print the body, assert it contains `"slideshow"`. (Pick a stable test endpoint or use the test HTTP server already in the runtime tests.)
@@ -102,7 +102,7 @@ Smallest, most contained change. Without this, nothing else matters.
 
 - [ ] Add `runtime/json_runtime.c` wrapping a vetted single-file JSON library. Surface: `jsonParse(s: string) -> Result<int, Error>` (handle), `jsonType(h, path: string) -> string` (returns `"null"`/`"bool"`/`"number"`/`"string"`/`"array"`/`"object"`), `jsonGet(h, path) -> Result<string, Error>` (path syntax: `"a.b[0].c"`), `jsonKeys(h, path) -> Result<List<string>, Error>`, `jsonLength(h, path) -> Result<int, Error>` (for arrays), `jsonFree(h) -> Result<bool, Error>`.
 - [ ] Replace the [`extract_json_field` stub](../../compiler/runtime/system_runtime.c#L380-L417) — either delete it or make it forward to `jsonParse`+`jsonGet`.
-- [ ] Register the builtins in `internal/codegen/`.
+- [ ] Register the builtins in `crates/osprey-codegen/src/extern_call.rs` + `crates/osprey-types/src/builtins.rs`.
 - [ ] Spec update: amend [`0012-Built-InFunctions.md`](../specs/0012-Built-InFunctions.md) with a `JSON` section. Mark it as "v1 builtin — slated for replacement by Osprey-native parser per `production-primitives.md`."
 - [ ] Add `examples/tested/http/github_api.osp` — `GET https://api.github.com/users/<known-stable-user>`, parse, print `login` and `public_repos`. Use a recorded fixture if hitting the live API in CI is too flaky.
 - [ ] Document the path syntax (`a.b[0].c`) in the spec, including escape rules for keys containing `.` or `[`.
@@ -114,7 +114,7 @@ Smallest, most contained change. Without this, nothing else matters.
   - [ ] `termSize() -> Result<{cols: int, rows: int}, Error>` via `ioctl(TIOCGWINSZ)`. If records-over-FFI is not yet supported, return two builtins `termCols()` / `termRows()` for v1.
   - [ ] `termReadKey() -> Result<string, Error>` — reads one keystroke in raw mode and translates ANSI escape sequences to human-readable strings (`"Up"`, `"Down"`, `"Left"`, `"Right"`, `"Enter"`, `"Esc"`, `"Tab"`, `"Backspace"`, `"Ctrl-C"`, otherwise the literal character). Returns error on EOF.
   - [ ] `termClear()`, `termMoveCursor(row: int, col: int)`, `termHideCursor()`, `termShowCursor()` — write the corresponding ANSI escape and flush.
-- [ ] Register all of the above in `internal/codegen/`.
+- [ ] Register all of the above in `crates/osprey-codegen/src/extern_call.rs` + `crates/osprey-types/src/builtins.rs`.
 - [ ] Spec update: new section in [`0012-Built-InFunctions.md`](../specs/0012-Built-InFunctions.md) called "Terminal Control", spec ID `[BUILTIN-TERM]`.
 - [ ] Add pure-Osprey module `examples/lib/ansi.osp` (or wherever stdlib lives) with `red(s)`, `green(s)`, `blue(s)`, `yellow(s)`, `cyan(s)`, `magenta(s)`, `bold(s)`, `dim(s)`, `bgRed(s)`, … — all just string-wrapping helpers. No new builtins.
 - [ ] Add `stringCellWidth(s: string) -> int` builtin that strips ANSI escape sequences (CSI / SGR) before counting cells. Needed so `padEnd(coloredString, 20)` aligns visibly. C implementation: state machine over the bytes, skip `\x1b[...m` runs.

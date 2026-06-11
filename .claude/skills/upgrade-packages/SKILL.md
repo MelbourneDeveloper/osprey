@@ -21,11 +21,10 @@ This repo has multiple manifests:
 
 | Location | Manifest file | Language | Package manager |
 |---|---|---|---|
-| `compiler/` | `go.mod` | Go | go modules |
+| repo root (workspace: `crates/*`, `tree-sitter-osprey/`) | `Cargo.toml` | Rust | cargo |
 | `vscode-extension/` | `package.json` | TypeScript | npm |
 | `webcompiler/` | `package.json` | Node.js | npm |
 | `website/` | `package.json` | Node.js | npm |
-| `compiler/examples/rust_integration/` | `Cargo.toml` | Rust | cargo |
 
 Process each one in order.
 
@@ -33,11 +32,11 @@ Process each one in order.
 
 Run the appropriate command to list what's outdated BEFORE upgrading anything.
 
-### Go (`compiler/`)
+### Rust (repo root workspace)
 ```bash
-cd compiler && go list -m -u all
+cargo update --dry-run --verbose
 ```
-**Read the docs:** https://go.dev/ref/mod#go-get
+**Read the docs:** https://doc.rust-lang.org/cargo/commands/cargo-update.html
 
 ### Node.js/npm (`vscode-extension/`, `webcompiler/`, `website/`)
 ```bash
@@ -47,12 +46,6 @@ cd website && npm outdated
 ```
 **Read the docs:** https://docs.npmjs.com/cli/v10/commands/npm-update
 
-### Rust (`compiler/examples/rust_integration/`)
-```bash
-cd compiler/examples/rust_integration && cargo outdated
-```
-**Read the docs:** https://doc.rust-lang.org/cargo/commands/cargo-update.html
-
 If `--check-only` was passed, **stop here** and report the outdated list.
 
 ## Step 3 — Read the official upgrade docs
@@ -61,12 +54,12 @@ If `--check-only` was passed, **stop here** and report the outdated list.
 
 ## Step 4 — Upgrade packages
 
-### Go
+### Rust (repo root workspace)
 ```bash
-cd compiler && go get -u ./...
-cd compiler && go mod tidy
+cargo update          # semver-compatible (within Cargo.toml ranges)
 ```
-For a specific package: `go get -u <module>@latest`.
+For a specific package: `cargo update -p <crate>`. With `--major`, edit the
+version requirement in the relevant `Cargo.toml` first, then `cargo update`.
 
 ### Node.js (npm)
 ```bash
@@ -75,11 +68,6 @@ npm update                            # semver-compatible (within package.json r
 npx npm-check-updates -u && npm install   # bump package.json to latest majors
 ```
 Run in each of: `vscode-extension/`, `webcompiler/`, `website/`.
-
-### Rust
-```bash
-cd compiler/examples/rust_integration && cargo update
-```
 
 ## Step 5 — Verify the upgrade
 

@@ -66,10 +66,14 @@ For each command extracted from the CI workflow:
 4. Move to the next step only after the current one succeeds.
 
 **Repo-specific context:**
-- Compiler: `cd compiler && make lint` / `make test` / `make build`
-- Root: `make lint` / `make test` / `make build` (delegates to compiler + vscode-extension)
-- C runtime linting: `make c-lint` (inside compiler/)
-- C runtime tests: `make c-test` (inside compiler/)
+- Everything runs from the repo root: `make lint` / `make test` / `make build`
+  (cargo clippy + extension lint; cargo test + coverage thresholds +
+  differential harness + extension tests; C runtime archives + cargo release
+  build + extension).
+- The compiler is the Rust workspace (`crates/`, binary `target/release/osprey`);
+  the C runtime archives are built by the internal `make _runtime` helper.
+- The differential harness is `zsh crates/diff_examples.sh` — expect
+  `PASS=41 FAIL=0 NOEXP=0` and `FC_OK`.
 
 ### Hard constraints
 
@@ -102,7 +106,7 @@ Once all CI steps pass locally:
 - Do not push if any step fails (unless `--failing` and all steps now pass)
 - Fix issues found in each step before moving to the next
 - Never skip steps or suppress errors
-- Skip steps that are CI-infrastructure-only (checkout, setup-go/node actions, cache steps, artifact uploads)
+- Skip steps that are CI-infrastructure-only (checkout, toolchain/node setup actions, cache steps, artifact uploads)
 
 ## Success criteria
 

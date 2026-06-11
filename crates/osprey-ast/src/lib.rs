@@ -163,6 +163,8 @@ pub enum Stmt {
         parameters: Vec<ExternParameter>,
         /// Declared return type, if any.
         return_type: Option<TypeExpr>,
+        /// Source position, if recorded.
+        position: Option<Position>,
     },
     /// A record/union `type` declaration.
     Type {
@@ -174,6 +176,8 @@ pub enum Stmt {
         variants: Vec<TypeVariant>,
         /// An optional validation function name (`where`-constrained type).
         validation_func: Option<String>,
+        /// Source position, if recorded.
+        position: Option<Position>,
     },
     /// An `effect` declaration listing its operations.
     Effect {
@@ -181,6 +185,8 @@ pub enum Stmt {
         name: String,
         /// Declared operations.
         operations: Vec<EffectOperation>,
+        /// Source position, if recorded.
+        position: Option<Position>,
     },
     /// A `module` block grouping nested statements.
     Module {

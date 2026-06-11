@@ -16,7 +16,7 @@ A parser writer needs three things:
 2. A way to know how far to advance after consuming a codepoint.
 3. A way to build a small string (e.g., a JSON string-literal value) without a chain of `+`.
 
-This plan adds the first two as builtins. The third is mostly handled today by `+` on `string` (already infallible per [`string-manipulation.md`](string-manipulation.md)) but with the cursor primitives in hand, parsers can buffer bytes into a `List<int>` and call `fromCodePoint` per char if they want.
+This plan adds the first two as builtins. The third is mostly handled today by `+` on `string` (already infallible) but with the cursor primitives in hand, parsers can buffer bytes into a `List<int>` and call `fromCodePoint` per char if they want.
 
 ## Scope
 
@@ -53,14 +53,13 @@ All five live in [`compiler/runtime/string_runtime.c`](../../compiler/runtime/st
   - `codePointWidth(0x7F) == 1`; `codePointWidth(0x80) == 2`; `codePointWidth(0x10000) == 4`; `codePointWidth(0x110000)` errors; `codePointWidth(0xD800)` errors (surrogate).
   - `fromCodePoint(0x1F600)` (😀) returns a 4-byte string; `fromCodePoint(0x110000)` errors.
   - Round-trip: `codePointAt(fromCodePoint(cp).value, 0).value == cp` for `cp ∈ {0, 0x7F, 0x80, 0x7FF, 0x800, 0xFFFF, 0x10000, 0x10FFFF}`.
-- [ ] **1.7** Run `make c-test` and `make c-lint`. Strict flags (`-Wconversion -Wsign-conversion -Wshadow -Wcast-qual -Wpedantic`) must stay clean.
+- [ ] **1.7** Run the C runtime test suite ([`compiler/runtime/run_tests.sh`](../../compiler/runtime/run_tests.sh)) and rebuild via `make _runtime`. The strict flags (`-Werror` plus the hardening set) must stay clean.
 
 ## Phase 2 — Builtin registry + LLVM codegen
 
-- [ ] **2.1** Add constants to [`internal/codegen/constants.go`](../../compiler/internal/codegen/constants.go) (the file with the existing `TypeString` etc).
-- [ ] **2.2** Register all five in [`builtin_registry.go`](../../compiler/internal/codegen/builtin_registry.go) using `initializeFunctions` (the same pattern as `length`, `contains`, etc.). Signatures per the spec table above. Set `ReturnType` correctly — `byteLength` returns plain `int`, the others return `Result<_, StringError>` (but see Phase 3 caveat below).
-- [ ] **2.3** Generators live in a new file `internal/codegen/string_cursor.go` (≤200 LOC). Each generator is one C-ABI call wrapped to convert raw return into the Osprey Result struct. Mirror the existing pattern in `core_functions.go::generateLengthCall`.
-- [ ] **2.4** Wire up: one line in `initializeFunctions` calling `registerStringCursorBuiltins(r)`.
+- [ ] **2.1** Register the five signatures in the checker's builtin table ([`crates/osprey-types/src/builtins.rs`](../../crates/osprey-types/src/builtins.rs)). `byteLength` returns plain `int`, the others return `Result<_, StringError>` (but see Phase 3 caveat below).
+- [ ] **2.2** Add the C-ABI lowerings in [`crates/osprey-codegen/src/extern_call.rs`](../../crates/osprey-codegen/src/extern_call.rs) — the same one-line `sig(...)` registry pattern as `length` and `contains`. Result-returning entries use the `ResultStr`-style return kinds already in that file.
+- [ ] **2.3** No new module needed — each builtin is one registry row plus its C function; only add a module if a lowering ever needs more than the shared call path.
 
 ## Phase 3 — Result payload caveat
 
@@ -97,7 +96,7 @@ Once all of `error-payloads.md`, `closures.md`, `recursive-union-payloads.md`, a
 
 ## Out of scope
 
-- A `Char` type (deferred per [`string-manipulation.md` § "Out of scope"](string-manipulation.md#out-of-scope-separate-plans-needed)).
+- A `Char` type (deferred).
 - Grapheme-cluster iteration.
 - Unicode normalisation forms.
 - Regex.
@@ -112,13 +111,11 @@ Once all of `error-payloads.md`, `closures.md`, `recursive-union-payloads.md`, a
 - [ ] 1.4 `osp_string_codepoint_width` with scalar-validity check
 - [ ] 1.5 `osp_string_from_codepoint`
 - [ ] 1.6 C unit tests covering ASCII, multi-byte, 4-byte, surrogates, boundaries
-- [ ] 1.7 `make c-test` and `make c-lint` clean under strict flags
+- [ ] 1.7 `runtime/run_tests.sh` + `make _runtime` clean under strict flags
 
 ### Phase 2 — Builtin registry + codegen
-- [ ] 2.1 Constants in `constants.go`
-- [ ] 2.2 Registry entries
-- [ ] 2.3 `string_cursor.go` generators
-- [ ] 2.4 Wire `registerStringCursorBuiltins` from `initializeFunctions`
+- [ ] 2.1 Checker signatures in `crates/osprey-types/src/builtins.rs`
+- [ ] 2.2 C-ABI lowerings in `crates/osprey-codegen/src/extern_call.rs`
 
 ### Phase 3 — Coordinate with error-payloads
 - [ ] 3.1 Land on top of `error-payloads.md` Phase 1 runtime contract — do not perpetuate the static-message hack
@@ -134,4 +131,3 @@ Once all of `error-payloads.md`, `closures.md`, `recursive-union-payloads.md`, a
 ### Acceptance
 - [ ] User-written JSON parser passes a 20-input round-trip corpus.
 - [ ] No O(n²) string copying in the JSON parser source (no `take`/`drop`/`substring` on the input cursor).
-- [ ] Cursor coverage tracked in `coverage-to-90-percent.md` once added.

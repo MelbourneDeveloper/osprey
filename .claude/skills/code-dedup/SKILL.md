@@ -15,9 +15,9 @@ Before touching ANY code, verify these conditions. If any fail, stop and report 
 1. Run `make test` — all tests must pass. If tests fail, stop. Do not dedup a broken codebase.
 2. Run `make test` — tests are fail-fast AND enforce the coverage threshold from `coverage-thresholds.json`. If anything fails, stop and fix it before deduping.
 3. Verify the project uses **static typing**:
-   - Go (compiler/): typed by default — proceed
+   - Rust (crates/, tree-sitter-osprey/): typed by default — proceed
    - TypeScript (vscode-extension/, webcompiler/, website/): check `tsconfig.json` has `"strict": true` — proceed if yes
-   - C (runtime/): typed by default — proceed
+   - C (compiler/runtime/): typed by default — proceed
 
 ## Steps
 
@@ -47,7 +47,7 @@ Search for code that is never called, never imported, never referenced.
 
 1. Look for unused exports, unused functions, unused variables
 2. Use language-appropriate tools:
-   - Go: the compiler already catches unused imports/variables; `golangci-lint run` reports unused code
+   - Rust: `dead_code`/`unused_*` are denied workspace-wide, so `cargo clippy --all-targets` reports unused code as errors
    - TypeScript: check for `noUnusedLocals`/`noUnusedParameters` in tsconfig, look for unexported functions with zero references
    - C: compiler warnings for unused functions/variables (already caught by `-Wall -Wextra`)
 3. For each candidate: **grep the entire codebase** for references (including tests, scripts, configs). Only mark as dead if truly zero references.

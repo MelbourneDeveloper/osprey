@@ -1,6 +1,6 @@
 [package]
 name = "osprey-ast"
-description = "Osprey abstract syntax tree (Rust port of compiler/internal/ast)"
+description = "Osprey abstract syntax tree types"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -163,6 +163,7 @@ mod tests {
                 name,
                 parameters,
                 return_type,
+                ..
             } => {
                 assert_eq!(name, "sqlite3_open");
                 assert_eq!(parameters.len(), 2);
