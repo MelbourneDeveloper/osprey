@@ -82,6 +82,25 @@ mod tests {
     }
 
     #[test]
+    fn spawn_lowers_to_a_real_fiber_with_spilled_captures() {
+        // `spawn` lifts its expression into a no-arg thunk handed to the C
+        // runtime's `fiber_spawn`; the local it closes over is spilled through
+        // a per-spawn module global (store at the spawn site, reload in the
+        // thunk), and `await` maps to `fiber_await`.
+        let ir = module(
+            "fn work(n: int) -> int = n * 2\n\
+             fn main() -> Unit = {\n\
+               let x = 21\n\
+               let f = spawn work(x)\n\
+               print(\"got ${await(f)}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("call i64 @fiber_spawn(i64 ()* @__fiber_closure_"));
+        assert!(ir.contains("@__fiber_cap_") && ir.contains("_x = global i64 0"));
+        assert!(ir.contains("call i64 @fiber_await(i64"));
+    }
+
+    #[test]
     fn inline_lambda_argument_is_lifted_to_a_function_pointer() {
         // An inline lambda flowing into a function-typed parameter is lifted to a
         // top-level `@__lambda_*` function and passed as an `i8*` code pointer,

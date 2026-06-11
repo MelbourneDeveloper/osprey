@@ -47,7 +47,7 @@ fn main() -> ExitCode {
     // an ill-typed program must never reach codegen, let alone execute.
     match mode {
         "--check" => run_check(path, &parsed.program),
-        "--llvm" if report_type_errors(path, &parsed.program) > 0 => ExitCode::FAILURE,
+        "--llvm" | "--run" if report_type_errors(path, &parsed.program) > 0 => ExitCode::FAILURE,
         "--llvm" => match osprey_codegen::compile_program(&parsed.program) {
             Ok(ir) => {
                 print!("{ir}");
@@ -58,7 +58,6 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        "--run" if report_type_errors(path, &parsed.program) > 0 => ExitCode::FAILURE,
         "--run" => run_program(path, &parsed.program, &source),
         _ => {
             println!("{:#?}", parsed.program);

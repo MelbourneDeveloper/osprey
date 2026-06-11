@@ -264,11 +264,8 @@ fn free_idents_rest(e: &Expr, out: &mut BTreeSet<String>) {
 /// Final third of the walker: fiber/effect forms (and the leaf-handled rest).
 fn free_idents_fiber(e: &Expr, out: &mut BTreeSet<String>) {
     match e {
-        Expr::Spawn(inner) | Expr::Await(inner) | Expr::Recv(inner) => free_idents(inner, out),
-        Expr::Yield(inner) => {
-            if let Some(i) = inner {
-                free_idents(i, out);
-            }
+        Expr::Spawn(inner) | Expr::Await(inner) | Expr::Recv(inner) | Expr::Yield(Some(inner)) => {
+            free_idents(inner, out);
         }
         Expr::Send { channel, value } => {
             free_idents(channel, out);
