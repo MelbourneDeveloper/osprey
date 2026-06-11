@@ -33,8 +33,11 @@ jobs:
           key: ${{ runner.os }}-cargo-osprey-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-osprey-
 
-      # gcc + winpthreads back the fiber/effects C runtime; llvm provides the
-      # clang the osprey binary shells out to when linking compiled programs.
+      # gcc + winpthreads back the fiber/effects C runtime; the `clang` package
+      # provides the MinGW clang driver (`/ucrt64/bin/clang.exe`) osprey shells
+      # out to when linking — the `llvm` package ships only the LLVM tools
+      # (llc/opt), not the driver, so without `clang` osprey would fall back to
+      # the runner's system MSVC clang and fail to link the MinGW runtime.
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -43,6 +46,7 @@ jobs:
           install: >-
             make
             mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-clang
             mingw-w64-ucrt-x86_64-llvm
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-openssl
