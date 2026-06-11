@@ -185,6 +185,42 @@ released artifact) builds the C runtime archives and runs fmt + clippy
 (`-D warnings`) + workspace tests + the 41/41 differential harness on every PR
 to `main`.
 
+**Hardening round (post-41/41).** Five structural upgrades landed on top of the
+behavioural parity above:
+
+1. **The type checker now gates the pipeline.** `--run`/`--llvm` run
+   `check_program` before codegen — an ill-typed program never compiles. Two
+   checker false positives this exposed were fixed (a user union re-using
+   `Success`/`Error` no longer hijacks patterns over a real `Result`; bool-literal
+   arms over a `Result` are the ternary/Elvis truthiness test, yielding the
+   unwrapped payload and covering both variants).
+2. **The must-reject suite is wired and ratcheted.**
+   [`crates/diff_examples.sh`](../../crates/diff_examples.sh) now also runs every
+   `examples/failscompilation/*.ospo` and fails CI if more than
+   `FC_EXPECTED_ESCAPES` ill-formed programs are accepted. Rejections went
+   33 → **50 / 62** (checker wiring + ported validations: constructor field-set
+   checking, unknown match variant, built-in redefinition, immutable-assignment).
+   The 12 remaining escapes (effects safety ×5, `any`-position rules ×4,
+   named-args arity, print-on-record, `comprehensive_bugs_demo`) are the ratchet
+   — port a validation, decrease the constant.
+3. **Fibers are REAL** — the same C runtime the language always used: `spawn e`
+   lifts `e` into a no-arg `i64 ()` thunk for `fiber_spawn` (a pthread; effect
+   handlers snapshot across), with closed-over locals spilled through per-spawn
+   module globals; `await`/`fiberDone` are `fiber_await`/`fiber_done`; channels
+   are `channel_create/send/recv`. `sleep` maps to `fiber_sleep(ms)` (an unmapped
+   fall-through had linked libc `sleep(seconds)`).
+4. **One type system.** `ProgramTypes` now carries *resolved* `Type`s for
+   constructor fields (a generic field resolves to a type variable — the boxed
+   `i64` rule falls out) and exported effect-operation signatures; the backend's
+   written-string re-parsers (`ltype_of_name`, `parse_op_sig`) are deleted.
+   Inference is the single source of type truth; codegen only maps `Type` →
+   LLVM.
+5. **The 411-line effects TUI (`examples/tui/api_browser.osp`) runs end-to-end**
+   under `osprey-rs` — live GitHub API, animated fiber-overlap loader, raw-mode
+   keys — matching the Go binary's screens byte-for-byte. Closing it needed the
+   eight `[BUILTIN-TERM]` builtins in codegen and `Fiber`/`Channel` lowering as
+   `i64` runtime ids.
+
 - **`osprey-types` — the HM core — DONE and verified.** A complete Hindley-Milner
   engine: enum `Type` language, index-addressed union-find substitution with
   path-compressed `prune`/occurs-check, unification (with the Osprey rules: `any`
@@ -241,7 +277,7 @@ per-subsystem record.
 - [~] 2.5 [`crates/osprey-runtime-sys`](../../crates/osprey-runtime-sys/src/lib.rs): `cc`-built FFI to `compiler/runtime/*.c` (same hardening flags; **no C rewrite**). Self-contained FFI-pointer unit (`ffi_runtime.c`) linked + tested; pthread/OpenSSL units link the same way as their callers land.
 - [~] 2.6 [`crates/osprey-cli`](../../crates/osprey-cli/src/main.rs): `osprey-rs` binary — `--ast` / `--check` / `--llvm` / `--run` / `--version` today; remaining clap surface (`--compile`, sandbox flags) grows with 2.4.
 - [x] 2.7 Differential test harness: [`crates/diff_examples.sh`](../../crates/diff_examples.sh) — Rust `--run` vs `.expectedoutput`, whole-string `TrimSpace`, across all goldens; portable repo-root (runs in CI), per-`uname` fallback for platform-specific outputs. **41/41, 0 NOEXP.**
-- [x] 2.8 **Gate:** 100% of `tested/` **passes (41/41, zero NOEXP)** — including the six cases the Go test held in in-code maps, now materialised as on-disk `.expectedoutput`. **CI runs the Rust gate** (a `rust` job in [`ci.yml`](../../.github/workflows/ci.yml): C-runtime build + fmt + clippy `-D warnings` + `cargo test` + the differential harness, on every PR to `main`). `failscompilation/` + `make c-test` remain out of scope this round.
+- [x] 2.8 **Gate:** 100% of `tested/` **passes (41/41, zero NOEXP)** — including the six cases the Go test held in in-code maps, now materialised as on-disk `.expectedoutput`. **CI runs the Rust gate** (a `rust` job in [`ci.yml`](../../.github/workflows/ci.yml): C-runtime build + fmt + clippy `-D warnings` + `cargo test` + the differential harness, on every PR to `main`). `failscompilation/` is now wired into the harness as a ratcheted must-reject suite (50/62, target 62/62); `make c-test` remains out of scope this round.
 - [x] 2.9 **All 11 remaining goldens landed** (see [Remaining examples](#remaining-examplestested--the-last-11)):
   - [x] R2 **files — runtime symbols.** Name-map `readFile`→`read_file` / `writeFile`→`write_file` with the right `Result<…>` wrapping, via the [`extern_call.rs`](../../crates/osprey-codegen/src/extern_call.rs) builtin table. `file_io_json_workflow` passes.
   - [x] R2 **db×2 — sqlite FFI.** Root cause was the type checker never publishing extern signatures (`collect_extern` skipped `fn_sigs`), so every `Ptr` collapsed to `i64`; publishing the signature + propagating `result_inner` through `match` phis (`finish_phi`, which fixed a Result double-wrap) makes `sqlite_basics` and `database_effect` pass.
