@@ -1,24 +1,15 @@
 #!/usr/bin/env bash
-# This script builds the Osprey compiler
+# This script builds the Osprey compiler (C runtime archives + Rust workspace)
 
 set -e
 
-cd /workspace/compiler
+cd /workspace
 
-echo "📦 Installing Go dependencies..."
-go mod tidy
-
-echo "🔧 Building runtime libraries..."
-make fiber-runtime http-runtime
-
-echo "🔧 Creating symlinks for tests..."
-cd internal/codegen && ln -sf ../../bin bin && cd ../..
-
-echo "🔧 Building Osprey compiler..."
+echo "🔧 Building Osprey (C runtime + Rust workspace + VSCode extension)..."
 make build
 
 echo "✅ Osprey compiler built successfully!"
 echo ""
-echo "The compiler is available at: ./bin/osprey"
+echo "The compiler is available at: ./target/release/osprey"
 echo "To install it globally, run: make install"
 echo "To run tests, run: make test"

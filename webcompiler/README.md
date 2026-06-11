@@ -20,7 +20,7 @@ graph TB
     end
     
     subgraph "External Processes"
-        D["Osprey Compiler<br/>osprey compile"]
+        D["Osprey Compiler<br/>osprey --sandbox --ast / --run"]
         E["Osprey LSP<br/>stdio interface"]
     end
     

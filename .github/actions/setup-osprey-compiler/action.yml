@@ -1,108 +1,72 @@
 name: "Setup Osprey Compiler"
-description: "Sets up Go, Rust, LLVM, and builds the Osprey compiler"
+description: "Installs the Rust toolchain + clang/LLVM, builds the C runtime archives and the osprey binary"
 inputs:
-  go-version:
-    description: "Go version to use"
-    required: false
-    default: "1.23.4"
   rust-toolchain:
     description: "Rust toolchain to use"
     required: false
     default: "stable"
+  version:
+    description: "Version to stamp into the binary (OSPREY_VERSION); empty keeps the 0.0.0-dev placeholder"
+    required: false
+    default: ""
 
 outputs:
   compiler-path:
-    description: "Path to the built Osprey compiler binary"
+    description: "Path to the built osprey binary"
     value: ${{ steps.build-compiler.outputs.compiler-path }}
 
 runs:
   using: "composite"
   steps:
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ inputs.go-version }}
-
     - name: Set up Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ inputs.rust-toolchain }}
-        profile: minimal
-        override: true
         components: rustfmt, clippy
 
-    - name: Cache Go modules
+    - name: Cache cargo registry + target
       uses: actions/cache@v4
       with:
         path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('compiler/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
-    - name: Cache Rust dependencies
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/bin/
           ~/.cargo/registry/index/
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
-          compiler/examples/rust_integration/target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('compiler/examples/rust_integration/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+          target/
+        key: ${{ runner.os }}-cargo-osprey-${{ hashFiles('Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-osprey-
 
-    - name: Install LLVM
+    - name: Install clang/LLVM, OpenSSL and SQLite (Linux)
+      if: runner.os == 'Linux'
       shell: bash
+      # clang links the osprey-emitted IR; libssl-dev/libsqlite3-dev satisfy the
+      # HTTP and FFI-database runtimes the examples link; zsh runs the
+      # differential harness.
       run: |
-        echo "📦 Installing LLVM tools..."
         sudo apt-get update
-        sudo apt-get install -y llvm-14 clang-14
-        # Create symlinks for the tools
-        sudo ln -sf /usr/bin/llc-14 /usr/bin/llc
-        sudo ln -sf /usr/bin/opt-14 /usr/bin/opt
-        sudo ln -sf /usr/bin/lli-14 /usr/bin/lli
-        sudo ln -sf /usr/bin/clang-14 /usr/bin/clang
-        echo "✅ LLVM tools installed"
-        llc --version
+        sudo apt-get install -y clang llvm libssl-dev libsqlite3-dev pkg-config zsh
         clang --version
 
-    - name: Install golangci-lint
+    - name: Install LLVM and OpenSSL (macOS)
+      if: runner.os == 'macOS'
       shell: bash
       run: |
-        echo "📦 Installing golangci-lint ..."
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
-        echo "✅ golangci-lint installed"
+        brew install llvm openssl@3 pkg-config
+        echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+        echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
 
-    - name: Install dependencies
+    - name: Build C runtime archives
       shell: bash
-      working-directory: ./compiler
-      run: make install-deps
+      run: make _runtime
 
-    - name: Build Rust library
-      shell: bash
-      working-directory: ./compiler/examples/rust_integration
-      run: |
-        echo "🦀 Building Rust library..."
-        cargo build --release
-        echo "✅ Rust library built successfully"
-
-    - name: Build fiber runtime library
-      shell: bash
-      working-directory: ./compiler
-      run: |
-        echo "🔨 Building fiber runtime library..."
-        make fiber-runtime
-        echo "✅ Fiber runtime library built successfully"
-
-    - name: Build Osprey compiler
+    - name: Build osprey (release)
       id: build-compiler
       shell: bash
-      working-directory: ./compiler
+      env:
+        OSPREY_VERSION: ${{ inputs.version }}
       run: |
-        echo "🔧 Building Osprey compiler..."
-        make build
-        echo "✅ Osprey compiler built successfully"
-        echo "compiler-path=./compiler/bin/osprey" >> $GITHUB_OUTPUT
+        set -euo pipefail
+        if [ -z "${OSPREY_VERSION}" ]; then unset OSPREY_VERSION; fi
+        cargo build --release -p osprey-cli
+        echo "compiler-path=$GITHUB_WORKSPACE/target/release/osprey" >> "$GITHUB_OUTPUT"
+        echo "$GITHUB_WORKSPACE/target/release" >> "$GITHUB_PATH"
+        target/release/osprey --version

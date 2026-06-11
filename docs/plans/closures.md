@@ -6,41 +6,37 @@ Parent: [`production-primitives.md`](production-primitives.md).
 Downstream: gating dependency for [`backend-framework.md`](backend-framework.md) (composable
 `Middleware = fn(Handler) -> Handler`).
 
-## Problem (UPDATED — Phase 1 has landed; capture is the live work)
+## Problem (UPDATED — re-probed against the Rust compiler)
 
-**Phase 1 is done.** Non-capturing lambdas now work in **every** position — `let`, argument, and record
-field. Re-confirmed this session by compiling:
+**Phase 1 is done, and the let-bound capture case now works too.** Probes against
+`target/release/osprey`:
 
 - `let f = fn(x: int) => x + 1; print(f(10))` → `11` ✅
+- `let n = 10; let addN = fn(x) => x + n; addN(5)` → `15` ✅ (let-bound capturing lambda)
+- `let wrap = fn(h) => fn(b) => h(b)` compiles ✅ (let-bound, inlined)
 - function value passed as an arg, and a non-capturing lambda stored in a record field → work ✅
-- `let f = record.fnField; f(x)` (call a function-valued field via a local) → works ✅
 
-**What is still broken: capture.** Any lambda that references an outer binding emits dangling SSA refs:
+**What is still missing: escaping closures** — a lambda *returned or stored as a first-class value*
+that captures its maker's state. `fn makeAdder(n: int) = fn(x) => x + n` has no expressible return
+type (the checker rejects calling the resulting `any`), and a *capturing* lambda passed as a function
+value loses its environment.
 
-| Probe | llc error |
-|---|---|
-| `let p="X"; fn(b) => p + b` (capture outer `let`) | `instruction forward referenced with type 'ptr'` |
-| `fn(h) => fn(b) => h(b)` (curried middleware) | `use of undefined value '%h'` |
-| `fn adder(n) = fn(x) => x + n` (named fn returns capturing lambda) | `use of undefined value '%n'` |
-| `obj.fnField(args)` directly | `UFCS call _.op(...) rewrites to op(_, ...): function not declared: op` |
+## Why (the Rust lowering today)
 
-## Why it's broken (CONFIRMED root cause)
+Lambdas take two paths in `crates/osprey-codegen`:
 
-A function VALUE is a **bare LLVM function pointer**, never a closure pair `{fn, env}`
-([`getLLVMFunctionType`, function_signatures.go:1272](../../compiler/internal/codegen/function_signatures.go#L1272)).
-`generateLambdaExpression` ([fiber_generation.go:402](../../compiler/internal/codegen/fiber_generation.go#L402))
-emits a fresh top-level func and binds the lambda's *own params*, but performs **zero capture** — it
-saves/restores `g.variables` but never threads outer values into the new function. So a lambda body's
-reference to `p`/`h`/`n` resolves against `g.variables`, which still holds the **parent** function's SSA
-values — out of scope in the emitted lambda, hence the dangling refs. The `wrap`/`adder` cases additionally
-need the env to survive *after the outer function returns* (escaping closures).
+1. **Let-bound lambdas inline at the call site**, where the captured names are still in scope — this
+   is why `addN(5)` and curried `wrap` work. The lambda never becomes a runtime value.
+2. **Lambdas used as *values*** (passed to a function-typed parameter) are **lifted** to a top-level
+   function by `lift_lambda` ([`crates/osprey-codegen/src/genfn.rs`](../../crates/osprey-codegen/src/genfn.rs)),
+   which is explicit that "a free identifier bound in the enclosing scope is not captured (the backend
+   lowers no closures)". A function value is a bare code pointer (`i8*`), never a closure pair `{fn, env}`.
 
-Only the **`spawn`** path was fixed, via a **global-spill hack**: `captureVariablesInExpression`
-([fiber_generation.go:603](../../compiler/internal/codegen/fiber_generation.go#L603)) collects free vars,
-`spillNonConstantCaptures` ([fiber_generation.go:574](../../compiler/internal/codegen/fiber_generation.go#L574))
-stores each into a per-spawn **module global**, and the closure reloads them. That's fine for `spawn`'s
-fire-once semantics but is **not** a correct general closure model (breaks re-entrancy, recursion, multiple
-instances, threads). General lambdas need a proper per-instance heap env (Phase 2).
+Only the **`spawn`** path threads captures, via a **global-spill mechanism**: `free_idents`
+([`crates/osprey-codegen/src/fiber.rs`](../../crates/osprey-codegen/src/fiber.rs)) collects free vars and
+`spill_captures` stores each into a per-spawn **module global** the emitted thunk reloads. That's fine for
+`spawn`'s fire-once semantics but is **not** a general closure model (breaks re-entrancy, recursion,
+multiple instances). General escaping lambdas need a per-instance heap env (Phase 2).
 
 ## Phase 1 — Make the no-capture case work ✅ LANDED
 
@@ -53,45 +49,40 @@ golden coverage when touching the lambda path in Phase 2 so this never regresses
 Goal: `fn makeAdder(n: int) -> (int) -> int = fn(x: int) => x + n` works, and the returned closure remains callable after `makeAdder` returns.
 
 - [ ] **2.1** Add a failing test for `makeAdder(5)(3) == 8` and `let add5 = makeAdder(5); add5(3) == 8`.
-- [ ] **2.2** Capture strategy — **closure-pair fat pointer** (confirmed by this session's grounding).
-  A function VALUE becomes a 2-field struct `osprey.closure = { i8* fnptr, i8* env }` (define once in the
-  generator). `env` is `null` for non-capturing lambdas / top-level functions, so capture-free lambdas pay
-  no allocation. Change `getLLVMFunctionType`
-  ([function_signatures.go:1272](../../compiler/internal/codegen/function_signatures.go#L1272)) +
-  the string-fallback at [:1208-1216](../../compiler/internal/codegen/function_signatures.go#L1208-L1216).
-- [ ] **2.3** Free-variable analysis — **reuse the existing walker**
-  `captureVariablesInExpression` ([fiber_generation.go:603](../../compiler/internal/codegen/fiber_generation.go#L603))
-  rather than a parallel implementation (no-duplication rule). Two required upgrades to it: (a) **subtract
-  the lambda's own parameters** from the captured set; (b) **recurse into** `LambdaExpression`,
-  `MatchExpression`, and `FieldAccessExpression` (it currently handles only Identifier/Call/Binary/Unary —
-  incomplete for nested lambdas). If a separate file is warranted, `internal/codegen/closure_conversion.go`
-  (under 500 LOC), but prefer extending the existing walker.
-- [ ] **2.4** In `generateLambdaExpression` ([fiber_generation.go:402](../../compiler/internal/codegen/fiber_generation.go#L402)):
-  for each captured var, **`malloc` a heap env struct** `{ captured fields… }` (NOT a module global — it
-  must outlive the enclosing frame for escaping closures like `adder`), store current values via the parent
-  builder, `bitcast` to `i8*`. Add a hidden leading `i8* %__env` param to the lambda; at entry, bitcast +
-  load each captured field into `g.variables` before body codegen (mirrors the spawn reload at
-  [fiber_generation.go:162-164](../../compiler/internal/codegen/fiber_generation.go#L162-L164) but
-  per-instance). Return the closure-pair `{ bitcast(lambda to i8*), env }`.
-- [ ] **2.5** Call sites — in `generateCallExpression`/`resolveFunctionValue`/`validateCallableType`
-  ([llvm.go:25](../../compiler/internal/codegen/llvm.go#L25),
-  [:102](../../compiler/internal/codegen/llvm.go#L102),
-  [:167](../../compiler/internal/codegen/llvm.go#L167)): when the callee is a closure pair, extract field 0
-  (fnptr) + field 1 (env) and emit `NewCall(fnptr, env, args...)` ([:61](../../compiler/internal/codegen/llvm.go#L61)).
-  **Preserve the direct-call fast path** for named top-level funcs (`resolveMonomorphizedFunction`,
-  [llvm.go:146](../../compiler/internal/codegen/llvm.go#L146)) so the bulk of the codebase is unperturbed.
-  Simplest ABI: all function-value signatures take a leading `i8*` env that top-level callees ignore.
+- [ ] **2.2** Capture strategy — **closure-pair fat pointer**. A function VALUE becomes a 2-field struct
+  `osprey.closure = { i8* fnptr, i8* env }` (define once in the generator). `env` is `null` for
+  non-capturing lambdas / top-level functions, so capture-free lambdas pay no allocation. Change the
+  function-value spelling (`fn_ptr_spelling` in
+  [`crates/osprey-codegen/src/genfn.rs`](../../crates/osprey-codegen/src/genfn.rs)) and the indirect-call
+  bitcast that shares it.
+- [ ] **2.3** Free-variable analysis — **reuse the existing walker** `free_idents`
+  ([`crates/osprey-codegen/src/fiber.rs`](../../crates/osprey-codegen/src/fiber.rs)) rather than a parallel
+  implementation (no-duplication rule); it already subtracts locally-bound names and recurses the full
+  `Expr` surface. Move it somewhere neutral (e.g. a small `freevars` module) if fiber.rs stops being its
+  only consumer.
+- [ ] **2.4** In `lift_lambda`: for each captured var, **`malloc` a heap env struct** `{ captured fields… }`
+  (NOT a module global — it must outlive the enclosing frame for escaping closures like `adder`), store
+  current values via the parent builder, `bitcast` to `i8*`. Add a hidden leading `i8* %__env` param to the
+  lifted lambda; at entry, load each captured field into scope before body codegen (mirrors the spawn
+  thunk's capture reload in fiber.rs, but per-instance). Return the closure-pair
+  `{ bitcast(lambda to i8*), env }`.
+- [ ] **2.5** Call sites — in the indirect-call path
+  ([`crates/osprey-codegen/src/call.rs`](../../crates/osprey-codegen/src/call.rs)): when the callee is a
+  closure pair, extract field 0 (fnptr) + field 1 (env) and call `fnptr(env, args...)`. **Preserve the
+  direct-call fast path** for named top-level funcs so the bulk of the codebase is unperturbed. Simplest
+  ABI: all function-value signatures take a leading `i8*` env that top-level callees ignore.
 - [ ] **2.6** Heap-allocate the env via `malloc` (already linked). Document the memory model in the file
-  header. **Do NOT touch the effect-handler ABI** ([effects_generation.go:416-438](../../compiler/internal/codegen/effects_generation.go#L416-L438))
-  — handlers are non-capturing; wrap as `{fn, null}` only if a handler is ever used as a first-class value.
-- [ ] **2.7** Function-typed record fields ([function_signatures.go] layout, field access
-  [expression_generation.go:1631](../../compiler/internal/codegen/expression_generation.go#L1631)) become
-  the closure-pair struct — so storing a *capturing* lambda in a field now works, and `let f = b.op; f(x)`
-  keeps working.
+  header. **Do NOT touch the effect-handler ABI**
+  ([`crates/osprey-codegen/src/effects.rs`](../../crates/osprey-codegen/src/effects.rs)) — handlers are
+  non-capturing; wrap as `{fn, null}` only if a handler is ever used as a first-class value.
+- [ ] **2.7** Function-typed record fields (ctor layout in
+  [`crates/osprey-codegen/src/builder.rs`](../../crates/osprey-codegen/src/builder.rs) /
+  [`aggregate.rs`](../../crates/osprey-codegen/src/aggregate.rs)) become the closure-pair struct — so
+  storing a *capturing* lambda in a field works, and `let f = b.op; f(x)` keeps working.
 - [ ] **2.8** Tests from 2.1 must pass; add `wrap`/`adder`/curried-middleware cases.
-- [ ] **2.9** (cleanup) Route `generateSpawnExpression` through the shared env mechanism and **delete
-  `spillNonConstantCaptures`** ([fiber_generation.go:574](../../compiler/internal/codegen/fiber_generation.go#L574)) —
-  removes the duplicate, buggy global-spill capture logic.
+- [ ] **2.9** (cleanup) Route `spawn` through the shared env mechanism and **delete `spill_captures`**
+  ([`crates/osprey-codegen/src/fiber.rs`](../../crates/osprey-codegen/src/fiber.rs)) — removes the
+  spawn-only global-spill capture mechanism.
 
 ## Phase 3 — Higher-order use sites
 
@@ -112,22 +103,18 @@ Goal: `obj.fnField(args)` **calls the function-valued field** instead of errorin
 This rule is **already specified** — [0012-Built-InFunctions.md:60](../specs/0012-Built-InFunctions.md#L60):
 "If a record has a field named `f`, field access wins; UFCS is the fallback." The codegen is non-conforming.
 
-Today `obj.fnField(args)` is unconditionally built as a `MethodCallExpression` at parse time (purely because
-an `LPAREN` follows the field — [builder_calls.go:69,117](../../compiler/internal/ast/builder_calls.go#L69)),
-then blindly UFCS-rewritten to `fnField(obj, args)` in codegen
-([expression_generation.go:1724](../../compiler/internal/codegen/expression_generation.go#L1724)) and the
-inferer ([type_inference.go:706-727](../../compiler/internal/codegen/type_inference.go#L706-L727)). A helper
-`receiverHasField` already exists ([type_inference.go:829-845](../../compiler/internal/codegen/type_inference.go#L829-L845),
-via `RecordType.HasField`) but is used **only to improve the error message**, not to change dispatch.
+Today `obj.fnField(args)` is rewritten to `fnField(obj, args)` at parse time — the UFCS sugar lives in the
+syntax layer ([`crates/osprey-syntax/src/expr.rs`](../../crates/osprey-syntax/src/expr.rs), "UFCS:
+`x.f(a, …)` is sugar for `f(x, a, …)`") — so by the time the checker and codegen see the call, the
+field-call interpretation is already gone.
 
 - [ ] **5.1** Failing test: `type B = { op: fn(int) -> int }; let b = B { op: fn(n) => n + 1 }; print(b.op(41))` → `42`.
-- [ ] **5.2** Before the UFCS rewrite in BOTH `generateMethodCallExpression`
-  ([expression_generation.go:1724](../../compiler/internal/codegen/expression_generation.go#L1724)) and the
-  inferer ([type_inference.go:709](../../compiler/internal/codegen/type_inference.go#L709)), check
-  `receiverHasField(object, name)`. If true → **field-call**: build a `CallExpression` whose `Function` is a
-  `FieldAccessExpression{object, name}` (the closure-pair call path from Phase 2.5), passing only the call's
-  own args (do NOT prepend `object`). If false → keep the existing UFCS rewrite. Realises the
-  field-access-wins-over-UFCS rule the error message already cites. Depends on Phase 2.
+- [ ] **5.2** Gate the UFCS rewrite on "does the receiver's record type have this field?". Since the
+  rewrite happens pre-inference, either (a) defer the decision: parse to a neutral `MethodCall` node and
+  let `crates/osprey-types` resolve field-call vs UFCS during inference, or (b) keep the rewrite but have
+  the checker re-interpret `f(x, …)` as a field call when `x`'s record type declares a function-typed
+  field `f`. Option (a) is cleaner. Field access wins; UFCS is the fallback — the rule the spec already
+  states. Depends on Phase 2 (the field's value must be a callable closure pair).
 
 ## Out of scope
 
@@ -142,14 +129,14 @@ via `RecordType.HasField`) but is used **only to improve the error message**, no
 
 ### Phase 2 — Capture
 - [ ] 2.1 Failing test for `makeAdder`, `wrap` (curried middleware), capture-outer-`let`
-- [ ] 2.2 Closure-pair fat pointer `{ i8* fnptr, i8* env }` in `getLLVMFunctionType`
-- [ ] 2.3 Reuse + extend `captureVariablesInExpression` (exclude params; recurse into Lambda/Match/FieldAccess)
-- [ ] 2.4 Heap env (`malloc`) + hidden `i8* %__env` param + entry reload in `generateLambdaExpression`
-- [ ] 2.5 Call-site fnptr+env extraction; preserve direct-call fast path
+- [ ] 2.2 Closure-pair fat pointer `{ i8* fnptr, i8* env }` in `fn_ptr_spelling` (genfn.rs)
+- [ ] 2.3 Reuse `free_idents` (fiber.rs) for free-variable analysis
+- [ ] 2.4 Heap env (`malloc`) + hidden `i8* %__env` param + entry reload in `lift_lambda`
+- [ ] 2.5 Call-site fnptr+env extraction (call.rs); preserve direct-call fast path
 - [ ] 2.6 Memory-model doc; leave effect-handler ABI untouched
 - [ ] 2.7 Function-typed record fields hold closure pairs (capturing lambda in a field works)
 - [ ] 2.8 `wrap`/`adder`/curried-middleware tests pass
-- [ ] 2.9 Cleanup: route spawn through shared env; delete `spillNonConstantCaptures`
+- [ ] 2.9 Cleanup: route spawn through shared env; delete `spill_captures`
 
 ### Phase 3 — Higher-order
 - [ ] 3.1 `map`/`forEachList` with lambda
@@ -162,7 +149,7 @@ via `RecordType.HasField`) but is used **only to improve the error message**, no
 
 ### Phase 5 — UFCS vs. field-call disambiguation
 - [ ] 5.1 Failing test `b.op(41)` → calls the field, prints `42`
-- [ ] 5.2 `receiverHasField` gate before UFCS rewrite (codegen + inferer)
+- [ ] 5.2 Field-presence gate before the UFCS rewrite (syntax layer + checker)
 
 ### Acceptance
 - [ ] All `examples/tested/` examples that use `fn(x) => ...` syntax compile and run.

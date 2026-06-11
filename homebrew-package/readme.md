@@ -39,7 +39,7 @@ The formula only requires this runtime dependency:
 
 - **LLVM** - Low-level code generation and optimization
 
-All other dependencies (Go, ANTLR, OpenSSL) are compiled into the pre-built binary and runtime libraries.
+All build-time dependencies (the Rust toolchain, OpenSSL) are compiled into the pre-built binary and runtime libraries.
 
 ## What Gets Installed
 
@@ -83,14 +83,13 @@ brew uninstall osprey
 
 #### Step 1: Create a GitHub Release
 
-1. **Build the release package** in your dev container:
+1. **Build the release package** from the repo root:
    ```bash
-   cd "Osprey Compiler"
    make build
    mkdir -p osprey-darwin-amd64
-   cp bin/osprey osprey-darwin-amd64/
-   cp bin/libfiber_runtime.a osprey-darwin-amd64/
-   cp bin/libhttp_runtime.a osprey-darwin-amd64/
+   cp target/release/osprey osprey-darwin-amd64/
+   cp compiler/lib/libfiber_runtime.a osprey-darwin-amd64/
+   cp compiler/lib/libhttp_runtime.a osprey-darwin-amd64/
    tar -czf osprey-darwin-amd64.tar.gz osprey-darwin-amd64/
    ```
 
@@ -198,18 +197,17 @@ Homebrew maintainers will review and may request changes:
 
 To create a release package for Homebrew:
 
-1. **Build in Dev Container** (with Go, ANTLR, OpenSSL installed):
+1. **Build** (with the Rust toolchain and OpenSSL installed), from the repo root:
 ```bash
-cd "Osprey Compiler"
-make build  # This builds with all security hardening
+make build  # C runtime archives (security-hardened) + cargo build --release
 ```
 
 2. **Package the Release**:
 ```bash
 mkdir -p osprey-darwin-amd64
-cp bin/osprey osprey-darwin-amd64/
-cp bin/libfiber_runtime.a osprey-darwin-amd64/
-cp bin/libhttp_runtime.a osprey-darwin-amd64/
+cp target/release/osprey osprey-darwin-amd64/
+cp compiler/lib/libfiber_runtime.a osprey-darwin-amd64/
+cp compiler/lib/libhttp_runtime.a osprey-darwin-amd64/
 tar -czf osprey-darwin-amd64.tar.gz osprey-darwin-amd64/
 ```
 
@@ -254,6 +252,6 @@ The formula installs to Homebrew's prefix (usually `/opt/homebrew` on Apple Sili
 
 ## Related Projects
 
-- [Osprey Compiler](../Osprey%20Compiler/) - Main compiler source code
-- [VS Code Extension](../Osprey%20VS%20Code%20Extension/) - IDE support
+- [Osprey Compiler](../crates/) - Main compiler source code (Rust)
+- [VS Code Extension](../vscode-extension/) - IDE support
 - [Web Compiler](../webcompiler/) - Browser-based playground

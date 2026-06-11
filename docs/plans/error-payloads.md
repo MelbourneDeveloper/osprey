@@ -6,22 +6,22 @@ Parent: [`production-primitives.md`](production-primitives.md).
 
 ## Problem
 
-Every `Error { message }` branch in user code is bound to the same hardcoded global string `"Error occurred"`, regardless of which builtin failed or what reason the runtime had.
+`Error { message }` branches in user code never see a real reason. Fallible builtins return a Result
+block whose error slot is unpopulated, and the match arm binds whatever the zeroed payload slot holds.
+Probe against `target/release/osprey`:
 
-Source: [`internal/codegen/llvm.go:2305`](../../compiler/internal/codegen/llvm.go#L2305):
-
-```go
-errorStr := g.module.NewGlobalDef(
-    "error_msg"+blockSuffix,
-    constant.NewCharArrayFromString("Error occurred\\x00"),
-)
-errorPtr := g.builder.NewGetElementPtr(...)
-g.variables[fieldName] = errorPtr
+```osprey
+let r = 10 / 0
+match r {
+    Success { value } => "ok ${value}"
+    Error { message } => "err ${message}"   // prints "err 0.0" — the zeroed slot, not a reason
+}
 ```
 
-This is acknowledged in [`docs/plans/string-manipulation.md:241`](string-manipulation.md#L241):
-
-> Fallible builtins set discriminant=1 and null value; the match-expression `Error { message }` branch always binds the same static `"Error occurred\x00"` global string regardless of which builtin failed.
+The Result lowering lives in [`crates/osprey-codegen/src/result.rs`](../../crates/osprey-codegen/src/result.rs)
+(block construction/unwrap) and the Error-arm field binding in
+[`crates/osprey-codegen/src/pattern.rs`](../../crates/osprey-codegen/src/pattern.rs); the C runtime's
+fallible functions ([`compiler/runtime/`](../../compiler/runtime/)) never write a message into the slot.
 
 A parser that cannot say *what went wrong* and *where* is unshippable. Same for every HTTP handler, file I/O failure, parse failure, division by zero. The spec's [ERR-PAYLOAD] section, added alongside this plan, makes the current implementation explicitly non-conforming.
 
@@ -33,7 +33,7 @@ The fix has three pieces:
 
 1. **Define the runtime payload contract.** For `E = string`, the payload slot holds a `char*` to the error message (heap-allocated by the runtime, or a static string constant — either is fine as long as it's read-only and null-terminated). For `E` = a discriminated union like `StringError`, the payload slot holds a pointer to the union value (same layout as any other discriminated union).
 2. **Make every runtime function that produces an Error actually populate the slot.** Today many runtime functions return what is effectively `Error { message: nullptr }`. Audit and fix.
-3. **Make codegen read the slot instead of generating a fresh global.** Replace [llvm.go:2298-2308](../../compiler/internal/codegen/llvm.go#L2298-L2308) with a load from the matched expression's Result struct.
+3. **Make codegen read the slot.** The Error-arm binding in [`crates/osprey-codegen/src/pattern.rs`](../../crates/osprey-codegen/src/pattern.rs) must load the message pointer from the matched expression's Result struct.
 
 ## Phase 1 — Runtime contract for `Result<T, string>`
 
@@ -57,9 +57,9 @@ Most fallible builtins today return `Result<T, string>` (file I/O, parseInt, par
 
 ## Phase 2 — Codegen reads the slot
 
-- [ ] **2.1** Delete the global-creation lines at [`llvm.go:2298-2308`](../../compiler/internal/codegen/llvm.go#L2298-L2308). Replace with: load the message pointer from the Result struct of the matched expression (the second/third field per Phase 1.1's layout).
-- [ ] **2.2** The matched expression's LLVM value is already live — it's the discriminant test that drives the match. Reuse that value (or its alloca) to GEP into the message slot. Look at how `generateSuccessBlock` (nearby in `llvm.go`) extracts the success value — the error path mirrors it.
-- [ ] **2.3** Type the loaded pointer as `i8*` and bind it to `g.variables[fieldName]`. Downstream code that uses `message` as a string already knows how to read `i8*`.
+- [ ] **2.1** In the Error-arm lowering ([`crates/osprey-codegen/src/pattern.rs`](../../crates/osprey-codegen/src/pattern.rs)): load the message pointer from the Result struct of the matched expression (the slot per Phase 1.1's layout) instead of binding the zeroed payload.
+- [ ] **2.2** The matched expression's LLVM value is already live — it's the discriminant test that drives the match. Reuse that value to GEP into the message slot, mirroring how the Success arm extracts the value (`unwrap` path in [`result.rs`](../../crates/osprey-codegen/src/result.rs)).
+- [ ] **2.3** Type the loaded pointer as `i8*` and bind it to the arm's `message` name. Downstream code that uses `message` as a string already knows how to read `i8*`.
 - [ ] **2.4** Failing test FIRST: `examples/tested/types/error_payload.osp` calls `split("abc", "")` and asserts the printed message is `"split: separator must not be empty"` (or whatever specific string Phase 1.3 chose). The `.expectedoutput` pins the exact text.
 
 ## Phase 3 — Discriminated-union payload types (e.g. `StringError`)
@@ -84,18 +84,18 @@ match split(s, "") {
 Spec auto-unwrap rules ([0004-TypeSystem.md:71-77](../specs/0004-TypeSystem.md#result-auto-unwrapping)) flatten nested Results. The spec ([ERR-PAYLOAD]) requires the original payload to survive that flattening.
 
 - [ ] **4.1** Test: `let x = parseInt(parseInt("notanumber") + "5")` — the outer Result must carry the inner parseInt's error message (or a wrapping message that mentions it), not a generic "Error occurred".
-- [ ] **4.2** Audit `maybeUnwrapResult` in [`expression_generation.go`](../../compiler/internal/codegen/expression_generation.go) — when it sees a nested Error, it must propagate the payload, not drop it.
+- [ ] **4.2** Audit the Result auto-unwrap path in [`crates/osprey-codegen/src/result.rs`](../../crates/osprey-codegen/src/result.rs) — when it sees a nested Error, it must propagate the payload, not drop it.
 
 ## Phase 5 — Codegen-side `Error { message: "literal" }` construction
 
 User code constructs Error values directly: `Error { message: "name cannot be empty" }`. That path must populate the same slot Phase 1 defined.
 
-- [ ] **5.1** Verify by reading `generateDiscriminatedUnionConstructor` in [`expression_generation.go`](../../compiler/internal/codegen/expression_generation.go) that user-constructed Error values store their message in the slot Phase 1.1 documented. If not, fix.
+- [ ] **5.1** Verify by reading the variant-constructor lowering in [`crates/osprey-codegen/src/aggregate.rs`](../../crates/osprey-codegen/src/aggregate.rs) that user-constructed Error values store their message in the slot Phase 1.1 documented. If not, fix.
 - [ ] **5.2** Test: a user function `fn fail() -> Result<int, string> = Error { message: "boom" }` — `match fail() { Error { message } => print(message) }` must print `"boom"`.
 
 ## Phase 6 — Coverage and tests
 
-- [ ] **6.1** Add a `tests/integration/error_payload_test.go` (or extend an existing one) that asserts every fallible builtin's specific error message text. One Go test case per error path. If any new builtin lands without an asserted message, the test must fail.
+- [ ] **6.1** Add unit tests in `crates/osprey-codegen` (or extend a golden example) that assert every fallible builtin's specific error message text — one case per error path. If any new builtin lands without an asserted message, the test must fail.
 - [ ] **6.2** Update `examples/tested/basics/strings/string_edge_cases.osp` to assert the specific messages now that they are real, not `"Error occurred"`.
 
 ## Out of scope
@@ -115,8 +115,8 @@ User code constructs Error values directly: `Error { message: "name cannot be em
 
 ### Phase 2 — Codegen reads the slot
 - [ ] 2.1 Failing test `examples/tested/types/error_payload.osp` with exact expected output
-- [ ] 2.2 Delete hardcoded global at `llvm.go:2298-2308`
-- [ ] 2.3 Replace with GEP+load of the message slot
+- [ ] 2.2 Error-arm binding in `pattern.rs` GEP+loads the message slot
+- [ ] 2.3 Loaded pointer typed `i8*`, bound to the arm's `message`
 - [ ] 2.4 Test passes
 
 ### Phase 3 — `Result<T, StringError>` (deferred until recursive-union-payloads lands)
@@ -125,14 +125,14 @@ User code constructs Error values directly: `Error { message: "name cannot be em
 
 ### Phase 4 — Auto-unwrap preserves payload
 - [ ] 4.1 Nested-error propagation test
-- [ ] 4.2 Audit `maybeUnwrapResult`
+- [ ] 4.2 Audit the auto-unwrap path in `result.rs`
 
 ### Phase 5 — User-constructed Error values
-- [ ] 5.1 Audit `generateDiscriminatedUnionConstructor`
+- [ ] 5.1 Audit the variant-constructor lowering in `aggregate.rs`
 - [ ] 5.2 User-defined fail() test
 
 ### Phase 6 — Coverage
-- [ ] 6.1 `tests/integration/error_payload_test.go` per-builtin message assertions
+- [ ] 6.1 Per-builtin message assertions (crate tests / golden examples)
 - [ ] 6.2 Update `string_edge_cases.osp` to specific messages
 
 ### Acceptance

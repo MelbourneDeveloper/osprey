@@ -11,18 +11,12 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "golang.go",
         "ms-vscode.cpptools",
-        "mike-lischke.vscode-antlr4",
         "rust-lang.rust-analyzer",
         "ms-vscode.makefile-tools"
       ],
       "settings": {
-        "go.useLanguageServer": true,
-        "go.lintTool": "golangci-lint",
-        "go.lintOnSave": "package",
         "editor.formatOnSave": true,
-        "go.testWorkingDirectory": "${workspaceFolder}/compiler",
         "C_Cpp.default.cStandard": "c11",
         "C_Cpp.default.compilerPath": "/usr/bin/clang",
         "C_Cpp.default.includePath": [

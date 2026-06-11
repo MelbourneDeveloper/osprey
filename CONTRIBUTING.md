@@ -9,16 +9,17 @@ Even discussions are great at this point.
 ## The Tech Stack
 
 Osprey is built on battle-tested tools:
-- **[Go](https://golang.org/)** - Compiler implementation 
-- **[ANTLR](https://www.antlr.org/)** - Grammar parsing
-- **[LLVM](https://llvm.org/)** - Code generation
+- **[Rust](https://www.rust-lang.org/)** - Compiler implementation (`crates/`)
+- **[tree-sitter](https://tree-sitter.github.io/)** - Grammar parsing (`tree-sitter-osprey/`)
+- **[LLVM](https://llvm.org/)** - Code generation (textual IR handed to clang)
+- **C** - The runtime (fibers, HTTP/WebSocket, collections) in `compiler/runtime/`
 
 ## AI Assisted Development
 
 You don't need a CS degree to implement language features. I've been using Claude Sonnet 4 with Cursor, and it's the first combo that actually guided me through the process of building a compiler. Other AI agents will work too, but this setup lets anyone contribute to language design.
 
 The AI can help you:
-- Parse/create ANTLR grammars and understand AST patterns
+- Extend the tree-sitter grammar and understand AST patterns
 - Implement new operators and language constructs
 - Debug LLVM IR generation
 - Write comprehensive tests
@@ -30,10 +31,9 @@ The AI can help you:
 ```bash
 # Fork and clone
 git clone https://github.com/MelbourneDeveloper/osprey.git
-cd osprey/compiler
+cd osprey
 
-# Build and test
-make install-deps
+# Build and test (from the repo root)
 make build
 make test
 ```
@@ -55,13 +55,13 @@ make test
 4. **Fix edge cases** - Let the AI help debug LLVM IR issues
 
 Example prompts:
-- "Add a new arithmetic operator to the ANTLR grammar"
+- "Add a new arithmetic operator to the tree-sitter grammar"
 - "Implement string interpolation in the AST builder"
 - "Generate LLVM IR for this pattern match"
 
 ## Code Guidelines
 
-- Follow existing patterns - Go lints enforce a lot
+- Follow existing patterns - the clippy lint wall (`make lint`) enforces a lot
 - Test new features thoroughly
 - Keep changes focused
 - Fix linter errors before submitting

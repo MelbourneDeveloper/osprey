@@ -10,16 +10,15 @@ if [ ! -f "package.json" ]; then
     exit 1
 fi
 
-# Check if the compiler exists
-COMPILER_PATH="../Osprey Compiler/bin/osprey"
-if [ ! -f "$COMPILER_PATH" ]; then
-    echo "❌ Error: Osprey compiler not found at $COMPILER_PATH"
-    echo "Please build the compiler first from the 'Osprey Compiler' directory:"
-    echo "  cd '../Osprey Compiler' && make build"
-    exit 1
+# The Rust compiler binary (cargo build --release) is optional: when present
+# and it supports --docs, scripts/generate-docs.sh (run by `npm run build`)
+# regenerates the API reference; otherwise the committed docs are used.
+COMPILER_PATH="../target/release/osprey"
+if [ -f "$COMPILER_PATH" ]; then
+    echo "✅ Found Osprey compiler at $COMPILER_PATH"
+else
+    echo "ℹ️ No compiler at $COMPILER_PATH — using committed docs (build with: cargo build --release)"
 fi
-
-echo "✅ Found Osprey compiler at $COMPILER_PATH"
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then
@@ -27,19 +26,7 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-# Generate documentation with the compiler
-echo "📚 Generating documentation..."
-
-# Create docs directory if it doesn't exist
-mkdir -p src/docs/generated
-
-# Generate spec documentation if the compiler supports it
-if "$COMPILER_PATH" --help | grep -q "generate-docs\|docs\|spec"; then
-    echo "🔧 Running compiler documentation generation..."
-    "$COMPILER_PATH" generate-docs --output src/docs/generated/ || echo "⚠️ Docs generation not available yet"
-fi
-
-# Build the website
+# Build the website (runs update-playground + generate-docs + eleventy)
 echo "🏗️ Building website..."
 npm run build
 

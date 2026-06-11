@@ -41,6 +41,12 @@
  * sockets (never file descriptors). */
 #define close closesocket
 
+/* POSIX <unistd.h> (and its sleep()) is not included on Windows — only this
+ * header is. Map POSIX sleep(seconds) onto Win32 Sleep(milliseconds) so the
+ * socket runtime's whole-second poll/shutdown loops compile. windows.h above
+ * provides Sleep + DWORD; only the HTTP/WebSocket TUs see this. */
+#define sleep(seconds) Sleep((DWORD)(seconds) * 1000U)
+
 /* Initialise Winsock once per process. Implemented (and auto-run via a
  * constructor) in http_shared.c. Safe to call repeatedly. */
 void osprey_wsa_init(void);

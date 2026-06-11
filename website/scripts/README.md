@@ -5,11 +5,11 @@ Scripts for building the Osprey website.
 ## Scripts
 
 ### `generate-docs.sh`
-Generates reference documentation from Osprey compiler examples.
-
-- Builds compiler if needed
-- Extracts symbols from `.osp` files using `osprey --docs`
-- Generates `stdlib.md`, `types.md`, `functions.md`
+Regenerates the API reference (`src/docs/`) via `osprey --docs` when a Rust
+compiler binary (`../target/release/osprey`, built with `cargo build
+--release`) is present and supports the flag. Otherwise the committed docs in
+`src/docs/` are used as-is, so the website build never requires a Rust
+toolchain.
 
 **Usage:**
 ```bash
@@ -17,11 +17,15 @@ Generates reference documentation from Osprey compiler examples.
 ```
 
 ### `copy-spec.js`
-Copies language specification from compiler to website source.
+Copies the language specification from `docs/specs/` to the website source.
+
+### `update-playground.js`
+Syncs the playground editor content from
+`compiler/examples/tested/basics/osprey_mega_showcase.osp`.
 
 ## Manual Documentation Generation
 
 ```bash
-cd compiler
-./osprey path/to/file.osp --docs
-``` 
+cargo build --release
+./target/release/osprey --docs --docs-dir website/src/docs
+```

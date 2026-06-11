@@ -312,10 +312,11 @@ function runOspreyCompiler(args, code = '') {
                 mode: fileStats.mode
             })}`)
             
-            // Use the osprey binary from PATH (installed in Docker) or fallback to local dev path
+            // Use the osprey binary from PATH (installed in Docker) or fall back
+            // to the local Rust release build (cargo build --release)
             const ospreyPath = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
                 ? 'osprey'
-                : path.resolve(__dirname, '../compiler/bin/osprey')
+                : path.resolve(__dirname, '../../target/release/osprey')
             
             // Check if osprey binary exists and is executable
             console.log(`🔍 Checking osprey binary: ${ospreyPath}`)

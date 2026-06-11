@@ -1,0 +1,126 @@
+================================================================================
+Function declaration with typed params, return type, expression body
+================================================================================
+
+fn add(a: int, b: int) -> int = a + b
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (statement
+    (function_declaration
+      name: (identifier)
+      parameters: (parameter_list
+        (parameter name: (identifier) type: (type_identifier (identifier)))
+        (parameter name: (identifier) type: (type_identifier (identifier))))
+      return_type: (type_identifier (identifier))
+      body: (expression
+        (binary_expression
+          left: (expression (primary_expression (identifier)))
+          right: (expression (primary_expression (identifier))))))))
+
+================================================================================
+Union type declaration
+================================================================================
+
+type Color = Red | Green | Blue
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (statement
+    (type_declaration
+      name: (identifier)
+      definition: (union_type
+        (variant name: (identifier))
+        (variant name: (identifier))
+        (variant name: (identifier))))))
+
+================================================================================
+Effect declaration with function-typed operation
+================================================================================
+
+effect Log { info: fn(string) -> Unit }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (statement
+    (effect_declaration
+      name: (identifier)
+      (operation_declaration
+        name: (identifier)
+        type: (function_type
+          (type_list (type_identifier (identifier)))
+          (type_identifier (identifier)))))))
+
+================================================================================
+Short lambda
+================================================================================
+
+let f = |x| => x * 2
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (statement
+    (let_declaration
+      name: (identifier)
+      value: (expression
+        (primary_expression
+          (lambda_expression
+            (parameter_list (parameter name: (identifier)))
+            body: (expression
+              (binary_expression
+                left: (expression (primary_expression (identifier)))
+                right: (expression (primary_expression (literal (integer))))))))))))
+
+================================================================================
+Match with constructor destructuring and wildcard
+================================================================================
+
+let r = match x {
+  Ok { value } => value
+  _ => 0
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (statement
+    (let_declaration
+      name: (identifier)
+      value: (expression
+        (match_expression
+          value: (expression (primary_expression (identifier)))
+          (match_arm
+            pattern: (pattern name: (identifier) (field_pattern (identifier)))
+            body: (expression (primary_expression (identifier))))
+          (match_arm
+            pattern: (pattern)
+            body: (expression (primary_expression (literal (integer))))))))))
+
+================================================================================
+Pipe chain (left-associative) with UFCS-style calls
+================================================================================
+
+let n = items |> map(double) |> sum()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (statement
+    (let_declaration
+      name: (identifier)
+      value: (expression
+        (pipe_expression
+          left: (expression
+            (pipe_expression
+              left: (expression (primary_expression (identifier)))
+              right: (expression
+                (call_expression
+                  callee: (expression (primary_expression (identifier)))
+                  (argument_list (expression (primary_expression (identifier))))))))
+          right: (expression
+            (call_expression
+              callee: (expression (primary_expression (identifier))))))))))

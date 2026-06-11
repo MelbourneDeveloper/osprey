@@ -643,7 +643,7 @@ function parseCompilerErrors(stderr: string, stdout: string, error: Error | unde
       continue;
     }
     
-    // Pattern: "token recognition error" (ANTLR specific)
+    // Pattern: "token recognition error" (legacy lexer error format)
     if (line.includes('token recognition error')) {
       // Extract line number if available
       const tokenMatch = line.match(/line (\d+):(\d+)/);

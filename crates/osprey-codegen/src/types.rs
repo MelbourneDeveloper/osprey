@@ -1,0 +1,75 @@
+//! Bridges Hindley-Milner inference ([`osprey_types`]) to the backend's LLVM
+//! type lattice. Inference runs to completion before emission starts and lands
+//! in a finished table ([`ProgramTypes`]); this module just maps an inferred
+//! [`Type`] to the [`LType`] the value travels as, so emission never threads
+//! inference state. Unresolved/polymorphic variables degrade to `i64`, matching
+//! the C runtime's uniform machine-word representation for generic values.
+
+use crate::llty::LType;
+use osprey_types::{names, Type};
+
+/// Map an inferred type to the LLVM type a runtime value of it travels as.
+pub fn ltype_of(ty: &Type) -> LType {
+    match ty {
+        Type::Con { name, args } => ltype_of_con(name, args),
+        // A function reference is a code pointer; values never hold one directly
+        // in the lowered programs (calls are direct), so treat as a handle.
+        // Records and unions are runtime handles too.
+        Type::Fun { .. } | Type::Record { .. } | Type::Union { .. } => LType::Ptr,
+        Type::Var(_) => LType::I64,
+    }
+}
+
+fn ltype_of_con(name: &str, args: &[Type]) -> LType {
+    match name {
+        // Int, unit and any travel as a machine word — as do fiber and channel
+        // handles, which are runtime ids drawn from one shared counter, not
+        // pointers.
+        names::INT | names::UNIT | names::ANY | names::FIBER | names::CHANNEL => LType::I64,
+        names::FLOAT => LType::Double,
+        names::STRING => LType::Str,
+        names::BOOL => LType::I1,
+        // Result<T, E> at a value site carries its unwrapped success value (the
+        // auto-unwrap the type checker already applied), so it travels as T.
+        names::RESULT => args.first().map_or(LType::I64, ltype_of),
+        // Collections and pointers — opaque runtime handles. A nullary user
+        // type name (nominal record/union referenced by name) is also an
+        // opaque handle, so the wildcard covers them all.
+        _ => LType::Ptr,
+    }
+}
+
+/// The Osprey owner type name to tag an aggregate value with, if `ty` is a
+/// nominal record/union (so field access / match can recover its layout).
+/// Scalars, collections and `Result` (auto-unwrapped at value sites) carry no
+/// owner.
+pub fn owner_name(ty: &Type) -> Option<String> {
+    match ty {
+        Type::Record { name, .. } | Type::Union { name, .. } => Some(name.clone()),
+        Type::Con { name, .. } => match name.as_str() {
+            names::INT
+            | names::FLOAT
+            | names::STRING
+            | names::BOOL
+            | names::UNIT
+            | names::ANY
+            | names::RESULT
+            | names::LIST
+            | names::MAP
+            | names::FIBER
+            | names::CHANNEL
+            | names::PTR => None,
+            other => Some(other.to_string()),
+        },
+        _ => None,
+    }
+}
+
+/// When `ty` is `Result<T, E>`, the inner success type `T` as an [`LType`].
+/// Used to carry the `{ T, i8 }*` Result block across call/return boundaries.
+pub fn result_inner(ty: &Type) -> Option<LType> {
+    match ty {
+        Type::Con { name, args } if name == names::RESULT => args.first().map(ltype_of),
+        _ => None,
+    }
+}

@@ -20,9 +20,9 @@ class Osprey < Formula
   end
 
   test do
-    # Test that the compiler can show help
-    output = shell_output("#{bin}/osprey --help 2>&1", 0)
-    assert_match "Osprey", output
+    # Test that the compiler reports its version
+    output = shell_output("#{bin}/osprey --version 2>&1", 0)
+    assert_match "osprey", output
     
     # Test that runtime libraries are installed
     assert_predicate lib/"libfiber_runtime.a", :exist?

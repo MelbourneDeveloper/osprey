@@ -1,0 +1,92 @@
+# Cargo workspace for the Osprey compiler (osprey-rs). Small crates keep
+# incremental builds fast (no single crate over ~5K LOC; LLVM stays out of the
+# build — IR is emitted as text and handed to clang).
+[workspace]
+resolver = "2"
+members = [
+    "tree-sitter-osprey",
+    "crates/osprey-ast",
+    "crates/osprey-syntax",
+    "crates/osprey-types",
+    "crates/osprey-codegen",
+    "crates/osprey-runtime-sys",
+    "crates/osprey-cli",
+]
+
+[workspace.package]
+version = "0.0.0-dev"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/MelbourneDeveloper/osprey"
+
+[workspace.dependencies]
+tree-sitter = "0.24"
+tree-sitter-language = "0.1"
+osprey-ast = { path = "crates/osprey-ast" }
+osprey-syntax = { path = "crates/osprey-syntax" }
+osprey-types = { path = "crates/osprey-types" }
+osprey-codegen = { path = "crates/osprey-codegen" }
+tree-sitter-osprey = { path = "tree-sitter-osprey" }
+
+# Maximum-strictness lints. Every crate opts in with `[lints] workspace = true`.
+# CI runs `cargo clippy --all-targets -- -D warnings`, so every entry below is a
+# hard build failure, not a warning. Tighten freely; never loosen without a
+# written reason. `#[allow(...)]` is banned (`allow_attributes = "deny"`) — use
+# `#[expect(...)]` so a stale suppression is itself an error.
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+missing_debug_implementations = "deny"
+unused_imports = "deny"
+dead_code = "deny"
+unused_variables = "deny"
+unused_mut = "deny"
+unused_assignments = "deny"
+unused_results = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+elided_lifetimes_in_paths = "deny"
+# A stale #[expect] must be an error, not a silent dead suppression.
+unfulfilled_lint_expectations = "deny"
+future_incompatible = { level = "deny", priority = -1 }
+nonstandard_style = { level = "deny", priority = -1 }
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[workspace.lints.clippy]
+# `all` + `pedantic` at maximum; restriction lints cherry-picked (the full
+# restriction group contains mutually-contradictory lints).
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+# Panics are bugs — return Result<T, E> and pattern-match instead.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+# Out-of-bounds indexing panics — use .get()/.get_mut().
+indexing_slicing = "deny"
+# Silent lossy `as` casts — use .into()/.try_into()/From/TryFrom.
+as_conversions = "deny"
+# Forgotten debug macros leaking to stderr.
+dbg_macro = "deny"
+# Force #[expect] over #[allow] so stale suppressions are errors, not hidden.
+allow_attributes = "deny"
+# Don't discard the error cause in .map_err(|_| ...) — preserve provenance.
+map_err_ignore = "deny"
+# Make ref-counted clones visually explicit: Rc::clone(&x), not x.clone().
+clone_on_ref_ptr = "deny"
+# NOTE: `arithmetic_side_effects` / `float_arithmetic` are deliberately NOT
+# denied — the codegen crate does pervasive width/offset math while emitting
+# textual LLVM IR, and denying them workspace-wide just forces `#[expect]`
+# noise. Add `#![deny(...)]` at a specific crate root if one ever needs it.
+
+# Fast-compile profile for `cargo llvm-cov` / test runs. Use with
+# `cargo llvm-cov --profile ci`: trades runtime speed for much faster builds.
+[profile.ci]
+inherits = "dev"
+opt-level = 1
+codegen-units = 16
+lto = false
+debug = 2
+incremental = false

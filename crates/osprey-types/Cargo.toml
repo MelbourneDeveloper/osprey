@@ -1,0 +1,16 @@
+[package]
+name = "osprey-types"
+description = "Hindley-Milner type inference for Osprey"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+osprey-ast.workspace = true
+
+[dev-dependencies]
+osprey-syntax.workspace = true
+
+[lints]
+workspace = true

@@ -74,27 +74,18 @@ jobs:
             os: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
 
-      # ---- Linux: full build (compiler + C runtimes + Rust interop) ----------
-      - name: Build (Linux)
-        if: runner.os == 'Linux'
+      # ---- Linux + macOS: toolchain + C archives + stamped binary -------------
+      - name: Build (Linux/macOS)
+        if: runner.os != 'Windows'
         uses: ./.github/actions/setup-osprey-compiler
+        with:
+          version: ${{ needs.version.outputs.version }}
 
-      # ---- macOS: LLVM + OpenSSL via Homebrew, then full build ---------------
-      - name: Build (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          set -euo pipefail
-          brew install llvm openssl@3 pkg-config
-          export PATH="$(brew --prefix llvm)/bin:$PATH"
-          export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig"
-          make -C compiler build-no-lint VERSION="${{ needs.version.outputs.version }}"
-
-      # ---- Windows: MSYS2 UCRT64 core build [WINDOWS-PORT-PHASE1] -------------
+      # ---- Windows: MSYS2 (MinGW C runtime) + cargo -------------------------
+      - name: Install Rust (Windows)
+        if: runner.os == 'Windows'
+        uses: dtolnay/rust-toolchain@stable
       - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
@@ -107,10 +98,15 @@ jobs:
             mingw-w64-ucrt-x86_64-llvm
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-openssl
-      - name: Build (Windows core)
+      - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
-        run: make -C compiler build-windows-core CC=gcc AR=ar VERSION="${{ needs.version.outputs.version }}"
+        env:
+          OSPREY_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          make _runtime CC=gcc AR=ar SHELL=/usr/bin/bash MKDIR='mkdir -p'
+          cargo build --release -p osprey-cli
 
       # ---- Verify version contract [SWR-VERSION-CLI-OUTPUT] ------------------
       - name: Verify version
@@ -118,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           exe=""; [ "${{ runner.os }}" = "Windows" ] && exe=".exe"
-          "compiler/bin/osprey${exe}" --version | grep -Fx "osprey ${{ needs.version.outputs.version }}"
+          "target/release/osprey${exe}" --version | grep -Fx "osprey ${{ needs.version.outputs.version }}"
 
       # ---- Package: binary + runtime libs -> tar.gz + sha256 -----------------
       - name: Package
@@ -130,8 +126,8 @@ jobs:
           exe=""; [ "${{ runner.os }}" = "Windows" ] && exe=".exe"
           staging="osprey-$v-$plat"
           mkdir -p "dist/$staging"
-          cp "compiler/bin/osprey${exe}" "dist/$staging/"
-          cp compiler/bin/lib*.a "dist/$staging/" 2>/dev/null || true
+          cp "target/release/osprey${exe}" "dist/$staging/"
+          cp compiler/lib/lib*.a "dist/$staging/" 2>/dev/null || cp compiler/bin/lib*.a "dist/$staging/" 2>/dev/null || true
           tar -czf "dist/$staging.tar.gz" -C dist "$staging"
           ( cd dist && shasum -a 256 "$staging.tar.gz" | tee "$staging.tar.gz.sha256" )
 

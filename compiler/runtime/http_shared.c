@@ -185,7 +185,10 @@ int send_websocket_frame(int socket_fd, const char *payload) {
   memcpy(frame + frame_len, payload, payload_len);
   frame_len += payload_len;
 
-  return send(socket_fd, frame, frame_len, 0);
+  // `frame` is unsigned char; Winsock's send() takes `const char *` (POSIX
+  // takes `const void *`). Cast at the call site — portable both ways, mirrors
+  // the setsockopt/accept/bind casts. [WINDOWS-PORT-PHASE2]
+  return send(socket_fd, (const char *)frame, frame_len, 0);
 }
 
 // WebSocket frame parsing (shared)

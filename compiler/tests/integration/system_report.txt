@@ -1,4 +1,0 @@
-=== SYSTEM REPORT ===
-App: FILE_NOT_FOUND
-Settings: FILE_NOT_FOUND
-=== END ===

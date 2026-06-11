@@ -5,9 +5,9 @@ set -e
 echo "🍺 Setting up Osprey Homebrew Tap..."
 
 # Check dependencies
-if [ ! -f "../compiler/osprey" ]; then
-    echo "✗ No osprey binary found in ../compiler/osprey"
-    echo "Build first: make build"
+if [ ! -f "../target/release/osprey" ]; then
+    echo "✗ No osprey binary found in ../target/release/osprey"
+    echo "Build first from the repo root: make build (or cargo build --release)"
     exit 1
 fi
 

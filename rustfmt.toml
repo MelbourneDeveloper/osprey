@@ -1,0 +1,7 @@
+# Stable rustfmt config. CI runs `cargo fmt --all --check` on the stable
+# toolchain, so only stable options live here — nightly-only options (e.g.
+# imports_granularity, group_imports) are silently ignored on stable and would
+# make `make fmt` deterministic only on nightly. Keep this stable-clean.
+edition = "2021"
+max_width = 100
+use_small_heuristics = "Default"

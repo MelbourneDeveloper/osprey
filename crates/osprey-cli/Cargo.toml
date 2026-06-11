@@ -1,0 +1,20 @@
+[package]
+name = "osprey-cli"
+description = "The Osprey compiler command-line front end"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "osprey"
+path = "src/main.rs"
+
+[dependencies]
+osprey-ast = { workspace = true }
+osprey-syntax = { workspace = true }
+osprey-types = { workspace = true }
+osprey-codegen = { workspace = true }
+
+[lints]
+workspace = true
