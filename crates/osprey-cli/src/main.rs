@@ -303,6 +303,15 @@ fn link_args(ir: &str, source: &str) -> Vec<String> {
         args.extend(openssl_flags());
     }
 
+    // Windows (MinGW UCRT64): the C runtime's fibers are winpthreads-backed, so
+    // `pthread_*` must be linked explicitly — unlike Linux/macOS where libc /
+    // libSystem provide them implicitly. Must come AFTER the archive that
+    // references them. Compiled out on Unix.
+    #[cfg(windows)]
+    {
+        args.push("-lpthread".to_string());
+    }
+
     // FFI directives: `// @link: sqlite3` -> `-lsqlite3`, `// @linkdir: P` -> `-LP`.
     for line in source.lines() {
         if let Some(lib) = directive(line, "link") {
