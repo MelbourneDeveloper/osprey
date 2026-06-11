@@ -270,7 +270,7 @@ fn bind_variant_fields(cg: &mut Codegen, disc: &Value, variant: &str, pat_fields
             continue;
         };
         let loaded = crate::aggregate::load_field(cg, &struct_ty, src.as_str(), idx + 1, *fty);
-        let owner = cg.ctor_field_written(variant, bind_name);
+        let owner = cg.ctor_field_owner(variant, bind_name);
         cg.bind(
             bind_name.clone(),
             Value::new(loaded, *fty).with_owner(owner),

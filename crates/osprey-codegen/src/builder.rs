@@ -4,8 +4,8 @@
 //! text; the AST-walking lives in `lower.rs`.
 
 use crate::llty::{LType, Value};
-use crate::types::{ltype_of, ltype_of_name};
-use osprey_types::{CtorLayout, ProgramTypes, Type};
+use crate::types::ltype_of;
+use osprey_types::{ProgramTypes, Type};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 
@@ -38,7 +38,6 @@ pub struct Codegen {
     /// (`let f = fn(x) => …` then `f(y)`), since the backend lowers no closures.
     pub(crate) lambdas: HashMap<String, (Vec<osprey_ast::Parameter>, osprey_ast::Expr)>,
     /// Whether the fiber-result global table has been emitted yet.
-    pub(crate) fiber_table_emitted: bool,
     /// Parsed `effect` operation signatures, keyed `"Effect.operation"`.
     pub(crate) effect_ops: HashMap<String, crate::effects::OpSig>,
     /// Monotonic id giving each emitted handler function a unique name.
@@ -107,7 +106,6 @@ impl Codegen {
             prog,
             pending_iter_ops: Vec::new(),
             lambdas: HashMap::new(),
-            fiber_table_emitted: false,
             effect_ops: HashMap::new(),
             handler_count: 0,
             lambda_count: 0,
@@ -294,7 +292,7 @@ impl Codegen {
         let fields = c
             .fields
             .iter()
-            .map(|(f, t)| (f.clone(), union_field_ltype(c, t)))
+            .map(|(f, t)| (f.clone(), ltype_of(t)))
             .collect();
         Some(CtorView {
             owner: c.owner.clone(),
@@ -319,7 +317,7 @@ impl Codegen {
                 c.fields
                     .iter()
                     .find(|(f, _)| f == field)
-                    .map(|(_, t)| (name, ltype_of_name(t)))
+                    .map(|(_, t)| (name, ltype_of(t)))
             })
             .collect();
         candidates.sort_by(|a, b| a.0.cmp(b.0));
@@ -347,10 +345,10 @@ impl Codegen {
     }
 
     /// The owner type name to tag a loaded aggregate field with: the field's
-    /// written type when that type is itself a known record/union, else `None`
+    /// resolved type when that type is itself a known record/union, else `None`
     /// (scalars carry no owner).
-    pub(crate) fn ctor_field_written(&self, owner: &str, field: &str) -> Option<String> {
-        let written = self
+    pub(crate) fn ctor_field_owner(&self, owner: &str, field: &str) -> Option<String> {
+        let ty = self
             .prog
             .ctors
             .get(owner)?
@@ -358,9 +356,9 @@ impl Codegen {
             .iter()
             .find(|(f, _)| f == field)
             .map(|(_, t)| t.clone())?;
-        let head = written.split(['<', '[']).next().unwrap_or(&written).trim();
-        if self.prog.ctors.contains_key(head) || self.prog.unions.contains_key(head) {
-            Some(head.to_string())
+        let head = crate::types::owner_name(&ty)?;
+        if self.prog.ctors.contains_key(&head) || self.prog.unions.contains_key(&head) {
+            Some(head)
         } else {
             None
         }
@@ -523,20 +521,6 @@ impl Codegen {
 }
 
 /// The LLVM type of a constructor field. A type-parameter field of a *union
-/// variant* (`Full { value: T }` of a generic union) boxes uniformly through
-/// `i64` — the payload (an int directly, a pointer `ptrtoint`-ed) rides in one
-/// slot regardless of the instantiating type, so a single block layout serves
-/// every instantiation of the union. A generic *record* instead gets a concrete
-/// per-construction layout (via `gen_object`), so it keeps its written field
-/// type here.
-fn union_field_ltype(c: &CtorLayout, written: &str) -> LType {
-    if !c.owner_is_record && c.type_params.iter().any(|tp| tp == written) {
-        LType::I64
-    } else {
-        ltype_of_name(written)
-    }
-}
-
 /// Whether a (fully substituted) inferred type still mentions a type variable —
 /// the mark of a polymorphic signature the backend must specialise per use.
 fn has_type_var(ty: &Type) -> bool {

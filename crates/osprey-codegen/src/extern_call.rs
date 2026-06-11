@@ -53,6 +53,9 @@ fn lookup(name: &str) -> Option<Sig> {
         "spawnProcess" => sig("spawn_process_with_handler", &[Str, Ptr], Ret::ResultInt),
         "awaitProcess" => sig("fiber_await_process", &[I64], Ret::Int),
         "cleanupProcess" => sig("fiber_cleanup_process", &[I64], Ret::Unit),
+        // `sleep(ms)` is MILLISECONDS via the fiber runtime — NOT libc
+        // `sleep(seconds)`, which an unmapped fall-through would link.
+        "sleep" => sig("fiber_sleep", &[I64], Ret::Int),
         // --- HTTP server/client (http_*_runtime.c); httpListen arg1 is the handler ---
         "httpCreateServer" => sig("http_create_server", &[I64, Str], Ret::Int),
         "httpListen" => sig("http_listen", &[I64, Ptr], Ret::Int),

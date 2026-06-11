@@ -21,8 +21,19 @@ pub struct CtorLayout {
     /// backend can tell a generic field (`data: T`) — whose concrete LLVM type
     /// is fixed per construction — from a nominal one (`origin: Point`).
     pub type_params: Vec<String>,
-    /// Ordered `(field name, field type as written)`.
-    pub fields: Vec<(String, String)>,
+    /// Ordered `(field name, resolved field type)` — a generic field
+    /// (`data: T`) resolves to a [`Type::Var`], which the backend lowers to its
+    /// uniform boxed representation.
+    pub fields: Vec<(String, Type)>,
+}
+
+/// One effect operation's resolved signature.
+#[derive(Debug, Clone)]
+pub struct OpType {
+    /// Parameter types, in declaration order.
+    pub params: Vec<Type>,
+    /// The operation's return type.
+    pub ret: Type,
 }
 
 /// Everything the code generator needs from inference: per-function signatures
@@ -36,6 +47,8 @@ pub struct ProgramTypes {
     pub ctors: HashMap<String, CtorLayout>,
     /// Union type name → ordered variant constructor names (tag order).
     pub unions: HashMap<String, Vec<String>>,
+    /// Effect name → operation name → resolved signature.
+    pub effects: HashMap<String, HashMap<String, OpType>>,
 }
 
 impl ProgramTypes {

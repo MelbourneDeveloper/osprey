@@ -177,7 +177,7 @@ impl Checker {
             .effects
             .get(effect)
             .and_then(|ops| ops.get(operation))
-            .cloned();
+            .map(|op| op.ret.clone());
         ret.unwrap_or_else(|| self.ctx.fresh())
     }
 

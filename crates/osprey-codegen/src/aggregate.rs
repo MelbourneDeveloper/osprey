@@ -247,7 +247,7 @@ pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> 
         tv.operand
     ));
     let loaded = load_field(cg, &struct_ty, src.as_str(), idx + 1, fty);
-    let owner = cg.ctor_field_written(&owner, field);
+    let owner = cg.ctor_field_owner(&owner, field);
     Ok(Value::new(loaded, fty).with_owner(owner))
 }
 

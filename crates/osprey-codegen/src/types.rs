@@ -73,21 +73,3 @@ pub fn result_inner(ty: &Type) -> Option<LType> {
         _ => None,
     }
 }
-
-/// Map a field/parameter type *as written* (the string forms stored in
-/// constructor layouts: `int`, `string`, `float`, `bool`, `Point`, …) to an
-/// `LType`. Anything not a known scalar is a runtime handle.
-pub fn ltype_of_name(written: &str) -> LType {
-    // A generic application like `List<int>` keeps only its head for layout.
-    let head = written.split(['<', '[']).next().unwrap_or(written).trim();
-    match head {
-        names::INT | names::UNIT | names::ANY => LType::I64,
-        // Fiber and channel handles are runtime ids drawn from one shared
-        // counter — they travel as plain integers, not pointers.
-        names::FIBER | names::CHANNEL => LType::I64,
-        names::FLOAT => LType::Double,
-        names::STRING => LType::Str,
-        names::BOOL => LType::I1,
-        _ => LType::Ptr,
-    }
-}

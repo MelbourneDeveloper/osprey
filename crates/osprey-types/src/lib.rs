@@ -25,7 +25,7 @@ mod unify;
 
 pub use check::{check_program, infer_program};
 pub use error::TypeError;
-pub use info::{CtorLayout, ProgramTypes};
+pub use info::{CtorLayout, OpType, ProgramTypes};
 pub use ty::{names, Scheme, Type, VarId};
 
 #[cfg(test)]

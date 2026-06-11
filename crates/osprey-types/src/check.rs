@@ -55,8 +55,8 @@ pub struct Checker {
     pub(crate) ctx: InferCtx,
     pub(crate) errors: Vec<TypeError>,
     pub(crate) ctors: HashMap<String, CtorInfo>,
-    /// Effect name -> operation name -> return type.
-    pub(crate) effects: HashMap<String, HashMap<String, Type>>,
+    /// Effect name -> operation name -> resolved signature.
+    pub(crate) effects: HashMap<String, HashMap<String, crate::info::OpType>>,
     /// Union/Result type name -> its variant constructor names (exhaustiveness).
     pub(crate) union_variants: HashMap<String, Vec<String>>,
     /// Function/extern name -> declared parameter names (for named arguments).
@@ -238,8 +238,8 @@ impl Checker {
     fn collect_effect(&mut self, name: &str, operations: &[EffectOperation]) {
         let mut ops = HashMap::new();
         for op in operations {
-            let (_, ret) = parse_fn_sig(&op.ty, &HashMap::new());
-            let _ = ops.insert(op.name.clone(), ret);
+            let (params, ret) = parse_fn_sig(&op.ty, &HashMap::new());
+            let _ = ops.insert(op.name.clone(), crate::info::OpType { params, ret });
         }
         let _ = self.effects.insert(name.to_string(), ops);
     }
@@ -485,13 +485,26 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
         .ctors
         .iter()
         .map(|(name, info)| {
+            // A declared type parameter resolves to a type variable — the
+            // backend lowers a variable to its uniform boxed representation,
+            // which is exactly the generic-payload rule.
+            let pmap: HashMap<String, Type> = info
+                .type_params
+                .iter()
+                .map(|p| (p.clone(), Type::Var(0)))
+                .collect();
+            let fields = info
+                .fields
+                .iter()
+                .map(|(f, written)| (f.clone(), type_name_to_type(written, &pmap)))
+                .collect();
             (
                 name.clone(),
                 CtorLayout {
                     owner: info.owner.clone(),
                     owner_is_record: info.owner_is_record,
                     type_params: info.type_params.clone(),
-                    fields: info.fields.clone(),
+                    fields,
                 },
             )
         })
@@ -501,5 +514,6 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
         functions,
         ctors,
         unions,
+        effects: checker.effects.clone(),
     }
 }

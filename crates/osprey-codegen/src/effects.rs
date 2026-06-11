@@ -12,7 +12,7 @@ use crate::cast::coerce_to;
 use crate::error::Result;
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use crate::types::ltype_of_name;
+use crate::types::{ltype_of, result_inner};
 use osprey_ast::{Expr, HandlerArm};
 
 /// A parsed effect-operation signature: parameter types, the result LLVM type,
@@ -46,85 +46,20 @@ impl OpSig {
     }
 }
 
-/// Parse an effect operation's written type (`fn(T1, T2) -> R`) into an [`OpSig`].
-pub(crate) fn parse_op_sig(ty: &str) -> OpSig {
-    let inner = ty.trim();
-    let open = inner.find('(');
-    let close = inner.rfind(')');
-    let (params, ret) = match (open, close) {
-        (Some(o), Some(c)) if c > o => {
-            let params = split_top(&inner[o + 1..c]);
-            let ret = inner[c + 1..]
-                .trim_start()
-                .trim_start_matches("->")
-                .trim()
-                .to_string();
-            (params, ret)
-        }
-        _ => (Vec::new(), inner.to_string()),
+/// Build an [`OpSig`] from inference's resolved operation signature — the one
+/// source of truth for effect types (no string re-parsing in the backend).
+pub(crate) fn op_sig_of(op: &osprey_types::OpType) -> OpSig {
+    let inner = result_inner(&op.ret);
+    let ret = if inner.is_some() {
+        LType::Ptr
+    } else {
+        ltype_of(&op.ret)
     };
-    let param_tys = params.iter().map(|p| ltype_of_name(p)).collect();
-    let (ret_lty, result_inner) = parse_ret(&ret);
     OpSig {
-        params: param_tys,
-        ret: ret_lty,
-        ret_result_inner: result_inner,
+        params: op.params.iter().map(ltype_of).collect(),
+        ret,
+        ret_result_inner: inner,
     }
-}
-
-/// Map a return-type spelling to `(carried LLVM type, Result success inner)`.
-/// `Unit` carries an `i64 0`; a `Result<T, _>` carries the `{ T, i8 }*` block.
-fn parse_ret(ret: &str) -> (LType, Option<LType>) {
-    let open = ret.find('<').or_else(|| ret.find('['));
-    let head = match open {
-        Some(i) => ret[..i].trim(),
-        None => ret.trim(),
-    };
-    if head != "Result" {
-        return (ltype_of_name(head), None);
-    }
-    // Result<T, E> — the success inner type T is the first generic argument.
-    let inner = open
-        .map(|i| {
-            let body = ret[i + 1..]
-                .trim_end()
-                .trim_end_matches('>')
-                .trim_end_matches(']');
-            split_top(body)
-        })
-        .and_then(|args| args.into_iter().next())
-        .map_or(LType::I64, |a| ltype_of_name(&a));
-    (LType::Ptr, Some(inner))
-}
-
-/// Split a comma-separated type list at the top bracket level.
-fn split_top(s: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut depth = 0i32;
-    let mut cur = String::new();
-    for ch in s.chars() {
-        match ch {
-            '<' | '[' | '(' => {
-                depth += 1;
-                cur.push(ch);
-            }
-            '>' | ']' | ')' => {
-                depth -= 1;
-                cur.push(ch);
-            }
-            ',' if depth == 0 => {
-                if !cur.trim().is_empty() {
-                    out.push(cur.trim().to_string());
-                }
-                cur.clear();
-            }
-            _ => cur.push(ch),
-        }
-    }
-    if !cur.trim().is_empty() {
-        out.push(cur.trim().to_string());
-    }
-    out
 }
 
 fn declare_stack(cg: &mut Codegen) {

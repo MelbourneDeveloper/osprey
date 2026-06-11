@@ -44,10 +44,12 @@ pub fn compile_program(program: &Program) -> Result<String> {
             }
             Stmt::Effect { name, operations } => {
                 for op in operations {
-                    cg.register_effect_op(
-                        format!("{name}.{}", op.name),
-                        crate::effects::parse_op_sig(&op.ty),
-                    );
+                    if let Some(sig) = cg.prog.effects.get(name).and_then(|m| m.get(&op.name)) {
+                        cg.register_effect_op(
+                            format!("{name}.{}", op.name),
+                            crate::effects::op_sig_of(sig),
+                        );
+                    }
                 }
             }
             _ => {}
