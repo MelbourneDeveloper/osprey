@@ -105,3 +105,8 @@ compiler/temp_test.txt
 compiler/test.log
 
 target/
+
+
+.deslop-cache/
+
+.vscode/code-navigator/
