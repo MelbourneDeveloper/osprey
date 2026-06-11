@@ -407,6 +407,7 @@ impl Checker {
                     self.push_assign(&dt.clone(), &vt);
                 }
             }
+            self.check_ctor_fields(name, fields, &dmap);
             if is_record {
                 Type::Record {
                     name: owner,
@@ -428,6 +429,31 @@ impl Checker {
             self.errors
                 .push(TypeError::new(format!("unknown constructor `{name}`")));
             self.ctx.fresh()
+        }
+    }
+
+    /// A construction must supply exactly the variant's declared fields:
+    /// `Success { data: 42 }` is missing `value` and names an unknown field.
+    fn check_ctor_fields(
+        &mut self,
+        name: &str,
+        fields: &[FieldAssignment],
+        dmap: &BTreeMap<String, Type>,
+    ) {
+        for fa in fields {
+            if !dmap.contains_key(&fa.name) {
+                self.errors.push(TypeError::new(format!(
+                    "constructor `{name}` has no field `{}`",
+                    fa.name
+                )));
+            }
+        }
+        for dname in dmap.keys() {
+            if !fields.iter().any(|fa| &fa.name == dname) {
+                self.errors.push(TypeError::new(format!(
+                    "constructor `{name}` requires field `{dname}`"
+                )));
+            }
         }
     }
 

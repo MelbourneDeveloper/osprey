@@ -1,7 +1,7 @@
-# Build stage for Osprey compiler
-FROM golang:1.23-bookworm AS osprey-builder
+# Build stage for the Osprey compiler (Rust: osprey-rs) + the pure-C runtime
+FROM rust:1-bookworm AS osprey-builder
 
-# Install build dependencies including gcc for the fiber runtime and OpenSSL for HTTP runtime
+# Build dependencies: gcc/make for the C runtime archives, OpenSSL for the HTTP runtime
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     git \
@@ -14,15 +14,18 @@ RUN apt-get update && apt-get upgrade -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Osprey source code from the compiler directory
-COPY compiler /workspace
+# Copy the Rust workspace + the C runtime sources (root Makefile builds both)
+COPY Cargo.toml Cargo.lock Makefile rustfmt.toml clippy.toml /workspace/
+COPY crates /workspace/crates
+COPY tree-sitter-osprey /workspace/tree-sitter-osprey
+COPY compiler/runtime /workspace/compiler/runtime
 WORKDIR /workspace
 
-# Build all runtime libraries
-RUN make fiber-runtime http-runtime websocket-runtime system-runtime
+# Build the C runtime archives (compiler/lib/lib*_runtime.a)
+RUN make _runtime
 
-# Build the Osprey compiler directly without linting
-RUN go build -o bin/osprey ./cmd/osprey
+# Build the Rust compiler binary (release)
+RUN cargo build --release -p osprey-cli
 
 # Build stage for LSP server
 FROM node:20-bookworm AS lsp-builder

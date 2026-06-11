@@ -41,9 +41,9 @@ fn is_result_variant(name: &str) -> bool {
 /// ternary/Elvis desugar produces.
 fn all_bool_literal_arms(arms: &[MatchArm]) -> bool {
     !arms.is_empty()
-        && arms.iter().all(|a| {
-            matches!(&a.pattern, Pattern::Literal(e) if matches!(e.as_ref(), Expr::Bool(_)))
-        })
+        && arms.iter().all(
+            |a| matches!(&a.pattern, Pattern::Literal(e) if matches!(e.as_ref(), Expr::Bool(_))),
+        )
 }
 
 impl Checker {
@@ -145,7 +145,33 @@ impl Checker {
                 return;
             }
         }
+        if let Some(owner) = self.unknown_variant_owner(name, disc) {
+            self.errors.push(TypeError::new(format!(
+                "unknown variant in match expression: variant `{name}` is not defined in type `{owner}`"
+            )));
+            return;
+        }
         local.insert(name.to_string(), Scheme::mono(disc.clone()));
+    }
+
+    /// When `name` looks like a variant (capitalised) but the discriminant is a
+    /// known union that has no such variant, return the union's name — a
+    /// lower-case identifier is an ordinary catch-all binding instead.
+    fn unknown_variant_owner(&mut self, name: &str, disc: &Type) -> Option<String> {
+        if !name.chars().next().is_some_and(char::is_uppercase) {
+            return None;
+        }
+        match self.ctx.prune(disc) {
+            Type::Con { name: owner, .. } => {
+                let variants = self.union_variants.get(&owner)?;
+                if variants.iter().any(|v| v == name) {
+                    None
+                } else {
+                    Some(owner)
+                }
+            }
+            _ => None,
+        }
     }
 
     fn bind_constructor(
@@ -164,6 +190,9 @@ impl Checker {
             return;
         }
         let Some((args, declared, owner, is_record)) = self.ctor_instance(name) else {
+            self.errors.push(TypeError::new(format!(
+                "unknown constructor `{name}` in match pattern"
+            )));
             for f in fields {
                 let fv = self.ctx.fresh();
                 local.insert(f.clone(), Scheme::mono(fv));

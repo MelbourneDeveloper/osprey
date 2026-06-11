@@ -107,12 +107,10 @@ impl Checker {
                 fields: vec![("message".into(), "string".into())],
             },
         );
-        let _ = self
-            .union_variants
-            .insert(
-                names::RESULT.into(),
-                vec![names::SUCCESS.into(), names::ERROR.into()],
-            );
+        let _ = self.union_variants.insert(
+            names::RESULT.into(),
+            vec![names::SUCCESS.into(), names::ERROR.into()],
+        );
         // Built-in HttpResponse record returned by HTTP request handlers.
         let _ = self.ctors.insert(
             "HttpResponse".into(),

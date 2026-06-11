@@ -22,17 +22,19 @@ pub fn ltype_of(ty: &Type) -> LType {
 
 fn ltype_of_con(name: &str, args: &[Type]) -> LType {
     match name {
-        // Int, unit and any all travel as a machine word.
-        names::INT | names::UNIT | names::ANY => LType::I64,
+        // Int, unit and any travel as a machine word — as do fiber and channel
+        // handles, which are runtime ids drawn from one shared counter, not
+        // pointers.
+        names::INT | names::UNIT | names::ANY | names::FIBER | names::CHANNEL => LType::I64,
         names::FLOAT => LType::Double,
         names::STRING => LType::Str,
         names::BOOL => LType::I1,
         // Result<T, E> at a value site carries its unwrapped success value (the
         // auto-unwrap the type checker already applied), so it travels as T.
         names::RESULT => args.first().map_or(LType::I64, ltype_of),
-        // Collections, fibers, channels, pointers — opaque runtime handles.
-        // A nullary user type name (nominal record/union referenced by name)
-        // is also an opaque handle, so the wildcard covers them all.
+        // Collections and pointers — opaque runtime handles. A nullary user
+        // type name (nominal record/union referenced by name) is also an
+        // opaque handle, so the wildcard covers them all.
         _ => LType::Ptr,
     }
 }
@@ -80,6 +82,9 @@ pub fn ltype_of_name(written: &str) -> LType {
     let head = written.split(['<', '[']).next().unwrap_or(written).trim();
     match head {
         names::INT | names::UNIT | names::ANY => LType::I64,
+        // Fiber and channel handles are runtime ids drawn from one shared
+        // counter — they travel as plain integers, not pointers.
+        names::FIBER | names::CHANNEL => LType::I64,
         names::FLOAT => LType::Double,
         names::STRING => LType::Str,
         names::BOOL => LType::I1,

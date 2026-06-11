@@ -5,7 +5,8 @@
 //! are the contract: each table entry below must match its C signature exactly.
 //! A named function passed as a callback (`spawnProcess` / `httpListen` handler)
 //! is lowered to a code pointer by `gen_expr`'s Identifier arm. Implements
-//! [BUILTIN-FILE], [BUILTIN-PROCESS], [BUILTIN-HTTP], [BUILTIN-JSON].
+//! [BUILTIN-FILE], [BUILTIN-PROCESS], [BUILTIN-HTTP], [BUILTIN-JSON],
+//! [BUILTIN-TERM].
 
 use crate::builder::Codegen;
 use crate::error::Result;
@@ -72,6 +73,15 @@ fn lookup(name: &str) -> Option<Sig> {
         "jsonGet" => sig("json_get", &[I64, Str], Ret::ResultStr(None)),
         "jsonLength" => sig("json_length", &[I64, Str], Ret::Int),
         "jsonFree" => sig("json_free", &[I64], Ret::ResultInt),
+        // --- terminal control (term_runtime.c) [BUILTIN-TERM] ---
+        "termRawMode" => sig("term_raw_mode", &[I64], Ret::Int),
+        "termCols" => sig("term_cols", &[], Ret::Int),
+        "termRows" => sig("term_rows", &[], Ret::Int),
+        "termReadKey" => sig("term_read_key", &[], Ret::ResultStr(None)),
+        "termClear" => sig("term_clear", &[], Ret::Int),
+        "termMoveCursor" => sig("term_move_cursor", &[I64, I64], Ret::Int),
+        "termHideCursor" => sig("term_hide_cursor", &[], Ret::Int),
+        "termShowCursor" => sig("term_show_cursor", &[], Ret::Int),
         _ => return None,
     })
 }

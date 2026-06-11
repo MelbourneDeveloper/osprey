@@ -182,9 +182,12 @@ jobs:
         run: cargo test --workspace
 
       - name: Differential golden tests (osprey-rs --run vs .expectedoutput)
-        # Must be 41/41 with zero examples lacking an expected output.
+        # Must be 41/41 with zero examples lacking an expected output, and the
+        # must-reject suite (examples/failscompilation) must stay within the
+        # FC_EXPECTED_ESCAPES ratchet declared in the harness.
         run: |
           out=$(zsh crates/diff_examples.sh)
           echo "$out"
           echo "$out" | grep -Eq 'FAIL=0 '  || { echo '::error::differential test FAILures'; exit 1; }
           echo "$out" | grep -Eq 'NOEXP=0 ' || { echo '::error::an example has no .expectedoutput'; exit 1; }
+          echo "$out" | grep -q  'FC_OK'    || { echo '::error::must-reject ratchet exceeded (ill-formed programs accepted)'; exit 1; }

@@ -278,6 +278,12 @@ fn websocket(e: &mut TypeEnv) {
 fn terminal(e: &mut TypeEnv) {
     mono(e, "termReadKey", vec![], res(s()));
     mono(e, "termRawMode", vec![i()], u());
+    mono(e, "termCols", vec![], i());
+    mono(e, "termRows", vec![], i());
+    mono(e, "termClear", vec![], i());
+    mono(e, "termMoveCursor", vec![i(), i()], i());
+    mono(e, "termHideCursor", vec![], i());
+    mono(e, "termShowCursor", vec![], i());
     // External process control: spawn with an event callback, await exit, clean up.
     mono(e, "spawnProcess", vec![s(), any()], i());
     mono(e, "awaitProcess", vec![i()], i());

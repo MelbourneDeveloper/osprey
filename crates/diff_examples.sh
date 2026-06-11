@@ -68,3 +68,33 @@ echo "================================"
 echo "PASS=$pass FAIL=$fail NOEXP=$noexp (of $((pass+fail+noexp)))"
 echo "FAILED:"
 for x in $FAILED; do echo "  $x"; done
+
+# ---- must-REJECT suite: examples/failscompilation -------------------------
+# Every .ospo is an ill-formed program the language defines as a compile error.
+# The compiler must refuse it (nonzero exit, nothing executed). FC_EXPECTED_ESCAPES
+# is a RATCHET: it counts the ill-formed programs osprey-rs still accepts
+# (validations not yet ported — effects safety, `any` rules, named-arg checks,
+# print-on-record). Port a validation -> decrease the number. An INCREASE is a
+# regression and fails CI. Target: 0.
+FC_EXPECTED_ESCAPES=12
+FCDIR=$ROOT/compiler/examples/failscompilation
+fc_rej=0; fc_esc=0
+typeset -a FC_ESCAPED
+if [[ -z "$FILTER" && -d "$FCDIR" ]]; then
+  for f in $(find $FCDIR -name '*.ospo' | sort); do
+    # alarm guards an accepted program that runs (and could block on I/O).
+    perl -e 'alarm 10; exec @ARGV' -- $BIN "$f" --run >/dev/null 2>&1
+    if [[ $? -eq 0 ]]; then
+      fc_esc=$((fc_esc+1)); FC_ESCAPED+=("${f#$FCDIR/}")
+    else
+      fc_rej=$((fc_rej+1))
+    fi
+  done
+  echo "FC_REJECT=$fc_rej FC_ESCAPE=$fc_esc (of $((fc_rej+fc_esc)), ratchet allows $FC_EXPECTED_ESCAPES)"
+  for x in $FC_ESCAPED; do echo "  escape: $x"; done
+  if [[ $fc_esc -le $FC_EXPECTED_ESCAPES ]]; then
+    echo "FC_OK"
+  else
+    echo "FC_REGRESSION: $fc_esc ill-formed programs accepted (ratchet: $FC_EXPECTED_ESCAPES)"
+  fi
+fi

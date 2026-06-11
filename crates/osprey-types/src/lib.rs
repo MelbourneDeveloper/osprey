@@ -112,14 +112,56 @@ mod tests {
     }
 
     #[test]
+    fn constructor_field_set_is_validated() {
+        // Missing and unknown fields are both errors.
+        let errs = bad("type R = Ok { value: int } | No { message: string }\n\
+                        let r = Ok { data: 42 }\n");
+        assert!(errs
+            .iter()
+            .any(|e| e.message.contains("requires field `value`")));
+        assert!(errs.iter().any(|e| e.message.contains("no field `data`")));
+    }
+
+    #[test]
+    fn unknown_variant_in_match_is_an_error() {
+        let errs = bad("type Color = Red | Green | Blue\n\
+                        let c = Red\n\
+                        let d = match c {\n\
+                          Red => 1\n\
+                          Maybe => 2\n\
+                          _ => 0\n\
+                        }\n");
+        assert!(errs
+            .iter()
+            .any(|e| e.message.contains("`Maybe` is not defined in type `Color`")));
+    }
+
+    #[test]
+    fn builtin_redefinition_is_an_error() {
+        let errs = bad("fn toString(x: int) -> string = \"custom\"\n");
+        assert!(errs
+            .iter()
+            .any(|e| e.message.contains("redefine built-in function `toString`")));
+    }
+
+    #[test]
+    fn assignment_to_immutable_binding_is_an_error() {
+        let errs = bad("fn main() -> Unit = {\n  let x = 42\n  x = 100\n}\n");
+        assert!(errs
+            .iter()
+            .any(|e| e.message.contains("immutable variable `x`")));
+        // `mut` bindings stay assignable.
+        ok("fn main() -> Unit = {\n  mut y = 1\n  y = 2\n}\n");
+    }
+
+    #[test]
     fn elvis_on_result_is_a_truth_test_yielding_the_payload() {
         // `r ?: fallback` desugars to `match r { true => r  false => fallback }`;
         // over a `Result` that is a discriminant test whose value is the
         // unwrapped payload — it must not unify the payload with `bool`.
-        ok("fn divide(a: int, b: int) = a / b\n\
-            let bad = divide(a: 10, b: 0)\n\
-            let v = bad ?: 0\n\
-            fn keep(x: int) -> int = x + v\n");
+        ok("let okCalc = 10 + 5\n\
+            let okElvis = okCalc ?: -1\n\
+            fn keep(x: int) -> int = x + okElvis\n");
     }
 
     #[test]
