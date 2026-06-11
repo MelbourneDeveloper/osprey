@@ -10,13 +10,13 @@ use crate::convert::{parse_fn_sig, type_expr_to_type, type_name_to_type};
 use crate::ctx::InferCtx;
 use crate::env::{generalize, TypeEnv};
 use crate::error::TypeError;
-use crate::ty::{Scheme, Type};
+use crate::ty::{names, Scheme, Type};
 use crate::unify::{unify, unify_assignable};
 use osprey_ast::{
     EffectOperation, Expr, ExternParameter, Parameter, Position, Program, Stmt, TypeExpr,
     TypeVariant,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The shared `name` accessor of the two AST parameter node types, so
 /// [`Checker::record_fn_params`] handles both without duplication.
@@ -64,6 +64,8 @@ pub struct Checker {
     /// Function name -> the exact (params, ret) types created in pass one, so
     /// body inference reuses the very same variables the signature exported.
     pub(crate) fn_sigs: HashMap<String, (Vec<Type>, Type)>,
+    /// The built-in function names — user code may not redefine these.
+    builtins: HashSet<String>,
 }
 
 impl Checker {
@@ -76,6 +78,7 @@ impl Checker {
             union_variants: HashMap::new(),
             fn_params: HashMap::new(),
             fn_sigs: HashMap::new(),
+            builtins: HashSet::new(),
         };
         c.register_result_ctors();
         c
@@ -84,9 +87,9 @@ impl Checker {
     /// Built-in `Result` constructors `Success { value: T }` / `Error { message: E }`.
     fn register_result_ctors(&mut self) {
         let _ = self.ctors.insert(
-            "Success".into(),
+            names::SUCCESS.into(),
             CtorInfo {
-                owner: "Result".into(),
+                owner: names::RESULT.into(),
                 owner_is_record: false,
                 type_params: vec!["T".into(), "E".into()],
                 fields: vec![("value".into(), "T".into())],
@@ -96,9 +99,9 @@ impl Checker {
         // the message is a concrete string, leaving E free to unify with the
         // declared error type (e.g. the nominal `Error`), not pinned to string.
         let _ = self.ctors.insert(
-            "Error".into(),
+            names::ERROR.into(),
             CtorInfo {
-                owner: "Result".into(),
+                owner: names::RESULT.into(),
                 owner_is_record: false,
                 type_params: vec!["T".into(), "E".into()],
                 fields: vec![("message".into(), "string".into())],
@@ -106,7 +109,10 @@ impl Checker {
         );
         let _ = self
             .union_variants
-            .insert("Result".into(), vec!["Success".into(), "Error".into()]);
+            .insert(
+                names::RESULT.into(),
+                vec![names::SUCCESS.into(), names::ERROR.into()],
+            );
         // Built-in HttpResponse record returned by HTTP request handlers.
         let _ = self.ctors.insert(
             "HttpResponse".into(),
@@ -153,11 +159,11 @@ impl Checker {
         match s {
             Stmt::Let {
                 name,
+                mutable,
                 ty,
                 value,
                 position,
-                ..
-            } => self.check_let(name, ty.as_ref(), value, env, *position),
+            } => self.check_let(name, *mutable, ty.as_ref(), value, env, *position),
             Stmt::Assignment {
                 name,
                 value,
@@ -172,6 +178,11 @@ impl Checker {
 
     /// Pass one: fill the declaration tables and the base environment.
     fn collect(&mut self, program: &Program, env: &mut TypeEnv) {
+        // `env` is exactly the builtin table on entry — snapshot it so
+        // `collect_function` can reject redefinition of a built-in.
+        if self.builtins.is_empty() {
+            self.builtins = env.bound_names();
+        }
         for stmt in &program.statements {
             match stmt {
                 Stmt::Type {
@@ -278,6 +289,12 @@ impl Checker {
         return_type: Option<&TypeExpr>,
         env: &mut TypeEnv,
     ) {
+        if self.builtins.contains(name) {
+            self.errors.push(TypeError::new(format!(
+                "cannot redefine built-in function `{name}`"
+            )));
+            return;
+        }
         let empty = HashMap::new();
         let params: Vec<Type> = parameters
             .iter()
@@ -354,6 +371,7 @@ impl Checker {
     fn check_let(
         &mut self,
         name: &str,
+        mutable: bool,
         ty: Option<&TypeExpr>,
         value: &Expr,
         env: &mut TypeEnv,
@@ -365,7 +383,11 @@ impl Checker {
             self.unify_or_err(&annotated, &value_ty, &format!("let `{name}`"), pos);
         }
         let scheme = generalize(&mut self.ctx, env, &value_ty);
-        env.insert(name, scheme);
+        if mutable {
+            env.insert_mutable(name, scheme);
+        } else {
+            env.insert(name, scheme);
+        }
     }
 
     /// Unify `expected` against `actual`, recording a positioned error prefixed
@@ -386,6 +408,12 @@ impl Checker {
         let value_ty = self.infer_expr(value, env);
         match env.get(name).cloned() {
             Some(scheme) => {
+                if !env.is_mutable(name) {
+                    self.record_err(
+                        TypeError::new(format!("cannot assign to immutable variable `{name}`")),
+                        pos,
+                    );
+                }
                 let existing = crate::env::instantiate(&mut self.ctx, &scheme);
                 self.unify_or_err(
                     &existing,

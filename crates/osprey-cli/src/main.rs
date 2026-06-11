@@ -1,9 +1,11 @@
 //! `osprey-rs` — the Osprey compiler's command-line front end.
 //!
-//! It parses Osprey and then dumps the AST (`--ast`), runs Hindley-Milner type
-//! inference (`--check`), emits LLVM IR (`--llvm`), or compiles-and-runs via
-//! clang (`--run`). `--compile`, `--symbols`, `--docs`, `--hover`, `--quiet`
-//! and the sandbox flags are not implemented yet.
+//! It parses Osprey and then dumps the AST (`--ast`), reports type errors
+//! (`--check`), emits LLVM IR (`--llvm`), or compiles-and-runs via clang
+//! (`--run`). Every compiling mode gates on Hindley-Milner type inference
+//! first — an ill-typed program never reaches codegen. `--compile`,
+//! `--symbols`, `--docs`, `--hover`, `--quiet` and the sandbox flags are not
+//! implemented yet.
 
 use std::path::Path;
 use std::process::{Command, ExitCode};
@@ -41,8 +43,11 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    // `--llvm` and `--run` gate on the type checker exactly like `--check`:
+    // an ill-typed program must never reach codegen, let alone execute.
     match mode {
         "--check" => run_check(path, &parsed.program),
+        "--llvm" if report_type_errors(path, &parsed.program) > 0 => ExitCode::FAILURE,
         "--llvm" => match osprey_codegen::compile_program(&parsed.program) {
             Ok(ir) => {
                 print!("{ir}");
@@ -53,6 +58,7 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        "--run" if report_type_errors(path, &parsed.program) > 0 => ExitCode::FAILURE,
         "--run" => run_program(path, &parsed.program, &source),
         _ => {
             println!("{:#?}", parsed.program);
@@ -61,17 +67,23 @@ fn main() -> ExitCode {
     }
 }
 
-fn run_check(path: &str, program: &osprey_ast::Program) -> ExitCode {
+/// Type-check `program`, print every error in `file:line:col: message` form,
+/// and return how many there were. The shared gate for `--check`/`--llvm`/`--run`.
+fn report_type_errors(path: &str, program: &osprey_ast::Program) -> usize {
     let errors = osprey_types::check_program(program);
-    if errors.is_empty() {
-        println!("{path}: ok ({} statements)", program.statements.len());
-        return ExitCode::SUCCESS;
-    }
     for e in &errors {
         match e.position {
             Some(p) => eprintln!("{path}:{}:{}: {}", p.line, p.column, e.message),
             None => eprintln!("{path}: {}", e.message),
         }
+    }
+    errors.len()
+}
+
+fn run_check(path: &str, program: &osprey_ast::Program) -> ExitCode {
+    if report_type_errors(path, program) == 0 {
+        println!("{path}: ok ({} statements)", program.statements.len());
+        return ExitCode::SUCCESS;
     }
     ExitCode::FAILURE
 }

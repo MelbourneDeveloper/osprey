@@ -25,18 +25,61 @@ fn unwrap_result(t: &Type) -> Type {
     }
 }
 
+fn is_result(t: &Type) -> bool {
+    matches!(t, Type::Con { name, .. } if name == names::RESULT)
+}
+
+/// Whether `name` is one of the built-in `Result` variant constructors. A
+/// user-declared variant may reuse these names (shadowing the builtin for
+/// construction), but a pattern over a discriminant that *is* a `Result` always
+/// means the built-in variant.
+fn is_result_variant(name: &str) -> bool {
+    name == names::SUCCESS || name == names::ERROR
+}
+
+/// Whether every arm is a `true`/`false` literal pattern — the shape the
+/// ternary/Elvis desugar produces.
+fn all_bool_literal_arms(arms: &[MatchArm]) -> bool {
+    !arms.is_empty()
+        && arms.iter().all(|a| {
+            matches!(&a.pattern, Pattern::Literal(e) if matches!(e.as_ref(), Expr::Bool(_)))
+        })
+}
+
 impl Checker {
     pub(crate) fn infer_match(&mut self, value: &Expr, arms: &[MatchArm], env: &TypeEnv) -> Type {
         let disc = self.infer_expr(value, env);
+        // Truthiness test: `true`/`false` arms over a `Result` (the ternary and
+        // Elvis desugar) test the discriminant, the arms cover Success/Error,
+        // and the match yields the *unwrapped* success payload.
+        let truthy = is_result(&self.ctx.prune(&disc)) && all_bool_literal_arms(arms);
         let result = self.ctx.fresh();
         for arm in arms {
-            let mut local = env.child();
-            self.bind_pattern(&arm.pattern, &disc, &mut local);
-            let body_ty = self.infer_expr(&arm.body, &local);
+            let body_ty = self.infer_arm(arm, &disc, truthy, env);
             self.push_unify(&result, &body_ty);
         }
-        self.check_exhaustive(&disc, arms);
+        if truthy {
+            self.check_bool_exhaustive(arms);
+        } else {
+            self.check_exhaustive(&disc, arms);
+        }
         result
+    }
+
+    /// Infer one arm's body type — binding its pattern against the discriminant
+    /// unless this is a truthiness match, whose arms bind nothing and merge as
+    /// the unwrapped success payload.
+    fn infer_arm(&mut self, arm: &MatchArm, disc: &Type, truthy: bool, env: &TypeEnv) -> Type {
+        let mut local = env.child();
+        if !truthy {
+            self.bind_pattern(&arm.pattern, disc, &mut local);
+        }
+        let body_ty = self.infer_expr(&arm.body, &local);
+        if truthy {
+            unwrap_result(&self.ctx.prune(&body_ty))
+        } else {
+            body_ty
+        }
     }
 
     /// `select { pattern => body ... }` — same arm-typing as match without a
@@ -89,6 +132,12 @@ impl Checker {
     /// A bare identifier pattern is either a nullary constructor (matches that
     /// variant) or a fresh variable binding.
     fn bind_binding(&mut self, name: &str, disc: &Type, local: &mut TypeEnv) {
+        // `Success`/`Error` over a real `Result` always mean the built-in
+        // variant, even when a user union shadows those names: match the
+        // variant, bind nothing.
+        if is_result_variant(name) && is_result(&self.ctx.prune(disc)) {
+            return;
+        }
         if self.ctors.get(name).is_some_and(|i| i.fields.is_empty()) {
             if let Some((args, _f, owner, is_record)) = self.ctor_instance(name) {
                 let owner_ty = nullary_owner_ty(owner, args, is_record);
@@ -107,6 +156,13 @@ impl Checker {
         disc: &Type,
         local: &mut TypeEnv,
     ) {
+        // `Success { value }` / `Error { message }` over a real `Result` always
+        // bind the built-in variant's fields, even when a user union shadows
+        // those constructor names.
+        if is_result_variant(name) && is_result(&self.ctx.prune(disc)) {
+            self.bind_result_fields(fields, disc, local);
+            return;
+        }
         let Some((args, declared, owner, is_record)) = self.ctor_instance(name) else {
             for f in fields {
                 let fv = self.ctx.fresh();
@@ -119,22 +175,8 @@ impl Checker {
         // binds `value : string` (the match auto-wrap rule: any value may be
         // matched as if wrapped in `Success`). This also lets validated record
         // constructions be matched without a real Result.
-        if owner == "Result" {
-            let dp = self.ctx.prune(disc);
-            let ok = match &dp {
-                Type::Con { name, args } if name == names::RESULT && !args.is_empty() => {
-                    args.first().cloned().unwrap_or_else(|| dp.clone())
-                }
-                _ => dp.clone(),
-            };
-            for fname in fields {
-                let ft = match fname.as_str() {
-                    "value" => ok.clone(),
-                    "message" => Type::string(),
-                    _ => self.ctx.fresh(),
-                };
-                local.insert(fname.clone(), Scheme::mono(ft));
-            }
+        if owner == names::RESULT {
+            self.bind_result_fields(fields, disc, local);
             return;
         }
         let declared_map: BTreeMap<String, Type> = declared.iter().cloned().collect();
@@ -162,6 +204,27 @@ impl Checker {
             let field_ty = declared.get(i).map(|(_, t)| t.clone());
             let target = field_ty.unwrap_or_else(|| self.ctx.fresh());
             self.bind_pattern(sub, &target, local);
+        }
+    }
+
+    /// Bind the built-in `Result` pattern fields against `disc`: `value` is the
+    /// success payload (the discriminant itself when it is not a `Result` — the
+    /// match auto-wrap rule), `message` is the error string.
+    fn bind_result_fields(&mut self, fields: &[String], disc: &Type, local: &mut TypeEnv) {
+        let dp = self.ctx.prune(disc);
+        let ok = match &dp {
+            Type::Con { name, args } if name == names::RESULT && !args.is_empty() => {
+                args.first().cloned().unwrap_or_else(|| dp.clone())
+            }
+            _ => dp.clone(),
+        };
+        for fname in fields {
+            let ft = match fname.as_str() {
+                "value" => ok.clone(),
+                "message" => Type::string(),
+                _ => self.ctx.fresh(),
+            };
+            local.insert(fname.clone(), Scheme::mono(ft));
         }
     }
 

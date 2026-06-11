@@ -5,13 +5,15 @@
 
 use crate::ctx::InferCtx;
 use crate::ty::{Scheme, Type, VarId};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Maps names to their type schemes. Cloned to form child scopes (lambda
 /// bodies, match arms) — value semantics, so child bindings never leak out.
 #[derive(Debug, Clone, Default)]
 pub struct TypeEnv {
     vars: HashMap<String, Scheme>,
+    /// Names declared `mut` — the only bindings assignment may target.
+    mutables: HashSet<String>,
 }
 
 impl TypeEnv {
@@ -24,7 +26,27 @@ impl TypeEnv {
     }
 
     pub fn insert(&mut self, name: impl Into<String>, scheme: Scheme) {
-        let _ = self.vars.insert(name.into(), scheme);
+        let name = name.into();
+        // A fresh binding shadows any outer `mut` of the same name.
+        let _ = self.mutables.remove(&name);
+        let _ = self.vars.insert(name, scheme);
+    }
+
+    /// Bind a `mut` declaration — the one binding form assignment may target.
+    pub fn insert_mutable(&mut self, name: impl Into<String>, scheme: Scheme) {
+        let name = name.into();
+        let _ = self.vars.insert(name.clone(), scheme);
+        let _ = self.mutables.insert(name);
+    }
+
+    pub fn is_mutable(&self, name: &str) -> bool {
+        self.mutables.contains(name)
+    }
+
+    /// The currently bound names. Snapshotted on the freshly built builtin
+    /// environment to detect redefinition of built-in functions.
+    pub fn bound_names(&self) -> HashSet<String> {
+        self.vars.keys().cloned().collect()
     }
 
     pub fn remove(&mut self, name: &str) {

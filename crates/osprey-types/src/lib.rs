@@ -95,6 +95,34 @@ mod tests {
     }
 
     #[test]
+    fn user_variant_shadowing_success_still_matches_real_results() {
+        // `Success` names both a user variant and the built-in Result ok-arm:
+        // a pattern over a real `Result` must mean the builtin, while bare
+        // `Success` as a value builds the user union.
+        ok("type TaskResult = Success | Warning | Failed\n\
+            fn pick(n: int) -> TaskResult = match n {\n\
+              0 => Success\n\
+              1 => Warning\n\
+              _ => Failed\n\
+            }\n\
+            fn total(r: Result<int, Error>) -> int = match r {\n\
+              Success { value } => value\n\
+              Error { message } => 0\n\
+            }\n");
+    }
+
+    #[test]
+    fn elvis_on_result_is_a_truth_test_yielding_the_payload() {
+        // `r ?: fallback` desugars to `match r { true => r  false => fallback }`;
+        // over a `Result` that is a discriminant test whose value is the
+        // unwrapped payload — it must not unify the payload with `bool`.
+        ok("fn divide(a: int, b: int) = a / b\n\
+            let bad = divide(a: 10, b: 0)\n\
+            let v = bad ?: 0\n\
+            fn keep(x: int) -> int = x + v\n");
+    }
+
+    #[test]
     fn generic_union_flows_type_argument() {
         ok("type Box<T> = Empty | Full { value: T }\n\
             let b = Full { value: 7 }\n\

@@ -3,8 +3,8 @@
 #
 # The compiler is the Rust workspace in crates/. `osprey-rs --run` emits LLVM IR
 # and hands it to clang together with the prebuilt C runtime archives
-# (compiler/bin/lib*_runtime.a) — those archives are pure C (no Go), built by
-# the private `_runtime` helper below.
+# (compiler/bin/lib*_runtime.a) — those archives are pure C, built by the
+# private `_runtime` helper below.
 #
 # Public targets are the handful documented with `## name:` lines. Everything
 # else (the `_`-prefixed rules) is an internal helper — not meant to be run by
@@ -12,20 +12,6 @@
 # =============================================================================
 
 .PHONY: build tui run test lint fmt clean ci setup install vsix
-.PHONY: BUILD TUI RUN TEST LINT FMT CLEAN CI SETUP INSTALL VSIX
-
-# Case-insensitive convenience: `make TUI` == `make tui`, etc.
-BUILD: build
-TUI: tui
-RUN: run
-TEST: test
-LINT: lint
-FMT: fmt
-CLEAN: clean
-CI: ci
-SETUP: setup
-INSTALL: install
-VSIX: vsix
 
 # ---------------------------------------------------------------------------
 # OS detection
@@ -42,25 +28,26 @@ endif
 # ---------------------------------------------------------------------------
 # Toolchain / paths
 # ---------------------------------------------------------------------------
-# BIN: the built CLI. RTB: archive output dir (osprey-rs searches compiler/bin).
+# NOTE: every variable below uses `?=` (not `:=`) on purpose — the VSCode
+# Makefile-Tools panel lists `:=` assignments as if they were targets, so `?=`
+# keeps them out of the target list. BIN: built CLI. RTB: archive output dir
+# (osprey-rs searches compiler/bin).
 CC  ?= cc
 AR  ?= ar
-BIN := target/release/osprey-rs
-RTB := compiler/bin
-TUI_DEMO := compiler/examples/tui/api_browser.osp
+BIN ?= target/release/osprey-rs
+RTB ?= compiler/bin
 
 # VSIX (VSCode extension) — macOS only. Bundles the Rust binary as `osprey`.
-EXT_DIR         := vscode-extension
-EXT_ID          := nimblesite.osprey
-VSCODE_STORAGE  := $(HOME)/Library/Application Support/Code/User/globalStorage/storage.json
+EXT_DIR        ?= vscode-extension
+VSCODE_STORAGE ?= $(HOME)/Library/Application Support/Code/User/globalStorage/storage.json
 
 # C runtime compile flag profiles (mirror the original hardened recipes).
-A    := -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE
-B    := $(A) -std=c11
-OSSL := -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations
+A    ?= -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE
+B    ?= $(A) -std=c11
+OSSL ?= -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations
 # Object lists for the archives (paths relative to compiler/, where `ar` runs).
-FIB_OBJ  := bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
-HTTP_OBJ := bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ)
+FIB_OBJ  ?= bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
+HTTP_OBJ ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ)
 
 # =============================================================================
 # Public targets
@@ -74,8 +61,8 @@ build: _runtime
 ## tui: Build, then launch the interactive TUI demo (live GitHub API browser).
 ##      Runs in the current terminal so the raw-mode key reader gets a real stdin.
 tui: build
-	@echo "==> launching TUI: $(TUI_DEMO)"
-	./$(BIN) $(TUI_DEMO) --run
+	@echo "==> launching TUI demo (live GitHub API browser)"
+	./$(BIN) compiler/examples/tui/api_browser.osp --run
 
 ## run: Compile and run an Osprey file (usage: make run FILE=<path>).
 run: build

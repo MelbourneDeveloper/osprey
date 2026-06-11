@@ -32,6 +32,10 @@ pub mod names {
     pub const UNIT: &str = "Unit";
     /// The `Result<ok, err>` sum type.
     pub const RESULT: &str = "Result";
+    /// `Result`'s ok-variant constructor (`Success { value }`).
+    pub const SUCCESS: &str = "Success";
+    /// `Result`'s error-variant constructor (`Error { message }`).
+    pub const ERROR: &str = "Error";
     /// The error type produced by failing arithmetic operations.
     pub const MATH_ERROR: &str = "MathError";
     /// The `List<elem>` collection type.
