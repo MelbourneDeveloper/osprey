@@ -7,7 +7,8 @@
 //! markdown (`--hover <name>`). Every compiling mode gates on Hindley-Milner
 //! type inference first — an ill-typed program never reaches codegen — and on
 //! the capability sandbox (`--sandbox`, `--no-http`, `--no-websocket`,
-//! `--no-fs`, `--no-ffi`). `--quiet` suppresses non-essential output.
+//! `--no-fs`, `--no-ffi`). `--quiet` suppresses non-essential output. The C
+//! driver used to link the emitted IR is `clang`, overridable via `OSPREY_CC`.
 
 mod lsp;
 mod sandbox;
@@ -234,7 +235,8 @@ fn build_executable(
         eprintln!("error: cannot write IR to {}: {e}", ll.display());
         return Err(ExitCode::FAILURE);
     }
-    let mut cmd = Command::new("clang");
+    let cc = c_compiler();
+    let mut cmd = Command::new(&cc);
     let _ = cmd
         .arg(&ll)
         .arg("-o")
@@ -244,14 +246,23 @@ fn build_executable(
     match cmd.status() {
         Ok(s) if s.success() => Ok(()),
         Ok(_) => {
-            eprintln!("error: clang failed to compile {}", ll.display());
+            eprintln!("error: {cc} failed to compile {}", ll.display());
             Err(ExitCode::FAILURE)
         }
         Err(e) => {
-            eprintln!("error: could not invoke clang: {e}");
+            eprintln!("error: could not invoke {cc}: {e}");
             Err(ExitCode::FAILURE)
         }
     }
+}
+
+/// The C compiler/linker driver used to lower the emitted LLVM IR. Defaults to
+/// `clang` (the only driver that consumes textual `.ll`); `OSPREY_CC` overrides
+/// it — needed where several clangs coexist and the IR/runtime must link with a
+/// matching toolchain (e.g. forcing the MinGW clang on Windows so it links the
+/// MinGW-built C runtime archive rather than the system MSVC clang).
+fn c_compiler() -> String {
+    std::env::var("OSPREY_CC").unwrap_or_else(|_| "clang".to_string())
 }
 
 /// The source file's stem (`demo` for `examples/demo.osp`).
