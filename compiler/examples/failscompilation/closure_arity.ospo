@@ -1,0 +1,7 @@
+// [TYPE-FN-CLOSURE] Calling a closure with the wrong arity is a compile-time
+// error naming both arities ("call arity mismatch: expected 1 argument(s),
+// got 2").
+fn main() -> int {
+    let f = fn(x: int) => x
+    f(1, 2)
+}

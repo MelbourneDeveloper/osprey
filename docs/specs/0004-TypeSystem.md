@@ -124,7 +124,7 @@ let greet   = fn(name: string) => prefix + name              // captures prefix
 print(greet("world"))                                         // "hello world"
 ```
 
-Closures and named functions are interchangeable wherever a function type is expected, including as higher-order arguments (`map`, `filter`, `fold`, `forEach`) and as the function field of records. A closure that captures no free variables is equivalent to a top-level function and the implementation SHOULD lower it to one.
+Closures and named functions are interchangeable wherever a function type is expected, including as higher-order arguments (`map`, `filter`, `fold`, `forEach`) and as the function field of records. A closure that captures no free variables is equivalent to a top-level function and the implementation SHOULD lower it to one. Calling through a function value is a value site: a `Result<T, E>` return auto-unwraps to `T`, exactly as at any other value site.
 
 ## Record Types
 

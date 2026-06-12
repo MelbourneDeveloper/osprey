@@ -122,6 +122,31 @@ pub fn unify_assignable(
             }
         }
     }
+    // Function values unify assignably in both positions: the return is
+    // covariant (a lambda inferring `(int) -> Result<int, MathError>`
+    // satisfies a slot declared `(int) -> int`, the same auto-unwrap a named
+    // function's body enjoys) and parameters match assignably with the roles
+    // flipped (the slot's parameter is the value the callee will receive, so
+    // a `(int) -> _` lambda accepts a slot passing `Result<int, MathError>`
+    // elements — they travel unwrapped at value sites).
+    if let (
+        Type::Fun {
+            params: ep,
+            ret: er,
+        },
+        Type::Fun {
+            params: ap,
+            ret: ar,
+        },
+    ) = (&expected, &actual)
+    {
+        if ep.len() == ap.len() {
+            for (e, a) in ep.iter().zip(ap) {
+                unify_assignable(ctx, a, e)?;
+            }
+            return unify_assignable(ctx, er, ar);
+        }
+    }
     unify(ctx, &expected, &actual)
 }
 

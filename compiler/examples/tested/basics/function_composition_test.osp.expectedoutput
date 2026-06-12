@@ -19,4 +19,16 @@ Quote: "hi"
 Hi "Bob"
 lit: ab\nc
 -2.5
+adders: 8 13 105
+direct: 10 inferred: 21
+passed: 111
+wrapped: 41 nested: 33
+pins: 42 42 9
+field: true false
+mapped: 13
+mapped: 23
+mapped: 33
+evensum: 20
+elem: 12
+elem: 15
 === Function Composition Test Complete ===

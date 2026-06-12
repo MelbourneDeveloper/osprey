@@ -176,9 +176,12 @@ impl<'a> Lowerer<'a> {
         for fd in self.descendants_of_kind(node, "field_declaration") {
             out.push(TypeField {
                 name: self.field_text(fd, "name"),
+                // Keep the full source text (`List<Self>`, `(int) -> bool`) —
+                // taking just the lowered head name would collapse a function
+                // type to `fn` and a generic to its constructor.
                 ty: fd
                     .child_by_field_name("type")
-                    .map(|n| self.lower_type(n).name)
+                    .map(|n| self.text(n))
                     .unwrap_or_default(),
                 constraint: None,
             });
@@ -297,7 +300,7 @@ impl<'a> Lowerer<'a> {
         found.map(|c| self.lower_type(c))
     }
 
-    fn last_type_child(&self, node: Node<'_>) -> Option<TypeExpr> {
+    pub(crate) fn last_type_child(&self, node: Node<'_>) -> Option<TypeExpr> {
         let mut cursor = node.walk();
         let found = node
             .named_children(&mut cursor)

@@ -15,6 +15,7 @@ mod aggregate;
 mod builder;
 mod call;
 mod cast;
+mod closure;
 mod collections;
 mod conv;
 mod effects;
@@ -22,6 +23,7 @@ mod error;
 mod expr;
 mod extern_call;
 mod fiber;
+mod freevars;
 mod genfn;
 mod iter;
 mod listlit;
@@ -53,8 +55,10 @@ pub fn referenced_idents(program: &osprey_ast::Program) -> std::collections::BTr
 fn stmt_idents(s: &osprey_ast::Stmt, out: &mut std::collections::BTreeSet<String>) {
     use osprey_ast::Stmt;
     match s {
-        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } => fiber::free_idents(value, out),
-        Stmt::Expr(e) | Stmt::Function { body: e, .. } => fiber::free_idents(e, out),
+        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } => {
+            freevars::free_idents(value, out);
+        }
+        Stmt::Expr(e) | Stmt::Function { body: e, .. } => freevars::free_idents(e, out),
         Stmt::Module { body, .. } => {
             for inner in body {
                 stmt_idents(inner, out);
@@ -108,11 +112,11 @@ mod tests {
     }
 
     #[test]
-    fn spawn_lowers_to_a_real_fiber_with_spilled_captures() {
-        // `spawn` lifts its expression into a no-arg thunk handed to the C
-        // runtime's `fiber_spawn`; the local it closes over is spilled through
-        // a per-spawn module global (store at the spawn site, reload in the
-        // thunk), and `await` maps to `fiber_await`.
+    fn spawn_lowers_to_a_per_instance_closure_cell() {
+        // `spawn` lowers its expression as a zero-parameter closure: the thunk
+        // takes its heap cell as env (so two in-flight spawns from one site
+        // never alias captures) and goes to `fiber_spawn_env`; `await` maps to
+        // `fiber_await`. No module globals are involved.
         let ir = module(
             "fn work(n: int) -> int = n * 2\n\
              fn main() -> Unit = {\n\
@@ -121,24 +125,44 @@ mod tests {
                print(\"got ${await(f)}\")\n\
              }\n",
         );
-        assert!(ir.contains("call i64 @fiber_spawn(i64 ()* @__fiber_closure_"));
-        assert!(ir.contains("@__fiber_cap_") && ir.contains("_x = global i64 0"));
+        assert!(ir.contains("call i64 @fiber_spawn_env(i64 (i8*)* @__fiber_thunk_"));
+        assert!(ir.contains("define i64 @__fiber_thunk_0(i8* %__env)"));
+        assert!(!ir.contains("@__fiber_cap_"));
         assert!(ir.contains("call i64 @fiber_await(i64"));
     }
 
     #[test]
-    fn inline_lambda_argument_is_lifted_to_a_function_pointer() {
-        // An inline lambda flowing into a function-typed parameter is lifted to a
-        // top-level `@__lambda_*` function and passed as an `i8*` code pointer,
-        // not evaluated as a value — so the indirect call inside `apply` reaches
-        // it the same way a bare function name would.
+    fn inline_lambda_argument_becomes_a_closure_cell() {
+        // An inline lambda flowing into a function-typed parameter becomes a
+        // closure cell `{ fnptr, captures… }`: the emitted function takes a
+        // hidden `i8* %__env`, and the indirect call inside `apply` loads the
+        // fnptr from the cell and passes the cell back as the env.
         let ir = module(
             "fn apply(value: int, f: (int) -> int) -> int = f(value)\n\
              let r = apply(value: 10, f: fn(x: int) => x + 1)\n\
              print(\"r=${r}\")\n",
         );
-        assert!(ir.contains("define i64 @__lambda_0(i64 %x)"));
-        assert!(ir.contains("@__lambda_0 to i8*"));
+        assert!(ir.contains("define i64 @__closure_fn_0(i8* %__env, i64 %x)"));
+        assert!(ir.contains("@__closure_cell_0 = private unnamed_addr constant { i8* }"));
+        assert!(ir.contains("call i64 %"));
+    }
+
+    #[test]
+    fn escaping_closure_captures_its_makers_state() {
+        // The headline closure case [TYPE-FN-CLOSURE]: a returned lambda
+        // capturing its maker's parameter stays callable — the capture is
+        // stored in a malloc'd cell and reloaded from `%__env` inside the
+        // lifted function.
+        let ir = module(
+            "fn makeAdder(n: int) -> (int) -> int = fn(x: int) => x + n\n\
+             fn main() -> Unit = {\n\
+               let add5 = makeAdder(5)\n\
+               print(\"r=${add5(3)}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("define i8* @makeAdder(i64 %n)"));
+        assert!(ir.contains("bitcast i8* %__env to { i8*, i64 }*"));
+        assert!(ir.contains("call i8* @malloc"));
     }
 
     #[test]
@@ -167,11 +191,19 @@ mod tests {
 
     #[test]
     fn unsupported_construct_fails_loudly() {
-        // A bare lambda used as a runtime value is not lowered (the backend lowers
-        // no closures) — it must fail loudly, never silently (CLAUDE.md: no
-        // placeholders, fail hard).
-        let parsed = parse_program("print(fn(x) => x)\n");
-        let err = compile_program(&parsed.program).unwrap_err();
+        // A construct the backend cannot lower must fail loudly, never
+        // silently (CLAUDE.md: no placeholders, fail hard). A method call on a
+        // value reaches codegen only through the UFCS rewrite, so a synthetic
+        // raw MethodCall node is unsupported.
+        let program = osprey_ast::Program {
+            statements: vec![osprey_ast::Stmt::Expr(osprey_ast::Expr::MethodCall {
+                target: Box::new(osprey_ast::Expr::Integer(1)),
+                method: String::from("frobnicate"),
+                arguments: Vec::new(),
+                named_arguments: Vec::new(),
+            })],
+        };
+        let err = compile_program(&program).unwrap_err();
         assert!(matches!(err, CodegenError::Unsupported(_)));
     }
 }

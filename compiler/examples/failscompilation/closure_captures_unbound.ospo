@@ -1,0 +1,7 @@
+// [TYPE-FN-CLOSURE] A lambda captures only names bound in an enclosing lexical
+// scope. A body referencing a name bound nowhere must be rejected at
+// type-check ("unknown identifier `nowhereBound`"), never silently captured.
+fn main() -> int {
+    let f = fn(x: int) => x + nowhereBound
+    f(1)
+}

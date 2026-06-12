@@ -107,4 +107,51 @@ print("lit: ab\\nc")
 let nf = -2.5
 print(toString(nf))
 
+// === Closures: escaping capture [TYPE-FN-CLOSURE] ===
+// A returned lambda keeps its maker's state alive (heap closure cell); each
+// instance owns its own cell, and an annotated or inferred maker works alike.
+fn makeAdder(n: int) -> (int) -> int = fn(x: int) => x + n
+fn makeScaler(k) = fn(v: int) => v * k
+let plus5 = makeAdder(5)
+let plus10 = makeAdder(10)
+print("adders: ${plus5(3)} ${plus10(3)} ${plus5(100)}")
+print("direct: ${makeAdder(7)(3)} inferred: ${makeScaler(3)(7)}")
+
+// A capturing let-bound lambda is a first-class value, curried composition
+// (the middleware shape) works, and nested closures capture level by level.
+let offset = 100
+let addOffset = fn(x: int) => x + offset
+print("passed: ${applyFunction(value: 11, func: addOffset)}")
+fn wrap(h: fn(int) -> int) -> (int) -> int = fn(b: int) => h(b) + 1
+let mw = wrap(double)
+let base = 3
+let nest = fn(x: int) => fn(y: int) => x + y + base
+print("wrapped: ${mw(20)} nested: ${nest(10)(20)}")
+
+// Regression pins: a rebound mut calls the NEW closure (not a stale inline
+// body); a named-function alias is a first-class value; a Result-returning
+// lambda auto-unwraps through a scalar-returning slot (value-site rule).
+fn mkR(x: int) -> Result<int, string> = Success { value: x }
+mut rb = fn(x: int) => x + 1
+rb = makeAdder(40)
+let dblAlias = double
+let unwrapped = fn(x: int) => mkR(x)
+print("pins: ${rb(2)} ${applyFunction(value: 21, func: dblAlias)} ${applyFunction(value: 9, func: unwrapped)}")
+
+// A function-typed record field holds a capturing closure (read it via `let`;
+// the direct `vchk.check(50)` spelling awaits the UFCS field-call rule).
+type Checker = { check: (int) -> bool }
+let limit = 10
+let vchk = Checker { check: fn(n: int) => n > limit }
+let chk = vchk.check
+print("field: ${chk(50)} ${chk(5)}")
+
+// Capturing lambdas as iterator callbacks: fused range pipeline and list walk.
+let factor2 = 3
+forEach(map(range(1, 4), fn(x: int) => x * 10 + factor2), fn(v: int) => print("mapped: ${v}"))
+let evensum = fold(filter(range(1, 10), fn(x: int) => x % 2 == 0), 0, fn(a: int, b: int) => a + b)
+let pair = listAppend(listAppend(List(), 4), 5)
+print("evensum: ${evensum}")
+forEachList(pair, fn(x: int) => print("elem: ${x * factor2}"))
+
 print("=== Function Composition Test Complete ===")

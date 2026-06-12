@@ -1,7 +1,7 @@
 # Plan: DataProvider YAML → Typed ORM (L3)
 
 Parent: [`backend-framework.md`](backend-framework.md). Runtime dep: [`ffi-sqlite.md`](ffi-sqlite.md).
-Ergonomics dep: [`closures.md`](closures.md). New `0020-ORM.md` lands with Phase 1.
+Ergonomics dep: closures — **landed** (closure cells, `crates/osprey-codegen/src/closure.rs`). New `0020-ORM.md` lands with Phase 1.
 
 ## Goal
 

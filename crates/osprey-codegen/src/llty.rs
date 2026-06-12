@@ -46,6 +46,20 @@ impl fmt::Display for LType {
     }
 }
 
+/// The LLVM spelling of a return slot: the `{ T, i8 }*` Result block when the
+/// callee returns `Result<T, _>`, else the plain scalar type.
+pub(crate) fn ret_spelling(ret_ty: LType, ret_inner: Option<LType>) -> String {
+    match ret_inner {
+        Some(inner) => format!("{{ {inner}, i8 }}*"),
+        None => ret_ty.to_string(),
+    }
+}
+
+/// Render each item and comma-join — the LLVM argument/parameter list shape.
+pub(crate) fn comma_join<T>(xs: &[T], f: impl Fn(&T) -> String) -> String {
+    xs.iter().map(f).collect::<Vec<_>>().join(", ")
+}
+
 /// An SSA value: a textual operand (`%3`, a literal like `42`, or a `getelementptr`
 /// result) paired with its LLVM type.
 #[derive(Debug, Clone)]

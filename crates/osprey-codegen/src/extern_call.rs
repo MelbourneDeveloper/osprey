@@ -4,7 +4,7 @@
 //! discipline. The archive symbols (`libfiber_runtime.a` / `libhttp_runtime.a`)
 //! are the contract: each table entry below must match its C signature exactly.
 //! A named function passed as a callback (`spawnProcess` / `httpListen` handler)
-//! is lowered to a code pointer by `gen_expr`'s Identifier arm. Implements
+//! is lowered to a raw code pointer here in `eval_args`. Implements
 //! [BUILTIN-FILE], [BUILTIN-PROCESS], [BUILTIN-HTTP], [BUILTIN-JSON],
 //! [BUILTIN-TERM].
 
@@ -104,9 +104,10 @@ pub(crate) fn gen(
 }
 
 /// Evaluate each argument (positional, or named in written order) and coerce it
-/// to the builtin's declared parameter type. A callback argument arrives already
-/// as an `i8*` code pointer (from `gen_expr`'s Identifier arm), so the `Ptr`
-/// coercion is a no-op for it.
+/// to the builtin's declared parameter type. A bare user-function name in a
+/// `Ptr` slot is a C callback (`spawnProcess`/`httpListen` handler) and takes
+/// its RAW code pointer — the C runtime calls it through a plain
+/// function-pointer cast, so a closure cell would be jumped into as code.
 fn eval_args(
     cg: &mut Codegen,
     sig: &Sig,
@@ -117,7 +118,16 @@ fn eval_args(
         .iter()
         .zip(crate::expr::arg_exprs(args, named))
         .map(|(want, e)| {
-            let v = gen_expr(cg, e)?;
+            let v = match e {
+                Expr::Identifier(n)
+                    if *want == LType::Ptr
+                        && cg.lookup(n).is_none()
+                        && cg.fn_params.contains_key(n) =>
+                {
+                    crate::expr::fn_pointer(cg, n)
+                }
+                _ => gen_expr(cg, e)?,
+            };
             Ok(crate::cast::coerce_to(cg, v, *want)?.operand)
         })
         .collect()

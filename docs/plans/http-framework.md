@@ -1,7 +1,7 @@
 # Plan: HTTP Framework (L2, shelf-style)
 
 Parent: [`backend-framework.md`](backend-framework.md). Builds on [`0014-HTTP.md`](../specs/0014-HTTP.md);
-new `0018-HTTPFramework.md` lands with Phase 2. v1 gated on [`closures.md`](closures.md).
+new `0018-HTTPFramework.md` lands with Phase 2. v1's closure gate has **landed** (closure cells).
 
 ## Goal
 
@@ -34,7 +34,7 @@ fn main() = serve(port: 8080, handler:
 
 - **v0 (no compiler change):** router is a **top-level dispatch `fn`** (handler can't close over a `let`);
   Request/Response records, helpers, `<id>` params. Middleware = hand-composed top-level `fn`s. Ships now.
-- **v1 (after [`closures.md`](closures.md) Phase 2):** real `Pipeline` (`foldr` of middleware), `Cascade`,
+- **v1 (unblocked — closures landed):** real `Pipeline` (`foldr` of middleware), `Cascade`,
   data-valued `router([...])`, shippable `recover`/`logging`/`cors` middleware.
 
 ## Records (target shape)

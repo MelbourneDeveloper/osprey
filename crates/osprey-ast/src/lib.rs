@@ -363,6 +363,9 @@ pub enum Expr {
         return_type: Option<TypeExpr>,
         /// Lambda body.
         body: Box<Expr>,
+        /// Source position — the key under which inference publishes this
+        /// lambda's resolved function type for the code generator.
+        position: Option<Position>,
     },
     /// A `match` expression.
     Match {
