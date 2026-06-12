@@ -17,7 +17,7 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 | Layer | Adds | Plan | Compiler work |
 |---|---|---|---|
 | **L0** | General closure capture (gates composable middleware) | ✅ landed (closure cells) | Done |
-| **L1** | Generic C interop (FFI) → SQLite bound via `extern fn`; `Database` effect on top | [`ffi-sqlite.md`](ffi-sqlite.md) | Medium (FFI: generic linking + opaque `Ptr`) |
+| **L1** | Generic C interop (FFI) → SQLite bound via `extern fn`; `Database` effect on top | ✅ landed — [spec 0019](../specs/0019-ForeignFunctionInterface.md) | Done |
 | **L2** | shelf-style framework: `Handler`/`Middleware`, `Request`/`Response`, router | [`http-framework.md`](http-framework.md) | None for v0; L0 for v1 |
 | **L3** | DataProvider YAML → typed records + CRUD + named SQL; migrations | [`orm-dataprovider.md`](orm-dataprovider.md) | Medium (Rust generator) |
 
@@ -46,10 +46,10 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 
 ## Master TODO
 
-- [x] **L1 COMPLETE** [`ffi-sqlite.md`](ffi-sqlite.md): generic FFI (`// @link`/`// @linkdir` + `Ptr` + pointer cells), SQLite `extern fn` round-trip, `Database` effect, spec [0019](../specs/0019-Database.md), CI-tested. Postgres binds via the same FFI.
+- [x] **L1 COMPLETE**: generic FFI (`// @link`/`// @linkdir` + `Ptr` + pointer cells), SQLite `extern fn` round-trip, `Database` effect, CI-tested; spec'd as [0019](../specs/0019-ForeignFunctionInterface.md) (plan completed and deleted).
 - [x] **L0** closure capture landed (closure cells). Remaining: UFCS field-call disambiguation — tracked in [`production-primitives.md`](production-primitives.md).
 - [ ] **L2** [`http-framework.md`](http-framework.md): v0 (router + Request/Response) → v1 (middleware).
 - [ ] **L3** [`orm-dataprovider.md`](orm-dataprovider.md): YAML → records + CRUD → named SQL queries.
-- [x] **L1+** [`ffi-sqlite.md`](ffi-sqlite.md): Postgres binding via the **same** FFI verified (libpq `PQlibVersion`); full server round-trip needs a live DB.
-- [ ] Spec: add `0018` (HTTP framework) / `0019` (Database effect) / `0020` (ORM) as layers land. DB access is FFI (`--no-ffi`), not a hardcoded capability.
+- [x] **L1+**: Postgres binding via the **same** FFI verified (libpq `PQlibVersion`); full server round-trip needs a live DB.
+- [ ] Spec: add chapters (HTTP framework / ORM) at the next free numbers as layers land — numbers are sequence-of-arrival, never reserved. The FFI/Database chapter landed as [0019](../specs/0019-ForeignFunctionInterface.md). DB access is FFI (`--no-ffi`), not a hardcoded capability.
 - [ ] One end-to-end golden example `examples/tested/http/todo_service.osp` (HTTP + ORM + SQLite).

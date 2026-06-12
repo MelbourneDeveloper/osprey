@@ -143,7 +143,7 @@ logicalOrExpression ::= logicalAndExpression ("||" logicalAndExpression)*
 logicalAndExpression::= comparisonExpression ("&&" comparisonExpression)*
 comparisonExpression::= additiveExpression (("==" | "!=" | "<" | ">" | "<=" | ">=") additiveExpression)*
 additiveExpression  ::= multiplicativeExpression (("+" | "-") multiplicativeExpression)*
-multiplicativeExpression ::= unaryExpression (("*" | "/") unaryExpression)*
+multiplicativeExpression ::= unaryExpression (("*" | "/" | "%") unaryExpression)*
 unaryExpression     ::= ("+" | "-" | "!")? pipeExpression
 pipeExpression      ::= callExpression ("|>" callExpression)*
 callExpression      ::= primaryExpression (
@@ -162,7 +162,7 @@ namedArgument       ::= ID ":" expression
 
 Precedence, highest to lowest:
 
-1. Unary `!`, `-`
+1. Unary `!`, `-`, `+`
 2. Multiplicative `*`, `/`, `%`
 3. Additive `+`, `-`
 4. Comparison `==`, `!=`, `<`, `>`, `<=`, `>=`

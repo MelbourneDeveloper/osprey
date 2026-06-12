@@ -2,13 +2,17 @@
 
 Osprey has no exceptions, panics, or null. Any function that can fail returns a `Result`.
 
+## Status
+
+[ERR-PAYLOAD] is not yet conforming: codegen binds `Error { message }` to a zeroed payload slot (plan: [`error-payloads.md`](../plans/error-payloads.md)).
+
 ## The Result Type
 
 ```osprey
 type Result<T, E> = Success { value: T } | Error { message: E }
 ```
 
-The compiler rejects any direct access to the contained value. Callers must pattern-match the `Result` (see [Pattern Matching](0007-PatternMatching.md)):
+The compiler rejects any direct access to the contained value. Callers must pattern-match the `Result` (see [Pattern Matching](0007-PatternMatching.md)) unless one of the auto-unwrap contexts applies ([Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)):
 
 ```osprey
 let result = someFunctionThatCanFail()
@@ -40,16 +44,12 @@ let divZero   = 10 / 0     // Error(DivisionByZero)
 
 #### Chaining Arithmetic
 
-Each operation returns a `Result`, so chaining requires either nested matches or, in the future, Result-aware operators:
+Compound expressions auto-unwrap intermediate `Result`s — `(10 + 5) * 2` is a single `Result<int, MathError>`, never a nested one, and only the final value is matched ([Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)):
 
 ```osprey
-let step1 = 10 + 5
-match step1 {
-    Success { val1 } => match val1 * 2 {
-        Success { val2 }    => print("Final: ${val2}")
-        Error   { message } => print("Multiplication error: ${message}")
-    }
-    Error { message } => print("Addition error: ${message}")
+match (10 + 5) * 2 {
+    Success { value }   => print("Final: ${value}")
+    Error   { message } => print("error: ${message}")
 }
 ```
 

@@ -139,3 +139,7 @@ User code constructs Error values directly: `Error { message: "name cannot be em
 - [ ] Every existing test still passes.
 - [ ] No more `"Error occurred"` global emitted anywhere by `osprey` for any input.
 - [ ] The JSON-parser canary in [`production-primitives.md`](production-primitives.md) reports `line N column M: expected ':'` (or equivalent) on malformed input — not `"Error occurred"`.
+
+## Known related defect (from the completed FFI/SQLite work)
+
+Mixing two `Result<T, Error>` payload shapes in one program — e.g. `Result<Ptr, Error>` (`{i8*, i8}`) and `Result<int, Error>` (`{i64, i8}`) — makes `llc` reject the IR (`instruction forward referenced`). The `Database` effect works around it by having only `open` return `Result` (other ops return raw rc/handles). Root cause is the generic-`Result` payload lowering; fix it as part of this plan so every fallible op can return `Result`.

@@ -39,7 +39,7 @@ Interpolated expressions are automatically converted to strings:
 
 - **Primitive types**: int, float, bool converted directly
 - **String types**: Inserted as-is
-- **Result types**: Must be pattern-matched before interpolation
+- **Result types**: interpolation auto-unwraps — the success payload is rendered (context 5 of [Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)); an `Error` renders as `Error(<message>)`, preserving the payload per [ERR-PAYLOAD](0013-ErrorHandling.md#error-payload-propagation--err-payload). To render the wrapper of a success, use `toString`.
 - **Complex types**: Use `toString()` for explicit conversion
 
 ```osprey
@@ -47,12 +47,9 @@ let num = 42
 let flag = true
 print("Number: ${num}, Flag: ${flag}")
 
-// Result types require unwrapping
 let result = 10 + 5
-match result {
-    Success { value } => print("Result: ${value}")
-    Error { message } => print("Error: ${message}")
-}
+print("Result: ${result}")        // "Result: 15"  (auto-unwrapped)
+print(toString(result))           // "Success(15)" (wrapper kept)
 ```
 
 ## Escaping

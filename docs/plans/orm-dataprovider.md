@@ -1,7 +1,7 @@
 # Plan: DataProvider YAML → Typed ORM (L3)
 
-Parent: [`backend-framework.md`](backend-framework.md). Runtime dep: [`ffi-sqlite.md`](ffi-sqlite.md).
-Ergonomics dep: closures — **landed** (closure cells, `crates/osprey-codegen/src/closure.rs`). New `0020-ORM.md` lands with Phase 1.
+Parent: [`backend-framework.md`](backend-framework.md). Runtime dep: the FFI layer ([spec 0019](../specs/0019-ForeignFunctionInterface.md)) — landed.
+Ergonomics dep: closures — **landed** (closure cells, `crates/osprey-codegen/src/closure.rs`). A new ORM spec chapter (next free number) lands with Phase 1.
 
 ## Goal
 
