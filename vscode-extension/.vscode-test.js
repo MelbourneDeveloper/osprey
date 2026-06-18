@@ -15,7 +15,7 @@ module.exports = defineConfig({
   ],
   coverage: {
     reporter: ['text-summary', 'json-summary', 'html'],
-    include: ['out/client/src/**/*.js', 'out/server/src/**/*.js'],
+    include: ['out/client/src/**/*.js'],
     exclude: ['out/test/**', '**/node_modules/**'],
     includeAll: true
   }

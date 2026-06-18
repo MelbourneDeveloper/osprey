@@ -1,6 +1,5 @@
 # Source files
 client/src/**
-server/src/**
 *.ts
 tsconfig.json
 
@@ -37,12 +36,9 @@ test-runner.js
 
 # Keep only essential files
 !out/**
-!server/out/**
 !syntaxes/**
 !language-configuration/**
 !package.json
 !README.md
 !LICENSE
-!node_modules/vscode-languageclient/**
-!node_modules/vscode-languageserver/**
-!node_modules/vscode-languageserver-textdocument/** 
+!node_modules/vscode-languageclient/** 

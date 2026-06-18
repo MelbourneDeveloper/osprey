@@ -223,7 +223,7 @@ suite('Osprey Language Features Tests', () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
-  test('Go to Definition - Function (Expected to fail until LSP fixed)', async () => {
+  test('Go to Definition - Function', async () => {
     const content = `
 fn double(x) = x * 2
 
@@ -254,7 +254,7 @@ let result = double(5)
     }
   });
 
-  test('Find All References - Function (Expected to fail until LSP fixed)', async () => {
+  test('Find All References - Function', async () => {
     const content = `
 fn add(x, y) = x + y
 

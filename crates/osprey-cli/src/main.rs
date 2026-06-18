@@ -9,8 +9,11 @@
 //! the capability sandbox (`--sandbox`, `--no-http`, `--no-websocket`,
 //! `--no-fs`, `--no-ffi`). `--quiet` suppresses non-essential output. The C
 //! driver used to link the emitted IR is `clang`, overridable via `OSPREY_CC`.
+//!
+//! `osprey lsp` runs the Language Server Protocol over stdio (the `osprey-lsp`
+//! crate, built on the published lspkit crates); the `--symbols`/`--hover`
+//! outline/signature helpers it shares now live there too.
 
-mod lsp;
 mod sandbox;
 
 use sandbox::Policy;
@@ -19,7 +22,8 @@ use std::process::{Command, ExitCode};
 
 const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --compile | --run | \
 --symbols] [--quiet] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
-       osprey --hover <name>";
+       osprey --hover <name>\n\
+       osprey lsp";
 
 /// The parsed invocation: source path, mode flag, and behaviour switches.
 struct Cli {
@@ -47,6 +51,12 @@ fn main() -> ExitCode {
         }
         return ExitCode::SUCCESS;
     }
+    // `osprey lsp`: speak the Language Server Protocol over stdio. The Rust
+    // server (osprey-lsp, built on the published lspkit crates) drives the
+    // compiler in-process. [LSP-REUSE-LSPKIT]
+    if args.first().map(String::as_str) == Some("lsp") {
+        return run_lsp();
+    }
     let cli = match parse_args(&args) {
         Ok(cli) => cli,
         Err(msg) => {
@@ -57,12 +67,30 @@ fn main() -> ExitCode {
     if cli.mode == "--hover" {
         // The positional is a built-in NAME, not a file. Unknown names print
         // nothing (the editor simply shows no hover) and still exit 0.
-        if let Some(md) = lsp::builtin_hover(&cli.path) {
+        if let Some(md) = osprey_lsp::builtin_hover(&cli.path) {
             println!("{md}");
         }
         return ExitCode::SUCCESS;
     }
     run(&cli)
+}
+
+/// Run the stdio language server to completion on a fresh Tokio runtime.
+fn run_lsp() -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            eprintln!("osprey lsp: cannot start async runtime: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(osprey_lsp::run_stdio()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("osprey lsp: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 /// Parse the argument list: the first non-flag is the source path; mode flags
@@ -137,7 +165,7 @@ fn dispatch(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode 
         // The outline must work for ill-typed (but parsable) files, so
         // `--symbols` deliberately skips the type gate.
         "--symbols" => {
-            println!("{}", lsp::symbols_json(program));
+            println!("{}", osprey_lsp::symbols_json(program));
             ExitCode::SUCCESS
         }
         "--llvm" | "--run" | "--compile" if report_type_errors(path, program) > 0 => {

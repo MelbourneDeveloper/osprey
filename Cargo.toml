@@ -10,6 +10,7 @@ members = [
     "crates/osprey-types",
     "crates/osprey-codegen",
     "crates/osprey-runtime-sys",
+    "crates/osprey-lsp",
     "crates/osprey-cli",
 ]
 
@@ -26,7 +27,22 @@ osprey-ast = { path = "crates/osprey-ast" }
 osprey-syntax = { path = "crates/osprey-syntax" }
 osprey-types = { path = "crates/osprey-types" }
 osprey-codegen = { path = "crates/osprey-codegen" }
+osprey-lsp = { path = "crates/osprey-lsp" }
 tree-sitter-osprey = { path = "tree-sitter-osprey" }
+
+# Language-server building blocks, reused from the published lspkit crates
+# (crates.io). [LSP-REUSE-LSPKIT] The LSP is wired to the compiler in-process,
+# so only the transport/VFS/engine layers are pulled in (no tree-sitter dup).
+lspkit = "0.0.1"
+lspkit-server = "0.0.1"
+lspkit-vfs = "0.0.1"
+lspkit-live = "0.0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "sync"] }
+async-trait = "0.1"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+lsp-types = "0.97"
 
 # Maximum-strictness lints. Every crate opts in with `[lints] workspace = true`.
 # CI runs `cargo clippy --all-targets -- -D warnings`, so every entry below is a

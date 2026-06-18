@@ -14,7 +14,7 @@ Osprey has no exceptions, panics, or null. Any function that can fail returns a 
 
 ## Status
 
-[ERR-PAYLOAD] is not yet conforming: codegen binds `Error { message }` to a zeroed payload slot (plan: [`error-payloads.md`](https://github.com/MelbourneDeveloper/osprey/blob/main/docs/plans/error-payloads.md)).
+[ERR-PAYLOAD] conforms for `E = string`: the runtime Result block carries a dedicated error-message slot, `Error { message }` binds the real reason, and `toString` renders `Error(<reason>)`. Discriminated-union error payloads (`Result<T, StringError>`) remain deferred behind recursive-union payloads.
 
 ## The Result Type
 

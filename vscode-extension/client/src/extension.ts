@@ -3,6 +3,7 @@ import { workspace, ExtensionContext, window, ConfigurationChangeEvent, commands
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import {
+  Executable,
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
@@ -31,6 +32,18 @@ function resolveBundledCompiler(context: ExtensionContext): string | undefined {
   const exe = process.platform === 'win32' ? '.exe' : '';
   const bundled = context.asAbsolutePath(path.join('bin', shipwrightPlatform(), `osprey${exe}`));
   return fs.existsSync(bundled) ? bundled : undefined;
+}
+
+// resolveServerCommand picks the osprey binary that backs the language server:
+// an explicit user setting, then the version-matched bundled compiler, then a
+// plain `osprey` on PATH. The server is launched as `<command> lsp` over stdio.
+function resolveServerCommand(context: ExtensionContext): string {
+  const config = workspace.getConfiguration('osprey');
+  const userPath = config.get<string>('server.compilerPath') || config.get<string>('server.path');
+  if (userPath) {
+    return userPath;
+  }
+  return resolveBundledCompiler(context) ?? 'osprey';
 }
 
 export function activate(context: ExtensionContext) {
@@ -76,56 +89,30 @@ export function activate(context: ExtensionContext) {
     })();
   }
 
-  // Prefer the version-matched bundled compiler for the LSP server unless the
-  // user has pointed osprey.server.compilerPath/path at their own build.
-  const bundledCompiler = resolveBundledCompiler(context);
-  if (bundledCompiler) {
-    outputChannel.appendLine(`Bundled compiler: ${bundledCompiler}`);
-  }
-  const serverEnv = bundledCompiler
-    ? { ...process.env, OSPREY_COMPILER_PATH: bundledCompiler }
-    : process.env;
+  // The language server is the Rust `osprey lsp` subcommand (the osprey-lsp
+  // crate, built on the published lspkit crates), spoken over stdio. Resolve
+  // the binary: explicit user setting first, then the version-matched bundled
+  // compiler, then `osprey` on PATH.
+  const ospreyCommand = resolveServerCommand(context);
+  outputChannel.appendLine(`Language server command: ${ospreyCommand} lsp`);
 
-  // Server options - use the TypeScript language server.
-  // Try both layouts: top-level tsc -b (out/server/src/server.js) and the
-  // server/tsconfig.json layout (server/out/src/server.js).
-  const candidatePaths = [
-    path.join('out', 'server', 'src', 'server.js'),
-    path.join('server', 'out', 'src', 'server.js')
-  ];
-  let serverModule = '';
-  for (const candidate of candidatePaths) {
-    const abs = context.asAbsolutePath(candidate);
-    if (fs.existsSync(abs)) {
-      serverModule = abs;
-      break;
-    }
-  }
-  outputChannel.appendLine(`Server module path: ${serverModule || '(not found)'}`);
-
-  if (!serverModule) {
-    const errorMsg = `Server module not found in any of: ${candidatePaths.join(', ')}`;
-    outputChannel.appendLine(`ERROR: ${errorMsg}`);
-    window.showErrorMessage(errorMsg);
-    return;
-  }
-  
-  outputChannel.appendLine('Server module exists, proceeding with setup...');
-  
-  const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
-  
+  const serverExecutable: Executable = {
+    command: ospreyCommand,
+    args: ['lsp'],
+    transport: TransportKind.stdio
+  };
   const serverOptions: ServerOptions = {
-    run: { module: serverModule, transport: TransportKind.ipc, options: { env: serverEnv } },
-    debug: {
-      module: serverModule,
-      transport: TransportKind.ipc,
-      options: { ...debugOptions, env: serverEnv }
-    }
+    run: serverExecutable,
+    debug: serverExecutable
   };
 
-  // Client options
+  // Client options. The server analyzes document text (not the filesystem), so
+  // unsaved `untitled:` buffers are supported alongside on-disk files.
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: 'file', language: 'osprey' }],
+    documentSelector: [
+      { scheme: 'file', language: 'osprey' },
+      { scheme: 'untitled', language: 'osprey' }
+    ],
     synchronize: {
       fileEvents: workspace.createFileSystemWatcher('**/*.osp')
     },

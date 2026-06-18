@@ -120,4 +120,4 @@ Spec ([TYPE-UNION-REC]) says: mutually recursive unions follow the same rule.
 
 ### Acceptance
 - [x] `JsonValue` from the spec at [TYPE-UNION-REC] compiles, constructs, and matches — proved by `recursive_unions.osp`.
-- [ ] The JSON-parser canary from [`production-primitives.md`](production-primitives.md) uses `JsonValue` and parses `{"a": [1, true, null]}` to the expected tree — pending the other production-primitives plans (string-cursor, closures, error-payloads, list-patterns) shipping.
+- [ ] The JSON-parser canary from [`production-primitives.md`](production-primitives.md) uses `JsonValue` and parses `{"a": [1, true, null]}` to the expected tree — string-cursor, closures and error-payloads have shipped; pending only list-patterns.

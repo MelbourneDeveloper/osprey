@@ -1,40 +1,66 @@
-//! Editor-integration output: `--symbols` (document outline as JSON) and
-//! `--hover` (built-in signature as markdown). The JSON shape is the contract
-//! the VS Code extension's language server parses (`getSymbolsFromCompiler` in
-//! `vscode-extension/server/src/server.ts`): an array of
-//! `{name, kind, type, line, column, signature?, parameters?, returnType?}`
-//! objects with 1-based `line` and `column`.
+//! AST-driven program analysis: the document outline, built-in hover text, and
+//! identifier lookups that power go-to-definition / find-references.
+//!
+//! This is the single source of truth for turning an [`osprey_ast::Program`]
+//! into editor symbols — both the language server and the `osprey --symbols` /
+//! `osprey --hover` CLI modes render from here.
 
 use osprey_ast::{ExternParameter, Parameter, Position, Program, Stmt, TypeExpr};
 use std::fmt::Write as _;
 
-/// One outline entry, rendered to a JSON object by [`sym_json`].
-struct Sym {
-    name: String,
-    kind: &'static str,
-    ty: String,
-    position: Option<Position>,
-    signature: Option<String>,
-    parameters: Vec<(String, String)>,
-    return_type: Option<String>,
+/// What kind of declaration a [`SymbolInfo`] describes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolKind {
+    /// A function or `extern fn`.
+    Function,
+    /// A `let` binding.
+    Variable,
+    /// A `type` or `effect` declaration.
+    Type,
 }
 
-/// The whole document outline as a JSON array (the `--symbols` payload).
-pub(crate) fn symbols_json(program: &Program) -> String {
-    let mut syms = Vec::new();
-    collect(&program.statements, &mut syms);
-    let rendered: Vec<String> = syms.iter().map(sym_json).collect();
-    format!("[{}]", rendered.join(","))
+impl SymbolKind {
+    /// The wire string used in the `--symbols` JSON and LSP detail.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Function => "function",
+            Self::Variable => "variable",
+            Self::Type => "type",
+        }
+    }
 }
 
-/// Markdown hover text for a built-in function name (the `--hover` payload),
-/// or `None` when the name is not a built-in.
-pub(crate) fn builtin_hover(name: &str) -> Option<String> {
-    osprey_types::builtin_signature(name).map(|sig| format!("```osprey\n{sig}\n```"))
+/// One outline entry derived from a top-level declaration.
+#[derive(Debug, Clone)]
+pub struct SymbolInfo {
+    /// Declared name.
+    pub name: String,
+    /// What sort of declaration this is.
+    pub kind: SymbolKind,
+    /// Rendered type/category text (signature for functions, annotation for
+    /// `let`, `"type"`/`"effect"` for declarations).
+    pub ty: String,
+    /// Source position, when the parser recorded one (1-based line, 0-based col).
+    pub position: Option<Position>,
+    /// Full rendered signature for functions.
+    pub signature: Option<String>,
+    /// `(name, rendered type)` parameter pairs for functions.
+    pub parameters: Vec<(String, String)>,
+    /// Rendered return type for functions.
+    pub return_type: Option<String>,
 }
 
-/// Walk top-level statements (recursing into modules) into outline entries.
-fn collect(stmts: &[Stmt], out: &mut Vec<Sym>) {
+/// Collect every top-level declaration (recursing into modules) into outline
+/// entries, in source order.
+#[must_use]
+pub fn collect_symbols(program: &Program) -> Vec<SymbolInfo> {
+    let mut out = Vec::new();
+    collect(&program.statements, &mut out);
+    out
+}
+
+fn collect(stmts: &[Stmt], out: &mut Vec<SymbolInfo>) {
     for stmt in stmts {
         match stmt {
             Stmt::Module { body, .. } => collect(body, out),
@@ -43,8 +69,7 @@ fn collect(stmts: &[Stmt], out: &mut Vec<Sym>) {
     }
 }
 
-/// The outline entry for one declaration, or `None` for non-declarations.
-fn sym_of(stmt: &Stmt) -> Option<Sym> {
+fn sym_of(stmt: &Stmt) -> Option<SymbolInfo> {
     match stmt {
         Stmt::Function {
             name,
@@ -78,28 +103,18 @@ fn sym_of(stmt: &Stmt) -> Option<Sym> {
     }
 }
 
-/// A function/extern entry: `type` and `signature` are the rendered signature.
 fn fn_sym(
     name: &str,
     parameters: Vec<(String, String)>,
     return_type: Option<&TypeExpr>,
     position: Option<Position>,
-) -> Sym {
+) -> SymbolInfo {
     let ret = return_type.map_or_else(|| String::from("Unit"), render_type);
-    let shown: Vec<String> = parameters
-        .iter()
-        .map(|(n, t)| {
-            if t.is_empty() {
-                n.clone()
-            } else {
-                format!("{n}: {t}")
-            }
-        })
-        .collect();
+    let shown: Vec<String> = parameters.iter().map(render_param).collect();
     let signature = format!("fn {name}({}) -> {ret}", shown.join(", "));
-    Sym {
+    SymbolInfo {
         name: name.into(),
-        kind: "function",
+        kind: SymbolKind::Function,
         ty: signature.clone(),
         position,
         signature: Some(signature),
@@ -108,11 +123,18 @@ fn fn_sym(
     }
 }
 
-/// A `let` binding entry; `type` is the written annotation when present.
-fn let_sym(name: &str, ty: Option<&TypeExpr>, position: Option<Position>) -> Sym {
-    Sym {
+fn render_param((n, t): &(String, String)) -> String {
+    if t.is_empty() {
+        n.clone()
+    } else {
+        format!("{n}: {t}")
+    }
+}
+
+fn let_sym(name: &str, ty: Option<&TypeExpr>, position: Option<Position>) -> SymbolInfo {
+    SymbolInfo {
         name: name.into(),
-        kind: "variable",
+        kind: SymbolKind::Variable,
         ty: ty.map(render_type).unwrap_or_default(),
         position,
         signature: None,
@@ -121,11 +143,10 @@ fn let_sym(name: &str, ty: Option<&TypeExpr>, position: Option<Position>) -> Sym
     }
 }
 
-/// A `type`/`effect` declaration entry (both surface as outline kind `type`).
-fn decl_sym(name: &str, ty: &str, position: Option<Position>) -> Sym {
-    Sym {
+fn decl_sym(name: &str, ty: &str, position: Option<Position>) -> SymbolInfo {
+    SymbolInfo {
         name: name.into(),
-        kind: "type",
+        kind: SymbolKind::Type,
         ty: ty.into(),
         position,
         signature: None,
@@ -134,7 +155,6 @@ fn decl_sym(name: &str, ty: &str, position: Option<Position>) -> Sym {
     }
 }
 
-/// `(name, rendered type or "")` pairs for ordinary parameters.
 fn param_pairs(params: &[Parameter]) -> Vec<(String, String)> {
     params
         .iter()
@@ -147,7 +167,6 @@ fn param_pairs(params: &[Parameter]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// `(name, rendered type)` pairs for extern parameters (always typed).
 fn extern_pairs(params: &[ExternParameter]) -> Vec<(String, String)> {
     params
         .iter()
@@ -156,7 +175,8 @@ fn extern_pairs(params: &[ExternParameter]) -> Vec<(String, String)> {
 }
 
 /// Render a written type expression back to source-ish text.
-fn render_type(t: &TypeExpr) -> String {
+#[must_use]
+pub fn render_type(t: &TypeExpr) -> String {
     if t.is_function {
         let ps: Vec<String> = t.parameter_types.iter().map(render_type).collect();
         let ret = t
@@ -178,16 +198,29 @@ fn render_type(t: &TypeExpr) -> String {
     format!("{}<{}>", t.name, gs.join(", "))
 }
 
-/// Render one entry as a JSON object. The AST column is 0-based; the wire
-/// format is 1-based, so it is shifted here.
-fn sym_json(s: &Sym) -> String {
+/// Markdown hover text for a built-in name, or `None` when not a built-in.
+#[must_use]
+pub fn builtin_hover(name: &str) -> Option<String> {
+    osprey_types::builtin_signature(name).map(|sig| format!("```osprey\n{sig}\n```"))
+}
+
+/// The whole document outline as the `--symbols` JSON array.
+#[must_use]
+pub fn symbols_json(program: &Program) -> String {
+    let rendered: Vec<String> = collect_symbols(program).iter().map(sym_json).collect();
+    format!("[{}]", rendered.join(","))
+}
+
+/// Render one entry as a JSON object. The AST column is 0-based; the wire format
+/// is 1-based, so it is shifted here.
+fn sym_json(s: &SymbolInfo) -> String {
     let (line, column) = s
         .position
         .map_or((1, 1), |p| (p.line, p.column.saturating_add(1)));
     let mut o = format!(
         "{{\"name\":{},\"kind\":{},\"type\":{},\"line\":{line},\"column\":{column}",
         json_str(&s.name),
-        json_str(s.kind),
+        json_str(s.kind.as_str()),
         json_str(&s.ty)
     );
     if let Some(sig) = &s.signature {
@@ -203,7 +236,6 @@ fn sym_json(s: &Sym) -> String {
     o
 }
 
-/// Render `(name, type)` pairs as a JSON array of `{name, type}` objects.
 fn params_json(params: &[(String, String)]) -> String {
     let items: Vec<String> = params
         .iter()
@@ -212,7 +244,6 @@ fn params_json(params: &[(String, String)]) -> String {
     format!("[{}]", items.join(","))
 }
 
-/// A JSON string literal: quoted, with the mandatory escapes.
 fn json_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len().saturating_add(2));
     out.push('"');

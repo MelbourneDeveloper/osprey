@@ -10,8 +10,8 @@ Probes (re-run against the Rust compiler, `target/release/osprey`) put the five 
 |---|---|---|---|
 | 1 | Lambdas at all (`fn(x) => x + 1`) | ✅ **landed** — one closure model: every function value is a closure cell `{ fnptr, captures… }` ([`crates/osprey-codegen/src/closure.rs`](../../crates/osprey-codegen/src/closure.rs)); escaping closures (`makeAdder`), curried middleware, nested capture, capturing lambdas in record fields and iterator callbacks all work; `spawn` shares the same cells (per-instance, re-entrant). Golden coverage in `function_composition_test.osp`. Remaining: UFCS field-call disambiguation (`obj.fnField(x)`) — see below | — |
 | 2 | Recursive unions with `List<Self>` / `Map<K,Self>` payload | ✅ landed — tagged heap layout with pointer-indirected payloads ([`crates/osprey-codegen/src/aggregate.rs`](../../crates/osprey-codegen/src/aggregate.rs)); golden coverage in `recursive_unions.osp` | [`recursive-union-payloads.md`](recursive-union-payloads.md) |
-| 3 | Error message payload threading through `Result<T, E>` | ✅ landed — the Result block carries a dedicated `i8* errmsg` slot (`{ T value, i8 disc, i8* errmsg }`); `Error { message }` binds it, `toString` shows `Error(<reason>)`, and every fallible builtin + division-by-zero + user-constructed `Error` populates a real reason ([`crates/osprey-codegen/src/result.rs`](../../crates/osprey-codegen/src/result.rs)). Golden coverage in `string_edge_cases.osp`. `StringError`-union payloads (Phase 3) stay deferred behind recursive unions | [`error-payloads.md`](error-payloads.md) |
-| 4 | O(1) codepoint/byte cursor over `string` | ✅ landed — `byteLength`/`byteAt`/`codePointAt`/`codePointWidth`/`fromCodePoint` as O(1) builtins over `string_runtime.c`, fallible ones threading real UTF-8 error messages through the Result errmsg slot. Golden coverage in `string_edge_cases.osp`; C unit coverage in `string_runtime_tests.c` | [`string-cursor.md`](string-cursor.md) |
+| 3 | Error message payload threading through `Result<T, E>` | ✅ landed — the Result block carries a dedicated `i8* errmsg` slot (`{ T value, i8 disc, i8* errmsg }`); `Error { message }` binds it, `toString` shows `Error(<reason>)`, and every fallible builtin + division-by-zero + user-constructed `Error` populates a real reason ([`crates/osprey-codegen/src/result.rs`](../../crates/osprey-codegen/src/result.rs)). Golden coverage in `errors/` + `string_edge_cases.osp`. `StringError`-union payloads stay deferred behind recursive unions | — (plan completed and deleted) |
+| 4 | O(1) codepoint/byte cursor over `string` | ✅ landed — `byteLength`/`byteAt`/`codePointAt`/`codePointWidth`/`fromCodePoint` as O(1) builtins over `string_runtime.c`, fallible ones threading real UTF-8 error messages through the Result errmsg slot. Golden coverage in `cursor/` + `string_edge_cases.osp`; C unit coverage in `string_runtime_tests.c` | — (plan completed and deleted) |
 | 5 | List patterns (`[head, ...tail]`) | ❌ spec'd at [TYPE-LIST-PATTERNS] but no AST node / no codegen — escalated to critical-path | [`list-patterns.md`](list-patterns.md) |
 
 What works today that we are **building on**:
@@ -28,10 +28,12 @@ What works today that we are **building on**:
 
 ## Sequencing
 
-The five plans are **independent at the implementation level** but have a natural priority order if a single agent picks them up:
+The five plans are **independent at the implementation level**. Error payloads
+and the string cursor have **shipped** (plans completed and deleted); the
+remaining priority is:
 
-1. **`error-payloads.md`** first — smallest, most contained, unblocks meaningful error messages everywhere immediately.
-2. **`string-cursor.md`** next — adds the C primitives that the JSON parser will sit on top of.
+1. ~~`error-payloads.md`~~ — ✅ shipped: meaningful error messages everywhere.
+2. ~~`string-cursor.md`~~ — ✅ shipped: the C cursor primitives the JSON parser sits on.
 3. **`list-patterns.md`** last — wraps the parser in idiomatic recursive descent (`[head, ...tail]`).
 
 Closures and recursive unions are done. One closure follow-up survives:
@@ -59,9 +61,9 @@ that sits **on top** of these primitives (its composable middleware gate — esc
 
 ## Master TODO (across all five plans)
 
-- [ ] Land `error-payloads.md` Phase 1 (runtime threading) and Phase 2 (codegen rewrite).
+- [x] Land error-payloads: the Result errmsg slot + codegen threading (plan completed and deleted). Coverage in `examples/tested/basics/errors/` + `string_edge_cases.osp`.
 - [x] Land closures (escaping capture, one closure-cell model; plan completed and deleted). Follow-up: UFCS field-call disambiguation (see Sequencing).
 - [x] Land `recursive-union-payloads.md` Phase 1 (layout) and Phase 2 (codegen).
-- [ ] Land `string-cursor.md` Phase 1 (C runtime) and Phase 2 (builtins + registry).
+- [x] Land string-cursor: the five C cursor builtins + registry + codegen (plan completed and deleted). Coverage in `examples/tested/basics/cursor/` + `string_runtime_tests.c`.
 - [ ] Land `list-patterns.md` Phase 1–3 (grammar, codegen, `osprey_list_drop` runtime).
 - [ ] Land `examples/tested/json/json_parser.osp` written in pure Osprey, using only the above primitives plus existing `List`/`Map`/`match`. Must round-trip RFC 8259 conforming inputs.

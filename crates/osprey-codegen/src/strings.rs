@@ -50,6 +50,7 @@ pub(crate) fn gen(
             cg,
             "osp_string_replace",
             &[LType::Str, LType::Str, LType::Str],
+            "replace: needle must not be empty",
             args,
             named,
         )?,
@@ -57,6 +58,7 @@ pub(crate) fn gen(
             cg,
             "osp_string_repeat",
             &[LType::Str, LType::I64],
+            "repeat: count must not be negative",
             args,
             named,
         )?,
@@ -64,6 +66,7 @@ pub(crate) fn gen(
             cg,
             "osp_string_pad_start",
             &[LType::Str, LType::I64, LType::Str],
+            "padStart: fill must not be empty",
             args,
             named,
         )?,
@@ -71,6 +74,7 @@ pub(crate) fn gen(
             cg,
             "osp_string_pad_end",
             &[LType::Str, LType::I64, LType::Str],
+            "padEnd: fill must not be empty",
             args,
             named,
         )?,
@@ -238,16 +242,17 @@ fn substring(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Resul
         "i8*, i64, i64",
         &[&s.operand, &start.operand, &end.operand],
     );
-    result_from_nullable(cg, &ptr, None)
+    result_from_nullable(cg, &ptr, Some("substring: index out of range"))
 }
 
 /// A fallible string transform returning a runtime `char*` that is NULL on
-/// failure, wrapped into `Result<string, _>`. `argtys` lists each argument's
-/// LLVM type in order.
+/// failure, wrapped into `Result<string, _>` with `errmsg` as the Error reason.
+/// `argtys` lists each argument's LLVM type in order.
 fn nullable_str(
     cg: &mut Codegen,
     cname: &str,
     argtys: &[LType],
+    errmsg: &str,
     args: &[Expr],
     _named: &[NamedArgument],
 ) -> Result<Value> {
@@ -255,7 +260,7 @@ fn nullable_str(
     let (ops, params) = typed_args(cg, &sig, args)?;
     let op_refs: Vec<&str> = ops.iter().map(String::as_str).collect();
     let ptr = cg.call("i8*", cname, &params, &op_refs);
-    result_from_nullable(cg, &ptr, None)
+    result_from_nullable(cg, &ptr, Some(errmsg))
 }
 
 /// `parseInt`/`parseFloat`: strict parse writing through an out-slot, returning
