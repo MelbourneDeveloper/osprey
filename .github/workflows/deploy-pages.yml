@@ -2,9 +2,11 @@
 name: Deploy to GitHub Pages
 
 on:
-  # Triggered by release.yml after a release is published (workflow_call).
-  # Also supports manual dispatch for emergency deploys. NOT triggered by
-  # pushes to main — only a tagged release deploys the site.
+  # Deploy the live site whenever main is updated (e.g. a squash-merged PR),
+  # in addition to release-driven deploys (workflow_call from release.yml)
+  # and manual dispatch for emergency deploys.
+  push:
+    branches: [main]
   workflow_call:
   workflow_dispatch:
 
@@ -30,8 +32,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Osprey Compiler
-        uses: ./.github/actions/setup-osprey-compiler
+      # NOTE: the Osprey compiler is intentionally NOT built here. The website
+      # ships committed reference docs as the source of truth; generate-docs.sh
+      # only regenerates them when an osprey binary that supports `--docs` is
+      # present (it isn't yet), and otherwise exits cleanly. Building the Rust
+      # compiler + LLVM here took 10+ min and blew the job timeout, which is why
+      # the live site stopped updating. Re-add a compiler-setup step only once
+      # `osprey --docs` lands and docs need regenerating at deploy time.
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -42,11 +49,7 @@ jobs:
         working-directory: ./website
         run: npm ci
 
-      - name: Generate documentation with Osprey compiler
-        working-directory: ./website
-        run: npm run generate-docs
-
-      - name: Build website
+      - name: Build website (uses committed reference docs)
         working-directory: ./website
         run: npm run build
 
