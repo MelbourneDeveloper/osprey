@@ -34,9 +34,14 @@ pub struct Codegen {
     /// builtins and replayed (in source order) when `forEach`/`fold` consumes
     /// the iterator. Cleared after each consumer.
     pub(crate) pending_iter_ops: Vec<crate::iter::IterOp>,
-    /// Let-bound lambdas, stored for inline application at their call sites
-    /// (`let f = fn(x) => …` then `f(y)`), since the backend lowers no closures.
+    /// Let-bound lambdas, kept for inline application at *direct* call sites
+    /// (`let f = fn(x) => …` then `f(y)`) — a beta-reduction fast path. The
+    /// same lambda is also materialized as a closure cell (`crate::closure`)
+    /// so the name works as a first-class value.
     pub(crate) lambdas: HashMap<String, (Vec<osprey_ast::Parameter>, osprey_ast::Expr)>,
+    /// Top-level functions already wrapped as closure cells (name → the cell's
+    /// constant global), so the forwarder is emitted once per module.
+    pub(crate) fnval_cells: HashMap<String, String>,
     /// Whether the fiber-result global table has been emitted yet.
     /// Parsed `effect` operation signatures, keyed `"Effect.operation"`.
     pub(crate) effect_ops: HashMap<String, crate::effects::OpSig>,
@@ -64,6 +69,10 @@ pub struct Codegen {
     /// `f: (int) -> int`): name → its signature ([`FnSig`]), so a call `f(x)`
     /// lowers to an indirect call through the `i8*` handle.
     pub(crate) fn_ptr_locals: HashMap<String, FnSig>,
+    /// The full inferred [`Type`] of each function-typed local, so a chained
+    /// application (`let inner = nested(10)` then `inner(20)`) can recover the
+    /// returned function's signature.
+    pub(crate) fn_value_types: HashMap<String, Type>,
     /// While inlining a generic function, a function-valued parameter bound to a
     /// callee *by name* (`apply(f: toString, …)`): the parameter redirects to
     /// that real callee, so `f(x)` in the body becomes `toString(x)`. This keeps
@@ -82,6 +91,9 @@ pub(crate) struct SavedFn {
     regs: usize,
     labels: usize,
     scopes: Vec<HashMap<String, Value>>,
+    /// Stream-fusion stages are per-function: a stage recorded inside a nested
+    /// function body must never replay in the suspended function's next loop.
+    pending_iter_ops: Vec<crate::iter::IterOp>,
 }
 
 impl Codegen {
@@ -106,6 +118,7 @@ impl Codegen {
             prog,
             pending_iter_ops: Vec::new(),
             lambdas: HashMap::new(),
+            fnval_cells: HashMap::new(),
             effect_ops: HashMap::new(),
             handler_count: 0,
             lambda_count: 0,
@@ -114,7 +127,33 @@ impl Codegen {
             fn_defs: HashMap::new(),
             inlining: HashSet::new(),
             fn_ptr_locals: HashMap::new(),
+            fn_value_types: HashMap::new(),
             call_aliases: HashMap::new(),
+        }
+    }
+
+    /// Register a function-typed local: its lowered signature for indirect
+    /// calls plus its full [`Type`] for chained applications.
+    pub(crate) fn bind_fn_local(&mut self, name: &str, ty: Type) {
+        if let Some(sig) = Codegen::fn_value_sig(&ty) {
+            let _ = self.fn_ptr_locals.insert(name.to_string(), sig);
+            let _ = self.fn_value_types.insert(name.to_string(), ty);
+        }
+    }
+
+    /// The function type of the value a call to `f` returns, when `f` is a
+    /// top-level function or a function-typed local that returns a function.
+    pub(crate) fn call_result_fn_type(&self, f: &str) -> Option<Type> {
+        let ret = self
+            .prog
+            .return_type(f)
+            .or_else(|| match self.fn_value_types.get(f) {
+                Some(Type::Fun { ret, .. }) => Some(&**ret),
+                _ => None,
+            })?;
+        match ret {
+            Type::Fun { .. } => Some(ret.clone()),
+            _ => None,
         }
     }
 
@@ -125,7 +164,10 @@ impl Codegen {
         let Some((params, ret)) = self.prog.functions.get(name) else {
             return false;
         };
-        params.iter().chain(std::iter::once(ret)).any(has_type_var)
+        params
+            .iter()
+            .chain(std::iter::once(ret))
+            .any(osprey_types::has_type_var)
     }
 
     /// The declared type parameters of a constructor's owner (`["T"]` for
@@ -139,16 +181,21 @@ impl Codegen {
             .unwrap_or_default()
     }
 
-    /// The lowered [`FnSig`] of a function-typed value `ty` (a higher-order
-    /// parameter), for the indirect-call bitcast — `None` if `ty` is not a
-    /// function.
+    /// The lowered [`FnSig`] of a function-typed value `ty`, for the closure
+    /// ABI — `None` if `ty` is not a function. The return is normalized via
+    /// [`crate::types::normalize_fn_ret`] so maker and consumer derive the
+    /// same ABI even when the assignable-unwrap rule let their types differ by
+    /// a Result wrapper.
     pub(crate) fn fn_value_sig(ty: &Type) -> Option<FnSig> {
         match ty {
-            Type::Fun { params, ret } => Some((
-                params.iter().map(ltype_of).collect(),
-                ltype_of(ret),
-                crate::types::result_inner(ret),
-            )),
+            Type::Fun { params, ret } => {
+                let ret = crate::types::normalize_fn_ret(ret);
+                Some((
+                    params.iter().map(ltype_of).collect(),
+                    ltype_of(ret),
+                    crate::types::result_inner(ret),
+                ))
+            }
             _ => None,
         }
     }
@@ -204,6 +251,7 @@ impl Codegen {
             regs: self.reg_count,
             labels: self.label_count,
             scopes: std::mem::take(&mut self.scopes),
+            pending_iter_ops: std::mem::take(&mut self.pending_iter_ops),
         };
         self.reg_count = 0;
         self.label_count = 0;
@@ -226,6 +274,7 @@ impl Codegen {
         self.reg_count = saved.regs;
         self.label_count = saved.labels;
         self.scopes = saved.scopes;
+        self.pending_iter_ops = saved.pending_iter_ops;
     }
 
     /// Register an `effect` operation's parsed signature for `handle`/`perform`.
@@ -274,6 +323,15 @@ impl Codegen {
     /// `{ T, i8 }*` Result block rather than a bare `T`.
     pub(crate) fn fn_ret_result_inner(&self, name: &str) -> Option<LType> {
         crate::types::result_inner(self.prog.return_type(name)?)
+    }
+
+    /// The LLVM spelling of `name`'s emitted return slot (Result block or
+    /// scalar) — the type its `define`/`call` lines actually carry.
+    pub(crate) fn fn_ret_spelling(&self, name: &str) -> String {
+        crate::llty::ret_spelling(
+            self.fn_ret_ltype(name).unwrap_or(LType::I64),
+            self.fn_ret_result_inner(name),
+        )
     }
 
     /// The full heap layout of a constructor: owning type, whether it is a
@@ -465,6 +523,10 @@ impl Codegen {
         self.cur_lines.clear();
         self.cur_block = String::from("entry");
         self.fn_ptr_locals.clear();
+        self.fn_value_types.clear();
+        // The beta-reduction cache is per-function too: a stale entry from an
+        // earlier function must not hijack a same-named local here.
+        self.lambdas.clear();
         self.push_scope();
         self.cur_lines.push("entry:".to_string());
     }
@@ -517,19 +579,6 @@ impl Codegen {
         let obj = self.fresh_reg();
         self.emit(format!("{obj} = bitcast i8* {raw} to {struct_ty}*"));
         obj
-    }
-}
-
-/// The LLVM type of a constructor field. A type-parameter field of a *union
-/// Whether a (fully substituted) inferred type still mentions a type variable —
-/// the mark of a polymorphic signature the backend must specialise per use.
-fn has_type_var(ty: &Type) -> bool {
-    match ty {
-        Type::Var(_) => true,
-        Type::Con { args, .. } => args.iter().any(has_type_var),
-        Type::Fun { params, ret } => params.iter().any(has_type_var) || has_type_var(ret),
-        Type::Record { fields, .. } => fields.values().any(has_type_var),
-        Type::Union { variants, .. } => variants.iter().any(has_type_var),
     }
 }
 

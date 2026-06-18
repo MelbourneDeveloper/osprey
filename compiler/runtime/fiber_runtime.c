@@ -15,6 +15,11 @@ void __osprey_handler_restore(HandlerSnapshot *snap);
 typedef struct Fiber {
   int64_t id;
   int64_t (*function)(void);
+  // Closure-cell entry: when set, takes precedence over `function`. The env
+  // points at a per-spawn heap cell owned by the spawning program (codegen
+  // emits it), so two in-flight spawns from one site never share state.
+  int64_t (*env_function)(void *);
+  void *env;
   int64_t result;
   bool completed;
   pthread_t thread;
@@ -23,6 +28,14 @@ typedef struct Fiber {
   bool uses_thread;
   HandlerSnapshot *handler_snapshot; // Inherited effect handlers from parent
 } Fiber;
+
+// Run a fiber's entry point through whichever ABI it was spawned with.
+static int64_t run_fiber_fn(Fiber *fiber) {
+  if (fiber->env_function != NULL) {
+    return fiber->env_function(fiber->env);
+  }
+  return fiber->function();
+}
 
 typedef struct Channel {
   int64_t id;
@@ -63,7 +76,7 @@ static void execute_fiber_directly(Fiber *fiber) {
     __osprey_handler_restore(fiber->handler_snapshot);
     fiber->handler_snapshot = NULL;
   }
-  fiber->result = fiber->function();
+  fiber->result = run_fiber_fn(fiber);
   fiber->completed = true;
 }
 
@@ -78,7 +91,7 @@ static void *fiber_thread_func(void *arg) {
   }
 
   // Execute the fiber function
-  fiber->result = fiber->function();
+  fiber->result = run_fiber_fn(fiber);
 
   // Mark as completed and signal
   pthread_mutex_lock(&fiber->mutex);
@@ -89,12 +102,9 @@ static void *fiber_thread_func(void *arg) {
   return NULL;
 }
 
-// Create and schedule a fiber
-int64_t fiber_spawn(int64_t (*fn)(void)) {
-  if (!fn) {
-    return -1; // Invalid function pointer
-  }
-
+// Create and schedule a fiber (shared by both spawn ABIs).
+static int64_t fiber_spawn_internal(int64_t (*fn)(void),
+                                    int64_t (*env_fn)(void *), void *env) {
   pthread_mutex_lock(&runtime_mutex);
 
   int64_t id = next_id++;
@@ -113,6 +123,8 @@ int64_t fiber_spawn(int64_t (*fn)(void)) {
 
   fiber->id = id;
   fiber->function = fn;
+  fiber->env_function = env_fn;
+  fiber->env = env;
   fiber->completed = false;
   fiber->uses_thread = false;
   fiber->handler_snapshot = __osprey_handler_snapshot();
@@ -145,6 +157,24 @@ int64_t fiber_spawn(int64_t (*fn)(void)) {
   pthread_mutex_unlock(&runtime_mutex);
 
   return id;
+}
+
+// Spawn with the env-free entry ABI.
+int64_t fiber_spawn(int64_t (*fn)(void)) {
+  if (!fn) {
+    return -1; // Invalid function pointer
+  }
+  return fiber_spawn_internal(fn, NULL, NULL);
+}
+
+// Spawn with the closure-cell entry ABI: `fn(env)` runs on the fiber. The env
+// cell is allocated per spawn by the compiled program, so re-entering the same
+// spawn site never aliases another in-flight fiber's captures.
+int64_t fiber_spawn_env(int64_t (*fn)(void *), void *env) {
+  if (!fn) {
+    return -1; // Invalid function pointer
+  }
+  return fiber_spawn_internal(NULL, fn, env);
 }
 
 // Wait for fiber completion

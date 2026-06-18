@@ -81,6 +81,7 @@ test: build
 	@echo "==> Testing (fail-fast + coverage + per-project thresholds)..."
 	$(MAKE) _test_rust
 	$(MAKE) _coverage_check_rust
+	$(MAKE) _test_c_runtime
 	$(MAKE) _test_differential
 	$(MAKE) _test_vscode_extension
 	$(MAKE) _coverage_check_vscode_extension
@@ -170,6 +171,18 @@ _coverage_check_rust:
 	echo "[rust] coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
 	if [ "$$PCT_INT" -lt "$$THRESHOLD" ]; then echo "[rust] FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; fi; \
 	echo "[rust] OK: $${PCT}% >= $${THRESHOLD}%"
+
+# Hardened C runtime unit tests (assertion-driven; a failed assert aborts the
+# binary). Covers the string cursor (BUILTIN-STRING-CURSOR) + the error-message
+# contract ([ERR-PAYLOAD]) exhaustively, under the same hardening flags the
+# archives use. Built as an executable (no `-c`), so it links the runtime TUs
+# directly. Runs on the `make test` (ubuntu) job; Windows CI uses its own steps.
+_test_c_runtime:
+	@echo "==> [c-runtime] string cursor + error-message contract tests..."
+	@cd compiler && $(CC) -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra \
+	  -ftrapv -std=c11 -D_GNU_SOURCE \
+	  runtime/string_runtime_tests.c runtime/string_runtime.c runtime/string_runtime_list.c \
+	  -o bin/string_runtime_tests && ./bin/string_runtime_tests
 
 # Differential golden harness: every examples/tested/*.osp run through
 # `osprey --run` must match its .expectedoutput byte-for-byte, and the

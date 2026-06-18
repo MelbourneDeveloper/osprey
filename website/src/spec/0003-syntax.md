@@ -2,7 +2,7 @@
 layout: page
 title: "Syntax"
 description: "Osprey Language Specification: Syntax"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0003-syntax/"
@@ -80,7 +80,7 @@ fn greet(name) = "Hello " + name
 fn getValue()  = 42
 ```
 
-Effect sets (`!E`) are described in [Algebraic Effects](0017-AlgebraicEffects.md). Functions of two or more parameters require named arguments at call sites; see [Function Calls](0005-FunctionCalls.md).
+Effect sets (`!E`) are described in [Algebraic Effects](/spec/0017-algebraiceffects/). Functions of two or more parameters require named arguments at call sites; see [Function Calls](/spec/0005-functioncalls/).
 
 ## Extern Declarations
 
@@ -143,7 +143,7 @@ let point  = Point { x: 10, y: 20 }
 let person = Person { name: "Alice", age: 25 }
 ```
 
-Validation, non-destructive update (`record { field: value }`), and full field-access semantics are in [Type System](0004-TypeSystem.md).
+Validation, non-destructive update (`record { field: value }`), and full field-access semantics are in [Type System](/spec/0004-typesystem/).
 
 ## Expressions
 
@@ -153,7 +153,7 @@ logicalOrExpression ::= logicalAndExpression ("||" logicalAndExpression)*
 logicalAndExpression::= comparisonExpression ("&&" comparisonExpression)*
 comparisonExpression::= additiveExpression (("==" | "!=" | "<" | ">" | "<=" | ">=") additiveExpression)*
 additiveExpression  ::= multiplicativeExpression (("+" | "-") multiplicativeExpression)*
-multiplicativeExpression ::= unaryExpression (("*" | "/") unaryExpression)*
+multiplicativeExpression ::= unaryExpression (("*" | "/" | "%") unaryExpression)*
 unaryExpression     ::= ("+" | "-" | "!")? pipeExpression
 pipeExpression      ::= callExpression ("|>" callExpression)*
 callExpression      ::= primaryExpression (
@@ -172,14 +172,14 @@ namedArgument       ::= ID ":" expression
 
 Precedence, highest to lowest:
 
-1. Unary `!`, `-`
+1. Unary `!`, `-`, `+`
 2. Multiplicative `*`, `/`, `%`
 3. Additive `+`, `-`
 4. Comparison `==`, `!=`, `<`, `>`, `<=`, `>=`
 5. Logical AND `&&`
 6. Logical OR `||`
 
-Block expressions and their scoping are defined in [Block Expressions](0008-BlockExpressions.md). Pattern-matching for booleans (the only conditional construct) is in [Boolean Operations](0009-BooleanOperations.md).
+Block expressions and their scoping are defined in [Block Expressions](/spec/0008-blockexpressions/). Pattern-matching for booleans (the only conditional construct) is in [Boolean Operations](/spec/0009-booleanoperations/).
 
 ## List Access
 
@@ -212,7 +212,7 @@ let user  = User { id: 1, name: "Alice" }
 let n     = user.name
 ```
 
-Field access on `any`, `Result`, or any union type requires a `match` to narrow the value first. See [Type System](0004-TypeSystem.md) for the full rules.
+Field access on `any`, `Result`, or any union type requires a `match` to narrow the value first. See [Type System](/spec/0004-typesystem/) for the full rules.
 
 Records are immutable. Use the non-destructive update form to produce a modified copy:
 
@@ -245,7 +245,7 @@ let label = match status {
 }
 ```
 
-Pattern semantics, exhaustiveness, and the ternary shorthand are in [Pattern Matching](0007-PatternMatching.md).
+Pattern semantics, exhaustiveness, and the ternary shorthand are in [Pattern Matching](/spec/0007-patternmatching/).
 
 ## Variable Binding
 

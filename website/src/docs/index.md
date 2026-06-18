@@ -1,6 +1,6 @@
 ---
 layout: page
-title: "API Reference - Osprey Programming Language"
+title: "API Reference"
 description: "Complete reference documentation for the Osprey programming language"
 ---
 
@@ -84,14 +84,14 @@ description: "Complete reference documentation for the Osprey programming langua
 | [trim](functions/trim/) | Removes leading and trailing whitespace. |
 | [trimEnd](functions/trimend/) | Removes trailing whitespace. |
 | [trimStart](functions/trimstart/) | Removes leading whitespace. |
-| [websocketClose](functions/websocketclose/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources. |
-| [websocketConnect](functions/websocketconnect/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback. |
-| [websocketCreateServer](functions/websocketcreateserver/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path. |
-| [websocketKeepAlive](functions/websocketkeepalive/) | ⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation). |
-| [websocketSend](functions/websocketsend/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection. |
-| [websocketServerBroadcast](functions/websocketserverbroadcast/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients sent to) instead of Result<Success, String>. Broadcasts a message to all connected WebSocket clients. |
-| [websocketServerListen](functions/websocketserverlisten/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections. |
-| [websocketStopServer](functions/websocketstopserver/) | ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections. |
+| [websocketClose](functions/websocketclose/) | Closes the WebSocket connection and cleans up resources. |
+| [websocketConnect](functions/websocketconnect/) | Establishes a WebSocket connection with a message handler callback. |
+| [websocketCreateServer](functions/websocketcreateserver/) | Creates a WebSocket server bound to the specified port, address, and path. |
+| [websocketKeepAlive](functions/websocketkeepalive/) | Keeps the WebSocket server running indefinitely until interrupted (blocking operation). |
+| [websocketSend](functions/websocketsend/) | Sends a message through the WebSocket connection. |
+| [websocketServerBroadcast](functions/websocketserverbroadcast/) | Broadcasts a message to all connected WebSocket clients. |
+| [websocketServerListen](functions/websocketserverlisten/) | Starts the WebSocket server listening for connections. |
+| [websocketStopServer](functions/websocketstopserver/) | Stops the WebSocket server and closes all connections. |
 | [words](functions/words/) | Splits on runs of whitespace; empty results dropped. |
 | [writeFile](functions/writefile/) | Writes content to a file. Creates the file if it doesn't exist. Returns number of bytes written. |
 

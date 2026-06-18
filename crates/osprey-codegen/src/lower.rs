@@ -99,19 +99,20 @@ fn gen_function(cg: &mut Codegen, name: &str, parameters: &[Parameter], body: &E
     cg.begin_function();
     // Record any function-typed parameters so a call through one lowers to an
     // indirect call (the higher-order `f(x)` in `fn apply(f, x) = f(x)`).
-    let fn_ptr_params: Vec<(String, crate::builder::FnSig)> = cg
+    let fn_ptr_params: Vec<(String, osprey_types::Type)> = cg
         .prog
         .param_types(name)
         .map(|ptys| {
             parameters
                 .iter()
                 .zip(ptys)
-                .filter_map(|(p, t)| Codegen::fn_value_sig(t).map(|s| (p.name.clone(), s)))
+                .filter(|(_, t)| matches!(t, osprey_types::Type::Fun { .. }))
+                .map(|(p, t)| (p.name.clone(), t.clone()))
                 .collect()
         })
         .unwrap_or_default();
-    for (n, s) in fn_ptr_params {
-        let _ = cg.fn_ptr_locals.insert(n, s);
+    for (n, t) in fn_ptr_params {
+        cg.bind_fn_local(&n, t);
     }
     let mut params = Vec::new();
     for (p, (pty, owner)) in parameters.iter().zip(param_sig.iter()) {
@@ -119,11 +120,29 @@ fn gen_function(cg: &mut Codegen, name: &str, parameters: &[Parameter], body: &E
         cg.bind(p.name.clone(), v);
         params.push((*pty, p.name.clone()));
     }
-    let body_val = gen_expr(cg, body)?;
+    let body_val = gen_fn_body(cg, name, body)?;
     let ret = coerce_return(cg, name, body_val)?;
     cg.emit(format!("ret {} {}", ret.llvm_ty(), ret.operand));
     cg.finish_function(&ret.llvm_ty(), name, &params);
     Ok(())
+}
+
+/// Lower a function body. A body that IS a lambda (`fn makeAdder(n) = fn(x) =>
+/// x + n`) becomes a closure cell typed by the function's declared/inferred
+/// return type — the same signature its callers will use — so maker and caller
+/// agree on the ABI.
+fn gen_fn_body(cg: &mut Codegen, name: &str, body: &Expr) -> Result<Value> {
+    if let Expr::Lambda {
+        parameters,
+        body: lbody,
+        ..
+    } = body
+    {
+        if let Some(sig) = cg.prog.return_type(name).and_then(Codegen::fn_value_sig) {
+            return crate::closure::emit_closure(cg, parameters, lbody, &sig);
+        }
+    }
+    gen_expr(cg, body)
 }
 
 /// Coerce a function body value to its declared return type. A `Result<T, E>`
@@ -156,17 +175,33 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
 }
 
 /// Bind `name` to `value`. A lambda is recorded for inline application at its
-/// call sites rather than evaluated (the backend lowers no closures). When
-/// `unwrap` is set (a mutable assignment), a Result value is unwrapped to its
-/// success payload before binding.
+/// direct call sites (a beta-reduction fast path) AND materialized as a closure
+/// cell so the name is a first-class value. When `unwrap` is set (a mutable
+/// assignment), a Result value is unwrapped to its success payload before
+/// binding.
 fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<()> {
     if let Expr::Lambda {
-        parameters, body, ..
+        parameters,
+        body,
+        position,
+        ..
     } = value
     {
         let _ = cg
             .lambdas
             .insert(name.to_string(), (parameters.clone(), (**body).clone()));
+        // Materialize the closure value when its type resolved concretely; a
+        // still-generic lambda stays inline-only (its cell ABI would lose the
+        // per-instantiation types).
+        if let Some(ty) = cg.prog.lambda_type(*position).cloned() {
+            if crate::types::fn_value_concrete(&ty) {
+                if let Some(sig) = Codegen::fn_value_sig(&ty) {
+                    let v = crate::closure::emit_closure(cg, parameters, body, &sig)?;
+                    cg.bind(name.to_string(), v);
+                    cg.bind_fn_local(name, ty);
+                }
+            }
+        }
         return Ok(());
     }
     let v = gen_expr(cg, value)?;
@@ -175,6 +210,59 @@ fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<
     } else {
         v
     };
+    // A non-lambda (re)binding invalidates any stale beta-reduction entry for
+    // the name — `mut f = fn(x) => …; f = makeAdder(10)` must call the new
+    // closure, not the old inline body.
+    let _ = cg.lambdas.remove(name);
+    // A function-valued binding (`let add5 = makeAdder(5)`) registers its
+    // function type so `add5(3)` lowers as a closure call.
+    if let Some(ty) = fn_result_type(cg, value) {
+        cg.bind_fn_local(name, ty);
+    }
     cg.bind(name.to_string(), v);
     Ok(())
+}
+
+/// The function type of a `let` initializer that produces a function value: a
+/// call whose callee returns a function, an alias of another function-typed
+/// local or a top-level function, or a function-typed record field.
+fn fn_result_type(cg: &Codegen, value: &Expr) -> Option<osprey_types::Type> {
+    match value {
+        Expr::Call { function, .. } => match &**function {
+            Expr::Identifier(f) => cg.call_result_fn_type(f),
+            _ => None,
+        },
+        Expr::Identifier(n) => cg.fn_value_types.get(n).cloned().or_else(|| {
+            // `let d = double` — alias of a named user function.
+            if cg.fn_params.contains_key(n) {
+                cg.prog
+                    .functions
+                    .get(n)
+                    .map(|(p, r)| osprey_types::Type::fun(p.clone(), r.clone()))
+            } else {
+                None
+            }
+        }),
+        Expr::FieldAccess { field, .. } => field_fn_type(cg, field),
+        _ => None,
+    }
+}
+
+/// The type of a function-typed record field, found by field name across the
+/// known constructor layouts (same fallback discipline as
+/// `Codegen::find_field_owner`).
+fn field_fn_type(cg: &Codegen, field: &str) -> Option<osprey_types::Type> {
+    let mut tys: Vec<(&String, &osprey_types::Type)> = cg
+        .prog
+        .ctors
+        .iter()
+        .filter_map(|(owner, c)| {
+            c.fields
+                .iter()
+                .find(|(f, t)| f == field && matches!(t, osprey_types::Type::Fun { .. }))
+                .map(|(_, t)| (owner, t))
+        })
+        .collect();
+    tys.sort_by(|a, b| a.0.cmp(b.0));
+    tys.into_iter().next().map(|(_, t)| t.clone())
 }

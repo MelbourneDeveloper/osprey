@@ -305,3 +305,87 @@ char *osp_float_to_string(double d) {
     }
     return osp_string_dup_internal(buf, (size_t)n);
 }
+
+/* ---------- O(1) byte / codepoint cursor (BUILTIN-STRING-CURSOR) ----------
+ * The irreducible primitive layer a pure-Osprey parser walks input with; every
+ * higher op (take/drop/substring) allocates, these do not. The fallible three
+ * report through `int64_t *out` + a returned `const char *` message (NULL on
+ * success); the message is a static .rodata string (process lifetime). The
+ * codegen side (strings.rs `cursor_int`) lowers that into the Result errmsg
+ * slot — see docs/specs/0012-Built-InFunctions.md (Cursor Access). */
+
+int64_t osp_string_byte_length(const char *s) {
+    if (!s) return 0;
+    return (int64_t)strlen(s);
+}
+
+const char *osp_string_byte_at(const char *s, int64_t i, int64_t *out) {
+    if (!s || !out) return "byteAt: null string";
+    int64_t len = (int64_t)strlen(s);
+    if (i < 0 || i >= len) return "byteAt: index out of range";
+    *out = (int64_t)(unsigned char)s[i];
+    return NULL;
+}
+
+/* UTF-8 bytes a lead byte begins, or 0 when it is not a valid lead. */
+static int osp_utf8_lead_width(unsigned char b) {
+    if (b < 0x80) return 1;
+    if ((b & 0xE0) == 0xC0) return 2;
+    if ((b & 0xF0) == 0xE0) return 3;
+    if ((b & 0xF8) == 0xF0) return 4;
+    return 0;
+}
+
+const char *osp_string_codepoint_at(const char *s, int64_t byte_index, int64_t *out) {
+    if (!s || !out) return "codePointAt: null string";
+    int64_t len = (int64_t)strlen(s);
+    if (byte_index < 0 || byte_index >= len) return "codePointAt: index out of range";
+    const unsigned char *p = (const unsigned char *)s + byte_index;
+    int width = osp_utf8_lead_width(p[0]);
+    if (width == 0) return "codePointAt: invalid UTF-8 lead byte";
+    if (byte_index + width > len) return "codePointAt: truncated codepoint";
+    int64_t cp = (int64_t)(p[0] & (0x7F >> width));
+    for (int k = 1; k < width; k++) {
+        if ((p[k] & 0xC0) != 0x80) return "codePointAt: invalid continuation byte";
+        cp = (cp << 6) | (int64_t)(p[k] & 0x3F);
+    }
+    if (width == 1) cp = p[0];
+    *out = cp;
+    return NULL;
+}
+
+const char *osp_string_codepoint_width(int64_t cp, int64_t *out) {
+    if (!out) return "codePointWidth: null out";
+    if (cp < 0 || cp > 0x10FFFF) return "codePointWidth: code point out of range";
+    if (cp >= 0xD800 && cp <= 0xDFFF) return "codePointWidth: surrogate is not a scalar";
+    *out = cp <= 0x7F ? 1 : cp <= 0x7FF ? 2 : cp <= 0xFFFF ? 3 : 4;
+    return NULL;
+}
+
+char *osp_string_from_codepoint(int64_t cp) {
+    if (cp < 0 || cp > 0x10FFFF) return NULL;
+    if (cp >= 0xD800 && cp <= 0xDFFF) return NULL;
+    char buf[5];
+    int n;
+    if (cp <= 0x7F) {
+        buf[0] = (char)cp;
+        n = 1;
+    } else if (cp <= 0x7FF) {
+        buf[0] = (char)(0xC0 | (cp >> 6));
+        buf[1] = (char)(0x80 | (cp & 0x3F));
+        n = 2;
+    } else if (cp <= 0xFFFF) {
+        buf[0] = (char)(0xE0 | (cp >> 12));
+        buf[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        buf[2] = (char)(0x80 | (cp & 0x3F));
+        n = 3;
+    } else {
+        buf[0] = (char)(0xF0 | (cp >> 18));
+        buf[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+        buf[2] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        buf[3] = (char)(0x80 | (cp & 0x3F));
+        n = 4;
+    }
+    buf[n] = '\0';
+    return osp_string_dup_internal(buf, (size_t)n);
+}

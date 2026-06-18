@@ -2,7 +2,7 @@
 layout: page
 title: "Pattern Matching"
 description: "Osprey Language Specification: Pattern Matching"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0007-patternmatching/"
@@ -10,7 +10,7 @@ permalink: "/spec/0007-patternmatching/"
 
 # Pattern Matching
 
-`match` is the only branching construct in Osprey. Record patterns are matched structurally by field name, not by field order. See [Type System](0004-TypeSystem.md) for type unification rules.
+`match` is the only branching construct in Osprey. Record patterns are matched structurally by field name, not by field order. See [Type System](/spec/0004-typesystem/) for type unification rules.
 
 ## Basic Patterns
 
@@ -49,16 +49,7 @@ let category = match score {
 
 ## Type Annotation Patterns
 
-A pattern of the form `name: type` matches when the value has the named type and binds it. This is the required form for narrowing an `any` value.
-
-```ebnf
-typePattern              ::= ID ":" type
-structuralPattern        ::= ID ":" "{" fieldList "}"
-anonymousStructuralPattern ::= "{" fieldList "}"
-constructorPattern       ::= ID ("(" pattern ("," pattern)* ")")?
-variablePattern          ::= ID
-wildcardPattern          ::= "_"
-```
+A pattern of the form `name: type` matches when the value has the named type and binds it. This is the required form for narrowing an `any` value. The grammar for all pattern forms is in [Syntax](/spec/0003-syntax/#match-expressions).
 
 ```osprey
 // Narrowing an any value
@@ -98,7 +89,7 @@ match result {
 
 ## Result Patterns
 
-`Result<T, E>` is matched the same way as any other union. See [Error Handling](0013-ErrorHandling.md) for the type and arithmetic semantics.
+`Result<T, E>` is matched the same way as any other union. See [Error Handling](/spec/0013-errorhandling/) for the type and arithmetic semantics.
 
 ```osprey
 let calculation = 1 + 3 + (300 / 5)  // Result<int, MathError>

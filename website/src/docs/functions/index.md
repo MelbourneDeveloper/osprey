@@ -424,49 +424,49 @@ Removes leading whitespace.
 
 **Signature:** `websocketClose(wsID: Int) -> Result<Success, String>`
 
-⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources.
+Closes the WebSocket connection and cleans up resources.
 
 ## [websocketConnect](websocketconnect/)
 
 **Signature:** `websocketConnect(url: String, messageHandler: (String) -> Result<Success, String>) -> Result<WebSocketID, String>`
 
-⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<WebSocketID, String> and takes string handler instead of function pointer. Establishes a WebSocket connection with a message handler callback.
+Establishes a WebSocket connection with a message handler callback.
 
 ## [websocketCreateServer](websocketcreateserver/)
 
 **Signature:** `websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`
 
-⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path.
+Creates a WebSocket server bound to the specified port, address, and path.
 
 ## [websocketKeepAlive](websocketkeepalive/)
 
 **Signature:** `websocketKeepAlive() -> Unit`
 
-⚠️ SPEC VIOLATION: Current implementation returns int instead of Unit. Keeps the WebSocket server running indefinitely until interrupted (blocking operation).
+Keeps the WebSocket server running indefinitely until interrupted (blocking operation).
 
 ## [websocketSend](websocketsend/)
 
 **Signature:** `websocketSend(wsID: Int, message: String) -> Result<Success, String>`
 
-⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Sends a message through the WebSocket connection.
+Sends a message through the WebSocket connection.
 
 ## [websocketServerBroadcast](websocketserverbroadcast/)
 
 **Signature:** `websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>`
 
-⚠️ SPEC VIOLATION: Current implementation returns raw int64_t (number of clients sent to) instead of Result<Success, String>. Broadcasts a message to all connected WebSocket clients.
+Broadcasts a message to all connected WebSocket clients.
 
 ## [websocketServerListen](websocketserverlisten/)
 
 **Signature:** `websocketServerListen(serverID: Int) -> Result<Success, String>`
 
-⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections.
+Starts the WebSocket server listening for connections.
 
 ## [websocketStopServer](websocketstopserver/)
 
 **Signature:** `websocketStopServer(serverID: Int) -> Result<Success, String>`
 
-⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections.
+Stops the WebSocket server and closes all connections.
 
 ## [words](words/)
 

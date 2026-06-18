@@ -1,0 +1,211 @@
+//! Scope-aware free-variable analysis over the AST. The one collector behind
+//! every capture mechanism in the backend — closure cells ([`crate::closure`])
+//! and `spawn` thunks ([`crate::fiber`]) — so "what does this expression close
+//! over" has exactly one answer. Names bound *inside* the expression (lambda
+//! parameters, `let`s in blocks, `match`/`select`/handler pattern bindings)
+//! are subtracted; everything else referenced is free.
+
+use osprey_ast::{Expr, FieldAssignment, InterpolatedPart, MatchArm, NamedArgument, Pattern, Stmt};
+use std::collections::BTreeSet;
+
+/// Collect the free identifiers of `e` into `out` (sorted, deduplicated).
+pub(crate) fn free_idents(e: &Expr, out: &mut BTreeSet<String>) {
+    let mut bound: Vec<String> = Vec::new();
+    walk(e, &mut bound, out);
+}
+
+fn note(name: &str, bound: &[String], out: &mut BTreeSet<String>) {
+    if !bound.iter().any(|b| b == name) {
+        let _ = out.insert(name.to_string());
+    }
+}
+
+/// Run `f` with `names` pushed onto the bound stack, restoring it after.
+fn scoped(
+    bound: &mut Vec<String>,
+    names: Vec<String>,
+    out: &mut BTreeSet<String>,
+    f: impl FnOnce(&mut Vec<String>, &mut BTreeSet<String>),
+) {
+    let depth = bound.len();
+    bound.extend(names);
+    f(bound, out);
+    bound.truncate(depth);
+}
+
+fn walk(e: &Expr, bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
+    match e {
+        Expr::Integer(_) | Expr::Float(_) | Expr::Str(_) | Expr::Bool(_) => {}
+        Expr::Identifier(n) => note(n, bound, out),
+        Expr::InterpolatedStr(parts) => {
+            for p in parts {
+                if let InterpolatedPart::Expr(inner) = p {
+                    walk(inner, bound, out);
+                }
+            }
+        }
+        Expr::List(xs) => walk_all(xs, bound, out),
+        Expr::Map(entries) => {
+            for en in entries {
+                walk(&en.key, bound, out);
+                walk(&en.value, bound, out);
+            }
+        }
+        Expr::Object(fields) => walk_fields(fields, bound, out),
+        Expr::Binary { left, right, .. } | Expr::Pipe { left, right } => {
+            walk(left, bound, out);
+            walk(right, bound, out);
+        }
+        Expr::Unary { operand, .. } => walk(operand, bound, out),
+        e2 => walk_rest(e2, bound, out),
+    }
+}
+
+/// Continuation of [`walk`] (kept in thirds so each stays small).
+fn walk_rest(e: &Expr, bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
+    match e {
+        Expr::Call {
+            function,
+            arguments,
+            named_arguments,
+        } => {
+            walk(function, bound, out);
+            walk_all(arguments, bound, out);
+            walk_named(named_arguments, bound, out);
+        }
+        Expr::MethodCall {
+            target,
+            arguments,
+            named_arguments,
+            ..
+        } => {
+            walk(target, bound, out);
+            walk_all(arguments, bound, out);
+            walk_named(named_arguments, bound, out);
+        }
+        Expr::FieldAccess { target, .. } => walk(target, bound, out),
+        Expr::Index { target, index } => {
+            walk(target, bound, out);
+            walk(index, bound, out);
+        }
+        Expr::Lambda {
+            parameters, body, ..
+        } => {
+            let names = parameters.iter().map(|p| p.name.clone()).collect();
+            scoped(bound, names, out, |b, o| walk(body, b, o));
+        }
+        Expr::Match { value, arms } => {
+            walk(value, bound, out);
+            walk_arms(arms, bound, out);
+        }
+        Expr::Block { statements, value } => walk_block(statements, value.as_deref(), bound, out),
+        Expr::TypeConstructor { fields, .. } => walk_fields(fields, bound, out),
+        Expr::Update { record, fields } => {
+            note(record, bound, out);
+            walk_fields(fields, bound, out);
+        }
+        e2 => walk_fiber(e2, bound, out),
+    }
+}
+
+/// Final third of the walker: fiber/effect forms (and the leaf-handled rest).
+fn walk_fiber(e: &Expr, bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
+    match e {
+        Expr::Spawn(inner) | Expr::Await(inner) | Expr::Recv(inner) | Expr::Yield(Some(inner)) => {
+            walk(inner, bound, out);
+        }
+        Expr::Send { channel, value } => {
+            walk(channel, bound, out);
+            walk(value, bound, out);
+        }
+        Expr::Select { arms } => walk_arms(arms, bound, out),
+        Expr::Perform {
+            arguments,
+            named_arguments,
+            ..
+        } => {
+            walk_all(arguments, bound, out);
+            walk_named(named_arguments, bound, out);
+        }
+        Expr::Handler { arms, body, .. } => {
+            for arm in arms {
+                scoped(bound, arm.params.clone(), out, |b, o| walk(&arm.body, b, o));
+            }
+            walk(body, bound, out);
+        }
+        // Every other variant is fully handled by the first two thirds.
+        _ => {}
+    }
+}
+
+/// `let`s bind for the *rest* of the block, so statements thread the bound
+/// stack left to right and the whole block's bindings pop together.
+fn walk_block(
+    statements: &[Stmt],
+    value: Option<&Expr>,
+    bound: &mut Vec<String>,
+    out: &mut BTreeSet<String>,
+) {
+    let depth = bound.len();
+    for s in statements {
+        match s {
+            Stmt::Let { name, value, .. } => {
+                walk(value, bound, out);
+                bound.push(name.clone());
+            }
+            Stmt::Assignment { value, .. } => walk(value, bound, out),
+            Stmt::Expr(e) => walk(e, bound, out),
+            _ => {}
+        }
+    }
+    if let Some(v) = value {
+        walk(v, bound, out);
+    }
+    bound.truncate(depth);
+}
+
+fn walk_arms(arms: &[MatchArm], bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
+    for arm in arms {
+        let names = pattern_bindings(&arm.pattern);
+        scoped(bound, names, out, |b, o| walk(&arm.body, b, o));
+    }
+}
+
+/// Every name a pattern binds in its arm's scope.
+fn pattern_bindings(p: &Pattern) -> Vec<String> {
+    match p {
+        Pattern::Wildcard | Pattern::Literal(_) => Vec::new(),
+        Pattern::Constructor {
+            fields,
+            sub_patterns,
+            ..
+        } => {
+            let mut names = fields.clone();
+            for sp in sub_patterns {
+                names.extend(pattern_bindings(sp));
+            }
+            names
+        }
+        Pattern::TypeAnnotated { name, .. } => vec![name.clone()],
+        Pattern::Structural { fields } => fields.clone(),
+        Pattern::Binding(n) => vec![n.clone()],
+    }
+}
+
+fn walk_all(xs: &[Expr], bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
+    for x in xs {
+        walk(x, bound, out);
+    }
+}
+
+fn walk_named(named: &[NamedArgument], bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
+    for n in named {
+        walk(&n.value, bound, out);
+    }
+}
+
+fn walk_fields(fields: &[FieldAssignment], bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
+    for f in fields {
+        walk(&f.value, bound, out);
+    }
+}

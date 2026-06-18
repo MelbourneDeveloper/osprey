@@ -1,7 +1,7 @@
 {
   "all": true,
-  "src": ["client/src", "server/src"],
-  "include": ["client/src/**/*.ts", "server/src/**/*.ts"],
+  "src": ["client/src"],
+  "include": ["client/src/**/*.ts"],
   "exclude": [
     "**/*.test.ts",
     "**/*.test.js",

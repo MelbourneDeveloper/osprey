@@ -2,13 +2,21 @@
 
 Osprey has no exceptions, panics, or null. Any function that can fail returns a `Result`.
 
+## Status
+
+[ERR-PAYLOAD] conforms for `E = string`: the runtime Result block carries a
+dedicated `i8* errmsg` slot, `Error { message }` binds the real reason, and
+`toString` renders `Error(<reason>)`. Discriminated-union error payloads
+(`Result<T, StringError>`) remain deferred behind
+[`recursive-union-payloads.md`](../plans/recursive-union-payloads.md).
+
 ## The Result Type
 
 ```osprey
 type Result<T, E> = Success { value: T } | Error { message: E }
 ```
 
-The compiler rejects any direct access to the contained value. Callers must pattern-match the `Result` (see [Pattern Matching](0007-PatternMatching.md)):
+The compiler rejects any direct access to the contained value. Callers must pattern-match the `Result` (see [Pattern Matching](0007-PatternMatching.md)) unless one of the auto-unwrap contexts applies ([Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)):
 
 ```osprey
 let result = someFunctionThatCanFail()
@@ -40,16 +48,12 @@ let divZero   = 10 / 0     // Error(DivisionByZero)
 
 #### Chaining Arithmetic
 
-Each operation returns a `Result`, so chaining requires either nested matches or, in the future, Result-aware operators:
+Compound expressions auto-unwrap intermediate `Result`s — `(10 + 5) * 2` is a single `Result<int, MathError>`, never a nested one, and only the final value is matched ([Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)):
 
 ```osprey
-let step1 = 10 + 5
-match step1 {
-    Success { val1 } => match val1 * 2 {
-        Success { val2 }    => print("Final: ${val2}")
-        Error   { message } => print("Multiplication error: ${message}")
-    }
-    Error { message } => print("Addition error: ${message}")
+match (10 + 5) * 2 {
+    Success { value }   => print("Final: ${value}")
+    Error   { message } => print("error: ${message}")
 }
 ```
 
@@ -58,8 +62,8 @@ match step1 {
 A `Result` formats as `Success(<value>)` or `Error(<message>)`:
 
 ```osprey
-print(toString(15 / 3))   // "Success(5)"
-print(toString(10 / 0))   // "Error(DivisionByZero)"
+print(toString(15 / 3))   // "Success(5.0)"  — division is always float
+print(toString(10 / 0))   // "Error(division by zero)"
 ```
 
 ## Error Payload Propagation — [ERR-PAYLOAD]

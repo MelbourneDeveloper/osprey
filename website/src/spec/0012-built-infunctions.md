@@ -2,7 +2,7 @@
 layout: page
 title: "Built-in Functions"
 description: "Osprey Language Specification: Built-in Functions"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0012-built-infunctions/"
@@ -10,7 +10,7 @@ permalink: "/spec/0012-built-infunctions/"
 
 # Built-in Functions
 
-Reference for built-in functions available in every Osprey program. Operations that can fail return `Result`; see [Error Handling](0013-ErrorHandling.md).
+Reference for built-in functions available in every Osprey program. Operations that can fail return `Result`; see [Error Handling](/spec/0013-errorhandling/).
 
 ## Basic I/O Functions
 
@@ -41,13 +41,13 @@ Strings are immutable UTF-8 sequences. Every function listed here is **pure**: i
 
 ### Design Principles
 
-These rules govern the entire string API. They are drawn from idiomatic FP string libraries — primarily Elm's `String` module and Haskell's `Data.Text` — and adapted to Osprey's `Result`-only error model (Osprey has no `Maybe`/`Option`; see [Error Handling](0013-ErrorHandling.md)).
+These rules govern the entire string API. They are drawn from idiomatic FP string libraries — primarily Elm's `String` module and Haskell's `Data.Text` — and adapted to Osprey's `Result`-only error model (Osprey has no `Maybe`/`Option`; see [Error Handling](/spec/0013-errorhandling/)).
 
 1. **Total functions return plain values.** Operations that cannot fail on any well-formed UTF-8 input (e.g. `length`, `toUpperCase`, `trim`, `contains`) return their result directly. They do **not** wrap in `Result`. This matches Elm (`String.length : String -> Int`) and Haskell (`Data.Text.length :: Text -> Int`).
 2. **Partial functions return `Result<T, StringError>`.** Operations with inputs that can be invalid (`substring` with out-of-range indices, `parseInt` on non-numeric input, `split` with an empty separator) return `Result`.
-3. **Subject-first argument order.** The string being operated on is the first parameter, enabling `myString |> trim |> toLowerCase` with the pipe operator (see [Iterators](0010-LoopConstructsAndFunctionalIterators.md)).
-4. **No silent Unicode surprises (target behaviour).** Case conversion follows Unicode simple case mapping; lengths and indices are codepoint counts, not byte counts. This matches Haskell `Data.Text` and Elm `String`. **Implementation status:** the v1 runtime counts bytes (`strlen`-based) and uses ASCII-only `tolower`/`toupper`. UTF-8-aware rewrites are tracked in [docs/plans/string-manipulation.md](../../docs/plans/string-manipulation.md) under "Out of scope".
-5. **No character (`Char`) type yet.** Higher-order operations over individual characters (`map`, `filter`, `foldl`, `any`, `all`) are intentionally **deferred** until Osprey introduces a `Char` type. Listed in the plan, see [docs/plans/string-manipulation.md](../../docs/plans/string-manipulation.md).
+3. **Subject-first argument order.** The string being operated on is the first parameter, enabling `myString |> trim |> toLowerCase` with the pipe operator (see [Iterators](/spec/0010-loopconstructsandfunctionaliterators/)).
+4. **No silent Unicode surprises (target behaviour).** Case conversion follows Unicode simple case mapping; lengths and indices are codepoint counts, not byte counts. This matches Haskell `Data.Text` and Elm `String`. **Implementation status:** the v1 runtime counts bytes (`strlen`-based) and uses ASCII-only `tolower`/`toupper`. UTF-8-aware rewrites build on the cursor primitives (`byteLength`, `byteAt`, `codePointAt`, `codePointWidth`, `fromCodePoint`), which have shipped.
+5. **No character (`Char`) type yet.** Higher-order operations over individual characters (`map`, `filter`, `foldl`, `any`, `all`) are intentionally **deferred** until Osprey introduces a `Char` type.
 
 ### Calling Style
 
@@ -66,7 +66,7 @@ toLowerCase(trim("  Hello  "))
 
 All three desugar to the same call. Rules:
 
-- **Pipe (`x |> f`)** rewrites to `f(x)`. With extra args, `x |> f(a, b)` becomes `f(x, a, b)`. A bare identifier on the right (`x |> f`) is auto-promoted to a call — no parens needed for single-arg functions. See [Iterators](0010-LoopConstructsAndFunctionalIterators.md#pipe-operator).
+- **Pipe (`x |> f`)** rewrites to `f(x)`. With extra args, `x |> f(a, b)` becomes `f(x, a, b)`. A bare identifier on the right (`x |> f`) is auto-promoted to a call — no parens needed for single-arg functions. See [Iterators](/spec/0010-loopconstructsandfunctionaliterators/#pipe-operator).
 - **UFCS (`x.f(args)`)** rewrites to `f(x, args)`. **Parens are required** to disambiguate from field access — `x.f` always means field access, never a method call. If a record has a field named `f`, field access wins; UFCS is the fallback.
 - **Direct call** is plain function application; nothing magic.
 
@@ -284,7 +284,7 @@ Releases process resources.
 
 ## Collection Functions
 
-Reference for builtins over `List<T>` and `Map<K, V>` (defined in [Type System — Collection Types](0004-TypeSystem.md#collection-types)). All functions are **pure** — they never mutate; "modifying" operations return a new collection that shares structure with the original. Operations that can fail return `Result`; total operations return their value directly. Subject-first argument order — the collection being operated on is the first parameter, enabling `xs |> filter(p) |> length(...)`.
+Reference for builtins over `List<T>` and `Map<K, V>` (defined in [Type System — Collection Types](/spec/0004-typesystem/#collection-types)). All functions are **pure** — they never mutate; "modifying" operations return a new collection that shares structure with the original. Operations that can fail return `Result`; total operations return their value directly. Subject-first argument order — the collection being operated on is the first parameter, enabling `xs |> filter(p) |> length(...)`.
 
 ### Design Principles
 
@@ -304,7 +304,7 @@ True iff `length` is `0`. Constant time.
 
 ### `List<T>`
 
-Backed by an immutable bitmapped vector trie (see [TYPE-LIST](0004-TypeSystem.md#listt--type-list)). Index access is `O(log₃₂ n)`.
+Backed by an immutable bitmapped vector trie (see [TYPE-LIST](/spec/0004-typesystem/#listt--type-list)). Index access is `O(log₃₂ n)`.
 
 #### `get(list: List<T>, index: int) -> Result<T, IndexError>`
 Same as `list[index]`. Returns `Error(OutOfBounds)` if `index < 0` or `index >= length(list)`.
@@ -335,7 +335,7 @@ First index of `value`, or `Error(NotFound)`.
 
 ### `Map<K, V>`
 
-Backed by a HAMT with branching factor 32 (see [TYPE-MAP](0004-TypeSystem.md#mapk-v--type-map)). Lookup/insert/remove are `O(log₃₂ n)` expected.
+Backed by a HAMT with branching factor 32 (see [TYPE-MAP](/spec/0004-typesystem/#mapk-v--type-map)). Lookup/insert/remove are `O(log₃₂ n)` expected.
 
 #### `get(map: Map<K, V>, key: K) -> Result<V, IndexError>`
 Same as `map[key]`. Returns `Error(NotFound)` if `key` is absent.
@@ -384,16 +384,16 @@ Group `items` into buckets keyed by `function(item)`. Within each bucket, items 
 
 ## Iterators and Pipe
 
-`range`, `forEach`, `map`, `filter`, `fold`, and `|>` are documented in [Iterators and Iteration](0010-LoopConstructsAndFunctionalIterators.md). Lists and maps are `Iterable`; map iteration yields `(K, V)` tuples.
+`range`, `forEach`, `map`, `filter`, `fold`, and `|>` are documented in [Iterators and Iteration](/spec/0010-loopconstructsandfunctionaliterators/). Lists and maps are `Iterable`; map iteration yields `(K, V)` tuples.
 
 ## HTTP
 
-See [HTTP](0014-HTTP.md).
+See [HTTP](/spec/0014-http/).
 
 ## WebSockets
 
-See [WebSockets](0015-WebSockets.md).
+See [WebSockets](/spec/0015-websockets/).
 
 ## Fibers and Channels
 
-`spawn`, `await`, `send`, `recv`, `yield`, `Fiber<T>`, `Channel<T>` are documented in [Fibers and Concurrency](0011-LightweightFibersAndConcurrency.md).
+`spawn`, `await`, `send`, `recv`, `yield`, `Fiber<T>`, `Channel<T>` are documented in [Fibers and Concurrency](/spec/0011-lightweightfibersandconcurrency/).

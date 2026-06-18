@@ -2,7 +2,7 @@
 layout: page
 title: "Lexical Structure"
 description: "Osprey Language Specification: Lexical Structure"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0002-lexicalstructure/"
@@ -26,7 +26,9 @@ ID := [a-zA-Z_][a-zA-Z0-9_]*
 ## Keywords
 
 ```
-fn let mut type match extern import effect perform handle in as
+fn let mut type match extern import module where
+effect perform handle in
+spawn await yield select
 ```
 
 ## Literals
@@ -88,7 +90,7 @@ let pair    = [x, y]
 
 ### Arithmetic Operators
 
-`+`, `-`, `*`, `/`, `%`. All arithmetic returns `Result`; full signatures and semantics are in [Error Handling](0013-ErrorHandling.md).
+`+`, `-`, `*`, `/`, `%`. All arithmetic returns `Result`; full signatures and semantics are in [Error Handling](/spec/0013-errorhandling/).
 
 ### Comparison Operators
 - `==` Equality

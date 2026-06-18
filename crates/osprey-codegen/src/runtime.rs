@@ -25,12 +25,10 @@ pub(crate) fn to_string_value(cg: &mut Codegen, v: Value) -> Result<Value> {
 }
 
 /// Format a `Result` block as `Success(<value>)` or `Error(<message>)`, branching
-/// on its discriminant — the spelling the golden outputs expect. A NULL string
-/// error payload prints the bare `Error`.
+/// on its discriminant — the spelling the golden outputs expect. The error
+/// payload comes from the errmsg slot (slot 2), which `load_errmsg` already
+/// falls back to the bare `"Error"` constant when unset. Implements [ERR-PAYLOAD].
 fn result_to_string(cg: &mut Codegen, v: &Value) -> Result<Value> {
-    let inner = v
-        .result_inner
-        .ok_or_else(|| crate::error::CodegenError::invalid("result_to_string on non-Result"))?;
     let (_sl, el, end) = crate::result::open_result_branch(cg, v);
     let val = crate::result::load_value(cg, v);
     let vs = to_string_value(cg, val)?;
@@ -38,32 +36,27 @@ fn result_to_string(cg: &mut Codegen, v: &Value) -> Result<Value> {
     let sb = cg.snapshot_to(&end);
 
     cg.start_block(&el);
-    let err = if inner == LType::Str {
-        // A runtime-stored NULL payload prints a bare "Error".
-        let payload = crate::result::load_value(cg, v);
-        let isnull = cg.fresh_reg();
-        cg.emit(format!("{isnull} = icmp eq i8* {}, null", payload.operand));
-        let fl = cg.fresh_label();
-        let nl = cg.fresh_label();
-        let jl = cg.fresh_label();
-        cg.emit(format!("br i1 {isnull}, label %{nl}, label %{fl}"));
-        cg.start_block(&fl);
-        let with = sprintf_wrap(cg, "Error(%s)", &payload.operand);
-        let fb = cg.cur_block().to_string();
-        cg.emit(format!("br label %{jl}"));
-        cg.start_block(&nl);
-        let bare = cg.string_constant("Error");
-        cg.emit(format!("br label %{jl}"));
-        cg.start_block(&jl);
-        let phi = cg.fresh_reg();
-        cg.emit(format!(
-            "{phi} = phi i8* [ {with}, %{fb} ], [ {}, %{nl} ]",
-            bare.operand
-        ));
-        phi
-    } else {
-        cg.string_constant("Error").operand
-    };
+    // A message-less Error (null errmsg slot) prints just `Error`; any real
+    // reason prints `Error(<reason>)`.
+    let msg = crate::result::load_errmsg(cg, v);
+    let isnull = cg.emit_reg(format!("icmp eq i8* {}, null", msg.operand));
+    let fl = cg.fresh_label();
+    let nl = cg.fresh_label();
+    let jl = cg.fresh_label();
+    cg.emit(format!("br i1 {isnull}, label %{nl}, label %{fl}"));
+    cg.start_block(&fl);
+    let with = sprintf_wrap(cg, "Error(%s)", &msg.operand);
+    let fb = cg.cur_block().to_string();
+    cg.emit(format!("br label %{jl}"));
+    cg.start_block(&nl);
+    let bare = cg.string_constant("Error");
+    cg.emit(format!("br label %{jl}"));
+    cg.start_block(&jl);
+    let err = cg.fresh_reg();
+    cg.emit(format!(
+        "{err} = phi i8* [ {with}, %{fb} ], [ {}, %{nl} ]",
+        bare.operand
+    ));
     let eb = cg.snapshot_to(&end);
 
     cg.start_block(&end);

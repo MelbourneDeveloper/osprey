@@ -46,5 +46,6 @@ let result = multiply(5, b: 3)  // Compilation error
 1. Zero parameters: empty parentheses, `f()`.
 2. One parameter: positional or named.
 3. Two or more parameters: every argument must be named. Mixing positional and named arguments is a compilation error.
+4. **Built-in functions** ([Built-in Functions](0012-Built-InFunctions.md)) are exempt: they take positional arguments in subject-first order — `split("a,b,c", ",")`, `fold(xs, 0, add)` — so the pipe can supply the subject as the first argument: `xs |> fold(0, add)`.
 
 Argument order at the call site is independent of declaration order; the compiler reorders by name.

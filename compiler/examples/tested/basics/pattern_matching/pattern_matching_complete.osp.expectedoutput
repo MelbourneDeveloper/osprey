@@ -29,4 +29,4 @@ ok elvis = 15
 bad elvis = 0.0
 good elvis = 5.0
 ok toString  = Success(15)
-bad toString = Error
+bad toString = Error(division by zero)

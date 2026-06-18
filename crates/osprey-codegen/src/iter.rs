@@ -6,13 +6,13 @@
 //! replaying those stages, so no intermediate collection is ever materialised.
 //! Implements [BUILTIN-ITER-*].
 
-use crate::builder::Codegen;
+use crate::builder::{Codegen, FnSig};
 use crate::conv::{as_i64, box_to_i64};
 use crate::error::{CodegenError, Result};
-use crate::expr::{call_with_values, gen_expr};
+use crate::expr::{apply_lambda_values, call_with_values, gen_expr};
 use crate::llty::{LType, Value};
 use crate::loops::{close_list_loop, close_range_loop, open_list_loop, open_range_loop};
-use osprey_ast::{Expr, NamedArgument};
+use osprey_ast::{Expr, NamedArgument, Parameter};
 
 const RANGE_TY: &str = "{ i64, i64 }";
 const RANGE_OWNER: &str = "Range";
@@ -21,7 +21,53 @@ const RANGE_OWNER: &str = "Range";
 #[derive(Clone)]
 pub(crate) struct IterOp {
     pub map: bool, // true = map (transform), false = filter (predicate)
-    pub fn_name: String,
+    pub cb: Callback,
+}
+
+/// An iterator callback in any of its three spellings.
+#[derive(Clone)]
+pub(crate) enum Callback {
+    /// A top-level function/builtin name — a direct call.
+    Named(String),
+    /// An inline (or let-bound) lambda — beta-reduced per element, so its
+    /// captures resolve in the enclosing scope.
+    Lambda(Vec<Parameter>, Expr),
+    /// A function-typed local (closure value) — called through its cell.
+    Local(String, FnSig),
+}
+
+/// Resolve an iterator callback argument to a [`Callback`]. A materialized
+/// closure value wins over the beta-reduction cache — the cell carries the
+/// captures snapshotted at creation.
+fn callback_of(cg: &Codegen, e: &Expr) -> Result<Callback> {
+    match e {
+        Expr::Lambda {
+            parameters, body, ..
+        } => Ok(Callback::Lambda(parameters.clone(), (**body).clone())),
+        Expr::Identifier(n) => match cg.fn_ptr_locals.get(n) {
+            Some(sig) => Ok(Callback::Local(n.clone(), sig.clone())),
+            None => match cg.lambdas.get(n) {
+                Some((params, body)) => Ok(Callback::Lambda(params.clone(), body.clone())),
+                None => Ok(Callback::Named(n.clone())),
+            },
+        },
+        _ => Err(CodegenError::unsupported(
+            "iterator callback must be a function name or lambda",
+        )),
+    }
+}
+
+/// Apply a callback to already-evaluated argument values.
+fn invoke(cg: &mut Codegen, cb: &Callback, args: Vec<Value>) -> Result<Value> {
+    match cb {
+        Callback::Named(name) => call_with_values(cg, name, args),
+        Callback::Lambda(params, body) => apply_lambda_values(cg, params, body, args),
+        Callback::Local(name, sig) => {
+            let handle = cg.lookup(name).ok_or_else(|| CodegenError::unknown(name))?;
+            let typed = crate::closure::coerce_typed_args(cg, sig, args)?;
+            Ok(crate::closure::cell_call(cg, &handle.operand, sig, &typed))
+        }
+    }
 }
 
 /// Dispatch an iterator builtin by name, or `None` if `name` is not one.
@@ -46,16 +92,6 @@ pub(crate) fn gen(
     Ok(Some(v))
 }
 
-/// The callback function name from an iterator argument (a bare identifier).
-fn callback_name(e: &Expr) -> Result<String> {
-    match e {
-        Expr::Identifier(n) => Ok(n.clone()),
-        _ => Err(CodegenError::unsupported(
-            "iterator callback must be a named function",
-        )),
-    }
-}
-
 fn nth(args: &[Expr], i: usize) -> Result<&Expr> {
     args.get(i)
         .ok_or_else(|| CodegenError::invalid("iterator builtin: missing argument"))
@@ -76,11 +112,8 @@ fn range(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 /// `map`/`filter`: record a pending stage and return the iterator unchanged.
 fn record(cg: &mut Codegen, args: &[Expr], is_map: bool) -> Result<Value> {
     let iter = gen_expr(cg, nth(args, 0)?)?;
-    let fn_name = callback_name(nth(args, 1)?)?;
-    cg.pending_iter_ops.push(IterOp {
-        map: is_map,
-        fn_name,
-    });
+    let cb = callback_of(cg, nth(args, 1)?)?;
+    cg.pending_iter_ops.push(IterOp { map: is_map, cb });
     Ok(iter)
 }
 
@@ -98,10 +131,10 @@ fn replay(cg: &mut Codegen, v: Value, skip: &str) -> Result<Value> {
     let mut cur = v;
     for op in &ops {
         if op.map {
-            cur = call_with_values(cg, &op.fn_name, vec![cur])?;
+            cur = invoke(cg, &op.cb, vec![cur])?;
             cur = crate::result::unwrap(cg, cur);
         } else {
-            let pred = call_with_values(cg, &op.fn_name, vec![cur.clone()])?;
+            let pred = invoke(cg, &op.cb, vec![cur.clone()])?;
             let pred = crate::result::unwrap(cg, pred);
             let pb = as_i64(cg, pred)?;
             let nz = cg.fresh_reg();
@@ -117,12 +150,12 @@ fn replay(cg: &mut Codegen, v: Value, skip: &str) -> Result<Value> {
 /// `forEach(iterator, fn)` — counted loop applying `fn` to each (fused) element.
 fn for_each(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let range = gen_expr(cg, nth(args, 0)?)?;
-    let consumer = callback_name(nth(args, 1)?)?;
+    let consumer = callback_of(cg, nth(args, 1)?)?;
     let (start, end) = bounds(cg, &range);
 
     let lp = open_range_loop(cg, &start, &end);
     let elem = replay(cg, Value::new(lp.i.clone(), LType::I64), &lp.incr)?;
-    let _ = call_with_values(cg, &consumer, vec![elem])?;
+    let _ = invoke(cg, &consumer, vec![elem])?;
     close_range_loop(cg, &lp);
     Ok(range)
 }
@@ -141,9 +174,9 @@ fn acc_init(cg: &mut Codegen, args: &[Expr]) -> Result<String> {
 
 /// One fold step: load the accumulator, apply `combine(acc, elem)`, box the
 /// result back into the slot.
-fn acc_step(cg: &mut Codegen, acc: &str, combine: &str, elem: Value) -> Result<()> {
+fn acc_step(cg: &mut Codegen, acc: &str, combine: &Callback, elem: Value) -> Result<()> {
     let a = cg.emit_reg(format!("load i64, i64* {acc}"));
-    let new = call_with_values(cg, combine, vec![Value::new(a, LType::I64), elem])?;
+    let new = invoke(cg, combine, vec![Value::new(a, LType::I64), elem])?;
     let new = crate::result::unwrap(cg, new);
     let new = box_to_i64(cg, new);
     cg.emit(format!("store i64 {}, i64* {acc}", new.operand));
@@ -159,7 +192,7 @@ fn acc_result(cg: &mut Codegen, acc: &str) -> Value {
 fn fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let range = gen_expr(cg, nth(args, 0)?)?;
     let acc = acc_init(cg, args)?;
-    let combine = callback_name(nth(args, 2)?)?;
+    let combine = callback_of(cg, nth(args, 2)?)?;
     let (start, end) = bounds(cg, &range);
 
     let lp = open_range_loop(cg, &start, &end);
@@ -179,9 +212,9 @@ fn list_arg(cg: &mut Codegen, args: &[Expr], i: usize) -> Result<Value> {
 /// `forEachList(list, fn)` — call `fn` on each element in order.
 fn for_each_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let l = list_arg(cg, args, 0)?;
-    let consumer = callback_name(nth(args, 1)?)?;
+    let consumer = callback_of(cg, nth(args, 1)?)?;
     let lp = open_list_loop(cg, &l.operand);
-    let _ = call_with_values(cg, &consumer, vec![Value::new(lp.elem.clone(), LType::I64)])?;
+    let _ = invoke(cg, &consumer, vec![Value::new(lp.elem.clone(), LType::I64)])?;
     close_list_loop(cg, &lp);
     Ok(l)
 }
@@ -189,12 +222,12 @@ fn for_each_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 /// `mapList`/`filterList` — build a new list via the runtime list builder.
 fn list_builder(cg: &mut Codegen, args: &[Expr], filter: bool) -> Result<Value> {
     let l = list_arg(cg, args, 0)?;
-    let f = callback_name(nth(args, 1)?)?;
+    let f = callback_of(cg, nth(args, 1)?)?;
     let bld = crate::collections::list_builder_new(cg);
     let lp = open_list_loop(cg, &l.operand);
     let elem = Value::new(lp.elem.clone(), LType::I64);
     if filter {
-        let pred = call_with_values(cg, &f, vec![elem.clone()])?;
+        let pred = invoke(cg, &f, vec![elem.clone()])?;
         let pred = crate::result::unwrap(cg, pred);
         let pb = as_i64(cg, pred)?;
         let nz = cg.fresh_reg();
@@ -207,7 +240,7 @@ fn list_builder(cg: &mut Codegen, args: &[Expr], filter: bool) -> Result<Value> 
         cg.emit(format!("br label %{skip}"));
         cg.start_block(&skip);
     } else {
-        let mapped = call_with_values(cg, &f, vec![elem])?;
+        let mapped = invoke(cg, &f, vec![elem])?;
         let mapped = crate::result::unwrap(cg, mapped);
         let boxed = box_to_i64(cg, mapped);
         crate::collections::list_builder_push(cg, &bld, &boxed.operand);
@@ -220,7 +253,7 @@ fn list_builder(cg: &mut Codegen, args: &[Expr], filter: bool) -> Result<Value> 
 fn fold_list(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let l = list_arg(cg, args, 0)?;
     let acc = acc_init(cg, args)?;
-    let combine = callback_name(nth(args, 2)?)?;
+    let combine = callback_of(cg, nth(args, 2)?)?;
     let lp = open_list_loop(cg, &l.operand);
     acc_step(cg, &acc, &combine, Value::new(lp.elem.clone(), LType::I64))?;
     close_list_loop(cg, &lp);

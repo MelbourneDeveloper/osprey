@@ -24,18 +24,9 @@ WORKDIR /workspace
 # Build the C runtime archives (compiler/lib/lib*_runtime.a)
 RUN make _runtime
 
-# Build the Rust compiler binary (release)
+# Build the Rust compiler binary (release). The same `osprey` binary serves the
+# language server over stdio (`osprey lsp`), so there is no separate LSP build.
 RUN cargo build --release -p osprey-cli
-
-# Build stage for LSP server
-FROM node:20-bookworm AS lsp-builder
-
-# Copy the VSCode extension for LSP server build
-COPY vscode-extension /workspace/vscode-extension
-WORKDIR /workspace
-
-# Install dependencies and build LSP server
-RUN cd vscode-extension/server && npm ci && npm run compile
 
 # Runtime stage
 FROM node:20-bookworm
@@ -76,9 +67,6 @@ COPY --from=osprey-builder /workspace/target/release/osprey /usr/local/bin/ospre
 # superset containing the websocket + system objects; osprey links only these two)
 COPY --from=osprey-builder /workspace/compiler/lib/libfiber_runtime.a /usr/local/lib/libfiber_runtime.a
 COPY --from=osprey-builder /workspace/compiler/lib/libhttp_runtime.a /usr/local/lib/libhttp_runtime.a
-
-# Copy built LSP server
-COPY --from=lsp-builder /workspace/vscode-extension/server /app/server
 
 # Copy web compiler source
 COPY webcompiler/package*.json ./

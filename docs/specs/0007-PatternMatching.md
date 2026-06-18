@@ -39,16 +39,7 @@ let category = match score {
 
 ## Type Annotation Patterns
 
-A pattern of the form `name: type` matches when the value has the named type and binds it. This is the required form for narrowing an `any` value.
-
-```ebnf
-typePattern              ::= ID ":" type
-structuralPattern        ::= ID ":" "{" fieldList "}"
-anonymousStructuralPattern ::= "{" fieldList "}"
-constructorPattern       ::= ID ("(" pattern ("," pattern)* ")")?
-variablePattern          ::= ID
-wildcardPattern          ::= "_"
-```
+A pattern of the form `name: type` matches when the value has the named type and binds it. This is the required form for narrowing an `any` value. The grammar for all pattern forms is in [Syntax](0003-Syntax.md#match-expressions).
 
 ```osprey
 // Narrowing an any value

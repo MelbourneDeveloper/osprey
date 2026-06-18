@@ -64,6 +64,9 @@ pub struct Checker {
     /// Function name -> the exact (params, ret) types created in pass one, so
     /// body inference reuses the very same variables the signature exported.
     pub(crate) fn_sigs: HashMap<String, (Vec<Type>, Type)>,
+    /// Every lambda's inferred function type, keyed by its source position —
+    /// resolved and published to the backend by [`infer_program`].
+    pub(crate) lambda_tys: Vec<(Position, Type)>,
     /// The built-in function names — user code may not redefine these.
     builtins: HashSet<String>,
 }
@@ -78,6 +81,7 @@ impl Checker {
             union_variants: HashMap::new(),
             fn_params: HashMap::new(),
             fn_sigs: HashMap::new(),
+            lambda_tys: Vec::new(),
             builtins: HashSet::new(),
         };
         c.register_result_ctors();
@@ -513,10 +517,16 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
         })
         .collect();
     let unions = checker.union_variants.clone();
+    let lambdas = checker
+        .lambda_tys
+        .iter()
+        .map(|(pos, ty)| ((pos.line, pos.column), checker.ctx.apply(ty)))
+        .collect();
     ProgramTypes {
         functions,
         ctors,
         unions,
         effects: checker.effects.clone(),
+        lambdas,
     }
 }

@@ -8,7 +8,7 @@ use crate::builder::Codegen;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use crate::result::{make_result_if_err, result_from_nullable};
+use crate::result::{make_result, make_result_if_err, result_from_nullable};
 use osprey_ast::{Expr, NamedArgument};
 
 /// Dispatch a string builtin by name, or `None` if `name` is not one.
@@ -50,6 +50,7 @@ pub(crate) fn gen(
             cg,
             "osp_string_replace",
             &[LType::Str, LType::Str, LType::Str],
+            "replace: needle must not be empty",
             args,
             named,
         )?,
@@ -57,6 +58,7 @@ pub(crate) fn gen(
             cg,
             "osp_string_repeat",
             &[LType::Str, LType::I64],
+            "repeat: count must not be negative",
             args,
             named,
         )?,
@@ -64,6 +66,7 @@ pub(crate) fn gen(
             cg,
             "osp_string_pad_start",
             &[LType::Str, LType::I64, LType::Str],
+            "padStart: fill must not be empty",
             args,
             named,
         )?,
@@ -71,15 +74,41 @@ pub(crate) fn gen(
             cg,
             "osp_string_pad_end",
             &[LType::Str, LType::I64, LType::Str],
+            "padEnd: fill must not be empty",
             args,
             named,
         )?,
-        "parseInt" => parse_strict(cg, "osp_parse_int_strict", LType::I64, args, named)?,
-        "parseFloat" => parse_strict(cg, "osp_parse_float_strict", LType::Double, args, named)?,
+        "parseInt" => parse_strict(
+            cg,
+            "osp_parse_int_strict",
+            LType::I64,
+            "parseInt: invalid integer",
+            args,
+            named,
+        )?,
+        "parseFloat" => parse_strict(
+            cg,
+            "osp_parse_float_strict",
+            LType::Double,
+            "parseFloat: invalid number",
+            args,
+            named,
+        )?,
         "join" => join(cg, args, named)?,
         "lines" => string_list(cg, "osp_string_lines", args)?,
         "words" => string_list(cg, "osp_string_words", args)?,
         "split" => split(cg, args)?,
+        // O(1) byte / codepoint cursor (BUILTIN-STRING-CURSOR).
+        "byteLength" => unary_i64(cg, "osp_string_byte_length", args, named)?,
+        "byteAt" => cursor_int(cg, "osp_string_byte_at", &[LType::Str, LType::I64], args)?,
+        "codePointAt" => cursor_int(
+            cg,
+            "osp_string_codepoint_at",
+            &[LType::Str, LType::I64],
+            args,
+        )?,
+        "codePointWidth" => cursor_int(cg, "osp_string_codepoint_width", &[LType::I64], args)?,
+        "fromCodePoint" => from_codepoint(cg, args)?,
         _ => return Ok(None),
     };
     Ok(Some(v))
@@ -193,7 +222,13 @@ fn index_of(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result
     cg.emit(format!("{iserr} = icmp slt i64 {idx}, 0"));
     let val = cg.fresh_reg();
     cg.emit(format!("{val} = select i1 {iserr}, i64 0, i64 {idx}"));
-    make_result_if_err(cg, Value::new(val, LType::I64), LType::I64, &iserr)
+    make_result_if_err(
+        cg,
+        Value::new(val, LType::I64),
+        LType::I64,
+        &iserr,
+        Some("indexOf: substring not found"),
+    )
 }
 
 /// `substring(s, start, end) -> Result<string, _>` (NULL ⇒ Error).
@@ -207,16 +242,17 @@ fn substring(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Resul
         "i8*, i64, i64",
         &[&s.operand, &start.operand, &end.operand],
     );
-    result_from_nullable(cg, &ptr, None)
+    result_from_nullable(cg, &ptr, Some("substring: index out of range"))
 }
 
 /// A fallible string transform returning a runtime `char*` that is NULL on
-/// failure, wrapped into `Result<string, _>`. `argtys` lists each argument's
-/// LLVM type in order.
+/// failure, wrapped into `Result<string, _>` with `errmsg` as the Error reason.
+/// `argtys` lists each argument's LLVM type in order.
 fn nullable_str(
     cg: &mut Codegen,
     cname: &str,
     argtys: &[LType],
+    errmsg: &str,
     args: &[Expr],
     _named: &[NamedArgument],
 ) -> Result<Value> {
@@ -224,7 +260,7 @@ fn nullable_str(
     let (ops, params) = typed_args(cg, &sig, args)?;
     let op_refs: Vec<&str> = ops.iter().map(String::as_str).collect();
     let ptr = cg.call("i8*", cname, &params, &op_refs);
-    result_from_nullable(cg, &ptr, None)
+    result_from_nullable(cg, &ptr, Some(errmsg))
 }
 
 /// `parseInt`/`parseFloat`: strict parse writing through an out-slot, returning
@@ -233,6 +269,7 @@ fn parse_strict(
     cg: &mut Codegen,
     cname: &str,
     inner: LType,
+    errmsg: &str,
     args: &[Expr],
     _named: &[NamedArgument],
 ) -> Result<Value> {
@@ -251,7 +288,7 @@ fn parse_strict(
     cg.emit(format!("{parsed} = load {inner}, {inner}* {slot}"));
     let iserr = cg.fresh_reg();
     cg.emit(format!("{iserr} = icmp ne i64 {rc}, 0"));
-    make_result_if_err(cg, Value::new(parsed, inner), inner, &iserr)
+    make_result_if_err(cg, Value::new(parsed, inner), inner, &iserr, Some(errmsg))
 }
 
 /// `lines`/`words`: split a string into a `List<string>`. The C `osp_string_list`
@@ -280,7 +317,39 @@ fn split(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
         Value::handle(ptr, crate::collections::LIST_OWNER),
         LType::Ptr,
         &iserr,
+        Some("split: separator must not be empty"),
     )
+}
+
+/// A fallible cursor builtin returning `Result<int, _>` (BUILTIN-STRING-CURSOR):
+/// the C function writes its `i64` result through an out-slot and returns NULL on
+/// success or a static `i8*` error message, which lands directly in the Result's
+/// errmsg slot. `argtys` lists the leading argument types before the out-slot.
+fn cursor_int(cg: &mut Codegen, cname: &str, argtys: &[LType], args: &[Expr]) -> Result<Value> {
+    let sig: Vec<(usize, LType)> = argtys.iter().enumerate().map(|(i, t)| (i, *t)).collect();
+    let (mut ops, params) = typed_args(cg, &sig, args)?;
+    let slot = cg.fresh_reg();
+    cg.emit(format!("{slot} = alloca i64"));
+    cg.emit(format!("store i64 0, i64* {slot}"));
+    ops.push(slot.clone());
+    let full_params = format!("{params}, i64*");
+    let op_refs: Vec<&str> = ops.iter().map(String::as_str).collect();
+    let emsg = cg.call("i8*", cname, &full_params, &op_refs);
+    let parsed = cg.fresh_reg();
+    cg.emit(format!("{parsed} = load i64, i64* {slot}"));
+    let is_err = cg.fresh_reg();
+    cg.emit(format!("{is_err} = icmp ne i8* {emsg}, null"));
+    let disc = cg.fresh_reg();
+    cg.emit(format!("{disc} = select i1 {is_err}, i8 1, i8 0"));
+    make_result(cg, Value::new(parsed, LType::I64), LType::I64, &disc, &emsg)
+}
+
+/// `fromCodePoint(cp: int) -> Result<string, _>` — the C encoder returns NULL on
+/// an invalid scalar value (surrogate / out of range), wrapped as Error.
+fn from_codepoint(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let cp = arg(cg, args, 0, LType::I64)?;
+    let ptr = cg.call("i8*", "osp_string_from_codepoint", "i64", &[&cp.operand]);
+    result_from_nullable(cg, &ptr, Some("fromCodePoint: invalid code point"))
 }
 
 /// `join(list: List<string>, separator: string) -> string`.

@@ -2,7 +2,7 @@
 layout: page
 title: "Type System"
 description: "Osprey Language Specification: Type System"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0004-typesystem/"
@@ -71,21 +71,23 @@ All primitive types are lowercase.
 | `bool`           | `true` \| `false`                                                  |
 | `unit`           | The single value `()`; the return type of a function with no result|
 | `any`            | Erased value; access requires pattern matching                     |
-| `Result<T, E>`   | Error-handling sum type (see [Error Handling](0013-ErrorHandling.md)) |
+| `Result<T, E>`   | Error-handling sum type (see [Error Handling](/spec/0013-errorhandling/)) |
 | `List<T>`        | Immutable sequential collection                                    |
 | `Map<K, V>`      | Immutable key/value collection                                     |
 
 `int` and `float` do not implicitly convert. Use `toFloat(int)` and `toInt(float)`.
 
-Arithmetic returns `Result<T, MathError>`. The full operator-by-operand table and chaining rules are in [Error Handling](0013-ErrorHandling.md#arithmetic-returns-result).
+Arithmetic returns `Result<T, MathError>`. The full operator-by-operand table and chaining rules are in [Error Handling](/spec/0013-errorhandling/#arithmetic-returns-result).
 
 ## Result Auto-Unwrapping
 
-A bare arithmetic expression has type `Result<T, MathError>`. The compiler auto-unwraps the inner `Result` in three contexts so authors do not write nested `match` chains:
+A bare arithmetic expression has type `Result<T, MathError>`. The compiler auto-unwraps the inner `Result` in five contexts so authors do not write nested `match` chains:
 
 1. **Nested arithmetic.** `(10 + 5) * 2` has type `Result<int, MathError>`, not `Result<Result<int, MathError>, MathError>`. If any sub-expression errors, the chain errors.
 2. **User function arguments.** Passing a `Result`-typed expression to a function that expects the underlying type unwraps it. `double(add(a: 5, b: 3))` is well-typed when `add` returns `Result<int, MathError>` and `double` expects `int`.
 3. **Fiber operations.** `spawn`, `await`, `send`, and `recv` unwrap `Result` arguments before storing them.
+4. **Function-value calls.** A `Result` returned through a function value unwraps at the call site ([TYPE-FN-CLOSURE]).
+5. **String interpolation.** `${expr}` renders the success payload (see [String Interpolation](/spec/0006-stringinterpolation/)).
 
 Auto-unwrap does **not** apply to:
 
@@ -115,7 +117,7 @@ let doubler: (int) -> int = fn(x: int) => x * 2
 fn createAdder(n: int) -> (int) -> int = fn(x: int) => x + n
 ```
 
-Multi-argument call syntax (named arguments are required for two or more parameters) is in [Function Calls](0005-FunctionCalls.md).
+Multi-argument call syntax (named arguments are required for two or more parameters) is in [Function Calls](/spec/0005-functioncalls/).
 
 ### Closures — [TYPE-FN-CLOSURE]
 
@@ -134,7 +136,7 @@ let greet   = fn(name: string) => prefix + name              // captures prefix
 print(greet("world"))                                         // "hello world"
 ```
 
-Closures and named functions are interchangeable wherever a function type is expected, including as higher-order arguments (`map`, `filter`, `fold`, `forEach`) and as the function field of records. A closure that captures no free variables is equivalent to a top-level function and the implementation SHOULD lower it to one.
+Closures and named functions are interchangeable wherever a function type is expected, including as higher-order arguments (`map`, `filter`, `fold`, `forEach`) and as the function field of records. A closure that captures no free variables is equivalent to a top-level function and the implementation SHOULD lower it to one. A `Result<T, E>` returned through a function-value call auto-unwraps to `T` (context 4 of [Result Auto-Unwrapping](#result-auto-unwrapping)).
 
 ## Record Types
 
@@ -214,7 +216,7 @@ let companyCity = company.address.city
 
 ## Union Types
 
-A union type (also "sum type", "tagged union", "discriminated union") declares a closed set of named variants. Each variant is either nullary (no payload) or carries a record-style payload. Grammar in [Syntax](0003-Syntax.md#type-declarations); pattern-matching rules in [Pattern Matching](0007-PatternMatching.md).
+A union type (also "sum type", "tagged union", "discriminated union") declares a closed set of named variants. Each variant is either nullary (no payload) or carries a record-style payload. Grammar in [Syntax](/spec/0003-syntax/#type-declarations); pattern-matching rules in [Pattern Matching](/spec/0007-patternmatching/).
 
 ```osprey
 type Color  = Red | Green | Blue
@@ -275,7 +277,7 @@ Field access on a validated value is only legal after matching on the `Result`.
 
 `List<T>` and `Map<K, V>` are the two built-in collection types. Both are **immutable persistent** structures: every operation that would mutate returns a new collection that shares structure with the original. There is no mutable variant. `Set<T>` is reserved for a future revision and is **not** part of this spec; use `Map<K, unit>` if a set-like semantic is required in the meantime.
 
-Builtin signatures referenced below are specified in [Built-in Functions](0012-Built-InFunctions.md) under "Collection Functions". Iterator operations (`map`, `filter`, `fold`, `forEach`) are specified in [Iterators and Iteration](0010-LoopConstructsAndFunctionalIterators.md) and work uniformly on lists, maps, and ranges via the implicit `Iterable` constraint.
+Builtin signatures referenced below are specified in [Built-in Functions](/spec/0012-built-infunctions/) under "Collection Functions". Iterator operations (`map`, `filter`, `fold`, `forEach`) are specified in [Iterators and Iteration](/spec/0010-loopconstructsandfunctionaliterators/) and work uniformly on lists, maps, and ranges via the implicit `Iterable` constraint.
 
 ### `List<T>` — [TYPE-LIST]
 
@@ -298,14 +300,14 @@ match numbers[0] {
 #### Operations — [TYPE-LIST-OPS]
 
 ```osprey
-let doubled  = numbers |> map(x => x * 2)
-let evens    = numbers |> filter(x => x % 2 == 0)
-let total    = numbers |> fold(initial: 0, function: (acc, x) => acc + x)
+let doubled  = numbers |> map(fn(x) => x * 2)
+let evens    = numbers |> filter(fn(x) => x % 2 == 0)
+let total    = numbers |> fold(0, fn(acc, x) => acc + x)
 let combined = numbers + [6, 7, 8]                       // concatenation produces a new list
-numbers |> forEach(x => print(toString(x)))
+numbers |> forEach(fn(x) => print(toString(x)))
 ```
 
-The `+` operator is defined on `(List<T>, List<T>) -> List<T>` and returns a new list. Chains of `map`/`filter` terminated by `forEach`/`fold` are fused per [Stream Fusion](0010-LoopConstructsAndFunctionalIterators.md#stream-fusion); no intermediate list is materialised.
+The `+` operator is defined on `(List<T>, List<T>) -> List<T>` and returns a new list. Chains of `map`/`filter` terminated by `forEach`/`fold` are fused per [Stream Fusion](/spec/0010-loopconstructsandfunctionaliterators/#stream-fusion); no intermediate list is materialised.
 
 #### Patterns — [TYPE-LIST-PATTERNS]
 
@@ -323,7 +325,7 @@ A list pattern matches a list of exactly the listed length unless the final elem
 #### Comprehensions — [TYPE-LIST-COMP]
 
 ```osprey
-let squares  = [x * x for x in range(start: 1, end: 5)]   // [1, 4, 9, 16, 25]
+let squares  = [x * x for x in range(1, 6)]               // [1, 4, 9, 16, 25]
 let filtered = [x for x in numbers if x > 3]
 let [head, ...tail] = numbers
 ```
@@ -371,13 +373,13 @@ match ages["Alice"] {
 All operations return a new map and never mutate the receiver.
 
 ```osprey
-let bumped     = ages |> mapValues(fn: age => age + 1)
-let upper      = ages |> mapKeys(fn: name => toUpperCase(name))
-let thirties   = ages |> filterEntries(fn: (k, v) => v >= 30)
-let totalAge   = ages |> foldEntries(initial: 0, function: (acc, k, v) => acc + v)
+let bumped     = ages |> mapValues(fn(age) => age + 1)
+let upper      = ages |> mapKeys(fn(name) => toUpperCase(name))
+let thirties   = ages |> filterEntries(fn(k, v) => v >= 30)
+let totalAge   = ages |> foldEntries(0, fn(acc, k, v) => acc + v)
 let merged     = ages + { "Dave": 28 }                      // right-biased union
-let updated    = set(map: ages, key: "Alice", value: 26)    // single-key update
-let withoutBob = remove(map: ages, key: "Bob")
+let updated    = set(ages, "Alice", 26)                     // single-key update
+let withoutBob = remove(ages, "Bob")
 ```
 
 Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than a tuple, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `(K, V)` tuple per element.
@@ -390,24 +392,24 @@ A map pattern is **subset-matching**: it matches any map whose entries are a sup
 
 ```osprey
 fn analyze(p: Map<string, int>) -> string = match p {
-    p when length(map: p) == 0               => "none"
+    p when length(p) == 0                    => "none"
     { "Alice": age }                         => "only Alice (${age}) or Alice + others"
     { "Alice": _, "Bob": _ }                 => "contains both Alice and Bob"
-    p when length(map: p) > 5                => "large"
+    p when length(p) > 5                     => "large"
     _                                        => "other"
 }
 ```
 
-The literal `{}` is disallowed as a pattern (it would match every map). Match emptiness explicitly with a guard: `p when length(map: p) == 0`.
+The literal `{}` is disallowed as a pattern (it would match every map). Match emptiness explicitly with a guard: `p when length(p) == 0`.
 
 #### Conversions — [TYPE-MAP-CONV]
 
 ```osprey
-let names    = keys(map: ages)                                  // List<string>, order unspecified
-let agesList = values(map: ages)                                // List<int>,    order unspecified
-let pairs    = entries(map: ages)                               // List<(string, int)>
-let m        = zipToMap(keys: names, values: agesList)          // Result<Map<K,V>, IndexError> if lengths differ
-let byGrade  = groupBy(items: students, function: s => s.grade) // Map<string, List<Student>>
+let names    = keys(ages)                                  // List<string>, order unspecified
+let agesList = values(ages)                                // List<int>,    order unspecified
+let pairs    = entries(ages)                               // List<(string, int)>
+let m        = zipToMap(names, agesList)                   // Result<Map<K,V>, IndexError> if lengths differ
+let byGrade  = groupBy(students, fn(s) => s.grade)         // Map<string, List<Student>>
 ```
 
 `zipToMap` returns a `Result` because mismatched lengths are an error. `groupBy` preserves the relative order of items within each bucket.
@@ -436,7 +438,7 @@ A future revision MAY upgrade `List<T>` to an RRB-tree (Bagwell & Rompf 2011; St
 | `StringError` | String operations that can fail (`length`, `substring`, `contains`) |
 | `ChannelError`| Channel send/recv                                    |
 
-`Success` and `Error` are the constructors of `Result<T, E>` (see [Error Handling](0013-ErrorHandling.md)).
+`Success` and `Error` are the constructors of `Result<T, E>` (see [Error Handling](/spec/0013-errorhandling/)).
 
 ## The `any` Type
 
@@ -464,7 +466,7 @@ fn process(v: any) -> int = match v {
 }
 ```
 
-Pattern syntax (`name: Type`, `name: { fields }`, `{ fields }`, `_`) is defined in [Pattern Matching](0007-PatternMatching.md).
+Pattern syntax (`name: Type`, `name: { fields }`, `{ fields }`, `_`) is defined in [Pattern Matching](/spec/0007-patternmatching/).
 
 ### Exhaustiveness
 

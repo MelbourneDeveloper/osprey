@@ -2,7 +2,7 @@
 layout: page
 title: "Block Expressions"
 description: "Osprey Language Specification: Block Expressions"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0008-blockexpressions/"
@@ -12,8 +12,8 @@ permalink: "/spec/0008-blockexpressions/"
 
 A block expression groups statements and returns the value of its final expression. Each block introduces a new lexical scope.
 
-```
-block_expression := '{' statement* expression? '}'
+```ebnf
+blockExpression ::= "{" statement* expression? "}"
 ```
 
 **Examples:**

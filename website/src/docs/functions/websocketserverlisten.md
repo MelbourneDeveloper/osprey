@@ -1,12 +1,12 @@
 ---
 layout: page
 title: "websocketServerListen (Function)"
-description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections."
+description: "Starts the WebSocket server listening for connections."
 ---
 
 **Signature:** `websocketServerListen(serverID: Int) -> Result<Success, String>`
 
-**Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String> and currently returns -4 (bind failed) due to port binding issues. Starts the WebSocket server listening for connections.
+**Description:** Starts the WebSocket server listening for connections. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
 ## Parameters
 

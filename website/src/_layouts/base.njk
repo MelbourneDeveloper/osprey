@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{{ description or site.description }}">
+    <meta name="description" content="{{ description or excerpt or site.description }}">
     
     <title>{% if title %}{{ title }} - {% endif %}{{ site.title }}</title>
     
@@ -30,7 +30,7 @@
 
     <!-- Open Graph -->
     <meta property="og:title" content="{{ title or site.title }}">
-    <meta property="og:description" content="{{ description or site.description }}">
+    <meta property="og:description" content="{{ description or excerpt or site.description }}">
     <meta property="og:type" content="{% if tags and 'blog' in tags %}article{% else %}website{% endif %}">
     <meta property="og:url" content="{{ site.url }}{{ page.url }}">
     <meta property="og:image" content="{{ site.url }}/assets/images/og-image.png">
@@ -44,9 +44,9 @@
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:site" content="{{ site.twitter }}">
+    {% if site.twitter %}<meta name="twitter:site" content="{{ site.twitter }}">{% endif %}
     <meta name="twitter:title" content="{{ title or site.title }}">
-    <meta name="twitter:description" content="{{ description or site.description }}">
+    <meta name="twitter:description" content="{{ description or excerpt or site.description }}">
     <meta name="twitter:image" content="{{ site.url }}/assets/images/twitter-card.png">
 
     <!-- Structured Data -->
@@ -57,7 +57,9 @@
       "@type": "BlogPosting",
       "headline": {{ title | dump | safe }},
       "description": {{ (description or excerpt or site.description) | dump | safe }},
+      "image": "{{ site.url }}/assets/images/og-image.png",
       "datePublished": "{{ page.date | rssDate }}",
+      "dateModified": "{{ page.date | rssDate }}",
       "author": {
         "@type": "Person",
         "name": "{{ author or 'Christian Findlay' }}",
@@ -82,19 +84,37 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "Osprey Programming Language",
-      "url": "{{ site.url }}",
-      "description": {{ site.description | dump | safe }},
-      "publisher": {
-        "@type": "Organization",
-        "name": "Osprey",
-        "url": "{{ site.url }}",
-        "logo": {
-          "@type": "ImageObject",
-          "url": "{{ site.url }}/assets/images/logo.png"
-        }
-      }
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "{{ site.url }}/#organization",
+          "name": "Osprey Programming Language",
+          "url": "{{ site.url }}",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "{{ site.url }}/assets/images/logo.png"
+          },
+          "sameAs": ["https://github.com/MelbourneDeveloper/osprey"]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "{{ site.url }}/#website",
+          "name": "Osprey Programming Language",
+          "url": "{{ site.url }}",
+          "description": {{ site.description | dump | safe }},
+          "publisher": { "@id": "{{ site.url }}/#organization" }
+        }{% if page.url == "/" %},
+        {
+          "@type": "SoftwareApplication",
+          "name": "Osprey",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "macOS, Linux, Windows",
+          "url": "{{ site.url }}",
+          "description": {{ site.description | dump | safe }},
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+          "publisher": { "@id": "{{ site.url }}/#organization" }
+        }{% endif %}
+      ]
     }
     </script>
     {% endif %}

@@ -2,7 +2,7 @@
 layout: page
 title: "WebSockets"
 description: "Osprey Language Specification: WebSockets"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0015-websockets/"
@@ -10,7 +10,7 @@ permalink: "/spec/0015-websockets/"
 
 # WebSockets
 
-Bidirectional WebSocket communication over RFC 6455. Every operation that can fail returns `Result`; see [Error Handling](0013-ErrorHandling.md).
+Bidirectional WebSocket communication over RFC 6455. Every operation that can fail returns `Result`; see [Error Handling](/spec/0013-errorhandling/).
 
 ## Status
 

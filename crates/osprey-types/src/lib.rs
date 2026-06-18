@@ -27,7 +27,7 @@ pub use builtins::builtin_signature;
 pub use check::{check_program, infer_program};
 pub use error::TypeError;
 pub use info::{CtorLayout, OpType, ProgramTypes};
-pub use ty::{names, Scheme, Type, VarId};
+pub use ty::{has_type_var, names, Scheme, Type, VarId};
 
 #[cfg(test)]
 #[expect(

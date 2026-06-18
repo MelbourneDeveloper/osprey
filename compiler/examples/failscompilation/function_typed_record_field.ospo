@@ -1,6 +1,8 @@
-// Function-typed record fields are not yet a runnable feature
-// (closure capture isn't implemented yet), but they must NOT panic
-// the compiler at AST-build time.
+// Function-typed record fields ARE a runnable feature (closure cells), but
+// calling one as `a.add(10)` still goes through the UFCS rewrite
+// (`add(a, 10)`) and is rejected — the spec'd field-access-wins
+// disambiguation (0012-Built-InFunctions) is not implemented yet. The working
+// spelling is `let f = a.add` then `f(10)`. Must reject cleanly, never panic.
 type Adder = {
     add: (int) -> int
 }

@@ -24,9 +24,10 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
             // A bare name that is a nullary constructor (`Active`, `Red`, …) is a
             // zero-field variant value.
             None if cg.is_ctor(name) => crate::aggregate::gen_constructor(cg, name, &[]),
-            // A bare top-level function name used as a value is a callback (passed
-            // to `spawnProcess`/`httpListen`): take its address as an `i8*`.
-            None if cg.fn_params.contains_key(name) => Ok(fn_pointer(cg, name)),
+            // A bare top-level function name used as a value becomes its closure
+            // cell — the one function-value representation. (C-runtime callback
+            // slots request a raw code pointer explicitly via `fn_pointer`.)
+            None if cg.fn_params.contains_key(name) => crate::closure::named_fn_cell(cg, name),
             None => Err(CodegenError::unknown(name)),
         },
         Expr::Binary { op, left, right } => gen_binary(cg, op, left, right),
@@ -62,17 +63,26 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
             ..
         } => crate::effects::gen_perform(cg, effect, operation, arguments),
         Expr::Handler { effect, arms, body } => crate::effects::gen_handler(cg, effect, arms, body),
+        // A lambda in plain value position (returned, block tail, stored in a
+        // field) becomes a closure cell, typed by inference.
+        Expr::Lambda {
+            parameters,
+            body,
+            position,
+            ..
+        } => crate::closure::lambda_value(cg, parameters, body, *position),
         other => Err(CodegenError::unsupported(describe(other))),
     }
 }
 
-/// A bare top-level function name used as a runtime value (a callback handed to
-/// `spawnProcess`/`httpListen`): emit its address bitcast to `i8*`. The source
-/// type of the bitcast is the function's exact emitted signature — built the
-/// same way `gen_function`/`coerce_return` spelled its `define` — so the cast is
-/// well-typed; the C runtime calls back through its own function-pointer cast.
-/// Mirrors the handler-pointer bitcast in `effects::gen_perform`.
-fn fn_pointer(cg: &mut Codegen, name: &str) -> Value {
+/// A top-level function's RAW code pointer (`i8*`) — exclusively for C-runtime
+/// callback slots (`spawnProcess`/`httpListen` handlers via `extern_call`),
+/// where the C side calls back through a plain function-pointer cast and a
+/// closure cell would be jumped into as code. The source type of the bitcast is
+/// the function's exact emitted signature — built the same way
+/// `gen_function`/`coerce_return` spelled its `define` — so the cast is
+/// well-typed. Mirrors the handler-pointer bitcast in `effects::gen_perform`.
+pub(crate) fn fn_pointer(cg: &mut Codegen, name: &str) -> Value {
     let fty = fn_ptr_type(cg, name);
     let reg = cg.emit_reg(format!("bitcast {fty} @{name} to i8*"));
     Value::new(reg, LType::Ptr)
@@ -82,18 +92,10 @@ fn fn_pointer(cg: &mut Codegen, name: &str) -> Value {
 /// `i64 (i64, i64, i8*)*` — return type (a `{ T, i8 }*` Result block, or the
 /// inferred scalar; `Unit` rides as `i64`) then its parameter type list.
 fn fn_ptr_type(cg: &Codegen, name: &str) -> String {
-    let params = cg
-        .fn_param_ltypes(name)
-        .unwrap_or_default()
-        .iter()
-        .map(|t| t.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let ret = match cg.fn_ret_result_inner(name) {
-        Some(inner) => format!("{{ {inner}, i8 }}*"),
-        None => cg.fn_ret_ltype(name).unwrap_or(LType::I64).to_string(),
-    };
-    format!("{ret} ({params})*")
+    let params = crate::llty::comma_join(&cg.fn_param_ltypes(name).unwrap_or_default(), |t| {
+        t.to_string()
+    });
+    format!("{} ({params})*", cg.fn_ret_spelling(name))
 }
 
 /// LLVM requires a decimal point or exponent in a `double` literal; render a
@@ -207,7 +209,7 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
 /// divisor yields `Error` (`Result<float, MathError>` disc 1), else
 /// `Success(quotient)`.
 fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
-    use crate::result::make_result;
+    use crate::result::{make_result, NO_MSG};
     let ld = as_double(cg, l)?;
     let rd = as_double(cg, r)?;
     let isz = cg.fresh_reg();
@@ -222,18 +224,27 @@ fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     cg.start_block(&nonzero_bb);
     let q = cg.fresh_reg();
     cg.emit(format!("{q} = fdiv double {}, {}", ld.operand, rd.operand));
-    let ok = make_result(cg, Value::new(q, LType::Double), LType::Double, "0")?;
+    let ok = make_result(cg, Value::new(q, LType::Double), LType::Double, "0", NO_MSG)?;
     let okb = cg.snapshot_to(&end);
 
     cg.start_block(&zero_bb);
-    let err = make_result(cg, Value::new("0.0", LType::Double), LType::Double, "1")?;
+    let msg = cg.string_constant("division by zero");
+    let err = make_result(
+        cg,
+        Value::new("0.0", LType::Double),
+        LType::Double,
+        "1",
+        &msg.operand,
+    )?;
     let errb = cg.snapshot_to(&end);
 
     cg.start_block(&end);
     let reg = cg.fresh_reg();
     cg.emit(format!(
-        "{reg} = phi {{ double, i8 }}* [ {}, %{okb} ], [ {}, %{errb} ]",
-        ok.operand, err.operand
+        "{reg} = phi {}* [ {}, %{okb} ], [ {}, %{errb} ]",
+        crate::llty::result_struct_ty(LType::Double),
+        ok.operand,
+        err.operand
     ));
     Ok(Value::result(reg, LType::Double))
 }
@@ -343,6 +354,22 @@ fn gen_call(
     {
         return apply_lambda(cg, parameters, body, arguments);
     }
+    // `makeAdder(5)(3)` — the callee is itself a call producing a function
+    // value: evaluate it to a closure handle and call through the cell.
+    if let Expr::Call {
+        function: inner, ..
+    } = function
+    {
+        if let Expr::Identifier(f) = &**inner {
+            let sig = cg
+                .call_result_fn_type(f)
+                .as_ref()
+                .and_then(Codegen::fn_value_sig);
+            if let Some(sig) = sig {
+                return call_fn_value(cg, function, &sig, arguments, named);
+            }
+        }
+    }
     let Expr::Identifier(ident) = function else {
         return Err(CodegenError::unsupported("indirect / higher-order call"));
     };
@@ -354,14 +381,16 @@ fn gen_call(
         .cloned()
         .unwrap_or_else(|| ident.clone());
     let name = name.as_str();
-    // A let-bound lambda is inlined at its call site (no closures lowered).
-    if let Some((params, body)) = cg.lambdas.get(name).cloned() {
-        return apply_lambda(cg, &params, &body, arguments);
-    }
-    // A call through a function-typed local (`f(x)` where `f: (int) -> int` is a
-    // higher-order parameter) is an indirect call through its `i8*` handle.
+    // A call through a function-typed local (`f(x)` where `f` holds a closure
+    // cell) goes through the cell FIRST — the cell snapshots captures at
+    // creation, the one capture semantics. The beta-reduction fast path below
+    // only serves lambdas that never materialized as a value.
     if let Some(v) = crate::genfn::try_indirect(cg, name, arguments, named)? {
         return Ok(v);
+    }
+    // A let-bound lambda with no materialized cell is inlined at its call site.
+    if let Some((params, body)) = cg.lambdas.get(name).cloned() {
+        return apply_lambda(cg, &params, &body, arguments);
     }
     match name {
         "print" => {
@@ -405,6 +434,21 @@ fn gen_call(
     }
 }
 
+/// Call through an evaluated function value: lower the callee expression to a
+/// closure handle, coerce the arguments to the signature's parameter types,
+/// and call through the cell.
+fn call_fn_value(
+    cg: &mut Codegen,
+    callee: &Expr,
+    sig: &FnSig,
+    arguments: &[Expr],
+    named: &[NamedArgument],
+) -> Result<Value> {
+    let handle = gen_expr(cg, callee)?;
+    let exprs = arg_exprs(arguments, named);
+    crate::closure::cell_call_exprs(cg, &handle.operand, sig, &exprs)
+}
+
 /// Beta-reduce a lambda at its application site: bind each parameter to its
 /// argument, lower the body in a fresh scope, then unwrap a `Result` return.
 /// A lambda's inferred return type is its body's success payload, so applying
@@ -416,10 +460,24 @@ fn apply_lambda(
     body: &Expr,
     arguments: &[Expr],
 ) -> Result<Value> {
+    let mut values = Vec::with_capacity(arguments.len());
+    for a in arguments {
+        values.push(gen_expr(cg, a)?);
+    }
+    apply_lambda_values(cg, parameters, body, values)
+}
+
+/// [`apply_lambda`] over already-evaluated argument values — shared with the
+/// iterator builtins, which produce loop elements as values.
+pub(crate) fn apply_lambda_values(
+    cg: &mut Codegen,
+    parameters: &[Parameter],
+    body: &Expr,
+    values: Vec<Value>,
+) -> Result<Value> {
     cg.push_scope();
-    for (p, a) in parameters.iter().zip(arguments) {
-        let av = gen_expr(cg, a)?;
-        cg.bind(p.name.clone(), av);
+    for (p, v) in parameters.iter().zip(values) {
+        cg.bind(p.name.clone(), v);
     }
     let v = gen_expr(cg, body);
     cg.pop_scope();
@@ -458,14 +516,10 @@ pub(crate) fn call_with_values(cg: &mut Codegen, name: &str, args: Vec<Value>) -
             .collect::<Result<Vec<_>>>()?,
         _ => args,
     };
-    let typed = coerced
-        .iter()
-        .map(Value::typed)
-        .collect::<Vec<_>>()
-        .join(", ");
-    // A function declared `-> Result<T, E>` hands back a `{ T, i8 }*` block.
+    let typed = crate::llty::comma_join(&coerced, Value::typed);
+    // A function declared `-> Result<T, E>` hands back a Result block pointer.
     if let Some(inner) = cg.fn_ret_result_inner(name) {
-        let rty = format!("{{ {inner}, i8 }}*");
+        let rty = format!("{}*", crate::llty::result_struct_ty(inner));
         let reg = emit_user_call(cg, name, &rty, &coerced, &typed);
         return Ok(Value::result(reg, inner));
     }
@@ -485,11 +539,7 @@ fn emit_user_call(
     typed: &str,
 ) -> String {
     if !cg.fn_params.contains_key(name) {
-        let sig = coerced
-            .iter()
-            .map(Value::llvm_ty)
-            .collect::<Vec<_>>()
-            .join(", ");
+        let sig = crate::llty::comma_join(coerced, Value::llvm_ty);
         cg.add_extern(format!("declare {rty} @{name}({sig})"));
     }
     cg.emit_reg(format!("call {rty} @{name}({typed})"))
@@ -502,13 +552,15 @@ pub(crate) fn ordered_args(
     named: &[NamedArgument],
 ) -> Result<Vec<Value>> {
     // The function-value signature of each declared parameter (if it is
-    // function-typed), so an inline-lambda argument is lifted to a code pointer
-    // matching that slot's ABI rather than evaluated as a value.
+    // function-typed), so an inline-lambda argument is lowered to that slot's
+    // ABI rather than evaluated as a value. An EXTERN callee crosses the C
+    // boundary: its function-typed slots take raw code pointers, not cells.
     let sigs: Vec<Option<FnSig>> = cg
         .prog
         .param_types(name)
         .map(|ts| ts.iter().map(Codegen::fn_value_sig).collect())
         .unwrap_or_default();
+    let ffi = !cg.fn_params.contains_key(name) && cg.prog.functions.contains_key(name);
     if !named.is_empty() {
         if let Some(pnames) = cg.fn_params.get(name).cloned() {
             let mut out = Vec::new();
@@ -518,6 +570,7 @@ pub(crate) fn ordered_args(
                         cg,
                         &na.value,
                         sigs.get(i).and_then(Option::as_ref),
+                        ffi,
                     )?);
                 }
             }
@@ -530,25 +583,37 @@ pub(crate) fn ordered_args(
     arguments
         .iter()
         .enumerate()
-        .map(|(i, a)| eval_arg(cg, a, sigs.get(i).and_then(Option::as_ref)))
+        .map(|(i, a)| eval_arg(cg, a, sigs.get(i).and_then(Option::as_ref), ffi))
         .collect()
 }
 
-/// Lower one call argument. An inline lambda flowing into a function-typed
-/// parameter is lifted to a top-level function (a code pointer); every other
-/// argument — including a value-position lambda with no function-typed slot,
-/// which stays unsupported — goes through `gen_expr`.
-fn eval_arg(cg: &mut Codegen, expr: &Expr, sig: Option<&FnSig>) -> Result<Value> {
-    if let (
-        Expr::Lambda {
-            parameters, body, ..
-        },
-        Some(sig),
-    ) = (expr, sig)
-    {
-        return crate::genfn::lift_lambda(cg, parameters, body, sig);
+/// Lower one call argument. A lambda flowing into a function-typed parameter
+/// becomes a closure cell with the slot's ABI — except across the C boundary
+/// (`ffi`), where the slot needs a raw code pointer: there a non-capturing
+/// lambda lifts env-free and a named function takes its raw address.
+/// Everything else goes through `gen_expr` (where a user function name becomes
+/// its forwarder cell).
+fn eval_arg(cg: &mut Codegen, expr: &Expr, sig: Option<&FnSig>, ffi: bool) -> Result<Value> {
+    match (expr, sig) {
+        (
+            Expr::Lambda {
+                parameters, body, ..
+            },
+            Some(sig),
+        ) => {
+            if ffi {
+                crate::closure::raw_callback_lambda(cg, parameters, body, sig)
+            } else {
+                crate::closure::emit_closure(cg, parameters, body, sig)
+            }
+        }
+        (Expr::Identifier(n), Some(_))
+            if ffi && cg.lookup(n).is_none() && cg.fn_params.contains_key(n) =>
+        {
+            Ok(fn_pointer(cg, n))
+        }
+        _ => gen_expr(cg, expr),
     }
-    gen_expr(cg, expr)
 }
 
 fn gen_interpolation(cg: &mut Codegen, parts: &[InterpolatedPart]) -> Result<Value> {

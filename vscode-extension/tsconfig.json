@@ -21,7 +21,6 @@
   },
   "include": [
     "client/src/**/*",
-    "server/src/**/*",
     "test/**/*.ts"
   ],
   "exclude": [

@@ -47,12 +47,19 @@ pub fn type_expr_to_type(te: &TypeExpr, params: &HashMap<String, Type>) -> Type 
 }
 
 /// Convert a bare field/effect type string (e.g. `"int"`, `"T"`,
-/// `"Result<string, Error>"`) into a type. Only the shallow `Name<...>` form is
-/// recognised; that covers every field type used by the examples.
+/// `"Result<string, Error>"`, `"(int) -> bool"`) into a type. The shallow
+/// `Name<...>`, `[elem]` and function-arrow forms are recognised; that covers
+/// every field type used by the examples.
 pub fn type_name_to_type(s: &str, params: &HashMap<String, Type>) -> Type {
     let s = s.trim();
     if let Some(var) = params.get(s) {
         return var.clone();
+    }
+    // A function type — `fn(int) -> bool` or `(int) -> bool` — parses through
+    // the same tolerant parser effect-operation signatures use.
+    if s.starts_with("fn(") || (s.starts_with('(') && s.contains("->")) {
+        let (ps, ret) = parse_fn_sig(s, params);
+        return Type::fun(ps, ret);
     }
     if let Some(open) = s.find('<') {
         if s.ends_with('>') {

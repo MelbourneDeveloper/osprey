@@ -44,8 +44,24 @@ function extractTitle(content, filename) {
 
 // Helper function to clean content for individual spec pages
 function cleanSpecContent(content, filename) {
-  // Don't remove TOC from individual pages - just return the content as-is
-  // The TOC provides valuable navigation within each document
+  // Rewrite cross-references so they resolve on the website. The spec markdown
+  // uses repo-relative links (e.g. `0004-TypeSystem.md`, `../plans/x.md`) that
+  // are valid on GitHub but 404 on the site, where specs live at
+  // `/spec/<slug>/`. Without this every inter-spec link is a broken link.
+
+  // Sibling spec pages: `0004-TypeSystem.md[#anchor]` -> `/spec/0004-typesystem/[#anchor]`
+  content = content.replace(
+    /\]\((\d{4}-[A-Za-z0-9._-]+)\.md(#[^)]*)?\)/g,
+    (_m, slug, anchor) => `](/spec/${slug.toLowerCase()}/${anchor || ''})`
+  );
+
+  // Plan / design docs aren't published to the site: point them at the repo.
+  content = content.replace(
+    /\]\((?:\.\.\/)+(?:docs\/)?plans\/([A-Za-z0-9._-]+\.md)(#[^)]*)?\)/g,
+    (_m, file, anchor) =>
+      `](https://github.com/MelbourneDeveloper/osprey/blob/main/docs/plans/${file}${anchor || ''})`
+  );
+
   return content.trim();
 }
 
@@ -72,6 +88,16 @@ permalink: "/spec/${slug}/"
 
 try {
   console.log('📁 Creating spec directory structure...');
+
+  // Remove previously generated spec pages first. Without this, renamed or
+  // renumbered source files leave orphan pages behind (e.g. an old
+  // 0015-http.md lingering after HTTP moved to 0014), producing duplicate
+  // content. index.md is regenerated separately at the end of this script.
+  for (const existing of fs.readdirSync(specDestDir)) {
+    if (existing.endsWith('.md') && existing !== 'index.md') {
+      fs.unlinkSync(path.join(specDestDir, existing));
+    }
+  }
 
   // Read all spec files (skipping meta-docs like README.md)
   const specFiles = fs.readdirSync(specSourceDir)
@@ -149,7 +175,7 @@ permalink: "/spec/"
   // Create a simple introduction and table of contents only
   const newIndexContent = `# Osprey Language Specification
 
-**Version:** 0.2.0-alpha  
+**Version:** 0.2.0  
 **Date:** ${new Date().toISOString().split('T')[0]}  
 **Author:** Christian Findlay
 
@@ -163,13 +189,14 @@ This specification defines the complete syntax and semantics of the Osprey progr
 
 The Osprey language is designed for elegance, safety, and performance, emphasizing:
 
+- **Algebraic effects** with compile-time safety — unhandled effects are compilation errors
 - **Named arguments** for multi-parameter functions to improve readability
-- **Strong type inference** to reduce boilerplate while maintaining safety
+- **Strong type inference** (Hindley-Milner) to reduce boilerplate while maintaining safety
 - **String interpolation** for convenient text formatting
 - **Pattern matching** for elegant conditional logic
-- **Immutable-by-default** variables with explicit mutability
-- **Fast HTTP servers and clients** with built-in streaming support
-- **WebSocket support** for real-time two-way communication
+- **Immutable-by-default** variables and persistent collections
+- **Fast HTTP/HTTPS servers and clients** with built-in streaming support
+- **C interoperability** via a typed foreign function interface
 
 ## Implementation Status
 

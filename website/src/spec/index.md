@@ -2,7 +2,7 @@
 layout: page
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/"
@@ -10,8 +10,8 @@ permalink: "/spec/"
 
 # Osprey Language Specification
 
-**Version:** 0.2.0-alpha  
-**Date:** 2026-05-29  
+**Version:** 0.2.0  
+**Date:** 2026-06-18  
 **Author:** Christian Findlay
 
 ## Table of Contents
@@ -33,6 +33,8 @@ permalink: "/spec/"
 15. [WebSockets](/spec/0015-websockets/)
 16. [Security and Sandboxing](/spec/0016-securityandsandboxing/)
 17. [Algebraic Effects](/spec/0017-algebraiceffects/)
+18. [Memory Management](/spec/0018-memorymanagement/)
+19. [Foreign Function Interface](/spec/0019-foreignfunctioninterface/)
 
 ## About This Specification
 
@@ -40,13 +42,14 @@ This specification defines the complete syntax and semantics of the Osprey progr
 
 The Osprey language is designed for elegance, safety, and performance, emphasizing:
 
+- **Algebraic effects** with compile-time safety — unhandled effects are compilation errors
 - **Named arguments** for multi-parameter functions to improve readability
-- **Strong type inference** to reduce boilerplate while maintaining safety
+- **Strong type inference** (Hindley-Milner) to reduce boilerplate while maintaining safety
 - **String interpolation** for convenient text formatting
 - **Pattern matching** for elegant conditional logic
-- **Immutable-by-default** variables with explicit mutability
-- **Fast HTTP servers and clients** with built-in streaming support
-- **WebSocket support** for real-time two-way communication
+- **Immutable-by-default** variables and persistent collections
+- **Fast HTTP/HTTPS servers and clients** with built-in streaming support
+- **C interoperability** via a typed foreign function interface
 
 ## Implementation Status
 

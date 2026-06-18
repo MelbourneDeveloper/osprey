@@ -167,6 +167,19 @@ impl Type {
     }
 }
 
+/// Whether a (fully substituted) type still mentions a type variable — the
+/// mark of a polymorphic signature that must be specialised per use.
+#[must_use]
+pub fn has_type_var(ty: &Type) -> bool {
+    match ty {
+        Type::Var(_) => true,
+        Type::Con { args, .. } => args.iter().any(has_type_var),
+        Type::Fun { params, ret } => params.iter().any(has_type_var) || has_type_var(ret),
+        Type::Record { fields, .. } => fields.values().any(has_type_var),
+        Type::Union { variants, .. } => variants.iter().any(has_type_var),
+    }
+}
+
 /// A polymorphic type scheme `forall vars. ty` — the engine of
 /// let-polymorphism: generalize at bindings, instantiate at uses.
 #[derive(Debug, Clone, PartialEq)]

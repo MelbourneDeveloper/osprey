@@ -348,4 +348,4 @@ The functional programming revolution isn't coming—**it's here**. And for web 
 
 ---
 
-*Ready to try building your own type-safe APIs? Check out our [web development guide](/docs/web-development/) or experiment in the [playground](/playground/).* 
+*Ready to try building your own type-safe APIs? Browse the [documentation](/docs/) or experiment in the [playground](/playground/).* 

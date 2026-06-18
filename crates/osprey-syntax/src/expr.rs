@@ -92,8 +92,12 @@ impl Lowerer<'_> {
                             .next()
                     },
                 )),
-                return_type: None,
+                // The only direct type-kind child of a lambda node is its
+                // `-> ret` annotation (parameter types sit inside the
+                // parameter_list, the body is an expression kind).
+                return_type: self.last_type_child(node),
                 body: Box::new(self.lower_expr_field(node, "body")),
+                position: Some(self.pos(node)),
             },
             "type_constructor" => Expr::TypeConstructor {
                 name: self.field_text(node, "name"),

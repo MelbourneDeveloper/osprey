@@ -16,8 +16,8 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 
 | Layer | Adds | Plan | Compiler work |
 |---|---|---|---|
-| **L0** | General closure capture (gates composable middleware) | [`closures.md`](closures.md) | Large (codegen) |
-| **L1** | Generic C interop (FFI) → SQLite bound via `extern fn`; `Database` effect on top | [`ffi-sqlite.md`](ffi-sqlite.md) | Medium (FFI: generic linking + opaque `Ptr`) |
+| **L0** | General closure capture (gates composable middleware) | ✅ landed (closure cells) | Done |
+| **L1** | Generic C interop (FFI) → SQLite bound via `extern fn`; `Database` effect on top | ✅ landed — [spec 0019](../specs/0019-ForeignFunctionInterface.md) | Done |
 | **L2** | shelf-style framework: `Handler`/`Middleware`, `Request`/`Response`, router | [`http-framework.md`](http-framework.md) | None for v0; L0 for v1 |
 | **L3** | DataProvider YAML → typed records + CRUD + named SQL; migrations | [`orm-dataprovider.md`](orm-dataprovider.md) | Medium (Rust generator) |
 
@@ -26,7 +26,7 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 1. **Escaping closures are unsupported language-wide** (function values are bare lifted pointers, no env
    slot — `lift_lambda` in [`crates/osprey-codegen/src/genfn.rs`](../../crates/osprey-codegen/src/genfn.rs)
    documents "the backend lowers no closures"; let-bound capturing lambdas only work because they inline).
-   Gates `Middleware = fn(Handler) -> Handler`. → [`closures.md`](closures.md).
+   Gates `Middleware = fn(Handler) -> Handler`. → ✅ landed (closure cells; `makeAdder`/`wrap` golden-covered).
 2. **A handler can't close over a `let`** (top-level `let`s run inside `main`); but top-level `fn`s are
    mutually visible. → L2 v0 router is a top-level dispatch `fn` (zero compiler change). → [`http-framework.md`](http-framework.md).
 
@@ -46,10 +46,10 @@ Not greenfield: we beef the existing `httpListen` server; DB is new (today only 
 
 ## Master TODO
 
-- [x] **L1 COMPLETE** [`ffi-sqlite.md`](ffi-sqlite.md): generic FFI (`// @link`/`// @linkdir` + `Ptr` + pointer cells), SQLite `extern fn` round-trip, `Database` effect, spec [0019](../specs/0019-Database.md), CI-tested. Postgres binds via the same FFI.
-- [ ] **L0** [`closures.md`](closures.md): Phase 2 capture + Phase 5 UFCS/field-call disambiguation.
+- [x] **L1 COMPLETE**: generic FFI (`// @link`/`// @linkdir` + `Ptr` + pointer cells), SQLite `extern fn` round-trip, `Database` effect, CI-tested; spec'd as [0019](../specs/0019-ForeignFunctionInterface.md) (plan completed and deleted).
+- [x] **L0** closure capture landed (closure cells). Remaining: UFCS field-call disambiguation — tracked in [`production-primitives.md`](production-primitives.md).
 - [ ] **L2** [`http-framework.md`](http-framework.md): v0 (router + Request/Response) → v1 (middleware).
 - [ ] **L3** [`orm-dataprovider.md`](orm-dataprovider.md): YAML → records + CRUD → named SQL queries.
-- [x] **L1+** [`ffi-sqlite.md`](ffi-sqlite.md): Postgres binding via the **same** FFI verified (libpq `PQlibVersion`); full server round-trip needs a live DB.
-- [ ] Spec: add `0018` (HTTP framework) / `0019` (Database effect) / `0020` (ORM) as layers land. DB access is FFI (`--no-ffi`), not a hardcoded capability.
+- [x] **L1+**: Postgres binding via the **same** FFI verified (libpq `PQlibVersion`); full server round-trip needs a live DB.
+- [ ] Spec: add chapters (HTTP framework / ORM) at the next free numbers as layers land — numbers are sequence-of-arrival, never reserved. The FFI/Database chapter landed as [0019](../specs/0019-ForeignFunctionInterface.md). DB access is FFI (`--no-ffi`), not a hardcoded capability.
 - [ ] One end-to-end golden example `examples/tested/http/todo_service.osp` (HTTP + ORM + SQLite).

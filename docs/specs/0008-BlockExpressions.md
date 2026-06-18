@@ -2,8 +2,8 @@
 
 A block expression groups statements and returns the value of its final expression. Each block introduces a new lexical scope.
 
-```
-block_expression := '{' statement* expression? '}'
+```ebnf
+blockExpression ::= "{" statement* expression? "}"
 ```
 
 **Examples:**

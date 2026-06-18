@@ -90,6 +90,13 @@ fn strings(e: &mut TypeEnv) {
     mono(e, "parseFloat", vec![s()], res(Type::float()));
     mono(e, "padStart", vec![s(), i(), s()], res(s()));
     mono(e, "padEnd", vec![s(), i(), s()], res(s()));
+    // O(1) byte / codepoint cursor (BUILTIN-STRING-CURSOR). byteLength is total;
+    // the rest are fallible (bad index / invalid UTF-8 / invalid scalar).
+    mono(e, "byteLength", vec![s()], i());
+    mono(e, "byteAt", vec![s(), i()], res(i()));
+    mono(e, "codePointAt", vec![s(), i()], res(i()));
+    mono(e, "codePointWidth", vec![i()], res(i()));
+    mono(e, "fromCodePoint", vec![i()], res(s()));
     for op in [
         "toUpperCase",
         "toLowerCase",

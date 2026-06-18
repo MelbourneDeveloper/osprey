@@ -16,7 +16,9 @@ ID := [a-zA-Z_][a-zA-Z0-9_]*
 ## Keywords
 
 ```
-fn let mut type match extern import effect perform handle in as
+fn let mut type match extern import module where
+effect perform handle in
+spawn await yield select
 ```
 
 ## Literals

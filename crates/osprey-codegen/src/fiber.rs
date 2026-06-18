@@ -1,15 +1,15 @@
 //! Fibers, channels, `yield` and `select`, lowered to the same C fiber runtime
 //! every compiled Osprey program links (`fiber_runtime.c` in
-//! `libfiber_runtime.a`). `spawn e` lifts `e` into a no-arg `i64 ()` thunk and
-//! hands it to `fiber_spawn` — a really-concurrent fiber (the runtime restores
-//! the spawner's effect-handler snapshot inside it, so `perform` works there).
-//! Locals the expression closes over are spilled through per-spawn module
-//! globals — stored at the spawn site, reloaded inside the thunk — preserving
-//! the fixed `i64 ()*` ABI for any capture set (captures are by value).
-//! `await`/`fiberDone` map to `fiber_await`/`fiber_done`, the non-blocking
-//! probe a foreground loop can animate against while the fiber works. Channels
-//! are `channel_create`/`channel_send`/`channel_recv`; channel ids and fiber
-//! ids draw from the runtime's one shared counter. `yield e` evaluates to its
+//! `libfiber_runtime.a`). `spawn e` lowers `e` as a zero-parameter closure
+//! (`crate::closure`): the thunk takes the closure cell as its env, reloads the
+//! captures `e` closes over, and is handed to `fiber_spawn_env` together with
+//! its per-spawn heap cell — so two in-flight spawns from one site never share
+//! capture state (the runtime restores the spawner's effect-handler snapshot
+//! inside the fiber, so `perform` works there). `await`/`fiberDone` map to
+//! `fiber_await`/`fiber_done`, the non-blocking probe a foreground loop can
+//! animate against while the fiber works. Channels are
+//! `channel_create`/`channel_send`/`channel_recv`; channel ids and fiber ids
+//! draw from the runtime's one shared counter. `yield e` evaluates to its
 //! operand and `select` takes its first arm (the deterministic examples drive
 //! arm readiness by `send`/`recv` order).
 
@@ -18,71 +18,33 @@ use crate::conv::{as_i64, box_to_i64};
 use crate::error::Result;
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use osprey_ast::{Expr, FieldAssignment, InterpolatedPart, MatchArm, NamedArgument, Stmt};
-use std::collections::BTreeSet;
+use osprey_ast::{Expr, MatchArm};
 
-/// One spilled capture: the local's name, its per-spawn global, and the value
-/// whose metadata (Result block shape, owner tag) the reload must keep.
-struct Capture {
-    name: String,
-    global: String,
-    val: Value,
-}
+/// The thunk's value-ABI signature: no parameters, returns the boxed `i64`
+/// fiber result.
+const THUNK_SIG: (LType, Option<LType>) = (LType::I64, None);
 
-/// `spawn e` — lift `e` into a no-arg thunk and start it on a real fiber.
+/// `spawn e` — lower `e` as a zero-parameter closure and start it on a real
+/// fiber via `fiber_spawn_env(thunk, cell)`.
 pub(crate) fn gen_spawn(cg: &mut Codegen, e: &Expr) -> Result<Value> {
     let id = cg.next_lambda_id();
-    let thunk = format!("__fiber_closure_{id}");
-    let caps = spill_captures(cg, id, e);
-    emit_thunk(cg, &thunk, &caps, e)?;
-    let r = cg.call("i64", "fiber_spawn", "i64 ()*", &[&format!("@{thunk}")]);
-    Ok(Value::new(r, LType::I64))
-}
-
-/// Store every local `e` closes over into a fresh module global at the spawn
-/// site, so the thunk (a separate function) can reload it.
-fn spill_captures(cg: &mut Codegen, id: usize, e: &Expr) -> Vec<Capture> {
-    let mut names = BTreeSet::new();
-    free_idents(e, &mut names);
-    let mut caps = Vec::new();
-    for name in names {
-        let Some(val) = cg.lookup(&name) else {
-            continue;
-        };
-        let ty = val.llvm_ty();
-        let global = format!("@__fiber_cap_{id}_{name}");
-        cg.add_global_def(format!("{global} = global {ty} {}", zero_of(&ty)));
-        cg.emit(format!("store {ty} {}, {ty}* {global}", val.operand));
-        caps.push(Capture { name, global, val });
-    }
-    caps
-}
-
-/// The zero constant for a module global of LLVM type `ty`.
-fn zero_of(ty: &str) -> &'static str {
-    if ty.ends_with('*') {
-        "null"
-    } else if ty == "double" {
-        "0.0"
-    } else {
-        "0"
-    }
-}
-
-/// Emit the thunk: reload each capture, lower the body, and return it as the
-/// uniform `i64` fiber result (`fiber_await` hands the same word back).
-fn emit_thunk(cg: &mut Codegen, thunk: &str, caps: &[Capture], e: &Expr) -> Result<()> {
+    let thunk = format!("__fiber_thunk_{id}");
+    let caps = crate::closure::capture_list(cg, &[], e);
+    let cell_ty = crate::closure::cell_struct_ty(&caps);
     let saved = cg.enter_nested_fn();
-    for c in caps {
-        let ty = c.val.llvm_ty();
-        let r = cg.emit_reg(format!("load {ty}, {ty}* {}", c.global));
-        let mut v = c.val.clone();
-        v.operand = r;
-        cg.bind(c.name.clone(), v);
-    }
+    crate::closure::reload_captures(cg, &cell_ty, &caps);
     let body = thunk_body(cg, e);
-    cg.exit_nested_fn(saved, "i64", thunk, &[]);
-    body
+    cg.exit_nested_fn(saved, "i64", &thunk, &[(LType::Ptr, String::from("__env"))]);
+    body?;
+    let sig = (Vec::new(), THUNK_SIG.0, THUNK_SIG.1);
+    let cell = crate::closure::cell_value(cg, id, &thunk, &cell_ty, &caps, &sig);
+    let r = cg.call(
+        "i64",
+        "fiber_spawn_env",
+        "i64 (i8*)*, i8*",
+        &[&format!("@{thunk}"), &cell.operand],
+    );
+    Ok(Value::new(r, LType::I64))
 }
 
 fn thunk_body(cg: &mut Codegen, e: &Expr) -> Result<()> {
@@ -176,151 +138,4 @@ pub(crate) fn gen_builtin(cg: &mut Codegen, name: &str, args: &[Expr]) -> Result
         _ => return Ok(None),
     };
     Ok(Some(v))
-}
-
-// ---- free-identifier collection for spawn captures -------------------------
-
-/// Collect every identifier referenced anywhere in `e`. Over-collection is
-/// harmless: only names bound to a *value* at the spawn site spill (a function
-/// name resolves through the call path, and a name re-bound inside the
-/// expression simply shadows its reload).
-pub(crate) fn free_idents(e: &Expr, out: &mut BTreeSet<String>) {
-    match e {
-        Expr::Integer(_) | Expr::Float(_) | Expr::Str(_) | Expr::Bool(_) => {}
-        Expr::Identifier(n) => {
-            let _ = out.insert(n.clone());
-        }
-        Expr::InterpolatedStr(parts) => {
-            for p in parts {
-                if let InterpolatedPart::Expr(inner) = p {
-                    free_idents(inner, out);
-                }
-            }
-        }
-        Expr::List(xs) => walk_all(xs, out),
-        Expr::Map(entries) => {
-            for en in entries {
-                free_idents(&en.key, out);
-                free_idents(&en.value, out);
-            }
-        }
-        Expr::Object(fields) => walk_fields(fields, out),
-        Expr::Binary { left, right, .. } | Expr::Pipe { left, right } => {
-            free_idents(left, out);
-            free_idents(right, out);
-        }
-        Expr::Unary { operand, .. } => free_idents(operand, out),
-        e2 => free_idents_rest(e2, out),
-    }
-}
-
-/// Continuation of [`free_idents`] (kept in two halves so each stays small).
-fn free_idents_rest(e: &Expr, out: &mut BTreeSet<String>) {
-    match e {
-        Expr::Call {
-            function,
-            arguments,
-            named_arguments,
-        } => {
-            free_idents(function, out);
-            walk_all(arguments, out);
-            walk_named(named_arguments, out);
-        }
-        Expr::MethodCall {
-            target,
-            arguments,
-            named_arguments,
-            ..
-        } => {
-            free_idents(target, out);
-            walk_all(arguments, out);
-            walk_named(named_arguments, out);
-        }
-        Expr::FieldAccess { target, .. } => free_idents(target, out),
-        Expr::Index { target, index } => {
-            free_idents(target, out);
-            free_idents(index, out);
-        }
-        Expr::Lambda { body, .. } => free_idents(body, out),
-        Expr::Match { value, arms } => {
-            free_idents(value, out);
-            walk_arms(arms, out);
-        }
-        Expr::Block { statements, value } => {
-            walk_stmts(statements, out);
-            if let Some(v) = value {
-                free_idents(v, out);
-            }
-        }
-        Expr::TypeConstructor { fields, .. } => walk_fields(fields, out),
-        Expr::Update { record, fields } => {
-            let _ = out.insert(record.clone());
-            walk_fields(fields, out);
-        }
-        e2 => free_idents_fiber(e2, out),
-    }
-}
-
-/// Final third of the walker: fiber/effect forms (and the leaf-handled rest).
-fn free_idents_fiber(e: &Expr, out: &mut BTreeSet<String>) {
-    match e {
-        Expr::Spawn(inner) | Expr::Await(inner) | Expr::Recv(inner) | Expr::Yield(Some(inner)) => {
-            free_idents(inner, out);
-        }
-        Expr::Send { channel, value } => {
-            free_idents(channel, out);
-            free_idents(value, out);
-        }
-        Expr::Select { arms } => walk_arms(arms, out),
-        Expr::Perform {
-            arguments,
-            named_arguments,
-            ..
-        } => {
-            walk_all(arguments, out);
-            walk_named(named_arguments, out);
-        }
-        Expr::Handler { arms, body, .. } => {
-            for arm in arms {
-                free_idents(&arm.body, out);
-            }
-            free_idents(body, out);
-        }
-        // Every other variant is fully handled by the first two thirds.
-        _ => {}
-    }
-}
-
-fn walk_all(xs: &[Expr], out: &mut BTreeSet<String>) {
-    for x in xs {
-        free_idents(x, out);
-    }
-}
-
-fn walk_named(named: &[NamedArgument], out: &mut BTreeSet<String>) {
-    for n in named {
-        free_idents(&n.value, out);
-    }
-}
-
-fn walk_fields(fields: &[FieldAssignment], out: &mut BTreeSet<String>) {
-    for f in fields {
-        free_idents(&f.value, out);
-    }
-}
-
-fn walk_arms(arms: &[MatchArm], out: &mut BTreeSet<String>) {
-    for arm in arms {
-        free_idents(&arm.body, out);
-    }
-}
-
-fn walk_stmts(statements: &[Stmt], out: &mut BTreeSet<String>) {
-    for s in statements {
-        match s {
-            Stmt::Let { value, .. } | Stmt::Assignment { value, .. } => free_idents(value, out),
-            Stmt::Expr(e) => free_idents(e, out),
-            _ => {}
-        }
-    }
 }

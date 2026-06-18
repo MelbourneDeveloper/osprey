@@ -49,6 +49,9 @@ pub struct ProgramTypes {
     pub unions: HashMap<String, Vec<String>>,
     /// Effect name → operation name → resolved signature.
     pub effects: HashMap<String, HashMap<String, OpType>>,
+    /// Lambda source position `(line, column)` → its resolved function type,
+    /// so the backend lowers every lambda from inferred types, not guesses.
+    pub lambdas: HashMap<(u32, u32), Type>,
 }
 
 impl ProgramTypes {
@@ -62,5 +65,11 @@ impl ProgramTypes {
     #[must_use]
     pub fn param_types(&self, name: &str) -> Option<&[Type]> {
         self.functions.get(name).map(|(p, _)| p.as_slice())
+    }
+
+    /// The resolved function type of the lambda written at `position`.
+    #[must_use]
+    pub fn lambda_type(&self, position: Option<osprey_ast::Position>) -> Option<&Type> {
+        position.and_then(|p| self.lambdas.get(&(p.line, p.column)))
     }
 }

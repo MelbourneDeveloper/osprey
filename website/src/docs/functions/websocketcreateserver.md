@@ -1,12 +1,12 @@
 ---
 layout: page
 title: "websocketCreateServer (Function)"
-description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path."
+description: "Creates a WebSocket server bound to the specified port, address, and path."
 ---
 
 **Signature:** `websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`
 
-**Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<ServerID, String> and has critical runtime issues with port binding failures. Creates a WebSocket server bound to the specified port, address, and path.
+**Description:** Creates a WebSocket server bound to the specified port, address, and path. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
 ## Parameters
 

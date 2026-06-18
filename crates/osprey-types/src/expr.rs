@@ -90,7 +90,8 @@ impl Checker {
                 parameters,
                 return_type,
                 body,
-            } => self.infer_lambda(parameters, return_type.as_ref(), body, env),
+                position,
+            } => self.infer_lambda(parameters, return_type.as_ref(), body, *position, env),
             Expr::Match { value, arms } => self.infer_match(value, arms, env),
             Expr::Block { statements, value } => {
                 self.infer_block(statements, value.as_deref(), env)
@@ -362,6 +363,7 @@ impl Checker {
         parameters: &[Parameter],
         return_type: Option<&TypeExpr>,
         body: &Expr,
+        position: Option<osprey_ast::Position>,
         env: &TypeEnv,
     ) -> Type {
         let empty = HashMap::new();
@@ -384,7 +386,13 @@ impl Checker {
             }
             None => body_ty,
         };
-        Type::fun(ptys, ret)
+        let fun = Type::fun(ptys, ret);
+        // Publish this lambda's type for the backend, keyed by source position
+        // (resolved against the final substitution in `infer_program`).
+        if let Some(pos) = position {
+            self.lambda_tys.push((pos, fun.clone()));
+        }
+        fun
     }
 
     fn infer_block(&mut self, statements: &[Stmt], value: Option<&Expr>, env: &TypeEnv) -> Type {

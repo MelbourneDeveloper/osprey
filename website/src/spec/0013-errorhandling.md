@@ -2,7 +2,7 @@
 layout: page
 title: "Error Handling"
 description: "Osprey Language Specification: Error Handling"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0013-errorhandling/"
@@ -12,13 +12,17 @@ permalink: "/spec/0013-errorhandling/"
 
 Osprey has no exceptions, panics, or null. Any function that can fail returns a `Result`.
 
+## Status
+
+[ERR-PAYLOAD] conforms for `E = string`: the runtime Result block carries a dedicated error-message slot, `Error { message }` binds the real reason, and `toString` renders `Error(<reason>)`. Discriminated-union error payloads (`Result<T, StringError>`) remain deferred behind recursive-union payloads.
+
 ## The Result Type
 
 ```osprey
 type Result<T, E> = Success { value: T } | Error { message: E }
 ```
 
-The compiler rejects any direct access to the contained value. Callers must pattern-match the `Result` (see [Pattern Matching](0007-PatternMatching.md)):
+The compiler rejects any direct access to the contained value. Callers must pattern-match the `Result` (see [Pattern Matching](/spec/0007-patternmatching/)) unless one of the auto-unwrap contexts applies ([Result Auto-Unwrapping](/spec/0004-typesystem/#result-auto-unwrapping)):
 
 ```osprey
 let result = someFunctionThatCanFail()
@@ -50,16 +54,12 @@ let divZero   = 10 / 0     // Error(DivisionByZero)
 
 #### Chaining Arithmetic
 
-Each operation returns a `Result`, so chaining requires either nested matches or, in the future, Result-aware operators:
+Compound expressions auto-unwrap intermediate `Result`s — `(10 + 5) * 2` is a single `Result<int, MathError>`, never a nested one, and only the final value is matched ([Result Auto-Unwrapping](/spec/0004-typesystem/#result-auto-unwrapping)):
 
 ```osprey
-let step1 = 10 + 5
-match step1 {
-    Success { val1 } => match val1 * 2 {
-        Success { val2 }    => print("Final: ${val2}")
-        Error   { message } => print("Multiplication error: ${message}")
-    }
-    Error { message } => print("Addition error: ${message}")
+match (10 + 5) * 2 {
+    Success { value }   => print("Final: ${value}")
+    Error   { message } => print("error: ${message}")
 }
 ```
 

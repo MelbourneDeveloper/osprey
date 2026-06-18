@@ -169,9 +169,7 @@
   },
   "dependencies": {
     "@nimblesite/shipwright-vscode": "^0.5.4",
-    "vscode-languageclient": "^9.0.1",
-    "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.12"
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",

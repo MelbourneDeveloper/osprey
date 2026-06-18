@@ -1,12 +1,12 @@
 ---
 layout: page
 title: "websocketStopServer (Function)"
-description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections."
+description: "Stops the WebSocket server and closes all connections."
 ---
 
 **Signature:** `websocketStopServer(serverID: Int) -> Result<Success, String>`
 
-**Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Stops the WebSocket server and closes all connections.
+**Description:** Stops the WebSocket server and closes all connections. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
 ## Parameters
 

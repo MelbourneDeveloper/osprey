@@ -3,6 +3,11 @@
 // spec/0012-Built-InFunctions.md is exercised here. The integration test
 // runner compares the full stdout to the expected output verbatim, so
 // any regression in a builtin's behaviour causes an exact-mismatch failure.
+// Also covers the O(1) string cursor (BUILTIN-STRING-CURSOR) and real error
+// payloads threaded through Result<T, E> ([ERR-PAYLOAD]).
+
+// A user-declared fallible function: its Error message must reach the arm.
+fn failWith(reason: string) -> Result<int, string> = Error { message: reason }
 
 fn main() -> int {
   // ---- isEmpty edges ----
@@ -121,6 +126,64 @@ fn main() -> int {
   match parseInt(" 42") {
     Success { value }   => print("pi-leading-space unexpected\n")
     Error   { message } => print("pi-leading-space rejected\n")
+  }
+
+  // ---- O(1) byte / codepoint cursor (BUILTIN-STRING-CURSOR) ----
+  // "héllo": é is U+00E9 (bytes 0xC3 0xA9), so byteLength is 6, not 5.
+  print("byteLen=${byteLength("héllo")}\n")
+  match byteAt("héllo", 1) {
+    Success { value }   => print("byteAt1=${value}\n")
+    Error   { message } => print("byteAt1 FAILED: ${message}\n")
+  }
+  match byteAt("héllo", 99) {
+    Success { value }   => print("byteAt-oob unexpected\n")
+    Error   { message } => print("byteAt-oob=${message}\n")
+  }
+  match codePointAt("héllo", 1) {
+    Success { value }   => print("cpAt1=${value}\n")
+    Error   { message } => print("cpAt1 FAILED: ${message}\n")
+  }
+  match codePointAt("héllo", 2) {
+    Success { value }   => print("cpAt-mid unexpected\n")
+    Error   { message } => print("cpAt-mid=${message}\n")
+  }
+  match codePointWidth(128512) {
+    Success { value }   => print("cpWidth=${value}\n")
+    Error   { message } => print("cpWidth FAILED: ${message}\n")
+  }
+  match codePointWidth(55296) {
+    Success { value }   => print("cpWidth-surrogate unexpected\n")
+    Error   { message } => print("cpWidth-surrogate=${message}\n")
+  }
+  match fromCodePoint(128512) {
+    Success { value }   => print("fromCp=${value}\n")
+    Error   { message } => print("fromCp FAILED: ${message}\n")
+  }
+  match fromCodePoint(2000000) {
+    Success { value }   => print("fromCp-bad unexpected\n")
+    Error   { message } => print("fromCp-bad=${message}\n")
+  }
+  // Round-trip: encode U+00E9 then decode byte 0 back to the same scalar.
+  match fromCodePoint(233) {
+    Success { value }   => match codePointAt(value, 0) {
+      Success { value }   => print("roundtrip=${value}\n")
+      Error   { message } => print("roundtrip FAILED: ${message}\n")
+    }
+    Error   { message } => print("roundtrip FAILED: ${message}\n")
+  }
+
+  // ---- real error payloads reach the Error arm ([ERR-PAYLOAD]) ----
+  match parseInt("oops") {
+    Success { value }   => print("pi-msg unexpected\n")
+    Error   { message } => print("pi-msg=${message}\n")
+  }
+  match 10 / 0 {
+    Success { value }   => print("div-msg unexpected\n")
+    Error   { message } => print("div-msg=${message}\n")
+  }
+  match failWith("custom boom") {
+    Success { value }   => print("user-msg unexpected\n")
+    Error   { message } => print("user-msg=${message}\n")
   }
 
   print("=== Edge Cases Complete ===\n")

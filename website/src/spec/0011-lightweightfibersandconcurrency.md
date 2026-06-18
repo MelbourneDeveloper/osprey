@@ -2,7 +2,7 @@
 layout: page
 title: "Fibers and Concurrency"
 description: "Osprey Language Specification: Fibers and Concurrency"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0011-lightweightfibersandconcurrency/"
@@ -10,7 +10,7 @@ permalink: "/spec/0011-lightweightfibersandconcurrency/"
 
 # Fibers and Concurrency
 
-Fibers are lightweight concurrent computations. They are constructed as values of `Fiber<T>` and communicate through `Channel<T>`. There are no OS threads exposed to user code; the runtime schedules fibers cooperatively.
+Fibers are lightweight concurrent computations. They are constructed as values of `Fiber<T>` and communicate through `Channel<T>`. There are no OS threads exposed to user code; the runtime schedules fibers cooperatively. Values cross fiber boundaries — `spawn` captures and channel `send` — by move or copy, never by sharing ([MEM-FIBER-ISOLATION] in [Memory Management](/spec/0018-memorymanagement/)).
 
 ## Status
 
@@ -63,24 +63,14 @@ let buf    = Channel<string> { capacity: 10 }   // buffered
 let ch = Channel<int> { capacity: 3 }
 
 let producer = spawn {
-    send(channel: ch, value: 1)
-    send(channel: ch, value: 2)
-    send(channel: ch, value: 3)
+    range(1, 4) |> forEach(fn(i) => send(ch, i))
 }
 
 let consumer = spawn {
-    match recv(ch) {
-        Success { value } => print("got ${value}")
+    range(1, 4) |> forEach(fn(i) => match recv(ch) {
+        Success { value }   => print("got ${value}")
         Error   { message } => print("recv error: ${message}")
-    }
-    match recv(ch) {
-        Success { value } => print("got ${value}")
-        Error   { message } => print("recv error: ${message}")
-    }
-    match recv(ch) {
-        Success { value } => print("got ${value}")
-        Error   { message } => print("recv error: ${message}")
-    }
+    })
 }
 
 await(producer)

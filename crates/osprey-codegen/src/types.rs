@@ -73,3 +73,38 @@ pub fn result_inner(ty: &Type) -> Option<LType> {
         _ => None,
     }
 }
+
+/// The canonical function-VALUE return: `Result<T, E>` → `T`, for ANY `E`.
+///
+/// Maker and consumer of a closure cell derive its ABI from *different* types
+/// that the checker only relates by assignability (the Result auto-unwrap
+/// rule), so the ABI must be identical across an assignability-equivalence
+/// class — stripping every Result wrapper is the only normalization with that
+/// property. Semantically this is the language's value-site auto-unwrap
+/// applied at the function-value boundary: a call through a function value
+/// yields the success payload. (Revisit when [ERR-PAYLOAD] lands a real
+/// error-carrying ABI.)
+pub fn normalize_fn_ret(ty: &Type) -> &Type {
+    if let Type::Con { name, args } = ty {
+        if name == names::RESULT {
+            if let Some(ok) = args.first() {
+                return ok;
+            }
+        }
+    }
+    ty
+}
+
+/// Whether a function type yields a concrete closure ABI: every parameter and
+/// the NORMALIZED return are variable-free. (`(int) -> Result<int, E>` with an
+/// unresolved `E` is concrete — the canonical ABI strips the wrapper, so the
+/// error slot never reaches the ABI.)
+pub fn fn_value_concrete(ty: &Type) -> bool {
+    match ty {
+        Type::Fun { params, ret } => {
+            !params.iter().any(osprey_types::has_type_var)
+                && !osprey_types::has_type_var(normalize_fn_ret(ret))
+        }
+        _ => false,
+    }
+}
