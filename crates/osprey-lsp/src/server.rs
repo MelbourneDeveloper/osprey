@@ -152,19 +152,25 @@ async fn did_change(engine: &OspreyEngine, bus: &lspkit_server::DiagnosticsBus, 
     publish(engine, bus, doc).await;
 }
 
-/// Apply a `didChange`: incremental edits via the VFS, a rangeless change as a
-/// whole-document replacement.
+/// Apply a `didChange`. A conformant client sends either a single full-document
+/// replacement (no range) or a batch of incremental edits — never both. Handling
+/// them as separate paths avoids the version collision that would arise from an
+/// `open` (which stamps the version) followed by a `change` (which then rejects
+/// the same version as stale and silently drops the edits).
 fn apply_changes(vfs: &Vfs, doc: &DocumentUri, params: &Value) {
     let version = DocumentVersion::new(wire::version(params));
-    let mut edits = Vec::new();
-    for change in wire::content_changes(params) {
-        match change {
-            Ok(edit) => edits.push(edit),
-            Err(full) => vfs.open(doc.clone(), &full, version),
-        }
+    let changes = wire::content_changes(params);
+    // A full replacement takes precedence; use the last one the batch carries.
+    if let Some(full) = changes.iter().rev().find_map(|c| c.as_ref().err()) {
+        vfs.open(doc.clone(), full, version);
+        return;
     }
+    let edits: Vec<_> = changes.into_iter().filter_map(Result::ok).collect();
     if !edits.is_empty() {
-        let _ = vfs.change(doc, &edits, version);
+        if let Err(error) = vfs.change(doc, &edits, version) {
+            // Lost edits would desync diagnostics from the buffer; surface it.
+            eprintln!("osprey lsp: didChange edit rejected: {error}");
+        }
     }
 }
 
@@ -232,8 +238,10 @@ fn build_dispatcher(engine: &OspreyEngine) -> Dispatcher {
         "textDocument/documentSymbol",
         |e, p, c| async move {
             let uri = DocumentUri::new(wire::doc_uri(&p)?);
+            let text = e.vfs().text(&uri).unwrap_or_default();
             Some(result(symbols_value(
                 answer(&e, Query::Symbols(uri), c).await,
+                &text,
             )))
         },
     );
@@ -315,11 +323,9 @@ fn signature_value(report: Option<Report>) -> Value {
     }
 }
 
-fn symbols_value(report: Option<Report>) -> Value {
+fn symbols_value(report: Option<Report>, text: &str) -> Value {
     match report {
-        Some(Report::Symbols(symbols)) => {
-            wire::symbols_result(&symbols, |n| crate::text::measure(n, ENCODING))
-        }
+        Some(Report::Symbols(symbols)) => wire::symbols_result(&symbols, text, ENCODING),
         _ => Value::Array(Vec::new()),
     }
 }

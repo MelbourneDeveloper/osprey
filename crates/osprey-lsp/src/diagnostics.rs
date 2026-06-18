@@ -43,20 +43,33 @@ fn diagnostic(
     encoding: PositionEncoding,
 ) -> Diagnostic {
     let line = pos.line.saturating_sub(1);
-    let start = pos.column;
-    let end = line_len(source, line, encoding).max(start.saturating_add(1));
+    let line_text = nth_line(source, line);
+    // `pos.column` is a tree-sitter byte offset; the wire range is in the
+    // negotiated encoding, so re-measure the line prefix in those units.
+    let start = byte_col_to_encoding(line_text, pos.column, encoding);
+    let end = line_text
+        .map_or(0, |l| crate::text::measure(l, encoding))
+        .max(start.saturating_add(1));
     Diagnostic::new(Severity::Error, message, (line, start, line, end))
         .with_source(SOURCE)
         .with_code(code)
 }
 
-/// Length of zero-based `line` in `encoding`'s character units (0 if absent).
-fn line_len(source: &str, line: u32, encoding: PositionEncoding) -> u32 {
-    let idx = usize::try_from(line).unwrap_or(usize::MAX);
-    source
-        .lines()
-        .nth(idx)
-        .map_or(0, |l| crate::text::measure(l, encoding))
+/// Zero-based `line`'s text, or `None` if absent.
+fn nth_line(source: &str, line: u32) -> Option<&str> {
+    usize::try_from(line)
+        .ok()
+        .and_then(|i| source.lines().nth(i))
+}
+
+/// Convert a byte column within `line` into `encoding`'s character units.
+fn byte_col_to_encoding(line: Option<&str>, byte_col: u32, encoding: PositionEncoding) -> u32 {
+    let Some(line) = line else {
+        return byte_col;
+    };
+    let idx = usize::try_from(byte_col).unwrap_or(usize::MAX);
+    line.get(..idx)
+        .map_or(byte_col, |prefix| crate::text::measure(prefix, encoding))
 }
 
 #[cfg(test)]

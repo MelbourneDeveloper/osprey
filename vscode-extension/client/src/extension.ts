@@ -3,9 +3,12 @@ import { workspace, ExtensionContext, window, ConfigurationChangeEvent, commands
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import {
+  CloseAction,
+  ErrorAction,
   Executable,
   LanguageClient,
   LanguageClientOptions,
+  RevealOutputChannelOn,
   ServerOptions,
   TransportKind
 } from 'vscode-languageclient/node';
@@ -117,7 +120,7 @@ export function activate(context: ExtensionContext) {
       fileEvents: workspace.createFileSystemWatcher('**/*.osp')
     },
     outputChannelName: 'Osprey Language Server',
-    revealOutputChannelOn: 4, // Error
+    revealOutputChannelOn: RevealOutputChannelOn.Error,
     initializationFailedHandler: (error) => {
       outputChannel.appendLine(`Initialization failed: ${error}`);
       window.showErrorMessage(`Osprey language server initialization failed: ${error}`);
@@ -126,11 +129,11 @@ export function activate(context: ExtensionContext) {
     errorHandler: {
       error: (error, message, count) => {
         outputChannel.appendLine(`Language server error: ${error}, message: ${message}, count: ${count}`);
-        return { action: 1 }; // Continue
+        return { action: ErrorAction.Continue };
       },
       closed: () => {
-        outputChannel.appendLine('Language server connection closed');
-        return { action: 1 }; // Restart
+        outputChannel.appendLine('Language server connection closed; restarting');
+        return { action: CloseAction.Restart };
       }
     }
   };

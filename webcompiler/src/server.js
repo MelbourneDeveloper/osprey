@@ -444,109 +444,103 @@ wss.on('connection', (ws, req) => {
     console.log('🔌 New WebSocket connection from:', req.socket.remoteAddress)
     console.log('🔍 Connection headers:', JSON.stringify(req.headers, null, 2))
 
-    // Path to the compiled Osprey LSP server - use different paths for Docker vs local dev
-    const lspPath = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
-        ? path.resolve(__dirname, '../server/out/src/server.js')  // Docker path: /app/server/out/src/server.js
-        : path.resolve(__dirname, '../../vscode-extension/server/out/src/server.js')  // Local dev path
+    // The Osprey language server is the Rust `osprey lsp` subcommand, spoken over
+    // stdio — the same binary that backs /api/run. In Docker it's on PATH; in
+    // local dev it's the release build under target/release.
+    const ospreyPath = process.env.NODE_ENV === 'production' || process.env.DOCKER_ENV
+        ? 'osprey'
+        : path.resolve(__dirname, '../../target/release/osprey')
 
-    console.log('🚀 Starting Osprey LSP:', lspPath)
+    console.log('🚀 Starting Osprey LSP:', `${ospreyPath} lsp`)
 
-    // Check if LSP file exists
-    fs.access(lspPath)
-        .then(() => {
-            // Spawn the LSP server process
-            const lspProcess = spawn('node', [lspPath, '--stdio'], {
-                stdio: ['pipe', 'pipe', 'pipe'],
-                cwd: process.cwd(),
-                env: { ...process.env, NODE_ENV: 'development' }
-            })
+    // Spawn the LSP server process
+    const lspProcess = spawn(ospreyPath, ['lsp'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: process.cwd(),
+        env: { ...process.env }
+    })
 
-            lspProcess.on('error', (error) => {
-                console.error('❌ LSP process error:', error)
-                ws.close(1011, 'LSP server failed to start')
-            })
+    lspProcess.on('error', (error) => {
+        console.error('❌ LSP process error:', error)
+        ws.close(1011, 'LSP server failed to start')
+    })
 
-            lspProcess.on('spawn', () => {
-                console.log('✅ LSP process started successfully')
-                console.log(`📊 LSP process PID: ${lspProcess.pid}`)
-            })
+    lspProcess.on('spawn', () => {
+        console.log('✅ LSP process started successfully')
+        console.log(`📊 LSP process PID: ${lspProcess.pid}`)
+    })
 
-            // Message counter for debugging
-            let clientToServerCount = 0
-            let serverToClientCount = 0
+    // Message counter for debugging
+    let clientToServerCount = 0
+    let serverToClientCount = 0
 
-            // Forward messages between WebSocket and LSP stdio
-            ws.on('message', (data) => {
-                const message = data.toString()
-                clientToServerCount++
-                console.log(`📨 Client -> LSP [${clientToServerCount}]:`, message.substring(0, 200) + (message.length > 200 ? '...' : ''))
+    // Forward messages between WebSocket and LSP stdio
+    ws.on('message', (data) => {
+        const message = data.toString()
+        clientToServerCount++
+        console.log(`📨 Client -> LSP [${clientToServerCount}]:`, message.substring(0, 200) + (message.length > 200 ? '...' : ''))
 
-                // Parse to check message type
-                try {
-                    const parsed = JSON.parse(message)
-                    console.log(`  📌 Message type: ${parsed.method || parsed.id ? 'request/response' : 'notification'}`)
-                    if (parsed.method) {
-                        console.log(`  📌 Method: ${parsed.method}`)
-                    }
-                } catch (e) {
-                    console.log('  ⚠️ Could not parse message as JSON')
-                }
+        // Parse to check message type
+        try {
+            const parsed = JSON.parse(message)
+            console.log(`  📌 Message type: ${parsed.method || parsed.id ? 'request/response' : 'notification'}`)
+            if (parsed.method) {
+                console.log(`  📌 Method: ${parsed.method}`)
+            }
+        } catch (e) {
+            console.log('  ⚠️ Could not parse message as JSON')
+        }
 
-                if (lspProcess.stdin && !lspProcess.stdin.destroyed) {
-                    lspProcess.stdin.write(message)
-                } else {
-                    console.error('❌ LSP stdin not available!')
-                }
-            })
+        if (lspProcess.stdin && !lspProcess.stdin.destroyed) {
+            lspProcess.stdin.write(message)
+        } else {
+            console.error('❌ LSP stdin not available!')
+        }
+    })
 
-            lspProcess.stdout.on('data', (data) => {
-                const message = data.toString()
-                serverToClientCount++
-                console.log(`📤 LSP -> Client [${serverToClientCount}]:`, message.substring(0, 200) + (message.length > 200 ? '...' : ''))
+    lspProcess.stdout.on('data', (data) => {
+        const message = data.toString()
+        serverToClientCount++
+        console.log(`📤 LSP -> Client [${serverToClientCount}]:`, message.substring(0, 200) + (message.length > 200 ? '...' : ''))
 
-                // Parse to check message type
-                try {
-                    const parsed = JSON.parse(message)
-                    console.log(`  📌 Message type: ${parsed.method || parsed.id ? 'request/response' : 'notification'}`)
-                    if (parsed.method) {
-                        console.log(`  📌 Method: ${parsed.method}`)
-                    }
-                } catch (e) {
-                    console.log('  ⚠️ Could not parse message as JSON')
-                }
+        // Parse to check message type
+        try {
+            const parsed = JSON.parse(message)
+            console.log(`  📌 Message type: ${parsed.method || parsed.id ? 'request/response' : 'notification'}`)
+            if (parsed.method) {
+                console.log(`  📌 Method: ${parsed.method}`)
+            }
+        } catch (e) {
+            console.log('  ⚠️ Could not parse message as JSON')
+        }
 
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(data)
-                } else {
-                    console.error('❌ WebSocket not open, cannot send message')
-                }
-            })
+        if (ws.readyState === ws.OPEN) {
+            ws.send(data)
+        } else {
+            console.error('❌ WebSocket not open, cannot send message')
+        }
+    })
 
-            lspProcess.stderr.on('data', (data) => {
-                const errorMsg = data.toString()
-                console.error('🔴 LSP stderr:', errorMsg)
-            })
+    lspProcess.stderr.on('data', (data) => {
+        const errorMsg = data.toString()
+        console.error('🔴 LSP stderr:', errorMsg)
+    })
 
-            ws.on('close', (code, reason) => {
-                console.log(`🔌 WebSocket disconnected: code=${code}, reason=${reason}`)
-                console.log(`📊 Total messages: Client->Server: ${clientToServerCount}, Server->Client: ${serverToClientCount}`)
-                if (!lspProcess.killed) {
-                    console.log('🛑 Killing LSP process')
-                    lspProcess.kill()
-                }
-            })
+    ws.on('close', (code, reason) => {
+        console.log(`🔌 WebSocket disconnected: code=${code}, reason=${reason}`)
+        console.log(`📊 Total messages: Client->Server: ${clientToServerCount}, Server->Client: ${serverToClientCount}`)
+        if (!lspProcess.killed) {
+            console.log('🛑 Killing LSP process')
+            lspProcess.kill()
+        }
+    })
 
-            lspProcess.on('close', (code, signal) => {
-                console.log(`🛑 LSP process exited: code=${code}, signal=${signal}`)
-                if (ws.readyState === ws.OPEN) {
-                    ws.close()
-                }
-            })
-        })
-        .catch((error) => {
-            console.error('❌ LSP server file not found:', lspPath, error)
-            ws.close(1011, 'LSP server file not found')
-        })
+    lspProcess.on('close', (code, signal) => {
+        console.log(`🛑 LSP process exited: code=${code}, signal=${signal}`)
+        if (ws.readyState === ws.OPEN) {
+            ws.close()
+        }
+    })
 
     ws.on('error', (error) => {
         console.error('❌ WebSocket error:', error)

@@ -6,11 +6,12 @@
 //! [`crate::model`] vocabulary.
 
 use lspkit_server::{Diagnostic, Severity};
-use lspkit_vfs::{Position, Range, TextEdit};
+use lspkit_vfs::{Position, PositionEncoding, Range, TextEdit};
 use serde_json::{json, Value};
 
 use crate::analysis::SymbolInfo;
 use crate::model::{CompletionItem, CompletionKind, Location, SignatureInfo, Span};
+use crate::text::{measure, occurrences};
 
 // LSP `SymbolKind` numeric codes.
 const SYMBOL_CLASS: u8 = 5;
@@ -159,14 +160,17 @@ pub fn locations_result(locations: &[Location]) -> Value {
 
 /// `textDocument/documentSymbol` result: a flat list of `DocumentSymbol`s.
 #[must_use]
-pub fn symbols_result(symbols: &[SymbolInfo], name_len: impl Fn(&str) -> u32) -> Value {
-    Value::Array(symbols.iter().map(|s| symbol_json(s, &name_len)).collect())
+pub fn symbols_result(symbols: &[SymbolInfo], text: &str, encoding: PositionEncoding) -> Value {
+    Value::Array(
+        symbols
+            .iter()
+            .map(|s| symbol_json(s, text, encoding))
+            .collect(),
+    )
 }
 
-fn symbol_json(s: &SymbolInfo, name_len: &impl Fn(&str) -> u32) -> Value {
-    let line = s.position.map_or(0, |p| p.line.saturating_sub(1));
-    let col = s.position.map_or(0, |p| p.column);
-    let span = (line, col, line, col.saturating_add(name_len(&s.name)));
+fn symbol_json(s: &SymbolInfo, text: &str, encoding: PositionEncoding) -> Value {
+    let span = identifier_span(s, text, encoding);
     let kind = match s.kind {
         crate::analysis::SymbolKind::Function => SYMBOL_FUNCTION,
         crate::analysis::SymbolKind::Variable => SYMBOL_VARIABLE,
@@ -179,6 +183,28 @@ fn symbol_json(s: &SymbolInfo, name_len: &impl Fn(&str) -> u32) -> Value {
         "range": range_json(span),
         "selectionRange": range_json(span)
     })
+}
+
+/// The span of a symbol's NAME. The parser records a declaration's position at
+/// its keyword (`fn`/`let`/`type`), so scan the declaration line for the first
+/// whole-word occurrence of the name; fall back to the keyword column.
+fn identifier_span(s: &SymbolInfo, text: &str, encoding: PositionEncoding) -> Span {
+    let line = s.position.map_or(0, |p| p.line.saturating_sub(1));
+    occurrences(text, &s.name, encoding)
+        .into_iter()
+        .find(|o| o.line == line)
+        .map_or_else(
+            || {
+                let col = s.position.map_or(0, |p| p.column);
+                (
+                    line,
+                    col,
+                    line,
+                    col.saturating_add(measure(&s.name, encoding)),
+                )
+            },
+            |o| (o.line, o.start, o.line, o.end),
+        )
 }
 
 /// `textDocument/signatureHelp` result, or JSON `null`.
@@ -295,6 +321,24 @@ mod tests {
         assert_eq!(
             published.pointer("/diagnostics/0/source"),
             Some(&Value::from("osprey"))
+        );
+    }
+
+    #[test]
+    fn document_symbol_range_lands_on_the_identifier_not_the_keyword() {
+        let src = "fn add(a: int) -> int = a\n";
+        let parsed = osprey_syntax::parse_program(src);
+        let syms = crate::analysis::collect_symbols(&parsed.program);
+        let value = symbols_result(&syms, src, PositionEncoding::Utf16);
+        // `add` is at column 3; the `fn` keyword is at column 0.
+        assert_eq!(value.pointer("/0/name"), Some(&Value::from("add")));
+        assert_eq!(
+            value.pointer("/0/range/start/character"),
+            Some(&Value::from(3))
+        );
+        assert_eq!(
+            value.pointer("/0/range/end/character"),
+            Some(&Value::from(6))
         );
     }
 }

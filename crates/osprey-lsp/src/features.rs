@@ -201,12 +201,30 @@ fn keyword_items() -> Vec<CompletionItem> {
 
 /// Parse `before` (the line text up to the cursor) and return the name of the
 /// innermost still-open call and the active (comma-separated) argument index.
+///
+/// String literals and `//` line comments are skipped so their `(`, `)` and `,`
+/// do not corrupt the call/comma stacks.
 fn enclosing_call(before: &str) -> Option<(String, u32)> {
     let mut names: Vec<String> = Vec::new();
     let mut commas: Vec<u32> = Vec::new();
     let mut current = String::new();
     let mut last = String::new();
-    for c in before.chars() {
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut chars = before.chars().peekable();
+    while let Some(c) = chars.next() {
+        if in_string {
+            match (escaped, c) {
+                (true, _) => escaped = false,
+                (false, '\\') => escaped = true,
+                (false, '"') => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        if c == '/' && chars.peek() == Some(&'/') {
+            break;
+        }
         if c.is_alphanumeric() || c == '_' {
             current.push(c);
             continue;
@@ -214,7 +232,11 @@ fn enclosing_call(before: &str) -> Option<(String, u32)> {
         if !current.is_empty() {
             last = std::mem::take(&mut current);
         }
-        step_call(c, &mut names, &mut commas, &mut last);
+        if c == '"' {
+            in_string = true;
+        } else {
+            step_call(c, &mut names, &mut commas, &mut last);
+        }
     }
     let name = names.last().filter(|n| !n.is_empty())?;
     Some((name.clone(), commas.last().copied().unwrap_or(0)))
@@ -272,6 +294,14 @@ mod tests {
         let sig = signature_help(SRC, 1, 19, U16).expect("sig");
         assert_eq!(sig.active_parameter, 1, "{sig:?}");
         assert_eq!(sig.parameters.len(), 2);
+    }
+
+    #[test]
+    fn signature_help_ignores_commas_inside_strings() {
+        // The commas inside the string literal must not advance the active param.
+        let src = "fn f(a: int, b: int) -> int = a\nlet x = f(\"a, b, c\", 2)\n";
+        let sig = signature_help(src, 1, 21, U16).expect("sig");
+        assert_eq!(sig.active_parameter, 1, "{sig:?}");
     }
 
     #[test]
