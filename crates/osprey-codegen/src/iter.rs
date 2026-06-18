@@ -63,9 +63,7 @@ fn invoke(cg: &mut Codegen, cb: &Callback, args: Vec<Value>) -> Result<Value> {
         Callback::Named(name) => call_with_values(cg, name, args),
         Callback::Lambda(params, body) => apply_lambda_values(cg, params, body, args),
         Callback::Local(name, sig) => {
-            let handle = cg
-                .lookup(name)
-                .ok_or_else(|| CodegenError::unknown(name))?;
+            let handle = cg.lookup(name).ok_or_else(|| CodegenError::unknown(name))?;
             let typed = crate::closure::coerce_typed_args(cg, sig, args)?;
             Ok(crate::closure::cell_call(cg, &handle.operand, sig, &typed))
         }

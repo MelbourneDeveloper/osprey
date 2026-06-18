@@ -257,7 +257,12 @@ pub(crate) fn cell_call_exprs(
 /// Call through a closure handle: load the fnptr from the cell and call it with
 /// the cell as the leading env argument. `typed_args` are already-coerced
 /// `"{ty} {operand}"` renderings in call order.
-pub(crate) fn cell_call(cg: &mut Codegen, handle: &str, sig: &FnSig, typed_args: &[String]) -> Value {
+pub(crate) fn cell_call(
+    cg: &mut Codegen,
+    handle: &str,
+    sig: &FnSig,
+    typed_args: &[String],
+) -> Value {
     let (ret_spelling, plist) = spelling_with_env(sig);
     let cellp = cg.emit_reg(format!("bitcast i8* {handle} to {{ i8* }}*"));
     let fpp = cg.emit_reg(format!(

@@ -202,6 +202,22 @@ fn broken syntax here {
     const extension = vscode.extensions.getExtension(extensionId);
     assert.ok(extension?.isActive, 'Extension should remain active with language server');
   });
+
+  test('Compile and Run commands execute against the active file', async () => {
+    fs.writeFileSync(testFile, 'fn main() -> Unit = print("hi")\n');
+    const document = await vscode.workspace.openTextDocument(testFile);
+    await vscode.window.showTextDocument(document);
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Both commands shell out to the staged `osprey` binary on PATH; they must
+    // run their handlers to completion without throwing back to the caller.
+    await vscode.commands.executeCommand('osprey.compile');
+    await vscode.commands.executeCommand('osprey.run');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    const extension = vscode.extensions.getExtension(extensionId);
+    assert.ok(extension?.isActive, 'Extension should remain active after running commands');
+  });
 });
 
 suite('Osprey Language Features Tests', () => {

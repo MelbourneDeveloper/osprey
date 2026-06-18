@@ -144,12 +144,13 @@ impl Codegen {
     /// The function type of the value a call to `f` returns, when `f` is a
     /// top-level function or a function-typed local that returns a function.
     pub(crate) fn call_result_fn_type(&self, f: &str) -> Option<Type> {
-        let ret = self.prog.return_type(f).or_else(|| {
-            match self.fn_value_types.get(f) {
+        let ret = self
+            .prog
+            .return_type(f)
+            .or_else(|| match self.fn_value_types.get(f) {
                 Some(Type::Fun { ret, .. }) => Some(&**ret),
                 _ => None,
-            }
-        })?;
+            })?;
         match ret {
             Type::Fun { .. } => Some(ret.clone()),
             _ => None,
@@ -580,7 +581,6 @@ impl Codegen {
         obj
     }
 }
-
 
 /// The resolved heap layout of a constructor.
 pub(crate) struct CtorView {
