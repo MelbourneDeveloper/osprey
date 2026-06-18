@@ -62,5 +62,31 @@ pi-min=-9223372036854775808
 
 pi-leading-space rejected
 
+byteLen=6
+
+byteAt1=195
+
+byteAt-oob=byteAt: index out of range
+
+cpAt1=233
+
+cpAt-mid=codePointAt: invalid UTF-8 lead byte
+
+cpWidth=4
+
+cpWidth-surrogate=codePointWidth: surrogate is not a scalar
+
+fromCp=😀
+
+fromCp-bad=fromCodePoint: invalid code point
+
+roundtrip=233
+
+pi-msg=parseInt: invalid integer
+
+div-msg=division by zero
+
+user-msg=custom boom
+
 === Edge Cases Complete ===
 

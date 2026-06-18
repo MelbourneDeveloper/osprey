@@ -2,7 +2,7 @@
 layout: page
 title: "Boolean Operations"
 description: "Osprey Language Specification: Boolean Operations"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0009-booleanoperations/"
@@ -10,7 +10,7 @@ permalink: "/spec/0009-booleanoperations/"
 
 # Boolean Operations
 
-Osprey has no `if`/`else` statement. Conditional logic is written as a `match` on a boolean (which forces both arms to be considered) or as the ternary shorthand `cond ? then : else`, which desugars to the same `match`. The ternary is defined in [Pattern Matching](0007-PatternMatching.md#ternary-match-syntactic-sugar).
+Osprey has no `if`/`else` statement. Conditional logic is written as a `match` on a boolean (which forces both arms to be considered) or as the ternary shorthand `cond ? then : else`, which desugars to the same `match`. The ternary is defined in [Pattern Matching](/spec/0007-patternmatching/#ternary-match-syntactic-sugar).
 
 ```osprey
 let status = match isValid {
@@ -41,7 +41,7 @@ let category = match score >= 90 {
 
 ## Boolean Operators
 
-`&&`, `||`, and `!` are short-circuiting; `==`, `!=`, `<`, `>`, `<=`, `>=` produce booleans. See [Lexical Structure](0002-LexicalStructure.md) for the full operator list.
+`&&`, `||`, and `!` are short-circuiting; `==`, `!=`, `<`, `>`, `<=`, `>=` produce booleans. See [Lexical Structure](/spec/0002-lexicalstructure/) for the full operator list.
 
 ```osprey
 let isAdult       = age >= 18

@@ -136,7 +136,7 @@ fn list_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
         "i8*, i64",
         &[&l.operand, &i.operand],
     );
-    result_from_flag(cg, &inb, &val)
+    result_from_flag(cg, &inb, &val, "listGet: index out of bounds")
 }
 
 /// `listContains(l, x) -> bool`: linear scan, content-equality for strings.
@@ -321,5 +321,5 @@ pub(crate) fn runtime_map_get(cg: &mut Codegen, m: &Value, k: &Value) -> Result<
         "i8*, i64",
         &[&m.operand, &k.operand],
     );
-    result_from_flag(cg, &has, &got)
+    result_from_flag(cg, &has, &got, "mapGet: key not found")
 }

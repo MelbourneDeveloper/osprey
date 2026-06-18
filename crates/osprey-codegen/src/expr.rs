@@ -209,7 +209,7 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
 /// divisor yields `Error` (`Result<float, MathError>` disc 1), else
 /// `Success(quotient)`.
 fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
-    use crate::result::make_result;
+    use crate::result::{make_result, NO_MSG};
     let ld = as_double(cg, l)?;
     let rd = as_double(cg, r)?;
     let isz = cg.fresh_reg();
@@ -224,18 +224,27 @@ fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     cg.start_block(&nonzero_bb);
     let q = cg.fresh_reg();
     cg.emit(format!("{q} = fdiv double {}, {}", ld.operand, rd.operand));
-    let ok = make_result(cg, Value::new(q, LType::Double), LType::Double, "0")?;
+    let ok = make_result(cg, Value::new(q, LType::Double), LType::Double, "0", NO_MSG)?;
     let okb = cg.snapshot_to(&end);
 
     cg.start_block(&zero_bb);
-    let err = make_result(cg, Value::new("0.0", LType::Double), LType::Double, "1")?;
+    let msg = cg.string_constant("division by zero");
+    let err = make_result(
+        cg,
+        Value::new("0.0", LType::Double),
+        LType::Double,
+        "1",
+        &msg.operand,
+    )?;
     let errb = cg.snapshot_to(&end);
 
     cg.start_block(&end);
     let reg = cg.fresh_reg();
     cg.emit(format!(
-        "{reg} = phi {{ double, i8 }}* [ {}, %{okb} ], [ {}, %{errb} ]",
-        ok.operand, err.operand
+        "{reg} = phi {}* [ {}, %{okb} ], [ {}, %{errb} ]",
+        crate::llty::result_struct_ty(LType::Double),
+        ok.operand,
+        err.operand
     ));
     Ok(Value::result(reg, LType::Double))
 }
@@ -508,9 +517,9 @@ pub(crate) fn call_with_values(cg: &mut Codegen, name: &str, args: Vec<Value>) -
         _ => args,
     };
     let typed = crate::llty::comma_join(&coerced, Value::typed);
-    // A function declared `-> Result<T, E>` hands back a `{ T, i8 }*` block.
+    // A function declared `-> Result<T, E>` hands back a Result block pointer.
     if let Some(inner) = cg.fn_ret_result_inner(name) {
-        let rty = format!("{{ {inner}, i8 }}*");
+        let rty = format!("{}*", crate::llty::result_struct_ty(inner));
         let reg = emit_user_call(cg, name, &rty, &coerced, &typed);
         return Ok(Value::result(reg, inner));
     }

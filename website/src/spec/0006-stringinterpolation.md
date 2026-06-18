@@ -2,7 +2,7 @@
 layout: page
 title: "String Interpolation"
 description: "Osprey Language Specification: String Interpolation"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0006-stringinterpolation/"
@@ -49,7 +49,7 @@ Interpolated expressions are automatically converted to strings:
 
 - **Primitive types**: int, float, bool converted directly
 - **String types**: Inserted as-is
-- **Result types**: Must be pattern-matched before interpolation
+- **Result types**: interpolation auto-unwraps — the success payload is rendered (context 5 of [Result Auto-Unwrapping](/spec/0004-typesystem/#result-auto-unwrapping)); an `Error` renders as `Error(<message>)`, preserving the payload per [ERR-PAYLOAD](/spec/0013-errorhandling/#error-payload-propagation--err-payload). To render the wrapper of a success, use `toString`.
 - **Complex types**: Use `toString()` for explicit conversion
 
 ```osprey
@@ -57,12 +57,9 @@ let num = 42
 let flag = true
 print("Number: ${num}, Flag: ${flag}")
 
-// Result types require unwrapping
 let result = 10 + 5
-match result {
-    Success { value } => print("Result: ${value}")
-    Error { message } => print("Error: ${message}")
-}
+print("Result: ${result}")        // "Result: 15"  (auto-unwrapped)
+print(toString(result))           // "Success(15)" (wrapper kept)
 ```
 
 ## Escaping

@@ -1,12 +1,12 @@
 ---
 layout: page
 title: "websocketClose (Function)"
-description: "⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources."
+description: "Closes the WebSocket connection and cleans up resources."
 ---
 
 **Signature:** `websocketClose(wsID: Int) -> Result<Success, String>`
 
-**Description:** ⚠️ SPEC VIOLATION: Current implementation returns raw int64_t instead of Result<Success, String>. Closes the WebSocket connection and cleans up resources.
+**Description:** Closes the WebSocket connection and cleans up resources. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
 ## Parameters
 

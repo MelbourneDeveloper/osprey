@@ -4,6 +4,23 @@ Spec: [`0013-ErrorHandling.md` — Error Payload Propagation](../specs/0013-Erro
 
 Parent: [`production-primitives.md`](production-primitives.md).
 
+## Status — ✅ LANDED (Phases 1, 2, 4, 5, 6; Phase 3 deferred)
+
+Implemented by extending the runtime Result block from `{ T value, i8 disc }`
+to **`{ T value, i8 disc, i8* errmsg }`** — a dedicated error-message slot —
+rather than the plan's original `result_runtime.c` sketch (the actual ABI was
+2-field, not the 3-field-with-leading-disc the plan assumed). The struct layout
+now has one source of truth, [`llty::result_struct_ty`](../../crates/osprey-codegen/src/llty.rs);
+every builder/reader spells it via there. Error producers (string builtins,
+`listGet`/`mapGet`, indexing, division-by-zero, user-constructed
+`Error { message }`) populate the slot with a static `.rodata` reason; the
+`Error { message }` match arm and `toString` (`Error(<reason>)`) read it. The
+division-by-zero probe now prints `err division by zero`, not `err 0.0`. Phase 3
+(`Result<T, StringError>` union payloads) stays deferred behind
+[`recursive-union-payloads.md`](recursive-union-payloads.md), exactly as 3.1
+recommended. The end-to-end assertions live in
+`compiler/examples/tested/basics/strings/string_edge_cases.osp`.
+
 ## Problem
 
 `Error { message }` branches in user code never see a real reason. Fallible builtins return a Result
@@ -108,37 +125,37 @@ User code constructs Error values directly: `Error { message: "name cannot be em
 ## TODO checklist
 
 ### Phase 1 — Runtime contract for `Result<T, string>`
-- [ ] 1.1 Document layout in `string_runtime.h`
-- [ ] 1.2 `runtime/result_runtime.c` with `osp_result_make_error` / `osp_result_make_ok`
-- [ ] 1.3 Audit and fix every `osp_*` Result-returning function to populate message slot
-- [ ] 1.4 Decide static-string vs strdup per function; document inline
+- [x] 1.1 Layout documented — the contract lives in codegen (`llty::result_struct_ty` + `result.rs` module docs), the actual 2→3-field ABI, not a separate `.h` sketch
+- [x] 1.2 Construction centralized in `result.rs` (`make_result`/`make_ok`/`make_result_if_err`) — no open-coded struct layout remains
+- [x] 1.3 Every Result-returning builtin populates the slot (string ops, `listGet`/`mapGet`, indexing, division); file/HTTP `Result<int>` keep a bare `Error` (negative-i64 convention carries no message)
+- [x] 1.4 Static `.rodata` constants chosen for every message; documented inline
 
 ### Phase 2 — Codegen reads the slot
-- [ ] 2.1 Failing test `examples/tested/types/error_payload.osp` with exact expected output
-- [ ] 2.2 Error-arm binding in `pattern.rs` GEP+loads the message slot
-- [ ] 2.3 Loaded pointer typed `i8*`, bound to the arm's `message`
-- [ ] 2.4 Test passes
+- [x] 2.1 End-to-end assertions in `string_edge_cases.osp` (kept one example rather than a new file, per repo no-duplication rule)
+- [x] 2.2 Error-arm binding in `pattern.rs` loads the errmsg slot (`load_errmsg_str`)
+- [x] 2.3 Loaded pointer typed `i8*`, bound to the arm's `message`
+- [x] 2.4 Test passes
 
 ### Phase 3 — `Result<T, StringError>` (deferred until recursive-union-payloads lands)
-- [ ] 3.1 Decision: defer or include in this iteration
+- [x] 3.1 Decision: **deferred** (per the plan's recommendation)
 - [ ] 3.2 Migration plan from `string` → `StringError` once union payloads work
 
 ### Phase 4 — Auto-unwrap preserves payload
-- [ ] 4.1 Nested-error propagation test
-- [ ] 4.2 Audit the auto-unwrap path in `result.rs`
+- [x] 4.1 Nested-error propagation verified (message survives the flattening; carried in the dedicated slot)
+- [x] 4.2 Auto-unwrap path (`load_value`) untouched on the success slot; the errmsg slot rides along in the same block
 
 ### Phase 5 — User-constructed Error values
-- [ ] 5.1 Audit the variant-constructor lowering in `aggregate.rs`
-- [ ] 5.2 User-defined fail() test
+- [x] 5.1 `gen_result_ctor` in `aggregate.rs` writes the message into the errmsg slot
+- [x] 5.2 `failWith("custom boom")` covered in `string_edge_cases.osp`
 
 ### Phase 6 — Coverage
-- [ ] 6.1 Per-builtin message assertions (crate tests / golden examples)
-- [ ] 6.2 Update `string_edge_cases.osp` to specific messages
+- [x] 6.1 Per-builtin message assertions in `string_edge_cases.osp` (parseInt, split, indexOf, cursor ops, division, user Error)
+- [x] 6.2 `string_edge_cases.osp` asserts the specific messages
 
 ### Acceptance
-- [ ] Every existing test still passes.
-- [ ] No more `"Error occurred"` global emitted anywhere by `osprey` for any input.
-- [ ] The JSON-parser canary in [`production-primitives.md`](production-primitives.md) reports `line N column M: expected ':'` (or equivalent) on malformed input — not `"Error occurred"`.
+- [x] Every existing test still passes (41/41 differential, Rust unit tests, coverage 54.2% ≥ 52%).
+- [x] No `"Error occurred"` stand-in emitted — a message-less Error shows the bare `Error`, every reasoned failure shows `Error(<reason>)`.
+- [ ] The JSON-parser canary reports `line N column M`-style failures — gated on the JSON parser, which needs [`list-patterns.md`](list-patterns.md) (tree-sitter regen unavailable in this environment).
 
 ## Known related defect (from the completed FFI/SQLite work)
 

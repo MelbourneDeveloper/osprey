@@ -101,7 +101,7 @@ contains("hello", "")             // true
 #### `indexOf(s: string, needle: string) -> Result<int, StringError>`
 Returns the codepoint index of the first occurrence of `needle`, or `Error(NotFound)` if absent. An empty `needle` returns `Success { value: 0 }`.
 
-### Cursor Access (total, O(1))
+### Cursor Access (total, O(1)) — [BUILTIN-STRING-CURSOR]
 
 These primitives expose `string` as a random-access byte/codepoint buffer without allocating. They exist so user-written parsers (JSON, query strings, CSV, log formats) can run in linear time instead of the O(n²) imposed by chaining `substring`/`take`/`drop`. They are the lowest-level string operations in the language; everything above is implementable in pure Osprey on top of them.
 

@@ -2,7 +2,7 @@
 layout: page
 title: "Security and Sandboxing"
 description: "Osprey Language Specification: Security and Sandboxing"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0016-securityandsandboxing/"
@@ -34,7 +34,7 @@ For more granular control, you can disable specific categories of operations:
 - `--no-http`: Disable HTTP client and server functions
 - `--no-websocket`: Disable WebSocket client and server functions  
 - `--no-fs`: Disable file system read/write operations
-- `--no-ffi`: Disable foreign function interface
+- `--no-ffi`: Disable foreign function interface (also gates third-party C libraries such as SQLite)
 
 **Examples:**
 ```bash
@@ -81,6 +81,13 @@ When file system access is disabled (`--no-fs` or `--sandbox`), these functions 
 - `deleteFile` - Delete file
 - `createDirectory` - Create directory
 - `listDirectory` - List directory contents
+
+#### Third-Party C Libraries (FFI)
+Database access is **not** a hardcoded builtin category. Osprey reaches SQLite (and any C library)
+through the generic **FFI / interop** layer — `extern fn` declarations bound to the linked library
+(see [Foreign Function Interface](/spec/0019-foreignfunctioninterface/)). It is therefore gated by `--no-ffi`
+(`PermissionFFI`), exactly like any other foreign call. When FFI is disabled, `extern` declarations and
+any library they bind (e.g. `libsqlite3`) are unavailable; no DB-specific permission exists.
 
 ## Compiler Output
 

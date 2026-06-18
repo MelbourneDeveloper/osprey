@@ -97,11 +97,10 @@ The plan document tracks each of these with its specific blocker.
 
 ## Try it
 
-The collections runtime is in `0.2.0-alpha`. Brew tap it on macOS:
+The collections runtime ships in `0.2.0`. Install it on macOS or Linux:
 
 ```bash
-brew tap melbournedeveloper/osprey
-brew install osprey
+brew install nimblesite/tap/osprey
 ```
 
 …and the [playground](/playground/) supports the new builtins too. Build something stateful — a route table, an event log, an undo stack — and see how the persistent semantics change the shape of the code.

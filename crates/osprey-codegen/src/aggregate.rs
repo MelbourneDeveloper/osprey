@@ -156,15 +156,25 @@ fn gen_http_response(cg: &mut Codegen, fields: &[FieldAssignment]) -> Result<Val
 }
 
 /// Build a `Success`/`Error` value in the Result ABI: the single field becomes
-/// the `{ inner, i8 }` block's payload, with disc `0` (Success) or `1` (Error).
+/// the block's success payload (slot 0), with disc `0` (Success) or `1`
+/// (Error). For `Error { message: m }` the (string) message is also written to
+/// the errmsg slot so the matching `Error { message }` arm and `toString` read
+/// the real reason — see [`crate::result`]. Implements [ERR-PAYLOAD].
 fn gen_result_ctor(cg: &mut Codegen, name: &str, fields: &[FieldAssignment]) -> Result<Value> {
     let fa = fields
         .first()
         .ok_or_else(|| CodegenError::invalid(format!("`{name}` needs one field")))?;
     let v = gen_expr(cg, &fa.value)?;
     let inner = v.ty;
-    let disc = if name == "Success" { "0" } else { "1" };
-    crate::result::make_result(cg, v, inner, disc)
+    let is_error = name == "Error";
+    let disc = if is_error { "1" } else { "0" };
+    // The errmsg slot is `i8*`; only a string/handle message can travel there.
+    let errmsg = if is_error && matches!(v.ty, LType::Str | LType::Ptr) {
+        v.operand.clone()
+    } else {
+        crate::result::NO_MSG.to_string()
+    };
+    crate::result::make_result(cg, v, inner, disc, &errmsg)
 }
 
 /// `record { field: newValue }` — copy every field of `record` into a fresh

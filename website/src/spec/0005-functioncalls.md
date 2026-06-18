@@ -2,7 +2,7 @@
 layout: page
 title: "Function Calls"
 description: "Osprey Language Specification: Function Calls"
-date: 2026-05-29
+date: 2026-06-18
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0005-functioncalls/"
@@ -56,5 +56,6 @@ let result = multiply(5, b: 3)  // Compilation error
 1. Zero parameters: empty parentheses, `f()`.
 2. One parameter: positional or named.
 3. Two or more parameters: every argument must be named. Mixing positional and named arguments is a compilation error.
+4. **Built-in functions** ([Built-in Functions](/spec/0012-built-infunctions/)) are exempt: they take positional arguments in subject-first order — `split("a,b,c", ",")`, `fold(xs, 0, add)` — so the pipe can supply the subject as the first argument: `xs |> fold(0, add)`.
 
 Argument order at the call site is independent of declaration order; the compiler reorders by name.

@@ -4,7 +4,11 @@ Osprey has no exceptions, panics, or null. Any function that can fail returns a 
 
 ## Status
 
-[ERR-PAYLOAD] is not yet conforming: codegen binds `Error { message }` to a zeroed payload slot (plan: [`error-payloads.md`](../plans/error-payloads.md)).
+[ERR-PAYLOAD] conforms for `E = string`: the runtime Result block carries a
+dedicated `i8* errmsg` slot, `Error { message }` binds the real reason, and
+`toString` renders `Error(<reason>)` (plan: [`error-payloads.md`](../plans/error-payloads.md)).
+Discriminated-union error payloads (`Result<T, StringError>`) remain deferred
+behind [`recursive-union-payloads.md`](../plans/recursive-union-payloads.md).
 
 ## The Result Type
 
@@ -58,8 +62,8 @@ match (10 + 5) * 2 {
 A `Result` formats as `Success(<value>)` or `Error(<message>)`:
 
 ```osprey
-print(toString(15 / 3))   // "Success(5)"
-print(toString(10 / 0))   // "Error(DivisionByZero)"
+print(toString(15 / 3))   // "Success(5.0)"  — division is always float
+print(toString(10 / 0))   // "Error(division by zero)"
 ```
 
 ## Error Payload Propagation — [ERR-PAYLOAD]

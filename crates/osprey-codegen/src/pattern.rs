@@ -123,10 +123,13 @@ fn gen_result_match(cg: &mut Codegen, disc: Value, arms: &[MatchArm]) -> Result<
         let d = crate::result::load_disc(cg, &disc);
         let c = cg.fresh_reg();
         cg.emit(format!("{c} = icmp eq i8 {d}, 0"));
+        // Success binds the value slot; Error binds the errmsg slot (the real
+        // reason), so `Error { message }` sees the message regardless of the
+        // success payload type. Implements [ERR-PAYLOAD].
         (
             c,
             crate::result::load_value(cg, &disc),
-            crate::result::load_value(cg, &disc),
+            crate::result::load_errmsg_str(cg, &disc),
         )
     } else if matches!(disc.ty, LType::Str | LType::Ptr) {
         // A handle discriminant (e.g. a WHERE-constrained constructor that

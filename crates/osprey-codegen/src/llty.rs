@@ -46,11 +46,21 @@ impl fmt::Display for LType {
     }
 }
 
-/// The LLVM spelling of a return slot: the `{ T, i8 }*` Result block when the
+/// The LLVM spelling of a `Result<T, E>` heap block:
+/// `{ T value, i8 disc, i8* errmsg }`. Slot 0 is the success payload; slot 1 the
+/// discriminant (0 = Success, 1 = Error); slot 2 the error-message string
+/// (`null` when Success or when the producer set no message). The single source
+/// of truth for the Result ABI layout — every builder/reader spells it via here.
+#[must_use]
+pub fn result_struct_ty(inner: LType) -> String {
+    format!("{{ {inner}, i8, i8* }}")
+}
+
+/// The LLVM spelling of a return slot: the Result block pointer when the
 /// callee returns `Result<T, _>`, else the plain scalar type.
 pub(crate) fn ret_spelling(ret_ty: LType, ret_inner: Option<LType>) -> String {
     match ret_inner {
-        Some(inner) => format!("{{ {inner}, i8 }}*"),
+        Some(inner) => format!("{}*", result_struct_ty(inner)),
         None => ret_ty.to_string(),
     }
 }
@@ -109,7 +119,8 @@ impl Value {
         }
     }
 
-    /// A `Result<inner, _>` value: `operand` points at a `{ inner, i8 }` block.
+    /// A `Result<inner, _>` value: `operand` points at a
+    /// `{ inner, i8 disc, i8* errmsg }` block.
     pub fn result(operand: impl Into<String>, inner: LType) -> Value {
         Value {
             operand: operand.into(),
@@ -142,20 +153,20 @@ impl Value {
         Value::new("0", LType::I64)
     }
 
-    /// The LLVM type spelling this value travels as — the precise
-    /// `{ inner, i8 }*` for a Result block, else the plain [`LType`].
+    /// The LLVM type spelling this value travels as — the precise Result block
+    /// pointer for a Result, else the plain [`LType`].
     #[must_use]
     pub fn llvm_ty(&self) -> String {
         match self.result_inner {
-            Some(inner) => format!("{{ {inner}, i8 }}*"),
+            Some(inner) => format!("{}*", result_struct_ty(inner)),
             None => self.ty.to_string(),
         }
     }
 
-    /// The `{ inner, i8 }` struct spelling of a Result block (no pointer).
+    /// The Result block struct spelling (no pointer), or `None` for a non-Result.
     #[must_use]
     pub fn result_struct_ty(&self) -> Option<String> {
-        self.result_inner.map(|inner| format!("{{ {inner}, i8 }}"))
+        self.result_inner.map(result_struct_ty)
     }
 
     /// Render as a typed operand, e.g. `i64 %3` — the form arguments and `ret`

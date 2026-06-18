@@ -614,6 +614,66 @@ static void test_parse_int_signs(void) {
     printf("  ok  parse_int_signs (boundary + sign + leading zeros + rejection)\n");
 }
 
+/* ---------- O(1) byte / codepoint cursor (BUILTIN-STRING-CURSOR) ---------- */
+
+static void test_cursor(void) {
+    int64_t out;
+
+    /* byteLength: total, O(1). */
+    assert(osp_string_byte_length("") == 0);
+    assert(osp_string_byte_length("abc") == 3);
+    assert(osp_string_byte_length("héllo") == 6);   /* é = 2 bytes */
+    assert(osp_string_byte_length(NULL) == 0);
+
+    /* byteAt: every ASCII position; -1 and len error. */
+    assert(osp_string_byte_at("abc", 0, &out) == NULL && out == 'a');
+    assert(osp_string_byte_at("abc", 2, &out) == NULL && out == 'c');
+    assert(osp_string_byte_at("abc", -1, &out) != NULL);
+    assert(osp_string_byte_at("abc", 3, &out) != NULL);
+    assert(osp_string_byte_at("", 0, &out) != NULL);
+    assert(osp_string_byte_at(NULL, 0, &out) != NULL);
+    assert(osp_string_byte_at("héllo", 1, &out) == NULL && out == 0xC3); /* lead of é */
+
+    /* codePointAt: decode + UTF-8 validation. */
+    assert(osp_string_codepoint_at("héllo", 0, &out) == NULL && out == 'h');
+    assert(osp_string_codepoint_at("héllo", 1, &out) == NULL && out == 0xE9); /* é */
+    assert(osp_string_codepoint_at("héllo", 2, &out) != NULL); /* mid-codepoint */
+    assert(osp_string_codepoint_at("abc", 5, &out) != NULL);   /* out of range */
+    /* 4-byte: 𝄞 U+1D11E */
+    assert(osp_string_byte_length("\xf0\x9d\x84\x9e") == 4);
+    assert(osp_string_codepoint_at("\xf0\x9d\x84\x9e", 0, &out) == NULL && out == 0x1D11E);
+    /* truncated lead byte (a lone 0xF0) */
+    assert(osp_string_codepoint_at("\xf0", 0, &out) != NULL);
+
+    /* codePointWidth: scalar-validity check. */
+    assert(osp_string_codepoint_width(0x7F, &out) == NULL && out == 1);
+    assert(osp_string_codepoint_width(0x80, &out) == NULL && out == 2);
+    assert(osp_string_codepoint_width(0xFFFF, &out) == NULL && out == 3);
+    assert(osp_string_codepoint_width(0x10000, &out) == NULL && out == 4);
+    assert(osp_string_codepoint_width(0x110000, &out) != NULL); /* out of range */
+    assert(osp_string_codepoint_width(0xD800, &out) != NULL);   /* surrogate */
+
+    /* fromCodePoint: encode 1..4 bytes; reject surrogate / out of range. */
+    char *enc = osp_string_from_codepoint(0x1F600); /* 😀 */
+    assert(enc != NULL && osp_string_byte_length(enc) == 4);
+    free(enc);
+    assert(osp_string_from_codepoint(0x110000) == NULL);
+    assert(osp_string_from_codepoint(0xD800) == NULL);
+
+    /* Round-trip codePointAt(fromCodePoint(cp), 0) == cp. U+0000 is excluded:
+     * a NUL byte terminates a C string, so it cannot survive this layout. */
+    int64_t cps[] = {0x7F, 0x80, 0x7FF, 0x800, 0xFFFF, 0x10000, 0x10FFFF};
+    for (size_t i = 0; i < sizeof(cps) / sizeof(cps[0]); i++) {
+        char *e = osp_string_from_codepoint(cps[i]);
+        assert(e != NULL);
+        int64_t dec;
+        assert(osp_string_codepoint_at(e, 0, &dec) == NULL);
+        assert(dec == cps[i]);
+        free(e);
+    }
+    printf("  ok  cursor (byteLength/byteAt/codePointAt/codePointWidth/fromCodePoint)\n");
+}
+
 /* ---------- entry point ---------- */
 
 int main(void) {
@@ -645,6 +705,7 @@ int main(void) {
     test_split_pathological();
     test_pad_overflow_guards();
     test_parse_int_signs();
+    test_cursor();
     printf("✅ all string_runtime tests passed\n");
     return 0;
 }

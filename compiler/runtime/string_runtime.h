@@ -41,6 +41,15 @@ int64_t osp_parse_int_strict(const char *s, int64_t *out);
 int64_t osp_parse_float_strict(const char *s, double *out);
 char *osp_float_to_string(double d);
 
+/* O(1) byte / codepoint cursor — BUILTIN-STRING-CURSOR. The fallible three
+ * write their result through `*out` and return NULL on success, else a static
+ * error message string. */
+int64_t osp_string_byte_length(const char *s);
+const char *osp_string_byte_at(const char *s, int64_t i, int64_t *out);
+const char *osp_string_codepoint_at(const char *s, int64_t byte_index, int64_t *out);
+const char *osp_string_codepoint_width(int64_t cp, int64_t *out);
+char *osp_string_from_codepoint(int64_t cp);
+
 /* list API — see string_runtime_list.c */
 osp_string_list *osp_string_split(const char *s, const char *sep);
 osp_string_list *osp_string_lines(const char *s);

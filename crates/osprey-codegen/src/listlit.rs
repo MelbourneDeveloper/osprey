@@ -167,10 +167,14 @@ pub(crate) fn gen_index(cg: &mut Codegen, target: &Expr, index: &Expr) -> Result
     ));
     let disc = cg.fresh_reg();
     cg.emit(format!("{disc} = select i1 {ok}, i8 0, i8 1"));
+    // `ok` is the in-bounds flag, so the message is selected on the failing path.
+    let oob = cg.string_constant("index out of bounds");
+    let errmsg = cg.emit_reg(format!("select i1 {ok}, i8* null, i8* {}", oob.operand));
     make_result(
         cg,
         Value::new(phi, elem).with_owner(elem_owner),
         elem,
         &disc,
+        &errmsg,
     )
 }

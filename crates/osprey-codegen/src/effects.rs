@@ -25,13 +25,10 @@ pub(crate) struct OpSig {
 }
 
 impl OpSig {
-    /// The handler function's LLVM return-type spelling (`{ T, i8 }*` for a
-    /// Result result, else the plain type).
+    /// The handler function's LLVM return-type spelling (the Result block
+    /// pointer for a Result result, else the plain type).
     fn ret_ty(&self) -> String {
-        match self.ret_result_inner {
-            Some(inner) => format!("{{ {inner}, i8 }}*"),
-            None => self.ret.to_string(),
-        }
+        crate::llty::ret_spelling(self.ret, self.ret_result_inner)
     }
 
     /// The handler function-pointer type, e.g. `i64 (i8*, i64)*`.

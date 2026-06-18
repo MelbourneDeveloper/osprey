@@ -153,7 +153,9 @@ fn emit(cg: &mut Codegen, sig: &Sig, ops: &[String]) -> Result<Value> {
         )),
         Ret::ResultInt => {
             let r = cg.call("i64", sig.cname, &params, &op_refs);
-            result_from_i64(cg, &r)
+            // The negative-i64 runtime convention carries no message string;
+            // the Error arm falls back to the bare "Error" reason.
+            result_from_i64(cg, &r, None)
         }
         Ret::ResultStr(err) => {
             let r = cg.call("i8*", sig.cname, &params, &op_refs);

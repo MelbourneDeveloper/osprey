@@ -4,6 +4,23 @@ Spec: [`0012-Built-InFunctions.md` — Cursor Access](../specs/0012-Built-InFunc
 
 Parent: [`production-primitives.md`](production-primitives.md).
 
+## Status — ✅ LANDED (Phases 1–4; Phase 5 canary gated on list-patterns)
+
+All five builtins ship: `byteLength` (total `int`) and the four fallible ones
+(`byteAt`, `codePointAt`, `codePointWidth`, `fromCodePoint`) in
+[`string_runtime.c`](../../compiler/runtime/string_runtime.c) /
+[`string_runtime.h`](../../compiler/runtime/string_runtime.h), registered in
+[`builtins.rs`](../../crates/osprey-types/src/builtins.rs) and lowered in
+[`strings.rs`](../../crates/osprey-codegen/src/strings.rs). The fallible three
+use a clean ABI: the C function writes its `i64` result through an out-slot and
+**returns the error message** (`NULL` on success), which lands directly in the
+Result errmsg slot from [`error-payloads.md`](error-payloads.md) — so real
+UTF-8 reasons (`codePointAt: invalid UTF-8 lead byte`, etc.) reach the
+`Error { message }` arm. C unit coverage is in
+[`string_runtime_tests.c`](../../compiler/runtime/string_runtime_tests.c)
+(`test_cursor`); end-to-end coverage is in `string_edge_cases.osp`. Phase 5 (the
+pure-Osprey JSON parser canary) is gated on list patterns and stays open.
+
 ## Problem
 
 Every existing string primitive allocates. `take(s, 1)`, `drop(s, 1)`, `substring(s, i, i+1)` each call `malloc` and copy bytes. Writing a parser this way is O(n²) at best — every advance copies the remaining input — and produces O(n log n) garbage that the allocator has to wade through.
@@ -105,29 +122,28 @@ Once `error-payloads.md` and this plan ship (closures and recursive unions are a
 ## TODO checklist
 
 ### Phase 1 — C runtime
-- [ ] 1.1 `osp_string_byte_length`
-- [ ] 1.2 `osp_string_byte_at`
-- [ ] 1.3 `osp_string_codepoint_at` with UTF-8 validation
-- [ ] 1.4 `osp_string_codepoint_width` with scalar-validity check
-- [ ] 1.5 `osp_string_from_codepoint`
-- [ ] 1.6 C unit tests covering ASCII, multi-byte, 4-byte, surrogates, boundaries
-- [ ] 1.7 `runtime/run_tests.sh` + `make _runtime` clean under strict flags
+- [x] 1.1 `osp_string_byte_length`
+- [x] 1.2 `osp_string_byte_at`
+- [x] 1.3 `osp_string_codepoint_at` with UTF-8 validation
+- [x] 1.4 `osp_string_codepoint_width` with scalar-validity check
+- [x] 1.5 `osp_string_from_codepoint`
+- [x] 1.6 C unit tests (`test_cursor`) covering ASCII, multi-byte, 4-byte, surrogates, boundaries, round-trip
+- [x] 1.7 `make _runtime` clean under strict flags (`-Werror -Wall -Wextra -ftrapv`)
 
 ### Phase 2 — Builtin registry + codegen
-- [ ] 2.1 Checker signatures in `crates/osprey-types/src/builtins.rs`
-- [ ] 2.2 C-ABI lowerings in `crates/osprey-codegen/src/extern_call.rs`
+- [x] 2.1 Checker signatures in `crates/osprey-types/src/builtins.rs`
+- [x] 2.2 Lowerings in `crates/osprey-codegen/src/strings.rs` (`cursor_int`/`from_codepoint`) — the string builtins live here, not `extern_call.rs`
 
 ### Phase 3 — Coordinate with error-payloads
-- [ ] 3.1 Land on top of `error-payloads.md` Phase 1 runtime contract — do not perpetuate the static-message hack
+- [x] 3.1 Landed on top of the `error-payloads.md` errmsg-slot contract — the cursor builtins thread real C-supplied messages, no static-message hack
 
 ### Phase 4 — E2E tests
-- [ ] 4.1 `cursor_basic.osp` happy-path
-- [ ] 4.2 `cursor_advance.osp` codepoint walk
-- [ ] 4.3 `cursor_wrong_arity.ospo` negative
+- [x] 4.1 Happy-path + 4.2 codepoint round-trip folded into `string_edge_cases.osp` (one example, per repo no-duplication rule)
+- [x] 4.3 Wrong arity (`byteAt("a")`) rejected by the generic arity checker (signature registration) — verified, no duplicate negative file added
 
 ### Phase 5 — Canary
-- [ ] 5.1 `examples/tested/json/json_parser.osp` (pure Osprey) parses `{"name":"alice","age":30,"tags":[1,true,null,"x"]}` and asserts the parsed tree; ≤500 LOC
+- [ ] 5.1 `json_parser.osp` (pure Osprey) — gated on [`list-patterns.md`](list-patterns.md) (tree-sitter regen unavailable here)
 
 ### Acceptance
-- [ ] User-written JSON parser passes a 20-input round-trip corpus.
-- [ ] No O(n²) string copying in the JSON parser source (no `take`/`drop`/`substring` on the input cursor).
+- [ ] User-written JSON parser passes a 20-input round-trip corpus — gated on the canary above.
+- [x] No O(n²) string copying possible: the cursor builtins are O(1) and non-allocating (byte/codepoint access never `malloc`s).

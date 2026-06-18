@@ -1,6 +1,6 @@
 ---
-title: "Functional Language with Algebraic Effects, Fibers, and Persistent Collections"
-description: "Osprey is a modern functional programming language with compile-time effect safety, lightweight fiber concurrency, immutable persistent List and Map, Hindley-Milner type inference, and pattern matching."
+title: "Functional Language with Algebraic Effects"
+description: "Osprey is a functional language with compile-time effect safety, lightweight fiber concurrency, immutable persistent collections, and Hindley-Milner types."
 ---
 
 <section class="hero">
@@ -11,7 +11,8 @@ description: "Osprey is a modern functional programming language with compile-ti
         Osprey
       </h1>
       <p class="hero-subtitle animate-on-scroll">
-        A modern functional programming oriented language designed for elegance, safety, and performance.
+        A modern functional language with <strong>compile-time effect safety</strong>, lightweight fiber
+        concurrency, and immutable persistent collections. Compiles to LLVM.
       </p>
       <div class="hero-actions animate-on-scroll">
         <a href="/playground/" class="btn btn-primary btn-lg">
@@ -204,6 +205,51 @@ range(1, 10) |> forEach(print)</code></pre>
   </div>
 </section>
 
+<section class="section section-alt">
+  <div class="container">
+    <h2 class="section-title">Algebraic Effects</h2>
+    <p class="section-subtitle">
+      Osprey is the world's first language with <strong>100% compile-time effect safety</strong>. Side effects
+      live in a function's type, and an unhandled effect is a <em>compilation error</em> — never a runtime surprise.
+    </p>
+
+    <div class="two-column">
+      <div class="content">
+        <h3>Effects in the type, handlers at the edge</h3>
+        <p>Declare an effect, <code>perform</code> its operations, then swap behaviour by changing the
+          <code>handle … in</code> block — no globals, no dependency injection framework. The same logic runs
+          against a production handler, a test double, or a silent one.</p>
+        <ul>
+          <li>Unhandled effects fail at compile time</li>
+          <li>Handlers are first-class and composable</li>
+          <li>Nested handlers override outer ones</li>
+          <li>Pairs naturally with fibers, HTTP, and TUIs</li>
+        </ul>
+      </div>
+      <div class="visual">
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">effect Logger {
+  log: fn(string) -> Unit
+}
+
+fn greet(name: string) -> Unit !Logger =
+  perform Logger.log("Hello, ${name}!")
+
+// Production: write to stdout
+handle Logger
+  log msg => print(msg)
+in greet("Alice")
+
+// Test: stay silent — same code, new handler
+handle Logger
+  log msg => 0
+in greet("Bob")</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="section">
   <div class="container">
     <h2 class="section-title">Persistent Collections</h2>
@@ -246,16 +292,16 @@ m + m2                      // right-biased union</code></pre>
   <div class="container">
     <div class="grid">
       <div class="card">
-        <h3>Fast Compilation</h3>
-        <p>Quick compilation cycles for rapid development and testing</p>
+        <h3>Compile-Time Effect Safety</h3>
+        <p>Every side effect is tracked in the type system. Unhandled effects are caught by the compiler.</p>
       </div>
       <div class="card">
         <h3>Memory Safe</h3>
-        <p>Strong typing prevents buffer overflows and memory leaks</p>
+        <p>Strong static typing and immutable data prevent buffer overflows and data races.</p>
       </div>
       <div class="card">
-        <h3>Zero Runtime Overhead</h3>
-        <p>Compile-time optimizations with minimal runtime costs</p>
+        <h3>Compiles to LLVM</h3>
+        <p>Stream fusion and structural sharing lower high-level code to efficient native binaries.</p>
       </div>
     </div>
   </div>
@@ -267,71 +313,55 @@ m + m2                      // right-biased union</code></pre>
 
     <div class="showcase-grid">
       <div class="card-code animate-on-scroll">
-        <h3>Function Definitions</h3>
+        <h3>Fiber Concurrency</h3>
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">// Simple, clean function definitions
-fn double(n: int) -> int = n * 2
+          <pre class="language-osprey"><code class="language-osprey">fn work(n: int) -> int = n * n
 
-// String interpolation that works
-let x = 42
-let name = "Alice"
-print("x = ${x}")
-print("name = ${name}")
+// Spawn lightweight fibers, await out of order
+let a = spawn work(6)
+let b = spawn work(7)
 
-// Pattern matching on values
-let result = match x {
-  42 => "The answer!"
-  0 => "Zero"
-  _ => "Something else"
-}
-print("Result: ${result}")</code></pre>
+let rb = await(b)
+let ra = await(a)
+print("a=${ra}, b=${rb}")
+
+// Message passing over a channel
+let ch = Channel(1)
+send(ch, 42)
+print("got ${recv(ch)}")</code></pre>
         </div>
       </div>
 
       <div class="card-code animate-on-scroll">
-        <h3>Type Safety</h3>
+        <h3>C Interop &amp; SQLite</h3>
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">fn analyzeNumber(n: int) -> string = match n {
-  0 => "Zero"
-  42 => "The answer!"
-  _ => "Something else"
-}
+          <pre class="language-osprey"><code class="language-osprey">// @link: sqlite3
 
-fn double(x: int) -> int = x * 2
-fn square(x: int) -> int = x * x
+// Bind C functions with typed signatures
+extern fn sqlite3_open(path: string, ppDb: Ptr) -> int
+extern fn osprey_ffi_cell() -> Ptr
+extern fn osprey_ffi_deref(cell: Ptr) -> Ptr
 
-// Test the functions
-print("Testing functions:")
-print(analyzeNumber(0))
-print(analyzeNumber(42))
-print(analyzeNumber(5))
-
-let x = 5
-let doubled = double(x)
-let squared = square(doubled)
-print("${x} doubled is ${doubled}")
-print("${doubled} squared is ${squared}")</code></pre>
+// Ptr carries the opaque C handle — no
+// arithmetic, no dereference, handles only
+let cell = osprey_ffi_cell()
+let rc = sqlite3_open("app.db", cell)
+let db = osprey_ffi_deref(cell)
+print("sqlite open rc = ${rc}")</code></pre>
         </div>
       </div>
 
       <div class="card-code animate-on-scroll">
-        <h3>Pattern Matching</h3>
+        <h3>HTTPS Client</h3>
         <div class="code-example">
-          <pre class="language-osprey"><code class="language-osprey">// Pattern matching grade example
-fn getGrade(score: int) -> string = match score {
-  100 => "Perfect!"
-  95 => "Excellent"
-  85 => "Very Good"
-  75 => "Good"
-  _ => "Needs Improvement"
-}
+          <pre class="language-osprey"><code class="language-osprey">// TLS via OpenSSL — https just works
+let client = httpCreateClient("https://httpbin.org", 5000)
 
-// Test the function
-print("Grade for 100: ${getGrade(100)}")
-print("Grade for 95: ${getGrade(95)}")
-print("Grade for 85: ${getGrade(85)}")
-print("Grade for 75: ${getGrade(75)}")
-print("Grade for 50: ${getGrade(50)}")</code></pre>
+let status = httpGet(client, "/get", "")
+print("status: ${status}")
+
+let closed = httpCloseClient(client)
+print("client closed")</code></pre>
         </div>
       </div>
     </div>
