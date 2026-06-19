@@ -2,7 +2,7 @@
 layout: page
 title: "Syntax"
 description: "Osprey Language Specification: Syntax"
-date: 2026-06-18
+date: 2026-06-19
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0003-syntax/"

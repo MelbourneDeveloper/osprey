@@ -2,7 +2,7 @@
 layout: page
 title: "Error Handling"
 description: "Osprey Language Specification: Error Handling"
-date: 2026-06-18
+date: 2026-06-19
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0013-errorhandling/"
@@ -14,7 +14,11 @@ Osprey has no exceptions, panics, or null. Any function that can fail returns a 
 
 ## Status
 
-[ERR-PAYLOAD] conforms for `E = string`: the runtime Result block carries a dedicated error-message slot, `Error { message }` binds the real reason, and `toString` renders `Error(<reason>)`. Discriminated-union error payloads (`Result<T, StringError>`) remain deferred behind recursive-union payloads.
+[ERR-PAYLOAD] conforms for `E = string`: the runtime Result block carries a
+dedicated `i8* errmsg` slot, `Error { message }` binds the real reason, and
+`toString` renders `Error(<reason>)`. Discriminated-union error payloads
+(`Result<T, StringError>`) remain deferred behind
+[`recursive-union-payloads.md`](https://github.com/MelbourneDeveloper/osprey/blob/main/docs/plans/recursive-union-payloads.md).
 
 ## The Result Type
 
@@ -68,8 +72,8 @@ match (10 + 5) * 2 {
 A `Result` formats as `Success(<value>)` or `Error(<message>)`:
 
 ```osprey
-print(toString(15 / 3))   // "Success(5)"
-print(toString(10 / 0))   // "Error(DivisionByZero)"
+print(toString(15 / 3))   // "Success(5.0)"  — division is always float
+print(toString(10 / 0))   // "Error(division by zero)"
 ```
 
 ## Error Payload Propagation — [ERR-PAYLOAD]

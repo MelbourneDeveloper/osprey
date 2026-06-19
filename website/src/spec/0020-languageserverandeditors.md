@@ -1,0 +1,208 @@
+---
+layout: page
+title: "Language Server & Editor Integrations"
+description: "Osprey Language Specification: Language Server & Editor Integrations"
+date: 2026-06-19
+tags: ["specification", "reference", "documentation"]
+author: "Christian Findlay"
+permalink: "/spec/0020-languageserverandeditors/"
+---
+
+# Language Server & Editor Integrations
+
+> **Engineering spec** (tooling), not part of the `0001`–`0019` language
+> reference. It defines how Osprey is presented to editors: one language server,
+> many front-ends.
+
+This spec governs the Osprey language server and every editor integration built
+on it — VS Code today, Neovim and Zed next. The guiding rule: **one engine,
+many surfaces.** Analysis is computed once, in-process, by a single Rust binary;
+every editor is a thin client over the same LSP transport.
+
+## Status
+
+| Surface | State |
+|---|---|
+| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/MelbourneDeveloper/osprey/pull/137)). |
+| VS Code extension (`nimblesite.osprey`) | **Shipped** — per-platform VSIX bundling a version-matched compiler. |
+| Open VSX | Planned — see [lsp-vsix-release.md](https://github.com/MelbourneDeveloper/osprey/blob/main/docs/plans/lsp-vsix-release.md). |
+| Neovim | Planned. The server is editor-agnostic; only a client recipe is missing. |
+| Zed | Planned (`shipwright-zed`). |
+| MCP surface (`lspkit-mcp`) | Future — the same `EngineApi` vended as MCP tools. |
+
+## Architecture: one engine, two surfaces `[LSP-ENGINE]`
+
+The server is built on the [`lspkit`](https://github.com/Nimblesite/lspkit)
+crates — the published `lspkit-*` building blocks, not a fork. Its headline
+contract is **"one engine, two surfaces"**: a single `EngineApi` implementation
+backs both an LSP server and (later) an MCP server, so live analysis state is
+computed once and vended two ways.
+
+```
+                       ┌─────────────────────────────────────┐
+  VS Code ─┐           │  crates/osprey-lsp                   │
+  Neovim   ├─ stdio ──▶│  OspreyEngine : lspkit::EngineApi    │
+  Zed      ┘  (JSON-   │    ├─ lspkit-vfs   (rope documents)  │
+              RPC)     │    ├─ lspkit-live  (Session/generation)
+                       │    └─ in-process compiler front-end: │
+                       │         osprey_syntax::parse_program │
+                       │         osprey_types::check_program  │
+                       └─────────────────────────────────────┘
+```
+
+Key consequence: the server **does not shell out** to the `osprey` binary or
+scrape stderr. It calls the compiler front-end directly
+([`crates/osprey-lsp/src/diagnostics.rs`](../../crates/osprey-lsp/src/diagnostics.rs)),
+so diagnostics, hover, and navigation share the compiler's own parser and type
+checker. There is exactly one source of truth.
+
+Crates consumed (all from crates.io, pinned via the workspace):
+
+| Crate | Used for |
+|---|---|
+| `lspkit` | `EngineApi` trait + neutral types. |
+| `lspkit-server` | JSON-RPC framing, `Dispatcher`, `Capabilities`, `DiagnosticsBus`/`DiagnosticsSink`, URI helpers. |
+| `lspkit-vfs` | Open-document store, rope incremental edits, `PositionEncoding` negotiation. |
+| `lspkit-live` | `Session` generation counter + broadcast. |
+
+## Transport `[LSP-TRANSPORT]`
+
+There is **one** server entry point for every editor:
+
+```
+osprey lsp
+```
+
+It speaks LSP over **stdio** with `Content-Length` framing. No socket, no port,
+no per-editor binary. An editor integration is configured by pointing its LSP
+client at this command; nothing else is editor-specific. The subcommand is
+implemented in [`crates/osprey-cli/src/main.rs`](../../crates/osprey-cli/src/main.rs)
+(delegating to `osprey_lsp::run_stdio`).
+
+## Lifecycle `[LSP-LIFECYCLE]`
+
+Standard LSP handshake and document sync:
+
+- `initialize` → advertise capabilities (`[LSP-CAPABILITIES]`); `initialized`.
+- `shutdown` → `exit`. After `shutdown`, requests fail with `EngineError::ShuttingDown`.
+- Document sync (incremental, `textDocumentSync: 2`): `didOpen`, `didChange`,
+  `didClose`. A `didChange` applies **either** a full replacement **or** a set
+  of incremental edits — never an open+change at the same version (which silently
+  drops edits). Dropped edits are surfaced, not swallowed.
+- `$/cancelRequest` is accepted. Requests are served sequentially: Osprey
+  single-file ASTs parse in microseconds, so request-level concurrency is a
+  deliberate non-goal until profiling shows a need.
+
+## Capabilities `[LSP-CAPABILITIES]`
+
+The server advertises and implements:
+
+| Capability | Method | Notes |
+|---|---|---|
+| Diagnostics | `textDocument/publishDiagnostics` | Push, via `DiagnosticsBus`. `[LSP-DIAGNOSTICS]` |
+| Hover | `textDocument/hover` | Markdown; symbol signature or builtin signature. |
+| Go to definition | `textDocument/definition` | AST-driven, anchored on the identifier. |
+| Find references | `textDocument/references` | Whole-word scan; `includeDeclaration` honored. |
+| Document symbols | `textDocument/documentSymbol` | Flat `DocumentSymbol`s; range on the **name**, not the `fn`/`let`/`type` keyword. |
+| Signature help | `textDocument/signatureHelp` | Active-parameter tracking; ignores `,`/`(`/`)` inside strings and `//` comments. |
+| Completion | `textDocument/completion` | Keywords/snippets + the document's own declarations. |
+
+Capabilities are the contract clients rely on; adding one means updating
+`initialize_result` in
+[`crates/osprey-lsp/src/wire.rs`](../../crates/osprey-lsp/src/wire.rs) **and** this
+table.
+
+## Position encoding `[LSP-ENCODING]`
+
+The server negotiates `positionEncoding` at `initialize` (default **UTF-16**).
+Tree-sitter reports columns as **byte** offsets, so every position crossing the
+wire is re-measured into the negotiated encoding
+([`crates/osprey-lsp/src/text.rs`](../../crates/osprey-lsp/src/text.rs),
+`byte_col_to_encoding`). A client that negotiates UTF-8 must receive UTF-8
+offsets; this is not optional.
+
+## Editor integrations
+
+Every integration is a thin client over `[LSP-TRANSPORT]`. They differ only in
+packaging and in how the version-matched binary is sourced (`[EDITOR-VERSIONING]`).
+
+### VS Code `[EDITOR-VSCODE]`
+
+- Extension id `nimblesite.osprey`; client in
+  [`vscode-extension/client/src/extension.ts`](../../vscode-extension/client/src/extension.ts)
+  spawns `osprey lsp` over stdio.
+- Shipped as a **per-platform VSIX** (`darwin-arm64`, `darwin-x64`, `linux-x64`,
+  `win32-x64`). Each VSIX **bundles** a version-matched `osprey` binary + runtime
+  libs + a stamped `shipwright.json`, verified present inside the package at build
+  time.
+- Client resolves the server command in priority order: user setting
+  (`osprey.server.compilerPath`) → bundled binary → `PATH` (per the Shipwright
+  `sources` list in [`shipwright.json`](../../shipwright.json)).
+- Marketplace publication uses **OIDC** (no PAT) — see `[EDITOR-VERSIONING]` and
+  the release plan.
+
+### Open VSX `[EDITOR-OPENVSX]`
+
+The same per-platform VSIX is published to [Open VSX](https://open-vsx.org) for
+VSCodium, Cursor, Windsurf, and Gitpod users. Open VSX has **no** OIDC support
+(as of 2026); it uses a separate long-lived `OVSX_PAT`. The Open VSX job MUST be
+independent of the Marketplace job so neither gates the other.
+
+### Neovim `[EDITOR-NEOVIM]`
+
+No VSIX. Neovim runs `osprey lsp` directly via `vim.lsp` / `nvim-lspconfig`:
+
+```lua
+vim.lsp.config('osprey', {
+  cmd = { 'osprey', 'lsp' },
+  filetypes = { 'osprey' },
+  root_markers = { '.git', 'osprey.toml' },
+})
+```
+
+The binary is sourced from the user's `PATH` (Homebrew/Scoop/GitHub release).
+Versioning is the installed binary's own version (`[EDITOR-VERSIONING]`); there
+is no bundling step.
+
+### Zed `[EDITOR-ZED]`
+
+A Zed extension (Rust compiled to WASM) registers Osprey as a language and
+declares its language server command (`osprey lsp`), published to the Zed
+extension registry. Version-matching and binary acquisition follow
+[`shipwright-zed`](https://github.com/Nimblesite/Shipwright). Like Neovim, the
+binary comes from `PATH`/package managers, not a bundle.
+
+## Versioning & supply chain `[EDITOR-VERSIONING]`
+
+All editor integrations obey the
+[Shipwright](https://github.com/Nimblesite/Shipwright) version contract — the
+extension and the binary it launches MUST be version-matched.
+
+- The binary is the source of truth: `osprey --version` → `osprey X.Y.Z`;
+  `osprey --version --json` → the version manifest (`[SWR-VERSION-CLI-OUTPUT]`).
+- Components are declared in [`shipwright.json`](../../shipwright.json):
+  `osprey-compiler` (the CLI — which *is* the language server, via the `lsp`
+  subcommand) and `osprey-vscode`. The LSP is **not** a separate component; it is
+  the same binary, so no separate version surface exists to drift.
+- Source version fields stay at `0.0.0-dev`; the real version is stamped from the
+  git tag at build time (`[SWR-VERSION-BUILD-STAMPING]`). Hard-coding a version is
+  a defect.
+- VS Code activation verifies the bundled compiler against the manifest and
+  prompts to reinstall on mismatch (`hosts.vscode.onMismatch`). PATH/registry
+  sources are verified at startup (`verifyStartup`).
+- Marketplace publishing uses GitHub OIDC → Microsoft Entra workload-identity
+  federation, with no stored PAT (`[SWR-VSIX-PUBLISH]`, `[SWR-SEC-OIDC-PUBLISH]`).
+  Concrete tenant/app identifiers live in the private
+  `Nimblesite/NimblesiteDeployment` ops repo; the release wiring is in the plan.
+
+## Conformance
+
+A change to this spec is conformant only if:
+
+1. Every editor still launches the **same** `osprey lsp` stdio server
+   (`[LSP-TRANSPORT]`) — no editor-specific analysis logic.
+2. New capabilities update both `initialize_result` and the `[LSP-CAPABILITIES]`
+   table.
+3. No source file hard-codes a version (`[EDITOR-VERSIONING]`).
+4. Code implementing a section references its ID in a comment
+   (e.g. `// Implements [LSP-CAPABILITIES]`), enforced by `spec-check`.

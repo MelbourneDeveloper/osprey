@@ -2,7 +2,7 @@
 layout: page
 title: "Algebraic Effects"
 description: "Osprey Language Specification: Algebraic Effects"
-date: 2026-06-18
+date: 2026-06-19
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0017-algebraiceffects/"

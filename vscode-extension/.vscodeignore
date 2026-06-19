@@ -41,4 +41,5 @@ test-runner.js
 !package.json
 !README.md
 !LICENSE
+!icon.png
 !node_modules/vscode-languageclient/** 

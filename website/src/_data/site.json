@@ -5,10 +5,6 @@
   "author": "Christian Findlay",
   "navigation": [
     {
-      "text": "About",
-      "url": "/about/"
-    },
-    {
       "text": "Status",
       "url": "/status/"
     },

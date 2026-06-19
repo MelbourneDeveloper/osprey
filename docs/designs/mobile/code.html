@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OSPREY | Systems Programming</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Geist:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#252f4e",
+                        "on-surface-variant": "#bdc8cd",
+                        "on-error-container": "#ffdad6",
+                        "error-container": "#93000a",
+                        "tertiary": "#ffe1c0",
+                        "surface-container-highest": "#2e3448",
+                        "surface-bright": "#33384c",
+                        "surface": "#0c1325",
+                        "on-secondary-fixed": "#0f1a38",
+                        "error": "#ffb4ab",
+                        "on-primary-container": "#005d70",
+                        "surface-variant": "#2e3448",
+                        "primary-container": "#77d7f4",
+                        "on-secondary-fixed-variant": "#3c4666",
+                        "primary-fixed": "#b2ebff",
+                        "tertiary-fixed-dim": "#fbba62",
+                        "on-primary-fixed-variant": "#004e5e",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-tertiary": "#462b00",
+                        "inverse-surface": "#dce1fb",
+                        "surface-tint": "#73d3f0",
+                        "tertiary-fixed": "#ffddb5",
+                        "surface-container-low": "#151b2d",
+                        "outline-variant": "#3e484c",
+                        "on-secondary-container": "#adb7dd",
+                        "surface-container-high": "#23293d",
+                        "secondary-container": "#3e4868",
+                        "primary": "#bdeeff",
+                        "inverse-on-surface": "#2a3043",
+                        "secondary-fixed-dim": "#bbc5ec",
+                        "on-background": "#dce1fb",
+                        "on-surface": "#dce1fb",
+                        "background": "#0c1325",
+                        "inverse-primary": "#00677d",
+                        "surface-container-lowest": "#070d1f",
+                        "on-tertiary-container": "#764c00",
+                        "on-error": "#690005",
+                        "surface-dim": "#0c1325",
+                        "primary-fixed-dim": "#73d3f0",
+                        "on-primary-fixed": "#001f27",
+                        "on-tertiary-fixed-variant": "#643f00",
+                        "surface-container": "#191f32",
+                        "outline": "#889297",
+                        "on-tertiary-fixed": "#2a1800",
+                        "tertiary-container": "#ffbe65",
+                        "secondary": "#bbc5ec",
+                        "on-primary": "#003642"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "base": "8px",
+                        "margin-desktop": "48px",
+                        "container-max": "1200px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Geist"],
+                        "code-sm": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["Geist"],
+                        "body-md": ["Geist"],
+                        "label-caps": ["JetBrains Mono"],
+                        "headline-lg": ["Geist"],
+                        "body-lg": ["Geist"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "code-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["30px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "label-caps": ["12px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #0c1325;
+            color: #dce1fb;
+            -webkit-font-smoothing: antialiased;
+        }
+        .glass-panel {
+            background: rgba(13, 24, 54, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .cyan-glow {
+            box-shadow: 0 0 20px rgba(119, 215, 244, 0.15);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #070d1f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3e4868;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md flex justify-between items-center px-margin-mobile h-16 border-b border-outline-variant/30">
+<div class="flex items-center gap-3">
+<img alt="Osprey Logo" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLs0BrQar7DLUDQVGGiiE2wNsw_xy1UrdjKumk5ln3t5xNzAIutDdUF01HqBffhl_oYWlmZpgGdl0WSB-h2zv-A4BXA6lK2zEjnSsygRs1D53eOHrnhMfWxonm4sloQBLD--7tkrOEuvNfw52JM27q35F0Glg0c_cT2loV669GZHsKb8sGD6VulI_02oalrYASOyHX_V5VIOY5UjEGM9qtrJ5i-uBCH7qy105s7sAuWnpwphHXlIFe5DmQY"/>
+<span class="font-headline-md text-headline-md font-bold text-primary tracking-tighter">OSPREY</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-primary hover:bg-surface-container-high transition-colors p-2 rounded-lg active:scale-95 duration-100">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+<button class="text-primary hover:bg-surface-container-high transition-colors p-2 rounded-lg active:scale-95 duration-100" id="menu-toggle">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+</div>
+</header>
+<!-- Mobile Navigation Drawer (Hidden by default) -->
+<div class="fixed inset-0 z-[60] transform translate-x-full transition-transform duration-300 ease-in-out" id="nav-drawer">
+<div class="absolute inset-0 bg-black/60 backdrop-blur-sm" id="drawer-overlay"></div>
+<nav class="absolute inset-y-0 right-0 w-72 bg-surface-container flex flex-col py-6 shadow-lg shadow-primary/10">
+<div class="px-6 mb-8 flex justify-between items-center">
+<span class="font-headline-md text-headline-md text-primary font-bold">OSPREY_CORE</span>
+<button class="text-on-surface-variant" id="close-drawer">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<div class="flex flex-col gap-2">
+<a class="bg-secondary-container text-on-secondary-container rounded-full mx-2 px-4 py-3 flex items-center gap-4 font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span> Documentation
+                </a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-bright transition-all mx-2 px-4 py-3 rounded-full flex items-center gap-4 font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined" data-icon="code">code</span> Playground
+                </a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-bright transition-all mx-2 px-4 py-3 rounded-full flex items-center gap-4 font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span> Packages
+                </a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-bright transition-all mx-2 px-4 py-3 rounded-full flex items-center gap-4 font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span> Community
+                </a>
+</div>
+</nav>
+</div>
+<main class="pt-16">
+<!-- Hero Section -->
+<section class="px-margin-mobile pt-12 pb-16 flex flex-col items-center text-center relative overflow-hidden">
+<!-- Background glow -->
+<div class="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-primary/10 blur-[100px] rounded-full"></div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-white mb-6 tracking-tight">
+                Crafting the Future of <span class="text-primary-container">Systems Programming.</span>
+</h1>
+<p class="text-on-surface-variant max-w-xs mb-8 font-body-md">
+                A memory-safe, high-concurrency language designed for performance-critical infrastructure and real-time systems.
+            </p>
+<div class="flex flex-col gap-4 w-full px-4 mb-12">
+<button class="bg-primary-container text-on-primary font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+                    Install Osprey
+                </button>
+<button class="border border-primary-container text-primary-container font-bold py-4 rounded-xl hover:bg-primary-container/10 active:scale-95 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="play_arrow">play_arrow</span>
+                    Try in Playground
+                </button>
+</div>
+<!-- Code Preview Window -->
+<div class="w-full max-w-sm glass-panel rounded-xl overflow-hidden text-left cyan-glow">
+<div class="bg-surface-container-highest px-4 py-2 flex items-center gap-2 border-b border-white/5">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-red-500/50"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-amber-500/50"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-emerald-500/50"></div>
+</div>
+<span class="font-code-sm text-xs text-on-surface-variant ml-2">main.os</span>
+</div>
+<div class="p-4 overflow-x-auto bg-[#070D1F]">
+<pre class="font-code-sm text-code-sm leading-relaxed"><code class="whitespace-pre"><span class="text-pink-400">import</span> { spawn, channel } <span class="text-pink-400">from</span> <span class="text-orange-300">"std/io"</span>;
+
+<span class="text-pink-400">pub fn</span> <span class="text-cyan-400">main</span>() {
+  <span class="text-lime-400">// Concurrent worker pool</span>
+  <span class="text-pink-400">let</span> (tx, rx) = channel&lt;<span class="text-orange-300">i32</span>&gt;();
+  
+  spawn(<span class="text-pink-400">async move</span> {
+    <span class="text-pink-400">for</span> msg <span class="text-pink-400">in</span> rx {
+      <span class="text-cyan-400">process_task</span>(msg);
+    }
+  });
+
+  tx.send(<span class="text-orange-300">42</span>).<span class="text-cyan-400">unwrap</span>();
+}</code></pre>
+</div>
+</div>
+</section>
+<!-- Core Pillars Section -->
+<section class="px-margin-mobile py-16 bg-surface-container-low">
+<h2 class="font-headline-md text-headline-md text-primary mb-10 text-center">Core Foundations</h2>
+<div class="flex flex-col gap-6">
+<!-- Pillar 1 -->
+<div class="glass-panel p-6 rounded-xl relative group overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary-container"></div>
+<span class="material-symbols-outlined text-primary-container mb-4 block" data-icon="security">security</span>
+<h3 class="font-headline-md text-headline-md text-white mb-2">Invisible Ownership</h3>
+<p class="text-on-surface-variant font-body-md">
+                        Say goodbye to the borrow checker headache. Osprey's compiler uses static linear analysis to ensure memory safety without explicit annotations.
+                    </p>
+</div>
+<!-- Pillar 2 -->
+<div class="glass-panel p-6 rounded-xl relative group overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary-container opacity-50"></div>
+<span class="material-symbols-outlined text-primary-container mb-4 block" data-icon="bolt">bolt</span>
+<h3 class="font-headline-md text-headline-md text-white mb-2">Wings Effect System</h3>
+<p class="text-on-surface-variant font-body-md">
+                        A robust, type-safe effect system that tracks side effects at the function level, enabling pure functional logic in a systems context.
+                    </p>
+</div>
+<!-- Pillar 3 -->
+<div class="glass-panel p-6 rounded-xl relative group overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary-container opacity-50"></div>
+<span class="material-symbols-outlined text-primary-container mb-4 block" data-icon="architecture">architecture</span>
+<h3 class="font-headline-md text-headline-md text-white mb-2">Talon Concurrency</h3>
+<p class="text-on-surface-variant font-body-md">
+                        Scale to millions of concurrent tasks with zero-cost async primitives and a lightning-fast M:N scheduler optimized for modern hardware.
+                    </p>
+</div>
+</div>
+</section>
+<!-- Performance Section -->
+<section class="px-margin-mobile py-16">
+<div class="mb-10 text-center">
+<span class="font-label-caps text-label-caps text-primary uppercase tracking-widest block mb-2">Efficiency First</span>
+<h2 class="font-headline-md text-headline-md text-white">Native Performance, Zero Tax</h2>
+</div>
+<div class="glass-panel rounded-xl p-6 mb-8 border border-primary/20">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="integration_instructions">integration_instructions</span>
+</div>
+<span class="font-code-sm text-sm text-primary">C Interop Preview</span>
+</div>
+<div class="bg-surface-container-lowest p-4 rounded-lg mb-6 overflow-x-auto">
+<pre class="font-code-sm text-xs leading-normal"><code class="whitespace-pre"><span class="text-pink-400">@c_import</span> <span class="text-orange-300">"header.h"</span>;
+
+<span class="text-pink-400">pub fn</span> <span class="text-cyan-400">call_native</span>() {
+  <span class="text-pink-400">unsafe</span> {
+    c.legacy_function();
+  }
+}</code></pre>
+</div>
+<ul class="space-y-4">
+<li class="flex gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div>
+<span class="font-bold text-white block">Zero-Copy Interop</span>
+<p class="text-on-surface-variant text-sm">Directly interface with C/C++ libraries without any marshalling overhead.</p>
+</div>
+</li>
+<li class="flex gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<div>
+<span class="font-bold text-white block">LLVM Optimization</span>
+<p class="text-on-surface-variant text-sm">State-of-the-art code generation utilizing the full power of LLVM 18 backend.</p>
+</div>
+</li>
+</ul>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="px-margin-mobile py-20 bg-surface-container-high relative overflow-hidden">
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[120px] rounded-full"></div>
+<div class="relative z-10 text-center">
+<h2 class="font-headline-md text-headline-md text-white mb-4">Join the Osprey Revolution</h2>
+<p class="text-on-surface-variant mb-10 max-w-xs mx-auto">
+                    Be the first to know when we release our v1.0 beta and official toolchain.
+                </p>
+<form class="flex flex-col gap-3">
+<div class="relative">
+<input class="w-full bg-surface-container-lowest border border-outline-variant/50 rounded-xl py-4 px-6 text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-all" placeholder="dev@example.com" type="email"/>
+</div>
+<button class="bg-primary-container text-on-primary font-bold py-4 rounded-xl shadow-lg hover:scale-[1.01] active:scale-95 transition-all">
+                        Notify Me
+                    </button>
+</form>
+<p class="text-xs text-on-surface-variant mt-4 opacity-60">No spam. Only high-performance updates.</p>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest border-t border-outline-variant/20 flex flex-col items-center gap-4 py-8 px-margin-mobile text-center">
+<div class="flex items-center gap-2 mb-4">
+<img alt="Osprey logo small" class="h-6 w-6 opacity-80" src="https://lh3.googleusercontent.com/aida/AP1WRLs0BrQar7DLUDQVGGiiE2wNsw_xy1UrdjKumk5ln3t5xNzAIutDdUF01HqBffhl_oYWlmZpgGdl0WSB-h2zv-A4BXA6lK2zEjnSsygRs1D53eOHrnhMfWxonm4sloQBLD--7tkrOEuvNfw52JM27q35F0Glg0c_cT2loV669GZHsKb8sGD6VulI_02oalrYASOyHX_V5VIOY5UjEGM9qtrJ5i-uBCH7qy105s7sAuWnpwphHXlIFe5DmQY"/>
+<span class="font-label-caps text-label-caps text-primary">OSPREY LANG FOUNDATION</span>
+</div>
+<div class="flex gap-6 mb-4">
+<a class="font-code-sm text-code-sm text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+<a class="font-code-sm text-code-sm text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Docs</a>
+<a class="font-code-sm text-code-sm text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Privacy</a>
+</div>
+<p class="font-code-sm text-code-sm text-on-surface-variant opacity-60">
+            © 2024 OSPREY LANG FOUNDATION
+        </p>
+</footer>
+<script>
+        const menuToggle = document.getElementById('menu-toggle');
+        const closeDrawer = document.getElementById('close-drawer');
+        const navDrawer = document.getElementById('nav-drawer');
+        const drawerOverlay = document.getElementById('drawer-overlay');
+
+        const toggleDrawer = () => {
+            navDrawer.classList.toggle('translate-x-full');
+        };
+
+        menuToggle.addEventListener('click', toggleDrawer);
+        closeDrawer.addEventListener('click', toggleDrawer);
+        drawerOverlay.addEventListener('click', toggleDrawer);
+
+        // Simple scroll animation reveal
+        const observerOptions = {
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('opacity-100', 'translate-y-0');
+                    entry.target.classList.remove('opacity-0', 'translate-y-4');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.glass-panel').forEach(el => {
+            el.classList.add('opacity-0', 'translate-y-4', 'transition-all', 'duration-700');
+            observer.observe(el);
+        });
+    </script>
+</body></html>

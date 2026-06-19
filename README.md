@@ -1,7 +1,14 @@
-# Osprey Programming Language
+<p align="center">
+  <img src="website/src/assets/images/logo.png" alt="Osprey logo" width="160" />
+</p>
 
-A modern functional programming language designed for elegance, safety, and performance. Written in Rust, outputs to LLVM.
- 
+<h1 align="center">Osprey Programming Language</h1>
+
+<p align="center">
+  A modern functional programming language designed for elegance, safety, and
+  performance.<br/>Written in Rust, outputs to LLVM.
+</p>
+
 ⭐ **[Star us on GitHub](https://github.com/MelbourneDeveloper/osprey)** to support the project and allow us to submit to Homebrew! ⭐
 
 ## Installation
@@ -19,7 +26,11 @@ Osprey shells out to LLVM (`llc`) and a C compiler at compile time; the package
 managers pull those in as dependencies (`llvm` for brew; `llvm` + `gcc` for scoop).
 
 The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=nimblesite.osprey)
-(`nimblesite.osprey`) bundles a version-matched compiler for syntax checking.
+(`nimblesite.osprey`) bundles a version-matched compiler and a Rust language
+server (`osprey lsp`, built on [lspkit](https://github.com/Nimblesite/lspkit)) for
+live diagnostics, hover, go-to-definition, and completion. The same server is
+editor-agnostic — Neovim and Zed are on the roadmap. See
+[Language Server & Editors](docs/specs/0020-LanguageServerAndEditors.md).
 
 ## Language Features
 

@@ -1,8 +1,18 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/MelbourneDeveloper/osprey/main/website/src/assets/images/logo.png" alt="Osprey logo" width="128" />
+</p>
+
 # Osprey for VS Code
+
+> **Preview.** Osprey is pre-production and evolving fast. Expect rough edges.
 
 Language support for [Osprey](https://ospreylang.dev) — a functional programming
 language with algebraic effects, fiber-based concurrency, pattern matching, and
 strong compile-time safety.
+
+Powered by a Rust language server (`osprey lsp`, built on
+[lspkit](https://github.com/Nimblesite/lspkit)) that runs the compiler front-end
+in-process — the same engine targeted at Neovim and Zed next.
 
 ## Features
 
@@ -10,6 +20,8 @@ strong compile-time safety.
   interpolation (`"Hello ${name}!"`), operators, and comments.
 - **Live diagnostics** — errors and warnings from the Osprey compiler as you
   type, inline in the editor.
+- **Hover, go-to-definition, find-references, document symbols, signature help,
+  and completion** — driven by the compiler's own parser and type checker.
 - **Compile & run** from the editor:
   - `Osprey: Compile Osprey File` (`Ctrl/Cmd+Shift+B`)
   - `Osprey: Compile and Run Osprey File` (`F5`)

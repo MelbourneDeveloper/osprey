@@ -2,7 +2,7 @@
 layout: page
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
-date: 2026-06-18
+date: 2026-06-19
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/"
@@ -11,7 +11,7 @@ permalink: "/spec/"
 # Osprey Language Specification
 
 **Version:** 0.2.0  
-**Date:** 2026-06-18  
+**Date:** 2026-06-19  
 **Author:** Christian Findlay
 
 ## Table of Contents
@@ -35,6 +35,7 @@ permalink: "/spec/"
 17. [Algebraic Effects](/spec/0017-algebraiceffects/)
 18. [Memory Management](/spec/0018-memorymanagement/)
 19. [Foreign Function Interface](/spec/0019-foreignfunctioninterface/)
+20. [Language Server & Editor Integrations](/spec/0020-languageserverandeditors/)
 
 ## About This Specification
 

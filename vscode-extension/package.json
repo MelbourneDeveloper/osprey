@@ -4,9 +4,19 @@
   "description": "Syntax highlighting and language server for Osprey programming language",
   "version": "0.0.0-dev",
   "publisher": "nimblesite",
+  "preview": true,
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#1b3a5b",
+    "theme": "dark"
+  },
+  "homepage": "https://ospreylang.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/MelbourneDeveloper/osprey.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MelbourneDeveloper/osprey/issues"
   },
   "engines": {
     "vscode": "^1.96.0",

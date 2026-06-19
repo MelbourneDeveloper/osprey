@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Ownership Inference in Osprey - Systema</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-fixed-variant": "#643f00",
+                      "surface-bright": "#33384c",
+                      "on-tertiary-container": "#764c00",
+                      "outline": "#889297",
+                      "on-tertiary": "#462b00",
+                      "on-primary-fixed-variant": "#004e5e",
+                      "secondary": "#bbc5ec",
+                      "on-error-container": "#ffdad6",
+                      "surface-dim": "#0c1325",
+                      "surface-container": "#191f32",
+                      "on-tertiary-fixed": "#2a1800",
+                      "primary-fixed": "#b2ebff",
+                      "outline-variant": "#3e484c",
+                      "inverse-primary": "#00677d",
+                      "on-surface": "#dce1fb",
+                      "surface-container-high": "#23293d",
+                      "surface-tint": "#73d3f0",
+                      "surface-container-lowest": "#070d1f",
+                      "error-container": "#93000a",
+                      "surface-variant": "#2e3448",
+                      "surface-container-highest": "#2e3448",
+                      "tertiary": "#ffe1c0",
+                      "surface-container-low": "#151b2d",
+                      "tertiary-container": "#ffbe65",
+                      "primary-container": "#77d7f4",
+                      "background": "#0c1325",
+                      "on-secondary": "#252f4e",
+                      "surface": "#0c1325",
+                      "on-secondary-fixed": "#0f1a38",
+                      "on-primary": "#003642",
+                      "on-error": "#690005",
+                      "on-secondary-container": "#adb7dd",
+                      "on-primary-container": "#005d70",
+                      "inverse-surface": "#dce1fb",
+                      "tertiary-fixed": "#ffddb5",
+                      "secondary-fixed-dim": "#bbc5ec",
+                      "on-background": "#dce1fb",
+                      "secondary-fixed": "#dbe1ff",
+                      "primary-fixed-dim": "#73d3f0",
+                      "tertiary-fixed-dim": "#fbba62",
+                      "secondary-container": "#3e4868",
+                      "primary": "#bdeeff",
+                      "on-surface-variant": "#bdc8cd",
+                      "on-secondary-fixed-variant": "#3c4666",
+                      "on-primary-fixed": "#001f27",
+                      "inverse-on-surface": "#2a3043",
+                      "error": "#ffb4ab"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "margin-mobile": "16px",
+                      "base": "8px",
+                      "gutter": "24px",
+                      "margin-desktop": "48px",
+                      "container-max": "1200px"
+              },
+              "fontFamily": {
+                      "headline-lg": [
+                              "Geist"
+                      ],
+                      "code-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "body-md": [
+                              "Geist"
+                      ],
+                      "headline-md": [
+                              "Geist"
+                      ],
+                      "body-lg": [
+                              "Geist"
+                      ],
+                      "label-caps": [
+                              "JetBrains Mono"
+                      ],
+                      "headline-lg-mobile": [
+                              "Geist"
+                      ]
+              },
+              "fontSize": {
+                      "headline-lg": [
+                              "40px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "code-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "1.3",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "1",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "30px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        /* Custom styles for code syntax highlighting to match the 'industrial, high-performance feel' */
+        .token-keyword { color: #ff79c6; } /* Pink */
+        .token-function { color: #50fa7b; } /* Lime */
+        .token-string { color: #f1fa8c; } /* Yellow */
+        .token-number { color: #bd93f9; } /* Purple */
+        .token-comment { color: #6272a4; font-style: italic; } /* Grayish Blue */
+        .token-operator { color: #ffb86c; } /* Orange */
+        .token-class { color: #8be9fd; } /* Cyan */
+        
+        .code-block-bg { background-color: #0d152b; }
+        
+        /* Smooth scrolling for table of contents */
+        html { scroll-behavior: smooth; }
+        
+        /* Article specific styling to ensure readability */
+        .article-content p {
+            margin-bottom: 1.5rem;
+            color: #bdc8cd; /* text-on-surface-variant equivalent */
+        }
+        .article-content h2 {
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            color: #dce1fb; /* text-on-surface equivalent */
+            scroll-margin-top: 80px; /* Offset for fixed header */
+        }
+        .article-content h3 {
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            color: #dce1fb;
+            scroll-margin-top: 80px;
+        }
+        .article-content ul, .article-content ol {
+            margin-bottom: 1.5rem;
+            padding-left: 1.5rem;
+            color: #bdc8cd;
+        }
+        .article-content li {
+            margin-bottom: 0.5rem;
+        }
+        .article-content ul {
+            list-style-type: disc;
+        }
+        .article-content ol {
+            list-style-type: decimal;
+        }
+        .article-content a {
+            color: #77d7f4; /* text-primary-container equivalent */
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .article-content a:hover {
+            color: #bdeeff; /* text-primary equivalent */
+            text-decoration: underline;
+        }
+        .article-content code:not(pre code) {
+            background-color: #191f32; /* surface-container */
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875em;
+            color: #bdeeff; /* primary */
+        }
+        
+        /* Table of Contents active state */
+        .toc-link.active {
+            color: #77d7f4;
+            border-left-color: #77d7f4;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased min-h-screen flex flex-col font-body-md text-body-md">
+<!-- TopNavBar -->
+<nav class="bg-surface-container-low dark:bg-surface-container-low fixed top-0 w-full z-50 border-b border-outline-variant dark:border-outline-variant flat no shadows font-body-md text-body-md">
+<div class="flex justify-between items-center h-16 px-margin-desktop max-w-container-max mx-auto">
+<!-- Brand -->
+<div class="flex items-center gap-3">
+<img alt="Osprey Logo" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLs0BrQar7DLUDQVGGiiE2wNsw_xy1UrdjKumk5ln3t5xNzAIutDdUF01HqBffhl_oYWlmZpgGdl0WSB-h2zv-A4BXA6lK2zEjnSsygRs1D53eOHrnhMfWxonm4sloQBLD--7tkrOEuvNfw52JM27q35F0Glg0c_cT2loV669GZHsKb8sGD6VulI_02oalrYASOyHX_V5VIOY5UjEGM9qtrJ5i-uBCH7qy105s7sAuWnpwphHXlIFe5DmQY"/>
+<a class="font-headline-md text-headline-md font-bold text-on-surface dark:text-on-surface cursor-pointer transition-all active:scale-95" href="#">
+                    Systema
+                </a>
+</div>
+<!-- Navigation Links -->
+<div class="hidden md:flex items-center gap-6">
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary-container transition-colors cursor-pointer transition-all active:scale-95" href="#">Specs</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary-container transition-colors cursor-pointer transition-all active:scale-95" href="#">Docs</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary-container transition-colors cursor-pointer transition-all active:scale-95" href="#">Standard Library</a>
+<a class="text-primary dark:text-primary border-b-2 border-primary pb-1 hover:text-primary dark:hover:text-primary-container transition-colors cursor-pointer transition-all active:scale-95" href="#">Blog</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary-container transition-colors cursor-pointer transition-all active:scale-95" href="#">GitHub</a>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-4">
+<!-- Trailing Primary Action -->
+<button class="bg-primary-container text-surface-container-lowest font-label-caps text-label-caps px-4 py-2 rounded transition-all hover:bg-primary cursor-pointer transition-all active:scale-95">
+                    Get Started
+                </button>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-grow pt-24 pb-20 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto w-full flex flex-col lg:flex-row gap-gutter">
+<!-- Left Sidebar: Table of Contents -->
+<aside class="hidden lg:block w-64 flex-shrink-0 relative">
+<div class="sticky top-24 bg-surface-container p-6 rounded-lg border border-outline-variant/30">
+<h4 class="font-label-caps text-label-caps text-on-surface-variant mb-4 uppercase tracking-wider">Contents</h4>
+<nav class="flex flex-col gap-2 font-code-sm text-code-sm" id="toc">
+<a class="toc-link text-on-surface-variant hover:text-primary-container transition-colors pl-3 border-l-2 border-transparent py-1" href="#introduction">Introduction</a>
+<a class="toc-link text-on-surface-variant hover:text-primary-container transition-colors pl-3 border-l-2 border-transparent py-1" href="#the-problem">The Borrow Checker Friction</a>
+<a class="toc-link text-on-surface-variant hover:text-primary-container transition-colors pl-3 border-l-2 border-transparent py-1" href="#osprey-solution">Osprey's Approach</a>
+<a class="toc-link text-on-surface-variant hover:text-primary-container transition-colors pl-3 border-l-2 border-transparent py-1" href="#how-it-works">How Inference Works</a>
+<a class="toc-link text-on-surface-variant hover:text-primary-container transition-colors pl-3 border-l-2 border-transparent py-1" href="#examples">Code Examples</a>
+<a class="toc-link text-on-surface-variant hover:text-primary-container transition-colors pl-3 border-l-2 border-transparent py-1" href="#limitations">Limitations</a>
+<a class="toc-link text-on-surface-variant hover:text-primary-container transition-colors pl-3 border-l-2 border-transparent py-1" href="#further-reading">Further Reading</a>
+</nav>
+</div>
+</aside>
+<!-- Central Content Column -->
+<article class="flex-grow max-w-[800px] article-content">
+<!-- Article Header -->
+<header class="mb-12 border-b border-outline-variant/50 pb-8">
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-4">Ownership Inference in Osprey</h1>
+<div class="flex items-center gap-4 font-code-sm text-code-sm text-on-surface-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">calendar_today</span>
+<span>June 18, 2026</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">person</span>
+<span>The Osprey Team</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">timer</span>
+<span>8 min read</span>
+</div>
+</div>
+</header>
+<!-- Article Body -->
+<section id="introduction">
+<p class="font-body-lg text-body-lg text-on-surface mb-6">
+                    Memory safety without garbage collection is a cornerstone of modern systems programming. However, managing lifetimes and ownership manually often leads to significant developer friction. Osprey introduces <strong>Ownership Inference</strong>, a compiler feature designed to automatically deduce ownership semantics in common scenarios, drastically reducing boilerplate without compromising safety.
+                </p>
+<p>
+                    This document serves as an overview of how Osprey's inference engine operates, where it succeeds, and the architectural philosophy behind its design.
+                </p>
+</section>
+<section id="the-problem">
+<h2 class="font-headline-md text-headline-md">The Borrow Checker Friction</h2>
+<p>
+                    Traditional lifetime annotations require developers to explicitly declare the scope of every reference. While this ensures safety, it clutters the code. Consider a standard function that takes two string slices and returns the longest:
+                </p>
+<!-- Code Block Example (Negative/Old way) -->
+<div class="relative group my-6 rounded-lg overflow-hidden border border-outline-variant/30 code-block-bg">
+<div class="flex items-center justify-between px-4 py-2 bg-surface-container-high border-b border-outline-variant/30">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Legacy Syntax (Explicit Lifetimes)</span>
+<button aria-label="Copy code" class="text-on-surface-variant hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+<pre class="p-4 overflow-x-auto"><code class="font-code-sm text-code-sm text-on-surface"><span class="token-keyword">fn</span> <span class="token-function">longest</span><span class="token-operator">&lt;</span><span class="token-keyword">'a</span><span class="token-operator">&gt;</span><span class="token-punctuation">(</span>x<span class="token-punctuation">:</span> <span class="token-operator">&amp;</span><span class="token-keyword">'a</span> <span class="token-class">str</span><span class="token-punctuation">,</span> y<span class="token-punctuation">:</span> <span class="token-operator">&amp;</span><span class="token-keyword">'a</span> <span class="token-class">str</span><span class="token-punctuation">)</span> <span class="token-operator">-&gt;</span> <span class="token-operator">&amp;</span><span class="token-keyword">'a</span> <span class="token-class">str</span> <span class="token-punctuation">{</span>
+    <span class="token-keyword">if</span> x<span class="token-punctuation">.</span><span class="token-function">len</span><span class="token-punctuation">(</span><span class="token-punctuation">)</span> <span class="token-operator">&gt;</span> y<span class="token-punctuation">.</span><span class="token-function">len</span><span class="token-punctuation">(</span><span class="token-punctuation">)</span> <span class="token-punctuation">{</span>
+        x
+    <span class="token-punctuation">}</span> <span class="token-keyword">else</span> <span class="token-punctuation">{</span>
+        y
+    <span class="token-punctuation">}</span>
+<span class="token-punctuation">}</span></code></pre>
+</div>
+</section>
+<section id="osprey-solution">
+<h2 class="font-headline-md text-headline-md">Osprey's Approach</h2>
+<p>
+                    Osprey's compiler uses advanced static analysis to infer these lifetimes in over 85% of typical use cases. The inference engine relies on a set of elision rules that have been expanded significantly compared to older languages.
+                </p>
+<!-- Admonition / Callout -->
+<div class="my-6 p-4 rounded-lg bg-primary-container/10 border-l-4 border-primary-container flex gap-4">
+<span class="material-symbols-outlined text-primary-container mt-1" style="font-variation-settings: 'FILL' 1;">info</span>
+<div>
+<h4 class="font-headline-md text-[18px] text-primary-container mb-1">Core Principle</h4>
+<p class="text-on-surface-variant text-sm m-0">Inference is only applied when the solution is unambiguous. If multiple valid lifetime assignments exist, the compiler will hard-fault and require explicit annotations to prevent silent logical errors.</p>
+</div>
+</div>
+</section>
+<section id="how-it-works">
+<h2 class="font-headline-md text-headline-md">How Inference Works</h2>
+<p>
+                    The compiler performs a multi-pass analysis during the intermediate representation (IR) stage:
+                </p>
+<ol>
+<li><strong>Control Flow Graph (CFG) Construction:</strong> Maps all possible execution paths.</li>
+<li><strong>Liveness Analysis:</strong> Determines where variables are created, used, and dropped.</li>
+<li><strong>Constraint Generation:</strong> Formulates a set of equations representing the required lifetime bounds.</li>
+<li><strong>Solving:</strong> Applies a specialized unification algorithm to resolve the constraints.</li>
+</ol>
+</section>
+<section id="examples">
+<h2 class="font-headline-md text-headline-md">Code Examples</h2>
+<p>
+                    With Osprey, the earlier example is simplified. The compiler recognizes that the return value must live at least as long as the shortest-lived input parameter.
+                </p>
+<!-- Code Block Example (Osprey Syntax) -->
+<div class="relative group my-6 rounded-lg overflow-hidden border border-outline-variant/30 code-block-bg">
+<div class="flex items-center justify-between px-4 py-2 bg-surface-container-high border-b border-outline-variant/30">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Osprey Syntax (Inferred)</span>
+<button aria-label="Copy code" class="text-on-surface-variant hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+<pre class="p-4 overflow-x-auto"><code class="font-code-sm text-code-sm text-on-surface"><span class="token-comment">// Lifetimes are elided; compiler infers them automatically</span>
+<span class="token-keyword">fn</span> <span class="token-function">longest</span><span class="token-punctuation">(</span>x<span class="token-punctuation">:</span> <span class="token-operator">&amp;</span><span class="token-class">str</span><span class="token-punctuation">,</span> y<span class="token-punctuation">:</span> <span class="token-operator">&amp;</span><span class="token-class">str</span><span class="token-punctuation">)</span> <span class="token-operator">-&gt;</span> <span class="token-operator">&amp;</span><span class="token-class">str</span> <span class="token-punctuation">{</span>
+    <span class="token-keyword">if</span> x<span class="token-punctuation">.</span><span class="token-function">len</span><span class="token-punctuation">(</span><span class="token-punctuation">)</span> <span class="token-operator">&gt;</span> y<span class="token-punctuation">.</span><span class="token-function">len</span><span class="token-punctuation">(</span><span class="token-punctuation">)</span> <span class="token-punctuation">{</span>
+        x
+    <span class="token-punctuation">}</span> <span class="token-keyword">else</span> <span class="token-punctuation">{</span>
+        y
+    <span class="token-punctuation">}</span>
+<span class="token-punctuation">}</span></code></pre>
+</div>
+<p>
+                    This extends to complex structs and generic bounds as well. Consider a data processing pipeline where buffers are passed by reference:
+                </p>
+<!-- Complex Code Block Example -->
+<div class="relative group my-6 rounded-lg overflow-hidden border border-outline-variant/30 code-block-bg">
+<div class="flex items-center justify-between px-4 py-2 bg-surface-container-high border-b border-outline-variant/30">
+<span class="font-code-sm text-code-sm text-on-surface-variant">pipeline.osp</span>
+<button aria-label="Copy code" class="text-on-surface-variant hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+<pre class="p-4 overflow-x-auto"><code class="font-code-sm text-code-sm text-on-surface"><span class="token-keyword">struct</span> <span class="token-class">Pipeline</span> <span class="token-punctuation">{</span>
+    input_buffer<span class="token-punctuation">:</span> <span class="token-operator">&amp;</span><span class="token-punctuation">[</span><span class="token-class">u8</span><span class="token-punctuation">]</span><span class="token-punctuation">,</span> <span class="token-comment">// Inferred lifetime tied to struct instance</span>
+    cursor<span class="token-punctuation">:</span> <span class="token-class">usize</span><span class="token-punctuation">,</span>
+<span class="token-punctuation">}</span>
+
+<span class="token-keyword">impl</span> <span class="token-class">Pipeline</span> <span class="token-punctuation">{</span>
+    <span class="token-keyword">fn</span> <span class="token-function">read_chunk</span><span class="token-punctuation">(</span><span class="token-keyword">mut self</span><span class="token-punctuation">,</span> size<span class="token-punctuation">:</span> <span class="token-class">usize</span><span class="token-punctuation">)</span> <span class="token-operator">-&gt;</span> <span class="token-class">Result</span><span class="token-operator">&lt;</span><span class="token-operator">&amp;</span><span class="token-punctuation">[</span><span class="token-class">u8</span><span class="token-punctuation">]</span><span class="token-punctuation">,</span> <span class="token-class">Error</span><span class="token-operator">&gt;</span> <span class="token-punctuation">{</span>
+        <span class="token-comment">// Compiler knows the returned slice borrows from self.input_buffer</span>
+        <span class="token-keyword">let</span> chunk <span class="token-operator">=</span> <span class="token-keyword">self</span><span class="token-punctuation">.</span>input_buffer<span class="token-punctuation">[</span><span class="token-keyword">self</span><span class="token-punctuation">.</span>cursor <span class="token-operator">..</span> <span class="token-keyword">self</span><span class="token-punctuation">.</span>cursor <span class="token-operator">+</span> size<span class="token-punctuation">]</span><span class="token-punctuation">;</span>
+        <span class="token-keyword">self</span><span class="token-punctuation">.</span>cursor <span class="token-operator">+=</span> size<span class="token-punctuation">;</span>
+        <span class="token-function">Ok</span><span class="token-punctuation">(</span>chunk<span class="token-punctuation">)</span>
+    <span class="token-punctuation">}</span>
+<span class="token-punctuation">}</span></code></pre>
+</div>
+</section>
+<section id="limitations">
+<h2 class="font-headline-md text-headline-md">Limitations and Fallbacks</h2>
+<p>
+                    While powerful, inference is not magic. There are edge cases where explicit annotations are still required:
+                </p>
+<ul>
+<li>When returning a reference that could plausibly be tied to a static global instead of an input parameter.</li>
+<li>In complex self-referential structs where the compiler cannot statically guarantee non-aliasing across mutations.</li>
+<li>When crossing Foreign Function Interface (FFI) boundaries where the external C code's behavior is opaque to the analyzer.</li>
+</ul>
+<blockquote class="border-l-4 border-outline-variant pl-4 my-6 text-on-surface-variant italic font-body-lg text-[18px]">
+                    "Our goal with Osprey isn't to remove the concept of lifetimes, but to make them invisible when they are obvious, saving developers mental cycles for the architecture that matters."
+                    <footer class="text-sm mt-2 font-normal not-italic">— Osprey Language Design Board</footer>
+</blockquote>
+</section>
+<section class="mt-12 pt-8 border-t border-outline-variant/30" id="further-reading">
+<h3 class="font-headline-md text-headline-md mb-4">Further Reading</h3>
+<ul class="list-none pl-0 space-y-3">
+<li><a class="flex items-center gap-2 group" href="#"><span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary-container transition-colors text-sm">article</span> <span>The Formal Semantics of Osprey's IR</span></a></li>
+<li><a class="flex items-center gap-2 group" href="#"><span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary-container transition-colors text-sm">menu_book</span> <span>Standard Library: Borrowing Patterns</span></a></li>
+<li><a class="flex items-center gap-2 group" href="#"><span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary-container transition-colors text-sm">forum</span> <span>RFC 0042: Extended Inference Rules</span></a></li>
+</ul>
+</section>
+</article>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest w-full py-12 border-t border-outline-variant dark:border-outline-variant flat no shadows font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant mt-auto">
+<div class="flex flex-col md:flex-row justify-between items-center px-margin-desktop max-w-container-max mx-auto gap-base">
+<!-- Brand / Copyright -->
+<div class="flex flex-col items-center md:items-start gap-2">
+<span class="font-label-caps text-label-caps text-primary dark:text-primary">Systema</span>
+<span>© 2024 Systema Foundation. Built for performance and safety.</span>
+</div>
+<!-- Footer Links -->
+<div class="flex flex-wrap justify-center gap-6 mt-4 md:mt-0">
+<a class="hover:text-primary dark:hover:text-primary underline transition-all transition-opacity hover:opacity-80 text-on-surface-variant dark:text-on-surface-variant" href="#">Privacy Policy</a>
+<a class="hover:text-primary dark:hover:text-primary underline transition-all transition-opacity hover:opacity-80 text-on-surface-variant dark:text-on-surface-variant" href="#">Code of Conduct</a>
+<a class="hover:text-primary dark:hover:text-primary underline transition-all transition-opacity hover:opacity-80 text-on-surface-variant dark:text-on-surface-variant" href="#">Security</a>
+<a class="hover:text-primary dark:hover:text-primary underline transition-all transition-opacity hover:opacity-80 text-on-surface-variant dark:text-on-surface-variant" href="#">Contributing</a>
+</div>
+</div>
+</footer>
+<script>
+        // Simple script to highlight active TOC item based on scroll position
+        document.addEventListener('DOMContentLoaded', () => {
+            const sections = document.querySelectorAll('section[id]');
+            const tocLinks = document.querySelectorAll('.toc-link');
+
+            const observerOptions = {
+                root: null,
+                rootMargin: '-100px 0px -60% 0px', // Adjust offsets to trigger slightly before the section hits top
+                threshold: 0
+            };
+
+            const observerCallback = (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const id = entry.target.getAttribute('id');
+                        // Remove active class from all
+                        tocLinks.forEach(link => link.classList.remove('active'));
+                        // Add active class to corresponding link
+                        const activeLink = document.querySelector(`.toc-link[href="#${id}"]`);
+                        if (activeLink) {
+                            activeLink.classList.add('active');
+                        }
+                    }
+                });
+            };
+
+            const observer = new IntersectionObserver(observerCallback, observerOptions);
+
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+            
+            // Set initial active state if loaded near top
+            if(window.scrollY < 100 && tocLinks.length > 0) {
+                tocLinks[0].classList.add('active');
+            }
+        });
+    </script>
+</body></html>

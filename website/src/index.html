@@ -89,6 +89,38 @@ scoop install osprey</code></pre>
 
 <section class="section">
   <div class="container">
+    <div class="two-column">
+      <div class="content">
+        <h2>The Vision</h2>
+        <p>
+          Osprey was born from the belief that elegance <strong>is</strong> the best defence against bugs. Too many
+          hours are wasted debugging null pointer exceptions, handling unexpected panics, and tracking down race
+          conditions. Osprey is different.
+        </p>
+        <p>
+          Osprey's type system aims to prevent entire classes of bugs at compile time, make concurrency safe by
+          default, and keep your code maintainable for years to come.
+        </p>
+      </div>
+      <div class="visual">
+        <div class="code-example">
+          <pre class="language-osprey"><code class="language-osprey">// Effects in the type, handlers at the edge
+effect Logger { log: fn(string) -> Unit }
+
+fn greet(name: string) -> Unit !Logger =
+  perform Logger.log("Hello, ${name}!")
+
+handle Logger
+  log msg => print(msg)
+in greet("Alice")</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
     <h2 class="section-title">Language Features</h2>
 
     <div class="two-column">
@@ -364,6 +396,79 @@ let closed = httpCloseClient(client)
 print("client closed")</code></pre>
         </div>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">Core Philosophy</h2>
+    <div class="philosophy-grid">
+      <div class="card">
+        <h3>Referential Transparency</h3>
+        <p>Functions return the same output for the same input. Side effects are explicit and tracked by the type system.</p>
+      </div>
+      <div class="card">
+        <h3>Immutability by Default</h3>
+        <p>Data is immutable unless explicitly marked mutable, making it safe to share across fibers.</p>
+      </div>
+      <div class="card">
+        <h3>Explicit Error Handling</h3>
+        <p>No hidden exceptions or panics. All failures return Result types you must handle.</p>
+      </div>
+      <div class="card">
+        <h3>Zero-Cost Abstractions</h3>
+        <p>High-level features — effects, iterators, persistent collections — compile to efficient native code.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container">
+    <h2 class="section-title">How Osprey Is Different</h2>
+    <div class="comparison-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Traditional</th>
+            <th>Osprey</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Side Effects</td>
+            <td>Untracked, implicit</td>
+            <td>In the type; unhandled effects are a compile error</td>
+          </tr>
+          <tr>
+            <td>Error Handling</td>
+            <td>Exceptions, panics</td>
+            <td>Result types</td>
+          </tr>
+          <tr>
+            <td>Null Safety</td>
+            <td>Null pointer exceptions</td>
+            <td>Option types only</td>
+          </tr>
+          <tr>
+            <td>Concurrency</td>
+            <td>Shared mutable state</td>
+            <td>Fiber-isolated, message-passing</td>
+          </tr>
+          <tr>
+            <td>Type Safety</td>
+            <td>Runtime type errors possible</td>
+            <td>Compile-time prevention via Hindley-Milner inference</td>
+          </tr>
+          <tr>
+            <td>Memory Management</td>
+            <td>Manual memory or garbage collection</td>
+            <td>Memory-safe, no GC pauses</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>

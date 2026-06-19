@@ -2,7 +2,7 @@
 layout: page
 title: "Fibers and Concurrency"
 description: "Osprey Language Specification: Fibers and Concurrency"
-date: 2026-06-18
+date: 2026-06-19
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0011-lightweightfibersandconcurrency/"
