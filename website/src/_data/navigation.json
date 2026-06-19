@@ -1,0 +1,36 @@
+{
+  "main": [
+    { "text": "Status", "url": "/status/" },
+    { "text": "Spec", "url": "/spec/" },
+    { "text": "Playground", "url": "/playground/" },
+    { "text": "Docs", "url": "/docs/" },
+    { "text": "Blog", "url": "/blog/" },
+    { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/osprey", "external": true }
+  ],
+  "footer": [
+    {
+      "title": "Language",
+      "items": [
+        { "text": "Try Online", "url": "/playground/" },
+        { "text": "Documentation", "url": "/docs/" },
+        { "text": "Feature Status", "url": "/status/" },
+        { "text": "Specification", "url": "/spec/" }
+      ]
+    },
+    {
+      "title": "Community",
+      "items": [
+        { "text": "Blog", "url": "/blog/" },
+        { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/osprey" },
+        { "text": "Issues", "url": "https://github.com/MelbourneDeveloper/osprey/issues" }
+      ]
+    },
+    {
+      "title": "Built by",
+      "items": [
+        { "text": "Nimblesite", "url": "https://nimblesite.co" },
+        { "text": "Christian Findlay", "url": "https://www.christianfindlay.com" }
+      ]
+    }
+  ]
+}

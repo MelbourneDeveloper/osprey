@@ -1,46 +1,20 @@
 {
   "title": "Osprey Programming Language",
+  "name": "Osprey",
   "description": "A modern functional programming oriented language designed for elegance, safety, and performance.",
   "url": "https://ospreylang.dev",
   "author": "Christian Findlay",
-  "navigation": [
-    {
-      "text": "Status",
-      "url": "/status/"
-    },
-    {
-      "text": "Spec",
-      "url": "/spec/"
-    },
-    {
-      "text": "Playground",
-      "url": "/playground/"
-    },
-    {
-      "text": "Documentation",
-      "url": "/docs/"
-    },
-    {
-      "text": "Blog",
-      "url": "/blog/"
-    }
-  ],
-  "colors": {
-    "primary": "#0EA5E9",
-    "primary_dark": "#0369A1",
-    "primary_darker": "#0C4A6E",
-    "primary_light": "#38BDF8",
-    "primary_lighter": "#7DD3FC",
-    "primary_lightest": "#E0F2FE",
-    "secondary": "#14B8A6",
-    "secondary_dark": "#0F766E",
-    "secondary_light": "#2DD4BF",
-    "secondary_lighter": "#5EEAD4",
-    "secondary_lightest": "#F0FDFA",
-    "accent": "#8B5CF6",
-    "accent_dark": "#6D28D9",
-    "accent_light": "#A78BFA",
-    "accent_lighter": "#C4B5FD",
-    "accent_lightest": "#F3E8FF"
+  "stylesheet": "/assets/css/styles.css",
+  "themeColor": "#0EA5E9",
+  "keywords": "osprey, functional programming, algebraic effects, fibers, LLVM, type inference, pattern matching",
+  "ogImage": "/assets/images/og-image.png",
+  "ogImageWidth": "1200",
+  "ogImageHeight": "630",
+  "favicon": "/assets/images/logo.png",
+  "appleTouchIcon": "/assets/images/logo.png",
+  "organization": {
+    "name": "Osprey Programming Language",
+    "logo": "/assets/images/logo.png",
+    "sameAs": ["https://github.com/MelbourneDeveloper/osprey"]
   }
 }

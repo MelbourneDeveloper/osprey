@@ -62,6 +62,14 @@ function cleanSpecContent(content, filename) {
       `](https://github.com/MelbourneDeveloper/osprey/blob/main/docs/plans/${file}${anchor || ''})`
   );
 
+  // Any remaining repo-relative links (source files, shipwright.json, etc.)
+  // climb to the repo root from docs/specs/. Send them to the repo on GitHub.
+  content = content.replace(
+    /\]\((?:\.\.\/){2,}([^)#]+)(#[^)]*)?\)/g,
+    (_m, repoPath, anchor) =>
+      `](https://github.com/MelbourneDeveloper/osprey/blob/main/${repoPath}${anchor || ''})`
+  );
+
   return content.trim();
 }
 

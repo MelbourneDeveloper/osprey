@@ -1,0 +1,71 @@
+/* Osprey site styles, layered on top of the techdoc structural theme.
+ * The theme ships colour-free structural CSS (/techdoc/css/*) and links THIS
+ * file after it. We keep the existing Osprey design (imported below) and add
+ * the colour variables + chrome styling the theme's markup expects.
+ * Richer visual designs will be merged in later — keep this minimal. */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("/css/variables.css");
+@import url("/css/base.css");
+@import url("/css/components.css");
+@import url("/css/syntax.css");
+
+/* Colour contract referenced by the theme's structural CSS. */
+:root {
+  --color-bg: #ffffff;
+  --color-text: #0f172a;
+  --color-primary: #0369a1;
+  --color-border: #e2e8f0;
+  --color-muted: #475569;
+  --max-width: 1200px;
+}
+[data-theme="dark"] {
+  --color-bg: #0b1220;
+  --color-text: #e2e8f0;
+  --color-primary: #38bdf8;
+  --color-border: #1e293b;
+  --color-muted: #94a3b8;
+}
+
+/* ---- Theme chrome: header / nav / footer ---- */
+.skip-link { position: absolute; left: -9999px; }
+.skip-link:focus { left: 1rem; top: 1rem; background: #fff; padding: .5rem 1rem; z-index: 1000; }
+
+.site-header {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+.site-header .nav {
+  max-width: var(--max-width); margin: 0 auto;
+  display: flex; align-items: center; gap: 1.5rem;
+  padding: .75rem 1.5rem;
+}
+.site-header .logo { font-weight: 800; font-size: 1.25rem; color: var(--color-text); text-decoration: none; }
+.site-header .nav-links { list-style: none; display: flex; gap: 1.25rem; margin: 0; padding: 0; flex: 1; }
+.site-header .nav-link { color: var(--color-muted); text-decoration: none; font-weight: 500; }
+.site-header .nav-link:hover, .site-header .nav-link.active { color: var(--color-primary); }
+.nav-actions { display: flex; align-items: center; gap: .75rem; }
+.theme-toggle, .mobile-menu-toggle {
+  background: none; border: 1px solid var(--color-border); border-radius: 6px;
+  cursor: pointer; padding: .35rem .5rem; color: var(--color-text);
+}
+.theme-toggle .theme-icon-dark { display: none; }
+[data-theme="dark"] .theme-toggle .theme-icon-light { display: none; }
+[data-theme="dark"] .theme-toggle .theme-icon-dark { display: inline; }
+.mobile-menu-toggle { display: none; flex-direction: column; gap: 4px; }
+.mobile-menu-toggle span { width: 20px; height: 2px; background: var(--color-text); display: block; }
+
+.site-footer { border-top: 1px solid var(--color-border); background: var(--color-bg); margin-top: 4rem; }
+.site-footer .footer-content { max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.5rem; }
+.footer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 2rem; }
+.footer-section h3 { font-size: .95rem; margin-bottom: .75rem; }
+.footer-section ul { list-style: none; margin: 0; padding: 0; }
+.footer-section li { margin: .35rem 0; }
+.footer-section a { color: var(--color-muted); text-decoration: none; }
+.footer-section a:hover { color: var(--color-primary); }
+.footer-bottom { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--color-border); color: var(--color-muted); }
+
+@media (max-width: 768px) {
+  .site-header .nav-links { display: none; }
+  .mobile-menu-toggle { display: flex; }
+}

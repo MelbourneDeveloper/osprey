@@ -7,6 +7,7 @@
 // highlights raw `language-osprey` blocks, and the playground shortcodes.
 import techdoc from "eleventy-plugin-techdoc";
 import Prism from "prismjs";
+import { DateTime } from "luxon";
 
 // Osprey Prism grammar — shared by the syntaxhighlight plugin and the transform.
 const ospreyGrammar = {
@@ -40,7 +41,9 @@ export default function (eleventyConfig) {
       description:
         "A modern functional language with compile-time effect safety, lightweight fiber concurrency, and immutable persistent collections.",
     },
-    features: { blog: true, docs: true, darkMode: true, i18n: false },
+    // Keep the existing blog index + docs pages; only adopt the theme's shell,
+    // SEO and generated sitemap/robots/feed/llms.txt. (New designs land later.)
+    features: { blog: false, docs: false, darkMode: true, i18n: false },
     i18n: { defaultLanguage: "en", languages: ["en"] },
   });
 
@@ -88,6 +91,30 @@ export default function (eleventyConfig) {
 
   eleventyConfig.addWatchTarget("src/css/");
   eleventyConfig.addWatchTarget("src/js/");
+
+  // Map the site's existing layout names onto the theme's base layout. Existing
+  // pages declare `layout: page`, `layout: page.njk` or `layout: base.njk`; the
+  // theme ships `layouts/base.njk`. Aliasing avoids touching every page.
+  eleventyConfig.addLayoutAlias("base", "layouts/base.njk");
+  eleventyConfig.addLayoutAlias("base.njk", "layouts/base.njk");
+  eleventyConfig.addLayoutAlias("page", "layouts/base.njk");
+  eleventyConfig.addLayoutAlias("page.njk", "layouts/base.njk");
+
+  // The blog index renders this collection (theme blog auto-pages are disabled).
+  eleventyConfig.addCollection("blog", (api) =>
+    api
+      .getFilteredByGlob("src/blog/**/*.md")
+      .filter((p) => !p.inputPath.includes("/index."))
+      .sort((a, b) => b.date - a.date)
+  );
+
+  // Date filters the blog listing uses (the theme exposes dateFormat/isoDate).
+  eleventyConfig.addFilter("readableDate", (d) =>
+    DateTime.fromJSDate(d, { zone: "utc" }).toFormat("dd LLL yyyy")
+  );
+  eleventyConfig.addFilter("htmlDateString", (d) =>
+    DateTime.fromJSDate(d, { zone: "utc" }).toFormat("yyyy-LL-dd")
+  );
 
   return {
     dir: { input: "src", output: "_site", data: "_data" },
