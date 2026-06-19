@@ -1,8 +1,18 @@
 ---
 layout: layouts/base.njk
 ---
-{# Shared wrapper for every long-form page (docs, spec, blog posts, status).
-   One prose design for all of them — see src/css/components.css `.prose`. #}
-<article class="prose">
+{# Shared layout for every long-form page (docs, spec, blog posts, status).
+   One prose design for all of them — see src/css/components.css `.prose`.
+   The TOC is built client-side from the article's own headings (toc.js), so
+   it adds no content — just navigation derived from what's already on the page. #}
+<div class="prose-layout">
+  <aside class="toc-aside">
+    <nav class="toc" id="toc" aria-label="On this page">
+      <p class="toc-title">Contents</p>
+    </nav>
+  </aside>
+  <article class="prose">
 {{ content | safe }}
-</article>
+  </article>
+</div>
+<script src="/js/toc.js" defer></script>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Osprey Blog</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed-variant": "#004e5e",
+                    "on-primary-container": "#005d70",
+                    "on-error": "#690005",
+                    "surface-container-lowest": "#070d1f",
+                    "on-secondary": "#252f4e",
+                    "on-primary-fixed": "#001f27",
+                    "surface-variant": "#2e3448",
+                    "primary-container": "#77d7f4",
+                    "tertiary-fixed": "#ffddb5",
+                    "on-tertiary": "#462b00",
+                    "surface": "#0c1325",
+                    "secondary-container": "#3e4868",
+                    "primary": "#bdeeff",
+                    "on-primary": "#003642",
+                    "surface-dim": "#0c1325",
+                    "outline": "#889297",
+                    "secondary": "#bbc5ec",
+                    "inverse-primary": "#00677d",
+                    "on-surface": "#dce1fb",
+                    "on-tertiary-fixed": "#2a1800",
+                    "error": "#ffb4ab",
+                    "background": "#0c1325",
+                    "surface-container": "#191f32",
+                    "surface-tint": "#73d3f0",
+                    "on-secondary-fixed": "#0f1a38",
+                    "tertiary-container": "#ffbe65",
+                    "surface-container-high": "#23293d",
+                    "primary-fixed": "#b2ebff",
+                    "tertiary": "#ffe1c0",
+                    "on-tertiary-container": "#764c00",
+                    "surface-container-low": "#151b2d",
+                    "tertiary-fixed-dim": "#fbba62",
+                    "on-tertiary-fixed-variant": "#643f00",
+                    "on-secondary-container": "#adb7dd",
+                    "inverse-surface": "#dce1fb",
+                    "primary-fixed-dim": "#73d3f0",
+                    "outline-variant": "#3e484c",
+                    "secondary-fixed-dim": "#bbc5ec",
+                    "error-container": "#93000a",
+                    "on-surface-variant": "#bdc8cd",
+                    "on-background": "#dce1fb",
+                    "surface-bright": "#33384c",
+                    "secondary-fixed": "#dbe1ff",
+                    "on-secondary-fixed-variant": "#3c4666",
+                    "surface-container-highest": "#2e3448",
+                    "on-error-container": "#ffdad6",
+                    "inverse-on-surface": "#2a3043"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "base": "8px",
+                    "container-max": "1200px",
+                    "margin-desktop": "48px"
+            },
+            "fontFamily": {
+                    "label-caps": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-md": [
+                            "Geist"
+                    ],
+                    "body-md": [
+                            "Geist"
+                    ],
+                    "code-sm": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-lg": [
+                            "Geist"
+                    ],
+                    "body-lg": [
+                            "Geist"
+                    ],
+                    "headline-lg-mobile": [
+                            "Geist"
+                    ]
+            },
+            "fontSize": {
+                    "label-caps": [
+                            "12px",
+                            {
+                                    "lineHeight": "1",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "1.3",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "1.6",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "code-sm": [
+                            "14px",
+                            {
+                                    "lineHeight": "1.5",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg": [
+                            "40px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "1.6",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "30px",
+                            {
+                                    "lineHeight": "1.2",
+                                    "fontWeight": "700"
+                            }
+                    ]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #070D1F; /* Level 0 Base */
+        }
+        .card-surface {
+            background-color: #0D1836; /* Level 1 Surface */
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .text-cyan {
+            color: #77D7F4;
+        }
+        .bg-cyan-low {
+            background-color: rgba(119, 215, 244, 0.1);
+        }
+    </style>
+</head>
+<body class="text-on-background font-body-md min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="bg-background dark:bg-background text-primary dark:text-primary font-body-md text-body-md docked full-width top-0 border-b border-outline-variant/30 flat no shadows transition-all duration-200 ease-in-out z-50">
+<div class="flex justify-between items-center h-16 px-margin-desktop max-w-container-max mx-auto w-full">
+<div class="flex items-center gap-4">
+<img alt="Osprey Logo" class="h-8 w-8" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDftjDmZGj6FKuw5waG3n2DRJLcUDjOHPGyIZAQvyEFCB0JXcLLiyyuhEl5VksXTTiAAw-BMOy5TnNPfOT6J8lEvdgAZMVS1eKnhKv5fHrypaegum3nA7_2OatmHJm6Eq8hopLKMShdpmvs9ZMDfhcuC2KI5DAGB6NDJH4yeR5_O7IdL6M6vtA4LqaemMvbXcJeI0ANs2zoEbKL_mVqQjFeC9l1BpXZVPbJCVh48Exnb3AU5rr1ktsuQUbbPYz2CQ4WLyfQFPYyAY8"/>
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary tracking-tighter">Osprey</span>
+</div>
+<div class="hidden md:flex items-center gap-6">
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:bg-surface-variant/50 px-3 py-2 rounded" href="#">About</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:bg-surface-variant/50 px-3 py-2 rounded" href="#">Status</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:bg-surface-variant/50 px-3 py-2 rounded" href="#">Spec</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:bg-surface-variant/50 px-3 py-2 rounded" href="#">Playground</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:bg-surface-variant/50 px-3 py-2 rounded" href="#">Documentation</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1 hover:bg-surface-variant/50 px-3 py-2" href="#">Blog</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="hidden md:block px-4 py-2 bg-primary-container text-on-primary-container font-label-caps text-label-caps rounded hover:bg-primary-fixed transition-colors">
+                    Get Started
+                </button>
+<button class="md:hidden text-on-surface-variant">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-grow pt-24 pb-32 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto w-full flex flex-col gap-16">
+<!-- Header & Filters -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 border-b border-outline-variant/20 pb-8">
+<div>
+<h1 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-4">Engineering Blog</h1>
+<p class="text-on-surface-variant text-body-lg max-w-2xl">Deep dives, release notes, and technical perspectives from the Osprey core team.</p>
+</div>
+<div class="flex gap-2 flex-wrap">
+<button class="px-4 py-2 rounded-full text-label-caps font-label-caps bg-cyan-low text-cyan border border-primary-container/30">All</button>
+<button class="px-4 py-2 rounded-full text-label-caps font-label-caps bg-transparent text-on-surface-variant border border-outline-variant hover:text-primary-container hover:border-primary-container transition-colors">Releases</button>
+<button class="px-4 py-2 rounded-full text-label-caps font-label-caps bg-transparent text-on-surface-variant border border-outline-variant hover:text-primary-container hover:border-primary-container transition-colors">Guides</button>
+<button class="px-4 py-2 rounded-full text-label-caps font-label-caps bg-transparent text-on-surface-variant border border-outline-variant hover:text-primary-container hover:border-primary-container transition-colors">Engineering</button>
+</div>
+</div>
+<!-- Featured Post Hero -->
+<article class="card-surface rounded-xl overflow-hidden group hover:border-primary-container/50 transition-colors duration-300">
+<div class="grid md:grid-cols-2 gap-0">
+<div class="p-8 md:p-12 flex flex-col justify-center gap-6">
+<div class="flex items-center gap-4">
+<span class="px-2 py-1 bg-cyan-low text-cyan rounded font-label-caps text-label-caps tracking-widest">RELEASE</span>
+<span class="text-on-surface-variant font-code-sm text-code-sm">Oct 24, 2026</span>
+</div>
+<h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-white group-hover:text-primary-container transition-colors">Osprey 1.2: The Pattern Guard Update</h2>
+<p class="text-body-lg text-on-surface-variant">Introducing exhaustive pattern matching with arbitrary guard clauses, significantly reducing boilerplate in complex state machines.</p>
+<div class="flex gap-2 mt-4">
+<span class="px-2 py-1 rounded border border-outline-variant text-on-surface-variant font-code-sm text-code-sm">#pattern-matching</span>
+<span class="px-2 py-1 rounded border border-outline-variant text-on-surface-variant font-code-sm text-code-sm">#release-notes</span>
+</div>
+<a class="mt-4 inline-flex items-center gap-2 text-cyan font-label-caps text-label-caps hover:text-primary transition-colors" href="#">
+                        READ FULL POST <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+<div class="bg-surface-container-lowest border-l border-outline-variant/20 p-8 flex items-center justify-center relative overflow-hidden">
+<!-- Abstract representation of code/patterns -->
+<div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(#77d7f4 1px, transparent 1px); background-size: 20px 20px;"></div>
+<pre class="font-code-sm text-code-sm text-on-surface-variant relative z-10 bg-surface/50 p-6 rounded border border-outline-variant/30 backdrop-blur-sm"><code>match state {
+  Active(user) if user.role == Admin =&gt;
+    grant_access(),
+  Active(user) =&gt; 
+    request_elevation(),
+  _ =&gt; 
+    deny()
+}</code>
+                    </pre>
+</div>
+</div>
+</article>
+<!-- Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+<!-- Card 1 -->
+<article class="card-surface rounded-lg p-6 flex flex-col gap-4 group hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-center mb-2">
+<span class="px-2 py-1 bg-cyan-low text-cyan rounded font-label-caps text-label-caps">ENGINEERING</span>
+<span class="text-on-surface-variant font-code-sm text-code-sm flex items-center gap-1"><span class="material-symbols-outlined text-sm">schedule</span> 12 min</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-white group-hover:text-primary-container transition-colors">Deep Dive into Talon Concurrency</h3>
+<p class="text-on-surface-variant text-body-md line-clamp-3">How we implemented lightweight fibers in the Osprey runtime to achieve C-like performance with Go-like semantics.</p>
+<div class="mt-auto pt-6 flex justify-between items-center border-t border-outline-variant/20">
+<span class="text-on-surface-variant font-code-sm text-code-sm">Oct 10, 2026</span>
+<a class="text-cyan group-hover:translate-x-1 transition-transform inline-flex" href="#"><span class="material-symbols-outlined">arrow_forward</span></a>
+</div>
+</article>
+<!-- Card 2 -->
+<article class="card-surface rounded-lg p-6 flex flex-col gap-4 group hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-center mb-2">
+<span class="px-2 py-1 bg-cyan-low text-cyan rounded font-label-caps text-label-caps">TECHNICAL</span>
+<span class="text-on-surface-variant font-code-sm text-code-sm flex items-center gap-1"><span class="material-symbols-outlined text-sm">schedule</span> 8 min</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-white group-hover:text-primary-container transition-colors">Zero-Tax Memory Safety</h3>
+<p class="text-on-surface-variant text-body-md line-clamp-3">Exploring the compile-time ownership model that allows Osprey to guarantee safety without a garbage collector or reference counting overhead.</p>
+<div class="mt-auto pt-6 flex justify-between items-center border-t border-outline-variant/20">
+<span class="text-on-surface-variant font-code-sm text-code-sm">Sep 28, 2026</span>
+<a class="text-cyan group-hover:translate-x-1 transition-transform inline-flex" href="#"><span class="material-symbols-outlined">arrow_forward</span></a>
+</div>
+</article>
+<!-- Card 3 -->
+<article class="card-surface rounded-lg p-6 flex flex-col gap-4 group hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-center mb-2">
+<span class="px-2 py-1 bg-cyan-low text-cyan rounded font-label-caps text-label-caps">GUIDE</span>
+<span class="text-on-surface-variant font-code-sm text-code-sm flex items-center gap-1"><span class="material-symbols-outlined text-sm">schedule</span> 15 min</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-white group-hover:text-primary-container transition-colors">Integrating C++ with Header Importer</h3>
+<p class="text-on-surface-variant text-body-md line-clamp-3">A step-by-step tutorial on using Osprey's native FFI to automatically generate bindings from existing C++ codebases.</p>
+<div class="mt-auto pt-6 flex justify-between items-center border-t border-outline-variant/20">
+<span class="text-on-surface-variant font-code-sm text-code-sm">Sep 15, 2026</span>
+<a class="text-cyan group-hover:translate-x-1 transition-transform inline-flex" href="#"><span class="material-symbols-outlined">arrow_forward</span></a>
+</div>
+</article>
+<!-- Card 4 -->
+<article class="card-surface rounded-lg p-6 flex flex-col gap-4 group hover:-translate-y-1 transition-transform duration-300">
+<div class="flex justify-between items-center mb-2">
+<span class="px-2 py-1 bg-cyan-low text-cyan rounded font-label-caps text-label-caps">COMMUNITY</span>
+<span class="text-on-surface-variant font-code-sm text-code-sm flex items-center gap-1"><span class="material-symbols-outlined text-sm">schedule</span> 5 min</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-white group-hover:text-primary-container transition-colors">Highlights from OspreyConf '26</h3>
+<p class="text-on-surface-variant text-body-md line-clamp-3">Recordings and summaries from the main stage, including the roadmap presentation and community lightning talks.</p>
+<div class="mt-auto pt-6 flex justify-between items-center border-t border-outline-variant/20">
+<span class="text-on-surface-variant font-code-sm text-code-sm">Aug 30, 2026</span>
+<a class="text-cyan group-hover:translate-x-1 transition-transform inline-flex" href="#"><span class="material-symbols-outlined">arrow_forward</span></a>
+</div>
+</article>
+</div>
+<!-- Newsletter Signup -->
+<section class="mt-16 bg-surface-container border border-outline-variant/30 rounded-xl p-8 md:p-12 text-center relative overflow-hidden">
+<!-- Decorative background element -->
+<div class="absolute -right-20 -top-20 w-64 h-64 bg-primary-container/10 rounded-full blur-3xl pointer-events-none"></div>
+<div class="relative z-10 max-w-2xl mx-auto flex flex-col items-center gap-6">
+<span class="material-symbols-outlined text-4xl text-cyan">mail</span>
+<h3 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg">Join the Nest</h3>
+<p class="text-on-surface-variant text-body-lg">Get the latest release notes, engineering deep dives, and community updates delivered straight to your inbox. No spam, just technical substance.</p>
+<form class="w-full max-w-md flex flex-col sm:flex-row gap-4 mt-4">
+<input class="flex-grow bg-surface-container-lowest border border-outline-variant/50 rounded px-4 py-3 text-on-surface focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container transition-all font-code-sm placeholder:text-on-surface-variant/50" placeholder="developer@example.com" type="email"/>
+<button class="bg-primary-container text-surface-container-lowest font-label-caps text-label-caps px-6 py-3 rounded hover:bg-primary-fixed transition-colors whitespace-nowrap" type="submit">
+                        SUBSCRIBE
+                    </button>
+</form>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-low dark:bg-surface-container-low text-primary dark:text-primary font-body-md text-body-md full-width bottom-0 border-t border-outline-variant/20 flat no shadows transition-opacity duration-150">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter py-12 px-margin-desktop max-w-container-max mx-auto">
+<div class="flex flex-col gap-4">
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary">Osprey</span>
+<p class="text-on-surface-variant text-sm mt-2">© 2024 Osprey Systems. Built for performance.</p>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-label-caps text-label-caps text-on-surface mb-2">RESOURCES</h4>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:text-primary-container" href="#">Nest Registry</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:text-primary-container" href="#">Osprey Guide</a>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-label-caps text-label-caps text-on-surface mb-2">COMMUNITY</h4>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:text-primary-container" href="#">Discord</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors hover:text-primary-container" href="#">GitHub</a>
+</div>
+</div>
+</footer>
+</body></html>
