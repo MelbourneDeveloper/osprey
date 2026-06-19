@@ -97,8 +97,9 @@ export default function (eleventyConfig) {
   // theme ships `layouts/base.njk`. Aliasing avoids touching every page.
   eleventyConfig.addLayoutAlias("base", "layouts/base.njk");
   eleventyConfig.addLayoutAlias("base.njk", "layouts/base.njk");
-  eleventyConfig.addLayoutAlias("page", "layouts/base.njk");
-  eleventyConfig.addLayoutAlias("page.njk", "layouts/base.njk");
+  // Long-form pages (docs, spec, blog posts, status) share ONE prose design.
+  eleventyConfig.addLayoutAlias("page", "layouts/prose.njk");
+  eleventyConfig.addLayoutAlias("page.njk", "layouts/prose.njk");
 
   // The blog index renders this collection (theme blog auto-pages are disabled).
   eleventyConfig.addCollection("blog", (api) =>

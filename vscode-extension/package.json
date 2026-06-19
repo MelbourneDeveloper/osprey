@@ -198,6 +198,9 @@
     "typescript": "^5.8.3"
   },
   "scripts": {
+    "sync-icon": "node scripts/sync-icon.mjs",
+    "vscode:prepublish": "npm run sync-icon && npm run compile",
+    "precompile": "npm run sync-icon",
     "compile": "tsc -b",
     "lint": "tsc -p ./ --noEmit",
     "watch": "tsc -b -w",

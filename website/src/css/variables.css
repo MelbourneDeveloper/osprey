@@ -1,136 +1,57 @@
+/* ============================================================================
+   Osprey design tokens — Material-3 dark theme (authoritative: docs/designs/*).
+   One source of truth for colour, type, spacing, radius. Dark-only by design.
+   ============================================================================ */
 :root {
-  /* Design System Color Palette - Osprey Brand Colors */
+  /* ---- Surfaces ---- */
+  --bg: #0c1325;
+  --surface: #0c1325;
+  --surface-lowest: #070d1f;
+  --surface-low: #151b2d;
+  --surface-container: #191f32;
+  --surface-high: #23293d;
+  --surface-highest: #2e3448;
 
-  /* Primary Blues - From Design System */
-  --color-primary-50: #F0F8FF;
-  --color-primary-100: #C7EBF9;
-  /* Sky */
-  --color-primary-200: #77D7F4;
-  /* Aqua */
-  --color-primary-300: #38A1DB;
-  /* BlueLight */
-  --color-primary-400: #2B8BC7;
-  --color-primary-500: #005C9C;
-  /* BlueMid */
-  --color-primary-600: #005C9C;
-  /* BlueMid - Main brand color */
-  --color-primary-700: #004A7F;
-  --color-primary-800: #003862;
-  --color-primary-900: #0B3A5E;
-  /* BlueDark */
+  /* ---- Foreground ---- */
+  --on-surface: #dce1fb;
+  --on-surface-variant: #bdc8cd;
 
-  /* Design System Gradient Colors */
-  --gradient-primary: linear-gradient(135deg, #005C9C 0%, #0B3A5E 100%);
-  --gradient-secondary: linear-gradient(135deg, #38A1DB 0%, #77D7F4 100%);
-  --gradient-accent: linear-gradient(135deg, #77D7F4 0%, #C7EBF9 100%);
-  --gradient-hero: linear-gradient(135deg, #005C9C 0%, #0B3A5E 50%, #38A1DB 100%);
-  --gradient-dark: linear-gradient(135deg, #0B3A5E 0%, #1F1F1F 50%, #000000 100%);
+  /* ---- Accents ---- */
+  --primary: #bdeeff;
+  --primary-container: #77d7f4;
+  --on-primary: #003642;
+  --on-primary-container: #005d70;
+  --secondary: #bbc5ec;
+  --secondary-container: #3e4868;
+  --on-secondary-container: #adb7dd;
+  --tertiary: #ffe1c0;
+  --tertiary-dim: #fbba62;
+  --tertiary-container: #ffbe65;
+  --outline: #889297;
+  --outline-variant: #3e484c;
+  --error: #ffb4ab;
 
-  /* Glass Morphism - Always Dark Mode */
-  --glass-bg: rgba(11, 58, 94, 0.2);
-  --glass-border: rgba(119, 215, 244, 0.1);
-  /* Aqua with transparency */
-  --glass-shadow: 0 8px 32px 0 rgba(11, 58, 94, 0.37);
-  /* BlueDark with transparency */
-  --glass-blur: blur(10px);
+  /* ---- Glass panel ---- */
+  --glass-bg: rgba(13, 24, 54, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-blur: blur(12px);
 
-  /* Enhanced Shadows - Using brand colors */
-  --shadow-sm: 0 2px 4px rgba(11, 58, 94, 0.05);
-  --shadow-md: 0 4px 12px rgba(11, 58, 94, 0.08);
-  --shadow-lg: 0 8px 24px rgba(11, 58, 94, 0.12);
-  --shadow-xl: 0 16px 48px rgba(11, 58, 94, 0.16);
-  --shadow-2xl: 0 24px 64px rgba(11, 58, 94, 0.2);
-  --shadow-glow: 0 0 40px rgba(0, 92, 156, 0.5);
-  /* BlueMid glow */
-  --shadow-neon: 0 0 80px rgba(56, 161, 219, 0.8);
-  /* BlueLight neon */
+  /* ---- Typography ---- */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
 
-  /* Design System Neutral Colors */
-  --color-neutral-0: #FFFFFF;
-  /* White */
-  --color-neutral-50: #FDFDFD;
-  /* OffWhite */
-  --color-neutral-100: #F2F2F2;
-  /* LightGrey */
-  --color-neutral-200: #E8E8E8;
-  --color-neutral-300: #D4D4D4;
-  --color-neutral-400: #A3A3A3;
-  --color-neutral-500: #737373;
-  --color-neutral-600: #525252;
-  --color-neutral-700: #404040;
-  --color-neutral-800: #262626;
-  --color-neutral-900: #1F1F1F;
-  /* DarkGrey */
-  --color-neutral-950: #0a0a0a;
+  --fs-display: clamp(2.4rem, 5.2vw, 4rem);
+  --fs-h1: clamp(1.9rem, 4vw, 2.5rem);
+  --fs-h2: clamp(1.6rem, 3vw, 2.1rem);
+  --fs-h3: 1.25rem;
+  --fs-body-lg: 1.125rem;
+  --fs-body: 1rem;
+  --fs-code: 0.875rem;
+  --fs-label: 0.75rem;
+  --lh-tight: 1.2;
+  --lh-body: 1.6;
 
-  /* Accent Colors - Harmonized with design system */
-  --color-accent-purple: #8b5cf6;
-  --color-accent-pink: #ec4899;
-  --color-accent-blue: #38A1DB;
-  /* BlueLight */
-  --color-accent-teal: #77D7F4;
-  /* Aqua */
-  --color-accent-orange: #f97316;
-
-  /* Background Colors - Always Dark Mode */
-  --color-bg-primary: #1F1F1F;
-  /* DarkGrey */
-  --color-bg-secondary: #262626;
-  --color-bg-tertiary: #404040;
-  --color-bg-dark: #1F1F1F;
-  /* DarkGrey */
-
-  /* Text Colors - Always Dark Mode */
-  --color-text-primary: #FDFDFD;
-  /* OffWhite */
-  --color-text-secondary: #F2F2F2;
-  /* LightGrey */
-  --color-text-tertiary: #A3A3A3;
-  --color-text-inverse: #1F1F1F;
-  /* DarkGrey */
-
-  /* Border Colors - Always Dark Mode */
-  --color-border-light: #404040;
-  --color-border-medium: #525252;
-  --color-border-primary: #005C9C;
-  /* BlueMid */
-
-  /* State Colors - Built from design system */
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  --color-info: #38A1DB;
-  /* BlueLight */
-
-  /* Typography with modern fonts */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Inconsolata', monospace;
-
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 1.875rem;
-  --font-size-4xl: 2.25rem;
-  --font-size-5xl: 3rem;
-  --font-size-6xl: 3.75rem;
-  --font-size-7xl: 4.5rem;
-  --font-size-8xl: 6rem;
-
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  --font-weight-extrabold: 800;
-
-  --line-height-tight: 1.25;
-  --line-height-normal: 1.5;
-  --line-height-relaxed: 1.75;
-
-  /* Spacing */
-  --space-0: 0;
+  /* ---- Spacing (techdoc structural CSS reads --space-*) ---- */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -143,64 +64,29 @@
   --space-16: 4rem;
   --space-20: 5rem;
   --space-24: 6rem;
-  --space-32: 8rem;
-  --space-40: 10rem;
-  --space-48: 12rem;
-  --space-56: 14rem;
-  --space-64: 16rem;
 
-  /* Border Radius */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
-  --radius-3xl: 2rem;
-  --radius-full: 9999px;
+  /* ---- Layout (techdoc structural CSS reads these) ---- */
+  --max-width: 1200px;
+  --content-width: 820px;
+  --sidebar-width: 250px;
+  --header-height: 64px;
+  --gutter: 24px;
+  --pad-x: clamp(1rem, 4vw, 3rem);
 
-  /* Transitions */
+  /* ---- Radius ---- */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ---- Motion ---- */
   --transition-fast: 150ms ease;
-  --transition-base: 250ms ease;
-  --transition-slow: 350ms ease;
-  --transition-spring: 500ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  --transition-bounce: 600ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --transition: 250ms ease;
 
-  /* Z-index scale */
-  --z-negative: -1;
-  --z-0: 0;
-  --z-10: 10;
-  --z-20: 20;
-  --z-30: 30;
-  --z-40: 40;
-  --z-50: 50;
-  --z-60: 60;
-  --z-70: 70;
-  --z-80: 80;
-  --z-90: 90;
-  --z-100: 100;
-
-  /* Container widths */
-  --container-sm: 640px;
-  --container-md: 768px;
-  --container-lg: 1024px;
-  --container-xl: 1280px;
-  --container-2xl: 1536px;
-
-  /* Animation Timing Functions */
-  --ease-in-out-expo: cubic-bezier(0.87, 0, 0.13, 1);
-  --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
-  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-in-out-back: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-
-  /* Backdrop Filters */
-  --backdrop-blur-sm: blur(4px);
-  --backdrop-blur-md: blur(8px);
-  --backdrop-blur-lg: blur(16px);
-  --backdrop-blur-xl: blur(24px);
-
-  /* Navigation Colors - Always Dark Mode */
-  --nav-bg-default: rgba(11, 58, 94, 1.0);
-  --nav-bg-scrolled: rgba(11, 58, 94, 1.0);
-  --nav-border-default: rgba(119, 215, 244, 0.6);
-  --nav-border-scrolled: rgba(119, 215, 244, 0.7);
+  /* ---- techdoc colour contract (its structural CSS references these) ---- */
+  --color-bg: var(--bg);
+  --color-text: var(--on-surface);
+  --color-primary: var(--primary-container);
+  --color-border: var(--outline-variant);
+  --color-muted: var(--on-surface-variant);
 }

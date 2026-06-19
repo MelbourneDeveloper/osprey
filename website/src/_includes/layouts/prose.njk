@@ -1,0 +1,8 @@
+---
+layout: layouts/base.njk
+---
+{# Shared wrapper for every long-form page (docs, spec, blog posts, status).
+   One prose design for all of them — see src/css/components.css `.prose`. #}
+<article class="prose">
+{{ content | safe }}
+</article>
