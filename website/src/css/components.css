@@ -78,13 +78,31 @@
 }
 
 /* ============================ Hero ======================================= */
-.hero { padding-block: clamp(3rem, 8vh, 6rem); }
+/* Fill the viewport (minus the in-flow sticky header) before any scroll. */
+.hero {
+  min-height: calc(100dvh - var(--header-height));
+  display: flex;
+  align-items: center;
+  padding-block: clamp(2rem, 5vh, 4rem);
+}
 .hero .container {
   display: grid;
   grid-template-columns: 1.05fr 1fr;
   gap: clamp(2rem, 5vw, 4rem);
   align-items: center;
+  width: 100%;
 }
+/* Grid/flex children holding non-wrapping code must be allowed to shrink,
+   or `white-space: pre` blows the column past the viewport. */
+.hero .container > *,
+.two-column > *,
+.grid > *,
+.philosophy-grid > *,
+.showcase-grid > *,
+.install-grid > * { min-width: 0; }
+.code-example,
+.code-example pre,
+.install-code pre { max-width: 100%; }
 .hero-content { display: flex; flex-direction: column; gap: var(--space-6); }
 .hero-title {
   font-size: var(--fs-display);
