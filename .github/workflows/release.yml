@@ -353,14 +353,10 @@ jobs:
           retention-days: 7
 
   # --------------------------------------------------------------------------
-  # Marketplace publish — passwordless via Microsoft Entra ID OIDC (copies the
-  # Deslop/Shipwright publish-marketplace shape). The `release` environment gives
-  # the GitHub OIDC subject the stable repo:MelbourneDeveloper/osprey:environment:release
-  # shape that the Entra app's federated credential trusts; the short-lived
-  # Marketplace token is minted from that session and handed to vsce via
-  # VSCE_PAT — no PAT secret is stored. Requires repo/environment secrets
-  # AZURE_CLIENT_ID + AZURE_TENANT_ID and an Entra app that co-publishes the
-  # `nimblesite` Marketplace publisher.
+  # Marketplace publish — uses a VS Code Marketplace PAT scoped to the protected
+  # `release` environment (Basilisk pipeline shape). The token is only ever an
+  # env var, never on the command line. Requires the VSCODE_MARKETPLACE_PAT
+  # secret on the `release` environment (or repo).
   publish-marketplace:
     name: Publish VSIX to VS Code Marketplace
     needs: [version, vsix]
@@ -369,7 +365,6 @@ jobs:
     environment: release
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
@@ -377,28 +372,24 @@ jobs:
         with:
           pattern: osprey-vsix-*
           path: artifacts
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
       # One `vsce publish` per platform-specific VSIX — vsce silently uses only
       # the first when several are globbed into a single call. A hyphenated tag
       # (v1.2.3-rc.1) is a prerelease and gets --pre-release.
-      - name: Publish each platform VSIX (Entra OIDC, no PAT)
+      - name: Publish each platform VSIX
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
         run: |
           set -euo pipefail
+          if [ -z "${VSCE_PAT:-}" ]; then
+            echo "::error::VSCODE_MARKETPLACE_PAT secret is not set; cannot publish to the Marketplace"
+            exit 1
+          fi
           shopt -s globstar nullglob
           flag=""
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
             flag="--pre-release"
             echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
           fi
-          VSCE_PAT="$(az account get-access-token \
-            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
-            --query accessToken -o tsv)"
-          echo "::add-mask::${VSCE_PAT}"
-          export VSCE_PAT
           published=0
           for vsix in artifacts/**/*.vsix; do
             echo "Publishing ${vsix}"
