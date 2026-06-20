@@ -70,8 +70,10 @@ jobs:
         include:
           - platform: darwin-arm64
             os: macos-14
-          - platform: darwin-x64
-            os: macos-13
+          # darwin-x64 (Intel mac) is dropped: GitHub is deprecating the free
+          # `macos-13` Intel runner and it no longer allocates (jobs queue
+          # indefinitely). Restore this leg once an Intel runner is available
+          # (paid large runner) or via an Apple-Silicon → x86_64 cross-compile.
           - platform: linux-x64
             os: ubuntu-latest
           - platform: win32-x64
@@ -208,7 +210,7 @@ jobs:
           set -euo pipefail
           base="https://github.com/${PRODUCT_REPO}/releases/download/v${VERSION}"
           sha() { cut -d' ' -f1 "dist/osprey-${VERSION}-$1.tar.gz.sha256"; }
-          arm=$(sha darwin-arm64); intel=$(sha darwin-x64); linux=$(sha linux-x64)
+          arm=$(sha darwin-arm64); linux=$(sha linux-x64)
           mkdir -p tap/Formula
           cat > tap/Formula/osprey.rb <<RUBY
           # typed: false
@@ -220,13 +222,10 @@ jobs:
             depends_on "llvm"
 
             on_macos do
+              # Apple Silicon only — no Intel mac build (see release.yml matrix).
               on_arm do
                 url "${base}/osprey-${VERSION}-darwin-arm64.tar.gz"
                 sha256 "${arm}"
-              end
-              on_intel do
-                url "${base}/osprey-${VERSION}-darwin-x64.tar.gz"
-                sha256 "${intel}"
               end
             end
 
@@ -333,7 +332,7 @@ jobs:
       matrix:
         include:
           - { os: macos-14,      target: darwin-arm64, artifact: darwin-arm64 }
-          - { os: macos-13,      target: darwin-x64,   artifact: darwin-x64 }
+          # darwin-x64 dropped — see the build matrix note (no Intel runner).
           - { os: ubuntu-latest, target: linux-x64,    artifact: linux-x64 }
           - { os: windows-latest, target: win32-x64,   artifact: win32-x64 }
     steps:
