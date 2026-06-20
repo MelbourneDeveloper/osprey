@@ -153,11 +153,36 @@ jobs:
           fail_on_unmatched_files: true
 
   # --------------------------------------------------------------------------
+  # Token preflight — brew/scoop (BREW_SCOOP_PAT) and Open VSX (OPEN_VSX_PAT) use
+  # standing tokens that can't be minted from OIDC. Probe them once so those jobs
+  # SKIP cleanly when the token isn't configured (the Marketplace OIDC publish +
+  # binaries + GitHub Release + site still ship). Secrets aren't readable in a
+  # job-level `if:`, so we surface their presence as booleans here. Add the
+  # secrets later and re-run the skipped jobs — no re-tag needed.
+  preflight:
+    name: Probe optional publish tokens
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_brew: ${{ steps.probe.outputs.has_brew }}
+      has_ovsx: ${{ steps.probe.outputs.has_ovsx }}
+    steps:
+      - id: probe
+        env:
+          BREW_SCOOP_PAT: ${{ secrets.BREW_SCOOP_PAT }}
+          OPEN_VSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BREW_SCOOP_PAT:-}" ]; then echo "has_brew=true" >> "$GITHUB_OUTPUT"; else echo "has_brew=false" >> "$GITHUB_OUTPUT"; echo "::warning::BREW_SCOOP_PAT not set — Homebrew + Scoop publish will be skipped"; fi
+          if [ -n "${OPEN_VSX_PAT:-}" ];   then echo "has_ovsx=true" >> "$GITHUB_OUTPUT"; else echo "has_ovsx=false" >> "$GITHUB_OUTPUT"; echo "::warning::OPEN_VSX_PAT not set — Open VSX publish will be skipped"; fi
+
+  # --------------------------------------------------------------------------
   # Homebrew tap — shape from templates/gh-actions/publish-brew-tap.yml, adapted
   # to install the runtime libs and depend on llvm (osprey shells out to it).
   brew:
     name: Publish Homebrew formula
-    needs: [version, github-release]
+    needs: [version, github-release, preflight]
+    if: ${{ needs.preflight.outputs.has_brew == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -227,7 +252,8 @@ jobs:
   # llc/clang/gcc at compile time. [WINDOWS-PORT]
   scoop:
     name: Publish Scoop manifest
-    needs: [version, github-release]
+    needs: [version, github-release, preflight]
+    if: ${{ needs.preflight.outputs.has_brew == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -353,10 +379,14 @@ jobs:
           retention-days: 7
 
   # --------------------------------------------------------------------------
-  # Marketplace publish — uses a VS Code Marketplace PAT scoped to the protected
-  # `release` environment (Basilisk pipeline shape). The token is only ever an
-  # env var, never on the command line. Requires the VSCODE_MARKETPLACE_PAT
-  # secret on the `release` environment (or repo).
+  # Marketplace publish — passwordless via Microsoft Entra ID OIDC. The `release`
+  # environment gives the GitHub OIDC subject the stable
+  # repo:MelbourneDeveloper/osprey:environment:release shape that the shared
+  # `Nimblesite-VSCode-Marketplace` app's federated credential trusts; the
+  # short-lived Marketplace token is minted from that session and handed to vsce
+  # via VSCE_PAT — no PAT is stored. AZURE_CLIENT_ID + AZURE_TENANT_ID are the
+  # non-sensitive identifiers of the shared app/tenant. See
+  # Nimblesite/NimblesiteDeployment docs/vscode-marketplace-oidc.md.
   publish-marketplace:
     name: Publish VSIX to VS Code Marketplace
     needs: [version, vsix]
@@ -365,6 +395,7 @@ jobs:
     environment: release
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
@@ -372,24 +403,30 @@ jobs:
         with:
           pattern: osprey-vsix-*
           path: artifacts
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
       # One `vsce publish` per platform-specific VSIX — vsce silently uses only
       # the first when several are globbed into a single call. A hyphenated tag
-      # (v1.2.3-rc.1) is a prerelease and gets --pre-release.
-      - name: Publish each platform VSIX
-        env:
-          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
+      # (v1.2.3-rc.1) is a prerelease and gets --pre-release. The Marketplace
+      # token is minted from the Entra OIDC session via az; the resource GUID is
+      # the immutable first-party app id vsce authenticates against.
+      - name: Publish each platform VSIX (Entra OIDC, no PAT)
         run: |
           set -euo pipefail
-          if [ -z "${VSCE_PAT:-}" ]; then
-            echo "::error::VSCODE_MARKETPLACE_PAT secret is not set; cannot publish to the Marketplace"
-            exit 1
-          fi
           shopt -s globstar nullglob
           flag=""
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
             flag="--pre-release"
             echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
           fi
+          VSCE_PAT="$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv)"
+          echo "::add-mask::${VSCE_PAT}"
+          export VSCE_PAT
           published=0
           for vsix in artifacts/**/*.vsix; do
             echo "Publishing ${vsix}"
@@ -409,7 +446,8 @@ jobs:
   # publish so one registry hiccup never blocks the other.
   publish-openvsx:
     name: Publish VSIX to Open VSX
-    needs: [version, vsix]
+    needs: [version, vsix, preflight]
+    if: ${{ needs.preflight.outputs.has_ovsx == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release
