@@ -517,5 +517,9 @@ jobs:
   deploy-webcompiler:
     name: Deploy web compiler
     needs: [github-release]
+    # Non-blocking: the browser compiler on Fly.io is an optional add-on, not a
+    # release artifact. A Fly outage or an invalid/banned FLY_API_TOKEN must not
+    # mark the whole release (VSIX + binaries + site) as failed.
+    continue-on-error: true
     uses: ./.github/workflows/deploy-webcompiler.yml
     secrets: inherit
