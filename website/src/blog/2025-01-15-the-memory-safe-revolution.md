@@ -18,12 +18,13 @@ This isn't just another trend—it's a fundamental shift that will reshape how w
 Traditional systems languages like C and C++ have powered our digital infrastructure for decades. But their flexibility comes with a devastating cost: **memory vulnerabilities are endemic**. Buffer overflows, use-after-free bugs, and null pointer dereferences aren't edge cases—they're the primary attack vectors compromising our most critical systems.
 
 ```osprey
-// In Osprey, this is impossible - the type system prevents null access
-fn processUser(user: User) -> Result<String, Error> {
-  match user.email {
-    Some(email) -> Ok("User has email: " + email),
-    None -> Err("User email not provided")
-  }
+// Osprey has no null. Absence is a value you must handle explicitly,
+// so "forgot to check for null" simply cannot happen.
+type Email = Provided { address: string } | Absent
+
+fn describeEmail(e: Email) -> string = match e {
+    Provided { address } => "User has email: ${address}"
+    Absent               => "User email not provided"
 }
 ```
 
@@ -41,35 +42,30 @@ While the memory safety crisis unfolds, functional programming is experiencing u
 
 ### **Immutability by Default**
 ```osprey
-// Osprey makes immutability natural and efficient
-let users = [
-  { name: "Alice", age: 30 },
-  { name: "Bob", age: 25 }
-]
+type User = { name: string, age: int, status: string }
 
-// This creates a new list without mutating the original
-let adults = users
-  |> filter(u -> u.age >= 18)
-  |> map(u -> { ...u, status: "verified" })
+let alice = User { name: "Alice", age: 30, status: "new" }
+
+// Record "update" returns a NEW value — alice is untouched.
+let verified = alice { status: "verified" }
+
+// Persistent collections behave the same way. listAppend returns a new
+// list that shares structure with the old one; nothing is mutated.
+let base = listAppend(listAppend(List(), alice), verified)
+let more = listAppend(base, alice { name: "Bob", age: 25 })
+// base still has length 2; `more` has length 3.
 ```
 
 ### **Fearless Concurrency**
-In Osprey, our **fiber-based concurrency model** makes parallel programming intuitive:
+In Osprey, our **fiber-based concurrency model** makes parallel programming intuitive. Fibers are spawned with `spawn { ... }` and joined with `await(...)`:
 
 ```osprey
-// Launch multiple async operations that can't cause data races
-fn fetchUserData(userId: String) -> Fiber<UserProfile> {
-  fiber {
-    let profile = fetch("/api/users/" + userId)
-    let preferences = fetch("/api/preferences/" + userId)
-    let activity = fetch("/api/activity/" + userId)
-    
-    UserProfile {
-      profile: profile.await,
-      preferences: preferences.await,
-      activity: activity.await
-    }
-  }
+// Launch isolated async operations that can't cause data races.
+fn fetchUserData(userId: int) -> int ![Logger] = {
+    let profile     = spawn { fetchProfile(userId) }
+    let preferences = spawn { fetchPreferences(userId) }
+    let activity    = spawn { fetchActivity(userId) }
+    await(profile) + await(preferences) + await(activity)
 }
 ```
 
@@ -84,17 +80,16 @@ Most modern languages adopted async/await as their concurrency solution. But as 
 Research from functional programming communities shows a clear alternative: **structured concurrency with lightweight threads**. This is exactly what Osprey's fiber system provides.
 
 ```osprey
-// Structured concurrency ensures all child operations complete
-fn processUsers(users: List<User>) -> Result<List<ProcessedUser>, Error> {
-  fiberGroup {
-    users.map(user -> 
-      fiber { processUserData(user) }
-    )
-  }.awaitAll()
+// Structured concurrency: spawn child fibers, then await each result.
+fn processBatch() -> int ![Logger] = {
+    let a = spawn { processOne(1) }
+    let b = spawn { processOne(2) }
+    let c = spawn { processOne(3) }
+    await(a) + await(b) + await(c)
 }
 ```
 
-When a `fiberGroup` exits, all child fibers are automatically canceled if they haven't completed. No orphaned operations, no resource leaks.
+Fibers are isolated execution contexts that communicate by message passing rather than shared memory — so there are no orphaned operations sharing mutable state behind your back.
 
 ## The Enterprise Shift is Already Happening
 
@@ -108,7 +103,7 @@ Major tech companies are making the transition:
 But here's what's missing: most memory-safe languages sacrifice either **performance** or **expressiveness**. Rust achieves memory safety but has a notoriously steep learning curve. Go prioritizes simplicity but lacks advanced type system features.
 
 **Osprey bridges this gap** by combining:
-- **Memory safety** through ownership and borrowing
+- **Memory safety** without manual memory management
 - **Functional expressiveness** with pattern matching and type inference  
 - **Zero-cost abstractions** that compile to efficient native code
 - **Modern concurrency** with structured fiber programming
@@ -118,22 +113,20 @@ But here's what's missing: most memory-safe languages sacrifice either **perform
 One of Osprey's most powerful features is its **exhaustive pattern matching** system:
 
 ```osprey
-type HttpResponse = 
-  | Success(data: Json, status: Int)
-  | ClientError(message: String, status: Int)
-  | ServerError(message: String, status: Int)
-  | NetworkError(timeout: Boolean)
+type ApiResult =
+    Body          { data: string, status: int }
+    | ClientError { message: string, status: int }
+    | ServerError { message: string }
+    | NetworkDown { timedOut: bool }
 
-fn handleResponse(response: HttpResponse) -> String {
-  match response {
-    Success(data, 200) -> "OK: " + data.toString(),
-    Success(data, status) -> "Success with status " + status.toString(),
-    ClientError(msg, 404) -> "Not found: " + msg,
-    ClientError(msg, status) -> "Client error " + status.toString() + ": " + msg,
-    ServerError(msg, _) -> "Server error: " + msg,
-    NetworkError(true) -> "Request timed out",
-    NetworkError(false) -> "Network connection failed"
-  }
+fn handleResponse(r: ApiResult) -> string = match r {
+    Body { data, status }           => "${toString(status)} OK: ${data}"
+    ClientError { message, status } => "client ${toString(status)}: ${message}"
+    ServerError { message }         => "server error: ${message}"
+    NetworkDown { timedOut }        => match timedOut {
+        true  => "request timed out"
+        false => "network connection failed"
+    }
 }
 ```
 
@@ -143,50 +136,50 @@ The compiler **guarantees** you handle every case. No null pointer exceptions, n
 
 Memory safety typically comes with runtime overhead—garbage collection pauses, reference counting costs, or dynamic checks. **Osprey takes a different approach**:
 
-Our **compile-time ownership analysis** eliminates most runtime safety checks while providing **zero-cost abstractions**. When you write high-level functional code, the compiler generates efficient imperative machine code.
+Compile-time analysis eliminates most runtime safety checks while providing **zero-cost abstractions**. When you write high-level functional code, the compiler generates efficient imperative machine code.
 
 ```osprey
-// High-level functional code...
-let result = numbers
-  |> filter(n -> n > 0)
-  |> map(n -> n * 2)  
-  |> reduce(0, (+))
+fn add(a: int, b: int) -> int = a + b
 
-// ...compiles to efficient loops with no allocations
+// High-level functional code...
+let result = range(1, 100)
+    |> filter(fn(n: int) => n > 0)
+    |> map(fn(n: int) => n * 2)
+    |> fold(0, add)
+
+// ...compiles to a single fused loop with no intermediate lists.
 ```
 
 ## What Makes Osprey Different
 
-### **Module System with Isolation**
-Osprey's module system prevents the kind of global state issues that plague large codebases:
+### **Immutable State, No Hidden Globals**
+Osprey threads state explicitly as immutable values instead of hiding it in mutable globals — exactly the kind of shared state that plagues large codebases. A cache is just an immutable `Map` passed in and returned:
 
 ```osprey
-module UserService {
-  private let cache = LRUCache.new<String, User>(1000)
-  
-  export fn getUser(id: String) -> Result<User, Error> {
-    match cache.get(id) {
-      Some(user) -> Ok(user),
-      None -> {
-        let user = Database.fetchUser(id)?
-        cache.set(id, user)
-        Ok(user)
-      }
+fn cachedName(id: string, cache: Map<string, string>) -> string =
+    match cache[id] {
+        Success { value }   => value
+        Error   { message } => "miss"
     }
-  }
-}
+
+// Growing the cache returns a NEW map — old versions stay valid.
+let c1 = mapSet(Map(), "u1", "Alice")
+let c2 = mapSet(c1, "u2", "Bob")
 ```
 
 ### **Effect System for Controlled Side Effects**
-Not all operations are pure, but Osprey's effect system makes side effects **explicit and controllable**:
+Not all operations are pure, but Osprey's effect system makes side effects **explicit and controllable**. Effects are declared in the signature with `![...]` and performed with `perform`; a handler decides what they actually do:
 
 ```osprey
-fn saveUser(user: User) -> IO<Result<UserId, DatabaseError>> {
-  io {
-    let validation = validateUser(user)  // Pure function
-    let saved = Database.insert(user)?   // Effectful operation
-    Ok(saved.id)
-  }
+effect Db {
+    insert: fn(User) -> int
+}
+
+fn saveUser(user: User) -> int ![Db, Logger] = {
+    perform Logger.log("validating user")
+    let id = perform Db.insert(user)
+    perform Logger.log("saved ${toString(id)}")
+    id
 }
 ```
 
@@ -207,4 +200,6 @@ The question isn't whether the industry will adopt memory-safe functional langua
 
 ---
 
-*Want to try Osprey yourself? Check out our [interactive playground](/playground/) or dive into the [documentation](/docs/) to get started.* 
+*Want to try Osprey yourself? Check out our [interactive playground](/playground/) or dive into the [documentation](/docs/) to get started.*
+
+> **Editor's note (updated 2026-06-20):** This post was first published in January 2025, early in Osprey's development. Osprey's syntax has evolved considerably since then — among other changes, the language dropped `Option`/`Some`/`None` in favour of explicit union variants, settled on `spawn`/`await(...)` for fibers, `=>` for match arms, expression-bodied functions, and lowercase primitive types (`int`/`string`/`bool`). The code samples above have been revised to match the current language. The original article is preserved unchanged in this site's Git history — browse the [repository](https://github.com/MelbourneDeveloper/osprey) and view this file's history to read it exactly as first published.

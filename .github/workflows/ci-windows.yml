@@ -5,6 +5,12 @@ name: CI (Windows)
 on:
   pull_request:
     branches: [main]
+    # Website-only PRs don't touch the compiler — skip the Windows build entirely.
+    # windows-core is NOT a required status check, so skipping the whole workflow
+    # via path filtering here is safe and won't leave a pending check blocking the
+    # merge. (ci.yml's required `ci` job uses job-level `if` skipping instead.)
+    paths-ignore:
+      - 'website/**'
   workflow_dispatch:
 
 concurrency:

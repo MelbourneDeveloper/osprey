@@ -12,10 +12,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ─── Change detection ───────────────────────────────────────────────────────
+  # Website-only PRs (changes confined to website/**) don't need the compiler, C
+  # runtime, VS Code extension or web-compiler toolchain. Detect whether anything
+  # OUTSIDE website/ changed so the heavy jobs below can skip.
+  #
+  # Required-check note: the `ci` job ("Test, Format, Build & Validate") is the
+  # required status check on `main` (ruleset 6154907). Skipping a job via an `if:`
+  # condition reports its check as "skipped", which branch protection treats as
+  # PASSING — so a website-only PR still merges. Do NOT convert this to an
+  # `on: paths:` filter: a workflow skipped by path filtering leaves the required
+  # check pending forever and blocks the merge.
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      website: ${{ steps.filter.outputs.website }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            website:
+              - 'website/**'
+            code:
+              - '!website/**'
+
   ci:
     # IMPORTANT: this name is the required status check on `main` (ruleset 6154907).
     # Renaming it will break branch protection — coordinate with the ruleset update.
     name: Test, Format, Build & Validate
+    needs: changes
+    # Skip the full compiler/runtime/extension pipeline for website-only PRs.
+    # A skipped required check reports as passing (see the `changes` job note).
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: full compiler build + C runtime compile + extension
     # tests + Docker web compiler test requires ~15 min
@@ -124,6 +157,9 @@ jobs:
   # (examples/failscompilation) must stay within the FC_EXPECTED_ESCAPES ratchet.
   rust:
     name: Rust Compiler (fmt, clippy, test, differential)
+    needs: changes
+    # Compiler-only gate — irrelevant to website-only PRs, so skip them.
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
