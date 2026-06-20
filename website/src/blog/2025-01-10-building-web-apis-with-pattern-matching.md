@@ -40,284 +40,155 @@ app.post('/users', async (req, res) => {
 
 ## Modeling API Responses with Algebraic Data Types
 
-Osprey takes a different approach. We model all possible outcomes as **algebraic data types**:
+Osprey takes a different approach. We model all possible outcomes as a single **algebraic data type** — a union whose variants each carry their own record of fields:
 
 ```osprey
-type CreateUserResult = 
-  | Success(user: User, id: UserId)
-  | ValidationError(fields: List<String>, messages: List<String>)
-  | DuplicateEmail(email: String)
-  | DatabaseTimeout(retryAfter: Int)
-  | DatabaseError(message: String)
-  | InternalError(context: String)
-
-type ApiResponse<T> = 
-  | Ok(data: T, status: Int)
-  | Error(message: String, code: String, status: Int)
+type CreateUserResult =
+    Created            { user: User, id: UserId }
+    | ValidationFailed { fields: List<string>, messages: List<string> }
+    | DuplicateEmail   { email: string }
+    | DatabaseTimeout  { retryAfter: int }
+    | DatabaseFailure  { message: string }
+    | InternalFailure  { context: string }
 ```
 
-Now our API handler **must** handle every case:
+Now our API handler **must** handle every case. A small helper keeps each arm to a single line — `HttpResponse` is Osprey's built-in response record:
 
 ```osprey
-fn createUserHandler(request: HttpRequest) -> HttpResponse {
-  let userData = parseUserData(request.body)
-  
-  match createUser(userData) {
-    Success(user, id) -> 
-      Ok({ user: user, id: id }, 201),
-      
-    ValidationError(fields, messages) ->
-      Error(
-        "Validation failed: " + messages.join(", "),
-        "VALIDATION_ERROR",
-        400
-      ),
-      
-    DuplicateEmail(email) ->
-      Error(
-        "Email " + email + " is already registered",
-        "DUPLICATE_EMAIL", 
-        409
-      ),
-      
-    DatabaseTimeout(retryAfter) ->
-      Error(
-        "Database temporarily unavailable",
-        "DATABASE_TIMEOUT",
-        503
-      ).withHeader("Retry-After", retryAfter.toString()),
-      
-    DatabaseError(message) ->
-      Error(
-        "Database error occurred",
-        "DATABASE_ERROR",
-        502
-      ).withLogging("Database error: " + message),
-      
-    InternalError(context) ->
-      Error(
-        "Internal server error",
-        "INTERNAL_ERROR",
-        500
-      ).withLogging("Internal error in " + context)
-  }
+fn json(status: int, body: string) -> HttpResponse = HttpResponse {
+    status: status,
+    headers: "Content-Type: application/json",
+    contentType: "application/json",
+    streamFd: -1,
+    isComplete: true,
+    partialBody: body
 }
+
+fn createUserHandler(request: HttpRequest) -> HttpResponse =
+    match createUser(parseUserData(request.body)) {
+        Created { user, id } =>
+            json(201, "{\"id\": ${toString(id)}}")
+        ValidationFailed { fields, messages } =>
+            json(400, "{\"error\": \"validation failed\"}")
+        DuplicateEmail { email } =>
+            json(409, "{\"error\": \"${email} is already registered\"}")
+        DatabaseTimeout { retryAfter } =>
+            json(503, "{\"error\": \"retry after ${toString(retryAfter)}s\"}")
+        DatabaseFailure { message } =>
+            json(502, "{\"error\": \"database error\"}")
+        InternalFailure { context } =>
+            json(500, "{\"error\": \"internal error in ${context}\"}")
+    }
 ```
 
-**The compiler guarantees** you handle every case. If you add a new error type, every pattern match that handles `CreateUserResult` will fail to compile until you add the new case.
+**The compiler guarantees** you handle every case. If you add a new variant to `CreateUserResult`, every `match` that handles it will fail to compile until you add the new arm.
 
-## Building a Complete REST API
+## Building a Complete User API
 
-Let's build a complete user management API to see how this scales:
+Let's build out a user management API to see how this scales. Osprey has no `module` keyword yet — types and functions live at the top level. Each operation returns a domain union, so the caller is forced to handle every outcome:
 
 ```osprey
-module UserApi {
-  type User = {
-    id: UserId,
-    email: String,
-    name: String,
-    createdAt: DateTime,
-    isActive: Boolean
-  }
-  
-  type UserFilter = 
-    | All
-    | Active
-    | Inactive
-    | CreatedAfter(date: DateTime)
-    | EmailDomain(domain: String)
-  
-  type UserOperation<T> = 
-    | Success(data: T)
-    | NotFound(id: UserId)
-    | ValidationError(field: String, message: String)
-    | PermissionDenied(action: String)
-    | DatabaseError(details: String)
-    | RateLimited(resetTime: DateTime)
-  
-  // GET /users
-  fn listUsers(filter: UserFilter, auth: AuthToken) -> UserOperation<List<User>> {
-    if (!auth.hasPermission("users:read")) {
-      return PermissionDenied("list users")
+type User = { id: int, email: string, name: string, isActive: bool }
+
+type UserFilter = All | Active | Inactive | EmailDomain { domain: string }
+
+type UserQuery =
+    Found       { user: User }
+    | Missing     { id: int }
+    | Forbidden   { action: string }
+    | QueryFailed { details: string }
+
+// GET /users/:id — permission gating is just another match arm.
+// Osprey is expression-based, so there is no early `return`.
+fn getUser(id: int, auth: AuthToken) -> UserQuery =
+    match hasPermission(auth, "users:read") {
+        false => Forbidden { action: "read user" }
+        true  => lookupUser(id)
     }
-    
-    match Database.queryUsers(filter) {
-      Ok(users) -> Success(users),
-      Err(dbError) -> DatabaseError(dbError.toString())
-    }
-  }
-  
-  // GET /users/:id
-  fn getUser(id: UserId, auth: AuthToken) -> UserOperation<User> {
-    if (!auth.hasPermission("users:read")) {
-      return PermissionDenied("read user")
-    }
-    
-    match Database.findUser(id) {
-      Some(user) -> Success(user),
-      None -> NotFound(id)
-    }
-  }
-  
-  // PUT /users/:id
-  fn updateUser(id: UserId, updates: UserUpdates, auth: AuthToken) -> UserOperation<User> {
-    if (!auth.hasPermission("users:write")) {
-      return PermissionDenied("update user")
-    }
-    
-    match validateUserUpdates(updates) {
-      Invalid(field, message) -> ValidationError(field, message),
-      Valid(validUpdates) -> 
-        match Database.updateUser(id, validUpdates) {
-          Some(updatedUser) -> Success(updatedUser),
-          None -> NotFound(id)
+```
+
+Validation and lookup compose as nested matches. The built-in `Result<T, E>` type (whose variants are `Success` and `Error`) threads naturally into our domain union:
+
+```osprey
+// PUT /users/:id
+fn updateUser(id: int, updates: UserUpdates, auth: AuthToken) -> UserQuery =
+    match hasPermission(auth, "users:write") {
+        false => Forbidden { action: "update user" }
+        true  => match validate(updates) {
+            Error   { message } => QueryFailed { details: message }
+            Success { value }   => applyUpdate(id, value)
         }
     }
-  }
-}
 ```
 
 ## HTTP Response Conversion
 
-Converting our domain types to HTTP responses becomes a pure mapping function:
+Converting our domain types to HTTP responses becomes a pure mapping function that reuses the `json` helper from earlier:
 
 ```osprey
-fn toHttpResponse<T>(operation: UserOperation<T>, encoder: T -> Json) -> HttpResponse {
-  match operation {
-    Success(data) -> 
-      HttpResponse(200, encoder(data)),
-      
-    NotFound(id) ->
-      HttpResponse(404, {
-        error: "User not found",
-        code: "USER_NOT_FOUND", 
-        userId: id.toString()
-      }),
-      
-    ValidationError(field, message) ->
-      HttpResponse(400, {
-        error: "Validation failed",
-        code: "VALIDATION_ERROR",
-        field: field,
-        message: message
-      }),
-      
-    PermissionDenied(action) ->
-      HttpResponse(403, {
-        error: "Permission denied",
-        code: "PERMISSION_DENIED",
-        action: action
-      }),
-      
-    DatabaseError(details) ->
-      HttpResponse(500, {
-        error: "Internal server error",
-        code: "DATABASE_ERROR"
-      }).withLogging("DB Error: " + details),
-      
-    RateLimited(resetTime) ->
-      HttpResponse(429, {
-        error: "Rate limit exceeded", 
-        code: "RATE_LIMITED"
-      }).withHeader("X-Rate-Limit-Reset", resetTime.toIsoString())
-  }
+fn toHttpResponse(q: UserQuery) -> HttpResponse = match q {
+    Found { user }          => json(200, "{\"email\": \"${user.email}\"}")
+    Missing { id }          => json(404, "{\"error\": \"user ${toString(id)} not found\"}")
+    Forbidden { action }    => json(403, "{\"error\": \"permission denied: ${action}\"}")
+    QueryFailed { details } => json(500, "{\"error\": \"internal error\"}")
 }
 ```
 
 ## Request Routing with Pattern Matching
 
-Osprey's pattern matching shines for request routing too:
+Osprey matches a single value per `match`, so multi-key routing is expressed as **nested matches** rather than tuple patterns:
 
 ```osprey
-fn routeRequest(request: HttpRequest) -> HttpResponse {
-  match (request.method, request.path, request.auth) {
-    (GET, "/users", Some(auth)) ->
-      let filter = parseUserFilter(request.query)
-      UserApi.listUsers(filter, auth) |> toHttpResponse(encodeUserList),
-      
-    (GET, "/users/" + userId, Some(auth)) ->
-      match UserId.parse(userId) {
-        Some(id) -> UserApi.getUser(id, auth) |> toHttpResponse(encodeUser),
-        None -> HttpResponse(400, { error: "Invalid user ID" })
-      },
-      
-    (PUT, "/users/" + userId, Some(auth)) ->
-      match (UserId.parse(userId), parseUserUpdates(request.body)) {
-        (Some(id), Some(updates)) -> 
-          UserApi.updateUser(id, updates, auth) |> toHttpResponse(encodeUser),
-        (None, _) -> 
-          HttpResponse(400, { error: "Invalid user ID" }),
-        (_, None) -> 
-          HttpResponse(400, { error: "Invalid request body" })
-      },
-      
-    (_, _, None) ->
-      HttpResponse(401, { error: "Authentication required" }),
-      
-    (method, path, _) ->
-      HttpResponse(404, { 
-        error: "Endpoint not found",
-        method: method.toString(),
-        path: path 
-      })
-  }
-}
+fn routeRequest(method: string, path: string, auth: AuthToken) -> HttpResponse =
+    match method {
+        "GET" => match path {
+            "/health" => json(200, "{\"status\": \"ok\"}")
+            "/users"  => toHttpResponse(getUser(1, auth))
+            _         => json(404, "{\"error\": \"not found\"}")
+        }
+        "POST" => json(201, "{\"message\": \"created\"}")
+        _      => json(405, "{\"error\": \"method not allowed\"}")
+    }
 ```
 
 ## Middleware as Function Composition
 
-Middleware becomes simple function composition:
+Functions are first-class, so middleware is just a function that wraps a handler. The `next` parameter is the handler to run if the gate passes — again, no early return, the gate is simply a `match`:
 
 ```osprey
-fn withRateLimit<T>(handler: HttpRequest -> T, limit: RateLimit) -> HttpRequest -> UserOperation<T> {
-  fn(request) {
-    match RateLimit.check(request.clientIp, limit) {
-      Allowed -> Success(handler(request)),
-      Limited(resetTime) -> RateLimited(resetTime)
+fn withAuth(
+    auth: AuthToken,
+    action: string,
+    next: fn(AuthToken) -> UserQuery
+) -> UserQuery =
+    match hasPermission(auth, action) {
+        false => Forbidden { action: action }
+        true  => next(auth)
     }
-  }
-}
-
-fn withAuth<T>(handler: (HttpRequest, AuthToken) -> T) -> HttpRequest -> UserOperation<T> {
-  fn(request) {
-    match Auth.validateToken(request.headers.authorization) {
-      Valid(token) -> Success(handler(request, token)),
-      Invalid -> PermissionDenied("invalid token"),
-      Missing -> PermissionDenied("authentication required")
-    }
-  }
-}
-
-// Compose middleware naturally
-let protectedHandler = listUsersHandler
-  |> withAuth
-  |> withRateLimit(RateLimit.perMinute(100))
 ```
+
+Because handlers are ordinary values, you compose cross-cutting concerns the same way you compose any other function — with the pipe operator `|>`.
 
 ## Testing Becomes Trivial
 
-Since everything is a pure function returning data, testing is incredibly straightforward:
+Since every handler is a pure function over data, testing is incredibly straightforward. Osprey programs are exercised with the **differential harness**: a program's `stdout` is byte-compared against a checked-in `.expectedoutput` file. A test is just a program that prints each outcome:
 
 ```osprey
-test "user creation handles all error cases" {
-  // Test successful creation
-  assert UserApi.createUser(validUserData) == Success(expectedUser, expectedId)
-  
-  // Test validation errors
-  assert UserApi.createUser(invalidEmail) == ValidationError(["email"], ["Invalid format"])
-  
-  // Test duplicate email
-  assert UserApi.createUser(duplicateEmail) == DuplicateEmail("test@example.com")
-  
-  // The compiler ensures we test every possible return value
+fn main() -> int {
+    print(describe(getUser(1, adminAuth)))   // Found ...
+    print(describe(getUser(2, adminAuth)))   // Forbidden ...
+    print(describe(getUser(9, adminAuth)))   // Missing ...
+    0
 }
 ```
+
+Because the result of each call is plain data, the expected output is completely deterministic — there is no hidden state to mock.
 
 ## The Reliability Advantage
 
 This approach eliminates entire categories of production bugs:
 
-- **No null reference exceptions** - Options and Results make nullability explicit
+- **No null reference exceptions** - Absence is modelled explicitly with union variants
 - **No unhandled error cases** - Pattern matching forces you to handle every scenario  
 - **No silent failures** - Every operation's outcome is explicitly modeled
 - **No incorrect status codes** - HTTP responses are generated deterministically
@@ -325,16 +196,18 @@ This approach eliminates entire categories of production bugs:
 
 ## Performance Benefits
 
-Despite the high-level abstractions, Osprey compiles to efficient code:
+Despite the high-level abstractions, Osprey compiles to efficient code. Functional pipelines over ranges are fused into a single loop:
 
 ```osprey
-// This high-level code...
-let result = users
-  |> filter(u -> u.isActive)
-  |> map(u -> { ...u, lastSeen: now() })
-  |> take(10)
+fn add(a: int, b: int) -> int = a + b
 
-// ...compiles to an efficient loop with no intermediate allocations
+// This high-level code...
+let result = range(1, 1000)
+    |> filter(fn(n: int) => (n % 2) == 0)
+    |> map(fn(n: int) => n * n)
+    |> fold(0, add)
+
+// ...compiles to a single loop with no intermediate lists (stream fusion).
 ```
 
 The pattern matching compiles to efficient jump tables, and the functional pipelines are optimized away entirely.
@@ -349,4 +222,6 @@ The functional programming revolution isn't coming—**it's here**. And for web 
 
 ---
 
-*Ready to try building your own type-safe APIs? Browse the [documentation](/docs/) or experiment in the [playground](/playground/).* 
+*Ready to try building your own type-safe APIs? Browse the [documentation](/docs/) or experiment in the [playground](/playground/).*
+
+> **Editor's note (updated 2026-06-20):** This post was first published in January 2025, early in Osprey's development. Osprey's syntax has evolved considerably since then — among other changes, the language settled on `=>` for match arms, record-style union variants, expression-bodied functions, lowercase primitive types (`int`/`string`/`bool`), and `Result` with `Success`/`Error`. The code samples above have been revised to match the current language. The original article is preserved unchanged in this site's Git history — browse the [repository](https://github.com/MelbourneDeveloper/osprey) and view this file's history to read it exactly as first published.
