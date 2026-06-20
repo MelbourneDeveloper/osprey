@@ -2,11 +2,13 @@
 name: Deploy to GitHub Pages
 
 on:
-  # Deploy the live site whenever main is updated (e.g. a squash-merged PR),
-  # in addition to release-driven deploys (workflow_call from release.yml)
-  # and manual dispatch for emergency deploys.
-  push:
-    branches: [main]
+  # Reusable site deploy. It deliberately has NO `push` trigger — the live site
+  # only updates as part of a release. release.yml calls this (workflow_call)
+  # after the stable GitHub Release is created (a release made with the default
+  # GITHUB_TOKEN does not emit a `release: published` event that can start
+  # another workflow, so the release pipeline invokes this one directly).
+  # `workflow_dispatch` allows a manual redeploy. Nothing here fires on a push
+  # to main.
   workflow_call:
   workflow_dispatch:
 
