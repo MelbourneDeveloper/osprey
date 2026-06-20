@@ -10,3 +10,7 @@ out/
 # Release-time bundled artifacts (staged into the VSIX by release.yml; never committed)
 bin/
 shipwright.json
+
+# Generated at build time from the ONE canonical logo
+# (website/src/assets/images/logo.png) by scripts/sync-icon.mjs. Never committed.
+icon.png

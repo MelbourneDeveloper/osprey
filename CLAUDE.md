@@ -73,6 +73,9 @@ npm install && npm run dev       # Start local development server
 npm run build                    # Build static site
 ```
 
+**CSS HARD BUDGET 1.8K LOC** BLOGS, SPECS, DOCS = PROSE = SAME CSS NAME PREFIX PROSE
+**ZERO TAILWIND** CONVERT TO CSS IMMEDIATELY
+
 **WebCompiler (Browser-based):**
 ```bash
 cd webcompiler  

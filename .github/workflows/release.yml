@@ -165,7 +165,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Nimblesite/homebrew-tap
-          token: ${{ secrets.TAP_TOKEN }}
+          token: ${{ secrets.BREW_SCOOP_PAT }}
           path: tap
       - name: Write formula
         env:
@@ -235,7 +235,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Nimblesite/scoop-bucket
-          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          token: ${{ secrets.BREW_SCOOP_PAT }}
           path: bucket
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
@@ -341,18 +341,133 @@ jobs:
           set -euo pipefail
           exe=""; [ "${{ runner.os }}" = "Windows" ] && exe=".exe"
           unzip -l *.vsix | grep -F "extension/bin/${{ matrix.target }}/osprey${exe}"
-      - name: Publish to Marketplace
-        if: ${{ vars.SKIP_VSCE_PUBLISH != 'true' }}
-        working-directory: vscode-extension
-        run: npx vsce publish --packagePath $(ls *.vsix)
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      # Packaging is per-platform (each VSIX bundles the matching native binary);
+      # publishing is centralised in the publish-marketplace / publish-openvsx
+      # jobs so the registry tokens live in one least-privilege place.
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: osprey-vsix-${{ matrix.target }}
+          path: vscode-extension/*.vsix
+          if-no-files-found: error
+          retention-days: 7
 
   # --------------------------------------------------------------------------
-  # Website + web compiler deploy — only after everything above succeeds.
+  # Marketplace publish — passwordless via Microsoft Entra ID OIDC (copies the
+  # Deslop/Shipwright publish-marketplace shape). The `release` environment gives
+  # the GitHub OIDC subject the stable repo:MelbourneDeveloper/osprey:environment:release
+  # shape that the Entra app's federated credential trusts; the short-lived
+  # Marketplace token is minted from that session and handed to vsce via
+  # VSCE_PAT — no PAT secret is stored. Requires repo/environment secrets
+  # AZURE_CLIENT_ID + AZURE_TENANT_ID and an Entra app that co-publishes the
+  # `nimblesite` Marketplace publisher.
+  publish-marketplace:
+    name: Publish VSIX to VS Code Marketplace
+    needs: [version, vsix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: osprey-vsix-*
+          path: artifacts
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      # One `vsce publish` per platform-specific VSIX — vsce silently uses only
+      # the first when several are globbed into a single call. A hyphenated tag
+      # (v1.2.3-rc.1) is a prerelease and gets --pre-release.
+      - name: Publish each platform VSIX (Entra OIDC, no PAT)
+        run: |
+          set -euo pipefail
+          shopt -s globstar nullglob
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+            echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
+          fi
+          VSCE_PAT="$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv)"
+          echo "::add-mask::${VSCE_PAT}"
+          export VSCE_PAT
+          published=0
+          for vsix in artifacts/**/*.vsix; do
+            echo "Publishing ${vsix}"
+            npx --yes @vscode/vsce@3.9.2 publish --skip-duplicate ${flag} --packagePath "${vsix}"
+            published=$((published + 1))
+          done
+          if [ "${published}" -eq 0 ]; then
+            echo "::error::no VSIX artifacts found to publish"
+            exit 1
+          fi
+          echo "Published ${published} VSIX(es) to the Marketplace"
+
+  # --------------------------------------------------------------------------
+  # Open VSX publish — serves the VS Code forks (Cursor, Windsurf, …). Open VSX
+  # has no OIDC trusted-publishing path today, so this uses an Open VSX token
+  # scoped to the protected `release` environment. Independent of the Marketplace
+  # publish so one registry hiccup never blocks the other.
+  publish-openvsx:
+    name: Publish VSIX to Open VSX
+    needs: [version, vsix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: osprey-vsix-*
+          path: artifacts
+      - name: Publish each platform VSIX to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OVSX_PAT:-}" ]; then
+            echo "::error::OPEN_VSX_PAT secret is not set; cannot publish to Open VSX"
+            exit 1
+          fi
+          shopt -s globstar nullglob
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+            echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
+          fi
+          published=0
+          for vsix in artifacts/**/*.vsix; do
+            echo "Publishing ${vsix}"
+            npx --yes ovsx@1.0.0 publish --skip-duplicate ${flag} --packagePath "${vsix}"
+            published=$((published + 1))
+          done
+          if [ "${published}" -eq 0 ]; then
+            echo "::error::no VSIX artifacts found to publish"
+            exit 1
+          fi
+          echo "Published ${published} VSIX(es) to Open VSX"
+
+  # --------------------------------------------------------------------------
+  # Website deploy — the live site updates ONLY as part of a release (never on a
+  # push to main). Gated solely on the GitHub Release existing, so a Marketplace
+  # / brew / scoop hiccup never blocks the docs going live. Stable tags only:
+  # a SemVer prerelease tag (v1.2.3-rc.1) contains a hyphen and is skipped, so a
+  # prerelease never overwrites the live site.
   deploy-site:
-    name: Deploy website + web compiler
-    needs: [github-release, brew, scoop, vsix]
+    name: Deploy website to GitHub Pages
+    needs: [github-release]
+    if: ${{ !contains(github.ref_name, '-') }}
     uses: ./.github/workflows/deploy-pages.yml
     permissions:
       contents: read
@@ -361,6 +476,6 @@ jobs:
 
   deploy-webcompiler:
     name: Deploy web compiler
-    needs: [github-release, brew, scoop, vsix]
+    needs: [github-release]
     uses: ./.github/workflows/deploy-webcompiler.yml
     secrets: inherit

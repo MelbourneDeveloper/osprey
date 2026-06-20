@@ -6,6 +6,7 @@ date: 2026-05-17
 tags: ["blog", "collections", "data-structures", "functional-programming", "language-design"]
 author: "Christian Findlay"
 readingTime: 8
+image: /assets/images/blog/persistent-collections.png
 ---
 
 Osprey now has first-class persistent collections. **`List<T>` and `Map<K, V>` are immutable**, but "modifying" them is cheap because the runtime shares structure between versions. This post walks through what landed, how it works under the hood, and which papers we leaned on.

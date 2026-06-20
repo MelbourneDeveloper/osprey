@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Osprey Eng Blog</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-variant": "#2e3448",
+                      "surface-container": "#191f32",
+                      "on-primary-fixed-variant": "#004e5e",
+                      "primary-fixed": "#b2ebff",
+                      "on-tertiary-fixed-variant": "#643f00",
+                      "on-secondary-fixed-variant": "#3c4666",
+                      "primary": "#bdeeff",
+                      "secondary-fixed": "#dbe1ff",
+                      "on-secondary-container": "#adb7dd",
+                      "on-tertiary": "#462b00",
+                      "secondary": "#bbc5ec",
+                      "error": "#ffb4ab",
+                      "primary-container": "#77d7f4",
+                      "tertiary-fixed": "#ffddb5",
+                      "on-primary-container": "#005d70",
+                      "inverse-primary": "#00677d",
+                      "on-tertiary-container": "#764c00",
+                      "on-surface": "#dce1fb",
+                      "on-tertiary-fixed": "#2a1800",
+                      "on-secondary-fixed": "#0f1a38",
+                      "on-error": "#690005",
+                      "surface-dim": "#0c1325",
+                      "surface-container-highest": "#2e3448",
+                      "error-container": "#93000a",
+                      "outline": "#889297",
+                      "background": "#0c1325",
+                      "primary-fixed-dim": "#73d3f0",
+                      "on-error-container": "#ffdad6",
+                      "surface-tint": "#73d3f0",
+                      "surface-container-lowest": "#070d1f",
+                      "surface-container-low": "#151b2d",
+                      "surface": "#0c1325",
+                      "surface-container-high": "#23293d",
+                      "secondary-container": "#3e4868",
+                      "inverse-on-surface": "#2a3043",
+                      "surface-bright": "#33384c",
+                      "inverse-surface": "#dce1fb",
+                      "tertiary-container": "#ffbe65",
+                      "on-background": "#dce1fb",
+                      "tertiary": "#ffe1c0",
+                      "on-secondary": "#252f4e",
+                      "outline-variant": "#3e484c",
+                      "secondary-fixed-dim": "#bbc5ec",
+                      "on-surface-variant": "#bdc8cd",
+                      "tertiary-fixed-dim": "#fbba62",
+                      "on-primary-fixed": "#001f27",
+                      "on-primary": "#003642"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "margin-desktop": "48px",
+                      "base": "8px",
+                      "margin-mobile": "16px",
+                      "container-max": "1200px"
+              },
+              "fontFamily": {
+                      "label-caps": [
+                              "JetBrains Mono"
+                      ],
+                      "code-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "body-md": [
+                              "Geist"
+                      ],
+                      "body-lg": [
+                              "Geist"
+                      ],
+                      "headline-md": [
+                              "Geist"
+                      ],
+                      "headline-lg-mobile": [
+                              "Geist"
+                      ],
+                      "headline-lg": [
+                              "Geist"
+                      ]
+              },
+              "fontSize": {
+                      "label-caps": [
+                              "12px",
+                              {
+                                      "lineHeight": "1",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "code-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "1.3",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "30px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg": [
+                              "40px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+            },
+          }
+        }
+      </script>
+<style>
+        body {
+            background-color: theme('colors.surface-container-lowest');
+            color: theme('colors.on-surface');
+        }
+        .card-border {
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .chip-glow {
+            box-shadow: 0 0 8px rgba(119, 215, 244, 0.2);
+        }
+      </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full z-50 bg-surface-container-lowest dark:bg-surface-container-lowest border-b border-outline-variant dark:border-outline-variant flat no shadows flex justify-between items-center px-margin-mobile h-16">
+<button class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant transition-colors active:scale-95 duration-100 p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu</span>
+</button>
+<div class="font-label-caps text-label-caps tracking-widest text-primary dark:text-primary">
+            OSPREY ENG
+        </div>
+<button class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant transition-colors active:scale-95 duration-100 p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">search</span>
+</button>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-[80px] pb-16 px-margin-mobile flex flex-col gap-8 w-full max-w-container-max mx-auto">
+<!-- Hero Section / Featured Post -->
+<section class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps text-primary tracking-widest uppercase mb-2">Featured Release</div>
+<article class="bg-[#0D1836] rounded-xl card-border overflow-hidden relative flex flex-col">
+<div class="w-full h-48 bg-surface-container-high relative" data-alt="A futuristic, high-contrast digital abstract illustration representing a major software release. The scene features glowing electric cyan geometric wireframes constructing a central node, set against a deep midnight slate background. The lighting is dramatic and directional, evoking a sense of technological advancement and precision engineering within the Osprey software ecosystem." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAxn8ESFNENDNW_8lUcPnWkQKqVaG9VARfe0PIU85ejzeiLf7DxC-JA1gMPU1MVAomY93iWJT_3jboUer9ya3aOnzQCIW3GWk35nQFvTxxKsOXq2zUiINUvMz5B3IDprKf3twF42xNK_4j6Tt-ZSe__J2N-IjvF1ksSnmE5HYWSqo0r2yL5QvX-1nZJ2XvMDJwYe39ZQwUpYCMfGC-f-_JleaV7bjg2H5hzY2WNEkoF1Y2BvlNPwjY8B0Yt259KJ6NwFJAzdU4bopc')">
+<div class="absolute inset-0 bg-gradient-to-t from-[#0D1836] to-transparent"></div>
+</div>
+<div class="p-4 flex flex-col gap-3 relative z-10 -mt-6">
+<div class="flex gap-2">
+<span class="bg-primary/10 text-primary font-code-sm text-code-sm px-2 py-1 rounded chip-glow border border-primary/20">Release</span>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface leading-tight">Introducing Osprey 1.2: Distributed Stream Processing at Scale</h1>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-3">
+                        Our latest major release fundamentally changes how Osprey handles real-time data ingestion. We've completely rewritten the event bus architecture to support zero-copy streaming, resulting in a 400% throughput increase while reducing tail latency by an order of magnitude.
+                    </p>
+<div class="flex items-center justify-between mt-2 pt-4 border-t border-white/5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-sm" style="font-variation-settings: 'FILL' 0;">calendar_today</span>
+<span class="font-code-sm text-code-sm text-outline">Oct 24, 2024</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-sm" style="font-variation-settings: 'FILL' 0;">schedule</span>
+<span class="font-code-sm text-code-sm text-outline">12 min read</span>
+</div>
+</div>
+</div>
+</article>
+</section>
+<!-- Category Filter Scroller -->
+<div class="w-full overflow-x-auto pb-4 -mx-margin-mobile px-margin-mobile hide-scrollbar">
+<div class="flex gap-2 min-w-max">
+<button class="bg-primary/10 border border-primary text-primary font-label-caps text-label-caps px-4 py-2 rounded-full chip-glow transition-colors">ALL POSTS</button>
+<button class="bg-surface-container border border-white/10 text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps px-4 py-2 rounded-full transition-colors">ARCHITECTURE</button>
+<button class="bg-surface-container border border-white/10 text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps px-4 py-2 rounded-full transition-colors">OPEN SOURCE</button>
+<button class="bg-surface-container border border-white/10 text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps px-4 py-2 rounded-full transition-colors">PERFORMANCE</button>
+<button class="bg-surface-container border border-white/10 text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps px-4 py-2 rounded-full transition-colors">CULTURE</button>
+</div>
+</div>
+<!-- Article Stack -->
+<section class="flex flex-col gap-4">
+<!-- Article Card 1 -->
+<article class="bg-[#0D1836] rounded-xl p-4 card-border flex flex-col gap-3 transition-transform active:scale-[0.98]">
+<div class="flex justify-between items-start gap-4">
+<div class="flex flex-col gap-2 flex-grow">
+<span class="text-primary font-code-sm text-code-sm border border-primary/20 px-2 py-0.5 rounded w-max bg-primary/5">Architecture</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">Migrating to a Multi-Region Active-Active Setup</h2>
+</div>
+<div class="w-20 h-20 bg-surface-container rounded-lg flex-shrink-0" data-alt="A detailed digital rendering showing abstract server racks connected by glowing neon cyan network lines stretching across a stylized dark world map. The aesthetic is high-tech, precise, and moody, representing global multi-region cloud architecture." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCssMJdBXKctBVDFHzSmQPIMqGsGVKV1DMUcnzClYwqgySvCyu6KLc6emB9EXKLFNqs4W3_Wiz0X5jN0aLlZRPB5lMdWvEmjD4CVhjyQocHZqxEVdBoev9QD2xOz3XsZwMe9vpPGvcpASr0Hrzmb6ZFgxHH8SRKd5YDH7MEyanUhszgt41s-RQI0JoEwOYmyPPdyAJbAQaXBP_PqOp_3dpKFM4fR1xm2pA6YSzewhdRgChNwZE1elUFL7qSs_ZJAWwbMH-6fDezyvw')"></div>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mt-1">
+                    Lessons learned from our transition to a globally distributed database architecture, dealing with clock skew, and managing cross-region replication lag.
+                </p>
+<div class="flex items-center gap-4 mt-2">
+<span class="font-code-sm text-code-sm text-outline flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">calendar_today</span> Oct 18</span>
+<span class="font-code-sm text-code-sm text-outline flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">schedule</span> 8 min</span>
+</div>
+</article>
+<!-- Article Card 2 -->
+<article class="bg-[#0D1836] rounded-xl p-4 card-border flex flex-col gap-3 transition-transform active:scale-[0.98]">
+<div class="flex justify-between items-start gap-4">
+<div class="flex flex-col gap-2 flex-grow">
+<span class="text-primary font-code-sm text-code-sm border border-primary/20 px-2 py-0.5 rounded w-max bg-primary/5">Performance</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">Optimizing Garbage Collection in Go 1.21</h2>
+</div>
+</div>
+<div class="bg-[#0D152B] p-3 rounded border border-white/5 font-code-sm text-code-sm text-on-surface-variant overflow-x-auto">
+<span class="text-pink-400">GOGC</span>=<span class="text-lime-400">100</span> <span class="text-pink-400">GOMEMLIMIT</span>=<span class="text-lime-400">4GiB</span> ./osprey-node
+                </div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">
+                    How tuning the memory limit parameter saved us 40% on compute costs for our primary worker nodes while maintaining steady latency.
+                </p>
+<div class="flex items-center gap-4 mt-2">
+<span class="font-code-sm text-code-sm text-outline flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">calendar_today</span> Oct 12</span>
+<span class="font-code-sm text-code-sm text-outline flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">schedule</span> 5 min</span>
+</div>
+</article>
+<!-- Article Card 3 -->
+<article class="bg-[#0D1836] rounded-xl p-4 card-border flex flex-col gap-3 transition-transform active:scale-[0.98]">
+<div class="flex justify-between items-start gap-4">
+<div class="flex flex-col gap-2 flex-grow">
+<span class="text-primary font-code-sm text-code-sm border border-primary/20 px-2 py-0.5 rounded w-max bg-primary/5">Open Source</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">Open-Sourcing 'Talon': Our Internal Load Tester</h2>
+</div>
+<div class="w-20 h-20 bg-surface-container rounded-lg flex-shrink-0" data-alt="A stylized 3D icon of a cybernetic bird talon gripping a data node. The visual style is industrial and sleek, utilizing deep navy blues and bright cyan highlights, representing a powerful, aggressive software tool in the Osprey ecosystem." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDsSgMe6pEw6QPkIWica3vqvZU9QgNZ0Pl_ktFx4pcVn2ETikweBTThQ4vddJwQTKM7tdnD-kcWdy95daiQrJ8dk9xvXdmuSGyBREXqqW4bWBOdNaptH8EiMen5Gp0pkrVKj9l-jr-nTlYj-HB4zwnc-6g0Ka-R_h7S_NiJ4y5RhWE7Shq0aFrBM7cHDwqwMqBl9dwmla4duem5g93Rf6yYlpQBTiOYZCgqJ5Xb99WpCHEIvm3Fts-rEpv1je408lFsEzcFZd3d3u0')"></div>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mt-1">
+                    Today we are releasing Talon, a distributed load testing framework built for simulating high-concurrency websocket connections.
+                </p>
+<div class="flex items-center gap-4 mt-2">
+<span class="font-code-sm text-code-sm text-outline flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">calendar_today</span> Sep 28</span>
+<span class="font-code-sm text-code-sm text-outline flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">schedule</span> 6 min</span>
+</div>
+</article>
+</section>
+<button class="w-full py-4 border border-outline-variant rounded-lg font-label-caps text-label-caps text-on-surface hover:bg-surface-variant transition-colors mt-4">
+            LOAD MORE ARTICLES
+        </button>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-dim dark:bg-surface-dim border-t border-outline-variant dark:border-outline-variant flat no shadows flex flex-col items-center gap-4 px-margin-mobile py-8 w-full mt-auto">
+<div class="font-label-caps text-label-caps text-on-surface opacity-80 hover:opacity-100 mb-2">
+            OSPREY ENG
+        </div>
+<div class="flex flex-wrap justify-center gap-6">
+<a class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Privacy Policy</a>
+<a class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Terms of Service</a>
+<a class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">RSS Feed</a>
+<a class="font-code-sm text-code-sm text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a>
+</div>
+<div class="font-code-sm text-code-sm text-outline mt-4 text-center">
+            © 2024 Osprey Engineering. Built for scale.
+        </div>
+</footer>
+<style>
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</body></html>

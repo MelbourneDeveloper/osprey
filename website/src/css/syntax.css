@@ -1,235 +1,62 @@
-/* ============================================
-   Syntax Highlighting - Neon Glow Theme
-   ============================================ */
-
-/* Base code styling */
+/* ============================================================================
+   Prism token colours — one scheme for every code block on the site
+   (home cards, prose, blog). Tuned for the navy Material-3 surface; mirrors
+   the palette in docs/designs/prose.
+   ============================================================================ */
+code[class*="language-"],
 pre[class*="language-"] {
-  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
-  color: #e0e6f1;
+  color: var(--on-surface);
   font-family: var(--font-mono);
-  font-size: 0.9rem;
-  line-height: 1.7;
-  border-radius: var(--radius-xl);
-  padding: var(--space-8);
-  overflow-x: auto;
-  position: relative;
-  white-space: pre !important;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.3),
-    0 20px 40px rgba(0, 0, 0, 0.4);
+  white-space: pre;
+  tab-size: 2;
 }
 
-/* Don't style pre elements inside .code-example */
-.code-example pre[class*="language-"] {
-  background: transparent !important;
-  border-radius: 0 !important;
-  padding: var(--space-8) !important;
-  padding-top: calc(var(--space-8) + 40px) !important;
-  box-shadow: none !important;
-  margin: 0 !important;
-  white-space: pre !important;
-}
-
-.code-example code[class*="language-"] {
-  color: #e0e6f1 !important;
-  font-family: var(--font-mono) !important;
-  white-space: pre !important;
-}
-
-code[class*="language-"] {
-  color: #e0e6f1;
-  font-family: var(--font-mono);
-  text-shadow: 0 0 10px rgba(224, 230, 241, 0.1);
-}
-
-/* Selection */
-pre[class*="language-"]::selection,
-pre[class*="language-"] ::selection,
-code[class*="language-"]::selection,
-code[class*="language-"] ::selection {
-  background: rgba(102, 126, 234, 0.3);
-  color: inherit;
-}
-
-/* ========================================================================
-   UNIFIED TOKEN STYLES - Single source of truth
-   ======================================================================== */
-
-/* Comments */
 .token.comment,
 .token.prolog,
 .token.doctype,
-.token.cdata {
-  color: #6b7280;
-  font-style: italic;
-  opacity: 0.8;
-}
+.token.cdata { color: #6272a4; font-style: italic; }
 
-/* Punctuation */
-.token.punctuation {
-  color: #94a3b8;
-}
+.token.punctuation { color: var(--on-surface-variant); }
 
-/* Keywords */
 .token.keyword,
 .token.control,
-.token.directive {
-  color: #c084fc;
-  font-weight: 600;
-  text-shadow: 0 0 20px rgba(192, 132, 252, 0.5);
-}
+.token.directive,
+.token.tag,
+.token.selector { color: #ff79c6; font-weight: 600; }
 
-/* Functions */
 .token.function,
-.token.method {
-  color: #f472b6;
-  text-shadow: 0 0 20px rgba(244, 114, 182, 0.3);
-}
+.token.method { color: #50fa7b; }
 
-/* Strings */
 .token.string,
 .token.char,
 .token.attr-value,
-.token.regex {
-  color: #4ade80;
-  text-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
-}
+.token.regex { color: #f1fa8c; }
 
-/* Numbers and constants */
 .token.number,
 .token.boolean,
-.token.constant {
-  color: #67e8f9;
-  text-shadow: 0 0 20px rgba(103, 232, 249, 0.3);
-}
+.token.constant { color: #bd93f9; }
 
-/* Types and classes */
 .token.class-name,
 .token.type,
-.token.builtin {
-  color: #fbbf24;
-  font-weight: 600;
-  text-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
-}
+.token.builtin,
+.token.attr-name { color: #8be9fd; }
 
-/* Operators */
 .token.operator,
 .token.entity,
-.token.url {
-  color: #fb923c;
-  text-shadow: 0 0 15px rgba(251, 146, 60, 0.6);
-}
+.token.url { color: #ffb86c; }
 
-/* Variables and properties */
 .token.variable,
 .token.property,
-.token.parameter {
-  color: #e9d5ff;
-  text-shadow: 0 0 10px rgba(233, 213, 255, 0.3);
-}
+.token.parameter { color: var(--on-surface); }
 
-/* Attributes */
-.token.attr-name,
-.token.attribute {
-  color: #5eead4;
-}
-
-/* Tags */
-.token.tag,
-.token.selector,
-.token.namespace {
-  color: #f87171;
-}
-
-/* Important and special tokens */
 .token.important,
-.token.atrule {
-  color: #fbbf24;
-  font-weight: bold;
-}
+.token.atrule { color: #ffb86c; font-weight: 600; }
 
-/* Deleted and inserted for diffs */
-.token.deleted {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
-}
+.token.deleted { color: var(--error); }
+.token.inserted { color: #50fa7b; }
+.token.italic { font-style: italic; }
+.token.bold { font-weight: 700; }
 
-.token.inserted {
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.1);
-}
-
-.token.italic {
-  font-style: italic;
-}
-
-/* ========================================================================
-   OSPREY-SPECIFIC SYNTAX - Enhanced rules
-   ======================================================================== */
-
-.language-osprey .token.pipe {
-  color: #a78bfa;
-  font-weight: bold;
-  text-shadow: 0 0 20px rgba(167, 139, 250, 0.8);
-}
-
-.language-osprey .token.pattern {
-  color: #f472b6;
-  font-weight: 600;
-}
-
-.language-osprey .token.interpolation {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.1);
-  padding: 0.1em 0.3em;
-  border-radius: 4px;
-}
-
-.language-osprey .token.interpolation .token.punctuation {
-  color: #fbbf24;
-}
-
-.language-osprey ::selection {
-  background: rgba(102, 126, 234, 0.3);
-  color: inherit;
-}
-
-
-
-/* ========================================================================
-   SCROLLBAR AND HOVER EFFECTS
-   ======================================================================== */
-
-/* Scrollbar styling for code blocks */
-pre[class*="language-"]::-webkit-scrollbar {
-  height: 8px;
-}
-
-pre[class*="language-"]::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-}
-
-pre[class*="language-"]::-webkit-scrollbar-thumb {
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  border-radius: 4px;
-}
-
-pre[class*="language-"]::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(90deg, #764ba2 0%, #f093fb 100%);
-}
-
-/* Subtle hover effects */
-.token:hover {
-  filter: brightness(1.1);
-  transition: filter 0.2s ease;
-}
-
-/* Override for inline code */
-:not(pre)>code[class*="language-"] {
-  padding: 0.2em 0.4em;
-  border-radius: var(--radius-sm);
-  background: rgba(102, 126, 234, 0.1);
-  color: var(--color-primary-600) !important;
-  font-size: 0.9em;
-}
+/* Osprey-specific tokens from the project Prism grammar. */
+.language-osprey .token.interpolation { color: #ffb86c; }
+.language-osprey .token.interpolation .token.punctuation { color: #ffb86c; }

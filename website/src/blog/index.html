@@ -1,5 +1,5 @@
 ---
-layout: page.njk
+layout: base.njk
 title: Blog
 description: Thoughts and insights on Osprey and modern programming language design
 ---
@@ -11,6 +11,11 @@ description: Thoughts and insights on Osprey and modern programming language des
       {% if collections.blog.length > 0 %}
         {% for post in collections.blog %}
           <article class="card">
+            {% if post.data.image %}
+              <a class="card-media" href="{{ post.url }}" aria-hidden="true" tabindex="-1">
+                <img src="{{ post.data.image }}" alt="" loading="lazy" width="1600" height="840">
+              </a>
+            {% endif %}
             <div class="card-content">
               {% if post.data.tags %}
                 <div class="card-tags">
