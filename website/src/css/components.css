@@ -431,7 +431,15 @@
 .prose pre[class*="language-"] {
   position: relative;
   padding-top: 2.9rem;
+  max-width: 100%;
+  overflow-x: auto;
 }
+/* Long inline tokens — file paths, generic type names, URLs — must wrap so they
+   never leak past their box and force horizontal page overflow on narrow or
+   font-fallback environments (e.g. CI Linux without the bundled mono font). */
+.prose p,
+.prose li { overflow-wrap: break-word; }
+.prose :not(pre) > code { overflow-wrap: anywhere; }
 .prose pre[data-language]::before {
   content: attr(data-language);
   position: absolute;
