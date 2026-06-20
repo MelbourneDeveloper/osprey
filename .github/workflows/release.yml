@@ -60,6 +60,10 @@ jobs:
     name: Build ${{ matrix.platform }}
     needs: version
     runs-on: ${{ matrix.os }}
+    # Windows is the newest, least-proven target — keep a win32 hiccup from
+    # blocking the mac/linux binaries + VSIX publish. A win32 failure shows as a
+    # failed leg (warning) but doesn't fail the build job.
+    continue-on-error: ${{ matrix.platform == 'win32-x64' }}
     strategy:
       fail-fast: false
       matrix:
@@ -129,7 +133,12 @@ jobs:
           cp "target/release/osprey${exe}" "dist/$staging/"
           cp compiler/lib/lib*.a "dist/$staging/" 2>/dev/null || cp compiler/bin/lib*.a "dist/$staging/" 2>/dev/null || true
           tar -czf "dist/$staging.tar.gz" -C dist "$staging"
-          ( cd dist && shasum -a 256 "$staging.tar.gz" | tee "$staging.tar.gz.sha256" )
+          # macOS ships shasum (Perl) but not sha256sum; Windows Git Bash ships
+          # sha256sum but not shasum; Linux has both. Identical output format
+          # (`<hash>  <file>`), so the downstream `cut -d' ' -f1` parsing in the
+          # brew/scoop jobs is unaffected.
+          sha256() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sha256sum "$@"; fi; }
+          ( cd dist && sha256 "$staging.tar.gz" | tee "$staging.tar.gz.sha256" )
 
       - uses: actions/upload-artifact@v4
         with:
@@ -316,6 +325,9 @@ jobs:
     name: Publish VSIX ${{ matrix.target }}
     needs: [version, build]
     runs-on: ${{ matrix.os }}
+    # Match the build job: a win32 VSIX hiccup must not block the mac/linux
+    # VSIXes from reaching the Marketplace.
+    continue-on-error: ${{ matrix.target == 'win32-x64' }}
     strategy:
       fail-fast: false
       matrix:
