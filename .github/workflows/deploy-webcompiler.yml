@@ -20,6 +20,9 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io
+        # Optional add-on: a Fly outage or an invalid/banned FLY_API_TOKEN must
+        # not fail a release. The browser compiler is not a release artifact.
+        continue-on-error: true
         run: |
           flyctl deploy --remote-only --app osprey --config webcompiler/fly.toml
         env:
