@@ -53,6 +53,16 @@ jobs:
         working-directory: ./website
         run: npm run build
 
+      # Gate the live deploy on the Playwright e2e suite — a broken or visually
+      # regressed site never reaches production.
+      - name: Install Playwright browser
+        working-directory: ./website
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        working-directory: ./website
+        run: npm test
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

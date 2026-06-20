@@ -6,6 +6,7 @@ date: 2025-01-10
 tags: ["blog", "web-development", "pattern-matching", "type-safety", "apis"]
 author: "Christian Findlay"
 readingTime: 6
+image: /assets/images/blog/building-web-apis-with-pattern-matching.png
 ---
 
 Web APIs are the backbone of modern applications, but they're also where things go wrong most often. Null reference exceptions, unhandled error cases, and missing validation logic plague even the most carefully written services. **What if your programming language could eliminate these problems entirely?**

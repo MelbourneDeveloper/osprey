@@ -112,3 +112,8 @@ public
 .pnp.*
 
 # Generated/copied files 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/

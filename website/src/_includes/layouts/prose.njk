@@ -12,6 +12,9 @@ layout: layouts/base.njk
     </nav>
   </aside>
   <article class="prose">
+{% if image %}
+    <img class="prose-hero" src="{{ image }}" alt="{{ title }}" width="1600" height="840" loading="eager">
+{% endif %}
 {{ content | safe }}
   </article>
 </div>

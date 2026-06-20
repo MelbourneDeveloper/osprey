@@ -6,6 +6,7 @@ date: 2025-01-15
 tags: ["blog", "memory-safety", "functional-programming", "concurrency", "future-tech"]
 author: "Christian Findlay"
 readingTime: 8
+image: /assets/images/blog/the-memory-safe-revolution.png
 ---
 
 The software industry is at an inflection point. Microsoft's Security Response Center has reported that [around 70% of the vulnerabilities it assigns a CVE each year](https://msrc.microsoft.com/blog/2019/07/a-proactive-approach-to-more-secure-code/) are memory safety issues. In 2024, a faulty CrowdStrike update — an out-of-bounds memory read — crashed millions of Windows machines; a [Parametrix analysis estimated **$5.4 billion** in direct losses](https://fortune.com/2024/08/03/crowdstrike-outage-fortune-500-companies-5-4-billion-damages-uninsured-losses/) for Fortune 500 companies alone. Meanwhile, the U.S. White House is [urging the industry to adopt memory-safe languages](https://bidenwhitehouse.archives.gov/oncd/briefing-room/2024/02/26/press-release-technical-report/) for critical systems.

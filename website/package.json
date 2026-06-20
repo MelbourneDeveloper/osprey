@@ -11,7 +11,10 @@
     "generate-docs": "bash scripts/generate-docs.sh",
     "update-playground": "node scripts/update-playground.js",
     "clean": "rm -rf _site",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "playwright test",
+    "test:e2e": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report"
   },
   "keywords": [
     "osprey",
@@ -24,6 +27,7 @@
   "devDependencies": {
     "@11ty/eleventy": "^3.1.2",
     "@11ty/eleventy-plugin-syntaxhighlight": "^5.0.1",
+    "@playwright/test": "^1.61.0",
     "luxon": "^3.6.1",
     "markdown-it": "^14.1.0",
     "markdown-it-anchor": "^9.2.0"
