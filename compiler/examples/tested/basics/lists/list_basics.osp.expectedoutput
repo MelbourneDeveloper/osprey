@@ -127,5 +127,27 @@ cmd[0]=echo hello
 cmd[2]=echo test
 cmd[5] OOB rejected
 empty[0] rejected
+classify:
+
+empty
+
+two(10,20)
+
+many head=1 rest=2
+
+one(7)
+
+sum a=
+6
+
+sum t=
+55
+
+restLen a=
+1
+
+restLen short=
+0
+
 [list done]
 

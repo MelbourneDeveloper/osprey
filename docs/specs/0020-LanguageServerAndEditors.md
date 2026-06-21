@@ -15,7 +15,7 @@ every editor is a thin client over the same LSP transport.
 |---|---|
 | Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/MelbourneDeveloper/osprey/pull/137)). |
 | VS Code extension (`nimblesite.osprey`) | **Shipped** — per-platform VSIX bundling a version-matched compiler. |
-| Open VSX | Planned — see [lsp-vsix-release.md](../plans/lsp-vsix-release.md). |
+| Open VSX | Planned. |
 | Neovim | Planned. The server is editor-agnostic; only a client recipe is missing. |
 | Zed | Planned (`shipwright-zed`). |
 | MCP surface (`lspkit-mcp`) | Future — the same `EngineApi` vended as MCP tools. |

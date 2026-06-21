@@ -338,4 +338,122 @@ mod tests {
         let v = c.fresh();
         assert!(unify(&mut c, &v, &Type::list(v.clone())).is_err());
     }
+
+    #[test]
+    fn function_types_unify_on_arity_params_and_return() {
+        let mut c = InferCtx::new();
+        let v = c.fresh();
+        // (int) -> v  ~  (int) -> string  binds v := string.
+        unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], v.clone()),
+            &Type::fun(vec![Type::int()], Type::string()),
+        )
+        .unwrap();
+        assert_eq!(c.apply(&v), Type::string());
+        // Arity mismatch is an error.
+        let e = unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], Type::int()),
+            &Type::fun(vec![Type::int(), Type::int()], Type::int()),
+        )
+        .unwrap_err();
+        assert!(format!("{e:?}").contains("arity"));
+    }
+
+    #[test]
+    fn assignable_wraps_bare_value_into_result_return() {
+        let mut c = InferCtx::new();
+        // A bare `bool` satisfies a `Result<bool, E>` slot (implicit Success).
+        let want = Type::result(Type::bool(), Type::prim("E"));
+        unify_assignable(&mut c, &want, &Type::bool()).unwrap();
+    }
+
+    #[test]
+    fn assignable_function_return_is_covariant_through_result() {
+        let mut c = InferCtx::new();
+        // `(int) -> Result<int, MathError>` is assignable to a `(int) -> int` slot.
+        let slot = Type::fun(vec![Type::int()], Type::int());
+        let lambda = Type::fun(
+            vec![Type::int()],
+            Type::result(Type::int(), Type::prim("MathError")),
+        );
+        unify_assignable(&mut c, &slot, &lambda).unwrap();
+    }
+
+    #[test]
+    fn record_mismatches_are_rejected() {
+        use std::collections::BTreeMap;
+        let mut c = InferCtx::new();
+        let rec = |pairs: &[(&str, Type)]| Type::Record {
+            name: "R".into(),
+            fields: pairs
+                .iter()
+                .map(|(k, t)| ((*k).to_string(), t.clone()))
+                .collect::<BTreeMap<_, _>>(),
+        };
+        // Same arity, different field name.
+        assert!(unify(
+            &mut c,
+            &rec(&[("x", Type::int())]),
+            &rec(&[("y", Type::int())])
+        )
+        .is_err());
+        // Different number of fields.
+        assert!(unify(
+            &mut c,
+            &rec(&[("x", Type::int())]),
+            &rec(&[("x", Type::int()), ("y", Type::int())]),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn nominal_constructor_unifies_with_same_named_record() {
+        use std::collections::BTreeMap;
+        let mut c = InferCtx::new();
+        let point_con = Type::con("Point", vec![]);
+        let point_rec = Type::Record {
+            name: "Point".into(),
+            fields: BTreeMap::new(),
+        };
+        unify(&mut c, &point_con, &point_rec).unwrap();
+        unify(&mut c, &point_rec, &point_con).unwrap();
+        // Distinct constructor names still clash.
+        assert!(unify(
+            &mut c,
+            &Type::con("List", vec![Type::int()]),
+            &Type::con("Map", vec![Type::int(), Type::int()])
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn unions_unify_by_name_and_variants() {
+        let mut c = InferCtx::new();
+        let u = |name: &str, vs: Vec<Type>| Type::Union {
+            name: name.into(),
+            variants: vs,
+        };
+        unify(
+            &mut c,
+            &u("E", vec![Type::int()]),
+            &u("E", vec![Type::int()]),
+        )
+        .unwrap();
+        // Different name.
+        assert!(unify(
+            &mut c,
+            &u("E", vec![Type::int()]),
+            &u("F", vec![Type::int()])
+        )
+        .is_err());
+        // Different variant count.
+        assert!(unify(
+            &mut c,
+            &u("E", vec![Type::int()]),
+            &u("E", vec![Type::int(), Type::bool()])
+        )
+        .is_err());
+    }
 }

@@ -1,0 +1,12 @@
+// Implements [TYPE-LIST-PATTERNS] negative test.
+//
+// The rest binder `...name` is legal only at the TAIL of a list pattern
+// (matching Haskell/Elm). A middle rest — `[a, ...mid, b]` — is unrepresentable
+// in the grammar and must be rejected, not silently misparsed.
+
+fn classify(xs) = match xs {
+    [a, ...mid, b] => a
+    _              => 0
+}
+
+print(classify(List()))

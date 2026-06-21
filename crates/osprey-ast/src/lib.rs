@@ -254,6 +254,16 @@ pub enum Pattern {
         /// Bound field names.
         fields: Vec<String>,
     },
+    /// `[]` / `[a, b]` / `[head, ...tail]` list destructuring. `elements` are the
+    /// fixed-prefix position patterns; `rest` is the optional tail binder name
+    /// (`...rest`), `None` for a fixed-length match. Implements
+    /// [TYPE-LIST-PATTERNS].
+    List {
+        /// Patterns for the fixed-prefix element positions.
+        elements: Vec<Pattern>,
+        /// Tail rest-binder name, or `None` for a fixed-length pattern.
+        rest: Option<String>,
+    },
     /// A bare identifier capture.
     Binding(String),
 }

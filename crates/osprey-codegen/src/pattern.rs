@@ -6,6 +6,7 @@
 //!     discriminant, binding the variant's fields.
 
 use crate::builder::Codegen;
+use crate::collections::LIST_OWNER;
 use crate::conv::as_i64;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
@@ -23,10 +24,100 @@ pub(crate) fn gen_match(cg: &mut Codegen, value: &Expr, arms: &[MatchArm]) -> Re
     if arms.iter().any(|a| is_result_arm(&a.pattern)) {
         return gen_result_match(cg, disc, arms);
     }
+    if arms
+        .iter()
+        .any(|a| matches!(a.pattern, Pattern::List { .. }))
+    {
+        return gen_list_match(cg, &disc, arms);
+    }
     if let Some(owner) = union_owner(cg, arms) {
         return gen_union_match(cg, &disc, arms, &owner);
     }
     gen_literal_match(cg, &disc, arms)
+}
+
+/// List-pattern match: each arm is length-guarded — `== n` for a fixed-length
+/// `[a, b]`, `>= n` for a `[a, ...rest]` — then its prefix elements and tail are
+/// bound from the runtime list. Coexists with a trailing catch-all
+/// (`xs => …` / `_`). Implements [TYPE-LIST-PATTERNS].
+fn gen_list_match(cg: &mut Codegen, disc: &Value, arms: &[MatchArm]) -> Result<Value> {
+    let list_val = crate::cast::coerce_to(cg, disc.clone(), LType::Ptr)?;
+    let len = cg.call("i64", "osprey_list_length", "i8*", &[&list_val.operand]);
+    let end = cg.fresh_label();
+    let mut phi_in: Vec<(Value, String)> = Vec::new();
+    let last = arms.len().saturating_sub(1);
+
+    for (i, arm) in arms.iter().enumerate() {
+        match &arm.pattern {
+            Pattern::List { elements, rest } => {
+                let n = elements.len();
+                let op = if rest.is_some() { "sge" } else { "eq" };
+                let cond = cg.emit_reg(format!("icmp {op} i64 {len}, {n}"));
+                let body_lbl = cg.fresh_label();
+                let next_lbl = cg.fresh_label();
+                cg.emit(format!(
+                    "br i1 {cond}, label %{body_lbl}, label %{next_lbl}"
+                ));
+                cg.start_block(&body_lbl);
+                bind_list_arm(cg, &list_val, elements, rest.as_deref(), n);
+                push_arm(cg, &arm.body, &mut phi_in)?;
+                cg.emit(format!("br label %{end}"));
+                cg.start_block(&next_lbl);
+                if i == last {
+                    cg.emit("unreachable");
+                }
+            }
+            Pattern::Wildcard | Pattern::Binding(_) | Pattern::TypeAnnotated { .. } => {
+                bind_catch_all(cg, &arm.pattern, &list_val);
+                push_arm(cg, &arm.body, &mut phi_in)?;
+                cg.emit(format!("br label %{end}"));
+                break;
+            }
+            _ => return Err(CodegenError::unsupported("non-list arm in list match")),
+        }
+    }
+    cg.start_block(&end);
+    finish_phi(cg, &phi_in)
+}
+
+/// Bind a matched list arm's prefix elements (`osprey_list_get(l, i)`) and its
+/// `...rest` tail (`osprey_list_drop(l, n)`). The length guard at the call site
+/// proves every index is in bounds. Elements cross as the uniform `i64`,
+/// carrying the scrutinee's element owner so a list-of-handles stays usable; a
+/// `_` element binds nothing.
+fn bind_list_arm(
+    cg: &mut Codegen,
+    list_val: &Value,
+    elements: &[Pattern],
+    rest: Option<&str>,
+    n: usize,
+) {
+    for (idx, el) in elements.iter().enumerate() {
+        if let Pattern::Binding(name) = el {
+            let elem = cg.call(
+                "i64",
+                "osprey_list_get",
+                "i8*, i64",
+                &[&list_val.operand, &idx.to_string()],
+            );
+            cg.bind(
+                name.clone(),
+                Value::new(elem, LType::I64).with_owner(list_val.payload_owner.clone()),
+            );
+        }
+    }
+    if let Some(name) = rest {
+        let tail = cg.call(
+            "i8*",
+            "osprey_list_drop",
+            "i8*, i64",
+            &[&list_val.operand, &n.to_string()],
+        );
+        cg.bind(
+            name.to_string(),
+            Value::handle(tail, LIST_OWNER).with_payload_owner(list_val.payload_owner.clone()),
+        );
+    }
 }
 
 /// Whether the arms are the bool-ternary shape (`true => …  false => …`) the

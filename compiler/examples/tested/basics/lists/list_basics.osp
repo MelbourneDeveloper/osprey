@@ -146,4 +146,42 @@ match empty[0] {
     Error   { message } => print("empty[0] rejected")
 }
 
-print("[list done]\n")
+// --- list patterns in match: all four forms + wildcard + recursion ---
+// Spec: [TYPE-LIST-PATTERNS]. `[]` / `[x]` / `[x, y]` are length-guarded; the
+// `[head, ...tail]` tail binds the suffix list; `[a, b, ...rest]` binds a prefix
+// plus a rest; `_` at an element position ignores it.
+fn classify(xs) = match xs {
+    []              => "empty"
+    [single]        => "one(${single})"
+    [first, second] => "two(${first},${second})"
+    [head, ...tail] => "many head=${head} rest=${listLength(tail)}"
+}
+// Recursive descent over the tail — the proof that the pattern drives recursion.
+// `+` is overflow-checked (`Result<int, MathError>`), so the step unwraps it.
+fn sumList(xs) = match xs {
+    []              => 0
+    [head, ...tail] => match head + sumList(tail) {
+        Success { value }   => value
+        Error   { message } => 0
+    }
+}
+// Prefix + rest, with a `_` element position that binds nothing; `rest` is the
+// suffix past the two fixed positions.
+fn restLen(xs) = match xs {
+    [_, second, ...rest] => listLength(rest)
+    _                    => 0
+}
+print("classify:\n")
+print("${classify(List())}\n")
+print("${classify(b)}\n")
+print("${classify(a)}\n")
+print("${classify(listAppend(List(), 7))}\n")
+print("sum a=")
+print(sumList(a))
+print("\nsum t=")
+print(sumList(t))
+print("\nrestLen a=")
+print(restLen(a))
+print("\nrestLen short=")
+print(restLen(listAppend(List(), 9)))
+print("\n[list done]\n")

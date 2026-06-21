@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { workspace, ExtensionContext, window, ConfigurationChangeEvent, commands, Uri, debug, languages } from 'vscode';
+import { workspace, ExtensionContext, window, commands, debug, languages } from 'vscode';
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import {
@@ -19,8 +19,9 @@ import {
 let client: LanguageClient;
 
 // shipwrightPlatform maps the Node platform/arch to the Shipwright platform id
-// (e.g. darwin-arm64, win32-x64) used in the bundled binary path.
-function shipwrightPlatform(): string {
+// (e.g. darwin-arm64, win32-x64) used in the bundled binary path. Exported for
+// unit testing of the platform-string mapping.
+export function shipwrightPlatform(): string {
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
   const os = process.platform === 'win32' ? 'win32'
     : process.platform === 'darwin' ? 'darwin' : 'linux';
@@ -30,8 +31,9 @@ function shipwrightPlatform(): string {
 // resolveBundledCompiler returns the absolute path to the version-matched
 // osprey binary bundled in this VSIX for the current platform, or undefined
 // when running unbundled (e.g. a local dev install). The release pipeline
-// stages it at bin/<platform>/osprey[.exe]. [SWR-VERSION-MANIFEST]
-function resolveBundledCompiler(context: ExtensionContext): string | undefined {
+// stages it at bin/<platform>/osprey[.exe]. [SWR-VERSION-MANIFEST] Exported so
+// both the bundled-present and unbundled branches can be unit tested.
+export function resolveBundledCompiler(context: ExtensionContext): string | undefined {
   const exe = process.platform === 'win32' ? '.exe' : '';
   const bundled = context.asAbsolutePath(path.join('bin', shipwrightPlatform(), `osprey${exe}`));
   return fs.existsSync(bundled) ? bundled : undefined;
@@ -40,7 +42,9 @@ function resolveBundledCompiler(context: ExtensionContext): string | undefined {
 // resolveServerCommand picks the osprey binary that backs the language server:
 // an explicit user setting, then the version-matched bundled compiler, then a
 // plain `osprey` on PATH. The server is launched as `<command> lsp` over stdio.
-function resolveServerCommand(context: ExtensionContext): string {
+// Exported so each resolution branch can be unit tested independently of a
+// single live activation.
+export function resolveServerCommand(context: ExtensionContext): string {
   const config = workspace.getConfiguration('osprey');
   const userPath = config.get<string>('server.compilerPath') || config.get<string>('server.path');
   if (userPath) {

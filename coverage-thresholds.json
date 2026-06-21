@@ -1,13 +1,13 @@
 {
   "_agent_pmo": "b636503",
-  "_doc": "Per-project coverage thresholds — single source of truth ([COVERAGE-THRESHOLDS-JSON]). Each entry is a project directory; `make test` measures that project and fails hard below its threshold. Thresholds are monotonically increasing: when coverage improves, bump the number to (measured - 1) in the same PR. Aim is 90% for every project; see docs/plans/coverage-to-90-percent.md.",
+  "_doc": "Per-project coverage thresholds — single source of truth ([COVERAGE-THRESHOLDS-JSON]). Each entry is a project directory; `make test` measures that project and fails hard below its threshold. Thresholds are monotonically increasing: when coverage improves, bump the number to (measured - 1) in the same PR. Aim is 90% for every project.",
   "projects": {
     "crates": {
-      "threshold": 52,
+      "threshold": 90,
       "language": "rust"
     },
     "vscode-extension": {
-      "threshold": 52,
+      "threshold": 75,
       "language": "typescript"
     }
   }

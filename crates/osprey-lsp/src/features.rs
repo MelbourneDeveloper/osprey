@@ -314,4 +314,66 @@ mod tests {
             .iter()
             .any(|i| i.label == "add" && i.kind == CompletionKind::Function));
     }
+
+    #[test]
+    fn hover_on_a_let_binding_uses_the_name_and_type_form() {
+        // A `let` has no signature, so hover renders the `name: type` fallback.
+        let src = "let limit: int = 10\nfn main() -> Unit = print(limit)\n";
+        let md = hover(src, 0, 5, U16).expect("hover");
+        assert!(md.contains("limit: int"), "{md}");
+    }
+
+    #[test]
+    fn completion_maps_a_type_declaration_to_the_type_kind() {
+        let src = "type Shade = Light | Dark\nlet c: int = 1\n";
+        let items = completion(src);
+        assert!(items
+            .iter()
+            .any(|i| i.label == "Shade" && i.kind == CompletionKind::Type));
+        // The variable `c` is a Variable-kind completion with its detail.
+        let c = items.iter().find(|i| i.label == "c").expect("c completion");
+        assert_eq!(c.kind, CompletionKind::Variable);
+        assert_eq!(c.detail.as_deref(), Some("int"));
+    }
+
+    #[test]
+    fn definition_and_references_return_empty_off_any_identifier() {
+        // A two-space gap guarantees a column that is over neither word.
+        let src = "let a  =  b\n";
+        // Column 6 sits in the double space between `a` and `=`.
+        assert!(definition(src, "file:///a.osp", 0, 6, U16).is_empty());
+        assert!(references(src, "file:///a.osp", 0, 6, U16, true).is_empty());
+        // A line past the end of the file yields no word either.
+        assert!(hover(src, 99, 0, U16).is_none());
+    }
+
+    #[test]
+    fn signature_help_labels_unannotated_parameters_by_name_only() {
+        // The parameter has no type annotation, so its label is the bare name.
+        let src = "fn id(x) = x\nlet y = id(7)\n";
+        let sig = signature_help(src, 1, 11, U16).expect("sig");
+        assert_eq!(sig.parameters, vec!["x".to_owned()]);
+        assert_eq!(sig.active_parameter, 0);
+    }
+
+    #[test]
+    fn signature_help_unwinds_a_closed_inner_call() {
+        // The inner `add(1, 2)` call is closed before the cursor, so the active
+        // call is the still-open outer `print(...)`. This exercises the `)` arm
+        // that pops the call/comma stacks.
+        let src = "fn add(a: int, b: int) -> int = a + b\nlet r = add(add(1, 2), 3)\n";
+        let sig = signature_help(src, 1, 24, U16).expect("sig");
+        assert_eq!(sig.label, "fn add(a: int, b: int) -> int");
+        // After the inner call closed, the cursor is over the outer second arg.
+        assert_eq!(sig.active_parameter, 1, "{sig:?}");
+    }
+
+    #[test]
+    fn signature_help_skips_commas_in_strings_and_line_comments() {
+        // The escaped quote and the `//` comment must not corrupt the comma/call
+        // tracking, so the active parameter stays at the first argument.
+        let src = "fn f(a: int, b: int) -> int = a\nlet x = f(\"a\\\"b\" // c, d\n";
+        let sig = signature_help(src, 1, 23, U16).expect("sig");
+        assert_eq!(sig.active_parameter, 0, "{sig:?}");
+    }
 }

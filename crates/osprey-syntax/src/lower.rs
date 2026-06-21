@@ -333,15 +333,17 @@ impl<'a> Lowerer<'a> {
     fn lower_pattern_inner(&self, pat: Node<'_>, inner: Node<'_>) -> Pattern {
         match inner.kind() {
             // A `-N` / `+N` pattern carries the sign in the `operator` field
-            // (grammar: `seq(operator: choice('-','+'), literal)`); fold it into
-            // the literal so `-5` matches `-5`, not `5`.
-            "literal" => {
-                let lit = self.lower_literal(inner);
+            // (grammar: `seq(operator: choice('-','+'), integer|float)`); fold it
+            // into the literal so `-5` matches `-5`, not `5`. Scalar literals now
+            // appear unwrapped (no `literal` node) so `[…]` stays a list_pattern.
+            "integer" | "float" | "boolean" | "string" | "interpolated_string" => {
+                let lit = self.lower_literal_node(inner);
                 let negated = pat
                     .child_by_field_name("operator")
                     .is_some_and(|op| self.text(op) == "-");
                 Pattern::Literal(Box::new(if negated { negate_literal(lit) } else { lit }))
             }
+            "list_pattern" => self.lower_list_pattern(inner),
             "field_pattern" => Pattern::Structural {
                 fields: self.field_pattern_names(inner),
             },
@@ -396,6 +398,19 @@ impl<'a> Lowerer<'a> {
 
     fn field_pattern_names(&self, fp: Node<'_>) -> Vec<String> {
         self.texts_of_kind(fp, "identifier")
+    }
+
+    /// Build a [`Pattern::List`] from a `list_pattern` node: the `element` fields
+    /// (each a `pattern`) become the fixed-prefix patterns in source order, and
+    /// the `rest` field (an identifier) becomes the optional tail binder.
+    fn lower_list_pattern(&self, node: Node<'_>) -> Pattern {
+        let elements = self
+            .named_of_kind(node, "pattern")
+            .iter()
+            .map(|p| self.lower_pattern(*p))
+            .collect();
+        let rest = node.child_by_field_name("rest").map(|r| self.text(r));
+        Pattern::List { elements, rest }
     }
 
     // ---- small node helpers ----

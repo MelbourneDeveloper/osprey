@@ -177,4 +177,39 @@ mod tests {
         let lines: Vec<u32> = hits.iter().map(|h| h.line).collect();
         assert_eq!(lines, vec![0, 1], "{hits:?}");
     }
+
+    #[test]
+    fn char_width_and_measure_follow_the_negotiated_encoding() {
+        // An emoji is one UTF-16 surrogate pair (2 units) but four UTF-8 bytes.
+        let rocket = '🚀';
+        assert_eq!(char_width(rocket, PositionEncoding::Utf16), 2);
+        assert_eq!(char_width(rocket, PositionEncoding::Utf8), 4);
+        // A `é` is one UTF-16 unit and two UTF-8 bytes.
+        assert_eq!(char_width('é', PositionEncoding::Utf16), 1);
+        assert_eq!(char_width('é', PositionEncoding::Utf8), 2);
+        // `measure` sums the per-char widths in the chosen encoding.
+        assert_eq!(measure("aé🚀", PositionEncoding::Utf8), 1 + 2 + 4);
+        assert_eq!(measure("aé🚀", PositionEncoding::Utf16), 1 + 1 + 2);
+    }
+
+    #[test]
+    fn prefix_to_clamps_to_the_full_line_and_respects_utf8_widths() {
+        // A character offset past the end returns the whole line unchanged.
+        assert_eq!(prefix_to("let x", 100, U16), "let x");
+        // In UTF-8 the prefix boundary is measured in bytes: `é` is two units, so
+        // offset 3 lands just after `aé`.
+        assert_eq!(prefix_to("aébc", 3, PositionEncoding::Utf8), "aé");
+        // Offset zero returns an empty prefix.
+        assert_eq!(prefix_to("abc", 0, U16), "");
+    }
+
+    #[test]
+    fn word_at_resolves_multibyte_identifiers_under_utf8_offsets() {
+        // `total` after a leading multi-byte char: in UTF-8 the word starts at
+        // byte offset 3 (after `é` = 2 bytes plus the space).
+        let line = "é total";
+        let span = word_at(line, 4, PositionEncoding::Utf8).expect("word");
+        assert_eq!(span.word, "total");
+        assert_eq!(span.start, 3);
+    }
 }

@@ -313,6 +313,13 @@ impl Lowerer<'_> {
         let Some(inner) = self.first_named(node) else {
             return Expr::Bool(false);
         };
+        self.lower_literal_node(inner)
+    }
+
+    /// Lower an already-unwrapped literal node (`integer`/`string`/… directly,
+    /// not the `literal` wrapper) — shared by `lower_literal` and scalar pattern
+    /// lowering, where the grammar exposes the scalar node without a wrapper.
+    pub(crate) fn lower_literal_node(&self, inner: Node<'_>) -> Expr {
         match inner.kind() {
             "integer" => Expr::Integer(self.text(inner).parse().unwrap_or(0)),
             "float" => Expr::Float(self.text(inner).parse().unwrap_or(0.0)),

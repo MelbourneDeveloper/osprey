@@ -12,8 +12,7 @@ you no longer need.
 
 Not implemented. The current compiler allocates heap values (closure cells,
 strings, collections, records) and never frees them. This spec is the
-contract every future reclamation backend must satisfy; the implementation
-plan is [`../plans/memory-management.md`](../plans/memory-management.md).
+contract every future reclamation backend must satisfy.
 
 ## Collection Is Unobservable [MEM-OPAQUE]
 

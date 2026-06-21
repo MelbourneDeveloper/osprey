@@ -281,7 +281,11 @@ module.exports = grammar({
           choice(
             seq('.', field('member', $.identifier)),
             seq('(', optional($.argument_list), ')'),
-            seq('[', field('index', $.expression), ']'),
+            // The index `[` must immediately follow the callee (no whitespace),
+            // so a match-arm body never swallows the next arm's `[…]` list
+            // pattern as an index (`=> 0  [head, ...t] => …`). Implements
+            // [TYPE-LIST-PATTERNS] coexistence with postfix indexing.
+            seq(token.immediate('['), field('index', $.expression), ']'),
           ),
         ),
       ),
@@ -350,12 +354,16 @@ module.exports = grammar({
     map_entry: ($) => seq(field('key', $.expression), ':', field('value', $.expression)),
 
     // ---------- PATTERNS ----------
-    // The `pattern` forms: literal/number (incl. negative), constructor
-    // & destructuring forms, type-annotation, structural, wildcard.
+    // The `pattern` forms: scalar literal/number (incl. negative), list
+    // destructuring, constructor & destructuring forms, type-annotation,
+    // structural, wildcard. Collection (list/map) literals are *not* pattern
+    // literals — `[…]` is a list_pattern, so `[head, tail]` never collides with
+    // a two-element list literal. Implements [TYPE-LIST-PATTERNS].
     pattern: ($) =>
       choice(
-        $.literal, // 0, 1.5, "x", true, false
-        prec.right(seq(field('operator', choice('-', '+')), $.literal)), // -1, +42
+        $.integer, $.float, $.string, $.interpolated_string, $.boolean, // 0, 1.5, "x", true
+        prec.right(seq(field('operator', choice('-', '+')), choice($.integer, $.float))), // -1, +42
+        $.list_pattern, // [], [x], [a, b], [head, ...tail]
         seq(field('name', $.identifier), '{', $.field_pattern, '}'), // Ok { value }
         seq(field('name', $.identifier), '(', sep1(',', $.pattern), ')'), // Some(x)
         seq(field('name', $.identifier), ':', '{', $.field_pattern, '}'), // p: { x, y }
@@ -363,6 +371,20 @@ module.exports = grammar({
         seq(field('name', $.identifier), optional(field('binding', $.identifier))), // bare var / capture
         seq('{', $.field_pattern, '}'), // { name, age }
         '_',
+      ),
+    // The rest binder `...id` is allowed only at the tail; a fixed-length form
+    // (`[]`, `[a, b]`) omits it. Mid-list rest (`[a, ...m, b]`) is unrepresentable.
+    list_pattern: ($) =>
+      seq(
+        '[',
+        optional(
+          seq(
+            field('element', $.pattern),
+            repeat(seq(',', field('element', $.pattern))),
+            optional(seq(',', '...', field('rest', $.identifier))),
+          ),
+        ),
+        ']',
       ),
     field_pattern: ($) => sep1(',', $.identifier),
 

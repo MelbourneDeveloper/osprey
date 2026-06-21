@@ -126,6 +126,31 @@ impl Checker {
                 fields,
                 sub_patterns,
             } => self.bind_constructor(name, fields, sub_patterns, disc, local),
+            Pattern::List { elements, rest } => {
+                self.bind_list_pattern(elements, rest.as_deref(), disc, local);
+            }
+        }
+    }
+
+    /// A list pattern unifies the discriminant with `List<E>` for a fresh element
+    /// type `E`, binds each prefix element against `E`, and binds the `...rest`
+    /// tail (when present) as `List<E>` — the same element type, since `drop`
+    /// yields a suffix of the same list. Implements [TYPE-LIST-PATTERNS].
+    fn bind_list_pattern(
+        &mut self,
+        elements: &[Pattern],
+        rest: Option<&str>,
+        disc: &Type,
+        local: &mut TypeEnv,
+    ) {
+        let elem = self.ctx.fresh();
+        let list_ty = Type::list(elem.clone());
+        self.push_unify(&list_ty, disc);
+        for el in elements {
+            self.bind_pattern(el, &elem, local);
+        }
+        if let Some(name) = rest {
+            local.insert(name.to_string(), Scheme::mono(list_ty));
         }
     }
 
