@@ -11,9 +11,10 @@
     "//3": "sub-makefile or its parsed variables.",
     "makefile.makefilePath": "Makefile",
     "makefile.makeDirectory": ".",
-    "//4": "Use the freshly-built dev compiler for LSP diagnostics so the editor",
-    "//5": "matches `make`/`./bin/osprey` instead of a stale global `osprey`. The",
-    "//6": "server execs this path verbatim (no variable substitution), so it is",
-    "//7": "absolute. Run `make build` to refresh it; see `make vsix` for packaging.",
-    "osprey.server.compilerPath": "/Users/christianfindlay/Documents/Code/osprey/compiler/bin/osprey"
+    "//4": "Use the freshly-built dev compiler for the LSP so the editor matches",
+    "//5": "`make build` (target/release/osprey) instead of a stale global `osprey`.",
+    "//6": "The server execs this path verbatim (no variable substitution), so it",
+    "//7": "is absolute. Run `make build` to refresh it; see `make vsix` for packaging.",
+    "//8": "NOTE: compiler/bin is the C-runtime archive dir, NOT the compiler binary.",
+    "osprey.server.compilerPath": "/Users/christianfindlay/Documents/Code/osprey/target/release/osprey"
 }

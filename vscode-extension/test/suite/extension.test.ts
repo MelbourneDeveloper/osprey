@@ -50,6 +50,23 @@ function resolveOspreyOnPath(): string | undefined {
   return undefined;
 }
 
+// resolveBuiltOsprey returns the binary the language client should actually be
+// launched against in tests. It PREFERS the freshly-built dev compiler under
+// the repo (target/release/osprey — the `make build` output that speaks the
+// current LSP protocol) over any older `osprey` on PATH. A stale PATH binary
+// (e.g. a months-old global install) predates the `lsp` subcommand and makes
+// the client fail to start, which is exactly what would silently break every
+// language feature — so the live-LSP suites must not depend on it. Falls back to
+// the PATH binary, then undefined.
+function resolveBuiltOsprey(): string | undefined {
+  const exe = process.platform === 'win32' ? 'osprey.exe' : 'osprey';
+  // The compiled test lives at <ext>/out/test/suite; the repo root is the
+  // parent of the extension root (resolved once at module scope as
+  // `extensionRoot`). The dev compiler lands at <repo>/target/release/osprey.
+  const built = path.resolve(extensionRoot, '..', 'target', 'release', exe);
+  return fs.existsSync(built) ? built : resolveOspreyOnPath();
+}
+
 suite('Osprey Shipwright Activation Coverage', () => {
   const settle = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   let priorCompilerPath: string | undefined;
@@ -60,7 +77,7 @@ suite('Osprey Shipwright Activation Coverage', () => {
     // activates so resolveServerCommand takes its explicit-user-path branch and
     // the language client launches against a genuine osprey, exercising the
     // client option handlers and the start outcome.
-    const ospreyPath = resolveOspreyOnPath();
+    const ospreyPath = resolveBuiltOsprey();
     if (ospreyPath) {
       const config = vscode.workspace.getConfiguration('osprey');
       priorCompilerPath = config.get<string>('server.compilerPath');
@@ -96,7 +113,7 @@ suite('Osprey Shipwright Activation Coverage', () => {
 
     // The explicit compiler path we set must be visible to the extension so its
     // resolveServerCommand picks the user-configured binary.
-    const ospreyPath = resolveOspreyOnPath();
+    const ospreyPath = resolveBuiltOsprey();
     if (ospreyPath) {
       assert.strictEqual(
         vscode.workspace.getConfiguration('osprey').get<string>('server.compilerPath'),
@@ -347,194 +364,333 @@ fn broken syntax here {
   });
 });
 
+// These tests drive the REAL Osprey language server end-to-end through VS
+// Code's provider commands and HARD-ASSERT the results. They are the regression
+// net for "hover doesn't work": if the LSP fails to launch (e.g. a dead
+// server.compilerPath that ENOENTs the client) EVERY test here fails loudly
+// instead of silently passing. To guarantee a live server we pin
+// server.compilerPath at a real osprey binary and warm the server up before any
+// assertion runs.
 suite('Osprey Language Features Tests', () => {
-  let document: vscode.TextDocument;
-  let editor: vscode.TextEditor;
+  let tempDir: string;
+  let priorCompilerPath: string | undefined;
+  let pinnedCompiler = false;
+  const extension = () => vscode.extensions.getExtension(extensionId);
 
-  // Helper to create and open a test document
-  async function createTestDocument(content: string): Promise<void> {
-    document = await vscode.workspace.openTextDocument({
-      language: 'osprey',
-      content: content
+  // pollFor retries an async provider call until `ok` accepts its result or the
+  // budget is exhausted, then throws with the last value. This is what turns
+  // "the LSP returned nothing (yet)" into an eventual HARD FAILURE rather than a
+  // silent pass — the toothlessness that let the hover regression ship.
+  async function pollFor<T>(
+    attempt: () => Thenable<T>,
+    ok: (value: T) => boolean,
+    tries = 40,
+    delayMs = 250
+  ): Promise<T> {
+    let last: T | undefined;
+    for (let i = 0; i < tries; i++) {
+      last = await Promise.resolve(attempt());
+      if (last !== undefined && ok(last)) {
+        return last;
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    throw new assert.AssertionError({
+      message: `LSP condition unmet after ${tries} tries; last=${JSON.stringify(last)}`
     });
-    editor = await vscode.window.showTextDocument(document);
-    // Wait for language server to process the document
-    await new Promise(resolve => setTimeout(resolve, 2000));
   }
+
+  async function openDoc(name: string, content: string): Promise<vscode.TextDocument> {
+    const file = path.join(tempDir, name);
+    fs.writeFileSync(file, content);
+    const doc = await vscode.workspace.openTextDocument(file);
+    await vscode.window.showTextDocument(doc);
+    return doc;
+  }
+
+  const hoverText = (h: vscode.Hover): string =>
+    h.contents.map(c => (typeof c === 'string' ? c : c.value)).join('\n');
+
+  const hoverAt = (uri: vscode.Uri, line: number, character: number) =>
+    vscode.commands.executeCommand<vscode.Hover[]>(
+      'vscode.executeHoverProvider', uri, new vscode.Position(line, character)
+    );
+  const defsAt = (uri: vscode.Uri, line: number, character: number) =>
+    vscode.commands.executeCommand<vscode.Location[]>(
+      'vscode.executeDefinitionProvider', uri, new vscode.Position(line, character)
+    );
+  const refsAt = (uri: vscode.Uri, line: number, character: number) =>
+    vscode.commands.executeCommand<vscode.Location[]>(
+      'vscode.executeReferenceProvider', uri, new vscode.Position(line, character)
+    );
+  const symbolsOf = (uri: vscode.Uri) =>
+    vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+      'vscode.executeDocumentSymbolProvider', uri
+    );
+  const completionAt = (uri: vscode.Uri, line: number, character: number) =>
+    vscode.commands.executeCommand<vscode.CompletionList>(
+      'vscode.executeCompletionItemProvider', uri, new vscode.Position(line, character)
+    );
+  const sigHelpAt = (uri: vscode.Uri, line: number, character: number) =>
+    vscode.commands.executeCommand<vscode.SignatureHelp>(
+      'vscode.executeSignatureHelpProvider', uri, new vscode.Position(line, character)
+    );
+  const nonEmptyHover = (h: vscode.Hover[]): boolean =>
+    Array.isArray(h) && h.length > 0 && hoverText(h[0]).length > 0;
+  const labelsOf = (list: vscode.CompletionList): string[] =>
+    list.items.map(i => (typeof i.label === 'string' ? i.label : i.label.label));
+  const startLines = (locs: vscode.Location[]): number[] =>
+    locs.map(l => l.range.start.line).sort((a, b) => a - b);
+
+  suiteSetup(async function () {
+    this.timeout(60000);
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'osprey-feat-'));
+
+    // Pin a genuine compiler so the language client is actually running.
+    const ospreyPath = resolveBuiltOsprey();
+    assert.ok(ospreyPath, 'a freshly-built osprey binary (target/release or PATH) is required for feature tests');
+    const config = vscode.workspace.getConfiguration('osprey');
+    priorCompilerPath = config.get<string>('server.compilerPath');
+    await config.update('server.compilerPath', ospreyPath, vscode.ConfigurationTarget.Global);
+    pinnedCompiler = true;
+
+    const ext = extension();
+    assert.ok(ext, 'extension discoverable');
+    if (ext && !ext.isActive) {
+      await ext.activate();
+    }
+
+    // Warm up: open a document and wait until hover actually answers. This both
+    // proves the server is live and removes first-request flakiness from the
+    // individual feature tests below.
+    const warm = await openDoc('warmup.osp', '\nfn warm(x) = x * 2\n\nlet w = warm(2)\n');
+    await pollFor<vscode.Hover[]>(
+      () => hoverAt(warm.uri, 3, 9),
+      h => Array.isArray(h) && h.length > 0 && hoverText(h[0]).includes('warm'),
+      80, 250
+    );
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  });
+
+  suiteTeardown(async () => {
+    if (pinnedCompiler) {
+      await vscode.workspace.getConfiguration('osprey').update(
+        'server.compilerPath', priorCompilerPath ?? '', vscode.ConfigurationTarget.Global
+      );
+    }
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 
   teardown(async () => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 
-  test('Go to Definition - Function', async () => {
-    const content = `
-fn double(x) = x * 2
+  // A single multi-construct program (type + functions + lets + builtins)
+  // exercised by the full provider sweep below.
+  const RICH = [
+    'type Shape = Circle | Square',     // 0
+    'fn area(r) = r * r',               // 1
+    'fn perimeter(r) = r + r + r + r',  // 2
+    'let radius = 5',                   // 3
+    'let a = area(radius)',             // 4
+    'let b = area(10)',                 // 5
+    'let c = perimeter(radius)',        // 6
+    'let names = List()',               // 7
+    'let count = listLength(names)',    // 8
+    'let m = print(a)'                  // 9
+  ].join('\n') + '\n';
 
-let result = double(5)
-`;
-    await createTestDocument(content);
+  test('CHUNKY: full language-intelligence sweep over one program (hover/def/refs/symbols/sig/completion)', async function () {
+    this.timeout(60000);
+    const doc = await openDoc('sweep.osp', RICH);
 
-    // Position cursor on 'double' in the function call
-    const position = new vscode.Position(3, 13); // Line 3, 'double' call
-    
-    try {
-      // Execute go to definition
-      const definitions = await vscode.commands.executeCommand<vscode.Location[]>(
-        'vscode.executeDefinitionProvider',
-        document.uri,
-        position
-      );
+    // --- HOVER: user functions at declaration and call site ---
+    const areaDecl = await pollFor(() => hoverAt(doc.uri, 1, 3),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('area'));
+    const areaDeclMd = hoverText(areaDecl[0]);
+    assert.ok(areaDeclMd.includes('fn area(r)'), 'area decl hover shows the signature');
+    assert.ok(areaDeclMd.includes('->'), 'area decl hover shows the return arrow');
+    assert.ok(areaDeclMd.includes('Unit'), 'area decl hover shows the inferred return type');
 
-      if (definitions && definitions.length > 0) {
-        assert.strictEqual(definitions[0].range.start.line, 1, 'Definition should be on line 1');
-        assert.strictEqual(definitions[0].range.start.character, 3, 'Definition should start at character 3');
-      } else {
-        // This is expected to fail currently due to LSP issues
-        console.log('Go to Definition not working - LSP integration issue (expected)');
-      }
-    } catch (error) {
-      console.log('Go to Definition failed as expected:', error);
+    const areaCall = await pollFor(() => hoverAt(doc.uri, 4, 9),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('area'));
+    assert.strictEqual(hoverText(areaCall[0]), areaDeclMd, 'call-site hover matches the declaration hover');
+
+    const periCall = await pollFor(() => hoverAt(doc.uri, 6, 9),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('perimeter'));
+    assert.ok(hoverText(periCall[0]).includes('fn perimeter(r)'), 'perimeter hover shows its signature');
+
+    // --- HOVER: built-ins carry their own typed signatures ---
+    const lenHover = await pollFor(() => hoverAt(doc.uri, 8, 13),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('listLength'));
+    const lenMd = hoverText(lenHover[0]);
+    assert.ok(lenMd.includes('->') && lenMd.includes('int'), 'listLength hover shows its typed signature');
+    assert.ok(lenMd.includes('List'), 'listLength hover mentions List');
+
+    const printHover = await pollFor(() => hoverAt(doc.uri, 9, 9),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('print'));
+    assert.ok(hoverText(printHover[0]).includes('Unit'), 'print hover shows it returns Unit');
+
+    // --- GO TO DEFINITION: both calls jump to their declarations ---
+    const areaDef = await pollFor(() => defsAt(doc.uri, 4, 9), d => Array.isArray(d) && d.length > 0);
+    assert.strictEqual(areaDef.length, 1, 'area has exactly one definition');
+    assert.strictEqual(areaDef[0].range.start.line, 1, 'area defined on line 1');
+    assert.strictEqual(areaDef[0].range.start.character, 3, 'area name starts at character 3');
+    assert.strictEqual(areaDef[0].uri.toString(), doc.uri.toString(), 'definition is in this document');
+
+    const periDef = await pollFor(() => defsAt(doc.uri, 6, 9), d => Array.isArray(d) && d.length > 0);
+    assert.strictEqual(periDef[0].range.start.line, 2, 'perimeter defined on line 2');
+
+    // --- FIND REFERENCES: declaration + every call, scoped to the function ---
+    const areaRefs = await pollFor(() => refsAt(doc.uri, 1, 3), r => Array.isArray(r) && r.length >= 3);
+    assert.strictEqual(areaRefs.length, 3, 'area: declaration + two calls');
+    assert.deepStrictEqual(startLines(areaRefs), [1, 4, 5], 'area references on the decl and both call lines');
+    assert.ok(areaRefs.every(r => r.uri.toString() === doc.uri.toString()), 'all area references in this document');
+
+    const periRefs = await pollFor(() => refsAt(doc.uri, 2, 3), r => Array.isArray(r) && r.length >= 2);
+    assert.strictEqual(periRefs.length, 2, 'perimeter: declaration + one call');
+    assert.deepStrictEqual(startLines(periRefs), [2, 6], 'perimeter references on decl and its call');
+
+    // --- DOCUMENT SYMBOLS: type, functions and lets with correct kinds ---
+    const syms = await pollFor(() => symbolsOf(doc.uri), s => Array.isArray(s) && s.length >= 10);
+    const byName = new Map(syms.map(s => [s.name, s]));
+    for (const name of ['Shape', 'area', 'perimeter', 'radius', 'a', 'b', 'c', 'names', 'count', 'm']) {
+      assert.ok(byName.has(name), `symbol ${name} is listed`);
+    }
+    assert.strictEqual(byName.get('Shape')?.kind, vscode.SymbolKind.Class, 'Shape is a type/Class');
+    assert.strictEqual(byName.get('area')?.kind, vscode.SymbolKind.Function, 'area is a Function');
+    assert.strictEqual(byName.get('perimeter')?.kind, vscode.SymbolKind.Function, 'perimeter is a Function');
+    assert.strictEqual(byName.get('radius')?.kind, vscode.SymbolKind.Variable, 'radius is a Variable');
+
+    // --- SIGNATURE HELP: inside the area(...) call ---
+    const help = await pollFor(() => sigHelpAt(doc.uri, 4, 13),
+      h => !!h && Array.isArray(h.signatures) && h.signatures.length > 0);
+    assert.ok(help.signatures[0].label.includes('area'), 'signature names area');
+    assert.strictEqual(help.signatures[0].parameters.length, 1, 'area has one parameter');
+    assert.strictEqual(help.activeParameter, 0, 'the first parameter is active');
+
+    // --- COMPLETION: user symbols AND keywords are offered ---
+    const list = await pollFor(() => completionAt(doc.uri, 9, 9),
+      l => !!l && Array.isArray(l.items) && l.items.length > 0);
+    const labels = labelsOf(list);
+    for (const sym of ['Shape', 'area', 'perimeter', 'radius', 'count']) {
+      assert.ok(labels.includes(sym), `completion offers the user symbol ${sym}`);
+    }
+    for (const kw of ['fn', 'let', 'match', 'type']) {
+      assert.ok(labels.includes(kw), `completion offers the keyword ${kw}`);
     }
   });
 
-  test('Find All References - Function', async () => {
-    const content = `
-fn add(x, y) = x + y
+  test('CHUNKY: diagnostics lifecycle — error surfaces, clears on fix, returns on re-break', async function () {
+    this.timeout(60000);
+    const doc = await openDoc('lifecycle.osp', '\nfn broken( = 42\n');
 
-let sum1 = add(x: 1, y: 2)
-let sum2 = add(x: 3, y: 4)
-print(add(x: 5, y: 6))
-`;
-    await createTestDocument(content);
+    // 1) The broken program must surface a real Error diagnostic from osprey.
+    const first = await pollFor(
+      () => Promise.resolve(vscode.languages.getDiagnostics(doc.uri)), d => d.length > 0);
+    assert.strictEqual(first[0].severity, vscode.DiagnosticSeverity.Error, 'first diagnostic is an Error');
+    assert.ok(first[0].message.length > 0, 'diagnostic carries a message');
+    assert.ok(/syntax/i.test(first[0].message), 'message identifies a syntax error');
+    assert.strictEqual(first[0].source, 'osprey', 'diagnostic attributed to the osprey server');
+    assert.ok(first[0].range.start.line >= 0, 'diagnostic has a real range');
 
-    // Position cursor on 'add' in the function definition
-    const position = new vscode.Position(1, 3); // Line 1, 'add' definition
-    
-    try {
-      const references = await vscode.commands.executeCommand<vscode.Location[]>(
-        'vscode.executeReferenceProvider',
-        document.uri,
-        position
-      );
+    // 2) Editing the buffer into a valid program retracts the diagnostic...
+    const editor = await vscode.window.showTextDocument(doc);
+    await editor.edit(b =>
+      b.replace(new vscode.Range(0, 0, doc.lineCount, 0), 'fn ok(x) = x * 2\nlet y = ok(2)\n'));
+    const cleared = await pollFor(
+      () => Promise.resolve(vscode.languages.getDiagnostics(doc.uri)), d => d.length === 0);
+    assert.strictEqual(cleared.length, 0, 'no diagnostics once the code is valid');
+    // ...and the now-valid buffer answers hover, proving the server reparsed it.
+    const okHover = await pollFor(() => hoverAt(doc.uri, 0, 3),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('ok'));
+    assert.ok(hoverText(okHover[0]).includes('fn ok'), 'hover works on the corrected program');
 
-      if (references && references.length > 0) {
-        assert.strictEqual(references.length, 4, 'Should find 4 references (1 definition + 3 usages)');
-      } else {
-        // This is expected to fail currently due to LSP issues
-        console.log('Find All References not working - LSP integration issue (expected)');
-      }
-    } catch (error) {
-      console.log('Find All References failed as expected:', error);
-    }
+    // 3) Re-breaking the buffer brings the Error diagnostic back.
+    const editor2 = await vscode.window.showTextDocument(doc);
+    await editor2.edit(b =>
+      b.replace(new vscode.Range(0, 0, doc.lineCount, 0), '\nfn broken( = 42\n'));
+    const second = await pollFor(
+      () => Promise.resolve(vscode.languages.getDiagnostics(doc.uri)), d => d.length > 0);
+    assert.strictEqual(second[0].severity, vscode.DiagnosticSeverity.Error, 're-broken code errors again');
+    assert.ok(second[0].message.length > 0, 're-error has a message');
   });
 
-  test('Hover Information - Function', async () => {
-    const content = `
-fn multiply(x, y) = x * y
+  test('CHUNKY: list-pattern program — hover/def/refs/symbols/completion over match patterns', async function () {
+    this.timeout(60000);
+    const content = [
+      'fn classify(xs) = match xs {',                     // 0
+      '  [] => "empty"',                                  // 1
+      '  [head, ...tail] => "many ${listLength(tail)}"',  // 2
+      '}',                                                // 3
+      'let z = classify(List())',                         // 4
+      'let w = classify(z)'                               // 5
+    ].join('\n') + '\n';
+    const doc = await openDoc('patterns.osp', content);
 
-let product = multiply(x: 3, y: 4)
-`;
-    await createTestDocument(content);
+    // Hover the declaration and a call: both render the classify signature.
+    const decl = await pollFor(() => hoverAt(doc.uri, 0, 3),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('classify'));
+    assert.ok(hoverText(decl[0]).includes('fn classify(xs)'), 'declaration hover shows classify signature');
+    const call = await pollFor(() => hoverAt(doc.uri, 4, 9),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('classify'));
+    assert.strictEqual(hoverText(call[0]), hoverText(decl[0]), 'call hover matches declaration hover');
 
-    // Position cursor on 'multiply' in the function call
-    const position = new vscode.Position(3, 14); // Line 3, 'multiply' call
-    
-    try {
-      const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
-        'vscode.executeHoverProvider',
-        document.uri,
-        position
-      );
+    // Definition from the first call lands on the declaration.
+    const def = await pollFor(() => defsAt(doc.uri, 4, 9), d => Array.isArray(d) && d.length > 0);
+    assert.strictEqual(def[0].range.start.line, 0, 'classify defined on line 0');
+    assert.strictEqual(def[0].range.start.character, 3, 'classify name at character 3');
 
-      if (hovers && hovers.length > 0) {
-        const hoverContent = hovers[0].contents[0];
-        assert.ok(hoverContent, 'Hover should have content');
-        
-        // Check if hover contains function information
-        const hoverText = typeof hoverContent === 'string' ? hoverContent : hoverContent.value;
-        assert.ok(hoverText.includes('multiply'), 'Hover should mention the function name');
-      } else {
-        console.log('Hover information not available yet');
-      }
-    } catch (error) {
-      console.log('Hover failed:', error);
-    }
+    // References include the declaration and both calls.
+    const refs = await pollFor(() => refsAt(doc.uri, 0, 3), r => Array.isArray(r) && r.length >= 3);
+    assert.strictEqual(refs.length, 3, 'classify: declaration + two calls');
+    assert.deepStrictEqual(startLines(refs), [0, 4, 5], 'references on the decl and both call lines');
+
+    // Symbols: the function plus the two lets, with correct kinds.
+    const syms = await pollFor(() => symbolsOf(doc.uri), s => Array.isArray(s) && s.length >= 3);
+    const byName = new Map(syms.map(s => [s.name, s]));
+    assert.strictEqual(byName.get('classify')?.kind, vscode.SymbolKind.Function, 'classify is a Function');
+    assert.strictEqual(byName.get('z')?.kind, vscode.SymbolKind.Variable, 'z is a Variable');
+    assert.strictEqual(byName.get('w')?.kind, vscode.SymbolKind.Variable, 'w is a Variable');
+
+    // Completion inside the second call offers the user function classify.
+    const list = await pollFor(() => completionAt(doc.uri, 5, 10),
+      l => !!l && Array.isArray(l.items) && l.items.length > 0);
+    assert.ok(labelsOf(list).includes('classify'), 'completion offers the classify function');
   });
 
-  test('Document Symbols', async () => {
-    const content = `
-fn foo() = 42
-let bar = 10
-type Baz = A | B
-`;
-    await createTestDocument(content);
+  test('CHUNKY: hover + symbols work on the ACTUAL reported list_basics.osp file', async function () {
+    this.timeout(60000);
+    // Open the very file the user reported ("Hover doesnt work!") straight from
+    // the repository and prove the language features answer over it. extensionRoot
+    // is <repo>/vscode-extension; the example lives under compiler/examples.
+    const reported = path.resolve(
+      extensionRoot, '..', 'compiler', 'examples', 'tested', 'basics', 'lists', 'list_basics.osp'
+    );
+    assert.ok(fs.existsSync(reported), `reported example exists at ${reported}`);
+    const doc = await vscode.workspace.openTextDocument(reported);
+    await vscode.window.showTextDocument(doc);
 
-    try {
-      const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
-        'vscode.executeDocumentSymbolProvider',
-        document.uri
-      );
+    // `print(listLength(e))` on line 13 (0-based 12): hover the builtin.
+    const lenHover = await pollFor(() => hoverAt(doc.uri, 12, 8),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('listLength'), 80, 250);
+    assert.ok(hoverText(lenHover[0]).includes('->'), 'listLength hover shows a signature on the real file');
+    assert.ok(hoverText(lenHover[0]).includes('int'), 'listLength hover shows it returns int');
 
-      if (symbols && symbols.length > 0) {
-        const symbolNames = symbols.map(s => s.name);
-        console.log('Found symbols:', symbolNames);
-        // Basic check that we found some symbols
-        assert.ok(symbols.length > 0, 'Should find at least some symbols');
-      } else {
-        console.log('Document symbols not available yet');
-      }
-    } catch (error) {
-      console.log('Document symbols failed:', error);
-    }
-  });
+    // `fn classify(xs)` on line 153 (0-based 152): hover the user function.
+    const classifyHover = await pollFor(() => hoverAt(doc.uri, 152, 5),
+      h => nonEmptyHover(h) && hoverText(h[0]).includes('classify'));
+    assert.ok(hoverText(classifyHover[0]).includes('fn classify'), 'classify hover shows its signature');
 
-  test('Diagnostics - Syntax Error', async () => {
-    const content = `
-fn broken( = 42
-`;
-    await createTestDocument(content);
-
-    // Wait for diagnostics
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    const diagnostics = vscode.languages.getDiagnostics(document.uri);
-    if (diagnostics.length > 0) {
-      const error = diagnostics[0];
-      assert.strictEqual(error.severity, vscode.DiagnosticSeverity.Error, 'Should be an error');
-      assert.ok(error.message.length > 0, 'Error should have a message');
-    } else {
-      console.log('No diagnostics found - may need more time or Osprey compiler');
-    }
-  });
-
-  test('Code Completion', async () => {
-    const content = `
-fn test() = 42
-let x = te
-`;
-    await createTestDocument(content);
-
-    // Position cursor after 'te'
-    const position = new vscode.Position(2, 10);
-    
-    try {
-      const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
-        'vscode.executeCompletionItemProvider',
-        document.uri,
-        position
-      );
-
-      if (completions && completions.items.length > 0) {
-        console.log('Found completions:', completions.items.map(item =>
-          typeof item.label === 'string' ? item.label : item.label.label
-        ));
-        assert.ok(completions.items.length > 0, 'Should have completion items');
-      } else {
-        console.log('No completions available yet');
-      }
-    } catch (error) {
-      console.log('Code completion failed:', error);
-    }
+    // Document symbols include the functions defined in the example.
+    const syms = await pollFor(() => symbolsOf(doc.uri), s => Array.isArray(s) && s.length > 0);
+    const names = syms.map(s => s.name);
+    assert.ok(names.includes('classify'), 'classify is listed among document symbols');
+    assert.ok(names.includes('sumList'), 'sumList is listed among document symbols');
+    assert.ok(names.includes('restLen'), 'restLen is listed among document symbols');
   });
 });
 
@@ -1089,5 +1245,148 @@ suite('Osprey Binary Resolution Unit Tests', () => {
         vscode.ConfigurationTarget.Global
       );
     }
+  });
+
+  test('resolveServerCommand falls back and warns when the configured path is missing', async () => {
+    // THE REGRESSION that killed hover: a configured server.compilerPath that
+    // points at a file that does not exist must NOT be returned verbatim (that
+    // ENOENTs the language client and silently kills every feature). It must
+    // fall back and warn. tempDir has no bundled binary, so the fallback is the
+    // bare `osprey` PATH lookup; then we stage a bundled binary and confirm it
+    // is preferred.
+    const config = vscode.workspace.getConfiguration('osprey');
+    const originalCompiler = config.get<string>('server.compilerPath');
+    const originalPath = config.get<string>('server.path');
+    const missing = path.join(tempDir, 'does', 'not', 'exist', 'osprey');
+    await config.update('server.compilerPath', missing, vscode.ConfigurationTarget.Global);
+    await config.update('server.path', '', vscode.ConfigurationTarget.Global);
+
+    try {
+      assert.ok(!fs.existsSync(missing), 'the configured path is genuinely absent');
+
+      const warnings: string[] = [];
+      const resolved = resolveServerCommand(fakeContext(tempDir), m => warnings.push(m));
+
+      assert.strictEqual(resolved, 'osprey', 'falls back to PATH osprey, never the dead path');
+      assert.notStrictEqual(resolved, missing, 'never returns the missing path');
+      assert.strictEqual(warnings.length, 1, 'exactly one warning is emitted');
+      assert.ok(warnings[0].includes(missing), 'warning names the offending path');
+      assert.ok(warnings[0].includes('does not exist'), 'warning explains the problem');
+
+      // With a bundled binary present, the fallback prefers it over PATH.
+      const exe = process.platform === 'win32' ? '.exe' : '';
+      const platDir = path.join(tempDir, 'bin', shipwrightPlatform());
+      fs.mkdirSync(platDir, { recursive: true });
+      const bundled = path.join(platDir, `osprey${exe}`);
+      fs.writeFileSync(bundled, '#!/bin/sh\nexit 0\n');
+      assert.strictEqual(
+        resolveServerCommand(fakeContext(tempDir), () => undefined),
+        bundled,
+        'missing user path falls back to the bundled binary when present'
+      );
+    } finally {
+      await config.update('server.compilerPath', originalCompiler ?? '', vscode.ConfigurationTarget.Global);
+      await config.update('server.path', originalPath ?? '', vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('resolveServerCommand keeps a bare command name without touching the filesystem', async () => {
+    // A bare `osprey` (no path separator) is a PATH command, not a file to
+    // existence-check; it must be returned as-is even though no such file exists
+    // relative to the cwd, and must not warn.
+    const config = vscode.workspace.getConfiguration('osprey');
+    const originalCompiler = config.get<string>('server.compilerPath');
+    await config.update('server.compilerPath', 'osprey', vscode.ConfigurationTarget.Global);
+    try {
+      const warnings: string[] = [];
+      const resolved = resolveServerCommand(fakeContext(tempDir), m => warnings.push(m));
+      assert.strictEqual(resolved, 'osprey', 'bare command returned verbatim');
+      assert.strictEqual(warnings.length, 0, 'no warning for a bare PATH command');
+    } finally {
+      await config.update('server.compilerPath', originalCompiler ?? '', vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('an existing configured path is still returned verbatim and never warns', async () => {
+    // Happy path: when the configured compiler DOES exist it is used directly,
+    // with no fallback and no warning — the dev-settings contract.
+    const config = vscode.workspace.getConfiguration('osprey');
+    const original = config.get<string>('server.compilerPath');
+    const real = path.join(tempDir, 'real-osprey');
+    fs.writeFileSync(real, '#!/bin/sh\nexit 0\n');
+    await config.update('server.compilerPath', real, vscode.ConfigurationTarget.Global);
+    try {
+      const warnings: string[] = [];
+      const resolved = resolveServerCommand(fakeContext(tempDir), m => warnings.push(m));
+      assert.strictEqual(resolved, real, 'existing path returned verbatim');
+      assert.strictEqual(warnings.length, 0, 'no warning when the path exists');
+    } finally {
+      await config.update('server.compilerPath', original ?? '', vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('looksLikePath distinguishes filesystem paths from bare commands', () => {
+    assert.ok(looksLikePath('/usr/local/bin/osprey'), 'absolute posix path');
+    assert.ok(looksLikePath('./target/release/osprey'), 'relative posix path');
+    assert.ok(looksLikePath('C:\\tools\\osprey.exe'), 'windows path');
+    assert.ok(!looksLikePath('osprey'), 'bare command is not a path');
+    assert.ok(!looksLikePath('osprey-lsp'), 'hyphenated bare command is not a path');
+  });
+});
+
+// Regression guard for the exact defect that broke hover: the committed dev
+// settings pointed osprey.server.compilerPath at compiler/bin/osprey — a path
+// `make build` never produces (compiler/bin is the C-runtime archive dir) — so
+// the language client ENOENT'd and every feature died. This locks the committed
+// value so it can never silently rot back to a non-existent binary.
+suite('Committed Dev Settings Sanity', () => {
+  // extensionRoot (module scope) is <repo>/vscode-extension; the repo root is
+  // one level up, and its .vscode/settings.json is the committed dev config.
+  const repoRoot = path.resolve(extensionRoot, '..');
+  const settingsPath = path.join(repoRoot, '.vscode', 'settings.json');
+
+  function compilerPathSetting(): string | undefined {
+    assert.ok(fs.existsSync(settingsPath), `repo .vscode/settings.json exists at ${settingsPath}`);
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    return settings['osprey.server.compilerPath'];
+  }
+
+  test('compilerPath is never the dead compiler/bin/osprey runtime-archive path', () => {
+    const compilerPath = compilerPathSetting();
+    if (!compilerPath) {
+      return; // unset is fine — resolution falls back to bundled/PATH.
+    }
+    // Checkout-independent string guards that directly forbid THE regression.
+    assert.ok(
+      !compilerPath.endsWith(path.join('compiler', 'bin', 'osprey')),
+      `compilerPath must not point at the runtime-archive dir: ${compilerPath}`
+    );
+    assert.ok(
+      !compilerPath.endsWith('compiler/bin/osprey'),
+      `compilerPath must not point at compiler/bin/osprey: ${compilerPath}`
+    );
+  });
+
+  test('a compilerPath inside this checkout resolves to a real, built binary', () => {
+    const compilerPath = compilerPathSetting();
+    if (!compilerPath || !compilerPath.startsWith(repoRoot)) {
+      // The committed path is absolute to the author's machine; on a foreign
+      // checkout (CI) it does not point into this tree, so existence is not our
+      // contract to enforce here. The string guards above still apply.
+      return;
+    }
+    // On the author's machine the path IS inside this checkout: after `make
+    // build` it must exist. This is the end-to-end proof that the editor's
+    // configured LSP binary is launchable (no ENOENT, so hover works), and that
+    // it is the make-build output rather than some other staged file.
+    assert.ok(
+      fs.existsSync(compilerPath),
+      `configured LSP binary must exist (run \`make build\`): ${compilerPath}`
+    );
+    assert.ok(
+      compilerPath.endsWith(path.join('target', 'release', 'osprey')) ||
+        compilerPath.endsWith('target/release/osprey'),
+      `in-checkout compilerPath should be the make-build output: ${compilerPath}`
+    );
   });
 });
