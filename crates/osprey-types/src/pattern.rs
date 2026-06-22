@@ -361,3 +361,199 @@ fn nullary_owner_ty(owner: String, args: Vec<Type>, is_record: bool) -> Type {
         Type::con(owner, args)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::check::check_program;
+    use osprey_syntax::parse_program;
+
+    fn check(src: &str) -> Vec<crate::error::TypeError> {
+        let parsed = parse_program(src);
+        assert!(
+            parsed.errors.is_empty(),
+            "syntax errors: {:?}",
+            parsed.errors
+        );
+        check_program(&parsed.program)
+    }
+
+    fn ok(src: &str) {
+        let errs = check(src);
+        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
+    }
+
+    #[test]
+    fn structural_pattern_binds_record_fields() {
+        ok("type Point = { x: int, y: int }\n\
+            fn getx(p: Point) -> int = match p {\n\
+              { x, y } => x + y\n\
+            }\n");
+        // A structural pattern over a non-record discriminant binds fresh vars.
+        ok("fn any(v) = match v {\n\
+              { a, b } => 0\n\
+            }\n");
+    }
+
+    #[test]
+    fn positional_constructor_destructures_fields() {
+        ok("type Wrap = Wrap { value: int }\n\
+            fn unwrap(w: Wrap) -> int = match w {\n\
+              Wrap(v) => v\n\
+            }\n");
+    }
+
+    #[test]
+    fn record_constructor_pattern_unifies_owner() {
+        // A `Ctor { fields }` pattern over a record type ties the discriminant to
+        // the record owner type.
+        ok("type Point = { x: int, y: int }\n\
+            fn getx(p: Point) -> int = match p {\n\
+              Point { x, y } => x\n\
+            }\n");
+    }
+
+    #[test]
+    fn bare_result_variant_bindings_match_the_builtin() {
+        // `Success`/`Error` as bare bindings over a real Result match the builtin
+        // variants and bind nothing.
+        ok("fn truthy(r: Result<int, Error>) -> int = match r {\n\
+              Success => 1\n\
+              Error => 0\n\
+            }\n");
+    }
+
+    #[test]
+    fn nullary_union_variant_bindings_unify_and_are_exhaustive() {
+        // No catch-all: each nullary binding is a variant, exercising both the
+        // binding-unify path and exhaustiveness via `pattern_ctor_name`.
+        ok("type Color = Red | Green | Blue\n\
+            fn name(c: Color) -> string = match c {\n\
+              Red => \"r\"\n\
+              Green => \"g\"\n\
+              Blue => \"b\"\n\
+            }\n");
+    }
+
+    #[test]
+    fn non_exhaustive_union_reports_missing_variants() {
+        let errs = check(
+            "type Color = Red | Green | Blue\n\
+             fn name(c: Color) -> string = match c {\n\
+               Red => \"r\"\n\
+               Green => \"g\"\n\
+             }\n",
+        );
+        assert!(errs
+            .iter()
+            .any(|e| e.message.contains("non-exhaustive") && e.message.contains("Blue")));
+    }
+
+    #[test]
+    fn uppercase_binding_over_non_union_is_a_plain_binding() {
+        // An uppercase name over an unconstrained (non-Con) discriminant is just a
+        // catch-all binding — `unknown_variant_owner` returns None for non-Con.
+        ok("fn f(v) = match v {\n\
+              X => X\n\
+            }\n");
+        // An uppercase name that IS a real variant of the union is fine.
+        ok("type Color = Red | Green\n\
+            fn g(c: Color) -> int = match c {\n\
+              Red => 1\n\
+              Green => 2\n\
+            }\n");
+    }
+
+    #[test]
+    fn result_pattern_with_an_unknown_field_binds_a_fresh_var() {
+        // `Success { extra }` over a Result binds the standard `value`/`message`
+        // and a fresh var for any other field name (the `_ => fresh()` arm).
+        ok("fn f(r: Result<int, Error>) -> int = match r {\n\
+              Success { value, extra } => value\n\
+              Error { message } => 0\n\
+            }\n");
+    }
+
+    #[test]
+    fn unknown_constructor_pattern_is_an_error_but_binds_fields() {
+        let errs = check(
+            "fn f(v) = match v {\n\
+               Bogus { a, b } => a\n\
+               _ => 0\n\
+             }\n",
+        );
+        assert!(errs
+            .iter()
+            .any(|e| e.message.contains("unknown constructor `Bogus`")));
+    }
+
+    #[test]
+    fn list_patterns_bind_head_tail_and_prefix() {
+        ok("fn classify(xs) = match xs {\n\
+              [] => \"empty\"\n\
+              [single] => \"one\"\n\
+              [head, ...tail] => \"many\"\n\
+            }\n");
+    }
+
+    #[test]
+    fn structural_pattern_over_a_record_value_binds_field_types() {
+        // Matching a record *value* (not a nominal annotation) makes the
+        // discriminant a real `Type::Record`, so structural binding reads the
+        // field's declared type.
+        ok("type Point = { x: int, y: int }\n\
+            fn sum() -> int = match Point { x: 1, y: 2 } {\n\
+              { x, y } => x + y\n\
+            }\n");
+    }
+
+    #[test]
+    fn type_annotated_pattern_binds_the_named_type() {
+        ok("fn f(v) = match v {\n\
+              n: Int => n\n\
+              _ => 0\n\
+            }\n");
+    }
+
+    #[test]
+    fn nullary_record_owner_pattern_unifies() {
+        // `type Foo = Foo` is a nullary record constructor; matching it ties the
+        // discriminant to the empty-record owner type (`nullary_owner_ty`'s
+        // record arm).
+        ok("type Foo = Foo\n\
+            fn f(x: Foo) -> int = match x {\n\
+              Foo => 1\n\
+            }\n");
+    }
+
+    #[test]
+    fn result_owner_constructor_pattern_autowraps_payload() {
+        // A `Success { value }` pattern over a non-Result discriminant auto-wraps
+        // it as the success payload, and `Error { message }` binds a string.
+        ok("fn f(n: int) -> int = match n {\n\
+              Success { value } => value\n\
+              Error { message } => 0\n\
+            }\n");
+    }
+
+    #[test]
+    fn bool_truthy_match_needs_both_branches() {
+        // A `true`/`false` (truthiness) match missing a branch is non-exhaustive.
+        let errs = check("let r = (10 + 5) ? 1 : 2\nlet x = match r > 0 { true => 1 }\n");
+        assert!(errs.iter().any(|e| e.message.contains("non-exhaustive")));
+    }
+
+    #[test]
+    fn bare_result_annotation_uses_the_no_args_unwrap_fallback() {
+        // A bare `Result` annotation (no type args) is still a Result; matching a
+        // literal against it runs `unwrap_result`'s no-args fallback (the empty
+        // Result cannot equal the int literal, so a mismatch is reported — the
+        // point is that the fallback branch is executed without panicking).
+        let errs = check(
+            "fn f(r: Result) -> int = match r {\n\
+               0 => 0\n\
+               _ => 1\n\
+             }\n",
+        );
+        assert!(errs.iter().any(|e| e.message.contains("Result")));
+    }
+}

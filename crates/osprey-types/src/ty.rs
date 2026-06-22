@@ -264,4 +264,35 @@ mod tests {
         );
         assert_eq!(Type::Var(3).to_string(), "t3");
     }
+
+    #[test]
+    fn ptr_is_the_named_pointer_primitive() {
+        assert!(Type::ptr().is_named(names::PTR));
+        assert_eq!(Type::ptr().to_string(), names::PTR);
+    }
+
+    #[test]
+    fn has_type_var_walks_records_and_unions() {
+        // A record whose only field is a variable is polymorphic.
+        let rec = Type::Record {
+            name: "R".into(),
+            fields: [("x".to_string(), Type::Var(0))].into_iter().collect(),
+        };
+        assert!(has_type_var(&rec));
+        // A union mentioning a variable in a variant is polymorphic; a fully
+        // concrete one is not.
+        let poly_union = Type::Union {
+            name: "U".into(),
+            variants: vec![Type::int(), Type::Var(1)],
+        };
+        let mono_union = Type::Union {
+            name: "U".into(),
+            variants: vec![Type::int(), Type::string()],
+        };
+        assert!(has_type_var(&poly_union));
+        assert!(!has_type_var(&mono_union));
+        // A generic constructor application is polymorphic via its args.
+        assert!(has_type_var(&Type::list(Type::Var(2))));
+        assert!(!has_type_var(&Type::list(Type::int())));
+    }
 }

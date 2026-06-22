@@ -308,4 +308,46 @@ mod tests {
         assert!(p.contains("scale") && p.contains("offset") && p.contains("base"));
         assert!(!p.contains("n"));
     }
+
+    #[test]
+    fn method_call_walks_target_and_arguments() {
+        // walk_rest's MethodCall arm: target + positional + named arguments.
+        let f = frees("let f = fn(s) => s.replace(needle, with: repl)");
+        assert!(f.contains("needle") && f.contains("repl"));
+        assert!(!f.contains("s"));
+    }
+
+    #[test]
+    fn record_update_walks_record_and_field_values() {
+        // walk_rest's Update arm: the updated record name + each field value.
+        // `ident { … }` always parses as a TypeConstructor (higher dynamic
+        // precedence), so the Update node is built directly here.
+        use osprey_ast::FieldAssignment;
+        let e = Expr::Update {
+            record: String::from("base"),
+            fields: vec![FieldAssignment {
+                name: String::from("x"),
+                value: Expr::Identifier(String::from("dx")),
+            }],
+        };
+        let mut out = BTreeSet::new();
+        free_idents(&e, &mut out);
+        assert!(out.contains("base") && out.contains("dx"));
+    }
+
+    #[test]
+    fn fiber_forms_capture_inner_expressions() {
+        // walk_fiber's Send/Recv arms.
+        let s = frees("let f = fn() => send(chan, payload)");
+        assert!(s.contains("chan") && s.contains("payload"));
+        let r = frees("let f = fn() => recv(inbox)");
+        assert!(r.contains("inbox"));
+    }
+
+    #[test]
+    fn block_assignment_and_expr_statements_are_walked() {
+        // walk_block's Assignment + Expr statement arms.
+        let f = frees("let f = fn() => { mut a = seed  a = step(a)  emit(a) }");
+        assert!(f.contains("seed") && f.contains("step") && f.contains("emit"));
+    }
 }

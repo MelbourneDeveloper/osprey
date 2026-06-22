@@ -429,6 +429,92 @@ mod tests {
     }
 
     #[test]
+    fn binding_a_var_to_itself_is_a_noop() {
+        let mut c = InferCtx::new();
+        let v = c.fresh();
+        // `t ~ t` short-circuits even after `v` aliases another fresh var.
+        let w = c.fresh();
+        unify(&mut c, &v, &w).unwrap();
+        unify(&mut c, &v, &w).unwrap();
+        assert_eq!(c.apply(&v), c.apply(&w));
+    }
+
+    #[test]
+    fn assignable_function_params_and_unwrapped_return_match() {
+        let mut c = InferCtx::new();
+        // Param contravariance + return unwrap in one call exercises the
+        // function arm of `unify_assignable` to completion.
+        let slot = Type::fun(vec![Type::int()], Type::int());
+        let value = Type::fun(
+            vec![Type::int()],
+            Type::result(Type::int(), Type::prim("MathError")),
+        );
+        unify_assignable(&mut c, &slot, &value).unwrap();
+        // And the wrap direction: a `(int) -> int` slot accepting a value whose
+        // return must be wrapped into a Result.
+        let result_slot = Type::fun(
+            vec![Type::int()],
+            Type::result(Type::int(), Type::prim("E")),
+        );
+        let bare = Type::fun(vec![Type::int()], Type::int());
+        unify_assignable(&mut c, &result_slot, &bare).unwrap();
+    }
+
+    #[test]
+    fn plain_unify_of_functions_auto_unwraps_returns_both_ways() {
+        let mut c = InferCtx::new();
+        let res = |ok: Type| Type::result(ok, Type::prim("MathError"));
+        // r1 concrete, r2 Result: `unify_fn_return` unwraps r2.
+        unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], Type::int()),
+            &Type::fun(vec![Type::int()], res(Type::int())),
+        )
+        .unwrap();
+        // r1 Result, r2 concrete: the wrap branch unifies inner with r2.
+        unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], res(Type::int())),
+            &Type::fun(vec![Type::int()], Type::int()),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn unify_seq_rejects_length_mismatch() {
+        let mut c = InferCtx::new();
+        // Same constructor name, different arity is a sequence-length mismatch.
+        assert!(unify(
+            &mut c,
+            &Type::con("Pair", vec![Type::int(), Type::int()]),
+            &Type::con("Pair", vec![Type::int()]),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn incompatible_shapes_hit_the_final_mismatch_arm() {
+        let mut c = InferCtx::new();
+        // A function vs a constructor matches no structural arm: the catch-all
+        // `_ => Err(mismatch)` fires.
+        assert!(unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], Type::int()),
+            &Type::con("List", vec![Type::int()]),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn assignable_unwraps_a_result_value_into_a_concrete_slot() {
+        let mut c = InferCtx::new();
+        // expected concrete `int`, actual `Result<int, E>`: the unwrap branch
+        // unifies `int` with the Result's inner payload.
+        let r = Type::result(Type::int(), Type::prim("E"));
+        unify_assignable(&mut c, &Type::int(), &r).unwrap();
+    }
+
+    #[test]
     fn unions_unify_by_name_and_variants() {
         let mut c = InferCtx::new();
         let u = |name: &str, vs: Vec<Type>| Type::Union {

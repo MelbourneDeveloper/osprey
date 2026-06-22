@@ -202,4 +202,21 @@ mod tests {
         let parsed = parse_program("fn (= \n");
         assert!(!parsed.errors.is_empty());
     }
+
+    #[test]
+    fn reports_missing_node_error() {
+        // `type T =` with no variant name forces tree-sitter to insert a MISSING
+        // identifier; collect_errors reports it via the is_missing format branch.
+        let parsed = parse_program("type T =\n");
+        assert!(
+            parsed
+                .errors
+                .iter()
+                .any(|e| e.message.starts_with("missing")),
+            "expected a missing-node error, got {:?}",
+            parsed.errors
+        );
+        // The error carries a 1-based line.
+        assert!(parsed.errors[0].position.line >= 1);
+    }
 }

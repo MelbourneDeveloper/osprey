@@ -158,4 +158,47 @@ mod tests {
         assert!(c.occurs(id, &Type::list(a.clone())));
         assert!(!c.occurs(id, &Type::list(Type::int())));
     }
+
+    fn rec(field: Type) -> Type {
+        Type::Record {
+            name: "R".into(),
+            fields: [("x".to_string(), field)].into_iter().collect(),
+        }
+    }
+    fn uni(variant: Type) -> Type {
+        Type::Union {
+            name: "U".into(),
+            variants: vec![variant],
+        }
+    }
+
+    #[test]
+    fn occurs_walks_records_unions_and_functions() {
+        let mut c = InferCtx::new();
+        let v = c.fresh();
+        let id = if let Type::Var(id) = v { id } else { 0 };
+        assert!(c.occurs(id, &rec(v.clone())));
+        assert!(c.occurs(id, &uni(v.clone())));
+        // The variable in a function's parameter / return is found too.
+        assert!(c.occurs(id, &Type::fun(vec![v.clone()], Type::int())));
+        assert!(c.occurs(id, &Type::fun(vec![Type::int()], v.clone())));
+    }
+
+    #[test]
+    fn apply_and_free_vars_descend_records_and_unions() {
+        let mut c = InferCtx::new();
+        let v = c.fresh();
+        let id = if let Type::Var(id) = v { id } else { 0 };
+        c.bind(id, Type::int());
+        // `apply` rebuilds records/unions with the binding resolved.
+        assert_eq!(c.apply(&rec(v.clone())), rec(Type::int()));
+        assert_eq!(c.apply(&uni(v.clone())), uni(Type::int()));
+        // `free_vars` reaches into record fields and union variants.
+        let w = c.fresh();
+        let mut fv = BTreeSet::new();
+        c.free_vars(&rec(w.clone()), &mut fv);
+        c.free_vars(&uni(w.clone()), &mut fv);
+        let wid = if let Type::Var(wid) = w { wid } else { 0 };
+        assert!(fv.contains(&wid));
+    }
 }
