@@ -3,11 +3,14 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { ErrorAction, CloseAction } from 'vscode-languageclient/node';
 import {
   shipwrightPlatform,
   resolveBundledCompiler,
   resolveServerCommand,
-  looksLikePath
+  looksLikePath,
+  makeClientFailureHandling,
+  deactivate
 } from '../../client/src/extension';
 
 const extensionId = 'nimblesite.osprey';
@@ -1388,5 +1391,66 @@ suite('Committed Dev Settings Sanity', () => {
         compilerPath.endsWith('target/release/osprey'),
       `in-checkout compilerPath should be the make-build output: ${compilerPath}`
     );
+  });
+});
+
+// Unit tests for the language client's failure-handling callbacks and the
+// deactivate hook. These fire only on real LSP transport failures / extension
+// shutdown, which the integration suites cannot deterministically induce, so we
+// drive the extracted, injectable handlers directly and assert their contracts.
+suite('Osprey Client Failure Handling Unit Tests', () => {
+  test('initializationFailedHandler logs, surfaces an error, and stops retrying', () => {
+    const logs: string[] = [];
+    const errors: string[] = [];
+    const handling = makeClientFailureHandling(m => logs.push(m), m => errors.push(m));
+
+    const result = handling.initializationFailedHandler!(new Error('init boom'));
+
+    assert.strictEqual(result, false, 'returns false so the client does not retry');
+    assert.strictEqual(logs.length, 1, 'logs exactly once');
+    assert.ok(logs[0].includes('Initialization failed'), 'log names the failure');
+    assert.ok(logs[0].includes('init boom'), 'log carries the underlying error');
+    assert.strictEqual(errors.length, 1, 'one user-facing error is shown');
+    assert.ok(errors[0].includes('initialization failed'), 'error message is descriptive');
+  });
+
+  test('errorHandler.error logs the error/message/count and continues', async () => {
+    const logs: string[] = [];
+    const handling = makeClientFailureHandling(m => logs.push(m), () => undefined);
+
+    const result = await handling.errorHandler!.error(new Error('transport'), undefined, 2);
+
+    assert.strictEqual(result.action, ErrorAction.Continue, 'keeps the server alive');
+    assert.strictEqual(logs.length, 1, 'logs the error once');
+    assert.ok(logs[0].includes('Language server error'), 'log identifies a server error');
+    assert.ok(logs[0].includes('transport'), 'log includes the underlying error');
+    assert.ok(logs[0].includes('2'), 'log includes the occurrence count');
+  });
+
+  test('errorHandler.closed logs and restarts the connection', async () => {
+    const logs: string[] = [];
+    const handling = makeClientFailureHandling(m => logs.push(m), () => undefined);
+
+    const result = await handling.errorHandler!.closed();
+
+    assert.strictEqual(result.action, CloseAction.Restart, 'restarts on a dropped connection');
+    assert.strictEqual(logs.length, 1, 'logs the closure once');
+    assert.ok(logs[0].includes('closed'), 'log names the closure');
+    assert.ok(logs[0].includes('restarting'), 'log states the restart');
+  });
+
+  // Runs LAST (file order): deactivate stops the live language client started by
+  // the earlier integration suites, so no later suite may depend on the server.
+  test('deactivate stops the running language client without throwing', async () => {
+    const result = deactivate();
+    // activate() ran in earlier suites, so a client exists and stop() yields a
+    // promise; await it to prove a clean shutdown. With no client the documented
+    // contract is to return undefined instead.
+    if (result !== undefined) {
+      await result;
+      assert.ok(true, 'client.stop() resolved cleanly');
+    } else {
+      assert.strictEqual(result, undefined, 'with no client, deactivate is a no-op');
+    }
   });
 });

@@ -76,6 +76,36 @@ export function resolveServerCommand(
   return resolveBundledCompiler(context) ?? 'osprey';
 }
 
+// makeClientFailureHandling builds the language client's failure callbacks: the
+// one-shot initialization-failed handler and the runtime error/closed handlers
+// that keep the server alive (Continue) or restart it (Restart). These fire only
+// on real LSP transport failures, which an integration test cannot reliably
+// induce — so they are extracted here and the side effects (`log`, `showError`)
+// are injected, letting each callback be unit-tested directly. Behaviour is
+// identical to the previous inline handlers.
+export function makeClientFailureHandling(
+  log: (message: string) => void,
+  showError: (message: string) => void
+): Pick<LanguageClientOptions, 'initializationFailedHandler' | 'errorHandler'> {
+  return {
+    initializationFailedHandler: (error) => {
+      log(`Initialization failed: ${error}`);
+      showError(`Osprey language server initialization failed: ${error}`);
+      return false;
+    },
+    errorHandler: {
+      error: (error, message, count) => {
+        log(`Language server error: ${error}, message: ${message}, count: ${count}`);
+        return { action: ErrorAction.Continue };
+      },
+      closed: () => {
+        log('Language server connection closed; restarting');
+        return { action: CloseAction.Restart };
+      }
+    }
+  };
+}
+
 export function activate(context: ExtensionContext) {
   console.log('Osprey extension is now active!');
   
@@ -151,21 +181,10 @@ export function activate(context: ExtensionContext) {
     },
     outputChannelName: 'Osprey Language Server',
     revealOutputChannelOn: RevealOutputChannelOn.Error,
-    initializationFailedHandler: (error) => {
-      outputChannel.appendLine(`Initialization failed: ${error}`);
-      window.showErrorMessage(`Osprey language server initialization failed: ${error}`);
-      return false;
-    },
-    errorHandler: {
-      error: (error, message, count) => {
-        outputChannel.appendLine(`Language server error: ${error}, message: ${message}, count: ${count}`);
-        return { action: ErrorAction.Continue };
-      },
-      closed: () => {
-        outputChannel.appendLine('Language server connection closed; restarting');
-        return { action: CloseAction.Restart };
-      }
-    }
+    ...makeClientFailureHandling(
+      (message) => outputChannel.appendLine(message),
+      (message) => { window.showErrorMessage(message); }
+    )
   };
 
   // Create and start the language client
