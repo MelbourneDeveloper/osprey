@@ -6,7 +6,8 @@ import * as os from 'os';
 import {
   shipwrightPlatform,
   resolveBundledCompiler,
-  resolveServerCommand
+  resolveServerCommand,
+  looksLikePath
 } from '../../client/src/extension';
 
 const extensionId = 'nimblesite.osprey';

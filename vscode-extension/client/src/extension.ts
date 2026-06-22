@@ -39,15 +39,38 @@ export function resolveBundledCompiler(context: ExtensionContext): string | unde
   return fs.existsSync(bundled) ? bundled : undefined;
 }
 
+// looksLikePath reports whether a configured compiler value is a filesystem
+// path (absolute or relative) rather than a bare command name resolved on PATH.
+// Only path-like values are existence-checked; a bare `osprey` is left for the
+// OS to resolve at spawn time.
+export function looksLikePath(value: string): boolean {
+  return value.includes('/') || value.includes('\\');
+}
+
 // resolveServerCommand picks the osprey binary that backs the language server:
 // an explicit user setting, then the version-matched bundled compiler, then a
 // plain `osprey` on PATH. The server is launched as `<command> lsp` over stdio.
-// Exported so each resolution branch can be unit tested independently of a
-// single live activation.
-export function resolveServerCommand(context: ExtensionContext): string {
+// A configured path that points at a MISSING file would make the language
+// client fail to spawn (ENOENT) and silently kill every feature — hover,
+// diagnostics, go-to-definition. Rather than die, fall back to the bundled/PATH
+// compiler and warn. `warn` is injectable so the fallback branch is unit
+// testable; it defaults to a no-op. Exported so each branch is unit tested
+// independently of a single live activation.
+export function resolveServerCommand(
+  context: ExtensionContext,
+  warn: (message: string) => void = () => undefined
+): string {
   const config = workspace.getConfiguration('osprey');
   const userPath = config.get<string>('server.compilerPath') || config.get<string>('server.path');
   if (userPath) {
+    if (looksLikePath(userPath) && !fs.existsSync(userPath)) {
+      const fallback = resolveBundledCompiler(context) ?? 'osprey';
+      warn(
+        `osprey.server.compilerPath "${userPath}" does not exist; ` +
+        `falling back to "${fallback}". Run \`make build\` to produce it.`
+      );
+      return fallback;
+    }
     return userPath;
   }
   return resolveBundledCompiler(context) ?? 'osprey';
@@ -100,7 +123,10 @@ export function activate(context: ExtensionContext) {
   // crate, built on the published lspkit crates), spoken over stdio. Resolve
   // the binary: explicit user setting first, then the version-matched bundled
   // compiler, then `osprey` on PATH.
-  const ospreyCommand = resolveServerCommand(context);
+  const ospreyCommand = resolveServerCommand(context, (m) => {
+    outputChannel.appendLine(m);
+    window.showWarningMessage(m);
+  });
   outputChannel.appendLine(`Language server command: ${ospreyCommand} lsp`);
 
   const serverExecutable: Executable = {
@@ -202,7 +228,7 @@ export function activate(context: ExtensionContext) {
       }
 
       // Actually run the Osprey program instead of debugging
-      compileAndRunCurrentFile();
+      compileAndRunCurrentFile(resolveServerCommand(context));
       return undefined; // Cancel the debug session
     }
   }));
@@ -232,10 +258,10 @@ export function activate(context: ExtensionContext) {
   // Register commands
   context.subscriptions.push(
     commands.registerCommand('osprey.compile', () => {
-      compileCurrentFile();
+      compileCurrentFile(resolveServerCommand(context));
     }),
     commands.registerCommand('osprey.run', () => {
-      compileAndRunCurrentFile();
+      compileAndRunCurrentFile(resolveServerCommand(context));
     }),
     commands.registerCommand('osprey.setLanguage', () => {
       const activeEditor = window.activeTextEditor;
@@ -252,7 +278,7 @@ export function activate(context: ExtensionContext) {
   );
 }
 
-function compileCurrentFile() {
+function compileCurrentFile(compilerCommand: string) {
   const activeEditor = window.activeTextEditor;
   if (!activeEditor) {
     window.showErrorMessage('No active Osprey file found');
@@ -274,9 +300,10 @@ function compileCurrentFile() {
     // Get the directory containing the file (no workspace required)
     const fileDir = path.dirname(document.fileName);
     
-    // Use the installed osprey compiler
-    execFile('osprey', [document.fileName], 
-      { cwd: fileDir }, 
+    // Use the resolved osprey compiler (user setting → version-matched bundled
+    // binary → `osprey` on PATH) — same resolution the language server uses.
+    execFile(compilerCommand, [document.fileName],
+      { cwd: fileDir },
       (error: any, stdout: any, stderr: any) => {
         outputChannel.appendLine(`=== COMPILATION OUTPUT ===`);
         
@@ -307,7 +334,7 @@ function compileCurrentFile() {
   });
 }
 
-function compileAndRunCurrentFile() {
+function compileAndRunCurrentFile(compilerCommand: string) {
   const activeEditor = window.activeTextEditor;
   if (!activeEditor) {
     window.showErrorMessage('No active Osprey file found');
@@ -329,9 +356,10 @@ function compileAndRunCurrentFile() {
     // Get the directory containing the file (no workspace required)
     const fileDir = path.dirname(document.fileName);
     
-    // Use the installed osprey compiler with --run flag
-    execFile('osprey', [document.fileName, '--run'], 
-      { cwd: fileDir }, 
+    // Use the resolved osprey compiler with --run (user setting → version-matched
+    // bundled binary → `osprey` on PATH) — same resolution the language server uses.
+    execFile(compilerCommand, [document.fileName, '--run'],
+      { cwd: fileDir },
       (error: any, stdout: any, stderr: any) => {
         outputChannel.appendLine(`=== COMPILE AND RUN OUTPUT ===`);
         
