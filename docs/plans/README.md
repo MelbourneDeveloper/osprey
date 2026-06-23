@@ -9,10 +9,8 @@ plan ends with a TODO checklist.
 |---|------|-----------|--------------|-------|
 | [0001](0001-codegen-higher-order-calls.md) | Higher-order / indirect calls | codegen | Direct + let-bound calls work; computed/field/chained callees bail | Medium |
 | [0002](0002-codegen-generic-function-values.md) | Generic functions & lambdas as values | codegen | Concrete capture-free/capturing lambdas work; generic ones bail | Medium |
-| [0003](0003-match-exhaustiveness.md) | Match exhaustiveness with catch-alls | types | Unions/bool checked; any catch-all disables the check | Low |
 | [0004](0004-collection-stdlib-completion.md) | Collection / map stdlib surface | stdlib | `listXxx`/`mapXxx` implemented; spec bare names + a few ops missing | Low–Medium |
 | [0005](0005-runtime-result-bridge.md) | HTTP/WebSocket `Result` bridge | runtime | Functions work but return raw `int64_t`, not `Result<T, string>` | Medium |
-| [0006](0006-fiber-yield.md) | Cooperative `yield()` | runtime | Parser + codegen exist; C runtime is a no-op stub | Medium–High |
 | [0007](0007-fiber-select.md) | `select` over channels | runtime | Parser + types work; codegen takes first arm; no runtime multiplexing | Medium |
 | [0008](0008-algebraic-effects-resume.md) | Effect `resume` / continuations | effects | Handlers work as value substitution; no `resume` | High |
 | [0009](0009-lsp-context-and-cross-file.md) | LSP context-awareness & cross-file | lsp | Hover/completion/sig-help work but identifier-only, single-file | Medium |

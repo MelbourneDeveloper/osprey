@@ -37,6 +37,12 @@ fn is_result_variant(name: &str) -> bool {
     name == names::SUCCESS || name == names::ERROR
 }
 
+/// An initial-uppercase identifier reads as a constructor/variant; a lower-case
+/// one reads as an ordinary variable binding.
+fn starts_uppercase(name: &str) -> bool {
+    name.chars().next().is_some_and(char::is_uppercase)
+}
+
 /// Whether every arm is a `true`/`false` literal pattern — the shape the
 /// ternary/Elvis desugar produces.
 fn all_bool_literal_arms(arms: &[MatchArm]) -> bool {
@@ -63,6 +69,7 @@ impl Checker {
         } else {
             self.check_exhaustive(&disc, arms);
         }
+        self.check_redundant_arms(arms);
         result
     }
 
@@ -183,7 +190,7 @@ impl Checker {
     /// known union that has no such variant, return the union's name — a
     /// lower-case identifier is an ordinary catch-all binding instead.
     fn unknown_variant_owner(&mut self, name: &str, disc: &Type) -> Option<String> {
-        if !name.chars().next().is_some_and(char::is_uppercase) {
+        if !starts_uppercase(name) {
             return None;
         }
         match self.ctx.prune(disc) {
@@ -332,17 +339,69 @@ impl Checker {
         }
     }
 
+    /// Flag arms that can never run: any arm after an irrefutable (catch-all)
+    /// arm, and a repeated constructor/variant arm. A catch-all stays legal — it
+    /// suppresses the missing-variant error — but dead arms after it (or duplicate
+    /// variants) are genuine mistakes, so report them.
+    fn check_redundant_arms(&mut self, arms: &[MatchArm]) {
+        let mut covered_all = false;
+        let mut seen: HashSet<String> = HashSet::new();
+        for arm in arms {
+            if covered_all {
+                self.errors.push(TypeError::new(
+                    "unreachable match arm: an earlier catch-all already covers every case",
+                ));
+                continue;
+            }
+            if let Some(name) = self.pattern_ctor_name(&arm.pattern) {
+                if !seen.insert(name.clone()) {
+                    self.errors.push(TypeError::new(format!(
+                        "unreachable match arm: variant `{name}` is already matched by an earlier arm"
+                    )));
+                }
+            }
+            covered_all = self.is_irrefutable(&arm.pattern);
+        }
+    }
+
+    /// Whether an arm absorbs every remaining case for *exhaustiveness*: a
+    /// wildcard, a typed binding (a single `n: Int` arm is treated as a catch-all
+    /// so it is not flagged non-exhaustive), or a genuine variable binding. A
+    /// capitalised bare name is a (possibly mis-spelled) constructor attempt — not
+    /// a catch-all — so the missing/unknown-variant path reports it.
     fn is_catch_all(&self, pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Wildcard | Pattern::TypeAnnotated { .. } => true,
-            Pattern::Binding(name) => self.ctors.get(name).is_none_or(|i| !i.fields.is_empty()),
+            Pattern::Binding(name) => self.is_variable_binding(name),
             _ => false,
         }
     }
 
+    /// Irrefutable patterns for *reachability*: only a wildcard or a genuine
+    /// variable binding truly covers every remaining value. A typed binding is a
+    /// type *test* (refutable), so it does not make later arms unreachable.
+    fn is_irrefutable(&self, pattern: &Pattern) -> bool {
+        match pattern {
+            Pattern::Wildcard => true,
+            Pattern::Binding(name) => self.is_variable_binding(name),
+            _ => false,
+        }
+    }
+
+    /// A bare binding is a genuine variable (not a variant) when it is lower-case
+    /// and not a known nullary constructor.
+    fn is_variable_binding(&self, name: &str) -> bool {
+        !starts_uppercase(name) && self.ctors.get(name).is_none_or(|i| !i.fields.is_empty())
+    }
+
+    /// The variant a pattern covers for exhaustiveness, if any: an explicit
+    /// constructor, a bare built-in `Result` variant (`Success`/`Error`, whose
+    /// fields are non-empty yet still name a variant), or a nullary-constructor
+    /// binding.
     fn pattern_ctor_name(&self, pattern: &Pattern) -> Option<String> {
         match pattern {
             Pattern::Constructor { name, .. } => Some(name.clone()),
+            Pattern::Binding(name) if is_result_variant(name) => Some(name.clone()),
             Pattern::Binding(name) if self.ctors.get(name).is_some_and(|i| i.fields.is_empty()) => {
                 Some(name.clone())
             }
@@ -555,5 +614,67 @@ mod tests {
              }\n",
         );
         assert!(errs.iter().any(|e| e.message.contains("Result")));
+    }
+
+    #[test]
+    fn lowercase_binding_is_a_legal_catch_all() {
+        // A genuine lower-case variable binding still absorbs the remaining
+        // variants, keeping a partial union match legal.
+        ok("type Color = Red | Green | Blue\n\
+            fn name(c: Color) -> string = match c {\n\
+              Red => \"r\"\n\
+              other => \"?\"\n\
+            }\n");
+    }
+
+    #[test]
+    fn misspelled_uppercase_variant_is_not_a_catch_all() {
+        // `Bleu` is not a `Color` variant: it must be reported rather than
+        // silently absorbing the missing variants as a catch-all.
+        let errs = check(
+            "type Color = Red | Green | Blue\n\
+             fn name(c: Color) -> string = match c {\n\
+               Red => \"r\"\n\
+               Bleu => \"?\"\n\
+             }\n",
+        );
+        assert!(
+            errs.iter().any(|e| e.message.contains("Bleu")),
+            "expected an error naming the unknown variant `Bleu`: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn arm_after_a_catch_all_is_unreachable() {
+        let errs = check(
+            "type Color = Red | Green | Blue\n\
+             fn name(c: Color) -> string = match c {\n\
+               Red => \"r\"\n\
+               _ => \"?\"\n\
+               Green => \"g\"\n\
+             }\n",
+        );
+        assert!(
+            errs.iter().any(|e| e.message.contains("unreachable")),
+            "expected an unreachable-arm error: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn duplicate_variant_arm_is_unreachable() {
+        let errs = check(
+            "type Color = Red | Green | Blue\n\
+             fn name(c: Color) -> string = match c {\n\
+               Red => \"r\"\n\
+               Green => \"g\"\n\
+               Red => \"r2\"\n\
+               Blue => \"b\"\n\
+             }\n",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.message.contains("unreachable") && e.message.contains("Red")),
+            "expected a duplicate-variant unreachable error: {errs:?}"
+        );
     }
 }

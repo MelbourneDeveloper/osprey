@@ -1,0 +1,10 @@
+// [TYPE-MATCH-EXHAUSTIVE] A capitalised bare name that is not a variant of the
+// discriminant union is a (mis-spelled) constructor, not a catch-all binding, so
+// it no longer silently absorbs the missing variants. `Bleu` must be rejected as
+// an unknown variant of `Color`.
+type Color = Red | Green | Blue
+fn name(c: Color) -> string = match c {
+    Red  => "r"
+    Bleu => "?"
+}
+print(name(Green))

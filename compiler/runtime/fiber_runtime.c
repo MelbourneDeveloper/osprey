@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <sched.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -226,10 +227,19 @@ int64_t fiber_await(int64_t fiber_id) {
   }
 }
 
-// TODO: Implement proper fiber yielding with context switching
+// Cooperative hand-off. In concurrent (threaded) mode, donate the rest of this
+// fiber's time slice to the scheduler so a peer fiber can run, then resume and
+// forward `value`. In deterministic mode fibers run sequentially to completion
+// while `fiber_await` holds `runtime_mutex`, so there is no peer to switch to
+// and taking the lock here would deadlock — yield forwards `value` unchanged,
+// preserving the differential harness's reproducible ordering. (`deterministic_mode`
+// is set once at startup before any fiber runs, so this lock-free read is safe.)
+// True cross-fiber interleaving under deterministic mode would need stackful
+// context switching (a separate, larger change); see docs spec 0011 §yield.
 int64_t fiber_yield(int64_t value) {
-  // NOTE: Current implementation is incomplete and needs proper context
-  // Don't ignore this. FIX IT!
+  if (!deterministic_mode) {
+    sched_yield();
+  }
   return value;
 }
 

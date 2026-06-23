@@ -1,0 +1,9 @@
+// [TYPE-MATCH-EXHAUSTIVE] An arm following an irrefutable catch-all can never
+// run; the compiler must reject the dead `Green` arm as unreachable.
+type Color = Red | Green | Blue
+fn name(c: Color) -> string = match c {
+    Red   => "r"
+    _     => "?"
+    Green => "g"
+}
+print(name(Blue))
