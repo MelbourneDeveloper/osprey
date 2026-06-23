@@ -1,0 +1,12 @@
+// Implements [TYPE-LIST-PATTERNS] negative test.
+//
+// A list pattern admits at most one rest binder. `[...a, ...b]` has two and
+// must be rejected — the grammar allows a single trailing `...name`, so a
+// leading or doubled rest fails to parse.
+
+fn classify(xs) = match xs {
+    [...a, ...b] => a
+    _            => 0
+}
+
+print(classify(List()))

@@ -188,4 +188,102 @@ mod tests {
             Type::result(Type::int(), Type::prim("Error"))
         );
     }
+
+    fn arr(elem: TypeExpr) -> TypeExpr {
+        let mut te = TypeExpr::named("");
+        te.is_array = true;
+        te.array_element = Some(Box::new(elem));
+        te
+    }
+
+    #[test]
+    fn type_expr_array_function_and_param_paths() {
+        let mut m = HashMap::new();
+        m.insert("T".to_string(), Type::Var(5));
+        // `[string]` → List<string>; an array with no element type → List<any>.
+        assert_eq!(
+            type_expr_to_type(&arr(TypeExpr::named("string")), &m),
+            Type::list(Type::string())
+        );
+        assert_eq!(
+            type_expr_to_type(
+                &{
+                    let mut te = TypeExpr::named("");
+                    te.is_array = true;
+                    te
+                },
+                &m
+            ),
+            Type::list(Type::any())
+        );
+        // A bare generic-parameter name resolves to its bound variable.
+        assert_eq!(type_expr_to_type(&TypeExpr::named("T"), &m), Type::Var(5));
+        // `fn(T) -> int`, plus a function with no declared return → Unit.
+        let mut fn_te = TypeExpr::named("");
+        fn_te.is_function = true;
+        fn_te.parameter_types = vec![TypeExpr::named("T")];
+        fn_te.return_type = Some(Box::new(TypeExpr::named("int")));
+        assert_eq!(
+            type_expr_to_type(&fn_te, &m),
+            Type::fun(vec![Type::Var(5)], Type::int())
+        );
+        let mut noret = TypeExpr::named("");
+        noret.is_function = true;
+        assert_eq!(
+            type_expr_to_type(&noret, &m),
+            Type::fun(Vec::new(), Type::unit())
+        );
+        // An applied generic head builds a `Con`.
+        let mut boxed = TypeExpr::named("Box");
+        boxed.generic_params = vec![TypeExpr::named("int")];
+        assert_eq!(
+            type_expr_to_type(&boxed, &m),
+            Type::con("Box", vec![Type::int()])
+        );
+    }
+
+    #[test]
+    fn type_name_to_type_nested_generics_and_fn_sigs() {
+        let m = HashMap::new();
+        // Generic head with a nested generic argument exercises `split_generic_args`
+        // depth tracking over `<>`.
+        assert_eq!(
+            type_name_to_type("Map<string, List<int>>", &m),
+            Type::map(Type::string(), Type::list(Type::int()))
+        );
+        // `fn(int) -> bool` and the paren form share `parse_fn_sig`.
+        assert_eq!(
+            type_name_to_type("fn(int) -> bool", &m),
+            Type::fun(vec![Type::int()], Type::bool())
+        );
+        assert_eq!(
+            type_name_to_type("(int, string) -> bool", &m),
+            Type::fun(vec![Type::int(), Type::string()], Type::bool())
+        );
+        // A `<` that is not closed by a trailing `>` is not a generic: it falls
+        // through to a nullary named type.
+        assert_eq!(
+            type_name_to_type("Weird<unclosed", &m),
+            Type::prim("Weird<unclosed")
+        );
+    }
+
+    #[test]
+    fn parse_fn_sig_tolerates_malformed_input() {
+        let m = HashMap::new();
+        // No open paren at all → `() -> Unit`.
+        assert_eq!(parse_fn_sig("fn", &m), (Vec::new(), Type::unit()));
+        // Open paren without a matching close → `() -> Unit`.
+        assert_eq!(parse_fn_sig("fn(int", &m), (Vec::new(), Type::unit()));
+        // Empty params and no arrow → `() -> Unit`.
+        assert_eq!(parse_fn_sig("fn()", &m), (Vec::new(), Type::unit()));
+        // A nested-paren parameter exercises the `matching_paren` depth counter.
+        assert_eq!(
+            parse_fn_sig("fn((int) -> int) -> bool", &m),
+            (
+                vec![Type::fun(vec![Type::int()], Type::int())],
+                Type::bool()
+            )
+        );
+    }
 }

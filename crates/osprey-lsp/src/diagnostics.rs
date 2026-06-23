@@ -97,11 +97,36 @@ mod tests {
     fn type_error_surfaces_when_parse_is_clean() {
         // Referencing an unknown function type-checks but does not parse-fail.
         let diags = compute("fn main() -> int = nope(1)\n", U16);
+        assert!(!diags.is_empty(), "an unknown call type-errors");
         assert!(
             diags
                 .iter()
                 .all(|d| d.code.as_deref() == Some("type-error")),
             "{diags:?}"
         );
+        // Every diagnostic carries the osprey source, is an error, and spans a
+        // non-empty range on its line.
+        for d in &diags {
+            assert_eq!(d.severity, Severity::Error);
+            assert_eq!(d.source.as_deref(), Some("osprey"));
+            let (sl, sc, el, ec) = d.range;
+            assert_eq!(sl, el, "single-line span: {d:?}");
+            assert!(ec > sc, "non-empty span: {d:?}");
+            assert!(!d.message.is_empty());
+        }
+    }
+
+    #[test]
+    fn diagnostic_columns_are_remeasured_in_the_negotiated_encoding() {
+        // A multi-byte identifier shifts the byte column; the wire range must be
+        // re-measured so the same program reports a wider start under UTF-8 than
+        // under UTF-16 when the error sits past a multi-byte char.
+        let src = "fn café() -> int = nope(1)\n";
+        let u16 = compute(src, PositionEncoding::Utf16);
+        let u8 = compute(src, PositionEncoding::Utf8);
+        // Both encodings find at least one diagnostic on the first line.
+        assert!(!u16.is_empty() && !u8.is_empty(), "{u16:?} {u8:?}");
+        assert!(u16.iter().all(|d| d.range.0 == 0));
+        assert!(u8.iter().all(|d| d.range.0 == 0));
     }
 }

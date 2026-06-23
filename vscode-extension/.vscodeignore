@@ -36,6 +36,10 @@ test-runner.js
 
 # Keep only essential files
 !out/**
+# Bundled, version-matched osprey compiler + C runtime archives (libfiber/libhttp)
+# staged by `make _vsix_bundle`. resolveBundledCompiler() loads bin/<platform>/osprey,
+# and the compiler links the .a archives sitting beside it for `--run`.
+!bin/**
 !syntaxes/**
 !language-configuration/**
 !package.json

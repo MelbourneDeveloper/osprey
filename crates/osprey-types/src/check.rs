@@ -530,3 +530,89 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
         lambdas,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{check_program, infer_program};
+    use osprey_syntax::parse_program;
+
+    fn check(src: &str) -> Vec<crate::error::TypeError> {
+        let parsed = parse_program(src);
+        assert!(
+            parsed.errors.is_empty(),
+            "syntax errors: {:?}",
+            parsed.errors
+        );
+        check_program(&parsed.program)
+    }
+
+    #[test]
+    fn module_bodies_are_checked_in_a_child_scope() {
+        let errs = check(
+            "module Math {\n\
+               fn square(x: int) -> int = x * x\n\
+             }\n",
+        );
+        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
+        // A type error inside a module body is still reported.
+        let errs = check(
+            "module Bad {\n\
+               let y: int = \"not an int\"\n\
+             }\n",
+        );
+        assert!(errs.iter().any(|e| e.message.contains("type mismatch")));
+    }
+
+    #[test]
+    fn assignment_to_undeclared_name_is_an_error() {
+        let errs = check("fn main() -> Unit = {\n  neverDeclared = 100\n}\n");
+        assert!(errs.iter().any(|e| e
+            .message
+            .contains("assignment to undeclared `neverDeclared`")));
+    }
+
+    #[test]
+    fn extern_declarations_register_signatures() {
+        // An `extern fn` exercises `collect_extern`, `record_fn_params` over
+        // `ExternParameter`, and the published signature used at the call site.
+        ok("extern fn c_add(a: int, b: int) -> int\n\
+            fn use_it() -> int = c_add(1, 2)\n");
+        // An extern with no declared return type defaults to Unit.
+        ok("extern fn c_log(msg: string)\n\
+            fn use_log() -> Unit = c_log(\"x\")\n");
+    }
+
+    #[test]
+    fn infer_program_publishes_functions_and_unions() {
+        let parsed = parse_program(
+            "type Color = Red | Green\n\
+             fn dbl(x: int) -> int = x * 2\n\
+             let g = fn(n) => n + 1\n",
+        );
+        let info = infer_program(&parsed.program);
+        // Resolved function signatures and union tags are published.
+        assert!(info.functions.contains_key("dbl"));
+        assert_eq!(
+            info.unions.get("Color").map(Vec::len),
+            Some(2),
+            "Color variants published"
+        );
+        // The lambda's resolved type is published keyed by source position.
+        assert!(!info.lambdas.is_empty(), "lambda type published");
+    }
+
+    fn ok(src: &str) {
+        let errs = check(src);
+        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
+    }
+
+    #[test]
+    fn single_variant_same_name_type_is_a_record() {
+        // `type Foo = Foo` is the single-variant record form (`is_record`); using
+        // the bare name is a record value, and `infer_program` publishes it.
+        let parsed = parse_program("type Foo = Foo\nlet x = Foo\n");
+        let info = infer_program(&parsed.program);
+        let foo = info.ctors.get("Foo").expect("Foo ctor published");
+        assert!(foo.owner_is_record);
+    }
+}

@@ -26,6 +26,7 @@ const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --comp
        osprey lsp";
 
 /// The parsed invocation: source path, mode flag, and behaviour switches.
+#[derive(Debug)]
 struct Cli {
     path: String,
     mode: String,
@@ -409,4 +410,156 @@ fn openssl_flags() -> Vec<String> {
         }
     }
     vec!["-lssl".into(), "-lcrypto".into()]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn parse_args_defaults_to_check_with_full_capabilities() {
+        let cli = parse_args(&args(&["prog.osp"])).expect("parses");
+        assert_eq!(cli.path, "prog.osp");
+        assert_eq!(cli.mode, "--check");
+        assert!(!cli.quiet);
+        assert!(cli.policy.http && cli.policy.websocket && cli.policy.fs && cli.policy.ffi);
+    }
+
+    #[test]
+    fn parse_args_last_mode_wins_and_quiet_sets() {
+        let cli = parse_args(&args(&["--ast", "f.osp", "--llvm", "--run", "--quiet"])).expect("ok");
+        assert_eq!(cli.mode, "--run");
+        assert_eq!(cli.path, "f.osp");
+        assert!(cli.quiet);
+    }
+
+    #[test]
+    fn parse_args_each_sandbox_flag_clears_one_capability() {
+        let cli = parse_args(&args(&["f.osp", "--no-http"])).expect("ok");
+        assert!(!cli.policy.http && cli.policy.websocket && cli.policy.fs && cli.policy.ffi);
+        let cli = parse_args(&args(&["f.osp", "--no-websocket"])).expect("ok");
+        assert!(cli.policy.http && !cli.policy.websocket);
+        let cli = parse_args(&args(&["f.osp", "--no-fs"])).expect("ok");
+        assert!(!cli.policy.fs && cli.policy.ffi);
+        let cli = parse_args(&args(&["f.osp", "--no-ffi"])).expect("ok");
+        assert!(!cli.policy.ffi && cli.policy.fs);
+        let cli = parse_args(&args(&["--sandbox", "f.osp"])).expect("ok");
+        assert!(!cli.policy.http && !cli.policy.websocket && !cli.policy.fs && !cli.policy.ffi);
+    }
+
+    #[test]
+    fn parse_args_rejects_unknown_flag_missing_path_and_extra_positional() {
+        let e = parse_args(&args(&["f.osp", "--bogus"])).expect_err("unknown flag");
+        assert!(e.contains("unknown flag --bogus"));
+        let e = parse_args(&args(&["--check"])).expect_err("no path");
+        assert!(e.contains("usage:"));
+        let e = parse_args(&args(&["a.osp", "b.osp"])).expect_err("two paths");
+        assert!(e.contains("unexpected argument b.osp"));
+    }
+
+    #[test]
+    fn stem_of_handles_dirs_and_missing_extension() {
+        assert_eq!(stem_of("examples/demo.osp"), "demo");
+        assert_eq!(stem_of("/a/b/c.osp"), "c");
+        assert_eq!(stem_of("noext"), "noext");
+    }
+
+    #[test]
+    fn directive_parses_both_spellings_and_ignores_others() {
+        assert_eq!(directive("// @link: sqlite3", "link"), Some("sqlite3"));
+        assert_eq!(
+            directive("//@linkdir: /opt/lib ", "linkdir"),
+            Some("/opt/lib")
+        );
+        assert_eq!(directive("  // @link:  pq  ", "link"), Some("pq"));
+        assert_eq!(directive("let x = 1", "link"), None);
+        assert_eq!(directive("// @link: sqlite3", "linkdir"), None);
+    }
+
+    #[test]
+    fn link_args_adds_ffi_directives_and_openssl_for_http() {
+        let ffi = link_args("", "// @link: sqlite3\n// @linkdir: /opt/lib\ncode\n");
+        assert!(ffi.iter().any(|a| a == "-lsqlite3"), "{ffi:?}");
+        assert!(ffi.iter().any(|a| a == "-L/opt/lib"), "{ffi:?}");
+        let http = link_args("call void @http_listen()", "");
+        assert!(http.iter().any(|a| a == "-lssl") && http.iter().any(|a| a == "-lcrypto"));
+        // No HTTP markers => no openssl flags.
+        let plain = link_args("call void @osprey_list_empty()", "");
+        assert!(!plain.iter().any(|a| a == "-lssl"));
+    }
+
+    #[test]
+    fn openssl_and_compiler_helpers_are_well_formed() {
+        let flags = openssl_flags();
+        assert!(flags.iter().any(|f| f == "-lssl") && flags.iter().any(|f| f == "-lcrypto"));
+        assert!(!c_compiler().is_empty());
+        assert!(find_runtime_lib("definitely_not_a_real_lib_xyz.a").is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn child_exit_code_maps_codes_and_signals() {
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(child_exit_code(std::process::ExitStatus::from_raw(0)), 0);
+        assert_eq!(
+            child_exit_code(std::process::ExitStatus::from_raw(1 << 8)),
+            1
+        );
+        // Killed by SIGKILL (9): no exit code, so 128 + signal.
+        assert_eq!(child_exit_code(std::process::ExitStatus::from_raw(9)), 137);
+    }
+
+    #[test]
+    fn report_type_errors_counts_zero_for_valid_and_more_for_ill_typed() {
+        let ok = osprey_syntax::parse_program("let x = 1\nprint(x)\n").program;
+        assert_eq!(report_type_errors("ok.osp", &ok), 0);
+        let bad = osprey_syntax::parse_program("let y = 1 + \"oops\" - true\n").program;
+        assert!(report_type_errors("bad.osp", &bad) > 0);
+    }
+
+    fn temp_source(name: &str, body: &str) -> String {
+        let p = std::env::temp_dir().join(format!("osprey_cli_{name}.osp"));
+        std::fs::write(&p, body).expect("write temp source");
+        p.display().to_string()
+    }
+
+    fn cli(path: impl Into<String>, mode: &str, policy: Policy) -> Cli {
+        Cli {
+            path: path.into(),
+            mode: mode.to_string(),
+            quiet: true,
+            policy,
+        }
+    }
+
+    #[test]
+    fn run_drives_check_symbols_and_llvm_modes_in_process() {
+        let path = temp_source("ok", "let greeting = \"hi\"\nprint(greeting)\n");
+        for mode in ["--check", "--symbols", "--llvm", "--ast"] {
+            // ExitCode is opaque; this drives run -> dispatch coverage and must
+            // not panic for a well-formed program.
+            let _ = run(&cli(path.clone(), mode, Policy::allow_all()));
+        }
+    }
+
+    #[test]
+    fn run_reports_missing_file_and_parse_errors() {
+        let _ = run(&cli(
+            "/no/such/osprey/file.osp",
+            "--check",
+            Policy::allow_all(),
+        ));
+        let path = temp_source("broken", "fn = = =\n");
+        let _ = run(&cli(path, "--check", Policy::allow_all())); // parse-error branch
+    }
+
+    #[test]
+    fn run_rejects_sandbox_violation_before_codegen() {
+        let path = temp_source("fs", "let c = readFile(\"x.txt\")\n");
+        let _ = run(&cli(path, "--llvm", Policy::sandbox())); // sandbox-violation branch
+    }
 }

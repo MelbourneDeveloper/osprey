@@ -338,4 +338,208 @@ mod tests {
         let v = c.fresh();
         assert!(unify(&mut c, &v, &Type::list(v.clone())).is_err());
     }
+
+    #[test]
+    fn function_types_unify_on_arity_params_and_return() {
+        let mut c = InferCtx::new();
+        let v = c.fresh();
+        // (int) -> v  ~  (int) -> string  binds v := string.
+        unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], v.clone()),
+            &Type::fun(vec![Type::int()], Type::string()),
+        )
+        .unwrap();
+        assert_eq!(c.apply(&v), Type::string());
+        // Arity mismatch is an error.
+        let e = unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], Type::int()),
+            &Type::fun(vec![Type::int(), Type::int()], Type::int()),
+        )
+        .unwrap_err();
+        assert!(format!("{e:?}").contains("arity"));
+    }
+
+    #[test]
+    fn assignable_wraps_bare_value_into_result_return() {
+        let mut c = InferCtx::new();
+        // A bare `bool` satisfies a `Result<bool, E>` slot (implicit Success).
+        let want = Type::result(Type::bool(), Type::prim("E"));
+        unify_assignable(&mut c, &want, &Type::bool()).unwrap();
+    }
+
+    #[test]
+    fn assignable_function_return_is_covariant_through_result() {
+        let mut c = InferCtx::new();
+        // `(int) -> Result<int, MathError>` is assignable to a `(int) -> int` slot.
+        let slot = Type::fun(vec![Type::int()], Type::int());
+        let lambda = Type::fun(
+            vec![Type::int()],
+            Type::result(Type::int(), Type::prim("MathError")),
+        );
+        unify_assignable(&mut c, &slot, &lambda).unwrap();
+    }
+
+    #[test]
+    fn record_mismatches_are_rejected() {
+        use std::collections::BTreeMap;
+        let mut c = InferCtx::new();
+        let rec = |pairs: &[(&str, Type)]| Type::Record {
+            name: "R".into(),
+            fields: pairs
+                .iter()
+                .map(|(k, t)| ((*k).to_string(), t.clone()))
+                .collect::<BTreeMap<_, _>>(),
+        };
+        // Same arity, different field name.
+        assert!(unify(
+            &mut c,
+            &rec(&[("x", Type::int())]),
+            &rec(&[("y", Type::int())])
+        )
+        .is_err());
+        // Different number of fields.
+        assert!(unify(
+            &mut c,
+            &rec(&[("x", Type::int())]),
+            &rec(&[("x", Type::int()), ("y", Type::int())]),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn nominal_constructor_unifies_with_same_named_record() {
+        use std::collections::BTreeMap;
+        let mut c = InferCtx::new();
+        let point_con = Type::con("Point", vec![]);
+        let point_rec = Type::Record {
+            name: "Point".into(),
+            fields: BTreeMap::new(),
+        };
+        unify(&mut c, &point_con, &point_rec).unwrap();
+        unify(&mut c, &point_rec, &point_con).unwrap();
+        // Distinct constructor names still clash.
+        assert!(unify(
+            &mut c,
+            &Type::con("List", vec![Type::int()]),
+            &Type::con("Map", vec![Type::int(), Type::int()])
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn binding_a_var_to_itself_is_a_noop() {
+        let mut c = InferCtx::new();
+        let v = c.fresh();
+        // `t ~ t` short-circuits even after `v` aliases another fresh var.
+        let w = c.fresh();
+        unify(&mut c, &v, &w).unwrap();
+        unify(&mut c, &v, &w).unwrap();
+        assert_eq!(c.apply(&v), c.apply(&w));
+    }
+
+    #[test]
+    fn assignable_function_params_and_unwrapped_return_match() {
+        let mut c = InferCtx::new();
+        // Param contravariance + return unwrap in one call exercises the
+        // function arm of `unify_assignable` to completion.
+        let slot = Type::fun(vec![Type::int()], Type::int());
+        let value = Type::fun(
+            vec![Type::int()],
+            Type::result(Type::int(), Type::prim("MathError")),
+        );
+        unify_assignable(&mut c, &slot, &value).unwrap();
+        // And the wrap direction: a `(int) -> int` slot accepting a value whose
+        // return must be wrapped into a Result.
+        let result_slot = Type::fun(
+            vec![Type::int()],
+            Type::result(Type::int(), Type::prim("E")),
+        );
+        let bare = Type::fun(vec![Type::int()], Type::int());
+        unify_assignable(&mut c, &result_slot, &bare).unwrap();
+    }
+
+    #[test]
+    fn plain_unify_of_functions_auto_unwraps_returns_both_ways() {
+        let mut c = InferCtx::new();
+        let res = |ok: Type| Type::result(ok, Type::prim("MathError"));
+        // r1 concrete, r2 Result: `unify_fn_return` unwraps r2.
+        unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], Type::int()),
+            &Type::fun(vec![Type::int()], res(Type::int())),
+        )
+        .unwrap();
+        // r1 Result, r2 concrete: the wrap branch unifies inner with r2.
+        unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], res(Type::int())),
+            &Type::fun(vec![Type::int()], Type::int()),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn unify_seq_rejects_length_mismatch() {
+        let mut c = InferCtx::new();
+        // Same constructor name, different arity is a sequence-length mismatch.
+        assert!(unify(
+            &mut c,
+            &Type::con("Pair", vec![Type::int(), Type::int()]),
+            &Type::con("Pair", vec![Type::int()]),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn incompatible_shapes_hit_the_final_mismatch_arm() {
+        let mut c = InferCtx::new();
+        // A function vs a constructor matches no structural arm: the catch-all
+        // `_ => Err(mismatch)` fires.
+        assert!(unify(
+            &mut c,
+            &Type::fun(vec![Type::int()], Type::int()),
+            &Type::con("List", vec![Type::int()]),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn assignable_unwraps_a_result_value_into_a_concrete_slot() {
+        let mut c = InferCtx::new();
+        // expected concrete `int`, actual `Result<int, E>`: the unwrap branch
+        // unifies `int` with the Result's inner payload.
+        let r = Type::result(Type::int(), Type::prim("E"));
+        unify_assignable(&mut c, &Type::int(), &r).unwrap();
+    }
+
+    #[test]
+    fn unions_unify_by_name_and_variants() {
+        let mut c = InferCtx::new();
+        let u = |name: &str, vs: Vec<Type>| Type::Union {
+            name: name.into(),
+            variants: vs,
+        };
+        unify(
+            &mut c,
+            &u("E", vec![Type::int()]),
+            &u("E", vec![Type::int()]),
+        )
+        .unwrap();
+        // Different name.
+        assert!(unify(
+            &mut c,
+            &u("E", vec![Type::int()]),
+            &u("F", vec![Type::int()])
+        )
+        .is_err());
+        // Different variant count.
+        assert!(unify(
+            &mut c,
+            &u("E", vec![Type::int()]),
+            &u("E", vec![Type::int(), Type::bool()])
+        )
+        .is_err());
+    }
 }

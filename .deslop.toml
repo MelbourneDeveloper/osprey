@@ -7,11 +7,11 @@
 # of scope here).
 # Docs: https://deslop.live/docs/for-ai/
 [threshold]
-# Measured 10.56% (2026-06-11; 18.03% when the gate was introduced). Ceiling
-# sits just above measured to absorb cross-runner float jitter. Ratchet DOWN as
-# duplication is removed — worst offenders today are osprey-types/builtins.rs
-# and codegen's expr.rs (see `deslop top-offenders`).
-max_duplication_percent = 11.0
+# Measured 9.20% (2026-06-22; 18.03% when the gate was introduced). Ceiling sits
+# just above measured to absorb cross-runner float jitter. Ratchet DOWN as
+# duplication is removed — worst offenders today are osprey-types/builtins.rs and
+# codegen's expr.rs (see `deslop top-offenders`).
+max_duplication_percent = 9.5
 
 [defaults]
 exclude = [

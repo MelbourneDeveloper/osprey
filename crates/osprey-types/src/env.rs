@@ -145,6 +145,35 @@ mod tests {
     }
 
     #[test]
+    fn instantiate_substitutes_into_records_and_unions() {
+        let mut ctx = InferCtx::new();
+        // forall t0. Union "U" { Record "R" { x: t0 }, t0 }
+        let body = Type::Union {
+            name: "U".into(),
+            variants: vec![
+                Type::Record {
+                    name: "R".into(),
+                    fields: [("x".to_string(), Type::Var(0))].into_iter().collect(),
+                },
+                Type::Var(0),
+            ],
+        };
+        let inst = instantiate(&mut ctx, &Scheme::poly(vec![0], body));
+        // The single quantified var is renamed to one consistent fresh var that
+        // appears in both the record field and the bare variant.
+        if let Type::Union { variants, .. } = &inst {
+            assert!(matches!(variants[1], Type::Var(_)));
+            if let Type::Record { fields, .. } = &variants[0] {
+                assert_eq!(fields["x"], variants[1]);
+            } else {
+                panic!("expected record variant");
+            }
+        } else {
+            panic!("expected union");
+        }
+    }
+
+    #[test]
     fn generalize_skips_env_bound_vars() {
         let mut ctx = InferCtx::new();
         let mut env = TypeEnv::new();

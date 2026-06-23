@@ -201,5 +201,83 @@ mod tests {
             .report(Query::Diagnostics(uri), CancellationToken::new())
             .await;
         assert!(matches!(err, Err(EngineError::ShuttingDown)));
+        // `rescan` is likewise refused after shutdown.
+        let rescan = engine.rescan(RescanScope::All, Progress::noop()).await;
+        assert!(matches!(rescan, Err(EngineError::ShuttingDown)));
+    }
+
+    #[tokio::test]
+    async fn report_answers_every_positional_query_kind() {
+        use crate::model::{At, Report};
+        let src = "fn add(a: int, b: int) -> int = a + b\nlet total = add(1, 2)\n";
+        let (engine, uri) = engine_with(src);
+        let at = |line, character| At {
+            uri: uri.clone(),
+            line,
+            character,
+        };
+        let cancel = || CancellationToken::new();
+        let report = |q| async { engine.report(q, cancel()).await.expect("report").data };
+
+        // Hover over the call to `add` renders its signature.
+        match report(Query::Hover(at(1, 13))).await {
+            Report::Hover(Some(md)) => assert!(md.contains("fn add"), "{md}"),
+            other => panic!("expected hover, got {other:?}"),
+        }
+        // Definition lands on the declaration (line 0).
+        match report(Query::Definition(at(1, 13))).await {
+            Report::Locations(locs) => assert_eq!(locs.first().map(|l| l.span.0), Some(0)),
+            other => panic!("expected locations, got {other:?}"),
+        }
+        // References including the declaration: two occurrences of `add`.
+        let refs = report(Query::References {
+            at: at(0, 3),
+            include_declaration: true,
+        })
+        .await;
+        match refs {
+            Report::Locations(locs) => assert_eq!(locs.len(), 2, "{locs:?}"),
+            other => panic!("expected locations, got {other:?}"),
+        }
+        // Signature help over the second argument tracks the active parameter.
+        match report(Query::SignatureHelp(at(1, 19))).await {
+            Report::Signature(Some(sig)) => {
+                assert_eq!(sig.active_parameter, 1);
+                assert_eq!(sig.parameters.len(), 2);
+            }
+            other => panic!("expected signature, got {other:?}"),
+        }
+        // Completion lists keywords plus the document's own declarations.
+        match report(Query::Completion(uri.clone())).await {
+            Report::Completion(items) => {
+                assert!(items.iter().any(|i| i.label == "fn"));
+                assert!(items.iter().any(|i| i.label == "add"));
+            }
+            other => panic!("expected completion, got {other:?}"),
+        }
+        // Diagnostics on a clean program are empty.
+        match report(Query::Diagnostics(uri.clone())).await {
+            Report::Diagnostics(diags) => assert!(diags.is_empty(), "{diags:?}"),
+            other => panic!("expected diagnostics, got {other:?}"),
+        }
+        // The vfs getter exposes the shared store.
+        assert_eq!(engine.vfs().text(&uri).as_deref(), Some(src));
+    }
+
+    #[tokio::test]
+    async fn subscribe_streams_generation_events_until_closed() {
+        use futures_util::StreamExt as _;
+        let (engine, _uri) = engine_with("fn main() = 1\n");
+        let mut stream = engine.subscribe();
+        // A rescan advances the generation and broadcasts an event.
+        let _ticket = engine
+            .rescan(RescanScope::All, Progress::noop())
+            .await
+            .expect("rescan");
+        let event = stream.next().await.expect("generation event");
+        assert_eq!(event.generation, Generation::ZERO.next(), "{event:?}");
+        // Dropping the engine closes the broadcast channel, ending the stream.
+        drop(engine);
+        assert!(stream.next().await.is_none(), "stream ends on close");
     }
 }

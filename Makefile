@@ -160,17 +160,31 @@ _test_rust:
 	@echo "==> [rust] running tests with coverage..."
 	set -o pipefail && cargo llvm-cov --workspace --profile ci --lcov --output-path lcov.info 2>&1 | tee test.log
 
+# Per-crate enforcement ([COVERAGE-THRESHOLDS-JSON]): every rust crate is gated
+# independently against its own threshold (floor 95% + monotonic ratchet). lcov
+# SF records are grouped by their crates/<name>/ path; a single crate below its
+# gate fails the whole target. Aggregating the workspace into one number would
+# let a well-covered crate mask an under-tested one — exactly what the ratchet
+# exists to prevent.
 _coverage_check_rust:
 	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
-	THRESHOLD=$$(jq -r '.projects.crates.threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
-	LH=$$(grep '^LH:' lcov.info | awk -F: '{sum+=$$2} END{print sum+0}'); \
-	LF=$$(grep '^LF:' lcov.info | awk -F: '{sum+=$$2} END{print sum+0}'); \
-	if [ "$$LF" -eq 0 ]; then echo "[rust] FAIL: no lines in lcov.info"; exit 1; fi; \
-	PCT=$$(awk "BEGIN{printf \"%.1f\", $$LH/$$LF*100}"); \
-	PCT_INT=$$(awk "BEGIN{printf \"%d\", $$LH/$$LF*100}"); \
-	echo "[rust] coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
-	if [ "$$PCT_INT" -lt "$$THRESHOLD" ]; then echo "[rust] FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; fi; \
-	echo "[rust] OK: $${PCT}% >= $${THRESHOLD}%"
+	if [ ! -f lcov.info ]; then echo "[rust] FAIL: lcov.info not produced"; exit 1; fi; \
+	fail=0; \
+	for crate in $$(jq -r '.projects | to_entries[] | select(.value.language=="rust") | .key' "$(COVERAGE_THRESHOLDS_FILE)"); do \
+	  threshold=$$(jq -r --arg c "$$crate" '.projects[$$c].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	  set -- $$(awk -F: -v c="$$crate" 'index($$0,"SF:")==1{in_c=index($$2,"/crates/" c "/")>0} in_c&&/^LH:/{h+=$$2} in_c&&/^LF:/{f+=$$2} END{printf "%d %d",h+0,f+0}' lcov.info); \
+	  lh=$$1; lf=$$2; \
+	  if [ "$$lf" -eq 0 ]; then echo "[rust] $$crate FAIL: no lines found in lcov.info"; fail=1; continue; fi; \
+	  pct=$$(awk "BEGIN{printf \"%.1f\", $$lh/$$lf*100}"); \
+	  pct_int=$$(awk "BEGIN{printf \"%d\", $$lh/$$lf*100}"); \
+	  if [ "$$pct_int" -lt "$$threshold" ]; then \
+	    echo "[rust] $$crate FAIL: $${pct}% < $${threshold}% ($$lh/$$lf lines)"; fail=1; \
+	  else \
+	    echo "[rust] $$crate OK: $${pct}% >= $${threshold}% ($$lh/$$lf lines)"; \
+	  fi; \
+	done; \
+	if [ "$$fail" -ne 0 ]; then echo "[rust] FAIL: one or more crates below threshold"; exit 1; fi; \
+	echo "[rust] OK: all crates meet their thresholds"
 
 # Hardened C runtime unit tests (assertion-driven; a failed assert aborts the
 # binary). Covers the string cursor (BUILTIN-STRING-CURSOR) + the error-message
@@ -284,15 +298,19 @@ _vsix_clean:
 _vsix_build:
 	cd $(EXT_DIR) && npm run compile
 
-# Stage the freshly-built Rust binary where the extension expects its bundled
-# compiler (bin/<os>-<arch>/osprey), so the VSIX runs against THIS build.
+# Stage the freshly-built Rust binary AND the C runtime archives where the
+# extension expects its bundled compiler (bin/<os>-<arch>/), so the VSIX runs
+# against THIS build. The compiler locates its runtime archives next to its own
+# executable (find_runtime_lib in osprey-cli), so libfiber_runtime.a /
+# libhttp_runtime.a must sit beside the bundled `osprey` for `--run` to link.
 _vsix_bundle:
 	@OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
 	case "$$OS" in darwin) OS=darwin;; linux) OS=linux;; *) OS=win32;; esac; \
 	ARCH=$$(uname -m); case "$$ARCH" in arm64|aarch64) ARCH=arm64;; *) ARCH=x64;; esac; \
 	DEST="$(EXT_DIR)/bin/$$OS-$$ARCH"; $(MKDIR) "$$DEST"; \
 	cp $(BIN) "$$DEST/osprey"; \
-	echo "  bundled $(BIN) -> $$DEST/osprey"
+	cp $(RTB)/libfiber_runtime.a $(RTB)/libhttp_runtime.a "$$DEST/"; \
+	echo "  bundled $(BIN) + libfiber_runtime.a + libhttp_runtime.a -> $$DEST/"
 
 _vsix_package:
 	cd $(EXT_DIR) && npm run package

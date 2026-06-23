@@ -594,3 +594,332 @@ fn classify(op: &str) -> OpKind {
         _ => OpKind::Arith,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::check::check_program;
+    use osprey_syntax::parse_program;
+
+    /// Parse + type-check a snippet, returning the diagnostics.
+    fn check(src: &str) -> Vec<crate::error::TypeError> {
+        let parsed = parse_program(src);
+        assert!(
+            parsed.errors.is_empty(),
+            "syntax errors: {:?}",
+            parsed.errors
+        );
+        check_program(&parsed.program)
+    }
+
+    fn ok(src: &str) {
+        let errs = check(src);
+        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
+    }
+
+    #[test]
+    fn pipe_into_call_and_bare_function() {
+        // Call form: `x |> f(a)` prepends `x`. Bare form: `x |> f` applies `f(x)`.
+        ok("fn add(a: int, b: int) -> int = a + b\n\
+            fn inc(n: int) -> int = n + 1\n\
+            let r = 10 |> add(5)\n\
+            let s = 10 |> inc\n");
+    }
+
+    #[test]
+    fn covers_every_simple_expression_form() {
+        // The parser only emits many `Expr` arms from real source, so one program
+        // mixes float/string/bool/interpolation/list/map/object/unary/field-access/
+        // index/lambda/block/spawn/await/channel send+recv/yield/perform.
+        ok("type Box = { v: int }\n\
+            effect Logger { log: fn(string) -> Unit }\n\
+            fn other() -> int = 7\n\
+            fn demo() -> Unit !Logger = {\n\
+              let f = 3.14\n\
+              let s = \"hi\"\n\
+              let b = true\n\
+              let count = 5\n\
+              let i = \"val=${count}\"\n\
+              let xs = [1, 2, 3]\n\
+              let m = { \"a\": 1, \"b\": 2 }\n\
+              let obj = { x: 1, y: 2 }\n\
+              let neg = -5\n\
+              let no = !b\n\
+              let bx = Box { v: 9 }\n\
+              let fx = bx.v\n\
+              let first = xs[0]\n\
+              let g = fn(n) => n + 1\n\
+              let fib = spawn other()\n\
+              let r = await(fib)\n\
+              let ch = Channel(1)\n\
+              send(ch, 42)\n\
+              let got = recv(ch)\n\
+              yield\n\
+              perform Logger.log(\"hello\")\n\
+            }\n");
+    }
+
+    #[test]
+    fn select_and_handler_expressions() {
+        // `select { ... }` and `handle E op => .. in body` both type their arms.
+        ok("fn pick() -> int = select {\n\
+              x => x\n\
+              _ => 0\n\
+            }\n");
+        ok("effect Logger { log: fn(string) -> Unit }\n\
+            fn run() -> int = handle Logger\n\
+              log msg => 0\n\
+            in 42\n");
+    }
+
+    #[test]
+    fn record_update_on_record_and_field_assign() {
+        ok("type Point = { x: int, y: int }\n\
+            let p = Point { x: 1, y: 2 }\n\
+            let q = p { x: 10 }\n");
+    }
+
+    #[test]
+    fn pipe_and_update_ast_nodes() {
+        // The parser desugars `|>` into a `Call` and record-update `r { f }` into a
+        // `TypeConstructor`, so `Expr::Pipe`/`Expr::Update` are built directly.
+        use osprey_ast::{Expr, FieldAssignment, Parameter, Program, Stmt, TypeExpr};
+        let inc = Stmt::Function {
+            name: "inc".into(),
+            parameters: vec![Parameter {
+                name: "n".into(),
+                ty: Some(TypeExpr::named("int")),
+            }],
+            return_type: Some(TypeExpr::named("int")),
+            body: Expr::Binary {
+                op: "+".into(),
+                left: Box::new(Expr::Identifier("n".into())),
+                right: Box::new(Expr::Integer(1)),
+            },
+            effects: Vec::new(),
+            position: None,
+        };
+        // Pipe, non-call form: `10 |> inc` applies `inc(10)`.
+        let bare_pipe = Stmt::Expr(Expr::Pipe {
+            left: Box::new(Expr::Integer(10)),
+            right: Box::new(Expr::Identifier("inc".into())),
+        });
+        // Pipe, call form: `10 |> inc(0)` prepends `10`, becoming `inc(10, 0)`
+        // (an arity mismatch — but the call-form branch is what we exercise).
+        let call_pipe = Stmt::Expr(Expr::Pipe {
+            left: Box::new(Expr::Integer(10)),
+            right: Box::new(Expr::Call {
+                function: Box::new(Expr::Identifier("inc".into())),
+                arguments: vec![Expr::Integer(0)],
+                named_arguments: Vec::new(),
+            }),
+        });
+        // `Expr::Update` over a non-record binding hits the else arm of
+        // `infer_update` (the field values are still inferred).
+        let update = Stmt::Expr(Expr::Update {
+            record: "n".into(),
+            fields: vec![FieldAssignment {
+                name: "x".into(),
+                value: Expr::Integer(1),
+            }],
+        });
+        let prog = Program {
+            statements: vec![
+                inc,
+                Stmt::Let {
+                    name: "n".into(),
+                    mutable: false,
+                    ty: None,
+                    value: Expr::Integer(2),
+                    position: None,
+                },
+                bare_pipe,
+                call_pipe,
+                update,
+            ],
+        };
+        // Only the deliberate pipe arity mismatch is expected.
+        let errs = check_program(&prog);
+        assert!(
+            errs.iter().all(|e| e.message.contains("arity")),
+            "unexpected errors: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn nullary_record_constructor_used_as_value() {
+        // `type Foo = Foo` is a single-variant record whose constructor has no
+        // fields: the bare name `Foo` is a record value (the empty-record arm).
+        ok("type Foo = Foo\n\
+            let x = Foo\n");
+    }
+
+    #[test]
+    fn method_call_with_positional_and_named_args() {
+        // The parser lowers `t.m(..)` to a plain `Call`, so an `Expr::MethodCall`
+        // is built directly to exercise `infer_method_call`'s arg loops.
+        use osprey_ast::{Expr, NamedArgument, Parameter, Program, Stmt, TypeExpr};
+        let int_param = |name: &str| Parameter {
+            name: name.into(),
+            ty: Some(TypeExpr::named("int")),
+        };
+        let body = Expr::MethodCall {
+            target: Box::new(Expr::Integer(1)),
+            method: "combine".into(),
+            arguments: vec![Expr::Integer(2)],
+            named_arguments: vec![NamedArgument {
+                name: "third".into(),
+                value: Expr::Integer(3),
+            }],
+        };
+        let prog = Program {
+            statements: vec![Stmt::Function {
+                name: "combine".into(),
+                parameters: vec![int_param("self"), int_param("other"), int_param("third")],
+                return_type: Some(TypeExpr::named("int")),
+                body: Expr::Binary {
+                    op: "+".into(),
+                    left: Box::new(Expr::Identifier("self".into())),
+                    right: Box::new(Expr::Identifier("other".into())),
+                },
+                effects: Vec::new(),
+                position: None,
+            }],
+        };
+        // The function's signature pass registers `combine`; the MethodCall is a
+        // bare top-level expression statement that drives `infer_method_call`.
+        let mut stmts = prog.statements;
+        stmts.push(Stmt::Expr(body));
+        let errs = check_program(&Program { statements: stmts });
+        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
+    }
+
+    #[test]
+    fn named_args_reorder_and_fall_back() {
+        // Reorder succeeds when every name matches a parameter.
+        ok("fn mk(a: int, b: string) -> int = a\n\
+            let r = mk(b: \"x\", a: 1)\n");
+        // A named call to an unknown function still type-checks its args (the
+        // fallback that maps the named args positionally).
+        ok("let f = fn(a) => a\n\
+            let r = f(a: 7)\n");
+    }
+
+    #[test]
+    fn index_string_and_unknown_target() {
+        // String index yields Result<string, _>; an opaque target falls back to
+        // a fresh Result.
+        ok("fn ch(s: string) -> Result<string, Error> = s[0]\n\
+            fn anyIdx(x) = x[0]\n");
+    }
+
+    #[test]
+    fn arith_list_map_concat_and_float_subtraction() {
+        // `+` over lists and maps unifies operands; `-` over floats yields a
+        // float Result.
+        ok("let xs = [1, 2] + [3, 4]\n\
+            fn fsub(a: float, b: float) -> Result<float, MathError> = a - b\n");
+    }
+
+    #[test]
+    fn perform_with_named_arguments() {
+        // A perform whose operation takes a named argument drives the named-arg
+        // loop; `perform` named args are built directly (the parser emits only
+        // positional perform args).
+        use osprey_ast::{Expr, NamedArgument, Program, Stmt};
+        ok("effect Logger { log: fn(string) -> Unit }\n\
+            fn shout(msg: string) -> Unit !Logger = perform Logger.log(msg)\n");
+        let perform = Stmt::Expr(Expr::Perform {
+            effect: "Logger".into(),
+            operation: "log".into(),
+            arguments: Vec::new(),
+            named_arguments: vec![NamedArgument {
+                name: "msg".into(),
+                value: Expr::Str("hi".into()),
+            }],
+        });
+        let errs = check_program(&Program {
+            statements: vec![perform],
+        });
+        assert!(errs.is_empty(), "unexpected errors: {errs:?}");
+    }
+
+    #[test]
+    fn nullary_union_variant_used_as_value() {
+        // A bare nullary *union* variant (`Red`) is a value of its owner type —
+        // the non-record `Type::con(owner, args)` arm of `lookup_ident`.
+        ok("type Color = Red | Green | Blue\n\
+            let c = Red\n");
+    }
+
+    #[test]
+    fn comparison_modulo_division_and_float_arith() {
+        ok("fn lt(a: int, b: int) -> bool = a < b\n\
+            fn md(a: int, b: int) -> Result<int, MathError> = a % b\n\
+            fn dv(a: int, b: int) -> Result<float, MathError> = a / b\n\
+            fn fadd(a: float, b: float) -> Result<float, MathError> = a + b\n\
+            fn fmul(a: float, b: float) -> Result<float, MathError> = a * b\n");
+    }
+
+    #[test]
+    fn list_concat_when_only_right_is_a_list() {
+        // `+` where the left operand starts unconstrained and the right is a
+        // known list ties them and yields the list type (the r-side list arm).
+        ok("fn cat(a, b: List<int>) = a + b\n");
+    }
+
+    #[test]
+    fn map_index_yields_value_result() {
+        ok("fn lookup(m: Map<string, int>) -> Result<int, Error> = m[\"k\"]\n");
+    }
+
+    #[test]
+    fn map_concatenation_unifies_operands() {
+        ok("fn merge(a: Map<string, int>, b: Map<string, int>) -> Map<string, int> = a + b\n");
+    }
+
+    #[test]
+    fn calling_an_unannotated_param_constrains_it_to_a_function() {
+        // `g` is an unannotated parameter (an unbound var); calling it drives the
+        // `apply_fn` Var branch that synthesises a function shape.
+        ok("fn apply(g, x) = g(x)\n");
+    }
+
+    #[test]
+    fn unknown_constructor_with_fields_is_an_error() {
+        let errs = check("let r = Nonexistent { field: 1 }\n");
+        assert!(errs
+            .iter()
+            .any(|e| e.message.contains("unknown constructor `Nonexistent`")));
+    }
+
+    #[test]
+    fn comparison_over_results_unwraps_both_sides() {
+        // `a % b` and `c % d` are both `Result<int, MathError>`; comparing them
+        // exercises the comparison arm's `unwrap_result` on both operands.
+        ok("fn cmp(a: int, b: int) -> bool = (a % b) == (b % a)\n");
+    }
+
+    #[test]
+    fn calling_a_non_identifier_and_a_non_function() {
+        // Calling the result of a lambda expression directly: the callee is not a
+        // bare identifier, so `infer_call` takes the `other` branch.
+        ok("let r = (fn(x) => x + 1)(41)\n");
+        // Calling a non-function value is an error (`apply_fn` non-function arm).
+        let errs = check("let x = 5\nlet r = x(1)\n");
+        assert!(errs.iter().any(|e| e.message.contains("cannot call")));
+    }
+
+    #[test]
+    fn lambda_with_param_and_return_annotations() {
+        ok("let f = fn(x: int) -> int => x + 1\n\
+            let r = f(10)\n");
+    }
+
+    #[test]
+    fn lowercase_record_update_via_constructor_syntax() {
+        // The grammar lowers `rec { f: v }` over an in-scope lower-cased binding
+        // as a constructor; `infer_constructor` recovers it as an update.
+        ok("type Point = { x: int, y: int }\n\
+            fn shift(p: Point) -> Point = p { x: 99 }\n");
+    }
+}

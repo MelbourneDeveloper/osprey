@@ -51,3 +51,23 @@ impl TypeError {
         TypeError::new(format!("recursive type: {a} occurs in {b}"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn at_anchors_to_a_position_and_with_pos_keeps_first() {
+        let pos = Position { line: 3, column: 7 };
+        let e = TypeError::at("boom", pos);
+        assert_eq!(e.message, "boom");
+        assert_eq!(e.position, Some(pos));
+        // `with_pos` is a no-op once a position is set.
+        let other = Position { line: 9, column: 1 };
+        let e = e.with_pos(Some(other));
+        assert_eq!(e.position, Some(pos));
+        // `new` has no position; `with_pos` then fills it.
+        let filled = TypeError::new("x").with_pos(Some(other));
+        assert_eq!(filled.position, Some(other));
+    }
+}

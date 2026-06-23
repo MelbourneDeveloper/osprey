@@ -13,11 +13,7 @@ This directory holds **all spec documents** for the project:
   convention. These are *not* part of the language reference:
   - [`0020-LanguageServerAndEditors.md`](0020-LanguageServerAndEditors.md) — the
     `osprey lsp` language server (one engine, many surfaces) and editor
-    integrations (VS Code, Open VSX, Neovim, Zed). Release plan:
-    [`../plans/lsp-vsix-release.md`](../plans/lsp-vsix-release.md).
-
-Sibling [`../plans/`](../plans/) holds *plans* (how-to docs with TODO
-checklists) rather than specs.
+    integrations (VS Code, Open VSX, Neovim, Zed).
 
 ## Spec ID convention
 

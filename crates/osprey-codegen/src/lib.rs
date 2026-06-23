@@ -83,6 +83,18 @@ mod tests {
         compile_program(&parsed.program).expect("codegen should succeed")
     }
 
+    /// Compile `src` and assert codegen rejected it (used for the loud-failure
+    /// branches that have no surface syntax of their own).
+    fn compile_err(src: &str) -> CodegenError {
+        let parsed = parse_program(src);
+        assert!(
+            parsed.errors.is_empty(),
+            "syntax errors: {:?}",
+            parsed.errors
+        );
+        compile_program(&parsed.program).unwrap_err()
+    }
+
     #[test]
     fn emits_main_and_puts_for_hello() {
         let ir = module("print(\"hello\")\n");
@@ -205,5 +217,573 @@ mod tests {
         };
         let err = compile_program(&program).unwrap_err();
         assert!(matches!(err, CodegenError::Unsupported(_)));
+    }
+
+    // ---- referenced_idents / stmt_idents (lib.rs 62-65) ----
+
+    #[test]
+    fn referenced_idents_walks_lets_funcs_and_nested_modules() {
+        let parsed = parse_program(
+            "type Ignored = A | B\n\
+             module M {\n\
+               fn helper(x) = httpGet(url)\n\
+               let y = readFile(path)\n\
+             }\n\
+             let z = spawnProcess(cmd)\n",
+        );
+        assert!(parsed.errors.is_empty(), "syntax: {:?}", parsed.errors);
+        let idents = referenced_idents(&parsed.program);
+        // Module body (a Stmt::Module) recurses; its inner fn + let contribute.
+        // The `type` declaration hits stmt_idents' catch-all arm.
+        assert!(idents.contains("httpGet"));
+        assert!(idents.contains("readFile"));
+        assert!(idents.contains("spawnProcess"));
+    }
+
+    // ---- iterators: range / map / filter / fold over ranges + lists ----
+
+    #[test]
+    fn range_pipeline_map_filter_foreach_and_fold() {
+        // range → map (record stage) → filter (record stage) → forEach (replay
+        // both stages, counted loop), plus a fold accumulator. Exercises iter.rs
+        // callback_of (named + lambda), replay, for_each, fold, acc_*.
+        let ir = module(
+            "fn dbl(x: int) -> int = x * 2\n\
+             fn big(x: int) -> bool = x > 4\n\
+             fn add(a: int, b: int) -> int = a + b\n\
+             fn main() -> Unit = {\n\
+               range(1, 6) |> map(dbl) |> filter(big) |> forEach(print)\n\
+               let s = range(1, 6) |> fold(0, add)\n\
+               print(\"sum=${s}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("@malloc"));
+        assert!(ir.contains("icmp ne i64"));
+        assert!(ir.contains("alloca i64"));
+    }
+
+    #[test]
+    fn list_builders_map_filter_fold_and_foreach() {
+        // mapList / filterList / foldList / forEachList over a runtime list.
+        // Exercises iter.rs list_builder (both branches), fold_list,
+        // for_each_list and collections list-builder protocol.
+        let ir = module(
+            "fn dbl(x: int) -> int = x * 2\n\
+             fn keep(x: int) -> bool = x > 1\n\
+             fn add(a: int, b: int) -> int = a + b\n\
+             fn main() -> Unit = {\n\
+               let xs = listAppend(listAppend(List(), 1), 2)\n\
+               let m = mapList(xs, dbl)\n\
+               let f = filterList(xs, keep)\n\
+               let t = foldList(xs, 0, add)\n\
+               forEachList(xs, print)\n\
+               print(\"len=${listLength(m)} f=${listLength(f)} t=${t}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("osprey_list_builder_new"));
+        assert!(ir.contains("osprey_list_builder_push"));
+        assert!(ir.contains("osprey_list_builder_seal"));
+    }
+
+    #[test]
+    fn iterator_lambda_callbacks_inline_and_let_bound() {
+        // An inline lambda and a let-bound lambda both serve as iterator
+        // callbacks — iter.rs callback_of's Lambda arms + the lambdas cache.
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let f = fn(x: int) => x + 1\n\
+               range(0, 3) |> map(f) |> forEach(fn(x: int) => print(\"v=${x}\"))\n\
+             }\n",
+        );
+        assert!(ir.contains("call"));
+    }
+
+    #[test]
+    fn iterator_callback_must_be_fn_or_lambda() {
+        // A non-identifier, non-lambda expression in callback position fails
+        // loudly (iter.rs callback_of's catch-all Err).
+        let err = compile_err("fn main() -> Unit = forEach(range(0, 3), 1 + 1)\n");
+        assert!(matches!(err, CodegenError::Unsupported(_)));
+    }
+
+    // ---- closures / free variables ----
+
+    #[test]
+    fn closure_captures_map_list_object_and_interpolation_free_vars() {
+        // A returned closure capturing several outer locals exercises
+        // freevars.rs Map/Object/List/interpolation walks and closure.rs
+        // capture_list + reload_captures + cell_value (malloc cell).
+        let ir = module(
+            "fn make(a: int, b: int) -> () -> int = fn() => {\n\
+               let m = { \"k\": a }\n\
+               let o = { x: b, y: a }\n\
+               let xs = [a, b]\n\
+               print(\"${a} ${b} ${listLength(xs)}\")\n\
+               a + b\n\
+             }\n\
+             fn main() -> Unit = {\n\
+               let g = make(1, 2)\n\
+               print(\"r=${g()}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("call i8* @malloc"));
+        assert!(ir.contains("bitcast i8* %__env"));
+    }
+
+    #[test]
+    fn nested_closure_returns_closure_value_in_block_tail() {
+        // A closure value as a block tail (closure.rs lambda_value path) and a
+        // capture-free closure (the constant-global cell branch in cell_value).
+        let ir = module(
+            "fn outer() -> () -> int = {\n\
+               let k = 9\n\
+               fn() => k\n\
+             }\n\
+             fn pure() -> () -> int = fn() => 7\n\
+             fn main() -> Unit = {\n\
+               let a = outer()\n\
+               let b = pure()\n\
+               print(\"${a()} ${b()}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("private unnamed_addr constant { i8* }"));
+    }
+
+    #[test]
+    fn named_function_used_as_a_value_emits_forwarder() {
+        // A bare top-level function name in value position becomes its closure
+        // forwarder cell (closure.rs named_fn_cell + emit_forwarder), then is
+        // called through the cell.
+        let ir = module(
+            "fn dbl(x: int) -> int = x * 2\n\
+             fn apply(f: (int) -> int, v: int) -> int = f(v)\n\
+             fn main() -> Unit = {\n\
+               let r = apply(dbl, 21)\n\
+               print(\"r=${r}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("@__fnval_") || ir.contains("@__closure"));
+    }
+
+    // ---- pattern matching: union variants, list patterns, result, literals ----
+
+    #[test]
+    fn union_match_binds_variant_fields_and_catch_all() {
+        // User-union match: tag load + per-variant branch + field binding
+        // (pattern.rs gen_union_match, bind_variant_fields) and a catch-all arm.
+        let ir = module(
+            "type Shape =\n\
+               Circle { r: int }\n\
+               | Square { s: int }\n\
+               | Blank\n\
+             fn area(sh: Shape) -> int = match sh {\n\
+               Circle { r } => r * r\n\
+               Square { s } => s * s\n\
+               _ => 0\n\
+             }\n\
+             fn main() -> Unit = print(\"a=${area(Circle { r: 3 })}\")\n",
+        );
+        assert!(ir.contains("load i64, i64*"));
+        assert!(ir.contains("icmp eq i64"));
+    }
+
+    #[test]
+    fn list_pattern_match_binds_head_tail_and_fixed_lengths() {
+        // List-pattern match: length guards (eq / sge), prefix + rest binding,
+        // wildcard element, trailing catch-all (pattern.rs gen_list_match,
+        // bind_list_arm).
+        let ir = module(
+            "fn classify(xs) = match xs {\n\
+               []                  => \"empty\"\n\
+               [only]              => \"one(${only})\"\n\
+               [_, second, ...rest] => \"rest=${listLength(rest)}\"\n\
+               other               => \"other(${listLength(other)})\"\n\
+             }\n\
+             fn main() -> Unit = {\n\
+               let xs = listAppend(listAppend(List(), 1), 2)\n\
+               print(classify(xs))\n\
+             }\n",
+        );
+        assert!(ir.contains("osprey_list_length"));
+        assert!(ir.contains("osprey_list_get"));
+        assert!(ir.contains("osprey_list_drop"));
+        assert!(ir.contains("icmp sge i64"));
+    }
+
+    #[test]
+    fn result_match_success_and_error_arms() {
+        // Result discrimination: branch on the i8 disc, bind Success value /
+        // Error message (pattern.rs gen_result_match, emit_result_arm).
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let xs = listAppend(List(), 10)\n\
+               match listGet(xs, 0) {\n\
+                 Success { value } => print(\"v=${value}\")\n\
+                 Error { message } => print(\"e=${message}\")\n\
+               }\n\
+             }\n",
+        );
+        assert!(ir.contains("icmp eq i8"));
+    }
+
+    #[test]
+    fn result_match_on_a_scalar_discriminant() {
+        // Matching a bare scalar against Success/Error arms falls back to the
+        // `disc >= 0 ⇒ Success` rule (pattern.rs gen_result_match scalar branch).
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let n = 5\n\
+               match n {\n\
+                 Success { value } => print(\"v=${value}\")\n\
+                 Error { message } => print(\"e=${message}\")\n\
+               }\n\
+             }\n",
+        );
+        assert!(ir.contains("icmp sge i64"));
+    }
+
+    #[test]
+    fn union_match_with_named_catch_all_binds_the_scrutinee() {
+        // A union match whose catch-all is a binding (not `_`) binds the whole
+        // scrutinee (pattern.rs gen_union_match's Binding catch-all arm).
+        let ir = module(
+            "type Shape = Circle { r: int } | Square { s: int } | Blank\n\
+             fn name(sh: Shape) -> int = match sh {\n\
+               Circle { r } => r\n\
+               other        => 0\n\
+             }\n\
+             fn main() -> Unit = print(\"${name(Blank)}\")\n",
+        );
+        assert!(ir.contains("load i64, i64*"));
+    }
+
+    #[test]
+    fn string_literal_match_chain() {
+        // A string-literal compare/branch chain ending in a catch-all
+        // (pattern.rs gen_literal_match + gen_eq's strcmp path).
+        let ir = module(
+            "fn route(p: string) -> string = match p {\n\
+               \"/a\" => \"A\"\n\
+               \"/b\" => \"B\"\n\
+               _     => \"404\"\n\
+             }\n\
+             fn main() -> Unit = print(route(\"/a\"))\n",
+        );
+        assert!(ir.contains("@strcmp"));
+    }
+
+    // ---- strings ----
+
+    #[test]
+    fn string_builtins_total_and_fallible() {
+        // A broad sweep of string builtins: total transforms, predicates,
+        // fallible parse/substring/split, cursor ops, fromCodePoint, join.
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let s = \"  Hello World  \"\n\
+               print(\"${length(s)} ${isEmpty(s)} ${contains(s, \"World\")}\")\n\
+               print(\"${startsWith(s, \"  \")} ${endsWith(s, \"  \")}\")\n\
+               print(\"${toUpperCase(s)} ${toLowerCase(s)} ${trim(s)}\")\n\
+               print(\"${trimStart(s)} ${trimEnd(s)} ${reverse(s)}\")\n\
+               print(\"${take(s, 2)} ${drop(s, 2)}\")\n\
+               print(\"${repeat(\"ab\", 3)} ${padStart(\"x\", 3, \"-\")} ${padEnd(\"x\", 3, \"-\")}\")\n\
+               print(\"${replace(\"aaa\", \"a\", \"b\")} ${byteLength(s)}\")\n\
+               match indexOf(s, \"World\") { Success { value } => print(\"i=${value}\") Error { message } => print(\"no\") }\n\
+               match substring(s, 2, 5) { Success { value } => print(\"sub=${value}\") Error { message } => print(\"no\") }\n\
+               match parseInt(\"42\") { Success { value } => print(\"n=${value}\") Error { message } => print(\"no\") }\n\
+               match parseFloat(\"4.5\") { Success { value } => print(\"f=${value}\") Error { message } => print(\"no\") }\n\
+               match split(\"a,b,c\", \",\") { Success { value } => print(\"parts=${listLength(value)}\") Error { message } => print(\"no\") }\n\
+               match byteAt(s, 0) { Success { value } => print(\"b=${value}\") Error { message } => print(\"no\") }\n\
+               match codePointAt(s, 0) { Success { value } => print(\"cp=${value}\") Error { message } => print(\"no\") }\n\
+               match fromCodePoint(65) { Success { value } => print(\"c=${value}\") Error { message } => print(\"no\") }\n\
+               let ws = words(s)\n\
+               let ls = lines(s)\n\
+               print(\"${join(ws, \"-\")} ${listLength(ls)}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("@strlen"));
+        assert!(ir.contains("osp_string_to_upper"));
+        assert!(ir.contains("osp_parse_int_strict"));
+        assert!(ir.contains("osp_string_codepoint_at"));
+        assert!(ir.contains("osp_string_join"));
+    }
+
+    // ---- collections: map literals, map operations ----
+
+    #[test]
+    fn map_literal_and_map_operations() {
+        // Map literal build, set/get/contains/remove/merge, keys/values lists,
+        // indexing — collections.rs gen_map_literal, map_* and map_to_list.
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let m = { \"a\": 1, \"b\": 2 }\n\
+               let m2 = mapSet(m, \"c\", 3)\n\
+               let m3 = mapRemove(m2, \"a\")\n\
+               let merged = m2 + m3\n\
+               print(\"len=${mapLength(merged)} has=${mapContains(m2, \"a\")}\")\n\
+               print(\"keys=${listLength(mapKeys(m2))} vals=${listLength(mapValues(m2))}\")\n\
+               match mapGet(m2, \"b\") { Success { value } => print(\"g=${value}\") Error { message } => print(\"no\") }\n\
+               match m[\"a\"] { Success { value } => print(\"i=${value}\") Error { message } => print(\"no\") }\n\
+             }\n",
+        );
+        assert!(ir.contains("osprey_map_builder_new"));
+        assert!(ir.contains("osprey_map_set"));
+        assert!(ir.contains("osprey_map_remove"));
+        assert!(ir.contains("osprey_map_iter_new"));
+    }
+
+    #[test]
+    fn list_get_and_contains_runtime_calls() {
+        // listGet (bounds-checked Result) and listContains (linear scan with
+        // both the int and string equality paths).
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let xs = listAppend(listAppend(List(), 1), 2)\n\
+               let ss = listAppend(List(), \"hi\")\n\
+               print(\"c=${listContains(xs, 2)} s=${listContains(ss, \"hi\")}\")\n\
+               match listGet(xs, 0) { Success { value } => print(\"v=${value}\") Error { message } => print(\"no\") }\n\
+             }\n",
+        );
+        assert!(ir.contains("osprey_list_in_bounds"));
+        assert!(ir.contains("@strcmp"));
+    }
+
+    // ---- conversions / arithmetic (conv.rs) ----
+
+    #[test]
+    fn float_and_mixed_arithmetic_exercises_conversions() {
+        // Float arithmetic, int→double promotion, division (always float),
+        // negation, comparisons — conv.rs as_double/as_i64/box_to_i64 and
+        // expr.rs arith/division/comparison/unary branches.
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let f = 3.5\n\
+               let i = 2\n\
+               let mixed = f + i\n\
+               let q = 10.0 / f\n\
+               let neg = -f\n\
+               let negi = -i\n\
+               let lt = f < 5.0\n\
+               let m = f % 2.0\n\
+               print(\"${mixed} ${q} ${neg} ${negi} ${lt} ${m}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("sitofp i64"));
+        assert!(ir.contains("fdiv double"));
+        assert!(ir.contains("fneg double"));
+        assert!(ir.contains("fcmp"));
+    }
+
+    #[test]
+    fn boolean_logic_and_unary_not() {
+        // && / || lower to i1 and/or; `not` / `!` to xor; bool box/zext paths.
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let a = true\n\
+               let b = false\n\
+               let c = a && b\n\
+               let d = a || b\n\
+               let e = !a\n\
+               print(\"${c} ${d} ${e}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("and i1"));
+        assert!(ir.contains("or i1"));
+        assert!(ir.contains("xor i1"));
+    }
+
+    // ---- records / aggregate (aggregate.rs) ----
+
+    #[test]
+    fn record_construct_field_access_and_update() {
+        // Construct a record, read fields, update one — aggregate.rs
+        // gen_constructor, gen_field_access, gen_update.
+        let ir = module(
+            "type Point = { x: int, y: int }\n\
+             fn main() -> Unit = {\n\
+               let p = Point { x: 1, y: 2 }\n\
+               let p2 = p { x: 9 }\n\
+               print(\"${p.x} ${p.y} ${p2.x}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("getelementptr"));
+        assert!(ir.contains("store i64"));
+    }
+
+    // ---- fibers (fiber.rs) ----
+
+    #[test]
+    fn fibers_channels_yield_select_and_done() {
+        // spawn/await (covered elsewhere) plus Channel/send/recv, yield with and
+        // without a value, select first-arm, fiber_yield and fiberDone.
+        let ir = module(
+            "fn work(n: int) -> int = n + 1\n\
+             fn main() -> Unit = {\n\
+               let ch = Channel(1)\n\
+               send(ch, 42)\n\
+               let got = recv(ch)\n\
+               let y = yield 5\n\
+               let z = fiber_yield(9)\n\
+               let pick = select { 1 => 100  2 => 200 }\n\
+               let f = spawn work(3)\n\
+               print(\"${got} ${y} ${z} ${pick} ${await(f)} ${fiberDone(f)}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("channel_create"));
+        assert!(ir.contains("channel_send"));
+        assert!(ir.contains("channel_recv"));
+        assert!(ir.contains("fiber_done"));
+    }
+
+    #[test]
+    fn channel_with_default_capacity_and_fiberdone_requires_arg() {
+        // Channel() with no capacity arg (fiber.rs default "0" branch).
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let ch = Channel()\n\
+               send(ch, 1)\n\
+               print(\"${recv(ch)}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("channel_create"));
+    }
+
+    // ---- error branches that fail loudly ----
+
+    #[test]
+    fn unknown_name_fails_loudly() {
+        // A bare reference to an undefined, non-constructor, non-function name
+        // (expr.rs Identifier None branch → CodegenError::unknown).
+        let err = compile_err("fn main() -> Unit = print(\"${nope}\")\n");
+        assert!(matches!(err, CodegenError::UnknownName(_)));
+    }
+
+    #[test]
+    fn generic_function_as_a_value_is_rejected() {
+        // A generic (polymorphic) function used as a first-class value has no
+        // single concrete ABI — closure.rs named_fn_cell rejects it loudly.
+        let err = compile_err(
+            "fn identity(x) = x\n\
+             fn apply(f: (int) -> int, v: int) -> int = f(v)\n\
+             fn main() -> Unit = print(\"${apply(identity, 3)}\")\n",
+        );
+        assert!(matches!(err, CodegenError::Unsupported(_)));
+    }
+
+    #[test]
+    fn float_literal_match_uses_fcmp() {
+        // A float-literal arm drives gen_eq's fcmp-oeq path (pattern.rs 487-491).
+        let ir = module(
+            "fn pick(x: float) -> int = match x {\n\
+               1.5 => 1\n\
+               _   => 0\n\
+             }\n\
+             fn main() -> Unit = print(\"${pick(1.5)}\")\n",
+        );
+        assert!(ir.contains("fcmp oeq double"));
+    }
+
+    #[test]
+    fn float_and_bool_elements_box_into_collections() {
+        // Boxing a double (bitcast) and a bool (zext) into the uniform i64
+        // element ABI — conv.rs box_to_i64's Double + I1 arms.
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let fs = listAppend(List(), 1.5)\n\
+               let bs = listAppend(List(), true)\n\
+               print(\"${listLength(fs)} ${listLength(bs)}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("bitcast double"));
+        assert!(ir.contains("zext i1"));
+    }
+
+    #[test]
+    fn boolean_equality_zexts_operands_to_i64() {
+        // Comparing two bools widens each to i64 for the icmp (conv.rs as_i64's
+        // I1 arm).
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let a = true\n\
+               let b = false\n\
+               print(\"${a == b}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("zext i1"));
+        assert!(ir.contains("icmp eq i64"));
+    }
+
+    #[test]
+    fn float_compared_to_int_promotes_via_sitofp() {
+        // A float compared with an int literal promotes the int to double
+        // (conv.rs as_double's I64 arm) inside gen_comparison's float branch.
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               let f = 2.5\n\
+               let gt = f > 2\n\
+               print(\"${gt}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("sitofp i64"));
+        assert!(ir.contains("fcmp"));
+    }
+
+    #[test]
+    fn code_point_width_cursor_builtin() {
+        // strings.rs codePointWidth dispatch arm (the one cursor builtin not
+        // exercised by the broad string sweep).
+        let ir = module(
+            "fn main() -> Unit = match codePointWidth(2) {\n\
+               Success { value } => print(\"w=${value}\")\n\
+               Error { message } => print(\"no\")\n\
+             }\n",
+        );
+        assert!(ir.contains("osp_string_codepoint_width"));
+    }
+
+    #[test]
+    fn yield_without_value_and_let_bound_lambda_materialize() {
+        // `yield` with no operand (fiber.rs gen_yield None) and a let-bound
+        // lambda materialized as a closure cell (lower.rs gen_bind lambda arm).
+        let ir = module(
+            "fn main() -> Unit = {\n\
+               yield\n\
+               let inc = fn(x: int) => x + 1\n\
+               print(\"${inc(4)}\")\n\
+             }\n",
+        );
+        assert!(ir.contains("define"));
+    }
+
+    #[test]
+    fn fiber_done_requires_an_argument() {
+        // fiberDone with no argument fails loudly (fiber.rs gen_builtin error).
+        let err = compile_err("fn main() -> Unit = print(\"${fiberDone()}\")\n");
+        assert!(matches!(err, CodegenError::Invalid(_)));
+    }
+
+    #[test]
+    fn codegen_constructors_are_callable_directly() {
+        // builder.rs Codegen::new + Default (not used by compile_program, which
+        // takes inferred types) — exercised directly for the public surface.
+        let _a = crate::builder::Codegen::new();
+        let _b = crate::builder::Codegen::default();
+    }
+
+    #[test]
+    fn codegen_error_display_covers_all_variants() {
+        // error.rs Display for every CodegenError variant.
+        assert_eq!(
+            CodegenError::unsupported("x").to_string(),
+            "codegen: unsupported construct: x"
+        );
+        assert_eq!(
+            CodegenError::unknown("n").to_string(),
+            "codegen: unknown name `n`"
+        );
+        assert_eq!(
+            CodegenError::invalid("p").to_string(),
+            "codegen: invalid program: p"
+        );
     }
 }

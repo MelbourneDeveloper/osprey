@@ -310,5 +310,65 @@ mod tests {
     fn json_strings_escape_quotes_and_control_chars() {
         assert_eq!(json_str("a\"b\\c\nd"), "\"a\\\"b\\\\c\\nd\"");
         assert_eq!(json_str("\u{1}"), "\"\\u0001\"");
+        // Carriage return and tab get their own short escapes.
+        assert_eq!(json_str("a\rb\tc"), "\"a\\rb\\tc\"");
+    }
+
+    #[test]
+    fn render_type_covers_named_array_generic_and_function_forms() {
+        use osprey_ast::TypeExpr;
+        // A bare named type renders as its name.
+        assert_eq!(render_type(&TypeExpr::named("int")), "int");
+
+        // An array type renders as `[element]`, and the empty array as `[]`.
+        let mut array = TypeExpr::named("");
+        array.is_array = true;
+        array.array_element = Some(Box::new(TypeExpr::named("string")));
+        assert_eq!(render_type(&array), "[string]");
+        let mut bare_array = TypeExpr::named("");
+        bare_array.is_array = true;
+        assert_eq!(render_type(&bare_array), "[]");
+
+        // A generic type renders as `Name<args>`.
+        let mut generic = TypeExpr::named("Result");
+        generic.generic_params = vec![TypeExpr::named("int"), TypeExpr::named("string")];
+        assert_eq!(render_type(&generic), "Result<int, string>");
+
+        // A function type renders parameter and return types; a missing return
+        // type defaults to `Unit`.
+        let mut func = TypeExpr::named("");
+        func.is_function = true;
+        func.parameter_types = vec![TypeExpr::named("int")];
+        func.return_type = Some(Box::new(TypeExpr::named("bool")));
+        assert_eq!(render_type(&func), "fn(int) -> bool");
+        let mut func_unit = TypeExpr::named("");
+        func_unit.is_function = true;
+        assert_eq!(render_type(&func_unit), "fn() -> Unit");
+    }
+
+    #[test]
+    fn collect_symbols_recurses_into_modules_and_skips_non_declarations() {
+        // A module body's declarations surface in the flat outline, while
+        // statements that are not declarations (the bare expression) are dropped.
+        let parsed = osprey_syntax::parse_program(
+            "module Inner {\n  fn helper() -> int = 1\n  let seed = 2\n}\n",
+        );
+        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+        let syms = collect_symbols(&parsed.program);
+        let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"helper"), "{names:?}");
+        assert!(names.contains(&"seed"), "{names:?}");
+        // The `let` carries no annotation, so its rendered type is empty and its
+        // kind is `Variable`.
+        let seed = syms.iter().find(|s| s.name == "seed").expect("seed symbol");
+        assert_eq!(seed.kind, SymbolKind::Variable);
+        assert_eq!(seed.ty, "");
+    }
+
+    #[test]
+    fn symbol_kind_as_str_round_trips_each_variant() {
+        assert_eq!(SymbolKind::Function.as_str(), "function");
+        assert_eq!(SymbolKind::Variable.as_str(), "variable");
+        assert_eq!(SymbolKind::Type.as_str(), "type");
     }
 }

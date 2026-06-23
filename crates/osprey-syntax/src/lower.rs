@@ -333,15 +333,17 @@ impl<'a> Lowerer<'a> {
     fn lower_pattern_inner(&self, pat: Node<'_>, inner: Node<'_>) -> Pattern {
         match inner.kind() {
             // A `-N` / `+N` pattern carries the sign in the `operator` field
-            // (grammar: `seq(operator: choice('-','+'), literal)`); fold it into
-            // the literal so `-5` matches `-5`, not `5`.
-            "literal" => {
-                let lit = self.lower_literal(inner);
+            // (grammar: `seq(operator: choice('-','+'), integer|float)`); fold it
+            // into the literal so `-5` matches `-5`, not `5`. Scalar literals now
+            // appear unwrapped (no `literal` node) so `[…]` stays a list_pattern.
+            "integer" | "float" | "boolean" | "string" | "interpolated_string" => {
+                let lit = self.lower_literal_node(inner);
                 let negated = pat
                     .child_by_field_name("operator")
                     .is_some_and(|op| self.text(op) == "-");
                 Pattern::Literal(Box::new(if negated { negate_literal(lit) } else { lit }))
             }
+            "list_pattern" => self.lower_list_pattern(inner),
             "field_pattern" => Pattern::Structural {
                 fields: self.field_pattern_names(inner),
             },
@@ -396,6 +398,19 @@ impl<'a> Lowerer<'a> {
 
     fn field_pattern_names(&self, fp: Node<'_>) -> Vec<String> {
         self.texts_of_kind(fp, "identifier")
+    }
+
+    /// Build a [`Pattern::List`] from a `list_pattern` node: the `element` fields
+    /// (each a `pattern`) become the fixed-prefix patterns in source order, and
+    /// the `rest` field (an identifier) becomes the optional tail binder.
+    fn lower_list_pattern(&self, node: Node<'_>) -> Pattern {
+        let elements = self
+            .named_of_kind(node, "pattern")
+            .iter()
+            .map(|p| self.lower_pattern(*p))
+            .collect();
+        let rest = node.child_by_field_name("rest").map(|r| self.text(r));
+        Pattern::List { elements, rest }
     }
 
     // ---- small node helpers ----
@@ -461,5 +476,187 @@ fn negate_literal(e: Expr) -> Expr {
         Expr::Integer(n) => Expr::Integer(-n),
         Expr::Float(f) => Expr::Float(-f),
         other => other,
+    }
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test assertions: an out-of-bounds index is a test failure, not a production panic"
+)]
+mod tests {
+    use crate::{parse_program, parse_tree};
+    use osprey_ast::{Expr, Pattern, Stmt};
+    use tree_sitter::Node;
+
+    fn stmts(src: &str) -> Vec<Stmt> {
+        let parsed = parse_program(src);
+        assert!(parsed.errors.is_empty(), "errors: {:?}", parsed.errors);
+        parsed.program.statements
+    }
+
+    fn one(src: &str) -> Stmt {
+        let mut s = stmts(src);
+        assert_eq!(s.len(), 1, "expected one stmt for {src:?}");
+        s.pop().unwrap()
+    }
+
+    /// Find the first descendant node of a given kind anywhere in the tree.
+    fn find_kind<'t>(node: Node<'t>, kind: &str) -> Option<Node<'t>> {
+        if node.kind() == kind {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        let children: Vec<Node<'t>> = node.children(&mut cursor).collect();
+        children.into_iter().find_map(|c| find_kind(c, kind))
+    }
+
+    #[test]
+    fn lowers_import_and_module() {
+        // `import` exercises lower_stmt's Import arm (texts_of_kind identifiers).
+        match one("import std.io.file\n") {
+            Stmt::Import { module } => assert_eq!(module, vec!["std", "io", "file"]),
+            s => panic!("expected import, got {s:?}"),
+        }
+        // A module body re-enters lower_stmt for nested declarations.
+        match one("module M {\n  let x = 1\n  fn f() = x\n}\n") {
+            Stmt::Module { name, body } => {
+                assert_eq!(name, "M");
+                assert_eq!(body.len(), 2);
+                assert!(matches!(body[0], Stmt::Let { .. }));
+                assert!(matches!(body[1], Stmt::Function { .. }));
+            }
+            s => panic!("expected module, got {s:?}"),
+        }
+    }
+
+    #[test]
+    fn lowers_record_type_and_array_and_function_types() {
+        // record_type definition (lower_type_decl record arm + lower_field_decls)
+        match one("type Point = {\n  x: int,\n  y: int\n}\n") {
+            Stmt::Type { name, variants, .. } => {
+                assert_eq!(name, "Point");
+                assert_eq!(variants.len(), 1);
+                assert_eq!(variants[0].fields.len(), 2);
+                assert_eq!(variants[0].fields[0].name, "x");
+            }
+            s => panic!("expected record type, got {s:?}"),
+        }
+        // array_type `Item[int]` (lower_type array_type arm + descendants_type_in),
+        // a function type, and a generic type — all in one signature.
+        match one(
+            "fn f(xs: Item[int], g: fn(int) -> bool, m: Map<string, int>) -> Item[int] = xs\n",
+        ) {
+            Stmt::Function {
+                parameters,
+                return_type,
+                ..
+            } => {
+                let arr = parameters[0].ty.as_ref().unwrap();
+                assert!(arr.is_array);
+                assert_eq!(arr.array_element.as_ref().unwrap().name, "int");
+                let func = parameters[1].ty.as_ref().unwrap();
+                assert!(func.is_function);
+                assert_eq!(func.return_type.as_ref().unwrap().name, "bool");
+                let gen = parameters[2].ty.as_ref().unwrap();
+                assert_eq!(gen.generic_params.len(), 2);
+                assert!(return_type.unwrap().is_array);
+            }
+            s => panic!("expected function, got {s:?}"),
+        }
+    }
+
+    /// The single match arm's pattern for `match x { <arm> => 0  _ => 1 }`.
+    fn first_pattern(arm: &str) -> Pattern {
+        let src = format!("let r = match x {{ {arm} => 0  _ => 1 }}\n");
+        match one(&src) {
+            Stmt::Let {
+                value: Expr::Match { mut arms, .. },
+                ..
+            } => arms.swap_remove(0).pattern,
+            s => panic!("expected match, got {s:?}"),
+        }
+    }
+
+    #[test]
+    fn lowers_constructor_type_annotated_negative_and_type_params() {
+        // Sub-pattern constructor `Some(inner)` -> identifier arm -> sub_patterns.
+        assert!(matches!(
+            first_pattern("Some(inner)"),
+            Pattern::Constructor { sub_patterns, .. } if sub_patterns.len() == 1
+        ));
+        // `n: int` -> TypeAnnotated.
+        assert!(matches!(
+            first_pattern("n: int"),
+            Pattern::TypeAnnotated { ref name, .. } if name == "n"
+        ));
+        // `-1.5` -> negated float literal (drives negate_literal's Float arm).
+        assert!(matches!(
+            first_pattern("-1.5"),
+            Pattern::Literal(b) if matches!(*b, Expr::Float(f) if f < 0.0)
+        ));
+        // Generic type params on a type declaration (type_parameters field).
+        match one("type Foo<T> = Bar | Baz\n") {
+            Stmt::Type {
+                type_params,
+                variants,
+                ..
+            } => {
+                assert_eq!(type_params, vec!["T"]);
+                assert_eq!(variants.len(), 2);
+            }
+            s => panic!("expected type, got {s:?}"),
+        }
+    }
+
+    #[test]
+    fn negate_literal_passes_through_non_numeric() {
+        // negate_literal flips numerics and returns non-numeric literals as-is.
+        assert_eq!(super::negate_literal(Expr::Integer(3)), Expr::Integer(-3));
+        assert_eq!(super::negate_literal(Expr::Float(2.0)), Expr::Float(-2.0));
+        assert_eq!(
+            super::negate_literal(Expr::Str("x".into())),
+            Expr::Str("x".into())
+        );
+    }
+
+    #[test]
+    fn lowers_assignment_effects_structural_and_list_patterns() {
+        // Reassignment statement (lower_stmt Assignment arm).
+        match one("x = 5\n") {
+            Stmt::Assignment { name, value, .. } => {
+                assert_eq!(name, "x");
+                assert_eq!(value, Expr::Integer(5));
+            }
+            s => panic!("expected assignment, got {s:?}"),
+        }
+        // Function effect clause `! [Log, State]` (lower_effects descendants).
+        match one("fn act() ! [Log, State] = 1\n") {
+            Stmt::Function { effects, .. } => assert_eq!(effects, vec!["Log", "State"]),
+            s => panic!("expected function, got {s:?}"),
+        }
+        // Bare structural `{ name, age }` and a fixed-length list `[a, b]`.
+        assert!(matches!(
+            first_pattern("{ name, age }"),
+            Pattern::Structural { fields } if fields == vec!["name", "age"]
+        ));
+        assert!(matches!(
+            first_pattern("[a, b]"),
+            Pattern::List { elements, rest: None } if elements.len() == 2
+        ));
+    }
+
+    #[test]
+    fn defensive_fallthrough_arms() {
+        // Drive lower_stmt / lower_type / lower_pattern on a node kind none of
+        // their match arms expect (a `line_comment`), hitting their `_` fallbacks.
+        let src = "// hi\nlet x = 1\n";
+        let tree = parse_tree(src).unwrap();
+        let lw = super::Lowerer::new(src.as_bytes());
+        let comment = find_kind(tree.root_node(), "line_comment").unwrap();
+
+        assert!(lw.lower_stmt(comment).is_none()); // `_ => return None`
+        assert_eq!(lw.lower_type(comment).name, lw.text(comment)); // `_ => named(text)`
+        assert!(matches!(lw.lower_pattern(comment), Pattern::Wildcard)); // `_` -> inner `_`
     }
 }
