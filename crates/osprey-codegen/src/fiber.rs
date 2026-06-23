@@ -9,9 +9,10 @@
 //! `fiber_await`/`fiber_done`, the non-blocking probe a foreground loop can
 //! animate against while the fiber works. Channels are
 //! `channel_create`/`channel_send`/`channel_recv`; channel ids and fiber ids
-//! draw from the runtime's one shared counter. `yield e` evaluates to its
-//! operand and `select` takes its first arm (the deterministic examples drive
-//! arm readiness by `send`/`recv` order).
+//! draw from the runtime's one shared counter. `yield e` performs the runtime's
+//! cooperative hand-off (`fiber_yield`) and evaluates to its operand; `select`
+//! takes its first arm (the deterministic examples drive arm readiness by
+//! `send`/`recv` order).
 
 use crate::builder::Codegen;
 use crate::conv::{as_i64, box_to_i64};
@@ -63,12 +64,18 @@ pub(crate) fn gen_await(cg: &mut Codegen, e: &Expr) -> Result<Value> {
     Ok(Value::new(r, LType::I64))
 }
 
-/// `yield e` / `yield` — identity (returns the value passed back).
+/// `yield e` / `yield` — drive the runtime's cooperative hand-off, then evaluate
+/// to the operand. `fiber_yield` donates the CPU to the scheduler in concurrent
+/// mode (a no-op under deterministic execution) and forwards its argument
+/// unchanged, so the Osprey value is preserved with its original type.
 pub(crate) fn gen_yield(cg: &mut Codegen, e: Option<&Expr>) -> Result<Value> {
-    match e {
-        Some(inner) => gen_expr(cg, inner),
-        None => Ok(Value::unit()),
-    }
+    let value = match e {
+        Some(inner) => gen_expr(cg, inner)?,
+        None => Value::unit(),
+    };
+    let boxed = box_to_i64(cg, value.clone());
+    let _ = cg.call("i64", "fiber_yield", "i64", &[&boxed.operand]);
+    Ok(value)
 }
 
 /// `send(channel, value)` — `channel_send` on the C runtime (blocks when full).
@@ -119,10 +126,9 @@ pub(crate) fn gen_builtin(cg: &mut Codegen, name: &str, args: &[Expr]) -> Result
             let r = cg.call("i64", "channel_create", "i64", &[&cap]);
             Value::new(r, LType::I64)
         }
-        "fiber_yield" => {
-            let v = args.first().map(|a| gen_expr(cg, a)).transpose()?;
-            v.unwrap_or_else(Value::unit)
-        }
+        // `fiber_yield(v)` called as an ordinary function shares `yield`'s
+        // lowering — the same runtime hand-off, forwarding `v`.
+        "fiber_yield" => gen_yield(cg, args.first())?,
         // `fiberDone(f)` — the C runtime's non-blocking completion probe.
         "fiberDone" => {
             let Some(a) = args.first() else {
