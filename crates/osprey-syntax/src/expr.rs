@@ -142,6 +142,7 @@ impl Lowerer<'_> {
                         target: Box::new(condition.clone()),
                         field: f,
                     },
+                    doc: None,
                     position: None,
                 })
                 .collect();

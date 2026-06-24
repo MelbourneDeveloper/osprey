@@ -52,6 +52,10 @@ pub struct ProgramTypes {
     /// Lambda source position `(line, column)` → its resolved function type,
     /// so the backend lowers every lambda from inferred types, not guesses.
     pub lambdas: HashMap<(u32, u32), Type>,
+    /// `let` binding source position `(line, column)` → its resolved type, so
+    /// editor hover can show the type of an unannotated binding.
+    /// Implements [LSP-HOVER-VARIABLES]
+    pub lets: HashMap<(u32, u32), Type>,
 }
 
 impl ProgramTypes {
@@ -71,5 +75,12 @@ impl ProgramTypes {
     #[must_use]
     pub fn lambda_type(&self, position: Option<osprey_ast::Position>) -> Option<&Type> {
         position.and_then(|p| self.lambdas.get(&(p.line, p.column)))
+    }
+
+    /// The resolved type of the `let` binding written at `position`.
+    /// Implements [LSP-HOVER-VARIABLES]
+    #[must_use]
+    pub fn let_type(&self, position: Option<osprey_ast::Position>) -> Option<&Type> {
+        position.and_then(|p| self.lets.get(&(p.line, p.column)))
     }
 }

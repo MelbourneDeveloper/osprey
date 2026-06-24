@@ -7,6 +7,13 @@ use osprey_ast::{
 };
 use tree_sitter::Node;
 
+/// Strip one doc-comment line's leading whitespace, its `///` marker, and one
+/// optional following space — leaving the prose. Implements [LSP-HOVER-DOCS]
+fn strip_doc_line(line: &str) -> &str {
+    let rest = line.trim_start().strip_prefix("///").unwrap_or(line);
+    rest.strip_prefix(' ').unwrap_or(rest)
+}
+
 /// Holds the source bytes so node text can be sliced during lowering.
 #[derive(Debug)]
 pub struct Lowerer<'a> {
@@ -34,6 +41,23 @@ impl<'a> Lowerer<'a> {
             line: u32::try_from(p.row).unwrap_or(u32::MAX).saturating_add(1),
             column: u32::try_from(p.column).unwrap_or(u32::MAX),
         }
+    }
+
+    /// Position of `node`'s named `field`, or `node`'s own start when absent. A
+    /// leading `///` doc comment shifts `node.start` onto the comment, so a
+    /// declaration keeps a stable position by anchoring on its keyword/name.
+    pub(crate) fn field_pos(&self, node: Node<'_>, field: &str) -> Position {
+        self.pos(node.child_by_field_name(field).unwrap_or(node))
+    }
+
+    /// The leading `///` documentation of a declaration, each line stripped of
+    /// its `///` (and one optional space) and joined by newline; `None` when the
+    /// declaration carries no doc comment. Implements [LSP-HOVER-DOCS]
+    pub(crate) fn doc_text(&self, node: Node<'_>) -> Option<String> {
+        let doc = self.first_child_of_kind(node, "doc_comment")?;
+        let text = self.text(doc);
+        let body: Vec<&str> = text.lines().map(strip_doc_line).collect();
+        Some(body.join("\n"))
     }
 
     /// First *named* child (skips anonymous tokens). Used to unwrap the wrapper
@@ -86,7 +110,8 @@ impl<'a> Lowerer<'a> {
                     .is_some_and(|n| self.text(n) == "mut"),
                 ty: node.child_by_field_name("type").map(|n| self.lower_type(n)),
                 value: self.lower_expr_field(node, "value"),
-                position: Some(self.pos(node)),
+                doc: self.doc_text(node),
+                position: Some(self.field_pos(node, "keyword")),
             },
             "assignment" => Stmt::Assignment {
                 name: self.field_text(node, "name"),
@@ -101,7 +126,8 @@ impl<'a> Lowerer<'a> {
                     .map(|n| self.lower_type(n)),
                 effects: self.lower_effects(node.child_by_field_name("effects")),
                 body: self.lower_expr_field(node, "body"),
-                position: Some(self.pos(node)),
+                doc: self.doc_text(node),
+                position: Some(self.field_pos(node, "name")),
             },
             "extern_declaration" => Stmt::Extern {
                 name: self.field_text(node, "name"),

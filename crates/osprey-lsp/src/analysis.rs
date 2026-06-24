@@ -5,7 +5,10 @@
 //! into editor symbols — both the language server and the `osprey --symbols` /
 //! `osprey --hover` CLI modes render from here.
 
-use osprey_ast::{ExternParameter, Parameter, Position, Program, Stmt, TypeExpr};
+use osprey_ast::{
+    Expr, ExternParameter, FieldAssignment, InterpolatedPart, MatchArm, NamedArgument, Parameter,
+    Position, Program, Stmt, TypeExpr,
+};
 use std::fmt::Write as _;
 
 /// What kind of declaration a [`SymbolInfo`] describes.
@@ -49,6 +52,9 @@ pub struct SymbolInfo {
     pub parameters: Vec<(String, String)>,
     /// Rendered return type for functions.
     pub return_type: Option<String>,
+    /// Leading `///` documentation, when the declaration carries one.
+    /// Implements [LSP-HOVER-DOCS]
+    pub doc: Option<String>,
 }
 
 /// Collect every top-level declaration (recursing into modules) into outline
@@ -69,18 +75,166 @@ fn collect(stmts: &[Stmt], out: &mut Vec<SymbolInfo>) {
     }
 }
 
+/// Collect every binding in the program — top-level declarations *and* `let`s
+/// nested in expression bodies (function/handler/match/block bodies) — so hover
+/// resolves local variables, not only top-level names. Source order.
+/// Implements [LSP-HOVER-VARIABLES]
+#[must_use]
+pub fn collect_all_symbols(program: &Program) -> Vec<SymbolInfo> {
+    let mut out = Vec::new();
+    walk_stmts(&program.statements, &mut out);
+    out
+}
+
+fn walk_stmts(stmts: &[Stmt], out: &mut Vec<SymbolInfo>) {
+    for stmt in stmts {
+        out.extend(sym_of(stmt));
+        walk_stmt_body(stmt, out);
+    }
+}
+
+fn walk_stmt_body(stmt: &Stmt, out: &mut Vec<SymbolInfo>) {
+    match stmt {
+        Stmt::Module { body, .. } => walk_stmts(body, out),
+        Stmt::Function { body, .. } => walk_expr(body, out),
+        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } => walk_expr(value, out),
+        _ => {}
+    }
+}
+
+/// Descend an expression collecting nested `let` bindings (first third).
+fn walk_expr(e: &Expr, out: &mut Vec<SymbolInfo>) {
+    match e {
+        Expr::InterpolatedStr(parts) => parts.iter().for_each(|p| {
+            if let InterpolatedPart::Expr(x) = p {
+                walk_expr(x, out);
+            }
+        }),
+        Expr::List(xs) => walk_each(xs, out),
+        Expr::Map(entries) => entries.iter().for_each(|en| {
+            walk_expr(&en.key, out);
+            walk_expr(&en.value, out);
+        }),
+        Expr::Object(fields) => walk_fields(fields, out),
+        Expr::Binary { left, right, .. } | Expr::Pipe { left, right } => {
+            walk_expr(left, out);
+            walk_expr(right, out);
+        }
+        Expr::Unary { operand, .. } => walk_expr(operand, out),
+        other => walk_expr_rest(other, out),
+    }
+}
+
+/// Continuation of [`walk_expr`] — call/navigation/block forms (second third).
+fn walk_expr_rest(e: &Expr, out: &mut Vec<SymbolInfo>) {
+    match e {
+        Expr::Call {
+            function,
+            arguments,
+            named_arguments,
+        } => {
+            walk_expr(function, out);
+            walk_each(arguments, out);
+            walk_named(named_arguments, out);
+        }
+        Expr::MethodCall {
+            target,
+            arguments,
+            named_arguments,
+            ..
+        } => {
+            walk_expr(target, out);
+            walk_each(arguments, out);
+            walk_named(named_arguments, out);
+        }
+        Expr::FieldAccess { target, .. } => walk_expr(target, out),
+        Expr::Index { target, index } => {
+            walk_expr(target, out);
+            walk_expr(index, out);
+        }
+        Expr::Lambda { body, .. } => walk_expr(body, out),
+        Expr::Match { value, arms } => {
+            walk_expr(value, out);
+            walk_arms(arms, out);
+        }
+        Expr::Block { statements, value } => {
+            walk_stmts(statements, out);
+            if let Some(v) = value {
+                walk_expr(v, out);
+            }
+        }
+        Expr::TypeConstructor { fields, .. } | Expr::Update { fields, .. } => {
+            walk_fields(fields, out);
+        }
+        other => walk_expr_fiber(other, out),
+    }
+}
+
+/// Final third of [`walk_expr`]: fiber/effect forms; leaves fall through.
+fn walk_expr_fiber(e: &Expr, out: &mut Vec<SymbolInfo>) {
+    match e {
+        Expr::Spawn(i) | Expr::Await(i) | Expr::Recv(i) | Expr::Yield(Some(i)) => walk_expr(i, out),
+        Expr::Send { channel, value } => {
+            walk_expr(channel, out);
+            walk_expr(value, out);
+        }
+        Expr::Select { arms } => walk_arms(arms, out),
+        Expr::Perform {
+            arguments,
+            named_arguments,
+            ..
+        } => {
+            walk_each(arguments, out);
+            walk_named(named_arguments, out);
+        }
+        Expr::Handler { arms, body, .. } => {
+            for arm in arms {
+                walk_expr(&arm.body, out);
+            }
+            walk_expr(body, out);
+        }
+        _ => {}
+    }
+}
+
+fn walk_each(xs: &[Expr], out: &mut Vec<SymbolInfo>) {
+    for x in xs {
+        walk_expr(x, out);
+    }
+}
+
+fn walk_named(named: &[NamedArgument], out: &mut Vec<SymbolInfo>) {
+    for n in named {
+        walk_expr(&n.value, out);
+    }
+}
+
+fn walk_fields(fields: &[FieldAssignment], out: &mut Vec<SymbolInfo>) {
+    for f in fields {
+        walk_expr(&f.value, out);
+    }
+}
+
+fn walk_arms(arms: &[MatchArm], out: &mut Vec<SymbolInfo>) {
+    for arm in arms {
+        walk_expr(&arm.body, out);
+    }
+}
+
 fn sym_of(stmt: &Stmt) -> Option<SymbolInfo> {
     match stmt {
         Stmt::Function {
             name,
             parameters,
             return_type,
+            doc,
             position,
             ..
         } => Some(fn_sym(
             name,
             param_pairs(parameters),
             return_type.as_ref(),
+            doc.clone(),
             *position,
         )),
         Stmt::Extern {
@@ -92,11 +246,16 @@ fn sym_of(stmt: &Stmt) -> Option<SymbolInfo> {
             name,
             extern_pairs(parameters),
             return_type.as_ref(),
+            None,
             *position,
         )),
         Stmt::Let {
-            name, ty, position, ..
-        } => Some(let_sym(name, ty.as_ref(), *position)),
+            name,
+            ty,
+            doc,
+            position,
+            ..
+        } => Some(let_sym(name, ty.as_ref(), doc.clone(), *position)),
         Stmt::Type { name, position, .. } => Some(decl_sym(name, "type", *position)),
         Stmt::Effect { name, position, .. } => Some(decl_sym(name, "effect", *position)),
         _ => None,
@@ -107,6 +266,7 @@ fn fn_sym(
     name: &str,
     parameters: Vec<(String, String)>,
     return_type: Option<&TypeExpr>,
+    doc: Option<String>,
     position: Option<Position>,
 ) -> SymbolInfo {
     let ret = return_type.map_or_else(|| String::from("Unit"), render_type);
@@ -120,6 +280,7 @@ fn fn_sym(
         signature: Some(signature),
         parameters,
         return_type: Some(ret),
+        doc,
     }
 }
 
@@ -131,7 +292,12 @@ fn render_param((n, t): &(String, String)) -> String {
     }
 }
 
-fn let_sym(name: &str, ty: Option<&TypeExpr>, position: Option<Position>) -> SymbolInfo {
+fn let_sym(
+    name: &str,
+    ty: Option<&TypeExpr>,
+    doc: Option<String>,
+    position: Option<Position>,
+) -> SymbolInfo {
     SymbolInfo {
         name: name.into(),
         kind: SymbolKind::Variable,
@@ -140,6 +306,7 @@ fn let_sym(name: &str, ty: Option<&TypeExpr>, position: Option<Position>) -> Sym
         signature: None,
         parameters: Vec::new(),
         return_type: None,
+        doc,
     }
 }
 
@@ -152,6 +319,7 @@ fn decl_sym(name: &str, ty: &str, position: Option<Position>) -> SymbolInfo {
         signature: None,
         parameters: Vec::new(),
         return_type: None,
+        doc: None,
     }
 }
 

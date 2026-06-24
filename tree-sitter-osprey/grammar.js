@@ -86,6 +86,7 @@ module.exports = grammar({
     // ---------- DECLARATIONS ----------
     let_declaration: ($) =>
       seq(
+        optional($.doc_comment),
         field('keyword', choice('let', 'mut')),
         field('name', $.identifier),
         optional(seq(':', field('type', $._type))),
@@ -306,6 +307,7 @@ module.exports = grammar({
         $.send_call,
         $.recv_call,
         $.perform_expression,
+        $.resume_expression,
         $.type_constructor,
         $.update_expression,
         $.block,
@@ -323,6 +325,11 @@ module.exports = grammar({
     recv_call: ($) => seq('recv', '(', $.expression, ')'),
     perform_expression: ($) =>
       seq('perform', field('effect', $.identifier), '.', field('operation', $.identifier), '(', optional($.argument_list), ')'),
+    // `resume(v)` resumes the performer's delimited continuation with `v`;
+    // `resume()` resumes with Unit. Only legal inside a handler arm body.
+    // Implements [EFFECTS-RESUME].
+    resume_expression: ($) =>
+      seq('resume', '(', field('value', optional($.expression)), ')'),
 
     type_constructor: ($) =>
       prec.dynamic(1, seq(field('name', $.identifier), optional($.type_arguments), '{', $.field_assignments, '}')),

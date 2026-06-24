@@ -955,6 +955,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "doc_comment",
+          "named": true
+        }
+      ]
     }
   },
   {

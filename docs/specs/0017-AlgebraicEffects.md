@@ -4,12 +4,17 @@ Osprey treats effects as first-class language features. An effect declares a set
 
 ## Status
 
-Effect declarations, `perform` expressions, effect annotations on function types, handler parsing, and full compile-time unhandled-effect checking are implemented. A handler arm's return value becomes the result of the `perform` and the performer continues — i.e. the common *single-shot tail-resume* — and handlers may own mutable state (see [Handler-Owned State]). An explicit `resume` expression (general delimited continuations, multi-shot resume) is not yet implemented.
+Effect declarations, `perform` expressions, effect annotations on function types, handler parsing, and full compile-time unhandled-effect checking are implemented. A handler arm may resume the performer in two ways:
+
+- **Implicit tail-resume.** An arm whose body is an ordinary expression returns that value to the `perform` site, which continues. This is the cheap default and handlers may own mutable state with it (see [Handler-Owned State]).
+- **Explicit `resume`.** An arm whose body contains a `resume` expression captures the performer's *delimited continuation*: `resume(v)` runs the rest of the handled computation with `v` as the operation's result and yields its answer back to the arm, so the arm can run code **after** the performer continues. Single-shot (each continuation is resumed at most once) and **deep** (the handler stays installed for the resumed computation). See [Resuming Handlers].
+
+Multi-shot resume (resuming one continuation more than once) is rejected with a clear diagnostic; it is a follow-up.
 
 ## Keywords
 
 ```
-effect perform handle in
+effect perform handle in resume
 ```
 
 ## Effect Declarations
@@ -115,6 +120,76 @@ performed inside a `spawn`ed fiber is handled in the spawner), so one effect
 handler can own the state for a whole running server. See
 `compiler/examples/tested/effects/http_state_levels.osp` and
 `compiler/examples/statefulhttp/`.
+
+## Resuming Handlers
+
+`[EFFECTS-RESUME]` A handler arm may name the performer's continuation with
+`resume`. `resume(v)` resumes the suspended `perform` with `v` as the operation's
+result, runs the rest of the handled computation, and evaluates to **that
+computation's answer** — so the arm can run code *after* the performer has moved
+on. `resume()` with no argument resumes with `Unit`.
+
+```ebnf
+resumeExpr ::= "resume" "(" expr? ")"
+```
+
+Semantics:
+
+- **Deep.** The handler stays installed for the resumed computation: if the
+  continuation performs the effect again, the same arm runs again.
+- **Single-shot.** Each continuation is resumed at most once. Resuming a
+  continuation twice is a compile-time error (multi-shot is a follow-up).
+- **Abort.** An arm that returns *without* resuming discards the continuation;
+  its value becomes the result of the whole `handle … in` — the basis for
+  exceptions and early exit.
+- An arm whose body is a plain value (no `resume`) is the implicit tail-resume of
+  [Handler-Owned State]; the two styles coexist per effect.
+
+```osprey
+effect Audit { step: fn(string) -> int }
+
+fn pipeline() -> int !Audit = {
+    let a = perform Audit.step("load")     // suspends here
+    let b = perform Audit.step("parse")    // …and here
+    a + b
+}
+
+fn main() -> int {
+    mut n = 0
+    let total = handle Audit
+        step label => {
+            n = n + 1
+            let answer = resume(n)          // performer continues with n
+            print("after ${label}: answer=${toString(answer)}")
+            answer                          // code AFTER resume — impossible with tail-resume
+        }
+    in pipeline()
+    print("total=${toString(total)}")
+    0
+}
+```
+
+Output — the "after" lines unwind **LIFO** as each continuation completes, the
+signature of a real delimited continuation:
+
+```
+after parse: answer=3
+after load: answer=3
+total=3
+```
+
+### Runtime model
+
+`resume` is implemented as **thread-as-continuation** (single-shot, deep): a
+`handle` region whose arms mention `resume` runs its `in` body on a spawned body
+thread while the host thread runs the arms; `perform` suspends the body thread and
+yields the operation to the host, and `resume` switches back, delivering the
+value. The suspended thread *is* the captured continuation, which is why it is
+single-shot (a live stack cannot be cloned). Regions with no `resume` keep the
+zero-overhead function-call path. The body thread inherits the host's handler
+stack via the existing snapshot/restore (`__osprey_handler_snapshot`), so a
+`perform` deep inside the continuation still resolves outer handlers. See
+[plan 0008](../plans/0008-algebraic-effects-resume.md).
 
 ## Effect Inference
 

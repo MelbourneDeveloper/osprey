@@ -2,7 +2,7 @@
 
 **Subsystem:** `crates/osprey-syntax`, `crates/osprey-ast`, `crates/osprey-types`,
 `crates/osprey-codegen`, `compiler/runtime`
-**Status:** Partially implemented (handlers work as value substitution)
+**Status:** Single-shot deep `resume` landing — thread-as-continuation (Option B)
 **Spec:** [0017-AlgebraicEffects.md](../specs/0017-AlgebraicEffects.md)
 
 ## Summary
@@ -59,32 +59,78 @@ captured continuation, so `resume v` (continue the performer with `v`) cannot be
 expressed. Multi-shot resume (resuming the same continuation more than once) is
 likewise impossible.
 
-## Implementation plan
+## Chosen design — thread-as-continuation (Option B)
 
-This needs a continuation mechanism. Recommended phased approach:
+The runtime is already thread-based (fibers are pthreads,
+[fiber_runtime.c](../../compiler/runtime/fiber_runtime.c)) and already
+snapshots/restores the handler stack across threads
+([effects_runtime.c](../../compiler/runtime/effects_runtime.c)). There is no
+`ucontext`/`setjmp` in the tree, so a suspended **thread** is the continuation —
+no stack-segment copying, no CPS pass. This also makes single-shot fall out for
+free: a live pthread stack cannot be cloned, so multi-shot is naturally excluded
+(and rejected with a diagnostic).
 
-1. **Surface syntax + AST.** Add `resume <expr>` to the grammar
-   ([tree-sitter-osprey/](../../tree-sitter-osprey/)), the AST
-   ([crates/osprey-ast/src/lib.rs](../../crates/osprey-ast/src/lib.rs)), and the
-   syntax lowering ([crates/osprey-syntax](../../crates/osprey-syntax)).
-2. **Type the continuation.** In [crates/osprey-types](../../crates/osprey-types),
-   bind the handler operation's parameters from the effect's `OpType`, and type
-   `resume` as accepting the operation's result type and producing the handled
-   computation's type. (Today handler params are fresh, unconnected vars —
-   tighten that first.)
-3. **Choose the runtime model.** Single-shot delimited continuations first:
-   - **Option A — CPS transform** of effectful code paths (no stack copying;
-     larger codegen change).
-   - **Option B — stackful capture** (`ucontext`/saved stack segment) keyed off
-     the handler stack frame; smaller codegen change, more runtime machinery.
-   Recommend prototyping **B** for single-shot, since the handler stack and
-   snapshot/restore plumbing already exist in `effects_runtime.c`.
-4. **Implement `__osprey_handler_resume`** to reactivate the captured
-   continuation and deliver the resume value back to the `perform` site.
-5. **Codegen handler arms** to capture the continuation, bind `resume`, and emit
-   resume calls.
-6. **Defer multi-shot resume** to a follow-up; gate it behind a clear "not yet"
-   diagnostic so single-shot ships first.
+### Static gate
+
+A `handle E arm… in body` is a **resuming region** iff any arm body contains a
+`resume`. Resuming regions emit the coroutine path below; every other region
+keeps the existing zero-overhead function-call path (handler = function, `ret` =
+tail-resume). Detected by an AST walk over arm bodies in codegen.
+
+### Runtime ABI (`compiler/runtime/effects_runtime.c`)
+
+A per-region `Coro` control block carries: the captured user `env`, a turn flag +
+mutex/cond pair, an operation-id + argument buffer (body→host), a `resume_value`
+(host→body), the body's final result, and `done`/`abort` flags.
+
+- `Coro *__osprey_coro_new(void *env)` — allocate.
+- `void __osprey_coro_start(Coro*, i64 (*body)(void*), HandlerSnapshot*)` — spawn
+  the body thread with the inherited handler stack, then block the host until the
+  body first suspends or completes.
+- `i64 __osprey_coro_suspend(Coro*, i64 op_id, i64 *args)` — **body side**, called
+  by each arm's suspend-trampoline at a `perform`: publishes `(op_id,args)`, hands
+  control to the host, blocks until resumed, returns `resume_value`. If the host
+  set `abort`, it `pthread_exit`s (single-shot teardown).
+- `i64 __osprey_coro_resume(Coro*, i64 v)` — **host side**, lowering of `resume`:
+  delivers `v`, runs the body until its next suspend or completion, blocks the
+  host meanwhile; returns `done ? body_result : <sentinel: body performed again>`.
+- accessors `__osprey_coro_done/op/arg/result` and `__osprey_coro_abort` + free.
+
+### Dispatch model (codegen-emitted, host thread)
+
+The host side is ordinary host-thread call recursion; the body thread runs
+straight-line and only suspends:
+
+```
+region(env):
+  coro = coro_new(env); push suspend-trampolines(env=coro); snapshot = handler_snapshot()
+  coro_start(coro, body_thunk, snapshot)
+  return drive(coro)
+
+drive(coro):                 // also re-entered after each resume that performed again
+  if coro_done(coro): return coro_result(coro)
+  return dispatch_arm(coro, coro_op(coro))     // an arm finishing IS the region answer
+
+dispatch_arm(coro, op):      // switch op → __arm_E_op(env, args…); arm body may call resume
+resume(v)  ⇒  r = coro_resume(coro, v); if !coro_done(coro) then drive(coro) else r
+```
+
+Tail-resume arms bottom out when the body completes (answer = `body_result`),
+matching today's semantics; non-tail arms run their post-`resume` code as the
+recursion unwinds (LIFO), the behaviour value-substitution can't express. An arm
+that never resumes returns directly → host sets `abort`, joins the body, frees the
+`Coro`.
+
+### Phases
+
+1. **Surface syntax + AST.** `resume "(" expr? ")"` in the grammar, AST
+   `Expr::Resume(Option<Box<Expr>>)`, syntax lowering.
+2. **Types.** Bind handler-arm params from the effect's `OpType`; type `resume`'s
+   argument against the operation result; reject `resume` outside a handler arm.
+3. **Runtime.** The `Coro` ABI above in `effects_runtime.c`.
+4. **Codegen.** Static gate; suspend-trampolines; `body_thunk`; the host
+   `drive`/`dispatch_arm`; lower `resume`.
+5. **Multi-shot** rejected with a clear diagnostic.
 
 ## Testing
 

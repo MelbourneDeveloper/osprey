@@ -696,6 +696,7 @@ mod tests {
                 right: Box::new(Expr::Integer(1)),
             },
             effects: Vec::new(),
+            doc: None,
             position: None,
         };
         // Pipe, non-call form: `10 |> inc` applies `inc(10)`.
@@ -730,6 +731,7 @@ mod tests {
                     mutable: false,
                     ty: None,
                     value: Expr::Integer(2),
+                    doc: None,
                     position: None,
                 },
                 bare_pipe,
@@ -782,6 +784,7 @@ mod tests {
                     right: Box::new(Expr::Identifier("other".into())),
                 },
                 effects: Vec::new(),
+                doc: None,
                 position: None,
             }],
         };

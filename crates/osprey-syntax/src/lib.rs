@@ -105,6 +105,38 @@ mod tests {
     }
 
     #[test]
+    fn lowers_doc_comments_on_let_and_function() {
+        // A `///` block above a binding is captured as its `doc`, stripped of the
+        // markers, and the recorded position stays on the declaration keyword/name
+        // (line 3 here), not the comment lines. Implements [LSP-HOVER-DOCS]
+        match one("/// The retry budget.\n/// Bounded above by `maxRetries`.\nlet retries: int = 3\n") {
+            Stmt::Let {
+                name, doc, position, ..
+            } => {
+                assert_eq!(name, "retries");
+                assert_eq!(
+                    doc.as_deref(),
+                    Some("The retry budget.\nBounded above by `maxRetries`.")
+                );
+                assert_eq!(position.map(|p| p.line), Some(3));
+            }
+            s => panic!("expected let, got {s:?}"),
+        }
+        match one("/// Adds two ints.\nfn add(a: int, b: int) -> int = a + b\n") {
+            Stmt::Function { doc, position, .. } => {
+                assert_eq!(doc.as_deref(), Some("Adds two ints."));
+                assert_eq!(position.map(|p| p.line), Some(2));
+            }
+            s => panic!("expected function, got {s:?}"),
+        }
+        // An undocumented binding carries no doc.
+        match one("let x = 1\n") {
+            Stmt::Let { doc, .. } => assert_eq!(doc, None),
+            s => panic!("expected let, got {s:?}"),
+        }
+    }
+
+    #[test]
     fn lowers_let() {
         match one("let x = 42\n") {
             Stmt::Let {

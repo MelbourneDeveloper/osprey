@@ -67,6 +67,10 @@ pub struct Checker {
     /// Every lambda's inferred function type, keyed by its source position —
     /// resolved and published to the backend by [`infer_program`].
     pub(crate) lambda_tys: Vec<(Position, Type)>,
+    /// Every `let` binding's inferred type, keyed by its source position, so
+    /// editor hover can show the type of an unannotated binding. Resolved and
+    /// published by [`infer_program`]. Implements [LSP-HOVER-VARIABLES]
+    pub(crate) let_tys: Vec<(Position, Type)>,
     /// The built-in function names — user code may not redefine these.
     builtins: HashSet<String>,
 }
@@ -82,6 +86,7 @@ impl Checker {
             fn_params: HashMap::new(),
             fn_sigs: HashMap::new(),
             lambda_tys: Vec::new(),
+            let_tys: Vec::new(),
             builtins: HashSet::new(),
         };
         c.register_result_ctors();
@@ -165,6 +170,7 @@ impl Checker {
                 ty,
                 value,
                 position,
+                ..
             } => self.check_let(name, *mutable, ty.as_ref(), value, env, *position),
             Stmt::Assignment {
                 name,
@@ -387,6 +393,12 @@ impl Checker {
             let annotated = type_expr_to_type(te, &HashMap::new());
             self.unify_or_err(&annotated, &value_ty, &format!("let `{name}`"), pos);
         }
+        // Publish the binding's inferred type for editor hover, keyed by source
+        // position (resolved against the final substitution in `infer_program`).
+        // Implements [LSP-HOVER-VARIABLES]
+        if let Some(p) = pos {
+            self.let_tys.push((p, value_ty.clone()));
+        }
         let scheme = generalize(&mut self.ctx, env, &value_ty);
         if mutable {
             env.insert_mutable(name, scheme);
@@ -522,12 +534,18 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
         .iter()
         .map(|(pos, ty)| ((pos.line, pos.column), checker.ctx.apply(ty)))
         .collect();
+    let lets = checker
+        .let_tys
+        .iter()
+        .map(|(pos, ty)| ((pos.line, pos.column), checker.ctx.apply(ty)))
+        .collect();
     ProgramTypes {
         functions,
         ctors,
         unions,
         effects: checker.effects.clone(),
         lambdas,
+        lets,
     }
 }
 
@@ -587,7 +605,8 @@ mod tests {
         let parsed = parse_program(
             "type Color = Red | Green\n\
              fn dbl(x: int) -> int = x * 2\n\
-             let g = fn(n) => n + 1\n",
+             let g = fn(n) => n + 1\n\
+             let n = dbl(21)\n",
         );
         let info = infer_program(&parsed.program);
         // Resolved function signatures and union tags are published.
@@ -599,6 +618,13 @@ mod tests {
         );
         // The lambda's resolved type is published keyed by source position.
         assert!(!info.lambdas.is_empty(), "lambda type published");
+        // The unannotated `let n = dbl(21)` resolves to `int`, published by
+        // position. Implements [LSP-HOVER-VARIABLES]
+        assert!(
+            info.lets.values().any(|t| t.to_string() == "int"),
+            "let type published: {:?}",
+            info.lets
+        );
     }
 
     fn ok(src: &str) {

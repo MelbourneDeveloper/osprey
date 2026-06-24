@@ -128,6 +128,8 @@ pub enum Stmt {
         ty: Option<TypeExpr>,
         /// The bound value expression.
         value: Expr,
+        /// Leading `///` documentation, joined by newline, when written.
+        doc: Option<String>,
         /// Source position, if recorded.
         position: Option<Position>,
     },
@@ -152,6 +154,8 @@ pub enum Stmt {
         effects: Vec<String>,
         /// Function body expression.
         body: Expr,
+        /// Leading `///` documentation, joined by newline, when written.
+        doc: Option<String>,
         /// Source position, if recorded.
         position: Option<Position>,
     },
@@ -476,6 +480,7 @@ mod tests {
                 mutable: false,
                 ty: None,
                 value: Expr::Integer(1),
+                doc: None,
                 position: None,
             }],
         };
