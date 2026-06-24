@@ -198,10 +198,13 @@ pub fn render_type(t: &TypeExpr) -> String {
     format!("{}<{}>", t.name, gs.join(", "))
 }
 
-/// Markdown hover text for a built-in name, or `None` when not a built-in.
+/// Rich Markdown hover text for a built-in name, or `None` when not a built-in.
+/// Renders the full metadata — signature, description, parameters, return type,
+/// and example — from the single source in `osprey_types`, so a built-in hovers
+/// with exactly the detail the reference docs carry.
 #[must_use]
 pub fn builtin_hover(name: &str) -> Option<String> {
-    osprey_types::builtin_signature(name).map(|sig| format!("```osprey\n{sig}\n```"))
+    osprey_types::builtin_hover_markdown(name)
 }
 
 /// The whole document outline as the `--symbols` JSON array.
@@ -299,8 +302,11 @@ mod tests {
     #[test]
     fn hover_renders_builtin_signature_and_rejects_unknowns() {
         let md = builtin_hover("print");
+        // The rich hover carries the call signature and the description, not just
+        // a bare `name : type` line.
         assert!(
-            md.as_deref().is_some_and(|m| m.contains("print : ")),
+            md.as_deref()
+                .is_some_and(|m| m.contains("print(value: any) -> Unit") && m.contains("Prints")),
             "{md:?}"
         );
         assert!(builtin_hover("notARealBuiltin").is_none());

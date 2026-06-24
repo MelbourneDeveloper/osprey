@@ -1,0 +1,263 @@
+//! Built-in documentation data (system, network & runtime). Generated companion to
+//! `builtins.rs`: every entry's prose pairs with the type scheme of the
+//! same name. Edit prose here; edit types in `builtins.rs`. The parity
+//! test in `builtin_docs.rs` guarantees the two stay in lockstep.
+//!
+//! Param order and count MUST match the builtin's real arity.
+
+use crate::builtin_docs::{d, BuiltinDoc};
+
+/// `files` built-in documentation. Prose only — types come from the
+/// authoritative scheme in `builtins.rs`, joined by name.
+pub(crate) fn files_docs(v: &mut Vec<BuiltinDoc>) {
+    d(
+        v,
+        "readFile",
+        "Reads the entire contents of a file as a string.",
+        &[("filename", "Path to the file to read")],
+        "let content = readFile(\"input.txt\")\nprint(\"File read\")",
+    );
+    d(v, "writeFile", "Writes content to a file. Creates the file if it doesn't exist. Returns number of bytes written.", &[("filename", "Path to the file to write"), ("content", "Content to write to the file")], "let result = writeFile(\"output.txt\", \"Hello, World!\")\nprint(\"File written\")");
+    d(v, "deleteFile", "Deletes the file at the given path, returning Unit on success or an error.", &[("path", "Filesystem path of the file to delete")], "match deleteFile(\"temp.txt\") {\n  Success { value } => print(\"deleted\")\n  Error { message } => print(message)\n}");
+}
+
+/// `http` built-in documentation. Prose only — types come from the
+/// authoritative scheme in `builtins.rs`, joined by name.
+pub(crate) fn http_docs(v: &mut Vec<BuiltinDoc>) {
+    d(
+        v,
+        "httpCreateClient",
+        "Creates an HTTP client for making requests to a base URL.",
+        &[
+            (
+                "base_url",
+                "Base URL for requests (e.g., \"http://api.example.com\")",
+            ),
+            ("timeout", "Request timeout in milliseconds"),
+        ],
+        "let clientId = httpCreateClient(\"http://httpbin.org\", 5000)\nprint(\"Client created\")",
+    );
+    d(
+        v,
+        "httpCloseClient",
+        "Closes the HTTP client and cleans up resources.",
+        &[("clientID", "Client identifier to close")],
+        "let result = httpCloseClient(clientId)\nprint(\"Client closed\")",
+    );
+    d(
+        v,
+        "httpGet",
+        "Makes an HTTP GET request to the specified path.",
+        &[
+            ("clientID", "Client identifier from httpCreateClient"),
+            ("path", "Request path (e.g., \"/api/users\")"),
+            (
+                "headers",
+                "Additional headers (e.g., \"Authorization: Bearer token\")",
+            ),
+        ],
+        "let status = httpGet(clientId, \"/get\", \"\")\nprint(\"GET request status: ${status}\")",
+    );
+    d(v, "httpGetResponse", "Sends an HTTP GET request and returns a response handle for inspecting the status, headers, and body.", &[("clientID", "Client identifier from httpCreateClient"), ("path", "Request path, e.g. \"/api/users\""), ("headers", "Additional request headers, or \"\" for none")], "match httpGetResponse(client, \"/users\", \"\") {\n  Success { value } => print(\"status: ${httpResponseStatus(value)}\")\n  Error { message } => print(message)\n}");
+    d(v, "httpResponseBody", "Returns the body of a response handle as a string.", &[("responseID", "Handle returned by httpGetResponse")], "match httpResponseBody(response) {\n  Success { value } => print(value)\n  Error { message } => print(message)\n}");
+    d(
+        v,
+        "httpResponseFree",
+        "Releases a response handle obtained from httpGetResponse.",
+        &[("responseID", "Handle returned by httpGetResponse")],
+        "httpResponseFree(response)",
+    );
+    d(
+        v,
+        "httpResponseStatus",
+        "Returns the HTTP status code of a response handle.",
+        &[("responseID", "Handle returned by httpGetResponse")],
+        "let code = httpResponseStatus(response)  // 200",
+    );
+    d(v, "httpResponseHeader", "Returns the value of the named header from a response handle.", &[("responseID", "Handle returned by httpGetResponse"), ("name", "Header name, e.g. \"Content-Type\"")], "match httpResponseHeader(response, \"Content-Type\") {\n  Success { value } => print(value)\n  Error { message } => print(message)\n}");
+    d(v, "httpPost", "Makes an HTTP POST request with a request body.", &[("clientID", "Client identifier from httpCreateClient"), ("path", "Request path"), ("body", "Request body data"), ("headers", "Additional headers")], "let status = httpPost(clientId, \"/post\", \"{\\\"key\\\":\\\"value\\\"}\", \"Content-Type: application/json\")\nprint(\"POST status: ${status}\")");
+    d(v, "httpPut", "Makes an HTTP PUT request with a request body.", &[("clientID", "Client identifier from httpCreateClient"), ("path", "Request path"), ("body", "Request body data"), ("headers", "Additional headers")], "let status = httpPut(clientId, \"/put\", \"{\\\"updated\\\":\\\"data\\\"}\", \"Content-Type: application/json\")\nprint(\"PUT status: ${status}\")");
+    d(
+        v,
+        "httpDelete",
+        "Makes an HTTP DELETE request to the specified path.",
+        &[
+            ("clientID", "Client identifier from httpCreateClient"),
+            ("path", "Request path"),
+            ("headers", "Additional headers"),
+        ],
+        "let status = httpDelete(clientId, \"/delete\", \"\")\nprint(\"DELETE status: ${status}\")",
+    );
+    d(v, "httpCreateServer", "Creates an HTTP server bound to the specified port and address.", &[("port", "Port number to bind to (1-65535)"), ("address", "IP address to bind to (e.g., \"127.0.0.1\", \"0.0.0.0\")")], "let serverId = httpCreateServer(8080, \"127.0.0.1\")\nprint(\"Server created with ID: ${serverId}\")");
+    d(
+        v,
+        "httpListen",
+        "Starts the HTTP server listening for requests with a handler function.",
+        &[
+            ("serverID", "Server identifier from httpCreateServer"),
+            ("handler", "Request handler function"),
+        ],
+        "let result = httpListen(serverId, requestHandler)\nprint(\"Server listening\")",
+    );
+    d(
+        v,
+        "httpStopServer",
+        "Stops the HTTP server and closes all connections.",
+        &[("serverID", "Server identifier to stop")],
+        "let result = httpStopServer(serverId)\nprint(\"Server stopped\")",
+    );
+}
+
+/// `json` built-in documentation. Prose only — types come from the
+/// authoritative scheme in `builtins.rs`, joined by name.
+pub(crate) fn json_docs(v: &mut Vec<BuiltinDoc>) {
+    d(v, "jsonParse", "Parses a JSON string and returns an opaque document handle for querying, or an error on malformed input.", &[("text", "The JSON text to parse")], "match jsonParse(\"{\\\"name\\\": \\\"osprey\\\"}\") {\n  Success { value } => print(\"parsed\")\n  Error { message } => print(message)\n}");
+    d(v, "jsonGet", "Returns the string value at the given path within a parsed JSON document.", &[("document", "Handle returned by jsonParse"), ("path", "Dotted path to the value, e.g. \"user.name\"")], "match jsonGet(doc, \"name\") {\n  Success { value } => print(value)\n  Error { message } => print(message)\n}");
+    d(
+        v,
+        "jsonLength",
+        "Returns the number of elements in the JSON array at the given path.",
+        &[
+            ("document", "Handle returned by jsonParse"),
+            ("path", "Dotted path to the array"),
+        ],
+        "let n = jsonLength(doc, \"items\")",
+    );
+    d(
+        v,
+        "jsonFree",
+        "Releases a parsed JSON document handle obtained from jsonParse.",
+        &[("document", "Handle returned by jsonParse")],
+        "jsonFree(doc)",
+    );
+}
+
+/// `concurrency` built-in documentation. Prose only — types come from the
+/// authoritative scheme in `builtins.rs`, joined by name.
+pub(crate) fn concurrency_docs(v: &mut Vec<BuiltinDoc>) {
+    d(v, "await", "Waits for a fiber to finish and returns its result, suspending the current fiber until then.", &[("fiber", "The fiber to await")], "let result = await(worker)");
+    d(
+        v,
+        "fiberDone",
+        "Returns 1 if the given fiber has finished, 0 otherwise.",
+        &[("fiber", "The fiber to test")],
+        "let finished = fiberDone(worker)  // 0 or 1",
+    );
+    d(
+        v,
+        "yield",
+        "Yields control from the current fiber, letting other ready fibers run.",
+        &[],
+        "yield()",
+    );
+    d(
+        v,
+        "fiber_yield",
+        "Yields control to the fiber scheduler with an optional value.",
+        &[("value", "The value to yield")],
+        "let result = fiber_yield(42)",
+    );
+    d(
+        v,
+        "Channel",
+        "Creates a new channel with the specified capacity.",
+        &[("capacity", "The capacity of the channel")],
+        "let ch = Channel(10)",
+    );
+    d(
+        v,
+        "send",
+        "Sends a value to a channel. Returns 1 for success, 0 for failure.",
+        &[
+            ("channel", "The channel to send to"),
+            ("value", "The value to send"),
+        ],
+        "let success = send(ch, 42)",
+    );
+    d(
+        v,
+        "recv",
+        "Receives a value from a channel.",
+        &[("channel", "The channel to receive from")],
+        "let value = recv(ch)",
+    );
+}
+
+/// `websocket` built-in documentation. Prose only — types come from the
+/// authoritative scheme in `builtins.rs`, joined by name.
+pub(crate) fn websocket_docs(v: &mut Vec<BuiltinDoc>) {
+    d(v, "websocketCreateServer", "Creates a WebSocket server bound to the specified port, address, and path. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*", &[("port", "Port number to bind to (1-65535)"), ("address", "IP address to bind to (e.g., \"127.0.0.1\", \"0.0.0.0\")"), ("path", "WebSocket endpoint path (e.g., \"/chat\", \"/live\")")], "let serverResult = websocketCreateServer(port: 8080, address: \"127.0.0.1\", path: \"/chat\")\nmatch serverResult {\n    Success serverId => print(\"WebSocket server created with ID: ${serverId}\")\n    Err message => print(\"Failed to create server: ${message}\")\n}");
+    d(v, "websocketServerListen", "Starts the WebSocket server listening for connections. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*", &[("serverID", "Server identifier from websocketCreateServer")], "let listenResult = websocketServerListen(serverID: serverId)\nmatch listenResult {\n    Success _ => print(\"Server listening on ws://127.0.0.1:8080/chat\")\n    Err message => print(\"Failed to start listening: ${message}\")\n}");
+    d(v, "websocketServerBroadcast", "Broadcasts a message to all connected WebSocket clients. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*", &[("serverID", "Server identifier"), ("message", "Message to broadcast to all clients")], "let broadcastResult = websocketServerBroadcast(serverID: serverId, message: \"Welcome to Osprey Chat!\")\nmatch broadcastResult {\n    Success _ => print(\"Message broadcasted to all clients\")\n    Err message => print(\"Failed to broadcast: ${message}\")\n}");
+    d(v, "websocketKeepAlive", "Keeps the WebSocket server running indefinitely until interrupted (blocking operation). *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*", &[], "websocketKeepAlive()  // Blocks until Ctrl+C");
+    d(
+        v,
+        "websocketConnect",
+        "Connects to a WebSocket server at the given URL and returns a connection id.",
+        &[("url", "WebSocket URL, e.g. \"ws://localhost:8080/chat\"")],
+        "let conn = websocketConnect(\"ws://localhost:8080/chat\")",
+    );
+    d(v, "websocketSend", "Sends a message through the WebSocket connection. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*", &[("wsID", "WebSocket identifier from websocketConnect"), ("message", "Message to send")], "let sendResult = websocketSend(wsID: wsId, message: \"Hello, WebSocket!\")\nmatch sendResult {\n    Success _ => print(\"Message sent successfully\")\n    Err message => print(\"Failed to send: ${message}\")\n}");
+    d(v, "websocketClose", "Closes the WebSocket connection and cleans up resources. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*", &[("wsID", "WebSocket identifier to close")], "let closeResult = websocketClose(wsID: wsId)\nmatch closeResult {\n    Success _ => print(\"Connection closed\")\n    Err message => print(\"Failed to close: ${message}\")\n}");
+}
+
+/// `terminal` built-in documentation. Prose only — types come from the
+/// authoritative scheme in `builtins.rs`, joined by name.
+pub(crate) fn terminal_docs(v: &mut Vec<BuiltinDoc>) {
+    d(v, "termReadKey", "Reads a single keypress from the terminal and returns it as a string.", &[], "match termReadKey() {\n  Success { value } => print(\"key: ${value}\")\n  Error { message } => print(message)\n}");
+    d(
+        v,
+        "termRawMode",
+        "Enables (1) or disables (0) raw terminal input mode, so keypresses arrive unbuffered.",
+        &[("enabled", "1 to enable raw mode, 0 to restore cooked mode")],
+        "termRawMode(1)",
+    );
+    d(
+        v,
+        "termCols",
+        "Returns the terminal width in columns.",
+        &[],
+        "let width = termCols()",
+    );
+    d(
+        v,
+        "termRows",
+        "Returns the terminal height in rows.",
+        &[],
+        "let height = termRows()",
+    );
+    d(
+        v,
+        "termClear",
+        "Clears the terminal screen.",
+        &[],
+        "termClear()",
+    );
+    d(
+        v,
+        "termMoveCursor",
+        "Moves the terminal cursor to the given row and column.",
+        &[
+            ("row", "Target row (1-based)"),
+            ("col", "Target column (1-based)"),
+        ],
+        "termMoveCursor(1, 1)",
+    );
+    d(
+        v,
+        "termHideCursor",
+        "Hides the terminal cursor.",
+        &[],
+        "termHideCursor()",
+    );
+    d(
+        v,
+        "termShowCursor",
+        "Shows the terminal cursor.",
+        &[],
+        "termShowCursor()",
+    );
+    d(v, "spawnProcess", "Spawns an external async process with MANDATORY callback for stdout/stderr capture. The callback function receives (processID: int, eventType: int, data: string) and is called for stdout (1), stderr (2), and exit (3) events. Returns a handle for the running process. CALLBACK IS REQUIRED - NO FUNCTION OVERLOADING!", &[("command", "The command to execute"), ("callback", "MANDATORY callback function for process events (processID, eventType, data)")], "fn processEventHandler(processID: int, eventType: int, data: string) -> Unit = {\n    match eventType {\n        1 => print(\"STDOUT: ${data}\")\n        2 => print(\"STDERR: ${data}\")\n        3 => print(\"EXIT: ${data}\")\n        _ => print(\"Unknown event\")\n    }\n}\nlet result = spawnProcess(\"echo hello\", processEventHandler)\nmatch result {\n    Success { value } => {\n        let exitCode = awaitProcess(value)\n        cleanupProcess(value)\n    }\n    Error { message } => print(\"Failed\")\n}");
+    d(v, "awaitProcess", "Waits for a spawned process to complete and returns its exit code. Blocks until the process finishes.", &[("handle", "Process ID from spawnProcess")], "let exitCode = awaitProcess(processHandle)\nprint(\"Process exited with code: ${toString(exitCode)}\")");
+    d(v, "cleanupProcess", "Cleans up resources associated with a completed process. Should be called after awaitProcess.", &[("handle", "Process ID from spawnProcess")], "cleanupProcess(processHandle)  // Free process resources");
+}

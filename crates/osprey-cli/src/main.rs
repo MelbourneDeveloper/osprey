@@ -14,6 +14,7 @@
 //! crate, built on the published lspkit crates); the `--symbols`/`--hover`
 //! outline/signature helpers it shares now live there too.
 
+mod docs;
 mod sandbox;
 
 use sandbox::Policy;
@@ -23,6 +24,7 @@ use std::process::{Command, ExitCode};
 const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --compile | --run | \
 --symbols] [--quiet] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
        osprey --hover <name>\n\
+       osprey --docs --docs-dir <dir>\n\
        osprey lsp";
 
 /// The parsed invocation: source path, mode flag, and behaviour switches.
@@ -57,6 +59,11 @@ fn main() -> ExitCode {
     // compiler in-process. [LSP-REUSE-LSPKIT]
     if args.first().map(String::as_str) == Some("lsp") {
         return run_lsp();
+    }
+    // `osprey --docs`: regenerate the built-in function reference from the
+    // compiler's metadata. No source file is involved.
+    if args.iter().any(|a| a == "--docs") {
+        return docs::run(&args);
     }
     let cli = match parse_args(&args) {
         Ok(cli) => cli,
