@@ -34,12 +34,17 @@ pub(crate) enum Callback {
     Lambda(Vec<Parameter>, Expr),
     /// A function-typed local (closure value) — called through its cell.
     Local(String, FnSig),
+    /// A computed closure value (a call result like `makeAdder(1)` or a field
+    /// access like `cfg.processor`) — already evaluated to a handle operand,
+    /// called through its cell per element.
+    Value(String, FnSig),
 }
 
 /// Resolve an iterator callback argument to a [`Callback`]. A materialized
 /// closure value wins over the beta-reduction cache — the cell carries the
-/// captures snapshotted at creation.
-fn callback_of(cg: &Codegen, e: &Expr) -> Result<Callback> {
+/// captures snapshotted at creation. A computed callback (call result or field
+/// access) is evaluated once here to a closure handle.
+fn callback_of(cg: &mut Codegen, e: &Expr) -> Result<Callback> {
     match e {
         Expr::Lambda {
             parameters, body, ..
@@ -51,9 +56,17 @@ fn callback_of(cg: &Codegen, e: &Expr) -> Result<Callback> {
                 None => Ok(Callback::Named(n.clone())),
             },
         },
-        _ => Err(CodegenError::unsupported(
-            "iterator callback must be a function name or lambda",
-        )),
+        _ => {
+            let sig = cg
+                .callee_fn_type(e)
+                .as_ref()
+                .and_then(Codegen::fn_value_sig)
+                .ok_or_else(|| {
+                    CodegenError::unsupported("iterator callback must be a function name or lambda")
+                })?;
+            let handle = gen_expr(cg, e)?;
+            Ok(Callback::Value(handle.operand, sig))
+        }
     }
 }
 
@@ -66,6 +79,10 @@ fn invoke(cg: &mut Codegen, cb: &Callback, args: Vec<Value>) -> Result<Value> {
             let handle = cg.lookup(name).ok_or_else(|| CodegenError::unknown(name))?;
             let typed = crate::closure::coerce_typed_args(cg, sig, args)?;
             Ok(crate::closure::cell_call(cg, &handle.operand, sig, &typed))
+        }
+        Callback::Value(operand, sig) => {
+            let typed = crate::closure::coerce_typed_args(cg, sig, args)?;
+            Ok(crate::closure::cell_call(cg, operand, sig, &typed))
         }
     }
 }
