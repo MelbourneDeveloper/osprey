@@ -4,7 +4,7 @@ title: "split (Function)"
 description: "Splits s on separator. Error(InvalidArgument) on empty separator."
 ---
 
-**Signature:** `split(s: string, separator: string) -> Result<List<string>, StringError>`
+**Signature:** `split(s: string, separator: string) -> Result<List<string>, Error>`
 
 **Description:** Splits s on separator. Error(InvalidArgument) on empty separator.
 
@@ -13,7 +13,7 @@ description: "Splits s on separator. Error(InvalidArgument) on empty separator."
 - **s** (string): The string to split
 - **separator** (string): Non-empty separator
 
-**Returns:** Result<List<string>, StringError>
+**Returns:** Result<List<string>, Error>
 
 ## Example
 

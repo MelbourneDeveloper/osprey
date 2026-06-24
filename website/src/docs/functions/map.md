@@ -4,16 +4,16 @@ title: "map (Function)"
 description: "Transforms each element in an iterator using a function, returning a new iterator."
 ---
 
-**Signature:** `map(iterator: iterator, fn: function) -> iterator`
+**Signature:** `map(iterator: List<t0>, fn: (t0) -> t1) -> List<t1>`
 
 **Description:** Transforms each element in an iterator using a function, returning a new iterator.
 
 ## Parameters
 
-- **iterator** (Iterator<T>): The iterator to transform
-- **fn** (T -> U): The transformation function
+- **iterator** (List<t0>): The iterator to transform
+- **fn** ((t0) -> t1): The transformation function
 
-**Returns:** Iterator<U>
+**Returns:** List<t1>
 
 ## Example
 

@@ -4,7 +4,7 @@ title: "padEnd (Function)"
 description: "Pads s on the right with copies of fill to reach targetLength bytes."
 ---
 
-**Signature:** `padEnd(s: string, targetLength: int, fill: string) -> Result<string, StringError>`
+**Signature:** `padEnd(s: string, targetLength: int, fill: string) -> Result<string, Error>`
 
 **Description:** Pads s on the right with copies of fill to reach targetLength bytes.
 
@@ -14,7 +14,7 @@ description: "Pads s on the right with copies of fill to reach targetLength byte
 - **targetLength** (int): Desired total length
 - **fill** (string): Padding string (non-empty)
 
-**Returns:** Result<string, StringError>
+**Returns:** Result<string, Error>
 
 ## Example
 

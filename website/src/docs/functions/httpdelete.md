@@ -4,7 +4,7 @@ title: "httpDelete (Function)"
 description: "Makes an HTTP DELETE request to the specified path."
 ---
 
-**Signature:** `httpDelete(clientID: int, path: string, headers: string) -> int`
+**Signature:** `httpDelete(clientID: int, path: string, headers: string) -> Result<string, Error>`
 
 **Description:** Makes an HTTP DELETE request to the specified path.
 
@@ -14,7 +14,7 @@ description: "Makes an HTTP DELETE request to the specified path."
 - **path** (string): Request path
 - **headers** (string): Additional headers
 
-**Returns:** int
+**Returns:** Result<string, Error>
 
 ## Example
 

@@ -4,7 +4,7 @@ title: "padStart (Function)"
 description: "Pads s on the left with copies of fill to reach targetLength bytes."
 ---
 
-**Signature:** `padStart(s: string, targetLength: int, fill: string) -> Result<string, StringError>`
+**Signature:** `padStart(s: string, targetLength: int, fill: string) -> Result<string, Error>`
 
 **Description:** Pads s on the left with copies of fill to reach targetLength bytes.
 
@@ -14,7 +14,7 @@ description: "Pads s on the left with copies of fill to reach targetLength bytes
 - **targetLength** (int): Desired total length
 - **fill** (string): Padding string (non-empty)
 
-**Returns:** Result<string, StringError>
+**Returns:** Result<string, Error>
 
 ## Example
 

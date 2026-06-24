@@ -1,10 +1,10 @@
 ---
 layout: page
 title: "websocketServerBroadcast (Function)"
-description: "Broadcasts a message to all connected WebSocket clients."
+description: "Broadcasts a message to all connected WebSocket clients. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*"
 ---
 
-**Signature:** `websocketServerBroadcast(serverID: Int, message: String) -> Result<Success, String>`
+**Signature:** `websocketServerBroadcast(serverID: int, message: string) -> int`
 
 **Description:** Broadcasts a message to all connected WebSocket clients. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
@@ -13,7 +13,7 @@ description: "Broadcasts a message to all connected WebSocket clients."
 - **serverID** (int): Server identifier
 - **message** (string): Message to broadcast to all clients
 
-**Returns:** Result<Success, String>
+**Returns:** int
 
 ## Example
 

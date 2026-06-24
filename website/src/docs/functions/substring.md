@@ -4,7 +4,7 @@ title: "substring (Function)"
 description: "Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end."
 ---
 
-**Signature:** `substring(s: string, start: int, end: int) -> Result<string, StringError>`
+**Signature:** `substring(s: string, start: int, end: int) -> Result<string, Error>`
 
 **Description:** Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end.
 
@@ -14,7 +14,7 @@ description: "Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0,
 - **start** (int): Starting index (inclusive)
 - **end** (int): Ending index (exclusive)
 
-**Returns:** Result<string, StringError>
+**Returns:** Result<string, Error>
 
 ## Example
 

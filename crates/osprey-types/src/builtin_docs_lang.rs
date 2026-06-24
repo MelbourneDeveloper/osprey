@@ -5,428 +5,383 @@
 //!
 //! Param order and count MUST match the builtin's real arity.
 
-use crate::builtin_docs::{d, BuiltinDoc};
+use crate::builtin_docs::{BuiltinDoc, ParamDoc};
 
 /// `core` built-in documentation. Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
-pub(crate) fn core_docs(v: &mut Vec<BuiltinDoc>) {
-    d(v, "print", "Prints a value to the console. Automatically converts the value to a string representation.", &[("value", "The value to print")], "print(\"Hello, World!\")  // Prints: Hello, World!\nprint(42)             // Prints: 42\nprint(true)           // Prints: true");
-    d(
-        v,
-        "input",
-        "Reads a string from the user's input.",
-        &[],
-        "let userInput = input()\nprint(userInput)",
-    );
-    d(
-        v,
-        "toString",
-        "Converts a value to its string representation.",
-        &[("value", "The value to convert to string")],
-        "let str = toString(42)\nprint(str)  // Prints: 42",
-    );
-    d(
-        v,
-        "length",
-        "Returns the byte length of a string. Total — never fails.",
-        &[("s", "The string to measure")],
-        "let len = length(\"hello\")  // 5",
-    );
-    d(
-        v,
-        "sleep",
-        "Pauses execution for the specified number of milliseconds.",
-        &[("milliseconds", "Number of milliseconds to sleep")],
-        "sleep(1000)  // Sleep for 1 second\nprint(\"Awake!\")",
-    );
-    d(
-        v,
-        "range",
-        "Creates an iterator that generates numbers from start to end (exclusive).",
-        &[
-            ("start", "The starting number (inclusive)"),
-            ("end", "The ending number (exclusive)"),
-        ],
-        "forEach(range(0, 5), fn(x) { print(x) })  // Prints: 0, 1, 2, 3, 4",
-    );
-    d(
-        v,
-        "abs",
-        "Returns the absolute value of an integer.",
-        &[("value", "The integer whose magnitude to take")],
-        "let d = abs(0 - 5)  // 5",
-    );
-    d(
-        v,
-        "not",
-        "Returns the logical negation of a boolean.",
-        &[("value", "The boolean to negate")],
-        "let off = not(true)  // false",
-    );
-}
+pub(crate) static CORE: &[BuiltinDoc] = &[
+    BuiltinDoc {
+        name: "print",
+        summary: "Prints a value to the console. Automatically converts the value to a string representation.",
+        params: &[ParamDoc { name: "value", description: "The value to print" }],
+        example: "print(\"Hello, World!\")  // Prints: Hello, World!\nprint(42)             // Prints: 42\nprint(true)           // Prints: true",
+    },
+    BuiltinDoc {
+        name: "input",
+        summary: "Reads a string from the user's input.",
+        params: &[],
+        example: "let userInput = input()\nprint(userInput)",
+    },
+    BuiltinDoc {
+        name: "toString",
+        summary: "Converts a value to its string representation.",
+        params: &[ParamDoc { name: "value", description: "The value to convert to string" }],
+        example: "let str = toString(42)\nprint(str)  // Prints: 42",
+    },
+    BuiltinDoc {
+        name: "length",
+        summary: "Returns the byte length of a string. Total — never fails.",
+        params: &[ParamDoc { name: "s", description: "The string to measure" }],
+        example: "let len = length(\"hello\")  // 5",
+    },
+    BuiltinDoc {
+        name: "sleep",
+        summary: "Pauses execution for the specified number of milliseconds.",
+        params: &[ParamDoc { name: "milliseconds", description: "Number of milliseconds to sleep" }],
+        example: "sleep(1000)  // Sleep for 1 second\nprint(\"Awake!\")",
+    },
+    BuiltinDoc {
+        name: "range",
+        summary: "Creates an iterator that generates numbers from start to end (exclusive).",
+        params: &[ParamDoc { name: "start", description: "The starting number (inclusive)" }, ParamDoc { name: "end", description: "The ending number (exclusive)" }],
+        example: "forEach(range(0, 5), fn(x) { print(x) })  // Prints: 0, 1, 2, 3, 4",
+    },
+    BuiltinDoc {
+        name: "abs",
+        summary: "Returns the absolute value of an integer.",
+        params: &[ParamDoc { name: "value", description: "The integer whose magnitude to take" }],
+        example: "let d = abs(0 - 5)  // 5",
+    },
+    BuiltinDoc {
+        name: "not",
+        summary: "Returns the logical negation of a boolean.",
+        params: &[ParamDoc { name: "value", description: "The boolean to negate" }],
+        example: "let off = not(true)  // false",
+    },
+];
 
 /// `strings` built-in documentation. Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
-pub(crate) fn strings_docs(v: &mut Vec<BuiltinDoc>) {
-    d(
-        v,
-        "contains",
-        "True if needle appears anywhere in s. Empty needle returns true.",
-        &[
-            ("s", "The string to search in"),
-            ("needle", "The substring to search for"),
-        ],
-        "let found = contains(\"hello world\", \"world\")  // true",
-    );
-    d(
-        v,
-        "startsWith",
-        "True if s begins with prefix.",
-        &[
-            ("s", "The string to test"),
-            ("prefix", "The prefix to look for"),
-        ],
-        "startsWith(\"GET /api\", \"GET \")  // true",
-    );
-    d(
-        v,
-        "endsWith",
-        "True if s ends with suffix.",
-        &[
-            ("s", "The string to test"),
-            ("suffix", "The suffix to look for"),
-        ],
-        "endsWith(\"image.png\", \".png\")  // true",
-    );
-    d(
-        v,
-        "indexOf",
-        "Returns byte-index of first occurrence of needle, or Error(NotFound).",
-        &[
-            ("s", "The string to search in"),
-            ("needle", "The substring to locate"),
-        ],
-        "match indexOf(\"foo=bar\", \"=\") { Success { value } => print(value) ... }",
-    );
-    d(
-        v,
-        "split",
-        "Splits s on separator. Error(InvalidArgument) on empty separator.",
-        &[
-            ("s", "The string to split"),
-            ("separator", "Non-empty separator"),
-        ],
-        "split(\"a,b,c\", \",\")  // Success { value: [\"a\",\"b\",\"c\"] }",
-    );
-    d(
-        v,
-        "join",
-        "Concatenates parts with separator between each pair.",
-        &[
-            ("parts", "Strings to join"),
-            ("separator", "Separator string"),
-        ],
-        "join([\"a\",\"b\",\"c\"], \"-\")  // \"a-b-c\"",
-    );
-    d(
-        v,
-        "parseInt",
-        "Strict base-10 signed-int parser. No whitespace tolerance.",
-        &[("s", "The string to parse")],
-        "parseInt(\"42\")  // Success { value: 42 }",
-    );
-    d(
-        v,
-        "lines",
-        "Splits on '\\n'. A trailing newline does not produce an empty entry.",
-        &[("s", "The string to split")],
-        "lines(\"a\\\nb\\\nc\")  // [\"a\",\"b\",\"c\"]",
-    );
-    d(
-        v,
-        "words",
-        "Splits on runs of whitespace; empty results dropped.",
-        &[("s", "The string to split")],
-        "words(\"a  b\\\\tc\")  // [\"a\",\"b\",\"c\"]",
-    );
-    d(
-        v,
-        "replace",
-        "Replaces every occurrence of needle. Error(InvalidArgument) on empty needle.",
-        &[
-            ("s", "The source string"),
-            ("needle", "The substring to find"),
-            ("replacement", "The replacement string"),
-        ],
-        "replace(\"a-b-c\", \"-\", \"_\")  // Success { value: \"a_b_c\" }",
-    );
-    d(
-        v,
-        "repeat",
-        "Concatenates s with itself n times. Error(InvalidArgument) on negative n.",
-        &[
-            ("s", "The string to repeat"),
-            ("n", "Repeat count, must be >= 0"),
-        ],
-        "repeat(\"ab\", 3)  // Success { value: \"ababab\" }",
-    );
-    d(
-        v,
-        "substring",
-        "Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end.",
-        &[
-            ("s", "The source string"),
-            ("start", "Starting index (inclusive)"),
-            ("end", "Ending index (exclusive)"),
-        ],
-        "substring(\"hello\", 1, 4)  // Success { value: \"ell\" }",
-    );
-    d(
-        v,
-        "take",
-        "Returns at most the first n bytes of s. Clamps; never fails.",
-        &[("s", "The source string"), ("n", "How many bytes to take")],
-        "take(\"hello\", 3)  // \"hel\"",
-    );
-    d(
-        v,
-        "drop",
-        "Returns s without its first n bytes. Clamps; never fails.",
-        &[("s", "The source string"), ("n", "How many bytes to drop")],
-        "drop(\"hello\", 3)  // \"lo\"",
-    );
-    d(
-        v,
-        "isEmpty",
-        "True if string has zero length.",
-        &[("s", "The string to test")],
-        "let blank = isEmpty(\"\")  // true",
-    );
-    d(
-        v,
-        "parseFloat",
-        "Strict base-10 floating-point parser. No whitespace tolerance.",
-        &[("s", "The string to parse")],
-        "parseFloat(\"3.14\")  // Success { value: 3.14 }",
-    );
-    d(
-        v,
-        "padStart",
-        "Pads s on the left with copies of fill to reach targetLength bytes.",
-        &[
-            ("s", "The string to pad"),
-            ("targetLength", "Desired total length"),
-            ("fill", "Padding string (non-empty)"),
-        ],
-        "padStart(\"7\", 3, \"0\")  // Success { value: \"007\" }",
-    );
-    d(
-        v,
-        "padEnd",
-        "Pads s on the right with copies of fill to reach targetLength bytes.",
-        &[
-            ("s", "The string to pad"),
-            ("targetLength", "Desired total length"),
-            ("fill", "Padding string (non-empty)"),
-        ],
-        "padEnd(\"7\", 3, \".\")  // Success { value: \"7..\" }",
-    );
-    d(
-        v,
-        "byteLength",
-        "Returns the number of bytes in the string's UTF-8 encoding.",
-        &[("text", "The string to measure")],
-        "let n = byteLength(\"héllo\")  // 6",
-    );
-    d(v, "byteAt", "Returns the byte at the given index (0-255), or an error if the index is out of range.", &[("text", "The string to read from"), ("index", "Zero-based byte offset")], "match byteAt(\"hi\", 0) {\n  Success { value } => print(\"byte: ${value}\")\n  Error { message } => print(message)\n}");
-    d(v, "codePointAt", "Returns the Unicode code point that begins at the given byte index. Fails on an invalid index or malformed UTF-8.", &[("text", "The string to read from"), ("index", "Byte offset where the code point starts")], "match codePointAt(\"héllo\", 1) {\n  Success { value } => print(\"U+${value}\")\n  Error { message } => print(message)\n}");
-    d(v, "codePointWidth", "Returns how many bytes the given Unicode code point occupies in UTF-8 (1-4).", &[("codePoint", "The Unicode scalar value")], "match codePointWidth(233) {\n  Success { value } => print(\"${value} bytes\")\n  Error { message } => print(message)\n}");
-    d(v, "fromCodePoint", "Returns the single-character string for a Unicode code point, or an error if it is not a valid scalar value.", &[("codePoint", "The Unicode scalar value to encode")], "match fromCodePoint(233) {\n  Success { value } => print(value)  // é\n  Error { message } => print(message)\n}");
-    d(
-        v,
-        "toUpperCase",
-        "ASCII-aware uppercase. Unicode simple case mapping is a future addition.",
-        &[("s", "The string to transform")],
-        "toUpperCase(\"hello\")  // \"HELLO\"",
-    );
-    d(
-        v,
-        "toLowerCase",
-        "ASCII-aware lowercase.",
-        &[("s", "The string to transform")],
-        "toLowerCase(\"HELLO\")  // \"hello\"",
-    );
-    d(
-        v,
-        "trim",
-        "Removes leading and trailing whitespace.",
-        &[("s", "The string to trim")],
-        "trim(\"  hi  \")  // \"hi\"",
-    );
-    d(
-        v,
-        "trimStart",
-        "Removes leading whitespace.",
-        &[("s", "The string to trim")],
-        "trimStart(\"  hi  \")  // \"hi  \"",
-    );
-    d(
-        v,
-        "trimEnd",
-        "Removes trailing whitespace.",
-        &[("s", "The string to trim")],
-        "trimEnd(\"  hi  \")  // \"  hi\"",
-    );
-    d(
-        v,
-        "reverse",
-        "Reverses byte order. Grapheme-cluster reversal is future work.",
-        &[("s", "The string to reverse")],
-        "reverse(\"abc\")  // \"cba\"",
-    );
-}
+pub(crate) static STRINGS: &[BuiltinDoc] = &[
+    BuiltinDoc {
+        name: "contains",
+        summary: "True if needle appears anywhere in s. Empty needle returns true.",
+        params: &[ParamDoc { name: "s", description: "The string to search in" }, ParamDoc { name: "needle", description: "The substring to search for" }],
+        example: "let found = contains(\"hello world\", \"world\")  // true",
+    },
+    BuiltinDoc {
+        name: "startsWith",
+        summary: "True if s begins with prefix.",
+        params: &[ParamDoc { name: "s", description: "The string to test" }, ParamDoc { name: "prefix", description: "The prefix to look for" }],
+        example: "startsWith(\"GET /api\", \"GET \")  // true",
+    },
+    BuiltinDoc {
+        name: "endsWith",
+        summary: "True if s ends with suffix.",
+        params: &[ParamDoc { name: "s", description: "The string to test" }, ParamDoc { name: "suffix", description: "The suffix to look for" }],
+        example: "endsWith(\"image.png\", \".png\")  // true",
+    },
+    BuiltinDoc {
+        name: "indexOf",
+        summary: "Returns byte-index of first occurrence of needle, or Error(NotFound).",
+        params: &[ParamDoc { name: "s", description: "The string to search in" }, ParamDoc { name: "needle", description: "The substring to locate" }],
+        example: "match indexOf(\"foo=bar\", \"=\") { Success { value } => print(value) ... }",
+    },
+    BuiltinDoc {
+        name: "split",
+        summary: "Splits s on separator. Error(InvalidArgument) on empty separator.",
+        params: &[ParamDoc { name: "s", description: "The string to split" }, ParamDoc { name: "separator", description: "Non-empty separator" }],
+        example: "split(\"a,b,c\", \",\")  // Success { value: [\"a\",\"b\",\"c\"] }",
+    },
+    BuiltinDoc {
+        name: "join",
+        summary: "Concatenates parts with separator between each pair.",
+        params: &[ParamDoc { name: "parts", description: "Strings to join" }, ParamDoc { name: "separator", description: "Separator string" }],
+        example: "join([\"a\",\"b\",\"c\"], \"-\")  // \"a-b-c\"",
+    },
+    BuiltinDoc {
+        name: "parseInt",
+        summary: "Strict base-10 signed-int parser. No whitespace tolerance.",
+        params: &[ParamDoc { name: "s", description: "The string to parse" }],
+        example: "parseInt(\"42\")  // Success { value: 42 }",
+    },
+    BuiltinDoc {
+        name: "lines",
+        summary: "Splits on '\\n'. A trailing newline does not produce an empty entry.",
+        params: &[ParamDoc { name: "s", description: "The string to split" }],
+        example: "lines(\"a\\\nb\\\nc\")  // [\"a\",\"b\",\"c\"]",
+    },
+    BuiltinDoc {
+        name: "words",
+        summary: "Splits on runs of whitespace; empty results dropped.",
+        params: &[ParamDoc { name: "s", description: "The string to split" }],
+        example: "words(\"a  b\\\\tc\")  // [\"a\",\"b\",\"c\"]",
+    },
+    BuiltinDoc {
+        name: "replace",
+        summary: "Replaces every occurrence of needle. Error(InvalidArgument) on empty needle.",
+        params: &[ParamDoc { name: "s", description: "The source string" }, ParamDoc { name: "needle", description: "The substring to find" }, ParamDoc { name: "replacement", description: "The replacement string" }],
+        example: "replace(\"a-b-c\", \"-\", \"_\")  // Success { value: \"a_b_c\" }",
+    },
+    BuiltinDoc {
+        name: "repeat",
+        summary: "Concatenates s with itself n times. Error(InvalidArgument) on negative n.",
+        params: &[ParamDoc { name: "s", description: "The string to repeat" }, ParamDoc { name: "n", description: "Repeat count, must be >= 0" }],
+        example: "repeat(\"ab\", 3)  // Success { value: \"ababab\" }",
+    },
+    BuiltinDoc {
+        name: "substring",
+        summary: "Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0, end>len, or start>end.",
+        params: &[ParamDoc { name: "s", description: "The source string" }, ParamDoc { name: "start", description: "Starting index (inclusive)" }, ParamDoc { name: "end", description: "Ending index (exclusive)" }],
+        example: "substring(\"hello\", 1, 4)  // Success { value: \"ell\" }",
+    },
+    BuiltinDoc {
+        name: "take",
+        summary: "Returns at most the first n bytes of s. Clamps; never fails.",
+        params: &[ParamDoc { name: "s", description: "The source string" }, ParamDoc { name: "n", description: "How many bytes to take" }],
+        example: "take(\"hello\", 3)  // \"hel\"",
+    },
+    BuiltinDoc {
+        name: "drop",
+        summary: "Returns s without its first n bytes. Clamps; never fails.",
+        params: &[ParamDoc { name: "s", description: "The source string" }, ParamDoc { name: "n", description: "How many bytes to drop" }],
+        example: "drop(\"hello\", 3)  // \"lo\"",
+    },
+    BuiltinDoc {
+        name: "isEmpty",
+        summary: "True if string has zero length.",
+        params: &[ParamDoc { name: "s", description: "The string to test" }],
+        example: "let blank = isEmpty(\"\")  // true",
+    },
+    BuiltinDoc {
+        name: "parseFloat",
+        summary: "Strict base-10 floating-point parser. No whitespace tolerance.",
+        params: &[ParamDoc { name: "s", description: "The string to parse" }],
+        example: "parseFloat(\"3.14\")  // Success { value: 3.14 }",
+    },
+    BuiltinDoc {
+        name: "padStart",
+        summary: "Pads s on the left with copies of fill to reach targetLength bytes.",
+        params: &[ParamDoc { name: "s", description: "The string to pad" }, ParamDoc { name: "targetLength", description: "Desired total length" }, ParamDoc { name: "fill", description: "Padding string (non-empty)" }],
+        example: "padStart(\"7\", 3, \"0\")  // Success { value: \"007\" }",
+    },
+    BuiltinDoc {
+        name: "padEnd",
+        summary: "Pads s on the right with copies of fill to reach targetLength bytes.",
+        params: &[ParamDoc { name: "s", description: "The string to pad" }, ParamDoc { name: "targetLength", description: "Desired total length" }, ParamDoc { name: "fill", description: "Padding string (non-empty)" }],
+        example: "padEnd(\"7\", 3, \".\")  // Success { value: \"7..\" }",
+    },
+    BuiltinDoc {
+        name: "byteLength",
+        summary: "Returns the number of bytes in the string's UTF-8 encoding.",
+        params: &[ParamDoc { name: "text", description: "The string to measure" }],
+        example: "let n = byteLength(\"héllo\")  // 6",
+    },
+    BuiltinDoc {
+        name: "byteAt",
+        summary: "Returns the byte at the given index (0-255), or an error if the index is out of range.",
+        params: &[ParamDoc { name: "text", description: "The string to read from" }, ParamDoc { name: "index", description: "Zero-based byte offset" }],
+        example: "match byteAt(\"hi\", 0) {\n  Success { value } => print(\"byte: ${value}\")\n  Error { message } => print(message)\n}",
+    },
+    BuiltinDoc {
+        name: "codePointAt",
+        summary: "Returns the Unicode code point that begins at the given byte index. Fails on an invalid index or malformed UTF-8.",
+        params: &[ParamDoc { name: "text", description: "The string to read from" }, ParamDoc { name: "index", description: "Byte offset where the code point starts" }],
+        example: "match codePointAt(\"héllo\", 1) {\n  Success { value } => print(\"U+${value}\")\n  Error { message } => print(message)\n}",
+    },
+    BuiltinDoc {
+        name: "codePointWidth",
+        summary: "Returns how many bytes the given Unicode code point occupies in UTF-8 (1-4).",
+        params: &[ParamDoc { name: "codePoint", description: "The Unicode scalar value" }],
+        example: "match codePointWidth(233) {\n  Success { value } => print(\"${value} bytes\")\n  Error { message } => print(message)\n}",
+    },
+    BuiltinDoc {
+        name: "fromCodePoint",
+        summary: "Returns the single-character string for a Unicode code point, or an error if it is not a valid scalar value.",
+        params: &[ParamDoc { name: "codePoint", description: "The Unicode scalar value to encode" }],
+        example: "match fromCodePoint(233) {\n  Success { value } => print(value)  // é\n  Error { message } => print(message)\n}",
+    },
+    BuiltinDoc {
+        name: "toUpperCase",
+        summary: "ASCII-aware uppercase. Unicode simple case mapping is a future addition.",
+        params: &[ParamDoc { name: "s", description: "The string to transform" }],
+        example: "toUpperCase(\"hello\")  // \"HELLO\"",
+    },
+    BuiltinDoc {
+        name: "toLowerCase",
+        summary: "ASCII-aware lowercase.",
+        params: &[ParamDoc { name: "s", description: "The string to transform" }],
+        example: "toLowerCase(\"HELLO\")  // \"hello\"",
+    },
+    BuiltinDoc {
+        name: "trim",
+        summary: "Removes leading and trailing whitespace.",
+        params: &[ParamDoc { name: "s", description: "The string to trim" }],
+        example: "trim(\"  hi  \")  // \"hi\"",
+    },
+    BuiltinDoc {
+        name: "trimStart",
+        summary: "Removes leading whitespace.",
+        params: &[ParamDoc { name: "s", description: "The string to trim" }],
+        example: "trimStart(\"  hi  \")  // \"hi  \"",
+    },
+    BuiltinDoc {
+        name: "trimEnd",
+        summary: "Removes trailing whitespace.",
+        params: &[ParamDoc { name: "s", description: "The string to trim" }],
+        example: "trimEnd(\"  hi  \")  // \"  hi\"",
+    },
+    BuiltinDoc {
+        name: "reverse",
+        summary: "Reverses byte order. Grapheme-cluster reversal is future work.",
+        params: &[ParamDoc { name: "s", description: "The string to reverse" }],
+        example: "reverse(\"abc\")  // \"cba\"",
+    },
+];
 
 /// `functional` built-in documentation. Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
-pub(crate) fn functional_docs(v: &mut Vec<BuiltinDoc>) {
-    d(
-        v,
-        "forEach",
-        "Applies a function to each element in an iterator.",
-        &[
-            ("iterator", "The iterator to process"),
-            ("function", "The function to apply to each element"),
-        ],
-        "forEach(range(1, 4), fn(x) { print(x * 2) })  // Prints: 2, 4, 6",
-    );
-    d(v, "map", "Transforms each element in an iterator using a function, returning a new iterator.", &[("iterator", "The iterator to transform"), ("fn", "The transformation function")], "let doubled = map(range(1, 4), fn(x) { x * 2 })\nforEach(doubled, print)  // Prints: 2, 4, 6");
-    d(v, "filter", "Filters elements in an iterator based on a predicate function.", &[("iterator", "The iterator to filter"), ("predicate", "The predicate function that returns true for elements to keep")], "let evens = filter(range(1, 6), fn(x) { x % 2 == 0 })\nforEach(evens, print)  // Prints: 2, 4");
-    d(v, "fold", "Reduces an iterator to a single value by repeatedly applying a function.", &[("iterator", "The iterator to reduce"), ("initial", "The initial value for the accumulator"), ("fn", "The reduction function that takes (accumulator, current) and returns new accumulator")], "range(1, 5) |> fold(0, add)  // sum: 0+1+2+3+4 = 10");
-}
+pub(crate) static FUNCTIONAL: &[BuiltinDoc] = &[
+    BuiltinDoc {
+        name: "forEach",
+        summary: "Applies a function to each element in an iterator.",
+        params: &[ParamDoc { name: "iterator", description: "The iterator to process" }, ParamDoc { name: "function", description: "The function to apply to each element" }],
+        example: "forEach(range(1, 4), fn(x) { print(x * 2) })  // Prints: 2, 4, 6",
+    },
+    BuiltinDoc {
+        name: "map",
+        summary: "Transforms each element in an iterator using a function, returning a new iterator.",
+        params: &[ParamDoc { name: "iterator", description: "The iterator to transform" }, ParamDoc { name: "fn", description: "The transformation function" }],
+        example: "let doubled = map(range(1, 4), fn(x) { x * 2 })\nforEach(doubled, print)  // Prints: 2, 4, 6",
+    },
+    BuiltinDoc {
+        name: "filter",
+        summary: "Filters elements in an iterator based on a predicate function.",
+        params: &[ParamDoc { name: "iterator", description: "The iterator to filter" }, ParamDoc { name: "predicate", description: "The predicate function that returns true for elements to keep" }],
+        example: "let evens = filter(range(1, 6), fn(x) { x % 2 == 0 })\nforEach(evens, print)  // Prints: 2, 4",
+    },
+    BuiltinDoc {
+        name: "fold",
+        summary: "Reduces an iterator to a single value by repeatedly applying a function.",
+        params: &[ParamDoc { name: "iterator", description: "The iterator to reduce" }, ParamDoc { name: "initial", description: "The initial value for the accumulator" }, ParamDoc { name: "fn", description: "The reduction function that takes (accumulator, current) and returns new accumulator" }],
+        example: "range(1, 5) |> fold(0, add)  // sum: 0+1+2+3+4 = 10",
+    },
+];
 
 /// `lists` built-in documentation. Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
-pub(crate) fn lists_docs(v: &mut Vec<BuiltinDoc>) {
-    d(
-        v,
-        "List",
-        "Creates a new empty list.",
-        &[],
-        "let myList = List()\nprint(\"Created empty list\")",
-    );
-    d(
-        v,
-        "listAppend",
-        "Returns a new list with value at the end. O(log32 n) amortised.",
-        &[("list", "The list"), ("value", "Value to append")],
-        "listAppend([1, 2], 3)  // [1, 2, 3]",
-    );
-    d(
-        v,
-        "listPrepend",
-        "Returns a new list with value at the front. O(n).",
-        &[("list", "The list"), ("value", "Value to prepend")],
-        "listPrepend([2, 3], 1)  // [1, 2, 3]",
-    );
-    d(
-        v,
-        "listConcat",
-        "Returns left ++ right. Same as left + right.",
-        &[("left", "Left operand"), ("right", "Right operand")],
-        "listConcat([1, 2], [3, 4])  // [1, 2, 3, 4]",
-    );
-    d(
-        v,
-        "listReverse",
-        "Returns a new list in reverse order.",
-        &[("list", "The list")],
-        "listReverse([1, 2, 3])  // [3, 2, 1]",
-    );
-    d(
-        v,
-        "listLength",
-        "Returns the number of elements in a list. O(1).",
-        &[("list", "The list")],
-        "listLength([1, 2, 3])  // 3",
-    );
-    d(v, "listGet", "Returns the element at the given index, or an error if the index is out of range.", &[("list", "The list to read from"), ("index", "Zero-based element index")], "match listGet(myList, 0) {\n  Success { value } => print(value)\n  Error { message } => print(message)\n}");
-    d(
-        v,
-        "listContains",
-        "True iff some element equals value. O(n).",
-        &[("list", "The list"), ("value", "Value to find")],
-        "listContains([1, 2, 3], 2)  // true",
-    );
-    d(
-        v,
-        "forEachList",
-        "Apply function to every element of list. Phase 7 of collections plan.",
-        &[
-            ("list", "The list"),
-            ("function", "Function applied per element"),
-        ],
-        "forEachList(xs, print)",
-    );
-}
+pub(crate) static LISTS: &[BuiltinDoc] = &[
+    BuiltinDoc {
+        name: "List",
+        summary: "Creates a new empty list.",
+        params: &[],
+        example: "let myList = List()\nprint(\"Created empty list\")",
+    },
+    BuiltinDoc {
+        name: "listAppend",
+        summary: "Returns a new list with value at the end. O(log32 n) amortised.",
+        params: &[ParamDoc { name: "list", description: "The list" }, ParamDoc { name: "value", description: "Value to append" }],
+        example: "listAppend([1, 2], 3)  // [1, 2, 3]",
+    },
+    BuiltinDoc {
+        name: "listPrepend",
+        summary: "Returns a new list with value at the front. O(n).",
+        params: &[ParamDoc { name: "list", description: "The list" }, ParamDoc { name: "value", description: "Value to prepend" }],
+        example: "listPrepend([2, 3], 1)  // [1, 2, 3]",
+    },
+    BuiltinDoc {
+        name: "listConcat",
+        summary: "Returns left ++ right. Same as left + right.",
+        params: &[ParamDoc { name: "left", description: "Left operand" }, ParamDoc { name: "right", description: "Right operand" }],
+        example: "listConcat([1, 2], [3, 4])  // [1, 2, 3, 4]",
+    },
+    BuiltinDoc {
+        name: "listReverse",
+        summary: "Returns a new list in reverse order.",
+        params: &[ParamDoc { name: "list", description: "The list" }],
+        example: "listReverse([1, 2, 3])  // [3, 2, 1]",
+    },
+    BuiltinDoc {
+        name: "listLength",
+        summary: "Returns the number of elements in a list. O(1).",
+        params: &[ParamDoc { name: "list", description: "The list" }],
+        example: "listLength([1, 2, 3])  // 3",
+    },
+    BuiltinDoc {
+        name: "listGet",
+        summary: "Returns the element at the given index, or an error if the index is out of range.",
+        params: &[ParamDoc { name: "list", description: "The list to read from" }, ParamDoc { name: "index", description: "Zero-based element index" }],
+        example: "match listGet(myList, 0) {\n  Success { value } => print(value)\n  Error { message } => print(message)\n}",
+    },
+    BuiltinDoc {
+        name: "listContains",
+        summary: "True iff some element equals value. O(n).",
+        params: &[ParamDoc { name: "list", description: "The list" }, ParamDoc { name: "value", description: "Value to find" }],
+        example: "listContains([1, 2, 3], 2)  // true",
+    },
+    BuiltinDoc {
+        name: "forEachList",
+        summary: "Apply function to every element of list. Phase 7 of collections plan.",
+        params: &[ParamDoc { name: "list", description: "The list" }, ParamDoc { name: "function", description: "Function applied per element" }],
+        example: "forEachList(xs, print)",
+    },
+];
 
 /// `maps` built-in documentation. Prose only — types come from the
 /// authoritative scheme in `builtins.rs`, joined by name.
-pub(crate) fn maps_docs(v: &mut Vec<BuiltinDoc>) {
-    d(
-        v,
-        "Map",
-        "Creates a new, empty persistent map.",
-        &[],
-        "let m = Map()",
-    );
-    d(
-        v,
-        "mapSet",
-        "Returns a new map with key bound to value (replaces prior binding).",
-        &[("map", "The map"), ("key", "Key"), ("value", "Value")],
-        "mapSet({\"a\": 1}, \"b\", 2)  // {\"a\": 1, \"b\": 2}",
-    );
-    d(v, "mapGet", "Returns the value associated with the key, or an error if the key is absent.", &[("map", "The map to look up in"), ("key", "The key to find")], "match mapGet(scores, \"alice\") {\n  Success { value } => print(value)\n  Error { message } => print(message)\n}");
-    d(
-        v,
-        "mapRemove",
-        "Returns a new map without key. No-op if key is absent.",
-        &[("map", "The map"), ("key", "Key")],
-        "mapRemove({\"a\": 1, \"b\": 2}, \"a\")  // {\"b\": 2}",
-    );
-    d(
-        v,
-        "mapMerge",
-        "Right-biased union. Same as left + right.",
-        &[("left", "Left"), ("right", "Right")],
-        "mapMerge({\"a\": 1}, {\"b\": 2})  // {\"a\": 1, \"b\": 2}",
-    );
-    d(
-        v,
-        "mapContains",
-        "True iff key is present in map.",
-        &[("map", "The map"), ("key", "Key to find")],
-        "mapContains({\"a\": 1}, \"a\")  // true",
-    );
-    d(
-        v,
-        "mapLength",
-        "Returns the number of entries in a map. O(1).",
-        &[("map", "The map")],
-        "mapLength({\"a\": 1, \"b\": 2})  // 2",
-    );
-    d(
-        v,
-        "mapKeys",
-        "All keys of the map as a list. Order unspecified.",
-        &[("map", "The map")],
-        "mapKeys(m)  // List<K>",
-    );
-    d(
-        v,
-        "mapValues",
-        "All values of the map as a list. Order matches mapKeys.",
-        &[("map", "The map")],
-        "mapValues(m)  // List<V>",
-    );
-}
+pub(crate) static MAPS: &[BuiltinDoc] = &[
+    BuiltinDoc {
+        name: "Map",
+        summary: "Creates a new, empty persistent map.",
+        params: &[],
+        example: "let m = Map()",
+    },
+    BuiltinDoc {
+        name: "mapSet",
+        summary: "Returns a new map with key bound to value (replaces prior binding).",
+        params: &[ParamDoc { name: "map", description: "The map" }, ParamDoc { name: "key", description: "Key" }, ParamDoc { name: "value", description: "Value" }],
+        example: "mapSet({\"a\": 1}, \"b\", 2)  // {\"a\": 1, \"b\": 2}",
+    },
+    BuiltinDoc {
+        name: "mapGet",
+        summary: "Returns the value associated with the key, or an error if the key is absent.",
+        params: &[ParamDoc { name: "map", description: "The map to look up in" }, ParamDoc { name: "key", description: "The key to find" }],
+        example: "match mapGet(scores, \"alice\") {\n  Success { value } => print(value)\n  Error { message } => print(message)\n}",
+    },
+    BuiltinDoc {
+        name: "mapRemove",
+        summary: "Returns a new map without key. No-op if key is absent.",
+        params: &[ParamDoc { name: "map", description: "The map" }, ParamDoc { name: "key", description: "Key" }],
+        example: "mapRemove({\"a\": 1, \"b\": 2}, \"a\")  // {\"b\": 2}",
+    },
+    BuiltinDoc {
+        name: "mapMerge",
+        summary: "Right-biased union. Same as left + right.",
+        params: &[ParamDoc { name: "left", description: "Left" }, ParamDoc { name: "right", description: "Right" }],
+        example: "mapMerge({\"a\": 1}, {\"b\": 2})  // {\"a\": 1, \"b\": 2}",
+    },
+    BuiltinDoc {
+        name: "mapContains",
+        summary: "True iff key is present in map.",
+        params: &[ParamDoc { name: "map", description: "The map" }, ParamDoc { name: "key", description: "Key to find" }],
+        example: "mapContains({\"a\": 1}, \"a\")  // true",
+    },
+    BuiltinDoc {
+        name: "mapLength",
+        summary: "Returns the number of entries in a map. O(1).",
+        params: &[ParamDoc { name: "map", description: "The map" }],
+        example: "mapLength({\"a\": 1, \"b\": 2})  // 2",
+    },
+    BuiltinDoc {
+        name: "mapKeys",
+        summary: "All keys of the map as a list. Order unspecified.",
+        params: &[ParamDoc { name: "map", description: "The map" }],
+        example: "mapKeys(m)  // List<K>",
+    },
+    BuiltinDoc {
+        name: "mapValues",
+        summary: "All values of the map as a list. Order matches mapKeys.",
+        params: &[ParamDoc { name: "map", description: "The map" }],
+        example: "mapValues(m)  // List<V>",
+    },
+];

@@ -4,11 +4,11 @@ title: "input (Function)"
 description: "Reads a string from the user's input."
 ---
 
-**Signature:** `input() -> Result<string, Error>`
+**Signature:** `input() -> string`
 
 **Description:** Reads a string from the user's input.
 
-**Returns:** Result<string, Error>
+**Returns:** string
 
 ## Example
 

@@ -4,13 +4,13 @@ title: "listLength (Function)"
 description: "Returns the number of elements in a list. O(1)."
 ---
 
-**Signature:** `listLength(list: List<T>) -> int`
+**Signature:** `listLength(list: List<t0>) -> int`
 
 **Description:** Returns the number of elements in a list. O(1).
 
 ## Parameters
 
-- **list** (List): The list
+- **list** (List<t0>): The list
 
 **Returns:** int
 

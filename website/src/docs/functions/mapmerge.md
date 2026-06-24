@@ -4,16 +4,16 @@ title: "mapMerge (Function)"
 description: "Right-biased union. Same as left + right."
 ---
 
-**Signature:** `mapMerge(left: Map<K, V>, right: Map<K, V>) -> Map<K, V>`
+**Signature:** `mapMerge(left: Map<t0, t1>, right: Map<t0, t1>) -> Map<t0, t1>`
 
 **Description:** Right-biased union. Same as left + right.
 
 ## Parameters
 
-- **left** (Map): Left
-- **right** (Map): Right
+- **left** (Map<t0, t1>): Left
+- **right** (Map<t0, t1>): Right
 
-**Returns:** Map
+**Returns:** Map<t0, t1>
 
 ## Example
 

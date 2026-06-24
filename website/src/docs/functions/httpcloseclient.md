@@ -4,7 +4,7 @@ title: "httpCloseClient (Function)"
 description: "Closes the HTTP client and cleans up resources."
 ---
 
-**Signature:** `httpCloseClient(clientID: int) -> int`
+**Signature:** `httpCloseClient(clientID: int) -> Unit`
 
 **Description:** Closes the HTTP client and cleans up resources.
 
@@ -12,7 +12,7 @@ description: "Closes the HTTP client and cleans up resources."
 
 - **clientID** (int): Client identifier to close
 
-**Returns:** int
+**Returns:** Unit
 
 ## Example
 

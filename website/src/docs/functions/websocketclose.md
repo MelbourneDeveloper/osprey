@@ -1,10 +1,10 @@
 ---
 layout: page
 title: "websocketClose (Function)"
-description: "Closes the WebSocket connection and cleans up resources."
+description: "Closes the WebSocket connection and cleans up resources. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*"
 ---
 
-**Signature:** `websocketClose(wsID: Int) -> Result<Success, String>`
+**Signature:** `websocketClose(wsID: int) -> Unit`
 
 **Description:** Closes the WebSocket connection and cleans up resources. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
@@ -12,7 +12,7 @@ description: "Closes the WebSocket connection and cleans up resources."
 
 - **wsID** (int): WebSocket identifier to close
 
-**Returns:** Result<Success, String>
+**Returns:** Unit
 
 ## Example
 

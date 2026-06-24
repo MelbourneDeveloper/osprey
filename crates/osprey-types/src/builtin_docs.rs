@@ -25,47 +25,30 @@ pub(crate) struct ParamDoc {
 pub(crate) struct BuiltinDoc {
     pub name: &'static str,
     pub summary: &'static str,
-    pub params: Vec<ParamDoc>,
+    pub params: &'static [ParamDoc],
     pub example: &'static str,
 }
 
-/// Push one documented built-in — the constructor the generated data tables use.
-pub(crate) fn d(
-    v: &mut Vec<BuiltinDoc>,
-    name: &'static str,
-    summary: &'static str,
-    params: &[(&'static str, &'static str)],
-    example: &'static str,
-) {
-    let params = params
-        .iter()
-        .map(|(name, description)| ParamDoc { name, description })
-        .collect();
-    v.push(BuiltinDoc {
-        name,
-        summary,
-        params,
-        example,
-    });
-}
-
-/// The whole documentation table, assembled from the per-category data.
-fn builtin_docs() -> Vec<BuiltinDoc> {
+/// Every built-in's documentation, in category order, as one flat iterator over
+/// the generated static tables.
+fn builtin_docs() -> impl Iterator<Item = &'static BuiltinDoc> {
     use crate::builtin_docs_lang as lang;
     use crate::builtin_docs_sys as sys;
-    let mut v = Vec::new();
-    lang::core_docs(&mut v);
-    lang::strings_docs(&mut v);
-    lang::functional_docs(&mut v);
-    lang::lists_docs(&mut v);
-    lang::maps_docs(&mut v);
-    sys::files_docs(&mut v);
-    sys::http_docs(&mut v);
-    sys::json_docs(&mut v);
-    sys::concurrency_docs(&mut v);
-    sys::websocket_docs(&mut v);
-    sys::terminal_docs(&mut v);
-    v
+    [
+        lang::CORE,
+        lang::STRINGS,
+        lang::FUNCTIONAL,
+        lang::LISTS,
+        lang::MAPS,
+        sys::FILES,
+        sys::HTTP,
+        sys::JSON,
+        sys::CONCURRENCY,
+        sys::WEBSOCKET,
+        sys::TERMINAL,
+    ]
+    .into_iter()
+    .flatten()
 }
 
 /// One parameter as rendered for an editor or doc page: name, the type read
@@ -101,12 +84,11 @@ pub struct BuiltinDocView {
 /// The full documentation for `name`, or `None` when it is not a built-in.
 #[must_use]
 pub fn builtin_doc_view(name: &str) -> Option<BuiltinDocView> {
-    let docs = builtin_docs();
-    let doc = docs.iter().find(|d| d.name == name)?;
+    let doc = builtin_docs().find(|d| d.name == name)?;
     let env = base_env();
     let scheme = env.get(name)?;
     let (param_types, ret) = split_fun(&scheme.ty);
-    let params = join_params(&doc.params, &param_types);
+    let params = join_params(doc.params, &param_types);
     let signature = render_signature(name, &params, &ret);
     Some(BuiltinDocView {
         name: name.to_string(),
@@ -121,7 +103,7 @@ pub fn builtin_doc_view(name: &str) -> Option<BuiltinDocView> {
 /// Every documented built-in name, in byte order (matching the website index).
 #[must_use]
 pub fn builtin_names() -> Vec<String> {
-    let mut names: Vec<String> = builtin_docs().iter().map(|d| d.name.to_string()).collect();
+    let mut names: Vec<String> = builtin_docs().map(|d| d.name.to_string()).collect();
     names.sort();
     names
 }
@@ -192,8 +174,7 @@ mod tests {
         // The drift guard: the documented set and the registered scheme set must
         // be identical, and each doc's parameter count must equal its real arity.
         let env = base_env();
-        let documented: BTreeSet<String> =
-            builtin_docs().iter().map(|d| d.name.to_string()).collect();
+        let documented: BTreeSet<String> = builtin_docs().map(|d| d.name.to_string()).collect();
         let registered: BTreeSet<String> = env.bound_names().into_iter().collect();
         assert_eq!(
             documented, registered,

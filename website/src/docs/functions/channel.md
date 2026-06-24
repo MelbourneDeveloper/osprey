@@ -4,7 +4,7 @@ title: "Channel (Function)"
 description: "Creates a new channel with the specified capacity."
 ---
 
-**Signature:** `Channel(capacity: int) -> Channel`
+**Signature:** `Channel(capacity: int) -> Channel<t0>`
 
 **Description:** Creates a new channel with the specified capacity.
 
@@ -12,7 +12,7 @@ description: "Creates a new channel with the specified capacity."
 
 - **capacity** (int): The capacity of the channel
 
-**Returns:** Channel
+**Returns:** Channel<t0>
 
 ## Example
 

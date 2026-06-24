@@ -4,13 +4,13 @@ title: "length (Function)"
 description: "Returns the byte length of a string. Total — never fails."
 ---
 
-**Signature:** `length(s: string) -> int`
+**Signature:** `length(s: any) -> int`
 
 **Description:** Returns the byte length of a string. Total — never fails.
 
 ## Parameters
 
-- **s** (string): The string to measure
+- **s** (any): The string to measure
 
 **Returns:** int
 

@@ -4,7 +4,7 @@ title: "parseFloat (Function)"
 description: "Strict base-10 floating-point parser. No whitespace tolerance."
 ---
 
-**Signature:** `parseFloat(s: string) -> Result<float, StringError>`
+**Signature:** `parseFloat(s: string) -> Result<float, Error>`
 
 **Description:** Strict base-10 floating-point parser. No whitespace tolerance.
 
@@ -12,7 +12,7 @@ description: "Strict base-10 floating-point parser. No whitespace tolerance."
 
 - **s** (string): The string to parse
 
-**Returns:** Result<float, StringError>
+**Returns:** Result<float, Error>
 
 ## Example
 

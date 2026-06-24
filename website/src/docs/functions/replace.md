@@ -4,7 +4,7 @@ title: "replace (Function)"
 description: "Replaces every occurrence of needle. Error(InvalidArgument) on empty needle."
 ---
 
-**Signature:** `replace(s: string, needle: string, replacement: string) -> Result<string, StringError>`
+**Signature:** `replace(s: string, needle: string, replacement: string) -> Result<string, Error>`
 
 **Description:** Replaces every occurrence of needle. Error(InvalidArgument) on empty needle.
 
@@ -14,7 +14,7 @@ description: "Replaces every occurrence of needle. Error(InvalidArgument) on emp
 - **needle** (string): The substring to find
 - **replacement** (string): The replacement string
 
-**Returns:** Result<string, StringError>
+**Returns:** Result<string, Error>
 
 ## Example
 
