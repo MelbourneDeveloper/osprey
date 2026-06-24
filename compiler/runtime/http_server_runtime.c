@@ -54,7 +54,9 @@ static int64_t server_loop_fiber(void) {
         char path[256] = {0};
         sscanf(buffer, "%15s %255s", method, path);
 
-        fprintf(stderr, "🌐 HTTP Request: %s %s\n", method, path);
+        // Dim, recessive trace on stderr so a program's own colored access log
+        // (on stdout) is what stands out.
+        fprintf(stderr, "\x1b[38;5;238m      · %s %s\x1b[0m\n", method, path);
 
         // Find the request body (after \r\n\r\n)
         char *body_start = strstr(buffer, "\r\n\r\n");

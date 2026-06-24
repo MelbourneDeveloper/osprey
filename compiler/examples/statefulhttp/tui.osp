@@ -29,6 +29,7 @@ effect Model {
 effect Net  { fetch: fn() -> string  push: fn(string) -> Unit }
 effect Term { readKey: fn() -> Result<string, Error>  raw: fn(int) -> Unit }
 effect Out  { line: fn(string) -> Unit }
+effect Diag { log: fn(string) -> Unit }   // every request → /tmp/osprey_tui.log
 
 // ---- ANSI helpers (pure) ----------------------------------------------------
 fn cyan(s: string) -> string = "\e[36m${s}\e[0m"
@@ -138,14 +139,12 @@ fn step(delta: int) -> Unit ![Out, Term, Net, Model] = {
 fn continueAfter(done: Unit) -> Unit ![Out, Term, Net, Model] = loop()
 
 // ---- INTERPRETATION: the only place real I/O and client state live ---------
+fn diagFile() -> string = "/tmp/osprey_tui.log"
+fn baseUrl() -> string = "http://127.0.0.1:8080"
+
 fn bodyOf(h: int) -> string = match httpResponseBody(h) {
     Success { value } => value
-    Error { message } => "(server unreachable — is it running on :8080?)\n"
-}
-
-fn httpFetch(clientId: int) -> string = match httpGetResponse(clientId, "/", "") {
-    Success { value } => readFree(value)
-    Error { message } => "(GET failed)\n"
+    Error { message } => "(no body)\n"
 }
 
 fn readFree(h: int) -> string = {
@@ -154,20 +153,46 @@ fn readFree(h: int) -> string = {
     b
 }
 
-fn httpPush(clientId: int, text: string) -> Unit = {
-    let code = toString(httpPost(clientId, "/tasks", text, ""))
-    print("")
+// A FRESH client per request — a reused client can wedge after a server-side
+// connection reset, which is exactly the "GET failed" symptom. Each attempt and
+// its outcome is appended to the log file via the Diag effect.
+fn httpFetch() -> string = {
+    let c = httpCreateClient(baseUrl(), 5000)
+    let out = match httpGetResponse(c, "/", "") {
+        Success { value } => {
+            let b = readFree(value)
+            perform Diag.log("GET  /        ok   ${toString(length(b))}B")
+            b
+        }
+        Error { message } => {
+            perform Diag.log("GET  /        ERR  ${message}")
+            "(GET failed — see ${diagFile()})\n"
+        }
+    }
+    let closed = httpCloseClient(c)
+    out
+}
+
+fn httpPush(text: string) -> Unit = {
+    let c = httpCreateClient(baseUrl(), 5000)
+    let code = toString(httpPost(c, "/tasks", text, ""))
+    let closed = httpCloseClient(c)
+    perform Diag.log("POST /tasks   ${code}  \"${text}\"")
 }
 
 fn main() -> Unit = {
-    let clientId = httpCreateClient("http://127.0.0.1:8080", 5000)
-
+    mut logBuf = ""       // Diag: the session log buffer (handler-owned)
     mut cache = ""        // Model: the cached task list
     mut cursor = 0        // Model: the selected row
     mut status = "ready"  // Model: the flash line
     mut seq = 0           // Model: client-side add counter
 
-    handle Model
+    handle Diag
+        log line => {
+            logBuf = "${logBuf}${line}\n"
+            let w = writeFile(diagFile(), logBuf)
+        }
+    in handle Model
         items       => cache
         setItems s  => { cache = s }
         sel         => cursor
@@ -176,14 +201,15 @@ fn main() -> Unit = {
         setFlash m  => { status = m }
         nextSeq     => { seq = seq + 1  seq }
     in handle Net
-        fetch    => httpFetch(clientId)
-        push t   => httpPush(clientId: clientId, text: t)
+        fetch    => httpFetch()
+        push t   => httpPush(t)
     in handle Term
         readKey  => termReadKey()
         raw on   => termRawMode(on)
     in handle Out
         line s   => print(s)
     in {
+        perform Diag.log("=== osprey tui session — server ${baseUrl()} ===")
         perform Term.raw(1)
         perform Model.setItems(perform Net.fetch())
         loop()

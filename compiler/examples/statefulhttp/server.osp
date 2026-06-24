@@ -33,6 +33,54 @@ effect Persist {
 }
 effect Log { info: fn(string) -> Unit }
 
+// ---- ANSI pizazz (pure string wrappers) ------------------------------------
+fn esc(code: string, s: string) -> string = "\e[${code}m${s}\e[0m"
+fn c256(n: string, s: string) -> string = "\e[38;5;${n}m${s}\e[0m"   // 256-color foreground
+fn bold(s: string) -> string = esc("1", s)
+fn dim(s: string) -> string = esc("2", s)
+fn cyan(s: string) -> string = esc("36", s)
+fn green(s: string) -> string = esc("92", s)
+fn yellow(s: string) -> string = esc("93", s)
+fn magenta(s: string) -> string = esc("95", s)
+fn inc(x: int) -> int = x + 1
+fn mn(a: int, b: int) -> int = match a < b { true => a  false => b }
+
+// A colored, fixed-width method badge (black text on a colored block).
+fn badge(method: string) -> string = match method {
+    "POST" => "\e[1;30;48;5;213m POST \e[0m"
+    "GET"  => "\e[1;30;48;5;117m GET  \e[0m"
+    _      => "\e[1;30;48;5;250m ${method} \e[0m"
+}
+
+// A bar of N filled blocks (capped) — a live gauge of how many tasks exist.
+fn blocks(i: int, n: int) -> string = match i < n {
+    true  => "▰" + blocks(inc(i), n)
+    false => ""
+}
+fn gauge(n: int) -> string = c256("213", blocks(0, mn(n, 28)))
+
+fn divider() -> string = c256("239", "  ──────────────────────────────────────────────────────")
+
+// A six-line ASCII "OSPREY" with a cyan→magenta gradient (one color per row).
+fn art() -> string =
+    c256("51",  "   ██████╗ ███████╗██████╗ ██████╗ ███████╗██╗   ██╗") + "\n" +
+    c256("45",  "  ██╔═══██╗██╔════╝██╔══██╗██╔══██╗██╔════╝╚██╗ ██╔╝") + "\n" +
+    c256("39",  "  ██║   ██║███████╗██████╔╝██████╔╝█████╗   ╚████╔╝ ") + "\n" +
+    c256("99",  "  ██║   ██║╚════██║██╔═══╝ ██╔══██╗██╔══╝    ╚██╔╝  ") + "\n" +
+    c256("135", "  ╚██████╔╝███████║██║     ██║  ██║███████╗   ██║   ") + "\n" +
+    c256("171", "   ╚═════╝ ╚══════╝╚═╝     ╚═╝  ╚═╝╚══════╝   ╚═╝   ")
+
+// The whole startup banner as one string (one print, no consecutive prints).
+fn banner() -> string =
+    "\n" + art() + "\n\n  " +
+    c256("46", "●") + dim(" live  ") + bold(c256("159", "http://127.0.0.1:8080")) +
+    dim("   ·   state lives in algebraic-effect handlers") + "\n" +
+    divider() + "\n  " +
+    badge("GET") + "  " + dim("/") + "         list tasks\n  " +
+    badge("GET") + "  " + dim("/stats") + "    server metrics\n  " +
+    badge("POST") + " " + dim("/tasks") + "    add a task " + dim("(body = task text)") + "\n" +
+    divider()
+
 fn textResp(status: int, bodyText: string) -> HttpResponse = HttpResponse {
     status: status,
     headers: "Content-Type: text/plain",
@@ -49,13 +97,16 @@ fn onPost(body: string) -> HttpResponse = {
     let id = perform Db.add(body)
     let snap = perform Db.list()
     let written = perform Persist.flush(snap)
-    perform Log.info("added task #${toString(id)} (${toString(written)}B persisted)")
+    perform Log.info(badge("POST") + "  " + green("✚") + " " + bold(yellow("\"${body}\"")) + "  " + cyan("#${toString(id)}") + "  " + gauge(id) + dim("  ${toString(written)}B"))
     textResp(201, "created task #${toString(id)}\n")
 }
 
-fn onGet(path: string) -> HttpResponse = match path {
-    "/stats" => textResp(200, "requests=${toString(perform Metrics.served())} tasks=${toString(perform Db.count())}\n")
-    _        => textResp(200, perform Db.list())
+fn onGet(path: string) -> HttpResponse = {
+    perform Log.info(badge("GET") + " " + dim(path) + dim("  ·  ${toString(perform Metrics.served())} served"))
+    match path {
+        "/stats" => textResp(200, "requests=${toString(perform Metrics.served())} tasks=${toString(perform Db.count())}\n")
+        _        => textResp(200, perform Db.list())
+    }
 }
 
 fn handleReq(method: string, path: string, headers: string, body: string) -> HttpResponse = {
@@ -74,6 +125,7 @@ fn serveForever() -> Unit = {
 }
 
 fn main() -> int {
+    mut logBuf = ""       // Log layer      (access log, mirrored to a file)
     mut diskBytes = 0     // Persist layer  (infrastructure)
     mut requests = 0      // Metrics layer  (server runtime)
     mut tasks = ""        // Db layer       (application data)
@@ -100,14 +152,15 @@ fn main() -> int {
         list  => tasks
         count => taskCount
     in handle Log
-        info m => print("[server] ${m}")
+        info m => {
+            logBuf = "${logBuf}${m}\n"
+            let w = writeFile("/tmp/osprey_server.log", logBuf)
+            print("  ${m}")
+        }
     in {
         let serverId = httpCreateServer(8080, "127.0.0.1")
         let listening = httpListen(serverId, handleReq)
-        print("Osprey task server listening on http://127.0.0.1:8080")
-        print("  GET /        list tasks")
-        print("  GET /stats   server metrics")
-        print("  POST /tasks  add a task (body = task text)")
+        print(banner())
         serveForever()
         0
     }
