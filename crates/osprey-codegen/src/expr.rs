@@ -371,6 +371,17 @@ fn gen_call(
         }
     }
     let Expr::Identifier(ident) = function else {
+        // A higher-order callee that is an arbitrary expression — a chained
+        // application (`add3(1)(2)(3)`) or a function held in a record field.
+        // Recover its signature from the type table and dispatch through the
+        // closure cell; fail loudly only when the callee is not a function value.
+        if let Some(sig) = cg
+            .callee_fn_type(function)
+            .as_ref()
+            .and_then(Codegen::fn_value_sig)
+        {
+            return call_fn_value(cg, function, &sig, arguments, named);
+        }
         return Err(CodegenError::unsupported("indirect / higher-order call"));
     };
     // A function-valued parameter (bound while inlining a generic function)

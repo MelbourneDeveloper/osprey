@@ -636,6 +636,30 @@ mod tests {
     }
 
     #[test]
+    fn higher_order_calls_through_computed_and_field_callees() {
+        // A chained 3-deep application (the outer callee is itself a call
+        // result), an iterator callback that is a computed call result
+        // (`makeAdder(10)`), and a filter callback read from a record field
+        // (`cfg.keep`) — each previously bailed; all now recover their signature
+        // from the type table and dispatch through the closure cell.
+        let ir = module(
+            "type Cfg = { keep: (int) -> bool }\n\
+             fn add3(a: int) -> (int) -> (int) -> int =\n\
+               fn(b: int) => fn(c: int) => a + b + c\n\
+             fn makeAdder(n: int) -> (int) -> int = fn(x: int) => x + n\n\
+             fn main() -> Unit = {\n\
+               let cfg = Cfg { keep: fn(n: int) => n > 1 }\n\
+               let chain = add3(1)(2)(3)\n\
+               let computed = fold(map(range(1, 4), makeAdder(10)), 0, fn(a: int, b: int) => a + b)\n\
+               let fieldcb = fold(filter(range(1, 5), cfg.keep), 0, fn(a: int, b: int) => a + b)\n\
+               print(\"${chain} ${computed} ${fieldcb}\")\n\
+             }\n",
+        );
+        // Each higher-order callee loads a function pointer from a closure cell.
+        assert!(ir.contains("to { i8* }*"), "expected a closure cell-call");
+    }
+
+    #[test]
     fn channel_with_default_capacity_and_fiberdone_requires_arg() {
         // Channel() with no capacity arg (fiber.rs default "0" branch).
         let ir = module(

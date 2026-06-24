@@ -5,6 +5,7 @@
 
 use crate::llty::{LType, Value};
 use crate::types::ltype_of;
+use osprey_ast::Expr;
 use osprey_types::{ProgramTypes, Type};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
@@ -155,6 +156,74 @@ impl Codegen {
             Type::Fun { .. } => Some(ret.clone()),
             _ => None,
         }
+    }
+
+    /// The function [`Type`] an expression evaluates to in callee/callback
+    /// position — `None` when it is not (statically) a function value. Powers
+    /// higher-order calls through arbitrary callee expressions: a chained
+    /// application (`add3(1)(2)(3)`), a function held in a record field
+    /// (`cfg.processor`), or a function-typed local.
+    pub(crate) fn callee_fn_type(&self, expr: &Expr) -> Option<Type> {
+        match expr {
+            Expr::Identifier(name) => self.identifier_fn_type(name),
+            // A call evaluates to its callee's return type — recurse so a chain
+            // peels one arrow per application.
+            Expr::Call { function, .. } => match self.callee_fn_type(function)? {
+                Type::Fun { ret, .. } => Some(*ret),
+                _ => None,
+            },
+            Expr::FieldAccess { target, field } => self.field_fn_type(target, field),
+            _ => None,
+        }
+    }
+
+    /// The function type of a named callee: a function-typed local first (its
+    /// inferred value type), else a top-level function's resolved signature.
+    fn identifier_fn_type(&self, name: &str) -> Option<Type> {
+        if let Some(t) = self.fn_value_types.get(name) {
+            return Some(t.clone());
+        }
+        let (params, ret) = self.prog.functions.get(name)?;
+        Some(Type::Fun {
+            params: params.clone(),
+            ret: Box::new(ret.clone()),
+        })
+    }
+
+    /// The type of `target.field` when `field` names a function-valued record
+    /// field — resolving `target`'s owner from the bound value's type tag, or a
+    /// unique field-name match across known layouts.
+    fn field_fn_type(&self, target: &Expr, field: &str) -> Option<Type> {
+        let owner = self.callee_field_owner(target, field)?;
+        self.prog
+            .ctors
+            .get(&owner)?
+            .fields
+            .iter()
+            .find(|(f, _)| f == field)
+            .map(|(_, t)| t.clone())
+    }
+
+    /// Resolve the owner type of `target.field`: prefer a bound identifier's
+    /// static type tag, else the unique constructor declaring `field`.
+    fn callee_field_owner(&self, target: &Expr, field: &str) -> Option<String> {
+        if let Expr::Identifier(name) = target {
+            let tagged = self.lookup(name).and_then(|v| v.osp_ty);
+            if let Some(owner) = tagged {
+                if self.declares_field(&owner, field) {
+                    return Some(owner);
+                }
+            }
+        }
+        self.find_field_owner(field)
+    }
+
+    /// Whether `owner`'s layout declares `field`.
+    fn declares_field(&self, owner: &str, field: &str) -> bool {
+        self.prog
+            .ctors
+            .get(owner)
+            .is_some_and(|c| c.fields.iter().any(|(f, _)| f == field))
     }
 
     /// Whether `name` is a user function whose inferred signature still contains

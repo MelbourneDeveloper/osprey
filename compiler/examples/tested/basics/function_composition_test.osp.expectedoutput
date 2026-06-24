@@ -31,4 +31,5 @@ mapped: 33
 evensum: 20
 elem: 12
 elem: 15
+chain3: 6 computed: 36 fieldcb: 23
 === Function Composition Test Complete ===

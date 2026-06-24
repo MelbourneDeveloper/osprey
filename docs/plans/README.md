@@ -7,7 +7,6 @@ plan ends with a TODO checklist.
 
 | # | Plan | Subsystem | Status today | Scope |
 |---|------|-----------|--------------|-------|
-| [0001](0001-codegen-higher-order-calls.md) | Higher-order / indirect calls | codegen | Direct + let-bound calls work; computed/field/chained callees bail | Medium |
 | [0002](0002-codegen-generic-function-values.md) | Generic functions & lambdas as values | codegen | Concrete capture-free/capturing lambdas work; generic ones bail | Medium |
 | [0004](0004-collection-stdlib-completion.md) | Collection / map stdlib surface | stdlib | `listXxx`/`mapXxx` implemented; spec bare names + a few ops missing | Low–Medium |
 | [0005](0005-runtime-result-bridge.md) | HTTP/WebSocket `Result` bridge | runtime | Functions work but return raw `int64_t`, not `Result<T, string>` | Medium |
