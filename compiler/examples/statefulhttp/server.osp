@@ -1,0 +1,114 @@
+// ============================================================================
+//  Osprey stateful HTTP server — STATE AT EVERY LEVEL OF THE API, via
+//  algebraic effects. Run it, then point the TUI client at it:
+//
+//      osprey examples/statefulhttp/server.osp --run      # terminal 1
+//      osprey examples/statefulhttp/tui.osp --run         # terminal 2
+//
+//  The request handler is PURE: it only `perform`s. All mutable state lives in
+//  the effect handlers installed by `main`, one per architectural layer:
+//
+//      Persist  (infrastructure)  owns the on-disk snapshot   — writes a file
+//      Metrics  (server runtime)  owns the request counter     — bumped per call
+//      Db       (application)     owns the task table           — the domain data
+//
+//  Handler-owned state is just a `mut` the handler closes over: `perform`
+//  threads a value through it and the performer resumes — a real State effect.
+//  The effects even cross the C HTTP-callback boundary: the server runs the
+//  pure handler on its accept thread and the `perform`s resolve to these
+//  handlers. Swap the handlers and the same routes run against a mock.
+// ============================================================================
+
+effect Db {
+    add:   fn(string) -> int      // append a task, returns its id
+    list:  fn() -> string         // the rendered task table
+    count: fn() -> int            // how many tasks exist
+}
+effect Metrics {
+    hit:    fn(string) -> Unit    // record one served request
+    served: fn() -> int           // total requests served since boot
+}
+effect Persist {
+    flush: fn(string) -> int      // durably write a snapshot, returns bytes
+}
+effect Log { info: fn(string) -> Unit }
+
+fn textResp(status: int, bodyText: string) -> HttpResponse = HttpResponse {
+    status: status,
+    headers: "Content-Type: text/plain",
+    contentType: "text/plain",
+    streamFd: -1,
+    isComplete: true,
+    partialBody: bodyText
+}
+
+// Adding a task touches every layer — Db records it, Persist writes the new
+// snapshot to disk — yet not one socket, file descriptor or mutable field
+// appears in this pure orchestration.
+fn onPost(body: string) -> HttpResponse = {
+    let id = perform Db.add(body)
+    let snap = perform Db.list()
+    let written = perform Persist.flush(snap)
+    perform Log.info("added task #${toString(id)} (${toString(written)}B persisted)")
+    textResp(201, "created task #${toString(id)}\n")
+}
+
+fn onGet(path: string) -> HttpResponse = match path {
+    "/stats" => textResp(200, "requests=${toString(perform Metrics.served())} tasks=${toString(perform Db.count())}\n")
+    _        => textResp(200, perform Db.list())
+}
+
+fn handleReq(method: string, path: string, headers: string, body: string) -> HttpResponse = {
+    perform Metrics.hit(path)
+    match method {
+        "POST" => onPost(body)
+        _      => onGet(path)
+    }
+}
+
+// httpListen returns once the accept thread is up; this keeps `main` (and the
+// handler scope that owns all state) alive while requests are served.
+fn serveForever() -> Unit = {
+    sleep(3600000)
+    serveForever()
+}
+
+fn main() -> int {
+    mut diskBytes = 0     // Persist layer  (infrastructure)
+    mut requests = 0      // Metrics layer  (server runtime)
+    mut tasks = ""        // Db layer       (application data)
+    mut taskCount = 0     // Db layer
+
+    handle Persist
+        flush snap => {
+            let saved = writeFile("/tmp/osprey_tasks.db", snap)
+            diskBytes = match saved {
+                Success { value } => length(snap)
+                Error { message } => -1
+            }
+            diskBytes
+        }
+    in handle Metrics
+        hit p  => { requests = requests + 1 }
+        served => requests
+    in handle Db
+        add t => {
+            taskCount = taskCount + 1
+            tasks = "${tasks}#${toString(taskCount)} ${t}\n"
+            taskCount
+        }
+        list  => tasks
+        count => taskCount
+    in handle Log
+        info m => print("[server] ${m}")
+    in {
+        let serverId = httpCreateServer(8080, "127.0.0.1")
+        let listening = httpListen(serverId, handleReq)
+        print("Osprey task server listening on http://127.0.0.1:8080")
+        print("  GET /        list tasks")
+        print("  GET /stats   server metrics")
+        print("  POST /tasks  add a task (body = task text)")
+        serveForever()
+        0
+    }
+}

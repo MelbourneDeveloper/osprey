@@ -15,7 +15,7 @@
 //! `send`/`recv` order).
 
 use crate::builder::Codegen;
-use crate::conv::{as_i64, box_to_i64};
+use crate::conv::{as_i64, box_to_i64, unbox_from_i64};
 use crate::error::Result;
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
@@ -34,9 +34,9 @@ pub(crate) fn gen_spawn(cg: &mut Codegen, e: &Expr) -> Result<Value> {
     let cell_ty = crate::closure::cell_struct_ty(&caps);
     let saved = cg.enter_nested_fn();
     crate::closure::reload_captures(cg, &cell_ty, &caps);
-    let body = thunk_body(cg, e);
+    let elem = thunk_body(cg, e);
     cg.exit_nested_fn(saved, "i64", &thunk, &[(LType::Ptr, String::from("__env"))]);
-    body?;
+    let elem = elem?;
     let sig = (Vec::new(), THUNK_SIG.0, THUNK_SIG.1);
     let cell = crate::closure::cell_value(cg, id, &thunk, &cell_ty, &caps, &sig);
     let r = cg.call(
@@ -45,23 +45,31 @@ pub(crate) fn gen_spawn(cg: &mut Codegen, e: &Expr) -> Result<Value> {
         "i64 (i8*)*, i8*",
         &[&format!("@{thunk}"), &cell.operand],
     );
-    Ok(Value::new(r, LType::I64))
+    // Tag the handle with the fiber's element type so `await` recovers it.
+    Ok(Value::new(r, LType::I64).with_fiber_elem(elem))
 }
 
-fn thunk_body(cg: &mut Codegen, e: &Expr) -> Result<()> {
+/// Lower the spawned expression into the thunk and box its result to the
+/// uniform `i64` fiber-result ABI; returns the element type so the spawn site
+/// can tag the handle for `await` to unbox.
+fn thunk_body(cg: &mut Codegen, e: &Expr) -> Result<LType> {
     let v = gen_expr(cg, e)?;
     let v = crate::result::unwrap(cg, v);
+    let elem = v.ty;
     let b = box_to_i64(cg, v);
     cg.emit(format!("ret i64 {}", b.operand));
-    Ok(())
+    Ok(elem)
 }
 
-/// `await(fiber)` — block on the C runtime until the fiber completes.
+/// `await(fiber)` — block on the C runtime until the fiber completes, then
+/// unbox its `i64` result back to the fiber's element type (a string/handle
+/// result is a pointer, recovered via `inttoptr`).
 pub(crate) fn gen_await(cg: &mut Codegen, e: &Expr) -> Result<Value> {
     let f = gen_expr(cg, e)?;
+    let elem = f.fiber_elem.unwrap_or(LType::I64);
     let id = as_i64(cg, f)?;
     let r = cg.call("i64", "fiber_await", "i64", &[&id.operand]);
-    Ok(Value::new(r, LType::I64))
+    Ok(unbox_from_i64(cg, &r, elem))
 }
 
 /// `yield e` / `yield` — drive the runtime's cooperative hand-off, then evaluate

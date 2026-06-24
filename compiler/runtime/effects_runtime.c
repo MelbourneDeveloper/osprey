@@ -16,6 +16,7 @@ typedef struct {
     char effect_name[MAX_EFFECT_NAME_LENGTH];
     char operation_name[MAX_OPERATION_NAME_LENGTH];
     void *handler_func_ptr;  // Function pointer to handler
+    void *env;               // Captured environment (cells + values), or NULL
 } HandlerEntry;
 
 // HandlerStack per thread/fiber
@@ -41,9 +42,11 @@ static void ensure_handler_stack_initialized(void) {
     }
 }
 
-// Push a handler onto the stack
+// Push a handler onto the stack, with its captured environment (cells +
+// values shared by every arm of one `handle` region; NULL when nothing is
+// captured).
 // Returns 0 on success, -1 on stack overflow
-int __osprey_handler_push(const char *effect_name, const char *operation_name, void *handler_func_ptr) {
+int __osprey_handler_push(const char *effect_name, const char *operation_name, void *handler_func_ptr, void *env) {
     ensure_handler_stack_initialized();
 
     pthread_mutex_lock(&g_handler_stack->lock);
@@ -64,6 +67,7 @@ int __osprey_handler_push(const char *effect_name, const char *operation_name, v
     entry->operation_name[MAX_OPERATION_NAME_LENGTH - 1] = '\0';
 
     entry->handler_func_ptr = handler_func_ptr;
+    entry->env = env;
 
     pthread_mutex_unlock(&g_handler_stack->lock);
     return 0;
@@ -101,6 +105,29 @@ void *__osprey_handler_lookup(const char *effect_name, const char *operation_nam
         if (strcmp(entry->effect_name, effect_name) == 0 &&
             strcmp(entry->operation_name, operation_name) == 0) {
             void *result = entry->handler_func_ptr;
+            pthread_mutex_unlock(&g_handler_stack->lock);
+            return result;
+        }
+    }
+
+    pthread_mutex_unlock(&g_handler_stack->lock);
+    return NULL;  // Handler not found
+}
+
+// Look up the captured environment of the innermost matching handler — the
+// companion to __osprey_handler_lookup, resolved the same top-to-bottom way so
+// fnptr and env always come from the same handler entry.
+// Returns the env pointer, or NULL if not found / no captures.
+void *__osprey_handler_lookup_env(const char *effect_name, const char *operation_name) {
+    ensure_handler_stack_initialized();
+
+    pthread_mutex_lock(&g_handler_stack->lock);
+
+    for (int i = g_handler_stack->top; i >= 0; i--) {
+        HandlerEntry *entry = &g_handler_stack->stack[i];
+        if (strcmp(entry->effect_name, effect_name) == 0 &&
+            strcmp(entry->operation_name, operation_name) == 0) {
+            void *result = entry->env;
             pthread_mutex_unlock(&g_handler_stack->lock);
             return result;
         }

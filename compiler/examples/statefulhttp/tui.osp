@@ -1,0 +1,191 @@
+// ============================================================================
+//  Osprey TUI — a colored, keyboard-driven HTTP client for the stateful task
+//  server (examples/statefulhttp/server.osp). Start the server first, then:
+//
+//      osprey examples/statefulhttp/tui.osp --run
+//
+//  Keys:  j / k  move selection      a  add a task      r  refresh
+//         q / Esc  quit
+//
+//  This is the CLIENT half of the state showcase. Just like the server, the
+//  TUI keeps ALL of its view state inside an effect handler: the `Model` effect
+//  owns the cached task list, the cursor and a flash message, and every
+//  keystroke mutates them by `perform`ing — handler-owned client state. The
+//  render loop is recursion (Osprey has no loop keyword); each keystroke
+//  tail-calls the next frame. Swap the handlers in `main` and the same UI runs
+//  against a mock server with no change to the logic below.
+// ============================================================================
+
+// ---- view state (handler-owned), the server, the terminal, the screen ------
+effect Model {
+    items:    fn() -> string        // cached task list, as fetched
+    setItems: fn(string) -> Unit
+    sel:      fn() -> int           // selected row
+    moveSel:  fn(int) -> Unit       // move the cursor (clamped)
+    flash:    fn() -> string        // one-line status message
+    setFlash: fn(string) -> Unit
+    nextSeq:  fn() -> int           // client-side counter for added tasks
+}
+effect Net  { fetch: fn() -> string  push: fn(string) -> Unit }
+effect Term { readKey: fn() -> Result<string, Error>  raw: fn(int) -> Unit }
+effect Out  { line: fn(string) -> Unit }
+
+// ---- ANSI helpers (pure) ----------------------------------------------------
+fn cyan(s: string) -> string = "\e[36m${s}\e[0m"
+fn green(s: string) -> string = "\e[32m${s}\e[0m"
+fn yellow(s: string) -> string = "\e[33m${s}\e[0m"
+fn dim(s: string) -> string = "\e[2m${s}\e[0m"
+fn bold(s: string) -> string = "\e[1m${s}\e[0m"
+fn invert(s: string) -> string = "\e[7m${s}\e[0m"
+fn rule() -> string = dim("  ------------------------------------------")
+
+// Plain-int arithmetic helpers: an `int`-typed function body unwraps Osprey's
+// checked `Result<int, MathError>`, so these stay usable in argument position.
+fn inc(x: int) -> int = x + 1
+fn dec(x: int) -> int = x - 1
+fn shift(a: int, b: int) -> int = a + b
+
+// ---- list helpers (the cached text is split into rows for rendering) --------
+fn rows(text: string) -> List<string> = match split(text, "\n") {
+    Success { value } => value
+    Error { message } => List()
+}
+
+// The server's list ends with a trailing newline, so the final split piece is
+// empty; the visible row count drops it.
+fn rowCount(text: string) -> int = match length(text) {
+    0 => 0
+    _ => dec(listLength(rows(text)))
+}
+
+// Highlight the selected row by inverting its "#N " prefix (the server numbers
+// tasks from 1). Pure string rewriting — no list indexing.
+fn highlight(text: string, sel: int) -> string = match replace(text, "#${toString(inc(sel))} ", invert(" #${toString(inc(sel))} ")) {
+    Success { value } => value
+    Error { message } => text
+}
+
+fn cursorLine(text: string, sel: int) -> string = match rowCount(text) {
+    0 => dim("  (no tasks yet — press 'a' to add one)")
+    _ => dim("  cursor on task ") + cyan("#${toString(inc(sel))}") + dim(" of ${toString(rowCount(text))}")
+}
+
+// ---- the screen: a pure string built from the current model -----------------
+fn screen(text: string, sel: int, msg: string) -> string =
+    "\e[?25l\e[2J\e[H\n" +
+    bold(cyan("  OSPREY task board")) + dim("   live @ http://127.0.0.1:8080") + "\n" +
+    rule() + "\n\n" +
+    highlight(text, sel) + "\n" +
+    cursorLine(text, sel) + "\n" +
+    rule() + "\n" +
+    dim("  j/k move    a add    r refresh    q quit") + "\n  " +
+    yellow(msg)
+
+// ---- selection movement (pure) ----------------------------------------------
+fn clamp(x: int, hi: int) -> int = match x < 0 {
+    true  => 0
+    false => match x < hi { true => x  false => match hi > 0 { true => dec(hi)  false => 0 } }
+}
+
+// ---- the render / input loop (recursion stands in for a while-loop) ---------
+fn draw() -> Unit ![Out, Model] =
+    perform Out.line(screen(perform Model.items(), perform Model.sel(), perform Model.flash()))
+
+fn refresh() -> Unit ![Net, Model] = {
+    perform Model.setItems(perform Net.fetch())
+    perform Model.setFlash("refreshed from server")
+}
+
+fn addTask() -> Unit ![Net, Model] = {
+    let n = perform Model.nextSeq()
+    perform Net.push("task from TUI #${toString(n)}")
+    perform Model.setItems(perform Net.fetch())
+    perform Model.setFlash("added task from TUI #${toString(n)}")
+}
+
+fn endApp() -> Unit ![Out, Term] = {
+    perform Term.raw(0)
+    perform Out.line("\e[?25h" + green("  goodbye!"))
+}
+
+fn loop() -> Unit ![Out, Term, Net, Model] = {
+    draw()
+    match perform Term.readKey() {
+        Success { value } => dispatch(value)
+        Error { message }  => endApp()
+    }
+}
+
+fn dispatch(key: string) -> Unit ![Out, Term, Net, Model] = match key {
+    "q"     => endApp()
+    "Esc"   => endApp()
+    "j"     => step(1)
+    "Down"  => step(1)
+    "k"     => step(dec(0))
+    "Up"    => step(dec(0))
+    "r"     => continueAfter(refresh())
+    "a"     => continueAfter(addTask())
+    _       => loop()
+}
+
+fn step(delta: int) -> Unit ![Out, Term, Net, Model] = {
+    perform Model.moveSel(delta)
+    loop()
+}
+
+// Run an effectful action, then re-enter the loop (sequences a Unit action
+// before the recursive call without a statement-level side effect in `match`).
+fn continueAfter(done: Unit) -> Unit ![Out, Term, Net, Model] = loop()
+
+// ---- INTERPRETATION: the only place real I/O and client state live ---------
+fn bodyOf(h: int) -> string = match httpResponseBody(h) {
+    Success { value } => value
+    Error { message } => "(server unreachable — is it running on :8080?)\n"
+}
+
+fn httpFetch(clientId: int) -> string = match httpGetResponse(clientId, "/", "") {
+    Success { value } => readFree(value)
+    Error { message } => "(GET failed)\n"
+}
+
+fn readFree(h: int) -> string = {
+    let b = bodyOf(h)
+    let freed = httpResponseFree(h)
+    b
+}
+
+fn httpPush(clientId: int, text: string) -> Unit = {
+    let code = toString(httpPost(clientId, "/tasks", text, ""))
+    print("")
+}
+
+fn main() -> Unit = {
+    let clientId = httpCreateClient("http://127.0.0.1:8080", 5000)
+
+    mut cache = ""        // Model: the cached task list
+    mut cursor = 0        // Model: the selected row
+    mut status = "ready"  // Model: the flash line
+    mut seq = 0           // Model: client-side add counter
+
+    handle Model
+        items       => cache
+        setItems s  => { cache = s }
+        sel         => cursor
+        moveSel d   => { cursor = clamp(shift(cursor, d), rowCount(cache)) }
+        flash       => status
+        setFlash m  => { status = m }
+        nextSeq     => { seq = seq + 1  seq }
+    in handle Net
+        fetch    => httpFetch(clientId)
+        push t   => httpPush(clientId: clientId, text: t)
+    in handle Term
+        readKey  => termReadKey()
+        raw on   => termRawMode(on)
+    in handle Out
+        line s   => print(s)
+    in {
+        perform Term.raw(1)
+        perform Model.setItems(perform Net.fetch())
+        loop()
+    }
+}

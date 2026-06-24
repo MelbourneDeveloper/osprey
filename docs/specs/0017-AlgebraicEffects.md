@@ -4,7 +4,7 @@ Osprey treats effects as first-class language features. An effect declares a set
 
 ## Status
 
-Effect declarations, `perform` expressions, effect annotations on function types, handler parsing, and full compile-time unhandled-effect checking are implemented. Continuation/`resume` semantics inside handlers are not yet implemented; current handlers act as value substitutions, which is sufficient for many uses but does not yet model the full algebraic-effects calculus.
+Effect declarations, `perform` expressions, effect annotations on function types, handler parsing, and full compile-time unhandled-effect checking are implemented. A handler arm's return value becomes the result of the `perform` and the performer continues — i.e. the common *single-shot tail-resume* — and handlers may own mutable state (see [Handler-Owned State]). An explicit `resume` expression (general delimited continuations, multi-shot resume) is not yet implemented.
 
 ## Keywords
 
@@ -79,6 +79,42 @@ in
     in
         perform Logger.log("test")    // prints "[INNER] test"
 ```
+
+## Handler-Owned State
+
+`[EFFECTS-HANDLER-STATE]` A handler arm may read and update a mutable binding
+from the enclosing scope. Any `mut` an arm captures is promoted to a shared
+heap cell that the whole `handle` region — every arm and the code after `in` —
+sees as one location. This makes the `State` effect *real*: the effectful code
+stays pure (it only `perform`s), and the handler is the single place the state
+lives.
+
+```osprey
+effect State { get: fn() -> int  set: fn(int) -> Unit }
+
+fn bump() -> int !State = {
+    let a = perform State.get()
+    perform State.set(a + 1)
+    perform State.get()
+}
+
+fn main() -> int {
+    mut cell = 0
+    let r = handle State
+        get        => cell           // reads the shared cell
+        set newVal => { cell = newVal }   // writes the shared cell
+    in bump()
+    print("r=${toString(r)} cell=${toString(cell)}")   // r=1 cell=1
+    0
+}
+```
+
+The cell is shared across the C HTTP-callback boundary (a request handler's
+`perform` resolves to the active handler) and across fiber boundaries (an effect
+performed inside a `spawn`ed fiber is handled in the spawner), so one effect
+handler can own the state for a whole running server. See
+`compiler/examples/tested/effects/http_state_levels.osp` and
+`compiler/examples/statefulhttp/`.
 
 ## Effect Inference
 

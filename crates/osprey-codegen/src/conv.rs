@@ -47,6 +47,20 @@ pub(crate) fn box_to_i64(cg: &mut Codegen, v: Value) -> Value {
     Value::new(reg, LType::I64)
 }
 
+/// Inverse of [`box_to_i64`]: recover a value of `ty` from the uniform `i64`
+/// ABI (fiber results). Pointers `inttoptr`, narrow ints `trunc`, `double`
+/// `bitcast`; an `i64` element passes through unchanged.
+pub(crate) fn unbox_from_i64(cg: &mut Codegen, raw: &str, ty: LType) -> Value {
+    let reg = match ty {
+        LType::I64 => return Value::new(raw.to_string(), LType::I64),
+        LType::Str | LType::Ptr => cg.emit_reg(format!("inttoptr i64 {raw} to i8*")),
+        LType::I1 => cg.emit_reg(format!("trunc i64 {raw} to i1")),
+        LType::I32 => cg.emit_reg(format!("trunc i64 {raw} to i32")),
+        LType::Double => cg.emit_reg(format!("bitcast i64 {raw} to double")),
+    };
+    Value::new(reg, ty)
+}
+
 /// Coerce to `double` (promoting an integer operand for mixed arithmetic).
 pub(crate) fn as_double(cg: &mut Codegen, v: Value) -> Result<Value> {
     match v.ty {

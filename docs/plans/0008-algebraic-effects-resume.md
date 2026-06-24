@@ -8,11 +8,30 @@
 ## Summary
 
 Effects are real and compile-time safe: declarations, `perform`, `handle … in`,
-effect annotations, and unhandled-effect rejection all work. What is missing is
-the defining feature of *algebraic* effects — `resume`. Today a handler arm
-behaves as a value substitution: it returns a value and the performing
-computation does **not** continue from the `perform` site. This is the largest and
-highest-risk of the partial features; it is the capstone, not a quick win.
+effect annotations, and unhandled-effect rejection all work. A handler arm's
+value now becomes the `perform`'s result and the performer continues past the
+`perform` site — the common **single-shot tail-resume** — and handlers may own
+mutable state (`[EFFECTS-HANDLER-STATE]`, see below), so the `State` effect is
+fully usable today. What remains is an *explicit* `resume` expression: capturing
+the continuation as a value so an arm can run code *after* resuming, resume in a
+non-tail position, or resume more than once (multi-shot). That is the remaining
+capstone.
+
+## Update — handler-owned state landed
+
+`[EFFECTS-HANDLER-STATE]` Handler arms can read and write a `mut` captured from
+the enclosing scope; such a `mut` is promoted to a shared heap cell and the
+handler stack carries a per-region environment (`__osprey_handler_push` gained an
+`env` pointer; `__osprey_handler_lookup_env` resolves it). This delivers the
+canonical State-effect pattern (handler owns the cell, effectful code stays
+pure) without general continuations, because value-substitution *is* tail-resume.
+Implemented in [crates/osprey-codegen/src/effects.rs](../../crates/osprey-codegen/src/effects.rs)
+(`capture_list`/`build_env`/`reload_env`), the cell read/write in
+[expr.rs](../../crates/osprey-codegen/src/expr.rs) and
+[lower.rs](../../crates/osprey-codegen/src/lower.rs), and
+[compiler/runtime/effects_runtime.c](../../compiler/runtime/effects_runtime.c).
+Reference app: `compiler/examples/tested/effects/http_state_levels.osp`. The
+remaining `resume` work below is unchanged.
 
 ## Evidence
 
