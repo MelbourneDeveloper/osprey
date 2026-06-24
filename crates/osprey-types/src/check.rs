@@ -73,6 +73,11 @@ pub struct Checker {
     pub(crate) let_tys: Vec<(Position, Type)>,
     /// The built-in function names — user code may not redefine these.
     builtins: HashSet<String>,
+    /// Stack of `(operation result type, handler answer type)` for the handler
+    /// arms currently being inferred, so a `resume` inside an arm types its
+    /// argument against the operation result and itself as the answer.
+    /// Implements [EFFECTS-RESUME].
+    pub(crate) resume_ctx: Vec<(Type, Type)>,
 }
 
 impl Checker {

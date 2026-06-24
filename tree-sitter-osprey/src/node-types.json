@@ -1547,6 +1547,10 @@
           "named": true
         },
         {
+          "type": "resume_expression",
+          "named": true
+        },
+        {
           "type": "send_call",
           "named": true
         },
@@ -1597,6 +1601,22 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "resume_expression",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -2252,6 +2272,10 @@
   },
   {
     "type": "recv",
+    "named": false
+  },
+  {
+    "type": "resume",
     "named": false
   },
   {

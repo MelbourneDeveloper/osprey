@@ -97,7 +97,9 @@ fn walk_stmt_body(stmt: &Stmt, out: &mut Vec<SymbolInfo>) {
     match stmt {
         Stmt::Module { body, .. } => walk_stmts(body, out),
         Stmt::Function { body, .. } => walk_expr(body, out),
-        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } => walk_expr(value, out),
+        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } | Stmt::Expr(value) => {
+            walk_expr(value, out);
+        }
         _ => {}
     }
 }
@@ -537,6 +539,140 @@ mod tests {
         let seed = syms.iter().find(|s| s.name == "seed").expect("seed symbol");
         assert_eq!(seed.kind, SymbolKind::Variable);
         assert_eq!(seed.ty, "");
+    }
+
+    #[test]
+    fn collect_all_symbols_descends_into_every_expression_form() {
+        // A `let` is buried inside each container expression variant; the deep
+        // collector must surface every one — this exercises all walker arms.
+        // Implements [LSP-HOVER-VARIABLES]
+        use osprey_ast::{Expr, FieldAssignment, HandlerArm, MapEntry, NamedArgument, Pattern};
+        let blk = |name: &str| Expr::Block {
+            statements: vec![Stmt::Let {
+                name: name.into(),
+                mutable: false,
+                ty: None,
+                value: Expr::Integer(0),
+                doc: None,
+                position: Some(Position { line: 1, column: 0 }),
+            }],
+            value: None,
+        };
+        let b = |name: &str| Box::new(blk(name));
+        let named = |name: &str| NamedArgument {
+            name: "n".into(),
+            value: blk(name),
+        };
+        let field = |name: &str| FieldAssignment {
+            name: "f".into(),
+            value: blk(name),
+        };
+        let arm = |name: &str| MatchArm {
+            pattern: Pattern::Wildcard,
+            body: blk(name),
+        };
+        let containers = vec![
+            Expr::List(vec![blk("list")]),
+            Expr::Map(vec![MapEntry {
+                key: blk("mapk"),
+                value: blk("mapv"),
+            }]),
+            Expr::Object(vec![field("obj")]),
+            Expr::Binary {
+                op: "+".into(),
+                left: b("binl"),
+                right: b("binr"),
+            },
+            Expr::Pipe {
+                left: b("pipel"),
+                right: b("piper"),
+            },
+            Expr::Unary {
+                op: "-".into(),
+                operand: b("unary"),
+            },
+            Expr::InterpolatedStr(vec![InterpolatedPart::Expr(blk("interp"))]),
+            Expr::Call {
+                function: b("callfn"),
+                arguments: vec![blk("callarg")],
+                named_arguments: vec![named("callnamed")],
+            },
+            Expr::MethodCall {
+                target: b("mtarget"),
+                method: "m".into(),
+                arguments: vec![blk("marg")],
+                named_arguments: vec![named("mnamed")],
+            },
+            Expr::FieldAccess {
+                target: b("fatarget"),
+                field: "f".into(),
+            },
+            Expr::Index {
+                target: b("idxt"),
+                index: b("idxi"),
+            },
+            Expr::Lambda {
+                parameters: Vec::new(),
+                return_type: None,
+                body: b("lambda"),
+                position: None,
+            },
+            Expr::Match {
+                value: b("matchval"),
+                arms: vec![arm("matcharm")],
+            },
+            Expr::TypeConstructor {
+                name: "T".into(),
+                type_args: Vec::new(),
+                fields: vec![field("tc")],
+            },
+            Expr::Update {
+                record: "r".into(),
+                fields: vec![field("update")],
+            },
+            Expr::Spawn(b("spawn")),
+            Expr::Await(b("await")),
+            Expr::Recv(b("recv")),
+            Expr::Yield(Some(b("yield"))),
+            Expr::Send {
+                channel: b("sendc"),
+                value: b("sendv"),
+            },
+            Expr::Select {
+                arms: vec![arm("select")],
+            },
+            Expr::Perform {
+                effect: "E".into(),
+                operation: "op".into(),
+                arguments: vec![blk("perform")],
+                named_arguments: vec![named("performnamed")],
+            },
+            Expr::Handler {
+                effect: "E".into(),
+                arms: vec![HandlerArm {
+                    operation: "op".into(),
+                    params: Vec::new(),
+                    body: blk("handlerarm"),
+                }],
+                body: b("handlerbody"),
+            },
+        ];
+        let program = Program {
+            statements: containers.into_iter().map(Stmt::Expr).collect(),
+        };
+        let names: Vec<String> = collect_all_symbols(&program)
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+        for expected in [
+            "list", "mapk", "mapv", "obj", "binl", "binr", "pipel", "piper", "unary", "interp",
+            "callfn", "callarg", "callnamed", "mtarget", "marg", "mnamed", "fatarget", "idxt",
+            "idxi", "lambda", "matchval", "matcharm", "tc", "update", "spawn", "await", "recv",
+            "yield", "sendc", "sendv", "select", "perform", "performnamed", "handlerarm",
+            "handlerbody",
+        ] {
+            assert!(names.iter().any(|n| n == expected), "missing `{expected}`");
+        }
     }
 
     #[test]

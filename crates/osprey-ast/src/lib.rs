@@ -451,6 +451,10 @@ pub enum Expr {
         /// The handled body expression.
         body: Box<Expr>,
     },
+    /// `resume(value)` — resume the performer's delimited continuation with
+    /// `value` (or `Unit` when absent). Legal only inside a handler arm body.
+    /// Implements [EFFECTS-RESUME].
+    Resume(Option<Box<Expr>>),
 }
 
 /// One arm of a `handle ... in` expression (`ast` handler arm).
