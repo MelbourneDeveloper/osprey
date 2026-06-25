@@ -59,7 +59,7 @@ function cleanSpecContent(content, filename) {
   content = content.replace(
     /\]\((?:\.\.\/)+(?:docs\/)?plans\/([A-Za-z0-9._-]+\.md)(#[^)]*)?\)/g,
     (_m, file, anchor) =>
-      `](https://github.com/MelbourneDeveloper/osprey/blob/main/docs/plans/${file}${anchor || ''})`
+      `](https://github.com/Nimblesite/osprey/blob/main/docs/plans/${file}${anchor || ''})`
   );
 
   // Any remaining repo-relative links (source files, shipwright.json, etc.)
@@ -67,7 +67,7 @@ function cleanSpecContent(content, filename) {
   content = content.replace(
     /\]\((?:\.\.\/){2,}([^)#]+)(#[^)]*)?\)/g,
     (_m, repoPath, anchor) =>
-      `](https://github.com/MelbourneDeveloper/osprey/blob/main/${repoPath}${anchor || ''})`
+      `](https://github.com/Nimblesite/osprey/blob/main/${repoPath}${anchor || ''})`
   );
 
   return content.trim();

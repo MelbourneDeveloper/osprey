@@ -466,7 +466,7 @@ lazyImages.forEach(img => imageObserver.observe(img));
 // Add some console easter eggs
 console.log('%c🦅 Welcome to Osprey!', 'font-size: 24px; font-weight: bold; color: #667eea;');
 console.log('%cBuilding the future of programming, one function at a time.', 'font-size: 14px; color: #764ba2;');
-console.log('%cInterested in contributing? Check out https://github.com/MelbourneDeveloper/osprey', 'font-size: 12px; color: #666;');
+console.log('%cInterested in contributing? Check out https://github.com/Nimblesite/osprey', 'font-size: 12px; color: #666;');
 
 // Tab Management for Examples
 class TabManager {

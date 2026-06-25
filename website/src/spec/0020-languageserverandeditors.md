@@ -23,9 +23,9 @@ every editor is a thin client over the same LSP transport.
 
 | Surface | State |
 |---|---|
-| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/MelbourneDeveloper/osprey/pull/137)). |
+| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/Nimblesite/osprey/pull/137)). |
 | VS Code extension (`nimblesite.osprey`) | **Shipped** — per-platform VSIX bundling a version-matched compiler. |
-| Open VSX | Planned — see [lsp-vsix-release.md](https://github.com/MelbourneDeveloper/osprey/blob/main/docs/plans/lsp-vsix-release.md). |
+| Open VSX | Planned — see [lsp-vsix-release.md](https://github.com/Nimblesite/osprey/blob/main/docs/plans/lsp-vsix-release.md). |
 | Neovim | Planned. The server is editor-agnostic; only a client recipe is missing. |
 | Zed | Planned (`shipwright-zed`). |
 | MCP surface (`lspkit-mcp`) | Future — the same `EngineApi` vended as MCP tools. |
@@ -52,7 +52,7 @@ computed once and vended two ways.
 
 Key consequence: the server **does not shell out** to the `osprey` binary or
 scrape stderr. It calls the compiler front-end directly
-([`crates/osprey-lsp/src/diagnostics.rs`](https://github.com/MelbourneDeveloper/osprey/blob/main/crates/osprey-lsp/src/diagnostics.rs)),
+([`crates/osprey-lsp/src/diagnostics.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-lsp/src/diagnostics.rs)),
 so diagnostics, hover, and navigation share the compiler's own parser and type
 checker. There is exactly one source of truth.
 
@@ -76,7 +76,7 @@ osprey lsp
 It speaks LSP over **stdio** with `Content-Length` framing. No socket, no port,
 no per-editor binary. An editor integration is configured by pointing its LSP
 client at this command; nothing else is editor-specific. The subcommand is
-implemented in [`crates/osprey-cli/src/main.rs`](https://github.com/MelbourneDeveloper/osprey/blob/main/crates/osprey-cli/src/main.rs)
+implemented in [`crates/osprey-cli/src/main.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-cli/src/main.rs)
 (delegating to `osprey_lsp::run_stdio`).
 
 ## Lifecycle `[LSP-LIFECYCLE]`
@@ -109,7 +109,7 @@ The server advertises and implements:
 
 Capabilities are the contract clients rely on; adding one means updating
 `initialize_result` in
-[`crates/osprey-lsp/src/wire.rs`](https://github.com/MelbourneDeveloper/osprey/blob/main/crates/osprey-lsp/src/wire.rs) **and** this
+[`crates/osprey-lsp/src/wire.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-lsp/src/wire.rs) **and** this
 table.
 
 ## Position encoding `[LSP-ENCODING]`
@@ -117,7 +117,7 @@ table.
 The server negotiates `positionEncoding` at `initialize` (default **UTF-16**).
 Tree-sitter reports columns as **byte** offsets, so every position crossing the
 wire is re-measured into the negotiated encoding
-([`crates/osprey-lsp/src/text.rs`](https://github.com/MelbourneDeveloper/osprey/blob/main/crates/osprey-lsp/src/text.rs),
+([`crates/osprey-lsp/src/text.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-lsp/src/text.rs),
 `byte_col_to_encoding`). A client that negotiates UTF-8 must receive UTF-8
 offsets; this is not optional.
 
@@ -129,7 +129,7 @@ packaging and in how the version-matched binary is sourced (`[EDITOR-VERSIONING]
 ### VS Code `[EDITOR-VSCODE]`
 
 - Extension id `nimblesite.osprey`; client in
-  [`vscode-extension/client/src/extension.ts`](https://github.com/MelbourneDeveloper/osprey/blob/main/vscode-extension/client/src/extension.ts)
+  [`vscode-extension/client/src/extension.ts`](https://github.com/Nimblesite/osprey/blob/main/vscode-extension/client/src/extension.ts)
   spawns `osprey lsp` over stdio.
 - Shipped as a **per-platform VSIX** (`darwin-arm64`, `darwin-x64`, `linux-x64`,
   `win32-x64`). Each VSIX **bundles** a version-matched `osprey` binary + runtime
@@ -137,7 +137,7 @@ packaging and in how the version-matched binary is sourced (`[EDITOR-VERSIONING]
   time.
 - Client resolves the server command in priority order: user setting
   (`osprey.server.compilerPath`) → bundled binary → `PATH` (per the Shipwright
-  `sources` list in [`shipwright.json`](https://github.com/MelbourneDeveloper/osprey/blob/main/shipwright.json)).
+  `sources` list in [`shipwright.json`](https://github.com/Nimblesite/osprey/blob/main/shipwright.json)).
 - Marketplace publication uses **OIDC** (no PAT) — see `[EDITOR-VERSIONING]` and
   the release plan.
 
@@ -180,7 +180,7 @@ extension and the binary it launches MUST be version-matched.
 
 - The binary is the source of truth: `osprey --version` → `osprey X.Y.Z`;
   `osprey --version --json` → the version manifest (`[SWR-VERSION-CLI-OUTPUT]`).
-- Components are declared in [`shipwright.json`](https://github.com/MelbourneDeveloper/osprey/blob/main/shipwright.json):
+- Components are declared in [`shipwright.json`](https://github.com/Nimblesite/osprey/blob/main/shipwright.json):
   `osprey-compiler` (the CLI — which *is* the language server, via the `lsp`
   subcommand) and `osprey-vscode`. The LSP is **not** a separate component; it is
   the same binary, so no separate version surface exists to drift.

@@ -2,7 +2,7 @@
   "name": "tree-sitter-osprey",
   "version": "0.0.0-dev",
   "description": "Tree-sitter grammar for the Osprey language (single canonical grammar: compiler, LSP, highlighting)",
-  "repository": "https://github.com/MelbourneDeveloper/osprey",
+  "repository": "https://github.com/Nimblesite/osprey",
   "license": "MIT",
   "main": "bindings/node",
   "keywords": [

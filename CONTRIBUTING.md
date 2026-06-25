@@ -30,7 +30,7 @@ The AI can help you:
 
 ```bash
 # Fork and clone
-git clone https://github.com/MelbourneDeveloper/osprey.git
+git clone https://github.com/Nimblesite/osprey.git
 cd osprey
 
 # Build and test (from the repo root)

@@ -4,7 +4,7 @@
     "id": "osprey",
     "displayName": "Osprey",
     "version": "0.0.0-dev",
-    "repository": "https://github.com/MelbourneDeveloper/osprey",
+    "repository": "https://github.com/Nimblesite/osprey",
     "homepage": "https://ospreylang.dev"
   },
   "components": [
@@ -25,7 +25,7 @@
         "scoop": "osprey"
       },
       "githubRelease": {
-        "repo": "MelbourneDeveloper/osprey",
+        "repo": "Nimblesite/osprey",
         "assetPattern": "osprey-${version}-${platform}.tar.gz",
         "checksum": true
       },
