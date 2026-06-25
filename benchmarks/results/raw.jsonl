@@ -1,0 +1,5 @@
+{"case":"tak","lang":"osprey","status":"ok","output":"9","expected":"9","rss":1218461696}
+{"case":"tak","lang":"rust","status":"ok","output":"9","expected":"9","rss":1622016}
+{"case":"tak","lang":"c","status":"ok","output":"9","expected":"9","rss":1458176}
+{"case":"tak","lang":"ocaml","status":"ok","output":"9","expected":"9","rss":2310144}
+{"case":"tak","lang":"haskell","status":"ok","output":"9","expected":"9","rss":11632640}

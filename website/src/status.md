@@ -55,18 +55,18 @@ Current version: **0.2.0** (released). The compiler is written in Rust and emits
 - **`extern fn`** declarations bind C functions with typed signatures
 - **`Ptr`** type carries opaque C handles (no arithmetic or dereference — handles only)
 - **Pointer cells** (`osprey_ffi_cell` / `osprey_ffi_deref` / `osprey_ffi_free`) handle C out-parameters
-- **SQLite** is driven entirely through this FFI — see [`examples/tested/db`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tested/db), including a capability-safe `Database` effect wrapper with bound parameters
+- **SQLite** is driven entirely through this FFI — see [`examples/tested/db`](https://github.com/Nimblesite/osprey/tree/main/compiler/examples/tested/db), including a capability-safe `Database` effect wrapper with bound parameters
 
 ### Terminal UIs
 - A full TUI is built from effects + pure string composition + ANSI codes — no framework required
-- Raw-mode key input, colored output, spinners, and live HTTPS/JSON data — see [`examples/tui`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tui)
+- Raw-mode key input, colored output, spinners, and live HTTPS/JSON data — see [`examples/tui`](https://github.com/Nimblesite/osprey/tree/main/compiler/examples/tui)
 
 ### Persistent Collections
 - **`List<T>`**: 32-way bitmapped vector trie with tail buffer (Bagwell 2000; Hickey, *Clojure*). Append is O(log₃₂ n) amortised; structural sharing keeps old versions valid.
 - **`Map<K, V>`**: 32-way Hash Array Mapped Trie (HAMT) with bitmap-packed children and collision nodes. Lookup, insert and remove are O(log₃₂ n) expected. Keys: `int`, `string`, `bool`.
 - **Builtins**: `listLength`, `listAppend`, `listPrepend`, `listConcat`, `listReverse`, `listContains`, `forEachList`, `mapLength`, `mapContains`, `mapSet`, `mapRemove`, `mapMerge`, `mapKeys`, `mapValues`.
 - **`+` operator**: `List<T> + List<T>` concatenates; `Map<K,V> + Map<K,V>` is a right-biased union.
-- **Test coverage**: 33 C-level assertions (10k-element stress, hash collisions, structural-sharing invariants) plus 12 e2e Osprey programs in [`examples/tested/basics/lists`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tested/basics/lists) with byte-exact output verification.
+- **Test coverage**: 33 C-level assertions (10k-element stress, hash collisions, structural-sharing invariants) plus 12 e2e Osprey programs in [`examples/tested/basics/lists`](https://github.com/Nimblesite/osprey/tree/main/compiler/examples/tested/basics/lists) with byte-exact output verification.
 
 ### Built-in Functions
 - **I/O**: `print()`, `input()`, `toString()`
@@ -98,4 +98,4 @@ Current version: **0.2.0** (released). The compiler is written in Rust and emits
 
 ---
 
-**Note**: Features marked as complete have working examples in the [`examples/tested/`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tested) directory whose output is byte-compared against checked-in expectations on every build.
+**Note**: Features marked as complete have working examples in the [`examples/tested/`](https://github.com/Nimblesite/osprey/tree/main/compiler/examples/tested) directory whose output is byte-compared against checked-in expectations on every build.

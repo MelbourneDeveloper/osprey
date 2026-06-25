@@ -24,7 +24,7 @@ permissions:
 
 env:
   # Stable identity used across formula/manifest/marketplace.
-  PRODUCT_REPO: MelbourneDeveloper/osprey
+  PRODUCT_REPO: Nimblesite/osprey
   HOMEPAGE: https://ospreylang.dev
   DESCRIPTION: "Osprey — a functional language with algebraic effects, fibers, and compile-time safety"
 
@@ -392,7 +392,7 @@ jobs:
   # --------------------------------------------------------------------------
   # Marketplace publish — passwordless via Microsoft Entra ID OIDC. The `release`
   # environment gives the GitHub OIDC subject the stable
-  # repo:MelbourneDeveloper/osprey:environment:release shape that the shared
+  # repo:Nimblesite/osprey:environment:release shape that the shared
   # `Nimblesite-VSCode-Marketplace` app's federated credential trusts; the
   # short-lived Marketplace token is minted from that session and handed to vsce
   # via VSCE_PAT — no PAT is stored. AZURE_CLIENT_ID + AZURE_TENANT_ID are the

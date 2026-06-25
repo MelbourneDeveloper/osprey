@@ -5,7 +5,7 @@
     { "text": "Playground", "url": "/playground/" },
     { "text": "Docs", "url": "/docs/" },
     { "text": "Blog", "url": "/blog/" },
-    { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/osprey", "external": true }
+    { "text": "GitHub", "url": "https://github.com/Nimblesite/osprey", "external": true }
   ],
   "footer": [
     {
@@ -21,8 +21,8 @@
       "title": "Community",
       "items": [
         { "text": "Blog", "url": "/blog/" },
-        { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/osprey" },
-        { "text": "Issues", "url": "https://github.com/MelbourneDeveloper/osprey/issues" }
+        { "text": "GitHub", "url": "https://github.com/Nimblesite/osprey" },
+        { "text": "Issues", "url": "https://github.com/Nimblesite/osprey/issues" }
       ]
     },
     {

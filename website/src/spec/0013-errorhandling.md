@@ -18,7 +18,7 @@ Osprey has no exceptions, panics, or null. Any function that can fail returns a 
 dedicated `i8* errmsg` slot, `Error { message }` binds the real reason, and
 `toString` renders `Error(<reason>)`. Discriminated-union error payloads
 (`Result<T, StringError>`) remain deferred behind
-[`recursive-union-payloads.md`](https://github.com/MelbourneDeveloper/osprey/blob/main/docs/plans/recursive-union-payloads.md).
+[`recursive-union-payloads.md`](https://github.com/Nimblesite/osprey/blob/main/docs/plans/recursive-union-payloads.md).
 
 ## The Result Type
 

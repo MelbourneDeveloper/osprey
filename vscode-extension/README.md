@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/MelbourneDeveloper/osprey/main/website/src/assets/images/logo.png" alt="Osprey logo" width="128" />
+  <img src="https://raw.githubusercontent.com/Nimblesite/osprey/main/website/src/assets/images/logo.png" alt="Osprey logo" width="128" />
 </p>
 
 # Osprey for VS Code
@@ -56,7 +56,7 @@ scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket && scoop 
 ## Links
 
 - Website & docs: <https://ospreylang.dev>
-- Source & issues: <https://github.com/MelbourneDeveloper/osprey>
+- Source & issues: <https://github.com/Nimblesite/osprey>
 
 ## License
 

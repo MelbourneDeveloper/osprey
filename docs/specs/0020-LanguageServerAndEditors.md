@@ -13,7 +13,7 @@ every editor is a thin client over the same LSP transport.
 
 | Surface | State |
 |---|---|
-| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/MelbourneDeveloper/osprey/pull/137)). |
+| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/Nimblesite/osprey/pull/137)). |
 | VS Code extension (`nimblesite.osprey`) | **Shipped** — per-platform VSIX bundling a version-matched compiler. |
 | Open VSX | Planned. |
 | Neovim | Planned. The server is editor-agnostic; only a client recipe is missing. |

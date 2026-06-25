@@ -82,13 +82,13 @@ compiles to a single loop with no intermediate list materialised — the same ze
 
 Every behaviour above is locked in by tests at two levels:
 
-- **C runtime**: 33 vanilla-C unit tests with `assert()` in [`compiler/runtime/list_tests.c`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/runtime/list_tests.c) and [`compiler/runtime/map_tests.c`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/runtime/map_tests.c). These cover empty edges, trie-level transitions at 32 / 33 / 1024 / 1025 elements, a 10 000-element stress, hash collisions, structural-sharing invariants ("mutate one version, the others stay intact"), and equivalence between builder construction and incremental `append`.
+- **C runtime**: 33 vanilla-C unit tests with `assert()` in [`compiler/runtime/list_tests.c`](https://github.com/Nimblesite/osprey/tree/main/compiler/runtime/list_tests.c) and [`compiler/runtime/map_tests.c`](https://github.com/Nimblesite/osprey/tree/main/compiler/runtime/map_tests.c). These cover empty edges, trie-level transitions at 32 / 33 / 1024 / 1025 elements, a 10 000-element stress, hash collisions, structural-sharing invariants ("mutate one version, the others stay intact"), and equivalence between builder construction and incremental `append`.
 
-- **End-to-end Osprey programs**: 12 `.osp` files in [`compiler/examples/tested/basics/lists/`](https://github.com/MelbourneDeveloper/osprey/tree/main/compiler/examples/tested/basics/lists). Each one actually runs through the JIT and its `stdout` is byte-compared against a checked-in `.expectedoutput`. Any regression in length, value, iteration order or persistence breaks the build.
+- **End-to-end Osprey programs**: 12 `.osp` files in [`compiler/examples/tested/basics/lists/`](https://github.com/Nimblesite/osprey/tree/main/compiler/examples/tested/basics/lists). Each one actually runs through the JIT and its `stdout` is byte-compared against a checked-in `.expectedoutput`. Any regression in length, value, iteration order or persistence breaks the build.
 
 ## What's deferred
 
-A few items from the [collections plan](https://github.com/MelbourneDeveloper/osprey/tree/main/docs/plans/collections.md) are explicitly deferred:
+A few items from the [collections plan](https://github.com/Nimblesite/osprey/tree/main/docs/plans/collections.md) are explicitly deferred:
 
 - **`[head, ...tail]` and subset map patterns** in `match` — requires grammar additions and a parser regeneration cycle.
 - **List comprehensions** (`[x * x for x in xs]`) — same grammar pipeline.

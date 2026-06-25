@@ -27,7 +27,7 @@ That's it. The pipeline does the rest:
 2. **Build** the compiler for `darwin-arm64`, `darwin-x64`, `linux-x64`, and
    `win32-x64`, verify `osprey --version` prints `osprey 1.2.3`, and package each
    as `osprey-1.2.3-<platform>.tar.gz` (binary + runtime libs) + `.sha256`.
-3. **GitHub Release** on `MelbourneDeveloper/osprey` with all tarballs.
+3. **GitHub Release** on `Nimblesite/osprey` with all tarballs.
 4. **Homebrew** — writes `Formula/osprey.rb` to
    [`Nimblesite/homebrew-tap`](https://github.com/Nimblesite/homebrew-tap).
 5. **Scoop** — writes `bucket/osprey.json` to
@@ -61,7 +61,7 @@ $ osprey --version --json
 
 ## Required secrets / variables
 
-Configure these on `MelbourneDeveloper/osprey`:
+Configure these on `Nimblesite/osprey`:
 
 | Secret | Used by | Purpose |
 |--------|---------|---------|

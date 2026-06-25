@@ -9,7 +9,7 @@
   performance.<br/>Written in Rust, outputs to LLVM.
 </p>
 
-⭐ **[Star us on GitHub](https://github.com/MelbourneDeveloper/osprey)** to support the project and allow us to submit to Homebrew! ⭐
+⭐ **[Star us on GitHub](https://github.com/Nimblesite/osprey)** to support the project and allow us to submit to Homebrew! ⭐
 
 ## Installation
 
@@ -142,4 +142,4 @@ MIT License - see [LICENSE](LICENSE)
 
 ---
 
-⭐ **[Give us a star on GitHub](https://github.com/MelbourneDeveloper/osprey)** if you like what we're building! ⭐ 
+⭐ **[Give us a star on GitHub](https://github.com/Nimblesite/osprey)** if you like what we're building! ⭐ 
