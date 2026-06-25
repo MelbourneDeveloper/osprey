@@ -170,7 +170,9 @@ fn scan_children(e: &Expr, muts: &mut BTreeSet<String>, captured: &mut BTreeSet<
                 scan_expr(&en.value, muts, captured);
             }
         }
-        Expr::Object(fs) | Expr::TypeConstructor { fields: fs, .. } | Expr::Update { fields: fs, .. } => {
+        Expr::Object(fs)
+        | Expr::TypeConstructor { fields: fs, .. }
+        | Expr::Update { fields: fs, .. } => {
             for f in fs {
                 scan_expr(&f.value, muts, captured);
             }
@@ -180,12 +182,21 @@ fn scan_children(e: &Expr, muts: &mut BTreeSet<String>, captured: &mut BTreeSet<
             scan_expr(right, muts, captured);
         }
         Expr::Unary { operand, .. } => scan_expr(operand, muts, captured),
-        Expr::Call { function, arguments, named_arguments } => {
+        Expr::Call {
+            function,
+            arguments,
+            named_arguments,
+        } => {
             scan_expr(function, muts, captured);
             scan_all(arguments, muts, captured);
             scan_named(named_arguments, muts, captured);
         }
-        Expr::MethodCall { target, arguments, named_arguments, .. } => {
+        Expr::MethodCall {
+            target,
+            arguments,
+            named_arguments,
+            ..
+        } => {
             scan_expr(target, muts, captured);
             scan_all(arguments, muts, captured);
             scan_named(named_arguments, muts, captured);
@@ -203,7 +214,11 @@ fn scan_children(e: &Expr, muts: &mut BTreeSet<String>, captured: &mut BTreeSet<
             scan_expr(channel, muts, captured);
             scan_expr(value, muts, captured);
         }
-        Expr::Perform { arguments, named_arguments, .. } => {
+        Expr::Perform {
+            arguments,
+            named_arguments,
+            ..
+        } => {
             scan_all(arguments, muts, captured);
             scan_named(named_arguments, muts, captured);
         }
@@ -217,7 +232,11 @@ fn scan_all(xs: &[Expr], muts: &mut BTreeSet<String>, captured: &mut BTreeSet<St
     }
 }
 
-fn scan_named(named: &[NamedArgument], muts: &mut BTreeSet<String>, captured: &mut BTreeSet<String>) {
+fn scan_named(
+    named: &[NamedArgument],
+    muts: &mut BTreeSet<String>,
+    captured: &mut BTreeSet<String>,
+) {
     for n in named {
         scan_expr(&n.value, muts, captured);
     }
@@ -225,7 +244,12 @@ fn scan_named(named: &[NamedArgument], muts: &mut BTreeSet<String>, captured: &m
 
 fn scan_stmt(s: &Stmt, muts: &mut BTreeSet<String>, captured: &mut BTreeSet<String>) {
     match s {
-        Stmt::Let { name, value, mutable, .. } => {
+        Stmt::Let {
+            name,
+            value,
+            mutable,
+            ..
+        } => {
             if *mutable {
                 let _ = muts.insert(name.clone());
             }
@@ -265,7 +289,10 @@ pub(crate) fn gen_handler(
         let eff_s = cg.string_constant(effect);
         let op_s = cg.string_constant(&arm.operation);
         let fp = cg.fresh_reg();
-        cg.emit(format!("{fp} = bitcast {} @{fn_name} to i8*", sig.fn_ptr_ty()));
+        cg.emit(format!(
+            "{fp} = bitcast {} @{fn_name} to i8*",
+            sig.fn_ptr_ty()
+        ));
         let r = cg.fresh_reg();
         cg.emit(format!(
             "{r} = call i32 @__osprey_handler_push(i8* {}, i8* {}, i8* {fp}, i8* {env})",
@@ -320,7 +347,10 @@ fn build_env(cg: &mut Codegen, caps: &[ArmCap]) -> (String, String) {
     }
     let env_ty = format!(
         "{{ {} }}",
-        caps.iter().map(ArmCap::slot_ty).collect::<Vec<_>>().join(", ")
+        caps.iter()
+            .map(ArmCap::slot_ty)
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     let cell = cg.malloc_struct(&env_ty);
     for (i, c) in caps.iter().enumerate() {
@@ -399,11 +429,20 @@ fn reload_env(cg: &mut Codegen, caps: &[ArmCap], env_ty: &str) {
         ));
         let loaded = cg.emit_reg(format!("load {slot_ty}, {slot_ty}* {p}"));
         match c {
-            ArmCap::Cell { name, pointee, osp_ty, .. } => {
+            ArmCap::Cell {
+                name,
+                pointee,
+                osp_ty,
+                ..
+            } => {
                 let ptr = cg.emit_reg(format!("bitcast i8* {loaded} to {}*", pointee.as_str()));
                 let _ = cg.cell_slots.insert(
                     name.clone(),
-                    CellSlot { ptr, pointee: *pointee, osp_ty: osp_ty.clone() },
+                    CellSlot {
+                        ptr,
+                        pointee: *pointee,
+                        osp_ty: osp_ty.clone(),
+                    },
                 );
             }
             ArmCap::Val { name, val } => {
@@ -457,7 +496,10 @@ pub(crate) fn gen_perform(
     let r = cg.fresh_reg();
     let mut call_args = vec![format!("i8* {env}")];
     call_args.extend(typed);
-    cg.emit(format!("{r} = call {ret_ty} {fp}({})", call_args.join(", ")));
+    cg.emit(format!(
+        "{r} = call {ret_ty} {fp}({})",
+        call_args.join(", ")
+    ));
     Ok(match sig.ret_result_inner {
         Some(inner) => Value::result(r, inner),
         None => Value::new(r, sig.ret),

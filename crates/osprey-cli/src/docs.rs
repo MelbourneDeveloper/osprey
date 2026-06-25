@@ -10,18 +10,18 @@
 
 use osprey_types::{builtin_doc_view, builtin_names, BuiltinDocView};
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 /// Entry point for the `--docs` mode. Reads `--docs-dir <dir>` from `args`.
 pub fn run(args: &[String]) -> ExitCode {
-    let dir = match docs_dir(args) {
-        Some(dir) => PathBuf::from(dir),
-        None => {
-            eprintln!("usage: osprey --docs --docs-dir <dir>");
-            return ExitCode::from(2);
-        }
+    let dir = if let Some(dir) = docs_dir(args) {
+        PathBuf::from(dir)
+    } else {
+        eprintln!("usage: osprey --docs --docs-dir <dir>");
+        return ExitCode::from(2);
     };
     match generate(&dir) {
         Ok(count) => {
@@ -52,10 +52,9 @@ fn generate(docs_dir: &Path) -> std::io::Result<usize> {
     let slugs = slug_map(&names);
     let views: Vec<BuiltinDocView> = names.iter().filter_map(|n| builtin_doc_view(n)).collect();
     for view in &views {
-        fs::write(
-            functions.join(format!("{}.md", slugs[&view.name])),
-            page(view),
-        )?;
+        if let Some(slug) = slugs.get(&view.name) {
+            fs::write(functions.join(format!("{slug}.md")), page(view))?;
+        }
     }
     fs::write(functions.join("index.md"), index(&views, &slugs))?;
     prune(&functions, &slugs)?;
@@ -76,7 +75,8 @@ fn slug_map(names: &[String]) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for n in names {
         let lower = n.to_lowercase();
-        let mut slug = if counts[&lower] == 1 || *n == lower {
+        let unique = counts.get(&lower).copied().unwrap_or(0) == 1;
+        let mut slug = if unique || *n == lower {
             lower.clone()
         } else {
             format!("{lower}-type")
@@ -117,12 +117,13 @@ fn page(v: &BuiltinDocView) -> String {
         v.name,
         yaml(&v.summary)
     );
-    out.push_str(&format!(
-        "**Signature:** `{}`\n\n**Description:** {}\n\n",
+    let _ = writeln!(
+        out,
+        "**Signature:** `{}`\n\n**Description:** {}\n",
         v.signature, v.summary
-    ));
+    );
     push_parameters(&mut out, v);
-    out.push_str(&format!("**Returns:** {}\n", v.return_type));
+    let _ = writeln!(out, "**Returns:** {}", v.return_type);
     push_example(&mut out, v);
     out
 }
@@ -133,14 +134,14 @@ fn push_parameters(out: &mut String, v: &BuiltinDocView) {
     }
     out.push_str("## Parameters\n\n");
     for p in &v.params {
-        out.push_str(&format!("- **{}** ({}): {}\n", p.name, p.ty, p.description));
+        let _ = writeln!(out, "- **{}** ({}): {}", p.name, p.ty, p.description);
     }
     out.push('\n');
 }
 
 fn push_example(out: &mut String, v: &BuiltinDocView) {
     if !v.example.is_empty() {
-        out.push_str(&format!("\n## Example\n\n```osprey\n{}\n```\n", v.example));
+        let _ = writeln!(out, "\n## Example\n\n```osprey\n{}\n```", v.example);
     }
 }
 
@@ -152,10 +153,12 @@ fn index(views: &[BuiltinDocView], slugs: &HashMap<String, String>) -> String {
          All built-in functions available in Osprey.\n\n",
     );
     for v in views {
-        out.push_str(&format!(
-            "## [{}]({}/)\n\n**Signature:** `{}`\n\n{}\n\n",
-            v.name, slugs[&v.name], v.signature, v.summary
-        ));
+        let slug = slugs.get(&v.name).map_or("", String::as_str);
+        let _ = writeln!(
+            out,
+            "## [{}]({}/)\n\n**Signature:** `{}`\n\n{}\n",
+            v.name, slug, v.signature, v.summary
+        );
     }
     out
 }
@@ -166,6 +169,10 @@ fn yaml(s: &str) -> String {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::indexing_slicing,
+    reason = "test assertions: a missing slug key is a test failure, not a production panic"
+)]
 mod tests {
     use super::*;
 
@@ -211,5 +218,92 @@ mod tests {
         assert_eq!(slugs["sleep"], "sleep");
         let distinct: HashSet<&String> = slugs.values().collect();
         assert_eq!(distinct.len(), slugs.len(), "slugs must be unique");
+    }
+
+    #[test]
+    fn slug_map_falls_back_to_a_numeric_suffix_when_the_type_slug_also_collides() {
+        // Three names collapsing to one lowercase stem force the dedupe loop past
+        // the bare stem and the `-type` form into the numeric fallback.
+        let names = vec!["foo".to_string(), "Foo".to_string(), "FOO".to_string()];
+        let slugs = slug_map(&names);
+        let distinct: HashSet<&String> = slugs.values().collect();
+        assert_eq!(
+            distinct.len(),
+            3,
+            "each colliding name gets a distinct slug"
+        );
+        assert!(
+            slugs.values().any(|s| s == "foo-2"),
+            "numeric fallback used: {slugs:?}"
+        );
+    }
+
+    // A fresh, empty temp directory unique to `tag` (any prior run is cleared).
+    fn fresh_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("osprey_docs_test_{tag}"));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn generate_writes_a_page_per_builtin_plus_an_index() {
+        let dir = fresh_dir("generate");
+        let count = generate(&dir).expect("generation succeeds");
+        let functions = dir.join("functions");
+        assert!(count > 0, "wrote at least one page");
+        assert!(
+            functions.join("sleep.md").exists(),
+            "a known builtin page written"
+        );
+        let index = fs::read_to_string(functions.join("index.md")).expect("index readable");
+        assert!(
+            index.contains("Built-in Functions"),
+            "index carries its heading"
+        );
+        assert!(
+            index.contains("sleep"),
+            "index lists each builtin: {index:.80}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_deletes_stale_pages_but_keeps_live_ones_and_the_index() {
+        let dir = fresh_dir("prune");
+        let functions = dir.join("functions");
+        fs::create_dir_all(&functions).expect("mkdir functions");
+        for (name, body) in [
+            ("sleep.md", "live"),
+            ("ghost.md", "stale"),
+            ("index.md", "idx"),
+        ] {
+            fs::write(functions.join(name), body).expect("seed file");
+        }
+        let mut slugs = HashMap::new();
+        let _ = slugs.insert("sleep".to_string(), "sleep".to_string());
+        prune(&functions, &slugs).expect("prune succeeds");
+        assert!(functions.join("sleep.md").exists(), "live page kept");
+        assert!(functions.join("index.md").exists(), "index is never pruned");
+        assert!(!functions.join("ghost.md").exists(), "stale page removed");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_generates_into_a_dir_and_takes_the_usage_branch_without_a_flag() {
+        let dir = fresh_dir("run");
+        let ok = run(&[
+            "--docs".to_string(),
+            "--docs-dir".to_string(),
+            dir.to_string_lossy().into_owned(),
+        ]);
+        assert!(
+            dir.join("functions/index.md").exists(),
+            "run --docs-dir generated docs"
+        );
+        // No `--docs-dir` takes the usage/error return; `ExitCode` exposes no
+        // accessor, so binding both invocations proves neither path panics.
+        let missing = run(&["--docs".to_string()]);
+        let _ = (ok, missing);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

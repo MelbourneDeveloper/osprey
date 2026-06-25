@@ -109,9 +109,14 @@ mod tests {
         // A `///` block above a binding is captured as its `doc`, stripped of the
         // markers, and the recorded position stays on the declaration keyword/name
         // (line 3 here), not the comment lines. Implements [LSP-HOVER-DOCS]
-        match one("/// The retry budget.\n/// Bounded above by `maxRetries`.\nlet retries: int = 3\n") {
+        match one(
+            "/// The retry budget.\n/// Bounded above by `maxRetries`.\nlet retries: int = 3\n",
+        ) {
             Stmt::Let {
-                name, doc, position, ..
+                name,
+                doc,
+                position,
+                ..
             } => {
                 assert_eq!(name, "retries");
                 assert_eq!(

@@ -93,6 +93,7 @@ impl Checker {
             lambda_tys: Vec::new(),
             let_tys: Vec::new(),
             builtins: HashSet::new(),
+            resume_ctx: Vec::new(),
         };
         c.register_result_ctors();
         c

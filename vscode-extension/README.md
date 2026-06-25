@@ -47,11 +47,11 @@ scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket && scoop 
 
 ## Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `osprey.server.enabled` | `true` | Enable/disable the language server. |
-| `osprey.diagnostics.enabled` | `true` | Enable/disable inline diagnostics. |
-| `osprey.server.compilerPath` | `""` | Path to an Osprey compiler. **Leave empty** to use the version-matched compiler bundled with this extension (falling back to `osprey` on `PATH`). |
+| Setting                      | Default | Description                                                                                                                                       |
+| ---------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `osprey.server.enabled`      | `true`  | Enable/disable the language server.                                                                                                               |
+| `osprey.diagnostics.enabled` | `true`  | Enable/disable inline diagnostics.                                                                                                                |
+| `osprey.server.compilerPath` | `""`    | Path to an Osprey compiler. **Leave empty** to use the version-matched compiler bundled with this extension (falling back to `osprey` on `PATH`). |
 
 ## Links
 

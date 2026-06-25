@@ -541,11 +541,14 @@ mod tests {
         assert_eq!(seed.ty, "");
     }
 
-    #[test]
-    fn collect_all_symbols_descends_into_every_expression_form() {
-        // A `let` is buried inside each container expression variant; the deep
-        // collector must surface every one — this exercises all walker arms.
-        // Implements [LSP-HOVER-VARIABLES]
+    /// One of every container `Expr` variant, each holding a block whose single
+    /// `let` is named for the slot it sits in — the fixture for the deep-walker
+    /// test below. Implements [LSP-HOVER-VARIABLES]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "exhaustive fixture: one arm per AST container variant is the point"
+    )]
+    fn every_container_with_a_nested_let() -> Vec<osprey_ast::Expr> {
         use osprey_ast::{Expr, FieldAssignment, HandlerArm, MapEntry, NamedArgument, Pattern};
         let blk = |name: &str| Expr::Block {
             statements: vec![Stmt::Let {
@@ -559,7 +562,7 @@ mod tests {
             value: None,
         };
         let b = |name: &str| Box::new(blk(name));
-        let named = |name: &str| NamedArgument {
+        let narg = |name: &str| NamedArgument {
             name: "n".into(),
             value: blk(name),
         };
@@ -571,7 +574,7 @@ mod tests {
             pattern: Pattern::Wildcard,
             body: blk(name),
         };
-        let containers = vec![
+        vec![
             Expr::List(vec![blk("list")]),
             Expr::Map(vec![MapEntry {
                 key: blk("mapk"),
@@ -595,13 +598,13 @@ mod tests {
             Expr::Call {
                 function: b("callfn"),
                 arguments: vec![blk("callarg")],
-                named_arguments: vec![named("callnamed")],
+                named_arguments: vec![narg("callnamed")],
             },
             Expr::MethodCall {
                 target: b("mtarget"),
                 method: "m".into(),
                 arguments: vec![blk("marg")],
-                named_arguments: vec![named("mnamed")],
+                named_arguments: vec![narg("mnamed")],
             },
             Expr::FieldAccess {
                 target: b("fatarget"),
@@ -645,7 +648,7 @@ mod tests {
                 effect: "E".into(),
                 operation: "op".into(),
                 arguments: vec![blk("perform")],
-                named_arguments: vec![named("performnamed")],
+                named_arguments: vec![narg("performnamed")],
             },
             Expr::Handler {
                 effect: "E".into(),
@@ -656,22 +659,62 @@ mod tests {
                 }],
                 body: b("handlerbody"),
             },
-        ];
+        ]
+    }
+
+    #[test]
+    fn collect_all_symbols_descends_into_every_expression_form() {
+        // A `let` is buried inside each container expression variant; the deep
+        // collector must surface every one — this exercises all walker arms.
+        // Implements [LSP-HOVER-VARIABLES]
         let program = Program {
-            statements: containers.into_iter().map(Stmt::Expr).collect(),
+            statements: every_container_with_a_nested_let()
+                .into_iter()
+                .map(Stmt::Expr)
+                .collect(),
         };
-        let names: Vec<String> = collect_all_symbols(&program)
+        let found: Vec<String> = collect_all_symbols(&program)
             .into_iter()
             .map(|s| s.name)
             .collect();
         for expected in [
-            "list", "mapk", "mapv", "obj", "binl", "binr", "pipel", "piper", "unary", "interp",
-            "callfn", "callarg", "callnamed", "mtarget", "marg", "mnamed", "fatarget", "idxt",
-            "idxi", "lambda", "matchval", "matcharm", "tc", "update", "spawn", "await", "recv",
-            "yield", "sendc", "sendv", "select", "perform", "performnamed", "handlerarm",
+            "list",
+            "mapk",
+            "mapv",
+            "obj",
+            "binl",
+            "binr",
+            "pipel",
+            "piper",
+            "unary",
+            "interp",
+            "callfn",
+            "callarg",
+            "callnamed",
+            "mtarget",
+            "marg",
+            "mnamed",
+            "fatarget",
+            "idxt",
+            "idxi",
+            "lambda",
+            "matchval",
+            "matcharm",
+            "tc",
+            "update",
+            "spawn",
+            "await",
+            "recv",
+            "yield",
+            "sendc",
+            "sendv",
+            "select",
+            "perform",
+            "performnamed",
+            "handlerarm",
             "handlerbody",
         ] {
-            assert!(names.iter().any(|n| n == expected), "missing `{expected}`");
+            assert!(found.iter().any(|n| n == expected), "missing `{expected}`");
         }
     }
 

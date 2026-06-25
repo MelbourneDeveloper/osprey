@@ -167,9 +167,12 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
         // A `mut` an effect handler captures is promoted to a shared heap cell so
         // the handler owns it; its declaration allocates the cell and a
         // reassignment stores through it (reads `load` it, see `gen_expr`).
-        Stmt::Let { name, value, mutable: true, .. } if cg.cell_vars.contains(name) => {
-            gen_cell_define(cg, name, value)
-        }
+        Stmt::Let {
+            name,
+            value,
+            mutable: true,
+            ..
+        } if cg.cell_vars.contains(name) => gen_cell_define(cg, name, value),
         Stmt::Assignment { name, value, .. } if cg.cell_slots.contains_key(name) => {
             gen_cell_store(cg, name, value)
         }
@@ -201,7 +204,11 @@ fn gen_cell_define(cg: &mut Codegen, name: &str, value: &Expr) -> Result<()> {
     cg.emit(format!("store {ty} {}, {ty}* {ptr}", v.operand));
     let _ = cg.cell_slots.insert(
         name.to_string(),
-        crate::builder::CellSlot { ptr, pointee, osp_ty: v.osp_ty },
+        crate::builder::CellSlot {
+            ptr,
+            pointee,
+            osp_ty: v.osp_ty,
+        },
     );
     Ok(())
 }
@@ -210,7 +217,9 @@ fn gen_cell_define(cg: &mut Codegen, name: &str, value: &Expr) -> Result<()> {
 /// and `store` into the shared slot.
 fn gen_cell_store(cg: &mut Codegen, name: &str, value: &Expr) -> Result<()> {
     let Some(slot) = cg.cell_slots.get(name).cloned() else {
-        return Err(CodegenError::unsupported("reassignment of an unpromoted cell"));
+        return Err(CodegenError::unsupported(
+            "reassignment of an unpromoted cell",
+        ));
     };
     let raw = gen_expr(cg, value)?;
     let v = crate::result::unwrap(cg, raw);

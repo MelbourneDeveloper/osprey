@@ -122,7 +122,27 @@ impl Checker {
                 arguments,
                 named_arguments,
             } => self.infer_perform(effect, operation, arguments, named_arguments, env),
-            Expr::Handler { arms, body, .. } => self.infer_handler(arms, body, env),
+            Expr::Handler { effect, arms, body } => self.infer_handler(effect, arms, body, env),
+            Expr::Resume(value) => self.infer_resume(value.as_deref(), env),
+        }
+    }
+
+    /// Infer `resume(v)`: its argument is delivered as the operation's result, so
+    /// it lands in the op-result slot at an assignment site — a bare
+    /// `Result<T, E>` (e.g. from arithmetic) auto-unwraps into a concrete `T`,
+    /// exactly as function returns and `let`/`mut` assignments do. The expression
+    /// itself evaluates to the handler's answer type. A `resume` outside any
+    /// handler arm is a hard error. Implements [EFFECTS-RESUME].
+    fn infer_resume(&mut self, value: Option<&Expr>, env: &TypeEnv) -> Type {
+        let arg = value.map_or_else(Type::unit, |v| self.infer_expr(v, env));
+        if let Some((op_ret, answer)) = self.resume_ctx.last().cloned() {
+            self.push_assign(&op_ret, &arg);
+            answer
+        } else {
+            self.errors.push(TypeError::new(
+                "`resume` is only valid inside a handler arm".to_string(),
+            ));
+            self.ctx.fresh()
         }
     }
 
@@ -182,22 +202,50 @@ impl Checker {
         ret.unwrap_or_else(|| self.ctx.fresh())
     }
 
-    /// Infer a `handle`: type each arm body in a child scope, then the handled body.
+    /// Infer a `handle`: type each arm body in a child scope whose params are the
+    /// effect operation's parameter types (not fresh vars), with the arm's
+    /// `(op result, answer)` pushed so any `resume` inside types correctly. The
+    /// handled body, the arms, and the whole expression all share one answer type.
+    /// The handled body lands in the answer slot at an assignment site, so a bare
+    /// `Result<T, E>` body (e.g. ending in arithmetic) auto-unwraps into a concrete
+    /// answer just as function returns do. Implements [EFFECTS-RESUME].
     fn infer_handler(
         &mut self,
+        effect: &str,
         arms: &[osprey_ast::HandlerArm],
         body: &Expr,
         env: &TypeEnv,
     ) -> Type {
+        let answer = self.ctx.fresh();
         for arm in arms {
+            let (params, op_ret) = self.op_param_ret(effect, &arm.operation, arm.params.len());
             let mut local = env.child();
-            for p in &arm.params {
-                let fv = self.ctx.fresh();
-                local.insert(p.clone(), crate::ty::Scheme::mono(fv));
+            for (p, pty) in arm.params.iter().zip(params) {
+                local.insert(p.clone(), crate::ty::Scheme::mono(pty));
             }
+            // Arm bodies stay independently typed (a tail-resume `get` arm yields
+            // the op result, a `set` arm yields Unit — they must not unify with
+            // each other); only `resume` threads the shared answer type, via the
+            // pushed context.
+            self.resume_ctx.push((op_ret, answer.clone()));
             let _ = self.infer_expr(&arm.body, &local);
+            let _ = self.resume_ctx.pop();
         }
-        self.infer_expr(body, env)
+        let body_ty = self.infer_expr(body, env);
+        self.push_assign(&answer, &body_ty);
+        answer
+    }
+
+    /// The `(param types, result type)` of `effect.operation`, falling back to
+    /// fresh variables when the operation is unknown or arity disagrees.
+    fn op_param_ret(&mut self, effect: &str, operation: &str, arity: usize) -> (Vec<Type>, Type) {
+        match self.effects.get(effect).and_then(|ops| ops.get(operation)) {
+            Some(op) if op.params.len() == arity => (op.params.clone(), op.ret.clone()),
+            _ => (
+                (0..arity).map(|_| self.ctx.fresh()).collect(),
+                self.ctx.fresh(),
+            ),
+        }
     }
 
     fn lookup_ident(&mut self, name: &str, env: &TypeEnv) -> Type {
@@ -669,6 +717,21 @@ mod tests {
             fn run() -> int = handle Logger\n\
               log msg => 0\n\
             in 42\n");
+        // `resume(v + 1000)` feeds arithmetic — a `Result<int, MathError>` —
+        // into the `int` operation-result slot, and the handled body ends in
+        // `a + 1`, another `Result`, flowing into the `int` answer pinned by the
+        // `false => 0` arm. Both are assignment sites that auto-unwrap; a plain
+        // unify would wrongly reject them. Guards the [EFFECTS-RESUME] fix.
+        ok("effect Guard { check: fn(int) -> int }\n\
+            fn guarded() -> int = handle Guard\n\
+              check v => match v < 100 {\n\
+                true => resume(v + 1000)\n\
+                false => 0\n\
+              }\n\
+            in {\n\
+              let a = perform Guard.check(5)\n\
+              a + 1\n\
+            }\n");
     }
 
     #[test]

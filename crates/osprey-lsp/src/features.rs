@@ -9,7 +9,9 @@ use lspkit_vfs::PositionEncoding;
 
 use osprey_ast::Program;
 
-use crate::analysis::{builtin_hover, collect_all_symbols, collect_symbols, SymbolInfo, SymbolKind};
+use crate::analysis::{
+    builtin_hover, collect_all_symbols, collect_symbols, SymbolInfo, SymbolKind,
+};
 use crate::model::{CompletionItem, CompletionKind, Location, SignatureInfo, Span};
 use crate::text::{occurrences, prefix_to, word_at, Occurrence};
 
