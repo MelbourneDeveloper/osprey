@@ -4,7 +4,7 @@ title: "httpPost (Function)"
 description: "Makes an HTTP POST request with a request body."
 ---
 
-**Signature:** `httpPost(clientID: int, path: string, body: string, headers: string) -> int`
+**Signature:** `httpPost(clientID: int, path: string, body: string, headers: string) -> Result<string, Error>`
 
 **Description:** Makes an HTTP POST request with a request body.
 
@@ -15,7 +15,7 @@ description: "Makes an HTTP POST request with a request body."
 - **body** (string): Request body data
 - **headers** (string): Additional headers
 
-**Returns:** int
+**Returns:** Result<string, Error>
 
 ## Example
 

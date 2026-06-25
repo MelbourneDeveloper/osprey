@@ -4,7 +4,7 @@ title: "parseInt (Function)"
 description: "Strict base-10 signed-int parser. No whitespace tolerance."
 ---
 
-**Signature:** `parseInt(s: string) -> Result<int, StringError>`
+**Signature:** `parseInt(s: string) -> Result<int, Error>`
 
 **Description:** Strict base-10 signed-int parser. No whitespace tolerance.
 
@@ -12,7 +12,7 @@ description: "Strict base-10 signed-int parser. No whitespace tolerance."
 
 - **s** (string): The string to parse
 
-**Returns:** Result<int, StringError>
+**Returns:** Result<int, Error>
 
 ## Example
 

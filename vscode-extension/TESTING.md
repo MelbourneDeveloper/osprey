@@ -33,6 +33,7 @@ test/
 ## Test Categories
 
 ### Integration Tests
+
 - Tests that require VS Code API and extension functionality
 - Located in `test/suite/extension.test.ts`
 - Test extension activation, commands, language features, etc.
@@ -43,6 +44,7 @@ test/
 ## Running Tests
 
 ### Method 1: VS Code Test CLI (Recommended)
+
 ```bash
 # Install dependencies first
 npm install
@@ -58,6 +60,7 @@ npm test
 ```
 
 ### Method 2: Test Launcher Script
+
 ```bash
 # Show all available commands
 npm run test:launcher help
@@ -73,6 +76,7 @@ npm run test:launcher clean
 ```
 
 ### Method 3: VS Code Debugger
+
 1. Open the extension in VS Code
 2. Go to Run and Debug (Ctrl+Shift+D)
 3. Select "Extension Tests" configuration
@@ -81,38 +85,39 @@ npm run test:launcher clean
 ## Test Configuration
 
 ### VS Code Test CLI Configuration (.vscode-test.js)
+
 ```javascript
-const { defineConfig } = require('@vscode/test-cli');
+const { defineConfig } = require("@vscode/test-cli");
 
 module.exports = defineConfig({
-  files: 'out/test/suite/**/*.test.js',
-  version: 'stable',
+  files: "out/test/suite/**/*.test.js",
+  version: "stable",
   mocha: {
-    ui: 'tdd',
+    ui: "tdd",
     timeout: 10000,
-    color: true
+    color: true,
   },
-  launchArgs: [
-    '--disable-extensions',
-    '--disable-workspace-trust'
-  ]
+  launchArgs: ["--disable-extensions", "--disable-workspace-trust"],
 });
 ```
 
 ### Debug Configuration (.vscode/launch.json)
+
 Two configurations are available:
+
 - **Run Extension**: Launch extension for manual testing
 - **Extension Tests**: Run tests with debugging support
 
 ## Writing Tests
 
 ### Basic Test Structure
-```typescript
-import * as assert from 'assert';
-import * as vscode from 'vscode';
 
-suite('My Test Suite', () => {
-  test('My test', async () => {
+```typescript
+import * as assert from "assert";
+import * as vscode from "vscode";
+
+suite("My Test Suite", () => {
+  test("My test", async () => {
     // Test code here
     assert.strictEqual(1 + 1, 2);
   });
@@ -120,37 +125,43 @@ suite('My Test Suite', () => {
 ```
 
 ### Testing Extension Functionality
+
 ```typescript
-test('Extension should activate', async () => {
-  const extension = vscode.extensions.getExtension('christianfindlay.osprey-language-support');
+test("Extension should activate", async () => {
+  const extension = vscode.extensions.getExtension(
+    "christianfindlay.osprey-language-support",
+  );
   assert.ok(extension);
   assert.ok(extension.isActive);
 });
 ```
 
 ### Testing with Files
+
 ```typescript
-test('Language detection', async () => {
-  const tempFile = path.join(os.tmpdir(), 'test.osp');
-  fs.writeFileSync(tempFile, 'fn test() = 42');
-  
+test("Language detection", async () => {
+  const tempFile = path.join(os.tmpdir(), "test.osp");
+  fs.writeFileSync(tempFile, "fn test() = 42");
+
   const document = await vscode.workspace.openTextDocument(tempFile);
-  assert.strictEqual(document.languageId, 'osprey');
-  
+  assert.strictEqual(document.languageId, "osprey");
+
   // Cleanup
   fs.unlinkSync(tempFile);
 });
 ```
 
 ### Testing Language Features (Expected Failures)
+
 Some language feature tests are expected to fail until LSP integration issues are resolved:
+
 ```typescript
-test('Go to Definition - Function (Expected to fail until LSP fixed)', async () => {
+test("Go to Definition - Function (Expected to fail until LSP fixed)", async () => {
   // Test implementation with try/catch to handle expected failures
   try {
     // Test go to definition functionality
   } catch (error) {
-    console.log('Go to Definition failed as expected:', error);
+    console.log("Go to Definition failed as expected:", error);
   }
 });
 ```
@@ -158,6 +169,7 @@ test('Go to Definition - Function (Expected to fail until LSP fixed)', async () 
 ## Test Status
 
 ### ✅ Working Tests
+
 - Extension activation
 - Language detection for `.osp` files
 - Command availability
@@ -168,6 +180,7 @@ test('Go to Definition - Function (Expected to fail until LSP fixed)', async () 
 - Basic diagnostics
 
 ### ⚠️ Expected Failures (LSP Issues)
+
 - Go to Definition
 - Find All References
 - Advanced hover information
@@ -177,16 +190,20 @@ test('Go to Definition - Function (Expected to fail until LSP fixed)', async () 
 ## Common Issues
 
 ### "Cannot find module 'vscode'" Error
+
 This means tests are running in regular Node.js instead of VS Code Extension Host.
+
 - ✅ **Fixed**: Use `vscode-test` CLI or proper test runner
 - ❌ **Wrong**: Running tests with regular `mocha` command
 
 ### Tests Timing Out
+
 - Increase timeout in `.vscode-test.js` or test files
 - Use `await` for async operations
 - Add delays for VS Code operations: `await new Promise(resolve => setTimeout(resolve, 1000))`
 
 ### Extension Not Activating
+
 - Check that test files have `.osp` extension
 - Ensure extension is properly configured in `package.json`
 - Use `--disable-extensions` flag to avoid conflicts
@@ -194,6 +211,7 @@ This means tests are running in regular Node.js instead of VS Code Extension Hos
 ## Test Output
 
 Successful test run should show:
+
 ```
 ✔ Validated version: 1.100.2
 ✔ Found existing install in .vscode-test/vscode-darwin-arm64-1.100.2
@@ -208,6 +226,7 @@ Language Feature Tests: 3 passing, 3 expected failures
 ## Continuous Integration
 
 For CI/CD pipelines, use:
+
 ```bash
 # Install dependencies
 npm ci
@@ -222,4 +241,4 @@ The VS Code Test CLI automatically handles downloading and running VS Code in CI
 
 - [VS Code Extension Testing Guide](https://code.visualstudio.com/api/working-with-extensions/testing-extension)
 - [@vscode/test-cli Documentation](https://www.npmjs.com/package/@vscode/test-cli)
-- [@vscode/test-electron Documentation](https://www.npmjs.com/package/@vscode/test-electron) 
+- [@vscode/test-electron Documentation](https://www.npmjs.com/package/@vscode/test-electron)

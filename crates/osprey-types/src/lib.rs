@@ -11,6 +11,9 @@
 //! Public surface: [`check_program`] takes a parsed [`osprey_ast::Program`] and
 //! returns the list of [`TypeError`]s (empty ⇒ well-typed).
 
+mod builtin_docs;
+mod builtin_docs_lang;
+mod builtin_docs_sys;
 mod builtins;
 mod check;
 mod convert;
@@ -23,6 +26,9 @@ mod pattern;
 mod ty;
 mod unify;
 
+pub use builtin_docs::{
+    builtin_doc_view, builtin_hover_markdown, builtin_names, BuiltinDocView, BuiltinParam,
+};
 pub use builtins::builtin_signature;
 pub use check::{check_program, infer_program};
 pub use error::TypeError;

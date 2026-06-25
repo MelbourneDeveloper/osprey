@@ -4,14 +4,14 @@ title: "listContains (Function)"
 description: "True iff some element equals value. O(n)."
 ---
 
-**Signature:** `listContains(list: List<T>, value: T) -> bool`
+**Signature:** `listContains(list: List<t0>, value: t0) -> bool`
 
 **Description:** True iff some element equals value. O(n).
 
 ## Parameters
 
-- **list** (List): The list
-- **value** (any): Value to find
+- **list** (List<t0>): The list
+- **value** (t0): Value to find
 
 **Returns:** bool
 

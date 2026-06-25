@@ -79,6 +79,23 @@ pub struct Codegen {
     /// that real callee, so `f(x)` in the body becomes `toString(x)`. This keeps
     /// a builtin or another generic function callable through the parameter.
     pub(crate) call_aliases: HashMap<String, String>,
+    /// Names of mutable locals in the current function that an effect handler
+    /// arm captures, so they must be promoted to shared heap cells (a plain
+    /// `mut` becomes a reference cell the handler owns). Computed per function.
+    pub(crate) cell_vars: HashSet<String>,
+    /// Live cell-backed bindings (name → its heap slot): a read loads, a
+    /// reassignment stores, and an effect handler captures the cell pointer so
+    /// `get`/`set` arms share one mutable location — handler-owned state.
+    pub(crate) cell_slots: HashMap<String, CellSlot>,
+}
+
+/// A mutable variable promoted to a heap cell so an effect handler can own it.
+/// `ptr` is a `{pointee}*` operand; reads `load` it, writes `store` to it.
+#[derive(Clone)]
+pub(crate) struct CellSlot {
+    pub ptr: String,
+    pub pointee: LType,
+    pub osp_ty: Option<String>,
 }
 
 /// A function value's lowered signature: parameter [`LType`]s, the return
@@ -95,6 +112,10 @@ pub(crate) struct SavedFn {
     /// Stream-fusion stages are per-function: a stage recorded inside a nested
     /// function body must never replay in the suspended function's next loop.
     pending_iter_ops: Vec<crate::iter::IterOp>,
+    /// Cell-promotion state is per-function: a handler arm (a nested function)
+    /// gets its own captured cells, never the suspended outer function's.
+    cell_vars: HashSet<String>,
+    cell_slots: HashMap<String, CellSlot>,
 }
 
 impl Codegen {
@@ -130,6 +151,8 @@ impl Codegen {
             fn_ptr_locals: HashMap::new(),
             fn_value_types: HashMap::new(),
             call_aliases: HashMap::new(),
+            cell_vars: HashSet::new(),
+            cell_slots: HashMap::new(),
         }
     }
 
@@ -321,6 +344,8 @@ impl Codegen {
             labels: self.label_count,
             scopes: std::mem::take(&mut self.scopes),
             pending_iter_ops: std::mem::take(&mut self.pending_iter_ops),
+            cell_vars: std::mem::take(&mut self.cell_vars),
+            cell_slots: std::mem::take(&mut self.cell_slots),
         };
         self.reg_count = 0;
         self.label_count = 0;
@@ -344,6 +369,8 @@ impl Codegen {
         self.label_count = saved.labels;
         self.scopes = saved.scopes;
         self.pending_iter_ops = saved.pending_iter_ops;
+        self.cell_vars = saved.cell_vars;
+        self.cell_slots = saved.cell_slots;
     }
 
     /// Register an `effect` operation's parsed signature for `handle`/`perform`.
@@ -583,6 +610,16 @@ impl Codegen {
         self.scopes.iter().rev().find_map(|s| s.get(name).cloned())
     }
 
+    /// Read a cell-backed variable: `load` its current value from the heap slot.
+    /// `None` when `name` is not promoted to a cell (the caller falls back to a
+    /// normal scope lookup).
+    pub(crate) fn cell_read(&mut self, name: &str) -> Option<Value> {
+        let slot = self.cell_slots.get(name).cloned()?;
+        let ty = slot.pointee.as_str();
+        let r = self.emit_reg(format!("load {ty}, {ty}* {}", slot.ptr));
+        Some(Value::new(r, slot.pointee).with_owner(slot.osp_ty))
+    }
+
     // ---- function framing ----
 
     /// Reset per-function state and open a fresh `entry` block + scope.
@@ -596,6 +633,10 @@ impl Codegen {
         // The beta-reduction cache is per-function too: a stale entry from an
         // earlier function must not hijack a same-named local here.
         self.lambdas.clear();
+        // Cell-promotion is per-function; `lower` repopulates `cell_vars` from
+        // this function's body before lowering it.
+        self.cell_vars.clear();
+        self.cell_slots.clear();
         self.push_scope();
         self.cur_lines.push("entry:".to_string());
     }

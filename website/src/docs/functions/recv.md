@@ -4,15 +4,15 @@ title: "recv (Function)"
 description: "Receives a value from a channel."
 ---
 
-**Signature:** `recv(channel: Channel) -> any`
+**Signature:** `recv(channel: Channel<t0>) -> t0`
 
 **Description:** Receives a value from a channel.
 
 ## Parameters
 
-- **channel** (Channel): The channel to receive from
+- **channel** (Channel<t0>): The channel to receive from
 
-**Returns:** any
+**Returns:** t0
 
 ## Example
 

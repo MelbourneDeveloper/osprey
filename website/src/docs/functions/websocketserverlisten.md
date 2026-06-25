@@ -1,10 +1,10 @@
 ---
 layout: page
 title: "websocketServerListen (Function)"
-description: "Starts the WebSocket server listening for connections."
+description: "Starts the WebSocket server listening for connections. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*"
 ---
 
-**Signature:** `websocketServerListen(serverID: Int) -> Result<Success, String>`
+**Signature:** `websocketServerListen(serverID: int) -> int`
 
 **Description:** Starts the WebSocket server listening for connections. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
@@ -12,7 +12,7 @@ description: "Starts the WebSocket server listening for connections."
 
 - **serverID** (int): Server identifier from websocketCreateServer
 
-**Returns:** Result<Success, String>
+**Returns:** int
 
 ## Example
 

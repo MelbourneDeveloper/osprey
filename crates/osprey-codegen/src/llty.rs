@@ -94,6 +94,11 @@ pub struct Value {
     /// carries `[]i64` so the unwrapped element is itself indexable. `None` for
     /// scalar payloads.
     pub payload_owner: Option<String>,
+    /// For a `Fiber<T>` handle: the element type `T` the fiber's result was
+    /// boxed from, so `await` can unbox the uniform `i64` result back to `T`
+    /// (a string fiber result is a pointer, not an integer). `None` for
+    /// non-fiber values (then `await` keeps the legacy `i64` result).
+    pub fiber_elem: Option<LType>,
 }
 
 impl Value {
@@ -105,6 +110,7 @@ impl Value {
             osp_ty: None,
             result_inner: None,
             payload_owner: None,
+            fiber_elem: None,
         }
     }
 
@@ -116,6 +122,7 @@ impl Value {
             osp_ty: Some(owner.into()),
             result_inner: None,
             payload_owner: None,
+            fiber_elem: None,
         }
     }
 
@@ -128,7 +135,16 @@ impl Value {
             osp_ty: Some("Result".to_string()),
             result_inner: Some(inner),
             payload_owner: None,
+            fiber_elem: None,
         }
+    }
+
+    /// Tag this fiber handle with its element type so `await` can unbox the
+    /// boxed `i64` result back to it.
+    #[must_use]
+    pub fn with_fiber_elem(mut self, elem: LType) -> Value {
+        self.fiber_elem = Some(elem);
+        self
     }
 
     /// This value re-tagged with an Osprey owner type name.

@@ -1,7 +1,7 @@
 ---
 layout: page
 title: "lines (Function)"
-description: "Splits on '\n'. A trailing newline does not produce an empty entry."
+description: "Splits on '\\n'. A trailing newline does not produce an empty entry."
 ---
 
 **Signature:** `lines(s: string) -> List<string>`

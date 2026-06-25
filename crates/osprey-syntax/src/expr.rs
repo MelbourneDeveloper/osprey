@@ -62,6 +62,9 @@ impl Lowerer<'_> {
                     named_arguments,
                 }
             }
+            "resume_expression" => {
+                Expr::Resume(self.first_named(node).map(|n| Box::new(self.lower_expr(n))))
+            }
             "spawn_expression" => Expr::Spawn(Box::new(self.lower_inner_expr(node))),
             "yield_expression" => {
                 Expr::Yield(self.first_named(node).map(|n| Box::new(self.lower_expr(n))))
@@ -142,6 +145,7 @@ impl Lowerer<'_> {
                         target: Box::new(condition.clone()),
                         field: f,
                     },
+                    doc: None,
                     position: None,
                 })
                 .collect();

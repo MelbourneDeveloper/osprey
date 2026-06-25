@@ -55,6 +55,19 @@ Crates consumed (all from crates.io, pinned via the workspace):
 | `lspkit-vfs` | Open-document store, rope incremental edits, `PositionEncoding` negotiation. |
 | `lspkit-live` | `Session` generation counter + broadcast. |
 
+### Reuse lspkit maximally `[LSP-REUSE-LSPKIT]`
+
+Anything editor-neutral is taken from `lspkit-*`, never re-implemented in
+`osprey-lsp`. When a needed primitive is **language-agnostic but missing**
+upstream, the rule is: use a thin local shim **and file an issue** so the shim
+can be deleted once `lspkit` ships it — the local copy is a temporary bridge,
+not a fork. The current example is word-at-position / occurrence / position
+re-measurement (used by hover, references, signature help): these are pure text
+primitives with no Osprey specifics, so they belong in `lspkit-vfs`. Tracked as
+[`lspkit#2`](https://github.com/Nimblesite/lspkit/issues/2); the shim lives in
+[`crates/osprey-lsp/src/text.rs`](../../crates/osprey-lsp/src/text.rs) and is
+marked for removal on resolution.
+
 ## Transport `[LSP-TRANSPORT]`
 
 There is **one** server entry point for every editor:
@@ -90,7 +103,7 @@ The server advertises and implements:
 | Capability | Method | Notes |
 |---|---|---|
 | Diagnostics | `textDocument/publishDiagnostics` | Push, via `DiagnosticsBus`. `[LSP-DIAGNOSTICS]` |
-| Hover | `textDocument/hover` | Markdown; symbol signature or builtin signature. |
+| Hover | `textDocument/hover` | Markdown. Functions/builtins → signature; **`let`/`mut` bindings (local *and* top-level) → their declared or inferred type**; any declaration's `///` docs rendered as prose. `[LSP-HOVER]` |
 | Go to definition | `textDocument/definition` | AST-driven, anchored on the identifier. |
 | Find references | `textDocument/references` | Whole-word scan; `includeDeclaration` honored. |
 | Document symbols | `textDocument/documentSymbol` | Flat `DocumentSymbol`s; range on the **name**, not the `fn`/`let`/`type` keyword. |
@@ -101,6 +114,65 @@ Capabilities are the contract clients rely on; adding one means updating
 `initialize_result` in
 [`crates/osprey-lsp/src/wire.rs`](../../crates/osprey-lsp/src/wire.rs) **and** this
 table.
+
+## Hover `[LSP-HOVER]`
+
+`textDocument/hover` answers "what is the thing under my cursor?" entirely from
+the AST + the type checker — never by shelling out. The word under the cursor is
+located with the shared text primitives (`[LSP-REUSE-LSPKIT]`); the matching
+declaration is found by walking the parsed program, and the reply is Markdown: a
+fenced code line (the signature or `name: type`) optionally followed by the
+declaration's documentation as prose. Implemented in
+[`crates/osprey-lsp/src/features.rs`](../../crates/osprey-lsp/src/features.rs)
+(`hover`) over [`analysis.rs`](../../crates/osprey-lsp/src/analysis.rs)
+(`collect_all_symbols`).
+
+Resolution order for the symbol under the cursor:
+
+1. A built-in (`print`, `map`, …) → its reference signature.
+2. A user **function** → its `fn name(params) -> ret` signature.
+3. A **`let`/`mut` binding** → `[LSP-HOVER-VARIABLES]`.
+
+### Variable hover `[LSP-HOVER-VARIABLES]`
+
+Every binding is hoverable, not just top-level declarations:
+
+- **Collection is deep.** `collect_all_symbols` walks *into* every
+  expression that can contain a block — function bodies, `handle … in …`,
+  `match`/`select` arms, lambdas, `spawn`/`await`, interpolations, call
+  arguments, list/map/object literals — so a `let` nested anywhere (e.g. inside
+  an HTTP handler's `in { … }` block) is found. A cursor-line/“nearest binding
+  at or before the cursor” rule resolves shadowing.
+- **Type comes from inference when unannotated.** An annotated `let x: T = …`
+  shows `x: T`. An unannotated `let x = f()` shows the **inferred** type: the
+  checker publishes every `let`'s resolved type keyed by source position
+  (`ProgramTypes.lets`, queried via `let_type`), the same position-keyed
+  mechanism already used for lambda parameters. The binding position is anchored
+  on the declaration's `let`/`mut` keyword so a leading doc comment never shifts
+  it. Implemented across
+  [`osprey-types`](../../crates/osprey-types/src/check.rs) (`let_tys`) and
+  [`osprey-types/src/info.rs`](../../crates/osprey-types/src/info.rs).
+
+### Documentation comments `[LSP-HOVER-DOCS]`
+
+A binding can be documented exactly like a function. A `///` documentation
+comment immediately above any declaration — `fn` **or** `let`/`mut` — is captured
+by the grammar (a `doc_comment` node, distinct from a `//` line comment),
+lowered onto the AST node's `doc` field, and rendered in hover as prose beneath
+the signature/type line. This is the same path functions already used; the
+feature is that **variables get it too**, satisfying "document variables like we
+can document functions". The grammar attaches `optional($.doc_comment)` to the
+declaration forms in [`tree-sitter-osprey/grammar.js`](../../tree-sitter-osprey/grammar.js);
+lowering lives in [`osprey-syntax/src/lower.rs`](../../crates/osprey-syntax/src/lower.rs)
+(`doc_text`).
+
+```osprey
+/// The greeting shown to the operator on connect.
+let banner = "hello"
+```
+
+Hovering `banner` shows `banner: string` followed by *"The greeting shown to the
+operator on connect."*
 
 ## Position encoding `[LSP-ENCODING]`
 

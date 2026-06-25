@@ -4,7 +4,7 @@ title: "httpStopServer (Function)"
 description: "Stops the HTTP server and closes all connections."
 ---
 
-**Signature:** `httpStopServer(serverID: int) -> int`
+**Signature:** `httpStopServer(serverID: int) -> Unit`
 
 **Description:** Stops the HTTP server and closes all connections.
 
@@ -12,7 +12,7 @@ description: "Stops the HTTP server and closes all connections."
 
 - **serverID** (int): Server identifier to stop
 
-**Returns:** int
+**Returns:** Unit
 
 ## Example
 

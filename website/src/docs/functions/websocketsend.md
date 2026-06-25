@@ -1,10 +1,10 @@
 ---
 layout: page
 title: "websocketSend (Function)"
-description: "Sends a message through the WebSocket connection."
+description: "Sends a message through the WebSocket connection. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*"
 ---
 
-**Signature:** `websocketSend(wsID: Int, message: String) -> Result<Success, String>`
+**Signature:** `websocketSend(wsID: int, message: string) -> int`
 
 **Description:** Sends a message through the WebSocket connection. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
@@ -13,7 +13,7 @@ description: "Sends a message through the WebSocket connection."
 - **wsID** (int): WebSocket identifier from websocketConnect
 - **message** (string): Message to send
 
-**Returns:** Result<Success, String>
+**Returns:** int
 
 ## Example
 

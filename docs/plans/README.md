@@ -12,7 +12,7 @@ plan ends with a TODO checklist.
 | [0005](0005-runtime-result-bridge.md) | HTTP/WebSocket `Result` bridge | runtime | Functions work but return raw `int64_t`, not `Result<T, string>` | Medium |
 | [0007](0007-fiber-select.md) | `select` over channels | runtime | Parser + types work; codegen takes first arm; no runtime multiplexing | Medium |
 | [0008](0008-algebraic-effects-resume.md) | Effect `resume` / continuations | effects | Handlers work as value substitution; no `resume` | High |
-| [0009](0009-lsp-context-and-cross-file.md) | LSP context-awareness & cross-file | lsp | Hover/completion/sig-help work but identifier-only, single-file | Medium |
+| [0009](0009-lsp-context-and-cross-file.md) | LSP context-awareness & cross-file | lsp | Variable hover (type+docs) landed; completion/sig-help still identifier-only, single-file | Medium |
 
 These were surfaced from `CodegenError::unsupported(...)` call sites, the
 `## Status` sections of the language specs (`docs/specs/`), and runtime `TODO`

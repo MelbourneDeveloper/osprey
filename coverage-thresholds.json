@@ -15,7 +15,7 @@
       "language": "rust"
     },
     "osprey-lsp": {
-      "threshold": 97,
+      "threshold": 98,
       "language": "rust"
     },
     "osprey-runtime-sys": {

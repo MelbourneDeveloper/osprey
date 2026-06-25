@@ -4,15 +4,15 @@ title: "listReverse (Function)"
 description: "Returns a new list in reverse order."
 ---
 
-**Signature:** `listReverse(list: List<T>) -> List<T>`
+**Signature:** `listReverse(list: List<t0>) -> List<t0>`
 
 **Description:** Returns a new list in reverse order.
 
 ## Parameters
 
-- **list** (List): The list
+- **list** (List<t0>): The list
 
-**Returns:** List
+**Returns:** List<t0>
 
 ## Example
 

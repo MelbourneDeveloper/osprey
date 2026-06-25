@@ -1,10 +1,10 @@
 ---
 layout: page
 title: "websocketCreateServer (Function)"
-description: "Creates a WebSocket server bound to the specified port, address, and path."
+description: "Creates a WebSocket server bound to the specified port, address, and path. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*"
 ---
 
-**Signature:** `websocketCreateServer(port: Int, address: String, path: String) -> Result<ServerID, String>`
+**Signature:** `websocketCreateServer(port: int, address: string, path: string) -> int`
 
 **Description:** Creates a WebSocket server bound to the specified port, address, and path. *(Implementation note: currently returns an integer status code; the `Result`-typed API shown in the signature is planned.)*
 
@@ -14,7 +14,7 @@ description: "Creates a WebSocket server bound to the specified port, address, a
 - **address** (string): IP address to bind to (e.g., "127.0.0.1", "0.0.0.0")
 - **path** (string): WebSocket endpoint path (e.g., "/chat", "/live")
 
-**Returns:** Result<ServerID, String>
+**Returns:** int
 
 ## Example
 

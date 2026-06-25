@@ -548,6 +548,39 @@ mod tests {
         assert!(ir.contains("@strcmp"));
     }
 
+    // ---- algebraic effects: handler-owned state (effects.rs) ----
+
+    #[test]
+    fn handler_owned_mutable_state_threads_through_a_heap_cell() {
+        // A `mut` an effect handler arm captures is promoted to a shared heap
+        // cell: the env-carrying handler ABI passes the cell pointer, `get`
+        // loads it and `set` stores it, so `perform` threads real state.
+        let ir = module(
+            "effect State { get: fn() -> int  set: fn(int) -> Unit }\n\
+             fn bump() -> int !State = { let a = perform State.get()  perform State.set(a + 1)  perform State.get() }\n\
+             fn main() -> int { mut c = 0\n  let r = handle State get => c set v => { c = v } in bump()\n  print(\"r=${toString(r)} c=${toString(c)}\")\n  0 }\n",
+        );
+        // env-carrying handler ABI (push takes a 4th i8* env; perform resolves it)
+        assert!(ir.contains("declare i32 @__osprey_handler_push(i8*, i8*, i8*, i8*)"));
+        assert!(ir.contains("@__osprey_handler_lookup_env"));
+        // the captured `mut` became a heap cell (malloc'd, stored, loaded)
+        assert!(ir.contains("@malloc"));
+        // each arm is emitted with the hidden leading env parameter
+        assert!(ir.contains("i8* %__env"));
+    }
+
+    #[test]
+    fn fiber_await_unboxes_a_string_result_to_a_pointer() {
+        // `await(spawn e)` recovers the fiber's element type: a string result is
+        // a pointer, recovered with `inttoptr`, not kept as a raw integer.
+        let ir = module(
+            "fn greet(n: string) -> string = \"hi ${n}\"\n\
+             fn main() -> Unit = print(await(spawn greet(\"x\")))\n",
+        );
+        assert!(ir.contains("fiber_await"));
+        assert!(ir.contains("inttoptr i64"));
+    }
+
     // ---- conversions / arithmetic (conv.rs) ----
 
     #[test]

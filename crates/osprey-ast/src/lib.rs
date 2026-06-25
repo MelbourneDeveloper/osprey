@@ -128,6 +128,8 @@ pub enum Stmt {
         ty: Option<TypeExpr>,
         /// The bound value expression.
         value: Expr,
+        /// Leading `///` documentation, joined by newline, when written.
+        doc: Option<String>,
         /// Source position, if recorded.
         position: Option<Position>,
     },
@@ -152,6 +154,8 @@ pub enum Stmt {
         effects: Vec<String>,
         /// Function body expression.
         body: Expr,
+        /// Leading `///` documentation, joined by newline, when written.
+        doc: Option<String>,
         /// Source position, if recorded.
         position: Option<Position>,
     },
@@ -447,6 +451,10 @@ pub enum Expr {
         /// The handled body expression.
         body: Box<Expr>,
     },
+    /// `resume(value)` — resume the performer's delimited continuation with
+    /// `value` (or `Unit` when absent). Legal only inside a handler arm body.
+    /// Implements [EFFECTS-RESUME].
+    Resume(Option<Box<Expr>>),
 }
 
 /// One arm of a `handle ... in` expression (`ast` handler arm).
@@ -476,6 +484,7 @@ mod tests {
                 mutable: false,
                 ty: None,
                 value: Expr::Integer(1),
+                doc: None,
                 position: None,
             }],
         };

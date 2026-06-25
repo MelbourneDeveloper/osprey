@@ -19,6 +19,12 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
         Expr::Bool(b) => Ok(Value::new(if *b { "1" } else { "0" }, LType::I1)),
         Expr::Str(s) => Ok(cg.string_constant(s)),
         Expr::InterpolatedStr(parts) => gen_interpolation(cg, parts),
+        // A handler-captured mutable promoted to a heap cell reads through a
+        // `load`; checked before the scope lookup since a cell is not scope-bound.
+        Expr::Identifier(name) if cg.cell_slots.contains_key(name) => match cg.cell_read(name) {
+            Some(v) => Ok(v),
+            None => Err(CodegenError::unknown(name)),
+        },
         Expr::Identifier(name) => match cg.lookup(name) {
             Some(v) => Ok(v),
             // A bare name that is a nullary constructor (`Active`, `Red`, …) is a

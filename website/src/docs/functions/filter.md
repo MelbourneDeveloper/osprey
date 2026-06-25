@@ -4,16 +4,16 @@ title: "filter (Function)"
 description: "Filters elements in an iterator based on a predicate function."
 ---
 
-**Signature:** `filter(iterator: iterator, predicate: function) -> iterator`
+**Signature:** `filter(iterator: List<t0>, predicate: (t0) -> bool) -> List<t0>`
 
 **Description:** Filters elements in an iterator based on a predicate function.
 
 ## Parameters
 
-- **iterator** (Iterator<T>): The iterator to filter
-- **predicate** (T -> bool): The predicate function that returns true for elements to keep
+- **iterator** (List<t0>): The iterator to filter
+- **predicate** ((t0) -> bool): The predicate function that returns true for elements to keep
 
-**Returns:** Iterator<T>
+**Returns:** List<t0>
 
 ## Example
 

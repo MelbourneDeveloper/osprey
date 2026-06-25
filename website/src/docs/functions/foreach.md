@@ -4,14 +4,14 @@ title: "forEach (Function)"
 description: "Applies a function to each element in an iterator."
 ---
 
-**Signature:** `forEach(iterator: iterator, function: function) -> int`
+**Signature:** `forEach(iterator: List<t0>, function: (t0) -> Unit) -> Unit`
 
 **Description:** Applies a function to each element in an iterator.
 
 ## Parameters
 
-- **iterator** (Iterator<T>): The iterator to process
-- **function** (T -> Unit): The function to apply to each element
+- **iterator** (List<t0>): The iterator to process
+- **function** ((t0) -> Unit): The function to apply to each element
 
 **Returns:** Unit
 

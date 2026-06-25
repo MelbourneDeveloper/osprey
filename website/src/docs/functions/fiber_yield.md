@@ -4,15 +4,15 @@ title: "fiber_yield (Function)"
 description: "Yields control to the fiber scheduler with an optional value."
 ---
 
-**Signature:** `fiber_yield(value: any) -> any`
+**Signature:** `fiber_yield(value: int) -> int`
 
 **Description:** Yields control to the fiber scheduler with an optional value.
 
 ## Parameters
 
-- **value** (any): The value to yield
+- **value** (int): The value to yield
 
-**Returns:** any
+**Returns:** int
 
 ## Example
 

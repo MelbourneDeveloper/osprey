@@ -383,6 +383,7 @@ mod tests {
             signature: None,
             parameters: Vec::new(),
             return_type: None,
+            doc: None,
         };
         let value = symbols_result(&[sym], "let other = 1\n", PositionEncoding::Utf16);
         // Fallback span starts at the keyword column (4) and spans the name width (5).

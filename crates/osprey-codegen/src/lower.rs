@@ -79,8 +79,10 @@ pub fn compile_program(program: &Program) -> Result<String> {
 
     cg.begin_function();
     if let Some(body) = user_main {
+        cg.cell_vars = crate::effects::captured_mut_vars(body);
         let _ = gen_expr(&mut cg, body)?;
     } else {
+        cg.cell_vars = crate::effects::captured_mut_vars_in_stmts(&top_level);
         for stmt in &top_level {
             gen_local_stmt(&mut cg, stmt)?;
         }
@@ -120,6 +122,7 @@ fn gen_function(cg: &mut Codegen, name: &str, parameters: &[Parameter], body: &E
         cg.bind(p.name.clone(), v);
         params.push((*pty, p.name.clone()));
     }
+    cg.cell_vars = crate::effects::captured_mut_vars(body);
     let body_val = gen_fn_body(cg, name, body)?;
     let ret = coerce_return(cg, name, body_val)?;
     cg.emit(format!("ret {} {}", ret.llvm_ty(), ret.operand));
@@ -161,6 +164,18 @@ fn coerce_return(cg: &mut Codegen, name: &str, body: Value) -> Result<Value> {
 
 pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
     match stmt {
+        // A `mut` an effect handler captures is promoted to a shared heap cell so
+        // the handler owns it; its declaration allocates the cell and a
+        // reassignment stores through it (reads `load` it, see `gen_expr`).
+        Stmt::Let {
+            name,
+            value,
+            mutable: true,
+            ..
+        } if cg.cell_vars.contains(name) => gen_cell_define(cg, name, value),
+        Stmt::Assignment { name, value, .. } if cg.cell_slots.contains_key(name) => {
+            gen_cell_store(cg, name, value)
+        }
         // An immutable `let` keeps a Result wrapper (so `let v = 21 * 2;
         // toString(v)` shows `Success(42)`); a `mut` reassignment auto-unwraps it
         // (the `mut` auto-unwrap rule: the cell holds the success payload).
@@ -172,6 +187,46 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
         }
         _ => Err(CodegenError::unsupported("statement in block/main")),
     }
+}
+
+/// Declare a handler-captured `mut` as a heap cell: evaluate + unwrap the
+/// initializer, `malloc` a one-slot cell of its type, store the initial value,
+/// and record the slot so reads `load` and reassignments `store` it.
+fn gen_cell_define(cg: &mut Codegen, name: &str, value: &Expr) -> Result<()> {
+    let raw = gen_expr(cg, value)?;
+    let v = crate::result::unwrap(cg, raw);
+    let pointee = v.ty;
+    let ty = pointee.as_str();
+    let cell = cg.malloc_struct(&format!("{{ {ty} }}"));
+    let ptr = cg.emit_reg(format!(
+        "getelementptr {{ {ty} }}, {{ {ty} }}* {cell}, i32 0, i32 0"
+    ));
+    cg.emit(format!("store {ty} {}, {ty}* {ptr}", v.operand));
+    let _ = cg.cell_slots.insert(
+        name.to_string(),
+        crate::builder::CellSlot {
+            ptr,
+            pointee,
+            osp_ty: v.osp_ty,
+        },
+    );
+    Ok(())
+}
+
+/// Reassign a cell-backed `mut`: evaluate + unwrap, coerce to the cell's type,
+/// and `store` into the shared slot.
+fn gen_cell_store(cg: &mut Codegen, name: &str, value: &Expr) -> Result<()> {
+    let Some(slot) = cg.cell_slots.get(name).cloned() else {
+        return Err(CodegenError::unsupported(
+            "reassignment of an unpromoted cell",
+        ));
+    };
+    let raw = gen_expr(cg, value)?;
+    let v = crate::result::unwrap(cg, raw);
+    let v = crate::cast::coerce_to(cg, v, slot.pointee)?;
+    let ty = slot.pointee.as_str();
+    cg.emit(format!("store {ty} {}, {ty}* {}", v.operand, slot.ptr));
+    Ok(())
 }
 
 /// Bind `name` to `value`. A lambda is recorded for inline application at its

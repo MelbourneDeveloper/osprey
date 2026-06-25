@@ -4,16 +4,16 @@ title: "mapRemove (Function)"
 description: "Returns a new map without key. No-op if key is absent."
 ---
 
-**Signature:** `mapRemove(map: Map<K, V>, key: K) -> Map<K, V>`
+**Signature:** `mapRemove(map: Map<t0, t1>, key: t0) -> Map<t0, t1>`
 
 **Description:** Returns a new map without key. No-op if key is absent.
 
 ## Parameters
 
-- **map** (Map): The map
-- **key** (any): Key
+- **map** (Map<t0, t1>): The map
+- **key** (t0): Key
 
-**Returns:** Map
+**Returns:** Map<t0, t1>
 
 ## Example
 

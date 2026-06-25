@@ -5,7 +5,10 @@
 //! into editor symbols — both the language server and the `osprey --symbols` /
 //! `osprey --hover` CLI modes render from here.
 
-use osprey_ast::{ExternParameter, Parameter, Position, Program, Stmt, TypeExpr};
+use osprey_ast::{
+    Expr, ExternParameter, FieldAssignment, InterpolatedPart, MatchArm, NamedArgument, Parameter,
+    Position, Program, Stmt, TypeExpr,
+};
 use std::fmt::Write as _;
 
 /// What kind of declaration a [`SymbolInfo`] describes.
@@ -49,6 +52,9 @@ pub struct SymbolInfo {
     pub parameters: Vec<(String, String)>,
     /// Rendered return type for functions.
     pub return_type: Option<String>,
+    /// Leading `///` documentation, when the declaration carries one.
+    /// Implements [LSP-HOVER-DOCS]
+    pub doc: Option<String>,
 }
 
 /// Collect every top-level declaration (recursing into modules) into outline
@@ -69,18 +75,168 @@ fn collect(stmts: &[Stmt], out: &mut Vec<SymbolInfo>) {
     }
 }
 
+/// Collect every binding in the program — top-level declarations *and* `let`s
+/// nested in expression bodies (function/handler/match/block bodies) — so hover
+/// resolves local variables, not only top-level names. Source order.
+/// Implements [LSP-HOVER-VARIABLES]
+#[must_use]
+pub fn collect_all_symbols(program: &Program) -> Vec<SymbolInfo> {
+    let mut out = Vec::new();
+    walk_stmts(&program.statements, &mut out);
+    out
+}
+
+fn walk_stmts(stmts: &[Stmt], out: &mut Vec<SymbolInfo>) {
+    for stmt in stmts {
+        out.extend(sym_of(stmt));
+        walk_stmt_body(stmt, out);
+    }
+}
+
+fn walk_stmt_body(stmt: &Stmt, out: &mut Vec<SymbolInfo>) {
+    match stmt {
+        Stmt::Module { body, .. } => walk_stmts(body, out),
+        Stmt::Function { body, .. } => walk_expr(body, out),
+        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } | Stmt::Expr(value) => {
+            walk_expr(value, out);
+        }
+        _ => {}
+    }
+}
+
+/// Descend an expression collecting nested `let` bindings (first third).
+fn walk_expr(e: &Expr, out: &mut Vec<SymbolInfo>) {
+    match e {
+        Expr::InterpolatedStr(parts) => parts.iter().for_each(|p| {
+            if let InterpolatedPart::Expr(x) = p {
+                walk_expr(x, out);
+            }
+        }),
+        Expr::List(xs) => walk_each(xs, out),
+        Expr::Map(entries) => entries.iter().for_each(|en| {
+            walk_expr(&en.key, out);
+            walk_expr(&en.value, out);
+        }),
+        Expr::Object(fields) => walk_fields(fields, out),
+        Expr::Binary { left, right, .. } | Expr::Pipe { left, right } => {
+            walk_expr(left, out);
+            walk_expr(right, out);
+        }
+        Expr::Unary { operand, .. } => walk_expr(operand, out),
+        other => walk_expr_rest(other, out),
+    }
+}
+
+/// Continuation of [`walk_expr`] — call/navigation/block forms (second third).
+fn walk_expr_rest(e: &Expr, out: &mut Vec<SymbolInfo>) {
+    match e {
+        Expr::Call {
+            function,
+            arguments,
+            named_arguments,
+        } => {
+            walk_expr(function, out);
+            walk_each(arguments, out);
+            walk_named(named_arguments, out);
+        }
+        Expr::MethodCall {
+            target,
+            arguments,
+            named_arguments,
+            ..
+        } => {
+            walk_expr(target, out);
+            walk_each(arguments, out);
+            walk_named(named_arguments, out);
+        }
+        Expr::FieldAccess { target, .. } => walk_expr(target, out),
+        Expr::Index { target, index } => {
+            walk_expr(target, out);
+            walk_expr(index, out);
+        }
+        Expr::Lambda { body, .. } => walk_expr(body, out),
+        Expr::Match { value, arms } => {
+            walk_expr(value, out);
+            walk_arms(arms, out);
+        }
+        Expr::Block { statements, value } => {
+            walk_stmts(statements, out);
+            if let Some(v) = value {
+                walk_expr(v, out);
+            }
+        }
+        Expr::TypeConstructor { fields, .. } | Expr::Update { fields, .. } => {
+            walk_fields(fields, out);
+        }
+        other => walk_expr_fiber(other, out),
+    }
+}
+
+/// Final third of [`walk_expr`]: fiber/effect forms; leaves fall through.
+fn walk_expr_fiber(e: &Expr, out: &mut Vec<SymbolInfo>) {
+    match e {
+        Expr::Spawn(i) | Expr::Await(i) | Expr::Recv(i) | Expr::Yield(Some(i)) => walk_expr(i, out),
+        Expr::Send { channel, value } => {
+            walk_expr(channel, out);
+            walk_expr(value, out);
+        }
+        Expr::Select { arms } => walk_arms(arms, out),
+        Expr::Perform {
+            arguments,
+            named_arguments,
+            ..
+        } => {
+            walk_each(arguments, out);
+            walk_named(named_arguments, out);
+        }
+        Expr::Handler { arms, body, .. } => {
+            for arm in arms {
+                walk_expr(&arm.body, out);
+            }
+            walk_expr(body, out);
+        }
+        _ => {}
+    }
+}
+
+fn walk_each(xs: &[Expr], out: &mut Vec<SymbolInfo>) {
+    for x in xs {
+        walk_expr(x, out);
+    }
+}
+
+fn walk_named(named: &[NamedArgument], out: &mut Vec<SymbolInfo>) {
+    for n in named {
+        walk_expr(&n.value, out);
+    }
+}
+
+fn walk_fields(fields: &[FieldAssignment], out: &mut Vec<SymbolInfo>) {
+    for f in fields {
+        walk_expr(&f.value, out);
+    }
+}
+
+fn walk_arms(arms: &[MatchArm], out: &mut Vec<SymbolInfo>) {
+    for arm in arms {
+        walk_expr(&arm.body, out);
+    }
+}
+
 fn sym_of(stmt: &Stmt) -> Option<SymbolInfo> {
     match stmt {
         Stmt::Function {
             name,
             parameters,
             return_type,
+            doc,
             position,
             ..
         } => Some(fn_sym(
             name,
             param_pairs(parameters),
             return_type.as_ref(),
+            doc.clone(),
             *position,
         )),
         Stmt::Extern {
@@ -92,11 +248,16 @@ fn sym_of(stmt: &Stmt) -> Option<SymbolInfo> {
             name,
             extern_pairs(parameters),
             return_type.as_ref(),
+            None,
             *position,
         )),
         Stmt::Let {
-            name, ty, position, ..
-        } => Some(let_sym(name, ty.as_ref(), *position)),
+            name,
+            ty,
+            doc,
+            position,
+            ..
+        } => Some(let_sym(name, ty.as_ref(), doc.clone(), *position)),
         Stmt::Type { name, position, .. } => Some(decl_sym(name, "type", *position)),
         Stmt::Effect { name, position, .. } => Some(decl_sym(name, "effect", *position)),
         _ => None,
@@ -107,6 +268,7 @@ fn fn_sym(
     name: &str,
     parameters: Vec<(String, String)>,
     return_type: Option<&TypeExpr>,
+    doc: Option<String>,
     position: Option<Position>,
 ) -> SymbolInfo {
     let ret = return_type.map_or_else(|| String::from("Unit"), render_type);
@@ -120,6 +282,7 @@ fn fn_sym(
         signature: Some(signature),
         parameters,
         return_type: Some(ret),
+        doc,
     }
 }
 
@@ -131,7 +294,12 @@ fn render_param((n, t): &(String, String)) -> String {
     }
 }
 
-fn let_sym(name: &str, ty: Option<&TypeExpr>, position: Option<Position>) -> SymbolInfo {
+fn let_sym(
+    name: &str,
+    ty: Option<&TypeExpr>,
+    doc: Option<String>,
+    position: Option<Position>,
+) -> SymbolInfo {
     SymbolInfo {
         name: name.into(),
         kind: SymbolKind::Variable,
@@ -140,6 +308,7 @@ fn let_sym(name: &str, ty: Option<&TypeExpr>, position: Option<Position>) -> Sym
         signature: None,
         parameters: Vec::new(),
         return_type: None,
+        doc,
     }
 }
 
@@ -152,6 +321,7 @@ fn decl_sym(name: &str, ty: &str, position: Option<Position>) -> SymbolInfo {
         signature: None,
         parameters: Vec::new(),
         return_type: None,
+        doc: None,
     }
 }
 
@@ -198,10 +368,13 @@ pub fn render_type(t: &TypeExpr) -> String {
     format!("{}<{}>", t.name, gs.join(", "))
 }
 
-/// Markdown hover text for a built-in name, or `None` when not a built-in.
+/// Rich Markdown hover text for a built-in name, or `None` when not a built-in.
+/// Renders the full metadata — signature, description, parameters, return type,
+/// and example — from the single source in `osprey_types`, so a built-in hovers
+/// with exactly the detail the reference docs carry.
 #[must_use]
 pub fn builtin_hover(name: &str) -> Option<String> {
-    osprey_types::builtin_signature(name).map(|sig| format!("```osprey\n{sig}\n```"))
+    osprey_types::builtin_hover_markdown(name)
 }
 
 /// The whole document outline as the `--symbols` JSON array.
@@ -299,8 +472,11 @@ mod tests {
     #[test]
     fn hover_renders_builtin_signature_and_rejects_unknowns() {
         let md = builtin_hover("print");
+        // The rich hover carries the call signature and the description, not just
+        // a bare `name : type` line.
         assert!(
-            md.as_deref().is_some_and(|m| m.contains("print : ")),
+            md.as_deref()
+                .is_some_and(|m| m.contains("print(value: any) -> Unit") && m.contains("Prints")),
             "{md:?}"
         );
         assert!(builtin_hover("notARealBuiltin").is_none());
@@ -363,6 +539,183 @@ mod tests {
         let seed = syms.iter().find(|s| s.name == "seed").expect("seed symbol");
         assert_eq!(seed.kind, SymbolKind::Variable);
         assert_eq!(seed.ty, "");
+    }
+
+    /// One of every container `Expr` variant, each holding a block whose single
+    /// `let` is named for the slot it sits in — the fixture for the deep-walker
+    /// test below. Implements [LSP-HOVER-VARIABLES]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "exhaustive fixture: one arm per AST container variant is the point"
+    )]
+    fn every_container_with_a_nested_let() -> Vec<osprey_ast::Expr> {
+        use osprey_ast::{Expr, FieldAssignment, HandlerArm, MapEntry, NamedArgument, Pattern};
+        let blk = |name: &str| Expr::Block {
+            statements: vec![Stmt::Let {
+                name: name.into(),
+                mutable: false,
+                ty: None,
+                value: Expr::Integer(0),
+                doc: None,
+                position: Some(Position { line: 1, column: 0 }),
+            }],
+            value: None,
+        };
+        let b = |name: &str| Box::new(blk(name));
+        let narg = |name: &str| NamedArgument {
+            name: "n".into(),
+            value: blk(name),
+        };
+        let field = |name: &str| FieldAssignment {
+            name: "f".into(),
+            value: blk(name),
+        };
+        let arm = |name: &str| MatchArm {
+            pattern: Pattern::Wildcard,
+            body: blk(name),
+        };
+        vec![
+            Expr::List(vec![blk("list")]),
+            Expr::Map(vec![MapEntry {
+                key: blk("mapk"),
+                value: blk("mapv"),
+            }]),
+            Expr::Object(vec![field("obj")]),
+            Expr::Binary {
+                op: "+".into(),
+                left: b("binl"),
+                right: b("binr"),
+            },
+            Expr::Pipe {
+                left: b("pipel"),
+                right: b("piper"),
+            },
+            Expr::Unary {
+                op: "-".into(),
+                operand: b("unary"),
+            },
+            Expr::InterpolatedStr(vec![InterpolatedPart::Expr(blk("interp"))]),
+            Expr::Call {
+                function: b("callfn"),
+                arguments: vec![blk("callarg")],
+                named_arguments: vec![narg("callnamed")],
+            },
+            Expr::MethodCall {
+                target: b("mtarget"),
+                method: "m".into(),
+                arguments: vec![blk("marg")],
+                named_arguments: vec![narg("mnamed")],
+            },
+            Expr::FieldAccess {
+                target: b("fatarget"),
+                field: "f".into(),
+            },
+            Expr::Index {
+                target: b("idxt"),
+                index: b("idxi"),
+            },
+            Expr::Lambda {
+                parameters: Vec::new(),
+                return_type: None,
+                body: b("lambda"),
+                position: None,
+            },
+            Expr::Match {
+                value: b("matchval"),
+                arms: vec![arm("matcharm")],
+            },
+            Expr::TypeConstructor {
+                name: "T".into(),
+                type_args: Vec::new(),
+                fields: vec![field("tc")],
+            },
+            Expr::Update {
+                record: "r".into(),
+                fields: vec![field("update")],
+            },
+            Expr::Spawn(b("spawn")),
+            Expr::Await(b("await")),
+            Expr::Recv(b("recv")),
+            Expr::Yield(Some(b("yield"))),
+            Expr::Send {
+                channel: b("sendc"),
+                value: b("sendv"),
+            },
+            Expr::Select {
+                arms: vec![arm("select")],
+            },
+            Expr::Perform {
+                effect: "E".into(),
+                operation: "op".into(),
+                arguments: vec![blk("perform")],
+                named_arguments: vec![narg("performnamed")],
+            },
+            Expr::Handler {
+                effect: "E".into(),
+                arms: vec![HandlerArm {
+                    operation: "op".into(),
+                    params: Vec::new(),
+                    body: blk("handlerarm"),
+                }],
+                body: b("handlerbody"),
+            },
+        ]
+    }
+
+    #[test]
+    fn collect_all_symbols_descends_into_every_expression_form() {
+        // A `let` is buried inside each container expression variant; the deep
+        // collector must surface every one — this exercises all walker arms.
+        // Implements [LSP-HOVER-VARIABLES]
+        let program = Program {
+            statements: every_container_with_a_nested_let()
+                .into_iter()
+                .map(Stmt::Expr)
+                .collect(),
+        };
+        let found: Vec<String> = collect_all_symbols(&program)
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+        for expected in [
+            "list",
+            "mapk",
+            "mapv",
+            "obj",
+            "binl",
+            "binr",
+            "pipel",
+            "piper",
+            "unary",
+            "interp",
+            "callfn",
+            "callarg",
+            "callnamed",
+            "mtarget",
+            "marg",
+            "mnamed",
+            "fatarget",
+            "idxt",
+            "idxi",
+            "lambda",
+            "matchval",
+            "matcharm",
+            "tc",
+            "update",
+            "spawn",
+            "await",
+            "recv",
+            "yield",
+            "sendc",
+            "sendv",
+            "select",
+            "perform",
+            "performnamed",
+            "handlerarm",
+            "handlerbody",
+        ] {
+            assert!(found.iter().any(|n| n == expected), "missing `{expected}`");
+        }
     }
 
     #[test]

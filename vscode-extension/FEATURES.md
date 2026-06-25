@@ -5,28 +5,33 @@
 Based on the Osprey tree-sitter grammar, provides rich syntax highlighting for:
 
 ### Keywords
+
 - **Control flow**: `match`, `if`, `else`, `loop`, `select`
 - **Declarations**: `fn`, `let`, `mut`, `type`, `import`, `extern`, `module`
 - **Fiber operations**: `spawn`, `await`, `yield`, `channel`, `send`, `recv`
 - **Other**: `return`
 
 ### Literals
+
 - **Numbers**: `42`, `123`, `123.45`
 - **Booleans**: `true`, `false`
 - **Strings**: `"hello world"`
 - **Interpolated strings**: `"Hello ${name}!"`
 
 ### Functions
+
 - **Declarations**: `fn add(x, y) = x + y`
 - **Calls**: `add(x: 1, y: 2)`
 - **Built-ins**: `print(value)`
 
 ### Types
+
 - **Definitions**: `type Result = Ok { value: String } | Error { message: String }`
 - **Variants**: `Ok`, `Error`, `Some`, `None`
 - **Pattern matching**: `match expr { Ok => "success" }`
 
 ### Operators
+
 - **Arithmetic**: `+`, `-`, `*`, `/`
 - **Assignment**: `=`
 - **Arrows**: `=>`, `|->`
@@ -43,6 +48,7 @@ Real-time compilation error detection:
 - **Line-precise**: Errors shown exactly where they occur
 
 ### Example Error Detection
+
 ```osprey
 fn add(x, y) = x + y
 let result = add(5, 10)  // ❌ Error: named arguments required
@@ -53,15 +59,18 @@ let result = add(5, 10)  // ❌ Error: named arguments required
 Intelligent autocompletion for:
 
 ### Keywords
+
 - `fn` → `fn ${1:name}(${2:params}) = ${3:body}`
 - `let` → `let ${1:name} = ${2:value}`
 - `match` → `match ${1:expr} { ${2:pattern} => ${3:result} }`
 - `type` → `type ${1:Name} = ${2:Variant} | ${3:Variant}`
 
 ### Built-in Functions
+
 - `print` → `print(${1:value})`
 
 ### Trigger Characters
+
 - `.` for method chaining
 - `:` for named arguments
 - `$` for string interpolation
@@ -71,17 +80,20 @@ Intelligent autocompletion for:
 ## 🔬 Advanced Language Features
 
 ### Hover Information
+
 - **Type information**: Hover over variables to see their types
 - **Function signatures**: Detailed parameter and return type info
 - **Documentation**: Built-in function documentation
 - **Pipe operator help**: Comprehensive `|>` operator documentation
 
 ### Signature Help
+
 - **Function parameters**: Shows parameter names and types as you type
 - **Named arguments**: Helps with required named parameter syntax
 - **Trigger on**: `(` and `,` characters
 
 ### Document Symbols
+
 - **Function outline**: Quick navigation to functions
 - **Type definitions**: Jump to type declarations
 - **Symbol hierarchy**: Organized code structure view
@@ -89,16 +101,19 @@ Intelligent autocompletion for:
 ## 🛠️ Language Features
 
 ### Bracket Matching
+
 - Auto-closing: `()`, `[]`, `{}`, `""`
 - Bracket highlighting
 - Smart indentation
 
 ### Comments
+
 - Line comments: `// comment`
 - Comment toggling with Ctrl+/
 - Syntax highlighting in comments
 
 ### String Interpolation
+
 - Syntax highlighting inside `${...}`
 - Nested expression support
 - Proper escaping
@@ -126,20 +141,24 @@ Customizable via VSCode settings:
 ## 🔧 Development Features
 
 ### Commands
+
 - **Compile**: `Ctrl+Shift+B` / `Cmd+Shift+B` - Compile current file
 - **Run**: `F5` - Compile and run current file
 - **Set Language**: Force language association for `.osp` files
 
 ### Status Bar
+
 - Shows "✅ Osprey" when language server is running
 - Click for server information
 
 ### Output Panel
+
 - "Osprey Language Server" channel for debugging
 - Compilation errors and warnings
 - Server startup/shutdown logs
 
 ### File Association
+
 - Automatic `.osp` file recognition
 - Proper language mode activation
 - Icon association (if configured)
@@ -149,13 +168,15 @@ Customizable via VSCode settings:
 ### ✅ **FIXED AND WORKING**
 
 #### Core Extension Features
+
 - **Extension Activation**: Extension properly activates when opening .osp files
-- **Language Detection**: Files are correctly detected as Osprey language  
+- **Language Detection**: Files are correctly detected as Osprey language
 - **Syntax Highlighting**: Works correctly with the TextMate grammar
 - **Commands**: Compile and run commands are available and working
 - **Configuration**: Extension configuration is accessible and functional
 
-#### Language Server Infrastructure  
+#### Language Server Infrastructure
+
 - **Server Startup**: Language server starts successfully
 - **Document Management**: Text documents are properly tracked
 - **Diagnostics**: Syntax errors are detected and reported
@@ -167,6 +188,7 @@ Customizable via VSCode settings:
 ### ⚠️ **PARTIALLY WORKING**
 
 #### Symbol Information
+
 - **Compiler Integration**: Osprey compiler `--symbols` flag works correctly
 - **Symbol Parsing**: `getSymbolsFromCompiler()` function correctly parses JSON output
 - **Symbol Tracking**: `findAllSymbolReferences()` function correctly identifies definitions and usages
@@ -174,19 +196,23 @@ Customizable via VSCode settings:
 ### ❌ **NOT WORKING (Main Issues)**
 
 #### Core Language Features
+
 - **Go to Definition**: VSCode not calling our `onDefinition` handler
-- **Find All References**: VSCode not calling our `onReferences` handler  
+- **Find All References**: VSCode not calling our `onReferences` handler
 - **Document Symbols**: Limited symbol information in outline view
 
 ### 🔧 **ROOT CAUSE ANALYSIS**
 
 #### Issue: Language Server Protocol Integration
+
 The main problem is that VSCode isn't routing language feature requests to our language server handlers, despite:
+
 1. ✅ Language server registering definition/references capabilities
 2. ✅ Extension properly starting the language server
 3. ✅ Server responding to other LSP requests (hover, completion, diagnostics)
 
 #### Possible Causes
+
 1. **Request Routing**: VSCode may not be sending `textDocument/definition` requests to our server
 2. **Capability Registration**: Definition provider capability may not be properly registered
 3. **Document URI Handling**: URI format mismatches between client and server
@@ -195,11 +221,13 @@ The main problem is that VSCode isn't routing language feature requests to our l
 ## 🎯 Future Roadmap
 
 ### Next Priority Fixes
+
 1. **Go-to Definition**: Debug LSP communication for definition requests
 2. **Find References**: Fix VSCode routing for reference requests
 3. **Document Symbols**: Enhanced symbol information in outline view
 
 ### Planned Features
+
 1. **Rename Symbol**: Intelligent renaming across files
 2. **Semantic Highlighting**: Advanced syntax coloring
 3. **Code Formatting**: Auto-format Osprey code
@@ -207,6 +235,7 @@ The main problem is that VSCode isn't routing language feature requests to our l
 5. **REPL Integration**: Interactive Osprey shell
 
 ### Advanced Features
+
 1. **Call Hierarchy**: Function call trees
 2. **Code Actions**: Quick fixes and refactoring
 3. **Workspace Symbols**: Project-wide symbol search
@@ -230,12 +259,13 @@ The main problem is that VSCode isn't routing language feature requests to our l
 ## 🔍 Debugging Information
 
 ### Compiler Integration Working
+
 ```bash
 $ echo 'fn double(x) = x * 2\nlet result = double(5)' | osprey --symbols
 [
   {
     "name": "double",
-    "kind": "function", 
+    "kind": "function",
     "type": "Function(x: Any) -> Any",
     "line": 1,
     "column": 1,
@@ -245,8 +275,9 @@ $ echo 'fn double(x) = x * 2\nlet result = double(5)' | osprey --symbols
 ```
 
 ### Extension Infrastructure Working
+
 - Language server starts: ✅
-- Documents are tracked: ✅  
+- Documents are tracked: ✅
 - Other LSP features work: ✅
 - Only definition/references broken: ❌
 
@@ -254,4 +285,4 @@ $ echo 'fn double(x) = x * 2\nlet result = double(5)' | osprey --symbols
 
 Report issues and feature requests at the Osprey repository. The extension is designed to grow with the language!
 
-**Status**: 🟡 Core features working, advanced navigation features need LSP debugging 
+**Status**: 🟡 Core features working, advanced navigation features need LSP debugging

@@ -4,7 +4,7 @@ title: "indexOf (Function)"
 description: "Returns byte-index of first occurrence of needle, or Error(NotFound)."
 ---
 
-**Signature:** `indexOf(s: string, needle: string) -> Result<int, StringError>`
+**Signature:** `indexOf(s: string, needle: string) -> Result<int, Error>`
 
 **Description:** Returns byte-index of first occurrence of needle, or Error(NotFound).
 
@@ -13,7 +13,7 @@ description: "Returns byte-index of first occurrence of needle, or Error(NotFoun
 - **s** (string): The string to search in
 - **needle** (string): The substring to locate
 
-**Returns:** Result<int, StringError>
+**Returns:** Result<int, Error>
 
 ## Example
 

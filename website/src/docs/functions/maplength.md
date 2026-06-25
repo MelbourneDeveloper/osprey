@@ -4,13 +4,13 @@ title: "mapLength (Function)"
 description: "Returns the number of entries in a map. O(1)."
 ---
 
-**Signature:** `mapLength(map: Map<K, V>) -> int`
+**Signature:** `mapLength(map: Map<t0, t1>) -> int`
 
 **Description:** Returns the number of entries in a map. O(1).
 
 ## Parameters
 
-- **map** (Map): The map
+- **map** (Map<t0, t1>): The map
 
 **Returns:** int
 

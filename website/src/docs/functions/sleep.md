@@ -4,7 +4,7 @@ title: "sleep (Function)"
 description: "Pauses execution for the specified number of milliseconds."
 ---
 
-**Signature:** `sleep(milliseconds: int) -> int`
+**Signature:** `sleep(milliseconds: int) -> Unit`
 
 **Description:** Pauses execution for the specified number of milliseconds.
 
@@ -12,7 +12,7 @@ description: "Pauses execution for the specified number of milliseconds."
 
 - **milliseconds** (int): Number of milliseconds to sleep
 
-**Returns:** int
+**Returns:** Unit
 
 ## Example
 

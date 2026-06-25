@@ -7,27 +7,66 @@
 
 use lspkit_vfs::PositionEncoding;
 
-use crate::analysis::{builtin_hover, collect_symbols, SymbolInfo, SymbolKind};
+use osprey_ast::Program;
+
+use crate::analysis::{
+    builtin_hover, collect_all_symbols, collect_symbols, SymbolInfo, SymbolKind,
+};
 use crate::model::{CompletionItem, CompletionKind, Location, SignatureInfo, Span};
 use crate::text::{occurrences, prefix_to, word_at, Occurrence};
 
-/// Hover markdown for the identifier at `(line, character)`.
+/// Hover markdown for the identifier at `(line, character)`: the symbol's
+/// signature, or `name: type` for a binding — inferring an unannotated `let`'s
+/// type from the checker — followed by its `///` documentation. Built-ins fall
+/// back to their reference docs. Implements [LSP-HOVER], [LSP-HOVER-VARIABLES],
+/// [LSP-HOVER-DOCS]
 #[must_use]
 pub fn hover(text: &str, line: u32, character: u32, enc: PositionEncoding) -> Option<String> {
     let word = word_under(text, line, character, enc)?;
     let parsed = osprey_syntax::parse_program(text);
-    collect_symbols(&parsed.program)
-        .iter()
-        .find(|s| s.name == word)
-        .map(hover_markdown)
-        .or_else(|| builtin_hover(&word))
+    let symbols = collect_all_symbols(&parsed.program);
+    match best_match(&symbols, &word, line) {
+        Some(sym) => Some(symbol_hover(sym, &parsed.program)),
+        None => builtin_hover(&word),
+    }
 }
 
-fn hover_markdown(s: &SymbolInfo) -> String {
-    match &s.signature {
-        Some(sig) => format!("```osprey\n{sig}\n```"),
-        None => format!("```osprey\n{}: {}\n```", s.name, s.ty),
+/// The declaration of `word` in scope at `line` (0-based): the binding declared
+/// at or before the cursor and nearest to it (innermost/most recent), else the
+/// first match — resolving local shadowing without a full scope walk.
+fn best_match<'a>(symbols: &'a [SymbolInfo], word: &str, line: u32) -> Option<&'a SymbolInfo> {
+    let cursor = line.saturating_add(1); // AST positions are 1-based lines.
+    let matches = || symbols.iter().filter(|s| s.name == word);
+    matches()
+        .filter(|s| s.position.is_some_and(|p| p.line <= cursor))
+        .max_by_key(|s| s.position.map_or(0, |p| p.line))
+        .or_else(|| matches().next())
+}
+
+/// Render `s` as hover markdown: a code-fenced signature/type, then its docs.
+fn symbol_hover(s: &SymbolInfo, program: &Program) -> String {
+    let code = match &s.signature {
+        Some(sig) => sig.clone(),
+        None => format!("{}: {}", s.name, displayed_type(s, program)),
+    };
+    let mut out = format!("```osprey\n{code}\n```");
+    if let Some(doc) = &s.doc {
+        out.push_str("\n\n");
+        out.push_str(doc);
     }
+    out
+}
+
+/// The type shown for a non-function symbol: its declared/category type, or —
+/// for an unannotated `let` — the type the checker inferred for that binding.
+/// Implements [LSP-HOVER-VARIABLES]
+fn displayed_type(s: &SymbolInfo, program: &Program) -> String {
+    if !s.ty.is_empty() {
+        return s.ty.clone();
+    }
+    osprey_types::infer_program(program)
+        .let_type(s.position)
+        .map_or_else(String::new, ToString::to_string)
 }
 
 /// Definition location(s) for the identifier at `(line, character)`.
@@ -321,6 +360,28 @@ mod tests {
         let src = "let limit: int = 10\nfn main() -> Unit = print(limit)\n";
         let md = hover(src, 0, 5, U16).expect("hover");
         assert!(md.contains("limit: int"), "{md}");
+    }
+
+    #[test]
+    fn hover_on_a_local_let_shows_inferred_type_and_docs() {
+        // A `let` nested in a function block, with no type annotation, hovers
+        // with the type the checker inferred for it plus its `///` docs — the
+        // case the top-level-only outline used to miss entirely.
+        // Implements [LSP-HOVER-VARIABLES], [LSP-HOVER-DOCS]
+        let src = "fn main() -> int = {\n/// The greeting text.\nlet greeting = \"hi\"\n0\n}\n";
+        let md = hover(src, 2, 6, U16).expect("hover over the `greeting` binding");
+        assert!(md.contains("greeting: string"), "inferred type: {md}");
+        assert!(md.contains("The greeting text."), "docs: {md}");
+    }
+
+    #[test]
+    fn hover_on_a_documented_function_renders_its_docs() {
+        // A `///` block above a function surfaces under its signature.
+        // Implements [LSP-HOVER-DOCS]
+        let src = "/// Doubles `x`.\nfn dbl(x: int) -> int = x * 2\n";
+        let md = hover(src, 1, 4, U16).expect("hover over `dbl`");
+        assert!(md.contains("fn dbl(x: int) -> int"), "signature: {md}");
+        assert!(md.contains("Doubles `x`."), "docs: {md}");
     }
 
     #[test]

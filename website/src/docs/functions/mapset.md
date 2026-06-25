@@ -4,17 +4,17 @@ title: "mapSet (Function)"
 description: "Returns a new map with key bound to value (replaces prior binding)."
 ---
 
-**Signature:** `mapSet(map: Map<K, V>, key: K, value: V) -> Map<K, V>`
+**Signature:** `mapSet(map: Map<t0, t1>, key: t0, value: t1) -> Map<t0, t1>`
 
 **Description:** Returns a new map with key bound to value (replaces prior binding).
 
 ## Parameters
 
-- **map** (Map): The map
-- **key** (any): Key
-- **value** (any): Value
+- **map** (Map<t0, t1>): The map
+- **key** (t0): Key
+- **value** (t1): Value
 
-**Returns:** Map
+**Returns:** Map<t0, t1>
 
 ## Example
 

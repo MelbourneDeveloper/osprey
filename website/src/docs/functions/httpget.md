@@ -4,7 +4,7 @@ title: "httpGet (Function)"
 description: "Makes an HTTP GET request to the specified path."
 ---
 
-**Signature:** `httpGet(clientID: int, path: string, headers: string) -> int`
+**Signature:** `httpGet(clientID: int, path: string, headers: string) -> Result<string, Error>`
 
 **Description:** Makes an HTTP GET request to the specified path.
 
@@ -14,7 +14,7 @@ description: "Makes an HTTP GET request to the specified path."
 - **path** (string): Request path (e.g., "/api/users")
 - **headers** (string): Additional headers (e.g., "Authorization: Bearer token")
 
-**Returns:** int
+**Returns:** Result<string, Error>
 
 ## Example
 

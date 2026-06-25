@@ -4,16 +4,16 @@ title: "listConcat (Function)"
 description: "Returns left ++ right. Same as left + right."
 ---
 
-**Signature:** `listConcat(left: List<T>, right: List<T>) -> List<T>`
+**Signature:** `listConcat(left: List<t0>, right: List<t0>) -> List<t0>`
 
 **Description:** Returns left ++ right. Same as left + right.
 
 ## Parameters
 
-- **left** (List): Left operand
-- **right** (List): Right operand
+- **left** (List<t0>): Left operand
+- **right** (List<t0>): Right operand
 
-**Returns:** List
+**Returns:** List<t0>
 
 ## Example
 
