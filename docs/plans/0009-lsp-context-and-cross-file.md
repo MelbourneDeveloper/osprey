@@ -13,6 +13,18 @@ only at identifier positions, ignore the surrounding syntactic context, and neve
 look beyond the current file. Finishing this plan makes them context-aware and
 workspace-aware.
 
+## Update — variable hover landed
+
+`[LSP-HOVER-VARIABLES]`/`[LSP-HOVER-DOCS]` A `let`/`mut` binding now hovers with
+its declared **or inferred** type plus any `///` doc comment — including bindings
+nested inside expression bodies (e.g. a `let` in an HTTP server's `in { … }`
+block), via deep symbol collection (`collect_all_symbols` in
+[analysis.rs](../../crates/osprey-lsp/src/analysis.rs)) and position-keyed inferred
+types (`ProgramTypes.lets` / `let_type`, [info.rs](../../crates/osprey-types/src/info.rs)).
+Proven by Rust unit tests and VSCode vsix e2e tests; documented in spec 0020
+`[LSP-HOVER]`. The remaining hover work below is inferred-type hover on *arbitrary
+expressions* and cross-file resolution.
+
 ## What works today
 
 - Diagnostics (syntax + type), go-to-definition, find-references, document symbols
@@ -26,8 +38,9 @@ workspace-aware.
 
 ## Gaps (all three are "works narrowly")
 
-1. **Hover** — only at identifier characters; nothing on type annotations,
-   keywords, operators, or expressions (no inferred-type hover). Single-file only.
+1. **Hover** — variable hover (declared/inferred type + `///` docs) landed (see
+   *Update* above); what remains is inferred-type hover on *arbitrary expressions*,
+   type annotations, keywords, and operators, plus cross-file.
    [features.rs](../../crates/osprey-lsp/src/features.rs) `hover`.
 2. **Completion** — ignores cursor position/context; returns all keywords + all
    symbols everywhere (offers `fn` snippet inside a type annotation, etc.); no
@@ -81,7 +94,11 @@ there is no workspace/file-graph context — [crates/osprey-lsp/src/model.rs](..
 - [ ] Thread cursor position + syntactic-context classification into completion.
 - [ ] Context-filter completion suggestions (type annotation / pattern / after-dot
       / call).
-- [ ] Inferred-type hover via `osprey_types` results (beyond declared names).
+- [x] Inferred-type hover for `let`/`mut` bindings + `///` variable docs
+      (`[LSP-HOVER-VARIABLES]`/`[LSP-HOVER-DOCS]`; deep collection in `analysis.rs`,
+      `let_type` by position in `osprey-types`; Rust + vsix e2e tests).
+- [ ] Extend inferred-type hover to arbitrary expressions / type annotations
+      (beyond `let`/`mut` bindings).
 - [ ] Trigger signature help on the function name, not only inside parens.
 - [ ] Add a multi-file workspace index to `Query`/`engine`; make
       definition/references/hover/completion/sig-help cross-file.
