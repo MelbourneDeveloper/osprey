@@ -95,6 +95,41 @@ def ratio_table(data: Data, langs: list[str], cases: list[str]) -> str:
     return head + sep + rows
 
 
+def _other_min(case: dict[str, Cell], key: str) -> float:
+    """Best (lowest) value of `key` among the non-Osprey languages — the bar Osprey is measured against."""
+    vs = [float(c[key]) for lang, c in case.items()
+          if lang != "osprey" and c.get("status") == "ok" and c.get(key)]
+    return min(vs) if vs else float("nan")
+
+
+def tuning_table(data: Data, cases: list[str]) -> str:
+    """Rank benchmarks by Osprey's CPU slowdown vs the fastest OTHER language — worst gap first.
+
+    This is the work list: the top rows are where Osprey's runtime/codegen needs
+    attention most. Peak-memory overhead (Osprey RSS vs the lightest other
+    language) is shown alongside — it is the dominant signal in this suite.
+    """
+    rows: list[tuple[float, str, float, float, float]] = []
+    for n in cases:
+        o = data[n].get("osprey", {})
+        if o.get("status") != "ok" or "mean" not in o:
+            continue
+        cpu_ref = _other_min(data[n], "mean")
+        rss_ref = _other_min(data[n], "rss")
+        rss = float(o.get("rss") or 0)
+        slow = float(o["mean"]) / cpu_ref if cpu_ref == cpu_ref else float("nan")
+        memx = rss / rss_ref if (rss_ref == rss_ref and rss_ref) else float("nan")
+        rows.append((slow, n, float(o["mean"]), rss, memx))
+    rows.sort(reverse=True)
+    head = "| Rank | Benchmark | Osprey CPU | × slower vs fastest | Osprey peak RSS | × heavier |\n"
+    sep = "|---|---|---|---|---|---|\n"
+    body = "".join(
+        f"| {i + 1} | {n} | {fmt_time(mean)} | {slow:.0f}× | {fmt_mem(rss)} | {memx:.0f}× |\n"
+        for i, (slow, n, mean, rss, memx) in enumerate(rows)
+    )
+    return head + sep + body
+
+
 def _ratios(data: Data, cases: list[str], lang: str, key: str) -> list[float]:
     rs: list[float] = []
     for n in cases:
@@ -124,6 +159,12 @@ def render(out: Path) -> None:
     md = ["# Osprey cross-language benchmarks\n",
           f"Languages compared: {', '.join(LABEL[l] for l in langs)}.\n",
           "Lower is better. CPU = hyperfine mean ± stddev; memory = peak resident set size.\n",
+          "\n## Tuning priorities — where Osprey needs work (worst gap first)\n",
+          "Ranked by Osprey's CPU slowdown against the *fastest other* language on each "
+          "benchmark. Start at the top. Memory overhead (vs the lightest other language) is "
+          "shown alongside — in this suite it is the bigger problem and tracks operation count, "
+          "not data size.\n\n",
+          tuning_table(data, cases),
           "\n## CPU time\n", md_table(data, langs, cases, cell_time),
           "\n## Relative speed (× the fastest language per benchmark)\n", ratio_table(data, langs, cases),
           "\n## Peak memory\n", md_table(data, langs, cases, cell_mem),

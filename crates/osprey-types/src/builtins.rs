@@ -69,6 +69,7 @@ fn core(e: &mut TypeEnv) {
     mono(e, "abs", vec![i()], i());
     // Truncating integer division, divide-by-zero-checked → Result<int, MathError>.
     // The `/` operator is float-only (Osprey spec); this is its integer sibling.
+    // Implements [BUILTIN-INTDIV].
     mono(e, "intDiv", vec![i(), i()], res(i()));
     mono(e, "not", vec![b()], b());
 }

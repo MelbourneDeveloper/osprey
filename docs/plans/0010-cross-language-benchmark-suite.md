@@ -2,7 +2,7 @@
 
 **Subsystem:** `benchmarks/` (harness + cases), `Makefile` (`make bench`),
 `.devcontainer` (comparison toolchains)
-**Status:** Suite shipped (15 cases × 5 languages); feature-blocked classics pending
+**Status:** Suite shipped (18 cases × 5 languages); `intDiv` added; feature-blocked classics (arrays, float) pending
 **Spec ID:** `[BENCH-SUITE]`
 
 ## Summary
@@ -16,10 +16,11 @@ RSS). All source lives **in-tree and version-controlled** under
 `benchmarks/cases/<name>/` — `<name>.{osp,rs,c,ml,hs}` + `expected.txt` +
 `bench.json`. Only build/run *output* (`benchmarks/results/`) is gitignored.
 
-## What works today (15 cases)
+## What works today (18 cases)
 
 **Recursion-bound:** `fib`, `ackermann`, `tak`, `hanoi`, `pascal`, `coins`, `mutual`
 **Iteration / number theory:** `primes`, `gcdsum`, `nestedloop`, `factorial`, `powmod`, `josephus`, `coprime`
+**Integer division (`intDiv`):** `collatz`, `digitsum`, `isqrt`
 **Allocation / memory:** `binarytrees`
 
 Harness: [benchmarks/run.sh](../../benchmarks/run.sh) (toolchain detection,
@@ -71,12 +72,16 @@ codegen/runtime path is half-built.
 
 - [x] Harness: build-once, correctness oracle, CPU (hyperfine) + peak RSS.
 - [x] `report.py`: CPU + relative-speed + peak-memory tables, geomean summary.
-- [x] 15 cases × 5 languages, all source version-controlled under `cases/`.
+- [x] `report.py`: **tuning-priorities** section — worst Osprey gap first (the work list).
+- [x] 18 cases × 5 languages, all source version-controlled under `cases/`.
 - [x] `make bench` target + `BENCH_FILTER`; `.gitignore` tracks source, ignores `results/`.
 - [x] Dev container: `ghc`, `ocaml`, `time`, hyperfine.
 - [x] README documents methodology, fairness caveats, the memory finding.
-- [ ] Run full suite end-to-end → publish `results.md` numbers in README findings.
-- [ ] **Add integer division `/`** (typed, checked) — codegen + types + tests.
-- [ ] Add `collatz`, `digit-sum`, `integer-sqrt` cases once `/` lands.
+- [x] Run full suite end-to-end → publish `results.md` numbers in README findings.
+- [x] **Add integer division** as the `intDiv` builtin (`/` stays float-only per
+      spec) — codegen + types + `[BUILTIN-INTDIV]` spec + tested example.
+- [x] Add `collatz`, `digitsum`, `isqrt` cases (all 5 languages, verified vs C oracle).
 - [ ] (Later) mutable arrays → sieve, matrix-multiply, sort/fannkuch/n-queens.
 - [ ] (Later) `int`↔`float` + `sqrt` → mandelbrot, n-body, spectral-norm.
+- [ ] (Later) the dominant finding: free per-operation heap allocation (no GC /
+      scope-based free) so peak RSS stops scaling with operation count.

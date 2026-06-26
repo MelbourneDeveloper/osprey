@@ -222,6 +222,7 @@ fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
 
 /// The `intDiv(a, b)` builtin — truncating integer division, divide-by-zero
 /// checked. The integer sibling of `/` (which the spec fixes to float).
+/// Implements [BUILTIN-INTDIV].
 fn gen_int_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let li = as_i64(cg, l)?;
     let ri = as_i64(cg, r)?;

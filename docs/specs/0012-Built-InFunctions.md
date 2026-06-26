@@ -25,6 +25,26 @@ let x = input()
 ### `toString(value: int | string | bool) -> string`
 Converts any value to its string representation.
 
+## Numeric Functions
+
+### `abs(n: int) -> int`
+Absolute value of an integer.
+
+### `intDiv(a: int, b: int) -> Result<int, MathError>` — [BUILTIN-INTDIV]
+Truncating integer division (rounds toward zero), divide-by-zero checked. The
+`/` operator is **float-only** by the [Type System](0004-TypeSystem.md) spec
+(`int / int` promotes to `float`); `intDiv` is its integer sibling. A zero
+divisor returns `Error(MathError)`; otherwise `Success(quotient)`. Like the
+`+ - * %` operators, the `Success` payload auto-unwraps at value sites
+(interpolation, comparison, arguments, `Result`-typed function returns).
+
+```osprey
+intDiv(7, 2)        // Success(3)
+intDiv(255643, 10)  // Success(25564)
+intDiv(5, 0)        // Error(MathError) — "division by zero"
+fn half(n) = intDiv(n, 2)   // -> int (Result auto-unwraps at the typed return)
+```
+
 ## String Functions
 
 Strings are immutable UTF-8 sequences. Every function listed here is **pure**: it returns a new value and never mutates its arguments.

@@ -76,6 +76,14 @@ print("12 % 5  = ${12 % 5}")
 print("isEven(8) = ${toString(isEven(8))}")
 print("isEven(7) = ${toString(isEven(7))}")
 
+// Integer division: intDiv truncates toward zero (contrast Half = 12.5 above);
+// divide-by-zero yields a Result Error, matched on Success/Error.
+print("intDiv(25,2) = ${intDiv(25, 2)}, intDiv(100,7) = ${intDiv(100, 7)}")
+match intDiv(5, 0) {
+    Success { value } => print("intDiv(5,0) = ${value}")
+    Error { message } => print("intDiv(5,0): ${message}")
+}
+
 // Power, factorial, fibonacci
 let n    = 5
 let m    = 3

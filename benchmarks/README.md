@@ -32,7 +32,7 @@ Results are written to `benchmarks/results/` (gitignored):
 | `results.json` | the same data, structured, for tracking over time |
 | `hf/*.json`    | raw [hyperfine](https://github.com/sharkdp/hyperfine) exports per case |
 
-## The benchmarks (15)
+## The benchmarks (18)
 
 All have a single deterministic **integer** result, so output is byte-comparable
 across languages (a broken implementation is caught and excluded from timing).
@@ -60,6 +60,9 @@ across languages (a broken implementation is caught and excluded from timing).
 | `powmod`     | naive modular exponentiation       | sum of `i^20 mod 1e9+7`, i in 1..1,000,000 |
 | `josephus`   | modular iteration                  | Josephus survivor, n=10,000,000, k=7 |
 | `coprime`    | nested iteration + gcd             | count coprime pairs in a 2000×2000 grid |
+| `collatz`    | integer `/` in deep recursion      | sum of Collatz (3n+1) stopping times over 1..100,000 |
+| `digitsum`   | integer `/` + `%` in recursion     | sum of decimal digit-sums over 1..2,000,000 |
+| `isqrt`      | Newton's method, integer `/`       | sum of integer square roots over 1..1,000,000 |
 
 **Allocation / memory**
 
@@ -114,22 +117,33 @@ Compile commands (source of truth: [`run.sh`](run.sh)):
   conservative versus an flambda build.
 - **Single machine, wall clock.** Treat ratios as indicative; re-run locally.
 
-## Findings (illustrative)
+## Findings
 
-On the author's machine (Apple Silicon, macOS), geometric mean across the suite:
+On the author's machine (Apple Silicon, macOS), geometric mean across the 18
+benchmarks (your `results/results.md` has the live numbers and a ranked
+**tuning-priorities** table — worst Osprey gap first):
 
 ```
-CPU:    Osprey ~10–15× slower than Rust / C / OCaml / Haskell — a stable gap,
-        no single benchmark blows up disproportionately.
-Memory: Osprey uses ~100–1000× more peak RSS than the others.
+CPU:    Osprey ~12–19× slower (geomean) — vs Rust 17.8×, C 18.9×, OCaml 12.5×,
+        Haskell 11.6×. But the spread is wide: arithmetic-in-a-tight-loop cases
+        blow up far worse than the geomean.
+Memory: Osprey uses ~120–960× more peak RSS than the others (geomean), up to
+        2244× on a single case.
 ```
 
-The memory result is the headline. Peak RSS scales with the **number of
+**Worst CPU gaps (vs the fastest other language):** `mutual` 89×, `digitsum`
+79×, `binarytrees` 63×, `collatz` 52×, `isqrt` 46×, `primes` 45×. The pattern is
+sharp: the more an inner loop is *cheap arithmetic and calls* (mutual recursion,
+digit extraction, Collatz, Newton's `intDiv`), the worse Osprey does — because
+each checked op/call is a heap allocation, so tiny work the others do in ~5 ms
+costs Osprey hundreds of ms.
+
+**The memory result is the headline.** Peak RSS scales with the **number of
 operations**, not live data: `print("${1+1}")` ≈ 1.4 MB, `fib(25)` ≈ 13 MB,
-`fib(35)` (≈120× more calls) ≈ 1.4 GB. That is the signature of the runtime
-heap-allocating per checked operation / call and not freeing during a run (no GC,
-no scope-based free) — the single highest-leverage thing to fix, now tracked
-directly by this suite.
+`fib(35)` (≈120× more calls) ≈ 1.4 GB; `hanoi` peaks at **3.0 GB**. That is the
+signature of the runtime heap-allocating per checked operation / call and not
+freeing during a run (no GC, no scope-based free) — the single highest-leverage
+thing to fix, now tracked directly by this suite.
 
 ## Not yet benchmarked (and why)
 
@@ -140,11 +154,13 @@ Blocked on language features Osprey doesn't expose today (left out, not faked):
 | mandelbrot, n-body, spectral-norm | no `sqrt`/trig stdlib, no `int`↔`float` conversion, float-formatting differs across languages (no exact integer oracle) |
 | n-queens, quicksort, mergesort, fannkuch | no list literals / cons / list pattern-matching / mutable arrays |
 | sieve of Eratosthenes, matrix-multiply, n-sieve | no mutable arrays |
-| collatz, digit-sum, integer-sqrt | no integer division or bit-shift operator (only float `/`) |
 | pidigits | no arbitrary-precision integers (i64 only) |
 
-As Osprey grows a math stdlib, numeric conversions, integer division, and
-arrays, these become expressible and should be added here.
+`collatz`, `digitsum`, and `isqrt` were unblocked by adding the `intDiv` builtin
+(truncating, divide-by-zero-checked integer division — the `/` operator stays
+float-only per spec; see [BUILTIN-INTDIV](../docs/specs/0012-Built-InFunctions.md)).
+As Osprey grows a math stdlib, numeric conversions, and mutable arrays, the
+remaining classics above become expressible and should be added here.
 
 ## Adding a benchmark
 

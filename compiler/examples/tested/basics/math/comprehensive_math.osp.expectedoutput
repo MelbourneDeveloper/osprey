@@ -6,6 +6,8 @@ Half:      12.5
 12 % 5  = 2
 isEven(8) = true
 isEven(7) = false
+intDiv(25,2) = 12, intDiv(100,7) = 14
+intDiv(5,0): division by zero
 pow(5,2)   = 25
 pow(5,3)   = 125
 fact(5)    = 120

@@ -53,6 +53,12 @@ pub(crate) static CORE: &[BuiltinDoc] = &[
         example: "let d = abs(0 - 5)  // 5",
     },
     BuiltinDoc {
+        name: "intDiv",
+        summary: "Truncating integer division (rounds toward zero), divide-by-zero checked. The `/` operator is float-only; this is its integer sibling, returning Result<int, MathError>.",
+        params: &[ParamDoc { name: "a", description: "The dividend" }, ParamDoc { name: "b", description: "The divisor (zero yields Error)" }],
+        example: "fn half(n) = intDiv(n, 2)  // intDiv(7, 2) == 3",
+    },
+    BuiltinDoc {
         name: "not",
         summary: "Returns the logical negation of a boolean.",
         params: &[ParamDoc { name: "value", description: "The boolean to negate" }],
