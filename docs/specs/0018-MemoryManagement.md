@@ -10,9 +10,25 @@ you no longer need.
 
 ## Status
 
-Not implemented. The current compiler allocates heap values (closure cells,
-strings, collections, records) and never frees them. This spec is the
-contract every future reclamation backend must satisfy.
+Partially implemented — the *boundary* exists; no *reclaiming* backend ships yet.
+
+- **Swappable backend boundary [MEM-BACKENDS]: done.** All codegen heap
+  allocation funnels through a single `@osp_alloc` hook (osprey-codegen
+  `builder.rs::heap_alloc` / `OSP_ALLOC_DECL`); the emitted IR names no
+  allocator, so a manager is chosen at link time. The default backend
+  (`compiler/runtime/memory_runtime.c`) is a `malloc` passthrough that never
+  frees during a run — sound because reclamation is unobservable [MEM-OPAQUE].
+- **Static reclamation of non-escaping values: done, by the optimizer.** The
+  `@osp_alloc` declaration carries allocator attributes, so at `-O2` LLVM proves
+  provably-dead allocations (the common case — per-operation `Result` blocks,
+  temporaries) non-escaping and removes them entirely. This realises the
+  [MEM-OWNERSHIP] "free at last use, statically" ideal for everything whose
+  lifetime LLVM can see.
+- **Reclaiming *escaping* values: not implemented.** Values that genuinely
+  outlive their allocation site (e.g. nodes of a built-and-held tree) still leak
+  for the run under the default backend. The ARC / tracing-GC backends below,
+  linked behind `@osp_alloc` (+ future `osp_retain`/`osp_release`/`osp_collect`
+  hooks), are what close this. This spec is the contract they must satisfy.
 
 ## Collection Is Unobservable [MEM-OPAQUE]
 

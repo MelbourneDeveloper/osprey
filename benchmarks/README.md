@@ -20,9 +20,11 @@ zsh benchmarks/run.sh            # run directly (assumes `make build` already ra
 zsh benchmarks/run.sh primes     # direct, single case
 ```
 
-> **Heads-up on RAM.** Osprey currently allocates heap memory per operation and
-> does not reclaim it during a run (see *Findings*), so the heavier cases peak at
-> **2–3 GB** each. Run on a machine with ≥8 GB free, or use `BENCH_FILTER`.
+> **Heads-up on RAM.** With the optimized build (below) every case except
+> `binarytrees` peaks at ~1.4 MB — on par with C. `binarytrees` still peaks near
+> **900 MB** because its tree nodes genuinely escape and the default allocator
+> does not reclaim them yet (see *Findings*); run it on a machine with a few GB
+> free, or skip it with `BENCH_FILTER`.
 
 Results are written to `benchmarks/results/` (gitignored):
 
@@ -94,7 +96,7 @@ Compile commands (source of truth: [`run.sh`](run.sh)):
 
 | Lang | Command |
 |------|---------|
-| Osprey  | `osprey <f>.osp --compile` |
+| Osprey  | `osprey <f>.osp --compile` (emits LLVM IR, compiled by clang at `-O2`; override with `OSPREY_OPT`) |
 | Rust    | `rustc -C opt-level=3 -C overflow-checks=off -o <bin> <f>.rs` |
 | C       | `cc -O2 -o <bin> <f>.c` |
 | OCaml   | `ocamlopt -O3 -unsafe -o <bin> <f>.ml` |
@@ -120,30 +122,36 @@ Compile commands (source of truth: [`run.sh`](run.sh)):
 ## Findings
 
 On the author's machine (Apple Silicon, macOS), geometric mean across the 18
-benchmarks (your `results/results.md` has the live numbers and a ranked
-**tuning-priorities** table — worst Osprey gap first):
+benchmarks (`results/results.md` has the live numbers and a ranked
+**tuning-priorities** table):
 
 ```
-CPU:    Osprey ~12–19× slower (geomean) — vs Rust 17.8×, C 18.9×, OCaml 12.5×,
-        Haskell 11.6×. But the spread is wide: arithmetic-in-a-tight-loop cases
-        blow up far worse than the geomean.
-Memory: Osprey uses ~120–960× more peak RSS than the others (geomean), up to
-        2244× on a single case.
+CPU:    Osprey ≈ 1.0× Rust, 1.1× C, 0.7× OCaml, 0.7× Haskell (geomean).
+        At parity with the fastest systems languages; faster than OCaml/Haskell.
+Memory: ≈ C on 17 of 18 cases (~1.4 MB). One outlier: binarytrees.
 ```
 
-**Worst CPU gaps (vs the fastest other language):** `mutual` 89×, `digitsum`
-79×, `binarytrees` 63×, `collatz` 52×, `isqrt` 46×, `primes` 45×. The pattern is
-sharp: the more an inner loop is *cheap arithmetic and calls* (mutual recursion,
-digit extraction, Collatz, Newton's `intDiv`), the worse Osprey does — because
-each checked op/call is a heap allocation, so tiny work the others do in ~5 ms
-costs Osprey hundreds of ms.
+**Osprey is the fastest of all five languages outright on several cases**
+(varies run-to-run, since Osprey/Rust/C are now within measurement noise of each
+other) — e.g. `digitsum`, `pascal`, `tak`, `powmod`, `mutual`, `josephus`,
+`primes`, `gcdsum`. On the rest it ties C/Rust.
 
-**The memory result is the headline.** Peak RSS scales with the **number of
-operations**, not live data: `print("${1+1}")` ≈ 1.4 MB, `fib(25)` ≈ 13 MB,
-`fib(35)` (≈120× more calls) ≈ 1.4 GB; `hanoi` peaks at **3.0 GB**. That is the
-signature of the runtime heap-allocating per checked operation / call and not
-freeing during a run (no GC, no scope-based free) — the single highest-leverage
-thing to fix, now tracked directly by this suite.
+**How it got here.** The first version of this suite measured Osprey 12–89×
+slower and using up to 2244× more memory. The cause was **not** the language: the
+compiler was handing its LLVM IR to clang with **no optimization flag (`-O0`)**,
+so every per-operation `Result` block stayed a live `malloc`. Compiling the IR at
+`-O2` lets LLVM prove those allocations non-escaping and delete them outright
+(heap → registers): `fib(35)` went from **0.52 s / 1.37 GB to 0.01 s / 1.4 MB**.
+See [plan 0010](../docs/plans/0010-cross-language-benchmark-suite.md).
+
+**The one remaining gap: `binarytrees`** (~900 MB, ~24× the fastest). Its tree
+nodes genuinely *escape* — they are built, held, then checksummed — so the
+optimizer cannot statically free them, and Osprey's default allocator
+(`compiler/runtime/memory_runtime.c`, a `malloc` passthrough) does not reclaim
+during a run. Allocation now funnels through one swappable `@osp_alloc` hook
+([MEM-BACKENDS](../docs/specs/0018-MemoryManagement.md)), so a reclaiming backend
+(ARC / arena / tracing GC) can be linked in to close this last gap without
+touching the language.
 
 ## Not yet benchmarked (and why)
 

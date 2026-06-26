@@ -174,14 +174,14 @@ mod tests {
         );
         assert!(ir.contains("define i8* @makeAdder(i64 %n)"));
         assert!(ir.contains("bitcast i8* %__env to { i8*, i64 }*"));
-        assert!(ir.contains("call i8* @malloc"));
+        assert!(ir.contains("call i8* @osp_alloc"));
     }
 
     #[test]
     fn interpolation_uses_sprintf() {
         let ir = module("let x = 7\nprint(\"x=${x}\")\n");
         assert!(ir.contains("@sprintf"));
-        assert!(ir.contains("malloc"));
+        assert!(ir.contains("@osp_alloc"));
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
                print(\"sum=${s}\")\n\
              }\n",
         );
-        assert!(ir.contains("@malloc"));
+        assert!(ir.contains("@osp_alloc"));
         assert!(ir.contains("icmp ne i64"));
         assert!(ir.contains("alloca i64"));
     }
@@ -326,7 +326,7 @@ mod tests {
                print(\"r=${g()}\")\n\
              }\n",
         );
-        assert!(ir.contains("call i8* @malloc"));
+        assert!(ir.contains("call i8* @osp_alloc"));
         assert!(ir.contains("bitcast i8* %__env"));
     }
 
@@ -564,7 +564,7 @@ mod tests {
         assert!(ir.contains("declare i32 @__osprey_handler_push(i8*, i8*, i8*, i8*)"));
         assert!(ir.contains("@__osprey_handler_lookup_env"));
         // the captured `mut` became a heap cell (malloc'd, stored, loaded)
-        assert!(ir.contains("@malloc"));
+        assert!(ir.contains("@osp_alloc"));
         // each arm is emitted with the hidden leading env parameter
         assert!(ir.contains("i8* %__env"));
     }

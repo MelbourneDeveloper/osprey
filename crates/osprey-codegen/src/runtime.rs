@@ -70,11 +70,9 @@ fn result_to_string(cg: &mut Codegen, v: &Value) -> Result<Value> {
 /// `malloc(64)` + `sprintf(buf, fmt, arg)` for a single `%s` substitution,
 /// returning the buffer.
 fn sprintf_wrap(cg: &mut Codegen, fmt: &str, arg: &str) -> String {
-    cg.add_extern("declare i8* @malloc(i64)");
     cg.add_extern("declare i32 @sprintf(i8*, i8*, ...)");
     let fmtv = cg.string_constant(fmt);
-    let buf = cg.fresh_reg();
-    cg.emit(format!("{buf} = call i8* @malloc(i64 64)"));
+    let buf = cg.heap_alloc("64");
     let tmp = cg.fresh_reg();
     cg.emit(format!(
         "{tmp} = call i32 (i8*, i8*, ...) @sprintf(i8* {buf}, i8* {}, i8* {arg})",
@@ -93,12 +91,10 @@ pub(crate) fn gen_print(cg: &mut Codegen, v: Value) -> Result<Value> {
 }
 
 pub(crate) fn int_to_string(cg: &mut Codegen, v: Value) -> Result<Value> {
-    cg.add_extern("declare i8* @malloc(i64)");
     cg.add_extern("declare i32 @sprintf(i8*, i8*, ...)");
     let i = as_i64(cg, v)?;
     let fmt = cg.string_constant("%ld");
-    let buf = cg.fresh_reg();
-    cg.emit(format!("{buf} = call i8* @malloc(i64 32)"));
+    let buf = cg.heap_alloc("32");
     let tmp = cg.fresh_reg();
     cg.emit(format!(
         "{tmp} = call i32 (i8*, i8*, ...) @sprintf(i8* {buf}, i8* {}, i64 {})",

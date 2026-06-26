@@ -271,7 +271,7 @@ fn gen_str_concat(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let rl = cg.call("i64", "strlen", "i8*", &[&rs.operand]);
     let sum = cg.emit_reg(format!("add i64 {ll}, {rl}"));
     let total = cg.emit_reg(format!("add i64 {sum}, 1"));
-    let buf = cg.call("i8*", "malloc", "i64", &[&total]);
+    let buf = cg.heap_alloc(&total);
     let _ = cg.call("i8*", "strcpy", "i8*, i8*", &[&buf, &ls.operand]);
     let _ = cg.call("i8*", "strcat", "i8*, i8*", &[&buf, &rs.operand]);
     Ok(Value::new(buf, LType::Str))
@@ -673,10 +673,8 @@ fn gen_interpolation(cg: &mut Codegen, parts: &[InterpolatedPart]) -> Result<Val
         }
     }
     let fmtv = cg.string_constant(&fmt);
-    cg.add_extern("declare i8* @malloc(i64)");
     cg.add_extern("declare i32 @sprintf(i8*, i8*, ...)");
-    let buf = cg.fresh_reg();
-    cg.emit(format!("{buf} = call i8* @malloc(i64 4096)"));
+    let buf = cg.heap_alloc("4096");
     let tmp = cg.fresh_reg();
     let extra = if args.is_empty() {
         String::new()

@@ -69,9 +69,7 @@ pub(crate) fn gen_list(cg: &mut Codegen, elements: &[Expr]) -> Result<Value> {
     // recover it; scalars carry none.
     let elem_owner = first.osp_ty.clone();
     let n = elements.len();
-    cg.add_extern("declare i8* @malloc(i64)");
-    let data = cg.fresh_reg();
-    cg.emit(format!("{data} = call i8* @malloc(i64 {})", n * 8));
+    let data = cg.heap_alloc(&(n * 8).to_string());
     let arr = cg.fresh_reg();
     cg.emit(format!("{arr} = bitcast i8* {data} to {}*", elem.as_str()));
     for (i, v) in vals.into_iter().enumerate() {
