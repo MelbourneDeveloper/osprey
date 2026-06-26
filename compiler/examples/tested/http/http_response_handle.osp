@@ -12,7 +12,7 @@ fn handleRequest(method: string, path: string, headers: string, body: string) ->
     partialBody: "hello body"
 }
 
-fn bodyLine(h: int) -> string = {
+fn bodyLine(h) = {
     let r = httpResponseBody(h)
     match r {
         Success { value } => "body=${value}"
@@ -20,7 +20,7 @@ fn bodyLine(h: int) -> string = {
     }
 }
 
-fn headerLine(h: int, name: string) -> string = {
+fn headerLine(h, name) = {
     let r = httpResponseHeader(h, name)
     match r {
         Success { value } => "hdr=${value}"
@@ -28,7 +28,7 @@ fn headerLine(h: int, name: string) -> string = {
     }
 }
 
-fn freeLine(h: int) -> string = {
+fn freeLine(h) = {
     let r = httpResponseFree(h)
     match r {
         Success { value } => "free-ok"
@@ -36,7 +36,7 @@ fn freeLine(h: int) -> string = {
     }
 }
 
-fn run() -> Unit = {
+fn run() = {
     let serverId = httpCreateServer(18095, "127.0.0.1")
     let listenResult = httpListen(serverId, handleRequest)
     let clientId = httpCreateClient("http://127.0.0.1:18095", 5000)

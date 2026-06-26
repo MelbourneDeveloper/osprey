@@ -1,0 +1,4 @@
+{
+  "name": "coprime",
+  "description": "Count coprime pairs in a 2000x2000 grid — nested iteration + Euclidean gcd"
+}

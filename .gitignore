@@ -110,3 +110,12 @@ target/
 .deslop-cache/
 
 .vscode/code-navigator/
+
+# Benchmark suite: generated binaries, hyperfine exports, rendered reports.
+# Per-language *source* files under benchmarks/cases/ ARE tracked; only the
+# build/run output is ignored. Plus stray native-compiler intermediates.
+benchmarks/results/
+benchmarks/cases/**/*.hi
+benchmarks/cases/**/*.cmi
+benchmarks/cases/**/*.cmx
+benchmarks/cases/**/*.o

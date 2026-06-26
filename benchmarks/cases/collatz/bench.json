@@ -1,0 +1,4 @@
+{
+  "name": "collatz",
+  "description": "Sum of Collatz (3n+1) stopping times over 1..100000 — integer division n/2 in deep recursion"
+}

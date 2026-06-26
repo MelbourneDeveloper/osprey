@@ -43,7 +43,7 @@ effect Database {
 }
 
 // --- real SQLite handler implementations (top-level, no captures) ---
-fn openReal(path: string) -> Result<Ptr, Error> = {
+fn openReal(path) = {
     let cell = osprey_ffi_cell()
     let rc = sqlite3_open(filename: path, ppDb: cell)
     let db = osprey_ffi_deref(cell: cell)
@@ -54,10 +54,10 @@ fn openReal(path: string) -> Result<Ptr, Error> = {
     }
 }
 
-fn execReal(db: Ptr, sql: string) -> int =
+fn execReal(db, sql) =
     sqlite3_exec(db: db, sql: sql, cb: osprey_ffi_null(), arg: osprey_ffi_null(), errmsg: osprey_ffi_null())
 
-fn prepareReal(db: Ptr, sql: string) -> Ptr = {
+fn prepareReal(db, sql) = {
     let cell = osprey_ffi_cell()
     let rc = sqlite3_prepare_v2(db: db, sql: sql, nByte: 0 - 1, ppStmt: cell, tail: osprey_ffi_null())
     let stmt = osprey_ffi_deref(cell: cell)
@@ -66,7 +66,7 @@ fn prepareReal(db: Ptr, sql: string) -> Ptr = {
 }
 
 // --- application logic: effect-typed, knows nothing about SQLite or FFI ---
-fn seedUser(db: Ptr, uid: int, uname: string) -> int !Database = {
+fn seedUser(db, uid, uname) !Database = {
     let stmt = perform Database.prepare(db, "INSERT INTO users(id, name) VALUES (?, ?)")
     let b1 = perform Database.bindInt(stmt, 1, uid)
     let b2 = perform Database.bindText(stmt, 2, uname)
@@ -75,13 +75,13 @@ fn seedUser(db: Ptr, uid: int, uname: string) -> int !Database = {
     rc
 }
 
-fn showUser(stmt: Ptr) -> int !Database = {
+fn showUser(stmt) !Database = {
     let rc = perform Database.step(stmt)
     print("user ${perform Database.columnInt(stmt, 0)} = ${perform Database.columnText(stmt, 1)}")
     rc
 }
 
-fn runApp(db: Ptr) -> Unit !Database = {
+fn runApp(db) !Database = {
     let createrc = perform Database.exec(db, "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT)")
     match createrc {
         0 => print("create ok")
@@ -101,7 +101,7 @@ fn runApp(db: Ptr) -> Unit !Database = {
     }
 }
 
-fn main() -> Unit =
+fn main() =
     handle Database
         open path => openReal(path: path)
         exec db sql => execReal(db: db, sql: sql)

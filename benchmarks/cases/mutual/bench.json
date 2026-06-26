@@ -1,0 +1,4 @@
+{
+  "name": "mutual",
+  "description": "Mutually-recursive isEven/isOdd applied across a range — mutual recursion"
+}

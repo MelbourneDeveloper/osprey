@@ -7,21 +7,21 @@
 
 type Pri = Low | Med | High
 
-fn priWeight(p: Pri) -> int = match p {
+fn priWeight(p) = match p {
     Low  => 1
     Med  => 5
     High => 9
 }
 
 type Color = Red | Green | Blue
-fn colorName(c: Color) -> string = match c {
+fn colorName(c) = match c {
     Red   => "red"
     Green => "green"
     Blue  => "blue"
 }
 
 // Forward reference: callerOfLater is defined here, calleeLater below.
-fn callerOfLater() -> int = calleeLater(10)
+fn callerOfLater() = calleeLater(10)
 
 fn main() -> int {
     print("=== omnibus ===")
@@ -57,9 +57,9 @@ fn main() -> int {
     print("forward call -> ${callerOfLater()}")
 
     // --- Lambda + pipe + chained pipe ---
-    let r = 5 |> (fn(x: int) => x + 100) |> (fn(x: int) => x * 2)
+    let r = 5 |> (fn(x) => x + 100) |> (fn(x) => x * 2)
     print(toString(r))
-    let single = 7 |> fn(x: int) => x * 3
+    let single = 7 |> fn(x) => x * 3
     print(toString(single))
 
     // --- mut auto-unwrap counter ---
@@ -100,4 +100,4 @@ fn main() -> int {
     0
 }
 
-fn calleeLater(n: int) -> int = n * 4
+fn calleeLater(n) = n * 4

@@ -1,0 +1,4 @@
+{
+  "name": "digitsum",
+  "description": "Sum of decimal digit-sums over 1..2000000 — integer division n/10 and modulo"
+}

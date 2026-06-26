@@ -1,0 +1,4 @@
+{
+  "name": "ackermann",
+  "description": "Ackermann-Peter function ack(3,10) — deep non-tail recursion"
+}

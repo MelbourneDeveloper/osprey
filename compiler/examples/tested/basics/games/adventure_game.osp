@@ -13,7 +13,7 @@ let goldCoins = 50
 let monstersDefeated = 0
 
 // Character stats and progression
-fn calculatePlayerLevel(defeats: int) -> int = match defeats {
+fn calculatePlayerLevel(defeats) = match defeats {
     0 => 1
     1 => 2
     2 => 3
@@ -21,7 +21,7 @@ fn calculatePlayerLevel(defeats: int) -> int = match defeats {
     _ => 5
 }
 
-fn getPlayerTitle(level: int) -> string = match level {
+fn getPlayerTitle(level) = match level {
     1 => "Novice Adventurer"
     2 => "Brave Explorer"
     3 => "Seasoned Warrior"
@@ -30,28 +30,28 @@ fn getPlayerTitle(level: int) -> string = match level {
 }
 
 // Combat system with separate functions (avoiding nested matches)
-fn calculateWeaponDamage(enemyType: int) -> int = match enemyType {
+fn calculateWeaponDamage(enemyType) = match enemyType {
     1 => 25  // Goblin with sword
     2 => 40  // Orc with sword
     3 => 60  // Dragon with sword
     _ => 15  // Unknown enemy with sword
 }
 
-fn calculateBarehandDamage(enemyType: int) -> int = match enemyType {
+fn calculateBarehandDamage(enemyType) = match enemyType {
     1 => 10  // Goblin barehanded
     2 => 15  // Orc barehanded
     3 => 20  // Dragon barehanded (barely a scratch!)
     _ => 5   // Unknown enemy barehanded
 }
 
-fn getEnemyName(enemyType: int) -> string = match enemyType {
+fn getEnemyName(enemyType) = match enemyType {
     1 => "Sneaky Goblin"
     2 => "Fierce Orc"
     3 => "Ancient Dragon"
     _ => "Mysterious Shadow"
 }
 
-fn getEnemyHealth(enemyType: int) -> int = match enemyType {
+fn getEnemyHealth(enemyType) = match enemyType {
     1 => 30  // Goblin
     2 => 60  // Orc
     3 => 120 // Dragon
@@ -59,7 +59,7 @@ fn getEnemyHealth(enemyType: int) -> int = match enemyType {
 }
 
 // Room exploration system
-fn exploreRoom(roomNumber: int) -> string = match roomNumber {
+fn exploreRoom(roomNumber) = match roomNumber {
     1 => "the Grand Entrance Hall with marble columns"
     2 => "a dusty Library filled with ancient tomes"
     3 => "the Armory containing gleaming weapons"
@@ -68,7 +68,7 @@ fn exploreRoom(roomNumber: int) -> string = match roomNumber {
     _ => "a mysterious room filled with swirling mist"
 }
 
-fn getRoomTreasure(roomNumber: int) -> int = match roomNumber {
+fn getRoomTreasure(roomNumber) = match roomNumber {
     1 => 10  // Small coin purse
     2 => 25  // Valuable book
     3 => 0   // Weapon instead of gold
@@ -77,12 +77,12 @@ fn getRoomTreasure(roomNumber: int) -> int = match roomNumber {
     _ => 5   // Mysterious trinket
 }
 
-fn hasRoomWeapon(roomNumber: int) -> int = match roomNumber {
+fn hasRoomWeapon(roomNumber) = match roomNumber {
     3 => 1  // Armory has sword
     _ => 0  // No weapon in other rooms
 }
 
-fn hasRoomKey(roomNumber: int) -> int = match roomNumber {
+fn hasRoomKey(roomNumber) = match roomNumber {
     2 => 1  // Library has key
     _ => 0  // No key in other rooms
 }

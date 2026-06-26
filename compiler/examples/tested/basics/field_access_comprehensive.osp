@@ -54,7 +54,7 @@ print("")
 
 // Test 6 - Complex expressions with field access
 print("Test 6 - Complex expressions with field access:")
-fn calculateArea(r: Rectangle) -> int = r.width * r.height
+fn calculateArea(r) = r.width * r.height
 let perimeter = 2 * (rect.width + rect.height)
 let manhattanDistance = point.x + point.y
 let calculatedArea = calculateArea(rect)

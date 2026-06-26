@@ -1,0 +1,4 @@
+{
+  "name": "primes",
+  "description": "Count primes below 200000 by trial division — integer modulo in a hot loop"
+}

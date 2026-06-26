@@ -1,0 +1,4 @@
+{
+  "name": "factorial",
+  "description": "Product 1..10,000,000 mod 1000000007 — multiplication-heavy fold"
+}

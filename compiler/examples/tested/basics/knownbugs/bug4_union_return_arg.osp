@@ -1,9 +1,9 @@
 type Outcome = Done { score: int } | Failed { code: int }
-fn classify(s: int) -> Outcome = match s {
+fn classify(s) = match s {
     0 => Failed { code: 99 }
     _ => Done   { score: s }
 }
-fn describe(o: Outcome) -> string = match o {
+fn describe(o) = match o {
     Done   { score } => "done " + toString(score)
     Failed { code }  => "failed " + toString(code)
 }

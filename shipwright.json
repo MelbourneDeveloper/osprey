@@ -9,7 +9,7 @@
   },
   "components": [
     {
-      "id": "osprey-compiler",
+      "id": "osprey",
       "kind": "cli",
       "binaryName": "osprey",
       "expectedVersion": "0.0.0-dev",
@@ -45,17 +45,17 @@
   "hosts": {
     "vscode": {
       "artifact": "vsix-per-platform",
-      "activationVerifies": ["osprey-compiler"],
+      "activationVerifies": ["osprey"],
       "onMismatch": "prompt-reinstall"
     },
     "cli": {
       "artifact": "archive",
-      "activationVerifies": ["osprey-compiler"],
+      "activationVerifies": ["osprey"],
       "onMismatch": "error"
     },
     "pkgmgr": {
       "artifact": "brew-formula",
-      "activationVerifies": ["osprey-compiler"],
+      "activationVerifies": ["osprey"],
       "onMismatch": "error"
     }
   }

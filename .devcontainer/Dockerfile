@@ -1,7 +1,10 @@
 # Simple, minimal Dockerfile for Osprey development (Rust compiler + C runtime)
 FROM debian:bookworm
 
-# Install basic system packages
+# Install basic system packages.
+# Benchmark suite (make bench): ghc + ocaml are the comparison toolchains;
+# `time` is GNU /usr/bin/time for peak-memory (RSS) measurement. hyperfine is
+# installed separately below (not packaged in Debian bookworm).
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
@@ -22,8 +25,20 @@ RUN apt-get update && apt-get install -y \
     jq \
     unzip \
     zip \
+    ghc \
+    ocaml \
+    time \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# hyperfine — statistical CPU-time benchmarking tool used by `make bench`.
+# Not in Debian bookworm apt; pull the release .deb for the build architecture.
+ARG HYPERFINE_VERSION=1.19.0
+RUN arch="$(dpkg --print-architecture)" \
+    && curl -fsSL -o /tmp/hyperfine.deb \
+      "https://github.com/sharkdp/hyperfine/releases/download/v${HYPERFINE_VERSION}/hyperfine_${HYPERFINE_VERSION}_${arch}.deb" \
+    && dpkg -i /tmp/hyperfine.deb \
+    && rm -f /tmp/hyperfine.deb
 
 # Install Node.js
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \

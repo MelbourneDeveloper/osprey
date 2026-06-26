@@ -29,20 +29,20 @@ print("T<I,S,I>: ${tIBI.first}/${tIBI.second}/${tIBI.third}")
 print("")
 
 // --- Function type equality via HOFs ---
-fn addOne(x: int)        -> int    = x + 1
-fn timesTwo(x: int)      -> int    = x * 2
-fn minusOne(x: int)      -> int    = x - 1
-fn excl(s: string)       -> string = s + "!"
-fn ques(s: string)       -> string = s + "?"
-fn intToString(x: int)   -> string = toString(x)
+fn addOne(x)        -> int    = x + 1
+fn timesTwo(x)      -> int    = x * 2
+fn minusOne(x)      -> int    = x - 1
+fn excl(s)       = s + "!"
+fn ques(s)       = s + "?"
+fn intToString(x)   = toString(x)
 fn twoArgAdd(a: int, b: int) -> int = a + b
 fn threeArgAdd(a: int, b: int, c: int) -> int = a + b + c
 
-fn applyInt(f: (int) -> int, x: int) -> int    = f(x)
-fn applyStr(f: (string) -> string, s: string) -> string = f(s)
-fn applyToStr(f: (int) -> string, x: int) -> string = f(x)
-fn applyTwo(f: (int, int) -> int, a: int, b: int) -> int = f(a, b)
-fn applyThree(f: (int, int, int) -> int, a: int, b: int, c: int) -> int = f(a, b, c)
+fn applyInt(f, x)    = f(x)
+fn applyStr(f, s) = f(s)
+fn applyToStr(f, x) = f(x)
+fn applyTwo(f: (int, int) -> int, a, b) = f(a, b)
+fn applyThree(f: (int, int, int) -> int, a, b, c) = f(a, b, c)
 
 print("=== Same (int)->int passed via HOF ===")
 print(toString(applyInt(f: addOne,   x: 10)))
@@ -69,19 +69,19 @@ print(duplicate("b"))
 
 // --- Union type equality (same tag = same, different tag = different) ---
 type Color = Red | Green | Blue
-fn colorName(c: Color) -> string = match c {
+fn colorName(c) = match c {
     Red   => "red"
     Green => "green"
     Blue  => "blue"
 }
-fn sameColor(a: Color, b: Color) -> bool = match a {
+fn sameColor(a, b) = match a {
     Red   => match b { Red   => true _ => false }
     Green => match b { Green => true _ => false }
     Blue  => match b { Blue  => true _ => false }
 }
-let c1: Color = Red
-let c2: Color = Red
-let c3: Color = Blue
+let c1 = Red
+let c2 = Red
+let c3 = Blue
 print("color1=${colorName(c1)} color3=${colorName(c3)}")
 print("sameRR=${toString(sameColor(a: c1, b: c2))}")
 print("sameRB=${toString(sameColor(a: c1, b: c3))}")

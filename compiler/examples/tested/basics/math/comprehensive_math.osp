@@ -37,7 +37,7 @@ fn complex(a, b) = match (a * 2) + (b * 3) - 1 {
     Error { message } => 0
 }
 
-fn isEven(x: int) -> bool = (x % 2) == 0
+fn isEven(x) = (x % 2) == 0
 
 fn classify(n) = match n {
     0 => "Zero"
@@ -45,7 +45,7 @@ fn classify(n) = match n {
     _ => "Many"
 }
 
-fn safeDivide(a: int, b: int) -> int = match b {
+fn safeDivide(a, b) = match b {
     0 => 999999
     _ => match a {
         10 => 5

@@ -67,6 +67,9 @@ fn core(e: &mut TypeEnv) {
     // range(start, end) -> List<int>
     mono(e, "range", vec![i(), i()], Type::list(i()));
     mono(e, "abs", vec![i()], i());
+    // Truncating integer division, divide-by-zero-checked → Result<int, MathError>.
+    // The `/` operator is float-only (Osprey spec); this is its integer sibling.
+    mono(e, "intDiv", vec![i(), i()], res(i()));
     mono(e, "not", vec![b()], b());
 }
 

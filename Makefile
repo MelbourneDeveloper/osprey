@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup tui run install uninstall website-dev website-build rebuild-install-vsix
+.PHONY: build test lint fmt clean ci setup tui run install uninstall website-dev website-build rebuild-install-vsix bench
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -274,6 +274,15 @@ website-dev:
 ## website-build: Build static site
 website-build:
 	cd website && npm run build
+
+## bench: Build, then run the cross-language performance benchmark suite
+##        (Osprey vs Rust/C/OCaml/Haskell — CPU via hyperfine, peak memory via
+##        /usr/bin/time). Absent toolchains are skipped. Informational only:
+##        NOT part of `make ci`/`make test` (perf is noisy on shared runners).
+##        Pass a name filter via BENCH_FILTER=<substr>; results in
+##        benchmarks/results/results.md. See benchmarks/README.md.
+bench: build
+	@zsh benchmarks/run.sh $(BENCH_FILTER)
 
 ## rebuild-install-vsix: Uninstall → clean → rebuild → package → install the
 ##      VSCode extension into every VSCode profile, bundling the freshly-built

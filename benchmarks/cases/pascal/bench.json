@@ -1,0 +1,4 @@
+{
+  "name": "pascal",
+  "description": "Binomial C(27,13) via naive un-memoised Pascal recursion — exponential recursion"
+}

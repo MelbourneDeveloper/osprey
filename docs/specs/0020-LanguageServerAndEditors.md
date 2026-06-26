@@ -243,8 +243,11 @@ extension and the binary it launches MUST be version-matched.
 - The binary is the source of truth: `osprey --version` → `osprey X.Y.Z`;
   `osprey --version --json` → the version manifest (`[SWR-VERSION-CLI-OUTPUT]`).
 - Components are declared in [`shipwright.json`](../../shipwright.json):
-  `osprey-compiler` (the CLI — which *is* the language server, via the `lsp`
-  subcommand) and `osprey-vscode`. The LSP is **not** a separate component; it is
+  `osprey` (the CLI — which *is* the language server, via the `lsp`
+  subcommand) and `osprey-vscode`. The component id **must** equal the name the
+  binary reports from `osprey --version` (Shipwright matches the probed name
+  against the component id), so the CLI component is `osprey`, not
+  `osprey-compiler`. The LSP is **not** a separate component; it is
   the same binary, so no separate version surface exists to drift.
 - Source version fields stay at `0.0.0-dev`; the real version is stamped from the
   git tag at build time (`[SWR-VERSION-BUILD-STAMPING]`). Hard-coding a version is

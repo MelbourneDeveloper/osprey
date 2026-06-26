@@ -39,12 +39,12 @@ fn nested(x, y) = match x {
     }
 }
 
-fn describe(s: Shape) -> string = match s {
+fn describe(s) = match s {
     Circle { radius }  => "circle r=${toString(radius)}"
     Square { x, y }    => "square (${toString(x)},${toString(y)})"
 }
 
-fn shapeKind(s: Shape) -> string = match s {
+fn shapeKind(s) = match s {
     Circle { radius } => "dyn circle"
     Square { x, y }   => "dyn square"
 }
@@ -81,8 +81,8 @@ print(match bob   { PersonData { age, name } => "Reordered: ${name}/${toString(a
 print(match alice { p: PersonData => "Got PersonData type" _ => "Other" })
 
 // --- Multi-variant + dynamic via function return ---
-let c: Shape = Circle { radius: 5 }
-let s: Shape = Square { x: 3, y: 7 }
+let c = Circle { radius: 5 }
+let s = Square { x: 3, y: 7 }
 print(describe(c))
 print(describe(s))
 print(shapeKind(c))

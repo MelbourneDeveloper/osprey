@@ -29,13 +29,13 @@ extern fn osprey_ffi_null() -> Ptr
 extern fn osprey_ffi_transient() -> Ptr
 
 // SQLITE_OK = 0, SQLITE_DONE = 101. A friendly status for the OK code.
-fn okText(rc: int) -> string = match rc {
+fn okText(rc) = match rc {
     0 => "ok"
     _ => "err"
 }
 
 // Prepare a statement and hand back the live stmt pointer (out-param via a cell).
-fn prepare(db: Ptr, sql: string) -> Ptr = {
+fn prepare(db, sql) = {
     let cell = osprey_ffi_cell()
     let rc = sqlite3_prepare_v2(db: db, sql: sql, nByte: 0 - 1, ppStmt: cell, tail: osprey_ffi_null())
     let stmt = osprey_ffi_deref(cell: cell)
@@ -44,7 +44,7 @@ fn prepare(db: Ptr, sql: string) -> Ptr = {
 }
 
 // Insert one user with BOUND parameters — no string interpolation of values.
-fn insertUser(db: Ptr, uid: int, uname: string) -> int = {
+fn insertUser(db, uid, uname) = {
     let stmt = prepare(db: db, sql: "INSERT INTO users(id, name) VALUES (?, ?)")
     let b1 = sqlite3_bind_int(stmt: stmt, idx: 1, val: uid)
     let b2 = sqlite3_bind_text(stmt: stmt, idx: 2, val: uname, nByte: 0 - 1, destructor: osprey_ffi_transient())
@@ -54,7 +54,7 @@ fn insertUser(db: Ptr, uid: int, uname: string) -> int = {
 }
 
 // Read the next row and print it as a typed (int, text) pair.
-fn printRow(stmt: Ptr) -> int = {
+fn printRow(stmt) = {
     let rc = sqlite3_step(stmt: stmt)
     print("user ${sqlite3_column_int(stmt: stmt, col: 0)} = ${sqlite3_column_text(stmt: stmt, col: 1)}")
     rc

@@ -1,0 +1,4 @@
+{
+  "name": "hanoi",
+  "description": "Towers of Hanoi move count (n=25) — exponential double recursion"
+}

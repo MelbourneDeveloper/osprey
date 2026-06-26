@@ -1,0 +1,4 @@
+{
+  "name": "powmod",
+  "description": "Sum of i^20 mod 1000000007 for i in 1..1,000,000 — naive modular exponentiation"
+}

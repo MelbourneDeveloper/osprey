@@ -3,7 +3,7 @@
 // breaks. Sections preserved verbatim (apart from being concatenated).
 
 // --- Hero ---
-fn double(n: int) -> int = n * 2
+fn double(n) = n * 2
 
 let x = 42
 let name = "Alice"
@@ -44,7 +44,7 @@ print("${xx} doubled is ${doubled}")
 print("${doubled} squared is ${squared}")
 
 // --- Grade pattern matching ---
-fn getGrade(s: int) -> string = match s {
+fn getGrade(s) = match s {
     100 => "Perfect!"
     95  => "Excellent"
     85  => "Very Good"
@@ -63,7 +63,7 @@ print("Range operations:")
 range(1, 10) |> forEach(print)
 
 // --- Fibers ---
-fn compute(value: int) -> int = value * 2
+fn compute(value) = value * 2
 let fiber1 = spawn compute(5)
 let fiber2 = spawn compute(10)
 print("Fiber 1 result: ${fiber1}")

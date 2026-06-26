@@ -1,0 +1,4 @@
+{
+  "name": "josephus",
+  "description": "Josephus survivor index (n=10,000,000, k=7) — modular iteration"
+}
