@@ -529,7 +529,7 @@ fn calculateTime(complexity) -> float = {
     complexity / divisor + offset
 }
 
-fn calculateEfficiency(duration: float) = {
+fn calculateEfficiency(duration) = {
     let thresholds = [50.0, 100.0]
     let scores = [100, 75, 50]
     let t1 = match thresholds[0] { Success { value } => value Error { message } => 50.0 }
@@ -582,7 +582,7 @@ fn aggregateResults(result1, result2, result3) = {
 }
 
 // 🔄 Effectful Task Processing - Combining effects with pattern matching
-fn processTask(taskId: string, dataSize: int, priority: TaskPriority) -> TaskResult ![Logger, Metrics] = {
+fn processTask(taskId, dataSize, priority) -> TaskResult ![Logger, Metrics] = {
     perform Logger.info("Starting task: " + taskId + " with data size: " + toString(dataSize))
     
     let complexity = calculateComplexity(priority)
@@ -618,7 +618,7 @@ fn processTask(taskId: string, dataSize: int, priority: TaskPriority) -> TaskRes
 }
 
 // Helper functions for fiber processing  
-fn processTaskForBatch(taskId: string, dataSize: int, priority: TaskPriority) -> int ![Logger, Metrics] = {
+fn processTaskForBatch(taskId, dataSize, priority) -> int ![Logger, Metrics] = {
     let result = processTask(taskId: taskId, dataSize: dataSize, priority: priority)
     match result {
         Success => 900
@@ -738,7 +738,7 @@ fn processGammaBatch() -> int ![Logger, TaskQueue, Metrics] = {
 }
 
 // 🔀 Advanced Pattern Matching - Complex task result analysis
-fn analyzeTaskResults(results: int, processingTime: int) -> string ![Metrics] = {
+fn analyzeTaskResults(results, processingTime) -> string ![Metrics] = {
     let totalProcessed = perform Metrics.getTotalProcessed()
     let efficiency = results * 10  // Simplified calculation
     

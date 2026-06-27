@@ -234,6 +234,12 @@ Returns byte-index of first occurrence of needle, or Error(NotFound).
 
 Reads a string from the user's input.
 
+## [intDiv](intdiv/)
+
+**Signature:** `intDiv(a: int, b: int) -> Result<int, Error>`
+
+Truncating integer division (rounds toward zero), divide-by-zero checked. The `/` operator is float-only; this is its integer sibling, returning Result<int, MathError>.
+
 ## [isEmpty](isempty/)
 
 **Signature:** `isEmpty(s: any) -> bool`
