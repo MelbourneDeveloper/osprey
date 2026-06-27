@@ -61,13 +61,13 @@ A    ?= -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall 
 B    ?= $(A) -std=c11
 OSSL ?= -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations
 # Object lists for the archives (paths relative to compiler/, where `ar` runs).
-FIB_OBJ  ?= bin/memory_runtime.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
+FIB_OBJ  ?= bin/memory_runtime.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o
 HTTP_OBJ ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ)
 # GC backend archives (osprey --memory=gc): the tracing collector replaces
 # memory_runtime.o, and the value-container units are rebuilt with the malloc
 # redirect (osp_gc_shim.h) so their nodes live in the managed heap. Everything
 # else is the same object. Implements [GC-TRACE-CONSERVATIVE], docs/plans/0011.
-FIB_OBJ_GC  ?= bin/memory_gc.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/gc/list_runtime.o bin/gc/map_runtime.o bin/gc/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
+FIB_OBJ_GC  ?= bin/memory_gc.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/gc/list_runtime.o bin/gc/map_runtime.o bin/gc/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o
 HTTP_OBJ_GC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ_GC)
 
 # WebAssembly (wasm32-wasip1) cross-build toolchain — opt-in via `make wasm`.
@@ -186,6 +186,7 @@ _runtime:
 	  $(CC) $(B) runtime/json_runtime.c         -o bin/json_runtime.o && \
 	  $(CC) $(B) runtime/ffi_runtime.c          -o bin/ffi_runtime.o && \
 	  $(CC) $(B) runtime/term_runtime.c         -o bin/term_runtime.o && \
+	  $(CC) $(B) runtime/random_runtime.c       -o bin/random_runtime.o && \
 	  $(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra \
 	        -Wformat -Werror=format-security -Werror=implicit-function-declaration \
 	        -Werror=incompatible-pointer-types -Werror=int-conversion -Warray-bounds -ftrapv \

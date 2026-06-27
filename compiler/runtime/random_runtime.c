@@ -18,6 +18,7 @@
 #define OSP_HAVE_ARC4RANDOM 1
 #elif defined(__linux__)
 #include <sys/random.h>
+#include <sys/types.h> // ssize_t for the getrandom(2) return
 #define OSP_HAVE_GETRANDOM 1
 #endif
 
