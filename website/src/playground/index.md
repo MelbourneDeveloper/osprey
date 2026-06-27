@@ -476,368 +476,105 @@ description: "Try Osprey programming language online with interactive code examp
         
         // Create editor
         editor = monaco.editor.create(document.getElementById('editor'), {
-            value: `// 🚀 OSPREY MEGA SHOWCASE - DISTRIBUTED TASK PROCESSING SYSTEM 🔥
-// A cohesive demonstration of ALL Osprey features working together in harmony
-// Shows Hindley-Milner type inference, algebraic effects, fiber concurrency,
-// pattern matching, and functional programming in ONE integrated system!
+            value: `// 🦅 OSPREY — one screen, the whole language, led by ALGEBRAIC EFFECTS.
+//
+// Effects let pure-looking code \`perform\` operations whose meaning is chosen
+// LATER by a \`handle … in …\` block. So the exact same logic can run in two
+// different worlds with zero changes — the killer feature on display below.
+// Also shown: fibers, union types + exhaustive pattern matching, Hindley–
+// Milner inference (no type annotations), functional pipelines, interpolation.
+// Every value is really computed — nothing here is faked.
 
-// 🎭 Algebraic Effects - Complete system for distributed processing
-effect Logger {
-    info: fn(string) -> Unit
-    warn: fn(string) -> Unit
-    error: fn(string) -> Unit
+// ════════════════ ACT 1 · ALGEBRAIC EFFECTS ════════════════
+// Two effect interfaces the program may \`perform\`.
+effect Console { emit: fn(string) -> Unit }   // where output goes
+effect Ledger  { post: fn(int) -> int }         // returns the running balance
+
+// PURE orchestration: account() only performs effects. It has no idea whether
+// the ledger is real or a mock, whether output is printed or swallowed. The
+// installed handler decides — the call site never changes.
+fn account() ![Console, Ledger] = {
+    perform Console.emit("open account")
+    let afterDeposit = perform Ledger.post(100)
+    perform Console.emit("deposit 100  → balance \${afterDeposit}")
+    let afterMore = perform Ledger.post(250)
+    perform Console.emit("deposit 250  → balance \${afterMore}")
+    let afterDraw = perform Ledger.post(0 - 90)
+    perform Console.emit("withdraw 90  → balance \${afterDraw}")
+    afterMore
 }
 
-effect TaskQueue {
-    enqueue: fn(string, int) -> Unit
-    dequeue: fn() -> string
-    getQueueSize: fn() -> int
+// World A — a handler can own STATE: a \`mut\` it closes over. \`perform
+// Ledger.post\` threads the amount through it and the arm's value becomes the
+// result of the perform, so this is a REAL stateful effect, not substitution.
+fn realWorld() = {
+    mut balance = 0
+    handle Console
+        emit line => print("  💸 \${line}")
+    in handle Ledger
+        post amount => { balance = balance + amount  balance }
+    in account()
 }
 
-effect Metrics {
-    recordSuccess: fn(string, int) -> Unit
-    recordFailure: fn(string) -> Unit
-    getTotalProcessed: fn() -> int
-}
+// World B — the SAME account(), swapped onto a compliance mock: the ledger is
+// frozen (every post is a no-op) and output is tagged. Identical code, totally
+// different behaviour — chosen entirely by the handler.
+fn dryRun() =
+    handle Console
+        emit line => print("  🧪 [dry-run] \${line}")
+    in handle Ledger
+        post amount => 0
+    in account()
 
-// 📊 Type System - Union types for task results (pattern matching required)
-type TaskResult = Success | Warning | Failed
-type TaskPriority = Urgent | High | Medium | Low
+// ════════════════ ACT 2 · FIBERS + FUNCTIONAL PIPELINES ════════════════
+fn even(x) = (x % 2) == 0
+fn sq(x)   = x * x
 
-// 🧠 Hindley-Milner Type Inference with Collections - NO type annotations!
-// The compiler infers ALL types through constraint solving and unification
+// A pure pipeline: sum of squares of the even numbers in [1, n) —
+// range |> filter |> map |> fold, no loops, no mutation.
+fn crunch(n) = range(1, n) |> filter(even) |> map(sq) |> fold(0, fn(a, b) => a + b)
 
-// Pure calculation functions using maps for configuration (types fully inferred)
-fn calculateComplexity(priority) = {
-    let complexityMap = { "Urgent": 750, "High": 450, "Medium": 600, "Low": 75 }
-    let priorityStr = match priority {
-        Urgent => "Urgent"
-        High => "High"
-        Medium => "Medium" 
-        Low => "Low"
-    }
-    match complexityMap[priorityStr] {
-        Success { value } => value
-        Error { message } => 100
-    }
-}
+// Union type — the match below is exhaustive; drop a case and it won't compile.
+type Tier = Epic | Solid | Starter
 
-fn calculateTime(complexity) -> float = {
-    let timeFactors = [10.0, 5.0]
-    let divisor = match timeFactors[0] { Success { value } => value Error { message } => 10.0 }
-    let offset = match timeFactors[1] { Success { value } => value Error { message } => 5.0 }
-    complexity / divisor + offset
-}
-
-fn calculateEfficiency(duration) = {
-    let thresholds = [50.0, 100.0]
-    let scores = [100, 75, 50]
-    let t1 = match thresholds[0] { Success { value } => value Error { message } => 50.0 }
-    let t2 = match thresholds[1] { Success { value } => value Error { message } => 100.0 }
-    
-    match duration < t1 {
-        true => match scores[0] { Success { value } => value Error { message } => 100 }
-        false => match duration < t2 {
-            true => match scores[1] { Success { value } => value Error { message } => 75 }
-            false => match scores[2] { Success { value } => value Error { message } => 50 }
-        }
-    }
-}
-
-// Data transformation pipeline using lists (all types inferred through HM)
-fn preprocessData(rawData) = {
-    let operations = [2, 100]
-    let mult = match operations[0] { Success { value } => value Error { message } => 1 }
-    let add = match operations[1] { Success { value } => value Error { message } => 0 }
-    match rawData * mult + add {
-        Success { value } => value
-        Error { message } => rawData
+fn tier(score) = match score >= 2000 {
+    true  => Epic
+    false => match score >= 500 {
+        true  => Solid
+        false => Starter
     }
 }
 
-fn validateData(data) = {
-    let validationConfig = { "minValue": 50 }
-    let minVal = match validationConfig["minValue"] { Success { value } => value Error { message } => 0 }
-    data > minVal
+fn badge(t) = match t {
+    Epic    => "🟣 EPIC"
+    Solid   => "🔵 SOLID"
+    Starter => "🟢 STARTER"
 }
 
-fn transformData(data) = {
-    let transformFactors = [3]
-    let factor = match transformFactors[0] { Success { value } => value Error { message } => 1 }
-    match data * factor {
-        Success { value } => value
-        Error { message } => data
-    }
-}
+fn main() = {
+    print("🦅 OSPREY FEATURE TOUR\\n══════════════════════════════════════")
+    print("ACT 1 · algebraic effects — same code, two worlds")
 
-fn aggregateResults(result1, result2, result3) = {
-    let results = [result1, result2, result3]
-    let r1 = match results[0] { Success { value } => value Error { message } => 0 }
-    let r2 = match results[1] { Success { value } => value Error { message } => 0 }
-    let r3 = match results[2] { Success { value } => value Error { message } => 0 }
-    match r1 + r2 + r3 {
-        Success { value } => value
-        Error { message } => 0
-    }
-}
+    let real = realWorld()
+    print("  ↳ realWorld() returned \${real}")
+    let mock = dryRun()
+    print("  ↳ dryRun()   returned \${mock}")
 
-// 🔄 Effectful Task Processing - Combining effects with pattern matching
-fn processTask(taskId, dataSize, priority) -> TaskResult ![Logger, Metrics] = {
-    perform Logger.info("Starting task: " + taskId + " with data size: " + toString(dataSize))
-    
-    let complexity = calculateComplexity(priority)
-    let expectedTime = calculateTime(complexity)
-    
-    // Simulate data processing pipeline
-    let preprocessed = preprocessData(dataSize)
-    let isValid = validateData(preprocessed)
-    
-    match isValid {
-        true => {
-            let processed = transformData(preprocessed)
-            let actualTime = match expectedTime + 2.0 {
-                Success { value } => value
-                Error { message } => expectedTime
-            }
-            let efficiency = calculateEfficiency(actualTime)
-            
-            perform Metrics.recordSuccess(taskId, processed)
-            perform Logger.info("Task " + taskId + " completed successfully in " + toString(actualTime) + "ms")
-            
-            match efficiency > 80 {
-                true => Success
-                false => Warning
-            }
-        }
-        false => {
-            perform Metrics.recordFailure(taskId)
-            perform Logger.error("Task " + taskId + " failed validation")
-            Failed
-        }
-    }
-}
+    print("══════════════════════════════════════\\nACT 2 · fibers compute functional pipelines in parallel")
 
-// Helper functions for fiber processing  
-fn processTaskForBatch(taskId, dataSize, priority) -> int ![Logger, Metrics] = {
-    let result = processTask(taskId: taskId, dataSize: dataSize, priority: priority)
-    match result {
-        Success => 900
-        Warning => 600  
-        Failed => 0
-    }
-}
+    // Each crunch() runs in its own lightweight fiber; await in order so the
+    // graded report is deterministic.
+    let fa = spawn crunch(10)
+    let fb = spawn crunch(20)
+    let fc = spawn crunch(40)
+    let ra = await(fa)
+    let rb = await(fb)
+    let rc = await(fc)
 
-// Pure task functions for fiber processing (no effects inside fibers)
-fn calculateAlphaTask1() = 900  // processTaskForBatch result for High priority, 150 data
-fn calculateAlphaTask2() = 900  // processTaskForBatch result for Medium priority, 200 data
-fn calculateAlphaTask3() = 900  // processTaskForBatch result for Urgent priority, 75 data
-
-fn calculateBetaTask1() = 900   // processTaskForBatch result for High priority, 150 data
-fn calculateBetaTask2() = 900   // processTaskForBatch result for Medium priority, 200 data
-fn calculateBetaTask3() = 900   // processTaskForBatch result for Urgent priority, 75 data
-
-fn calculateGammaTask1() = 900  // processTaskForBatch result for High priority, 150 data
-fn calculateGammaTask2() = 900  // processTaskForBatch result for Medium priority, 200 data
-fn calculateGammaTask3() = 900  // processTaskForBatch result for Urgent priority, 75 data
-
-// 🚀 Fiber Concurrency - Deterministic task processing with parallel fibers
-fn processAlphaBatch() -> int ![Logger, TaskQueue, Metrics] = {
-    perform Logger.info("Processing batch: alpha")
-    
-    // Spawn pure computation fibers (no effects inside)
-    let worker1 = spawn calculateAlphaTask1()
-    let worker2 = spawn calculateAlphaTask2()
-    let worker3 = spawn calculateAlphaTask3()
-    
-    // Await results and perform deterministic logging
-    let result1 = await(worker1)
-    perform Logger.info("Starting task: task-alpha-1 with data size: 150")
-    perform Metrics.recordSuccess("task-alpha-1", 1200)
-    perform Logger.info("Task task-alpha-1 completed successfully in 52ms")
-    
-    let result2 = await(worker2)
-    perform Logger.info("Starting task: task-alpha-2 with data size: 200")
-    perform Metrics.recordSuccess("task-alpha-2", 1500)
-    perform Logger.info("Task task-alpha-2 completed successfully in 67ms")
-    
-    let result3 = await(worker3)
-    perform Logger.info("Starting task: task-alpha-3 with data size: 75")
-    perform Metrics.recordSuccess("task-alpha-3", 750)
-    perform Logger.info("Task task-alpha-3 completed successfully in 82ms")
-    
-    let batchTotal = aggregateResults(result1: result1, result2: result2, result3: result3)
-    
-    perform TaskQueue.enqueue("batch-alpha", batchTotal)
-    perform Logger.info("Batch alpha processed: " + toString(batchTotal) + " total data units")
-    
-    batchTotal
-}
-
-fn processBetaBatch() -> int ![Logger, TaskQueue, Metrics] = {
-    perform Logger.info("Processing batch: beta")
-    
-    // Spawn pure computation fibers (no effects inside)
-    let worker1 = spawn calculateBetaTask1()
-    let worker2 = spawn calculateBetaTask2()
-    let worker3 = spawn calculateBetaTask3()
-    
-    // Await results and perform deterministic logging
-    let result1 = await(worker1)
-    perform Logger.info("Starting task: task-beta-1 with data size: 150")
-    perform Metrics.recordSuccess("task-beta-1", 1200)
-    perform Logger.info("Task task-beta-1 completed successfully in 52ms")
-    
-    let result2 = await(worker2)
-    perform Logger.info("Starting task: task-beta-2 with data size: 200")
-    perform Metrics.recordSuccess("task-beta-2", 1500)
-    perform Logger.info("Task task-beta-2 completed successfully in 67ms")
-    
-    let result3 = await(worker3)
-    perform Logger.info("Starting task: task-beta-3 with data size: 75")
-    perform Metrics.recordSuccess("task-beta-3", 750)
-    perform Logger.info("Task task-beta-3 completed successfully in 82ms")
-    
-    let batchTotal = aggregateResults(result1: result1, result2: result2, result3: result3)
-    
-    perform TaskQueue.enqueue("batch-beta", batchTotal)
-    perform Logger.info("Batch beta processed: " + toString(batchTotal) + " total data units")
-    
-    batchTotal
-}
-
-fn processGammaBatch() -> int ![Logger, TaskQueue, Metrics] = {
-    perform Logger.info("Processing batch: gamma")
-    
-    // Spawn pure computation fibers (no effects inside)
-    let worker1 = spawn calculateGammaTask1()
-    let worker2 = spawn calculateGammaTask2()
-    let worker3 = spawn calculateGammaTask3()
-    
-    // Await results and perform deterministic logging
-    let result1 = await(worker1)
-    perform Logger.info("Starting task: task-gamma-1 with data size: 150")
-    perform Metrics.recordSuccess("task-gamma-1", 1200)
-    perform Logger.info("Task task-gamma-1 completed successfully in 52ms")
-    
-    let result2 = await(worker2)
-    perform Logger.info("Starting task: task-gamma-2 with data size: 200")
-    perform Metrics.recordSuccess("task-gamma-2", 1500)
-    perform Logger.info("Task task-gamma-2 completed successfully in 67ms")
-    
-    let result3 = await(worker3)
-    perform Logger.info("Starting task: task-gamma-3 with data size: 75")
-    perform Metrics.recordSuccess("task-gamma-3", 750)
-    perform Logger.info("Task task-gamma-3 completed successfully in 82ms")
-    
-    let batchTotal = aggregateResults(result1: result1, result2: result2, result3: result3)
-    
-    perform TaskQueue.enqueue("batch-gamma", batchTotal)
-    perform Logger.info("Batch gamma processed: " + toString(batchTotal) + " total data units")
-    
-    batchTotal
-}
-
-// 🔀 Advanced Pattern Matching - Complex task result analysis
-fn analyzeTaskResults(results, processingTime) -> string ![Metrics] = {
-    let totalProcessed = perform Metrics.getTotalProcessed()
-    let efficiency = results * 10  // Simplified calculation
-    
-    let statusCategory = match efficiency > 2000 {
-        true => "OUTSTANDING"
-        false => match efficiency > 1500 {
-            true => "EXCELLENT"
-            false => match efficiency > 1000 {
-                true => "GOOD"
-                false => "NEEDS_IMPROVEMENT"
-            }
-        }
-    }
-    
-    let performanceEmoji = match statusCategory {
-        "OUTSTANDING" => "🌟"
-        "EXCELLENT" => "🚀"
-        "GOOD" => "✅"
-        "NEEDS_IMPROVEMENT" => "⚠️"
-        _ => "❓"
-    }
-    
-    // Complex string interpolation with nested expressions
-    "🎯 DISTRIBUTED PROCESSING REPORT 🎯\n" +
-    "══════════════════════════════════════\n" +
-    "Batch Results: " + toString(results) + " data units\n" +
-    "Processing Time: " + toString(processingTime) + "ms\n" +
-    "System Total: " + toString(totalProcessed) + " units processed\n" +
-    "Efficiency Score: " + toString(efficiency) + "/1000\n" +
-    "Performance Category: " + statusCategory + " " + performanceEmoji + "\n" +
-    "Queue Status: Active with concurrent workers\n" +
-    "══════════════════════════════════════\n" +
-    "✨ System operating at optimal capacity! ✨\n"
-}
-
-// 🎪 Main System - Complete integration of all features
-fn main() -> Unit = {
-    handle Metrics
-        recordSuccess taskId processed => print("✅ " + taskId + " succeeded: " + toString(processed) + " units")
-        recordFailure taskId => print("❌ " + taskId + " failed")
-        getTotalProcessed => 2500
-    in handle TaskQueue
-        enqueue taskId data => print("📥 Queued: " + taskId + " (" + toString(data) + " units)")
-        dequeue => "next-task-001"
-        getQueueSize => 15
-    in handle Logger
-        info msg => print("ℹ️  " + msg)
-        warn msg => print("⚠️  " + msg)
-        error msg => print("💥 " + msg)
-    in {
-        print("🚀 OSPREY DISTRIBUTED TASK PROCESSING SYSTEM")
-        print("═════════════════════════════════════════════")
-        print("🔥 Demonstrating ALL features working together!")
-        print("")
-        
-        // Start distributed processing with concurrent fiber batches
-        let results1 = processAlphaBatch()
-        let results2 = processBetaBatch() 
-        let results3 = processGammaBatch()
-        
-        let totalResults = aggregateResults(result1: results1, result2: results2, result3: results3)
-        let processingTime = 45
-        
-        // Generate comprehensive system report
-        let report = analyzeTaskResults(results: totalResults, processingTime: processingTime)
-        print(report)
-        
-        // Demonstrate functional programming patterns with collections
-        let systemMetrics = [100, 200, 150, 300, 250]
-        let batchSummary = { 
-            "alpha": results1, 
-            "beta": results2, 
-            "gamma": results3,
-            "total": totalResults 
-        }
-        
-        print("📊 System Metrics Analysis with Collections:")
-        print("Total throughput: " + toString(totalResults) + " units")
-        print("Average batch size: ${totalResults / 3.0} units")
-        
-        let alphaResult = match batchSummary["alpha"] { Success { value } => value Error { message } => 0 }
-        let betaResult = match batchSummary["beta"] { Success { value } => value Error { message } => 0 }
-        let gammaResult = match batchSummary["gamma"] { Success { value } => value Error { message } => 0 }
-        
-        print("Batch breakdown: Alpha=" + toString(alphaResult) + ", Beta=" + toString(betaResult) + ", Gamma=" + toString(gammaResult))
-        
-        let topMetric = match systemMetrics[3] { Success { value } => value Error { message } => 0 }
-        print("Peak metric value: " + toString(topMetric) + " from monitoring array")
-        
-        print("═════════════════════════════════════════════")
-        print("🎉 COMPREHENSIVE DEMO COMPLETE! 🎉")
-        print("✅ Hindley-Milner Type Inference: Functions with NO type annotations!")
-        print("✅ Algebraic Effects: Logger, TaskQueue, Metrics working together")
-        print("✅ Fiber Concurrency: Parallel batch processing with spawn/await")
-        print("✅ Pattern Matching: Union types, exhaustive matching, guards")
-        print("✅ Functional Programming: Pure functions, composition, immutability")
-        print("✅ String Interpolation: Complex formatting with nested expressions")
-        print("🔥 ALL FEATURES INTEGRATED IN ONE COHESIVE SYSTEM! 🔥")
-    }
+    print("  Σeven² <10  = \${ra}  \${badge(tier(ra))}")
+    print("  Σeven² <20  = \${rb}  \${badge(tier(rb))}")
+    print("  Σeven² <40  = \${rc}  \${badge(tier(rc))}")
+    print("══════════════════════════════════════\\ntotal \${ra + rb + rc}  ·  fleet \${badge(tier(ra + rb + rc))}")
 }
 `,
             language: 'osprey',
@@ -1044,7 +781,7 @@ fn main() -> Unit = {
         const gridItems = errorLines.map(error => {
             if (error.lineNum !== null) {
                 const location = error.column > 0 ? `${error.lineNum}:${error.column}` : `${error.lineNum}`;
-                return `<div class="error-line" onclick="jumpToLine(${error.lineNum}, ${error.column || 1})">
+                return `<div class="error-line" onclick="jumpToLine(event, ${error.lineNum}, ${error.column || 1})">
                     <span class="error-location">Line ${location}</span>
                     <span class="error-message">${error.message}</span>
                 </div>`;
@@ -1072,7 +809,7 @@ fn main() -> Unit = {
         return text;
     }
     
-    function jumpToLine(lineNumber, column = 1) {
+    function jumpToLine(evt, lineNumber, column = 1) {
         if (!editor) return;
         
         console.log(`🎯 Jumping to line ${lineNumber}, column ${column}`);
@@ -1081,8 +818,9 @@ fn main() -> Unit = {
         const errorLines = document.querySelectorAll('.error-line');
         errorLines.forEach(el => el.classList.remove('selected'));
         
-        // Mark clicked line as selected
-        event.target.closest('.error-line')?.classList.add('selected');
+        // Mark clicked line as selected (event passed explicitly — no reliance
+        // on the non-standard implicit global `event`)
+        evt?.target?.closest('.error-line')?.classList.add('selected');
         
         // Jump to the line in Monaco editor
         editor.setPosition({ lineNumber: lineNumber, column: column });

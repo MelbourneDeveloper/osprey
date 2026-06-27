@@ -20,11 +20,11 @@ const VIEWPORTS = [
   { name: "mobile", width: 390, height: 844 },
 ];
 
-// Pre-existing issues tracked separately — NOT introduced by the redesign.
-// Scoped so the suite still catches any NEW error on these pages.
-const KNOWN_ERRORS = [
-  { page: "playground", pattern: /totalResults is not defined/ },
-];
+// Per-page error suppressions. Empty: the playground's "totalResults is not
+// defined" crash (an unescaped ${} in the embedded sample) is fixed at the
+// source (website/scripts/update-playground.js now escapes ${), so the suite
+// asserts every page — playground included — is genuinely error-free.
+const KNOWN_ERRORS = [];
 
 // Third-party/CDN request failures we don't control (playground's Monaco editor).
 const IGNORED_REQUEST_HOSTS = /monaco|cdnjs|jsdelivr|unpkg|googleapis|gstatic/;
