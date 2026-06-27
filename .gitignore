@@ -114,7 +114,8 @@ target/
 # Benchmark suite: generated binaries, hyperfine exports, rendered reports.
 # Per-language *source* files under benchmarks/cases/ ARE tracked; only the
 # build/run output is ignored. Plus stray native-compiler intermediates.
-benchmarks/results/
+benchmarks/results/bin/
+benchmarks/results/hf/
 benchmarks/cases/**/*.hi
 benchmarks/cases/**/*.cmi
 benchmarks/cases/**/*.cmx
