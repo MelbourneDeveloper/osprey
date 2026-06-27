@@ -40,6 +40,7 @@ editor-agnostic — Neovim and Zed are on the roadmap. See
 - **HTTP-native**: Built-in server/client with streaming support
 - **Fiber concurrency**: Lightweight isolated execution contexts
 - **Zero-cost abstractions**: Compiles to efficient LLVM IR
+- **Runs in the browser**: Compiles to WebAssembly (`--target=wasm32`) — see [Compiling to WebAssembly](#compiling-to-webassembly)
 
 ## Revolutionary Safety
 
@@ -121,6 +122,45 @@ make install       # Install compiler + runtime archives locally
 ```
 
 The compiler binary lands at `target/release/osprey`.
+
+## Compiling to WebAssembly
+
+Osprey compiles to `wasm32-wasip1` and runs in the browser, under `wasmtime`, or
+under Node's built-in WASI. See [`docs/specs/0022-WebAssemblyTarget.md`](docs/specs/0022-WebAssemblyTarget.md)
+for the design and [`examples/wasm/`](examples/wasm/) for a full example.
+
+**Toolchain** (one-time): `clang` (any recent LLVM has the wasm32 backend),
+`wasm-ld`, and a WASI sysroot.
+
+```bash
+brew install lld wasi-libc          # macOS (wasm-ld + WASI sysroot)
+sudo apt-get install -y lld         # Linux: wasm-ld; sysroot via the wasi-sdk
+```
+
+**Build the wasm runtime + an example, then run it:**
+
+```bash
+make wasm                           # builds libosprey_runtime_wasm.a + examples/wasm/build/hello.wasm
+make wasm-test                      # validates the module and runs it under Node's WASI
+
+# or drive the compiler directly:
+osprey examples/wasm/hello.osp --target=wasm32 --compile -o hello.wasm
+wasmtime hello.wasm                 # run under a standalone WASI runtime
+osprey examples/wasm/hello.osp --target=wasm32 --run     # compile + run (uses wasmtime)
+node scripts/wasm-smoke.mjs hello.wasm                   # run under Node's WASI
+```
+
+**In the browser** — `examples/wasm/index.html` ships a tiny inline WASI shim
+(no bundler, no npm). Serve the directory and open it; from the devtools console,
+`await osprey.run()` instantiates the module and prints its output to the page:
+
+```bash
+cd examples/wasm && python3 -m http.server 8080   # then open http://localhost:8080/
+```
+
+The portable core (allocator, strings, lists, maps, JSON, effects) runs on wasm.
+Fibers/`spawn`, HTTP/WebSocket, FFI/SQLite, processes, file I/O and `random` are
+not ported — a program using them fails at link with a clear `undefined symbol`.
 
 ## Status
 

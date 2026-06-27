@@ -2,7 +2,7 @@
 
 A minimal end-to-end example: an Osprey program compiled to `wasm32-wasip1` and
 run under `wasmtime`, Node's WASI, and in the browser. See
-[`docs/specs/0019-WebAssemblyTarget.md`](../../docs/specs/0019-WebAssemblyTarget.md)
+[`docs/specs/0022-WebAssemblyTarget.md`](../../docs/specs/0022-WebAssemblyTarget.md)
 for the design.
 
 ## Prerequisites
