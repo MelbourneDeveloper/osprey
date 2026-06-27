@@ -1,0 +1,4 @@
+{
+  "name": "listops",
+  "description": "Build then recursively traverse a persistent List<int> (sum + count-below), repeated — persistent vector allocation + traversal"
+}

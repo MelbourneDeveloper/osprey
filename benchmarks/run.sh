@@ -74,10 +74,10 @@ peak_rss() {
   local bin=$1 best=0 v
   for _ in $(seq 1 $MEMRUNS); do
     if [[ "$(uname)" == Darwin ]]; then
-      /usr/bin/time -l "$bin" >/dev/null 2>"$TMP/mem.txt"
+      /usr/bin/time -l "$bin" <"$MODE0" >/dev/null 2>"$TMP/mem.txt"
       v=$(awk '/maximum resident set size/ {print $1}' "$TMP/mem.txt")
     else
-      /usr/bin/time -v "$bin" >/dev/null 2>"$TMP/mem.txt"
+      /usr/bin/time -v "$bin" <"$MODE0" >/dev/null 2>"$TMP/mem.txt"
       v=$(awk -F: '/Maximum resident set size/ {gsub(/ /,"",$2); print $2*1024}' "$TMP/mem.txt")
     fi
     [[ -n "$v" && "$v" -gt "$best" ]] && best=$v
@@ -92,6 +92,14 @@ json_row() {
 }
 
 rm -rf "$OUT"; mkdir -p "$TMP" "$BINDIR" "$HFDIR"; : > "$RAW"
+
+# Benchmark input modes. A case may read its first stdin line to pick a token
+# seed: "0" => a fixed seed (fully deterministic — what we time and oracle), "1"
+# => a fresh cryptographically-secure seed (same workload, unpredictable data).
+# We always feed MODE0 so the suite is reproducible AND so a case that calls
+# input() never blocks on a tty. `BENCH_RANDOM=1` adds a randomized demo pass.
+MODE0="$TMP/mode_const"; print -- "0" > "$MODE0"
+MODE1="$TMP/mode_rand";  print -- "1" > "$MODE1"
 
 if [[ ! -x "$OSP" ]]; then
   echo "FATAL: osprey binary not found at $OSP — run 'make build' first." >&2
@@ -111,6 +119,7 @@ for dir in $CASEDIR/*/(/); do
   echo "\n==> $name  (expected: $expected)"
 
   typeset -a hf_args; hf_args=()
+  typeset -a ok_pairs; ok_pairs=()
   for lang in $LANGS; do
     src="$dir/$name.${EXT[$lang]}"
     toolchain_ok "$lang" || continue
@@ -119,7 +128,7 @@ for dir in $CASEDIR/*/(/); do
     if ! build "$lang" "$dir" "$name" "$bin"; then
       echo "    $lang: BUILD FAILED"; json_row "$name" "$lang" "build_failed" "" "$expected"; fail=1; continue
     fi
-    actual=$("$bin" 2>/dev/null); actual=${actual//[[:space:]]/}
+    actual=$("$bin" <"$MODE0" 2>/dev/null); actual=${actual//[[:space:]]/}
     if [[ "$actual" != "$expected" ]]; then
       echo "    $lang: WRONG OUTPUT ($actual != $expected) — excluded from timing"
       json_row "$name" "$lang" "wrong_output" "$actual" "$expected"; fail=1; continue
@@ -128,12 +137,26 @@ for dir in $CASEDIR/*/(/); do
     json_row "$name" "$lang" "ok" "$actual" "$expected" "$rss"
     echo "    $lang: ok  (rss $(( rss / 1024 )) KiB)"
     hf_args+=(-n "$lang" "$bin")
+    ok_pairs+=("$lang=$bin")
   done
 
   if (( ${#hf_args} > 0 )); then
-    hyperfine -N --warmup "$WARMUP" --min-runs "$MINRUNS" \
+    # --input feeds MODE0 to every timed run: the constant seed keeps the
+    # measurement reproducible (and matches the oracle above).
+    hyperfine -N --input "$MODE0" --warmup "$WARMUP" --min-runs "$MINRUNS" \
       --export-json "$HFDIR/$name.json" $hf_args >/dev/null 2>&1 \
       || echo "    (hyperfine failed for $name)"
+  fi
+
+  # Randomized demo pass: prove each case also runs on unpredictable input. Feeds
+  # MODE1 (cryptographically-secure seed) — outputs vary run-to-run, so this is
+  # never oracle-checked or charted, just shown. Opt-in: BENCH_RANDOM=1.
+  if [[ -n "${BENCH_RANDOM:-}" && ${#ok_pairs} -gt 0 ]]; then
+    echo "    [random] same workload, cryptographically-secure seed:"
+    for pair in $ok_pairs; do
+      rl=${pair%%=*}; rb=${pair#*=}
+      echo "      $rl: $("$rb" <"$MODE1" 2>/dev/null) / $("$rb" <"$MODE1" 2>/dev/null) (constant=$expected)"
+    done
   fi
 done
 

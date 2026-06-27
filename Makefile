@@ -145,11 +145,16 @@ wasm: build _runtime_wasm
 	@echo "==> wasm artifacts ready (run 'make wasm-test' to validate + smoke-run)"
 
 ## wasm-test: Validate the compiled .wasm is well-formed and run it under a WASI
-## host (Node's built-in WASI), asserting its stdout. Depends on `make wasm`.
+## host (Node's built-in WASI), asserting stdout for the smoke example and every
+## compiler/examples/tested golden example. Depends on `make wasm`.
 wasm-test: wasm
 	@echo "==> validating + smoke-running examples/wasm/build/hello.wasm"
 	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/hello.wasm || echo "(wasm-validate not found — skipping structural check)"
 	node scripts/wasm-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+	@echo "==> [wasm differential] osprey --target=wasm32 vs compiler/examples/tested..."
+	@out=$$(zsh crates/diff_wasm_examples.sh); echo "$$out"; \
+	  echo "$$out" | grep -Eq '(^| )FAIL=0 '  || { echo 'FAIL: wasm differential mismatch'; exit 1; }; \
+	  echo "$$out" | grep -Eq '(^| )NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }
 
 ## setup: Post-create dev environment setup (used by devcontainer)
 setup:

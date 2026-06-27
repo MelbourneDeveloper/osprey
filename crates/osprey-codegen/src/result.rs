@@ -191,6 +191,25 @@ pub(crate) fn load_errmsg_str(cg: &mut Codegen, v: &Value) -> Value {
     Value::new(msg, LType::Str)
 }
 
+/// Re-lay a `Result` block under `inner` as its success-slot type, preserving
+/// the discriminant and error message. A no-op when `inner` already matches;
+/// otherwise it rebuilds `{T, i8, i8*}` so the producer and every reader agree
+/// on the layout. Load-bearing on 32-bit targets (wasm32), where `i8*` (4 bytes)
+/// and `i64` (8 bytes) differ in size: an `Error { message }` constructor types
+/// its success slot from the *message* (`i8*`), but a function declared
+/// `-> Result<int, _>` is read back with an `i64` slot, which silently shifts
+/// the disc/errmsg offsets and flips Error to Success. [WASM-TARGET-WIDTH]
+pub(crate) fn repack_to_inner(cg: &mut Codegen, v: Value, inner: LType) -> Result<Value> {
+    if v.result_inner == Some(inner) {
+        return Ok(v);
+    }
+    let disc = load_disc(cg, &v);
+    let errmsg = load_errmsg(cg, &v);
+    let loaded = load_value(cg, &v);
+    let value = coerce_to(cg, loaded, inner)?;
+    make_result(cg, value, inner, &disc, &errmsg.operand)
+}
+
 /// Auto-unwrap a Result at a value site (arithmetic, `print`, an argument),
 /// yielding its success payload; a non-Result value passes through.
 pub(crate) fn unwrap(cg: &mut Codegen, v: Value) -> Value {

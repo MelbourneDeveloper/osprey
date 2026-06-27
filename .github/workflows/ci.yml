@@ -244,7 +244,7 @@ jobs:
         # wasm-validate; the wasi-sdk sysroot supplies wasm32-wasip1 libc + crt1.
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm lld wabt
+          sudo apt-get install -y clang llvm lld wabt zsh
           WASI_VERSION=24
           curl -sSL -o /tmp/wasi-sysroot.tar.gz \
             "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sysroot-${WASI_VERSION}.0.tar.gz"
@@ -267,6 +267,17 @@ jobs:
             --compile -o examples/wasm/build/hello.wasm
           wasm-validate examples/wasm/build/hello.wasm
           node scripts/wasm-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+
+      - name: WebAssembly golden suite (every tested example, wasm vs .expectedoutput)
+        # Compiles every compiler/examples/tested/*.osp to wasm and runs it under
+        # Node's WASI, comparing stdout to its .expectedoutput. Examples using a
+        # non-portable feature (fibers/HTTP/SQLite/processes/file I/O/random) link
+        # with an `undefined symbol` and are SKIPped, not failed. Gate: FAIL=0.
+        run: |
+          out=$(zsh crates/diff_wasm_examples.sh)
+          echo "$out"
+          echo "$out" | grep -Eq 'FAIL=0 '  || { echo '::error::wasm golden suite FAILures'; exit 1; }
+          echo "$out" | grep -Eq 'NOEXP=0 ' || { echo '::error::a tested example has no .expectedoutput'; exit 1; }
 
   # ─── Website end-to-end (Playwright) ────────────────────────────────────────
   # Builds the site (compiler-free; committed reference docs) and runs the

@@ -189,8 +189,12 @@ fn gen_fn_body(cg: &mut Codegen, name: &str, body: &Expr) -> Result<Value> {
 /// through); everything else coerces to the inferred scalar return type.
 fn coerce_return(cg: &mut Codegen, name: &str, body: Value) -> Result<Value> {
     if let Some(inner) = cg.fn_ret_result_inner(name) {
+        // An existing Result is re-laid to the *declared* success-slot type: a
+        // body like `Error { message }` types its slot from the message (`i8*`),
+        // which must agree with the `i64` the callers read or the block's
+        // disc/errmsg offsets shift on 32-bit targets. [WASM-TARGET-WIDTH]
         if body.result_inner.is_some() {
-            return Ok(body);
+            return crate::result::repack_to_inner(cg, body, inner);
         }
         return crate::result::make_ok(cg, body, inner);
     }

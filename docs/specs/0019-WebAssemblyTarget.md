@@ -10,8 +10,11 @@ WASI host — `wasmtime`, Node's `node:wasi`, or a browser WASI shim. [WASM-TARG
 
 Implemented for the portable language core. `osprey --target=wasm32 --compile`
 emits a validated `.wasm` that prints correctly under wasmtime, Node's WASI, and
-in the browser (`examples/wasm/`). The CI `wasm` job gates on it
-(`wasm-validate` + a Node-WASI stdout assertion).
+in the browser (`examples/wasm/`). Of the tested example suite, **30/48 run on
+wasm with byte-identical stdout**; the other 18 use a non-portable feature and
+skip (see below). The CI `wasm` job gates on both the browser-loadable example
+(`wasm-validate` + Node-WASI stdout) and the full golden suite
+(`crates/diff_wasm_examples.sh`, FAIL=0).
 
 Not yet ported (link-time `undefined symbol`, by design — see Limitations):
 fibers/`spawn` (pthreads), HTTP/WebSocket (sockets/OpenSSL), FFI (`dlopen`),
@@ -38,9 +41,10 @@ zero-extends and truncates losslessly — addresses fit in 32 bits. No byte
 offsets are hard-coded; LLVM computes struct layout per the target datalayout.
 The backend needed **no** pointer-width refactor.
 
-### Two width fixes (correctness on ILP32) [WASM-TARGET-WIDTH]
+### Three width fixes (correctness on ILP32) [WASM-TARGET-WIDTH]
 
-The IR did bake in two host C type widths that differ on wasm32 (ILP32):
+The IR baked in host type widths that differ on wasm32 (ILP32), each invisible
+on LP64 (where `i8*` and `i64` are both 8 bytes) but wrong on wasm32:
 
 1. **`size_t` (string length).** Codegen called libc `strlen`, declared `i64`,
    but `size_t` is 32-bit on wasm32 — a `wasm-ld` signature mismatch that traps.
@@ -50,9 +54,17 @@ The IR did bake in two host C type widths that differ on wasm32 (ILP32):
 2. **`long` (integer formatting).** Integer→string used `sprintf("%ld", i64)`;
    on wasm32 `long` is 32-bit, truncating large values. Fixed by `"%lld"`
    (`long long` is 64-bit on every target; identical to `%ld` on LP64).
+3. **`Result` success-slot type.** The `Result<T, E>` block is `{ T, i8 disc,
+   i8* errmsg }`. An `Error { message }` constructor typed its success slot from
+   the *message* (`i8*`), but a function declared `-> Result<int, _>` is read
+   back with an `i64` slot. On LP64 both are 8 bytes so it worked by accident;
+   on wasm32 the 4-byte `i8*` slot shifts the `disc`/`errmsg` offsets, flipping
+   `Error` to `Success` with a garbage payload. Fixed by re-laying a returned
+   `Result` to the declared success-slot type (`result::repack_to_inner`, called
+   from `coerce_return`) so producer and reader agree on the layout.
 
-Both fixes are width-stable improvements that leave native output byte-identical
-(the differential golden suite is unchanged).
+All three are width-stable improvements that leave native output byte-identical
+(the differential golden suite is unchanged at 48/48).
 
 ### Entry point: a `__main_void` thunk [WASM-ENTRY]
 
@@ -100,4 +112,8 @@ link with a clear `undefined symbol`.
 - `node scripts/wasm-smoke.mjs hello.wasm examples/wasm/hello.expectedoutput`
   — runs under Node's WASI and asserts stdout
 - `examples/wasm/index.html` — loads and runs it in the browser, output to page
-- CI `wasm` job runs the validate + Node-WASI smoke on every PR.
+- `zsh crates/diff_wasm_examples.sh` — the golden suite: compile every tested
+  example to wasm, run under Node's WASI, diff stdout; non-portable examples
+  (undefined symbol) are SKIPped. Reports `PASS=30 FAIL=0 SKIP=18`.
+- CI `wasm` job runs the validate + Node-WASI smoke **and** the golden suite on
+  every PR.
