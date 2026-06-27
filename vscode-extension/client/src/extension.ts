@@ -5,6 +5,7 @@ import {
   window,
   commands,
   debug,
+  DebugAdapterExecutable,
   languages,
 } from "vscode";
 import { execFile } from "child_process";
@@ -152,6 +153,56 @@ export function applyDefaultOspreyDebugConfig(
   return config;
 }
 
+export function defaultDebugOutputPath(program: string): string {
+  const exe = process.platform === "win32" ? ".exe" : "";
+  return path.join(
+    path.dirname(program),
+    ".osprey-debug",
+    `${path.basename(program, path.extname(program))}${exe}`,
+  );
+}
+
+export function resolveLldbDapCommand(config: any = {}): string {
+  const setting = workspace
+    .getConfiguration("osprey")
+    .get<string>("debug.lldbDapPath");
+  return config.lldbDapPath || setting || "lldb-dap";
+}
+
+function compileDebugProgram(
+  compilerCommand: string,
+  sourceProgram: string,
+  debugOutput: string,
+  cwd: string,
+  log: (message: string) => void,
+): Promise<void> {
+  fs.mkdirSync(path.dirname(debugOutput), { recursive: true });
+  return new Promise((resolve, reject) => {
+    execFile(
+      compilerCommand,
+      [sourceProgram, "--debug", "--compile", "-o", debugOutput],
+      { cwd },
+      (error: any, stdout: any, stderr: any) => {
+        if (stdout) {
+          log(stdout);
+        }
+        if (stderr) {
+          log(stderr);
+        }
+        if (error) {
+          reject(
+            new Error(
+              `Osprey debug build failed with exit code ${error.code || "unknown"}`,
+            ),
+          );
+          return;
+        }
+        resolve();
+      },
+    );
+  });
+}
+
 export function activate(context: ExtensionContext) {
   console.log("Osprey extension is now active!");
 
@@ -287,9 +338,10 @@ export function activate(context: ExtensionContext) {
 
   // Register debug adapter
   const provider = debug.registerDebugAdapterDescriptorFactory("osprey", {
-    createDebugAdapterDescriptor(_session: any) {
-      // Return null to use inline debug adapter
-      return null;
+    createDebugAdapterDescriptor(session: any) {
+      return new DebugAdapterExecutable(
+        resolveLldbDapCommand(session?.configuration),
+      );
     },
   });
 
@@ -298,7 +350,7 @@ export function activate(context: ExtensionContext) {
   // Register debug configuration provider
   context.subscriptions.push(
     debug.registerDebugConfigurationProvider("osprey", {
-      resolveDebugConfiguration(folder: any, config: any, token: any) {
+      async resolveDebugConfiguration(folder: any, config: any, token: any) {
         // If no config is provided, synthesize one from the active osprey editor.
         config = applyDefaultOspreyDebugConfig(config, window.activeTextEditor);
 
@@ -310,9 +362,48 @@ export function activate(context: ExtensionContext) {
             });
         }
 
-        // Actually run the Osprey program instead of debugging
-        compileAndRunCurrentFile(resolveServerCommand(context));
-        return undefined; // Cancel the debug session
+        const sourceProgram = config.program;
+        const cwd = config.cwd || path.dirname(sourceProgram);
+        const debugOutput =
+          config.debugOutput || defaultDebugOutputPath(sourceProgram);
+        const document = workspace.textDocuments.find(
+          (d) => d.fileName === sourceProgram,
+        );
+        if (document && document.isDirty) {
+          const saved = await document.save();
+          if (!saved) {
+            window.showErrorMessage("Save the Osprey file before debugging.");
+            return undefined;
+          }
+        }
+
+        outputChannel.appendLine(
+          `Debug build: ${sourceProgram} -> ${debugOutput}`,
+        );
+        try {
+          await compileDebugProgram(
+            resolveServerCommand(context),
+            sourceProgram,
+            debugOutput,
+            cwd,
+            (message) => outputChannel.appendLine(message),
+          );
+        } catch (error: any) {
+          const msg = error?.message || String(error);
+          outputChannel.appendLine(msg);
+          window.showErrorMessage(msg);
+          return undefined;
+        }
+
+        return {
+          ...config,
+          type: "osprey",
+          request: "launch",
+          program: debugOutput,
+          sourceProgram,
+          cwd,
+          lldbDapPath: resolveLldbDapCommand(config),
+        };
       },
     }),
   );

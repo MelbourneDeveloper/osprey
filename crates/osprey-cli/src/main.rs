@@ -387,8 +387,39 @@ fn build_executable(
 /// per-operation `Result` allocations non-escaping and removes them entirely
 /// (heap → registers), the [MEM-OWNERSHIP] "free at last use" ideal achieved
 /// statically; without it those allocations leak for the whole run.
-fn opt_flag() -> String {
-    std::env::var("OSPREY_OPT").unwrap_or_else(|_| "-O2".to_string())
+fn compile_ir(
+    path: &str,
+    program: &osprey_ast::Program,
+    debug: bool,
+) -> osprey_codegen::Result<String> {
+    if debug {
+        return osprey_codegen::compile_program_debug(
+            program,
+            osprey_codegen::DebugSource::from_path(path),
+        );
+    }
+    osprey_codegen::compile_program(program)
+}
+
+fn opt_flag(debug: bool) -> String {
+    let build = if debug {
+        osprey_debug::DebugBuild::ON
+    } else {
+        osprey_debug::DebugBuild::OFF
+    };
+    build.opt_flag(
+        std::env::var("OSPREY_OPT").unwrap_or_else(|_| "-O2".to_string()),
+        std::env::var("OSPREY_DEBUG_OPT").ok(),
+    )
+}
+
+fn debug_compile_flags(debug: bool) -> Vec<String> {
+    let build = if debug {
+        osprey_debug::DebugBuild::ON
+    } else {
+        osprey_debug::DebugBuild::OFF
+    };
+    build.native_driver_flags()
 }
 
 /// The C compiler/linker driver used to lower the emitted LLVM IR. Defaults to
@@ -576,16 +607,19 @@ mod tests {
         let cli = parse_args(&args(&[
             "f.osp",
             "--target=wasm32",
+            "--debug",
             "--compile",
             "-o",
             "out/f.wasm",
         ]))
         .expect("ok");
         assert_eq!(cli.target, "wasm32");
+        assert!(cli.debug);
         assert_eq!(cli.output.as_deref(), Some("out/f.wasm"));
         // default target is native, no output.
         let cli = parse_args(&args(&["f.osp"])).expect("ok");
         assert_eq!(cli.target, "native");
+        assert!(!cli.debug);
         assert!(cli.output.is_none());
         // -o with no following value, and an unknown target, are errors.
         assert!(parse_args(&args(&["f.osp", "-o"])).is_err());
@@ -708,6 +742,7 @@ mod tests {
             memory: "default".to_string(),
             target: "native".to_string(),
             output: None,
+            debug: false,
         }
     }
 
