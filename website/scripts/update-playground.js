@@ -7,8 +7,17 @@ const path = require('path');
 const MEGA_SHOWCASE_PATH = path.join(__dirname, '../../compiler/examples/tested/basics/osprey_mega_showcase.osp');
 const PLAYGROUND_PATH = path.join(__dirname, '../src/playground/index.md');
 
-function escapeBackticks(str) {
-    return str.replace(/`/g, '\\`');
+// The showcase is embedded inside a JS template literal (value: `...`). Any
+// backslash, backtick, or `${` in the Osprey source must be escaped or the
+// browser evaluates it as JS — an unescaped `${expr}` (Osprey string
+// interpolation) throws a ReferenceError that aborts the script and leaves
+// Monaco uninitialised, i.e. a blank playground. Order matters: backslashes
+// first so the escapes we add below are not themselves re-escaped.
+function escapeForTemplateLiteral(str) {
+    return str
+        .replace(/\\/g, '\\\\')
+        .replace(/`/g, '\\`')
+        .replace(/\$\{/g, '\\${');
 }
 
 function updatePlayground() {
@@ -42,8 +51,8 @@ function updatePlayground() {
             return false;
         }
         
-        // Escape backticks in the mega showcase code
-        const escapedCode = escapeBackticks(megaShowcaseCode);
+        // Escape the showcase for safe embedding in the JS template literal
+        const escapedCode = escapeForTemplateLiteral(megaShowcaseCode);
         
         // Replace the editor value
         const newPlaygroundContent = 

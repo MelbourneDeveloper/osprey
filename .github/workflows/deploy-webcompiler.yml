@@ -20,10 +20,28 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io
+        id: deploy
         # Optional add-on: a Fly outage or an invalid/banned FLY_API_TOKEN must
         # not fail a release. The browser compiler is not a release artifact.
+        # But the failure must NOT be silent (that froze the live playground on a
+        # stale build for weeks) — the next step surfaces it loudly.
         continue-on-error: true
         run: |
+          if [ -z "${FLY_API_TOKEN}" ]; then
+            echo "::error title=Missing FLY_API_TOKEN::The FLY_API_TOKEN secret is empty. Mint one with 'fly tokens create deploy -a osprey' and set it via 'gh secret set FLY_API_TOKEN'."
+            exit 1
+          fi
           flyctl deploy --remote-only --app osprey --config webcompiler/fly.toml
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Surface deploy failure
+        if: steps.deploy.outcome == 'failure'
+        run: |
+          echo "::warning title=Web compiler deploy FAILED::flyctl deploy did not succeed (banned/expired token or Fly outage). The live playground backend at https://osprey.fly.dev is now STALE. Fix: 'fly tokens create deploy -a osprey' then 'gh secret set FLY_API_TOKEN'."
+          # A manual redeploy that fails should fail the run so the operator
+          # notices immediately; a release-triggered deploy stays non-fatal.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual deploy failed — failing the job so it is not missed."
+            exit 1
+          fi

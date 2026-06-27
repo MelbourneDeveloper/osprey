@@ -1,9 +1,13 @@
-# fly.toml app configuration file generated for osprey-webcompiler on 2025-06-18T09:26:02Z
+# fly.toml app configuration file for the Osprey web playground compiler.
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
+# The app is named `osprey` — this is the host the website playground calls
+# (https://osprey.fly.dev/api). The deploy workflow passes a matching
+# `--app osprey`; keep this field in sync so a bare `fly deploy` targets the
+# same machine the playground actually hits.
 
-app = 'osprey-webcompiler'
+app = 'osprey'
 primary_region = 'ord'
 
 [build]
