@@ -16,13 +16,15 @@
 
 mod docs;
 mod sandbox;
+mod wasm;
 
 use sandbox::Policy;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --compile | --run | \
---symbols] [--quiet] [--memory=default|gc] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
+--symbols] [--quiet] [--memory=default|gc] [--target=native|wasm32] [-o <out>] \
+[--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
        osprey --hover <name>\n\
        osprey --docs --docs-dir <dir>\n\
        osprey lsp";
@@ -38,6 +40,11 @@ struct Cli {
     /// (malloc passthrough) or `gc` (tracing collector). Link-time only; the IR
     /// is identical [MEM-BACKENDS]. (`arc` is reserved, docs/plans/0011.)
     memory: String,
+    /// Codegen/link target: `native` (host executable via clang) or `wasm32`
+    /// (browser-ready WebAssembly via wasm-ld; wasm32-wasip1). [WASM-TARGET]
+    target: String,
+    /// Explicit output artifact path (`-o`); defaults to the source stem.
+    output: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -113,7 +120,10 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
     let mut quiet = false;
     let mut policy = Policy::allow_all();
     let mut memory = String::from("default");
-    for a in args {
+    let mut target = String::from("native");
+    let mut output = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
         match a.as_str() {
             "--ast" | "--check" | "--llvm" | "--compile" | "--run" | "--symbols" | "--hover" => {
                 mode.clone_from(a);
@@ -124,7 +134,13 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
             "--no-websocket" => policy.websocket = false,
             "--no-fs" => policy.fs = false,
             "--no-ffi" => policy.ffi = false,
+            // `-o <path>` consumes the next argument as the output artifact path.
+            "-o" => {
+                let next = it.next().ok_or_else(|| format!("-o requires a path\n{USAGE}"))?;
+                output = Some(next.clone());
+            }
             flag if flag.starts_with("--memory=") => memory = parse_memory(&flag[9..])?,
+            flag if flag.starts_with("--target=") => target = parse_target(&flag[9..])?,
             flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}\n{USAGE}")),
             _ if path.is_none() => path = Some(a.clone()),
             other => return Err(format!("unexpected argument {other}\n{USAGE}")),
@@ -137,8 +153,21 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
             quiet,
             policy,
             memory,
+            target,
+            output,
         }),
         None => Err(USAGE.to_string()),
+    }
+}
+
+/// Validate the `--target=` value: `native` (host executable) or `wasm32`
+/// (browser-ready WebAssembly, wasm32-wasip1). [WASM-TARGET]
+fn parse_target(value: &str) -> Result<String, String> {
+    match value {
+        "native" | "wasm32" => Ok(value.to_string()),
+        other => Err(format!(
+            "unknown target '{other}' (available: native, wasm32)\n{USAGE}"
+        )),
     }
 }
 
@@ -210,7 +239,7 @@ fn dispatch(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode 
                 ExitCode::FAILURE
             }
         },
-        "--run" => run_program(path, program, source, &cli.memory),
+        "--run" => run_program(cli, program, source),
         "--compile" => compile_program_to_disk(cli, program, source),
         _ => {
             println!("{program:#?}");
@@ -242,14 +271,19 @@ fn run_check(cli: &Cli, program: &osprey_ast::Program) -> ExitCode {
     ExitCode::FAILURE
 }
 
-/// `--compile`: build an executable named after the source file, in the
-/// current directory.
+/// `--compile`: build the artifact at `-o` (or the source stem, `.wasm` for the
+/// wasm target) — a host executable via clang, or WebAssembly via wasm-ld.
 fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
-    let exe = PathBuf::from(stem_of(&cli.path));
-    match build_executable(&cli.path, program, source, &exe, &cli.memory) {
+    let out = output_path(&cli.path, cli.output.as_deref(), &cli.target);
+    let result = if cli.target == "wasm32" {
+        wasm::build(&cli.path, program, &out)
+    } else {
+        build_executable(&cli.path, program, source, &out, &cli.memory)
+    };
+    match result {
         Ok(()) => {
             if !cli.quiet {
-                println!("{}", exe.display());
+                println!("{}", out.display());
             }
             ExitCode::SUCCESS
         }
@@ -257,10 +291,24 @@ fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &st
     }
 }
 
-/// Compile to a temp executable and run it — the `--run` end-to-end path.
-fn run_program(path: &str, program: &osprey_ast::Program, source: &str, memory: &str) -> ExitCode {
-    let exe = std::env::temp_dir().join(format!("{}.out", stem_of(path)));
-    if let Err(code) = build_executable(path, program, source, &exe, memory) {
+/// The output artifact path: the explicit `-o` value, else the source stem in
+/// the current directory — with a `.wasm` extension for the wasm target.
+fn output_path(src: &str, output: Option<&str>, target: &str) -> PathBuf {
+    match output {
+        Some(o) => PathBuf::from(o),
+        None if target == "wasm32" => PathBuf::from(format!("{}.wasm", stem_of(src))),
+        None => PathBuf::from(stem_of(src)),
+    }
+}
+
+/// Compile to a temp artifact and run it — the `--run` end-to-end path. Native
+/// runs the executable directly; wasm runs it under a WASI host (`wasmtime`).
+fn run_program(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
+    if cli.target == "wasm32" {
+        return wasm::run(cli, program);
+    }
+    let exe = std::env::temp_dir().join(format!("{}.out", stem_of(&cli.path)));
+    if let Err(code) = build_executable(&cli.path, program, source, &exe, &cli.memory) {
         return code;
     }
     match Command::new(&exe).status() {
@@ -338,7 +386,7 @@ fn c_compiler() -> String {
 }
 
 /// The source file's stem (`demo` for `examples/demo.osp`).
-fn stem_of(path: &str) -> String {
+pub(crate) fn stem_of(path: &str) -> String {
     Path::new(path)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -349,7 +397,7 @@ fn stem_of(path: &str) -> String {
 /// The exit code to propagate for a finished child: its own code when it exited
 /// normally, else (Unix) `128 + signal` for a signal death — so a segfaulting
 /// program is NOT masked as success (`status.code()` is `None` for a signal).
-fn child_exit_code(status: std::process::ExitStatus) -> u8 {
+pub(crate) fn child_exit_code(status: std::process::ExitStatus) -> u8 {
     if let Some(code) = status.code() {
         return u8::try_from(code).unwrap_or(1);
     }
@@ -423,7 +471,7 @@ fn directive<'a>(line: &'a str, key: &str) -> Option<&'a str> {
 /// the working directory's repo layout, then next to the `osprey` executable
 /// (the release-tarball layout, and `target/release` two levels under the repo
 /// root), then the system lib dir.
-fn find_runtime_lib(lib: &str) -> Option<String> {
+pub(crate) fn find_runtime_lib(lib: &str) -> Option<String> {
     let mut roots = vec![
         format!("compiler/bin/{lib}"),
         format!("compiler/lib/{lib}"),

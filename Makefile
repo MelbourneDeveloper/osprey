@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup tui run install uninstall website-dev website-build rebuild-install-vsix bench conformance-gc
+.PHONY: build test lint fmt clean ci setup tui run install uninstall website-dev website-build rebuild-install-vsix bench conformance-gc wasm wasm-test
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -70,6 +70,25 @@ HTTP_OBJ ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.
 FIB_OBJ_GC  ?= bin/memory_gc.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/gc/list_runtime.o bin/gc/map_runtime.o bin/gc/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
 HTTP_OBJ_GC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ_GC)
 
+# WebAssembly (wasm32-wasip1) cross-build toolchain — opt-in via `make wasm`.
+# Compiles the portable C-runtime subset (no pthreads/sockets/OpenSSL/syscalls)
+# to a wasm archive osprey links with `--target=wasm32`. See docs/specs/0019.
+WASM_CC      ?= clang
+WASM_AR      ?= llvm-ar
+WASM_TARGET  ?= wasm32-wasip1
+# WASI sysroot (libc + crt1). Override with WASI_SYSROOT=/path; else probe the
+# Homebrew (macOS), wasi-sdk and common Linux locations in turn.
+WASI_SYSROOT ?= $(shell for d in "$$OSPREY_WASI_SYSROOT" \
+  /opt/homebrew/opt/wasi-libc/share/wasi-sysroot \
+  /usr/local/opt/wasi-libc/share/wasi-sysroot \
+  /opt/wasi-sdk/share/wasi-sysroot "$$WASI_SDK_PATH/share/wasi-sysroot" \
+  /usr/share/wasi-sysroot; do [ -n "$$d" ] && [ -d "$$d" ] && { echo "$$d"; break; }; done)
+WASM_CFLAGS  ?= --target=$(WASM_TARGET) --sysroot=$(WASI_SYSROOT) -O2 -std=c11 -Wall -Wextra -Werror -c
+# Portable subset that compiles for wasm32: allocator + strings + value
+# containers + JSON + effects. Excludes fiber (pthreads), http/websocket
+# (sockets/OpenSSL), system (fork/wait), term (termios) and ffi (dlopen).
+WASM_RT_SRC  ?= memory_runtime string_runtime string_runtime_list list_runtime map_runtime map_runtime_hamt json_runtime effects_runtime
+
 # =============================================================================
 # Standard Targets
 # =============================================================================
@@ -113,6 +132,24 @@ clean:
 
 ## ci: lint + test + build (full CI simulation)
 ci: lint test build
+
+## wasm: Build the compiler + the browser-ready wasm runtime archive
+## (compiler/bin/libosprey_runtime_wasm.a), then compile the example program to
+## examples/wasm/build/. Requires clang (wasm32 backend), wasm-ld and a WASI
+## sysroot — `brew install lld wasi-libc` (macOS) or the wasi-sdk. See
+## docs/specs/0019-WebAssemblyTarget.md.
+wasm: build _runtime_wasm
+	@echo "==> compiling the wasm example -> examples/wasm/build/"
+	@$(MKDIR) examples/wasm/build
+	$(BIN) examples/wasm/hello.osp --target=wasm32 --compile -o examples/wasm/build/hello.wasm
+	@echo "==> wasm artifacts ready (run 'make wasm-test' to validate + smoke-run)"
+
+## wasm-test: Validate the compiled .wasm is well-formed and run it under a WASI
+## host (Node's built-in WASI), asserting its stdout. Depends on `make wasm`.
+wasm-test: wasm
+	@echo "==> validating + smoke-running examples/wasm/build/hello.wasm"
+	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/hello.wasm || echo "(wasm-validate not found — skipping structural check)"
+	node scripts/wasm-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
 
 ## setup: Post-create dev environment setup (used by devcontainer)
 setup:
@@ -164,6 +201,22 @@ _runtime:
 	  $(AR) rcs bin/libfiber_runtime_gc.a $(FIB_OBJ_GC) && \
 	  $(AR) rcs bin/libhttp_runtime_gc.a  $(HTTP_OBJ_GC) && \
 	  cp bin/libfiber_runtime.a bin/libhttp_runtime.a bin/libfiber_runtime_gc.a bin/libhttp_runtime_gc.a lib/
+
+# Cross-compile the portable C-runtime subset to a wasm32-wasip1 archive that
+# osprey links for `--target=wasm32`. One shell so `cd` persists. Fails loudly
+# if no WASI sysroot is found. Output: compiler/{bin,lib}/libosprey_runtime_wasm.a
+_runtime_wasm:
+	@if [ -z "$(WASI_SYSROOT)" ]; then \
+	  echo "ERROR: no WASI sysroot found. Install it with 'brew install lld wasi-libc'"; \
+	  echo "       (macOS) or the wasi-sdk, or set WASI_SYSROOT=/path/to/wasi-sysroot."; \
+	  exit 1; fi
+	@echo "==> building wasm runtime archive ($(WASM_TARGET), sysroot $(WASI_SYSROOT))"
+	@cd compiler && set -e && $(MKDIR) bin/wasm lib && \
+	  for u in $(WASM_RT_SRC); do \
+	    $(WASM_CC) $(WASM_CFLAGS) runtime/$$u.c -o bin/wasm/$$u.o; \
+	  done && \
+	  $(WASM_AR) rcs bin/libosprey_runtime_wasm.a bin/wasm/*.o && \
+	  cp bin/libosprey_runtime_wasm.a lib/
 
 # --- rust (crates/) ---------------------------------------------------------
 # Implements [TEST-RULES] — cargo test is fail-fast at the binary level by

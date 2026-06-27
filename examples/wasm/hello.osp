@@ -1,0 +1,19 @@
+// Osprey -> WebAssembly demo. [WASM-TARGET]
+//
+// Build:  osprey examples/wasm/hello.osp --target=wasm32 --compile
+//         (or `make wasm`, which drops hello.wasm in examples/wasm/build/)
+// Run:    wasmtime hello.wasm        # or `osprey hello.osp --target=wasm32 --run`
+//         node scripts/wasm-smoke.mjs build/hello.wasm hello.expectedoutput
+//         open index.html            # loads hello.wasm in the browser
+//
+// Exercises recursion, string concatenation and `length` (both route through
+// the runtime's osp_strlen, the width-stable shim that makes the wasm port
+// correct), arithmetic, and multi-value string interpolation.
+fn fib(n) = match n < 2 {
+  true => n
+  false => fib(n - 1) + fib(n - 2)
+}
+
+let who = "Osprey" + " on " + "WebAssembly"
+let n = 10
+print("${who}\nfib(${n}) = ${fib(n)}\nlength(who) = ${length(who)}")

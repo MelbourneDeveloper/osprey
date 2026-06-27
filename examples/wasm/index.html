@@ -1,0 +1,112 @@
+<!doctype html>
+<!-- Osprey -> WebAssembly browser loader. [WASM-TARGET]
+
+     Loads a wasm32-wasip1 command module compiled by `osprey --target=wasm32`
+     and runs it with a tiny inline WASI shim (fd_write -> page + console). No
+     bundler, no npm: open this file over http (e.g. `python3 -m http.server`
+     from examples/wasm/, then visit /index.html) after `make wasm`.
+
+     From the browser console you can also drive it directly:
+         await osprey.run()            // (re)instantiate and run _start
+         osprey.instance.exports       // the raw wasm exports (memory, main, ...)
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Osprey on WebAssembly</title>
+    <style>
+      body { font: 15px/1.5 system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1rem; }
+      h1 { font-size: 1.4rem; }
+      button { font: inherit; padding: 0.4rem 0.9rem; cursor: pointer; }
+      pre { background: #11141a; color: #e6e6e6; padding: 1rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+      code { background: #eef; padding: 0 0.25rem; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <h1>Osprey &rarr; WebAssembly</h1>
+    <p>
+      <code>hello.osp</code> compiled to <code>build/hello.wasm</code> and run in
+      your browser. Output (via the WASI <code>fd_write</code> shim) appears below;
+      it is also logged to the devtools console. Call <code>await osprey.run()</code>
+      from the console to run it again.
+    </p>
+    <p><button id="run">Run hello.wasm</button></p>
+    <pre id="out">(click “Run”, or call osprey.run() in the console)</pre>
+
+    <script type="module">
+      const outEl = document.getElementById("out");
+
+      // Minimal WASI preview1 shim — only what a print-only command module
+      // touches. Everything else returns ESUCCESS/ENOSYS rather than trapping,
+      // so unexpected calls degrade gracefully instead of killing the run.
+      function makeWasi() {
+        let memory = null;
+        let stdout = "";
+        const ESUCCESS = 0, ENOSYS = 52;
+        const view = () => new DataView(memory.buffer);
+        const bytes = () => new Uint8Array(memory.buffer);
+        const flush = () => {
+          if (!stdout) return;
+          outEl.textContent += stdout;
+          console.log(stdout.replace(/\n$/, ""));
+          stdout = "";
+        };
+        // fd_write(fd, iovs, iovs_len, nwritten) — gather iovecs, decode UTF-8.
+        const fd_write = (fd, iovs, iovsLen, nwrittenPtr) => {
+          const dv = view();
+          let written = 0;
+          let text = "";
+          for (let i = 0; i < iovsLen; i++) {
+            const ptr = dv.getUint32(iovs + i * 8, true);
+            const len = dv.getUint32(iovs + i * 8 + 4, true);
+            text += new TextDecoder("utf-8").decode(bytes().subarray(ptr, ptr + len));
+            written += len;
+          }
+          dv.setUint32(nwrittenPtr, written, true);
+          if (fd === 1 || fd === 2) { stdout += text; if (text.includes("\n")) flush(); }
+          return ESUCCESS;
+        };
+        const imports = {
+          fd_write,
+          proc_exit: (code) => { flush(); if (code) console.error(`exit ${code}`); },
+          fd_close: () => ESUCCESS,
+          fd_seek: () => ESUCCESS,
+          fd_fdstat_get: () => ESUCCESS,
+          fd_fdstat_set_flags: () => ESUCCESS,
+          environ_sizes_get: (countPtr, sizePtr) => { const dv = view(); dv.setUint32(countPtr, 0, true); dv.setUint32(sizePtr, 0, true); return ESUCCESS; },
+          environ_get: () => ESUCCESS,
+          args_sizes_get: (countPtr, sizePtr) => { const dv = view(); dv.setUint32(countPtr, 0, true); dv.setUint32(sizePtr, 0, true); return ESUCCESS; },
+          args_get: () => ESUCCESS,
+          clock_time_get: (id, prec, outPtr) => { view().setBigUint64(outPtr, BigInt(Date.now()) * 1000000n, true); return ESUCCESS; },
+          random_get: (ptr, len) => { crypto.getRandomValues(bytes().subarray(ptr, ptr + len)); return ESUCCESS; },
+          poll_oneoff: () => ENOSYS,
+        };
+        return {
+          setMemory: (m) => { memory = m; },
+          flush,
+          imports: new Proxy(imports, { get: (t, k) => t[k] ?? (() => ENOSYS) }),
+        };
+      }
+
+      async function run() {
+        outEl.textContent = "";
+        const wasi = makeWasi();
+        const bytes = await (await fetch("build/hello.wasm")).arrayBuffer();
+        const { instance } = await WebAssembly.instantiate(bytes, {
+          wasi_snapshot_preview1: wasi.imports,
+        });
+        wasi.setMemory(instance.exports.memory);
+        instance.exports._start();
+        wasi.flush();
+        window.osprey.instance = instance;
+        return instance.exports;
+      }
+
+      window.osprey = { run };
+      document.getElementById("run").addEventListener("click", () => {
+        run().catch((e) => { outEl.textContent = `error: ${e.message ?? e}`; });
+      });
+    </script>
+  </body>
+</html>
