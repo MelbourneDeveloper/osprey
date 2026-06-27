@@ -216,7 +216,13 @@ fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let ld = as_double(cg, l)?;
     let rd = as_double(cg, r)?;
     gen_checked_division(
-        cg, &ld.operand, &rd.operand, LType::Double, "fdiv double", "fcmp oeq double", "0.0",
+        cg,
+        &ld.operand,
+        &rd.operand,
+        LType::Double,
+        "fdiv double",
+        "fcmp oeq double",
+        "0.0",
     )
 }
 
@@ -227,7 +233,13 @@ fn gen_int_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let li = as_i64(cg, l)?;
     let ri = as_i64(cg, r)?;
     gen_checked_division(
-        cg, &li.operand, &ri.operand, LType::I64, "sdiv i64", "icmp eq i64", "0",
+        cg,
+        &li.operand,
+        &ri.operand,
+        LType::I64,
+        "sdiv i64",
+        "icmp eq i64",
+        "0",
     )
 }
 
@@ -235,12 +247,20 @@ fn gen_int_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
 /// `Error` (`Result<_, MathError>` disc 1), else `Success(quotient)`. `div`/`cmp`
 /// carry their LLVM type, `zero` is the typed zero literal.
 fn gen_checked_division(
-    cg: &mut Codegen, lop: &str, rop: &str, inner: LType, div: &str, cmp: &str, zero: &str,
+    cg: &mut Codegen,
+    lop: &str,
+    rop: &str,
+    inner: LType,
+    div: &str,
+    cmp: &str,
+    zero: &str,
 ) -> Result<Value> {
     use crate::result::{make_result, NO_MSG};
     let isz = cg.emit_reg(format!("{cmp} {rop}, {zero}"));
     let (zero_bb, nonzero_bb, end) = (cg.fresh_label(), cg.fresh_label(), cg.fresh_label());
-    cg.emit(format!("br i1 {isz}, label %{zero_bb}, label %{nonzero_bb}"));
+    cg.emit(format!(
+        "br i1 {isz}, label %{zero_bb}, label %{nonzero_bb}"
+    ));
 
     cg.start_block(&nonzero_bb);
     let q = cg.emit_reg(format!("{div} {lop}, {rop}"));
