@@ -15,6 +15,7 @@ every editor is a thin client over the same LSP transport.
 |---|---|
 | Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/Nimblesite/osprey/pull/137)). |
 | VS Code extension (`nimblesite.osprey`) | **Shipped** — per-platform VSIX bundling a version-matched compiler. |
+| Debugger (`osprey --debug` + DAP) | Planned / in progress — source-level native debugging via DWARF + LLDB-DAP; see [Plan 0012](../plans/0012-osprey-debugger.md). |
 | Open VSX | Planned. |
 | Neovim | Planned. The server is editor-agnostic; only a client recipe is missing. |
 | Zed | Planned (`shipwright-zed`). |
@@ -28,16 +29,108 @@ contract is **"one engine, two surfaces"**: a single `EngineApi` implementation
 backs both an LSP server and (later) an MCP server, so live analysis state is
 computed once and vended two ways.
 
+```mermaid
+flowchart LR
+  vscode[VS Code]
+  neovim[Neovim]
+  zed[Zed]
+
+  vscode -->|LSP over stdio<br/>JSON-RPC| lsp
+  neovim -->|LSP over stdio<br/>JSON-RPC| lsp
+  zed -->|LSP over stdio<br/>JSON-RPC| lsp
+
+  subgraph server["crates/osprey-lsp"]
+    lsp["osprey lsp"]
+    engine["OspreyEngine<br/>lspkit::EngineApi"]
+    vfs["lspkit-vfs<br/>rope documents"]
+    live["lspkit-live<br/>Session / generation"]
+    syntax["osprey_syntax::parse_program"]
+    types["osprey_types::check_program"]
+
+    lsp --> engine
+    engine --> vfs
+    engine --> live
+    engine --> syntax
+    engine --> types
+  end
 ```
-                       ┌─────────────────────────────────────┐
-  VS Code ─┐           │  crates/osprey-lsp                   │
-  Neovim   ├─ stdio ──▶│  OspreyEngine : lspkit::EngineApi    │
-  Zed      ┘  (JSON-   │    ├─ lspkit-vfs   (rope documents)  │
-              RPC)     │    ├─ lspkit-live  (Session/generation)
-                       │    └─ in-process compiler front-end: │
-                       │         osprey_syntax::parse_program │
-                       │         osprey_types::check_program  │
-                       └─────────────────────────────────────┘
+
+The debugger fits into the editor architecture through the LSP-backed analysis
+plane. LSP remains the source-of-truth plane for diagnostics, symbols, hover,
+definition, completion, and source identity. A debug launch uses that same
+source model, but runtime control is carried over DAP: breakpoints, stepping,
+stack frames, scopes, and variables. Both planes are rooted in the same
+version-matched `osprey` compiler, so they must agree on file identity,
+line/column encoding, and generated debug metadata.
+
+```mermaid
+flowchart TB
+  subgraph editor["Editor integration"]
+    doc["Open .osp document"]
+    lspClient["LSP client"]
+    debugUi["Debug UI"]
+    debugProvider["Osprey debug configuration provider"]
+  end
+
+  subgraph staticPlane["Static analysis plane: LSP"]
+    lspServer["osprey lsp"]
+    engine["OspreyEngine"]
+    ast["AST + type information"]
+  end
+
+  subgraph runtimePlane["Runtime debugging plane: DAP"]
+    dap["DAP adapter<br/>lldb-dap first"]
+    process["Running Osprey process"]
+    stack["breakpoints / stepping<br/>stack / scopes / variables"]
+  end
+
+  subgraph compiler["Version-matched osprey compiler"]
+    debugBuild["osprey --debug --compile"]
+    dwarf["native debug binary<br/>DWARF source info"]
+  end
+
+  doc --> lspClient
+  lspClient -->|LSP over stdio| lspServer
+  lspServer --> engine
+  engine --> ast
+  ast -->|diagnostics, symbols,<br/>hover, definitions| lspClient
+
+  doc --> debugProvider
+  lspClient -.->|source identity +<br/>validated positions| debugProvider
+  debugUi --> debugProvider
+  debugProvider --> debugBuild
+  debugBuild --> dwarf
+  debugProvider -->|launch request| dap
+  dwarf -->|symbols + line tables| dap
+  dap --> process
+  process --> stack
+  stack -->|DAP events/responses| debugUi
+```
+
+During a VS Code launch, the LSP is already live and has the current document
+snapshot. The debug provider must use that editor/LSP context to choose the
+program, save or reject dirty state, compile a debug binary, and then hand
+runtime control to DAP.
+
+```mermaid
+sequenceDiagram
+  participant Editor as VS Code
+  participant LSP as osprey lsp
+  participant Provider as Osprey debug provider
+  participant Compiler as osprey --debug --compile
+  participant DAP as lldb-dap
+  participant Program as Osprey process
+
+  Editor->>LSP: didOpen / didChange .osp document
+  LSP-->>Editor: diagnostics + symbols + source positions
+  Editor->>Provider: resolveDebugConfiguration(program)
+  Provider->>Editor: require saved current document
+  Provider->>Compiler: compile selected .osp with debug metadata
+  Compiler-->>Provider: native binary with DWARF source info
+  Provider->>DAP: launch binary + breakpoint requests
+  DAP->>Program: start / continue / step
+  Program-->>DAP: stop at source location
+  DAP-->>Editor: stopped event, stack, scopes, variables
 ```
 
 Key consequence: the server **does not shell out** to the `osprey` binary or
@@ -200,6 +293,13 @@ packaging and in how the version-matched binary is sourced (`[EDITOR-VERSIONING]
 - Client resolves the server command in priority order: user setting
   (`osprey.server.compilerPath`) → bundled binary → `PATH` (per the Shipwright
   `sources` list in [`shipwright.json`](../../shipwright.json)).
+- The debugger contribution is part of the same extension but is not an LSP
+  request. It uses the LSP/editor context to resolve the current `.osp` program,
+  invokes the version-matched compiler as `osprey --debug --compile`, and starts
+  a DAP session (initially `lldb-dap`) against the resulting native binary.
+- Pressing F5 MUST start a real debug session. It MUST NOT cancel the debug
+  session and shell out to `osprey --run`; that path belongs only to the
+  `osprey.run` command.
 - Marketplace publication uses **OIDC** (no PAT) — see `[EDITOR-VERSIONING]` and
   the release plan.
 
@@ -268,6 +368,11 @@ A change to this spec is conformant only if:
    (`[LSP-TRANSPORT]`) — no editor-specific analysis logic.
 2. New capabilities update both `initialize_result` and the `[LSP-CAPABILITIES]`
    table.
-3. No source file hard-codes a version (`[EDITOR-VERSIONING]`).
-4. Code implementing a section references its ID in a comment
+3. Debugger integration keeps static analysis in LSP and runtime control in DAP;
+   both must use the same source identity and position model
+   (`[DEBUGGER-EDITOR]`, `[LSP-ENCODING]`).
+4. VS Code F5 starts a real DAP debug session; it does not proxy to
+   `osprey --run` (`[EDITOR-VSCODE]`).
+5. No source file hard-codes a version (`[EDITOR-VERSIONING]`).
+6. Code implementing a section references its ID in a comment
    (e.g. `// Implements [LSP-CAPABILITIES]`), enforced by `spec-check`.

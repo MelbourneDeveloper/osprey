@@ -38,7 +38,8 @@ mod types;
 
 pub use error::{CodegenError, Result};
 pub use llty::{LType, Value};
-pub use lower::compile_program;
+pub use builder::DebugSource;
+pub use lower::{compile_program, compile_program_debug};
 
 /// Every identifier referenced anywhere in `program` — function bodies, lets,
 /// nested modules. The CLI's capability sandbox uses this to detect gated
@@ -85,6 +86,23 @@ mod tests {
         compile_program(&parsed.program).expect("codegen should succeed")
     }
 
+    fn debug_module(src: &str) -> String {
+        let parsed = parse_program(src);
+        assert!(
+            parsed.errors.is_empty(),
+            "syntax errors: {:?}",
+            parsed.errors
+        );
+        compile_program_debug(
+            &parsed.program,
+            DebugSource {
+                filename: "debug.osp".to_string(),
+                directory: "/tmp".to_string(),
+            },
+        )
+        .expect("debug codegen should succeed")
+    }
+
     /// Compile `src` and assert codegen rejected it (used for the loud-failure
     /// branches that have no surface syntax of their own).
     fn compile_err(src: &str) -> CodegenError {
@@ -115,6 +133,18 @@ mod tests {
         assert!(ir.contains("define i64 @add(i64 %a, i64 %b)"));
         assert!(ir.contains("add i64 %a, %b"));
         assert!(ir.contains("call i64 @add(i64 2, i64 3)"));
+    }
+
+    #[test]
+    fn debug_compile_emits_source_level_metadata() {
+        let ir = debug_module("let x = 1\nprint(x)\n");
+        assert!(ir.contains("source_filename = \"/tmp/debug.osp\""));
+        assert!(ir.contains("!llvm.dbg.cu = !{!"));
+        assert!(ir.contains("!llvm.module.flags = !{!"));
+        assert!(ir.contains("!DICompileUnit("));
+        assert!(ir.contains("!DISubprogram(name: \"main\""));
+        assert!(ir.contains("!DILocation(line: 1, column: 1"));
+        assert!(ir.contains(", !dbg !"));
     }
 
     #[test]

@@ -1,0 +1,12 @@
+[package]
+name = "osprey-debug"
+description = "Debugger support primitives shared by the Osprey compiler and editor integrations"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

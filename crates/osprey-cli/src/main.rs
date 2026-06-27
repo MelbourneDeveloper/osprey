@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --compile | --run | \
---symbols] [--quiet] [--memory=default|gc] [--target=native|wasm32] [-o <out>] \
+--symbols] [--quiet] [--debug] [--memory=default|gc] [--target=native|wasm32] [-o <out>] \
 [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
        osprey --hover <name>\n\
        osprey --docs --docs-dir <dir>\n\
@@ -45,6 +45,8 @@ struct Cli {
     target: String,
     /// Explicit output artifact path (`-o`); defaults to the source stem.
     output: Option<String>,
+    /// Emit source-level debug metadata and link a debugger-friendly binary.
+    debug: bool,
 }
 
 fn main() -> ExitCode {
@@ -557,6 +559,47 @@ mod tests {
     }
 
     #[test]
+    fn parse_args_handles_target_and_output() {
+        let cli = parse_args(&args(&[
+            "f.osp",
+            "--target=wasm32",
+            "--compile",
+            "-o",
+            "out/f.wasm",
+        ]))
+        .expect("ok");
+        assert_eq!(cli.target, "wasm32");
+        assert_eq!(cli.output.as_deref(), Some("out/f.wasm"));
+        // default target is native, no output.
+        let cli = parse_args(&args(&["f.osp"])).expect("ok");
+        assert_eq!(cli.target, "native");
+        assert!(cli.output.is_none());
+        // -o with no following value, and an unknown target, are errors.
+        assert!(parse_args(&args(&["f.osp", "-o"])).is_err());
+        assert!(parse_args(&args(&["f.osp", "--target=riscv"])).is_err());
+    }
+
+    #[test]
+    fn parse_target_accepts_known_and_rejects_unknown() {
+        assert_eq!(parse_target("native").as_deref(), Ok("native"));
+        assert_eq!(parse_target("wasm32").as_deref(), Ok("wasm32"));
+        assert!(parse_target("x86").is_err());
+    }
+
+    #[test]
+    fn output_path_defaults_by_target_and_honours_dash_o() {
+        assert_eq!(output_path("a/b.osp", None, "native"), PathBuf::from("b"));
+        assert_eq!(
+            output_path("a/b.osp", None, "wasm32"),
+            PathBuf::from("b.wasm")
+        );
+        assert_eq!(
+            output_path("a/b.osp", Some("custom.wasm"), "wasm32"),
+            PathBuf::from("custom.wasm")
+        );
+    }
+
+    #[test]
     fn stem_of_handles_dirs_and_missing_extension() {
         assert_eq!(stem_of("examples/demo.osp"), "demo");
         assert_eq!(stem_of("/a/b/c.osp"), "c");
@@ -650,6 +693,8 @@ mod tests {
             quiet: true,
             policy,
             memory: "default".to_string(),
+            target: "native".to_string(),
+            output: None,
         }
     }
 

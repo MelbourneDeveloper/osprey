@@ -5,10 +5,49 @@
 
 use crate::llty::{LType, Value};
 use crate::types::ltype_of;
-use osprey_ast::Expr;
+use osprey_ast::{Expr, Position};
 use osprey_types::{ProgramTypes, Type};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
+
+/// Code generation switches that alter the emitted module without changing
+/// Osprey semantics.
+#[derive(Debug, Clone, Default)]
+pub struct CodegenOptions {
+    /// Source file identity used for LLVM/DWARF debug metadata.
+    pub debug_source: Option<DebugSource>,
+}
+
+/// Source file identity for emitted debug information.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DebugSource {
+    /// Basename of the source file.
+    pub filename: String,
+    /// Directory containing the source file.
+    pub directory: String,
+}
+
+impl DebugSource {
+    /// Build a debug source identity from a source path.
+    #[must_use]
+    pub fn from_path(path: &str) -> Self {
+        let path = std::path::Path::new(path);
+        let filename = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("input.osp")
+            .to_string();
+        let directory = path
+            .parent()
+            .and_then(|p| p.to_str())
+            .unwrap_or(".")
+            .to_string();
+        DebugSource {
+            filename,
+            directory,
+        }
+    }
+}
 
 /// Accumulates a whole module while lowering one function at a time.
 pub struct Codegen {
@@ -87,6 +126,8 @@ pub struct Codegen {
     /// reassignment stores, and an effect handler captures the cell pointer so
     /// `get`/`set` arms share one mutable location — handler-owned state.
     pub(crate) cell_slots: HashMap<String, CellSlot>,
+    /// LLVM/DWARF debug metadata state, when `--debug` was requested.
+    debug: Option<DebugState>,
 }
 
 /// A mutable variable promoted to a heap cell so an effect handler can own it.
@@ -116,6 +157,146 @@ pub(crate) struct SavedFn {
     /// gets its own captured cells, never the suspended outer function's.
     cell_vars: HashSet<String>,
     cell_slots: HashMap<String, CellSlot>,
+    debug_scope: Option<usize>,
+    debug_position: Option<Position>,
+}
+
+#[derive(Debug, Clone)]
+struct DebugState {
+    source: DebugSource,
+    current_scope: Option<usize>,
+    current_position: Option<Position>,
+    next_id: usize,
+    file_id: usize,
+    cu_id: usize,
+    empty_id: usize,
+    subroutine_type_id: usize,
+    dwarf_flag_id: usize,
+    debug_version_flag_id: usize,
+    ident_id: usize,
+    dynamic: Vec<(usize, String)>,
+}
+
+impl DebugState {
+    fn new(source: DebugSource) -> Self {
+        DebugState {
+            source,
+            current_scope: None,
+            current_position: None,
+            next_id: 7,
+            file_id: 0,
+            cu_id: 1,
+            empty_id: 2,
+            subroutine_type_id: 3,
+            dwarf_flag_id: 4,
+            debug_version_flag_id: 5,
+            ident_id: 6,
+            dynamic: Vec::new(),
+        }
+    }
+
+    fn source_filename(&self) -> String {
+        let path = std::path::Path::new(&self.source.directory).join(&self.source.filename);
+        metadata_escape(&path.display().to_string())
+    }
+
+    fn begin_function(&mut self, name: &str, position: Option<Position>) -> usize {
+        let id = self.alloc_id();
+        let line = position.map_or(1, |p| p.line.max(1));
+        let name = metadata_escape(name);
+        self.dynamic.push((
+            id,
+            format!(
+                "!{id} = distinct !DISubprogram(name: \"{name}\", linkageName: \"{name}\", scope: !{}, file: !{}, line: {line}, type: !{}, scopeLine: {line}, spFlags: DISPFlagDefinition, unit: !{}, retainedNodes: !{})",
+                self.file_id,
+                self.file_id,
+                self.subroutine_type_id,
+                self.cu_id,
+                self.empty_id
+            ),
+        ));
+        self.current_scope = Some(id);
+        self.current_position = position;
+        id
+    }
+
+    fn clear_function(&mut self) {
+        self.current_scope = None;
+        self.current_position = None;
+    }
+
+    fn set_position(&mut self, position: Option<Position>) -> Option<Position> {
+        let previous = self.current_position;
+        if position.is_some() {
+            self.current_position = position;
+        }
+        previous
+    }
+
+    fn location_id(&mut self) -> Option<usize> {
+        let scope = self.current_scope?;
+        let position = self.current_position?;
+        let id = self.alloc_id();
+        let line = position.line.max(1);
+        let column = position.column.saturating_add(1).max(1);
+        self.dynamic.push((
+            id,
+            format!("!{id} = !DILocation(line: {line}, column: {column}, scope: !{scope})"),
+        ));
+        Some(id)
+    }
+
+    fn metadata_lines(&self) -> Vec<String> {
+        let file = metadata_escape(&self.source.filename);
+        let dir = metadata_escape(&self.source.directory);
+        let mut out = vec![
+            format!(
+                "!{} = !DIFile(filename: \"{file}\", directory: \"{dir}\")",
+                self.file_id
+            ),
+            format!(
+                "!{} = distinct !DICompileUnit(language: DW_LANG_C, file: !{}, producer: \"osprey\", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug)",
+                self.cu_id, self.file_id
+            ),
+            format!("!{} = !{{}}", self.empty_id),
+            format!(
+                "!{} = !DISubroutineType(types: !{})",
+                self.subroutine_type_id, self.empty_id
+            ),
+            format!(
+                "!{} = !{{i32 2, !\"Dwarf Version\", i32 5}}",
+                self.dwarf_flag_id
+            ),
+            format!(
+                "!{} = !{{i32 2, !\"Debug Info Version\", i32 3}}",
+                self.debug_version_flag_id
+            ),
+            format!("!{} = !{{!\"osprey\"}}", self.ident_id),
+        ];
+        out.extend(self.dynamic.iter().map(|(_, line)| line.clone()));
+        out
+    }
+
+    fn module_flags(&self) -> String {
+        format!(
+            "!llvm.module.flags = !{{!{}, !{}}}",
+            self.dwarf_flag_id, self.debug_version_flag_id
+        )
+    }
+
+    fn compile_units(&self) -> String {
+        format!("!llvm.dbg.cu = !{{!{}}}", self.cu_id)
+    }
+
+    fn ident(&self) -> String {
+        format!("!llvm.ident = !{{!{}}}", self.ident_id)
+    }
+
+    fn alloc_id(&mut self) -> usize {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
 }
 
 impl Codegen {
@@ -126,6 +307,11 @@ impl Codegen {
     /// Build with the inferred program types that drive parameter/return/value
     /// typing.
     pub fn with_types(prog: ProgramTypes) -> Codegen {
+        Codegen::with_options(prog, CodegenOptions::default())
+    }
+
+    /// Build with inferred program types and explicit code generation options.
+    pub fn with_options(prog: ProgramTypes, options: CodegenOptions) -> Codegen {
         Codegen {
             externs: BTreeSet::new(),
             globals: Vec::new(),
@@ -153,6 +339,7 @@ impl Codegen {
             call_aliases: HashMap::new(),
             cell_vars: HashSet::new(),
             cell_slots: HashMap::new(),
+            debug: options.debug_source.map(DebugState::new),
         }
     }
 
@@ -346,7 +533,12 @@ impl Codegen {
             pending_iter_ops: std::mem::take(&mut self.pending_iter_ops),
             cell_vars: std::mem::take(&mut self.cell_vars),
             cell_slots: std::mem::take(&mut self.cell_slots),
+            debug_scope: self.debug.as_ref().and_then(|d| d.current_scope),
+            debug_position: self.debug.as_ref().and_then(|d| d.current_position),
         };
+        if let Some(debug) = self.debug.as_mut() {
+            debug.clear_function();
+        }
         self.reg_count = 0;
         self.label_count = 0;
         self.cur_lines = vec!["entry:".to_string()];
@@ -371,6 +563,10 @@ impl Codegen {
         self.pending_iter_ops = saved.pending_iter_ops;
         self.cell_vars = saved.cell_vars;
         self.cell_slots = saved.cell_slots;
+        if let Some(debug) = self.debug.as_mut() {
+            debug.current_scope = saved.debug_scope;
+            debug.current_position = saved.debug_position;
+        }
     }
 
     /// Register an `effect` operation's parsed signature for `handle`/`perform`.
@@ -544,7 +740,11 @@ impl Codegen {
     // ---- emission ----
 
     pub(crate) fn emit(&mut self, line: impl Into<String>) {
-        self.cur_lines.push(format!("  {}", line.into()));
+        let mut line = line.into();
+        if let Some(id) = self.debug.as_mut().and_then(DebugState::location_id) {
+            line.push_str(&format!(", !dbg !{id}"));
+        }
+        self.cur_lines.push(format!("  {line}"));
     }
 
     /// Emit `r = {rhs}` to a fresh SSA register and return `r` — the ubiquitous
@@ -623,7 +823,7 @@ impl Codegen {
     // ---- function framing ----
 
     /// Reset per-function state and open a fresh `entry` block + scope.
-    pub(crate) fn begin_function(&mut self) {
+    pub(crate) fn begin_function(&mut self, name: &str, position: Option<Position>) {
         self.reg_count = 0;
         self.label_count = 0;
         self.cur_lines.clear();
@@ -639,6 +839,9 @@ impl Codegen {
         self.cell_slots.clear();
         self.push_scope();
         self.cur_lines.push("entry:".to_string());
+        if let Some(debug) = self.debug.as_mut() {
+            let _ = debug.begin_function(name, position);
+        }
     }
 
     /// Render the in-progress function and append it to the module. `ret` is the
@@ -650,14 +853,28 @@ impl Codegen {
             .collect::<Vec<_>>()
             .join(", ");
         let body = std::mem::take(&mut self.cur_lines).join("\n");
+        let dbg = self
+            .debug
+            .as_ref()
+            .and_then(|d| d.current_scope)
+            .map_or_else(String::new, |id| format!(" !dbg !{id}"));
         self.funcs
-            .push(format!("define {ret} @{name}({param_list}) {{\n{body}\n}}"));
+            .push(format!("define {ret} @{name}({param_list}){dbg} {{\n{body}\n}}"));
         self.pop_scope();
+        if let Some(debug) = self.debug.as_mut() {
+            debug.clear_function();
+        }
     }
 
     /// Assemble the final module text: header, externals, globals, functions.
     pub(crate) fn render(&self) -> String {
         let mut out = String::from("; Generated by osprey-rs (Rust LLVM-text backend)\n\n");
+        if let Some(debug) = &self.debug {
+            out.push_str(&format!(
+                "source_filename = \"{}\"\n\n",
+                debug.source_filename()
+            ));
+        }
         for decl in &self.externs {
             out.push_str(decl);
             out.push('\n');
@@ -670,6 +887,19 @@ impl Codegen {
         out.push('\n');
         out.push_str(&self.funcs.join("\n\n"));
         out.push('\n');
+        if let Some(debug) = &self.debug {
+            out.push('\n');
+            out.push_str(&debug.compile_units());
+            out.push('\n');
+            out.push_str(&debug.module_flags());
+            out.push('\n');
+            out.push_str(&debug.ident());
+            out.push('\n');
+            for line in debug.metadata_lines() {
+                out.push_str(&line);
+                out.push('\n');
+            }
+        }
         out
     }
 
@@ -701,6 +931,20 @@ impl Codegen {
         let obj = self.fresh_reg();
         self.emit(format!("{obj} = bitcast i8* {raw} to {struct_ty}*"));
         obj
+    }
+
+    /// Set the current debug source position, returning the previous position.
+    pub(crate) fn set_debug_position(&mut self, position: Option<Position>) -> Option<Position> {
+        self.debug
+            .as_mut()
+            .map_or(None, |debug| debug.set_position(position))
+    }
+
+    /// Restore the debug source position captured by [`set_debug_position`].
+    pub(crate) fn restore_debug_position(&mut self, previous: Option<Position>) {
+        if let Some(debug) = self.debug.as_mut() {
+            debug.current_position = previous;
+        }
     }
 }
 
@@ -743,4 +987,16 @@ fn escape_c_string(text: &str) -> (String, usize) {
     }
     out.push_str("\\00");
     (out, bytes.len() + 1)
+}
+
+fn metadata_escape(text: &str) -> String {
+    let mut out = String::new();
+    for ch in text.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
