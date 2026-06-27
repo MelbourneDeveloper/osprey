@@ -342,6 +342,8 @@
 .bench-card .lbl { color: var(--on-surface-variant); font-size: var(--fs-label); text-transform: uppercase; letter-spacing: 0.04em; }
 .bench-card.is-accent .big { color: var(--tertiary-dim); }
 .bench-card.is-good .big { color: var(--primary-container); }
+.comparison-cta { text-align: center; margin-top: var(--space-6); color: var(--on-surface-variant); }
+.comparison-cta a { font-weight: 600; }
 
 /* ============================ Prose (docs / spec / blog post / status) ==== */
 /* Two-column docs layout: sticky TOC sidebar + left-aligned article, matching
