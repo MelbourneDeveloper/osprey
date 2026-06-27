@@ -12,13 +12,13 @@ analysis plane; DAP is the runtime control plane. The implementation plan is
 
 ## Status
 
-| Capability                          | State                                                                          |
-| ----------------------------------- | ------------------------------------------------------------------------------ |
-| Debug build mode (`osprey --debug`) | In progress. Emits LLVM/DWARF metadata for native builds.                      |
-| VS Code DAP launch                  | In progress. Compiles `.osp` to a native debug binary and launches `lldb-dap`. |
-| Variables / value rendering         | Planned. Requires local-variable metadata and Osprey runtime inspectors.       |
-| Fibers / effects inspection         | Planned. Requires runtime debug APIs.                                          |
-| Replay / time travel                | Planned. Requires deterministic runtime event recording.                       |
+| Capability                          | State                                                                                                     |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Debug build mode (`osprey --debug`) | Implemented for native Phase 1 builds: LLVM/DWARF metadata, debug driver flags, and wasm rejection.       |
+| VS Code DAP launch                  | Implemented for Phase 2: compiles `.osp` to a native debug binary and launches real `lldb-dap`.           |
+| Variables / value rendering         | Partial. Primitive params/lets emit metadata and are DAP-tested; full Osprey value renderers are planned. |
+| Fibers / effects inspection         | Planned. Requires runtime debug APIs.                                                                     |
+| Replay / time travel                | Planned. Requires deterministic runtime event recording.                                                  |
 
 ## Protocol Split `[DEBUGGER-PROTOCOLS]`
 

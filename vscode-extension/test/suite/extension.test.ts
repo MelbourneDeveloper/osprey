@@ -2456,10 +2456,7 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
 
     assert.strictEqual(resolveLldbDapExecutable({}, host), undefined);
     assert.strictEqual(
-      resolveLldbDapExecutable(
-        { lldbDapPath: "/missing/lldb-dap" },
-        host,
-      ),
+      resolveLldbDapExecutable({ lldbDapPath: "/missing/lldb-dap" }, host),
       undefined,
     );
     assert.strictEqual(

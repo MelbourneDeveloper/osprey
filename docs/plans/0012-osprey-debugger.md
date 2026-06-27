@@ -577,41 +577,55 @@ Acceptance:
 ### Phase 0 - Spec and safety rails
 
 - [x] Write this plan.
-- [ ] Add `docs/specs/0021-Debugger.md` once phase 1 behavior is real enough to
+- [x] Add `docs/specs/0021-Debugger.md` once phase 1 behavior is real enough to
       become language/tooling contract.
 - [ ] Add issue checklist and labels for debugger phases.
 
 ### Phase 1 - Source line debugging
 
-- [ ] Add complete statement source positions, including bare expression
+- [x] Add complete statement source positions, including bare expression
       statements.
-- [ ] Add `osprey_codegen::compile_program_debug`.
-- [ ] Emit `DICompileUnit`, `DIFile`, `DISubprogram`, `DILocation`, and module
+- [x] Add `osprey_codegen::compile_program_debug`.
+- [x] Emit `DICompileUnit`, `DIFile`, `DISubprogram`, `DILocation`, and module
       flags.
-- [ ] Add `--debug` and debug clang flags.
-- [ ] Preserve debug artifacts for tests.
-- [ ] Add golden tests for debug IR metadata.
-- [ ] Add a headless LLDB smoke test for source breakpoint and stepping.
+- [x] Add `--debug` and debug clang flags.
+- [x] Preserve debug artifacts for tests.
+- [x] Add golden tests for debug IR metadata, including `DIFile`, user-function
+      `DISubprogram`, per-platform DWARF version, and 1-based `DILocation`
+      column assertions.
+- [ ] Add a repo-run headless LLDB smoke test for source breakpoint and
+      stepping. A manual LLDB smoke has passed; it is not yet an automated repo
+      test.
 
 ### Phase 2 - VS Code real debug launch
 
-- [ ] Replace the current fake debug provider that cancels the session and runs
+- [x] Replace the current fake debug provider that cancels the session and runs
       the file.
-- [ ] Compile the selected `.osp` file with `--debug --compile`.
-- [ ] Resolve `lldb-dap`.
-- [ ] Launch LLDB-DAP with the compiled binary.
-- [ ] Add extension tests for configuration synthesis and missing-tool errors.
-- [ ] Add a DAP smoke test that launches and hits a source breakpoint.
+- [x] Compile the selected `.osp` file with `--debug --compile`.
+- [x] Resolve `lldb-dap` through config, setting, PATH, `xcrun`, and common LLVM
+      paths with a precise missing-tool error.
+- [x] Launch LLDB-DAP with the compiled binary.
+- [x] Add extension tests for configuration synthesis and missing-tool errors.
+- [x] Add a DAP smoke test that launches, hits a source breakpoint, reads stack
+      and primitive locals, steps over, continues, and terminates.
+- [ ] Upstream/import generic VS Code debugger glue and the DAP test harness
+      from a shared LspKit TypeScript package. Local `lsp_toolkit` currently has
+      Rust crates only and no debugger package, so Osprey keeps the pure helpers
+      as the seed for extraction instead of duplicating them elsewhere.
 
 ### Phase 3 - Variables and lexical scopes
 
-- [ ] Emit `DILocalVariable` for parameters and lets.
-- [ ] Emit value-location records for locals, mut cells, captures, match
-      bindings, and handler parameters; migrate the textual spelling from
-      `@llvm.dbg.*` compatibility intrinsics to `#dbg_*` debug records once the
-      supported LLVM floor makes that path portable.
+- [x] Emit `DILocalVariable` for primitive function parameters and `let`
+      bindings.
+- [x] Emit compatibility value-location intrinsics for primitive params/lets and
+      verify the values through LLDB-DAP.
+- [ ] Migrate the textual spelling from `@llvm.dbg.*` compatibility intrinsics
+      to `#dbg_*` debug records once the supported LLVM floor makes that path
+      portable.
+- [ ] Extend value-location records to mut cells, captures, match bindings, and
+      handler parameters.
 - [ ] Add lexical scopes for blocks, lambdas, match arms, and handlers.
-- [ ] Validate primitive local inspection in LLDB.
+- [x] Validate primitive local inspection in LLDB-DAP.
 - [ ] Add unavailable-value reporting tests.
 
 ### Phase 4 - Osprey type and value rendering

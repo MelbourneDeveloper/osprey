@@ -1086,5 +1086,9 @@ fn metadata_escape(text: &str) -> String {
 }
 
 fn host_dwarf_version() -> u8 {
-    if cfg!(target_os = "macos") { 4 } else { 5 }
+    if cfg!(target_os = "macos") {
+        4
+    } else {
+        5
+    }
 }
