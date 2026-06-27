@@ -19,8 +19,9 @@ for the design.
 From the repo root:
 
 ```sh
-make wasm        # builds the wasm runtime archive + compiles hello.osp -> build/hello.wasm
-make wasm-test   # validates the module and smoke-runs it under Node's WASI
+# One target builds everything ready to go: the wasm runtime archive, the
+# compiled example, and validation + smoke-runs (Node's WASI and the browser shim).
+make wasm
 ```
 
 Or drive the compiler directly:
@@ -32,15 +33,16 @@ osprey examples/wasm/hello.osp --target=wasm32 --compile -o examples/wasm/build/
 # run it under a WASI host
 wasmtime examples/wasm/build/hello.wasm
 osprey examples/wasm/hello.osp --target=wasm32 --run     # uses wasmtime under the hood
-node scripts/wasm-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+node scripts/wasm-smoke.mjs         examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput  # Node's WASI host
+node scripts/wasm-browser-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput  # the browser's WASI shim
 ```
 
 Expected output ([`hello.expectedoutput`](hello.expectedoutput)):
 
 ```
 Osprey on WebAssembly
-fib(10) = 55
-length(who) = 21
+length = 21
+2 * 1500000000 = 3000000000
 ```
 
 ## In the browser
@@ -56,8 +58,8 @@ cd examples/wasm && python3 -m http.server 8080
 From the devtools console you can drive the module directly:
 
 ```js
-await osprey.run()        // (re)instantiate and run _start
-osprey.instance.exports   // raw wasm exports: memory, main, __main_void, ...
+await osprey.run()   // (re)instantiate and run _start
+osprey.exports       // raw wasm exports: memory, _start
 ```
 
 ## What works / what doesn't

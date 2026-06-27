@@ -52,6 +52,18 @@ Required behavior:
 - Non-debug builds keep their release-oriented defaults.
 - `--debug --target=wasm32` is rejected until WebAssembly debug information is
   specified and tested.
+- The emitted DWARF version is platform-aware: default to **DWARF 4 on macOS**
+  (Apple `dsymutil`/LLDB lag on v5 features such as `.debug_names` and
+  `DW_FORM_strx`) and DWARF 5 elsewhere when the target toolchain supports it.
+  Hard-coding DWARF 5 for the macOS-first target is a defect.
+- Language identity: until a registered DWARF language code for Osprey exists,
+  `DW_LANG_C` is the interim choice, but it is NOT neutral — debuggers apply
+  C expression-eval, formatting, demangling, and array-lower-bound semantics
+  from it, which the Osprey-aware evaluator (see Plan Layer 6) must override.
+  The real fix is to register `DW_LNAME_Osprey` with dwarfstd.org and emit the
+  DWARF 6 `DW_AT_language_name` + `DW_AT_language_version` pair while still
+  dual-emitting legacy `DW_AT_language` for older consumers. See
+  [Plan 0012, Layer 2](../plans/0012-osprey-debugger.md).
 
 Minimum emitted metadata:
 
@@ -72,6 +84,11 @@ Rules:
 
 - Osprey AST positions use 1-based lines and 0-based columns.
 - DAP/source debugger positions exposed to users use 1-based lines and columns.
+- Emitted DWARF/`!DILocation` lines and columns are 1-based. The 0-based AST
+  column MUST be converted with `column + 1` before emission, because LLVM
+  reserves `!DILocation` column `0` as the "no column" sentinel — emitting a
+  raw 0-based column collides with it and yields off-by-one or dropped column
+  data. A 1-based AST line maps straight through.
 - Compiler-generated code may be associated with the nearest source statement
   only when doing so improves stepping/breakpoint behavior.
 - Generated helper frames should be hidden from normal stepping once smart
@@ -106,14 +123,43 @@ The extension may let users configure:
 
 ## Reusable Debugger Helpers `[DEBUGGER-REUSE]`
 
-Generic debugger utilities MUST live outside Osprey-specific compiler modules.
-The `osprey-debug` crate holds small editor/compiler-neutral primitives such as
-debug source identity and native debug-build policy. It intentionally avoids
-Osprey parser, type-checker, codegen, and editor dependencies so useful pieces
-can later move into `lspkit`.
+Generic debugger utilities MUST NOT be re-implemented per language. Osprey,
+Basilisk (Python) and SharpLsp (C#) each ship a VS Code debugger and are
+converging on the shared [LspKit](https://github.com/Nimblesite/lspkit) toolkit.
+The debugger glue has two reuse layers, and duplication across the three
+projects in either layer is a defect:
 
-Osprey-specific lowering remains in `osprey-codegen`; editor-specific launch
-logic remains in the VS Code extension.
+**Compiler/native layer (Rust).** Debug-build policy (`-g`, `-O0`,
+`-fno-omit-frame-pointer`, platform DWARF version), debug source identity, and
+DWARF helpers are editor- and language-neutral. They live in `osprey-debug`
+today as the seed and are candidates to upstream into an `lspkit-debug` crate
+(LspKit currently has no debugger code). `osprey-debug` intentionally avoids
+Osprey parser, type-checker, codegen, and editor dependencies. This layer only
+benefits other native-compiled languages; Python/C# do not consume it.
+
+**Editor layer (TypeScript).** This is where Osprey, Basilisk and SharpLsp
+actually triplicate code, so it is the priority reuse target. The following are
+language-neutral and MUST be hoisted into a shared package under the LspKit
+umbrella rather than forked into each extension:
+
+- DAP adapter resolution (setting override → common toolchain paths → PATH,
+  with a precise missing-tool error). SharpLsp's `findNetcoredbg` /
+  `getNetcoredbgCandidates` is the reference shape.
+- Debug-launch config synthesis/normalization (empty F5 config → defaults,
+  missing program → active file / entry artifact, profile merge). Basilisk's
+  pure `applyDebugConfigDefaults` and SharpLsp's `resolveDebugConfiguration`
+  are the reference shapes.
+- Save-dirty-documents-or-reject, and the pre-launch native build hook.
+- The DAP test harness: a DAP client (initialize/launch/setBreakpoints/
+  continue/stepIn/Out/Over/stackTrace/scopes/variables/evaluate), poll helpers,
+  and UI stubs. Basilisk's debug-integration test client and SharpLsp's
+  `pollUntilResult` / UI stubs are the reference shapes.
+
+Only the genuinely language-specific bits stay in each extension: the debug
+`type`, adapter name (`lldb-dap` for Osprey), compiler/build command, and
+toolchain-specific paths. Osprey-specific lowering remains in `osprey-codegen`.
+The Osprey extension's debugger code is the seed to upstream, not a private
+fork to grow in isolation.
 
 ## Future Runtime Inspection `[DEBUGGER-RUNTIME]`
 
@@ -121,8 +167,11 @@ The finished debugger must inspect Osprey values, not just native pointers.
 
 Required future support:
 
-- Local variables and parameters via `DILocalVariable` and `dbg.value` /
-  `dbg.declare`.
+- Local variables and parameters via `DILocalVariable` plus LLVM value-location
+  records. Prefer LLVM 19+ `#dbg_value` / `#dbg_declare` debug records; the
+  current textual backend may use the older `@llvm.dbg.value` /
+  `@llvm.dbg.declare` compatibility form while it is verified to lower to
+  correct DWARF in supported toolchains.
 - Records, unions, `Result`, strings, lists, maps, closures, fibers, channels,
   and effect handlers rendered as Osprey values.
 - Safe runtime inspection helpers for opaque handles.
@@ -142,5 +191,12 @@ A change is conformant only if:
    adapter can launch.
 3. The VS Code debugger contribution starts a DAP session; it does not proxy to
    `osprey --run`.
-4. LSP and debugger source positions follow `[DEBUGGER-SOURCE-MAP]`.
-5. Generic debugger utilities remain isolated per `[DEBUGGER-REUSE]`.
+4. LSP and debugger source positions follow `[DEBUGGER-SOURCE-MAP]`, including
+   the `column + 1` DWARF emission rule.
+5. Generic debugger utilities remain isolated AND upstreamable per
+   `[DEBUGGER-REUSE]`; the editor DAP glue and DAP test harness are not
+   duplicated across Osprey, Basilisk, and SharpLsp.
+6. Variable/parameter metadata, once emitted, is verified through LLDB/DAP; the
+   IR spelling may be `#dbg_*` records or the current `@llvm.dbg.*`
+   compatibility intrinsics, and the DWARF version honors the per-platform
+   default (DWARF 4 on macOS).

@@ -11,6 +11,7 @@ import {
   looksLikePath,
   makeClientFailureHandling,
   applyDefaultOspreyDebugConfig,
+  defaultOspreyDebugConfigForEditor,
   defaultDebugOutputPath,
   resolveLldbDapCommand,
   deactivate,
@@ -78,6 +79,179 @@ function resolveBuiltOsprey(): string | undefined {
   // `extensionRoot`). The dev compiler lands at <repo>/target/release/osprey.
   const built = path.resolve(extensionRoot, "..", "target", "release", exe);
   return fs.existsSync(built) ? built : resolveOspreyOnPath();
+}
+
+function resolveExecutableOnPath(command: string): string | undefined {
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!dir) {
+      continue;
+    }
+    const candidate = path.join(dir, command);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function resolveRequiredLldbDap(): string {
+  const command = resolveLldbDapCommand({});
+  if (
+    (command.includes("/") || command.includes("\\")) &&
+    fs.existsSync(command)
+  ) {
+    return command;
+  }
+  const onPath = resolveExecutableOnPath(command);
+  if (onPath) {
+    return onPath;
+  }
+  assert.fail(
+    `lldb-dap is required for the Osprey VSIX debugger E2E test; resolved "${command}" but it was not executable`,
+  );
+}
+
+function clearDebugBreakpoints(): void {
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+}
+
+function setSourceBreakpoints(filePath: string, lines: number[]): void {
+  clearDebugBreakpoints();
+  vscode.debug.addBreakpoints(
+    lines.map(
+      (line) =>
+        new vscode.SourceBreakpoint(
+          new vscode.Location(
+            vscode.Uri.file(filePath),
+            new vscode.Position(line - 1, 0),
+          ),
+        ),
+    ),
+  );
+}
+
+async function waitForDebugSessionStart(
+  timeoutMs = 30_000,
+): Promise<vscode.DebugSession> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      disposable.dispose();
+      reject(new Error(`Debug session did not start within ${timeoutMs}ms`));
+    }, timeoutMs);
+    const disposable = vscode.debug.onDidStartDebugSession((session) => {
+      clearTimeout(timer);
+      disposable.dispose();
+      resolve(session);
+    });
+  });
+}
+
+async function waitForDebugSessionEnd(
+  timeoutMs = 30_000,
+  sessionId?: string,
+): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const active = vscode.debug.activeDebugSession;
+    if (!active || (sessionId && active.id !== sessionId)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Debug session did not end within ${timeoutMs}ms`);
+}
+
+async function getStackTrace(
+  session: vscode.DebugSession,
+  threadId: number,
+): Promise<{
+  stackFrames: {
+    id: number;
+    name: string;
+    source?: { path?: string };
+    line: number;
+    column: number;
+  }[];
+}> {
+  return session.customRequest("stackTrace", {
+    threadId,
+    startFrame: 0,
+    levels: 20,
+  }) as Promise<{
+    stackFrames: {
+      id: number;
+      name: string;
+      source?: { path?: string };
+      line: number;
+      column: number;
+    }[];
+  }>;
+}
+
+async function getScopes(
+  session: vscode.DebugSession,
+  frameId: number,
+): Promise<{
+  scopes: { name: string; variablesReference: number; expensive?: boolean }[];
+}> {
+  return session.customRequest("scopes", { frameId }) as Promise<{
+    scopes: { name: string; variablesReference: number; expensive?: boolean }[];
+  }>;
+}
+
+async function getVariables(
+  session: vscode.DebugSession,
+  variablesReference: number,
+): Promise<{
+  variables: {
+    name: string;
+    value: string;
+    type?: string;
+    variablesReference: number;
+  }[];
+}> {
+  return session.customRequest("variables", { variablesReference }) as Promise<{
+    variables: {
+      name: string;
+      value: string;
+      type?: string;
+      variablesReference: number;
+    }[];
+  }>;
+}
+
+async function waitForStop(
+  session: vscode.DebugSession,
+  timeoutMs = 30_000,
+): Promise<{
+  threadId: number;
+  stack: Awaited<ReturnType<typeof getStackTrace>>;
+}> {
+  const started = Date.now();
+  let lastError = "";
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const threadsResponse = (await session.customRequest("threads")) as {
+        threads?: { id: number }[];
+      };
+      for (const thread of threadsResponse.threads ?? []) {
+        try {
+          const stack = await getStackTrace(session, thread.id);
+          if (stack.stackFrames.length > 0) {
+            return { threadId: thread.id, stack };
+          }
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
+        }
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(
+    `Timed out waiting for debugger stop after ${timeoutMs}ms (${lastError})`,
+  );
 }
 
 suite("Osprey Shipwright Activation Coverage", () => {
@@ -260,6 +434,10 @@ print(result)
     assert.ok(
       commands.includes("osprey.run"),
       "Run command should be available",
+    );
+    assert.ok(
+      commands.includes("osprey.debug"),
+      "Debug command should be available",
     );
   });
 
@@ -1037,7 +1215,7 @@ suite("Osprey Language Features Tests", () => {
     this.timeout(60000);
     // Open the very file the user reported ("Hover doesnt work!") straight from
     // the repository and prove the language features answer over it. extensionRoot
-    // is <repo>/vscode-extension; the example lives under compiler/examples.
+    // is <repo>/vscode-extension; the example lives under examples.
     const reported = path.resolve(
       extensionRoot,
       "..",
@@ -1347,10 +1525,11 @@ suite("Osprey Command Handler Coverage", () => {
     );
   });
 
-  test("all three osprey commands are registered", async () => {
+  test("all four osprey commands are registered", async () => {
     const all = await vscode.commands.getCommands(true);
     assert.ok(all.includes("osprey.compile"), "compile registered");
     assert.ok(all.includes("osprey.run"), "run registered");
+    assert.ok(all.includes("osprey.debug"), "debug registered");
     assert.ok(all.includes("osprey.setLanguage"), "setLanguage registered");
   });
 });
@@ -1522,6 +1701,191 @@ suite("Osprey Activation Side-Effect Coverage", () => {
       vscode.extensions.getExtension(extensionId2)?.isActive,
       "extension survives the no-program debug path",
     );
+  });
+});
+
+suite("Osprey VSIX Debugger E2E", () => {
+  let tempDir: string;
+  let priorCompilerPath: string | undefined;
+  let priorLldbDapPath: string | undefined;
+  let lldbDapPath: string;
+
+  setup(async function () {
+    this.timeout(60000);
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "osprey-debug-vsix-"));
+
+    const ospreyPath = resolveBuiltOsprey();
+    assert.ok(
+      ospreyPath && fs.existsSync(ospreyPath),
+      "a freshly built osprey binary is required for VSIX debugger E2E",
+    );
+    lldbDapPath = resolveRequiredLldbDap();
+
+    const config = vscode.workspace.getConfiguration("osprey");
+    priorCompilerPath = config.get<string>("server.compilerPath");
+    priorLldbDapPath = config.get<string>("debug.lldbDapPath");
+    await config.update(
+      "server.compilerPath",
+      ospreyPath,
+      vscode.ConfigurationTarget.Global,
+    );
+    await config.update(
+      "debug.lldbDapPath",
+      lldbDapPath,
+      vscode.ConfigurationTarget.Global,
+    );
+
+    const extension = vscode.extensions.getExtension(extensionId);
+    assert.ok(extension, "Osprey extension should be installed in test host");
+    await extension.activate();
+  });
+
+  teardown(async function () {
+    clearDebugBreakpoints();
+    if (vscode.debug.activeDebugSession) {
+      try {
+        await vscode.debug.stopDebugging();
+      } catch {
+        // The session can terminate naturally while cleanup is racing it.
+      }
+    }
+    const config = vscode.workspace.getConfiguration("osprey");
+    await config.update(
+      "server.compilerPath",
+      priorCompilerPath,
+      vscode.ConfigurationTarget.Global,
+    );
+    await config.update(
+      "debug.lldbDapPath",
+      priorLldbDapPath,
+      vscode.ConfigurationTarget.Global,
+    );
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("package manifest exposes a real debugger contribution", () => {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(extensionRoot, "package.json"), "utf8"),
+    ) as {
+      activationEvents?: string[];
+      contributes?: {
+        commands?: { command: string }[];
+        keybindings?: { command: string; key?: string }[];
+        breakpoints?: { language: string }[];
+        debuggers?: { type: string; languages?: string[] }[];
+      };
+    };
+
+    assert.ok(
+      pkg.activationEvents?.includes("onDebugResolve:osprey"),
+      "VSIX activates to resolve osprey debug configs",
+    );
+    assert.ok(
+      pkg.contributes?.commands?.some((cmd) => cmd.command === "osprey.debug"),
+      "VSIX contributes an explicit osprey.debug command",
+    );
+    assert.ok(
+      pkg.contributes?.keybindings?.some(
+        (binding) => binding.command === "osprey.debug" && binding.key === "f5",
+      ),
+      "F5 is bound to the debugger command, not osprey.run",
+    );
+    assert.ok(
+      pkg.contributes?.breakpoints?.some((bp) => bp.language === "osprey"),
+      "VSIX declares Osprey source breakpoints",
+    );
+    assert.ok(
+      pkg.contributes?.debuggers?.some(
+        (debuggerContribution) =>
+          debuggerContribution.type === "osprey" &&
+          debuggerContribution.languages?.includes("osprey"),
+      ),
+      "VSIX contributes the osprey DAP debugger type",
+    );
+  });
+
+  test("debug command synthesizes the same real launch config as F5", () => {
+    const source = path.join(tempDir, "command.osp");
+    const config = defaultOspreyDebugConfigForEditor({
+      document: { languageId: "osprey", fileName: source },
+    });
+    assert.strictEqual(config.type, "osprey");
+    assert.strictEqual(config.request, "launch");
+    assert.strictEqual(config.name, "Debug Osprey File");
+    assert.strictEqual(config.program, source);
+    assert.strictEqual(config.cwd, tempDir);
+  });
+
+  test("starts lldb-dap, hits an Osprey source breakpoint, reads stack and locals", async function () {
+    this.timeout(90000);
+
+    const source = path.join(tempDir, "breakpoint.osp");
+    const debugOutput = defaultDebugOutputPath(source);
+    fs.writeFileSync(
+      source,
+      ["let x = 1", "let y = x + 2", 'print("debugger reached ${x}")', ""].join(
+        "\n",
+      ),
+    );
+
+    const document = await vscode.workspace.openTextDocument(source);
+    await vscode.window.showTextDocument(document);
+    await document.save();
+
+    setSourceBreakpoints(source, [2]);
+    const sessionPromise = waitForDebugSessionStart(45000);
+    const started = await vscode.debug.startDebugging(undefined, {
+      type: "osprey",
+      request: "launch",
+      name: "Osprey VSIX Debugger E2E",
+      program: source,
+      cwd: tempDir,
+      debugOutput,
+      lldbDapPath,
+      stopOnEntry: false,
+    });
+    assert.ok(started, "VS Code should accept the Osprey debug launch");
+
+    const session = await sessionPromise;
+    assert.strictEqual(session.type, "osprey");
+
+    const stopped = await waitForStop(session, 45000);
+    const topFrame = stopped.stack.stackFrames[0];
+    assert.ok(topFrame, "debugger must report a stopped stack frame");
+    assert.strictEqual(
+      path.normalize(topFrame.source?.path ?? ""),
+      path.normalize(source),
+      "top stack frame is the Osprey source file",
+    );
+    assert.strictEqual(topFrame.line, 2, "breakpoint stops on Osprey line 2");
+    assert.ok(topFrame.column >= 1, "DAP reports a 1-based source column");
+
+    const scopes = await getScopes(session, topFrame.id);
+    assert.ok(scopes.scopes.length > 0, "debugger exposes frame scopes");
+    const variables = (
+      await Promise.all(
+        scopes.scopes
+          .filter((scope) => scope.variablesReference > 0)
+          .map((scope) => getVariables(session, scope.variablesReference)),
+      )
+    ).flatMap((result) => result.variables);
+    const x = variables.find((variable) => variable.name === "x");
+    assert.ok(
+      x,
+      `local x must be visible through DAP variables; saw ${variables
+        .map((variable) => variable.name)
+        .join(", ")}`,
+    );
+    assert.match(x.value, /\b1\b/, "local x value is available through DAP");
+    assert.ok(
+      fs.existsSync(debugOutput),
+      "debug launch compiled a native binary",
+    );
+
+    await session.customRequest("continue", { threadId: stopped.threadId });
+    await waitForDebugSessionEnd(45000, session.id);
   });
 });
 

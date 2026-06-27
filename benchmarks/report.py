@@ -21,9 +21,12 @@ import sys
 from pathlib import Path
 from typing import Callable, Optional, cast
 
-ORDER: list[str] = ["osprey", "osprey-gc", "rust", "c", "ocaml", "haskell"]
+ORDER: list[str] = ["osprey", "osprey-gc", "rust", "c", "ocaml", "haskell",
+                    "osprey-wasm", "rust-wasm", "c-wasm"]
 LABEL: dict[str, str] = {"osprey": "Osprey", "osprey-gc": "Osprey (GC)",
-                         "rust": "Rust", "c": "C", "ocaml": "OCaml", "haskell": "Haskell"}
+                         "rust": "Rust", "c": "C", "ocaml": "OCaml", "haskell": "Haskell",
+                         "osprey-wasm": "Osprey (wasm)", "rust-wasm": "Rust (wasm)",
+                         "c-wasm": "C (wasm)"}
 REPO = Path(__file__).resolve().parent.parent
 
 Cell = dict[str, object]
@@ -64,9 +67,12 @@ def geomean(xs: list[float]) -> float:
 
 
 def vals(case: dict[str, Cell], key: str) -> dict[str, float]:
-    """The numeric `key` (mean / rss) of every language that ran OK in this case."""
+    """The numeric `key` (mean / rss) of every language that ran OK in this case.
+
+    A falsy value (rss == 0) means "not measured" — wasm runs under wasmtime, whose
+    host RSS isn't comparable — so it is excluded here and rendered as "—"."""
     return {l: float(c[key]) for l, c in case.items()
-            if c.get("status") == "ok" and c.get(key) is not None}
+            if c.get("status") == "ok" and c.get(key)}
 
 
 def ratios(data: Data, cases: list[str], lang: str, key: str) -> list[float]:
@@ -107,7 +113,7 @@ def _row(case: dict[str, Cell], name: str, langs: list[str], key: str, fmt: Call
 
 def _td(c: Cell, lang: str, key: str, fmt: Callable[[float], str],
         v: dict[str, float], best: Optional[float]) -> str:
-    ok = c.get("status") == "ok" and c.get(key) is not None
+    ok = c.get("status") == "ok" and bool(c.get(key))
     txt = fmt(float(c[key])) if ok else cell_missing(c)
     classes = ["num"] + (["col-osprey"] if lang.startswith("osprey") else [])
     if ok and best is not None and float(c[key]) == best:

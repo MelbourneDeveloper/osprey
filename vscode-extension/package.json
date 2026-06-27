@@ -33,6 +33,13 @@
     "language"
   ],
   "main": "./out/client/src/extension.js",
+  "activationEvents": [
+    "onLanguage:osprey",
+    "onCommand:osprey.compile",
+    "onCommand:osprey.run",
+    "onCommand:osprey.debug",
+    "onDebugResolve:osprey"
+  ],
   "contributes": {
     "languages": [
       {
@@ -77,6 +84,11 @@
         "category": "Osprey"
       },
       {
+        "command": "osprey.debug",
+        "title": "Debug Osprey File",
+        "category": "Osprey"
+      },
+      {
         "command": "osprey.setLanguage",
         "title": "Set Language to Osprey",
         "category": "Osprey"
@@ -93,6 +105,11 @@
           "when": "resourceLangId == osprey",
           "command": "osprey.run",
           "group": "navigation@2"
+        },
+        {
+          "when": "resourceLangId == osprey",
+          "command": "osprey.debug",
+          "group": "navigation@3"
         }
       ],
       "commandPalette": [
@@ -102,6 +119,10 @@
         },
         {
           "command": "osprey.run",
+          "when": "resourceLangId == osprey"
+        },
+        {
+          "command": "osprey.debug",
           "when": "resourceLangId == osprey"
         }
       ]
@@ -114,9 +135,14 @@
         "when": "resourceLangId == osprey"
       },
       {
-        "command": "osprey.run",
+        "command": "osprey.debug",
         "key": "f5",
         "when": "resourceLangId == osprey"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "osprey"
       }
     ],
     "debuggers": [

@@ -30,7 +30,7 @@ Implemented in [crates/osprey-codegen/src/effects.rs](../../crates/osprey-codege
 [expr.rs](../../crates/osprey-codegen/src/expr.rs) and
 [lower.rs](../../crates/osprey-codegen/src/lower.rs), and
 [compiler/runtime/effects_runtime.c](../../compiler/runtime/effects_runtime.c).
-Reference app: `compiler/examples/tested/effects/http_state_levels.osp`. The
+Reference app: `examples/tested/effects/http_state_levels.osp`. The
 remaining `resume` work below is unchanged.
 
 ## Evidence
@@ -50,7 +50,7 @@ remaining `resume` work below is unchanged.
 - Compile-time unhandled-effect checking —
   [crates/osprey-types/src/check.rs](../../crates/osprey-types/src/check.rs).
 - Working example —
-  [compiler/examples/tested/effects/algebraic_effects_comprehensive.osp](../../compiler/examples/tested/effects/algebraic_effects_comprehensive.osp).
+  [examples/tested/effects/algebraic_effects_comprehensive.osp](../../examples/tested/effects/algebraic_effects_comprehensive.osp).
 
 ## Where it stops
 
@@ -135,7 +135,7 @@ that never resumes returns directly → host sets `abort`, joins the body, frees
 ## Testing
 
 - Extend
-  [algebraic_effects_comprehensive.osp](../../compiler/examples/tested/effects/algebraic_effects_comprehensive.osp)
+  [algebraic_effects_comprehensive.osp](../../examples/tested/effects/algebraic_effects_comprehensive.osp)
   with a state/generator-style handler that resumes (e.g. a counter or a
   `yield`-like producer) and asserts the performer continues; refresh
   `.expectedoutput`.

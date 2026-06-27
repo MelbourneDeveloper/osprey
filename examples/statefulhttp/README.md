@@ -16,8 +16,8 @@ process, exercised by CI) lives at
 ## Run it
 
 ```bash
-osprey compiler/examples/statefulhttp/server.osp --run    # terminal 1
-osprey compiler/examples/statefulhttp/tui.osp --run        # terminal 2
+osprey examples/statefulhttp/server.osp --run    # terminal 1
+osprey examples/statefulhttp/tui.osp --run        # terminal 2
 ```
 
 TUI keys: `j`/`k` move · `a` add a task · `r` refresh · `q` quit.

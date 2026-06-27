@@ -42,10 +42,15 @@ Results are written to `benchmarks/results/` (gitignored):
 time. Both the standalone report and the website page are generated mechanically
 by [`report.py`](report.py) — never hand-edit them.
 
-## The benchmarks (18)
+## The benchmarks (22)
 
-All have a single deterministic **integer** result, so output is byte-comparable
-across languages (a broken implementation is caught and excluded from timing).
+Every case prints a single deterministic **integer** result, so output is
+byte-comparable across languages (a broken implementation is caught and excluded
+from timing) — but that integer is now often a *checksum over non-integer data*
+(strings, maps, lists, algebraic trees), so the suite exercises far more than
+`int` arithmetic. Four cases additionally run in **two input modes** — a fixed
+constant seed (what we time and verify) or a cryptographically-secure random
+seed — see [Constant vs randomized input](#constant-vs-randomized-input).
 
 **Recursion-bound**
 
@@ -84,6 +89,23 @@ across languages (a broken implementation is caught and excluded from timing).
 heap nodes, so peak RSS reveals each language's allocation/GC strategy (Rust
 `Box`, C `malloc`/`free`, OCaml/Haskell GC, Osprey's runtime).
 
+**Data structures (non-integer)** — these stress the runtime's collection and
+algebraic-type machinery, not just `int` arithmetic. Each draws its data from a
+seeded token generator and runs in constant *or* randomized mode (below).
+
+| Case | Data type | What it stresses | Workload |
+|------|-----------|------------------|----------|
+| `wordfreq`  | `String` keys + `Map<string,int>` | HAMT insert/lookup + string hashing | count 200k tokens, position-weighted checksum |
+| `textstats` | `String`                          | immutable string builtins (`length`/`contains`/`startsWith`) in a hot loop | score 200k tokens |
+| `listops`   | persistent `List<int>`            | bitmapped-vector-trie build + recursive traversal | build+traverse 4k-element lists ×8 |
+| `exprtree`  | recursive union + records         | constructor allocation + pattern-match dispatch + modular eval | build+evaluate depth-14 trees ×10 |
+
+`listops` is a second **memory** benchmark alongside `binarytrees`: persistent
+`listAppend` allocates a fresh spine on every push, so under the default
+(non-reclaiming) backend it peaks near **2.5 GB**, while `--memory=gc` reclaims
+the dead intermediate lists to **~3.6 MB** (a ~690× cut). `wordfreq` shows the
+same effect on the HAMT (54 MB → ~3.7 MB).
+
 ## Methodology
 
 1. **Build once, time the binary.** `osprey … --compile` emits a persistent
@@ -110,6 +132,61 @@ Compile commands (source of truth: [`run.sh`](run.sh)):
 | C       | `cc -O2 -o <bin> <f>.c` |
 | OCaml   | `ocamlopt -O3 -unsafe -o <bin> <f>.ml` |
 | Haskell | `ghc -O2 -o <bin> <f>.hs` |
+| Osprey (wasm) | `osprey <f>.osp --target=wasm32 --compile -o <f>.wasm` → `wasmtime run` |
+| Rust (wasm)   | `rustc --target wasm32-wasip1 -C opt-level=3 -o <f>.wasm` → `wasmtime run` |
+| C (wasm)      | `clang --target=wasm32-wasip1 --sysroot=<wasi> -O2 -o <f>.wasm` → `wasmtime run` |
+
+### WebAssembly targets
+
+The three languages with a stock wasm backend — **Osprey, Rust, C** — also
+cross-compile the *same source* to `wasm32-wasip1` and run it under
+[`wasmtime`](https://wasmtime.dev), giving the `Osprey (wasm)`, `Rust (wasm)`,
+and `C (wasm)` columns. This measures the identical program's cost on a portable
+VM. Notes and limits:
+
+- **CPU is charted, memory is not** (`—`): each run is `wasmtime run <module>`, so
+  peak RSS is dominated by the wasmtime host, not the module's linear memory —
+  not comparable to the native columns. The CPU figure *includes* VM
+  startup, so wasm is expected to trail native; it's an apples-to-apples
+  wasm-vs-wasm comparison, not wasm-vs-native.
+- **OCaml and Haskell have no wasm column** — no stock `ocamlopt`/`ghc` wasm
+  target (their wasm stories need separate experimental toolchains).
+- **`C (wasm)` needs a wasi-sdk** that ships the wasm `compiler-rt` builtins;
+  stock `clang` + `wasi-libc` often lacks it, so the column auto-hides when a
+  trivial probe fails to link (set `OSPREY_WASI_SYSROOT` to point at one).
+- **A case that uses a non-portable builtin is skipped for wasm, not failed.**
+  Osprey's wasm runtime is the portable subset (allocator, strings, lists, maps,
+  JSON, effects) — it excludes fibers, HTTP, the terminal, and `input`/`random`
+  ([0022](../docs/specs/0022-WebAssemblyTarget.md)). So the data-structure cases
+  that read a seed via `input()`/`randomBelow` (`wordfreq`, `textstats`,
+  `listops`, `exprtree`) have no `Osprey (wasm)` cell, while the pure-compute
+  cases (`fib`, `binarytrees`, …) do.
+
+### Constant vs randomized input
+
+The four data-structure cases (`wordfreq`, `textstats`, `listops`, `exprtree`)
+read the **first line of stdin** to choose a seed for their token generator:
+
+- **`0` (or empty / not a tty)** — a *fixed* seed: the run is fully deterministic.
+  This is what the harness feeds (so timings are reproducible and the
+  `expected.txt` oracle holds). Every language uses the same Park-Miller MINSTD
+  generator, so all six produce byte-identical output.
+- **`1`** — a *cryptographically-secure random* seed. In Osprey this calls the
+  new `randomBelow` builtin (OS CSPRNG); the other languages draw from
+  `/dev/urandom` / their stdlib RNG. The workload is identical but the data is
+  unpredictable, so output varies run-to-run and is **not** oracle-checked.
+
+The harness always feeds the constant seed via `hyperfine --input` and a stdin
+redirect (which also stops an `input()` call from blocking on a tty). To watch a
+case run on fresh random data each time, set `BENCH_RANDOM=1`:
+
+```bash
+BENCH_RANDOM=1 BENCH_FILTER=wordfreq make bench   # prints a randomized demo pass
+echo 1 | benchmarks/results/bin/wordfreq__osprey   # or drive one binary directly
+```
+
+This is the only place randomness enters the suite; everything charted is the
+deterministic constant-seed run.
 
 ## Reading the numbers fairly
 
@@ -173,15 +250,20 @@ Blocked on language features Osprey doesn't expose today (left out, not faked):
 | Benchmark | Blocked on |
 |-----------|-----------|
 | mandelbrot, n-body, spectral-norm | no `sqrt`/trig stdlib, no `int`↔`float` conversion, float-formatting differs across languages (no exact integer oracle) |
-| n-queens, quicksort, mergesort, fannkuch | no list literals / cons / list pattern-matching / mutable arrays |
+| n-queens, fannkuch | no mutable arrays |
+| quicksort, mergesort | recursive `filter`+concat over a persistent `List` currently miscompiles (codegen) — `listops` covers list build + recursive traversal instead |
 | sieve of Eratosthenes, matrix-multiply, n-sieve | no mutable arrays |
 | pidigits | no arbitrary-precision integers (i64 only) |
 
 `collatz`, `digitsum`, and `isqrt` were unblocked by adding the `intDiv` builtin
 (truncating, divide-by-zero-checked integer division — the `/` operator stays
 float-only per spec; see [BUILTIN-INTDIV](../docs/specs/0012-Built-InFunctions.md)).
-As Osprey grows a math stdlib, numeric conversions, and mutable arrays, the
-remaining classics above become expressible and should be added here.
+The four data-structure cases (`wordfreq`, `textstats`, `listops`, `exprtree`)
+were unblocked by the persistent `Map`/`List`, string builtins, recursive unions,
+and the new cryptographically-secure `random`/`randomBelow` builtins
+([BUILTIN-RANDOM](../docs/specs/0012-Built-InFunctions.md)). As Osprey grows a
+math stdlib, numeric conversions, and mutable arrays, the remaining classics
+above become expressible and should be added here.
 
 ## Adding a benchmark
 

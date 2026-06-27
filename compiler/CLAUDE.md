@@ -4,7 +4,7 @@ The Osprey compiler itself is the Rust workspace in `crates/` (built with
 `cargo`, binary `target/release/osprey`). See the root [CLAUDE.md](../CLAUDE.md)
 for all build commands, architecture, and development rules.
 
-This directory contains only the parts that stayed behind after the Go → Rust
+This directory contains the C runtime that stayed behind after the Go → Rust
 migration:
 
 ## Contents
@@ -12,10 +12,11 @@ migration:
 - `runtime/` - Pure-C runtime libraries (fibers, HTTP/WebSocket, system, string,
   list/map, JSON, FFI, terminal). Linked by `osprey --run` as
   `libfiber_runtime.a` / `libhttp_runtime.a`.
-- `examples/tested/` - Working example programs; each `.osp` must match its
-  `.expectedoutput` byte-for-byte in the differential harness
-  (`crates/diff_examples.sh`, run by `make test`).
-- `examples/failscompilation/` - Programs the compiler must reject.
+
+Example programs and golden tests live at the top-level
+[`../examples/`](../examples/): `examples/tested/` (each `.osp` matches its
+`.expectedoutput` in the differential harness `crates/diff_examples.sh`, run by
+`make test`) and `examples/failscompilation/` (programs the compiler must reject).
 
 ## Building
 

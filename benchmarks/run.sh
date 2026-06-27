@@ -38,13 +38,33 @@ MEMRUNS=${BENCH_MEMRUNS:-3}
 # Rust) first after Osprey so the gap to Osprey reads left-to-right. `osprey-gc`
 # is the SAME .osp compiled with the tracing GC backend (--memory=gc), so the
 # allocation cases (binarytrees) show reclamation next to the default backend.
-LANGS=(osprey osprey-gc rust c ocaml haskell)
+LANGS=(osprey osprey-gc rust c ocaml haskell osprey-wasm rust-wasm c-wasm)
 typeset -A EXT
-EXT=(osprey osp  osprey-gc osp  rust rs  c c  ocaml ml  haskell hs)
+EXT=(osprey osp  osprey-gc osp  rust rs  c c  ocaml ml  haskell hs
+     osprey-wasm osp  rust-wasm rs  c-wasm c)
 
 have() { command -v "$1" >/dev/null 2>&1 }
 
-# toolchain_ok <lang> — is the compiler for <lang> installed?
+# WebAssembly: the *-wasm langs cross-compile the SAME sources to wasm32-wasip1
+# and run them under wasmtime, so the wasm column is the cost of the identical
+# program on a portable VM (OCaml/Haskell have no stock wasm path, so they have
+# no wasm column). WASI sysroot for the C/clang path — override OSPREY_WASI_SYSROOT.
+WASI_SYSROOT=${OSPREY_WASI_SYSROOT:-}
+if [[ -z "$WASI_SYSROOT" ]]; then
+  for d in /opt/homebrew/opt/wasi-libc/share/wasi-sysroot \
+           /usr/local/opt/wasi-libc/share/wasi-sysroot \
+           /opt/wasi-sdk/share/wasi-sysroot "${WASI_SDK_PATH:-}/share/wasi-sysroot" \
+           /usr/share/wasi-sysroot; do
+    [[ -n "$d" && -d "$d" ]] && { WASI_SYSROOT=$d; break }
+  done
+fi
+# A *-wasm "binary" is a tiny wrapper that runs the module under wasmtime, so the
+# oracle/hyperfine/rss machinery drives it unchanged (stdin is inherited).
+wasm_wrap() { printf '#!/bin/sh\nexec wasmtime run "%s.wasm" "$@"\n' "$1" > "$1"; chmod +x "$1" }
+
+# toolchain_ok <lang> — is the compiler for <lang> installed? (wasm langs also
+# need wasmtime + a wasm backend; c-wasm needs a wasi-sdk that ships compiler-rt,
+# probed once into CWASM_OK because stock clang+wasi-libc often lacks it.)
 toolchain_ok() {
   case "$1" in
     osprey|osprey-gc) [[ -x "$OSP" ]] ;;
@@ -52,6 +72,9 @@ toolchain_ok() {
     c)       have cc ;;
     ocaml)   have ocamlopt ;;
     haskell) have ghc ;;
+    osprey-wasm) [[ -x "$OSP" ]] && have wasmtime && [[ -f "$ROOT/compiler/lib/libosprey_runtime_wasm.a" ]] ;;
+    rust-wasm)   have rustc && have wasmtime && rustup target list 2>/dev/null | grep -q 'wasm32-wasip1 (installed)' ;;
+    c-wasm)      [[ "${CWASM_OK:-0}" == 1 ]] ;;
   esac
 }
 
@@ -66,6 +89,12 @@ build() {
     ocaml)   cp "$dir/$name.ml" "$TMP/$name.ml" && \
              ( cd "$TMP" && ocamlopt -O3 -unsafe -o "$out" "$name.ml" >/dev/null 2>&1 ) ;;  # compile a copy: ocamlopt litters .cmi/.cmx/.o beside the source
     haskell) ghc -O2 -outputdir "$TMP/hs_$name" -o "$out" "$dir/$name.hs" >/dev/null 2>&1 ;;
+    # --- wasm32-wasip1 cross-builds, run via the wasm_wrap wrapper. A case that
+    #     uses a non-portable builtin (input/random/fibers) fails to link here and
+    #     is reported as wasm-incompatible (a skip, not a hard failure). ---
+    osprey-wasm) ( cd "$dir" && "$OSP" "$name.osp" --target=wasm32 --compile -o "$out.wasm" >/dev/null 2>&1 ) && wasm_wrap "$out" ;;
+    rust-wasm)   rustc --target wasm32-wasip1 -C opt-level=3 -o "$out.wasm" "$dir/$name.rs" 2>/dev/null && wasm_wrap "$out" ;;
+    c-wasm)      clang --target=wasm32-wasip1 --sysroot="$WASI_SYSROOT" -O2 -o "$out.wasm" "$dir/$name.c" 2>/dev/null && wasm_wrap "$out" ;;
   esac
 }
 
@@ -101,6 +130,16 @@ rm -rf "$OUT"; mkdir -p "$TMP" "$BINDIR" "$HFDIR"; : > "$RAW"
 MODE0="$TMP/mode_const"; print -- "0" > "$MODE0"
 MODE1="$TMP/mode_rand";  print -- "1" > "$MODE1"
 
+# Probe c-wasm once: stock clang + wasi-libc frequently lacks the wasm
+# compiler-rt builtins, so confirm a trivial module actually links (and runs)
+# before offering the column — otherwise it's reported ABSENT, not failing.
+CWASM_OK=0
+if have clang && have wasmtime && [[ -n "$WASI_SYSROOT" ]]; then
+  print 'int main(void){return 0;}' > "$TMP/cwasm_probe.c"
+  clang --target=wasm32-wasip1 --sysroot="$WASI_SYSROOT" -O2 \
+        -o "$TMP/cwasm_probe.wasm" "$TMP/cwasm_probe.c" 2>/dev/null && CWASM_OK=1
+fi
+
 if [[ ! -x "$OSP" ]]; then
   echo "FATAL: osprey binary not found at $OSP — run 'make build' first." >&2
   exit 1
@@ -126,16 +165,27 @@ for dir in $CASEDIR/*/(/); do
     [[ -f "$src" ]] || { echo "    $lang: no source"; continue }
     bin="$BINDIR/${name}__${lang}"
     if ! build "$lang" "$dir" "$name" "$bin"; then
-      echo "    $lang: BUILD FAILED"; json_row "$name" "$lang" "build_failed" "" "$expected"; fail=1; continue
+      # A wasm build that fails = the case uses a non-portable builtin: skip it,
+      # don't fail the suite. A native build failure is a real error.
+      case "$lang" in
+        *-wasm) echo "    $lang: not wasm-compatible (skipped)"; json_row "$name" "$lang" "wasm_incompatible" "" "$expected" ;;
+        *)      echo "    $lang: BUILD FAILED"; json_row "$name" "$lang" "build_failed" "" "$expected"; fail=1 ;;
+      esac
+      continue
     fi
     actual=$("$bin" <"$MODE0" 2>/dev/null); actual=${actual//[[:space:]]/}
     if [[ "$actual" != "$expected" ]]; then
       echo "    $lang: WRONG OUTPUT ($actual != $expected) — excluded from timing"
       json_row "$name" "$lang" "wrong_output" "$actual" "$expected"; fail=1; continue
     fi
-    rss=$(peak_rss "$bin")
+    # wasm runs under wasmtime, whose host RSS dwarfs the module's linear memory,
+    # so a peak-RSS number isn't comparable to the native ones — skip it (0 => —).
+    case "$lang" in
+      *-wasm) rss=0 ;;
+      *)      rss=$(peak_rss "$bin") ;;
+    esac
     json_row "$name" "$lang" "ok" "$actual" "$expected" "$rss"
-    echo "    $lang: ok  (rss $(( rss / 1024 )) KiB)"
+    if (( rss > 0 )); then echo "    $lang: ok  (rss $(( rss / 1024 )) KiB)"; else echo "    $lang: ok  (wasm; mem n/a)"; fi
     hf_args+=(-n "$lang" "$bin")
     ok_pairs+=("$lang=$bin")
   done

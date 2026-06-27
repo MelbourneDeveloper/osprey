@@ -7,7 +7,7 @@
 //! (`print`, `toString`, `length`) and stay precise where a wrong type is a
 //! genuine bug. Result-returning builtins return `Result<T, Error>` — the
 //! shape the C runtime actually returns — so the match/auto-unwrap paths agree
-//! with the expected outputs in `compiler/examples/tested`.
+//! with the expected outputs in `examples/tested`.
 
 use crate::env::TypeEnv;
 use crate::ty::{Scheme, Type};

@@ -110,7 +110,7 @@ untouched, so the default build/test path carries zero risk.
 
 A backend is conforming iff every differential-harness example produces
 byte-identical output and leaks zero language values under it. `make
-conformance-gc` runs `crates/diff_examples.sh` with the backend selected; the
+_conformance-gc` runs `crates/diff_examples.sh` with the backend selected; the
 benchmark suite adds an `Osprey (GC)` column so `binarytrees` (905 MiB → a few
 MiB) is visible next to the default.
 

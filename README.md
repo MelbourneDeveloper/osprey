@@ -91,7 +91,8 @@ fn main() -> Unit = {
 
 - `crates/` - Main Osprey compiler (Rust workspace: osprey-ast, osprey-syntax, osprey-types, osprey-codegen, osprey-runtime-sys, osprey-cli)
 - `tree-sitter-osprey/` - Tree-sitter grammar (parser)
-- `compiler/` - Pure-C runtime sources (`runtime/`) + example programs (`examples/`)
+- `compiler/` - Pure-C runtime sources (`runtime/`)
+- `examples/` - Example programs + golden test suites (`tested/`, `failscompilation/`, `tui/`, `wasm/`)
 - `vscode-extension/` - VSCode language support
 - `website/` - Documentation site
 - `webcompiler/` - Browser-based compiler
@@ -140,8 +141,9 @@ sudo apt-get install -y lld         # Linux: wasm-ld; sysroot via the wasi-sdk
 **Build the wasm runtime + an example, then run it:**
 
 ```bash
-make wasm                           # builds libosprey_runtime_wasm.a + examples/wasm/build/hello.wasm
-make wasm-test                      # validates the module and runs it under Node's WASI
+# One target builds everything ready to go: the wasm runtime archive, the
+# compiled example, validation, and smoke-runs under Node's WASI + the browser shim.
+make wasm
 
 # or drive the compiler directly:
 osprey examples/wasm/hello.osp --target=wasm32 --compile -o hello.wasm
@@ -150,9 +152,10 @@ osprey examples/wasm/hello.osp --target=wasm32 --run     # compile + run (uses w
 node scripts/wasm-smoke.mjs hello.wasm                   # run under Node's WASI
 ```
 
-**In the browser** — `examples/wasm/index.html` ships a tiny inline WASI shim
-(no bundler, no npm). Serve the directory and open it; from the devtools console,
-`await osprey.run()` instantiates the module and prints its output to the page:
+**In the browser** — `examples/wasm/index.html` ships a tiny shared WASI shim
+(`wasi-shim.mjs`; no bundler, no npm). Serve the directory and open it — it runs
+on load; from the devtools console, `await osprey.run()` re-runs it and prints to
+the page:
 
 ```bash
 cd examples/wasm && python3 -m http.server 8080   # then open http://localhost:8080/

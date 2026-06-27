@@ -98,22 +98,73 @@ conventional Homebrew / wasi-sdk / Linux paths.
 
 `make _runtime_wasm` cross-compiles the portable C units — allocator, strings,
 list/map containers, JSON, effects — to `libosprey_runtime_wasm.a`. The
-allocator is the same `malloc` passthrough (`@osp_alloc`); reclamation stays
-unobservable [MEM-OPAQUE]. Non-portable units (fibers, HTTP/WebSocket, system,
+allocator is the default `malloc` passthrough (`@osp_alloc`); how memory is
+managed on wasm — and why the tracing GC is excluded — is detailed in
+[WASM-TARGET-MEMORY] below. Non-portable units (fibers, HTTP/WebSocket, system,
 terminal, FFI, CSPRNG) are excluded; because archives link on demand, a program
 that does not reference their symbols links cleanly, and one that does fails at
 link with a clear `undefined symbol`.
+
+### Memory management: linear memory now, ARC the wasm-friendly path [WASM-TARGET-MEMORY]
+
+Three distinct things are easy to conflate. The wasm target uses the first,
+cannot use the second, and deliberately does not use the third:
+
+1. **Osprey's linear-memory allocator — what wasm uses today.** Exactly like the
+   native *default* backend, the wasm runtime links the `malloc`-passthrough
+   allocator (`@osp_alloc`, `compiler/runtime/memory_runtime.c`) over wasm linear
+   memory. Reclamation is unobservable [MEM-OPAQUE]: an allocation lives for the
+   run except where the optimizer statically frees a provably non-escaping value,
+   so a long-running wasm program's heap grows like the native default's. This is
+   a sound semantics choice, not a leak bug — see
+   [spec 0018](0018-MemoryManagement.md).
+
+2. **Osprey's tracing GC (`--memory=gc`) — native-only, NOT available on wasm.**
+   The shipped conservative collector ([GC-TRACE-CONSERVATIVE], plan 0011) finds
+   roots by scanning the C stack, the machine registers (flushed with `setjmp`)
+   and the data/BSS segments, and serialises behind a `pthread` mutex. None of
+   those exist under `wasm32-wasip1`: wasm has no addressable native stack or
+   registers, no `setjmp` register spill to scan, and no pthreads. So
+   `--memory=gc` does not combine with `--target=wasm32`, and the wasm runtime
+   archive ships only the default allocator (no `memory_gc.o`). A *precise*
+   collector — roots from an LLVM shadow stack ([GC-TRACE-CHENEY]) — could target
+   wasm, but it is unbuilt.
+
+3. **The WebAssembly GC proposal (Wasm-GC) — a different thing Osprey does not
+   target.** "Wasm GC" means host-VM-managed heap objects (typed references,
+   `struct.new` / `array.new`); it is orthogonal to Osprey's *own* collector.
+   Osprey emits ordinary linear-memory wasm through the unchanged LLVM pipeline
+   ([WASM-TARGET-IR]) and manages its own heap — it never lowers Osprey values to
+   Wasm-GC types. Wasm-GC is a plausible *future* backend (the host VM would do
+   the reclaiming, so no shipped Osprey collector would be needed), but it would
+   require target-specific codegen the current design avoids and does not compose
+   with the wasi-libc linear-memory model used here.
+
+**ARC is the reclaiming backend that fits wasm [WASM-TARGET-MEMORY-ARC].** The
+planned ARC default ([GC-ARC-PERCEUS], plan 0011 phase 2) is *precise* —
+`osp_retain`/`osp_release` are compiler-inserted, so it needs none of the
+stack/register/segment scanning, `setjmp`, or threads that bar the conservative
+GC from wasm — and *complete*, because the value heap is acyclic [MEM-ACYCLIC],
+so no cycle collector is required. The Perceus dup/drop pass is target-agnostic
+codegen; once it lands natively, an ARC wasm runtime archive slots in behind
+`@osp_alloc` with zero wasm-specific work and gives wasm real, deterministic
+reclamation in plain linear memory — no Wasm-GC proposal required. Until then,
+wasm uses the default allocate-and-leak-until-exit backend.
 
 ## Limitations
 
 - **No fibers/HTTP/WebSocket/FFI/`random`/`input`.** These depend on
   pthreads / sockets / OpenSSL / `dlopen` / syscalls absent under
   `wasm32-wasip1`. A program using them fails at link, not silently.
-- **WASI in the browser** needs a shim (`examples/wasm/index.html` ships a
-  ~60-line inline one mapping `fd_write` to the page/console). A future
-  `wasm32-unknown-unknown` mode could import I/O from JS directly.
-- **No reclamation on wasm** beyond the optimizer's static frees, same as
-  native default [MEM-OPAQUE].
+- **WASI in the browser** needs a shim (`examples/wasm/wasi-shim.mjs`, loaded by
+  `index.html` and exercised headlessly by `scripts/wasm-browser-smoke.mjs`),
+  mapping `fd_write` to the page/console. A future `wasm32-unknown-unknown` mode
+  could import I/O from JS directly.
+- **No GC on wasm.** The tracing collector (`--memory=gc`) is native-only, so
+  wasm reclaims nothing beyond the optimizer's static frees [MEM-OPAQUE], same as
+  the native default. ARC ([GC-ARC-PERCEUS]) is the portable path to real
+  reclamation — and the WebAssembly-GC proposal is not used. See
+  [WASM-TARGET-MEMORY].
 
 ## Verification
 
@@ -121,6 +172,8 @@ link with a clear `undefined symbol`.
 - `wasm-validate hello.wasm` — structural well-formedness
 - `node scripts/wasm-smoke.mjs hello.wasm examples/wasm/hello.expectedoutput`
   — runs under Node's WASI and asserts stdout
+- `node scripts/wasm-browser-smoke.mjs hello.wasm examples/wasm/hello.expectedoutput`
+  — runs under the browser's inline WASI shim (the exact module `index.html` uses)
 - `examples/wasm/index.html` — loads and runs it in the browser, output to page
 - `zsh crates/diff_wasm_examples.sh` — the golden suite: compile every tested
   example to wasm, run under Node's WASI, diff stdout; non-portable examples

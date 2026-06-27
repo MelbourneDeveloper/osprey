@@ -30,34 +30,63 @@ published papers, and author/publisher paper pages. Short quotes are included
 as anchors; the implementation decisions below are paraphrased requirements,
 not copied text.
 
-| Source | Authority | Relevant anchor |
-|---|---|---|
-| DWARF v5 standard, DWARF Committee, 2017 - https://dwarfstd.org/doc/DWARF5.pdf | Debug-info standard | "accurate picture of the source program" |
-| LLVM Source Level Debugging docs - https://llvm.org/docs/SourceLevelDebugging.html | LLVM producer docs | "source-language's AST map onto LLVM code" |
-| Debug Adapter Protocol - https://microsoft.github.io/debug-adapter-protocol/ | DAP spec | "defines the abstract protocol" |
-| VS Code debugger extension guide - https://code.visualstudio.com/api/extension-guides/debugger-extension | VS Code API docs | "debug adapter which is a separate process" |
-| LLDB-DAP docs - https://lldb.llvm.org/resources/lldbdap.html | LLDB project docs | "`lldb-dap` exposes LLDB's functionality" |
-| Kell and Stinnett, Onward! 2024, "Source-Level Debugging of Compiler-Optimised Code: Ill-Posed, but Not Impossible" - https://dl.acm.org/doi/10.1145/3689492.3690047 | ACM peer-reviewed paper | "loss of state" |
-| Huang, Liang, Su, Zhang, PLDI 2025, "Robustifying Debug Information Updates in LLVM via Control-Flow Conformance Analysis" - https://dl.acm.org/doi/10.1145/3729267 | ACM peer-reviewed paper | "debug location updates" |
-| Stinnett and Kell, OOPSLA 2026, "Debugging Debugging Information using Dynamic Call Trees" - https://dl.acm.org/doi/10.1145/3798213 | ACM peer-reviewed paper | "observing a running source program" |
-| Lu, Liu, Wang, Zhang, FSE 2024, "DTD: Comprehensive and Scalable Testing for Debuggers" - https://dl.acm.org/doi/10.1145/3643779 | ACM peer-reviewed paper | debugger conformance testing |
+| Source                                                                                                                                                               | Authority               | Relevant anchor                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------- |
+| DWARF v5 standard, DWARF Committee, 2017 - https://dwarfstd.org/doc/DWARF5.pdf                                                                                       | Debug-info standard     | "accurate picture of the source program"    |
+| LLVM Source Level Debugging docs - https://llvm.org/docs/SourceLevelDebugging.html                                                                                   | LLVM producer docs      | "source-language's AST map onto LLVM code"  |
+| Debug Adapter Protocol - https://microsoft.github.io/debug-adapter-protocol/                                                                                         | DAP spec                | "defines the abstract protocol"             |
+| VS Code debugger extension guide - https://code.visualstudio.com/api/extension-guides/debugger-extension                                                             | VS Code API docs        | "debug adapter which is a separate process" |
+| LLDB-DAP docs - https://lldb.llvm.org/resources/lldbdap.html                                                                                                         | LLDB project docs       | "`lldb-dap` exposes LLDB's functionality"   |
+| Kell and Stinnett, Onward! 2024, "Source-Level Debugging of Compiler-Optimised Code: Ill-Posed, but Not Impossible" - https://dl.acm.org/doi/10.1145/3689492.3690047 | ACM peer-reviewed paper | "loss of state"                             |
+| Huang, Liang, Su, Zhang, PLDI 2025, "Robustifying Debug Information Updates in LLVM via Control-Flow Conformance Analysis" - https://dl.acm.org/doi/10.1145/3729267  | ACM peer-reviewed paper | "debug location updates"                    |
+| Stinnett and Kell, OOPSLA 2026, "Debugging Debugging Information using Dynamic Call Trees" - https://dl.acm.org/doi/10.1145/3798213                                  | ACM peer-reviewed paper | "observing a running source program"        |
+| Lu, Liu, Wang, Zhang, FSE 2024, "DTD: Comprehensive and Scalable Testing for Debuggers" - https://dl.acm.org/doi/10.1145/3643779                                     | ACM peer-reviewed paper | debugger conformance testing                |
 
 Implications for Osprey:
 
 - Use DWARF as the native interchange format on Unix-like platforms. It is the
   standard consumer contract for LLDB/GDB and already models source languages,
-  scopes, functions, variables, line tables, and locations.
+  scopes, functions, variables, line tables, and locations. Emit the version
+  the target toolchain best supports: DWARF 4 on macOS (Apple `dsymutil`/LLDB
+  lag on v5), DWARF 5 elsewhere.
 - Emit debug metadata through LLVM IR metadata, not a sidecar map that only our
   extension understands. Osprey's backend already emits textual LLVM IR, so the
   right boundary is `!DICompileUnit`, `!DISubprogram`, `!DILocation`,
-  `!DILocalVariable`, and the debug records/intrinsics LLVM documents.
+  `!DILocalVariable`, and value-location records. The long-term target is
+  LLVM's `#dbg_value` / `#dbg_declare` **debug records**; the current textual IR
+  backend may emit the older `@llvm.dbg.*` intrinsic compatibility form only
+  while the pinned local LLVM toolchain accepts and lowers it correctly.
 - Use DAP for IDEs, but do not define a new DAP dialect unless required.
   Reuse `lldb-dap` first; add Osprey-only requests only behind the standard
   adapter boundary.
-- Treat optimized debugging as a correctness problem, not a best-effort
-  nicety. Debug builds start at `-O0`; optimized debug builds come later with
-  validation against control-flow/call-tree behavior.
-- Validate debuggers and debug info with automated tests. Manual "looks OK in
+- Optimized-code debugging is **ill-posed, not impossible** (Kell & Stinnett,
+  Onward! 2024): there is no single faithful source view of optimized state, so
+  the answer is an explicit choice of view plus residual state/computation on
+  demand — not "give up" and not `-Og`-style de-optimization. Pragmatically,
+  debug builds start at `-O0`; the correctness criterion for emitted local/line
+  info is the paper's **per-variable history oracle** (every local's observed
+  value-change history matches the source program's, each change at the correct
+  file and line; invariant under DCE/CSE/code motion). Never fabricate a value:
+  report it unavailable, and do not conflate "optimized out" with a debug-info
+  emission bug.
+- When Osprey gains its own IR transforms, debug-location updates must obey the
+  **control-flow conformance** invariant (Huang et al., PLDI 2025): an optimized
+  path's location set must be a _subset_ of the corresponding source path's. Per
+  moved/cloned/merged instruction choose Preserve / Merge / Drop accordingly;
+  never attach a source location to a path that did not already carry it, and
+  prefer Drop over a guessed location. (Today Osprey optimizes at the clang
+  level, so this binds clang/LLVM; it binds us the moment we add passes.)
+- Validate stack/scope correctness against the **source-level dynamic call
+  tree**, comparing an optimized run to its unoptimized reference (Stinnett &
+  Kell, OOPSLA 2026). This is strictly stronger than the weak "backtrace
+  invariant," which reversed or empty backtraces can satisfy. Classify each
+  divergence as a compiler bug vs a debug-info _format_ limitation, use DWARF
+  `inlined_subroutine` records and location views, and mark synthesized frames
+  artificial so debuggers can hide them.
+- Test the debugger itself by **cross-debugger differential testing** over the
+  _same_ binary (DTD; Lu et al., FSE 2024): drive two independent adapters,
+  instruction-step, and diff full program state including registers, treating
+  optimized-out / error / not-found as _distinct_ states. Manual "looks OK in
   VS Code" is not acceptance.
 
 ## User-facing requirements
@@ -122,6 +151,9 @@ Acceptance:
   holes.
 - LSP and debugger share the same line/column convention: Osprey AST uses
   1-based lines and 0-based columns; DAP uses 1-based lines and columns.
+  Emitted `!DILocation` columns are 1-based, so convert the 0-based AST column
+  with `column + 1` — LLVM reserves column `0` as the "no column" sentinel, and
+  emitting a raw 0-based column silently collides with it.
 
 ### Layer 2: LLVM/DWARF debug info
 
@@ -133,9 +165,16 @@ Required module metadata:
 - `!llvm.dbg.cu` with one `DICompileUnit`.
 - `!llvm.module.flags` with `"Debug Info Version"` and DWARF version.
 - `DIFile` for every source file involved.
-- Osprey producer string and language tag. Until a registered DWARF language
-  code exists for Osprey, use `DW_LANG_C` or `DW_LANG_lo_user` consistently and
-  document the compatibility tradeoff.
+- Osprey producer string and language tag. `DW_LANG_C` is the pragmatic interim
+  code, but it is **not neutral**: LLDB/GDB drive expression-evaluation language,
+  value/type formatting, name demangling, and default array lower bounds off
+  `DW_AT_language`, so claiming C imports C semantics that the Osprey-aware
+  evaluator (Layer 6) must then override. `DW_LANG_lo_user`..`hi_user` is honest
+  but unrecognized by every debugger (and ≥ `0x8000` forces `DW_FORM_data2`).
+  The correct long-term path is to register `DW_LNAME_Osprey` with dwarfstd.org
+  and emit the DWARF 6 `DW_AT_language_name` + `DW_AT_language_version` pair
+  (permitted from a DWARF 5 producer) while dual-emitting legacy `DW_AT_language`
+  for older consumers — the same path Rust and Swift took rather than reusing C.
 
 Required function metadata:
 
@@ -160,9 +199,15 @@ Required instruction metadata:
 
 Required variable metadata:
 
-- Function parameters: `DILocalVariable` plus `dbg.declare` or `dbg.value`.
-- Immutable locals: `dbg.value` for SSA values; `dbg.declare` for stack/heap
-  slots when addressable.
+- Emit variable locations as LLVM value-location records. Prefer
+  `#dbg_declare` / `#dbg_value` **debug records** on LLVM 19+ / RemoveDIs
+  toolchains. The current Osprey textual backend is allowed to use the older
+  `@llvm.dbg.value` compatibility intrinsic while tested LLDB/DWARF output
+  remains correct; this is a bridge, not the desired final IR spelling.
+- Function parameters: `DILocalVariable` plus a value-location record or
+  compatibility `dbg.value`.
+- Immutable locals: value-location records for SSA values; `dbg.declare`/
+  `#dbg_declare` for stack/heap slots when addressable.
 - Mutable locals: a user variable and its storage cell must be represented so
   the user sees the value, not only the cell pointer.
 - Captures: closure environment fields mapped back to capture names.
@@ -266,9 +311,29 @@ Future Osprey-aware adapter:
   variables, evaluate, fibers, effects, and replay requests.
 - Any non-standard DAP extension must be prefixed and documented.
 
+Shared editor components (no per-language duplication):
+
+- Osprey, Basilisk, and SharpLsp each ship a VS Code debugger. The editor-side
+  glue is language-neutral and MUST be shared via a package under the
+  [LspKit](https://github.com/Nimblesite/lspkit) umbrella, not forked into each
+  extension. See spec `[DEBUGGER-REUSE]`.
+- LspKit is currently Rust-only and carries no debugger code, so this needs a
+  new shared TypeScript package (VS Code DAP glue + DAP test harness) alongside
+  a future `lspkit-debug` Rust crate for native debug-build policy.
+- Shared TypeScript surface: adapter resolution (setting → toolchain paths →
+  PATH + precise missing-tool error; cf. SharpLsp `findNetcoredbg`), debug-config
+  synthesis (cf. Basilisk `applyDebugConfigDefaults`, SharpLsp
+  `resolveDebugConfiguration`), save-dirty-or-reject, the pre-launch build hook,
+  and the DAP test client/poll/UI-stub harness.
+- Language-specific only: debug `type`, adapter binary (`lldb-dap`), build
+  command, toolchain paths. The Osprey extension contributes its generic glue
+  upstream rather than maintaining a private copy.
+
 Acceptance:
 
 - Pressing F5 on a focused `.osp` file starts a debug session.
+- The editor DAP glue and DAP test harness are imported from the shared LspKit
+  package, not duplicated in the Osprey/Basilisk/SharpLsp extensions.
 - The VS Code debug UI can set/hit a source breakpoint.
 - The debug session does not use `osprey.run`; it launches a debugger.
 - A headless DAP integration test can initialize, launch, set breakpoints,
@@ -313,7 +378,7 @@ Acceptance:
 ### Layer 6: expression evaluation
 
 Expression evaluation must be Osprey-aware. LLDB C expression evaluation is not
-  enough for Osprey syntax or type rules.
+enough for Osprey syntax or type rules.
 
 Required modes:
 
@@ -436,10 +501,22 @@ Policy:
 
 Required validation:
 
-- Compare unoptimized vs optimized line/step traces.
-- Validate debug location updates through control-flow conformance style tests.
-- Use dynamic call-tree checks to catch impossible or misleading optimized
-  stacks.
+- Per-variable history oracle (Kell & Stinnett): each local's observed
+  value-change history must match the source program's, with each change at the
+  correct file and line. This factors out temporal imprecision and flags only
+  outright wrong or missing variable info; it is the automatable correctness
+  test for emitted local/line metadata.
+- Control-flow conformance for location updates (Huang et al.): for every
+  instruction a pass moves/clones/merges, assert the optimized path's location
+  set is a subset of the source path's, and that the Preserve/Merge/Drop choice
+  follows from that containment. Applies once Osprey runs its own IR passes.
+- Source-level dynamic call-tree differential (Stinnett & Kell): compare the
+  call tree recovered from an optimized run against its unoptimized reference;
+  attribute divergences to compiler vs debug-info format. Do not settle for the
+  weak backtrace invariant (reversed/empty backtraces satisfy it).
+- Cross-debugger differential testing (DTD, Lu et al.): diff full program state
+  between two adapters over the same binary, treating optimized-out / error /
+  not-found as distinct states.
 - Track coverage of debug metadata: functions, lines, variables, scopes, and
   value locations.
 
@@ -529,8 +606,10 @@ Acceptance:
 ### Phase 3 - Variables and lexical scopes
 
 - [ ] Emit `DILocalVariable` for parameters and lets.
-- [ ] Emit `dbg.declare`/`dbg.value` for locals, mut cells, captures, match
-      bindings, and handler parameters.
+- [ ] Emit value-location records for locals, mut cells, captures, match
+      bindings, and handler parameters; migrate the textual spelling from
+      `@llvm.dbg.*` compatibility intrinsics to `#dbg_*` debug records once the
+      supported LLVM floor makes that path portable.
 - [ ] Add lexical scopes for blocks, lambdas, match arms, and handlers.
 - [ ] Validate primitive local inspection in LLDB.
 - [ ] Add unavailable-value reporting tests.
@@ -645,7 +724,7 @@ The Osprey debugger is complete when:
 - A user can debug normal Osprey programs from VS Code and from a headless DAP
   test runner.
 - Breakpoints, stepping, stacks, scopes, variables, and expression evaluation
-  work for the language constructs in `compiler/examples/tested`.
+  work for the language constructs in `examples/tested`.
 - Osprey runtime values render as language values, not raw implementation
   pointers.
 - Fibers and effects are inspectable at the language level.

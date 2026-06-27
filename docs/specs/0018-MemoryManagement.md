@@ -32,7 +32,7 @@ ships (tracing GC, opt-in via `--memory=gc`); the ARC default is next
   (`--memory=gc`, `compiler/runtime/memory_gc.c`) reclaims them — a conservative
   mark & sweep linked behind `@osp_alloc`, complete because the heap is acyclic
   [MEM-ACYCLIC]. On `binarytrees` it cuts peak RSS ~80× (905 MiB → ~11 MiB) with
-  byte-identical output across every differential example (`make conformance-gc`).
+  byte-identical output across every differential example (`make _conformance-gc`).
   The ARC default and a precise copying GC are the remaining work
   ([plan 0011](../plans/0011-arc-gc-implementation.md)); this spec is the
   contract they must satisfy.
@@ -136,6 +136,15 @@ source code:
   statically elided wherever ownership is provable. Complete without a
   cycle collector because the heap is acyclic [MEM-ACYCLIC].
 - **Tracing GC** — the conformance oracle that keeps [MEM-OPAQUE] honest.
+
+**Backend portability.** The two reclaiming backends need different things from
+the host. The conservative tracing GC finds roots by scanning the native stack,
+machine registers and data/BSS segments, so it runs on native targets only. ARC
+is *precise* (the compiler inserts retain/release) and non-atomic, so it carries
+to every target — including `wasm32`, where it is the *only* reclaiming option:
+the conservative GC cannot scan a wasm stack, and the WebAssembly-GC proposal is
+a separate, untargeted mechanism. See
+[spec 0022](0022-WebAssemblyTarget.md) [WASM-TARGET-MEMORY].
 
 A reclamation backend is conforming iff every differential-harness example
 produces byte-identical output and reports zero leaked language values under

@@ -94,7 +94,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
-          ./target/release/osprey.exe compiler/examples/tested/fiber/fiber_showcase.osp --run --quiet > out.txt
+          ./target/release/osprey.exe examples/tested/fiber/fiber_showcase.osp --run --quiet > out.txt
           cat out.txt
           grep -Fq "=== Fiber Showcase Complete ===" out.txt
           grep -Fq "map-reduce total = 1400" out.txt
@@ -104,5 +104,5 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
-          ./target/release/osprey.exe compiler/examples/tested/basics/feature_omnibus.osp --run --quiet > omni.txt
+          ./target/release/osprey.exe examples/tested/basics/feature_omnibus.osp --run --quiet > omni.txt
           cat omni.txt

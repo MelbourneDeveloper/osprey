@@ -118,8 +118,8 @@ The cell is shared across the C HTTP-callback boundary (a request handler's
 `perform` resolves to the active handler) and across fiber boundaries (an effect
 performed inside a `spawn`ed fiber is handled in the spawner), so one effect
 handler can own the state for a whole running server. See
-`compiler/examples/tested/effects/http_state_levels.osp` and
-`compiler/examples/statefulhttp/`.
+`examples/tested/effects/http_state_levels.osp` and
+`examples/statefulhttp/`.
 
 ## Resuming Handlers
 

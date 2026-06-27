@@ -1,19 +1,20 @@
 # Osprey Compiler Assets
 
 The compiler itself is the Rust workspace at the repository root
-([crates/](../crates/), binary `osprey`). This directory holds the assets
-compiled programs and the test suites depend on:
+([crates/](../crates/), binary `osprey`). This directory holds the C runtime
+that compiled programs link against:
 
 - [runtime/](runtime/) - The C runtime (fibers, effects, HTTP/WebSocket,
   strings, lists, maps, JSON, terminal). Built into `lib/libfiber_runtime.a` /
   `lib/libhttp_runtime.a` by `make _runtime`; `osprey` links these at
   `--compile`/`--run` time.
-- [examples/tested/](examples/tested/) - Golden examples; each `.osp` runs in
-  CI and must match its `.expectedoutput` byte-for-byte
-  ([crates/diff_examples.sh](../crates/diff_examples.sh)).
-- [examples/failscompilation/](examples/failscompilation/) - Ill-formed
-  programs the compiler must reject (the must-reject ratchet).
-- [examples/tui/](examples/tui/) - The interactive TUI showcase (`make tui`).
+
+Example programs and the golden test suites live at the top-level
+[examples/](../examples/) directory: [examples/tested/](../examples/tested/)
+(golden examples run in CI against `.expectedoutput` via
+[crates/diff_examples.sh](../crates/diff_examples.sh)),
+[examples/failscompilation/](../examples/failscompilation/) (the must-reject
+ratchet), and [examples/tui/](../examples/tui/) (the `make _tui` showcase).
 
 ## Related Projects
 
@@ -24,4 +25,4 @@ compiled programs and the test suites depend on:
 ## Development Notes
 
 - Don't put .osp files in the root of this folder
-- This is for runtime/examples only - no loose project files
+- This is for the C runtime only - no loose project files

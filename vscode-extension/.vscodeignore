@@ -4,10 +4,17 @@ client/src/**
 tsconfig.json
 
 # Build and development files
+.cursor/**
+.vscode/**
 .vscode-test/**
 .vscode-test.js
+.DS_Store
+.c8rc.json
+coverage/**
 test/**
 scripts/**
+test.log
+*.vsix
 
 # Exclude development dependencies but keep production dependencies
 node_modules/@types/**
@@ -35,7 +42,9 @@ test-runner.js
 .gitignore
 
 # Keep only essential files
-!out/**
+!out/client/**
+out/test/**
+out/tsconfig.tsbuildinfo
 # Bundled, version-matched osprey compiler + C runtime archives (libfiber/libhttp)
 # staged by `make _vsix_bundle`. resolveBundledCompiler() loads bin/<platform>/osprey,
 # and the compiler links the .a archives sitting beside it for `--run`.
@@ -46,4 +55,4 @@ test-runner.js
 !README.md
 !LICENSE
 !icon.png
-!node_modules/vscode-languageclient/** 
+!node_modules/vscode-languageclient/**

@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# WebAssembly golden harness: compile every compiler/examples/tested/*.osp to
+# WebAssembly golden harness: compile every examples/tested/*.osp to
 # wasm32, run it under Node's WASI host, and compare stdout to .expectedoutput.
 # Usage: diff_wasm_examples.sh [--verbose] [name-filter]
 set -u
@@ -10,7 +10,7 @@ set -u
 ROOT=${OSPREY_ROOT:-${0:A:h}/..}
 ROOT=${ROOT:A}
 BIN=$ROOT/target/release/osprey
-EXDIR=$ROOT/compiler/examples/tested
+EXDIR=$ROOT/examples/tested
 OUTDIR=${OSPREY_WASM_EXAMPLES_OUT:-$ROOT/target/wasm-examples}
 SMOKE=$ROOT/scripts/wasm-smoke.mjs
 VERBOSE=0

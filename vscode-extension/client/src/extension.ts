@@ -8,7 +8,7 @@ import {
   DebugAdapterExecutable,
   languages,
 } from "vscode";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import * as fs from "fs";
 import {
   CloseAction,
@@ -132,6 +132,10 @@ export interface ActiveEditorLike {
   document: { languageId: string; fileName: string };
 }
 
+function isOspreyDocument(document: ActiveEditorLike["document"]): boolean {
+  return document.languageId === "osprey" || document.fileName.endsWith(".osp");
+}
+
 // applyDefaultOspreyDebugConfig fills an otherwise-empty launch config from the
 // active osprey editor, so pressing Run with no `.vscode/launch.json` still
 // works ([EDITOR-VSCODE]). It mutates and returns `config`: synthesis happens
@@ -143,14 +147,21 @@ export function applyDefaultOspreyDebugConfig(
   activeEditor: ActiveEditorLike | undefined,
 ): any {
   if (!config.type && !config.request && !config.name) {
-    if (activeEditor && activeEditor.document.languageId === "osprey") {
+    if (activeEditor && isOspreyDocument(activeEditor.document)) {
       config.type = "osprey";
       config.name = "Debug Osprey File";
       config.request = "launch";
       config.program = activeEditor.document.fileName;
+      config.cwd = path.dirname(activeEditor.document.fileName);
     }
   }
   return config;
+}
+
+export function defaultOspreyDebugConfigForEditor(
+  activeEditor: ActiveEditorLike | undefined,
+): any {
+  return applyDefaultOspreyDebugConfig({}, activeEditor);
 }
 
 export function defaultDebugOutputPath(program: string): string {
@@ -162,11 +173,88 @@ export function defaultDebugOutputPath(program: string): string {
   );
 }
 
-export function resolveLldbDapCommand(config: any = {}): string {
+export interface LldbDapResolutionHost {
+  env?: NodeJS.ProcessEnv;
+  existsSync?: (filePath: string) => boolean;
+  execFileSync?: (
+    command: string,
+    args: readonly string[],
+    options: { encoding: BufferEncoding },
+  ) => string | Buffer;
+  getSetting?: () => string | undefined;
+  platform?: NodeJS.Platform;
+}
+
+function findExecutableOnPath(
+  command: string,
+  env: NodeJS.ProcessEnv,
+  existsSync: (filePath: string) => boolean,
+): string | undefined {
+  for (const dir of (env.PATH ?? "").split(path.delimiter)) {
+    if (!dir) {
+      continue;
+    }
+    const candidate = path.join(dir, command);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+export function resolveLldbDapCommand(
+  config: any = {},
+  host: LldbDapResolutionHost = {},
+): string {
   const setting = workspace
     .getConfiguration("osprey")
     .get<string>("debug.lldbDapPath");
-  return config.lldbDapPath || setting || "lldb-dap";
+  const configured = config.lldbDapPath || host.getSetting?.() || setting;
+  if (configured) {
+    return configured;
+  }
+
+  const platform = host.platform ?? process.platform;
+  const existsSync = host.existsSync ?? fs.existsSync;
+  const env = host.env ?? process.env;
+  const lldbDapName = platform === "win32" ? "lldb-dap.exe" : "lldb-dap";
+  const legacyName = platform === "win32" ? "lldb-vscode.exe" : "lldb-vscode";
+  const onPath =
+    findExecutableOnPath(lldbDapName, env, existsSync) ??
+    findExecutableOnPath(legacyName, env, existsSync);
+  if (onPath) {
+    return onPath;
+  }
+
+  if (platform === "darwin") {
+    try {
+      const xcrun = host.execFileSync ?? execFileSync;
+      const resolved = String(
+        xcrun("xcrun", ["-f", "lldb-dap"], { encoding: "utf8" }),
+      ).trim();
+      if (resolved) {
+        return resolved;
+      }
+    } catch {
+      // Fall through to common install locations and finally the bare command.
+    }
+  }
+
+  const commonCandidates =
+    platform === "win32"
+      ? [
+          "C:\\Program Files\\LLVM\\bin\\lldb-dap.exe",
+          "C:\\Program Files\\LLVM\\bin\\lldb-vscode.exe",
+        ]
+      : [
+          "/opt/homebrew/opt/llvm/bin/lldb-dap",
+          "/usr/local/opt/llvm/bin/lldb-dap",
+          "/usr/bin/lldb-dap",
+          "/opt/homebrew/opt/llvm/bin/lldb-vscode",
+          "/usr/local/opt/llvm/bin/lldb-vscode",
+          "/usr/bin/lldb-vscode",
+        ];
+  return commonCandidates.find(existsSync) ?? lldbDapName;
 }
 
 function compileDebugProgram(
@@ -453,6 +541,9 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand("osprey.run", () => {
       compileAndRunCurrentFile(resolveServerCommand(context));
     }),
+    commands.registerCommand("osprey.debug", () => {
+      void debugCurrentFile();
+    }),
     commands.registerCommand("osprey.setLanguage", () => {
       const activeEditor = window.activeTextEditor;
       if (activeEditor) {
@@ -468,6 +559,15 @@ export function activate(context: ExtensionContext) {
       }
     }),
   );
+}
+
+async function debugCurrentFile() {
+  const config = defaultOspreyDebugConfigForEditor(window.activeTextEditor);
+  if (!config.program) {
+    window.showErrorMessage("Please open a .osp file to debug");
+    return;
+  }
+  await debug.startDebugging(undefined, config);
 }
 
 function compileCurrentFile(compilerCommand: string) {

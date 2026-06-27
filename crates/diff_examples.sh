@@ -8,7 +8,7 @@ set -u
 ROOT=${OSPREY_ROOT:-${0:A:h}/..}
 ROOT=${ROOT:A}
 BIN=$ROOT/target/release/osprey
-EXDIR=$ROOT/compiler/examples/tested
+EXDIR=$ROOT/examples/tested
 VERBOSE=0
 FILTER=""
 for a in "$@"; do
@@ -71,7 +71,7 @@ for x in $FAILED; do echo "  $x"; done
 # print-on-record). Port a validation -> decrease the number. An INCREASE is a
 # regression and fails CI. Target: 0.
 FC_EXPECTED_ESCAPES=12
-FCDIR=$ROOT/compiler/examples/failscompilation
+FCDIR=$ROOT/examples/failscompilation
 fc_rej=0; fc_esc=0
 typeset -a FC_ESCAPED
 if [[ -z "$FILTER" && -d "$FCDIR" ]]; then

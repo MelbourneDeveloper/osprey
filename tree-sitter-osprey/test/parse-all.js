@@ -4,7 +4,7 @@
  * parse every VALID Osprey example with tree-sitter and assert ZERO ERROR/MISSING
  * nodes. Exits non-zero on any error node so it can gate CI.
  *
- * Valid examples = compiler/examples/**.osp (the *.ospo files under
+ * Valid examples = examples/**.osp (the *.ospo files under
  * failscompilation/ are deliberately broken and are excluded).
  */
 const { execFileSync } = require('node:child_process');
@@ -12,7 +12,7 @@ const { readdirSync, statSync } = require('node:fs');
 const { join, relative } = require('node:path');
 
 const ROOT = join(__dirname, '..');
-const EXAMPLES = join(ROOT, '..', 'compiler', 'examples');
+const EXAMPLES = join(ROOT, '..', 'examples');
 const TS = join(ROOT, 'node_modules', '.bin', 'tree-sitter');
 
 function ospFiles(dir) {

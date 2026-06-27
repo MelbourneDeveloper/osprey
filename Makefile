@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup tui run install uninstall website-dev website-build rebuild-install-vsix bench conformance-gc wasm wasm-test
+.PHONY: build test lint fmt clean ci setup run install bench wasm
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -72,7 +72,7 @@ HTTP_OBJ_GC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runti
 
 # WebAssembly (wasm32-wasip1) cross-build toolchain — opt-in via `make wasm`.
 # Compiles the portable C-runtime subset (no pthreads/sockets/OpenSSL/syscalls)
-# to a wasm archive osprey links with `--target=wasm32`. See docs/specs/0019.
+# to a wasm archive osprey links with `--target=wasm32`. See docs/specs/0022.
 WASM_CC      ?= clang
 WASM_AR      ?= llvm-ar
 WASM_TARGET  ?= wasm32-wasip1
@@ -133,28 +133,26 @@ clean:
 ## ci: lint + test + build (full CI simulation)
 ci: lint test build
 
-## wasm: Build the compiler + the browser-ready wasm runtime archive
-## (compiler/bin/libosprey_runtime_wasm.a), then compile the example program to
-## examples/wasm/build/. Requires clang (wasm32 backend), wasm-ld and a WASI
-## sysroot — `brew install lld wasi-libc` (macOS) or the wasi-sdk. See
-## docs/specs/0019-WebAssemblyTarget.md.
+## wasm: Build everything for the WebAssembly target, ready to go — the wasm
+## runtime archive (compiler/bin/libosprey_runtime_wasm.a) and the compiled
+## browser example (examples/wasm/build/hello.wasm) — then validate it and
+## smoke-run it under Node's WASI, the browser WASI shim, and the full golden
+## suite. Requires clang (wasm32 backend), wasm-ld and a WASI sysroot —
+## `brew install lld wasi-libc` (macOS) or the wasi-sdk. See
+## docs/specs/0022-WebAssemblyTarget.md.
 wasm: build _runtime_wasm
 	@echo "==> compiling the wasm example -> examples/wasm/build/"
 	@$(MKDIR) examples/wasm/build
 	$(BIN) examples/wasm/hello.osp --target=wasm32 --compile -o examples/wasm/build/hello.wasm
-	@echo "==> wasm artifacts ready (run 'make wasm-test' to validate + smoke-run)"
-
-## wasm-test: Validate the compiled .wasm is well-formed and run it under a WASI
-## host (Node's built-in WASI), asserting stdout for the smoke example and every
-## compiler/examples/tested golden example. Depends on `make wasm`.
-wasm-test: wasm
 	@echo "==> validating + smoke-running examples/wasm/build/hello.wasm"
 	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/hello.wasm || echo "(wasm-validate not found — skipping structural check)"
-	node scripts/wasm-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
-	@echo "==> [wasm differential] osprey --target=wasm32 vs compiler/examples/tested..."
+	node scripts/wasm-smoke.mjs         examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+	node scripts/wasm-browser-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+	@echo "==> [wasm differential] osprey --target=wasm32 vs examples/tested..."
 	@out=$$(zsh crates/diff_wasm_examples.sh); echo "$$out"; \
 	  echo "$$out" | grep -Eq '(^| )FAIL=0 '  || { echo 'FAIL: wasm differential mismatch'; exit 1; }; \
 	  echo "$$out" | grep -Eq '(^| )NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }
+	@echo "==> wasm ready: built + validated + WASI/browser smoke + golden suite green"
 
 ## setup: Post-create dev environment setup (used by devcontainer)
 setup:
@@ -281,9 +279,9 @@ _test_differential:
 	  echo "$$out" | grep -Eq 'NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }; \
 	  echo "$$out" | grep -q  'FC_OK'    || { echo 'FAIL: must-reject ratchet exceeded'; exit 1; }
 
-## conformance-gc: run every tested example under the tracing GC backend; output
-## must be byte-identical to the default ([MEM-BACKENDS] oracle, docs/plans/0011).
-conformance-gc: build
+# _conformance-gc: run every tested example under the tracing GC backend; output
+# must be byte-identical to the default ([MEM-BACKENDS] oracle, docs/plans/0011).
+_conformance-gc: build
 	@echo "==> [conformance] differential harness under --memory=gc..."
 	@out=$$(OSPREY_RUN_FLAGS=--memory=gc zsh crates/diff_examples.sh); echo "$$out"; \
 	  echo "$$out" | grep -Eq 'FAIL=0 ' || { echo 'FAIL: GC backend output diverged'; exit 1; }
@@ -322,11 +320,11 @@ _coverage_check_vscode_extension:
 # Repo-Specific Targets
 # =============================================================================
 
-## tui: Build, then launch the interactive TUI demo (live GitHub API browser).
-##      Runs in the current terminal so the raw-mode key reader gets real stdin.
-tui: build
+# _tui: Build, then launch the interactive TUI demo (live GitHub API browser).
+#       Runs in the current terminal so the raw-mode key reader gets real stdin.
+_tui: build
 	@echo "==> launching TUI demo (live GitHub API browser)"
-	./$(BIN) compiler/examples/tui/api_browser.osp --run
+	./$(BIN) examples/tui/api_browser.osp --run
 
 ## run: Compile and run an Osprey file (usage: make run FILE=<path>)
 run: build
@@ -340,18 +338,18 @@ install: build
 	sudo cp $(RTB)/libfiber_runtime.a $(RTB)/libhttp_runtime.a /usr/local/lib/
 	@echo "==> installed osprey and runtime archives."
 
-## uninstall: Remove osprey + runtime archives from the system
-uninstall:
+# _uninstall: Remove osprey + runtime archives from the system
+_uninstall:
 	cargo uninstall osprey-cli 2>/dev/null || true
 	sudo rm -f /usr/local/lib/libfiber_runtime.a /usr/local/lib/libhttp_runtime.a
 	@echo "==> uninstalled."
 
-## website-dev: Start local website development server
-website-dev:
+# _website-dev: Start local website development server
+_website-dev:
 	cd website && npm run dev
 
-## website-build: Build static site
-website-build:
+# _website-build: Build static site
+_website-build:
 	cd website && npm run build
 
 ## bench: Build, then run the cross-language performance benchmark suite
@@ -363,10 +361,10 @@ website-build:
 bench: build
 	@zsh benchmarks/run.sh $(BENCH_FILTER)
 
-## rebuild-install-vsix: Uninstall → clean → rebuild → package → install the
-##      VSCode extension into every VSCode profile, bundling the freshly-built
-##      Rust compiler as `osprey`. macOS only. See [MAKE-IDE-EXT].
-rebuild-install-vsix: build _vsix_uninstall _vsix_clean _vsix_build _vsix_bundle _vsix_package _vsix_install
+# _rebuild-install-vsix: Uninstall → clean → rebuild → package → install the
+#      VSCode extension into every VSCode profile, bundling the freshly-built
+#      Rust compiler as `osprey`. macOS only. See [MAKE-IDE-EXT].
+_rebuild-install-vsix: build _vsix_uninstall _vsix_clean _vsix_build _vsix_bundle _vsix_package _vsix_install
 
 # --- vsix sub-steps ---------------------------------------------------------
 # Uninstall from default profile + every named profile in storage.json.

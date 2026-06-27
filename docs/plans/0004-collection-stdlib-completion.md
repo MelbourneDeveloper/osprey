@@ -68,7 +68,7 @@ Two viable approaches:
 
 ## Testing
 
-- Extend [compiler/examples/tested/basics/lists/](../../compiler/examples/tested/basics/lists/)
+- Extend [examples/tested/basics/lists/](../../examples/tested/basics/lists/)
   and a map example to use the bare names and the new ops; refresh
   `.expectedoutput`.
 - Cover `head([])`/`tail([])` edge cases and `zipToMap` length-mismatch error.
