@@ -5,6 +5,7 @@
 
 use crate::llty::{LType, Value};
 use crate::types::ltype_of;
+use osprey_debug::DebugSource;
 use osprey_ast::{Expr, Position};
 use osprey_types::{ProgramTypes, Type};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -16,37 +17,6 @@ use std::fmt::Write as _;
 pub struct CodegenOptions {
     /// Source file identity used for LLVM/DWARF debug metadata.
     pub debug_source: Option<DebugSource>,
-}
-
-/// Source file identity for emitted debug information.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DebugSource {
-    /// Basename of the source file.
-    pub filename: String,
-    /// Directory containing the source file.
-    pub directory: String,
-}
-
-impl DebugSource {
-    /// Build a debug source identity from a source path.
-    #[must_use]
-    pub fn from_path(path: &str) -> Self {
-        let path = std::path::Path::new(path);
-        let filename = path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("input.osp")
-            .to_string();
-        let directory = path
-            .parent()
-            .and_then(|p| p.to_str())
-            .unwrap_or(".")
-            .to_string();
-        DebugSource {
-            filename,
-            directory,
-        }
-    }
 }
 
 /// Accumulates a whole module while lowering one function at a time.
@@ -196,8 +166,7 @@ impl DebugState {
     }
 
     fn source_filename(&self) -> String {
-        let path = std::path::Path::new(&self.source.directory).join(&self.source.filename);
-        metadata_escape(&path.display().to_string())
+        metadata_escape(&self.source.path().display().to_string())
     }
 
     fn begin_function(&mut self, name: &str, position: Option<Position>) -> usize {

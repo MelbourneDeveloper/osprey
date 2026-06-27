@@ -38,7 +38,7 @@ mod types;
 
 pub use error::{CodegenError, Result};
 pub use llty::{LType, Value};
-pub use builder::DebugSource;
+pub use osprey_debug::DebugSource;
 pub use lower::{compile_program, compile_program_debug};
 
 /// Every identifier referenced anywhere in `program` — function bodies, lets,

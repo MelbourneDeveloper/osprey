@@ -124,6 +124,7 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
     let mut memory = String::from("default");
     let mut target = String::from("native");
     let mut output = None;
+    let mut debug = false;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -131,6 +132,7 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
                 mode.clone_from(a);
             }
             "--quiet" => quiet = true,
+            "--debug" => debug = true,
             "--sandbox" => policy = Policy::sandbox(),
             "--no-http" => policy.http = false,
             "--no-websocket" => policy.websocket = false,
@@ -157,6 +159,7 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
             memory,
             target,
             output,
+            debug,
         }),
         None => Err(USAGE.to_string()),
     }
@@ -231,7 +234,7 @@ fn dispatch(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode 
         "--llvm" | "--run" | "--compile" if report_type_errors(path, program) > 0 => {
             ExitCode::FAILURE
         }
-        "--llvm" => match osprey_codegen::compile_program(program) {
+        "--llvm" => match compile_ir(path, program, cli.debug) {
             Ok(ir) => {
                 print!("{ir}");
                 ExitCode::SUCCESS
@@ -278,9 +281,13 @@ fn run_check(cli: &Cli, program: &osprey_ast::Program) -> ExitCode {
 fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
     let out = output_path(&cli.path, cli.output.as_deref(), &cli.target);
     let result = if cli.target == "wasm32" {
+        if cli.debug {
+            eprintln!("error: --debug is currently supported only for --target=native");
+            return ExitCode::from(2);
+        }
         wasm::build(&cli.path, program, &out)
     } else {
-        build_executable(&cli.path, program, source, &out, &cli.memory)
+        build_executable(&cli.path, program, source, &out, &cli.memory, cli.debug)
     };
     match result {
         Ok(()) => {
@@ -307,10 +314,14 @@ fn output_path(src: &str, output: Option<&str>, target: &str) -> PathBuf {
 /// runs the executable directly; wasm runs it under a WASI host (`wasmtime`).
 fn run_program(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
     if cli.target == "wasm32" {
+        if cli.debug {
+            eprintln!("error: --debug is currently supported only for --target=native");
+            return ExitCode::from(2);
+        }
         return wasm::run(cli, program);
     }
     let exe = std::env::temp_dir().join(format!("{}.out", stem_of(&cli.path)));
-    if let Err(code) = build_executable(&cli.path, program, source, &exe, &cli.memory) {
+    if let Err(code) = build_executable(&cli.path, program, source, &exe, &cli.memory, cli.debug) {
         return code;
     }
     match Command::new(&exe).status() {
@@ -330,8 +341,9 @@ fn build_executable(
     source: &str,
     exe: &Path,
     memory: &str,
+    debug: bool,
 ) -> Result<(), ExitCode> {
-    let ir = match osprey_codegen::compile_program(program) {
+    let ir = match compile_ir(path, program, debug) {
         Ok(ir) => ir,
         Err(e) => {
             eprintln!("{path}: {e}");
@@ -350,7 +362,8 @@ fn build_executable(
         .arg("-o")
         .arg(exe)
         .arg("-Wno-override-module")
-        .arg(opt_flag())
+        .arg(opt_flag(debug))
+        .args(debug_compile_flags(debug))
         .args(link_args(&ir, source, memory));
     match cmd.status() {
         Ok(s) if s.success() => Ok(()),

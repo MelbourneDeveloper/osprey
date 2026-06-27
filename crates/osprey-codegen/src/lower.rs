@@ -3,10 +3,11 @@
 //! inference), then synthesize `main` from either a user `main` or the trailing
 //! top-level statements.
 
-use crate::builder::{Codegen, CodegenOptions, DebugSource};
+use crate::builder::{Codegen, CodegenOptions};
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
+use osprey_debug::DebugSource;
 use osprey_ast::{Expr, Parameter, Position, Program, Stmt};
 
 /// Compile a whole program to an LLVM IR module (text), driven by the inferred
