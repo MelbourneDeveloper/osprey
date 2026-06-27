@@ -2,27 +2,27 @@
 // from arithmetic comparison, WHERE-constraint syntax on records (currently
 // always succeeds — both branches kept here as a future-proof smoke test).
 
-fn notEmpty(s: string) -> bool = match s {
+fn notEmpty(s) = match s {
     ""  => false
     _   => true
 }
 
-fn isPositive(n: int) -> Result<bool, MathError> = n > 0
+fn isPositive(n) -> Result<bool, MathError> = n > 0
 
-fn isValidAge(age: int) -> bool = match age {
+fn isValidAge(age) = match age {
     0   => false
     200 => false
     _   => true
 }
 
-fn isValidEmail(email: string) -> bool = match email {
+fn isValidEmail(email) = match email {
     ""        => false
     "invalid" => false
     _         => true
 }
 
 // Type-level WHERE constraint syntax (validator is forward-referenced)
-fn validatePerson(person: Person) -> bool = match person.age {
+fn validatePerson(person) = match person.age {
     0 => false
     _ => true
 }

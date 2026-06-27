@@ -1,0 +1,4 @@
+{
+  "name": "gcdsum",
+  "description": "Sum of gcd(i,1234567) for i in 1..1999999 — Euclidean recursion, modulo heavy"
+}

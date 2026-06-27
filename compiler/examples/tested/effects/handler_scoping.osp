@@ -11,17 +11,17 @@ effect Logger {
 }
 
 // ---- nested override helpers ----
-fn innerOp() -> int !Logger = {
+fn innerOp() !Logger = {
     perform Logger.log("inner exec")
     perform Logger.debug("debug inner")
     42
 }
-fn outerOp() -> int !Logger = {
+fn outerOp() !Logger = {
     perform Logger.log("outer exec")
     perform Logger.debug("debug outer")
     21
 }
-fn testNested() -> Unit !Logger = {
+fn testNested() !Logger = {
     perform Logger.log("before inner handler")
 
     let innerResult = handle Logger
@@ -38,7 +38,7 @@ fn testNested() -> Unit !Logger = {
     perform Logger.log("outer result: " + toString(outerResult))
 }
 
-fn main() -> Unit = {
+fn main() = {
     handle Logger
         log msg   => print("[OUTER-LOG] " + msg)
         debug msg => print("[OUTER-DEBUG] " + msg)
@@ -57,19 +57,19 @@ fn main() -> Unit = {
 }
 
 // helpers defined AFTER main — exercises the forward-ref pre-pass
-fn performComplex() -> int !Logger = {
+fn performComplex() !Logger = {
     perform Logger.log("complex starting")
     let v = 21 * 2
     perform Logger.log("complex intermediate: " + toString(v))
     v
 }
 
-fn deepNestedOp() -> int !Logger = {
+fn deepNestedOp() !Logger = {
     perform Logger.log("deep op exec")
     performComplex()
 }
 
-fn nestedCall() -> int !Logger = {
+fn nestedCall() !Logger = {
     perform Logger.log("before nested")
     let r = deepNestedOp()
     perform Logger.log("after nested")

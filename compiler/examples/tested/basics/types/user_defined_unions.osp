@@ -7,17 +7,17 @@ type Outcome = Ok { value: string } | Err { message: string }
 
 type Status = Active | Inactive
 
-fn describe(o: Outcome) -> string = match o {
+fn describe(o) = match o {
     Ok { value } => "ok: " + value
     Err { message } => "err: " + message
 }
 
-fn label(s: Status) -> string = match s {
+fn label(s) = match s {
     Active => "active"
     Inactive => "inactive"
 }
 
-fn main() -> Unit = {
+fn main() = {
     print(describe(Ok { value: "loaded" }))
     print(describe(Err { message: "missing" }))
     print(label(Active))

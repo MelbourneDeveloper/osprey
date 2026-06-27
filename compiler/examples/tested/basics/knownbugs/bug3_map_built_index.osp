@@ -1,4 +1,4 @@
-fn main() -> Unit = {
+fn main() = {
     let ra = 9
     let m = mapSet(mapSet(Map(), "a", ra), "b", 16)
     match m["a"] { Success { value } => print("a=" + toString(value)) Error { message } => print("miss") }

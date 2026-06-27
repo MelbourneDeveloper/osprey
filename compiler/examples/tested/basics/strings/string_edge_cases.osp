@@ -7,7 +7,7 @@
 // payloads threaded through Result<T, E> ([ERR-PAYLOAD]).
 
 // A user-declared fallible function: its Error message must reach the arm.
-fn failWith(reason: string) -> Result<int, string> = Error { message: reason }
+fn failWith(reason) -> Result<int, string> = Error { message: reason }
 
 fn main() -> int {
   // ---- isEmpty edges ----

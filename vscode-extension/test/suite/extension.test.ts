@@ -2023,9 +2023,12 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
   });
 
   test("leaves an empty config untouched when the active editor is not osprey", () => {
-    const config = applyDefaultOspreyDebugConfig({}, {
-      document: { languageId: "plaintext", fileName: "/tmp/notes.txt" },
-    });
+    const config = applyDefaultOspreyDebugConfig(
+      {},
+      {
+        document: { languageId: "plaintext", fileName: "/tmp/notes.txt" },
+      },
+    );
     assert.strictEqual(config.program, undefined, "no program synthesized");
     assert.strictEqual(config.type, undefined, "no type synthesized");
   });

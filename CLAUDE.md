@@ -36,6 +36,24 @@ This file provides guidance for agents when working with code in this repository
   - The best function is a single expression with no side effects (pure)
   - Avoid consecutive statements and assignments, even when assignments add
     clarity
+- **LEAN ON TYPE INFERENCE — DO NOT WRITE REDUNDANT TYPE ANNOTATIONS** -
+  Osprey is Hindley-Milner: every type the compiler can infer must be left
+  off. This is a core style rule of the language — less redundancy.
+  - **Never annotate function parameters** when their type is inferable from
+    the body or call site. Write `fn add(a, b) = a + b`, NOT
+    `fn add(a: int, b: int) = a + b`.
+  - **Never annotate a function return type** when it is inferable. Write
+    `fn isEven(x) = (x % 2) == 0`, NOT `fn isEven(x: int) -> bool = ...`.
+  - **Never annotate lambda parameters** when inferable: `|x| => x * 2`, not
+    `|x: int| => x * 2`.
+  - Keep an annotation ONLY when the compiler genuinely cannot infer it: an
+    empty literal with no context (`let xs: List<int> = []`), an `extern` /
+    ambiguous return, an unconstrained polymorphic type variable, or a
+    load-bearing return type that forces `Result<T, MathError>` to
+    auto-unwrap to `T`. If removing an annotation still compiles and produces
+    identical output, it was redundant — remove it.
+  - This applies to ALL `.osp` you write or touch — `examples/tested/`,
+    `benchmarks/`, docs, and website snippets alike.
 - **NO CONSECUTIVE PRINT CALLS IN OSP** - Use string interpolation! Consolidate consecutive prints into singular interpolated strings!!!
 
 ## Commands

@@ -4,7 +4,7 @@
 // Spec: [BUILTIN-STRING-*], [BUILTIN-STRING-LIST], [BUILTIN-STRING-UFCS],
 // [BUILTIN-STRING-SEARCH]
 
-fn handleGet(path: string) -> string =
+fn handleGet(path) =
     match path {
         "/health" => "200 ok"
         _ => match startsWith(path, "/api/users/") {
@@ -15,12 +15,12 @@ fn handleGet(path: string) -> string =
             }
         }
     }
-fn handlePost(path: string) -> string =
+fn handlePost(path) =
     match path {
         "/api/users" => "201 created"
         _            => "404 not-found"
     }
-fn route(method: string, path: string) -> string =
+fn route(method, path) =
     match method {
         "GET"  => handleGet(path)
         "POST" => handlePost(path)

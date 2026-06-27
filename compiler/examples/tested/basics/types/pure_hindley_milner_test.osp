@@ -54,7 +54,7 @@ print("")
 // Test 4: Polymorphic functions with HM inference
 print("Test 4: Polymorphic function inference")
 fn identityP(x) = x              // HM infers: <T>(T) -> T
-fn makePoint(a: int, b: int) = Point { x: a, y: b }  // int -> Point
+fn makePoint(a, b) = Point { x: a, y: b }  // int -> Point
 
 // Each usage gets monomorphized
 let id1 = identityP(42)          // int -> int
@@ -154,9 +154,9 @@ print("Test 9: Method call type inference")
 type StringWrapper = { content: string }
 
 // Add a method-like function that takes self
-fn getLength(self: StringWrapper) = 42  // Need explicit type for self parameter
+fn getLength(self) = 42
 
-fn uppercase(self: StringWrapper) = self.content + "_UPPER"
+fn uppercase(self) = self.content + "_UPPER"
 
 let wrapper = StringWrapper { content: "hello" }
 
@@ -200,7 +200,7 @@ print("Test 11: Type equality and String methods")
 
 // This will exercise the String() and Equals() methods on various types
 fn typeTest1(x) = x * 2
-fn typeTest2(s: string) = s + s  // Need explicit type for string concatenation
+fn typeTest2(s) = s + s
 fn typeTest3(b) = !b
 
 let typeResult1 = typeTest1(21)

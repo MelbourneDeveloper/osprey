@@ -89,7 +89,7 @@ print("${statusStr2}")
 // Test basic union types for coverage - exercises NewUnionType, String(), Category(), Equals()
 type SimpleUnion = A | B | C
 
-fn processSimple(u: SimpleUnion) -> string = match u {
+fn processSimple(u) = match u {
     A => "Got A"
     B => "Got B"
     C => "Got C"

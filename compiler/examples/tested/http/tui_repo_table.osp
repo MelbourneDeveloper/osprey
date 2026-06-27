@@ -14,13 +14,13 @@ fn handleRequest(method: string, path: string, headers: string, body: string) ->
 }
 
 // --- color + layout helpers ---
-fn cyan(s: string) -> string = "\e[36m${s}\e[0m"
-fn bold(s: string) -> string = "\e[1m${s}\e[0m"
-fn yellow(s: string) -> string = "\e[33m${s}\e[0m"
-fn dim(s: string) -> string = "\e[2m${s}\e[0m"
-fn green(s: string) -> string = "\e[32m${s}\e[0m"
+fn cyan(s) = "\e[36m${s}\e[0m"
+fn bold(s) = "\e[1m${s}\e[0m"
+fn yellow(s) = "\e[33m${s}\e[0m"
+fn dim(s) = "\e[2m${s}\e[0m"
+fn green(s) = "\e[32m${s}\e[0m"
 
-fn pad(s: string, n: int) -> string = {
+fn pad(s, n) = {
     let r = padEnd(s, n, " ")
     match r {
         Success { value } => value
@@ -28,7 +28,7 @@ fn pad(s: string, n: int) -> string = {
     }
 }
 
-fn field(doc: int, path: string) -> string = {
+fn field(doc, path) = {
     let r = jsonGet(doc, path)
     match r {
         Success { value } => value
@@ -36,7 +36,7 @@ fn field(doc: int, path: string) -> string = {
     }
 }
 
-fn renderRow(doc: int, i: int, n: int) -> Unit = {
+fn renderRow(doc, i, n) = {
     match i < n {
         true => {
             let name = field(doc: doc, path: "[${i}].name")
@@ -53,20 +53,20 @@ fn renderRow(doc: int, i: int, n: int) -> Unit = {
     }
 }
 
-fn renderTable(doc: int) -> Unit = {
+fn renderTable(doc) = {
     let count = jsonLength(doc, "")
     print(green("  Repositories (${count})"))
     print("  ----------------------------")
     renderRow(doc: doc, i: 0, n: count)
 }
 
-fn renderDoc(d: int) -> Unit = {
+fn renderDoc(d) = {
     renderTable(d)
     let fr = jsonFree(d)
     print(dim("  rendered"))
 }
 
-fn renderBody(bodyText: string) -> Unit = {
+fn renderBody(bodyText) = {
     let doc = jsonParse(bodyText)
     match doc {
         Success { value } => renderDoc(value)
@@ -74,7 +74,7 @@ fn renderBody(bodyText: string) -> Unit = {
     }
 }
 
-fn renderResponse(h: int) -> Unit = {
+fn renderResponse(h) = {
     let body = httpResponseBody(h)
     match body {
         Success { value } => renderBody(value)
@@ -82,7 +82,7 @@ fn renderResponse(h: int) -> Unit = {
     }
 }
 
-fn run() -> Unit = {
+fn run() = {
     let serverId = httpCreateServer(18099, "127.0.0.1")
     let listenResult = httpListen(serverId, handleRequest)
     let clientId = httpCreateClient("http://127.0.0.1:18099", 5000)

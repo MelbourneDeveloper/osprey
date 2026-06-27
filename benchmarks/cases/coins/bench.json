@@ -1,0 +1,4 @@
+{
+  "name": "coins",
+  "description": "Count ways to make 600 from coins [1,5,10,25,50] — combinatorial recursion (SICP)"
+}

@@ -673,24 +673,43 @@ impl Codegen {
         out
     }
 
+    /// Allocate `size` bytes through the swappable Osprey allocation hook and
+    /// return the raw `i8*` register. The single heap-allocation primitive every
+    /// codegen site funnels through, so the memory backend is chosen at link time
+    /// (default `osp_alloc` = `malloc`; ARC / tracing-GC / arena swap in behind
+    /// the same symbol) — never baked into the IR. Implements [MEM-BACKENDS],
+    /// docs/specs/0018. The allocator attributes are load-bearing: they let LLVM
+    /// recognise `@osp_alloc` as an allocation function, so `-O2` proves
+    /// non-escaping allocations dead and removes them entirely (the
+    /// [MEM-OWNERSHIP] static free-at-last-use, achieved by the optimizer).
+    pub(crate) fn heap_alloc(&mut self, size: &str) -> String {
+        self.add_extern(OSP_ALLOC_DECL);
+        self.emit_reg(format!("call i8* @osp_alloc(i64 {size})"))
+    }
+
     /// Allocate a heap block sized for the LLVM struct type `struct_ty`, via the
     /// portable `getelementptr null, 1` sizeof trick, and return the typed
     /// pointer register (`{TY}*`).
     pub(crate) fn malloc_struct(&mut self, struct_ty: &str) -> String {
-        self.add_extern("declare i8* @malloc(i64)");
         let szp = self.fresh_reg();
         self.emit(format!(
             "{szp} = getelementptr {struct_ty}, {struct_ty}* null, i64 1"
         ));
         let sz = self.fresh_reg();
         self.emit(format!("{sz} = ptrtoint {struct_ty}* {szp} to i64"));
-        let raw = self.fresh_reg();
-        self.emit(format!("{raw} = call i8* @malloc(i64 {sz})"));
+        let raw = self.heap_alloc(&sz);
         let obj = self.fresh_reg();
         self.emit(format!("{obj} = bitcast i8* {raw} to {struct_ty}*"));
         obj
     }
 }
+
+/// The swappable allocation hook declaration. `noalias` + the allocator
+/// attributes (`allocsize`/`allockind`/`alloc-family`) make LLVM treat
+/// `@osp_alloc` as an allocation function for dead-allocation elimination, while
+/// a custom `alloc-family` ("osprey", not "malloc") stops LLVM rewriting it to
+/// libc `calloc`/`realloc` and bypassing the backend. Implements [MEM-BACKENDS].
+pub(crate) const OSP_ALLOC_DECL: &str = "declare noalias i8* @osp_alloc(i64) allocsize(0) allockind(\"alloc,uninitialized\") mustprogress nounwind willreturn \"alloc-family\"=\"osprey\"";
 
 /// The resolved heap layout of a constructor.
 pub(crate) struct CtorView {

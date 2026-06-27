@@ -7,12 +7,12 @@
 
 // The sample mixes four scripts whose codepoints encode to 1, 2, 3 and 4 bytes:
 //   'A'=65 (1B)  'é'=233 (2B)  '世'=19990 (3B)  '😀'=128512 (4B)  then ASCII.
-fn sample() -> string = "Aé世😀, hello!"
+fn sample() = "Aé世😀, hello!"
 
 // Decode the codepoint at byteIndex, print its scalar value, and recurse to the
 // next codepoint boundary (byteIndex + width). Returns the running codepoint
 // count. Stops exactly when the cursor reaches byteLength — total O(n).
-fn walk(s: string, byteIndex: int, count: int) -> int = match byteIndex >= byteLength(s) {
+fn walk(s, byteIndex, count) = match byteIndex >= byteLength(s) {
     true  => count
     false => match codePointAt(s, byteIndex) {
         Success { value } => {
@@ -30,7 +30,7 @@ fn walk(s: string, byteIndex: int, count: int) -> int = match byteIndex >= byteL
     }
 }
 
-fn main() -> int {
+fn main() {
     let s = sample()
     let bytes = byteLength(s)
     print("=== UTF-8 codepoint walk ===")

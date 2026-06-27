@@ -1,0 +1,4 @@
+{
+  "name": "fib",
+  "description": "Naive recursive Fibonacci, fib(35) — function-call & recursion overhead"
+}

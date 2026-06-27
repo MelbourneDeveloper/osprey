@@ -5,13 +5,13 @@
 // Spec: [BUILTIN-STRING-CURSOR] (Cursor Access).
 
 // codePointWidth(cp) must equal the real encoded byte count of its char.
-fn widthMatches(cp: int, ch: string) -> bool = match codePointWidth(cp) {
+fn widthMatches(cp, ch) = match codePointWidth(cp) {
     Success { value } => value == byteLength(ch)
     Error   { message } => false
 }
 
 // Decode byte 0 of an encoded char and assert it equals the original scalar.
-fn checkDecode(cp: int, ch: string) -> int = {
+fn checkDecode(cp, ch) = {
     match codePointAt(ch, 0) {
         Success { value } => match value == cp {
             true  => print("cp=${cp} char=${ch} byteLen=${byteLength(ch)} width-ok=${widthMatches(cp, ch)} -> roundtrip OK ${value}\n")
@@ -23,7 +23,7 @@ fn checkDecode(cp: int, ch: string) -> int = {
 }
 
 // Encode one scalar, then round-trip-decode it.
-fn roundTrip(cp: int) -> int = {
+fn roundTrip(cp) = {
     match fromCodePoint(cp) {
         Success { value }   => checkDecode(cp, value)
         Error   { message } => { print("cp=${cp} encode FAILED: ${message}\n") 0 }
@@ -32,7 +32,7 @@ fn roundTrip(cp: int) -> int = {
 }
 
 // An invalid scalar must be rejected by encode with an Error message.
-fn rejectInvalid(cp: int) -> int = {
+fn rejectInvalid(cp) = {
     match fromCodePoint(cp) {
         Success { value }   => print("cp=${cp} UNEXPECTEDLY accepted: ${value}\n")
         Error   { message } => print("cp=${cp} rejected: ${message}\n")
@@ -40,7 +40,7 @@ fn rejectInvalid(cp: int) -> int = {
     0
 }
 
-fn main() -> int {
+fn main() {
     // 1-byte (0x01..0x7F): low 0x01, 'A', boundary 0x7F. (NUL 0x00 is the
     // C-string terminator, so it is not representable as a standalone char.)
     print("=== 1-byte: 0x01..0x7F ===\n")

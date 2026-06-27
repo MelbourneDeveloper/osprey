@@ -15,7 +15,7 @@ let reputation = 0
 let planetsVisited = 0
 
 // Market prices and trading system
-fn getResourcePrice(resourceType: int) -> int = match resourceType {
+fn getResourcePrice(resourceType) = match resourceType {
     1 => 50   // Quantum Crystals
     2 => 25   // Space Metal
     3 => 75   // Exotic Spices
@@ -24,7 +24,7 @@ fn getResourcePrice(resourceType: int) -> int = match resourceType {
     _ => 10   // Common Minerals
 }
 
-fn getResourceName(resourceType: int) -> string = match resourceType {
+fn getResourceName(resourceType) = match resourceType {
     1 => "Quantum Crystals"
     2 => "Space Metal"
     3 => "Exotic Spices"
@@ -33,7 +33,7 @@ fn getResourceName(resourceType: int) -> string = match resourceType {
     _ => "Common Minerals"
 }
 
-fn getPlanetName(planetId: int) -> string = match planetId {
+fn getPlanetName(planetId) = match planetId {
     1 => "Nebula Prime"
     2 => "Crystal Moon"
     3 => "Trade Station Alpha"
@@ -42,7 +42,7 @@ fn getPlanetName(planetId: int) -> string = match planetId {
     _ => "Unknown Sector"
 }
 
-fn getPlanetSpecialty(planetId: int) -> int = match planetId {
+fn getPlanetSpecialty(planetId) = match planetId {
     1 => 1  // Quantum Crystals
     2 => 2  // Space Metal
     3 => 3  // Exotic Spices
@@ -51,7 +51,7 @@ fn getPlanetSpecialty(planetId: int) -> int = match planetId {
     _ => 6  // Common Minerals
 }
 
-fn calculateTravelCost(distance: int) -> int = match distance {
+fn calculateTravelCost(distance) = match distance {
     1 => 10  // Nearby
     2 => 20  // Medium range
     3 => 30  // Far
@@ -59,7 +59,7 @@ fn calculateTravelCost(distance: int) -> int = match distance {
     _ => 50  // Deep space
 }
 
-fn getReputationTitle(rep: int) -> string = match rep {
+fn getReputationTitle(rep) = match rep {
     0 => "Unknown Trader"
     1 => "Novice Merchant"
     2 => "Skilled Trader"
@@ -69,12 +69,12 @@ fn getReputationTitle(rep: int) -> string = match rep {
 }
 
 // Ship and crew management
-fn calculateCargoValue(amount: int, price: int) -> int = match amount * price {
+fn calculateCargoValue(amount, price) = match amount * price {
     Success { value } => value
     Error { message } => 0
 }
 
-fn getShipStatus(fuel: int) -> string = match fuel {
+fn getShipStatus(fuel) = match fuel {
     100 => "Excellent"
     75 => "Good"
     50 => "Fair"

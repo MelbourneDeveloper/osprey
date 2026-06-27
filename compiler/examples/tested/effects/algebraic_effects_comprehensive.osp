@@ -30,24 +30,24 @@ effect Counter {
 }
 
 // Pure functions work fine
-fn doubleValue(x: int) -> int = match x * 2 {
+fn doubleValue(x) = match x * 2 {
     Success { value } => value
     Error { message } => 0
 }
 
-fn concatenateStrings(a: string, b: string) -> string = match a + b {
+fn concatenateStrings(a, b) = match a + b {
     Success { value } => value
     Error { message } => ""
 }
 
 // Functions with single effects
-fn loggedIncrement(message: string) -> Unit ![Logger, Counter] = {
+fn loggedIncrement(message) ![Logger, Counter] = {
     perform Logger.log("Incrementing: ${message}")
     perform Counter.increment()
 }
 
 // Pattern matching with effects
-fn processItems(count: int) -> int ![Logger, Counter] = match count {
+fn processItems(count) ![Logger, Counter] = match count {
     0 => {
         perform Logger.log("Base case reached")
         perform Counter.getValue()
@@ -71,7 +71,7 @@ fn processItems(count: int) -> int ![Logger, Counter] = match count {
 }
 
 // Fiber integration with effects
-fn asyncProcessing(taskId: int) -> int ![Logger, Counter] = {
+fn asyncProcessing(taskId) ![Logger, Counter] = {
     perform Logger.log("Starting async task ${toString(taskId)}")
     let fiber1 = spawn {
         perform Logger.log("Fiber1 executing")
@@ -94,7 +94,7 @@ fn asyncProcessing(taskId: int) -> int ![Logger, Counter] = {
 }
 
 // Complex calculation with multiple effects
-fn calculation(x: int) -> int ![Logger, State] = {
+fn calculation(x) ![Logger, State] = {
     perform Logger.log("Starting calculation for: ${toString(x)}")
     let current = perform State.get()
     let result = match x * 2 + current {
@@ -107,7 +107,7 @@ fn calculation(x: int) -> int ![Logger, State] = {
 }
 
 // Error handling with pattern matching
-fn errorProne(value: int) -> int !Logger = match value {
+fn errorProne(value) !Logger = match value {
     -5 => {
         perform Logger.error("Negative value detected: ${toString(value)}")
         0
@@ -132,7 +132,7 @@ fn errorProne(value: int) -> int !Logger = match value {
 }
 
 // File I/O operations with effects
-fn writeConfigFile(configName: string, data: string) -> Unit ![FileIO, Logger] = {
+fn writeConfigFile(configName, data) ![FileIO, Logger] = {
     let filename = match "config_" + configName + ".txt" {
         Success { value } => value
         Error { message } => "config.txt"
@@ -142,7 +142,7 @@ fn writeConfigFile(configName: string, data: string) -> Unit ![FileIO, Logger] =
     perform Logger.log("Config file written successfully")
 }
 
-fn readAndProcessLogFile(logFile: string) -> string ![FileIO, Logger] = {
+fn readAndProcessLogFile(logFile) ![FileIO, Logger] = {
     perform Logger.log("Reading log file: ${logFile}")
     let content = perform FileIO.readFile(logFile)
     perform Logger.log("Processing log content, length: ${toString(length(content))}")
@@ -153,7 +153,7 @@ fn readAndProcessLogFile(logFile: string) -> string ![FileIO, Logger] = {
     processedContent
 }
 
-fn generateReport(reportId: int, data: string) -> Unit ![FileIO, Logger, State] = {
+fn generateReport(reportId, data) ![FileIO, Logger, State] = {
     let reportFile = match "report_" + toString(reportId) + ".txt" {
         Success { value } => value
         Error { message } => "report.txt"
@@ -182,7 +182,7 @@ fn generateReport(reportId: int, data: string) -> Unit ![FileIO, Logger, State] 
     perform Logger.log("Report generated and state updated")
 }
 
-fn cleanupTempFiles() -> Unit ![FileIO, Logger] = {
+fn cleanupTempFiles() ![FileIO, Logger] = {
     perform Logger.log("Cleaning up temporary files")
     perform FileIO.deleteFile("temp_data.txt")
     perform FileIO.deleteFile("temp_logs.txt")
@@ -190,7 +190,7 @@ fn cleanupTempFiles() -> Unit ![FileIO, Logger] = {
 }
 
 // Test mocked input via effects - NO real input() call!
-fn testMockedInput() -> Unit ![IO, Logger] = {
+fn testMockedInput() ![IO, Logger] = {
     perform Logger.log("Testing mocked input via effects")
     let mockInput = perform IO.input()
     match mockInput {
@@ -201,7 +201,7 @@ fn testMockedInput() -> Unit ![IO, Logger] = {
 }
 
 // Main function demonstrating all features
-fn main() -> Unit = {
+fn main() = {
     handle Counter
         increment => print("⬆️ Counter incremented")
         getValue => 42

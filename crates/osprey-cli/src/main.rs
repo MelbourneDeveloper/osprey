@@ -278,6 +278,7 @@ fn build_executable(
         .arg("-o")
         .arg(exe)
         .arg("-Wno-override-module")
+        .arg(opt_flag())
         .args(link_args(&ir, source));
     match cmd.status() {
         Ok(s) if s.success() => Ok(()),
@@ -290,6 +291,19 @@ fn build_executable(
             Err(ExitCode::FAILURE)
         }
     }
+}
+
+/// The LLVM optimization level handed to clang when lowering the emitted IR.
+/// Defaults to `-O2`; `OSPREY_OPT` overrides it (e.g. `-O0` for fast debug
+/// builds, `-O3` to match Rust/OCaml release flags). This is load-bearing twice
+/// over: it is the difference between competitive and 30–100× slower native
+/// code, and — because codegen currently has no reclamation backend [MEM-OPAQUE,
+/// docs/specs/0018] — it IS the default memory strategy. At `-O2` LLVM proves
+/// per-operation `Result` allocations non-escaping and removes them entirely
+/// (heap → registers), the [MEM-OWNERSHIP] "free at last use" ideal achieved
+/// statically; without it those allocations leak for the whole run.
+fn opt_flag() -> String {
+    std::env::var("OSPREY_OPT").unwrap_or_else(|_| "-O2".to_string())
 }
 
 /// The C compiler/linker driver used to lower the emitted LLVM IR. Defaults to

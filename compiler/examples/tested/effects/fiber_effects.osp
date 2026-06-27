@@ -14,7 +14,7 @@ effect Logger {
 }
 
 type Priority = Low | Med | High
-fn priWeight(p: Priority) -> int = match p {
+fn priWeight(p) = match p {
     Low  => 1
     Med  => 5
     High => 9
@@ -28,23 +28,23 @@ type Outcome =
     Done     { score: int }
     | Failed { code: int }
 
-fn classify(score: int) -> Outcome = match score {
+fn classify(score) = match score {
     0 => Failed { code: 0 - 1 }
     _ => Done   { score: score }
 }
 
 // (1) Effect inside a fiber-run worker.
-fn runJob(weight: int) -> int !Logger = {
+fn runJob(weight) !Logger = {
     perform Logger.log("weight " + toString(weight))
     weight * weight
 }
 
 // (1') Effect inside a list-processing helper.
-fn report(xs) -> Unit !Logger = perform Logger.log("collected " + toString(listLength(xs)))
+fn report(xs) !Logger = perform Logger.log("collected " + toString(listLength(xs)))
 
-fn show(x: int) -> Unit = print("  " + toString(x))
+fn show(x) = print("  " + toString(x))
 
-fn main() -> Unit = {
+fn main() = {
     print("=== mixup: fibers + effects + records ===")
 
     handle Logger

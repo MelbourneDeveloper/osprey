@@ -42,10 +42,23 @@ Read **every line** of `--log-failed` output. For each failure note the exact fi
 
 ## Step 2 — Analyze the CI workflow
 
-1. Find the CI workflow file: `.github/workflows/ci.yml`.
-2. Read the workflow file completely. Parse every job and every step.
-3. The CI runs: `make lint → make test → make build` (see [MAKE-TARGETS] in REPO-STANDARDS-SPEC).
-4. Note any environment variables, matrix strategies, or conditional steps that affect execution.
+1. Find ALL CI workflow files under `.github/workflows/` (e.g. `ci.yml`,
+   `ci-windows.yml`) — not just one. Parse every job and every step in each.
+2. Read each workflow file completely. Parse every job and every step.
+3. The core `ci` job runs `make lint → make test → make build`, but it is NOT
+   the whole story (see [MAKE-TARGETS] in REPO-STANDARDS-SPEC). At time of
+   writing CI also runs, and you MUST run locally: the Shipwright manifest
+   validation (`npm run test:shipwright` in `vscode-extension`), the example
+   compile/run checks, the **Docker web-compiler test** (`webcompiler/` —
+   `docker build` + run container + `./test.sh`), the separate `rust` job
+   (`cargo fmt --all --check`, clippy, `cargo test --workspace`, the
+   differential harness), and the `website` Playwright E2E suite (`npm test`
+   in `website/`). Re-derive the actual list from the workflows every time —
+   do not trust this list to be current.
+4. Note any environment variables, matrix strategies, or conditional steps that
+   affect execution — including platform-only jobs (e.g. `ci-windows.yml` runs
+   on `windows-latest`; on macOS/Linux run the closest local equivalent and
+   flag the gap).
 
 **Do NOT assume the steps are correct.** Read the actual CI workflow to confirm. If extra targets beyond the 7 standard ones are found (e.g. `make fmt-check`, `make coverage-check`), flag them — they should be consolidated by the agent-pmo skill.
 
@@ -73,7 +86,11 @@ For each command extracted from the CI workflow:
 - The compiler is the Rust workspace (`crates/`, binary `target/release/osprey`);
   the C runtime archives are built by the internal `make _runtime` helper.
 - The differential harness is `zsh crates/diff_examples.sh` — expect
-  `PASS=41 FAIL=0 NOEXP=0` and `FC_OK`.
+  `PASS=N FAIL=0 NOEXP=0` (N grows as examples are added; 48 at time of
+  writing) and `FC_OK`.
+- The Docker web-compiler test needs a running daemon. If `docker info` fails,
+  start it (`open -a Docker` on macOS) and wait for readiness before running —
+  do NOT treat an unavailable daemon as licence to skip the check.
 
 ### Hard constraints
 
@@ -105,8 +122,19 @@ Once all CI steps pass locally:
 - **Always read the CI workflow first.** Never assume what commands CI runs.
 - Do not push if any step fails (unless `--failing` and all steps now pass)
 - Fix issues found in each step before moving to the next
-- Never skip steps or suppress errors
-- Skip steps that are CI-infrastructure-only (checkout, toolchain/node setup actions, cache steps, artifact uploads)
+- **Never skip steps or suppress errors.** RUN EVERY CHECK CI RUNS.
+- **Run EVERY actual check locally — no exceptions for "heavy" ones.** This
+  explicitly includes Docker / service-container tests (e.g. the web-compiler
+  Docker test), end-to-end suites (Playwright), coverage-gated tests, and the
+  format check. "It builds a container" / "it's slow" is NOT a reason to skip —
+  start the daemon and run it. If a check genuinely cannot run on this host
+  (e.g. a Windows-only job on macOS), say so explicitly in the report and run
+  the closest local equivalent; do not silently drop it.
+- The ONLY lines you may skip are pure CI plumbing that have no check semantics
+  and no local equivalent: `actions/checkout`, toolchain/`setup-node` install
+  actions, dependency cache restore/save, and artifact upload/download. Skipping
+  these is fine because they assert nothing about the code — never extend this to
+  a build/lint/test/validation step.
 
 ## Success criteria
 

@@ -1,0 +1,4 @@
+{
+  "name": "nestedloop",
+  "description": "Triple-nested loop 250^3 accumulating (i*j*k) mod 1000000007 — nested iteration"
+}

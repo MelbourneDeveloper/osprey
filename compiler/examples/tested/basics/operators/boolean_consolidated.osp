@@ -5,7 +5,7 @@
 fn getTrue()  = true
 fn getFalse() = false
 fn isEqual(x, y) = x == y
-fn xor(a: bool, b: bool) -> bool = (a || b) && !(a && b)
+fn xor(a, b) = (a || b) && !(a && b)
 
 print("=== Boolean Test ===")
 

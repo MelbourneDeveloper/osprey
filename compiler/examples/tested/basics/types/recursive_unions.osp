@@ -17,7 +17,7 @@ type JsonValue =
     | JArr  { items:   List<JsonValue> }
     | JObj  { entries: Map<string, JsonValue> }
 
-fn describe(j: JsonValue) -> string = match j {
+fn describe(j) = match j {
     JNull             => "null"
     JBool { v }       => "bool"
     JNum  { v }       => "num"
@@ -26,7 +26,7 @@ fn describe(j: JsonValue) -> string = match j {
     JObj  { entries } => "obj"
 }
 
-fn announce(j: JsonValue) -> Unit = print(describe(j))
+fn announce(j) = print(describe(j))
 
 // --- List<Self> payload ---
 let jNum  = JNum  { v: 42 }
@@ -87,27 +87,27 @@ match obj {
 // ---------- 3: Plain self-recursive (Tree) ----------
 type Tree = Leaf | Node { value: int, left: Tree, right: Tree }
 
-fn label(t: Tree) -> string = match t {
+fn label(t) = match t {
     Leaf                        => "leaf"
     Node { value, left, right } => "node"
 }
-fn rootVal(t: Tree) -> int = match t {
+fn rootVal(t) = match t {
     Leaf                        => 0
     Node { value, left, right } => value
 }
-fn leftLabel(t: Tree) -> string = match t {
+fn leftLabel(t) = match t {
     Leaf                        => "leaf"
     Node { value, left, right } => label(left)
 }
-fn rightRootVal(t: Tree) -> int = match t {
+fn rightRootVal(t) = match t {
     Leaf                        => 0
     Node { value, left, right } => rootVal(right)
 }
-fn rightRightVal(t: Tree) -> int = match t {
+fn rightRightVal(t) = match t {
     Leaf                        => 0
     Node { value, left, right } => rightRootVal(right)
 }
-fn leftRightVal(t: Tree) -> int = match t {
+fn leftRightVal(t) = match t {
     Leaf                        => 0
     Node { value, left, right } => rightRootVal(left)
 }
@@ -144,32 +144,32 @@ type Stmt =
     SLet     { name: string, value: Expr }
     | SRet   { value: Expr }
 
-fn descExpr(e: Expr) -> string = match e {
+fn descExpr(e) = match e {
     ENum { v }    => "num"
     EAdd { args } => "add"
     EBlk { body } => "blk"
 }
-fn descStmt(s: Stmt) -> string = match s {
+fn descStmt(s) = match s {
     SLet { name, value } => "let"
     SRet { value }       => "ret"
 }
-fn numValue(e: Expr) -> int = match e {
+fn numValue(e) = match e {
     ENum { v }    => v
     EAdd { args } => 999
     EBlk { body } => 999
 }
-fn announceExpr(e: Expr) -> Unit = print(descExpr(e))
-fn announceNum(e: Expr)  -> Unit = print(toString(numValue(e)))
+fn announceExpr(e) = print(descExpr(e))
+fn announceNum(e)  = print(toString(numValue(e)))
 
-fn unwrapBlk(e: Expr) -> Stmt = match e {
+fn unwrapBlk(e) = match e {
     EBlk { body } => body
     _             => SRet { value: ENum { v: 0 } }
 }
-fn unwrapRet(s: Stmt) -> Expr = match s {
+fn unwrapRet(s) = match s {
     SRet { value } => value
     _              => ENum { v: 0 }
 }
-fn unwrapAddLen(e: Expr) -> int = match e {
+fn unwrapAddLen(e) = match e {
     EAdd { args } => listLength(args)
     _             => 999
 }

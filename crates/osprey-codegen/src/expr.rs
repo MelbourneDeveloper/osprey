@@ -211,48 +211,75 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     crate::result::make_ok(cg, Value::new(reg, LType::I64), LType::I64)
 }
 
-/// Division — always float, with a runtime divide-by-zero check: a zero
-/// divisor yields `Error` (`Result<float, MathError>` disc 1), else
-/// `Success(quotient)`.
+/// The `/` operator — always float, divide-by-zero checked.
 fn gen_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
-    use crate::result::{make_result, NO_MSG};
     let ld = as_double(cg, l)?;
     let rd = as_double(cg, r)?;
-    let isz = cg.fresh_reg();
-    cg.emit(format!("{isz} = fcmp oeq double {}, 0.0", rd.operand));
-    let zero_bb = cg.fresh_label();
-    let nonzero_bb = cg.fresh_label();
-    let end = cg.fresh_label();
+    gen_checked_division(
+        cg,
+        &ld.operand,
+        &rd.operand,
+        LType::Double,
+        "fdiv double",
+        "fcmp oeq double",
+        "0.0",
+    )
+}
+
+/// The `intDiv(a, b)` builtin — truncating integer division, divide-by-zero
+/// checked. The integer sibling of `/` (which the spec fixes to float).
+/// Implements [BUILTIN-INTDIV].
+fn gen_int_division(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
+    let li = as_i64(cg, l)?;
+    let ri = as_i64(cg, r)?;
+    gen_checked_division(
+        cg,
+        &li.operand,
+        &ri.operand,
+        LType::I64,
+        "sdiv i64",
+        "icmp eq i64",
+        "0",
+    )
+}
+
+/// Shared divide-by-zero skeleton for `/` and `intDiv`: a zero divisor yields
+/// `Error` (`Result<_, MathError>` disc 1), else `Success(quotient)`. `div`/`cmp`
+/// carry their LLVM type, `zero` is the typed zero literal.
+fn gen_checked_division(
+    cg: &mut Codegen,
+    lop: &str,
+    rop: &str,
+    inner: LType,
+    div: &str,
+    cmp: &str,
+    zero: &str,
+) -> Result<Value> {
+    use crate::result::{make_result, NO_MSG};
+    let isz = cg.emit_reg(format!("{cmp} {rop}, {zero}"));
+    let (zero_bb, nonzero_bb, end) = (cg.fresh_label(), cg.fresh_label(), cg.fresh_label());
     cg.emit(format!(
         "br i1 {isz}, label %{zero_bb}, label %{nonzero_bb}"
     ));
 
     cg.start_block(&nonzero_bb);
-    let q = cg.fresh_reg();
-    cg.emit(format!("{q} = fdiv double {}, {}", ld.operand, rd.operand));
-    let ok = make_result(cg, Value::new(q, LType::Double), LType::Double, "0", NO_MSG)?;
+    let q = cg.emit_reg(format!("{div} {lop}, {rop}"));
+    let ok = make_result(cg, Value::new(q, inner), inner, "0", NO_MSG)?;
     let okb = cg.snapshot_to(&end);
 
     cg.start_block(&zero_bb);
     let msg = cg.string_constant("division by zero");
-    let err = make_result(
-        cg,
-        Value::new("0.0", LType::Double),
-        LType::Double,
-        "1",
-        &msg.operand,
-    )?;
+    let err = make_result(cg, Value::new(zero, inner), inner, "1", &msg.operand)?;
     let errb = cg.snapshot_to(&end);
 
     cg.start_block(&end);
-    let reg = cg.fresh_reg();
-    cg.emit(format!(
-        "{reg} = phi {}* [ {}, %{okb} ], [ {}, %{errb} ]",
-        crate::llty::result_struct_ty(LType::Double),
+    let reg = cg.emit_reg(format!(
+        "phi {0}* [ {1}, %{okb} ], [ {2}, %{errb} ]",
+        crate::llty::result_struct_ty(inner),
         ok.operand,
         err.operand
     ));
-    Ok(Value::result(reg, LType::Double))
+    Ok(Value::result(reg, inner))
 }
 
 /// String concatenation: `malloc(strlen a + strlen b + 1)` then `strcpy`+`strcat`
@@ -264,7 +291,7 @@ fn gen_str_concat(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let rl = cg.call("i64", "strlen", "i8*", &[&rs.operand]);
     let sum = cg.emit_reg(format!("add i64 {ll}, {rl}"));
     let total = cg.emit_reg(format!("add i64 {sum}, 1"));
-    let buf = cg.call("i8*", "malloc", "i64", &[&total]);
+    let buf = cg.heap_alloc(&total);
     let _ = cg.call("i8*", "strcpy", "i8*, i8*", &[&buf, &ls.operand]);
     let _ = cg.call("i8*", "strcat", "i8*, i8*", &[&buf, &rs.operand]);
     Ok(Value::new(buf, LType::Str))
@@ -421,6 +448,20 @@ fn gen_call(
                 .ok_or_else(|| CodegenError::invalid("toString needs one argument"))?;
             let v = gen_expr(cg, arg)?;
             to_string_value(cg, v)
+        }
+        "intDiv" => {
+            let a = arg_exprs(arguments, named);
+            let (an, bn) = (
+                a.first()
+                    .ok_or_else(|| CodegenError::invalid("intDiv needs two arguments"))?,
+                a.get(1)
+                    .ok_or_else(|| CodegenError::invalid("intDiv needs two arguments"))?,
+            );
+            let l = gen_expr(cg, an)?;
+            let l = crate::result::unwrap(cg, l);
+            let r = gen_expr(cg, bn)?;
+            let r = crate::result::unwrap(cg, r);
+            gen_int_division(cg, l, r)
         }
         // Runtime builtins take precedence over a same-named user function: the
         // names below are reserved. Each dispatcher returns `None` when the name
@@ -652,10 +693,8 @@ fn gen_interpolation(cg: &mut Codegen, parts: &[InterpolatedPart]) -> Result<Val
         }
     }
     let fmtv = cg.string_constant(&fmt);
-    cg.add_extern("declare i8* @malloc(i64)");
     cg.add_extern("declare i32 @sprintf(i8*, i8*, ...)");
-    let buf = cg.fresh_reg();
-    cg.emit(format!("{buf} = call i8* @malloc(i64 4096)"));
+    let buf = cg.heap_alloc("4096");
     let tmp = cg.fresh_reg();
     let extra = if args.is_empty() {
         String::new()
