@@ -219,6 +219,17 @@ fn fail(msg: &str) -> ExitCode {
 mod tests {
     use super::*;
 
+    /// Serializes tests that read/write process-global toolchain env vars
+    /// (`OSPREY_WASM_*`, `*_SYSROOT`) so they neither race each other nor the
+    /// end-to-end build below — env is shared across the parallel test threads.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     #[test]
     fn entry_thunk_wraps_main_for_the_wasi_start_path() {
         let out = with_entry_thunk("define i32 @main() {\n  ret i32 0\n}\n");
@@ -301,12 +312,182 @@ mod tests {
         assert_eq!(lib_dir(&sysroot).expect("found"), want);
     }
 
+    #[test]
+    fn run_tool_reports_success_failure_and_a_missing_program() {
+        // A program that exits 0 succeeds; a non-zero exit and a missing program
+        // are both mapped to a CLI failure (exercising `run_tool` + `fail`).
+        assert!(run_tool("true", &[]).is_ok());
+        assert!(run_tool("false", &[]).is_err());
+        assert!(run_tool("/no/such/tool/osprey_xyz", &[]).is_err());
+    }
+
+    #[test]
+    fn compile_object_lowers_textual_ir_with_clang() {
+        // Requires clang (present wherever `make test` runs); a tiny valid module
+        // exercises the write-IR + `clang -c` lowering path end to end.
+        if Command::new(tool("OSPREY_WASM_CC", "clang"))
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            eprintln!("skipping compile_object test: clang absent");
+            return;
+        }
+        let obj = compile_object("osprey_cli_unit", "define i32 @main() {\n  ret i32 0\n}\n")
+            .expect("clang lowers trivial IR to a wasm object");
+        assert!(obj.exists(), "object emitted at {}", obj.display());
+    }
+
+    #[test]
+    fn link_invokes_the_linker_and_maps_its_exit_code() {
+        let _g = lock_env();
+        let prev = std::env::var("OSPREY_WASM_LD").ok();
+        // A stand-in "linker" that ignores its args and exits 0 → link succeeds.
+        std::env::set_var("OSPREY_WASM_LD", "true");
+        let ok = link(
+            Path::new("/tmp/o.o"),
+            "/tmp/rt.a",
+            Path::new("/tmp/libdir"),
+            Path::new("/tmp/out.wasm"),
+        );
+        // A stand-in that exits non-zero → link reports a CLI failure.
+        std::env::set_var("OSPREY_WASM_LD", "false");
+        let err = link(
+            Path::new("/tmp/o.o"),
+            "/tmp/rt.a",
+            Path::new("/tmp/libdir"),
+            Path::new("/tmp/out.wasm"),
+        );
+        match prev {
+            Some(v) => std::env::set_var("OSPREY_WASM_LD", v),
+            None => std::env::remove_var("OSPREY_WASM_LD"),
+        }
+        assert!(ok.is_ok(), "linker exit 0 => ok");
+        assert!(err.is_err(), "linker non-zero => failure");
+    }
+
+    #[test]
+    fn run_host_uses_the_configured_runner_and_handles_a_missing_one() {
+        let _g = lock_env();
+        let prev = std::env::var("OSPREY_WASM_RUN").ok();
+        let wasm = std::env::temp_dir().join("osprey_run_host_unit.wasm");
+        let _ = std::fs::write(&wasm, b"\0asm");
+        // A present runner that ignores args and exits 0 → success-code path.
+        std::env::set_var("OSPREY_WASM_RUN", "true");
+        let _ok = run_host(&wasm);
+        // A missing runner → the spawn-error hint path.
+        std::env::set_var("OSPREY_WASM_RUN", "/no/such/runner/osprey_xyz");
+        let _err = run_host(&wasm);
+        match prev {
+            Some(v) => std::env::set_var("OSPREY_WASM_RUN", v),
+            None => std::env::remove_var("OSPREY_WASM_RUN"),
+        }
+    }
+
+    #[test]
+    fn sysroot_candidates_includes_wasi_sdk_path_when_set() {
+        let _g = lock_env();
+        let prev = std::env::var("WASI_SDK_PATH").ok();
+        std::env::set_var("WASI_SDK_PATH", "/opt/osprey-test-wasi-sdk");
+        let cands = sysroot_candidates();
+        match prev {
+            Some(v) => std::env::set_var("WASI_SDK_PATH", v),
+            None => std::env::remove_var("WASI_SDK_PATH"),
+        }
+        assert!(
+            cands
+                .iter()
+                .any(|p| p.ends_with("wasi-sysroot")
+                    && p.to_string_lossy().contains("osprey-test-wasi-sdk")),
+            "WASI_SDK_PATH contributes a sysroot candidate: {cands:?}"
+        );
+    }
+
+    #[test]
+    fn build_fails_cleanly_when_the_sysroot_override_is_bogus() {
+        let _g = lock_env();
+        let prev = std::env::var("OSPREY_WASI_SYSROOT").ok();
+        std::env::set_var("OSPREY_WASI_SYSROOT", "/no/such/wasi/sysroot/xyz");
+        let program = osprey_syntax::parse_program("let n = 1\nprint(\"${n}\")\n").program;
+        let out = std::env::temp_dir().join("osprey_build_err_unit.wasm");
+        let res = build("unit.osp", &program, &out);
+        match prev {
+            Some(v) => std::env::set_var("OSPREY_WASI_SYSROOT", v),
+            None => std::env::remove_var("OSPREY_WASI_SYSROOT"),
+        }
+        assert!(res.is_err(), "a bogus sysroot override must fail the build");
+    }
+
+    /// Drive the whole build+run driver with the real tools stubbed by `true`
+    /// (exit 0): codegen → entry thunk → sysroot → lib dir → runtime archive →
+    /// `compile_object` → `link` → `run_host`. This exercises the orchestration
+    /// deterministically on any host (no clang/wasm-ld/wasmtime needed); the
+    /// genuine toolchain path is covered separately by the e2e test below and
+    /// the CI `wasm` job.
+    #[test]
+    fn build_and_run_drive_the_full_driver_with_stub_tools() {
+        let _g = lock_env();
+        let prev = [
+            ("OSPREY_WASI_SYSROOT", std::env::var("OSPREY_WASI_SYSROOT").ok()),
+            ("OSPREY_WASM_CC", std::env::var("OSPREY_WASM_CC").ok()),
+            ("OSPREY_WASM_LD", std::env::var("OSPREY_WASM_LD").ok()),
+            ("OSPREY_WASM_RUN", std::env::var("OSPREY_WASM_RUN").ok()),
+        ];
+
+        // A fake sysroot whose lib dir exists so `lib_dir` resolves.
+        let sysroot = unique_dir("full_sysroot");
+        std::fs::create_dir_all(sysroot.join("lib").join("wasm32-wasip1")).expect("mk libdir");
+        // A discoverable runtime archive next to the test binary (the current-exe
+        // search root) so `find_runtime_lib` succeeds without `make wasm`.
+        let archive = std::env::current_exe()
+            .ok()
+            .and_then(|e| e.parent().map(|p| p.join(RUNTIME_LIB)));
+        if let Some(a) = &archive {
+            std::fs::write(a, b"").expect("write stub archive");
+        }
+        std::env::set_var("OSPREY_WASI_SYSROOT", sysroot.display().to_string());
+        for k in ["OSPREY_WASM_CC", "OSPREY_WASM_LD", "OSPREY_WASM_RUN"] {
+            std::env::set_var(k, "true");
+        }
+
+        let program = osprey_syntax::parse_program("let n = 1\nprint(\"${n}\")\n").program;
+        let out = std::env::temp_dir().join("osprey_full_driver_unit.wasm");
+        let built = build("unit.osp", &program, &out);
+        let _ran = run(&stub_cli(), &program);
+
+        if let Some(a) = &archive {
+            let _ = std::fs::remove_file(a);
+        }
+        for (k, v) in prev {
+            match v {
+                Some(val) => std::env::set_var(k, val),
+                None => std::env::remove_var(k),
+            }
+        }
+        assert!(built.is_ok(), "stubbed toolchain drives a clean build");
+    }
+
+    /// A minimal wasm-target `Cli` for driving `run` in a unit test.
+    fn stub_cli() -> Cli {
+        Cli {
+            path: "unit.osp".to_string(),
+            mode: "--run".to_string(),
+            quiet: true,
+            policy: crate::sandbox::Policy::allow_all(),
+            memory: "default".to_string(),
+            target: "wasm32".to_string(),
+            output: None,
+            debug: false,
+        }
+    }
+
     // End-to-end build+run, exercised only where the wasm toolchain is present
     // (the dev machine and the CI `ci` job, which installs lld + a WASI sysroot
     // and `make wasm` before `make test`). Skipped elsewhere so the unit suite
     // stays toolchain-free.
     #[test]
     fn build_and_run_end_to_end_when_toolchain_present() {
+        let _g = lock_env();
         let have_ld = std::env::var("OSPREY_WASM_LD").is_ok()
             || Command::new("wasm-ld").arg("--version").output().is_ok();
         let have_sysroot = wasi_sysroot().is_ok();

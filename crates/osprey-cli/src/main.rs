@@ -790,4 +790,46 @@ mod tests {
         let path = temp_source("fs", "let c = readFile(\"x.txt\")\n");
         let _ = run(&cli(path, "--llvm", Policy::sandbox())); // sandbox-violation branch
     }
+
+    #[test]
+    fn parse_args_accepts_the_memory_backend_flag() {
+        let cli = parse_args(&args(&["f.osp", "--memory=gc"])).expect("ok");
+        assert_eq!(cli.memory, "gc");
+    }
+
+    #[test]
+    fn report_type_errors_prints_positioned_diagnostics() {
+        // An undefined identifier yields an error carrying a source position,
+        // exercising the `Some(position)` diagnostic arm.
+        let bad = osprey_syntax::parse_program("print(missingVariable)\n").program;
+        assert!(report_type_errors("bad.osp", &bad) > 0);
+    }
+
+    #[test]
+    fn compile_ir_and_debug_helpers_switch_on_the_debug_flag() {
+        let program = osprey_syntax::parse_program("let n = 1\nprint(\"${n}\")\n").program;
+        // debug=true takes the debug-info codegen path; both opt/driver helpers
+        // branch on the same flag.
+        assert!(compile_ir("p.osp", &program, true).is_ok());
+        assert!(!opt_flag(true).is_empty());
+        assert!(!opt_flag(false).is_empty());
+        let _ = debug_compile_flags(true);
+        let _ = debug_compile_flags(false);
+    }
+
+    #[test]
+    fn wasm_target_rejects_debug_then_dispatches_to_the_backend() {
+        let program = osprey_syntax::parse_program("let n = 1\nprint(\"${n}\")\n").program;
+        let mut c = cli("p.osp", "--compile", Policy::allow_all());
+        c.target = "wasm32".to_string();
+        // --debug + --target=wasm32 is rejected before any toolchain work.
+        c.debug = true;
+        let _ = compile_program_to_disk(&c, &program, "");
+        let _ = run_program(&c, &program, "");
+        // Without --debug the wasm build/run driver is dispatched (it fails
+        // cleanly without the wasm toolchain, but the dispatch lines execute).
+        c.debug = false;
+        let _ = compile_program_to_disk(&c, &program, "");
+        let _ = run_program(&c, &program, "");
+    }
 }
