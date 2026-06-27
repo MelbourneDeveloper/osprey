@@ -11,15 +11,15 @@ every editor is a thin client over the same LSP transport.
 
 ## Status
 
-| Surface | State |
-|---|---|
-| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/Nimblesite/osprey/pull/137)). |
-| VS Code extension (`nimblesite.osprey`) | **Shipped** — per-platform VSIX bundling a version-matched compiler. |
-| Debugger (`osprey --debug` + DAP) | Planned / in progress — source-level native debugging via DWARF + LLDB-DAP; see [Plan 0012](../plans/0012-osprey-debugger.md). |
-| Open VSX | Planned. |
-| Neovim | Planned. The server is editor-agnostic; only a client recipe is missing. |
-| Zed | Planned (`shipwright-zed`). |
-| MCP surface (`lspkit-mcp`) | Future — the same `EngineApi` vended as MCP tools. |
+| Surface                                          | State                                                                                                                                                           |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/Nimblesite/osprey/pull/137)).                                                           |
+| VS Code extension (`nimblesite.osprey`)          | **Shipped** — per-platform VSIX bundling a version-matched compiler.                                                                                            |
+| Debugger (`osprey --debug` + DAP)                | Planned / in progress — source-level native debugging via DWARF + LLDB-DAP; see [Debugger](0021-Debugger.md) and [Plan 0012](../plans/0012-osprey-debugger.md). |
+| Open VSX                                         | Planned.                                                                                                                                                        |
+| Neovim                                           | Planned. The server is editor-agnostic; only a client recipe is missing.                                                                                        |
+| Zed                                              | Planned (`shipwright-zed`).                                                                                                                                     |
+| MCP surface (`lspkit-mcp`)                       | Future — the same `EngineApi` vended as MCP tools.                                                                                                              |
 
 ## Architecture: one engine, two surfaces `[LSP-ENGINE]`
 
@@ -54,6 +54,8 @@ flowchart LR
     engine --> types
   end
 ```
+
+### Debugger Integration `[DEBUGGER-EDITOR]`
 
 The debugger fits into the editor architecture through the LSP-backed analysis
 plane. LSP remains the source-of-truth plane for diagnostics, symbols, hover,
@@ -141,12 +143,12 @@ checker. There is exactly one source of truth.
 
 Crates consumed (all from crates.io, pinned via the workspace):
 
-| Crate | Used for |
-|---|---|
-| `lspkit` | `EngineApi` trait + neutral types. |
+| Crate           | Used for                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `lspkit`        | `EngineApi` trait + neutral types.                                                               |
 | `lspkit-server` | JSON-RPC framing, `Dispatcher`, `Capabilities`, `DiagnosticsBus`/`DiagnosticsSink`, URI helpers. |
-| `lspkit-vfs` | Open-document store, rope incremental edits, `PositionEncoding` negotiation. |
-| `lspkit-live` | `Session` generation counter + broadcast. |
+| `lspkit-vfs`    | Open-document store, rope incremental edits, `PositionEncoding` negotiation.                     |
+| `lspkit-live`   | `Session` generation counter + broadcast.                                                        |
 
 ### Reuse lspkit maximally `[LSP-REUSE-LSPKIT]`
 
@@ -193,15 +195,15 @@ Standard LSP handshake and document sync:
 
 The server advertises and implements:
 
-| Capability | Method | Notes |
-|---|---|---|
-| Diagnostics | `textDocument/publishDiagnostics` | Push, via `DiagnosticsBus`. `[LSP-DIAGNOSTICS]` |
-| Hover | `textDocument/hover` | Markdown. Functions/builtins → signature; **`let`/`mut` bindings (local *and* top-level) → their declared or inferred type**; any declaration's `///` docs rendered as prose. `[LSP-HOVER]` |
-| Go to definition | `textDocument/definition` | AST-driven, anchored on the identifier. |
-| Find references | `textDocument/references` | Whole-word scan; `includeDeclaration` honored. |
-| Document symbols | `textDocument/documentSymbol` | Flat `DocumentSymbol`s; range on the **name**, not the `fn`/`let`/`type` keyword. |
-| Signature help | `textDocument/signatureHelp` | Active-parameter tracking; ignores `,`/`(`/`)` inside strings and `//` comments. |
-| Completion | `textDocument/completion` | Keywords/snippets + the document's own declarations. |
+| Capability       | Method                            | Notes                                                                                                                                                                                       |
+| ---------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Diagnostics      | `textDocument/publishDiagnostics` | Push, via `DiagnosticsBus`. `[LSP-DIAGNOSTICS]`                                                                                                                                             |
+| Hover            | `textDocument/hover`              | Markdown. Functions/builtins → signature; **`let`/`mut` bindings (local _and_ top-level) → their declared or inferred type**; any declaration's `///` docs rendered as prose. `[LSP-HOVER]` |
+| Go to definition | `textDocument/definition`         | AST-driven, anchored on the identifier.                                                                                                                                                     |
+| Find references  | `textDocument/references`         | Whole-word scan; `includeDeclaration` honored.                                                                                                                                              |
+| Document symbols | `textDocument/documentSymbol`     | Flat `DocumentSymbol`s; range on the **name**, not the `fn`/`let`/`type` keyword.                                                                                                           |
+| Signature help   | `textDocument/signatureHelp`      | Active-parameter tracking; ignores `,`/`(`/`)` inside strings and `//` comments.                                                                                                            |
+| Completion       | `textDocument/completion`         | Keywords/snippets + the document's own declarations.                                                                                                                                        |
 
 Capabilities are the contract clients rely on; adding one means updating
 `initialize_result` in
@@ -230,7 +232,7 @@ Resolution order for the symbol under the cursor:
 
 Every binding is hoverable, not just top-level declarations:
 
-- **Collection is deep.** `collect_all_symbols` walks *into* every
+- **Collection is deep.** `collect_all_symbols` walks _into_ every
   expression that can contain a block — function bodies, `handle … in …`,
   `match`/`select` arms, lambdas, `spawn`/`await`, interpolations, call
   arguments, list/map/object literals — so a `let` nested anywhere (e.g. inside
@@ -264,8 +266,8 @@ lowering lives in [`osprey-syntax/src/lower.rs`](../../crates/osprey-syntax/src/
 let banner = "hello"
 ```
 
-Hovering `banner` shows `banner: string` followed by *"The greeting shown to the
-operator on connect."*
+Hovering `banner` shows `banner: string` followed by _"The greeting shown to the
+operator on connect."_
 
 ## Position encoding `[LSP-ENCODING]`
 
@@ -343,7 +345,7 @@ extension and the binary it launches MUST be version-matched.
 - The binary is the source of truth: `osprey --version` → `osprey X.Y.Z`;
   `osprey --version --json` → the version manifest (`[SWR-VERSION-CLI-OUTPUT]`).
 - Components are declared in [`shipwright.json`](../../shipwright.json):
-  `osprey` (the CLI — which *is* the language server, via the `lsp`
+  `osprey` (the CLI — which _is_ the language server, via the `lsp`
   subcommand) and `osprey-vscode`. The component id **must** equal the name the
   binary reports from `osprey --version` (Shipwright matches the probed name
   against the component id), so the CLI component is `osprey`, not

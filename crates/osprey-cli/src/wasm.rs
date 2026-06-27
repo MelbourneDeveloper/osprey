@@ -44,8 +44,11 @@ pub(crate) fn build(path: &str, program: &osprey_ast::Program, out: &Path) -> Re
     };
     let sysroot = wasi_sysroot().map_err(|e| fail(&e))?;
     let libdir = lib_dir(&sysroot).map_err(|e| fail(&e))?;
-    let archive = find_runtime_lib(RUNTIME_LIB)
-        .ok_or_else(|| fail(&format!("{RUNTIME_LIB} not found — run `make wasm` to build it")))?;
+    let archive = find_runtime_lib(RUNTIME_LIB).ok_or_else(|| {
+        fail(&format!(
+            "{RUNTIME_LIB} not found — run `make wasm` to build it"
+        ))
+    })?;
     let obj = compile_object(&stem_of(path), &ir)?;
     link(&obj, &archive, &libdir, out)
 }
@@ -117,7 +120,10 @@ fn link_argv(obj: &Path, archive: &str, libdir: &Path, out: &Path) -> Vec<String
 /// Locate a WASI sysroot: `OSPREY_WASI_SYSROOT` if set, else the first existing
 /// of the conventional Homebrew / wasi-sdk / Linux locations.
 fn wasi_sysroot() -> Result<PathBuf, String> {
-    pick_sysroot(std::env::var("OSPREY_WASI_SYSROOT").ok(), &sysroot_candidates())
+    pick_sysroot(
+        std::env::var("OSPREY_WASI_SYSROOT").ok(),
+        &sysroot_candidates(),
+    )
 }
 
 /// The default sysroot search path, in priority order.
@@ -148,11 +154,15 @@ fn pick_sysroot(override_dir: Option<String>, candidates: &[PathBuf]) -> Result<
             ))
         };
     }
-    candidates.iter().find(|p| p.is_dir()).cloned().ok_or_else(|| {
-        "no WASI sysroot found — install it (e.g. `brew install wasi-libc`) or set \
+    candidates
+        .iter()
+        .find(|p| p.is_dir())
+        .cloned()
+        .ok_or_else(|| {
+            "no WASI sysroot found — install it (e.g. `brew install wasi-libc`) or set \
          OSPREY_WASI_SYSROOT=/path/to/wasi-sysroot"
-            .to_string()
-    })
+                .to_string()
+        })
 }
 
 /// The sysroot's wasm lib dir (holds `crt1-command.o` + `libc.a`), preferring
@@ -246,7 +256,10 @@ mod tests {
 
     #[test]
     fn tool_falls_back_to_default_when_env_unset() {
-        assert_eq!(tool("OSPREY_WASM_CC_DEFINITELY_UNSET_XYZ", "clang"), "clang");
+        assert_eq!(
+            tool("OSPREY_WASM_CC_DEFINITELY_UNSET_XYZ", "clang"),
+            "clang"
+        );
     }
 
     fn unique_dir(tag: &str) -> PathBuf {
@@ -264,7 +277,11 @@ mod tests {
             real
         );
         // a non-directory override is an error.
-        assert!(pick_sysroot(Some("/no/such/dir/xyz".to_string()), &[real.clone()]).is_err());
+        assert!(pick_sysroot(
+            Some("/no/such/dir/xyz".to_string()),
+            std::slice::from_ref(&real)
+        )
+        .is_err());
         // no override: first existing candidate is chosen.
         let missing = PathBuf::from("/no/such/dir/abc");
         assert_eq!(
@@ -303,6 +320,6 @@ mod tests {
         let out = std::env::temp_dir().join(format!("osprey_wasm_e2e_{}.wasm", std::process::id()));
         build("e2e.osp", &program, &out).expect("wasm build");
         let bytes = std::fs::read(&out).expect("read wasm");
-        assert_eq!(&bytes[..4], b"\0asm", "wasm magic header");
+        assert!(bytes.starts_with(b"\0asm"), "wasm magic header");
     }
 }

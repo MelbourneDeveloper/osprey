@@ -4,11 +4,12 @@
 //
 // Validates the module is well-formed (`WebAssembly.validate`), runs it as a
 // WASI command under Node's built-in `node:wasi` (no external runtime needed —
-// the same engine a browser WASI shim emulates), and, when an expected-output
-// file is given, asserts captured stdout matches it. Exits non-zero on any
-// failure so `make wasm-test` / CI can gate on it.
+// the same preview1 ABI a browser WASI shim emulates), and, when an expected-
+// output file is given, asserts captured stdout matches it. Exits non-zero on
+// any failure so `make wasm-test` / CI can gate on it.
 
 import { readFile } from "node:fs/promises";
+import { openSync, closeSync, readFileSync } from "node:fs";
 import { WASI } from "node:wasi";
 
 const [, , wasmPath, expectedPath] = process.argv;
@@ -23,17 +24,18 @@ if (!WebAssembly.validate(bytes)) {
   process.exit(1);
 }
 
-// Capture fd 1 by overriding the WASI stdout file descriptor with a pipe-like
-// collector. Node's WASI writes to the real fd 1, so we intercept via a patched
-// write on process.stdout and restore it after.
-let captured = "";
-const realWrite = process.stdout.write.bind(process.stdout);
-process.stdout.write = (chunk, ...rest) => {
-  captured += typeof chunk === "string" ? chunk : chunk.toString("utf8");
-  return realWrite(chunk, ...rest);
-};
+// Node's WASI writes to the real stdout fd, so capture it by pointing the
+// instance's fd 1 at a temp file and reading it back after the run.
+const capturePath = `${wasmPath}.stdout.txt`;
+const fd = openSync(capturePath, "w");
+const wasi = new WASI({
+  version: "preview1",
+  args: [wasmPath],
+  env: {},
+  stdout: fd,
+  returnOnExit: true,
+});
 
-const wasi = new WASI({ version: "preview1", args: [wasmPath], env: {} });
 let exitCode = 0;
 try {
   const { instance } = await WebAssembly.instantiate(bytes, {
@@ -41,17 +43,14 @@ try {
   });
   exitCode = wasi.start(instance);
 } catch (err) {
-  // wasi.start throws a special exit exception on a non-zero proc_exit; treat a
-  // clean exit(0) as success and surface anything else.
-  if (err && typeof err.code === "number") {
-    exitCode = err.code;
-  } else {
-    process.stdout.write = realWrite;
-    console.error(`FAIL: module trapped: ${err?.message ?? err}`);
-    process.exit(1);
-  }
+  closeSync(fd);
+  console.error(`FAIL: module trapped: ${err?.message ?? err}`);
+  process.exit(1);
 }
-process.stdout.write = realWrite;
+closeSync(fd);
+
+const captured = readFileSync(capturePath, "utf8");
+process.stdout.write(captured);
 
 if (exitCode) {
   console.error(`FAIL: module exited with code ${exitCode}`);

@@ -11,6 +11,8 @@ import {
   looksLikePath,
   makeClientFailureHandling,
   applyDefaultOspreyDebugConfig,
+  defaultDebugOutputPath,
+  resolveLldbDapCommand,
   deactivate,
 } from "../../client/src/extension";
 
@@ -1449,9 +1451,9 @@ suite("Osprey Activation Side-Effect Coverage", () => {
     assert.strictEqual(restored, original, "config value restored");
   });
 
-  // startDebugging may never settle because the provider cancels the session by
-  // returning undefined, so always race it against a timeout and never assert on
-  // the return value.
+  // startDebugging may depend on a host lldb-dap installation, so always race it
+  // against a timeout and assert only that the extension survives the provider
+  // path.
   async function startDebugRaced(
     config: vscode.DebugConfiguration,
   ): Promise<string> {
@@ -1470,8 +1472,8 @@ suite("Osprey Activation Side-Effect Coverage", () => {
     this.timeout(30000);
 
     // With an active osprey editor and an empty config, resolveDebugConfiguration
-    // synthesizes type/name/request/program from the editor, then kicks off
-    // compile-and-run and cancels the session by returning undefined.
+    // synthesizes type/name/request/program from the editor, then attempts the
+    // real debug-launch path: save, debug-compile, and hand off to DAP.
     const file = path.join(tempDir, "debug-synth.osp");
     fs.writeFileSync(file, 'fn main() -> Unit = print("debug synth")\n');
     const document = await vscode.workspace.openTextDocument(file);
@@ -1510,7 +1512,7 @@ suite("Osprey Activation Side-Effect Coverage", () => {
 
     const outcome = await startDebugRaced({
       type: "osprey",
-      name: "Run Osprey File",
+      name: "Debug Osprey File",
       request: "launch",
     } as vscode.DebugConfiguration);
     await settle(1500);
@@ -1996,7 +1998,7 @@ suite("Osprey Client Failure Handling Unit Tests", () => {
   });
 });
 
-// Pure unit tests for the debug-config synthesis the "Run Osprey File" command
+// Pure unit tests for the debug-config synthesis the "Debug Osprey File" launch
 // relies on. Driving it through vscode.debug.startDebugging is unreliable in the
 // headless host (no real debug UI invokes the provider), so the branchy logic is
 // extracted and tested directly here.
@@ -2014,7 +2016,7 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
     );
     assert.strictEqual(config.type, "osprey", "type defaults to osprey");
     assert.strictEqual(config.request, "launch", "request defaults to launch");
-    assert.strictEqual(config.name, "Run Osprey File", "name is set");
+    assert.strictEqual(config.name, "Debug Osprey File", "name is set");
     assert.strictEqual(
       config.program,
       "/tmp/main.osp",
@@ -2055,5 +2057,25 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
       "explicit program preserved",
     );
     assert.strictEqual(config.name, "Custom", "explicit name preserved");
+  });
+
+  test("chooses a stable per-source debug output path", () => {
+    const out = defaultDebugOutputPath(path.join("/tmp", "demo.osp"));
+    assert.strictEqual(path.basename(path.dirname(out)), ".osprey-debug");
+    assert.strictEqual(
+      path.basename(out),
+      process.platform === "win32" ? "demo.exe" : "demo",
+    );
+  });
+
+  test("resolves lldb-dap from config before defaults", () => {
+    assert.strictEqual(
+      resolveLldbDapCommand({ lldbDapPath: "/custom/lldb-dap" }),
+      "/custom/lldb-dap",
+    );
+    assert.ok(
+      resolveLldbDapCommand({}).length > 0,
+      "default lldb-dap command is non-empty",
+    );
   });
 });

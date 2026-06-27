@@ -145,7 +145,7 @@ export function applyDefaultOspreyDebugConfig(
   if (!config.type && !config.request && !config.name) {
     if (activeEditor && activeEditor.document.languageId === "osprey") {
       config.type = "osprey";
-      config.name = "Run Osprey File";
+      config.name = "Debug Osprey File";
       config.request = "launch";
       config.program = activeEditor.document.fileName;
     }

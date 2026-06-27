@@ -7,8 +7,8 @@ use crate::builder::{Codegen, CodegenOptions};
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use osprey_debug::DebugSource;
 use osprey_ast::{Expr, Parameter, Position, Program, Stmt};
+use osprey_debug::DebugSource;
 
 /// Compile a whole program to an LLVM IR module (text), driven by the inferred
 /// types in [`osprey_types::ProgramTypes`].
@@ -233,12 +233,10 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
             value,
             position,
         } => with_stmt_debug(cg, *position, |cg| gen_bind(cg, name, value, true)),
-        Stmt::Expr { value, position } => {
-            with_stmt_debug(cg, *position, |cg| {
-                let _ = gen_expr(cg, value)?;
-                Ok(())
-            })
-        }
+        Stmt::Expr { value, position } => with_stmt_debug(cg, *position, |cg| {
+            let _ = gen_expr(cg, value)?;
+            Ok(())
+        }),
         _ => Err(CodegenError::unsupported("statement in block/main")),
     }
 }

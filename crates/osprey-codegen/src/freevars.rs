@@ -153,8 +153,7 @@ fn walk_block(
                 walk(value, bound, out);
                 bound.push(name.clone());
             }
-            Stmt::Assignment { value, .. } => walk(value, bound, out),
-            Stmt::Expr { value, .. } => walk(value, bound, out),
+            Stmt::Assignment { value, .. } | Stmt::Expr { value, .. } => walk(value, bound, out),
             _ => {}
         }
     }

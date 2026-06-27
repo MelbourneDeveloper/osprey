@@ -38,8 +38,8 @@ mod types;
 
 pub use error::{CodegenError, Result};
 pub use llty::{LType, Value};
-pub use osprey_debug::DebugSource;
 pub use lower::{compile_program, compile_program_debug};
+pub use osprey_debug::DebugSource;
 
 /// Every identifier referenced anywhere in `program` — function bodies, lets,
 /// nested modules. The CLI's capability sandbox uses this to detect gated

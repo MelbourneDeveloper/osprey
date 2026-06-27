@@ -140,11 +140,17 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
             "--no-ffi" => policy.ffi = false,
             // `-o <path>` consumes the next argument as the output artifact path.
             "-o" => {
-                let next = it.next().ok_or_else(|| format!("-o requires a path\n{USAGE}"))?;
+                let next = it
+                    .next()
+                    .ok_or_else(|| format!("-o requires a path\n{USAGE}"))?;
                 output = Some(next.clone());
             }
-            flag if flag.starts_with("--memory=") => memory = parse_memory(&flag[9..])?,
-            flag if flag.starts_with("--target=") => target = parse_target(&flag[9..])?,
+            flag if flag.starts_with("--memory=") => {
+                memory = parse_memory(flag.strip_prefix("--memory=").unwrap_or_default())?;
+            }
+            flag if flag.starts_with("--target=") => {
+                target = parse_target(flag.strip_prefix("--target=").unwrap_or_default())?;
+            }
             flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}\n{USAGE}")),
             _ if path.is_none() => path = Some(a.clone()),
             other => return Err(format!("unexpected argument {other}\n{USAGE}")),

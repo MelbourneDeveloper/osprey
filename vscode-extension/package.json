@@ -134,8 +134,39 @@
             "properties": {
               "program": {
                 "type": "string",
-                "description": "Absolute path to an Osprey file.",
+                "description": "Absolute path to an Osprey source file.",
                 "default": "${file}"
+              },
+              "args": {
+                "type": "array",
+                "description": "Command-line arguments passed to the debugged program.",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the debugged program.",
+                "default": "${fileDirname}"
+              },
+              "env": {
+                "type": "object",
+                "description": "Environment variables for the debugged program.",
+                "default": {}
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Stop at program entry before running user code.",
+                "default": false
+              },
+              "debugOutput": {
+                "type": "string",
+                "description": "Optional output path for the compiled native debug binary."
+              },
+              "lldbDapPath": {
+                "type": "string",
+                "description": "Optional lldb-dap executable path. Defaults to osprey.debug.lldbDapPath or lldb-dap on PATH."
               }
             }
           }
@@ -144,8 +175,9 @@
           {
             "type": "osprey",
             "request": "launch",
-            "name": "Run Osprey File",
-            "program": "${file}"
+            "name": "Debug Osprey File",
+            "program": "${file}",
+            "cwd": "${fileDirname}"
           }
         ]
       }
@@ -173,6 +205,11 @@
           "type": "string",
           "default": "",
           "description": "Path to the Osprey compiler executable. Leave empty to use the version-matched compiler bundled with this extension (falling back to `osprey` on PATH)."
+        },
+        "osprey.debug.lldbDapPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to lldb-dap. Leave empty to use `lldb-dap` on PATH."
         }
       }
     }

@@ -6,14 +6,11 @@
 //         node scripts/wasm-smoke.mjs build/hello.wasm hello.expectedoutput
 //         open index.html            # loads hello.wasm in the browser
 //
-// Exercises recursion, string concatenation and `length` (both route through
-// the runtime's osp_strlen, the width-stable shim that makes the wasm port
-// correct), arithmetic, and multi-value string interpolation.
-fn fib(n) = match n < 2 {
-  true => n
-  false => fib(n - 1) + fib(n - 2)
-}
-
+// Exercises the two width fixes that make the wasm port correct: string
+// concatenation and `length` both route through the runtime's osp_strlen
+// (returns i64 on every target, unlike libc strlen's 32-bit size_t on wasm32),
+// and the large product formats via %lld (a plain %ld would truncate it on
+// wasm32, where `long` is 32-bit).
 let who = "Osprey" + " on " + "WebAssembly"
-let n = 10
-print("${who}\nfib(${n}) = ${fib(n)}\nlength(who) = ${length(who)}")
+let big = 2 * 1500000000
+print("${who}\nlength = ${length(who)}\n2 * 1500000000 = ${big}")
