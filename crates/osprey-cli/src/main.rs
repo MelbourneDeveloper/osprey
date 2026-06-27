@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --compile | --run | \
---symbols] [--quiet] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
+--symbols] [--quiet] [--memory=default|gc] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
        osprey --hover <name>\n\
        osprey --docs --docs-dir <dir>\n\
        osprey lsp";
@@ -34,6 +34,10 @@ struct Cli {
     mode: String,
     quiet: bool,
     policy: Policy,
+    /// The reclaiming memory backend linked behind `@osp_alloc` — `default`
+    /// (malloc passthrough) or `gc` (tracing collector). Link-time only; the IR
+    /// is identical [MEM-BACKENDS]. (`arc` is reserved, docs/plans/0011.)
+    memory: String,
 }
 
 fn main() -> ExitCode {
@@ -108,6 +112,7 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
     let mut mode = String::from("--check");
     let mut quiet = false;
     let mut policy = Policy::allow_all();
+    let mut memory = String::from("default");
     for a in args {
         match a.as_str() {
             "--ast" | "--check" | "--llvm" | "--compile" | "--run" | "--symbols" | "--hover" => {
@@ -119,6 +124,7 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
             "--no-websocket" => policy.websocket = false,
             "--no-fs" => policy.fs = false,
             "--no-ffi" => policy.ffi = false,
+            flag if flag.starts_with("--memory=") => memory = parse_memory(&flag[9..])?,
             flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}\n{USAGE}")),
             _ if path.is_none() => path = Some(a.clone()),
             other => return Err(format!("unexpected argument {other}\n{USAGE}")),
@@ -130,8 +136,23 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
             mode,
             quiet,
             policy,
+            memory,
         }),
         None => Err(USAGE.to_string()),
+    }
+}
+
+/// Validate the `--memory=` value. `arc` is reserved but not yet implemented
+/// (docs/plans/0011) — reject it explicitly rather than silently mislabel.
+fn parse_memory(value: &str) -> Result<String, String> {
+    match value {
+        "default" | "gc" => Ok(value.to_string()),
+        "arc" => {
+            Err("memory backend 'arc' is not yet implemented (available: default, gc)".to_string())
+        }
+        other => Err(format!(
+            "unknown memory backend '{other}' (available: default, gc)\n{USAGE}"
+        )),
     }
 }
 
@@ -189,7 +210,7 @@ fn dispatch(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode 
                 ExitCode::FAILURE
             }
         },
-        "--run" => run_program(path, program, source),
+        "--run" => run_program(path, program, source, &cli.memory),
         "--compile" => compile_program_to_disk(cli, program, source),
         _ => {
             println!("{program:#?}");
@@ -225,7 +246,7 @@ fn run_check(cli: &Cli, program: &osprey_ast::Program) -> ExitCode {
 /// current directory.
 fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
     let exe = PathBuf::from(stem_of(&cli.path));
-    match build_executable(&cli.path, program, source, &exe) {
+    match build_executable(&cli.path, program, source, &exe, &cli.memory) {
         Ok(()) => {
             if !cli.quiet {
                 println!("{}", exe.display());
@@ -237,9 +258,9 @@ fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &st
 }
 
 /// Compile to a temp executable and run it — the `--run` end-to-end path.
-fn run_program(path: &str, program: &osprey_ast::Program, source: &str) -> ExitCode {
+fn run_program(path: &str, program: &osprey_ast::Program, source: &str, memory: &str) -> ExitCode {
     let exe = std::env::temp_dir().join(format!("{}.out", stem_of(path)));
-    if let Err(code) = build_executable(path, program, source, &exe) {
+    if let Err(code) = build_executable(path, program, source, &exe, memory) {
         return code;
     }
     match Command::new(&exe).status() {
@@ -258,6 +279,7 @@ fn build_executable(
     program: &osprey_ast::Program,
     source: &str,
     exe: &Path,
+    memory: &str,
 ) -> Result<(), ExitCode> {
     let ir = match osprey_codegen::compile_program(program) {
         Ok(ir) => ir,
@@ -279,7 +301,7 @@ fn build_executable(
         .arg(exe)
         .arg("-Wno-override-module")
         .arg(opt_flag())
-        .args(link_args(&ir, source));
+        .args(link_args(&ir, source, memory));
     match cmd.status() {
         Ok(s) if s.success() => Ok(()),
         Ok(_) => {
@@ -345,18 +367,22 @@ fn child_exit_code(status: std::process::ExitStatus) -> u8 {
 /// libc: the prebuilt C runtime static library (the HTTP superset when the
 /// program touches HTTP/WebSocket, else the fiber runtime), OpenSSL for HTTP,
 /// and any `// @link:` / `// @linkdir:` FFI directives (e.g. `-lsqlite3`).
-fn link_args(ir: &str, source: &str) -> Vec<String> {
+fn link_args(ir: &str, source: &str, memory: &str) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     let uses_http = ir.contains("@http") || ir.contains("@websocket");
 
+    // The reclaiming backend is a link-time archive swap — the IR is identical
+    // [MEM-BACKENDS]. `gc` links the tracing-collector archive set; `default`
+    // the malloc-passthrough set. (docs/plans/0011)
+    let suffix = if memory == "gc" { "_gc" } else { "" };
     let lib = if uses_http {
-        "libhttp_runtime.a"
+        format!("libhttp_runtime{suffix}.a")
     } else {
-        "libfiber_runtime.a"
+        format!("libfiber_runtime{suffix}.a")
     };
-    if let Some(p) = find_runtime_lib(lib) {
+    if let Some(p) = find_runtime_lib(&lib) {
         args.push(p);
-    } else if let Some(p) = find_runtime_lib("libfiber_runtime.a") {
+    } else if let Some(p) = find_runtime_lib(&format!("libfiber_runtime{suffix}.a")) {
         args.push(p);
     }
 
@@ -503,14 +529,35 @@ mod tests {
 
     #[test]
     fn link_args_adds_ffi_directives_and_openssl_for_http() {
-        let ffi = link_args("", "// @link: sqlite3\n// @linkdir: /opt/lib\ncode\n");
+        let ffi = link_args(
+            "",
+            "// @link: sqlite3\n// @linkdir: /opt/lib\ncode\n",
+            "default",
+        );
         assert!(ffi.iter().any(|a| a == "-lsqlite3"), "{ffi:?}");
         assert!(ffi.iter().any(|a| a == "-L/opt/lib"), "{ffi:?}");
-        let http = link_args("call void @http_listen()", "");
+        let http = link_args("call void @http_listen()", "", "default");
         assert!(http.iter().any(|a| a == "-lssl") && http.iter().any(|a| a == "-lcrypto"));
         // No HTTP markers => no openssl flags.
-        let plain = link_args("call void @osprey_list_empty()", "");
+        let plain = link_args("call void @osprey_list_empty()", "", "default");
         assert!(!plain.iter().any(|a| a == "-lssl"));
+    }
+
+    #[test]
+    fn link_args_selects_gc_archive_and_validates_backend() {
+        // The `gc` backend swaps in the `_gc` archive set; `default` does not.
+        let gc = link_args("call void @osprey_list_empty()", "", "gc");
+        assert!(
+            gc.iter().any(|a| a.contains("_gc.a")) || gc.is_empty(),
+            "gc backend must select a *_gc archive when one is present: {gc:?}"
+        );
+        let plain = link_args("call void @osprey_list_empty()", "", "default");
+        assert!(!plain.iter().any(|a| a.contains("_gc.a")), "{plain:?}");
+        // Backend validation: default/gc accepted, arc reserved, others rejected.
+        assert_eq!(parse_memory("gc").as_deref(), Ok("gc"));
+        assert_eq!(parse_memory("default").as_deref(), Ok("default"));
+        assert!(parse_memory("arc").is_err());
+        assert!(parse_memory("bogus").is_err());
     }
 
     #[test]
@@ -554,6 +601,7 @@ mod tests {
             mode: mode.to_string(),
             quiet: true,
             policy,
+            memory: "default".to_string(),
         }
     }
 

@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup tui run install uninstall website-dev website-build rebuild-install-vsix bench
+.PHONY: build test lint fmt clean ci setup tui run install uninstall website-dev website-build rebuild-install-vsix bench conformance-gc
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -63,6 +63,12 @@ OSSL ?= -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated
 # Object lists for the archives (paths relative to compiler/, where `ar` runs).
 FIB_OBJ  ?= bin/memory_runtime.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
 HTTP_OBJ ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ)
+# GC backend archives (osprey --memory=gc): the tracing collector replaces
+# memory_runtime.o, and the value-container units are rebuilt with the malloc
+# redirect (osp_gc_shim.h) so their nodes live in the managed heap. Everything
+# else is the same object. Implements [GC-TRACE-CONSERVATIVE], docs/plans/0011.
+FIB_OBJ_GC  ?= bin/memory_gc.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/gc/list_runtime.o bin/gc/map_runtime.o bin/gc/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
+HTTP_OBJ_GC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ_GC)
 
 # =============================================================================
 # Standard Targets
@@ -126,8 +132,12 @@ setup:
 # so `cd` persists; faithful port of the original hardened C recipes.
 _runtime:
 	@echo "==> building C runtime archives ($(RTB)/lib*_runtime.a)"
-	@cd compiler && set -e && $(MKDIR) bin lib && \
+	@cd compiler && set -e && $(MKDIR) bin lib bin/gc && \
 	  $(CC) $(B) runtime/memory_runtime.c       -o bin/memory_runtime.o && \
+	  $(CC) $(B) runtime/memory_gc.c            -o bin/memory_gc.o && \
+	  $(CC) $(B) -include runtime/osp_gc_shim.h runtime/list_runtime.c     -o bin/gc/list_runtime.o && \
+	  $(CC) $(B) -include runtime/osp_gc_shim.h runtime/map_runtime.c      -o bin/gc/map_runtime.o && \
+	  $(CC) $(B) -include runtime/osp_gc_shim.h runtime/map_runtime_hamt.c -o bin/gc/map_runtime_hamt.o && \
 	  $(CC) -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o && \
 	  $(CC) $(A) runtime/system_runtime.c       -o bin/system_runtime.o && \
 	  $(CC) $(A) runtime/effects_runtime.c      -o bin/effects_runtime.o && \
@@ -151,7 +161,9 @@ _runtime:
 	  $(CC) $(A) $(OSSL) `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o && \
 	  $(AR) rcs bin/libfiber_runtime.a $(FIB_OBJ) && \
 	  $(AR) rcs bin/libhttp_runtime.a  $(HTTP_OBJ) && \
-	  cp bin/libfiber_runtime.a bin/libhttp_runtime.a lib/
+	  $(AR) rcs bin/libfiber_runtime_gc.a $(FIB_OBJ_GC) && \
+	  $(AR) rcs bin/libhttp_runtime_gc.a  $(HTTP_OBJ_GC) && \
+	  cp bin/libfiber_runtime.a bin/libhttp_runtime.a bin/libfiber_runtime_gc.a bin/libhttp_runtime_gc.a lib/
 
 # --- rust (crates/) ---------------------------------------------------------
 # Implements [TEST-RULES] — cargo test is fail-fast at the binary level by
@@ -209,6 +221,13 @@ _test_differential:
 	  echo "$$out" | grep -Eq 'FAIL=0 '  || { echo 'FAIL: differential mismatch'; exit 1; }; \
 	  echo "$$out" | grep -Eq 'NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }; \
 	  echo "$$out" | grep -q  'FC_OK'    || { echo 'FAIL: must-reject ratchet exceeded'; exit 1; }
+
+## conformance-gc: run every tested example under the tracing GC backend; output
+## must be byte-identical to the default ([MEM-BACKENDS] oracle, docs/plans/0011).
+conformance-gc: build
+	@echo "==> [conformance] differential harness under --memory=gc..."
+	@out=$$(OSPREY_RUN_FLAGS=--memory=gc zsh crates/diff_examples.sh); echo "$$out"; \
+	  echo "$$out" | grep -Eq 'FAIL=0 ' || { echo 'FAIL: GC backend output diverged'; exit 1; }
 
 # --- vscode-extension -------------------------------------------------------
 # The extension's LSP server spawns the `osprey` binary at runtime, so the

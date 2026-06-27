@@ -10,7 +10,9 @@ you no longer need.
 
 ## Status
 
-Partially implemented — the *boundary* exists; no *reclaiming* backend ships yet.
+Partially implemented — the *boundary* exists and a first *reclaiming* backend
+ships (tracing GC, opt-in via `--memory=gc`); the ARC default is next
+([implementation plan 0011](../plans/0011-arc-gc-implementation.md)).
 
 - **Swappable backend boundary [MEM-BACKENDS]: done.** All codegen heap
   allocation funnels through a single `@osp_alloc` hook (osprey-codegen
@@ -24,11 +26,16 @@ Partially implemented — the *boundary* exists; no *reclaiming* backend ships y
   temporaries) non-escaping and removes them entirely. This realises the
   [MEM-OWNERSHIP] "free at last use, statically" ideal for everything whose
   lifetime LLVM can see.
-- **Reclaiming *escaping* values: not implemented.** Values that genuinely
-  outlive their allocation site (e.g. nodes of a built-and-held tree) still leak
-  for the run under the default backend. The ARC / tracing-GC backends below,
-  linked behind `@osp_alloc` (+ future `osp_retain`/`osp_release`/`osp_collect`
-  hooks), are what close this. This spec is the contract they must satisfy.
+- **Reclaiming *escaping* values: tracing GC ships, ARC pending.** Values that
+  genuinely outlive their allocation site (e.g. nodes of a built-and-held tree)
+  still leak under the *default* backend, but the opt-in tracing collector
+  (`--memory=gc`, `compiler/runtime/memory_gc.c`) reclaims them — a conservative
+  mark & sweep linked behind `@osp_alloc`, complete because the heap is acyclic
+  [MEM-ACYCLIC]. On `binarytrees` it cuts peak RSS ~80× (905 MiB → ~11 MiB) with
+  byte-identical output across every differential example (`make conformance-gc`).
+  The ARC default and a precise copying GC are the remaining work
+  ([plan 0011](../plans/0011-arc-gc-implementation.md)); this spec is the
+  contract they must satisfy.
 
 ## Collection Is Unobservable [MEM-OPAQUE]
 

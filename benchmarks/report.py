@@ -21,8 +21,9 @@ import sys
 from pathlib import Path
 from typing import Callable, Optional, cast
 
-ORDER: list[str] = ["osprey", "rust", "c", "ocaml", "haskell"]
-LABEL: dict[str, str] = {"osprey": "Osprey", "rust": "Rust", "c": "C", "ocaml": "OCaml", "haskell": "Haskell"}
+ORDER: list[str] = ["osprey", "osprey-gc", "rust", "c", "ocaml", "haskell"]
+LABEL: dict[str, str] = {"osprey": "Osprey", "osprey-gc": "Osprey (GC)",
+                         "rust": "Rust", "c": "C", "ocaml": "OCaml", "haskell": "Haskell"}
 REPO = Path(__file__).resolve().parent.parent
 
 Cell = dict[str, object]
@@ -91,7 +92,7 @@ def cell_missing(c: Cell) -> str:
 def value_table(data: Data, langs: list[str], cases: list[str], key: str, fmt: Callable[[float], str]) -> str:
     """A `.comparison-table` of `key` per case/lang: fastest cell badged, Osprey wins starred."""
     head = "<tr><th>Benchmark</th>" + "".join(
-        f'<th class="num{" col-osprey" if l == "osprey" else ""}">{LABEL[l]}</th>' for l in langs) + "</tr>"
+        f'<th class="num{" col-osprey" if l.startswith("osprey") else ""}">{LABEL[l]}</th>' for l in langs) + "</tr>"
     body = "".join(_row(data[n], n, langs, key, fmt) for n in cases)
     return ('<div class="comparison-table"><table><thead>' + head
             + "</thead><tbody>" + body + "</tbody></table></div>")
@@ -108,7 +109,7 @@ def _td(c: Cell, lang: str, key: str, fmt: Callable[[float], str],
         v: dict[str, float], best: Optional[float]) -> str:
     ok = c.get("status") == "ok" and c.get(key) is not None
     txt = fmt(float(c[key])) if ok else cell_missing(c)
-    classes = ["num"] + (["col-osprey"] if lang == "osprey" else [])
+    classes = ["num"] + (["col-osprey"] if lang.startswith("osprey") else [])
     if ok and best is not None and float(c[key]) == best:
         strict = all(float(c[key]) < o for l, o in v.items() if l != lang)
         if lang == "osprey" and strict:
@@ -124,7 +125,7 @@ def summary(data: Data, langs: list[str], cases: list[str]) -> str:
     cw = wins(data, cases, "mean")
     cards = [_card(str(len(cw)), "CPU wins (fastest of all)", "is-accent")]
     for lang in langs:
-        if lang != "osprey" and (rs := ratios(data, cases, lang, "mean")):
+        if not lang.startswith("osprey") and (rs := ratios(data, cases, lang, "mean")):
             g = geomean(rs)
             cards.append(_card(f"{g:.2f}×", f"CPU vs {LABEL[lang]}", "is-good" if g <= 1.05 else ""))
     note = (f'<p>Osprey is the fastest of all five languages on <strong>'

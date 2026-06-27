@@ -21,9 +21,11 @@ zsh benchmarks/run.sh primes     # direct, single case
 ```
 
 > **Heads-up on RAM.** With the optimized build (below) every case except
-> `binarytrees` peaks at ~1.4 MB — on par with C. `binarytrees` still peaks near
-> **900 MB** because its tree nodes genuinely escape and the default allocator
-> does not reclaim them yet (see *Findings*); run it on a machine with a few GB
+> `binarytrees` peaks at ~1.4 MB — on par with C. Under the *default* backend
+> `binarytrees` still peaks near **900 MB** because its tree nodes genuinely
+> escape and that backend never reclaims (see *Findings*); the **`Osprey (GC)`**
+> column compiles the same source with `--memory=gc` (tracing collector) and
+> brings it down to **~11 MB**. Run the default case on a machine with a few GB
 > free, or skip it with `BENCH_FILTER`.
 
 Results are written to `benchmarks/results/` (gitignored):
@@ -103,6 +105,7 @@ Compile commands (source of truth: [`run.sh`](run.sh)):
 | Lang | Command |
 |------|---------|
 | Osprey  | `osprey <f>.osp --compile` (emits LLVM IR, compiled by clang at `-O2`; override with `OSPREY_OPT`) |
+| Osprey (GC) | `osprey <f>.osp --memory=gc --compile` (same IR; links the tracing-GC runtime archive — [MEM-BACKENDS]) |
 | Rust    | `rustc -C opt-level=3 -C overflow-checks=off -o <bin> <f>.rs` |
 | C       | `cc -O2 -o <bin> <f>.c` |
 | OCaml   | `ocamlopt -O3 -unsafe -o <bin> <f>.ml` |
@@ -149,14 +152,19 @@ so every per-operation `Result` block stayed a live `malloc`. Compiling the IR a
 (heap → registers): `fib(35)` went from **0.52 s / 1.37 GB to 0.01 s / 1.4 MB**.
 See [plan 0010](../docs/plans/0010-cross-language-benchmark-suite.md).
 
-**The one remaining gap: `binarytrees`** (~900 MB, ~24× the fastest). Its tree
-nodes genuinely *escape* — they are built, held, then checksummed — so the
-optimizer cannot statically free them, and Osprey's default allocator
-(`compiler/runtime/memory_runtime.c`, a `malloc` passthrough) does not reclaim
-during a run. Allocation now funnels through one swappable `@osp_alloc` hook
-([MEM-BACKENDS](../docs/specs/0018-MemoryManagement.md)), so a reclaiming backend
-(ARC / arena / tracing GC) can be linked in to close this last gap without
-touching the language.
+**The one remaining gap — and how the GC closes it: `binarytrees`.** Its tree
+nodes genuinely *escape* — built, held, then checksummed — so the optimizer
+cannot statically free them, and the default allocator
+(`compiler/runtime/memory_runtime.c`, a `malloc` passthrough) never reclaims:
+~900 MB. Allocation funnels through one swappable `@osp_alloc` hook
+([MEM-BACKENDS](../docs/specs/0018-MemoryManagement.md)), so linking the tracing
+collector (`compiler/runtime/memory_gc.c`, `--memory=gc`) reclaims the dead trees
+with **no language change and byte-identical output** — peak RSS drops ~80× to
+~11 MB (the `Osprey (GC)` column), on par with Haskell. The collector is a
+conservative mark & sweep, complete because the value heap is acyclic
+[MEM-ACYCLIC]; an ARC default and a precise copying GC that should reach
+C/OCaml-class numbers are the next phases
+([plan 0011](../../docs/plans/0011-arc-gc-implementation.md)).
 
 ## Not yet benchmarked (and why)
 

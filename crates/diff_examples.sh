@@ -39,7 +39,10 @@ for f in $(find $EXDIR -name '*.osp' | sort); do
   # never a per-line strip (which would drop trailing whitespace the program
   # emits).
   expected=$(cat "$exp")
-  actual=$($BIN "$f" --run 2>/tmp/osprey_rs_err.txt)
+  # OSPREY_RUN_FLAGS (default empty) selects a backend for conformance, e.g.
+  # `OSPREY_RUN_FLAGS=--memory=gc` runs every example under the tracing GC — the
+  # [MEM-BACKENDS] oracle: output must stay byte-identical. No effect when unset.
+  actual=$($BIN "$f" --run ${=OSPREY_RUN_FLAGS:-} 2>/tmp/osprey_rs_err.txt)
   rc=$?
   expected_trim="${expected#"${expected%%[![:space:]]*}"}"; expected_trim="${expected_trim%"${expected_trim##*[![:space:]]}"}"
   actual_trim="${actual#"${actual%%[![:space:]]*}"}"; actual_trim="${actual_trim%"${actual_trim##*[![:space:]]}"}"

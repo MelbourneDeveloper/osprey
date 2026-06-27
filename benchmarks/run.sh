@@ -35,17 +35,19 @@ MINRUNS=${BENCH_MINRUNS:-10}
 MEMRUNS=${BENCH_MEMRUNS:-3}
 
 # Language order is the report's column order. "Speed of light" baselines (C,
-# Rust) first after Osprey so the gap to Osprey reads left-to-right.
-LANGS=(osprey rust c ocaml haskell)
+# Rust) first after Osprey so the gap to Osprey reads left-to-right. `osprey-gc`
+# is the SAME .osp compiled with the tracing GC backend (--memory=gc), so the
+# allocation cases (binarytrees) show reclamation next to the default backend.
+LANGS=(osprey osprey-gc rust c ocaml haskell)
 typeset -A EXT
-EXT=(osprey osp  rust rs  c c  ocaml ml  haskell hs)
+EXT=(osprey osp  osprey-gc osp  rust rs  c c  ocaml ml  haskell hs)
 
 have() { command -v "$1" >/dev/null 2>&1 }
 
 # toolchain_ok <lang> — is the compiler for <lang> installed?
 toolchain_ok() {
   case "$1" in
-    osprey)  [[ -x "$OSP" ]] ;;
+    osprey|osprey-gc) [[ -x "$OSP" ]] ;;
     rust)    have rustc ;;
     c)       have cc ;;
     ocaml)   have ocamlopt ;;
@@ -57,7 +59,8 @@ toolchain_ok() {
 build() {
   local lang=$1 dir=$2 name=$3 out=$4
   case "$lang" in
-    osprey)  ( cd "$dir" && "$OSP" "$name.osp" --compile >/dev/null 2>&1 ) && mv -f "$dir/$name" "$out" ;;
+    osprey)    ( cd "$dir" && "$OSP" "$name.osp" --compile >/dev/null 2>&1 ) && mv -f "$dir/$name" "$out" ;;
+    osprey-gc) ( cd "$dir" && "$OSP" "$name.osp" --memory=gc --compile >/dev/null 2>&1 ) && mv -f "$dir/$name" "$out" ;;
     rust)    rustc -C opt-level=3 -C overflow-checks=off -o "$out" "$dir/$name.rs" 2>/dev/null ;;
     c)       cc -O2 -o "$out" "$dir/$name.c" 2>/dev/null ;;
     ocaml)   cp "$dir/$name.ml" "$TMP/$name.ml" && \
