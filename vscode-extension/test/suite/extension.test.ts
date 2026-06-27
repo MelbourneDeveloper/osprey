@@ -14,6 +14,8 @@ import {
   defaultOspreyDebugConfigForEditor,
   defaultDebugOutputPath,
   resolveLldbDapCommand,
+  resolveLldbDapExecutable,
+  missingLldbDapMessage,
   deactivate,
 } from "../../client/src/extension";
 
@@ -81,30 +83,10 @@ function resolveBuiltOsprey(): string | undefined {
   return fs.existsSync(built) ? built : resolveOspreyOnPath();
 }
 
-function resolveExecutableOnPath(command: string): string | undefined {
-  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!dir) {
-      continue;
-    }
-    const candidate = path.join(dir, command);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
 function resolveRequiredLldbDap(): string {
-  const command = resolveLldbDapCommand({});
-  if (
-    (command.includes("/") || command.includes("\\")) &&
-    fs.existsSync(command)
-  ) {
+  const command = resolveLldbDapExecutable({});
+  if (command && fs.existsSync(command)) {
     return command;
-  }
-  const onPath = resolveExecutableOnPath(command);
-  if (onPath) {
-    return onPath;
   }
   assert.fail(
     `lldb-dap is required for the Osprey VSIX debugger E2E test; resolved "${command}" but it was not executable`,
@@ -1219,7 +1201,6 @@ suite("Osprey Language Features Tests", () => {
     const reported = path.resolve(
       extensionRoot,
       "..",
-      "compiler",
       "examples",
       "tested",
       "basics",
@@ -1884,7 +1865,18 @@ suite("Osprey VSIX Debugger E2E", () => {
       "debug launch compiled a native binary",
     );
 
-    await session.customRequest("continue", { threadId: stopped.threadId });
+    await session.customRequest("next", { threadId: stopped.threadId });
+    const stepped = await waitForStop(session, 45000);
+    const steppedFrame = stepped.stack.stackFrames[0];
+    assert.ok(steppedFrame, "debugger must report a frame after stepping");
+    assert.strictEqual(
+      path.normalize(steppedFrame.source?.path ?? ""),
+      path.normalize(source),
+      "stepping remains in the Osprey source file",
+    );
+    assert.strictEqual(steppedFrame.line, 3, "step over advances to line 3");
+
+    await session.customRequest("continue", { threadId: stepped.threadId });
     await waitForDebugSessionEnd(45000, session.id);
   });
 });
@@ -2433,13 +2425,51 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
   });
 
   test("resolves lldb-dap from config before defaults", () => {
+    const host = {
+      env: { PATH: "" },
+      existsSync: (filePath: string) => filePath === "/custom/lldb-dap",
+      getSetting: () => undefined,
+      platform: "linux" as NodeJS.Platform,
+    };
+
     assert.strictEqual(
-      resolveLldbDapCommand({ lldbDapPath: "/custom/lldb-dap" }),
+      resolveLldbDapExecutable({ lldbDapPath: "/custom/lldb-dap" }, host),
+      "/custom/lldb-dap",
+    );
+    assert.strictEqual(
+      resolveLldbDapCommand({ lldbDapPath: "/custom/lldb-dap" }, host),
       "/custom/lldb-dap",
     );
     assert.ok(
       resolveLldbDapCommand({}).length > 0,
       "default lldb-dap command is non-empty",
+    );
+  });
+
+  test("strict lldb-dap resolver reports missing tools precisely", () => {
+    const host = {
+      env: { PATH: "" },
+      existsSync: () => false,
+      getSetting: () => undefined,
+      platform: "linux" as NodeJS.Platform,
+    };
+
+    assert.strictEqual(resolveLldbDapExecutable({}, host), undefined);
+    assert.strictEqual(
+      resolveLldbDapExecutable(
+        { lldbDapPath: "/missing/lldb-dap" },
+        host,
+      ),
+      undefined,
+    );
+    assert.strictEqual(
+      resolveLldbDapCommand({}, host),
+      "lldb-dap",
+      "compatibility resolver still returns a command name for old callers",
+    );
+    assert.match(
+      missingLldbDapMessage({ lldbDapPath: "/missing/lldb-dap" }),
+      /Configured lldbDapPath: \/missing\/lldb-dap\./,
     );
   });
 });

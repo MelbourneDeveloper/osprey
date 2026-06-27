@@ -206,19 +206,31 @@ export function resolveLldbDapCommand(
   config: any = {},
   host: LldbDapResolutionHost = {},
 ): string {
-  const setting = workspace
-    .getConfiguration("osprey")
-    .get<string>("debug.lldbDapPath");
-  const configured = config.lldbDapPath || host.getSetting?.() || setting;
-  if (configured) {
-    return configured;
-  }
+  const platform = host.platform ?? process.platform;
+  const lldbDapName = platform === "win32" ? "lldb-dap.exe" : "lldb-dap";
+  return resolveLldbDapExecutable(config, host) ?? lldbDapName;
+}
 
+export function resolveLldbDapExecutable(
+  config: any = {},
+  host: LldbDapResolutionHost = {},
+): string | undefined {
+  const setting = host.getSetting
+    ? host.getSetting()
+    : workspace.getConfiguration("osprey").get<string>("debug.lldbDapPath");
+  const configured = config.lldbDapPath || setting;
   const platform = host.platform ?? process.platform;
   const existsSync = host.existsSync ?? fs.existsSync;
   const env = host.env ?? process.env;
   const lldbDapName = platform === "win32" ? "lldb-dap.exe" : "lldb-dap";
   const legacyName = platform === "win32" ? "lldb-vscode.exe" : "lldb-vscode";
+  if (configured) {
+    if (looksLikePath(configured)) {
+      return existsSync(configured) ? configured : undefined;
+    }
+    return findExecutableOnPath(configured, env, existsSync);
+  }
+
   const onPath =
     findExecutableOnPath(lldbDapName, env, existsSync) ??
     findExecutableOnPath(legacyName, env, existsSync);
@@ -232,11 +244,11 @@ export function resolveLldbDapCommand(
       const resolved = String(
         xcrun("xcrun", ["-f", "lldb-dap"], { encoding: "utf8" }),
       ).trim();
-      if (resolved) {
+      if (resolved && existsSync(resolved)) {
         return resolved;
       }
     } catch {
-      // Fall through to common install locations and finally the bare command.
+      // Fall through to common install locations.
     }
   }
 
@@ -254,7 +266,18 @@ export function resolveLldbDapCommand(
           "/usr/local/opt/llvm/bin/lldb-vscode",
           "/usr/bin/lldb-vscode",
         ];
-  return commonCandidates.find(existsSync) ?? lldbDapName;
+  return commonCandidates.find(existsSync);
+}
+
+export function missingLldbDapMessage(config: any = {}): string {
+  const configured = config.lldbDapPath
+    ? ` Configured lldbDapPath: ${config.lldbDapPath}.`
+    : "";
+  return (
+    "lldb-dap was not found. Install LLVM/LLDB or set osprey.debug.lldbDapPath " +
+    "to an existing lldb-dap executable. Checked launch config, VS Code setting, PATH, " +
+    `xcrun, and common LLVM install paths.${configured}`
+  );
 }
 
 function compileDebugProgram(
@@ -427,9 +450,14 @@ export function activate(context: ExtensionContext) {
   // Register debug adapter
   const provider = debug.registerDebugAdapterDescriptorFactory("osprey", {
     createDebugAdapterDescriptor(session: any) {
-      return new DebugAdapterExecutable(
-        resolveLldbDapCommand(session?.configuration),
-      );
+      const command = resolveLldbDapExecutable(session?.configuration);
+      if (!command) {
+        const message = missingLldbDapMessage(session?.configuration);
+        outputChannel.appendLine(message);
+        void window.showErrorMessage(message);
+        return undefined;
+      }
+      return new DebugAdapterExecutable(command);
     },
   });
 
@@ -490,7 +518,6 @@ export function activate(context: ExtensionContext) {
           program: debugOutput,
           sourceProgram,
           cwd,
-          lldbDapPath: resolveLldbDapCommand(config),
         };
       },
     }),

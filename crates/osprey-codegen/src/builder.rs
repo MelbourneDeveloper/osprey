@@ -148,6 +148,7 @@ struct DebugState {
     dwarf_flag_id: usize,
     debug_version_flag_id: usize,
     ident_id: usize,
+    dwarf_version: u8,
     i64_type_id: usize,
     i32_type_id: usize,
     bool_type_id: usize,
@@ -173,6 +174,7 @@ impl DebugState {
             dwarf_flag_id: 4,
             debug_version_flag_id: 5,
             ident_id: 6,
+            dwarf_version: host_dwarf_version(),
             i64_type_id: 7,
             i32_type_id: 8,
             bool_type_id: 9,
@@ -297,8 +299,8 @@ impl DebugState {
                 self.subroutine_type_id, self.empty_id
             ),
             format!(
-                "!{} = !{{i32 2, !\"Dwarf Version\", i32 5}}",
-                self.dwarf_flag_id
+                "!{} = !{{i32 2, !\"Dwarf Version\", i32 {}}}",
+                self.dwarf_flag_id, self.dwarf_version
             ),
             format!(
                 "!{} = !{{i32 2, !\"Debug Info Version\", i32 3}}",
@@ -1081,4 +1083,8 @@ fn metadata_escape(text: &str) -> String {
         }
     }
     out
+}
+
+fn host_dwarf_version() -> u8 {
+    if cfg!(target_os = "macos") { 4 } else { 5 }
 }

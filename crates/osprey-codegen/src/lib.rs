@@ -137,15 +137,22 @@ mod tests {
 
     #[test]
     fn debug_compile_emits_source_level_metadata() {
-        let ir = debug_module("let x = 1\nprint(x)\n");
+        let ir = debug_module("fn add(a: int, b: int) -> int = a + b\nlet x = add(1, 2)\nprint(x)\n");
+        let expected_dwarf_version = if cfg!(target_os = "macos") { 4 } else { 5 };
+
         assert!(ir.contains("source_filename = \"/tmp/debug.osp\""));
         assert!(ir.contains("!llvm.dbg.cu = !{!"));
         assert!(ir.contains("!llvm.module.flags = !{!"));
         assert!(ir.contains("!DICompileUnit("));
+        assert!(ir.contains("!DIFile(filename: \"debug.osp\", directory: \"/tmp\")"));
+        assert!(ir.contains(&format!(
+            "!\"Dwarf Version\", i32 {expected_dwarf_version}"
+        )));
+        assert!(ir.contains("!DISubprogram(name: \"add\""));
         assert!(ir.contains("!DISubprogram(name: \"main\""));
         assert!(ir.contains("!DILocalVariable(name: \"x\""));
         assert!(ir.contains("@llvm.dbg.value"));
-        assert!(ir.contains("!DILocation(line: 1, column: 1"));
+        assert!(ir.contains("!DILocation(line: 2, column: 1"));
         assert!(ir.contains(", !dbg !"));
     }
 

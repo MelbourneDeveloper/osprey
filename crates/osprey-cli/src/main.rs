@@ -282,14 +282,21 @@ fn run_check(cli: &Cli, program: &osprey_ast::Program) -> ExitCode {
     ExitCode::FAILURE
 }
 
+fn reject_debug_wasm(debug: bool) -> Option<ExitCode> {
+    if debug {
+        eprintln!("error: --debug is currently supported only for --target=native");
+        return Some(ExitCode::from(2));
+    }
+    None
+}
+
 /// `--compile`: build the artifact at `-o` (or the source stem, `.wasm` for the
 /// wasm target) — a host executable via clang, or WebAssembly via wasm-ld.
 fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
     let out = output_path(&cli.path, cli.output.as_deref(), &cli.target);
     let result = if cli.target == "wasm32" {
-        if cli.debug {
-            eprintln!("error: --debug is currently supported only for --target=native");
-            return ExitCode::from(2);
+        if let Some(code) = reject_debug_wasm(cli.debug) {
+            return code;
         }
         wasm::build(&cli.path, program, &out)
     } else {
@@ -320,9 +327,8 @@ fn output_path(src: &str, output: Option<&str>, target: &str) -> PathBuf {
 /// runs the executable directly; wasm runs it under a WASI host (`wasmtime`).
 fn run_program(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
     if cli.target == "wasm32" {
-        if cli.debug {
-            eprintln!("error: --debug is currently supported only for --target=native");
-            return ExitCode::from(2);
+        if let Some(code) = reject_debug_wasm(cli.debug) {
+            return code;
         }
         return wasm::run(cli, program);
     }
@@ -650,6 +656,12 @@ mod tests {
             output_path("a/b.osp", Some("custom.wasm"), "wasm32"),
             PathBuf::from("custom.wasm")
         );
+    }
+
+    #[test]
+    fn debug_wasm_rejection_is_centralized() {
+        assert!(reject_debug_wasm(true).is_some());
+        assert!(reject_debug_wasm(false).is_none());
     }
 
     #[test]
