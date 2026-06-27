@@ -137,5 +137,5 @@ done
 echo "\n==> rendering report"
 python3 "$BENCHDIR/report.py" "$OUT" || { echo "report failed" >&2; exit 1; }
 rm -rf "$TMP"
-echo "==> done. See $OUT/results.md"
+echo "==> done. Open $OUT/results.html"
 exit $fail

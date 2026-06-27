@@ -96,13 +96,16 @@ codegen/runtime path is half-built.
 ## TODO
 
 - [x] Harness: build-once, correctness oracle, CPU (hyperfine) + peak RSS.
-- [x] `report.py`: CPU + relative-speed + peak-memory tables, geomean summary.
-- [x] `report.py`: **tuning-priorities** section — worst Osprey gap first (the work list).
+- [x] `report.py`: CPU + peak-memory tables, geomean-vs-each-language summary cards,
+      fastest-cell badging + Osprey-win stars.
 - [x] 18 cases × 5 languages, all source version-controlled under `cases/`.
 - [x] `make bench` target + `BENCH_FILTER`; `.gitignore` tracks source, ignores `results/`.
 - [x] Dev container: `ghc`, `ocaml`, `time`, hyperfine.
 - [x] README documents methodology, fairness caveats, the memory finding.
-- [x] Run full suite end-to-end → publish `results.md` numbers in README findings.
+- [x] Run full suite end-to-end → publish numbers in README findings.
+- [x] `report.py` renders a self-contained **HTML** report (`results.html`, Osprey
+      website CSS) and bakes the tables into the website `/benchmarks` page +
+      methodology; `results.md` retired. Generated mechanically — never hand-edited.
 - [x] **Add integer division** as the `intDiv` builtin (`/` stays float-only per
       spec) — codegen + types + `[BUILTIN-INTDIV]` spec + tested example.
 - [x] Add `collatz`, `digitsum`, `isqrt` cases (all 5 languages, verified vs C oracle).

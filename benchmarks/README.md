@@ -30,9 +30,15 @@ Results are written to `benchmarks/results/` (gitignored):
 
 | file | contents |
 |------|----------|
-| `results.md`   | human-readable CPU + memory tables and Osprey-relative slowdown |
+| `results.html` | self-contained HTML report — CPU + memory tables styled with the Osprey website CSS (open in a browser) |
 | `results.json` | the same data, structured, for tracking over time |
 | `hf/*.json`    | raw [hyperfine](https://github.com/sharkdp/hyperfine) exports per case |
+
+`make bench` also **bakes** the tables into the website
+(`website/src/_includes/benchmarks-tables.html`, committed) so the
+[`/benchmarks`](../website/src/benchmarks.md) page renders them at site-build
+time. Both the standalone report and the website page are generated mechanically
+by [`report.py`](report.py) — never hand-edit them.
 
 ## The benchmarks (18)
 
@@ -122,8 +128,7 @@ Compile commands (source of truth: [`run.sh`](run.sh)):
 ## Findings
 
 On the author's machine (Apple Silicon, macOS), geometric mean across the 18
-benchmarks (`results/results.md` has the live numbers and a ranked
-**tuning-priorities** table):
+benchmarks (open `results/results.html` for the live, per-case numbers):
 
 ```
 CPU:    Osprey ≈ 1.0× Rust, 1.1× C, 0.7× OCaml, 0.7× Haskell (geomean).
