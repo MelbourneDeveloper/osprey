@@ -501,7 +501,7 @@ mod tests {
                print(\"${join(ws, \"-\")} ${listLength(ls)}\")\n\
              }\n",
         );
-        assert!(ir.contains("@strlen"));
+        assert!(ir.contains("@osp_strlen"));
         assert!(ir.contains("osp_string_to_upper"));
         assert!(ir.contains("osp_parse_int_strict"));
         assert!(ir.contains("osp_string_codepoint_at"));

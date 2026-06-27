@@ -173,7 +173,7 @@ fn gen_arith(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     if op == "+" && (is_map(&l) || is_map(&r)) {
         return Ok(crate::collections::merge_handles(cg, &l, &r));
     }
-    // `+` with a string operand is concatenation: libc strlen/strcpy/strcat
+    // `+` with a string operand is concatenation: osp_strlen/strcpy/strcat
     // into a fresh malloc'd buffer.
     if op == "+" && (l.ty == LType::Str || r.ty == LType::Str) {
         return gen_str_concat(cg, l, r);
@@ -282,13 +282,16 @@ fn gen_checked_division(
     Ok(Value::result(reg, inner))
 }
 
-/// String concatenation: `malloc(strlen a + strlen b + 1)` then `strcpy`+`strcat`
-/// (libc), promoting a non-string operand through `toString` first.
+/// String concatenation: `malloc(osp_strlen a + osp_strlen b + 1)` then
+/// `strcpy`+`strcat`, promoting a non-string operand through `toString` first.
+/// Length comes from the runtime's `osp_strlen` (returns `i64` on every target)
+/// rather than libc `strlen` (returns `size_t`, which is 32-bit on wasm32) so
+/// the emitted IR is pointer-width-stable. [BUILTIN-STRING-LENGTH]
 fn gen_str_concat(cg: &mut Codegen, l: Value, r: Value) -> Result<Value> {
     let ls = to_string_value(cg, l)?;
     let rs = to_string_value(cg, r)?;
-    let ll = cg.call("i64", "strlen", "i8*", &[&ls.operand]);
-    let rl = cg.call("i64", "strlen", "i8*", &[&rs.operand]);
+    let ll = cg.call("i64", "osp_strlen", "i8*", &[&ls.operand]);
+    let rl = cg.call("i64", "osp_strlen", "i8*", &[&rs.operand]);
     let sum = cg.emit_reg(format!("add i64 {ll}, {rl}"));
     let total = cg.emit_reg(format!("add i64 {sum}, 1"));
     let buf = cg.heap_alloc(&total);

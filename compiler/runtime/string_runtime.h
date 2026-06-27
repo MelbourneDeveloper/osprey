@@ -20,6 +20,11 @@ char *osp_string_empty_internal(void);
 int osp_is_ws_internal(unsigned char c);
 
 /* scalar API — see string_runtime.c */
+/* Byte length as a fixed-width int64. Wraps libc strlen so the size_t->int64
+ * cast happens in C (correct on every target), keeping the emitted IR
+ * pointer-width-stable — libc strlen returns size_t, 32-bit on wasm32 but
+ * 64-bit on native. [BUILTIN-STRING-LENGTH] */
+int64_t osp_strlen(const char *s);
 int64_t osp_string_is_empty(const char *s);
 int64_t osp_string_starts_with(const char *s, const char *prefix);
 int64_t osp_string_ends_with(const char *s, const char *suffix);

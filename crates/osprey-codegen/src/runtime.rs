@@ -93,7 +93,10 @@ pub(crate) fn gen_print(cg: &mut Codegen, v: Value) -> Result<Value> {
 pub(crate) fn int_to_string(cg: &mut Codegen, v: Value) -> Result<Value> {
     cg.add_extern("declare i32 @sprintf(i8*, i8*, ...)");
     let i = as_i64(cg, v)?;
-    let fmt = cg.string_constant("%ld");
+    // `%lld` (not `%ld`): Osprey `int` is i64, and on ILP32 targets like wasm32
+    // `long` is 32-bit while `long long` is 64-bit everywhere. `%lld` reads the
+    // full i64 on every target; on LP64 (native) it is identical to `%ld`.
+    let fmt = cg.string_constant("%lld");
     let buf = cg.heap_alloc("32");
     let tmp = cg.fresh_reg();
     cg.emit(format!(
