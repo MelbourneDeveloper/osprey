@@ -1,3 +1,266 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Osprey benchmarks</title>
+<style>/* ============================================================================
+   Osprey design tokens — Material-3 dark theme (authoritative: docs/designs/*).
+   One source of truth for colour, type, spacing, radius. Dark-only by design.
+   ============================================================================ */
+:root {
+  /* ---- Surfaces ---- */
+  --bg: #0c1325;
+  --surface: #0c1325;
+  --surface-lowest: #070d1f;
+  --surface-low: #151b2d;
+  --surface-container: #191f32;
+  --surface-high: #23293d;
+  --surface-highest: #2e3448;
+
+  /* ---- Foreground ---- */
+  --on-surface: #dce1fb;
+  --on-surface-variant: #bdc8cd;
+
+  /* ---- Accents ---- */
+  --primary: #bdeeff;
+  --primary-container: #77d7f4;
+  --on-primary: #003642;
+  --on-primary-container: #005d70;
+  --secondary: #bbc5ec;
+  --secondary-container: #3e4868;
+  --on-secondary-container: #adb7dd;
+  --tertiary: #ffe1c0;
+  --tertiary-dim: #fbba62;
+  --tertiary-container: #ffbe65;
+  --outline: #889297;
+  --outline-variant: #3e484c;
+  --error: #ffb4ab;
+
+  /* ---- Glass panel ---- */
+  --glass-bg: rgba(13, 24, 54, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-blur: blur(12px);
+
+  /* ---- Typography ---- */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+
+  --fs-display: clamp(2.4rem, 5.2vw, 4rem);
+  --fs-h1: clamp(1.9rem, 4vw, 2.5rem);
+  --fs-h2: clamp(1.6rem, 3vw, 2.1rem);
+  --fs-h3: 1.25rem;
+  --fs-body-lg: 1.125rem;
+  --fs-body: 1rem;
+  --fs-code: 0.875rem;
+  --fs-label: 0.75rem;
+  --lh-tight: 1.2;
+  --lh-body: 1.6;
+
+  /* ---- Spacing (techdoc structural CSS reads --space-*) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* ---- Layout (techdoc structural CSS reads these) ---- */
+  --max-width: 1200px;
+  --content-width: 820px;
+  --sidebar-width: 250px;
+  --header-height: 64px;
+  --gutter: 24px;
+  --pad-x: clamp(1rem, 4vw, 3rem);
+
+  /* ---- Radius ---- */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ---- Motion ---- */
+  --transition-fast: 150ms ease;
+  --transition: 250ms ease;
+
+  /* ---- techdoc colour contract (its structural CSS references these) ---- */
+  --color-bg: var(--bg);
+  --color-text: var(--on-surface);
+  --color-primary: var(--primary-container);
+  --color-border: var(--outline-variant);
+  --color-muted: var(--on-surface-variant);
+}
+
+/* ============================================================================
+   Base elements — dark Material-3 surface. Content is always visible (no JS
+   dependency); entrance motion is additive only.
+   ============================================================================ */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--header-height) + var(--space-4));
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--on-surface);
+  background-color: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+svg,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Centred content column shared by every section. */
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-inline: auto;
+  padding-inline: var(--pad-x);
+}
+
+/* ---- Headings ---- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--on-surface);
+  line-height: var(--lh-tight);
+  font-weight: 700;
+  margin: 0 0 var(--space-4);
+  letter-spacing: -0.01em;
+}
+h1 { font-size: var(--fs-h1); }
+h2 { font-size: var(--fs-h2); }
+h3 { font-size: var(--fs-h3); }
+h4 { font-size: 1.05rem; }
+
+p {
+  margin: 0 0 var(--space-4);
+}
+
+strong { color: var(--on-surface); font-weight: 600; }
+em { color: inherit; }
+
+/* ---- Links ---- */
+a {
+  color: var(--primary-container);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+a:hover { color: var(--primary); }
+
+/* ---- Lists ---- */
+ul,
+ol { margin: 0 0 var(--space-4); padding-left: 1.4rem; }
+li { margin: 0.35rem 0; }
+
+/* ---- Inline + block code ---- */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+:not(pre) > code {
+  background: var(--surface-container);
+  color: var(--primary);
+  padding: 0.15em 0.4em;
+  border-radius: var(--radius-sm);
+}
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  line-height: 1.6;
+  background: var(--surface-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  margin: var(--space-6) 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0.7rem 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform var(--transition-fast), background var(--transition-fast),
+    box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-lg { padding: 0.95rem 1.6rem; font-size: 1rem; }
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.btn-primary:hover {
+  color: var(--on-primary);
+  box-shadow: 0 0 24px rgba(119, 215, 244, 0.35);
+}
+.btn-secondary {
+  background: transparent;
+  border-color: var(--primary-container);
+  color: var(--primary);
+}
+.btn-secondary:hover {
+  background: rgba(119, 215, 244, 0.1);
+  color: var(--primary);
+}
+
+/* ---- Selection + scrollbars ---- */
+::selection {
+  background: var(--primary-container);
+  color: var(--on-primary);
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--surface-lowest); }
+::-webkit-scrollbar-thumb {
+  background: var(--surface-highest);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--outline-variant); }
+
+/* ---- Entrance motion (additive — content is visible without JS) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .animate-on-scroll {
+    animation: fade-up 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
 /* ============================================================================
    Components — site shell, home sections, prose pages, blog index.
    Built on the techdoc structural shell (.site-header/.nav/.site-footer) and
@@ -649,3 +912,16 @@
   .blog-posts { grid-template-columns: 1fr; }
   .blog-posts .card:first-child .card-title { font-size: var(--fs-h3); }
 }
+</style></head>
+<body><main class="container" style="padding-top:3rem;padding-bottom:4rem">
+<h1>Osprey cross-language benchmarks</h1>
+<p>Osprey, Rust, C, OCaml, Haskell — same naive algorithm and parameters in every language, native
+release builds, output checked against an integer oracle. CPU = hyperfine
+mean&nbsp;±&nbsp;stddev; memory = peak resident set size. Generated mechanically
+by <code>benchmarks/report.py</code>; re-run with <code>make bench</code>.</p>
+<div class="bench-summary"><div class="bench-card is-accent"><span class="big">6</span><span class="lbl">CPU wins (fastest of all)</span></div><div class="bench-card is-good"><span class="big">0.98×</span><span class="lbl">CPU vs Rust</span></div><div class="bench-card is-good"><span class="big">1.05×</span><span class="lbl">CPU vs C</span></div><div class="bench-card is-good"><span class="big">0.71×</span><span class="lbl">CPU vs OCaml</span></div><div class="bench-card is-good"><span class="big">0.67×</span><span class="lbl">CPU vs Haskell</span></div></div><p>Osprey is the fastest of all five languages on <strong>digitsum, factorial, hanoi, josephus, primes, tak</strong>. Lower is better; ★ marks an Osprey win.</p>
+<h2>CPU time</h2>
+<div class="comparison-table"><table><thead><tr><th>Benchmark</th><th class="num col-osprey">Osprey</th><th class="num">Rust</th><th class="num">C</th><th class="num">OCaml</th><th class="num">Haskell</th></tr></thead><tbody><tr><td>ackermann</td><td class="num col-osprey">127.9&nbsp;ms</td><td class="num">132.5&nbsp;ms</td><td class="num">128.0&nbsp;ms</td><td class="num">113.6&nbsp;ms</td><td class="num best">65.6&nbsp;ms</td></tr><tr><td>binarytrees</td><td class="num col-osprey">420.3&nbsp;ms</td><td class="num">713.2&nbsp;ms</td><td class="num">348.9&nbsp;ms</td><td class="num">50.7&nbsp;ms</td><td class="num best">16.7&nbsp;ms</td></tr><tr><td>coins</td><td class="num col-osprey">71.7&nbsp;ms</td><td class="num">76.2&nbsp;ms</td><td class="num">71.1&nbsp;ms</td><td class="num">93.6&nbsp;ms</td><td class="num best">52.3&nbsp;ms</td></tr><tr><td>collatz</td><td class="num col-osprey">12.3&nbsp;ms</td><td class="num">11.4&nbsp;ms</td><td class="num best">9.4&nbsp;ms</td><td class="num">54.2&nbsp;ms</td><td class="num">39.3&nbsp;ms</td></tr><tr><td>coprime</td><td class="num col-osprey">62.4&nbsp;ms</td><td class="num">60.9&nbsp;ms</td><td class="num best">58.5&nbsp;ms</td><td class="num">88.1&nbsp;ms</td><td class="num">100.0&nbsp;ms</td></tr><tr><td>digitsum</td><td class="num col-osprey win">4.9&nbsp;ms ★</td><td class="num">5.2&nbsp;ms</td><td class="num">5.3&nbsp;ms</td><td class="num">19.0&nbsp;ms</td><td class="num">29.1&nbsp;ms</td></tr><tr><td>factorial</td><td class="num col-osprey win">33.5&nbsp;ms ★</td><td class="num">34.8&nbsp;ms</td><td class="num">34.6&nbsp;ms</td><td class="num">50.2&nbsp;ms</td><td class="num">53.9&nbsp;ms</td></tr><tr><td>fib</td><td class="num col-osprey">21.1&nbsp;ms</td><td class="num best">17.8&nbsp;ms</td><td class="num">18.6&nbsp;ms</td><td class="num">24.3&nbsp;ms</td><td class="num">49.8&nbsp;ms</td></tr><tr><td>gcdsum</td><td class="num col-osprey">81.1&nbsp;ms</td><td class="num">79.8&nbsp;ms</td><td class="num best">79.3&nbsp;ms</td><td class="num">101.6&nbsp;ms</td><td class="num">103.3&nbsp;ms</td></tr><tr><td>hanoi</td><td class="num col-osprey win">38.4&nbsp;ms ★</td><td class="num">38.8&nbsp;ms</td><td class="num">39.3&nbsp;ms</td><td class="num">61.6&nbsp;ms</td><td class="num">55.8&nbsp;ms</td></tr><tr><td>isqrt</td><td class="num col-osprey">13.4&nbsp;ms</td><td class="num">11.2&nbsp;ms</td><td class="num best">10.6&nbsp;ms</td><td class="num">20.9&nbsp;ms</td><td class="num">40.5&nbsp;ms</td></tr><tr><td>josephus</td><td class="num col-osprey win">32.8&nbsp;ms ★</td><td class="num">33.5&nbsp;ms</td><td class="num">33.4&nbsp;ms</td><td class="num">41.2&nbsp;ms</td><td class="num">44.5&nbsp;ms</td></tr><tr><td>mutual</td><td class="num col-osprey">13.4&nbsp;ms</td><td class="num">13.0&nbsp;ms</td><td class="num best">12.8&nbsp;ms</td><td class="num">28.9&nbsp;ms</td><td class="num">40.5&nbsp;ms</td></tr><tr><td>nestedloop</td><td class="num col-osprey">44.8&nbsp;ms</td><td class="num">46.4&nbsp;ms</td><td class="num best">44.5&nbsp;ms</td><td class="num">57.1&nbsp;ms</td><td class="num">63.9&nbsp;ms</td></tr><tr><td>pascal</td><td class="num col-osprey">27.7&nbsp;ms</td><td class="num">27.7&nbsp;ms</td><td class="num best">27.6&nbsp;ms</td><td class="num">44.6&nbsp;ms</td><td class="num">62.3&nbsp;ms</td></tr><tr><td>powmod</td><td class="num col-osprey">23.4&nbsp;ms</td><td class="num">22.7&nbsp;ms</td><td class="num best">22.4&nbsp;ms</td><td class="num">59.6&nbsp;ms</td><td class="num">57.4&nbsp;ms</td></tr><tr><td>primes</td><td class="num col-osprey win">6.3&nbsp;ms ★</td><td class="num">6.7&nbsp;ms</td><td class="num">6.6&nbsp;ms</td><td class="num">8.8&nbsp;ms</td><td class="num">15.8&nbsp;ms</td></tr><tr><td>tak</td><td class="num col-osprey win">32.7&nbsp;ms ★</td><td class="num">32.8&nbsp;ms</td><td class="num">32.9&nbsp;ms</td><td class="num">45.1&nbsp;ms</td><td class="num">64.4&nbsp;ms</td></tr></tbody></table></div>
+<h2>Peak memory</h2>
+<div class="comparison-table"><table><thead><tr><th>Benchmark</th><th class="num col-osprey">Osprey</th><th class="num">Rust</th><th class="num">C</th><th class="num">OCaml</th><th class="num">Haskell</th></tr></thead><tbody><tr><td>ackermann</td><td class="num col-osprey best">1.6&nbsp;MiB</td><td class="num">1.7&nbsp;MiB</td><td class="num best">1.6&nbsp;MiB</td><td class="num">2.6&nbsp;MiB</td><td class="num">15.1&nbsp;MiB</td></tr><tr><td>binarytrees</td><td class="num col-osprey">905.0&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num best">1.7&nbsp;MiB</td><td class="num">5.1&nbsp;MiB</td><td class="num">11.0&nbsp;MiB</td></tr><tr><td>coins</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>collatz</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>coprime</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>digitsum</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>factorial</td><td class="num col-osprey best">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>fib</td><td class="num col-osprey best">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>gcdsum</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>hanoi</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>isqrt</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>josephus</td><td class="num col-osprey best">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>mutual</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>nestedloop</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.0&nbsp;MiB</td></tr><tr><td>pascal</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>powmod</td><td class="num col-osprey best">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>primes</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr><tr><td>tak</td><td class="num col-osprey">1.4&nbsp;MiB</td><td class="num">1.5&nbsp;MiB</td><td class="num best">1.4&nbsp;MiB</td><td class="num">2.2&nbsp;MiB</td><td class="num">11.1&nbsp;MiB</td></tr></tbody></table></div>
+</main></body></html>
