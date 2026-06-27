@@ -304,8 +304,8 @@ impl Lowerer<'_> {
         // that trailing expression as an `expression_statement`; recover it as
         // the block value so the type of `{ ...; r }` is the type of `r`.
         if value.is_none() {
-            if let Some(Stmt::Expr(_)) = statements.last() {
-                if let Some(Stmt::Expr(e)) = statements.pop() {
+            if matches!(statements.last(), Some(Stmt::Expr { .. })) {
+                if let Some(Stmt::Expr { value: e, .. }) = statements.pop() {
                     value = Some(Box::new(e));
                 }
             }

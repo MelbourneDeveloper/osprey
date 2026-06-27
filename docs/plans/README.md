@@ -14,6 +14,7 @@ plan ends with a TODO checklist.
 | [0008](0008-algebraic-effects-resume.md) | Effect `resume` / continuations | effects | Handlers work as value substitution; no `resume` | High |
 | [0009](0009-lsp-context-and-cross-file.md) | LSP context-awareness & cross-file | lsp | Variable hover (type+docs) landed; completion/sig-help still identifier-only, single-file | Medium |
 | [0010](0010-cross-language-benchmark-suite.md) | Cross-language benchmark suite | benchmarks | 18 cases × 5 langs shipped; `intDiv` added; feature-blocked classics (arrays, float) pending | Low–High |
+| [0012](0012-osprey-debugger.md) | Modern Osprey debugger | compiler/editor/runtime | Spec written; Phase 1 source line debugging in progress | High |
 
 These were surfaced from `CodegenError::unsupported(...)` call sites, the
 `## Status` sections of the language specs (`docs/specs/`), and runtime `TODO`

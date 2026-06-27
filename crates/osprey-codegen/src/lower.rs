@@ -72,7 +72,9 @@ pub fn compile_program(program: &Program) -> Result<String> {
                 body,
                 ..
             } => gen_function(&mut cg, name, parameters, body)?,
-            Stmt::Let { .. } | Stmt::Assignment { .. } | Stmt::Expr(_) => top_level.push(stmt),
+            Stmt::Let { .. } | Stmt::Assignment { .. } | Stmt::Expr { .. } => {
+                top_level.push(stmt);
+            }
             _ => {}
         }
     }
@@ -181,8 +183,10 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
         // (the `mut` auto-unwrap rule: the cell holds the success payload).
         Stmt::Let { name, value, .. } => gen_bind(cg, name, value, false),
         Stmt::Assignment { name, value, .. } => gen_bind(cg, name, value, true),
-        Stmt::Expr(e) => {
-            let _ = gen_expr(cg, e)?;
+        Stmt::Expr { value, position } => {
+            let previous = cg.set_debug_position(*position);
+            let _ = gen_expr(cg, value)?;
+            cg.restore_debug_position(previous);
             Ok(())
         }
         _ => Err(CodegenError::unsupported("statement in block/main")),

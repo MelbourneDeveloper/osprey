@@ -200,7 +200,12 @@ pub enum Stmt {
         body: Vec<Stmt>,
     },
     /// A bare expression statement.
-    Expr(Expr),
+    Expr {
+        /// The expression being evaluated for side effects.
+        value: Expr,
+        /// Source position, if recorded.
+        position: Option<Position>,
+    },
 }
 
 /// A named argument `name: value` in a call.

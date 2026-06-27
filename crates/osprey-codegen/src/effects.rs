@@ -259,7 +259,7 @@ fn scan_stmt(s: &Stmt, muts: &mut BTreeSet<String>, captured: &mut BTreeSet<Stri
             let _ = muts.insert(name.clone());
             scan_expr(value, muts, captured);
         }
-        Stmt::Expr(e) => scan_expr(e, muts, captured),
+        Stmt::Expr { value, .. } => scan_expr(value, muts, captured),
         _ => {}
     }
 }

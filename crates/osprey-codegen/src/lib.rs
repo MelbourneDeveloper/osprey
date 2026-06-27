@@ -58,7 +58,9 @@ fn stmt_idents(s: &osprey_ast::Stmt, out: &mut std::collections::BTreeSet<String
         Stmt::Let { value, .. } | Stmt::Assignment { value, .. } => {
             freevars::free_idents(value, out);
         }
-        Stmt::Expr(e) | Stmt::Function { body: e, .. } => freevars::free_idents(e, out),
+        Stmt::Expr { value: e, .. } | Stmt::Function { body: e, .. } => {
+            freevars::free_idents(e, out);
+        }
         Stmt::Module { body, .. } => {
             for inner in body {
                 stmt_idents(inner, out);
@@ -208,12 +210,15 @@ mod tests {
         // value reaches codegen only through the UFCS rewrite, so a synthetic
         // raw MethodCall node is unsupported.
         let program = osprey_ast::Program {
-            statements: vec![osprey_ast::Stmt::Expr(osprey_ast::Expr::MethodCall {
-                target: Box::new(osprey_ast::Expr::Integer(1)),
-                method: String::from("frobnicate"),
-                arguments: Vec::new(),
-                named_arguments: Vec::new(),
-            })],
+            statements: vec![osprey_ast::Stmt::Expr {
+                value: osprey_ast::Expr::MethodCall {
+                    target: Box::new(osprey_ast::Expr::Integer(1)),
+                    method: String::from("frobnicate"),
+                    arguments: Vec::new(),
+                    named_arguments: Vec::new(),
+                },
+                position: None,
+            }],
         };
         let err = compile_program(&program).unwrap_err();
         assert!(matches!(err, CodegenError::Unsupported(_)));

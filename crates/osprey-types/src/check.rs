@@ -183,8 +183,8 @@ impl Checker {
                 value,
                 position,
             } => self.check_assignment(name, value, env, *position),
-            Stmt::Expr(e) => {
-                let _ = self.infer_expr(e, env);
+            Stmt::Expr { value, .. } => {
+                let _ = self.infer_expr(value, env);
             }
             _ => {}
         }
