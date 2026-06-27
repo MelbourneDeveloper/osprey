@@ -290,15 +290,18 @@
 .comparison-table { overflow-x: auto; }
 .comparison-table table {
   width: 100%;
+  min-width: 40rem;
   border-collapse: collapse;
   border: 1px solid var(--outline-variant);
   border-radius: var(--radius);
   overflow: hidden;
   font-size: 0.95rem;
 }
-.comparison-table th,
-.comparison-table td {
-  padding: var(--space-3) var(--space-4);
+/* `table` in the selector keeps these ahead of the `.prose td` defaults that
+   would otherwise win on a source-order tie inside an `<article class="prose">`. */
+.comparison-table table th,
+.comparison-table table td {
+  padding: var(--space-2) var(--space-4);
   text-align: left;
   border-bottom: 1px solid var(--outline-variant);
 }
