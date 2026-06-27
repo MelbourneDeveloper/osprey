@@ -31,14 +31,19 @@ RUN cargo build --release -p osprey-cli
 # Runtime stage
 FROM node:20-bookworm
 
-# Install runtime dependencies including LLVM, compiler toolchain, and utilities
+# Install runtime dependencies including LLVM, compiler toolchain, and utilities.
+# LLVM/clang MUST be >= 15: osprey-codegen emits the swappable-allocator
+# declaration `@osp_alloc` with the `allockind(...)` / "alloc-family" allocator
+# attributes (osprey-codegen builder.rs OSP_ALLOC_DECL, [MEM-BACKENDS]), which
+# are an LLVM 15 feature. clang-14 rejects them with "expected top-level entity"
+# and fails to compile every program. clang-16 is the newest in Debian bookworm.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     ca-certificates \
     wget \
-    llvm-14 \
-    llvm-14-dev \
-    clang-14 \
+    llvm-16 \
+    llvm-16-dev \
+    clang-16 \
     gcc \
     build-essential \
     libssl-dev \
@@ -47,10 +52,10 @@ RUN apt-get update \
     pkg-config \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 60
+    && update-alternatives --install /usr/bin/clang clang /usr/bin/clang-16 60
 
-# Add LLVM14 tools to PATH so Osprey compiler can find them
-ENV PATH="/usr/lib/llvm-14/bin:${PATH}"
+# Add LLVM16 tools to PATH so Osprey compiler can find them
+ENV PATH="/usr/lib/llvm-16/bin:${PATH}"
 
 # Create non-root user for security
 RUN groupadd -g 1001 nodejs && \
