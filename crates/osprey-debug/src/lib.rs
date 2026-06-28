@@ -90,6 +90,17 @@ mod tests {
     }
 
     #[test]
+    fn debug_source_falls_back_for_a_rootless_path() {
+        // The filesystem root has neither a file name nor a parent, so both
+        // fallbacks fire: a stable basename and the current directory. This
+        // pins the NO-PLACEHOLDER fallback values, not just their execution.
+        let src = DebugSource::from_path("/");
+        assert_eq!(src.filename, "input.osp");
+        assert_eq!(src.directory, ".");
+        assert_eq!(src.path(), PathBuf::from("./input.osp"));
+    }
+
+    #[test]
     fn debug_build_selects_flags() {
         assert_eq!(
             DebugBuild::OFF.opt_flag("-O2".to_string(), Some("-O0".to_string())),

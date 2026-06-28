@@ -18,6 +18,20 @@ import {
   missingLldbDapMessage,
   deactivate,
 } from "../../client/src/extension";
+import {
+  extensionRoot,
+  resolveBuiltOsprey,
+  resolveRequiredLldbDap,
+} from "./osprey-test-env";
+import {
+  clearDebugBreakpoints,
+  getScopes,
+  getVariables,
+  setSourceBreakpoints,
+  waitForDebugSessionEnd,
+  waitForDebugSessionStart,
+  waitForStop,
+} from "./dap-harness";
 
 const extensionId = "nimblesite.osprey";
 
@@ -26,8 +40,7 @@ const extensionId = "nimblesite.osprey";
 // extension root (it is gitignored as a build-time artifact); we replicate that
 // here so the Shipwright version handshake in activate() runs under test
 // instead of being skipped. Staging happens at module load — before any test
-// triggers (lazy) activation.
-const extensionRoot = path.resolve(__dirname, "..", "..", "..");
+// triggers (lazy) activation. `extensionRoot` is imported from ./osprey-test-env.
 const stagedManifestPath = path.join(extensionRoot, "shipwright.json");
 const repoRootManifestPath = path.resolve(
   extensionRoot,
@@ -48,193 +61,11 @@ let manifestWasStaged = false;
   }
 })();
 
-// resolveOspreyOnPath returns the absolute path of the `osprey` binary the test
-// harness staged on PATH (the same one the LSP would otherwise find), or
-// undefined if it cannot be located. Used to exercise the explicit
-// `server.compilerPath` branch of resolveServerCommand before activation.
-function resolveOspreyOnPath(): string | undefined {
-  const exe = process.platform === "win32" ? "osprey.exe" : "osprey";
-  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!dir) {
-      continue;
-    }
-    const candidate = path.join(dir, exe);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
-// resolveBuiltOsprey returns the binary the language client should actually be
-// launched against in tests. It PREFERS the freshly-built dev compiler under
-// the repo (target/release/osprey — the `make build` output that speaks the
-// current LSP protocol) over any older `osprey` on PATH. A stale PATH binary
-// (e.g. a months-old global install) predates the `lsp` subcommand and makes
-// the client fail to start, which is exactly what would silently break every
-// language feature — so the live-LSP suites must not depend on it. Falls back to
-// the PATH binary, then undefined.
-function resolveBuiltOsprey(): string | undefined {
-  const exe = process.platform === "win32" ? "osprey.exe" : "osprey";
-  // The compiled test lives at <ext>/out/test/suite; the repo root is the
-  // parent of the extension root (resolved once at module scope as
-  // `extensionRoot`). The dev compiler lands at <repo>/target/release/osprey.
-  const built = path.resolve(extensionRoot, "..", "target", "release", exe);
-  return fs.existsSync(built) ? built : resolveOspreyOnPath();
-}
-
-function resolveRequiredLldbDap(): string {
-  const command = resolveLldbDapExecutable({});
-  if (command && fs.existsSync(command)) {
-    return command;
-  }
-  assert.fail(
-    `lldb-dap is required for the Osprey VSIX debugger E2E test; resolved "${command}" but it was not executable`,
-  );
-}
-
-function clearDebugBreakpoints(): void {
-  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
-}
-
-function setSourceBreakpoints(filePath: string, lines: number[]): void {
-  clearDebugBreakpoints();
-  vscode.debug.addBreakpoints(
-    lines.map(
-      (line) =>
-        new vscode.SourceBreakpoint(
-          new vscode.Location(
-            vscode.Uri.file(filePath),
-            new vscode.Position(line - 1, 0),
-          ),
-        ),
-    ),
-  );
-}
-
-async function waitForDebugSessionStart(
-  timeoutMs = 30_000,
-): Promise<vscode.DebugSession> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      disposable.dispose();
-      reject(new Error(`Debug session did not start within ${timeoutMs}ms`));
-    }, timeoutMs);
-    const disposable = vscode.debug.onDidStartDebugSession((session) => {
-      clearTimeout(timer);
-      disposable.dispose();
-      resolve(session);
-    });
-  });
-}
-
-async function waitForDebugSessionEnd(
-  timeoutMs = 30_000,
-  sessionId?: string,
-): Promise<void> {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    const active = vscode.debug.activeDebugSession;
-    if (!active || (sessionId && active.id !== sessionId)) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Debug session did not end within ${timeoutMs}ms`);
-}
-
-async function getStackTrace(
-  session: vscode.DebugSession,
-  threadId: number,
-): Promise<{
-  stackFrames: {
-    id: number;
-    name: string;
-    source?: { path?: string };
-    line: number;
-    column: number;
-  }[];
-}> {
-  return session.customRequest("stackTrace", {
-    threadId,
-    startFrame: 0,
-    levels: 20,
-  }) as Promise<{
-    stackFrames: {
-      id: number;
-      name: string;
-      source?: { path?: string };
-      line: number;
-      column: number;
-    }[];
-  }>;
-}
-
-async function getScopes(
-  session: vscode.DebugSession,
-  frameId: number,
-): Promise<{
-  scopes: { name: string; variablesReference: number; expensive?: boolean }[];
-}> {
-  return session.customRequest("scopes", { frameId }) as Promise<{
-    scopes: { name: string; variablesReference: number; expensive?: boolean }[];
-  }>;
-}
-
-async function getVariables(
-  session: vscode.DebugSession,
-  variablesReference: number,
-): Promise<{
-  variables: {
-    name: string;
-    value: string;
-    type?: string;
-    variablesReference: number;
-  }[];
-}> {
-  return session.customRequest("variables", { variablesReference }) as Promise<{
-    variables: {
-      name: string;
-      value: string;
-      type?: string;
-      variablesReference: number;
-    }[];
-  }>;
-}
-
-async function waitForStop(
-  session: vscode.DebugSession,
-  timeoutMs = 30_000,
-): Promise<{
-  threadId: number;
-  stack: Awaited<ReturnType<typeof getStackTrace>>;
-}> {
-  const started = Date.now();
-  let lastError = "";
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const threadsResponse = (await session.customRequest("threads")) as {
-        threads?: { id: number }[];
-      };
-      for (const thread of threadsResponse.threads ?? []) {
-        try {
-          const stack = await getStackTrace(session, thread.id);
-          if (stack.stackFrames.length > 0) {
-            return { threadId: thread.id, stack };
-          }
-        } catch (error) {
-          lastError = error instanceof Error ? error.message : String(error);
-        }
-      }
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(
-    `Timed out waiting for debugger stop after ${timeoutMs}ms (${lastError})`,
-  );
-}
+// The DAP test harness (breakpoints, session-lifecycle waiters, stackTrace /
+// scopes / variables, waitForStop) and the osprey/lldb-dap binary resolution
+// now live in ./dap-harness and ./osprey-test-env — the single shared copy that
+// mirrors @nimblesite/lspkit-debug. They are imported above; nothing is
+// re-derived here. [DEBUGGER-REUSE]
 
 suite("Osprey Shipwright Activation Coverage", () => {
   const settle = (ms: number) =>

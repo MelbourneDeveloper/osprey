@@ -145,6 +145,25 @@
         "language": "osprey"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ospreyDebug",
+          "title": "Osprey Debug",
+          "icon": "icon.png"
+        }
+      ]
+    },
+    "views": {
+      "ospreyDebug": [
+        {
+          "id": "ospreyDebugView",
+          "name": "Program",
+          "icon": "icon.png",
+          "contextualTitle": "Osprey Debug"
+        }
+      ]
+    },
     "debuggers": [
       {
         "type": "osprey",

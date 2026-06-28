@@ -20,6 +20,7 @@ import {
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
+import { registerOspreyDebugPanel } from "./debug-panel";
 
 // @nimblesite/shipwright-vscode is ESM-only; this extension is CommonJS, so it
 // is loaded via dynamic import() (never a static require) inside activate().
@@ -462,6 +463,11 @@ export function activate(context: ExtensionContext) {
   });
 
   context.subscriptions.push(provider);
+
+  // Register the Osprey Debug panel (call stack, locals, program details, and
+  // the reserved CPU/memory profiling surfaces). It tracks the live session and
+  // refreshes on every stop.
+  registerOspreyDebugPanel(context);
 
   // Register debug configuration provider
   context.subscriptions.push(
