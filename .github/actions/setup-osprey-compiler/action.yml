@@ -35,25 +35,41 @@ runs:
         key: ${{ runner.os }}-cargo-osprey-${{ hashFiles('Cargo.lock') }}
         restore-keys: ${{ runner.os }}-cargo-osprey-
 
-    - name: Install clang/LLVM, lldb, OpenSSL and SQLite (Linux)
+    - name: Install clang/LLVM, lldb-dap, OpenSSL and SQLite (Linux)
       if: runner.os == 'Linux'
       shell: bash
       # clang links the osprey-emitted IR; libssl-dev/libsqlite3-dev satisfy the
       # HTTP and FFI-database runtimes the examples link; zsh runs the
-      # differential harness; lldb provides lldb-dap, which backs the VS Code
-      # debugger end-to-end tests (osprey --debug -> lldb-dap).
+      # differential harness. lldb-dap backs the VS Code debugger end-to-end
+      # tests (osprey --debug -> lldb-dap).
+      #
+      # [DEBUGGER-LLDB-DAP-VERSION] The distro lldb on ubuntu-latest is lldb 18,
+      # whose lldb-dap *DAP server* (NOT the DWARF reader — liblldb 18 reads the
+      # osprey-emitted debug info correctly) is buggy on x86_64: it reports a
+      # stopped frame's source path as "." and ignores breakpoint conditions.
+      # Both are fixed from lldb-dap 19 onward (developers run lldb-dap 22 on
+      # macOS, where the same suite passes). Pull a modern lldb-dap from
+      # apt.llvm.org and pin /usr/bin/lldb-dap to it; keep clang/llvm 18 for the
+      # C runtime build. The distro lldb is a last-resort fallback so a mirror
+      # hiccup is loud (debugger tests fail) rather than silently degraded.
       run: |
+        set -euo pipefail
         sudo apt-get update
-        sudo apt-get install -y clang llvm lldb libssl-dev libsqlite3-dev pkg-config zsh
+        sudo apt-get install -y clang llvm libssl-dev libsqlite3-dev pkg-config zsh wget gnupg
         clang --version
-        # Expose lldb-dap at /usr/bin/lldb-dap — the package may ship it only under
-        # a versioned LLVM bin dir — so the extension's PATH/`/usr/bin` resolver
-        # finds it and the debugger E2E run (rather than failing as "not found").
-        if ! command -v lldb-dap >/dev/null 2>&1; then
-          DAP="$(ls /usr/lib/llvm-*/bin/lldb-dap /usr/bin/lldb-dap-* /usr/bin/lldb-vscode 2>/dev/null | sort -V | tail -1 || true)"
-          if [ -n "$DAP" ]; then sudo ln -sf "$DAP" /usr/bin/lldb-dap; fi
-        fi
-        command -v lldb-dap && echo "lldb-dap: $(command -v lldb-dap)" || echo "warning: lldb-dap unresolved"
+        LLVM_VER=20
+        . /etc/os-release
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+          | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+        echo "deb http://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-${LLVM_VER} main" \
+          | sudo tee /etc/apt/sources.list.d/llvm-${LLVM_VER}.list >/dev/null
+        sudo apt-get update
+        sudo apt-get install -y "lldb-${LLVM_VER}" || sudo apt-get install -y lldb
+        # Pin /usr/bin/lldb-dap to the newest lldb-dap available (prefers the
+        # apt.llvm.org build) so the extension's PATH//usr/bin resolver finds it.
+        DAP="$(ls /usr/lib/llvm-*/bin/lldb-dap /usr/bin/lldb-dap-* /usr/bin/lldb-vscode 2>/dev/null | sort -V | tail -1 || true)"
+        if [ -n "$DAP" ]; then sudo ln -sf "$DAP" /usr/bin/lldb-dap; fi
+        command -v lldb-dap && lldb-dap --version | head -2 || echo "warning: lldb-dap unresolved"
 
     - name: Install LLVM and OpenSSL (macOS)
       if: runner.os == 'macOS'

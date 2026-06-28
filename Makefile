@@ -362,27 +362,21 @@ _website-build:
 bench: build
 	@zsh benchmarks/run.sh $(BENCH_FILTER)
 
-## vsix-rebuild-reinstall: Clean → build → uninstall → reinstall the Osprey
-##      VSCode extension, bundling the freshly-built Rust compiler as `osprey`.
+## vsix-rebuild-reinstall: Clean → build → reinstall the Osprey VSCode
+##      extension in place, bundling the freshly-built Rust compiler as `osprey`.
 ##      Touches ONLY the Osprey extension ($(EXT_ID)) in the DEFAULT profile —
 ##      never another extension, never another VSCode profile. macOS only.
+##      ONE `code` invocation (install --force, no separate uninstall) so the
+##      running VSCode reconciles its extension host exactly once, not twice.
 ##      See [MAKE-IDE-EXT].
-vsix-rebuild-reinstall: _vsix_clean build _vsix_build _vsix_bundle _vsix_package _vsix_uninstall _vsix_install
+vsix-rebuild-reinstall: _vsix_clean build _vsix_build _vsix_bundle _vsix_package _vsix_install
 
 # _rebuild-install-vsix: deprecated private alias of `vsix-rebuild-reinstall`.
 _rebuild-install-vsix: vsix-rebuild-reinstall
 
 # --- vsix sub-steps ---------------------------------------------------------
-# Uninstall ONLY the Osprey extension ($(EXT_ID)) from the DEFAULT profile. It
-# is id-scoped, so it can never remove another extension, and it does NOT
-# enumerate VSCode profiles, so it can never touch any other profile.
-# `code --uninstall-extension` exits non-zero when not installed; swallowed so
-# uninstall-before-install stays idempotent.
-_vsix_uninstall:
-	-@code --uninstall-extension $(EXT_ID) >/dev/null 2>&1 && echo "  uninstalled $(EXT_ID)" || echo "  $(EXT_ID) not installed"
-
 _vsix_clean:
-	cd $(EXT_DIR) && $(RM) out dist *.vsix
+	cd $(EXT_DIR) && $(RM) out dist osprey-*.vsix
 
 _vsix_build:
 	cd $(EXT_DIR) && npm run compile
@@ -405,10 +399,12 @@ _vsix_package:
 	cd $(EXT_DIR) && npm run package
 
 # Install the newest Osprey VSIX into the DEFAULT profile only. `--install-
-# extension <file>` installs exactly that one VSIX (the Osprey extension) and no
-# other; it does NOT enumerate VSCode profiles.
+# extension <file> --force` upgrades that one extension id in place — no
+# separate uninstall needed, so the live VSCode reconciles its extension host
+# once. It installs exactly that VSIX (the Osprey extension) and no other, and
+# does NOT enumerate VSCode profiles, so it can never touch any other extension.
 _vsix_install:
-	@VSIX=$$(ls -t $(EXT_DIR)/*.vsix 2>/dev/null | head -1); \
-	if [ -z "$$VSIX" ]; then echo "FAIL: no .vsix in $(EXT_DIR)/"; exit 1; fi; \
+	@VSIX=$$(ls -t $(EXT_DIR)/osprey-*.vsix 2>/dev/null | head -1); \
+	if [ -z "$$VSIX" ]; then echo "FAIL: no osprey-*.vsix in $(EXT_DIR)/"; exit 1; fi; \
 	echo "  vsix: $$VSIX"; \
 	code --install-extension "$$VSIX" --force && echo "  installed $(EXT_ID)"

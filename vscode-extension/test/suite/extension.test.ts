@@ -1635,18 +1635,27 @@ suite("Osprey VSIX Debugger E2E", () => {
 
     const source = path.join(tempDir, "breakpoint.osp");
     const debugOutput = defaultDebugOutputPath(source);
+    // A function call on the breakpoint line lets the same test assert that F10
+    // (Step Over) EXECUTES the call without descending into it — the regression
+    // guard for "step over behaved like step in". bump is monomorphic (annotated
+    // `-> int`), so it is a real call frame the debugger could wrongly enter.
+    // [DEBUGGER-STEP-OVER]
     fs.writeFileSync(
       source,
-      ["let x = 1", "let y = x + 2", 'print("debugger reached ${x}")', ""].join(
-        "\n",
-      ),
+      [
+        "fn bump(v) -> int = v + 1",
+        "let x = 1",
+        "let y = bump(x)",
+        'print("debugger reached ${x} and ${y}")',
+        "",
+      ].join("\n"),
     );
 
     const document = await vscode.workspace.openTextDocument(source);
     await vscode.window.showTextDocument(document);
     await document.save();
 
-    setSourceBreakpoints(source, [2]);
+    setSourceBreakpoints(source, [3]);
     const sessionPromise = waitForDebugSessionStart(45000);
     const started = await vscode.debug.startDebugging(undefined, {
       type: "osprey",
@@ -1671,7 +1680,7 @@ suite("Osprey VSIX Debugger E2E", () => {
       path.normalize(source),
       "top stack frame is the Osprey source file",
     );
-    assert.strictEqual(topFrame.line, 2, "breakpoint stops on Osprey line 2");
+    assert.strictEqual(topFrame.line, 3, "breakpoint stops on Osprey line 3");
     assert.ok(topFrame.column >= 1, "DAP reports a 1-based source column");
 
     const scopes = await getScopes(session, topFrame.id);
@@ -1696,6 +1705,10 @@ suite("Osprey VSIX Debugger E2E", () => {
       "debug launch compiled a native binary",
     );
 
+    // F10 / Step Over on `let y = bump(x)`: execute the call to bump and land
+    // on the NEXT line of main, WITHOUT descending into bump. A debugger that
+    // stepped *into* bump would report the top frame as bump on line 1, and
+    // bump would appear on the stack. [DEBUGGER-STEP-OVER]
     await session.customRequest("next", { threadId: stopped.threadId });
     const stepped = await waitForStop(session, 45000);
     const steppedFrame = stepped.stack.stackFrames[0];
@@ -1705,7 +1718,17 @@ suite("Osprey VSIX Debugger E2E", () => {
       path.normalize(source),
       "stepping remains in the Osprey source file",
     );
-    assert.strictEqual(steppedFrame.line, 3, "step over advances to line 3");
+    assert.ok(
+      !stepped.stack.stackFrames.some((frame) => frame.name.includes("bump")),
+      `step over (F10) must NOT descend into bump(); stack was ${stepped.stack.stackFrames
+        .map((frame) => frame.name)
+        .join(" <- ")}`,
+    );
+    assert.strictEqual(
+      steppedFrame.line,
+      4,
+      "step over executes the call and advances main to line 4",
+    );
 
     await session.customRequest("continue", { threadId: stepped.threadId });
     await waitForDebugSessionEnd(45000, session.id);
