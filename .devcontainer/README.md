@@ -76,7 +76,8 @@ To debug the extension:
 /osprey/
 ├── crates/             # Osprey compiler (Rust workspace)
 ├── tree-sitter-osprey/ # Tree-sitter grammar (parser)
-├── compiler/           # C runtime sources (runtime/) + examples
+├── compiler/           # C runtime sources (runtime/)
+├── examples/           # Example programs + golden test suites
 ├── vscode-extension/   # VS Code extension (TypeScript)
 ├── webcompiler/        # Web compiler (ignored in dev container)
 └── .devcontainer/      # Dev container configuration

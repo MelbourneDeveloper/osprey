@@ -4,7 +4,7 @@
 //! links against libc and the prebuilt C runtime archives in `compiler/bin/`
 //! (`libfiber_runtime.a` / `libhttp_runtime.a`). Two anchors define correct
 //! output: the C runtime ABI (those archives' symbols and conventions) and the
-//! golden outputs in `compiler/examples/tested`, exercised end-to-end by
+//! golden outputs in `examples/tested`, exercised end-to-end by
 //! `crates/diff_examples.sh`. Constructs the backend does not lower return
 //! [`CodegenError::Unsupported`] — it never emits a placeholder.
 //!
@@ -38,7 +38,8 @@ mod types;
 
 pub use error::{CodegenError, Result};
 pub use llty::{LType, Value};
-pub use lower::compile_program;
+pub use lower::{compile_program, compile_program_debug};
+pub use osprey_debug::DebugSource;
 
 /// Every identifier referenced anywhere in `program` — function bodies, lets,
 /// nested modules. The CLI's capability sandbox uses this to detect gated
@@ -58,7 +59,9 @@ fn stmt_idents(s: &osprey_ast::Stmt, out: &mut std::collections::BTreeSet<String
         Stmt::Let { value, .. } | Stmt::Assignment { value, .. } => {
             freevars::free_idents(value, out);
         }
-        Stmt::Expr(e) | Stmt::Function { body: e, .. } => freevars::free_idents(e, out),
+        Stmt::Expr { value: e, .. } | Stmt::Function { body: e, .. } => {
+            freevars::free_idents(e, out);
+        }
         Stmt::Module { body, .. } => {
             for inner in body {
                 stmt_idents(inner, out);
@@ -81,6 +84,23 @@ mod tests {
             parsed.errors
         );
         compile_program(&parsed.program).expect("codegen should succeed")
+    }
+
+    fn debug_module(src: &str) -> String {
+        let parsed = parse_program(src);
+        assert!(
+            parsed.errors.is_empty(),
+            "syntax errors: {:?}",
+            parsed.errors
+        );
+        compile_program_debug(
+            &parsed.program,
+            DebugSource {
+                filename: "debug.osp".to_string(),
+                directory: "/tmp".to_string(),
+            },
+        )
+        .expect("debug codegen should succeed")
     }
 
     /// Compile `src` and assert codegen rejected it (used for the loud-failure
@@ -113,6 +133,31 @@ mod tests {
         assert!(ir.contains("define i64 @add(i64 %a, i64 %b)"));
         assert!(ir.contains("add i64 %a, %b"));
         assert!(ir.contains("call i64 @add(i64 2, i64 3)"));
+    }
+
+    #[test]
+    fn debug_compile_emits_source_level_metadata() {
+        let ir =
+            debug_module("fn add(a: int, b: int) -> int = a + b\nlet x = add(1, 2)\nprint(x)\n");
+        let expected_dwarf_version = if cfg!(target_os = "macos") { 4 } else { 5 };
+
+        assert!(ir.contains("source_filename = \"/tmp/debug.osp\""));
+        assert!(ir.contains("!llvm.dbg.cu = !{!"));
+        assert!(ir.contains("!llvm.module.flags = !{!"));
+        assert!(ir.contains("!DICompileUnit("));
+        assert!(ir.contains("!DIFile(filename: \"debug.osp\", directory: \"/tmp\")"));
+        assert!(ir.contains(&format!("!\"Dwarf Version\", i32 {expected_dwarf_version}")));
+        assert!(ir.contains("!DISubprogram(name: \"add\""));
+        assert!(ir.contains("!DISubprogram(name: \"main\""));
+        assert!(ir.contains("!DILocalVariable(name: \"x\""));
+        // Parameters (a, b) use dbg.value — SSA args live for the whole
+        // function. `let` locals (x) use dbg.declare over a stack slot, the
+        // robust -O0 representation that keeps the line table free of stray
+        // line-0 rows. [DEBUGGER-DBG-DECLARE]
+        assert!(ir.contains("@llvm.dbg.value"));
+        assert!(ir.contains("call void @llvm.dbg.declare(metadata"));
+        assert!(ir.contains("!DILocation(line: 2, column: 1"));
+        assert!(ir.contains(", !dbg !"));
     }
 
     #[test]
@@ -208,12 +253,15 @@ mod tests {
         // value reaches codegen only through the UFCS rewrite, so a synthetic
         // raw MethodCall node is unsupported.
         let program = osprey_ast::Program {
-            statements: vec![osprey_ast::Stmt::Expr(osprey_ast::Expr::MethodCall {
-                target: Box::new(osprey_ast::Expr::Integer(1)),
-                method: String::from("frobnicate"),
-                arguments: Vec::new(),
-                named_arguments: Vec::new(),
-            })],
+            statements: vec![osprey_ast::Stmt::Expr {
+                value: osprey_ast::Expr::MethodCall {
+                    target: Box::new(osprey_ast::Expr::Integer(1)),
+                    method: String::from("frobnicate"),
+                    arguments: Vec::new(),
+                    named_arguments: Vec::new(),
+                },
+                position: None,
+            }],
         };
         let err = compile_program(&program).unwrap_err();
         assert!(matches!(err, CodegenError::Unsupported(_)));
@@ -501,7 +549,7 @@ mod tests {
                print(\"${join(ws, \"-\")} ${listLength(ls)}\")\n\
              }\n",
         );
-        assert!(ir.contains("@strlen"));
+        assert!(ir.contains("@osp_strlen"));
         assert!(ir.contains("osp_string_to_upper"));
         assert!(ir.contains("osp_parse_int_strict"));
         assert!(ir.contains("osp_string_codepoint_at"));

@@ -1,0 +1,4 @@
+{
+  "name": "wordfreq",
+  "description": "Word-frequency counting into a Map<string,int> over a pseudo-random token stream — string keys + HAMT aggregation"
+}

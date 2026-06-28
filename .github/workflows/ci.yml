@@ -133,8 +133,8 @@ jobs:
 
       - name: Test example compilation and execution
         run: |
-          target/release/osprey compiler/examples/tested/basics/math/comprehensive_math.osp --run
-          target/release/osprey compiler/examples/tested/basics/feature_omnibus.osp --run
+          target/release/osprey examples/tested/basics/math/comprehensive_math.osp --run
+          target/release/osprey examples/tested/basics/feature_omnibus.osp --run
 
       - name: Test Web Compiler
         run: |
@@ -216,6 +216,71 @@ jobs:
           echo "$out" | grep -Eq 'FAIL=0 '  || { echo '::error::differential test FAILures'; exit 1; }
           echo "$out" | grep -Eq 'NOEXP=0 ' || { echo '::error::an example has no .expectedoutput'; exit 1; }
           echo "$out" | grep -q  'FC_OK'    || { echo '::error::must-reject ratchet exceeded (ill-formed programs accepted)'; exit 1; }
+
+  # ─── WebAssembly target ─────────────────────────────────────────────────────
+  # Compiles a sample Osprey program to wasm32-wasip1 with `osprey --target=wasm32`
+  # and gates on the artifact being well-formed (`wasm-validate`) and producing
+  # the expected stdout under a WASI host (Node's built-in `node:wasi`). Proves
+  # the wasm runtime archive links and the emitted module actually runs.
+  # Self-contained (no VS Code toolchain) so it stays fast. [WASM-TARGET]
+  wasm:
+    name: WebAssembly target (wasm32-wasip1)
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install clang/LLVM, lld (wasm-ld), wabt and a WASI sysroot
+        # clang's wasm32 backend lowers the IR; lld provides wasm-ld; wabt gives
+        # wasm-validate; the wasi-sdk sysroot supplies wasm32-wasip1 libc + crt1.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm lld wabt zsh
+          WASI_VERSION=24
+          curl -fsSL -o /tmp/wasi-sysroot.tar.gz \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sysroot-${WASI_VERSION}.0.tar.gz"
+          # The release tarball unpacks to a versioned top dir (wasi-sysroot-<v>.0/);
+          # strip it so the sysroot lands at a stable path containing lib/wasm32-wasip1.
+          sudo mkdir -p /opt/wasi-sdk/share/wasi-sysroot
+          sudo tar -xzf /tmp/wasi-sysroot.tar.gz -C /opt/wasi-sdk/share/wasi-sysroot --strip-components=1
+          test -d /opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip1
+          echo "OSPREY_WASI_SYSROOT=/opt/wasi-sdk/share/wasi-sysroot" >> "$GITHUB_ENV"
+          wasm-ld --version
+
+      - name: Build native + wasm runtime archives and the compiler
+        run: |
+          make _runtime
+          make _runtime_wasm
+          cargo build --release -p osprey-cli
+
+      - name: Compile the example to wasm, validate, and smoke-run under WASI
+        run: |
+          mkdir -p examples/wasm/build
+          target/release/osprey examples/wasm/hello.osp --target=wasm32 \
+            --compile -o examples/wasm/build/hello.wasm
+          wasm-validate examples/wasm/build/hello.wasm
+          node scripts/wasm-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+          node scripts/wasm-browser-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+
+      - name: WebAssembly golden suite (every tested example, wasm vs .expectedoutput)
+        # Compiles every examples/tested/*.osp to wasm and runs it under
+        # Node's WASI, comparing stdout to its .expectedoutput. Examples using a
+        # non-portable feature (fibers/HTTP/SQLite/processes/file I/O/random) link
+        # with an `undefined symbol` and are SKIPped, not failed. Gate: FAIL=0.
+        run: |
+          out=$(zsh crates/diff_wasm_examples.sh)
+          echo "$out"
+          echo "$out" | grep -Eq 'FAIL=0 '  || { echo '::error::wasm golden suite FAILures'; exit 1; }
+          echo "$out" | grep -Eq 'NOEXP=0 ' || { echo '::error::a tested example has no .expectedoutput'; exit 1; }
 
   # ─── Website end-to-end (Playwright) ────────────────────────────────────────
   # Builds the site (compiler-free; committed reference docs) and runs the

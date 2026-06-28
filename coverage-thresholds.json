@@ -14,6 +14,10 @@
       "threshold": 95,
       "language": "rust"
     },
+    "osprey-debug": {
+      "threshold": 95,
+      "language": "rust"
+    },
     "osprey-lsp": {
       "threshold": 98,
       "language": "rust"

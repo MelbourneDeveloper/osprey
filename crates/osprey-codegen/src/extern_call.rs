@@ -20,6 +20,8 @@ use osprey_ast::{Expr, NamedArgument};
 enum Ret {
     /// Plain `i64` (status, handle, count, exit code).
     Int,
+    /// Plain `i8*` string, taken as-is (`input()` — the caller owns it).
+    Str,
     /// `void` — yields Unit.
     Unit,
     /// `Result<int, _>`: the C `i64` is the success value; `< 0` ⇒ Error.
@@ -46,6 +48,13 @@ fn lookup(name: &str) -> Option<Sig> {
     use LType::{Ptr, Str, I64};
     let sig = |cname, params, ret| Sig { cname, params, ret };
     Some(match name {
+        // --- cryptographically-secure random + stdin (random_runtime.c) ---
+        // [BUILTIN-RANDOM] uniform non-negative int; [BUILTIN-RANDOM-BELOW]
+        // unbiased [0, n) (negative ⇒ Error per ResultInt); [BUILTIN-INPUT]
+        // one stdin line as a string.
+        "random" => sig("osp_random", &[], Ret::Int),
+        "randomBelow" => sig("osp_random_below", &[I64], Ret::ResultInt),
+        "input" => sig("osp_input", &[], Ret::Str),
         // --- file I/O (system_runtime.c) ---
         "readFile" => sig("read_file", &[Str], Ret::ResultStr(Some("File read error"))),
         "writeFile" => sig("write_file", &[Str, Str], Ret::ResultInt),
@@ -150,6 +159,10 @@ fn emit(cg: &mut Codegen, sig: &Sig, ops: &[String]) -> Result<Value> {
         Ret::Int => Ok(Value::new(
             cg.call("i64", sig.cname, &params, &op_refs),
             LType::I64,
+        )),
+        Ret::Str => Ok(Value::new(
+            cg.call("i8*", sig.cname, &params, &op_refs),
+            LType::Str,
         )),
         Ret::ResultInt => {
             let r = cg.call("i64", sig.cname, &params, &op_refs);

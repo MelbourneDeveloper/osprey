@@ -11,8 +11,27 @@ import {
   looksLikePath,
   makeClientFailureHandling,
   applyDefaultOspreyDebugConfig,
+  defaultOspreyDebugConfigForEditor,
+  defaultDebugOutputPath,
+  resolveLldbDapCommand,
+  resolveLldbDapExecutable,
+  missingLldbDapMessage,
   deactivate,
 } from "../../client/src/extension";
+import {
+  extensionRoot,
+  resolveBuiltOsprey,
+  resolveRequiredLldbDap,
+} from "./osprey-test-env";
+import {
+  clearDebugBreakpoints,
+  getScopes,
+  getVariables,
+  setSourceBreakpoints,
+  waitForDebugSessionEnd,
+  waitForDebugSessionStart,
+  waitForStop,
+} from "./dap-harness";
 
 const extensionId = "nimblesite.osprey";
 
@@ -21,8 +40,7 @@ const extensionId = "nimblesite.osprey";
 // extension root (it is gitignored as a build-time artifact); we replicate that
 // here so the Shipwright version handshake in activate() runs under test
 // instead of being skipped. Staging happens at module load — before any test
-// triggers (lazy) activation.
-const extensionRoot = path.resolve(__dirname, "..", "..", "..");
+// triggers (lazy) activation. `extensionRoot` is imported from ./osprey-test-env.
 const stagedManifestPath = path.join(extensionRoot, "shipwright.json");
 const repoRootManifestPath = path.resolve(
   extensionRoot,
@@ -43,40 +61,11 @@ let manifestWasStaged = false;
   }
 })();
 
-// resolveOspreyOnPath returns the absolute path of the `osprey` binary the test
-// harness staged on PATH (the same one the LSP would otherwise find), or
-// undefined if it cannot be located. Used to exercise the explicit
-// `server.compilerPath` branch of resolveServerCommand before activation.
-function resolveOspreyOnPath(): string | undefined {
-  const exe = process.platform === "win32" ? "osprey.exe" : "osprey";
-  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!dir) {
-      continue;
-    }
-    const candidate = path.join(dir, exe);
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
-// resolveBuiltOsprey returns the binary the language client should actually be
-// launched against in tests. It PREFERS the freshly-built dev compiler under
-// the repo (target/release/osprey — the `make build` output that speaks the
-// current LSP protocol) over any older `osprey` on PATH. A stale PATH binary
-// (e.g. a months-old global install) predates the `lsp` subcommand and makes
-// the client fail to start, which is exactly what would silently break every
-// language feature — so the live-LSP suites must not depend on it. Falls back to
-// the PATH binary, then undefined.
-function resolveBuiltOsprey(): string | undefined {
-  const exe = process.platform === "win32" ? "osprey.exe" : "osprey";
-  // The compiled test lives at <ext>/out/test/suite; the repo root is the
-  // parent of the extension root (resolved once at module scope as
-  // `extensionRoot`). The dev compiler lands at <repo>/target/release/osprey.
-  const built = path.resolve(extensionRoot, "..", "target", "release", exe);
-  return fs.existsSync(built) ? built : resolveOspreyOnPath();
-}
+// The DAP test harness (breakpoints, session-lifecycle waiters, stackTrace /
+// scopes / variables, waitForStop) and the osprey/lldb-dap binary resolution
+// now live in ./dap-harness and ./osprey-test-env — the single shared copy that
+// mirrors @nimblesite/lspkit-debug. They are imported above; nothing is
+// re-derived here. [DEBUGGER-REUSE]
 
 suite("Osprey Shipwright Activation Coverage", () => {
   const settle = (ms: number) =>
@@ -258,6 +247,10 @@ print(result)
     assert.ok(
       commands.includes("osprey.run"),
       "Run command should be available",
+    );
+    assert.ok(
+      commands.includes("osprey.debug"),
+      "Debug command should be available",
     );
   });
 
@@ -1035,11 +1028,10 @@ suite("Osprey Language Features Tests", () => {
     this.timeout(60000);
     // Open the very file the user reported ("Hover doesnt work!") straight from
     // the repository and prove the language features answer over it. extensionRoot
-    // is <repo>/vscode-extension; the example lives under compiler/examples.
+    // is <repo>/vscode-extension; the example lives under examples.
     const reported = path.resolve(
       extensionRoot,
       "..",
-      "compiler",
       "examples",
       "tested",
       "basics",
@@ -1345,10 +1337,11 @@ suite("Osprey Command Handler Coverage", () => {
     );
   });
 
-  test("all three osprey commands are registered", async () => {
+  test("all four osprey commands are registered", async () => {
     const all = await vscode.commands.getCommands(true);
     assert.ok(all.includes("osprey.compile"), "compile registered");
     assert.ok(all.includes("osprey.run"), "run registered");
+    assert.ok(all.includes("osprey.debug"), "debug registered");
     assert.ok(all.includes("osprey.setLanguage"), "setLanguage registered");
   });
 });
@@ -1449,9 +1442,9 @@ suite("Osprey Activation Side-Effect Coverage", () => {
     assert.strictEqual(restored, original, "config value restored");
   });
 
-  // startDebugging may never settle because the provider cancels the session by
-  // returning undefined, so always race it against a timeout and never assert on
-  // the return value.
+  // startDebugging may depend on a host lldb-dap installation, so always race it
+  // against a timeout and assert only that the extension survives the provider
+  // path.
   async function startDebugRaced(
     config: vscode.DebugConfiguration,
   ): Promise<string> {
@@ -1470,8 +1463,8 @@ suite("Osprey Activation Side-Effect Coverage", () => {
     this.timeout(30000);
 
     // With an active osprey editor and an empty config, resolveDebugConfiguration
-    // synthesizes type/name/request/program from the editor, then kicks off
-    // compile-and-run and cancels the session by returning undefined.
+    // synthesizes type/name/request/program from the editor, then attempts the
+    // real debug-launch path: save, debug-compile, and hand off to DAP.
     const file = path.join(tempDir, "debug-synth.osp");
     fs.writeFileSync(file, 'fn main() -> Unit = print("debug synth")\n');
     const document = await vscode.workspace.openTextDocument(file);
@@ -1510,7 +1503,7 @@ suite("Osprey Activation Side-Effect Coverage", () => {
 
     const outcome = await startDebugRaced({
       type: "osprey",
-      name: "Run Osprey File",
+      name: "Debug Osprey File",
       request: "launch",
     } as vscode.DebugConfiguration);
     await settle(1500);
@@ -1520,6 +1513,225 @@ suite("Osprey Activation Side-Effect Coverage", () => {
       vscode.extensions.getExtension(extensionId2)?.isActive,
       "extension survives the no-program debug path",
     );
+  });
+});
+
+suite("Osprey VSIX Debugger E2E", () => {
+  let tempDir: string;
+  let priorCompilerPath: string | undefined;
+  let priorLldbDapPath: string | undefined;
+  let lldbDapPath: string;
+
+  setup(async function () {
+    this.timeout(60000);
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "osprey-debug-vsix-"));
+
+    const ospreyPath = resolveBuiltOsprey();
+    assert.ok(
+      ospreyPath && fs.existsSync(ospreyPath),
+      "a freshly built osprey binary is required for VSIX debugger E2E",
+    );
+    lldbDapPath = resolveRequiredLldbDap();
+
+    const config = vscode.workspace.getConfiguration("osprey");
+    priorCompilerPath = config.get<string>("server.compilerPath");
+    priorLldbDapPath = config.get<string>("debug.lldbDapPath");
+    await config.update(
+      "server.compilerPath",
+      ospreyPath,
+      vscode.ConfigurationTarget.Global,
+    );
+    await config.update(
+      "debug.lldbDapPath",
+      lldbDapPath,
+      vscode.ConfigurationTarget.Global,
+    );
+
+    const extension = vscode.extensions.getExtension(extensionId);
+    assert.ok(extension, "Osprey extension should be installed in test host");
+    await extension.activate();
+  });
+
+  teardown(async function () {
+    clearDebugBreakpoints();
+    if (vscode.debug.activeDebugSession) {
+      try {
+        await vscode.debug.stopDebugging();
+      } catch {
+        // The session can terminate naturally while cleanup is racing it.
+      }
+    }
+    const config = vscode.workspace.getConfiguration("osprey");
+    await config.update(
+      "server.compilerPath",
+      priorCompilerPath,
+      vscode.ConfigurationTarget.Global,
+    );
+    await config.update(
+      "debug.lldbDapPath",
+      priorLldbDapPath,
+      vscode.ConfigurationTarget.Global,
+    );
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("package manifest exposes a real debugger contribution", () => {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(extensionRoot, "package.json"), "utf8"),
+    ) as {
+      activationEvents?: string[];
+      contributes?: {
+        commands?: { command: string }[];
+        keybindings?: { command: string; key?: string }[];
+        breakpoints?: { language: string }[];
+        debuggers?: { type: string; languages?: string[] }[];
+      };
+    };
+
+    assert.ok(
+      pkg.activationEvents?.includes("onDebugResolve:osprey"),
+      "VSIX activates to resolve osprey debug configs",
+    );
+    assert.ok(
+      pkg.contributes?.commands?.some((cmd) => cmd.command === "osprey.debug"),
+      "VSIX contributes an explicit osprey.debug command",
+    );
+    assert.ok(
+      pkg.contributes?.keybindings?.some(
+        (binding) => binding.command === "osprey.debug" && binding.key === "f5",
+      ),
+      "F5 is bound to the debugger command, not osprey.run",
+    );
+    assert.ok(
+      pkg.contributes?.breakpoints?.some((bp) => bp.language === "osprey"),
+      "VSIX declares Osprey source breakpoints",
+    );
+    assert.ok(
+      pkg.contributes?.debuggers?.some(
+        (debuggerContribution) =>
+          debuggerContribution.type === "osprey" &&
+          debuggerContribution.languages?.includes("osprey"),
+      ),
+      "VSIX contributes the osprey DAP debugger type",
+    );
+  });
+
+  test("debug command synthesizes the same real launch config as F5", () => {
+    const source = path.join(tempDir, "command.osp");
+    const config = defaultOspreyDebugConfigForEditor({
+      document: { languageId: "osprey", fileName: source },
+    });
+    assert.strictEqual(config.type, "osprey");
+    assert.strictEqual(config.request, "launch");
+    assert.strictEqual(config.name, "Debug Osprey File");
+    assert.strictEqual(config.program, source);
+    assert.strictEqual(config.cwd, tempDir);
+  });
+
+  test("starts lldb-dap, hits an Osprey source breakpoint, reads stack and locals", async function () {
+    this.timeout(90000);
+
+    const source = path.join(tempDir, "breakpoint.osp");
+    const debugOutput = defaultDebugOutputPath(source);
+    // A function call on the breakpoint line lets the same test assert that F10
+    // (Step Over) EXECUTES the call without descending into it — the regression
+    // guard for "step over behaved like step in". bump is monomorphic (annotated
+    // `-> int`), so it is a real call frame the debugger could wrongly enter.
+    // [DEBUGGER-STEP-OVER]
+    fs.writeFileSync(
+      source,
+      [
+        "fn bump(v) -> int = v + 1",
+        "let x = 1",
+        "let y = bump(x)",
+        'print("debugger reached ${x} and ${y}")',
+        "",
+      ].join("\n"),
+    );
+
+    const document = await vscode.workspace.openTextDocument(source);
+    await vscode.window.showTextDocument(document);
+    await document.save();
+
+    setSourceBreakpoints(source, [3]);
+    const sessionPromise = waitForDebugSessionStart(45000);
+    const started = await vscode.debug.startDebugging(undefined, {
+      type: "osprey",
+      request: "launch",
+      name: "Osprey VSIX Debugger E2E",
+      program: source,
+      cwd: tempDir,
+      debugOutput,
+      lldbDapPath,
+      stopOnEntry: false,
+    });
+    assert.ok(started, "VS Code should accept the Osprey debug launch");
+
+    const session = await sessionPromise;
+    assert.strictEqual(session.type, "osprey");
+
+    const stopped = await waitForStop(session, 45000);
+    const topFrame = stopped.stack.stackFrames[0];
+    assert.ok(topFrame, "debugger must report a stopped stack frame");
+    assert.strictEqual(
+      path.normalize(topFrame.source?.path ?? ""),
+      path.normalize(source),
+      "top stack frame is the Osprey source file",
+    );
+    assert.strictEqual(topFrame.line, 3, "breakpoint stops on Osprey line 3");
+    assert.ok(topFrame.column >= 1, "DAP reports a 1-based source column");
+
+    const scopes = await getScopes(session, topFrame.id);
+    assert.ok(scopes.scopes.length > 0, "debugger exposes frame scopes");
+    const variables = (
+      await Promise.all(
+        scopes.scopes
+          .filter((scope) => scope.variablesReference > 0)
+          .map((scope) => getVariables(session, scope.variablesReference)),
+      )
+    ).flatMap((result) => result.variables);
+    const x = variables.find((variable) => variable.name === "x");
+    assert.ok(
+      x,
+      `local x must be visible through DAP variables; saw ${variables
+        .map((variable) => variable.name)
+        .join(", ")}`,
+    );
+    assert.match(x.value, /\b1\b/, "local x value is available through DAP");
+    assert.ok(
+      fs.existsSync(debugOutput),
+      "debug launch compiled a native binary",
+    );
+
+    // F10 / Step Over on `let y = bump(x)`: execute the call to bump and land
+    // on the NEXT line of main, WITHOUT descending into bump. A debugger that
+    // stepped *into* bump would report the top frame as bump on line 1, and
+    // bump would appear on the stack. [DEBUGGER-STEP-OVER]
+    await session.customRequest("next", { threadId: stopped.threadId });
+    const stepped = await waitForStop(session, 45000);
+    const steppedFrame = stepped.stack.stackFrames[0];
+    assert.ok(steppedFrame, "debugger must report a frame after stepping");
+    assert.strictEqual(
+      path.normalize(steppedFrame.source?.path ?? ""),
+      path.normalize(source),
+      "stepping remains in the Osprey source file",
+    );
+    assert.ok(
+      !stepped.stack.stackFrames.some((frame) => frame.name.includes("bump")),
+      `step over (F10) must NOT descend into bump(); stack was ${stepped.stack.stackFrames
+        .map((frame) => frame.name)
+        .join(" <- ")}`,
+    );
+    assert.strictEqual(
+      steppedFrame.line,
+      4,
+      "step over executes the call and advances main to line 4",
+    );
+
+    await session.customRequest("continue", { threadId: stepped.threadId });
+    await waitForDebugSessionEnd(45000, session.id);
   });
 });
 
@@ -1996,7 +2208,7 @@ suite("Osprey Client Failure Handling Unit Tests", () => {
   });
 });
 
-// Pure unit tests for the debug-config synthesis the "Run Osprey File" command
+// Pure unit tests for the debug-config synthesis the "Debug Osprey File" launch
 // relies on. Driving it through vscode.debug.startDebugging is unreliable in the
 // headless host (no real debug UI invokes the provider), so the branchy logic is
 // extracted and tested directly here.
@@ -2014,7 +2226,7 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
     );
     assert.strictEqual(config.type, "osprey", "type defaults to osprey");
     assert.strictEqual(config.request, "launch", "request defaults to launch");
-    assert.strictEqual(config.name, "Run Osprey File", "name is set");
+    assert.strictEqual(config.name, "Debug Osprey File", "name is set");
     assert.strictEqual(
       config.program,
       "/tmp/main.osp",
@@ -2055,5 +2267,60 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
       "explicit program preserved",
     );
     assert.strictEqual(config.name, "Custom", "explicit name preserved");
+  });
+
+  test("chooses a stable per-source debug output path", () => {
+    const out = defaultDebugOutputPath(path.join("/tmp", "demo.osp"));
+    assert.strictEqual(path.basename(path.dirname(out)), ".osprey-debug");
+    assert.strictEqual(
+      path.basename(out),
+      process.platform === "win32" ? "demo.exe" : "demo",
+    );
+  });
+
+  test("resolves lldb-dap from config before defaults", () => {
+    const host = {
+      env: { PATH: "" },
+      existsSync: (filePath: string) => filePath === "/custom/lldb-dap",
+      getSetting: () => undefined,
+      platform: "linux" as NodeJS.Platform,
+    };
+
+    assert.strictEqual(
+      resolveLldbDapExecutable({ lldbDapPath: "/custom/lldb-dap" }, host),
+      "/custom/lldb-dap",
+    );
+    assert.strictEqual(
+      resolveLldbDapCommand({ lldbDapPath: "/custom/lldb-dap" }, host),
+      "/custom/lldb-dap",
+    );
+    assert.ok(
+      resolveLldbDapCommand({}).length > 0,
+      "default lldb-dap command is non-empty",
+    );
+  });
+
+  test("strict lldb-dap resolver reports missing tools precisely", () => {
+    const host = {
+      env: { PATH: "" },
+      existsSync: () => false,
+      getSetting: () => undefined,
+      platform: "linux" as NodeJS.Platform,
+    };
+
+    assert.strictEqual(resolveLldbDapExecutable({}, host), undefined);
+    assert.strictEqual(
+      resolveLldbDapExecutable({ lldbDapPath: "/missing/lldb-dap" }, host),
+      undefined,
+    );
+    assert.strictEqual(
+      resolveLldbDapCommand({}, host),
+      "lldb-dap",
+      "compatibility resolver still returns a command name for old callers",
+    );
+    assert.match(
+      missingLldbDapMessage({ lldbDapPath: "/missing/lldb-dap" }),
+      /Configured lldbDapPath: \/missing\/lldb-dap\./,
+    );
   });
 });

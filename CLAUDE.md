@@ -72,7 +72,7 @@ make clean         # Clean all build artifacts
 ```bash
 make run FILE=<path>       # Compile and run an Osprey file (osprey <file> --run)
 make install               # Install osprey + runtime archives system-wide
-make rebuild-install-vsix  # Rebuild + reinstall the VSCode extension (macOS)
+make _rebuild-install-vsix  # Rebuild + reinstall the VSCode extension (macOS)
 ```
 
 The compiler binary lands at `target/release/osprey`.
@@ -141,8 +141,8 @@ npm install && npm start         # Start web-based compiler service
 
 **Testing Strategy:**
 - Unit tests live inside each crate in `crates/`
-- `compiler/examples/tested/` - Working examples run via the differential harness (`crates/diff_examples.sh`); output must match `.expectedoutput` byte-for-byte
-- `compiler/examples/failscompilation/` - Error cases the compiler must reject
+- `examples/tested/` - Working examples run via the differential harness (`crates/diff_examples.sh`); output must match `.expectedoutput` byte-for-byte
+- `examples/failscompilation/` - Error cases the compiler must reject
 - Coverage thresholds enforced per-project via `coverage-thresholds.json`
 
 **Security Architecture:**
@@ -154,7 +154,7 @@ npm install && npm start         # Start web-based compiler service
 **Development Workflow:**
 1. **Grammar Changes**: Edit the tree-sitter grammar in `tree-sitter-osprey/`
 2. **Language Features**: Implement in `osprey-syntax`/`osprey-ast`, then `osprey-codegen`
-3. **Testing**: Add examples to `compiler/examples/tested/` and error cases to `compiler/examples/failscompilation/`
+3. **Testing**: Add examples to `examples/tested/` and error cases to `examples/failscompilation/`
 4. **Type System**: Extend `crates/osprey-types` for new type rules
 5. **Runtime**: Add C functions in `compiler/runtime/` for system operations
 

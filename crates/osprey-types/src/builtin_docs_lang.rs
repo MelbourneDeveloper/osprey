@@ -59,6 +59,18 @@ pub(crate) static CORE: &[BuiltinDoc] = &[
         example: "fn half(n) = intDiv(n, 2)  // intDiv(7, 2) == 3",
     },
     BuiltinDoc {
+        name: "random",
+        summary: "A cryptographically-secure uniform random non-negative integer (0 .. 2^63-1), drawn fresh from the OS entropy source. Unseeded and unpredictable.",
+        params: &[],
+        example: "let big = random()  // e.g. 7240982340198",
+    },
+    BuiltinDoc {
+        name: "randomBelow",
+        summary: "A cryptographically-secure uniform random integer in [0, n), unbiased by rejection sampling. Returns Result<int, MathError> — Error when n <= 0.",
+        params: &[ParamDoc { name: "n", description: "Exclusive upper bound; must be positive" }],
+        example: "let d = randomBelow(6) ?: 0  // a fair die face 0..5",
+    },
+    BuiltinDoc {
         name: "not",
         summary: "Returns the logical negation of a boolean.",
         params: &[ParamDoc { name: "value", description: "The boolean to negate" }],

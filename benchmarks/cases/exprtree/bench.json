@@ -1,0 +1,4 @@
+{
+  "name": "exprtree",
+  "description": "Build then modular-evaluate a random arithmetic expression tree — recursive algebraic union + records"
+}

@@ -36,6 +36,7 @@ permalink: "/spec/"
 18. [Memory Management](/spec/0018-memorymanagement/)
 19. [Foreign Function Interface](/spec/0019-foreignfunctioninterface/)
 20. [Language Server & Editor Integrations](/spec/0020-languageserverandeditors/)
+22. [WebAssembly Target](/spec/0022-webassemblytarget/)
 
 ## About This Specification
 

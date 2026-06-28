@@ -152,7 +152,13 @@ impl<'a> Lowerer<'a> {
                     .filter_map(|n| self.lower_stmt(n))
                     .collect(),
             },
-            "expression_statement" => Stmt::Expr(self.lower_expr(self.first_named(node)?)),
+            "expression_statement" => {
+                let expr = self.first_named(node)?;
+                Stmt::Expr {
+                    value: self.lower_expr(expr),
+                    position: Some(self.pos(expr)),
+                }
+            }
             _ => return None,
         })
     }

@@ -3,11 +3,12 @@
 //! inference), then synthesize `main` from either a user `main` or the trailing
 //! top-level statements.
 
-use crate::builder::Codegen;
+use crate::builder::{Codegen, CodegenOptions};
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::llty::{LType, Value};
-use osprey_ast::{Expr, Parameter, Program, Stmt};
+use osprey_ast::{Expr, Parameter, Position, Program, Stmt};
+use osprey_debug::DebugSource;
 
 /// Compile a whole program to an LLVM IR module (text), driven by the inferred
 /// types in [`osprey_types::ProgramTypes`].
@@ -17,8 +18,26 @@ use osprey_ast::{Expr, Parameter, Program, Stmt};
 /// Returns `Err` if any function body, top-level statement, or `main`
 /// expression contains a construct that cannot be lowered to LLVM IR.
 pub fn compile_program(program: &Program) -> Result<String> {
+    compile_program_with_options(program, CodegenOptions::default())
+}
+
+/// Compile a whole program with LLVM/DWARF debug metadata rooted at `source`.
+///
+/// # Errors
+///
+/// Returns `Err` under the same conditions as [`compile_program`].
+pub fn compile_program_debug(program: &Program, source: DebugSource) -> Result<String> {
+    compile_program_with_options(
+        program,
+        CodegenOptions {
+            debug_source: Some(source),
+        },
+    )
+}
+
+fn compile_program_with_options(program: &Program, options: CodegenOptions) -> Result<String> {
     let prog = osprey_types::infer_program(program);
-    let mut cg = Codegen::with_types(prog);
+    let mut cg = Codegen::with_options(prog, options);
 
     // Pre-pass: record parameter names so named-argument calls can be ordered,
     // and parse `effect` operation signatures for `handle`/`perform`.
@@ -59,10 +78,15 @@ pub fn compile_program(program: &Program) -> Result<String> {
     }
 
     let mut top_level: Vec<&Stmt> = Vec::new();
-    let mut user_main: Option<&Expr> = None;
+    let mut user_main: Option<(&Expr, Option<Position>)> = None;
     for stmt in &program.statements {
         match stmt {
-            Stmt::Function { name, body, .. } if name == "main" => user_main = Some(body),
+            Stmt::Function {
+                name,
+                body,
+                position,
+                ..
+            } if name == "main" => user_main = Some((body, *position)),
             // A generic function is specialised by inlining at each call site
             // (recorded in `fn_defs`), so it is not emitted as a monomorphic def.
             Stmt::Function { name, .. } if cg.fn_defs.contains_key(name) => {}
@@ -70,15 +94,21 @@ pub fn compile_program(program: &Program) -> Result<String> {
                 name,
                 parameters,
                 body,
+                position,
                 ..
-            } => gen_function(&mut cg, name, parameters, body)?,
-            Stmt::Let { .. } | Stmt::Assignment { .. } | Stmt::Expr(_) => top_level.push(stmt),
+            } => gen_function(&mut cg, name, parameters, body, *position)?,
+            Stmt::Let { .. } | Stmt::Assignment { .. } | Stmt::Expr { .. } => {
+                top_level.push(stmt);
+            }
             _ => {}
         }
     }
 
-    cg.begin_function();
-    if let Some(body) = user_main {
+    let main_position = user_main
+        .and_then(|(_, position)| position)
+        .or_else(|| top_level.iter().find_map(|stmt| stmt_position(stmt)));
+    cg.begin_function("main", main_position);
+    if let Some((body, _)) = user_main {
         cg.cell_vars = crate::effects::captured_mut_vars(body);
         let _ = gen_expr(&mut cg, body)?;
     } else {
@@ -93,12 +123,18 @@ pub fn compile_program(program: &Program) -> Result<String> {
     Ok(cg.render())
 }
 
-fn gen_function(cg: &mut Codegen, name: &str, parameters: &[Parameter], body: &Expr) -> Result<()> {
+fn gen_function(
+    cg: &mut Codegen,
+    name: &str,
+    parameters: &[Parameter],
+    body: &Expr,
+    position: Option<Position>,
+) -> Result<()> {
     let param_sig = cg
         .fn_param_sig(name)
         .unwrap_or_else(|| vec![(LType::I64, None); parameters.len()]);
 
-    cg.begin_function();
+    cg.begin_function(name, position);
     // Record any function-typed parameters so a call through one lowers to an
     // indirect call (the higher-order `f(x)` in `fn apply(f, x) = f(x)`).
     let fn_ptr_params: Vec<(String, osprey_types::Type)> = cg
@@ -119,6 +155,7 @@ fn gen_function(cg: &mut Codegen, name: &str, parameters: &[Parameter], body: &E
     let mut params = Vec::new();
     for (p, (pty, owner)) in parameters.iter().zip(param_sig.iter()) {
         let v = Value::new(format!("%{}", p.name), *pty).with_owner(owner.clone());
+        cg.emit_debug_param(&p.name, &v);
         cg.bind(p.name.clone(), v);
         params.push((*pty, p.name.clone()));
     }
@@ -153,8 +190,12 @@ fn gen_fn_body(cg: &mut Codegen, name: &str, body: &Expr) -> Result<Value> {
 /// through); everything else coerces to the inferred scalar return type.
 fn coerce_return(cg: &mut Codegen, name: &str, body: Value) -> Result<Value> {
     if let Some(inner) = cg.fn_ret_result_inner(name) {
+        // An existing Result is re-laid to the *declared* success-slot type: a
+        // body like `Error { message }` types its slot from the message (`i8*`),
+        // which must agree with the `i64` the callers read or the block's
+        // disc/errmsg offsets shift on 32-bit targets. [WASM-TARGET-WIDTH]
         if body.result_inner.is_some() {
-            return Ok(body);
+            return crate::result::repack_to_inner(cg, body, inner);
         }
         return crate::result::make_ok(cg, body, inner);
     }
@@ -171,22 +212,58 @@ pub(crate) fn gen_local_stmt(cg: &mut Codegen, stmt: &Stmt) -> Result<()> {
             name,
             value,
             mutable: true,
+            position,
             ..
-        } if cg.cell_vars.contains(name) => gen_cell_define(cg, name, value),
-        Stmt::Assignment { name, value, .. } if cg.cell_slots.contains_key(name) => {
-            gen_cell_store(cg, name, value)
+        } if cg.cell_vars.contains(name) => {
+            with_stmt_debug(cg, *position, |cg| gen_cell_define(cg, name, value))
+        }
+        Stmt::Assignment {
+            name,
+            value,
+            position,
+        } if cg.cell_slots.contains_key(name) => {
+            with_stmt_debug(cg, *position, |cg| gen_cell_store(cg, name, value))
         }
         // An immutable `let` keeps a Result wrapper (so `let v = 21 * 2;
         // toString(v)` shows `Success(42)`); a `mut` reassignment auto-unwraps it
         // (the `mut` auto-unwrap rule: the cell holds the success payload).
-        Stmt::Let { name, value, .. } => gen_bind(cg, name, value, false),
-        Stmt::Assignment { name, value, .. } => gen_bind(cg, name, value, true),
-        Stmt::Expr(e) => {
-            let _ = gen_expr(cg, e)?;
+        Stmt::Let {
+            name,
+            value,
+            position,
+            ..
+        } => with_stmt_debug(cg, *position, |cg| gen_bind(cg, name, value, false)),
+        Stmt::Assignment {
+            name,
+            value,
+            position,
+        } => with_stmt_debug(cg, *position, |cg| gen_bind(cg, name, value, true)),
+        Stmt::Expr { value, position } => with_stmt_debug(cg, *position, |cg| {
+            let _ = gen_expr(cg, value)?;
             Ok(())
-        }
+        }),
         _ => Err(CodegenError::unsupported("statement in block/main")),
     }
+}
+
+fn stmt_position(stmt: &Stmt) -> Option<Position> {
+    match stmt {
+        Stmt::Let { position, .. }
+        | Stmt::Assignment { position, .. }
+        | Stmt::Expr { position, .. } => *position,
+        _ => None,
+    }
+}
+
+fn with_stmt_debug(
+    cg: &mut Codegen,
+    position: Option<Position>,
+    f: impl FnOnce(&mut Codegen) -> Result<()>,
+) -> Result<()> {
+    let previous = cg.set_debug_position(position);
+    let result = f(cg);
+    cg.restore_debug_position(previous);
+    result
 }
 
 /// Declare a handler-captured `mut` as a heap cell: evaluate + unwrap the
@@ -252,6 +329,7 @@ fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<
             if crate::types::fn_value_concrete(&ty) {
                 if let Some(sig) = Codegen::fn_value_sig(&ty) {
                     let v = crate::closure::emit_closure(cg, parameters, body, &sig)?;
+                    cg.emit_debug_local(name, &v);
                     cg.bind(name.to_string(), v);
                     cg.bind_fn_local(name, ty);
                 }
@@ -274,6 +352,7 @@ fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<
     if let Some(ty) = fn_result_type(cg, value) {
         cg.bind_fn_local(name, ty);
     }
+    cg.emit_debug_local(name, &v);
     cg.bind(name.to_string(), v);
     Ok(())
 }

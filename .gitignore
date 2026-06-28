@@ -78,11 +78,11 @@ webcompiler/src/outputs/
 website/_site/
 
 # Rust
-compiler/examples/rust_integration/target/
-compiler/examples/rust_integration/librust_utils.a
+examples/rust_integration/target/
+examples/rust_integration/librust_utils.a
 
 # Repo-specific test data
-compiler/examples/tested/effects/test_data/
+examples/tested/effects/test_data/
 
 # Tool caches
 .deslop-cache/
@@ -120,3 +120,5 @@ benchmarks/cases/**/*.hi
 benchmarks/cases/**/*.cmi
 benchmarks/cases/**/*.cmx
 benchmarks/cases/**/*.o
+
+.osprey-debug

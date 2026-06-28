@@ -59,7 +59,7 @@ fn compile(source: &str) -> Result<usize, String> {
 
 #[test]
 fn every_tested_example_compiles_to_ir() {
-    let dir = repo_root().join("compiler/examples/tested");
+    let dir = repo_root().join("examples/tested");
     let files = sources(&dir, "osp");
     assert!(
         files.len() >= 40,
@@ -92,7 +92,7 @@ fn every_tested_example_compiles_to_ir() {
 
 #[test]
 fn list_pattern_negative_cases_are_rejected() {
-    let dir = repo_root().join("compiler/examples/failscompilation");
+    let dir = repo_root().join("examples/failscompilation");
     for name in [
         "list_pattern_middle_rest.ospo",
         "list_pattern_double_rest.ospo",
@@ -111,7 +111,7 @@ fn failscompilation_corpus_drives_rejection_paths() {
     // The compiler does not yet reject all of them (the shell harness tracks the
     // residue via a ratchet), so this asserts only that a healthy majority are
     // already rejected and that the pipeline never panics on ill-formed input.
-    let dir = repo_root().join("compiler/examples/failscompilation");
+    let dir = repo_root().join("examples/failscompilation");
     let files = sources(&dir, "ospo");
     assert!(!files.is_empty(), "expected a must-reject corpus");
     let rejected = files

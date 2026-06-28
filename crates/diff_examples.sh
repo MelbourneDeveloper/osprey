@@ -8,7 +8,7 @@ set -u
 ROOT=${OSPREY_ROOT:-${0:A:h}/..}
 ROOT=${ROOT:A}
 BIN=$ROOT/target/release/osprey
-EXDIR=$ROOT/compiler/examples/tested
+EXDIR=$ROOT/examples/tested
 VERBOSE=0
 FILTER=""
 for a in "$@"; do
@@ -39,7 +39,10 @@ for f in $(find $EXDIR -name '*.osp' | sort); do
   # never a per-line strip (which would drop trailing whitespace the program
   # emits).
   expected=$(cat "$exp")
-  actual=$($BIN "$f" --run 2>/tmp/osprey_rs_err.txt)
+  # OSPREY_RUN_FLAGS (default empty) selects a backend for conformance, e.g.
+  # `OSPREY_RUN_FLAGS=--memory=gc` runs every example under the tracing GC — the
+  # [MEM-BACKENDS] oracle: output must stay byte-identical. No effect when unset.
+  actual=$($BIN "$f" --run ${=OSPREY_RUN_FLAGS:-} 2>/tmp/osprey_rs_err.txt)
   rc=$?
   expected_trim="${expected#"${expected%%[![:space:]]*}"}"; expected_trim="${expected_trim%"${expected_trim##*[![:space:]]}"}"
   actual_trim="${actual#"${actual%%[![:space:]]*}"}"; actual_trim="${actual_trim%"${actual_trim##*[![:space:]]}"}"
@@ -68,7 +71,7 @@ for x in $FAILED; do echo "  $x"; done
 # print-on-record). Port a validation -> decrease the number. An INCREASE is a
 # regression and fails CI. Target: 0.
 FC_EXPECTED_ESCAPES=12
-FCDIR=$ROOT/compiler/examples/failscompilation
+FCDIR=$ROOT/examples/failscompilation
 fc_rej=0; fc_esc=0
 typeset -a FC_ESCAPED
 if [[ -z "$FILTER" && -d "$FCDIR" ]]; then

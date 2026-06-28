@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Paths
-const MEGA_SHOWCASE_PATH = path.join(__dirname, '../../compiler/examples/tested/basics/osprey_mega_showcase.osp');
+const MEGA_SHOWCASE_PATH = path.join(__dirname, '../../examples/tested/basics/osprey_mega_showcase.osp');
 const PLAYGROUND_PATH = path.join(__dirname, '../src/playground/index.md');
 
 // The showcase is embedded inside a JS template literal (value: `...`). Any

@@ -97,7 +97,7 @@ fn walk_stmt_body(stmt: &Stmt, out: &mut Vec<SymbolInfo>) {
     match stmt {
         Stmt::Module { body, .. } => walk_stmts(body, out),
         Stmt::Function { body, .. } => walk_expr(body, out),
-        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } | Stmt::Expr(value) => {
+        Stmt::Let { value, .. } | Stmt::Assignment { value, .. } | Stmt::Expr { value, .. } => {
             walk_expr(value, out);
         }
         _ => {}
@@ -670,7 +670,10 @@ mod tests {
         let program = Program {
             statements: every_container_with_a_nested_let()
                 .into_iter()
-                .map(Stmt::Expr)
+                .map(|value| Stmt::Expr {
+                    value,
+                    position: None,
+                })
                 .collect(),
         };
         let found: Vec<String> = collect_all_symbols(&program)

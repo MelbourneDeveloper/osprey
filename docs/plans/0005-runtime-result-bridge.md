@@ -33,7 +33,7 @@ subsystems, so it is planned together to avoid duplicate work.
 
 - `httpCreateServer` / `httpListen` / `httpStopServer`, client requests, and the
   `HttpResponse` record round-trip — see
-  [compiler/examples/tested/http/](../../compiler/examples/tested/http/).
+  [examples/tested/http/](../../examples/tested/http/).
 - WebSocket create/listen/send/close/broadcast paths exist in the runtime.
 
 ## Where it's misaligned
@@ -69,11 +69,11 @@ subsystems, so it is planned together to avoid duplicate work.
 
 ## Testing
 
-- Extend [compiler/examples/tested/http/](../../compiler/examples/tested/http/)
+- Extend [examples/tested/http/](../../examples/tested/http/)
   to `match` on the `Result` of `httpListen` and on a deliberately failing bind
   (port in use) to assert the `Error` message threads through.
 - Re-enable / add a WebSocket server `listen` example now that binding is fixed
-  (see [compiler/examples/websocketserver/](../../compiler/examples/websocketserver/)).
+  (see [examples/websocketserver/](../../examples/websocketserver/)).
 
 ## Risks / considerations
 

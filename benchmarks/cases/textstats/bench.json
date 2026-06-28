@@ -1,0 +1,4 @@
+{
+  "name": "textstats",
+  "description": "Fold per-token string metrics (length/contains/startsWith) over a pseudo-random token stream — immutable string builtins"
+}

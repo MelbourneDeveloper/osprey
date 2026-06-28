@@ -15,11 +15,15 @@ print(42)
 print(true)
 ```
 
-### `input() -> int`
-Reads an integer from stdin.
+### `input() -> string` — [BUILTIN-INPUT]
+Reads one line from standard input (without its trailing newline) and returns it
+as a string. At end-of-file — including when stdin is empty or not connected —
+it returns the empty string `""` rather than blocking or failing. Parse it with
+`parseInt`/`parseFloat` when a number is wanted.
 
 ```osprey
-let x = input()
+let line = input()                 // "" if there is no input
+let n    = parseInt(input()) ?: 0  // a number, or 0 when absent/unparseable
 ```
 
 ### `toString(value: int | string | bool) -> string`
@@ -43,6 +47,30 @@ intDiv(7, 2)        // Success(3)
 intDiv(255643, 10)  // Success(25564)
 intDiv(5, 0)        // Error(MathError) — "division by zero"
 fn half(n) = intDiv(n, 2)   // -> int (Result auto-unwraps at the typed return)
+```
+
+### `random() -> int` — [BUILTIN-RANDOM]
+A cryptographically-secure uniform random non-negative integer in `[0, 2^63-1]`,
+drawn fresh from the operating system's CSPRNG (`arc4random_buf` on macOS/BSD,
+`getrandom(2)` on Linux, falling back to `/dev/urandom`). It carries no userspace
+seed or state, so the stream is unpredictable and never reproducible — suitable
+for security-sensitive use as well as randomized inputs.
+
+```osprey
+let token = random()        // e.g. 7240982340198 (varies every call)
+fn coinFlip() = randomBelow(2) ?: 0   // 0 or 1
+```
+
+### `randomBelow(n: int) -> Result<int, MathError>` — [BUILTIN-RANDOM-BELOW]
+A cryptographically-secure uniform random integer in the half-open range
+`[0, n)`. The result is **unbiased**: it is drawn by rejection sampling, so every
+value in the range is equally likely (a plain `random() % n` is not). A
+non-positive `n` returns `Error(MathError)`; otherwise `Success(value)` with
+`0 <= value < n`. Compose for an arbitrary range: `lo + (randomBelow(hi - lo) ?: 0)`.
+
+```osprey
+let die = randomBelow(6) ?: 0          // a fair face 0..5
+match randomBelow(0) { Success { value } => value  Error { message } => 0 - 1 }  // Error
 ```
 
 ## String Functions

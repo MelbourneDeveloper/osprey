@@ -19,7 +19,9 @@ pub(crate) fn gen(
     named: &[NamedArgument],
 ) -> Result<Option<Value>> {
     let v = match name {
-        "length" => unary_i64(cg, "strlen", args, named)?,
+        // `osp_strlen` (not libc `strlen`) returns `i64` on every target; libc
+        // `strlen` returns `size_t`, 32-bit on wasm32, breaking the IR's width.
+        "length" => unary_i64(cg, "osp_strlen", args, named)?,
         "isEmpty" => bool_from_i64(cg, "osp_string_is_empty", &[(0, LType::Str)], args, named)?,
         "contains" => contains(cg, args, named)?,
         "startsWith" => bool_from_i64(

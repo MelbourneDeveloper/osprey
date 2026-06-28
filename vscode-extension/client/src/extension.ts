@@ -5,9 +5,10 @@ import {
   window,
   commands,
   debug,
+  DebugAdapterExecutable,
   languages,
 } from "vscode";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import * as fs from "fs";
 import {
   CloseAction,
@@ -19,6 +20,7 @@ import {
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
+import { registerOspreyDebugPanel } from "./debug-panel";
 
 // @nimblesite/shipwright-vscode is ESM-only; this extension is CommonJS, so it
 // is loaded via dynamic import() (never a static require) inside activate().
@@ -131,6 +133,10 @@ export interface ActiveEditorLike {
   document: { languageId: string; fileName: string };
 }
 
+function isOspreyDocument(document: ActiveEditorLike["document"]): boolean {
+  return document.languageId === "osprey" || document.fileName.endsWith(".osp");
+}
+
 // applyDefaultOspreyDebugConfig fills an otherwise-empty launch config from the
 // active osprey editor, so pressing Run with no `.vscode/launch.json` still
 // works ([EDITOR-VSCODE]). It mutates and returns `config`: synthesis happens
@@ -142,14 +148,171 @@ export function applyDefaultOspreyDebugConfig(
   activeEditor: ActiveEditorLike | undefined,
 ): any {
   if (!config.type && !config.request && !config.name) {
-    if (activeEditor && activeEditor.document.languageId === "osprey") {
+    if (activeEditor && isOspreyDocument(activeEditor.document)) {
       config.type = "osprey";
-      config.name = "Run Osprey File";
+      config.name = "Debug Osprey File";
       config.request = "launch";
       config.program = activeEditor.document.fileName;
+      config.cwd = path.dirname(activeEditor.document.fileName);
     }
   }
   return config;
+}
+
+export function defaultOspreyDebugConfigForEditor(
+  activeEditor: ActiveEditorLike | undefined,
+): any {
+  return applyDefaultOspreyDebugConfig({}, activeEditor);
+}
+
+export function defaultDebugOutputPath(program: string): string {
+  const exe = process.platform === "win32" ? ".exe" : "";
+  return path.join(
+    path.dirname(program),
+    ".osprey-debug",
+    `${path.basename(program, path.extname(program))}${exe}`,
+  );
+}
+
+export interface LldbDapResolutionHost {
+  env?: NodeJS.ProcessEnv;
+  existsSync?: (filePath: string) => boolean;
+  execFileSync?: (
+    command: string,
+    args: readonly string[],
+    options: { encoding: BufferEncoding },
+  ) => string | Buffer;
+  getSetting?: () => string | undefined;
+  platform?: NodeJS.Platform;
+}
+
+function findExecutableOnPath(
+  command: string,
+  env: NodeJS.ProcessEnv,
+  existsSync: (filePath: string) => boolean,
+): string | undefined {
+  for (const dir of (env.PATH ?? "").split(path.delimiter)) {
+    if (!dir) {
+      continue;
+    }
+    const candidate = path.join(dir, command);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+export function resolveLldbDapCommand(
+  config: any = {},
+  host: LldbDapResolutionHost = {},
+): string {
+  const platform = host.platform ?? process.platform;
+  const lldbDapName = platform === "win32" ? "lldb-dap.exe" : "lldb-dap";
+  return resolveLldbDapExecutable(config, host) ?? lldbDapName;
+}
+
+export function resolveLldbDapExecutable(
+  config: any = {},
+  host: LldbDapResolutionHost = {},
+): string | undefined {
+  const setting = host.getSetting
+    ? host.getSetting()
+    : workspace.getConfiguration("osprey").get<string>("debug.lldbDapPath");
+  const configured = config.lldbDapPath || setting;
+  const platform = host.platform ?? process.platform;
+  const existsSync = host.existsSync ?? fs.existsSync;
+  const env = host.env ?? process.env;
+  const lldbDapName = platform === "win32" ? "lldb-dap.exe" : "lldb-dap";
+  const legacyName = platform === "win32" ? "lldb-vscode.exe" : "lldb-vscode";
+  if (configured) {
+    if (looksLikePath(configured)) {
+      return existsSync(configured) ? configured : undefined;
+    }
+    return findExecutableOnPath(configured, env, existsSync);
+  }
+
+  const onPath =
+    findExecutableOnPath(lldbDapName, env, existsSync) ??
+    findExecutableOnPath(legacyName, env, existsSync);
+  if (onPath) {
+    return onPath;
+  }
+
+  if (platform === "darwin") {
+    try {
+      const xcrun = host.execFileSync ?? execFileSync;
+      const resolved = String(
+        xcrun("xcrun", ["-f", "lldb-dap"], { encoding: "utf8" }),
+      ).trim();
+      if (resolved && existsSync(resolved)) {
+        return resolved;
+      }
+    } catch {
+      // Fall through to common install locations.
+    }
+  }
+
+  const commonCandidates =
+    platform === "win32"
+      ? [
+          "C:\\Program Files\\LLVM\\bin\\lldb-dap.exe",
+          "C:\\Program Files\\LLVM\\bin\\lldb-vscode.exe",
+        ]
+      : [
+          "/opt/homebrew/opt/llvm/bin/lldb-dap",
+          "/usr/local/opt/llvm/bin/lldb-dap",
+          "/usr/bin/lldb-dap",
+          "/opt/homebrew/opt/llvm/bin/lldb-vscode",
+          "/usr/local/opt/llvm/bin/lldb-vscode",
+          "/usr/bin/lldb-vscode",
+        ];
+  return commonCandidates.find(existsSync);
+}
+
+export function missingLldbDapMessage(config: any = {}): string {
+  const configured = config.lldbDapPath
+    ? ` Configured lldbDapPath: ${config.lldbDapPath}.`
+    : "";
+  return (
+    "lldb-dap was not found. Install LLVM/LLDB or set osprey.debug.lldbDapPath " +
+    "to an existing lldb-dap executable. Checked launch config, VS Code setting, PATH, " +
+    `xcrun, and common LLVM install paths.${configured}`
+  );
+}
+
+function compileDebugProgram(
+  compilerCommand: string,
+  sourceProgram: string,
+  debugOutput: string,
+  cwd: string,
+  log: (message: string) => void,
+): Promise<void> {
+  fs.mkdirSync(path.dirname(debugOutput), { recursive: true });
+  return new Promise((resolve, reject) => {
+    execFile(
+      compilerCommand,
+      [sourceProgram, "--debug", "--compile", "-o", debugOutput],
+      { cwd },
+      (error: any, stdout: any, stderr: any) => {
+        if (stdout) {
+          log(stdout);
+        }
+        if (stderr) {
+          log(stderr);
+        }
+        if (error) {
+          reject(
+            new Error(
+              `Osprey debug build failed with exit code ${error.code || "unknown"}`,
+            ),
+          );
+          return;
+        }
+        resolve();
+      },
+    );
+  });
 }
 
 export function activate(context: ExtensionContext) {
@@ -287,18 +450,29 @@ export function activate(context: ExtensionContext) {
 
   // Register debug adapter
   const provider = debug.registerDebugAdapterDescriptorFactory("osprey", {
-    createDebugAdapterDescriptor(_session: any) {
-      // Return null to use inline debug adapter
-      return null;
+    createDebugAdapterDescriptor(session: any) {
+      const command = resolveLldbDapExecutable(session?.configuration);
+      if (!command) {
+        const message = missingLldbDapMessage(session?.configuration);
+        outputChannel.appendLine(message);
+        void window.showErrorMessage(message);
+        return undefined;
+      }
+      return new DebugAdapterExecutable(command);
     },
   });
 
   context.subscriptions.push(provider);
 
+  // Register the Osprey Debug panel (call stack, locals, program details, and
+  // the reserved CPU/memory profiling surfaces). It tracks the live session and
+  // refreshes on every stop.
+  registerOspreyDebugPanel(context);
+
   // Register debug configuration provider
   context.subscriptions.push(
     debug.registerDebugConfigurationProvider("osprey", {
-      resolveDebugConfiguration(folder: any, config: any, token: any) {
+      async resolveDebugConfiguration(folder: any, config: any, token: any) {
         // If no config is provided, synthesize one from the active osprey editor.
         config = applyDefaultOspreyDebugConfig(config, window.activeTextEditor);
 
@@ -310,9 +484,47 @@ export function activate(context: ExtensionContext) {
             });
         }
 
-        // Actually run the Osprey program instead of debugging
-        compileAndRunCurrentFile(resolveServerCommand(context));
-        return undefined; // Cancel the debug session
+        const sourceProgram = config.program;
+        const cwd = config.cwd || path.dirname(sourceProgram);
+        const debugOutput =
+          config.debugOutput || defaultDebugOutputPath(sourceProgram);
+        const document = workspace.textDocuments.find(
+          (d) => d.fileName === sourceProgram,
+        );
+        if (document && document.isDirty) {
+          const saved = await document.save();
+          if (!saved) {
+            window.showErrorMessage("Save the Osprey file before debugging.");
+            return undefined;
+          }
+        }
+
+        outputChannel.appendLine(
+          `Debug build: ${sourceProgram} -> ${debugOutput}`,
+        );
+        try {
+          await compileDebugProgram(
+            resolveServerCommand(context),
+            sourceProgram,
+            debugOutput,
+            cwd,
+            (message) => outputChannel.appendLine(message),
+          );
+        } catch (error: any) {
+          const msg = error?.message || String(error);
+          outputChannel.appendLine(msg);
+          window.showErrorMessage(msg);
+          return undefined;
+        }
+
+        return {
+          ...config,
+          type: "osprey",
+          request: "launch",
+          program: debugOutput,
+          sourceProgram,
+          cwd,
+        };
       },
     }),
   );
@@ -362,6 +574,9 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand("osprey.run", () => {
       compileAndRunCurrentFile(resolveServerCommand(context));
     }),
+    commands.registerCommand("osprey.debug", () => {
+      void debugCurrentFile();
+    }),
     commands.registerCommand("osprey.setLanguage", () => {
       const activeEditor = window.activeTextEditor;
       if (activeEditor) {
@@ -377,6 +592,15 @@ export function activate(context: ExtensionContext) {
       }
     }),
   );
+}
+
+async function debugCurrentFile() {
+  const config = defaultOspreyDebugConfigForEditor(window.activeTextEditor);
+  if (!config.program) {
+    window.showErrorMessage("Please open a .osp file to debug");
+    return;
+  }
+  await debug.startDebugging(undefined, config);
 }
 
 function compileCurrentFile(compilerCommand: string) {

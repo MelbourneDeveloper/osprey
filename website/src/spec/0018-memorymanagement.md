@@ -125,6 +125,15 @@ source code:
   cycle collector because the heap is acyclic [MEM-ACYCLIC].
 - **Tracing GC** — the conformance oracle that keeps [MEM-OPAQUE] honest.
 
+**Backend portability.** The two reclaiming backends need different things from
+the host. The conservative tracing GC finds roots by scanning the native stack,
+machine registers and data/BSS segments, so it runs on native targets only. ARC
+is *precise* (the compiler inserts retain/release) and non-atomic, so it carries
+to every target — including `wasm32`, where it is the *only* reclaiming option:
+the conservative GC cannot scan a wasm stack, and the WebAssembly-GC proposal is
+a separate, untargeted mechanism. See
+[spec 0022](0022-WebAssemblyTarget.md) [WASM-TARGET-MEMORY].
+
 A reclamation backend is conforming iff every differential-harness example
 produces byte-identical output and reports zero leaked language values under
 it.

@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup tui run install uninstall website-dev website-build rebuild-install-vsix bench
+.PHONY: build test lint fmt clean ci setup run install bench wasm vsix-rebuild-reinstall
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -52,17 +52,43 @@ BIN ?= target/release/osprey
 RTB ?= compiler/bin
 
 # VSIX (VSCode extension) — macOS only. Bundles the Rust binary as `osprey`.
+# All VSIX targets touch ONLY this extension id, ONLY in the default profile;
+# they never enumerate VSCode profiles and never affect any other extension.
 EXT_DIR        ?= vscode-extension
 EXT_ID         ?= nimblesite.osprey
-VSCODE_STORAGE ?= $(HOME)/Library/Application Support/Code/User/globalStorage/storage.json
 
 # C runtime compile flag profiles (hardened; mirror the original recipes).
 A    ?= -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE
 B    ?= $(A) -std=c11
 OSSL ?= -DOPENSSL_SUPPRESS_DEPRECATED -DOPENSSL_API_COMPAT=30000 -Wno-deprecated-declarations
 # Object lists for the archives (paths relative to compiler/, where `ar` runs).
-FIB_OBJ  ?= bin/memory_runtime.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o
+FIB_OBJ  ?= bin/memory_runtime.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/list_runtime.o bin/map_runtime.o bin/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o
 HTTP_OBJ ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ)
+# GC backend archives (osprey --memory=gc): the tracing collector replaces
+# memory_runtime.o, and the value-container units are rebuilt with the malloc
+# redirect (osp_gc_shim.h) so their nodes live in the managed heap. Everything
+# else is the same object. Implements [GC-TRACE-CONSERVATIVE], docs/plans/0011.
+FIB_OBJ_GC  ?= bin/memory_gc.o bin/fiber_runtime.o bin/system_runtime.o bin/effects_runtime.o bin/string_runtime.o bin/string_runtime_list.o bin/gc/list_runtime.o bin/gc/map_runtime.o bin/gc/map_runtime_hamt.o bin/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o
+HTTP_OBJ_GC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ_GC)
+
+# WebAssembly (wasm32-wasip1) cross-build toolchain — opt-in via `make wasm`.
+# Compiles the portable C-runtime subset (no pthreads/sockets/OpenSSL/syscalls)
+# to a wasm archive osprey links with `--target=wasm32`. See docs/specs/0022.
+WASM_CC      ?= clang
+WASM_AR      ?= llvm-ar
+WASM_TARGET  ?= wasm32-wasip1
+# WASI sysroot (libc + crt1). Override with WASI_SYSROOT=/path; else probe the
+# Homebrew (macOS), wasi-sdk and common Linux locations in turn.
+WASI_SYSROOT ?= $(shell for d in "$$OSPREY_WASI_SYSROOT" \
+  /opt/homebrew/opt/wasi-libc/share/wasi-sysroot \
+  /usr/local/opt/wasi-libc/share/wasi-sysroot \
+  /opt/wasi-sdk/share/wasi-sysroot "$$WASI_SDK_PATH/share/wasi-sysroot" \
+  /usr/share/wasi-sysroot; do [ -n "$$d" ] && [ -d "$$d" ] && { echo "$$d"; break; }; done)
+WASM_CFLAGS  ?= --target=$(WASM_TARGET) --sysroot=$(WASI_SYSROOT) -O2 -std=c11 -Wall -Wextra -Werror -c
+# Portable subset that compiles for wasm32: allocator + strings + value
+# containers + JSON + effects. Excludes fiber (pthreads), http/websocket
+# (sockets/OpenSSL), system (fork/wait), term (termios) and ffi (dlopen).
+WASM_RT_SRC  ?= memory_runtime string_runtime string_runtime_list list_runtime map_runtime map_runtime_hamt json_runtime effects_runtime
 
 # =============================================================================
 # Standard Targets
@@ -108,6 +134,27 @@ clean:
 ## ci: lint + test + build (full CI simulation)
 ci: lint test build
 
+## wasm: Build everything for the WebAssembly target, ready to go — the wasm
+## runtime archive (compiler/bin/libosprey_runtime_wasm.a) and the compiled
+## browser example (examples/wasm/build/hello.wasm) — then validate it and
+## smoke-run it under Node's WASI, the browser WASI shim, and the full golden
+## suite. Requires clang (wasm32 backend), wasm-ld and a WASI sysroot —
+## `brew install lld wasi-libc` (macOS) or the wasi-sdk. See
+## docs/specs/0022-WebAssemblyTarget.md.
+wasm: build _runtime_wasm
+	@echo "==> compiling the wasm example -> examples/wasm/build/"
+	@$(MKDIR) examples/wasm/build
+	$(BIN) examples/wasm/hello.osp --target=wasm32 --compile -o examples/wasm/build/hello.wasm
+	@echo "==> validating + smoke-running examples/wasm/build/hello.wasm"
+	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/hello.wasm || echo "(wasm-validate not found — skipping structural check)"
+	node scripts/wasm-smoke.mjs         examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+	node scripts/wasm-browser-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+	@echo "==> [wasm differential] osprey --target=wasm32 vs examples/tested..."
+	@out=$$(zsh crates/diff_wasm_examples.sh); echo "$$out"; \
+	  echo "$$out" | grep -Eq '(^| )FAIL=0 '  || { echo 'FAIL: wasm differential mismatch'; exit 1; }; \
+	  echo "$$out" | grep -Eq '(^| )NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }
+	@echo "==> wasm ready: built + validated + WASI/browser smoke + golden suite green"
+
 ## setup: Post-create dev environment setup (used by devcontainer)
 setup:
 	@echo "==> Setting up development environment..."
@@ -126,8 +173,12 @@ setup:
 # so `cd` persists; faithful port of the original hardened C recipes.
 _runtime:
 	@echo "==> building C runtime archives ($(RTB)/lib*_runtime.a)"
-	@cd compiler && set -e && $(MKDIR) bin lib && \
+	@cd compiler && set -e && $(MKDIR) bin lib bin/gc && \
 	  $(CC) $(B) runtime/memory_runtime.c       -o bin/memory_runtime.o && \
+	  $(CC) $(B) runtime/memory_gc.c            -o bin/memory_gc.o && \
+	  $(CC) $(B) -include runtime/osp_gc_shim.h runtime/list_runtime.c     -o bin/gc/list_runtime.o && \
+	  $(CC) $(B) -include runtime/osp_gc_shim.h runtime/map_runtime.c      -o bin/gc/map_runtime.o && \
+	  $(CC) $(B) -include runtime/osp_gc_shim.h runtime/map_runtime_hamt.c -o bin/gc/map_runtime_hamt.o && \
 	  $(CC) -c -fPIC -O2 -Werror -Wall -Wextra -Wpedantic -std=c11 -D_GNU_SOURCE runtime/fiber_runtime.c -o bin/fiber_runtime.o && \
 	  $(CC) $(A) runtime/system_runtime.c       -o bin/system_runtime.o && \
 	  $(CC) $(A) runtime/effects_runtime.c      -o bin/effects_runtime.o && \
@@ -139,6 +190,7 @@ _runtime:
 	  $(CC) $(B) runtime/json_runtime.c         -o bin/json_runtime.o && \
 	  $(CC) $(B) runtime/ffi_runtime.c          -o bin/ffi_runtime.o && \
 	  $(CC) $(B) runtime/term_runtime.c         -o bin/term_runtime.o && \
+	  $(CC) $(B) runtime/random_runtime.c       -o bin/random_runtime.o && \
 	  $(CC) -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra \
 	        -Wformat -Werror=format-security -Werror=implicit-function-declaration \
 	        -Werror=incompatible-pointer-types -Werror=int-conversion -Warray-bounds -ftrapv \
@@ -151,7 +203,25 @@ _runtime:
 	  $(CC) $(A) $(OSSL) `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o && \
 	  $(AR) rcs bin/libfiber_runtime.a $(FIB_OBJ) && \
 	  $(AR) rcs bin/libhttp_runtime.a  $(HTTP_OBJ) && \
-	  cp bin/libfiber_runtime.a bin/libhttp_runtime.a lib/
+	  $(AR) rcs bin/libfiber_runtime_gc.a $(FIB_OBJ_GC) && \
+	  $(AR) rcs bin/libhttp_runtime_gc.a  $(HTTP_OBJ_GC) && \
+	  cp bin/libfiber_runtime.a bin/libhttp_runtime.a bin/libfiber_runtime_gc.a bin/libhttp_runtime_gc.a lib/
+
+# Cross-compile the portable C-runtime subset to a wasm32-wasip1 archive that
+# osprey links for `--target=wasm32`. One shell so `cd` persists. Fails loudly
+# if no WASI sysroot is found. Output: compiler/{bin,lib}/libosprey_runtime_wasm.a
+_runtime_wasm:
+	@if [ -z "$(WASI_SYSROOT)" ]; then \
+	  echo "ERROR: no WASI sysroot found. Install it with 'brew install lld wasi-libc'"; \
+	  echo "       (macOS) or the wasi-sdk, or set WASI_SYSROOT=/path/to/wasi-sysroot."; \
+	  exit 1; fi
+	@echo "==> building wasm runtime archive ($(WASM_TARGET), sysroot $(WASI_SYSROOT))"
+	@cd compiler && set -e && $(MKDIR) bin/wasm lib && \
+	  for u in $(WASM_RT_SRC); do \
+	    $(WASM_CC) $(WASM_CFLAGS) runtime/$$u.c -o bin/wasm/$$u.o; \
+	  done && \
+	  $(WASM_AR) rcs bin/libosprey_runtime_wasm.a bin/wasm/*.o && \
+	  cp bin/libosprey_runtime_wasm.a lib/
 
 # --- rust (crates/) ---------------------------------------------------------
 # Implements [TEST-RULES] — cargo test is fail-fast at the binary level by
@@ -210,6 +280,13 @@ _test_differential:
 	  echo "$$out" | grep -Eq 'NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }; \
 	  echo "$$out" | grep -q  'FC_OK'    || { echo 'FAIL: must-reject ratchet exceeded'; exit 1; }
 
+# _conformance-gc: run every tested example under the tracing GC backend; output
+# must be byte-identical to the default ([MEM-BACKENDS] oracle, docs/plans/0011).
+_conformance-gc: build
+	@echo "==> [conformance] differential harness under --memory=gc..."
+	@out=$$(OSPREY_RUN_FLAGS=--memory=gc zsh crates/diff_examples.sh); echo "$$out"; \
+	  echo "$$out" | grep -Eq 'FAIL=0 ' || { echo 'FAIL: GC backend output diverged'; exit 1; }
+
 # --- vscode-extension -------------------------------------------------------
 # The extension's LSP server spawns the `osprey` binary at runtime, so the
 # integration tests need a real compiler on PATH: the Rust binary is staged as
@@ -244,11 +321,11 @@ _coverage_check_vscode_extension:
 # Repo-Specific Targets
 # =============================================================================
 
-## tui: Build, then launch the interactive TUI demo (live GitHub API browser).
-##      Runs in the current terminal so the raw-mode key reader gets real stdin.
-tui: build
+# _tui: Build, then launch the interactive TUI demo (live GitHub API browser).
+#       Runs in the current terminal so the raw-mode key reader gets real stdin.
+_tui: build
 	@echo "==> launching TUI demo (live GitHub API browser)"
-	./$(BIN) compiler/examples/tui/api_browser.osp --run
+	./$(BIN) examples/tui/api_browser.osp --run
 
 ## run: Compile and run an Osprey file (usage: make run FILE=<path>)
 run: build
@@ -262,18 +339,18 @@ install: build
 	sudo cp $(RTB)/libfiber_runtime.a $(RTB)/libhttp_runtime.a /usr/local/lib/
 	@echo "==> installed osprey and runtime archives."
 
-## uninstall: Remove osprey + runtime archives from the system
-uninstall:
+# _uninstall: Remove osprey + runtime archives from the system
+_uninstall:
 	cargo uninstall osprey-cli 2>/dev/null || true
 	sudo rm -f /usr/local/lib/libfiber_runtime.a /usr/local/lib/libhttp_runtime.a
 	@echo "==> uninstalled."
 
-## website-dev: Start local website development server
-website-dev:
+# _website-dev: Start local website development server
+_website-dev:
 	cd website && npm run dev
 
-## website-build: Build static site
-website-build:
+# _website-build: Build static site
+_website-build:
 	cd website && npm run build
 
 ## bench: Build, then run the cross-language performance benchmark suite
@@ -285,25 +362,21 @@ website-build:
 bench: build
 	@zsh benchmarks/run.sh $(BENCH_FILTER)
 
-## rebuild-install-vsix: Uninstall → clean → rebuild → package → install the
-##      VSCode extension into every VSCode profile, bundling the freshly-built
-##      Rust compiler as `osprey`. macOS only. See [MAKE-IDE-EXT].
-rebuild-install-vsix: build _vsix_uninstall _vsix_clean _vsix_build _vsix_bundle _vsix_package _vsix_install
+## vsix-rebuild-reinstall: Clean → build → reinstall the Osprey VSCode
+##      extension in place, bundling the freshly-built Rust compiler as `osprey`.
+##      Touches ONLY the Osprey extension ($(EXT_ID)) in the DEFAULT profile —
+##      never another extension, never another VSCode profile. macOS only.
+##      ONE `code` invocation (install --force, no separate uninstall) so the
+##      running VSCode reconciles its extension host exactly once, not twice.
+##      See [MAKE-IDE-EXT].
+vsix-rebuild-reinstall: _vsix_clean build _vsix_build _vsix_bundle _vsix_package _vsix_install
+
+# _rebuild-install-vsix: deprecated private alias of `vsix-rebuild-reinstall`.
+_rebuild-install-vsix: vsix-rebuild-reinstall
 
 # --- vsix sub-steps ---------------------------------------------------------
-# Uninstall from default profile + every named profile in storage.json.
-# `code --uninstall-extension` exits non-zero when not installed; swallowed so
-# uninstall-before-install stays idempotent.
-_vsix_uninstall:
-	-@code --uninstall-extension $(EXT_ID) >/dev/null 2>&1 && echo "  [default] uninstalled" || echo "  [default] not installed"
-	@jq -r '.userDataProfiles[]?.name' "$(VSCODE_STORAGE)" 2>/dev/null | while IFS= read -r prof; do \
-	  [ -z "$$prof" ] && continue; \
-	  code --profile "$$prof" --uninstall-extension $(EXT_ID) >/dev/null 2>&1 \
-	    && echo "  [$$prof] uninstalled" || echo "  [$$prof] not installed"; \
-	done
-
 _vsix_clean:
-	cd $(EXT_DIR) && $(RM) out dist *.vsix
+	cd $(EXT_DIR) && $(RM) out dist osprey-*.vsix
 
 _vsix_build:
 	cd $(EXT_DIR) && npm run compile
@@ -325,13 +398,13 @@ _vsix_bundle:
 _vsix_package:
 	cd $(EXT_DIR) && npm run package
 
-# Install the newest VSIX into the default profile + every named profile.
+# Install the newest Osprey VSIX into the DEFAULT profile only. `--install-
+# extension <file> --force` upgrades that one extension id in place — no
+# separate uninstall needed, so the live VSCode reconciles its extension host
+# once. It installs exactly that VSIX (the Osprey extension) and no other, and
+# does NOT enumerate VSCode profiles, so it can never touch any other extension.
 _vsix_install:
-	@VSIX=$$(ls -t $(EXT_DIR)/*.vsix 2>/dev/null | head -1); \
-	if [ -z "$$VSIX" ]; then echo "FAIL: no .vsix in $(EXT_DIR)/"; exit 1; fi; \
+	@VSIX=$$(ls -t $(EXT_DIR)/osprey-*.vsix 2>/dev/null | head -1); \
+	if [ -z "$$VSIX" ]; then echo "FAIL: no osprey-*.vsix in $(EXT_DIR)/"; exit 1; fi; \
 	echo "  vsix: $$VSIX"; \
-	code --install-extension "$$VSIX" --force && echo "  [default] installed"; \
-	jq -r '.userDataProfiles[]?.name' "$(VSCODE_STORAGE)" 2>/dev/null | while IFS= read -r prof; do \
-	  [ -z "$$prof" ] && continue; \
-	  code --profile "$$prof" --install-extension "$$VSIX" --force && echo "  [$$prof] installed"; \
-	done
+	code --install-extension "$$VSIX" --force && echo "  installed $(EXT_ID)"

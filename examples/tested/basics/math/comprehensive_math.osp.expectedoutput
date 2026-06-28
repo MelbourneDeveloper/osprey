@@ -17,4 +17,5 @@ complex    = 18
 Error: Cannot divide 15 by 0!
 20 / 4 = 5
 classify Zero / One / Many
+random>=0 yes, randomBelow(100) in-range, randomBelow(0) rejected, stdin=[]
 === Math Showcase Complete ===

@@ -8,7 +8,7 @@ description: Audits a website for SEO, AI search performance, structured data, m
 
 Performs a comprehensive website audit and fixes issues affecting search visibility and AI discoverability.
 
-**Repo context:** The website lives in `website/` and uses the 11ty (Eleventy) static site generator. Generated output goes to `website/_site`. Run `make website-dev` to start the dev server and `make website-build` to build.
+**Repo context:** The website lives in `website/` and uses the 11ty (Eleventy) static site generator. Generated output goes to `website/_site`. Run `make _website-dev` to start the dev server and `make _website-build` to build.
 
 Copy this checklist and track your progress:
 
@@ -136,7 +136,7 @@ Read the design system docs and view the design screens in the designsystem fold
 
 ## Step 11 — Test with Playwright
 
-Build and run the website locally using `make website-dev` (or `cd website && npm run dev`).
+Build and run the website locally using `make _website-dev` (or `cd website && npm run dev`).
 
 **Desktop tests (1280x720):**
 

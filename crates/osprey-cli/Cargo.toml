@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 osprey-ast = { workspace = true }
+osprey-debug = { workspace = true }
 osprey-syntax = { workspace = true }
 osprey-types = { workspace = true }
 osprey-codegen = { workspace = true }

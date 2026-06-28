@@ -1,0 +1,88 @@
+<!doctype html>
+<!-- Osprey -> WebAssembly browser loader. [WASM-TARGET]
+
+     Loads a wasm32-wasip1 command module compiled by `osprey --target=wasm32`
+     and runs it with the shared inline WASI shim (wasi-shim.mjs; fd_write ->
+     page + console). No bundler, no npm.
+
+     IMPORTANT: serve this directory over HTTP — browsers block fetch() of the
+     .wasm (and ES-module imports) from file://. After `make wasm`:
+         cd examples/wasm && python3 -m http.server 8080
+         open http://localhost:8080/
+
+     From the browser console you can also drive it directly:
+         await osprey.run()        // (re)instantiate and run _start
+         osprey.exports            // the raw wasm exports (memory, _start)
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Osprey on WebAssembly</title>
+    <style>
+      body { font: 15px/1.5 system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1rem; }
+      h1 { font-size: 1.4rem; }
+      button { font: inherit; padding: 0.4rem 0.9rem; cursor: pointer; }
+      pre { background: #11141a; color: #e6e6e6; padding: 1rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; }
+      code { background: #eef; padding: 0 0.25rem; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <h1>Osprey &rarr; WebAssembly</h1>
+    <p>
+      <code>hello.osp</code> compiled to <code>build/hello.wasm</code> and run in
+      your browser. Output (via the WASI <code>fd_write</code> shim) appears below
+      and in the devtools console. It runs automatically on load; click
+      &ldquo;Run&rdquo; or call <code>await osprey.run()</code> to run it again.
+    </p>
+    <p><button id="run">Run hello.wasm</button></p>
+    <pre id="out">loading&hellip;</pre>
+
+    <!-- A classic script (not type=module) so it still runs over file://: ES-module
+         imports are CORS-blocked from disk, so we dynamic-import the shared shim
+         only once we know we're on http(s). Over file:// we show guidance instead. -->
+    <script>
+      const outEl = document.getElementById("out");
+      const FILE_HINT =
+        "This page must be served over HTTP, not opened from disk\n" +
+        "(browsers block loading the .wasm and JS modules over file://).\n\n" +
+        "  cd examples/wasm && python3 -m http.server 8080\n" +
+        "then open http://localhost:8080/";
+      const write = (text) => {
+        outEl.textContent += text;
+        for (const line of text.split("\n")) if (line) console.log(line);
+      };
+
+      async function run() {
+        if (location.protocol === "file:") {
+          outEl.textContent = FILE_HINT;
+          return;
+        }
+        outEl.textContent = "";
+        let bytes;
+        try {
+          const res = await fetch("build/hello.wasm");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          bytes = await res.arrayBuffer();
+        } catch (e) {
+          outEl.textContent =
+            `Could not load build/hello.wasm (${e.message ?? e}).\n` +
+            "Build it first, from the repo root:\n\n  make wasm";
+          return;
+        }
+        const { runModule } = await import("./wasi-shim.mjs");
+        window.osprey.exports = await runModule(bytes, write);
+        return window.osprey.exports;
+      }
+
+      window.osprey = { run };
+      document.getElementById("run").addEventListener("click", () => {
+        run().catch((e) => { outEl.textContent = `error: ${e.message ?? e}`; });
+      });
+      // Run on load when served over HTTP, so the page works without a click;
+      // over file:// show the how-to-serve hint immediately.
+      if (location.protocol === "file:") outEl.textContent = FILE_HINT;
+      else run().catch(() => {});
+    </script>
+  </body>
+</html>

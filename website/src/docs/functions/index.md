@@ -420,6 +420,18 @@ Strict base-10 signed-int parser. No whitespace tolerance.
 
 Prints a value to the console. Automatically converts the value to a string representation.
 
+## [random](random/)
+
+**Signature:** `random() -> int`
+
+A cryptographically-secure uniform random non-negative integer (0 .. 2^63-1), drawn fresh from the OS entropy source. Unseeded and unpredictable.
+
+## [randomBelow](randombelow/)
+
+**Signature:** `randomBelow(n: int) -> Result<int, Error>`
+
+A cryptographically-secure uniform random integer in [0, n), unbiased by rejection sampling. Returns Result<int, MathError> — Error when n <= 0.
+
 ## [range](range/)
 
 **Signature:** `range(start: int, end: int) -> List<int>`

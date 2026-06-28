@@ -1,4 +1,5 @@
 <!-- agent-pmo:74cf183 -->
+
 # Osprey Specifications
 
 This directory holds **all spec documents** for the project:
@@ -10,10 +11,16 @@ This directory holds **all spec documents** for the project:
   — this README is explicitly skipped by that generator).
 - **Engineering specs** (tooling, repo behaviour, processes, cross-cutting
   concerns) — added here as more arrive. Use the same `[GROUP-TOPIC]` ID
-  convention. These are *not* part of the language reference:
+  convention. These are _not_ part of the language reference:
   - [`0020-LanguageServerAndEditors.md`](0020-LanguageServerAndEditors.md) — the
     `osprey lsp` language server (one engine, many surfaces) and editor
     integrations (VS Code, Open VSX, Neovim, Zed).
+  - [`0021-Debugger.md`](0021-Debugger.md) — source-level debugging, debug
+    builds, DAP editor launch, and reusable debugger helper boundaries.
+  - [`0022-WebAssemblyTarget.md`](0022-WebAssemblyTarget.md) — compiling to
+    WebAssembly (`osprey --target=wasm32`, wasm32-wasip1): the portable runtime
+    subset, entry/link model, the ILP32 width fixes, and running `.wasm` under
+    wasmtime / Node's WASI / the browser.
 
 ## Spec ID convention
 

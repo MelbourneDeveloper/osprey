@@ -763,29 +763,38 @@ mod tests {
             position: None,
         };
         // Pipe, non-call form: `10 |> inc` applies `inc(10)`.
-        let bare_pipe = Stmt::Expr(Expr::Pipe {
-            left: Box::new(Expr::Integer(10)),
-            right: Box::new(Expr::Identifier("inc".into())),
-        });
+        let bare_pipe = Stmt::Expr {
+            value: Expr::Pipe {
+                left: Box::new(Expr::Integer(10)),
+                right: Box::new(Expr::Identifier("inc".into())),
+            },
+            position: None,
+        };
         // Pipe, call form: `10 |> inc(0)` prepends `10`, becoming `inc(10, 0)`
         // (an arity mismatch — but the call-form branch is what we exercise).
-        let call_pipe = Stmt::Expr(Expr::Pipe {
-            left: Box::new(Expr::Integer(10)),
-            right: Box::new(Expr::Call {
-                function: Box::new(Expr::Identifier("inc".into())),
-                arguments: vec![Expr::Integer(0)],
-                named_arguments: Vec::new(),
-            }),
-        });
+        let call_pipe = Stmt::Expr {
+            value: Expr::Pipe {
+                left: Box::new(Expr::Integer(10)),
+                right: Box::new(Expr::Call {
+                    function: Box::new(Expr::Identifier("inc".into())),
+                    arguments: vec![Expr::Integer(0)],
+                    named_arguments: Vec::new(),
+                }),
+            },
+            position: None,
+        };
         // `Expr::Update` over a non-record binding hits the else arm of
         // `infer_update` (the field values are still inferred).
-        let update = Stmt::Expr(Expr::Update {
-            record: "n".into(),
-            fields: vec![FieldAssignment {
-                name: "x".into(),
-                value: Expr::Integer(1),
-            }],
-        });
+        let update = Stmt::Expr {
+            value: Expr::Update {
+                record: "n".into(),
+                fields: vec![FieldAssignment {
+                    name: "x".into(),
+                    value: Expr::Integer(1),
+                }],
+            },
+            position: None,
+        };
         let prog = Program {
             statements: vec![
                 inc,
@@ -854,7 +863,10 @@ mod tests {
         // The function's signature pass registers `combine`; the MethodCall is a
         // bare top-level expression statement that drives `infer_method_call`.
         let mut stmts = prog.statements;
-        stmts.push(Stmt::Expr(body));
+        stmts.push(Stmt::Expr {
+            value: body,
+            position: None,
+        });
         let errs = check_program(&Program { statements: stmts });
         assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
     }
@@ -894,15 +906,18 @@ mod tests {
         use osprey_ast::{Expr, NamedArgument, Program, Stmt};
         ok("effect Logger { log: fn(string) -> Unit }\n\
             fn shout(msg: string) -> Unit !Logger = perform Logger.log(msg)\n");
-        let perform = Stmt::Expr(Expr::Perform {
-            effect: "Logger".into(),
-            operation: "log".into(),
-            arguments: Vec::new(),
-            named_arguments: vec![NamedArgument {
-                name: "msg".into(),
-                value: Expr::Str("hi".into()),
-            }],
-        });
+        let perform = Stmt::Expr {
+            value: Expr::Perform {
+                effect: "Logger".into(),
+                operation: "log".into(),
+                arguments: Vec::new(),
+                named_arguments: vec![NamedArgument {
+                    name: "msg".into(),
+                    value: Expr::Str("hi".into()),
+                }],
+            },
+            position: None,
+        };
         let errs = check_program(&Program {
             statements: vec![perform],
         });

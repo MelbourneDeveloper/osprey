@@ -7,7 +7,7 @@
 //! (`print`, `toString`, `length`) and stay precise where a wrong type is a
 //! genuine bug. Result-returning builtins return `Result<T, Error>` — the
 //! shape the C runtime actually returns — so the match/auto-unwrap paths agree
-//! with the expected outputs in `compiler/examples/tested`.
+//! with the expected outputs in `examples/tested`.
 
 use crate::env::TypeEnv;
 use crate::ty::{Scheme, Type};
@@ -71,6 +71,11 @@ fn core(e: &mut TypeEnv) {
     // The `/` operator is float-only (Osprey spec); this is its integer sibling.
     // Implements [BUILTIN-INTDIV].
     mono(e, "intDiv", vec![i(), i()], res(i()));
+    // Cryptographically-secure randomness (random_runtime.c). `random` yields a
+    // uniform non-negative int; `randomBelow(n)` an unbiased int in [0, n),
+    // Error when n <= 0. Implements [BUILTIN-RANDOM], [BUILTIN-RANDOM-BELOW].
+    mono(e, "random", vec![], i());
+    mono(e, "randomBelow", vec![i()], res(i()));
     mono(e, "not", vec![b()], b());
 }
 

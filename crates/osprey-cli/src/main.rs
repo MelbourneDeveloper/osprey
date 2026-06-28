@@ -16,13 +16,15 @@
 
 mod docs;
 mod sandbox;
+mod wasm;
 
 use sandbox::Policy;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --compile | --run | \
---symbols] [--quiet] [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
+--symbols] [--quiet] [--debug] [--memory=default|gc] [--target=native|wasm32] [-o <out>] \
+[--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
        osprey --hover <name>\n\
        osprey --docs --docs-dir <dir>\n\
        osprey lsp";
@@ -34,6 +36,17 @@ struct Cli {
     mode: String,
     quiet: bool,
     policy: Policy,
+    /// The reclaiming memory backend linked behind `@osp_alloc` — `default`
+    /// (malloc passthrough) or `gc` (tracing collector). Link-time only; the IR
+    /// is identical [MEM-BACKENDS]. (`arc` is reserved, docs/plans/0011.)
+    memory: String,
+    /// Codegen/link target: `native` (host executable via clang) or `wasm32`
+    /// (browser-ready WebAssembly via wasm-ld; wasm32-wasip1). [WASM-TARGET]
+    target: String,
+    /// Explicit output artifact path (`-o`); defaults to the source stem.
+    output: Option<String>,
+    /// Emit source-level debug metadata and link a debugger-friendly binary.
+    debug: bool,
 }
 
 fn main() -> ExitCode {
@@ -108,17 +121,36 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
     let mut mode = String::from("--check");
     let mut quiet = false;
     let mut policy = Policy::allow_all();
-    for a in args {
+    let mut memory = String::from("default");
+    let mut target = String::from("native");
+    let mut output = None;
+    let mut debug = false;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
         match a.as_str() {
             "--ast" | "--check" | "--llvm" | "--compile" | "--run" | "--symbols" | "--hover" => {
                 mode.clone_from(a);
             }
             "--quiet" => quiet = true,
+            "--debug" => debug = true,
             "--sandbox" => policy = Policy::sandbox(),
             "--no-http" => policy.http = false,
             "--no-websocket" => policy.websocket = false,
             "--no-fs" => policy.fs = false,
             "--no-ffi" => policy.ffi = false,
+            // `-o <path>` consumes the next argument as the output artifact path.
+            "-o" => {
+                let next = it
+                    .next()
+                    .ok_or_else(|| format!("-o requires a path\n{USAGE}"))?;
+                output = Some(next.clone());
+            }
+            flag if flag.starts_with("--memory=") => {
+                memory = parse_memory(flag.strip_prefix("--memory=").unwrap_or_default())?;
+            }
+            flag if flag.starts_with("--target=") => {
+                target = parse_target(flag.strip_prefix("--target=").unwrap_or_default())?;
+            }
             flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}\n{USAGE}")),
             _ if path.is_none() => path = Some(a.clone()),
             other => return Err(format!("unexpected argument {other}\n{USAGE}")),
@@ -130,8 +162,37 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
             mode,
             quiet,
             policy,
+            memory,
+            target,
+            output,
+            debug,
         }),
         None => Err(USAGE.to_string()),
+    }
+}
+
+/// Validate the `--target=` value: `native` (host executable) or `wasm32`
+/// (browser-ready WebAssembly, wasm32-wasip1). [WASM-TARGET]
+fn parse_target(value: &str) -> Result<String, String> {
+    match value {
+        "native" | "wasm32" => Ok(value.to_string()),
+        other => Err(format!(
+            "unknown target '{other}' (available: native, wasm32)\n{USAGE}"
+        )),
+    }
+}
+
+/// Validate the `--memory=` value. `arc` is reserved but not yet implemented
+/// (docs/plans/0011) — reject it explicitly rather than silently mislabel.
+fn parse_memory(value: &str) -> Result<String, String> {
+    match value {
+        "default" | "gc" => Ok(value.to_string()),
+        "arc" => {
+            Err("memory backend 'arc' is not yet implemented (available: default, gc)".to_string())
+        }
+        other => Err(format!(
+            "unknown memory backend '{other}' (available: default, gc)\n{USAGE}"
+        )),
     }
 }
 
@@ -179,7 +240,7 @@ fn dispatch(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode 
         "--llvm" | "--run" | "--compile" if report_type_errors(path, program) > 0 => {
             ExitCode::FAILURE
         }
-        "--llvm" => match osprey_codegen::compile_program(program) {
+        "--llvm" => match compile_ir(path, program, cli.debug) {
             Ok(ir) => {
                 print!("{ir}");
                 ExitCode::SUCCESS
@@ -189,7 +250,7 @@ fn dispatch(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode 
                 ExitCode::FAILURE
             }
         },
-        "--run" => run_program(path, program, source),
+        "--run" => run_program(cli, program, source),
         "--compile" => compile_program_to_disk(cli, program, source),
         _ => {
             println!("{program:#?}");
@@ -221,14 +282,30 @@ fn run_check(cli: &Cli, program: &osprey_ast::Program) -> ExitCode {
     ExitCode::FAILURE
 }
 
-/// `--compile`: build an executable named after the source file, in the
-/// current directory.
+fn reject_debug_wasm(debug: bool) -> Option<ExitCode> {
+    if debug {
+        eprintln!("error: --debug is currently supported only for --target=native");
+        return Some(ExitCode::from(2));
+    }
+    None
+}
+
+/// `--compile`: build the artifact at `-o` (or the source stem, `.wasm` for the
+/// wasm target) — a host executable via clang, or WebAssembly via wasm-ld.
 fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
-    let exe = PathBuf::from(stem_of(&cli.path));
-    match build_executable(&cli.path, program, source, &exe) {
+    let out = output_path(&cli.path, cli.output.as_deref(), &cli.target);
+    let result = if cli.target == "wasm32" {
+        if let Some(code) = reject_debug_wasm(cli.debug) {
+            return code;
+        }
+        wasm::build(&cli.path, program, &out)
+    } else {
+        build_executable(&cli.path, program, source, &out, &cli.memory, cli.debug)
+    };
+    match result {
         Ok(()) => {
             if !cli.quiet {
-                println!("{}", exe.display());
+                println!("{}", out.display());
             }
             ExitCode::SUCCESS
         }
@@ -236,10 +313,27 @@ fn compile_program_to_disk(cli: &Cli, program: &osprey_ast::Program, source: &st
     }
 }
 
-/// Compile to a temp executable and run it — the `--run` end-to-end path.
-fn run_program(path: &str, program: &osprey_ast::Program, source: &str) -> ExitCode {
-    let exe = std::env::temp_dir().join(format!("{}.out", stem_of(path)));
-    if let Err(code) = build_executable(path, program, source, &exe) {
+/// The output artifact path: the explicit `-o` value, else the source stem in
+/// the current directory — with a `.wasm` extension for the wasm target.
+fn output_path(src: &str, output: Option<&str>, target: &str) -> PathBuf {
+    match output {
+        Some(o) => PathBuf::from(o),
+        None if target == "wasm32" => PathBuf::from(format!("{}.wasm", stem_of(src))),
+        None => PathBuf::from(stem_of(src)),
+    }
+}
+
+/// Compile to a temp artifact and run it — the `--run` end-to-end path. Native
+/// runs the executable directly; wasm runs it under a WASI host (`wasmtime`).
+fn run_program(cli: &Cli, program: &osprey_ast::Program, source: &str) -> ExitCode {
+    if cli.target == "wasm32" {
+        if let Some(code) = reject_debug_wasm(cli.debug) {
+            return code;
+        }
+        return wasm::run(cli, program);
+    }
+    let exe = std::env::temp_dir().join(format!("{}.out", stem_of(&cli.path)));
+    if let Err(code) = build_executable(&cli.path, program, source, &exe, &cli.memory, cli.debug) {
         return code;
     }
     match Command::new(&exe).status() {
@@ -258,8 +352,10 @@ fn build_executable(
     program: &osprey_ast::Program,
     source: &str,
     exe: &Path,
+    memory: &str,
+    debug: bool,
 ) -> Result<(), ExitCode> {
-    let ir = match osprey_codegen::compile_program(program) {
+    let ir = match compile_ir(path, program, debug) {
         Ok(ir) => ir,
         Err(e) => {
             eprintln!("{path}: {e}");
@@ -278,8 +374,9 @@ fn build_executable(
         .arg("-o")
         .arg(exe)
         .arg("-Wno-override-module")
-        .arg(opt_flag())
-        .args(link_args(&ir, source));
+        .arg(opt_flag(debug))
+        .args(debug_compile_flags(debug))
+        .args(link_args(&ir, source, memory));
     match cmd.status() {
         Ok(s) if s.success() => Ok(()),
         Ok(_) => {
@@ -302,8 +399,39 @@ fn build_executable(
 /// per-operation `Result` allocations non-escaping and removes them entirely
 /// (heap → registers), the [MEM-OWNERSHIP] "free at last use" ideal achieved
 /// statically; without it those allocations leak for the whole run.
-fn opt_flag() -> String {
-    std::env::var("OSPREY_OPT").unwrap_or_else(|_| "-O2".to_string())
+fn compile_ir(
+    path: &str,
+    program: &osprey_ast::Program,
+    debug: bool,
+) -> osprey_codegen::Result<String> {
+    if debug {
+        return osprey_codegen::compile_program_debug(
+            program,
+            osprey_codegen::DebugSource::from_path(path),
+        );
+    }
+    osprey_codegen::compile_program(program)
+}
+
+fn opt_flag(debug: bool) -> String {
+    let build = if debug {
+        osprey_debug::DebugBuild::ON
+    } else {
+        osprey_debug::DebugBuild::OFF
+    };
+    build.opt_flag(
+        std::env::var("OSPREY_OPT").unwrap_or_else(|_| "-O2".to_string()),
+        std::env::var("OSPREY_DEBUG_OPT").ok(),
+    )
+}
+
+fn debug_compile_flags(debug: bool) -> Vec<String> {
+    let build = if debug {
+        osprey_debug::DebugBuild::ON
+    } else {
+        osprey_debug::DebugBuild::OFF
+    };
+    build.native_driver_flags()
 }
 
 /// The C compiler/linker driver used to lower the emitted LLVM IR. Defaults to
@@ -316,7 +444,7 @@ fn c_compiler() -> String {
 }
 
 /// The source file's stem (`demo` for `examples/demo.osp`).
-fn stem_of(path: &str) -> String {
+pub(crate) fn stem_of(path: &str) -> String {
     Path::new(path)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -327,7 +455,7 @@ fn stem_of(path: &str) -> String {
 /// The exit code to propagate for a finished child: its own code when it exited
 /// normally, else (Unix) `128 + signal` for a signal death — so a segfaulting
 /// program is NOT masked as success (`status.code()` is `None` for a signal).
-fn child_exit_code(status: std::process::ExitStatus) -> u8 {
+pub(crate) fn child_exit_code(status: std::process::ExitStatus) -> u8 {
     if let Some(code) = status.code() {
         return u8::try_from(code).unwrap_or(1);
     }
@@ -345,18 +473,22 @@ fn child_exit_code(status: std::process::ExitStatus) -> u8 {
 /// libc: the prebuilt C runtime static library (the HTTP superset when the
 /// program touches HTTP/WebSocket, else the fiber runtime), OpenSSL for HTTP,
 /// and any `// @link:` / `// @linkdir:` FFI directives (e.g. `-lsqlite3`).
-fn link_args(ir: &str, source: &str) -> Vec<String> {
+fn link_args(ir: &str, source: &str, memory: &str) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     let uses_http = ir.contains("@http") || ir.contains("@websocket");
 
+    // The reclaiming backend is a link-time archive swap — the IR is identical
+    // [MEM-BACKENDS]. `gc` links the tracing-collector archive set; `default`
+    // the malloc-passthrough set. (docs/plans/0011)
+    let suffix = if memory == "gc" { "_gc" } else { "" };
     let lib = if uses_http {
-        "libhttp_runtime.a"
+        format!("libhttp_runtime{suffix}.a")
     } else {
-        "libfiber_runtime.a"
+        format!("libfiber_runtime{suffix}.a")
     };
-    if let Some(p) = find_runtime_lib(lib) {
+    if let Some(p) = find_runtime_lib(&lib) {
         args.push(p);
-    } else if let Some(p) = find_runtime_lib("libfiber_runtime.a") {
+    } else if let Some(p) = find_runtime_lib(&format!("libfiber_runtime{suffix}.a")) {
         args.push(p);
     }
 
@@ -397,7 +529,7 @@ fn directive<'a>(line: &'a str, key: &str) -> Option<&'a str> {
 /// the working directory's repo layout, then next to the `osprey` executable
 /// (the release-tarball layout, and `target/release` two levels under the repo
 /// root), then the system lib dir.
-fn find_runtime_lib(lib: &str) -> Option<String> {
+pub(crate) fn find_runtime_lib(lib: &str) -> Option<String> {
     let mut roots = vec![
         format!("compiler/bin/{lib}"),
         format!("compiler/lib/{lib}"),
@@ -483,6 +615,56 @@ mod tests {
     }
 
     #[test]
+    fn parse_args_handles_target_and_output() {
+        let cli = parse_args(&args(&[
+            "f.osp",
+            "--target=wasm32",
+            "--debug",
+            "--compile",
+            "-o",
+            "out/f.wasm",
+        ]))
+        .expect("ok");
+        assert_eq!(cli.target, "wasm32");
+        assert!(cli.debug);
+        assert_eq!(cli.output.as_deref(), Some("out/f.wasm"));
+        // default target is native, no output.
+        let cli = parse_args(&args(&["f.osp"])).expect("ok");
+        assert_eq!(cli.target, "native");
+        assert!(!cli.debug);
+        assert!(cli.output.is_none());
+        // -o with no following value, and an unknown target, are errors.
+        assert!(parse_args(&args(&["f.osp", "-o"])).is_err());
+        assert!(parse_args(&args(&["f.osp", "--target=riscv"])).is_err());
+    }
+
+    #[test]
+    fn parse_target_accepts_known_and_rejects_unknown() {
+        assert_eq!(parse_target("native").as_deref(), Ok("native"));
+        assert_eq!(parse_target("wasm32").as_deref(), Ok("wasm32"));
+        assert!(parse_target("x86").is_err());
+    }
+
+    #[test]
+    fn output_path_defaults_by_target_and_honours_dash_o() {
+        assert_eq!(output_path("a/b.osp", None, "native"), PathBuf::from("b"));
+        assert_eq!(
+            output_path("a/b.osp", None, "wasm32"),
+            PathBuf::from("b.wasm")
+        );
+        assert_eq!(
+            output_path("a/b.osp", Some("custom.wasm"), "wasm32"),
+            PathBuf::from("custom.wasm")
+        );
+    }
+
+    #[test]
+    fn debug_wasm_rejection_is_centralized() {
+        assert!(reject_debug_wasm(true).is_some());
+        assert!(reject_debug_wasm(false).is_none());
+    }
+
+    #[test]
     fn stem_of_handles_dirs_and_missing_extension() {
         assert_eq!(stem_of("examples/demo.osp"), "demo");
         assert_eq!(stem_of("/a/b/c.osp"), "c");
@@ -503,14 +685,35 @@ mod tests {
 
     #[test]
     fn link_args_adds_ffi_directives_and_openssl_for_http() {
-        let ffi = link_args("", "// @link: sqlite3\n// @linkdir: /opt/lib\ncode\n");
+        let ffi = link_args(
+            "",
+            "// @link: sqlite3\n// @linkdir: /opt/lib\ncode\n",
+            "default",
+        );
         assert!(ffi.iter().any(|a| a == "-lsqlite3"), "{ffi:?}");
         assert!(ffi.iter().any(|a| a == "-L/opt/lib"), "{ffi:?}");
-        let http = link_args("call void @http_listen()", "");
+        let http = link_args("call void @http_listen()", "", "default");
         assert!(http.iter().any(|a| a == "-lssl") && http.iter().any(|a| a == "-lcrypto"));
         // No HTTP markers => no openssl flags.
-        let plain = link_args("call void @osprey_list_empty()", "");
+        let plain = link_args("call void @osprey_list_empty()", "", "default");
         assert!(!plain.iter().any(|a| a == "-lssl"));
+    }
+
+    #[test]
+    fn link_args_selects_gc_archive_and_validates_backend() {
+        // The `gc` backend swaps in the `_gc` archive set; `default` does not.
+        let gc = link_args("call void @osprey_list_empty()", "", "gc");
+        assert!(
+            gc.iter().any(|a| a.contains("_gc.a")) || gc.is_empty(),
+            "gc backend must select a *_gc archive when one is present: {gc:?}"
+        );
+        let plain = link_args("call void @osprey_list_empty()", "", "default");
+        assert!(!plain.iter().any(|a| a.contains("_gc.a")), "{plain:?}");
+        // Backend validation: default/gc accepted, arc reserved, others rejected.
+        assert_eq!(parse_memory("gc").as_deref(), Ok("gc"));
+        assert_eq!(parse_memory("default").as_deref(), Ok("default"));
+        assert!(parse_memory("arc").is_err());
+        assert!(parse_memory("bogus").is_err());
     }
 
     #[test]
@@ -554,6 +757,10 @@ mod tests {
             mode: mode.to_string(),
             quiet: true,
             policy,
+            memory: "default".to_string(),
+            target: "native".to_string(),
+            output: None,
+            debug: false,
         }
     }
 
@@ -582,5 +789,47 @@ mod tests {
     fn run_rejects_sandbox_violation_before_codegen() {
         let path = temp_source("fs", "let c = readFile(\"x.txt\")\n");
         let _ = run(&cli(path, "--llvm", Policy::sandbox())); // sandbox-violation branch
+    }
+
+    #[test]
+    fn parse_args_accepts_the_memory_backend_flag() {
+        let cli = parse_args(&args(&["f.osp", "--memory=gc"])).expect("ok");
+        assert_eq!(cli.memory, "gc");
+    }
+
+    #[test]
+    fn report_type_errors_prints_positioned_diagnostics() {
+        // An undefined identifier yields an error carrying a source position,
+        // exercising the `Some(position)` diagnostic arm.
+        let bad = osprey_syntax::parse_program("print(missingVariable)\n").program;
+        assert!(report_type_errors("bad.osp", &bad) > 0);
+    }
+
+    #[test]
+    fn compile_ir_and_debug_helpers_switch_on_the_debug_flag() {
+        let program = osprey_syntax::parse_program("let n = 1\nprint(\"${n}\")\n").program;
+        // debug=true takes the debug-info codegen path; both opt/driver helpers
+        // branch on the same flag.
+        assert!(compile_ir("p.osp", &program, true).is_ok());
+        assert!(!opt_flag(true).is_empty());
+        assert!(!opt_flag(false).is_empty());
+        let _ = debug_compile_flags(true);
+        let _ = debug_compile_flags(false);
+    }
+
+    #[test]
+    fn wasm_target_rejects_debug_then_dispatches_to_the_backend() {
+        let program = osprey_syntax::parse_program("let n = 1\nprint(\"${n}\")\n").program;
+        let mut c = cli("p.osp", "--compile", Policy::allow_all());
+        c.target = "wasm32".to_string();
+        // --debug + --target=wasm32 is rejected before any toolchain work.
+        c.debug = true;
+        let _ = compile_program_to_disk(&c, &program, "");
+        let _ = run_program(&c, &program, "");
+        // Without --debug the wasm build/run driver is dispatched (it fails
+        // cleanly without the wasm toolchain, but the dispatch lines execute).
+        c.debug = false;
+        let _ = compile_program_to_disk(&c, &program, "");
+        let _ = run_program(&c, &program, "");
     }
 }

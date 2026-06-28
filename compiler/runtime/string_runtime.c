@@ -31,6 +31,9 @@ int osp_is_ws_internal(unsigned char c) {
 
 /* ---------- inspection / search (total) ---------- */
 
+/* Byte length as a fixed-width int64 (see header). NULL is length 0. */
+int64_t osp_strlen(const char *s) { return s ? (int64_t)strlen(s) : 0; }
+
 int64_t osp_string_is_empty(const char *s) {
     if (!s) return 1;
     return s[0] == '\0' ? 1 : 0;
