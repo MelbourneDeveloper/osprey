@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup run install bench wasm
+.PHONY: build test lint fmt clean ci setup run install bench wasm vsix-rebuild-reinstall
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -52,9 +52,10 @@ BIN ?= target/release/osprey
 RTB ?= compiler/bin
 
 # VSIX (VSCode extension) — macOS only. Bundles the Rust binary as `osprey`.
+# All VSIX targets touch ONLY this extension id, ONLY in the default profile;
+# they never enumerate VSCode profiles and never affect any other extension.
 EXT_DIR        ?= vscode-extension
 EXT_ID         ?= nimblesite.osprey
-VSCODE_STORAGE ?= $(HOME)/Library/Application Support/Code/User/globalStorage/storage.json
 
 # C runtime compile flag profiles (hardened; mirror the original recipes).
 A    ?= -c -fPIC -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror -Wall -Wextra -ftrapv -fPIE -D_GNU_SOURCE
@@ -361,22 +362,24 @@ _website-build:
 bench: build
 	@zsh benchmarks/run.sh $(BENCH_FILTER)
 
-# _rebuild-install-vsix: Uninstall → clean → rebuild → package → install the
-#      VSCode extension into every VSCode profile, bundling the freshly-built
-#      Rust compiler as `osprey`. macOS only. See [MAKE-IDE-EXT].
-_rebuild-install-vsix: build _vsix_uninstall _vsix_clean _vsix_build _vsix_bundle _vsix_package _vsix_install
+## vsix-rebuild-reinstall: Clean → build → uninstall → reinstall the Osprey
+##      VSCode extension, bundling the freshly-built Rust compiler as `osprey`.
+##      Touches ONLY the Osprey extension ($(EXT_ID)) in the DEFAULT profile —
+##      never another extension, never another VSCode profile. macOS only.
+##      See [MAKE-IDE-EXT].
+vsix-rebuild-reinstall: _vsix_clean build _vsix_build _vsix_bundle _vsix_package _vsix_uninstall _vsix_install
+
+# _rebuild-install-vsix: deprecated private alias of `vsix-rebuild-reinstall`.
+_rebuild-install-vsix: vsix-rebuild-reinstall
 
 # --- vsix sub-steps ---------------------------------------------------------
-# Uninstall from default profile + every named profile in storage.json.
+# Uninstall ONLY the Osprey extension ($(EXT_ID)) from the DEFAULT profile. It
+# is id-scoped, so it can never remove another extension, and it does NOT
+# enumerate VSCode profiles, so it can never touch any other profile.
 # `code --uninstall-extension` exits non-zero when not installed; swallowed so
 # uninstall-before-install stays idempotent.
 _vsix_uninstall:
-	-@code --uninstall-extension $(EXT_ID) >/dev/null 2>&1 && echo "  [default] uninstalled" || echo "  [default] not installed"
-	@jq -r '.userDataProfiles[]?.name' "$(VSCODE_STORAGE)" 2>/dev/null | while IFS= read -r prof; do \
-	  [ -z "$$prof" ] && continue; \
-	  code --profile "$$prof" --uninstall-extension $(EXT_ID) >/dev/null 2>&1 \
-	    && echo "  [$$prof] uninstalled" || echo "  [$$prof] not installed"; \
-	done
+	-@code --uninstall-extension $(EXT_ID) >/dev/null 2>&1 && echo "  uninstalled $(EXT_ID)" || echo "  $(EXT_ID) not installed"
 
 _vsix_clean:
 	cd $(EXT_DIR) && $(RM) out dist *.vsix
@@ -401,13 +404,11 @@ _vsix_bundle:
 _vsix_package:
 	cd $(EXT_DIR) && npm run package
 
-# Install the newest VSIX into the default profile + every named profile.
+# Install the newest Osprey VSIX into the DEFAULT profile only. `--install-
+# extension <file>` installs exactly that one VSIX (the Osprey extension) and no
+# other; it does NOT enumerate VSCode profiles.
 _vsix_install:
 	@VSIX=$$(ls -t $(EXT_DIR)/*.vsix 2>/dev/null | head -1); \
 	if [ -z "$$VSIX" ]; then echo "FAIL: no .vsix in $(EXT_DIR)/"; exit 1; fi; \
 	echo "  vsix: $$VSIX"; \
-	code --install-extension "$$VSIX" --force && echo "  [default] installed"; \
-	jq -r '.userDataProfiles[]?.name' "$(VSCODE_STORAGE)" 2>/dev/null | while IFS= read -r prof; do \
-	  [ -z "$$prof" ] && continue; \
-	  code --profile "$$prof" --install-extension "$$VSIX" --force && echo "  [$$prof] installed"; \
-	done
+	code --install-extension "$$VSIX" --force && echo "  installed $(EXT_ID)"

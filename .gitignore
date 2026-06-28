@@ -120,3 +120,5 @@ benchmarks/cases/**/*.hi
 benchmarks/cases/**/*.cmi
 benchmarks/cases/**/*.cmx
 benchmarks/cases/**/*.o
+
+.osprey-debug
