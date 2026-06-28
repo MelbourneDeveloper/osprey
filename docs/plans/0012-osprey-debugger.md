@@ -201,11 +201,13 @@ Required variable metadata:
 
 - Emit variable locations as LLVM value-location records. Prefer
   `#dbg_declare` / `#dbg_value` **debug records** on LLVM 19+ / RemoveDIs
-  toolchains. The current Osprey textual backend is allowed to use the older
-  `@llvm.dbg.value` compatibility intrinsic while tested LLDB/DWARF output
-  remains correct; this is a bridge, not the desired final IR spelling.
-- Function parameters: `DILocalVariable` plus a value-location record or
-  compatibility `dbg.value`.
+  toolchains. The current Osprey textual backend uses the `@llvm.dbg.declare`
+  compatibility intrinsic over a dedicated stack slot per local: it keeps the
+  line table free of the stray line-0 rows an inline `@llvm.dbg.value` lowers
+  to (which derail x86_64 lldb-dap breakpoint line resolution). This is a
+  bridge, not the desired final IR spelling. [DEBUGGER-DBG-DECLARE]
+- Function parameters: `DILocalVariable` plus a `dbg.declare` over a slot
+  holding the incoming argument.
 - Immutable locals: value-location records for SSA values; `dbg.declare`/
   `#dbg_declare` for stack/heap slots when addressable.
 - Mutable locals: a user variable and its storage cell must be represented so

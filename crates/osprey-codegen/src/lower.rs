@@ -155,7 +155,7 @@ fn gen_function(
     let mut params = Vec::new();
     for (p, (pty, owner)) in parameters.iter().zip(param_sig.iter()) {
         let v = Value::new(format!("%{}", p.name), *pty).with_owner(owner.clone());
-        cg.emit_debug_value(&p.name, &v);
+        cg.emit_debug_param(&p.name, &v);
         cg.bind(p.name.clone(), v);
         params.push((*pty, p.name.clone()));
     }
@@ -329,7 +329,7 @@ fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<
             if crate::types::fn_value_concrete(&ty) {
                 if let Some(sig) = Codegen::fn_value_sig(&ty) {
                     let v = crate::closure::emit_closure(cg, parameters, body, &sig)?;
-                    cg.emit_debug_value(name, &v);
+                    cg.emit_debug_local(name, &v);
                     cg.bind(name.to_string(), v);
                     cg.bind_fn_local(name, ty);
                 }
@@ -352,7 +352,7 @@ fn gen_bind(cg: &mut Codegen, name: &str, value: &Expr, unwrap: bool) -> Result<
     if let Some(ty) = fn_result_type(cg, value) {
         cg.bind_fn_local(name, ty);
     }
-    cg.emit_debug_value(name, &v);
+    cg.emit_debug_local(name, &v);
     cg.bind(name.to_string(), v);
     Ok(())
 }

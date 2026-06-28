@@ -150,7 +150,12 @@ mod tests {
         assert!(ir.contains("!DISubprogram(name: \"add\""));
         assert!(ir.contains("!DISubprogram(name: \"main\""));
         assert!(ir.contains("!DILocalVariable(name: \"x\""));
+        // Parameters (a, b) use dbg.value — SSA args live for the whole
+        // function. `let` locals (x) use dbg.declare over a stack slot, the
+        // robust -O0 representation that keeps the line table free of stray
+        // line-0 rows. [DEBUGGER-DBG-DECLARE]
         assert!(ir.contains("@llvm.dbg.value"));
+        assert!(ir.contains("call void @llvm.dbg.declare(metadata"));
         assert!(ir.contains("!DILocation(line: 2, column: 1"));
         assert!(ir.contains(", !dbg !"));
     }

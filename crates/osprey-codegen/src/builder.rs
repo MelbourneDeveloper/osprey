@@ -822,14 +822,24 @@ impl Codegen {
         r
     }
 
-    /// Record a source-level local value for native debuggers via LLVM's
-    /// `dbg.value` intrinsic.
-    pub(crate) fn emit_debug_value(&mut self, name: &str, value: &Value) {
-        let Some(var_id) = self
-            .debug
+    /// The `DILocalVariable` metadata id for `name` of type `ty`, if a debug
+    /// build is active. The single lookup both debug-recorders funnel through.
+    fn debug_var_id(&mut self, name: &str, ty: LType) -> Option<usize> {
+        self.debug
             .as_mut()
-            .and_then(|debug| debug.local_variable_id(name, value.ty))
-        else {
+            .and_then(|debug| debug.local_variable_id(name, ty))
+    }
+
+    /// Record a source-level **parameter** for native debuggers via
+    /// `llvm.dbg.value`. [DEBUGGER-DBG-DECLARE]
+    ///
+    /// A parameter is an SSA argument live for the whole function, so dbg.value
+    /// (no stack slot) is correct and immediately readable — including by a
+    /// conditional breakpoint on the function's first line. Emitted at function
+    /// entry inside the prologue, it never produces the inter-statement line-0
+    /// row that an inline `let` dbg.value would.
+    pub(crate) fn emit_debug_param(&mut self, name: &str, value: &Value) {
+        let Some(var_id) = self.debug_var_id(name, value.ty) else {
             return;
         };
         self.add_extern("declare void @llvm.dbg.value(metadata, metadata, metadata)");
@@ -837,6 +847,31 @@ impl Codegen {
             "call void @llvm.dbg.value(metadata {} {}, metadata !{var_id}, metadata !DIExpression())",
             value.ty.as_str(),
             value.operand
+        ));
+    }
+
+    /// Record a source-level **local** (`let` binding) for native debuggers via
+    /// `llvm.dbg.declare` over a dedicated stack slot. [DEBUGGER-DBG-DECLARE]
+    ///
+    /// dbg.declare is the robust -O0 representation for an addressable local:
+    /// lldb reads it from the slot at every PC in scope. An inline `dbg.value`
+    /// would instead lower to a `DBG_VALUE` whose line-table row is line 0;
+    /// between two statements that becomes a stray line-0 entry that derails
+    /// `x86_64` lldb-dap breakpoint line resolution (a frame reports `line 0`, so
+    /// a breakpoint "stops on line 0"). The slot is debug-only — codegen keeps
+    /// using `value.operand`, and Osprey `let` bindings are immutable, so the
+    /// once-written slot stays correct.
+    pub(crate) fn emit_debug_local(&mut self, name: &str, value: &Value) {
+        let Some(var_id) = self.debug_var_id(name, value.ty) else {
+            return;
+        };
+        self.add_extern("declare void @llvm.dbg.declare(metadata, metadata, metadata)");
+        let ty = value.ty.as_str();
+        let slot = self.fresh_reg();
+        self.emit(format!("{slot} = alloca {ty}"));
+        self.emit(format!("store {ty} {}, {ty}* {slot}", value.operand));
+        self.emit(format!(
+            "call void @llvm.dbg.declare(metadata {ty}* {slot}, metadata !{var_id}, metadata !DIExpression())"
         ));
     }
 
