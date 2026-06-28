@@ -44,20 +44,21 @@ runs:
       # tests (osprey --debug -> lldb-dap).
       #
       # [DEBUGGER-LLDB-DAP-VERSION] The distro lldb on ubuntu-latest is lldb 18,
-      # whose lldb-dap *DAP server* (NOT the DWARF reader — liblldb 18 reads the
+      # whose lldb-dap *DAP server* (NOT the DWARF reader — liblldb reads the
       # osprey-emitted debug info correctly) is buggy on x86_64: it reports a
-      # stopped frame's source path as "." and ignores breakpoint conditions.
-      # Both are fixed from lldb-dap 19 onward (developers run lldb-dap 22 on
-      # macOS, where the same suite passes). Pull a modern lldb-dap from
-      # apt.llvm.org and pin /usr/bin/lldb-dap to it; keep clang/llvm 18 for the
-      # C runtime build. The distro lldb is a last-resort fallback so a mirror
+      # stopped frame's source path as "." and ignores breakpoint conditions,
+      # and intervening releases (20) flake on x86_64 step/line resolution.
+      # Pin lldb-dap to 22 — the exact toolchain (LLVM 22.1.8) developers run on
+      # macOS, where the whole debugger E2E suite passes deterministically, and
+      # which is stable on Linux too (verified). Keep clang/llvm 18 for the C
+      # runtime build. The distro lldb is a last-resort fallback so a mirror
       # hiccup is loud (debugger tests fail) rather than silently degraded.
       run: |
         set -euo pipefail
         sudo apt-get update
         sudo apt-get install -y clang llvm libssl-dev libsqlite3-dev pkg-config zsh wget gnupg
         clang --version
-        LLVM_VER=20
+        LLVM_VER=22
         . /etc/os-release
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
           | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
