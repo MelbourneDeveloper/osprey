@@ -195,13 +195,35 @@ export async function findVariable(
   return all.find((variable) => variable.name === name);
 }
 
-/** Poll until the debuggee is stopped with a stack frame; throws on timeout. */
+/** How long to keep polling for a *source-resolved* top frame before accepting
+ * an unresolved one. lldb-dap can briefly report the top frame's source as `.`
+ * and its line as 0 on the first `stackTrace` of a fresh session, before the
+ * module's line table finishes loading, then correct both. Re-polling within
+ * this grace makes source/line assertions robust to that cold start without
+ * masking a genuinely unresolved frame. */
+const SOURCE_RESOLVE_GRACE_MS = 2_000;
+
+/** A top frame lldb-dap has fully resolved: a real source path (not the cold
+ * "." placeholder) on a real 1-based line (not the cold 0). A frame that simply
+ * has no source — e.g. the C entry stub a `stopOnEntry` launch pauses in — is
+ * not "resolvable", so callers fall back to it once the grace elapses. */
+function topFrameResolved(stop: DapStop): boolean {
+  const top = stop.stack.stackFrames[0];
+  const path = top?.source?.path;
+  return path !== undefined && path !== "" && path !== "." && top.line >= 1;
+}
+
+/** Poll until the debuggee is stopped with a stack frame; throws on timeout.
+ * Prefers a source-resolved top frame (see {@link SOURCE_RESOLVE_GRACE_MS}) so
+ * the cold-start `.`/line-0 transient does not race callers that assert on the
+ * frame's source path or line. */
 export async function waitForStop(
   session: vscode.DebugSession,
   timeoutMs = 30_000,
 ): Promise<DapStop> {
   const started = Date.now();
   let lastError = "";
+  let fallback: DapStop | undefined;
   while (Date.now() - started < timeoutMs) {
     try {
       const threadsResponse = (await session.customRequest("threads")) as {
@@ -211,16 +233,26 @@ export async function waitForStop(
         try {
           const stack = await getStackTrace(session, thread.id);
           if (stack.stackFrames.length > 0) {
-            return { threadId: thread.id, stack };
+            const stop = { threadId: thread.id, stack };
+            if (topFrameResolved(stop)) {
+              return stop;
+            }
+            fallback ??= stop;
           }
         } catch (error) {
           lastError = error instanceof Error ? error.message : String(error);
         }
       }
+      if (fallback && Date.now() - started >= SOURCE_RESOLVE_GRACE_MS) {
+        return fallback;
+      }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+  if (fallback) {
+    return fallback;
   }
   throw new Error(
     `Timed out waiting for the debuggee to stop after ${timeoutMs}ms (${lastError})`,
