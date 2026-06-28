@@ -395,10 +395,8 @@ mod tests {
             None => std::env::remove_var("WASI_SDK_PATH"),
         }
         assert!(
-            cands
-                .iter()
-                .any(|p| p.ends_with("wasi-sysroot")
-                    && p.to_string_lossy().contains("osprey-test-wasi-sdk")),
+            cands.iter().any(|p| p.ends_with("wasi-sysroot")
+                && p.to_string_lossy().contains("osprey-test-wasi-sdk")),
             "WASI_SDK_PATH contributes a sysroot candidate: {cands:?}"
         );
     }
@@ -428,7 +426,10 @@ mod tests {
     fn build_and_run_drive_the_full_driver_with_stub_tools() {
         let _g = lock_env();
         let prev = [
-            ("OSPREY_WASI_SYSROOT", std::env::var("OSPREY_WASI_SYSROOT").ok()),
+            (
+                "OSPREY_WASI_SYSROOT",
+                std::env::var("OSPREY_WASI_SYSROOT").ok(),
+            ),
             ("OSPREY_WASM_CC", std::env::var("OSPREY_WASM_CC").ok()),
             ("OSPREY_WASM_LD", std::env::var("OSPREY_WASM_LD").ok()),
             ("OSPREY_WASM_RUN", std::env::var("OSPREY_WASM_RUN").ok()),

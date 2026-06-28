@@ -246,11 +246,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang llvm lld wabt zsh
           WASI_VERSION=24
-          curl -sSL -o /tmp/wasi-sysroot.tar.gz \
+          curl -fsSL -o /tmp/wasi-sysroot.tar.gz \
             "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sysroot-${WASI_VERSION}.0.tar.gz"
-          sudo mkdir -p /opt/wasi-sdk/share
-          sudo tar -xzf /tmp/wasi-sysroot.tar.gz -C /opt/wasi-sdk/share
-          test -d /opt/wasi-sdk/share/wasi-sysroot
+          # The release tarball unpacks to a versioned top dir (wasi-sysroot-<v>.0/);
+          # strip it so the sysroot lands at a stable path containing lib/wasm32-wasip1.
+          sudo mkdir -p /opt/wasi-sdk/share/wasi-sysroot
+          sudo tar -xzf /tmp/wasi-sysroot.tar.gz -C /opt/wasi-sdk/share/wasi-sysroot --strip-components=1
+          test -d /opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip1
           echo "OSPREY_WASI_SYSROOT=/opt/wasi-sdk/share/wasi-sysroot" >> "$GITHUB_ENV"
           wasm-ld --version
 
