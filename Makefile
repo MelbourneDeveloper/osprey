@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup run install bench wasm vsix-rebuild-reinstall
+.PHONY: build test lint fmt clean ci setup run install bench wasm wasm-serve vsix-rebuild-reinstall
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -89,6 +89,9 @@ WASM_CFLAGS  ?= --target=$(WASM_TARGET) --sysroot=$(WASI_SYSROOT) -O2 -std=c11 -
 # containers + JSON + effects. Excludes fiber (pthreads), http/websocket
 # (sockets/OpenSSL), system (fork/wait), term (termios) and ffi (dlopen).
 WASM_RT_SRC  ?= memory_runtime string_runtime string_runtime_list list_runtime map_runtime map_runtime_hamt json_runtime effects_runtime
+# `make wasm-serve` static-host dir + port for the in-browser example.
+WASM_SERVE_DIR  ?= examples/wasm
+WASM_SERVE_PORT ?= 8080
 
 # =============================================================================
 # Standard Targets
@@ -154,6 +157,19 @@ wasm: build _runtime_wasm
 	  echo "$$out" | grep -Eq '(^| )FAIL=0 '  || { echo 'FAIL: wasm differential mismatch'; exit 1; }; \
 	  echo "$$out" | grep -Eq '(^| )NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }
 	@echo "==> wasm ready: built + validated + WASI/browser smoke + golden suite green"
+
+## wasm-serve: Build the wasm target (full `make wasm`), then static-host
+##      $(WASM_SERVE_DIR) at http://localhost:$(WASM_SERVE_PORT)/ and open it in
+##      your browser. Long-running dev server — Ctrl-C to stop. Override the port
+##      with WASM_SERVE_PORT=<n>. (`make wasm` itself stays headless for CI.)
+wasm-serve: wasm
+	@URL="http://localhost:$(WASM_SERVE_PORT)/"; \
+	  command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 not found (needed for the dev server)"; exit 1; }; \
+	  echo "==> serving $(WASM_SERVE_DIR)/ at $$URL — opening browser (Ctrl-C to stop)"; \
+	  OPENER=$$(command -v open || command -v xdg-open || true); \
+	  if [ -n "$$OPENER" ]; then ( sleep 1; "$$OPENER" "$$URL" >/dev/null 2>&1 || true ) & \
+	  else echo "  (no 'open'/'xdg-open' found — browse to $$URL manually)"; fi; \
+	  cd $(WASM_SERVE_DIR) && exec python3 -m http.server $(WASM_SERVE_PORT)
 
 ## setup: Post-create dev environment setup (used by devcontainer)
 setup:
