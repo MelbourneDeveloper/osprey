@@ -3,14 +3,96 @@
 // Build:  osprey examples/wasm/hello.osp --target=wasm32 --compile
 //         (or `make wasm`, which drops hello.wasm in examples/wasm/build/)
 // Run:    wasmtime hello.wasm        # or `osprey hello.osp --target=wasm32 --run`
-//         node scripts/wasm-smoke.mjs build/hello.wasm hello.expectedoutput
-//         open index.html            # loads hello.wasm in the browser
+//         make wasm-serve            # serves index.html + opens the browser
 //
-// Exercises the two width fixes that make the wasm port correct: string
-// concatenation and `length` both route through the runtime's osp_strlen
-// (returns i64 on every target, unlike libc strlen's 32-bit size_t on wasm32),
-// and the large product formats via %lld (a plain %ld would truncate it on
+// One screen, the wasm-safe heart of the language: algebraic effects (the same
+// pure logic run in two different worlds), union types + exhaustive pattern
+// matching, Hindley-Milner inference (no annotations), functional pipelines,
+// persistent List/Map, recursion, string interpolation. Everything here links
+// the portable wasm32 runtime subset (strings, lists, maps, effects) -- no
+// fibers, sockets, or syscalls. The finale pins the two width fixes that make
+// the wasm port correct: `length`/concat route through osp_strlen (i64 on every
+// target) and the large product formats via %lld (a plain %ld truncates on
 // wasm32, where `long` is 32-bit).
-let who = "Osprey" + " on " + "WebAssembly"
-let big = 2 * 1500000000
-print("${who}\nlength = ${length(who)}\n2 * 1500000000 = ${big}")
+
+// ── algebraic effects ── meaning chosen by the handler, not the call site ──
+effect Console { emit: fn(string) -> Unit }
+effect Ledger  { post: fn(int) -> int }
+
+fn account() ![Console, Ledger] = {
+    perform Console.emit("open account")
+    let afterDeposit = perform Ledger.post(100)
+    perform Console.emit("deposit 100  -> balance ${afterDeposit}")
+    let afterDraw = perform Ledger.post(0 - 40)
+    perform Console.emit("withdraw 40  -> balance ${afterDraw}")
+    afterDraw
+}
+
+// World A owns real state in the handler; World B freezes the ledger to a mock.
+fn realWorld() = {
+    mut balance = 0
+    handle Console
+        emit line => print("    money ${line}")
+    in handle Ledger
+        post amount => { balance = balance + amount  balance }
+    in account()
+}
+
+fn dryRun() =
+    handle Console
+        emit line => print("    test  [dry-run] ${line}")
+    in handle Ledger
+        post amount => 0
+    in account()
+
+// ── union type + exhaustive pattern matching (drop an arm: compile error) ──
+type Tier = Epic | Solid | Starter
+
+fn tier(score) = match score >= 200 {
+    true  => Epic
+    false => match score >= 50 {
+        true  => Solid
+        false => Starter
+    }
+}
+
+fn badge(t) = match t {
+    Epic    => "EPIC"
+    Solid   => "SOLID"
+    Starter => "STARTER"
+}
+
+// ── pure functional pipeline: sum of squares of the evens in [1, n) ──
+// `fold` is the idiomatic iteration here -- no manual loops, no mutation.
+fn even(x) = (x % 2) == 0
+fn sq(x)   = x * x
+fn crunch(n) = range(1, n) |> filter(even) |> map(sq) |> fold(0, fn(a, b) => a + b)
+
+// ── persistent List<T> + Map<K,V> ── immutable, structurally shared ──
+let nums     = listAppend(listAppend(listAppend(listAppend(List(), 3), 1), 4), 1)
+let scores   = mapSet(mapSet(mapSet(Map(), "epic", 240), "solid", 80), "starter", 5)
+let hasEpic  = mapContains(scores, "epic")
+let has4     = listContains(nums, 4)
+let has9     = listContains(nums, 9)
+let crunched = crunch(40)
+let who      = "Osprey" + " on " + "WebAssembly"
+let big      = 2 * 1500000000
+
+print("OSPREY -> WebAssembly  ::  language tour
+======================================
+effects  same logic, two worlds
+  World A (real, stateful handler):")
+let real = realWorld()
+print("  World B (mock, frozen ledger):")
+let mock = dryRun()
+print("  -> realWorld returned ${real}, dryRun returned ${mock}
+--------------------------------------
+pipeline  sum even^2 in [1,40) = ${crunched}  ${badge(tier(crunched))}
+list      len ${listLength(nums)}, contains 4 = ${has4}, contains 9 = ${has9}
+map       size ${mapLength(scores)}, has epic = ${hasEpic}
+tiers     ${badge(tier(240))} / ${badge(tier(80))} / ${badge(tier(5))}
+--------------------------------------
+wasm width fixes
+  ${who}
+  length = ${length(who)}
+  2 * 1500000000 = ${big}")
