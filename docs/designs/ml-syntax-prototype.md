@@ -438,23 +438,189 @@ lower this to nested handler machinery internally. Repeated `in handle`
 disappears, but the single `do` still earns its keep as the boundary between
 handler installation and the handled computation.
 
+### Testing With Effect Doubles
+
+The biggest payoff of first-class handlers is test doubles. A function under
+test should not accept a `Db`, `Persist`, or `Log` parameter just so tests can
+replace them. The production function should stay written in terms of the
+operations it needs:
+
+```osp
+createTask : string -> HttpResponse
+createTask body =
+    createdText = textResp 201
+    id = perform Db.add body
+    snap = perform Db.list
+    written = perform Persist.flush snap
+
+    perform Log.info (
+        "created #" +
+        toString id +
+        " " +
+        body +
+        " " +
+        toString written +
+        "B"
+    )
+
+    createdText "created task #${toString id}\n"
+```
+
+The test installs fake interpretations of those operations around the call:
+
+```osp
+test "createTask stores the task, flushes the snapshot, and logs" =
+    mut tasks = ""
+    mut taskCount = 0
+    mut flushedSnapshot = ""
+    mut logLine = ""
+
+    db =
+        handler Db
+            add task =>
+                taskCount := taskCount + 1
+                tasks := "${tasks}#${toString taskCount} ${task}\n"
+                taskCount
+
+            list =>
+                tasks
+
+            count =>
+                taskCount
+
+    persist =
+        handler Persist
+            flush snap =>
+                flushedSnapshot := snap
+                length snap
+
+    log =
+        handler Log
+            info message =>
+                logLine := message
+
+    response =
+        handle db persist log
+        do
+            createTask "buy milk"
+
+    expectEqual 201 (httpResponseStatus response)
+    expectEqual "created task #1\n" (httpResponseBody response)
+    expectEqual "#1 buy milk\n" flushedSnapshot
+    expectEqual "created #1 buy milk 12B" logLine
+```
+
+This is the intended testing shape:
+
+```osp
+handle fakeDb fakePersist fakeLog
+do
+    functionUnderTest input
+```
+
+The fake handlers can be stubs, spies, mocks, or full in-memory interpreters.
+Because handler arms close over mutable bindings from the test block, a test can
+both define behavior and observe what happened without polluting production
+function signatures.
+
+Error-path tests stay just as small:
+
+```osp
+test "createTask still returns created when persistence fails" =
+    mut attemptedSnapshot = ""
+    mut logLine = ""
+
+    db =
+        handler Db
+            add task => 7
+            list => "#7 buy milk\n"
+            count => 1
+
+    persist =
+        handler Persist
+            flush snap =>
+                attemptedSnapshot := snap
+                -1
+
+    log =
+        handler Log
+            info message =>
+                logLine := message
+
+    response =
+        handle db persist log
+        do
+            createTask "buy milk"
+
+    expectEqual 201 (httpResponseStatus response)
+    expectEqual "#7 buy milk\n" attemptedSnapshot
+    expectEqual "created #7 buy milk -1B" logLine
+```
+
+Reusable doubles should usually be handler factories:
+
+```osp
+silentLog : Unit -> Handler Log
+silentLog () =
+    handler Log
+        info message => ()
+
+fixedDb : string -> int -> Handler Db
+fixedDb listed nextId =
+    handler Db
+        add task => nextId
+        list => listed
+        count => nextId
+
+failingPersist : Unit -> Handler Persist
+failingPersist () =
+    handler Persist
+        flush snap => -1
+```
+
+Then a test can focus on the behavior it actually cares about:
+
+```osp
+test "stats response reads count from Db and served count from Metrics" =
+    db = fixedDb "#1 existing\n" 1
+    persist = failingPersist ()
+    log = silentLog ()
+
+    metrics =
+        handler Metrics
+            hit path => ()
+            served => 42
+
+    response =
+        handle db persist log metrics
+        do
+            onGet "/stats"
+
+    expectEqual 200 (httpResponseStatus response)
+    expectEqual "requests=42 tasks=1\n" (httpResponseBody response)
+```
+
+That is the design target for test ergonomics: tests decide what effects mean at
+the boundary of the call under test. Production code only performs named
+operations.
+
 ## Prototype: `examples/statefulhttp/server.osp`
 
 ```osp
 effect Db
-    add : string -> int
-    list : Unit -> string
-    count : Unit -> int
+    add : string => int
+    list : Unit => string
+    count : Unit => int
 
 effect Metrics
-    hit : string -> Unit
-    served : Unit -> int
+    hit : string => Unit
+    served : Unit => int
 
 effect Persist
-    flush : string -> int
+    flush : string => int
 
 effect Log
-    info : string -> Unit
+    info : string => Unit
 
 
 esc : string -> string -> string
@@ -692,6 +858,7 @@ main () =
 - Old block braces are not accepted in the target syntax. Osprey should have one canonical syntax, not permanent brace and layout dialects.
 - String interpolation keeps `${...}` for now. It is inside string literal syntax rather than block syntax, so it can stay unless it creates a concrete parser or readability problem.
 - Function arrows are curried. `a -> b -> c` means `a -> (b -> c)`, and partial application is part of normal Osprey style.
+- Effect operations use request syntax. `op : Payload => Result` declares an operation, reserving `->` for function types and currying.
 - Handlers are first-class values. `handler Db ...` creates a `Handler Db`, and `handle db do ...` installs handler values around a computation.
 
 ## Remaining Syntax Questions
