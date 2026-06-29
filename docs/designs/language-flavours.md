@@ -19,6 +19,272 @@ default source ── parse/lower default ┐
 ML source      ── parse/lower ML ─────┘
 ```
 
+## Multiple Parsers, One AST
+
+Each flavour can have its own concrete syntax tree (CST). The CST is allowed to
+look completely different because it represents source spelling, not language
+meaning. The compiler boundary is the lowering step: every flavour-specific CST
+must lower into the same canonical AST/HIR before semantic analysis begins.
+
+```mermaid
+flowchart LR
+    DefaultSource["Default source<br/>.osp"] --> DefaultParser["Default parser<br/>tree-sitter-osprey"]
+    MlSource["ML source<br/>.ospml / --flavour ml"] --> MlParser["ML parser<br/>tree-sitter-osprey-ml"]
+
+    DefaultParser --> DefaultCst["Default CST<br/>brace/named-call syntax"]
+    MlParser --> MlCst["ML CST<br/>layout/curried-call syntax"]
+
+    DefaultCst --> DefaultLowerer["Default CST lowerer"]
+    MlCst --> MlLowerer["ML CST lowerer"]
+
+    DefaultLowerer --> Canonical["Canonical AST/HIR<br/>one Osprey core"]
+    MlLowerer --> Canonical
+
+    Canonical --> Types["Type checker"]
+    Types --> Effects["Effect checker"]
+    Effects --> Ir["Compiler IR"]
+    Ir --> Codegen["Codegen/runtime"]
+```
+
+The rule is strict: no type checker, effect checker, or codegen path should
+inspect the original flavour. If a later compiler phase needs to ask "was this
+default syntax or ML syntax?", the boundary has leaked.
+
+The current compiler already has the right rough shape for this. Today,
+`crates/osprey-syntax` parses a tree-sitter CST and lowers it into
+`osprey_ast::Program`. A flavour-aware frontend would generalize that into:
+
+```text
+source -> selected parser -> flavour CST -> flavour lowerer -> Program/HIR
+```
+
+That means adding new frontend pieces, not duplicating the compiler.
+
+```mermaid
+flowchart TB
+    subgraph Frontend["Flavour frontends"]
+        DParse["parse_default(source)<br/>DefaultCst"]
+        MParse["parse_ml(source)<br/>MlCst"]
+        DLower["lower_default(DefaultCst)<br/>Program"]
+        MLower["lower_ml(MlCst)<br/>Program"]
+        DParse --> DLower
+        MParse --> MLower
+    end
+
+    DLower --> Program["osprey_ast::Program<br/>or future canonical HIR"]
+    MLower --> Program
+
+    subgraph Shared["Shared compiler"]
+        Program --> Infer["Hindley-Milner inference"]
+        Infer --> EffectSafety["Unhandled-effect checking"]
+        EffectSafety --> LowerIr["IR lowering"]
+        LowerIr --> Native["Native/WASM/runtime codegen"]
+    end
+```
+
+### CSTs Are Disposable
+
+The CST should be treated as parser-owned detail. It is useful for diagnostics,
+formatting, highlighting, and source spans, but it should not become the semantic
+model of the language.
+
+Default CST example:
+
+```osp
+fn add(x: int, y: int) -> int = x + y
+let sum = add(x: 1, y: 2)
+```
+
+ML CST example:
+
+```osp
+add : int -> int -> int
+add x y = x + y
+sum = add 1 2
+```
+
+Those CSTs will have different node shapes. That is fine. The lowerers decide
+whether they represent the same canonical thing or different canonical things.
+
+```mermaid
+flowchart LR
+    DFn["Default CST<br/>function_declaration<br/>params: x,y"] --> DLower["Default lowerer"]
+    MFn["ML CST<br/>signature + binding<br/>patterns: x y"] --> MLower["ML lowerer"]
+
+    DLower --> NormalFn["Canonical Function<br/>arity = 2<br/>call style = named/default"]
+    MLower --> CurriedFn["Canonical Curried Function<br/>x -> y -> result"]
+
+    NormalFn --> SharedAst["Shared AST/HIR enum set"]
+    CurriedFn --> SharedAst
+```
+
+This diagram is intentionally not pretending the two forms are always identical.
+Default `fn add(x, y)` and ML `add x y` can lower to different canonical function
+shapes because they have different currying defaults. They still share one AST
+vocabulary and one type checker.
+
+### Lowering Contract
+
+Every flavour lowerer must obey the same contract:
+
+- Produce canonical AST/HIR only.
+- Preserve source spans from the original CST.
+- Preserve documentation comments.
+- Preserve parameter names where they exist.
+- Mark generated wrapper nodes as synthetic.
+- Normalize syntax-only differences.
+- Refuse flavour-only semantic hacks.
+
+Examples of syntax-only normalization:
+
+| Default CST | ML CST | Canonical AST/HIR |
+| --- | --- | --- |
+| `let x = value` | `x = value` | immutable binding |
+| `x = value` assignment | `x := value` | mutation |
+| `match x { A => b }` | `match x` layout arms | match expression |
+| `Success { value }` | `Success value` | constructor pattern with one payload |
+| `Thing { a: x }` | `Thing` layout fields | record construction |
+| `op: fn(T) -> U` | `op : T => U` | effect operation payload/result |
+
+Examples that are not syntax-only:
+
+| Default source | ML source | Canonical result |
+| --- | --- | --- |
+| `fn add(x, y) = ...` | `add x y = ...` | different function shape unless explicitly normalized by wrapper generation |
+| `add(x: 1, y: 2)` | `add 1 2` | same only if target callable shape matches |
+| `fn add(x) -> (int) -> int = ...` | `add : int -> int -> int` | same curried function shape |
+
+### Suggested Rust Shape
+
+The implementation does not need two compilers. It needs a small flavour
+frontend abstraction.
+
+```rust
+pub enum Flavour {
+    Default,
+    Ml,
+}
+
+pub struct Parsed {
+    pub program: Program,
+    pub errors: Vec<SyntaxError>,
+    pub flavour: Flavour,
+}
+
+pub trait FlavourFrontend {
+    type Cst;
+
+    fn parse_tree(source: &str) -> Option<Self::Cst>;
+    fn lower(source: &str, cst: &Self::Cst) -> Program;
+    fn collect_errors(source: &str, cst: &Self::Cst) -> Vec<SyntaxError>;
+}
+```
+
+Public entry point:
+
+```rust
+pub fn parse_program_with_flavour(source: &str, flavour: Flavour) -> Parsed {
+    match flavour {
+        Flavour::Default => default_frontend::parse_program(source),
+        Flavour::Ml => ml_frontend::parse_program(source),
+    }
+}
+```
+
+Existing callers can keep using:
+
+```rust
+pub fn parse_program(source: &str) -> Parsed {
+    parse_program_with_flavour(source, Flavour::Default)
+}
+```
+
+That preserves the default syntax as the default API while allowing the ML
+frontend to land behind a flag.
+
+```mermaid
+classDiagram
+    class Flavour {
+        <<enum>>
+        Default
+        Ml
+    }
+
+    class Parsed {
+        Program program
+        Vec~SyntaxError~ errors
+        Flavour flavour
+    }
+
+    class FlavourFrontend {
+        <<trait>>
+        parse_tree(source)
+        lower(source, cst)
+        collect_errors(source, cst)
+    }
+
+    class DefaultFrontend
+    class MlFrontend
+    class Program
+
+    FlavourFrontend <|.. DefaultFrontend
+    FlavourFrontend <|.. MlFrontend
+    DefaultFrontend --> Program
+    MlFrontend --> Program
+    Parsed --> Program
+    Parsed --> Flavour
+```
+
+### Diagnostics And Source Maps
+
+The canonical AST/HIR should carry source spans plus flavour metadata at the
+file/module boundary. Semantic diagnostics should not need flavour-specific
+logic, but rendering diagnostics should use the original spelling.
+
+Example:
+
+- Default flavour mutation fix: "use `mut` before the binding" or "assignment
+  requires a mutable binding".
+- ML flavour mutation fix: "use `:=` to mutate an existing `mut` binding".
+
+The semantic error is the same. The suggested fix is flavour-specific.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Parser as Flavour parser
+    participant Lowerer as Flavour lowerer
+    participant TC as Shared type checker
+    participant Diag as Diagnostic renderer
+
+    User->>Parser: source text
+    Parser->>Lowerer: CST + syntax errors
+    Lowerer->>TC: canonical AST/HIR + source spans + flavour
+    TC->>Diag: semantic diagnostic code + span
+    Diag->>User: message rendered in source flavour
+```
+
+### Golden Tests
+
+A flavour system needs cross-flavour equivalence tests. For source pairs that
+should mean the same thing, tests should parse both and compare canonical output.
+
+```mermaid
+flowchart LR
+    DefaultFixture["default fixture"] --> DefaultParsed["parse default"]
+    MlFixture["ML fixture"] --> MlParsed["parse ML"]
+    DefaultParsed --> Normalize["strip spans/synthetic ids"]
+    MlParsed --> Normalize
+    Normalize --> Compare["assert canonical AST/HIR equivalent"]
+```
+
+Not every pair should be equivalent. Currying tests need two buckets:
+
+- Equivalent: default explicit curried function versus ML curried function.
+- Not equivalent: default ordinary multi-parameter function versus ML curried
+  function.
+
+
 ## Feasibility
 
 This is feasible, but only if the boundary is kept sharp.
