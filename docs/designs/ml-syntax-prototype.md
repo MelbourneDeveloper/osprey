@@ -170,13 +170,23 @@ distance (3, 4)
 
 ### Effects
 
-Effect declarations are currently small interfaces wrapped in braces. In a
-layout language, the braces do not add information: the indented operation
+Effect declarations are named operation signatures. They look a bit like
+Haskell type classes or Rust traits because they are a named bundle of
+operations, but the semantics are different. A trait says "this type implements
+these methods". An algebraic effect says "this computation may request these
+operations".
+
+That distinction matters because effects are handled by computation scope, not
+implemented by a receiver type. A function that performs `Db.add` does not know
+which database implementation it is using. The surrounding handler decides what
+that operation means for this run.
+
+In a layout language, the braces do not add information: the indented operation
 signatures already say exactly what belongs to the effect.
 
 Moving effects to layout also makes them visually match handlers. The effect
-declares operations with names and types; the handler later implements those
-same operation names with clauses.
+declares operations with names and types; a handler later interprets those same
+operation names with clauses.
 
 ```osp
 effect Db
@@ -188,7 +198,7 @@ effect Log
     info : string -> Unit
 ```
 
-No effect-body braces. Operations read like a small interface.
+No effect-body braces. Operations read like a small scoped signature.
 
 ### Match
 
@@ -286,34 +296,103 @@ problem is not the handler arms themselves; it is the repeated nesting:
 important thing is the set of handlers installed for a computation, not the
 mechanical nesting needed by the current AST.
 
-A grouped `handle` installs several effect handlers for one body. `do` marks the
-start of that body. It reads better than `in` for non-ML users: "handle these
-effects, then do this computation." The word is short, familiar, and still
-creates an explicit boundary between handler definitions and handled code.
+The core split should be:
 
 ```osp
-handle
-    Persist
-        flush snap =>
-            saved = writeFile "/tmp/osprey_tasks.db" snap
-            diskBytes := match saved
-                Success value => length snap
-                Error message => -1
-            diskBytes
+effect Db       // declares operations
+handler Db      // creates a handler value that interprets those operations
+handle db do    // installs handler values around a computation
+```
 
-    Metrics
-        hit p => requests := requests + 1
-        served => requests
+Handlers need to be first-class values. That lets code build them, configure
+them, pass them into functions, return them from functions, and swap them for
+tests. This is the effect-system version of dependency injection, without
+turning effects into traits or interfaces.
+
+```osp
+memoryDb : Unit -> Handler Db
+memoryDb () =
+    mut tasks = ""
+    mut taskCount = 0
+
+    handler Db
+        add t =>
+            taskCount := taskCount + 1
+            tasks := "${tasks}#${toString taskCount} ${t}\n"
+            taskCount
+
+        list =>
+            tasks
+
+        count =>
+            taskCount
+```
+
+The mutable cells belong to the handler value. Creating a new handler creates
+fresh state; passing the same handler around shares that interpreter and its
+state.
+
+```osp
+db = memoryDb ()
+
+handle db
+do
+    handleReq method path headers body
+```
+
+Parameterized handlers compose naturally with currying:
+
+```osp
+filePersist : string -> Handler Persist
+filePersist path =
+    writeSnapshot = writeFile path
+
+    handler Persist
+        flush snap =>
+            saved = writeSnapshot snap
+            match saved
+                Success _ => length snap
+                Error _ => -1
+
+persist = filePersist "/tmp/osprey_tasks.db"
+```
+
+A grouped `handle` installs several handler values for one body. `do` marks the
+start of that body. It reads better than `in` for non-ML users: "handle these
+effects, then do this computation." The word is short, familiar, and still
+creates an explicit boundary between handler installation and handled code.
+
+```osp
+persist = filePersist "/tmp/osprey_tasks.db"
+metrics = metricsCounter ()
+db = memoryDb ()
+log = fileLog "/tmp/osprey_server.log"
+
+handle persist metrics db log
 do
     serverId = httpCreateServer 8080 "127.0.0.1"
     listening = httpListen serverId handleReq
     serveForever ()
 ```
 
-One `handle` installs a group of effect handlers for one body. The compiler can
+Inline handler syntax can still exist for local one-off handlers:
+
+```osp
+handle
+    handler Metrics
+        hit p => requests := requests + 1
+        served => requests
+do
+    serveForever ()
+```
+
+That is shorthand for creating an anonymous `Handler Metrics` value and
+installing it immediately. The underlying concept is still handler values.
+
+One `handle` installs a group of handler values for one body. The compiler can
 lower this to nested handler machinery internally. Repeated `in handle`
 disappears, but the single `do` still earns its keep as the boundary between
-handler definitions and the handled computation.
+handler installation and the handled computation.
 
 ## Prototype: `examples/statefulhttp/server.osp`
 
@@ -436,6 +515,62 @@ textResp status bodyText =
         partialBody = bodyText
 
 
+filePersist : string -> Handler Persist
+filePersist path =
+    mut diskBytes = 0
+    writeTasks = writeFile path
+
+    handler Persist
+        flush snap =>
+            saved = writeTasks snap
+            diskBytes := match saved
+                Success value => length snap
+                Error message => -1
+            diskBytes
+
+
+metricsCounter : Unit -> Handler Metrics
+metricsCounter () =
+    mut requests = 0
+
+    handler Metrics
+        hit p =>
+            requests := requests + 1
+
+        served =>
+            requests
+
+
+memoryDb : Unit -> Handler Db
+memoryDb () =
+    mut tasks = ""
+    mut taskCount = 0
+
+    handler Db
+        add t =>
+            taskCount := taskCount + 1
+            tasks := "${tasks}#${toString taskCount} ${t}\n"
+            taskCount
+
+        list =>
+            tasks
+
+        count =>
+            taskCount
+
+
+fileLog : string -> Handler Log
+fileLog path =
+    mut logBuf = ""
+    writeServerLog = writeFile path
+
+    handler Log
+        info m =>
+            logBuf := "${logBuf}${m}\n"
+            _ = writeServerLog logBuf
+            print "  ${m}"
+
+
 onPost : string -> HttpResponse
 onPost body =
     createdText = textResp 201
@@ -492,48 +627,12 @@ serveForever () =
 
 main : Unit -> int
 main () =
-    mut logBuf = ""
-    mut diskBytes = 0
-    mut requests = 0
-    mut tasks = ""
-    mut taskCount = 0
-    writeTasks = writeFile "/tmp/osprey_tasks.db"
-    writeServerLog = writeFile "/tmp/osprey_server.log"
+    persist = filePersist "/tmp/osprey_tasks.db"
+    metrics = metricsCounter ()
+    db = memoryDb ()
+    log = fileLog "/tmp/osprey_server.log"
 
-    handle
-        Persist
-            flush snap =>
-                saved = writeTasks snap
-                diskBytes := match saved
-                    Success value => length snap
-                    Error message => -1
-                diskBytes
-
-        Metrics
-            hit p =>
-                requests := requests + 1
-
-            served =>
-                requests
-
-        Db
-            add t =>
-                taskCount := taskCount + 1
-                tasks := "${tasks}#${toString taskCount} ${t}\n"
-                taskCount
-
-            list =>
-                tasks
-
-            count =>
-                taskCount
-
-        Log
-            info m =>
-                logBuf := "${logBuf}${m}\n"
-                _ = writeServerLog logBuf
-                print "  ${m}"
-
+    handle persist metrics db log
     do
         createLocalServer = httpCreateServer 8080
         serverId = createLocalServer "127.0.0.1"
@@ -549,6 +648,7 @@ main () =
 - Old block braces are not accepted in the target syntax. Osprey should have one canonical syntax, not permanent brace and layout dialects.
 - String interpolation keeps `${...}` for now. It is inside string literal syntax rather than block syntax, so it can stay unless it creates a concrete parser or readability problem.
 - Function arrows are curried. `a -> b -> c` means `a -> (b -> c)`, and partial application is part of normal Osprey style.
+- Handlers are first-class values. `handler Db ...` creates a `Handler Db`, and `handle db do ...` installs handler values around a computation.
 
 ## Remaining Syntax Questions
 
