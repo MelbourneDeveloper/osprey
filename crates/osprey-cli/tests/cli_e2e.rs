@@ -89,6 +89,39 @@ fn run_file_cc(path: &Path, mode: &str, cc: &str) -> Out {
 /// fails there — exercising the `Err` arms `compile_program` feeds.
 const GENERIC_AS_VALUE: &str = "fn id(x) = x\nlet f = id\nprint(\"ok\")\n";
 
+/// Explicit effect resume must run the rest of the handled computation and then
+/// return the handled computation's answer to the arm.
+const RESUME_EFFECT: &str = r#"
+effect Audit {
+    step: fn(string) -> int
+}
+
+fn pipeline() -> int !Audit = {
+    let a = perform Audit.step("load")
+    let b = perform Audit.step("parse")
+    match a + b {
+        Success { value } => value
+        Error { message } => 0
+    }
+}
+
+fn main() = {
+    mut n = 0
+    let total = handle Audit
+        step label => {
+            n = match n + 1 {
+                Success { value } => value
+                Error { message } => n
+            }
+            let answer = resume(n)
+            print("after " + label + ": answer=" + toString(answer))
+            answer
+        }
+    in pipeline()
+    print("total=" + toString(total))
+}
+"#;
+
 #[test]
 fn version_plain_and_json() {
     let plain = run_args(&["--version"]);
@@ -188,6 +221,17 @@ fn run_compiles_links_and_executes() {
     let o = run_file(&prog, &["--run"]);
     assert_eq!(o.code, Some(0), "stderr={}", o.stderr);
     assert!(o.stdout.contains("v=hi"), "{}", o.stdout);
+}
+
+#[test]
+fn explicit_resume_runs_the_performer_continuation() {
+    let prog = temp_osp("resume_effect", RESUME_EFFECT);
+    let o = run_file(&prog, &["--run"]);
+    assert_eq!(o.code, Some(0), "stderr={}", o.stderr);
+    assert_eq!(
+        o.stdout,
+        "after parse: answer=3\nafter load: answer=3\ntotal=3\n"
+    );
 }
 
 #[test]
