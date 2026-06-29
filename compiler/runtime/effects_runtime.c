@@ -5,8 +5,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-#include <stdint.h>
-#include <stdbool.h>
+#ifdef __wasm__
+// wasm32-wasip1 is single-threaded and ships no pthread symbols, so the
+// effect handler stack needs no real locking. [WASM-TARGET-EFFECTS]
+#define pthread_mutex_init(m, a) ((void)(m), (void)(a), 0)
+#define pthread_mutex_lock(m) ((void)(m), 0)
+#define pthread_mutex_unlock(m) ((void)(m), 0)
+#define pthread_mutex_destroy(m) ((void)(m), 0)
+#endif
 
 // Maximum handler stack depth per fiber
 #define MAX_HANDLER_STACK_DEPTH 1024
