@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 // Maximum handler stack depth per fiber
 #define MAX_HANDLER_STACK_DEPTH 1024
@@ -200,4 +202,235 @@ void __osprey_handler_restore(HandlerSnapshot *snap) {
     pthread_mutex_unlock(&g_handler_stack->lock);
 
     free(snap);
+}
+
+typedef struct OspreyCoro {
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+    pthread_t thread;
+    bool started;
+    bool joined;
+    bool suspended;
+    bool done;
+    bool abort;
+    int64_t op_id;
+    int64_t args[16];
+    int64_t arg_count;
+    int64_t resume_value;
+    int64_t result;
+    void *region_env;
+} OspreyCoro;
+
+typedef struct CoroStartArgs {
+    OspreyCoro *coro;
+    int64_t (*body)(void *);
+    void *body_env;
+    HandlerSnapshot *snapshot;
+} CoroStartArgs;
+
+void *__osprey_coro_new(void *env) {
+    OspreyCoro *coro = (OspreyCoro *)malloc(sizeof(OspreyCoro));
+    if (coro == NULL) {
+        fprintf(stderr, "FATAL: Failed to allocate effect continuation\n");
+        abort();
+    }
+    pthread_mutex_init(&coro->lock, NULL);
+    pthread_cond_init(&coro->cond, NULL);
+    coro->started = false;
+    coro->joined = false;
+    coro->suspended = false;
+    coro->done = false;
+    coro->abort = false;
+    coro->op_id = 0;
+    coro->arg_count = 0;
+    coro->resume_value = 0;
+    coro->result = 0;
+    coro->region_env = env;
+    for (int i = 0; i < 16; i++) {
+        coro->args[i] = 0;
+    }
+    return coro;
+}
+
+static void *__osprey_coro_thread(void *raw) {
+    CoroStartArgs *args = (CoroStartArgs *)raw;
+    OspreyCoro *coro = args->coro;
+    if (args->snapshot != NULL) {
+        __osprey_handler_restore(args->snapshot);
+        args->snapshot = NULL;
+    }
+    int64_t result = args->body(args->body_env);
+    free(args);
+
+    pthread_mutex_lock(&coro->lock);
+    coro->result = result;
+    coro->done = true;
+    coro->suspended = false;
+    pthread_cond_broadcast(&coro->cond);
+    pthread_mutex_unlock(&coro->lock);
+    return NULL;
+}
+
+void __osprey_coro_start(void *raw, int64_t (*body)(void *), void *body_env, HandlerSnapshot *snapshot) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL || body == NULL) {
+        fprintf(stderr, "FATAL: Invalid effect continuation start\n");
+        abort();
+    }
+    CoroStartArgs *args = (CoroStartArgs *)malloc(sizeof(CoroStartArgs));
+    if (args == NULL) {
+        fprintf(stderr, "FATAL: Failed to allocate effect continuation start args\n");
+        abort();
+    }
+    args->coro = coro;
+    args->body = body;
+    args->body_env = body_env;
+    args->snapshot = snapshot;
+
+    int rc = pthread_create(&coro->thread, NULL, __osprey_coro_thread, args);
+    if (rc != 0) {
+        free(args);
+        fprintf(stderr, "FATAL: Failed to start effect continuation thread\n");
+        abort();
+    }
+    pthread_mutex_lock(&coro->lock);
+    coro->started = true;
+    while (!coro->suspended && !coro->done) {
+        pthread_cond_wait(&coro->cond, &coro->lock);
+    }
+    pthread_mutex_unlock(&coro->lock);
+}
+
+int64_t __osprey_coro_suspend(void *raw, int64_t op_id, int64_t *args, int64_t arg_count) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL) {
+        return 0;
+    }
+    pthread_mutex_lock(&coro->lock);
+    coro->op_id = op_id;
+    coro->arg_count = arg_count;
+    int64_t capped = arg_count;
+    if (capped > 16) {
+        capped = 16;
+    }
+    for (int64_t i = 0; i < capped; i++) {
+        coro->args[i] = args == NULL ? 0 : args[i];
+    }
+    coro->suspended = true;
+    pthread_cond_broadcast(&coro->cond);
+    while (coro->suspended && !coro->abort) {
+        pthread_cond_wait(&coro->cond, &coro->lock);
+    }
+    if (coro->abort) {
+        pthread_mutex_unlock(&coro->lock);
+        pthread_exit(NULL);
+    }
+    int64_t resume_value = coro->resume_value;
+    pthread_mutex_unlock(&coro->lock);
+    return resume_value;
+}
+
+int64_t __osprey_coro_resume(void *raw, int64_t value) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL) {
+        return 0;
+    }
+    pthread_mutex_lock(&coro->lock);
+    if (coro->done) {
+        int64_t result = coro->result;
+        pthread_mutex_unlock(&coro->lock);
+        return result;
+    }
+    coro->resume_value = value;
+    coro->suspended = false;
+    pthread_cond_broadcast(&coro->cond);
+    while (!coro->suspended && !coro->done) {
+        pthread_cond_wait(&coro->cond, &coro->lock);
+    }
+    int64_t result = coro->done ? coro->result : 0;
+    pthread_mutex_unlock(&coro->lock);
+    return result;
+}
+
+int64_t __osprey_coro_done(void *raw) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL) {
+        return 1;
+    }
+    pthread_mutex_lock(&coro->lock);
+    int64_t done = coro->done ? 1 : 0;
+    pthread_mutex_unlock(&coro->lock);
+    return done;
+}
+
+int64_t __osprey_coro_op(void *raw) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL) {
+        return 0;
+    }
+    pthread_mutex_lock(&coro->lock);
+    int64_t op = coro->op_id;
+    pthread_mutex_unlock(&coro->lock);
+    return op;
+}
+
+int64_t __osprey_coro_arg(void *raw, int64_t index) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL || index < 0 || index >= 16) {
+        return 0;
+    }
+    pthread_mutex_lock(&coro->lock);
+    int64_t arg = index < coro->arg_count ? coro->args[index] : 0;
+    pthread_mutex_unlock(&coro->lock);
+    return arg;
+}
+
+int64_t __osprey_coro_result(void *raw) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL) {
+        return 0;
+    }
+    pthread_mutex_lock(&coro->lock);
+    int64_t result = coro->result;
+    pthread_mutex_unlock(&coro->lock);
+    return result;
+}
+
+void __osprey_coro_abort(void *raw) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL) {
+        return;
+    }
+    pthread_mutex_lock(&coro->lock);
+    if (!coro->done) {
+        coro->abort = true;
+        coro->suspended = false;
+        pthread_cond_broadcast(&coro->cond);
+    }
+    pthread_mutex_unlock(&coro->lock);
+    if (coro->started && !coro->joined) {
+        pthread_join(coro->thread, NULL);
+        coro->joined = true;
+    }
+    pthread_mutex_lock(&coro->lock);
+    coro->done = true;
+    pthread_mutex_unlock(&coro->lock);
+}
+
+void __osprey_coro_free(void *raw) {
+    OspreyCoro *coro = (OspreyCoro *)raw;
+    if (coro == NULL) {
+        return;
+    }
+    if (coro->started && !coro->joined) {
+        if (!coro->done) {
+            __osprey_coro_abort(coro);
+        } else {
+            pthread_join(coro->thread, NULL);
+            coro->joined = true;
+        }
+    }
+    pthread_cond_destroy(&coro->cond);
+    pthread_mutex_destroy(&coro->lock);
+    free(coro);
 }

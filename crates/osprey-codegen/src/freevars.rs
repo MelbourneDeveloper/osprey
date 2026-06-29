@@ -127,6 +127,7 @@ fn walk_fiber(e: &Expr, bound: &mut Vec<String>, out: &mut BTreeSet<String>) {
             walk_all(arguments, bound, out);
             walk_named(named_arguments, bound, out);
         }
+        Expr::Resume(Some(value)) => walk(value, bound, out),
         Expr::Handler { arms, body, .. } => {
             for arm in arms {
                 scoped(bound, arm.params.clone(), out, |b, o| walk(&arm.body, b, o));
