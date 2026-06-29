@@ -18,12 +18,14 @@ mod docs;
 mod sandbox;
 mod wasm;
 
+use osprey_syntax::Flavor;
 use sandbox::Policy;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --compile | --run | \
---symbols] [--quiet] [--debug] [--memory=default|gc] [--target=native|wasm32] [-o <out>] \
+--symbols] [--quiet] [--debug] [--flavor default|ml] [--memory=default|gc] \
+[--target=native|wasm32] [-o <out>] \
 [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
        osprey --hover <name>\n\
        osprey --docs --docs-dir <dir>\n\
@@ -47,6 +49,10 @@ struct Cli {
     output: Option<String>,
     /// Emit source-level debug metadata and link a debugger-friendly binary.
     debug: bool,
+    /// Explicit source flavor from `--flavor`; `None` when unset, so flavor
+    /// resolution falls through to the marker/extension precedence
+    /// ([FLAVOR-SELECT], docs/specs/0023-LanguageFlavors.md).
+    flavor: Option<Flavor>,
 }
 
 fn main() -> ExitCode {
@@ -125,6 +131,7 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
     let mut target = String::from("native");
     let mut output = None;
     let mut debug = false;
+    let mut flavor = None;
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -144,6 +151,17 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
                     .next()
                     .ok_or_else(|| format!("-o requires a path\n{USAGE}"))?;
                 output = Some(next.clone());
+            }
+            // `--flavor <name>` selects the source flavor explicitly (highest
+            // selection precedence). [FLAVOR-SELECT]
+            "--flavor" => {
+                let next = it
+                    .next()
+                    .ok_or_else(|| format!("--flavor requires a value (default|ml)\n{USAGE}"))?;
+                flavor = Some(parse_flavor(next)?);
+            }
+            flag if flag.starts_with("--flavor=") => {
+                flavor = Some(parse_flavor(flag.strip_prefix("--flavor=").unwrap_or_default())?);
             }
             flag if flag.starts_with("--memory=") => {
                 memory = parse_memory(flag.strip_prefix("--memory=").unwrap_or_default())?;
@@ -166,6 +184,7 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
             target,
             output,
             debug,
+            flavor,
         }),
         None => Err(USAGE.to_string()),
     }
@@ -196,6 +215,55 @@ fn parse_memory(value: &str) -> Result<String, String> {
     }
 }
 
+/// Validate a `--flavor` / marker value into a [`Flavor`]. [FLAVOR-SELECT]
+fn parse_flavor(value: &str) -> Result<Flavor, String> {
+    value.parse().map_err(|e| format!("{e}\n{USAGE}"))
+}
+
+/// The value of a leading `// osprey: flavor=<name>` marker, if the source has
+/// one (the space-less `//osprey: flavor=` spelling is accepted too).
+fn flavor_marker(source: &str) -> Option<&str> {
+    source.lines().find_map(|line| {
+        let t = line.trim();
+        t.strip_prefix("// osprey: flavor=")
+            .or_else(|| t.strip_prefix("//osprey: flavor="))
+            .map(str::trim)
+    })
+}
+
+/// The flavor implied by the file extension: `.ospml` ⇒ ML, `.osp` ⇒ Default.
+/// Any other extension yields `None` (no opinion). [FLAVOR-SELECT]
+fn flavor_from_extension(path: &str) -> Option<Flavor> {
+    match Path::new(path).extension().and_then(|e| e.to_str()) {
+        Some("ospml") => Some(Flavor::Ml),
+        Some("osp") => Some(Flavor::Default),
+        _ => None,
+    }
+}
+
+/// Resolve the compilation unit's flavor by precedence: explicit `--flavor`
+/// flag > file marker > extension > Default. A marker and extension that
+/// disagree are a hard error rather than a silent guess. [FLAVOR-SELECT]
+fn resolve_flavor(flag: Option<Flavor>, path: &str, source: &str) -> Result<Flavor, String> {
+    if let Some(f) = flag {
+        return Ok(f);
+    }
+    let marker = match flavor_marker(source) {
+        Some(value) => Some(parse_flavor(value)?),
+        None => None,
+    };
+    let extension = flavor_from_extension(path);
+    match (marker, extension) {
+        (Some(m), Some(e)) if m != e => Err(format!(
+            "{path}: flavor marker (flavor={m}) and file extension (flavor={e}) disagree; \
+             make them agree or pass --flavor to override"
+        )),
+        (Some(m), _) => Ok(m),
+        (None, Some(e)) => Ok(e),
+        (None, None) => Ok(Flavor::Default),
+    }
+}
+
 /// Parse, gate (syntax → sandbox → types), and dispatch the selected mode.
 fn run(cli: &Cli) -> ExitCode {
     let path = &cli.path;
@@ -206,7 +274,14 @@ fn run(cli: &Cli) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let parsed = osprey_syntax::parse_program(&source);
+    let flavor = match resolve_flavor(cli.flavor, path, &source) {
+        Ok(flavor) => flavor,
+        Err(msg) => {
+            eprintln!("{msg}");
+            return ExitCode::from(2);
+        }
+    };
+    let parsed = osprey_syntax::parse_program_with_flavor(&source, flavor);
     if !parsed.errors.is_empty() {
         for err in &parsed.errors {
             eprintln!(
@@ -583,6 +658,47 @@ mod tests {
     }
 
     #[test]
+    fn parse_args_accepts_flavor_flag_in_both_spellings() {
+        // No flag ⇒ unset, so resolution falls through to marker/extension.
+        assert_eq!(parse_args(&args(&["f.osp"])).expect("ok").flavor, None);
+        // Spaced and `=` spellings both set the explicit flavor.
+        for spelling in [&["--flavor", "ml", "f.osp"][..], &["--flavor=ml", "f.osp"][..]] {
+            let cli = parse_args(&args(spelling)).expect("ok");
+            assert_eq!(cli.flavor, Some(Flavor::Ml));
+        }
+        assert_eq!(
+            parse_args(&args(&["--flavor=default", "f.osp"]))
+                .expect("ok")
+                .flavor,
+            Some(Flavor::Default)
+        );
+        // A bogus value and a missing value both fail loudly.
+        assert!(parse_args(&args(&["--flavor=fsharp", "f.osp"])).is_err());
+        assert!(parse_args(&args(&["f.osp", "--flavor"])).is_err());
+    }
+
+    #[test]
+    fn resolve_flavor_follows_flag_marker_extension_precedence() {
+        // Flag wins outright, overriding a disagreeing extension silently.
+        assert_eq!(
+            resolve_flavor(Some(Flavor::Default), "a.ospml", "").expect("ok"),
+            Flavor::Default
+        );
+        // No flag: with a neutral extension, the marker decides.
+        assert_eq!(
+            resolve_flavor(None, "a.txt", "// osprey: flavor=ml\nx = 1\n").expect("ok"),
+            Flavor::Ml
+        );
+        // No flag, no marker: extension decides.
+        assert_eq!(resolve_flavor(None, "a.ospml", "").expect("ok"), Flavor::Ml);
+        assert_eq!(resolve_flavor(None, "a.osp", "").expect("ok"), Flavor::Default);
+        // Nothing at all ⇒ Default.
+        assert_eq!(resolve_flavor(None, "a.txt", "").expect("ok"), Flavor::Default);
+        // Marker and extension that disagree are a hard error, not a guess.
+        assert!(resolve_flavor(None, "a.osp", "// osprey: flavor=ml\n").is_err());
+    }
+
+    #[test]
     fn parse_args_last_mode_wins_and_quiet_sets() {
         let cli = parse_args(&args(&["--ast", "f.osp", "--llvm", "--run", "--quiet"])).expect("ok");
         assert_eq!(cli.mode, "--run");
@@ -761,6 +877,7 @@ mod tests {
             target: "native".to_string(),
             output: None,
             debug: false,
+            flavor: None,
         }
     }
 

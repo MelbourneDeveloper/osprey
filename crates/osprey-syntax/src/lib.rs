@@ -10,6 +10,7 @@ use tree_sitter::{Node, Parser, Tree};
 
 mod expr;
 mod lower;
+mod ml;
 
 pub use lower::Lowerer;
 
@@ -22,6 +23,47 @@ pub struct SyntaxError {
     pub position: Position,
 }
 
+/// A source **flavor**: a parser-and-lowering profile over the one shared
+/// language core. Every flavor converges on the same canonical [`Program`]
+/// before any semantic analysis runs, so nothing past lowering may inspect
+/// which flavor produced a program. Implements [FLAVOR-BOUNDARY],
+/// [FLAVOR-FRONTEND] (docs/specs/0023-LanguageFlavors.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Flavor {
+    /// C-style braces, parens-and-named-argument calls, explicit currying. The
+    /// language defined by specs 0001–0022; today's fully-implemented frontend.
+    #[default]
+    Default,
+    /// Layout (offside-rule) blocks, whitespace application, curry-by-default.
+    /// Surface specified in spec 0024; built by plan 0013 phases 2–3.
+    Ml,
+}
+
+impl std::fmt::Display for Flavor {
+    /// The canonical lowercase name used by the `--flavor` flag, the
+    /// `// osprey: flavor=` marker, and diagnostics.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Flavor::Default => "default",
+            Flavor::Ml => "ml",
+        })
+    }
+}
+
+impl std::str::FromStr for Flavor {
+    type Err = String;
+
+    /// Parse a flavor name (`default` | `ml`). Unknown names are an error so a
+    /// typo fails loudly instead of silently selecting the Default frontend.
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "default" => Ok(Flavor::Default),
+            "ml" => Ok(Flavor::Ml),
+            other => Err(format!("unknown flavor '{other}' (available: default, ml)")),
+        }
+    }
+}
+
 /// The result of lowering: the program plus any syntax errors. Errors being
 /// non-empty does not prevent producing a best-effort tree.
 #[derive(Debug, Clone, PartialEq)]
@@ -30,11 +72,34 @@ pub struct Parsed {
     pub program: Program,
     /// Syntax errors discovered while parsing; empty on a clean parse.
     pub errors: Vec<SyntaxError>,
+    /// The flavor this source was parsed under. Carried for diagnostic
+    /// rendering only — no semantic phase may branch on it ([FLAVOR-BOUNDARY]).
+    pub flavor: Flavor,
 }
 
-/// Parse Osprey source into a typed [`Program`].
+/// Parse Osprey source into a typed [`Program`] using the **Default** flavor.
+///
+/// The signature is unchanged so every existing caller is unaffected: Default
+/// stays the default API. Implements [FLAVOR-FRONTEND].
 #[must_use]
 pub fn parse_program(source: &str) -> Parsed {
+    parse_program_with_flavor(source, Flavor::Default)
+}
+
+/// Parse Osprey source under an explicit [`Flavor`], dispatching to that
+/// flavor's frontend. Both frontends produce the same canonical [`Program`];
+/// they meet at the AST and are indistinguishable from there on.
+/// Implements [FLAVOR-FRONTEND], [FLAVOR-BOUNDARY].
+#[must_use]
+pub fn parse_program_with_flavor(source: &str, flavor: Flavor) -> Parsed {
+    match flavor {
+        Flavor::Default => parse_default(source),
+        Flavor::Ml => ml::parse_ml(source),
+    }
+}
+
+/// The Default (brace) frontend: tree-sitter CST + [`Lowerer`] → [`Program`].
+fn parse_default(source: &str) -> Parsed {
     let Some(tree) = parse_tree(source) else {
         return Parsed {
             program: Program {
@@ -44,6 +109,7 @@ pub fn parse_program(source: &str) -> Parsed {
                 message: "failed to initialize Osprey grammar".to_owned(),
                 position: Position { line: 1, column: 0 },
             }],
+            flavor: Flavor::Default,
         };
     };
     let root = tree.root_node();
@@ -51,7 +117,11 @@ pub fn parse_program(source: &str) -> Parsed {
     let program = lowerer.lower_program(root);
     let mut errors = Vec::new();
     collect_errors(root, source.as_bytes(), &mut errors);
-    Parsed { program, errors }
+    Parsed {
+        program,
+        errors,
+        flavor: Flavor::Default,
+    }
 }
 
 /// Run only the tree-sitter parse (used by tooling that wants the raw CST).

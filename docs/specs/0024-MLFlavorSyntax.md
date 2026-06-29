@@ -1,17 +1,17 @@
-# ML Flavour Syntax
+# ML Flavor Syntax
 
-The **ML flavour** is a layout-based source surface for Osprey: indentation
+The **ML flavor** is a layout-based source surface for Osprey: indentation
 delimits blocks, functions curry by default, and effect handlers are first-class
-values. It is one of Osprey's [language flavours](0023-LanguageFlavours.md) — a
+values. It is one of Osprey's [language flavors](0023-LanguageFlavors.md) — a
 parsing-and-lowering profile, not a separate language. Every construct here
-lowers to the same `osprey_ast::Program` the Default (brace) flavour produces,
+lowers to the same `osprey_ast::Program` the Default (brace) flavor produces,
 and from there shares one type checker, effect checker, and backend.
 
 This chapter is the **surface reference**. The boundary rules, the lowering
 contract, currying canonicalisation, and the shared-core handler-value feature
-are normative in [Language Flavours](0023-LanguageFlavours.md); this chapter is
+are normative in [Language Flavors](0023-LanguageFlavors.md); this chapter is
 subordinate to that contract. Implementation is tracked in
-[plan 0013](../plans/0013-ml-flavour-frontend.md).
+[plan 0013](../plans/0013-ml-flavor-frontend.md).
 
 - [Status](#status)
 - [Layout Model](#layout-model)
@@ -29,16 +29,16 @@ subordinate to that contract. Implementation is tracked in
 
 ## Status
 
-Not implemented. The Default flavour (specs `0001`–`0022`) is the only frontend
+Not implemented. The Default flavor (specs `0001`–`0022`) is the only frontend
 today. This chapter specifies the ML surface that
-[plan 0013](../plans/0013-ml-flavour-frontend.md) will build as a second
-frontend. Select it with `--flavour ml`, the `.ospml` extension, or a
-`// osprey: flavour=ml` marker (see
-[Flavour Selection](0023-LanguageFlavours.md#flavour-selection)).
+[plan 0013](../plans/0013-ml-flavor-frontend.md) will build as a second
+frontend. Select it with `--flavor ml`, the `.ospml` extension, or a
+`// osprey: flavor=ml` marker (see
+[Flavor Selection](0023-LanguageFlavors.md#flavor-selection)).
 
 ## Layout Model
 
-`[FLAVOUR-ML-LAYOUT]` The ML flavour uses the **offside rule**. A block is
+`[FLAVOR-ML-LAYOUT]` The ML flavor uses the **offside rule**. A block is
 introduced by a header line and continued by the lines indented under it; a line
 indented less than the block's column closes it. Blocks nest by indentation.
 
@@ -53,14 +53,14 @@ brace grammar has none today — `tree-sitter-osprey/` ships no `scanner.c`). Th
 scanner tracks an indentation stack, emits `INDENT`/`DEDENT`/`NEWLINE`, and
 ignores blank lines and comment-only lines. Source positions (row/column) are
 preserved on every token so diagnostics and the LSP keep working
-([FLAVOUR-LOWER-CONTRACT](0023-LanguageFlavours.md#the-lowering-contract)).
+([FLAVOR-LOWER-CONTRACT](0023-LanguageFlavors.md#the-lowering-contract)).
 
 String interpolation keeps `${…}`. Parentheses remain available for grouping and
 precedence; they are not mandatory call punctuation.
 
 ## Bindings and Mutation
 
-`[FLAVOUR-ML-BIND]` `=` **binds**, `:=` **mutates**. There is no `let`: a bare
+`[FLAVOR-ML-BIND]` `=` **binds**, `:=` **mutates**. There is no `let`: a bare
 `name = expr` introduces an immutable binding in the current layout block. `mut`
 marks a mutable binding, and every write to it uses `:=`, so mutation is visible
 without scanning back to the declaration.
@@ -82,12 +82,12 @@ mutation was meant. Shadowing in a nested block or pattern is allowed.
 
 Lowering: `name = e` → `Stmt::Let { mutable: false }`; `mut name = e` →
 `Stmt::Let { mutable: true }`; `name := e` → `Stmt::Assignment`. These are the
-*same* canonical nodes the Default flavour emits for `let`, `mut`, and `=`
+*same* canonical nodes the Default flavor emits for `let`, `mut`, and `=`
 reassignment respectively — only the spelling differs.
 
 ## Functions and Currying
 
-`[FLAVOUR-ML-FN]` A function definition is a binding whose head has one or more
+`[FLAVOR-ML-FN]` A function definition is a binding whose head has one or more
 parameter patterns. The optional signature line above it uses ML arrows.
 
 ```ebnf
@@ -106,7 +106,7 @@ add : int -> int -> int
 add x y = x + y
 ```
 
-`[FLAVOUR-ML-CURRY]` Arrows are **right-associative** and application is
+`[FLAVOR-ML-CURRY]` Arrows are **right-associative** and application is
 **left-associative**, so `int -> int -> int` is `int -> (int -> int)` and
 `add 1 2` is `(add 1) 2`. Multi-argument function syntax therefore *reads as
 curried*, and partial application falls out for free:
@@ -128,9 +128,9 @@ d = distance (3, 4)
 ```
 
 Lowering (normative in
-[FLAVOUR-CURRY](0023-LanguageFlavours.md#currying-canonicalisation)): `add x y =
+[FLAVOR-CURRY](0023-LanguageFlavors.md#currying-canonicalisation)): `add x y =
 body` lowers to a one-parameter binding returning a one-parameter `Expr::Lambda`
-— **identical** canonical AST to the Default flavour's explicit
+— **identical** canonical AST to the Default flavor's explicit
 `fn add(x) -> (int) -> int = fn(y) => body`. It is deliberately **not** the same
 AST as Default `fn add(x, y) = body` (one two-parameter `Stmt::Function`).
 `add 1 2` lowers to nested single-argument `Expr::Call`s; no partial-application
@@ -143,7 +143,7 @@ space-remover).
 
 ## Function Calls
 
-`[FLAVOUR-ML-CALL]` Calls use whitespace application; parentheses group.
+`[FLAVOR-ML-CALL]` Calls use whitespace application; parentheses group.
 
 ```ebnf
 application ::= app atom
@@ -162,7 +162,7 @@ Lowering: `f a b` → nested `Expr::Call`, one argument each
 
 ## Effects
 
-`[FLAVOUR-ML-EFFECT]` An effect declaration is a layout block of operation
+`[FLAVOR-ML-EFFECT]` An effect declaration is a layout block of operation
 signatures. Operations use `=>` so that `->` keeps its one meaning — function
 and currying type. An operation is a request with a **payload** and a **result**,
 not a curried function.
@@ -205,7 +205,7 @@ Lowering: `effect E` + arms → `Stmt::Effect { operations }`, where each
 
 ## Handlers
 
-`[FLAVOUR-ML-HANDLER]` Handlers are **first-class values**. `handler E` followed
+`[FLAVOR-ML-HANDLER]` Handlers are **first-class values**. `handler E` followed
 by indented arms evaluates to a value of type `Handler E`. `handle` installs one
 or more such values around a computation, with `do` marking the handled body.
 
@@ -234,7 +234,7 @@ memoryDb () =
             taskCount
 ```
 
-Installing several at once replaces the Default flavour's repeated nesting:
+Installing several at once replaces the Default flavor's repeated nesting:
 
 ```osp
 db = memoryDb ()
@@ -251,14 +251,14 @@ with currying (`filePersist path = … handler Persist …`).
 
 First-class handler values, the `Handler E` type, and multi-install are a
 **shared-core feature**, not ML-only sugar — see
-[FLAVOUR-HANDLER-VALUE](0023-LanguageFlavours.md#shared-core-additions). They
+[FLAVOR-HANDLER-VALUE](0023-LanguageFlavors.md#shared-core-additions). They
 lower to `Expr::HandlerValue` and `Expr::Install`; `handle a b c do body`
-desugars to nested installs. The Default flavour gains the same feature in brace
+desugars to nested installs. The Default flavor gains the same feature in brace
 spelling.
 
 ## Match
 
-`[FLAVOUR-ML-MATCH]` `match` uses the same clause style as handlers: the
+`[FLAVOR-ML-MATCH]` `match` uses the same clause style as handlers: the
 scrutinee follows `match`, and each indented arm is `Pattern => body`. A
 one-payload constructor binds its payload directly — `Success value`, not
 `Success { value }`.
@@ -281,7 +281,7 @@ Default `Success { value }` produces. Wildcard `_` → `Pattern::Wildcard`.
 
 ## Records
 
-`[FLAVOUR-ML-RECORD]` Record construction is a layout block headed by the
+`[FLAVOR-ML-RECORD]` Record construction is a layout block headed by the
 constructor name, with `field = value` lines. Inside a record literal the left
 of `=` is a field name, not a new binding; the indentation under a constructor
 makes that unambiguous.
@@ -307,10 +307,10 @@ Lowering: `Expr::TypeConstructor { name, fields }`; record update lowers to
 
 ## Blocks
 
-`[FLAVOUR-ML-BLOCK]` A function body, match arm, handler arm, or `do` body is an
+`[FLAVOR-ML-BLOCK]` A function body, match arm, handler arm, or `do` body is an
 ordinary layout region containing bindings, mutations, performs, and a final
 expression. The final expression is the block's value. There is no separate
-`{ … }` expression form in this flavour.
+`{ … }` expression form in this flavor.
 
 ```osp
 onPost body =
@@ -327,8 +327,8 @@ expression — the same node the Default `{ … }` block produces.
 ## Canonical Lowering Table
 
 Every ML form on the left lowers to the canonical node on the right
-(`crates/osprey-ast/src/lib.rs`). The Default-flavour spelling of the same node
-is in [FLAVOUR-LAYER](0023-LanguageFlavours.md#flavour-concern-vs-shared-core-concern).
+(`crates/osprey-ast/src/lib.rs`). The Default-flavor spelling of the same node
+is in [FLAVOR-LAYER](0023-LanguageFlavors.md#flavor-concern-vs-shared-core-concern).
 
 | ML surface | Canonical AST node |
 | --- | --- |
@@ -349,7 +349,7 @@ is in [FLAVOUR-LAYER](0023-LanguageFlavours.md#flavour-concern-vs-shared-core-co
 
 ## Worked Example
 
-The same program a Default-flavour author would write with braces, `fn`, named
+The same program a Default-flavor author would write with braces, `fn`, named
 arguments, and nested `handle … in`. It exercises curried definitions, partial
 application (`textResp 201`, `c256 "213"`), `=>` effect operations, first-class
 handler values with owned `mut` state, and one grouped `handle … do`.
@@ -459,12 +459,12 @@ test "createTask stores the task and logs" =
   `Expr::Lambda`), keeping `=>` as the clause/yield arrow and `->` as the type
   arrow.
 - **Effect annotations on signatures:** the effect row follows the result type,
-  as in the Default flavour (`saveTask : string -> int ![Store, Log]`).
+  as in the Default flavor (`saveTask : string -> int ![Store, Log]`).
 
 ## Cross-references
 
-- [Language Flavours](0023-LanguageFlavours.md) — the normative boundary,
+- [Language Flavors](0023-LanguageFlavors.md) — the normative boundary,
   contract, currying canonicalisation, and shared-core handler-value feature.
 - [Algebraic Effects](0017-AlgebraicEffects.md) — effect semantics shared by both
-  flavours.
-- [Plan 0013 — ML Flavour Frontend](../plans/0013-ml-flavour-frontend.md).
+  flavors.
+- [Plan 0013 — ML Flavor Frontend](../plans/0013-ml-flavor-frontend.md).
