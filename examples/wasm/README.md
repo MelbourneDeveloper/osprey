@@ -1,6 +1,8 @@
 # Osprey → WebAssembly
 
-A minimal end-to-end example: an Osprey program compiled to `wasm32-wasip1` and
+An end-to-end example: an Osprey program — algebraic effects (one logic, two
+handlers), union types + exhaustive pattern matching, Hindley-Milner inference,
+functional pipelines, and persistent List/Map — compiled to `wasm32-wasip1` and
 run under `wasmtime`, Node's WASI, and in the browser. See
 [`docs/specs/0022-WebAssemblyTarget.md`](../../docs/specs/0022-WebAssemblyTarget.md)
 for the design.
@@ -40,15 +42,40 @@ node scripts/wasm-browser-smoke.mjs examples/wasm/build/hello.wasm examples/wasm
 Expected output ([`hello.expectedoutput`](hello.expectedoutput)):
 
 ```
-Osprey on WebAssembly
-length = 21
-2 * 1500000000 = 3000000000
+OSPREY -> WebAssembly  ::  language tour
+======================================
+effects  same logic, two worlds
+  World A (real, stateful handler):
+    money open account
+    money deposit 100  -> balance 100
+    money withdraw 40  -> balance 60
+  World B (mock, frozen ledger):
+    test  [dry-run] open account
+    test  [dry-run] deposit 100  -> balance 0
+    test  [dry-run] withdraw 40  -> balance 0
+  -> realWorld returned 60, dryRun returned 0
+--------------------------------------
+pipeline  sum even^2 in [1,40) = 9880  EPIC
+list      len 4, contains 4 = true, contains 9 = false
+map       size 3, has epic = true
+tiers     EPIC / SOLID / STARTER
+--------------------------------------
+wasm width fixes
+  Osprey on WebAssembly
+  length = 21
+  2 * 1500000000 = 3000000000
 ```
 
 ## In the browser
 
 `index.html` ships a tiny inline WASI shim (`fd_write` → page + console), so no
-bundler or npm packages are needed. Serve this directory over HTTP and open it:
+bundler or npm packages are needed. One target builds, serves, and opens it:
+
+```sh
+make wasm-serve              # build + serve examples/wasm + open the browser
+```
+
+Or serve this directory over HTTP by hand:
 
 ```sh
 cd examples/wasm && python3 -m http.server 8080
