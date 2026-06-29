@@ -1,0 +1,41 @@
+{
+  "binary": [
+    "crates/**",
+    "compiler/**",
+    "tree-sitter-osprey/**",
+    "webcompiler/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "Makefile"
+  ],
+  "vsix": [
+    "vscode-extension/**"
+  ],
+  "website": [
+    "website/**",
+    "benchmarks/**"
+  ],
+  "ignore": [
+    "**/*.md",
+    "docs/**",
+    "examples/**",
+    ".github/**",
+    ".devcontainer/**",
+    ".vscode/**",
+    ".claude/**",
+    ".cursor/**",
+    ".clinerules/**",
+    ".cursorrules",
+    ".windsurfrules",
+    ".deslop.toml",
+    ".gitignore",
+    ".dockerignore",
+    "clippy.toml",
+    "rustfmt.toml",
+    "coverage-thresholds.json",
+    "opencode.json",
+    "osprey.code-workspace",
+    "pull_request_template.md",
+    "test_output.txt"
+  ]
+}
