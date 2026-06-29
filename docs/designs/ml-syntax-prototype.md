@@ -32,6 +32,7 @@ parser diagnostic, and style discussion has to pick sides forever.
 - Single-field constructor patterns use `Constructor value`, not `Constructor { value }`.
 - Record construction uses layout.
 - Function calls may use ML-style whitespace application.
+- Effect operations use `operation : Payload => Result`, not function arrows.
 - A grouped `handle` uses one `do` to introduce the handled computation.
 
 ## Core Forms
@@ -182,23 +183,66 @@ which database implementation it is using. The surrounding handler decides what
 that operation means for this run.
 
 In a layout language, the braces do not add information: the indented operation
-signatures already say exactly what belongs to the effect.
+signatures already say exactly what belongs to the effect. The operation
+signature should also avoid `->`, because `->` now has one specific meaning:
+curried function type.
 
 Moving effects to layout also makes them visually match handlers. The effect
-declares operations with names and types; a handler later interprets those same
-operation names with clauses.
+declares operations with names, payload types, and result types; a handler later
+interprets those same operation names with clauses.
 
 ```osp
 effect Db
-    add : string -> int
-    list : Unit -> string
-    count : Unit -> int
+    add : string => int
+    list : Unit => string
+    count : Unit => int
 
 effect Log
-    info : string -> Unit
+    info : string => Unit
 ```
 
 No effect-body braces. Operations read like a small scoped signature.
+
+The broad rule is:
+
+```osp
+function type:
+    a -> b -> c
+
+effect operation:
+    op : Payload => Result
+
+handler clause:
+    op payload => body
+
+match arm:
+    Pattern => expression
+```
+
+`->` belongs to functions and currying. `=>` belongs to clauses and requests
+that yield a result. That means `=>` appears in `match`, `handler`, and
+`effect`, but the context is clear and the meaning is consistent: the left side
+yields the right side.
+
+Zero-payload operations use `Unit` as the payload type:
+
+```osp
+effect Metrics
+    hit : string => Unit
+    served : Unit => int
+```
+
+Multi-field effect inputs should be real payload data, not fake multi-argument
+operations. Use a record when the request has several fields:
+
+```osp
+type AddTask =
+    body : string
+    priority : int
+
+effect Db
+    add : AddTask => int
+```
 
 ### Match
 
