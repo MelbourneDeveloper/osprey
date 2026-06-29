@@ -81,7 +81,14 @@ inc : int -> int
 inc x = x + 1
 ```
 
-The signature syntax is ML-like. Whether `a -> b -> c` means true currying or only a surface spelling for multi-argument functions is a separate semantic decision. For this prototype it can desugar to the existing multi-argument function model.
+The signature syntax is ML-like, and this prototype adopts the ML meaning:
+`a -> b -> c` is right-associative and means `a -> (b -> c)`. A function takes
+one argument and returns either the final result or another function waiting for
+the next argument.
+
+This sounds strange from C-family languages, but it makes partial application
+fall out naturally. If a function normally needs two arguments, supplying one
+argument gives back a smaller function.
 
 ```osp
 main : Unit -> int
@@ -100,6 +107,65 @@ name = expr             // value binding
 name arg1 arg2 = expr   // function binding
 name := expr            // mutation
 expr                    // expression; if final in block, returned
+```
+
+### Currying
+
+Currying is settled for this syntax. Osprey should not borrow the ML arrow shape
+and then give it non-ML semantics. If the type says `int -> int -> int`, the
+function takes an `int` and returns a function from `int` to `int`.
+
+```osp
+add : int -> int -> int
+add x y = x + y
+
+answer = add 1 2
+```
+
+Function application is left-associative, so this:
+
+```osp
+add 1 2
+```
+
+means this:
+
+```osp
+(add 1) 2
+```
+
+The payoff is that reusable adapters do not need lambda noise:
+
+```osp
+addOne : int -> int
+addOne = add 1
+
+okText : string -> HttpResponse
+okText = textResp 200
+
+writeTasks : string -> Result<Unit, Error>
+writeTasks = writeFile "/tmp/osprey_tasks.db"
+```
+
+This should shape API design. Put stable, reusable, configuration-like arguments
+first, and the final data argument last. That makes partial application useful:
+
+```osp
+replace : string -> string -> string -> string
+replace old new text = ...
+
+removeSpaces = replace " " ""
+slug = removeSpaces "hello world"
+```
+
+Uncurried tuple functions still exist, but they are not the normal API style.
+They mean "this function takes one tuple value":
+
+```osp
+distance : (int, int) -> int
+distance point = ...
+
+distance (3, 4)
 ```
 
 ### Effects
@@ -244,10 +310,10 @@ do
     serveForever ()
 ```
 
-One `handle` installs a group of effect handlers for one body. This can desugar
-to the current nested handler AST. Repeated `in handle` disappears, but the
-single `do` still earns its keep as the boundary between handler definitions and
-the handled computation.
+One `handle` installs a group of effect handlers for one body. The compiler can
+lower this to nested handler machinery internally. Repeated `in handle`
+disappears, but the single `do` still earns its keep as the boundary between
+handler definitions and the handled computation.
 
 ## Prototype: `examples/statefulhttp/server.osp`
 
@@ -275,6 +341,18 @@ esc code s =
 c256 : string -> string -> string
 c256 n s =
     "\e[38;5;${n}m${s}\e[0m"
+
+rose : string -> string
+rose = c256 "213"
+
+teal : string -> string
+teal = c256 "159"
+
+lime : string -> string
+lime = c256 "46"
+
+muted : string -> string
+muted = c256 "239"
 
 bold : string -> string
 bold s = esc "1" s
@@ -320,11 +398,11 @@ blocks i n =
 
 gauge : int -> string
 gauge n =
-    c256 "213" (blocks 0 (mn n 28))
+    rose (blocks 0 (mn n 28))
 
 divider : string
 divider =
-    c256 "239" "  ──────────────────────────────────────────────────────"
+    muted "  ──────────────────────────────────────────────────────"
 
 art : string
 art =
@@ -338,7 +416,7 @@ art =
 banner : string
 banner =
     "\n" + art + "\n\n  " +
-    c256 "46" "●" + dim " live  " + bold (c256 "159" "http://127.0.0.1:8080") +
+    lime "●" + dim " live  " + bold (teal "http://127.0.0.1:8080") +
     dim "   ·   state lives in algebraic-effect handlers" + "\n" +
     divider + "\n  " +
     badge "GET" + "  " + dim "/" + "         list tasks\n  " +
@@ -360,6 +438,7 @@ textResp status bodyText =
 
 onPost : string -> HttpResponse
 onPost body =
+    createdText = textResp 201
     id = perform Db.add body
     snap = perform Db.list
     written = perform Persist.flush snap
@@ -375,11 +454,12 @@ onPost body =
         gauge id +
         dim "  ${toString written}B"
     )
-    textResp 201 "created task #${toString id}\n"
+    createdText "created task #${toString id}\n"
 
 
 onGet : string -> HttpResponse
 onGet path =
+    okText = textResp 200
     perform Log.info (
         badge "GET" +
         " " +
@@ -389,10 +469,10 @@ onGet path =
 
     match path
         "/stats" =>
-            textResp 200 "requests=${toString (perform Metrics.served)} tasks=${toString (perform Db.count)}\n"
+            okText "requests=${toString (perform Metrics.served)} tasks=${toString (perform Db.count)}\n"
 
         _ =>
-            textResp 200 (perform Db.list)
+            okText (perform Db.list)
 
 
 handleReq : string -> string -> string -> string -> HttpResponse
@@ -417,11 +497,13 @@ main () =
     mut requests = 0
     mut tasks = ""
     mut taskCount = 0
+    writeTasks = writeFile "/tmp/osprey_tasks.db"
+    writeServerLog = writeFile "/tmp/osprey_server.log"
 
     handle
         Persist
             flush snap =>
-                saved = writeFile "/tmp/osprey_tasks.db" snap
+                saved = writeTasks snap
                 diskBytes := match saved
                     Success value => length snap
                     Error message => -1
@@ -449,11 +531,12 @@ main () =
         Log
             info m =>
                 logBuf := "${logBuf}${m}\n"
-                _ = writeFile "/tmp/osprey_server.log" logBuf
+                _ = writeServerLog logBuf
                 print "  ${m}"
 
     do
-        serverId = httpCreateServer 8080 "127.0.0.1"
+        createLocalServer = httpCreateServer 8080
+        serverId = createLocalServer "127.0.0.1"
         listening = httpListen serverId handleReq
         print banner
         serveForever ()
@@ -465,8 +548,8 @@ main () =
 - Grouped handlers use `do`, not `in`. `do` is easier to read as "install these handlers, then run this computation".
 - Old block braces are not accepted in the target syntax. Osprey should have one canonical syntax, not permanent brace and layout dialects.
 - String interpolation keeps `${...}` for now. It is inside string literal syntax rather than block syntax, so it can stay unless it creates a concrete parser or readability problem.
+- Function arrows are curried. `a -> b -> c` means `a -> (b -> c)`, and partial application is part of normal Osprey style.
 
 ## Remaining Syntax Questions
 
 - Should zero-argument functions be called as `banner`, `banner ()`, or both? The prototype uses values for pure constants and `()` only where recursion or effects make the call boundary useful.
-- Should `a -> b -> c` introduce currying, or remain syntax sugar for multi-argument functions? Currying is elegant but affects calling convention, partial application, and inference.

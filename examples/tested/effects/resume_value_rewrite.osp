@@ -1,0 +1,33 @@
+// The handler chooses each operation result, then observes the final answer
+// after resume returns.
+
+effect Supply {
+    next: fn(string) -> int
+}
+
+fn total() -> int !Supply = {
+    let first = perform Supply.next("first")
+    let second = perform Supply.next("second")
+    let third = perform Supply.next("third")
+    match first + second + third {
+        Success { value } => value
+        Error { message } => 0
+    }
+}
+
+fn main() = {
+    mut seed = 100
+    let result = handle Supply
+        next label => {
+            seed = match seed + 5 {
+                Success { value } => value
+                Error { message } => seed
+            }
+            print("supply " + label + "=" + toString(seed))
+            let answer = resume(seed)
+            print("seen after " + label + ": " + toString(answer))
+            answer
+        }
+    in total()
+    print("result=" + toString(result))
+}
