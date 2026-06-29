@@ -1,0 +1,42 @@
+{
+  "Curried function with signature": {
+    "prefix": "fn",
+    "description": "A curried function binding with a type signature (ML flavor)",
+    "body": [
+      "${1:add} : ${2:Int} -> ${3:Int} -> ${4:Int}",
+      "${1:add} ${5:a} ${6:b} = ${7:a + b}"
+    ]
+  },
+  "Match expression": {
+    "prefix": "match",
+    "description": "A match expression with arms (ML flavor)",
+    "body": [
+      "match ${1:value}",
+      "  ${2:Pattern} => ${3:result}",
+      "  _ => ${4:fallback}"
+    ]
+  },
+  "Effect declaration": {
+    "prefix": "effect",
+    "description": "An effect declaration with an operation (ML flavor)",
+    "body": [
+      "effect ${1:State}",
+      "  ${2:get} : ${3:Unit} => ${4:Int}",
+      "  ${5:put} : ${6:Int} => ${7:Unit}"
+    ]
+  },
+  "Handler value": {
+    "prefix": "handler",
+    "description": "A handler value for an effect (ML flavor)",
+    "body": [
+      "${1:run} = handler",
+      "  ${2:get} ${3:k} => ${4:k state}",
+      "  ${5:put} ${6:v} ${3:k} => ${7:k Unit}"
+    ]
+  },
+  "Main": {
+    "prefix": "main",
+    "description": "A main binding (ML flavor)",
+    "body": ["main = do", "  ${1:print \"Hello, Osprey!\"}"]
+  }
+}

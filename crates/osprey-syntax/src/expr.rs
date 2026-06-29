@@ -332,13 +332,13 @@ impl Lowerer<'_> {
                 // `string`. Detect the `${` marker here and interpolate either way.
                 let raw = self.text(inner);
                 if raw.contains("${") {
-                    Expr::InterpolatedStr(Self::lower_interpolation(&raw))
+                    Expr::InterpolatedStr(lower_interpolation(&raw, parse_fragment))
                 } else {
                     Expr::Str(unquote(&raw))
                 }
             }
             "interpolated_string" => {
-                Expr::InterpolatedStr(Self::lower_interpolation(&self.text(inner)))
+                Expr::InterpolatedStr(lower_interpolation(&self.text(inner), parse_fragment))
             }
             "list_literal" => Expr::List(self.exprs_of_kind(inner, "expression")),
             "map_literal" => Expr::Map(
@@ -354,10 +354,19 @@ impl Lowerer<'_> {
         }
     }
 
-    /// Split a `"text ${expr} more"` literal into [`InterpolatedPart`]s, parsing
-    /// each embedded expression as an Osprey fragment.
-    fn lower_interpolation(raw: &str) -> Vec<InterpolatedPart> {
-        let inner = unquote(raw);
+    // Interpolation splitting lives as a free `pub(crate)` fn below so the ML
+    // frontend can reuse it with its own fragment parser (no duplication).
+}
+
+/// Split a `"text ${expr} more"` literal into [`InterpolatedPart`]s, parsing
+/// each embedded expression with `parse_frag` (the active flavor's fragment
+/// parser). Shared by the Default and ML frontends so the `${…}`-scanning and
+/// escape handling exist in exactly one place.
+pub(crate) fn lower_interpolation(
+    raw: &str,
+    parse_frag: impl Fn(&str) -> Expr,
+) -> Vec<InterpolatedPart> {
+    let inner = unquote(raw);
         let bytes = inner.as_bytes();
         let mut parts = Vec::new();
         let mut text_start = 0usize;
@@ -387,7 +396,7 @@ impl Lowerer<'_> {
                     j += 1;
                 }
                 if let Some(frag) = inner.get(i + 2..j) {
-                    parts.push(InterpolatedPart::Expr(parse_fragment(frag)));
+                    parts.push(InterpolatedPart::Expr(parse_frag(frag)));
                 }
                 i = j + 1;
                 text_start = i;
@@ -401,14 +410,13 @@ impl Lowerer<'_> {
             }
         }
         parts
-    }
 }
 
 /// Strip surrounding quotes and resolve backslash escapes in one pass (so a
 /// literal `\\` can never be re-interpreted): `\n` `\r` `\t` newline/CR/tab,
 /// `\e` the ANSI ESC (0x1B, used by the terminal-color helpers), `\0` NUL,
 /// `\"` and `\\` the literals. An unrecognised escape is kept verbatim.
-fn unquote(s: &str) -> String {
+pub(crate) fn unquote(s: &str) -> String {
     let trimmed = s
         .strip_prefix('"')
         .and_then(|x| x.strip_suffix('"'))

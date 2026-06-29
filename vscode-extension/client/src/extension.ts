@@ -133,8 +133,24 @@ export interface ActiveEditorLike {
   document: { languageId: string; fileName: string };
 }
 
+// Osprey ships two surface flavors that share one compiler, language server,
+// and debug pipeline: the brace flavor (.osp, languageId "osprey") and the ML
+// layout flavor (.ospml, languageId "osprey-ml"). The CLI selects the flavor
+// from the file extension, so every editor-side filter must accept BOTH — never
+// hard-filter to ".osp"/"osprey" alone or ML files silently lose their UX.
+const OSPREY_LANGUAGE_IDS = ["osprey", "osprey-ml"];
+const OSPREY_FILE_EXTENSIONS = [".osp", ".ospml"];
+
+export function isOspreyFile(fileName: string): boolean {
+  return OSPREY_FILE_EXTENSIONS.some((ext) => fileName.endsWith(ext));
+}
+
+function isOspreyLanguageId(languageId: string): boolean {
+  return OSPREY_LANGUAGE_IDS.includes(languageId);
+}
+
 function isOspreyDocument(document: ActiveEditorLike["document"]): boolean {
-  return document.languageId === "osprey" || document.fileName.endsWith(".osp");
+  return isOspreyLanguageId(document.languageId) || isOspreyFile(document.fileName);
 }
 
 // applyDefaultOspreyDebugConfig fills an otherwise-empty launch config from the
@@ -398,9 +414,11 @@ export function activate(context: ExtensionContext) {
     documentSelector: [
       { scheme: "file", language: "osprey" },
       { scheme: "untitled", language: "osprey" },
+      { scheme: "file", language: "osprey-ml" },
+      { scheme: "untitled", language: "osprey-ml" },
     ],
     synchronize: {
-      fileEvents: workspace.createFileSystemWatcher("**/*.osp"),
+      fileEvents: workspace.createFileSystemWatcher("**/*.osp{,ml}"),
     },
     outputChannelName: "Osprey Language Server",
     revealOutputChannelOn: RevealOutputChannelOn.Error,
@@ -529,21 +547,22 @@ export function activate(context: ExtensionContext) {
     }),
   );
 
-  // Auto-detect and force language association for .osp files
+  // Auto-detect and force language association for .osp and .ospml files. The
+  // ML layout flavor (.ospml) binds to "osprey-ml"; the brace flavor (.osp) to
+  // "osprey". ".ospml" must be tested before ".osp" because the former also
+  // ends with "osp".
   workspace.onDidOpenTextDocument((document) => {
     outputChannel.appendLine(`📁 Document opened: ${document.fileName}`);
-    if (
-      document.fileName.endsWith(".osp") &&
-      document.languageId !== "osprey"
-    ) {
+    const target = ospreyLanguageForFile(document.fileName);
+    if (target && document.languageId !== target) {
       outputChannel.appendLine(
         `🔧 Forcing language association for ${document.fileName} (was: ${document.languageId})`,
       );
       // Use the proper API to set language
-      languages.setTextDocumentLanguage(document, "osprey").then(
+      languages.setTextDocumentLanguage(document, target).then(
         () => {
           outputChannel.appendLine(
-            `✅ Successfully set language to osprey for ${document.fileName}`,
+            `✅ Successfully set language to ${target} for ${document.fileName}`,
           );
         },
         (error: any) => {
@@ -555,14 +574,12 @@ export function activate(context: ExtensionContext) {
 
   // Check already open documents
   workspace.textDocuments.forEach((document) => {
-    if (
-      document.fileName.endsWith(".osp") &&
-      document.languageId !== "osprey"
-    ) {
+    const target = ospreyLanguageForFile(document.fileName);
+    if (target && document.languageId !== target) {
       outputChannel.appendLine(
         `🔧 Forcing language association for already open file: ${document.fileName}`,
       );
-      languages.setTextDocumentLanguage(document, "osprey");
+      languages.setTextDocumentLanguage(document, target);
     }
   });
 
