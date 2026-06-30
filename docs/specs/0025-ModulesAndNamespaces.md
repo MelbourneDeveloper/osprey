@@ -8,7 +8,7 @@ it belongs to a project; it does **not** decide the names it exports.
 > module signatures, exports, state ownership, separate compilation, and project
 > assembly are shared-core semantics. The Default flavor and ML flavor may spell
 > declarations differently, but both lower to the same canonical project model:
-> `NamespaceDecl`, `ModuleDecl`, `SignatureDecl`, `Import`, and qualified names.
+> `NamespaceDecl`, `ModuleDecl`, `SignatureDecl`, `Import`, and symbol paths.
 > No type checker, effect checker, code generator, runtime, or LSP feature may
 > infer semantics from `.osp` vs `.ospml` once lowering has happened. See
 > [Language Flavors](0023-LanguageFlavors.md).
@@ -23,13 +23,36 @@ fiber-isolated module sketch in [Fibers and Concurrency](0011-LightweightFibersA
 
 ## Research Basis
 
-`[MODULES-RESEARCH]` The design combines .NET-style logical namespaces with
-ML-style abstraction boundaries and Osprey's algebraic effects.
+`[MODULES-RESEARCH]` The design combines .NET-style logical named groups with
+ML-style abstraction boundaries and Osprey's algebraic effects. It deliberately
+does **not** adopt the usual .NET `Company.Product.Feature` hierarchy as an
+Osprey norm.
 
 - Parnas set the bar for modularity: "The effectiveness of a \"modularization\" is
   dependent upon the criteria used" ([Parnas 1972](https://wstomv.win.tue.nl/edu/2ip30/references/criteria_for_modularization.pdf)).
-- The C# specification gives the path-independent naming model: "Namespaces are
-  open-ended" ([Microsoft C# spec, namespaces](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/namespaces)).
+- The .NET precedent Osprey keeps is the named logical group: "A namespace
+  declaration assigns your types to a named group" ([Microsoft namespace guide](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/program-structure/namespaces)).
+- The .NET Framework Design Guidelines document the familiar hierarchy template
+  `<Company>.(<Product>|<Technology>)[.<Feature>]`; Osprey records that as
+  precedent, not a recommendation for app code ([Microsoft namespace guidelines](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/names-of-namespaces)).
+- F# separates namespaces from modules: a namespace attaches a name to related
+  program elements, while a module groups F# constructs such as types, values,
+  and functions ([F# namespaces](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/namespaces), [F# modules](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/modules)).
+- Slash-style module names have precedent: Racket says a string module path uses
+  Unix-style `/` as the separator ([Racket module paths](https://docs.racket-lang.org/guide/module-paths.html)), and Go import paths are string literals such as `"lib/math"` ([Go spec](https://go.dev/ref/spec#Import_declarations)).
+- Rust gives the item-qualification precedent Osprey follows: "A path is a
+  sequence of one or more path segments separated by `::` tokens" ([Rust Reference](https://doc.rust-lang.org/reference/paths.html)).
+- OCaml's module system makes signatures the abstraction boundary: "A signature
+  specifies which components of a structure are accessible" ([OCaml manual](https://ocaml.org/manual/5.0/moduleexamples.html)).
+- Haskell modules are explicit about import/export control; the Report defines
+  modules with import declarations and optional export lists ([Haskell 2010 Report](https://www.haskell.org/onlinereport/haskell2010/haskellch5.html)).
+- Elm keeps module exposure visible at the top of the file through `exposing`
+  lists ([Elm modules guide](https://guide.elm-lang.org/webapps/modules)).
+- Clojure's namespace guide makes aliasing first-class because long names are
+  rarely what readers want at every call site ([Clojure namespaces](https://clojure.org/guides/learn/namespaces)).
+- Java's reverse-domain convention is about globally unique published packages;
+  the JLS says it piggybacks on an existing unique-name registry, not source
+  location ([JLS unique package names](https://docs.oracle.com/javase/specs/jls/se7/html/jls-6.html#jls-6.1)).
 - Harper and Lillibridge identify the core problem as "the management of the
   flow of information between program units" ([POPL 1994](https://www.cs.cmu.edu/~rwh/papers/sharing/popl94.pdf)).
 - Rossberg, Russo, and Dreyer summarize the ML lesson: "ML modules are a
@@ -55,13 +78,44 @@ These are not ornamental citations. They drive the rules below: names are
 logical, interfaces are explicit, abstract state does not leak, and mutable state
 has one owner.
 
+## Comparative Practice
+
+`[MODULES-COMPARATIVE-PRACTICE]` The survey above yields concrete rules:
+
+- **Use namespaces for logical grouping, not architecture.** .NET/F# names are a
+  useful precedent for path-independent grouping, but Osprey does not copy the
+  deep enterprise naming convention as the default shape.
+- **Use modules for boundaries.** OCaml/F#/ML practice puts abstraction,
+  signatures, and implementation hiding at the module boundary; Osprey follows
+  that instead of making namespaces carry privacy or state.
+- **Make import surface area visible.** Haskell, Elm, and Clojure all make
+  import/export choices visible in source. Osprey therefore supports explicit
+  member imports and aliases, and treats wildcard imports as a script/test
+  convenience.
+- **Separate module paths from member access.** Rust's `::` keeps item paths
+  visually distinct from record field access; Osprey uses `::` for namespace,
+  module, and exported-member paths, leaving `.` for value/member operations.
+- **Allow slash names only as labels.** Racket and Go show precedent for
+  slash-like module/import paths, but in Osprey a quoted slash namespace is one
+  opaque label. It does not imply folder mirroring, parent namespaces, or load
+  order.
+- **Reserve reverse-DNS/deep names for distribution.** Java's reverse-domain
+  convention solves global package collision, not local application design.
+  Osprey may use similar labels for published libraries later, but app code
+  should usually stay flat.
+
 ## Design Goals
 
 `[MODULES-GOALS]` The module system must make the good structure the easy
 structure:
 
-- **Path-independent names.** A namespace name comes from source text, not from
+- **Path-independent names.** A namespace label comes from source text, not from
   `src/foo/bar.osp`.
+- **Flat-first namespaces.** A good namespace is usually one short project or
+  domain label, not a forced company/product/feature tower.
+- **Separators are spelling, not architecture.** A quoted namespace may contain
+  `/` when a project wants folder-like names, but `/` does not create parent
+  namespaces, inheritance, visibility, or initialization order.
 - **Open namespaces, closed modules.** Namespaces organize; modules encapsulate.
 - **Explicit imports and exports.** Wildcard visibility is the escape hatch, not
   the default.
@@ -74,49 +128,165 @@ structure:
 - **Cross-flavor interop.** A `.osp` module and `.ospml` module import each other
   through canonical signatures.
 
+## Canonical Project Model
+
+`[MODULES-MODEL]` The module system is a project graph. Concrete syntax is only
+how each flavor contributes nodes and edges to that graph.
+
+The shared model contains:
+
+- `SourceFile { path, flavor, namespace }` - a parsed file with one active
+  flavor and one namespace label, explicit or project-defaulted.
+- `Namespace { label, contributions }` - an open logical grouping of
+  declarations from any number of files.
+- `Module { namespace, path, kind, exports, private_items, signature }` - a
+  closed boundary inside a namespace. `kind` is `plain` or `state`.
+- `Signature { name, items }` - an interface contract for a module.
+- `ImportEdge { from_file, target, alias, imported_members }` - a dependency on
+  a namespace/module/member surface, never on a physical file.
+- `SymbolId { namespace, path }` - the stable identity for exported declarations.
+- `StateOwner { module, cells, access_paths }` - the single owner of private
+  durable state in a `state module`.
+
+Every later phase consumes this model, not surface syntax:
+
+```text
+source files (.osp/.ospml)
+  -> flavor parsers
+  -> canonical project graph
+  -> import resolution
+  -> signature and privacy checking
+  -> type/effect checking
+  -> codegen/runtime/LSP/docs
+```
+
+No semantic rule below depends on braces, layout, `fn`, whitespace application,
+or named arguments. Those are flavor concerns described in
+[Syntax](0003-Syntax.md), [Language Flavors](0023-LanguageFlavors.md), and
+[ML Flavor Syntax](0024-MLFlavorSyntax.md).
+
+## Surface Projection
+
+`[MODULES-FLAVOR-PROJECTION]` Each flavor projects the same model into its own
+surface. The examples in this chapter are illustrative; the model above is the
+normative layer.
+
+| Concept | Shared model | Default flavor | ML flavor |
+| --- | --- | --- | --- |
+| Namespace contribution | `Namespace { label }` | `namespace billing { ... }` or `namespace billing;` | `namespace billing` followed by layout declarations |
+| Module boundary | `Module { path, exports, private_items }` | `module Tax { ... }` | `module Tax` + indented body |
+| State module | `Module { kind: state }` | `state module Store { ... }` | `state module Store` + indented body |
+| Import edge | `ImportEdge` | `import billing::Tax::{addTax}` | same path form; calls use ML application |
+| Signature | `Signature { items }` | `signature StoreSig { ... }` | `signature StoreSig` + indented items |
+| Export | exported item metadata | `export fn f(...) = ...` | `export f : ...` / `export f x = ...` |
+| Symbol path | `SymbolId { namespace, path }` | `billing::Tax::addTax` | same path; application remains whitespace |
+
 ## Namespaces
 
 `[MODULES-NAMESPACE]` A `namespace` declaration contributes declarations to an
 open logical namespace. Multiple files may contribute to the same namespace.
+Namespace labels are opaque. `billing`, `"billing/api"`, and `"ui/forms"` are
+three unrelated labels; no parent namespace is implied.
 
 ```ebnf
-namespaceDecl ::= "namespace" qualifiedName ("{" statement* "}" | ";")
-qualifiedName ::= IDENT ("." IDENT)*
+namespaceDecl ::= "namespace" namespaceName ("{" statement* "}" | ";")
+namespaceName ::= IDENT | STRING
+symbolPath ::= IDENT ("::" IDENT)*
 ```
 
+Default flavor:
+
 ```osprey
-namespace Acme.Billing {
+namespace billing {
     type Money = { cents: int, currency: string }
 }
 
-namespace Acme.Billing {
+namespace billing {
     fn zero(currency: string) -> Money = Money { cents: 0, currency: currency }
 }
 ```
 
-The two declarations above define one namespace, `Acme.Billing`. The compiler
+ML flavor:
+
+```osp
+namespace billing
+
+type Money =
+    Money
+        cents : int
+        currency : string
+
+zero : string -> Money
+zero currency =
+    Money
+        cents = 0
+        currency = currency
+```
+
+The two declarations above define one namespace, `billing`. The compiler
 merges namespace bodies before semantic analysis. Duplicate exported names in the
 same namespace are compile-time errors unless they are overloads explicitly
 allowed by a later overload spec.
 
+Quoted labels allow slash-style names without overloading `/` inside ordinary
+expressions:
+
+```osprey
+namespace "billing/api";
+```
+
+The slash is part of the label. It does not create a `billing` parent namespace.
+
 `[MODULES-FILE-SCOPED-NAMESPACE]` A file-scoped namespace declaration applies to
 all declarations after it in the file:
 
+Default flavor:
+
 ```osprey
-namespace Acme.Billing;
+namespace billing;
 
 type Invoice = { id: string, total: int }
 fn emptyInvoice(id: string) = Invoice { id: id, total: 0 }
+```
+
+ML flavor:
+
+```osp
+namespace billing
+
+type Invoice =
+    Invoice
+        id : string
+        total : int
+
+emptyInvoice : string -> Invoice
+emptyInvoice id =
+    Invoice
+        id = id
+        total = 0
 ```
 
 A file may contain either one file-scoped namespace declaration or any number of
 block-scoped namespace declarations, not both.
 
 `[MODULES-PATH-INDEPENDENCE]` The physical file path is never part of the
-namespace identity. A file `src/weird/place/x.osp` may declare
-`namespace Acme.Billing;`. The compiler may warn when path and namespace drift
-from project convention, but it must not change symbol identity or import
+namespace identity. A file `src/weird/place/x.osp` may declare `namespace billing;`
+or `namespace "billing/api";`. The compiler may warn when path and namespace
+drift from project convention, but it must not change symbol identity or import
 resolution.
+
+`[MODULES-NAMESPACE-STYLE]` Namespace style is flexible but flat-first:
+
+- Prefer one short lowercase label for app namespaces: `app`, `billing`, `ui`,
+  `worker`.
+- Use quoted slash labels only when the slash is part of a meaningful external
+  name, published package path, generated binding path, or project convention:
+  `"billing/api"`, `"vendor/sqlite"`.
+- Avoid reverse-domain and three-part product hierarchies in ordinary app code.
+  They are accepted for interoperability and distribution, but examples and docs
+  must not present them as the normal shape.
+- Never mirror folders by default. If a team chooses folder-like slash labels,
+  the label remains opaque and path-independent.
 
 ## Modules
 
@@ -127,15 +297,17 @@ its signature.
 
 ```ebnf
 moduleDecl ::= plainModuleDecl | stateModuleDecl
-plainModuleDecl ::= "module" qualifiedName signatureAscription? "{" moduleItem* "}"
-stateModuleDecl ::= "state" "module" qualifiedName signatureAscription? "{" moduleItem* "}"
-signatureAscription ::= ":" qualifiedName
+plainModuleDecl ::= "module" symbolPath signatureAscription? "{" moduleItem* "}"
+stateModuleDecl ::= "state" "module" symbolPath signatureAscription? "{" moduleItem* "}"
+signatureAscription ::= ":" symbolPath
 moduleItem ::= exportDecl | statement
 exportDecl ::= "export" statement
 ```
 
+Default flavor:
+
 ```osprey
-namespace Acme.Billing;
+namespace billing;
 
 module Tax {
     let defaultRate = 10
@@ -145,11 +317,24 @@ module Tax {
 }
 ```
 
+ML flavor:
+
+```osp
+namespace billing
+
+module Tax
+    defaultRate = 10
+
+    export addTax : int -> int
+    export addTax cents =
+        cents + cents * defaultRate / 100
+```
+
 `Tax.defaultRate` is private. `Tax.addTax` is exported.
 
 `[MODULES-NAMESPACE-VS-MODULE]` Namespaces are open and stateless. Modules are
 closed and may own private implementation details. A namespace cannot be used as
-a runtime value; a module can be referenced as a qualified declaration space and,
+a runtime value; a module can be referenced as a named declaration space and,
 when it is a `state module`, has a runtime state owner.
 
 ## Imports
@@ -157,27 +342,50 @@ when it is a `state module`, has a runtime state owner.
 `[MODULES-IMPORT]` Imports name namespaces or modules, not files.
 
 ```ebnf
-importStmt ::= "import" qualifiedName importTail?
+importStmt ::= "import" importTarget importTail?
+importTarget ::= namespaceName ("::" symbolPath)?
 importTail ::= "as" IDENT
-             | "." "{" importMember ("," importMember)* "}"
-             | "." "*"
+             | "::" "{" importMember ("," importMember)* "}"
+             | "::" "*"
 importMember ::= IDENT ("as" IDENT)?
 ```
 
+Default flavor:
+
 ```osprey
-import Acme.Billing.Tax
-import Acme.Billing.Tax.{addTax}
-import Acme.Billing.Tax as Tax
+import billing::Tax
+import billing::Tax::{addTax}
+import billing::Tax as Tax
+import "billing/api" as billingApi
+
+let gross = addTax(100)
+let other = Tax::addTax(100)
+```
+
+ML flavor:
+
+```osp
+import billing::Tax
+import billing::Tax::{addTax}
+import billing::Tax as Tax
+import "billing/api" as billingApi
+
+gross = addTax 100
+other = Tax::addTax 100
 ```
 
 Resolution rules:
 
-- Fully qualified names always work: `Acme.Billing.Tax.addTax(100)`.
-- `import A.B.C` brings the exported module or namespace `C` into the local
-  scope as `C`.
-- `import A.B.C.{x, y}` brings only listed exported members into local scope.
-- `import A.B.C as Alias` brings `Alias` into local scope.
-- `import A.B.C.*` is allowed only in examples, scripts, and tests unless the
+- Identifier namespace labels can be used directly with `::`:
+  `billing::Tax::addTax(100)`.
+- Quoted namespace labels must be imported with an alias before member access:
+  `import "billing/api" as billingApi`, then `billingApi::Tax::addTax(100)`.
+- `import billing::Tax` brings the exported module `Tax` into the local scope as
+  `Tax`.
+- `import billing::Tax::{x, y}` brings only listed exported members into local
+  scope.
+- `import billing::Tax as Alias` brings `Alias` into local scope.
+- `import billing::Tax::*` is allowed only in examples, scripts, and tests unless the
   project enables `allow_wildcard_imports = true`; it is forbidden for state
   modules.
 - Ambiguous unqualified names are compile-time errors. The diagnostic must show
@@ -192,6 +400,8 @@ path.
 public by default inside namespaces. A module controls its public surface through
 `export` or a signature.
 
+Default flavor:
+
 ```osprey
 module Parser {
     type Token = { text: string }       // private
@@ -200,8 +410,26 @@ module Parser {
 }
 ```
 
+ML flavor:
+
+```osp
+module Parser
+    type Token =
+        Token
+            text : string
+
+    export type Ast =
+        Expr | Stmt
+
+    export parse : string -> Result<Ast, Error>
+    export parse source =
+        ...
+```
+
 `[MODULES-OPAQUE-TYPES]` A module may export an opaque type, hiding its
 representation:
+
+Default flavor:
 
 ```osprey
 module UserIds {
@@ -210,6 +438,21 @@ module UserIds {
     export fn parseUserId(raw: string) -> Result<UserId, Error> = ...
     export fn showUserId(id: UserId) -> string = ...
 }
+```
+
+ML flavor:
+
+```osp
+module UserIds
+    export opaque type UserId = int
+
+    export parseUserId : string -> Result<UserId, Error>
+    export parseUserId raw =
+        ...
+
+    export showUserId : UserId -> string
+    export showUserId id =
+        ...
 ```
 
 Outside `UserIds`, `UserId` is distinct from `int`. Inside `UserIds`, the
@@ -225,6 +468,8 @@ lists the names, types, effects, and opacity visible to clients.
 signatureDecl ::= "signature" IDENT "{" signatureItem* "}"
 signatureItem ::= typeSpec | effectSpec | fnSpec | moduleSpec
 ```
+
+Default flavor:
 
 ```osprey
 signature StoreSig {
@@ -244,6 +489,31 @@ module MemoryStore : StoreSig {
     }
     export fn empty() = Store { values: [] }
 }
+```
+
+ML flavor:
+
+```osp
+signature StoreSig
+    opaque type Store
+    effect StoreFx
+        load : Unit => Store
+        save : Store => Unit
+    empty : Unit -> Store
+
+module MemoryStore : StoreSig
+    export opaque type Store =
+        Store
+            values : [string]
+
+    export effect StoreFx
+        load : Unit => Store
+        save : Store => Unit
+
+    export empty : Unit -> Store
+    export empty () =
+        Store
+            values = []
 ```
 
 Signature conformance is checked structurally:
@@ -287,7 +557,7 @@ libraries. They are preferred over ambient globals.
 Namespace-level `mut` is a compile-time error.
 
 ```osprey
-namespace Acme.Bad;
+namespace badState;
 
 mut count = 0
 // error [MODULES-STATE-TOPLEVEL]:
@@ -319,7 +589,7 @@ state module Counter {
 Clients perform the effect; the module owns the cell:
 
 ```osprey
-import Counter.{CounterFx, counterHandler}
+import Counter::{CounterFx, counterHandler}
 
 fn allocate() -> int !CounterFx =
     perform CounterFx.next()
@@ -396,9 +666,9 @@ namespace graph.
 
 ```toml
 [project]
-name = "acme.billing"
+name = "billing"
 source_roots = ["src", "tests"]
-root_namespace = "Acme"
+default_namespace = "billing"
 
 [modules]
 allow_wildcard_imports = false
@@ -435,15 +705,15 @@ the ML literature.
 
 ## Name Mangling And ABI
 
-`[MODULES-ABI]` Canonical names are fully qualified:
+`[MODULES-ABI]` Canonical symbol names include the namespace label and `::` path:
 
 ```text
-Acme.Billing.Tax.addTax
+billing::Tax::addTax
 ```
 
-Codegen must mangle qualified names deterministically and collision-free. The
+Codegen must mangle symbol paths deterministically and collision-free. The
 mangled form is an implementation detail; diagnostics, docs, LSP, debugger, and
-stack traces use source-level qualified names.
+stack traces use source-level names.
 
 Cross-flavor exports use the same ABI rules as
 [Cross-Flavor Interop](0023-LanguageFlavors.md#cross-flavor-interop).
@@ -467,7 +737,7 @@ Cross-flavor exports use the same ABI rules as
 `src/a.osp`:
 
 ```osprey
-namespace Acme.App;
+namespace app;
 
 fn hello(name: string) = "Hello ${name}"
 ```
@@ -475,17 +745,34 @@ fn hello(name: string) = "Hello ${name}"
 `src/deeply/nested/b.ospml`:
 
 ```osprey
-namespace Acme.App
+namespace app
 
 greet name = hello name
 ```
 
-Both files contribute to `Acme.App`. The path `deeply/nested` is irrelevant.
+Both files contribute to `app`. The path `deeply/nested` is irrelevant.
+
+`src/http.osp` shows the optional slash label:
+
+```osprey
+namespace "app/http";
+
+fn route() = "/"
+```
+
+That namespace is unrelated to `app`; import it with an alias when used from
+ordinary expressions:
+
+```osprey
+import "app/http" as httpApp
+
+let root = httpApp::route()
+```
 
 ### Centralised State
 
 ```osprey
-namespace Acme.App;
+namespace app;
 
 state module SessionStore {
     mut sessions = []
@@ -540,5 +827,11 @@ Application code cannot mutate `sessions`. It can only perform `Sessions`.
   Polymorphic Language." POPL 2018.
 - Cong Ma, Zhaoyi Ge, Edward Lee, and Yizhou Zhang. "Lexical Effect Handlers,
   Directly." OOPSLA 2024.
-- Microsoft. "C# Language Specification - Namespaces."
+- Microsoft. ".NET namespace guidance."
+- Microsoft. "F# Namespaces" and "F# Modules."
+- OCaml. "The OCaml Manual - The Module System."
+- Simon Marlow, editor. "Haskell 2010 Language Report", Chapter 5, Modules.
+- Elm. "Modules." Elm Guide.
+- Clojure. "Namespaces." Clojure Guides.
+- Oracle. "Java Language Specification", Section 6.1, Names.
 - Redux. "Three Principles."

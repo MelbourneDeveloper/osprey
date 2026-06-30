@@ -3,15 +3,16 @@
 ## Summary
 
 Implement [spec 0025 - Modules and Namespaces](../specs/0025-ModulesAndNamespaces.md):
-.NET-style open namespaces for path-independent names, ML-style modules and
+.NET-style logical namespaces for path-independent names, ML-style modules and
 signatures for abstraction, and explicit state modules for centralising mutable
-state.
+state. Namespaces are flat-first opaque labels; module/member qualification uses
+`::`, not a promoted dot hierarchy.
 
 The existing compiler already has `Stmt::Import`, `Stmt::Module`, Default-flavor
 syntax for `import`/`module`, child-scope module checking, and project-adjacent
 LSP work. The missing pieces are the project namespace graph, import resolution,
-exports, signatures, qualified names, state-ownership checks, and codegen/LSP
-support for fully qualified symbols.
+exports, signatures, symbol paths, state-ownership checks, and codegen/LSP
+support for source-level symbol paths.
 
 ## Current State
 
@@ -34,6 +35,9 @@ support for fully qualified symbols.
 - No higher-order parameterised modules before basic signatures work.
 - No wildcard imports in library code by default.
 - No implicit path-to-namespace mapping.
+- No default `Company.Product.Feature` namespace convention.
+- No semantic hierarchy from namespace separators; quoted slash labels are
+  opaque names.
 
 ## Phase 0 - Spec And Parser Contract
 
@@ -44,6 +48,8 @@ TODO:
       0025 for semantics.
 - [x] Update `docs/specs/0011-LightweightFibersAndConcurrency.md` to mark the
       old fiber-isolated module paragraph as superseded by spec 0025.
+- [x] Add the comparative language-practice survey and flat-first namespace
+      style rules to spec 0025.
 - [ ] Decide exact surface grammar for ML-flavor `namespace`, `module`,
       `signature`, `export`, and `state module`.
 - [ ] Reserve new keywords in both flavors: `namespace`, `signature`, `export`,
@@ -53,8 +59,8 @@ TODO:
 
 TODO:
 
-- [ ] Add `QualifiedName(Vec<String>)` to `osprey-ast`.
-- [ ] Replace string-only `Stmt::Module { name }` with qualified module names and
+- [ ] Add `NamespaceName(String)` and `SymbolPath(Vec<String>)` to `osprey-ast`.
+- [ ] Replace string-only `Stmt::Module { name }` with symbol paths and
       visibility/export metadata.
 - [ ] Add `Stmt::Namespace { name, body }`.
 - [ ] Add `Stmt::Signature { name, items }`.
@@ -70,15 +76,20 @@ TODO:
 TODO:
 
 - [ ] Default flavor: parse block-scoped and file-scoped `namespace`.
-- [ ] Default flavor: parse `module A.B { ... }`, `state module`, `signature`,
+- [ ] Default flavor: parse `module A::B { ... }`, `state module`, `signature`,
       `export`, `opaque type`, import aliases, member lists, and wildcards.
-- [ ] Default flavor: parse qualified names in expressions and types.
+- [ ] Default flavor: parse flat namespace labels plus quoted slash labels in
+      namespace/import declarations.
+- [ ] Default flavor: parse `::` symbol paths in expressions and types.
 - [ ] ML flavor: add the same constructs in layout form and lower to the same
       canonical AST.
-- [ ] Interpolation re-entry must parse qualified names using the current file's
+- [ ] Interpolation re-entry must parse `::` symbol paths using the current file's
       flavor.
-- [ ] Add parser tests for path-independent namespace declarations, duplicate
-      namespace blocks, exports, signatures, aliases, and qualified calls.
+- [ ] Add parser tests for path-independent namespace declarations, flat
+      namespaces, quoted slash labels, duplicate namespace blocks, exports,
+      signatures, aliases, and `::` calls.
+- [ ] Add formatter/lint fixtures that prefer flat labels in docs/examples but
+      continue accepting quoted slash labels and reverse-domain labels.
 
 ## Phase 3 - Project Loader And Namespace Graph
 
@@ -86,16 +97,18 @@ TODO:
 
 - [ ] Add `Project` / `ProjectGraph` in a compiler-facing crate, shared by CLI
       and LSP.
-- [ ] Read `osprey.toml` with `source_roots`, `root_namespace`, and module
+- [ ] Read `osprey.toml` with `source_roots`, `default_namespace`, and module
       policy. Single-file mode remains unchanged.
 - [ ] Scan `.osp` and `.ospml` files under source roots.
 - [ ] Resolve flavor per file using the existing precedence rules.
 - [ ] Parse every file independently, then merge namespace declarations by
-      qualified name.
+      namespace label.
 - [ ] Build an import table that maps imports to namespaces/modules, never file
       paths.
 - [ ] Detect duplicate exported declarations in one namespace/module.
 - [ ] Detect ambiguous imports and emit actionable diagnostics.
+- [ ] Add style diagnostics as warnings only: folder drift, deep hierarchy in app
+      code, and reverse-domain labels outside published-library config.
 - [ ] Enforce one project entry point: designated entry file or `fn main()`.
 - [ ] Reject executable top-level statements in non-entry project files.
 
@@ -104,7 +117,7 @@ TODO:
 TODO:
 
 - [ ] Add a resolver pass before type checking: local scope, module private
-      scope, imported aliases, imported members, namespace qualified lookup,
+      scope, imported aliases, imported members, namespace/symbol-path lookup,
       builtins.
 - [ ] Store resolved symbol IDs on declarations/references or in a side table.
 - [ ] Make type inference consume resolved symbols instead of raw strings.
@@ -139,15 +152,15 @@ TODO:
 
 TODO:
 
-- [ ] Mangle fully qualified names deterministically.
+- [ ] Mangle namespace labels and `::` symbol paths deterministically.
 - [ ] Update function, extern, effect-operation, handler, type-constructor, and
-      generated lambda names to use qualified symbol IDs.
+      generated lambda names to use resolved symbol IDs.
 - [ ] Ensure imports do not emit runtime initialization.
 - [ ] Lower pure namespace/module constants without hidden order dependence.
 - [ ] Lower state module instances through explicit handler/instance
       construction.
 - [ ] Reject cyclic state initialization before codegen.
-- [ ] Preserve source-level qualified names in debug info and stack traces.
+- [ ] Preserve source-level names in debug info and stack traces.
 - [ ] Add IR equivalence tests for cross-flavor modules with identical canonical
       project graphs.
 
@@ -157,13 +170,14 @@ TODO:
 
 - [ ] CLI: `osprey build` / project mode reads `osprey.toml`; existing single-file
       commands keep working.
-- [ ] CLI: diagnostics show qualified names and import candidates.
+- [ ] CLI: diagnostics show namespace labels, `::` symbol paths, and import
+      candidates.
 - [ ] LSP: maintain an incremental project graph across open files and source
       roots.
 - [ ] LSP: go-to-definition, references, hover, completion, and document symbols
       understand namespaces/modules/imports.
-- [ ] LSP: show state-boundary warnings and quick fixes for aliases/qualified
-      names.
+- [ ] LSP: show state-boundary warnings and quick fixes for aliases and explicit
+      `::` paths.
 - [ ] Formatter: preserve file-scoped namespace and format module/signature
       blocks in both flavors.
 - [ ] Docs generator: create namespace/module reference pages from exported
@@ -176,6 +190,8 @@ TODO:
 - [ ] Add `examples/tested/modules/` with multi-file projects.
 - [ ] Include path-independent namespaces where file paths intentionally do not
       match namespace names.
+- [ ] Include flat namespace examples and at least one quoted slash-label example
+      to lock in separator neutrality.
 - [ ] Include Default imports ML and ML imports Default.
 - [ ] Include explicit import lists, aliases, ambiguous import failures, and
       wildcard policy failures.
@@ -191,7 +207,7 @@ TODO:
 
 1. AST + parser support with no project mode, covered by unit tests.
 2. Project graph and resolver in check-only mode.
-3. Type checker on qualified/resolved names.
+3. Type checker on resolved symbol paths.
 4. Exports/signatures/opaque types.
 5. State rules.
 6. Codegen for multi-file project mode.
