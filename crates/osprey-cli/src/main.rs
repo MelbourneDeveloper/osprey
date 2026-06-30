@@ -15,6 +15,7 @@
 //! outline/signature helpers it shares now live there too.
 
 mod docs;
+mod fmt;
 mod sandbox;
 mod wasm;
 
@@ -27,6 +28,7 @@ const USAGE: &str = "usage: osprey <file.osp> [--check | --ast | --llvm | --comp
 --symbols] [--quiet] [--debug] [--flavor default|ml] [--memory=default|gc] \
 [--target=native|wasm32] [-o <out>] \
 [--sandbox | --no-http | --no-websocket | --no-fs | --no-ffi]\n\
+       osprey fmt [--check | --stdout] [--flavor default|ml] <path...>\n\
        osprey --hover <name>\n\
        osprey --docs --docs-dir <dir>\n\
        osprey lsp";
@@ -78,6 +80,10 @@ fn main() -> ExitCode {
     // compiler in-process. [LSP-REUSE-LSPKIT]
     if args.first().map(String::as_str) == Some("lsp") {
         return run_lsp();
+    }
+    // `osprey fmt`: reformat Osprey sources (both flavors). No compilation.
+    if args.first().map(String::as_str) == Some("fmt") {
+        return fmt::run(args.get(1..).unwrap_or_default());
     }
     // `osprey --docs`: regenerate the built-in function reference from the
     // compiler's metadata. No source file is involved.

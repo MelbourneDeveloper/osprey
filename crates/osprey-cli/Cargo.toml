@@ -16,6 +16,7 @@ osprey-debug = { workspace = true }
 osprey-syntax = { workspace = true }
 osprey-types = { workspace = true }
 osprey-codegen = { workspace = true }
+osprey-fmt = { workspace = true }
 osprey-lsp = { workspace = true }
 tokio = { workspace = true }
 

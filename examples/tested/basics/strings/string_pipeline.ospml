@@ -19,7 +19,7 @@ handlePost path =
     match path
         "/api/users" => "201 created"
         _            => "404 not-found"
-route method path =
+route (method, path) =
     match method
         "GET"  => handleGet path
         "POST" => handlePost path
@@ -101,12 +101,12 @@ main () =
         Error message => print "split empty rejected\n"
 
     // ----- HTTP-routing via startsWith + pattern matching -----
-    print "${route "GET" "/health"}\n"
-    print "${route "GET" "/api/users/42"}\n"
-    print "${route "GET" "/api/orders"}\n"
-    print "${route "POST" "/api/users"}\n"
-    print "${route "GET" "/random"}\n"
-    print "${route "DELETE" "/anything"}\n"
+    print "${route ("GET", "/health")}\n"
+    print "${route ("GET", "/api/users/42")}\n"
+    print "${route ("GET", "/api/orders")}\n"
+    print "${route ("POST", "/api/users")}\n"
+    print "${route ("GET", "/random")}\n"
+    print "${route ("DELETE", "/anything")}\n"
 
     print "=== Pipeline Complete ===\n"
     0

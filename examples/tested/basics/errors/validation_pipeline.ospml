@@ -41,16 +41,16 @@ inputAt i =
         Success value => value
         Error message => ""
 
-runAll i n =
+runAll (i, n) =
     match i < n
         false => 0
         true =>
             match validate (inputAt i)
-                _ => runAll (i + 1) n
+                _ => runAll (i + 1, n)
 
 main () =
     print "=== Validation Pipeline ==="
-    runAll 0 4
+    runAll (0, 4)
     match parseAge "abc"
         Success value => print "unexpected success"
         Error message =>

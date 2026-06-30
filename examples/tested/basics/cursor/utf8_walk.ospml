@@ -12,7 +12,7 @@ sample () = "Aé世😀, hello!"
 // Decode the codepoint at byteIndex, print its scalar value, and recurse to the
 // next codepoint boundary (byteIndex + width). Returns the running codepoint
 // count. Stops exactly when the cursor reaches byteLength — total O(n).
-walk s byteIndex count =
+walk (s, byteIndex, count) =
     match byteIndex >= byteLength s
         true => count
         false =>
@@ -23,7 +23,7 @@ walk s byteIndex count =
                         Success value =>
                             width = value
                             print "cp[${toString count}] @byte ${toString byteIndex} = ${toString cp} (${toString width} bytes)"
-                            walk s (byteIndex + width) (count + 1)
+                            walk (s, byteIndex + width, count + 1)
                         Error message => -1
                 Error message => -1
 
@@ -33,7 +33,7 @@ main () =
     print "=== UTF-8 codepoint walk ==="
     print "string    = ${s}"
     print "byteLength = ${toString bytes}"
-    total = walk s 0 0
+    total = walk (s, 0, 0)
     print "codepoints = ${toString total}"
     proof =
         match total < bytes

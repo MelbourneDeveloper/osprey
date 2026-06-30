@@ -6,17 +6,17 @@
 // Spec: [BUILTIN-STRING-CURSOR] (Cursor Access).
 
 // codePointWidth(cp) must equal the real encoded byte count of its char.
-widthMatches cp ch =
+widthMatches (cp, ch) =
     match codePointWidth cp
         Success value => value == byteLength ch
         Error message => false
 
 // Decode byte 0 of an encoded char and assert it equals the original scalar.
-checkDecode cp ch =
+checkDecode (cp, ch) =
     match codePointAt ch 0
         Success value =>
             match value == cp
-                true => print "cp=${cp} char=${ch} byteLen=${byteLength ch} width-ok=${widthMatches cp ch} -> roundtrip OK ${value}\n"
+                true => print "cp=${cp} char=${ch} byteLen=${byteLength ch} width-ok=${widthMatches (cp, ch)} -> roundtrip OK ${value}\n"
                 false => print "cp=${cp} ROUNDTRIP MISMATCH got ${value}\n"
         Error message => print "cp=${cp} decode FAILED: ${message}\n"
     0
@@ -24,7 +24,7 @@ checkDecode cp ch =
 // Encode one scalar, then round-trip-decode it.
 roundTrip cp =
     match fromCodePoint cp
-        Success value => checkDecode cp value
+        Success value => checkDecode (cp, value)
         Error message =>
             print "cp=${cp} encode FAILED: ${message}\n"
             0

@@ -18,12 +18,12 @@ result2 = processAnyValue 5
 print "Any values stored without auto-conversion"
 
 // Test getRegularArgumentPosition coverage
-testArgs a b c =
+testArgs (a, b, c) =
     match a > 0
         true => b + " positive"
         false => b + " zero or negative " + toString c
 
-argResult = testArgs 5 "value" true
+argResult = testArgs (5, "value", true)
 print "testArgs result: ${argResult}"
 
 // Test type inference edge cases with any
@@ -61,11 +61,11 @@ print "false"
 
 // Test type comparison workaround since any comparison is complex
 compareTypes : any -> any -> string
-compareTypes a b = "Type comparison tested"
+compareTypes (a, b) = "Type comparison tested"
 
-comp1 = compareTypes 42 42
-comp2 = compareTypes 42 "42"
-comp3 = compareTypes "test" "test"
+comp1 = compareTypes (42, 42)
+comp2 = compareTypes (42, "42")
+comp3 = compareTypes ("test", "test")
 
 print "Type comparisons:"
 print "Type comparison tested"
@@ -123,7 +123,7 @@ color1 = Red
 color2 = Red
 color3 = Blue
 
-compareColors c1 c2 =
+compareColors (c1, c2) =
     match c1
         Red =>
             match c2
@@ -139,5 +139,5 @@ compareColors c1 c2 =
                 _ => "Different colors"
 
 print "Union equality tests:"
-print (compareColors color1 color2)
-print (compareColors color1 color3)
+print (compareColors (color1, color2))
+print (compareColors (color1, color3))

@@ -39,8 +39,11 @@ impl Line {
 /// Scan one raw line (a trailing `\r` is treated as part of the line ending).
 pub(crate) fn scan_line(raw: &str) -> Line {
     let chars: Vec<char> = raw.trim_end_matches('\r').chars().collect();
-    let leading_ws = chars.iter().take_while(|c| **c == ' ' || **c == '\t').count();
-    let (content, open_delta) = normalize(&chars[leading_ws..]);
+    let leading_ws = chars
+        .iter()
+        .take_while(|c| **c == ' ' || **c == '\t')
+        .count();
+    let (content, open_delta) = normalize(chars.get(leading_ws..).unwrap_or_default());
     let leading_closers = content
         .chars()
         .take_while(|c| matches!(c, '}' | ')' | ']'))
@@ -61,14 +64,18 @@ fn normalize(chars: &[char]) -> (String, i32) {
     let mut i = 0;
     while let Some(&c) = chars.get(i) {
         if c == '/' && chars.get(i + 1) == Some(&'/') {
-            out.extend(&chars[i..]);
+            out.extend(chars.get(i..).unwrap_or_default());
             break;
         }
         if c == '"' {
             i = copy_string(chars, i, &mut out);
         } else if c == ' ' || c == '\t' {
             out.push(' ');
-            i += chars[i..].iter().take_while(|x| **x == ' ' || **x == '\t').count();
+            i += chars
+                .iter()
+                .skip(i)
+                .take_while(|x| **x == ' ' || **x == '\t')
+                .count();
         } else {
             delta += bracket_delta(c);
             out.push(c);

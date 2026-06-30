@@ -117,7 +117,10 @@ mod tests {
         let out = format_source(src, Flavor::Default).expect("formats");
         assert_eq!(out, "fn main() = {\n    print(1)\n}\n");
         // Idempotent.
-        assert_eq!(format_source(&out, Flavor::Default).expect("re-formats"), out);
+        assert_eq!(
+            format_source(&out, Flavor::Default).expect("re-formats"),
+            out
+        );
     }
 
     #[test]

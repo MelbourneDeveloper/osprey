@@ -63,7 +63,7 @@ getReputationTitle rep = match rep
     _ => "Galactic Legend"
 
 // Ship and crew management
-calculateCargoValue amount price = match amount * price
+calculateCargoValue (amount, price) = match amount * price
     Success value => value
     Error message => 0
 
@@ -99,7 +99,7 @@ print "This planet specializes in: ${resource1Name}"
 print "Market price: ${resource1Price} credits per unit"
 
 purchaseAmount1 = 10
-totalCost1 = calculateCargoValue purchaseAmount1 resource1Price
+totalCost1 = calculateCargoValue (purchaseAmount1, resource1Price)
 newCredits1 = match credits - totalCost1
     Success value => value
     Error message => credits
@@ -138,7 +138,7 @@ sellPrice1 = match resource1Price + 25
     Success value => value
     Error message => resource1Price
   // 50% markup
-revenue1 = calculateCargoValue purchaseAmount1 sellPrice1
+revenue1 = calculateCargoValue (purchaseAmount1, sellPrice1)
 newCredits2 = match newCredits1 + revenue1
     Success value => value
     Error message => newCredits1
@@ -155,7 +155,7 @@ print ""
 
 // Buy local specialty
 purchaseAmount2 = 15
-totalCost2 = calculateCargoValue purchaseAmount2 resource2Price
+totalCost2 = calculateCargoValue (purchaseAmount2, resource2Price)
 newCredits3 = match newCredits2 - totalCost2
     Success value => value
     Error message => newCredits2
@@ -189,7 +189,7 @@ sellPrice2 = match resource2Price + 30
     Success value => value
     Error message => resource2Price
   // Premium for rare goods
-revenue2 = calculateCargoValue purchaseAmount2 sellPrice2
+revenue2 = calculateCargoValue (purchaseAmount2, sellPrice2)
 newCredits4 = match newCredits3 + revenue2
     Success value => value
     Error message => newCredits3

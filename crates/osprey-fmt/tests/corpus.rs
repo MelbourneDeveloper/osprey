@@ -6,6 +6,10 @@
 //! **meaning-preserving** (the formatted text reparses to the very same AST).
 //! Files that do not currently parse are skipped rather than failed, so the test
 //! stays green while the language frontends are mid-flight.
+#![expect(
+    clippy::panic,
+    reason = "test assertions: a read or re-format failure here is a test failure, not a production panic"
+)]
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -60,8 +64,8 @@ fn check_extension(ext: &str) -> (usize, usize) {
         if once != src {
             changed += 1;
         }
-        let twice = format_for_path(&key, &once)
-            .unwrap_or_else(|e| panic!("re-format {display}: {e:?}"));
+        let twice =
+            format_for_path(&key, &once).unwrap_or_else(|e| panic!("re-format {display}: {e:?}"));
         assert_eq!(once, twice, "formatting is not idempotent for {display}");
     }
     (processed, changed)

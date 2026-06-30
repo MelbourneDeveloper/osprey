@@ -124,6 +124,7 @@ pub fn initialize_result(encoding: &str) -> Value {
             "definitionProvider": true,
             "referencesProvider": true,
             "documentSymbolProvider": true,
+            "documentFormattingProvider": true,
             "completionProvider": {
                 "resolveProvider": false,
                 "triggerCharacters": [".", ":", "$", "(", "|"]
@@ -156,6 +157,28 @@ fn location_json(loc: &Location) -> Value {
 #[must_use]
 pub fn locations_result(locations: &[Location]) -> Value {
     Value::Array(locations.iter().map(location_json).collect())
+}
+
+/// `textDocument/formatting` result: a single whole-document `TextEdit` when the
+/// formatter changed anything, or an empty array when the buffer is already
+/// formatted (so the editor records no change).
+#[must_use]
+pub fn formatting_result(formatted: &str, original: &str, encoding: PositionEncoding) -> Value {
+    if formatted == original {
+        return Value::Array(Vec::new());
+    }
+    json!([{ "range": full_range(original, encoding), "newText": formatted }])
+}
+
+/// The range spanning the whole document, from `(0, 0)` to the end of the last
+/// line measured in `encoding`.
+fn full_range(text: &str, encoding: PositionEncoding) -> Value {
+    let last_line = text.rsplit('\n').next().unwrap_or("");
+    let end_line = u32::try_from(text.matches('\n').count()).unwrap_or(u32::MAX);
+    json!({
+        "start": { "line": 0, "character": 0 },
+        "end": { "line": end_line, "character": measure(last_line, encoding) }
+    })
 }
 
 /// `textDocument/documentSymbol` result: a flat list of `DocumentSymbol`s.
@@ -440,6 +463,21 @@ mod tests {
     }
 
     #[test]
+    fn formatting_result_spans_the_whole_document_or_is_empty() {
+        // An unchanged buffer yields no edits.
+        let same = formatting_result("a\n", "a\n", PositionEncoding::Utf16);
+        assert_eq!(same.as_array().map(Vec::len), Some(0));
+        // A changed buffer yields one edit spanning (0,0)..(end_line, end_char).
+        let edit = formatting_result("x\ny\n", "x\n  y\n", PositionEncoding::Utf16);
+        assert_at(&edit, "/0/newText", "x\ny\n");
+        assert_at(&edit, "/0/range/start/line", 0);
+        assert_at(&edit, "/0/range/start/character", 0);
+        // The original has two newlines, so the end is line 2, character 0.
+        assert_at(&edit, "/0/range/end/line", 2);
+        assert_at(&edit, "/0/range/end/character", 0);
+    }
+
+    #[test]
     fn locations_result_renders_each_location_range() {
         use crate::model::Location;
         let locs = vec![
@@ -510,6 +548,7 @@ mod tests {
         assert_at(&value, "/capabilities/textDocumentSync", 2);
         assert_at(&value, "/capabilities/referencesProvider", true);
         assert_at(&value, "/capabilities/documentSymbolProvider", true);
+        assert_at(&value, "/capabilities/documentFormattingProvider", true);
         assert_at(
             &value,
             "/capabilities/completionProvider/resolveProvider",

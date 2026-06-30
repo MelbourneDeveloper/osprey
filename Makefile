@@ -138,10 +138,12 @@ clean:
 ci: lint test build
 
 ## wasm: Build everything for the WebAssembly target, ready to go — the wasm
-## runtime archive (compiler/bin/libosprey_runtime_wasm.a) and the compiled
-## browser example (examples/wasm/build/hello.wasm) — then validate it and
-## smoke-run it under Node's WASI, the browser WASI shim, and the full golden
-## suite. Requires clang (wasm32 backend), wasm-ld and a WASI sysroot —
+## runtime archive (compiler/bin/libosprey_runtime_wasm.a), the hello example,
+## and Osprey Data Studio in BOTH flavors (studio.{osp,ospml} -> one byte-
+## identical manifest that drives the SQLite dashboard in examples/wasm/
+## index.html) — then validate them and smoke-run under Node's WASI, the browser
+## WASI shim, and the full golden suite. Requires clang (wasm32 backend),
+## wasm-ld and a WASI sysroot —
 ## `brew install lld wasi-libc` (macOS) or the wasi-sdk. See
 ## docs/specs/0022-WebAssemblyTarget.md.
 wasm: build _runtime_wasm
@@ -152,6 +154,15 @@ wasm: build _runtime_wasm
 	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/hello.wasm || echo "(wasm-validate not found — skipping structural check)"
 	node scripts/wasm-smoke.mjs         examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
 	node scripts/wasm-browser-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+	@echo "==> compiling Osprey Data Studio (BOTH flavors) -> examples/wasm/build/"
+	$(BIN) examples/wasm/studio.osp   --target=wasm32 --compile -o examples/wasm/build/studio.osp.wasm
+	$(BIN) examples/wasm/studio.ospml --target=wasm32 --compile -o examples/wasm/build/studio.ospml.wasm
+	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/studio.osp.wasm && wasm-validate examples/wasm/build/studio.ospml.wasm || echo "(wasm-validate not found — skipping structural check)"
+	@echo "==> both Studio flavors must emit the SAME manifest (byte-identical golden)"
+	node scripts/wasm-smoke.mjs         examples/wasm/build/studio.osp.wasm   examples/wasm/studio.expectedoutput
+	node scripts/wasm-browser-smoke.mjs examples/wasm/build/studio.osp.wasm   examples/wasm/studio.expectedoutput
+	node scripts/wasm-smoke.mjs         examples/wasm/build/studio.ospml.wasm examples/wasm/studio.expectedoutput
+	node scripts/wasm-browser-smoke.mjs examples/wasm/build/studio.ospml.wasm examples/wasm/studio.expectedoutput
 	@echo "==> [wasm differential] osprey --target=wasm32 vs examples/tested..."
 	@out=$$(zsh crates/diff_wasm_examples.sh); echo "$$out"; \
 	  echo "$$out" | grep -Eq '(^| )FAIL=0 '  || { echo 'FAIL: wasm differential mismatch'; exit 1; }; \

@@ -1,0 +1,119 @@
+// Osprey Data Studio — the analytics brain behind examples/wasm/index.html.
+// [WASM-TARGET] ML (layout) flavor. The Default twin is studio.osp; both emit a
+// byte-identical manifest (proven by the wasm differential harness).
+//
+// Same program as studio.osp in the curry-by-default, indentation-delimited ML
+// surface: `=` binds, `:=` mutates, whitespace is application, blocks are layout.
+// Multi-line SQL is spelled with `\n` because the layout lexer ends a string at
+// the newline (the one place the two sources read differently).
+//
+// Two cooperating WebAssembly engines in the browser: THIS module computes a
+// sales dataset, its schema, its analytics queries, and its own gold-standard
+// answers; sql.js (SQLite, also wasm) executes the SQL and the page reconciles
+// SQLite's results against Osprey's pure-FP answers. Showcased: algebraic
+// effects (the handler IS the database writer + accountant), union types +
+// exhaustive match, records as an effect payload, HM inference, persistent
+// state, string interpolation.
+
+// ── domain ────────────────────────────────────────────────────────────────
+type Region =
+    North
+    South
+    East
+    West
+
+type Grade =
+    Premium
+    Standard
+    Budget
+
+type Sale =
+    id : int
+    product : string
+    region : string
+    qty : int
+    price : int
+
+regionName r =
+    match r
+        North => "North"
+        South => "South"
+        East => "East"
+        West => "West"
+
+// Price bands → a Grade. Drop an arm and the compiler rejects the program; the
+// SQL `grade_mix` query mirrors these exact thresholds so both engines agree.
+grade price =
+    match price >= 15
+        true => Premium
+        false =>
+            match price >= 9
+                true => Standard
+                false => Budget
+
+isPremium price =
+    match grade price
+        Premium => 1
+        Standard => 0
+        Budget => 0
+
+// Revenue tier for the whole book of business — the headline badge.
+tier revenue =
+    match revenue >= 400
+        true => "FLAGSHIP"
+        false =>
+            match revenue >= 150
+                true => "GROWING"
+                false => "STARTER"
+
+mkSale (id, product, region, qty, price) =
+    Sale
+        id = id
+        product = product
+        region = regionName region
+        qty = qty
+        price = price
+
+// ── the books ── one ledger entry per sale, replayed through the handler ────
+books () =
+    perform Db.record (mkSale (1, "Espresso", North, 4, 18))
+    perform Db.record (mkSale (2, "Latte", South, 6, 12))
+    perform Db.record (mkSale (3, "ColdBrew", East, 3, 15))
+    perform Db.record (mkSale (4, "Espresso", West, 5, 18))
+    perform Db.record (mkSale (5, "Drip", North, 8, 7))
+    perform Db.record (mkSale (6, "Latte", East, 4, 12))
+    perform Db.record (mkSale (7, "ColdBrew", South, 2, 15))
+    perform Db.record (mkSale (8, "Drip", West, 10, 7))
+
+// ── algebraic effect ── the handler is the SQLite writer AND the accountant ──
+effect Db
+    record : Sale => int
+
+ddl () =
+    "CREATE TABLE sales (\n  id      INTEGER PRIMARY KEY,\n  product TEXT    NOT NULL,\n  region  TEXT    NOT NULL,\n  qty     INTEGER NOT NULL,\n  price   INTEGER NOT NULL\n);"
+
+insertLine s =
+    "INSERT INTO sales VALUES (${s.id}, '${s.product}', '${s.region}', ${s.qty}, ${s.price});"
+
+queries () =
+    "::QUERY|revenue_by_region|Revenue by region\nSELECT region, SUM(qty * price) AS revenue, SUM(qty) AS units\nFROM sales GROUP BY region ORDER BY revenue DESC;\n::QUERY|top_products|Top products by revenue\nSELECT product, SUM(qty) AS units, SUM(qty * price) AS revenue\nFROM sales GROUP BY product ORDER BY revenue DESC;\n::QUERY|grade_mix|Order grade mix\nSELECT CASE WHEN price >= 15 THEN 'Premium'\n            WHEN price >= 9  THEN 'Standard'\n            ELSE 'Budget' END AS grade,\n       COUNT(*) AS orders, SUM(qty * price) AS revenue\nFROM sales GROUP BY grade ORDER BY revenue DESC;\n::QUERY|big_orders|Biggest orders\nSELECT id, product, region, qty, price, qty * price AS revenue\nFROM sales ORDER BY revenue DESC LIMIT 5;"
+
+run () =
+    mut seed = ""
+    mut revenue = 0
+    mut units = 0
+    mut count = 0
+    mut premium = 0
+    handle Db
+        record sale =>
+            seed := "${seed}${insertLine sale}\n"
+            revenue := revenue + sale.qty * sale.price
+            units := units + sale.qty
+            count := count + 1
+            premium := premium + isPremium sale.price
+            revenue
+    in
+        total = books ()
+        print "::OSPREY-STUDIO|1\n::DDL\n${ddl ()}\n::SEED\n${seed}::END-SEED\n${queries ()}\n::METRIC|total_revenue|${revenue}\n::METRIC|total_units|${units}\n::METRIC|order_count|${count}\n::METRIC|premium_orders|${premium}\n::METRIC|revenue_tier|${tier revenue}\n::END"
+
+studio = run ()

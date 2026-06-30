@@ -39,6 +39,12 @@ for f in $(find $EXDIR \( -name '*.osp' -o -name '*.ospml' \) | sort); do
     # <stem>.osp.expectedoutput: both flavors must run byte-identically
     # ([FLAVOR-IR-EQUIV]), so the in-place .osp golden serves the .ospml too.
     exp="$base.osp.expectedoutput"
+  elif [[ -f "$base.osp.expectedoutput.$(uname -s)" ]]; then
+    # Same flavor-shared rule for an OS-specific Default golden: an ML twin
+    # <stem>.ospml inherits <stem>.osp.expectedoutput.<uname> when the Default
+    # twin's output is OS-dependent (callback_stdout_demo's subprocess text),
+    # since both flavors run byte-identically ([FLAVOR-IR-EQUIV]).
+    exp="$base.osp.expectedoutput.$(uname -s)"
   elif [[ -f "$base.expectedoutput" ]]; then
     exp="$base.expectedoutput"
   else

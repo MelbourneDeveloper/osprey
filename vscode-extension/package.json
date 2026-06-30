@@ -86,6 +86,14 @@
         }
       }
     ],
+    "configurationDefaults": {
+      "[osprey]": {
+        "editor.defaultFormatter": "nimblesite.osprey"
+      },
+      "[osprey-ml]": {
+        "editor.defaultFormatter": "nimblesite.osprey"
+      }
+    },
     "grammars": [
       {
         "language": "osprey",

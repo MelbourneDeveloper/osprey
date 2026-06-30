@@ -1,11 +1,52 @@
 # Osprey → WebAssembly
 
-An end-to-end example: an Osprey program — algebraic effects (one logic, two
-handlers), union types + exhaustive pattern matching, Hindley-Milner inference,
-functional pipelines, and persistent List/Map — compiled to `wasm32-wasip1` and
-run under `wasmtime`, Node's WASI, and in the browser. See
+Two examples compiled to `wasm32-wasip1` and run under `wasmtime`, Node's WASI,
+and in the browser. See
 [`docs/specs/0022-WebAssemblyTarget.md`](../../docs/specs/0022-WebAssemblyTarget.md)
 for the design.
+
+- **`hello.osp`** — a one-screen language tour (algebraic effects, union types +
+  exhaustive matching, HM inference, pipelines, persistent List/Map).
+- **`studio.osp` + `studio.ospml`** — **Osprey Data Studio**, the app behind
+  [`index.html`](index.html): two cooperating WebAssembly engines in your
+  browser. Shipped in **both flavors** — Default (brace) and ML (layout) — that
+  emit a **byte-identical** manifest.
+
+## Osprey Data Studio — Osprey × SQLite, both on WebAssembly
+
+A real, sophisticated single-page app that does not just print to the console:
+
+1. **Osprey is the brain.** `studio.osp` models a sales dataset with a `Sale`
+   record and `Region`/`Grade` union types, then replays each row through an
+   **algebraic-effect handler** (`effect Db`). That one handler *is* the database
+   writer and the accountant: it appends an `INSERT` to a seed script and folds
+   the row into running totals in the same pass. The module prints a delimited
+   **manifest** — schema (DDL), seed (DML), named analytics queries, and Osprey's
+   own **gold-standard answers** — over the WASI `fd_write` shim.
+2. **SQLite is the engine.** The page loads [`sql.js`](https://sql.js.org)
+   (SQLite compiled to WebAssembly) from a CDN, executes Osprey's DDL + seed into
+   a live in-browser database, and runs the analytics queries.
+3. **The page reconciles them.** Every gold-standard metric Osprey computed in
+   pure functions is checked against the same number computed by SQLite over the
+   relational data. They agree — two independent WebAssembly engines, one truth.
+
+On top of that: a **live SQL console** (run arbitrary SQL against the seeded
+database, ⌘/Ctrl-Enter to execute), result tables for every shipped query, the
+**syntax-highlighted source** for both flavors, and the raw manifest.
+
+The headline is the **flavor toggle**: switch between the `studio.osp` (Default)
+and `studio.ospml` (ML) WebAssembly builds and the dashboard is identical, because
+both lower to the same canonical AST and emit the same bytes
+([`docs/specs/0023-LanguageFlavors.md`](../../docs/specs/0023-LanguageFlavors.md),
+[`0024-MLFlavorSyntax.md`](../../docs/specs/0024-MLFlavorSyntax.md)).
+
+```sh
+make wasm-serve     # build both flavors + sql-driven page, serve, open the browser
+```
+
+Then use the flavor toggle, the SQL console, and ↻ Re-run. No bundler, no npm in
+the page — only `sql.js` from a CDN (offline, Osprey's metrics + manifest still
+render; the live-SQL parts need the CDN).
 
 ## Prerequisites
 
@@ -14,79 +55,51 @@ for the design.
 - A WASI sysroot — `brew install wasi-libc`, or the
   [wasi-sdk](https://github.com/WebAssembly/wasi-sdk). Override the autodetected
   location with `OSPREY_WASI_SYSROOT=/path/to/wasi-sysroot`.
-- `node` (for the smoke test) and, optionally, `wasmtime` (for `--run`).
+- `node` (for the smoke tests) and, optionally, `wasmtime` (for `--run`).
 
 ## Build & run
 
 From the repo root:
 
 ```sh
-# One target builds everything ready to go: the wasm runtime archive, the
-# compiled example, and validation + smoke-runs (Node's WASI and the browser shim).
+# One target builds everything ready to go: the wasm runtime archive, the hello
+# example, BOTH Studio flavors, validation, and WASI/browser-shim smoke-runs
+# (both Studio flavors must match one byte-identical golden, studio.expectedoutput).
 make wasm
 ```
 
 Or drive the compiler directly:
 
 ```sh
-# compile to WebAssembly
+# the language tour
 osprey examples/wasm/hello.osp --target=wasm32 --compile -o examples/wasm/build/hello.wasm
+osprey examples/wasm/hello.osp --target=wasm32 --run        # uses wasmtime under the hood
 
-# run it under a WASI host
-wasmtime examples/wasm/build/hello.wasm
-osprey examples/wasm/hello.osp --target=wasm32 --run     # uses wasmtime under the hood
-node scripts/wasm-smoke.mjs         examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput  # Node's WASI host
-node scripts/wasm-browser-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput  # the browser's WASI shim
-```
-
-Expected output ([`hello.expectedoutput`](hello.expectedoutput)):
-
-```
-OSPREY -> WebAssembly  ::  language tour
-======================================
-effects  same logic, two worlds
-  World A (real, stateful handler):
-    money open account
-    money deposit 100  -> balance 100
-    money withdraw 40  -> balance 60
-  World B (mock, frozen ledger):
-    test  [dry-run] open account
-    test  [dry-run] deposit 100  -> balance 0
-    test  [dry-run] withdraw 40  -> balance 0
-  -> realWorld returned 60, dryRun returned 0
---------------------------------------
-pipeline  sum even^2 in [1,40) = 9880  EPIC
-list      len 4, contains 4 = true, contains 9 = false
-map       size 3, has epic = true
-tiers     EPIC / SOLID / STARTER
---------------------------------------
-wasm width fixes
-  Osprey on WebAssembly
-  length = 21
-  2 * 1500000000 = 3000000000
+# Osprey Data Studio, both flavors — identical manifest from different syntax
+osprey examples/wasm/studio.osp   --target=wasm32 --compile -o examples/wasm/build/studio.osp.wasm
+osprey examples/wasm/studio.ospml --target=wasm32 --compile -o examples/wasm/build/studio.ospml.wasm
+osprey examples/wasm/studio.osp   --run    # the manifest, on the console
+diff <(osprey examples/wasm/studio.osp --run) <(osprey examples/wasm/studio.ospml --run) && echo "byte-identical"
 ```
 
 ## In the browser
 
-`index.html` ships a tiny inline WASI shim (`fd_write` → page + console), so no
-bundler or npm packages are needed. One target builds, serves, and opens it:
+`index.html` dynamic-imports the shared WASI shim (`wasi-shim.mjs`, `fd_write` →
+page + console) and loads SQLite (`sql.js`) on demand. Serve over HTTP (browsers
+block `fetch()` of `.wasm` and ES modules from `file://`):
 
 ```sh
-make wasm-serve              # build + serve examples/wasm + open the browser
+make wasm-serve                          # build + serve + open the browser
+# …or by hand:
+cd examples/wasm && python3 -m http.server 8080   # then visit http://localhost:8080/
 ```
 
-Or serve this directory over HTTP by hand:
-
-```sh
-cd examples/wasm && python3 -m http.server 8080
-# then visit http://localhost:8080/  and click “Run hello.wasm”
-```
-
-From the devtools console you can drive the module directly:
+From the devtools console you can drive it directly:
 
 ```js
-await osprey.run()   // (re)instantiate and run _start
-osprey.exports       // raw wasm exports: memory, _start
+await osprey.loadFlavor("ospml")     // re-run the dashboard from the ML build
+osprey.query("SELECT * FROM sales")  // run SQL against the live SQLite database
+osprey.state                         // parsed manifest, metrics, db handle
 ```
 
 ## What works / what doesn't

@@ -20,7 +20,7 @@ bodyLine h =
         Success value => "body=${value}"
         Error message => "nobody"
 
-headerLine h name =
+headerLine (h, name) =
     r = httpResponseHeader h name
     match r
         Success value => "hdr=${value}"
@@ -41,8 +41,8 @@ run () =
         Success value =>
             print "status=${httpResponseStatus value}"
             print (bodyLine value)
-            print (headerLine value "X-Demo")
-            print (headerLine value "Nope")
+            print (headerLine (value, "X-Demo"))
+            print (headerLine (value, "Nope"))
             print (freeLine value)
             print (freeLine value)
         Error message => print "reqfail ${message}"

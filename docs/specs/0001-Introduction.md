@@ -11,7 +11,7 @@ Osprey is a statically-typed functional language in the ML family. It compiles t
 - Immutable bindings by default; `mut` opts in to mutability.
 - Algebraic effects checked at compile time.
 - `Result<T, E>` for all fallible operations; no exceptions, panics, or null.
-- Named arguments required for functions of two or more parameters.
+- In the Default flavor, named arguments are required for functions of two or more parameters (`f(x: a, y: b)`); the ML flavor uses whitespace application (`f a b`) or the uncurried grouping (`f (x, y)`) instead.
 - Lightweight fibers and channel-based concurrency.
 - Automatic memory management with no observable collector — ARC by default, tracing GC selectable, and a `--static-memory` mode with zero runtime memory operations.
 - Built-in HTTP and WebSocket support.

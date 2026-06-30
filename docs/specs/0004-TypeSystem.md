@@ -410,7 +410,7 @@ let updated    = set(ages, "Alice", 26)                     // single-key update
 let withoutBob = remove(ages, "Bob")
 ```
 
-Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than a tuple, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `(K, V)` tuple per element.
+Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than as one packed value, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `Entry<K, V>` record (`{ key, value }`, defined with the Map builtins in [Built-In Functions](0012-Built-InFunctions.md)) per element — Osprey has no tuple type.
 
 The `+` operator on `(Map<K, V>, Map<K, V>) -> Map<K, V>` is **right-biased** (the right-hand side wins on conflicting keys).
 
@@ -435,7 +435,7 @@ The literal `{}` is disallowed as a pattern (it would match every map). Match em
 ```osprey
 let names    = keys(ages)                                  // List<string>, order unspecified
 let agesList = values(ages)                                // List<int>,    order unspecified
-let pairs    = entries(ages)                               // List<(string, int)>
+let pairs    = entries(ages)                               // List<Entry<string, int>>
 let m        = zipToMap(names, agesList)                   // Result<Map<K,V>, IndexError> if lengths differ
 let byGrade  = groupBy(students, fn(s) => s.grade)         // Map<string, List<Student>>
 ```

@@ -23,6 +23,13 @@ The first implementation slice is intentionally small: line tables,
 `--debug`, and VS Code launch through LLDB-DAP. This plan is not small. It is
 the complete target system.
 
+The watch window is also the memory-profiler entry point. A user must be able
+to select any heap-backed variable or watch expression and open an object graph
+that shows outgoing children, incoming retainers, paths to roots, retained
+size, allocation site, owning fiber, and snapshot diffs. The visualizer is not
+a decorative graph; it is the debugger answer to "what is this connected to?"
+and "what is still holding this alive?"
+
 ## Research basis
 
 Only authoritative sources are accepted here: official standards/docs, ACM
@@ -36,11 +43,24 @@ not copied text.
 | LLVM Source Level Debugging docs - https://llvm.org/docs/SourceLevelDebugging.html                                                                                   | LLVM producer docs      | "source-language's AST map onto LLVM code"  |
 | Debug Adapter Protocol - https://microsoft.github.io/debug-adapter-protocol/                                                                                         | DAP spec                | "defines the abstract protocol"             |
 | VS Code debugger extension guide - https://code.visualstudio.com/api/extension-guides/debugger-extension                                                             | VS Code API docs        | "debug adapter which is a separate process" |
-| LLDB-DAP docs - https://lldb.llvm.org/resources/lldbdap.html                                                                                                         | LLDB project docs       | "`lldb-dap` exposes LLDB's functionality"   |
+| LLDB-DAP docs - https://lldb.llvm.org/use/lldbdap.html                                                                                                               | LLDB project docs       | "`lldb-dap` exposes LLDB's functionality"   |
 | Kell and Stinnett, Onward! 2024, "Source-Level Debugging of Compiler-Optimised Code: Ill-Posed, but Not Impossible" - https://dl.acm.org/doi/10.1145/3689492.3690047 | ACM peer-reviewed paper | "loss of state"                             |
 | Huang, Liang, Su, Zhang, PLDI 2025, "Robustifying Debug Information Updates in LLVM via Control-Flow Conformance Analysis" - https://dl.acm.org/doi/10.1145/3729267  | ACM peer-reviewed paper | "debug location updates"                    |
 | Stinnett and Kell, OOPSLA 2026, "Debugging Debugging Information using Dynamic Call Trees" - https://dl.acm.org/doi/10.1145/3798213                                  | ACM peer-reviewed paper | "observing a running source program"        |
 | Lu, Liu, Wang, Zhang, FSE 2024, "DTD: Comprehensive and Scalable Testing for Debuggers" - https://dl.acm.org/doi/10.1145/3643779                                     | ACM peer-reviewed paper | debugger conformance testing                |
+| Printezis and Jones, OOPSLA 2002, "GCspy: An Adaptable Heap Visualisation Framework" - https://dl.acm.org/doi/10.1145/583854.582451                                  | ACM peer-reviewed paper | heap visualisation framework                |
+| Jump and McKinley, POPL 2007, "Cork: Dynamic Memory Leak Detection for Garbage-Collected Languages" - https://dl.acm.org/doi/10.1145/1190215.1190224                  | ACM peer-reviewed paper | points-from graph summaries                 |
+| Rayside et al., ASE 2007, "Object Ownership Profiling: A Technique for Finding and Fixing Memory Leaks" - https://dl.acm.org/doi/10.1145/1321631.1321661             | ACM peer-reviewed paper | object ownership profiling                  |
+| Reiss, VISSOFT 2009, "Visualizing the Java Heap to Detect Memory Problems" - https://ieeexplore.ieee.org/document/5336418/                                          | IEEE peer-reviewed paper | heap visualization for memory problems      |
+| Weninger et al., ICPE 2019, "AntTracks TrendViz: Configurable Heap Memory Visualization Over Time" - https://dl.acm.org/doi/10.1145/3302541.3313100                  | ACM/SPEC paper          | heap evolution over time                    |
+| Vilk and Berger, PLDI 2018, "BLeak: Automatically Debugging Memory Leaks in Web Applications" - https://dl.acm.org/doi/10.1145/3192366.3192386                       | ACM peer-reviewed paper | growth-path leak debugging                  |
+| Lengauer and Tarjan, TOPLAS 1979, "A Fast Algorithm for Finding Dominators in a Flowgraph" - https://dl.acm.org/doi/10.1145/357062.357071                            | ACM algorithm paper     | dominator tree construction                 |
+| Herman, Melancon, and Marshall, TVCG 2000, "Graph Visualization and Navigation in Information Visualization" - https://dl.acm.org/doi/abs/10.1109/2945.841119        | IEEE survey paper       | graph navigation survey                     |
+| Holten, TVCG/InfoVis 2006, "Hierarchical Edge Bundles" - https://dl.acm.org/doi/10.1109/TVCG.2006.147                                                               | IEEE visualization paper | bundled adjacency relations                 |
+| Munzner, IEEE InfoVis 1997, "H3: Laying Out Large Directed Graphs in 3D Hyperbolic Space" - https://dl.acm.org/doi/10.5555/857188.857627                             | IEEE visualization paper | focus+context large graphs                  |
+| Chrome DevTools memory docs - https://developer.chrome.com/docs/devtools/memory-problems/memory-101/                                                                | Browser tooling docs    | shallow/retained size vocabulary            |
+| Eclipse Memory Analyzer dominator tree docs - https://help.eclipse.org/latest/topic/org.eclipse.mat.ui.help/concepts/dominatortree.html                             | Production profiler docs | dominators and retained heap                |
+| Debug Adapter Protocol variables/readMemory docs - https://microsoft.github.io/debug-adapter-protocol/specification                                                   | DAP spec                | variables and memory references             |
 
 Implications for Osprey:
 
@@ -88,6 +108,31 @@ Implications for Osprey:
   instruction-step, and diff full program state including registers, treating
   optimized-out / error / not-found as _distinct_ states. Manual "looks OK in
   VS Code" is not acceptance.
+- Treat the object graph as a rooted directed graph of Osprey heap values and
+  runtime roots. Outgoing edges answer "what does this value reference?";
+  incoming reverse edges and root paths answer "what keeps this alive?". The
+  UI must show both, because a variables tree alone hides aliasing, sharing,
+  captured closures, retained channels, and effect resumptions.
+- Compute retained size from a dominator tree when the snapshot has a complete
+  enough root set and edge set. Use a standard dominator algorithm
+  (Lengauer-Tarjan is the baseline authority); when conservative roots or
+  custom managers make the graph incomplete, label retained size as approximate
+  or unavailable rather than inventing precision.
+- Lift the best profiler ideas into Osprey's watch window: GCspy's separable
+  telemetry/replay model, Cork's points-from summaries for leak localization,
+  ownership profiling's grouping by owner/allocation context, AntTracks'
+  timeline snapshots, BLeak's growth-path focus, and production profilers'
+  shallow/retained size, dominator, and path-to-root vocabulary.
+- Avoid graph hairballs. The first object graph view is the selected variable's
+  focused neighborhood, with lazy inbound/outbound expansion. Whole-heap views
+  start as dominator trees, allocation-site/type/fiber aggregates, treemaps, or
+  timelines. Apply focus+context navigation, stable incremental layout, hidden
+  edge counts, filtering, search, pinning, and edge bundling before drawing
+  dense cross-links.
+- Keep DAP standard where it fits and prefix Osprey extensions where it does
+  not. `variables`/`variableReference` remain the value tree. Object graph
+  payloads need custom Osprey requests because they are graph/snapshot data,
+  not a linear child list.
 
 ## User-facing requirements
 
@@ -109,6 +154,16 @@ The finished debugger must support these workflows:
   handles.
 - Render Osprey values: ints, floats, bools, strings, Unit, records, unions,
   Result, lists, maps, fibers, channels, effects, closures, and Ptr/FFI values.
+- From any heap-backed variable or watch expression, open an object graph that
+  shows outgoing references, incoming retainers, typed edges, source allocation
+  sites, owning fibers, and runtime roots.
+- Ask "why is this still alive?" and get shortest/key retention paths from
+  stack/global/fiber/channel/effect/runtime roots to the selected object.
+- Inspect dominator/retained-size views for snapshots, with approximation
+  clearly labelled when the memory backend cannot provide complete edge/root
+  data.
+- Capture and compare memory snapshots during breakpoints or replay to see
+  object-count, byte-size, retention-path, and allocation-site changes.
 - Evaluate Osprey expressions in the current frame, with side-effect controls.
 - Inspect fibers as logical tasks even when the OS sees one thread.
 - Inspect active effect handlers and resumptions.
@@ -123,6 +178,8 @@ The finished debugger must support these workflows:
 - Do not promise reliable optimized variable inspection before explicit
   optimized-debug validation exists.
 - Do not let debug mode change Osprey language semantics.
+- Do not expose debugger object ids, raw addresses, retain counts, root sets, or
+  retained sizes to Osprey source code.
 
 ## Architecture
 
@@ -248,6 +305,8 @@ New CLI surface:
   `--debug` is present.
 - `--debug-opt=none|limited|optimized`: optimization/debuggability policy.
   Initial implementation supports `none` only.
+- `--debug-memory=off|object-graph|timeline`: memory-profiler metadata policy.
+  Initial implementation may support `off` and on-demand `object-graph` only.
 - `--debug-out <path>`: optional path for the debug executable.
 - `--debug-preserve-ir`: keep the `.ll` file for inspection.
 - `--debug-preserve-symbols`: keep platform symbol bundles such as `.dSYM`.
@@ -376,6 +435,116 @@ Acceptance:
 - Lists/maps are paged and do not dump unbounded memory.
 - Runtime handles never crash the debug session when null/corrupt; they render
   as invalid/unavailable.
+
+### Layer 5A: object graph watch window and memory profiler
+
+The object graph is part of the debugger, not a separate heap-dump tool. It
+starts from the same value references used by the variables/watch UI and then
+adds graph, root, retention, ownership, and snapshot analysis.
+
+Debugger data model:
+
+- `DebugObjectId`: stable for the current paused process or replay trace. It is
+  not a source-level identity and does not have to be a raw pointer.
+- `ObjectNode`: id, Osprey type, runtime kind, short value summary, shallow
+  bytes, retained bytes or unavailable/approximate, source allocation site,
+  owning fiber id, allocation generation/time when recorded, backend provenance,
+  and validity state.
+- `ObjectEdge`: source id, target id, edge kind, display label, source slot
+  (`field name`, list index, map bucket/key/value, capture name, queue entry),
+  direction, and strength/precision (`precise`, `conservative`, `synthetic`).
+- `RootNode`: stack local/parameter, module global, selected watch expression,
+  active fiber, suspended fiber, channel, effect handler/resumption, runtime
+  singleton, FFI handle, or conservative native root.
+- `GraphSnapshot`: snapshot id, process/debug-session id, stop reason, selected
+  frame/fiber, root set, nodes, edges, aggregation nodes, profiler warnings,
+  and backend capability flags.
+
+Required runtime/debug APIs:
+
+- Resolve a DAP `variableReference` or Osprey watch expression to a
+  `DebugObjectId` when the value is heap-backed.
+- Enumerate outgoing Osprey heap edges for a node without guessing C layouts in
+  TypeScript.
+- Enumerate incoming edges through a runtime-maintained reverse index or a
+  bounded graph scan; large scans must be cancellable.
+- Enumerate roots from the selected frame, all stacks/fibers, module globals,
+  channels, active effects, runtime tables, and backend-specific roots.
+- Capture snapshots in stop-the-world debug mode so graph topology is
+  internally consistent for the selected stop event.
+- Export JSON and DOT snapshots for tests and issue attachments.
+
+DAP/editor boundary:
+
+- Standard DAP `variables`, `scopes`, and `evaluate` continue to power the
+  exact tree drill-down.
+- Add prefixed custom requests only for graph-shaped data:
+  `osprey/objectGraph`, `osprey/objectGraph/expand`,
+  `osprey/objectGraph/retainers`, `osprey/objectGraph/roots`,
+  `osprey/heapSnapshot`, `osprey/heapSnapshot/diff`, and
+  `osprey/allocationSites`.
+- Every request accepts paging, max-node, max-edge, max-depth, root-kind, edge
+  kind, type, fiber, allocation-site, and timeout filters.
+- The adapter must return partial results with explicit truncation/cancellation
+  metadata instead of blocking the IDE on huge heaps.
+
+Retention analysis:
+
+- Reachability starts at runtime roots, then follows precise Osprey heap edges.
+- Incoming retainers are computed from the reverse graph.
+- Shortest paths to roots answer the first retention question quickly.
+- Key retention paths must de-duplicate equivalent paths so one noisy stack root
+  does not hide independent owners.
+- Dominator tree and retained size are computed for complete snapshots. For
+  snapshot roots, a synthetic super-root dominates all real roots.
+- Conservative GC roots, FFI handles, and custom managers can make retention
+  incomplete. The UI must mark affected paths/sizes approximate or unavailable.
+- Snapshot diff compares object count, shallow bytes, retained bytes, type,
+  allocation site, owning fiber, and root-path changes.
+
+Visual UX:
+
+- The variables/watch row gets a "show object graph" action for heap-backed
+  values. Non-heap values explain that there is no graph root.
+- The first graph is a local neighborhood: selected node, outgoing children,
+  incoming retainers, direct roots, and hidden-edge counts.
+- Expansion is directional: expand children, expand retainers, expand to root,
+  expand allocation-site group, expand fiber group.
+- Whole-heap mode starts from aggregated dominators, allocation sites, type
+  groups, or fiber groups; it does not render every object by default.
+- The visualizer supports pinned nodes, search, filters, type/source/fiber
+  grouping, snapshot timeline, snapshot diff overlay, and JSON/DOT export.
+- Layout is stable across refreshes and expansions. Text must not overlap.
+  Dense cross-links use bundling, elision, or aggregate nodes rather than a
+  useless hairball.
+
+Performance and safety:
+
+- Object graph profiling is off in release builds and opt-in in debug builds.
+- Runtime metadata is compiled only under `--debug-memory=object-graph` or
+  stronger modes unless a minimal id/descriptor table is cheap enough to keep in
+  all debug builds.
+- Snapshot capture must have a bounded memory budget and cancellation path.
+- Large collections and maps are paged. Huge object groups collapse by default.
+- Runtime helper functions are side-effect-free and safe while the program is
+  paused. Corrupt/null handles render as invalid, not as adapter crashes.
+- Native addresses and raw bytes are hidden unless the user enables expert
+  native view.
+
+Acceptance:
+
+- Selecting a record/list/map/closure/fiber/channel/effect value can open a
+  graph rooted at that value.
+- The graph shows both outgoing children and incoming retainers with typed
+  edges.
+- A structurally shared list/map test shows the shared node and both owners.
+- A closure-capture test shows the captured value and the closure retaining it.
+- A fiber/channel/effect test shows runtime roots and owning logical fiber ids.
+- A leak-shaped example can show a path from a root to the retained object.
+- Retained size/dominator view works for a complete snapshot and marks
+  conservative/custom-manager limitations honestly.
+- Snapshot diff detects growth by allocation site and changed root paths.
+- JSON/DOT export is deterministic enough for golden tests.
 
 ### Layer 6: expression evaluation
 
@@ -639,6 +808,29 @@ Acceptance:
 - [ ] Page large collections.
 - [ ] Add corruption/null safety tests for runtime handle display.
 
+### Phase 4A - Object graph watch window and memory profiler
+
+- [ ] Define debug object ids, node metadata, edge kinds, root categories, and
+      snapshot JSON/DOT formats.
+- [ ] Add runtime descriptors for Osprey heap object kinds and typed outgoing
+      edges.
+- [ ] Add root enumeration for stack locals, module globals, fibers, channels,
+      active effects, runtime tables, and backend-specific roots.
+- [ ] Add `--debug-memory=object-graph` and compile/link only the required
+      profiler metadata in debug builds.
+- [ ] Add Osprey DAP custom requests for object graph expansion, retainers,
+      roots, snapshots, snapshot diffs, and allocation-site summaries.
+- [ ] Add a VS Code watch/variables action that opens the graph visualizer for
+      a selected heap-backed value.
+- [ ] Implement local-neighborhood graph view with directional expansion,
+      hidden-edge counts, search, filters, pinning, grouping, and stable layout.
+- [ ] Implement shortest/key retention paths, dominator tree, retained size, and
+      explicit approximate/unavailable labelling.
+- [ ] Add snapshot diff and replay snapshot hooks.
+- [ ] Test structural sharing, closure capture retention, fiber/channel/effect
+      roots, conservative-root approximation, custom-manager unsupported mode,
+      large-graph paging, cancellation, and deterministic JSON/DOT export.
+
 ### Phase 5 - Expression evaluation
 
 - [ ] Parse/type-check watch expressions in Osprey syntax.
@@ -699,6 +891,8 @@ DAP tests:
 - StackTrace.
 - Scopes/variables.
 - Evaluate.
+- Object graph custom requests: selected root, outgoing expansion, incoming
+  retainers, roots, retention paths, snapshot, snapshot diff, cancellation.
 - Disconnect/terminate.
 
 Osprey semantic tests:
@@ -716,6 +910,8 @@ Regression tests:
 - Breakpoint on every executable source line in selected examples.
 - Step sequence is stable for `--debug-opt=none`.
 - Variables are correct or explicitly unavailable.
+- Object graph output is bounded, deterministic after sorting/canonicalization,
+  and labels approximate/unavailable retention data.
 - Runtime/generated frames hidden by default.
 
 ## Risks
@@ -727,6 +923,13 @@ Regression tests:
   override that without changing release behavior.
 - Runtime handles are opaque. Pretty-printers need stable runtime inspection
   APIs, not ad hoc memory guessing.
+- Object graph visualizers can become unreadable on real heaps. Mitigation:
+  start from focused neighborhoods and aggregated dominators/allocation sites,
+  require paging/filtering/cancellation, and treat layout stability as a testable
+  feature.
+- Retained-size computation is only as good as the root/edge model. Mitigation:
+  label conservative/custom-manager gaps explicitly and prefer unavailable over
+  fake precision.
 - Fibers/effects may require runtime changes to expose logical stacks.
 - macOS debug symbols may require dSYM handling even when ELF-like tests pass
   elsewhere.
@@ -743,6 +946,9 @@ The Osprey debugger is complete when:
   work for the language constructs in `examples/tested`.
 - Osprey runtime values render as language values, not raw implementation
   pointers.
+- The watch/variables UI can open an object graph for heap-backed values, show
+  connected objects and retainers, compute root paths/retained size when
+  supported, compare snapshots, and export deterministic graph data.
 - Fibers and effects are inspectable at the language level.
 - Replay can reproduce deterministic concurrency/effects executions.
 - Debug-info quality is continuously tested, including optimized-debug modes

@@ -20,37 +20,37 @@ yellow s = "\e[33m${s}\e[0m"
 dim s = "\e[2m${s}\e[0m"
 green s = "\e[32m${s}\e[0m"
 
-pad s n =
+pad (s, n) =
     r = padEnd s n " "
     match r
         Success value => value
         Error message => s
 
-field doc path =
+field (doc, path) =
     r = jsonGet doc path
     match r
         Success value => value
         Error message => "?"
 
-renderRow doc i n =
+renderRow (doc, i, n) =
     match i < n
         true =>
-            name = field doc "[${i}].name"
-            stars = field doc "[${i}].stars"
-            lang = field doc "[${i}].lang"
+            name = field (doc, "[${i}].name")
+            stars = field (doc, "[${i}].stars")
+            lang = field (doc, "[${i}].lang")
             bullet = cyan "*"
-            nameCol = bold (pad name 12)
-            starsCol = yellow "* ${pad stars 5}"
+            nameCol = bold (pad (name, 12))
+            starsCol = yellow "* ${pad (stars, 5)}"
             langCol = dim lang
             print "  ${bullet} ${nameCol} ${starsCol} ${langCol}"
-            renderRow doc (i + 1) n
+            renderRow (doc, i + 1, n)
         false => print ""
 
 renderTable doc =
     count = jsonLength doc ""
     print (green "  Repositories (${count})")
     print "  ----------------------------"
-    renderRow doc 0 count
+    renderRow (doc, 0, count)
 
 renderDoc d =
     renderTable d

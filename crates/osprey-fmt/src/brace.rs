@@ -46,7 +46,8 @@ mod tests {
     #[test]
     fn nested_blocks_step_by_one_level_each() {
         let src = "fn f() = {\nmatch x {\nA => {\ng()\n}\n}\n}\n";
-        let want = "fn f() = {\n    match x {\n        A => {\n            g()\n        }\n    }\n}\n";
+        let want =
+            "fn f() = {\n    match x {\n        A => {\n            g()\n        }\n    }\n}\n";
         assert_eq!(format(src), want);
     }
 

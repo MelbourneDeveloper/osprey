@@ -28,6 +28,7 @@ analysis plane; DAP is the runtime control plane. The implementation plan is
 | Debug build mode (`osprey --debug`) | Implemented for native Phase 1 builds: LLVM/DWARF metadata, debug driver flags, and wasm rejection.       |
 | VS Code DAP launch                  | Implemented for Phase 2: compiles `.osp` to a native debug binary and launches real `lldb-dap`.           |
 | Variables / value rendering         | Partial. Primitive params/lets emit metadata and are DAP-tested; full Osprey value renderers are planned. |
+| Object graph / memory profiler      | Planned. Extends the watch/variables surface with retention paths, object neighborhoods, and snapshots.   |
 | Fibers / effects inspection         | Planned. Requires runtime debug APIs.                                                                     |
 | Replay / time travel                | Planned. Requires deterministic runtime event recording.                                                  |
 
@@ -186,11 +187,113 @@ Required future support:
 - Records, unions, `Result`, strings, lists, maps, closures, fibers, channels,
   and effect handlers rendered as Osprey values.
 - Safe runtime inspection helpers for opaque handles.
+- Object graph inspection for any heap-backed variable or watch expression.
 - Fiber and effect runtime debug ids.
 - Replayable scheduler/effect/IO event streams.
 
 These features are not allowed to guess raw memory layouts ad hoc from the
 editor. Stable runtime inspection APIs are required.
+
+## Object Graph Watch Window `[DEBUGGER-OBJECT-GRAPH]`
+
+The debugger must integrate an object graph and memory-profiler view directly
+into the watch/variables workflow. Selecting a variable or evaluating a watch
+expression must let the user answer two questions without leaving the debugger:
+
+1. What heap values is this value connected to?
+2. What roots, variables, fibers, runtime handles, or shared structures are
+   keeping this value reachable?
+
+This is a debugger/profiler feature, not an Osprey language API. It must obey
+[Memory Management](0018-MemoryManagement.md) [MEM-DEBUG-OBSERVABILITY]: object
+identity, addresses, retained size, roots, allocation sites, reference counts,
+and collector/backend state are visible only in explicit debug/profiling
+surfaces and never become program-observable semantics.
+
+Required model:
+
+- Every heap-backed value that can appear in a variables/watch response has a
+  stable debug object id for the current process or replay trace. The id is not
+  a language-level identity and need not be a raw address.
+- Nodes expose debugger metadata: Osprey type, runtime kind, value summary,
+  shallow size, retained size when computed, allocation site/source span when
+  known, owning fiber, allocation generation/timestamp when recorded, backend
+  provenance (`arc`, `gc`, custom), and validity (`live`, `collected`,
+  `moved`, `unavailable`, `corrupt`).
+- Edges are typed and directional: record field, tuple/list index, map key/value,
+  union payload, closure capture, persistent-collection sharing, fiber capture,
+  channel queue, effect handler/resumption, runtime handle, stack/global root,
+  and backend bookkeeping. The UI must distinguish incoming retainers from
+  outgoing references.
+- Roots are first-class nodes/categories: selected local/watch value, stack
+  slots, module globals, active fibers, suspended fibers, channels, effect
+  handlers, runtime singletons, FFI handles, and conservative-GC roots when the
+  backend can only report an approximate native root.
+
+Required debugger operations:
+
+- Expand from a selected variable into outgoing children, incoming retainers, or
+  both, lazily and with paging.
+- Show shortest paths to roots and "key" distinct retention paths, not only a
+  single path that hides alternate owners.
+- Compute a dominator tree and retained size for snapshots where the root set
+  and graph are complete enough. Retained-size results must be labelled
+  unavailable or approximate when custom managers or conservative roots make the
+  graph incomplete.
+- Group/aggregate graph regions by Osprey type, source allocation site, owning
+  fiber, runtime kind, module, or user-defined watch selection.
+- Capture snapshots at a breakpoint, on demand from the watch window, or during
+  replay; compare snapshots by object count, shallow bytes, retained bytes,
+  allocation site, and retention-path changes.
+- Export the current graph/snapshot as JSON and DOT for bug reports and
+  reproducible tests.
+
+Required visual behavior:
+
+- The variables tree remains the canonical drill-down for exact values; the
+  graph view is a companion visualizer reachable from the same selected
+  variable/watch expression.
+- The initial view is a focused object neighborhood, not the whole heap. Whole
+  heap visualizations must start from aggregated dominators, allocation sites,
+  or type/fiber groups.
+- Layout must be stable across expansions and refreshes so a paused program does
+  not visually scramble while the user drills down.
+- Large graphs must avoid hairballs through focus+context navigation, filters,
+  edge bundling where useful, hidden-edge counts, top-K retained-size defaults,
+  search, pinned nodes, and collapsible aggregate nodes.
+- Text must not overlap nodes/edges; color must not be the only carrier of
+  ownership, lifetime, or retention warnings.
+
+Design authorities:
+
+- GCspy, Printezis and Jones, OOPSLA 2002, introduced a reusable architecture
+  for collecting, transmitting, storing, and replaying memory-management
+  behavior:
+  <https://dl.acm.org/doi/10.1145/583854.582451>.
+- Cork, Jump and McKinley, POPL 2007, uses summarized points-from graphs to
+  identify heap growth in garbage-collected languages:
+  <https://dl.acm.org/doi/10.1145/1190215.1190224>.
+- Object ownership profiling, Rayside et al., ASE 2007, uses ownership views to
+  find and fix leaks:
+  <https://dl.acm.org/doi/10.1145/1321631.1321661>.
+- Reiss, VISSOFT 2009, motivates interactive heap visualization for extracting
+  actionable memory-problem information:
+  <https://ieeexplore.ieee.org/document/5336418/>.
+- AntTracks TrendViz, Weninger et al., ICPE 2019, combines trace-based heap
+  reconstruction with configurable grouping and time evolution:
+  <https://dl.acm.org/doi/10.1145/3302541.3313100>.
+- Chrome DevTools, Eclipse MAT, JetBrains dotMemory, and Visual Studio memory
+  tools establish the production vocabulary: shallow size, retained size,
+  dominators, paths to roots, retention paths, snapshot diffing, and hot paths:
+  <https://developer.chrome.com/docs/devtools/memory-problems/get-started>,
+  <https://eclipse.dev/mat/>,
+  <https://www.jetbrains.com/help/dotmemory/Retained_by.html>,
+  <https://learn.microsoft.com/en-us/visualstudio/profiling/hot-path-to-root>.
+- Graph-visualization guidance comes from Herman/Melancon/Marshall's survey,
+  Holten's hierarchical edge bundles, and Munzner's H3 focus+context work:
+  <https://dl.acm.org/doi/abs/10.1109/2945.841119>,
+  <https://dl.acm.org/doi/10.1109/TVCG.2006.147>,
+  <https://dl.acm.org/doi/10.5555/857188.857627>.
 
 ## Conformance
 
@@ -211,3 +314,6 @@ A change is conformant only if:
    IR spelling may be `#dbg_*` records or the current `@llvm.dbg.*`
    compatibility intrinsics, and the DWARF version honors the per-platform
    default (DWARF 4 on macOS).
+7. Object graph inspection, once enabled, follows `[DEBUGGER-OBJECT-GRAPH]`:
+   stable debug ids, typed incoming/outgoing edges, root paths, bounded lazy
+   expansion, labelled approximation, and no editor-side raw-layout guessing.

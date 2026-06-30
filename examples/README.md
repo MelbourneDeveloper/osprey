@@ -71,7 +71,12 @@ Currying is the one honest difference between the flavors. ML `add x y = x + y`
 lowers to the Default **explicit-curry** form `fn add(x) = fn(y) => x + y` — the
 same canonical AST, machine-checked by the `.osp`/`.ospml` twins. It is *not* the
 same value as a Default multi-parameter `fn add(x, y)`, which is deliberately a
-distinct (uncurried) function.
+distinct (uncurried) function. To twin that flat form, ML writes the **uncurried**
+form `add (x, y) = x + y` — parentheses around a comma-list (argument grouping,
+not a tuple; Osprey has none) — which lowers to the same single flat
+multi-parameter function. So each twin matches its original form-for-form:
+whitespace `f a b` ↔ Default explicit-curry, parens `f (a, b)` ↔ Default
+multi-parameter — both emitting byte-identical IR.
 
 ## Running an example
 

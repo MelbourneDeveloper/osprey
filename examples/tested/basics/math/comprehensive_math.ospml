@@ -6,7 +6,7 @@ type MathError =
     DivisionByZero
     Overflow
 
-power base exp =
+power (base, exp) =
     match exp
         0 => 1
         1 => base
@@ -43,7 +43,7 @@ fibonacci n =
         5 => 5
         _ => 8
 
-complex a b =
+complex (a, b) =
     match (a * 2) + (b * 3) - 1
         Success value => value
         Error message => 0
@@ -56,7 +56,7 @@ classify n =
         1 => "One"
         _ => "Many"
 
-safeDivide a b =
+safeDivide (a, b) =
     match b
         0 => 999999
         _ =>
@@ -65,8 +65,8 @@ safeDivide a b =
                 20 => 5
                 _ => 0
 
-showDiv a b =
-    result = safeDivide a b
+showDiv (a, b) =
+    result = safeDivide (a, b)
     match result
         999999 => print "Error: Cannot divide ${a} by ${b}!"
         _ => print "${a} / ${b} = ${result}"
@@ -95,16 +95,16 @@ match intDiv 5 0
 // Power, factorial, fibonacci
 n = 5
 m = 3
-print "pow(5,2)   = ${power n 2}"
-print "pow(5,3)   = ${power n 3}"
+print "pow(5,2)   = ${power (n, 2)}"
+print "pow(5,3)   = ${power (n, 3)}"
 print "fact(5)    = ${factorial n}"
 print "fib(5)     = ${fibonacci n}"
-print "complex    = ${complex n m}"
+print "complex    = ${complex (n, m)}"
 
 // Division — both branches
-showDiv 10 2
-showDiv 15 0
-showDiv 20 4
+showDiv (10, 2)
+showDiv (15, 0)
+showDiv (20, 4)
 
 print "classify ${classify 0} / ${classify 1} / ${classify n}"
 

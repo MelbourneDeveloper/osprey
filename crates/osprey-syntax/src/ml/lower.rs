@@ -97,7 +97,9 @@ fn collect_names_in_expr(expr: &MlExpr, out: &mut HashSet<String>) {
         }
         MlExpr::AppMulti { func, args } => {
             collect_names_in_expr(func, out);
-            args.iter().for_each(|a| collect_names_in_expr(a, out));
+            for a in args {
+                collect_names_in_expr(a, out);
+            }
         }
         MlExpr::UnitApp { func } => collect_names_in_expr(func, out),
         MlExpr::Binary { left, right, .. } => {
@@ -116,22 +118,42 @@ fn collect_names_in_expr(expr: &MlExpr, out: &mut HashSet<String>) {
         }
         MlExpr::Match { scrutinee, arms } => {
             collect_names_in_expr(scrutinee, out);
-            arms.iter().for_each(|a| collect_names_in_expr(&a.body, out));
+            for a in arms {
+                collect_names_in_expr(&a.body, out);
+            }
         }
         MlExpr::Handle { arms, body, .. } => {
-            arms.iter().for_each(|a| collect_names_in_expr(&a.body, out));
+            for a in arms {
+                collect_names_in_expr(&a.body, out);
+            }
             collect_names_in_expr(body, out);
         }
-        MlExpr::Select(arms) => arms.iter().for_each(|a| collect_names_in_expr(&a.body, out)),
-        MlExpr::List(items) => items.iter().for_each(|i| collect_names_in_expr(i, out)),
-        MlExpr::Map(entries) => entries.iter().for_each(|(k, v)| {
-            collect_names_in_expr(k, out);
-            collect_names_in_expr(v, out);
-        }),
-        MlExpr::Record { fields, .. } => {
-            fields.iter().for_each(|f| collect_names_in_expr(&f.value, out));
+        MlExpr::Select(arms) => {
+            for a in arms {
+                collect_names_in_expr(&a.body, out);
+            }
         }
-        MlExpr::Perform { args, .. } => args.iter().for_each(|a| collect_names_in_expr(a, out)),
+        MlExpr::List(items) => {
+            for i in items {
+                collect_names_in_expr(i, out);
+            }
+        }
+        MlExpr::Map(entries) => {
+            for (k, v) in entries {
+                collect_names_in_expr(k, out);
+                collect_names_in_expr(v, out);
+            }
+        }
+        MlExpr::Record { fields, .. } => {
+            for f in fields {
+                collect_names_in_expr(&f.value, out);
+            }
+        }
+        MlExpr::Perform { args, .. } => {
+            for a in args {
+                collect_names_in_expr(a, out);
+            }
+        }
         MlExpr::Yield(Some(v)) | MlExpr::Resume(Some(v)) => collect_names_in_expr(v, out),
         _ => {}
     }
@@ -155,23 +177,15 @@ fn lower_items(items: Vec<MlItem>) -> Vec<Stmt> {
                 body,
                 pos,
             } => {
+                // Pair the binding with its preceding signature's type and
+                // effect row (both `None`/empty when unsigned), passed as one
+                // `sig` argument so the lowerer stays within the parameter budget.
                 let sig = pending
                     .take()
-                    .filter(|(signed, _, _)| *signed == name);
-                let effects = sig
-                    .as_ref()
-                    .map(|(_, _, effects)| effects.clone())
-                    .unwrap_or_default();
-                let ty = sig.map(|(_, ty, _)| ty);
+                    .filter(|(signed, _, _)| *signed == name)
+                    .map(|(_, ty, effects)| (ty, effects));
                 out.push(lower_binding(
-                    mutable,
-                    name,
-                    params,
-                    uncurried,
-                    body,
-                    pos,
-                    ty.as_ref(),
-                    effects,
+                    mutable, name, params, uncurried, body, pos, sig,
                 ));
             }
             MlItem::Assign { name, value, pos } => {
@@ -314,10 +328,15 @@ fn lower_binding(
     uncurried: bool,
     body: MlExpr,
     pos: Position,
-    sig: Option<&MlType>,
-    effects: Vec<String>,
+    sig: Option<(MlType, Vec<String>)>,
 ) -> Stmt {
     let body = lower_expr(body);
+    // Split the paired signature into its declared type and effect row.
+    let (ty, effects) = match sig {
+        Some((ty, effects)) => (Some(ty), effects),
+        None => (None, Vec::new()),
+    };
+    let ty = ty.as_ref();
     // An empty surface parameter list is a value binding; a non-empty one (even
     // the lone unit marker `()`) is a function. `()` binds no canonical
     // parameter, so `f () = e` is a zero-parameter function like `fn f() = e`.
@@ -326,16 +345,16 @@ fn lower_binding(
         return Stmt::Let {
             name,
             mutable,
-            ty: sig.and_then(type_expr),
+            ty: ty.and_then(type_expr),
             value: body,
             doc: None,
             position: Some(pos),
         };
     }
     let (parameters, body, return_type) = if uncurried {
-        build_function_flat(params, body, sig)
+        build_function_flat(params, body, ty)
     } else {
-        build_function(params, body, sig, pos)
+        build_function(params, body, ty, pos)
     };
     Stmt::Function {
         name,
@@ -374,7 +393,11 @@ fn build_function_flat(
             MlParam::Unit => None,
         })
         .collect();
-    (parameters, body, arrow_of(spine.get(consumed..).unwrap_or(&[])))
+    (
+        parameters,
+        body,
+        arrow_of(spine.get(consumed..).unwrap_or(&[])),
+    )
 }
 
 /// Lower one `op : P => R` effect operation line to the canonical
@@ -383,7 +406,11 @@ fn build_function_flat(
 /// and `return_type` stay empty/blank, matching the Default-flavor shape.
 fn lower_effect_op(op: MlEffectOp) -> EffectOperation {
     EffectOperation {
-        ty: format!("fn({}) -> {}", render_op_payload(&op.payload), render_type(&op.result)),
+        ty: format!(
+            "fn({}) -> {}",
+            render_op_payload(&op.payload),
+            render_type(&op.result)
+        ),
         name: op.name,
         parameters: Vec::new(),
         return_type: String::new(),
@@ -588,9 +615,10 @@ fn lower_expr(expr: MlExpr) -> Expr {
         // `func (a, b, …)` — the uncurried saturated call lowers to one flat
         // multi-argument `Call`, byte-identical to the Default `func(a, b, …)`
         // ([FLAVOR-ML-CALL]).
-        MlExpr::AppMulti { func, args } => {
-            call(lower_expr(*func), args.into_iter().map(lower_expr).collect())
-        }
+        MlExpr::AppMulti { func, args } => call(
+            lower_expr(*func),
+            args.into_iter().map(lower_expr).collect(),
+        ),
         MlExpr::UnitApp { func } => call(lower_expr(*func), Vec::new()),
         MlExpr::List(items) => Expr::List(items.into_iter().map(lower_expr).collect()),
         MlExpr::Map(entries) => Expr::Map(entries.into_iter().map(lower_map_entry).collect()),
@@ -796,9 +824,8 @@ fn lower_application(func: MlExpr, arg: MlExpr) -> Expr {
         _ => true,
     };
     if curried {
-        args.into_iter().fold(lower_expr(head), |acc, a| {
-            call(acc, vec![lower_expr(a)])
-        })
+        args.into_iter()
+            .fold(lower_expr(head), |acc, a| call(acc, vec![lower_expr(a)]))
     } else {
         call(lower_expr(head), args.into_iter().map(lower_expr).collect())
     }
@@ -960,7 +987,10 @@ mod tests {
                         if arguments == &vec![Expr::Integer(1)]),
                     "expected inner call add(1), got {function:?}"
                 );
-                if let Expr::Call { function: inner, .. } = *function {
+                if let Expr::Call {
+                    function: inner, ..
+                } = *function
+                {
                     assert_eq!(*inner, Expr::Identifier("add".to_owned()));
                 }
             }
@@ -973,7 +1003,13 @@ mod tests {
         // `add 1 2 == 3` ⇒ (add 1 2) == 3.
         let s = one("r = add 1 2 == 3\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Binary { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Binary { .. },
+                    ..
+                }
+            ),
             "expected comparison, got {s:?}"
         );
         if let Stmt::Let {
@@ -991,7 +1027,13 @@ mod tests {
     fn unit_application_is_zero_arg_call() {
         let s = one("r = make ()\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Call { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Call { .. },
+                    ..
+                }
+            ),
             "expected zero-arg call, got {s:?}"
         );
         if let Stmt::Let {
@@ -1013,7 +1055,13 @@ mod tests {
     fn match_lowers_constructor_and_wildcard_arms() {
         let s = one("r =\n    match x\n        Success value => value\n        _ => 0\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Match { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Match { .. },
+                    ..
+                }
+            ),
             "expected match, got {s:?}"
         );
         if let Stmt::Let {
@@ -1043,7 +1091,13 @@ mod tests {
         let src = "r =\n    match xs\n        [] => 0\n        [head, ...tail] => 1\n        [_, b, ...rest] => 2\n";
         let s = one(src);
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Match { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Match { .. },
+                    ..
+                }
+            ),
             "expected match, got {s:?}"
         );
         if let Stmt::Let {
@@ -1051,7 +1105,9 @@ mod tests {
             ..
         } = s
         {
-            assert!(matches!(&arms[0].pattern, Pattern::List { elements, rest } if elements.is_empty() && rest.is_none()));
+            assert!(
+                matches!(&arms[0].pattern, Pattern::List { elements, rest } if elements.is_empty() && rest.is_none())
+            );
             let p1 = &arms[1].pattern;
             assert!(
                 matches!(p1, Pattern::List { .. }),
@@ -1083,7 +1139,13 @@ mod tests {
         // not a single two-parameter lambda.
         let s = one("f = \\x y => x + y\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Lambda { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Lambda { .. },
+                    ..
+                }
+            ),
             "expected lambda, got {s:?}"
         );
         if let Stmt::Let {
@@ -1107,7 +1169,13 @@ mod tests {
         // `x |> f` becomes `f(x)` — no Pipe node survives, matching Default.
         let piped = one("r = x |> f\n");
         assert!(
-            matches!(piped, Stmt::Let { value: Expr::Call { .. }, .. }),
+            matches!(
+                piped,
+                Stmt::Let {
+                    value: Expr::Call { .. },
+                    ..
+                }
+            ),
             "expected piped call, got {piped:?}"
         );
         if let Stmt::Let {
@@ -1130,7 +1198,13 @@ mod tests {
         let src = "p =\n    Point\n        x = 1\n        y = 2\n";
         let s = one(src);
         assert!(
-            matches!(s, Stmt::Let { value: Expr::TypeConstructor { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::TypeConstructor { .. },
+                    ..
+                }
+            ),
             "expected type constructor, got {s:?}"
         );
         if let Stmt::Let {
@@ -1151,7 +1225,13 @@ mod tests {
         // Default `Ok { value: "x" }` produce ([FLAVOR-ML-RECORD]).
         let s = one("r = Ok(value = \"x\")\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::TypeConstructor { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::TypeConstructor { .. },
+                    ..
+                }
+            ),
             "expected type constructor, got {s:?}"
         );
         if let Stmt::Let {
@@ -1173,7 +1253,13 @@ mod tests {
         // the Default `receiver { field: v }` produces ([FLAVOR-ML-RECORD]).
         let s = one("p2 = point1(x = 30)\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::TypeConstructor { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::TypeConstructor { .. },
+                    ..
+                }
+            ),
             "expected update type constructor, got {s:?}"
         );
         if let Stmt::Let {
@@ -1194,7 +1280,13 @@ mod tests {
         // `{ "a": 1, "b": 2 }` produces ([FLAVOR-ML-MAP]).
         let s = one("m = [\"a\" => 1, \"b\" => 2]\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Map(_), .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Map(_),
+                    ..
+                }
+            ),
             "expected map, got {s:?}"
         );
         if let Stmt::Let {
@@ -1248,7 +1340,13 @@ mod tests {
         // to the Default `spawn f(x)` ([FLAVOR-ML-SPAWN]).
         let s = one("r = spawn task 1\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Spawn(_), .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Spawn(_),
+                    ..
+                }
+            ),
             "expected spawn, got {s:?}"
         );
         if let Stmt::Let {
@@ -1268,7 +1366,13 @@ mod tests {
         // `spawn` + an indented block lowers to `Expr::Spawn` wrapping the block.
         let s = one("r = spawn\n    x = 1\n    task x\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Spawn(_), .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Spawn(_),
+                    ..
+                }
+            ),
             "expected spawn, got {s:?}"
         );
         if let Stmt::Let {
@@ -1288,7 +1392,13 @@ mod tests {
         // `${toString id}` is ML whitespace application inside the fragment.
         let s = one("r = \"n=${toString id}\"\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::InterpolatedStr(_), .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::InterpolatedStr(_),
+                    ..
+                }
+            ),
             "expected interpolated string, got {s:?}"
         );
         if let Stmt::Let {
@@ -1309,7 +1419,13 @@ mod tests {
         let src = "f x =\n    y = x + 1\n    y + 2\n";
         let s = one(src);
         assert!(
-            matches!(s, Stmt::Function { body: Expr::Block { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Function {
+                    body: Expr::Block { .. },
+                    ..
+                }
+            ),
             "expected block body, got {s:?}"
         );
         if let Stmt::Function {
@@ -1337,7 +1453,13 @@ mod tests {
         // Same binding, this time the first statement of a function block.
         let s = one("main () =\n    answer = 41 + 1\n    answer\n");
         assert!(
-            matches!(s, Stmt::Function { body: Expr::Block { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Function {
+                    body: Expr::Block { .. },
+                    ..
+                }
+            ),
             "expected function with block body, got {s:?}"
         );
         if let Stmt::Function {
@@ -1358,7 +1480,8 @@ mod tests {
         // `type Outcome = Ok { value: string } | Err { message: string }` emits:
         // two payload-carrying variants with `validation_func: None` and each
         // field `constraint: None` ([FLAVOR-ML-TYPE], [FLAVOR-IR-EQUIV]).
-        let src = "type Outcome =\n    Ok\n        value : string\n    Err\n        message : string\n";
+        let src =
+            "type Outcome =\n    Ok\n        value : string\n    Err\n        message : string\n";
         let s = one(src);
         assert!(matches!(s, Stmt::Type { .. }), "expected type, got {s:?}");
         if let Stmt::Type {
@@ -1402,10 +1525,7 @@ mod tests {
         // the type's own name, exactly as Default's `type Point = { x, y }` does.
         let s = one("type Point =\n    x : int\n    y : int\n");
         assert!(matches!(s, Stmt::Type { .. }), "expected type, got {s:?}");
-        if let Stmt::Type {
-            name, variants, ..
-        } = s
-        {
+        if let Stmt::Type { name, variants, .. } = s {
             assert_eq!(name, "Point");
             assert_eq!(variants.len(), 1);
             assert_eq!(variants[0].name, "Point");
@@ -1460,7 +1580,10 @@ mod tests {
         // emits — one operation rendered as `fn(string) -> Unit`, with empty
         // parameters and a blank return type ([FLAVOR-ML-EFFECT], [FLAVOR-IR-EQUIV]).
         let s = one("effect Trace\n    mark : string => Unit\n");
-        assert!(matches!(s, Stmt::Effect { .. }), "expected effect, got {s:?}");
+        assert!(
+            matches!(s, Stmt::Effect { .. }),
+            "expected effect, got {s:?}"
+        );
         if let Stmt::Effect {
             name, operations, ..
         } = s
@@ -1509,7 +1632,13 @@ mod tests {
         // `perform Trace.mark("one")` emits ([FLAVOR-ML-EFFECT]).
         let s = one("r = perform Trace.mark \"one\"\n");
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Perform { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Perform { .. },
+                    ..
+                }
+            ),
             "expected perform, got {s:?}"
         );
         if let Stmt::Let {
@@ -1539,7 +1668,13 @@ mod tests {
             "r =\n    handle Trace\n        mark label =>\n            resume\n    in traced ()\n";
         let s = one(src);
         assert!(
-            matches!(s, Stmt::Let { value: Expr::Handler { .. }, .. }),
+            matches!(
+                s,
+                Stmt::Let {
+                    value: Expr::Handler { .. },
+                    ..
+                }
+            ),
             "expected handler, got {s:?}"
         );
         if let Stmt::Let {
@@ -1564,12 +1699,24 @@ mod tests {
         // byte-identical to the Default `resume()` / `resume(seed)` ([FLAVOR-ML-EFFECT]).
         let bare = one("r = resume\n");
         assert!(
-            matches!(bare, Stmt::Let { value: Expr::Resume(None), .. }),
+            matches!(
+                bare,
+                Stmt::Let {
+                    value: Expr::Resume(None),
+                    ..
+                }
+            ),
             "expected bare resume, got {bare:?}"
         );
         let valued = one("r = resume seed\n");
         assert!(
-            matches!(valued, Stmt::Let { value: Expr::Resume(Some(_)), .. }),
+            matches!(
+                valued,
+                Stmt::Let {
+                    value: Expr::Resume(Some(_)),
+                    ..
+                }
+            ),
             "expected valued resume, got {valued:?}"
         );
         if let Stmt::Let {

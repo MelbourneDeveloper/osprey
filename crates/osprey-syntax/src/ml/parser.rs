@@ -1144,7 +1144,7 @@ impl Parser<'_> {
     /// like the Default `resume()` ([FLAVOR-ML-EFFECT]).
     fn resume_expr(&mut self) -> MlExpr {
         self.advance(); // `resume`
-        // `resume ()` is a unit resume, like the Default `resume()`.
+                        // `resume ()` is a unit resume, like the Default `resume()`.
         if matches!(self.peek(), TokKind::LParen) && matches!(self.peek_at(1), TokKind::RParen) {
             self.advance();
             self.advance();
