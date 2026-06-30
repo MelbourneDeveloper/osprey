@@ -1,0 +1,147 @@
+# release-change-detection.yml — Shipwright-shipped reusable workflow.
+#
+# COST CONTROL. Diff the pushed release tag against the previous release tag and
+# decide which surfaces must publish, so the expensive macOS/Windows build matrix
+# only runs when the artifact it produces actually changed.
+# Implements docs/specs/release-change-detection.md [SWR-REL-CHANGES-*]
+# (the Shipwright realisation of the Deslop SWR-REL-CHANGES proposal):
+#   - binary changed     -> full release: build matrix + every channel  [SWR-REL-CHANGES-CASCADE]
+#   - vsix / jetbrains    -> still build the matrix (the artifact bundles a binary at the
+#                            new tag version), publish that surface, skip the rest  [SWR-REL-CHANGES-MATRIX]
+#   - website only        -> deploy the site, skip the whole matrix
+#   - unclassified path   -> full release, fail-safe                     [SWR-REL-CHANGES-FAILSAFE]
+#   - first release / nothing matched -> full release
+#
+# Single-version contract: a tag stamps one version and host activation-verify is
+# onMismatch:error, so a published VSIX/JetBrains plugin MUST bundle binaries built
+# at the new version. Reusing a prior release's binary is therefore NOT done here.
+#
+# Supply chain (docs/specs/supply-chain-security.md):
+#   - SWR-SEC-ACTION-PINNING  every `uses:` is a full 40-char commit SHA.
+#   - SWR-SEC-TOKEN-PRIVILEGE read-only token; no write/id-token needed here.
+#   - the classifier is installed from a PINNED Shipwright commit (`shipwright_rev`).
+
+name: release-change-detection
+
+on:
+  workflow_call:
+    inputs:
+      config_path:
+        description: "Path to the release-scope ruleset (schemas/release-scope.schema.json)."
+        required: false
+        type: string
+        default: .github/release-scope.json
+      shipwright_rev:
+        description: "FULL 40-char commit SHA of Nimblesite/Shipwright to install shipwright-release-scope from. Pin it (SWR-SEC-ACTION-PINNING); the shipwright-compliance skill fills this in on rollout."
+        required: true
+        type: string
+      tag_match:
+        description: "glob used to find the previous release tag (git describe --match)."
+        required: false
+        type: string
+        default: "v[0-9]*"
+    outputs:
+      full:
+        description: "true for a full release — publish the standalone binary, Homebrew, Scoop, every extension, and the website."
+        value: ${{ jobs.scope.outputs.full }}
+      build_matrix:
+        description: "true when the native binary build matrix must run (full, or a binary-bundling artifact changed). The expensive, macOS/Windows-heavy gate."
+        value: ${{ jobs.scope.outputs.build_matrix }}
+      vsix:
+        description: "true when the VS Code extension must be published."
+        value: ${{ jobs.scope.outputs.vsix }}
+      jetbrains:
+        description: "true when the JetBrains plugin must be published."
+        value: ${{ jobs.scope.outputs.jetbrains }}
+      website:
+        description: "true when the documentation website must be deployed."
+        value: ${{ jobs.scope.outputs.website }}
+      previous_tag:
+        description: "The previous release tag the diff was taken against ('' on the first release)."
+        value: ${{ jobs.scope.outputs.previous_tag }}
+
+# SWR-SEC-TOKEN-PRIVILEGE: read-only; this job only reads git history.
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      # `||` falls through the empty string from a skipped step to the value set
+      # by whichever step actually ran (first-release vs classified).
+      full: ${{ steps.decide.outputs.full || steps.first.outputs.full }}
+      build_matrix: ${{ steps.decide.outputs.build_matrix || steps.first.outputs.build_matrix }}
+      vsix: ${{ steps.decide.outputs.vsix || steps.first.outputs.vsix }}
+      jetbrains: ${{ steps.decide.outputs.jetbrains || steps.first.outputs.jetbrains }}
+      website: ${{ steps.decide.outputs.website || steps.first.outputs.website }}
+      previous_tag: ${{ steps.prev.outputs.previous_tag }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0            # full history + tags for the tag-to-tag diff
+          persist-credentials: false
+
+      - name: Resolve previous release tag
+        id: prev
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="${GITHUB_REF_NAME}"
+          # Newest release tag strictly older than the current tag on this history.
+          prev="$(git describe --tags --abbrev=0 --match '${{ inputs.tag_match }}' "${current}^" 2>/dev/null || true)"
+          echo "previous_tag=${prev}" >> "$GITHUB_OUTPUT"
+          echo "Previous tag: ${prev:-<none>}; current: ${current}"
+
+      # First release (no previous tag): nothing to diff against — publish everything.
+      - name: First-release short-circuit
+        id: first
+        if: steps.prev.outputs.previous_tag == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "full=true"
+            echo "build_matrix=true"
+            echo "vsix=true"
+            echo "jetbrains=true"
+            echo "website=true"
+          } >> "$GITHUB_OUTPUT"
+          echo "No previous tag — full release." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
+        if: steps.prev.outputs.previous_tag != ''
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        if: steps.prev.outputs.previous_tag != ''
+        with:
+          key: release-scope-${{ inputs.shipwright_rev }}
+
+      - name: Install shipwright-release-scope (pinned)
+        if: steps.prev.outputs.previous_tag != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install --locked \
+            --git https://github.com/Nimblesite/Shipwright \
+            --rev "${{ inputs.shipwright_rev }}" \
+            shipwright-release-scope
+
+      - name: Classify changed paths
+        id: decide
+        if: steps.prev.outputs.previous_tag != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only \
+            "${{ steps.prev.outputs.previous_tag }}..${GITHUB_REF_NAME}" > changed.txt
+          echo "Changed files since ${{ steps.prev.outputs.previous_tag }}:"
+          cat changed.txt
+          # The tool appends full/build_matrix/vsix/jetbrains/website to $GITHUB_OUTPUT
+          # and a summary to $GITHUB_STEP_SUMMARY, and prints the full JSON to stdout.
+          shipwright-release-scope \
+            --config "${{ inputs.config_path }}" \
+            --changed changed.txt
