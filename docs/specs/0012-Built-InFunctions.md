@@ -405,8 +405,10 @@ All keys. Iteration order is **unspecified**.
 #### `values(map: Map<K, V>) -> List<V>`
 All values, in the same order as `keys(map)`.
 
-#### `entries(map: Map<K, V>) -> List<(K, V)>`
-All `(key, value)` pairs, in the same order as `keys(map)`.
+#### `entries(map: Map<K, V>) -> List<Entry<K, V>>`
+All key/value entries, in the same order as `keys(map)`. An entry is the record
+`type Entry<K, V> = { key: K, value: V }` (Osprey has no tuple type, so a pair is
+a two-field record, not a `(K, V)` tuple).
 
 #### `mapValues(map: Map<K, V>, fn: fn(V) -> W) -> Map<K, W>`
 Apply `fn` to every value, preserving keys.
@@ -428,7 +430,7 @@ Group `items` into buckets keyed by `function(item)`. Within each bucket, items 
 
 ## Iterators and Pipe
 
-`range`, `forEach`, `map`, `filter`, `fold`, and `|>` are documented in [Iterators and Iteration](0010-LoopConstructsAndFunctionalIterators.md). Lists and maps are `Iterable`; map iteration yields `(K, V)` tuples.
+`range`, `forEach`, `map`, `filter`, `fold`, and `|>` are documented in [Iterators and Iteration](0010-LoopConstructsAndFunctionalIterators.md). Lists and maps are `Iterable`; map iteration yields `Entry<K, V>` records (`{ key, value }`, the same elements as `entries(map)`) — not tuples, since Osprey has no tuple type.
 
 ## HTTP
 

@@ -18,7 +18,9 @@ fn double(x) = x * 2
 let result = double(5)
 
 // Multiple parameters - named arguments required
-// (Default surface; lowers to Expr::Call. ML curries: `add 10 20` is nested one-arg calls.)
+// (Default surface; lowers to one multi-arg Expr::Call. The ML twin of this flat fn add(x, y)
+// is the uncurried add (10, 20); whitespace add 10 20 is the curried twin of the explicit-curry
+// def fn add(x) = fn(y) => x + y — a DIFFERENT value.)
 fn add(x, y) = x + y
 let sum = add(x: 10, y: 20)
 

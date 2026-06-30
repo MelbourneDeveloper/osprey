@@ -110,8 +110,8 @@ Rules:
 
 For VS Code:
 
-1. The debug provider resolves the `.osp` source file from the active editor or
-   launch configuration.
+1. The debug provider resolves the Osprey source file (`.osp` or `.ospml`) from
+   the active editor or launch configuration.
 2. Dirty documents are saved or the debug launch is rejected.
 3. The provider runs the version-matched compiler:
 

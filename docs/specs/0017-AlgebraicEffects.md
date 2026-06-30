@@ -198,7 +198,7 @@ stack via the existing snapshot/restore (`__osprey_handler_snapshot`), so a
 The compiler infers the minimal effect set of every expression. Functions either declare their effects or are required to be pure. A function may be polymorphic over an effect set:
 
 ```osprey
-fn loggedCalculation<E>(x: int) -> int !E = {
+fn loggedCalculation<E>(x) -> int !E = {
     perform Logger.log("calculating")     // E must include Logger
     x * 2
 }
@@ -253,7 +253,7 @@ in
 effect Exception { raise: fn(string) -> unit }
 effect State     { get: fn() -> int, set: fn(int) -> unit }
 
-fn doubleAndStore(x: int) -> int ![Exception, State] = match x * 2 {
+fn doubleAndStore(x) -> int ![Exception, State] = match x * 2 {
     Success { value }   => {
         perform State.set(value)
         value

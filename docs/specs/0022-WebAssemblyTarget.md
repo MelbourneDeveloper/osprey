@@ -20,7 +20,7 @@ WASI host — `wasmtime`, Node's `node:wasi`, or a browser WASI shim. [WASM-TARG
 Implemented for the portable language core. `osprey --target=wasm32 --compile`
 emits a validated `.wasm` that prints correctly under wasmtime, Node's WASI, and
 in the browser (`examples/wasm/`). Of the tested example suite, **47/70 run on
-wasm with byte-identical stdout** — including every ML-flavor `.osp` twin under
+wasm with byte-identical stdout** — including the Default-flavor `.osp` twin of every ML example under
 `examples/tested/ml/`, which the golden harness reaches via the flavor-shared
 `<stem>.expectedoutput` fallback ([FLAVOR-IR-EQUIV]); the other 23 use a
 non-portable feature and skip (see below). The CI `wasm` job gates on both the

@@ -105,8 +105,8 @@ Each fiber that touches a `module` receives its own private instance. There is n
 ```osprey
 module Counter {
     mut count = 0
-    fn increment() -> int = { count = count + 1; count }
-    fn get()       -> int = count
+    fn increment() = { count = count + 1; count }
+    fn get()       = count
 }
 
 let f1 = spawn Counter.increment()   // 1

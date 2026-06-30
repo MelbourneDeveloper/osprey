@@ -258,9 +258,12 @@ flavor. Cross-flavor *projects* are supported through normal imports (see
 ## Flavor Concern vs Shared-Core Concern
 
 `[FLAVOR-LAYER]` This is the heart of the contract: the exact line between what
-a flavor normalises away and what the shared core defines. Every Default and ML
-construct in the left two columns lowers to the **same** canonical AST node
-(grounded in `crates/osprey-ast/src/lib.rs`).
+a flavor normalises away and what the shared core defines. Most rows lower both
+flavors to the **same** canonical AST node (grounded in
+`crates/osprey-ast/src/lib.rs`); the **Ordinary function** and **Call** rows
+(marked †) pair by *concept* only and deliberately lower to different shapes —
+Default flat multi-parameter vs ML curried/nested chain. See
+[Currying Canonicalisation](#currying-canonicalisation).
 
 | Concept | Default flavor | ML flavor | Canonical AST node |
 | --- | --- | --- | --- |
@@ -269,7 +272,7 @@ construct in the left two columns lowers to the **same** canonical AST node
 | Mutation | `x = e` | `x := e` | `Stmt::Assignment` |
 | Ordinary function | `fn f(x, y) = e` | `f x y = e`† | `Stmt::Function` / curried `Lambda` chain† |
 | Lambda | `fn(y) => e` | `\y => e` | `Expr::Lambda` |
-| Call | `f(x: a, y: b)` | `f a b` | `Expr::Call` (`named_arguments` vs nested single-arg `Call`) |
+| Call | `f(x: a, y: b)` | `f a b`† | `Expr::Call` (`named_arguments` vs nested single-arg `Call`)† |
 | Block | `{ s; …; e }` | layout block | `Expr::Block { statements, value }` |
 | Match | `match v { P => e }` | `match v` + indented arms | `Expr::Match` + `MatchArm` |
 | One-field pattern | `Success { value }` | `Success value` | `Pattern::Constructor { fields: ["value"] }` |
@@ -279,8 +282,11 @@ construct in the left two columns lowers to the **same** canonical AST node
 | Perform | `perform E.op(a)` | `perform E.op a` | `Expr::Perform` |
 
 † See [Currying Canonicalisation](#currying-canonicalisation): Default
-`fn f(x, y)` is one two-parameter function; ML `f x y` is a curried chain. They
-share the AST *vocabulary* but are deliberately **not** the same value.
+`fn f(x, y)` / `f(x: a, y: b)` is one flat multi-parameter function and one
+multi-arg `Call`; ML `f x y` / `f a b` is a curried chain and nested single-arg
+`Call`s. They share the AST *vocabulary* but are deliberately **not** the same
+value. ML's twin for the flat Default forms is the uncurried `f (x, y)` /
+`f (a, b)` (parens = argument grouping, not a tuple — Osprey has no tuple type).
 
 Anything in that table is a **flavor concern**: the lowerer erases the spelling
 difference and nothing downstream can tell which surface was used. Constructs
