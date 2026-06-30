@@ -6,6 +6,8 @@
 - [Operators](#operators)
 - [Delimiters](#delimiters)
 
+> **Flavor layer — surface (CST).**  This chapter is the Default flavor (`.osp`) lexical grammar: a flavor-internal, below-the-AST concern owned by `crates/osprey-syntax/src/default/`. Tokens are a CST artifact — they never reach the shared core, which sees only the canonical `osprey_ast::Program` after lowering. The ML flavor (`.ospml`) has its OWN offside-rule layout lexer (`crates/osprey-syntax/src/ml/lexer.rs`) that derives `INDENT`/`DEDENT`/`NEWLINE` from an explicit indent stack ([FLAVOR-ML-LAYOUT] in [ML Flavor Syntax](0024-MLFlavorSyntax.md)); the rules below describe only this surface. Lexical structure differs per flavor; both feed lowering. See [Language Flavors](0023-LanguageFlavors.md).
+
 ## Identifiers
 
 Start with letter or underscore, followed by letters, digits, or underscores.

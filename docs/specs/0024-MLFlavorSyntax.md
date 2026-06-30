@@ -1,7 +1,9 @@
 # ML Flavor Syntax
 
 The **ML flavor** is a layout-based source surface for Osprey: indentation
-delimits blocks, functions curry by default, and effect handlers are first-class
+delimits blocks, functions are an uncurried syntactic skin over the canonical
+AST (whitespace application reads naturally but lowers byte-identically to the
+Default flavor's multi-argument calls), and effect handlers are first-class
 values. It is one of Osprey's [language flavors](0023-LanguageFlavors.md) — a
 parsing-and-lowering profile, not a separate language. Every construct here
 lowers to the same `osprey_ast::Program` the Default (brace) flavor produces,
@@ -26,15 +28,36 @@ subordinate to that contract. Implementation is tracked in
 - [Canonical Lowering Table](#canonical-lowering-table)
 - [Worked Example](#worked-example)
 - [Resolved Syntax Questions](#resolved-syntax-questions)
+- [References](#references)
 
 ## Status
 
-Not implemented. The Default flavor (specs `0001`–`0022`) is the only frontend
-today. This chapter specifies the ML surface that
-[plan 0013](../plans/0013-ml-flavor-frontend.md) will build as a second
-frontend. Select it with `--flavor ml`, the `.ospml` extension, or a
-`// osprey: flavor=ml` marker (see
+**Partially implemented; in active development.** The Default flavor (specs
+`0001`–`0022`) remains the primary frontend. Select the ML surface with
+`--flavor ml`, the `.ospml` extension, or a `// osprey: flavor=ml` marker (see
 [Flavor Selection](0023-LanguageFlavors.md#flavor-selection)).
+
+- **Phase 1 — flavor frontend seam: implemented and green.** The `Flavor`
+  enum, `Parsed.flavor`, and `parse_program_with_flavor` are live, with
+  `parse_program` kept as the `Flavor::Default` specialisation.
+- **Phase 4 — flavor selection: implemented and green.** The CLI
+  `--flavor default|ml` flag, the `.ospml` extension, and the
+  `// osprey: flavor=ml` marker are resolved by the precedence
+  flag > marker > extension > Default, with a hard error when extension and
+  marker disagree. The differential harness
+  ([`crates/diff_examples.sh`](../../crates/diff_examples.sh)) discovers
+  `.ospml` fixtures **additively**, leaving every existing `.osp` example
+  untouched.
+- **Phases 2–3 — ML lexer/parser/lowerer: in active development.** The frontend
+  is a hand-written Rust layout lexer + recursive-descent (Pratt /
+  precedence-climbing) parser in
+  [`crates/osprey-syntax/src/ml/`](../../crates/osprey-syntax/src/ml/) (see
+  [`[FLAVOR-ML-LAYOUT]`](#layout-model)).
+- **Phase 0 — first-class handler values + effects: deferred.** ML
+  handler/effect syntax errors loudly until this shared-core feature lands.
+
+The parsing techniques and the offside rule are cited in the
+[References](#references) section.
 
 ## Layout Model
 
@@ -48,12 +71,45 @@ DEDENT  ::= (* return to a less-indented region *)
 NEWLINE ::= (* significant end-of-line within a layout region *)
 ```
 
-These tokens are produced by a stateful **external scanner** (the tree-sitter
-brace grammar has none today — `tree-sitter-osprey/` ships no `scanner.c`). The
-scanner tracks an indentation stack, emits `INDENT`/`DEDENT`/`NEWLINE`, and
-ignores blank lines and comment-only lines. Source positions (row/column) are
-preserved on every token so diagnostics and the LSP keep working
-([FLAVOR-LOWER-CONTRACT](0023-LanguageFlavors.md#the-lowering-contract)).
+**Implementation decision — hand-written Rust layout lexer.** These tokens are
+produced by a **hand-written Rust layout lexer** in
+[`crates/osprey-syntax/src/ml/lexer.rs`](../../crates/osprey-syntax/src/ml/lexer.rs)
+(with `token.rs`, `parser.rs`, `mod.rs` alongside). The lexer derives the layout
+markers (`Indent`/`Dedent`/`Newline`) from the **offside rule** (Landin 1966)
+via an **explicit indentation stack**, with **bracket depth suppressing layout
+inside parentheses**; it ignores blank lines and comment-only lines, and
+preserves source positions (row/column) on every token so diagnostics and the
+LSP keep working
+([FLAVOR-LOWER-CONTRACT](0023-LanguageFlavors.md#the-lowering-contract)). This is
+now wired end-to-end in the editor: the language server selects the ML frontend
+for a `.ospml` document through `osprey_syntax::parse_program_for_path`, so a
+layout-flavor file is analysed by its own parser instead of being flagged as
+broken Default syntax — see
+[FLAVOR-SELECT](0023-LanguageFlavors.md#flavor-selection). The
+parser above it is a **recursive-descent (Pratt / precedence-climbing)** parser
+that produces an ML **concrete syntax tree (CST)**; a separate lowerer
+(`lower.rs`) then converts that CST to canonical `osprey_ast::Program`, keeping a
+clean **CST→AST separation**.
+
+This **supersedes** the earlier plan of a `tree-sitter-osprey-ml` grammar with
+an external C scanner. Rationale: the offside rule is naturally expressed with
+an explicit indent stack in safe Rust; the frontend stays panic-free /
+`Result`-returning and unit-testable (project rules), with no `unsafe` C and no
+codegen-tool build dependency. Per
+[`[FLAVOR-BOUNDARY]`](0023-LanguageFlavors.md#the-one-law) the parser
+**mechanism** is a below-the-AST, flavor-internal concern, so this swap does not
+change the architecture (many CSTs, one AST). The parsing techniques are cited
+in the [References](#references) section.
+
+> **Escape hatch (documented fallback, not the primary path).** If the
+> hand-written layout frontend becomes onerous or accrues parsing bugs we cannot
+> tame, we fall back to a `tree-sitter-osprey-ml` grammar with an external
+> `INDENT`/`DEDENT`/`NEWLINE` `scanner.c`. The boundary law
+> ([`[FLAVOR-BOUNDARY]`](0023-LanguageFlavors.md#the-one-law)) makes the parser
+> mechanism a flavor-internal swap that leaves the AST and everything above it
+> untouched. (The tree-sitter brace grammar has none today —
+> `tree-sitter-osprey/` ships no `scanner.c` — so the fallback scanner would be
+> new work.)
 
 String interpolation keeps `${…}`. Parentheses remain available for grouping and
 precedence; they are not mandatory call punctuation.
@@ -106,17 +162,21 @@ add : int -> int -> int
 add x y = x + y
 ```
 
-`[FLAVOR-ML-CURRY]` Arrows are **right-associative** and application is
-**left-associative**, so `int -> int -> int` is `int -> (int -> int)` and
-`add 1 2` is `(add 1) 2`. Multi-argument function syntax therefore *reads as
-curried*, and partial application falls out for free:
+`[FLAVOR-ML-CURRY]` ML is an **uncurried syntactic skin** over the canonical
+AST, not a curry-by-default calculus. A multi-parameter binding `add x y = body`
+lowers to **one multi-parameter** `Stmt::Function` — byte-identical canonical AST
+to the Default flavor's `fn add(x, y) = body` — and whitespace application
+`add 1 2` collapses its spine to **one multi-argument** `Expr::Call`, identical
+to Default `add(1, 2)`. This identity is the whole point: it is what lets every
+idiomatic, uncurried Default example have an ML twin that emits byte-identical
+IR ([FLAVOR-IR-EQUIV](0023-LanguageFlavors.md#ir-equivalence)).
 
-```osp
-addOne : int -> int
-addOne = add 1
-
-answer = addOne 41
-```
+Application is left-associative (`add 1 2` is `((add) 1) 2` at the surface, then
+collapsed), and a function-typed signature's arrows are right-associative
+(`int -> int -> int` is `int -> (int -> int)`). Partial application is **not
+implicit**: `add 1` for the two-parameter `add` is an arity error in both
+flavors. Write it with an explicit lambda when you want it — `inc = \y => add 1 y`
+— exactly as Default writes `(y) => add(1, y)`.
 
 A tupled function takes **one** tuple value and is not the normal API style:
 
@@ -129,16 +189,14 @@ d = distance (3, 4)
 
 Lowering (normative in
 [FLAVOR-CURRY](0023-LanguageFlavors.md#currying-canonicalisation)): `add x y =
-body` lowers to a one-parameter binding returning a one-parameter `Expr::Lambda`
-— **identical** canonical AST to the Default flavor's explicit
-`fn add(x) -> (int) -> int = fn(y) => body`. It is deliberately **not** the same
-AST as Default `fn add(x, y) = body` (one two-parameter `Stmt::Function`).
-`add 1 2` lowers to nested single-argument `Expr::Call`s; no partial-application
-support is added to the type checker, because every curried function and every
-application is one-argument and thus always saturated.
+body` lowers to one two-parameter `Stmt::Function`, `\x y => body` to one
+two-parameter `Expr::Lambda`, and `add 1 2` to one two-argument `Expr::Call` —
+each byte-identical to the Default `fn add(x, y)`, `(x, y) => body`, and
+`add(1, 2)`. No flavor-only currying survives lowering.
 
 API guidance: put stable, configuration-like arguments first and the data
-argument last, so partial application is useful (`replace " " ""` ⇒ a
+argument last, so an explicit-lambda partial is useful (`\s => replace " " "" s`
+⇒ a
 space-remover).
 
 ## Function Calls
@@ -335,9 +393,11 @@ is in [FLAVOR-LAYER](0023-LanguageFlavors.md#flavor-concern-vs-shared-core-conce
 | `x = e` | `Stmt::Let { mutable: false }` |
 | `mut x = e` | `Stmt::Let { mutable: true }` |
 | `x := e` | `Stmt::Assignment` |
-| `f x y = e` (curried) | one-param `Stmt::Function` → nested `Expr::Lambda` |
-| `\y => e` | `Expr::Lambda` |
-| `f a b` | nested one-arg `Expr::Call` |
+| `f x y = e` (uncurried) | one multi-param `Stmt::Function` |
+| `\x y => e` | one multi-param `Expr::Lambda` |
+| `f a b` | one multi-arg `Expr::Call` |
+| `type T =` + variant/field layout | `Stmt::Type` + `TypeVariant` |
+| `[a, b, c]` / `xs[i]` | `Expr::List` / `Expr::Index` |
 | layout block | `Expr::Block` |
 | `match v` + arms | `Expr::Match` + `MatchArm` |
 | `Success value` | `Pattern::Constructor { fields: ["value"] }` |
@@ -460,6 +520,37 @@ test "createTask stores the task and logs" =
   arrow.
 - **Effect annotations on signatures:** the effect row follows the result type,
   as in the Default flavor (`saveTask : string -> int ![Store, Log]`).
+
+## References
+
+These are the verified sources behind the hand-written ML frontend
+([`[FLAVOR-ML-LAYOUT]`](#layout-model)): the recursive-descent / predictive
+parser, its Pratt (precedence-climbing) expression layer, and the offside-rule
+layout lexer.
+
+### 1. Recursive-descent / predictive parsing foundations
+
+- **Compilers: Principles, Techniques, and Tools** (the "Dragon Book"), 2nd ed. — Alfred V. Aho, Monica S. Lam, Ravi Sethi, Jeffrey D. Ullman. 2006. Pearson. ISBN 9780321486813. <https://www.pearson.com/en-us/subject-catalog/p/compilers-principles-techniques-and-tools/P200000003472/9780321486813> — Authorizes the canonical predictive recursive-descent / LL(1) construction (FIRST/FOLLOW-driven procedure-per-nonterminal parsing) the hand-written parser implements.
+- **Compiler Construction** — Niklaus Wirth. 1996 (Addison-Wesley; author's free PDF). ETH Zürich. Landing page: <https://people.inf.ethz.ch/wirth/CompilerConstruction/index.html> · PDF: <https://people.inf.ethz.ch/wirth/CompilerConstruction/CompilerConstruction1.pdf> — Authorizes the single-symbol-lookahead, single-pass recursive-descent strategy of deriving one recursive procedure per grammar production directly from an EBNF grammar.
+- **Crafting Interpreters** (ch. 6 "Parsing Expressions", ch. 17 "Compiling Expressions") — Robert Nystrom. 2021. Genever Benning (freely readable online). <https://craftinginterpreters.com/compiling-expressions.html> — Practitioner reference authorizing the by-hand, no-generator recursive-descent parser and its Pratt-based expression layer for a real language.
+
+### 2. Operator-precedence / Pratt parsing
+
+- **Top Down Operator Precedence** — Vaughan R. Pratt. 1973. Proc. 1st ACM SIGACT-SIGPLAN Symposium on Principles of Programming Languages (POPL '73), pp. 41–51. DOI: <https://doi.org/10.1145/512927.512931> — The primary source authorizing the Pratt (top-down operator-precedence) expression parser: per-token prefix/infix handlers driven by binding powers.
+- **Parsing Expressions by Precedence Climbing** — Eli Bendersky. 2 Aug 2012. <https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing> — Authorizes the precedence-climbing formulation of operator-precedence parsing (the loop-based, min-precedence variant used in production front-ends such as Clang).
+- **Parsing Expressions by Recursive Descent: From Precedence Climbing to Pratt Parsing** — Theodore S. Norvell, Memorial University of Newfoundland. <https://www.engr.mun.ca/~theo/Misc/pratt_parsing.htm> — Authorizes treating precedence climbing and Pratt parsing as the same algorithm, justifying a single binding-power table for prefix/infix/postfix/ternary operators.
+
+### 3. The offside rule / layout-sensitive (indentation) syntax
+
+- **The Next 700 Programming Languages** — Peter J. Landin. 1966. Communications of the ACM 9(3), pp. 157–166. DOI: <https://doi.org/10.1145/365230.365257> — The origin of the "offside rule"; the primary source authorizing indentation-as-structure (a token left of the line's first significant token starts a new construct).
+- **Principled Parsing for Indentation-Sensitive Languages: Revisiting Landin's Offside Rule** — Michael D. Adams. 2013. Proc. 40th ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages (POPL '13), pp. 511–522. DOI: <https://doi.org/10.1145/2429069.2429129> · author PDF: <https://michaeldadams.org/papers/layout_parsing/LayoutParsing.pdf> — Authorizes a grammar-integrated, principled treatment of indentation sensitivity rather than an ad-hoc lexer hack.
+- **Haskell 2010 Language Report** — §2.7 "Layout" (informal) and §10.3 (formal layout algorithm) — Simon Marlow (ed.). 2010. haskell.org. Lexical chapter: <https://www.haskell.org/onlinereport/haskell2010/haskellch2.html> · Syntax-reference chapter: <https://www.haskell.org/onlinereport/haskell2010/haskellch10.html> — Secondary/reference source authorizing a concrete, fully specified offside layout algorithm (brace/semicolon insertion from indentation) suitable for a hand-written lexer/parser.
+
+### 4. Error recovery in recursive-descent (panic-mode / synchronization)
+
+- **Compilers: Principles, Techniques, and Tools** (the "Dragon Book"), 2nd ed., §4.1.3–4.1.4 (Error-Recovery Strategies; panic-mode and phrase-level recovery) — Aho, Lam, Sethi, Ullman. 2006. Pearson. ISBN 9780321486813. <https://www.pearson.com/en-us/subject-catalog/p/compilers-principles-techniques-and-tools/P200000003472/9780321486813> — The foundational reference authorizing panic-mode error recovery: on a syntax error, discard input tokens until a synchronizing token (e.g. statement terminators / FOLLOW sets) is reached, then resume.
+
+> Verification (research subagent, 2026): the three DOIs (Pratt 10.1145/512927.512931, Landin 10.1145/365230.365257, Adams 10.1145/2429069.2429129) resolve through doi.org to the correct ACM DL records (ACM landing pages 403 to automated fetches; corroborated via doi.org redirect + dblp). Wirth ETH page + PDF, Adams author PDF, Nystrom, Bendersky, Norvell, and both Haskell 2010 chapters were each fetched and matched. Dragon Book §4.1.3–4.1.4 are the standard 2nd-ed. TOC section numbers (book/publisher confirmed; exact section numbers not page-verified).
 
 ## Cross-references
 

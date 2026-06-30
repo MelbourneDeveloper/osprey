@@ -1,0 +1,19 @@
+// Higher-order: `apply` takes a function and a value and calls it; `twice`
+// applies a function two times. Functions are first-class arguments. The
+// signatures keep the function-typed parameters concrete.
+
+apply : (int -> int) -> int -> int
+apply f x = f x
+
+twice : (int -> int) -> int -> int
+twice f x = f (f x)
+
+double : int -> int
+double n = n + n
+
+inc : int -> int
+inc n = n + 1
+
+main () =
+    print "a=${apply double 5} b=${apply inc 9} t=${twice double 3} ti=${twice inc 40}"
+    0

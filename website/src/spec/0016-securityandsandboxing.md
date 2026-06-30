@@ -2,7 +2,7 @@
 layout: page
 title: "Security and Sandboxing"
 description: "Osprey Language Specification: Security and Sandboxing"
-date: 2026-06-19
+date: 2026-06-30
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0016-securityandsandboxing/"

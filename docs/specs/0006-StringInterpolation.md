@@ -2,6 +2,8 @@
 
 String interpolation provides convenient inline expression evaluation within string literals.
 
+> **Flavor layer — mixed.**  `${...}` interpolation is flavor-neutral: BOTH the Default flavor (`.osp`) and the ML flavor (`.ospml`) spell it identically, and the scanning that splits a literal into text + `${...}` segments plus all escape resolution live in the shared `crate::strings` module — not in either flavor's frontend. Interpolated literals lower to one canonical `Expr::InterpolatedStr` whose `InterpolatedPart`s carry either literal text or an embedded expression, so the [shared core](0023-LanguageFlavors.md#the-one-law) never sees a flavor. Only the *embedded fragment* (`x + y` inside `${...}`) is parsed per-flavor — each flavor parses that expression in its own surface grammar — but the brace scanning and escapes are identical. See [Language Flavors](0023-LanguageFlavors.md) and [ML Flavor Syntax](0024-MLFlavorSyntax.md).
+
 ## Syntax
 
 String interpolation uses `${}` syntax:

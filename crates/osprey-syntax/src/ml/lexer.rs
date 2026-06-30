@@ -82,11 +82,11 @@ impl Scanner {
         while let Some(c) = self.peek(0) {
             match c {
                 ' ' | '\t' | '\r' | '\n' => {
-                    self.bump();
+                    let _ = self.bump();
                 }
                 '/' if self.peek(1) == Some('/') => {
                     while !matches!(self.peek(0), Some('\n') | None) {
-                        self.bump();
+                        let _ = self.bump();
                     }
                 }
                 _ => break,
@@ -97,13 +97,17 @@ impl Scanner {
     fn scan(&mut self) -> (Vec<Token>, Vec<SyntaxError>) {
         let mut out = Vec::new();
         loop {
+            let before = self.i;
             self.skip_trivia();
             if self.i >= self.chars.len() {
                 break;
             }
+            // Glued = no trivia was skipped, so this token abuts the previous
+            // one. Meaningless for the very first token (nothing precedes it).
+            let glued = self.i == before && !out.is_empty();
             let pos = self.pos();
             if let Some(kind) = self.scan_token(pos) {
-                out.push(Token { kind, pos });
+                out.push(Token { kind, pos, glued });
             }
         }
         (out, std::mem::take(&mut self.errors))
@@ -122,16 +126,21 @@ impl Scanner {
     fn scan_number(&mut self, pos: Position) -> TokKind {
         let start = self.i;
         while matches!(self.peek(0), Some('0'..='9')) {
-            self.bump();
+            let _ = self.bump();
         }
         let is_float = self.peek(0) == Some('.') && matches!(self.peek(1), Some('0'..='9'));
         if is_float {
-            self.bump();
+            let _ = self.bump();
             while matches!(self.peek(0), Some('0'..='9')) {
-                self.bump();
+                let _ = self.bump();
             }
         }
-        let text: String = self.chars[start..self.i].iter().collect();
+        let text: String = self
+            .chars
+            .get(start..self.i)
+            .unwrap_or_default()
+            .iter()
+            .collect();
         if is_float {
             text.parse::<f64>().map_or_else(
                 |_| {
@@ -151,28 +160,49 @@ impl Scanner {
         }
     }
 
+    /// Scan a `"…"` literal, tracking `${…}` interpolation-brace depth so a
+    /// nested string inside a fragment (`"v=${f "abc"}"`) does not end the outer
+    /// token at the inner quote. Mirrors the brace-depth scan in
+    /// [`crate::strings::lower_interpolation`]: a `"` only terminates the outer
+    /// string at interpolation depth 0; at depth > 0 it opens a nested string
+    /// that is consumed to its matching close quote ([FLAVOR-FRONTEND]).
     fn scan_string(&mut self, pos: Position) -> TokKind {
-        self.bump(); // opening quote
+        let _ = self.bump(); // opening quote
         let mut raw = String::new();
+        let mut interp_depth = 0i32;
         loop {
             match self.peek(0) {
-                None | Some('\n') => {
+                None => {
                     self.error(pos, "unterminated string literal");
                     break;
                 }
-                Some('"') => {
-                    self.bump();
+                // A newline only ends the outer literal outside interpolation;
+                // a `${…}` fragment may legitimately span the line break.
+                Some('\n') if interp_depth == 0 => {
+                    self.error(pos, "unterminated string literal");
                     break;
                 }
+                Some('"') if interp_depth == 0 => {
+                    let _ = self.bump();
+                    break;
+                }
+                // Inside `${…}` a quote opens a nested string; consume it whole
+                // (honouring escapes) so its content stays in the raw token.
+                Some('"') => self.scan_nested_string(pos, &mut raw),
                 Some('\\') => {
-                    self.bump();
+                    let _ = self.bump();
+                    raw.push('\\');
                     if let Some(escaped) = self.bump() {
-                        raw.push('\\');
                         raw.push(escaped);
                     }
                 }
                 Some(c) => {
-                    self.bump();
+                    if c == '{' && raw.ends_with('$') {
+                        interp_depth += 1;
+                    } else if c == '}' && interp_depth > 0 {
+                        interp_depth -= 1;
+                    }
+                    let _ = self.bump();
                     raw.push(c);
                 }
             }
@@ -180,12 +210,49 @@ impl Scanner {
         TokKind::Str(raw)
     }
 
+    /// Consume a nested `"…"` string appearing inside a `${…}` fragment, copying
+    /// its delimiters and body (escapes preserved) verbatim into `raw`. The
+    /// nested quotes never affect the outer literal's termination.
+    fn scan_nested_string(&mut self, pos: Position, raw: &mut String) {
+        let _ = self.bump(); // opening quote of the nested string
+        raw.push('"');
+        loop {
+            match self.peek(0) {
+                None | Some('\n') => {
+                    self.error(pos, "unterminated string literal");
+                    break;
+                }
+                Some('"') => {
+                    let _ = self.bump();
+                    raw.push('"');
+                    break;
+                }
+                Some('\\') => {
+                    let _ = self.bump();
+                    raw.push('\\');
+                    if let Some(escaped) = self.bump() {
+                        raw.push(escaped);
+                    }
+                }
+                Some(c) => {
+                    let _ = self.bump();
+                    raw.push(c);
+                }
+            }
+        }
+    }
+
     fn scan_ident(&mut self) -> TokKind {
         let start = self.i;
         while matches!(self.peek(0), Some(c) if c.is_alphanumeric() || c == '_') {
-            self.bump();
+            let _ = self.bump();
         }
-        let text: String = self.chars[start..self.i].iter().collect();
+        let text: String = self
+            .chars
+            .get(start..self.i)
+            .unwrap_or_default()
+            .iter()
+            .collect();
         keyword_or_ident(&text)
     }
 
@@ -193,19 +260,16 @@ impl Scanner {
         let c = self.peek(0)?;
         let next = self.peek(1);
         if let Some(kind) = two_char_operator(c, next) {
-            self.bump();
-            self.bump();
+            let _ = self.bump();
+            let _ = self.bump();
             return Some(kind);
         }
         let kind = single_char_operator(c);
-        self.bump();
-        match kind {
-            Some(kind) => Some(kind),
-            None => {
-                self.error(pos, format!("unexpected character '{c}'"));
-                None
-            }
+        let _ = self.bump();
+        if kind.is_none() {
+            self.error(pos, format!("unexpected character '{c}'"));
         }
+        kind
     }
 }
 
@@ -236,6 +300,8 @@ fn single_char_operator(c: char) -> Option<TokKind> {
         '\\' => TokKind::Backslash,
         '(' => TokKind::LParen,
         ')' => TokKind::RParen,
+        '[' => TokKind::LBracket,
+        ']' => TokKind::RBracket,
         ',' => TokKind::Comma,
         '.' => TokKind::Dot,
         '+' | '-' | '*' | '/' | '%' | '<' | '>' | '!' => TokKind::Op(c.to_string()),
@@ -259,8 +325,8 @@ fn insert_layout(content: Vec<Token>) -> (Vec<Token>, Vec<SyntaxError>) {
             emit_layout(&mut out, &mut stack, &mut errors, tok.pos, started);
         }
         match tok.kind {
-            TokKind::LParen => depth += 1,
-            TokKind::RParen => depth = (depth - 1).max(0),
+            TokKind::LParen | TokKind::LBracket => depth += 1,
+            TokKind::RParen | TokKind::RBracket => depth = (depth - 1).max(0),
             _ => {}
         }
         prev_line = tok.pos.line;
@@ -269,7 +335,7 @@ fn insert_layout(content: Vec<Token>) -> (Vec<Token>, Vec<SyntaxError>) {
     }
     let close = out.last().map_or(Position::default(), |t| t.pos);
     while stack.last().copied().unwrap_or(0) > 0 {
-        stack.pop();
+        let _ = stack.pop();
         out.push(layout_tok(TokKind::Dedent, close));
     }
     out.push(layout_tok(TokKind::Eof, close));
@@ -293,7 +359,7 @@ fn emit_layout(
         return;
     }
     while col < stack.last().copied().unwrap_or(0) {
-        stack.pop();
+        let _ = stack.pop();
         out.push(layout_tok(TokKind::Dedent, pos));
     }
     if col == stack.last().copied().unwrap_or(0) {
@@ -311,14 +377,15 @@ fn emit_layout(
 }
 
 fn layout_tok(kind: TokKind, pos: Position) -> Token {
-    Token { kind, pos }
+    // Synthetic layout markers never abut a content token meaningfully.
+    Token {
+        kind,
+        pos,
+        glued: false,
+    }
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::indexing_slicing,
-    reason = "test assertions: an out-of-bounds index is a test failure, not a panic"
-)]
 mod tests {
     use super::*;
 
@@ -388,5 +455,26 @@ mod tests {
     fn reports_unterminated_string() {
         let (_, errors) = lex("x = \"oops\n");
         assert!(errors.iter().any(|e| e.message.contains("unterminated")));
+    }
+
+    #[test]
+    fn nested_string_in_interpolation_is_one_token() {
+        // The inner quotes around `a` sit inside a `${…}` fragment; they must not
+        // terminate the outer literal, which lexes as a SINGLE string token whose
+        // raw still carries the unresolved `${ f "a" }` span.
+        let (tokens, errors) = lex("x = \"v=${f \"a\"}\"\n");
+        assert!(errors.is_empty(), "lex errors: {errors:?}");
+        let strings: Vec<&String> = tokens
+            .iter()
+            .filter_map(|t| match &t.kind {
+                TokKind::Str(s) => Some(s),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            strings,
+            vec![&"v=${f \"a\"}".to_owned()],
+            "exactly one string token carrying the unresolved fragment",
+        );
     }
 }

@@ -2,7 +2,7 @@
 layout: page
 title: "Language Server & Editor Integrations"
 description: "Osprey Language Specification: Language Server & Editor Integrations"
-date: 2026-06-19
+date: 2026-06-30
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0020-languageserverandeditors/"
@@ -21,14 +21,15 @@ every editor is a thin client over the same LSP transport.
 
 ## Status
 
-| Surface | State |
-|---|---|
-| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/Nimblesite/osprey/pull/137)). |
-| VS Code extension (`nimblesite.osprey`) | **Shipped** — per-platform VSIX bundling a version-matched compiler. |
-| Open VSX | Planned — see [lsp-vsix-release.md](https://github.com/Nimblesite/osprey/blob/main/docs/plans/lsp-vsix-release.md). |
-| Neovim | Planned. The server is editor-agnostic; only a client recipe is missing. |
-| Zed | Planned (`shipwright-zed`). |
-| MCP surface (`lspkit-mcp`) | Future — the same `EngineApi` vended as MCP tools. |
+| Surface                                          | State                                                                                                                                                           |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language server (`osprey lsp`, Rust on `lspkit`) | **Shipped** — replaced the TypeScript server ([#137](https://github.com/Nimblesite/osprey/pull/137)).                                                           |
+| VS Code extension (`nimblesite.osprey`)          | **Shipped** — per-platform VSIX bundling a version-matched compiler.                                                                                            |
+| Debugger (`osprey --debug` + DAP)                | Planned / in progress — source-level native debugging via DWARF + LLDB-DAP; see [Debugger](/spec/0021-debugger/) and [Plan 0012](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0012-osprey-debugger.md). |
+| Open VSX                                         | Planned.                                                                                                                                                        |
+| Neovim                                           | Planned. The server is editor-agnostic; only a client recipe is missing.                                                                                        |
+| Zed                                              | Planned (`shipwright-zed`).                                                                                                                                     |
+| MCP surface (`lspkit-mcp`)                       | Future — the same `EngineApi` vended as MCP tools.                                                                                                              |
 
 ## Architecture: one engine, two surfaces `[LSP-ENGINE]`
 
@@ -38,16 +39,110 @@ contract is **"one engine, two surfaces"**: a single `EngineApi` implementation
 backs both an LSP server and (later) an MCP server, so live analysis state is
 computed once and vended two ways.
 
+```mermaid
+flowchart LR
+  vscode[VS Code]
+  neovim[Neovim]
+  zed[Zed]
+
+  vscode -->|LSP over stdio<br/>JSON-RPC| lsp
+  neovim -->|LSP over stdio<br/>JSON-RPC| lsp
+  zed -->|LSP over stdio<br/>JSON-RPC| lsp
+
+  subgraph server["crates/osprey-lsp"]
+    lsp["osprey lsp"]
+    engine["OspreyEngine<br/>lspkit::EngineApi"]
+    vfs["lspkit-vfs<br/>rope documents"]
+    live["lspkit-live<br/>Session / generation"]
+    syntax["osprey_syntax::parse_program"]
+    types["osprey_types::check_program"]
+
+    lsp --> engine
+    engine --> vfs
+    engine --> live
+    engine --> syntax
+    engine --> types
+  end
 ```
-                       ┌─────────────────────────────────────┐
-  VS Code ─┐           │  crates/osprey-lsp                   │
-  Neovim   ├─ stdio ──▶│  OspreyEngine : lspkit::EngineApi    │
-  Zed      ┘  (JSON-   │    ├─ lspkit-vfs   (rope documents)  │
-              RPC)     │    ├─ lspkit-live  (Session/generation)
-                       │    └─ in-process compiler front-end: │
-                       │         osprey_syntax::parse_program │
-                       │         osprey_types::check_program  │
-                       └─────────────────────────────────────┘
+
+### Debugger Integration `[DEBUGGER-EDITOR]`
+
+The debugger fits into the editor architecture through the LSP-backed analysis
+plane. LSP remains the source-of-truth plane for diagnostics, symbols, hover,
+definition, completion, and source identity. A debug launch uses that same
+source model, but runtime control is carried over DAP: breakpoints, stepping,
+stack frames, scopes, and variables. Both planes are rooted in the same
+version-matched `osprey` compiler, so they must agree on file identity,
+line/column encoding, and generated debug metadata.
+
+```mermaid
+flowchart TB
+  subgraph editor["Editor integration"]
+    doc["Open .osp document"]
+    lspClient["LSP client"]
+    debugUi["Debug UI"]
+    debugProvider["Osprey debug configuration provider"]
+  end
+
+  subgraph staticPlane["Static analysis plane: LSP"]
+    lspServer["osprey lsp"]
+    engine["OspreyEngine"]
+    ast["AST + type information"]
+  end
+
+  subgraph runtimePlane["Runtime debugging plane: DAP"]
+    dap["DAP adapter<br/>lldb-dap first"]
+    process["Running Osprey process"]
+    stack["breakpoints / stepping<br/>stack / scopes / variables"]
+  end
+
+  subgraph compiler["Version-matched osprey compiler"]
+    debugBuild["osprey --debug --compile"]
+    dwarf["native debug binary<br/>DWARF source info"]
+  end
+
+  doc --> lspClient
+  lspClient -->|LSP over stdio| lspServer
+  lspServer --> engine
+  engine --> ast
+  ast -->|diagnostics, symbols,<br/>hover, definitions| lspClient
+
+  doc --> debugProvider
+  lspClient -.->|source identity +<br/>validated positions| debugProvider
+  debugUi --> debugProvider
+  debugProvider --> debugBuild
+  debugBuild --> dwarf
+  debugProvider -->|launch request| dap
+  dwarf -->|symbols + line tables| dap
+  dap --> process
+  process --> stack
+  stack -->|DAP events/responses| debugUi
+```
+
+During a VS Code launch, the LSP is already live and has the current document
+snapshot. The debug provider must use that editor/LSP context to choose the
+program, save or reject dirty state, compile a debug binary, and then hand
+runtime control to DAP.
+
+```mermaid
+sequenceDiagram
+  participant Editor as VS Code
+  participant LSP as osprey lsp
+  participant Provider as Osprey debug provider
+  participant Compiler as osprey --debug --compile
+  participant DAP as lldb-dap
+  participant Program as Osprey process
+
+  Editor->>LSP: didOpen / didChange .osp document
+  LSP-->>Editor: diagnostics + symbols + source positions
+  Editor->>Provider: resolveDebugConfiguration(program)
+  Provider->>Editor: require saved current document
+  Provider->>Compiler: compile selected .osp with debug metadata
+  Compiler-->>Provider: native binary with DWARF source info
+  Provider->>DAP: launch binary + breakpoint requests
+  DAP->>Program: start / continue / step
+  Program-->>DAP: stop at source location
+  DAP-->>Editor: stopped event, stack, scopes, variables
 ```
 
 Key consequence: the server **does not shell out** to the `osprey` binary or
@@ -58,12 +153,25 @@ checker. There is exactly one source of truth.
 
 Crates consumed (all from crates.io, pinned via the workspace):
 
-| Crate | Used for |
-|---|---|
-| `lspkit` | `EngineApi` trait + neutral types. |
+| Crate           | Used for                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `lspkit`        | `EngineApi` trait + neutral types.                                                               |
 | `lspkit-server` | JSON-RPC framing, `Dispatcher`, `Capabilities`, `DiagnosticsBus`/`DiagnosticsSink`, URI helpers. |
-| `lspkit-vfs` | Open-document store, rope incremental edits, `PositionEncoding` negotiation. |
-| `lspkit-live` | `Session` generation counter + broadcast. |
+| `lspkit-vfs`    | Open-document store, rope incremental edits, `PositionEncoding` negotiation.                     |
+| `lspkit-live`   | `Session` generation counter + broadcast.                                                        |
+
+### Reuse lspkit maximally `[LSP-REUSE-LSPKIT]`
+
+Anything editor-neutral is taken from `lspkit-*`, never re-implemented in
+`osprey-lsp`. When a needed primitive is **language-agnostic but missing**
+upstream, the rule is: use a thin local shim **and file an issue** so the shim
+can be deleted once `lspkit` ships it — the local copy is a temporary bridge,
+not a fork. The current example is word-at-position / occurrence / position
+re-measurement (used by hover, references, signature help): these are pure text
+primitives with no Osprey specifics, so they belong in `lspkit-vfs`. Tracked as
+[`lspkit#2`](https://github.com/Nimblesite/lspkit/issues/2); the shim lives in
+[`crates/osprey-lsp/src/text.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-lsp/src/text.rs) and is
+marked for removal on resolution.
 
 ## Transport `[LSP-TRANSPORT]`
 
@@ -97,20 +205,79 @@ Standard LSP handshake and document sync:
 
 The server advertises and implements:
 
-| Capability | Method | Notes |
-|---|---|---|
-| Diagnostics | `textDocument/publishDiagnostics` | Push, via `DiagnosticsBus`. `[LSP-DIAGNOSTICS]` |
-| Hover | `textDocument/hover` | Markdown; symbol signature or builtin signature. |
-| Go to definition | `textDocument/definition` | AST-driven, anchored on the identifier. |
-| Find references | `textDocument/references` | Whole-word scan; `includeDeclaration` honored. |
-| Document symbols | `textDocument/documentSymbol` | Flat `DocumentSymbol`s; range on the **name**, not the `fn`/`let`/`type` keyword. |
-| Signature help | `textDocument/signatureHelp` | Active-parameter tracking; ignores `,`/`(`/`)` inside strings and `//` comments. |
-| Completion | `textDocument/completion` | Keywords/snippets + the document's own declarations. |
+| Capability       | Method                            | Notes                                                                                                                                                                                       |
+| ---------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Diagnostics      | `textDocument/publishDiagnostics` | Push, via `DiagnosticsBus`. `[LSP-DIAGNOSTICS]`                                                                                                                                             |
+| Hover            | `textDocument/hover`              | Markdown. Functions/builtins → signature; **`let`/`mut` bindings (local _and_ top-level) → their declared or inferred type**; any declaration's `///` docs rendered as prose. `[LSP-HOVER]` |
+| Go to definition | `textDocument/definition`         | AST-driven, anchored on the identifier.                                                                                                                                                     |
+| Find references  | `textDocument/references`         | Whole-word scan; `includeDeclaration` honored.                                                                                                                                              |
+| Document symbols | `textDocument/documentSymbol`     | Flat `DocumentSymbol`s; range on the **name**, not the `fn`/`let`/`type` keyword.                                                                                                           |
+| Signature help   | `textDocument/signatureHelp`      | Active-parameter tracking; ignores `,`/`(`/`)` inside strings and `//` comments.                                                                                                            |
+| Completion       | `textDocument/completion`         | Keywords/snippets + the document's own declarations.                                                                                                                                        |
 
 Capabilities are the contract clients rely on; adding one means updating
 `initialize_result` in
 [`crates/osprey-lsp/src/wire.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-lsp/src/wire.rs) **and** this
 table.
+
+## Hover `[LSP-HOVER]`
+
+`textDocument/hover` answers "what is the thing under my cursor?" entirely from
+the AST + the type checker — never by shelling out. The word under the cursor is
+located with the shared text primitives (`[LSP-REUSE-LSPKIT]`); the matching
+declaration is found by walking the parsed program, and the reply is Markdown: a
+fenced code line (the signature or `name: type`) optionally followed by the
+declaration's documentation as prose. Implemented in
+[`crates/osprey-lsp/src/features.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-lsp/src/features.rs)
+(`hover`) over [`analysis.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-lsp/src/analysis.rs)
+(`collect_all_symbols`).
+
+Resolution order for the symbol under the cursor:
+
+1. A built-in (`print`, `map`, …) → its reference signature.
+2. A user **function** → its `fn name(params) -> ret` signature.
+3. A **`let`/`mut` binding** → `[LSP-HOVER-VARIABLES]`.
+
+### Variable hover `[LSP-HOVER-VARIABLES]`
+
+Every binding is hoverable, not just top-level declarations:
+
+- **Collection is deep.** `collect_all_symbols` walks _into_ every
+  expression that can contain a block — function bodies, `handle … in …`,
+  `match`/`select` arms, lambdas, `spawn`/`await`, interpolations, call
+  arguments, list/map/object literals — so a `let` nested anywhere (e.g. inside
+  an HTTP handler's `in { … }` block) is found. A cursor-line/“nearest binding
+  at or before the cursor” rule resolves shadowing.
+- **Type comes from inference when unannotated.** An annotated `let x: T = …`
+  shows `x: T`. An unannotated `let x = f()` shows the **inferred** type: the
+  checker publishes every `let`'s resolved type keyed by source position
+  (`ProgramTypes.lets`, queried via `let_type`), the same position-keyed
+  mechanism already used for lambda parameters. The binding position is anchored
+  on the declaration's `let`/`mut` keyword so a leading doc comment never shifts
+  it. Implemented across
+  [`osprey-types`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-types/src/check.rs) (`let_tys`) and
+  [`osprey-types/src/info.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-types/src/info.rs).
+
+### Documentation comments `[LSP-HOVER-DOCS]`
+
+A binding can be documented exactly like a function. A `///` documentation
+comment immediately above any declaration — `fn` **or** `let`/`mut` — is captured
+by the grammar (a `doc_comment` node, distinct from a `//` line comment),
+lowered onto the AST node's `doc` field, and rendered in hover as prose beneath
+the signature/type line. This is the same path functions already used; the
+feature is that **variables get it too**, satisfying "document variables like we
+can document functions". The grammar attaches `optional($.doc_comment)` to the
+declaration forms in [`tree-sitter-osprey/grammar.js`](https://github.com/Nimblesite/osprey/blob/main/tree-sitter-osprey/grammar.js);
+lowering lives in [`osprey-syntax/src/lower.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-syntax/src/lower.rs)
+(`doc_text`).
+
+```osprey
+/// The greeting shown to the operator on connect.
+let banner = "hello"
+```
+
+Hovering `banner` shows `banner: string` followed by _"The greeting shown to the
+operator on connect."_
 
 ## Position encoding `[LSP-ENCODING]`
 
@@ -138,6 +305,13 @@ packaging and in how the version-matched binary is sourced (`[EDITOR-VERSIONING]
 - Client resolves the server command in priority order: user setting
   (`osprey.server.compilerPath`) → bundled binary → `PATH` (per the Shipwright
   `sources` list in [`shipwright.json`](https://github.com/Nimblesite/osprey/blob/main/shipwright.json)).
+- The debugger contribution is part of the same extension but is not an LSP
+  request. It uses the LSP/editor context to resolve the current `.osp` program,
+  invokes the version-matched compiler as `osprey --debug --compile`, and starts
+  a DAP session (initially `lldb-dap`) against the resulting native binary.
+- Pressing F5 MUST start a real debug session. It MUST NOT cancel the debug
+  session and shell out to `osprey --run`; that path belongs only to the
+  `osprey.run` command.
 - Marketplace publication uses **OIDC** (no PAT) — see `[EDITOR-VERSIONING]` and
   the release plan.
 
@@ -181,7 +355,7 @@ extension and the binary it launches MUST be version-matched.
 - The binary is the source of truth: `osprey --version` → `osprey X.Y.Z`;
   `osprey --version --json` → the version manifest (`[SWR-VERSION-CLI-OUTPUT]`).
 - Components are declared in [`shipwright.json`](https://github.com/Nimblesite/osprey/blob/main/shipwright.json):
-  `osprey` (the CLI — which *is* the language server, via the `lsp`
+  `osprey` (the CLI — which _is_ the language server, via the `lsp`
   subcommand) and `osprey-vscode`. The component id **must** equal the name the
   binary reports from `osprey --version` (Shipwright matches the probed name
   against the component id), so the CLI component is `osprey`, not
@@ -206,6 +380,11 @@ A change to this spec is conformant only if:
    (`[LSP-TRANSPORT]`) — no editor-specific analysis logic.
 2. New capabilities update both `initialize_result` and the `[LSP-CAPABILITIES]`
    table.
-3. No source file hard-codes a version (`[EDITOR-VERSIONING]`).
-4. Code implementing a section references its ID in a comment
+3. Debugger integration keeps static analysis in LSP and runtime control in DAP;
+   both must use the same source identity and position model
+   (`[DEBUGGER-EDITOR]`, `[LSP-ENCODING]`).
+4. VS Code F5 starts a real DAP debug session; it does not proxy to
+   `osprey --run` (`[EDITOR-VSCODE]`).
+5. No source file hard-codes a version (`[EDITOR-VERSIONING]`).
+6. Code implementing a section references its ID in a comment
    (e.g. `// Implements [LSP-CAPABILITIES]`), enforced by `spec-check`.

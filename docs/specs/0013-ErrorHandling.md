@@ -2,6 +2,8 @@
 
 Osprey has no exceptions, panics, or null. Any function that can fail returns a `Result`.
 
+> **Flavor layer — shared core (AST and above).**  The `Result` type, the error model, and function-boundary auto-unwrap live entirely at or above the canonical AST (`osprey_ast::Program`) and are flavor-blind — they operate on the `Result<T, E>` union type, `Match` arms, and `Call` results identically no matter whether a program was spelled in the Default (`.osp`) or ML (`.ospml`) surface. Per [FLAVOR-BOUNDARY], no phase that observes errors (type inference, IR lowering, codegen, runtime) may inspect which flavor produced the program. Note the [Language Flavors](0023-LanguageFlavors.md) assumption that arithmetic stays `Result`-wrapped in **both** flavors (overflow-checked, yielding `Result<int, MathError>`); the clean `int` output programs see is the shared auto-unwrap erasing the wrapper, not a flavor rule.
+
 ## Status
 
 [ERR-PAYLOAD] conforms for `E = string`: the runtime Result block carries a

@@ -2,6 +2,8 @@
 
 Osprey has no `for`, `while`, or `loop` construct. Iteration is expressed as composition of `range`, `forEach`, `map`, `filter`, and `fold` using the pipe operator `|>`.
 
+> **Flavor layer — shared core (AST and above).**  Iteration has no dedicated AST node: `range`, `map`, `filter`, `fold`, and `forEach` are ordinary functions invoked through `Expr::Call`, composed with `Expr::Pipe`, and parameterised by `Expr::Lambda` — the same flavor-blind nodes every chapter lowers to. Stream fusion and all iteration semantics operate on `osprey_ast::Program` and never observe which flavor produced it. The spellings here (C-style calls, `fn(x) => e` lambdas) are the Default surface; the ML flavor writes the identical pipelines with whitespace application and `\x => e` lambdas — see [ML Flavor Syntax](0024-MLFlavorSyntax.md). See [Language Flavors](0023-LanguageFlavors.md) for the [FLAVOR-BOUNDARY] law.
+
 ## Core Iterator Functions
 
 `Iterator<T>` is the type of a lazily-produced sequence. It exists during type-checking and is always fused away at compile time (see [Stream Fusion](#stream-fusion)); it is never a materialised runtime collection. Like all built-ins, iterator functions take positional arguments in subject-first order (rule 4 of [Function Calls](0005-FunctionCalls.md#rules)); parameter names below are descriptive only.

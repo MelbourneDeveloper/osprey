@@ -1,0 +1,10 @@
+// Default-flavor twin of hello.ospml. A bare ML script (top-level statements)
+// lowers to the same canonical AST as `fn main() = { ... }`, and an ML
+// `name = expr` binding lowers identically to a Default `let`. The `${...}`
+// interpolation is shared by both flavors.
+
+fn main() = {
+    let greeting = "Hello from the ML flavor"
+    print(greeting)
+    print("2 + 3 = ${2 + 3}")
+}

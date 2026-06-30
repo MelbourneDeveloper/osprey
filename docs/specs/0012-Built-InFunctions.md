@@ -2,6 +2,8 @@
 
 Reference for built-in functions available in every Osprey program. Operations that can fail return `Result`; see [Error Handling](0013-ErrorHandling.md).
 
+> **Flavor layer — shared core (AST and above).**  The built-in function set is shared core: the *same* functions exist in every flavor, and a call to any of them lowers to the canonical `Expr::Call` node regardless of source surface. Only the call *spelling* is a flavor concern — the Default surface writes `toString(x)`, the ML flavor uses whitespace application `toString x` — and that difference is erased at lowering, so nothing here depends on which flavor produced the program. The Default spelling is shown throughout; see [Language Flavors](0023-LanguageFlavors.md) and [ML Flavor Syntax](0024-MLFlavorSyntax.md) for the surface mapping.
+
 ## Basic I/O Functions
 
 ```osprey

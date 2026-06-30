@@ -2,6 +2,8 @@
 
 Osprey treats effects as first-class language features. An effect declares a set of operations; functions list the effects they may perform; handlers give meaning to operations. The compiler rejects any program that performs an unhandled effect.
 
+> **Flavor layer — shared core (AST and above).**  Effect semantics live entirely at and above the canonical AST and are flavor-blind: an effect declaration is `Stmt::Effect` (carrying `EffectOperation`s), `perform IDENT.op(...)` lowers to `Expr::Perform`, a `handle` region lowers to `Expr::Handler{effect, arms, body}` (arms are `HandlerArm`), and `resume(v)` lowers to `Expr::Resume`. The `handle ... in expr` spelling below is the Default-flavor (`.osp`) surface; the ML flavor writes `handle ... do expr` ([FLAVOR-ML-EFFECT]/[FLAVOR-ML-HANDLER] in [ML Flavor Syntax](0024-MLFlavorSyntax.md)) and lowers to the *same* `Handler` node — type inference, the static unhandled-effect check, and the thread-as-continuation runtime never learn which flavor produced the program ([FLAVOR-BOUNDARY] in [Language Flavors](0023-LanguageFlavors.md)). NOTE: first-class handler *values*, a `Handler E` type, and multi-install are a **deferred** Phase-0 shared-core addition ([FLAVOR-HANDLER-VALUE] in 0023) — not in the AST today; ML effect/handler syntax errors loudly until that lands, so treat ML effects as not yet working.
+
 ## Status
 
 Effect declarations, `perform` expressions, effect annotations on function types, handler parsing, and full compile-time unhandled-effect checking are implemented. A handler arm may resume the performer in two ways:

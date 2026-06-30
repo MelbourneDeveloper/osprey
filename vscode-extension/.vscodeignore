@@ -51,6 +51,8 @@ out/tsconfig.tsbuildinfo
 !bin/**
 !syntaxes/**
 !language-configuration/**
+!language-configuration-ml.json
+!snippets/**
 !package.json
 !README.md
 !LICENSE

@@ -5,11 +5,72 @@
 <h1 align="center">Osprey Programming Language</h1>
 
 <p align="center">
-  A modern functional programming language designed for elegance, safety, and
-  performance.<br/>Written in Rust, outputs to LLVM.
+  <strong>One core. Two surfaces. Zero compromise.</strong><br/>
+  One Hindley-Milner type checker, one effect system, one runtime, one LLVM/wasm
+  backend — fronted by two first-class syntaxes. A C-style surface for the
+  <strong>systems programmer</strong> and a layout-based ML surface for the
+  <strong>FP devotee</strong>.<br/>Written in Rust, outputs to LLVM.
 </p>
 
 ⭐ **[Star us on GitHub](https://github.com/Nimblesite/osprey)** to support the project and allow us to submit to Homebrew! ⭐
+
+## Two Flavors, One Core
+
+Osprey is **one language** with **two first-class, permanent syntaxes** called
+flavors. Neither is the watered-down one — each goes all the way in its own
+direction.
+
+- **Default flavor (`.osp`)** — C-style braces, `fn`, `f(x: a, y: b)` calls with
+  named arguments. The surface a **systems programmer** reaches for: explicit,
+  familiar, block-structured. **Fully implemented today** (specs 0001–0022).
+- **ML flavor (`.ospml`)** — offside-rule layout (indentation, no braces),
+  curry-by-default, whitespace application `f a b`, `\x => e` lambdas, `:=`
+  mutation, `->` for types and `=>` for clauses. The surface an **FP devotee**
+  reaches for: terse, expression-first, ML/Haskell-shaped. **In active
+  development**, with runnable proof in [`examples/tested/ml/`](examples/tested/ml/).
+
+**No compromise — pick your tribe.** ML is not "braces optional"; Default is not
+deprecated or transitional. Systems programmers get real braces; FP folks get
+real layout and real currying. Nobody is asked to accept the other camp's
+spelling — pick your flavor and go all in.
+
+### The same program, both flavors
+
+Both surfaces lower to the **same canonical AST** before any type checking. The
+currying twin below is **machine-checked equal**:
+
+```osprey
+// Default flavor (.osp):
+fn add(x) = fn(y) => x + y
+```
+
+```osprey
+// ML flavor (.ospml) — identical canonical AST:
+add x y = x + y
+```
+
+After lowering, nothing — type checker, effect checker, optimiser, codegen — can
+tell which flavor you wrote. Same safety, same effects, same performance.
+
+### Same folder, compiled together
+
+Because every flavor lowers to the same canonical AST, the architecture is
+**designed** so that files of different flavors live in **one project folder** and
+compile into **one program**. Pick the flavor **per file**; the team is never
+forced to pick one tribe. Exports are canonical signatures with stable names and
+order, so by design a Default module and an ML module can import each other.
+
+```text
+project/
+  math.ospml     # ML flavor — curry-by-default module
+  app.osp        # Default flavor — braces; imports math
+```
+
+**Flavor selection (shipping today):** select the ML surface with the `.ospml`
+extension, the `--flavor ml` CLI flag, or a leading `// osprey: flavor=ml`
+marker. Precedence: flag > marker > extension > Default. One flavor per file;
+mixed flavors per project via imports. Multi-file cross-flavor imports are the
+design direction; per-file flavor selection is implemented and green today.
 
 ## Installation
 
@@ -48,43 +109,45 @@ editor-agnostic — Neovim and Zed are on the roadmap. See
 
 ## Syntax Example
 
-```osprey
-// 🔒 HANDLER ISOLATION SIMPLE TEST 🔒
+Algebraic effects in the **Default flavor** (fully implemented). The same code
+runs under different handlers — production writes to stdout, the test handler
+stays silent:
 
+```osprey
 effect Logger {
     log: fn(string) -> Unit
 }
 
-// Main function with different handlers
-fn main() -> Unit = {
-    print("🔒 Testing Handler Isolation")
-    
-    // Production handler
-    let result1 = handle Logger
-        log msg => print("[PROD] " + msg)
-    in {
-        perform Logger.log("Processing task: 5")
-        10
-    }
-    
-    // Debug handler
-    let result2 = handle Logger
-        log msg => print("[TEST] " + msg)
-    in {
-        perform Logger.log("Processing task: 12")
-        24
-    }
-    
-    // Silent handler
-    let result3 = handle Logger
-        log msg => 0
-    in {
-        perform Logger.log("Processing task: 0")
-        0
-    }
-    
-    print("📊 Results: Prod=" + toString(result1) + ", Test=" + toString(result2) + ", Silent=" + toString(result3))
-} 
+fn greet(name: string) -> Unit !Logger =
+  perform Logger.log("Hello, ${name}!")
+
+// Production: write to stdout
+handle Logger
+  log msg => print(msg)
+in greet("Alice")
+
+// Test: stay silent — same code, new handler
+handle Logger
+  log msg => 0
+in greet("Bob")
+```
+
+A taste of the **ML flavor** (`.ospml`) — curry-by-default and layout-based
+`match`, runnable today (see [`examples/tested/ml/`](examples/tested/ml/)):
+
+```text
+adder : int -> int -> int
+adder a b = a + b
+
+// partial application falls straight out of currying:
+addTen = adder 10
+answer = addTen 32        // 42
+
+classify n =
+    match n
+        0 => "zero"
+        1 => "one"
+        _ => "many"
 ```
 
 ## Project Structure

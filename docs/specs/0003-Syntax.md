@@ -2,6 +2,10 @@
 
 This chapter defines the syntactic forms that make up an Osprey program. Semantics for individual constructs are in their dedicated chapters; cross-references are noted inline.
 
+> **Flavor layer — surface (CST).**  Every spelling in this chapter is the **Default flavor** (`.osp`) concrete grammar — C-style braces, `fn`, and `f(x: a, y: b)` named-argument calls. These are surface forms only: lowering erases them into the shared canonical AST (`osprey_ast::Program`), the single tree every later phase consumes. The ML flavor (`.ospml`) spells the same constructs differently (offside layout, `\x => e`, whitespace application) and lowers to the *same* AST nodes — see [ML Flavor Syntax](0024-MLFlavorSyntax.md) for the counterpart of each form here. See [Language Flavors](0023-LanguageFlavors.md) for the one-AST-many-CSTs model and the [FLAVOR-BOUNDARY] law.
+>
+> The major forms below map to canonical AST nodes as follows: `let`/`mut` → `Stmt::Let{mutable}`; `fn` → `Stmt::Function`; `extern` → `Stmt::Extern`; `type` → `Stmt::Type` + `TypeVariant`; `import` → `Stmt::Import`; calls → `Expr::Call{function, arguments, named_arguments}`; `match` → `Expr::Match` + `MatchArm`; `{ … }` blocks → `Expr::Block{statements, value}`; field access → `Expr::FieldAccess`; indexing → `Expr::Index`; and the pattern forms → `Pattern::*` (`Wildcard`, `Literal`, `Constructor`, `TypeAnnotated`, `Structural`, `Binding`). Names and shapes are flavor-blind from the AST upward.
+
 - [Program Structure](#program-structure)
 - [Imports](#imports)
 - [Let Declarations](#let-declarations)

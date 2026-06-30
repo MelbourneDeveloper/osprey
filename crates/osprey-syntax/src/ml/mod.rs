@@ -6,31 +6,33 @@
 //! lowering contract: `docs/specs/0023-LanguageFlavors.md`. Build sequence:
 //! `docs/plans/0013-ml-flavor-frontend.md`.
 //!
-//! The layout-sensitive grammar (external INDENT/DEDENT/NEWLINE scanner, plan
-//! phase 2) and the `MlLowerer` (phase 3) are not yet wired. Until they land,
-//! [`parse_ml`] fails loudly rather than silently misparsing ML source as
-//! Default — there are no silent placeholders.
+//! Clean three-stage frontend with a parse/lower seam ([FLAVOR-FRONTEND]):
+//! 1. [`lexer`] turns source into a layout-resolved [`token`] stream (the
+//!    offside rule, [FLAVOR-ML-LAYOUT]);
+//! 2. [`parser`] is a hand-written recursive-descent + Pratt parser producing
+//!    the faithful ML [`cst`] (no canonicalisation);
+//! 3. [`lower`] normalises the CST into the canonical AST (currying, pipe
+//!    desugaring, interpolation), the sole place ML meets the shared core.
+//!
+//! First-class handler values and effects (plan phase 0) are not yet in the
+//! shared core, so the parser reports a precise "not yet supported" error for
+//! `effect`/`handler`/`handle`/`do`/`perform` rather than misparsing them.
 
-use crate::{Flavor, Parsed, SyntaxError};
-use osprey_ast::{Position, Program};
+use crate::{Flavor, Parsed};
 
-/// Parse ML-flavor source into the canonical [`Program`].
-///
-/// Phase-1 seam: returns a single explanatory syntax error so selecting the ML
-/// flavor today is a clear, actionable failure, not a corrupt parse. Phases 2–3
-/// replace this body with the real layout parse + lowering.
-pub(crate) fn parse_ml(_source: &str) -> Parsed {
+mod cst;
+mod lexer;
+mod lower;
+mod parser;
+mod token;
+
+/// Parse ML-flavor source into the canonical [`Program`](osprey_ast::Program):
+/// lex → parse to CST → lower to AST. Best-effort, carrying any syntax errors.
+pub(crate) fn parse_ml(source: &str) -> Parsed {
+    let (items, errors) = parser::parse(source);
     Parsed {
-        program: Program {
-            statements: Vec::new(),
-        },
-        errors: vec![SyntaxError {
-            message: "the ML flavor frontend is not yet implemented \
-                      (docs/plans/0013-ml-flavor-frontend.md, phases 2–3); \
-                      use the Default flavor or omit --flavor"
-                .to_owned(),
-            position: Position { line: 1, column: 0 },
-        }],
+        program: lower::lower(items),
+        errors,
         flavor: Flavor::Ml,
     }
 }

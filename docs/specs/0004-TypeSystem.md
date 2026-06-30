@@ -16,6 +16,8 @@
 
 Osprey uses Hindley-Milner inference. Every well-typed expression has a unique most general type, inference always terminates, and a successful type-check guarantees no runtime type errors.
 
+> **Flavor layer — shared core (AST and above).**  Type inference runs on the canonical `osprey_ast::Program` *after* lowering, so it is entirely flavor-blind ([FLAVOR-BOUNDARY], [FLAVOR-LAYER]). Nothing in this chapter inspects which surface produced a program: the type checker (`osprey-types`) consumes only the canonical AST. The samples below use the Default surface (`.osp`), but the ML flavor (`.ospml`, see [ML Flavor Syntax](0024-MLFlavorSyntax.md)) lowers to identical ASTs and obeys these inference rules unchanged. See [Language Flavors](0023-LanguageFlavors.md).
+
 Type annotations are optional everywhere they can be inferred:
 
 ```osprey

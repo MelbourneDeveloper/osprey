@@ -2,7 +2,7 @@
 layout: page
 title: "Memory Management"
 description: "Osprey Language Specification: Memory Management"
-date: 2026-06-19
+date: 2026-06-30
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0018-memorymanagement/"
@@ -20,10 +20,32 @@ you no longer need.
 
 ## Status
 
-Not implemented. The current compiler allocates heap values (closure cells,
-strings, collections, records) and never frees them. This spec is the
-contract every future reclamation backend must satisfy; the implementation
-plan is [`../plans/memory-management.md`](https://github.com/Nimblesite/osprey/blob/main/docs/plans/memory-management.md).
+Partially implemented — the *boundary* exists and a first *reclaiming* backend
+ships (tracing GC, opt-in via `--memory=gc`); the ARC default is next
+([implementation plan 0011](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0011-arc-gc-implementation.md)).
+
+- **Swappable backend boundary [MEM-BACKENDS]: done.** All codegen heap
+  allocation funnels through a single `@osp_alloc` hook (osprey-codegen
+  `builder.rs::heap_alloc` / `OSP_ALLOC_DECL`); the emitted IR names no
+  allocator, so a manager is chosen at link time. The default backend
+  (`compiler/runtime/memory_runtime.c`) is a `malloc` passthrough that never
+  frees during a run — sound because reclamation is unobservable [MEM-OPAQUE].
+- **Static reclamation of non-escaping values: done, by the optimizer.** The
+  `@osp_alloc` declaration carries allocator attributes, so at `-O2` LLVM proves
+  provably-dead allocations (the common case — per-operation `Result` blocks,
+  temporaries) non-escaping and removes them entirely. This realises the
+  [MEM-OWNERSHIP] "free at last use, statically" ideal for everything whose
+  lifetime LLVM can see.
+- **Reclaiming *escaping* values: tracing GC ships, ARC pending.** Values that
+  genuinely outlive their allocation site (e.g. nodes of a built-and-held tree)
+  still leak under the *default* backend, but the opt-in tracing collector
+  (`--memory=gc`, `compiler/runtime/memory_gc.c`) reclaims them — a conservative
+  mark & sweep linked behind `@osp_alloc`, complete because the heap is acyclic
+  [MEM-ACYCLIC]. On `binarytrees` it cuts peak RSS ~80× (905 MiB → ~11 MiB) with
+  byte-identical output across every differential example (`make _conformance-gc`).
+  The ARC default and a precise copying GC are the remaining work
+  ([plan 0011](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0011-arc-gc-implementation.md)); this spec is the
+  contract they must satisfy.
 
 ## Collection Is Unobservable [MEM-OPAQUE]
 
@@ -132,7 +154,7 @@ is *precise* (the compiler inserts retain/release) and non-atomic, so it carries
 to every target — including `wasm32`, where it is the *only* reclaiming option:
 the conservative GC cannot scan a wasm stack, and the WebAssembly-GC proposal is
 a separate, untargeted mechanism. See
-[spec 0022](0022-WebAssemblyTarget.md) [WASM-TARGET-MEMORY].
+[spec 0022](/spec/0022-webassemblytarget/) [WASM-TARGET-MEMORY].
 
 A reclamation backend is conforming iff every differential-harness example
 produces byte-identical output and reports zero leaked language values under

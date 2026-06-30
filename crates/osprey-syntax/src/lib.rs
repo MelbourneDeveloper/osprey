@@ -1,18 +1,22 @@
-//! CST -> AST lowering: an explicit recursive descent over tree-sitter named
-//! nodes (no visitor plumbing, exhaustive matching).
+//! Flavor-agnostic frontend entry: source text in, canonical [`Program`] out.
 //!
-//! `parse_program` is the public entry: source text in, [`Program`] out (plus any
-//! syntax errors discovered by tree-sitter). Errors are collected, never fatal:
-//! the front-end never panics on bad input and always produces a best-effort AST.
+//! This crate hosts two **flavor** folders that each parse a source surface and
+//! lower it to the one shared [`osprey_ast::Program`]: [`default`] (C-style
+//! braces, tree-sitter) and [`ml`] (layout, curry-by-default, hand-written).
+//! Everything in this module is flavor-neutral — the [`Flavor`] selector, the
+//! [`Parsed`] result, and the dispatch that routes source to a flavor's
+//! frontend. Past lowering, nothing may tell the flavors apart
+//! ([FLAVOR-BOUNDARY], docs/specs/0023-LanguageFlavors.md). `parse_program` is
+//! the public entry; errors are collected, never fatal, so the frontend never
+//! panics on bad input and always produces a best-effort AST.
 
 use osprey_ast::{Position, Program};
-use tree_sitter::{Node, Parser, Tree};
 
-mod expr;
-mod lower;
+mod default;
 mod ml;
+mod strings;
 
-pub use lower::Lowerer;
+pub use default::{parse_tree, Lowerer};
 
 /// A syntax error located in the source (an ERROR/MISSING node from tree-sitter).
 #[derive(Debug, Clone, PartialEq)]
@@ -93,69 +97,73 @@ pub fn parse_program(source: &str) -> Parsed {
 #[must_use]
 pub fn parse_program_with_flavor(source: &str, flavor: Flavor) -> Parsed {
     match flavor {
-        Flavor::Default => parse_default(source),
+        Flavor::Default => default::parse(source),
         Flavor::Ml => ml::parse_ml(source),
     }
 }
 
-/// The Default (brace) frontend: tree-sitter CST + [`Lowerer`] → [`Program`].
-fn parse_default(source: &str) -> Parsed {
-    let Some(tree) = parse_tree(source) else {
-        return Parsed {
-            program: Program {
-                statements: Vec::new(),
-            },
-            errors: vec![SyntaxError {
-                message: "failed to initialize Osprey grammar".to_owned(),
-                position: Position { line: 1, column: 0 },
-            }],
-            flavor: Flavor::Default,
-        };
-    };
-    let root = tree.root_node();
-    let lowerer = Lowerer::new(source.as_bytes());
-    let program = lowerer.lower_program(root);
-    let mut errors = Vec::new();
-    collect_errors(root, source.as_bytes(), &mut errors);
-    Parsed {
-        program,
-        errors,
-        flavor: Flavor::Default,
-    }
+/// The value of a leading `// osprey: flavor=<name>` marker, if the source has
+/// one (the space-less `//osprey: flavor=` spelling is accepted too). The marker
+/// must appear before any code so flavor selection never depends on a deep scan.
+fn flavor_marker(source: &str) -> Option<&str> {
+    source.lines().find_map(|line| {
+        let t = line.trim();
+        t.strip_prefix("// osprey: flavor=")
+            .or_else(|| t.strip_prefix("//osprey: flavor="))
+            .map(str::trim)
+    })
 }
 
-/// Run only the tree-sitter parse (used by tooling that wants the raw CST).
-///
-/// Returns [`None`] if the embedded Osprey grammar cannot be loaded or
-/// tree-sitter declines to produce a tree (neither happens for a valid build).
+/// The flavor implied by a path's extension: `.ospml` ⇒ ML, `.osp` ⇒ Default.
+/// Any other extension yields `None` (no opinion). [FLAVOR-SELECT]
 #[must_use]
-pub fn parse_tree(source: &str) -> Option<Tree> {
-    let mut parser = Parser::new();
-    parser
-        .set_language(&tree_sitter_osprey::LANGUAGE.into())
-        .ok()?;
-    parser.parse(source, None)
+pub fn flavor_from_extension(path: &str) -> Option<Flavor> {
+    match std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+    {
+        Some("ospml") => Some(Flavor::Ml),
+        Some("osp") => Some(Flavor::Default),
+        _ => None,
+    }
 }
 
-fn collect_errors(node: Node<'_>, src: &[u8], out: &mut Vec<SyntaxError>) {
-    if node.is_error() || node.is_missing() {
-        let p = node.start_position();
-        out.push(SyntaxError {
-            message: if node.is_missing() {
-                format!("missing {}", node.kind())
-            } else {
-                format!("syntax error near {:?}", node.utf8_text(src).unwrap_or(""))
-            },
-            position: Position {
-                line: u32::try_from(p.row).unwrap_or(u32::MAX).saturating_add(1),
-                column: u32::try_from(p.column).unwrap_or(u32::MAX),
-            },
-        });
+/// Resolve a compilation unit's flavor by precedence: explicit `flag` >
+/// file marker > extension > Default. A marker and extension that disagree are a
+/// hard error rather than a silent guess, so the CLI and the editor agree on the
+/// same frontend for the same file. Implements [FLAVOR-SELECT]
+/// (docs/specs/0023-LanguageFlavors.md).
+///
+/// # Errors
+/// Returns the disagreement message when a marker and the extension select
+/// different flavors, or the parse error when the marker names an unknown flavor.
+pub fn resolve_flavor(flag: Option<Flavor>, path: &str, source: &str) -> Result<Flavor, String> {
+    if let Some(f) = flag {
+        return Ok(f);
     }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_errors(child, src, out);
+    let marker = match flavor_marker(source) {
+        Some(value) => Some(value.parse::<Flavor>()?),
+        None => None,
+    };
+    match (marker, flavor_from_extension(path)) {
+        (Some(m), Some(e)) if m != e => Err(format!(
+            "{path}: flavor marker (flavor={m}) and file extension (flavor={e}) disagree; \
+             make them agree or pass --flavor to override"
+        )),
+        (Some(m), _) => Ok(m),
+        (None, Some(e)) => Ok(e),
+        (None, None) => Ok(Flavor::Default),
     }
+}
+
+/// Parse `source` under the flavor resolved from `path` and any file marker,
+/// falling back to Default when the two disagree or name an unknown flavor (an
+/// editor surfaces such conflicts as ordinary diagnostics, never a hard stop).
+/// This is the entry the LSP uses so `.ospml` is read with the ML frontend.
+#[must_use]
+pub fn parse_program_for_path(path: &str, source: &str) -> Parsed {
+    let flavor = resolve_flavor(None, path, source).unwrap_or(Flavor::Default);
+    parse_program_with_flavor(source, flavor)
 }
 
 #[cfg(test)]
@@ -165,165 +173,47 @@ fn collect_errors(node: Node<'_>, src: &[u8], out: &mut Vec<SyntaxError>) {
 )]
 mod tests {
     use super::*;
-    use osprey_ast::{Expr, Pattern, Stmt};
-
-    fn one(src: &str) -> Stmt {
-        let parsed = parse_program(src);
-        assert!(parsed.errors.is_empty(), "errors: {:?}", parsed.errors);
-        assert_eq!(parsed.program.statements.len(), 1);
-        parsed.program.statements.into_iter().next().unwrap()
-    }
 
     #[test]
-    fn lowers_doc_comments_on_let_and_function() {
-        // A `///` block above a binding is captured as its `doc`, stripped of the
-        // markers, and the recorded position stays on the declaration keyword/name
-        // (line 3 here), not the comment lines. Implements [LSP-HOVER-DOCS]
-        match one(
-            "/// The retry budget.\n/// Bounded above by `maxRetries`.\nlet retries: int = 3\n",
-        ) {
-            Stmt::Let {
-                name,
-                doc,
-                position,
-                ..
-            } => {
-                assert_eq!(name, "retries");
-                assert_eq!(
-                    doc.as_deref(),
-                    Some("The retry budget.\nBounded above by `maxRetries`.")
-                );
-                assert_eq!(position.map(|p| p.line), Some(3));
-            }
-            s => panic!("expected let, got {s:?}"),
-        }
-        match one("/// Adds two ints.\nfn add(a: int, b: int) -> int = a + b\n") {
-            Stmt::Function { doc, position, .. } => {
-                assert_eq!(doc.as_deref(), Some("Adds two ints."));
-                assert_eq!(position.map(|p| p.line), Some(2));
-            }
-            s => panic!("expected function, got {s:?}"),
-        }
-        // An undocumented binding carries no doc.
-        match one("let x = 1\n") {
-            Stmt::Let { doc, .. } => assert_eq!(doc, None),
-            s => panic!("expected let, got {s:?}"),
-        }
-    }
-
-    #[test]
-    fn lowers_let() {
-        match one("let x = 42\n") {
-            Stmt::Let {
-                name,
-                value,
-                mutable,
-                ..
-            } => {
-                assert_eq!(name, "x");
-                assert!(!mutable);
-                assert_eq!(value, Expr::Integer(42));
-            }
-            s => panic!("expected let, got {s:?}"),
-        }
-    }
-
-    #[test]
-    fn lowers_function_with_binary_body() {
-        match one("fn add(a: int, b: int) -> int = a + b\n") {
-            Stmt::Function {
-                name,
-                parameters,
-                return_type,
-                body,
-                ..
-            } => {
-                assert_eq!(name, "add");
-                assert_eq!(parameters.len(), 2);
-                assert_eq!(parameters[0].name, "a");
-                assert_eq!(return_type.unwrap().name, "int");
-                match body {
-                    Expr::Binary { op, .. } => assert_eq!(op, "+"),
-                    b => panic!("expected binary, got {b:?}"),
-                }
-            }
-            s => panic!("expected function, got {s:?}"),
-        }
-    }
-
-    #[test]
-    fn lowers_union_type() {
-        match one("type Color = Red | Green | Blue\n") {
-            Stmt::Type { name, variants, .. } => {
-                assert_eq!(name, "Color");
-                assert_eq!(variants.len(), 3);
-                assert_eq!(variants[2].name, "Blue");
-            }
-            s => panic!("expected type, got {s:?}"),
-        }
-    }
-
-    #[test]
-    fn lowers_extern_with_ptr() {
-        match one("extern fn sqlite3_open(filename: string, ppDb: Ptr) -> int\n") {
-            Stmt::Extern {
-                name,
-                parameters,
-                return_type,
-                ..
-            } => {
-                assert_eq!(name, "sqlite3_open");
-                assert_eq!(parameters.len(), 2);
-                assert_eq!(parameters[1].ty.name, "Ptr");
-                assert_eq!(return_type.unwrap().name, "int");
-            }
-            s => panic!("expected extern, got {s:?}"),
-        }
-    }
-
-    #[test]
-    fn lowers_match() {
-        match one("let r = match x {\n  Ok { value } => value\n  _ => 0\n}\n") {
-            Stmt::Let {
-                value: Expr::Match { arms, .. },
-                ..
-            } => {
-                assert_eq!(arms.len(), 2);
-                assert!(matches!(arms[1].pattern, Pattern::Wildcard));
-            }
-            s => panic!("expected let-match, got {s:?}"),
-        }
-    }
-
-    #[test]
-    fn lowers_effect_and_perform() {
-        let parsed = parse_program(
-            "effect Log { info: fn(string) -> Unit }\nfn go() = perform Log.info(msg: \"hi\")\n",
+    fn resolve_flavor_follows_flag_marker_extension_precedence() {
+        // Flag wins outright, overriding a disagreeing extension silently.
+        assert_eq!(
+            resolve_flavor(Some(Flavor::Default), "a.ospml", "").expect("ok"),
+            Flavor::Default
         );
-        assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
-        assert!(matches!(parsed.program.statements[0], Stmt::Effect { .. }));
-    }
-
-    #[test]
-    fn reports_syntax_error() {
-        let parsed = parse_program("fn (= \n");
-        assert!(!parsed.errors.is_empty());
-    }
-
-    #[test]
-    fn reports_missing_node_error() {
-        // `type T =` with no variant name forces tree-sitter to insert a MISSING
-        // identifier; collect_errors reports it via the is_missing format branch.
-        let parsed = parse_program("type T =\n");
-        assert!(
-            parsed
-                .errors
-                .iter()
-                .any(|e| e.message.starts_with("missing")),
-            "expected a missing-node error, got {:?}",
-            parsed.errors
+        // No flag: with a neutral extension, the marker decides.
+        assert_eq!(
+            resolve_flavor(None, "a.txt", "// osprey: flavor=ml\nx = 1\n").expect("ok"),
+            Flavor::Ml
         );
-        // The error carries a 1-based line.
-        assert!(parsed.errors[0].position.line >= 1);
+        // No flag, no marker: extension decides for both Osprey extensions.
+        assert_eq!(resolve_flavor(None, "a.ospml", "").expect("ok"), Flavor::Ml);
+        assert_eq!(
+            resolve_flavor(None, "a.osp", "").expect("ok"),
+            Flavor::Default
+        );
+        // Nothing at all ⇒ Default.
+        assert_eq!(
+            resolve_flavor(None, "a.txt", "").expect("ok"),
+            Flavor::Default
+        );
+        // Marker and extension that disagree are a hard error, not a guess.
+        assert!(resolve_flavor(None, "a.osp", "// osprey: flavor=ml\n").is_err());
+        // An unknown marker name fails loudly too.
+        assert!(resolve_flavor(None, "a.txt", "// osprey: flavor=fsharp\n").is_err());
+    }
+
+    #[test]
+    fn parse_program_for_path_selects_ml_for_ospml() {
+        // The `.ospml` extension routes through the ML frontend, so a layout,
+        // curry-by-default source parses cleanly where the Default frontend would
+        // reject the bare `:` signature and `\` lambda.
+        let ml = parse_program_for_path("tour.ospml", "inc : int -> int\ninc x = x + 1\n");
+        assert!(ml.errors.is_empty(), "ml errors: {:?}", ml.errors);
+        assert_eq!(ml.flavor, Flavor::Ml);
+        // A `.osp` path stays on the Default frontend.
+        let def = parse_program_for_path("m.osp", "fn inc(x: int) -> int = x + 1\n");
+        assert!(def.errors.is_empty(), "default errors: {:?}", def.errors);
+        assert_eq!(def.flavor, Flavor::Default);
     }
 }

@@ -1,0 +1,33 @@
+// ML flavor: constructor patterns over the built-in `Result` (the `Success v` /
+// `Error e` payload-binding form), mutable bindings with `:=`, higher-order
+// functions, an explicitly curried function for partial application, and layout
+// blocks. Integer arithmetic yields `Result<int, MathError>`, so these helpers
+// match it and return `int`.
+
+safeMod : int -> int -> int
+safeMod a b =
+    match a % b
+        Success value => value
+        Error e => -1
+
+twice : (int -> int) -> int -> int
+twice f x = f (f x)
+
+bump : int -> int
+bump x = x + 10
+
+// Explicitly curried (one parameter returning a lambda) so `adder 10` partially
+// applies; the uncurried skin curries only through explicit lambdas.
+adder : int -> int -> int
+adder a = \b => a + b
+
+main : Unit -> int
+main () =
+    mut total = 0
+    rem = safeMod 17 5
+    total := rem
+    print "rem17_5=${toString total} rem20_7=${toString (safeMod 20 7)}"
+    print "twiceBump5=${toString (twice bump 5)}"
+    addTen = adder 10
+    print "addTen32=${toString (addTen 32)} direct=${toString ((adder 7) 8)}"
+    0

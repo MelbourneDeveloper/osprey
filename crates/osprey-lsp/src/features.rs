@@ -21,9 +21,15 @@ use crate::text::{occurrences, prefix_to, word_at, Occurrence};
 /// back to their reference docs. Implements [LSP-HOVER], [LSP-HOVER-VARIABLES],
 /// [LSP-HOVER-DOCS]
 #[must_use]
-pub fn hover(text: &str, line: u32, character: u32, enc: PositionEncoding) -> Option<String> {
+pub fn hover(
+    text: &str,
+    path: &str,
+    line: u32,
+    character: u32,
+    enc: PositionEncoding,
+) -> Option<String> {
     let word = word_under(text, line, character, enc)?;
-    let parsed = osprey_syntax::parse_program(text);
+    let parsed = osprey_syntax::parse_program_for_path(path, text);
     let symbols = collect_all_symbols(&parsed.program);
     match best_match(&symbols, &word, line) {
         Some(sym) => Some(symbol_hover(sym, &parsed.program)),
@@ -81,7 +87,7 @@ pub fn definition(
     let Some(word) = word_under(text, line, character, enc) else {
         return Vec::new();
     };
-    declarations(text, &word, enc)
+    declarations(text, uri, &word, enc)
         .into_iter()
         .map(|o| located(uri, (o.line, o.start, o.line, o.end)))
         .collect()
@@ -100,7 +106,7 @@ pub fn references(
     let Some(word) = word_under(text, line, character, enc) else {
         return Vec::new();
     };
-    let decls: Vec<(u32, u32)> = declarations(text, &word, enc)
+    let decls: Vec<(u32, u32)> = declarations(text, uri, &word, enc)
         .iter()
         .map(|o| (o.line, o.start))
         .collect();
@@ -115,13 +121,14 @@ pub fn references(
 #[must_use]
 pub fn signature_help(
     text: &str,
+    path: &str,
     line: u32,
     character: u32,
     enc: PositionEncoding,
 ) -> Option<SignatureInfo> {
     let line_str = nth_line(text, line)?;
     let (name, active) = enclosing_call(prefix_to(line_str, character, enc))?;
-    let parsed = osprey_syntax::parse_program(text);
+    let parsed = osprey_syntax::parse_program_for_path(path, text);
     let sym = collect_symbols(&parsed.program)
         .into_iter()
         .find(|s| s.name == name && s.kind == SymbolKind::Function)?;
@@ -136,8 +143,8 @@ pub fn signature_help(
 
 /// Completion items: keywords plus the document's own declarations.
 #[must_use]
-pub fn completion(text: &str) -> Vec<CompletionItem> {
-    let parsed = osprey_syntax::parse_program(text);
+pub fn completion(text: &str, path: &str) -> Vec<CompletionItem> {
+    let parsed = osprey_syntax::parse_program_for_path(path, text);
     keyword_items()
         .into_iter()
         .chain(collect_symbols(&parsed.program).iter().map(symbol_item))
@@ -164,8 +171,8 @@ fn located(uri: &str, span: Span) -> Location {
 /// A declaration's recorded position points at its keyword (`fn`/`type`/`let`),
 /// not the name, so this finds the first whole-word occurrence of `name` on each
 /// declaration line — the location editors expect for go-to-definition.
-fn declarations(text: &str, name: &str, enc: PositionEncoding) -> Vec<Occurrence> {
-    let parsed = osprey_syntax::parse_program(text);
+fn declarations(text: &str, path: &str, name: &str, enc: PositionEncoding) -> Vec<Occurrence> {
+    let parsed = osprey_syntax::parse_program_for_path(path, text);
     let occs = occurrences(text, name, enc);
     collect_symbols(&parsed.program)
         .iter()
@@ -308,8 +315,10 @@ mod tests {
 
     #[test]
     fn hover_uses_signature_for_functions_and_builtins() {
-        assert!(hover(SRC, 1, 12, U16).is_some_and(|m| m.contains("fn add(a: int, b: int) -> int")));
-        assert!(hover("fn main() = print(1)\n", 0, 13, U16).is_some_and(|m| m.contains("print")));
+        assert!(hover(SRC, "file:///a.osp", 1, 12, U16)
+            .is_some_and(|m| m.contains("fn add(a: int, b: int) -> int")));
+        assert!(hover("fn main() = print(1)\n", "file:///a.osp", 0, 13, U16)
+            .is_some_and(|m| m.contains("print")));
     }
 
     #[test]
@@ -330,7 +339,7 @@ mod tests {
     #[test]
     fn signature_help_tracks_the_active_parameter() {
         // Line 1 is `let total = add(1, 2)`; char 19 is over the second argument.
-        let sig = signature_help(SRC, 1, 19, U16).expect("sig");
+        let sig = signature_help(SRC, "file:///a.osp", 1, 19, U16).expect("sig");
         assert_eq!(sig.active_parameter, 1, "{sig:?}");
         assert_eq!(sig.parameters.len(), 2);
     }
@@ -339,13 +348,13 @@ mod tests {
     fn signature_help_ignores_commas_inside_strings() {
         // The commas inside the string literal must not advance the active param.
         let src = "fn f(a: int, b: int) -> int = a\nlet x = f(\"a, b, c\", 2)\n";
-        let sig = signature_help(src, 1, 21, U16).expect("sig");
+        let sig = signature_help(src, "file:///a.osp", 1, 21, U16).expect("sig");
         assert_eq!(sig.active_parameter, 1, "{sig:?}");
     }
 
     #[test]
     fn completion_includes_keywords_and_declarations() {
-        let items = completion(SRC);
+        let items = completion(SRC, "file:///a.osp");
         assert!(items
             .iter()
             .any(|i| i.label == "fn" && i.kind == CompletionKind::Keyword));
@@ -358,7 +367,7 @@ mod tests {
     fn hover_on_a_let_binding_uses_the_name_and_type_form() {
         // A `let` has no signature, so hover renders the `name: type` fallback.
         let src = "let limit: int = 10\nfn main() -> Unit = print(limit)\n";
-        let md = hover(src, 0, 5, U16).expect("hover");
+        let md = hover(src, "file:///a.osp", 0, 5, U16).expect("hover");
         assert!(md.contains("limit: int"), "{md}");
     }
 
@@ -369,7 +378,7 @@ mod tests {
         // case the top-level-only outline used to miss entirely.
         // Implements [LSP-HOVER-VARIABLES], [LSP-HOVER-DOCS]
         let src = "fn main() -> int = {\n/// The greeting text.\nlet greeting = \"hi\"\n0\n}\n";
-        let md = hover(src, 2, 6, U16).expect("hover over the `greeting` binding");
+        let md = hover(src, "file:///a.osp", 2, 6, U16).expect("hover over the `greeting` binding");
         assert!(md.contains("greeting: string"), "inferred type: {md}");
         assert!(md.contains("The greeting text."), "docs: {md}");
     }
@@ -379,7 +388,7 @@ mod tests {
         // A `///` block above a function surfaces under its signature.
         // Implements [LSP-HOVER-DOCS]
         let src = "/// Doubles `x`.\nfn dbl(x: int) -> int = x * 2\n";
-        let md = hover(src, 1, 4, U16).expect("hover over `dbl`");
+        let md = hover(src, "file:///a.osp", 1, 4, U16).expect("hover over `dbl`");
         assert!(md.contains("fn dbl(x: int) -> int"), "signature: {md}");
         assert!(md.contains("Doubles `x`."), "docs: {md}");
     }
@@ -387,7 +396,7 @@ mod tests {
     #[test]
     fn completion_maps_a_type_declaration_to_the_type_kind() {
         let src = "type Shade = Light | Dark\nlet c: int = 1\n";
-        let items = completion(src);
+        let items = completion(src, "file:///a.osp");
         assert!(items
             .iter()
             .any(|i| i.label == "Shade" && i.kind == CompletionKind::Type));
@@ -405,14 +414,14 @@ mod tests {
         assert!(definition(src, "file:///a.osp", 0, 6, U16).is_empty());
         assert!(references(src, "file:///a.osp", 0, 6, U16, true).is_empty());
         // A line past the end of the file yields no word either.
-        assert!(hover(src, 99, 0, U16).is_none());
+        assert!(hover(src, "file:///a.osp", 99, 0, U16).is_none());
     }
 
     #[test]
     fn signature_help_labels_unannotated_parameters_by_name_only() {
         // The parameter has no type annotation, so its label is the bare name.
         let src = "fn id(x) = x\nlet y = id(7)\n";
-        let sig = signature_help(src, 1, 11, U16).expect("sig");
+        let sig = signature_help(src, "file:///a.osp", 1, 11, U16).expect("sig");
         assert_eq!(sig.parameters, vec!["x".to_owned()]);
         assert_eq!(sig.active_parameter, 0);
     }
@@ -423,7 +432,7 @@ mod tests {
         // call is the still-open outer `print(...)`. This exercises the `)` arm
         // that pops the call/comma stacks.
         let src = "fn add(a: int, b: int) -> int = a + b\nlet r = add(add(1, 2), 3)\n";
-        let sig = signature_help(src, 1, 24, U16).expect("sig");
+        let sig = signature_help(src, "file:///a.osp", 1, 24, U16).expect("sig");
         assert_eq!(sig.label, "fn add(a: int, b: int) -> int");
         // After the inner call closed, the cursor is over the outer second arg.
         assert_eq!(sig.active_parameter, 1, "{sig:?}");
@@ -434,7 +443,7 @@ mod tests {
         // The escaped quote and the `//` comment must not corrupt the comma/call
         // tracking, so the active parameter stays at the first argument.
         let src = "fn f(a: int, b: int) -> int = a\nlet x = f(\"a\\\"b\" // c, d\n";
-        let sig = signature_help(src, 1, 23, U16).expect("sig");
+        let sig = signature_help(src, "file:///a.osp", 1, 23, U16).expect("sig");
         assert_eq!(sig.active_parameter, 0, "{sig:?}");
     }
 }

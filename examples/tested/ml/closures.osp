@@ -1,0 +1,13 @@
+// Default-flavor twin of closures.ospml. ML `adder n = \x => x + n` lowers to
+// `fn adder(n) = fn(x) => x + n`; the ML signature maps to the `-> (int) -> int`
+// annotation that makes the captured-arg closure concrete and auto-unwraps the
+// arithmetic Result — byte-identical IR.
+
+fn adder(n: int) -> (int) -> int = fn(x) => x + n
+
+fn main() = {
+    let add10 = adder(10)
+    let add100 = adder(100)
+    print("a=${add10(5)} b=${add100(5)} c=${adder(3)(4)}")
+    0
+}

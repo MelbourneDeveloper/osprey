@@ -149,8 +149,24 @@ function isOspreyLanguageId(languageId: string): boolean {
   return OSPREY_LANGUAGE_IDS.includes(languageId);
 }
 
+// ospreyLanguageForFile maps an Osprey source file to its VS Code language id —
+// the ML layout flavor (.ospml) to "osprey-ml", the brace flavor (.osp) to
+// "osprey" — or undefined for a non-Osprey file. ".ospml" is checked first
+// because it also ends with "osp". Exported so the mapping is unit-testable.
+export function ospreyLanguageForFile(fileName: string): string | undefined {
+  if (fileName.endsWith(".ospml")) {
+    return "osprey-ml";
+  }
+  if (fileName.endsWith(".osp")) {
+    return "osprey";
+  }
+  return undefined;
+}
+
 function isOspreyDocument(document: ActiveEditorLike["document"]): boolean {
-  return isOspreyLanguageId(document.languageId) || isOspreyFile(document.fileName);
+  return (
+    isOspreyLanguageId(document.languageId) || isOspreyFile(document.fileName)
+  );
 }
 
 // applyDefaultOspreyDebugConfig fills an otherwise-empty launch config from the
@@ -597,8 +613,14 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand("osprey.setLanguage", () => {
       const activeEditor = window.activeTextEditor;
       if (activeEditor) {
-        languages.setTextDocumentLanguage(activeEditor.document, "osprey");
-        window.showInformationMessage("Set language to Osprey");
+        const target =
+          ospreyLanguageForFile(activeEditor.document.fileName) ?? "osprey";
+        languages.setTextDocumentLanguage(activeEditor.document, target);
+        window.showInformationMessage(
+          target === "osprey-ml"
+            ? "Set language to Osprey ML"
+            : "Set language to Osprey",
+        );
       }
     }),
     workspace.onDidChangeConfiguration((event: any) => {
@@ -614,7 +636,7 @@ export function activate(context: ExtensionContext) {
 async function debugCurrentFile() {
   const config = defaultOspreyDebugConfigForEditor(window.activeTextEditor);
   if (!config.program) {
-    window.showErrorMessage("Please open a .osp file to debug");
+    window.showErrorMessage("Please open a .osp or .ospml file to debug");
     return;
   }
   await debug.startDebugging(undefined, config);
@@ -628,8 +650,8 @@ function compileCurrentFile(compilerCommand: string) {
   }
 
   const document = activeEditor.document;
-  if (!document.fileName.endsWith(".osp")) {
-    window.showErrorMessage("Please open a .osp file to compile");
+  if (!isOspreyFile(document.fileName)) {
+    window.showErrorMessage("Please open a .osp or .ospml file to compile");
     return;
   }
 
@@ -688,8 +710,8 @@ function compileAndRunCurrentFile(compilerCommand: string) {
   }
 
   const document = activeEditor.document;
-  if (!document.fileName.endsWith(".osp")) {
-    window.showErrorMessage("Please open a .osp file to run");
+  if (!isOspreyFile(document.fileName)) {
+    window.showErrorMessage("Please open a .osp or .ospml file to run");
     return;
   }
 

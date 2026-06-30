@@ -8,6 +8,16 @@ difference to any program. The developer's only obligation is the one every
 garbage-collected language already imposes: don't keep references to values
 you no longer need.
 
+> **Flavor layer — shared core (AST and above).**  Memory management is entirely
+> below the canonical AST: the `@osp_alloc` boundary, ARC/tracing reclamation,
+> ownership inference, and the runtime all consume `osprey_ast::Program` and the
+> IR lowered from it, never the CST or its source flavor. Allocation arises from
+> the AST nodes that produce heap values (`List`, `Map`, `Object`, `Str`,
+> `InterpolatedStr`, closures from `Lambda`, union/record `TypeConstructor`),
+> and two programs with identical ASTs exhibit byte-identical memory behaviour
+> whether they were written in the Default (`.osp`) or ML (`.ospml`) flavor. See
+> [Language Flavors](0023-LanguageFlavors.md) [FLAVOR-BOUNDARY].
+
 ## Status
 
 Partially implemented — the *boundary* exists and a first *reclaiming* backend

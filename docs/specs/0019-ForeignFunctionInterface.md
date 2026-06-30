@@ -2,6 +2,8 @@
 
 Osprey calls C (and any C-ABI library) through `extern fn` declarations. There are no per-library compiler builtins — SQLite, libpq, compression, crypto all bind through this one mechanism. Declaration grammar and the type ABI table are in [Syntax](0003-Syntax.md#extern-declarations); sandbox gating (`--no-ffi`, `--sandbox`) is in [Security and Sandboxing](0016-SecurityAndSandboxing.md).
 
+> **Flavor layer — mixed.**  An `extern fn` *declaration* is a surface (CST) form: the spelling here is the Default flavor (`.osp`); the ML flavor (`.ospml`) spells the same declaration in offside layout, with the counterpart described in [ML Flavor Syntax](0024-MLFlavorSyntax.md). Both flavors lower to the single canonical `Stmt::Extern` (parameters as `ExternParameter`, signature via `TypeExpr`), and a callback argument lowers to `Expr::Identifier` or a capture-free `Expr::Lambda`. Everything below that node — the C-ABI type mapping, the `Ptr` type, link directives, and linking — is shared core and flavor-blind: per [FLAVOR-BOUNDARY] no phase after lowering can tell which flavor wrote the `extern`. See [Language Flavors](0023-LanguageFlavors.md).
+
 ## Link Directives [FFI-LINK-DIRECTIVES]
 
 A source comment directive links a system library at compile time:

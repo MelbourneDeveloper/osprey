@@ -2,6 +2,8 @@
 
 Fibers are lightweight concurrent computations. They are constructed as values of `Fiber<T>` and communicate through `Channel<T>`. There are no OS threads exposed to user code; the runtime schedules fibers cooperatively. Values cross fiber boundaries — `spawn` captures and channel `send` — by move or copy, never by sharing ([MEM-FIBER-ISOLATION] in [Memory Management](0018-MemoryManagement.md)).
 
+> **Flavor layer — shared core (AST and above).**  Concurrency is a shared-core concern. The constructs here lower to canonical `osprey_ast` nodes — `Expr::Spawn`, `Expr::Yield`, `Expr::Await`, `Expr::Send`, `Expr::Recv`, and `Expr::Select` — and the runtime scheduler operates on those nodes alone ([FLAVOR-BOUNDARY] in [Language Flavors](0023-LanguageFlavors.md)). The semantics, the cooperative scheduling, and the channel runtime are one across every flavor; only the surface spelling differs. The Default (`.osp`) spelling is shown below; the ML (`.ospml`) counterpart is described in [ML Flavor Syntax](0024-MLFlavorSyntax.md). No phase below the AST can tell which flavor produced a fiber, send, or select.
+
 ## Status
 
 `spawn`, `await`, `yield`, and basic channel operations are implemented. `yield`

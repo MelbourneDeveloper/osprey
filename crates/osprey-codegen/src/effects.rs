@@ -28,6 +28,16 @@ pub(crate) struct OpSig {
 }
 
 impl OpSig {
+    /// A default all-`i64` signature for `arity` parameters — the fallback when
+    /// inference recorded no resolved signature for an effect operation.
+    fn default_for_arity(arity: usize) -> Self {
+        OpSig {
+            params: vec![LType::I64; arity],
+            ret: LType::I64,
+            ret_result_inner: None,
+        }
+    }
+
     /// The handler function's LLVM return-type spelling (the Result block
     /// pointer for a Result result, else the plain type).
     fn ret_ty(&self) -> String {
@@ -41,6 +51,43 @@ impl OpSig {
         parts.extend(self.params.iter().map(LType::to_string));
         format!("{} ({})*", self.ret_ty(), parts.join(", "))
     }
+}
+
+/// Emit `ret <ty> <operand>` for `ret` and close out the nested function whose
+/// LLVM return type matches `sig`.
+fn ret_and_exit(
+    cg: &mut Codegen,
+    saved: crate::builder::SavedFn,
+    sig: &OpSig,
+    name: &str,
+    params: &[(LType, String)],
+    ret: &Value,
+) {
+    cg.emit(format!("ret {} {}", ret.llvm_ty(), ret.operand));
+    cg.exit_nested_fn(saved, &sig.ret_ty(), name, params);
+}
+
+/// Bind each of an arm's operation parameters as an SSA value (`%name`, typed
+/// from `sig`, defaulting to `i64`) and append it to the emitted `params` list.
+fn bind_arm_params(
+    cg: &mut Codegen,
+    arm: &HandlerArm,
+    sig: &OpSig,
+    params: &mut Vec<(LType, String)>,
+) {
+    for (i, pname) in arm.params.iter().enumerate() {
+        let pty = sig.params.get(i).copied().unwrap_or(LType::I64);
+        cg.bind(pname.clone(), Value::new(format!("%{pname}"), pty));
+        params.push((pty, pname.clone()));
+    }
+}
+
+/// The free identifiers an arm's body closes over, minus the arm's own
+/// parameters — the names that must be captured from the enclosing scope.
+fn arm_free_idents(arm: &HandlerArm) -> impl Iterator<Item = String> + '_ {
+    let mut free = BTreeSet::new();
+    free_idents(&arm.body, &mut free);
+    free.into_iter().filter(|n| !arm.params.contains(n))
 }
 
 /// One binding shared by every arm of a single `handle` region, captured into
@@ -84,6 +131,14 @@ pub(crate) fn op_sig_of(op: &osprey_types::OpType) -> OpSig {
         ret,
         ret_result_inner: inner,
     }
+}
+
+/// The resolved [`OpSig`] for `effect.operation`, falling back to an all-`i64`
+/// signature of the arm's arity when inference recorded none.
+fn op_sig_for(cg: &Codegen, effect: &str, arm: &HandlerArm) -> OpSig {
+    let key = format!("{effect}.{}", arm.operation);
+    cg.effect_op(&key)
+        .unwrap_or_else(|| OpSig::default_for_arity(arm.params.len()))
 }
 
 fn declare_stack(cg: &mut Codegen) {
@@ -137,9 +192,7 @@ fn scan_expr(e: &Expr, muts: &mut BTreeSet<String>, captured: &mut BTreeSet<Stri
     match e {
         Expr::Handler { arms, body, .. } => {
             for arm in arms {
-                let mut free = BTreeSet::new();
-                free_idents(&arm.body, &mut free);
-                captured.extend(free.into_iter().filter(|n| !arm.params.contains(n)));
+                captured.extend(arm_free_idents(arm));
                 scan_expr(&arm.body, muts, captured);
             }
             scan_expr(body, muts, captured);
@@ -296,12 +349,7 @@ pub(crate) fn gen_handler(
     let caps = capture_list(cg, arms);
     let (env, env_ty) = build_env(cg, &caps);
     for arm in arms {
-        let key = format!("{effect}.{}", arm.operation);
-        let sig = cg.effect_op(&key).unwrap_or(OpSig {
-            params: vec![LType::I64; arm.params.len()],
-            ret: LType::I64,
-            ret_result_inner: None,
-        });
+        let sig = op_sig_for(cg, effect, arm);
         let id = cg.next_handler_id();
         let fn_name = format!("__handler_{effect}_{}_{id}", arm.operation);
         emit_handler_fn(cg, &fn_name, arm, &sig, &caps, &env_ty)?;
@@ -408,26 +456,17 @@ fn stmt_contains_resume(stmt: &Stmt) -> bool {
 /// free variable is captured by value. Names that resolve to nothing in scope
 /// (top-level functions, constructors) need no capture — the arm resolves them
 /// directly.
+fn arms_free_idents(arms: &[HandlerArm]) -> BTreeSet<String> {
+    arms.iter().flat_map(arm_free_idents).collect()
+}
+
 fn capture_list(cg: &Codegen, arms: &[HandlerArm]) -> Vec<ArmCap> {
-    let mut names = BTreeSet::new();
-    for arm in arms {
-        let mut free = BTreeSet::new();
-        free_idents(&arm.body, &mut free);
-        names.extend(free.into_iter().filter(|n| !arm.params.contains(n)));
-    }
-    caps_from_names(cg, names)
+    caps_from_names(cg, arms_free_idents(arms))
 }
 
 fn capture_list_resuming(cg: &Codegen, arms: &[HandlerArm], body: &Expr) -> Vec<ArmCap> {
-    let mut names = BTreeSet::new();
-    for arm in arms {
-        let mut free = BTreeSet::new();
-        free_idents(&arm.body, &mut free);
-        names.extend(free.into_iter().filter(|n| !arm.params.contains(n)));
-    }
-    let mut body_free = BTreeSet::new();
-    free_idents(body, &mut body_free);
-    names.extend(body_free);
+    let mut names = arms_free_idents(arms);
+    free_idents(body, &mut names);
     caps_from_names(cg, names)
 }
 
@@ -503,11 +542,7 @@ fn emit_handler_fn(
     let saved = cg.enter_nested_fn();
     let mut params = vec![(LType::Ptr, String::from("__env"))];
     reload_env(cg, caps, env_ty);
-    for (i, pname) in arm.params.iter().enumerate() {
-        let pty = sig.params.get(i).copied().unwrap_or(LType::I64);
-        cg.bind(pname.clone(), Value::new(format!("%{pname}"), pty));
-        params.push((pty, pname.clone()));
-    }
+    bind_arm_params(cg, arm, sig, &mut params);
     let body = gen_expr(cg, &arm.body)?;
     let ret = if let Some(inner) = sig.ret_result_inner {
         if body.result_inner.is_some() {
@@ -518,9 +553,7 @@ fn emit_handler_fn(
     } else {
         coerce_to(cg, body, sig.ret)?
     };
-    cg.emit(format!("ret {} {}", ret.llvm_ty(), ret.operand));
-    let ret_ty = sig.ret_ty();
-    cg.exit_nested_fn(saved, &ret_ty, name, &params);
+    ret_and_exit(cg, saved, sig, name, &params, &ret);
     Ok(())
 }
 
@@ -593,12 +626,7 @@ fn gen_resuming_handler(
     let answer_ty = emit_resuming_body_fn(cg, &body_fn, body, &caps, &env_ty)?;
     let mut drive_arms = Vec::new();
     for (op_id, arm) in arms.iter().enumerate() {
-        let key = format!("{effect}.{}", arm.operation);
-        let sig = cg.effect_op(&key).unwrap_or(OpSig {
-            params: vec![LType::I64; arm.params.len()],
-            ret: LType::I64,
-            ret_result_inner: None,
-        });
+        let sig = op_sig_for(cg, effect, arm);
         let suspend_fn = format!("__resume_suspend_{effect}_{}_{id}_{op_id}", arm.operation);
         let arm_fn = format!("__resume_arm_{effect}_{}_{id}_{op_id}", arm.operation);
         emit_suspend_fn(cg, &suspend_fn, op_id, &sig);
@@ -712,9 +740,7 @@ fn emit_suspend_fn(cg: &mut Codegen, name: &str, op_id: usize, sig: &OpSig) {
         ],
     );
     let ret = unbox_coro_value(cg, &raw, sig.ret, sig.ret_result_inner);
-    cg.emit(format!("ret {} {}", ret.llvm_ty(), ret.operand));
-    let ret_ty = sig.ret_ty();
-    cg.exit_nested_fn(saved, &ret_ty, name, &params);
+    ret_and_exit(cg, saved, sig, name, &params, &ret);
 }
 
 struct ArmFnSpec<'a> {
@@ -733,11 +759,7 @@ fn emit_resuming_arm_fn(cg: &mut Codegen, arm: &HandlerArm, spec: &ArmFnSpec<'_>
         (LType::Ptr, String::from("__env")),
         (LType::Ptr, String::from("__coro")),
     ];
-    for (i, pname) in arm.params.iter().enumerate() {
-        let pty = spec.sig.params.get(i).copied().unwrap_or(LType::I64);
-        cg.bind(pname.clone(), Value::new(format!("%{pname}"), pty));
-        params.push((pty, pname.clone()));
-    }
+    bind_arm_params(cg, arm, spec.sig, &mut params);
     cg.resume_ctx = Some(ResumeCodegenContext {
         env: String::from("%__env"),
         coro: String::from("%__coro"),
@@ -900,11 +922,9 @@ pub(crate) fn gen_perform(
 ) -> Result<Value> {
     declare_stack(cg);
     let key = format!("{effect}.{operation}");
-    let sig = cg.effect_op(&key).unwrap_or(OpSig {
-        params: vec![LType::I64; args.len()],
-        ret: LType::I64,
-        ret_result_inner: None,
-    });
+    let sig = cg
+        .effect_op(&key)
+        .unwrap_or_else(|| OpSig::default_for_arity(args.len()));
 
     // Evaluate + coerce arguments to the operation's parameter types.
     let mut typed = Vec::new();

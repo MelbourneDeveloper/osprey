@@ -1,10 +1,10 @@
 //! Expression lowering: every [`Expr`] form — literals, operators, call shapes
 //! and named arguments, match/handler arms, and string interpolation.
 
-use crate::lower::Lowerer;
+use super::lower::Lowerer;
+use crate::strings::{lower_interpolation, unquote};
 use osprey_ast::{
-    Expr, FieldAssignment, HandlerArm, InterpolatedPart, MapEntry, MatchArm, NamedArgument,
-    Pattern, Stmt,
+    Expr, FieldAssignment, HandlerArm, MapEntry, MatchArm, NamedArgument, Pattern, Stmt,
 };
 use tree_sitter::Node;
 
@@ -354,96 +354,8 @@ impl Lowerer<'_> {
         }
     }
 
-    // Interpolation splitting lives as a free `pub(crate)` fn below so the ML
-    // frontend can reuse it with its own fragment parser (no duplication).
-}
-
-/// Split a `"text ${expr} more"` literal into [`InterpolatedPart`]s, parsing
-/// each embedded expression with `parse_frag` (the active flavor's fragment
-/// parser). Shared by the Default and ML frontends so the `${…}`-scanning and
-/// escape handling exist in exactly one place.
-pub(crate) fn lower_interpolation(
-    raw: &str,
-    parse_frag: impl Fn(&str) -> Expr,
-) -> Vec<InterpolatedPart> {
-    let inner = unquote(raw);
-        let bytes = inner.as_bytes();
-        let mut parts = Vec::new();
-        let mut text_start = 0usize;
-        let mut i = 0usize;
-        while i < bytes.len() {
-            if bytes.get(i) == Some(&b'$') && bytes.get(i + 1) == Some(&b'{') {
-                if i > text_start {
-                    if let Some(text) = inner.get(text_start..i) {
-                        parts.push(InterpolatedPart::Text(text.to_string()));
-                    }
-                }
-                // Find the `}` that closes this `${`, honouring nested braces so
-                // `${match x { a => 1 b => 2 }}` captures the whole match.
-                let mut depth = 1i32;
-                let mut j = i + 2;
-                while let Some(byte) = bytes.get(j) {
-                    match byte {
-                        b'{' => depth += 1,
-                        b'}' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                break;
-                            }
-                        }
-                        _ => {}
-                    }
-                    j += 1;
-                }
-                if let Some(frag) = inner.get(i + 2..j) {
-                    parts.push(InterpolatedPart::Expr(parse_frag(frag)));
-                }
-                i = j + 1;
-                text_start = i;
-            } else {
-                i += 1;
-            }
-        }
-        if let Some(text) = inner.get(text_start..) {
-            if !text.is_empty() {
-                parts.push(InterpolatedPart::Text(text.to_string()));
-            }
-        }
-        parts
-}
-
-/// Strip surrounding quotes and resolve backslash escapes in one pass (so a
-/// literal `\\` can never be re-interpreted): `\n` `\r` `\t` newline/CR/tab,
-/// `\e` the ANSI ESC (0x1B, used by the terminal-color helpers), `\0` NUL,
-/// `\"` and `\\` the literals. An unrecognised escape is kept verbatim.
-pub(crate) fn unquote(s: &str) -> String {
-    let trimmed = s
-        .strip_prefix('"')
-        .and_then(|x| x.strip_suffix('"'))
-        .unwrap_or(s);
-    let mut out = String::with_capacity(trimmed.len());
-    let mut chars = trimmed.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some('t') => out.push('\t'),
-            Some('e') => out.push('\u{1b}'),
-            Some('0') => out.push('\0'),
-            Some('"') => out.push('"'),
-            // An escaped backslash, or a trailing lone backslash at end of input.
-            Some('\\') | None => out.push('\\'),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-        }
-    }
-    out
+    // Interpolation splitting and escape resolution are flavor-neutral and live
+    // in `crate::strings`; this frontend supplies its own fragment parser below.
 }
 
 /// Parse an interpolation fragment (`${ ... }` contents) into a single [`Expr`].

@@ -4,10 +4,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+#include <stdint.h>  // int64_t — explicit so the wasm32-wasip1 sysroot resolves it
 #include <pthread.h>
 #ifdef __wasm__
-// wasm32-wasip1 is single-threaded and ships no pthread symbols, so the
-// effect handler stack needs no real locking. [WASM-TARGET-EFFECTS]
+// wasm32-wasip1 is single-threaded: the effect handler stack needs no real
+// locking, so the mutex ops become no-ops. The thread-based coroutine
+// continuation section (struct OspreyCoro onward) is excluded wholesale for
+// wasm via `#ifndef __wasm__` — it needs pthread_create/cond/join/exit, which
+// wasi-libc cannot honour. With those symbols absent from the wasm archive,
+// resumable-effect programs link-fail and are SKIPped by the wasm golden suite,
+// exactly like the fiber/HTTP runtimes. [WASM-TARGET-EFFECTS]
 #define pthread_mutex_init(m, a) ((void)(m), (void)(a), 0)
 #define pthread_mutex_lock(m) ((void)(m), 0)
 #define pthread_mutex_unlock(m) ((void)(m), 0)
@@ -210,6 +217,13 @@ void __osprey_handler_restore(HandlerSnapshot *snap) {
     free(snap);
 }
 
+// Thread-based effect continuations: a handler `resume` is implemented by
+// running the handled computation on its own pthread and ping-ponging control
+// via a condvar. wasm32-wasip1 has no usable pthreads, so this entire section
+// is compiled only for native targets; on wasm the `__osprey_coro_*` symbols
+// are intentionally absent, making resumable-effect programs link-fail and be
+// SKIPped by the wasm golden suite. [WASM-TARGET-EFFECTS]
+#ifndef __wasm__
 typedef struct OspreyCoro {
     pthread_mutex_t lock;
     pthread_cond_t cond;
@@ -440,3 +454,4 @@ void __osprey_coro_free(void *raw) {
     pthread_mutex_destroy(&coro->lock);
     free(coro);
 }
+#endif // !__wasm__ — thread-based effect continuations excluded on wasm32-wasip1

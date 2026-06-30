@@ -11,6 +11,12 @@ pub(crate) struct Token {
     pub kind: TokKind,
     /// 1-based line / 0-based column where the token starts.
     pub pos: Position,
+    /// Whether this token immediately follows the previous content token with
+    /// no intervening whitespace/comment. Disambiguates `xs[0]` (a *glued*
+    /// postfix index) from `f [0]` (whitespace application to a list literal) —
+    /// the only place ML whitespace-application overlaps bracket syntax
+    /// ([FLAVOR-ML-INDEX]).
+    pub glued: bool,
 }
 
 /// The kind (and payload) of an ML token.
@@ -32,8 +38,14 @@ pub(crate) enum TokKind {
     KwFalse,
     /// `match`.
     KwMatch,
+    /// `type` — introduces a union/enum/record type declaration ([FLAVOR-ML-TYPE]).
+    KwType,
+    /// `extern` — introduces an external (FFI) function declaration ([FLAVOR-ML-EXTERN]).
+    KwExtern,
+    /// `spawn` — starts a fiber, evaluating its block/expr concurrently ([FLAVOR-ML-SPAWN]).
+    KwSpawn,
     /// A reserved word reserved for a not-yet-implemented construct (`effect`,
-    /// `handler`, `handle`, `do`, `perform`, `type`). Carries its spelling so the
+    /// `handler`, `handle`, `do`, `perform`). Carries its spelling so the
     /// parser can report a precise "not yet supported" diagnostic.
     Reserved(String),
     /// `=`.
@@ -52,6 +64,10 @@ pub(crate) enum TokKind {
     LParen,
     /// `)`.
     RParen,
+    /// `[`.
+    LBracket,
+    /// `]`.
+    RBracket,
     /// `,`.
     Comma,
     /// `.`.
@@ -76,7 +92,10 @@ pub(crate) fn keyword_or_ident(text: &str) -> TokKind {
         "true" => TokKind::KwTrue,
         "false" => TokKind::KwFalse,
         "match" => TokKind::KwMatch,
-        "effect" | "handler" | "handle" | "do" | "perform" | "type" => {
+        "type" => TokKind::KwType,
+        "extern" => TokKind::KwExtern,
+        "spawn" => TokKind::KwSpawn,
+        "effect" | "handler" | "handle" | "do" | "perform" => {
             TokKind::Reserved(text.to_owned())
         }
         _ => TokKind::Ident(text.to_owned()),

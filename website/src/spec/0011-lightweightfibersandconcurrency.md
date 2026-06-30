@@ -2,7 +2,7 @@
 layout: page
 title: "Fibers and Concurrency"
 description: "Osprey Language Specification: Fibers and Concurrency"
-date: 2026-06-19
+date: 2026-06-30
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0011-lightweightfibersandconcurrency/"
@@ -14,7 +14,15 @@ Fibers are lightweight concurrent computations. They are constructed as values o
 
 ## Status
 
-`spawn`, `await`, `yield`, and basic channel operations are implemented. The `select` expression and the fiber-isolated module system below are planned and not yet wired through code generation.
+`spawn`, `await`, `yield`, and basic channel operations are implemented. `yield`
+performs a real cooperative hand-off: in concurrent (thread-backed) execution it
+donates the CPU to the scheduler and resumes when next scheduled, forwarding its
+operand unchanged. Under the deterministic execution mode used by the test
+harness, fibers run sequentially to completion, so `yield` forwards its value
+without re-ordering; true cross-fiber interleaving under deterministic mode would
+require stackful context switching and is not yet implemented. The `select`
+expression and the fiber-isolated module system below are planned and not yet
+wired through code generation.
 
 ## Core Types
 

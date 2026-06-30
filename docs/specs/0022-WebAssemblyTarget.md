@@ -6,19 +6,31 @@ reuses the existing LLVM-IR pipeline unchanged and adds a target selector
 link step. The output is a `wasm32-wasip1` command module that runs under any
 WASI host — `wasmtime`, Node's `node:wasi`, or a browser WASI shim. [WASM-TARGET]
 
+> **Flavor layer — shared core (AST and above).**  The wasm backend lives
+> entirely below the surface: it consumes the canonical `osprey_ast::Program`
+> through the same LLVM-IR pipeline as the native target and never sees which
+> [flavor](0023-LanguageFlavors.md) produced it. Because codegen is a pure
+> function of the AST, identical ASTs yield byte-identical IR and `.wasm` —
+> this is the [FLAVOR-IR-EQUIV] guarantee, so an ML `.ospml` program runs on
+> wasm exactly like its `.osp` twin (the golden suite already proves this via
+> the flavor-shared `<stem>.expectedoutput` fallback in Status).
+
 ## Status
 
 Implemented for the portable language core. `osprey --target=wasm32 --compile`
 emits a validated `.wasm` that prints correctly under wasmtime, Node's WASI, and
-in the browser (`examples/wasm/`). Of the tested example suite, **30/48 run on
-wasm with byte-identical stdout**; the other 18 use a non-portable feature and
-skip (see below). The CI `wasm` job gates on both the browser-loadable example
-(`wasm-validate` + Node-WASI stdout) and the full golden suite
-(`crates/diff_wasm_examples.sh`, FAIL=0).
+in the browser (`examples/wasm/`). Of the tested example suite, **47/70 run on
+wasm with byte-identical stdout** — including every ML-flavor `.osp` twin under
+`examples/tested/ml/`, which the golden harness reaches via the flavor-shared
+`<stem>.expectedoutput` fallback ([FLAVOR-IR-EQUIV]); the other 23 use a
+non-portable feature and skip (see below). The CI `wasm` job gates on both the
+browser-loadable example (`wasm-validate` + Node-WASI stdout) and the full
+golden suite (`crates/diff_wasm_examples.sh`, FAIL=0).
 
 Not yet ported (link-time `undefined symbol`, by design — see Limitations):
 fibers/`spawn` (pthreads), HTTP/WebSocket (sockets/OpenSSL), FFI (`dlopen`),
-and the `random`/`input` builtins (CSPRNG/stdin syscalls).
+the `random`/`input` builtins (CSPRNG/stdin syscalls), and **resumable effect
+continuations** — the thread-based `__osprey_coro_*` runtime ([WASM-TARGET-EFFECTS]).
 
 ## Design
 
@@ -87,13 +99,36 @@ conventional Homebrew / wasi-sdk / Linux paths.
 ### Runtime subset [WASM-TARGET-RUNTIME]
 
 `make _runtime_wasm` cross-compiles the portable C units — allocator, strings,
-list/map containers, JSON, effects — to `libosprey_runtime_wasm.a`. The
-allocator is the default `malloc` passthrough (`@osp_alloc`); how memory is
-managed on wasm — and why the tracing GC is excluded — is detailed in
-[WASM-TARGET-MEMORY] below. Non-portable units (fibers, HTTP/WebSocket, system,
-terminal, FFI, CSPRNG) are excluded; because archives link on demand, a program
-that does not reference their symbols links cleanly, and one that does fails at
-link with a clear `undefined symbol`.
+list/map containers, JSON, and the effect *handler stack* — to
+`libosprey_runtime_wasm.a` (the thread-based effect *continuations* are split
+out; see [WASM-TARGET-EFFECTS]). The allocator is the default `malloc`
+passthrough (`@osp_alloc`); how memory is managed on wasm — and why the tracing
+GC is excluded — is detailed in [WASM-TARGET-MEMORY] below. Non-portable units
+(fibers, HTTP/WebSocket, system, terminal, FFI, CSPRNG) are excluded; because
+archives link on demand, a program that does not reference their symbols links
+cleanly, and one that does fails at link with a clear `undefined symbol`.
+
+### Effects: handler stack portable, continuations native-only [WASM-TARGET-EFFECTS]
+
+`effects_runtime.c` is the one runtime unit that is *partly* portable, so it is
+split rather than excluded wholesale. The **handler stack** (push/pop/lookup of
+`handle … in` scopes) needs only a mutex — no-op'd on single-threaded wasm — so
+it compiles into the wasm archive and a program that merely installs handlers
+links cleanly. The **resumable continuation** machinery (`__osprey_coro_*`)
+implements `resume` by running the handled computation on its own `pthread` and
+ping-ponging control through a condvar; `wasm32-wasip1` has no usable pthreads
+(`pthread_create`/`pthread_cond_*`/`pthread_exit`), so that whole section is
+guarded out with `#ifndef __wasm__`. With those symbols absent, a program that
+actually resumes an effect link-fails on `__osprey_coro_suspend` and is SKIPped
+by the golden suite — the same "non-portable feature ⇒ undefined symbol ⇒ skip"
+contract used for fibers/HTTP. (`#include <stdint.h>` is explicit because the
+wasi sysroot, unlike the host libc, does not transitively supply `int64_t`.)
+
+**Assumption:** resumable algebraic effects on wasm wait on the precise,
+thread-free continuation backend the ARC work unlocks ([WASM-TARGET-MEMORY-ARC]);
+until then they are a documented wasm limitation, not a regression. The five
+`effects/resume_*.osp` examples assert this by SKIPping on wasm while passing
+natively.
 
 ### Memory management: linear memory now, ARC the wasm-friendly path [WASM-TARGET-MEMORY]
 
@@ -143,9 +178,11 @@ wasm uses the default allocate-and-leak-until-exit backend.
 
 ## Limitations
 
-- **No fibers/HTTP/WebSocket/FFI/`random`/`input`.** These depend on
-  pthreads / sockets / OpenSSL / `dlopen` / syscalls absent under
-  `wasm32-wasip1`. A program using them fails at link, not silently.
+- **No fibers/HTTP/WebSocket/FFI/`random`/`input`/resumable effects.** These
+  depend on pthreads / sockets / OpenSSL / `dlopen` / syscalls absent under
+  `wasm32-wasip1`. A program using them fails at link, not silently. Effect
+  *handlers* still work on wasm; only `resume`-based continuations are excluded
+  ([WASM-TARGET-EFFECTS]).
 - **WASI in the browser** needs a shim (`examples/wasm/wasi-shim.mjs`, loaded by
   `index.html` and exercised headlessly by `scripts/wasm-browser-smoke.mjs`),
   mapping `fd_write` to the page/console. A future `wasm32-unknown-unknown` mode
@@ -167,6 +204,6 @@ wasm uses the default allocate-and-leak-until-exit backend.
 - `examples/wasm/index.html` — loads and runs it in the browser, output to page
 - `zsh crates/diff_wasm_examples.sh` — the golden suite: compile every tested
   example to wasm, run under Node's WASI, diff stdout; non-portable examples
-  (undefined symbol) are SKIPped. Reports `PASS=30 FAIL=0 SKIP=18`.
+  (undefined symbol) are SKIPped. Reports `PASS=47 FAIL=0 SKIP=23 NOEXP=0`.
 - CI `wasm` job runs the validate + Node-WASI smoke **and** the golden suite on
   every PR.

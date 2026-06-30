@@ -16,6 +16,8 @@ import {
   resolveLldbDapCommand,
   resolveLldbDapExecutable,
   missingLldbDapMessage,
+  ospreyLanguageForFile,
+  isOspreyFile,
   deactivate,
 } from "../../client/src/extension";
 import {
@@ -2037,6 +2039,44 @@ suite("Osprey Binary Resolution Unit Tests", () => {
     assert.ok(
       !looksLikePath("osprey-lsp"),
       "hyphenated bare command is not a path",
+    );
+  });
+
+  // The .ospml extension selects the ML layout flavor. The language id is what
+  // the language client's documentSelector keys off, and the compiler resolves
+  // the same flavor from the file path — so this mapping is exactly what makes
+  // .ospml diagnostics use the ML frontend instead of being misreported as
+  // broken Default syntax. ".ospml" must win over ".osp" because it also ends
+  // with "osp". Guards the flavor selection that drives ML diagnostics.
+  test("ospreyLanguageForFile maps .ospml to osprey-ml and .osp to osprey", () => {
+    assert.strictEqual(
+      ospreyLanguageForFile("/work/curry_tour.ospml"),
+      "osprey-ml",
+      ".ospml selects the ML layout flavor language id",
+    );
+    assert.strictEqual(
+      ospreyLanguageForFile("/work/hello.osp"),
+      "osprey",
+      ".osp selects the brace flavor language id",
+    );
+    assert.strictEqual(
+      ospreyLanguageForFile("C:\\work\\tour.ospml"),
+      "osprey-ml",
+      ".ospml wins over .osp despite also ending in osp",
+    );
+    assert.strictEqual(
+      ospreyLanguageForFile("/work/readme.md"),
+      undefined,
+      "a non-Osprey file maps to no language id",
+    );
+  });
+
+  test("isOspreyFile accepts both .osp and .ospml", () => {
+    assert.ok(isOspreyFile("/work/hello.osp"), ".osp is an Osprey file");
+    assert.ok(isOspreyFile("/work/hello.ospml"), ".ospml is an Osprey file");
+    assert.ok(
+      !isOspreyFile("/work/notes.txt"),
+      "a non-Osprey file is rejected",
     );
   });
 });

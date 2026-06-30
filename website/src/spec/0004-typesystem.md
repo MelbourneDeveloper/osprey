@@ -2,7 +2,7 @@
 layout: page
 title: "Type System"
 description: "Osprey Language Specification: Type System"
-date: 2026-06-19
+date: 2026-06-30
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0004-typesystem/"
