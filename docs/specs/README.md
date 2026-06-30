@@ -29,6 +29,9 @@ This directory holds **all spec documents** for the project:
   - [`0024-MLFlavorSyntax.md`](0024-MLFlavorSyntax.md) — the ML flavor surface
     reference: layout blocks, curry-by-default functions, `=>` effect operations,
     first-class handler values, and each construct's canonical lowering.
+  - [`0025-ModulesAndNamespaces.md`](0025-ModulesAndNamespaces.md) — multi-file
+    application structure: path-independent namespaces, explicit module exports,
+    signatures, state modules, import resolution, and project assembly.
 
 ## Spec ID convention
 

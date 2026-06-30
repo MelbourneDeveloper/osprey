@@ -100,6 +100,11 @@ select {
 
 ## Fiber-Isolated Modules (planned)
 
+> **Superseded design note.** This section records the older sketch that existed
+> before the multi-file module design. The normative module/state model is now
+> [Modules and Namespaces](0025-ModulesAndNamespaces.md), especially
+> `[MODULES-STATE]` and `[MODULES-STATE-MODULE]`.
+
 Each fiber that touches a `module` receives its own private instance. There is no shared mutable state across fibers; communication is via channels.
 
 ```osprey

@@ -43,6 +43,10 @@ module Geometry {
 }
 ```
 
+Module semantics for multi-file projects, exports, signatures, state modules,
+and path-independent namespaces are defined in
+[Modules and Namespaces](0025-ModulesAndNamespaces.md).
+
 ## Imports
 
 ```ebnf
@@ -54,6 +58,9 @@ import std
 import std.io
 import graphics.canvas
 ```
+
+Import semantics for multi-file projects, aliases, explicit member imports, and
+wildcard policy are defined in [Modules and Namespaces](0025-ModulesAndNamespaces.md#imports).
 
 ## Let Declarations
 
