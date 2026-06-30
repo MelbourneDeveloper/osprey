@@ -167,10 +167,6 @@ pub fn parse_program_for_path(path: &str, source: &str) -> Parsed {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::indexing_slicing,
-    reason = "test assertions: an out-of-bounds index is a test failure, not a production panic"
-)]
 mod tests {
     use super::*;
 

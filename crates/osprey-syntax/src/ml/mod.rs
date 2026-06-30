@@ -14,9 +14,14 @@
 //! 3. [`lower`] normalises the CST into the canonical AST (currying, pipe
 //!    desugaring, interpolation), the sole place ML meets the shared core.
 //!
-//! First-class handler values and effects (plan phase 0) are not yet in the
-//! shared core, so the parser reports a precise "not yet supported" error for
-//! `effect`/`handler`/`handle`/`do`/`perform` rather than misparsing them.
+//! Algebraic effects are supported: `effect`/`perform`/`handle`/`resume` lower
+//! to the same canonical [`Stmt::Effect`](osprey_ast::Stmt::Effect),
+//! [`Expr::Perform`](osprey_ast::Expr::Perform),
+//! [`Expr::Handler`](osprey_ast::Expr::Handler), and
+//! [`Expr::Resume`](osprey_ast::Expr::Resume) the Default flavor emits
+//! ([FLAVOR-ML-EFFECT]). First-class handler values (`handler`/`do`) are not yet
+//! in the shared core, so the parser reports a precise "not yet supported" error
+//! for those rather than misparsing them.
 
 use crate::{Flavor, Parsed};
 

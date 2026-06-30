@@ -147,7 +147,9 @@ mod tests {
         let parts = lower_interpolation("\"v ${1 + 2} end\"", frag);
         assert_eq!(parts.len(), 3);
         assert!(matches!(parts[0], InterpolatedPart::Text(ref t) if t == "v "));
-        assert!(matches!(parts[1], InterpolatedPart::Expr(Expr::Identifier(ref e)) if e == "1 + 2"));
+        assert!(
+            matches!(parts[1], InterpolatedPart::Expr(Expr::Identifier(ref e)) if e == "1 + 2")
+        );
         assert!(matches!(parts[2], InterpolatedPart::Text(ref t) if t == " end"));
         // Nested braces inside `${…}` are captured whole, and an interpolation
         // ending exactly at `}` leaves no trailing text part.

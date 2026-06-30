@@ -398,6 +398,14 @@ name = "osprey-debug"
 version = "0.0.0-dev"
 
 [[package]]
+name = "osprey-fmt"
+version = "0.0.0-dev"
+dependencies = [
+ "osprey-ast",
+ "osprey-syntax",
+]
+
+[[package]]
 name = "osprey-lsp"
 version = "0.0.0-dev"
 dependencies = [

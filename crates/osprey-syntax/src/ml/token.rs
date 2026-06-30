@@ -44,9 +44,29 @@ pub(crate) enum TokKind {
     KwExtern,
     /// `spawn` — starts a fiber, evaluating its block/expr concurrently ([FLAVOR-ML-SPAWN]).
     KwSpawn,
-    /// A reserved word reserved for a not-yet-implemented construct (`effect`,
-    /// `handler`, `handle`, `do`, `perform`). Carries its spelling so the
-    /// parser can report a precise "not yet supported" diagnostic.
+    /// `effect` — introduces an algebraic effect declaration ([FLAVOR-ML-EFFECT]).
+    KwEffect,
+    /// `perform` — performs an effect operation ([FLAVOR-ML-EFFECT]).
+    KwPerform,
+    /// `handle` — installs an effect handler ([FLAVOR-ML-EFFECT]).
+    KwHandle,
+    /// `resume` — resumes a suspended continuation from a handler arm ([FLAVOR-ML-EFFECT]).
+    KwResume,
+    /// `in` — separates a `handle` block from the handled body ([FLAVOR-ML-EFFECT]).
+    KwIn,
+    /// `await` — block on a spawned fiber's result ([FLAVOR-ML-CONCURRENCY]).
+    KwAwait,
+    /// `yield` — yield (optionally a value) from the current fiber ([FLAVOR-ML-CONCURRENCY]).
+    KwYield,
+    /// `send` — send a value on a channel ([FLAVOR-ML-CONCURRENCY]).
+    KwSend,
+    /// `recv` — receive a value from a channel ([FLAVOR-ML-CONCURRENCY]).
+    KwRecv,
+    /// `select` — choose among ready channel arms ([FLAVOR-ML-CONCURRENCY]).
+    KwSelect,
+    /// A reserved word reserved for a not-yet-implemented construct (`handler`,
+    /// `do`). Carries its spelling so the parser can report a precise
+    /// "not yet supported" diagnostic.
     Reserved(String),
     /// `=`.
     Eq,
@@ -95,9 +115,17 @@ pub(crate) fn keyword_or_ident(text: &str) -> TokKind {
         "type" => TokKind::KwType,
         "extern" => TokKind::KwExtern,
         "spawn" => TokKind::KwSpawn,
-        "effect" | "handler" | "handle" | "do" | "perform" => {
-            TokKind::Reserved(text.to_owned())
-        }
+        "effect" => TokKind::KwEffect,
+        "perform" => TokKind::KwPerform,
+        "handle" => TokKind::KwHandle,
+        "resume" => TokKind::KwResume,
+        "in" => TokKind::KwIn,
+        "await" => TokKind::KwAwait,
+        "yield" => TokKind::KwYield,
+        "send" => TokKind::KwSend,
+        "recv" => TokKind::KwRecv,
+        "select" => TokKind::KwSelect,
+        "handler" | "do" => TokKind::Reserved(text.to_owned()),
         _ => TokKind::Ident(text.to_owned()),
     }
 }

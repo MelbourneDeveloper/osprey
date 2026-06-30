@@ -8,7 +8,9 @@
 //! failure (not a production panic), so the lint is relaxed only for this file.
 #![expect(
     clippy::indexing_slicing,
-    reason = "test assertions: an out-of-bounds index is a test failure"
+    clippy::panic,
+    clippy::unreachable,
+    reason = "test assertions: a failed match, unreachable arm, or out-of-bounds index is a test failure, not a production panic"
 )]
 
 use std::str::FromStr;
@@ -22,7 +24,10 @@ use osprey_syntax::{
 /// Parse ML source, asserting a clean parse, and return the statements.
 fn ml_ok(src: &str) -> Vec<Stmt> {
     let parsed = parse_program_with_flavor(src, Flavor::Ml);
-    assert!(parsed.errors.is_empty(), "unexpected ml errors: {parsed:#?}");
+    assert!(
+        parsed.errors.is_empty(),
+        "unexpected ml errors: {parsed:#?}"
+    );
     assert_eq!(parsed.flavor, Flavor::Ml);
     parsed.program.statements
 }
@@ -94,7 +99,10 @@ fn path_and_resolve_select_ml_frontend() {
     assert!(p.errors.is_empty(), "errors: {:?}", p.errors);
     assert_eq!(p.flavor, Flavor::Ml);
     // resolve_flavor agrees with the extension.
-    assert_eq!(resolve_flavor(None, "t.ospml", "").as_ref(), Ok(&Flavor::Ml));
+    assert_eq!(
+        resolve_flavor(None, "t.ospml", "").as_ref(),
+        Ok(&Flavor::Ml)
+    );
 }
 
 // --- lexer.rs ----------------------------------------------------------------
@@ -103,7 +111,7 @@ fn path_and_resolve_select_ml_frontend() {
 fn float_literal_lexes_and_lowers() {
     // Exercises scan_number's float branch (the `.digits` tail) and the float
     // atom lowering.
-    assert_eq!(let_value("pi = 3.14\n"), Expr::Float(3.14));
+    assert_eq!(let_value("g = 9.8\n"), Expr::Float(9.8));
     // A trailing dot with no fraction is NOT a float: `1.` keeps the int then a
     // dot (field access) — here `x.field` is a field access, not a float.
     match let_value("r = a.b\n") {
@@ -237,10 +245,7 @@ fn unexpected_token_in_type_reports_an_error() {
     // `x : =` puts an `=` where a type atom is expected.
     let parsed = ml_err("x : =\nx = 1\n");
     assert!(
-        parsed
-            .errors
-            .iter()
-            .any(|e| e.message.contains("in type")),
+        parsed.errors.iter().any(|e| e.message.contains("in type")),
         "expected an in-type error, got {:?}",
         parsed.errors
     );
@@ -397,8 +402,10 @@ fn expression_only_top_level_item_is_a_bare_expr_statement() {
 
 #[test]
 fn reserved_words_each_report_not_yet_supported() {
-    // Every reserved Phase-0 word must error loudly rather than misparse.
-    for word in ["effect", "handler", "handle", "do", "perform"] {
+    // The remaining Phase-0 words (first-class handler values) must error loudly
+    // rather than misparse. `effect`/`handle`/`perform`/`resume` are now supported
+    // and lower to the canonical effect AST ([FLAVOR-ML-EFFECT]).
+    for word in ["handler", "do"] {
         let parsed = ml_err(&format!("{word} Foo\n"));
         assert!(
             parsed
@@ -475,7 +482,9 @@ fn field_access_lowers_to_field_access() {
 fn string_pattern_in_match_lowers_to_a_literal() {
     match let_value("r =\n    match s\n        \"hi\" => 1\n        _ => 0\n") {
         Expr::Match { arms, .. } => {
-            assert!(matches!(&arms[0].pattern, Pattern::Literal(boxed) if matches!(**boxed, Expr::Str(ref t) if t == "hi")));
+            assert!(
+                matches!(&arms[0].pattern, Pattern::Literal(boxed) if matches!(**boxed, Expr::Str(ref t) if t == "hi"))
+            );
         }
         other => panic!("expected a match, got {other:?}"),
     }
@@ -484,7 +493,9 @@ fn string_pattern_in_match_lowers_to_a_literal() {
 #[test]
 fn constructor_pattern_with_payload_fields_lowers() {
     // `Success value` binds one payload field; `Error message` another.
-    match let_value("r =\n    match res\n        Success value => value\n        Error message => message\n") {
+    match let_value(
+        "r =\n    match res\n        Success value => value\n        Error message => message\n",
+    ) {
         Expr::Match { arms, .. } => {
             match &arms[0].pattern {
                 Pattern::Constructor { name, fields, .. } => {
@@ -525,18 +536,36 @@ fn interpolation_with_application_fragment_lowers_to_a_call() {
 }
 
 #[test]
-fn three_parameter_function_is_one_uncurried_function() {
-    // `f a b c = a` ⇒ a single THREE-parameter function with the body straight in
-    // place — the uncurried skin ([FLAVOR-CURRY]), byte-identical to the Default
-    // `fn f(a, b, c) = a`, deliberately NOT a nested-lambda curry chain.
+fn three_parameter_function_is_curried_nested_lambda() {
+    // `f a b c = a` curries by default ([FLAVOR-ML-CURRY]): a single ONE-parameter
+    // function over `a` whose body is a nested one-parameter lambda chain over `b`
+    // then `c` — byte-identical to the Default *explicit-curry*
+    // `fn f(a) = fn(b) => fn(c) => a`, deliberately NOT the flat `fn f(a, b, c)`.
     match ml_one("f a b c = a\n") {
         Stmt::Function {
             parameters, body, ..
         } => {
-            assert_eq!(parameters.len(), 3);
+            assert_eq!(parameters.len(), 1);
             assert_eq!(parameters[0].name, "a");
-            assert_eq!(parameters[2].name, "c");
-            assert!(matches!(body, Expr::Identifier(ref n) if n == "a"));
+            match body {
+                Expr::Lambda {
+                    parameters, body, ..
+                } => {
+                    assert_eq!(parameters.len(), 1);
+                    assert_eq!(parameters[0].name, "b");
+                    match *body {
+                        Expr::Lambda {
+                            parameters, body, ..
+                        } => {
+                            assert_eq!(parameters.len(), 1);
+                            assert_eq!(parameters[0].name, "c");
+                            assert!(matches!(*body, Expr::Identifier(ref n) if n == "a"));
+                        }
+                        other => panic!("expected inner lambda over c, got {other:?}"),
+                    }
+                }
+                other => panic!("expected curried lambda over b, got {other:?}"),
+            }
         }
         other => panic!("expected a function, got {other:?}"),
     }

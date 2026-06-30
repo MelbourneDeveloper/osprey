@@ -296,6 +296,54 @@ wire is re-measured into the negotiated encoding
 `byte_col_to_encoding`). A client that negotiates UTF-8 must receive UTF-8
 offsets; this is not optional.
 
+## Analyzer Lints `[LSP-ANALYZER]`
+
+The language server is also Osprey's **analyzer**: beyond type and effect errors
+it runs a set of **style lints** that keep source minimal and idiomatic. Lints
+are computed on the canonical `osprey_ast::Program` plus the inferred type
+tables, so they are **flavor-blind** ([FLAVOR-BOUNDARY](0023-LanguageFlavors.md#the-one-law))
+— one lint fires identically for a `.osp` and its `.ospml` twin — and each ships
+a **code action (autofix)** so the editor rewrites the offending text in one
+keystroke. CI runs the same analyzer in deny mode, so a lint is a hard failure,
+not a hint. **Status: specified; the redundant-symbol rule below is the first to
+be implemented.**
+
+### Redundant symbols `[ANALYZER-REDUNDANT-SYMBOL]`
+
+**The first and highest-priority analyzer rule.** Osprey is terse in *both*
+flavors; a symbol the compiler can derive on its own is noise. This lint flags —
+and its autofix **deletes** — every **redundant type annotation**: any annotation
+whose type the Hindley-Milner checker already infers
+([TYPE-NO-REDUNDANT-ANNOTATION](0004-TypeSystem.md#hindley-milner-inference)).
+
+| Redundant form | Autofix result |
+| --- | --- |
+| `fn add(a: int, b: int) = a + b` | `fn add(a, b) = a + b` |
+| `fn isEven(x) -> bool = (x % 2) == 0` | `fn isEven(x) = (x % 2) == 0` |
+| `let n: int = 0` | `let n = 0` |
+| `\|x: int\| => x * 2` | `\|x\| => x * 2` |
+| ML `add : int -> int` over an inferable `add x = …` | delete the signature line |
+| needless `fn main()` / ML `main () =` wrapping a script | unwrap to bare top-level statements |
+
+**Decision procedure.** The annotation is redundant ⇔ re-running inference with
+it removed yields the *same* principal type **and** the same lowered AST/IR. The
+lint checks the written annotation against the inferred type; if they match and
+the annotation is not load-bearing, it reports a `quickfix` that removes the
+symbol (and, for a needless `main`, dedents the body — `main` is synthesised from
+trailing top-level statements, so the script runs unchanged).
+
+**Never flagged (load-bearing).** The lint must not touch an annotation the
+checker cannot infer: an empty literal (`let xs: List<int> = []`), the ambiguous
+empty map `{}`, an `extern` boundary, an unconstrained polymorphic variable a
+caller must pin, or a return type that *forces* `Result<T, E>` auto-unwrap to `T`
+([Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)). Removing
+one of these changes the program, so it is not redundant. A `main` that takes
+arguments or returns a real exit code is likewise kept.
+
+This lint is the enforcement arm of
+[TYPE-NO-REDUNDANT-ANNOTATION](0004-TypeSystem.md#hindley-milner-inference); the
+two specs move together.
+
 ## Editor integrations
 
 Every integration is a thin client over `[LSP-TRANSPORT]`. They differ only in

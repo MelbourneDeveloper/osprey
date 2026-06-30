@@ -165,9 +165,11 @@ Returns the UTF-8 byte at index `i` as an `int` in `[0, 255]`, or `Error(IndexOu
 Decodes the UTF-8 codepoint starting at `byteIndex` and returns it as an `int`. Returns `Error(IndexOutOfRange)` if `byteIndex` is out of range, or `Error(InvalidArgument)` if it does not land on a codepoint boundary or the bytes are malformed. O(1) (at most 4 bytes read). Pair with `codePointWidth` to advance:
 
 ```osprey
-fn nextChar(s: string, i: int) -> Result<(int, int), StringError> = match codePointAt(s, i) {
+type CharStep = { codePoint: int, nextIndex: int }
+
+fn nextChar(s, i) = match codePointAt(s, i) {
     Success { value: cp } => match codePointWidth(cp) {
-        Success { value: w } => Success { value: (cp, i + w) }
+        Success { value: w } => Success { value: CharStep { codePoint: cp, nextIndex: i + w } }
         Error   { message }  => Error { message }
     }
     Error { message } => Error { message }
@@ -255,11 +257,13 @@ let greeting = "Hello, " + name + "!"
 ### Example: parsing a query string
 
 ```osprey
-fn parsePair(pair: string) -> Result<(string, string), StringError> =
+type KeyValue = { key: string, value: string }
+
+fn parsePair(pair) =
     match indexOf(pair, "=") {
         Success { value: i } => match substring(pair, 0, i) {
             Success { value: k } => match substring(pair, i + 1, length(pair)) {
-                Success { value: v } => Success { value: (k, v) }
+                Success { value: v } => Success { value: KeyValue { key: k, value: v } }
                 Error   { message }  => Error { message }
             }
             Error { message } => Error { message }
@@ -306,14 +310,14 @@ Checks if file exists.
 Spawns an external process. The callback is invoked for each stdout/stderr line and on exit.
 
 ```osprey
-fn processEventHandler(processID: int, eventType: int, data: string) -> unit = match eventType {
+fn processEventHandler(processID, eventType, data) = match eventType {
     1 => print("[STDOUT] ${data}")
     2 => print("[STDERR] ${data}")
     3 => print("[EXIT] Code: ${data}")
     _ => print("[UNKNOWN] ${data}")
 }
 
-let result = spawnProcess(command: "echo 'Hello'", callback: processEventHandler)
+let result = spawnProcess("echo 'Hello'", processEventHandler)
 ```
 
 ### `awaitProcess(processId: int) -> int`

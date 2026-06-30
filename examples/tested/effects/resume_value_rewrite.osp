@@ -15,19 +15,17 @@ fn total() -> int !Supply = {
     }
 }
 
-fn main() = {
-    mut seed = 100
-    let result = handle Supply
-        next label => {
-            seed = match seed + 5 {
-                Success { value } => value
-                Error { message } => seed
-            }
-            print("supply " + label + "=" + toString(seed))
-            let answer = resume(seed)
-            print("seen after " + label + ": " + toString(answer))
-            answer
+mut seed = 100
+let result = handle Supply
+    next label => {
+        seed = match seed + 5 {
+            Success { value } => value
+            Error { message } => seed
         }
-    in total()
-    print("result=" + toString(result))
-}
+        print("supply " + label + "=" + toString(seed))
+        let answer = resume(seed)
+        print("seen after " + label + ": " + toString(answer))
+        answer
+    }
+in total()
+print("result=" + toString(result))

@@ -17,7 +17,7 @@ zero () = 48
 nine () = 57
 
 // Is the byte at index i an ASCII digit? End-of-input (Error) is "no".
-isDigitAt s i =
+isDigitAt (s, i) =
     match byteAt s i
         Success value => value >= zero () && value <= nine ()
         Error message => false
@@ -25,47 +25,47 @@ isDigitAt s i =
 // Accumulate the digit run starting at i. acc carries the value built so far;
 // each step multiplies by ten and adds (byte - '0'). Stops at the first
 // non-digit byte OR at end-of-input, returning the accumulated integer.
-scanInt s i acc =
+scanInt (s, i, acc) =
     match byteAt s i
         Success value =>
             match value >= zero () && value <= nine ()
-                true => scanInt s (i + 1) ((acc * 10) + (value - zero ()))
+                true => scanInt (s, (i + 1), ((acc * 10) + (value - zero ())))
                 false => acc
         Error message => acc
 
 // Index of the first byte at or after i that is NOT a digit (where the token
 // ends). Recurses while digits continue; returns i at the first non-digit/EOI.
-scanEnd s i =
-    match isDigitAt s i
-        true => scanEnd s (i + 1)
+scanEnd (s, i) =
+    match isDigitAt (s, i)
+        true => scanEnd (s, (i + 1))
         false => i
 
 // Skip a run of non-digit bytes: index of the next digit at or after i, or
 // byteLength s if none remains. The dual of scanEnd, used to hop between
 // number tokens.
-nextDigit s i =
+nextDigit (s, i) =
     match i >= byteLength s
         true => i
         false =>
-            match isDigitAt s i
+            match isDigitAt (s, i)
                 true => i
-                false => nextDigit s (i + 1)
+                false => nextDigit (s, (i + 1))
 
 // Walk the whole string, scanning every number token into a List<int>.
 // From position i: skip to the next digit, scan that number, append it, then
 // continue from just past the token. Terminates when no digit remains.
-scanAll s i acc =
-    match nextDigit s i >= byteLength s
+scanAll (s, i, acc) =
+    match nextDigit (s, i) >= byteLength s
         true => acc
-        false => scanAll s (scanEnd s (nextDigit s i)) (listAppend acc (scanInt s (nextDigit s i) 0))
+        false => scanAll (s, (scanEnd (s, (nextDigit (s, i)))), (listAppend acc (scanInt (s, (nextDigit (s, i)), 0))))
 
 main () =
     // ---- single token: "12345abc" stops at 'a' ----
     mixed = "12345abc"
     print "byteLen=${byteLength mixed}\n"
-    print "scan=${scanInt mixed 0 0}\n"
-    print "end=${scanEnd mixed 0}\n"
-    match byteAt mixed (scanEnd mixed 0)
+    print "scan=${scanInt (mixed, 0, 0)}\n"
+    print "end=${scanEnd (mixed, 0)}\n"
+    match byteAt mixed (scanEnd (mixed, 0))
         Success value => print "stopByte=${value}\n"
         Error message => print "stopByte FAILED\n"
 
@@ -74,26 +74,26 @@ main () =
     // `${…}` span, so each call whose argument is a string literal is hoisted
     // into a binding first; the temp collapses in codegen to the same IR the
     // Default flavor emits for the inline `${scanInt("777", 0, 0)}` form.
-    pure = scanInt "777" 0 0
+    pure = scanInt ("777", 0, 0)
     print "pure=${pure}\n"
-    pureEnd = scanEnd "777" 0
+    pureEnd = scanEnd ("777", 0)
     print "pureEnd=${pureEnd}\n"
 
     // ---- leading non-digits: scan returns 0, nextDigit finds the run ----
-    leadScan = scanInt "ab42" 0 0
+    leadScan = scanInt ("ab42", 0, 0)
     print "leadScan=${leadScan}\n"
-    leadNext = nextDigit "ab42" 0
+    leadNext = nextDigit ("ab42", 0)
     print "leadNext=${leadNext}\n"
-    leadVal = scanInt "ab42" (nextDigit "ab42" 0) 0
+    leadVal = scanInt ("ab42", (nextDigit ("ab42", 0)), 0)
     print "leadVal=${leadVal}\n"
 
     // ---- empty input: nothing to scan ----
-    emptyScan = scanInt "" 0 0
+    emptyScan = scanInt ("", 0, 0)
     print "emptyScan=${emptyScan}\n"
 
     // ---- multi-token lexer over a delimited string ----
     stream = "12,345-6789 0!42"
-    tokens = scanAll stream 0 (List ())
+    tokens = scanAll (stream, 0, (List ()))
     print "tokenCount=${listLength tokens}\n"
     forEachList tokens print
 

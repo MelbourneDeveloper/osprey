@@ -105,15 +105,12 @@ fn bump() -> int !State = {
     perform State.get()
 }
 
-fn main() -> int {
-    mut cell = 0
-    let r = handle State
-        get        => cell           // reads the shared cell
-        set newVal => { cell = newVal }   // writes the shared cell
-    in bump()
-    print("r=${toString(r)} cell=${toString(cell)}")   // r=1 cell=1
-    0
-}
+mut cell = 0
+let r = handle State
+    get        => cell           // reads the shared cell
+    set newVal => { cell = newVal }   // writes the shared cell
+in bump()
+print("r=${toString(r)} cell=${toString(cell)}")   // r=1 cell=1
 ```
 
 The cell is shared across the C HTTP-callback boundary (a request handler's
@@ -161,19 +158,16 @@ fn pipeline() -> int !Audit = {
     a + b
 }
 
-fn main() -> int {
-    mut n = 0
-    let total = handle Audit
-        step label => {
-            n = n + 1
-            let answer = resume(n)          // performer continues with n
-            print("after ${label}: answer=${toString(answer)}")
-            answer                          // code AFTER resume — impossible with tail-resume
-        }
-    in pipeline()
-    print("total=${toString(total)}")
-    0
-}
+mut n = 0
+let total = handle Audit
+    step label => {
+        n = n + 1
+        let answer = resume(n)          // performer continues with n
+        print("after ${label}: answer=${toString(answer)}")
+        answer                          // code AFTER resume — impossible with tail-resume
+    }
+in pipeline()
+print("total=${toString(total)}")
 ```
 
 Output — the "after" lines unwind **LIFO** as each continuation completes, the

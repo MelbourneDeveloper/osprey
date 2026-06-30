@@ -13,18 +13,16 @@ fn pipeline() -> int !Audit = {
     }
 }
 
-fn main() = {
-    mut n = 0
-    let total = handle Audit
-        step label => {
-            n = match n + 1 {
-                Success { value } => value
-                Error { message } => n
-            }
-            let answer = resume(n)
-            print("after " + label + ": answer=" + toString(answer))
-            answer
+mut n = 0
+let total = handle Audit
+    step label => {
+        n = match n + 1 {
+            Success { value } => value
+            Error { message } => n
         }
-    in pipeline()
-    print("total=" + toString(total))
-}
+        let answer = resume(n)
+        print("after " + label + ": answer=" + toString(answer))
+        answer
+    }
+in pipeline()
+print("total=" + toString(total))

@@ -76,6 +76,8 @@ fn getValue()  = 42
 
 Effect sets (`!E`) are described in [Algebraic Effects](0017-AlgebraicEffects.md). Functions of two or more parameters require named arguments at call sites; see [Function Calls](0005-FunctionCalls.md).
 
+A Default multi-parameter function such as `fn add(x, y) = x + y` lowers to a **single flat multi-parameter** `Stmt::Function`; it does **not** curry. (The ML flavor curries by default — `add x y` is nested single-parameter functions — and spells this flat form as `add (x, y)`; the two Default forms and their ML twins are defined in [Currying canonicalisation](0023-LanguageFlavors.md#currying-canonicalisation).)
+
 ## Extern Declarations
 
 `extern` declares an interface to a foreign function (Rust, C, or any C-ABI library). It has no body.

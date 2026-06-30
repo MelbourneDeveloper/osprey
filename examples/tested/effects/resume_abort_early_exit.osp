@@ -13,22 +13,20 @@ fn guarded() -> int !Stop = {
     99
 }
 
-fn main() = {
-    let result = handle Stop
-        check n => match n {
-            0 => {
-                print("stopping at zero")
-                999
-            }
-            _ => {
-                let answer = resume(match n * 10 {
-                    Success { value } => value
-                    Error { message } => 0
-                })
-                print("continued check " + toString(n) + ": answer=" + toString(answer))
-                answer
-            }
+let result = handle Stop
+    check n => match n {
+        0 => {
+            print("stopping at zero")
+            999
         }
-    in guarded()
-    print("result=" + toString(result))
-}
+        _ => {
+            let answer = resume(match n * 10 {
+                Success { value } => value
+                Error { message } => 0
+            })
+            print("continued check " + toString(n) + ": answer=" + toString(answer))
+            answer
+        }
+    }
+in guarded()
+print("result=" + toString(result))

@@ -101,19 +101,18 @@ fn runApp(db) !Database = {
     }
 }
 
-fn main() =
-    handle Database
-        open path => openReal(path: path)
-        exec db sql => execReal(db: db, sql: sql)
-        prepare db sql => prepareReal(db: db, sql: sql)
-        bindInt stmt idx val => sqlite3_bind_int(stmt: stmt, idx: idx, val: val)
-        bindText stmt idx val => sqlite3_bind_text(stmt: stmt, idx: idx, val: val, nByte: 0 - 1, destructor: osprey_ffi_transient())
-        step stmt => sqlite3_step(stmt: stmt)
-        columnInt stmt col => sqlite3_column_int(stmt: stmt, col: col)
-        columnText stmt col => sqlite3_column_text(stmt: stmt, col: col)
-        finalize stmt => sqlite3_finalize(stmt: stmt)
-        close db => sqlite3_close(db: db)
-    in match perform Database.open(":memory:") {
-        Success { value } => runApp(db: value)
-        Error { message } => print("open ${message}")
-    }
+handle Database
+    open path => openReal(path: path)
+    exec db sql => execReal(db: db, sql: sql)
+    prepare db sql => prepareReal(db: db, sql: sql)
+    bindInt stmt idx val => sqlite3_bind_int(stmt: stmt, idx: idx, val: val)
+    bindText stmt idx val => sqlite3_bind_text(stmt: stmt, idx: idx, val: val, nByte: 0 - 1, destructor: osprey_ffi_transient())
+    step stmt => sqlite3_step(stmt: stmt)
+    columnInt stmt col => sqlite3_column_int(stmt: stmt, col: col)
+    columnText stmt col => sqlite3_column_text(stmt: stmt, col: col)
+    finalize stmt => sqlite3_finalize(stmt: stmt)
+    close db => sqlite3_close(db: db)
+in match perform Database.open(":memory:") {
+    Success { value } => runApp(db: value)
+    Error { message } => print("open ${message}")
+}

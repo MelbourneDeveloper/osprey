@@ -55,7 +55,7 @@ let buf    = Channel<string> { capacity: 10 }   // buffered
 | Wait for a fiber to produce its value           | `await(fiber: Fiber<T>) -> T`                        |
 | Send a value to a channel                       | `send(channel: Channel<T>, value: T) -> Result<unit, ChannelError>` |
 | Receive a value from a channel                  | `recv(channel: Channel<T>) -> Result<T, ChannelError>` |
-| Yield to the scheduler                          | `yield() -> unit`                                    |
+| Yield to the scheduler, forwarding the value    | `yield(value: T) -> T`                               |
 
 ## Producer / Consumer Example
 

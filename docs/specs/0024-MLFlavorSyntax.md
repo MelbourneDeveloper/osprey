@@ -1,10 +1,9 @@
 # ML Flavor Syntax
 
 The **ML flavor** is a layout-based source surface for Osprey: indentation
-delimits blocks, functions are an uncurried syntactic skin over the canonical
-AST (whitespace application reads naturally but lowers byte-identically to the
-Default flavor's multi-argument calls), and effect handlers are first-class
-values. It is one of Osprey's [language flavors](0023-LanguageFlavors.md) — a
+delimits blocks, functions **curry by default** (whitespace application reads as
+curried and lowers to the Default flavor's explicit-curry nested-lambda shape),
+and effect handlers are first-class values. It is one of Osprey's [language flavors](0023-LanguageFlavors.md) — a
 parsing-and-lowering profile, not a separate language. Every construct here
 lowers to the same `osprey_ast::Program` the Default (brace) flavor produces,
 and from there shares one type checker, effect checker, and backend.
@@ -148,9 +147,10 @@ parameter patterns. The optional signature line above it uses ML arrows.
 
 ```ebnf
 signature ::= ID ":" type
-funDef    ::= ID paramPattern+ "=" blockOrExpr
+funDef    ::= ID paramPattern+ "=" blockOrExpr                 (* curried: one arg per pattern *)
+            | ID "(" param ("," param)* ")" "=" blockOrExpr    (* uncurried: one flat arg list *)
 type      ::= type "->" type            (* right-associative: a -> b -> c = a -> (b -> c) *)
-            | "(" type ("," type)* ")" "->" type   (* one tupled argument *)
+            | "(" type ("," type)* ")" "->" type   (* uncurried multi-argument *)
             | typeAtom
 ```
 
@@ -162,41 +162,71 @@ add : int -> int -> int
 add x y = x + y
 ```
 
-`[FLAVOR-ML-CURRY]` ML is an **uncurried syntactic skin** over the canonical
-AST, not a curry-by-default calculus. A multi-parameter binding `add x y = body`
-lowers to **one multi-parameter** `Stmt::Function` — byte-identical canonical AST
-to the Default flavor's `fn add(x, y) = body` — and whitespace application
-`add 1 2` collapses its spine to **one multi-argument** `Expr::Call`, identical
-to Default `add(1, 2)`. This identity is the whole point: it is what lets every
-idiomatic, uncurried Default example have an ML twin that emits byte-identical
-IR ([FLAVOR-IR-EQUIV](0023-LanguageFlavors.md#ir-equivalence)).
+`[FLAVOR-ML-CURRY]` ML **curries by default**. A multi-parameter binding
+`add x y = body` reads as curried: it lowers to the **nested-lambda shape** — a
+one-parameter `Stmt::Function` whose body is a one-parameter `Expr::Lambda` —
+byte-identical to the Default flavor's *explicit-curry*
+`fn add(x) = fn(y) => body`, **not** to the Default *multi-parameter*
+`fn add(x, y)` (a deliberately different value, normative in
+[FLAVOR-CURRY](0023-LanguageFlavors.md#currying-canonicalisation)). An ML program
+and its Default explicit-curry twin emit byte-identical
+IR ([FLAVOR-IR-EQUIV](0023-LanguageFlavors.md#cross-flavor-equivalence-tests)).
 
-Application is left-associative (`add 1 2` is `((add) 1) 2` at the surface, then
-collapsed), and a function-typed signature's arrows are right-associative
-(`int -> int -> int` is `int -> (int -> int)`). Partial application is **not
-implicit**: `add 1` for the two-parameter `add` is an arity error in both
-flavors. Write it with an explicit lambda when you want it — `inc = \y => add 1 y`
-— exactly as Default writes `(y) => add(1, y)`.
+Application is curried and left-associative: `add 1 2` is `((add) 1) 2`, lowering
+to nested single-argument calls `Call(Call(add, [1]), [2])`; a function-typed
+signature's arrows are right-associative (`int -> int -> int` is
+`int -> (int -> int)`), mirroring the application. **Partial application just
+works**: `add 1` is the inner saturated call returning a function value — the
+idiom ML reaches for (`rose = c256 "213"` makes a one-argument colouriser from
+the two-argument `c256`).
 
-A tupled function takes **one** tuple value and is not the normal API style:
+**ML also has an uncurried, multi-argument form** — for a binding that should
+*not* curry — written with parenthesised, comma-separated parameters:
 
 ```osp
-distance : (int, int) -> int
-distance point = ...
+add : (int, int) -> int
+add (x, y) = x + y
 
-d = distance (3, 4)
+sum = add (10, 20)
 ```
 
+`add (x, y) = body` lowers to a **flat two-parameter `Stmt::Function`** — the
+*same* canonical node as the Default *multi-parameter* `fn add(x, y) = body` —
+and the saturated call `add (10, 20)` lowers to a single multi-argument
+`Call(add, [10, 20])`, matching Default's `add(x: 10, y: 20)`. It does **not**
+partially apply; the parenthesised comma-list is an argument grouping, not a
+tuple value (Osprey has no tuple type). It is the deliberate not-equivalent of
+the curried `add x y`.
+
+ML therefore has **two** function forms, and they twin the two Default forms
+exactly:
+
+| ML form | lowers to | Default twin |
+| --- | --- | --- |
+| curried `add x y = e` | one-param `Function` → `Lambda` chain | explicit-curry `fn add(x) = fn(y) => e` |
+| uncurried `add (x, y) = e` | flat two-param `Function` | multi-param `fn add(x, y) = e` |
+
+This is what keeps cross-flavor IR **byte-identical**
+([FLAVOR-IR-EQUIV](0023-LanguageFlavors.md#cross-flavor-equivalence-tests)) with
+**no** backend currying magic: a twin's author picks the ML form matching its
+Default original's currying — curried Default ↔ ML whitespace, uncurried Default
+↔ ML parens — so both sides lower to the same AST and emit the same IR.
+
 Lowering (normative in
-[FLAVOR-CURRY](0023-LanguageFlavors.md#currying-canonicalisation)): `add x y =
-body` lowers to one two-parameter `Stmt::Function`, `\x y => body` to one
-two-parameter `Expr::Lambda`, and `add 1 2` to one two-argument `Expr::Call` —
-each byte-identical to the Default `fn add(x, y)`, `(x, y) => body`, and
-`add(1, 2)`. No flavor-only currying survives lowering.
+[FLAVOR-CURRY](0023-LanguageFlavors.md#currying-canonicalisation)): curried
+`add x y = body` → a one-parameter `Stmt::Function` returning a one-parameter
+`Expr::Lambda`; `\x y => body` → the same curried `Expr::Lambda` chain; `add 1 2`
+→ nested one-argument `Expr::Call`s — each byte-identical to Default
+*explicit-curry* `fn add(x) = fn(y) => body` and `add(1)(2)`. Uncurried
+`add (x, y) = body` → a flat multi-parameter `Stmt::Function`, and `add (1, 2)` →
+a single `Call(add, [1, 2])` — byte-identical to Default `fn add(x, y)` and
+`add(x: 1, y: 2)`. No flavor-only node shape survives lowering; ML reuses
+Default's value vocabulary. (The backend *may* still fold a saturated curried
+call into a direct multi-argument call as an independent optimisation, but the
+lowered AST of `add x y` stays the curried nested form.)
 
 API guidance: put stable, configuration-like arguments first and the data
-argument last, so an explicit-lambda partial is useful (`\s => replace " " "" s`
-⇒ a
+argument last, so partial application is useful (`replace " " ""` ⇒ a
 space-remover).
 
 ## Function Calls
@@ -215,8 +245,11 @@ textResp 201 "created\n"
 c256 "213" (blocks 0 (mn n 28))
 ```
 
-Lowering: `f a b` → nested `Expr::Call`, one argument each
-(`Call(Call(f,[a]),[b])`). A parenthesised group lowers to its inner expression.
+Lowering: whitespace application `f a b` → nested `Expr::Call`, one argument each
+(`Call(Call(f,[a]),[b])`) — curried. A parenthesised comma-list `f (a, b)` is the
+**uncurried** saturated call → a single `Call(f, [a, b])` (matching Default's
+`f(x: a, y: b)`); a single parenthesised expression `f (a)` is just grouping and
+lowers to `Call(f, [a])`.
 
 ## Effects
 
@@ -393,9 +426,11 @@ is in [FLAVOR-LAYER](0023-LanguageFlavors.md#flavor-concern-vs-shared-core-conce
 | `x = e` | `Stmt::Let { mutable: false }` |
 | `mut x = e` | `Stmt::Let { mutable: true }` |
 | `x := e` | `Stmt::Assignment` |
-| `f x y = e` (uncurried) | one multi-param `Stmt::Function` |
-| `\x y => e` | one multi-param `Expr::Lambda` |
-| `f a b` | one multi-arg `Expr::Call` |
+| `f x y = e` (curried) | one-param `Stmt::Function` returning a `Lambda` chain |
+| `f (x, y) = e` (uncurried) | flat multi-param `Stmt::Function` |
+| `\x y => e` | curried `Expr::Lambda` chain |
+| `f a b` | nested one-arg `Expr::Call` — `Call(Call(f,[a]),[b])` |
+| `f (a, b)` (saturated) | single multi-arg `Expr::Call` — `Call(f, [a, b])` |
 | `type T =` + variant/field layout | `Stmt::Type` + `TypeVariant` |
 | `[a, b, c]` / `xs[i]` | `Expr::List` / `Expr::Index` |
 | layout block | `Expr::Block` |
@@ -466,16 +501,13 @@ createTask body =
     perform Log.info "created #${toString id} ${snap}"
     textResp 201 "created task #${toString id}\n"
 
-main : Unit -> int
-main () =
-    db = memoryDb ()
-    log = silentLog ()
+db = memoryDb ()
+log = silentLog ()
 
-    handle db log
-    do
-        response = createTask "buy milk"
-        print (httpResponseBody response)
-        0
+handle db log
+do
+    response = createTask "buy milk"
+    print (httpResponseBody response)
 ```
 
 The first-class handlers make test doubles trivial — a test installs spy or

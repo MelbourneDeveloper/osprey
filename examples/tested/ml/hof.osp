@@ -1,9 +1,10 @@
-// Default-flavor twin of hof.ospml. ML is an uncurried skin: `apply f x = f x`
-// lowers to one multi-parameter `fn apply(f, x)` and whitespace application
-// `apply double 5` to one call `apply(double, 5)` — byte-identical to this
-// Default source. The function-typed parameter signatures and the `-> int`
-// returns on `double`/`inc` mirror the ML signatures and auto-unwrap arithmetic
-// Results.
+// Default-flavor twin of hof.ospml. These are plain multi-argument helpers, so
+// the ML uncurried tuple binding `apply (f, x)` mirrors the Default
+// multi-parameter `fn apply(f, x)` form-for-form — both lower to one flat
+// two-parameter function, byte-identical IR. The function-typed parameter
+// signatures and the `-> int` returns are load-bearing: they keep each function
+// value concrete (codegen rejects a generic function value) and auto-unwrap
+// arithmetic Results.
 
 fn apply(f: (int) -> int, x: int) -> int = f(x)
 
@@ -12,7 +13,4 @@ fn twice(f: (int) -> int, x: int) -> int = f(f(x))
 fn double(n: int) -> int = n + n
 fn inc(n: int) -> int = n + 1
 
-fn main() = {
-    print("a=${apply(double, 5)} b=${apply(inc, 9)} t=${twice(double, 3)} ti=${twice(inc, 40)}")
-    0
-}
+print("a=${apply(double, 5)} b=${apply(inc, 9)} t=${twice(double, 3)} ti=${twice(inc, 40)}")

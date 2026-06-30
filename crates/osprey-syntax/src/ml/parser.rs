@@ -37,8 +37,8 @@
 //!   concrete authoritative spec of layout-driven token insertion.
 
 use super::cst::{
-    MlArm, MlExpr, MlExternParam, MlField, MlItem, MlParam, MlPattern, MlType, MlTypeField,
-    MlVariant,
+    MlArm, MlEffectOp, MlExpr, MlExternParam, MlField, MlHandleArm, MlItem, MlParam, MlPattern,
+    MlType, MlTypeField, MlVariant,
 };
 use super::lexer::lex;
 use super::token::{TokKind, Token};
@@ -59,6 +59,11 @@ pub(crate) fn parse(source: &str) -> (Vec<MlItem>, Vec<SyntaxError>) {
     };
     (items, errors)
 }
+
+/// The `-` operator lexeme — used as both a binary subtraction operator and the
+/// prefix sign of a negative literal (including in patterns, where `-N` folds
+/// into a negated integer literal).
+const MINUS_OP: &str = "-";
 
 /// Binding powers, mirroring the Default grammar's precedence table so equal
 /// programs in either flavor produce the same canonical AST (higher binds
@@ -169,11 +174,12 @@ impl Parser<'_> {
             TokKind::KwMut => self.mut_binding(),
             TokKind::KwType => self.type_decl(),
             TokKind::KwExtern => self.extern_decl(),
+            TokKind::KwEffect => self.effect_decl(),
             TokKind::Reserved(word) => {
                 let word = word.clone();
                 self.error(format!(
-                    "ML construct '{word}' is not yet supported (effects/handlers \
-                     are plan 0013 phase 0); use the Default flavor for now"
+                    "ML construct '{word}' is not yet supported (plan 0013); \
+                     use the Default flavor for now"
                 ));
                 None
             }
@@ -193,6 +199,7 @@ impl Parser<'_> {
             mutable: true,
             name,
             params: Vec::new(),
+            uncurried: false,
             body,
             pos,
         })
@@ -354,6 +361,63 @@ impl Parser<'_> {
         Some(MlExternParam { name, ty })
     }
 
+    /// `effect Name` + an indented block of `op : P => R` operation lines — an
+    /// algebraic effect declaration ([FLAVOR-ML-EFFECT]). Mirrors [`Self::type_decl`]'s
+    /// layout-block parsing.
+    fn effect_decl(&mut self) -> Option<MlItem> {
+        let pos = self.pos();
+        self.advance(); // `effect`
+        let name = self.ident()?;
+        let operations = self.effect_operations();
+        Some(MlItem::Effect {
+            name,
+            operations,
+            pos,
+        })
+    }
+
+    /// The indented `op : P => R` operation lines of an `effect` block.
+    fn effect_operations(&mut self) -> Vec<MlEffectOp> {
+        let mut operations = Vec::new();
+        if !self.eat(&TokKind::Indent) {
+            return operations;
+        }
+        while !self.at_block_end() {
+            self.skip_separators();
+            if self.at_block_end() {
+                break;
+            }
+            let before = self.i;
+            match self.effect_op() {
+                Some(op) => operations.push(op),
+                None => self.recover(),
+            }
+            if self.i == before {
+                self.recover();
+            }
+        }
+        let _ = self.eat(&TokKind::Dedent);
+        operations
+    }
+
+    /// One `op : payload => result` operation line.
+    fn effect_op(&mut self) -> Option<MlEffectOp> {
+        let name = self.ident()?;
+        if !self.eat(&TokKind::Colon) {
+            self.error("expected ':' in effect operation");
+        }
+        let payload = self.ty();
+        if !self.eat(&TokKind::FatArrow) {
+            self.error("expected '=>' in effect operation");
+        }
+        let result = self.ty();
+        Some(MlEffectOp {
+            name,
+            payload,
+            result,
+        })
+    }
+
     /// Dispatch an identifier-led item: signature (skipped), assignment,
     /// binding/function, or a bare expression.
     fn ident_item(&mut self) -> Option<MlItem> {
@@ -374,12 +438,38 @@ impl Parser<'_> {
         Some(MlItem::Assign { name, value, pos })
     }
 
-    /// `name : type` → a type signature for the binding that follows.
+    /// `name : type` → a type signature for the binding that follows, with an
+    /// optional trailing effect row `! Name(, Name)*` or `! [Name, …]`
+    /// ([FLAVOR-ML-EFFECT]).
     fn signature(&mut self) -> Option<MlItem> {
         let name = self.ident()?;
         self.advance(); // `:`
         let ty = self.ty();
-        Some(MlItem::Signature { name, ty })
+        let effects = self.effect_row();
+        Some(MlItem::Signature { name, ty, effects })
+    }
+
+    /// An optional effect row after a signature's type: `! Name(, Name)*` or the
+    /// bracketed `! [Name, …]`. Empty when no `!` is present ([FLAVOR-ML-EFFECT]).
+    fn effect_row(&mut self) -> Vec<String> {
+        if !matches!(self.peek(), TokKind::Op(op) if op == "!") {
+            return Vec::new();
+        }
+        self.advance(); // `!`
+        let bracketed = self.eat(&TokKind::LBracket);
+        let mut effects = Vec::new();
+        if let Some(name) = self.ident() {
+            effects.push(name);
+            while self.eat(&TokKind::Comma) {
+                if let Some(name) = self.ident() {
+                    effects.push(name);
+                }
+            }
+        }
+        if bracketed && !self.eat(&TokKind::RBracket) {
+            self.error("expected ']' to close effect row");
+        }
+        effects
     }
 
     /// A type: arrows are right-associative (`a -> b -> c` = `a -> (b -> c)`).
@@ -411,12 +501,17 @@ impl Parser<'_> {
         matches!(self.peek(), TokKind::Ident(_) | TokKind::LParen)
     }
 
-    /// A type atom: a name, or a parenthesised group / tuple.
+    /// A type atom: a name (optionally with `<…>` generic arguments), or a
+    /// parenthesised group / tuple.
     fn ty_atom(&mut self) -> MlType {
         match self.peek().clone() {
             TokKind::Ident(name) => {
                 self.advance();
-                MlType::Name(name)
+                if self.at_angle_open() {
+                    self.ty_generic_args(name)
+                } else {
+                    MlType::Name(name)
+                }
             }
             TokKind::LParen => self.ty_paren(),
             other => {
@@ -424,6 +519,28 @@ impl Parser<'_> {
                 MlType::Name("Unit".to_owned())
             }
         }
+    }
+
+    /// Whether the current token opens a generic argument list (`<`).
+    fn at_angle_open(&self) -> bool {
+        matches!(self.peek(), TokKind::Op(op) if op == "<")
+    }
+
+    /// `Head< t (, t)* >` — angle-bracketed generic arguments, lowered to the
+    /// same [`MlType::App`] as the whitespace `Head t…` form so both render to
+    /// `Head<…>` ([FLAVOR-ML-FN]). Reuses [`Self::ty`] for each argument.
+    fn ty_generic_args(&mut self, head: String) -> MlType {
+        self.advance(); // `<`
+        let mut args = vec![self.ty()];
+        while self.eat(&TokKind::Comma) {
+            args.push(self.ty());
+        }
+        if matches!(self.peek(), TokKind::Op(op) if op == ">") {
+            self.advance(); // `>`
+        } else {
+            self.error("expected '>' to close generic arguments");
+        }
+        MlType::App { head, args }
     }
 
     /// `( t )` grouping or `( t, t, … )` a tupled argument.
@@ -445,17 +562,20 @@ impl Parser<'_> {
     }
 
     /// `name param* = body` → a binding (value when `param*` is empty, function
-    /// otherwise). Currying is applied later, in the lowerer.
+    /// otherwise). Currying is applied later, in the lowerer; the head form
+    /// (juxtaposed `f x y` curried vs parenthesised comma-list `f (x, y)`
+    /// uncurried) is recorded in `uncurried` ([FLAVOR-ML-CURRY]).
     fn binding(&mut self) -> Option<MlItem> {
         let pos = self.pos();
         let name = self.ident()?;
-        let params = self.params();
+        let (params, uncurried) = self.head_params();
         let _ = self.expect_eq();
         let body = self.body_after_eq();
         Some(MlItem::Binding {
             mutable: false,
             name,
             params,
+            uncurried,
             body,
             pos,
         })
@@ -467,7 +587,22 @@ impl Parser<'_> {
         MlItem::Expr { value, pos }
     }
 
-    /// Collect zero or more surface parameter patterns up to the `=`/`=>`.
+    /// The parameter list of a binding or lambda head, plus whether it was the
+    /// **uncurried** parenthesised comma-list form `(x, y)` (→ a flat
+    /// multi-parameter function/lambda) rather than the juxtaposed curried form
+    /// `x y` (→ a nested-lambda chain) ([FLAVOR-ML-CURRY]). The uncurried form is
+    /// a single parenthesised group holding a top-level comma; everything else
+    /// (juxtaposed names, a lone `(x)` / `(x : t)` / `()`) is curried.
+    fn head_params(&mut self) -> (Vec<MlParam>, bool) {
+        if matches!(self.peek(), TokKind::LParen) && self.first_paren_has_comma() {
+            (self.uncurried_params(), true)
+        } else {
+            (self.params(), false)
+        }
+    }
+
+    /// Collect zero or more juxtaposed surface parameter patterns up to the
+    /// `=`/`=>` — the curried head form.
     fn params(&mut self) -> Vec<MlParam> {
         let mut out = Vec::new();
         loop {
@@ -477,29 +612,85 @@ impl Parser<'_> {
                     self.advance();
                     out.push(MlParam::Named(name));
                 }
-                TokKind::LParen => match self.paren_param() {
-                    Some(name) => out.push(MlParam::Named(name)),
-                    None => out.push(MlParam::Unit),
-                },
+                TokKind::LParen => out.push(self.paren_param()),
                 _ => break,
             }
         }
         out
     }
 
-    /// A parenthesised parameter: `()` (the unit marker → `None`) or `(name)`.
-    fn paren_param(&mut self) -> Option<String> {
+    /// `( p ( , p )* )` — the parenthesised comma-list parameters of the
+    /// uncurried head form ([FLAVOR-ML-CURRY]).
+    fn uncurried_params(&mut self) -> Vec<MlParam> {
         self.advance(); // `(`
-        let name = match self.peek() {
+        let mut out = Vec::new();
+        if !matches!(self.peek(), TokKind::RParen) {
+            loop {
+                out.push(self.one_param());
+                if !self.eat(&TokKind::Comma) {
+                    break;
+                }
+                if matches!(self.peek(), TokKind::RParen) {
+                    break; // tolerate a trailing comma
+                }
+            }
+        }
+        if !self.eat(&TokKind::RParen) {
+            self.error("expected ')'");
+        }
+        out
+    }
+
+    /// A parenthesised parameter: `()` (the unit marker), `(name)`, or the inline
+    /// type-annotated `(name : type)` a lambda uses for a load-bearing parameter
+    /// type ([FLAVOR-ML-FN]).
+    fn paren_param(&mut self) -> MlParam {
+        self.advance(); // `(`
+        let param = self.one_param();
+        let _ = self.eat(&TokKind::RParen);
+        param
+    }
+
+    /// One parameter inside a `(…)` group: a named `name`, a type-annotated
+    /// `name : type`, or the unit marker (no name). Shared by the lone `(x)` and
+    /// the comma-list `(x, y)` forms so neither duplicates the rule.
+    fn one_param(&mut self) -> MlParam {
+        match self.peek() {
             TokKind::Ident(name) => {
                 let name = name.clone();
                 self.advance();
-                Some(name)
+                if self.eat(&TokKind::Colon) {
+                    MlParam::Typed(name, self.ty())
+                } else {
+                    MlParam::Named(name)
+                }
             }
-            _ => None,
-        };
-        let _ = self.eat(&TokKind::RParen);
-        name
+            _ => MlParam::Unit,
+        }
+    }
+
+    /// Non-consuming: does the parenthesised group opening at the current `(`
+    /// hold a top-level comma before its matching `)`? Distinguishes the
+    /// uncurried comma-list `(x, y)` from grouping `(x)` and the unit `()`.
+    fn first_paren_has_comma(&self) -> bool {
+        let mut depth = 0i32;
+        let mut j = self.i;
+        while let Some(tok) = self.toks.get(j) {
+            match tok.kind {
+                TokKind::LParen | TokKind::LBracket => depth += 1,
+                TokKind::RParen | TokKind::RBracket => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return false;
+                    }
+                }
+                TokKind::Comma if depth == 1 => return true,
+                TokKind::Eof => return false,
+                _ => {}
+            }
+            j += 1;
+        }
+        false
     }
 
     /// Lookahead (non-consuming): does the run from the current identifier end
@@ -568,11 +759,14 @@ impl Parser<'_> {
     /// single-argument [`MlExpr::App`] ([FLAVOR-ML-CALL]).
     fn application(&mut self) -> MlExpr {
         let mut func = self.postfix();
-        // `Ctor(field = v, …)` is an inline record literal, not application: an
-        // uppercase constructor immediately followed by `(ident = …`. It lowers
-        // to the same `MlExpr::Record` the layout form does ([FLAVOR-ML-RECORD]).
+        // `Head(field = v, …)` is an inline record literal, not application: any
+        // identifier immediately followed by `(ident = …`. An UPPERCASE head is
+        // construction (`Ctor(...)`); a LOWERCASE head is a non-destructive record
+        // update (`receiver(...)`). Both lower to the same `MlExpr::Record` node —
+        // and to the same canonical `Expr::TypeConstructor { name }` the Default
+        // `Ctor { f: v }` / `receiver { f: v }` produce ([FLAVOR-ML-RECORD]).
         if let MlExpr::Ident(name) = &func {
-            if is_constructor(name) && self.at_inline_record() {
+            if self.at_inline_record() {
                 let name = name.clone();
                 func = self.inline_record(name);
             }
@@ -586,6 +780,17 @@ impl Parser<'_> {
             };
         }
         while self.starts_atom() {
+            // `f (a, b)` — a parenthesised comma-list argument is the uncurried
+            // saturated call: a single multi-argument `Call` ([FLAVOR-ML-CALL]).
+            // A lone `f (a)` has no top-level comma and stays plain grouping.
+            if matches!(self.peek(), TokKind::LParen) && self.first_paren_has_comma() {
+                let args = self.uncurried_args();
+                func = MlExpr::AppMulti {
+                    func: Box::new(func),
+                    args,
+                };
+                continue;
+            }
             let arg = self.postfix();
             func = MlExpr::App {
                 func: Box::new(func),
@@ -593,6 +798,28 @@ impl Parser<'_> {
             };
         }
         func
+    }
+
+    /// `( e ( , e )* )` — the parenthesised comma-list arguments of an uncurried
+    /// saturated call, lowered to a single multi-argument `Call` ([FLAVOR-ML-CALL]).
+    fn uncurried_args(&mut self) -> Vec<MlExpr> {
+        self.advance(); // `(`
+        let mut args = Vec::new();
+        if !matches!(self.peek(), TokKind::RParen) {
+            loop {
+                args.push(self.expr(0));
+                if !self.eat(&TokKind::Comma) {
+                    break;
+                }
+                if matches!(self.peek(), TokKind::RParen) {
+                    break; // tolerate a trailing comma
+                }
+            }
+        }
+        if !self.eat(&TokKind::RParen) {
+            self.error("expected ')'");
+        }
+        args
     }
 
     /// Postfix `.field` access and glued `[index]` chained onto an atom. A `[`
@@ -673,6 +900,14 @@ impl Parser<'_> {
             }
             TokKind::KwMatch => self.match_expr(),
             TokKind::KwSpawn => self.spawn_expr(),
+            TokKind::KwPerform => self.perform_expr(),
+            TokKind::KwHandle => self.handle_expr(),
+            TokKind::KwResume => self.resume_expr(),
+            TokKind::KwAwait => self.await_expr(),
+            TokKind::KwYield => self.yield_expr(),
+            TokKind::KwSend => self.send_expr(),
+            TokKind::KwRecv => self.recv_expr(),
+            TokKind::KwSelect => self.select_expr(),
             TokKind::Backslash => self.lambda(),
             TokKind::LParen => self.paren(),
             TokKind::LBracket => self.list(),
@@ -700,9 +935,14 @@ impl Parser<'_> {
         }
     }
 
-    /// `[ a, b, c ]` list literal (possibly empty). Layout is suppressed inside
-    /// brackets, so elements may span lines ([FLAVOR-ML-LIST]).
+    /// A bracket literal: a `[ k => v, … ]` map when a top-level `=>` (or the
+    /// explicit empty form `[=>]`) is present, otherwise a `[ a, b, c ]` list
+    /// ([FLAVOR-ML-LIST], [FLAVOR-ML-MAP]). Layout is suppressed inside brackets,
+    /// so elements may span lines.
     fn list(&mut self) -> MlExpr {
+        if self.bracket_is_map() {
+            return self.map_literal();
+        }
         self.advance(); // `[`
         let mut items = Vec::new();
         if !matches!(self.peek(), TokKind::RBracket) {
@@ -720,6 +960,68 @@ impl Parser<'_> {
         MlExpr::List(items)
     }
 
+    /// Non-consuming lookahead: does the bracket group opening at the current `[`
+    /// hold map entries? True when a `=>` appears at the group's own nesting
+    /// depth before the matching `]`, or for the explicit empty form `[=>]`.
+    fn bracket_is_map(&self) -> bool {
+        let mut depth = 0i32;
+        let mut j = self.i;
+        while let Some(tok) = self.toks.get(j) {
+            match tok.kind {
+                TokKind::LBracket | TokKind::LParen => depth += 1,
+                TokKind::RBracket | TokKind::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return false; // closed without a top-level `=>`
+                    }
+                }
+                TokKind::FatArrow if depth == 1 => return true,
+                TokKind::Eof => return false,
+                _ => {}
+            }
+            j += 1;
+        }
+        false
+    }
+
+    /// `[ k => v ( , k => v )* ]` or the empty `[=>]` — a map literal. Each entry
+    /// is `key => value`; it lowers to the same [`Expr::Map`] the Default
+    /// `{ k: v }` produces ([FLAVOR-ML-MAP]).
+    fn map_literal(&mut self) -> MlExpr {
+        self.advance(); // `[`
+        let mut entries = Vec::new();
+        // The explicit empty form `[=>]` yields a zero-entry map.
+        if self.eat(&TokKind::FatArrow) {
+            let _ = self.eat(&TokKind::RBracket);
+            return MlExpr::Map(entries);
+        }
+        if !matches!(self.peek(), TokKind::RBracket) {
+            loop {
+                entries.push(self.map_entry());
+                if !self.eat(&TokKind::Comma) {
+                    break;
+                }
+                if matches!(self.peek(), TokKind::RBracket) {
+                    break; // tolerate a trailing comma
+                }
+            }
+        }
+        if !self.eat(&TokKind::RBracket) {
+            self.error("expected ']'");
+        }
+        MlExpr::Map(entries)
+    }
+
+    /// One `key => value` map entry.
+    fn map_entry(&mut self) -> (MlExpr, MlExpr) {
+        let key = self.expr(0);
+        if !self.eat(&TokKind::FatArrow) {
+            self.error("expected '=>' in map entry");
+        }
+        let value = self.expr(0);
+        (key, value)
+    }
+
     /// `( expr )` grouping, kept as an [`MlExpr::Paren`] node.
     fn paren(&mut self) -> MlExpr {
         self.advance(); // `(`
@@ -730,17 +1032,19 @@ impl Parser<'_> {
         MlExpr::Paren(Box::new(inner))
     }
 
-    /// `\param* => body` lambda.
+    /// `\param* => body` lambda. The juxtaposed head `\x y =>` is curried; the
+    /// parenthesised comma-list head `\(x, y) =>` is uncurried ([FLAVOR-ML-CURRY]).
     fn lambda(&mut self) -> MlExpr {
         let pos = self.pos();
         self.advance(); // `\`
-        let params = self.params();
+        let (params, uncurried) = self.head_params();
         if !self.eat(&TokKind::FatArrow) {
             self.error("expected '=>' in lambda");
         }
         let body = self.body_after_eq();
         MlExpr::Lambda {
             params,
+            uncurried,
             body: Box::new(body),
             pos,
         }
@@ -751,6 +1055,164 @@ impl Parser<'_> {
     fn spawn_expr(&mut self) -> MlExpr {
         self.advance(); // `spawn`
         MlExpr::Spawn(Box::new(self.body_after_eq()))
+    }
+
+    /// `perform Effect.op arg…` — perform an effect operation with
+    /// whitespace-applied arguments ([FLAVOR-ML-EFFECT]). The head is the
+    /// dotted `Effect.operation`; the trailing atoms are its arguments.
+    fn perform_expr(&mut self) -> MlExpr {
+        self.advance(); // `perform`
+        let effect = self.ident().unwrap_or_default();
+        if !self.eat(&TokKind::Dot) {
+            self.error("expected '.' between effect and operation in perform");
+        }
+        let operation = self.ident().unwrap_or_default();
+        // `op ()` is a zero-argument performance, not application to unit.
+        if matches!(self.peek(), TokKind::LParen) && matches!(self.peek_at(1), TokKind::RParen) {
+            self.advance();
+            self.advance();
+            return MlExpr::Perform {
+                effect,
+                operation,
+                args: Vec::new(),
+            };
+        }
+        let mut args = Vec::new();
+        while self.starts_atom() {
+            args.push(self.postfix());
+        }
+        MlExpr::Perform {
+            effect,
+            operation,
+            args,
+        }
+    }
+
+    /// `handle Effect` + indented `op param* => body` arms + `in body` — install
+    /// an effect handler over the body expression ([FLAVOR-ML-EFFECT]).
+    fn handle_expr(&mut self) -> MlExpr {
+        self.advance(); // `handle`
+        let effect = self.ident().unwrap_or_default();
+        let mut arms = Vec::new();
+        if self.eat(&TokKind::Indent) {
+            while !self.at_block_end() {
+                self.skip_separators();
+                if self.at_block_end() {
+                    break;
+                }
+                let before = self.i;
+                arms.push(self.handle_arm());
+                if self.i == before {
+                    self.recover();
+                }
+            }
+            let _ = self.eat(&TokKind::Dedent);
+        }
+        self.skip_separators();
+        if !self.eat(&TokKind::KwIn) {
+            self.error("expected 'in' after handle arms");
+        }
+        let body = self.body_after_eq();
+        MlExpr::Handle {
+            effect,
+            arms,
+            body: Box::new(body),
+        }
+    }
+
+    /// One `op param* => body` arm of a `handle` expression.
+    fn handle_arm(&mut self) -> MlHandleArm {
+        let operation = self.ident().unwrap_or_default();
+        let mut params = Vec::new();
+        while let TokKind::Ident(name) = self.peek() {
+            params.push(name.clone());
+            self.advance();
+        }
+        if !self.eat(&TokKind::FatArrow) {
+            self.error("expected '=>' in handle arm");
+        }
+        let body = self.body_after_eq();
+        MlHandleArm {
+            operation,
+            params,
+            body,
+        }
+    }
+
+    /// `resume`, `resume value`, or `resume` + an indented block — resume a
+    /// suspended continuation. A `resume` with no argument yields a unit resume,
+    /// like the Default `resume()` ([FLAVOR-ML-EFFECT]).
+    fn resume_expr(&mut self) -> MlExpr {
+        self.advance(); // `resume`
+        // `resume ()` is a unit resume, like the Default `resume()`.
+        if matches!(self.peek(), TokKind::LParen) && matches!(self.peek_at(1), TokKind::RParen) {
+            self.advance();
+            self.advance();
+            return MlExpr::Resume(None);
+        }
+        // An indented block, or an inline `match`/expression, is the resumed
+        // value; bare `resume` on its own line resumes with unit.
+        if matches!(self.peek(), TokKind::Indent) || self.starts_resume_arg() {
+            return MlExpr::Resume(Some(Box::new(self.body_after_eq())));
+        }
+        MlExpr::Resume(None)
+    }
+
+    /// Whether the current token begins an inline `resume` argument: an ordinary
+    /// argument atom, or a `match` whose own arms supply the resumed value.
+    fn starts_resume_arg(&self) -> bool {
+        self.starts_atom() || matches!(self.peek(), TokKind::KwMatch)
+    }
+
+    /// `await fiber` — block on a spawned fiber. Takes one postfix atom (the
+    /// fiber handle), so `await (spawn f x)` nests via the parenthesised group
+    /// ([FLAVOR-ML-CONCURRENCY]).
+    fn await_expr(&mut self) -> MlExpr {
+        self.advance(); // `await`
+        MlExpr::Await(Box::new(self.postfix()))
+    }
+
+    /// `yield` or `yield value` — yield from the current fiber. A bare `yield`
+    /// (nothing more on the line) yields unit ([FLAVOR-ML-CONCURRENCY]).
+    fn yield_expr(&mut self) -> MlExpr {
+        self.advance(); // `yield`
+        if self.starts_atom() {
+            return MlExpr::Yield(Some(Box::new(self.postfix())));
+        }
+        MlExpr::Yield(None)
+    }
+
+    /// `send channel value` — send a value on a channel; channel and value are
+    /// each one postfix atom ([FLAVOR-ML-CONCURRENCY]).
+    fn send_expr(&mut self) -> MlExpr {
+        self.advance(); // `send`
+        let channel = Box::new(self.postfix());
+        let value = Box::new(self.postfix());
+        MlExpr::Send { channel, value }
+    }
+
+    /// `recv channel` — receive a value from a channel ([FLAVOR-ML-CONCURRENCY]).
+    fn recv_expr(&mut self) -> MlExpr {
+        self.advance(); // `recv`
+        MlExpr::Recv(Box::new(self.postfix()))
+    }
+
+    /// `select` + indented `pattern => body` arms — choose among ready channel
+    /// arms, reusing the `match` arm grammar ([FLAVOR-ML-CONCURRENCY]).
+    fn select_expr(&mut self) -> MlExpr {
+        self.advance(); // `select`
+        let mut arms = Vec::new();
+        if self.eat(&TokKind::Indent) {
+            while !self.at_block_end() {
+                self.skip_separators();
+                if self.at_block_end() {
+                    break;
+                }
+                arms.push(self.match_arm());
+            }
+            let _ = self.eat(&TokKind::Dedent);
+        }
+        MlExpr::Select(arms)
     }
 
     /// `match scrutinee` + indented `pattern => body` arms.
@@ -786,6 +1248,19 @@ impl Parser<'_> {
     /// A match pattern: `_`, a literal, `Ctor field…`, or a bare binding.
     fn pattern(&mut self) -> MlPattern {
         match self.peek().clone() {
+            // `-N` — a negative integer literal pattern. The lexer splits this
+            // into `-` then the magnitude, so fold the sign into the literal so
+            // `-5` matches `-5`, mirroring the Default flavor ([FLAVOR-ML-MATCH]).
+            TokKind::Op(op) if op == MINUS_OP && matches!(self.peek_at(1), TokKind::Int(_)) => {
+                self.advance(); // `-`
+                match self.peek().clone() {
+                    TokKind::Int(n) => {
+                        self.advance();
+                        MlPattern::Int(-n)
+                    }
+                    _ => MlPattern::Wildcard,
+                }
+            }
             TokKind::Int(n) => {
                 self.advance();
                 MlPattern::Int(n)
@@ -806,11 +1281,56 @@ impl Parser<'_> {
                 self.advance();
                 self.ident_pattern(name)
             }
+            TokKind::LBracket => self.list_pattern(),
             other => {
                 self.error(format!("unexpected token {other:?} in pattern"));
                 MlPattern::Wildcard
             }
         }
+    }
+
+    /// `[ p, … ]` or `[ p, …, ...rest ]` — a list pattern with fixed-prefix
+    /// element patterns and an optional trailing `...name` rest-binder
+    /// ([FLAVOR-ML-MATCH], [TYPE-LIST-PATTERNS]). Layout is suppressed inside
+    /// brackets, so elements may span lines.
+    fn list_pattern(&mut self) -> MlPattern {
+        self.advance(); // `[`
+        let mut elements = Vec::new();
+        let mut rest = None;
+        if !matches!(self.peek(), TokKind::RBracket) {
+            loop {
+                if let Some(name) = self.rest_binder() {
+                    rest = Some(name);
+                    break; // `...rest` is always the final element
+                }
+                elements.push(self.pattern());
+                if !self.eat(&TokKind::Comma) {
+                    break;
+                }
+                if matches!(self.peek(), TokKind::RBracket) {
+                    break; // tolerate a trailing comma
+                }
+            }
+        }
+        if !self.eat(&TokKind::RBracket) {
+            self.error("expected ']'");
+        }
+        MlPattern::List { elements, rest }
+    }
+
+    /// A `...name` rest-binder (three `.` tokens then an identifier), consumed
+    /// only when it is actually present. Returns the bound name, or `None`.
+    fn rest_binder(&mut self) -> Option<String> {
+        let is_spread = matches!(self.peek(), TokKind::Dot)
+            && matches!(self.peek_at(1), TokKind::Dot)
+            && matches!(self.peek_at(2), TokKind::Dot);
+        if !is_spread {
+            return None;
+        }
+        self.advance();
+        self.advance();
+        self.advance();
+        self.ident()
     }
 
     /// `_` → wildcard; `Ctor a b` → constructor binding payload fields; a bare

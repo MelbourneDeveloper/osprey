@@ -41,7 +41,7 @@ Interpolated expressions are automatically converted to strings:
 
 - **Primitive types**: int, float, bool converted directly
 - **String types**: Inserted as-is
-- **Result types**: interpolation auto-unwraps — the success payload is rendered (context 5 of [Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)); an `Error` renders as `Error(<message>)`, preserving the payload per [ERR-PAYLOAD](0013-ErrorHandling.md#error-payload-propagation--err-payload). To render the wrapper of a success, use `toString`.
+- **Result types**: interpolation auto-unwraps — the success payload is rendered (string interpolation is one of the auto-unwrap contexts in [Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)); an `Error` renders as `Error(<message>)`, preserving the payload per [ERR-PAYLOAD](0013-ErrorHandling.md#error-payload-propagation--err-payload). To render the wrapper of a success, use `toString`.
 - **Complex types**: Use `toString()` for explicit conversion
 
 ```osprey

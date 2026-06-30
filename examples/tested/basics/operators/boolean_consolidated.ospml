@@ -5,8 +5,8 @@
 
 getTrue () = true
 getFalse () = false
-isEqual x y = x == y
-xor a b = (a || b) && !(a && b)
+isEqual (x, y) = x == y
+xor (a, b) = (a || b) && !(a && b)
 
 print "=== Boolean Test ==="
 
@@ -26,7 +26,7 @@ print (10 <= 15)
 print (8 >= 8)
 
 // Equality via function (named args normalize to positional)
-match isEqual 5 5
+match isEqual (5, 5)
     true => print "Equal"
     false => print "Not Equal"
 
@@ -52,9 +52,9 @@ rhs2 = (!p) && (!q)
 print "deMorgan || ${toString (lhs2 == rhs2)}"
 
 // XOR via composition
-print "xor T T ${toString (xor true true)}"
-print "xor T F ${toString (xor true false)}"
-print "xor F F ${toString (xor false false)}"
+print "xor T T ${toString (xor (true, true))}"
+print "xor T F ${toString (xor (true, false))}"
+print "xor F F ${toString (xor (false, false))}"
 
 // Bool from match expression
 parity = match 4

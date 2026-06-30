@@ -1,0 +1,56 @@
+effect Logger
+    log : string => Unit
+    debug : string => Unit
+
+innerOp () =
+    perform Logger.log "inner exec"
+    perform Logger.debug "debug inner"
+    42
+
+outerOp () =
+    perform Logger.log "outer exec"
+    perform Logger.debug "debug outer"
+    21
+
+testNested () =
+    perform Logger.log "before inner handler"
+
+    innerResult =
+        handle Logger
+            log msg   => print ("[INNER-LOG] " + msg)
+            debug msg => print ("[INNER-DEBUG] " + msg)
+        in
+            r = innerOp ()
+            perform Logger.log ("inner result: " + toString r)
+            r
+
+    perform Logger.log "after inner handler — back to outer"
+    outerResult = outerOp ()
+    perform Logger.log ("outer result: " + toString outerResult)
+
+handle Logger
+    log msg   => print ("[OUTER-LOG] " + msg)
+    debug msg => print ("[OUTER-DEBUG] " + msg)
+in
+    print "=== handler scoping ==="
+    r = nestedCall ()
+    print ("forward chain result: " + toString r)
+
+    testNested ()
+    print "=== done ==="
+
+performComplex () =
+    perform Logger.log "complex starting"
+    v = 21 * 2
+    perform Logger.log ("complex intermediate: " + toString v)
+    v
+
+deepNestedOp () =
+    perform Logger.log "deep op exec"
+    performComplex ()
+
+nestedCall () =
+    perform Logger.log "before nested"
+    r = deepNestedOp ()
+    perform Logger.log "after nested"
+    r

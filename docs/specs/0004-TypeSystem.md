@@ -30,6 +30,42 @@ fn twice(f, x)         = f(f(x))                 // <T>((T) -> T, T) -> T
 fn compose(f, g)       = fn(x) => f(g(x))        // <A,B,C>((B)->C,(A)->B) -> (A)->C
 ```
 
+`[TYPE-NO-REDUNDANT-ANNOTATION]` **Optional is not the whole rule: an annotation
+the checker can infer is *redundant*, and redundant symbols are forbidden.**
+Osprey is terse — **neither flavor is verbose** — so any type symbol the compiler
+would derive anyway MUST be omitted. This is normative style, not taste:
+
+- **Never** annotate a function parameter whose type is inferable from the body
+  or a call site (`fn add(a, b) = a + b`, never `fn add(a: int, b: int)`).
+- **Never** write a function return type the checker can infer
+  (`fn isEven(x) = (x % 2) == 0`, never `… -> bool`).
+- **Never** annotate a `let`/lambda binding the checker can infer
+  (`let n = 0`; `|x| => x * 2`).
+
+The rule is identical in both flavors: an ML signature line (`add : int -> int`)
+is just as redundant when the body fixes the type, and must be dropped too.
+
+Keep an annotation **only** when the checker genuinely cannot infer it — the
+narrow, load-bearing set: an empty literal with no context
+(`let xs: List<int> = []`, [TYPE-LIST](#list-t--type-list)); the ambiguous empty
+map (`{}` at an ambiguous position, [TYPE-MAP](#map-k-v--type-map)); an `extern`
+boundary; an unconstrained polymorphic variable a caller must pin; or a return
+type that is *load-bearing* because it forces `Result<T, E>` to auto-unwrap to
+`T` at the function boundary ([Result Auto-Unwrapping](#result-auto-unwrapping)).
+Record and union field declarations (`type Point = { x: int, y: int }`,
+`Circle { radius: int }`) are **definition sites, not inference sites** — their
+`field: Type` annotations *define* the type and are always required, never
+redundant; the rule above never touches them. The same holds for `extern`
+parameter signatures, which the FFI boundary requires
+([Foreign Function Interface](0019-ForeignFunctionInterface.md)).
+If deleting an annotation still type-checks and produces identical IR, it was
+redundant — delete it.
+
+This rule is **machine-enforced** by the analyzer's first lint,
+[`[ANALYZER-REDUNDANT-SYMBOL]`](0020-LanguageServerAndEditors.md#redundant-symbols-analyzer-redundant-symbol),
+which flags every redundant annotation and offers a one-keystroke autofix that
+deletes it.
+
 A polymorphic function is monomorphised independently at each call site:
 
 ```osprey

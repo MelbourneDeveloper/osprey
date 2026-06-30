@@ -105,7 +105,7 @@ They are reconciled by their lowerers, never by a shared grammar.
 | Flavor | Spelling | Blocks | Calls | Currying default | Extension | Spec |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Default** | C-style | `{ … }` braces | `f(x: a, y: b)` parens + named args | **Off** — explicit only, via function-returning-function values | `.osp` | `0001`–`0022` |
-| **ML** | layout | offside-rule indentation | `f a b` whitespace application | **Off** — uncurried skin; `f a b` = `f(a, b)`, curry via explicit `\` lambda | `.ospml` | [0024](0024-MLFlavorSyntax.md) |
+| **ML** | layout | offside-rule indentation | `f a b` whitespace application | **On** — `f x y` curries; uncurried form `f (x, y)` | `.ospml` | [0024](0024-MLFlavorSyntax.md) |
 
 Both flavors are permanent and first-class. The Default flavor is **not**
 deprecated and is **not** a transitional dialect. Earlier design drafts proposed
@@ -267,9 +267,9 @@ construct in the left two columns lowers to the **same** canonical AST node
 | Immutable binding | `let x = e` | `x = e` | `Stmt::Let { mutable: false }` |
 | Mutable binding | `mut x = e` | `mut x = e` | `Stmt::Let { mutable: true }` |
 | Mutation | `x = e` | `x := e` | `Stmt::Assignment` |
-| Ordinary function | `fn f(x, y) = e` | `f x y = e` | `Stmt::Function` (one multi-parameter function — identical for both)† |
+| Ordinary function | `fn f(x, y) = e` | `f x y = e`† | `Stmt::Function` / curried `Lambda` chain† |
 | Lambda | `fn(y) => e` | `\y => e` | `Expr::Lambda` |
-| Call | `f(x: a, y: b)` | `f a b` | `Expr::Call` (`named_arguments` vs positional — both one multi-arg `Call`) |
+| Call | `f(x: a, y: b)` | `f a b` | `Expr::Call` (`named_arguments` vs nested single-arg `Call`) |
 | Block | `{ s; …; e }` | layout block | `Expr::Block { statements, value }` |
 | Match | `match v { P => e }` | `match v` + indented arms | `Expr::Match` + `MatchArm` |
 | One-field pattern | `Success { value }` | `Success value` | `Pattern::Constructor { fields: ["value"] }` |
@@ -279,9 +279,8 @@ construct in the left two columns lowers to the **same** canonical AST node
 | Perform | `perform E.op(a)` | `perform E.op a` | `Expr::Perform` |
 
 † See [Currying Canonicalisation](#currying-canonicalisation): Default
-`fn f(x, y)` and ML `f x y` lower to the **same** one two-parameter
-`Stmt::Function` — ML is an uncurried skin, not a curried chain. Currying is
-explicit in both flavors and is never a flavor difference.
+`fn f(x, y)` is one two-parameter function; ML `f x y` is a curried chain. They
+share the AST *vocabulary* but are deliberately **not** the same value.
 
 Anything in that table is a **flavor concern**: the lowerer erases the spelling
 difference and nothing downstream can tell which surface was used. Constructs
@@ -290,13 +289,8 @@ that have *no* row — because the canonical AST cannot yet express them — are
 
 ## Currying Canonicalisation
 
-`[FLAVOR-CURRY]` Currying is **not** a flavor difference. The ML flavor is an
-**uncurried syntactic skin**: a multi-parameter ML binding and a multi-argument
-ML application lower to the *same* canonical nodes the Default flavor produces,
-so both surfaces meet at one multi-arity function value. Neither flavor
-auto-curries; you reach a curried value only by writing it explicitly, in either
-flavor. This is pure lowering — **no type-checker or codegen change is
-required.**
+`[FLAVOR-CURRY]` Currying is the one place the flavors read differently, and it
+is still pure lowering — **no type-checker or codegen change is required.**
 
 The canonical type `Type::Fun { params: Vec<Type>, ret: Box<Type> }`
 (`crates/osprey-types/src/ty.rs:67`) is flat multi-arity. A *curried* function is
@@ -307,13 +301,11 @@ simply a **nested** `Fun`: `int -> int -> int` is
 (capture-carrying lambdas-as-values are implemented — see
 [plan 0002](../plans/0002-codegen-generic-function-values.md)).
 
-So the two flavors lower identically — the ML skin just spells the same nodes
-with less punctuation:
+So the split is entirely in the lowerers:
 
 - **Default flavor: currying is explicit.** `fn add(x, y) = x + y` lowers to one
-  `Stmt::Function` with two parameters, and `add(1, 2)` to one two-argument
-  `Expr::Call`. Currying happens only when the author writes a function that
-  returns a function:
+  `Stmt::Function` with two parameters. Currying happens only when the author
+  writes a function that returns a function:
 
   ```osp
   fn addCurried(x) -> (int) -> int = fn(y) => x + y
@@ -322,29 +314,45 @@ with less punctuation:
   which lowers to a one-parameter `Function` whose body is a one-parameter
   `Lambda`.
 
-- **ML flavor: an uncurried skin over the same nodes.** `add x y = x + y` lowers
-  to **the same one two-parameter** `Stmt::Function` as the Default
-  `fn add(x, y)` above, and whitespace application `add 1 2` collapses its spine
-  to **one two-argument** `Expr::Call`, identical to `add(1, 2)`. Partial
-  application is **not** implicit: `add 1` for a two-parameter `add` is an arity
-  error in *both* flavors. Curry on purpose with an explicit lambda —
-  `inc = \y => add 1 y`, exactly as Default writes `(y) => add(1, y)`.
+- **ML flavor: currying is the default reading.** `add x y = e` with the
+  curried signature `add : int -> int -> int` lowers to **the same nested-lambda
+  shape** as the Default `addCurried` above — a one-parameter binding returning a
+  one-parameter `Lambda`. ML whitespace application `add 1 2` lowers to nested
+  single-argument calls `Call(Call(add, [1]), [2])`, each of which is fully
+  saturated against a one-parameter `Fun`. Partial application `add 1` is just
+  the inner saturated call returning a function value.
 
-Because ML application collapses to one multi-argument `Call`, it maps straight
-onto the existing multi-arity `Fun` and the exact-arity checker, with **no**
-currying or partial-application machinery added to the core. The ML lowerer does
-the collapse; the core stays as-is.
+- **ML flavor: the uncurried form is explicit too.** When a binding should *not*
+  curry, ML writes parenthesised, comma-separated parameters: `add (x, y) = e`
+  lowers to a flat two-parameter `Function` — the *same* node as Default
+  `fn add(x, y)` — and `add (a, b)` to a single `Call(add, [a, b])`. So ML twins
+  *both* Default forms: whitespace `add x y` ↔ Default explicit-curry, parens
+  `add (x, y)` ↔ Default multi-parameter.
 
-**Two equivalence buckets** (machine-checked in
-`crates/osprey-cli/tests/cross_flavor_equiv.rs`):
+Because each ML function and each ML application is one-argument, ML currying
+maps onto the existing exact-arity checker with **no** partial-application
+support added to the core. The ML lowerer does the work; the core stays as-is.
 
-- **Equivalent:** Default multi-parameter `fn add(x, y)` ≡ ML `add x y`.
-  Identical canonical AST (modulo names and spans) — one two-parameter
-  `Function`. This is the idiomatic twin every uncurried Default example gets.
-- **Not equivalent:** Default explicit-curried `fn add(x) = fn(y) => …` ≢ ML
-  `add x y`. Different canonical AST — a one-parameter `Function` returning a
-  `Lambda` versus a two-parameter `Function`. The test asserts they are *not*
-  equal; ML never auto-curries, so conflating them would be the boundary leaking.
+**Saturated calls are a backend optimisation, not an AST change.** A fully
+saturated curried application *may* be compiled like a direct multi-argument
+call when the target is known (as the original design intended), but the
+canonical AST stays curried — nested one-argument `Lambda`/`Call`. Flattening it
+to a multi-parameter `Function` is a boundary leak: it makes ML `f x y`
+indistinguishable from Default `fn f(x, y)`, which the equivalence buckets
+forbid. The sanctioned way to get a flat multi-parameter `Function` in ML is to
+*write* the uncurried `f (x, y)` form — never by silently flattening `f x y`.
+
+**Three equivalence buckets** (used by the golden tests below):
+
+- **Equivalent (curried):** Default explicit-curried `addCurried` ≡ ML curried
+  `add x y`. Identical canonical AST (modulo names and spans).
+- **Equivalent (uncurried):** Default multi-parameter `fn add(x, y)` ≡ ML
+  uncurried `add (x, y)`. Both lower to one flat two-parameter `Function` —
+  identical canonical AST.
+- **Not equivalent:** Default multi-parameter `fn add(x, y)` ≢ ML *curried*
+  `add x y`. Different canonical AST — one two-parameter `Function` versus a
+  one-parameter `Function` returning a `Lambda`. The test asserts they are *not*
+  equal. Conflating them would be the boundary leaking.
 
 ## Shared-Core Additions
 
@@ -396,24 +404,23 @@ First-class handlers, `Handler E`, and multi-install are tracked as Phase 0 of
 `[FLAVOR-INTEROP]` Modules written in different flavors import each other
 normally, because exported declarations are canonical AST signatures with stable
 parameter names and order. The ABI rule is deliberately honest about the
-shape of the value each side exports:
+currying split:
 
-- A **multi-parameter** function — written `fn f(x, y)` in Default or `f x y` in
-  ML, both lowering to one multi-parameter `Stmt::Function` — exports as a
-  multi-parameter function. A caller in either flavor applies it as a
-  **saturated** multi-argument call; partial application needs an explicit lambda
-  (a bare `f a` is an arity error in both flavors) unless a curried wrapper is
+- A **Default** multi-parameter function exports as an ordinary multi-parameter
+  function. An ML caller may call it only as a **saturated** application; partial
+  application of a non-curried import is a type error unless a curried wrapper is
   generated.
-- An **explicitly curried** function (one that returns a function) exports as
-  that nested function value, and the other flavor applies it through ordinary
-  function-value calls.
+- An **ML** curried function exports as a curried function value (a Default
+  caller applies it through ordinary function-value calls); an **ML** uncurried
+  function `f (x, y)` exports as an ordinary multi-parameter function, identical
+  to Default `fn f(x, y)`.
 - Handler values, records, unions, `Result`, and effects have one canonical type
   identity regardless of source flavor.
 
 The compiler **may** generate convenience wrappers (a curried view of a
-multi-parameter export, or a saturated view of an explicitly-curried export), but
-the canonical declaration stays honest — the core never pretends a
-multi-parameter function and an explicitly-curried function are the same value.
+multi-parameter export, or a saturated view of a curried export), but the
+canonical declaration stays honest — the core never pretends a multi-parameter
+function and a curried function are the same value.
 
 ## Flavor-Aware Diagnostics
 
@@ -449,11 +456,12 @@ in `crates/diff_examples.sh`.
 
 Two buckets, both asserted:
 
-- **Equivalent** — e.g. Default multi-parameter `fn add(x, y)` vs ML uncurried
-  `add x y`; Default `handle h1 h2 in body` vs ML `handle h1 h2 do body`.
-  Canonical ASTs must be equal.
-- **Not equivalent** — e.g. Default explicit-curried `fn add(x) = fn(y) => …` vs
-  ML multi-parameter `add x y`. Canonical ASTs must differ.
+- **Equivalent** — e.g. Default explicit-curried function vs ML curried `f x y`;
+  Default multi-parameter `fn f(x, y)` vs ML uncurried `f (x, y)`; Default
+  `handle h1 h2 in body` vs ML `handle h1 h2 do body`. Canonical ASTs must be
+  equal.
+- **Not equivalent** — e.g. Default multi-parameter function vs ML *curried*
+  `f x y`. Canonical ASTs must differ.
 
 ```mermaid
 flowchart LR
@@ -478,11 +486,15 @@ in the `rust` CI job under `cargo test --workspace`.
 **Paired-example convention.** Equivalence fixtures live as real, runnable
 examples under `examples/tested/ml/`. Each concept is a triple sharing one stem:
 
-- `<stem>.ospml` — the ML-flavor program (uncurried skin, offside layout).
-- `<stem>.osp` — the Default twin, hand-written so it lowers to the *same* AST
-  (idiomatic multi-parameter `fn f(x, y) = …` mirrors ML `f x y = …`; call syntax
-  `toString(y)` mirrors ML whitespace application `toString y`; a Default
-  `fn main() = { … }` mirrors a bare ML top-level script).
+- `<stem>.ospml` — the ML-flavor program (curry-by-default, offside layout).
+- `<stem>.osp` — the Default twin, hand-written so it lowers to the *same* AST.
+  **The twin matches its original's currying form-for-form:** a curried Default
+  `fn f(x) = fn(y) => …` twins ML whitespace `f x y = …`, and an uncurried
+  Default `fn f(x, y) = …` twins ML parens `f (x, y) = …`; call syntax
+  `toString(y)` mirrors ML whitespace `toString y`. **Neither uses a `main`
+  wrapper** — both are bare top-level scripts (`main` is synthesised from
+  trailing statements in both flavors, see [FLAVOR-ASSIGN] below), so there is no
+  needless `fn main()` and no extra indentation.
 - `<stem>.expectedoutput` — **one shared golden file** for both flavors. The
   differential harness (`crates/diff_examples.sh`) resolves a source's golden as
   `<file>.expectedoutput` → OS-specific → `<stem>.expectedoutput`, so a pair
@@ -503,8 +515,11 @@ byte-identical to the Default `let`.
 function-boundary auto-unwrap, not from any flavor-specific rule. (2) Effects /
 first-class handlers are deferred (Phase 0, [`[FLAVOR-HANDLER-VALUE]`](#shared-core-additions));
 paired fixtures use only shared-core constructs until that lands. (3) The Default
-twin is authored to match the ML AST, not the other way around — ML is the
-flavor under test, Default is the oracle.
+twin is authored to match the ML AST (ML is the flavor under test, Default the
+oracle), matching currying **form-for-form**: curried originals pair with ML
+whitespace `f x y`, uncurried multi-parameter originals with ML parens
+`f (x, y)`. Neither side needs a backend currying fold to stay IR-identical, and
+neither wraps the script in `main` (it is synthesised).
 
 ## Resolved Open Questions
 
@@ -580,10 +595,11 @@ below for the honesty boundary on multi-file builds.
 3. **ML code in copy must be real.** Prefer copying snippets verbatim from the
    tested `examples/tested/ml/` fixtures so every published ML program compiles.
 4. **Currying is the one honest difference.** Where the two flavors are compared,
-   note that ML `add x y` ≡ Default explicit-curry `fn add(x) = fn(y) => …` at
-   the AST (machine-checked, `crates/osprey-cli/tests/cross_flavor_equiv.rs`),
-   while Default multi-parameter `fn add(x, y)` is deliberately a *different*
-   value — never imply they are identical.
+   note that ML `add x y` ≡ Default explicit-curry `fn add(x) = fn(y) => …` and
+   ML uncurried `add (x, y)` ≡ Default multi-parameter `fn add(x, y)` at the AST
+   (machine-checked, `crates/osprey-cli/tests/cross_flavor_equiv.rs`), while ML
+   *curried* `add x y` is deliberately a *different* value from `fn add(x, y)` —
+   never imply those two are identical.
 
 ### Decision Record and Assumptions (2026-06-30)
 
@@ -662,10 +678,39 @@ divided as `[FLAVOR-FRONTEND-FS]` describes. Decisions made autonomously:
   `parse_program_for_path`, `resolve_flavor`, `parse_tree`, and `Lowerer` keep
   their signatures and re-export paths; the move is internal and the whole
   workspace builds and tests green.
-  - **Assumption:** ML-flavor feature work (the uncurried-lowering build-out and
+  - **Assumption:** ML-flavor feature work (the curry-by-default lowering build-out and
     list/record/type surface) continues under `src/ml/` and is unaffected by this
     structural split — the two are orthogonal. The shared seam between the work
     streams is exactly `crate::strings` and the `lib.rs` dispatch.
+
+### Decision Record — Currying + no-main (2026-06-30)
+
+The ML lowering briefly drifted to an **uncurried syntactic skin** (ML `add x y`
+flattened to the same multi-parameter `Function` as Default `fn add(x, y)`) to
+make byte-identical-IR twinning against *idiomatic* Default examples trivial.
+That violated the original design (`docs/designs/language-flavours.md`, commit
+`231222cc`: "currying is the default reading", "curried by default"; "uncurried"
+appears nowhere). Reconciled autonomously per in-session user mandate ("ML
+curries by default"; "the IR does need to be IDENTICAL … wherever the original
+curries the ML does the default, wherever the original does not curry the ML twin
+does the same"):
+
+- **ML curries by default.** `add x y = e` → curried nested-lambda shape (≡
+  Default explicit-curry); `add 1 2` → nested one-argument calls.
+- **ML also has an explicit uncurried form** `add (x, y) = e` → a flat
+  multi-parameter `Function` (≡ Default `fn add(x, y)`).
+- **IR stays byte-identical with no backend currying magic** because each twin
+  matches its original form-for-form: curried Default ↔ ML whitespace `f x y`,
+  uncurried Default ↔ ML parens `f (x, y)`. Identical AST ⇒ identical IR.
+- The canonical AST of `f x y` **stays curried**; flattening it is a boundary
+  leak ([FLAVOR-CURRY](#currying-canonicalisation)).
+- **No `main` wrapper.** `main` is synthesised from trailing top-level statements
+  in *both* flavors (`osprey-codegen`), so paired fixtures are bare top-level
+  scripts — no `fn main()`, no needless indentation. A `main` is written only
+  when it takes arguments or returns a real exit code.
+- Code to revert: `ml/lower.rs` (curried whitespace lowering + add the uncurried
+  paren form) and `crates/osprey-cli/tests/cross_flavor_equiv.rs` (assert the
+  three buckets above).
 
 ## Risks
 

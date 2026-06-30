@@ -16,15 +16,15 @@ type Triple T U V =
     third : V
 
 makeContainer val = Container(value = val)
-makePair a b = Pair(first = a, second = b)
-makeTriple a b c = Triple(first = a, second = b, third = c)
+makePair (a, b) = Pair(first = a, second = b)
+makeTriple (a, b, c) = Triple(first = a, second = b, third = c)
 
 cInt1 = makeContainer 42
 cInt2 = makeContainer 99
 cStr = makeContainer "text"
-pairIS1 = makePair 1 "test"
-pairIS2 = makePair 2 "hello"
-tIBI = makeTriple 1 "test" 42
+pairIS1 = makePair (1, "test")
+pairIS2 = makePair (2, "hello")
+tIBI = makeTriple (1, "test", 42)
 
 print "C<int>:  ${cInt1.value}, ${cInt2.value}"
 print "C<str>:  ${cStr.value}"
@@ -45,31 +45,31 @@ excl s = s + "!"
 ques s = s + "?"
 intToString x = toString x
 twoArgAdd : int -> int -> int
-twoArgAdd a b = a + b
+twoArgAdd (a, b) = a + b
 threeArgAdd : int -> int -> int -> int
-threeArgAdd a b c = a + b + c
+threeArgAdd (a, b, c) = a + b + c
 
-applyInt f x = f x
-applyStr f s = f s
-applyToStr f x = f x
+applyInt (f, x) = f x
+applyStr (f, s) = f s
+applyToStr (f, x) = f x
 applyTwo : ((int, int) -> int) -> int -> int -> int
-applyTwo f a b = f a b
+applyTwo (f, a, b) = f (a, b)
 applyThree : ((int, int, int) -> int) -> int -> int -> int -> int
-applyThree f a b c = f a b c
+applyThree (f, a, b, c) = f (a, b, c)
 
 print "=== Same (int)->int passed via HOF ==="
-print (toString (applyInt addOne 10))
-print (toString (applyInt timesTwo 10))
-print (toString (applyInt minusOne 10))
+print (toString (applyInt (addOne, 10)))
+print (toString (applyInt (timesTwo, 10)))
+print (toString (applyInt (minusOne, 10)))
 
 print "=== Same (string)->string passed via HOF ==="
-print (applyStr excl "hi")
-print (applyStr ques "hi")
+print (applyStr (excl, "hi"))
+print (applyStr (ques, "hi"))
 
 print "=== Different shapes ==="
-print (applyToStr intToString 42)
-print (toString (applyTwo twoArgAdd 5 7))
-print (toString (applyThree threeArgAdd 1 2 3))
+print (applyToStr (intToString, 42))
+print (toString (applyTwo (twoArgAdd, 5, 7)))
+print (toString (applyThree (threeArgAdd, 1, 2, 3)))
 print ""
 
 // --- Generic monomorphization via identity-like functions ---
@@ -90,7 +90,7 @@ colorName c =
         Red => "red"
         Green => "green"
         Blue => "blue"
-sameColor a b =
+sameColor (a, b) =
     match a
         Red =>
             match b
@@ -108,7 +108,7 @@ c1 = Red
 c2 = Red
 c3 = Blue
 print "color1=${colorName c1} color3=${colorName c3}"
-print "sameRR=${toString (sameColor c1 c2)}"
-print "sameRB=${toString (sameColor c1 c3)}"
+print "sameRR=${toString (sameColor (c1, c2))}"
+print "sameRB=${toString (sameColor (c1, c3))}"
 
 print "=== TYPE EQUALITY COMPLETE ==="

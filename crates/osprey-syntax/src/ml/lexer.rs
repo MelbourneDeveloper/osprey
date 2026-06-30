@@ -422,12 +422,15 @@ mod tests {
         assert!(k.contains(&TokKind::Indent), "block opens with Indent");
         assert!(k.contains(&TokKind::Dedent), "block closes with Dedent");
         // The Dedent must precede the sibling `h` binding.
-        let dedent = k.iter().position(|t| *t == TokKind::Dedent).unwrap();
-        let h = k
-            .iter()
-            .position(|t| *t == TokKind::Ident("h".to_owned()))
-            .unwrap();
-        assert!(dedent < h);
+        let dedent = k.iter().position(|t| *t == TokKind::Dedent);
+        let h = k.iter().position(|t| *t == TokKind::Ident("h".to_owned()));
+        assert!(dedent.is_some(), "expected a Dedent token");
+        assert!(h.is_some(), "expected the `h` binding token");
+        // Both positions are asserted present above, so this guard always binds;
+        // it avoids the forbidden `unwrap()` ([USER-MANDATE-NO-PANIC-IN-TESTS]).
+        if let (Some(dedent), Some(h)) = (dedent, h) {
+            assert!(dedent < h);
+        }
     }
 
     #[test]

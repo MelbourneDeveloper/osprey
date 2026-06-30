@@ -1,30 +1,28 @@
 // Default-flavor twin of results_state_hof.ospml. ML positional constructor
 // patterns `Success value` / `Error e` lower to the same nodes as Default field
 // patterns `Success { value }` / `Error { message }` when the bound name matches
-// the payload field. ML is an uncurried skin: `safeMod a b` / `twice f x` lower
-// to multi-parameter `fn(...)`, while the explicitly curried `adder a = \b => …`
-// lowers to `fn adder(a) = fn(b) => …` so `adder(10)` partially applies. The ML
-// type signatures map to these annotations (load-bearing: they auto-unwrap
-// arithmetic `Result` to `int`) — byte-identical IR.
+// the payload field. The plain multi-argument helpers `safeMod` / `twice` mirror
+// the ML uncurried tuple form (`fn safeMod(a, b)` ↔ `safeMod (a, b)`), while the
+// genuinely curried `adder(a) = fn(b) => …` mirrors ML `adder a = \b => …` so
+// `adder(10)` partially applies. `adder`/`twice` signatures are load-bearing
+// (concrete closure / function-value types); the rest are inferred — byte-
+// identical IR.
 
-fn safeMod(a: int, b: int) -> int = match a % b {
+fn safeMod(a, b) = match a % b {
     Success { value } => value
     Error { message } => -1
 }
 
-fn twice(f: (int) -> int, x: int) -> int = f(f(x))
+fn twice(f: (int) -> int, x: int) = f(f(x))
 
-fn bump(x: int) -> int = x + 10
+fn bump(x) = x + 10
 
 fn adder(a: int) -> (int) -> int = fn(b) => a + b
 
-fn main() = {
-    mut total = 0
-    let rem = safeMod(17, 5)
-    total = rem
-    print("rem17_5=${toString(total)} rem20_7=${toString(safeMod(20, 7))}")
-    print("twiceBump5=${toString(twice(bump, 5))}")
-    let addTen = adder(10)
-    print("addTen32=${toString(addTen(32))} direct=${toString(adder(7)(8))}")
-    0
-}
+mut total = 0
+let rem = safeMod(17, 5)
+total = rem
+print("rem17_5=${toString(total)} rem20_7=${toString(safeMod(20, 7))}")
+print("twiceBump5=${toString(twice(bump, 5))}")
+let addTen = adder(10)
+print("addTen32=${toString(addTen(32))} direct=${toString(adder(7)(8))}")

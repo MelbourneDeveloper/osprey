@@ -16,18 +16,16 @@ fn form() -> string ![Prompt, Log] = {
     name
 }
 
-fn main() = {
-    handle Log
-        line msg => print("[log] " + msg)
-    in {
-        let result = handle Prompt
-            ask field => {
-                print("ask " + field)
-                let answer = resume("Ada")
-                print("after ask: " + answer)
-                answer
-            }
-        in form()
-        print("result=" + result)
-    }
+handle Log
+    line msg => print("[log] " + msg)
+in {
+    let result = handle Prompt
+        ask field => {
+            print("ask " + field)
+            let answer = resume("Ada")
+            print("after ask: " + answer)
+            answer
+        }
+    in form()
+    print("result=" + result)
 }

@@ -17,7 +17,8 @@ use osprey_ast::Position;
 pub(crate) enum MlItem {
     /// `mut? name param* = body`. Zero params ⇒ a value binding; one or more
     /// (including the unit marker) ⇒ a function definition. Currying is not yet
-    /// applied — `params` is the flat surface list.
+    /// applied — `params` is the flat surface list; `uncurried` records *which*
+    /// surface form wrote it ([FLAVOR-ML-CURRY]).
     Binding {
         /// Whether `mut` introduced the binding.
         mutable: bool,
@@ -25,6 +26,12 @@ pub(crate) enum MlItem {
         name: String,
         /// The surface parameter list (empty for a value binding).
         params: Vec<MlParam>,
+        /// `true` when the head was the parenthesised comma-list `f (x, y)`
+        /// (uncurried → flat multi-parameter `Function`); `false` for the
+        /// juxtaposed `f x y` (curried → one-param `Function` returning a
+        /// `Lambda` chain). Irrelevant for zero/one parameter, where both forms
+        /// lower identically.
+        uncurried: bool,
         /// The right-hand side.
         body: MlExpr,
         /// Source position of the name.
@@ -48,6 +55,9 @@ pub(crate) enum MlItem {
         name: String,
         /// The declared type.
         ty: MlType,
+        /// The effect row from a trailing `! Name(, Name)*` (or `! [Name, …]`),
+        /// empty when the signature declares no effects ([FLAVOR-ML-EFFECT]).
+        effects: Vec<String>,
     },
     /// `type Name param* =` + an indented layout block of variants
     /// ([FLAVOR-ML-TYPE]). A union/enum lists uppercase constructor variants
@@ -77,6 +87,16 @@ pub(crate) enum MlItem {
         /// Source position of the `extern` keyword.
         pos: Position,
     },
+    /// `effect Name` + an indented block of `op : P => R` operation lines — an
+    /// algebraic effect declaration ([FLAVOR-ML-EFFECT]).
+    Effect {
+        /// The effect name.
+        name: String,
+        /// The declared operations, in order.
+        operations: Vec<MlEffectOp>,
+        /// Source position of the `effect` keyword.
+        pos: Position,
+    },
     /// A bare expression evaluated for its effect or trailing value.
     Expr {
         /// The expression.
@@ -93,6 +113,19 @@ pub(crate) struct MlExternParam {
     pub name: String,
     /// The parameter's declared type.
     pub ty: MlType,
+}
+
+/// One `op : P => R` operation line of an `effect` declaration. The payload and
+/// result types are rendered into the canonical `fn(P) -> R` string by the
+/// lowerer ([FLAVOR-ML-EFFECT]).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MlEffectOp {
+    /// The operation name.
+    pub name: String,
+    /// The operation's payload (argument) type.
+    pub payload: MlType,
+    /// The operation's result type.
+    pub result: MlType,
 }
 
 /// One variant of a `type` declaration: a constructor name and its payload
@@ -141,8 +174,11 @@ pub(crate) enum MlType {
 /// A surface parameter pattern in a binding or lambda head.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum MlParam {
-    /// A named parameter.
+    /// A named parameter, type left to inference / the signature.
     Named(String),
+    /// A parenthesised type-annotated parameter `(name : type)` — the inline
+    /// form a lambda uses for a load-bearing parameter type ([FLAVOR-ML-FN]).
+    Typed(String, MlType),
     /// The unit marker `()` — a zero-argument function boundary, not a value.
     Unit,
 }
@@ -176,12 +212,24 @@ pub(crate) enum MlExpr {
         /// Right operand.
         right: Box<MlExpr>,
     },
-    /// Single-argument application `func arg` (the surface curried form).
+    /// Single-argument application `func arg` (the surface curried form). A
+    /// whitespace spine `f a b` nests these (`App(App(f, a), b)`) and lowers to
+    /// curried nested single-argument calls ([FLAVOR-ML-CALL]).
     App {
         /// The applied expression.
         func: Box<MlExpr>,
         /// The single argument.
         arg: Box<MlExpr>,
+    },
+    /// Parenthesised comma-list application `func (a, b, …)` — the **uncurried**
+    /// saturated call, lowering to a single multi-argument `Call(func, [a, b,
+    /// …])` ([FLAVOR-ML-CALL]). A one-element list `f (a)` is plain grouping and
+    /// parses as [`MlExpr::App`], not this node.
+    AppMulti {
+        /// The applied expression.
+        func: Box<MlExpr>,
+        /// The argument list (two or more), in order.
+        args: Vec<MlExpr>,
     },
     /// Zero-argument application `func ()`.
     UnitApp {
@@ -197,6 +245,9 @@ pub(crate) enum MlExpr {
     },
     /// `[ a, b, c ]` list literal (possibly empty).
     List(Vec<MlExpr>),
+    /// `[ k => v, … ]` map literal — the bracket form disambiguated from a list
+    /// by the `=>` entry separator ([FLAVOR-ML-MAP]).
+    Map(Vec<(MlExpr, MlExpr)>),
     /// `target[index]` — a glued postfix index (list/map lookup, returns
     /// `Result`). Only formed when the `[` abuts the target with no space.
     Index {
@@ -207,10 +258,16 @@ pub(crate) enum MlExpr {
     },
     /// `( inner )` — grouping kept in the CST; the lowerer unwraps it.
     Paren(Box<MlExpr>),
-    /// `\param* => body` lambda (curried in the lowerer).
+    /// `\param* => body` lambda. The juxtaposed head `\x y => body` is **curried**
+    /// (a one-parameter `Lambda` returning a `Lambda` chain); the parenthesised
+    /// comma-list head `\(x, y) => body` is **uncurried** (one flat multi-parameter
+    /// `Lambda`), twinning Default's `(x, y) => body` ([FLAVOR-ML-CURRY]).
     Lambda {
         /// The surface parameter list.
         params: Vec<MlParam>,
+        /// `true` for the parenthesised comma-list head `\(x, y) =>` (flat);
+        /// `false` for the juxtaposed `\x y =>` (curried chain).
+        uncurried: bool,
         /// The lambda body.
         body: Box<MlExpr>,
         /// Source position.
@@ -240,6 +297,56 @@ pub(crate) enum MlExpr {
     /// `spawn body` — start a fiber whose body (an indented block or inline
     /// expression) runs concurrently ([FLAVOR-ML-SPAWN]).
     Spawn(Box<MlExpr>),
+    /// `perform Effect.op arg…` — perform an effect operation with
+    /// whitespace-applied arguments ([FLAVOR-ML-EFFECT]).
+    Perform {
+        /// The effect name.
+        effect: String,
+        /// The operation name.
+        operation: String,
+        /// The performed arguments, in order.
+        args: Vec<MlExpr>,
+    },
+    /// `handle Effect` + indented arms + `in body` — install an effect handler
+    /// over the `body` expression ([FLAVOR-ML-EFFECT]).
+    Handle {
+        /// The handled effect name.
+        effect: String,
+        /// The per-operation handler arms.
+        arms: Vec<MlHandleArm>,
+        /// The handled body expression (after `in`).
+        body: Box<MlExpr>,
+    },
+    /// `resume` or `resume value` — resume a suspended continuation
+    /// ([FLAVOR-ML-EFFECT]).
+    Resume(Option<Box<MlExpr>>),
+    /// `await fiber` — block on a spawned fiber's result ([FLAVOR-ML-CONCURRENCY]).
+    Await(Box<MlExpr>),
+    /// `yield` or `yield value` — yield from the current fiber ([FLAVOR-ML-CONCURRENCY]).
+    Yield(Option<Box<MlExpr>>),
+    /// `send channel value` — send a value on a channel ([FLAVOR-ML-CONCURRENCY]).
+    Send {
+        /// The channel expression.
+        channel: Box<MlExpr>,
+        /// The value to send.
+        value: Box<MlExpr>,
+    },
+    /// `recv channel` — receive a value from a channel ([FLAVOR-ML-CONCURRENCY]).
+    Recv(Box<MlExpr>),
+    /// `select` + indented `pattern => body` arms — choose among ready channel
+    /// arms ([FLAVOR-ML-CONCURRENCY]).
+    Select(Vec<MlArm>),
+}
+
+/// One `op param* => body` arm of a `handle` expression ([FLAVOR-ML-EFFECT]).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MlHandleArm {
+    /// The handled operation name.
+    pub operation: String,
+    /// The operation parameter names bound in the body.
+    pub params: Vec<String>,
+    /// The arm body.
+    pub body: MlExpr,
 }
 
 /// One `pattern => body` arm of a `match`.
@@ -271,6 +378,15 @@ pub(crate) enum MlPattern {
     },
     /// A bare lowercase binding.
     Bind(String),
+    /// `[ p, … ]` or `[ p, …, ...rest ]` — a list pattern with fixed-prefix
+    /// element patterns and an optional trailing `...name` rest-binder
+    /// ([FLAVOR-ML-MATCH], [TYPE-LIST-PATTERNS]).
+    List {
+        /// Patterns for the fixed-prefix element positions.
+        elements: Vec<MlPattern>,
+        /// The trailing `...name` rest-binder, or `None` for a fixed length.
+        rest: Option<String>,
+    },
 }
 
 /// A `field = value` initialiser inside a record literal.

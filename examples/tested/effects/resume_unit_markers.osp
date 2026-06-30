@@ -10,14 +10,12 @@ fn traced() -> int !Trace = {
     7
 }
 
-fn main() = {
-    let result = handle Trace
-        mark label => {
-            print("before " + label)
-            let final = resume()
-            print("after " + label + ": final=" + toString(final))
-            final
-        }
-    in traced()
-    print("result=" + toString(result))
-}
+let result = handle Trace
+    mark label => {
+        print("before " + label)
+        let final = resume()
+        print("after " + label + ": final=" + toString(final))
+        final
+    }
+in traced()
+print("result=" + toString(result))

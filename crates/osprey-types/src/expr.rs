@@ -645,6 +645,7 @@ fn classify(op: &str) -> OpKind {
 
 #[cfg(test)]
 mod tests {
+    use crate::check::check_program;
     use crate::testutil::{check, ok};
 
     #[test]

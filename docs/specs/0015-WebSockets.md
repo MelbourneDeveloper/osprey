@@ -42,7 +42,7 @@ websocketClose(wsID: WebSocketID)                  -> Result<unit, string>
 `messageHandler` is invoked once per incoming frame with the frame payload.
 
 ```osprey
-fn handleMessage(msg: string) -> Result<unit, string> = {
+fn handleMessage(msg) -> Result<unit, string> = {
     print("received: ${msg}")
     Success { value: () }
 }
@@ -72,19 +72,19 @@ websocketStopServer(serverID: ServerID)                           -> Result<unit
 
 ## Server Example
 
+No `main` wrapper is needed — a program is a bare top-level script, and `main` is
+synthesised from the trailing statements (identically in both flavors):
+
 ```osprey
-fn main() -> int = {
-    match websocketCreateServer(port: 8080, address: "127.0.0.1", path: "/chat") {
-        Success { value: serverID } => match websocketServerListen(serverID: serverID) {
-            Success { value: _ } => {
-                websocketServerBroadcast(serverID: serverID, message: "Welcome!")
-                sleep(10000)
-                websocketStopServer(serverID: serverID)
-                0
-            }
-            Error { message } => { print("listen failed: ${message}"); 1 }
+match websocketCreateServer(port: 8080, address: "127.0.0.1", path: "/chat") {
+    Success { value: serverID } => match websocketServerListen(serverID: serverID) {
+        Success { value: _ } => {
+            websocketServerBroadcast(serverID: serverID, message: "Welcome!")
+            sleep(10000)
+            websocketStopServer(serverID: serverID)
         }
-        Error { message } => { print("create failed: ${message}"); 1 }
+        Error { message } => print("listen failed: ${message}")
     }
+    Error { message } => print("create failed: ${message}")
 }
 ```

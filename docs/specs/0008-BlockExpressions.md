@@ -30,7 +30,7 @@ let complex = {
 print("Complex: ${complex}")  // prints "Complex: 300"
 
 // Block with function calls
-fn multiply(a: int, b: int) -> int = a * b
+fn multiply(a, b) = a * b
 let calc = {
     let a = 5
     let b = 6

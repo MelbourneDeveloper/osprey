@@ -535,8 +535,10 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
         })
         .collect();
     let unions = checker.union_variants.clone();
-    let lambdas = resolve_positioned(&checker.ctx, &checker.lambda_tys);
-    let lets = resolve_positioned(&checker.ctx, &checker.let_tys);
+    let lambda_tys = checker.lambda_tys.clone();
+    let let_tys = checker.let_tys.clone();
+    let lambdas = resolve_positioned(&mut checker.ctx, &lambda_tys);
+    let lets = resolve_positioned(&mut checker.ctx, &let_tys);
     ProgramTypes {
         functions,
         ctors,
@@ -549,7 +551,7 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
 
 /// Resolve a list of source-position-keyed types against the final
 /// substitution, keying the published map by `(line, column)`.
-fn resolve_positioned(ctx: &InferCtx, tys: &[(Position, Type)]) -> HashMap<(u32, u32), Type> {
+fn resolve_positioned(ctx: &mut InferCtx, tys: &[(Position, Type)]) -> HashMap<(u32, u32), Type> {
     tys.iter()
         .map(|(pos, ty)| ((pos.line, pos.column), ctx.apply(ty)))
         .collect()
