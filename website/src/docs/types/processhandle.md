@@ -18,12 +18,3 @@ match result {
     Error { message } => print("Process failed")
 }
 ```
-
-```osprey-ml
-result = spawnProcess "echo hello"
-match result
-    Success value =>
-        exitCode = awaitProcess value
-        cleanupProcess value
-    Error message => print "Process failed"
-```

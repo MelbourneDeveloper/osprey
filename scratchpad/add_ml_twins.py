@@ -65,64 +65,154 @@ def has_toplevel_comma(s):
     return len(split_top_commas(s)) > 1
 
 
-def paren_call_to_ws(expr):
-    """f(x) -> f x ; f(x, y) -> f (x, y) ; keep nested. String/quote aware."""
-    out = expr
-    # Rewrite innermost `name(args)` where args has no nested parens.
-    pat = re.compile(r'(\b[A-Za-z_]\w*)\(([^()]*)\)')
-    prev = None
-    while prev != out:
-        prev = out
-        def repl(m):
-            fn, args = m.group(1), m.group(2).strip()
-            if fn in ("fn",):
-                return m.group(0)
-            if args == "":
-                return f"{fn}()"  # zero-arg -> stripped below
-            if has_toplevel_comma(args):
-                parts = split_top_commas(args)
-                return f"{fn} ({', '.join(parts)})"
-            return f"{fn} {args}"
-        out = pat.sub(repl, out)
-    # zero-arg: f() -> f
-    out = re.sub(r'\b([A-Za-z_]\w*)\(\)', r'\1', out)
-    return out
+def _find_match(s, open_idx):
+    """Given s[open_idx] == '(', return index of the matching ')'. Quote-aware."""
+    depth, i, quote = 0, open_idx, None
+    while i < len(s):
+        c = s[i]
+        if quote:
+            if c == quote and s[i-1] != "\\":
+                quote = None
+        elif c in '"\'':
+            quote = c
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def paren_call_to_ws(s):
+    """Recursively rewrite `name(args)` calls to ML whitespace/uncurried form.
+    name(x) -> name x ; name(x, y) -> name (x, y) ; name() -> name.
+    `fn(...)` (lambda head) is skipped. Quote- and nesting-aware."""
+    res, i = [], 0
+    while i < len(s):
+        m = re.match(r'([A-Za-z_]\w*)\(', s[i:])
+        # only treat as a call if the identifier isn't 'fn' (lambda) and the char
+        # before it isn't part of a larger token
+        if m and m.group(1) != "fn":
+            name = m.group(1)
+            open_idx = i + len(name)
+            close = _find_match(s, open_idx)
+            if close != -1:
+                inner = paren_call_to_ws(s[open_idx+1:close])
+                inner_s = inner.strip()
+                if inner_s == "":
+                    res.append(name)                       # name() -> name
+                elif has_toplevel_comma(inner_s):
+                    res.append(f"{name} ({inner_s})")      # name (a, b)
+                else:
+                    res.append(f"{name} {inner_s}")        # name x
+                i = close + 1
+                continue
+        # copy char, skipping over quoted strings verbatim
+        c = s[i]
+        if c in '"\'':
+            q = c; res.append(c); i += 1
+            while i < len(s):
+                res.append(s[i])
+                if s[i] == q and s[i-1] != "\\":
+                    i += 1; break
+                i += 1
+            continue
+        res.append(c); i += 1
+    return "".join(res)
+
+
+def _lam_head(params):
+    params = params.strip()
+    if has_toplevel_comma(params):
+        return f"\\({', '.join(split_top_commas(params))}) =>"
+    return f"\\{params} =>" if params else "\\() =>"
 
 
 def translate_expr(expr):
     e = expr
-    # lambdas fn(x) => e  / fn(a,b) => e
-    def lam(m):
-        params = m.group(1).strip()
-        if "," in params:
-            return f"\\({params}) =>"
-        return f"\\{params} =>"
-    e = re.sub(r'fn\(([^)]*)\)\s*=>', lam, e)
-    # print("...") -> print "..."  and print(x) -> print x (handled by paren_call)
+    # brace-body lambda: fn(x) { body }  -> \x => body
+    def lam_brace(m):
+        return f"{_lam_head(m.group(1))} {m.group(2).strip()}"
+    e = re.sub(r'fn\(([^)]*)\)\s*\{([^{}]*)\}', lam_brace, e)
+    # arrow lambda: fn(x) => e
+    e = re.sub(r'fn\(([^)]*)\)\s*=>', lambda m: _lam_head(m.group(1)), e)
     e = paren_call_to_ws(e)
     return e
 
 
 # ---- line-block translation ---------------------------------------------
 
+def translate_records(code):
+    """Convert record construction `Name { f: v, ... }` and record type decls
+    `type Name = { f: T, ... }` to offside ML layout:
+        Name              |   type Name =
+            f = v         |       f : T
+    Non-record content is preserved. Single-line and multi-line handled."""
+    # `type Name = { body }`  -> keep header, fields use `:`
+    def repl_type(m):
+        header, body = m.group(1), m.group(2)
+        fields = [f.strip() for f in split_top_commas(body.strip()) if f.strip()]
+        rows = []
+        for fld in fields:
+            key, _, typ = fld.partition(":")
+            rows.append(f"    {key.strip()} : {typ.strip()}")
+        return f"{header}\n" + "\n".join(rows)
+
+    out = re.sub(r'(type\s+[A-Za-z_][\w<>]*\s*=)\s*\{(.*?)\}', repl_type, code, flags=re.S)
+
+    # bare construction `Name { body }` (not preceded by `type ... =`) -> fields use `=`
+    def repl_ctor(m):
+        name, body = m.group(1), m.group(2)
+        fields = [f.strip() for f in split_top_commas(body.strip()) if f.strip()]
+        rows = []
+        for fld in fields:
+            key, _, val = fld.partition(":")
+            rows.append(f"    {key.strip()} = {translate_expr(val.strip())}")
+        return f"{name}\n" + "\n".join(rows)
+
+    out = re.sub(r'\b([A-Z][\w<>]*)\s*\{(.*?)\}', repl_ctor, out, flags=re.S)
+    return out
+
+
+HARD = []  # blocks the script refuses -> hand-treatment list
+
+
+def is_complex(code):
+    """True if the block has a shape the line/record/match rules can't safely do."""
+    if code.count("match ") + code.count("match\n") > 1:
+        return True  # multiple match blocks
+    # fn with brace body spanning lines:  fn name(...) {  ... }
+    if re.search(r'\bfn\s+\w+\([^)]*\)\s*(?:->\s*\w+\s*)?\{', code):
+        return True
+    # standalone braced match whose arms our converter can't parse cleanly is caught later
+    return False
+
+
 def translate_block(code):
     """Translate a whole Default osprey code block body to ML. Returns None if the
-    block is byte-identical (no surface difference) so caller can skip."""
-    lines = code.split("\n")
-    # Detect braced match / braced fn bodies -> too complex for line rules; handle a
-    # few common shapes, else fall back to a best-effort per-line pass.
-    if any(re.search(r'\bmatch\b.*\{', l) for l in lines) or \
-       re.search(r'\{\s*$', code) and re.search(r'=>', code):
-        ml = translate_match_block(lines)
-        if ml is not None:
-            return "\n".join(ml)
-    out = []
-    for line in lines:
-        out.append(translate_line(line))
-    ml = "\n".join(out)
-    if ml == code:
+    block is byte-identical (no surface difference) so caller can skip. Records
+    complex blocks in HARD and returns None so they get hand-treatment."""
+    if is_complex(code):
+        HARD.append(code)
         return None
-    return ml
+    lines = code.split("\n")
+    # Single braced match -> offside layout.
+    if any(re.search(r'\bmatch\b.*\{', l) for l in lines):
+        ml = translate_match_block(lines)
+        if ml is None:
+            HARD.append(code)
+            return None
+        return "\n".join(ml)
+    # Inline record construction / type-record -> offside layout.
+    if re.search(r'[A-Za-z_][\w<>]*\s*\{', code) and ":" in code:
+        rec = translate_records(code)
+        if rec != code:
+            return rec
+    out = [translate_line(l) for l in lines]
+    ml = "\n".join(out)
+    return None if ml == code else ml
 
 
 def translate_line(line):
@@ -195,6 +285,8 @@ def process(path):
     out = []
     idx = 0
     changed = False
+    hard_here = False
+    before = len(HARD)
     for m in BLOCK.finditer(txt):
         out.append(txt[idx:m.end()])
         idx = m.end()
@@ -210,15 +302,25 @@ def process(path):
     out.append(txt[idx:])
     if changed:
         path.write_text("".join(out))
-    return changed
+    if len(HARD) > before:
+        hard_here = True
+    return changed, hard_here
 
 def main():
     files = sorted(DOCS.rglob("*.md"))
     n = 0
+    hard_files = []
     for f in files:
-        if process(f):
+        changed, hard = process(f)
+        if changed:
             n += 1
+        if hard:
+            hard_files.append(str(f))
     print(f"Added ML twins to {n} files (of {len(files)} scanned).")
+    if hard_files:
+        print(f"HAND-TREAT ({len(hard_files)} files with complex blocks):")
+        for hf in hard_files:
+            print(f"  {hf}")
 
 if __name__ == "__main__":
     main()

@@ -52,17 +52,26 @@ test.describe("desktop interactions", () => {
     await page.goto("/wasm/");
     // The Osprey module ran, sql.js loaded, and the DB is seeded.
     await expect(page.locator("#banner.ok")).toContainText("Database ready", { timeout: 20_000 });
-    // Initial query auto-ran and rendered a result table.
+
+    // The "Write a query" tab is active by default: the query auto-ran, rendered
+    // a result table, and the SQL editor overlay is highlighted.
+    await expect(page.locator("#tab-query")).toHaveClass(/is-active/);
     await expect(page.locator("#sql-result table.data")).toBeVisible();
-    // Osprey source is highlighted with the real Prism grammar (shared tokens).
-    await expect(page.locator("#src-code .token.keyword").first()).toBeVisible();
-    // The SQL editor overlay is highlighted too.
     await expect(page.locator("#sql-hl .token.keyword").first()).toBeVisible();
 
-    // Adding a row and re-querying reflects the new data.
+    // The Source tab reveals the highlighted Osprey program.
+    await page.click("#tab-source");
+    await expect(page.locator("#panel-source")).toBeVisible();
+    await expect(page.locator("#src-code .token.keyword").first()).toBeVisible();
+
+    // The Add-data tab: inserting a row and re-querying reflects the new data.
+    await page.click("#tab-add");
+    await expect(page.locator("#panel-add")).toBeVisible();
     await page.fill('#add-form input[name="product"]', "TestBrew");
     await page.click("#add-form button[type=submit]");
     await expect(page.locator("#add-status.ok")).toContainText("TestBrew");
+
+    await page.click("#tab-query");
     await page.fill("#sql", "SELECT product FROM sales WHERE product = 'TestBrew';");
     await page.click("#run-sql");
     await expect(page.locator("#sql-result")).toContainText("TestBrew");

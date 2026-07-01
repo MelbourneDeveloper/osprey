@@ -23,7 +23,7 @@ print(true)           // Prints: true
 ```
 
 ```osprey-ml
-print ("Hello, World!")  // Prints: Hello, World!
+print "Hello, World!"  // Prints: Hello, World!
 print 42             // Prints: 42
 print true           // Prints: true
 ```

@@ -395,6 +395,67 @@
   color: var(--primary-container);
   margin: 0 0 var(--space-2);
 }
+
+/* ---- WASM demo: 3-tab studio that fills most of the viewport ---- */
+.wasm-studio { padding-block: 0 clamp(2rem, 5vw, 4rem); }
+.wasm-studio .container {
+  display: flex;
+  flex-direction: column;
+  min-height: min(78vh, 900px);
+}
+.wasm-tabbar {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--outline-variant);
+}
+.wasm-tab {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-4) var(--space-5);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--on-surface-variant);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.wasm-tab:hover { background: var(--surface-low); color: var(--on-surface); }
+.wasm-tab.is-active {
+  background: var(--surface-low);
+  border-color: var(--outline-variant);
+  color: var(--on-surface);
+}
+.wasm-tab-k { font-size: var(--fs-h3); font-weight: 700; }
+.wasm-tab-sub {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-container);
+}
+.wasm-panels { flex: 1; display: flex; min-height: 0; }
+.wasm-panel {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-top: var(--space-6);
+}
+.wasm-panel.is-active { display: flex; }
+.panel-hint {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.9rem;
+}
+/* Let the tall panels (query console, source) fill and scroll internally. */
+#panel-query .console { flex: 1; min-height: 0; grid-template-rows: auto auto auto 1fr; }
+#panel-query .tablewrap { min-height: 0; }
+#panel-source .wasm-code-window { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#panel-source .wasm-code-window pre { flex: 1; max-height: none; overflow: auto; }
 .section-head {
   display: flex;
   align-items: baseline;
@@ -960,6 +1021,11 @@ table.data td.num {
   .hero-actions { width: 100%; flex-direction: column; }
   .hero-actions .btn { width: 100%; }
   .wasm-hero h1 { max-width: none; }
+  /* Three tabs stay in one row on phones: compact labels, no sub-caption. */
+  .wasm-tab { padding: var(--space-3); align-items: center; text-align: center; }
+  .wasm-tab-k { font-size: var(--fs-body); }
+  .wasm-tab-sub { display: none; }
+  .wasm-studio .container { min-height: 70vh; }
   .console-bar { width: 100%; }
   .console-bar .btn { width: 100%; }
   .add-form { flex-direction: column; align-items: stretch; }

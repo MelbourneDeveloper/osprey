@@ -4,6 +4,12 @@ title: "API Reference"
 description: "Complete reference documentation for the Osprey programming language"
 ---
 
+## Flavors
+
+Osprey has one core and two surface syntaxes: the **Default** (`.osp`) C-style braces
+flavor and the **ML** (`.ospml`) offside-layout, curry-by-default flavor. Both lower to
+the exact same AST. See **[Language Flavors — Default vs ML](flavors/)**.
+
 ## Quick Navigation
 
 - [Flavors](flavors/) - Default (`.osp`) vs ML (`.ospml`) syntax — one core, two surfaces

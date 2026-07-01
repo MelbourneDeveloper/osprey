@@ -43,19 +43,6 @@ fn main() = {
 }
 ```
 
-```osprey-ml
-type Shape = Circle | Square
-
-area (s, size) =
-    match s
-        Circle => size * size * 3
-        Square => size * size
-
-main () =
-    total = area (Circle, 4) + area (Square, 2)
-    print "total: ${total}"
-```
-
 ## The Default flavor (`.osp`)
 
 Braces delimit blocks, `fn` introduces functions, `let` binds, and calls use
@@ -80,18 +67,6 @@ Indentation delimits blocks (the *offside rule*), functions are **curried by
 default**, application is whitespace (`f x` instead of `f(x)`), lambdas are `\x => e`,
 and mutation uses the walrus `:=`. Type annotations, when genuinely needed, sit on
 their own line above the definition. It reads like OCaml, F#, or Haskell.
-
-```osprey-ml
-classify n =
-    match n
-        0 => "zero"
-        _ => "many"
-
-main () =
-    xs = [1, 2, 3]
-    doubled = xs |> map \x => x * 2
-    print "${classify 0}, ${classify 9}"
-```
 
 ## Things that never change
 

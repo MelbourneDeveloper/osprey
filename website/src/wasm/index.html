@@ -19,75 +19,92 @@ permalink: /wasm/
   </div>
 </section>
 
-<section class="section">
+<section class="wasm-studio">
   <div class="container">
-    <div class="section-head">
-      <div>
-        <p class="eyebrow">Insert a row</p>
-        <h2>Add data</h2>
-      </div>
-      <p class="hint">Each row is inserted into the same <code>sales</code> table Osprey seeded. Your queries below see it immediately.</p>
+    <div class="wasm-tabbar" role="tablist" aria-label="WebAssembly demo">
+      <button class="wasm-tab is-active" id="tab-query" role="tab" aria-controls="panel-query" aria-selected="true">
+        <span class="wasm-tab-k">Write a query</span>
+        <span class="wasm-tab-sub">live in-browser database</span>
+      </button>
+      <button class="wasm-tab" id="tab-add" role="tab" aria-controls="panel-add" aria-selected="false">
+        <span class="wasm-tab-k">Add data</span>
+        <span class="wasm-tab-sub">insert a row</span>
+      </button>
+      <button class="wasm-tab" id="tab-source" role="tab" aria-controls="panel-source" aria-selected="false">
+        <span class="wasm-tab-k">The Osprey source</span>
+        <span class="wasm-tab-sub">compiled to wasm</span>
+      </button>
     </div>
-    <form id="add-form" class="add-form" autocomplete="off">
-      <label>Product <input name="product" value="Mocha" required></label>
-      <label>Region
-        <select name="region">
-          <option>North</option><option>South</option><option>East</option><option>West</option>
-        </select>
-      </label>
-      <label>Qty <input name="qty" type="number" min="1" value="5" required></label>
-      <label>Price <input name="price" type="number" min="1" value="14" required></label>
-      <button type="submit" class="btn btn-primary">Add row</button>
-    </form>
-    <p id="add-status" class="add-status">&nbsp;</p>
-  </div>
-</section>
 
-<section class="section section-alt">
-  <div class="container">
-    <div class="section-head">
-      <div>
-        <p class="eyebrow">Live in-browser database</p>
-        <h2>Write a query</h2>
-      </div>
-      <p class="hint">Standard SQL, run by sql.js. Press <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to run.</p>
-    </div>
-    <div class="console">
-      <div class="console-bar" id="presets"></div>
-      <div class="editor-wrap">
-        <pre class="editor-hl language-sql" aria-hidden="true"><code id="sql-hl" class="language-sql"></code></pre>
-        <textarea id="sql" spellcheck="false" aria-label="SQL query">SELECT region,
+    <div class="wasm-panels">
+      <div class="wasm-panel is-active" id="panel-query" role="tabpanel" aria-labelledby="tab-query">
+        <p class="panel-hint">Standard SQL, run by sql.js. Press <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to run.</p>
+        <div class="console">
+          <div class="console-bar" id="presets"></div>
+          <div class="editor-wrap">
+            <pre class="editor-hl language-sql" aria-hidden="true"><code id="sql-hl" class="language-sql"></code></pre>
+            <textarea id="sql" spellcheck="false" aria-label="SQL query">SELECT region,
        SUM(qty * price) AS revenue,
        SUM(qty)         AS units
 FROM sales
 GROUP BY region
 ORDER BY revenue DESC;</textarea>
+          </div>
+          <div class="console-bar">
+            <button id="run-sql" class="btn btn-primary">Run query</button>
+            <button id="reset-db" class="btn btn-secondary">Reset to seed</button>
+            <span class="spacer"></span>
+            <span id="sql-status" class="console-status">ready</span>
+          </div>
+          <div id="sql-result" class="tablewrap" hidden></div>
+        </div>
       </div>
-      <div class="console-bar">
-        <button id="run-sql" class="btn btn-primary">Run query</button>
-        <button id="reset-db" class="btn btn-secondary">Reset to seed</button>
-        <span class="spacer"></span>
-        <span id="sql-status" class="console-status">ready</span>
+
+      <div class="wasm-panel" id="panel-add" role="tabpanel" aria-labelledby="tab-add" hidden>
+        <p class="panel-hint">Each row is inserted into the same <code>sales</code> table Osprey seeded — your queries see it immediately.</p>
+        <form id="add-form" class="add-form" autocomplete="off">
+          <label>Product <input name="product" value="Mocha" required></label>
+          <label>Region
+            <select name="region">
+              <option>North</option><option>South</option><option>East</option><option>West</option>
+            </select>
+          </label>
+          <label>Qty <input name="qty" type="number" min="1" value="5" required></label>
+          <label>Price <input name="price" type="number" min="1" value="14" required></label>
+          <button type="submit" class="btn btn-primary">Add row</button>
+        </form>
+        <p id="add-status" class="add-status">&nbsp;</p>
       </div>
-      <div id="sql-result" class="tablewrap" hidden></div>
+
+      <div class="wasm-panel" id="panel-source" role="tabpanel" aria-labelledby="tab-source" hidden>
+        <p class="panel-hint">Algebraic effects, union types, and exhaustive pattern matching — compiled to wasm.</p>
+        <div class="wasm-code-window">
+          <div class="chrome"><span></span><span></span><span></span><b>studio.osp</b></div>
+          <pre class="language-osprey"><code id="src-code" class="language-osprey">loading source…</code></pre>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="section">
-  <div class="container">
-    <div class="section-head">
-      <div>
-        <p class="eyebrow">The program that seeds the database</p>
-        <h2>The Osprey source</h2>
-      </div>
-      <p class="hint">Algebraic effects, union types, and exhaustive pattern matching — compiled to wasm.</p>
-    </div>
-    <div class="wasm-code-window">
-      <div class="chrome"><span></span><span></span><span></span><b>studio.osp</b></div>
-      <pre class="language-osprey"><code id="src-code" class="language-osprey">loading source…</code></pre>
-    </div>
-  </div>
-</section>
-
+<script>
+  // Tab controller: show one panel at a time. Panels stay in the DOM (only
+  // toggled with [hidden]) so wasm-studio.js keeps its element references and
+  // the SQL editor / result table work regardless of which tab is active.
+  (function () {
+    const tabs = [...document.querySelectorAll(".wasm-tab")];
+    const panelFor = (tab) => document.getElementById(tab.getAttribute("aria-controls"));
+    function activate(tab) {
+      tabs.forEach((t) => {
+        const on = t === tab;
+        t.classList.toggle("is-active", on);
+        t.setAttribute("aria-selected", String(on));
+        const p = panelFor(t);
+        p.classList.toggle("is-active", on);
+        p.hidden = !on;
+      });
+    }
+    tabs.forEach((t) => t.addEventListener("click", () => activate(t)));
+  })();
+</script>
 <script src="/js/wasm-studio.js" type="module"></script>
