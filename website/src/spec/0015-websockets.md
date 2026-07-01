@@ -37,21 +37,6 @@ type WebSocketConnection = {
 }
 ```
 
-```osprey-ml
-type WebSocketID = int
-type ServerID    = int
-
-type WebSocketMessage =
-    type      : string
-    data      : string
-    timestamp : int
-
-type WebSocketConnection =
-    id          : WebSocketID
-    url         : string
-    isConnected : bool
-```
-
 ## Client Functions
 
 ```osprey
@@ -62,13 +47,6 @@ websocketConnect(
 
 websocketSend(wsID: WebSocketID, message: string) -> Result<unit, string>
 websocketClose(wsID: WebSocketID)                  -> Result<unit, string>
-```
-
-```osprey-ml
-websocketConnect : (string, string -> Result<unit, string>) -> Result<WebSocketID, string>
-
-websocketSend : (WebSocketID, string) -> Result<unit, string>
-websocketClose : WebSocketID -> Result<unit, string>
 ```
 
 `messageHandler` is invoked once per incoming frame with the frame payload.
@@ -88,20 +66,6 @@ match websocketConnect(url: "ws://localhost:8080/chat", messageHandler: handleMe
 }
 ```
 
-```osprey-ml
-handleMessage : string -> Result<unit, string>
-handleMessage msg =
-    print "received: ${msg}"
-    Success
-        value = ()
-
-match websocketConnect (url = "ws://localhost:8080/chat", messageHandler = handleMessage)
-    Success wsID =>
-        websocketSend (wsID = wsID, message = "hello")
-        websocketClose (wsID = wsID)
-    Error message => print "connect failed: ${message}"
-```
-
 ## Server Functions
 
 ```osprey
@@ -114,15 +78,6 @@ websocketServerSend(serverID: ServerID, wsID: WebSocketID,
                     message: string)                              -> Result<unit, string>
 websocketServerBroadcast(serverID: ServerID, message: string)     -> Result<unit, string>
 websocketStopServer(serverID: ServerID)                           -> Result<unit, string>
-```
-
-```osprey-ml
-websocketCreateServer : (int, string, string) -> Result<ServerID, string>
-
-websocketServerListen : ServerID -> Result<unit, string>
-websocketServerSend : (ServerID, WebSocketID, string) -> Result<unit, string>
-websocketServerBroadcast : (ServerID, string) -> Result<unit, string>
-websocketStopServer : ServerID -> Result<unit, string>
 ```
 
 ## Server Example
@@ -142,16 +97,4 @@ match websocketCreateServer(port: 8080, address: "127.0.0.1", path: "/chat") {
     }
     Error { message } => print("create failed: ${message}")
 }
-```
-
-```osprey-ml
-match websocketCreateServer (port: 8080, address: "127.0.0.1", path: "/chat")
-    Success serverID =>
-        match websocketServerListen (serverID: serverID)
-            Success _ =>
-                websocketServerBroadcast (serverID: serverID, message: "Welcome!")
-                sleep 10000
-                websocketStopServer (serverID: serverID)
-            Error message => print "listen failed: ${message}"
-    Error message => print "create failed: ${message}"
 ```

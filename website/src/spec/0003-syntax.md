@@ -75,12 +75,6 @@ import std.io
 import graphics.canvas
 ```
 
-```osprey-ml
-import std
-import std.io
-import graphics.canvas
-```
-
 Import semantics for multi-file projects, aliases, explicit member imports, and
 wildcard policy are defined in [Modules and Namespaces](/spec/0025-modulesandnamespaces/#imports).
 

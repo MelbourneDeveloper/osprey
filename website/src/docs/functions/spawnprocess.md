@@ -18,11 +18,13 @@ description: "Spawns an external async process with MANDATORY callback for stdou
 ## Example
 
 ```osprey
-fn processEventHandler(processID, eventType, data) = match eventType {
-    1 => print("STDOUT: ${data}")
-    2 => print("STDERR: ${data}")
-    3 => print("EXIT: ${data}")
-    _ => print("Unknown event")
+fn processEventHandler(processID: int, eventType: int, data: string) -> Unit = {
+    match eventType {
+        1 => print("STDOUT: ${data}")
+        2 => print("STDERR: ${data}")
+        3 => print("EXIT: ${data}")
+        _ => print("Unknown event")
+    }
 }
 let result = spawnProcess("echo hello", processEventHandler)
 match result {

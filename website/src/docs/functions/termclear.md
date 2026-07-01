@@ -17,5 +17,5 @@ termClear()
 ```
 
 ```osprey-ml
-termClear ()
+termClear
 ```

@@ -25,6 +25,6 @@ match deleteFile("temp.txt") {
 
 ```osprey-ml
 match deleteFile "temp.txt"
-    Success value => print "deleted"
-    Error message => print message
+    Success { value } => print "deleted"
+    Error { message } => print message
 ```

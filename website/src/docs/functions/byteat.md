@@ -26,6 +26,6 @@ match byteAt("hi", 0) {
 
 ```osprey-ml
 match byteAt ("hi", 0)
-    Success value => print "byte: ${value}"
-    Error message => print message
+    Success { value } => print "byte: ${value}"
+    Error { message } => print message
 ```

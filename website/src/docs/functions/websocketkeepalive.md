@@ -17,5 +17,5 @@ websocketKeepAlive()  // Blocks until Ctrl+C
 ```
 
 ```osprey-ml
-websocketKeepAlive ()  // Blocks until Ctrl+C
+websocketKeepAlive  // Blocks until Ctrl+C
 ```

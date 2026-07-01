@@ -21,5 +21,6 @@ parseFloat("3.14")  // Success { value: 3.14 }
 ```
 
 ```osprey-ml
-parseFloat "3.14"  // Success { value: 3.14 }
+parseFloat("3.14")  // Success
+    value = 3.14
 ```

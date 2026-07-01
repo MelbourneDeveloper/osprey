@@ -28,14 +28,6 @@ support.
 type Result<T, E> = Success { value: T } | Error { message: E }
 ```
 
-```osprey-ml
-type Result<T, E> =
-    Success
-        value : T
-    Error
-        message : E
-```
-
 The compiler rejects any direct access to the contained value. Callers must pattern-match the `Result` (see [Pattern Matching](/spec/0007-patternmatching/)) unless one of the auto-unwrap contexts applies ([Result Auto-Unwrapping](/spec/0004-typesystem/#result-auto-unwrapping)):
 
 ```osprey

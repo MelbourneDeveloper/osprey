@@ -26,6 +26,6 @@ match httpResponseHeader(response, "Content-Type") {
 
 ```osprey-ml
 match httpResponseHeader (response, "Content-Type")
-    Success value => print value
-    Error message => print message
+    Success { value } => print value
+    Error { message } => print message
 ```

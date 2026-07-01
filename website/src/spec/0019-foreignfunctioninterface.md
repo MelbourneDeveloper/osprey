@@ -23,11 +23,6 @@ A source comment directive links a system library at compile time:
 // @linkdir: /opt/lib    → clang -L/opt/lib
 ```
 
-```osprey-ml
-// @link: sqlite3        → clang -lsqlite3
-// @linkdir: /opt/lib    → clang -L/opt/lib
-```
-
 Directives are read from the source file and passed to the linker by both `--run` and `--compile`. Library names and paths are validated; shell injection through a directive is a compile-time error.
 
 ## The `Ptr` Type [FFI-PTR]

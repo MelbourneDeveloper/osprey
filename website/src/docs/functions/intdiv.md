@@ -22,5 +22,5 @@ fn half(n) = intDiv(n, 2)  // intDiv(7, 2) == 3
 ```
 
 ```osprey-ml
-half n = intDiv (n, 2)  // intDiv(7, 2) == 3
+half (n) = intDiv(n, 2)  // intDiv(7, 2) = = 3
 ```

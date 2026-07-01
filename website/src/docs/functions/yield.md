@@ -17,5 +17,5 @@ yield()
 ```
 
 ```osprey-ml
-yield ()
+yield
 ```

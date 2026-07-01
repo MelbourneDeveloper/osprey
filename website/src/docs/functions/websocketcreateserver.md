@@ -27,7 +27,6 @@ match serverResult {
 ```
 
 ```osprey-ml
-serverResult = websocketCreateServer (port: 8080, address: "127.0.0.1", path: "/chat")
 match serverResult
     Success serverId => print "WebSocket server created with ID: ${serverId}"
     Err message => print "Failed to create server: ${message}"

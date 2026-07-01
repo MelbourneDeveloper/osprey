@@ -25,7 +25,6 @@ match listenResult {
 ```
 
 ```osprey-ml
-listenResult = websocketServerListen (serverID: serverId)
 match listenResult
     Success _ => print "Server listening on ws://127.0.0.1:8080/chat"
     Err message => print "Failed to start listening: ${message}"

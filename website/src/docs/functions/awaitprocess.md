@@ -23,5 +23,5 @@ print("Process exited with code: ${toString(exitCode)}")
 
 ```osprey-ml
 exitCode = awaitProcess processHandle
-print "Process exited with code: ${toString exitCode}"
+print "Process exited with code: ${toString(exitCode)}"
 ```

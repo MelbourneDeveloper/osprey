@@ -16,19 +16,31 @@ you prefer, per file, by extension.
   whitespace application (`f x`), `\x => e` lambdas, `:=` for mutation. Reads like
   OCaml, F#, or Haskell.
 
-The same program, both flavors:
+The same program, both flavors — a union type, a function that matches on it, a
+binding, and interpolated output. Both compile to identical IR:
 
 ```osprey
+type Shape = Circle | Square
+
 fn area(s, size) = match s {
     Circle => size * size * 3
     Square => size * size
 }
+
+let total = area(Circle, 4) + area(Square, 2)
+print("total: ${total}")
 ```
 
 ```osprey-ml
-match s
-    Circle => size * size * 3
-    Square => size * size
+type Shape = Circle | Square
+
+area (s, size) =
+    match s
+        Circle => size * size * 3
+        Square => size * size
+
+total = area (Circle, 4) + area (Square, 2)
+print "total: ${total}"
 ```
 
 ## Quick Navigation

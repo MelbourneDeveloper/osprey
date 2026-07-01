@@ -18,6 +18,6 @@ print("Created empty list")
 ```
 
 ```osprey-ml
-myList = List ()
+myList = List
 print "Created empty list"
 ```

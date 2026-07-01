@@ -17,5 +17,5 @@ termShowCursor()
 ```
 
 ```osprey-ml
-termShowCursor ()
+termShowCursor
 ```

@@ -79,18 +79,6 @@ let sum = add(10, y: 20)  // Compilation error
 let result = multiply(5, b: 3)  // Compilation error
 ```
 
-```osprey-ml
-// ERROR: Multi-parameter function with positional arguments
-add (x, y) = x + y
-sum = add (10, 20)  // Compilation error
-
-// ERROR: Mixed positional and named arguments
-sum = add (10, y: 20)  // Compilation error
-
-// ERROR: Missing parameter name
-result = multiply (5, b: 3)  // Compilation error
-```
-
 ## Rules
 
 1. Zero parameters: empty parentheses, `f()`.

@@ -17,5 +17,5 @@ let big = random()  // e.g. 7240982340198
 ```
 
 ```osprey-ml
-big = random ()  // e.g. 7240982340198
+big = random  // e.g. 7240982340198
 ```
