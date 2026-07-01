@@ -9,15 +9,15 @@ description: "Type declaration keyword. Used to define custom types and type ali
 ## Example
 
 ```osprey
-type UserId = Int
+type UserId = int
 type Status = Active | Inactive
-type User = { name: String, age: Int }
+type User = { name: string, age: int }
 ```
 
 ```osprey-ml
-type UserId = Int
+type UserId = int
 type Status = Active | Inactive
 type User =
-    name : String
-    age : Int
+    name : string
+    age : int
 ```

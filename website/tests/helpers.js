@@ -11,7 +11,10 @@ const PAGES = [
   { name: "blog-index", path: "/blog/", kind: "listing" },
   { name: "blog-post", path: "/blog/2026-05-17-persistent-collections/", kind: "prose" },
   { name: "status", path: "/status/", kind: "prose" },
-  { name: "wasm", path: "/wasm/", kind: "wasm" },
+  // Full-screen studio: the 3-tab demo fills the viewport, so the footer is
+  // intentionally hidden and the page never scrolls (kind stays "wasm" so the
+  // interaction + overflow tests still target it).
+  { name: "wasm", path: "/wasm/", kind: "wasm", fullscreen: true },
   { name: "playground", path: "/playground/", kind: "app" },
 ];
 

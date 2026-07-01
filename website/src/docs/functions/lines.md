@@ -21,3 +21,9 @@ lines("a\
 b\
 c")  // ["a","b","c"]
 ```
+
+```osprey-ml
+lines "a\
+b\
+c"  // ["a","b","c"]
+```

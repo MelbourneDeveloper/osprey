@@ -16,3 +16,8 @@ description: "Reads a string from the user's input."
 let userInput = input()
 print(userInput)
 ```
+
+```osprey-ml
+userInput = input ()
+print userInput
+```

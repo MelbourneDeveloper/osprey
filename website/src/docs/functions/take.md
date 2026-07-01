@@ -20,3 +20,7 @@ description: "Returns at most the first n bytes of s. Clamps; never fails."
 ```osprey
 take("hello", 3)  // "hel"
 ```
+
+```osprey-ml
+take ("hello", 3)  // "hel"
+```

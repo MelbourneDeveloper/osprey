@@ -19,3 +19,7 @@ description: "All keys of the map as a list. Order unspecified."
 ```osprey
 mapKeys(m)  // List<K>
 ```
+
+```osprey-ml
+mapKeys m  // List<K>
+```

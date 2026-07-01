@@ -10,7 +10,7 @@ description: "Variable declaration keyword. Used to bind values to identifiers. 
 
 ```osprey
 let name = "Alice"
-let age: Int = 25
+let age = 25
 let isActive = true
 ```
 

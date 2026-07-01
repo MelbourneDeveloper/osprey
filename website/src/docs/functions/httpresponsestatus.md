@@ -19,3 +19,7 @@ description: "Returns the HTTP status code of a response handle."
 ```osprey
 let code = httpResponseStatus(response)  // 200
 ```
+
+```osprey-ml
+code = httpResponseStatus response  // 200
+```

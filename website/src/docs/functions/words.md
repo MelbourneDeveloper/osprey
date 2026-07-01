@@ -19,3 +19,7 @@ description: "Splits on runs of whitespace; empty results dropped."
 ```osprey
 words("a  b\\tc")  // ["a","b","c"]
 ```
+
+```osprey-ml
+words "a  b\\tc"  // ["a","b","c"]
+```

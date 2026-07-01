@@ -15,3 +15,7 @@ description: "Clears the terminal screen."
 ```osprey
 termClear()
 ```
+
+```osprey-ml
+termClear ()
+```

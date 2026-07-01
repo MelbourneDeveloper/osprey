@@ -21,3 +21,7 @@ description: "Reduces an iterator to a single value by repeatedly applying a fun
 ```osprey
 range(1, 5) |> fold(0, add)  // sum: 0+1+2+3+4 = 10
 ```
+
+```osprey-ml
+range (1, 5) |> fold (0, add)  // sum: 0+1+2+3+4 = 10
+```

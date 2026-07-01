@@ -20,3 +20,7 @@ description: "True if s ends with suffix."
 ```osprey
 endsWith("image.png", ".png")  // true
 ```
+
+```osprey-ml
+endsWith ("image.png", ".png")  // true
+```

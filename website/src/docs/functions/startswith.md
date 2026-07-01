@@ -20,3 +20,7 @@ description: "True if s begins with prefix."
 ```osprey
 startsWith("GET /api", "GET ")  // true
 ```
+
+```osprey-ml
+startsWith ("GET /api", "GET ")  // true
+```

@@ -5,20 +5,6 @@ description: "An Osprey program compiled to wasm32-wasip1 seeds a real SQLite da
 permalink: /wasm/
 ---
 
-<section class="wasm-hero">
-  <div class="container">
-    <p class="eyebrow">Osprey → WebAssembly</p>
-    <h1>An Osprey program runs a database in your browser.</h1>
-    <p class="wasm-lede">
-      This Osprey source is compiled to <code>wasm32-wasip1</code>. When it runs, it
-      emits a SQLite schema and seed data, which we load into <strong>sql.js</strong>
-      (SQLite compiled to wasm). Add rows and write queries against the live database
-      below — nothing leaves your machine.
-    </p>
-    <div id="banner" class="banner">Booting the Osprey WebAssembly module…</div>
-  </div>
-</section>
-
 <section class="wasm-studio">
   <div class="container">
     <div class="wasm-tabbar" role="tablist" aria-label="WebAssembly demo">
@@ -38,7 +24,6 @@ permalink: /wasm/
 
     <div class="wasm-panels">
       <div class="wasm-panel is-active" id="panel-query" role="tabpanel" aria-labelledby="tab-query">
-        <p class="panel-hint">Standard SQL, run by sql.js. Press <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to run.</p>
         <div class="console">
           <div class="console-bar" id="presets"></div>
           <div class="editor-wrap">
@@ -61,7 +46,6 @@ ORDER BY revenue DESC;</textarea>
       </div>
 
       <div class="wasm-panel" id="panel-add" role="tabpanel" aria-labelledby="tab-add" hidden>
-        <p class="panel-hint">Each row is inserted into the same <code>sales</code> table Osprey seeded — your queries see it immediately.</p>
         <form id="add-form" class="add-form" autocomplete="off">
           <label>Product <input name="product" value="Mocha" required></label>
           <label>Region
@@ -77,13 +61,14 @@ ORDER BY revenue DESC;</textarea>
       </div>
 
       <div class="wasm-panel" id="panel-source" role="tabpanel" aria-labelledby="tab-source" hidden>
-        <p class="panel-hint">Algebraic effects, union types, and exhaustive pattern matching — compiled to wasm.</p>
         <div class="wasm-code-window">
           <div class="chrome"><span></span><span></span><span></span><b>studio.osp</b></div>
           <pre class="language-osprey"><code id="src-code" class="language-osprey">loading source…</code></pre>
         </div>
       </div>
     </div>
+
+    <div id="banner" class="banner banner-slim">Booting the Osprey WebAssembly module…</div>
   </div>
 </section>
 

@@ -21,3 +21,8 @@ description: "Starts the HTTP server listening for requests with a handler funct
 let result = httpListen(serverId, requestHandler)
 print("Server listening")
 ```
+
+```osprey-ml
+result = httpListen (serverId, requestHandler)
+print "Server listening"
+```

@@ -19,6 +19,10 @@ Reference for built-in functions available in every Osprey program. Operations t
 ```osprey
 print(value: int | string | bool) -> int
 ```
+
+```osprey-ml
+print : int | string | bool -> int
+```
 Prints values to standard output with automatic type conversion.
 
 ```osprey
@@ -171,6 +175,18 @@ type StringError =
     | InvalidArgument { message: string }
     | NotFound
     | ParseFailed { input: string }
+```
+
+```osprey-ml
+type StringError =
+    IndexOutOfRange
+        index : int
+        length : int
+    InvalidArgument
+        message : string
+    NotFound
+    ParseFailed
+        input : string
 ```
 
 ### Inspection (total)
@@ -364,6 +380,32 @@ match split("name=alice&age=30", "&") {
 }
 ```
 
+```osprey-ml
+type KeyValue =
+    key : string
+    value : string
+
+parsePair pair =
+    match indexOf (pair, "=")
+        Success i =>
+            match substring (pair, 0, i)
+                Success k =>
+                    match substring (pair, i + 1, length pair)
+                        Success v =>
+                            Success
+                                value =
+                                    KeyValue
+                                        key = k
+                                        value = v
+                        Error message => Error message
+                Error message => Error message
+        Error message => Error message
+
+match split ("name=alice&age=30", "&")
+    Success pairs => forEach (pairs, \p => parsePair p |> print)
+    Error message => print "bad query"
+```
+
 ### Sources
 
 The API surface above is informed by the following FP-style string libraries:
@@ -405,6 +447,16 @@ fn processEventHandler(processID, eventType, data) = match eventType {
 }
 
 let result = spawnProcess("echo 'Hello'", processEventHandler)
+```
+
+```osprey-ml
+processEventHandler (processID, eventType, data) = match eventType
+    1 => print "[STDOUT] ${data}"
+    2 => print "[STDERR] ${data}"
+    3 => print "[EXIT] Code: ${data}"
+    _ => print "[UNKNOWN] ${data}"
+
+result = spawnProcess ("echo 'Hello'", processEventHandler)
 ```
 
 ### `awaitProcess(processId: int) -> int`

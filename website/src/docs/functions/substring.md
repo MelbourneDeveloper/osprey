@@ -21,3 +21,7 @@ description: "Extracts s[start, end). Returns Error(IndexOutOfRange) if start<0,
 ```osprey
 substring("hello", 1, 4)  // Success { value: "ell" }
 ```
+
+```osprey-ml
+substring ("hello", 1, 4)  // Success { value: "ell" }
+```

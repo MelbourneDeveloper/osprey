@@ -20,3 +20,7 @@ description: "Returns the number of elements in the JSON array at the given path
 ```osprey
 let n = jsonLength(doc, "items")
 ```
+
+```osprey-ml
+n = jsonLength (doc, "items")
+```

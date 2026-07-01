@@ -19,3 +19,7 @@ description: "Releases a parsed JSON document handle obtained from jsonParse."
 ```osprey
 jsonFree(doc)
 ```
+
+```osprey-ml
+jsonFree doc
+```

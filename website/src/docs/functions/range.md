@@ -20,3 +20,7 @@ description: "Creates an iterator that generates numbers from start to end (excl
 ```osprey
 forEach(range(0, 5), fn(x) { print(x) })  // Prints: 0, 1, 2, 3, 4
 ```
+
+```osprey-ml
+forEach (range (0, 5), \x => print x)  // Prints: 0, 1, 2, 3, 4
+```

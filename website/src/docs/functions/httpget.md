@@ -22,3 +22,8 @@ description: "Makes an HTTP GET request to the specified path."
 let status = httpGet(clientId, "/get", "")
 print("GET request status: ${status}")
 ```
+
+```osprey-ml
+status = httpGet (clientId, "/get", "")
+print "GET request status: ${status}"
+```

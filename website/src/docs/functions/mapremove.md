@@ -20,3 +20,7 @@ description: "Returns a new map without key. No-op if key is absent."
 ```osprey
 mapRemove({"a": 1, "b": 2}, "a")  // {"b": 2}
 ```
+
+```osprey-ml
+mapRemove ({"a": 1, "b": 2}, "a")  // {"b": 2}
+```

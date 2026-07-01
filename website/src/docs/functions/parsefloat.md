@@ -19,3 +19,7 @@ description: "Strict base-10 floating-point parser. No whitespace tolerance."
 ```osprey
 parseFloat("3.14")  // Success { value: 3.14 }
 ```
+
+```osprey-ml
+parseFloat "3.14"  // Success { value: 3.14 }
+```

@@ -15,3 +15,7 @@ description: "Returns the terminal width in columns."
 ```osprey
 let width = termCols()
 ```
+
+```osprey-ml
+width = termCols ()
+```

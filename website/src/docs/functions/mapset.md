@@ -21,3 +21,7 @@ description: "Returns a new map with key bound to value (replaces prior binding)
 ```osprey
 mapSet({"a": 1}, "b", 2)  // {"a": 1, "b": 2}
 ```
+
+```osprey-ml
+mapSet ({"a": 1}, "b", 2)  // {"a": 1, "b": 2}
+```

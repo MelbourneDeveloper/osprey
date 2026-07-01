@@ -20,3 +20,8 @@ description: "Closes the HTTP client and cleans up resources."
 let result = httpCloseClient(clientId)
 print("Client closed")
 ```
+
+```osprey-ml
+result = httpCloseClient clientId
+print "Client closed"
+```

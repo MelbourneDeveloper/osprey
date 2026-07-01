@@ -21,3 +21,7 @@ description: "Replaces every occurrence of needle. Error(InvalidArgument) on emp
 ```osprey
 replace("a-b-c", "-", "_")  // Success { value: "a_b_c" }
 ```
+
+```osprey-ml
+replace ("a-b-c", "-", "_")  // Success { value: "a_b_c" }
+```

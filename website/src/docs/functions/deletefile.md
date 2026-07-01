@@ -22,3 +22,9 @@ match deleteFile("temp.txt") {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match deleteFile "temp.txt"
+    Success value => print "deleted"
+    Error message => print message
+```

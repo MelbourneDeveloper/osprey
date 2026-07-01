@@ -20,3 +20,7 @@ description: "Apply function to every element of list. Phase 7 of collections pl
 ```osprey
 forEachList(xs, print)
 ```
+
+```osprey-ml
+forEachList (xs, print)
+```

@@ -294,6 +294,11 @@ lowering lives in [`osprey-syntax/src/lower.rs`](https://github.com/Nimblesite/o
 let banner = "hello"
 ```
 
+```osprey-ml
+/// The greeting shown to the operator on connect.
+banner = "hello"
+```
+
 Hovering `banner` shows `banner: string` followed by _"The greeting shown to the
 operator on connect."_
 

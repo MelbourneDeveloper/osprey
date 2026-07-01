@@ -19,3 +19,7 @@ description: "Returns the byte length of a string. Total — never fails."
 ```osprey
 let len = length("hello")  // 5
 ```
+
+```osprey-ml
+len = length "hello"  // 5
+```

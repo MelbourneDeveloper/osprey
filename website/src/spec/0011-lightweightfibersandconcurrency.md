@@ -33,6 +33,11 @@ Fiber<T>     // a concurrent computation that produces a value of type T
 Channel<T>   // an in-process communication channel carrying values of type T
 ```
 
+```osprey-ml
+Fiber<T>     // a concurrent computation that produces a value of type T
+Channel<T>   // an in-process communication channel carrying values of type T
+```
+
 ## Constructing Fibers
 
 Fibers are constructed using ordinary record-construction syntax:

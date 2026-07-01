@@ -381,6 +381,19 @@ in
     performIncrement(5)
 ```
 
+```osprey-ml
+effect Counter
+    increment : int => int
+
+performIncrement : int -> int !Counter
+performIncrement n = perform Counter.increment n
+
+handle Counter
+    increment n => performIncrement (n + 1)   // ❌ handler performs the effect it handles
+in
+    performIncrement 5
+```
+
 ## Worked Example
 
 `x * 2` returns `Result<int, MathError>`; the function below performs `Exception` on overflow and `State` to record the success.
@@ -409,4 +422,41 @@ in
     in
         let result = doubleAndStore(21)
         print("result: " + toString(result))
+```
+
+```osprey-ml
+effect Exception
+    raise : string => Unit
+
+effect State
+    get : Unit => int
+    set : int => Unit
+
+doubleAndStore : int -> int ![Exception, State]
+doubleAndStore x =
+    match x * 2
+        Success value =>
+            perform State.set value
+            value
+        Error message =>
+            perform Exception.raise message
+            0
+
+exceptionHandler =
+    handler Exception
+        raise msg =>
+            print ("error: " + msg)
+            -1
+
+stateHandler =
+    handler State
+        get => 0
+        set newVal => print ("state: " + toString newVal)
+
+handle exceptionHandler
+do
+    handle stateHandler
+    do
+        result = doubleAndStore 21
+        print ("result: " + toString result)
 ```

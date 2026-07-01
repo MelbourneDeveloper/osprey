@@ -20,3 +20,7 @@ description: "True iff key is present in map."
 ```osprey
 mapContains({"a": 1}, "a")  // true
 ```
+
+```osprey-ml
+mapContains ({"a": 1}, "a")  // true
+```

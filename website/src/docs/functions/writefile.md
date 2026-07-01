@@ -21,3 +21,8 @@ description: "Writes content to a file. Creates the file if it doesn't exist. Re
 let result = writeFile("output.txt", "Hello, World!")
 print("File written")
 ```
+
+```osprey-ml
+result = writeFile ("output.txt", "Hello, World!")
+print "File written"
+```

@@ -16,3 +16,8 @@ description: "Creates a new empty list."
 let myList = List()
 print("Created empty list")
 ```
+
+```osprey-ml
+myList = List ()
+print "Created empty list"
+```

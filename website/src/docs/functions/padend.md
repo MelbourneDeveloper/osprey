@@ -21,3 +21,7 @@ description: "Pads s on the right with copies of fill to reach targetLength byte
 ```osprey
 padEnd("7", 3, ".")  // Success { value: "7.." }
 ```
+
+```osprey-ml
+padEnd ("7", 3, ".")  // Success { value: "7.." }
+```

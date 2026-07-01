@@ -9,13 +9,9 @@ description: "Function declaration keyword. Used to define functions with parame
 ## Example
 
 ```osprey
-fn add(a: Int, b: Int) -> Int {
-    a + b
-}
+fn add(a, b) = a + b
 
-fn greet(name: String) {
-    print("Hello, " + name)
-}
+fn greet(name) = print("Hello, " + name)
 ```
 
 ```osprey-ml

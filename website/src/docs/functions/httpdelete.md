@@ -22,3 +22,8 @@ description: "Makes an HTTP DELETE request to the specified path."
 let status = httpDelete(clientId, "/delete", "")
 print("DELETE status: ${status}")
 ```
+
+```osprey-ml
+status = httpDelete (clientId, "/delete", "")
+print "DELETE status: ${status}"
+```

@@ -20,3 +20,8 @@ description: "Reads the entire contents of a file as a string."
 let content = readFile("input.txt")
 print("File read")
 ```
+
+```osprey-ml
+content = readFile "input.txt"
+print "File read"
+```

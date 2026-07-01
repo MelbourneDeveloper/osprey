@@ -15,3 +15,7 @@ description: "Yields control from the current fiber, letting other ready fibers 
 ```osprey
 yield()
 ```
+
+```osprey-ml
+yield ()
+```

@@ -22,3 +22,9 @@ match httpResponseBody(response) {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match httpResponseBody response
+    Success value => print value
+    Error message => print message
+```

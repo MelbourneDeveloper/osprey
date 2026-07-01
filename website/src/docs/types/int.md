@@ -9,8 +9,8 @@ description: "A 64-bit signed integer type. Can represent whole numbers from -9,
 ## Example
 
 ```osprey
-let number: Int = 42
-let negative: Int = -100
+let number = 42
+let negative = -100
 ```
 
 ```osprey-ml

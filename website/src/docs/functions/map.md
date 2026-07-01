@@ -21,3 +21,8 @@ description: "Transforms each element in an iterator using a function, returning
 let doubled = map(range(1, 4), fn(x) { x * 2 })
 forEach(doubled, print)  // Prints: 2, 4, 6
 ```
+
+```osprey-ml
+doubled = map (range (1, 4), \x => x * 2)
+forEach (doubled, print)  // Prints: 2, 4, 6
+```

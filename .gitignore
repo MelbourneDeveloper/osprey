@@ -124,3 +124,6 @@ benchmarks/cases/**/*.cmx
 benchmarks/cases/**/*.o
 
 .osprey-debug
+
+
+scratchpad/

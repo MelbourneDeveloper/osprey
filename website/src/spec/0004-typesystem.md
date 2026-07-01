@@ -165,6 +165,13 @@ functionType ::= "(" (type ("," type)*)? ")" "->" type
 (string) -> (int) -> bool          // higher-order
 ```
 
+```osprey-ml
+int -> int
+(int, string) -> bool
+() -> string
+string -> int -> bool          // higher-order
+```
+
 ```osprey
 fn applyFunction(value: int, transform: (int) -> int) -> int = transform(value)
 
@@ -512,6 +519,20 @@ match numbers[0] {
 }
 ```
 
+```osprey-ml
+numbers = [1, 2, 3, 4, 5]            // List<int>
+names   = ["Alice", "Bob"]           // List<string>
+
+// Empty literal cannot infer its element type unless the context provides it
+empty : List<int>
+empty = []                           // ok
+total = sumOfInts []                 // ok if sumOfInts: (List<int>) -> int
+
+match numbers[0]
+    Success value   => print value
+    Error message => print message
+```
+
 #### Operations — [TYPE-LIST-OPS]
 
 ```osprey
@@ -520,6 +541,14 @@ let evens    = numbers |> filter(fn(x) => x % 2 == 0)
 let total    = numbers |> fold(0, fn(acc, x) => acc + x)
 let combined = numbers + [6, 7, 8]                       // concatenation produces a new list
 numbers |> forEach(fn(x) => print(toString(x)))
+```
+
+```osprey-ml
+doubled  = numbers |> map (\x => x * 2)
+evens    = numbers |> filter (\x => x % 2 == 0)
+total    = numbers |> fold (0, \(acc, x) => acc + x)
+combined = numbers + [6, 7, 8]                       // concatenation produces a new list
+numbers |> forEach (\x => print (toString x))
 ```
 
 The `+` operator is defined on `(List<T>, List<T>) -> List<T>` and returns a new list. Chains of `map`/`filter` terminated by `forEach`/`fold` are fused per [Stream Fusion](/spec/0010-loopconstructsandfunctionaliterators/#stream-fusion); no intermediate list is materialised.
@@ -535,6 +564,14 @@ fn classify(xs: List<int>) -> string = match xs {
 }
 ```
 
+```osprey-ml
+classify xs = match xs
+    []                 => "empty"
+    [single]           => "one"
+    [first, second]    => "two"
+    [head, ...tail]    => "many starting with ${head}"
+```
+
 A list pattern matches a list of exactly the listed length unless the final element is a rest binder (`...name`). The rest binder is itself a `List<T>` and is `[]` when the underlying list has exactly the prefix length.
 
 #### Comprehensions — [TYPE-LIST-COMP]
@@ -543,6 +580,12 @@ A list pattern matches a list of exactly the listed length unless the final elem
 let squares  = [x * x for x in range(1, 6)]               // [1, 4, 9, 16, 25]
 let filtered = [x for x in numbers if x > 3]
 let [head, ...tail] = numbers
+```
+
+```osprey-ml
+squares  = [x * x for x in range(1, 6)]               // [1, 4, 9, 16, 25]
+filtered = [x for x in numbers if x > 3]
+[head, ...tail] = numbers
 ```
 
 Comprehensions desugar to `map` + `filter` over the source iterator and are subject to the same stream-fusion rules.
@@ -563,11 +606,25 @@ let ages = {
 }                                                 // Map<string, int>
 ```
 
+```osprey-ml
+ages = {
+    "Alice":   25,
+    "Bob":     30,
+    "Charlie": 35
+}                                                 // Map<string, int>
+```
+
 The empty map literal `{}` is parsed as a `Map<K, V>` literal **only** at expression positions where a block expression is disallowed (e.g. RHS of `=` in a `let`, function argument). At ambiguous positions an explicit type annotation is required:
 
 ```osprey
 let scores: Map<string, int> = {}                 // ok: typed empty map
 let always_a_block          = { 1 }               // block expression returning 1
+```
+
+```osprey-ml
+scores : Map<string, int>
+scores = {}                                       // ok: typed empty map
+always_a_block = 1                                // block expression returning 1
 ```
 
 Duplicate keys in a literal are a **compile-time error**.
@@ -583,6 +640,12 @@ match ages["Alice"] {
 }
 ```
 
+```osprey-ml
+match ages["Alice"]
+    Success value => print (toString value)
+    Error message => print message
+```
+
 #### Operations — [TYPE-MAP-OPS]
 
 All operations return a new map and never mutate the receiver.
@@ -595,6 +658,16 @@ let totalAge   = ages |> foldEntries(0, fn(acc, k, v) => acc + v)
 let merged     = ages + { "Dave": 28 }                      // right-biased union
 let updated    = set(ages, "Alice", 26)                     // single-key update
 let withoutBob = remove(ages, "Bob")
+```
+
+```osprey-ml
+bumped     = ages |> mapValues (\age => age + 1)
+upper      = ages |> mapKeys (\name => toUpperCase name)
+thirties   = ages |> filterEntries (\(k, v) => v >= 30)
+totalAge   = ages |> foldEntries (0, \(acc, k, v) => acc + v)
+merged     = ages + { "Dave": 28 }                      // right-biased union
+updated    = set (ages, "Alice", 26)                     // single-key update
+withoutBob = remove (ages, "Bob")
 ```
 
 Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than as one packed value, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `Entry<K, V>` record (`{ key, value }`, defined with the Map builtins in [Built-In Functions](/spec/0012-built-infunctions/)) per element — Osprey has no tuple type.
@@ -615,6 +688,16 @@ fn analyze(p: Map<string, int>) -> string = match p {
 }
 ```
 
+```osprey-ml
+analyze : Map<string, int> -> string
+analyze p = match p
+    p when length p == 0                     => "none"
+    { "Alice": age }                         => "only Alice (${age}) or Alice + others"
+    { "Alice": _, "Bob": _ }                 => "contains both Alice and Bob"
+    p when length p > 5                      => "large"
+    _                                        => "other"
+```
+
 The literal `{}` is disallowed as a pattern (it would match every map). Match emptiness explicitly with a guard: `p when length(p) == 0`.
 
 #### Conversions — [TYPE-MAP-CONV]
@@ -625,6 +708,14 @@ let agesList = values(ages)                                // List<int>,    orde
 let pairs    = entries(ages)                               // List<Entry<string, int>>
 let m        = zipToMap(names, agesList)                   // Result<Map<K,V>, IndexError> if lengths differ
 let byGrade  = groupBy(students, fn(s) => s.grade)         // Map<string, List<Student>>
+```
+
+```osprey-ml
+names    = keys ages                                       // List<string>, order unspecified
+agesList = values ages                                     // List<int>,    order unspecified
+pairs    = entries ages                                    // List<Entry<string, int>>
+m        = zipToMap (names, agesList)                      // Result<Map<K,V>, IndexError> if lengths differ
+byGrade  = groupBy (students, \s => s.grade)               // Map<string, List<Student>>
 ```
 
 `zipToMap` returns a `Result` because mismatched lengths are an error. `groupBy` preserves the relative order of items within each bucket.
@@ -669,6 +760,15 @@ fn callIt(v: any) = someFunction(v)                        // ❌ pass to typed 
 let s = toString(v)              // where v: any            // ❌ implicit conversion
 ```
 
+```osprey-ml
+processAny (v : any) = v + 1                               // ❌ direct arithmetic
+getLength (v : any) = v.length                             // ❌ direct field access
+n : int
+n = someAnyFunction ()                                     // ❌ implicit conversion
+callIt (v : any) = someFunction v                          // ❌ pass to typed parameter
+s = toString v                   // where v: any            // ❌ implicit conversion
+```
+
 Each of these produces a compilation error.
 
 ### Required Form
@@ -679,6 +779,14 @@ fn process(v: any) -> int = match v {
     s: string => length(s)
     _         => 0
 }
+```
+
+```osprey-ml
+process : any -> int
+process v = match v
+    n: int    => n + 1
+    s: string => length s
+    _         => 0
 ```
 
 Pattern syntax (`name: Type`, `name: { fields }`, `{ fields }`, `_`) is defined in [Pattern Matching](/spec/0007-patternmatching/).
@@ -693,6 +801,13 @@ match v {
     s: string => processString(s)
     _         => handleOther()
 }
+```
+
+```osprey-ml
+match v
+    n : int    => processInt n
+    s : string => processString s
+    _          => handleOther ()
 ```
 
 A wildcard arm that returns the matched value preserves the `any` type; to escape `any`, every arm (including the wildcard) must return the same concrete type.
@@ -732,6 +847,14 @@ Annotations are required when the compiler cannot infer a type:
 ```osprey
 let xs: List<int> = []
 fn parseValue<T>(input: string) -> Result<T, ParseError> = ...
+```
+
+```osprey-ml
+xs : List<int>
+xs = []
+
+parseValue<T> : string -> Result<T, ParseError>
+parseValue input = ...
 ```
 
 The compiler emits an error in each case where inference is ambiguous; explicit annotations resolve them.

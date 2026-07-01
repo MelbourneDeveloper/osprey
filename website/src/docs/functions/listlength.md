@@ -19,3 +19,7 @@ description: "Returns the number of elements in a list. O(1)."
 ```osprey
 listLength([1, 2, 3])  // 3
 ```
+
+```osprey-ml
+listLength [1, 2, 3]  // 3
+```

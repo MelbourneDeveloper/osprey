@@ -23,3 +23,8 @@ description: "Makes an HTTP POST request with a request body."
 let status = httpPost(clientId, "/post", "{\"key\":\"value\"}", "Content-Type: application/json")
 print("POST status: ${status}")
 ```
+
+```osprey-ml
+status = httpPost (clientId, "/post", "{\"key\":\"value\"}", "Content-Type: application/json")
+print "POST status: ${status}"
+```

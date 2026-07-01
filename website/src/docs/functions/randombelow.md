@@ -19,3 +19,7 @@ description: "A cryptographically-secure uniform random integer in [0, n), unbia
 ```osprey
 let d = randomBelow(6) ?: 0  // a fair die face 0..5
 ```
+
+```osprey-ml
+d = randomBelow 6 ?: 0  // a fair die face 0..5
+```
