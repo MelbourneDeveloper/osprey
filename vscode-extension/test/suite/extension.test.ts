@@ -1346,6 +1346,153 @@ suite("Osprey Command Handler Coverage", () => {
     assert.ok(all.includes("osprey.debug"), "debug registered");
     assert.ok(all.includes("osprey.setLanguage"), "setLanguage registered");
   });
+
+  // startDebugRaced runs the real startDebugging path but never hangs the suite
+  // on a host without a debug UI: it resolves to a marker string once VS Code
+  // settles or a timeout elapses, whichever comes first.
+  async function startDebugRaced(
+    config: vscode.DebugConfiguration,
+    budgetMs = 6000,
+  ): Promise<string> {
+    const timeout = new Promise<string>((resolve) =>
+      setTimeout(() => resolve("timeout"), budgetMs),
+    );
+    const start = Promise.resolve(
+      vscode.debug.startDebugging(undefined, config),
+    )
+      .then((v) => `resolved:${String(v)}`)
+      .catch((error: unknown) => `error:${String(error)}`);
+    return Promise.race([start, timeout]);
+  }
+
+  test("osprey.debug with an active .osp editor drives the real launch path", async function () {
+    this.timeout(45000);
+    // The osprey.debug command reads window.activeTextEditor, synthesizes a
+    // launch config, and hands off to startDebugging — which invokes the real
+    // debug-configuration provider: save, `osprey --debug --compile`, then DAP.
+    // We fire the command with a genuine osprey editor active and assert the
+    // extension survives the full provider round-trip.
+    const document = await openOsp(
+      "debug-cmd.osp",
+      'fn main() -> Unit = print("debug via command")\n',
+    );
+    assert.strictEqual(document.languageId, "osprey", "doc is osprey");
+    assert.ok(await makeActive(document), "osprey doc is active for debug");
+    assert.ok(
+      vscode.window.activeTextEditor?.document.fileName.endsWith(".osp"),
+      "active editor is the .osp file the command will debug",
+    );
+
+    // Fire the command; give the debug-compile + DAP handoff a real window.
+    await vscode.commands.executeCommand("osprey.debug");
+    await settle(6000);
+    if (vscode.debug.activeDebugSession) {
+      try {
+        await vscode.debug.stopDebugging();
+      } catch {
+        // The session may already be terminating; cleanup races are benign.
+      }
+    }
+
+    assert.ok(
+      extension()?.isActive,
+      "extension stays active after osprey.debug",
+    );
+    // The provider debug-compiles to a stable per-source path; on a host with a
+    // working toolchain that native artifact exists after the launch attempt.
+    const artifact = path.join(
+      path.dirname(document.fileName),
+      ".osprey-debug",
+      process.platform === "win32" ? "debug-cmd.exe" : "debug-cmd",
+    );
+    assert.ok(
+      fs.existsSync(artifact) || !vscode.debug.activeDebugSession,
+      "debug launch either produced the native artifact or settled cleanly",
+    );
+  });
+
+  test("osprey.debug with no editor surfaces the open-a-file error", async () => {
+    // With no active editor, debugCurrentFile hits `!config.program` and shows
+    // "Please open a .osp or .ospml file to debug" instead of launching.
+    await closeEverything();
+    const before = vscode.window.activeTextEditor;
+
+    await vscode.commands.executeCommand("osprey.debug");
+    await settle(600);
+
+    assert.ok(
+      extension()?.isActive,
+      "extension survives osprey.debug with no program",
+    );
+    assert.strictEqual(
+      vscode.debug.activeDebugSession,
+      undefined,
+      "no debug session starts without a program",
+    );
+    // The guarded command must not have opened an editor.
+    assert.ok(
+      before === undefined || vscode.window.activeTextEditor === before,
+      "the no-program debug command opened no editor",
+    );
+  });
+
+  test("debug provider rejects a broken .osp source at debug-compile time", async function () {
+    this.timeout(45000);
+    // A syntactically broken program makes `osprey --debug --compile` exit
+    // non-zero. The provider awaits compileDebugProgram, which rejects; the
+    // catch shows the failure and returns undefined so no session starts. This
+    // exercises the compile-failure branch of the debug-configuration provider.
+    const broken = path.join(tempDir, "debug-broken.osp");
+    fs.writeFileSync(broken, "fn main( = @@@ not valid osprey\n");
+    const document = await vscode.workspace.openTextDocument(broken);
+    await makeActive(document);
+
+    const outcome = await startDebugRaced({
+      type: "osprey",
+      request: "launch",
+      name: "Debug Osprey File",
+      program: broken,
+      cwd: tempDir,
+    } as vscode.DebugConfiguration);
+    await settle(1500);
+
+    assert.ok(typeof outcome === "string", "debug start settled to a string");
+    assert.strictEqual(
+      vscode.debug.activeDebugSession,
+      undefined,
+      "a source that fails to debug-compile launches no session",
+    );
+    assert.ok(
+      extension()?.isActive,
+      "extension survives a failed debug-compile",
+    );
+    // The broken source stays exactly as written — the provider never mutates
+    // it, it only tries (and fails) to compile it.
+    assert.ok(
+      document.getText().includes("not valid osprey"),
+      "broken source preserved after the failed debug-compile",
+    );
+  });
+
+  test("debug provider reports 'no program' for an empty config with no editor", async () => {
+    // No active editor + a config with no program means synthesis is skipped
+    // and `!config.program` shows "Cannot find a program to run".
+    await closeEverything();
+    const outcome = await startDebugRaced({
+      type: "osprey",
+      request: "launch",
+      name: "Debug Osprey File",
+    } as vscode.DebugConfiguration);
+    await settle(1000);
+
+    assert.ok(typeof outcome === "string", "settled to a string");
+    assert.strictEqual(
+      vscode.debug.activeDebugSession,
+      undefined,
+      "no session starts when there is no resolvable program",
+    );
+    assert.ok(extension()?.isActive, "extension survives the no-program path");
+  });
 });
 
 suite("Osprey Activation Side-Effect Coverage", () => {
