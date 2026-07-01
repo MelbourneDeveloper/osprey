@@ -34,7 +34,8 @@ HAND_TWINS = {
         'match status\n    Active => "User is active"\n    Inactive => "User is inactive"'
     ),
     "keywords/type.md": (
-        'type UserId = int\ntype Status = Active | Inactive\n'
+        'type UserId =\n    int\n\n'
+        'type Status =\n    Active\n    Inactive\n\n'
         'type User =\n    name : string\n    age : int'
     ),
     "functions/jsonparse.md": (
@@ -68,7 +69,7 @@ HAND_TWINS = {
     "functions/substring.md": 'substring ("hello", 1, 4)  // Success { value: "ell" }',
     "functions/lines.md": 'lines "a\\\nb\\\nc"  // ["a","b","c"]',
     "index.md": (
-        'type Shape = Circle | Square\n\n'
+        'type Shape =\n    Circle\n    Square\n\n'
         'area (s, size) =\n    match s\n'
         '        Circle => size * size * 3\n        Square => size * size\n\n'
         'total = area (Circle, 4) + area (Square, 2)\n'

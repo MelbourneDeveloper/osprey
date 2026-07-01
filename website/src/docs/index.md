@@ -31,6 +31,20 @@ let total = area(Circle, 4) + area(Square, 2)
 print("total: ${total}")
 ```
 
+```osprey-ml
+type Shape =
+    Circle
+    Square
+
+area (s, size) =
+    match s
+        Circle => size * size * 3
+        Square => size * size
+
+total = area (Circle, 4) + area (Square, 2)
+print "total: ${total}"
+```
+
 ## Quick Navigation
 
 - [Functions](functions/) - Built-in functions for I/O, iteration, and data transformation

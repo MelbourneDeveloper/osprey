@@ -15,8 +15,13 @@ type User = { name: string, age: int }
 ```
 
 ```osprey-ml
-type UserId = int
-type Status = Active | Inactive
+type UserId =
+    int
+
+type Status =
+    Active
+    Inactive
+
 type User =
     name : string
     age : int

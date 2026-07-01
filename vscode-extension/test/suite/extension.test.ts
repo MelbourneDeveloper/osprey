@@ -2362,5 +2362,179 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
       missingLldbDapMessage({ lldbDapPath: "/missing/lldb-dap" }),
       /Configured lldbDapPath: \/missing\/lldb-dap\./,
     );
+    // With nothing configured the message omits the "Configured lldbDapPath"
+    // suffix but still names every location the resolver probed.
+    const bare = missingLldbDapMessage();
+    assert.ok(
+      !bare.includes("Configured lldbDapPath"),
+      "no config suffix when nothing is configured",
+    );
+    assert.ok(bare.includes("PATH"), "message lists PATH as a probed location");
+    assert.ok(
+      bare.includes("xcrun"),
+      "message lists xcrun as a probed location",
+    );
+  });
+
+  // A configured BARE command name (no path separator) is resolved by walking
+  // PATH, not by existence-checking a literal file. This drives the
+  // findExecutableOnPath branch for a configured value on both platforms.
+  test("a configured bare lldb-dap command is resolved by walking PATH", () => {
+    const posixBin = "/opt/tools/my-lldb";
+    const posixHost = {
+      env: { PATH: ["/nope", "/opt/tools", ""].join(path.delimiter) },
+      existsSync: (p: string) => p === posixBin,
+      getSetting: () => undefined,
+      platform: "linux" as NodeJS.Platform,
+    };
+    assert.strictEqual(
+      resolveLldbDapExecutable({ lldbDapPath: "my-lldb" }, posixHost),
+      posixBin,
+      "configured bare command is found on the first PATH dir that has it",
+    );
+    // resolveLldbDapCommand delegates to the same resolver, so it agrees.
+    assert.strictEqual(
+      resolveLldbDapCommand({ lldbDapPath: "my-lldb" }, posixHost),
+      posixBin,
+      "command resolver returns the PATH-resolved bare command",
+    );
+
+    const winBin = "C:\\tools\\lldb-dap.exe";
+    const winHost = {
+      env: { PATH: ["C:\\nope", "C:\\tools"].join(path.delimiter) },
+      existsSync: (p: string) => p === winBin,
+      getSetting: () => undefined,
+      platform: "win32" as NodeJS.Platform,
+    };
+    assert.strictEqual(
+      resolveLldbDapExecutable({ lldbDapPath: "lldb-dap.exe" }, winHost),
+      winBin,
+      "configured bare command resolves against a Windows PATH too",
+    );
+
+    // A configured bare command that is on NO PATH dir resolves to undefined.
+    assert.strictEqual(
+      resolveLldbDapExecutable(
+        { lldbDapPath: "ghost" },
+        { ...posixHost, existsSync: () => false },
+      ),
+      undefined,
+      "a bare command absent from every PATH dir is unresolved",
+    );
+  });
+
+  // On macOS, when nothing is configured and nothing is on PATH, the resolver
+  // asks `xcrun -f lldb-dap` and trusts an existing result. Both the success
+  // path and the "xcrun threw / returned a non-existent path" fall-through are
+  // driven here through the injectable execFileSync.
+  test("darwin xcrun resolves lldb-dap when PATH has none", () => {
+    const xcrunPath = "/Applications/Xcode.app/lldb-dap";
+    const okHost = {
+      env: { PATH: "" },
+      existsSync: (p: string) => p === xcrunPath,
+      execFileSync: () => `${xcrunPath}\n`,
+      getSetting: () => undefined,
+      platform: "darwin" as NodeJS.Platform,
+    };
+    assert.strictEqual(
+      resolveLldbDapExecutable({}, okHost),
+      xcrunPath,
+      "an existing xcrun-reported path is used and trimmed",
+    );
+
+    // xcrun throwing (tool absent) must fall through to the common candidates,
+    // one of which we make exist.
+    const brewCandidate = "/opt/homebrew/opt/llvm/bin/lldb-dap";
+    const throwHost = {
+      env: { PATH: "" },
+      existsSync: (p: string) => p === brewCandidate,
+      execFileSync: () => {
+        throw new Error("xcrun: command not found");
+      },
+      getSetting: () => undefined,
+      platform: "darwin" as NodeJS.Platform,
+    };
+    assert.strictEqual(
+      resolveLldbDapExecutable({}, throwHost),
+      brewCandidate,
+      "when xcrun throws, the first existing common LLVM path wins",
+    );
+
+    // xcrun succeeding but pointing at a NON-existent path also falls through.
+    const fallthroughHost = {
+      env: { PATH: "" },
+      existsSync: (p: string) => p === "/usr/bin/lldb-dap",
+      execFileSync: () => "/nonexistent/from/xcrun",
+      getSetting: () => undefined,
+      platform: "darwin" as NodeJS.Platform,
+    };
+    assert.strictEqual(
+      resolveLldbDapExecutable({}, fallthroughHost),
+      "/usr/bin/lldb-dap",
+      "a non-existent xcrun result is ignored in favour of a real candidate",
+    );
+  });
+
+  // With nothing configured and nothing on PATH (and no darwin xcrun), the
+  // resolver scans a fixed list of common LLVM install locations per platform.
+  test("common LLVM install paths are the last resort per platform", () => {
+    const winCandidate = "C:\\Program Files\\LLVM\\bin\\lldb-vscode.exe";
+    const winHost = {
+      env: { PATH: "" },
+      existsSync: (p: string) => p === winCandidate,
+      getSetting: () => undefined,
+      platform: "win32" as NodeJS.Platform,
+    };
+    assert.strictEqual(
+      resolveLldbDapExecutable({}, winHost),
+      winCandidate,
+      "a legacy lldb-vscode.exe under Program Files is found on Windows",
+    );
+
+    const linuxCandidate = "/usr/local/opt/llvm/bin/lldb-dap";
+    const linuxHost = {
+      env: { PATH: "" },
+      existsSync: (p: string) => p === linuxCandidate,
+      getSetting: () => undefined,
+      platform: "linux" as NodeJS.Platform,
+    };
+    assert.strictEqual(
+      resolveLldbDapExecutable({}, linuxHost),
+      linuxCandidate,
+      "a common /usr/local LLVM path is found on Linux",
+    );
+
+    // Nothing anywhere -> undefined (the .find returns undefined).
+    assert.strictEqual(
+      resolveLldbDapExecutable(
+        {},
+        { ...linuxHost, existsSync: () => false },
+      ),
+      undefined,
+      "no configured value, PATH, xcrun, or common path leaves it unresolved",
+    );
+  });
+
+  // The VS Code setting (host.getSetting) is consulted when the launch config
+  // carries no lldbDapPath, and a config value overrides the setting.
+  test("lldb-dap setting is used and overridden by launch config", () => {
+    const settingPath = "/from/setting/lldb-dap";
+    const configPath = "/from/config/lldb-dap";
+    const host = {
+      env: { PATH: "" },
+      existsSync: (p: string) => p === settingPath || p === configPath,
+      getSetting: () => settingPath,
+      platform: "linux" as NodeJS.Platform,
+    };
+    assert.strictEqual(
+      resolveLldbDapExecutable({}, host),
+      settingPath,
+      "the osprey.debug.lldbDapPath setting is honoured when no config path",
+    );
+    assert.strictEqual(
+      resolveLldbDapExecutable({ lldbDapPath: configPath }, host),
+      configPath,
+      "an explicit launch-config path overrides the setting",
+    );
   });
 });
