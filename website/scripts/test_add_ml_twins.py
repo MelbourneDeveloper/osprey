@@ -25,7 +25,11 @@ def test_match_arm_brace_pattern_binds_by_juxtaposition():
     assert ml is not None, "expected a translated ML twin"
     assert "Success value =>" in ml, f"pattern not juxtaposed:\n{ml}"
     assert "Error message =>" in ml, f"pattern not juxtaposed:\n{ml}"
-    assert "{" not in ml and "}" not in ml, f"braces leaked into ML match:\n{ml}"
+    # No brace payload may survive in an arm *pattern* (before the `=>`).
+    # String-interpolation braces `${...}` in an arm *body* are valid ML and OK.
+    for arm in ml.splitlines():
+        pat = arm.split("=>", 1)[0]
+        assert "{" not in pat and "}" not in pat, f"braces leaked into ML pattern:\n{arm}"
 
 
 if __name__ == "__main__":

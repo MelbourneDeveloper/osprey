@@ -26,6 +26,6 @@ match listGet(myList, 0) {
 
 ```osprey-ml
 match listGet (myList, 0)
-    Success { value } => print value
-    Error { message } => print message
+    Success value => print value
+    Error message => print message
 ```

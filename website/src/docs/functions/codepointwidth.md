@@ -25,6 +25,6 @@ match codePointWidth(233) {
 
 ```osprey-ml
 match codePointWidth 233
-    Success { value } => print "${value} bytes"
-    Error { message } => print message
+    Success value => print "${value} bytes"
+    Error message => print message
 ```

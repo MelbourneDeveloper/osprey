@@ -127,3 +127,6 @@ benchmarks/cases/**/*.o
 
 
 scratchpad/
+
+
+__pycache__/

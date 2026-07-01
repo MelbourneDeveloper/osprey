@@ -26,6 +26,6 @@ match codePointAt("héllo", 1) {
 
 ```osprey-ml
 match codePointAt ("héllo", 1)
-    Success { value } => print "U+${value}"
-    Error { message } => print message
+    Success value => print "U+${value}"
+    Error message => print message
 ```

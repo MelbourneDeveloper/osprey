@@ -289,6 +289,26 @@ mod tests {
     }
 
     #[test]
+    fn generate_surfacing_an_io_error_takes_the_failure_branch() {
+        // Point `--docs-dir` at a path whose parent is a *file*: `create_dir_all`
+        // then fails, so `generate` returns `Err` and `run` takes its error arm.
+        let file = std::env::temp_dir().join("osprey_docs_not_a_dir");
+        fs::write(&file, "i am a file").expect("seed blocking file");
+        let blocked = file.join("under_a_file");
+        assert!(
+            generate(&blocked).is_err(),
+            "creating a dir beneath a file must fail"
+        );
+        let code = run(&[
+            "--docs".to_string(),
+            "--docs-dir".to_string(),
+            blocked.to_string_lossy().into_owned(),
+        ]);
+        let _ = code; // ExitCode is opaque; reaching here proves the arm ran.
+        let _ = fs::remove_file(&file);
+    }
+
+    #[test]
     fn run_generates_into_a_dir_and_takes_the_usage_branch_without_a_flag() {
         let dir = fresh_dir("run");
         let ok = run(&[

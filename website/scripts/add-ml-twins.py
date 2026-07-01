@@ -66,6 +66,14 @@ HAND_TWINS = {
     "functions/repeat.md": 'repeat ("ab", 3)  // Success { value: "ababab" }',
     "functions/replace.md": 'replace ("a-b-c", "-", "_")  // Success { value: "a_b_c" }',
     "functions/substring.md": 'substring ("hello", 1, 4)  // Success { value: "ell" }',
+    "functions/lines.md": 'lines "a\\\nb\\\nc"  // ["a","b","c"]',
+    "index.md": (
+        'type Shape = Circle | Square\n\n'
+        'area (s, size) =\n    match s\n'
+        '        Circle => size * size * 3\n        Square => size * size\n\n'
+        'total = area (Circle, 4) + area (Square, 2)\n'
+        'print "total: ${total}"'
+    ),
 }
 
 # ---- token-level helpers -------------------------------------------------
@@ -321,6 +329,8 @@ def translate_match_block(lines):
         pat, res = a.group(1).strip(), a.group(2).strip()
         # constructor payload: Some(x) -> Some x ; None stays
         pat = re.sub(r'(\b[A-Z]\w*)\(([^)]*)\)', lambda mm: f"{mm.group(1)} {mm.group(2)}" if mm.group(2) else mm.group(1), pat)
+        # brace payload: Success { value } -> Success value ; fields juxtaposed
+        pat = re.sub(r'(\b[A-Z]\w*)\s*\{([^}]*)\}', lambda mm: (f"{mm.group(1)} " + " ".join(f.strip() for f in mm.group(2).split(",") if f.strip())).strip(), pat)
         arms.append(f"    {pat} => {translate_expr(res)}")
     return [f"match {translate_expr(scrut)}"] + arms
 

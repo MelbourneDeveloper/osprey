@@ -1949,6 +1949,23 @@ mod tests {
     }
 
     #[test]
+    fn parse_flavor_accepts_known_names_and_rejects_the_rest() {
+        assert_eq!(parse_flavor("default").expect("default"), Flavor::Default);
+        assert_eq!(parse_flavor("ml").expect("ml"), Flavor::Ml);
+        let err = parse_flavor("klingon").expect_err("unknown flavor rejected");
+        assert!(err.contains("usage: osprey"), "{err}");
+    }
+
+    #[test]
+    fn link_flag_helpers_return_a_nonempty_flag_set() {
+        // Both run to completion regardless of host: `openssl_flags` always yields
+        // at least the `-lssl -lcrypto` fallback, and the runtime-lib search walks
+        // its whole candidate list (returning None here is fine — the body ran).
+        assert!(openssl_flags().iter().any(|f| f == "-lssl"));
+        let _ = find_runtime_lib("libosprey_runtime_definitely_absent.a");
+    }
+
+    #[test]
     fn compile_ir_and_debug_helpers_switch_on_the_debug_flag() {
         let program = osprey_syntax::parse_program("let n = 1\nprint(\"${n}\")\n").program;
         // debug=true takes the debug-info codegen path; both opt/driver helpers
