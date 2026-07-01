@@ -25,8 +25,11 @@ you no longer need.
 > the AST nodes that produce heap values (`List`, `Map`, `Object`, `Str`,
 > `InterpolatedStr`, closures from `Lambda`, union/record `TypeConstructor`),
 > and two programs with identical ASTs exhibit byte-identical memory behaviour
-> whether they were written in the Default (`.osp`) or ML (`.ospml`) flavor. See
-> [Language Flavors](/spec/0023-languageflavors/) [FLAVOR-BOUNDARY].
+> whether they were written in the Default (`.osp`) or ML (`.ospml`) flavor. Both
+> flavors are documented here: samples below appear in both surfaces — Default
+> (`.osp`) first, then its ML (`.ospml`) twin, each tagged with a flavor badge.
+> See [Language Flavors](/spec/0023-languageflavors/) [FLAVOR-BOUNDARY] and
+> [ML Flavor Syntax](/spec/0024-mlflavorsyntax/) [FLAVOR-ML].
 
 ## Status
 

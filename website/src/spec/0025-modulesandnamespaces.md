@@ -16,7 +16,9 @@ it belongs to a project; it does **not** decide the names it exports.
 
 > **Flavor layer - shared core (AST and above).** Namespace/import resolution,
 > module signatures, exports, state ownership, separate compilation, and project
-> assembly are shared-core semantics. The Default flavor and ML flavor may spell
+> assembly are shared-core semantics. This chapter documents both flavors:
+> samples below appear in both surfaces - Default (`.osp`) first, then its ML
+> (`.ospml`) twin, each tagged with a flavor badge. The two flavors may spell
 > declarations differently, but both lower to the same canonical project model:
 > `NamespaceDecl`, `ModuleDecl`, `SignatureDecl`, `Import`, and symbol paths.
 > No type checker, effect checker, code generator, runtime, or LSP feature may
@@ -218,7 +220,7 @@ namespace billing {
 
 ML flavor:
 
-```osp
+```osprey-ml
 namespace billing
 
 type Money =
@@ -226,7 +228,6 @@ type Money =
         cents : int
         currency : string
 
-zero : string -> Money
 zero currency =
     Money
         cents = 0
@@ -261,7 +262,7 @@ fn emptyInvoice(id: string) = Invoice { id: id, total: 0 }
 
 ML flavor:
 
-```osp
+```osprey-ml
 namespace billing
 
 type Invoice =
@@ -269,7 +270,6 @@ type Invoice =
         id : string
         total : int
 
-emptyInvoice : string -> Invoice
 emptyInvoice id =
     Invoice
         id = id
@@ -329,7 +329,7 @@ module Tax {
 
 ML flavor:
 
-```osp
+```osprey-ml
 namespace billing
 
 module Tax
@@ -374,7 +374,7 @@ let other = Tax::addTax(100)
 
 ML flavor:
 
-```osp
+```osprey-ml
 import billing::Tax
 import billing::Tax::{addTax}
 import billing::Tax as Tax
@@ -422,7 +422,7 @@ module Parser {
 
 ML flavor:
 
-```osp
+```osprey-ml
 module Parser
     type Token =
         Token
@@ -452,7 +452,7 @@ module UserIds {
 
 ML flavor:
 
-```osp
+```osprey-ml
 module UserIds
     export opaque type UserId = int
 
@@ -503,7 +503,7 @@ module MemoryStore : StoreSig {
 
 ML flavor:
 
-```osp
+```osprey-ml
 signature StoreSig
     opaque type Store
     effect StoreFx
@@ -520,7 +520,6 @@ module MemoryStore : StoreSig
         load : Unit => Store
         save : Store => Unit
 
-    export empty : Unit -> Store
     export empty () =
         Store
             values = []

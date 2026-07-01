@@ -9,7 +9,19 @@ readingTime: 7
 image: /assets/images/blog/osprey-flavors.png
 ---
 
+When I started working on Osprey, the dream was *zero compromise*. I think the biggest shame about the most popular languages is that they compromise. The language designers make decisions for adoption but end up watering down the original spirit of the language because of this. I didn't want this for Osprey. I wanted something else. I wanted the language to be exactly what I wanted it to be and to have all the performance, safety and elegance of the other great, modern languages.
+
+I found out immediately that there was a big catch to this. You cannot please everyone. It's not just about aesthetics. You have to make tradeoffs when you design syntax. Certain decisions push you in directions that have rippling effects. The most obvious decision is the decision on whether to use indentation or braces to specify blocks.
+
+Many programmers that are accustomed to C style languages like C#, Java, Dart and so on find indentation based syntax to be too uncomfortable to use. But, indentation based languages mean you can remove a lot of symbols and reduce visual noise. At the end of the day, it's cleaner but it also alienates a whole group of people. Many people wouldn't touch Osprey because it looks like code from another tribe.
+
 Every language picks a side, and every side loses someone. Curly braces or significant whitespace. `fn add(x, y)` or `add x y`. The systems programmer who wants explicit blocks and named arguments, versus the FP devotee who wants layout and curry-by-default. Pick braces and the Haskell crowd wrinkles their nose; pick layout and the C crowd walks away. The syntax wars are real, and they force you into a tribe before you've written a line.
+
+I had encountered dilemmas several times while build Osprey and the answer was always "put an abstraction here". My thinking was "Can we defer this decision? Can we make this aspect of the language pluggable?". We shouldn't bake decisions into the language early. We should allow people building with Osprey to make their own decisions. And, in many cases, I found that leaving an abstraction where the develop could make their own call was the exact right decision.
+
+Then, I asked the question "Can we make the syntax pluggable?". Well, it turns out that we absolutely can and it's barely even a for the compiler. When we parse code, we convert the code into a Concrete Syntax Tree (CST). This is the first pass that just converts the code unprocessed into in-memory data. Then, that data is converted to an Abstract Syntax Tree (AST). This is the processed syntax that can be readily converted to code.
+
+It turns out that we can basically swap any CST in front of the AST. That's how we get flavors. It's a powerful concept. There is nothing about any language that weds it to the syntax. The syntax is basically just a taste aspect of the language. So, I made the obvious choice to allow multiple flavor syntaxes instead of tying Osprey to one view of the world.
 
 Osprey's answer is to stop pretending there's one right answer. **One core. Two flavors. Zero compromise.**
 

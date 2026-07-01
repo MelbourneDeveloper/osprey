@@ -12,7 +12,7 @@ permalink: "/spec/0010-loopconstructsandfunctionaliterators/"
 
 Osprey has no `for`, `while`, or `loop` construct. Iteration is expressed as composition of `range`, `forEach`, `map`, `filter`, and `fold` using the pipe operator `|>`.
 
-> **Flavor layer — shared core (AST and above).**  Iteration has no dedicated AST node: `range`, `map`, `filter`, `fold`, and `forEach` are ordinary functions invoked through `Expr::Call`, composed with `Expr::Pipe`, and parameterised by `Expr::Lambda` — the same flavor-blind nodes every chapter lowers to. Stream fusion and all iteration semantics operate on `osprey_ast::Program` and never observe which flavor produced it. The spellings here (C-style calls, `fn(x) => e` lambdas) are the Default surface; the ML flavor writes the identical pipelines with `\x => e` lambdas, applying single-argument calls by whitespace (`forEach print`, `map double`) and the flat multi-argument built-ins as the uncurried parenthesised comma-list (`range (1, 5)`, `fold (0, add)`) — the form-for-form twin of the Default positional call (parens-comma-list is argument grouping, not a tuple; whitespace application would curry, yielding a different AST per [FLAVOR-ML-CALL]). See [ML Flavor Syntax](/spec/0024-mlflavorsyntax/). See [Language Flavors](/spec/0023-languageflavors/) for the [FLAVOR-BOUNDARY] law.
+> **Flavor layer — shared core (AST and above).**  Iteration has no dedicated AST node: `range`, `map`, `filter`, `fold`, and `forEach` are ordinary functions invoked through `Expr::Call`, composed with `Expr::Pipe`, and parameterised by `Expr::Lambda` — the same flavor-blind nodes every chapter lowers to. Stream fusion and all iteration semantics operate on `osprey_ast::Program` and never observe which flavor produced it. This chapter documents both surfaces: samples below appear in both flavors — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge. Default writes C-style calls and `fn(x) => e` lambdas; the ML twin writes the identical pipelines with `\x => e` lambdas, applying single-argument calls by whitespace (`forEach print`, `map double`) and the flat multi-argument built-ins as the uncurried parenthesised comma-list (`range (1, 5)`, `fold (0, add)`) — the form-for-form twin of the Default positional call (parens-comma-list is argument grouping, not a tuple; whitespace application would curry, yielding a different AST per [FLAVOR-ML-CALL]). See [ML Flavor Syntax](/spec/0024-mlflavorsyntax/). See [Language Flavors](/spec/0023-languageflavors/) for the [FLAVOR-BOUNDARY] law.
 
 ## Core Iterator Functions
 
@@ -65,6 +65,14 @@ range(1, 10) |> forEach(print)
 range(0, 20) |> filter(isEven) |> map(double) |> forEach(print)
 ```
 
+The same pipelines in the ML flavor — `|>` is identical; single-argument stages apply by whitespace (`forEach print`, `map double`), while the two-argument `range` takes its arguments as an uncurried parenthesised comma-list:
+
+```osprey-ml
+5 |> double |> print                                        // print (double 5)
+range (1, 10) |> forEach print
+range (0, 20) |> filter isEven |> map double |> forEach print
+```
+
 ## Stream Fusion
 
 Chains of `map`, `filter`, `forEach`, and `fold` over an iterator are fused at compile time into a single loop with no intermediate collections. The chain
@@ -96,6 +104,25 @@ range(1, 20)
 
 // Pipeline of named stages
 input()
+  |> validateInput
+  |> normalizeData
+  |> processData
+  |> formatOutput
+  |> print
+```
+
+The ML twin — the single-argument stages (`map square`, `filter isEven`) apply by whitespace, the two-argument `fold` and `range` take their arguments as parenthesised comma-lists, and the named-stage pipeline is spelled identically:
+
+```osprey-ml
+// Transform → filter → aggregate
+range (1, 20)
+  |> map square
+  |> filter isEven
+  |> fold (0, add)
+  |> print
+
+// Pipeline of named stages
+input ()
   |> validateInput
   |> normalizeData
   |> processData

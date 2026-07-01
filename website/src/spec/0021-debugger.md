@@ -20,12 +20,12 @@ the language server, but it uses a different protocol: LSP is the static
 analysis plane; DAP is the runtime control plane. The implementation plan is
 [Plan 0012](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0012-osprey-debugger.md).
 
-> **Flavor layer — shared core (AST and above).**  Debug info derives from the
-> canonical `osprey_ast::Program` and is flavor-blind: the same AST yields the
-> same `!DISubprogram`/`!DILocation` metadata and the same debug semantics
-> regardless of whether the program was authored in the Default (`.osp`) or ML
-> (`.ospml`) flavor. Source positions and line tables point at the *authoring*
-> flavor's source text, preserved by the lowering contract span rule
+> **Flavor layer — shared core (AST and above).**  This chapter documents both
+> flavors at once: debug info derives from the canonical `osprey_ast::Program`
+> and is flavor-blind, so a Default (`.osp`) program and its ML (`.ospml`) twin
+> yield the same `!DISubprogram`/`!DILocation` metadata and the same debug
+> semantics. Source positions and line tables point at the *authoring* flavor's
+> source text, preserved by the lowering contract span rule
 > ([FLAVOR-LOWER-CONTRACT] in [Language Flavors](/spec/0023-languageflavors/)):
 > desugared nodes carry the `Position` of the source construct, so only the
 > mapped source file (`.osp` vs `.ospml`) differs — never the debug

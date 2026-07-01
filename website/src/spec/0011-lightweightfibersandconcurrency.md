@@ -12,7 +12,7 @@ permalink: "/spec/0011-lightweightfibersandconcurrency/"
 
 Fibers are lightweight concurrent computations. They are constructed as values of `Fiber<T>` and communicate through `Channel<T>`. There are no OS threads exposed to user code; the runtime schedules fibers cooperatively. Values cross fiber boundaries — `spawn` captures and channel `send` — by move or copy, never by sharing ([MEM-FIBER-ISOLATION] in [Memory Management](/spec/0018-memorymanagement/)).
 
-> **Flavor layer — shared core (AST and above).**  Concurrency is a shared-core concern. The constructs here lower to canonical `osprey_ast` nodes — `Expr::Spawn`, `Expr::Yield`, `Expr::Await`, `Expr::Send`, `Expr::Recv`, and `Expr::Select` — and the runtime scheduler operates on those nodes alone ([FLAVOR-BOUNDARY] in [Language Flavors](/spec/0023-languageflavors/)). The semantics, the cooperative scheduling, and the channel runtime are one across every flavor; only the surface spelling differs. The Default (`.osp`) spelling is shown below; the ML (`.ospml`) counterpart is described in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/). No phase below the AST can tell which flavor produced a fiber, send, or select.
+> **Flavor layer — shared core (AST and above).**  Concurrency is a shared-core concern. The constructs here lower to canonical `osprey_ast` nodes — `Expr::Spawn`, `Expr::Yield`, `Expr::Await`, `Expr::Send`, `Expr::Recv`, and `Expr::Select` — and the runtime scheduler operates on those nodes alone ([FLAVOR-BOUNDARY] in [Language Flavors](/spec/0023-languageflavors/)). The semantics, the cooperative scheduling, and the channel runtime are one across every flavor; only the surface spelling differs. Samples below appear in both flavors — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge; the ML surface is specified in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/). No phase below the AST can tell which flavor produced a fiber, send, or select.
 
 ## Status
 
@@ -85,6 +85,26 @@ let consumer = spawn {
 
 await(producer)
 await(consumer)
+```
+
+The ML surface spells the same `spawn` blocks and `await` calls with layout and whitespace application — `spawn` heads an indented block, `await handle` is a bare single-argument call, and the `match` scrutinee sits on the `match` line with indented `Success value` / `Error e` arms:
+
+```osprey-ml
+ch =
+    Channel<int>
+        capacity = 3
+
+producer = spawn
+    range (1, 4) |> forEach \i => send (ch, i)
+
+consumer = spawn
+    range (1, 4) |> forEach \i =>
+        match recv ch
+            Success value => print "got ${value}"
+            Error message => print "recv error: ${message}"
+
+await producer
+await consumer
 ```
 
 ## select (planned)

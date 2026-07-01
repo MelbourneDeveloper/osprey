@@ -12,7 +12,7 @@ permalink: "/spec/0006-stringinterpolation/"
 
 String interpolation provides convenient inline expression evaluation within string literals.
 
-> **Flavor layer — mixed.**  `${...}` interpolation is flavor-neutral: BOTH the Default flavor (`.osp`) and the ML flavor (`.ospml`) spell it identically, and the scanning that splits a literal into text + `${...}` segments plus all escape resolution live in the shared `crate::strings` module — not in either flavor's frontend. Interpolated literals lower to one canonical `Expr::InterpolatedStr` whose `InterpolatedPart`s carry either literal text or an embedded expression, so the [shared core](/spec/0023-languageflavors/#the-one-law) never sees a flavor. Only the *embedded fragment* (`x + y` inside `${...}`) is parsed per-flavor — each flavor parses that expression in its own surface grammar — but the brace scanning and escapes are identical. See [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
+> **Flavor layer — mixed.**  This chapter documents BOTH flavors. Samples below appear in both surfaces — Default (`.osp`) first, then its ML (`.ospml`) twin, each tagged with a flavor badge. `${...}` interpolation is flavor-neutral: both flavors spell it identically, and the scanning that splits a literal into text + `${...}` segments plus all escape resolution live in the shared `crate::strings` module — not in either flavor's frontend. Interpolated literals lower to one canonical `Expr::InterpolatedStr` whose `InterpolatedPart`s carry either literal text or an embedded expression, so the [shared core](/spec/0023-languageflavors/#the-one-law) never sees a flavor. Only the *embedded fragment* (`x + y` inside `${...}`) is parsed per-flavor — each flavor parses that expression in its own surface grammar — but the brace scanning and escapes are identical. See [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
 
 ## Syntax
 
@@ -51,6 +51,30 @@ print("Doubled: ${double(5)}")
 type Person = { name: string, age: int }
 let person = Person { name: "Bob", age: 25 }
 print("Person: ${person.name}, age ${person.age}")
+```
+
+The same expressions in the ML flavor — arithmetic and `${...}` holes are unchanged; only bindings and calls change spelling (`double 5` applies by whitespace):
+
+```osprey-ml
+x = 10
+y = 5
+print "Sum: ${x + y}"
+print "Product: ${x * y}"
+print "Complex: ${(x + y) * 2 - 1}"
+
+// Function calls
+double n = n * 2
+print "Doubled: ${double 5}"
+
+// Field access
+type Person =
+    name : string
+    age : int
+person =
+    Person
+        name = "Bob"
+        age = 25
+print "Person: ${person.name}, age ${person.age}"
 ```
 
 ## Type Handling
