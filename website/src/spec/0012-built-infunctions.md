@@ -282,6 +282,12 @@ match split("a,b,c", ",") {
 }
 ```
 
+```osprey-ml
+match split ("a,b,c", ",")
+    Success value   => forEach (value, print)   // "a" "b" "c"
+    Error message   => print "split error"
+```
+
 #### `join(parts: List<string>, separator: string) -> string`
 Concatenates `parts` with `separator` between each pair. Returns `""` if `parts` is empty.
 
@@ -329,6 +335,10 @@ The `+` operator on two `string` values returns `string` directly (not `Result`)
 
 ```osprey
 let greeting = "Hello, " + name + "!"
+```
+
+```osprey-ml
+greeting = "Hello, " + name + "!"
 ```
 
 ### Example: parsing a query string

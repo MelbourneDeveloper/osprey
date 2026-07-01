@@ -6,13 +6,33 @@ description: "Complete reference documentation for the Osprey programming langua
 
 ## Flavors
 
-Osprey has one core and two surface syntaxes: the **Default** (`.osp`) C-style braces
-flavor and the **ML** (`.ospml`) offside-layout, curry-by-default flavor. Both lower to
-the exact same AST. See **[Language Flavors — Default vs ML](flavors/)**.
+Osprey is **one language** you can write **two different ways**. Both compile to the exact
+same program and run identically — only the way you type the code differs. Pick whichever
+you prefer, per file, by extension.
+
+- **Default** (`.osp`) — C-style braces. `fn f(a, b) = …`, `let x = v`, `f(x)` calls,
+  `{ }` blocks. Familiar from C, Rust, Swift, or TypeScript.
+- **ML** (`.ospml`) — offside (indentation) layout, curry-by-default. No `fn`/`let`,
+  whitespace application (`f x`), `\x => e` lambdas, `:=` for mutation. Reads like
+  OCaml, F#, or Haskell.
+
+The same program, both flavors:
+
+```osprey
+fn area(s, size) = match s {
+    Circle => size * size * 3
+    Square => size * size
+}
+```
+
+```osprey-ml
+match s
+    Circle => size * size * 3
+    Square => size * size
+```
 
 ## Quick Navigation
 
-- [Flavors](flavors/) - Default (`.osp`) vs ML (`.ospml`) syntax — one core, two surfaces
 - [Functions](functions/) - Built-in functions for I/O, iteration, and data transformation
 - [Types](types/) - Built-in data types (Int, String, Bool, Any)
 - [Operators](operators/) - Arithmetic, comparison, and logical operators

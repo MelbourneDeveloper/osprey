@@ -172,6 +172,26 @@ in bump()
 print("r=${toString(r)} cell=${toString(cell)}")   // r=1 cell=1
 ```
 
+```osprey-ml
+effect State
+    get : Unit => int
+    set : int => Unit
+
+bump : Unit -> int !State
+bump () =
+    a = perform State.get
+    perform State.set (a + 1)
+    perform State.get
+
+mut cell = 0
+cellState =
+    handler State
+        get => cell                  // reads the shared cell
+        set newVal => cell := newVal // writes the shared cell
+r = handle cellState do bump ()
+print "r=${toString r} cell=${toString cell}"   // r=1 cell=1
+```
+
 The cell is shared across the C HTTP-callback boundary (a request handler's
 `perform` resolves to the active handler) and across fiber boundaries (an effect
 performed inside a `spawn`ed fiber is handled in the spawner), so one effect
@@ -229,6 +249,28 @@ in pipeline()
 print("total=${toString(total)}")
 ```
 
+```osprey-ml
+effect Audit
+    step : string => int
+
+pipeline : Unit -> int !Audit
+pipeline () =
+    a = perform Audit.step "load"     // suspends here
+    b = perform Audit.step "parse"    // …and here
+    a + b
+
+mut n = 0
+auditTrace =
+    handler Audit
+        step label =>
+            n := n + 1
+            answer = resume n           // performer continues with n
+            print "after ${label}: answer=${toString answer}"
+            answer                      // code AFTER resume — impossible with tail-resume
+total = handle auditTrace do pipeline ()
+print "total=${toString total}"
+```
+
 Output — the "after" lines unwind **LIFO** as each continuation completes, the
 signature of a real delimited continuation:
 
@@ -263,6 +305,13 @@ fn loggedCalculation<E>(x) -> int !E = {
 }
 ```
 
+```osprey-ml
+loggedCalculation : int -> int !E
+loggedCalculation x =
+    perform Logger.log "calculating"      // E must include Logger
+    x * 2
+```
+
 ## Static Safety Checks
 
 The compiler enforces three static checks on effect programs. Each failure is a compile-time error, not a runtime fault.
@@ -289,6 +338,34 @@ in
         getFromA => circularA()   // ❌ circular dependency
     in
         circularA()
+```
+
+```osprey-ml
+effect StateA
+    getFromB : Unit => int
+
+effect StateB
+    getFromA : Unit => int
+
+circularA : Unit -> int !StateA
+circularA () = perform StateA.getFromB
+
+circularB : Unit -> int !StateB
+circularB () = perform StateB.getFromA
+
+handlerA =
+    handler StateA
+        getFromB => circularB ()  // ❌ circular dependency
+
+handlerB =
+    handler StateB
+        getFromA => circularA ()  // ❌ circular dependency
+
+handle handlerA
+do
+    handle handlerB
+    do
+        circularA ()
 ```
 
 ### Handler-Self-Recursion Example

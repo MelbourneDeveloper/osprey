@@ -357,6 +357,28 @@ let company = Company {
 let companyCity = company.address.city
 ```
 
+```osprey-ml
+type Address =
+    street : string
+    city : string
+    zipCode : string
+
+type Company =
+    name : string
+    address : Address
+
+company =
+    Company
+        name = "Tech Corp"
+        address =
+            Address
+                street = "456 Tech Ave"
+                city = "Sydney"
+                zipCode = "2000"
+
+companyCity = company.address.city
+```
+
 ## Union Types
 
 A union type (also "sum type", "tagged union", "discriminated union") declares a closed set of named variants. Each variant is either nullary (no payload) or carries a record-style payload. Grammar in [Syntax](/spec/0003-syntax/#type-declarations); pattern-matching rules in [Pattern Matching](/spec/0007-patternmatching/).
@@ -366,6 +388,18 @@ type Color  = Red | Green | Blue
 type Shape  = Circle    { radius: float }
             | Rectangle { width:  float, height: float }
             | Triangle  { a: float, b: float, c: float }
+```
+
+```osprey-ml
+type Color =
+    Red
+    Green
+    Blue
+
+type Shape =
+    Circle { radius: float }
+    Rectangle { width: float, height: float }
+    Triangle { a: float, b: float, c: float }
 ```
 
 A union value carries a runtime discriminant identifying its variant; the compiler emits one branch per variant in any `match`. Field access on a union requires `match` to narrow it to a single variant first.
@@ -384,6 +418,20 @@ type JsonValue =
     | JStr  { v: string }
     | JArr  { items:   List<JsonValue> }
     | JObj  { entries: Map<string, JsonValue> }
+```
+
+```osprey-ml
+type Tree =
+    Leaf
+    Node { value: int, left: Tree, right: Tree }
+
+type JsonValue =
+    JNull
+    JBool { v: bool }
+    JNum { v: float }
+    JStr { v: string }
+    JArr { items: List<JsonValue> }
+    JObj { entries: Map<string, JsonValue> }
 ```
 
 A recursive union is laid out indirectly — variant payloads referencing the same type, or containing a `List<Self>` / `Map<K, Self>`, MUST be stored behind a pointer so the type's size is finite. This requirement is invisible to the user: construction, pattern-matching, and field access read the same as for any other variant. Mutually recursive unions follow the same rule.
@@ -412,6 +460,30 @@ match r {
     Success { value }   => print("ok: ${value.name}")
     Error   { message } => print("validation failed: ${message}")
 }
+```
+
+```osprey-ml
+type Product where validateProduct =
+    name : string
+    price : int
+
+validateProduct : Product -> Result<Product, string>
+validateProduct p =
+    match p.name
+        "" => Error { message: "name cannot be empty" }
+        _ =>
+            match p.price
+                0 => Error { message: "price must be positive" }
+                _ => Success { value: p }
+
+// Construction returns Result<Product, string>
+r =
+    Product
+        name = "Widget"
+        price = 100
+match r
+    Success value => print "ok: ${value.name}"
+    Error message => print "validation failed: ${message}"
 ```
 
 Field access on a validated value is only legal after matching on the `Result`.

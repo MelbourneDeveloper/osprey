@@ -26,6 +26,5 @@ HttpResponse
     contentType = "application/json"
     streamFd = -1
     isComplete = true
-    partialBody = "{\"message\": \"Hello\""
-}
+    partialBody = "{\"message\": \"Hello\"}"
 ```

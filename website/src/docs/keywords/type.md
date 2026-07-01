@@ -13,3 +13,11 @@ type UserId = Int
 type Status = Active | Inactive
 type User = { name: String, age: Int }
 ```
+
+```osprey-ml
+type UserId = Int
+type Status = Active | Inactive
+type User =
+    name : String
+    age : Int
+```
