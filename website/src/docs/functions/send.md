@@ -22,5 +22,5 @@ let success = send(ch, 42)
 ```
 
 ```osprey-ml
-success = send (ch, 42)
+success = send ch 42
 ```

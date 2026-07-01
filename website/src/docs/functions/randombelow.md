@@ -21,5 +21,8 @@ let d = randomBelow(6) ?: 0  // a fair die face 0..5
 ```
 
 ```osprey-ml
-d = randomBelow 6 ?: 0  // a fair die face 0..5
+d =
+    match randomBelow 6
+        Success value => value  // a fair die face 0..5
+        Error message => 0
 ```

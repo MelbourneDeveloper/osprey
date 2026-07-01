@@ -17,5 +17,5 @@ termHideCursor()
 ```
 
 ```osprey-ml
-termHideCursor
+termHideCursor ()
 ```

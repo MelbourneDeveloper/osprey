@@ -20,7 +20,7 @@ match termReadKey() {
 ```
 
 ```osprey-ml
-match termReadKey
+match termReadKey ()
     Success value => print "key: ${value}"
     Error message => print message
 ```

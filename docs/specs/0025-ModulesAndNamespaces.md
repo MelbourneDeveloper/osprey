@@ -208,7 +208,7 @@ namespace billing {
 
 ML flavor:
 
-```osp
+```osprey-ml
 namespace billing
 
 type Money =
@@ -251,7 +251,7 @@ fn emptyInvoice(id: string) = Invoice { id: id, total: 0 }
 
 ML flavor:
 
-```osp
+```osprey-ml
 namespace billing
 
 type Invoice =
@@ -319,7 +319,7 @@ module Tax {
 
 ML flavor:
 
-```osp
+```osprey-ml
 namespace billing
 
 module Tax
@@ -364,7 +364,7 @@ let other = Tax::addTax(100)
 
 ML flavor:
 
-```osp
+```osprey-ml
 import billing::Tax
 import billing::Tax::{addTax}
 import billing::Tax as Tax
@@ -412,7 +412,7 @@ module Parser {
 
 ML flavor:
 
-```osp
+```osprey-ml
 module Parser
     type Token =
         Token
@@ -442,7 +442,7 @@ module UserIds {
 
 ML flavor:
 
-```osp
+```osprey-ml
 module UserIds
     export opaque type UserId = int
 
@@ -493,7 +493,7 @@ module MemoryStore : StoreSig {
 
 ML flavor:
 
-```osp
+```osprey-ml
 signature StoreSig
     opaque type Store
     effect StoreFx

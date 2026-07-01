@@ -26,6 +26,7 @@ match sendResult {
 ```
 
 ```osprey-ml
+sendResult = websocketSend wsId "Hello, WebSocket!"
 match sendResult
     Success _ => print "Message sent successfully"
     Err message => print "Failed to send: ${message}"

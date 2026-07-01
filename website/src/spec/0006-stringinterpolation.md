@@ -63,11 +63,10 @@ double n = n * 2
 print "Doubled: ${double 5}"
 
 // Field access
-type Person = { name: string, age: int }
-person =
-  Person
-    name = "Bob"
-    age = 25
+type Person =
+    name : string
+    age : int
+person = Person(name = "Bob", age = 25)
 print "Person: ${person.name}, age ${person.age}"
 ```
 

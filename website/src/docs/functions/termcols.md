@@ -17,5 +17,5 @@ let width = termCols()
 ```
 
 ```osprey-ml
-width = termCols
+width = termCols ()
 ```

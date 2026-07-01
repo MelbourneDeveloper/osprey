@@ -21,6 +21,5 @@ parseInt("42")  // Success { value: 42 }
 ```
 
 ```osprey-ml
-parseInt("42")  // Success
-    value = 42
+parseInt "42"  // Success { value: 42 }
 ```

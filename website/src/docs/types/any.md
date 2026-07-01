@@ -14,6 +14,9 @@ let text: Any = "Hello"
 ```
 
 ```osprey-ml
-value : Any = 42
-text : Any = "Hello"
+value : Any
+value = 42
+
+text : Any
+text = "Hello"
 ```

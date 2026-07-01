@@ -37,9 +37,9 @@ let message = match option {
 
 ```osprey-ml
 type Option =
-    | Some
+    Some
         value : int
-    | None
+    None
 
 message =
     match option
@@ -107,37 +107,11 @@ match result {
 }
 ```
 
-```osprey-ml
-// Narrowing an any value
-match anyValue
-    n : int    => n + 1
-    s : string => length s
-    b : bool =>
-        match b
-            true  => 1
-            false => 0
-    _ => 0
-
-// Structural matching: any type with these field names
-match anyValue
-    { name, age }    => print "${name}: ${age}"
-    p : { name, age } => print "person ${p.name}: ${p.age}"   // bind whole + destructure
-    u : User id      => print "user ${id}"                    // typed structural
-    _                => print "unknown"
-
-// Type-narrowed structural fields
-match anyValue
-    { x, y }                    => print "point: (${x}, ${y})"
-    p : { name }                => print "named: ${p.name}"
-    { id, email, active: bool } => print "active user: ${id}"
-    _                           => print "no match"
-
-// Type pattern with destructuring of a known constructor
-match result
-    success : Success value timestamp => processSuccess (value, timestamp)
-    error   : Error code message      => handleError (code, message)
-    _                                 => defaultHandler ()
-```
+> Type-narrowing arms (`n : int =>`) and structural field patterns
+> (`{ name, age } =>`, `p : { name } =>`) on `any` have no ML-flavor surface
+> syntax; use the Default flavor for structural and type-narrowed matching.
+> Constructor-payload matching (`Success value`, `Error message`) works in both
+> flavors — see the `Result` example below.
 
 ## Result Patterns
 
@@ -180,7 +154,10 @@ let value = calculation { value } ? value : -1   // 15
 
 ```osprey-ml
 calculation = 10 + 5
-value = calculation { value } ? value : -1   // 15
+value =
+    match calculation
+        Success value => value
+        Error _       => -1   // 15
 ```
 
 Desugars to:
@@ -194,8 +171,8 @@ match calculation {
 
 ```osprey-ml
 match calculation
-    { value } => value
-    _         => -1
+    Success value => value
+    Error _       => -1
 ```
 
 Result-default form — extract `Success { value }` or use the default on `Error`:
@@ -206,8 +183,13 @@ let errorVal  = divide(a: 10, b: 0) ?: -1   // -1
 ```
 
 ```osprey-ml
-safeValue = divide (10, 2) ?: -1   // 5
-errorVal  = divide (10, 0) ?: -1   // -1
+orDefault r =
+    match r
+        Success value => value
+        Error _       => -1
+
+safeValue = orDefault (divide (10, 2))   // 5
+errorVal  = orDefault (divide (10, 0))   // -1
 ```
 
 A boolean expression with `?:` works because `true`/`false` desugar to the same match:
@@ -217,5 +199,8 @@ let status = isActive ? "Active" : "Inactive"
 ```
 
 ```osprey-ml
-status = isActive ? "Active" : "Inactive"
+status =
+    match isActive
+        true  => "Active"
+        false => "Inactive"
 ```

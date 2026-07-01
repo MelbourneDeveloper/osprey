@@ -23,5 +23,6 @@ match indexOf("foo=bar", "=") { Success { value } => print(value) ... }
 
 ```osprey-ml
 match indexOf ("foo=bar", "=")
-    Success value => print value ...
+    Success value => print value
+    Error message => print "not found"
 ```

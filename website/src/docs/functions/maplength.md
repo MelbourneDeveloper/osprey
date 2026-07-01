@@ -21,5 +21,5 @@ mapLength({"a": 1, "b": 2})  // 2
 ```
 
 ```osprey-ml
-mapLength {"a": 1, "b": 2}  // 2
+mapLength ["a" => 1, "b" => 2]  // 2
 ```
