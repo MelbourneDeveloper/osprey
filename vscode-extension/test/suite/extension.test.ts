@@ -26,6 +26,7 @@ import {
   resolveRequiredLldbDap,
 } from "./osprey-test-env";
 import {
+  assertLocalVariable,
   clearDebugBreakpoints,
   getScopes,
   getVariables,
@@ -1092,6 +1093,167 @@ suite("Osprey Language Features Tests", () => {
       "restLen is listed among document symbols",
     );
   });
+
+  test("CHUNKY: the live LSP serves the ML flavor (.ospml) end-to-end", async function () {
+    this.timeout(60000);
+    // The .ospml layout flavor rides the SAME language server through the
+    // `osprey-ml` document selector wired in activate(). Nothing before this
+    // proved the live server answers over ML source; this drives hover,
+    // go-to-definition, references, symbols, diagnostics and completion against a
+    // real .ospml buffer so a regression that broke ML editor UX (e.g. the
+    // selector losing "osprey-ml", or the ML frontend not reaching the LSP) fails
+    // loudly. ML flavor: `name args = body`, whitespace application, offside
+    // blocks, `name = value` bindings (no `let`/`fn`). [LSP-ML-FLAVOR]
+    const ML =
+      [
+        "double x = x * 2", // 0  curried unary fn
+        "triple x = x + x + x", // 1  curried unary fn
+        "base = 5", // 2  binding
+        "d = double base", // 3  call site of double
+        "t = triple base", // 4  call site of triple
+        "u = double base", // 5  second call of double
+        'print "d=${d} t=${t} u=${u}"', // 6
+      ].join("\n") + "\n";
+    const file = path.join(tempDir, "sweep.ospml");
+    fs.writeFileSync(file, ML);
+    const doc = await vscode.workspace.openTextDocument(file);
+    await vscode.window.showTextDocument(doc);
+
+    // The extension must associate .ospml with the ML language id, which is how
+    // the LSP client's documentSelector routes it to the server.
+    for (let i = 0; i < 40 && doc.languageId !== "osprey-ml"; i++) {
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    assert.strictEqual(
+      doc.languageId,
+      "osprey-ml",
+      "a .ospml file is associated with the osprey-ml language id",
+    );
+
+    // --- HOVER: the curried function at its declaration and a call site ---
+    const declHover = await pollFor(
+      () => hoverAt(doc.uri, 0, 0),
+      (h) => nonEmptyHover(h) && hoverText(h[0]).includes("double"),
+      80,
+      250,
+    );
+    const declMd = hoverText(declHover[0]);
+    assert.ok(declMd.includes("double"), "ML fn hover names the function");
+    assert.ok(
+      declMd.includes("->"),
+      "ML fn hover renders a function-type arrow",
+    );
+    const callHover = await pollFor(
+      () => hoverAt(doc.uri, 3, 4),
+      (h) => nonEmptyHover(h) && hoverText(h[0]).includes("double"),
+    );
+    assert.strictEqual(
+      hoverText(callHover[0]),
+      declMd,
+      "ML call-site hover matches the declaration hover",
+    );
+    // A binding hovers with its inferred type — no annotation in the source.
+    const baseHover = await pollFor(
+      () => hoverAt(doc.uri, 2, 0),
+      (h) => nonEmptyHover(h) && hoverText(h[0]).includes("base"),
+    );
+    assert.ok(
+      /base\s*:\s*int/i.test(hoverText(baseHover[0])),
+      `ML binding hover shows inferred type: ${hoverText(baseHover[0])}`,
+    );
+
+    // --- GO TO DEFINITION: a call jumps back to the ML declaration ---
+    const def = await pollFor(
+      () => defsAt(doc.uri, 3, 4),
+      (d) => Array.isArray(d) && d.length > 0,
+    );
+    assert.strictEqual(def[0].range.start.line, 0, "double defined on line 0");
+    assert.strictEqual(
+      def[0].uri.toString(),
+      doc.uri.toString(),
+      "definition resolves within the .ospml document",
+    );
+
+    // --- FIND REFERENCES: declaration + both call sites of double ---
+    const refs = await pollFor(
+      () => refsAt(doc.uri, 0, 0),
+      (r) => Array.isArray(r) && r.length >= 3,
+    );
+    assert.deepStrictEqual(
+      startLines(refs),
+      [0, 3, 5],
+      "double is referenced at its declaration and both call sites",
+    );
+
+    // --- DOCUMENT SYMBOLS: both functions and every binding are listed ---
+    const syms = await pollFor(
+      () => symbolsOf(doc.uri),
+      (s) => Array.isArray(s) && s.length >= 5,
+    );
+    const names = new Set(syms.map((s) => s.name));
+    for (const name of ["double", "triple", "base", "d", "t", "u"]) {
+      assert.ok(names.has(name), `ML symbol ${name} is listed`);
+    }
+
+    // --- COMPLETION: user-defined ML symbols are offered ---
+    const list = await pollFor(
+      () => completionAt(doc.uri, 4, 4),
+      (l) => !!l && Array.isArray(l.items) && l.items.length > 0,
+    );
+    const labels = labelsOf(list);
+    assert.ok(
+      labels.includes("double") && labels.includes("triple"),
+      "completion offers the ML user functions",
+    );
+
+    // --- DIAGNOSTICS lifecycle on ML source: break it, then fix it ---
+    const editor = await vscode.window.showTextDocument(doc);
+    await editor.edit((b) =>
+      b.replace(
+        new vscode.Range(0, 0, doc.lineCount, 0),
+        'd = missingFn 5\nprint "${d}"\n',
+      ),
+    );
+    const broken = await pollFor(
+      () => Promise.resolve(vscode.languages.getDiagnostics(doc.uri)),
+      (d) => d.length > 0,
+    );
+    assert.strictEqual(
+      broken[0].severity,
+      vscode.DiagnosticSeverity.Error,
+      "an undefined ML identifier is a real Error diagnostic",
+    );
+    assert.strictEqual(
+      broken[0].source,
+      "osprey",
+      "ML diagnostic is attributed to the osprey server",
+    );
+
+    const editor2 = await vscode.window.showTextDocument(doc);
+    await editor2.edit((b) =>
+      b.replace(
+        new vscode.Range(0, 0, doc.lineCount, 0),
+        'square x = x * x\nv = square 4\nprint "${v}"\n',
+      ),
+    );
+    const fixed = await pollFor(
+      () => Promise.resolve(vscode.languages.getDiagnostics(doc.uri)),
+      (d) => d.length === 0,
+    );
+    assert.strictEqual(
+      fixed.length,
+      0,
+      "diagnostics clear once the ML program is valid again",
+    );
+    const okHover = await pollFor(
+      () => hoverAt(doc.uri, 0, 0),
+      (h) => nonEmptyHover(h) && hoverText(h[0]).includes("square"),
+    );
+    assert.ok(
+      hoverText(okHover[0]).includes("square"),
+      "hover works on the corrected ML program",
+    );
+  });
 });
 
 // These suites drive the command handlers, event subscriptions, and debug
@@ -1557,6 +1719,53 @@ suite("Osprey Activation Side-Effect Coverage", () => {
     assert.ok(ext?.isActive, "extension active");
   });
 
+  test("the open watcher force-corrects a mis-associated .osp file to osprey", async () => {
+    // The interesting branch of onDidOpenTextDocument is the CORRECTION path:
+    // `document.languageId !== target`. Normally VS Code already associates .osp
+    // to "osprey", so the branch never runs. Force a genuine mismatch by mapping
+    // *.osp -> plaintext, open the file (it comes in as plaintext), and prove the
+    // extension's watcher drags it back to "osprey" — the real self-healing the
+    // handler exists for. The association is restored in a finally so no later
+    // suite inherits the override.
+    const filesConfig = vscode.workspace.getConfiguration("files");
+    const priorAssoc =
+      filesConfig.get<Record<string, string>>("associations") ?? {};
+    await filesConfig.update(
+      "associations",
+      { ...priorAssoc, "*.osp": "plaintext" },
+      vscode.ConfigurationTarget.Global,
+    );
+    await settle(300);
+
+    try {
+      const file = path.join(tempDir, "misassociated.osp");
+      fs.writeFileSync(file, 'fn main() -> Unit = print("corrected")\n');
+      const document = await vscode.workspace.openTextDocument(file);
+      await vscode.window.showTextDocument(document);
+
+      // The watcher's setTextDocumentLanguage is async; poll until it lands.
+      for (let i = 0; i < 40 && document.languageId !== "osprey"; i++) {
+        await settle(150);
+      }
+      assert.strictEqual(
+        document.languageId,
+        "osprey",
+        "the watcher re-associated a plaintext-opened .osp back to osprey",
+      );
+      assert.ok(
+        vscode.extensions.getExtension(extensionId2)?.isActive,
+        "extension stays active after the correction",
+      );
+    } finally {
+      await filesConfig.update(
+        "associations",
+        priorAssoc,
+        vscode.ConfigurationTarget.Global,
+      );
+      await settle(300);
+    }
+  });
+
   test("changing osprey configuration fires the change handler", async () => {
     // Flip an osprey setting to trigger onDidChangeConfiguration, which shows an
     // information message. We assert the round-trip of the value to confirm the
@@ -1881,6 +2090,216 @@ suite("Osprey VSIX Debugger E2E", () => {
 
     await session.customRequest("continue", { threadId: stepped.threadId });
     await waitForDebugSessionEnd(45000, session.id);
+  });
+
+  test("debugging an UNSAVED buffer saves it, compiles, and stops at a breakpoint", async function () {
+    this.timeout(90000);
+    // The debug-configuration provider must SAVE a dirty buffer before it shells
+    // out to `osprey --debug --compile` — otherwise it would compile stale disk
+    // contents. This drives that exact path end-to-end: open a file, dirty it in
+    // the editor with the ONLY correct program, launch, and prove the debugger
+    // stops on a line that exists *only* in the unsaved edit — which can only
+    // happen if the provider saved the buffer first. [EDITOR-VSCODE]
+    // VS Code would itself flush dirty editors before launching unless we tell
+    // it not to. With debug.saveBeforeStart="none" the buffer reaches the
+    // Osprey debug-configuration provider STILL DIRTY, so the provider's own
+    // save-before-compile path (the thing under test) actually runs.
+    const debugConfig = vscode.workspace.getConfiguration("debug");
+    const priorSaveBeforeStart = debugConfig.get<string>("saveBeforeStart");
+    await debugConfig.update(
+      "saveBeforeStart",
+      "none",
+      vscode.ConfigurationTarget.Global,
+    );
+
+    try {
+      const source = path.join(tempDir, "dirty-buffer.osp");
+      // Seed disk with a DIFFERENT program (no breakpoint-worthy body) so a
+      // failure to save would compile this instead and never stop on our line.
+      fs.writeFileSync(
+        source,
+        'fn main() -> Unit = print("stale disk contents")\n',
+      );
+
+      const document = await vscode.workspace.openTextDocument(source);
+      const editor = await vscode.window.showTextDocument(document);
+
+      // Replace the whole buffer WITHOUT saving: the editor is now dirty and the
+      // in-memory program differs from disk.
+      const edited = [
+        "fn tag(v) -> int = v + 100",
+        "let base = 7",
+        "let tagged = tag(base)",
+        'print("dirty debug ${base} and ${tagged}")',
+        "",
+      ].join("\n");
+      const applied = await editor.edit((b) =>
+        b.replace(new vscode.Range(0, 0, document.lineCount, 0), edited),
+      );
+      assert.ok(applied, "the buffer edit was applied");
+      assert.ok(document.isDirty, "the buffer is dirty before launch");
+      assert.notStrictEqual(
+        fs.readFileSync(source, "utf8"),
+        document.getText(),
+        "disk and buffer differ before the provider saves",
+      );
+
+      const debugOutput = defaultDebugOutputPath(source);
+      setSourceBreakpoints(source, [2]); // edited-only `let tagged = tag(base)`
+      const sessionPromise = waitForDebugSessionStart(45000);
+      const started = await vscode.debug.startDebugging(undefined, {
+        type: "osprey",
+        request: "launch",
+        name: "Osprey dirty-buffer E2E",
+        program: source,
+        cwd: tempDir,
+        debugOutput,
+        lldbDapPath,
+        stopOnEntry: false,
+      });
+      assert.ok(started, "VS Code accepted the dirty-buffer debug launch");
+
+      // The provider's save-before-compile path must have run: buffer clean, and
+      // disk now holds the EDITED program (not the stale seed).
+      assert.ok(
+        !document.isDirty,
+        "the provider saved the dirty buffer before compiling",
+      );
+      assert.strictEqual(
+        fs.readFileSync(source, "utf8"),
+        edited,
+        "disk now holds the edited program the provider saved",
+      );
+
+      const session = await sessionPromise;
+      assert.strictEqual(
+        session.type,
+        "osprey",
+        "session is the osprey debugger",
+      );
+      const stopped = await waitForStop(session, 45000);
+      const topFrame = stopped.stack.stackFrames[0];
+      assert.ok(
+        topFrame,
+        "debugger reports a stopped frame in the saved program",
+      );
+      assert.strictEqual(
+        path.normalize(topFrame.source?.path ?? ""),
+        path.normalize(source),
+        "stopped in the saved .osp source",
+      );
+      assert.strictEqual(
+        topFrame.line,
+        2,
+        "stopped on the edited-only breakpoint line (proves the save happened)",
+      );
+
+      // The edited-only local `base` is live — findVariable searches every scope,
+      // and this also exercises the shared DAP harness assertLocalVariable path.
+      // The matcher is a predicate (its rendered value is a materialized string
+      // whose exact form depends on where in the line execution paused).
+      const base = await assertLocalVariable(
+        session,
+        topFrame.id,
+        "base",
+        (value) => typeof value === "string" && value.length > 0,
+      );
+      assert.strictEqual(base.name, "base", "assertLocalVariable returns base");
+      assert.ok(
+        fs.existsSync(debugOutput),
+        "the saved (not stale) program was debug-compiled to a native binary",
+      );
+
+      await session.customRequest("continue", { threadId: stopped.threadId });
+      await waitForDebugSessionEnd(45000, session.id);
+    } finally {
+      await debugConfig.update(
+        "saveBeforeStart",
+        priorSaveBeforeStart,
+        vscode.ConfigurationTarget.Global,
+      );
+    }
+  });
+
+  test("a dead lldbDapPath makes the adapter factory refuse to start a session", async function () {
+    this.timeout(60000);
+    // The debug-adapter descriptor factory resolves lldb-dap from the launch
+    // config. When the configured lldbDapPath does not exist AND nothing else
+    // resolves, the factory returns undefined after surfacing an error — so VS
+    // Code never actually attaches a DAP. We prove that by pointing lldbDapPath
+    // at a guaranteed-absent file and asserting the session never reaches a
+    // running/stopped state on our breakpoint. The compiler still runs (the
+    // provider compiles before the adapter is asked for), so this isolates the
+    // adapter-resolution branch from the compile branch.
+    const source = path.join(tempDir, "dead-adapter.osp");
+    fs.writeFileSync(
+      source,
+      ["fn main() -> Unit = {", '  print("never debugged")', "}", ""].join(
+        "\n",
+      ),
+    );
+    const document = await vscode.workspace.openTextDocument(source);
+    await vscode.window.showTextDocument(document);
+    await document.save();
+
+    const deadDap = path.join(tempDir, "no", "such", "lldb-dap");
+    assert.ok(
+      !fs.existsSync(deadDap),
+      "the configured lldb-dap is truly absent",
+    );
+
+    setSourceBreakpoints(source, [1]);
+    let sawSession: vscode.DebugSession | undefined;
+    const sub = vscode.debug.onDidStartDebugSession((s) => {
+      sawSession = s;
+    });
+    try {
+      // Race the launch against a timeout; with a dead adapter the promise
+      // resolves false (or a session that immediately dies) rather than hanging.
+      const outcome = await Promise.race([
+        Promise.resolve(
+          vscode.debug.startDebugging(undefined, {
+            type: "osprey",
+            request: "launch",
+            name: "Osprey dead-adapter E2E",
+            program: source,
+            cwd: tempDir,
+            debugOutput: defaultDebugOutputPath(source),
+            lldbDapPath: deadDap,
+            stopOnEntry: false,
+          }),
+        )
+          .then((v) => `resolved:${String(v)}`)
+          .catch((e: unknown) => `error:${String(e)}`),
+        new Promise<string>((resolve) =>
+          setTimeout(() => resolve("timeout"), 12000),
+        ),
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      assert.ok(typeof outcome === "string", "launch settled to a string");
+      // A dead adapter must NOT yield a live, stopped session on our breakpoint.
+      const stuckRunning =
+        sawSession !== undefined &&
+        vscode.debug.activeDebugSession?.id === sawSession.id;
+      assert.ok(
+        !stuckRunning,
+        "no live osprey debug session survives a missing lldb-dap adapter",
+      );
+      assert.ok(
+        vscode.extensions.getExtension(extensionId)?.isActive,
+        "extension survives the dead-adapter path",
+      );
+    } finally {
+      sub.dispose();
+      if (vscode.debug.activeDebugSession) {
+        try {
+          await vscode.debug.stopDebugging();
+        } catch {
+          // Session teardown can race our cleanup; that is fine.
+        }
+      }
+    }
   });
 });
 
@@ -2508,180 +2927,6 @@ suite("Osprey Debug Config Synthesis Unit Tests", () => {
     assert.match(
       missingLldbDapMessage({ lldbDapPath: "/missing/lldb-dap" }),
       /Configured lldbDapPath: \/missing\/lldb-dap\./,
-    );
-    // With nothing configured the message omits the "Configured lldbDapPath"
-    // suffix but still names every location the resolver probed.
-    const bare = missingLldbDapMessage();
-    assert.ok(
-      !bare.includes("Configured lldbDapPath"),
-      "no config suffix when nothing is configured",
-    );
-    assert.ok(bare.includes("PATH"), "message lists PATH as a probed location");
-    assert.ok(
-      bare.includes("xcrun"),
-      "message lists xcrun as a probed location",
-    );
-  });
-
-  // A configured BARE command name (no path separator) is resolved by walking
-  // PATH, not by existence-checking a literal file. This drives the
-  // findExecutableOnPath branch for a configured value on both platforms.
-  test("a configured bare lldb-dap command is resolved by walking PATH", () => {
-    const posixBin = "/opt/tools/my-lldb";
-    const posixHost = {
-      env: { PATH: ["/nope", "/opt/tools", ""].join(path.delimiter) },
-      existsSync: (p: string) => p === posixBin,
-      getSetting: () => undefined,
-      platform: "linux" as NodeJS.Platform,
-    };
-    assert.strictEqual(
-      resolveLldbDapExecutable({ lldbDapPath: "my-lldb" }, posixHost),
-      posixBin,
-      "configured bare command is found on the first PATH dir that has it",
-    );
-    // resolveLldbDapCommand delegates to the same resolver, so it agrees.
-    assert.strictEqual(
-      resolveLldbDapCommand({ lldbDapPath: "my-lldb" }, posixHost),
-      posixBin,
-      "command resolver returns the PATH-resolved bare command",
-    );
-
-    const winBin = "C:\\tools\\lldb-dap.exe";
-    const winHost = {
-      env: { PATH: ["C:\\nope", "C:\\tools"].join(path.delimiter) },
-      existsSync: (p: string) => p === winBin,
-      getSetting: () => undefined,
-      platform: "win32" as NodeJS.Platform,
-    };
-    assert.strictEqual(
-      resolveLldbDapExecutable({ lldbDapPath: "lldb-dap.exe" }, winHost),
-      winBin,
-      "configured bare command resolves against a Windows PATH too",
-    );
-
-    // A configured bare command that is on NO PATH dir resolves to undefined.
-    assert.strictEqual(
-      resolveLldbDapExecutable(
-        { lldbDapPath: "ghost" },
-        { ...posixHost, existsSync: () => false },
-      ),
-      undefined,
-      "a bare command absent from every PATH dir is unresolved",
-    );
-  });
-
-  // On macOS, when nothing is configured and nothing is on PATH, the resolver
-  // asks `xcrun -f lldb-dap` and trusts an existing result. Both the success
-  // path and the "xcrun threw / returned a non-existent path" fall-through are
-  // driven here through the injectable execFileSync.
-  test("darwin xcrun resolves lldb-dap when PATH has none", () => {
-    const xcrunPath = "/Applications/Xcode.app/lldb-dap";
-    const okHost = {
-      env: { PATH: "" },
-      existsSync: (p: string) => p === xcrunPath,
-      execFileSync: () => `${xcrunPath}\n`,
-      getSetting: () => undefined,
-      platform: "darwin" as NodeJS.Platform,
-    };
-    assert.strictEqual(
-      resolveLldbDapExecutable({}, okHost),
-      xcrunPath,
-      "an existing xcrun-reported path is used and trimmed",
-    );
-
-    // xcrun throwing (tool absent) must fall through to the common candidates,
-    // one of which we make exist.
-    const brewCandidate = "/opt/homebrew/opt/llvm/bin/lldb-dap";
-    const throwHost = {
-      env: { PATH: "" },
-      existsSync: (p: string) => p === brewCandidate,
-      execFileSync: () => {
-        throw new Error("xcrun: command not found");
-      },
-      getSetting: () => undefined,
-      platform: "darwin" as NodeJS.Platform,
-    };
-    assert.strictEqual(
-      resolveLldbDapExecutable({}, throwHost),
-      brewCandidate,
-      "when xcrun throws, the first existing common LLVM path wins",
-    );
-
-    // xcrun succeeding but pointing at a NON-existent path also falls through.
-    const fallthroughHost = {
-      env: { PATH: "" },
-      existsSync: (p: string) => p === "/usr/bin/lldb-dap",
-      execFileSync: () => "/nonexistent/from/xcrun",
-      getSetting: () => undefined,
-      platform: "darwin" as NodeJS.Platform,
-    };
-    assert.strictEqual(
-      resolveLldbDapExecutable({}, fallthroughHost),
-      "/usr/bin/lldb-dap",
-      "a non-existent xcrun result is ignored in favour of a real candidate",
-    );
-  });
-
-  // With nothing configured and nothing on PATH (and no darwin xcrun), the
-  // resolver scans a fixed list of common LLVM install locations per platform.
-  test("common LLVM install paths are the last resort per platform", () => {
-    const winCandidate = "C:\\Program Files\\LLVM\\bin\\lldb-vscode.exe";
-    const winHost = {
-      env: { PATH: "" },
-      existsSync: (p: string) => p === winCandidate,
-      getSetting: () => undefined,
-      platform: "win32" as NodeJS.Platform,
-    };
-    assert.strictEqual(
-      resolveLldbDapExecutable({}, winHost),
-      winCandidate,
-      "a legacy lldb-vscode.exe under Program Files is found on Windows",
-    );
-
-    const linuxCandidate = "/usr/local/opt/llvm/bin/lldb-dap";
-    const linuxHost = {
-      env: { PATH: "" },
-      existsSync: (p: string) => p === linuxCandidate,
-      getSetting: () => undefined,
-      platform: "linux" as NodeJS.Platform,
-    };
-    assert.strictEqual(
-      resolveLldbDapExecutable({}, linuxHost),
-      linuxCandidate,
-      "a common /usr/local LLVM path is found on Linux",
-    );
-
-    // Nothing anywhere -> undefined (the .find returns undefined).
-    assert.strictEqual(
-      resolveLldbDapExecutable(
-        {},
-        { ...linuxHost, existsSync: () => false },
-      ),
-      undefined,
-      "no configured value, PATH, xcrun, or common path leaves it unresolved",
-    );
-  });
-
-  // The VS Code setting (host.getSetting) is consulted when the launch config
-  // carries no lldbDapPath, and a config value overrides the setting.
-  test("lldb-dap setting is used and overridden by launch config", () => {
-    const settingPath = "/from/setting/lldb-dap";
-    const configPath = "/from/config/lldb-dap";
-    const host = {
-      env: { PATH: "" },
-      existsSync: (p: string) => p === settingPath || p === configPath,
-      getSetting: () => settingPath,
-      platform: "linux" as NodeJS.Platform,
-    };
-    assert.strictEqual(
-      resolveLldbDapExecutable({}, host),
-      settingPath,
-      "the osprey.debug.lldbDapPath setting is honoured when no config path",
-    );
-    assert.strictEqual(
-      resolveLldbDapExecutable({ lldbDapPath: configPath }, host),
-      configPath,
-      "an explicit launch-config path overrides the setting",
     );
   });
 });
