@@ -12,3 +12,8 @@ description: "A type that can represent any value. Useful for generic programmin
 let value: Any = 42
 let text: Any = "Hello"
 ```
+
+```osprey-ml
+value : Any = 42
+text : Any = "Hello"
+```

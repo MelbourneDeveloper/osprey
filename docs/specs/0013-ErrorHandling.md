@@ -29,6 +29,14 @@ match result {
 }
 ```
 
+```osprey-ml
+result = someFunctionThatCanFail
+
+match result
+    Success value   => print "Success: ${value}"
+    Error   message => print "Error: ${message}"
+```
+
 ## Arithmetic Returns Result
 
 Every arithmetic operation returns `Result<T, MathError>` so overflow, underflow, and division by zero surface as values, not panics.
@@ -48,6 +56,14 @@ let mixed     = 10 + 5.5   // Result<float, MathError>
 let divZero   = 10 / 0     // Error(DivisionByZero)
 ```
 
+```osprey-ml
+sum       = 1 + 3      // Result<int,   MathError>
+quotient  = 10 / 3     // Result<float, MathError>
+remainder = 10 % 3     // Result<int,   MathError>
+mixed     = 10 + 5.5   // Result<float, MathError>
+divZero   = 10 / 0     // Error(DivisionByZero)
+```
+
 #### Chaining Arithmetic
 
 Compound expressions auto-unwrap intermediate `Result`s — `(10 + 5) * 2` is a single `Result<int, MathError>`, never a nested one, and only the final value is matched ([Result Auto-Unwrapping](0004-TypeSystem.md#result-auto-unwrapping)):
@@ -59,6 +75,12 @@ match (10 + 5) * 2 {
 }
 ```
 
+```osprey-ml
+match (10 + 5) * 2
+    Success value   => print "Final: ${value}"
+    Error   message => print "error: ${message}"
+```
+
 ### toString Format
 
 A `Result` formats as `Success(<value>)` or `Error(<message>)`:
@@ -66,6 +88,11 @@ A `Result` formats as `Success(<value>)` or `Error(<message>)`:
 ```osprey
 print(toString(15 / 3))   // "Success(5.0)"  — division is always float
 print(toString(10 / 0))   // "Error(division by zero)"
+```
+
+```osprey-ml
+print (toString (15 / 3))   // "Success(5.0)"  — division is always float
+print (toString (10 / 0))   // "Error(division by zero)"
 ```
 
 ## Error Payload Propagation — [ERR-PAYLOAD]
@@ -78,6 +105,13 @@ match split("abc", "") {
     Error   { message } => print(message)   // MUST print "separator is empty",
                                             // not "Error occurred"
 }
+```
+
+```osprey-ml
+match split ("abc", "")
+    Success value   => forEach (value, print)
+    Error   message => print message   // MUST print "separator is empty",
+                                       // not "Error occurred"
 ```
 
 This requirement applies uniformly across arithmetic, string, list, map, file-I/O, HTTP, and user-defined fallible functions, and to nested `Result` chains (auto-unwrap MUST preserve the original error payload). Implementations that lose the payload — for example by binding the pattern variable to a static global — are non-conforming.

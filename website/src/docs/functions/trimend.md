@@ -19,3 +19,7 @@ description: "Removes trailing whitespace."
 ```osprey
 trimEnd("  hi  ")  // "  hi"
 ```
+
+```osprey-ml
+trimEnd "  hi  "  // "  hi"
+```

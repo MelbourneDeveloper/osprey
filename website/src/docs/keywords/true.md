@@ -12,3 +12,8 @@ description: "Boolean literal representing the logical value true."
 let isReady = true
 if (isReady) { print("Ready!") }
 ```
+
+```osprey-ml
+isReady = true
+if isReady then print "Ready!"
+```

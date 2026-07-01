@@ -24,6 +24,14 @@ let result = match value {
 }
 ```
 
+```osprey-ml
+result =
+    match value
+        0 => "zero"
+        1 => "one"
+        n => "other: " + toString n
+```
+
 ## Union Type Patterns
 
 A union pattern names the variant. Variants with fields are destructured using `{ field, ... }`; variants without fields are matched by name alone. Both forms lower to `Pattern::Constructor`; the brace destructuring shown here is the Default surface, spelled `Success value` in the ML flavor ([`[FLAVOR-ML-MATCH]`](/spec/0024-mlflavorsyntax/#match)).
@@ -37,6 +45,18 @@ let message = match option {
 }
 ```
 
+```osprey-ml
+type Option =
+    | Some
+        value : int
+    | None
+
+message =
+    match option
+        Some value => "Value: " + toString value
+        None       => "No value"
+```
+
 ## Wildcard Patterns
 
 The underscore `_` matches any value:
@@ -47,6 +67,14 @@ let category = match score {
     90 => "excellent"
     _ => "good"
 }
+```
+
+```osprey-ml
+category =
+    match score
+        100 => "perfect"
+        90 => "excellent"
+        _ => "good"
 ```
 
 ## Type Annotation Patterns

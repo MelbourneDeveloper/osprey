@@ -12,3 +12,8 @@ description: "Boolean literal representing the logical value false."
 let isComplete = false
 if (!isComplete) { print("Not done yet") }
 ```
+
+```osprey-ml
+isComplete = false
+if !isComplete then print "Not done yet"
+```

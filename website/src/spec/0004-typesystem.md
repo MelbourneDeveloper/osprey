@@ -40,6 +40,19 @@ fn twice(f, x)         = f(f(x))                 // <T>((T) -> T, T) -> T
 fn compose(f, g)       = fn(x) => f(g(x))        // <A,B,C>((B)->C,(A)->B) -> (A)->C
 ```
 
+```osprey-ml
+identity x       = x                        // <T>(T) -> T
+add (a, b)       = a + b                     // (int, int) -> Result<int, MathError>
+greet name       = "Hello, " + name          // (string) -> string
+makeUser (n, a)  =
+    User
+        name = n
+        age = a                             // (string, int) -> User
+getName u        = u.name                    // (User) -> string
+twice (f, x)     = f (f x)                   // <T>((T) -> T, T) -> T
+compose (f, g)   = \x => f (g x)             // <A,B,C>((B)->C,(A)->B) -> (A)->C
+```
+
 `[TYPE-NO-REDUNDANT-ANNOTATION]` **Optional is not the whole rule: an annotation
 the checker can infer is *redundant*, and redundant symbols are forbidden.**
 Osprey is terse — **neither flavor is verbose** — so any type symbol the compiler
@@ -81,6 +94,11 @@ A polymorphic function is monomorphised independently at each call site:
 ```osprey
 let i = identity(42)        // identity<int>
 let s = identity("hello")   // identity<string>
+```
+
+```osprey-ml
+i = identity 42          // identity<int>
+s = identity "hello"     // identity<string>
 ```
 
 ### Record Type Unification
@@ -155,6 +173,17 @@ let doubler: (int) -> int = fn(x: int) => x * 2
 fn createAdder(n: int) -> (int) -> int = fn(x: int) => x + n
 ```
 
+```osprey-ml
+applyFunction : (int, (int) -> int) -> int
+applyFunction (value, transform) = transform value
+
+doubler : (int) -> int
+doubler = \x => x * 2
+
+createAdder : int -> (int) -> int
+createAdder n = \x => x + n
+```
+
 Multi-argument call syntax (named arguments are required for two or more parameters) is in [Function Calls](/spec/0005-functioncalls/).
 
 ### Closures — [TYPE-FN-CLOSURE]
@@ -174,6 +203,20 @@ let greet   = fn(name: string) => prefix + name              // captures prefix
 print(greet("world"))                                         // "hello world"
 ```
 
+```osprey-ml
+makeAdder : int -> (int) -> int
+makeAdder n = \x => x + n                       // captures n
+
+add5    = makeAdder 5
+add10   = makeAdder 10
+print (add5 3)     // 8
+print (add10 3)    // 13
+
+prefix  = "hello "
+greet   = \name => prefix + name                // captures prefix
+print (greet "world")                                         // "hello world"
+```
+
 Closures and named functions are interchangeable wherever a function type is expected, including as higher-order arguments (`map`, `filter`, `fold`, `forEach`) and as the function field of records. A closure that captures no free variables is equivalent to a top-level function and the implementation SHOULD lower it to one. A `Result<T, E>` returned through a function-value call auto-unwraps to `T` (context 4 of [Result Auto-Unwrapping](#result-auto-unwrapping)).
 
 ## Record Types
@@ -189,6 +232,17 @@ type Point   = { x: int, y: int }
 type Person  = { name: string, age: int, active: bool }
 ```
 
+```osprey-ml
+type Point =
+    x : int
+    y : int
+
+type Person =
+    name : string
+    age : int
+    active : bool
+```
+
 ### Construction
 
 ```osprey
@@ -197,6 +251,25 @@ let person = Person { name: "Alice", age: 30, active: true }
 
 // Field order at construction is irrelevant
 let person2 = Person { active: true, name: "Bob", age: 22 }
+```
+
+```osprey-ml
+point =
+    Point
+        x = 10
+        y = 20
+person =
+    Person
+        name = "Alice"
+        age = 30
+        active = true
+
+// Field order at construction is irrelevant
+person2 =
+    Person
+        active = true
+        name = "Bob"
+        age = 22
 ```
 
 All fields are required. Missing or unknown fields, or type mismatches, are compilation errors.
@@ -227,6 +300,28 @@ let area = match shape {
 }
 ```
 
+```osprey-ml
+n = person.name        // ok
+
+// any: pattern-match
+nameOf : any -> string
+nameOf v =
+    match v
+        p: { name } => p.name
+        _ => "unknown"
+
+// Result: match before access
+match personResult
+    Success value => print value.name
+    Error message => print message
+
+// Union: discriminate first
+area =
+    match shape
+        Circle { radius } => 3.14 * radius * radius
+        Rectangle { width, height } => width * height
+```
+
 The compiler implementation must look up fields by name; positional access is forbidden in code generation.
 
 ### Immutability and Non-Destructive Update
@@ -236,6 +331,16 @@ Records cannot be modified. To produce a record that differs in some fields from
 ```osprey
 let p2 = point  { x: 15 }                // y carried over
 let p3 = person { age: 26, active: false }
+```
+
+```osprey-ml
+p2 =
+    point
+        x = 15               // y carried over
+p3 =
+    person
+        age = 26
+        active = false
 ```
 
 ### Nested Records

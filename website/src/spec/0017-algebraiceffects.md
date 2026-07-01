@@ -43,6 +43,12 @@ effect State {
 }
 ```
 
+```osprey-ml
+effect State
+    get : Unit => int
+    set : int => Unit
+```
+
 ## Effectful Function Types
 
 A function declares the effects it may perform with `!E` after its return type. `E` is either a single effect or a bracketed set.
@@ -50,6 +56,14 @@ A function declares the effects it may perform with `!E` after its return type. 
 ```osprey
 fn read() -> string !IO = perform IO.readLine()
 fn fetch(url: string) -> string ![IO, Net] = ...
+```
+
+```osprey-ml
+read : Unit -> string !IO
+read () = perform IO.readLine
+
+fetch : string -> string ![IO, Net]
+fetch url = ...
 ```
 
 A function with no `!E` is pure; calling an effectful function from a pure context is a compilation error.
@@ -66,6 +80,14 @@ fn incrementTwice() -> int !State = {
     perform State.set(current + 1)
     perform State.get()
 }
+```
+
+```osprey-ml
+incrementTwice : Unit -> int !State
+incrementTwice () =
+    current = perform State.get
+    perform State.set (current + 1)
+    perform State.get
 ```
 
 If no enclosing handler covers an effect, the program does not compile.
@@ -85,6 +107,17 @@ in
     incrementTwice()
 ```
 
+```osprey-ml
+state =
+    handler State
+        get => 42
+        set newVal => print ("set to " + toString newVal)
+
+handle state
+do
+    incrementTwice ()
+```
+
 The innermost matching handler wins for each effect. Handlers may be nested freely:
 
 ```osprey
@@ -95,6 +128,22 @@ in
         log msg => print("[INNER] " + msg)
     in
         perform Logger.log("test")    // prints "[INNER] test"
+```
+
+```osprey-ml
+outer =
+    handler Logger
+        log msg => print ("[OUTER] " + msg)
+
+inner =
+    handler Logger
+        log msg => print ("[INNER] " + msg)
+
+handle outer
+do
+    handle inner
+    do
+        perform Logger.log "test"    // prints "[INNER] test"
 ```
 
 ## Handler-Owned State

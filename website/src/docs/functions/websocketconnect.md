@@ -19,3 +19,7 @@ description: "Connects to a WebSocket server at the given URL and returns a conn
 ```osprey
 let conn = websocketConnect("ws://localhost:8080/chat")
 ```
+
+```osprey-ml
+conn = websocketConnect "ws://localhost:8080/chat"
+```

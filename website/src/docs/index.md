@@ -6,6 +6,7 @@ description: "Complete reference documentation for the Osprey programming langua
 
 ## Quick Navigation
 
+- [Flavors](flavors/) - Default (`.osp`) vs ML (`.ospml`) syntax — one core, two surfaces
 - [Functions](functions/) - Built-in functions for I/O, iteration, and data transformation
 - [Types](types/) - Built-in data types (Int, String, Bool, Any)
 - [Operators](operators/) - Arithmetic, comparison, and logical operators

@@ -11,3 +11,7 @@ description: "Checks if the first value is greater than the second."
 ```osprey
 let isGreater = 7 > 3  // isGreater = true
 ```
+
+```osprey-ml
+isGreater = 7 > 3  // isGreater = true
+```

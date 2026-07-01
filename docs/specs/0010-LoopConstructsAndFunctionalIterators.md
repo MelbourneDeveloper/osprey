@@ -17,11 +17,21 @@ range(0, 3)      // 0, 1, 2
 range(10, 13)    // 10, 11, 12
 ```
 
+```osprey-ml
+range (1, 5)     // 1, 2, 3, 4
+range (0, 3)     // 0, 1, 2
+range (10, 13)   // 10, 11, 12
+```
+
 ### `forEach(iterator: Iterator<T>, function: fn(T) -> U) -> unit`
 Applies `function` to each element for its side effects.
 
 ```osprey
 range(1, 5) |> forEach(print)
+```
+
+```osprey-ml
+range (1, 5) |> forEach print
 ```
 
 ### `map(iterator: Iterator<T>, function: fn(T) -> U) -> Iterator<U>`
@@ -31,6 +41,10 @@ Transforms each element.
 range(1, 5) |> map(double)
 ```
 
+```osprey-ml
+range (1, 5) |> map double
+```
+
 ### `filter(iterator: Iterator<T>, predicate: fn(T) -> bool) -> Iterator<T>`
 Keeps elements that satisfy `predicate`.
 
@@ -38,11 +52,19 @@ Keeps elements that satisfy `predicate`.
 range(1, 10) |> filter(isEven)
 ```
 
+```osprey-ml
+range (1, 10) |> filter isEven
+```
+
 ### `fold(iterator: Iterator<T>, initial: U, function: fn(U, T) -> U) -> U`
 Reduces an iterator to a single value.
 
 ```osprey
 range(1, 5) |> fold(0, add)   // 0+1+2+3+4 = 10
+```
+
+```osprey-ml
+range (1, 5) |> fold (0, add)   // 0+1+2+3+4 = 10
 ```
 
 ## Pipe Operator
@@ -55,12 +77,22 @@ range(1, 10) |> forEach(print)
 range(0, 20) |> filter(isEven) |> map(double) |> forEach(print)
 ```
 
+```osprey-ml
+5 |> double |> print                                        // print(double(5))
+range (1, 10) |> forEach print
+range (0, 20) |> filter isEven |> map double |> forEach print
+```
+
 ## Stream Fusion
 
 Chains of `map`, `filter`, `forEach`, and `fold` over an iterator are fused at compile time into a single loop with no intermediate collections. The chain
 
 ```osprey
 range(1, 5) |> map(double) |> filter(isEven) |> forEach(print)
+```
+
+```osprey-ml
+range (1, 5) |> map double |> filter isEven |> forEach print
 ```
 
 compiles to one loop that applies `double`, the `isEven` test, and `print` per element — equivalent to:
@@ -86,6 +118,23 @@ range(1, 20)
 
 // Pipeline of named stages
 input()
+  |> validateInput
+  |> normalizeData
+  |> processData
+  |> formatOutput
+  |> print
+```
+
+```osprey-ml
+// Transform → filter → aggregate
+range (1, 20)
+  |> map square
+  |> filter isEven
+  |> fold (0, add)
+  |> print
+
+// Pipeline of named stages
+input ()
   |> validateInput
   |> normalizeData
   |> processData

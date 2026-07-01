@@ -26,6 +26,16 @@ let max = match a > b {
 }
 ```
 
+```osprey-ml
+status = match isValid
+    true  => "Success"
+    false => "Failure"
+
+max = match a > b
+    true  => a
+    false => b
+```
+
 Nested matches handle compound conditions:
 
 ```osprey
@@ -41,6 +51,16 @@ let category = match score >= 90 {
 }
 ```
 
+```osprey-ml
+category = match score >= 90
+    true  => match score == 100
+        true  => "Perfect"
+        false => "Excellent"
+    false => match score >= 70
+        true  => "Good"
+        false => "Needs Improvement"
+```
+
 ## Boolean Operators
 
 `&&`, `||`, and `!` are short-circuiting; `==`, `!=`, `<`, `>`, `<=`, `>=` produce booleans. See [Lexical Structure](/spec/0002-lexicalstructure/) for the full operator list.
@@ -51,4 +71,12 @@ let hasPermission = isAdult && isAuthorized
 let canAccess     = hasPermission || isAdmin
 let isBlocked     = !isActive
 let validUser     = !isBanned && (isVerified || hasInvite)
+```
+
+```osprey-ml
+isAdult       = age >= 18
+hasPermission = isAdult && isAuthorized
+canAccess     = hasPermission || isAdmin
+isBlocked     = !isActive
+validUser     = !isBanned && (isVerified || hasInvite)
 ```

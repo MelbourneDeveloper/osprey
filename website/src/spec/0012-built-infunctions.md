@@ -27,6 +27,12 @@ print(42)
 print(true)
 ```
 
+```osprey-ml
+print "Hello World"
+print 42
+print true
+```
+
 ### `input() -> string` — [BUILTIN-INPUT]
 Reads one line from standard input (without its trailing newline) and returns it
 as a string. At end-of-file — including when stdin is empty or not connected —
@@ -36,6 +42,11 @@ it returns the empty string `""` rather than blocking or failing. Parse it with
 ```osprey
 let line = input()                 // "" if there is no input
 let n    = parseInt(input()) ?: 0  // a number, or 0 when absent/unparseable
+```
+
+```osprey-ml
+line = input ()                    // "" if there is no input
+n    = parseInt (input ()) ?: 0    // a number, or 0 when absent/unparseable
 ```
 
 ### `toString(value: int | string | bool) -> string`
@@ -61,6 +72,13 @@ intDiv(5, 0)        // Error(MathError) — "division by zero"
 fn half(n) = intDiv(n, 2)   // -> int (Result auto-unwraps at the typed return)
 ```
 
+```osprey-ml
+intDiv (7, 2)        // Success(3)
+intDiv (255643, 10)  // Success(25564)
+intDiv (5, 0)        // Error(MathError) — "division by zero"
+half n = intDiv (n, 2)   // -> int (Result auto-unwraps at the typed return)
+```
+
 ### `random() -> int` — [BUILTIN-RANDOM]
 A cryptographically-secure uniform random non-negative integer in `[0, 2^63-1]`,
 drawn fresh from the operating system's CSPRNG (`arc4random_buf` on macOS/BSD,
@@ -73,6 +91,11 @@ let token = random()        // e.g. 7240982340198 (varies every call)
 fn coinFlip() = randomBelow(2) ?: 0   // 0 or 1
 ```
 
+```osprey-ml
+token = random ()        // e.g. 7240982340198 (varies every call)
+coinFlip () = randomBelow 2 ?: 0   // 0 or 1
+```
+
 ### `randomBelow(n: int) -> Result<int, MathError>` — [BUILTIN-RANDOM-BELOW]
 A cryptographically-secure uniform random integer in the half-open range
 `[0, n)`. The result is **unbiased**: it is drawn by rejection sampling, so every
@@ -83,6 +106,13 @@ non-positive `n` returns `Error(MathError)`; otherwise `Success(value)` with
 ```osprey
 let die = randomBelow(6) ?: 0          // a fair face 0..5
 match randomBelow(0) { Success { value } => value  Error { message } => 0 - 1 }  // Error
+```
+
+```osprey-ml
+die = randomBelow 6 ?: 0          // a fair face 0..5
+match randomBelow 0
+    Success value => value
+    Error message => 0 - 1       // Error
 ```
 
 ## String Functions
@@ -109,6 +139,17 @@ String functions can be called three ways. **Pipe (`|>`) is the preferred form**
 
 // Direct call — fine for single operations
 toLowerCase(trim("  Hello  "))
+
+// Method-call (UFCS) — sugar, equivalent to the direct form
+"  Hello  ".trim().toLowerCase()
+```
+
+```osprey-ml
+// Preferred — pipe chain, reads top-to-bottom
+"  Hello, World  " |> trim |> toLowerCase |> split ", "
+
+// Direct call — fine for single operations
+toLowerCase (trim "  Hello  ")
 
 // Method-call (UFCS) — sugar, equivalent to the direct form
 "  Hello  ".trim().toLowerCase()
@@ -150,12 +191,22 @@ contains("hello world", "world")  // true
 contains("hello", "")             // true
 ```
 
+```osprey-ml
+contains ("hello world", "world")  // true
+contains ("hello", "")             // true
+```
+
 #### `startsWith(s: string, prefix: string) -> bool`
 #### `endsWith(s: string, suffix: string) -> bool`
 
 ```osprey
 "GET /api/users" |> startsWith("GET ")   // true
 "image.png"      |> endsWith(".png")     // true
+```
+
+```osprey-ml
+"GET /api/users" |> startsWith "GET "   // true
+"image.png"      |> endsWith ".png"     // true
 ```
 
 #### `indexOf(s: string, needle: string) -> Result<int, StringError>`
@@ -184,6 +235,22 @@ fn nextChar(s, i) = match codePointAt(s, i) {
     }
     Error { message } => Error { message }
 }
+```
+
+```osprey-ml
+type CharStep = { codePoint: int, nextIndex: int }
+
+nextChar (s, i) =
+    match codePointAt (s, i)
+        Success cp =>
+            match codePointWidth cp
+                Success w =>
+                    Success
+                        CharStep
+                            codePoint = cp
+                            nextIndex = i + w
+                Error message => Error message
+        Error message => Error message
 ```
 
 #### `codePointWidth(codepoint: int) -> Result<int, StringError>`

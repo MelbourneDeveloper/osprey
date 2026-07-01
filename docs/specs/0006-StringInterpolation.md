@@ -14,6 +14,12 @@ let age = 30
 let message = "Hello ${name}, you are ${age} years old"
 ```
 
+```osprey-ml
+name = "Alice"
+age = 30
+message = "Hello ${name}, you are ${age} years old"
+```
+
 ## Expression Support
 
 Any expression can be interpolated:
@@ -35,6 +41,26 @@ let person = Person { name: "Bob", age: 25 }
 print("Person: ${person.name}, age ${person.age}")
 ```
 
+```osprey-ml
+x = 10
+y = 5
+print "Sum: ${x + y}"
+print "Product: ${x * y}"
+print "Complex: ${(x + y) * 2 - 1}"
+
+// Function calls
+double n = n * 2
+print "Doubled: ${double 5}"
+
+// Field access
+type Person = { name: string, age: int }
+person =
+  Person
+    name = "Bob"
+    age = 25
+print "Person: ${person.name}, age ${person.age}"
+```
+
 ## Type Handling
 
 Interpolated expressions are automatically converted to strings:
@@ -54,6 +80,16 @@ print("Result: ${result}")        // "Result: 15"  (auto-unwrapped)
 print(toString(result))           // "Success(15)" (wrapper kept)
 ```
 
+```osprey-ml
+num = 42
+flag = true
+print "Number: ${num}, Flag: ${flag}"
+
+result = 10 + 5
+print "Result: ${result}"        // "Result: 15"  (auto-unwrapped)
+print (toString result)          // "Success(15)" (wrapper kept)
+```
+
 ## Escaping
 
 Use backslash to escape special characters:
@@ -63,6 +99,13 @@ let literal = "Dollar sign: \${not interpolated}"
 let newline = "Line 1\nLine 2"
 let quote = "He said \"Hello\""
 let backslash = "Path: C:\\Users\\Name"
+```
+
+```osprey-ml
+literal = "Dollar sign: \${not interpolated}"
+newline = "Line 1\nLine 2"
+quote = "He said \"Hello\""
+backslash = "Path: C:\\Users\\Name"
 ```
 
 Supported escape sequences:

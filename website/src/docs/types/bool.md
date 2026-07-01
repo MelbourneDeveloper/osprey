@@ -12,3 +12,8 @@ description: "A boolean type that can be either true or false. Used for logical 
 let isValid: Bool = true
 let isComplete: Bool = false
 ```
+
+```osprey-ml
+isValid = true
+isComplete = false
+```

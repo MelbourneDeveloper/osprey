@@ -12,3 +12,8 @@ description: "Import declaration keyword. Used to bring modules and their export
 import { function1, Type1 } from "module"
 import * as Utils from "utils"
 ```
+
+```osprey-ml
+import { function1, Type1 } from "module"
+import * as Utils from "utils"
+```

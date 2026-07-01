@@ -17,3 +17,9 @@ fn greet(name: String) {
     print("Hello, " + name)
 }
 ```
+
+```osprey-ml
+add (a, b) = a + b
+
+greet name = print ("Hello, " + name)
+```

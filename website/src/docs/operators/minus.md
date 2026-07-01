@@ -11,3 +11,7 @@ description: "Subtracts the second number from the first."
 ```osprey
 let result = 10 - 4  // result = 6
 ```
+
+```osprey-ml
+result = 10 - 4  // result = 6
+```

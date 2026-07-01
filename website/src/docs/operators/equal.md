@@ -11,3 +11,7 @@ description: "Compares two values for equality."
 ```osprey
 let isEqual = 5 == 5  // isEqual = true
 ```
+
+```osprey-ml
+isEqual = 5 == 5  // isEqual = true
+```

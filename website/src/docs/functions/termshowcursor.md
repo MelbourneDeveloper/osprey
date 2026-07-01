@@ -15,3 +15,7 @@ description: "Shows the terminal cursor."
 ```osprey
 termShowCursor()
 ```
+
+```osprey-ml
+termShowCursor ()
+```

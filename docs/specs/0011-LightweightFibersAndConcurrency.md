@@ -33,6 +33,11 @@ let task = Fiber<int> {
 }
 ```
 
+```osprey-ml
+task = Fiber<int>
+    computation = \() => calculatePrimes (n: 1000)
+```
+
 `spawn <expr>` is sugar for the equivalent `Fiber` construction:
 
 ```osprey
@@ -41,11 +46,23 @@ let result = spawn 42
 let result = Fiber<int> { computation: fn() => 42 }
 ```
 
+```osprey-ml
+result = spawn 42
+// equivalent to:
+result = Fiber<int>
+    computation = \() => 42
+```
+
 ## Constructing Channels
 
 ```osprey
 let sync   = Channel<int>    { capacity: 0  }   // unbuffered (rendezvous)
 let buf    = Channel<string> { capacity: 10 }   // buffered
+```
+
+```osprey-ml
+sync = Channel<int>    { capacity = 0  }   // unbuffered (rendezvous)
+buf  = Channel<string> { capacity = 10 }   // buffered
 ```
 
 ## Operations
@@ -77,6 +94,22 @@ await(producer)
 await(consumer)
 ```
 
+```osprey-ml
+ch = Channel<int> { capacity = 3 }
+
+producer = spawn
+    range (1, 4) |> forEach (\i => send (ch, i))
+
+consumer = spawn
+    range (1, 4) |> forEach (\i =>
+        match recv ch
+            Success value   => print "got ${value}"
+            Error   message => print "recv error: ${message}")
+
+await producer
+await consumer
+```
+
 ## select (planned)
 
 `select` waits on multiple channel operations and runs the arm whose operation completes first:
@@ -96,6 +129,16 @@ select {
     num => recv(ch2) => processNumber(num)
     _   => timeoutHandler()
 }
+```
+
+```osprey-ml
+ch1 = Channel<string> { capacity = 1 }
+ch2 = Channel<int>    { capacity = 1 }
+
+select
+    msg => recv ch1 => processString msg
+    num => recv ch2 => processNumber num
+    _   => timeoutHandler ()
 ```
 
 ## Fiber-Isolated Modules (planned)
@@ -119,6 +162,21 @@ let f2 = spawn Counter.increment()   // 1, not 2 — separate instance
 
 await(f1)
 await(f2)
+```
+
+```osprey-ml
+module Counter
+    mut count = 0
+    increment () =
+        count := count + 1
+        count
+    get () = count
+
+f1 = spawn Counter.increment ()   // 1
+f2 = spawn Counter.increment ()   // 1, not 2 — separate instance
+
+await f1
+await f2
 ```
 
 A fiber's module instance is initialised on first access (copy-on-first-access) and is destroyed with the fiber.

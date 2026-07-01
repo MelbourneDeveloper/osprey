@@ -28,6 +28,13 @@ extern fn osprey_ffi_free(cell: Ptr) -> int    // release the cell
 extern fn osprey_ffi_null() -> Ptr             // a NULL argument
 ```
 
+```osprey-ml
+extern osprey_ffi_cell -> Ptr      // allocate a pointer-sized cell (pass where C expects T**)
+extern osprey_ffi_deref (cell : Ptr) -> Ptr   // read back the pointer C wrote
+extern osprey_ffi_free (cell : Ptr) -> int    // release the cell
+extern osprey_ffi_null -> Ptr             // a NULL argument
+```
+
 ## Callbacks [FFI-CALLBACKS]
 
 A named top-level function passed where an `extern fn` expects a function parameter lowers to a raw C code pointer. A capture-free lambda is accepted the same way; a **capturing** lambda is a compile-time error (captures cannot cross the C boundary; use a named function).

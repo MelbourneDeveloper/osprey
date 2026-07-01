@@ -39,6 +39,32 @@ let calc = {
 print("Calculation: ${calc}")  // prints "Calculation: 30"
 ```
 
+```osprey-ml
+// Simple block with local variables
+result =
+    x = 10
+    y = 20
+    x + y
+print "Result: ${result}"  // prints "Result: 30"
+
+// Nested blocks
+complex =
+    outer = 100
+    inner_result =
+        inner = 50
+        outer + inner
+    inner_result * 2
+print "Complex: ${complex}"  // prints "Complex: 300"
+
+// Block with function calls
+multiply (a, b) = a * b
+calc =
+    a = 5
+    b = 6
+    multiply (a: a, b: b)
+print "Calculation: ${calc}"  // prints "Calculation: 30"
+```
+
 ## Block Scoping Rules
 
 Block expressions create a new lexical scope:
@@ -58,6 +84,17 @@ let result = {
 print("Result: ${result}")  // 75
 print("Outer x: ${x}")      // 100 (unchanged)
 // print("${y}")            // ERROR: y not in scope
+```
+
+```osprey-ml
+x = 100
+result =
+    x = 50            // Shadows outer x
+    y = 25            // Only visible in this block
+    x + y             // Uses inner x (50)
+print "Result: ${result}"  // 75
+print "Outer x: ${x}"      // 100 (unchanged)
+// print "${y}"            // ERROR: y not in scope
 ```
 
 ## Block Return Values
