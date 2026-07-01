@@ -19,7 +19,3 @@ description: "ASCII-aware lowercase."
 ```osprey
 toLowerCase("HELLO")  // "hello"
 ```
-
-```osprey-ml
-toLowerCase "HELLO"  // "hello"
-```

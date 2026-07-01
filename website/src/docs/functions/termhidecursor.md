@@ -15,7 +15,3 @@ description: "Hides the terminal cursor."
 ```osprey
 termHideCursor()
 ```
-
-```osprey-ml
-termHideCursor ()
-```

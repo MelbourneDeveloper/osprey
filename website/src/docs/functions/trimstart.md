@@ -19,7 +19,3 @@ description: "Removes leading whitespace."
 ```osprey
 trimStart("  hi  ")  // "hi  "
 ```
-
-```osprey-ml
-trimStart "  hi  "  // "hi  "
-```
