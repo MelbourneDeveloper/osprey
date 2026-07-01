@@ -9,7 +9,7 @@ description: "A handle to a spawned async process. Contains the process ID and a
 ## Example
 
 ```osprey
-let result = spawnProcess("echo hello")
+let result = spawnProcess("echo hello", onEvent)
 match result {
     Success { value } => {
         let exitCode = awaitProcess(value)
@@ -20,7 +20,7 @@ match result {
 ```
 
 ```osprey-ml
-result = spawnProcess "echo hello"
+result = spawnProcess ("echo hello", onEvent)
 match result
     Success value =>
         exitCode = awaitProcess value

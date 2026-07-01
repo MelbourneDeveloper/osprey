@@ -25,6 +25,7 @@ match closeResult {
 ```
 
 ```osprey-ml
+closeResult = websocketClose wsId
 match closeResult
     Success _ => print "Connection closed"
     Err message => print "Failed to close: ${message}"

@@ -44,8 +44,7 @@ let task = Fiber<int> {
 ```
 
 ```osprey-ml
-task = Fiber<int>
-    computation = \() => calculatePrimes (n: 1000)
+task = spawn (calculatePrimes 1000)
 ```
 
 `spawn <expr>` is sugar for the equivalent `Fiber` construction:
@@ -58,9 +57,6 @@ let result = Fiber<int> { computation: fn() => 42 }
 
 ```osprey-ml
 result = spawn 42
-// equivalent to:
-result = Fiber<int>
-    computation = \() => 42
 ```
 
 ## Constructing Channels
@@ -71,8 +67,8 @@ let buf    = Channel<string> { capacity: 10 }   // buffered
 ```
 
 ```osprey-ml
-sync = Channel<int>    { capacity = 0  }   // unbuffered (rendezvous)
-buf  = Channel<string> { capacity = 10 }   // buffered
+sync = Channel 0    // unbuffered (rendezvous)
+buf  = Channel 10   // buffered
 ```
 
 ## Operations
@@ -105,16 +101,18 @@ await(consumer)
 ```
 
 ```osprey-ml
-ch = Channel<int> { capacity = 3 }
+ch = Channel 3
 
 producer = spawn
-    range (1, 4) |> forEach (\i => send (ch, i))
+    range (1, 4) |> forEach (\i => send ch i)
+
+consume i =
+    match recv ch
+        Success value   => print "got ${value}"
+        Error   message => print "recv error: ${message}"
 
 consumer = spawn
-    range (1, 4) |> forEach (\i =>
-        match recv ch
-            Success value   => print "got ${value}"
-            Error   message => print "recv error: ${message}")
+    range (1, 4) |> forEach consume
 
 await producer
 await consumer
@@ -141,15 +139,9 @@ select {
 }
 ```
 
-```osprey-ml
-ch1 = Channel<string> { capacity = 1 }
-ch2 = Channel<int>    { capacity = 1 }
-
-select
-    msg => recv ch1 => processString msg
-    num => recv ch2 => processNumber num
-    _   => timeoutHandler ()
-```
+> `select` is planned and not yet implemented in either flavor; the ML surface
+> syntax for the channel-`select` arm form is unspecified. Use the Default flavor
+> illustration above.
 
 ## Fiber-Isolated Modules (planned)
 
@@ -174,19 +166,7 @@ await(f1)
 await(f2)
 ```
 
-```osprey-ml
-module Counter
-    mut count = 0
-    increment () =
-        count := count + 1
-        count
-    get () = count
-
-f1 = spawn Counter.increment ()   // 1
-f2 = spawn Counter.increment ()   // 1, not 2 — separate instance
-
-await f1
-await f2
-```
+> This superseded `module` sketch has no ML-flavor surface syntax. See
+> [Modules and Namespaces](/spec/0025-modulesandnamespaces/) for the normative model.
 
 A fiber's module instance is initialised on first access (copy-on-first-access) and is destroyed with the fiber.

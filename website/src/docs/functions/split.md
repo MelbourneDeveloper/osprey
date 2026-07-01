@@ -22,6 +22,5 @@ split("a,b,c", ",")  // Success { value: ["a","b","c"] }
 ```
 
 ```osprey-ml
-split("a,b,c", ",")  // Success
-    value = ["a","b","c"]
+split ("a,b,c", ",")  // Success { value: ["a","b","c"] }
 ```

@@ -17,5 +17,5 @@ let m = Map()
 ```
 
 ```osprey-ml
-m = Map
+m = Map ()
 ```

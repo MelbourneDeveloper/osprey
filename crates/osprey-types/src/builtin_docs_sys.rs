@@ -168,7 +168,7 @@ pub(crate) static CONCURRENCY: &[BuiltinDoc] = &[
         "yield",
         "Yields control from the current fiber, letting other ready fibers run.",
         [],
-        "yield()",
+        "yield",
     ),
     builtin_doc!(
         "fiber_yield",

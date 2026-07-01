@@ -15,5 +15,7 @@ if (isReady) { print("Ready!") }
 
 ```osprey-ml
 isReady = true
-if (isReady) { print "Ready!" }
+match isReady
+    true => print "Ready!"
+    false => print "Wait"
 ```

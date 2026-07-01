@@ -43,11 +43,8 @@ module Geometry {
 }
 ```
 
-```osprey-ml
-module Geometry
-    pi = 3.14159
-    area r = pi * r * r
-```
+> `module` has no ML-flavor surface syntax; see
+> [Modules and Namespaces](0025-ModulesAndNamespaces.md).
 
 Module semantics for multi-file projects, exports, signatures, state modules,
 and path-independent namespaces are defined in
@@ -85,7 +82,7 @@ let result  = calculateValue(input: data)
 x       = 42
 name    = "Alice"
 mut counter = 0
-result  = calculateValue (input: data)
+result  = calculateValue data
 ```
 
 `let` binds immutably; `mut` binds mutably. Type annotations are optional.
@@ -138,10 +135,10 @@ let isPrime = rust_is_prime(17)
 ```
 
 ```osprey-ml
-extern rust_add (a : int, b : int) -> int
+extern rust_add (a : int) (b : int) -> int
 extern rust_is_prime (n : int) -> bool
 
-sum     = rust_add (a: 15, b: 25)
+sum     = rust_add 15 25
 isPrime = rust_is_prime 17
 ```
 
@@ -175,12 +172,15 @@ type Shape = Circle    { radius: int }
 ```
 
 ```osprey-ml
-type Color = Red | Green | Blue
+type Color =
+    Red
+    Green
+    Blue
 
 type Shape =
-    | Circle
+    Circle
         radius : int
-    | Rectangle
+    Rectangle
         width : int
         height : int
 ```
@@ -201,18 +201,13 @@ let person = Person { name: "Alice", age: 25 }
 type Point =
     x : int
     y : int
-type Person = where validatePerson
+
+type Person =
     name : string
     age : int
 
-point  =
-    Point
-        x = 10
-        y = 20
-person =
-    Person
-        name = "Alice"
-        age = 25
+point  = Point(x = 10, y = 20)
+person = Person(name = "Alice", age = 25)
 ```
 
 Validation, non-destructive update (`record { field: value }`), and full field-access semantics are in [Type System](0004-TypeSystem.md).
@@ -296,10 +291,8 @@ let n     = user.name
 type User =
     id : int
     name : string
-user  =
-    User
-        id = 1
-        name = "Alice"
+
+user  = User(id = 1, name = "Alice")
 n     = user.name
 ```
 
@@ -312,9 +305,7 @@ let p2 = point { x: 15 }   // y carried over
 ```
 
 ```osprey-ml
-p2 =
-    point
-        x = 15   // y carried over
+p2 = point(x = 15)   // y carried over
 ```
 
 ## Match Expressions
@@ -344,9 +335,9 @@ let label = match status {
 
 ```osprey-ml
 type Status =
-    | Ready
-    | Running
-    | Done
+    Ready
+    Running
+    Done
         code : int
 
 label =

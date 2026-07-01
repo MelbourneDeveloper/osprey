@@ -313,7 +313,7 @@ So the split is entirely in the lowerers:
   `Stmt::Function` with two parameters. Currying happens only when the author
   writes a function that returns a function:
 
-  ```osp
+  ```osprey
   fn addCurried(x) -> (int) -> int = fn(y) => x + y
   ```
 

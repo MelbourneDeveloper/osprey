@@ -127,17 +127,8 @@ input()
 
 ```osprey-ml
 // Transform → filter → aggregate
-range (1, 20)
-  |> map square
-  |> filter isEven
-  |> fold (0, add)
-  |> print
+range (1, 20) |> map square |> filter isEven |> fold (0, add) |> print
 
 // Pipeline of named stages
-input ()
-  |> validateInput
-  |> normalizeData
-  |> processData
-  |> formatOutput
-  |> print
+input () |> validateInput |> normalizeData |> processData |> formatOutput |> print
 ```

@@ -22,5 +22,5 @@ mapContains({"a": 1}, "a")  // true
 ```
 
 ```osprey-ml
-mapContains ({"a": 1}, "a")  // true
+mapContains (["a" => 1], "a")  // true
 ```

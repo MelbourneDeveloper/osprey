@@ -36,7 +36,7 @@ effect State {
 ```osprey-ml
 effect State
     get : Unit => int
-    set : int => Unit
+    set : int => unit
 ```
 
 ## Effectful Function Types
@@ -53,7 +53,7 @@ read : Unit -> string !IO
 read () = perform IO.readLine
 
 fetch : string -> string ![IO, Net]
-fetch url = ...
+fetch url = perform Net.get url
 ```
 
 A function with no `!E` is pure; calling an effectful function from a pure context is a compilation error.
@@ -98,13 +98,10 @@ in
 ```
 
 ```osprey-ml
-state =
-    handler State
-        get => 42
-        set newVal => print ("set to " + toString newVal)
-
-handle state
-do
+handle State
+    get => 42
+    set newVal => print ("set to " + toString newVal)
+in
     incrementTwice ()
 ```
 
@@ -121,18 +118,12 @@ in
 ```
 
 ```osprey-ml
-outer =
-    handler Logger
-        log msg => print ("[OUTER] " + msg)
-
-inner =
-    handler Logger
+handle Logger
+    log msg => print ("[OUTER] " + msg)
+in
+    handle Logger
         log msg => print ("[INNER] " + msg)
-
-handle outer
-do
-    handle inner
-    do
+    in
         perform Logger.log "test"    // prints "[INNER] test"
 ```
 
@@ -174,11 +165,12 @@ bump () =
     perform State.get
 
 mut cell = 0
-cellState =
-    handler State
-        get => cell                  // reads the shared cell
-        set newVal => cell := newVal // writes the shared cell
-r = handle cellState do bump ()
+r = handle State
+    get => cell                      // reads the shared cell
+    set newVal =>
+        cell := newVal               // writes the shared cell
+in
+    bump ()
 print "r=${toString r} cell=${toString cell}"   // r=1 cell=1
 ```
 
@@ -250,14 +242,14 @@ pipeline () =
     a + b
 
 mut n = 0
-auditTrace =
-    handler Audit
-        step label =>
-            n := n + 1
-            answer = resume n           // performer continues with n
-            print "after ${label}: answer=${toString answer}"
-            answer                      // code AFTER resume — impossible with tail-resume
-total = handle auditTrace do pipeline ()
+total = handle Audit
+    step label =>
+        n := n + 1
+        answer = resume n               // performer continues with n
+        print "after ${label}: answer=${toString answer}"
+        answer                          // code AFTER resume — impossible with tail-resume
+in
+    pipeline ()
 print "total=${toString total}"
 ```
 
@@ -343,18 +335,12 @@ circularA () = perform StateA.getFromB
 circularB : Unit -> int !StateB
 circularB () = perform StateB.getFromA
 
-handlerA =
-    handler StateA
-        getFromB => circularB ()  // ❌ circular dependency
-
-handlerB =
-    handler StateB
-        getFromA => circularA ()  // ❌ circular dependency
-
-handle handlerA
-do
-    handle handlerB
-    do
+handle StateA
+    getFromB => circularB ()       // ❌ circular dependency
+in
+    handle StateB
+        getFromA => circularA ()   // ❌ circular dependency
+    in
         circularA ()
 ```
 

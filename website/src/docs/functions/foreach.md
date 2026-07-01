@@ -22,5 +22,5 @@ forEach(range(1, 4), fn(x) { print(x * 2) })  // Prints: 2, 4, 6
 ```
 
 ```osprey-ml
-forEach (range (1, 4), \x => print x * 2)  // Prints: 2, 4, 6
+forEach (range (1, 4), \x => print (x * 2))  // Prints: 2, 4, 6
 ```

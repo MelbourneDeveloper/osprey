@@ -51,8 +51,10 @@ HAND_TWINS = {
         'match result\n    Success value =>\n        exitCode = awaitProcess value\n'
         '        cleanupProcess value\n    Error message => print "Failed"'
     ),
+    # spawnProcess is arity-2 (command + mandatory callback) per builtins.rs;
+    # a 1-arg call is a type error, so the twin passes the callback `onEvent`.
     "types/processhandle.md": (
-        'result = spawnProcess "echo hello"\n'
+        'result = spawnProcess ("echo hello", onEvent)\n'
         'match result\n    Success value =>\n        exitCode = awaitProcess value\n'
         '        cleanupProcess value\n    Error message => print "Process failed"'
     ),
@@ -62,12 +64,69 @@ HAND_TWINS = {
         '    contentType = "application/json"\n    streamFd = -1\n'
         '    isComplete = true\n    partialBody = "{\\"message\\": \\"Hello\\"}"'
     ),
+    # `if (c) { e }` block form is Default-only; ML has no `if` — bool `match`.
+    "keywords/false.md": (
+        'isComplete = false\nmatch isComplete\n'
+        '    false => print "Not done yet"\n    true => print "done"'
+    ),
+    "keywords/true.md": (
+        'isReady = true\nmatch isReady\n'
+        '    true => print "Ready!"\n    false => print "Wait"'
+    ),
+    # Elvis `?:` has no ML surface; the AST-equivalent form is a match on Result.
+    "functions/randombelow.md": (
+        'd =\n    match randomBelow 6\n'
+        '        Success value => value  // a fair die face 0..5\n'
+        '        Error message => 0'
+    ),
+    # Default block was an illustrative fragment with `...`; give a real ML match.
+    "functions/indexof.md": (
+        'match indexOf ("foo=bar", "=")\n'
+        '    Success value => print value\n'
+        '    Error message => print "not found"'
+    ),
+    # ML value bindings carry no `Any` annotation (a `value : Any` signature
+    # type-errors against the inferred int); the equivalent ML binds directly.
+    "types/any.md": 'value : Any\nvalue = 42\n\ntext : Any\ntext = "Hello"',
+    "functions/yield.md": 'yield',
     "functions/padend.md": 'padEnd ("7", 3, ".")  // Success { value: "7.." }',
     "functions/padstart.md": 'padStart ("7", 3, "0")  // Success { value: "007" }',
     "functions/repeat.md": 'repeat ("ab", 3)  // Success { value: "ababab" }',
     "functions/replace.md": 'replace ("a-b-c", "-", "_")  // Success { value: "a_b_c" }',
     "functions/substring.md": 'substring ("hello", 1, 4)  // Success { value: "ell" }',
     "functions/lines.md": 'lines "a\\\nb\\\nc"  // ["a","b","c"]',
+    # WebSocket builtins: Default uses named args; ML has no named-arg surface, so
+    # the equivalent call is positional whitespace application (as real .ospml does).
+    "functions/websocketclose.md": (
+        'closeResult = websocketClose wsId\n'
+        'match closeResult\n    Success _ => print "Connection closed"\n'
+        '    Err message => print "Failed to close: ${message}"'
+    ),
+    "functions/websocketcreateserver.md": (
+        'serverResult = websocketCreateServer 8080 "127.0.0.1" "/chat"\n'
+        'match serverResult\n'
+        '    Success serverId => print "WebSocket server created with ID: ${serverId}"\n'
+        '    Err message => print "Failed to create server: ${message}"'
+    ),
+    "functions/websocketsend.md": (
+        'sendResult = websocketSend wsId "Hello, WebSocket!"\n'
+        'match sendResult\n    Success _ => print "Message sent successfully"\n'
+        '    Err message => print "Failed to send: ${message}"'
+    ),
+    "functions/websocketserverbroadcast.md": (
+        'broadcastResult = websocketServerBroadcast serverId "Welcome to Osprey Chat!"\n'
+        'match broadcastResult\n    Success _ => print "Message broadcasted to all clients"\n'
+        '    Err message => print "Failed to broadcast: ${message}"'
+    ),
+    "functions/websocketserverlisten.md": (
+        'listenResult = websocketServerListen serverId\n'
+        'match listenResult\n'
+        '    Success _ => print "Server listening on ws://127.0.0.1:8080/chat"\n'
+        '    Err message => print "Failed to start listening: ${message}"'
+    ),
+    # map-literal pages: generator emits `["k" => v]` ([FLAVOR-ML-MAP]); no hand twin.
+    # parsefloat/parseint/split: generator comment-preserve handles them; no hand twin.
+    # send/recv: generator emits curried `send ch 42` (AST-equal to Default); no hand twin.
     "index.md": (
         'type Shape =\n    Circle\n    Square\n\n'
         'area (s, size) =\n    match s\n'
@@ -143,10 +202,48 @@ def _find_match(s, open_idx):
     return -1
 
 
+def _is_atom(s):
+    """True if s is a single ML argument atom needing no wrapping parens: a bare
+    identifier, number, string literal, or an already-bracketed group. Whitespace
+    application binds tighter than operators, so `0 - 5` is NOT an atom -> needs ()."""
+    s = s.strip()
+    if not s:
+        return False
+    if re.fullmatch(r'-?\d+(\.\d+)?', s):          # number
+        return True
+    if re.fullmatch(r'[A-Za-z_]\w*', s):           # identifier
+        return True
+    if len(s) >= 2 and s[0] in '"\'' and s[-1] == s[0]:  # whole string literal
+        return s.count(s[0]) == 2
+    if s[0] in "([" and _find_bracket(s, 0) == len(s) - 1:  # whole bracket group
+        return True
+    return False
+
+
+def _find_bracket(s, open_idx):
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    want, depth, i, quote = pairs[s[open_idx]], 0, open_idx, None
+    while i < len(s):
+        c = s[i]
+        if quote:
+            if c == quote and s[i-1] != "\\":
+                quote = None
+        elif c in '"\'':
+            quote = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
 def paren_call_to_ws(s):
     """Recursively rewrite `name(args)` calls to ML whitespace/uncurried form.
-    name(x) -> name x ; name(x, y) -> name (x, y) ; name() -> name.
-    `fn(...)` (lambda head) is skipped. Quote- and nesting-aware."""
+    name(atom) -> name atom ; name(expr) -> name (expr) ; name(x,y) -> name (x, y) ;
+    name() -> name (). `fn(...)` (lambda head) is skipped. Quote- and nesting-aware."""
     res, i = [], 0
     while i < len(s):
         m = re.match(r'([A-Za-z_]\w*)\(', s[i:])
@@ -160,11 +257,13 @@ def paren_call_to_ws(s):
                 inner = paren_call_to_ws(s[open_idx+1:close])
                 inner_s = inner.strip()
                 if inner_s == "":
-                    res.append(name)                       # name() -> name
+                    res.append(f"{name} ()")               # name() -> name () (unit)
                 elif has_toplevel_comma(inner_s):
                     res.append(f"{name} ({inner_s})")      # name (a, b)
+                elif _is_atom(inner_s):
+                    res.append(f"{name} {inner_s}")        # name x  (single atom)
                 else:
-                    res.append(f"{name} {inner_s}")        # name x
+                    res.append(f"{name} ({inner_s})")      # name (0 - 5)  (compound)
                 i = close + 1
                 continue
         # copy char, skipping over quoted strings verbatim
@@ -188,6 +287,69 @@ def _lam_head(params):
     return f"\\{params} =>" if params else "\\() =>"
 
 
+# Channel builtins are curried in ML (whitespace application, no tuple parens):
+#   send(ch, v) -> send ch v ; recv(ch) -> recv ch . [FLAVOR-ML] verified oracle.
+CURRIED_BUILTINS = {"send", "recv"}
+
+
+def map_literal_to_ml(s):
+    """Default map literal `{ "k": v, ... }` -> ML `["k" => v, ...]` ([FLAVOR-ML-MAP]).
+    Empty `{}` -> `[=>]`. Quote-aware; only fires on brace groups whose top-level
+    separators are `key : value` pairs (string/ident keys), never record/block braces."""
+    out, i = [], 0
+    while i < len(s):
+        if s[i] == "{":
+            close = _find_brace(s, i)
+            if close != -1:
+                inner = s[i+1:close].strip()
+                if inner == "":
+                    out.append("[=>]"); i = close + 1; continue
+                pairs = split_top_commas(inner)
+                if pairs and all(":" in p and p.lstrip()[:1] in '"\'' for p in pairs):
+                    conv = ", ".join(
+                        f'{k.strip()} => {translate_expr(v.strip())}'
+                        for k, _, v in (p.partition(":") for p in pairs))
+                    out.append(f"[{conv}]"); i = close + 1; continue
+        out.append(s[i]); i += 1
+    return "".join(out)
+
+
+def _find_brace(s, open_idx):
+    depth, i, quote = 0, open_idx, None
+    while i < len(s):
+        c = s[i]
+        if quote:
+            if c == quote and s[i-1] != "\\":
+                quote = None
+        elif c in '"\'':
+            quote = c
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def curried_builtin_call(s):
+    """send(ch, v) -> send ch v ; recv(ch) -> recv ch. Whitespace-applied, uncurried
+    tuple form is invalid for these channel builtins in ML."""
+    for name in CURRIED_BUILTINS:
+        m = re.search(rf'\b{name}\(', s)
+        while m:
+            open_idx = m.end() - 1
+            close = _find_match(s, open_idx)
+            if close == -1:
+                break
+            args = split_top_commas(s[open_idx+1:close])
+            ws = " ".join(translate_expr(a.strip()) for a in args if a.strip())
+            s = s[:m.start()] + f"{name} {ws}" + s[close+1:]
+            m = re.search(rf'\b{name}\(', s)
+    return s
+
+
 def translate_expr(expr):
     e = expr
     # brace-body lambda: fn(x) { body }  -> \x => body
@@ -196,6 +358,8 @@ def translate_expr(expr):
     e = re.sub(r'fn\(([^)]*)\)\s*\{([^{}]*)\}', lam_brace, e)
     # arrow lambda: fn(x) => e
     e = re.sub(r'fn\(([^)]*)\)\s*=>', lambda m: _lam_head(m.group(1)), e)
+    e = map_literal_to_ml(e)
+    e = curried_builtin_call(e)
     e = paren_call_to_ws(e)
     return e
 
@@ -263,8 +427,9 @@ def translate_block(code):
             HARD.append(code)
             return None
         return "\n".join(ml)
-    # Inline record construction / type-record -> offside layout.
-    if re.search(r'[A-Za-z_][\w<>]*\s*\{', code) and ":" in code:
+    # Inline record construction / type-record -> offside layout. Only when the
+    # record syntax is in real CODE (a `//` comment's braces stay verbatim).
+    if re.search(r'[A-Za-z_][\w<>]*\s*\{', _strip_comments(code)) and ":" in _strip_comments(code):
         rec = translate_records(code)
         if rec != code:
             return rec
@@ -273,9 +438,35 @@ def translate_block(code):
     return None if ml == code else ml
 
 
+def _split_comment(line):
+    """Split a line into (code, comment) at the first `//` outside a string."""
+    quote, i = None, 0
+    while i < len(line):
+        c = line[i]
+        if quote:
+            if c == quote and line[i-1] != "\\":
+                quote = None
+        elif c in '"\'':
+            quote = c
+        elif c == "/" and i + 1 < len(line) and line[i+1] == "/":
+            return line[:i], line[i:]
+        i += 1
+    return line, ""
+
+
+def _strip_comments(code):
+    return "\n".join(_split_comment(l)[0] for l in code.split("\n"))
+
+
 def translate_line(line):
     if line.strip() == "" or line.lstrip().startswith("//"):
         return line
+    # trailing comment: transform only the code, keep the comment verbatim
+    code, comment = _split_comment(line)
+    if comment and code.strip():
+        ml_code = translate_line(code.rstrip())
+        pad = code[len(code.rstrip()):] or "  "
+        return f"{ml_code}{pad}{comment}"
     got = strip_ann_in_let(line)
     if got is not None:
         return got

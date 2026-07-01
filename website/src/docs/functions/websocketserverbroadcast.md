@@ -26,6 +26,7 @@ match broadcastResult {
 ```
 
 ```osprey-ml
+broadcastResult = websocketServerBroadcast serverId "Welcome to Osprey Chat!"
 match broadcastResult
     Success _ => print "Message broadcasted to all clients"
     Err message => print "Failed to broadcast: ${message}"

@@ -22,5 +22,5 @@ mapRemove({"a": 1, "b": 2}, "a")  // {"b": 2}
 ```
 
 ```osprey-ml
-mapRemove ({"a": 1, "b": 2}, "a")  // {"b": 2}
+mapRemove (["a" => 1, "b" => 2], "a")  // {"b": 2}
 ```

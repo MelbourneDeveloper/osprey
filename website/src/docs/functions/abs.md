@@ -21,5 +21,5 @@ let d = abs(0 - 5)  // 5
 ```
 
 ```osprey-ml
-d = abs 0 - 5  // 5
+d = abs (0 - 5)  // 5
 ```

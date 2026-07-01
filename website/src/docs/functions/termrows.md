@@ -17,5 +17,5 @@ let height = termRows()
 ```
 
 ```osprey-ml
-height = termRows
+height = termRows ()
 ```

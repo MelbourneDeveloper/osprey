@@ -36,7 +36,10 @@ let n    = parseInt(input()) ?: 0  // a number, or 0 when absent/unparseable
 
 ```osprey-ml
 line = input ()                    // "" if there is no input
-n    = parseInt (input ()) ?: 0    // a number, or 0 when absent/unparseable
+n =
+    match parseInt (input ())      // a number, or 0 when absent/unparseable
+        Success value => value
+        Error _       => 0
 ```
 
 ### `toString(value: int | string | bool) -> string`
@@ -83,7 +86,10 @@ fn coinFlip() = randomBelow(2) ?: 0   // 0 or 1
 
 ```osprey-ml
 token = random ()        // e.g. 7240982340198 (varies every call)
-coinFlip () = randomBelow 2 ?: 0   // 0 or 1
+coinFlip () =
+    match randomBelow 2   // 0 or 1
+        Success value => value
+        Error _       => 0
 ```
 
 ### `randomBelow(n: int) -> Result<int, MathError>` — [BUILTIN-RANDOM-BELOW]
@@ -99,7 +105,10 @@ match randomBelow(0) { Success { value } => value  Error { message } => 0 - 1 } 
 ```
 
 ```osprey-ml
-die = randomBelow 6 ?: 0          // a fair face 0..5
+die =
+    match randomBelow 6           // a fair face 0..5
+        Success value => value
+        Error _       => 0
 match randomBelow 0
     Success value => value
     Error message => 0 - 1       // Error
@@ -141,8 +150,8 @@ toLowerCase(trim("  Hello  "))
 // Direct call — fine for single operations
 toLowerCase (trim "  Hello  ")
 
-// Method-call (UFCS) — sugar, equivalent to the direct form
-"  Hello  ".trim().toLowerCase()
+// Chained UFCS (`.trim().toLowerCase()`) has no ML surface; use the pipe form:
+"  Hello  " |> trim |> toLowerCase
 ```
 
 All three desugar to the same call. Rules:
@@ -228,19 +237,17 @@ fn nextChar(s, i) = match codePointAt(s, i) {
 ```
 
 ```osprey-ml
-type CharStep = { codePoint: int, nextIndex: int }
+type CharStep =
+    codePoint : int
+    nextIndex : int
 
 nextChar (s, i) =
     match codePointAt (s, i)
         Success cp =>
             match codePointWidth cp
-                Success w =>
-                    Success
-                        CharStep
-                            codePoint = cp
-                            nextIndex = i + w
-                Error message => Error message
-        Error message => Error message
+                Success w => Success(value = CharStep(codePoint = cp, nextIndex = i + w))
+                Error message => Error(message = message)
+        Error message => Error(message = message)
 ```
 
 #### `codePointWidth(codepoint: int) -> Result<int, StringError>`

@@ -18,6 +18,6 @@ print(userInput)
 ```
 
 ```osprey-ml
-userInput = input
+userInput = input ()
 print userInput
 ```

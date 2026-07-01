@@ -205,7 +205,7 @@ print(greet("world"))                                         // "hello world"
 
 ```osprey-ml
 makeAdder : int -> (int) -> int
-makeAdder n = \x => x + n                       // captures n
+makeAdder n = \(x : int) => x + n               // captures n
 
 add5    = makeAdder 5
 add10   = makeAdder 10
@@ -213,7 +213,7 @@ print (add5 3)     // 8
 print (add10 3)    // 13
 
 prefix  = "hello "
-greet   = \name => prefix + name                // captures prefix
+greet   = \(name : string) => prefix + name     // captures prefix
 print (greet "world")                                         // "hello world"
 ```
 
@@ -303,13 +303,6 @@ let area = match shape {
 ```osprey-ml
 n = person.name        // ok
 
-// any: pattern-match
-nameOf : any -> string
-nameOf v =
-    match v
-        p: { name } => p.name
-        _ => "unknown"
-
 // Result: match before access
 match personResult
     Success value => print value.name
@@ -321,6 +314,9 @@ area =
         Circle radius => 3.14 * radius * radius
         Rectangle width height => width * height
 ```
+
+> The `any` structural-narrowing arm (`p: { name } => p.name`) has no ML-flavor
+> surface syntax; use the Default flavor for structural matching on `any`.
 
 The compiler implementation must look up fields by name; positional access is forbidden in code generation.
 
@@ -334,13 +330,8 @@ let p3 = person { age: 26, active: false }
 ```
 
 ```osprey-ml
-p2 =
-    point
-        x = 15               // y carried over
-p3 =
-    person
-        age = 26
-        active = false
+p2 = point(x = 15)               // y carried over
+p3 = person(age = 26, active = false)
 ```
 
 ### Nested Records
@@ -367,14 +358,7 @@ type Company =
     name : string
     address : Address
 
-company =
-    Company
-        name = "Tech Corp"
-        address =
-            Address
-                street = "456 Tech Ave"
-                city = "Sydney"
-                zipCode = "2000"
+company = Company(name = "Tech Corp", address = Address(street = "456 Tech Ave", city = "Sydney", zipCode = "2000"))
 
 companyCity = company.address.city
 ```
@@ -397,9 +381,15 @@ type Color =
     Blue
 
 type Shape =
-    Circle { radius: float }
-    Rectangle { width: float, height: float }
-    Triangle { a: float, b: float, c: float }
+    Circle
+        radius : float
+    Rectangle
+        width : float
+        height : float
+    Triangle
+        a : float
+        b : float
+        c : float
 ```
 
 A union value carries a runtime discriminant identifying its variant; the compiler emits one branch per variant in any `match`. Field access on a union requires `match` to narrow it to a single variant first.
@@ -423,15 +413,23 @@ type JsonValue =
 ```osprey-ml
 type Tree =
     Leaf
-    Node { value: int, left: Tree, right: Tree }
+    Node
+        value : int
+        left : Tree
+        right : Tree
 
 type JsonValue =
     JNull
-    JBool { v: bool }
-    JNum { v: float }
-    JStr { v: string }
-    JArr { items: List<JsonValue> }
-    JObj { entries: Map<string, JsonValue> }
+    JBool
+        v : bool
+    JNum
+        v : float
+    JStr
+        v : string
+    JArr
+        items : List<JsonValue>
+    JObj
+        entries : Map<string, JsonValue>
 ```
 
 A recursive union is laid out indirectly — variant payloads referencing the same type, or containing a `List<Self>` / `Map<K, Self>`, MUST be stored behind a pointer so the type's size is finite. This requirement is invisible to the user: construction, pattern-matching, and field access read the same as for any other variant. Mutually recursive unions follow the same rule.
@@ -463,24 +461,21 @@ match r {
 ```
 
 ```osprey-ml
-type Product where validateProduct =
+type Product =
     name : string
     price : int
 
 validateProduct : Product -> Result<Product, string>
 validateProduct p =
     match p.name
-        "" => Error { message: "name cannot be empty" }
+        "" => Error(message = "name cannot be empty")
         _ =>
             match p.price
-                0 => Error { message: "price must be positive" }
-                _ => Success { value: p }
+                0 => Error(message = "price must be positive")
+                _ => Success(value = p)
 
 // Construction returns Result<Product, string>
-r =
-    Product
-        name = "Widget"
-        price = 100
+r = Product(name = "Widget", price = 100)
 match r
     Success value => print "ok: ${value.name}"
     Error message => print "validation failed: ${message}"

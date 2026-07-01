@@ -13,7 +13,7 @@ description: "Yields control from the current fiber, letting other ready fibers 
 ## Example
 
 ```osprey
-yield()
+yield
 ```
 
 ```osprey-ml

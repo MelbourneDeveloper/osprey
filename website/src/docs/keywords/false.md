@@ -15,5 +15,7 @@ if (!isComplete) { print("Not done yet") }
 
 ```osprey-ml
 isComplete = false
-if (!isComplete) { print "Not done yet" }
+match isComplete
+    false => print "Not done yet"
+    true => print "done"
 ```

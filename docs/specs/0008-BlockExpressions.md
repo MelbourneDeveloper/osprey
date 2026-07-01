@@ -61,7 +61,7 @@ multiply (a, b) = a * b
 calc =
     a = 5
     b = 6
-    multiply (a: a, b: b)
+    multiply (a, b)
 print "Calculation: ${calc}"  // prints "Calculation: 30"
 ```
 
