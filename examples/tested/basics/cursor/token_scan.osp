@@ -62,35 +62,33 @@ fn scanAll(s, i, acc) = match nextDigit(s, i) >= byteLength(s) {
                      listAppend(acc, scanInt(s, nextDigit(s, i), 0)))
 }
 
-fn main() {
-    // ---- single token: "12345abc" stops at 'a' ----
-    let mixed = "12345abc"
-    print("byteLen=${byteLength(mixed)}\n")
-    print("scan=${scanInt(mixed, 0, 0)}\n")        // 12345
-    print("end=${scanEnd(mixed, 0)}\n")            // 5 (index of 'a')
-    match byteAt(mixed, scanEnd(mixed, 0)) {        // proves we stopped at 'a'
-        Success { value }   => print("stopByte=${value}\n")   // 97 == 'a'
-        Error   { message } => print("stopByte FAILED\n")
-    }
-
-    // ---- digits-only token runs to end-of-input via the Error branch ----
-    print("pure=${scanInt("777", 0, 0)}\n")        // 777
-    print("pureEnd=${scanEnd("777", 0)}\n")        // 3 == byteLength
-
-    // ---- leading non-digits: scan returns 0, nextDigit finds the run ----
-    print("leadScan=${scanInt("ab42", 0, 0)}\n")   // 0 (starts on 'a')
-    print("leadNext=${nextDigit("ab42", 0)}\n")    // 2 (index of '4')
-    print("leadVal=${scanInt("ab42", nextDigit("ab42", 0), 0)}\n")  // 42
-
-    // ---- empty input: nothing to scan ----
-    print("emptyScan=${scanInt("", 0, 0)}\n")      // 0
-
-    // ---- multi-token lexer over a delimited string ----
-    let stream = "12,345-6789 0!42"
-    let tokens = scanAll(stream, 0, List())
-    print("tokenCount=${listLength(tokens)}\n")    // 5
-    forEachList(tokens, print)                     // 12 345 6789 0 42
-
-    print("=== Scan Complete ===\n")
-    0
+// ---- single token: "12345abc" stops at 'a' ----
+let mixed = "12345abc"
+print("byteLen=${byteLength(mixed)}\n")
+print("scan=${scanInt(mixed, 0, 0)}\n")        // 12345
+print("end=${scanEnd(mixed, 0)}\n")            // 5 (index of 'a')
+match byteAt(mixed, scanEnd(mixed, 0)) {        // proves we stopped at 'a'
+    Success { value }   => print("stopByte=${value}\n")   // 97 == 'a'
+    Error   { message } => print("stopByte FAILED\n")
 }
+
+// ---- digits-only token runs to end-of-input via the Error branch ----
+print("pure=${scanInt("777", 0, 0)}\n")        // 777
+print("pureEnd=${scanEnd("777", 0)}\n")        // 3 == byteLength
+
+// ---- leading non-digits: scan returns 0, nextDigit finds the run ----
+print("leadScan=${scanInt("ab42", 0, 0)}\n")   // 0 (starts on 'a')
+print("leadNext=${nextDigit("ab42", 0)}\n")    // 2 (index of '4')
+print("leadVal=${scanInt("ab42", nextDigit("ab42", 0), 0)}\n")  // 42
+
+// ---- empty input: nothing to scan ----
+print("emptyScan=${scanInt("", 0, 0)}\n")      // 0
+
+// ---- multi-token lexer over a delimited string ----
+let stream = "12,345-6789 0!42"
+let tokens = scanAll(stream, 0, List())
+print("tokenCount=${listLength(tokens)}\n")    // 5
+forEachList(tokens, print)                     // 12 345 6789 0 42
+
+print("=== Scan Complete ===\n")
+0

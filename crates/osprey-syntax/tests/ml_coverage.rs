@@ -591,6 +591,158 @@ fn signed_let_binding_carries_its_declared_type() {
 }
 
 #[test]
+fn typed_uncurried_function_and_lambda_params_lower() {
+    match ml_one("pair (x : int, y : string) = x\n") {
+        Stmt::Function { parameters, .. } => {
+            assert_eq!(parameters.len(), 2);
+            assert_eq!(parameters[0].name, "x");
+            assert!(matches!(parameters[0].ty, Some(TypeExpr { ref name, .. }) if name == "int"));
+            assert_eq!(parameters[1].name, "y");
+            assert!(
+                matches!(parameters[1].ty, Some(TypeExpr { ref name, .. }) if name == "string")
+            );
+        }
+        other => panic!("expected a flat function, got {other:?}"),
+    }
+
+    match let_value("f = \\(x : int, y : string) => x\n") {
+        Expr::Lambda { parameters, .. } => {
+            assert_eq!(parameters.len(), 2);
+            assert!(matches!(parameters[0].ty, Some(TypeExpr { ref name, .. }) if name == "int"));
+            assert!(
+                matches!(parameters[1].ty, Some(TypeExpr { ref name, .. }) if name == "string")
+            );
+        }
+        other => panic!("expected a flat lambda, got {other:?}"),
+    }
+}
+
+#[test]
+fn typed_curried_params_thread_into_function_and_lambda_tail() {
+    match ml_one("apply (f : int -> int) (x : int) = f x\n") {
+        Stmt::Function {
+            parameters, body, ..
+        } => {
+            assert_eq!(parameters.len(), 1);
+            assert!(matches!(
+                parameters[0].ty,
+                Some(TypeExpr {
+                    is_function: true,
+                    ..
+                })
+            ));
+            match body {
+                Expr::Lambda { parameters, .. } => {
+                    assert_eq!(parameters.len(), 1);
+                    assert!(
+                        matches!(parameters[0].ty, Some(TypeExpr { ref name, .. }) if name == "int")
+                    );
+                }
+                other => panic!("expected a typed lambda tail, got {other:?}"),
+            }
+        }
+        other => panic!("expected a curried function, got {other:?}"),
+    }
+}
+
+#[test]
+fn tuple_type_and_effect_payload_rendering_are_canonical() {
+    match ml_one("type TupleBox =\n    pair : (int, string)\n") {
+        Stmt::Type { variants, .. } => {
+            assert_eq!(variants[0].fields[0].ty, "(int, string)");
+        }
+        other => panic!("expected a type declaration, got {other:?}"),
+    }
+
+    match ml_one("type FnBox =\n    mapper : (int, string) -> Result int string\n") {
+        Stmt::Type { variants, .. } => {
+            assert_eq!(
+                variants[0].fields[0].ty,
+                "(int, string) -> Result<int, string>"
+            );
+        }
+        other => panic!("expected a type declaration, got {other:?}"),
+    }
+
+    match ml_one(
+        "effect Bus\n    publish : (string, int) => Result string string\n    ping : Unit => int\n",
+    ) {
+        Stmt::Effect { operations, .. } => {
+            assert_eq!(
+                operations[0].ty,
+                "fn(string, int) -> Result<string, string>"
+            );
+            assert_eq!(operations[1].ty, "fn() -> int");
+        }
+        other => panic!("expected an effect declaration, got {other:?}"),
+    }
+}
+
+#[test]
+fn unit_tail_params_and_empty_type_bodies_parse() {
+    match ml_one("ignore x () = x\n") {
+        Stmt::Function { body, .. } => match body {
+            Expr::Lambda { parameters, .. } => assert!(parameters.is_empty()),
+            other => panic!("expected a unit lambda tail, got {other:?}"),
+        },
+        other => panic!("expected a function, got {other:?}"),
+    }
+
+    match ml_one("type Empty =\n") {
+        Stmt::Type { variants, .. } => assert!(variants.is_empty()),
+        other => panic!("expected an empty type declaration, got {other:?}"),
+    }
+
+    match ml_one("type Choice =\n    A\n\n") {
+        Stmt::Type { variants, .. } => assert_eq!(variants.len(), 1),
+        other => panic!("expected a union declaration, got {other:?}"),
+    }
+}
+
+#[test]
+fn extern_without_return_type_uses_none() {
+    match ml_one("extern log (message : string)\n") {
+        Stmt::Extern {
+            parameters,
+            return_type,
+            ..
+        } => {
+            assert_eq!(parameters.len(), 1);
+            assert!(return_type.is_none());
+        }
+        other => panic!("expected an extern declaration, got {other:?}"),
+    }
+}
+
+#[test]
+fn concurrency_forms_and_uncurried_calls_lower_to_ast_nodes() {
+    assert!(matches!(
+        let_value("r = await (spawn task 1)\n"),
+        Expr::Await(_)
+    ));
+    assert!(matches!(let_value("r = yield\n"), Expr::Yield(None)));
+    assert!(matches!(
+        let_value("r = yield value\n"),
+        Expr::Yield(Some(_))
+    ));
+    assert!(matches!(
+        let_value("r = send ch value\n"),
+        Expr::Send { .. }
+    ));
+    assert!(matches!(let_value("r = recv ch\n"), Expr::Recv(_)));
+
+    match let_value("r = f (1, 2)\n") {
+        Expr::Call { arguments, .. } => assert_eq!(arguments.len(), 2),
+        other => panic!("expected a flat uncurried call, got {other:?}"),
+    }
+
+    match let_value("r =\n    select\n        value => value\n        _ => 0\n") {
+        Expr::Select { arms } => assert_eq!(arms.len(), 2),
+        other => panic!("expected a select expression, got {other:?}"),
+    }
+}
+
+#[test]
 fn stray_operator_as_an_operand_falls_through_to_an_error() {
     // The right of `+` starts with `*`, which is an operator but neither `-` nor
     // `!`: the unary prefix branch is skipped and the atom parser reports the

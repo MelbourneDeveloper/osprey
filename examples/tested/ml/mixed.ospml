@@ -14,9 +14,8 @@ sign n =
         true => "pos"
         false => "neg"
 
-main () =
-    base = 7
-    triple = scale 3
-    piped = base |> step |> step
-    print "triple=${triple base} piped=${piped} sign=${sign base} mix=${triple (step base)}"
-    0
+base = 7
+triple = scale 3
+piped = base |> step |> step
+print "triple=${triple base} piped=${piped} sign=${sign base} mix=${triple (step base)}"
+0

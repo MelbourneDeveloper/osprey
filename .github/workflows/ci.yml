@@ -290,7 +290,7 @@ jobs:
   website:
     name: Website E2E (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ./website
@@ -302,6 +302,34 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: website/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-website-wasm-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-website-wasm-
+
+      - name: Install wasm toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm lld wabt zsh
+          WASI_VERSION=24
+          curl -fsSL -o /tmp/wasi-sysroot.tar.gz \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sysroot-${WASI_VERSION}.0.tar.gz"
+          sudo mkdir -p /opt/wasi-sdk/share/wasi-sysroot
+          sudo tar -xzf /tmp/wasi-sysroot.tar.gz -C /opt/wasi-sdk/share/wasi-sysroot --strip-components=1
+          test -d /opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip1
+          echo "OSPREY_WASI_SYSROOT=/opt/wasi-sdk/share/wasi-sysroot" >> "$GITHUB_ENV"
+          wasm-ld --version
+        working-directory: .
 
       - name: Install dependencies
         run: npm ci

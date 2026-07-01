@@ -48,14 +48,13 @@ runAll (i, n) =
             match validate (inputAt i)
                 _ => runAll (i + 1, n)
 
-main () =
-    print "=== Validation Pipeline ==="
-    runAll (0, 4)
-    match parseAge "abc"
-        Success value => print "unexpected success"
-        Error message =>
-            match parseAge "999"
-                Success value2 => print "unexpected success"
-                Error reason2 => print "threaded reasons = \"${message}\" / \"${reason2}\""
-    print "=== Validation Pipeline Complete ==="
-    0
+print "=== Validation Pipeline ==="
+runAll (0, 4)
+match parseAge "abc"
+    Success value => print "unexpected success"
+    Error message =>
+        match parseAge "999"
+            Success value2 => print "unexpected success"
+            Error reason2 => print "threaded reasons = \"${message}\" / \"${reason2}\""
+print "=== Validation Pipeline Complete ==="
+0

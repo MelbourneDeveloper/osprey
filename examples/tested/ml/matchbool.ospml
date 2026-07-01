@@ -11,6 +11,5 @@ even n =
         true => "even"
         false => "odd"
 
-main () =
-    print "g80=${grade 80} g20=${grade 20} e4=${even 4} e7=${even 7}"
-    0
+print "g80=${grade 80} g20=${grade 20} e4=${even 4} e7=${even 7}"
+0

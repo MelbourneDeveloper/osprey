@@ -16,5 +16,16 @@
     "//6": "The server execs this path verbatim (no variable substitution), so it",
     "//7": "is absolute. Run `make build` to refresh it; see `make vsix` for packaging.",
     "//8": "NOTE: compiler/bin is the C-runtime archive dir, NOT the compiler binary.",
-    "osprey.server.compilerPath": "/Users/christianfindlay/Documents/Code/osprey/target/release/osprey"
+    "osprey.server.compilerPath": "/Users/christianfindlay/Documents/Code/osprey/target/release/osprey",
+    "//9": "Force rust-analyzer to own native VS Code test discovery for the root Cargo workspace.",
+    "rust-analyzer.testExplorer": true,
+    "rust-analyzer.linkedProjects": [
+        "/Users/christianfindlay/Documents/Code/osprey/Cargo.toml"
+    ],
+    "rust-analyzer.cargo.allTargets": true,
+    "rust-analyzer.cargo.autoreload": true,
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.cfg.setTest": true,
+    "rust-analyzer.check.command": "clippy",
+    "rust-analyzer.check.allTargets": true
 }

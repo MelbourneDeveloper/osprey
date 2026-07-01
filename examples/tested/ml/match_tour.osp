@@ -9,8 +9,6 @@ fn classify(n) = match n {
     _ => "many"
 }
 
-fn main() = {
-    print(classify(0))
-    print(classify(1))
-    print(classify(9))
-}
+print(classify(0))
+print(classify(1))
+print(classify(9))

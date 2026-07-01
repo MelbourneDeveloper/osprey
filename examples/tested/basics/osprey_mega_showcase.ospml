@@ -52,25 +52,24 @@ badge t = match t
     Solid   => "🔵 SOLID"
     Starter => "🟢 STARTER"
 
-main () =
-    print "🦅 OSPREY FEATURE TOUR\n══════════════════════════════════════"
-    print "ACT 1 · algebraic effects — same code, two worlds"
+print "🦅 OSPREY FEATURE TOUR\n══════════════════════════════════════"
+print "ACT 1 · algebraic effects — same code, two worlds"
 
-    real = realWorld ()
-    print "  ↳ realWorld() returned ${real}"
-    mock = dryRun ()
-    print "  ↳ dryRun()   returned ${mock}"
+real = realWorld ()
+print "  ↳ realWorld() returned ${real}"
+mock = dryRun ()
+print "  ↳ dryRun()   returned ${mock}"
 
-    print "══════════════════════════════════════\nACT 2 · fibers compute functional pipelines in parallel"
+print "══════════════════════════════════════\nACT 2 · fibers compute functional pipelines in parallel"
 
-    fa = spawn (crunch 10)
-    fb = spawn (crunch 20)
-    fc = spawn (crunch 40)
-    ra = await fa
-    rb = await fb
-    rc = await fc
+fa = spawn (crunch 10)
+fb = spawn (crunch 20)
+fc = spawn (crunch 40)
+ra = await fa
+rb = await fb
+rc = await fc
 
-    print "  Σeven² <10  = ${ra}  ${badge (tier ra)}"
-    print "  Σeven² <20  = ${rb}  ${badge (tier rb)}"
-    print "  Σeven² <40  = ${rc}  ${badge (tier rc)}"
-    print "══════════════════════════════════════\ntotal ${ra + rb + rc}  ·  fleet ${badge (tier (ra + rb + rc))}"
+print "  Σeven² <10  = ${ra}  ${badge (tier ra)}"
+print "  Σeven² <20  = ${rb}  ${badge (tier rb)}"
+print "  Σeven² <40  = ${rc}  ${badge (tier rc)}"
+print "══════════════════════════════════════\ntotal ${ra + rb + rc}  ·  fleet ${badge (tier (ra + rb + rc))}"

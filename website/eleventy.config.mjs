@@ -88,9 +88,21 @@ export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("src/css");
   eleventyConfig.addPassthroughCopy("src/js");
   eleventyConfig.addPassthroughCopy("src/playground");
+  // Publish WebAssembly demo assets for the native /wasm/ page. The deploy
+  // pipeline runs `make wasm-site` first so generated binaries land here.
+  eleventyConfig.addPassthroughCopy({
+    "../examples/wasm/build/studio.osp.wasm": "wasm/build/studio.osp.wasm",
+  });
+  eleventyConfig.addPassthroughCopy({
+    "../examples/wasm/build/studio.ospml.wasm": "wasm/build/studio.ospml.wasm",
+  });
+  eleventyConfig.addPassthroughCopy({ "../examples/wasm/wasi-shim.mjs": "wasm/wasi-shim.mjs" });
+  eleventyConfig.addPassthroughCopy({ "../examples/wasm/studio.osp": "wasm/studio.osp" });
+  eleventyConfig.addPassthroughCopy({ "../examples/wasm/studio.ospml": "wasm/studio.ospml" });
 
   eleventyConfig.addWatchTarget("src/css/");
   eleventyConfig.addWatchTarget("src/js/");
+  eleventyConfig.addWatchTarget("../examples/wasm/");
 
   // Map the site's existing layout names onto the theme's base layout. Existing
   // pages declare `layout: page`, `layout: page.njk` or `layout: base.njk`; the

@@ -53,20 +53,18 @@ fn runAll(i, n) = match i < n {
     }
 }
 
-fn main() -> int {
-    print("=== Validation Pipeline ===")
-    runAll(0, 4)
+print("=== Validation Pipeline ===")
+runAll(0, 4)
 
-    // Direct proof: each user-constructed Error message reaches the Error arm
-    // and is re-interpolated into another string ([ERR-PAYLOAD]). A nested
-    // match distinguishes the two distinct rejection reasons.
-    match parseAge("abc") {
-        Success { value }   => print("unexpected success")
-        Error   { message } => match parseAge("999") {
-            Success { value2 }  => print("unexpected success")
-            Error   { reason2 } => print("threaded reasons = \"${message}\" / \"${reason2}\"")
-        }
+// Direct proof: each user-constructed Error message reaches the Error arm
+// and is re-interpolated into another string ([ERR-PAYLOAD]). A nested
+// match distinguishes the two distinct rejection reasons.
+match parseAge("abc") {
+    Success { value }   => print("unexpected success")
+    Error   { message } => match parseAge("999") {
+        Success { value2 }  => print("unexpected success")
+        Error   { reason2 } => print("threaded reasons = \"${message}\" / \"${reason2}\"")
     }
-    print("=== Validation Pipeline Complete ===")
-    0
 }
+print("=== Validation Pipeline Complete ===")
+0

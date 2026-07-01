@@ -25,7 +25,7 @@ jobs:
   build-and-deploy:
     name: Build Documentation and Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -34,22 +34,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # NOTE: the Osprey compiler is intentionally NOT built here. The website
-      # ships committed reference docs as the source of truth; generate-docs.sh
-      # only regenerates them when an osprey binary that supports `--docs` is
-      # present (it isn't yet), and otherwise exits cleanly. Building the Rust
-      # compiler + LLVM here took 10+ min and blew the job timeout, which is why
-      # the live site stopped updating. Re-add a compiler-setup step only once
-      # `osprey --docs` lands and docs need regenerating at deploy time.
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-pages-wasm-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-pages-wasm-
+
+      - name: Install wasm toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm lld wabt zsh
+          WASI_VERSION=24
+          curl -fsSL -o /tmp/wasi-sysroot.tar.gz \
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sysroot-${WASI_VERSION}.0.tar.gz"
+          sudo mkdir -p /opt/wasi-sdk/share/wasi-sysroot
+          sudo tar -xzf /tmp/wasi-sysroot.tar.gz -C /opt/wasi-sdk/share/wasi-sysroot --strip-components=1
+          test -d /opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip1
+          echo "OSPREY_WASI_SYSROOT=/opt/wasi-sdk/share/wasi-sysroot" >> "$GITHUB_ENV"
+          wasm-ld --version
+
       - name: Install website dependencies
         working-directory: ./website
         run: npm ci
+
+      - name: Build website WebAssembly demo
+        run: make wasm-site
 
       - name: Build website (uses committed reference docs)
         working-directory: ./website
@@ -63,7 +85,7 @@ jobs:
 
       - name: End-to-end tests
         working-directory: ./website
-        run: npm test
+        run: npx playwright test
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

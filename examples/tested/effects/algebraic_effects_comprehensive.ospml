@@ -146,38 +146,37 @@ testMockedInput () =
         Error message => perform Logger.log "Mock input error: ${message}"
     perform Logger.log "Mock input toString: ${toString mockInput}"
 
-main () =
-    handle Counter
-        increment => print "⬆️ Counter incremented"
-        getValue => 42
-        reset => print "🔄 Counter reset to 0"
-    in handle State
-        get => 10
-        set newVal => print ("📊 State updated to: " + toString newVal)
-    in handle Logger
-        log msg => print ("📝 LOG: " + msg)
-        error msg => print ("❌ ERROR: " + msg)
-    in handle FileIO
-        writeFile filename content => print ("💾 Writing file: " + filename)
-        readFile filename => "mock file content"
-        deleteFile filename => print ("🗑️ Deleting file: " + filename)
-    in handle IO
-        read => "mock read data"
-        write msg => print ("📤 IO Write: " + msg)
-        input => Success(value = "mocked user input")
-    in
-        print "🚀 Starting Comprehensive Effects Test"
+handle Counter
+    increment => print "⬆️ Counter incremented"
+    getValue => 42
+    reset => print "🔄 Counter reset to 0"
+in handle State
+    get => 10
+    set newVal => print ("📊 State updated to: " + toString newVal)
+in handle Logger
+    log msg => print ("📝 LOG: " + msg)
+    error msg => print ("❌ ERROR: " + msg)
+in handle FileIO
+    writeFile filename content => print ("💾 Writing file: " + filename)
+    readFile filename => "mock file content"
+    deleteFile filename => print ("🗑️ Deleting file: " + filename)
+in handle IO
+    read => "mock read data"
+    write msg => print ("📤 IO Write: " + msg)
+    input => Success(value = "mocked user input")
+in
+    print "🚀 Starting Comprehensive Effects Test"
 
-        calcResult = calculation 21
+    calcResult = calculation 21
 
-        processResult = processItems 3
+    processResult = processItems 3
 
-        errorResult1 = errorProne (-5)
-        errorResult2 = errorProne 150
-        errorResult3 = errorProne 25
+    errorResult1 = errorProne (-5)
+    errorResult2 = errorProne 150
+    errorResult3 = errorProne 25
 
-        asyncResult = asyncProcessing 5
+    asyncResult = asyncProcessing 5
 
-        testMockedInput ()
+    testMockedInput ()
 
-        print ("🎯 Final Results: Calc=" + toString calcResult + ", Process=" + toString processResult + ", Errors=[" + toString errorResult1 + "," + toString errorResult2 + "," + toString errorResult3 + "], Async=" + toString asyncResult + " 🎉")
+    print ("🎯 Final Results: Calc=" + toString calcResult + ", Process=" + toString processResult + ", Errors=[" + toString errorResult1 + "," + toString errorResult2 + "," + toString errorResult3 + "], Async=" + toString asyncResult + " 🎉")

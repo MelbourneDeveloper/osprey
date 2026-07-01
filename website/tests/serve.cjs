@@ -17,6 +17,7 @@ const TYPES = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".webp": "image/webp",
+  ".wasm": "application/wasm",
   ".ico": "image/x-icon",
   ".xml": "application/xml; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",

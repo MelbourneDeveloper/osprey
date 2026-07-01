@@ -14,6 +14,5 @@ sumTo n =
                         Error message => 0
                 Error message => 0
 
-main () =
-    print "sum5=${sumTo 5} sum10=${sumTo 10} sum1=${sumTo 1}"
-    0
+print "sum5=${sumTo 5} sum10=${sumTo 10} sum1=${sumTo 1}"
+0

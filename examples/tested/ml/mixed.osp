@@ -12,10 +12,8 @@ fn sign(n: int) -> string = match n >= 0 {
     false => "neg"
 }
 
-fn main() = {
-    let base = 7
-    let triple = scale(3)
-    let piped = base |> step |> step
-    print("triple=${triple(base)} piped=${piped} sign=${sign(base)} mix=${triple(step(base))}")
-    0
-}
+let base = 7
+let triple = scale(3)
+let piped = base |> step |> step
+print("triple=${triple(base)} piped=${piped} sign=${sign(base)} mix=${triple(step(base))}")
+0

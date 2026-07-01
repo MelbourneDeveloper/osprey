@@ -5,9 +5,7 @@
 
 fn adder(n: int) -> (int) -> int = fn(x) => x + n
 
-fn main() = {
-    let add10 = adder(10)
-    let add100 = adder(100)
-    print("a=${add10(5)} b=${add100(5)} c=${adder(3)(4)}")
-    0
-}
+let add10 = adder(10)
+let add100 = adder(100)
+print("a=${add10(5)} b=${add100(5)} c=${adder(3)(4)}")
+0

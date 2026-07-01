@@ -14,7 +14,5 @@ fn sumTo(n: int) -> int = match n {
     }
 }
 
-fn main() = {
-    print("sum5=${sumTo(5)} sum10=${sumTo(10)} sum1=${sumTo(1)}")
-    0
-}
+print("sum5=${sumTo(5)} sum10=${sumTo(10)} sum1=${sumTo(1)}")
+0

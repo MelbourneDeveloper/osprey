@@ -9,7 +9,5 @@ fn label(n) = match n {
     _ => "many"
 }
 
-fn main() = {
-    print("a=${label(0)} b=${label(1)} c=${label(2)} d=${label(7)}")
-    0
-}
+print("a=${label(0)} b=${label(1)} c=${label(2)} d=${label(7)}")
+0

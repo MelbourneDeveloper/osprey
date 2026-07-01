@@ -115,37 +115,35 @@ fn runDemo() = {
 // ---- main installs the handlers — the ONLY place state lives ---------------
 // The `mut` cells below are owned by their handlers: the arms read and write
 // them, and the running server mutates them through every request.
-fn main() -> int {
-    mut diskBytes = 0     // Persist layer  (infrastructure)
-    mut requests = 0      // Metrics layer  (server runtime)
-    mut tasks = ""        // Db layer       (application data)
-    mut taskCount = 0     // Db layer
+mut diskBytes = 0     // Persist layer  (infrastructure)
+mut requests = 0      // Metrics layer  (server runtime)
+mut tasks = ""        // Db layer       (application data)
+mut taskCount = 0     // Db layer
 
-    handle Persist
-        flush snap => {
-            let saved = writeFile("/tmp/osprey_tasks.db", snap)
-            diskBytes = match saved {
-                Success { value } => length(snap)
-                Error { message } => -1
-            }
-            diskBytes
+handle Persist
+    flush snap => {
+        let saved = writeFile("/tmp/osprey_tasks.db", snap)
+        diskBytes = match saved {
+            Success { value } => length(snap)
+            Error { message } => -1
         }
-        bytes => diskBytes
-    in handle Metrics
-        hit p      => { requests = requests + 1 }
-        served     => requests
-    in handle Db
-        add t => {
-            taskCount = taskCount + 1
-            tasks = "${tasks}#${toString(taskCount)} ${t}\n"
-            taskCount
-        }
-        list  => tasks
-        count => taskCount
-    in handle Log
-        info m => print("[client] ${m}")
-    in {
-        runDemo()
-        0
+        diskBytes
     }
+    bytes => diskBytes
+in handle Metrics
+    hit p      => { requests = requests + 1 }
+    served     => requests
+in handle Db
+    add t => {
+        taskCount = taskCount + 1
+        tasks = "${tasks}#${toString(taskCount)} ${t}\n"
+        taskCount
+    }
+    list  => tasks
+    count => taskCount
+in handle Log
+    info m => print("[client] ${m}")
+in {
+    runDemo()
+    0
 }

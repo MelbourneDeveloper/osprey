@@ -27,28 +27,27 @@ walk (s, byteIndex, count) =
                         Error message => -1
                 Error message => -1
 
-main () =
-    s = sample ()
-    bytes = byteLength s
-    print "=== UTF-8 codepoint walk ==="
-    print "string    = ${s}"
-    print "byteLength = ${toString bytes}"
-    total = walk (s, 0, 0)
-    print "codepoints = ${toString total}"
-    proof =
-        match total < bytes
-            true => "PROOF codepoints(${toString total}) < bytes(${toString bytes}): non-ASCII costs >1 byte"
-            false => "PROOF FAILED: expected fewer codepoints than bytes"
-    print proof
-    emoji =
-        match codePointAt s 6
-            Success value => "emoji scalar @byte 6 = ${toString value}"
-            Error message => "emoji decode FAILED: ${message}"
-    print emoji
-    mid =
-        match codePointAt s 7
-            Success value => "mid-sequence unexpectedly decoded ${toString value}"
-            Error message => "mid-sequence rejected: ${message}"
-    print mid
-    print "=== walk complete ==="
-    0
+s = sample ()
+bytes = byteLength s
+print "=== UTF-8 codepoint walk ==="
+print "string    = ${s}"
+print "byteLength = ${toString bytes}"
+total = walk (s, 0, 0)
+print "codepoints = ${toString total}"
+proof =
+    match total < bytes
+        true => "PROOF codepoints(${toString total}) < bytes(${toString bytes}): non-ASCII costs >1 byte"
+        false => "PROOF FAILED: expected fewer codepoints than bytes"
+print proof
+emoji =
+    match codePointAt s 6
+        Success value => "emoji scalar @byte 6 = ${toString value}"
+        Error message => "emoji decode FAILED: ${message}"
+print emoji
+mid =
+    match codePointAt s 7
+        Success value => "mid-sequence unexpectedly decoded ${toString value}"
+        Error message => "mid-sequence rejected: ${message}"
+print mid
+print "=== walk complete ==="
+0

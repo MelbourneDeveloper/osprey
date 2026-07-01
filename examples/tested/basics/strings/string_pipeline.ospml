@@ -24,89 +24,86 @@ route (method, path) =
         "GET"  => handleGet path
         "POST" => handlePost path
         _      => "405 method-not-allowed"
+print "=== String Pipeline ===\n"
 
-main : int
-main () =
-    print "=== String Pipeline ===\n"
+// ----- Inspection / search (total, no Result wrap) -----
+raw = "  GET /api/users?name=alice&age=30  "
+print "raw=\"${raw}\" len=${raw |> length}\n"
+print "isEmpty=${raw |> isEmpty}\n"
+print "contains 'GET'=${raw |> contains "GET"}\n"
+print "startsWith '  '=${raw |> startsWith "  "}\n"
+print "endsWith '  '=${raw |> endsWith "  "}\n"
 
-    // ----- Inspection / search (total, no Result wrap) -----
-    raw = "  GET /api/users?name=alice&age=30  "
-    print "raw=\"${raw}\" len=${raw |> length}\n"
-    print "isEmpty=${raw |> isEmpty}\n"
-    print "contains 'GET'=${raw |> contains "GET"}\n"
-    print "startsWith '  '=${raw |> startsWith "  "}\n"
-    print "endsWith '  '=${raw |> endsWith "  "}\n"
+// pipe == UFCS == direct
+print "len pipe=${raw |> length}  ufcs=${length raw}  direct=${length raw}\n"
+print "ctns pipe=${raw |> contains "GET"}  ufcs=${contains raw "GET"}  direct=${contains raw "GET"}\n"
 
-    // pipe == UFCS == direct
-    print "len pipe=${raw |> length}  ufcs=${length raw}  direct=${length raw}\n"
-    print "ctns pipe=${raw |> contains "GET"}  ufcs=${contains raw "GET"}  direct=${contains raw "GET"}\n"
+// ----- Transformation chain via pipe -----
+normalized = raw |> trim |> toLowerCase
+print "normalized=\"${normalized}\"\n"
+print "isGetRequest=${normalized |> startsWith "get "}\n"
 
-    // ----- Transformation chain via pipe -----
-    normalized = raw |> trim |> toLowerCase
-    print "normalized=\"${normalized}\"\n"
-    print "isGetRequest=${normalized |> startsWith "get "}\n"
+// UFCS chain
+print "chain=\"${take (toLowerCase (trim raw)) 5}\"\n"
 
-    // UFCS chain
-    print "chain=\"${take (toLowerCase (trim raw)) 5}\"\n"
+// ----- Substring & search (fallible — Result<T,E>) -----
+match indexOf raw "?"
+    Success value   => print "query starts at ${value}\n"
+    Error   message => print "no query string\n"
+match substring "hello world" 6 11
+    Success value   => print "substring=\"${value}\"\n"
+    Error   message => print "substring err\n"
 
-    // ----- Substring & search (fallible — Result<T,E>) -----
-    match indexOf raw "?"
-        Success value   => print "query starts at ${value}\n"
-        Error   message => print "no query string\n"
-    match substring "hello world" 6 11
-        Success value   => print "substring=\"${value}\"\n"
-        Error   message => print "substring err\n"
+// ----- Transformation (fallible) -----
+match replace "a-b-c-d" "-" "/"
+    Success value => print "replace=\"${value}\"\n"
+    Error message => print "replace err\n"
+match repeat "ab" 4
+    Success value => print "repeat=\"${value}\"\n"
+    Error message => print "repeat err\n"
+match padStart "42" 5 "0"
+    Success value => print "padS=\"${value}\"\n"
+    Error message => print "padS err\n"
+match padEnd "42" 5 "0"
+    Success value => print "padE=\"${value}\"\n"
+    Error message => print "padE err\n"
 
-    // ----- Transformation (fallible) -----
-    match replace "a-b-c-d" "-" "/"
-        Success value => print "replace=\"${value}\"\n"
-        Error message => print "replace err\n"
-    match repeat "ab" 4
-        Success value => print "repeat=\"${value}\"\n"
-        Error message => print "repeat err\n"
-    match padStart "42" 5 "0"
-        Success value => print "padS=\"${value}\"\n"
-        Error message => print "padS err\n"
-    match padEnd "42" 5 "0"
-        Success value => print "padE=\"${value}\"\n"
-        Error message => print "padE err\n"
+// ----- take/drop/reverse (UFCS form) -----
+hello = "hello"
+print "take ufcs=\"${take hello 3}\"\n"
+print "drop ufcs=\"${drop hello 3}\"\n"
+print "reverse=\"${reverse "abc"}\"\n"
 
-    // ----- take/drop/reverse (UFCS form) -----
-    hello = "hello"
-    print "take ufcs=\"${take hello 3}\"\n"
-    print "drop ufcs=\"${drop hello 3}\"\n"
-    print "reverse=\"${reverse "abc"}\"\n"
+// ----- Parsing -----
+match parseInt "123"
+    Success value => print "parseInt=${value}\n"
+    Error message => print "pi err\n"
+match parseInt "oops"
+    Success value => print "oops=${value}\n"
+    Error message => print "parseInt strict: rejects 'oops'\n"
+match parseFloat "3.14"
+    Success value => print "parseFloat=${value}\n"
+    Error message => print "pf err\n"
 
-    // ----- Parsing -----
-    match parseInt "123"
-        Success value => print "parseInt=${value}\n"
-        Error message => print "pi err\n"
-    match parseInt "oops"
-        Success value => print "oops=${value}\n"
-        Error message => print "parseInt strict: rejects 'oops'\n"
-    match parseFloat "3.14"
-        Success value => print "parseFloat=${value}\n"
-        Error message => print "pf err\n"
+// ----- Split/lines/words → List<string> -----
+multi  = "a\nb\nc"
+spaced = "  hello   world  "
+print "lines count=${listLength (lines multi)}\n"
+print "words count=${listLength (words spaced)}\n"
+match split "a,b,c" ","
+    Success value => print "split count=${listLength value}\n"
+    Error message => print "split err\n"
+match split "anything" ""
+    Success value => print "split empty unexpected\n"
+    Error message => print "split empty rejected\n"
 
-    // ----- Split/lines/words → List<string> -----
-    multi  = "a\nb\nc"
-    spaced = "  hello   world  "
-    print "lines count=${listLength (lines multi)}\n"
-    print "words count=${listLength (words spaced)}\n"
-    match split "a,b,c" ","
-        Success value => print "split count=${listLength value}\n"
-        Error message => print "split err\n"
-    match split "anything" ""
-        Success value => print "split empty unexpected\n"
-        Error message => print "split empty rejected\n"
+// ----- HTTP-routing via startsWith + pattern matching -----
+print "${route ("GET", "/health")}\n"
+print "${route ("GET", "/api/users/42")}\n"
+print "${route ("GET", "/api/orders")}\n"
+print "${route ("POST", "/api/users")}\n"
+print "${route ("GET", "/random")}\n"
+print "${route ("DELETE", "/anything")}\n"
 
-    // ----- HTTP-routing via startsWith + pattern matching -----
-    print "${route ("GET", "/health")}\n"
-    print "${route ("GET", "/api/users/42")}\n"
-    print "${route ("GET", "/api/orders")}\n"
-    print "${route ("POST", "/api/users")}\n"
-    print "${route ("GET", "/random")}\n"
-    print "${route ("DELETE", "/anything")}\n"
-
-    print "=== Pipeline Complete ===\n"
-    0
+print "=== Pipeline Complete ===\n"
+0

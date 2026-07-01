@@ -11,6 +11,7 @@ const PAGES = [
   { name: "blog-index", path: "/blog/", kind: "listing" },
   { name: "blog-post", path: "/blog/2026-05-17-persistent-collections/", kind: "prose" },
   { name: "status", path: "/status/", kind: "prose" },
+  { name: "wasm", path: "/wasm/", kind: "wasm" },
   { name: "playground", path: "/playground/", kind: "app" },
 ];
 

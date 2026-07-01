@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make test:*)",
+      "Bash(go test:*)",
+      "Bash(go run:*)",
+      "Bash(find:*)",
+      "Bash(make build:*)",
+      "Bash(bin/osprey:*)",
+      "Bash(/dev/null)",
+      "Read(//tmp/**)",
+      "Bash(git log:*)",
+      "Bash(./bin/osprey compile:*)",
+      "Bash(./bin/osprey:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "autoMemoryEnabled": false
+}

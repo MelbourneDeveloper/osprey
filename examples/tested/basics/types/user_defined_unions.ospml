@@ -23,8 +23,7 @@ label s =
         Active => "active"
         Inactive => "inactive"
 
-main () =
-    print (describe (Ok(value = "loaded")))
-    print (describe (Err(message = "missing")))
-    print (label Active)
-    print (label Inactive)
+print (describe (Ok(value = "loaded")))
+print (describe (Err(message = "missing")))
+print (label Active)
+print (label Inactive)

@@ -10,5 +10,10 @@
     "esbenp.prettier-vscode",
     "GitHub.copilot",
     "GitHub.vscode-pull-request-github"
+  ],
+  "unwantedRecommendations": [
+    "hbenl.vscode-test-explorer",
+    "ms-vscode.test-adapter-converter",
+    "kondratiev.vscode-rust-test-adapter"
   ]
 }

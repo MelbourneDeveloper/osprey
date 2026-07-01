@@ -6,8 +6,6 @@
 fn shout(s) = s + "!"
 fn greet(who) = "Hi " + who
 
-fn main() = {
-    let name = "Ada"
-    let hello = greet(name)
-    print("plain=${hello} loud=${shout(hello)} both=${shout(greet(name))} concat=${hello + name}")
-}
+let name = "Ada"
+let hello = greet(name)
+print("plain=${hello} loud=${shout(hello)} both=${shout(greet(name))} concat=${hello + name}")

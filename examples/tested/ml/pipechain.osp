@@ -6,7 +6,5 @@ fn inc(x: int) -> int = x + 1
 fn double(x: int) -> int = x + x
 fn square(x: int) -> int = x * x
 
-fn main() = {
-    print("p1=${5 |> inc |> double} p2=${3 |> double |> square |> inc} p3=${10 |> inc |> inc |> double}")
-    0
-}
+print("p1=${5 |> inc |> double} p2=${3 |> double |> square |> inc} p3=${10 |> inc |> inc |> double}")
+0

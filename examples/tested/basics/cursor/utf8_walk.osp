@@ -30,34 +30,32 @@ fn walk(s, byteIndex, count) = match byteIndex >= byteLength(s) {
     }
 }
 
-fn main() {
-    let s = sample()
-    let bytes = byteLength(s)
-    print("=== UTF-8 codepoint walk ===")
-    print("string    = ${s}")
-    print("byteLength = ${bytes}")
+let s = sample()
+let bytes = byteLength(s)
+print("=== UTF-8 codepoint walk ===")
+print("string    = ${s}")
+print("byteLength = ${bytes}")
 
-    // Walk every codepoint, printing each scalar value as we advance the cursor.
-    let total = walk(s, 0, 0)
-    print("codepoints = ${total}")
+// Walk every codepoint, printing each scalar value as we advance the cursor.
+let total = walk(s, 0, 0)
+print("codepoints = ${total}")
 
-    // PROOF: a multi-script string holds fewer codepoints than UTF-8 bytes.
-    print(match total < bytes {
-        true  => "PROOF codepoints(${total}) < bytes(${bytes}): non-ASCII costs >1 byte"
-        false => "PROOF FAILED: expected fewer codepoints than bytes"
-    })
+// PROOF: a multi-script string holds fewer codepoints than UTF-8 bytes.
+print(match total < bytes {
+    true  => "PROOF codepoints(${total}) < bytes(${bytes}): non-ASCII costs >1 byte"
+    false => "PROOF FAILED: expected fewer codepoints than bytes"
+})
 
-    // Round-trip the 4-byte emoji scalar to confirm the decoder read it whole.
-    print(match codePointAt(s, 6) {
-        Success { value } => "emoji scalar @byte 6 = ${value}"
-        Error   { message } => "emoji decode FAILED: ${message}"
-    })
+// Round-trip the 4-byte emoji scalar to confirm the decoder read it whole.
+print(match codePointAt(s, 6) {
+    Success { value } => "emoji scalar @byte 6 = ${value}"
+    Error   { message } => "emoji decode FAILED: ${message}"
+})
 
-    // codePointAt landing mid-sequence must be rejected (byte 7 is inside 😀).
-    print(match codePointAt(s, 7) {
-        Success { value } => "mid-sequence unexpectedly decoded ${value}"
-        Error   { message } => "mid-sequence rejected: ${message}"
-    })
-    print("=== walk complete ===")
-    0
-}
+// codePointAt landing mid-sequence must be rejected (byte 7 is inside 😀).
+print(match codePointAt(s, 7) {
+    Success { value } => "mid-sequence unexpectedly decoded ${value}"
+    Error   { message } => "mid-sequence rejected: ${message}"
+})
+print("=== walk complete ===")
+0

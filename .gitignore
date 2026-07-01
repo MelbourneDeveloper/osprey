@@ -59,6 +59,8 @@ compiler/bin/
 compiler/lib/
 compiler/outputs/
 compiler/internal/codegen/bin/
+examples/wasm/build/
+*.wasm
 *.exe
 *.exe~
 *.dll

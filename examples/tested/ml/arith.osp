@@ -2,10 +2,8 @@
 // script to `fn main() = { ... }`, and the arithmetic precedence/parentheses are
 // shared by both flavors — same canonical AST, byte-identical IR.
 
-fn main() = {
-    let a = 2 + 3 * 4
-    let b = (2 + 3) * 4
-    let c = 20 - 6 * 2
-    let d = 2 * 3 + 4 * 5
-    print("a=${a} b=${b} c=${c} d=${d}")
-}
+let a = 2 + 3 * 4
+let b = (2 + 3) * 4
+let c = 20 - 6 * 2
+let d = 2 * 3 + 4 * 5
+print("a=${a} b=${b} c=${c} d=${d}")

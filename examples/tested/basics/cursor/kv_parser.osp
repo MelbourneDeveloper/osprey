@@ -65,27 +65,25 @@ fn advance(seg, rest, sep) = {
     processAll(drop(rest, sep + 1))
 }
 
-fn main() {
-    print("=== key=value config parser ===")
+print("=== key=value config parser ===")
 
-    print("Parsing well-formed 'host=localhost;port=8080;tls=true':")
-    let good = processAll("host=localhost;port=8080;tls=true")
+print("Parsing well-formed 'host=localhost;port=8080;tls=true':")
+let good = processAll("host=localhost;port=8080;tls=true")
 
-    print("Parsing with a malformed entry 'a=1;bad_entry_no_equals;c=3':")
-    let mixed = processAll("a=1;bad_entry_no_equals;c=3")
+print("Parsing with a malformed entry 'a=1;bad_entry_no_equals;c=3':")
+let mixed = processAll("a=1;bad_entry_no_equals;c=3")
 
-    // Direct error-path proof: a lone malformed entry yields an Error payload.
-    print("Direct parsePair on 'bad_entry_no_equals':")
-    match parsePair("bad_entry_no_equals") {
-        Success { value } => print("  unexpected ${value}")
-        Error   { message } => print("  rejected: ${message}")
-    }
-
-    // Cursor proof: findEq returns the byte index of '=' for a good entry,
-    // and the sentinel for a malformed one.
-    print("findEq('port=8080') = ${findEq("port=8080", 0)}")
-    print("findEq('bad_entry_no_equals') = ${findEq("bad_entry_no_equals", 0)}")
-
-    print("=== parser complete ===")
-    0
+// Direct error-path proof: a lone malformed entry yields an Error payload.
+print("Direct parsePair on 'bad_entry_no_equals':")
+match parsePair("bad_entry_no_equals") {
+    Success { value } => print("  unexpected ${value}")
+    Error   { message } => print("  rejected: ${message}")
 }
+
+// Cursor proof: findEq returns the byte index of '=' for a good entry,
+// and the sentinel for a malformed one.
+print("findEq('port=8080') = ${findEq("port=8080", 0)}")
+print("findEq('bad_entry_no_equals') = ${findEq("bad_entry_no_equals", 0)}")
+
+print("=== parser complete ===")
+0

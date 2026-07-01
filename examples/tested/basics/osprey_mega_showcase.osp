@@ -73,28 +73,26 @@ fn badge(t) = match t {
     Starter => "🟢 STARTER"
 }
 
-fn main() = {
-    print("🦅 OSPREY FEATURE TOUR\n══════════════════════════════════════")
-    print("ACT 1 · algebraic effects — same code, two worlds")
+print("🦅 OSPREY FEATURE TOUR\n══════════════════════════════════════")
+print("ACT 1 · algebraic effects — same code, two worlds")
 
-    let real = realWorld()
-    print("  ↳ realWorld() returned ${real}")
-    let mock = dryRun()
-    print("  ↳ dryRun()   returned ${mock}")
+let real = realWorld()
+print("  ↳ realWorld() returned ${real}")
+let mock = dryRun()
+print("  ↳ dryRun()   returned ${mock}")
 
-    print("══════════════════════════════════════\nACT 2 · fibers compute functional pipelines in parallel")
+print("══════════════════════════════════════\nACT 2 · fibers compute functional pipelines in parallel")
 
-    // Each crunch() runs in its own lightweight fiber; await in order so the
-    // graded report is deterministic.
-    let fa = spawn crunch(10)
-    let fb = spawn crunch(20)
-    let fc = spawn crunch(40)
-    let ra = await(fa)
-    let rb = await(fb)
-    let rc = await(fc)
+// Each crunch() runs in its own lightweight fiber; await in order so the
+// graded report is deterministic.
+let fa = spawn crunch(10)
+let fb = spawn crunch(20)
+let fc = spawn crunch(40)
+let ra = await(fa)
+let rb = await(fb)
+let rc = await(fc)
 
-    print("  Σeven² <10  = ${ra}  ${badge(tier(ra))}")
-    print("  Σeven² <20  = ${rb}  ${badge(tier(rb))}")
-    print("  Σeven² <40  = ${rc}  ${badge(tier(rc))}")
-    print("══════════════════════════════════════\ntotal ${ra + rb + rc}  ·  fleet ${badge(tier(ra + rb + rc))}")
-}
+print("  Σeven² <10  = ${ra}  ${badge(tier(ra))}")
+print("  Σeven² <20  = ${rb}  ${badge(tier(rb))}")
+print("  Σeven² <40  = ${rc}  ${badge(tier(rc))}")
+print("══════════════════════════════════════\ntotal ${ra + rb + rc}  ·  fleet ${badge(tier(ra + rb + rc))}")

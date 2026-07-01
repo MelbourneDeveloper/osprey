@@ -11,6 +11,5 @@ double x = x + x
 square : int -> int
 square x = x * x
 
-main () =
-    print "p1=${5 |> inc |> double} p2=${3 |> double |> square |> inc} p3=${10 |> inc |> inc |> double}"
-    0
+print "p1=${5 |> inc |> double} p2=${3 |> double |> square |> inc} p3=${10 |> inc |> inc |> double}"
+0

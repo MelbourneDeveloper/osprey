@@ -66,35 +66,32 @@ runDemo () =
     print "GET /stats -> ${fetch (clientId, "/stats")}"
     stopped = httpStopServer serverId
     print "STATE @ shutdown — db: ${toString (perform Db.count ())} tasks | server: ${toString (perform Metrics.served ())} requests | disk: ${toString (perform Persist.bytes ())} bytes"
+mut diskBytes = 0
+mut requests = 0
+mut tasks = ""
+mut taskCount = 0
 
-main : Unit -> int
-main () =
-    mut diskBytes = 0
-    mut requests = 0
-    mut tasks = ""
-    mut taskCount = 0
-
-    handle Persist
-        flush snap =>
-            saved = writeFile "/tmp/osprey_tasks.db" snap
-            diskBytes := match saved
-                Success value => length snap
-                Error message => -1
-            diskBytes
-        bytes => diskBytes
-    in handle Metrics
-        hit p      =>
-            requests := requests + 1
-        served     => requests
-    in handle Db
-        add t =>
-            taskCount := taskCount + 1
-            tasks := "${tasks}#${toString taskCount} ${t}\n"
-            taskCount
-        list  => tasks
-        count => taskCount
-    in handle Log
-        info m => print "[client] ${m}"
-    in
-        runDemo ()
-        0
+handle Persist
+    flush snap =>
+        saved = writeFile "/tmp/osprey_tasks.db" snap
+        diskBytes := match saved
+            Success value => length snap
+            Error message => -1
+        diskBytes
+    bytes => diskBytes
+in handle Metrics
+    hit p      =>
+        requests := requests + 1
+    served     => requests
+in handle Db
+    add t =>
+        taskCount := taskCount + 1
+        tasks := "${tasks}#${toString taskCount} ${t}\n"
+        taskCount
+    list  => tasks
+    count => taskCount
+in handle Log
+    info m => print "[client] ${m}"
+in
+    runDemo ()
+    0

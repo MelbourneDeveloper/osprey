@@ -43,6 +43,26 @@ test.describe("desktop interactions", () => {
     await expect(page).toHaveURL(/\/playground\/$/);
   });
 
+  test("wasm studio serves generated modules and toggles flavors", async ({ page }) => {
+    for (const asset of [
+      "/wasm/wasi-shim.mjs",
+      "/wasm/studio.osp",
+      "/wasm/studio.ospml",
+      "/wasm/build/studio.osp.wasm",
+      "/wasm/build/studio.ospml.wasm",
+    ]) {
+      const res = await page.request.get(asset);
+      expect(res.status(), `${asset} status`).toBe(200);
+    }
+
+    await page.goto("/wasm/");
+    await expect(page.locator("#metrics .metric")).toHaveCount(5, { timeout: 15_000 });
+    await expect(page.locator("#flavor-bytes")).toContainText("KB wasm");
+    await page.locator("#flavor-ospml").click();
+    await expect(page.locator("#flavor-name")).toContainText("studio.ospml");
+    await expect(page.locator("#metrics .metric")).toHaveCount(5);
+  });
+
   test("real-world example code is not clipped", async ({ page }) => {
     await page.goto("/");
     const clips = await page.evaluate(() =>

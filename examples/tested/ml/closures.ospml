@@ -7,8 +7,7 @@
 adder : int -> (int) -> int
 adder n = \x => x + n
 
-main () =
-    add10 = adder 10
-    add100 = adder 100
-    print "a=${add10 5} b=${add100 5} c=${(adder 3) 4}"
-    0
+add10 = adder 10
+add100 = adder 100
+print "a=${add10 5} b=${add100 5} c=${(adder 3) 4}"
+0
