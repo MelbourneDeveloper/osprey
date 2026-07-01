@@ -12,7 +12,7 @@ permalink: "/spec/0013-errorhandling/"
 
 Osprey has no exceptions, panics, or null. Any function that can fail returns a `Result`.
 
-> **Flavor layer — shared core (AST and above).**  The `Result` type, the error model, and function-boundary auto-unwrap live entirely at or above the canonical AST (`osprey_ast::Program`) and are flavor-blind — they operate on the `Result<T, E>` union type, `Match` arms, and `Call` results identically no matter whether a program was spelled in the Default (`.osp`) or ML (`.ospml`) surface. Per [FLAVOR-BOUNDARY], no phase that observes errors (type inference, IR lowering, codegen, runtime) may inspect which flavor produced the program. Note the [Language Flavors](/spec/0023-languageflavors/) assumption that arithmetic stays `Result`-wrapped in **both** flavors (overflow-checked, yielding `Result<int, MathError>`); the clean `int` output programs see is the shared auto-unwrap erasing the wrapper, not a flavor rule. Both flavors are documented here: samples below appear in both surfaces — Default (`.osp`, `let` bindings and brace-delimited `match`) first, then its ML twin (`.ospml`, offside layout, bare `name = expr`, see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)), each code block tagged with a flavor badge. The two spellings lower to identical ASTs and obey these error rules unchanged.
+> **Flavor layer — shared core (AST and above).**  The `Result` type, the error model, and function-boundary auto-unwrap live entirely at or above the canonical AST (`osprey_ast::Program`) and are flavor-blind — they operate on the `Result<T, E>` union type, `Match` arms, and `Call` results identically no matter whether a program was spelled in the Default (`.osp`) or ML (`.ospml`) surface. Per [FLAVOR-BOUNDARY], no phase that observes errors (type inference, IR lowering, codegen, runtime) may inspect which flavor produced the program. Note the [Language Flavors](/spec/0023-languageflavors/) assumption that arithmetic stays `Result`-wrapped in **both** flavors (overflow-checked, yielding `Result<int, MathError>`); the clean `int` output programs see is the shared auto-unwrap erasing the wrapper, not a flavor rule. The code samples below use the Default surface (`.osp`) — `let` bindings and brace-delimited `match`; the same programs in the ML flavor (`.ospml`, offside layout, bare `name = expr`, see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)) lower to identical ASTs and obey these error rules unchanged.
 
 ## Status
 
@@ -37,16 +37,6 @@ match result {
     Success { value }   => print("Success: ${value}")
     Error   { message } => print("Error: ${message}")
 }
-```
-
-The same match in the ML flavor — offside layout, and the one-field constructor patterns bind by position (`Success value`) rather than by field record:
-
-```osprey-ml
-result = someFunctionThatCanFail ()
-
-match result
-    Success value   => print "Success: ${value}"
-    Error message   => print "Error: ${message}"
 ```
 
 ## Arithmetic Returns Result

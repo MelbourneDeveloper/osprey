@@ -12,7 +12,7 @@ permalink: "/spec/0001-introduction/"
 
 Osprey is a statically-typed functional language in the ML family. It compiles to native code via LLVM.
 
-> **Flavor layer — mixed.**  Osprey is one language core fronted by more than one source surface, called *flavors*, and this spec documents both. There is exactly **one AST** — the canonical `osprey_ast::Program` — but many concrete surfaces (CSTs). Two flavors exist today: the Default flavor (`.osp`), with C-style braces and named-argument calls, and the ML flavor (`.ospml`), with offside-rule layout and whitespace application. Both lower to the same `osprey_ast::Program` before any semantic analysis, so type inference, effect checking, and codegen never see which flavor produced a program. Samples below appear in both flavors — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge. The full model and the surface/shared-core boundary are defined in [Language Flavors](/spec/0023-languageflavors/), and the ML surface itself in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
+> **Flavor layer — mixed.**  Osprey is one language core fronted by more than one source surface, called *flavors*. There is exactly **one AST** — the canonical `osprey_ast::Program` — but many concrete surfaces (CSTs). Two flavors exist today: the Default flavor (`.osp`), with C-style braces and named-argument calls, described by specs 0001–0022 here; and the ML flavor (`.ospml`), with offside-rule layout and whitespace application, described by [ML Flavor Syntax](/spec/0024-mlflavorsyntax/). Both lower to the same `osprey_ast::Program` before any semantic analysis, so type inference, effect checking, and codegen never see which flavor produced a program. The full model and the surface/shared-core boundary are defined in [Language Flavors](/spec/0023-languageflavors/).
 
 ## Core Features
 
@@ -25,24 +25,6 @@ Osprey is a statically-typed functional language in the ML family. It compiles t
 - Lightweight fibers and channel-based concurrency.
 - Automatic memory management with no observable collector — ARC by default, tracing GC selectable, and a `--static-memory` mode with zero runtime memory operations.
 - Built-in HTTP and WebSocket support.
-
-## Two Surfaces, One Core
-
-The same program in both flavors. Default (`.osp`) — C-style braces, parenthesised calls:
-
-```osprey
-fn main() {
-    print("Hello, Osprey")
-}
-```
-
-ML (`.ospml`) — a bare script, offside layout, whitespace application:
-
-```osprey-ml
-print "Hello, Osprey"
-```
-
-Both lower to the same `osprey_ast::Program`, so everything after this chapter — inference, effects, codegen — is identical.
 
 ## Status
 

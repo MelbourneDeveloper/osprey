@@ -12,7 +12,7 @@ permalink: "/spec/0003-syntax/"
 
 This chapter defines the syntactic forms that make up an Osprey program. Semantics for individual constructs are in their dedicated chapters; cross-references are noted inline.
 
-> **Flavor layer — surface (CST).**  This chapter documents **both flavors**. Samples below appear in both surfaces — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge. Default spells constructs with C-style braces, `fn`, and `f(x: a, y: b)` named-argument calls; ML spells the same constructs with offside layout, `\x => e`, and whitespace application. Both are surface forms only: lowering erases them into the shared canonical AST (`osprey_ast::Program`), the single tree every later phase consumes, so each pair lowers to the *same* AST nodes. See [ML Flavor Syntax](/spec/0024-mlflavorsyntax/) for the counterpart of each form and [Language Flavors](/spec/0023-languageflavors/) for the one-AST-many-CSTs model and the [FLAVOR-BOUNDARY] law.
+> **Flavor layer — surface (CST).**  Every spelling in this chapter is the **Default flavor** (`.osp`) concrete grammar — C-style braces, `fn`, and `f(x: a, y: b)` named-argument calls. These are surface forms only: lowering erases them into the shared canonical AST (`osprey_ast::Program`), the single tree every later phase consumes. The ML flavor (`.ospml`) spells the same constructs differently (offside layout, `\x => e`, whitespace application) and lowers to the *same* AST nodes — see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/) for the counterpart of each form here. See [Language Flavors](/spec/0023-languageflavors/) for the one-AST-many-CSTs model and the [FLAVOR-BOUNDARY] law.
 >
 > The major forms below map to canonical AST nodes as follows: `let`/`mut` → `Stmt::Let{mutable}`; `fn` → `Stmt::Function`; `extern` → `Stmt::Extern`; `type` → `Stmt::Type` + `TypeVariant`; `import` → `Stmt::Import`; `module` → `Stmt::Module{name, body}`; calls → `Expr::Call{function, arguments, named_arguments}`; `match` → `Expr::Match` + `MatchArm`; `{ … }` blocks → `Expr::Block{statements, value}`; field access → `Expr::FieldAccess`; indexing → `Expr::Index`; and the pattern forms → `Pattern::*` (`Wildcard`, `Literal`, `Constructor`, `TypeAnnotated`, `Structural`, `Binding`). Names and shapes are flavor-blind from the AST upward.
 
@@ -52,11 +52,6 @@ module Geometry {
     fn area(r) = pi * r * r
 }
 ```
-```osprey-ml
-module Geometry
-    pi   = 3.14159
-    area r = pi * r * r
-```
 
 Module semantics for multi-file projects, exports, signatures, state modules,
 and path-independent namespaces are defined in
@@ -89,12 +84,6 @@ let name    = "Alice"
 mut counter = 0
 let result  = calculateValue(input: data)
 ```
-```osprey-ml
-x       = 42
-name    = "Alice"
-mut counter = 0
-result  = calculateValue data
-```
 
 `let` binds immutably; `mut` binds mutably. Type annotations are optional.
 
@@ -112,12 +101,6 @@ fn double(x)   = x * 2
 fn add(x, y)   = x + y
 fn greet(name) = "Hello " + name
 fn getValue()  = 42
-```
-```osprey-ml
-double x   = x * 2
-add (x, y) = x + y
-greet name = "Hello " + name
-getValue () = 42
 ```
 
 Effect sets (`!E`) are described in [Algebraic Effects](/spec/0017-algebraiceffects/). Functions of two or more parameters require named arguments at call sites; see [Function Calls](/spec/0005-functioncalls/).
@@ -285,15 +268,6 @@ let label = match status {
     Running        => "running"
     Done { code }  => "done (${code})"
 }
-```
-```osprey-ml
-type Status = Ready | Running | Done { code: int }
-
-label =
-    match status
-        Ready          => "ready"
-        Running        => "running"
-        Done { code }  => "done (${code})"
 ```
 
 Pattern semantics, exhaustiveness, and the ternary shorthand are in [Pattern Matching](/spec/0007-patternmatching/).

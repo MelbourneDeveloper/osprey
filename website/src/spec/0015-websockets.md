@@ -12,7 +12,7 @@ permalink: "/spec/0015-websockets/"
 
 Bidirectional WebSocket communication over RFC 6455. Every operation that can fail returns `Result`; see [Error Handling](/spec/0013-errorhandling/).
 
-> **Flavor layer — shared core (AST and above).**  WebSocket streaming is a runtime concern: the functions here are ordinary names, and a call like `websocketSend(wsID: wsID, message: "hello")` lowers to `Expr::Call { function, arguments, named_arguments }` with the result threaded through `Expr::Match`. From the canonical AST (`osprey_ast::Program`) onward — type inference, effect checking, IR lowering, codegen, and the C runtime — nothing inspects which flavor produced the program; WebSocket semantics are flavor-blind, so both flavors are documented here and only the surface spelling of the call differs. Samples below appear in both flavors — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge. See [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
+> **Flavor layer — shared core (AST and above).**  WebSocket streaming is a runtime concern: the functions here are ordinary names, and a call like `websocketSend(wsID: wsID, message: "hello")` lowers to `Expr::Call { function, arguments, named_arguments }` with the result threaded through `Expr::Match`. From the canonical AST (`osprey_ast::Program`) onward — type inference, effect checking, IR lowering, codegen, and the C runtime — nothing inspects which flavor produced the program; WebSocket semantics are flavor-blind. Only the surface spelling of the call differs (the named-argument form shown here is the Default `.osp` surface; the ML `.ospml` whitespace-application counterpart is described in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)). See [Language Flavors](/spec/0023-languageflavors/).
 
 ## Status
 
@@ -64,20 +64,6 @@ match websocketConnect(url: "ws://localhost:8080/chat", messageHandler: handleMe
     }
     Error { message } => print("connect failed: ${message}")
 }
-```
-
-The ML surface spells the same calls with whitespace application — the named-argument `websocketSend(wsID: wsID, message: "hello")` becomes the saturated tuple call `websocketSend (wsID, "hello")` — and layout `match` arms with the payload-binding `Success wsID` pattern replace the braced blocks:
-
-```osprey-ml
-handleMessage msg =
-    print "received: ${msg}"
-    Success ()
-
-match websocketConnect ("ws://localhost:8080/chat", handleMessage)
-    Success wsID =>
-        websocketSend (wsID, "hello")
-        websocketClose wsID
-    Error message => print "connect failed: ${message}"
 ```
 
 ## Server Functions

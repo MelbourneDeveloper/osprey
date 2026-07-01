@@ -12,7 +12,7 @@ permalink: "/spec/0012-built-infunctions/"
 
 Reference for built-in functions available in every Osprey program. Operations that can fail return `Result`; see [Error Handling](/spec/0013-errorhandling/).
 
-> **Flavor layer — shared core (AST and above).**  The built-in function set is shared core: the *same* functions exist in every flavor, and a call to any of them lowers to the canonical `Expr::Call` node regardless of source surface. Only the call *spelling* is a flavor concern — the Default surface writes `toString(x)`, the ML flavor uses whitespace application `toString x` — and that difference is erased at lowering, so nothing here depends on which flavor produced the program. Both flavors are documented here: samples below appear in both surfaces — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge. See [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/) for the surface mapping.
+> **Flavor layer — shared core (AST and above).**  The built-in function set is shared core: the *same* functions exist in every flavor, and a call to any of them lowers to the canonical `Expr::Call` node regardless of source surface. Only the call *spelling* is a flavor concern — the Default surface writes `toString(x)`, the ML flavor uses whitespace application `toString x` — and that difference is erased at lowering, so nothing here depends on which flavor produced the program. The Default spelling is shown throughout; see [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/) for the surface mapping.
 
 ## Basic I/O Functions
 
@@ -25,14 +25,6 @@ Prints values to standard output with automatic type conversion.
 print("Hello World")
 print(42)
 print(true)
-```
-
-The same calls in the ML flavor — whitespace application instead of parentheses, `${...}` interpolation unchanged:
-
-```osprey-ml
-print "Hello World"
-print 42
-print true
 ```
 
 ### `input() -> string` — [BUILTIN-INPUT]

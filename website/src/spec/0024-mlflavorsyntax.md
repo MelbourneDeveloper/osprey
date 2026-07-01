@@ -136,7 +136,7 @@ bindingHead ::= ID paramPattern*          (* zero patterns ⇒ value; one+ ⇒ f
 mutation  ::= ID ":=" expr
 ```
 
-```osprey-ml
+```osp
 answer = 42
 mut requests = 0
 requests := requests + 1
@@ -164,7 +164,7 @@ type      ::= type "->" type            (* right-associative: a -> b -> c = a ->
             | typeAtom
 ```
 
-```osprey-ml
+```osp
 inc : int -> int
 inc x = x + 1
 
@@ -193,7 +193,7 @@ the two-argument `c256`).
 **ML also has an uncurried, multi-argument form** — for a binding that should
 *not* curry — written with parenthesised, comma-separated parameters:
 
-```osprey-ml
+```osp
 add : (int, int) -> int
 add (x, y) = x + y
 
@@ -249,7 +249,7 @@ application ::= app atom
 atom        ::= ID | literal | "(" expr ")"
 ```
 
-```osprey-ml
+```osp
 length snap
 textResp 201 "created\n"
 c256 "213" (blocks 0 (mn n 28))
@@ -273,7 +273,7 @@ effectDecl ::= "effect" ID INDENT opSig+ DEDENT
 opSig      ::= ID ":" type "=>" type
 ```
 
-```osprey-ml
+```osp
 effect Db
     add : string => int
     list : Unit => string
@@ -286,7 +286,7 @@ effect Log
 Zero-payload operations take `Unit`. Multi-field requests use a record payload,
 not a fake multi-argument operation:
 
-```osprey-ml
+```osp
 type AddTask =
     body : string
     priority : int
@@ -316,7 +316,7 @@ handlerArm   ::= ID param* "=>" blockOrExpr
 install      ::= "handle" expr+ "do" blockOrExpr
 ```
 
-```osprey-ml
+```osp
 memoryDb : Unit -> Handler Db
 memoryDb () =
     mut tasks = ""
@@ -337,7 +337,7 @@ memoryDb () =
 
 Installing several at once replaces the Default flavor's repeated nesting:
 
-```osprey-ml
+```osp
 db = memoryDb ()
 log = silentLog ()
 
@@ -369,7 +369,7 @@ matchExpr ::= "match" expr INDENT matchArm+ DEDENT
 matchArm  ::= pattern "=>" blockOrExpr
 ```
 
-```osprey-ml
+```osp
 diskBytes =
     match saved
         Success value => length snap
@@ -392,7 +392,7 @@ recordExpr ::= ID INDENT fieldInit+ DEDENT
 fieldInit  ::= ID "=" expr
 ```
 
-```osprey-ml
+```osp
 textResp status bodyText =
     HttpResponse
         status = status
@@ -413,7 +413,7 @@ ordinary layout region containing bindings, mutations, performs, and a final
 expression. The final expression is the block's value. There is no separate
 `{ … }` expression form in this flavor.
 
-```osprey-ml
+```osp
 onPost body =
     id = perform Db.add body
     snap = perform Db.list
@@ -459,7 +459,7 @@ arguments, and nested `handle … in`. It exercises curried definitions, partial
 application (`textResp 201`, `c256 "213"`), `=>` effect operations, first-class
 handler values with owned `mut` state, and one grouped `handle … do`.
 
-```osprey-ml
+```osp
 effect Db
     add : string => int
     list : Unit => string
@@ -524,7 +524,7 @@ The first-class handlers make test doubles trivial — a test installs spy or
 stub handlers that close over the test's own `mut` cells around the call under
 test, with no `Db`/`Log` parameters polluting the production signature:
 
-```osprey-ml
+```osp
 test "createTask stores the task and logs" =
     mut stored = ""
     mut logLine = ""

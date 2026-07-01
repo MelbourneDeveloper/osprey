@@ -26,7 +26,7 @@ permalink: "/spec/0004-typesystem/"
 
 Osprey uses Hindley-Milner inference. Every well-typed expression has a unique most general type, inference always terminates, and a successful type-check guarantees no runtime type errors.
 
-> **Flavor layer — shared core (AST and above).**  Type inference runs on the canonical `osprey_ast::Program` *after* lowering, so it is entirely flavor-blind ([FLAVOR-BOUNDARY], [FLAVOR-LAYER]). Nothing in this chapter inspects which surface produced a program: the type checker (`osprey-types`) consumes only the canonical AST. Both flavors are documented here — samples below appear in both surfaces, Default (`.osp`) first then its ML (`.ospml`, see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)) twin, each code block tagged with a flavor badge. The two lower to identical ASTs and obey these inference rules unchanged. See [Language Flavors](/spec/0023-languageflavors/).
+> **Flavor layer — shared core (AST and above).**  Type inference runs on the canonical `osprey_ast::Program` *after* lowering, so it is entirely flavor-blind ([FLAVOR-BOUNDARY], [FLAVOR-LAYER]). Nothing in this chapter inspects which surface produced a program: the type checker (`osprey-types`) consumes only the canonical AST. The samples below use the Default surface (`.osp`), but the ML flavor (`.ospml`, see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)) lowers to identical ASTs and obeys these inference rules unchanged. See [Language Flavors](/spec/0023-languageflavors/).
 
 Type annotations are optional everywhere they can be inferred:
 
@@ -38,21 +38,6 @@ fn makeUser(n, a)      = User { name: n, age: a }  // (string, int) -> User
 fn getName(u)          = u.name                  // (User) -> string
 fn twice(f, x)         = f(f(x))                 // <T>((T) -> T, T) -> T
 fn compose(f, g)       = fn(x) => f(g(x))        // <A,B,C>((B)->C,(A)->B) -> (A)->C
-```
-
-The same definitions in the ML flavor — no `fn`, whitespace application, and (the point of this chapter) no signature lines, because every type is inferred:
-
-```osprey-ml
-identity x    = x                       // <T>(T) -> T
-add (a, b)    = a + b                   // (int, int) -> Result<int, MathError>
-greet name    = "Hello, " + name        // (string) -> string
-makeUser (n, a) =                       // (string, int) -> User
-    User
-        name = n
-        age  = a
-getName u     = u.name                  // (User) -> string
-twice (f, x)  = f (f x)                 // <T>((T) -> T, T) -> T
-compose (f, g) = \x => f (g x)          // <A,B,C>((B)->C,(A)->B) -> (A)->C
 ```
 
 `[TYPE-NO-REDUNDANT-ANNOTATION]` **Optional is not the whole rule: an annotation

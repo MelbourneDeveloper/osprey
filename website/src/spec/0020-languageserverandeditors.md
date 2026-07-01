@@ -19,10 +19,8 @@ on it — VS Code today, Neovim and Zed next. The guiding rule: **one engine,
 many surfaces.** Analysis is computed once, in-process, by a single Rust binary;
 every editor is a thin client over the same LSP transport.
 
-> **Flavor layer — shared core (AST and above).**  Both flavors are documented
-> here, and samples below appear in both surfaces — Default (`.osp`) first, then
-> its ML (`.ospml`) twin, each tagged with a flavor badge. The language server is
-> the one component that must *select* a flavor per document: it parses through
+> **Flavor layer — shared core (AST and above).**  The language server is the
+> one component that must *select* a flavor per document: it parses through
 > `osprey_syntax::parse_program_for_path(uri, text)`, which resolves the flavor
 > from the `.osp`/`.ospml` extension plus a leading `// osprey: flavor=` marker
 > (`[FLAVOR-SELECT]` in [Language Flavors](/spec/0023-languageflavors/)), so a
@@ -294,11 +292,6 @@ lowering lives in [`osprey-syntax/src/lower.rs`](https://github.com/Nimblesite/o
 ```osprey
 /// The greeting shown to the operator on connect.
 let banner = "hello"
-```
-
-```osprey-ml
-/// The greeting shown to the operator on connect.
-banner = "hello"
 ```
 
 Hovering `banner` shows `banner: string` followed by _"The greeting shown to the

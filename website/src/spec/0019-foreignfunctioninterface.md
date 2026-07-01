@@ -12,7 +12,7 @@ permalink: "/spec/0019-foreignfunctioninterface/"
 
 Osprey calls C (and any C-ABI library) through `extern fn` declarations. There are no per-library compiler builtins — SQLite, libpq, compression, crypto all bind through this one mechanism. Declaration grammar and the type ABI table are in [Syntax](/spec/0003-syntax/#extern-declarations); sandbox gating (`--no-ffi`, `--sandbox`) is in [Security and Sandboxing](/spec/0016-securityandsandboxing/).
 
-> **Flavor layer — mixed.**  An `extern` *declaration* is a surface (CST) form, and this chapter documents both flavors. Samples below appear in both surfaces — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge; the ML flavor spells the same declaration in offside layout, detailed in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/). Both flavors lower to the single canonical `Stmt::Extern` (parameters as `ExternParameter`, signature via `TypeExpr`), and a callback argument lowers to `Expr::Identifier` or a capture-free `Expr::Lambda`. Everything below that node — the C-ABI type mapping, the `Ptr` type, link directives, and linking — is shared core and flavor-blind: per [FLAVOR-BOUNDARY] no phase after lowering can tell which flavor wrote the `extern`. See [Language Flavors](/spec/0023-languageflavors/).
+> **Flavor layer — mixed.**  An `extern fn` *declaration* is a surface (CST) form: the spelling here is the Default flavor (`.osp`); the ML flavor (`.ospml`) spells the same declaration in offside layout, with the counterpart described in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/). Both flavors lower to the single canonical `Stmt::Extern` (parameters as `ExternParameter`, signature via `TypeExpr`), and a callback argument lowers to `Expr::Identifier` or a capture-free `Expr::Lambda`. Everything below that node — the C-ABI type mapping, the `Ptr` type, link directives, and linking — is shared core and flavor-blind: per [FLAVOR-BOUNDARY] no phase after lowering can tell which flavor wrote the `extern`. See [Language Flavors](/spec/0023-languageflavors/).
 
 ## Link Directives [FFI-LINK-DIRECTIVES]
 
@@ -36,13 +36,6 @@ extern fn osprey_ffi_cell() -> Ptr      // allocate a pointer-sized cell (pass w
 extern fn osprey_ffi_deref(cell: Ptr) -> Ptr   // read back the pointer C wrote
 extern fn osprey_ffi_free(cell: Ptr) -> int    // release the cell
 extern fn osprey_ffi_null() -> Ptr             // a NULL argument
-```
-
-```osprey-ml
-extern osprey_ffi_cell -> Ptr           // allocate a pointer-sized cell (pass where C expects T**)
-extern osprey_ffi_deref (cell : Ptr) -> Ptr   // read back the pointer C wrote
-extern osprey_ffi_free (cell : Ptr) -> int    // release the cell
-extern osprey_ffi_null -> Ptr           // a NULL argument
 ```
 
 ## Callbacks [FFI-CALLBACKS]

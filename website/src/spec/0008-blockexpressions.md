@@ -12,7 +12,7 @@ permalink: "/spec/0008-blockexpressions/"
 
 A block expression groups statements and returns the value of its final expression. Each block introduces a new lexical scope.
 
-> **Flavor layer — mixed.**  Every block lowers to one canonical `Expr::Block{statements, value}` node, so the scoping and value-of-last-expression rules below are shared-core semantics that run identically no matter which flavor produced the program. Only the *delimiting* differs by surface: the Default flavor brackets blocks with `{ ... }` braces, while the ML flavor delimits them by layout/offside ([FLAVOR-ML-BLOCK] in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)); both flavors meet at the same AST node. This chapter documents both. Samples below appear in both flavors — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge. See [Language Flavors](/spec/0023-languageflavors/).
+> **Flavor layer — mixed.**  Every block lowers to one canonical `Expr::Block{statements, value}` node, so the scoping and value-of-last-expression rules below are shared-core semantics that run identically no matter which flavor produced the program. Only the *delimiting* differs by surface: the Default flavor shown here brackets blocks with `{ ... }` braces, while the ML flavor delimits them by layout/offside ([FLAVOR-ML-BLOCK] in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)). The brace grammar below is the Default surface spelling; both flavors meet at the same AST node. See [Language Flavors](/spec/0023-languageflavors/).
 
 ```ebnf
 blockExpression ::= "{" statement* expression? "}"
@@ -47,34 +47,6 @@ let calc = {
     multiply(a: a, b: b)
 }
 print("Calculation: ${calc}")  // prints "Calculation: 30"
-```
-
-The ML flavor delimits blocks by layout instead of braces — the indented region holds the bindings and its trailing expression is the block's value:
-
-```osprey-ml
-// Simple block with local variables
-result =
-    x = 10
-    y = 20
-    x + y
-print "Result: ${result}"  // prints "Result: 30"
-
-// Nested blocks
-complex =
-    outer = 100
-    inner_result =
-        inner = 50
-        outer + inner
-    inner_result * 2
-print "Complex: ${complex}"  // prints "Complex: 300"
-
-// Block with function calls
-multiply (a, b) = a * b
-calc =
-    a = 5
-    b = 6
-    multiply (a, b)
-print "Calculation: ${calc}"  // prints "Calculation: 30"
 ```
 
 ## Block Scoping Rules

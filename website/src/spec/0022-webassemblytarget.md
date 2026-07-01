@@ -16,14 +16,11 @@ reuses the existing LLVM-IR pipeline unchanged and adds a target selector
 link step. The output is a `wasm32-wasip1` command module that runs under any
 WASI host — `wasmtime`, Node's `node:wasi`, or a browser WASI shim. [WASM-TARGET]
 
-> **Flavor layer — shared core (AST and above).**  Both
-> [flavors](/spec/0023-languageflavors/) are documented here; samples below
-> appear in both surfaces — Default (`.osp`) then its
-> [ML](/spec/0024-mlflavorsyntax/) (`.ospml`) twin, each tagged with a flavor
-> badge. The wasm backend itself lives entirely below the surface: it consumes
-> the canonical `osprey_ast::Program` through the same LLVM-IR pipeline as the
-> native target and never sees which flavor produced it. Because codegen is a
-> pure function of the AST, identical ASTs yield byte-identical IR and `.wasm` —
+> **Flavor layer — shared core (AST and above).**  The wasm backend lives
+> entirely below the surface: it consumes the canonical `osprey_ast::Program`
+> through the same LLVM-IR pipeline as the native target and never sees which
+> [flavor](/spec/0023-languageflavors/) produced it. Because codegen is a pure
+> function of the AST, identical ASTs yield byte-identical IR and `.wasm` —
 > this is the [FLAVOR-IR-EQUIV] guarantee, so an ML `.ospml` program runs on
 > wasm exactly like its `.osp` twin (the golden suite already proves this via
 > the flavor-shared `<stem>.expectedoutput` fallback in Status).

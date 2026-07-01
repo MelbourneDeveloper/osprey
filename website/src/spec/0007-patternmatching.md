@@ -12,7 +12,7 @@ permalink: "/spec/0007-patternmatching/"
 
 `match` is the only branching construct in Osprey. Record patterns are matched structurally by field name, not by field order. See [Type System](/spec/0004-typesystem/) for type unification rules.
 
-> **Flavor layer — mixed.**  A `match` lowers to `Expr::Match` over `MatchArm`s, each carrying a `Pattern` (`Wildcard`, `Literal`, `Constructor { name, fields, sub_patterns }`, `TypeAnnotated`, `Structural`, `List`, `Binding`). Only the *spelling* of these patterns is a surface (CST) concern. This chapter documents both flavors: samples below appear in both surfaces — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge. A one-field variant is `Success { value }` in Default, where the ML flavor writes `Success value` ([`[FLAVOR-ML-MATCH]`](/spec/0024-mlflavorsyntax/#match)) — but both flavors lower to the **same** `Pattern::Constructor { name, fields }`. Everything else here — exhaustiveness checking, `any`/union narrowing, and arm semantics — is shared-core: it runs on the canonical AST and is flavor-blind ([`[FLAVOR-BOUNDARY]`](/spec/0023-languageflavors/#the-one-law)). See [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
+> **Flavor layer — mixed.**  A `match` lowers to `Expr::Match` over `MatchArm`s, each carrying a `Pattern` (`Wildcard`, `Literal`, `Constructor { name, fields, sub_patterns }`, `TypeAnnotated`, `Structural`, `List`, `Binding`). Only the *spelling* of these patterns is a surface (CST) concern: this chapter shows the Default flavor — a one-field variant is `Success { value }`, where the ML flavor writes `Success value` ([`[FLAVOR-ML-MATCH]`](/spec/0024-mlflavorsyntax/#match)) — but both flavors lower to the **same** `Pattern::Constructor { name, fields }`. Everything else here — exhaustiveness checking, `any`/union narrowing, and arm semantics — is shared-core: it runs on the canonical AST and is flavor-blind ([`[FLAVOR-BOUNDARY]`](/spec/0023-languageflavors/#the-one-law)). See [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
 
 ## Basic Patterns
 
@@ -22,16 +22,6 @@ let result = match value {
     1 => "one"
     n => "other: " + toString(n)
 }
-```
-
-The ML flavor drops the braces — the scrutinee sits on the `match` line and each `pattern => body` arm is an indented (offside) region:
-
-```osprey-ml
-result =
-    match value
-        0 => "zero"
-        1 => "one"
-        n => "other: " + toString n
 ```
 
 ## Union Type Patterns
@@ -45,17 +35,6 @@ let message = match option {
     Some { value } => "Value: " + toString(value)
     None           => "No value"
 }
-```
-
-In the ML flavor the one-field variant pattern is written `Some value` — the payload binds positionally, with no braces — and the arms are laid out by indentation:
-
-```osprey-ml
-type Option = Some { value: int } | None
-
-message =
-    match option
-        Some value => "Value: " + toString value
-        None       => "No value"
 ```
 
 ## Wildcard Patterns
@@ -121,16 +100,6 @@ match calculation {
     Success { value }   => print("Result: ${value}")
     Error   { message } => print("Math error: ${message}")
 }
-```
-
-The same `Result` match in the ML flavor binds each payload positionally (`Success value`, `Error message`) with offside arms:
-
-```osprey-ml
-calculation = 1 + 3 + (300 / 5)  // Result<int, MathError>
-
-match calculation
-    Success value   => print "Result: ${value}"
-    Error message   => print "Math error: ${message}"
 ```
 
 Compound arithmetic expressions yield a single `Result`, not nested `Result`s; the compiler unwraps intermediate values inside the chain. Only the final value needs to be matched.

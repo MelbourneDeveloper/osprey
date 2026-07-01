@@ -72,4 +72,3 @@ Supported escape sequences:
 - `\\` - Backslash
 - `\"` - Double quote
 - `\${` - Literal `${` (prevents interpolation)
-

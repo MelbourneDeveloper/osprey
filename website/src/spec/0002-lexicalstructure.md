@@ -16,7 +16,7 @@ permalink: "/spec/0002-lexicalstructure/"
 - [Operators](#operators)
 - [Delimiters](#delimiters)
 
-> **Flavor layer — surface (CST).**  This chapter documents BOTH flavors' lexical grammars: flavor-internal, below-the-AST concerns. The Default flavor (`.osp`) grammar is owned by `crates/osprey-syntax/src/default/`, while the ML flavor (`.ospml`) has its OWN offside-rule layout lexer (`crates/osprey-syntax/src/ml/lexer.rs`) that derives `INDENT`/`DEDENT`/`NEWLINE` from an explicit indent stack ([FLAVOR-ML-LAYOUT] in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)). Tokens are a CST artifact — they never reach the shared core, which sees only the canonical `osprey_ast::Program` after lowering. Lexical structure differs per flavor; both feed lowering. Samples below appear in both flavors — Default (`.osp`) then its ML (`.ospml`) twin, each tagged with a flavor badge. See [Language Flavors](/spec/0023-languageflavors/).
+> **Flavor layer — surface (CST).**  This chapter is the Default flavor (`.osp`) lexical grammar: a flavor-internal, below-the-AST concern owned by `crates/osprey-syntax/src/default/`. Tokens are a CST artifact — they never reach the shared core, which sees only the canonical `osprey_ast::Program` after lowering. The ML flavor (`.ospml`) has its OWN offside-rule layout lexer (`crates/osprey-syntax/src/ml/lexer.rs`) that derives `INDENT`/`DEDENT`/`NEWLINE` from an explicit indent stack ([FLAVOR-ML-LAYOUT] in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)); the rules below describe only this surface. Lexical structure differs per flavor; both feed lowering. See [Language Flavors](/spec/0023-languageflavors/).
 
 ## Identifiers
 
@@ -45,11 +45,6 @@ INTEGER := [0-9]+
 let count = 42
 let negative = -17
 let zero = 0
-```
-```osprey-ml
-count = 42
-negative = -17
-zero = 0
 ```
 
 ### Float Literals
@@ -91,11 +86,6 @@ LIST := '[' (expression (',' expression)*)? ']'
 let numbers = [1, 2, 3, 4]
 let names   = ["Alice", "Bob", "Charlie"]
 let pair    = [x, y]
-```
-```osprey-ml
-numbers = [1, 2, 3, 4]
-names   = ["Alice", "Bob", "Charlie"]
-pair    = [x, y]
 ```
 
 ## Operators
