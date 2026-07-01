@@ -22,3 +22,9 @@ match codePointWidth(233) {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match codePointWidth 233
+    Success value => print "${value} bytes"
+    Error message => print message
+```

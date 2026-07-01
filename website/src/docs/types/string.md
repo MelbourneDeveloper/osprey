@@ -9,7 +9,13 @@ description: "A sequence of characters representing text. Supports string interp
 ## Example
 
 ```osprey
-let greeting: String = "Hello, World!"
+let greeting = "Hello, World!"
 let name = "Alice"
 let message = "Hello, ${name}!"
+```
+
+```osprey-ml
+greeting = "Hello, World!"
+name = "Alice"
+message = "Hello, ${name}!"
 ```

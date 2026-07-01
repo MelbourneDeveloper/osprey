@@ -38,22 +38,20 @@ fn testNested() !Logger = {
     perform Logger.log("outer result: " + toString(outerResult))
 }
 
-fn main() = {
-    handle Logger
-        log msg   => print("[OUTER-LOG] " + msg)
-        debug msg => print("[OUTER-DEBUG] " + msg)
-    in {
-        print("=== handler scoping ===")
-        // (1) forward-reference: nestedCall + deepNestedOp + performComplex are
-        // all defined AFTER main; every perform inside their chain must still
-        // reach this outer handle/in block.
-        let r = nestedCall()
-        print("forward chain result: " + toString(r))
+handle Logger
+    log msg   => print("[OUTER-LOG] " + msg)
+    debug msg => print("[OUTER-DEBUG] " + msg)
+in {
+    print("=== handler scoping ===")
+    // (1) forward-reference: nestedCall + deepNestedOp + performComplex are
+    // all defined AFTER main; every perform inside their chain must still
+    // reach this outer handle/in block.
+    let r = nestedCall()
+    print("forward chain result: " + toString(r))
 
-        // (2) nested override
-        testNested()
-        print("=== done ===")
-    }
+    // (2) nested override
+    testNested()
+    print("=== done ===")
 }
 
 // helpers defined AFTER main — exercises the forward-ref pre-pass

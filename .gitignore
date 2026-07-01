@@ -59,6 +59,8 @@ compiler/bin/
 compiler/lib/
 compiler/outputs/
 compiler/internal/codegen/bin/
+examples/wasm/build/
+*.wasm
 *.exe
 *.exe~
 *.dll
@@ -122,3 +124,9 @@ benchmarks/cases/**/*.cmx
 benchmarks/cases/**/*.o
 
 .osprey-debug
+
+
+scratchpad/
+
+
+__pycache__/

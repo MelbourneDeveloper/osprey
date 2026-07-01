@@ -23,3 +23,9 @@ match jsonGet(doc, "name") {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match jsonGet (doc, "name")
+    Success value => print value
+    Error message => print message
+```

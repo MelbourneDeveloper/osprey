@@ -22,3 +22,9 @@ match fromCodePoint(233) {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match fromCodePoint 233
+    Success value => print value  // é
+    Error message => print message
+```

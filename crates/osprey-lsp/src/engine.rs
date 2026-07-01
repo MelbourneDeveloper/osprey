@@ -61,10 +61,10 @@ impl OspreyEngine {
         let enc = self.encoding();
         match query {
             Query::Diagnostics(uri) => {
-                Report::Diagnostics(diagnostics::compute(&self.text(&uri), enc))
+                Report::Diagnostics(diagnostics::compute(&self.text(&uri), uri.as_str(), enc))
             }
             Query::Symbols(uri) => {
-                let parsed = osprey_syntax::parse_program(&self.text(&uri));
+                let parsed = osprey_syntax::parse_program_for_path(uri.as_str(), &self.text(&uri));
                 Report::Symbols(collect_symbols(&parsed.program))
             }
             Query::Hover(at) => Report::Hover(self.hover(&at)),
@@ -74,16 +74,30 @@ impl OspreyEngine {
                 include_declaration,
             } => Report::Locations(self.locate(&at, false, include_declaration)),
             Query::SignatureHelp(at) => Report::Signature(self.signature(&at)),
-            Query::Completion(uri) => Report::Completion(features::completion(&self.text(&uri))),
+            Query::Completion(uri) => {
+                Report::Completion(features::completion(&self.text(&uri), uri.as_str()))
+            }
         }
     }
 
     fn hover(&self, at: &At) -> Option<String> {
-        features::hover(&self.text(&at.uri), at.line, at.character, self.encoding())
+        features::hover(
+            &self.text(&at.uri),
+            at.uri.as_str(),
+            at.line,
+            at.character,
+            self.encoding(),
+        )
     }
 
     fn signature(&self, at: &At) -> Option<crate::model::SignatureInfo> {
-        features::signature_help(&self.text(&at.uri), at.line, at.character, self.encoding())
+        features::signature_help(
+            &self.text(&at.uri),
+            at.uri.as_str(),
+            at.line,
+            at.character,
+            self.encoding(),
+        )
     }
 
     fn locate(

@@ -12,3 +12,8 @@ description: "Takes the result of the left expression and passes it as the first
 5 |> double |> print  // (5) -> double -> print
 range(1, 10) |> forEach(print)
 ```
+
+```osprey-ml
+5 |> double |> print  // (5) -> double -> print
+range (1, 10) |> forEach print
+```

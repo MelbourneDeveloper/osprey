@@ -2,7 +2,7 @@
 layout: page
 title: "Type System"
 description: "Osprey Language Specification: Type System"
-date: 2026-06-19
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0004-typesystem/"
@@ -26,6 +26,8 @@ permalink: "/spec/0004-typesystem/"
 
 Osprey uses Hindley-Milner inference. Every well-typed expression has a unique most general type, inference always terminates, and a successful type-check guarantees no runtime type errors.
 
+> **Flavor layer — shared core (AST and above).**  Type inference runs on the canonical `osprey_ast::Program` *after* lowering, so it is entirely flavor-blind ([FLAVOR-BOUNDARY], [FLAVOR-LAYER]). Nothing in this chapter inspects which surface produced a program: the type checker (`osprey-types`) consumes only the canonical AST. The samples below use the Default surface (`.osp`), but the ML flavor (`.ospml`, see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)) lowers to identical ASTs and obeys these inference rules unchanged. See [Language Flavors](/spec/0023-languageflavors/).
+
 Type annotations are optional everywhere they can be inferred:
 
 ```osprey
@@ -38,11 +40,65 @@ fn twice(f, x)         = f(f(x))                 // <T>((T) -> T, T) -> T
 fn compose(f, g)       = fn(x) => f(g(x))        // <A,B,C>((B)->C,(A)->B) -> (A)->C
 ```
 
+```osprey-ml
+identity x       = x                        // <T>(T) -> T
+add (a, b)       = a + b                     // (int, int) -> Result<int, MathError>
+greet name       = "Hello, " + name          // (string) -> string
+makeUser (n, a)  =
+    User
+        name = n
+        age = a                             // (string, int) -> User
+getName u        = u.name                    // (User) -> string
+twice (f, x)     = f (f x)                   // <T>((T) -> T, T) -> T
+compose (f, g)   = \x => f (g x)             // <A,B,C>((B)->C,(A)->B) -> (A)->C
+```
+
+`[TYPE-NO-REDUNDANT-ANNOTATION]` **Optional is not the whole rule: an annotation
+the checker can infer is *redundant*, and redundant symbols are forbidden.**
+Osprey is terse — **neither flavor is verbose** — so any type symbol the compiler
+would derive anyway MUST be omitted. This is normative style, not taste:
+
+- **Never** annotate a function parameter whose type is inferable from the body
+  or a call site (`fn add(a, b) = a + b`, never `fn add(a: int, b: int)`).
+- **Never** write a function return type the checker can infer
+  (`fn isEven(x) = (x % 2) == 0`, never `… -> bool`).
+- **Never** annotate a `let`/lambda binding the checker can infer
+  (`let n = 0`; `|x| => x * 2`).
+
+The rule is identical in both flavors: an ML signature line (`add : int -> int`)
+is just as redundant when the body fixes the type, and must be dropped too.
+
+Keep an annotation **only** when the checker genuinely cannot infer it — the
+narrow, load-bearing set: an empty literal with no context
+(`let xs: List<int> = []`, [TYPE-LIST](#list-t--type-list)); the ambiguous empty
+map (`{}` at an ambiguous position, [TYPE-MAP](#map-k-v--type-map)); an `extern`
+boundary; an unconstrained polymorphic variable a caller must pin; or a return
+type that is *load-bearing* because it forces `Result<T, E>` to auto-unwrap to
+`T` at the function boundary ([Result Auto-Unwrapping](#result-auto-unwrapping)).
+Record and union field declarations (`type Point = { x: int, y: int }`,
+`Circle { radius: int }`) are **definition sites, not inference sites** — their
+`field: Type` annotations *define* the type and are always required, never
+redundant; the rule above never touches them. The same holds for `extern`
+parameter signatures, which the FFI boundary requires
+([Foreign Function Interface](/spec/0019-foreignfunctioninterface/)).
+If deleting an annotation still type-checks and produces identical IR, it was
+redundant — delete it.
+
+This rule is **machine-enforced** by the analyzer's first lint,
+[`[ANALYZER-REDUNDANT-SYMBOL]`](/spec/0020-languageserverandeditors/#redundant-symbols-analyzer-redundant-symbol),
+which flags every redundant annotation and offers a one-keystroke autofix that
+deletes it.
+
 A polymorphic function is monomorphised independently at each call site:
 
 ```osprey
 let i = identity(42)        // identity<int>
 let s = identity("hello")   // identity<string>
+```
+
+```osprey-ml
+i = identity 42          // identity<int>
+s = identity "hello"     // identity<string>
 ```
 
 ### Record Type Unification
@@ -117,6 +173,17 @@ let doubler: (int) -> int = fn(x: int) => x * 2
 fn createAdder(n: int) -> (int) -> int = fn(x: int) => x + n
 ```
 
+```osprey-ml
+applyFunction : (int, (int) -> int) -> int
+applyFunction (value, transform) = transform value
+
+doubler : (int) -> int
+doubler = \x => x * 2
+
+createAdder : int -> (int) -> int
+createAdder n = \x => x + n
+```
+
 Multi-argument call syntax (named arguments are required for two or more parameters) is in [Function Calls](/spec/0005-functioncalls/).
 
 ### Closures — [TYPE-FN-CLOSURE]
@@ -136,6 +203,20 @@ let greet   = fn(name: string) => prefix + name              // captures prefix
 print(greet("world"))                                         // "hello world"
 ```
 
+```osprey-ml
+makeAdder : int -> (int) -> int
+makeAdder n = \x => x + n                       // captures n
+
+add5    = makeAdder 5
+add10   = makeAdder 10
+print (add5 3)     // 8
+print (add10 3)    // 13
+
+prefix  = "hello "
+greet   = \name => prefix + name                // captures prefix
+print (greet "world")                                         // "hello world"
+```
+
 Closures and named functions are interchangeable wherever a function type is expected, including as higher-order arguments (`map`, `filter`, `fold`, `forEach`) and as the function field of records. A closure that captures no free variables is equivalent to a top-level function and the implementation SHOULD lower it to one. A `Result<T, E>` returned through a function-value call auto-unwraps to `T` (context 4 of [Result Auto-Unwrapping](#result-auto-unwrapping)).
 
 ## Record Types
@@ -151,6 +232,17 @@ type Point   = { x: int, y: int }
 type Person  = { name: string, age: int, active: bool }
 ```
 
+```osprey-ml
+type Point =
+    x : int
+    y : int
+
+type Person =
+    name : string
+    age : int
+    active : bool
+```
+
 ### Construction
 
 ```osprey
@@ -159,6 +251,25 @@ let person = Person { name: "Alice", age: 30, active: true }
 
 // Field order at construction is irrelevant
 let person2 = Person { active: true, name: "Bob", age: 22 }
+```
+
+```osprey-ml
+point =
+    Point
+        x = 10
+        y = 20
+person =
+    Person
+        name = "Alice"
+        age = 30
+        active = true
+
+// Field order at construction is irrelevant
+person2 =
+    Person
+        active = true
+        name = "Bob"
+        age = 22
 ```
 
 All fields are required. Missing or unknown fields, or type mismatches, are compilation errors.
@@ -189,6 +300,28 @@ let area = match shape {
 }
 ```
 
+```osprey-ml
+n = person.name        // ok
+
+// any: pattern-match
+nameOf : any -> string
+nameOf v =
+    match v
+        p: { name } => p.name
+        _ => "unknown"
+
+// Result: match before access
+match personResult
+    Success value => print value.name
+    Error message => print message
+
+// Union: discriminate first
+area =
+    match shape
+        Circle radius => 3.14 * radius * radius
+        Rectangle width height => width * height
+```
+
 The compiler implementation must look up fields by name; positional access is forbidden in code generation.
 
 ### Immutability and Non-Destructive Update
@@ -198,6 +331,16 @@ Records cannot be modified. To produce a record that differs in some fields from
 ```osprey
 let p2 = point  { x: 15 }                // y carried over
 let p3 = person { age: 26, active: false }
+```
+
+```osprey-ml
+p2 =
+    point
+        x = 15               // y carried over
+p3 =
+    person
+        age = 26
+        active = false
 ```
 
 ### Nested Records
@@ -214,6 +357,28 @@ let company = Company {
 let companyCity = company.address.city
 ```
 
+```osprey-ml
+type Address =
+    street : string
+    city : string
+    zipCode : string
+
+type Company =
+    name : string
+    address : Address
+
+company =
+    Company
+        name = "Tech Corp"
+        address =
+            Address
+                street = "456 Tech Ave"
+                city = "Sydney"
+                zipCode = "2000"
+
+companyCity = company.address.city
+```
+
 ## Union Types
 
 A union type (also "sum type", "tagged union", "discriminated union") declares a closed set of named variants. Each variant is either nullary (no payload) or carries a record-style payload. Grammar in [Syntax](/spec/0003-syntax/#type-declarations); pattern-matching rules in [Pattern Matching](/spec/0007-patternmatching/).
@@ -223,6 +388,18 @@ type Color  = Red | Green | Blue
 type Shape  = Circle    { radius: float }
             | Rectangle { width:  float, height: float }
             | Triangle  { a: float, b: float, c: float }
+```
+
+```osprey-ml
+type Color =
+    Red
+    Green
+    Blue
+
+type Shape =
+    Circle { radius: float }
+    Rectangle { width: float, height: float }
+    Triangle { a: float, b: float, c: float }
 ```
 
 A union value carries a runtime discriminant identifying its variant; the compiler emits one branch per variant in any `match`. Field access on a union requires `match` to narrow it to a single variant first.
@@ -241,6 +418,20 @@ type JsonValue =
     | JStr  { v: string }
     | JArr  { items:   List<JsonValue> }
     | JObj  { entries: Map<string, JsonValue> }
+```
+
+```osprey-ml
+type Tree =
+    Leaf
+    Node { value: int, left: Tree, right: Tree }
+
+type JsonValue =
+    JNull
+    JBool { v: bool }
+    JNum { v: float }
+    JStr { v: string }
+    JArr { items: List<JsonValue> }
+    JObj { entries: Map<string, JsonValue> }
 ```
 
 A recursive union is laid out indirectly — variant payloads referencing the same type, or containing a `List<Self>` / `Map<K, Self>`, MUST be stored behind a pointer so the type's size is finite. This requirement is invisible to the user: construction, pattern-matching, and field access read the same as for any other variant. Mutually recursive unions follow the same rule.
@@ -269,6 +460,30 @@ match r {
     Success { value }   => print("ok: ${value.name}")
     Error   { message } => print("validation failed: ${message}")
 }
+```
+
+```osprey-ml
+type Product where validateProduct =
+    name : string
+    price : int
+
+validateProduct : Product -> Result<Product, string>
+validateProduct p =
+    match p.name
+        "" => Error { message: "name cannot be empty" }
+        _ =>
+            match p.price
+                0 => Error { message: "price must be positive" }
+                _ => Success { value: p }
+
+// Construction returns Result<Product, string>
+r =
+    Product
+        name = "Widget"
+        price = 100
+match r
+    Success value => print "ok: ${value.name}"
+    Error message => print "validation failed: ${message}"
 ```
 
 Field access on a validated value is only legal after matching on the `Result`.
@@ -382,7 +597,7 @@ let updated    = set(ages, "Alice", 26)                     // single-key update
 let withoutBob = remove(ages, "Bob")
 ```
 
-Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than a tuple, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `(K, V)` tuple per element.
+Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than as one packed value, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `Entry<K, V>` record (`{ key, value }`, defined with the Map builtins in [Built-In Functions](/spec/0012-built-infunctions/)) per element — Osprey has no tuple type.
 
 The `+` operator on `(Map<K, V>, Map<K, V>) -> Map<K, V>` is **right-biased** (the right-hand side wins on conflicting keys).
 
@@ -407,7 +622,7 @@ The literal `{}` is disallowed as a pattern (it would match every map). Match em
 ```osprey
 let names    = keys(ages)                                  // List<string>, order unspecified
 let agesList = values(ages)                                // List<int>,    order unspecified
-let pairs    = entries(ages)                               // List<(string, int)>
+let pairs    = entries(ages)                               // List<Entry<string, int>>
 let m        = zipToMap(names, agesList)                   // Result<Map<K,V>, IndexError> if lengths differ
 let byGrade  = groupBy(students, fn(s) => s.grade)         // Map<string, List<Student>>
 ```

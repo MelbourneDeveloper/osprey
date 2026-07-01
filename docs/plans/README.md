@@ -15,6 +15,8 @@ plan ends with a TODO checklist.
 | [0009](0009-lsp-context-and-cross-file.md) | LSP context-awareness & cross-file | lsp | Variable hover (type+docs) landed; completion/sig-help still identifier-only, single-file | Medium |
 | [0010](0010-cross-language-benchmark-suite.md) | Cross-language benchmark suite | benchmarks | 18 cases × 5 langs shipped; `intDiv` added; feature-blocked classics (arrays, float) pending | Low–High |
 | [0012](0012-osprey-debugger.md) | Modern Osprey debugger | compiler/editor/runtime | Spec written; Phase 1 source line debugging in progress | High |
+| [0013](0013-ml-flavor-frontend.md) | ML flavor frontend (layout syntax, curry-by-default) | frontend/types/codegen/tooling | Specs written ([0023](../specs/0023-LanguageFlavors.md)/[0024](../specs/0024-MLFlavorSyntax.md)); no ML frontend yet | High |
+| [0014](0014-modules-and-namespaces.md) | Modules, namespaces & multi-file apps | frontend/resolver/types/codegen/lsp | Spec written ([0025](../specs/0025-ModulesAndNamespaces.md)); parser has only early `import`/`module` grouping | High |
 
 These were surfaced from `CodegenError::unsupported(...)` call sites, the
 `## Status` sections of the language specs (`docs/specs/`), and runtime `TODO`

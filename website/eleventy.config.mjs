@@ -29,8 +29,19 @@ const ospreyGrammar = {
   punctuation: /[{}[\];(),.:]/,
 };
 
+// ML flavor (.ospml) — offside layout, curry-by-default, whitespace application,
+// `\x => e` lambdas, `:=` mutation, `handler`/`handle … do`. Same token palette as
+// the Default grammar; only the keyword set differs (no `fn`, adds `handler`).
+// See spec 0024 (ML Flavor Syntax) and 0023 (Language Flavors).
+const ospreyMlGrammar = {
+  ...ospreyGrammar,
+  keyword:
+    /\b(?:let|mut|match|type|effect|perform|handler|handle|do|in|extern|spawn|await|yield|if|else|import|module|true|false|where|Unit|Result|Option|Some|None|Ok|Err|Handler)\b/,
+};
+
 function ensureOsprey() {
   if (!Prism.languages.osprey) Prism.languages.osprey = ospreyGrammar;
+  if (!Prism.languages["osprey-ml"]) Prism.languages["osprey-ml"] = ospreyMlGrammar;
 }
 
 export default function (eleventyConfig) {
@@ -51,14 +62,16 @@ export default function (eleventyConfig) {
   // transform below) can colour `.osp` snippets.
   ensureOsprey();
 
-  // Highlight raw `<pre class="language-osprey">` blocks that ship as literal
-  // HTML in the marketing pages (not processed by the markdown highlighter).
+  // Highlight raw `<pre class="language-osprey">` / `language-osprey-ml` blocks
+  // that ship as literal HTML in the marketing pages (not processed by the
+  // markdown highlighter). Both flavors share the transform; the fence language
+  // selects the grammar and the flavor badge (see FLAVOR_LABEL / addFlavorBadge).
   eleventyConfig.addTransform("osprey-highlight", function (content, outputPath) {
     if (!outputPath || !outputPath.endsWith(".html")) return content;
     ensureOsprey();
     return content.replace(
-      /<pre class="language-osprey"><code class="language-osprey">([\s\S]*?)<\/code><\/pre>/g,
-      (_m, code) => {
+      /<pre class="language-(osprey(?:-ml)?)"><code class="language-\1">([\s\S]*?)<\/code><\/pre>/g,
+      (_m, lang, code) => {
         const decoded = code
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">")
@@ -67,9 +80,26 @@ export default function (eleventyConfig) {
           .replace(/&#39;/g, "'")
           .replace(/<\/?[^>]+(>|$)/g, "")
           .trim();
-        const html = Prism.highlight(decoded, Prism.languages.osprey, "osprey");
-        return `<pre class="language-osprey" tabindex="0" data-language="osprey"><code class="language-osprey">${html}</code></pre>`;
+        const html = Prism.highlight(decoded, Prism.languages[lang], lang);
+        return `<pre class="language-${lang}" tabindex="0" data-language="${lang}"><code class="language-${lang}">${html}</code></pre>`;
       }
+    );
+  });
+
+  // Flavor badge — the single place that makes "which flavor is this code?"
+  // unambiguous on EVERY Osprey code block across docs, specs, blog, and
+  // marketing pages. The theme's markdown highlighter and the transform above
+  // both emit `data-language="osprey"` or `"osprey-ml"`; this rewrites that
+  // attribute to a human-readable flavor label and adds `data-flavor` for CSS.
+  // Default flavor (.osp) is the explicit label — never a silent, unmarked block.
+  const FLAVOR_LABEL = { osprey: "Osprey · Default", "osprey-ml": "Osprey · ML" };
+  const FLAVOR_KEY = { osprey: "default", "osprey-ml": "ml" };
+  eleventyConfig.addTransform("osprey-flavor-badge", function (content, outputPath) {
+    if (!outputPath || !outputPath.endsWith(".html")) return content;
+    return content.replace(
+      /<pre ((?:[^>]*?\s)?)data-language="(osprey(?:-ml)?)"/g,
+      (_m, pre, lang) =>
+        `<pre ${pre}data-language="${FLAVOR_LABEL[lang]}" data-flavor="${FLAVOR_KEY[lang]}"`
     );
   });
 
@@ -88,9 +118,21 @@ export default function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("src/css");
   eleventyConfig.addPassthroughCopy("src/js");
   eleventyConfig.addPassthroughCopy("src/playground");
+  // Publish WebAssembly demo assets for the native /wasm/ page. The deploy
+  // pipeline runs `make wasm-site` first so generated binaries land here.
+  eleventyConfig.addPassthroughCopy({
+    "../examples/wasm/build/studio.osp.wasm": "wasm/build/studio.osp.wasm",
+  });
+  eleventyConfig.addPassthroughCopy({
+    "../examples/wasm/build/studio.ospml.wasm": "wasm/build/studio.ospml.wasm",
+  });
+  eleventyConfig.addPassthroughCopy({ "../examples/wasm/wasi-shim.mjs": "wasm/wasi-shim.mjs" });
+  eleventyConfig.addPassthroughCopy({ "../examples/wasm/studio.osp": "wasm/studio.osp" });
+  eleventyConfig.addPassthroughCopy({ "../examples/wasm/studio.ospml": "wasm/studio.ospml" });
 
   eleventyConfig.addWatchTarget("src/css/");
   eleventyConfig.addWatchTarget("src/js/");
+  eleventyConfig.addWatchTarget("../examples/wasm/");
 
   // Map the site's existing layout names onto the theme's base layout. Existing
   // pages declare `layout: page`, `layout: page.njk` or `layout: base.njk`; the

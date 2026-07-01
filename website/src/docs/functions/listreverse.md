@@ -19,3 +19,7 @@ description: "Returns a new list in reverse order."
 ```osprey
 listReverse([1, 2, 3])  // [3, 2, 1]
 ```
+
+```osprey-ml
+listReverse [1, 2, 3]  // [3, 2, 1]
+```

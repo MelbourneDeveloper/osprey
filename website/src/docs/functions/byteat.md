@@ -23,3 +23,9 @@ match byteAt("hi", 0) {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match byteAt ("hi", 0)
+    Success value => print "byte: ${value}"
+    Error message => print message
+```

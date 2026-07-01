@@ -20,3 +20,7 @@ description: "Truncating integer division (rounds toward zero), divide-by-zero c
 ```osprey
 fn half(n) = intDiv(n, 2)  // intDiv(7, 2) == 3
 ```
+
+```osprey-ml
+half (n) = intDiv(n, 2)  // intDiv(7, 2) = = 3
+```

@@ -646,23 +646,7 @@ fn classify(op: &str) -> OpKind {
 #[cfg(test)]
 mod tests {
     use crate::check::check_program;
-    use osprey_syntax::parse_program;
-
-    /// Parse + type-check a snippet, returning the diagnostics.
-    fn check(src: &str) -> Vec<crate::error::TypeError> {
-        let parsed = parse_program(src);
-        assert!(
-            parsed.errors.is_empty(),
-            "syntax errors: {:?}",
-            parsed.errors
-        );
-        check_program(&parsed.program)
-    }
-
-    fn ok(src: &str) {
-        let errs = check(src);
-        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
-    }
+    use crate::testutil::{check, ok};
 
     #[test]
     fn pipe_into_call_and_bare_function() {

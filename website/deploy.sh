@@ -26,6 +26,10 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
+# Build the WebAssembly demo assets that the /wasm/ site page publishes.
+echo "🧱 Building WebAssembly demo assets..."
+(cd .. && make wasm-site)
+
 # Build the website (runs update-playground + generate-docs + eleventy)
 echo "🏗️ Building website..."
 npm run build
@@ -39,4 +43,4 @@ if [ "${GITHUB_ACTIONS:-false}" = "true" ]; then
 else
     echo "💡 To serve locally, run: npm run start"
     echo "💡 Website is ready for deployment from the _site/ directory"
-fi 
+fi

@@ -35,6 +35,7 @@
   "main": "./out/client/src/extension.js",
   "activationEvents": [
     "onLanguage:osprey",
+    "onLanguage:osprey-ml",
     "onCommand:osprey.compile",
     "onCommand:osprey.run",
     "onCommand:osprey.debug",
@@ -63,13 +64,52 @@
           "light": "./icon.png",
           "dark": "./icon.png"
         }
+      },
+      {
+        "id": "osprey-ml",
+        "aliases": [
+          "Osprey ML",
+          "osprey-ml"
+        ],
+        "extensions": [
+          ".ospml"
+        ],
+        "filenames": [],
+        "filenamePatterns": [
+          "*.ospml"
+        ],
+        "firstLine": "^//.*[Oo]sprey.*",
+        "configuration": "./language-configuration-ml.json",
+        "icon": {
+          "light": "./icon.png",
+          "dark": "./icon.png"
+        }
       }
     ],
+    "configurationDefaults": {
+      "[osprey]": {
+        "editor.defaultFormatter": "nimblesite.osprey"
+      },
+      "[osprey-ml]": {
+        "editor.defaultFormatter": "nimblesite.osprey"
+      }
+    },
     "grammars": [
       {
         "language": "osprey",
         "scopeName": "source.osprey",
         "path": "./syntaxes/osprey.tmGrammar.json"
+      },
+      {
+        "language": "osprey-ml",
+        "scopeName": "source.osprey-ml",
+        "path": "./syntaxes/osprey-ml.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "osprey-ml",
+        "path": "./snippets/osprey-ml.json"
       }
     ],
     "commands": [
@@ -97,17 +137,17 @@
     "menus": {
       "editor/context": [
         {
-          "when": "resourceLangId == osprey",
+          "when": "resourceLangId == osprey || resourceLangId == osprey-ml",
           "command": "osprey.compile",
           "group": "navigation@1"
         },
         {
-          "when": "resourceLangId == osprey",
+          "when": "resourceLangId == osprey || resourceLangId == osprey-ml",
           "command": "osprey.run",
           "group": "navigation@2"
         },
         {
-          "when": "resourceLangId == osprey",
+          "when": "resourceLangId == osprey || resourceLangId == osprey-ml",
           "command": "osprey.debug",
           "group": "navigation@3"
         }
@@ -115,15 +155,15 @@
       "commandPalette": [
         {
           "command": "osprey.compile",
-          "when": "resourceLangId == osprey"
+          "when": "resourceLangId == osprey || resourceLangId == osprey-ml"
         },
         {
           "command": "osprey.run",
-          "when": "resourceLangId == osprey"
+          "when": "resourceLangId == osprey || resourceLangId == osprey-ml"
         },
         {
           "command": "osprey.debug",
-          "when": "resourceLangId == osprey"
+          "when": "resourceLangId == osprey || resourceLangId == osprey-ml"
         }
       ]
     },
@@ -132,17 +172,20 @@
         "command": "osprey.compile",
         "key": "ctrl+shift+b",
         "mac": "cmd+shift+b",
-        "when": "resourceLangId == osprey"
+        "when": "resourceLangId == osprey || resourceLangId == osprey-ml"
       },
       {
         "command": "osprey.debug",
         "key": "f5",
-        "when": "resourceLangId == osprey"
+        "when": "resourceLangId == osprey || resourceLangId == osprey-ml"
       }
     ],
     "breakpoints": [
       {
         "language": "osprey"
+      },
+      {
+        "language": "osprey-ml"
       }
     ],
     "viewsContainers": {
@@ -169,7 +212,8 @@
         "type": "osprey",
         "label": "Osprey",
         "languages": [
-          "osprey"
+          "osprey",
+          "osprey-ml"
         ],
         "configurationAttributes": {
           "launch": {

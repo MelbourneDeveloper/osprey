@@ -20,3 +20,8 @@ description: "Stops the HTTP server and closes all connections."
 let result = httpStopServer(serverId)
 print("Server stopped")
 ```
+
+```osprey-ml
+result = httpStopServer serverId
+print "Server stopped"
+```

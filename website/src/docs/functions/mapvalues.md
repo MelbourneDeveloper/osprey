@@ -19,3 +19,7 @@ description: "All values of the map as a list. Order matches mapKeys."
 ```osprey
 mapValues(m)  // List<V>
 ```
+
+```osprey-ml
+mapValues m  // List<V>
+```

@@ -21,3 +21,8 @@ description: "Creates an HTTP server bound to the specified port and address."
 let serverId = httpCreateServer(8080, "127.0.0.1")
 print("Server created with ID: ${serverId}")
 ```
+
+```osprey-ml
+serverId = httpCreateServer (8080, "127.0.0.1")
+print "Server created with ID: ${serverId}"
+```

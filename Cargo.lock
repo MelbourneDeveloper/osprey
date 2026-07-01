@@ -377,6 +377,7 @@ dependencies = [
  "osprey-ast",
  "osprey-codegen",
  "osprey-debug",
+ "osprey-fmt",
  "osprey-lsp",
  "osprey-syntax",
  "osprey-types",
@@ -398,6 +399,14 @@ name = "osprey-debug"
 version = "0.0.0-dev"
 
 [[package]]
+name = "osprey-fmt"
+version = "0.0.0-dev"
+dependencies = [
+ "osprey-ast",
+ "osprey-syntax",
+]
+
+[[package]]
 name = "osprey-lsp"
 version = "0.0.0-dev"
 dependencies = [
@@ -408,6 +417,7 @@ dependencies = [
  "lspkit-server",
  "lspkit-vfs",
  "osprey-ast",
+ "osprey-fmt",
  "osprey-syntax",
  "osprey-types",
  "serde",

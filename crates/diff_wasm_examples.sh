@@ -30,12 +30,17 @@ mkdir -p "$OUTDIR"
 for f in $(find $EXDIR -name '*.osp' | sort); do
   rel=${f#$EXDIR/}
   [[ -n "$FILTER" && "$rel" != *"$FILTER"* ]] && continue
-  # Expected-output precedence matches crates/diff_examples.sh exactly: shared
-  # expectation first, then the OS-specific expectation.
+  # Expected-output precedence matches crates/diff_examples.sh exactly: the
+  # per-file expectation first, then the OS-specific one, then the flavor-shared
+  # <stem>.expectedoutput so an ML twin pair (foo.osp + foo.ospml) reuses ONE
+  # golden file ([FLAVOR-IR-EQUIV]) — both flavors emit byte-identical output.
+  base="${f%.*}"
   if [[ -f "$f.expectedoutput" ]]; then
     exp="$f.expectedoutput"
   elif [[ -f "$f.expectedoutput.$(uname -s)" ]]; then
     exp="$f.expectedoutput.$(uname -s)"
+  elif [[ -f "$base.expectedoutput" ]]; then
+    exp="$base.expectedoutput"
   else
     noexp=$((noexp+1))
     [[ $VERBOSE -eq 1 ]] && echo "NOEXP  $rel"

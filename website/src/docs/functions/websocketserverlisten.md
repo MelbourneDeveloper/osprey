@@ -23,3 +23,9 @@ match listenResult {
     Err message => print("Failed to start listening: ${message}")
 }
 ```
+
+```osprey-ml
+match listenResult
+    Success _ => print "Server listening on ws://127.0.0.1:8080/chat"
+    Err message => print "Failed to start listening: ${message}"
+```

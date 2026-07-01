@@ -20,3 +20,7 @@ description: "True iff some element equals value. O(n)."
 ```osprey
 listContains([1, 2, 3], 2)  // true
 ```
+
+```osprey-ml
+listContains ([1, 2, 3], 2)  // true
+```

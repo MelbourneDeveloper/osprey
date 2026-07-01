@@ -20,3 +20,8 @@ description: "Waits for a spawned process to complete and returns its exit code.
 let exitCode = awaitProcess(processHandle)
 print("Process exited with code: ${toString(exitCode)}")
 ```
+
+```osprey-ml
+exitCode = awaitProcess processHandle
+print "Process exited with code: ${toString(exitCode)}"
+```

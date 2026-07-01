@@ -7,7 +7,21 @@ tags: ["status", "features", "roadmap"]
 author: "Christian Findlay"
 ---
 
-Current version: **0.2.0** (released). The compiler is written in Rust and emits LLVM IR.
+Current version: **{% if releases.latest %}{{ releases.latest.tag }}{% else %}v0.9.0{% endif %}** (released). The compiler is written in Rust and emits LLVM IR.
+
+## 📦 Releases
+
+<em>Generated at build time from the [GitHub Releases](https://github.com/Nimblesite/osprey/releases) page.</em>
+
+{% if releases.list.length %}
+| Version | Released | |
+| --- | --- | --- |
+{% for r in releases.list -%}
+| [{{ r.tag }}]({{ r.url }}){% if r.prerelease %} <sup>pre-release</sup>{% endif %} | {{ r.date }} | {% if loop.first %}**Latest**{% endif %} |
+{% endfor %}
+{% else %}
+Release list unavailable at build time — see the [GitHub Releases](https://github.com/Nimblesite/osprey/releases) page.
+{% endif %}
 
 ## ✅ Complete Features
 

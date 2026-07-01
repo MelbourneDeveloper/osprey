@@ -23,3 +23,9 @@ match httpResponseHeader(response, "Content-Type") {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match httpResponseHeader (response, "Content-Type")
+    Success value => print value
+    Error message => print message
+```

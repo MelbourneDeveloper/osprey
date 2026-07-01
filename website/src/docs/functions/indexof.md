@@ -20,3 +20,8 @@ description: "Returns byte-index of first occurrence of needle, or Error(NotFoun
 ```osprey
 match indexOf("foo=bar", "=") { Success { value } => print(value) ... }
 ```
+
+```osprey-ml
+match indexOf ("foo=bar", "=")
+    Success value => print value ...
+```

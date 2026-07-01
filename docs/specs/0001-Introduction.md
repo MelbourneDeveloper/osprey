@@ -2,6 +2,8 @@
 
 Osprey is a statically-typed functional language in the ML family. It compiles to native code via LLVM.
 
+> **Flavor layer — mixed.**  Osprey is one language core fronted by more than one source surface, called *flavors*. There is exactly **one AST** — the canonical `osprey_ast::Program` — but many concrete surfaces (CSTs). Two flavors exist today: the Default flavor (`.osp`), with C-style braces and named-argument calls, described by specs 0001–0022 here; and the ML flavor (`.ospml`), with offside-rule layout and whitespace application, described by [ML Flavor Syntax](0024-MLFlavorSyntax.md). Both lower to the same `osprey_ast::Program` before any semantic analysis, so type inference, effect checking, and codegen never see which flavor produced a program. The full model and the surface/shared-core boundary are defined in [Language Flavors](0023-LanguageFlavors.md).
+
 ## Core Features
 
 - Hindley-Milner type inference; explicit annotations are optional.
@@ -9,7 +11,7 @@ Osprey is a statically-typed functional language in the ML family. It compiles t
 - Immutable bindings by default; `mut` opts in to mutability.
 - Algebraic effects checked at compile time.
 - `Result<T, E>` for all fallible operations; no exceptions, panics, or null.
-- Named arguments required for functions of two or more parameters.
+- In the Default flavor, named arguments are required for functions of two or more parameters (`f(x: a, y: b)`); the ML flavor uses whitespace application (`f a b`) or the uncurried grouping (`f (x, y)`) instead.
 - Lightweight fibers and channel-based concurrency.
 - Automatic memory management with no observable collector — ARC by default, tracing GC selectable, and a `--static-memory` mode with zero runtime memory operations.
 - Built-in HTTP and WebSocket support.

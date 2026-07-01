@@ -23,3 +23,9 @@ match listGet(myList, 0) {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match listGet (myList, 0)
+    Success value => print value
+    Error message => print message
+```

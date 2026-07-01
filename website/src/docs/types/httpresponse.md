@@ -18,3 +18,13 @@ HttpResponse {
     partialBody: "{\"message\": \"Hello\"}"
 }
 ```
+
+```osprey-ml
+HttpResponse
+    status = 200
+    headers = "Content-Type: application/json"
+    contentType = "application/json"
+    streamFd = -1
+    isComplete = true
+    partialBody = "{\"message\": \"Hello\"}"
+```

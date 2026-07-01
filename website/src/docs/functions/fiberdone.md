@@ -19,3 +19,7 @@ description: "Returns 1 if the given fiber has finished, 0 otherwise."
 ```osprey
 let finished = fiberDone(worker)  // 0 or 1
 ```
+
+```osprey-ml
+finished = fiberDone worker  // 0 or 1
+```

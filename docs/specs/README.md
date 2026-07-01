@@ -21,6 +21,17 @@ This directory holds **all spec documents** for the project:
     WebAssembly (`osprey --target=wasm32`, wasm32-wasip1): the portable runtime
     subset, entry/link model, the ILP32 width fixes, and running `.wasm` under
     wasmtime / Node's WASI / the browser.
+  - [`0023-LanguageFlavors.md`](0023-LanguageFlavors.md) — the **flavor**
+    contract: many CSTs, one AST. How the Default (brace) flavor and the ML
+    (layout) flavor converge on `osprey_ast::Program` before any semantic
+    analysis, the lowering contract, flavor selection, currying
+    canonicalisation, interop, and flavor-aware diagnostics.
+  - [`0024-MLFlavorSyntax.md`](0024-MLFlavorSyntax.md) — the ML flavor surface
+    reference: layout blocks, curry-by-default functions, `=>` effect operations,
+    first-class handler values, and each construct's canonical lowering.
+  - [`0025-ModulesAndNamespaces.md`](0025-ModulesAndNamespaces.md) — multi-file
+    application structure: path-independent namespaces, explicit module exports,
+    signatures, state modules, import resolution, and project assembly.
 
 ## Spec ID convention
 

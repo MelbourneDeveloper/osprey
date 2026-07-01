@@ -19,3 +19,7 @@ description: "Returns the absolute value of an integer."
 ```osprey
 let d = abs(0 - 5)  // 5
 ```
+
+```osprey-ml
+d = abs 0 - 5  // 5
+```

@@ -35,7 +35,7 @@
       "language": "rust"
     },
     "vscode-extension": {
-      "threshold": 89,
+      "threshold": 95,
       "language": "typescript"
     }
   }

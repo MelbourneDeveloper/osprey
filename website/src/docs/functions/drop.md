@@ -20,3 +20,7 @@ description: "Returns s without its first n bytes. Clamps; never fails."
 ```osprey
 drop("hello", 3)  // "lo"
 ```
+
+```osprey-ml
+drop ("hello", 3)  // "lo"
+```

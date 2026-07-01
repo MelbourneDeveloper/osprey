@@ -21,3 +21,8 @@ description: "Filters elements in an iterator based on a predicate function."
 let evens = filter(range(1, 6), fn(x) { x % 2 == 0 })
 forEach(evens, print)  // Prints: 2, 4
 ```
+
+```osprey-ml
+evens = filter (range (1, 6), \x => x % 2 == 0)
+forEach (evens, print)  // Prints: 2, 4
+```

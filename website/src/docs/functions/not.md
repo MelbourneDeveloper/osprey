@@ -19,3 +19,7 @@ description: "Returns the logical negation of a boolean."
 ```osprey
 let off = not(true)  // false
 ```
+
+```osprey-ml
+off = not true  // false
+```

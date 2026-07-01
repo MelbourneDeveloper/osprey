@@ -11,3 +11,7 @@ description: "Returns the remainder of dividing the first number by the second."
 ```osprey
 let result = 17 % 5  // result = 2
 ```
+
+```osprey-ml
+result = 17 % 5  // result = 2
+```

@@ -23,6 +23,8 @@ mod error;
 mod expr;
 mod info;
 mod pattern;
+#[cfg(test)]
+mod testutil;
 mod ty;
 mod unify;
 
@@ -41,33 +43,7 @@ pub use ty::{has_type_var, names, Scheme, Type, VarId};
     reason = "tests drive checking for its side effects and discard the returned diagnostics"
 )]
 mod tests {
-    use super::*;
-    use osprey_syntax::parse_program;
-
-    /// Parse + type-check a snippet, asserting it is well-typed.
-    fn ok(src: &str) {
-        let parsed = parse_program(src);
-        assert!(
-            parsed.errors.is_empty(),
-            "syntax errors: {:?}",
-            parsed.errors
-        );
-        let errs = check_program(&parsed.program);
-        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
-    }
-
-    /// Parse + type-check, asserting at least one type error is reported.
-    fn bad(src: &str) -> Vec<TypeError> {
-        let parsed = parse_program(src);
-        assert!(
-            parsed.errors.is_empty(),
-            "syntax errors: {:?}",
-            parsed.errors
-        );
-        let errs = check_program(&parsed.program);
-        assert!(!errs.is_empty(), "expected a type error, got none");
-        errs
-    }
+    use crate::testutil::{bad, ok};
 
     #[test]
     fn checks_arithmetic_and_let() {

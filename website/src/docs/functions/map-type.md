@@ -15,3 +15,7 @@ description: "Creates a new, empty persistent map."
 ```osprey
 let m = Map()
 ```
+
+```osprey-ml
+m = Map
+```

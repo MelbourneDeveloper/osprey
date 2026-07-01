@@ -20,3 +20,7 @@ description: "Concatenates s with itself n times. Error(InvalidArgument) on nega
 ```osprey
 repeat("ab", 3)  // Success { value: "ababab" }
 ```
+
+```osprey-ml
+repeat ("ab", 3)  // Success { value: "ababab" }
+```

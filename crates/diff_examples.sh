@@ -20,16 +20,33 @@ done
 
 pass=0; fail=0; noexp=0; comperr=0
 typeset -a FAILED
-for f in $(find $EXDIR -name '*.osp' | sort); do
+for f in $(find $EXDIR \( -name '*.osp' -o -name '*.ospml' \) | sort); do
   rel=${f#$EXDIR/}
   [[ -n "$FILTER" && "$rel" != *"$FILTER"* ]] && continue
-  # Expected-output precedence: the shared .expectedoutput, else the
+  # Expected-output precedence: the per-file .expectedoutput, else the
   # OS-specific .expectedoutput.<uname> (callback_stdout_demo: its subprocess
-  # error text + exit code differ Darwin vs Linux).
+  # error text + exit code differ Darwin vs Linux), else the flavor-shared
+  # <stem>.expectedoutput. The last one lets a Default/ML flavor pair
+  # (foo.osp + foo.ospml) share ONE golden file ([FLAVOR-IR-EQUIV]): both
+  # flavors must produce byte-identical output, so one expected file serves both.
+  base="${f%.*}"
   if [[ -f "$f.expectedoutput" ]]; then
     exp="$f.expectedoutput"
   elif [[ -f "$f.expectedoutput.$(uname -s)" ]]; then
     exp="$f.expectedoutput.$(uname -s)"
+  elif [[ -f "$base.osp.expectedoutput" ]]; then
+    # An ML twin <stem>.ospml shares the Default twin's golden
+    # <stem>.osp.expectedoutput: both flavors must run byte-identically
+    # ([FLAVOR-IR-EQUIV]), so the in-place .osp golden serves the .ospml too.
+    exp="$base.osp.expectedoutput"
+  elif [[ -f "$base.osp.expectedoutput.$(uname -s)" ]]; then
+    # Same flavor-shared rule for an OS-specific Default golden: an ML twin
+    # <stem>.ospml inherits <stem>.osp.expectedoutput.<uname> when the Default
+    # twin's output is OS-dependent (callback_stdout_demo's subprocess text),
+    # since both flavors run byte-identically ([FLAVOR-IR-EQUIV]).
+    exp="$base.osp.expectedoutput.$(uname -s)"
+  elif [[ -f "$base.expectedoutput" ]]; then
+    exp="$base.expectedoutput"
   else
     noexp=$((noexp+1))
     [[ $VERBOSE -eq 1 ]] && echo "NOEXP  $rel"

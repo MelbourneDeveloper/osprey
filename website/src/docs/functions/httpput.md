@@ -23,3 +23,8 @@ description: "Makes an HTTP PUT request with a request body."
 let status = httpPut(clientId, "/put", "{\"updated\":\"data\"}", "Content-Type: application/json")
 print("PUT status: ${status}")
 ```
+
+```osprey-ml
+status = httpPut (clientId, "/put", "{\"updated\":\"data\"}", "Content-Type: application/json")
+print "PUT status: ${status}"
+```

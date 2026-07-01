@@ -19,3 +19,7 @@ description: "Yields control to the fiber scheduler with an optional value."
 ```osprey
 let result = fiber_yield(42)
 ```
+
+```osprey-ml
+result = fiber_yield 42
+```

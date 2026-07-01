@@ -21,3 +21,8 @@ description: "Creates an HTTP client for making requests to a base URL."
 let clientId = httpCreateClient("http://httpbin.org", 5000)
 print("Client created")
 ```
+
+```osprey-ml
+clientId = httpCreateClient ("http://httpbin.org", 5000)
+print "Client created"
+```

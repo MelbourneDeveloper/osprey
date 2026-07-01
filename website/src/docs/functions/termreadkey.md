@@ -18,3 +18,9 @@ match termReadKey() {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match termReadKey
+    Success value => print "key: ${value}"
+    Error message => print message
+```

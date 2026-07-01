@@ -23,3 +23,9 @@ match closeResult {
     Err message => print("Failed to close: ${message}")
 }
 ```
+
+```osprey-ml
+match closeResult
+    Success _ => print "Connection closed"
+    Err message => print "Failed to close: ${message}"
+```

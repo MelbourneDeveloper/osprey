@@ -1,0 +1,14 @@
+[package]
+name = "osprey-fmt"
+description = "The Osprey source formatter — flavor-aware, parse-verified, idempotent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+osprey-ast = { workspace = true }
+osprey-syntax = { workspace = true }
+
+[lints]
+workspace = true

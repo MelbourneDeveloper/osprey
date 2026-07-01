@@ -10,16 +10,42 @@ Language support for [Osprey](https://ospreylang.dev) — a functional programmi
 language with algebraic effects, fiber-based concurrency, pattern matching, and
 strong compile-time safety.
 
+**One core. Two surfaces. Zero compromise.** Osprey is one language — one
+Hindley-Milner type checker, one effect system, one runtime, one standard
+library, one LLVM/wasm backend — fronted by two first-class **flavors**:
+
+- **Default flavor (`.osp`)** — C-style braces, `fn`, `f(x: a, y: b)` calls with
+  named arguments. The surface a systems programmer reaches for: explicit,
+  familiar, block-structured. **Fully implemented today.**
+- **ML flavor (`.ospml`)** — offside-rule layout (indentation, no braces),
+  curry-by-default, whitespace application `f a b`, `\x => e` lambdas, `:=`
+  mutation. The surface an FP devotee reaches for: terse, expression-first,
+  ML/Haskell-shaped. **In active development.**
+
+Neither flavor is the watered-down one: the surface goes all the way in your
+direction. Systems programmers get real braces; FP devotees get real layout and
+real currying. Pick your tribe and go all in — nobody is forced into the other
+camp's spelling.
+
+Select the flavor *per file* (the `.ospml` extension, a leading
+`// osprey: flavor=ml` marker, or the `--flavor ml` CLI flag — all shipping
+today). Because both flavors lower to the same canonical AST before any type
+checking, the design lets a `.osp` file and a `.ospml` file live in one folder
+and compile into a single program, sharing one type checker, one effect system,
+and one binary.
+
 Powered by a Rust language server (`osprey lsp`, built on
 [lspkit](https://github.com/Nimblesite/lspkit)) that runs the compiler front-end
 in-process — the same engine targeted at Neovim and Zed next.
 
 ## Features
 
-- **Syntax highlighting** for `.osp` files — keywords, types, string
-  interpolation (`"Hello ${name}!"`), operators, and comments.
+- **Syntax highlighting** — keywords, types, string interpolation
+  (`"Hello ${name}!"`), operators, and comments. Default (`.osp`) is fully
+  supported today; ML (`.ospml`) support is rolling out alongside the flavor.
 - **Live diagnostics** — errors and warnings from the Osprey compiler as you
-  type, inline in the editor.
+  type, inline in the editor (full for Default `.osp`; ML `.ospml` diagnostics
+  track the in-development ML front-end).
 - **Hover, go-to-definition, find-references, document symbols, signature help,
   and completion** — driven by the compiler's own parser and type checker.
 - **Compile & run** from the editor:

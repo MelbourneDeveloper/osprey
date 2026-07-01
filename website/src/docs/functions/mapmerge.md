@@ -20,3 +20,7 @@ description: "Right-biased union. Same as left + right."
 ```osprey
 mapMerge({"a": 1}, {"b": 2})  // {"a": 1, "b": 2}
 ```
+
+```osprey-ml
+mapMerge ({"a": 1}, {"b": 2})  // {"a": 1, "b": 2}
+```

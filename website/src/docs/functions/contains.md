@@ -20,3 +20,7 @@ description: "True if needle appears anywhere in s. Empty needle returns true."
 ```osprey
 let found = contains("hello world", "world")  // true
 ```
+
+```osprey-ml
+found = contains ("hello world", "world")  // true
+```

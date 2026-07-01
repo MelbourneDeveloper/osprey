@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup run install bench wasm wasm-serve vsix-rebuild-reinstall
+.PHONY: build test lint fmt clean ci setup run install bench wasm wasm-site wasm-serve vsix-rebuild-reinstall
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -74,8 +74,11 @@ HTTP_OBJ_GC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_runti
 # WebAssembly (wasm32-wasip1) cross-build toolchain — opt-in via `make wasm`.
 # Compiles the portable C-runtime subset (no pthreads/sockets/OpenSSL/syscalls)
 # to a wasm archive osprey links with `--target=wasm32`. See docs/specs/0022.
-WASM_CC      ?= clang
-WASM_AR      ?= llvm-ar
+WASM_LLVM_BIN ?= $(shell for d in /opt/homebrew/opt/llvm/bin /usr/local/opt/llvm/bin; do [ -x "$$d/clang" ] && { echo "$$d"; break; }; done)
+WASM_LLD_BIN  ?= $(shell for d in /opt/homebrew/opt/lld/bin /usr/local/opt/lld/bin "$(WASM_LLVM_BIN)"; do [ -n "$$d" ] && [ -x "$$d/wasm-ld" ] && { echo "$$d"; break; }; done)
+WASM_PATH_PREFIX ?= $(shell for d in "$(WASM_LLVM_BIN)" "$(WASM_LLD_BIN)"; do [ -n "$$d" ] && printf "%s:" "$$d"; done)
+WASM_CC      ?= $(if $(WASM_LLVM_BIN),$(WASM_LLVM_BIN)/clang,clang)
+WASM_AR      ?= $(if $(WASM_LLVM_BIN),$(WASM_LLVM_BIN)/llvm-ar,llvm-ar)
 WASM_TARGET  ?= wasm32-wasip1
 # WASI sysroot (libc + crt1). Override with WASI_SYSROOT=/path; else probe the
 # Homebrew (macOS), wasi-sdk and common Linux locations in turn.
@@ -138,10 +141,12 @@ clean:
 ci: lint test build
 
 ## wasm: Build everything for the WebAssembly target, ready to go — the wasm
-## runtime archive (compiler/bin/libosprey_runtime_wasm.a) and the compiled
-## browser example (examples/wasm/build/hello.wasm) — then validate it and
-## smoke-run it under Node's WASI, the browser WASI shim, and the full golden
-## suite. Requires clang (wasm32 backend), wasm-ld and a WASI sysroot —
+## runtime archive (compiler/bin/libosprey_runtime_wasm.a), the hello example,
+## and Osprey Data Studio in BOTH flavors (studio.{osp,ospml} -> one byte-
+## identical manifest that drives the SQLite dashboard in examples/wasm/
+## index.html) — then validate them and smoke-run under Node's WASI, the browser
+## WASI shim, and the full golden suite. Requires clang (wasm32 backend),
+## wasm-ld and a WASI sysroot —
 ## `brew install lld wasi-libc` (macOS) or the wasi-sdk. See
 ## docs/specs/0022-WebAssemblyTarget.md.
 wasm: build _runtime_wasm
@@ -152,11 +157,39 @@ wasm: build _runtime_wasm
 	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/hello.wasm || echo "(wasm-validate not found — skipping structural check)"
 	node scripts/wasm-smoke.mjs         examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
 	node scripts/wasm-browser-smoke.mjs examples/wasm/build/hello.wasm examples/wasm/hello.expectedoutput
+	@echo "==> compiling Osprey Data Studio (BOTH flavors) -> examples/wasm/build/"
+	$(BIN) examples/wasm/studio.osp   --target=wasm32 --compile -o examples/wasm/build/studio.osp.wasm
+	$(BIN) examples/wasm/studio.ospml --target=wasm32 --compile -o examples/wasm/build/studio.ospml.wasm
+	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/studio.osp.wasm && wasm-validate examples/wasm/build/studio.ospml.wasm || echo "(wasm-validate not found — skipping structural check)"
+	@echo "==> both Studio flavors must emit the SAME manifest (byte-identical golden)"
+	node scripts/wasm-smoke.mjs         examples/wasm/build/studio.osp.wasm   examples/wasm/studio.expectedoutput
+	node scripts/wasm-browser-smoke.mjs examples/wasm/build/studio.osp.wasm   examples/wasm/studio.expectedoutput
+	node scripts/wasm-smoke.mjs         examples/wasm/build/studio.ospml.wasm examples/wasm/studio.expectedoutput
+	node scripts/wasm-browser-smoke.mjs examples/wasm/build/studio.ospml.wasm examples/wasm/studio.expectedoutput
 	@echo "==> [wasm differential] osprey --target=wasm32 vs examples/tested..."
 	@out=$$(zsh crates/diff_wasm_examples.sh); echo "$$out"; \
 	  echo "$$out" | grep -Eq '(^| )FAIL=0 '  || { echo 'FAIL: wasm differential mismatch'; exit 1; }; \
 	  echo "$$out" | grep -Eq '(^| )NOEXP=0 ' || { echo 'FAIL: example missing .expectedoutput'; exit 1; }
 	@echo "==> wasm ready: built + validated + WASI/browser smoke + golden suite green"
+
+wasm wasm-site _runtime_wasm: export PATH := $(WASM_PATH_PREFIX)$(PATH)
+
+## wasm-site: Build only the WebAssembly artifacts published by the website.
+##      Used by GitHub Pages before `npm run build`; does not rely on checked-in
+##      wasm binaries. Requires clang, wasm-ld, a WASI sysroot, and node.
+wasm-site: _runtime_wasm
+	@echo "==> building osprey compiler for the website wasm demo"
+	cargo build --release -p osprey-cli
+	@echo "==> compiling Osprey Data Studio website assets -> examples/wasm/build/"
+	@$(MKDIR) examples/wasm/build
+	$(BIN) examples/wasm/studio.osp   --target=wasm32 --compile -o examples/wasm/build/studio.osp.wasm
+	$(BIN) examples/wasm/studio.ospml --target=wasm32 --compile -o examples/wasm/build/studio.ospml.wasm
+	@command -v wasm-validate >/dev/null 2>&1 && wasm-validate examples/wasm/build/studio.osp.wasm && wasm-validate examples/wasm/build/studio.ospml.wasm || echo "(wasm-validate not found — skipping structural check)"
+	node scripts/wasm-smoke.mjs         examples/wasm/build/studio.osp.wasm   examples/wasm/studio.expectedoutput
+	node scripts/wasm-browser-smoke.mjs examples/wasm/build/studio.osp.wasm   examples/wasm/studio.expectedoutput
+	node scripts/wasm-smoke.mjs         examples/wasm/build/studio.ospml.wasm examples/wasm/studio.expectedoutput
+	node scripts/wasm-browser-smoke.mjs examples/wasm/build/studio.ospml.wasm examples/wasm/studio.expectedoutput
+	@echo "==> website wasm demo ready"
 
 ## wasm-serve: Build the wasm target (full `make wasm`), then static-host
 ##      $(WASM_SERVE_DIR) at http://localhost:$(WASM_SERVE_PORT)/ and open it in

@@ -479,6 +479,7 @@ mod tests {
             target: "wasm32".to_string(),
             output: None,
             debug: false,
+            flavor: None,
         }
     }
 

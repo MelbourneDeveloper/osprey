@@ -20,3 +20,7 @@ description: "Returns a new list with value at the front. O(n)."
 ```osprey
 listPrepend([2, 3], 1)  // [1, 2, 3]
 ```
+
+```osprey-ml
+listPrepend ([2, 3], 1)  // [1, 2, 3]
+```

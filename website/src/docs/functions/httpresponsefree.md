@@ -19,3 +19,7 @@ description: "Releases a response handle obtained from httpGetResponse."
 ```osprey
 httpResponseFree(response)
 ```
+
+```osprey-ml
+httpResponseFree response
+```

@@ -60,6 +60,33 @@ description: "Try Osprey programming language online with interactive code examp
         color: #569cd6;
         opacity: 0.8;
     }
+
+    .flavor-toggle {
+        display: inline-flex;
+        margin-left: 8px;
+        border: 1px solid #444;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .flavor-btn {
+        background: transparent;
+        color: #9aa0a6;
+        border: none;
+        margin: 0;
+        padding: 4px 12px;
+        font-size: 12px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        border-radius: 0;
+        cursor: pointer;
+    }
+
+    .flavor-btn:hover { background: #3a3a3a; color: #d4d4d4; }
+
+    .flavor-btn.active {
+        background: #0e639c;
+        color: #fff;
+    }
     
     .header-right {
         display: flex;
@@ -415,6 +442,10 @@ description: "Try Osprey programming language online with interactive code examp
                 <div class="editor-title">
                     <span>Osprey Editor</span>
                     <span class="playground-badge">⚡ Playground</span>
+                    <div class="flavor-toggle" role="group" aria-label="Source flavor">
+                        <button id="flavor-osp" class="flavor-btn active" onclick="setFlavor('osp')" aria-pressed="true">Default .osp</button>
+                        <button id="flavor-ospml" class="flavor-btn" onclick="setFlavor('ospml')" aria-pressed="false">ML .ospml</button>
+                    </div>
                 </div>
                 <div class="header-right">
                     <div class="status">
@@ -453,46 +484,85 @@ description: "Try Osprey programming language online with interactive code examp
     require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
     
     require(['vs/editor/editor.main'], function() {
-        // Register Osprey language
+        // Register Osprey language (shared tokenizer for both flavors)
         monaco.languages.register({ id: 'osprey' });
-        
-        // Define syntax highlighting
+
+        // Monarch grammar covering BOTH flavors: braces/`fn`/named args (.osp)
+        // and offside-rule/whitespace-application (.ospml). Handles effects,
+        // fibers, `${...}` string interpolation, types, numbers and operators.
         monaco.languages.setMonarchTokensProvider('osprey', {
-            keywords: ['fn', 'let', 'mut', 'type', 'import', 'match', 'if', 'else', 'loop', 'spawn', 'extern', 'true', 'false'],
+            keywords: [
+                'fn', 'let', 'mut', 'type', 'import', 'module', 'match', 'if', 'else',
+                'loop', 'spawn', 'await', 'yield', 'extern', 'effect', 'perform',
+                'handle', 'resume', 'in', 'do', 'true', 'false'
+            ],
+            typeKeywords: ['int', 'string', 'bool', 'Unit', 'float', 'char'],
+            operators: [
+                '=>', '->', '|>', ':=', '==', '!=', '<=', '>=', '&&', '||',
+                '=', '+', '-', '*', '/', '%', '<', '>', '!', ':', '|', '\\'
+            ],
+            symbols: /[=><!~?:&|+\-*\/^%\\]+/,
             tokenizer: {
                 root: [
                     [/\/\/.*$/, 'comment'],
+                    // Type / union-variant names start with a capital letter.
+                    [/[A-Z][\w$]*/, 'type'],
                     [/[a-z_$][\w$]*/, {
                         cases: {
                             '@keywords': 'keyword',
+                            '@typeKeywords': 'type',
                             '@default': 'identifier'
                         }
                     }],
-                    [/".*?"/, 'string'],
+                    { include: '@whitespace' },
+                    [/"/, { token: 'string.quote', bracket: '@open', next: '@string' }],
                     [/\d+/, 'number'],
-                ]
+                    [/@symbols/, { cases: { '@operators': 'operator', '@default': '' } }],
+                ],
+                whitespace: [
+                    [/[ \t\r\n]+/, ''],
+                ],
+                // String literals with `${...}` interpolation highlighted as code.
+                string: [
+                    [/\$\{/, { token: 'delimiter.bracket', next: '@interp' }],
+                    [/[^"\\$]+/, 'string'],
+                    [/\\./, 'string.escape'],
+                    [/\$/, 'string'],
+                    [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' }],
+                ],
+                interp: [
+                    [/\}/, { token: 'delimiter.bracket', next: '@pop' }],
+                    [/[A-Z][\w$]*/, 'type'],
+                    [/[a-z_$][\w$]*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+                    [/\d+/, 'number'],
+                    [/@symbols/, { cases: { '@operators': 'operator', '@default': '' } }],
+                ],
             }
         });
-        
-        // Create editor
+
+        // Create editor (starts in the Default flavor).
         editor = monaco.editor.create(document.getElementById('editor'), {
-            value: `// 🦅 OSPREY — one screen, the whole language, led by ALGEBRAIC EFFECTS.
-//
-// Effects let pure-looking code \`perform\` operations whose meaning is chosen
-// LATER by a \`handle … in …\` block. So the exact same logic can run in two
-// different worlds with zero changes — the killer feature on display below.
-// Also shown: fibers, union types + exhaustive pattern matching, Hindley–
-// Milner inference (no type annotations), functional pipelines, interpolation.
-// Every value is really computed — nothing here is faked.
+            value: SAMPLES.osp,
+            language: 'osprey',
+            theme: 'vs-dark',
+            automaticLayout: true
+        });
 
-// ════════════════ ACT 1 · ALGEBRAIC EFFECTS ════════════════
-// Two effect interfaces the program may \`perform\`.
-effect Console { emit: fn(string) -> Unit }   // where output goes
-effect Ledger  { post: fn(int) -> int }         // returns the running balance
+        // Update status
+        updateStatus('connected', 'Ready');
+    });
 
-// PURE orchestration: account() only performs effects. It has no idea whether
-// the ledger is real or a mock, whether output is printed or swallowed. The
-// installed handler decides — the call site never changes.
+    // Same program, two flavors — identical output, proven byte-for-byte.
+    // Switch the editor contents with the flavor toggle in the header.
+    let currentFlavor = 'osp';
+    const SAMPLES = {
+        // @generated:osp — filled from examples/tested/basics/osprey_mega_showcase.osp by scripts/update-playground.js
+        osp: `// 🦅 Osprey in one screen — algebraic effects, fibers, unions, HM inference.
+// The SAME account() runs in two worlds; only the installed handler differs.
+effect Console { emit: fn(string) -> Unit }
+effect Ledger  { post: fn(int) -> int }
+
+// account() only performs effects — it never learns whether the ledger is real.
 fn account() ![Console, Ledger] = {
     perform Console.emit("open account")
     let afterDeposit = perform Ledger.post(100)
@@ -504,9 +574,7 @@ fn account() ![Console, Ledger] = {
     afterMore
 }
 
-// World A — a handler can own STATE: a \`mut\` it closes over. \`perform
-// Ledger.post\` threads the amount through it and the arm's value becomes the
-// result of the perform, so this is a REAL stateful effect, not substitution.
+// World A: a real, stateful ledger — the handler owns a \`mut\` it threads through.
 fn realWorld() = {
     mut balance = 0
     handle Console
@@ -516,9 +584,7 @@ fn realWorld() = {
     in account()
 }
 
-// World B — the SAME account(), swapped onto a compliance mock: the ledger is
-// frozen (every post is a no-op) and output is tagged. Identical code, totally
-// different behaviour — chosen entirely by the handler.
+// World B: same code, a frozen compliance mock — every post is a no-op.
 fn dryRun() =
     handle Console
         emit line => print("  🧪 [dry-run] \${line}")
@@ -526,15 +592,12 @@ fn dryRun() =
         post amount => 0
     in account()
 
-// ════════════════ ACT 2 · FIBERS + FUNCTIONAL PIPELINES ════════════════
+// Pure pipeline: Σ of squares of the evens in [1, n) — no loops, no mutation.
 fn even(x) = (x % 2) == 0
 fn sq(x)   = x * x
-
-// A pure pipeline: sum of squares of the even numbers in [1, n) —
-// range |> filter |> map |> fold, no loops, no mutation.
 fn crunch(n) = range(1, n) |> filter(even) |> map(sq) |> fold(0, fn(a, b) => a + b)
 
-// Union type — the match below is exhaustive; drop a case and it won't compile.
+// Exhaustive match over a union — drop a case and it won't compile.
 type Tier = Epic | Solid | Starter
 
 fn tier(score) = match score >= 2000 {
@@ -551,40 +614,128 @@ fn badge(t) = match t {
     Starter => "🟢 STARTER"
 }
 
-fn main() = {
-    print("🦅 OSPREY FEATURE TOUR\\n══════════════════════════════════════")
-    print("ACT 1 · algebraic effects — same code, two worlds")
+print("🦅 OSPREY FEATURE TOUR\\n══════════════════════════════════════")
+print("ACT 1 · algebraic effects — same code, two worlds")
 
-    let real = realWorld()
-    print("  ↳ realWorld() returned \${real}")
-    let mock = dryRun()
-    print("  ↳ dryRun()   returned \${mock}")
+let real = realWorld()
+print("  ↳ realWorld() returned \${real}")
+let mock = dryRun()
+print("  ↳ dryRun()   returned \${mock}")
 
-    print("══════════════════════════════════════\\nACT 2 · fibers compute functional pipelines in parallel")
+print("══════════════════════════════════════\\nACT 2 · fibers compute functional pipelines in parallel")
 
-    // Each crunch() runs in its own lightweight fiber; await in order so the
-    // graded report is deterministic.
-    let fa = spawn crunch(10)
-    let fb = spawn crunch(20)
-    let fc = spawn crunch(40)
-    let ra = await(fa)
-    let rb = await(fb)
-    let rc = await(fc)
+// Each crunch() runs in its own fiber; await in order for a deterministic report.
+let fa = spawn crunch(10)
+let fb = spawn crunch(20)
+let fc = spawn crunch(40)
+let ra = await(fa)
+let rb = await(fb)
+let rc = await(fc)
 
-    print("  Σeven² <10  = \${ra}  \${badge(tier(ra))}")
-    print("  Σeven² <20  = \${rb}  \${badge(tier(rb))}")
-    print("  Σeven² <40  = \${rc}  \${badge(tier(rc))}")
-    print("══════════════════════════════════════\\ntotal \${ra + rb + rc}  ·  fleet \${badge(tier(ra + rb + rc))}")
-}
+print("  Σeven² <10  = \${ra}  \${badge(tier(ra))}")
+print("  Σeven² <20  = \${rb}  \${badge(tier(rb))}")
+print("  Σeven² <40  = \${rc}  \${badge(tier(rc))}")
+print("══════════════════════════════════════\\ntotal \${ra + rb + rc}  ·  fleet \${badge(tier(ra + rb + rc))}")
 `,
-            language: 'osprey',
-            theme: 'vs-dark',
-            automaticLayout: true
-        });
-        
-        // Update status
-        updateStatus('connected', 'Ready');
-    });
+        // @generated:ospml — filled from examples/tested/basics/osprey_mega_showcase.ospml by scripts/update-playground.js
+        ospml: `effect Console
+    emit : string => Unit
+
+effect Ledger
+    post : int => int
+
+account () =
+    perform Console.emit "open account"
+    afterDeposit = perform Ledger.post 100
+    perform Console.emit "deposit 100  → balance \${afterDeposit}"
+    afterMore = perform Ledger.post 250
+    perform Console.emit "deposit 250  → balance \${afterMore}"
+    afterDraw = perform Ledger.post (0 - 90)
+    perform Console.emit "withdraw 90  → balance \${afterDraw}"
+    afterMore
+
+realWorld () =
+    mut balance = 0
+    handle Console
+        emit line => print "  💸 \${line}"
+    in handle Ledger
+        post amount =>
+            balance := balance + amount
+            balance
+    in account ()
+
+dryRun () =
+    handle Console
+        emit line => print "  🧪 [dry-run] \${line}"
+    in handle Ledger
+        post amount => 0
+    in account ()
+
+even x = (x % 2) == 0
+sq x   = x * x
+
+crunch n = range 1 n |> filter even |> map sq |> fold 0 (\\(a, b) => a + b)
+
+type Tier =
+    Epic
+    Solid
+    Starter
+
+tier score = match score >= 2000
+    true  => Epic
+    false => match score >= 500
+        true  => Solid
+        false => Starter
+
+badge t = match t
+    Epic    => "🟣 EPIC"
+    Solid   => "🔵 SOLID"
+    Starter => "🟢 STARTER"
+
+print "🦅 OSPREY FEATURE TOUR\\n══════════════════════════════════════"
+print "ACT 1 · algebraic effects — same code, two worlds"
+
+real = realWorld ()
+print "  ↳ realWorld() returned \${real}"
+mock = dryRun ()
+print "  ↳ dryRun()   returned \${mock}"
+
+print "══════════════════════════════════════\\nACT 2 · fibers compute functional pipelines in parallel"
+
+fa = spawn (crunch 10)
+fb = spawn (crunch 20)
+fc = spawn (crunch 40)
+ra = await fa
+rb = await fb
+rc = await fc
+
+print "  Σeven² <10  = \${ra}  \${badge (tier ra)}"
+print "  Σeven² <20  = \${rb}  \${badge (tier rb)}"
+print "  Σeven² <40  = \${rc}  \${badge (tier rc)}"
+print "══════════════════════════════════════\\ntotal \${ra + rb + rc}  ·  fleet \${badge (tier (ra + rb + rc))}"
+`,
+    };
+
+    // Toggle the editor between the .osp and .ospml versions of the same program.
+    // Only swaps when the buffer is still an unedited sample, so we never clobber
+    // a user's work; otherwise it just flips the active button label.
+    function setFlavor(flavor) {
+        if (flavor === currentFlavor) return;
+        const ospBtn = document.getElementById('flavor-osp');
+        const ospmlBtn = document.getElementById('flavor-ospml');
+        const isOsp = flavor === 'osp';
+        ospBtn.classList.toggle('active', isOsp);
+        ospmlBtn.classList.toggle('active', !isOsp);
+        ospBtn.setAttribute('aria-pressed', String(isOsp));
+        ospmlBtn.setAttribute('aria-pressed', String(!isOsp));
+
+        if (editor) {
+            const current = editor.getValue();
+            const isPristine = current === SAMPLES.osp || current === SAMPLES.ospml;
+            if (isPristine) editor.setValue(SAMPLES[flavor]);
+        }
+        currentFlavor = flavor;
+    }
     
     function updateStatus(type, message) {
         const statusDot = document.getElementById('status-dot');

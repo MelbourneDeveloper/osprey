@@ -19,3 +19,7 @@ description: "True if string has zero length."
 ```osprey
 let blank = isEmpty("")  // true
 ```
+
+```osprey-ml
+blank = isEmpty ""  // true
+```

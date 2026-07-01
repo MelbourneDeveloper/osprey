@@ -20,3 +20,7 @@ description: "Concatenates parts with separator between each pair."
 ```osprey
 join(["a","b","c"], "-")  // "a-b-c"
 ```
+
+```osprey-ml
+join (["a","b","c"], "-")  // "a-b-c"
+```

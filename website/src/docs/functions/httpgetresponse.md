@@ -24,3 +24,9 @@ match httpGetResponse(client, "/users", "") {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match httpGetResponse (client, "/users", "")
+    Success value => print "status: ${httpResponseStatus(value)}"
+    Error message => print message
+```

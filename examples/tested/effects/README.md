@@ -1,68 +1,35 @@
-# 🚀 ALGEBRAIC EFFECTS EXAMPLES 🔥
+# Algebraic Effects Examples
 
-This directory contains examples demonstrating **PRIMO ALGEBRAIC EFFECTS** in Osprey! 
+This directory is part of the golden example suite. Every runnable `.osp` file
+has a sibling `.expectedoutput` file, and `crates/diff_examples.sh` compares the
+program output byte-for-byte after trimming outer whitespace.
 
-Algebraic effects are a revolutionary approach to handling side effects in functional programming languages. They allow you to:
+## Coverage
 
-- **Suspend computation** at any point with `perform`
-- **Handle effects functionally** with structured handlers  
-- **Resume execution** exactly where you left off
-- **Compose effects** cleanly without callback hell
-- **Separate pure and effectful code** at the type level
+- `algebraic_effects_comprehensive.osp` covers multiple effects, effect sets,
+  handlers, handler-owned state, mock IO, files, logging, and fibers.
+- `handler_scoping.osp` covers nested handler override and forward-referenced
+  functions that perform effects.
+- `fiber_effects.osp` covers effects across spawned fibers.
+- `http_state_levels.osp` covers handler-owned state across HTTP callback and
+  fiber boundaries.
 
-## Examples
+## Explicit Resume Examples
 
-### `algebraic_effects.osp` 
-Basic effect declaration - shows how to declare effects and pure functions.
+- `resume_lifo_audit.osp` shows post-`resume` code unwinding in LIFO order.
+- `resume_unit_markers.osp` shows `resume()` for a `Unit` operation.
+- `resume_abort_early_exit.osp` shows an arm returning without `resume`, which
+  aborts the suspended continuation and becomes the whole handler result.
+- `resume_outer_handler_bridge.osp` shows a resumed body keeping outer handlers
+  installed.
+- `resume_value_rewrite.osp` shows the handler choosing operation results and
+  observing the final answer after each continuation returns.
 
-### `algebraic_effects_perform.osp`
-Demonstrates `perform` expressions and unhandled effect detection.
+## Running
 
-### `algebraic_effects_complete.osp` 
-Complete example with multiple effects showing the full system in action.
+From the repo root:
 
-### `algebraic_effects_with_handlers.osp`
-Shows future handler syntax (commented out until fully implemented).
-
-## Current Implementation Status
-
-✅ **IMPLEMENTED:**
-- Effect declarations (`effect EffectName { ... }`)
-- Effect annotations on function types (`fn foo() -> T !Effect`)
-- Perform expressions (`perform Effect.operation(args)`)
-- Unhandled effect detection and runtime errors
-- CPS infrastructure for future handlers
-- Effect registry and type tracking
-
-🚧 **COMING SOON:**
-- Handler expressions (`with handler Effect { ... } do { ... }`)
-- Resume operations (`resume(value)`)
-- Effect set composition (`![Effect1, Effect2]`)
-- Full CPS transformation with continuation capture
-- Zero-overhead effect compilation
-
-## How It Works
-
-Algebraic effects work by:
-
-1. **Effect Declaration**: Define what operations an effect supports
-2. **Effect Performance**: Use `perform` to suspend computation and invoke effect operations  
-3. **Effect Handling**: Catch and handle effect operations with custom logic
-4. **Continuation Resumption**: Resume computation from where it was suspended
-
-This creates a powerful abstraction for handling:
-- **State management** (get/set operations)
-- **I/O operations** (read/write with error handling)
-- **Async/concurrency** (async/await without promises)
-- **Exception handling** (throw/catch as effects)
-- **Non-determinism** (choice/fail for backtracking)
-
-## PRIMO Features
-
-- **Type-safe**: Effects are tracked in the type system
-- **Composable**: Effects can be combined and nested
-- **Zero-overhead**: Compiles to efficient LLVM IR  
-- **Structured**: No callback hell or monad stacks
-- **Direct-style**: Write code that looks synchronous but handles effects
-
-**ALGEBRAIC EFFECTS = THE FUTURE OF PROGRAMMING! 🔥** 
+```sh
+zsh crates/diff_examples.sh effects
+zsh crates/diff_examples.sh resume_
+```

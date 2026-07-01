@@ -19,3 +19,7 @@ description: "Receives a value from a channel."
 ```osprey
 let value = recv(ch)
 ```
+
+```osprey-ml
+value = recv ch
+```

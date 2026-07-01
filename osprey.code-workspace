@@ -1,6 +1,10 @@
 {
   "folders": [
     {
+      "name": "Osprey Workspace",
+      "path": "."
+    },
+    {
       "name": "Osprey Compiler",
       "path": "compiler"
     },
@@ -37,8 +41,16 @@
       "-v"
     ],
     "go.toolsManagement.checkForUpdates": "local",
+    "rust-analyzer.testExplorer": true,
+    "rust-analyzer.linkedProjects": [
+      "/Users/christianfindlay/Documents/Code/osprey/Cargo.toml"
+    ],
+    "rust-analyzer.cargo.allTargets": true,
+    "rust-analyzer.cargo.autoreload": true,
     "rust-analyzer.check.command": "clippy",
+    "rust-analyzer.check.allTargets": true,
     "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.cfg.setTest": true,
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit"
@@ -78,15 +90,12 @@
     "antlr.antlr4",
     "llvm-vs-code-extensions.vscode-clangd",
     "ms-vscode.makefile-tools",
-    "ms-vscode.test-adapter-converter",
     "ms-vscode.vscode-json",
     "redhat.vscode-yaml",
     "ms-vscode.vscode-markdown",
     "streetsidesoftware.code-spell-checker",
     "ms-vscode.hexeditor",
-    "hbenl.vscode-test-explorer",
     "hbenl.vscode-jest-test-adapter",
-    "kondratiev.vscode-rust-test-adapter",
     "premparihar.gotestexplorer",
     "ms-vscode.cpptools",
     "vadimcn.vscode-lldb",

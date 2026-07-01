@@ -19,3 +19,7 @@ description: "Cleans up resources associated with a completed process. Should be
 ```osprey
 cleanupProcess(processHandle)  // Free process resources
 ```
+
+```osprey-ml
+cleanupProcess processHandle  // Free process resources
+```

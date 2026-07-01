@@ -15,3 +15,7 @@ description: "A cryptographically-secure uniform random non-negative integer (0 
 ```osprey
 let big = random()  // e.g. 7240982340198
 ```
+
+```osprey-ml
+big = random  // e.g. 7240982340198
+```

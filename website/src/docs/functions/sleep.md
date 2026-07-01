@@ -20,3 +20,8 @@ description: "Pauses execution for the specified number of milliseconds."
 sleep(1000)  // Sleep for 1 second
 print("Awake!")
 ```
+
+```osprey-ml
+sleep 1000  // Sleep for 1 second
+print "Awake!"
+```

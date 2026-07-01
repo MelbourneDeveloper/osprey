@@ -20,3 +20,8 @@ description: "Splits s on separator. Error(InvalidArgument) on empty separator."
 ```osprey
 split("a,b,c", ",")  // Success { value: ["a","b","c"] }
 ```
+
+```osprey-ml
+split("a,b,c", ",")  // Success
+    value = ["a","b","c"]
+```

@@ -19,3 +19,8 @@ description: "Strict base-10 signed-int parser. No whitespace tolerance."
 ```osprey
 parseInt("42")  // Success { value: 42 }
 ```
+
+```osprey-ml
+parseInt("42")  // Success
+    value = 42
+```

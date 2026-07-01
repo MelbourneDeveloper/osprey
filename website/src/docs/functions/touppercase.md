@@ -19,3 +19,7 @@ description: "ASCII-aware uppercase. Unicode simple case mapping is a future add
 ```osprey
 toUpperCase("hello")  // "HELLO"
 ```
+
+```osprey-ml
+toUpperCase "hello"  // "HELLO"
+```

@@ -2,7 +2,7 @@
 layout: page
 title: "Built-in Functions"
 description: "Osprey Language Specification: Built-in Functions"
-date: 2026-06-19
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0012-built-infunctions/"
@@ -11,6 +11,8 @@ permalink: "/spec/0012-built-infunctions/"
 # Built-in Functions
 
 Reference for built-in functions available in every Osprey program. Operations that can fail return `Result`; see [Error Handling](/spec/0013-errorhandling/).
+
+> **Flavor layer — shared core (AST and above).**  The built-in function set is shared core: the *same* functions exist in every flavor, and a call to any of them lowers to the canonical `Expr::Call` node regardless of source surface. Only the call *spelling* is a flavor concern — the Default surface writes `toString(x)`, the ML flavor uses whitespace application `toString x` — and that difference is erased at lowering, so nothing here depends on which flavor produced the program. The Default spelling is shown throughout; see [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/) for the surface mapping.
 
 ## Basic I/O Functions
 
@@ -25,15 +27,93 @@ print(42)
 print(true)
 ```
 
-### `input() -> int`
-Reads an integer from stdin.
+```osprey-ml
+print "Hello World"
+print 42
+print true
+```
+
+### `input() -> string` — [BUILTIN-INPUT]
+Reads one line from standard input (without its trailing newline) and returns it
+as a string. At end-of-file — including when stdin is empty or not connected —
+it returns the empty string `""` rather than blocking or failing. Parse it with
+`parseInt`/`parseFloat` when a number is wanted.
 
 ```osprey
-let x = input()
+let line = input()                 // "" if there is no input
+let n    = parseInt(input()) ?: 0  // a number, or 0 when absent/unparseable
+```
+
+```osprey-ml
+line = input ()                    // "" if there is no input
+n    = parseInt (input ()) ?: 0    // a number, or 0 when absent/unparseable
 ```
 
 ### `toString(value: int | string | bool) -> string`
 Converts any value to its string representation.
+
+## Numeric Functions
+
+### `abs(n: int) -> int`
+Absolute value of an integer.
+
+### `intDiv(a: int, b: int) -> Result<int, MathError>` — [BUILTIN-INTDIV]
+Truncating integer division (rounds toward zero), divide-by-zero checked. The
+`/` operator is **float-only** by the [Type System](/spec/0004-typesystem/) spec
+(`int / int` promotes to `float`); `intDiv` is its integer sibling. A zero
+divisor returns `Error(MathError)`; otherwise `Success(quotient)`. Like the
+`+ - * %` operators, the `Success` payload auto-unwraps at value sites
+(interpolation, comparison, arguments, `Result`-typed function returns).
+
+```osprey
+intDiv(7, 2)        // Success(3)
+intDiv(255643, 10)  // Success(25564)
+intDiv(5, 0)        // Error(MathError) — "division by zero"
+fn half(n) = intDiv(n, 2)   // -> int (Result auto-unwraps at the typed return)
+```
+
+```osprey-ml
+intDiv (7, 2)        // Success(3)
+intDiv (255643, 10)  // Success(25564)
+intDiv (5, 0)        // Error(MathError) — "division by zero"
+half n = intDiv (n, 2)   // -> int (Result auto-unwraps at the typed return)
+```
+
+### `random() -> int` — [BUILTIN-RANDOM]
+A cryptographically-secure uniform random non-negative integer in `[0, 2^63-1]`,
+drawn fresh from the operating system's CSPRNG (`arc4random_buf` on macOS/BSD,
+`getrandom(2)` on Linux, falling back to `/dev/urandom`). It carries no userspace
+seed or state, so the stream is unpredictable and never reproducible — suitable
+for security-sensitive use as well as randomized inputs.
+
+```osprey
+let token = random()        // e.g. 7240982340198 (varies every call)
+fn coinFlip() = randomBelow(2) ?: 0   // 0 or 1
+```
+
+```osprey-ml
+token = random ()        // e.g. 7240982340198 (varies every call)
+coinFlip () = randomBelow 2 ?: 0   // 0 or 1
+```
+
+### `randomBelow(n: int) -> Result<int, MathError>` — [BUILTIN-RANDOM-BELOW]
+A cryptographically-secure uniform random integer in the half-open range
+`[0, n)`. The result is **unbiased**: it is drawn by rejection sampling, so every
+value in the range is equally likely (a plain `random() % n` is not). A
+non-positive `n` returns `Error(MathError)`; otherwise `Success(value)` with
+`0 <= value < n`. Compose for an arbitrary range: `lo + (randomBelow(hi - lo) ?: 0)`.
+
+```osprey
+let die = randomBelow(6) ?: 0          // a fair face 0..5
+match randomBelow(0) { Success { value } => value  Error { message } => 0 - 1 }  // Error
+```
+
+```osprey-ml
+die = randomBelow 6 ?: 0          // a fair face 0..5
+match randomBelow 0
+    Success value => value
+    Error message => 0 - 1       // Error
+```
 
 ## String Functions
 
@@ -59,6 +139,17 @@ String functions can be called three ways. **Pipe (`|>`) is the preferred form**
 
 // Direct call — fine for single operations
 toLowerCase(trim("  Hello  "))
+
+// Method-call (UFCS) — sugar, equivalent to the direct form
+"  Hello  ".trim().toLowerCase()
+```
+
+```osprey-ml
+// Preferred — pipe chain, reads top-to-bottom
+"  Hello, World  " |> trim |> toLowerCase |> split ", "
+
+// Direct call — fine for single operations
+toLowerCase (trim "  Hello  ")
 
 // Method-call (UFCS) — sugar, equivalent to the direct form
 "  Hello  ".trim().toLowerCase()
@@ -100,12 +191,22 @@ contains("hello world", "world")  // true
 contains("hello", "")             // true
 ```
 
+```osprey-ml
+contains ("hello world", "world")  // true
+contains ("hello", "")             // true
+```
+
 #### `startsWith(s: string, prefix: string) -> bool`
 #### `endsWith(s: string, suffix: string) -> bool`
 
 ```osprey
 "GET /api/users" |> startsWith("GET ")   // true
 "image.png"      |> endsWith(".png")     // true
+```
+
+```osprey-ml
+"GET /api/users" |> startsWith "GET "   // true
+"image.png"      |> endsWith ".png"     // true
 ```
 
 #### `indexOf(s: string, needle: string) -> Result<int, StringError>`
@@ -125,13 +226,31 @@ Returns the UTF-8 byte at index `i` as an `int` in `[0, 255]`, or `Error(IndexOu
 Decodes the UTF-8 codepoint starting at `byteIndex` and returns it as an `int`. Returns `Error(IndexOutOfRange)` if `byteIndex` is out of range, or `Error(InvalidArgument)` if it does not land on a codepoint boundary or the bytes are malformed. O(1) (at most 4 bytes read). Pair with `codePointWidth` to advance:
 
 ```osprey
-fn nextChar(s: string, i: int) -> Result<(int, int), StringError> = match codePointAt(s, i) {
+type CharStep = { codePoint: int, nextIndex: int }
+
+fn nextChar(s, i) = match codePointAt(s, i) {
     Success { value: cp } => match codePointWidth(cp) {
-        Success { value: w } => Success { value: (cp, i + w) }
+        Success { value: w } => Success { value: CharStep { codePoint: cp, nextIndex: i + w } }
         Error   { message }  => Error { message }
     }
     Error { message } => Error { message }
 }
+```
+
+```osprey-ml
+type CharStep = { codePoint: int, nextIndex: int }
+
+nextChar (s, i) =
+    match codePointAt (s, i)
+        Success cp =>
+            match codePointWidth cp
+                Success w =>
+                    Success
+                        CharStep
+                            codePoint = cp
+                            nextIndex = i + w
+                Error message => Error message
+        Error message => Error message
 ```
 
 #### `codePointWidth(codepoint: int) -> Result<int, StringError>`
@@ -161,6 +280,12 @@ match split("a,b,c", ",") {
     Success { value }   => forEach(value, print)   // "a" "b" "c"
     Error   { message } => print("split error")
 }
+```
+
+```osprey-ml
+match split ("a,b,c", ",")
+    Success value   => forEach (value, print)   // "a" "b" "c"
+    Error message   => print "split error"
 ```
 
 #### `join(parts: List<string>, separator: string) -> string`
@@ -212,14 +337,20 @@ The `+` operator on two `string` values returns `string` directly (not `Result`)
 let greeting = "Hello, " + name + "!"
 ```
 
+```osprey-ml
+greeting = "Hello, " + name + "!"
+```
+
 ### Example: parsing a query string
 
 ```osprey
-fn parsePair(pair: string) -> Result<(string, string), StringError> =
+type KeyValue = { key: string, value: string }
+
+fn parsePair(pair) =
     match indexOf(pair, "=") {
         Success { value: i } => match substring(pair, 0, i) {
             Success { value: k } => match substring(pair, i + 1, length(pair)) {
-                Success { value: v } => Success { value: (k, v) }
+                Success { value: v } => Success { value: KeyValue { key: k, value: v } }
                 Error   { message }  => Error { message }
             }
             Error { message } => Error { message }
@@ -266,14 +397,14 @@ Checks if file exists.
 Spawns an external process. The callback is invoked for each stdout/stderr line and on exit.
 
 ```osprey
-fn processEventHandler(processID: int, eventType: int, data: string) -> unit = match eventType {
+fn processEventHandler(processID, eventType, data) = match eventType {
     1 => print("[STDOUT] ${data}")
     2 => print("[STDERR] ${data}")
     3 => print("[EXIT] Code: ${data}")
     _ => print("[UNKNOWN] ${data}")
 }
 
-let result = spawnProcess(command: "echo 'Hello'", callback: processEventHandler)
+let result = spawnProcess("echo 'Hello'", processEventHandler)
 ```
 
 ### `awaitProcess(processId: int) -> int`
@@ -361,8 +492,10 @@ All keys. Iteration order is **unspecified**.
 #### `values(map: Map<K, V>) -> List<V>`
 All values, in the same order as `keys(map)`.
 
-#### `entries(map: Map<K, V>) -> List<(K, V)>`
-All `(key, value)` pairs, in the same order as `keys(map)`.
+#### `entries(map: Map<K, V>) -> List<Entry<K, V>>`
+All key/value entries, in the same order as `keys(map)`. An entry is the record
+`type Entry<K, V> = { key: K, value: V }` (Osprey has no tuple type, so a pair is
+a two-field record, not a `(K, V)` tuple).
 
 #### `mapValues(map: Map<K, V>, fn: fn(V) -> W) -> Map<K, W>`
 Apply `fn` to every value, preserving keys.
@@ -384,7 +517,7 @@ Group `items` into buckets keyed by `function(item)`. Within each bucket, items 
 
 ## Iterators and Pipe
 
-`range`, `forEach`, `map`, `filter`, `fold`, and `|>` are documented in [Iterators and Iteration](/spec/0010-loopconstructsandfunctionaliterators/). Lists and maps are `Iterable`; map iteration yields `(K, V)` tuples.
+`range`, `forEach`, `map`, `filter`, `fold`, and `|>` are documented in [Iterators and Iteration](/spec/0010-loopconstructsandfunctionaliterators/). Lists and maps are `Iterable`; map iteration yields `Entry<K, V>` records (`{ key, value }`, the same elements as `entries(map)`) — not tuples, since Osprey has no tuple type.
 
 ## HTTP
 

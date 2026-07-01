@@ -9,6 +9,11 @@ description: "A boolean type that can be either true or false. Used for logical 
 ## Example
 
 ```osprey
-let isValid: Bool = true
-let isComplete: Bool = false
+let isValid = true
+let isComplete = false
+```
+
+```osprey-ml
+isValid = true
+isComplete = false
 ```

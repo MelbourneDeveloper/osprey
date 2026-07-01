@@ -4,6 +4,47 @@ title: "API Reference"
 description: "Complete reference documentation for the Osprey programming language"
 ---
 
+## Flavors
+
+Osprey is **one language** you can write **two different ways**. Both compile to the exact
+same program and run identically — only the way you type the code differs. Pick whichever
+you prefer, per file, by extension.
+
+- **Default** (`.osp`) — C-style braces. `fn f(a, b) = …`, `let x = v`, `f(x)` calls,
+  `{ }` blocks. Familiar from C, Rust, Swift, or TypeScript.
+- **ML** (`.ospml`) — offside (indentation) layout, curry-by-default. No `fn`/`let`,
+  whitespace application (`f x`), `\x => e` lambdas, `:=` for mutation. Reads like
+  OCaml, F#, or Haskell.
+
+The same program, both flavors — a union type, a function that matches on it, a
+binding, and interpolated output. Both compile to identical IR:
+
+```osprey
+type Shape = Circle | Square
+
+fn area(s, size) = match s {
+    Circle => size * size * 3
+    Square => size * size
+}
+
+let total = area(Circle, 4) + area(Square, 2)
+print("total: ${total}")
+```
+
+```osprey-ml
+type Shape =
+    Circle
+    Square
+
+area (s, size) =
+    match s
+        Circle => size * size * 3
+        Square => size * size
+
+total = area (Circle, 4) + area (Square, 2)
+print "total: ${total}"
+```
+
 ## Quick Navigation
 
 - [Functions](functions/) - Built-in functions for I/O, iteration, and data transformation

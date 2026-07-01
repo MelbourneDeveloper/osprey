@@ -20,3 +20,7 @@ description: "Sends a value to a channel. Returns 1 for success, 0 for failure."
 ```osprey
 let success = send(ch, 42)
 ```
+
+```osprey-ml
+success = send (ch, 42)
+```

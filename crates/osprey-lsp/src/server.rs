@@ -271,6 +271,17 @@ fn build_dispatcher(engine: &OspreyEngine) -> Dispatcher {
             )))
         },
     );
+    register(
+        &dispatcher,
+        engine,
+        "textDocument/formatting",
+        |e, p, _c| async move {
+            let uri = wire::doc_uri(&p)?;
+            let text = e.vfs().text(&DocumentUri::new(uri.clone()))?;
+            let formatted = osprey_fmt::format_for_path(&uri, &text).ok()?;
+            Some(result(wire::formatting_result(&formatted, &text, ENCODING)))
+        },
+    );
     dispatcher
 }
 
@@ -741,6 +752,27 @@ mod tests {
         let sig_result = sig.result.expect("signature result");
         assert_at(&sig_result, "/activeParameter", 1);
         assert_at(&sig_result, "/signatures/0/parameters/0/label", "a: int");
+        h.shutdown_and_exit().await;
+    }
+
+    #[tokio::test]
+    async fn formatting_reindents_the_open_document() {
+        let mut h = Harness::start();
+        // A messy-but-valid Default buffer reindents to four-space blocks.
+        let _diags = h.open("fn main() = {\nprint(1)\n}\n").await;
+        let resp = h
+            .request(90, "textDocument/formatting", text_doc(URI))
+            .await;
+        let edits = array_result(&resp, "formatting");
+        let first = edits.first().expect("one formatting edit");
+        assert_at(first, "/newText", "fn main() = {\n    print(1)\n}\n");
+
+        // Once formatted, a second request reports no edits.
+        let _again = h.open("fn main() = {\n    print(1)\n}\n").await;
+        let resp2 = h
+            .request(91, "textDocument/formatting", text_doc(URI))
+            .await;
+        assert_eq!(resp2.result, Some(Value::Array(Vec::new())));
         h.shutdown_and_exit().await;
     }
 

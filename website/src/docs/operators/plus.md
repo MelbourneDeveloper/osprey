@@ -11,3 +11,7 @@ description: "Adds two numbers together."
 ```osprey
 let result = 5 + 3  // result = 8
 ```
+
+```osprey-ml
+result = 5 + 3  // result = 8
+```

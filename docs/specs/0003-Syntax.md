@@ -2,6 +2,10 @@
 
 This chapter defines the syntactic forms that make up an Osprey program. Semantics for individual constructs are in their dedicated chapters; cross-references are noted inline.
 
+> **Flavor layer — surface (CST).**  The syntactic forms here are surface spellings only; the **semantics and lowering are shared-core and flavor-blind** — every spelling collapses into the one canonical AST (`osprey_ast::Program`), the single tree every later phase consumes ([FLAVOR-BOUNDARY]). This chapter shows **both flavors**: the Default (`.osp`) spelling — C-style braces, `fn`, and `f(x: a, y: b)` named-argument calls — and, wherever the surface actually differs, the **ML (`.ospml`) twin shown inline alongside it** in `osprey-ml` blocks (offside layout, `\x => e`, whitespace application). Both spellings lower to the *same* AST nodes; see [ML Flavor Syntax](0024-MLFlavorSyntax.md) for the full ML counterpart of each form, and [Language Flavors](0023-LanguageFlavors.md) for the one-AST-many-CSTs model and the [FLAVOR-BOUNDARY] law.
+>
+> The major forms below map to canonical AST nodes as follows: `let`/`mut` → `Stmt::Let{mutable}`; `fn` → `Stmt::Function`; `extern` → `Stmt::Extern`; `type` → `Stmt::Type` + `TypeVariant`; `import` → `Stmt::Import`; `module` → `Stmt::Module{name, body}`; calls → `Expr::Call{function, arguments, named_arguments}`; `match` → `Expr::Match` + `MatchArm`; `{ … }` blocks → `Expr::Block{statements, value}`; field access → `Expr::FieldAccess`; indexing → `Expr::Index`; and the pattern forms → `Pattern::*` (`Wildcard`, `Literal`, `Constructor`, `TypeAnnotated`, `Structural`, `Binding`). Names and shapes are flavor-blind from the AST upward.
+
 - [Program Structure](#program-structure)
 - [Imports](#imports)
 - [Let Declarations](#let-declarations)
@@ -25,7 +29,29 @@ statement ::= importStmt
             | typeDecl
             | moduleDecl
             | exprStmt
+
+moduleDecl ::= "module" ID "{" statement* "}"
 ```
+
+A `moduleDecl` groups declarations under a namespace and lowers to
+`Stmt::Module { name, body }`:
+
+```osprey
+module Geometry {
+    let pi   = 3.14159
+    fn area(r) = pi * r * r
+}
+```
+
+```osprey-ml
+module Geometry
+    pi = 3.14159
+    area r = pi * r * r
+```
+
+Module semantics for multi-file projects, exports, signatures, state modules,
+and path-independent namespaces are defined in
+[Modules and Namespaces](0025-ModulesAndNamespaces.md).
 
 ## Imports
 
@@ -39,6 +65,9 @@ import std.io
 import graphics.canvas
 ```
 
+Import semantics for multi-file projects, aliases, explicit member imports, and
+wildcard policy are defined in [Modules and Namespaces](0025-ModulesAndNamespaces.md#imports).
+
 ## Let Declarations
 
 ```ebnf
@@ -50,6 +79,13 @@ let x       = 42
 let name    = "Alice"
 mut counter = 0
 let result  = calculateValue(input: data)
+```
+
+```osprey-ml
+x       = 42
+name    = "Alice"
+mut counter = 0
+result  = calculateValue (input: data)
 ```
 
 `let` binds immutably; `mut` binds mutably. Type annotations are optional.
@@ -70,7 +106,16 @@ fn greet(name) = "Hello " + name
 fn getValue()  = 42
 ```
 
+```osprey-ml
+double x   = x * 2
+add (x, y) = x + y
+greet name = "Hello " + name
+getValue () = 42
+```
+
 Effect sets (`!E`) are described in [Algebraic Effects](0017-AlgebraicEffects.md). Functions of two or more parameters require named arguments at call sites; see [Function Calls](0005-FunctionCalls.md).
+
+A Default multi-parameter function such as `fn add(x, y) = x + y` lowers to a **single flat multi-parameter** `Stmt::Function`; it does **not** curry. (The ML flavor curries by default — `add x y` is nested single-parameter functions — and spells this flat form as `add (x, y)`; the two Default forms and their ML twins are defined in [Currying canonicalisation](0023-LanguageFlavors.md#currying-canonicalisation).)
 
 ## Extern Declarations
 
@@ -90,6 +135,14 @@ extern fn rust_is_prime(n: int) -> bool
 
 let sum     = rust_add(a: 15, b: 25)
 let isPrime = rust_is_prime(17)
+```
+
+```osprey-ml
+extern rust_add (a : int, b : int) -> int
+extern rust_is_prime (n : int) -> bool
+
+sum     = rust_add (a: 15, b: 25)
+isPrime = rust_is_prime 17
 ```
 
 ABI mapping:
@@ -121,6 +174,17 @@ type Shape = Circle    { radius: int }
            | Rectangle { width: int, height: int }
 ```
 
+```osprey-ml
+type Color = Red | Green | Blue
+
+type Shape =
+    | Circle
+        radius : int
+    | Rectangle
+        width : int
+        height : int
+```
+
 ## Records
 
 A record type names a fixed set of fields. Construction uses `TypeName { field: value, ... }`; field order at the call site is irrelevant.
@@ -131,6 +195,24 @@ type Person = { name: string, age: int } where validatePerson
 
 let point  = Point { x: 10, y: 20 }
 let person = Person { name: "Alice", age: 25 }
+```
+
+```osprey-ml
+type Point =
+    x : int
+    y : int
+type Person = where validatePerson
+    name : string
+    age : int
+
+point  =
+    Point
+        x = 10
+        y = 20
+person =
+    Person
+        name = "Alice"
+        age = 25
 ```
 
 Validation, non-destructive update (`record { field: value }`), and full field-access semantics are in [Type System](0004-TypeSystem.md).
@@ -188,6 +270,14 @@ match numbers[0] {
 }
 ```
 
+```osprey-ml
+numbers = [1, 2, 3, 4]
+
+match numbers[0]
+    Success value   => print "first: ${value}"
+    Error   message => print "index error: ${message}"
+```
+
 ## Field Access
 
 ```ebnf
@@ -202,12 +292,29 @@ let user  = User { id: 1, name: "Alice" }
 let n     = user.name
 ```
 
+```osprey-ml
+type User =
+    id : int
+    name : string
+user  =
+    User
+        id = 1
+        name = "Alice"
+n     = user.name
+```
+
 Field access on `any`, `Result`, or any union type requires a `match` to narrow the value first. See [Type System](0004-TypeSystem.md) for the full rules.
 
 Records are immutable. Use the non-destructive update form to produce a modified copy:
 
 ```osprey
 let p2 = point { x: 15 }   // y carried over
+```
+
+```osprey-ml
+p2 =
+    point
+        x = 15   // y carried over
 ```
 
 ## Match Expressions
@@ -233,6 +340,20 @@ let label = match status {
     Running        => "running"
     Done { code }  => "done (${code})"
 }
+```
+
+```osprey-ml
+type Status =
+    | Ready
+    | Running
+    | Done
+        code : int
+
+label =
+    match status
+        Ready       => "ready"
+        Running     => "running"
+        Done code   => "done (${code})"
 ```
 
 Pattern semantics, exhaustiveness, and the ternary shorthand are in [Pattern Matching](0007-PatternMatching.md).

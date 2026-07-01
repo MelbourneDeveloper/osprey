@@ -15,3 +15,7 @@ description: "Keeps the WebSocket server running indefinitely until interrupted 
 ```osprey
 websocketKeepAlive()  // Blocks until Ctrl+C
 ```
+
+```osprey-ml
+websocketKeepAlive  // Blocks until Ctrl+C
+```

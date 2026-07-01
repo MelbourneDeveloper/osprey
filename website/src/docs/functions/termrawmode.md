@@ -19,3 +19,7 @@ description: "Enables (1) or disables (0) raw terminal input mode, so keypresses
 ```osprey
 termRawMode(1)
 ```
+
+```osprey-ml
+termRawMode 1
+```

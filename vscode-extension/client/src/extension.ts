@@ -133,8 +133,40 @@ export interface ActiveEditorLike {
   document: { languageId: string; fileName: string };
 }
 
+// Osprey ships two surface flavors that share one compiler, language server,
+// and debug pipeline: the brace flavor (.osp, languageId "osprey") and the ML
+// layout flavor (.ospml, languageId "osprey-ml"). The CLI selects the flavor
+// from the file extension, so every editor-side filter must accept BOTH — never
+// hard-filter to ".osp"/"osprey" alone or ML files silently lose their UX.
+const OSPREY_LANGUAGE_IDS = ["osprey", "osprey-ml"];
+const OSPREY_FILE_EXTENSIONS = [".osp", ".ospml"];
+
+export function isOspreyFile(fileName: string): boolean {
+  return OSPREY_FILE_EXTENSIONS.some((ext) => fileName.endsWith(ext));
+}
+
+function isOspreyLanguageId(languageId: string): boolean {
+  return OSPREY_LANGUAGE_IDS.includes(languageId);
+}
+
+// ospreyLanguageForFile maps an Osprey source file to its VS Code language id —
+// the ML layout flavor (.ospml) to "osprey-ml", the brace flavor (.osp) to
+// "osprey" — or undefined for a non-Osprey file. ".ospml" is checked first
+// because it also ends with "osp". Exported so the mapping is unit-testable.
+export function ospreyLanguageForFile(fileName: string): string | undefined {
+  if (fileName.endsWith(".ospml")) {
+    return "osprey-ml";
+  }
+  if (fileName.endsWith(".osp")) {
+    return "osprey";
+  }
+  return undefined;
+}
+
 function isOspreyDocument(document: ActiveEditorLike["document"]): boolean {
-  return document.languageId === "osprey" || document.fileName.endsWith(".osp");
+  return (
+    isOspreyLanguageId(document.languageId) || isOspreyFile(document.fileName)
+  );
 }
 
 // applyDefaultOspreyDebugConfig fills an otherwise-empty launch config from the
@@ -398,9 +430,11 @@ export function activate(context: ExtensionContext) {
     documentSelector: [
       { scheme: "file", language: "osprey" },
       { scheme: "untitled", language: "osprey" },
+      { scheme: "file", language: "osprey-ml" },
+      { scheme: "untitled", language: "osprey-ml" },
     ],
     synchronize: {
-      fileEvents: workspace.createFileSystemWatcher("**/*.osp"),
+      fileEvents: workspace.createFileSystemWatcher("**/*.osp{,ml}"),
     },
     outputChannelName: "Osprey Language Server",
     revealOutputChannelOn: RevealOutputChannelOn.Error,
@@ -529,21 +563,22 @@ export function activate(context: ExtensionContext) {
     }),
   );
 
-  // Auto-detect and force language association for .osp files
+  // Auto-detect and force language association for .osp and .ospml files. The
+  // ML layout flavor (.ospml) binds to "osprey-ml"; the brace flavor (.osp) to
+  // "osprey". ".ospml" must be tested before ".osp" because the former also
+  // ends with "osp".
   workspace.onDidOpenTextDocument((document) => {
     outputChannel.appendLine(`📁 Document opened: ${document.fileName}`);
-    if (
-      document.fileName.endsWith(".osp") &&
-      document.languageId !== "osprey"
-    ) {
+    const target = ospreyLanguageForFile(document.fileName);
+    if (target && document.languageId !== target) {
       outputChannel.appendLine(
         `🔧 Forcing language association for ${document.fileName} (was: ${document.languageId})`,
       );
       // Use the proper API to set language
-      languages.setTextDocumentLanguage(document, "osprey").then(
+      languages.setTextDocumentLanguage(document, target).then(
         () => {
           outputChannel.appendLine(
-            `✅ Successfully set language to osprey for ${document.fileName}`,
+            `✅ Successfully set language to ${target} for ${document.fileName}`,
           );
         },
         (error: any) => {
@@ -555,14 +590,12 @@ export function activate(context: ExtensionContext) {
 
   // Check already open documents
   workspace.textDocuments.forEach((document) => {
-    if (
-      document.fileName.endsWith(".osp") &&
-      document.languageId !== "osprey"
-    ) {
+    const target = ospreyLanguageForFile(document.fileName);
+    if (target && document.languageId !== target) {
       outputChannel.appendLine(
         `🔧 Forcing language association for already open file: ${document.fileName}`,
       );
-      languages.setTextDocumentLanguage(document, "osprey");
+      languages.setTextDocumentLanguage(document, target);
     }
   });
 
@@ -580,8 +613,14 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand("osprey.setLanguage", () => {
       const activeEditor = window.activeTextEditor;
       if (activeEditor) {
-        languages.setTextDocumentLanguage(activeEditor.document, "osprey");
-        window.showInformationMessage("Set language to Osprey");
+        const target =
+          ospreyLanguageForFile(activeEditor.document.fileName) ?? "osprey";
+        languages.setTextDocumentLanguage(activeEditor.document, target);
+        window.showInformationMessage(
+          target === "osprey-ml"
+            ? "Set language to Osprey ML"
+            : "Set language to Osprey",
+        );
       }
     }),
     workspace.onDidChangeConfiguration((event: any) => {
@@ -597,7 +636,7 @@ export function activate(context: ExtensionContext) {
 async function debugCurrentFile() {
   const config = defaultOspreyDebugConfigForEditor(window.activeTextEditor);
   if (!config.program) {
-    window.showErrorMessage("Please open a .osp file to debug");
+    window.showErrorMessage("Please open a .osp or .ospml file to debug");
     return;
   }
   await debug.startDebugging(undefined, config);
@@ -611,8 +650,8 @@ function compileCurrentFile(compilerCommand: string) {
   }
 
   const document = activeEditor.document;
-  if (!document.fileName.endsWith(".osp")) {
-    window.showErrorMessage("Please open a .osp file to compile");
+  if (!isOspreyFile(document.fileName)) {
+    window.showErrorMessage("Please open a .osp or .ospml file to compile");
     return;
   }
 
@@ -671,8 +710,8 @@ function compileAndRunCurrentFile(compilerCommand: string) {
   }
 
   const document = activeEditor.document;
-  if (!document.fileName.endsWith(".osp")) {
-    window.showErrorMessage("Please open a .osp file to run");
+  if (!isOspreyFile(document.fileName)) {
+    window.showErrorMessage("Please open a .osp or .ospml file to run");
     return;
   }
 

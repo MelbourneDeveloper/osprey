@@ -11,3 +11,7 @@ description: "Compares two values for inequality."
 ```osprey
 let isNotEqual = 5 != 3  // isNotEqual = true
 ```
+
+```osprey-ml
+isNotEqual = 5 != 3  // isNotEqual = true
+```

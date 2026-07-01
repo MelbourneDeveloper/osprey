@@ -24,3 +24,9 @@ match broadcastResult {
     Err message => print("Failed to broadcast: ${message}")
 }
 ```
+
+```osprey-ml
+match broadcastResult
+    Success _ => print "Message broadcasted to all clients"
+    Err message => print "Failed to broadcast: ${message}"
+```

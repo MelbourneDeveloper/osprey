@@ -19,3 +19,7 @@ description: "Reverses byte order. Grapheme-cluster reversal is future work."
 ```osprey
 reverse("abc")  // "cba"
 ```
+
+```osprey-ml
+reverse "abc"  // "cba"
+```

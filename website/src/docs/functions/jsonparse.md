@@ -22,3 +22,9 @@ match jsonParse("{\"name\": \"osprey\"}") {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match jsonParse "{\"name\": \"osprey\"}"
+    Success value => print "parsed"
+    Error message => print message
+```

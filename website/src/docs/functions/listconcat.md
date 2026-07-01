@@ -20,3 +20,7 @@ description: "Returns left ++ right. Same as left + right."
 ```osprey
 listConcat([1, 2], [3, 4])  // [1, 2, 3, 4]
 ```
+
+```osprey-ml
+listConcat ([1, 2], [3, 4])  // [1, 2, 3, 4]
+```

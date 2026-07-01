@@ -11,3 +11,7 @@ description: "Divides the first number by the second."
 ```osprey
 let result = 15 / 3  // result = 5
 ```
+
+```osprey-ml
+result = 15 / 3  // result = 5
+```

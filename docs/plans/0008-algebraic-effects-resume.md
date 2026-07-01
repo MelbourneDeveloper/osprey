@@ -2,7 +2,7 @@
 
 **Subsystem:** `crates/osprey-syntax`, `crates/osprey-ast`, `crates/osprey-types`,
 `crates/osprey-codegen`, `compiler/runtime`
-**Status:** Single-shot deep `resume` landing — thread-as-continuation (Option B)
+**Status:** Single-shot deep `resume` landed — thread-as-continuation (Option B)
 **Spec:** [0017-AlgebraicEffects.md](../specs/0017-AlgebraicEffects.md)
 
 ## Summary
@@ -12,10 +12,9 @@ effect annotations, and unhandled-effect rejection all work. A handler arm's
 value now becomes the `perform`'s result and the performer continues past the
 `perform` site — the common **single-shot tail-resume** — and handlers may own
 mutable state (`[EFFECTS-HANDLER-STATE]`, see below), so the `State` effect is
-fully usable today. What remains is an *explicit* `resume` expression: capturing
-the continuation as a value so an arm can run code *after* resuming, resume in a
-non-tail position, or resume more than once (multi-shot). That is the remaining
-capstone.
+fully usable today. Explicit single-shot deep `resume` now captures the
+continuation as a value so an arm can run code *after* resuming or resume in a
+non-tail position. Multi-shot resume remains a follow-up.
 
 ## Update — handler-owned state landed
 
@@ -30,16 +29,26 @@ Implemented in [crates/osprey-codegen/src/effects.rs](../../crates/osprey-codege
 [expr.rs](../../crates/osprey-codegen/src/expr.rs) and
 [lower.rs](../../crates/osprey-codegen/src/lower.rs), and
 [compiler/runtime/effects_runtime.c](../../compiler/runtime/effects_runtime.c).
-Reference app: `examples/tested/effects/http_state_levels.osp`. The
-remaining `resume` work below is unchanged.
+Reference app: `examples/tested/effects/http_state_levels.osp`.
+
+## Update — single-shot explicit resume landed
+
+`[EFFECTS-RESUME]` Resuming handler regions now use the thread-as-continuation
+runtime in [compiler/runtime/effects_runtime.c](../../compiler/runtime/effects_runtime.c):
+the body runs on a pthread with an inherited handler stack, `perform` suspends
+through generated trampolines, and `resume(v)` resumes the body until completion
+or the next performed operation. Codegen keeps non-resuming handlers on the
+existing direct-call path and emits the coroutine path only for arms that mention
+`resume`. Covered by the CLI regression test
+`explicit_resume_runs_the_performer_continuation`.
 
 ## Evidence
 
-- Spec status: *"Continuation/`resume` semantics inside handlers are not yet
-  implemented; current handlers act as value substitutions …"* —
+- Spec status: explicit single-shot deep `resume` is executable —
   [0017-AlgebraicEffects.md](../specs/0017-AlgebraicEffects.md) §Status.
-- Codegen note: *"example handlers never resume, so an arm is an ordinary
-  function"* — [crates/osprey-codegen/src/effects.rs](../../crates/osprey-codegen/src/effects.rs).
+- Codegen gate: resuming regions emit body thunks, suspend trampolines, and a
+  host-side drive/dispatch function; non-resuming regions keep the ordinary
+  handler-function path — [crates/osprey-codegen/src/effects.rs](../../crates/osprey-codegen/src/effects.rs).
 
 ## What works today
 
@@ -49,15 +58,17 @@ remaining `resume` work below is unchanged.
   [crates/osprey-codegen/src/effects.rs](../../crates/osprey-codegen/src/effects.rs).
 - Compile-time unhandled-effect checking —
   [crates/osprey-types/src/check.rs](../../crates/osprey-types/src/check.rs).
+- Single-shot deep explicit `resume` in handler arms —
+  [crates/osprey-codegen/src/effects.rs](../../crates/osprey-codegen/src/effects.rs),
+  [compiler/runtime/effects_runtime.c](../../compiler/runtime/effects_runtime.c).
 - Working example —
   [examples/tested/effects/algebraic_effects_comprehensive.osp](../../examples/tested/effects/algebraic_effects_comprehensive.osp).
 
 ## Where it stops
 
-A handler arm is lowered as an ordinary function returning a value; there is no
-captured continuation, so `resume v` (continue the performer with `v`) cannot be
-expressed. Multi-shot resume (resuming the same continuation more than once) is
-likewise impossible.
+Multi-shot resume (resuming the same continuation more than once) remains a
+follow-up. The landed implementation is single-shot and stackful; a live pthread
+stack is not cloned.
 
 ## Chosen design — thread-as-continuation (Option B)
 
@@ -84,10 +95,10 @@ mutex/cond pair, an operation-id + argument buffer (body→host), a `resume_valu
 (host→body), the body's final result, and `done`/`abort` flags.
 
 - `Coro *__osprey_coro_new(void *env)` — allocate.
-- `void __osprey_coro_start(Coro*, i64 (*body)(void*), HandlerSnapshot*)` — spawn
-  the body thread with the inherited handler stack, then block the host until the
-  body first suspends or completes.
-- `i64 __osprey_coro_suspend(Coro*, i64 op_id, i64 *args)` — **body side**, called
+- `void __osprey_coro_start(Coro*, i64 (*body)(void*), void *env, HandlerSnapshot*)` — spawn
+  the body thread with the inherited handler stack and body environment, then
+  block the host until the body first suspends or completes.
+- `i64 __osprey_coro_suspend(Coro*, i64 op_id, i64 *args, i64 argc)` — **body side**, called
   by each arm's suspend-trampoline at a `perform`: publishes `(op_id,args)`, hands
   control to the host, blocks until resumed, returns `resume_value`. If the host
   set `abort`, it `pthread_exit`s (single-shot teardown).
@@ -104,7 +115,7 @@ straight-line and only suspends:
 ```
 region(env):
   coro = coro_new(env); push suspend-trampolines(env=coro); snapshot = handler_snapshot()
-  coro_start(coro, body_thunk, snapshot)
+  coro_start(coro, body_thunk, env, snapshot)
   return drive(coro)
 
 drive(coro):                 // also re-entered after each resume that performed again
@@ -123,22 +134,19 @@ that never resumes returns directly → host sets `abort`, joins the body, frees
 
 ### Phases
 
-1. **Surface syntax + AST.** `resume "(" expr? ")"` in the grammar, AST
+1. **Surface syntax + AST.** Done: `resume "(" expr? ")"` in the grammar, AST
    `Expr::Resume(Option<Box<Expr>>)`, syntax lowering.
-2. **Types.** Bind handler-arm params from the effect's `OpType`; type `resume`'s
+2. **Types.** Done: bind handler-arm params from the effect's `OpType`; type `resume`'s
    argument against the operation result; reject `resume` outside a handler arm.
-3. **Runtime.** The `Coro` ABI above in `effects_runtime.c`.
-4. **Codegen.** Static gate; suspend-trampolines; `body_thunk`; the host
+3. **Runtime.** Done: the `Coro` ABI above in `effects_runtime.c`.
+4. **Codegen.** Done: static gate; suspend-trampolines; `body_thunk`; the host
    `drive`/`dispatch_arm`; lower `resume`.
-5. **Multi-shot** rejected with a clear diagnostic.
+5. **Multi-shot** follow-up.
 
 ## Testing
 
-- Extend
-  [algebraic_effects_comprehensive.osp](../../examples/tested/effects/algebraic_effects_comprehensive.osp)
-  with a state/generator-style handler that resumes (e.g. a counter or a
-  `yield`-like producer) and asserts the performer continues; refresh
-  `.expectedoutput`.
+- CLI regression: `explicit_resume_runs_the_performer_continuation` asserts
+  LIFO post-`resume` output for the Audit/pipeline example.
 - `failscompilation` case: multi-shot resume rejected with a clear message (until
   implemented).
 
@@ -154,13 +162,13 @@ that never resumes returns directly → host sets `abort`, joins the body, frees
 
 ## TODO
 
-- [ ] Add `resume <expr>` to grammar, AST, and syntax lowering.
-- [ ] Bind handler-arm params from the effect `OpType`; type `resume`.
-- [ ] Prototype single-shot delimited continuations (stackful capture on the
+- [x] Add `resume <expr>` to grammar, AST, and syntax lowering.
+- [x] Bind handler-arm params from the effect `OpType`; type `resume`.
+- [x] Prototype single-shot delimited continuations (stackful capture on the
       existing handler stack).
-- [ ] Implement `__osprey_handler_resume` in `effects_runtime.c`.
-- [ ] Codegen handler arms to capture the continuation + emit resume.
+- [x] Implement the `__osprey_coro_*` continuation ABI in `effects_runtime.c`.
+- [x] Codegen handler arms to capture the continuation + emit resume.
 - [ ] Reject multi-shot resume with a clear diagnostic (follow-up to implement).
-- [ ] Extend the effects example with a resuming handler; refresh `.expectedoutput`.
-- [ ] Update 0017 §Status once single-shot resume lands.
+- [x] Add a resuming-handler CLI regression test.
+- [x] Update 0017 §Status once single-shot resume lands.
 - [ ] `make ci` green.

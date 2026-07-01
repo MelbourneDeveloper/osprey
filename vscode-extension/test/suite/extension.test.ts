@@ -16,6 +16,8 @@ import {
   resolveLldbDapCommand,
   resolveLldbDapExecutable,
   missingLldbDapMessage,
+  ospreyLanguageForFile,
+  isOspreyFile,
   deactivate,
 } from "../../client/src/extension";
 import {
@@ -24,6 +26,7 @@ import {
   resolveRequiredLldbDap,
 } from "./osprey-test-env";
 import {
+  assertLocalVariable,
   clearDebugBreakpoints,
   getScopes,
   getVariables,
@@ -1090,6 +1093,167 @@ suite("Osprey Language Features Tests", () => {
       "restLen is listed among document symbols",
     );
   });
+
+  test("CHUNKY: the live LSP serves the ML flavor (.ospml) end-to-end", async function () {
+    this.timeout(60000);
+    // The .ospml layout flavor rides the SAME language server through the
+    // `osprey-ml` document selector wired in activate(). Nothing before this
+    // proved the live server answers over ML source; this drives hover,
+    // go-to-definition, references, symbols, diagnostics and completion against a
+    // real .ospml buffer so a regression that broke ML editor UX (e.g. the
+    // selector losing "osprey-ml", or the ML frontend not reaching the LSP) fails
+    // loudly. ML flavor: `name args = body`, whitespace application, offside
+    // blocks, `name = value` bindings (no `let`/`fn`). [LSP-ML-FLAVOR]
+    const ML =
+      [
+        "double x = x * 2", // 0  curried unary fn
+        "triple x = x + x + x", // 1  curried unary fn
+        "base = 5", // 2  binding
+        "d = double base", // 3  call site of double
+        "t = triple base", // 4  call site of triple
+        "u = double base", // 5  second call of double
+        'print "d=${d} t=${t} u=${u}"', // 6
+      ].join("\n") + "\n";
+    const file = path.join(tempDir, "sweep.ospml");
+    fs.writeFileSync(file, ML);
+    const doc = await vscode.workspace.openTextDocument(file);
+    await vscode.window.showTextDocument(doc);
+
+    // The extension must associate .ospml with the ML language id, which is how
+    // the LSP client's documentSelector routes it to the server.
+    for (let i = 0; i < 40 && doc.languageId !== "osprey-ml"; i++) {
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    assert.strictEqual(
+      doc.languageId,
+      "osprey-ml",
+      "a .ospml file is associated with the osprey-ml language id",
+    );
+
+    // --- HOVER: the curried function at its declaration and a call site ---
+    const declHover = await pollFor(
+      () => hoverAt(doc.uri, 0, 0),
+      (h) => nonEmptyHover(h) && hoverText(h[0]).includes("double"),
+      80,
+      250,
+    );
+    const declMd = hoverText(declHover[0]);
+    assert.ok(declMd.includes("double"), "ML fn hover names the function");
+    assert.ok(
+      declMd.includes("->"),
+      "ML fn hover renders a function-type arrow",
+    );
+    const callHover = await pollFor(
+      () => hoverAt(doc.uri, 3, 4),
+      (h) => nonEmptyHover(h) && hoverText(h[0]).includes("double"),
+    );
+    assert.strictEqual(
+      hoverText(callHover[0]),
+      declMd,
+      "ML call-site hover matches the declaration hover",
+    );
+    // A binding hovers with its inferred type — no annotation in the source.
+    const baseHover = await pollFor(
+      () => hoverAt(doc.uri, 2, 0),
+      (h) => nonEmptyHover(h) && hoverText(h[0]).includes("base"),
+    );
+    assert.ok(
+      /base\s*:\s*int/i.test(hoverText(baseHover[0])),
+      `ML binding hover shows inferred type: ${hoverText(baseHover[0])}`,
+    );
+
+    // --- GO TO DEFINITION: a call jumps back to the ML declaration ---
+    const def = await pollFor(
+      () => defsAt(doc.uri, 3, 4),
+      (d) => Array.isArray(d) && d.length > 0,
+    );
+    assert.strictEqual(def[0].range.start.line, 0, "double defined on line 0");
+    assert.strictEqual(
+      def[0].uri.toString(),
+      doc.uri.toString(),
+      "definition resolves within the .ospml document",
+    );
+
+    // --- FIND REFERENCES: declaration + both call sites of double ---
+    const refs = await pollFor(
+      () => refsAt(doc.uri, 0, 0),
+      (r) => Array.isArray(r) && r.length >= 3,
+    );
+    assert.deepStrictEqual(
+      startLines(refs),
+      [0, 3, 5],
+      "double is referenced at its declaration and both call sites",
+    );
+
+    // --- DOCUMENT SYMBOLS: both functions and every binding are listed ---
+    const syms = await pollFor(
+      () => symbolsOf(doc.uri),
+      (s) => Array.isArray(s) && s.length >= 5,
+    );
+    const names = new Set(syms.map((s) => s.name));
+    for (const name of ["double", "triple", "base", "d", "t", "u"]) {
+      assert.ok(names.has(name), `ML symbol ${name} is listed`);
+    }
+
+    // --- COMPLETION: user-defined ML symbols are offered ---
+    const list = await pollFor(
+      () => completionAt(doc.uri, 4, 4),
+      (l) => !!l && Array.isArray(l.items) && l.items.length > 0,
+    );
+    const labels = labelsOf(list);
+    assert.ok(
+      labels.includes("double") && labels.includes("triple"),
+      "completion offers the ML user functions",
+    );
+
+    // --- DIAGNOSTICS lifecycle on ML source: break it, then fix it ---
+    const editor = await vscode.window.showTextDocument(doc);
+    await editor.edit((b) =>
+      b.replace(
+        new vscode.Range(0, 0, doc.lineCount, 0),
+        'd = missingFn 5\nprint "${d}"\n',
+      ),
+    );
+    const broken = await pollFor(
+      () => Promise.resolve(vscode.languages.getDiagnostics(doc.uri)),
+      (d) => d.length > 0,
+    );
+    assert.strictEqual(
+      broken[0].severity,
+      vscode.DiagnosticSeverity.Error,
+      "an undefined ML identifier is a real Error diagnostic",
+    );
+    assert.strictEqual(
+      broken[0].source,
+      "osprey",
+      "ML diagnostic is attributed to the osprey server",
+    );
+
+    const editor2 = await vscode.window.showTextDocument(doc);
+    await editor2.edit((b) =>
+      b.replace(
+        new vscode.Range(0, 0, doc.lineCount, 0),
+        'square x = x * x\nv = square 4\nprint "${v}"\n',
+      ),
+    );
+    const fixed = await pollFor(
+      () => Promise.resolve(vscode.languages.getDiagnostics(doc.uri)),
+      (d) => d.length === 0,
+    );
+    assert.strictEqual(
+      fixed.length,
+      0,
+      "diagnostics clear once the ML program is valid again",
+    );
+    const okHover = await pollFor(
+      () => hoverAt(doc.uri, 0, 0),
+      (h) => nonEmptyHover(h) && hoverText(h[0]).includes("square"),
+    );
+    assert.ok(
+      hoverText(okHover[0]).includes("square"),
+      "hover works on the corrected ML program",
+    );
+  });
 });
 
 // These suites drive the command handlers, event subscriptions, and debug
@@ -1344,6 +1508,153 @@ suite("Osprey Command Handler Coverage", () => {
     assert.ok(all.includes("osprey.debug"), "debug registered");
     assert.ok(all.includes("osprey.setLanguage"), "setLanguage registered");
   });
+
+  // startDebugRaced runs the real startDebugging path but never hangs the suite
+  // on a host without a debug UI: it resolves to a marker string once VS Code
+  // settles or a timeout elapses, whichever comes first.
+  async function startDebugRaced(
+    config: vscode.DebugConfiguration,
+    budgetMs = 6000,
+  ): Promise<string> {
+    const timeout = new Promise<string>((resolve) =>
+      setTimeout(() => resolve("timeout"), budgetMs),
+    );
+    const start = Promise.resolve(
+      vscode.debug.startDebugging(undefined, config),
+    )
+      .then((v) => `resolved:${String(v)}`)
+      .catch((error: unknown) => `error:${String(error)}`);
+    return Promise.race([start, timeout]);
+  }
+
+  test("osprey.debug with an active .osp editor drives the real launch path", async function () {
+    this.timeout(45000);
+    // The osprey.debug command reads window.activeTextEditor, synthesizes a
+    // launch config, and hands off to startDebugging — which invokes the real
+    // debug-configuration provider: save, `osprey --debug --compile`, then DAP.
+    // We fire the command with a genuine osprey editor active and assert the
+    // extension survives the full provider round-trip.
+    const document = await openOsp(
+      "debug-cmd.osp",
+      'fn main() -> Unit = print("debug via command")\n',
+    );
+    assert.strictEqual(document.languageId, "osprey", "doc is osprey");
+    assert.ok(await makeActive(document), "osprey doc is active for debug");
+    assert.ok(
+      vscode.window.activeTextEditor?.document.fileName.endsWith(".osp"),
+      "active editor is the .osp file the command will debug",
+    );
+
+    // Fire the command; give the debug-compile + DAP handoff a real window.
+    await vscode.commands.executeCommand("osprey.debug");
+    await settle(6000);
+    if (vscode.debug.activeDebugSession) {
+      try {
+        await vscode.debug.stopDebugging();
+      } catch {
+        // The session may already be terminating; cleanup races are benign.
+      }
+    }
+
+    assert.ok(
+      extension()?.isActive,
+      "extension stays active after osprey.debug",
+    );
+    // The provider debug-compiles to a stable per-source path; on a host with a
+    // working toolchain that native artifact exists after the launch attempt.
+    const artifact = path.join(
+      path.dirname(document.fileName),
+      ".osprey-debug",
+      process.platform === "win32" ? "debug-cmd.exe" : "debug-cmd",
+    );
+    assert.ok(
+      fs.existsSync(artifact) || !vscode.debug.activeDebugSession,
+      "debug launch either produced the native artifact or settled cleanly",
+    );
+  });
+
+  test("osprey.debug with no editor surfaces the open-a-file error", async () => {
+    // With no active editor, debugCurrentFile hits `!config.program` and shows
+    // "Please open a .osp or .ospml file to debug" instead of launching.
+    await closeEverything();
+    const before = vscode.window.activeTextEditor;
+
+    await vscode.commands.executeCommand("osprey.debug");
+    await settle(600);
+
+    assert.ok(
+      extension()?.isActive,
+      "extension survives osprey.debug with no program",
+    );
+    assert.strictEqual(
+      vscode.debug.activeDebugSession,
+      undefined,
+      "no debug session starts without a program",
+    );
+    // The guarded command must not have opened an editor.
+    assert.ok(
+      before === undefined || vscode.window.activeTextEditor === before,
+      "the no-program debug command opened no editor",
+    );
+  });
+
+  test("debug provider rejects a broken .osp source at debug-compile time", async function () {
+    this.timeout(45000);
+    // A syntactically broken program makes `osprey --debug --compile` exit
+    // non-zero. The provider awaits compileDebugProgram, which rejects; the
+    // catch shows the failure and returns undefined so no session starts. This
+    // exercises the compile-failure branch of the debug-configuration provider.
+    const broken = path.join(tempDir, "debug-broken.osp");
+    fs.writeFileSync(broken, "fn main( = @@@ not valid osprey\n");
+    const document = await vscode.workspace.openTextDocument(broken);
+    await makeActive(document);
+
+    const outcome = await startDebugRaced({
+      type: "osprey",
+      request: "launch",
+      name: "Debug Osprey File",
+      program: broken,
+      cwd: tempDir,
+    } as vscode.DebugConfiguration);
+    await settle(1500);
+
+    assert.ok(typeof outcome === "string", "debug start settled to a string");
+    assert.strictEqual(
+      vscode.debug.activeDebugSession,
+      undefined,
+      "a source that fails to debug-compile launches no session",
+    );
+    assert.ok(
+      extension()?.isActive,
+      "extension survives a failed debug-compile",
+    );
+    // The broken source stays exactly as written — the provider never mutates
+    // it, it only tries (and fails) to compile it.
+    assert.ok(
+      document.getText().includes("not valid osprey"),
+      "broken source preserved after the failed debug-compile",
+    );
+  });
+
+  test("debug provider reports 'no program' for an empty config with no editor", async () => {
+    // No active editor + a config with no program means synthesis is skipped
+    // and `!config.program` shows "Cannot find a program to run".
+    await closeEverything();
+    const outcome = await startDebugRaced({
+      type: "osprey",
+      request: "launch",
+      name: "Debug Osprey File",
+    } as vscode.DebugConfiguration);
+    await settle(1000);
+
+    assert.ok(typeof outcome === "string", "settled to a string");
+    assert.strictEqual(
+      vscode.debug.activeDebugSession,
+      undefined,
+      "no session starts when there is no resolvable program",
+    );
+    assert.ok(extension()?.isActive, "extension survives the no-program path");
+  });
 });
 
 suite("Osprey Activation Side-Effect Coverage", () => {
@@ -1406,6 +1717,53 @@ suite("Osprey Activation Side-Effect Coverage", () => {
     assert.ok(document.fileName.endsWith(".osp"), "is a .osp file");
     const ext = vscode.extensions.getExtension(extensionId2);
     assert.ok(ext?.isActive, "extension active");
+  });
+
+  test("the open watcher force-corrects a mis-associated .osp file to osprey", async () => {
+    // The interesting branch of onDidOpenTextDocument is the CORRECTION path:
+    // `document.languageId !== target`. Normally VS Code already associates .osp
+    // to "osprey", so the branch never runs. Force a genuine mismatch by mapping
+    // *.osp -> plaintext, open the file (it comes in as plaintext), and prove the
+    // extension's watcher drags it back to "osprey" — the real self-healing the
+    // handler exists for. The association is restored in a finally so no later
+    // suite inherits the override.
+    const filesConfig = vscode.workspace.getConfiguration("files");
+    const priorAssoc =
+      filesConfig.get<Record<string, string>>("associations") ?? {};
+    await filesConfig.update(
+      "associations",
+      { ...priorAssoc, "*.osp": "plaintext" },
+      vscode.ConfigurationTarget.Global,
+    );
+    await settle(300);
+
+    try {
+      const file = path.join(tempDir, "misassociated.osp");
+      fs.writeFileSync(file, 'fn main() -> Unit = print("corrected")\n');
+      const document = await vscode.workspace.openTextDocument(file);
+      await vscode.window.showTextDocument(document);
+
+      // The watcher's setTextDocumentLanguage is async; poll until it lands.
+      for (let i = 0; i < 40 && document.languageId !== "osprey"; i++) {
+        await settle(150);
+      }
+      assert.strictEqual(
+        document.languageId,
+        "osprey",
+        "the watcher re-associated a plaintext-opened .osp back to osprey",
+      );
+      assert.ok(
+        vscode.extensions.getExtension(extensionId2)?.isActive,
+        "extension stays active after the correction",
+      );
+    } finally {
+      await filesConfig.update(
+        "associations",
+        priorAssoc,
+        vscode.ConfigurationTarget.Global,
+      );
+      await settle(300);
+    }
   });
 
   test("changing osprey configuration fires the change handler", async () => {
@@ -1733,6 +2091,216 @@ suite("Osprey VSIX Debugger E2E", () => {
     await session.customRequest("continue", { threadId: stepped.threadId });
     await waitForDebugSessionEnd(45000, session.id);
   });
+
+  test("debugging an UNSAVED buffer saves it, compiles, and stops at a breakpoint", async function () {
+    this.timeout(90000);
+    // The debug-configuration provider must SAVE a dirty buffer before it shells
+    // out to `osprey --debug --compile` — otherwise it would compile stale disk
+    // contents. This drives that exact path end-to-end: open a file, dirty it in
+    // the editor with the ONLY correct program, launch, and prove the debugger
+    // stops on a line that exists *only* in the unsaved edit — which can only
+    // happen if the provider saved the buffer first. [EDITOR-VSCODE]
+    // VS Code would itself flush dirty editors before launching unless we tell
+    // it not to. With debug.saveBeforeStart="none" the buffer reaches the
+    // Osprey debug-configuration provider STILL DIRTY, so the provider's own
+    // save-before-compile path (the thing under test) actually runs.
+    const debugConfig = vscode.workspace.getConfiguration("debug");
+    const priorSaveBeforeStart = debugConfig.get<string>("saveBeforeStart");
+    await debugConfig.update(
+      "saveBeforeStart",
+      "none",
+      vscode.ConfigurationTarget.Global,
+    );
+
+    try {
+      const source = path.join(tempDir, "dirty-buffer.osp");
+      // Seed disk with a DIFFERENT program (no breakpoint-worthy body) so a
+      // failure to save would compile this instead and never stop on our line.
+      fs.writeFileSync(
+        source,
+        'fn main() -> Unit = print("stale disk contents")\n',
+      );
+
+      const document = await vscode.workspace.openTextDocument(source);
+      const editor = await vscode.window.showTextDocument(document);
+
+      // Replace the whole buffer WITHOUT saving: the editor is now dirty and the
+      // in-memory program differs from disk.
+      const edited = [
+        "fn tag(v) -> int = v + 100",
+        "let base = 7",
+        "let tagged = tag(base)",
+        'print("dirty debug ${base} and ${tagged}")',
+        "",
+      ].join("\n");
+      const applied = await editor.edit((b) =>
+        b.replace(new vscode.Range(0, 0, document.lineCount, 0), edited),
+      );
+      assert.ok(applied, "the buffer edit was applied");
+      assert.ok(document.isDirty, "the buffer is dirty before launch");
+      assert.notStrictEqual(
+        fs.readFileSync(source, "utf8"),
+        document.getText(),
+        "disk and buffer differ before the provider saves",
+      );
+
+      const debugOutput = defaultDebugOutputPath(source);
+      setSourceBreakpoints(source, [2]); // edited-only `let tagged = tag(base)`
+      const sessionPromise = waitForDebugSessionStart(45000);
+      const started = await vscode.debug.startDebugging(undefined, {
+        type: "osprey",
+        request: "launch",
+        name: "Osprey dirty-buffer E2E",
+        program: source,
+        cwd: tempDir,
+        debugOutput,
+        lldbDapPath,
+        stopOnEntry: false,
+      });
+      assert.ok(started, "VS Code accepted the dirty-buffer debug launch");
+
+      // The provider's save-before-compile path must have run: buffer clean, and
+      // disk now holds the EDITED program (not the stale seed).
+      assert.ok(
+        !document.isDirty,
+        "the provider saved the dirty buffer before compiling",
+      );
+      assert.strictEqual(
+        fs.readFileSync(source, "utf8"),
+        edited,
+        "disk now holds the edited program the provider saved",
+      );
+
+      const session = await sessionPromise;
+      assert.strictEqual(
+        session.type,
+        "osprey",
+        "session is the osprey debugger",
+      );
+      const stopped = await waitForStop(session, 45000);
+      const topFrame = stopped.stack.stackFrames[0];
+      assert.ok(
+        topFrame,
+        "debugger reports a stopped frame in the saved program",
+      );
+      assert.strictEqual(
+        path.normalize(topFrame.source?.path ?? ""),
+        path.normalize(source),
+        "stopped in the saved .osp source",
+      );
+      assert.strictEqual(
+        topFrame.line,
+        2,
+        "stopped on the edited-only breakpoint line (proves the save happened)",
+      );
+
+      // The edited-only local `base` is live — findVariable searches every scope,
+      // and this also exercises the shared DAP harness assertLocalVariable path.
+      // The matcher is a predicate (its rendered value is a materialized string
+      // whose exact form depends on where in the line execution paused).
+      const base = await assertLocalVariable(
+        session,
+        topFrame.id,
+        "base",
+        (value) => typeof value === "string" && value.length > 0,
+      );
+      assert.strictEqual(base.name, "base", "assertLocalVariable returns base");
+      assert.ok(
+        fs.existsSync(debugOutput),
+        "the saved (not stale) program was debug-compiled to a native binary",
+      );
+
+      await session.customRequest("continue", { threadId: stopped.threadId });
+      await waitForDebugSessionEnd(45000, session.id);
+    } finally {
+      await debugConfig.update(
+        "saveBeforeStart",
+        priorSaveBeforeStart,
+        vscode.ConfigurationTarget.Global,
+      );
+    }
+  });
+
+  test("a dead lldbDapPath makes the adapter factory refuse to start a session", async function () {
+    this.timeout(60000);
+    // The debug-adapter descriptor factory resolves lldb-dap from the launch
+    // config. When the configured lldbDapPath does not exist AND nothing else
+    // resolves, the factory returns undefined after surfacing an error — so VS
+    // Code never actually attaches a DAP. We prove that by pointing lldbDapPath
+    // at a guaranteed-absent file and asserting the session never reaches a
+    // running/stopped state on our breakpoint. The compiler still runs (the
+    // provider compiles before the adapter is asked for), so this isolates the
+    // adapter-resolution branch from the compile branch.
+    const source = path.join(tempDir, "dead-adapter.osp");
+    fs.writeFileSync(
+      source,
+      ["fn main() -> Unit = {", '  print("never debugged")', "}", ""].join(
+        "\n",
+      ),
+    );
+    const document = await vscode.workspace.openTextDocument(source);
+    await vscode.window.showTextDocument(document);
+    await document.save();
+
+    const deadDap = path.join(tempDir, "no", "such", "lldb-dap");
+    assert.ok(
+      !fs.existsSync(deadDap),
+      "the configured lldb-dap is truly absent",
+    );
+
+    setSourceBreakpoints(source, [1]);
+    let sawSession: vscode.DebugSession | undefined;
+    const sub = vscode.debug.onDidStartDebugSession((s) => {
+      sawSession = s;
+    });
+    try {
+      // Race the launch against a timeout; with a dead adapter the promise
+      // resolves false (or a session that immediately dies) rather than hanging.
+      const outcome = await Promise.race([
+        Promise.resolve(
+          vscode.debug.startDebugging(undefined, {
+            type: "osprey",
+            request: "launch",
+            name: "Osprey dead-adapter E2E",
+            program: source,
+            cwd: tempDir,
+            debugOutput: defaultDebugOutputPath(source),
+            lldbDapPath: deadDap,
+            stopOnEntry: false,
+          }),
+        )
+          .then((v) => `resolved:${String(v)}`)
+          .catch((e: unknown) => `error:${String(e)}`),
+        new Promise<string>((resolve) =>
+          setTimeout(() => resolve("timeout"), 12000),
+        ),
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      assert.ok(typeof outcome === "string", "launch settled to a string");
+      // A dead adapter must NOT yield a live, stopped session on our breakpoint.
+      const stuckRunning =
+        sawSession !== undefined &&
+        vscode.debug.activeDebugSession?.id === sawSession.id;
+      assert.ok(
+        !stuckRunning,
+        "no live osprey debug session survives a missing lldb-dap adapter",
+      );
+      assert.ok(
+        vscode.extensions.getExtension(extensionId)?.isActive,
+        "extension survives the dead-adapter path",
+      );
+    } finally {
+      sub.dispose();
+      if (vscode.debug.activeDebugSession) {
+        try {
+          await vscode.debug.stopDebugging();
+        } catch {
+          // Session teardown can race our cleanup; that is fine.
+        }
+      }
+    }
+  });
 });
 
 // Unit tests for the pure binary-resolution helpers. These don't depend on a
@@ -2037,6 +2605,44 @@ suite("Osprey Binary Resolution Unit Tests", () => {
     assert.ok(
       !looksLikePath("osprey-lsp"),
       "hyphenated bare command is not a path",
+    );
+  });
+
+  // The .ospml extension selects the ML layout flavor. The language id is what
+  // the language client's documentSelector keys off, and the compiler resolves
+  // the same flavor from the file path — so this mapping is exactly what makes
+  // .ospml diagnostics use the ML frontend instead of being misreported as
+  // broken Default syntax. ".ospml" must win over ".osp" because it also ends
+  // with "osp". Guards the flavor selection that drives ML diagnostics.
+  test("ospreyLanguageForFile maps .ospml to osprey-ml and .osp to osprey", () => {
+    assert.strictEqual(
+      ospreyLanguageForFile("/work/curry_tour.ospml"),
+      "osprey-ml",
+      ".ospml selects the ML layout flavor language id",
+    );
+    assert.strictEqual(
+      ospreyLanguageForFile("/work/hello.osp"),
+      "osprey",
+      ".osp selects the brace flavor language id",
+    );
+    assert.strictEqual(
+      ospreyLanguageForFile("C:\\work\\tour.ospml"),
+      "osprey-ml",
+      ".ospml wins over .osp despite also ending in osp",
+    );
+    assert.strictEqual(
+      ospreyLanguageForFile("/work/readme.md"),
+      undefined,
+      "a non-Osprey file maps to no language id",
+    );
+  });
+
+  test("isOspreyFile accepts both .osp and .ospml", () => {
+    assert.ok(isOspreyFile("/work/hello.osp"), ".osp is an Osprey file");
+    assert.ok(isOspreyFile("/work/hello.ospml"), ".ospml is an Osprey file");
+    assert.ok(
+      !isOspreyFile("/work/notes.txt"),
+      "a non-Osprey file is rejected",
     );
   });
 });

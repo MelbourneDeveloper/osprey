@@ -20,3 +20,8 @@ description: "Converts a value to its string representation."
 let str = toString(42)
 print(str)  // Prints: 42
 ```
+
+```osprey-ml
+str = toString 42
+print str  // Prints: 42
+```

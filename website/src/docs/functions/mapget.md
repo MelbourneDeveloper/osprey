@@ -23,3 +23,9 @@ match mapGet(scores, "alice") {
   Error { message } => print(message)
 }
 ```
+
+```osprey-ml
+match mapGet (scores, "alice")
+    Success value => print value
+    Error message => print message
+```

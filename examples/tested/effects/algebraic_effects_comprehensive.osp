@@ -201,45 +201,43 @@ fn testMockedInput() ![IO, Logger] = {
 }
 
 // Main function demonstrating all features
-fn main() = {
-    handle Counter
-        increment => print("⬆️ Counter incremented")
-        getValue => 42
-        reset => print("🔄 Counter reset to 0")
-    in handle State
-        get => 10
-        set newVal => print("📊 State updated to: " + toString(newVal))
-    in handle Logger
-        log msg => print("📝 LOG: " + msg)
-        error msg => print("❌ ERROR: " + msg)  
-    in handle FileIO
-        writeFile filename content => print("💾 Writing file: " + filename)
-        readFile filename => "mock file content"
-        deleteFile filename => print("🗑️ Deleting file: " + filename)
-    in handle IO
-        read => "mock read data"
-        write msg => print("📤 IO Write: " + msg)
-        input => Success { value: "mocked user input" }
-    in {
-        print("🚀 Starting Comprehensive Effects Test")
-        
-        // Test basic calculation
-        let calcResult = calculation(21)
-        
-        // Test pattern matching with effects
-        let processResult = processItems(3)
-        
-        // Test error handling patterns
-        let errorResult1 = errorProne(-5)
-        let errorResult2 = errorProne(150)
-        let errorResult3 = errorProne(25)
-        
-        // Test async processing with fibers
-        let asyncResult = asyncProcessing(5)
-        
-        // Test mocked input functionality
-        testMockedInput()
-        
-        print("🎯 Final Results: Calc=" + toString(calcResult) + ", Process=" + toString(processResult) + ", Errors=[" + toString(errorResult1) + "," + toString(errorResult2) + "," + toString(errorResult3) + "], Async=" + toString(asyncResult) + " 🎉")
-    }
+handle Counter
+    increment => print("⬆️ Counter incremented")
+    getValue => 42
+    reset => print("🔄 Counter reset to 0")
+in handle State
+    get => 10
+    set newVal => print("📊 State updated to: " + toString(newVal))
+in handle Logger
+    log msg => print("📝 LOG: " + msg)
+    error msg => print("❌ ERROR: " + msg)  
+in handle FileIO
+    writeFile filename content => print("💾 Writing file: " + filename)
+    readFile filename => "mock file content"
+    deleteFile filename => print("🗑️ Deleting file: " + filename)
+in handle IO
+    read => "mock read data"
+    write msg => print("📤 IO Write: " + msg)
+    input => Success { value: "mocked user input" }
+in {
+    print("🚀 Starting Comprehensive Effects Test")
+    
+    // Test basic calculation
+    let calcResult = calculation(21)
+    
+    // Test pattern matching with effects
+    let processResult = processItems(3)
+    
+    // Test error handling patterns
+    let errorResult1 = errorProne(-5)
+    let errorResult2 = errorProne(150)
+    let errorResult3 = errorProne(25)
+    
+    // Test async processing with fibers
+    let asyncResult = asyncProcessing(5)
+    
+    // Test mocked input functionality
+    testMockedInput()
+    
+    print("🎯 Final Results: Calc=" + toString(calcResult) + ", Process=" + toString(processResult) + ", Errors=[" + toString(errorResult1) + "," + toString(errorResult2) + "," + toString(errorResult3) + "], Async=" + toString(asyncResult) + " 🎉")
 }

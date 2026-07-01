@@ -535,16 +535,10 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
         })
         .collect();
     let unions = checker.union_variants.clone();
-    let lambdas = checker
-        .lambda_tys
-        .iter()
-        .map(|(pos, ty)| ((pos.line, pos.column), checker.ctx.apply(ty)))
-        .collect();
-    let lets = checker
-        .let_tys
-        .iter()
-        .map(|(pos, ty)| ((pos.line, pos.column), checker.ctx.apply(ty)))
-        .collect();
+    let lambda_tys = checker.lambda_tys.clone();
+    let let_tys = checker.let_tys.clone();
+    let lambdas = resolve_positioned(&mut checker.ctx, &lambda_tys);
+    let lets = resolve_positioned(&mut checker.ctx, &let_tys);
     ProgramTypes {
         functions,
         ctors,
@@ -555,20 +549,19 @@ pub fn infer_program(program: &Program) -> crate::info::ProgramTypes {
     }
 }
 
+/// Resolve a list of source-position-keyed types against the final
+/// substitution, keying the published map by `(line, column)`.
+fn resolve_positioned(ctx: &mut InferCtx, tys: &[(Position, Type)]) -> HashMap<(u32, u32), Type> {
+    tys.iter()
+        .map(|(pos, ty)| ((pos.line, pos.column), ctx.apply(ty)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{check_program, infer_program};
+    use super::infer_program;
+    use crate::testutil::{check, ok};
     use osprey_syntax::parse_program;
-
-    fn check(src: &str) -> Vec<crate::error::TypeError> {
-        let parsed = parse_program(src);
-        assert!(
-            parsed.errors.is_empty(),
-            "syntax errors: {:?}",
-            parsed.errors
-        );
-        check_program(&parsed.program)
-    }
 
     #[test]
     fn module_bodies_are_checked_in_a_child_scope() {
@@ -631,11 +624,6 @@ mod tests {
             "let type published: {:?}",
             info.lets
         );
-    }
-
-    fn ok(src: &str) {
-        let errs = check(src);
-        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
     }
 
     #[test]

@@ -19,3 +19,7 @@ description: "Waits for a fiber to finish and returns its result, suspending the
 ```osprey
 let result = await(worker)
 ```
+
+```osprey-ml
+result = await worker
+```

@@ -15,3 +15,7 @@ description: "Returns the terminal height in rows."
 ```osprey
 let height = termRows()
 ```
+
+```osprey-ml
+height = termRows
+```

@@ -20,3 +20,7 @@ description: "Moves the terminal cursor to the given row and column."
 ```osprey
 termMoveCursor(1, 1)
 ```
+
+```osprey-ml
+termMoveCursor (1, 1)
+```

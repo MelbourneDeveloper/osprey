@@ -96,6 +96,8 @@ pub struct Codegen {
     /// reassignment stores, and an effect handler captures the cell pointer so
     /// `get`/`set` arms share one mutable location — handler-owned state.
     pub(crate) cell_slots: HashMap<String, CellSlot>,
+    /// Continuation lowering context while emitting a resuming handler arm.
+    pub(crate) resume_ctx: Option<ResumeCodegenContext>,
     /// LLVM/DWARF debug metadata state, when `--debug` was requested.
     debug: Option<DebugState>,
 }
@@ -107,6 +109,14 @@ pub(crate) struct CellSlot {
     pub ptr: String,
     pub pointee: LType,
     pub osp_ty: Option<String>,
+}
+
+#[derive(Clone)]
+pub(crate) struct ResumeCodegenContext {
+    pub env: String,
+    pub coro: String,
+    pub drive_fn: String,
+    pub answer_ty: LType,
 }
 
 /// A function value's lowered signature: parameter [`LType`]s, the return
@@ -127,6 +137,7 @@ pub(crate) struct SavedFn {
     /// gets its own captured cells, never the suspended outer function's.
     cell_vars: HashSet<String>,
     cell_slots: HashMap<String, CellSlot>,
+    resume_ctx: Option<ResumeCodegenContext>,
     debug_scope: Option<usize>,
     debug_position: Option<Position>,
     debug_retained_nodes: Option<usize>,
@@ -398,6 +409,7 @@ impl Codegen {
             call_aliases: HashMap::new(),
             cell_vars: HashSet::new(),
             cell_slots: HashMap::new(),
+            resume_ctx: None,
             debug: options.debug_source.map(DebugState::new),
         }
     }
@@ -592,6 +604,7 @@ impl Codegen {
             pending_iter_ops: std::mem::take(&mut self.pending_iter_ops),
             cell_vars: std::mem::take(&mut self.cell_vars),
             cell_slots: std::mem::take(&mut self.cell_slots),
+            resume_ctx: self.resume_ctx.take(),
             debug_scope: self.debug.as_ref().and_then(|d| d.current_scope),
             debug_position: self.debug.as_ref().and_then(|d| d.current_position),
             debug_retained_nodes: self.debug.as_ref().and_then(|d| d.current_retained_nodes),
@@ -628,6 +641,7 @@ impl Codegen {
         self.pending_iter_ops = saved.pending_iter_ops;
         self.cell_vars = saved.cell_vars;
         self.cell_slots = saved.cell_slots;
+        self.resume_ctx = saved.resume_ctx;
         if let Some(debug) = self.debug.as_mut() {
             debug.current_scope = saved.debug_scope;
             debug.current_position = saved.debug_position;
@@ -957,6 +971,7 @@ impl Codegen {
         // this function's body before lowering it.
         self.cell_vars.clear();
         self.cell_slots.clear();
+        self.resume_ctx = None;
         self.push_scope();
         self.cur_lines.push("entry:".to_string());
         if let Some(debug) = self.debug.as_mut() {

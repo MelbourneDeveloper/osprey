@@ -19,3 +19,13 @@ match status {
     Inactive -> "User is inactive"
 }
 ```
+
+```osprey-ml
+match value
+    Some x => x
+    None => 0
+
+match status
+    Active => "User is active"
+    Inactive => "User is inactive"
+```

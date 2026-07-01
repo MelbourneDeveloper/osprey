@@ -19,3 +19,7 @@ description: "Creates a new channel with the specified capacity."
 ```osprey
 let ch = Channel(10)
 ```
+
+```osprey-ml
+ch = Channel 10
+```

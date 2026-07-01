@@ -20,3 +20,7 @@ description: "Returns a new list with value at the end. O(log32 n) amortised."
 ```osprey
 listAppend([1, 2], 3)  // [1, 2, 3]
 ```
+
+```osprey-ml
+listAppend ([1, 2], 3)  // [1, 2, 3]
+```

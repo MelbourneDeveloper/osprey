@@ -19,3 +19,7 @@ description: "Returns the number of entries in a map. O(1)."
 ```osprey
 mapLength({"a": 1, "b": 2})  // 2
 ```
+
+```osprey-ml
+mapLength {"a": 1, "b": 2}  // 2
+```

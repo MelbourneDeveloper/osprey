@@ -25,3 +25,9 @@ match serverResult {
     Err message => print("Failed to create server: ${message}")
 }
 ```
+
+```osprey-ml
+match serverResult
+    Success serverId => print "WebSocket server created with ID: ${serverId}"
+    Err message => print "Failed to create server: ${message}"
+```

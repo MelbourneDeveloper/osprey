@@ -69,6 +69,7 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
             ..
         } => crate::effects::gen_perform(cg, effect, operation, arguments),
         Expr::Handler { effect, arms, body } => crate::effects::gen_handler(cg, effect, arms, body),
+        Expr::Resume(value) => crate::effects::gen_resume(cg, value.as_deref()),
         // A lambda in plain value position (returned, block tail, stored in a
         // field) becomes a closure cell, typed by inference.
         Expr::Lambda {

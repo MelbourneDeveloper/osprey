@@ -1,0 +1,7 @@
+supply first=105
+supply second=110
+supply third=115
+seen after third: 330
+seen after second: 330
+seen after first: 330
+result=330

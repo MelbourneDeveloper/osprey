@@ -27,7 +27,8 @@ for (const pg of PAGES) {
       await expect(page.locator(".site-header")).toBeVisible();
       // The theme toggle must stay hidden — the design is dark-only.
       await expect(page.locator(".theme-toggle")).toBeHidden();
-      if (pg.kind !== "app") {
+      // Full-screen app-like pages (playground, wasm studio) hide the footer.
+      if (pg.kind !== "app" && !pg.fullscreen) {
         await expect(page.locator(".site-footer")).toBeVisible();
       }
     });

@@ -11,3 +11,7 @@ description: "Multiplies two numbers."
 ```osprey
 let result = 6 * 7  // result = 42
 ```
+
+```osprey-ml
+result = 6 * 7  // result = 42
+```

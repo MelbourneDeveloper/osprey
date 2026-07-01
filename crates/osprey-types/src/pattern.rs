@@ -423,23 +423,7 @@ fn nullary_owner_ty(owner: String, args: Vec<Type>, is_record: bool) -> Type {
 
 #[cfg(test)]
 mod tests {
-    use crate::check::check_program;
-    use osprey_syntax::parse_program;
-
-    fn check(src: &str) -> Vec<crate::error::TypeError> {
-        let parsed = parse_program(src);
-        assert!(
-            parsed.errors.is_empty(),
-            "syntax errors: {:?}",
-            parsed.errors
-        );
-        check_program(&parsed.program)
-    }
-
-    fn ok(src: &str) {
-        let errs = check(src);
-        assert!(errs.is_empty(), "unexpected type errors: {errs:?}");
-    }
+    use crate::testutil::{check, ok};
 
     #[test]
     fn structural_pattern_binds_record_fields() {

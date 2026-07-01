@@ -19,3 +19,7 @@ description: "Returns the number of bytes in the string's UTF-8 encoding."
 ```osprey
 let n = byteLength("héllo")  // 6
 ```
+
+```osprey-ml
+n = byteLength "héllo"  // 6
+```
