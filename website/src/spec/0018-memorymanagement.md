@@ -2,7 +2,7 @@
 layout: page
 title: "Memory Management"
 description: "Osprey Language Specification: Memory Management"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0018-memorymanagement/"
@@ -17,6 +17,16 @@ a tracing collector, fully static frees, or any mix — with no observable
 difference to any program. The developer's only obligation is the one every
 garbage-collected language already imposes: don't keep references to values
 you no longer need.
+
+> **Flavor layer — shared core (AST and above).**  Memory management is entirely
+> below the canonical AST: the `@osp_alloc` boundary, ARC/tracing reclamation,
+> ownership inference, and the runtime all consume `osprey_ast::Program` and the
+> IR lowered from it, never the CST or its source flavor. Allocation arises from
+> the AST nodes that produce heap values (`List`, `Map`, `Object`, `Str`,
+> `InterpolatedStr`, closures from `Lambda`, union/record `TypeConstructor`),
+> and two programs with identical ASTs exhibit byte-identical memory behaviour
+> whether they were written in the Default (`.osp`) or ML (`.ospml`) flavor. See
+> [Language Flavors](/spec/0023-languageflavors/) [FLAVOR-BOUNDARY].
 
 ## Status
 
@@ -61,6 +71,39 @@ Concretely:
 A program whose output depends on reclamation behavior is not a valid Osprey
 program; conforming implementations are free to differ on it. This rule is
 what makes every backend below interchangeable.
+
+## Debugger Observability [MEM-DEBUG-OBSERVABILITY]
+
+The debugger and memory profiler are allowed to observe implementation memory
+state only when the user explicitly starts a debug/profiling session. That
+observability is outside the language semantics.
+
+Debugger/profiler surfaces may expose:
+
+- Debug object ids and, in expert/native modes, raw addresses.
+- Heap object kinds, Osprey types, source allocation sites, shallow sizes,
+  retained sizes, allocation generations, and backend provenance.
+- Incoming/outgoing object graph edges and paths from roots to a selected value.
+- ARC retain counts, static-ownership classifications, tracing-GC mark state,
+  and custom-manager metadata when the active backend supports it.
+- Snapshot diffs and allocation/retention timelines.
+
+These facts MUST NOT be available to Osprey source code, MUST NOT affect
+program output, and MUST NOT introduce collection-order guarantees. A debugger
+may pause the program, request bounded runtime inspection, and pay profiling
+overhead, but the inspected program's observable Osprey behavior remains
+governed by [MEM-OPAQUE].
+
+Precision depends on the backend:
+
+- ARC/debug-static metadata is precise when the compiler/runtime emit object
+  descriptors for all Osprey heap edges.
+- The conservative GC may report approximate native roots because stack/register
+  scanning can mistake non-pointers for roots. Such roots must be labelled
+  conservative/approximate in the debugger.
+- Custom managers either implement the optional debug introspection interface or
+  report object graph/retention data as unsupported. They must not let the
+  editor infer private memory layouts ad hoc.
 
 ## Resources Are Effects, Not Destructors [MEM-RESOURCES]
 

@@ -43,24 +43,50 @@ test.describe("desktop interactions", () => {
     await expect(page).toHaveURL(/\/playground\/$/);
   });
 
-  test("wasm studio serves generated modules and toggles flavors", async ({ page }) => {
-    for (const asset of [
-      "/wasm/wasi-shim.mjs",
-      "/wasm/studio.osp",
-      "/wasm/studio.ospml",
-      "/wasm/build/studio.osp.wasm",
-      "/wasm/build/studio.ospml.wasm",
-    ]) {
+  test("wasm demo seeds a browser SQLite db and runs queries", async ({ page }) => {
+    for (const asset of ["/wasm/wasi-shim.mjs", "/wasm/studio.osp", "/wasm/build/studio.osp.wasm"]) {
       const res = await page.request.get(asset);
       expect(res.status(), `${asset} status`).toBe(200);
     }
 
     await page.goto("/wasm/");
-    await expect(page.locator("#metrics .metric")).toHaveCount(5, { timeout: 15_000 });
-    await expect(page.locator("#flavor-bytes")).toContainText("KB wasm");
+    // The Osprey module ran, sql.js loaded, and the DB is seeded.
+    await expect(page.locator("#banner.ok")).toContainText("Database ready", { timeout: 20_000 });
+    // Initial query auto-ran and rendered a result table.
+    await expect(page.locator("#sql-result table.data")).toBeVisible();
+    // Osprey source is highlighted with the real Prism grammar (shared tokens).
+    await expect(page.locator("#src-code .token.keyword").first()).toBeVisible();
+    // The SQL editor overlay is highlighted too.
+    await expect(page.locator("#sql-hl .token.keyword").first()).toBeVisible();
+
+    // Adding a row and re-querying reflects the new data.
+    await page.fill('#add-form input[name="product"]', "TestBrew");
+    await page.click("#add-form button[type=submit]");
+    await expect(page.locator("#add-status.ok")).toContainText("TestBrew");
+    await page.fill("#sql", "SELECT product FROM sales WHERE product = 'TestBrew';");
+    await page.click("#run-sql");
+    await expect(page.locator("#sql-result")).toContainText("TestBrew");
+  });
+
+  test("playground flavor toggle swaps the sample between .osp and .ospml", async ({ page }) => {
+    await page.goto("/playground/");
+    // Wait for Monaco to seed the editor with the Default-flavor sample.
+    const editorValue = () =>
+      page.evaluate(() => window.monaco?.editor?.getModels?.()[0]?.getValue() ?? "");
+    await expect.poll(editorValue, { timeout: 20_000 }).toContain("fn account()");
+
+    // Default flavor is active on load.
+    await expect(page.locator("#flavor-osp")).toHaveClass(/active/);
+
+    // Switching to ML swaps in the offside-rule twin (no `fn`, `handle … in`).
     await page.locator("#flavor-ospml").click();
-    await expect(page.locator("#flavor-name")).toContainText("studio.ospml");
-    await expect(page.locator("#metrics .metric")).toHaveCount(5);
+    await expect(page.locator("#flavor-ospml")).toHaveClass(/active/);
+    await expect.poll(editorValue).toContain("account () =");
+    expect(await editorValue()).not.toContain("fn account()");
+
+    // Switching back restores the Default sample.
+    await page.locator("#flavor-osp").click();
+    await expect.poll(editorValue).toContain("fn account()");
   });
 
   test("real-world example code is not clipped", async ({ page }) => {

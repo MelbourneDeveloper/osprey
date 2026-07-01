@@ -2,7 +2,7 @@
 layout: page
 title: "WebAssembly Target"
 description: "Osprey Language Specification: WebAssembly Target"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0022-webassemblytarget/"
@@ -16,12 +16,21 @@ reuses the existing LLVM-IR pipeline unchanged and adds a target selector
 link step. The output is a `wasm32-wasip1` command module that runs under any
 WASI host — `wasmtime`, Node's `node:wasi`, or a browser WASI shim. [WASM-TARGET]
 
+> **Flavor layer — shared core (AST and above).**  The wasm backend lives
+> entirely below the surface: it consumes the canonical `osprey_ast::Program`
+> through the same LLVM-IR pipeline as the native target and never sees which
+> [flavor](/spec/0023-languageflavors/) produced it. Because codegen is a pure
+> function of the AST, identical ASTs yield byte-identical IR and `.wasm` —
+> this is the [FLAVOR-IR-EQUIV] guarantee, so an ML `.ospml` program runs on
+> wasm exactly like its `.osp` twin (the golden suite already proves this via
+> the flavor-shared `<stem>.expectedoutput` fallback in Status).
+
 ## Status
 
 Implemented for the portable language core. `osprey --target=wasm32 --compile`
 emits a validated `.wasm` that prints correctly under wasmtime, Node's WASI, and
 in the browser (`examples/wasm/`). Of the tested example suite, **47/70 run on
-wasm with byte-identical stdout** — including every ML-flavor `.osp` twin under
+wasm with byte-identical stdout** — including the Default-flavor `.osp` twin of every ML example under
 `examples/tested/ml/`, which the golden harness reaches via the flavor-shared
 `<stem>.expectedoutput` fallback ([FLAVOR-IR-EQUIV]); the other 23 use a
 non-portable feature and skip (see below). The CI `wasm` job gates on both the

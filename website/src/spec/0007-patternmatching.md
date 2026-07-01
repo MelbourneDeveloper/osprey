@@ -2,7 +2,7 @@
 layout: page
 title: "Pattern Matching"
 description: "Osprey Language Specification: Pattern Matching"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0007-patternmatching/"
@@ -11,6 +11,8 @@ permalink: "/spec/0007-patternmatching/"
 # Pattern Matching
 
 `match` is the only branching construct in Osprey. Record patterns are matched structurally by field name, not by field order. See [Type System](/spec/0004-typesystem/) for type unification rules.
+
+> **Flavor layer — mixed.**  A `match` lowers to `Expr::Match` over `MatchArm`s, each carrying a `Pattern` (`Wildcard`, `Literal`, `Constructor { name, fields, sub_patterns }`, `TypeAnnotated`, `Structural`, `List`, `Binding`). Only the *spelling* of these patterns is a surface (CST) concern: this chapter shows the Default flavor — a one-field variant is `Success { value }`, where the ML flavor writes `Success value` ([`[FLAVOR-ML-MATCH]`](/spec/0024-mlflavorsyntax/#match)) — but both flavors lower to the **same** `Pattern::Constructor { name, fields }`. Everything else here — exhaustiveness checking, `any`/union narrowing, and arm semantics — is shared-core: it runs on the canonical AST and is flavor-blind ([`[FLAVOR-BOUNDARY]`](/spec/0023-languageflavors/#the-one-law)). See [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
 
 ## Basic Patterns
 
@@ -24,7 +26,7 @@ let result = match value {
 
 ## Union Type Patterns
 
-A union pattern names the variant. Variants with fields are destructured using `{ field, ... }`; variants without fields are matched by name alone.
+A union pattern names the variant. Variants with fields are destructured using `{ field, ... }`; variants without fields are matched by name alone. Both forms lower to `Pattern::Constructor`; the brace destructuring shown here is the Default surface, spelled `Success value` in the ML flavor ([`[FLAVOR-ML-MATCH]`](/spec/0024-mlflavorsyntax/#match)).
 
 ```osprey
 type Option = Some { value: int } | None

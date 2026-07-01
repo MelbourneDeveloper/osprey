@@ -2,7 +2,7 @@
 layout: page
 title: "Language Server & Editor Integrations"
 description: "Osprey Language Specification: Language Server & Editor Integrations"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0020-languageserverandeditors/"
@@ -18,6 +18,18 @@ This spec governs the Osprey language server and every editor integration built
 on it — VS Code today, Neovim and Zed next. The guiding rule: **one engine,
 many surfaces.** Analysis is computed once, in-process, by a single Rust binary;
 every editor is a thin client over the same LSP transport.
+
+> **Flavor layer — shared core (AST and above).**  The language server is the
+> one component that must *select* a flavor per document: it parses through
+> `osprey_syntax::parse_program_for_path(uri, text)`, which resolves the flavor
+> from the `.osp`/`.ospml` extension plus a leading `// osprey: flavor=` marker
+> (`[FLAVOR-SELECT]` in [Language Flavors](/spec/0023-languageflavors/)), so a
+> `.ospml` document is analysed by the ML frontend rather than misreported as
+> broken Default syntax. Past that parse, every feature — diagnostics, hover,
+> completion, signature help, navigation — runs flavor-blind over the canonical
+> `osprey_ast::Program`; nothing downstream of lowering knows which surface
+> ([Default](/spec/0023-languageflavors/) or [ML](/spec/0024-mlflavorsyntax/)) produced
+> it.
 
 ## Status
 
@@ -64,6 +76,12 @@ flowchart LR
     engine --> types
   end
 ```
+
+The engine threads each open document's path into `osprey_syntax`, so the
+parse entry point is the flavor-selecting `parse_program_for_path` rather than
+a fixed-flavor parse; the resolved flavor is invisible to `osprey_types` and
+everything else above the AST (`[FLAVOR-SELECT]`, see
+[Language Flavors](/spec/0023-languageflavors/)).
 
 ### Debugger Integration `[DEBUGGER-EDITOR]`
 
@@ -287,6 +305,54 @@ wire is re-measured into the negotiated encoding
 ([`crates/osprey-lsp/src/text.rs`](https://github.com/Nimblesite/osprey/blob/main/crates/osprey-lsp/src/text.rs),
 `byte_col_to_encoding`). A client that negotiates UTF-8 must receive UTF-8
 offsets; this is not optional.
+
+## Analyzer Lints `[LSP-ANALYZER]`
+
+The language server is also Osprey's **analyzer**: beyond type and effect errors
+it runs a set of **style lints** that keep source minimal and idiomatic. Lints
+are computed on the canonical `osprey_ast::Program` plus the inferred type
+tables, so they are **flavor-blind** ([FLAVOR-BOUNDARY](/spec/0023-languageflavors/#the-one-law))
+— one lint fires identically for a `.osp` and its `.ospml` twin — and each ships
+a **code action (autofix)** so the editor rewrites the offending text in one
+keystroke. CI runs the same analyzer in deny mode, so a lint is a hard failure,
+not a hint. **Status: specified; the redundant-symbol rule below is the first to
+be implemented.**
+
+### Redundant symbols `[ANALYZER-REDUNDANT-SYMBOL]`
+
+**The first and highest-priority analyzer rule.** Osprey is terse in *both*
+flavors; a symbol the compiler can derive on its own is noise. This lint flags —
+and its autofix **deletes** — every **redundant type annotation**: any annotation
+whose type the Hindley-Milner checker already infers
+([TYPE-NO-REDUNDANT-ANNOTATION](/spec/0004-typesystem/#hindley-milner-inference)).
+
+| Redundant form | Autofix result |
+| --- | --- |
+| `fn add(a: int, b: int) = a + b` | `fn add(a, b) = a + b` |
+| `fn isEven(x) -> bool = (x % 2) == 0` | `fn isEven(x) = (x % 2) == 0` |
+| `let n: int = 0` | `let n = 0` |
+| `\|x: int\| => x * 2` | `\|x\| => x * 2` |
+| ML `add : int -> int` over an inferable `add x = …` | delete the signature line |
+| needless `fn main()` / ML `main () =` wrapping a script | unwrap to bare top-level statements |
+
+**Decision procedure.** The annotation is redundant ⇔ re-running inference with
+it removed yields the *same* principal type **and** the same lowered AST/IR. The
+lint checks the written annotation against the inferred type; if they match and
+the annotation is not load-bearing, it reports a `quickfix` that removes the
+symbol (and, for a needless `main`, dedents the body — `main` is synthesised from
+trailing top-level statements, so the script runs unchanged).
+
+**Never flagged (load-bearing).** The lint must not touch an annotation the
+checker cannot infer: an empty literal (`let xs: List<int> = []`), the ambiguous
+empty map `{}`, an `extern` boundary, an unconstrained polymorphic variable a
+caller must pin, or a return type that *forces* `Result<T, E>` auto-unwrap to `T`
+([Result Auto-Unwrapping](/spec/0004-typesystem/#result-auto-unwrapping)). Removing
+one of these changes the program, so it is not redundant. A `main` that takes
+arguments or returns a real exit code is likewise kept.
+
+This lint is the enforcement arm of
+[TYPE-NO-REDUNDANT-ANNOTATION](/spec/0004-typesystem/#hindley-milner-inference); the
+two specs move together.
 
 ## Editor integrations
 

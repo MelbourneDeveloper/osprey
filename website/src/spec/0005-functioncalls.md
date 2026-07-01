@@ -2,13 +2,15 @@
 layout: page
 title: "Function Calls"
 description: "Osprey Language Specification: Function Calls"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0005-functioncalls/"
 ---
 
 # Function Calls
+
+> **Flavor layer — surface (CST).**  The call spellings in this chapter — named-argument `f(x: a, y: b)`, positional `f(x)`, and `f()` — are the **Default** surface (`.osp`); every form lowers to a single canonical node, `Expr::Call { function, arguments, named_arguments }`. The **ML** flavor (`.ospml`) writes calls two ways: whitespace application `f a b` ([FLAVOR-ML-CALL](/spec/0024-mlflavorsyntax/)), which **curries by default** and lowers to nested one-argument `Expr::Call`s (`Call(Call(f, [a]), [b])`); and the **uncurried** call `f (a, b)` — parentheses around a comma-list — which lowers to a single multi-argument `Call(f, [a, b])`, the exact twin of the Default named-argument call `f(x: a, y: b)`. (The parenthesised comma-list is argument grouping, not a tuple — Osprey has no tuple type.) The arity, named-argument, and saturation rules below are **shared-core** — the type checker enforces them on the AST and is flavor-blind. The one honest surface difference is currying ([FLAVOR-CURRY](/spec/0023-languageflavors/#currying-canonicalisation)). See [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
 
 ## Named Arguments Requirement
 
@@ -26,15 +28,35 @@ fn double(x) = x * 2
 let result = double(5)
 
 // Multiple parameters - named arguments required
+// (Default surface; lowers to one multi-arg Expr::Call. The ML twin of this flat fn add(x, y)
+// is the uncurried add (10, 20); whitespace add 10 20 is the curried twin of the explicit-curry
+// def fn add(x) = fn(y) => x + y — a DIFFERENT value.)
 fn add(x, y) = x + y
 let sum = add(x: 10, y: 20)
 
 // Order doesn't matter with named arguments
 let sum2 = add(y: 20, x: 10)
 
-// Works with type annotations
-fn multiply(a: int, b: int) -> int = a * b
+// Multi-parameter definition + named-argument call
+fn multiply(a, b) = a * b
 let product = multiply(a: 5, b: 3)
+```
+```osprey-ml
+// Zero parameters
+getValue () = 42
+value = getValue ()
+
+// Single parameter - whitespace application
+double x = x * 2
+result = double 5
+
+// Multiple parameters - uncurried call (twin of the named-argument call)
+add (x, y) = x + y
+sum = add (10, 20)
+
+// Multi-parameter definition + uncurried call
+multiply (a, b) = a * b
+product = multiply (5, 3)
 ```
 
 ### Invalid Function Calls
@@ -59,3 +81,12 @@ let result = multiply(5, b: 3)  // Compilation error
 4. **Built-in functions** ([Built-in Functions](/spec/0012-built-infunctions/)) are exempt: they take positional arguments in subject-first order — `split("a,b,c", ",")`, `fold(xs, 0, add)` — so the pipe can supply the subject as the first argument: `xs |> fold(0, add)`.
 
 Argument order at the call site is independent of declaration order; the compiler reorders by name.
+
+These rules are enforced on the canonical `Expr::Call` after lowering, so they hold identically regardless of flavor; the type checker is flavor-blind. ML whitespace application **curries by default** — `add 10 20` lowers to nested one-argument calls, each saturated against a one-parameter function — see [FLAVOR-CURRY](/spec/0023-languageflavors/#currying-canonicalisation) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/).
+
+The two flavors twin call-for-call: a Default named-argument call `add(x: 10, y: 20)` (against a flat multi-parameter `fn add(x, y)`) is written in ML as the uncurried `add (10, 20)`; a Default explicit-curry call `add(10)(20)` is written in ML as whitespace `add 10 20`. Each pair lowers to the same `Expr::Call` shape and emits byte-identical IR.
+
+## Cross-references
+
+- [Language Flavors](/spec/0023-languageflavors/)
+- [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)

@@ -2,7 +2,7 @@
 layout: page
 title: "Built-in Functions"
 description: "Osprey Language Specification: Built-in Functions"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0012-built-infunctions/"
@@ -11,6 +11,8 @@ permalink: "/spec/0012-built-infunctions/"
 # Built-in Functions
 
 Reference for built-in functions available in every Osprey program. Operations that can fail return `Result`; see [Error Handling](/spec/0013-errorhandling/).
+
+> **Flavor layer — shared core (AST and above).**  The built-in function set is shared core: the *same* functions exist in every flavor, and a call to any of them lowers to the canonical `Expr::Call` node regardless of source surface. Only the call *spelling* is a flavor concern — the Default surface writes `toString(x)`, the ML flavor uses whitespace application `toString x` — and that difference is erased at lowering, so nothing here depends on which flavor produced the program. The Default spelling is shown throughout; see [Language Flavors](/spec/0023-languageflavors/) and [ML Flavor Syntax](/spec/0024-mlflavorsyntax/) for the surface mapping.
 
 ## Basic I/O Functions
 
@@ -173,9 +175,11 @@ Returns the UTF-8 byte at index `i` as an `int` in `[0, 255]`, or `Error(IndexOu
 Decodes the UTF-8 codepoint starting at `byteIndex` and returns it as an `int`. Returns `Error(IndexOutOfRange)` if `byteIndex` is out of range, or `Error(InvalidArgument)` if it does not land on a codepoint boundary or the bytes are malformed. O(1) (at most 4 bytes read). Pair with `codePointWidth` to advance:
 
 ```osprey
-fn nextChar(s: string, i: int) -> Result<(int, int), StringError> = match codePointAt(s, i) {
+type CharStep = { codePoint: int, nextIndex: int }
+
+fn nextChar(s, i) = match codePointAt(s, i) {
     Success { value: cp } => match codePointWidth(cp) {
-        Success { value: w } => Success { value: (cp, i + w) }
+        Success { value: w } => Success { value: CharStep { codePoint: cp, nextIndex: i + w } }
         Error   { message }  => Error { message }
     }
     Error { message } => Error { message }
@@ -263,11 +267,13 @@ let greeting = "Hello, " + name + "!"
 ### Example: parsing a query string
 
 ```osprey
-fn parsePair(pair: string) -> Result<(string, string), StringError> =
+type KeyValue = { key: string, value: string }
+
+fn parsePair(pair) =
     match indexOf(pair, "=") {
         Success { value: i } => match substring(pair, 0, i) {
             Success { value: k } => match substring(pair, i + 1, length(pair)) {
-                Success { value: v } => Success { value: (k, v) }
+                Success { value: v } => Success { value: KeyValue { key: k, value: v } }
                 Error   { message }  => Error { message }
             }
             Error { message } => Error { message }
@@ -314,14 +320,14 @@ Checks if file exists.
 Spawns an external process. The callback is invoked for each stdout/stderr line and on exit.
 
 ```osprey
-fn processEventHandler(processID: int, eventType: int, data: string) -> unit = match eventType {
+fn processEventHandler(processID, eventType, data) = match eventType {
     1 => print("[STDOUT] ${data}")
     2 => print("[STDERR] ${data}")
     3 => print("[EXIT] Code: ${data}")
     _ => print("[UNKNOWN] ${data}")
 }
 
-let result = spawnProcess(command: "echo 'Hello'", callback: processEventHandler)
+let result = spawnProcess("echo 'Hello'", processEventHandler)
 ```
 
 ### `awaitProcess(processId: int) -> int`
@@ -409,8 +415,10 @@ All keys. Iteration order is **unspecified**.
 #### `values(map: Map<K, V>) -> List<V>`
 All values, in the same order as `keys(map)`.
 
-#### `entries(map: Map<K, V>) -> List<(K, V)>`
-All `(key, value)` pairs, in the same order as `keys(map)`.
+#### `entries(map: Map<K, V>) -> List<Entry<K, V>>`
+All key/value entries, in the same order as `keys(map)`. An entry is the record
+`type Entry<K, V> = { key: K, value: V }` (Osprey has no tuple type, so a pair is
+a two-field record, not a `(K, V)` tuple).
 
 #### `mapValues(map: Map<K, V>, fn: fn(V) -> W) -> Map<K, W>`
 Apply `fn` to every value, preserving keys.
@@ -432,7 +440,7 @@ Group `items` into buckets keyed by `function(item)`. Within each bucket, items 
 
 ## Iterators and Pipe
 
-`range`, `forEach`, `map`, `filter`, `fold`, and `|>` are documented in [Iterators and Iteration](/spec/0010-loopconstructsandfunctionaliterators/). Lists and maps are `Iterable`; map iteration yields `(K, V)` tuples.
+`range`, `forEach`, `map`, `filter`, `fold`, and `|>` are documented in [Iterators and Iteration](/spec/0010-loopconstructsandfunctionaliterators/). Lists and maps are `Iterable`; map iteration yields `Entry<K, V>` records (`{ key, value }`, the same elements as `entries(map)`) — not tuples, since Osprey has no tuple type.
 
 ## HTTP
 

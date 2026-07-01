@@ -2,7 +2,7 @@
 layout: page
 title: "Lexical Structure"
 description: "Osprey Language Specification: Lexical Structure"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0002-lexicalstructure/"
@@ -15,6 +15,8 @@ permalink: "/spec/0002-lexicalstructure/"
 - [Literals](#literals)
 - [Operators](#operators)
 - [Delimiters](#delimiters)
+
+> **Flavor layer — surface (CST).**  This chapter is the Default flavor (`.osp`) lexical grammar: a flavor-internal, below-the-AST concern owned by `crates/osprey-syntax/src/default/`. Tokens are a CST artifact — they never reach the shared core, which sees only the canonical `osprey_ast::Program` after lowering. The ML flavor (`.ospml`) has its OWN offside-rule layout lexer (`crates/osprey-syntax/src/ml/lexer.rs`) that derives `INDENT`/`DEDENT`/`NEWLINE` from an explicit indent stack ([FLAVOR-ML-LAYOUT] in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)); the rules below describe only this surface. Lexical structure differs per flavor; both feed lowering. See [Language Flavors](/spec/0023-languageflavors/).
 
 ## Identifiers
 
@@ -43,6 +45,11 @@ INTEGER := [0-9]+
 let count = 42
 let negative = -17
 let zero = 0
+```
+```osprey-ml
+count = 42
+negative = -17
+zero = 0
 ```
 
 ### Float Literals
@@ -84,6 +91,11 @@ LIST := '[' (expression (',' expression)*)? ']'
 let numbers = [1, 2, 3, 4]
 let names   = ["Alice", "Bob", "Charlie"]
 let pair    = [x, y]
+```
+```osprey-ml
+numbers = [1, 2, 3, 4]
+names   = ["Alice", "Bob", "Charlie"]
+pair    = [x, y]
 ```
 
 ## Operators

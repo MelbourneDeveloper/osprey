@@ -2,7 +2,7 @@
 layout: page
 title: "Type System"
 description: "Osprey Language Specification: Type System"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0004-typesystem/"
@@ -26,6 +26,8 @@ permalink: "/spec/0004-typesystem/"
 
 Osprey uses Hindley-Milner inference. Every well-typed expression has a unique most general type, inference always terminates, and a successful type-check guarantees no runtime type errors.
 
+> **Flavor layer — shared core (AST and above).**  Type inference runs on the canonical `osprey_ast::Program` *after* lowering, so it is entirely flavor-blind ([FLAVOR-BOUNDARY], [FLAVOR-LAYER]). Nothing in this chapter inspects which surface produced a program: the type checker (`osprey-types`) consumes only the canonical AST. The samples below use the Default surface (`.osp`), but the ML flavor (`.ospml`, see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)) lowers to identical ASTs and obeys these inference rules unchanged. See [Language Flavors](/spec/0023-languageflavors/).
+
 Type annotations are optional everywhere they can be inferred:
 
 ```osprey
@@ -37,6 +39,42 @@ fn getName(u)          = u.name                  // (User) -> string
 fn twice(f, x)         = f(f(x))                 // <T>((T) -> T, T) -> T
 fn compose(f, g)       = fn(x) => f(g(x))        // <A,B,C>((B)->C,(A)->B) -> (A)->C
 ```
+
+`[TYPE-NO-REDUNDANT-ANNOTATION]` **Optional is not the whole rule: an annotation
+the checker can infer is *redundant*, and redundant symbols are forbidden.**
+Osprey is terse — **neither flavor is verbose** — so any type symbol the compiler
+would derive anyway MUST be omitted. This is normative style, not taste:
+
+- **Never** annotate a function parameter whose type is inferable from the body
+  or a call site (`fn add(a, b) = a + b`, never `fn add(a: int, b: int)`).
+- **Never** write a function return type the checker can infer
+  (`fn isEven(x) = (x % 2) == 0`, never `… -> bool`).
+- **Never** annotate a `let`/lambda binding the checker can infer
+  (`let n = 0`; `|x| => x * 2`).
+
+The rule is identical in both flavors: an ML signature line (`add : int -> int`)
+is just as redundant when the body fixes the type, and must be dropped too.
+
+Keep an annotation **only** when the checker genuinely cannot infer it — the
+narrow, load-bearing set: an empty literal with no context
+(`let xs: List<int> = []`, [TYPE-LIST](#list-t--type-list)); the ambiguous empty
+map (`{}` at an ambiguous position, [TYPE-MAP](#map-k-v--type-map)); an `extern`
+boundary; an unconstrained polymorphic variable a caller must pin; or a return
+type that is *load-bearing* because it forces `Result<T, E>` to auto-unwrap to
+`T` at the function boundary ([Result Auto-Unwrapping](#result-auto-unwrapping)).
+Record and union field declarations (`type Point = { x: int, y: int }`,
+`Circle { radius: int }`) are **definition sites, not inference sites** — their
+`field: Type` annotations *define* the type and are always required, never
+redundant; the rule above never touches them. The same holds for `extern`
+parameter signatures, which the FFI boundary requires
+([Foreign Function Interface](/spec/0019-foreignfunctioninterface/)).
+If deleting an annotation still type-checks and produces identical IR, it was
+redundant — delete it.
+
+This rule is **machine-enforced** by the analyzer's first lint,
+[`[ANALYZER-REDUNDANT-SYMBOL]`](/spec/0020-languageserverandeditors/#redundant-symbols-analyzer-redundant-symbol),
+which flags every redundant annotation and offers a one-keystroke autofix that
+deletes it.
 
 A polymorphic function is monomorphised independently at each call site:
 
@@ -382,7 +420,7 @@ let updated    = set(ages, "Alice", 26)                     // single-key update
 let withoutBob = remove(ages, "Bob")
 ```
 
-Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than a tuple, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `(K, V)` tuple per element.
+Map-specific iterator forms (`filterEntries`, `foldEntries`, `mapValues`, `mapKeys`) take the key and value as separate arguments rather than as one packed value, mirroring Elm's `Dict.foldl : (comparable -> v -> b -> b) -> b -> Dict comparable v -> b`. Plain `map`/`filter`/`fold` from the iterator module operate on `entries(map)` and receive a single `Entry<K, V>` record (`{ key, value }`, defined with the Map builtins in [Built-In Functions](/spec/0012-built-infunctions/)) per element — Osprey has no tuple type.
 
 The `+` operator on `(Map<K, V>, Map<K, V>) -> Map<K, V>` is **right-biased** (the right-hand side wins on conflicting keys).
 
@@ -407,7 +445,7 @@ The literal `{}` is disallowed as a pattern (it would match every map). Match em
 ```osprey
 let names    = keys(ages)                                  // List<string>, order unspecified
 let agesList = values(ages)                                // List<int>,    order unspecified
-let pairs    = entries(ages)                               // List<(string, int)>
+let pairs    = entries(ages)                               // List<Entry<string, int>>
 let m        = zipToMap(names, agesList)                   // Result<Map<K,V>, IndexError> if lengths differ
 let byGrade  = groupBy(students, fn(s) => s.grade)         // Map<string, List<Student>>
 ```

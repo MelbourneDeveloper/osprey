@@ -1,12 +1,11 @@
-// Osprey Data Studio — the analytics brain behind examples/wasm/index.html.
-// [WASM-TARGET] Default (brace) flavor. The ML twin is studio.ospml; both emit
+// Osprey Data Studio — the program behind the /wasm/ browser demo.
+// [WASM-TARGET] Default (brace) flavor. studio.ospml is the ML twin; both emit
 // a byte-identical manifest (proven by the wasm differential harness).
 //
-// One Osprey program, two cooperating WebAssembly engines in the browser:
-//   * THIS module computes a sales dataset, its schema, its analytics queries,
-//     and its own gold-standard answers — printed as a delimited manifest.
-//   * sql.js (SQLite compiled to wasm) executes the SQL and the page reconciles
-//     SQLite's results against Osprey's pure-FP answers. They must agree.
+// Compiled to wasm32-wasip1 and run in the browser, THIS module computes a
+// sales dataset, its schema, and its analytics queries, then prints them as a
+// delimited manifest. The page loads the schema + seed into sql.js (SQLite as
+// wasm) so visitors add rows and write SQL against a real in-browser database.
 //
 // Showcased, all linking the portable wasm32 runtime (strings, maps, effects):
 //   algebraic effects (the handler IS the database writer + accountant),

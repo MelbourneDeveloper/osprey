@@ -2,7 +2,7 @@
 layout: page
 title: "Security and Sandboxing"
 description: "Osprey Language Specification: Security and Sandboxing"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0016-securityandsandboxing/"
@@ -11,6 +11,8 @@ permalink: "/spec/0016-securityandsandboxing/"
 # Security and Sandboxing
 
 The compiler can disable categories of built-in functions at compile time. Restricted functions are not lowered into the program at all — calls to them produce "undefined function" compile errors. There is no runtime overhead.
+
+> **Flavor layer — shared core (AST and above).**  Capability-based sandboxing and the effect system are one system across every flavor — entirely flavor-blind. The gated operations are ordinary calls that lower to `Expr::Call`; the permission gate enforces restrictions on the canonical `osprey_ast::Program` and in codegen, where restricted built-ins are simply never lowered or linked. Per [FLAVOR-BOUNDARY], no phase that decides what to block inspects which surface (`.osp` Default or `.ospml` ML) produced the program — security is enforced on the shared AST and below it in the runtime, never per-flavor. The flag spellings shown here are CLI concerns and are flavor-independent. See [Language Flavors](/spec/0023-languageflavors/).
 
 ## Security Flags
 

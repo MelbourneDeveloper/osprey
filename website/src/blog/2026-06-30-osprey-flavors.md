@@ -1,17 +1,17 @@
 ---
 layout: page.njk
-title: "Osprey Flavors: One Core, Two Surfaces, Zero Compromise"
+title: "Osprey Flavors: One Core, Two Flavors, Zero Compromise"
 excerpt: "Braces or layout — pick your tribe and go all in. The ML flavor isn't braces-optional and the Default flavor isn't deprecated. It's the same language underneath."
 date: 2026-06-30
 tags: ["blog", "language-design", "flavors", "functional-programming", "ml-syntax"]
 author: "Christian Findlay"
 readingTime: 7
-image: /assets/images/og-image.png
+image: /assets/images/blog/osprey-flavors.png
 ---
 
 Every language picks a side, and every side loses someone. Curly braces or significant whitespace. `fn add(x, y)` or `add x y`. The systems programmer who wants explicit blocks and named arguments, versus the FP devotee who wants layout and curry-by-default. Pick braces and the Haskell crowd wrinkles their nose; pick layout and the C crowd walks away. The syntax wars are real, and they force you into a tribe before you've written a line.
 
-Osprey's answer is to stop pretending there's one right answer. **One core. Two surfaces. Zero compromise.**
+Osprey's answer is to stop pretending there's one right answer. **One core. Two flavors. Zero compromise.**
 
 ## The problem: syntax forces a tribe
 
@@ -24,13 +24,13 @@ Most languages resolve this by declaring a winner and grudgingly bolting on the 
 Osprey ships **two first-class, permanent syntaxes** called flavors. Neither is the watered-down one.
 
 - **Default flavor (`.osp`)** — C-style braces, `fn`, `f(x: a, y: b)` calls with named arguments. Explicit, familiar, block-structured. This is the surface a systems programmer reaches for. Fully implemented today.
-- **ML flavor (`.ospml`)** — offside-rule layout (indentation, no braces), curry-by-default, whitespace application `f a b`, `\x => e` lambdas, `:=` mutation, `->` for types and `=>` for clauses. Terse, expression-first, ML/Haskell-shaped. This is the surface an FP devotee reaches for. In active development.
+- **ML flavor (`.ospml`)** — offside-rule layout (indentation, no braces), curry-by-default, whitespace application `f a b`, `\x => e` lambdas, `:=` mutation, `->` for types and `=>` for clauses. Terse, expression-first, ML/Haskell-shaped. This is the surface an FP devotee reaches for. Fully implemented today.
 
 The point is **no compromise**. The ML flavor is not "braces optional." The Default flavor is not deprecated or transitional. Each surface goes all the way in its own direction. Systems programmers get real braces and real named arguments; FP folks get real layout and real currying. Nobody is asked to swallow the other camp's spelling. The language belongs to *your* tribe — pick your flavor and go all in.
 
 Here's the ML flavor saying hello — this runs today:
 
-```osprey
+```osprey-ml
 greeting = "Hello from the ML flavor"
 print greeting
 print "2 + 3 = ${2 + 3}"
@@ -46,7 +46,7 @@ That's what makes the "no compromise" claim more than a slogan: both surfaces me
 
 The one honest difference between the surfaces is currying, and it's machine-checked. In ML, every function is curried by default:
 
-```osprey
+```osprey-ml
 inc : int -> int
 inc x = x + 1
 
@@ -71,7 +71,7 @@ We have a test that asserts the two produce the same tree. Note the precision he
 
 The ML surface carries its FP shape all the way through. Layout-driven `match`:
 
-```osprey
+```osprey-ml
 classify n =
     match n
         0 => "zero"
@@ -81,7 +81,7 @@ classify n =
 
 Higher-order functions and `Result` payload matching (integer division and mod return `Result<int, MathError>`, so you match the payload):
 
-```osprey
+```osprey-ml
 twice : (int -> int) -> int -> int
 twice f x = f (f x)
 
@@ -95,7 +95,7 @@ safeMod a b =
 
 Bindings and mutation, with `=` to bind and `:=` to mutate:
 
-```osprey
+```osprey-ml
 mut counter = 0
 counter := counter + 1      // := mutates; = binds
 print "counter = ${counter}"
@@ -119,9 +119,9 @@ Exports are canonical signatures with stable names and ordering, so a Default mo
 
 To be precise about what ships today: **per-file flavor selection is implemented and green.** You select the ML surface with the `.ospml` extension, the `--flavor ml` CLI flag, or a leading `// osprey: flavor=ml` marker (precedence: flag > marker > extension > Default). That mechanism is exercised by tested examples right now. The multi-file *cross-flavor import* — a Default module pulling in an ML module in the same build — is the design direction the canonical-AST architecture is built for, but it is not yet covered by a tested example, so we're showing you the folder model and the per-file selection that is green, not a runnable cross-flavor import program.
 
-## Effects: shown in the Default flavor
+## Effects: in both flavors
 
-Osprey's headline feature is compile-time-safe algebraic effects. Here's the effect demo in the **Default flavor**, where it's fully implemented:
+Osprey's headline feature is compile-time-safe algebraic effects — and it works in **both** flavors. Here's the same `Logger` demo, first in the Default flavor:
 
 ```osprey
 effect Logger {
@@ -142,15 +142,33 @@ handle Logger
 in greet("Bob")
 ```
 
-The `!Logger` row says `greet` performs a `Logger` effect; an unhandled effect is a compile error. Swap the handler and the same code logs to stdout or stays silent — no global mutable wiring, just a different `handle` block.
+…and the identical program in the ML flavor — layout, whitespace application, `handle … in`, the lot:
+
+```osprey-ml
+effect Logger
+    log : string => Unit
+
+greet name =
+    perform Logger.log "Hello, ${name}!"
+
+handle Logger
+    log msg => print msg
+in greet "Alice"
+
+handle Logger
+    log msg => 0
+in greet "Bob"
+```
+
+The `!Logger` row says `greet` performs a `Logger` effect; an unhandled effect is a compile error. Swap the handler and the same code logs to stdout or stays silent — no global mutable wiring, just a different `handle` block. Both flavors lower to the same `Handler` node, so the effect checker and runtime never learn which one you wrote.
 
 ## Status, honestly
 
 The **Default flavor is fully implemented** — specs 0001 through 0022, the complete effect system, the persistent collections, the lot.
 
-The **ML flavor is in active development**, with runnable proof you can read and run: the [tested ML examples](https://github.com/Nimblesite/osprey/tree/main/examples/tested/ml) cover hello-world, curry-by-default with partial application, higher-order functions, `Result` matching, layout `match`, and mutation — each one runs through the compiler and its `stdout` is byte-compared against a checked-in `.expectedoutput`.
+The **ML flavor is fully implemented too**, with runnable proof you can read and run: the [tested ML examples](https://github.com/Nimblesite/osprey/tree/main/examples/tested) cover hello-world, curry-by-default with partial application, higher-order functions, `Result` matching, layout `match`, mutation, fibers, and algebraic effects with `handle … in` — each one runs through the compiler and its `stdout` is byte-compared against a checked-in `.expectedoutput`.
 
-The honest caveat: **ML effect syntax does not run yet.** The ML surface for `effect` / `handle … do` is *designed* but errors loudly today — it's the deferred Phase 0 shared-core feature. The next thing landing is **first-class handler values plus ML effects**, the piece that lets the effect system reach the ML surface the same way everything else already has. Until then, every effect demo you see in our docs is in the Default flavor, because that's what works.
+ML effects run today: `effect`, `perform`, `handle … in`, and `resume` all work in the ML flavor, byte-checked by the [tested examples](https://github.com/Nimblesite/osprey/tree/main/examples/tested/effects). The one honest caveat is narrow: **first-class handler *values*** — a `Handler E` type you can pass around and install dynamically — are a deferred shared-core addition that neither flavor exposes yet. Lexically-scoped `handle … in` regions, which is what effect handlers look like in practice, work in both.
 
 ## Pick your flavor
 

@@ -9,13 +9,13 @@ description: "Osprey is one functional language fronted by two first-class synta
     <div class="hero-content">
       <h1 class="hero-title animate-on-scroll">
         <span class="accent">Osprey</span>
-        — one core, two surfaces, zero compromise.
+        — one core, two flavors, zero compromise.
       </h1>
       <p class="hero-subtitle animate-on-scroll">
         Osprey is <strong>one</strong> functional language fronted by <strong>two</strong> first-class flavors:
         a brace-style <strong>Default</strong> flavor for systems programmers and an offside-rule <strong>ML</strong>
-        flavor for FP devotees. One Hindley-Milner type checker, one effect system, one runtime, one LLVM backend —
-        pick your tribe, go all in.
+        flavor for FP devotees. One Hindley-Milner type checker, one effect system, one fiber runtime, one LLVM
+        backend — pick your tribe, go all in.
       </p>
       <div class="hero-actions animate-on-scroll">
         <a href="/playground/" class="btn btn-primary btn-lg">
@@ -27,24 +27,45 @@ description: "Osprey is one functional language fronted by two first-class synta
       </div>
     </div>
 
-    <div class="hero-code animate-on-scroll parallax typewriter-enabled" data-speed="0.3">
-      <div class="code-example">
-        <pre class="language-osprey"><code class="language-osprey">// Simple, clean function definitions
-fn double(n: int) -> int = n * 2
-
-// String interpolation that works
-let x = 42
-let name = "Alice"
-print("x = ${x}")
-print("name = ${name}")
-
-// Pattern matching on values
-let result = match x {
-  42 => "The answer!"
-  0 => "Zero"
-  _ => "Something else"
+    <div class="hero-code animate-on-scroll">
+      <p class="hero-code-caption">The same program — algebraic effects handled over fibers — in both flavors.</p>
+      <div class="flavor-split">
+        <div class="code-example">
+          <div class="flavor-tag">Default <span>.osp</span></div>
+          <pre class="language-osprey"><code class="language-osprey">effect Logger {
+  log: fn(string) -> Unit
 }
-print("Result: ${result}")</code></pre>
+
+fn runJob(weight) !Logger = {
+  perform Logger.log("weight ${weight}")
+  weight * weight
+}
+
+handle Logger
+  log msg => print("[LOG] ${msg}")
+in {
+  let fast = spawn runJob(9)
+  let slow = spawn runJob(5)
+  print("scores ${await(fast)} / ${await(slow)}")
+}</code></pre>
+        </div>
+
+        <div class="code-example">
+          <div class="flavor-tag">ML <span>.ospml</span></div>
+          <pre class="language-osprey"><code class="language-osprey">effect Logger
+  log : string => Unit
+
+runJob weight =
+  perform Logger.log "weight ${weight}"
+  weight * weight
+
+handle Logger
+  log msg => print "[LOG] ${msg}"
+in
+  fast = spawn (runJob 9)
+  slow = spawn (runJob 5)
+  print "scores ${await fast} / ${await slow}"</code></pre>
+        </div>
       </div>
     </div>
   </div>
@@ -100,9 +121,9 @@ scoop install osprey</code></pre>
   <div class="container">
     <h2 class="section-title">Two Flavors, One Core</h2>
     <p class="section-subtitle">
-      Neither flavor is the watered-down one. The <strong>Default</strong> flavor is fully implemented today;
-      the <strong>ML</strong> flavor is in active development with runnable proof in the test suite. Both lower to
-      the <strong>same canonical AST</strong> — after lowering, nothing (type checker, effect checker, optimiser,
+      Neither flavor is the watered-down one. <strong>Both are fully implemented today</strong> — the same programs
+      run in either syntax, proven byte-for-byte in the test suite. Both lower to the
+      <strong>same canonical AST</strong>, so after lowering nothing (type checker, effect checker, optimiser,
       codegen) can tell which flavor you wrote.
     </p>
 
@@ -129,7 +150,7 @@ print(analyzeNumber(42))</code></pre>
         <h3>ML flavor — for FP devotees</h3>
         <p>Offside-rule layout (indentation, no braces), curry-by-default, whitespace application
           <code>f a b</code>, and <code>=&gt;</code> clauses. Terse, expression-first, ML/Haskell-shaped.
-          In active development.</p>
+          Fully implemented today.</p>
         <div class="code-example">
           <pre class="language-osprey"><code class="language-osprey">// ML flavor (.ospml) — layout, currying — RUNS TODAY
 inc : int -&gt; int

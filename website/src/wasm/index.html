@@ -1,90 +1,21 @@
 ---
 layout: layouts/base.njk
-title: "Osprey WebAssembly Data Studio"
-description: "A live Osprey WebAssembly demo: two Osprey source flavors compile to wasm, emit a SQLite manifest, and reconcile pure Osprey metrics against sql.js in the browser."
+title: "Osprey in the Browser — WebAssembly SQL Demo"
+description: "An Osprey program compiled to wasm32-wasip1 seeds a real SQLite database in your browser. Add rows and write SQL against it — Osprey and SQL both syntax-highlighted."
 permalink: /wasm/
 ---
 
 <section class="wasm-hero">
-  <div class="container wasm-hero-grid">
-    <div class="wasm-copy">
-      <p class="eyebrow">Osprey -> WebAssembly</p>
-      <h1>Two Osprey flavors. One browser-native analytics app.</h1>
-      <p class="wasm-lede">
-        Osprey compiles a real program to <code>wasm32-wasip1</code>. The module emits
-        a SQLite schema, seed data, analytics queries, and pure Osprey gold-standard
-        metrics. The page then runs the SQL in <strong>sql.js</strong> and reconciles
-        both engines in your browser.
-      </p>
-
-      <div class="flavor-bar">
-        <div class="seg" role="group" aria-label="Source flavor">
-          <button id="flavor-osp" aria-pressed="true">Default .osp</button>
-          <button id="flavor-ospml" aria-pressed="false">ML .ospml</button>
-        </div>
-        <p class="flavor-note">
-          Running <b id="flavor-name">studio.osp</b> · <span id="flavor-bytes" class="mono">waiting</span>
-        </p>
-      </div>
-
-      <div class="hero-actions">
-        <button id="rerun" class="btn btn-primary btn-lg">Run pipeline</button>
-        <a class="btn btn-secondary btn-lg" href="#console">Open SQL console</a>
-      </div>
-
-      <div class="pill-row">
-        <span class="tag">algebraic effects</span>
-        <span class="tag">union types</span>
-        <span class="tag">pattern matching</span>
-        <span class="tag">wasm32-wasip1</span>
-        <span class="tag">SQLite wasm</span>
-      </div>
-    </div>
-
-    <div class="wasm-stage" aria-label="WebAssembly data pipeline">
-      <div class="pipe-node is-osprey">
-        <span class="k">1. Source</span>
-        <span class="v" id="pn-src">studio.osp</span>
-        <span class="sub">records, effects, queries</span>
-      </div>
-      <div class="pipe-node is-osprey">
-        <span class="k">2. Osprey wasm</span>
-        <span class="v">_start()</span>
-        <span class="sub" id="pn-manifest">manifest via fd_write</span>
-      </div>
-      <div class="pipe-node is-sqlite">
-        <span class="k">3. SQLite wasm</span>
-        <span class="v">sql.js</span>
-        <span class="sub" id="pn-sqlite">loading on demand</span>
-      </div>
-      <div class="pipe-node">
-        <span class="k">4. Reconcile</span>
-        <span class="v" id="pn-reconcile">Osprey vs SQLite</span>
-        <span class="sub">independent answers</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="section" style="padding-top: 0">
   <div class="container">
-    <div id="banner" class="banner">Booting the WebAssembly pipeline...</div>
-  </div>
-</section>
-
-<section class="section section-alt">
-  <div class="container">
-    <div class="section-head">
-      <div>
-        <p class="eyebrow">Computed by Osprey, checked by SQLite</p>
-        <h2>Gold-standard metrics</h2>
-      </div>
-      <p class="hint">Every metric starts in Osprey code, then SQLite independently confirms it from the seeded database.</p>
-    </div>
-    <div id="metrics" class="metrics"></div>
-    <div id="reconcile" class="reconcile">
-      <span class="dot"></span><span>reconciliation pending</span>
-    </div>
+    <p class="eyebrow">Osprey → WebAssembly</p>
+    <h1>An Osprey program runs a database in your browser.</h1>
+    <p class="wasm-lede">
+      This Osprey source is compiled to <code>wasm32-wasip1</code>. When it runs, it
+      emits a SQLite schema and seed data, which we load into <strong>sql.js</strong>
+      (SQLite compiled to wasm). Add rows and write queries against the live database
+      below — nothing leaves your machine.
+    </p>
+    <div id="banner" class="banner">Booting the Osprey WebAssembly module…</div>
   </div>
 </section>
 
@@ -92,35 +23,49 @@ permalink: /wasm/
   <div class="container">
     <div class="section-head">
       <div>
-        <p class="eyebrow">SQL authored by the Osprey module</p>
-        <h2>Analytics queries</h2>
+        <p class="eyebrow">Insert a row</p>
+        <h2>Add data</h2>
       </div>
-      <p class="hint">These result tables run live against sql.js after Osprey emits the manifest.</p>
+      <p class="hint">Each row is inserted into the same <code>sales</code> table Osprey seeded. Your queries below see it immediately.</p>
     </div>
-    <div id="queries" class="wasm-query-list"></div>
+    <form id="add-form" class="add-form" autocomplete="off">
+      <label>Product <input name="product" value="Mocha" required></label>
+      <label>Region
+        <select name="region">
+          <option>North</option><option>South</option><option>East</option><option>West</option>
+        </select>
+      </label>
+      <label>Qty <input name="qty" type="number" min="1" value="5" required></label>
+      <label>Price <input name="price" type="number" min="1" value="14" required></label>
+      <button type="submit" class="btn btn-primary">Add row</button>
+    </form>
+    <p id="add-status" class="add-status">&nbsp;</p>
   </div>
 </section>
 
-<section id="console" class="section section-alt">
+<section class="section section-alt">
   <div class="container">
     <div class="section-head">
       <div>
         <p class="eyebrow">Live in-browser database</p>
-        <h2>SQL console</h2>
+        <h2>Write a query</h2>
       </div>
-      <p class="hint">Run arbitrary SQL against the same database that Osprey seeded.</p>
+      <p class="hint">Standard SQL, run by sql.js. Press <kbd>⌘/Ctrl</kbd>+<kbd>Enter</kbd> to run.</p>
     </div>
     <div class="console">
       <div class="console-bar" id="presets"></div>
-      <textarea id="sql" spellcheck="false" aria-label="SQL query">SELECT region,
+      <div class="editor-wrap">
+        <pre class="editor-hl language-sql" aria-hidden="true"><code id="sql-hl" class="language-sql"></code></pre>
+        <textarea id="sql" spellcheck="false" aria-label="SQL query">SELECT region,
        SUM(qty * price) AS revenue,
-       ROUND(AVG(price), 1) AS avg_price
+       SUM(qty)         AS units
 FROM sales
 GROUP BY region
 ORDER BY revenue DESC;</textarea>
+      </div>
       <div class="console-bar">
         <button id="run-sql" class="btn btn-primary">Run query</button>
-        <button id="reset-db" class="btn btn-secondary">Reset database</button>
+        <button id="reset-db" class="btn btn-secondary">Reset to seed</button>
         <span class="spacer"></span>
         <span id="sql-status" class="console-status">ready</span>
       </div>
@@ -133,33 +78,14 @@ ORDER BY revenue DESC;</textarea>
   <div class="container">
     <div class="section-head">
       <div>
-        <p class="eyebrow">Same program, two source surfaces</p>
+        <p class="eyebrow">The program that seeds the database</p>
         <h2>The Osprey source</h2>
       </div>
-    </div>
-    <div class="wasm-tabs" id="src-tabs">
-      <button data-src="osp" aria-pressed="true">studio.osp</button>
-      <button data-src="ospml" aria-pressed="false">studio.ospml</button>
+      <p class="hint">Algebraic effects, union types, and exhaustive pattern matching — compiled to wasm.</p>
     </div>
     <div class="wasm-code-window">
-      <div class="chrome"><span></span><span></span><span></span><b id="src-name">studio.osp</b></div>
-      <pre><code id="src-code" class="mono">loading source...</code></pre>
-    </div>
-  </div>
-</section>
-
-<section class="section section-alt">
-  <div class="container">
-    <div class="section-head">
-      <div>
-        <p class="eyebrow">stdout from the Osprey wasm module</p>
-        <h2>The emitted manifest</h2>
-      </div>
-      <p class="hint">DDL, seed rows, queries, and metrics from <code id="manifest-from">_start()</code>.</p>
-    </div>
-    <div class="wasm-code-window">
-      <div class="chrome"><span></span><span></span><span></span><b>fd_write output</b></div>
-      <pre><code id="manifest" class="mono">waiting...</code></pre>
+      <div class="chrome"><span></span><span></span><span></span><b>studio.osp</b></div>
+      <pre class="language-osprey"><code id="src-code" class="language-osprey">loading source…</code></pre>
     </div>
   </div>
 </section>

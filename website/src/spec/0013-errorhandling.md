@@ -2,7 +2,7 @@
 layout: page
 title: "Error Handling"
 description: "Osprey Language Specification: Error Handling"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0013-errorhandling/"
@@ -11,6 +11,8 @@ permalink: "/spec/0013-errorhandling/"
 # Error Handling
 
 Osprey has no exceptions, panics, or null. Any function that can fail returns a `Result`.
+
+> **Flavor layer — shared core (AST and above).**  The `Result` type, the error model, and function-boundary auto-unwrap live entirely at or above the canonical AST (`osprey_ast::Program`) and are flavor-blind — they operate on the `Result<T, E>` union type, `Match` arms, and `Call` results identically no matter whether a program was spelled in the Default (`.osp`) or ML (`.ospml`) surface. Per [FLAVOR-BOUNDARY], no phase that observes errors (type inference, IR lowering, codegen, runtime) may inspect which flavor produced the program. Note the [Language Flavors](/spec/0023-languageflavors/) assumption that arithmetic stays `Result`-wrapped in **both** flavors (overflow-checked, yielding `Result<int, MathError>`); the clean `int` output programs see is the shared auto-unwrap erasing the wrapper, not a flavor rule. The code samples below use the Default surface (`.osp`) — `let` bindings and brace-delimited `match`; the same programs in the ML flavor (`.ospml`, offside layout, bare `name = expr`, see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)) lower to identical ASTs and obey these error rules unchanged.
 
 ## Status
 

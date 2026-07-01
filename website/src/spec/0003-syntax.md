@@ -2,7 +2,7 @@
 layout: page
 title: "Syntax"
 description: "Osprey Language Specification: Syntax"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0003-syntax/"
@@ -11,6 +11,10 @@ permalink: "/spec/0003-syntax/"
 # Syntax
 
 This chapter defines the syntactic forms that make up an Osprey program. Semantics for individual constructs are in their dedicated chapters; cross-references are noted inline.
+
+> **Flavor layer — surface (CST).**  Every spelling in this chapter is the **Default flavor** (`.osp`) concrete grammar — C-style braces, `fn`, and `f(x: a, y: b)` named-argument calls. These are surface forms only: lowering erases them into the shared canonical AST (`osprey_ast::Program`), the single tree every later phase consumes. The ML flavor (`.ospml`) spells the same constructs differently (offside layout, `\x => e`, whitespace application) and lowers to the *same* AST nodes — see [ML Flavor Syntax](/spec/0024-mlflavorsyntax/) for the counterpart of each form here. See [Language Flavors](/spec/0023-languageflavors/) for the one-AST-many-CSTs model and the [FLAVOR-BOUNDARY] law.
+>
+> The major forms below map to canonical AST nodes as follows: `let`/`mut` → `Stmt::Let{mutable}`; `fn` → `Stmt::Function`; `extern` → `Stmt::Extern`; `type` → `Stmt::Type` + `TypeVariant`; `import` → `Stmt::Import`; `module` → `Stmt::Module{name, body}`; calls → `Expr::Call{function, arguments, named_arguments}`; `match` → `Expr::Match` + `MatchArm`; `{ … }` blocks → `Expr::Block{statements, value}`; field access → `Expr::FieldAccess`; indexing → `Expr::Index`; and the pattern forms → `Pattern::*` (`Wildcard`, `Literal`, `Constructor`, `TypeAnnotated`, `Structural`, `Binding`). Names and shapes are flavor-blind from the AST upward.
 
 - [Program Structure](#program-structure)
 - [Imports](#imports)
@@ -35,7 +39,28 @@ statement ::= importStmt
             | typeDecl
             | moduleDecl
             | exprStmt
+
+moduleDecl ::= "module" ID "{" statement* "}"
 ```
+
+A `moduleDecl` groups declarations under a namespace and lowers to
+`Stmt::Module { name, body }`:
+
+```osprey
+module Geometry {
+    let pi   = 3.14159
+    fn area(r) = pi * r * r
+}
+```
+```osprey-ml
+module Geometry
+    pi   = 3.14159
+    area r = pi * r * r
+```
+
+Module semantics for multi-file projects, exports, signatures, state modules,
+and path-independent namespaces are defined in
+[Modules and Namespaces](/spec/0025-modulesandnamespaces/).
 
 ## Imports
 
@@ -49,6 +74,9 @@ import std.io
 import graphics.canvas
 ```
 
+Import semantics for multi-file projects, aliases, explicit member imports, and
+wildcard policy are defined in [Modules and Namespaces](/spec/0025-modulesandnamespaces/#imports).
+
 ## Let Declarations
 
 ```ebnf
@@ -60,6 +88,12 @@ let x       = 42
 let name    = "Alice"
 mut counter = 0
 let result  = calculateValue(input: data)
+```
+```osprey-ml
+x       = 42
+name    = "Alice"
+mut counter = 0
+result  = calculateValue data
 ```
 
 `let` binds immutably; `mut` binds mutably. Type annotations are optional.
@@ -79,8 +113,16 @@ fn add(x, y)   = x + y
 fn greet(name) = "Hello " + name
 fn getValue()  = 42
 ```
+```osprey-ml
+double x   = x * 2
+add (x, y) = x + y
+greet name = "Hello " + name
+getValue () = 42
+```
 
 Effect sets (`!E`) are described in [Algebraic Effects](/spec/0017-algebraiceffects/). Functions of two or more parameters require named arguments at call sites; see [Function Calls](/spec/0005-functioncalls/).
+
+A Default multi-parameter function such as `fn add(x, y) = x + y` lowers to a **single flat multi-parameter** `Stmt::Function`; it does **not** curry. (The ML flavor curries by default — `add x y` is nested single-parameter functions — and spells this flat form as `add (x, y)`; the two Default forms and their ML twins are defined in [Currying canonicalisation](/spec/0023-languageflavors/#currying-canonicalisation).)
 
 ## Extern Declarations
 
@@ -243,6 +285,15 @@ let label = match status {
     Running        => "running"
     Done { code }  => "done (${code})"
 }
+```
+```osprey-ml
+type Status = Ready | Running | Done { code: int }
+
+label =
+    match status
+        Ready          => "ready"
+        Running        => "running"
+        Done { code }  => "done (${code})"
 ```
 
 Pattern semantics, exhaustiveness, and the ternary shorthand are in [Pattern Matching](/spec/0007-patternmatching/).

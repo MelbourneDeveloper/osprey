@@ -2,7 +2,7 @@
 layout: page
 title: "Osprey Language Specification"
 description: "Complete language specification and syntax reference for the Osprey programming language"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/"
@@ -11,7 +11,7 @@ permalink: "/spec/"
 # Osprey Language Specification
 
 **Version:** 0.2.0  
-**Date:** 2026-06-30  
+**Date:** 2026-07-01  
 **Author:** Christian Findlay
 
 ## Table of Contents
@@ -40,6 +40,7 @@ permalink: "/spec/"
 22. [WebAssembly Target](/spec/0022-webassemblytarget/)
 23. [Language Flavors](/spec/0023-languageflavors/)
 24. [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)
+25. [Modules and Namespaces](/spec/0025-modulesandnamespaces/)
 
 ## About This Specification
 

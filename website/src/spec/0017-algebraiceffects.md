@@ -2,7 +2,7 @@
 layout: page
 title: "Algebraic Effects"
 description: "Osprey Language Specification: Algebraic Effects"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0017-algebraiceffects/"
@@ -11,6 +11,8 @@ permalink: "/spec/0017-algebraiceffects/"
 # Algebraic Effects
 
 Osprey treats effects as first-class language features. An effect declares a set of operations; functions list the effects they may perform; handlers give meaning to operations. The compiler rejects any program that performs an unhandled effect.
+
+> **Flavor layer — shared core (AST and above).**  Effect semantics live entirely at and above the canonical AST and are flavor-blind: an effect declaration is `Stmt::Effect` (carrying `EffectOperation`s), `perform IDENT.op(...)` lowers to `Expr::Perform`, a `handle` region lowers to `Expr::Handler{effect, arms, body}` (arms are `HandlerArm`), and `resume(v)` lowers to `Expr::Resume`. The `handle ... in expr` spelling below is the Default-flavor (`.osp`) surface; the ML flavor writes `handle ... do expr` ([FLAVOR-ML-EFFECT]/[FLAVOR-ML-HANDLER] in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/)) and lowers to the *same* `Handler` node — type inference, the static unhandled-effect check, and the thread-as-continuation runtime never learn which flavor produced the program ([FLAVOR-BOUNDARY] in [Language Flavors](/spec/0023-languageflavors/)). NOTE: first-class handler *values*, a `Handler E` type, and multi-install are a **deferred** Phase-0 shared-core addition ([FLAVOR-HANDLER-VALUE] in 0023) — not in the AST today; ML effect/handler syntax errors loudly until that lands, so treat ML effects as not yet working.
 
 ## Status
 
@@ -113,15 +115,12 @@ fn bump() -> int !State = {
     perform State.get()
 }
 
-fn main() -> int {
-    mut cell = 0
-    let r = handle State
-        get        => cell           // reads the shared cell
-        set newVal => { cell = newVal }   // writes the shared cell
-    in bump()
-    print("r=${toString(r)} cell=${toString(cell)}")   // r=1 cell=1
-    0
-}
+mut cell = 0
+let r = handle State
+    get        => cell           // reads the shared cell
+    set newVal => { cell = newVal }   // writes the shared cell
+in bump()
+print("r=${toString(r)} cell=${toString(cell)}")   // r=1 cell=1
 ```
 
 The cell is shared across the C HTTP-callback boundary (a request handler's
@@ -169,19 +168,16 @@ fn pipeline() -> int !Audit = {
     a + b
 }
 
-fn main() -> int {
-    mut n = 0
-    let total = handle Audit
-        step label => {
-            n = n + 1
-            let answer = resume(n)          // performer continues with n
-            print("after ${label}: answer=${toString(answer)}")
-            answer                          // code AFTER resume — impossible with tail-resume
-        }
-    in pipeline()
-    print("total=${toString(total)}")
-    0
-}
+mut n = 0
+let total = handle Audit
+    step label => {
+        n = n + 1
+        let answer = resume(n)          // performer continues with n
+        print("after ${label}: answer=${toString(answer)}")
+        answer                          // code AFTER resume — impossible with tail-resume
+    }
+in pipeline()
+print("total=${toString(total)}")
 ```
 
 Output — the "after" lines unwind **LIFO** as each continuation completes, the
@@ -212,7 +208,7 @@ stack via the existing snapshot/restore (`__osprey_handler_snapshot`), so a
 The compiler infers the minimal effect set of every expression. Functions either declare their effects or are required to be pure. A function may be polymorphic over an effect set:
 
 ```osprey
-fn loggedCalculation<E>(x: int) -> int !E = {
+fn loggedCalculation<E>(x) -> int !E = {
     perform Logger.log("calculating")     // E must include Logger
     x * 2
 }
@@ -267,7 +263,7 @@ in
 effect Exception { raise: fn(string) -> unit }
 effect State     { get: fn() -> int, set: fn(int) -> unit }
 
-fn doubleAndStore(x: int) -> int ![Exception, State] = match x * 2 {
+fn doubleAndStore(x) -> int ![Exception, State] = match x * 2 {
     Success { value }   => {
         perform State.set(value)
         value

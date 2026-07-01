@@ -2,7 +2,7 @@
 layout: page
 title: "Fibers and Concurrency"
 description: "Osprey Language Specification: Fibers and Concurrency"
-date: 2026-06-30
+date: 2026-07-01
 tags: ["specification", "reference", "documentation"]
 author: "Christian Findlay"
 permalink: "/spec/0011-lightweightfibersandconcurrency/"
@@ -11,6 +11,8 @@ permalink: "/spec/0011-lightweightfibersandconcurrency/"
 # Fibers and Concurrency
 
 Fibers are lightweight concurrent computations. They are constructed as values of `Fiber<T>` and communicate through `Channel<T>`. There are no OS threads exposed to user code; the runtime schedules fibers cooperatively. Values cross fiber boundaries — `spawn` captures and channel `send` — by move or copy, never by sharing ([MEM-FIBER-ISOLATION] in [Memory Management](/spec/0018-memorymanagement/)).
+
+> **Flavor layer — shared core (AST and above).**  Concurrency is a shared-core concern. The constructs here lower to canonical `osprey_ast` nodes — `Expr::Spawn`, `Expr::Yield`, `Expr::Await`, `Expr::Send`, `Expr::Recv`, and `Expr::Select` — and the runtime scheduler operates on those nodes alone ([FLAVOR-BOUNDARY] in [Language Flavors](/spec/0023-languageflavors/)). The semantics, the cooperative scheduling, and the channel runtime are one across every flavor; only the surface spelling differs. The Default (`.osp`) spelling is shown below; the ML (`.ospml`) counterpart is described in [ML Flavor Syntax](/spec/0024-mlflavorsyntax/). No phase below the AST can tell which flavor produced a fiber, send, or select.
 
 ## Status
 
@@ -63,7 +65,7 @@ let buf    = Channel<string> { capacity: 10 }   // buffered
 | Wait for a fiber to produce its value           | `await(fiber: Fiber<T>) -> T`                        |
 | Send a value to a channel                       | `send(channel: Channel<T>, value: T) -> Result<unit, ChannelError>` |
 | Receive a value from a channel                  | `recv(channel: Channel<T>) -> Result<T, ChannelError>` |
-| Yield to the scheduler                          | `yield() -> unit`                                    |
+| Yield to the scheduler, forwarding the value    | `yield(value: T) -> T`                               |
 
 ## Producer / Consumer Example
 
@@ -108,13 +110,18 @@ select {
 
 ## Fiber-Isolated Modules (planned)
 
+> **Superseded design note.** This section records the older sketch that existed
+> before the multi-file module design. The normative module/state model is now
+> [Modules and Namespaces](/spec/0025-modulesandnamespaces/), especially
+> `[MODULES-STATE]` and `[MODULES-STATE-MODULE]`.
+
 Each fiber that touches a `module` receives its own private instance. There is no shared mutable state across fibers; communication is via channels.
 
 ```osprey
 module Counter {
     mut count = 0
-    fn increment() -> int = { count = count + 1; count }
-    fn get()       -> int = count
+    fn increment() = { count = count + 1; count }
+    fn get()       = count
 }
 
 let f1 = spawn Counter.increment()   // 1
