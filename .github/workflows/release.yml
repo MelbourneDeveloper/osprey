@@ -13,8 +13,14 @@ name: Release
 # Version stamping ([SWR-VERSION-BUILD-STAMPING]): the version is derived from
 # the tag and stamped into every artifact. Source stays at 0.0.0-dev.
 #
+# Cost gate ([SWR-REL-CHANGES-*]): the `scope` job diffs this tag against the
+# previous one and gates the rest, so a website/benchmark-only tag deploys the
+# site without rebuilding the macOS/Windows binary matrix or republishing
+# brew/scoop/VSIX/Marketplace. Ruleset: .github/release-scope.json.
+#
 # Job shapes follow Shipwright's templates/gh-actions/*.yml (binary-multiplatform,
-# publish-brew-tap, publish-scoop-bucket, publish-vsix-per-platform).
+# publish-brew-tap, publish-scoop-bucket, publish-vsix-per-platform,
+# release-change-detection).
 on:
   push:
     tags: ['v*']
@@ -29,6 +35,25 @@ env:
   DESCRIPTION: "Osprey — a functional language with algebraic effects, fibers, and compile-time safety"
 
 jobs:
+  # --------------------------------------------------------------------------
+  # Release scope (COST GATE) — diff this tag against the previous release tag and
+  # decide which surfaces must publish, so the expensive macOS/Windows build matrix
+  # only runs when the artifact it produces actually changed. Ruleset lives in
+  # .github/release-scope.json. Implements [SWR-REL-CHANGES-*]:
+  #   binary changed    -> full release (build matrix + every channel)
+  #   vsix changed       -> still build the matrix (the VSIX bundles a binary at the
+  #                         new tag version), publish the VSIX, skip the other channels
+  #   website only       -> deploy the site, skip the whole matrix
+  #   unclassified path  -> full release, fail-safe
+  scope:
+    name: Decide release scope
+    uses: ./.github/workflows/release-change-detection.yml
+    permissions:
+      contents: read
+    with:
+      # Pinned Shipwright commit the classifier is installed from [SWR-SEC-ACTION-PINNING].
+      shipwright_rev: 78f1455f27e8bfefc96e757a3eab23289be0e3f7
+
   # --------------------------------------------------------------------------
   version:
     name: Resolve version from tag
@@ -58,7 +83,11 @@ jobs:
   # --------------------------------------------------------------------------
   build:
     name: Build ${{ matrix.platform }}
-    needs: version
+    needs: [version, scope]
+    # The expensive native matrix runs only when an artifact that bundles a binary
+    # changed — a full release, or a vsix/jetbrains change (which must rebuild the
+    # binary at the new tag version). A website-only tag skips it. [SWR-REL-CHANGES-MATRIX]
+    if: ${{ needs.scope.outputs.build_matrix == 'true' }}
     runs-on: ${{ matrix.os }}
     # Windows is the newest, least-proven target — keep a win32 hiccup from
     # blocking the mac/linux binaries + VSIX publish. A win32 failure shows as a
@@ -150,7 +179,10 @@ jobs:
   # --------------------------------------------------------------------------
   github-release:
     name: Publish GitHub Release
-    needs: [version, build]
+    needs: [version, build, scope]
+    # The standalone binary GitHub Release (and the brew/scoop jobs that depend on
+    # it) only ship on a full release. [SWR-REL-CHANGES-CASCADE]
+    if: ${{ needs.scope.outputs.full == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -322,7 +354,11 @@ jobs:
   # extension launches a version-matched compiler verified by @nimblesite/shipwright-vscode.
   vsix:
     name: Publish VSIX ${{ matrix.target }}
-    needs: [version, build]
+    needs: [version, build, scope]
+    # Package the per-platform VSIX only when the extension changed (or a full
+    # release). build_matrix is guaranteed true here, so the bundled binary is
+    # rebuilt at the new tag version. [SWR-REL-CHANGES-MATRIX]
+    if: ${{ needs.scope.outputs.vsix == 'true' }}
     runs-on: ${{ matrix.os }}
     # Match the build job: a win32 VSIX hiccup must not block the mac/linux
     # VSIXes from reaching the Marketplace.
@@ -500,14 +536,15 @@ jobs:
 
   # --------------------------------------------------------------------------
   # Website deploy — the live site updates ONLY as part of a release (never on a
-  # push to main). Gated solely on the GitHub Release existing, so a Marketplace
-  # / brew / scoop hiccup never blocks the docs going live. Stable tags only:
-  # a SemVer prerelease tag (v1.2.3-rc.1) contains a hyphen and is skipped, so a
-  # prerelease never overwrites the live site.
+  # push to main). Decoupled from the binary release: it deploys whenever the
+  # website surface changed (full release, or a website-only tag), so benchmark /
+  # docs updates ship without rebuilding the whole binary matrix. [SWR-REL-CHANGES]
+  # Stable tags only: a SemVer prerelease tag (v1.2.3-rc.1) contains a hyphen and
+  # is skipped, so a prerelease never overwrites the live site.
   deploy-site:
     name: Deploy website to GitHub Pages
-    needs: [github-release]
-    if: ${{ !contains(github.ref_name, '-') }}
+    needs: [scope]
+    if: ${{ needs.scope.outputs.website == 'true' && !contains(github.ref_name, '-') }}
     uses: ./.github/workflows/deploy-pages.yml
     permissions:
       contents: read
