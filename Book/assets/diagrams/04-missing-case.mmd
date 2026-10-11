@@ -1,0 +1,7 @@
+flowchart TD
+    accTitle: Finish the decision when a state changes
+    accDescr: Adding Learning to Status makes statusLabel non-exhaustive. Adding its explicit arm restores coverage and the compiler accepts the program.
+    A["Add Learning<br/>to Status"] --> B["Check statusLabel"]
+    B --> C["Missing Learning arm<br/>Compiler rejects"]
+    C --> D["Add Learning arm<br/>Return learning text"]
+    D --> E["Check again<br/>All variants covered"]

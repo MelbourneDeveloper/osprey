@@ -1,0 +1,22 @@
+type Status = Planned | Complete { note: string }
+
+fn statusLabel(status) = match status {
+    Planned => "planned"
+    Complete { note } => "complete: ${note}"
+}
+
+type Lesson = { title: string, status: Status }
+
+fn summary(lesson) =
+    "${lesson.title} [${statusLabel(lesson.status)}]"
+
+fn main() = {
+    let planned = Lesson {
+        title: "Read a match", status: Planned
+    }
+    let completed = Lesson {
+        title: "Read a match",
+        status: Complete { note: "handled both cases" }
+    }
+    print("${summary(planned)}\n${summary(completed)}")
+}

@@ -1,0 +1,1 @@
+examples/chapter-04/failscompilation/unreachable-arm.osp: unreachable match arm: an earlier catch-all already covers every case

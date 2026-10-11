@@ -4,7 +4,7 @@
 
 Start with [Chapter 9 — Ask for an effect](manuscript/09-ask-for-an-effect.md) for a step-by-step introduction to algebraic effects: typed requests, handler scope, why callbacks matter, and the same Flight Log function under terminal and test handlers. [Chapter 8](manuscript/08-prove-what-the-program-does.md) teaches behavior tests; [Chapter 10](manuscript/10-read-write-and-call-the-web.md) applies effects to storage, failure, and HTTP. Each includes runnable examples, exercises, and recorded results.
 
-The current edition has **Chapters 1–3 and 8–10 complete**. The other chapters remain editorial scaffolds. The compiler release still needs to be pinned before publication; `evidence.json` records the development compiler used to verify the examples.
+The current edition has **Chapters 1–4 and 8–10 complete**. The other chapters remain editorial scaffolds. The compiler release still needs to be pinned before publication; `evidence.json` records the development compiler used to verify the examples.
 
 ## Reader promise
 

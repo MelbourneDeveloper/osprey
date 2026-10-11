@@ -1,0 +1,31 @@
+name: Detect CI scope
+description: Classify changed files consistently for Linux, Windows and content checks
+outputs:
+  code:
+    description: Compiler, runtime, integration or CI changes; unknown files fail closed
+    value: ${{ steps.scope.outputs.code }}
+  website:
+    description: Website files changed
+    value: ${{ steps.scope.outputs.website }}
+  book:
+    description: Book content, assets, examples or tooling changed
+    value: ${{ steps.scope.outputs.book }}
+  benchmarks:
+    description: Benchmark data, programs or tooling changed
+    value: ${{ steps.scope.outputs.benchmarks }}
+runs:
+  using: composite
+  steps:
+    - uses: dorny/paths-filter@v3
+      id: files
+      with:
+        list-files: json
+        filters: |
+          all:
+            - '**'
+    - name: Classify changed files
+      id: scope
+      shell: bash
+      env:
+        CHANGED_FILES: ${{ steps.files.outputs.all_files }}
+      run: node scripts/ci-scope.mjs

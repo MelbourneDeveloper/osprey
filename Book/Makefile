@@ -20,7 +20,7 @@ DIAGRAM_PNGS := \
 	assets/diagrams/03-inference-trail.png \
 	assets/diagrams/03-annotation-choice.png \
 	assets/diagrams/03-mismatch-locator.png \
-	$(patsubst %.mmd,%.png,$(wildcard assets/diagrams/08-*.mmd assets/diagrams/09-*.mmd assets/diagrams/10-*.mmd))
+	$(patsubst %.mmd,%.png,$(wildcard assets/diagrams/04-*.mmd assets/diagrams/08-*.mmd assets/diagrams/09-*.mmd assets/diagrams/10-*.mmd))
 
 MERMAID_PNGS := $(patsubst %.mmd,%.png,$(wildcard assets/diagrams/*.mmd))
 

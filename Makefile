@@ -1004,9 +1004,9 @@ _website-build: $(WEBSITE_NODE_DEPS)
 	cd website && npm run build
 
 # _test_bench_tools: Unit-test the benchmark result merger and the README figure
-# generator. The merger decides whether an Osprey-only re-run (`make
-# bench-osprey`) may overwrite published measurements, so it guards the recorded
-# data set against a failed partial run; `update_readme` is what keeps every
+# generator. Every benchmark run stages and merges validated replacements, so
+# the checks guard the recorded data set against failed or incomplete runs;
+# `update_readme` is what keeps every
 # quoted binarytrees figure in step with that data.
 _test_bench_tools:
 	@echo "==> Bench tooling tests..."
@@ -1017,7 +1017,8 @@ _test_bench_tools:
 ##        /usr/bin/time). Absent toolchains are skipped. Informational only:
 ##        NOT part of `make ci`/`make test` (perf is noisy on shared runners).
 ##        Pass a name filter via BENCH_FILTER=<substr>; results in
-##        benchmarks/results/results.md. See benchmarks/README.md.
+##        benchmarks/results/results.html. Every run preserves unmeasured
+##        values and publishes only validated replacements. See benchmarks/README.md.
 bench: build
 	@zsh benchmarks/run.sh $(BENCH_FILTER)
 

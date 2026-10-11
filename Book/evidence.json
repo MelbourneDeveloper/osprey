@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "editionStatus": "partial-manuscript-chapters-1-3-and-8-10-complete",
+  "editionStatus": "partial-manuscript-chapters-1-4-and-8-10-complete",
   "releasePinned": false,
   "compilerVersion": "0.0.0-dev",
   "chapters": [
@@ -56,11 +56,30 @@
     {
       "number": 4,
       "spec": "mapped",
-      "examples": "planned",
-      "capture": "planned",
-      "auditedOn": "2026-10-04",
-      "editorial": "editorial-scaffold",
-      "implementation": "current-contracts-audited; checkpoint-not-written"
+      "examples": "run-with-recorded-dev-binary",
+      "capture": "concept-diagrams-ready",
+      "auditedOn": "2026-10-11",
+      "editorial": "complete",
+      "implementation": "compiler-checked",
+      "verifiedOn": "2026-10-11",
+      "compilerSha256": "e213e1e7e8bd0d7c5a6e6baac7e1ba9475e3b49115a979ce6e5a5576364ba29f",
+      "platform": "linux-x86_64",
+      "specifications": [
+        "../docs/specs/0003-Syntax.md",
+        "../docs/specs/0004-TypeSystem.md",
+        "../docs/specs/0007-PatternMatching.md"
+      ],
+      "checks": [
+        "2 runnable programs match exact output; 2 rejection fixtures match exact compiler diagnostics",
+        "Changed label, count and completion-note exercises produce predicted output",
+        "Missing Learning and unreachable-arm repairs compile and run with expected output",
+        "Mixed arm types, missing boolean case and sibling-arm payload access are rejected",
+        "make check-examples passes for all completed chapter examples",
+        "make check passes with pandoc 3.9",
+        "All displayed Osprey snippets and the missing-case diagnostic match stored sources and evidence",
+        "Chapter HTML checked at 1280px and 320px: no document horizontal overflow; both diagrams loaded and inspected"
+      ],
+      "scope": "Boolean and integer literal matches, wildcard ordering, closed union coverage, named payload destructuring; no roadmap or disputed pattern forms taught"
     },
     {
       "number": 5,

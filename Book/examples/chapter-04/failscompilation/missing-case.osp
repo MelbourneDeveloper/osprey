@@ -1,0 +1,8 @@
+type Status = Planned | Learning | Complete { note: string }
+
+fn statusLabel(status) = match status {
+    Planned => "planned"
+    Complete { note } => "complete: ${note}"
+}
+
+fn main() = print(statusLabel(Learning))

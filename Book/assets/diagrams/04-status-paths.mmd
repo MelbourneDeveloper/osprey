@@ -1,0 +1,7 @@
+flowchart TD
+    accTitle: Every status produces a label
+    accDescr: Status selects Planned or Complete. Complete binds its note before returning completion text. Both arms return a string.
+    A["Status"] --> B["Planned"]
+    A --> C["Complete<br/>Bind note"]
+    B --> D["planned"]
+    C --> E["complete text<br/>with note"]

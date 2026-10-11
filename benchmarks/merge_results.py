@@ -1,62 +1,86 @@
 #!/usr/bin/env python3
-"""Replace selected language measurements without disturbing other results."""
+"""Publish validated measurements while retaining every unreplaced value."""
 
 import json
+import math
+import os
 import sys
+import tempfile
 from pathlib import Path
 
-# Statuses a partial run may publish. `wasm_incompatible` is a legitimate skip
-# (the case uses a non-portable builtin), so it carries no measurement and must
-# not veto the merge. Anything else means the re-run produced no trustworthy
-# number for that cell — publishing it would overwrite a good published record
-# with a hole, so the whole merge is refused and the destination left untouched.
+TIMING = ("mean", "stddev", "min", "max")
 PUBLISHABLE = {"ok", "wasm_incompatible"}
 
 
-def read_jsonl(path: Path) -> list[dict[str, object]]:
-    return [json.loads(line) for line in path.read_text().splitlines() if line]
+def valid_timing(result: dict) -> bool:
+    return all(isinstance(result.get(k), (int, float)) and not isinstance(result[k], bool)
+               and math.isfinite(result[k]) and (result[k] >= 0 if k == "stddev" else result[k] > 0)
+               for k in TIMING)
 
 
-def failures(rows: list[dict[str, object]], languages: set[str]) -> list[str]:
-    return [
-        f"{row['case']}/{row['lang']}={row['status']}"
-        for row in rows
-        if str(row["lang"]) in languages and str(row["status"]) not in PUBLISHABLE
-    ]
+def atomic_write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as temporary:
+            temporary.write(content)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.chmod(name, path.stat().st_mode & 0o777 if path.exists() else 0o644)
+        os.replace(name, path)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line] if path.exists() else []
+
+
+def failures(rows: list[dict], languages: set[str]) -> list[str]:
+    return [f"{r['case']}/{r['lang']}={r['status']}" for r in rows
+            if r["lang"] in languages and r["status"] not in PUBLISHABLE]
+
+
+def hyperfine(path: Path) -> dict:
+    return json.loads(path.read_text()) if path.exists() else {"results": []}
+
+
+def timing_update(destination: Path, update: Path, case: str, langs: set[str]) -> tuple[Path, str]:
+    path = destination / "hf" / f"{case}.json"
+    old, new = hyperfine(path), hyperfine(update / "hf" / f"{case}.json")
+    replacements = {r.get("command"): r for r in new["results"] if valid_timing(r)}
+    missing = langs - replacements.keys()
+    if missing:
+        raise ValueError(f"missing valid timing for {case}: {', '.join(sorted(missing))}; published results left untouched")
+    old["results"] = [r for r in old["results"] if r.get("command") not in langs]
+    old["results"].extend(replacements[lang] for lang in sorted(langs))
+    return path, json.dumps(old, indent=2, allow_nan=False) + "\n"
+
+
+def raw_update(old: list[dict], new: list[dict]) -> str:
+    cells = {(r["case"], r["lang"]): r for r in old}
+    for row in new:
+        key = row["case"], row["lang"]
+        previous = cells.get(key, {})
+        cells[key] = {**row, "rss": row["rss"] or previous.get("rss", 0)}
+    return "".join(json.dumps(row, separators=(",", ":"), allow_nan=False) + "\n" for row in cells.values())
 
 
 def merge(destination: Path, update: Path, languages: set[str]) -> None:
-    old_raw = read_jsonl(destination / "raw.jsonl")
-    new_raw = read_jsonl(update / "raw.jsonl")
-    broken = failures(new_raw, languages)
+    old, new = read_jsonl(destination / "raw.jsonl"), read_jsonl(update / "raw.jsonl")
+    broken = failures(new, languages)
     if broken:
-        raise ValueError(
-            "partial benchmark failed; published results left untouched: " + ", ".join(broken)
-        )
-    # Replacement is keyed on the (case, language) pairs the re-run ACTUALLY
-    # measured, never on the language list it was asked to measure. A language
-    # whose toolchain is absent writes no record, and keying on the list alone
-    # deleted its published row for every re-run case.
-    measured = {(str(r["case"]), str(r["lang"])) for r in new_raw if str(r["lang"]) in languages}
-
-    kept = [row for row in old_raw if (str(row["case"]), str(row["lang"])) not in measured]
-    merged = kept + [row for row in new_raw if str(row["lang"]) in languages]
-    (destination / "raw.jsonl").write_text(
-        "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in merged)
-    )
-
-    destination_hf = destination / "hf"
-    destination_hf.mkdir(parents=True, exist_ok=True)
-    for case in {c for c, _ in measured}:
-        replaced = {lang for c, lang in measured if c == case}
-        update_file = update / "hf" / f"{case}.json"
-        destination_file = destination_hf / f"{case}.json"
-        old = json.loads(destination_file.read_text()) if destination_file.exists() else {"results": []}
-        new = json.loads(update_file.read_text()) if update_file.exists() else {"results": []}
-        results = [r for r in old.get("results", []) if r.get("command") not in replaced]
-        results.extend(r for r in new.get("results", []) if r.get("command") in replaced)
-        old["results"] = results
-        destination_file.write_text(json.dumps(old, indent=2) + "\n")
+        raise ValueError("partial benchmark failed; published results left untouched: " + ", ".join(broken))
+    measured = [r for r in new if r["lang"] in languages and r["status"] == "ok"]
+    if not measured:
+        return
+    cases = {r["case"] for r in measured}
+    # Validate and serialize EVERY replacement before touching any published file.
+    writes = [timing_update(destination, update, case, {r["lang"] for r in measured if r["case"] == case})
+              for case in sorted(cases)]
+    writes.append((destination / "raw.jsonl", raw_update(old, measured)))
+    for path, content in writes:
+        atomic_write(path, content)
 
 
 if __name__ == "__main__":
