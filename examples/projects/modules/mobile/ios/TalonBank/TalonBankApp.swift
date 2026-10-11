@@ -124,10 +124,10 @@ struct BankScreen: View {
                 HStack { Spacer(); keyboardDone }.padding(.horizontal, 16).background(BankTheme.paper)
             }
             ScrollView { NativeNode(node: node, store: store) }
-                .frame(maxWidth: 540, maxHeight: 490)
+                .frame(maxHeight: 490)
                 .background(Color.white).clipShape(RoundedRectangle(cornerRadius: 26))
                 .accessibilityIdentifier("bank-modal")
-        }
+        }.frame(maxWidth: 540)
     }
 
     private func errorView(_ error: String) -> some View {
