@@ -15,11 +15,12 @@ struct TalonBankApp: App {
 struct BankScreen: View {
     @ObservedObject var store: BankStore
     @State private var settings = false
+    @State private var keyboardVisible = false
     private var sidebar: BankNode? { store.view?.first { $0.has("sidebar") } }
     private var menuOpen: Bool { sidebar?.has("open") == true }
     private var modal: BankNode? { store.view?.first { $0.has("modal") } }
 
-    var body: some View {
+    private var layout: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width >= 860
             ZStack(alignment: .leading) {
@@ -35,15 +36,24 @@ struct BankScreen: View {
             .overlay(alignment: .bottom) { if modal == nil { notice } }
             .environment(\.bankViewportWidth, geometry.size.width)
         }
-        .tint(BankTheme.green)
+    }
+
+    var body: some View {
+        layout.tint(BankTheme.green)
         .font(BankTheme.type(14))
         .sheet(isPresented: $settings) { BankConnection(store: store) }
         .toolbar { ToolbarItemGroup(placement: .keyboard) {
-            Spacer()
-            Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-                .accessibilityIdentifier("keyboard-done")
+            if modal == nil { Spacer(); keyboardDone }
         } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardVisible = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in store.click("topbar-refresh") }
+    }
+
+    private var keyboardDone: some View {
+        Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+            .frame(minWidth: 44, minHeight: 44)
+            .accessibilityIdentifier("keyboard-done")
     }
 
     private func main(wide: Bool) -> some View {
@@ -98,18 +108,26 @@ struct BankScreen: View {
     private func modalOverlay(_ node: BankNode) -> some View {
         ZStack(alignment: .bottom) {
             Color.black.opacity(0.45).ignoresSafeArea().onTapGesture { store.click("close-modal") }
-            // The notice stacks on the sheet. Laid over the screen it covered the sheet's title
-            // and close button once the keyboard pushed the sheet to the top.
-            VStack(spacing: 0) {
-                notice
-                ScrollView { NativeNode(node: node, store: store) }
-                    .frame(maxWidth: 540, maxHeight: 490)
-                    .background(Color.white).clipShape(RoundedRectangle(cornerRadius: 26))
-                    .accessibilityIdentifier("bank-modal")
-            }
+            modalSheet(node)
         }
         .accessibilityAddTraits(.isModal)
         .accessibilityAction(.escape) { store.click("close-modal") }
+    }
+
+    private func modalSheet(_ node: BankNode) -> some View {
+        // Keep notices above the form so they cannot cover its title or close button.
+        VStack(spacing: 0) {
+            notice
+            // Modal accessibility excludes the screen's keyboard toolbar. Keep
+            // dismissal inside the modal so VoiceOver and touch can reach it.
+            if keyboardVisible {
+                HStack { Spacer(); keyboardDone }.padding(.horizontal, 16).background(BankTheme.paper)
+            }
+            ScrollView { NativeNode(node: node, store: store) }
+                .frame(maxWidth: 540, maxHeight: 490)
+                .background(Color.white).clipShape(RoundedRectangle(cornerRadius: 26))
+                .accessibilityIdentifier("bank-modal")
+        }
     }
 
     private func errorView(_ error: String) -> some View {
