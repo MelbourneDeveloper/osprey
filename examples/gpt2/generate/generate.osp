@@ -1,8 +1,11 @@
-// Greedy text generation with the trained GPT-2 model: no training, no
-// conversion step, no Python. `make gpt2 PROMPT="..."` downloads the published
-// weights into examples/gpt2/weights and runs this project. The prompt is the
-// first line of stdin, the number of tokens to generate the optional second
-// line (default 20). The model lives in ../model; this file is the sampler.
+// Greedy text generation with the trained GPT-2 model: no training from
+// scratch, no conversion step, no Python. `make gpt2 PROMPT="..."` downloads the
+// published weights into examples/gpt2/weights and runs this project. The prompt
+// is the first line of stdin, the number of tokens to generate the optional
+// second line (default 20). The model lives in ../model; this file is the
+// sampler. The prompt takes one full forward pass; every later token takes one
+// forwardStep over the blocks' cached qkv rows, so a token costs one position
+// rather than the whole sequence, with every value the full pass would compute.
 import gpt2::Tokenizer
 import gpt2::Model
 import gpt2::Model::{at, maxF, width, vocabSize, layerCount, endOfText}
@@ -10,23 +13,33 @@ import gpt2::Model::{at, maxF, width, vocabSize, layerCount, endOfText}
 let defaultPrompt = "The capital of France is"
 let defaultTokens = 20
 
-/// The most likely next token after the sequence: the tied output projection
-/// of the final position's normalised state, then an argmax.
-fn nextToken(w, ids) = {
-    let t = listLength(ids)
-    let x = Model::layerNorm(Model::forward(w, toGpu(ids), t).x, t, w.lnfG, w.lnfB)
-    let last = gpuIota(width) |> gpuMap(fn(c) => at(x, (t - 1) * width + c))
-    let logits = Model::product(last, w.wteT, 1, width, vocabSize)
+/// The most likely token after the last block's output row `last` [1, width]:
+/// the tied output projection of its normalised state, then an argmax.
+fn nextToken(w, last) = {
+    let logits = Model::product(Model::layerNorm(last, 1, w.lnfG, w.lnfB), w.wteT, 1, width, vocabSize)
     let peak = logits |> gpuFold(at(logits, 0), maxF)
     gpuGet(gpuIota(vocabSize) |> gpuFilter(fn(v) => at(logits, v) == peak), 0) ?: endOfText
 }
 
-fn generate(w, ids, remaining) = match remaining == 0 {
+/// Row t - 1 of x [t, width].
+fn lastRow(x, t) = gpuIota(width) |> gpuMap(fn(c) => at(x, (t - 1) * width + c))
+
+/// `remaining` more tokens after ids, whose last token `pending` the cached
+/// blocks have not seen yet.
+fn generate(w, ids, caches, pending, remaining) = match remaining == 0 {
     true => ids
     false => {
-        let next = nextToken(w, ids)
-        match next == endOfText { true => ids  false => generate(w, listAppend(ids, next), remaining - 1) }
+        let step = Model::forwardStep(w, pending, listLength(ids), caches)
+        let next = nextToken(w, step.x)
+        match next == endOfText { true => ids  false => generate(w, listAppend(ids, next), step.caches, next, remaining - 1) }
     }
+}
+
+/// The prompt's continuation: the full pass's last row predicts the first
+/// token, and the pass's qkv rows seed the caches for every later one.
+fn continuation(w, ids, trace, t, count) = {
+    let first = nextToken(w, lastRow(trace.x, t))
+    match first == endOfText { true => ids  false => generate(w, listAppend(ids, first), Model::qkvCaches(trace), first, count - 1) }
 }
 
 fn main() = {
@@ -41,8 +54,9 @@ fn main() = {
     let bpe = Tokenizer::loadBpe(Model::weightsDir + "/merges.txt")
     let w = Model::loadWeights()
     let ids = Tokenizer::encode(bpe, prompt)
+    let t = listLength(ids)
     print("gpt2 (124M) on ${gpuDevice()} — ${listLength(bpe.merges)} merges, ${intDiv(gpuLength(w.wte), width)} vocabulary rows, ${layerCount} layers")
     print("prompt: ${prompt}\ntokens:${Tokenizer::idsText(ids)}")
-    let out = generate(w, ids, count)
+    let out = match count < 1 { true => ids  false => continuation(w, ids, Model::forward(w, toGpu(ids), t), t, count) }
     print("generated ${listLength(out) - listLength(ids)} tokens\n${Tokenizer::decode(bpe, out)}")
 }
