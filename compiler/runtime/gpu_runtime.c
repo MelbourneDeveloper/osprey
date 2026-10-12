@@ -26,28 +26,35 @@ typedef struct OspreyGpuBuffer {
 // Elements are 8-byte words; lengths above this would overflow the byte count.
 #define GPU_MAX_LEN (INT64_MAX / 8)
 
+// A requested length made total: negative or byte-overflowing requests
+// become zero, so every allocation below is for a representable size.
+static int64_t clamped_len(int64_t length) {
+  return (length < 0 || length > GPU_MAX_LEN) ? 0 : length;
+}
+
+// `length` zero-filled scalar words (at least one, so the empty buffer still
+// owns a payload), or NULL when the data allocation fails.
+static int64_t *zeroed_words(int64_t length) {
+  int64_t bytes = (length > 0 ? length : 1) * 8;
+  int64_t *data = (int64_t *)osp_alloc_tagged(bytes, OSP_MEM_RAW);
+  for (int64_t i = 0; data && i < length; i++) {
+    data[i] = 0;
+  }
+  return data;
+}
+
 // Allocate a zero-filled buffer of `length` scalar words. Out-of-range
 // lengths clamp to zero and allocation failure yields NULL; every accessor
 // below treats both as an empty buffer instead of trapping.
 void *osprey_gpu_alloc(int64_t length) {
-  if (length < 0 || length > GPU_MAX_LEN) {
-    length = 0;
-  }
+  length = clamped_len(length);
   OspreyGpuBuffer *b = (OspreyGpuBuffer *)osp_alloc_tagged(
       (int64_t)sizeof(OspreyGpuBuffer), GPU_HDR_LAYOUT);
   if (!b) {
     return NULL;
   }
-  int64_t bytes = (length > 0 ? length : 1) * 8;
-  b->data = (int64_t *)osp_alloc_tagged(bytes, OSP_MEM_RAW);
-  if (!b->data) {
-    b->length = 0;
-    return b;
-  }
-  for (int64_t i = 0; i < length; i++) {
-    b->data[i] = 0;
-  }
-  b->length = length;
+  b->data = zeroed_words(length);
+  b->length = b->data ? length : 0;
   return b;
 }
 
@@ -55,6 +62,15 @@ void *osprey_gpu_alloc(int64_t length) {
 int64_t osprey_gpu_len(void *buffer) {
   OspreyGpuBuffer *b = (OspreyGpuBuffer *)buffer;
   return b ? b->length : 0;
+}
+
+// The stored words themselves, for the host-backend operations in gpu_host.c
+// that walk whole buffers (the dense product, the file loaders); NULL for an
+// empty or failed buffer, whose length is 0, so a caller bounding its loops by
+// osprey_gpu_len never dereferences it.
+int64_t *osprey_gpu_data(void *buffer) {
+  OspreyGpuBuffer *b = (OspreyGpuBuffer *)buffer;
+  return b && b->length > 0 ? b->data : NULL;
 }
 
 // Whether `index` names a stored word: the ONE bounds predicate every accessor

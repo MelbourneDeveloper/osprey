@@ -49,7 +49,7 @@ Use the [bank](../examples/projects/modules/README.md) and [mobile apps](../exam
 - Native memory modes are default, GC, and ARC. The default allocator retains general allocations. Strict static-memory checking and tail-call optimization are not implemented.
 - Mobile C ABI targets use the default allocator and do not expose a stable returned-string release API. Platform networking belongs to the native host.
 - Project modules and cross-flavor imports work; the package manager remains roadmap work.
-- GPU kernels currently execute as host loops. Device code generation remains roadmap work in [plan 0023](plans/0023-gpu-computation.md).
+- GPU kernels currently execute as host loops. Device code generation remains roadmap work in [plan 0023](plans/0023-gpu-computation.md). A trained model does run on that surface — [GPT-2](../examples/gpt2/README.md) loads the published weights with `gpuLoadTensor` and generates text — so say "runs on the GPU surface" or "on the host backend", never "GPU-accelerated".
 - Calling C crosses Osprey's memory-safety boundary.
 
 Update claims when the implementation and its verification change. A feature appearing in a specification does not by itself establish support.

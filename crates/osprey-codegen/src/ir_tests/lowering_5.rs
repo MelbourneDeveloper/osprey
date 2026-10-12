@@ -21,7 +21,7 @@ fn higher_order_calls_through_computed_and_field_callees() {
              fn fieldWitness() -> string = dispatch(Dispatch { m: methodField })\n\
              fn add3(a: int) -> (int) -> (int) -> int =\n\
                fn(b: int) => fn(c: int) => satAdd(satAdd(a, b), c)\n\
-             fn makeAdder(n: int) -> (int) -> int = fn(x: int) => satAdd(x, n)\n\
+             fn makeAdder(n) = fn(x) => satAdd(x, n)\n\
              fn main() -> Unit = {\n\
                let cfg = Cfg { keep: fn(n: int) => n > 1 }\n\
                let chain = add3(1)(2)(3)\n\
@@ -53,6 +53,11 @@ fn higher_order_calls_through_computed_and_field_callees() {
 fn field_callbacks_return_callables_and_keep_named_slots() {
     // A field callback returns another callable through two generic helpers.
     // The second record also proves named field arguments keep written slots.
+    // `firstSlot` keeps `second: int` and `-> int` deliberately: unannotated
+    // the definition is generic — lambda-lifted, no real `@firstSlot` symbol —
+    // so the witnesses below could not prove a call keeps its named arguments
+    // in their written slots. `first: int` is inferable (pinned by the return
+    // and the int call sites) and is left off.
     let returned = module(
             "effect Probe { value: fn() -> int }\n\
              fn fetch() -> int !Probe = perform Probe.value()\n\
@@ -68,7 +73,7 @@ fn field_callbacks_return_callables_and_keep_named_slots() {
              fn dispatchNamed<T>(x: T) = x.m(ignored: pure, callback: fetch)\n\
              fn forward<T>(dummy: T, cb: () -> () -> int) = dispatch(Factory { m: cb })()\n\
              fn forwardNamed<T>(dummy: T, cb: (() -> int, () -> int) -> () -> int) = dispatchNamed(NamedFactory { m: cb })()\n\
-             fn firstSlot(first: int, second: int) -> int = first\n\
+             fn firstSlot(first, second: int) -> int = first\n\
              fn throughSlot<T>(dummy: T, callback: (int, int) -> int) = callback(second: 22, first: 11)\n\
              fn genericSlotWitness() -> int = throughSlot(0, firstSlot)\n\
              fn declaredSlotWitness() -> int = firstSlot(second: 22, first: 11)\n\
@@ -231,7 +236,7 @@ fn a_still_generic_lambda_with_no_slot_at_all_is_rejected() {
 fn float_literal_match_uses_fcmp() {
     // A float-literal arm drives gen_eq's fcmp-oeq path (pattern.rs 487-491).
     let ir = module(
-        "fn pick(x: float) -> int = match x {\n\
+        "fn pick(x) = match x {\n\
                1.5 => 1\n\
                _   => 0\n\
              }\n\

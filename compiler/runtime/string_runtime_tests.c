@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "collection_runtime.h"
 #include "string_runtime.h"
 
 /* ---------- scalar predicates ---------- */
@@ -385,6 +386,45 @@ static void test_join(void) {
     osp_string_list_free(list);
 
     printf("  ok  join\n");
+}
+
+/* Append a borrowed word to a runtime list the way codegen stores strings. */
+static OspreyList *push_word(OspreyList *list, const char *word) {
+    return osprey_list_append(list, (int64_t)(intptr_t)word);
+}
+
+/* `join` over the RUNTIME list layout (listAppend, toList, a settled
+   `let`-bound string list) must agree with the flat-literal join. */
+static void test_join_runtime_list(void) {
+    /* NULL list → "" */
+    char *out = osp_string_join_list(NULL, ", ");
+    assert(out != NULL && strcmp(out, "") == 0);
+    free(out);
+
+    /* empty runtime list → "" */
+    OspreyList *list = osprey_list_empty();
+    out = osp_string_join_list(list, ", ");
+    assert(out != NULL && strcmp(out, "") == 0);
+    free(out);
+
+    /* one word: the separator is never applied */
+    list = push_word(list, "solo");
+    out = osp_string_join_list(list, "-");
+    assert(strcmp(out, "solo") == 0);
+    free(out);
+
+    /* two words with a separator */
+    const char second[] = "duo";
+    list = push_word(list, second);
+    out = osp_string_join_list(list, "-");
+    assert(strcmp(out, "solo-duo") == 0);
+    /* the result is a fresh allocation the caller owns, never an element */
+    assert(out != second && out != (char *)(intptr_t)osprey_list_get(list, 0));
+    out[0] = 'S';
+    assert(strcmp(second, "duo") == 0);
+    free(out);
+
+    printf("  ok  join_runtime_list\n");
 }
 
 /* ---------- adversarial: long strings, repeated ops, round-trips ---------- */
@@ -907,6 +947,7 @@ int main(void) {
     test_lines();
     test_words();
     test_join();
+    test_join_runtime_list();
     /* adversarial coverage */
     test_long_strings();
     test_round_trips();

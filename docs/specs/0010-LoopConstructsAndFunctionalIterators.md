@@ -53,7 +53,7 @@ range (1, 10) |> filter isEven
 ```
 
 ### `fold(iterator: Iterator<T>, initial: U, function: fn(U, T) -> U) -> U` — [BUILTIN-ITER-FOLD]
-Reduces an iterator to a single value.
+Reduces an iterator to a single value. A list-literal seed (`fold([], …)`, `fold([1, 2], …)`) takes the runtime list representation exactly once, before the loop, so every iteration's `listAppend` or `listConcat` reads and returns a runtime list and the loop body performs no per-iteration conversion.
 
 ```osprey
 fn add(total: int, value: int) -> int = total + value

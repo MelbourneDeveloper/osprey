@@ -118,6 +118,30 @@ pub(crate) static CORE: &[BuiltinDoc] = &[
         "let xs = gpuIota(1000) |> gpuMap(toFloat)  // a float buffer 0.0 .. 999.0",
     ),
     builtin_doc!(
+        "sqrt",
+        "The square root of a float. Total over IEEE doubles: a negative argument yields NaN. Pure, so a kernel may call it or name it.",
+        ["x" => "The float to take the root of"],
+        "sqrt(2.0)  // 1.4142135623730951",
+    ),
+    builtin_doc!(
+        "exp",
+        "e raised to a float. Total: a large argument yields infinity, never an Arith operation. Pure, so softmax kernels name it directly.",
+        ["x" => "The exponent"],
+        "scores |> gpuMap(exp)",
+    ),
+    builtin_doc!(
+        "ln",
+        "The natural logarithm of a float. Total: zero yields negative infinity and a negative argument NaN. Named ln so programs keep the name log for their loggers.",
+        ["x" => "The float to take the logarithm of"],
+        "ln(1.0)  // 0.0",
+    ),
+    builtin_doc!(
+        "tanh",
+        "The hyperbolic tangent of a float, in (-1, 1). Total; the activation GELU is written from.",
+        ["x" => "The float argument"],
+        "tanh(0.0)  // 0.0",
+    ),
+    builtin_doc!(
         "checkedAdd",
         "Named overflow-checked integer addition, returning Result<int, Error>.",
         ["a" => "The first addend", "b" => "The second addend"],
@@ -621,6 +645,24 @@ pub(crate) static GPU: &[BuiltinDoc] = &[
         "Stream compaction: keeps the elements a pure predicate accepts, preserving order.",
         ["buffer" => "The source buffer", "predicate" => "The pure element predicate"],
         "toGpu([1, 2, 3, 4]) |> gpuFilter(fn(x) => x % 2 == 0)",
+    ),
+    builtin_doc!(
+        "gpuMatMul",
+        "The dense row-major product of a rows x inner float buffer and an inner x cols one, as a rows x cols buffer. Every element accumulates in k order from 0.0 in double; a length that disagrees with the stated shape is an Error naming the operand.",
+        ["left" => "The rows x inner buffer", "right" => "The inner x cols buffer", "rows" => "The left operand's row count", "inner" => "The shared dimension", "cols" => "The right operand's column count"],
+        "gpuMatMul(x, w, tokens, 768, 2304) ?: empty",
+    ),
+    builtin_doc!(
+        "gpuLoad",
+        "Reads count little-endian IEEE-754 binary32 values starting at a byte offset of a file into a GpuBuffer<float>, widening each exactly. A missing file or a short read is an Error carrying the operating system's reason.",
+        ["path" => "The file to read", "offset" => "The byte offset the first value starts at", "count" => "How many values to read"],
+        "gpuLoad(\"gpt2_124M.bin\", 1024, 768) ?: toGpu([0.0])",
+    ),
+    builtin_doc!(
+        "gpuLoadTensor",
+        "Reads one named tensor out of a safetensors file into a GpuBuffer<float>, widening F64, F32, F16 or BF16 storage exactly. An unknown name, another dtype or a truncated file is an Error saying which.",
+        ["path" => "The safetensors file", "name" => "The tensor's name in the header"],
+        "gpuLoadTensor(\"model.safetensors\", \"wte.weight\") ?: toGpu([0.0])",
     ),
     builtin_doc!(
         "gpuDevice",

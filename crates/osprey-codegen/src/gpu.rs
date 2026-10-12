@@ -7,6 +7,7 @@
 //! codegen are already proven pure by the effect checker [GPU-KERNEL-PURE].
 
 mod buffer;
+mod io;
 
 use crate::builder::Codegen;
 use crate::conv::box_to_i64;
@@ -16,7 +17,7 @@ use crate::gpu_kernel::{extract, kernel_elem, kernel_of, slot};
 use crate::iter::{acc_init, acc_result, acc_step, invoke, nth, Callback};
 use crate::llty::{LType, Value};
 use crate::loops::{close_range_loop, open_range_loop};
-use buffer::{kept_counter, push_kept, take_kept};
+use buffer::{kept_counter, push_if_kept, take_kept};
 use osprey_ast::{Expr, NamedArgument};
 
 /// The owner tag GPU buffer handles travel under when their element type is
@@ -111,6 +112,9 @@ fn operation(name: &str) -> Option<Lowering> {
         "gpuGet" => gpu_get,
         "gpuScan" => gpu_scan,
         "gpuFilter" => gpu_filter,
+        "gpuMatMul" => io::mat_mul,
+        "gpuLoad" => io::load,
+        "gpuLoadTensor" => io::load_tensor,
         _ => return None,
     })
 }
@@ -223,13 +227,20 @@ fn map_into(
     Ok(out.with_owner(Some(elem_owner(Some(mapped_ty)))))
 }
 
-/// `gpuMap(buffer, kernel)` — apply a pure kernel to every element [GPU-MAP].
-fn gpu_map(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+/// `(buffer, kernel)` — the preamble `gpuMap` and `gpuFilter` share: the source
+/// handle, its element type, and the kernel extracted over that one element
+/// slot. The kernel is lifted before the launch site is built, so its `define`
+/// precedes the loop that calls it [GPU-KERNEL-EXTRACT].
+fn unary_kernel(cg: &mut Codegen, args: &[Expr]) -> Result<(Value, Option<LType>, Callback)> {
     let src = buffer_arg(cg, args, 0)?;
     let (kernel, elem) = kernel_of(cg, args, 1, &src, 0)?;
-    // Lift before the launch site is built, so the kernel's `define` precedes
-    // the loop that calls it [GPU-KERNEL-EXTRACT].
     let kernel = extract(cg, kernel, &[slot(elem)])?;
+    Ok((src, elem, kernel))
+}
+
+/// `gpuMap(buffer, kernel)` — apply a pure kernel to every element [GPU-MAP].
+fn gpu_map(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let (src, elem, kernel) = unary_kernel(cg, args)?;
     let len = buffer_len(cg, &src);
     map_into(
         cg,
@@ -354,17 +365,8 @@ fn gpu_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
         &[&buf.operand, &index.operand],
     );
     let raw = buffer_get(cg, &buf, &index.operand);
-    let elem = tagged_elem(&buf);
-    let value = elem_value(cg, raw, elem);
-    let inner = value.ty;
-    let is_err = cg.emit_reg(format!("icmp eq i32 {inb}, 0"));
-    crate::result::make_result_if_err(
-        cg,
-        value,
-        inner,
-        &is_err,
-        Some("gpuGet: index out of bounds"),
-    )
+    let value = elem_value(cg, raw, tagged_elem(&buf));
+    crate::result::make_result_unless_in_bounds(cg, &inb, value, "gpuGet: index out of bounds")
 }
 
 /// `gpuScan(buffer, initial, combine)` — inclusive prefix scan [GPU-SCAN]:
@@ -389,9 +391,7 @@ fn gpu_scan(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 /// length is unknown until the predicate has run, so this fills a
 /// source-length scratch buffer and publishes the exact prefix length.
 fn gpu_filter(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
-    let src = buffer_arg(cg, args, 0)?;
-    let (predicate, elem) = kernel_of(cg, args, 1, &src, 0)?;
-    let predicate = extract(cg, predicate, &[slot(elem)])?;
+    let (src, elem, predicate) = unary_kernel(cg, args)?;
     let len = buffer_len(cg, &src);
     let out = buffer_alloc(cg, &len, elem_owner(elem));
     let kept = kept_counter(cg);
@@ -401,16 +401,7 @@ fn gpu_filter(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
         let raw = box_to_i64(cg, arg.clone()).operand;
         let verdict = invoke(cg, &predicate, vec![arg])?;
         let verdict = crate::cast::coerce_to(cg, verdict, LType::I1)?;
-        let keep = cg.fresh_label();
-        let skip = cg.fresh_label();
-        cg.emit(format!(
-            "br i1 {}, label %{keep}, label %{skip}",
-            verdict.operand
-        ));
-        cg.start_block(&keep);
-        push_kept(cg, &out, &kept, &raw);
-        cg.emit(format!("br label %{skip}"));
-        cg.start_block(&skip);
+        push_if_kept(cg, &verdict.operand, &out, &kept, &raw);
         Ok(())
     })?;
     take_kept(cg, &out, &kept);

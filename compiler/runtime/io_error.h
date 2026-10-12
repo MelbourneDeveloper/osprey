@@ -32,6 +32,11 @@ void osp_io_error_clear(void);
 // than allocating: a reporter that can itself fail out of memory is no reporter.
 void osp_io_error_set(const char *op, const char *subject, int err);
 
+// Record why `op` failed on `subject` when the cause is not an errno but a
+// sentence of the producer's own — a malformed header, a shape that does not
+// match. Same "op: subject: reason" format, same truncation discipline.
+void osp_io_error_text(const char *op, const char *subject, const char *reason);
+
 // The calling thread's current reason, or NULL if none is held. BORROWED: the
 // pointer belongs to the channel and dies at this thread's next set/clear, so
 // anything that outlives the call must use osp_io_error_take instead.

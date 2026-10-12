@@ -360,9 +360,7 @@ pub(crate) fn runtime_list_get(cg: &mut Codegen, l: &Value, i: &Value) -> Result
     // The success payload is the ELEMENT's type, not the storage word's, so a
     // `List<float>` yields `Result<float, _>` [`LIST_TAG`].
     let value = elem_value(cg, l, &raw);
-    let inner = value.ty;
-    let is_err = cg.emit_reg(format!("icmp eq i32 {inb}, 0"));
-    crate::result::make_result_if_err(cg, value, inner, &is_err, Some(INDEX_OOB))
+    crate::result::make_result_unless_in_bounds(cg, &inb, value, INDEX_OOB)
 }
 
 /// `listContains(l, x) -> bool`: linear scan, content-equality for strings.

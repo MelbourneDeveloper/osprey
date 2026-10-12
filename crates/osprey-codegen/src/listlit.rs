@@ -246,6 +246,19 @@ pub(crate) fn escaping(cg: &mut Codegen, v: Value) -> Value {
     v
 }
 
+/// A string list (`lines`/`words`/`split`) reaching a NAME is converted to the
+/// runtime layout once, at the binding. Left flat, every `listGet(rows, i)`
+/// on the bound name paid [`to_runtime_list`]'s full copy — 50 000 lines read
+/// 5 000 times allocated 6.9 GB and took nine seconds; settled here the same
+/// reads take 80 ms. Numeric literals keep their flat fast path: they are
+/// small, and `toGpu` reads them in place. [BUILTIN-LIST-GET]
+pub(crate) fn settled_string_list(cg: &mut Codegen, v: Value) -> Value {
+    if v.osp_ty.as_deref() == Some(STRING_LIST_OWNER) {
+        return to_runtime_list(cg, v);
+    }
+    v
+}
+
 /// `target[index]` — flat list-literal access (bounds-checked `Result<T, _>`) or
 /// runtime-map lookup.
 pub(crate) fn gen_index(cg: &mut Codegen, target: &Expr, index: &Expr) -> Result<Value> {

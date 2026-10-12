@@ -78,6 +78,7 @@ mod unused;
 mod unused_tests;
 mod variance;
 
+pub use builtin_constraints::is_gpu_scalar;
 pub use builtin_docs::{
     builtin_doc_view, builtin_hover_markdown, builtin_names, BuiltinDocView, BuiltinParam,
 };

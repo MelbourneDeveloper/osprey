@@ -66,6 +66,36 @@ Materializes a buffer back into a host list. The element type crosses with the v
 
 The element count. Constant time.
 
+### `gpuLoad(path: string, offset: int, count: int) -> Result<GpuBuffer<float>, Error>` — [GPU-BUFFER-LOAD]
+
+Reads `count` little-endian IEEE-754 binary32 values starting at byte `offset` of the file at `path`, widening each exactly to the double word a `GpuBuffer<float>` holds — the layout of llm.c's checkpoints and of any raw dump of a float32 array. A `count` of zero yields the empty buffer. The result is the whole buffer or an `Error`, never a partially filled buffer: a file holding fewer than `count` values from `offset` is `file ends before the tensor does`, so a truncated weight file never loads as a smaller model.
+
+Every failure is an `Error` whose message names the operation, the path and the reason, through the channel `readFile` uses ([BUILTIN-FILE-ERRMSG](0012-Built-InFunctions.md#failure-reasons--builtin-file-errmsg)): the operating system's own wording for a file that is missing or unreadable and for a negative `offset` (`Invalid argument`), `a negative element count`, the short-read sentence above, and `read failed` when the stream reports an error mid-way.
+
+```osprey
+let wte = gpuLoad("gpt2_124M.bin", 1024, 50257 * 768) ?: toGpu([0.0])
+```
+
+```osprey-ml
+wte = gpuLoad ("gpt2_124M.bin", 1024, 50257 * 768) ?: toGpu [0.0]
+```
+
+### `gpuLoadTensor(path: string, name: string) -> Result<GpuBuffer<float>, Error>` — [GPU-BUFFER-TENSOR]
+
+Reads one named tensor out of a [safetensors](https://github.com/huggingface/safetensors/blob/main/README.md) file — the Hugging Face interchange format: an 8-byte little-endian header length `N`, then `N` bytes of JSON mapping each tensor name to its `dtype`, `shape` and `data_offsets`, then the tensor bytes — into a `GpuBuffer<float>`. The entry is located by its quoted name followed by a colon, so `h.1.attn.weight` never matches inside `h.11.attn.weight`, and the header's entry order is irrelevant: `__metadata__` may come first or last. `data_offsets` are relative to the start of the data section, byte `8 + N`. Four storage types are admitted and each widens exactly: `F64`, `F32`, `F16` (binary16, including subnormals, infinities and NaN) and `BF16` (the upper sixteen bits of a binary32). The byte span must be a whole number of elements.
+
+The tensor's `shape` is read past but **not returned**: a buffer is rank-1, which [plan 0023](../plans/0023-gpu-computation.md) names as the first surface gap, so the program states the shape it knows to [GPU-MATMUL]. Until a multi-dimensional index space exists this is the honest contract rather than a shape the type cannot carry.
+
+Errors are an `Error` naming the file or the tensor and one of: `shorter than a safetensors header prefix`, `header length is not plausible for safetensors` (above 100 MiB), `file ends inside the header`, `no tensor of that name in the header`, `dtype is not F64, F32, F16 or BF16`, `data_offsets are missing or inverted`, `byte span is not a whole number of elements` — plus every reason [GPU-BUFFER-LOAD] reports for reading the bytes themselves.
+
+```osprey
+let wte = gpuLoadTensor("model.safetensors", "wte.weight") ?: toGpu([0.0])
+```
+
+```osprey-ml
+wte = gpuLoadTensor ("model.safetensors", "wte.weight") ?: toGpu [0.0]
+```
+
 ## Kernels
 
 A *kernel* is the function value passed to a GPU combinator. Kernels are written as ordinary Osprey functions or lambdas — there is no separate kernel language, no annotation, and no restrictions beyond purity and the element restriction at the boundary.
@@ -149,6 +179,26 @@ Inclusive prefix scan: element `i` of the result is `combine` folded over the so
 
 Stream compaction: keeps the elements the pure predicate accepts, preserving source order. The host backend fills a source-length scratch buffer and publishes the kept prefix; a device backend implements the same contract with a scan-based compaction.
 
+## Dense linear algebra
+
+### `gpuMatMul(left: GpuBuffer<float>, right: GpuBuffer<float>, rows: int, inner: int, cols: int) -> Result<GpuBuffer<float>, Error>` — [GPU-MATMUL]
+
+The dense product of a `rows × inner` matrix and an `inner × cols` matrix, both row-major in flat float buffers, as the row-major `rows × cols` buffer: `out[r * cols + c]` is the sum over `k` from `0` to `inner - 1` of `left[r * inner + k] * right[k * cols + c]`. The sum is accumulated **in `k` order starting from `0.0`, in double, with each product formed before it is added** — no fused multiply-add. That order is the contract, exactly as [GPU-FOLD]'s is: a device backend may reassociate or contract only where it produces the host's bytes. The host walks `r`, then `k`, then `c`, which writes each output row contiguously and still accumulates every element in `k` order; the test that pins the order sums `2^53 + 1 - 2^53` to `0.0` where any other association gives `1.0`.
+
+The element type is `float` only, fixed by the signature: an int buffer operand is a type error at the call, never a silent widening. A shape the operands do not have is an `Error`, never a partial buffer: `gpuMatMul: left operand: has N elements, the stated shape needs M` (likewise `right operand`), `gpuMatMul: result: rows * cols is negative or overflows`, or the operating system's out-of-memory wording when the result cannot be allocated. Any zero dimension with consistent lengths yields the zero-filled `rows × cols` result — empty when `rows` or `cols` is zero, all zeros when `inner` is.
+
+A matrix is a flat buffer plus the shape the program states, because a buffer is rank-1; the multi-dimensional surface [plan 0023](../plans/0023-gpu-computation.md) owes is what removes the three shape arguments.
+
+```osprey
+fn linear(x, w, tokens, inputs, outputs) = gpuMatMul(x, w, tokens, inputs, outputs)
+let logits = linear(hidden, wte, 64, 768, 50257) ?: toGpu([0.0])
+```
+
+```osprey-ml
+linear (x, w, tokens, inputs, outputs) = gpuMatMul (x, w, tokens, inputs, outputs)
+logits = linear (hidden, wte, 64, 768, 50257) ?: toGpu [0.0]
+```
+
 ## Kernel purity — [GPU-KERNEL-PURE]
 
 The compiler rejects any GPU combinator call whose kernel performs an algebraic effect **that a handler must discharge at run time**, directly or through any chain of helpers and lambdas. An effect a *static* handler has already erased ([0017-AlgebraicEffects.md](0017-AlgebraicEffects.md)) is not present in the kernel by the time this gate runs, so it is not an effect the kernel performs — the rule is about what reaches the device, not about how the source was written. The proof reuses the static effect discharge machinery ([EFFECTS-STATIC-DISCHARGE](0017-AlgebraicEffects.md)): the kernel's operation summary must be empty of every effect but one. The exception is `Arith` ([0037](0037-ArithmeticEffects.md)): on the host backend a kernel's arithmetic dispatches to the enclosing policy exactly as any lambda's does, so a kernel may *require* an `Arith` policy without failing this gate (`effect_rows/gpu.rs::gpu_kernel_verdict` filters it), and the boundary rule a device backend must then meet is stated under [GPU-KERNEL-EXTRACT]. Wrapping the call in any other handler does not lift the restriction — a handler makes an effect *dischargeable*, but a kernel body still cannot leave the device to reach one, so the requirement is purity, not handledness.
@@ -216,6 +266,20 @@ xs = gpuIota 100000 |> gpuMap toFloat
 
 `toFloat` is a total widening — every `int` has a nearest `double` — so it returns a bare `float` rather than a `Result`, and it registers in [0012-Built-InFunctions.md](0012-Built-InFunctions.md) with a docs entry like every builtin. It is usable both as a direct call and, as above, as a first-class kernel passed by name. The reverse direction already exists as checked truncation on the arithmetic side and is out of scope for buffers.
 
+### Kernel math — [BUILTIN-MATH]
+
+The unary float functions `sqrt`, `exp`, `ln` and `tanh` ([BUILTIN-MATH](0012-Built-InFunctions.md)) are pure and total over IEEE doubles, so a kernel may call them or *be* one of them by name: `gpuMap(exp)` extracts a kernel whose body is the intrinsic call, with no closure cell and no environment ([GPU-KERNEL-EXTRACT]). They take a `float` and nothing else — an int buffer is widened explicitly with `toFloat` first, as above — and they never perform an `Arith` operation, so a kernel written from them needs no policy.
+
+```osprey
+let probabilities = scores |> gpuMap(exp)
+let activations = pre |> gpuMap(fn(x) => 0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x))))
+```
+
+```osprey-ml
+probabilities = scores |> gpuMap exp
+activations = pre |> gpuMap (\x => 0.5 * x * (1.0 + tanh (0.7978845608 * (x + 0.044715 * x * x * x))))
+```
+
 ## Kernel extraction — [GPU-KERNEL-EXTRACT]
 
 Each **admissible** kernel a combinator runs is compiled **once**, as a standalone module-scope function with a flat scalar signature, and the loop over the buffer calls it per element. The forms that decline are listed under [Which kernels are extracted](#which-kernels-are-extracted); they run correctly on the host backend, and a device backend must reject them with a diagnostic rather than silently execute a host pointer. This is not an optimization detail: an extracted kernel with a first-order scalar ABI and no captured environment is exactly the artifact a PTX, AIR or SPIR-V emitter consumes, so [GPU-BACKEND-DEVICE] becomes a target driver rather than a rewrite.
@@ -243,7 +307,7 @@ A kernel function takes, in this order:
 
 There is **no environment pointer and no closure struct**. A capturing kernel compiles to a function whose captures are arguments, not to a heap cell with a hidden `env` parameter. The return is a scalar.
 
-A kernel that would return an unhandled `Result` is rejected before the program links, by the same scalar discipline that already guards the combinators: `gpuMap`/`gpuZipWith` reject the stored element, `gpuFold` and `gpuScan` reject the accumulator update, and `gpuFilter` rejects the verdict. Handle failure inside the kernel with `?:` or `match`.
+A kernel that would return an unhandled `Result` is rejected before the program links, at one of two gates. `gpuFold`, `gpuScan` and `gpuFilter` have signatures that pin the kernel's result — the accumulator's own type, or `bool` — so inference rejects such a kernel at the call (`cannot unify int with Result<int, Error>`). `gpuMap` and `gpuZipWith` leave the result type `U` free, so the gate is codegen's scalar backstop on the stored element: `a gpuMap kernel result cannot be an unhandled Result; handle it inside the kernel`. Handle failure inside the kernel with `?:` or `match`.
 
 Arithmetic keeps its policy contract at the kernel boundary: the compiler never silently replaces a region's chosen policy with trapping or wrapping ([ARITH-TOTAL](0037-ArithmeticEffects.md#the-guarantee--arith-total)). On the host backend a kernel's `Arith` operations are exempt from the stage-legality row ([STAGE-GPU-LEGAL](0017-AlgebraicEffects.md#gpu-legality--stage-gpu-legal)) and dispatch to the enclosing policy exactly as any lambda's do, so a kernel with fallible arithmetic compiles only where a region installs a policy; with none, the program is rejected at its entry. A device backend cannot call back into a runtime handler, so it will need a static `Arith` interpretation. `handle static Arith` does not provide one yet and is rejected.
 
@@ -256,7 +320,7 @@ Arithmetic keeps its policy contract at the kernel boundary: the compiler never 
   variables becoming leading uniform parameters.
 - An **unannotated (generic) function** kernel is specialised at its call site with the buffer's element type and lifted when its body fits the extracted ABI. A **recursive** function gets its own emitted definition per instantiation ([GPU-KERNEL-FORM]), because its body cannot be specialised by inlining.
 - A **locally let-bound lambda with a known body** is lifted using its definition-time environment, including a concrete lambda that also has a closure cell for ordinary calls. Immutable scalar and buffer captures become uniforms; shadowing at the launch site must not replace them. An applied generic callback retains its type instantiation while selecting the body, so float slots remain floats. A module-stored lambda retains its ordinary storage and prefix ABI. An opaque computed function value (a record field or an unknown call result) keeps its closure-cell call because its body and environment cannot be recovered statically; a device backend must reject it rather than silently offload a host pointer.
-- A **scalar builtin passed by name** (`gpuMap(toFloat)`, `gpuMap(abs)`, or `gpuZipWith(..., wrapAdd)`) is lifted into a scalar function containing its ordinary intrinsic lowering. Its argument types come from the combinator slots, so float `abs` keeps a `double` ABI. The wrapper has no closure cell or environment pointer. The same rule covers total saturating arithmetic and `intDiv`; fallible integer builtins retain the enclosing `Arith` policy, operation arguments, recovery values and element order. Lexical bindings take precedence over builtin names. A builtin whose scheme requires host handles or a `Result` slot declines extraction.
+- A **scalar builtin passed by name** (`gpuMap(toFloat)`, `gpuMap(abs)`, or `gpuZipWith(..., wrapAdd)`) is lifted into a scalar function containing its ordinary intrinsic lowering. Its argument types come from the combinator slots, so float `abs` keeps a `double` ABI. The wrapper has no closure cell or environment pointer. The same rule covers total saturating arithmetic, `intDiv` and the float functions ([BUILTIN-MATH]); fallible integer builtins retain the enclosing `Arith` policy, operation arguments, recovery values and element order. Lexical bindings take precedence over builtin names. A builtin whose scheme takes or returns a host handle or a `Result` is not a kernel at all: the combinator's scalar slot types reject it during inference, before extraction is consulted, so the extraction-time scheme check (`admissible`) is a backstop no source program reaches.
 - A lambda whose body reads a name the lifted function cannot see — a
   let-bound lambda, a function-typed local, a handler-owned mutable cell —
   keeps the inlined lowering rather than emitting a call to a symbol that was

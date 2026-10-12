@@ -114,6 +114,10 @@ fn a_named_kernel_reuses_its_own_definition() {
     // A named function already has an emitted symbol the loop calls, so
     // extraction emits nothing new and copies nothing.
     let ir = module(
+        // The annotations are deliberate: an unannotated `twice` is a generic
+        // kernel, specialised and lifted at its call site, which is the other
+        // test's subject. Only a function with a CONCRETE signature has its own
+        // symbol for the loop to call.
         "fn twice(x: float) -> float = x * 2.0\n\
              fn f() = {\n\
                let out = toGpu([1.0, 2.0]) |> gpuMap(twice)\n\
@@ -202,4 +206,107 @@ fn twin_flavors_number_their_kernels_identically() {
     );
     assert_eq!(default_ir, ml_ir);
     assert!(default_ir.contains("define double @__gpu_kernel_0(double %$p0, double %$p1)"));
+}
+
+// ---- host operations [GPU-MATMUL] [GPU-BUFFER-LOAD] [GPU-BUFFER-TENSOR] ----
+
+/// The runtime producer is called exactly once inside `f`, with the `io_error`
+/// channel cleared immediately before and read immediately after, so the
+/// `Error` message is the reason THIS call recorded [BUILTIN-FILE-ERRMSG].
+fn assert_one_bracketed_call(ir: &str, symbol: &str) {
+    let host = function_body(ir, "define i64 @f()");
+    let call = format!("call i8* @{symbol}(");
+    assert_eq!(host.matches(&call).count(), 1, "{host}");
+    let at = host.find(&call).unwrap_or(host.len());
+    let clear = host
+        .rfind("call void @osp_io_error_clear()")
+        .unwrap_or(host.len());
+    let take = host.find("call i8* @osp_io_error_take()").unwrap_or(0);
+    assert!(clear < at && at < take, "{host}");
+}
+
+#[test]
+fn gpu_matmul_is_one_bracketed_runtime_call() {
+    let ir = module(
+        "fn f() = {\n\
+               let a = toGpu([1.0, 2.0])\n\
+               let m = gpuMatMul(a, a, 1, 2, 1) ?: a\n\
+               gpuLength(m)\n\
+             }\n\
+             print(f())\n",
+    );
+    assert_one_bracketed_call(&ir, "osprey_gpu_matmul");
+}
+
+#[test]
+fn gpu_load_is_one_bracketed_runtime_call() {
+    let ir = module(
+        "fn f() = {\n\
+               let w = gpuLoad(\"w.bin\", 8, 2) ?: toGpu([0.0])\n\
+               gpuLength(w)\n\
+             }\n\
+             print(f())\n",
+    );
+    assert_one_bracketed_call(&ir, "osprey_gpu_load_f32");
+}
+
+#[test]
+fn gpu_load_tensor_is_one_bracketed_runtime_call() {
+    let ir = module(
+        "fn f() = {\n\
+               let w = gpuLoadTensor(\"m.safetensors\", \"wte\") ?: toGpu([0.0])\n\
+               gpuLength(w)\n\
+             }\n\
+             print(f())\n",
+    );
+    assert_one_bracketed_call(&ir, "osprey_gpu_load_tensor");
+}
+
+// ---- float functions [BUILTIN-MATH] ----
+
+#[test]
+fn sqrt_exp_log_are_llvm_intrinsics_and_tanh_is_libm() {
+    let ir = module(
+        "fn f(x) = sqrt(x) + exp(x) + ln(x) + tanh(x)\n\
+             print(\"${f(2.0)}\")\n",
+    );
+    shows(
+        &ir,
+        &[
+            "call double @llvm.sqrt.f64(double ",
+            "call double @llvm.exp.f64(double ",
+            "call double @llvm.log.f64(double ",
+            "call double @tanh(double ",
+            "declare double @tanh(double)",
+        ],
+    );
+}
+
+#[test]
+fn a_float_function_by_name_is_an_extracted_kernel_in_both_flavors() {
+    // `gpuMap(exp)` lifts the builtin into a scalar kernel whose body is the
+    // intrinsic call — no closure cell, no environment [GPU-KERNEL-EXTRACT].
+    let default_ir = module(
+        "fn f() = {\n\
+               let out = toGpu([1.0, 2.0]) |> gpuMap(exp)\n\
+               gpuLength(out)\n\
+             }\n\
+             print(f())\n",
+    );
+    let ml_ir = ml_module(
+        "f () =\n    \
+                 out = toGpu [1.0, 2.0] |> gpuMap exp\n    \
+                 gpuLength out\n\
+             \n\
+             print (f ())\n",
+    );
+    assert_eq!(default_ir, ml_ir);
+    let header = "define double @__gpu_kernel_0(double %$p0)";
+    assert!(default_ir.contains(header), "{default_ir}");
+    let kernel = function_body(&default_ir, header);
+    assert!(
+        kernel.contains("call double @llvm.exp.f64(double %$p0)"),
+        "{kernel}"
+    );
+    assert!(!kernel.contains("__env"), "{kernel}");
 }

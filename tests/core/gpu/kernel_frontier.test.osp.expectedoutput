@@ -11,5 +11,6 @@ ok 10 - closed GPU kernels retain lexical uniforms
 ok 11 - host GPU kernels retain live cells
 ok 12 - declined GPU extraction preserves managed captures
 ok 13 - captured GPU kernels preserve arithmetic policy
-1..13
-# tests=13 passed=13 failed=0 skipped=0
+ok 14 - float math builtins are total and name GPU kernels
+1..14
+# tests=14 passed=14 failed=0 skipped=0

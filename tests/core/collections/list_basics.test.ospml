@@ -12,7 +12,6 @@ type Slot =
     ready : bool
 
 (** appendThrough builds inclusive integer ranges while preserving every prior list version. *)
-appendThrough : List int -> int -> int -> List int
 appendThrough xs next last = match next > last
     true => xs
     false => appendThrough (listAppend xs next) (next + 1 ) last
@@ -25,7 +24,6 @@ classify [first, second] = "two(${first},${second})"
 classify [head, ...tail] = "many head=${head} rest=${listLength tail}"
 
 (** sumList proves recursive head-tail destructuring retains every element. *)
-sumList : List int -> int
 sumList [] = 0
 sumList [head, ...tail] = head + sumList tail 
 
@@ -36,7 +34,6 @@ restLen _ = 0
 
 (** encodeIteration folds callback order into a base-100 integer through a handled
     effect, pinning forEachList's in-order traversal ([BUILTIN-LIST-FOREACH]). *)
-encodeIteration : List int -> int
 encodeIteration xs =
     mut encoded = 0
     handle IterationProbe
@@ -1332,3 +1329,39 @@ boundaryIndexCase () =
 
 // Register bounds checking across element types and the tail boundary.
 test "list index boundaries are checked on every element type" (\() => exactArithmetic (boundaryIndexCase))
+
+(** foldSeedCase pins [BUILTIN-ITER-FOLD]: a list-literal seed takes the runtime
+    representation once, before the loop, so every iteration's listAppend and
+    listConcat reads a runtime list. Left flat, the second iteration read the
+    literal's header as a trie and crashed. *)
+foldSeedCase () =
+    squares = range (1, 5) |> fold [] (\(acc, i) => listAppend (acc, i * i))
+    words = range (0, 3) |> fold [] (\(acc, i) => listAppend (acc, "w${i}"))
+    doubled = range (0, 3) |> fold [] (\(acc, i) => listConcat (acc, [i, i]))
+    seeded = range (3, 6) |> fold [1, 2] (\(acc, i) => listAppend (acc, i))
+    checkAll "fold over a list-literal seed" [
+        listLength squares == 4, (listGet (squares, 3) ?: 0) == 16, sumList squares == 30,
+        listLength words == 3, (listGet (words, 2) ?: "?") == "w2", joinWords words == "w0|w1|w2|",
+        listLength doubled == 6, (listGet (doubled, 4) ?: -1) == 2, sumList doubled == 6,
+        listLength seeded == 5, (listGet (seeded, 0) ?: 0) == 1, (listGet (seeded, 4) ?: 0) == 5, sumList seeded == 15
+    ]
+
+(** linesIndexCase pins [BUILTIN-LIST-GET] on a bound string list: the result
+    of lines is settled into the runtime layout once at the binding, so ten
+    thousand indexed reads cost ten thousand reads, not ten thousand copies of
+    two thousand strings. "line i" is 6, 7, 8 or 9 bytes by decade, 16890 per
+    pass, and the reads make five passes. *)
+lineAfter (acc, i) = match i == 0
+    true => "line 0"
+    false => acc + "\nline ${i}"
+
+linesIndexCase () =
+    text = range (0, 2000) |> fold "" lineAfter
+    rows = lines text
+    total = range (0, 10000) |> fold 0 (\(acc, i) => acc + byteLength (listGet (rows, i % 2000) ?: ""))
+    checkAll "a bound string list is read by index in constant time" [
+        listLength rows == 2000, (listGet (rows, 1999) ?: "?") == "line 1999", total == 84450
+    ]
+
+test "fold rebuilds a list-literal seed once before the loop" (\() => exactArithmetic (foldSeedCase))
+test "a bound string list is read by index in constant time" (\() => exactArithmetic (linesIndexCase))

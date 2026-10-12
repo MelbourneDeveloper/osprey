@@ -114,7 +114,8 @@ pub(crate) fn is_gpu_buffer_builtin(name: &str) -> bool {
 
 /// A scalar a `GpuBuffer` may hold [GPU-BUFFER-ELEM]. Unresolved variables are
 /// deferred exactly as `is_sized` defers them.
-fn is_gpu_scalar(ty: &Type) -> bool {
+#[must_use]
+pub fn is_gpu_scalar(ty: &Type) -> bool {
     match ty {
         Type::Var(_) => true,
         Type::Con { name, args } => {

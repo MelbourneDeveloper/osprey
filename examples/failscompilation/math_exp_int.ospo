@@ -1,0 +1,3 @@
+// [BUILTIN-MATH]: an int is not widened implicitly; `exp(3)` is a type error
+// and the program must say `exp(toFloat(3))`.
+fn main() = print(exp(3))

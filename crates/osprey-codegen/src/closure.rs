@@ -431,9 +431,54 @@ fn ret_as_sig(cg: &mut Codegen, v: Value, ret_ty: LType, ret_inner: Option<LType
         Some(inner) => crate::result::fit_to_inner(cg, v, inner)?,
         None => crate::cast::coerce_to(cg, v, ret_ty)?,
     };
-    // Nested-function epilogue: the return transfers +1, owned locals drop
-    // [GC-ARC-PERCEUS].
-    crate::arc::epilogue(cg, Some(&rv));
-    cg.emit(format!("ret {} {}", rv.llvm_ty(), rv.operand));
+    emit_return(cg, &rv);
     Ok(())
+}
+
+/// Emit the nested-function epilogue and `ret`: the return transfers +1, owned
+/// locals drop [GC-ARC-PERCEUS]. A scalar return makes the retain a no-op. The
+/// one definition of the nested-body return discipline.
+pub(crate) fn emit_return(cg: &mut Codegen, value: &Value) {
+    crate::arc::epilogue(cg, Some(value));
+    cg.emit(format!("ret {} {}", value.llvm_ty(), value.operand));
+}
+
+/// Lower a nested function body in VALUE position and emit its `ret`: the body
+/// is what the function returns, whatever the enclosing statement was doing
+/// with the loop. The one shared lowering — GPU kernel bodies and
+/// monomorphised instantiation bodies fit their declared return slot alike.
+pub(crate) fn lower_fn_body(cg: &mut Codegen, body: &Expr, own: Option<&FnSig>) -> Result<Value> {
+    let outer = std::mem::replace(&mut cg.value_discarded, false);
+    let lowered =
+        crate::expr::gen_body(cg, body).and_then(|v| crate::expr::fit_lambda_return(cg, v, own));
+    cg.value_discarded = outer;
+    let value = lowered?;
+    emit_return(cg, &value);
+    Ok(value)
+}
+
+/// Call a known symbol under a signature: coerce the arguments, emit the call
+/// with any `leading` operands (a kernel's uniforms) ahead of them, take the
+/// callee's +1 — callee epilogues transfer +1 on every return
+/// [GC-ARC-PERCEUS]. The one direct call-by-symbol: extracted GPU kernels and
+/// monomorphised instantiations.
+pub(crate) fn call_symbol(
+    cg: &mut Codegen,
+    symbol: &str,
+    sig: &FnSig,
+    leading: &[Value],
+    args: Vec<Value>,
+) -> Result<Value> {
+    let typed = coerce_typed_args(cg, sig, args)?;
+    let ret = crate::llty::ret_spelling(sig.1, sig.2);
+    let operands = leading
+        .iter()
+        .map(Value::typed)
+        .chain(typed)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let reg = cg.emit_reg(format!("call {ret} @{symbol}({operands})"));
+    let value = returned(reg, sig);
+    crate::arc::own(cg, &value);
+    Ok(value)
 }

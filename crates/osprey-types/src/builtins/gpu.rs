@@ -62,6 +62,20 @@ pub(super) fn declare(e: &mut TypeEnv) {
         vec![buf_t(), Type::fun(vec![t()], b())],
         buf_t(),
     );
+    // [GPU-MATMUL] The dense row-major product of two float buffers at a
+    // caller-stated shape; a length that disagrees with the shape is an Error.
+    let floats = || Type::gpu_buffer(Type::float());
+    mono(
+        e,
+        "gpuMatMul",
+        vec![floats(), floats(), i(), i(), i()],
+        res(floats()),
+    );
+    // [GPU-BUFFER-LOAD] / [GPU-BUFFER-TENSOR] Trained weights enter as float
+    // buffers straight from a file: raw little-endian binary32 words at a byte
+    // offset, or one named tensor of a safetensors file.
+    mono(e, "gpuLoad", vec![s(), i(), i()], res(floats()));
+    mono(e, "gpuLoadTensor", vec![s(), s()], res(floats()));
     // [GPU-DEVICE] The active execution backend's name. Selection between
     // devices arrives with the `Gpu` effect at roadmap stage 5.
     mono(e, "gpuDevice", vec![], s());

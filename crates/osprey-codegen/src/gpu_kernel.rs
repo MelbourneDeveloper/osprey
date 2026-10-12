@@ -335,18 +335,7 @@ fn param_sigs(parameters: &[Parameter], own: Option<&FnSig>, slots: &[LType]) ->
 fn emit(cg: &mut Codegen, k: &Lifting<'_>, params: Vec<ParamSig>) -> Result<Callback> {
     let symbol = format!("{KERNEL_PREFIX}{}", cg.next_kernel_id());
     let uniforms: Vec<Value> = k.caps.iter().map(|c| c.val.clone()).collect();
-    let saved = cg.enter_nested_fn();
-    crate::closure::begin_source(cg, &symbol, k.position);
-    let plist = declare(cg, k, &params);
-    let emitted = kernel_body(cg, k.body, k.own);
-    let ret = emitted
-        .as_ref()
-        .map_or_else(|_| LType::I64.to_string(), Value::llvm_ty);
-    // Restore the enclosing function BEFORE propagating, so a failed body never
-    // leaves the host's emission state clobbered ([`crate::closure`] does the
-    // same).
-    cg.exit_nested_fn(saved, &ret, &symbol, &plist);
-    let value = emitted?;
+    let value = define(cg, k, &symbol, &params)?;
     let sig = (
         params,
         value.ty,
@@ -359,6 +348,26 @@ fn emit(cg: &mut Codegen, k: &Lifting<'_>, params: Vec<ParamSig>) -> Result<Call
         uniforms,
         sig,
     }))
+}
+
+/// The lifted `define` itself: a nested function whose parameters are the
+/// kernel's and whose body is lowered through the shared nested-body
+/// discipline, which emits the `ret`. The body is always in VALUE position —
+/// it is what the function returns — whatever the enclosing statement was
+/// doing with the loop.
+fn define(cg: &mut Codegen, k: &Lifting<'_>, symbol: &str, params: &[ParamSig]) -> Result<Value> {
+    let saved = cg.enter_nested_fn();
+    crate::closure::begin_source(cg, symbol, k.position);
+    let plist = declare(cg, k, params);
+    let emitted = crate::closure::lower_fn_body(cg, k.body, k.own);
+    let ret = emitted
+        .as_ref()
+        .map_or_else(|_| LType::I64.to_string(), Value::llvm_ty);
+    // Restore the enclosing function BEFORE propagating, so a failed body never
+    // leaves the host's emission state clobbered ([`crate::closure`] does the
+    // same).
+    cg.exit_nested_fn(saved, &ret, symbol, &plist);
+    emitted
 }
 
 /// The lifted function's parameter list — uniforms first, then the element
@@ -393,42 +402,13 @@ fn bind_uniforms(cg: &mut Codegen, caps: &[crate::closure::Capture]) -> Vec<(LTy
     out
 }
 
-/// Lower the kernel body and emit its `ret`. The body is always in VALUE
-/// position — it is what the function returns — whatever the enclosing
-/// statement was doing with the loop.
-fn kernel_body(cg: &mut Codegen, body: &Expr, own: Option<&FnSig>) -> Result<Value> {
-    let outer = std::mem::replace(&mut cg.value_discarded, false);
-    let lowered =
-        crate::expr::gen_body(cg, body).and_then(|v| crate::expr::fit_lambda_return(cg, v, own));
-    cg.value_discarded = outer;
-    let value = lowered?;
-    // Function epilogue: the return transfers +1, owned locals drop
-    // [GC-ARC-PERCEUS]. A scalar return makes the retain a no-op.
-    crate::arc::epilogue(cg, Some(&value));
-    cg.emit(format!("ret {} {}", value.llvm_ty(), value.operand));
-    Ok(value)
-}
-
 /// Call an extracted kernel: the uniforms first, then this element's slots.
 pub(crate) fn extracted_call(
     cg: &mut Codegen,
     kernel: &Extracted,
     args: Vec<Value>,
 ) -> Result<Value> {
-    let typed = crate::closure::coerce_typed_args(cg, &kernel.sig, args)?;
-    let ret = crate::llty::ret_spelling(kernel.sig.1, kernel.sig.2);
-    let operands = kernel
-        .uniforms
-        .iter()
-        .map(Value::typed)
-        .chain(typed)
-        .collect::<Vec<_>>()
-        .join(", ");
-    let reg = cg.emit_reg(format!("call {ret} @{}({operands})", kernel.symbol));
-    let value = crate::closure::returned(reg, &kernel.sig);
-    // Callee epilogues transfer +1 on every return [GC-ARC-PERCEUS].
-    crate::arc::own(cg, &value);
-    Ok(value)
+    crate::closure::call_symbol(cg, &kernel.symbol, &kernel.sig, &kernel.uniforms, args)
 }
 
 #[cfg(test)]

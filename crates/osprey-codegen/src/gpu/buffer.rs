@@ -69,6 +69,18 @@ pub(super) fn push_kept(cg: &mut Codegen, out: &Value, kept: &str, word: &str) {
     cg.emit(format!("store i64 {next}, i64* {kept}"));
 }
 
+/// Append `word` only when `verdict` (an `i1` operand) holds — one compaction
+/// step of `gpuFilter` [GPU-FILTER].
+pub(super) fn push_if_kept(cg: &mut Codegen, verdict: &str, out: &Value, kept: &str, word: &str) {
+    let keep = cg.fresh_label();
+    let skip = cg.fresh_label();
+    cg.emit(format!("br i1 {verdict}, label %{keep}, label %{skip}"));
+    cg.start_block(&keep);
+    push_kept(cg, out, kept, word);
+    cg.emit(format!("br label %{skip}"));
+    cg.start_block(&skip);
+}
+
 /// Publish the compacted prefix: the buffer's length becomes the kept count.
 pub(super) fn take_kept(cg: &mut Codegen, out: &Value, kept: &str) {
     let total = cg.emit_reg(format!("load i64, i64* {kept}"));
@@ -84,11 +96,7 @@ pub(super) fn take_kept(cg: &mut Codegen, out: &Value, kept: &str) {
 fn fuse_iterator(cg: &mut Codegen, range: &Value) -> Result<Value> {
     let stages = crate::iter::stages_of(cg, range);
     let (start, end) = crate::iter::bounds(cg, range);
-    let span = cg.emit_reg(format!("sub i64 {end}, {start}"));
-    // An inverted range yields no elements, so its buffer is empty, not a
-    // negative-length allocation.
-    let empty = cg.emit_reg(format!("icmp slt i64 {span}, 0"));
-    let span = cg.emit_reg(format!("select i1 {empty}, i64 0, i64 {span}"));
+    let span = span_of(cg, &start, &end);
     let out = buffer_alloc(cg, &span, GPU_OWNER.to_string());
     let kept = kept_counter(cg);
     let lp = open_range_loop(cg, &start, &end);
@@ -101,6 +109,14 @@ fn fuse_iterator(cg: &mut Codegen, range: &Value) -> Result<Value> {
     close_range_loop(cg, &lp);
     take_kept(cg, &out, &kept);
     Ok(out.with_owner(Some(elem_owner(Some(elem)))))
+}
+
+/// The element count of `[start, end)`. An inverted range yields no elements,
+/// so its buffer is empty, not a negative-length allocation [GPU-BUFFER-FUSE].
+fn span_of(cg: &mut Codegen, start: &str, end: &str) -> String {
+    let span = cg.emit_reg(format!("sub i64 {end}, {start}"));
+    let empty = cg.emit_reg(format!("icmp slt i64 {span}, 0"));
+    cg.emit_reg(format!("select i1 {empty}, i64 0, i64 {span}"))
 }
 
 /// `toGpu(list)` — dense copy of a scalar list [GPU-BUFFER-FROM-LIST]. A flat

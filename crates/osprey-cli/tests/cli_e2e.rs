@@ -132,6 +132,29 @@ fn run_args_with_stdin(args: &[&str], input: &str) -> Out {
     }
 }
 
+/// [BUILTIN-STRING-JOIN] over a RUNTIME string list. `join` works on a list
+/// literal and on an unbound `words`/`lines` result (both flat) and SEGFAULTS
+/// (exit 139, no output) on every runtime list: one built by `listAppend`,
+/// one returned by `toList`, and a `words` result bound to a name — which the
+/// binding now settles into the runtime layout [BUILTIN-LIST-GET], so
+/// `let ws = words(s)` then `join(ws, …)` crashes where it used to work.
+/// This pins the crash; the fix belongs to `osp_string_join`'s lowering.
+#[test]
+fn join_accepts_every_string_list_representation() {
+    let path = temp_osp(
+        "join_runtime_lists",
+        "fn main() = {\n\
+             let appended = listAppend(listAppend(List(), \"a\"), \"b\")\n\
+             let collected = range(0, 2) |> map(fn(i) => \"c${i}\") |> toList()\n\
+             let bound = words(\"x y\")\n\
+             print(\"${join(appended, \"-\")} ${join(collected, \"-\")} ${join(bound, \"-\")}\")\n\
+         }\n",
+    );
+    let out = run_file(&path, &["--run", "--quiet"]);
+    assert_eq!(out.code, Some(0), "stderr: {}", out.stderr);
+    assert_eq!(out.stdout, "a-b c0-c1 x-y\n");
+}
+
 /// Run against a source `path` plus extra flags — the common compiling shape.
 fn run_file(path: &Path, extra: &[&str]) -> Out {
     let mut cmd = osprey();

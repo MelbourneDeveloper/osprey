@@ -1,0 +1,3 @@
+// osprey: flavor=ml
+// [BUILTIN-MATH]: a string argument is a type error in this flavor too.
+main () = print (sqrt "x")
