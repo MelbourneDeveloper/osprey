@@ -1,6 +1,7 @@
 // Memory GOLDEN tests — exact live-set checkpoints and hard peak ceilings for
 // the ARC backend ([GC-ARC-PERCEUS], [MEM-BACKENDS], docs/specs/0018). Linked
-// against memory_arc.c + gpu_runtime.c by the Makefile's _test_c_runtime.
+// against memory_arc.c + gpu_runtime.c + gpu_host.c + file_runtime.c by the
+// Makefile's _test_c_runtime.
 //
 // Where memory_arc_tests.c proves the MECHANISM (headers, registry, drop
 // walks), this suite pins the NUMBERS: after every workload the live
@@ -17,9 +18,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 // Not declared in memory_hooks.h: the raw allocator, the shim entry points,
-// the ARC diagnostics under test, and the GPU buffer ABI (gpu_runtime.c).
+// the ARC diagnostics under test, the GPU buffer ABI (gpu_runtime.c) and the
+// raw weight loader (gpu_host.c).
 void *osp_alloc(int64_t size);
 void *osp_arc_malloc(size_t size);
 void *osp_arc_realloc(void *old, size_t size);
@@ -33,6 +36,7 @@ void *osprey_gpu_alloc(int64_t length);
 int64_t osprey_gpu_len(void *buffer);
 void osprey_gpu_set(void *buffer, int64_t index, int64_t word);
 int64_t osprey_gpu_get(void *buffer, int64_t index);
+void *osprey_gpu_load_f32(const char *path, int64_t offset, int64_t count);
 
 static long g_checks = 0;
 #define CHECK(c)                                                               \
@@ -226,6 +230,26 @@ static void t_gpu_churn_flat(void) {
   at_floor();
 }
 
+// A load that fails AFTER allocating its result — a file of three binary32
+// words asked for four — must release that buffer before reporting the reason
+// [GPU-BUFFER-LOAD]: a NULL result owes nothing. The ARC corpus lane found two
+// live objects per failed gpuLoad in tests/core/gpu/transformer before
+// gpu_host.c released it; this is the counted form of that pin. A load that
+// succeeds costs exactly one buffer, reclaimed by one release.
+static void t_gpu_load_failure_releases(void) {
+  char path[] = "/tmp/osprey_golden_load_XXXXXX";
+  int fd = mkstemp(path);
+  CHECK(fd >= 0 && write(fd, "ABCDEFGHIJKL", 12) == 12 && close(fd) == 0);
+  CHECK(osprey_gpu_load_f32(path, 0, 4) == NULL);
+  at_floor();
+  void *words = osprey_gpu_load_f32(path, 0, 3);
+  CHECK(words != NULL && osprey_gpu_len(words) == 3);
+  CHECK(osp_arc_live_objects() == g_floor_objs + 2);
+  osp_release(words);
+  at_floor();
+  (void)unlink(path);
+}
+
 // Immortal singletons are a PERMANENT, EXACT floor — they never decay, and
 // later workloads sit on top of the floor without disturbing it. Runs last so
 // every earlier test could assert the zero floor.
@@ -260,6 +284,7 @@ int main(void) {
   t_strdup_exact();
   t_gpu_buffer_accounting();
   t_gpu_churn_flat();
+  t_gpu_load_failure_releases();
   t_immortal_floor();
   printf("[ok] memory_golden: %ld assertions\n", g_checks);
   return 0;

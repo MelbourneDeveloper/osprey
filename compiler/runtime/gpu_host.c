@@ -12,9 +12,12 @@
 // holds. Every failure path records WHY on the io_error channel and returns
 // NULL; codegen turns that pair into `Error { message }` [BUILTIN-FILE-ERRMSG].
 // Like gpu_runtime.c this unit is backend-neutral: buffers come from
-// osprey_gpu_alloc, scratch memory never outlives the call.
+// osprey_gpu_alloc, scratch memory never outlives the call, and a buffer
+// allocated for a result that then fails is released before the failure is
+// reported, so a NULL result owes the memory backend nothing.
 
 #include "io_error.h"
+#include "memory_hooks.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -53,6 +56,14 @@ int64_t *osprey_gpu_data(void *buffer);
 
 // Elements per fread while widening a tensor into its buffer.
 #define LOAD_CHUNK 4096
+
+// The NULL of a failed operation, with the buffer it had allocated released.
+// The ARC corpus lane found two live objects per failed load before this
+// existed: tests/core/gpu/transformer pins it, memory_golden_tests.c counts it.
+static void *abandoned(void *buffer) {
+  osp_release(buffer);
+  return NULL;
+}
 
 static const char OP_MATMUL[] = "gpuMatMul";
 static const char OP_LOAD[] = "gpuLoad";
@@ -118,7 +129,7 @@ void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, in
   void *out = osprey_gpu_alloc(n);
   if (!out || osprey_gpu_len(out) != n) {
     osp_io_error_set(OP_MATMUL, "result", ENOMEM);
-    return NULL;
+    return abandoned(out);
   }
   int64_t *o = osprey_gpu_data(out);
   const int64_t *a = osprey_gpu_data(left);
@@ -208,13 +219,13 @@ static void *read_words(FILE *f, const char *op, const char *path, Dtype t, int6
   int64_t *words = osprey_gpu_data(out);
   if (!out || osprey_gpu_len(out) != count || (count > 0 && !words)) {
     osp_io_error_set(op, path, ENOMEM);
-    return NULL;
+    return abandoned(out);
   }
   for (int64_t done = 0; done < count;) {
     size_t want = (size_t)(count - done < LOAD_CHUNK ? count - done : LOAD_CHUNK);
     if (fread(chunk, width, want, f) != want) {
       osp_io_error_text(op, path, ferror(f) ? "read failed" : "file ends before the tensor does");
-      return NULL;
+      return abandoned(out);
     }
     for (size_t i = 0; i < want; i++, done++) {
       words[done] = widen(t, chunk + i * width);

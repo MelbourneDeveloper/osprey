@@ -68,7 +68,7 @@ The element count. Constant time.
 
 ### `gpuLoad(path: string, offset: int, count: int) -> Result<GpuBuffer<float>, Error>` — [GPU-BUFFER-LOAD]
 
-Reads `count` little-endian IEEE-754 binary32 values starting at byte `offset` of the file at `path`, widening each exactly to the double word a `GpuBuffer<float>` holds — the layout of llm.c's checkpoints and of any raw dump of a float32 array. A `count` of zero yields the empty buffer. The result is the whole buffer or an `Error`, never a partially filled buffer: a file holding fewer than `count` values from `offset` is `file ends before the tensor does`, so a truncated weight file never loads as a smaller model.
+Reads `count` little-endian IEEE-754 binary32 values starting at byte `offset` of the file at `path`, widening each exactly to the double word a `GpuBuffer<float>` holds — the layout of llm.c's checkpoints and of any raw dump of a float32 array. A `count` of zero yields the empty buffer. The result is the whole buffer or an `Error`, never a partially filled buffer: a file holding fewer than `count` values from `offset` is `file ends before the tensor does`, so a truncated weight file never loads as a smaller model. An `Error` also leaves no buffer behind under any memory backend — the buffer allocated for the result is released before the reason is reported, which the ARC corpus lane's zero-leak sentinel and `memory_golden_tests.c` both count.
 
 Every failure is an `Error` whose message names the operation, the path and the reason, through the channel `readFile` uses ([BUILTIN-FILE-ERRMSG](0012-Built-InFunctions.md#failure-reasons--builtin-file-errmsg)): the operating system's own wording for a file that is missing or unreadable and for a negative `offset` (`Invalid argument`), `a negative element count`, the short-read sentence above, and `read failed` when the stream reports an error mid-way.
 
@@ -269,6 +269,8 @@ xs = gpuIota 100000 |> gpuMap toFloat
 ### Kernel math — [BUILTIN-MATH]
 
 The unary float functions `sqrt`, `exp`, `ln` and `tanh` ([BUILTIN-MATH](0012-Built-InFunctions.md)) are pure and total over IEEE doubles, so a kernel may call them or *be* one of them by name: `gpuMap(exp)` extracts a kernel whose body is the intrinsic call, with no closure cell and no environment ([GPU-KERNEL-EXTRACT]). They take a `float` and nothing else — an int buffer is widened explicitly with `toFloat` first, as above — and they never perform an `Arith` operation, so a kernel written from them needs no policy.
+
+`sqrt` is correctly rounded on every host, like the four operations, so a value computed from them alone has one byte-exact answer everywhere. `exp`, `ln` and `tanh` are each host's libm (glibc, musl under WASI, Darwin, Bionic), whose last digits differ: a golden that must hold on every corpus lane never prints such a value and compares it within a tolerance instead — `tests/core/gpu/transformer.test.osp` uses 1e-9 for everything downstream of `exp` or `tanh` and exact comparison for everything else, including LayerNorm. The universal special values stay exact: `exp(0.0)` is `1.0`, `exp(-1000.0)` is `0.0`, `ln(1.0)` is `0.0`, `tanh(±1000.0)` is `±1.0`.
 
 ```osprey
 let probabilities = scores |> gpuMap(exp)

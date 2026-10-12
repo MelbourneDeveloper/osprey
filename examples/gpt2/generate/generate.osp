@@ -1,0 +1,48 @@
+// Greedy text generation with the trained GPT-2 model: no training, no
+// conversion step, no Python. `make gpt2 PROMPT="..."` downloads the published
+// weights into examples/gpt2/weights and runs this project. The prompt is the
+// first line of stdin, the number of tokens to generate the optional second
+// line (default 20). The model lives in ../model; this file is the sampler.
+import gpt2::Tokenizer
+import gpt2::Model
+import gpt2::Model::{at, maxF, width, vocabSize, layerCount, endOfText}
+
+let defaultPrompt = "The capital of France is"
+let defaultTokens = 20
+
+/// The most likely next token after the sequence: the tied output projection
+/// of the final position's normalised state, then an argmax.
+fn nextToken(w, ids) = {
+    let t = listLength(ids)
+    let x = Model::layerNorm(Model::forward(w, toGpu(ids), t).x, t, w.lnfG, w.lnfB)
+    let last = gpuIota(width) |> gpuMap(fn(c) => at(x, (t - 1) * width + c))
+    let logits = Model::product(last, w.wteT, 1, width, vocabSize)
+    let peak = logits |> gpuFold(at(logits, 0), maxF)
+    gpuGet(gpuIota(vocabSize) |> gpuFilter(fn(v) => at(logits, v) == peak), 0) ?: endOfText
+}
+
+fn generate(w, ids, remaining) = match remaining == 0 {
+    true => ids
+    false => {
+        let next = nextToken(w, ids)
+        match next == endOfText { true => ids  false => generate(w, listAppend(ids, next), remaining - 1) }
+    }
+}
+
+fn main() = {
+    handle Arith {
+        overflow _ _ _ wrapped => wrapped
+        divideByZero _ _ => 0.0
+        remainderByZero _ => 0
+    }
+    let promptLine = input()
+    let prompt = match promptLine == "" { true => defaultPrompt  false => promptLine }
+    let count = parseInt(input()) ?: defaultTokens
+    let bpe = Tokenizer::loadBpe(Model::weightsDir + "/merges.txt")
+    let w = Model::loadWeights()
+    let ids = Tokenizer::encode(bpe, prompt)
+    print("gpt2 (124M) on ${gpuDevice()} — ${listLength(bpe.merges)} merges, ${intDiv(gpuLength(w.wte), width)} vocabulary rows, ${layerCount} layers")
+    print("prompt: ${prompt}\ntokens:${Tokenizer::idsText(ids)}")
+    let out = generate(w, ids, count)
+    print("generated ${listLength(out) - listLength(ids)} tokens\n${Tokenizer::decode(bpe, out)}")
+}

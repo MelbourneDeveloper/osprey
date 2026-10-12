@@ -1,0 +1,5 @@
+[project]
+name = "train"
+source_roots = ["../model", "."]
+default_namespace = "train"
+entry = "train.osp"

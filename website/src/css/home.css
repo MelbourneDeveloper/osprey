@@ -51,6 +51,9 @@
 .effect-steps h3 { font-size: 1.15rem; font-weight: 500; letter-spacing: -0.025em; margin-bottom: 0.5rem; }
 .effect-steps p { color: var(--on-surface-variant); font-size: 0.87rem; margin: 0; }
 .support-note { color: var(--on-surface-variant); font-size: 0.78rem; line-height: 1.7; max-width: 100ch; margin-top: 3rem; }
+.model-section { border-bottom: 0; border-top: 1px solid #77d7f425; }
+.model-section .flight-code pre[class*="language-"] { min-height: 0; }
+.model-section .code-result samp { overflow-wrap: anywhere; }
 .language-section { background: var(--surface-lowest); }
 .language-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 5rem; }
 .language-grid article { border-top: 1px solid #77d7f425; padding: 2rem 0; }

@@ -6,7 +6,9 @@
 print "=== File I/O Workflow Test ==="
 
 content = "Hello, Osprey file I/O!"
-filename = "test_output.txt"
+(** Named per run: the twins share one working directory, and a twin that
+    truncates the file while this one reads it back would read "" instead. *)
+filename = "test_output_${random ()}.txt"
 
 print "-- Step 1: Writing to file --"
 writeResult = writeFile filename content
@@ -35,8 +37,8 @@ print "=== Test Complete ==="
 (** Repeat the real write/read workflow and verify both Result payloads. *)
 fileWorkflowCase () =
     expected = "Hello, Osprey file I/O!"
-    written = writeFile "test_output.txt" expected
-    readBack = readFile "test_output.txt"
+    written = writeFile filename expected
+    readBack = readFile filename
     missing = readFile "nonexistent_file_xyz123.txt"
     writeMatches = match written
         Success value => value == byteLength expected

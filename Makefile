@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup run install bench bench-osprey wasm wasm-site wasm-serve bank bank-web bank-test bank-e2e hawk graphics gpt2 \
+.PHONY: build test lint fmt clean ci setup run install bench bench-osprey wasm wasm-site wasm-serve bank bank-web bank-test bank-e2e hawk graphics gpt2 gpt2-train \
 	vsix-rebuild-reinstall \
 	_language-test _deslop _gpu-demo _graphics-shader \
 	_test_gc_stack_root _test_c_runtime _coverage_check_c_runtime _bank_test _test_bench_tools \
@@ -640,7 +640,7 @@ C_SRC_memory_gc_tests = runtime/memory_gc_tests.c runtime/memory_gc.c
 C_LIBS_memory_gc_tests = -pthread
 C_SRC_memory_pool_tests = runtime/memory_pool_tests.c
 C_SRC_memory_runtime_tests = runtime/memory_runtime_tests.c runtime/memory_runtime.c
-C_SRC_memory_golden_tests = runtime/memory_golden_tests.c runtime/memory_arc.c runtime/gpu_runtime.c
+C_SRC_memory_golden_tests = runtime/memory_golden_tests.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c
 C_LIBS_memory_golden_tests = -pthread
 C_SRC_gpu_runtime_tests = runtime/gpu_runtime_tests.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c runtime/memory_runtime.c
 C_SRC_list_tests = runtime/list_tests.c runtime/list_runtime.c runtime/memory_runtime.c
@@ -991,7 +991,11 @@ $(GPT2_DIR)/weights/%:
 	curl -fsSL --retry 3 -o $@ $(GPT2_SOURCE)/$*
 
 gpt2: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
-	@printf '%s\n%s\n' "$(PROMPT)" "$(TOKENS)" | ./$(BIN) $(GPT2_DIR)/gpt2.osp --run --memory=arc
+	@printf '%s\n%s\n' "$(PROMPT)" "$(TOKENS)" | ./$(BIN) $(GPT2_DIR)/generate --run --memory=arc
+
+## gpt2-train: One training step of GPT-2 on the prompt: loss, gradients, SGD, loss again (usage: make gpt2-train PROMPT="...")
+gpt2-train: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
+	@printf '%s\n' "$(PROMPT)" | ./$(BIN) $(GPT2_DIR)/train --run --memory=arc
 
 ## run: Compile and run an Osprey file (usage: make run FILE=<path>)
 run: build

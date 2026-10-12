@@ -126,18 +126,20 @@ benchmarks/cases/**/*.o
 # COMMITTED once, in the same change that added the tests writing them — a
 # corpus run then leaves the tree dirty, and a stale copy is a test input
 # nobody wrote on purpose.
-#   file_io_json_workflow.test.osp -> test_output.txt, test_stale_reason.txt
+#   file_io_json_workflow.test.osp -> test_output_<n>.txt, test_stale_reason.txt
 #   http_state_levels.test.osp     -> osprey_http_state_levels.db
 # Leading `/` anchors these to the repo root the corpus actually writes to.
 # Unanchored, `test_output.txt` also matched
 # tests/regressions/basics/files/test_output.txt, reaching into the regression
 # corpus and hiding any future file that happens to share the name.
+/test_output_*.txt
 /test_output.txt
 /test_stale_reason.txt
 /osprey_http_state_levels.db
 # `osprey test <dir>` runs each program from its own directory, so the same two
 # files also land beside the test. Fully anchored for the reason above: these
 # exact paths, never a bare name that could hide a real fixture elsewhere.
+/tests/regressions/basics/files/test_output_*.txt
 /tests/regressions/basics/files/test_output.txt
 /tests/regressions/basics/files/test_stale_reason.txt
 /tests/regressions/effects/osprey_http_state_levels.db
@@ -146,6 +148,10 @@ benchmarks/cases/**/*.o
 # race when the corpus runs them concurrently from the same directory.
 /osprey_storage_injection_*.txt
 /tests/effects/injection/osprey_storage_injection_*.txt
+# transformer.test.{osp,ospml} write the raw and safetensors files their
+# loader cases read back, named per run for the same reason.
+/osprey_transformer_*
+/tests/core/gpu/osprey_transformer_*
 
 # Core dumps from a crashed C test binary (a container run leaves them here).
 core
