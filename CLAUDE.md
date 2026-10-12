@@ -13,6 +13,19 @@ Nearly-complete features get finished. Completely broken features get removed an
 
 That doesn't mean taking shortcuts to finish features. That means doing the HARD WORK to COMPLETE FEATURES IN THE HIGHEST POSSIBLE quality level
 
+## Repository coordination
+
+- **Git worktrees are banned.** Never create or use linked, temporary, detached, or agent-managed worktrees for this repository. Work in the existing checkout.
+- **There may be only ONE active feature branch across ALL machines, clones, contributors, and agents combined.** This is a repository-wide limit, not one branch per machine or per task. All concurrent work uses the same active branch; never create a second feature branch for isolation, review, experiments, or another task.
+- Continue the existing active feature branch. Before starting a replacement branch, verify that the previous feature branch has been merged or explicitly retired and that every machine is coordinated on the replacement. Local branch listings alone cannot establish the state of other machines. If that coordination cannot be established, stay on the existing branch.
+- Preserve concurrent uncommitted changes. These rules do not authorize committing, pushing, switching branches, deleting branches, or removing existing worktrees.
+
+## Specification synchronization
+
+For a synchronization round, reconcile specifications, implementing code, acceptance/rejection tests, active plans, and public status summaries together. Distinguish shipped behavior, partial implementation, normative targets, and dated verification evidence. A future requirement without implementation is delivery work, not proof of support; an old passing run does not validate later source changes.
+
+Trace changed claims to named code and tests, fix stale prose at its source, and preserve intended requirements and meaningful assertions. Record actual code/test disagreements and validation gaps explicitly instead of weakening the contract. Check the whole requested scope rather than stopping at the first documentation discrepancy. Keep corpus floors and target exclusions sourced from `crates/run_test_corpus.sh` and the checked-in manifests, not copied historical totals. Run relevant existing checks and report any checks that were not completed.
+
 ## Tests outrank code
 
 **A failing test that pins a compiler bug is worth more than a speculative fix.** A red test survives refactors and turns a suspicion into an enforceable contract. Code you *believe* is correct is a liability until an assertion proves it.

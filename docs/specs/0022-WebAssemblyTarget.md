@@ -10,10 +10,10 @@ hello fixture, runs it through Node's WASI host and the browser shim, then runs
 the native backend uses, pointed at the other code generator. It compiles every
 program under `tests/` to wasm32, runs it under Node's WASI host, and compares
 stdout byte-for-byte to the same `.expectedoutput` golden the native run must
-match. Only an explicit compiler diagnostic that ``target `wasm32` does not support`` a named capability qualifies as `SKIP`; the exact 61 excluded programs and their diagnostic reasons are pinned in the skip manifest. Unexpected linker errors fail, as do other build or runtime errors. CI requires
+match. Only an explicit compiler diagnostic that ``target `wasm32` does not support`` a named capability qualifies as `SKIP`; the excluded programs and their diagnostic reasons are pinned in `tests/WASM_UNPORTABLE.txt`. Unexpected linker errors fail, as do other build or runtime errors. CI requires
 `TEST_CORPUS_FAIL=0`, `TEST_CORPUS_GOLDEN_FAIL=0` and
 `TEST_CORPUS_GOLDEN_MISSING=0`, plus a golden floor so coverage cannot quietly
-shrink — 142 on wasm32 and 203 natively (`crates/run_test_corpus.sh`,
+shrink — currently 151 on wasm32 and 217 natively (`crates/run_test_corpus.sh`,
 `OSPREY_GOLDEN_MIN`). The floor ratchets up as goldens are added and is never
 lowered to turn a red build green.
 

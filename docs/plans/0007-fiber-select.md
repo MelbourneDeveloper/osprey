@@ -28,8 +28,8 @@
    operations, including explicit default or timeout behavior.
 3. Type-check each operation against its channel element type and merge arm
    result types; then remove `[CONCURRENCY-SELECT-REJECT]`.
-4. Lower the runtime's selected arm index to control flow and delete the legacy
-   first-arm function.
+4. Lower the runtime's selected arm index to control flow, replacing the current
+   loud-failure `gen_select` implementation.
 
 ## Acceptance
 

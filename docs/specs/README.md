@@ -2,6 +2,16 @@
 
 # Osprey Specifications
 
+## Implementation and verification
+
+A normative target specifies intended behavior; it does not establish implementation or a passing test run. Active [plans](../plans/README.md) track unfinished delivery. Dated acceptance records describe the source tested at that time and must not be presented as verification of later changes. Follow the [synchronization instructions](../../CLAUDE.md#specification-synchronization) when changing a contract or implementation status.
+
+### Synchronization evidence — 11 October 2026
+
+This round reconciled the Action stdin/JSON and process-status requirements, WebAssembly runtime support and corpus floors, GPU extraction/reduction contracts, and mobile validation claims against their implementation, existing tests, and owning plans. The Action's failure-status mechanism remains unimplemented delivery work; mobile simulator, emulator, device, and hosted CI evidence must be refreshed after the callable handler migration. Historical GPU timings do not measure the current arithmetic or extraction implementation.
+
+Validation: 36 tests passed across `cross_flavor_ir_equiv`, `graphics_scenes`, `input_descriptor_states`, and `input_never_blocks` (`cargo test -p osprey-cli` with those four `--test` selections). This includes the complete paired-corpus IR comparison. Relative link destinations in 53 instruction/spec/plan documents and the generated website render passed. This round does not establish a fresh full `make ci` result or mobile platform execution; it is not exhaustive behavioral verification of every normative target.
+
 ## Managing effects
 
 [0017 — Algebraic Effects](0017-AlgebraicEffects.md) is the single effects
@@ -66,8 +76,7 @@ This directory holds the language and engineering specifications:
   - [`0033-OspreyGitHubAction.md`](0033-OspreyGitHubAction.md) — a marketplace
     GitHub Action that is a thin wrapper over a co-located `.osp` program: the
     stdin-only input ferry (one JSON line via `input`), the `key=value` →
-    `$GITHUB_OUTPUT` contract, Docker vs composite packaging, and why the native
-    target is forced (wasm omits `input`) with the deferred wasm path.
+    `$GITHUB_OUTPUT` contract, Docker vs composite packaging, the initial native packaging choice, and the deferred wasm packaging path (`input` already exists on wasm).
   - [`0036-StructuredConcurrency.md`](0036-StructuredConcurrency.md) —
     **normative target**: structured fiber scopes, cancellation as an
     effect-handler action (decline to resume, run `finally` finalizers,
