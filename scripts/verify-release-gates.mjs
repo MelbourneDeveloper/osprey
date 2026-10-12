@@ -81,16 +81,23 @@ const jobNames = releaseLines
   .filter((match) => match !== null)
   .map((match) => match[1])
 
-// The gate job's own block: from its header to the next job at the same indent.
-const gateStart = releaseLines.findIndex((line) => line === `  ${GATE_JOB}:`)
-const gateRest = releaseLines.slice(gateStart + 1)
-const gateEnd = gateRest.findIndex((line) => /^ {2}[A-Za-z]/.test(line))
-const gateBlock = gateEnd === -1 ? gateRest : gateRest.slice(0, gateEnd)
-
 const takeWhile = (items, keep) => {
   const stop = items.findIndex((item) => !keep(item))
   return stop === -1 ? items : items.slice(0, stop)
 }
+
+const jobStart = (name) => releaseLines.findIndex((line) => line === `  ${name}:`)
+const readJob = (name) => {
+  const start = jobStart(name)
+  return start === -1 ? [] : takeWhile(releaseLines.slice(start + 1), (line) => !/^ {2}[A-Za-z]/.test(line))
+}
+const gateStart = jobStart(GATE_JOB)
+const gateBlock = readJob(GATE_JOB)
+
+// Azure identifiers live in the same protected environment as publishing.
+const credentialEnvironmentMissing = readJob('preflight').includes('    environment: release')
+  ? []
+  : [`${RELEASE_WORKFLOW}: preflight must use the release environment to read its publish credentials`]
 
 // `needs:` is either an inline flow sequence or a block list of `- name`.
 const NEEDS_ITEM = /^ {6}- ([A-Za-z][A-Za-z0-9_-]*)\s*$/
@@ -123,7 +130,7 @@ if (gateStart === -1) brokenParser.push(`no \`${GATE_JOB}\` job in ${RELEASE_WOR
 if (jobNames.length < 8) brokenParser.push(`parsed only ${jobNames.length} jobs from ${RELEASE_WORKFLOW} — the parser is broken`)
 if (workflowFiles.length < 4) brokenParser.push(`found only ${workflowFiles.length} workflow files — this check is scanning nothing`)
 
-const failures = [...brokenParser, ...unreviewed, ...stale, ...unguarded, ...phantom, ...conditionMissing]
+const failures = [...brokenParser, ...unreviewed, ...stale, ...unguarded, ...phantom, ...conditionMissing, ...credentialEnvironmentMissing]
 
 if (failures.length > 0) {
   console.error('release gate guard: FAIL')

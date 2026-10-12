@@ -99,7 +99,7 @@ For each command extracted from the CI workflow:
 
 ### Hard constraints
 
-- **NEVER modify test files** — fix the source code, not the tests
+- Fix the root cause of failures instead of changing tests, but if you are absolutely certain that the test is incorrect, you can correct it
 - **NEVER add suppressions** (`// nolint`, `// eslint-disable`)
 - **NEVER use `any` in TypeScript** to silence type errors
 - **NEVER delete or ignore failing tests**

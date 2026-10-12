@@ -226,6 +226,7 @@ jobs:
   preflight:
     name: Verify publish credentials
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 5
     steps:
       - name: Require every publish credential

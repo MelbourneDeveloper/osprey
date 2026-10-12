@@ -92,26 +92,35 @@ causalScore (qkv, h, r, c) = match c <= r
     true => score (qkv, h, r, c)
     false => 0.0
 rowMax (scores, row, t, r) = range (0, r + 1) |> fold (at (scores, row * t)) (\(a, c) => maxF (a, at (scores, row * t + c)))
-causalWeight (scores, peaks, t, i) = match i % t <= intDiv (i, t) % t
+(** Row r of the n attended rows is position first + r; scores and probs are [heads, n, t]. *)
+causalWeight (scores, peaks, t, n, first, i) = match i % t <= first + intDiv (i, t) % n
     true => exp (at (scores, i) - at (peaks, intDiv (i, t)))
     false => 0.0
-weighted (probs, qkv, t, r, h, d) = range (0, r + 1) |> fold 0.0 (\(a, c) => a + at (probs, (h * t + r) * t + c) * vAt (qkv, c, h, d))
+weighted (probs, qkv, t, n, first, r, h, d) = range (0, first + r + 1) |> fold 0.0 (\(a, c) => a + at (probs, (h * n + r) * t + c) * vAt (qkv, c, h, d))
 
-(** Causal scores [heads, t, t]: row (h, r) attends to columns c <= r only. *)
-scoresOf (qkv, t) = gpuIota (heads * t * t) |> gpuMap (\i => causalScore (qkv, intDiv (i, t * t), intDiv (i % (t * t), t), i % t))
+(** Causal scores of positions first..t-1, [heads, t - first, t]: row (h, r)
+    attends to columns c <= first + r only. *)
+scoresFrom (qkv, t, first) =
+    n = t - first
+    gpuIota (heads * n * t) |> gpuMap (\i => causalScore (qkv, intDiv (i, n * t), first + intDiv (i % (n * t), t), i % t))
 
 (** Softmax of every causal row: fold its peak, spend it in the shift, fold the
     partition sum, spend that in the divide. *)
-probsOf (scores, t) =
-    peaks = gpuIota (heads * t) |> gpuMap (\row => rowMax (scores, row, t, row % t))
-    weights = gpuIota (heads * t * t) |> gpuMap (\i => causalWeight (scores, peaks, t, i))
-    sums = gpuIota (heads * t) |> gpuMap (\row => sumRange (weights, row * t, t))
-    gpuIota (heads * t * t) |> gpuMap (\i => at (weights, i) / at (sums, intDiv (i, t)))
+probsOf (scores, t, n, first) =
+    peaks = gpuIota (heads * n) |> gpuMap (\row => rowMax (scores, row, t, first + row % n))
+    weights = gpuIota (heads * n * t) |> gpuMap (\i => causalWeight (scores, peaks, t, n, first, i))
+    sums = gpuIota (heads * n) |> gpuMap (\row => sumRange (weights, row * t, t))
+    gpuIota (heads * n * t) |> gpuMap (\i => at (weights, i) / at (sums, intDiv (i, t)))
 
-(** Causal multi-head self-attention over qkv [t, qkvWidth], as [t, width]. *)
-attention (qkv, t) =
-    probs = probsOf (scoresOf (qkv, t), t)
-    gpuIota (t * width) |> gpuMap (\i => weighted (probs, qkv, t, intDiv (i, width), intDiv (i % width, headWidth), i % headWidth))
+(** Causal multi-head self-attention for positions first..t-1 of qkv [t, qkvWidth],
+    as [t - first, width]: the whole sequence from 0, the newest position alone
+    from t - 1 — the KV-cached step, reading the earlier rows' keys and values. *)
+attentionFrom (qkv, t, first) =
+    n = t - first
+    probs = probsOf (scoresFrom (qkv, t, first), t, n, first)
+    gpuIota (n * width) |> gpuMap (\i => weighted (probs, qkv, t, n, first, intDiv (i, width), intDiv (i % width, headWidth), i % headWidth))
+
+attention (qkv, t) = attentionFrom (qkv, t, 0)
 
 (** One pre-norm block: attention and MLP, each with a residual. *)
 block (x, t) =
@@ -234,7 +243,7 @@ softmaxCase () =
         4.0, 0.0, 0.0, 5.0, 5.0, 0.0, 1.0, 2.0, 3.0,
         -2.0, 0.0, 0.0, 1.0, 1.0, 0.0, 3.0, 2.0, 1.0
     ]
-    probs = probsOf (scores, 3)
+    probs = probsOf (scores, 3, 3, 0)
     checkAll "softmax normalises every causal row, shifted by its peak" [
         gpuLength probs == 18,
         at (probs, 0) == 1.0, at (probs, 1) == 0.0, at (probs, 2) == 0.0,
@@ -245,14 +254,17 @@ softmaxCase () =
         near (sumRange (probs, 6, 3), 1.0), near (sumRange (probs, 15, 3), 1.0)
     ]
 
+(** Two positions whose keys are equal, so the second attends half to each value. *)
+pairQkv () = toGpu [
+    1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 1.0, 2.0, 3.0, 4.0,
+    2.0, 3.0, 4.0, 5.0, 1.0, 1.0, 2.0, 2.0, 5.0, 6.0, 7.0, 8.0
+]
+
 (** A lone token attends only to itself, so attention returns its value
     columns; a second token whose keys equal the first's averages the values. *)
 attentionExactCase () =
     single = attention (toGpu [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0], 1)
-    pair = attention (toGpu [
-        1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 1.0, 2.0, 3.0, 4.0,
-        2.0, 3.0, 4.0, 5.0, 1.0, 1.0, 2.0, 2.0, 5.0, 6.0, 7.0, 8.0
-    ], 2)
+    pair = attention (pairQkv (), 2)
     checkAll "attention returns a lone token's value and averages equal keys" [
         gpuLength single == 4, at (single, 0) == 8.0, at (single, 1) == 9.0, at (single, 2) == 10.0, at (single, 3) == 11.0,
         gpuLength pair == 8, at (pair, 0) == 1.0, at (pair, 1) == 2.0, at (pair, 2) == 3.0, at (pair, 3) == 4.0,
@@ -276,6 +288,28 @@ attentionCase () =
         near (at (a, 2), -1.2230308087437807), near (at (a, 3), 1.2129035308112646),
         near (at (a, 4), -0.06741551961608724), near (at (a, 5), 0.4164761656826965),
         near (at (a, 6), -1.243087625638697), near (at (a, 7), 1.3210809841254196)
+    ]
+
+(** Row r of a [rows, n] buffer, and whether a [1, n] buffer equals that row exactly. *)
+rowOf (x, r, n) = gpuIota n |> gpuMap (\c => at (x, r * n + c))
+sameRow (single, rows, r, n) = range (0, n) |> fold true (\(ok, c) => ok && at (single, c) == at (rows, r * n + c))
+
+(** The KV-cached step: the newest position attends through the earlier rows
+    with the full pass's arithmetic, and LayerNorm and linear are row-wise, so
+    one row's pass equals that row of the two-row pass bit for bit — which is
+    why examples/gpt2's generate can grow a cache instead of recomputing. *)
+cachedStepCase () =
+    x = embed (tokenTable (), positionTable (), miniTokens (), 2)
+    normed = layerNorm (x, 2, ln1g (), ln1b ())
+    qkv = linear (normed, 2, width, qkvWidth, qkvW (), qkvB ())
+    newest = attentionFrom (qkv, 2, 1)
+    pairStep = attentionFrom (pairQkv (), 2, 1)
+    checkAll "the newest position attends through the cache exactly as the full pass does" [
+        gpuLength newest == width, sameRow (newest, attention (qkv, 2), 1, width),
+        near (at (newest, 0), -0.06741551961608724), near (at (newest, 3), 1.3210809841254196),
+        gpuLength pairStep == width, at (pairStep, 0) == 3.0, at (pairStep, 1) == 4.0, at (pairStep, 2) == 5.0, at (pairStep, 3) == 6.0,
+        sameRow (layerNorm (rowOf (x, 1, width), 1, ln1g (), ln1b ()), normed, 1, width),
+        sameRow (linear (rowOf (normed, 1, width), 1, width, qkvWidth, qkvW (), qkvB ()), qkv, 1, qkvWidth)
     ]
 
 blockCase () =
@@ -359,6 +393,7 @@ test ("softmax normalises every causal row, shifted by its peak", \() => exactAr
 test ("attention returns a lone token's value and averages equal keys", \() => exactArithmetic (attentionExactCase))
 test ("embed gathers each token's row and adds its position's row", \() => exactArithmetic (embedCase))
 test ("attention over the embedded pair matches the reference pass", \() => exactArithmetic (attentionCase))
+test ("the newest position attends through the cache exactly as the full pass does", \() => exactArithmetic (cachedStepCase))
 test ("one pre-norm block matches the reference pass", \() => exactArithmetic (blockCase))
 test ("the tied readout scores every token row and argmax picks the first peak", \() => exactArithmetic (nextTokenCase))
 test ("gpuLoad widens little-endian binary32 words and refuses a short read", \() => exactArithmetic (loadCase))
