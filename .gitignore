@@ -154,6 +154,6 @@ benchmarks/cases/**/*.o
 /tests/core/gpu/osprey_transformer_*
 
 # Core dumps from a crashed C test binary (a container run leaves them here).
-core
-core.*
+/core
+/core.*
 examples/gpt2/weights/
