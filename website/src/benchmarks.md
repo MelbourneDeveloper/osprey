@@ -29,6 +29,8 @@ These three rows compare measurements made on this machine. `wordfreq` remains s
 
 **The full tables combine this Osprey run and the six fresh C/Rust measurements with historical records.** The historical records do not identify their machine. Cross-language aggregate ratios and highlighted minimum cells in these tables are therefore descriptions of the stored data, not controlled performance comparisons. Use the three rows above for the current C/Rust sample.
 
+On 11 October 2026, 148 missing historical timing cells were recovered from [the 20 August recorded results](https://github.com/Nimblesite/osprey/blob/713366f9e9e6ff9b7dec26691a1257f969df2d53/benchmarks/results/results.json). All newer measurements were retained. The recovered cells passed their recorded output checks, and their source programs and expected outputs are unchanged. No historical Osprey timing was restored. These recovered values are historical measurements, with the same machine-provenance limitation above. The recovered Rust WebAssembly timings also predate the explicit 4 MiB Wasmtime stack setting used by current runs.
+
 The tables are generated from the harness output by [`benchmarks/report.py`](https://github.com/Nimblesite/osprey/blob/main/benchmarks/report.py). Osprey columns are highlighted; a star marks a lowest recorded Osprey value subject to the provenance limitation above.
 
 {% include "benchmarks-tables.html" %}
@@ -38,7 +40,7 @@ The tables are generated from the harness output by [`benchmarks/report.py`](htt
 Sources and deterministic expected outputs live in [`benchmarks/cases/`](https://github.com/Nimblesite/osprey/tree/main/benchmarks/cases). Each language runs the same workload and checksummed result. Iteration and collection representations differ, so source inspection matters when interpreting a gap.
 
 1. **Build once, time execution.** Native programs are compiled to persistent executables. Compiler and linker time are excluded. Wasmtime execution includes VM startup.
-2. **Check correctness first.** Every binary must produce its case's expected output before it is timed. A failed Osprey refresh leaves published results unchanged.
+2. **Check correctness first.** Every binary must produce its case's expected output before it is timed. A failed build, output check or timing run leaves published results unchanged.
 3. **Elapsed time.** `hyperfine -N --warmup 3 --min-runs 10` reports the mean and standard deviation. Seeded cases receive `0` on standard input.
 4. **Memory.** `/usr/bin/time` records peak RSS, taking the maximum of three runs. Wasmtime host RSS is not reported as module memory.
 5. **WebAssembly stack.** Every language's Wasmtime wrapper uses `-W max-wasm-stack=4194304`. The explicit 4 MiB call-stack budget lets the unchanged `ackermann` workload complete with `8189`; its previous failure exhausted the host's default budget.
@@ -68,4 +70,4 @@ make bench-osprey                # refresh all Osprey backends only
 BENCH_FILTER=wordfreq make bench # one workload across installed toolchains
 ```
 
-Results are tracked in `benchmarks/results/results.json` and `results.html`; the website tables are regenerated from the same data. A partial run preserves unmeasured cells. Keep the measurement date, machine, selected languages and timing variance beside any comparison drawn from them.
+Results are tracked in `benchmarks/results/results.json` and `results.html`; the website tables are regenerated from the same data. Every run stages its output and preserves recorded values until valid replacements exist, including when toolchains are absent or cases are skipped. Keep the measurement date, machine, selected languages and timing variance beside any comparison drawn from them.

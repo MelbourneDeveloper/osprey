@@ -25,9 +25,8 @@ compiles and times only `osprey`, `osprey-arc`, `osprey-gc` and `osprey-wasm`,
 never Rust/C/C#/Dart/OCaml/Haskell. It stages into a temp directory and merges
 only the `(case, language)` cells it actually measured, so every other
 language's tracked record survives byte-for-byte — and if any case fails to
-build or mismatches its oracle, nothing is published at all. It needs one prior
-`make bench` for the baseline. Any run narrowed by `BENCH_FILTER` merges the
-same way, for the same reason.
+build, mismatches its oracle or fails timing, nothing is published at all. It needs one prior
+`make bench` for the baseline. Every run, including a full `make bench`, stages and merges this way. Missing toolchains, skipped cases and unavailable measurements preserve the last recorded values. Replacements require complete, finite timing measurements; published files are replaced atomically.
 
 All WebAssembly columns run under Wasmtime with an explicit 4 MiB call-stack budget (`-W max-wasm-stack=4194304`). The `ackermann` workload exhausts Wasmtime's default budget; with the shared budget it prints the required `8189`. This changes host capacity, not the workload or correctness oracle.
 
@@ -42,8 +41,7 @@ All WebAssembly columns run under Wasmtime with an explicit 4 MiB call-stack bud
 
 Results are written to `benchmarks/results/`. The measured outputs below are
 **tracked**, so a figure quoted anywhere in the repo can be checked against them;
-only the per-case binaries (`bin/`) and raw hyperfine exports (`hf/`) are
-gitignored:
+raw hyperfine exports (`hf/`) are gitignored, and binaries are built in a temporary staging directory:
 
 | file | contents |
 |------|----------|
@@ -191,7 +189,6 @@ case run on fresh random data each time, set `BENCH_RANDOM=1`:
 
 ```bash
 BENCH_RANDOM=1 BENCH_FILTER=wordfreq make bench   # prints a randomized demo pass
-echo 1 | benchmarks/results/bin/wordfreq__osprey   # or drive one binary directly
 ```
 
 This is the only place randomness enters the suite; everything charted is the

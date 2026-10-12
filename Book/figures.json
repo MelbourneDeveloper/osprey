@@ -210,6 +210,32 @@
       "height": 1528,
       "alt": "An Osprey event handler produces a new model and a command. The native host executes the command and sends a completion event. A later Osprey update checks that event and produces the next model.",
       "provenance": "Deterministic Mermaid source, rendered with Mermaid CLI and styles/mermaid.json; explanatory diagram, not a product capture."
+    },
+    {
+      "id": "04-status-paths",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "chapter": 4,
+      "source": "assets/diagrams/04-status-paths.mmd",
+      "master": "assets/diagrams/04-status-paths.svg",
+      "publication": "assets/diagrams/04-status-paths.png",
+      "width": 964,
+      "height": 788,
+      "alt": "Status selects Planned or Complete. Complete binds its note before returning completion text. Both arms return a string.",
+      "provenance": "Deterministic Mermaid source, rendered with Mermaid CLI 11.12.0 and styles/mermaid.json; explanatory diagram, not a product capture."
+    },
+    {
+      "id": "04-missing-case",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "chapter": 4,
+      "source": "assets/diagrams/04-missing-case.mmd",
+      "master": "assets/diagrams/04-missing-case.svg",
+      "publication": "assets/diagrams/04-missing-case.png",
+      "width": 764,
+      "height": 1290,
+      "alt": "Adding Learning to Status makes statusLabel non-exhaustive. Adding its explicit arm restores coverage and the compiler accepts the program.",
+      "provenance": "Deterministic Mermaid source, rendered with Mermaid CLI 11.12.0 and styles/mermaid.json; explanatory diagram, not a product capture."
     }
   ]
 }

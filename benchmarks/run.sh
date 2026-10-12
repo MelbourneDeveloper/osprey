@@ -29,20 +29,14 @@ ROOT=${ROOT:A}
 OSP=$ROOT/target/release/osprey
 CASEDIR=$BENCHDIR/cases
 OUT=$BENCHDIR/results
-RUNOUT=$OUT
 FILTER=${1:-}
 PARTIAL=${BENCH_PARTIAL:-0}
-# A run that does not measure every case in every language must NOT replace the
-# published set wholesale: it stages into a temp dir and merges its cells back.
-# That covers the Osprey-only re-run (BENCH_PARTIAL=1) and equally any filtered
-# run — `make bench BENCH_FILTER=fib` used to `rm -rf` every recorded result and
-# then die in report.py, whose README refresh needs a case the filter excluded.
-MERGE=0
-[[ "$PARTIAL" == 1 || -n "$FILTER" ]] && [[ -f "$OUT/raw.jsonl" ]] && MERGE=1
-if [[ "$MERGE" == 1 ]]; then
-  RUNOUT=$(mktemp -d "${TMPDIR:-/tmp}/osprey-bench-merge.XXXXXX")
-  trap 'rm -rf "$RUNOUT"' EXIT INT TERM
-fi
+# Every run stages outside the published directory, including unfiltered runs:
+# missing tools, skips, failed builds and interruptions cannot erase baselines.
+RUNOUT=$(mktemp -d "${TMPDIR:-/tmp}/osprey-bench-merge.XXXXXX") || exit 1
+trap 'rm -rf "$RUNOUT"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 TMP=$RUNOUT/tmp
 BINDIR=$RUNOUT/bin
 HFDIR=$RUNOUT/hf
@@ -157,11 +151,10 @@ json_row() {
     "$1" "$2" "$3" "$4" "$5" "${6:-0}" >> "$RAW"
 }
 
-if [[ "$PARTIAL" == 1 && "$MERGE" != 1 ]]; then
+if [[ "$PARTIAL" == 1 && ! -f "$OUT/raw.jsonl" ]]; then
   echo "FATAL: bench-osprey needs existing results at $OUT; run 'make bench' first." >&2
   exit 1
 fi
-[[ "$MERGE" == 1 ]] || rm -rf "$OUT"
 mkdir -p "$TMP" "$BINDIR" "$HFDIR"; : > "$RAW"
 
 # Benchmark input modes. A case may read its first stdin line to pick a token
@@ -248,7 +241,7 @@ for dir in $CASEDIR/*/(/); do
     # measurement reproducible (and matches the oracle above).
     hyperfine -N --input "$MODE0" --warmup "$WARMUP" --min-runs "$MINRUNS" \
       --export-json "$HFDIR/$name.json" $hf_args >/dev/null 2>&1 \
-      || echo "    (hyperfine failed for $name)"
+      || { echo "    (hyperfine failed for $name)"; fail=1; }
   fi
 
   # Randomized demo pass: prove each case also runs on unpredictable input. Feeds
@@ -264,12 +257,10 @@ for dir in $CASEDIR/*/(/); do
 done
 
 echo "\n==> rendering report"
-if [[ "$MERGE" == 1 ]]; then
-  # $LANGS, not a hardcoded list: the merge replaces exactly the (case, language)
-  # cells this run measured and leaves every other published record untouched.
-  python3 "$BENCHDIR/merge_results.py" "$OUT" "$RUNOUT" $LANGS \
-    || { echo "result merge failed — published results left untouched" >&2; exit 1; }
-fi
+(( fail == 0 )) || { echo "benchmark failed — published results left untouched" >&2; exit 1; }
+python3 "$BENCHDIR/merge_results.py" "$OUT" "$RUNOUT" $LANGS \
+  || { echo "result merge failed — published results left untouched" >&2; exit 1; }
+mkdir -p "$OUT"
 python3 "$BENCHDIR/report.py" "$OUT" || { echo "report failed" >&2; exit 1; }
 rm -rf "$TMP"
 echo "==> done. Open $OUT/results.html"

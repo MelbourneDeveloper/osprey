@@ -1,0 +1,6 @@
+fn activityLabel(active) = match active {
+    _ => "ready to learn"
+    false => "taking a break"
+}
+
+fn main() = print(activityLabel(false))

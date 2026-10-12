@@ -4,7 +4,7 @@ You can begin with a text file and one change to a quoted string. This book buil
 
 Osprey helps you build programs from values and functions, keep ordinary failure visible, and choose how operations such as logging or storage are implemented. That last ability comes from **algebraic effects**. Chapter 9 introduces them from the beginning; no previous knowledge of functional programming is required.
 
-This working manuscript has completed Chapters 1–3 and 8–10. The remaining chapters are labelled outlines. Each finished chapter supplies self-contained examples, so you can explore the effects sequence while the intervening lessons are being written.
+This working manuscript has completed Chapters 1–4 and 8–10. The remaining chapters are labelled outlines. Each finished chapter supplies self-contained examples, so you can explore the effects sequence while the intervening lessons are being written.
 
 ![The book moves from one running file through honest data and outside-world interaction to a program the reader can ship and reshape.](assets/diagrams/00-reading-journey.png)
 

@@ -1,0 +1,15 @@
+fn activityLabel(active) = match active {
+    true => "ready to learn"
+    false => "taking a break"
+}
+
+fn sessionLabel(count) = match count {
+    0 => "first flight"
+    1 => "one session logged"
+    _ => "several sessions logged"
+}
+
+fn main() = print(
+    "${activityLabel(true)}\n${activityLabel(false)}\n" +
+    "${sessionLabel(0)}\n${sessionLabel(1)}\n${sessionLabel(3)}"
+)
