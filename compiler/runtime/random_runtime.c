@@ -186,8 +186,8 @@ static int osp_input_byte(void) {
   return read(STDIN_FILENO, &ch, 1) == 1 ? (int)ch : EOF;
 }
 #else
-// Windows and wasm keep the stdio reader: the wasm runtime excludes `input`
-// altogether ([WASM-TARGET]).
+// Windows and wasm keep the stdio reader; WASI supplies stdin through fd 0.
+// The portable wasm archive includes this unit ([WASM-TARGET-RUNTIME]).
 static int osp_input_byte(void) { return getchar(); }
 #endif
 

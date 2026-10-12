@@ -2873,8 +2873,9 @@ suite("Osprey VSIX Debugger E2E", () => {
 
   // Osprey files are identified by extension alone. A `firstLine` content
   // heuristic claimed every sibling whose header comment mentioned Osprey —
-  // `examples/graphics/scene.metal` was being parsed as Osprey and reported 45
-  // syntax errors. Nothing may re-introduce a content-based claim.
+  // the graphics bridge's Metal shader (then `examples/graphics/scene.metal`,
+  // now `base.metal`) was being parsed as Osprey and reported 45 syntax
+  // errors. Nothing may re-introduce a content-based claim.
   test("language contributions claim files by extension, never by content", () => {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(extensionRoot, "package.json"), "utf8"),

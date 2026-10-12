@@ -1,0 +1,214 @@
+// One training step of the trained GPT-2 model on the downloaded weights:
+// the next-token cross-entropy of the prompt, the gradient of every parameter
+// through the twelve blocks, one SGD step, and the loss again. The prompt is
+// the first line of stdin. `make gpt2-train PROMPT="..."` runs it, and
+// examples/gpt2/reference.py prints the same loss and gradient sums from the
+// same accumulation order. The model lives in ../model; this file is the
+// backward pass, written as the same `gpuIota |> gpuMap` kernels and
+// `gpuMatMul` products as the forward one ([GPU-MATMUL], [BUILTIN-MATH]).
+import gpt2::Tokenizer
+import gpt2::Model
+import gpt2::Model::{Layer, Weights, Acts, at, addF, maxF, width, heads, headWidth, qkvWidth, mlpWidth,
+    vocabSize, layerCount, positions, widthF, epsilon, scoreScale, geluScale, geluCubic, qAt, kAt, vAt}
+
+let defaultPrompt = "The capital of France is"
+let learningRate = 0.0001
+
+/// The gradients of one `linear`: its input, weight and bias.
+type Grad = { dx: GpuBuffer<float>, dw: GpuBuffer<float>, db: GpuBuffer<float> }
+/// The gradients of one `layerNorm`: its input, gain and bias.
+type NormGrad = { dx: GpuBuffer<float>, dg: GpuBuffer<float>, db: GpuBuffer<float> }
+/// The loss and what flows back from it: into the final state and into the tied embedding.
+type Head = { loss: float, dxf: GpuBuffer<float>, dwte: GpuBuffer<float> }
+type BlockGrad = { dx: GpuBuffer<float>, grad: Layer }
+type Back = { dx: GpuBuffer<float>, grads: List<Layer> }
+type Embed = { dwte: GpuBuffer<float>, dwpe: GpuBuffer<float> }
+type Step = { loss: float, grads: List<Layer>, dwte: GpuBuffer<float>, dwpe: GpuBuffer<float>, dlnfG: GpuBuffer<float>, dlnfB: GpuBuffer<float> }
+
+fn onehot(hit) = match hit { true => 1.0  false => 0.0 }
+fn total(b) = b |> gpuFold(0.0, addF)
+
+/// d gelu / dx for the tanh approximation.
+fn geluSlope(x) = {
+    let th = tanh(geluScale * (x + geluCubic * x * x * x))
+    0.5 * (1.0 + th) + 0.5 * x * (1.0 - th * th) * geluScale * (1.0 + 3.0 * geluCubic * x * x)
+}
+
+fn columnSums(dy, rows, cols) = gpuIota(cols) |> gpuMap(fn(c) => range(0, rows) |> fold(0.0, fn(a, r) => a + at(dy, r * cols + c)))
+
+/// y = x · w + b, so dx = dy · wᵀ, dw = xᵀ · dy and db sums dy's rows.
+fn linearBack(dy, x, rows, inner, cols, w) = Grad {
+    dx: Model::product(dy, Model::transpose(w, inner, cols), rows, cols, inner),
+    dw: Model::product(Model::transpose(x, rows, inner), dy, inner, rows, cols),
+    db: columnSums(dy, rows, cols)
+}
+
+/// LayerNorm backward over x [t, width] with gain g: the normalised rows are
+/// recomputed from x exactly as the forward pass did.
+fn normBack(dy, x, t, g) = {
+    let means = Model::rowMeans(x, t)
+    let variances = Model::rowVariances(x, t, means)
+    let xhat = gpuIota(t * width) |> gpuMap(fn(i) => (at(x, i) - at(means, intDiv(i, width))) / sqrt(at(variances, intDiv(i, width)) + epsilon))
+    let dxhat = gpuIota(t * width) |> gpuMap(fn(i) => at(dy, i) * at(g, i % width))
+    let m1 = gpuIota(t) |> gpuMap(fn(r) => Model::sumRange(dxhat, r * width, width) / widthF)
+    let m2 = gpuIota(t) |> gpuMap(fn(r) => (range(0, width) |> fold(0.0, fn(a, c) => a + at(dxhat, r * width + c) * at(xhat, r * width + c))) / widthF)
+    NormGrad {
+        dx: gpuIota(t * width) |> gpuMap(fn(i) => {
+            let r = intDiv(i, width)
+            (at(dxhat, i) - at(m1, r) - at(xhat, i) * at(m2, r)) / sqrt(at(variances, r) + epsilon)
+        }),
+        dg: gpuIota(width) |> gpuMap(fn(c) => range(0, t) |> fold(0.0, fn(a, r) => a + at(dy, r * width + c) * at(xhat, r * width + c))),
+        db: columnSums(dy, t, width)
+    }
+}
+
+fn dProb(dout, qkv, h, r, c) = range(0, headWidth) |> fold(0.0, fn(a, d) => a + at(dout, r * width + h * headWidth + d) * vAt(qkv, c, h, d))
+fn dQuery(dS, qkv, t, r, h, d) = (range(0, r + 1) |> fold(0.0, fn(a, c) => a + at(dS, (h * t + r) * t + c) * kAt(qkv, c, h, d))) * scoreScale
+fn dKey(dS, qkv, t, c, h, d) = (range(c, t) |> fold(0.0, fn(a, r) => a + at(dS, (h * t + r) * t + c) * qAt(qkv, r, h, d))) * scoreScale
+fn dValue(probs, dout, t, c, h, d) = range(c, t) |> fold(0.0, fn(a, r) => a + at(probs, (h * t + r) * t + c) * at(dout, r * width + h * headWidth + d))
+
+/// dout [t, width] back through causal attention, as dqkv [t, 2304]: the
+/// softmax Jacobian per row, then the query, key and value columns of each head.
+fn attentionBack(dout, probs, qkv, t) = {
+    let dP = gpuIota(heads * t * t) |> gpuMap(fn(i) => {
+        let h = intDiv(i, t * t)
+        let r = intDiv(i % (t * t), t)
+        let c = i % t
+        match c <= r { true => dProb(dout, qkv, h, r, c)  false => 0.0 }
+    })
+    let dots = gpuIota(heads * t) |> gpuMap(fn(row) => range(0, row % t + 1) |> fold(0.0, fn(a, c) => a + at(dP, row * t + c) * at(probs, row * t + c)))
+    let dS = gpuIota(heads * t * t) |> gpuMap(fn(i) => at(probs, i) * (at(dP, i) - at(dots, intDiv(i, t))))
+    gpuIota(t * qkvWidth) |> gpuMap(fn(i) => {
+        let r = intDiv(i, qkvWidth)
+        let col = i % qkvWidth
+        let h = intDiv(col % width, headWidth)
+        let d = col % headWidth
+        match col < width {
+            true => dQuery(dS, qkv, t, r, h, d)
+            false => match col < 2 * width { true => dKey(dS, qkv, t, r, h, d)  false => dValue(probs, dout, t, r, h, d) }
+        }
+    })
+}
+
+/// One block backward: dy is the gradient of the block's output y.
+fn blockBack(dy, acts, t, l) = {
+    let out = linearBack(dy, acts.u, t, mlpWidth, width, l.outW)
+    let fc = linearBack(gpuZipWith(out.dx, acts.f, fn(g, x) => g * geluSlope(x)), acts.h2, t, width, mlpWidth, l.fcW)
+    let ln2 = normBack(fc.dx, acts.x2, t, l.ln2g)
+    let dx2 = gpuZipWith(dy, ln2.dx, addF)
+    let proj = linearBack(dx2, acts.a, t, width, width, l.projW)
+    let qkv = linearBack(attentionBack(proj.dx, acts.probs, acts.qkv, t), acts.h1, t, width, qkvWidth, l.qkvW)
+    let ln1 = normBack(qkv.dx, acts.x, t, l.ln1g)
+    BlockGrad {
+        dx: gpuZipWith(dx2, ln1.dx, addF),
+        grad: Layer {
+            ln1g: ln1.dg, ln1b: ln1.db, qkvW: qkv.dw, qkvB: qkv.db, projW: proj.dw, projB: proj.db,
+            ln2g: ln2.dg, ln2b: ln2.db, fcW: fc.dw, fcB: fc.db, outW: out.dw, outB: out.db
+        }
+    }
+}
+
+fn emptyActs() = {
+    let e = toGpu([])
+    Acts { x: e, h1: e, qkv: e, probs: e, a: e, x2: e, h2: e, f: e, u: e, y: e }
+}
+
+/// Blocks i down to 0, collecting each block's gradients in layer order.
+fn backward(w, trace, dy, i, t, acc) = match i < 0 {
+    true => Back { dx: dy, grads: acc }
+    false => {
+        let b = blockBack(dy, listGet(trace.acts, i) ?: emptyActs(), t, Model::layer(w, i))
+        backward(w, trace, b.dx, i - 1, t, listPrepend(acc, b.grad))
+    }
+}
+
+/// Row-wise softmax of logits [t, vocab].
+fn softmaxRows(logits, t) = {
+    let peaks = gpuIota(t) |> gpuMap(fn(r) => range(1, vocabSize) |> fold(at(logits, r * vocabSize), fn(a, v) => maxF(a, at(logits, r * vocabSize + v))))
+    let weights = gpuIota(t * vocabSize) |> gpuMap(fn(i) => exp(at(logits, i) - at(peaks, intDiv(i, vocabSize))))
+    let sums = gpuIota(t) |> gpuMap(fn(r) => Model::sumRange(weights, r * vocabSize, vocabSize))
+    gpuIota(t * vocabSize) |> gpuMap(fn(i) => at(weights, i) / at(sums, intDiv(i, vocabSize)))
+}
+
+fn target(tokens, r) = gpuGet(tokens, r + 1) ?: 0
+
+/// Mean next-token cross-entropy over the first t - 1 positions of xf [t, width],
+/// and its gradient into xf and into the tied output embedding.
+fn lossHead(w, xf, tokens, t) = {
+    let probs = softmaxRows(Model::product(xf, w.wteT, t, width, vocabSize), t)
+    let count = toFloat(t - 1)
+    let loss = (range(0, t - 1) |> fold(0.0, fn(a, r) => a - ln(at(probs, r * vocabSize + target(tokens, r))))) / count
+    let dlogits = gpuIota(t * vocabSize) |> gpuMap(fn(i) => {
+        let r = intDiv(i, vocabSize)
+        match r == t - 1 { true => 0.0  false => (at(probs, i) - onehot(i % vocabSize == target(tokens, r))) / count }
+    })
+    Head {
+        loss: loss,
+        dxf: Model::product(dlogits, w.wte, t, vocabSize, width),
+        dwte: Model::product(Model::transpose(dlogits, t, vocabSize), xf, vocabSize, t, width)
+    }
+}
+
+/// The embedding gradients: the output projection's share plus each token's row
+/// of dx0 [t, width], and dx0 itself for the positions used.
+fn embedBack(dx0, dwteOut, tokens, t) = Embed {
+    dwte: gpuIota(vocabSize * width) |> gpuMap(fn(i) => range(0, t) |> fold(at(dwteOut, i), fn(a, r) =>
+        match (gpuGet(tokens, r) ?: 0) == intDiv(i, width) { true => a + at(dx0, r * width + i % width)  false => a })),
+    dwpe: gpuIota(positions * width) |> gpuMap(fn(i) => match intDiv(i, width) < t { true => at(dx0, i)  false => 0.0 })
+}
+
+fn finalState(w, tokens, t) = Model::layerNorm(Model::forward(w, tokens, t).x, t, w.lnfG, w.lnfB)
+
+fn trainStep(w, tokens, t) = {
+    let trace = Model::forward(w, tokens, t)
+    let head = lossHead(w, Model::layerNorm(trace.x, t, w.lnfG, w.lnfB), tokens, t)
+    let lnf = normBack(head.dxf, trace.x, t, w.lnfG)
+    let back = backward(w, trace, lnf.dx, layerCount - 1, t, [])
+    let emb = embedBack(back.dx, head.dwte, tokens, t)
+    Step { loss: head.loss, grads: back.grads, dwte: emb.dwte, dwpe: emb.dwpe, dlnfG: lnf.dg, dlnfB: lnf.db }
+}
+
+fn descend(p, g) = gpuZipWith(p, g, fn(a, d) => a - learningRate * d)
+
+fn descendLayer(l, g) = Layer {
+    ln1g: descend(l.ln1g, g.ln1g), ln1b: descend(l.ln1b, g.ln1b), qkvW: descend(l.qkvW, g.qkvW), qkvB: descend(l.qkvB, g.qkvB),
+    projW: descend(l.projW, g.projW), projB: descend(l.projB, g.projB), ln2g: descend(l.ln2g, g.ln2g), ln2b: descend(l.ln2b, g.ln2b),
+    fcW: descend(l.fcW, g.fcW), fcB: descend(l.fcB, g.fcB), outW: descend(l.outW, g.outW), outB: descend(l.outB, g.outB)
+}
+
+/// One SGD step over every parameter.
+fn descendAll(w, s) = {
+    let wte = descend(w.wte, s.dwte)
+    Weights {
+        wte: wte, wteT: Model::transpose(wte, vocabSize, width), wpe: descend(w.wpe, s.dwpe),
+        lnfG: descend(w.lnfG, s.dlnfG), lnfB: descend(w.lnfB, s.dlnfB),
+        blocks: range(0, layerCount) |> fold([], fn(acc, i) => listAppend(acc, descendLayer(Model::layer(w, i), listGet(s.grads, i) ?: Model::emptyLayer())))
+    }
+}
+
+fn layerLine(g) = "${total(g.ln1g)} ${total(g.ln1b)} ${total(g.qkvW)} ${total(g.qkvB)} ${total(g.projW)} ${total(g.projB)} ${total(g.ln2g)} ${total(g.ln2b)} ${total(g.fcW)} ${total(g.fcB)} ${total(g.outW)} ${total(g.outB)}"
+
+fn gradLines(grads, i) = match i == layerCount {
+    true => ""
+    false => "\nh.${i} ${layerLine(listGet(grads, i) ?: Model::emptyLayer())}" + gradLines(grads, i + 1)
+}
+
+fn main() = {
+    handle Arith {
+        overflow _ _ _ wrapped => wrapped
+        divideByZero _ _ => 0.0
+        remainderByZero _ => 0
+    }
+    let promptLine = input()
+    let prompt = match promptLine == "" { true => defaultPrompt  false => promptLine }
+    let bpe = Tokenizer::loadBpe(Model::weightsDir + "/merges.txt")
+    let w = Model::loadWeights()
+    let ids = Tokenizer::encode(bpe, prompt)
+    let t = listLength(ids)
+    let tokens = toGpu(ids)
+    print("gpt2 (124M) on ${gpuDevice()} — one training step over ${t} tokens, learning rate ${learningRate}\nprompt: ${prompt}\ntokens:${Tokenizer::idsText(ids)}")
+    let s = trainStep(w, tokens, t)
+    print("loss ${s.loss}\ngrad wte ${total(s.dwte)} wpe ${total(s.dwpe)} ln_f ${total(s.dlnfG)} ${total(s.dlnfB)}${gradLines(s.grads, 0)}")
+    let stepped = descendAll(w, s)
+    print("loss after one step ${lossHead(stepped, finalState(stepped, tokens, t), tokens, t).loss}")
+}

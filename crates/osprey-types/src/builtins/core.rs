@@ -25,6 +25,12 @@ fn numbers(e: &mut TypeEnv) {
     // every i64 has a nearest double. Implements [BUILTIN-TOFLOAT] and the GPU
     // surface's explicit element conversion [GPU-CONVERT].
     mono(e, "toFloat", vec![i()], Type::float());
+    // The unary float functions every numeric kernel is written from. Total
+    // over IEEE doubles (a domain error yields NaN, an overflow infinity), so
+    // bare `float`; pure, so a kernel may call or name them [BUILTIN-MATH].
+    for name in ["sqrt", "exp", "ln", "tanh"] {
+        mono(e, name, vec![Type::float()], Type::float());
+    }
     // Named equivalents of the overflow-checked integer operators. These retain
     // the runtime builtins' generic Error channel for compatibility.
     for checked in ["checkedAdd", "checkedSub", "checkedMul"] {

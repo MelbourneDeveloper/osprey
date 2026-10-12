@@ -49,10 +49,10 @@ and are corrected here rather than left to mislead.
   while staying out of `tests/WASM_UNPORTABLE.txt` — so it runs under wasm32 too.
   Phase 5 is therefore unblocked on the runtime side; what it still lacks is the
   WASI host shim, not a runtime change.
-- **The harness cannot feed stdin.** `crates/run_test_corpus.sh` invokes
-  `$BIN "$file" --run --quiet --memory=…` with no `<` redirect and no per-file
+- **The harness has no per-program stdin fixtures.** `crates/run_test_corpus.sh` invokes
+  `$BIN "$file" --run --quiet --memory=…` with stdin redirected from `/dev/null` and no per-file
   `.stdin` fixture convention, so Phase 1 must either add that convention to the
-  shared invocation for all 160 programs or prove the round-trip from a
+  shared invocation for all corpus programs or prove the round-trip from a
   `cli_e2e` Rust test that pipes stdin itself. Decide this before editing the
   corpus script.
 
@@ -61,7 +61,7 @@ and are corrected here rather than left to mislead.
 Prove the mechanism before wrapping any YAML around it.
 
 - Add one `tests/regressions/` program that calls `input()` once, parses the JSON
-  line with the string builtins ([BUILTIN-STRING-*]), computes a result, and
+  line with the JSON builtins ([BUILTIN-JSON]), computes a result, and
   prints `key=value` lines as a single interpolated string.
 - Provide `.expectedoutput`; register the twin so `crates/run_test_corpus.sh`
   checks it byte-for-byte. Feed the JSON line by piping the fixture into
@@ -71,7 +71,9 @@ Prove the mechanism before wrapping any YAML around it.
 - Reference `[GHA-FERRY-STDIN]` and `[GHA-IO-CONTRACT]` in the program's header
   comment so `spec-check` links it.
 
-Exit criterion: `make test` green with the round-trip covered.
+- Establish an explicit failure-status mechanism: ordinary `main` results are currently discarded by `crates/osprey-codegen/src/lower.rs`. A returned `Error` or integer alone cannot fail the action. Pin valid input, invalid JSON, application failure, and wrapper pipeline failure before accepting packaging.
+
+Exit criterion: `make test` green with the round-trip and failure-status behavior covered.
 
 ## Phase 2 — Docker packaging [GHA-PACKAGING-DOCKER]
 
@@ -94,8 +96,8 @@ output for the same inputs.
 
 The cross-OS alternative, sharing the same `main.osp`.
 
-- Composite `action.yml`: install `osprey` (Homebrew/Scoop), ensure `clang`,
-  then `printf '%s' "$INPUT_PAYLOAD" | osprey "$GITHUB_ACTION_PATH/main.osp"
+- Composite `action.yml`: install `osprey` (Homebrew/Scoop), ensure `clang` and `jq`,
+  then `set -euo pipefail` and `printf '%s' "$INPUT_PAYLOAD" | jq -c . | osprey "$GITHUB_ACTION_PATH/main.osp"
   --run >> "$GITHUB_OUTPUT"` with `INPUT_PAYLOAD: ${{ toJSON(inputs) }}`.
 - Cache the toolchain install across runs.
 
@@ -110,19 +112,9 @@ runners.
 
 ## Phase 5 — wasm packaging (deferred) [GHA-WASM-DEFERRED]
 
-Adopt the zero-toolchain distribution story. Both paths' *runtime*
-prerequisites already landed; what remains is the host shim. Either suffices:
+Distribute a precompiled `main.wasm` and invoke it under wasmtime or a Node WASI host with the compact JSON line on stdin. `WASM_RT_SRC` already includes `random_runtime`; runtime support for `input` is not a blocker. Delivery still requires packaging, stdout forwarding, and explicit failure-status tests.
 
-1. ~~Add `input` to the wasm runtime~~ — **already done**: `WASM_RT_SRC` lists
-   `random_runtime` and the excluded-symbol golden harness is green with it. What
-   is left on this path is shipping a committed `main.wasm` run by
-   `wasmtime`/Node WASI with the JSON line on stdin.
-2. Or ferry via the browser host ABI ([WASM-WEB-ABI]): the export plumbing exists
-   (`WEB_DISPATCH` / `web_dispatch_export` / `with_web_dispatch_thunk` in
-   `crates/osprey-cli/src/wasm.rs`, the bridge in `compiler/runtime/web_runtime.c`,
-   `osp_alloc` in the memory backends). Missing: the Node WASI host shim that
-   allocates the payload, writes it into linear memory, and calls
-   `osprey_web_dispatch(message)`.
+The existing browser ABI ([WASM-WEB-ABI]) could support a separate message-based design, but calling `osprey_web_dispatch(message)` directly does not satisfy this plan's stdin-only ferry contract. Such a design would require a separately specified contract and acceptance tests.
 
 Exit criterion: the same round-trip passes with only a WASI host on the runner —
 no `osprey`, `clang`, or runtime archive installed.
@@ -144,10 +136,11 @@ Phase 1 — ferry round-trip [GHA-IO-CONTRACT]:
 
 - [ ] Decide how a program under test receives stdin: a `.stdin` fixture
       convention in `crates/run_test_corpus.sh` (which today pipes nothing to any
-      of its 160 programs) **or** a `cli_e2e` Rust test that pipes the JSON line
+      corpus program) **or** a `cli_e2e` Rust test that pipes the JSON line
       itself. This gates every other Phase 1 item.
+- [ ] Explicit application failure status, with valid input, invalid JSON, application error, and wrapper pipeline failure checks; ordinary `main` results do not determine process status.
 - [ ] One program calling `input()` once, parsing the JSON line with
-      [BUILTIN-STRING-*], and printing `key=value` as a single interpolated
+      [BUILTIN-JSON], and printing `key=value` as a single interpolated
       string. Expand
       `tests/regressions/basics/math/comprehensive_math.test.osp` (already calls
       `input()`; its golden line `stdin=[]` changes once stdin is fed) or
@@ -161,7 +154,7 @@ Phase 1 — ferry round-trip [GHA-IO-CONTRACT]:
 
 Phase 2 — Docker packaging [GHA-PACKAGING-DOCKER]:
 
-- [ ] `main.osp` at a fixed path (no `main.osp` exists anywhere in the tree).
+- [ ] `main.osp` at a fixed path (no action `main.osp` exists at the repository root).
 - [ ] Action `Dockerfile` with `clang`, the `osprey` binary and the runtime
       archives, optionally pre-compiling `main.osp` at image build. The two
       existing Dockerfiles (`webcompiler/`, `.devcontainer/`) are unrelated.
@@ -175,8 +168,8 @@ Phase 2 — Docker packaging [GHA-PACKAGING-DOCKER]:
 Phase 3 — Composite packaging [GHA-PACKAGING-COMPOSITE]:
 
 - [ ] Composite `action.yml` installing `osprey` from the tap / Scoop, ensuring
-      `clang`, then ferrying `INPUT_PAYLOAD: ${{ toJSON(inputs) }}` into
-      `osprey main.osp --run >> "$GITHUB_OUTPUT"`.
+      `clang`, then ferrying `INPUT_PAYLOAD: ${{ toJSON(inputs) }}` through
+      a `jq -c .` compaction stage and `osprey main.osp --run >> "$GITHUB_OUTPUT"`, with `pipefail` enabled so malformed input fails the step.
 - [ ] Toolchain install cached across runs (caching exists only for the internal
       `setup-osprey-compiler` action's `~/.cargo`).
 - [ ] Same output as Phase 2 on `ubuntu`, `macos` and `windows` runners.
@@ -194,10 +187,7 @@ Phase 5 — wasm packaging [GHA-WASM-DEFERRED]:
       a corpus program calling `input()` runs under wasm32 without a
       `WASM_UNPORTABLE` exclusion. This item was listed as the phase's blocker;
       it is no longer one.
-- [ ] Node WASI host shim: allocate the payload with `osp_alloc`, write it into
-      linear memory, call the exported `osprey_web_dispatch(message)` — or run a
-      committed `main.wasm` under `wasmtime`/Node WASI with the JSON line on
-      stdin. The export plumbing and bridge already exist.
+- [ ] Package a precompiled `main.wasm` under wasmtime or Node WASI, supplying the compact JSON line on stdin, forwarding stdout, and preserving failure status.
 - [ ] Round-trip green with only a WASI host on the runner — no `osprey`,
       `clang`, or runtime archive installed.
 

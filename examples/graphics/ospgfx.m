@@ -16,28 +16,12 @@
 #import <QuartzCore/CAMetalLayer.h>
 #include <stdint.h>
 
-// Parameter slots Osprey can push per frame. `OSP_GFX_SLOTS` and the field
-// order below are an ABI shared with the `Uniforms` struct in base.metal, which
-// spells the same count out on its own — the GPU cannot see this header. A
-// disagreement between the two does not fail to compile; it silently shifts
-// `res` and `time` and corrupts every scene, so
-// crates/osprey-cli/tests/graphics_scenes.rs asserts they still match.
-#define OSP_GFX_SLOTS 24
-
-// Two scales, because a slot carries one of two very different things. Motion
-// arrives in fixed point (4096 = 1.0), where a full turn wraps with an integer
-// modulo and Osprey's oscillators are exact. Authored tuning arrives in
-// thousandths, so a number written 0.085 by a scene author divides back to
-// exactly the float the literal 0.085 would have produced.
-#define OSP_GFX_FIXED_ONE 4096.0f
-#define OSP_GFX_MILLI_ONE 1000.0f
-
-typedef struct OspGfxUniforms {
-  float slot[OSP_GFX_SLOTS];
-  float res[2];
-  float time;
-  float pad;
-} OspGfxUniforms;
+// The slot count, the two fixed-point scales, the uniform block and the
+// argument validation are the Osprey-facing ABI, declared once in
+// ospgfx_abi.h and shared with the Direct3D 12 bridge. `Uniforms` in
+// base.metal mirrors `OspGfxUniforms` by hand — the GPU cannot see the header
+// — and crates/osprey-cli/tests/graphics_scenes.rs asserts the mirror agrees.
+#include "ospgfx_abi.h"
 
 @interface OspGfxContext : NSObject <NSWindowDelegate>
 @property(nonatomic, strong) NSWindow *window;
@@ -112,10 +96,11 @@ static id<MTLRenderPipelineState> osp_gfx_pipeline(id<MTLDevice> device,
   if (!library) {
     return nil;
   }
-  const char *entry = fragmentName && *fragmentName ? fragmentName : "osp_fragment";
+  const char *entry = osp_gfx_fragment_entry(fragmentName);
   NSError *error = nil;
   MTLRenderPipelineDescriptor *desc = [[MTLRenderPipelineDescriptor alloc] init];
-  desc.vertexFunction = [library newFunctionWithName:@"osp_vertex"];
+  desc.vertexFunction =
+      [library newFunctionWithName:[NSString stringWithUTF8String:OSP_GFX_VERTEX_ENTRY]];
   desc.fragmentFunction =
       [library newFunctionWithName:[NSString stringWithUTF8String:entry]];
   desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
@@ -169,12 +154,10 @@ static void osp_gfx_make_window(OspGfxContext *ctx, id<MTLDevice> device,
 void *osp_gfx_open(int64_t width, int64_t height, int64_t scale,
                    const char *title, const char *shaderPath,
                    const char *fragmentName) {
-  if (width <= 0 || height <= 0 || width > 8192 || height > 8192) {
+  if (!osp_gfx_extent_ok(width, height)) {
     return NULL;
   }
-  if (scale < 1 || scale > 16) {
-    scale = 1;
-  }
+  scale = osp_gfx_clamp_scale(scale);
   osp_gfx_boot_app();
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
   if (!device) {
@@ -197,18 +180,19 @@ void *osp_gfx_open(int64_t width, int64_t height, int64_t scale,
   return (__bridge_retained void *)ctx;
 }
 
-// Store one slot after dividing `value` by `scale`. Out-of-range slots are
-// ignored rather than trapping, so a scene bug never takes the process down.
+// Store one slot through the shared ABI helper. The uniforms are an ObjC
+// property, so the struct is copied out, written and copied back; the slot
+// range check and the division live in ospgfx_abi.h, once for both bridges.
 static int64_t osp_gfx_store(void *handle, int64_t slot, int64_t value,
                              float scale) {
   OspGfxContext *ctx = (__bridge OspGfxContext *)handle;
-  if (!ctx || slot < 0 || slot >= OSP_GFX_SLOTS) {
+  if (!ctx) {
     return 0;
   }
   OspGfxUniforms u = ctx.uniforms;
-  u.slot[slot] = (float)value / scale;
+  int64_t stored = osp_gfx_slot_store(&u, slot, value, scale);
   ctx.uniforms = u;
-  return 1;
+  return stored;
 }
 
 // Push one moving scene parameter, in 4096ths; the shader sees a float.
@@ -288,7 +272,7 @@ int64_t osp_gfx_draw(void *handle) {
 // so they play at the same speed whatever frame rate the host sustains.
 int64_t osp_gfx_ticks(void *handle) {
   OspGfxContext *ctx = (__bridge OspGfxContext *)handle;
-  return ctx ? (int64_t)((osp_gfx_now() - ctx.openedAt) * 1000.0) : 0;
+  return ctx ? osp_gfx_elapsed_ms(ctx.openedAt, osp_gfx_now()) : 0;
 }
 
 int64_t osp_gfx_close(void *handle) {

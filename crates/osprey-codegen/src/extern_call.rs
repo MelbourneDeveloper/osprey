@@ -236,7 +236,7 @@ fn emit(cg: &mut Codegen, sig: &Sig, ops: &[String]) -> Result<Value> {
 /// [`take_io_error`] around every call, this is what makes the channel
 /// trustworthy rather than merely usually-right. Implements
 /// [BUILTIN-FILE-ERRMSG].
-fn clear_io_error(cg: &mut Codegen) {
+pub(crate) fn clear_io_error(cg: &mut Codegen) {
     cg.add_extern("declare void @osp_io_error_clear()");
     cg.emit("call void @osp_io_error_clear()".to_string());
 }
@@ -246,7 +246,7 @@ fn clear_io_error(cg: &mut Codegen) {
 /// back on. Owning is not optional: the channel's own buffer is reused by this
 /// thread's next I/O call, but the `Result` built from it can outlive any number
 /// of those, so a borrowed pointer would later read as an unrelated failure.
-fn take_io_error(cg: &mut Codegen) -> String {
+pub(crate) fn take_io_error(cg: &mut Codegen) -> String {
     cg.add_extern("declare i8* @osp_io_error_take()");
     let reason = cg.emit_reg("call i8* @osp_io_error_take()".to_string());
     // The errmsg store dups its own +1, so this one drops at region end

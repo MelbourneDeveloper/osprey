@@ -20,13 +20,16 @@ pub(crate) fn intrinsic_value(
     Some(absolute_cell(cg, ty))
 }
 
-fn shadowed(cg: &Codegen, name: &str) -> bool {
+/// A name a local binding shadows, so the intrinsic must not claim it —
+/// shared with the GPU kernel path, which also declines behind a fn-ptr local.
+pub(crate) fn shadowed(cg: &Codegen, name: &str) -> bool {
     cg.lookup(name).is_some()
+        || cg.lambda_def(name).is_some()
         || cg.cell_slots.contains_key(name)
+        || cg.fn_ptr_locals.contains_key(name)
+        || cg.call_aliases.contains_key(name)
         || cg.module_globals.contains_key(name)
         || cg.fn_params.contains_key(name)
-        || cg.call_aliases.contains_key(name)
-        || cg.lambda_def(name).is_some()
 }
 
 fn absolute_cell(cg: &mut Codegen, ty: osprey_types::Type) -> Result<Value> {

@@ -9,16 +9,16 @@
 //! in its bridge, and — the failure this file exists for now that there are two
 //! backends — Windows and macOS can quietly stop rendering the same thing.
 //!
-//! Structural checks catch drift; injected SDK failures exercise the frame path.
-//! Real Windows shader compilation and rendering still require Windows.
+//! Structural checks catch drift; injected SDK failures exercise the frame path
+//! against the real shared ABI header. Real Windows shader compilation and
+//! rendering still require Windows.
+//!
+//! The uniform-ABI checks live in `graphics_scenes/abi.rs`; the frame-path
+//! execution in `graphics_scenes/frame.rs`.
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-/// Slots 0..=7 carry motion; 8..=20 carry the authored grade. `base/base.osp`
-/// and `base.metal` both spell this out, and the bridge sizes its array to it.
-const LOOK_SLOT_LAST: usize = 20;
 
 /// A scene entry is an import, a comment, and one call. Anything longer means
 /// the shared host has started leaking back into the scenes.
@@ -48,19 +48,6 @@ fn source_lines(source: &str) -> usize {
             !line.is_empty() && !line.starts_with("//")
         })
         .count()
-}
-
-/// The integer following `needle` in `source`, e.g. the `24` in
-/// `#define OSP_GFX_SLOTS 24`.
-fn number_after(source: &str, needle: &str) -> Option<usize> {
-    source.split(needle).nth(1).and_then(|rest| {
-        let digits: String = rest
-            .trim_start()
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        digits.parse().ok()
-    })
 }
 
 #[test]
@@ -288,15 +275,10 @@ const FRAGMENT_ENTRIES: [&str; 3] = [
     "osp_fragment_character",
 ];
 
-/// The whole Osprey-facing contract, in the order `base/base.osp` declares it.
-const BRIDGE_EXPORTS: [&str; 6] = [
-    "osp_gfx_open",
-    "osp_gfx_set",
-    "osp_gfx_set_milli",
-    "osp_gfx_draw",
-    "osp_gfx_ticks",
-    "osp_gfx_close",
-];
+/// Constants only the HLSL library legitimately declares: the float4 register
+/// count its cbuffer packing needs and Metal does not. Listed explicitly, and
+/// asserted to be EXACTLY the HLSL-only set, so a stale entry fails too.
+const HLSL_ONLY_CONSTANTS: [&str; 1] = ["OSP_GFX_SLOT_REGISTERS"];
 
 /// Drop `//` comments, so prose about a constant is never mistaken for the
 /// constant. Both shader dialects use only line comments.
@@ -327,22 +309,27 @@ fn shader_constants(source: &str) -> BTreeSet<String> {
 }
 
 #[test]
-fn the_hlsl_library_declares_every_constant_the_metal_one_does() {
+fn the_two_shader_libraries_declare_the_same_constants() {
     let graphics = repo_root().join("examples/graphics");
-    let metal = read_required(&graphics.join("base.metal"));
-    let hlsl = read_required(&graphics.join("base.hlsl"));
+    let metal = shader_constants(&read_required(&graphics.join("base.metal")));
+    let hlsl_source = read_required(&graphics.join("base.hlsl"));
+    let hlsl = shader_constants(&hlsl_source);
 
-    // base.metal is the reference: every constant it names has to exist in the
-    // HLSL twin, or the two backends have started rendering different pictures.
-    // The reverse is not required — HLSL needs a register count Metal does not.
-    let missing: Vec<String> = shader_constants(&metal)
-        .difference(&shader_constants(&hlsl))
-        .cloned()
-        .collect();
+    // In both directions: a constant in one library and not the other means
+    // the two backends have started rendering different pictures. The only
+    // admissible asymmetry is the HLSL register count, named above.
+    let missing: Vec<&String> = metal.difference(&hlsl).collect();
     assert!(
         missing.is_empty(),
         "base.hlsl is missing constants base.metal declares: {missing:?}"
     );
+    let hlsl_only: BTreeSet<&str> = hlsl.difference(&metal).map(String::as_str).collect();
+    assert_eq!(
+        hlsl_only,
+        HLSL_ONLY_CONSTANTS.into_iter().collect(),
+        "base.hlsl's extra constants must be exactly the listed HLSL-only set"
+    );
+    let hlsl = hlsl_source;
 
     // Folding log2(e) by hand — the reason moving the falloff rate into Osprey
     // changed no pixel — has to survive the crossing, and both dialects spell
@@ -382,107 +369,8 @@ fn the_hlsl_constant_buffer_cannot_quietly_unpack_itself() {
     );
 }
 
-#[test]
-fn every_declaration_of_the_uniform_layout_agrees() {
-    let graphics = repo_root().join("examples/graphics");
-    let host = read_required(&graphics.join("base/base.osp"));
-    let metal_bridge = read_required(&graphics.join("ospgfx.m"));
-    // The Windows bridge is three files — the shared ABI header, the one-time
-    // bring-up and the exported entry points — and it is the union of them that
-    // has to match ospgfx.m, so it is compared as one text.
-    let d3d_abi = read_required(&graphics.join("ospgfx_d3d12.c"));
-    let d3d = [
-        read_required(&graphics.join("ospgfx_d3d12.h")),
-        read_required(&graphics.join("ospgfx_d3d12_setup.c")),
-        d3d_abi.clone(),
-    ]
-    .join("\n");
-
-    // This is the silent-corruption bug the shared-library layout exists to
-    // prevent, now doubled: four independent declarations of one layout — two
-    // bridges and two shader libraries — and no compiler can check any of them
-    // against the others. A disagreement compiles cleanly and then shifts `res`
-    // and `time` under every scene on one of the two platforms.
-    let slots = number_after(&metal_bridge, "#define OSP_GFX_SLOTS");
-    for (name, source, res) in [
-        ("ospgfx.m", &metal_bridge, "float res[2];"),
-        (
-            "base.metal",
-            &read_required(&graphics.join("base.metal")),
-            "float2 res;",
-        ),
-        ("the D3D12 bridge", &d3d, "float res[2];"),
-        (
-            "base.hlsl",
-            &read_required(&graphics.join("base.hlsl")),
-            "float2 res;",
-        ),
-    ] {
-        assert_eq!(
-            number_after(source, "#define OSP_GFX_SLOTS"),
-            slots,
-            "OSP_GFX_SLOTS in {name} disagrees with ospgfx.m"
-        );
-        assert!(
-            source.contains("float slot[OSP_GFX_SLOTS];")
-                && source.contains(res)
-                && source.contains("float time;")
-                && source.contains("float pad;"),
-            "{name}'s uniform layout lost a field or stopped sizing itself from OSP_GFX_SLOTS"
-        );
-    }
-    assert!(
-        slots.unwrap_or_default() > LOOK_SLOT_LAST,
-        "OSP_GFX_SLOTS is too small for look slot {LOOK_SLOT_LAST}"
-    );
-
-    // The host's own view of the same layout: where the grade starts and ends.
-    assert!(
-        host.contains("fn motionCount() = 8")
-            && host.contains("fn lookFirst() = 8")
-            && host.contains(&format!("fn lookLast() = {LOOK_SLOT_LAST}")),
-        "the shared host must agree with the shaders about the slot ranges"
-    );
-
-    // Osprey's `extern fn` declarations are written once and linked against
-    // whichever bridge the platform built, so the two present one C ABI: the
-    // same six symbols, both slot scales — motion in fixed point, the grade in
-    // thousandths, because the grade's exactness depends on that division — a
-    // fragment entry as a parameter, and a diagnostic that names the entry it
-    // could not find. A symbol missing from one side is a link error there and
-    // nothing at all on the other.
-    for (name, bridge) in [("ospgfx.m", &metal_bridge), ("the D3D12 bridge", &d3d)] {
-        for export in BRIDGE_EXPORTS {
-            assert!(
-                bridge.contains(&format!("{export}(")),
-                "{name} must keep exporting {export}"
-            );
-        }
-        for shared in [
-            "#define OSP_GFX_FIXED_ONE 4096.0f",
-            "#define OSP_GFX_MILLI_ONE 1000.0f",
-            "const char *fragmentName)",
-            r#""ospgfx: shader needs osp_vertex and %s\n", entry"#,
-        ] {
-            assert!(bridge.contains(shared), "{name} must keep `{shared}`");
-        }
-    }
-    for export in BRIDGE_EXPORTS {
-        assert!(
-            d3d_abi.contains(&format!("OSP_GFX_API int64_t {export}("))
-                || d3d_abi.contains(&format!("OSP_GFX_API void *{export}(")),
-            "the D3D12 bridge must mark {export} for export from its DLL"
-        );
-    }
-
-    // The scenes name one shader path for every platform; the extension swap in
-    // the Windows bridge is what keeps that true without editing a scene.
-    assert!(
-        d3d.contains(r#"#define OSP_GFX_SHADER_EXT ".hlsl""#)
-            && host.contains(r#"fn shaderPath() = "examples/graphics/base.metal""#),
-        "the host must name one shader path and the D3D12 bridge must resolve it"
-    );
-}
+#[path = "graphics_scenes/abi.rs"]
+mod abi;
 
 #[path = "graphics_scenes/frame.rs"]
 mod frame;

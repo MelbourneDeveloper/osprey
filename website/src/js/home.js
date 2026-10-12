@@ -33,9 +33,11 @@ new IntersectionObserver(([entry]) => {
 }, { threshold: 0.1 }).observe(video);
 showMotionState();
 
+const flavorControls = document.querySelectorAll('.flavor-controls button[data-flavor]');
+
 function selectFlavor(button) {
   const flavor = button.dataset.flavor;
-  for (const control of document.querySelectorAll('[data-flavor]')) {
+  for (const control of flavorControls) {
     control.setAttribute('aria-pressed', String(control === button));
   }
   for (const source of document.querySelectorAll('[data-source-flavor]')) {
@@ -44,6 +46,6 @@ function selectFlavor(button) {
   document.querySelector('#source-extension').textContent = flavor === 'ml' ? '.ospml' : '.osp';
 }
 
-for (const button of document.querySelectorAll('[data-flavor]')) {
+for (const button of flavorControls) {
   button.addEventListener('click', () => selectFlavor(button));
 }

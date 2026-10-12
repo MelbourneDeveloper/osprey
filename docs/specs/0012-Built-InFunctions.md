@@ -127,6 +127,40 @@ toFloat(-3)                       // -3.0
 gpuIota(1000) |> gpuMap(toFloat)  // GpuBuffer<float>, 0.0 .. 999.0
 ```
 
+### `sqrt` / `exp` / `ln` / `tanh` — [BUILTIN-MATH]
+Each has signature `(x: float) -> float` and is total over IEEE doubles, so
+it returns a bare `float` and never performs an `Arith` operation
+([FLOAT-IEEE-RESULTS](0037-ArithmeticEffects.md#floating-point-results--float-ieee-results)):
+a domain error yields NaN (`sqrt(-1.0)`, `ln(-1.0)`), `ln(0.0)` is negative
+infinity, an `exp` too large for a double is positive infinity, and `tanh`
+stays within `[-1.0, 1.0]`. The natural logarithm is spelled `ln`, not `log`,
+so a program keeps `log` for its own logger. `sqrt`, `exp`, `ln` and `tanh`
+are reserved builtin names like every other builtin: a program may not define
+its own function under one of them (`cannot redefine built-in function`).
+
+The argument is a `float` and nothing else. There is no implicit widening:
+`exp(3)` is a type error (`cannot unify float with int`), and the program
+writes `exp(toFloat(3))`. Each function is pure, so a GPU kernel may call it
+or *be* it, passed by name ([GPU-KERNEL-FORM](0034-GPUComputation.md)):
+`scores |> gpuMap(exp)` extracts a kernel whose body is the function.
+
+Lowering: `sqrt`, `exp` and `ln` are the LLVM `llvm.sqrt.f64`,
+`llvm.exp.f64` and `llvm.log.f64` intrinsics; `tanh` is the C library's
+`tanh`. A program whose IR references `exp`, `ln`, `tanh` or the float `%`
+operator is linked against `libm`.
+
+```osprey
+sqrt(2.0)                       // 1.4142135623730951
+fn gelu(x) = 0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x)))
+let probabilities = scores |> gpuMap(exp)
+```
+
+```osprey-ml
+sqrt 2.0                        // 1.4142135623730951
+gelu x = 0.5 * x * (1.0 + tanh (0.7978845608 * (x + 0.044715 * x * x * x)))
+probabilities = scores |> gpuMap exp
+```
+
 ### `checkedAdd` / `checkedSub` / `checkedMul` — [BUILTIN-CHECKED-ARITH]
 Each has signature `(a: int, b: int) -> Result<int, Error>`. Overflow-checked
 integer addition, subtraction, and multiplication, lowering to
@@ -408,7 +442,7 @@ match split ("a,b,c", ",")
 ```
 
 #### `join(parts: List<string>, separator: string) -> string` — [BUILTIN-STRING-JOIN]
-Concatenates `parts` with `separator` between each pair. Returns `""` if `parts` is empty.
+Concatenates `parts` with `separator` between each pair. Returns `""` if `parts` is empty. `parts` may be a list in either representation — a flat list literal or a runtime list built by `listAppend`, `toList`, `lines`, `words` or `split` — and the result is the same string.
 
 #### `lines(s: string) -> List<string>` — [BUILTIN-STRING-LINES]
 Splits on `"\n"`. A trailing newline does not produce an empty final element.
@@ -661,7 +695,7 @@ list, or map behavior for both common functions.
 collects an iterator pipeline into one ([BUILTIN-ITER-TOLIST]).
 
 #### `listGet(list: List<T>, index: int) -> Result<T, Error>` — [BUILTIN-LIST-GET]
-Equivalent to `list[index]`. An out-of-range index returns `Error`.
+Equivalent to `list[index]`. An out-of-range index returns `Error`. A string list bound to a name — the result of `lines`, `words` or `split` — is settled into the runtime representation once, at the binding, so every `listGet` on the bound name is a constant-time read and never a copy of the list.
 
 #### `listPrepend(list: List<T>, value: T) -> List<T>` — [BUILTIN-LIST-PREPEND]
 Returns a list with `value` at the front.

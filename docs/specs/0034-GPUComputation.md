@@ -22,6 +22,8 @@ Buffer allocation is total: a negative length, a length whose byte count would o
 
 Buffer elements are scalars: `int`, `float`, or `bool`. This is the regular, first-order device sublanguage that every production functional GPU language restricts device data to — Futhark ([Henriksen et al., PLDI 2017](https://doi.org/10.1145/3062341.3062354)) and Accelerate ([McDonell et al., ICFP 2013](https://doi.org/10.1145/2500365.2500595)) both make this restriction, because representing sum types and pointers on SIMT hardware is an open research problem (the flattening line of work: [Blelloch, CACM 1996](https://doi.org/10.1145/227234.227246); [Bergstrom et al., PPoPP 2013](https://doi.org/10.1145/2442516.2442525)). Strings, lists, records, and unions stay on the host side of the boundary; full ADTs and pattern matching remain available in host code, including the code that builds and consumes buffers. A non-scalar element is a compile error at the call that would create it.
 
+The restriction has one spelling in the compiler: inference enforces it at the call site (`crates/osprey-types/src/builtin_constraints.rs`), and codegen backstops it with the single predicate `gpu::is_scalar` (`crates/osprey-codegen/src/gpu.rs`), consulted alike by element stores, kernel results, reduction accumulators, builtin-kernel slots and extracted-kernel uniforms ([GPU-KERNEL-EXTRACT]).
+
 ## Buffer built-ins
 
 ### `toGpu(source) -> GpuBuffer<T>` — [GPU-BUFFER-FROM-LIST]
@@ -63,6 +65,36 @@ Materializes a buffer back into a host list. The element type crosses with the v
 ### `gpuLength(buffer: GpuBuffer<T>) -> int` — [GPU-BUFFER-LENGTH]
 
 The element count. Constant time.
+
+### `gpuLoad(path: string, offset: int, count: int) -> Result<GpuBuffer<float>, Error>` — [GPU-BUFFER-LOAD]
+
+Reads `count` little-endian IEEE-754 binary32 values starting at byte `offset` of the file at `path`, widening each exactly to the double word a `GpuBuffer<float>` holds — the layout of llm.c's checkpoints and of any raw dump of a float32 array. A `count` of zero yields the empty buffer. The result is the whole buffer or an `Error`, never a partially filled buffer: a file holding fewer than `count` values from `offset` is `file ends before the tensor does`, so a truncated weight file never loads as a smaller model. An `Error` also leaves no buffer behind under any memory backend — the buffer allocated for the result is released before the reason is reported, which the ARC corpus lane's zero-leak sentinel and `memory_golden_tests.c` both count.
+
+Every failure is an `Error` whose message names the operation, the path and the reason, through the channel `readFile` uses ([BUILTIN-FILE-ERRMSG](0012-Built-InFunctions.md#failure-reasons--builtin-file-errmsg)): the operating system's own wording for a file that is missing or unreadable and for a negative `offset` (`Invalid argument`), `a negative element count`, the short-read sentence above, and `read failed` when the stream reports an error mid-way.
+
+```osprey
+let wte = gpuLoad("gpt2_124M.bin", 1024, 50257 * 768) ?: toGpu([0.0])
+```
+
+```osprey-ml
+wte = gpuLoad ("gpt2_124M.bin", 1024, 50257 * 768) ?: toGpu [0.0]
+```
+
+### `gpuLoadTensor(path: string, name: string) -> Result<GpuBuffer<float>, Error>` — [GPU-BUFFER-TENSOR]
+
+Reads one named tensor out of a [safetensors](https://github.com/huggingface/safetensors/blob/main/README.md) file — the Hugging Face interchange format: an 8-byte little-endian header length `N`, then `N` bytes of JSON mapping each tensor name to its `dtype`, `shape` and `data_offsets`, then the tensor bytes — into a `GpuBuffer<float>`. The entry is located by its quoted name followed by a colon, so `h.1.attn.weight` never matches inside `h.11.attn.weight`, and the header's entry order is irrelevant: `__metadata__` may come first or last. `data_offsets` are relative to the start of the data section, byte `8 + N`. Four storage types are admitted and each widens exactly: `F64`, `F32`, `F16` (binary16, including subnormals, infinities and NaN) and `BF16` (the upper sixteen bits of a binary32). The byte span must be a whole number of elements.
+
+The tensor's `shape` is read past but **not returned**: a buffer is rank-1, which [plan 0023](../plans/0023-gpu-computation.md) names as the first surface gap, so the program states the shape it knows to [GPU-MATMUL]. Until a multi-dimensional index space exists this is the honest contract rather than a shape the type cannot carry.
+
+Errors are an `Error` naming the file or the tensor and one of: `shorter than a safetensors header prefix`, `header length is not plausible for safetensors` (above 100 MiB), `file ends inside the header`, `no tensor of that name in the header`, `dtype is not F64, F32, F16 or BF16`, `data_offsets are missing or inverted`, `byte span is not a whole number of elements` — plus every reason [GPU-BUFFER-LOAD] reports for reading the bytes themselves.
+
+```osprey
+let wte = gpuLoadTensor("model.safetensors", "wte.weight") ?: toGpu([0.0])
+```
+
+```osprey-ml
+wte = gpuLoadTensor ("model.safetensors", "wte.weight") ?: toGpu [0.0]
+```
 
 ## Kernels
 
@@ -147,11 +179,31 @@ Inclusive prefix scan: element `i` of the result is `combine` folded over the so
 
 Stream compaction: keeps the elements the pure predicate accepts, preserving source order. The host backend fills a source-length scratch buffer and publishes the kept prefix; a device backend implements the same contract with a scan-based compaction.
 
+## Dense linear algebra
+
+### `gpuMatMul(left: GpuBuffer<float>, right: GpuBuffer<float>, rows: int, inner: int, cols: int) -> Result<GpuBuffer<float>, Error>` — [GPU-MATMUL]
+
+The dense product of a `rows × inner` matrix and an `inner × cols` matrix, both row-major in flat float buffers, as the row-major `rows × cols` buffer: `out[r * cols + c]` is the sum over `k` from `0` to `inner - 1` of `left[r * inner + k] * right[k * cols + c]`. The sum is accumulated **in `k` order starting from `0.0`, in double, with each product formed before it is added** — no fused multiply-add. That order is the contract, exactly as [GPU-FOLD]'s is: a device backend may reassociate or contract only where it produces the host's bytes. The host walks `r`, then `k`, then `c`, which writes each output row contiguously and still accumulates every element in `k` order; the test that pins the order sums `2^53 + 1 - 2^53` to `0.0` where any other association gives `1.0`.
+
+The element type is `float` only, fixed by the signature: an int buffer operand is a type error at the call, never a silent widening. A shape the operands do not have is an `Error`, never a partial buffer: `gpuMatMul: left operand: has N elements, the stated shape needs M` (likewise `right operand`), `gpuMatMul: result: rows * cols is negative or overflows`, or the operating system's out-of-memory wording when the result cannot be allocated. Any zero dimension with consistent lengths yields the zero-filled `rows × cols` result — empty when `rows` or `cols` is zero, all zeros when `inner` is.
+
+A matrix is a flat buffer plus the shape the program states, because a buffer is rank-1; the multi-dimensional surface [plan 0023](../plans/0023-gpu-computation.md) owes is what removes the three shape arguments.
+
+```osprey
+fn linear(x, w, tokens, inputs, outputs) = gpuMatMul(x, w, tokens, inputs, outputs)
+let logits = linear(hidden, wte, 64, 768, 50257) ?: toGpu([0.0])
+```
+
+```osprey-ml
+linear (x, w, tokens, inputs, outputs) = gpuMatMul (x, w, tokens, inputs, outputs)
+logits = linear (hidden, wte, 64, 768, 50257) ?: toGpu [0.0]
+```
+
 ## Kernel purity — [GPU-KERNEL-PURE]
 
-The compiler rejects any GPU combinator call whose kernel performs an algebraic effect **that a handler must discharge at run time**, directly or through any chain of helpers and lambdas. An effect a *static* handler has already erased ([0017-AlgebraicEffects.md](0017-AlgebraicEffects.md)) is not present in the kernel by the time this gate runs, so it is not an effect the kernel performs — the rule is about what reaches the device, not about how the source was written. The proof reuses the static effect discharge machinery ([EFFECTS-STATIC-DISCHARGE](0017-AlgebraicEffects.md)): the kernel's operation summary must be empty. Wrapping the call in a handler does not lift the restriction — a handler makes an effect *dischargeable*, but a kernel body still cannot leave the device to reach one, so the requirement is purity, not handledness.
+The compiler rejects any GPU combinator call whose kernel performs an algebraic effect **that a handler must discharge at run time**, directly or through any chain of helpers and lambdas. An effect a *static* handler has already erased ([0017-AlgebraicEffects.md](0017-AlgebraicEffects.md)) is not present in the kernel by the time this gate runs, so it is not an effect the kernel performs — the rule is about what reaches the device, not about how the source was written. The proof reuses the static effect discharge machinery ([EFFECTS-STATIC-DISCHARGE](0017-AlgebraicEffects.md)): the kernel's operation summary must be empty of every effect but one. The exception is `Arith` ([0037](0037-ArithmeticEffects.md)): on the host backend a kernel's arithmetic dispatches to the enclosing policy exactly as any lambda's does, so a kernel may *require* an `Arith` policy without failing this gate (`effect_rows/gpu.rs::gpu_kernel_verdict` filters it), and the boundary rule a device backend must then meet is stated under [GPU-KERNEL-EXTRACT]. Wrapping the call in any other handler does not lift the restriction — a handler makes an effect *dischargeable*, but a kernel body still cannot leave the device to reach one, so the requirement is purity, not handledness.
 
-Effect-typed parallelism is the studied way to draw this line: Dex distinguishes the parallelism-destroying `State` effect from a parallelism-preserving accumulation effect ([Paszke et al., ICFP 2021](https://arxiv.org/abs/2104.05372)), on effect-system foundations from Koka ([Leijen, 2014](https://arxiv.org/abs/1406.2061)); which handler shapes commute with parallel evaluation at all is formalized in "Parallel Algebraic Effect Handlers" ([Xie et al., ICFP 2024](https://dl.acm.org/toc/pacmpl/2024/8/ICFP)) — the theory closest to Osprey's handlers. Today's rule is the sound conservative point on that spectrum: an empty effect row. A parallelism-preserving accumulation effect, if ever added, must be justified against that work.
+Effect-typed parallelism is the studied way to draw this line: Dex distinguishes the parallelism-destroying `State` effect from a parallelism-preserving accumulation effect ([Paszke et al., ICFP 2021](https://arxiv.org/abs/2104.05372)), on effect-system foundations from Koka ([Leijen, 2014](https://arxiv.org/abs/1406.2061)); which handler shapes commute with parallel evaluation at all is formalized in "Parallel Algebraic Effect Handlers" ([Xie, Johnson, Maclaurin, Paszke, ICFP 2024](https://doi.org/10.1145/3674651)) — the theory closest to Osprey's handlers. Today's rule is the sound conservative point on that spectrum: an effect row empty of everything but `Arith`. A parallelism-preserving accumulation effect, if ever added, must be justified against that work.
 
 The check fails closed: a kernel whose effects the checker cannot prove (for example, a function value received as a parameter from an unknown call site, or a closure whose provenance analysis widens out) is rejected with a `cannot prove GPU kernel pure` error. Passing a named function or an inline lambda always gives the checker what it needs.
 
@@ -214,6 +266,22 @@ xs = gpuIota 100000 |> gpuMap toFloat
 
 `toFloat` is a total widening — every `int` has a nearest `double` — so it returns a bare `float` rather than a `Result`, and it registers in [0012-Built-InFunctions.md](0012-Built-InFunctions.md) with a docs entry like every builtin. It is usable both as a direct call and, as above, as a first-class kernel passed by name. The reverse direction already exists as checked truncation on the arithmetic side and is out of scope for buffers.
 
+### Kernel math — [BUILTIN-MATH]
+
+The unary float functions `sqrt`, `exp`, `ln` and `tanh` ([BUILTIN-MATH](0012-Built-InFunctions.md)) are pure and total over IEEE doubles, so a kernel may call them or *be* one of them by name: `gpuMap(exp)` extracts a kernel whose body is the intrinsic call, with no closure cell and no environment ([GPU-KERNEL-EXTRACT]). They take a `float` and nothing else — an int buffer is widened explicitly with `toFloat` first, as above — and they never perform an `Arith` operation, so a kernel written from them needs no policy.
+
+`sqrt` is correctly rounded on every host, like the four operations, so a value computed from them alone has one byte-exact answer everywhere. `exp`, `ln` and `tanh` are each host's libm (glibc, musl under WASI, Darwin, Bionic), whose last digits differ: a golden that must hold on every corpus lane never prints such a value and compares it within a tolerance instead — `tests/core/gpu/transformer.test.osp` uses 1e-9 for everything downstream of `exp` or `tanh` and exact comparison for everything else, including LayerNorm. The universal special values stay exact: `exp(0.0)` is `1.0`, `exp(-1000.0)` is `0.0`, `ln(1.0)` is `0.0`, `tanh(±1000.0)` is `±1.0`.
+
+```osprey
+let probabilities = scores |> gpuMap(exp)
+let activations = pre |> gpuMap(fn(x) => 0.5 * x * (1.0 + tanh(0.7978845608 * (x + 0.044715 * x * x * x))))
+```
+
+```osprey-ml
+probabilities = scores |> gpuMap exp
+activations = pre |> gpuMap (\x => 0.5 * x * (1.0 + tanh (0.7978845608 * (x + 0.044715 * x * x * x))))
+```
+
 ## Kernel extraction — [GPU-KERNEL-EXTRACT]
 
 Each **admissible** kernel a combinator runs is compiled **once**, as a standalone module-scope function with a flat scalar signature, and the loop over the buffer calls it per element. The forms that decline are listed under [Which kernels are extracted](#which-kernels-are-extracted); they run correctly on the host backend, and a device backend must reject them with a diagnostic rather than silently execute a host pointer. This is not an optimization detail: an extracted kernel with a first-order scalar ABI and no captured environment is exactly the artifact a PTX, AIR or SPIR-V emitter consumes, so [GPU-BACKEND-DEVICE] becomes a target driver rather than a rewrite.
@@ -241,7 +309,7 @@ A kernel function takes, in this order:
 
 There is **no environment pointer and no closure struct**. A capturing kernel compiles to a function whose captures are arguments, not to a heap cell with a hidden `env` parameter. The return is a scalar.
 
-A kernel that would return an unhandled `Result` is rejected before the program links, by the same scalar discipline that already guards the combinators: `gpuMap`/`gpuZipWith` reject the stored element, `gpuFold` and `gpuScan` reject the accumulator update, and `gpuFilter` rejects the verdict. Handle failure inside the kernel with `?:` or `match`.
+A kernel that would return an unhandled `Result` is rejected before the program links, at one of two gates. `gpuFold`, `gpuScan` and `gpuFilter` have signatures that pin the kernel's result — the accumulator's own type, or `bool` — so inference rejects such a kernel at the call (`cannot unify int with Result<int, Error>`). `gpuMap` and `gpuZipWith` leave the result type `U` free, so the gate is codegen's scalar backstop on the stored element: `a gpuMap kernel result cannot be an unhandled Result; handle it inside the kernel`. Handle failure inside the kernel with `?:` or `match`.
 
 Arithmetic keeps its policy contract at the kernel boundary: the compiler never silently replaces a region's chosen policy with trapping or wrapping ([ARITH-TOTAL](0037-ArithmeticEffects.md#the-guarantee--arith-total)). On the host backend a kernel's `Arith` operations are exempt from the stage-legality row ([STAGE-GPU-LEGAL](0017-AlgebraicEffects.md#gpu-legality--stage-gpu-legal)) and dispatch to the enclosing policy exactly as any lambda's do, so a kernel with fallible arithmetic compiles only where a region installs a policy; with none, the program is rejected at its entry. A device backend cannot call back into a runtime handler, so it will need a static `Arith` interpretation. `handle static Arith` does not provide one yet and is rejected.
 
@@ -254,7 +322,7 @@ Arithmetic keeps its policy contract at the kernel boundary: the compiler never 
   variables becoming leading uniform parameters.
 - An **unannotated (generic) function** kernel is specialised at its call site with the buffer's element type and lifted when its body fits the extracted ABI. A **recursive** function gets its own emitted definition per instantiation ([GPU-KERNEL-FORM]), because its body cannot be specialised by inlining.
 - A **locally let-bound lambda with a known body** is lifted using its definition-time environment, including a concrete lambda that also has a closure cell for ordinary calls. Immutable scalar and buffer captures become uniforms; shadowing at the launch site must not replace them. An applied generic callback retains its type instantiation while selecting the body, so float slots remain floats. A module-stored lambda retains its ordinary storage and prefix ABI. An opaque computed function value (a record field or an unknown call result) keeps its closure-cell call because its body and environment cannot be recovered statically; a device backend must reject it rather than silently offload a host pointer.
-- A **scalar builtin passed by name** (`gpuMap(toFloat)`, `gpuMap(abs)`, or `gpuZipWith(..., wrapAdd)`) is lifted into a scalar function containing its ordinary intrinsic lowering. Its argument types come from the combinator slots, so float `abs` keeps a `double` ABI. The wrapper has no closure cell or environment pointer. The same rule covers total saturating arithmetic and `intDiv`; fallible integer builtins retain the enclosing `Arith` policy, operation arguments, recovery values and element order. Lexical bindings take precedence over builtin names. A builtin whose scheme requires host handles or a `Result` slot declines extraction.
+- A **scalar builtin passed by name** (`gpuMap(toFloat)`, `gpuMap(abs)`, or `gpuZipWith(..., wrapAdd)`) is lifted into a scalar function containing its ordinary intrinsic lowering. Its argument types come from the combinator slots, so float `abs` keeps a `double` ABI. The wrapper has no closure cell or environment pointer. The same rule covers total saturating arithmetic, `intDiv` and the float functions ([BUILTIN-MATH]); fallible integer builtins retain the enclosing `Arith` policy, operation arguments, recovery values and element order. Lexical bindings take precedence over builtin names. A builtin whose scheme takes or returns a host handle or a `Result` is not a kernel at all: the combinator's scalar slot types reject it during inference, before extraction is consulted, so the extraction-time scheme check (`admissible`) is a backstop no source program reaches.
 - A lambda whose body reads a name the lifted function cannot see — a
   let-bound lambda, a function-typed local, a handler-owned mutable cell —
   keeps the inlined lowering rather than emitting a call to a symbol that was
@@ -331,7 +399,7 @@ Implementation is staged in [plan 0023](../plans/0023-gpu-computation.md), which
 
 *Non-normative:* a bibliography, not a requirement. It has no implementing code and no test.
 
-The scholarly work Osprey's GPU features are grounded in. Inline citations above point here; the design decisions these produced are recorded in [plan 0023](../plans/0023-gpu-computation.md).
+The scholarly and vendor work Osprey's GPU features are grounded in. Inline citations above point here; the design decisions these produced are recorded in [plan 0023](../plans/0023-gpu-computation.md). Every entry was re-verified against its primary source on 2026-10-12.
 
 **The device sublanguage and functional GPU compilation**
 
@@ -344,6 +412,12 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
   Data Parallelism.* PPoPP 2019.
   <https://doi.org/10.1145/3293883.3295707> — why nested parallelism is
   deferred rather than naively flattened.
+- Henriksen. *A Comparison of OpenCL, CUDA, and HIP as Compilation Targets
+  for a Functional Array Language.* FProPer 2024
+  (<https://futhark-lang.org/publications.html>) — the directly comparable
+  study for [GPU-BACKEND-DEVICE]'s substrate choice. The same group's
+  WebGPU backend work (Paarmann, 2024; Andreasen, 2025) is the closest prior
+  art for a functional array language on WGSL.
 - Chakravarty, Keller, Lee, McDonell, Grover. *Accelerating Haskell Array
   Codes with Multicore GPUs.* DAMP 2011.
   <https://doi.org/10.1145/1926354.1926358> — type-level host/device
@@ -351,6 +425,22 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
 - McDonell, Chakravarty, Keller, Lippmeier. *Optimising Purely Functional
   GPU Programs.* ICFP 2013. <https://doi.org/10.1145/2500365.2500595> —
   array fusion as the load-bearing optimization behind [GPU-BACKEND-HOST].
+- Köpcke, Steuwer, Gorlatch. *Descend: A Safe GPU Systems Programming
+  Language.* PLDI 2024. <https://doi.org/10.1145/3656411> — the imperative
+  counterpart: CUDA-parity performance with ownership and lifetimes tracked
+  in the type system.
+- *Modular GPU Programming with Typed Perspectives* (Prism / the Bundl
+  calculus). PLDI 2026, Distinguished Paper.
+  <https://doi.org/10.1145/3808290> — the granularity of thread control as
+  a type; the model for making collective operations composable if Osprey's
+  device sublanguage ever exposes them.
+- *Kuiper: verified and efficient GPU programming.* ARRAY 2025 — dependent
+  types and concurrent separation logic over the GPU memory hierarchy,
+  extracting to specialised CUDA.
+- Higher Order Company. *HVM2 / Bend* — a massively parallel interaction-
+  combinator evaluator compiling higher-order functional programs to C and
+  CUDA (<https://github.com/HigherOrderCO/Bend>); the other functional-on-GPU
+  route, without static guarantees.
 
 **Parallel primitives and flattening foundations**
 
@@ -375,28 +465,46 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
   <https://arxiv.org/abs/2104.05372> — parallelism-preserving vs
   parallelism-destroying effects, the theory behind [GPU-KERNEL-PURE];
   implementation at <https://github.com/google-research/dex-lang>.
-- Xie et al. *Parallel Algebraic Effect Handlers.* ICFP 2024 (PACMPL
-  8, ICFP issue: <https://dl.acm.org/toc/pacmpl/2024/8/ICFP>) — which
-  handler shapes commute with parallel evaluation; governs any future
-  relaxation of the empty-effect-row kernel rule and the stage-5 `Gpu`
-  effect.
+- Xie, Johnson, Maclaurin, Paszke. *Parallel Algebraic Effect Handlers.*
+  ICFP 2024 (Proc. ACM Program. Lang. 8, ICFP).
+  <https://doi.org/10.1145/3674651> — which handler shapes commute with
+  parallel evaluation; governs any future relaxation of the kernel effect-row
+  rule and the stage-5 `Gpu` effect.
 
 **Device code generation and scheduling**
 
 - Tillet, Kung, Cox. *Triton: An Intermediate Language and Compiler for
   Tiled Neural Network Computations.* MAPL 2019.
-  <https://doi.org/10.1145/3315508.3329973> — the tile abstraction; with
-  NVIDIA's open-source [CUDA Tile IR](https://github.com/NVIDIA/cuda-tile),
-  a candidate escape-hatch level for stage 4+.
+  <https://doi.org/10.1145/3315508.3329973> — the tile abstraction. Triton's
+  in-tree **Gluon** dialect exposes Blackwell's `tcgen05`/TMA primitives
+  directly where the high-level abstraction cannot find the codegen.
+- NVIDIA. *CUDA Tile IR* — an MLIR Tile dialect, Python bindings, bytecode
+  and conformance suite, open-sourced 2025-12-04 under Apache-2.0 alongside
+  CUDA 13.1 (<https://github.com/NVIDIA/cuda-tile>); the tile-level target a
+  stage 4+ emitter could lower to instead of raw PTX.
+- Chen et al. *TVM: An Automated End-to-End Optimizing Compiler for Deep
+  Learning.* OSDI 2018.
+  <https://www.usenix.org/conference/osdi18/presentation/chen> — graph- and
+  operator-level scheduling with learned cost models; with Halide, the
+  separation stage 7 follows.
 - Ragan-Kelley, Barnes, Adams, Paris, Durand, Amarasinghe. *Halide:
   Decoupling Algorithms from Schedules for High-Performance Image
-  Processing.* PLDI 2013. <https://doi.org/10.1145/2491956.2462176> — the
-  algorithm/schedule separation stage 7's schedule layer follows; the
+  Processing.* PLDI 2013. <https://doi.org/10.1145/2491956.2462176>; the
   autoscheduler is [Adams et al., SIGGRAPH
   2019](https://doi.org/10.1145/3306346.3322967).
 - Ikarashi, Bernstein, Reinking, Genc, Ragan-Kelley. *Exo: Externalized
   Rewriting for Hardware Accelerators.* PLDI 2022.
   <https://doi.org/10.1145/3519939.3523446> — user-extensible scheduling.
+- Spector, Arora, Singhal, Fu, Ré. *ThunderKittens: Simple, Fast, and
+  Adorable AI Kernels.* ICLR 2025. <https://arxiv.org/abs/2410.20399> —
+  16×16 register tiles, managed shared-memory layouts and explicit
+  asynchronous workers: the expressiveness bar for a schedule layer on
+  tensor-core hardware.
+- NVIDIA. *CUTLASS / CuTe* layout algebra (<https://github.com/NVIDIA/cutlass>);
+  *Categorical Foundations for CuTe Layouts*, 2026,
+  <https://arxiv.org/abs/2601.05972> — composition, logical product and
+  division of layouts, the vocabulary a memory-hierarchy surface must be
+  able to express.
 - Verdoolaege, Juega, Cohen, Gómez, Tenllado, Catthoor. *Polyhedral
   Parallel Code Generation for CUDA* (PPCG). ACM TACO 2013.
   <https://doi.org/10.1145/2400682.2400713>; the tiling/fusion algorithm is
@@ -407,9 +515,49 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
   [`nvgpu`](https://mlir.llvm.org/docs/Dialects/NVGPU/),
   [`nvvm`](https://mlir.llvm.org/docs/Dialects/NVVMDialect/) — the
   progressive-lowering substrate weighed at stage 4's decision checkpoint.
+- LLVM. [*User Guide for the NVPTX Back-end*](https://llvm.org/docs/NVPTXUsage.html)
+  and [*Compiling CUDA with clang*](https://llvm.org/docs/CompileCudaWithLLVM.html)
+  — the incremental, wasm-shaped device path; the LLVM **SPIR-V backend**
+  is an official target since LLVM 20 (added to `LLVM_ALL_TARGETS`), so the
+  same textual-IR emitter can feed Vulkan/WebGPU.
+
+**Target specifications**
+
+- NVIDIA, *PTX ISA* (per CUDA release); Apple, *Metal Shading Language
+  Specification* 4.1 (2026-06-04); W3C, *WebGPU* and *WGSL* (Candidate
+  Recommendation); Khronos, *SPIR-V* 1.6 and the *Vulkan 1.4* SPIR-V
+  environment (Vulkan 1.4 released 2024-12-03, mandating SPIR-V 1.0–1.6);
+  Khronos, *Slang* (hosted since 2024-11-21; one source to SPIR-V, HLSL,
+  GLSL, WGSL and MSL) — the dialects a device emitter must speak, and the
+  one that already speaks all of them.
+
+**Reference workloads**
+
+- Karpathy. *llm.c* — GPT-2 pretraining in plain C and CUDA
+  (<https://github.com/karpathy/llm.c>): a ~1 000-line fp32 CPU reference
+  (`train_gpt2.c`), the CUDA mainline (`train_gpt2.cu`) and a ladder of
+  kernels from naive to tuned. The reference application plan 0023 holds
+  every surface gap against, on the host today and on the device at stage 4.
+- Godoy et al. *Mojo: MLIR-Based Performance-Portable HPC Science Kernels
+  on GPUs for the Python Ecosystem.* SC Workshops 2025 (WACCPD, best paper).
+  <https://arxiv.org/abs/2509.21039> — seven-point stencil, BabelStream,
+  miniBUDE and Hartree-Fock on H100 and MI300A; "competitive with CUDA and
+  HIP for memory-bound kernels", with gaps on AMD atomics and fast-math
+  compute-bound kernels. The micro-benchmark set stage 4's gate reuses.
 
 **Autodiff (stage 7)**
 
+- Moses, Churavy. *Instead of Rewriting Foreign Code for Machine Learning,
+  Automatically Synthesize Fast Gradients* (Enzyme). NeurIPS 2020; and
+  Moses, Churavy, Paehler, Hückelheim, Narayanan, Schanen, Doerfert.
+  *Reverse-Mode Automatic Differentiation and Optimization of GPU Kernels
+  via Enzyme.* SC 2021 (<https://c.wsmoses.com/papers/EnzymeGPU.pdf>) —
+  compiler-level AD over optimised LLVM IR, the first reverse-mode AD of GPU
+  kernels; the natural fit for a compiler that already emits LLVM IR.
+- *JAX Autodiff from a Linear Logic Perspective.* POPL 2026.
+  <https://doi.org/10.1145/3776654> — the JAX/Dex autodiff core as a linear
+  λ-calculus with a Curry-Howard reading, sound qualitatively and
+  quantitatively.
 - Elliott. *The Simple Essence of Automatic Differentiation.* ICFP 2018.
   <https://arxiv.org/abs/1804.00746> — the categorical core for a
   functional language's AD.
@@ -422,12 +570,8 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
   decoupling is [Taichi, SIGGRAPH Asia
   2019](https://doi.org/10.1145/3355089.3356506).
 
-**Competitive positioning and portability layers**
+**Portability layers**
 
-- Godoy et al. *Mojo: MLIR-Based Performance-Portable HPC Science Kernels
-  on GPUs for the Python Ecosystem.* SC Workshops 2025 (WACCPD).
-  <https://arxiv.org/abs/2509.21039> — the measured Mojo baseline stage
-  4's benchmark gates target.
 - Edwards, Trott, Sunderland. *Kokkos: Enabling Manycore Performance
   Portability.* JPDC 2014. <https://doi.org/10.1016/j.jpdc.2014.07.003> —
   execution/memory-space abstraction for the stage-6 portability story.

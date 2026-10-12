@@ -1,6 +1,6 @@
 ---
 name: spec-check
-description: Audit spec/plan documents against the codebase. Ensures every spec section has implementing code, tests, and matching logic. Use when the user says "check specs", "spec audit", or "verify specs".
+description: Audit spec/plan documents against the codebase. Distinguishes shipped contracts from delivery targets and reconciles specs, code, tests, and plans. Use when the user says "check specs", "spec audit", or "verify specs".
 argument-hint: "[optional spec ID or filename filter]"
 ---
 <!-- agent-pmo:74cf183 -->
@@ -9,7 +9,7 @@ argument-hint: "[optional spec ID or filename filter]"
 
 > **Portable skill.** This skill adapts to the current repository. The agent MUST inspect the repo structure and use judgment to apply these instructions appropriately.
 
-Audit spec/plan documents against the codebase. Ensures every spec section has implementing code, tests, and that the code logic matches the spec.
+Audit spec/plan documents against the codebase. Reconcile shipped behavior with implementing code and tests; record unfinished normative requirements in the owning plan. Follow `CLAUDE.md`, including the worktree ban and the single active feature branch across all machines.
 
 ## Arguments
 
@@ -17,7 +17,7 @@ Audit spec/plan documents against the codebase. Ensures every spec section has i
 
 ## Instructions
 
-Follow these steps exactly. Be strict and pedantic. Stop on the first failure.
+Follow these steps exactly. Be strict and pedantic. Cover the entire requested scope; collect and resolve discrepancies rather than stopping at the first failure.
 
 ---
 
@@ -34,7 +34,7 @@ Before checking code/test references, verify that the specs themselves are well-
 4. **Check group clustering:** The first word of each ID is its group. All sections in the same group MUST appear together (adjacent) in the document. If they're scattered, flag it.
 5. **Check for missing IDs:** Any heading that defines a requirement or behavior should have an ID. Flag headings in spec files that look like they define behavior but lack an ID.
 
-If any ID violations are found, report them all and **STOP**:
+If any ID violations are found, report them all and continue the behavioral audit:
 ```
 SPEC ID VIOLATIONS:
 
@@ -42,10 +42,10 @@ SPEC ID VIOLATIONS:
 - docs/specs/AUTH-SPEC.md line 30: [AUTH-TOKEN-VERIFY] and [AUTH-LOGIN] are not adjacent (scattered group)
 - docs/specs/CI-SPEC.md line 5: "## Coverage thresholds" has no spec ID
 
-Fix spec IDs first, then re-run spec-check.
+Fix the ID violations, and report behavioral findings from the rest of the requested scope.
 ```
 
-If all IDs are valid, proceed to Step 2.
+Proceed to Step 2 after recording any ID findings.
 
 ---
 
@@ -89,7 +89,7 @@ ERROR: No specs found matching "$ARGUMENTS". Discovered spec files: [list them]
 
 ### Step 4: Check each spec section
 
-For EACH spec section that has an ID, perform checks A, B, and C below. **Stop on the first failure.**
+Classify each section as shipped, partial, or normative target using its status and owning plan. For shipped sections, perform checks A, B, and C below. For partial sections, check the implemented slice and record the missing slice. For normative targets, require consistent plan/status claims; absence of implementing code is expected and must not be relabeled as shipped. References alone are not proof of implementation. **Cover the entire requested scope; collect and resolve discrepancies rather than stopping at the first failure.**
 
 #### Check A: Code references the spec ID
 
@@ -106,41 +106,42 @@ Use Grep with the literal spec ID (e.g., `[AUTH-TOKEN-VERIFY]`) to find referenc
 ```
 SPEC VIOLATION: [AUTH-TOKEN-VERIFY] "Section Title" has no implementing code.
 
-Every spec section must have at least one code file that references it via a comment
+Every shipped behavioral section must have at least one code file that references it via a comment
 containing the spec ID (e.g., `// Implements [AUTH-TOKEN-VERIFY]`).
 
 ACTION REQUIRED: Add a comment referencing [AUTH-TOKEN-VERIFY] in the file(s) that implement
 this spec section, then re-run spec-check.
 ```
 
-**STOP HERE. Do not continue to other checks.**
+Record the missing reference and continue the audit.
 
 #### Check B: Tests reference the spec ID
 
 Search test files for the spec ID. Test files are found in:
-- `compiler/tests/`
-- `compiler/**/*_test.go`
-- `vscode-extension/**/*.test.ts`
+- Rust inline `#[cfg(test)]` modules and `crates/*/tests/`
+- `tests/` acceptance programs, shared goldens and `examples/failscompilation/` rejection fixtures
+- `compiler/runtime/*tests.c`
+- `vscode-extension/**/*.test.ts` and `website/tests/`
 
 **If NO test files reference the spec ID:**
 
 ```
 SPEC VIOLATION: [AUTH-TOKEN-VERIFY] "Section Title" has no tests.
 
-Every spec section must have corresponding tests that reference the spec ID.
+Every shipped behavioral section must have corresponding tests that reference the spec ID.
 
 ACTION REQUIRED: Add tests for [AUTH-TOKEN-VERIFY] with a comment or test name containing
 the spec ID, then re-run spec-check.
 ```
 
-**STOP HERE. Do not continue to other checks.**
+Record the missing reference and continue the audit.
 
 #### Check C: Code logic matches the spec
 
 1. **Read the spec section content carefully.** Understand exactly what behavior, logic, ordering, conditions, and constraints the spec describes.
 2. **Read the implementing code.** Use the references found in Check A to locate the implementing files.
 3. **Compare spec vs. code.** Be SENSITIVE and PEDANTIC. Check for ordering violations, missing conditions, wrong logic, missing steps, wrong defaults.
-4. **If the code deviates from the spec**, report a detailed error with quotes from both spec and code. **STOP.**
+4. **If the code deviates from the spec**, report a detailed error with quotes from both spec and code. Record the discrepancy and continue.
 5. **If the code matches the spec**, this check passes. Move to the next spec.
 
 ---
@@ -149,7 +150,7 @@ the spec ID, then re-run spec-check.
 
 #### On failure (any check fails):
 
-Output ONLY the first violation found. End with:
+Report all discrepancies, corrections, explicit delivery gaps, and checks completed or not run. Do not claim every spec was verified merely because references exist. End with:
 ```
 spec-check FAILED. Fix the violation above and re-run.
 ```
@@ -159,18 +160,18 @@ spec-check FAILED. Fix the violation above and re-run.
 Output a summary table:
 
 ```
-spec-check PASSED. All specs verified.
+spec-check PASSED for the implemented scope. Delivery targets and verification gaps are listed separately.
 
 | Spec ID        | Title                    | Code References | Test References | Logic Match |
 |----------------|--------------------------|-----------------|-----------------|-------------|
 | [AUTH-TOKEN]   | Authentication flow      | src/auth.go     | tests/auth_test.go | PASS     |
 
-Checked N spec sections across M files. All have implementing code, tests, and matching logic.
+Checked N implemented spec sections across M files, with implementing code, tests, and matching logic. List normative targets, partial sections, and any unexecuted validation separately.
 ```
 
 ## Key principles
 
-- **Fail fast.** Stop on the first violation. One fix at a time.
+- **Cover the requested scope.** Reconcile all four sources and preserve outstanding findings.
 - **Be pedantic.** If the spec says it, the code must do it. No "close enough".
 - **Quote everything.** Always quote the spec text and the code in error messages.
 - **Be actionable.** Every error must tell the developer what file to change and what to do.

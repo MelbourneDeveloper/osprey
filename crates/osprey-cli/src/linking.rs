@@ -13,7 +13,7 @@ pub(super) fn link_args(ir: &str, source: &str, memory: &str) -> Vec<String> {
     if uses_http {
         args.extend(openssl_flags());
     }
-    args.extend(platform_flags(uses_http, ir.contains("frem ")));
+    args.extend(platform_flags(uses_http, needs_libm(ir)));
     args.extend(source.lines().filter_map(ffi_flag));
     args
 }
@@ -30,11 +30,19 @@ fn runtime_archive(http: bool, memory: &str) -> Option<String> {
         .or_else(|| find_runtime_lib(&format!("libfiber_runtime{suffix}.a")))
 }
 
-fn platform_flags(http: bool, float_remainder: bool) -> Vec<String> {
+/// The IR spellings that reach libm: `frem` may lower to `fmod`
+/// [FLOAT-IEEE-RESULTS], and the float functions [BUILTIN-MATH] are libm
+/// calls — the `exp`/`ln` intrinsics lower to them, `tanh` is called by name.
+const LIBM_SPELLINGS: [&str; 4] = ["frem ", "@llvm.exp.f64", "@llvm.log.f64", "@tanh("];
+
+fn needs_libm(ir: &str) -> bool {
+    LIBM_SPELLINGS.iter().any(|spelling| ir.contains(spelling))
+}
+
+fn platform_flags(http: bool, libm: bool) -> Vec<String> {
     let mut flags = Vec::new();
-    // [FLOAT-IEEE-RESULTS]: LLVM may lower `frem` to libm's fmod.
     // Place libraries after the object/archive that references their symbols.
-    if cfg!(unix) && float_remainder {
+    if cfg!(unix) && libm {
         flags.push("-lm".into());
     }
     if cfg!(windows) {
@@ -119,4 +127,32 @@ pub(super) fn openssl_flags() -> Vec<String> {
         }
     }
     vec!["-lssl".into(), "-lcrypto".into()]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::needs_libm;
+
+    #[test]
+    fn libm_is_linked_for_each_spelling_that_reaches_it_and_nothing_else() {
+        // [BUILTIN-MATH] / [FLOAT-IEEE-RESULTS]: the four IR spellings whose
+        // lowering needs libm, and near misses that must not drag it in.
+        for ir in [
+            "%r = frem double %a, %b",
+            "call double @llvm.exp.f64(double 1.0)",
+            "call double @llvm.log.f64(double 1.0)",
+            "call double @tanh(double 1.0)",
+        ] {
+            assert!(needs_libm(ir), "{ir}");
+        }
+        for ir in [
+            "",
+            "call double @llvm.sqrt.f64(double 1.0)",
+            "%r = fadd double %a, %b",
+            "call float @tanhf(float 1.0)",
+            "declare double @tanh2(double)",
+        ] {
+            assert!(!needs_libm(ir), "{ir}");
+        }
+    }
 }

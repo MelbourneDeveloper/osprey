@@ -26,7 +26,7 @@ pub(super) fn check_extraction_floor(label: &str, ir: &str) -> Result<(), String
     Ok(())
 }
 
-const EXTRACTION_FLOORS: [(&str, usize); 8] = [
+const EXTRACTION_FLOORS: [(&str, usize); 9] = [
     ("buffers.test", 28),
     ("combinators.test", 16),
     ("gamedev.test", 17),
@@ -35,6 +35,7 @@ const EXTRACTION_FLOORS: [(&str, usize); 8] = [
     ("raster.test", 5),
     ("scalar_contracts.test", 4),
     ("stress.test", 18),
+    ("transformer.test", 36),
 ];
 
 /// [GPU-KERNEL-EXTRACT] Immutable lexical captures become explicit uniforms.

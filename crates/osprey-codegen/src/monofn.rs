@@ -278,31 +278,12 @@ fn lower_body(cg: &mut Codegen, body: &Expr, sig: &FnSig) -> Result<Value> {
     // and the read after the `handle` sees the initial value
     // ([EFFECTS-HANDLER-STATE]).
     cg.cell_vars = crate::effects::captured_mut_vars(body);
-    let outer = std::mem::replace(&mut cg.value_discarded, false);
-    let lowered = crate::expr::gen_body(cg, body)
-        .and_then(|v| crate::expr::fit_lambda_return(cg, v, Some(sig)));
-    cg.value_discarded = outer;
-    let value = lowered?;
-    // Function epilogue: the return transfers +1, owned locals drop
-    // [GC-ARC-PERCEUS].
-    crate::arc::epilogue(cg, Some(&value));
-    cg.emit(format!("ret {} {}", value.llvm_ty(), value.operand));
-    Ok(value)
+    crate::closure::lower_fn_body(cg, body, Some(sig))
 }
 
 /// Call one instantiation with the argument values the call site lowered.
 fn call(cg: &mut Codegen, target: &Instantiation, args: Vec<Value>) -> Result<Value> {
-    let typed = crate::closure::coerce_typed_args(cg, &target.sig, args)?;
-    let ret = crate::llty::ret_spelling(target.sig.1, target.sig.2);
-    let reg = cg.emit_reg(format!(
-        "call {ret} @{}({})",
-        target.symbol,
-        typed.join(", ")
-    ));
-    let value = crate::closure::returned(reg, &target.sig);
-    // Callee epilogues transfer +1 on every return [GC-ARC-PERCEUS].
-    crate::arc::own(cg, &value);
-    Ok(value)
+    crate::closure::call_symbol(cg, &target.symbol, &target.sig, &[], args)
 }
 
 #[cfg(test)]

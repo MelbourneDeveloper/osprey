@@ -90,6 +90,21 @@ pub(crate) fn make_result_if_err(
     make_result_if_err_because(cg, value, inner, is_err, msg, None)
 }
 
+/// A gathered element gated on a runtime in-bounds verdict (`i32`, zero means
+/// out of bounds): `Success(value)` at the value's own type, else `Error(msg)`.
+/// Every indexable runtime — lists and GPU buffers alike — lands here, so the
+/// two `Result` shapes cannot drift.
+pub(crate) fn make_result_unless_in_bounds(
+    cg: &mut Codegen,
+    in_bounds: &str,
+    value: Value,
+    msg: &str,
+) -> Result<Value> {
+    let inner = value.ty;
+    let is_err = cg.emit_reg(format!("icmp eq i32 {in_bounds}, 0"));
+    make_result_if_err(cg, value, inner, &is_err, Some(msg))
+}
+
 /// [`make_result_if_err`] with a RUNTIME reason: `reason` is an `i8*` operand
 /// (null when the producer recorded none) that outranks the static `msg`. This
 /// is how a failed builtin's real cause — "writeFile: out/x.db: No such file or

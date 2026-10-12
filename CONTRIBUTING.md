@@ -38,21 +38,26 @@ make build
 make test
 ```
 
+## Repository coordination
+
+Git worktrees are banned. There may be only **ONE active feature branch across ALL machines and clones combined**. Coordinate all work on the existing active branch; do not create a branch per machine, contributor, or task. A replacement branch may start only after the previous branch is merged or explicitly retired and all machines are coordinated. See [CLAUDE.md](CLAUDE.md) for the shared instructions.
+
 ## What to Work On
 
-1. **Language features** - Check the [language specification](docs/specs/) for "NOT IMPLEMENTED" 
-2. **New operators** - Add arithmetic, comparison, or logical operators
-3. **Pattern matching** - Extend match expressions
-4. **Standard library** - Add built-in functions
-5. **Make examples** - The HTTP server works. Try building an API
-6. **Test compilation errors** - Make sure the compiler is forcing you to do things the right way
+Osprey is in stabilization mode. Prioritize reliability of existing features, truthful diagnostics, and conformance to the documented contract. Active [plans](docs/plans/README.md) distinguish unfinished requirements from shipped behavior.
+
+1. Harden existing language features and built-ins.
+2. Expand acceptance and rejection coverage for edge cases.
+3. Reconcile specs, code, tests, plans, and public status claims when behavior changes.
+4. Improve existing examples and application boundaries.
 
 ## The AI Workflow
 
-1. **Understand the pattern** - Ask your AI: "How does pattern matching work in this codebase?"
-2. **Implement incrementally** - Start with parsing, then AST, then codegen
-3. **Test everything** - Add assertion suites to `tests/`
-4. **Fix edge cases** - Let the AI help debug LLVM IR issues
+1. **Check the contract** — Read the relevant spec, implementation status, tests, and active plan.
+2. **Understand the pattern** - Ask your AI: "How does pattern matching work in this codebase?"
+3. **Implement incrementally** - Start with parsing, then AST, then codegen
+4. **Test everything** - Add assertion suites to `tests/`
+5. **Fix edge cases** - Let the AI help debug LLVM IR issues
 
 Example prompts:
 - "Add a new arithmetic operator to the tree-sitter grammar"

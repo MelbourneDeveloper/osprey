@@ -1,0 +1,1 @@
+codegen: unsupported construct: a gpuMap kernel result must be a scalar (int, float, or bool)

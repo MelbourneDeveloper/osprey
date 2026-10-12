@@ -219,6 +219,13 @@ pub(super) fn gen_call(
             let n = as_i64(cg, v)?;
             as_double(cg, n)
         }
+        // [BUILTIN-MATH] sqrt/exp/log/tanh: one float call, total.
+        name if crate::arithmetic::is_float_function(name) => {
+            let arg = first_arg(arguments, named)
+                .ok_or_else(|| CodegenError::invalid(format!("{name} needs one argument")))?;
+            let v = gen_expr(cg, arg)?;
+            crate::arithmetic::float_function(cg, name, v)
+        }
         name if is_binary_integer_builtin(name) => {
             let (left, right) = two_int_args(cg, name, arguments, named)?;
             binary_integer_builtin(cg, name, left, right)

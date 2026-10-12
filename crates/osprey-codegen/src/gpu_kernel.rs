@@ -297,19 +297,27 @@ fn host_bound(cg: &Codegen, names: &BTreeSet<String>) -> bool {
 }
 
 /// Whether a capture can travel as an extracted-kernel parameter: a scalar
-/// word, or a GPU buffer handle. A string, a record/union handle, a `Result`
-/// block or a Fiber carries host-side structure the flat device ABI has no
-/// slot for — the same restriction [GPU-BUFFER-ELEM] places on element data.
+/// word, or a GPU buffer handle. A string, a record/union handle, an erased
+/// box, a `Result` block or a Fiber carries host-side structure the flat
+/// device ABI has no slot for — the same restriction [GPU-BUFFER-ELEM] places
+/// on element data, and the same predicate ([`crate::gpu::is_scalar`]).
 fn uniform_admissible(v: &Value) -> bool {
+    let buffer_handle =
+        matches!(v.ty, LType::Ptr) && v.osp_ty.as_deref().is_some_and(crate::gpu::is_buffer_owner);
     v.result_inner.is_none()
         && v.fiber_elem.is_none()
-        && match v.ty {
-            LType::I64 | LType::Double | LType::I1 => true,
-            LType::Ptr => v.osp_ty.as_deref().is_some_and(crate::gpu::is_buffer_owner),
-            // An erased box points at host-side structure just as a string or
-            // record handle does — no device slot for it.
-            LType::Str | LType::I32 | LType::Any => false,
-        }
+        && (crate::gpu::is_scalar(v.ty) || buffer_handle)
+}
+
+/// A flat scalar parameter slot — no `Result` layout, no Fiber shape — the only
+/// kind the extracted ABI declares for an undeclared element or a uniform.
+fn word_slot(ty: LType, inferred_type: Option<osprey_types::Type>) -> ParamSig {
+    ParamSig {
+        ty,
+        result_inner: None,
+        fiber: None,
+        inferred_type,
+    }
 }
 
 /// The kernel's own parameter slots: its inferred signature where it has one,
@@ -318,12 +326,7 @@ fn param_sigs(parameters: &[Parameter], own: Option<&FnSig>, slots: &[LType]) ->
     (0..parameters.len())
         .map(|i| match own.and_then(|s| s.0.get(i)).cloned() {
             Some(declared) => declared,
-            None => ParamSig {
-                ty: slots.get(i).copied().unwrap_or(LType::I64),
-                result_inner: None,
-                fiber: None,
-                inferred_type: None,
-            },
+            None => word_slot(slots.get(i).copied().unwrap_or(LType::I64), None),
         })
         .collect()
 }
@@ -332,18 +335,7 @@ fn param_sigs(parameters: &[Parameter], own: Option<&FnSig>, slots: &[LType]) ->
 fn emit(cg: &mut Codegen, k: &Lifting<'_>, params: Vec<ParamSig>) -> Result<Callback> {
     let symbol = format!("{KERNEL_PREFIX}{}", cg.next_kernel_id());
     let uniforms: Vec<Value> = k.caps.iter().map(|c| c.val.clone()).collect();
-    let saved = cg.enter_nested_fn();
-    crate::closure::begin_source(cg, &symbol, k.position);
-    let plist = declare(cg, k, &params);
-    let emitted = kernel_body(cg, k.body, k.own);
-    let ret = emitted
-        .as_ref()
-        .map_or_else(|_| LType::I64.to_string(), Value::llvm_ty);
-    // Restore the enclosing function BEFORE propagating, so a failed body never
-    // leaves the host's emission state clobbered ([`crate::closure`] does the
-    // same).
-    cg.exit_nested_fn(saved, &ret, &symbol, &plist);
-    let value = emitted?;
+    let value = define(cg, k, &symbol, &params)?;
     let sig = (
         params,
         value.ty,
@@ -356,6 +348,26 @@ fn emit(cg: &mut Codegen, k: &Lifting<'_>, params: Vec<ParamSig>) -> Result<Call
         uniforms,
         sig,
     }))
+}
+
+/// The lifted `define` itself: a nested function whose parameters are the
+/// kernel's and whose body is lowered through the shared nested-body
+/// discipline, which emits the `ret`. The body is always in VALUE position —
+/// it is what the function returns — whatever the enclosing statement was
+/// doing with the loop.
+fn define(cg: &mut Codegen, k: &Lifting<'_>, symbol: &str, params: &[ParamSig]) -> Result<Value> {
+    let saved = cg.enter_nested_fn();
+    crate::closure::begin_source(cg, symbol, k.position);
+    let plist = declare(cg, k, params);
+    let emitted = crate::closure::lower_fn_body(cg, k.body, k.own);
+    let ret = emitted
+        .as_ref()
+        .map_or_else(|_| LType::I64.to_string(), Value::llvm_ty);
+    // Restore the enclosing function BEFORE propagating, so a failed body never
+    // leaves the host's emission state clobbered ([`crate::closure`] does the
+    // same).
+    cg.exit_nested_fn(saved, &ret, symbol, &plist);
+    emitted
 }
 
 /// The lifted function's parameter list — uniforms first, then the element
@@ -378,12 +390,7 @@ fn bind_uniforms(cg: &mut Codegen, caps: &[crate::closure::Capture]) -> Vec<(LTy
     let mut out = Vec::with_capacity(caps.len());
     for (i, c) in caps.iter().enumerate() {
         let reg = crate::llty::param_register(i);
-        let sig = ParamSig {
-            ty: c.val.ty,
-            result_inner: None,
-            fiber: None,
-            inferred_type: c.val.inferred_type.clone(),
-        };
+        let sig = word_slot(c.val.ty, c.val.inferred_type.clone());
         // `incoming_param` registers no ownership: a uniform buffer handle is
         // BORROWED for the call's duration, exactly as a top-level function's
         // parameters are [GC-ARC-PERCEUS].
@@ -395,42 +402,13 @@ fn bind_uniforms(cg: &mut Codegen, caps: &[crate::closure::Capture]) -> Vec<(LTy
     out
 }
 
-/// Lower the kernel body and emit its `ret`. The body is always in VALUE
-/// position — it is what the function returns — whatever the enclosing
-/// statement was doing with the loop.
-fn kernel_body(cg: &mut Codegen, body: &Expr, own: Option<&FnSig>) -> Result<Value> {
-    let outer = std::mem::replace(&mut cg.value_discarded, false);
-    let lowered =
-        crate::expr::gen_body(cg, body).and_then(|v| crate::expr::fit_lambda_return(cg, v, own));
-    cg.value_discarded = outer;
-    let value = lowered?;
-    // Function epilogue: the return transfers +1, owned locals drop
-    // [GC-ARC-PERCEUS]. A scalar return makes the retain a no-op.
-    crate::arc::epilogue(cg, Some(&value));
-    cg.emit(format!("ret {} {}", value.llvm_ty(), value.operand));
-    Ok(value)
-}
-
 /// Call an extracted kernel: the uniforms first, then this element's slots.
 pub(crate) fn extracted_call(
     cg: &mut Codegen,
     kernel: &Extracted,
     args: Vec<Value>,
 ) -> Result<Value> {
-    let typed = crate::closure::coerce_typed_args(cg, &kernel.sig, args)?;
-    let ret = crate::llty::ret_spelling(kernel.sig.1, kernel.sig.2);
-    let operands = kernel
-        .uniforms
-        .iter()
-        .map(Value::typed)
-        .chain(typed)
-        .collect::<Vec<_>>()
-        .join(", ");
-    let reg = cg.emit_reg(format!("call {ret} @{}({operands})", kernel.symbol));
-    let value = crate::closure::returned(reg, &kernel.sig);
-    // Callee epilogues transfer +1 on every return [GC-ARC-PERCEUS].
-    crate::arc::own(cg, &value);
-    Ok(value)
+    crate::closure::call_symbol(cg, &kernel.symbol, &kernel.sig, &kernel.uniforms, args)
 }
 
 #[cfg(test)]

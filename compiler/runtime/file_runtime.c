@@ -71,6 +71,13 @@ static void describe_errno(int err, char *out, size_t out_size) {
 #endif
 }
 
+void osp_io_error_text(const char *op, const char *subject, const char *reason) {
+  (void)snprintf(io_error_text, sizeof(io_error_text), "%s: %s: %s",
+                 op != NULL ? op : "io",
+                 subject != NULL ? subject : "<null path>", reason);
+  io_error_present = 1;
+}
+
 void osp_io_error_set(const char *op, const char *subject, int err) {
   char reason[OSP_IO_REASON_MAX];
   if (err != 0) {
@@ -78,10 +85,7 @@ void osp_io_error_set(const char *op, const char *subject, int err) {
   } else {
     (void)snprintf(reason, sizeof(reason), "unspecified failure");
   }
-  (void)snprintf(io_error_text, sizeof(io_error_text), "%s: %s: %s",
-                 op != NULL ? op : "io",
-                 subject != NULL ? subject : "<null path>", reason);
-  io_error_present = 1;
+  osp_io_error_text(op, subject, reason);
 }
 
 const char *osp_io_error(void) {

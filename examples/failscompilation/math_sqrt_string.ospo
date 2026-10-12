@@ -1,0 +1,2 @@
+// [BUILTIN-MATH]: the float functions take a float; a string is a type error.
+fn main() = print(sqrt("x"))

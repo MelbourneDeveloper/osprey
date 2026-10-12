@@ -247,5 +247,20 @@ fn capturedArithmeticCase() = {
     ])
 }
 
+/// The float functions are total over IEEE doubles ([BUILTIN-MATH]): a domain
+/// error is NaN, an overflow is infinity, nothing performs Arith — and each
+/// is a kernel by name.
+fn mathTotalityCase() = {
+    let nan = sqrt(-1.0)
+    let probabilities = toGpu([0.0, 1.0]) |> gpuMap(exp)
+    checkAll("float math builtins are total over IEEE doubles", [
+        sqrt(4.0) == 2.0, nan != nan, ln(0.0) < -1000.0, ln(0.0) == ln(0.0) * 2.0,
+        exp(1000.0) == exp(2000.0), exp(1000.0) > 1.0, tanh(1000000.0) == 1.0,
+        tanh(-1000000.0) == -1.0, (gpuGet(probabilities, 0) ?: 0.0) == 1.0,
+        (toGpu([1.0, 4.0, 9.0]) |> gpuMap(sqrt) |> gpuFold(0.0, addFloats)) == 6.0
+    ])
+}
+
 test("declined GPU extraction preserves managed captures", managedKernelCase)
 test("captured GPU kernels preserve arithmetic policy", capturedArithmeticCase)
+test("float math builtins are total and name GPU kernels", mathTotalityCase)

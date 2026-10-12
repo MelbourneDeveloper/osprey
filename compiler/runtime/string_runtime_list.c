@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "collection_runtime.h"
 #include "memory_hooks.h"
 #include "string_runtime.h"
 
@@ -136,6 +137,24 @@ char *osp_string_join(const osp_string_list *list, const char *sep) {
         }
     }
     *w = '\0';
+    return out;
+}
+
+// `join` over a RUNTIME list — the layout every list builtin produces
+// (listAppend, toList, a fold) and every `let`-bound string list settles to.
+// The elements are the `char *` words the list stores; they are borrowed into
+// a flat view for osp_string_join, so the two layouts share one join.
+char *osp_string_join_list(OspreyList *list, const char *sep) {
+    int64_t n = list ? osprey_list_length(list) : 0;
+    osp_string_list view = {n, NULL};
+    if (n > 0) {
+        view.items = (char **)malloc(sizeof(char *) * (size_t)n);
+        if (!view.items) return NULL;
+        for (int64_t i = 0; i < n; i++)
+            view.items[i] = (char *)(intptr_t)osprey_list_get(list, i);
+    }
+    char *out = osp_string_join(&view, sep);
+    free(view.items);
     return out;
 }
 

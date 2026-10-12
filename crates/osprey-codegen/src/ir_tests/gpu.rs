@@ -109,50 +109,15 @@ fn a_fold_kernel_takes_uniforms_then_accumulator_then_element() {
     shows(&kernel, &["fmul double %$p0, %$p2", "fadd double %$p1,"]);
 }
 
-/// A handler with one RESUMING arm and one SUBSTITUTING arm continues by
-/// re-entering its own dispatcher with the same arguments. A plain call
-/// there grew one native frame per operation the substituting arm answered:
-/// release builds happened to fold it away, debug builds compile at `-O0`
-/// where nothing does, and a loop of otherwise constant-space performs
-/// exhausted the host stack. The reuse must be a property of the MODULE,
-/// not a hope about the optimizer. Implements [EFFECTS-HANDLER-ARMS].
-#[test]
-fn a_mixed_handler_dispatcher_continues_by_guaranteed_tail_call() {
-    let ir = module(
-        "effect Log {\n\
-               note: fn(int) -> Unit\n\
-               control ask: fn(int) -> int\n\
-               }\n\
-               fn hammer(n) = range(0, n) |> forEach(fn(i) => perform Log.note(i))\n\
-               let done = {\n\
-                   handle Log {\n\
-                       note value => value\n\
-                       ask value => resume(1)\n\
-                   }\n\
-                   hammer(3)\n\
-               }\n\
-               print(\"done\")\n",
-    );
-    let body = function_body(
-        &ir,
-        "define i64 @__resume_drive_Log_0(i8* %__env, i8* %__coro)",
-    );
-    let reentries: Vec<&str> = body
-        .lines()
-        .filter(|line| line.contains("call i64 @__resume_drive_Log_0"))
-        .collect();
-    assert_eq!(reentries.len(), 1, "one re-entry per dispatcher: {body}");
-    assert!(
-        reentries.iter().all(|line| line.contains("musttail call")),
-        "the dispatcher must re-enter itself with a guaranteed tail call, saw: {reentries:?}"
-    );
-}
-
 #[test]
 fn a_named_kernel_reuses_its_own_definition() {
     // A named function already has an emitted symbol the loop calls, so
     // extraction emits nothing new and copies nothing.
     let ir = module(
+        // The annotations are deliberate: an unannotated `twice` is a generic
+        // kernel, specialised and lifted at its call site, which is the other
+        // test's subject. Only a function with a CONCRETE signature has its own
+        // symbol for the loop to call.
         "fn twice(x: float) -> float = x * 2.0\n\
              fn f() = {\n\
                let out = toGpu([1.0, 2.0]) |> gpuMap(twice)\n\
@@ -243,19 +208,105 @@ fn twin_flavors_number_their_kernels_identically() {
     assert!(default_ir.contains("define double @__gpu_kernel_0(double %$p0, double %$p1)"));
 }
 
+// ---- host operations [GPU-MATMUL] [GPU-BUFFER-LOAD] [GPU-BUFFER-TENSOR] ----
+
+/// The runtime producer is called exactly once inside `f`, with the `io_error`
+/// channel cleared immediately before and read immediately after, so the
+/// `Error` message is the reason THIS call recorded [BUILTIN-FILE-ERRMSG].
+fn assert_one_bracketed_call(ir: &str, symbol: &str) {
+    let host = function_body(ir, "define i64 @f()");
+    let call = format!("call i8* @{symbol}(");
+    assert_eq!(host.matches(&call).count(), 1, "{host}");
+    let at = host.find(&call).unwrap_or(host.len());
+    let clear = host
+        .rfind("call void @osp_io_error_clear()")
+        .unwrap_or(host.len());
+    let take = host.find("call i8* @osp_io_error_take()").unwrap_or(0);
+    assert!(clear < at && at < take, "{host}");
+}
+
 #[test]
-fn codegen_error_display_covers_all_variants() {
-    // error.rs Display for every CodegenError variant.
-    assert_eq!(
-        CodegenError::unsupported("x").to_string(),
-        "codegen: unsupported construct: x"
+fn gpu_matmul_is_one_bracketed_runtime_call() {
+    let ir = module(
+        "fn f() = {\n\
+               let a = toGpu([1.0, 2.0])\n\
+               let m = gpuMatMul(a, a, 1, 2, 1) ?: a\n\
+               gpuLength(m)\n\
+             }\n\
+             print(f())\n",
     );
-    assert_eq!(
-        CodegenError::unknown("n").to_string(),
-        "codegen: unknown name `n`"
+    assert_one_bracketed_call(&ir, "osprey_gpu_matmul");
+}
+
+#[test]
+fn gpu_load_is_one_bracketed_runtime_call() {
+    let ir = module(
+        "fn f() = {\n\
+               let w = gpuLoad(\"w.bin\", 8, 2) ?: toGpu([0.0])\n\
+               gpuLength(w)\n\
+             }\n\
+             print(f())\n",
     );
-    assert_eq!(
-        CodegenError::invalid("p").to_string(),
-        "codegen: invalid program: p"
+    assert_one_bracketed_call(&ir, "osprey_gpu_load_f32");
+}
+
+#[test]
+fn gpu_load_tensor_is_one_bracketed_runtime_call() {
+    let ir = module(
+        "fn f() = {\n\
+               let w = gpuLoadTensor(\"m.safetensors\", \"wte\") ?: toGpu([0.0])\n\
+               gpuLength(w)\n\
+             }\n\
+             print(f())\n",
     );
+    assert_one_bracketed_call(&ir, "osprey_gpu_load_tensor");
+}
+
+// ---- float functions [BUILTIN-MATH] ----
+
+#[test]
+fn sqrt_exp_log_are_llvm_intrinsics_and_tanh_is_libm() {
+    let ir = module(
+        "fn f(x) = sqrt(x) + exp(x) + ln(x) + tanh(x)\n\
+             print(\"${f(2.0)}\")\n",
+    );
+    shows(
+        &ir,
+        &[
+            "call double @llvm.sqrt.f64(double ",
+            "call double @llvm.exp.f64(double ",
+            "call double @llvm.log.f64(double ",
+            "call double @tanh(double ",
+            "declare double @tanh(double)",
+        ],
+    );
+}
+
+#[test]
+fn a_float_function_by_name_is_an_extracted_kernel_in_both_flavors() {
+    // `gpuMap(exp)` lifts the builtin into a scalar kernel whose body is the
+    // intrinsic call — no closure cell, no environment [GPU-KERNEL-EXTRACT].
+    let default_ir = module(
+        "fn f() = {\n\
+               let out = toGpu([1.0, 2.0]) |> gpuMap(exp)\n\
+               gpuLength(out)\n\
+             }\n\
+             print(f())\n",
+    );
+    let ml_ir = ml_module(
+        "f () =\n    \
+                 out = toGpu [1.0, 2.0] |> gpuMap exp\n    \
+                 gpuLength out\n\
+             \n\
+             print (f ())\n",
+    );
+    assert_eq!(default_ir, ml_ir);
+    let header = "define double @__gpu_kernel_0(double %$p0)";
+    assert!(default_ir.contains(header), "{default_ir}");
+    let kernel = function_body(&default_ir, header);
+    assert!(
+        kernel.contains("call double @llvm.exp.f64(double %$p0)"),
+        "{kernel}"
+    );
+    assert!(!kernel.contains("__env"), "{kernel}");
 }

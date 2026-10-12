@@ -2,7 +2,9 @@
 print("=== File I/O Workflow Test ===")
 
 let content = "Hello, Osprey file I/O!"
-let filename = "test_output.txt"
+/// Named per run: the twins share one working directory, and a twin that
+/// truncates the file while this one reads it back would read "" instead.
+let filename = "test_output_${random()}.txt"
 
 print("-- Step 1: Writing to file --")
 let writeResult = writeFile(filename, content)
@@ -33,8 +35,8 @@ print("=== Test Complete ===")
 /// Repeats the real write/read workflow and verifies both Result payloads.
 fn fileWorkflowCase() = {
     let expected = "Hello, Osprey file I/O!"
-    let written = writeFile("test_output.txt", expected)
-    let readBack = readFile("test_output.txt")
+    let written = writeFile(filename, expected)
+    let readBack = readFile(filename)
     let missing = readFile("nonexistent_file_xyz123.txt")
     let writeMatches = match written {
         Success { value } => value == byteLength(expected)

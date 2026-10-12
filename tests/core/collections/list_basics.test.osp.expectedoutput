@@ -9,5 +9,7 @@ ok 8 - record lists destructure whole through list patterns
 ok 9 - nested lists index, destructure, and stay isolated
 ok 10 - forEachList and range pipelines visit every element type in order
 ok 11 - list index boundaries are checked on every element type
-1..11
-# tests=11 passed=11 failed=0 skipped=0
+ok 12 - fold rebuilds a list-literal seed once before the loop
+ok 13 - a bound string list is read by index in constant time
+1..13
+# tests=13 passed=13 failed=0 skipped=0

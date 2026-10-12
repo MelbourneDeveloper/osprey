@@ -1,113 +1,93 @@
 # CLAUDE.md
-<!-- agent-pmo:74cf183 -->
 
-Subagents = ⛔️ ILLEGAL
+**Osprey is in stabilization mode.** Finish and polish existing features and make the tests prove they are complete. Nothing new until what exists is hardened.
 
-Guidance for agents working in this repository.
+## ⚠️ Non-negotiables
 
-**Osprey is in stabilization mode.** One measure outranks everything else — not new features, not new syntax, not more examples:
+- **Subagents are illegal.**
+- **Never ask the user questions.** Use your judgement, record assumptions, act autonomously.
+- **Answer punctually, not at length.** A few sentences or a short list; no essays, recaps or restating the question. Mark the one point the user must not miss with an emoji — nothing else gets one.
+- **Zero duplicate code.** Edit in place, never create parallel versions. Use deslop: `find-similar` before writing code, `top-offenders` after modifying it.
+- **No git** — and never stamp yourself as co-author — unless explicitly requested.
+- **Token economics.** Check file size before reading, Grep over Read, smallest diff that solves the problem. Delete dead code, unused imports and stale comments.
+- **Never disable, weaken, bypass or narrow a CI gate to get a merge.** Not the rulesets, not a required-check list, not a job's `if:`, not a test's timeout. If a check is red, the code is wrong — fix the code.
 
-> **Every existing feature is stable, accurate and reliable. A program that compiles behaves exactly as documented; a program that must be rejected is rejected with a truthful error.**
+## Testing
 
-Nearly-complete features get finished. Completely broken features get removed and reported, not papered over. Before adding anything new, ask whether the effort would better harden something that exists.
-
-That doesn't mean taking shortcuts to finish features. That means doing the HARD WORK to COMPLETE FEATURES IN THE HIGHEST POSSIBLE quality level
-
-## Tests outrank code
-
-**A failing test that pins a compiler bug is worth more than a speculative fix.** A red test survives refactors and turns a suspicion into an enforceable contract. Code you *believe* is correct is a liability until an assertion proves it.
+**A failing test that pins a compiler bug is worth more than a speculative fix.** Code you *believe* is correct is a liability until an assertion proves it.
 
 - Write the test before the fix. If you can only do one, write the test.
 - A red test in the tree is a correct outcome. Never weaken, skip or delete a failing test, and never remove an assertion to make one pass.
-- Unit tests live inside each crate. Working programs live in `tests/` and run via the differential harness (`crates/run_test_corpus.sh`) under each memory backend and again on wasm32 (`OSPREY_TARGET=wasm32`); output must match the sibling `.expectedoutput` byte-for-byte. An ML twin shares its Default twin's golden — both flavors must print identically.
+- Unit tests live inside each crate. Programs in `tests/` run via the differential harness (`crates/run_test_corpus.sh`) under each memory backend and on wasm32 (`OSPREY_TARGET=wasm32`); output must match the sibling `.expectedoutput` byte-for-byte, and an ML twin shares its Default twin's golden.
 - `examples/failscompilation/` holds programs the compiler must reject.
 - Coverage thresholds live in `coverage-thresholds.json` and only go up.
-- Expand existing examples/tests instead of adding files. Keep examples concise, mixing many language constructs per file.
+- Expand existing examples and tests instead of adding files; keep each concise, mixing many language constructs.
 
-## 🚨 The pipeline is not negotiable
+## Broken code
 
-**A gate you can turn off is not a gate.** On 2026-08-12 both branch rulesets were found `enforcement: disabled` — a 212-file PR merged past them 29 minutes after its own CI failures were filed as issues #202/#203/#204. Nothing in the tree could have noticed, because branch protection lives in GitHub's settings.
+On encountering code that fails silently:
 
-- **Never disable, weaken, bypass or narrow a CI gate to get a merge.** Not the rulesets, not a required-check list, not a job's `if:`, not a test's timeout. If a check is red, the code is wrong — fix the code.
-- **"Advisory" is deleted.** Marking a job "not a required status check" removes it. If it is worth running it is worth blocking on; if it is not worth blocking on, delete the job and say so.
-- **Never merge with a known failure.** An open issue describing a red check on the branch is a blocker, not a footnote. File-and-merge is the exact failure this section exists to prevent.
-- The required checks are pinned in [`scripts/verify-branch-protection.mjs`](scripts/verify-branch-protection.mjs), asserted by the `changes` job on every PR. Changing the gate means changing that list and the ruleset together — the check fails until they agree.
-- Adding a required check? It must skip via a **job-level `if:`**, never `on: paths:`/`paths-ignore:`. A path-filtered job never reports, and a required check that never reports blocks every merge forever.
+- Replace it with a panic and a comment explaining why the code is wrong.
+- Write a test that fails because of the missing implementation.
+- Report the problem to the user. Do not try to fix the code.
 
-## 🚨 Broken Code Process
+A panic is found in seconds; a silent failure never is. This quarantine is the one place a panic is mandated.
 
-Upon encountering code that fails silently:
+## CI gates
 
-- REPLACE the code with a panic immediately and include comments to explain WHY the code is wrong
-- Write a test that fails because of the missing implementation
-- Report the problem to the user immediately
-- DO NOT TRY TO FIX THE CODE
+- **"Advisory" is deleted.** Marking a job "not a required status check" removes it. If it is worth running it is worth blocking on; otherwise delete the job and say so.
+- **Never merge with a known failure.** An open issue describing a red check on the branch is a blocker, not a footnote.
+- **Required checks are pinned** in [`scripts/verify-branch-protection.mjs`](scripts/verify-branch-protection.mjs) and asserted by the `changes` job on every PR. Changing the gate means changing that list and the ruleset together.
+- **A new required check skips via a job-level `if:`**, never `on: paths:`/`paths-ignore:`. A path-filtered job never reports, which blocks every merge forever.
 
-Silently-wrong output is worse than a crash: a panic is found in seconds; a silent failure never is. This quarantine is the one place a panic is mandated.
+## Code rules
 
-## Hard rules
-
-- ⚠️ **Never ask the user questions.** Use your judgement, record assumptions, act autonomously.
-- ⚠️ **Answer punctually, not at length.** A few sentences or a short list; no essays, no recaps, no restating the question. Mark the one point the user must not miss with an emoji — nothing else gets one. ⚠️
-- ⚠️ **Zero duplicate code.** Edit in place, never create parallel versions. Use deslop: `find-similar` before writing code, `top-offenders` after modifying it.
-- ⚠️ **No git** — and never stamp yourself as co-author — unless explicitly requested.
-- ⚠️ **Token economics.** Check file size before reading, Grep over Read, smallest diff that solves the problem. Delete dead code, unused imports, stale comments.
-- **No placeholders** — fix existing ones or fail with an error.
 - **Files under 500 LOC, functions under 20 LOC.** Refactor when over.
 - **FP style everywhere** — pure functions over OOP; name values as constants instead of scattering literals.
+- **No placeholders** — fix existing ones or fail with an error.
 - **Run `make ci` routinely** — most clippy lints auto-fix; don't hand-fix them.
-
-## Documentation
-
-- Spec IDs are hierarchical descriptive slugs — `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]`, never numbered. Code implementing a spec section references its ID in a comment (`// Implements [PARSER-EFFECTS-HANDLE]`) so grep finds spec → code → tests. Code, specs and tests must agree; where they don't, fix the stale source.
-- Let prose wrap naturally — no line endings for forced wrapping.
-- ⚠️ **ASCII-art diagrams are illegal** — [typeDiagram](https://typediagram.dev/docs/language-reference.html) for data types, mermaid for everything else.
-- Before touching the README, website, specs, docs, examples, release notes or user-facing comments, read [`docs/messaging.md`](docs/messaging.md).
+- **Rust: panics, `unwrap()` and similar are illegal** outside the broken-code quarantine. Return `Result<T, E>` and pattern match.
 
 ## Osprey style
 
-- **FP constructs**: immutable types, expressions over statements, algebraic effects for abstraction, ML-style minimal brackets. The best function is a single pure expression. Avoid consecutive statements and assignments, even when they add clarity.
+- **FP constructs** — immutable types, expressions over statements, algebraic effects for abstraction, ML-style minimal brackets. The best function is a single pure expression. Avoid consecutive statements and assignments, even when they add clarity.
 - **Lean on type inference — redundant annotations are defects.** Osprey is Hindley-Milner: every type the compiler can infer must be left off.
-  - Never annotate function parameters, return types or lambda parameters when inferable: `fn add(a, b) = a + b`, not `fn add(a: int, b: int) = a + b`; `|x| => x * 2`, not `|x: int| => x * 2`.
+  - Never annotate parameters, return types or lambda parameters when inferable: `fn add(a, b) = a + b`, not `fn add(a: int, b: int) = a + b`; `|x| => x * 2`, not `|x: int| => x * 2`.
   - Keep an annotation only when the compiler cannot infer the type: an empty literal with no context (`let xs: List<int> = []`), an `extern`/ambiguous return, or an unconstrained polymorphic type variable. A return annotation never turns `Result<T, E>` into `T` — handle failure with `match` or `?:`.
-  - If removing an annotation still compiles with identical output, it was redundant — remove it. Applies to every `.osp` you touch: `tests/regressions/`, `benchmarks/`, docs and website snippets.
+  - If removing an annotation still compiles with identical output, remove it. Applies to every `.osp` you touch, including `benchmarks/`, docs and website snippets.
 - **No consecutive print calls** — consolidate into one interpolated string.
 
 ```ospml
-    // This is wrong because the signature can be inferred. You must omit this!
+    // Wrong: the signature is inferable, so it must be omitted.
     escape : string -> string
-    escape s =
-        bslash = "\\"
-        quote = "\""
-        step = replace s bslash (bslash + bslash) ?: ""
-        escapeControls (replace step quote (bslash + quote) ?: "") 1
+    escape s = escapeControls (replace s "\"" "\\\"" ?: "") 1
 ```
 
-## Rust
+## Documentation
 
-- **Panics are illegal** outside the broken-code quarantine. Return `Result<T, E>`.
-- **`unwrap()` and similar are illegal.** Use pattern matching.
+- **Spec IDs are hierarchical descriptive slugs** — `[GROUP-TOPIC]` or `[GROUP-TOPIC-DETAIL]`, never numbered. Implementing code cites the ID in a comment (`// Implements [PARSER-EFFECTS-HANDLE]`) so grep links spec → code → tests. Where code, specs and tests disagree, fix the stale source.
+- **Let prose wrap naturally** — no forced line endings.
+- **ASCII-art diagrams are illegal** — [typeDiagram](https://typediagram.dev/docs/language-reference.html) for data types, mermaid for everything else.
+- **Read [`docs/messaging.md`](docs/messaging.md)** before touching the README, website, specs, docs, examples, release notes or user-facing comments.
 
 ## Commands
 
-- Use the Makefile from the repo root: `make ci` (lint + test + build), `make test`, `make build`, `make fmt`, `make run FILE=<path>`. The compiler binary lands at `target/release/osprey`.
+- **Makefile** from the repo root: `make ci` (lint + test + build), `make test`, `make build`, `make fmt`, `make run FILE=<path>`. The compiler binary lands at `target/release/osprey`.
 - **VSCode extension**: `cd vscode-extension && npm install && npm run compile`; test with `npm test`.
-- **Website**: `cd website && npm install && npm run dev` (or `npm run build`). **CSS hard budget 1.8k LOC**; blogs/specs/docs are prose and share the `prose` CSS name prefix; **zero Tailwind**.
+- **Website**: `cd website && npm install && npm run dev` (or `npm run build`). CSS hard budget 1.8k LOC; blogs, specs and docs are prose and share the `prose` CSS name prefix; zero Tailwind.
 - **WebCompiler**: `cd webcompiler && npm install && npm start`.
-- **Never commit generated files.** `website/src/spec/*.md` (from `docs/specs/`) and `website/src/assets/vendor/` are gitignored build output regenerated by `npm run build` — edit the source, never the copy.
+- **Never commit generated files.** `website/src/spec/*.md` and `website/src/assets/vendor/` are gitignored output of `npm run build` — edit the source in `docs/specs/`, never the copy.
 
 ## Architecture
 
 - `crates/` — the compiler pipeline: tree-sitter parse (`osprey-syntax`, grammar in `tree-sitter-osprey/`) → AST (`osprey-ast`) → Hindley-Milner inference (`osprey-types`) → LLVM IR (`osprey-codegen`) → CLI (`osprey-cli`, the `osprey` binary); `osprey-runtime-sys` links the C runtime.
 - `compiler/runtime/` — pure-C runtime (fibers, HTTP/WebSocket, system ops), compiled with hardening flags (`-D_FORTIFY_SOURCE=2`, `-fstack-protector-strong`), all warnings as errors. Performance-critical code stays C.
-- `vscode-extension/` (TypeScript), `website/` (11ty), `webcompiler/` (Node service), `homebrew-package/`.
+- A language change follows that same path, then lands a regression program in `tests/regressions/` plus a rejection case in `examples/failscompilation/`.
 
-Key invariants:
+### Language invariants
 
-- Effects are declared with `effect` and managed by callable `handler` values or rest-of-block `handle` statements. The compiler rejects a program that performs an effect no handler discharges — ``unhandled effect operations at program entry: E.op; add a matching `handle` `` — reaching through helpers, lambdas passed to HOFs, and fibers (`crates/osprey-types/src/effect_rows.rs`). The remaining limit is representational: closed-program operation summaries, not an effect-row variable in `Type::Fun`.
-- Pattern matching is mandatory for `any` types and union types.
+- Effects are declared with `effect` and discharged by `handler` values or rest-of-block `handle` statements. The compiler rejects a program that performs an effect no handler discharges — ``unhandled effect operations at program entry: E.op; add a matching `handle` `` — reaching through helpers, lambdas passed to HOFs, and fibers (`crates/osprey-types/src/effect_rows.rs`). The remaining limit is representational: closed-program operation summaries, not an effect-row variable in `Type::Fun`.
+- Pattern matching is mandatory for `any` and union types.
 - All HTTP/WebSocket operations return `Result<T, String>`.
 - Fibers are isolated — message passing, no shared memory.
 - Effects provide capability-based security; file, HTTP and process sandboxing is configurable.
-
-Workflow for a language change: grammar in `tree-sitter-osprey/` → `osprey-syntax`/`osprey-ast` → type rules in `osprey-types` → `osprey-codegen` → C runtime functions if needed → regression program in `tests/regressions/` + rejection case in `examples/failscompilation/`.

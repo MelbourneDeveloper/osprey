@@ -178,6 +178,12 @@ fn for_each(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 /// operand of the template is stale; only its type tags are read [MEM-BACKENDS].
 pub(crate) fn acc_init(cg: &mut Codegen, args: &[Expr]) -> Result<(String, Value)> {
     let initial = gen_expr(cg, nth(args, 1)?)?;
+    // The seed's representation is the loop-carried slot's for every
+    // iteration, and a flat list literal (`fold([], …)`) is not what
+    // `listAppend` hands back: left flat, the second iteration read a runtime
+    // list's header as `{ length, data }` and segfaulted. The slot is an
+    // escape, so the literal takes the runtime layout here, once.
+    let initial = crate::listlit::escaping(cg, initial);
     // A pointer accumulator escapes into the loop-carried slot: dup it so the
     // per-iteration region drop cannot free it [GC-ARC-PERCEUS].
     crate::arc::escape_retain(cg, &initial);

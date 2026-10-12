@@ -68,18 +68,18 @@ esac
 # Silence is not success — if coverage ever drops below this floor the harness
 # FAILS rather than quietly checking less than it used to.
 #
-# Natively all 217 programs are covered by golden files, most shared by a
+# Natively all 219 programs are covered by golden files, most shared by a
 # Default/ML flavor pair. On wasm32 the programs blocked on a capability WASI
 # does not have are skipped — each named in tests/WASM_UNPORTABLE.txt, and a
 # resumable one named by the OPERATION it cannot suspend [MULTI-WASM] — leaving
-# 151. On the mobile C ABI targets the same accounting leaves 166: the rest are
+# 153. On the mobile C ABI targets the same accounting leaves 168: the rest are
 # rejected for a missing capability or for a boundary the scalar C ABI cannot
 # express, each pinned in tests/MOBILE_UNPORTABLE.txt.
 # Ratchet UP as goldens are added; never lower it to turn a red build green.
 case $TARGET in
-  wasm32)            GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-151} ;;
-  ios-sim|android*) GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-166} ;;
-  *)                 GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-217} ;;
+  wasm32)            GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-153} ;;
+  ios-sim|android*) GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-168} ;;
+  *)                 GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-219} ;;
 esac
 
 # [GPU-KERNEL-EXTRACT] differential. The extracted-kernel lowering and the
@@ -87,7 +87,7 @@ esac
 # semantics, so the GPU suites must produce byte-identical output under both.
 # This re-runs ONLY tests/core/gpu under the OPPOSITE lowering and compares it
 # to the stdout the main pass already captured — a second oracle for the same
-# goldens at the cost of eighteen programs, not a second corpus.
+# goldens at the cost of twenty programs, not a second corpus.
 GPU_SUITE_DIR=$TESTDIR/core/gpu
 # Canonicalized exactly as the compiler's mode_of: surrounding whitespace is
 # ignored, empty keeps extraction, anything else is an error. Selecting the
@@ -104,8 +104,8 @@ case $GPU_KERNELS_MODE in
     exit 2
     ;;
 esac
-# Nine suites x two flavors. Ratchet UP; never lower it to turn a build green.
-GPU_MODE_MIN=${OSPREY_GPU_MODE_MIN:-18}
+# Ten suites x two flavors. Ratchet UP; never lower it to turn a build green.
+GPU_MODE_MIN=${OSPREY_GPU_MODE_MIN:-20}
 
 
 # Backend execution — one `run_*` per target, plus the one-time device and

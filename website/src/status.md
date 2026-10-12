@@ -79,7 +79,7 @@ are compiled and compared with checked-in expected output.
 
 The compiler rejects unsupported target operations during `--check`, `--llvm`, and compilation. iOS and Android reject `resume` and unavailable built-in process, HTTP, and WebSocket operations. Their hosts provide platform networking through the C boundary. WebAssembly also rejects fibers, terminal control, and arbitrary C imports; approved browser imports and supported host filesystem operations remain available.
 
-[Issue Inbox](/docs/mobile-apps/) demonstrates the same Osprey project on iOS and Android, including ML modules and a small Default-flavor C entry point. Its screenshots come from actual simulator/emulator runs. The iOS app has also been installed and verified on a physical iPhone. Both Android ABIs execute the shared test corpus through the C ABI.
+[Issue Inbox](/docs/mobile-apps/) demonstrates the same Osprey project on iOS and Android, including ML modules and a small Default-flavor C entry point. Its screenshots come from actual simulator/emulator runs. Earlier builds were verified on a physical iPhone and through the shared C ABI on both Android ABIs. Those platform runs predate the callable handler migration; current checks cover shared domain behavior, LLVM/ABI generation, and native C entrypoints on Linux. Simulator, emulator, device, and hosted CI execution must be refreshed for the migrated sources; see the [validation record](https://github.com/Nimblesite/osprey/blob/main/examples/mobile/README.md#validation).
 
 ## Source compatibility
 

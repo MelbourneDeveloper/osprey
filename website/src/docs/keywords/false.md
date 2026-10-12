@@ -20,5 +20,5 @@ print(match isComplete {
 isComplete = false
 match isComplete
     false => print "Not done yet"
-    true => print "Done"
+    true => print "done"
 ```

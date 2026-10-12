@@ -157,6 +157,38 @@ pub(crate) fn absolute(cg: &mut Codegen, value: Value) -> Result<Value> {
     integer_absolute(cg, value)
 }
 
+/// The unary float functions [BUILTIN-MATH]. `sqrt`, `exp` and `ln` are the
+/// LLVM intrinsics (`ln` is `llvm.log`; the name `log` is left to programs,
+/// whose loggers want it), `tanh` the libm symbol (its intrinsic is
+/// younger than the oldest toolchain the targets build with); each is one
+/// `double -> double` call a device emitter maps to its own math library.
+const FLOAT_FUNCTIONS: [(&str, &str); 4] = [
+    ("sqrt", "llvm.sqrt.f64"),
+    ("exp", "llvm.exp.f64"),
+    ("ln", "llvm.log.f64"),
+    ("tanh", "tanh"),
+];
+
+pub(crate) fn is_float_function(name: &str) -> bool {
+    FLOAT_FUNCTIONS.iter().any(|(n, _)| *n == name)
+}
+
+/// Apply the float function `name` to `value`. Inference admits only a `float`
+/// argument (`exp(3)` is a type error, never a widening), so `as_double` is a
+/// no-op on every program that reaches codegen. Total: domain errors are NaN,
+/// overflow is infinity. Implements [BUILTIN-MATH].
+pub(crate) fn float_function(cg: &mut Codegen, name: &str, value: Value) -> Result<Value> {
+    let Some((_, symbol)) = FLOAT_FUNCTIONS.iter().find(|(n, _)| *n == name) else {
+        return Err(crate::error::CodegenError::invalid(format!(
+            "{name} is not a float function"
+        )));
+    };
+    let x = as_double(cg, value)?;
+    cg.add_extern(format!("declare double @{symbol}(double)"));
+    let operand = cg.emit_reg(format!("call double @{symbol}(double {})", x.operand));
+    Ok(Value::new(operand, LType::Double))
+}
+
 /// [BUILTIN-ABS] clears the sign of zero and infinity, preserving NaN.
 fn float_absolute(cg: &mut Codegen, value: &Value) -> Value {
     cg.add_extern("declare double @llvm.fabs.f64(double)");

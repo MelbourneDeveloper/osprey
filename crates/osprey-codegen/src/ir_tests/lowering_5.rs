@@ -21,7 +21,7 @@ fn higher_order_calls_through_computed_and_field_callees() {
              fn fieldWitness() -> string = dispatch(Dispatch { m: methodField })\n\
              fn add3(a: int) -> (int) -> (int) -> int =\n\
                fn(b: int) => fn(c: int) => satAdd(satAdd(a, b), c)\n\
-             fn makeAdder(n: int) -> (int) -> int = fn(x: int) => satAdd(x, n)\n\
+             fn makeAdder(n) = fn(x) => satAdd(x, n)\n\
              fn main() -> Unit = {\n\
                let cfg = Cfg { keep: fn(n: int) => n > 1 }\n\
                let chain = add3(1)(2)(3)\n\
@@ -53,6 +53,11 @@ fn higher_order_calls_through_computed_and_field_callees() {
 fn field_callbacks_return_callables_and_keep_named_slots() {
     // A field callback returns another callable through two generic helpers.
     // The second record also proves named field arguments keep written slots.
+    // `firstSlot` keeps `second: int` and `-> int` deliberately: unannotated
+    // the definition is generic — lambda-lifted, no real `@firstSlot` symbol —
+    // so the witnesses below could not prove a call keeps its named arguments
+    // in their written slots. `first: int` is inferable (pinned by the return
+    // and the int call sites) and is left off.
     let returned = module(
             "effect Probe { value: fn() -> int }\n\
              fn fetch() -> int !Probe = perform Probe.value()\n\
@@ -68,7 +73,7 @@ fn field_callbacks_return_callables_and_keep_named_slots() {
              fn dispatchNamed<T>(x: T) = x.m(ignored: pure, callback: fetch)\n\
              fn forward<T>(dummy: T, cb: () -> () -> int) = dispatch(Factory { m: cb })()\n\
              fn forwardNamed<T>(dummy: T, cb: (() -> int, () -> int) -> () -> int) = dispatchNamed(NamedFactory { m: cb })()\n\
-             fn firstSlot(first: int, second: int) -> int = first\n\
+             fn firstSlot(first, second: int) -> int = first\n\
              fn throughSlot<T>(dummy: T, callback: (int, int) -> int) = callback(second: 22, first: 11)\n\
              fn genericSlotWitness() -> int = throughSlot(0, firstSlot)\n\
              fn declaredSlotWitness() -> int = firstSlot(second: 22, first: 11)\n\
@@ -231,7 +236,7 @@ fn a_still_generic_lambda_with_no_slot_at_all_is_rejected() {
 fn float_literal_match_uses_fcmp() {
     // A float-literal arm drives gen_eq's fcmp-oeq path (pattern.rs 487-491).
     let ir = module(
-        "fn pick(x: float) -> int = match x {\n\
+        "fn pick(x) = match x {\n\
                1.5 => 1\n\
                _   => 0\n\
              }\n\
@@ -322,4 +327,60 @@ fn codegen_constructors_are_callable_directly() {
     // takes inferred types) — exercised directly for the public surface.
     let _a = builder::Codegen::new();
     let _b = builder::Codegen::default();
+}
+
+#[test]
+fn codegen_error_display_covers_all_variants() {
+    // error.rs Display for every CodegenError variant.
+    assert_eq!(
+        CodegenError::unsupported("x").to_string(),
+        "codegen: unsupported construct: x"
+    );
+    assert_eq!(
+        CodegenError::unknown("n").to_string(),
+        "codegen: unknown name `n`"
+    );
+    assert_eq!(
+        CodegenError::invalid("p").to_string(),
+        "codegen: invalid program: p"
+    );
+}
+
+/// A handler with one RESUMING arm and one SUBSTITUTING arm continues by
+/// re-entering its own dispatcher with the same arguments. A plain call
+/// there grew one native frame per operation the substituting arm answered:
+/// release builds happened to fold it away, debug builds compile at `-O0`
+/// where nothing does, and a loop of otherwise constant-space performs
+/// exhausted the host stack. The reuse must be a property of the MODULE,
+/// not a hope about the optimizer. Implements [EFFECTS-HANDLER-ARMS].
+#[test]
+fn a_mixed_handler_dispatcher_continues_by_guaranteed_tail_call() {
+    let ir = module(
+        "effect Log {\n\
+               note: fn(int) -> Unit\n\
+               control ask: fn(int) -> int\n\
+               }\n\
+               fn hammer(n) = range(0, n) |> forEach(fn(i) => perform Log.note(i))\n\
+               let done = {\n\
+                   handle Log {\n\
+                       note value => value\n\
+                       ask value => resume(1)\n\
+                   }\n\
+                   hammer(3)\n\
+               }\n\
+               print(\"done\")\n",
+    );
+    let body = function_body(
+        &ir,
+        "define i64 @__resume_drive_Log_0(i8* %__env, i8* %__coro)",
+    );
+    let reentries: Vec<&str> = body
+        .lines()
+        .filter(|line| line.contains("call i64 @__resume_drive_Log_0"))
+        .collect();
+    assert_eq!(reentries.len(), 1, "one re-entry per dispatcher: {body}");
+    assert!(
+        reentries.iter().all(|line| line.contains("musttail call")),
+        "the dispatcher must re-enter itself with a guaranteed tail call, saw: {reentries:?}"
+    );
 }

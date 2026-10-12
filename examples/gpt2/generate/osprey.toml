@@ -1,0 +1,5 @@
+[project]
+name = "generate"
+source_roots = ["../model", "."]
+default_namespace = "generate"
+entry = "generate.osp"

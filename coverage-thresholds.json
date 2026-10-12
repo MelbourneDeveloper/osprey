@@ -58,6 +58,10 @@
       "threshold": 90,
       "language": "c"
     },
+    "gpu_host": {
+      "threshold": 90,
+      "language": "c"
+    },
     "effects_runtime": {
       "threshold": 90,
       "language": "c"

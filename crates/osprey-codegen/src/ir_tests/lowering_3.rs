@@ -318,6 +318,65 @@ fn a_file_scope_list_literal_is_rebuilt_before_a_function_reads_it() {
 }
 
 #[test]
+fn a_list_literal_fold_seed_is_rebuilt_once_before_the_loop() {
+    // `fold([], …)` carries its seed through the loop-carried slot. Left flat,
+    // the second iteration read the runtime list `listAppend` handed back as a
+    // `{ length, data }` header and SEGFAULTED. The seed now takes the runtime
+    // layout once, at the escape into the slot, and the loop body converts
+    // nothing per iteration [BUILTIN-ITER-FOLD].
+    let ir = module(
+        "fn main() -> Unit = {\n\
+               let xs = range(0, 3) |> fold([], fn(acc, i) => listAppend(acc, i))\n\
+               print(listLength(xs))\n\
+             }\n",
+    );
+    let main = function_body(&ir, "define i32 @main()");
+    assert_eq!(
+        main.matches("call i8* @osprey_list_builder_new_of").count(),
+        1,
+        "exactly one conversion, the seed's:\n{main}"
+    );
+    let sealed = main
+        .find("call i8* @osprey_list_builder_seal")
+        .unwrap_or(main.len());
+    let appended = main.find("@osprey_list_append").unwrap_or(0);
+    assert!(
+        sealed < appended,
+        "the seed is sealed before the loop's first append:\n{main}"
+    );
+}
+
+#[test]
+fn a_bound_string_list_is_settled_once_at_its_binding() {
+    // `let rows = lines(s)` then `listGet(rows, i)` in a loop copied the WHOLE
+    // list on every read (50 000 lines × 5 000 reads: 6.9 GB and nine seconds).
+    // The binding settles the `[]i8*` result once; the loop reads the runtime
+    // list in place [BUILTIN-LIST-GET].
+    let ir = module(
+        "fn main() -> Unit = {\n\
+               let rows = lines(\"a\\nb\\nc\")\n\
+               let total = range(0, 3) |> fold(0, fn(acc, i) => wrapAdd(acc, length(listGet(rows, i) ?: \"\")))\n\
+               print(total)\n\
+             }\n",
+    );
+    let main = function_body(&ir, "define i32 @main()");
+    assert_eq!(
+        main.matches("call i8* @osprey_list_builder_new_of(i32 1)")
+            .count(),
+        1,
+        "exactly one string-list conversion, at the binding:\n{main}"
+    );
+    let sealed = main
+        .find("call i8* @osprey_list_builder_seal")
+        .unwrap_or(main.len());
+    let read = main.find("@osprey_list_in_bounds").unwrap_or(0);
+    assert!(
+        sealed < read,
+        "the list is settled before the loop's first read:\n{main}"
+    );
+}
+
+#[test]
 fn list_get_and_contains_runtime_calls() {
     // listGet (bounds-checked Result) and listContains (linear scan with
     // both the int and string equality paths).

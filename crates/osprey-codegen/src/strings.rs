@@ -399,13 +399,19 @@ fn from_codepoint(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     result_from_nullable(cg, &ptr, Some("fromCodePoint: invalid code point"), None)
 }
 
-/// `join(list: List<string>, separator: string) -> string`.
+/// `join(list: List<string>, separator: string) -> string`. The list takes the
+/// runtime layout first, so a flat literal, an unbound `lines()` result, a
+/// `let`-bound one and a `listAppend`/`toList`/`fold` result all join through
+/// one C entry point; the flat-only `osp_string_join` read a runtime list's
+/// header as `{ length, items }` and segfaulted [BUILTIN-STRING-JOIN].
 fn join(cg: &mut Codegen, args: &[Expr], _named: &[NamedArgument]) -> Result<Value> {
-    let list = arg(cg, args, 0, LType::Ptr)?;
+    let list = gen_expr(cg, crate::iter::nth(args, 0)?)?;
+    let list = crate::listlit::to_runtime_list(cg, list);
+    let list = crate::cast::coerce_to(cg, list, LType::Ptr)?;
     let sep = arg(cg, args, 1, LType::Str)?;
     let r = cg.call(
         "i8*",
-        "osp_string_join",
+        "osp_string_join_list",
         "i8*, i8*",
         &[&list.operand, &sep.operand],
     );

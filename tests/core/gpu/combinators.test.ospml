@@ -16,17 +16,13 @@ emptyFloats : Unit -> GpuBuffer<float>
 emptyFloats () = toGpu []
 
 (** The associative int combines fold and scan share. *)
-sumI : (int, int) -> int
 sumI (a, b) = (a + b) 
-mulI : (int, int) -> int
 mulI (a, b) = (a * b) 
 
 (** subI and horner are deliberately non-commutative. Left-to-right is the
     only traversal that reproduces their results, so every assertion on them
     pins the order [GPU-BACKEND-HOST] rather than merely the element set. *)
-subI : (int, int) -> int
 subI (a, b) = (a - b) 
-horner : (int, int) -> int
 horner (a, d) = (((a * 10) ) + d) 
 
 (** maxI makes a scan a running maximum; addF is the float reduction; orB is
@@ -35,13 +31,10 @@ maxI : (int, int) -> int
 maxI (a, b) = match a > b
     true => a
     false => b
-addF : (float, float) -> float
 addF (a, x) = a + x
-orB : (bool, bool) -> bool
 orB (a, b) = a || b
 
 (** The population count that turns a bool buffer into a scalar. *)
-countTrue : (int, bool) -> int
 countTrue (a, flag) = match flag
     true => (a + 1) 
     false => a
@@ -79,11 +72,9 @@ truthy b = b
 
 (** The zip kernels below all return an element type neither operand has, so
     gpuZipWith is exercised as a type-changing combinator too. *)
-sameParity : (int, int) -> bool
 sameParity (a, b) = isEven a == isEven b
 lessF : (float, float) -> bool
 lessF (a, b) = a < b
-meanF : (int, int) -> float
 meanF (a, b) = (toFloat a + toFloat b) * 0.5
 mixAdd : (int, float) -> float
 mixAdd (i, x) = toFloat i + x

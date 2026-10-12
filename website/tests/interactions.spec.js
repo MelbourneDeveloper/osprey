@@ -23,12 +23,12 @@ test.describe("homepage flight and source examples", () => {
   test("both syntax examples execute with the displayed output", async ({ page }, testInfo) => {
     await page.goto("/");
     for (const [flavor, extension] of [["default", "osp"], ["ml", "ospml"]]) {
-      await page.locator(`[data-flavor="${flavor}"]`).click();
+      await page.locator(`.flavor-controls button[data-flavor="${flavor}"]`).click();
       const source = page.locator(`#example-${flavor}`);
       await expect(source).toBeVisible();
       const file = testInfo.outputPath(`greeting.${extension}`);
       const output = await executeExample(await source.textContent(), file);
-      expect(output).toBe(`${await page.locator(".code-result samp").textContent()}\n`);
+      expect(output).toBe(`${await page.locator(".hero .code-result samp").textContent()}\n`);
     }
   });
 

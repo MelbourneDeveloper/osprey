@@ -62,6 +62,10 @@ fn call_builtin_with_values(cg: &mut Codegen, name: &str, args: &[Value]) -> Opt
         // `gpuIota(n) |> gpuMap(toFloat)` lowers through this arm.
         "toFloat" => as_i64(cg, arg()).and_then(|n| as_double(cg, n)),
         "abs" => crate::arithmetic::absolute(cg, arg()),
+        // [BUILTIN-MATH] `gpuMap(exp)`: a float function named as a kernel.
+        name if crate::arithmetic::is_float_function(name) => {
+            crate::arithmetic::float_function(cg, name, arg())
+        }
         name if is_binary_integer_builtin(name) => match args {
             [left, right] => binary_integer_builtin(cg, name, left.clone(), right.clone()),
             _ => Err(CodegenError::invalid(format!("{name} needs two arguments"))),

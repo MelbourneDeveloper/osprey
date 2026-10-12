@@ -1,6 +1,6 @@
 //! Scalar intrinsic kernels reuse ordinary builtin lowering. [GPU-KERNEL-EXTRACT]
 use super::{Callback, Codegen, Expr, GpuKernelMode, LType, Parameter, Result};
-use osprey_types::{names, Type};
+use osprey_types::Type;
 
 /// Preserve an applied builtin's name instead of allocating a closure cell.
 pub(super) fn callback(cg: &Codegen, expression: &Expr) -> Option<Callback> {
@@ -12,24 +12,14 @@ pub(super) fn callback(cg: &Codegen, expression: &Expr) -> Option<Callback> {
         Expr::TypeApply { function, .. } => return callback(cg, function),
         _ => return None,
     };
-    (arity(name).is_some() && !shadowed(cg, name)).then(|| Callback::Named(name.clone()))
+    (arity(name).is_some() && !crate::builtin_values::shadowed(cg, name))
+        .then(|| Callback::Named(name.clone()))
 }
 
-fn shadowed(cg: &Codegen, name: &str) -> bool {
-    cg.lookup(name).is_some()
-        || cg.lambda_def(name).is_some()
-        || cg.cell_slots.contains_key(name)
-        || cg.fn_ptr_locals.contains_key(name)
-        || cg.call_aliases.contains_key(name)
-        || cg.module_globals.contains_key(name)
-        || cg.fn_params.contains_key(name)
-}
-
+/// A builtin lifts only when its arity matches and every combinator slot is a
+/// scalar word [GPU-BUFFER-ELEM].
 pub(super) fn admissible(name: &str, slots: &[LType]) -> bool {
-    arity(name) == Some(slots.len())
-        && slots
-            .iter()
-            .all(|slot| matches!(slot, LType::I64 | LType::Double | LType::I1))
+    arity(name) == Some(slots.len()) && slots.iter().copied().all(crate::gpu::is_scalar)
 }
 
 /// Use the authoritative builtin scheme; host handles and Result slots decline.
@@ -40,18 +30,8 @@ fn arity(name: &str) -> Option<usize> {
     params
         .iter()
         .chain(std::iter::once(ret.as_ref()))
-        .all(scalar)
+        .all(osprey_types::is_gpu_scalar)
         .then_some(params.len())
-}
-
-fn scalar(ty: &Type) -> bool {
-    match ty {
-        Type::Var(_) => true,
-        Type::Con { name, args } => {
-            args.is_empty() && matches!(name.as_str(), names::INT | names::FLOAT | names::BOOL)
-        }
-        _ => false,
-    }
 }
 
 /// Synthesize only the call surface; ordinary lowering owns intrinsic semantics.
