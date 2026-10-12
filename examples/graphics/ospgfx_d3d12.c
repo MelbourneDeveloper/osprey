@@ -16,18 +16,6 @@
 
 static const FLOAT OSP_GFX_CLEAR[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
-// A window Osprey could not possibly have meant is refused, but a nonsensical
-// scale is clamped rather than refused — the same asymmetry ospgfx.m has, and
-// for the same reason: the resolution is a contract, the magnification is not.
-static int osp_gfx_extent_ok(int64_t width, int64_t height) {
-  return width > 0 && height > 0 && width <= OSP_GFX_MAX_EXTENT &&
-         height <= OSP_GFX_MAX_EXTENT;
-}
-
-static int64_t osp_gfx_clamp_scale(int64_t scale) {
-  return scale < OSP_GFX_MIN_SCALE || scale > OSP_GFX_MAX_SCALE ? OSP_GFX_MIN_SCALE : scale;
-}
-
 // The bring-up, in order, short-circuiting on the first refusal — which has
 // already said what it was. The factory is the one object not kept: the swap
 // chain holds what it needs, so it is released whether or not this succeeded.
@@ -67,15 +55,11 @@ OSP_GFX_API void *osp_gfx_open(int64_t width, int64_t height, int64_t scale,
   return NULL;
 }
 
-// Store one slot after dividing `value` by `scale`. Out-of-range slots are
-// ignored rather than trapping, so a scene bug never takes the process down.
+// Store one slot through the shared ABI helper, which owns the range check and
+// the division for both bridges; a NULL handle stores nothing.
 static int64_t osp_gfx_store(void *handle, int64_t slot, int64_t value, float scale) {
   OspGfxContext *ctx = (OspGfxContext *)handle;
-  if (!ctx || slot < 0 || slot >= OSP_GFX_SLOTS) {
-    return 0;
-  }
-  ctx->uniforms.slot[slot] = (float)value / scale;
-  return 1;
+  return osp_gfx_slot_store(ctx ? &ctx->uniforms : NULL, slot, value, scale);
 }
 
 // Push one moving scene parameter, in 4096ths; the shader sees a float.
@@ -237,7 +221,7 @@ OSP_GFX_API int64_t osp_gfx_draw(void *handle) {
 // so they play at the same speed whatever frame rate the host sustains.
 OSP_GFX_API int64_t osp_gfx_ticks(void *handle) {
   OspGfxContext *ctx = (OspGfxContext *)handle;
-  return ctx ? (int64_t)((osp_gfx_now() - ctx->openedAt) * 1000.0) : 0;
+  return ctx ? osp_gfx_elapsed_ms(ctx->openedAt, osp_gfx_now()) : 0;
 }
 
 // Every GPU object here is still referenced by work in flight, so the queue is

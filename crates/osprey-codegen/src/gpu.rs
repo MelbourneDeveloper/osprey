@@ -1,23 +1,41 @@
 //! GPU computation builtins — the host execution backend [GPU-BACKEND-HOST]
 //! (docs/specs/0034-GPUComputation.md). `toGpu`/`fromGpu` copy between
-//! persistent lists and dense scalar buffers, `gpuMap`/`gpuFold` run kernels
-//! as fused native loops over those buffers. The dense unboxed layout is the
-//! staging layout a device transfer will use; kernels reaching codegen are
-//! already proven pure by the effect checker [GPU-KERNEL-PURE].
+//! persistent lists and dense scalar buffers; the combinators (`gpuMap`,
+//! `gpuFold`, `gpuZipWith`, `gpuScan`, `gpuFilter`, `gpuIota`, `gpuGet`) run
+//! kernels as native counted loops over those buffers. The dense unboxed
+//! layout is the staging layout a device transfer will use; kernels reaching
+//! codegen are already proven pure by the effect checker [GPU-KERNEL-PURE].
+
+mod buffer;
 
 use crate::builder::Codegen;
 use crate::conv::box_to_i64;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
 use crate::gpu_kernel::{extract, kernel_elem, kernel_of, slot};
-use crate::iter::{acc_init, acc_result, acc_step, invoke, nth};
+use crate::iter::{acc_init, acc_result, acc_step, invoke, nth, Callback};
 use crate::llty::{LType, Value};
 use crate::loops::{close_range_loop, open_range_loop};
+use buffer::{kept_counter, push_kept, take_kept};
 use osprey_ast::{Expr, NamedArgument};
 
 /// The owner tag GPU buffer handles travel under when their element type is
 /// not statically known.
 const GPU_OWNER: &str = "GpuBuffer";
+
+/// Whether `ty` is a buffer word — `int`, `float` or `bool`. This is the
+/// device sublanguage's element restriction [GPU-BUFFER-ELEM], spelled ONCE:
+/// element data, kernel results, reduction accumulators and extracted-kernel
+/// uniforms ([`crate::gpu_kernel`]) all consult this predicate.
+pub(crate) fn is_scalar(ty: LType) -> bool {
+    matches!(ty, LType::I64 | LType::Double | LType::I1)
+}
+
+/// Whether `v` is a bare scalar word — [`is_scalar`] with no `Result` wrapper,
+/// which would travel as an erased pointer the flat ABI has no slot for.
+fn is_scalar_value(v: &Value) -> bool {
+    v.result_inner.is_none() && is_scalar(v.ty)
+}
 
 /// The name `gpuDevice()` reports for the host execution backend
 /// [GPU-DEVICE] [GPU-BACKEND-HOST]. Device backends will report their own
@@ -30,17 +48,21 @@ const HOST_DEVICE: &str = "host";
 /// parameters and returns.
 pub(crate) const GPU_TAG: &str = "Gpu#";
 
+/// The owner tag for a buffer whose element has the given tag spelling, or the
+/// bare owner when the element is unknown — the one place `Gpu#` is joined to
+/// a spelling, so a static type, a lowered `LType` and an inferred literal
+/// element all tag their handles identically.
+fn owner_of(elem: Option<&str>) -> String {
+    crate::llty::elem_tagged_owner(GPU_TAG, GPU_OWNER, elem)
+}
+
 /// The owner tag for a `GpuBuffer<elem>` static type: element-typed when the
 /// element is a concrete scalar, the bare owner otherwise.
 pub(crate) fn buffer_owner(
     prog: &osprey_types::ProgramTypes,
     elem: Option<&osprey_types::Type>,
 ) -> String {
-    crate::llty::elem_tagged_owner(
-        GPU_TAG,
-        GPU_OWNER,
-        crate::types::elem_tag(prog, elem).as_deref(),
-    )
+    owner_of(crate::types::elem_tag(prog, elem).as_deref())
 }
 
 /// The element `LType` recorded on a buffer value's owner tag, if any. A buffer
@@ -56,23 +78,9 @@ pub(crate) fn is_buffer_owner(owner: &str) -> bool {
     owner == GPU_OWNER || owner.starts_with(GPU_TAG)
 }
 
-/// The element `LType` of the list `v` holds, from either list representation:
-/// a flat literal's `[]double` or a runtime handle's `List#double`. The copy
-/// into a buffer is element-blind without it, so `toGpu` of a `List<float>`
-/// value produced a bare-tagged buffer whose reads mis-typed [GPU-BUFFER-ELEM].
-fn list_elem(v: &Value) -> Option<LType> {
-    crate::llty::elem_of_tag(v, "[]")
-        .or_else(|| crate::collections::tagged_elem(v))
-        .map(|tag| crate::llty::elem_of_spelling(&tag).0)
-}
-
 /// The owner tag for a buffer holding `elem` words.
 fn elem_owner(elem: Option<LType>) -> String {
-    crate::llty::elem_tagged_owner(
-        GPU_TAG,
-        GPU_OWNER,
-        elem.and_then(crate::llty::scalar_spelling),
-    )
+    owner_of(elem.and_then(crate::llty::scalar_spelling))
 }
 
 /// Dispatch a GPU builtin by name, or `None` if `name` is not one.
@@ -93,8 +101,8 @@ type Lowering = fn(&mut Codegen, &[Expr]) -> Result<Value>;
 
 fn operation(name: &str) -> Option<Lowering> {
     Some(match name {
-        "toGpu" => to_gpu,
-        "fromGpu" => from_gpu,
+        "toGpu" => buffer::to_gpu,
+        "fromGpu" => buffer::from_gpu,
         "gpuLength" => gpu_length,
         "gpuMap" => gpu_map,
         "gpuFold" => gpu_fold,
@@ -146,143 +154,21 @@ fn elem_value(cg: &mut Codegen, raw: String, elem: Option<LType>) -> Value {
 }
 
 /// The scalar-element backstop [GPU-BUFFER-ELEM]: a buffer word is an `int`,
-/// `float`, or `bool`, boxed to its raw `i64` word.
+/// `float`, or `bool`, boxed to its raw `i64` word. An unhandled `Result` gets
+/// its own diagnostic, because the fix (handle it inside the kernel) differs
+/// from a non-scalar's.
 fn scalar_word(cg: &mut Codegen, v: Value, what: &str) -> Result<Value> {
     if v.result_inner.is_some() {
         return Err(CodegenError::unsupported(format!(
             "{what} cannot be an unhandled Result; handle it inside the kernel"
         )));
     }
-    if !matches!(v.ty, LType::I64 | LType::Double | LType::I1) {
+    if !is_scalar(v.ty) {
         return Err(CodegenError::unsupported(format!(
             "{what} must be a scalar (int, float, or bool)"
         )));
     }
     Ok(box_to_i64(cg, v))
-}
-
-/// `toGpu([a, b, c])` — a buffer literal [GPU-BUFFER-LITERAL]. The elements are
-/// stored straight into the dense buffer at their constant indices, so neither
-/// the flat literal block nor an `OspreyList` is ever built: one allocation
-/// instead of three, and no copy loop. The element tag comes from the first
-/// element's lowered type, exactly as a flat list literal's would — or, for an
-/// EMPTY literal, from the element type inference resolved at the literal's own
-/// position, so `toGpu([])` in a float context is a float buffer instead of a
-/// bare handle whose reads default to `int` [GPU-BUFFER-ELEM].
-fn buffer_literal(
-    cg: &mut Codegen,
-    elements: &[Expr],
-    position: Option<osprey_ast::Position>,
-) -> Result<Value> {
-    let out = buffer_alloc(cg, &elements.len().to_string(), GPU_OWNER.to_string());
-    let mut elem = crate::listlit::inferred_elem(cg, position);
-    for (i, e) in elements.iter().enumerate() {
-        let v = gen_expr(cg, e)?;
-        elem = elem.or_else(|| crate::llty::scalar_spelling(v.ty).map(str::to_string));
-        let word = scalar_word(cg, v, "a GPU buffer literal element")?;
-        buffer_set(cg, &out, &i.to_string(), &word.operand);
-    }
-    Ok(out.with_owner(Some(crate::llty::elem_tagged_owner(
-        GPU_TAG,
-        GPU_OWNER,
-        elem.as_deref(),
-    ))))
-}
-
-/// The compaction counter shared by `gpuFilter` and iterator fusion: a stack
-/// slot holding how many elements have been kept so far. Both write into a
-/// buffer sized at the *source* length, because the kept count is not known
-/// until the loop has run.
-fn kept_counter(cg: &mut Codegen) -> String {
-    let kept = cg.emit_reg("alloca i64");
-    cg.emit(format!("store i64 0, i64* {kept}"));
-    kept
-}
-
-/// Append `word` at the counter's position and advance it.
-fn push_kept(cg: &mut Codegen, out: &Value, kept: &str, word: &str) {
-    let at = cg.emit_reg(format!("load i64, i64* {kept}"));
-    buffer_set(cg, out, &at, word);
-    let next = cg.emit_reg(format!("add i64 {at}, 1"));
-    cg.emit(format!("store i64 {next}, i64* {kept}"));
-}
-
-/// Publish the compacted prefix: the buffer's length becomes the kept count.
-fn take_kept(cg: &mut Codegen, out: &Value, kept: &str) {
-    let total = cg.emit_reg(format!("load i64, i64* {kept}"));
-    cg.call_void("osprey_gpu_take", "i8*, i64", &[&out.operand, &total]);
-}
-
-/// `toGpu(iterator)` — iterator/buffer fusion [GPU-BUFFER-FUSE]. `toGpu` is a
-/// consuming stage of the iterator pipeline: the pending map/filter stages
-/// replay inside one counted loop that writes each surviving element straight
-/// into the dense buffer, so `range |> map |> toGpu` never materializes a
-/// `List`. A filter stage makes the kept count dynamic, so this fills a
-/// span-length buffer and publishes the exact prefix, as `gpuFilter` does.
-fn fuse_iterator(cg: &mut Codegen, range: &Value) -> Result<Value> {
-    let stages = crate::iter::stages_of(cg, range);
-    let (start, end) = crate::iter::bounds(cg, range);
-    let span = cg.emit_reg(format!("sub i64 {end}, {start}"));
-    // An inverted range yields no elements, so its buffer is empty, not a
-    // negative-length allocation.
-    let empty = cg.emit_reg(format!("icmp slt i64 {span}, 0"));
-    let span = cg.emit_reg(format!("select i1 {empty}, i64 0, i64 {span}"));
-    let out = buffer_alloc(cg, &span, GPU_OWNER.to_string());
-    let kept = kept_counter(cg);
-    let lp = open_range_loop(cg, &start, &end);
-    crate::arc::push_frame(cg);
-    let v = crate::iter::replay(cg, &stages, Value::new(lp.i.clone(), LType::I64), &lp.incr)?;
-    let elem = v.ty;
-    let word = scalar_word(cg, v, "a toGpu element")?;
-    push_kept(cg, &out, &kept, &word.operand);
-    crate::arc::pop_frame(cg);
-    close_range_loop(cg, &lp);
-    take_kept(cg, &out, &kept);
-    Ok(out.with_owner(Some(elem_owner(Some(elem)))))
-}
-
-/// `toGpu(list)` — dense copy of a scalar list [GPU-BUFFER-FROM-LIST]. A flat
-/// list literal's element tag (`[]double`) becomes the buffer's element tag.
-/// A literal argument takes [`buffer_literal`] and an iterator pipeline
-/// [`fuse_iterator`], so neither builds a list on the way to the buffer.
-fn to_gpu(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
-    let arg = nth(args, 0)?;
-    if let Expr::List(elements, position) = arg {
-        return buffer_literal(cg, elements, *position);
-    }
-    let source = gen_expr(cg, arg)?;
-    if source.osp_ty.as_deref() == Some(crate::iter::RANGE_OWNER) {
-        return fuse_iterator(cg, &source);
-    }
-    let elem = list_elem(&source);
-    let l = crate::listlit::to_runtime_list(cg, source);
-    let l = crate::cast::coerce_to(cg, l, LType::Ptr)?;
-    let len = cg.call("i64", "osprey_list_length", "i8*", &[&l.operand]);
-    let buf = buffer_alloc(cg, &len, elem_owner(elem));
-    let lp = open_range_loop(cg, "0", &len);
-    let elem = cg.call("i64", "osprey_list_get", "i8*, i64", &[&l.operand, &lp.i]);
-    buffer_set(cg, &buf, &lp.i, &elem);
-    close_range_loop(cg, &lp);
-    Ok(buf)
-}
-
-/// `fromGpu(buffer)` — materialize a buffer as a list [GPU-BUFFER-TO-LIST].
-/// Elements are scalars, so the builder's kind is unmanaged.
-fn from_gpu(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
-    let b = buffer_arg(cg, args, 0)?;
-    let bld = crate::collections::list_builder_new_of(cg, "0");
-    let len = buffer_len(cg, &b);
-    let lp = open_range_loop(cg, "0", &len);
-    let elem = buffer_get(cg, &b, &lp.i);
-    crate::collections::list_builder_push(cg, &bld, &elem, "0");
-    close_range_loop(cg, &lp);
-    // The buffer's element type crosses to the list's owner tag: a float buffer
-    // materializes as a `List<float>` that reads back as floats, not as the
-    // IEEE-754 words the uniform element ABI stores [GPU-BUFFER-TO-LIST].
-    let sealed = crate::collections::list_builder_seal(cg, &bld);
-    Ok(sealed.with_owner(Some(crate::collections::list_owner(
-        tagged_elem(&b).and_then(crate::llty::scalar_spelling),
-    ))))
 }
 
 /// `gpuLength(buffer)` — the element count [GPU-BUFFER-LENGTH].
@@ -312,16 +198,29 @@ fn kernel_loop(
     Ok(())
 }
 
-/// The fold/scan accumulator slot, restricted to scalar words so every
-/// accepted reduction stays offloadable [GPU-FOLD] [GPU-SCAN].
-fn scalar_acc_init(cg: &mut Codegen, args: &[Expr], what: &str) -> Result<(String, Value)> {
-    let (acc, tmpl) = acc_init(cg, args)?;
-    if tmpl.result_inner.is_some() || !matches!(tmpl.ty, LType::I64 | LType::Double | LType::I1) {
-        return Err(CodegenError::unsupported(format!(
-            "a {what} accumulator must be a scalar (int, float, or bool)"
-        )));
-    }
-    Ok((acc, tmpl))
+/// The shared chassis of `gpuMap`/`gpuZipWith`: `apply` runs at every index of
+/// `src` and each scalar result is stored at that index in a fresh
+/// `len`-element buffer. The kernel's result `LType` is codegen-time
+/// knowledge, so the handle is retagged with it and downstream combinators
+/// recover the element without a kernel signature.
+fn map_into(
+    cg: &mut Codegen,
+    src: &Value,
+    len: &str,
+    elem: Option<LType>,
+    what: &str,
+    mut apply: impl FnMut(&mut Codegen, Value, &str) -> Result<Value>,
+) -> Result<Value> {
+    let out = buffer_alloc(cg, len, GPU_OWNER.to_string());
+    let mut mapped_ty = LType::I64;
+    kernel_loop(cg, src, len, elem, |cg, arg, i| {
+        let mapped = apply(cg, arg, i)?;
+        mapped_ty = mapped.ty;
+        let stored = scalar_word(cg, mapped, what)?;
+        buffer_set(cg, &out, i, &stored.operand);
+        Ok(())
+    })?;
+    Ok(out.with_owner(Some(elem_owner(Some(mapped_ty)))))
 }
 
 /// `gpuMap(buffer, kernel)` — apply a pure kernel to every element [GPU-MAP].
@@ -332,62 +231,96 @@ fn gpu_map(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     // the loop that calls it [GPU-KERNEL-EXTRACT].
     let kernel = extract(cg, kernel, &[slot(elem)])?;
     let len = buffer_len(cg, &src);
-    let out = buffer_alloc(cg, &len, GPU_OWNER.to_string());
-    let mut mapped_ty = LType::I64;
-    kernel_loop(cg, &src, &len, elem, |cg, arg, i| {
-        let mapped = invoke(cg, &kernel, vec![arg])?;
-        mapped_ty = mapped.ty;
-        let stored = scalar_word(cg, mapped, "a gpuMap kernel result")?;
-        buffer_set(cg, &out, i, &stored.operand);
-        Ok(())
-    })?;
-    // The kernel's result LType is codegen-time knowledge: retag the handle so
-    // downstream combinators recover the element without a kernel signature.
-    Ok(out.with_owner(Some(elem_owner(Some(mapped_ty)))))
-}
-
-/// `gpuFold(buffer, initial, combine)` — reduce to one scalar [GPU-FOLD]. The
-/// scalar-accumulator restriction keeps every accepted program offloadable
-/// when device reductions land.
-fn gpu_fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
-    let src = buffer_arg(cg, args, 0)?;
-    let (acc, tmpl) = scalar_acc_init(cg, args, "gpuFold")?;
-    let (combine, elem) = kernel_of(cg, args, 2, &src, 1)?;
-    let combine = extract(cg, combine, &[tmpl.ty, slot(elem)])?;
-    let len = buffer_len(cg, &src);
-    kernel_loop(cg, &src, &len, elem, |cg, arg, _| {
-        acc_step(cg, &acc, &tmpl, &combine, arg)
-    })?;
-    Ok(acc_result(cg, &acc, &tmpl))
+    map_into(
+        cg,
+        &src,
+        &len,
+        elem,
+        "a gpuMap kernel result",
+        |cg, arg, _| invoke(cg, &kernel, vec![arg]),
+    )
 }
 
 /// `gpuZipWith(a, b, kernel)` — elementwise binary combination [GPU-ZIPWITH].
-/// The result length is the shorter operand's, so a ragged pair truncates
-/// rather than reading past the end.
 fn gpu_zip_with(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let left = buffer_arg(cg, args, 0)?;
     let right = buffer_arg(cg, args, 1)?;
     let (kernel, left_elem) = kernel_of(cg, args, 2, &left, 0)?;
     let right_elem = kernel_elem(cg, nth(args, 2)?, &kernel, &right, 1);
     let kernel = extract(cg, kernel, &[slot(left_elem), slot(right_elem)])?;
-    let left_len = buffer_len(cg, &left);
-    let right_len = buffer_len(cg, &right);
+    let len = shorter_len(cg, &left, &right);
+    map_into(
+        cg,
+        &left,
+        &len,
+        left_elem,
+        "a gpuZipWith kernel result",
+        |cg, a, i| {
+            let raw = buffer_get(cg, &right, i);
+            let b = elem_value(cg, raw, right_elem);
+            invoke(cg, &kernel, vec![a, b])
+        },
+    )
+}
+
+/// The shorter of two buffers' lengths, so a ragged pair truncates rather than
+/// reading past the end [GPU-ZIPWITH].
+fn shorter_len(cg: &mut Codegen, left: &Value, right: &Value) -> String {
+    let left_len = buffer_len(cg, left);
+    let right_len = buffer_len(cg, right);
     let shorter = cg.emit_reg(format!("icmp slt i64 {left_len}, {right_len}"));
-    let len = cg.emit_reg(format!(
+    cg.emit_reg(format!(
         "select i1 {shorter}, i64 {left_len}, i64 {right_len}"
-    ));
-    let out = buffer_alloc(cg, &len, GPU_OWNER.to_string());
-    let mut zipped_ty = LType::I64;
-    kernel_loop(cg, &left, &len, left_elem, |cg, a, i| {
-        let raw = buffer_get(cg, &right, i);
-        let b = elem_value(cg, raw, right_elem);
-        let zipped = invoke(cg, &kernel, vec![a, b])?;
-        zipped_ty = zipped.ty;
-        let stored = scalar_word(cg, zipped, "a gpuZipWith kernel result")?;
-        buffer_set(cg, &out, i, &stored.operand);
-        Ok(())
-    })?;
-    Ok(out.with_owner(Some(elem_owner(Some(zipped_ty)))))
+    ))
+}
+
+/// The pieces every reduction shares [GPU-FOLD] [GPU-SCAN]: the source buffer
+/// and its trip count, the scalar accumulator slot with the type template that
+/// recovers it, the extracted combine kernel, and the element type.
+struct Reduction {
+    src: Value,
+    len: String,
+    acc: String,
+    tmpl: Value,
+    combine: Callback,
+    elem: Option<LType>,
+}
+
+/// `(buffer, initial, combine)` — the preamble `gpuFold` and `gpuScan` share.
+/// The accumulator is restricted to a scalar word so every accepted reduction
+/// stays offloadable when device reductions land, and the combine kernel is
+/// extracted with the accumulator slot first [GPU-KERNEL-EXTRACT].
+fn reduction(cg: &mut Codegen, args: &[Expr], what: &str) -> Result<Reduction> {
+    let src = buffer_arg(cg, args, 0)?;
+    let (acc, tmpl) = acc_init(cg, args)?;
+    if !is_scalar_value(&tmpl) {
+        return Err(CodegenError::unsupported(format!(
+            "a {what} accumulator must be a scalar (int, float, or bool)"
+        )));
+    }
+    let (combine, elem) = kernel_of(cg, args, 2, &src, 1)?;
+    let combine = extract(cg, combine, &[tmpl.ty, slot(elem)])?;
+    let len = buffer_len(cg, &src);
+    Ok(Reduction {
+        src,
+        len,
+        acc,
+        tmpl,
+        combine,
+        elem,
+    })
+}
+
+/// One reduction step: fold the current element into the accumulator slot.
+fn step(cg: &mut Codegen, r: &Reduction, arg: Value) -> Result<()> {
+    acc_step(cg, &r.acc, &r.tmpl, &r.combine, arg)
+}
+
+/// `gpuFold(buffer, initial, combine)` — reduce to one scalar [GPU-FOLD].
+fn gpu_fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let r = reduction(cg, args, "gpuFold")?;
+    kernel_loop(cg, &r.src, &r.len, r.elem, |cg, arg, _| step(cg, &r, arg))?;
+    Ok(acc_result(cg, &r.acc, &r.tmpl))
 }
 
 /// `gpuIota(n)` — the index buffer `[0, n)` [GPU-IOTA]. Gather, stencil, and
@@ -439,17 +372,13 @@ fn gpu_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 /// The running accumulator is the same scalar slot `gpuFold` uses, so a device
 /// backend can swap in a work-efficient parallel scan without changing meaning.
 fn gpu_scan(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
-    let src = buffer_arg(cg, args, 0)?;
-    let (acc, tmpl) = scalar_acc_init(cg, args, "gpuScan")?;
-    let (combine, elem) = kernel_of(cg, args, 2, &src, 1)?;
-    let combine = extract(cg, combine, &[tmpl.ty, slot(elem)])?;
-    let len = buffer_len(cg, &src);
-    let out = buffer_alloc(cg, &len, elem_owner(Some(tmpl.ty)));
-    kernel_loop(cg, &src, &len, elem, |cg, arg, i| {
-        acc_step(cg, &acc, &tmpl, &combine, arg)?;
+    let r = reduction(cg, args, "gpuScan")?;
+    let out = buffer_alloc(cg, &r.len, elem_owner(Some(r.tmpl.ty)));
+    kernel_loop(cg, &r.src, &r.len, r.elem, |cg, arg, i| {
+        step(cg, &r, arg)?;
         // The slot already holds the boxed running value — exactly a buffer
         // word — so publishing it costs one load, not a re-box.
-        let running = cg.emit_reg(format!("load i64, i64* {acc}"));
+        let running = cg.emit_reg(format!("load i64, i64* {}", r.acc));
         buffer_set(cg, &out, i, &running);
         Ok(())
     })?;

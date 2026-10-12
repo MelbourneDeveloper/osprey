@@ -5,7 +5,7 @@ typedef int HRESULT;
 typedef unsigned UINT;
 typedef unsigned DWORD;
 typedef void ID3D12CommandList;
-typedef struct { float slot[24], res[2], time, pad; } OspGfxUniforms;
+// OspGfxUniforms comes from the real ospgfx_abi.h, prepended by frame.rs.
 typedef struct {
   void *queue, *fence, *fenceEvent, *commands, *swap, *allocator, *pipeline;
   uint64_t fenceValue;

@@ -323,3 +323,59 @@ fn codegen_constructors_are_callable_directly() {
     let _a = builder::Codegen::new();
     let _b = builder::Codegen::default();
 }
+
+#[test]
+fn codegen_error_display_covers_all_variants() {
+    // error.rs Display for every CodegenError variant.
+    assert_eq!(
+        CodegenError::unsupported("x").to_string(),
+        "codegen: unsupported construct: x"
+    );
+    assert_eq!(
+        CodegenError::unknown("n").to_string(),
+        "codegen: unknown name `n`"
+    );
+    assert_eq!(
+        CodegenError::invalid("p").to_string(),
+        "codegen: invalid program: p"
+    );
+}
+
+/// A handler with one RESUMING arm and one SUBSTITUTING arm continues by
+/// re-entering its own dispatcher with the same arguments. A plain call
+/// there grew one native frame per operation the substituting arm answered:
+/// release builds happened to fold it away, debug builds compile at `-O0`
+/// where nothing does, and a loop of otherwise constant-space performs
+/// exhausted the host stack. The reuse must be a property of the MODULE,
+/// not a hope about the optimizer. Implements [EFFECTS-HANDLER-ARMS].
+#[test]
+fn a_mixed_handler_dispatcher_continues_by_guaranteed_tail_call() {
+    let ir = module(
+        "effect Log {\n\
+               note: fn(int) -> Unit\n\
+               control ask: fn(int) -> int\n\
+               }\n\
+               fn hammer(n) = range(0, n) |> forEach(fn(i) => perform Log.note(i))\n\
+               let done = {\n\
+                   handle Log {\n\
+                       note value => value\n\
+                       ask value => resume(1)\n\
+                   }\n\
+                   hammer(3)\n\
+               }\n\
+               print(\"done\")\n",
+    );
+    let body = function_body(
+        &ir,
+        "define i64 @__resume_drive_Log_0(i8* %__env, i8* %__coro)",
+    );
+    let reentries: Vec<&str> = body
+        .lines()
+        .filter(|line| line.contains("call i64 @__resume_drive_Log_0"))
+        .collect();
+    assert_eq!(reentries.len(), 1, "one re-entry per dispatcher: {body}");
+    assert!(
+        reentries.iter().all(|line| line.contains("musttail call")),
+        "the dispatcher must re-enter itself with a guaranteed tail call, saw: {reentries:?}"
+    );
+}

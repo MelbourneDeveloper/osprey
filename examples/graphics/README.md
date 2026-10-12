@@ -27,18 +27,23 @@ flowchart TB
 ```
 base/base.osp              the only host: fixed-point trig, motion + look tables
 kali|opal|character/       one osprey.toml + one two-line scene.osp each
+ospgfx_abi.h               the one C declaration of the Osprey-facing ABI:
+                           slot count, both scales, uniform block, validation
 base.metal                 macOS shader library: 3 named fragment entries
 base.hlsl                  the Direct3D 12 twin of base.metal, entry for entry
 ospgfx.m                   macOS bridge: Cocoa window, Metal layer
-ospgfx_d3d12.h             Windows bridge: shared uniform ABI and context
+ospgfx_d3d12.h             Windows bridge: D3D12 context and constants
 ospgfx_d3d12_setup.c       Windows bridge: one-time device/swap-chain bring-up
 ospgfx_d3d12.c             Windows bridge: the six exported symbols, frame path
 ```
 
-Both bridges export the same six symbols with the same semantics: values arrive
-in 4096ths (`osp_gfx_set`) or thousandths (`osp_gfx_set_milli`), out-of-range
-slots are ignored, `osp_gfx_draw` returns 1 while the window lives and 0 once it
-closes, and `osp_gfx_ticks` is milliseconds since the window opened. Direct3D also returns 0 on frame recording, presentation or queue-drain failure and stops further drawing. A failed `osp_gfx_close` returns 0 and retains resources for a close retry; it releases them only after the queue drains. Portable injected-failure tests verify these paths, while Windows compilation and rendering remain unverified.
+Both bridges include `ospgfx_abi.h` and export the same six symbols with the
+same semantics: values arrive in 4096ths (`osp_gfx_set`) or thousandths
+(`osp_gfx_set_milli`), out-of-range slots are ignored, `osp_gfx_draw` returns 1
+while the window lives and 0 once it closes, and `osp_gfx_ticks` is milliseconds
+since the window opened. The slot store, the window-extent and scale validation
+and the tick arithmetic are inline helpers in the header, so neither bridge can
+drift from the other on them. Direct3D also returns 0 on frame recording, presentation or queue-drain failure and stops further drawing. A failed `osp_gfx_close` returns 0 and retains resources for a close retry; it releases them only after the queue drains. Portable injected-failure tests verify these paths against the real header, while Windows compilation and rendering remain unverified.
 
 `base/base.osp` names `examples/graphics/base.metal` on every platform. The
 Windows bridge swaps the extension to `.hlsl`, which is why the scene never
@@ -91,11 +96,13 @@ twin, because Metal's `float2x2` takes columns and HLSL's takes rows; a mistake
 there compiles cleanly and spins every scene the wrong way.
 
 The two backends are pinned together by
-`crates/osprey-cli/tests/graphics_scenes.rs`, which requires every constant
-`base.metal` declares to exist in `base.hlsl`, requires the same named fragment
-entries and the same slot count in both, and requires the D3D12 bridge to keep
-the same six exports and the same two fixed-point scales as `ospgfx.m`. That
-catches drift; it does not catch a shader that will not compile.
+`crates/osprey-cli/tests/graphics_scenes.rs` and its `graphics_scenes/abi.rs`,
+which require the two shader libraries to declare the same constants in both
+directions (the one HLSL-only name, its float4 register count, is listed
+explicitly), the same named fragment entries, and a uniform layout that mirrors
+`ospgfx_abi.h`; and which require both bridges to include that header rather
+than restate any of it, and to keep the same six exports. That catches drift; it
+does not catch a shader that will not compile.
 
 Pixel-for-pixel identity across the two platforms is **not** claimed. The
 arithmetic is transcribed operation for operation, but fxc and Metal's compiler

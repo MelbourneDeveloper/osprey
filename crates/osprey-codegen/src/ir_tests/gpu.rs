@@ -109,45 +109,6 @@ fn a_fold_kernel_takes_uniforms_then_accumulator_then_element() {
     shows(&kernel, &["fmul double %$p0, %$p2", "fadd double %$p1,"]);
 }
 
-/// A handler with one RESUMING arm and one SUBSTITUTING arm continues by
-/// re-entering its own dispatcher with the same arguments. A plain call
-/// there grew one native frame per operation the substituting arm answered:
-/// release builds happened to fold it away, debug builds compile at `-O0`
-/// where nothing does, and a loop of otherwise constant-space performs
-/// exhausted the host stack. The reuse must be a property of the MODULE,
-/// not a hope about the optimizer. Implements [EFFECTS-HANDLER-ARMS].
-#[test]
-fn a_mixed_handler_dispatcher_continues_by_guaranteed_tail_call() {
-    let ir = module(
-        "effect Log {\n\
-               note: fn(int) -> Unit\n\
-               control ask: fn(int) -> int\n\
-               }\n\
-               fn hammer(n) = range(0, n) |> forEach(fn(i) => perform Log.note(i))\n\
-               let done = {\n\
-                   handle Log {\n\
-                       note value => value\n\
-                       ask value => resume(1)\n\
-                   }\n\
-                   hammer(3)\n\
-               }\n\
-               print(\"done\")\n",
-    );
-    let body = function_body(
-        &ir,
-        "define i64 @__resume_drive_Log_0(i8* %__env, i8* %__coro)",
-    );
-    let reentries: Vec<&str> = body
-        .lines()
-        .filter(|line| line.contains("call i64 @__resume_drive_Log_0"))
-        .collect();
-    assert_eq!(reentries.len(), 1, "one re-entry per dispatcher: {body}");
-    assert!(
-        reentries.iter().all(|line| line.contains("musttail call")),
-        "the dispatcher must re-enter itself with a guaranteed tail call, saw: {reentries:?}"
-    );
-}
-
 #[test]
 fn a_named_kernel_reuses_its_own_definition() {
     // A named function already has an emitted symbol the loop calls, so
@@ -241,21 +202,4 @@ fn twin_flavors_number_their_kernels_identically() {
     );
     assert_eq!(default_ir, ml_ir);
     assert!(default_ir.contains("define double @__gpu_kernel_0(double %$p0, double %$p1)"));
-}
-
-#[test]
-fn codegen_error_display_covers_all_variants() {
-    // error.rs Display for every CodegenError variant.
-    assert_eq!(
-        CodegenError::unsupported("x").to_string(),
-        "codegen: unsupported construct: x"
-    );
-    assert_eq!(
-        CodegenError::unknown("n").to_string(),
-        "codegen: unknown name `n`"
-    );
-    assert_eq!(
-        CodegenError::invalid("p").to_string(),
-        "codegen: invalid program: p"
-    );
 }

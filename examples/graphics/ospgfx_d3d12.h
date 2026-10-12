@@ -47,30 +47,17 @@
 #include <dxgi1_4.h>
 #include <stdint.h>
 
+// The slot count, the two fixed-point scales, the uniform block and the
+// argument validation are the Osprey-facing ABI shared with ospgfx.m, declared
+// once in ospgfx_abi.h. base.hlsl mirrors the uniform layout by hand — the GPU
+// cannot see the header — and crates/osprey-cli/tests/graphics_scenes.rs
+// asserts the mirror agrees.
+#include "ospgfx_abi.h"
+
 // Naming exactly the symbols Osprey's `extern fn` declarations look for is what
 // MSVC needs to export anything at all, and what stops mingw-w64 exporting
 // every other function in the two translation units as well.
 #define OSP_GFX_API __declspec(dllexport)
-
-// Parameter slots Osprey can push per frame. The count and the field order are
-// an ABI shared with base.hlsl, which spells the same count out on its own —
-// the GPU cannot see this header. A disagreement does not fail to compile; it
-// silently shifts `res` and `time` and corrupts every scene, so
-// crates/osprey-cli/tests/graphics_scenes.rs asserts the two still match, and
-// asserts this backend still matches ospgfx.m.
-#define OSP_GFX_SLOTS 24
-
-// Two scales, because a slot carries one of two very different things: motion
-// in fixed point (4096 = 1.0), authored tuning in thousandths.
-#define OSP_GFX_FIXED_ONE 4096.0f
-#define OSP_GFX_MILLI_ONE 1000.0f
-
-typedef struct OspGfxUniforms {
-  float slot[OSP_GFX_SLOTS];
-  float res[2];
-  float time;
-  float pad;
-} OspGfxUniforms;
 
 // The whole uniform block travels as root constants, one DWORD per float.
 #define OSP_GFX_ROOT_CONSTANTS ((UINT)(sizeof(OspGfxUniforms) / sizeof(float)))
@@ -89,9 +76,6 @@ typedef char osp_gfx_root_constants_fit[OSP_GFX_ROOT_CONSTANTS <= OSP_GFX_ROOT_B
 // Long enough that a heavily loaded GPU is never mistaken for a hung one, short
 // enough that a genuinely hung device does not wedge the host forever.
 #define OSP_GFX_FRAME_TIMEOUT_MS 5000u
-#define OSP_GFX_MAX_EXTENT 8192
-#define OSP_GFX_MIN_SCALE 1
-#define OSP_GFX_MAX_SCALE 16
 #define OSP_GFX_TITLE_MAX 256
 #define OSP_GFX_PATH_MAX 1024
 #define OSP_GFX_DPI_DEFAULT 96u
@@ -100,11 +84,13 @@ typedef char osp_gfx_root_constants_fit[OSP_GFX_ROOT_CONSTANTS <= OSP_GFX_ROOT_B
 // Metal bridge asks Cocoa for, and the reason no swap-chain resize path exists.
 #define OSP_GFX_WINDOW_STYLE (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX)
 
+// Shader Model 5.0 through the legacy fxc-compatible `D3DCompile`. The current
+// Microsoft compiler is DXC (LLVM-based, required for Shader Model 6); 5.0 is
+// kept because the library needs nothing from SM6 and fxc is what every SDK
+// still ships on PATH-less installs.
 #define OSP_GFX_SHADER_EXT ".hlsl"
-#define OSP_GFX_VERTEX_ENTRY "osp_vertex"
 #define OSP_GFX_VERTEX_TARGET "vs_5_0"
 #define OSP_GFX_FRAGMENT_TARGET "ps_5_0"
-#define OSP_GFX_DEFAULT_FRAGMENT "osp_fragment"
 #define OSP_GFX_COMPILE_FLAGS D3DCOMPILE_OPTIMIZATION_LEVEL3
 
 typedef struct OspGfxContext {

@@ -297,19 +297,27 @@ fn host_bound(cg: &Codegen, names: &BTreeSet<String>) -> bool {
 }
 
 /// Whether a capture can travel as an extracted-kernel parameter: a scalar
-/// word, or a GPU buffer handle. A string, a record/union handle, a `Result`
-/// block or a Fiber carries host-side structure the flat device ABI has no
-/// slot for — the same restriction [GPU-BUFFER-ELEM] places on element data.
+/// word, or a GPU buffer handle. A string, a record/union handle, an erased
+/// box, a `Result` block or a Fiber carries host-side structure the flat
+/// device ABI has no slot for — the same restriction [GPU-BUFFER-ELEM] places
+/// on element data, and the same predicate ([`crate::gpu::is_scalar`]).
 fn uniform_admissible(v: &Value) -> bool {
+    let buffer_handle =
+        matches!(v.ty, LType::Ptr) && v.osp_ty.as_deref().is_some_and(crate::gpu::is_buffer_owner);
     v.result_inner.is_none()
         && v.fiber_elem.is_none()
-        && match v.ty {
-            LType::I64 | LType::Double | LType::I1 => true,
-            LType::Ptr => v.osp_ty.as_deref().is_some_and(crate::gpu::is_buffer_owner),
-            // An erased box points at host-side structure just as a string or
-            // record handle does — no device slot for it.
-            LType::Str | LType::I32 | LType::Any => false,
-        }
+        && (crate::gpu::is_scalar(v.ty) || buffer_handle)
+}
+
+/// A flat scalar parameter slot — no `Result` layout, no Fiber shape — the only
+/// kind the extracted ABI declares for an undeclared element or a uniform.
+fn word_slot(ty: LType, inferred_type: Option<osprey_types::Type>) -> ParamSig {
+    ParamSig {
+        ty,
+        result_inner: None,
+        fiber: None,
+        inferred_type,
+    }
 }
 
 /// The kernel's own parameter slots: its inferred signature where it has one,
@@ -318,12 +326,7 @@ fn param_sigs(parameters: &[Parameter], own: Option<&FnSig>, slots: &[LType]) ->
     (0..parameters.len())
         .map(|i| match own.and_then(|s| s.0.get(i)).cloned() {
             Some(declared) => declared,
-            None => ParamSig {
-                ty: slots.get(i).copied().unwrap_or(LType::I64),
-                result_inner: None,
-                fiber: None,
-                inferred_type: None,
-            },
+            None => word_slot(slots.get(i).copied().unwrap_or(LType::I64), None),
         })
         .collect()
 }
@@ -378,12 +381,7 @@ fn bind_uniforms(cg: &mut Codegen, caps: &[crate::closure::Capture]) -> Vec<(LTy
     let mut out = Vec::with_capacity(caps.len());
     for (i, c) in caps.iter().enumerate() {
         let reg = crate::llty::param_register(i);
-        let sig = ParamSig {
-            ty: c.val.ty,
-            result_inner: None,
-            fiber: None,
-            inferred_type: c.val.inferred_type.clone(),
-        };
+        let sig = word_slot(c.val.ty, c.val.inferred_type.clone());
         // `incoming_param` registers no ownership: a uniform buffer handle is
         // BORROWED for the call's duration, exactly as a top-level function's
         // parameters are [GC-ARC-PERCEUS].

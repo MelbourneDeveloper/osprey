@@ -19,8 +19,8 @@ fn mulF(x: float, y: float) = x * y
 
 /// maxF and minF fold a buffer to its extremes: the seeds a softmax shift and
 /// a min-max rescale capture.
-fn maxF(a: float, x: float) = match x > a { true => x false => a }
-fn minF(a: float, x: float) = match x < a { true => x false => a }
+fn maxF(a, x: float) = match x > a { true => x false => a }
+fn minF(a, x: float) = match x < a { true => x false => a }
 
 /// relu clamps negative inputs to zero; isActive marks what a relu layer lets
 /// through.
@@ -52,7 +52,7 @@ fn varianceOf(xs) = {
 fn saxpy(x: float, y: float) = 2.0 * x + y
 
 /// softWeight weights a score already shifted by the batch maximum, so d >= 0.
-fn softWeight(d: float) = (1.0 / (1.0 + d + d * d)) 
+fn softWeight(d) = (1.0 / (1.0 + d + d * d)) 
 
 /// softmax is four stages, two of them captures: fold the maximum, spend it in
 /// the shift, fold the partition function, spend that in the divide.

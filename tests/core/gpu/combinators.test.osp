@@ -14,23 +14,23 @@ fn emptyInts() -> GpuBuffer<int> = toGpu([])
 fn emptyFloats() -> GpuBuffer<float> = toGpu([])
 
 /// sumI and mulI are the associative int combines fold and scan share.
-fn sumI(a: int, b: int) = (a + b) 
-fn mulI(a: int, b: int) = (a * b) 
+fn sumI(a, b) = (a + b) 
+fn mulI(a, b) = (a * b) 
 
 /// subI and horner are deliberately non-commutative. Left-to-right is the
 /// only traversal that reproduces their results, so every assertion on them
 /// pins the order [GPU-BACKEND-HOST] rather than merely the element set.
-fn subI(a: int, b: int) = (a - b) 
-fn horner(a: int, d: int) = (((a * 10) ) + d) 
+fn subI(a, b) = (a - b) 
+fn horner(a, d) = (((a * 10) ) + d) 
 
 /// maxI makes a scan a running maximum; addF is the float reduction; orB is
 /// the boolean any-reduction that latches on the first accepted element.
-fn maxI(a: int, b: int) = match a > b { true => a false => b }
+fn maxI(a, b: int) = match a > b { true => a false => b }
 fn addF(a: float, x: float) = a + x
-fn orB(a: bool, b: bool) = a || b
+fn orB(a, b) = a || b
 
 /// countTrue is the population count that turns a bool buffer into a scalar.
-fn countTrue(a: int, flag: bool) = match flag {
+fn countTrue(a, flag) = match flag {
     true => (a + 1) 
     false => a
 }
@@ -65,14 +65,14 @@ fn truthy(b) = b
 
 /// The zip kernels below all return an element type neither operand has, so
 /// gpuZipWith is exercised as a type-changing combinator too.
-fn sameParity(a: int, b: int) = isEven(a) == isEven(b)
-fn lessF(a: float, b: float) = a < b
-fn meanF(a: int, b: int) = (toFloat(a) + toFloat(b)) * 0.5
-fn mixAdd(i: int, x: float) = toFloat(i) + x
+fn sameParity(a, b) = isEven(a) == isEven(b)
+fn lessF(a, b: float) = a < b
+fn meanF(a, b) = (toFloat(a) + toFloat(b)) * 0.5
+fn mixAdd(i, x: float) = toFloat(i) + x
 
 /// oobMessage renders a gpuGet outcome as text so the Error [GPU-GET] returns
 /// is visible in an assertion instead of being swallowed by a `?:` default.
-fn oobMessage(buf: GpuBuffer<int>, i: int) = match gpuGet(buf, i) {
+fn oobMessage(buf: GpuBuffer<int>, i) = match gpuGet(buf, i) {
     Success { value } => "value ${value}"
     Error { message } => message
 }

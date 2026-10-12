@@ -25,11 +25,10 @@ fn shadowed(cg: &Codegen, name: &str) -> bool {
         || cg.fn_params.contains_key(name)
 }
 
+/// A builtin lifts only when its arity matches and every combinator slot is a
+/// scalar word [GPU-BUFFER-ELEM].
 pub(super) fn admissible(name: &str, slots: &[LType]) -> bool {
-    arity(name) == Some(slots.len())
-        && slots
-            .iter()
-            .all(|slot| matches!(slot, LType::I64 | LType::Double | LType::I1))
+    arity(name) == Some(slots.len()) && slots.iter().copied().all(crate::gpu::is_scalar)
 }
 
 /// Use the authoritative builtin scheme; host handles and Result slots decline.

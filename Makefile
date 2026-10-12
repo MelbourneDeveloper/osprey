@@ -922,7 +922,7 @@ ifeq ($(MSYSTEM),)
 graphics _graphics-shader:
 	@Write-Host "make graphics needs the MSYS2 UCRT64 shell -- see $(GFX_DIR)/README.md"
 else
-$(GFX_LIB): $(GFX_SRC) $(GFX_DIR)/ospgfx_d3d12.h
+$(GFX_LIB): $(GFX_SRC) $(GFX_DIR)/ospgfx_d3d12.h $(GFX_DIR)/ospgfx_abi.h
 	@echo "==> building Osprey -> Direct3D 12 graphics bridge"
 	$(CC) -shared -O2 $(GFX_WARN) -o $(GFX_DLL) $(GFX_SRC) \
 		-Wl,--out-implib,$(GFX_LIB) $(GFX_SYSLIB)
@@ -954,7 +954,7 @@ else
 GFX_LIB := $(GFX_DIR)/libospgfx.dylib
 GFX_SHADER := $(GFX_DIR)/base.metal
 
-$(GFX_LIB): $(GFX_DIR)/ospgfx.m
+$(GFX_LIB): $(GFX_DIR)/ospgfx.m $(GFX_DIR)/ospgfx_abi.h
 	@echo "==> building Osprey -> macOS graphics bridge"
 	clang -dynamiclib -fobjc-arc -O2 $(GFX_WARN) \
 		-install_name $(CURDIR)/$(GFX_LIB) \

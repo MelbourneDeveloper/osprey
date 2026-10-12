@@ -22,6 +22,8 @@ Buffer allocation is total: a negative length, a length whose byte count would o
 
 Buffer elements are scalars: `int`, `float`, or `bool`. This is the regular, first-order device sublanguage that every production functional GPU language restricts device data to — Futhark ([Henriksen et al., PLDI 2017](https://doi.org/10.1145/3062341.3062354)) and Accelerate ([McDonell et al., ICFP 2013](https://doi.org/10.1145/2500365.2500595)) both make this restriction, because representing sum types and pointers on SIMT hardware is an open research problem (the flattening line of work: [Blelloch, CACM 1996](https://doi.org/10.1145/227234.227246); [Bergstrom et al., PPoPP 2013](https://doi.org/10.1145/2442516.2442525)). Strings, lists, records, and unions stay on the host side of the boundary; full ADTs and pattern matching remain available in host code, including the code that builds and consumes buffers. A non-scalar element is a compile error at the call that would create it.
 
+The restriction has one spelling in the compiler: inference enforces it at the call site (`crates/osprey-types/src/builtin_constraints.rs`), and codegen backstops it with the single predicate `gpu::is_scalar` (`crates/osprey-codegen/src/gpu.rs`), consulted alike by element stores, kernel results, reduction accumulators, builtin-kernel slots and extracted-kernel uniforms ([GPU-KERNEL-EXTRACT]).
+
 ## Buffer built-ins
 
 ### `toGpu(source) -> GpuBuffer<T>` — [GPU-BUFFER-FROM-LIST]
@@ -149,9 +151,9 @@ Stream compaction: keeps the elements the pure predicate accepts, preserving sou
 
 ## Kernel purity — [GPU-KERNEL-PURE]
 
-The compiler rejects any GPU combinator call whose kernel performs an algebraic effect **that a handler must discharge at run time**, directly or through any chain of helpers and lambdas. An effect a *static* handler has already erased ([0017-AlgebraicEffects.md](0017-AlgebraicEffects.md)) is not present in the kernel by the time this gate runs, so it is not an effect the kernel performs — the rule is about what reaches the device, not about how the source was written. The proof reuses the static effect discharge machinery ([EFFECTS-STATIC-DISCHARGE](0017-AlgebraicEffects.md)): the kernel's operation summary must be empty. Wrapping the call in a handler does not lift the restriction — a handler makes an effect *dischargeable*, but a kernel body still cannot leave the device to reach one, so the requirement is purity, not handledness.
+The compiler rejects any GPU combinator call whose kernel performs an algebraic effect **that a handler must discharge at run time**, directly or through any chain of helpers and lambdas. An effect a *static* handler has already erased ([0017-AlgebraicEffects.md](0017-AlgebraicEffects.md)) is not present in the kernel by the time this gate runs, so it is not an effect the kernel performs — the rule is about what reaches the device, not about how the source was written. The proof reuses the static effect discharge machinery ([EFFECTS-STATIC-DISCHARGE](0017-AlgebraicEffects.md)): the kernel's operation summary must be empty of every effect but one. The exception is `Arith` ([0037](0037-ArithmeticEffects.md)): on the host backend a kernel's arithmetic dispatches to the enclosing policy exactly as any lambda's does, so a kernel may *require* an `Arith` policy without failing this gate (`effect_rows/gpu.rs::gpu_kernel_verdict` filters it), and the boundary rule a device backend must then meet is stated under [GPU-KERNEL-EXTRACT]. Wrapping the call in any other handler does not lift the restriction — a handler makes an effect *dischargeable*, but a kernel body still cannot leave the device to reach one, so the requirement is purity, not handledness.
 
-Effect-typed parallelism is the studied way to draw this line: Dex distinguishes the parallelism-destroying `State` effect from a parallelism-preserving accumulation effect ([Paszke et al., ICFP 2021](https://arxiv.org/abs/2104.05372)), on effect-system foundations from Koka ([Leijen, 2014](https://arxiv.org/abs/1406.2061)); which handler shapes commute with parallel evaluation at all is formalized in "Parallel Algebraic Effect Handlers" ([Xie et al., ICFP 2024](https://dl.acm.org/toc/pacmpl/2024/8/ICFP)) — the theory closest to Osprey's handlers. Today's rule is the sound conservative point on that spectrum: an empty effect row. A parallelism-preserving accumulation effect, if ever added, must be justified against that work.
+Effect-typed parallelism is the studied way to draw this line: Dex distinguishes the parallelism-destroying `State` effect from a parallelism-preserving accumulation effect ([Paszke et al., ICFP 2021](https://arxiv.org/abs/2104.05372)), on effect-system foundations from Koka ([Leijen, 2014](https://arxiv.org/abs/1406.2061)); which handler shapes commute with parallel evaluation at all is formalized in "Parallel Algebraic Effect Handlers" ([Xie, Johnson, Maclaurin, Paszke, ICFP 2024](https://doi.org/10.1145/3674651)) — the theory closest to Osprey's handlers. Today's rule is the sound conservative point on that spectrum: an effect row empty of everything but `Arith`. A parallelism-preserving accumulation effect, if ever added, must be justified against that work.
 
 The check fails closed: a kernel whose effects the checker cannot prove (for example, a function value received as a parameter from an unknown call site, or a closure whose provenance analysis widens out) is rejected with a `cannot prove GPU kernel pure` error. Passing a named function or an inline lambda always gives the checker what it needs.
 
@@ -331,7 +333,7 @@ Implementation is staged in [plan 0023](../plans/0023-gpu-computation.md), which
 
 *Non-normative:* a bibliography, not a requirement. It has no implementing code and no test.
 
-The scholarly work Osprey's GPU features are grounded in. Inline citations above point here; the design decisions these produced are recorded in [plan 0023](../plans/0023-gpu-computation.md).
+The scholarly and vendor work Osprey's GPU features are grounded in. Inline citations above point here; the design decisions these produced are recorded in [plan 0023](../plans/0023-gpu-computation.md). Every entry was re-verified against its primary source on 2026-10-12.
 
 **The device sublanguage and functional GPU compilation**
 
@@ -344,6 +346,12 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
   Data Parallelism.* PPoPP 2019.
   <https://doi.org/10.1145/3293883.3295707> — why nested parallelism is
   deferred rather than naively flattened.
+- Henriksen. *A Comparison of OpenCL, CUDA, and HIP as Compilation Targets
+  for a Functional Array Language.* FProPer 2024
+  (<https://futhark-lang.org/publications.html>) — the directly comparable
+  study for [GPU-BACKEND-DEVICE]'s substrate choice. The same group's
+  WebGPU backend work (Paarmann, 2024; Andreasen, 2025) is the closest prior
+  art for a functional array language on WGSL.
 - Chakravarty, Keller, Lee, McDonell, Grover. *Accelerating Haskell Array
   Codes with Multicore GPUs.* DAMP 2011.
   <https://doi.org/10.1145/1926354.1926358> — type-level host/device
@@ -351,6 +359,22 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
 - McDonell, Chakravarty, Keller, Lippmeier. *Optimising Purely Functional
   GPU Programs.* ICFP 2013. <https://doi.org/10.1145/2500365.2500595> —
   array fusion as the load-bearing optimization behind [GPU-BACKEND-HOST].
+- Köpcke, Steuwer, Gorlatch. *Descend: A Safe GPU Systems Programming
+  Language.* PLDI 2024. <https://doi.org/10.1145/3656411> — the imperative
+  counterpart: CUDA-parity performance with ownership and lifetimes tracked
+  in the type system.
+- *Modular GPU Programming with Typed Perspectives* (Prism / the Bundl
+  calculus). PLDI 2026, Distinguished Paper.
+  <https://doi.org/10.1145/3808290> — the granularity of thread control as
+  a type; the model for making collective operations composable if Osprey's
+  device sublanguage ever exposes them.
+- *Kuiper: verified and efficient GPU programming.* ARRAY 2025 — dependent
+  types and concurrent separation logic over the GPU memory hierarchy,
+  extracting to specialised CUDA.
+- Higher Order Company. *HVM2 / Bend* — a massively parallel interaction-
+  combinator evaluator compiling higher-order functional programs to C and
+  CUDA (<https://github.com/HigherOrderCO/Bend>); the other functional-on-GPU
+  route, without static guarantees.
 
 **Parallel primitives and flattening foundations**
 
@@ -375,28 +399,46 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
   <https://arxiv.org/abs/2104.05372> — parallelism-preserving vs
   parallelism-destroying effects, the theory behind [GPU-KERNEL-PURE];
   implementation at <https://github.com/google-research/dex-lang>.
-- Xie et al. *Parallel Algebraic Effect Handlers.* ICFP 2024 (PACMPL
-  8, ICFP issue: <https://dl.acm.org/toc/pacmpl/2024/8/ICFP>) — which
-  handler shapes commute with parallel evaluation; governs any future
-  relaxation of the empty-effect-row kernel rule and the stage-5 `Gpu`
-  effect.
+- Xie, Johnson, Maclaurin, Paszke. *Parallel Algebraic Effect Handlers.*
+  ICFP 2024 (Proc. ACM Program. Lang. 8, ICFP).
+  <https://doi.org/10.1145/3674651> — which handler shapes commute with
+  parallel evaluation; governs any future relaxation of the kernel effect-row
+  rule and the stage-5 `Gpu` effect.
 
 **Device code generation and scheduling**
 
 - Tillet, Kung, Cox. *Triton: An Intermediate Language and Compiler for
   Tiled Neural Network Computations.* MAPL 2019.
-  <https://doi.org/10.1145/3315508.3329973> — the tile abstraction; with
-  NVIDIA's open-source [CUDA Tile IR](https://github.com/NVIDIA/cuda-tile),
-  a candidate escape-hatch level for stage 4+.
+  <https://doi.org/10.1145/3315508.3329973> — the tile abstraction. Triton's
+  in-tree **Gluon** dialect exposes Blackwell's `tcgen05`/TMA primitives
+  directly where the high-level abstraction cannot find the codegen.
+- NVIDIA. *CUDA Tile IR* — an MLIR Tile dialect, Python bindings, bytecode
+  and conformance suite, open-sourced 2025-12-04 under Apache-2.0 alongside
+  CUDA 13.1 (<https://github.com/NVIDIA/cuda-tile>); the tile-level target a
+  stage 4+ emitter could lower to instead of raw PTX.
+- Chen et al. *TVM: An Automated End-to-End Optimizing Compiler for Deep
+  Learning.* OSDI 2018.
+  <https://www.usenix.org/conference/osdi18/presentation/chen> — graph- and
+  operator-level scheduling with learned cost models; with Halide, the
+  separation stage 7 follows.
 - Ragan-Kelley, Barnes, Adams, Paris, Durand, Amarasinghe. *Halide:
   Decoupling Algorithms from Schedules for High-Performance Image
-  Processing.* PLDI 2013. <https://doi.org/10.1145/2491956.2462176> — the
-  algorithm/schedule separation stage 7's schedule layer follows; the
+  Processing.* PLDI 2013. <https://doi.org/10.1145/2491956.2462176>; the
   autoscheduler is [Adams et al., SIGGRAPH
   2019](https://doi.org/10.1145/3306346.3322967).
 - Ikarashi, Bernstein, Reinking, Genc, Ragan-Kelley. *Exo: Externalized
   Rewriting for Hardware Accelerators.* PLDI 2022.
   <https://doi.org/10.1145/3519939.3523446> — user-extensible scheduling.
+- Spector, Arora, Singhal, Fu, Ré. *ThunderKittens: Simple, Fast, and
+  Adorable AI Kernels.* ICLR 2025. <https://arxiv.org/abs/2410.20399> —
+  16×16 register tiles, managed shared-memory layouts and explicit
+  asynchronous workers: the expressiveness bar for a schedule layer on
+  tensor-core hardware.
+- NVIDIA. *CUTLASS / CuTe* layout algebra (<https://github.com/NVIDIA/cutlass>);
+  *Categorical Foundations for CuTe Layouts*, 2026,
+  <https://arxiv.org/abs/2601.05972> — composition, logical product and
+  division of layouts, the vocabulary a memory-hierarchy surface must be
+  able to express.
 - Verdoolaege, Juega, Cohen, Gómez, Tenllado, Catthoor. *Polyhedral
   Parallel Code Generation for CUDA* (PPCG). ACM TACO 2013.
   <https://doi.org/10.1145/2400682.2400713>; the tiling/fusion algorithm is
@@ -407,9 +449,49 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
   [`nvgpu`](https://mlir.llvm.org/docs/Dialects/NVGPU/),
   [`nvvm`](https://mlir.llvm.org/docs/Dialects/NVVMDialect/) — the
   progressive-lowering substrate weighed at stage 4's decision checkpoint.
+- LLVM. [*User Guide for the NVPTX Back-end*](https://llvm.org/docs/NVPTXUsage.html)
+  and [*Compiling CUDA with clang*](https://llvm.org/docs/CompileCudaWithLLVM.html)
+  — the incremental, wasm-shaped device path; the LLVM **SPIR-V backend**
+  is an official target since LLVM 20 (added to `LLVM_ALL_TARGETS`), so the
+  same textual-IR emitter can feed Vulkan/WebGPU.
+
+**Target specifications**
+
+- NVIDIA, *PTX ISA* (per CUDA release); Apple, *Metal Shading Language
+  Specification* 4.1 (2026-06-04); W3C, *WebGPU* and *WGSL* (Candidate
+  Recommendation); Khronos, *SPIR-V* 1.6 and the *Vulkan 1.4* SPIR-V
+  environment (Vulkan 1.4 released 2024-12-03, mandating SPIR-V 1.0–1.6);
+  Khronos, *Slang* (hosted since 2024-11-21; one source to SPIR-V, HLSL,
+  GLSL, WGSL and MSL) — the dialects a device emitter must speak, and the
+  one that already speaks all of them.
+
+**Reference workloads**
+
+- Karpathy. *llm.c* — GPT-2 pretraining in plain C and CUDA
+  (<https://github.com/karpathy/llm.c>): a ~1 000-line fp32 CPU reference
+  (`train_gpt2.c`), the CUDA mainline (`train_gpt2.cu`) and a ladder of
+  kernels from naive to tuned. The reference application plan 0023 holds
+  every surface gap against, on the host today and on the device at stage 4.
+- Godoy et al. *Mojo: MLIR-Based Performance-Portable HPC Science Kernels
+  on GPUs for the Python Ecosystem.* SC Workshops 2025 (WACCPD, best paper).
+  <https://arxiv.org/abs/2509.21039> — seven-point stencil, BabelStream,
+  miniBUDE and Hartree-Fock on H100 and MI300A; "competitive with CUDA and
+  HIP for memory-bound kernels", with gaps on AMD atomics and fast-math
+  compute-bound kernels. The micro-benchmark set stage 4's gate reuses.
 
 **Autodiff (stage 7)**
 
+- Moses, Churavy. *Instead of Rewriting Foreign Code for Machine Learning,
+  Automatically Synthesize Fast Gradients* (Enzyme). NeurIPS 2020; and
+  Moses, Churavy, Paehler, Hückelheim, Narayanan, Schanen, Doerfert.
+  *Reverse-Mode Automatic Differentiation and Optimization of GPU Kernels
+  via Enzyme.* SC 2021 (<https://c.wsmoses.com/papers/EnzymeGPU.pdf>) —
+  compiler-level AD over optimised LLVM IR, the first reverse-mode AD of GPU
+  kernels; the natural fit for a compiler that already emits LLVM IR.
+- *JAX Autodiff from a Linear Logic Perspective.* POPL 2026.
+  <https://doi.org/10.1145/3776654> — the JAX/Dex autodiff core as a linear
+  λ-calculus with a Curry-Howard reading, sound qualitatively and
+  quantitatively.
 - Elliott. *The Simple Essence of Automatic Differentiation.* ICFP 2018.
   <https://arxiv.org/abs/1804.00746> — the categorical core for a
   functional language's AD.
@@ -422,12 +504,8 @@ The scholarly work Osprey's GPU features are grounded in. Inline citations above
   decoupling is [Taichi, SIGGRAPH Asia
   2019](https://doi.org/10.1145/3355089.3356506).
 
-**Competitive positioning and portability layers**
+**Portability layers**
 
-- Godoy et al. *Mojo: MLIR-Based Performance-Portable HPC Science Kernels
-  on GPUs for the Python Ecosystem.* SC Workshops 2025 (WACCPD).
-  <https://arxiv.org/abs/2509.21039> — the measured Mojo baseline stage
-  4's benchmark gates target.
 - Edwards, Trott, Sunderland. *Kokkos: Enabling Manycore Performance
   Portability.* JPDC 2014. <https://doi.org/10.1016/j.jpdc.2014.07.003> —
   execution/memory-space abstraction for the stage-6 portability story.

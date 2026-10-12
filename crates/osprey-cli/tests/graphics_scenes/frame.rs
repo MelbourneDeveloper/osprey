@@ -50,29 +50,41 @@ fn run(command: &mut Command) -> Result<(), String> {
     ))
 }
 
+/// The shared ABI header both bridges include.
+const ABI_HEADER: &str = "ospgfx_abi.h";
+
+/// The frame functions are compiled against the REAL shared ABI header,
+/// included exactly as the bridges include it, so the one C declaration they
+/// share is itself compiled and checked on every platform that runs this
+/// suite, not only where a bridge builds.
 pub(super) fn verify(root: &Path) -> Result<(), String> {
-    let source = fs::read_to_string(root.join("examples/graphics/ospgfx_d3d12.c"))
-        .map_err(|error| error.to_string())?;
+    let graphics = root.join("examples/graphics");
+    let source =
+        fs::read_to_string(graphics.join("ospgfx_d3d12.c")).map_err(|error| error.to_string())?;
     let bodies = FUNCTIONS
         .iter()
         .map(|name| function(&source, name))
         .collect::<Result<Vec<_>, _>>()?
         .join("\n");
-    execute(&format!(
-        "{}\n{bodies}\n{}",
-        include_str!("frame_stubs.h"),
-        include_str!("frame_cases.c")
-    ))
+    execute(
+        &graphics,
+        &format!(
+            "#include \"{ABI_HEADER}\"\n{}\n{bodies}\n{}",
+            include_str!("frame_stubs.h"),
+            include_str!("frame_cases.c")
+        ),
+    )
 }
 
-fn execute(source: &str) -> Result<(), String> {
+fn execute(include_dir: &Path, source: &str) -> Result<(), String> {
     let dir = std::env::temp_dir().join(format!("osprey-frame-failures-{}", std::process::id()));
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     let code = dir.join("frame.c");
     fs::write(&code, source).map_err(|error| error.to_string())?;
     let binary = dir.join("frame.exe");
     run(Command::new("clang")
-        .args(["-std=c11", "-Wall", "-Wextra", "-Werror"])
+        .args(["-std=c11", "-Wall", "-Wextra", "-Werror", "-I"])
+        .arg(include_dir)
         .arg(&code)
         .arg("-o")
         .arg(&binary))?;

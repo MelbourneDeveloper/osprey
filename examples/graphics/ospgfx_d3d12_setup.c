@@ -414,8 +414,7 @@ static int osp_gfx_state(OspGfxContext *ctx, ID3DBlob *vs, ID3DBlob *ps) {
 }
 
 int osp_gfx_pipeline(OspGfxContext *ctx, const char *shaderPath, const char *fragmentName) {
-  const char *entry =
-      fragmentName && *fragmentName ? fragmentName : OSP_GFX_DEFAULT_FRAGMENT;
+  const char *entry = osp_gfx_fragment_entry(fragmentName);
   ID3DBlob *vs = NULL;
   ID3DBlob *ps = NULL;
   int ready = osp_gfx_shaders(shaderPath, entry, &vs, &ps) && osp_gfx_root(ctx) &&

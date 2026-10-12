@@ -1,5 +1,5 @@
 // Dense scalar buffers for GPU computation — the host execution backend
-// [GPU-BACKEND-HOST] behind toGpu/fromGpu/gpuMap/gpuFold/gpuLength
+// [GPU-BACKEND-HOST] behind toGpu/fromGpu and every gpu* combinator
 // (docs/specs/0034-GPUComputation.md). A buffer is { length, data }: length
 // in elements, data a contiguous array of raw 8-byte scalar words (int bits,
 // double bits, or 0/1 bools) — the staging layout a device transfer consumes,
@@ -57,14 +57,19 @@ int64_t osprey_gpu_len(void *buffer) {
   return b ? b->length : 0;
 }
 
+// Whether `index` names a stored word: the ONE bounds predicate every accessor
+// below shares, so a read, a write and the Result gate can never disagree
+// about which indices exist. NULL, a data-less (failed) allocation and the
+// published-length tail are all out of bounds.
+static int addressable(const OspreyGpuBuffer *b, int64_t index) {
+  return b && b->data && index >= 0 && index < b->length;
+}
+
 // The raw word at `index`, or 0 out of bounds. Codegen's counted loops stay
 // in bounds by construction; the guard is the no-trap backstop.
 int64_t osprey_gpu_get(void *buffer, int64_t index) {
-  OspreyGpuBuffer *b = (OspreyGpuBuffer *)buffer;
-  if (!b || !b->data || index < 0 || index >= b->length) {
-    return 0;
-  }
-  return b->data[index];
+  const OspreyGpuBuffer *b = (const OspreyGpuBuffer *)buffer;
+  return addressable(b, index) ? b->data[index] : 0;
 }
 
 // Store the raw word at `index`; out-of-bounds stores are ignored. Buffers
@@ -72,18 +77,15 @@ int64_t osprey_gpu_get(void *buffer, int64_t index) {
 // a freshly allocated buffer call this.
 void osprey_gpu_set(void *buffer, int64_t index, int64_t word) {
   OspreyGpuBuffer *b = (OspreyGpuBuffer *)buffer;
-  if (!b || !b->data || index < 0 || index >= b->length) {
-    return;
+  if (addressable(b, index)) {
+    b->data[index] = word;
   }
-  b->data[index] = word;
 }
 
-// Whether `index` is addressable — the gate osprey_gpu_get's Result form
-// branches on, so a gather reports out-of-bounds instead of reading 0
-// [GPU-GET].
+// The gate osprey_gpu_get's Result form branches on, so a gather reports
+// out-of-bounds instead of reading 0 [GPU-GET].
 int32_t osprey_gpu_in_bounds(void *buffer, int64_t index) {
-  OspreyGpuBuffer *b = (OspreyGpuBuffer *)buffer;
-  return (b && b->data && index >= 0 && index < b->length) ? 1 : 0;
+  return addressable((const OspreyGpuBuffer *)buffer, index) ? 1 : 0;
 }
 
 // Shrink a compaction scratch buffer to its first `count` elements in place.

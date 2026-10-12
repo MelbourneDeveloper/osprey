@@ -1,363 +1,149 @@
 # Plan 0025 — GPU Graphics Backends: one shader library, many device APIs
 
-**Subsystem:** `examples/graphics/` (shader libraries + platform bridges) +
-`Makefile` (per-OS build recipes) + `crates/osprey-cli/tests/graphics_scenes.rs`
-(the drift guard)
-**Status:** **macOS/Metal ships and is observed working. Windows/D3D12 is
-written but has never been compiled, linked or run** — not on the machine that
-wrote it, not anywhere. Vulkan/SPIR-V is unstarted. The convergence with
-`gpu*` (stage 5 below) is unstarted and is the reason this plan exists at all.
-**Spec:** none yet. `examples/graphics/README.md` is the current contract; a
-spec is owed once a second backend is verified (stage 3).
-**Sibling plan:** [0023 — GPU computation](0023-gpu-computation.md) owns the
-`gpu*` language surface and kernel extraction. This plan owns the *device
-plumbing*. They meet at stage 5.
+**Subsystem:** `examples/graphics/` (shader libraries, the shared ABI header, platform bridges) + `Makefile` (per-OS build recipes) + `crates/osprey-cli/tests/graphics_scenes.rs` with `graphics_scenes/{abi,frame}.rs` (the drift guard)
+**Status:** **macOS/Metal observed working (July 2026). Windows/D3D12 is written but has never been compiled, linked or run on Windows**; its per-frame path *is* compiled and executed on every CI platform against stubbed SDK calls and the real ABI header. Vulkan/SPIR-V is unstarted. The convergence with `gpu*` (stage 5) is unstarted.
+**Priority (set 2026-10-12): subordinate to [plan 0023](0023-gpu-computation.md).** The graphics examples exist to demonstrate capability. Work here is admissible only when it advances `gpu*` reaching a device; stages 2–4 below are therefore not scheduled on their own and run only when stage 5 names what it needs from them, and stage 5 itself waits on plan 0023's stage 4 emitter.
+**Spec:** none. `examples/graphics/README.md` is the current contract; a spec is owed if and when stage 5 lands, not before.
+**Sibling plan:** [0023 — GPU computation](0023-gpu-computation.md) owns the `gpu*` language surface, kernel extraction and every device backend. This plan owns only the window/drawable/shader-library plumbing those backends will reuse.
 
 ## Summary
 
-`examples/graphics/` is the only place in the repository where Osprey code
-causes a GPU to execute instructions. It does that by *not* using `gpu*`: an
-Osprey host program drives a window through six extern C functions, and a
-hand-written fragment shader does the per-pixel work. Osprey is the host
-language and the GPU is the rasteriser.
+`examples/graphics/` is the only place in the repository where Osprey code causes a GPU to execute instructions. It does that by *not* using `gpu*`: an Osprey host program drives a window through six extern C functions, and a hand-written fragment shader does the per-pixel work. Osprey is the host language and the GPU is the rasteriser.
 
-The arrangement's whole value is one sentence: **the Osprey sources are
-byte-identical on every platform.** `base/base.osp` and the three `scene.osp`
-entries are not ported, not `#ifdef`-ed and not conditionally compiled. A scene
-names a shader file and a fragment entry inside it; each backend resolves that
-name into its own dialect. Everything else in this plan exists to keep that
-true as backends multiply.
+The arrangement's whole value is one sentence: **the Osprey sources are byte-identical on every platform.** `base/base.osp` and the three `scene.osp` entries are not ported, not `#ifdef`-ed and not conditionally compiled. A scene names a shader file and a fragment entry inside it; each backend resolves that name into its own dialect.
+
+What makes this plan worth keeping under the new priority is one file: `ospgfx_abi.h`. The slot protocol it declares — a fixed vector of scalar uniforms the host fills and the shader reads — is exactly an extracted kernel's leading uniform parameters (`[GPU-KERNEL-EXTRACT]`). When plan 0023's emitter exists, it targets this header; nothing else here needs to be redone.
 
 ```mermaid
 flowchart TB
-  osp["base/base.osp<br/>one host, one clock"] --> abi["six extern fns<br/>osp_gfx_*"]
+  osp["base/base.osp<br/>one host, one clock"] --> abi["ospgfx_abi.h<br/>slots, scales, uniform block, validation"]
   abi --> mac["ospgfx.m<br/>Metal + Cocoa"]
-  abi --> win["ospgfx_d3d12.c<br/>D3D12 + Win32"]
-  abi --> vk["future: Vulkan"]
-  mac --> msl["base.metal"]
-  win --> hlsl["base.hlsl"]
-  vk --> spv["base.slang → SPIR-V"]
+  abi --> win["ospgfx_d3d12.{h,c}<br/>D3D12 + Win32"]
+  mac --> msl["base.metal<br/>mirrors the uniform block"]
+  win --> hlsl["base.hlsl<br/>mirrors the uniform block"]
+  abi -. stage 5 .-> emit["gpu* kernel emitter<br/>(plan 0023 stage 6)"]
 ```
 
-## The invariant: two shader libraries, one program
+## The invariant: one ABI header, two shader libraries, one program
 
-`base.metal` (453 lines) and `base.hlsl` (443 lines) are the same program in
-two dialects — section for section, helper for helper, entry for entry. One
-`Uniforms` block, one `osp_vertex`, three named fragment entries
-(`osp_fragment`, `osp_fragment_opal`, `osp_fragment_character`) the bridge
-selects between by name. `base.metal` carries the design prose; `base.hlsl`
-records only what HLSL does differently, so the pair is not 400 lines of
-duplicated commentary.
+The Osprey-facing C contract is declared **once**, in `ospgfx_abi.h`: `OSP_GFX_SLOTS`, the two fixed-point scales, the `OspGfxUniforms` block, the window-extent and scale validation, the fragment-entry default, the slot store and the elapsed-time helper. Both bridges `#include` it and restate none of it; `graphics_scenes/abi.rs` fails if either bridge grows its own `#define OSP_GFX_SLOTS` or `typedef struct OspGfxUniforms` again.
 
-Nothing in either toolchain can check that they agree. That is what
-`crates/osprey-cli/tests/graphics_scenes.rs` is for — six tests, and the two
-that matter here **derive** their expectations rather than listing them:
+The shader libraries cannot include it — each bridge compiles its shader from source at run time with no include path — so `base.metal` and `base.hlsl` each mirror the uniform block by hand. That is the silent-corruption hazard the drift guard exists for: a disagreement does not fail to compile, it shifts `res` and `time` under every scene on one platform. The guard pins both mirrors to the header, derives the two libraries' constant sets from their text and requires them to be equal in **both directions**, with the single legitimate HLSL-only name (`OSP_GFX_SLOT_REGISTERS`, the float4 register count its cbuffer packing needs) listed explicitly and asserted to be *exactly* the difference, so a stale whitelist entry fails too.
 
-- `the_hlsl_library_declares_every_constant_the_metal_one_does` tokenises both
-  files with comments stripped, collects every screaming-snake identifier, and
-  diffs the sets. Adding a constant to `base.metal` and forgetting `base.hlsl`
-  fails without anyone remembering to update a list.
-- `every_declaration_of_the_uniform_layout_agrees` pins **four** independent
-  declarations of one layout — `OspGfxUniforms` in `ospgfx.m`, the same struct
-  in `ospgfx_d3d12.h`, `Uniforms` in `base.metal`, and the cbuffer in
-  `base.hlsl` — plus both bridges' six exports and both fixed-point scales.
+Two transcription hazards are load-bearing enough to have their own test and their own comment, because both compile cleanly when wrong:
 
-Two transcription hazards are load-bearing enough to have their own test and
-their own comment, because both compile cleanly when wrong:
+1. **cbuffer packing.** A `float slot[24]` inside an HLSL constant buffer gets one 16-byte register *per element* and would read `slot[1]` out of the bridge's `slot[4]`. It is declared `float4 uniformSlotPack[OSP_GFX_SLOTS / 4]` and unpacked once by `loadUniforms()`; a `#if (OSP_GFX_SLOTS % 4) != 0 / #error` guards the divisibility, and `the_hlsl_constant_buffer_cannot_quietly_unpack_itself` guards the guard.
+2. **Matrix convention.** Metal's `float2x2` takes **columns**; HLSL's takes **rows** and needs `mul`. `rotationFromTurns` is transposed accordingly. Get it wrong and every scene spins backwards at full frame rate.
 
-1. **cbuffer packing.** A `float slot[24]` inside an HLSL constant buffer gets
-   one 16-byte register *per element* — 384 bytes — and would read `slot[1]`
-   out of the bridge's `slot[4]`, silently and wrongly. It is declared
-   `float4 uniformSlotPack[OSP_GFX_SLOTS / 4]` (96 bytes, byte-for-byte the C
-   array) and unpacked once by `loadUniforms()`, so helper signatures still
-   match Metal's. A `#if (OSP_GFX_SLOTS % 4) != 0 / #error` guards the
-   divisibility the argument rests on, and
-   `the_hlsl_constant_buffer_cannot_quietly_unpack_itself` guards the guard.
-2. **Matrix convention.** Metal's `float2x2` takes **columns** and multiplies a
-   column vector on its right; HLSL's takes **rows** and needs `mul`.
-   `rotationFromTurns` is transposed accordingly. Get it wrong and every scene
-   spins backwards at full frame rate.
-
-Pixel-for-pixel identity across platforms is **not** claimed and must not be.
-The arithmetic is transcribed operation for operation, but fxc and Metal's
-compiler fold, reassociate and schedule independently. "Indistinguishable",
-never "bit-equal".
+Pixel-for-pixel identity across platforms is **not** claimed and must not be. The arithmetic is transcribed operation for operation, but the shader compilers fold, reassociate and schedule independently. "Indistinguishable", never "bit-equal".
 
 ## What works today
 
-- **The Metal backend.** `ospgfx.m` — Cocoa window + `CAMetalLayer`, the flat C
-  ABI (`osp_gfx_open`, `osp_gfx_set`, `osp_gfx_set_milli`, `osp_gfx_draw`,
-  `osp_gfx_ticks`, `osp_gfx_close`), `newLibraryWithSource:` at open time.
-  Measured at 103 fps on a 1920×1200 drawable for the same scene the `gpu*`
-  host backend renders at 13 fps.
-- **The Osprey host.** `base/base.osp` holds the fixed-point trigonometry, the
-  per-scene oscillator and grade tables and the frame loop, exactly once.
-  `kali/`, `opal/`, `character/` are one-file projects importing
-  `graphics::SceneBase`; each names `../base` as a second source root because
-  Default Osprey cannot import across standalone scripts ([MODULES-MODEL],
-  [MODULES-ENTRYPOINT]).
-- **Authored grade lives in Osprey, not the shader.** The Kali scene's
-  falloff, palette step and depth, exposure, core gain, floor and sharpness,
-  saturation, vignette, gamma and trap clamp arrive in thousandths over FFI.
-  An offscreen A/B render at matched uniforms was byte-identical, which is the
-  bar that refactor had to clear. What stays in the shader is mathematics, the
-  loop trip counts (they must be compile-time constants to unroll), and the
-  fixed palette identity of a composition.
-- **The drift guard**, `crates/osprey-cli/tests/graphics_scenes.rs`, 487 LOC,
-  six tests. It was mutation-checked: eleven deliberate mutations (slot count
-  24→32, a constant renamed out of the HLSL, the cbuffer unpacked to a
-  `float[]`, a lost `OSP_GFX_API` export, `res` dropped from `ospgfx.m` and
-  from `base.metal`, a moved host table, a renamed HLSL entry, a dropped
-  scale constant, a reworded diagnostic, an undone `log2(e)` fold) and every
-  one was detected.
-- **`make graphics SCENE=…` splits by `$(OS)`.** The macOS recipe is unchanged
-  apart from `-Wall -Werror` becoming the overridable `$(GFX_WARN)`.
+- **The Metal backend.** `ospgfx.m` — Cocoa window + `CAMetalLayer`, the six exported C functions (each bridge declares its own export prototypes; the header holds the data contract they share), `newLibraryWithSource:` at open time. Measured in July 2026 at 103 fps on a 1920×1200 drawable for the scene the `gpu*` host backend rendered at 13 fps; both numbers are historical and live, dated, in plan 0023's "What that costs, measured".
+- **The Osprey host.** `base/base.osp` holds the fixed-point trigonometry, the per-scene oscillator and grade tables and the frame loop, exactly once. `kali/`, `opal/`, `character/` are one-file projects importing `graphics::SceneBase`; each names `../base` as a second source root because Default Osprey cannot import across standalone scripts ([MODULES-MODEL], [MODULES-ENTRYPOINT]).
+- **Authored grade lives in Osprey, not the shader.** An offscreen A/B render at matched uniforms was byte-identical when the grade moved out of the shader; that is the bar stage 5 inherits.
+- **The shared ABI header**, `ospgfx_abi.h`: platform-neutral C11, compiled on macOS (ObjC), on Windows (MinGW/MSVC, unverified) and on Linux by the frame-path test. The bridges' slot store, extent/scale validation and tick arithmetic are its inline helpers; each bridge keeps only the platform-specific wrapper (ObjC property copy-out/copy-in on macOS, a direct pointer on Windows).
+- **The drift guard**: ten tests across `graphics_scenes.rs` (scene structure, Kali grade, fragment entries, bidirectional constant sets, cbuffer guard), `graphics_scenes/abi.rs` (header as canonical declaration, both mirrors, both bridges include-and-restate-nothing, one C ABI, host slot ranges) and `graphics_scenes/frame.rs` (the D3D12 frame functions compiled with clang `-Wall -Wextra -Werror` against the real header and stubbed SDK calls, every injected failure path asserted). An earlier mutation check of the pre-header structure detected 11/11 deliberate mutations; the post-header structure was re-checked on 2026-10-12 against the mutations listed under Landmines.
+- **`make graphics SCENE=…` splits by `$(OS)`**, and both bridge recipes depend on `ospgfx_abi.h`.
 
 ## What is written but unverified
 
-`base.hlsl`, `ospgfx_d3d12.h`, `ospgfx_d3d12_setup.c`, `ospgfx_d3d12.c` and the
-Makefile's `Windows_NT` branch have **never been compiled, linked or run**.
-They were written on macOS with no MSVC, no Windows SDK, no mingw-w64 and no
-fxc or dxc. Every one of those files says so at the top, `README.md` says so
-under "Verification status", the Makefile branch says so in a comment, and the
-test file's module doc says so. Do not remove those notices for tidiness; they
-are the only thing standing between "transcribed" and "works".
+`base.hlsl`, `ospgfx_d3d12.h`, `ospgfx_d3d12_setup.c`, `ospgfx_d3d12.c` and the Makefile's `Windows_NT` branch have **never been compiled, linked or run on Windows**. They were written on macOS with no MSVC, no Windows SDK, no mingw-w64 and no fxc or dxc. Every one of those files says so at the top, `README.md` says so under "Verification status", and the Makefile branch says so in a comment. Do not remove those notices for tidiness; they are the only thing standing between "transcribed" and "works". What *is* verified on every platform is the per-frame control flow (`graphics_scenes/frame.rs`) and the ABI header's C.
 
-The shape of what was written, for whoever verifies it:
+The shape of what was written, for whoever verifies it: three files, not one (`_setup.c` is within a dozen lines of the 500-LOC cap — split before adding); uniforms as 28 root-constant DWORDs with a compile-time budget assertion; every HRESULT through `osp_gfx_ok`; the scene sources untouched and the `.metal` → `.hlsl` extension swap done by the bridge from the file name; `GetCPUDescriptorHandleForHeapStart` called once and cached (the one C binding that historically diverges between MSVC and mingw-w64 — **if the Windows build fails, suspect this line first**); no WARP fallback. The shader is compiled through `D3DCompile` at Shader Model 5.0 — the legacy fxc path; Microsoft's current compiler is DXC (LLVM-based, required for Shader Model 6), and SM 5.0 is kept only because the library needs nothing from SM 6.
 
-- **Three files, not one.** D3D12 bring-up is several times Metal's code for
-  the same picture; written as one file it measured 751 LOC against the
-  repository's 500-LOC cap. `ospgfx_d3d12.h` is the uniform ABI and context,
-  `_setup.c` (490 LOC) is everything built once, `.c` (241 LOC) is the six
-  exports and the frame path. **`_setup.c` is 490 of 500 — the next feature
-  added there needs a fourth file, not another function.**
-- **Uniforms are root constants**, 28 DWORDs written straight into the command
-  list: no upload heap, no per-frame resource lifetime. A
-  `typedef char osp_gfx_root_constants_fit[… <= 64 ? 1 : -1];` fails to
-  *compile* if the slot count ever outgrows the root-signature budget, rather
-  than failing at pipeline creation with an opaque validation message.
-- **Every HRESULT goes through `osp_gfx_ok`**, which prints the call and code
-  to stderr and returns 0, so the bring-up chain short-circuits with `&&` and
-  failure paths return NULL/0 exactly as `ospgfx.m` does. No stubs.
-- **The scene sources are untouched, and that is enforced.** `base/base.osp`
-  still says `fn shaderPath() = "examples/graphics/base.metal"` on Windows; the
-  bridge swaps the extension itself (`OSP_GFX_SHADER_EXT ".hlsl"`, taken from
-  the *file name* only, so dotted directories resolve correctly). A test pins
-  both halves.
-- **`GetCPUDescriptorHandleForHeapStart`** is the one C binding that
-  historically diverges between MSVC and mingw-w64. It was **not** papered over
-  with `WIDL_EXPLICIT_AGGREGATE_RETURNS`: `D3D12_CPU_DESCRIPTOR_HANDLE` is a
-  single pointer-sized field, so it returns in a register under the x64 ABI and
-  both toolchains' default bindings return it by value; setting that macro
-  would have broken mingw. Called once, cached, reasoning in a comment. **If
-  the Windows build fails, this is the first line to suspect anyway.**
-- **No WARP fallback.** `D3D12CreateDevice(NULL, …)` asks for the default
-  hardware adapter, so a GPU-less runner fails rather than degrading.
-  Deliberate and documented.
-
-## The Windows CI job that would settle it
-
-Steps 1–4 need no display and no GPU; step 5 needs a desktop session **and** a
-D3D12 adapter. This is the acceptance criterion for stage 2 below.
-
-1. **Every shader entry point through fxc** — fxc *is* `D3DCompile`, so this
-   checks exactly what the bridge does at run time:
-   `fxc.exe -nologo -T vs_5_0 -E osp_vertex -Fo check.cso examples\graphics\base.hlsl`,
-   then `-T ps_5_0` for `osp_fragment`, `osp_fragment_opal` and
-   `osp_fragment_character`.
-2. **Build the bridge, warnings fatal**, in the MSYS2 UCRT64 shell:
-   `gcc -shared -O2 -Wall -Werror -o examples/graphics/ospgfx.dll examples/graphics/ospgfx_d3d12.c examples/graphics/ospgfx_d3d12_setup.c -Wl,--out-implib,examples/graphics/libospgfx.dll.a -ld3d12 -ldxgi -ld3dcompiler -ldxguid -luser32`
-3. **Type-check and link the unchanged scenes.**
-   `osprey.exe examples/graphics/{kali,opal,character} --check`, then
-   `osprey.exe examples/graphics/kali --compile` — `--compile` is what
-   exercises `// @link: ospgfx` against step 2's import library.
-4. **Run the drift guard:**
-   `cargo test -p osprey-cli --test graphics_scenes`
-5. **Open a window and draw** — the only step that proves the backend, and the
-   only one that can catch the cbuffer packing or the matrix transpose:
-   `PATH="$PWD/examples/graphics:$PATH" timeout 20 osprey.exe examples/graphics/kali --run`.
-   The scene runs until its window closes, so it needs the timeout, and it
-   prints its own frame count and rate on the way out. Zero frames means
-   `osp_gfx_open` refused and said why on stderr.
-
-Steps 1–4 belong in ordinary CI as soon as a Windows runner exists. Step 5 does
-not: it needs hardware and a session, so it is a manual or self-hosted gate.
+The five commands that would settle it on Windows (fxc every entry, build the DLL warnings-fatal, type-check and link the unchanged scenes, run the drift guard, open a window for twenty seconds) are the how-to in [`examples/graphics/README.md`](../../examples/graphics/README.md) — not repeated here. Steps 1–4 need no display; step 5 needs a desktop session and a D3D12 adapter.
 
 ## Stages
 
-Each stage keeps `make ci` green and must not change a single byte of
-`base/base.osp` or any `scene.osp`. That constraint is the deliverable.
+Each stage keeps `make ci` green and must not change a single byte of `base/base.osp` or any `scene.osp`. That constraint is the deliverable.
 
 ### Stage 1 — Metal backend and the shared-library invariant ✅
 
-Landed. Acceptance: `make graphics SCENE=kali|opal|character` opens a window
-and renders; `graphics_scenes.rs` passes; the derived-constant and
-uniform-layout tests fail when either library drifts.
+Landed. Acceptance: `make graphics SCENE=kali|opal|character` opens a window and renders; the drift guard passes; the derived-constant and uniform-layout tests fail when either library drifts.
 
-### Stage 2 — verify the D3D12 backend
+### Stage 2 — verify the D3D12 backend — DEFERRED
 
-Run the five steps above on real Windows, fix what they find, and replace the
-"unverified" notices in all five files, the README and the test module doc with
-what was actually observed. Gate: step 5 renders `kali` for twenty seconds and
-reports a non-zero frame rate; steps 1–4 run in CI on every PR.
+Not scheduled. Admissible only if stage 5 picks HLSL as its first emitted dialect, which it will not: the emitter must target the dialect whose hand-written library is *verified*, and that is Metal. Gate when it does run: the README's step 5 renders `kali` for twenty seconds with a non-zero frame rate, and steps 1–4 run in CI on a Windows runner. Expect fixes in the two hazards above and in HLSL spellings chosen blind (`(float3)0.0` splats, `(float)i` casts).
 
-Expect the fixes to be in the two hazards named above plus HLSL spelling
-choices that could not be tested from macOS (`(float3)0.0` splats and `(float)i`
-casts were used over `float3(0.0)`/`float(i)` precisely because the
-constructor-call spelling is accepted less consistently across shader
-compilers — that guess may be wrong in either direction).
+### Stage 3 — write the spec — DEFERRED to stage 5
 
-### Stage 3 — write the spec
+`[GFX-ABI]`, `[GFX-SHADER-LIB]`, `[GFX-UNIFORMS]`, `[GFX-HOST-PORTABLE]` are owed when stage 5 lands, because that is when the contract stops being an example's and becomes the compiler's. Gate unchanged: every ID has implementing code that references it and a test that fails when it is violated.
 
-One spec section per invariant, with IDs, once two backends are verified:
-`[GFX-ABI]` (the six exports and both fixed-point scales), `[GFX-SHADER-LIB]`
-(one library per backend, named entries, the no-drift rule), `[GFX-UNIFORMS]`
-(the layout and its four declarations), `[GFX-HOST-PORTABLE]` (the scene
-sources never learn which API is underneath). Gate: every ID has implementing
-code that references it and a test that fails when it is violated — the same
-bar every other spec in `docs/specs/` meets.
+### Stage 4 — Vulkan/SPIR-V third backend — DECISION CLOSED
 
-### Stage 4 — Vulkan/SPIR-V third backend
-
-A third backend is what proves the pattern generalises rather than being a
-macOS/Windows coincidence, and it is the one that runs on Linux CI *and* feeds
-plan 0023's WebGPU target (WGSL and SPIR-V are one device sublanguage with two
-spellings).
-
-The open decision is the source language. Transcribing a third dialect by hand
-scales badly and doubles the drift surface each time; the alternatives are
-authoring in one language and compiling down (Slang or `glslang`/`shaderc` from
-a common source), or generating all dialects from an Osprey-side description —
-which is stage 5 arriving early. **Do not start the transcription until that
-choice is made.** Gate: `kali` renders under Vulkan with the scene sources
-unchanged, and the constant-set test extends to three libraries without
-becoming a three-way manual list.
+The open question was the source language for a third dialect. Under the current priority it is closed: **no hand-transcribed shader will be written again.** A third dialect is admissible only as Osprey-emitted output — stage 5 here, plan 0023's stage 6 — where the LLVM SPIR-V backend (an official LLVM target since LLVM 20) and WGSL (the same device sublanguage, W3C Candidate Recommendation) are the two spellings one emitter produces. If a hand-authored multi-target shader source is ever wanted again, the authority is Slang — hosted by Khronos since 2024-11-21 and compiling one source to SPIR-V, HLSL, GLSL, WGSL and MSL — not a fourth transcription.
 
 ### Stage 5 — convergence: `gpu*` emits the shader
 
-The end state, and the reason this is a plan rather than an examples folder.
-Today a scene hand-writes MSL/HLSL and Osprey merely pushes uniforms. The
-convergence point is that [plan 0023](0023-gpu-computation.md) stage 3's
-extracted kernels — first-order, scalar-signatured, capture-free, purity-proven
-— are *emitted* as MSL/HLSL/SPIR-V, and `base.metal` becomes generated output
-rather than authored source.
+The end state, and the reason this is a plan rather than an examples folder. Today a scene hand-writes MSL and Osprey merely pushes uniforms. The convergence point is that plan 0023 stage 3's extracted kernels — first-order, scalar-signatured, capture-free, purity-proven — are *emitted* as MSL (Metal Shading Language, specification 4.1 as of 2026-06-04), and `base.metal` becomes generated output rather than authored source.
 
 What each side must bring:
 
-- From plan 0023: a device IR emitter over the extracted-kernel ABI, and a
-  decision about kernels that decline extraction (a closure cell has no device
-  representation — reject by name, never silently run on the host).
-- From this plan: the uniform-slot protocol is already exactly a kernel's
-  uniform parameter list, which is the fortunate part. What is missing is a
-  per-pixel index space (`gpuMap` is rank-1 over a flat buffer; a fragment
-  shader is rank-2 over a drawable), and a way to express "this buffer is the
-  drawable" without a copy.
-- Shared: whichever of MSL/HLSL/SPIR-V the emitter targets first must be the
-  one whose hand-written library is *verified*, so the generated output can be
-  diffed against a known-good reference frame rather than trusted.
+- From plan 0023: a device IR emitter over the extracted-kernel ABI, and a decision about kernels that decline extraction (a closure cell has no device representation — reject by name, never silently run on the host).
+- From this plan: `ospgfx_abi.h`'s slot protocol is already a kernel's uniform parameter list. What is missing is a per-pixel index space (`gpuMap` is rank-1 over a flat buffer; a fragment shader is rank-2 over a drawable), and a way to express "this buffer is the drawable" without a copy — both of which plan 0023's `llm.c` reference application will also demand, which is why they are owned there.
+- Shared: the emitter targets MSL first, because that is the verified library the generated output can be diffed against.
 
-Gate: one scene's fragment body written as an Osprey kernel, compiled to the
-platform shader, rendering a frame byte-identical to the hand-written shader's
-at matched uniforms — the same A/B bar the grade refactor cleared.
+Gate: one scene's fragment body written as an Osprey kernel, compiled to the platform shader, rendering a frame byte-identical to the hand-written shader's at matched uniforms — the same A/B bar the grade refactor cleared.
+
+## Authorities (verified 2026-10-12)
+
+- Apple, *Metal Shading Language Specification* 4.1 (2026-06-04) — the dialect stage 5 emits first.
+- Microsoft, *DirectX Shader Compiler* (DXC): the current HLSL compiler, LLVM/Clang-based, required for Shader Model 6; fxc remains only for SM 5.x. The D3D12 bridge's `D3DCompile` at `vs_5_0`/`ps_5_0` is the legacy path by choice.
+- Khronos, *Slang Initiative* (launched 2024-11-21): one shading language compiled to SPIR-V, HLSL, GLSL, WGSL and MSL under open governance — the fallback for any hand-authored multi-target shader.
+- Khronos, *Vulkan 1.4* (released 2024-12-03) requires SPIR-V 1.0–1.6; *SPIR-V 1.6* revision 4 (2024-07-03).
+- W3C GPU for the Web Working Group, *WebGPU* and *WGSL* — Candidate Recommendation, drafts through 2026.
+- LLVM, SPIR-V backend promoted to an official target (`LLVM_ALL_TARGETS`, LLVM 20) — one textual-IR emitter can feed both PTX and SPIR-V.
 
 ## Landmines
 
-- **`examples/graphics/` is not in the differential corpus and not in CI.** It
-  needs a display. A change here is verified by running it, or it is not
-  verified. `make -n graphics` only proves the recipe expands.
-- **`_setup.c` is at 490 of 500 LOC.** Split before adding, not after.
-- **`GFX_WARN=-Wall` drops `-Werror`** deliberately, because unverified code
-  plus fatal warnings is a bad first-run experience. Do not make it
-  unconditional once the backend is verified — put `-Werror` back.
-- **Windows `make graphics` requires the MSYS2 UCRT64 shell.** Native
-  PowerShell gets a one-line pointer to the README instead of a broken recipe;
-  keep it that way. The MSVC `cl /LD` route works but needs an MSVC-targeting
-  driver (`OSPREY_CC=clang-cl`) because `-lospgfx` only resolves `ospgfx.lib`
-  under that target.
-- **A shader error is otherwise invisible** — the bridge compiles the library
-  at run time, so a typo surfaces as a window that refuses to open.
-  `make _graphics-shader` exists to turn that into a build failure, and it
-  *skips quietly* when the toolchain is absent. A silent skip is not a pass.
-- **Four independent declarations of one uniform layout** (two bridges, two
-  shader libraries) and no compiler checks any of them against another. Change
-  one, run `graphics_scenes.rs`, always.
+- **`examples/graphics/` is not in the differential corpus and not in CI.** It needs a display. A change here is verified by running it, or it is not verified. `make -n graphics` only proves the recipe expands. The one exception is the frame-path test, which executes the D3D12 frame functions on every platform against stubs.
+- **`ospgfx_abi.h` helpers are `static inline`.** clang suppresses `-Wunused-function` for them only when the header is *included*; pasting its text into a main file (as the frame test once did) fails `-Werror`. Include it with `-I`, never inline it.
+- **`_setup.c` is within a dozen lines of the 500-LOC cap.** Split before adding, not after.
+- **`GFX_WARN=-Wall` drops `-Werror`** deliberately, because unverified code plus fatal warnings is a bad first-run experience. Put `-Werror` back the day stage 2 passes.
+- **Windows `make graphics` requires the MSYS2 UCRT64 shell.** Native PowerShell gets a one-line pointer to the README instead of a broken recipe.
+- **A shader error is otherwise invisible** — the bridge compiles the library at run time, so a typo surfaces as a window that refuses to open. `make _graphics-shader` turns that into a build failure and *skips quietly* when the toolchain is absent. A silent skip is not a pass.
+- **Mutations the post-header drift guard must keep catching** (re-run after touching it): `OSP_GFX_SLOTS` changed in the header alone; `#define OSP_GFX_SLOTS` reintroduced in a bridge; a screaming-snake constant added to one shader library only; `OSP_GFX_API` dropped from one D3D12 export; `float res[2];` dropped from the header.
 
 ## TODO checklist
 
 ### Stage 1 — Metal + the invariant
 
 - [x] `ospgfx.m`: Cocoa window, `CAMetalLayer`, the six-symbol flat C ABI.
-- [x] `base.metal`: one library, one `Uniforms`, one `osp_vertex`, three named
-      fragment entries selected by name at open time.
+- [x] `base.metal`: one library, one `Uniforms`, one `osp_vertex`, three named fragment entries selected by name at open time.
 - [x] `base/base.osp` as the single host; three one-file scene projects.
-- [x] Authored grade moved from the shader into Osprey, A/B render
-      byte-identical at matched uniforms.
-- [x] `graphics_scenes.rs` drift guard, mutation-checked (11/11 detected).
+- [x] Authored grade moved from the shader into Osprey, A/B render byte-identical at matched uniforms.
+- [x] Drift guard, mutation-checked.
 - [x] `make graphics SCENE=…` with an up-front `xcrun metal` shader check.
+- [x] **One ABI declaration** (`ospgfx_abi.h`) included by both bridges; bridges restate nothing; the frame-path test compiles the real header; both Makefile recipes depend on it.
+- [x] **Drift guard structural and bidirectional (branch review P2.9):** constant sets compared both ways with an explicit, exact HLSL-only whitelist; uniform-layout checks derived from the header; ABI checks split into `graphics_scenes/abi.rs`.
 
-### Stage 2 — D3D12 verification
+### Stage 2 — D3D12 verification (deferred)
 
-- [x] `base.hlsl` transcribed entry for entry, with the `float4` cbuffer
-      packing, its `#error` divisibility guard, and the transposed
-      `rotationFromTurns`.
-- [x] Three-file bridge (`ospgfx_d3d12.h` / `_setup.c` / `.c`), six exports,
-      identical semantics and encodings, root-constant uniforms with a
-      compile-time budget assertion, every HRESULT through `osp_gfx_ok`.
-- [x] Makefile `Windows_NT` branch + fxc entry-point check + PowerShell
-      pointer; macOS recipe unchanged.
-- [x] Tests extended to police both backends from derived sets, not lists.
-- [ ] **Nothing above has been compiled, linked or run.** Execute CI steps 1–5
-      on Windows.
-- [ ] Steps 1–4 wired into CI on a Windows runner.
-- [x] **Propagate frame-path failures (branch review P1.13).** Submit/frame return status through draw/close. Failed frames stop drawing, including allocator reuse; presentation failure still drains the submitted queue. Signal, event, timeout, wait failure, device removal and fence exhaustion retain resources until a successful close retry. `graphics_scenes::direct3d_frame_failures_are_reported_and_resources_retained` compiles the actual frame functions with injected SDK failures and assertions for every path. This verifies control flow, not Windows SDK compatibility or rendering; the Windows checks above remain open.
-- [ ] **Make the drift guard structural and bidirectional (branch review
-      P2.9).** `graphics_scenes.rs` compares export names/text fragments and
-      shader constants Metal-to-HLSL only, so HLSL-only drift passes. Derive
-      complete normalized signatures from one canonical ABI and compare
-      constant sets in both directions with an explicit backend-only
-      whitelist.
-- [ ] Replace the "unverified" notices in `base.hlsl`, `ospgfx_d3d12.h`,
-      `ospgfx_d3d12_setup.c`, `ospgfx_d3d12.c`, the Makefile branch, the README
-      and `graphics_scenes.rs`'s module doc with observed results.
-- [ ] Restore `-Werror` as the default once step 2 passes.
-- [ ] Decide on a WARP software-adapter fallback — required if step 5 is ever
-      to run on a hosted runner.
-- [ ] `vscode-extension/test/suite/extension.test.ts:2025` still names
-      `examples/graphics/scene.metal`, a file that no longer exists. One-line
-      comment fix, outside this folder.
+- [x] `base.hlsl` transcribed entry for entry, with the `float4` cbuffer packing, its `#error` divisibility guard, and the transposed `rotationFromTurns`.
+- [x] Three-file bridge, six exports, identical semantics and encodings, root-constant uniforms with a compile-time budget assertion, every HRESULT through `osp_gfx_ok`.
+- [x] Makefile `Windows_NT` branch + fxc entry-point check + PowerShell pointer.
+- [x] Frame-path failures propagate (branch review P1.13), pinned by `direct3d_frame_failures_are_reported_and_resources_retained`, which compiles the actual frame functions against the real ABI header with injected SDK failures. This verifies control flow, not Windows SDK compatibility or rendering.
+- [ ] Execute the README's five Windows steps; replace the "unverified" notices with observed results; restore `-Werror`; decide on a WARP fallback. **Deferred: not admissible under the current priority unless stage 5 needs HLSL.**
+- [x] `vscode-extension/test/suite/extension.test.ts` no longer describes `examples/graphics/scene.metal` as a present file (comment fix).
 
-### Stage 3 — spec
+### Stage 3 — spec (deferred to stage 5)
 
-- [ ] `[GFX-ABI]`, `[GFX-SHADER-LIB]`, `[GFX-UNIFORMS]`, `[GFX-HOST-PORTABLE]`
-      in a new `docs/specs/` entry, each referenced from the implementing code.
-- [ ] `README.md` reduced to a how-to-run guide once the contract lives in the
-      spec.
+- [ ] `[GFX-ABI]`, `[GFX-SHADER-LIB]`, `[GFX-UNIFORMS]`, `[GFX-HOST-PORTABLE]` in a new `docs/specs/` entry, each referenced from the implementing code — when stage 5 lands.
 
-### Stage 4 — Vulkan/SPIR-V
+### Stage 4 — Vulkan/SPIR-V (decision closed)
 
-- [ ] Source-language decision: hand-transcribe, author-once-and-compile
-      (Slang/`shaderc`), or generate from Osprey. Record the decision and why.
-- [ ] Third backend: Vulkan surface + swapchain + SPIR-V pipeline behind the
-      same six exports.
-- [ ] `kali` renders on Linux with the scene sources unchanged.
-- [ ] The constant-set and uniform-layout tests extend to three libraries
-      without a manual three-way list.
+- [x] Source-language decision recorded: no hand transcription; Osprey-emitted only (stage 5); Slang is the authority if hand-authored multi-target source is ever wanted.
+- [ ] Any SPIR-V/WGSL output arrives through plan 0023's stage 6 emitter, not through a fourth hand-written library.
 
 ### Stage 5 — convergence with `gpu*`
 
-- [ ] Device shader emitter over plan 0023's extracted-kernel ABI, targeting
-      the verified backend first.
-- [ ] Rank-2 index space for per-pixel kernels; a drawable expressible as a
-      buffer without a copy.
-- [ ] One scene's fragment body written as an Osprey kernel, rendering a frame
-      byte-identical to the hand-written shader at matched uniforms.
-- [ ] `base.metal` becomes generated output; the hand-written library is kept
-      as the differential reference, not deleted.
+- [ ] Device shader emitter over plan 0023's extracted-kernel ABI, targeting MSL first and `ospgfx_abi.h`'s slot protocol as the uniform binding.
+- [ ] Rank-2 index space for per-pixel kernels; a drawable expressible as a buffer without a copy (owned by plan 0023's surface work).
+- [ ] One scene's fragment body written as an Osprey kernel, rendering a frame byte-identical to the hand-written shader at matched uniforms.
+- [ ] `base.metal` becomes generated output; the hand-written library is kept as the differential reference, not deleted.
 
 ### Cross-cutting
 
-- [ ] Any new backend keeps `base/base.osp` and every `scene.osp`
-      byte-identical — the invariant, and the first thing to check in review.
-- [ ] `docs/messaging.md` says GPU *computation* is host-only. This plan is the
-      exception that proves it: Osprey hosting a GPU shader is real and may be
-      described; `gpu*` reaching a GPU is not, and must not be conflated.
+- [ ] Any new backend keeps `base/base.osp` and every `scene.osp` byte-identical — the invariant, and the first thing to check in review.
+- [ ] `docs/messaging.md` says GPU *computation* is host-only. This plan is the exception that proves it: Osprey hosting a GPU shader is real and may be described; `gpu*` reaching a GPU is not, and must not be conflated.
