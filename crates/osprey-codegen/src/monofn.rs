@@ -146,15 +146,17 @@ fn emit_at(
     let _ = cg.monofns.insert(key, target.clone());
     let saved = cg.enter_nested_fn();
     let position = cg.fn_defs.get(name).and_then(|(_, _, position)| *position);
-    crate::closure::begin_source(cg, name, position);
-    let plist = bind_params(cg, parameters, owners, params);
-    crate::closure::source_parameters(cg, parameters, 0);
-    // Inside the body, so the definition line is credited when the
-    // instantiation RUNS rather than when it is emitted or handed to a C
-    // callback slot — the same placement `gen_function` uses for a monomorphic
-    // definition [TESTING-COVERAGE-CODEGEN].
-    cg.cov_hit_inline_fn(name);
-    let emitted = lower_body(cg, body, &target.sig);
+    let (plist, emitted) = cg.within_source_function(name, |cg| {
+        crate::closure::begin_source(cg, name, position);
+        let plist = bind_params(cg, parameters, owners, params);
+        crate::closure::source_parameters(cg, parameters, 0);
+        // Inside the body, so the definition line is credited when the
+        // instantiation RUNS rather than when it is emitted or handed to a C
+        // callback slot — the same placement `gen_function` uses for a
+        // monomorphic definition [TESTING-COVERAGE-CODEGEN].
+        cg.cov_hit_inline_fn(name);
+        (plist, lower_body(cg, body, &target.sig))
+    });
     let spelling = crate::llty::ret_spelling(ret.0, ret.1);
     // Restore the enclosing function BEFORE propagating, so a failed body never
     // leaves the host's emission state clobbered ([`crate::gpu_kernel`] does

@@ -978,12 +978,14 @@ graphics: build $(GFX_LIB) _graphics-shader
 	./$(BIN) $(GFX_DIR)/$(SCENE) --run
 endif
 
-## gpt2: Run the trained GPT-2 model on the GPU surface (usage: make gpt2 PROMPT="..." TOKENS=20)
+## gpt2: Run the trained GPT-2 model under one Tensor handler (usage: make gpt2 PROMPT="..." TOKENS=20 BACKEND=gpu|lists)
+## BACKEND=gpu runs the model on the GPU surface (the host backend today); BACKEND=lists runs the same model over host lists.
 ## The published weights and merges download once into examples/gpt2/weights (ignored by git).
 GPT2_DIR    := examples/gpt2
 GPT2_SOURCE := https://huggingface.co/openai-community/gpt2/resolve/main
 PROMPT      ?= The capital of France is
 TOKENS      ?= 20
+BACKEND     ?= gpu
 
 $(GPT2_DIR)/weights/%:
 	@$(MKDIR) $(GPT2_DIR)/weights
@@ -991,11 +993,11 @@ $(GPT2_DIR)/weights/%:
 	curl -fsSL --retry 3 -o $@ $(GPT2_SOURCE)/$*
 
 gpt2: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
-	@printf '%s\n%s\n' "$(PROMPT)" "$(TOKENS)" | ./$(BIN) $(GPT2_DIR)/generate --run --memory=arc
+	@printf '%s\n%s\n%s\n' "$(PROMPT)" "$(TOKENS)" "$(BACKEND)" | ./$(BIN) $(GPT2_DIR)/generate --run --memory=arc
 
-## gpt2-train: One training step of GPT-2 on the prompt: loss, gradients, SGD, loss again (usage: make gpt2-train PROMPT="...")
+## gpt2-train: One training step of GPT-2 on the prompt: loss, gradients, SGD, loss again (usage: make gpt2-train PROMPT="..." BACKEND=gpu|lists)
 gpt2-train: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
-	@printf '%s\n' "$(PROMPT)" | ./$(BIN) $(GPT2_DIR)/train --run --memory=arc
+	@printf '%s\n%s\n' "$(PROMPT)" "$(BACKEND)" | ./$(BIN) $(GPT2_DIR)/train --run --memory=arc
 
 ## run: Compile and run an Osprey file (usage: make run FILE=<path>)
 run: build

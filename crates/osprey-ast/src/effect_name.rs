@@ -24,23 +24,73 @@ pub fn instantiation(effect: &str) -> Option<&str> {
     rest.strip_suffix('>')
 }
 
+/// Whether a handler spelled `answered` answers a request spelled `request`:
+/// the same spelling, or a request naming no instantiation — which asks for
+/// inference ([EFFECTS-GENERIC-INSTANTIATION]) — against any instantiation of
+/// its declaration. An explicitly instantiated request matches only its own
+/// spelling, so `Stash<int>` is never answered by `Stash<string>`.
+#[must_use]
+pub fn covers(request: &str, answered: &str) -> bool {
+    request == answered || (instantiation(request).is_none() && base(answered) == request)
+}
+
+/// [`covers`] over `Effect.op` operation names: the operation must agree and
+/// the effect mention must be covered.
+#[must_use]
+pub fn operation_covers(request: &str, answered: &str) -> bool {
+    match (request.rsplit_once('.'), answered.rsplit_once('.')) {
+        (Some((effect, operation)), Some((handled, supplied))) => {
+            operation == supplied && covers(effect, handled)
+        }
+        _ => request == answered,
+    }
+}
+
 /// How many arguments a mention instantiates its declaration at. Counted at
 /// bracket depth zero, so `Signal<Result<int, Error>>` is ONE argument rather
 /// than two — a nested generic is not a second signal.
 #[must_use]
 pub fn arity(effect: &str) -> usize {
-    let Some(arguments) = instantiation(effect) else {
-        return 0;
-    };
-    if arguments.trim().is_empty() {
-        return 0;
+    instantiation(effect).map_or(0, |arguments| split_arguments(arguments).len())
+}
+
+/// The comma-separated items of `list` at bracket depth zero, trimmed; an
+/// empty list has none. `fn(int, int) -> int, bool` is TWO items.
+#[must_use]
+pub fn split_arguments(list: &str) -> Vec<&str> {
+    if list.trim().is_empty() {
+        return Vec::new();
     }
     let mut depth = 0_i32;
-    arguments
+    let mut start = 0_usize;
+    let mut items = Vec::new();
+    for (index, c) in list.char_indices() {
+        if separates(c, list[..index].ends_with('-'), &mut depth) {
+            items.push(list[start..index].trim());
+            start = index + 1;
+        }
+    }
+    items.push(list[start..].trim());
+    items
+}
+
+/// The parameter types an operation signature `fn(P1, P2, …) -> R` declares,
+/// as written, one text per parameter. A signature with no parameter list
+/// declares none.
+#[must_use]
+pub fn signature_parameters(signature: &str) -> Vec<&str> {
+    let Some((_, rest)) = signature.split_once('(') else {
+        return Vec::new();
+    };
+    let mut depth = 1_i32;
+    let close = rest
         .char_indices()
-        .filter(|(index, c)| separates(*c, arguments[..*index].ends_with('-'), &mut depth))
-        .count()
-        + 1
+        .find(|(index, c)| {
+            let _ = separates(*c, rest[..*index].ends_with('-'), &mut depth);
+            depth == 0
+        })
+        .map(|(index, _)| index);
+    close.map_or_else(Vec::new, |close| split_arguments(&rest[..close]))
 }
 
 /// Whether `c` separates two top-level arguments, advancing `depth` past any
@@ -129,6 +179,17 @@ mod tests {
     }
 
     #[test]
+    fn a_bare_request_is_covered_by_any_instantiation_of_its_declaration() {
+        assert!(covers("Tensor", "Tensor<List<float>>"));
+        assert!(covers("Tensor<List<float>>", "Tensor<List<float>>"));
+        assert!(!covers("Tensor<int>", "Tensor<List<float>>"));
+        assert!(!covers("Tensor", "Tensors<int>"));
+        assert!(operation_covers("Tensor.get", "Tensor<List<float>>.get"));
+        assert!(!operation_covers("Tensor.get", "Tensor<List<float>>.put"));
+        assert!(!operation_covers("Tensor<int>.get", "Tensor<string>.get"));
+    }
+
+    #[test]
     fn arity_counts_top_level_arguments_only() {
         assert_eq!(arity("Log"), 0);
         assert_eq!(arity("Signal<Count>"), 1);
@@ -139,6 +200,20 @@ mod tests {
         assert_eq!(arity("Pair<fn(int) -> int, bool>"), 2);
         assert_eq!(arity("Signal<[int]>"), 1);
         assert_eq!(arity("Signal<{ x: int, y: int }>"), 1);
+    }
+
+    #[test]
+    fn a_signature_lists_its_written_parameter_types() {
+        assert_eq!(
+            signature_parameters("fn(B, B, fn(float, float) -> float) -> B"),
+            vec!["B", "B", "fn(float, float) -> float"]
+        );
+        assert_eq!(signature_parameters("fn() -> string"), Vec::<&str>::new());
+        assert_eq!(signature_parameters("string"), Vec::<&str>::new());
+        assert_eq!(
+            split_arguments("Result<int, Error>, [int]"),
+            vec!["Result<int, Error>", "[int]"]
+        );
     }
 
     #[test]

@@ -106,6 +106,10 @@ pub(crate) struct Codegen {
     nullary_singletons: HashMap<String, String>,
     /// Resolved signatures, constructor layouts and union tags from inference.
     pub(crate) prog: ProgramTypes,
+    /// The top-level source function being lowered, which selects that
+    /// function's copy of every position-keyed inferred type
+    /// ([`osprey_types::SiteTable`]).
+    pub(crate) source_function: Option<String>,
     /// Erased-`any` descriptors, deep-box functions and the candidate row
     /// table ([`crate::anybox`], [TYPE-ANY]).
     pub(crate) anys: crate::anybox::AnyState,
@@ -328,6 +332,7 @@ impl Codegen {
             extern_ret_types: BTreeSet::new(),
             nullary_singletons: HashMap::new(),
             prog,
+            source_function: None,
             iter_stages: HashMap::new(),
             lambdas: HashMap::new(),
             file_lambdas: HashMap::new(),

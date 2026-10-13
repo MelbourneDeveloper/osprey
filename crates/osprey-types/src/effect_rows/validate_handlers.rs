@@ -45,7 +45,7 @@ pub(super) fn validate_handler_arms(
                 &handled_row,
                 fibered.as_deref(),
             ));
-            let local = analyzer.handler_arm_env(effect, arm, body, scope, env);
+            let local = analyzer.handler_arm_env(effect, arm, body, *stage, scope, env);
             let row = analyzer.expression(&arm.body, scope, &local);
             if stage.is_compile_time() && !row.runtime_builtins.is_empty() {
                 errors.push(

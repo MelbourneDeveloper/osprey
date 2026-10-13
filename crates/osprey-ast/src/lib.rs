@@ -32,7 +32,7 @@ pub use multiplicity::{
 pub use resume::resumes_on_one_path;
 pub use stack::with_stack;
 pub use stage::{Stage, STATIC_STAGE_KEYWORD};
-pub use visit::{walk_each, walk_program, AstNode, AstVisitor};
+pub use visit::{walk_each, walk_program, walk_statement, AstNode, AstVisitor};
 
 /// The one wording for an entry conflict [MODULES-ENTRYPOINT]. Two phases can
 /// reach it — the type checker for a plain source, the project assembler for a

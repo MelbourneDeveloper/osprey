@@ -101,6 +101,14 @@ pub(crate) fn parameter_aliases(body: &Expr, parameters: &BTreeSet<String>) -> B
     }
 }
 
+/// Whether `body` performs an operation of an effect `selected` accepts.
+pub(crate) fn any_perform(body: &Expr, selected: impl Fn(&str) -> bool) -> bool {
+    any_expression(
+        body,
+        |expression| matches!(expression, Expr::Perform { effect, .. } if selected(effect)),
+    )
+}
+
 fn any_expression(body: &Expr, predicate: impl Fn(&Expr) -> bool) -> bool {
     let mut pending = vec![AstNode::Expression(body)];
     while let Some(node) = pending.pop() {
@@ -214,11 +222,19 @@ fn resolve(fact: &BodyFacts, required: &BTreeMap<String, Vec<String>>) -> Vec<St
         let inherited = required.get(callee).into_iter().flatten();
         operations.extend(
             inherited
-                .filter(|operation| !handled.contains(*operation))
+                .filter(|operation| !answered(handled, operation))
                 .cloned(),
         );
     }
     sorted(operations)
+}
+
+/// Whether an enclosing region already answers `operation`, including a
+/// request that leaves its instantiation to inference.
+fn answered(handled: &[String], operation: &str) -> bool {
+    handled
+        .iter()
+        .any(|supplied| effect_name::operation_covers(operation, supplied))
 }
 
 /// The `Effect.op` name every requirement, dependency and dispatch is keyed by.
@@ -298,7 +314,7 @@ fn scan_body(
             effect, operation, ..
         } => {
             let requested = operation_name(effect, operation);
-            if declared_at(effects, effect, stage) && !handled.contains(&requested) {
+            if declared_at(effects, effect, stage) && !answered(handled, &requested) {
                 facts.direct.push(requested);
             }
             children_mut(expression, &mut |child| {

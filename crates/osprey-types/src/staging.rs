@@ -215,6 +215,102 @@ mod tests {
     use super::*;
     use std::collections::{BTreeMap, HashMap};
 
+    const GPU_ARMS_WITH_RESULT_FALLBACKS: &str = "static effect Tensor<B> {\n\
+        get: fn(B, int) -> float\n\
+        matMul: fn(B, B, int, int, int) -> B\n\
+    }\n\
+    fn onGpu(work) = {\n\
+        handle static Tensor<GpuBuffer<float>> {\n\
+            get b i => gpuGet(b, i) ?: 0.0\n\
+            matMul a b rows inner cols => gpuMatMul(a, b, rows, inner, cols) ?: toGpu([])\n\
+        }\n\
+        work()\n\
+    }\n\
+    fn main() = {\n\
+        let ones = toGpu([1.0, 1.0, 1.0, 1.0])\n\
+        onGpu(fn() => perform Tensor.get(perform Tensor.matMul(ones, ones, 2, 2, 2), 0))\n\
+    }\n";
+
+    /// [PATTERN-RESULT-DEFAULT] types a `Success` payload by its field label,
+    /// so the lowering's hygiene must leave `value` and the `?:` binder
+    /// unrenamed: renamed, the fallback `toGpu([])` kept an open element type
+    /// and the backend read the float buffer back as `int`.
+    #[test]
+    fn a_static_arm_keeps_its_result_field_labels_so_the_residual_types_its_fallback() {
+        let parsed = osprey_syntax::parse_program_with_flavor(
+            GPU_ARMS_WITH_RESULT_FALLBACKS,
+            osprey_syntax::Flavor::Default,
+        );
+        let lowered = lower_static_checked(&parsed.program);
+        assert!(lowered.is_ok(), "lowering failed: {lowered:?}");
+        let Ok(lowered) = lowered else { return };
+        let types = crate::infer_program(&lowered);
+        let elements: Vec<_> = types
+            .lists
+            .iter()
+            .map(|((line, column), _)| {
+                types.list_elem_type(
+                    None,
+                    Some(osprey_ast::Position {
+                        line: *line,
+                        column: *column,
+                    }),
+                )
+            })
+            .collect();
+        assert_eq!(elements.len(), 2, "both list literals survive lowering");
+        assert!(
+            elements
+                .iter()
+                .all(|element| *element == Some(&crate::Type::float())),
+            "every list literal is a float list after lowering: {elements:?}"
+        );
+    }
+
+    const GENERIC_MODEL_OVER_A_TENSOR_EFFECT: &str = "static effect Tensor<B> {\n\
+        build: fn(int, fn(int) -> float) -> B\n\
+        zipWith: fn(B, B, fn(float, float) -> float) -> B\n\
+    }\n\
+    type Acts<B> = { f: B }\n\
+    fn onGpu(work) = {\n\
+        handle static Tensor<GpuBuffer<float>> {\n\
+            build n f => gpuIota(n) |> gpuMap(f)\n\
+            zipWith a b f => gpuZipWith(a, b, f)\n\
+        }\n\
+        work()\n\
+    }\n\
+    fn blockLike(dy, acts) = perform Tensor.zipWith(dy, acts.f, fn(g, x) => g)\n\
+    fn main() = onGpu(fn() => {\n\
+        let ones = perform Tensor.build(4, fn(i) => 1.0)\n\
+        blockLike(ones, Acts { f: ones })\n\
+    })\n";
+
+    /// A static operation's declared callback type is part of the contract the
+    /// model was checked against. The residual must keep it: a kernel written
+    /// against `fn(float, float) -> float` inside a generic function is
+    /// otherwise re-inferred polymorphic, and the backend lowers its element
+    /// slots as raw words — reading every float as an int.
+    #[test]
+    fn a_discharged_arm_keeps_the_operation_s_declared_callback_types() {
+        let parsed = osprey_syntax::parse_program_with_flavor(
+            GENERIC_MODEL_OVER_A_TENSOR_EFFECT,
+            osprey_syntax::Flavor::Default,
+        );
+        let lowered = lower_static_checked(&parsed.program);
+        assert!(lowered.is_ok(), "lowering failed: {lowered:?}");
+        let Ok(lowered) = lowered else { return };
+        let types = crate::infer_program(&lowered);
+        let lambdas: Vec<String> = types.lambdas.values().map(ToString::to_string).collect();
+        assert!(
+            lambdas.len() >= 3,
+            "every lambda survives lowering: {lambdas:?}"
+        );
+        assert!(
+            !types.lambdas.values().any(crate::has_type_var),
+            "every residual lambda is concrete: {lambdas:?}"
+        );
+    }
+
     #[test]
     fn nested_record_effect_identity_round_trips_through_source_spelling() {
         let fields = BTreeMap::from([

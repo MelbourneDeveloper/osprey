@@ -2,6 +2,7 @@
 //! answers, how a runtime handler shadows it, and how a stack identifies a
 //! specialization.
 
+use crate::effect_name::{covers, operation_covers};
 use crate::stage_rows::operation_name;
 use crate::HandlerArm;
 
@@ -21,11 +22,12 @@ impl Region {
         }
     }
 
-    /// Whether this region answers `operation` (an `Effect.op` name).
+    /// Whether this region answers `operation` (an `Effect.op` name), including
+    /// a request that leaves its instantiation to inference.
     pub(super) fn answers(&self, operation: &str) -> bool {
         self.arms
             .iter()
-            .any(|arm| operation_name(&self.effect, &arm.operation) == operation)
+            .any(|arm| operation_covers(operation, &operation_name(&self.effect, &arm.operation)))
     }
 
     /// This region as seen from inside a runtime handler for its effect: the
@@ -68,7 +70,7 @@ pub(super) fn shadowed_regions(
     regions
         .iter()
         .filter_map(|region| {
-            if region.effect == effect {
+            if covers(effect, &region.effect) {
                 region.shadowed_by(supplied)
             } else {
                 Some(region.clone_region())
@@ -79,7 +81,7 @@ pub(super) fn shadowed_regions(
 
 /// Whether any enclosing region answers `effect`.
 pub(super) fn answered(regions: &[Region], effect: &str) -> bool {
-    regions.iter().any(|region| region.effect == effect)
+    regions.iter().any(|region| covers(effect, &region.effect))
 }
 
 /// The innermost arm answering one operation.
@@ -92,7 +94,7 @@ pub(super) fn innermost_arm(
         .iter()
         .enumerate()
         .rev()
-        .filter(|(_, region)| region.effect == effect)
+        .filter(|(_, region)| covers(effect, &region.effect))
         .find_map(|(index, region)| {
             region
                 .arms

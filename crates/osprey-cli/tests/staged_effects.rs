@@ -8,10 +8,13 @@
 //! proves these assertions can fail — without it, a compiler that stopped
 //! emitting handlers entirely would still pass.
 
+#[path = "common/residue.rs"]
+mod residue;
 #[path = "common/staging.rs"]
 mod staging;
 
 use osprey_syntax::{parse_program_with_flavor, Flavor};
+use residue::HANDLER_RUNTIME_SYMBOLS;
 use staging::{compile_for_target, compile_staged, diagnostics};
 
 fn dependency_report(
@@ -31,9 +34,6 @@ fn dependency_report(
     );
     dependencies.unwrap_or_default()
 }
-
-/// The C runtime symbols a dynamic handler region registers and looks up.
-const HANDLER_RUNTIME_SYMBOLS: &[&str] = &["__osprey_handler_push", "__osprey_handler_lookup"];
 
 const STATIC_SOURCE: &str = r#"
 static effect Alloc { scratch: fn(int) -> int }

@@ -54,7 +54,7 @@ pub(crate) fn gen_expr(cg: &mut Codegen, expr: &Expr) -> Result<Value> {
         }),
         Expr::List(_, position) => cg
             .prog
-            .list_elem_type(*position)
+            .list_elem_type(cg.source_function.as_deref(), *position)
             .cloned()
             .map(|element| osprey_types::Type::con(osprey_types::names::LIST, vec![element])),
         Expr::Perform { position, .. } => position

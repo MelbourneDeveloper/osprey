@@ -1,5 +1,5 @@
 //! Type checking: sites.
-use super::{HashMap, HashSet, InferCtx, Position, Type};
+use super::{HashMap, HashSet, InferCtx, Type};
 
 /// The code generator's erased view assigns every declared generic parameter
 /// the uniform boxed type-variable representation.
@@ -83,9 +83,11 @@ pub(super) fn dedupe_sites<S: PartialEq>(
 /// substitution, keying the published map by `(line, column)`.
 pub(super) fn resolve_positioned(
     ctx: &mut InferCtx,
-    tys: &[(Position, Type)],
-) -> HashMap<(u32, u32), Type> {
-    tys.iter()
-        .map(|(pos, ty)| ((pos.line, pos.column), ctx.apply(ty)))
-        .collect()
+    tys: &[(super::Site, Type)],
+) -> crate::info::SiteTable {
+    let mut table = crate::info::SiteTable::default();
+    for ((function, pos), ty) in tys {
+        table.insert(function.as_deref(), (pos.line, pos.column), ctx.apply(ty));
+    }
+    table
 }

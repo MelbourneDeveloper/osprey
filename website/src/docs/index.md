@@ -9,6 +9,7 @@ Osprey uses typed algebraic effects to separate application requests from their 
 ## Start here
 
 - **[Algebraic effects](/docs/effects/)** — declare an operation, call a reusable handler, replace it in a test, and choose an arithmetic policy.
+- **[One model, two backends](/docs/one-model-two-backends/)** — write GPT-2 once against a static `Tensor` effect, then run it over host lists or on the GPU surface by choosing a handler.
 - **[Install Osprey](/docs/installation/)** — set up the compiler and LLVM/clang toolchain on macOS, Linux, or Windows.
 - **[Build My First App](/docs/my-first-app/)** — create a native CLI that models JSON as a recursive algebraic data type, reads a JSON file, and safely writes the next state.
 - **[Try the Playground](/playground/)** — run small programs in the browser before setting up a local toolchain.

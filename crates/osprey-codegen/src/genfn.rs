@@ -61,10 +61,12 @@ fn inline_body(
     let mut groups = crate::curry::Groups::file_scoped(cg, rest);
     cg.cell_vars = crate::effects::captured_mut_vars(body);
     let _ = cg.inlining.insert(name.to_string());
-    for (parameter, argument) in params.iter().zip(lowered) {
-        bind_inline_arg(cg, parameter, argument);
-    }
-    let result = crate::curry::apply_groups(cg, body, &mut groups);
+    let result = cg.within_source_function(name, |cg| {
+        for (parameter, argument) in params.iter().zip(lowered) {
+            bind_inline_arg(cg, parameter, argument);
+        }
+        crate::curry::apply_groups(cg, body, &mut groups)
+    });
     groups.restore(cg);
     result.and_then(|value| inline_result(cg, name, value, rest.is_empty()))
 }

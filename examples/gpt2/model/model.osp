@@ -1,13 +1,14 @@
-// The GPT-2 124M transformer on the Osprey GPU surface: the published
-// model.safetensors loaded with `gpuLoadTensor`, the twelve blocks as
-// `gpuIota |> gpuMap` kernels and `gpuMatMul` products. The forward pass keeps
-// every block's activations, so examples/gpt2/generate reads the final state
-// and examples/gpt2/train runs the backward pass over the same trace.
+// The GPT-2 124M transformer, written once against the `Tensor` effect in
+// gpt2::Backends. The model performs `build`, `get`, `matMul` and friends and
+// never names a buffer type: the handler a program installs — `onLists` or
+// `onGpu` — decides whether a tensor is a host list or a GPU buffer, and both
+// compute the same doubles in the same order. The forward pass keeps every
+// block's activations, so examples/gpt2/generate reads the final state and
+// examples/gpt2/train runs the backward pass over the same trace.
 //
-// This is plan 0023's reference application (docs/plans/0023-gpu-computation.md):
-// one model that exercises [GPU-MATMUL], [GPU-BUFFER-TENSOR], [BUILTIN-MATH]
-// and every combinator, on the host backend today and unchanged on a device
-// backend tomorrow. Everything here runs on the CPU; `gpuDevice()` says so.
+// This is plan 0023's reference application (docs/plans/0023-gpu-computation.md)
+// and its stage 5, effect-selected execution: one model, two interpretations,
+// chosen per lexical region ([STAGE-BACKEND], [GPU-DEVICE]).
 
 namespace gpt2;
 
@@ -32,57 +33,56 @@ module Model {
     export let geluScale = 0.7978845608028654
     export let geluCubic = 0.044715
 
-    export type Layer = {
-        ln1g: GpuBuffer<float>, ln1b: GpuBuffer<float>,
-        qkvW: GpuBuffer<float>, qkvB: GpuBuffer<float>,
-        projW: GpuBuffer<float>, projB: GpuBuffer<float>,
-        ln2g: GpuBuffer<float>, ln2b: GpuBuffer<float>,
-        fcW: GpuBuffer<float>, fcB: GpuBuffer<float>,
-        outW: GpuBuffer<float>, outB: GpuBuffer<float>
+    /// One block's parameters. `B` is whatever the installed `Tensor` handler
+    /// represents a tensor as; the model never looks inside.
+    export type Layer<B> = {
+        ln1g: B, ln1b: B, qkvW: B, qkvB: B, projW: B, projB: B,
+        ln2g: B, ln2b: B, fcW: B, fcB: B, outW: B, outB: B
     }
 
     /// wteT is the token embedding transposed to [width, vocab], so the tied
     /// output projection is one product instead of fifty thousand gathers per step.
-    export type Weights = {
-        wte: GpuBuffer<float>, wteT: GpuBuffer<float>, wpe: GpuBuffer<float>,
-        lnfG: GpuBuffer<float>, lnfB: GpuBuffer<float>, blocks: List<Layer>
-    }
+    export type Weights<B> = { wte: B, wteT: B, wpe: B, lnfG: B, lnfB: B, blocks: List<Layer<B>> }
 
     /// Everything one block computes, in forward order: the backward pass reads
     /// each of them exactly once. `y` is the block's output and the next block's `x`.
-    export type Acts = {
-        x: GpuBuffer<float>, h1: GpuBuffer<float>, qkv: GpuBuffer<float>,
-        probs: GpuBuffer<float>, a: GpuBuffer<float>, x2: GpuBuffer<float>,
-        h2: GpuBuffer<float>, f: GpuBuffer<float>, u: GpuBuffer<float>, y: GpuBuffer<float>
-    }
+    export type Acts<B> = { x: B, h1: B, qkv: B, probs: B, a: B, x2: B, h2: B, f: B, u: B, y: B }
 
     /// Causal attention keeps its probabilities [heads, t, t] beside its output.
-    export type Attn = { probs: GpuBuffer<float>, out: GpuBuffer<float> }
+    export type Attn<B> = { probs: B, out: B }
 
     /// The forward trace: one Acts per block, and the last block's output.
-    export type Trace = { acts: List<Acts>, x: GpuBuffer<float> }
+    export type Trace<B> = { acts: List<Acts<B>>, x: B }
 
     /// One block's output row for the newest position, and its qkv rows for
     /// every position so far [t, 2304] — the KV cache a later position attends to.
-    export type BlockStep = { y: GpuBuffer<float>, qkv: GpuBuffer<float> }
+    export type BlockStep<B> = { y: B, qkv: B }
 
     /// The newest position through every block: its final row [1, width] and
     /// each block's grown cache.
-    export type Stepped = { x: GpuBuffer<float>, caches: List<GpuBuffer<float>> }
+    export type Stepped<B> = { x: B, caches: List<B> }
 
-    export fn at(m, i) = gpuGet(m, i) ?: 0.0
+    export fn at(m, i) = perform Backends::Tensor.get(m, i)
+    export fn size(m) = perform Backends::Tensor.length(m)
+    export fn empty() = perform Backends::Tensor.fromList([])
+    export fn device() = perform Backends::Tensor.device()
+    export fn total(b) = perform Backends::Tensor.reduce(b, 0.0, addF)
+    export fn plus(a, b) = perform Backends::Tensor.zipWith(a, b, addF)
     export fn addF(a, x) = a + x
     export fn maxF(a, x) = match x > a { true => x  false => a }
     export fn gelu(x) = 0.5 * x * (1.0 + tanh(geluScale * (x + geluCubic * x * x * x)))
+    export fn gelus(f) = perform Backends::Tensor.build(size(f), fn(i) => gelu(at(f, i)))
 
-    /// One tensor of the checkpoint. A missing or mis-typed tensor is reported and
-    /// yields an empty buffer, which the first product refuses by name.
-    fn tensor(name) = match gpuLoadTensor(weightsDir + "/model.safetensors", name) {
-        Success { value } => value
-        Error { message } => {
-            print(message)
-            toGpu([])
+    /// One tensor of the checkpoint. A handler arm cannot print, so a tensor
+    /// that failed to load — an empty one — is reported here by name; the
+    /// first product over it yields an empty result in turn.
+    fn tensor(name) = reported(name, perform Backends::Tensor.load(weightsDir + "/model.safetensors", name))
+    fn reported(name, t) = match size(t) == 0 {
+        true => {
+            print("gpt2: ${name} did not load")
+            t
         }
+        false => t
     }
 
     fn layerAt(i) = {
@@ -107,49 +107,44 @@ module Model {
     }
 
     export fn emptyLayer() = {
-        let e = toGpu([])
+        let e = empty()
         Layer { ln1g: e, ln1b: e, qkvW: e, qkvB: e, projW: e, projB: e, ln2g: e, ln2b: e, fcW: e, fcB: e, outW: e, outB: e }
     }
 
     export fn layer(w, i) = listGet(w.blocks, i) ?: emptyLayer()
 
-    /// m [rows, cols] as [cols, rows]: buffers are rank-1, so a product against a
-    /// transposed operand is a gather followed by `gpuMatMul`.
-    export fn transpose(m, rows, cols) = gpuIota(rows * cols) |> gpuMap(fn(i) => at(m, (i % rows) * cols + intDiv(i, rows)))
+    /// m [rows, cols] as [cols, rows]: tensors are rank-1, so a product against a
+    /// transposed operand is a gather followed by `matMul`.
+    export fn transpose(m, rows, cols) = perform Backends::Tensor.build(rows * cols, fn(i) => at(m, (i % rows) * cols + intDiv(i, rows)))
 
-    /// a [rows, inner] times b [inner, cols]; a shape mismatch is reported and
-    /// yields an empty buffer.
-    export fn product(a, b, rows, inner, cols) = match gpuMatMul(a, b, rows, inner, cols) {
-        Success { value } => value
-        Error { message } => {
-            print(message)
-            toGpu([])
-        }
-    }
+    /// a [rows, inner] times b [inner, cols]; a shape mismatch yields an empty tensor.
+    export fn product(a, b, rows, inner, cols) = perform Backends::Tensor.matMul(a, b, rows, inner, cols)
 
-    /// Sum of a contiguous run of a flat buffer.
+    /// Sum of a contiguous run of a flat tensor.
     export fn sumRange(x, start, n) = range(start, start + n) |> fold(0.0, fn(a, i) => a + at(x, i))
     export fn squaredDeviation(x, start, n, mean) = range(start, start + n) |> fold(0.0, fn(a, i) => a + (at(x, i) - mean) * (at(x, i) - mean))
 
     /// Per-row mean and variance of x [t, width], the LayerNorm statistics.
-    export fn rowMeans(x, t) = gpuIota(t) |> gpuMap(fn(r) => sumRange(x, r * width, width) / widthF)
-    export fn rowVariances(x, t, means) = gpuIota(t) |> gpuMap(fn(r) => squaredDeviation(x, r * width, width, at(means, r)) / widthF)
+    export fn rowMeans(x, t) = perform Backends::Tensor.build(t, fn(r) => sumRange(x, r * width, width) / widthF)
+    export fn rowVariances(x, t, means) = perform Backends::Tensor.build(t, fn(r) => squaredDeviation(x, r * width, width, at(means, r)) / widthF)
+
+    fn normalised(x, means, variances, g, b, i) = {
+        let r = intDiv(i, width)
+        let c = i % width
+        (at(x, i) - at(means, r)) / sqrt(at(variances, r) + epsilon) * at(g, c) + at(b, c)
+    }
 
     /// LayerNorm over each of the t rows of x [t, width].
     export fn layerNorm(x, t, g, b) = {
         let means = rowMeans(x, t)
         let variances = rowVariances(x, t, means)
-        gpuIota(t * width) |> gpuMap(fn(i) => {
-            let r = intDiv(i, width)
-            let c = i % width
-            (at(x, i) - at(means, r)) / sqrt(at(variances, r) + epsilon) * at(g, c) + at(b, c)
-        })
+        perform Backends::Tensor.build(t * width, fn(i) => normalised(x, means, variances, g, b, i))
     }
 
     /// x [rows, inner] times w [inner, cols], plus the bias on every row.
     export fn linear(x, rows, inner, cols, w, bias) = {
         let value = product(x, w, rows, inner, cols)
-        gpuIota(rows * cols) |> gpuMap(fn(i) => at(value, i) + at(bias, i % cols))
+        perform Backends::Tensor.build(rows * cols, fn(i) => at(value, i) + at(bias, i % cols))
     }
 
     /// qkv is [t, 2304]: the query, key and value of head h occupy 64 columns each.
@@ -161,16 +156,34 @@ module Model {
     /// Row r of n attended rows is position first + r; probs are [heads, n, t].
     fn weighted(probs, qkv, t, n, first, r, h, d) = range(0, first + r + 1) |> fold(0.0, fn(a, c) => a + at(probs, (h * n + r) * t + c) * vAt(qkv, c, h, d))
 
+    /// Element i of the causal score tensor [heads, n, t]: zero above the diagonal.
+    fn causalScore(qkv, t, n, first, i) = {
+        let h = intDiv(i, n * t)
+        let r = first + intDiv(i % (n * t), t)
+        let c = i % t
+        match c <= r { true => score(qkv, h, r, c)  false => 0.0 }
+    }
+
+    /// Element i of the unnormalised softmax: exp against the row's peak, zero above the diagonal.
+    fn causalWeight(scores, peaks, t, n, first, i) = {
+        let row = intDiv(i, t)
+        match i % t <= first + row % n { true => exp(at(scores, i) - at(peaks, row))  false => 0.0 }
+    }
+
     /// Softmax of each causal row of scores [heads, n, t], where row r of a head
     /// is position first + r and attends to columns c <= first + r only.
     fn probsOf(scores, t, n, first) = {
-        let peaks = gpuIota(heads * n) |> gpuMap(fn(row) => rowMax(scores, row, t, first + row % n))
-        let weights = gpuIota(heads * n * t) |> gpuMap(fn(i) => {
-            let row = intDiv(i, t)
-            match i % t <= first + row % n { true => exp(at(scores, i) - at(peaks, row))  false => 0.0 }
-        })
-        let sums = gpuIota(heads * n) |> gpuMap(fn(row) => sumRange(weights, row * t, t))
-        gpuIota(heads * n * t) |> gpuMap(fn(i) => at(weights, i) / at(sums, intDiv(i, t)))
+        let peaks = perform Backends::Tensor.build(heads * n, fn(row) => rowMax(scores, row, t, first + row % n))
+        let weights = perform Backends::Tensor.build(heads * n * t, fn(i) => causalWeight(scores, peaks, t, n, first, i))
+        let sums = perform Backends::Tensor.build(heads * n, fn(row) => sumRange(weights, row * t, t))
+        perform Backends::Tensor.build(heads * n * t, fn(i) => at(weights, i) / at(sums, intDiv(i, t)))
+    }
+
+    /// Element i of the attention output [n, width].
+    fn attended(probs, qkv, t, n, first, i) = {
+        let r = intDiv(i, width)
+        let h = intDiv(i % width, headWidth)
+        weighted(probs, qkv, t, n, first, r, h, i % headWidth)
     }
 
     /// Causal multi-head self-attention for positions first..t-1 of qkv [t, 2304],
@@ -180,18 +193,8 @@ module Model {
     /// Scores and probabilities are [heads, t - first, t].
     export fn attentionFrom(qkv, t, first) = {
         let n = t - first
-        let scores = gpuIota(heads * n * t) |> gpuMap(fn(i) => {
-            let h = intDiv(i, n * t)
-            let r = first + intDiv(i % (n * t), t)
-            let c = i % t
-            match c <= r { true => score(qkv, h, r, c)  false => 0.0 }
-        })
-        let probs = probsOf(scores, t, n, first)
-        Attn { probs: probs, out: gpuIota(n * width) |> gpuMap(fn(i) => {
-            let r = intDiv(i, width)
-            let h = intDiv(i % width, headWidth)
-            weighted(probs, qkv, t, n, first, r, h, i % headWidth)
-        }) }
+        let probs = probsOf(perform Backends::Tensor.build(heads * n * t, fn(i) => causalScore(qkv, t, n, first, i)), t, n, first)
+        Attn { probs: probs, out: perform Backends::Tensor.build(n * width, fn(i) => attended(probs, qkv, t, n, first, i)) }
     }
 
     /// Every position of qkv [t, 2304] at once, as [t, width].
@@ -202,11 +205,11 @@ module Model {
         let h1 = layerNorm(x, t, l.ln1g, l.ln1b)
         let qkv = linear(h1, t, width, qkvWidth, l.qkvW, l.qkvB)
         let attn = attention(qkv, t)
-        let x2 = gpuZipWith(x, linear(attn.out, t, width, width, l.projW, l.projB), addF)
+        let x2 = plus(x, linear(attn.out, t, width, width, l.projW, l.projB))
         let h2 = layerNorm(x2, t, l.ln2g, l.ln2b)
         let f = linear(h2, t, width, mlpWidth, l.fcW, l.fcB)
-        let u = f |> gpuMap(gelu)
-        let y = gpuZipWith(x2, linear(u, t, mlpWidth, width, l.outW, l.outB), addF)
+        let u = gelus(f)
+        let y = plus(x2, linear(u, t, mlpWidth, width, l.outW, l.outB))
         Acts { x: x, h1: h1, qkv: qkv, probs: attn.probs, a: attn.out, x2: x2, h2: h2, f: f, u: u, y: y }
     }
 
@@ -218,19 +221,16 @@ module Model {
         }
     }
 
-    /// Token plus position embeddings, [t, width].
-    export fn embed(w, tokens, t) = gpuIota(t * width) |> gpuMap(fn(i) => {
-        let r = intDiv(i, width)
-        at(w.wte, (gpuGet(tokens, r) ?: 0) * width + i % width) + at(w.wpe, i)
-    })
+    /// Token plus position embeddings of the host-side ids, [t, width].
+    export fn embed(w, ids, t) = perform Backends::Tensor.build(t * width, fn(i) => at(w.wte, (listGet(ids, intDiv(i, width)) ?: 0) * width + i % width) + at(w.wpe, i))
 
     /// The twelve blocks over the embedded tokens [t, width].
-    export fn forward(w, tokens, t) = blocks(w, embed(w, tokens, t), t, 0, [])
+    export fn forward(w, ids, t) = blocks(w, embed(w, ids, t), t, 0, [])
 
     /// `rows` followed by `more`: a cache growing by one position.
     fn appended(rows, more) = {
-        let n = gpuLength(rows)
-        gpuIota(n + gpuLength(more)) |> gpuMap(fn(i) => match i < n { true => at(rows, i)  false => at(more, i - n) })
+        let n = size(rows)
+        perform Backends::Tensor.build(n + size(more), fn(i) => match i < n { true => at(rows, i)  false => at(more, i - n) })
     }
 
     /// One block for the newest position t - 1 alone: its row x [1, width] and
@@ -240,21 +240,21 @@ module Model {
     /// row-wise and attention reads the cached rows exactly where it did.
     export fn blockStep(x, t, l, cached) = {
         let qkv = appended(cached, linear(layerNorm(x, 1, l.ln1g, l.ln1b), 1, width, qkvWidth, l.qkvW, l.qkvB))
-        let x2 = gpuZipWith(x, linear(attentionFrom(qkv, t, t - 1).out, 1, width, width, l.projW, l.projB), addF)
-        let u = linear(layerNorm(x2, 1, l.ln2g, l.ln2b), 1, width, mlpWidth, l.fcW, l.fcB) |> gpuMap(gelu)
-        BlockStep { y: gpuZipWith(x2, linear(u, 1, mlpWidth, width, l.outW, l.outB), addF), qkv: qkv }
+        let x2 = plus(x, linear(attentionFrom(qkv, t, t - 1).out, 1, width, width, l.projW, l.projB))
+        let u = gelus(linear(layerNorm(x2, 1, l.ln2g, l.ln2b), 1, width, mlpWidth, l.fcW, l.fcB))
+        BlockStep { y: plus(x2, linear(u, 1, mlpWidth, width, l.outW, l.outB)), qkv: qkv }
     }
 
     fn stepBlocks(w, x, t, i, caches, acc) = match i == layerCount {
         true => Stepped { x: x, caches: acc }
         false => {
-            let s = blockStep(x, t, layer(w, i), listGet(caches, i) ?: toGpu([]))
+            let s = blockStep(x, t, layer(w, i), listGet(caches, i) ?: empty())
             stepBlocks(w, s.y, t, i + 1, caches, listAppend(acc, s.qkv))
         }
     }
 
     /// The embedding of one token at position p, [1, width].
-    export fn embedOne(w, token, p) = gpuIota(width) |> gpuMap(fn(c) => at(w.wte, token * width + c) + at(w.wpe, p * width + c))
+    export fn embedOne(w, token, p) = perform Backends::Tensor.build(width, fn(c) => at(w.wte, token * width + c) + at(w.wpe, p * width + c))
 
     /// The newest position, token at index t - 1, through the twelve blocks over
     /// their caches of the t - 1 earlier positions.
@@ -262,7 +262,7 @@ module Model {
 
     fn cacheAt(trace, i) = match listGet(trace.acts, i) {
         Success { value } => value.qkv
-        Error _ => toGpu([])
+        Error _ => empty()
     }
 
     /// Each block's qkv rows from a full pass: the caches a first forwardStep grows.

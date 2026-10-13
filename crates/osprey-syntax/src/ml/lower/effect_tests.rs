@@ -89,6 +89,25 @@ fn multi_arg_effect_op_renders_flat_payload() {
 }
 
 #[test]
+fn a_function_typed_operation_parameter_keeps_its_flat_arity() {
+    // A callback parameter `(float, float) -> float` is a FLAT two-parameter
+    // function, rendered in the parenthesised-domain spelling the type
+    // checker reads as `fn(float, float) -> float` — never a one-parameter
+    // function over a tuple ([FLAVOR-ML-CURRY], [FLAVOR-ML-EFFECT]).
+    let s = ml_one_stmt(
+        "effect Tensor\n    reduce : (List<float>, float, (float, float) -> float) => float\n",
+    );
+    if let Stmt::Effect { operations, .. } = s {
+        assert_eq!(
+            operations[0].ty,
+            "fn(List<float>, float, (float, float) -> float) -> float"
+        );
+    } else {
+        panic!("expected effect, got {s:?}");
+    }
+}
+
+#[test]
 fn signature_effect_row_threads_into_function() {
     // `traced : Unit -> int ! Trace` puts `Trace` in the function's effect row,
     // byte-identical to the Default `fn traced() -> int !Trace`.

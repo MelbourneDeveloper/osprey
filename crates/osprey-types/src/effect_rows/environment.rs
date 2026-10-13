@@ -24,6 +24,12 @@ impl CallableEnv {
 }
 
 impl CallableEnv {
+    /// Whether `expression` names a compile-time arm parameter whose operand
+    /// discharge will supply.
+    pub(super) fn deferred_arm_parameter(&self, expression: &super::Expr) -> bool {
+        matches!(expression, super::Expr::Identifier(name) if self.deferred_arm_parameters.contains(name))
+    }
+
     /// Bind each parameter at the current level, shadowing any outer binding of
     /// the same name.
     pub(super) fn bind_parameters(&mut self, parameters: &[String]) {

@@ -410,6 +410,8 @@ A one-shot platform stack-switch primitive does not prohibit multi-shot implemen
 
 `[STAGE-BACKEND]` Each region may select an interpretation suitable for its target. The same operation contract governs host and device interpretations. Backend selection cannot bypass type, row or stage checks, and a host implementation is not proof of execution on device hardware.
 
+`[STAGE-BACKEND-CONTRACT]` A static rewrite binds each operation argument under the parameter type the operation declared where that type names none of the effect's type parameters. The residual program is therefore checked against the same callback contract the request was, under every instantiation: a callback written against `fn(float, float) -> float` keeps that type after discharge even inside a definition that is otherwise polymorphic. The reference program is GPT-2 (`examples/gpt2`), written once against a static `Tensor<B>` effect and run by a handler over `List<float>` or a handler over `GpuBuffer<float>` with identical output; `tests/effects/staged/tensor_backends` pins both interpretations against oracle values in both flavors. See [One model, two backends](../../website/src/docs/one-model-two-backends.md).
+
 ## Stage polymorphism — [STAGE-POLY]
 
 `[STAGE-POLY]` A higher-order definition can be instantiated with callbacks requiring different declared effects and stages. No duplication of its source definition is required.

@@ -187,7 +187,7 @@ fn displayed_type(s: &SymbolInfo, program: &Program) -> String {
         return s.ty.clone();
     }
     osprey_types::infer_program(program)
-        .let_type(s.position)
+        .let_type(None, s.position)
         .map_or_else(String::new, osprey_types::render_with_holes)
 }
 

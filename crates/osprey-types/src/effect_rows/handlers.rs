@@ -4,12 +4,23 @@ use super::{
     Requirement, Value,
 };
 
+/// One handler as the row analysis sees it: the effect it answers, its arms,
+/// the handled body, where it was written and when its arms run.
+pub(super) struct HandlerSite<'a> {
+    pub(super) effect: &'a str,
+    pub(super) arms: &'a [HandlerArm],
+    pub(super) body: &'a Expr,
+    pub(super) position: Option<Position>,
+    pub(super) stage: osprey_ast::Stage,
+}
+
 impl Analyzer<'_> {
     pub(super) fn handler_arm_env(
         &self,
         effect: &str,
         arm: &HandlerArm,
         body: &Expr,
+        stage: osprey_ast::Stage,
         scope: &[String],
         env: &CallableEnv,
     ) -> CallableEnv {
@@ -30,6 +41,9 @@ impl Analyzer<'_> {
                 let _ = local.values.insert(parameter.clone(), value);
             } else {
                 let _ = local.values.remove(parameter);
+                if stage.is_compile_time() {
+                    let _ = local.deferred_arm_parameters.insert(parameter.clone());
+                }
             }
         }
         local
@@ -37,25 +51,27 @@ impl Analyzer<'_> {
 
     pub(super) fn handler_body_env(
         &self,
-        effect: &str,
-        arms: &[HandlerArm],
-        body: &Expr,
-        position: Option<Position>,
+        site: &HandlerSite<'_>,
         scope: &[String],
         env: &CallableEnv,
     ) -> CallableEnv {
-        let arguments =
-            self.instance_arguments(effect, position, &self.instances.handlers, "handler");
+        let arguments = self.instance_arguments(
+            site.effect,
+            site.position,
+            &self.instances.handlers,
+            "handler",
+        );
         let mut local = env.clone();
-        for arm in arms {
+        for arm in site.arms {
             // Arms execute outside this handler, so resolve their returned
             // values using only the outer handler environment.
-            let mut arm_env = self.handler_arm_env(effect, arm, body, scope, env);
+            let mut arm_env =
+                self.handler_arm_env(site.effect, arm, site.body, site.stage, scope, env);
             let value = self
                 .returned_value(&arm.body, scope, &mut arm_env)
                 .unwrap_or_else(Value::unknown_callable);
             let _ = local.handler_returns.insert(
-                Requirement::new(effect, &arm.operation, arguments.clone()),
+                Requirement::new(site.effect, &arm.operation, arguments.clone()),
                 value,
             );
         }

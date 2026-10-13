@@ -100,7 +100,9 @@ impl Checker {
         let pushed = scopes.len();
         self.handler_scopes.extend(scopes);
         self.current_fn_typarams = typarams;
+        let enclosing = self.current_fn.replace(name.to_owned());
         let body_ty = self.infer_expr(body, &local);
+        self.current_fn = enclosing;
         self.current_fn_typarams = HashMap::new();
         self.handler_scopes
             .truncate(self.handler_scopes.len().saturating_sub(pushed));

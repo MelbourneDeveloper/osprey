@@ -39,7 +39,8 @@ impl Checker {
         // position (resolved against the final substitution in `infer_program`).
         // Implements [LSP-HOVER-VARIABLES]
         if let Some(p) = pos {
-            self.let_tys.push((p, binding_ty.clone()));
+            self.let_tys
+                .push(((self.current_fn.clone(), p), binding_ty.clone()));
         }
         // A let-bound value carries obligations exactly as a named function
         // does: quantifying a variable that still holds a pending arithmetic

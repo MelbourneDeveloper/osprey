@@ -231,7 +231,10 @@ fn factory_lambda_abi(
     if lambdas.is_empty() {
         return None;
     }
-    let ty = cg.prog.let_type(position)?.clone();
+    let ty = cg
+        .prog
+        .let_type(cg.source_function.as_deref(), position)?
+        .clone();
     crate::types::fn_value_concrete(&ty).then_some((lambdas, ty))
 }
 
@@ -274,7 +277,7 @@ fn captures_callee_params(cg: &Codegen, value: &Expr) -> bool {
 fn lambda_cell(cg: &Codegen, position: Option<Position>) -> Option<(osprey_types::Type, FnSig)> {
     let ty = cg
         .prog
-        .lambda_type(position)
+        .lambda_type(cg.source_function.as_deref(), position)
         .filter(|t| crate::types::fn_value_concrete(t))?;
     Some((ty.clone(), Codegen::fn_value_sig(&cg.prog, ty)?))
 }
@@ -405,7 +408,7 @@ pub(crate) fn fn_result_type(cg: &Codegen, value: &Expr) -> Option<osprey_types:
             .filter(crate::types::fn_value_concrete),
         Expr::Lambda { position, .. } => cg
             .prog
-            .lambda_type(*position)
+            .lambda_type(cg.source_function.as_deref(), *position)
             .filter(|t| crate::types::fn_value_concrete(t))
             .cloned(),
         Expr::Call { function, .. } => match &**function {

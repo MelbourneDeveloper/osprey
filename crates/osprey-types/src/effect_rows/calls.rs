@@ -34,10 +34,15 @@ impl Analyzer<'_> {
             let arguments =
                 self.callsite_arguments(function, arguments, named_arguments, scope, env);
             out.union(self.invoke_with_arguments(callee, arguments));
-        } else if !statically_named_callee(function, env) && self.may_be_callable(function) {
+        } else if !statically_named_callee(function, env)
+            && self.may_be_callable(function)
+            && !env.deferred_arm_parameter(function)
+        {
             // A computed value that successfully type-checks as a function must
             // carry effect provenance. If an unsupported transport erased that
-            // provenance, fail closed instead of assuming the call is pure.
+            // provenance, fail closed instead of assuming the call is pure. A
+            // compile-time arm's parameter is the exception: discharge binds
+            // it to the actual operand before the residual program is checked.
             out.unresolved_dynamic_call = true;
         }
         if let Some(name) = self.builtin_callee(function, scope, env) {

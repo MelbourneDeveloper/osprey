@@ -37,6 +37,7 @@ impl Checker {
             fn_typarams: HashMap::new(),
             declared_effect_rows: HashMap::new(),
             current_fn_typarams: HashMap::new(),
+            current_fn: None,
             defer_arith: true,
         };
         c.register_result_ctors();
