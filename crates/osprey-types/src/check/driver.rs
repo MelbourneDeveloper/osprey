@@ -57,6 +57,7 @@ pub(super) fn checked_program_with_exports(
         let effect_proof = crate::effect_rows::check(program, &instances, exports);
         if !refine_handler_arguments(&mut checker, &instances) {
             checker.errors.extend(effect_proof.errors);
+            checker.signal_queries = effect_proof.signal_queries;
             checker.function_effects = effect_proof.functions;
             break;
         }

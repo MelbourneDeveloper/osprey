@@ -12,17 +12,10 @@ exactArithmetic work =
             0
     work ()
 
-// [STAGE-POLY] [STAGE-POLY-ERASURE] [STAGE-COMPAT] One unannotated
-// higher-order function serving BOTH stages in one program — the falsification
-// gate of [STAGE-FALSIFY] item 3, and the file
-// `docs/specs/0035-StagedEffects.md` names as its measured result.
-//
-// The ML twin of `staged_shared.test.osp`, sharing its golden. [STAGE-DECL]
-// gives the ML surface the same stage axis — `static effect` declares one and
-// `handle static` discharges it — because the rewrite runs at the flavor
-// boundary, on the one canonical AST both surfaces lower to
-// ([STAGE-LOWER-ORDER-PHASE]). A stage that only one surface can spell would
-// put half the declaration surface out of reach of half the language.
+// [STAGE-POLY] [STAGE-POLY-ERASURE] [STAGE-COMPAT] The same higher-order
+// definition serves static Scale and dynamic Audit in one program. Source
+// contracts are validated before specialization; the residual program is
+// checked again. Both flavors share the same golden.
 
 static effect Scale
     (** Compile-time scale factor. Rewritten away; never reaches the runtime. *)
@@ -66,3 +59,35 @@ test "one unannotated function serves both stages in one program" (\() => exactA
     dynamicTotal == 2,
     trail == "[n=0][n=1]"
 ])))
+
+static effect Live T
+    read : Unit => T
+liveLabel () =
+    value = perform Live<int>.read ()
+    perform Audit.note "live=${value};"
+    "live=${value}"
+fiberLabel () = await (spawn (liveLabel ()))
+reactiveFibersAndContinuations () =
+    mut log = ""
+    handle Audit
+        note message =>
+            log := "${log}${message}"
+            resume ()
+    first =
+        handle static Live<int>
+            read => 3
+        signalSnapshot fiberLabel
+    idle =
+        handle static Live<int>
+            read => 99
+        signalRefresh first [] fiberLabel
+    next =
+        handle static Live<int>
+            read => 7
+        signalRefresh idle (signalDependencies liveLabel) fiberLabel
+    checkAll "reactive rebuild crosses fibers and deep resume" [
+        first.value == "live=3", idle.value == "live=3", next.value == "live=7",
+        first.revision == 1, idle.revision == 1, next.revision == 2,
+        log == "live=3;live=7;"
+    ]
+test "reactive rebuilds compose static signals with fibers and continuations" reactiveFibersAndContinuations

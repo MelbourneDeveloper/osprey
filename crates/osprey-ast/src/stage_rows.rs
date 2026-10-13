@@ -1,54 +1,21 @@
-//! What a body requires, and at which stage.
+//! Structural requirements used during static lowering and kernel validation.
 //!
-//! One walk answers both questions the staging axis asks of a program. At
-//! [`Stage::Static`] it is the **dependency set** — the reactive reads a
-//! function may make, including an explicit unknown remainder when a callback
-//! has no published effect row ([STAGE-SIGNALS-EXACT]). At [`Stage::Dynamic`] it is
-//! the **residual runtime row** — what a `kernel` boundary must find empty,
-//! because device code cannot leave the device to reach a handler
-//! ([STAGE-GPU-LEGAL]). They differ only in which declarations count, so they
-//! share a walk rather than drifting as two.
+//! Reactive dependency consumers use `osprey_types::signal_dependencies`,
+//! which validates source and preserves resolved callable and generic identities.
 
 use crate::mutate::children_mut;
 use crate::stage::{effect_declarations, EffectDecl};
 use crate::{effect_name, walk_program, AstNode, AstVisitor, Expr, Program, Stage, Stmt};
 use std::collections::{BTreeMap, BTreeSet};
 
-const UNKNOWN_DEPENDENCY: &str = "<unknown>";
-
-/// The static-effect operations each named function requires, transitively
-/// through the calls it makes, minus everything it discharges itself.
-/// Implements [STAGE-SIGNALS-DIRTY].
-///
-/// This is the dependency set: a reactive read is a static operation, so the
-/// row a function already carries names what it may read. The query runs on
-/// the program **before** [`discharge`] erases those operations. An unknown
-/// callback row is reported as `<unknown>` instead of an empty dependency set.
-#[must_use]
-pub fn dependencies(program: &Program) -> BTreeMap<String, Vec<String>> {
-    let mut required = requirements(program, Stage::Static);
-    attach_unknown(program, &mut required);
-    required
-}
-
+// Structural lowering must also fail closed on unresolved callback dispatch.
+// Reactive dependency reporting instead uses the resolved checker proof.
 fn attach_unknown(program: &Program, required: &mut BTreeMap<String, Vec<String>>) {
-    for name in unknown_dependency_functions(program) {
-        let operations = required.entry(name).or_default();
-        operations.push(UNKNOWN_DEPENDENCY.to_owned());
-        operations.sort();
-        operations.dedup();
-    }
-}
-
-/// A parameter invoked as a callable has an unresolved row. Propagate that
-/// remainder through named callers instead of publishing a complete-looking
-/// empty set that would miss reactive invalidation ([STAGE-SIGNALS-EXACT]).
-fn unknown_dependency_functions(program: &Program) -> BTreeSet<String> {
     #[derive(Default)]
     struct Parameters(BTreeMap<String, BTreeSet<String>>);
     impl AstVisitor for Parameters {
         fn statement(&mut self, statement: &Stmt) {
-            let callable = match statement {
+            match statement {
                 Stmt::Function {
                     name, parameters, ..
                 }
@@ -56,24 +23,23 @@ fn unknown_dependency_functions(program: &Program) -> BTreeSet<String> {
                     name,
                     value: Expr::Lambda { parameters, .. },
                     ..
-                } => Some((name, parameters)),
-                _ => None,
-            };
-            if let Some((name, parameters)) = callable {
-                let _ = self.0.insert(
-                    name.clone(),
-                    parameters
-                        .iter()
-                        .map(|parameter| parameter.name.clone())
-                        .collect(),
-                );
+                } => {
+                    let _ = self.0.insert(
+                        name.clone(),
+                        parameters
+                            .iter()
+                            .map(|parameter| parameter.name.clone())
+                            .collect(),
+                    );
+                }
+                _ => {}
             }
         }
     }
     let mut parameters = Parameters::default();
     walk_program(program, &mut parameters);
     let bodies = function_bodies(program);
-    let mut unknown: BTreeSet<String> = bodies
+    let mut unknown: BTreeSet<_> = bodies
         .iter()
         .filter(|(name, body)| {
             parameters
@@ -85,15 +51,17 @@ fn unknown_dependency_functions(program: &Program) -> BTreeSet<String> {
         .collect();
     loop {
         let previous = unknown.len();
-        let inherited: Vec<_> = bodies
-            .iter()
-            .filter(|(_, body)| references_any(body, &unknown))
-            .map(|(name, _)| name.clone())
-            .collect();
+        let inherited: Vec<_> = bodies.iter().filter(|(_, body)| any_expression(body, |expression| matches!(expression, Expr::Identifier(name) if unknown.contains(name)))).map(|(name, _)| name.clone()).collect();
         unknown.extend(inherited);
         if unknown.len() == previous {
-            return unknown;
+            break;
         }
+    }
+    for name in unknown {
+        required
+            .entry(name)
+            .or_default()
+            .push("<unknown>".to_owned());
     }
 }
 
@@ -131,13 +99,6 @@ pub(crate) fn parameter_aliases(body: &Expr, parameters: &BTreeSet<String>) -> B
             return aliases;
         }
     }
-}
-
-fn references_any(body: &Expr, names: &BTreeSet<String>) -> bool {
-    any_expression(
-        body,
-        |expression| matches!(expression, Expr::Identifier(name) if names.contains(name)),
-    )
 }
 
 fn any_expression(body: &Expr, predicate: impl Fn(&Expr) -> bool) -> bool {

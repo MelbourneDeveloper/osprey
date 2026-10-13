@@ -17,6 +17,8 @@ pub struct EffectRequirements {
     pub runtime_builtins: Vec<String>,
     /// Symbolic callback uses or unresolved dynamic calls remain in the summary.
     pub unresolved_callbacks: bool,
+    /// Some operation instances retain unsolved type arguments.
+    pub unresolved_instances: bool,
 }
 
 /// The declared shape of a record/variant constructor: ordered `(field, type)`
@@ -59,6 +61,8 @@ pub struct OpType {
 /// union memberships.
 #[derive(Debug, Clone, Default)]
 pub struct ProgramTypes {
+    /// Checked signal metadata at source callee identities, before discharge.
+    pub(crate) signal_queries: HashMap<usize, EffectRequirements>,
     /// Function/extern name → (resolved parameter types, resolved return type).
     pub functions: HashMap<String, (Vec<Type>, Type)>,
     /// Qualified function name → the same requirements used by entry checking.

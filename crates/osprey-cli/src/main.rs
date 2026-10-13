@@ -38,9 +38,10 @@ mod test_skips;
 mod testkit;
 mod toolchain;
 mod warnings;
+#[cfg(test)]
+use osprey_syntax::Flavor;
 mod wasm;
 
-use osprey_syntax::Flavor;
 use std::process::ExitCode;
 
 mod executable_cache;
@@ -96,7 +97,7 @@ fn run_arguments(args: &[String]) -> ExitCode {
         }
     };
     match cli.mode.as_str() {
-        "--deps" => report_dependencies(&cli.path, cli.flavor),
+        "--deps" => report_dependencies(&cli),
         "--hover" => report_hover(&cli.path),
         _ => run(&cli),
     }
@@ -109,54 +110,30 @@ fn report_hover(name: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Print every function's dependency set, one `name: op, op` line per function
-/// that has one. Implements [STAGE-SIGNALS-DIRTY].
-fn report_dependencies(path: &str, flavor: Option<Flavor>) -> ExitCode {
-    let program = match dependency_program(path, flavor) {
-        Ok(program) => program,
+/// Print checked signal may-read sets after module assembly, before discharge.
+/// Implements [STAGE-SIGNALS-EXACT].
+fn report_dependencies(cli: &Cli) -> ExitCode {
+    let input = match load_input(cli) {
+        Ok(input) => input,
         Err(code) => return code,
     };
-    // Check before static discharge erases operations [STAGE-SIGNALS-EXACT].
-    if dependency_type_errors(path, &program) {
-        return ExitCode::FAILURE;
-    }
-    for (function, operations) in osprey_ast::stage::dependencies(&program) {
-        if !operations.is_empty() {
-            println!("{function}: {}", operations.join(", "));
+    match osprey_types::signal_dependencies(input.program()) {
+        Ok(dependencies) => {
+            println!("# conservative signal may-read sets; runtime choices include all possible targets; <unknown> is an unresolved remainder");
+            for (function, operations) in dependencies {
+                if !operations.is_empty() {
+                    println!("{function}: {}", operations.join(", "));
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        Err(errors) => {
+            for error in errors {
+                eprintln!("{}", input.diagnostic(error.position, &error.message));
+            }
+            ExitCode::FAILURE
         }
     }
-    ExitCode::SUCCESS
-}
-
-fn dependency_program(path: &str, flavor: Option<Flavor>) -> Result<osprey_ast::Program, ExitCode> {
-    let source = std::fs::read_to_string(path).map_err(|_error| {
-        eprintln!("error: cannot read {path}");
-        ExitCode::from(2)
-    })?;
-    let flavor = osprey_syntax::resolve_flavor(flavor, path, &source).map_err(|_error| {
-        eprintln!("error: cannot resolve the flavor of {path}");
-        ExitCode::from(2)
-    })?;
-    let parsed = osprey_syntax::parse_program_with_flavor(&source, flavor);
-    if report_syntax_errors(path, &parsed.errors) {
-        return Err(ExitCode::FAILURE);
-    }
-    Ok(parsed.program)
-}
-
-fn dependency_type_errors(path: &str, program: &osprey_ast::Program) -> bool {
-    let errors = osprey_types::check_program(program);
-    for error in &errors {
-        if let Some(position) = error.position {
-            eprintln!(
-                "{path}:{}:{}: {}",
-                position.line, position.column, error.message
-            );
-        } else {
-            eprintln!("{path}: {}", error.message);
-        }
-    }
-    !errors.is_empty()
 }
 
 /// Print syntax errors in the one canonical `path:line:col: message` form and

@@ -1,5 +1,5 @@
 //! Staged effects ([STAGE-RESIDUE], [STAGE-SIGNALS-DIRTY],
-//! docs/specs/0035-StagedEffects.md).
+//! docs/specs/0017-AlgebraicEffects.md).
 //!
 //! The claim a static effect makes is not "usually optimised away" but
 //! *absent*: after the rewrite, the emitted IR contains no handler-runtime
@@ -24,7 +24,12 @@ fn dependency_report(
         "invalid dependency fixture: {:?}",
         parsed.errors
     );
-    osprey_ast::stage::dependencies(&parsed.program)
+    let dependencies = osprey_types::signal_dependencies(&parsed.program);
+    assert!(
+        dependencies.is_ok(),
+        "invalid signal contracts: {dependencies:?}"
+    );
+    dependencies.unwrap_or_default()
 }
 
 /// The C runtime symbols a dynamic handler region registers and looks up.
@@ -141,10 +146,7 @@ fn dependency_report_keeps_unknown_callback_requirements_visible() {
     let source = "static effect Signal { read: fn() -> int }\nfn invoke(callback) = callback()\nfn reading() = perform Signal.read()\nfn widget() = invoke(reading)\n";
     let deps = dependency_report(source, Flavor::Default);
     assert_eq!(deps.get("invoke"), Some(&vec!["<unknown>".to_owned()]));
-    assert_eq!(
-        deps.get("widget"),
-        Some(&vec!["<unknown>".to_owned(), "Signal.read".to_owned()]),
-    );
+    assert_eq!(deps.get("widget"), Some(&vec!["Signal.read".to_owned()]),);
 }
 
 #[test]
@@ -203,7 +205,7 @@ fn main() = {
 }
 
 // ---------------------------------------------------------------------------
-// The rules of docs/specs/0035-StagedEffects.md that reach past discharge: the
+// The rules of docs/specs/0017-AlgebraicEffects.md that reach past discharge: the
 // target a static row may be built for, the offload boundary a kernel is, and
 // the identity a reactive read carries. Each test below states the spec's
 // contract in the form the spec states it, so the rule cannot regress into a

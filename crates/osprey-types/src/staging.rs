@@ -1,5 +1,9 @@
 //! Validate staged data contracts before any operation or unused arm disappears.
 
+mod signals;
+use signals::materialize_signal_queries;
+pub(crate) use signals::parameter_names as signal_parameter_names;
+
 use crate::TypeError;
 use osprey_ast::{mutate, walk_program, AstVisitor, Expr, Program, Stmt};
 
@@ -27,13 +31,72 @@ pub fn lower_static_checked(program: &Program) -> Result<Program, Vec<TypeError>
     // enclosing `handle static Echo<int>`. Use the already checked site
     // instantiations for this backend copy before matching regions; otherwise
     // the rewrite silently leaves a request that the checker proved handled.
-    let mut resolved = program.clone();
+    let mut resolved = materialize_signal_queries(program, &source_types);
     for statement in &mut resolved.statements {
         mutate::statement_children_mut(statement, &mut |expression| {
             resolve_effect_mentions(expression, &source_types);
         });
     }
     osprey_ast::stage::lower(&resolved).map_err(stage_errors)
+}
+
+/// Resolved, validated signal may-read sets before static discharge.
+/// Implements [STAGE-SIGNALS-EXACT]; callers must assemble modules first.
+///
+/// # Errors
+/// Invalid source never produces a complete-looking dependency report.
+pub fn signal_dependencies(
+    program: &Program,
+) -> Result<std::collections::BTreeMap<String, Vec<String>>, Vec<TypeError>> {
+    let _ = lower_static_checked(program)?;
+    let types = crate::check::infer_checked(program)?;
+    let mut static_effects = StaticEffects::default();
+    walk_program(program, &mut static_effects);
+    Ok(types
+        .function_effects
+        .into_iter()
+        .map(|(name, requirements)| {
+            (
+                osprey_ast::symbol::demangle_message(&name).into_owned(),
+                static_effects.dependencies(&requirements),
+            )
+        })
+        .collect())
+}
+
+#[derive(Default)]
+struct StaticEffects(std::collections::BTreeSet<String>);
+
+impl AstVisitor for StaticEffects {
+    fn statement(&mut self, statement: &Stmt) {
+        if let Stmt::Effect { name, stage, .. } = statement {
+            if stage.is_compile_time() {
+                let _ = self.0.insert(name.clone());
+            }
+        }
+    }
+}
+
+impl StaticEffects {
+    fn dependencies(&self, requirements: &crate::EffectRequirements) -> Vec<String> {
+        let mut operations: Vec<_> = requirements
+            .operations
+            .iter()
+            .filter(|operation| {
+                let effect = operation
+                    .rsplit_once('.')
+                    .map_or(operation.as_str(), |(effect, _)| effect);
+                self.0.contains(osprey_ast::effect_name::base(effect))
+            })
+            .map(|operation| osprey_ast::symbol::demangle_message(operation).into_owned())
+            .collect();
+        if requirements.unresolved_callbacks || requirements.unresolved_instances {
+            operations.push("<unknown>".to_owned());
+        }
+        operations.sort();
+        operations.dedup();
+        operations
+    }
 }
 
 fn resolve_effect_mentions(expression: &mut Expr, types: &crate::ProgramTypes) {
@@ -136,6 +199,7 @@ pub(crate) fn has_staging(program: &Program) -> bool {
             }
         }
         fn expression(&mut self, expression: &Expr) {
+            self.0 |= matches!(expression, Expr::Call { function, .. } if matches!(function.as_ref(), Expr::Identifier(name) if signals::is_intrinsic(name)));
             if let Expr::Handler { stage, .. } = expression {
                 self.0 |= stage.is_compile_time();
             }

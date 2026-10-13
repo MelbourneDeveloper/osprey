@@ -177,3 +177,54 @@ fn exported_callbacks_with_unresolved_effects_are_rejected() {
         "{errors:?}"
     );
 }
+
+#[test]
+fn reactive_snapshots_preserve_escaped_callback_effects() {
+    for (flavor, source) in [
+        (osprey_syntax::Flavor::Default, "effect Audit { write: fn() -> int }\nlet cached = signalSnapshot(|| => || => perform Audit.write())\nprint(cached.value())\n"),
+        (osprey_syntax::Flavor::Ml, "effect Audit\n    write : Unit => int\ncached = signalSnapshot (\\() => \\() => perform Audit.write ())\nprint (cached.value ())\n"),
+    ] {
+        let parsed = osprey_syntax::parse_program_with_flavor(source, flavor);
+        assert!(parsed.errors.is_empty(), "{flavor:?}: {:?}", parsed.errors);
+        let errors = check_program(&parsed.program);
+        assert!(errors.iter().any(|error| error.message.contains("Audit.write") && error.message.contains("unhandled")), "{flavor:?}: {errors:?}");
+    }
+}
+
+#[test]
+fn dependency_analysis_rejects_invalid_staging_before_reporting() {
+    let source = "static effect Signal { read: fn() -> int }\nfn work() = { handle Signal { read => 42 }\nperform Signal.read() }\n";
+    let parsed = osprey_syntax::parse_program_with_flavor(source, osprey_syntax::Flavor::Default);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let report = crate::signal_dependencies(&parsed.program);
+    assert!(report.is_err_and(|errors| errors
+        .iter()
+        .any(|error| error.message.contains("Signal") && error.message.contains("static"))));
+}
+
+#[test]
+fn unresolved_generic_signal_metadata_keeps_an_unknown_remainder() {
+    let source = "static effect Signal<T> { read: fn(T) -> T }\nfn generic(value) = perform Signal.read(value)\nfn dependencies(value) = signalDependencies(|| => generic(value))\n";
+    let parsed = osprey_syntax::parse_program_with_flavor(source, osprey_syntax::Flavor::Default);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let report = crate::signal_dependencies(&parsed.program).expect("valid generic signal source");
+    assert!(
+        report
+            .get("generic")
+            .is_some_and(|operations| operations.iter().any(|operation| operation == "<unknown>")),
+        "{report:?}"
+    );
+}
+
+#[test]
+fn static_snapshot_callables_never_capture_the_construction_handler_silently() {
+    for (flavor, source) in [
+        (osprey_syntax::Flavor::Default, "static effect Signal { read: fn() -> int }\nfn count() = perform Signal.read()\nlet cached = { handle static Signal { read => 1 }\nsignalSnapshot(|| => || => count()) }\nlet answer = { handle static Signal { read => 2 }\ncached.value() }\nprint(answer)\n"),
+        (osprey_syntax::Flavor::Ml, "static effect Signal\n    read : Unit => int\ncount () = perform Signal.read ()\ncached =\n    handle static Signal\n        read => 1\n    signalSnapshot (\\() => \\() => count ())\nanswer =\n    handle static Signal\n        read => 2\n    cached.value ()\nprint answer\n"),
+    ] {
+        let parsed = osprey_syntax::parse_program_with_flavor(source, flavor);
+        assert!(parsed.errors.is_empty(), "{flavor:?}: {:?}", parsed.errors);
+        let errors = check_program(&parsed.program);
+        assert!(errors.iter().any(|error| error.message.contains("Signal.read") && error.message.contains("invocation-time specialization") && error.position.is_some()), "{flavor:?}: {errors:?}");
+    }
+}

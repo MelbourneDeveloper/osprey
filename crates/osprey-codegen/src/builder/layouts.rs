@@ -5,6 +5,15 @@ impl Codegen {
     /// Register an anonymous object literal's ordered field layout and return the
     /// synthetic owner name to tag its handle with.
     pub(crate) fn register_obj_layout(&mut self, fields: Vec<ObjField>) -> String {
+        // Structurally equal branches must retain one owner through a phi.
+        // Implements [TYPE-RECORD], [STAGE-SIGNALS-REBUILD].
+        if let Some((name, _)) = self
+            .obj_layouts
+            .iter()
+            .find(|(name, existing)| name.starts_with("__obj_") && **existing == fields)
+        {
+            return name.clone();
+        }
         let name = format!("__obj_{}", self.obj_count);
         self.obj_count += 1;
         self.register_layout(name, fields)

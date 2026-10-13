@@ -68,6 +68,9 @@ pub(super) fn validate_handler_arms(
             // unhandled operation. Implements [EFFECTS-STATIC-DISCHARGE].
             validate_handler_arms(analyzer, axis, &arm.body, scope, &local, errors);
         }
+        if stage.is_compile_time() {
+            validate_static_escape(analyzer, expression, scope, env, errors);
+        }
         let body_env = env.under_handler(effect, arms, *stage);
         validate_handler_arms(analyzer, axis, body, scope, &body_env, errors);
         if let Some(clause) = return_clause {
@@ -78,4 +81,76 @@ pub(super) fn validate_handler_arms(
     walk_children(expression, |child| {
         validate_handler_arms(analyzer, axis, child, scope, env, errors);
     });
+}
+
+// Fail closed rather than bind future operations to the construction handler.
+// The lowering pass cannot yet re-specialize an escaping callable at invocation.
+// Implements [EFFECTS-STATIC-DISCHARGE], [STAGE-LOWER-ORDER].
+fn validate_static_escape(
+    analyzer: &Analyzer<'_>,
+    expression: &Expr,
+    scope: &[String],
+    env: &CallableEnv,
+    errors: &mut Vec<TypeError>,
+) {
+    let escaped = escaping_operations(analyzer, expression, scope, env);
+    if let Expr::Handler {
+        effect, position, ..
+    } = expression
+    {
+        if !escaped.is_empty() {
+            errors.push(TypeError::new(format!("static handler `{effect}` returns a callable requiring {}; escaping static callables require invocation-time specialization, which is not implemented", escaped.join(", "))).with_pos(*position));
+        }
+    }
+}
+
+fn escaping_operations(
+    analyzer: &Analyzer<'_>,
+    expression: &Expr,
+    scope: &[String],
+    env: &CallableEnv,
+) -> Vec<String> {
+    let Expr::Handler {
+        effect,
+        arms,
+        position,
+        ..
+    } = expression
+    else {
+        return Vec::new();
+    };
+    let Some(value) = analyzer.value(expression, scope, env) else {
+        return Vec::new();
+    };
+    let arguments =
+        analyzer.instance_arguments(effect, *position, &analyzer.instances.handlers, "handler");
+    latent_operations(&value)
+        .into_iter()
+        .filter(|required| {
+            required.effect == osprey_ast::effect_name::base(effect)
+                && required.arguments == arguments
+                && arms.iter().any(|arm| arm.operation == required.operation)
+        })
+        .map(|required| super::requirement_name(&required))
+        .collect()
+}
+
+fn latent_operations(value: &super::Value) -> super::Requirements {
+    let mut operations = super::Requirements::new();
+    if let Some(super::Callable::Known(callable)) = &value.callable {
+        operations.extend(callable.summary.required.iter().cloned());
+        if let Some(returned) = &callable.returned {
+            operations.extend(latent_operations(returned));
+        }
+    }
+    for nested in value
+        .fields
+        .values()
+        .chain(value.element.as_deref())
+        .chain(value.result_payload.as_deref())
+        .chain(value.fiber_payload.as_deref())
+    {
+        operations.extend(latent_operations(nested));
+    }
+    operations
 }

@@ -20,7 +20,6 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-pub use crate::stage_rows::dependencies;
 pub(crate) use crate::stage_rows::{body_requirements, runtime_requirements};
 
 /// The marker that declares a compile-time stage, spelled once so both flavors'

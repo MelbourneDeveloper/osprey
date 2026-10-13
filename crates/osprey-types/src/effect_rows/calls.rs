@@ -41,6 +41,25 @@ impl Analyzer<'_> {
             out.unresolved_dynamic_call = true;
         }
         if let Some(name) = self.builtin_callee(function, scope, env) {
+            if matches!(
+                name,
+                "signalDependencies" | "signalSnapshot" | "signalRefresh"
+            ) {
+                let slot = if name == "signalRefresh" { 2 } else { 0 };
+                let query = super::names::signal_argument(slot, arguments, named_arguments)
+                    .and_then(|argument| self.callable(argument, scope, env))
+                    .map_or_else(
+                        || Summary {
+                            unresolved_dynamic_call: true,
+                            ..Summary::default()
+                        },
+                        |callback| self.invoke_with_values(callback, &[]),
+                    );
+                let _ = self.instances.signal_queries.borrow_mut().insert(
+                    expression_site(function),
+                    super::reports::report(self.instances, query),
+                );
+            }
             for operation in crate::arithmetic::total_builtin_operations(name, arguments) {
                 let _ = out.required.remove(&Requirement::new(
                     osprey_ast::ARITH_EFFECT,
@@ -63,7 +82,16 @@ impl Analyzer<'_> {
                 .copied()
                 .chain(gpu_kernel_slot(name))
             {
-                if let Some(argument) = arguments.get(index) {
+                if let Some(argument) = arguments.get(index).or_else(|| {
+                    matches!(name, "signalSnapshot" | "signalRefresh")
+                        .then(|| {
+                            named_arguments
+                                .iter()
+                                .find(|argument| argument.name == "work")
+                                .map(|argument| &argument.value)
+                        })
+                        .flatten()
+                }) {
                     if let Some(callback) = self.callable(argument, scope, env) {
                         out.union(self.invoke_with_values(callback, &[]));
                     }

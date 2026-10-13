@@ -338,7 +338,18 @@ fn cmp_code(op: &str, float: bool) -> &'static str {
 
 pub(crate) fn gen_comparison(cg: &mut Codegen, op: &str, l: Value, r: Value) -> Result<Value> {
     let reg = cg.fresh_reg();
-    let is_str = |t: LType| t == LType::Str || t == LType::Ptr;
+    if l.ty == LType::Ptr && r.ty == LType::Ptr && matches!(op, "==" | "!=") {
+        // Aggregate equality compares identity, never bytes as a C string.
+        // Implements [BOOL-COMPARE-OPERANDS].
+        cg.emit(format!(
+            "{reg} = icmp {} i8* {}, {}",
+            cmp_code(op, false),
+            l.operand,
+            r.operand
+        ));
+        return Ok(Value::new(reg, LType::I1));
+    }
+    let is_str = |t: LType| t == LType::Str;
     if is_str(l.ty) && is_str(r.ty) {
         let c = cg.call("i32", "strcmp", "i8*, i8*", &[&l.operand, &r.operand]);
         cg.emit(format!("{reg} = icmp {} i32 {c}, 0", cmp_code(op, false)));

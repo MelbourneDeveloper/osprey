@@ -70,6 +70,7 @@ type HandlerCandidates = HashMap<(u32, u32), BTreeSet<Vec<String>>>;
 
 #[derive(Default)]
 pub(crate) struct Instances {
+    pub(crate) signal_queries: RefCell<HashMap<usize, crate::EffectRequirements>>,
     pub(crate) expression_types: RefCell<HashMap<usize, crate::ty::Type>>,
     pub(crate) methods: crate::methods::Targets,
     /// A type error already proved a call target is not callable. It cannot

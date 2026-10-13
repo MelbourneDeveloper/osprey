@@ -27,7 +27,7 @@ Not every page needs the full list. Give the reader code, its result, and a next
 
 The [effects specification](specs/0017-AlgebraicEffects.md) defines the contract. [Plan 0016](plans/0016-algebraic-effects-and-handlers.md) owns delivery status and limitations. [Runnable handler examples](../examples/handlers/README.md) demonstrate current behavior in both flavors and compare it with other languages. Keep intended semantics and demonstrated support distinct.
 
-Use the [bank](../examples/projects/modules/README.md) and [mobile apps](../examples/mobile/README.md) to explain application boundaries. Mobile handlers describe SQL and HTTP commands; native hosts execute them and send completion events. This does not imply that mobile continuations or the planned staged reactive runtime are implemented.
+Use the [bank](../examples/projects/modules/README.md) and [mobile apps](../examples/mobile/README.md) to explain application boundaries. Mobile handlers describe SQL and HTTP commands; native hosts execute them and send completion events. The [reactive signal primitives](../website/src/docs/reactive-signals.md) provide checked dependency metadata and selective immutable cache refresh; mobile command execution remains at the host boundary.
 
 ## Keep the copy concrete
 

@@ -327,15 +327,28 @@ fn frame() = kernel\n    Tile size => 8\nin shade(2)\n";
     /// spell the mention the same way, so a dependency set is the same set.
     #[test]
     fn both_flavors_name_a_signal_by_its_instantiation() {
+        #[derive(Default)]
+        struct Mentions(Vec<String>);
+        impl osprey_ast::AstVisitor for Mentions {
+            fn expression(&mut self, expression: &Expr) {
+                if let Expr::Perform {
+                    effect, operation, ..
+                } = expression
+                {
+                    self.0.push(format!("{effect}.{operation}"));
+                }
+            }
+        }
         let default = "static effect Signal<T> { read: fn() -> T }\n\
 fn counter(n) = (perform Signal<Count>.read()) ?: n\n";
         let ml = "static effect Signal T\n    read : Unit => T\n\ncounter n = perform Signal<Count>.read () ?: n\n";
         for (flavor, source) in [(Flavor::Default, default), (Flavor::Ml, ml)] {
             let parsed = parse_program_with_flavor(source, flavor);
             assert!(parsed.errors.is_empty(), "{flavor:?}: {:?}", parsed.errors);
-            let deps = osprey_ast::stage::dependencies(&parsed.program);
+            let mut mentions = Mentions::default();
+            osprey_ast::walk_program(&parsed.program, &mut mentions);
             assert_eq!(
-                deps.get("counter").cloned().unwrap_or_default(),
+                mentions.0,
                 vec!["Signal<Count>.read"],
                 "{flavor:?}: the dependency is the instantiation, not the bare effect"
             );
