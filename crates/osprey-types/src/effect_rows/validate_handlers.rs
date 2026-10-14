@@ -99,7 +99,7 @@ fn validate_static_escape(
     } = expression
     {
         if !escaped.is_empty() {
-            errors.push(TypeError::new(format!("static handler `{effect}` returns a callable requiring {}; escaping static callables require invocation-time specialization, which is not implemented", escaped.join(", "))).with_pos(*position));
+            errors.push(TypeError::new(format!("static handler `{effect}` returns deferred work requiring {}; escaping static work requires invocation-time specialization, which is not implemented", escaped.join(", "))).with_pos(*position));
         }
     }
 }
@@ -136,7 +136,10 @@ fn escaping_operations(
 }
 
 fn latent_operations(value: &super::Value) -> super::Requirements {
-    let mut operations = super::Requirements::new();
+    // Lazy iterator callbacks run when consumed, after this handler may have
+    // ended. Quarantine their escape as well as ordinary closures until
+    // invocation-time specialization preserves [STAGE-LOWER-ORDER].
+    let mut operations = value.deferred.required.clone();
     if let Some(super::Callable::Known(callable)) = &value.callable {
         operations.extend(callable.summary.required.iter().cloned());
         if let Some(returned) = &callable.returned {

@@ -35,3 +35,26 @@ let next = refreshViews(first, signalDependencies(count), 7, 2)
 let last = refreshViews(next, signalDependencies(cursor), 7, 4)
 let idle = refreshViews(last, [], 7, 4)
 print("${describe(next)}\n${describe(last)}\nidle=${idle.status.value} builds=${idle.status.revision}")
+
+type Quantity = { items: int }
+type Price = { cents: int }
+fn quantity() = (perform Signal<Quantity>.read()).items
+fn unitPrice() = (perform Signal<Price>.read()).cents
+fn lineTotal() = satMul(quantity(), unitPrice())
+fn delivery() = match lineTotal() >= 2500 { true => "free" false => "paid" }
+fn cartQuote() = { total: lineTotal(), delivery: delivery() }
+fn cartSnapshot(items, cents) = {
+    handle static Signal<Quantity> { read => Quantity { items: items } }
+    handle static Signal<Price> { read => Price { cents: cents } }
+    signalSnapshot(cartQuote)
+}
+fn refreshCart(old, changed, items, cents) = {
+    handle static Signal<Quantity> { read => Quantity { items: items } }
+    handle static Signal<Price> { read => Price { cents: cents } }
+    signalRefresh(old, changed, cartQuote)
+}
+let cart = cartSnapshot(2, 500)
+let bulk = refreshCart(cart, signalDependencies(quantity), 5, 500)
+let sale = refreshCart(bulk, signalDependencies(unitPrice), 5, 400)
+let retained = refreshCart(sale, [], 99, 99)
+print("cart=${cart.value.total}->${bulk.value.total}->${sale.value.total} delivery=${bulk.value.delivery}->${sale.value.delivery} idle=${retained.value.total}@${retained.revision}")

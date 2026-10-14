@@ -487,3 +487,13 @@ fn reactive_static_reads_leave_no_runtime_effect_dispatch() {
         );
     }
 }
+
+#[test]
+fn signal_iterators_consumed_inside_the_handler_remain_valid() {
+    for (extension, source) in [
+        ("osp", "static effect Signal { read: fn() -> int }\nlet cached = { handle static Signal { read => 1 }\nsignalSnapshot(|| => range(0, 2) |> map(fn(_i) => perform Signal.read()) |> toList()) }\nprint(\"${listGet(cached.value, 0) ?: 0}:${listGet(cached.value, 1) ?: 0}\")\n"),
+        ("ospml", "static effect Signal\n    read : Unit => int\ncached =\n    handle static Signal\n        read => 1\n    signalSnapshot (\\() => range 0 2 |> map (\\_i => perform Signal.read ()) |> toList)\nprint \"${listGet cached.value 0 ?: 0}:${listGet cached.value 1 ?: 0}\"\n"),
+    ] {
+        assert_flavored_output("collected_signals", extension, source, "1:1\n");
+    }
+}

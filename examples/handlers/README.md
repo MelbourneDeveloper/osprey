@@ -142,6 +142,8 @@ on wasm.
 
 The same programs then derive signal dependencies, cache counter/cursor/status views, and refresh only affected views. Changing count rebuilds counter and status; changing cursor rebuilds cursor and status. An idle update retains every cached value and revision. The [reactive signals guide](../../website/src/docs/reactive-signals.md) describes the three cache operations.
 
+A checkout example derives an immutable quote from quantity and price signals. Quantity changes cross the free-delivery threshold; a price change updates both the total and delivery decision. An idle update retains the previous quote while earlier snapshots keep their original totals.
+
 ## Reproducibility
 
 Verified locally with Koka 3.2.3, OCaml 5.4.1, Eff 5.1 (source commit `503da71b9cb927af04fc62e28511e63cd7199151`), and Effekt 0.80.0. Eff interpreter binding/type echoes are removed from the displayed comparison; its full transcript remains in `target/handler-demo/eff.log`. Compiler logs and executables stay under `target/handler-demo`, outside the source directory.

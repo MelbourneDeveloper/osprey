@@ -77,9 +77,9 @@ esac
 # express, each pinned in tests/MOBILE_UNPORTABLE.txt.
 # Ratchet UP as goldens are added; never lower it to turn a red build green.
 case $TARGET in
-  wasm32)            GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-155} ;;
-  ios-sim|android*) GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-170} ;;
-  *)                 GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-221} ;;
+  wasm32)            GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-157} ;;
+  ios-sim|android*) GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-172} ;;
+  *)                 GOLDEN_MIN=${OSPREY_GOLDEN_MIN:-223} ;;
 esac
 
 # [GPU-KERNEL-EXTRACT] differential. The extracted-kernel lowering and the
