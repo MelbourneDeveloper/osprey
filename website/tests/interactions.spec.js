@@ -1,6 +1,7 @@
 // User-interaction tests with explicit assertions: navigation, the hero,
 // the mobile menu drawer, and the prose Table-of-Contents.
 const { test, expect } = require("@playwright/test");
+const { paintedColours } = require("./helpers");
 
 async function executeExample(source, file) {
   const { writeFile } = require("node:fs/promises");
@@ -190,6 +191,8 @@ test.describe("desktop interactions", () => {
     const editorValue = () =>
       page.evaluate(() => window.monaco?.editor?.getModels?.()[0]?.getValue() ?? "");
     await expect.poll(editorValue, { timeout: 20_000 }).toContain("fn account()");
+    // Both samples render highlighted, not as one plain colour.
+    const editorColours = () => paintedColours(page.locator('.monaco-editor .view-line span[class*="mtk"]'));
 
     // Default flavor is active on load.
     await expect(page.locator("#flavor-osp")).toHaveClass(/active/);
@@ -200,9 +203,12 @@ test.describe("desktop interactions", () => {
     await expect.poll(editorValue).toContain("account () =");
     expect(await editorValue()).not.toContain("fn account()");
 
+    await expect.poll(editorColours).toBeGreaterThan(1);
+
     // Switching back restores the Default sample.
     await page.locator("#flavor-osp").click();
     await expect.poll(editorValue).toContain("fn account()");
+    await expect.poll(editorColours).toBeGreaterThan(1);
   });
 
   test("playground compiles ML flavor: Run posts flavor=ml so .ospml reaches the ML frontend", async ({
