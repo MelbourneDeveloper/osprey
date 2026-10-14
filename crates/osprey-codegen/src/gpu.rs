@@ -38,11 +38,6 @@ fn is_scalar_value(v: &Value) -> bool {
     v.result_inner.is_none() && is_scalar(v.ty)
 }
 
-/// The name `gpuDevice()` reports for the host execution backend
-/// [GPU-DEVICE] [GPU-BACKEND-HOST]. Device backends will report their own
-/// names (`cuda:0`, `metal:0`) when they land.
-const HOST_DEVICE: &str = "host";
-
 /// Owner-tag prefix marking a buffer whose element `LType` is known; the suffix
 /// is the element's LLVM spelling (`Gpu#double`), mirroring the flat
 /// list-literal convention (`[]double`) so the tag survives lets, pipes,
@@ -92,7 +87,8 @@ pub(crate) fn gen(
     _named: &[NamedArgument],
 ) -> Result<Option<Value>> {
     if name == "gpuDevice" {
-        return Ok(Some(cg.string_constant(HOST_DEVICE)));
+        let name = cg.call("i8*", "osprey_gpu_device_name", "", &[]);
+        return Ok(Some(Value::new(name, LType::Str)));
     }
     operation(name).map(|lower| lower(cg, args)).transpose()
 }

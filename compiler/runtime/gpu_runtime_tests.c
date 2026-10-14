@@ -450,7 +450,35 @@ static void t_load_tensor_malformed_files(void) {
   expect_errno("gpuLoadTensor: /nonexistent/osprey/model.safetensors: ", ENOENT);
 }
 
-int main(void) {
+#if defined(__APPLE__)
+uint64_t osprey_gpu_metal_completed(void);
+__attribute__((weak, noinline)) uint64_t osprey_gpu_metal_completed(void) { return 0; }
+// A correct numerical answer alone cannot distinguish CPU fallback from GPU
+// execution: require a successfully completed Metal command as well.
+static void t_matmul_reaches_metal(void) {
+  CHECK(setenv("OSPREY_GPU", "metal", 1) == 0);
+  t_matmul_exact();
+  CHECK(osprey_gpu_metal_completed() > 0);
+}
+#endif
+
+#if defined(OSPREY_GPU_BUFFER_SUITE)
+#define main osprey_gpu_buffer_tests
+#endif
+int main(int argc, char **argv) {
+#if defined(__APPLE__)
+  if (argc == 2 && strcmp(argv[1], "--metal") == 0) {
+    t_matmul_reaches_metal();
+    t_matmul_accumulates_in_k_order();
+    t_matmul_zero_dimensions();
+    t_matmul_shape_errors();
+    printf("[ok] gpu_runtime: Metal command completed, %ld assertions\n", g_checks);
+    return 0;
+  }
+#else
+  (void)argc;
+  (void)argv;
+#endif
   t_alloc_zero_filled();
   t_alloc_clamps_to_empty();
   t_alloc_failure_is_empty();

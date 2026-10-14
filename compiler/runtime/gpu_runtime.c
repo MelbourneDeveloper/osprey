@@ -9,9 +9,56 @@
 // backend, native and wasm alike.
 
 #include "memory_hooks.h"
+#include "gpu_device.h"
+#include "io_error.h"
+#if defined(OSPREY_GPU_OPENCL)
+#include "gpu_opencl_api.h"
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int device_selection(void) {
+  const char *mode = getenv("OSPREY_GPU");
+  if (!mode || !*mode || strcmp(mode, "host") == 0) return 0;
+  if (strcmp(mode, "auto") == 0) return 1;
+  if (strcmp(mode, "metal") == 0) return 2;
+  if (strcmp(mode, "opencl") == 0) return 3;
+  osp_io_error_text("gpuMatMul", "device selection", "unknown backend; expected host, auto, metal, or opencl");
+  return -1;
+}
+
+// Implements [GPU-DEVICE]: report the resolved builtin matrix adapter.
+const char *osprey_gpu_device_name(void) {
+  int selected = device_selection();
+  if (!selected) return "host";
+#if defined(OSPREY_GPU_METAL)
+  if (selected == 1 || selected == 2) return osprey_gpu_metal_name();
+#endif
+#if defined(OSPREY_GPU_OPENCL)
+  if (selected == 1 || selected == 3) return osprey_gpu_opencl_name();
+#endif
+  return selected < 0 ? "invalid:device" : "unavailable:device";
+}
+
+int osprey_gpu_device_matmul(const int64_t *left, const int64_t *right, int64_t *out,
+                             int64_t rows, int64_t inner, int64_t cols) {
+  int selected = device_selection();
+  if (selected <= 0) return selected;
+#if defined(OSPREY_GPU_METAL)
+  if (selected == 1 || selected == 2) return osprey_gpu_metal_matmul(left, right, out, rows, inner, cols);
+#endif
+#if defined(OSPREY_GPU_OPENCL)
+  if (selected == 1 || selected == 3) return osprey_gpu_opencl_matmul(left, right, out, rows, inner, cols);
+#endif
+#if !defined(OSPREY_GPU_METAL) && !defined(OSPREY_GPU_OPENCL)
+  (void)left; (void)right; (void)out; (void)rows; (void)inner; (void)cols;
+#endif
+  osp_io_error_text("gpuMatMul", "device selection", "no GPU adapter in this runtime build");
+  return -1;
+}
 
 typedef struct OspreyGpuBuffer {
   int64_t length;

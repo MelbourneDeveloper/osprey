@@ -14,6 +14,12 @@ pub(super) fn link_args(ir: &str, source: &str, memory: &str) -> Vec<String> {
         args.extend(openssl_flags());
     }
     args.extend(platform_flags(uses_http, needs_libm(ir)));
+    if cfg!(target_os = "macos") && ir.contains("@osprey_gpu_") {
+        args.extend(["-framework", "Foundation", "-framework", "Metal"].map(str::to_owned));
+    }
+    if cfg!(target_os = "linux") && ir.contains("@osprey_gpu_") {
+        args.extend(["-ldl", "-pthread"].map(str::to_owned));
+    }
     args.extend(source.lines().filter_map(ffi_flag));
     args
 }

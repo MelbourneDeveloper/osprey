@@ -18,6 +18,7 @@
 
 #include "io_error.h"
 #include "memory_hooks.h"
+#include "gpu_device.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -69,6 +70,13 @@ static const char OP_MATMUL[] = "gpuMatMul";
 static const char OP_LOAD[] = "gpuLoad";
 static const char OP_TENSOR[] = "gpuLoadTensor";
 
+// Broken-code quarantine: the GPT-2 example used to turn failed tensors and
+// products into empty buffers, then generate/train with fabricated zeros.
+void *osprey_gpu_panic(const char *message) {
+  (void)fprintf(stderr, "GPT-2 cannot continue: %s\n", message ? message : "unknown GPU failure");
+  abort();
+}
+
 static double word_double(int64_t word) {
   double d;
   memcpy(&d, &word, sizeof d);
@@ -116,7 +124,7 @@ static void axpy_row(int64_t *out, const int64_t *right, double x, int64_t cols)
 // out[r*cols + c] = sum over k, in order from 0.0, of left[r*inner + k] *
 // right[k*cols + c], in double. NULL with the reason recorded when either
 // operand's length disagrees with the shape or the shape overflows.
-void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, int64_t cols) {
+static void *matrix_result(void *left, void *right, int64_t rows, int64_t inner, int64_t cols) {
   int64_t n = area(rows, cols);
   if (n < 0) {
     osp_io_error_text(OP_MATMUL, "result", "rows * cols is negative or overflows");
@@ -131,14 +139,25 @@ void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, in
     osp_io_error_set(OP_MATMUL, "result", ENOMEM);
     return abandoned(out);
   }
+  return out;
+}
+
+static void host_product(int64_t *o, const int64_t *a, const int64_t *b, int64_t rows, int64_t inner, int64_t cols) {
+  for (int64_t r = 0; o && a && b && r < rows; r++) {
+    for (int64_t k = 0; k < inner; k++)
+      axpy_row(o + r * cols, b + k * cols, word_double(a[r * inner + k]), cols);
+  }
+}
+
+void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, int64_t cols) {
+  void *out = matrix_result(left, right, rows, inner, cols);
+  if (!out) return NULL;
   int64_t *o = osprey_gpu_data(out);
   const int64_t *a = osprey_gpu_data(left);
   const int64_t *b = osprey_gpu_data(right);
-  for (int64_t r = 0; o && a && b && r < rows; r++) {
-    for (int64_t k = 0; k < inner; k++) {
-      axpy_row(o + r * cols, b + k * cols, word_double(a[r * inner + k]), cols);
-    }
-  }
+  int device = osprey_gpu_device_matmul(a, b, o, rows, inner, cols);
+  if (device != 0) return device > 0 ? out : abandoned(out);
+  host_product(o, a, b, rows, inner, cols);
   return out;
 }
 

@@ -47,10 +47,15 @@ fn program(ext: &str, template: &str) -> Option<PathBuf> {
 /// `(exit code, stdout, stderr)` of `osprey <path> --run --quiet`, rooted at
 /// the repo so the runtime archives resolve.
 fn run(path: &Path) -> (Option<i32>, String, String) {
+    run_with_gpu(path, "host")
+}
+
+fn run_with_gpu(path: &Path, backend: &str) -> (Option<i32>, String, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_osprey"))
         .current_dir(manifest().join("..").join(".."))
         .arg(path)
         .args(["--run", "--quiet"])
+        .env("OSPREY_GPU", backend)
         .output();
     match output {
         Ok(out) => (
@@ -70,5 +75,33 @@ fn both_flavors_read_the_safetensors_fixture_exactly() {
         let (code, stdout, stderr) = path.as_deref().map(run).unwrap_or_default();
         assert_eq!(code, Some(0), "{ext}: stderr: {stderr}");
         assert_eq!(stdout, EXPECTED, "{ext}");
+    }
+}
+
+fn gpt2_failure_project() -> Option<PathBuf> {
+    let directory =
+        std::env::temp_dir().join(format!("osprey_gpt2_failure_{}", std::process::id()));
+    std::fs::create_dir_all(&directory).ok()?;
+    let model = manifest().join("../../examples/gpt2/model");
+    let model = serde_json::to_string(&model.to_string_lossy()).ok()?;
+    let config = format!("[project]\nname = \"failure\"\nsource_roots = [{model}, \".\"]\ndefault_namespace = \"failure\"\nentry = \"main.osp\"\n");
+    std::fs::write(directory.join("osprey.toml"), config).ok()?;
+    let source = "import gpt2::Model\nfn main() = { let out = Model::product(toGpu([1.0]), toGpu([1.0]), 1, 1, 1)\nprint(gpuLength(out)) }\n";
+    std::fs::write(directory.join("main.osp"), source).ok()?;
+    Some(directory)
+}
+
+#[test]
+fn gpt2_rejects_a_failed_gpu_dispatch_instead_of_generating_with_empty_matrices() {
+    let path = gpt2_failure_project();
+    assert!(path.is_some(), "GPU failure project could not be written");
+    let (code, stdout, stderr) = path
+        .as_deref()
+        .map(|p| run_with_gpu(p, "invalid"))
+        .unwrap_or_default();
+    assert_ne!(code, Some(0), "failed GPU dispatch continued: {stdout}");
+    assert!(stderr.contains("unknown backend"), "{stderr}");
+    if let Some(path) = path {
+        let _ = std::fs::remove_dir_all(path);
     }
 }

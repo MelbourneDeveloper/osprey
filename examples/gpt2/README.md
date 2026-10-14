@@ -58,13 +58,17 @@ directory; the Makefile targets add `--memory=arc`.
 
 ## What runs where
 
-Everything runs on the CPU today. `gpuDevice()` reports `host`, and both
-programs say so on their first line. The GPU surface is the shape the model is
-written in, so the same source runs unchanged when a device backend lands
-([plan 0023](../../docs/plans/0023-gpu-computation.md)); nothing here is
-GPU-accelerated.
+`make gpt2` and `make gpt2-train` request GPU matrix execution by default (`GPU=auto`). On macOS, products dispatch directly to Metal; elsewhere they dispatch to an OpenCL compute GPU through its installed driver. `GPU=metal` or `GPU=opencl` requests a specific adapter, and `GPU=host` selects the CPU oracle. The same model source runs on all three paths, without CUDA. `gpuDevice()` names the resolved adapter and labels matrix-kernel execution; a completed-command message on stderr proves a matrix reached the GPU. Adapter failures abort the model rather than continuing with empty buffers.
 
-| Measured 2026-10-12, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build | |
+Run the compiler interactively from the repository root:
+
+```sh
+OSPREY_GPU=auto osprey examples/gpt2/generate --run --memory=arc
+```
+
+Enter the prompt, then the token count on the next line. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Both GPU adapters use the same software binary64 arithmetic, preserving the host's product/accumulation order without float32 substitution. Tokenization, attention gathers, LayerNorm, and other `gpuMap`/fold combinators still execute on the CPU. This is GPU matrix execution with real transfer and synchronization costs, not a fully device-resident transformer. General kernel offload remains in [plan 0023](../../docs/plans/0023-gpu-computation.md).
+
+| Historical host measurements, before the KV cache: 2026-10-12, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build | |
 | --- | --- |
 | Loading 124M parameters as float buffers plus the transposed embedding | 9.3 s |
 | One greedy token, 5 to 25 tokens of context, no KV cache | about 1.25 s |
@@ -130,7 +134,7 @@ lowerings and wasm32 on every `make test`.
 ## Known limits
 
 - One prompt line (and, for `generate`, an optional token count line) on
-  stdin; no KV cache, so every generated token recomputes the whole sequence.
+  stdin. Generation caches the blocks' qkv rows and computes only the new position after the prompt pass.
 - The pre-tokenizer is an ASCII approximation of GPT-2's Unicode regular
   expression; prompts in other scripts tokenize correctly only where the
   letter/number/punctuation classes agree with the ASCII rules.

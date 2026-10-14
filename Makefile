@@ -10,7 +10,7 @@
 .PHONY: build test lint fmt clean ci setup run install bench bench-osprey wasm wasm-site wasm-serve bank bank-web bank-test bank-e2e hawk graphics gpt2 gpt2-train \
 	vsix-rebuild-reinstall \
 	_language-test _deslop _gpu-demo _graphics-shader \
-	_test_gc_stack_root _test_c_runtime _coverage_check_c_runtime _bank_test _test_bench_tools \
+	_test_gc_stack_root _test_c_runtime _test_gpu_device _coverage_check_c_runtime _bank_test _test_bench_tools \
 	_vsix_clean _vsix_bundle _vsix_package _vsix_install
 
 # ---------------------------------------------------------------------------
@@ -135,9 +135,29 @@ HTTP_OBJ_GC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_reque
 # [GC-ARC-PERCEUS], spec 0018.
 FIB_OBJ_ARC  ?= bin/memory_arc.o bin/gpu_runtime.o bin/gpu_host.o bin/fiber_runtime.o bin/system_runtime.o bin/arc/file_runtime.o bin/effects_runtime.o bin/effects_coro.o bin/arc/string_runtime.o bin/arc/string_runtime_list.o bin/arc/list_runtime.o bin/arc/map_runtime.o bin/arc/map_runtime_hamt.o bin/arc/json_runtime.o bin/ffi_runtime.o bin/term_runtime.o bin/random_runtime.o bin/test_runtime.o bin/coverage_runtime.o bin/profiler_runtime.o bin/profiler_sampler.o
 HTTP_OBJ_ARC ?= bin/http_shared.o bin/http_client_runtime.o bin/http_server_request.o bin/http_server_response.o bin/http_server_runtime.o bin/websocket_client_runtime.o bin/websocket_server_runtime.o $(FIB_OBJ_ARC)
+ifeq ($(UNAME_S),Darwin)
+GPU_DEVICE_OBJ ?= bin/gpu_metal.o
+GPU_DEVICE_NATIVE ?= compiler/bin/gpu_metal.o
+GPU_DEVICE_FLAGS ?= -DOSPREY_GPU_METAL=1
+GPU_DEVICE_LIBS ?= -framework Foundation -framework Metal
+FIB_OBJ += bin/gpu_metal.o
+FIB_OBJ_GC += bin/gpu_metal.o
+FIB_OBJ_ARC += bin/gpu_metal.o
+endif
+GPU_DEVICE_OBJ += bin/gpu_opencl.o
+GPU_DEVICE_NATIVE += compiler/bin/gpu_opencl.o
+GPU_DEVICE_FLAGS += -DOSPREY_GPU_OPENCL=1
+GPU_DEVICE_LINK = $(addprefix $(CURDIR)/compiler/,$(GPU_DEVICE_OBJ))
+FIB_OBJ += bin/gpu_opencl.o
+FIB_OBJ_GC += bin/gpu_opencl.o
+FIB_OBJ_ARC += bin/gpu_opencl.o
+ifeq ($(UNAME_S),Linux)
+GPU_DEVICE_LIBS += -ldl -pthread
+endif
 NATIVE_RUNTIME_CONFIG ?= compiler/bin/.native-runtime-config
 NATIVE_RUNTIME_STAMP ?= compiler/bin/.native-runtime.stamp
 NATIVE_RUNTIME_INPUTS ?= $(filter-out compiler/runtime/%_tests.c compiler/runtime/test_http_length_validation.c compiler/runtime/test_openssl.c compiler/runtime/test_system_runtime.c compiler/runtime/test_file_runtime.c compiler/runtime/web_runtime.c,$(wildcard compiler/runtime/*.c)) $(wildcard compiler/runtime/*.h)
+NATIVE_RUNTIME_INPUTS += $(wildcard compiler/runtime/*.m compiler/runtime/*.metal)
 NATIVE_RUNTIME_ARCHIVES ?= compiler/bin/libfiber_runtime.a compiler/bin/libhttp_runtime.a compiler/bin/libfiber_runtime_gc.a compiler/bin/libhttp_runtime_gc.a compiler/bin/libfiber_runtime_arc.a compiler/bin/libhttp_runtime_arc.a compiler/lib/libfiber_runtime.a compiler/lib/libhttp_runtime.a compiler/lib/libfiber_runtime_gc.a compiler/lib/libhttp_runtime_gc.a compiler/lib/libfiber_runtime_arc.a compiler/lib/libhttp_runtime_arc.a
 
 # WebAssembly (wasm32-wasip1) cross-build toolchain — opt-in via `make wasm`.
@@ -447,7 +467,7 @@ _runtime:
 	@$(MKDIR) $(RTB)
 	@set -e; config_tmp="$(NATIVE_RUNTIME_CONFIG).$$$$"; \
 	  { printf '%s\n' \
-	      "CC=$(CC)" "AR=$(AR)" "A=$(A)" "B=$(B)" "WARN_MAX=$(WARN_MAX)" \
+	      "CC=$(CC)" "AR=$(AR)" "A=$(A)" "B=$(B)" "WARN_MAX=$(WARN_MAX)" "GPU_DEVICE_FLAGS=$(GPU_DEVICE_FLAGS)" \
 	      "OSSL=$(OSSL)" "FIB_OBJ=$(FIB_OBJ)" "HTTP_OBJ=$(HTTP_OBJ)" \
 	      "FIB_OBJ_GC=$(FIB_OBJ_GC)" "HTTP_OBJ_GC=$(HTTP_OBJ_GC)" \
 	      "FIB_OBJ_ARC=$(FIB_OBJ_ARC)" "HTTP_OBJ_ARC=$(HTTP_OBJ_ARC)"; \
@@ -468,7 +488,17 @@ _runtime:
 	  done
 	@$(MAKE) --no-print-directory -s $(NATIVE_RUNTIME_STAMP)
 
-$(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makefile
+compiler/bin/gpu_shader_source.h: compiler/runtime/gpu_f64.metal scripts/embed_gpu_shader.awk
+	@$(MKDIR) compiler/bin
+	awk -f scripts/embed_gpu_shader.awk $< > $@
+
+compiler/bin/gpu_metal.o: compiler/runtime/gpu_metal.m compiler/bin/gpu_shader_source.h compiler/runtime/gpu_device.h Makefile
+	$(CC) $(A) -fobjc-arc $(GPU_DEVICE_FLAGS) $< -o $@
+
+compiler/bin/gpu_opencl.o: compiler/runtime/gpu_opencl.c compiler/bin/gpu_shader_source.h compiler/runtime/gpu_opencl_api.h Makefile
+	$(CC) $(B) $< -o $@
+
+$(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makefile $(GPU_DEVICE_NATIVE)
 	@echo "==> building C runtime archives ($(RTB)/lib*_runtime.a)"
 	@cd compiler && set -e && $(MKDIR) bin lib bin/gc bin/arc && \
 	  $(CC) $(B) runtime/memory_runtime.c       -o bin/memory_runtime.o && \
@@ -498,7 +528,7 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(B) runtime/ffi_runtime.c          -o bin/ffi_runtime.o && \
 	  $(CC) $(B) runtime/term_runtime.c         -o bin/term_runtime.o && \
 	  $(CC) $(B) runtime/random_runtime.c       -o bin/random_runtime.o && \
-	  $(CC) $(B) runtime/gpu_runtime.c          -o bin/gpu_runtime.o && \
+	  $(CC) $(B) $(GPU_DEVICE_FLAGS) runtime/gpu_runtime.c -o bin/gpu_runtime.o && \
 	  $(CC) $(B) runtime/gpu_host.c             -o bin/gpu_host.o && \
 	  $(CC) $(B) runtime/test_runtime.c         -o bin/test_runtime.o && \
 	  $(CC) $(B) runtime/coverage_runtime.c     -o bin/coverage_runtime.o && \
@@ -516,6 +546,7 @@ $(NATIVE_RUNTIME_STAMP): $(NATIVE_RUNTIME_INPUTS) $(NATIVE_RUNTIME_CONFIG) Makef
 	  $(CC) $(A) $(OSSL) `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/http_server_runtime.c      -o bin/http_server_runtime.o && \
 	  $(CC) $(A) $(OSSL) `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_client_runtime.c -o bin/websocket_client_runtime.o && \
 	  $(CC) $(A) $(OSSL) `pkg-config --cflags openssl 2>/dev/null || echo ""` runtime/websocket_server_runtime.c -o bin/websocket_server_runtime.o && \
+	  $(RM) bin/libfiber_runtime.a bin/libhttp_runtime.a bin/libfiber_runtime_gc.a bin/libhttp_runtime_gc.a bin/libfiber_runtime_arc.a bin/libhttp_runtime_arc.a && \
 	  $(AR) rcs bin/libfiber_runtime.a $(FIB_OBJ) && \
 	  $(AR) rcs bin/libhttp_runtime.a  $(HTTP_OBJ) && \
 	  $(AR) rcs bin/libfiber_runtime_gc.a $(FIB_OBJ_GC) && \
@@ -624,7 +655,7 @@ PROF_T = -O2 -g -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-st
 # (_coverage_check_c_runtime) iterate this same table, so adding one row wires
 # a suite into testing AND coverage measurement.
 C_TEST_SUITES ?= memory_gc_stack_root_tests memory_arc_tests memory_gc_tests \
-  memory_pool_tests memory_runtime_tests memory_golden_tests gpu_runtime_tests \
+  memory_pool_tests memory_runtime_tests memory_golden_tests gpu_runtime_tests gpu_opencl_tests gpu_selection_tests gpu_no_device_tests \
   list_tests map_tests string_runtime_tests json_runtime_tests \
   effects_runtime_tests builtins_runtime_tests test_system_runtime \
   test_file_runtime \
@@ -642,13 +673,33 @@ C_SRC_memory_pool_tests = runtime/memory_pool_tests.c
 C_SRC_memory_runtime_tests = runtime/memory_runtime_tests.c runtime/memory_runtime.c
 C_SRC_memory_golden_tests = runtime/memory_golden_tests.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c
 C_LIBS_memory_golden_tests = -pthread
+C_FLAGS_memory_golden_tests = $(GPU_DEVICE_FLAGS)
+C_LIBS_memory_golden_tests += $(GPU_DEVICE_LINK) $(GPU_DEVICE_LIBS)
 C_SRC_gpu_runtime_tests = runtime/gpu_runtime_tests.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_runtime_tests = $(GPU_DEVICE_FLAGS)
+C_LIBS_gpu_runtime_tests = $(GPU_DEVICE_LINK) $(GPU_DEVICE_LIBS)
+C_SRC_gpu_device_tests = runtime/gpu_device_tests.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_device_tests = $(GPU_DEVICE_FLAGS)
+C_LIBS_gpu_device_tests = $(GPU_DEVICE_LINK) $(GPU_DEVICE_LIBS)
+C_SRC_gpu_opencl_tests = runtime/gpu_opencl_tests.c runtime/gpu_opencl.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_opencl_tests = -DOSPREY_GPU_TESTING=1
+C_LIBS_gpu_opencl_tests = -pthread $(if $(filter Linux,$(UNAME_S)),-ldl)
+C_SRC_gpu_selection_tests = runtime/gpu_selection_tests.c runtime/gpu_runtime_tests.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_selection_tests = -DOSPREY_GPU_BUFFER_SUITE=1 -DOSPREY_GPU_METAL=1 -DOSPREY_GPU_OPENCL=1
+C_SRC_gpu_no_device_tests = $(C_SRC_gpu_selection_tests)
+C_FLAGS_gpu_no_device_tests = -DOSPREY_GPU_BUFFER_SUITE=1
+ifeq ($(UNAME_S),Darwin)
+C_TEST_SUITES += gpu_metal_tests
+C_SRC_gpu_metal_tests = runtime/gpu_metal_tests.m runtime/gpu_metal.m runtime/file_runtime.c runtime/memory_runtime.c
+C_FLAGS_gpu_metal_tests = -fobjc-arc -DOSPREY_GPU_METAL=1
+C_LIBS_gpu_metal_tests = -framework Foundation -framework Metal -pthread
+endif
 C_SRC_list_tests = runtime/list_tests.c runtime/list_runtime.c runtime/memory_runtime.c
 C_SRC_map_tests = runtime/map_tests.c runtime/map_runtime.c runtime/map_runtime_hamt.c runtime/memory_runtime.c
 C_SRC_string_runtime_tests = runtime/string_runtime_tests.c runtime/string_runtime.c runtime/string_runtime_list.c runtime/list_runtime.c runtime/memory_runtime.c
 C_SRC_json_runtime_tests = runtime/json_runtime_tests.c runtime/json_grammar_tests.c runtime/json_runtime.c
 C_LIBS_json_runtime_tests = -pthread
-C_SRC_effects_runtime_tests = runtime/effects_runtime_tests.c runtime/effects_runtime.c runtime/effects_coro.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/profiler_runtime.c runtime/profiler_sampler.c
+C_SRC_effects_runtime_tests = runtime/effects_runtime_tests.c runtime/effects_runtime.c runtime/effects_coro.c runtime/memory_arc.c runtime/gpu_runtime.c runtime/file_runtime.c runtime/profiler_runtime.c runtime/profiler_sampler.c
 C_LIBS_effects_runtime_tests = -pthread
 C_SRC_builtins_runtime_tests = runtime/builtins_runtime_tests.c runtime/random_entropy_tests.c runtime/ffi_runtime.c runtime/random_runtime.c runtime/term_runtime.c runtime/test_runtime.c
 C_SRC_test_system_runtime = runtime/test_system_runtime.c runtime/test_system_failures.c runtime/system_runtime.c runtime/file_runtime.c runtime/memory_runtime.c
@@ -693,9 +744,12 @@ _test_gc_stack_root:
 	@echo "==> [c-runtime] GC caller-stack root regression..."
 	@cd compiler && $(call C_SUITE_CMD,memory_gc_stack_root_tests)
 
-_test_c_runtime:
+_test_c_runtime: $(GPU_DEVICE_NATIVE)
 	@echo "==> [c-runtime] memory/gpu/effects/json/builtins/system/string/HTTP/fiber suites..."
 	@cd compiler && set -e; $(foreach s,$(C_TEST_SUITES),$(call C_SUITE_CMD,$(s)) && ) true
+
+_test_gpu_device: $(GPU_DEVICE_NATIVE)
+	@cd compiler && $(call C_SUITE_CMD,gpu_device_tests)
 
 # Per-library C line-coverage gate. Rebuilds every table suite with gcov
 # instrumentation into compiler/bin/cov/<suite>/, reruns it there (a failing
@@ -739,7 +793,7 @@ _coverage_check_c_runtime:
 	@set -e; cd compiler/bin && mkdir -p cov && cd cov; \
 	$(foreach s,$(C_TEST_SUITES),mkdir -p $(s) && (cd $(s) && $(CC) $(or $(C_PROFILE_$(s)),$(T)) --coverage -DOSP_COVERAGE_DUMP $(C_FLAGS_$(s)) $(addprefix ../../../,$(C_SRC_$(s))) $(C_LIBS_$(s)) -o $(s) && { ./$(s) >/dev/null 2>&1 || true; } && { $(GCOV_TOOL) *.gcda > summary.txt 2>/dev/null || true; }) && ) true
 	@command -v jq >/dev/null || { echo "[c] FAIL: jq is required to read $(COVERAGE_THRESHOLDS_FILE); a gate that cannot run must not report success"; exit 1; }
-	@libs=$$(jq -r '.projects | to_entries[] | select(.value.language=="c") | .key' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	@libs=$$(jq -r --arg platform "$(if $(filter Darwin,$(UNAME_S)),darwin,$(if $(filter Linux,$(UNAME_S)),linux,windows))" '.projects | to_entries[] | select(.value.language=="c" and ((.value.platform // $$platform)==$$platform)) | .key' "$(COVERAGE_THRESHOLDS_FILE)"); \
 	if [ -z "$$libs" ]; then echo "[c] FAIL: no C entries in $(COVERAGE_THRESHOLDS_FILE) -- the gate would pass vacuously"; exit 1; fi; \
 	fail=0; \
 	for n in $(C_SHIPPED_UNITS); do \
@@ -750,7 +804,7 @@ _coverage_check_c_runtime:
 	  thr=$$(jq -r --arg l "$$lib" '.projects[$$l].threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
 	  best=$$(for f in compiler/bin/cov/*/summary.txt; do \
 	    [ -f "$$f" ] || continue; \
-	    sed -n "\#File '.*/runtime/$$lib\.c'#{n;s/Lines executed:\([0-9.]*\)% of .*/\1/p;}" "$$f"; \
+      sed -n "\#File '.*/runtime/$$lib\.[cm]'#{n;s/Lines executed:\([0-9.]*\)% of .*/\1/p;}" "$$f"; \
 	  done | sort -rn | head -1); \
 	  if [ -z "$$best" ]; then echo "[c] $$lib FAIL: no coverage data (no suite links it, or its suite died before dumping)"; fail=1; continue; fi; \
 	  best_int=$${best%.*}; \
@@ -984,6 +1038,7 @@ GPT2_DIR    := examples/gpt2
 GPT2_SOURCE := https://huggingface.co/openai-community/gpt2/resolve/main
 PROMPT      ?= The capital of France is
 TOKENS      ?= 20
+GPU         ?= auto
 
 $(GPT2_DIR)/weights/%:
 	@$(MKDIR) $(GPT2_DIR)/weights
@@ -991,11 +1046,11 @@ $(GPT2_DIR)/weights/%:
 	curl -fsSL --retry 3 -o $@ $(GPT2_SOURCE)/$*
 
 gpt2: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
-	@printf '%s\n%s\n' "$(PROMPT)" "$(TOKENS)" | ./$(BIN) $(GPT2_DIR)/generate --run --memory=arc
+	@printf '%s\n%s\n' "$(PROMPT)" "$(TOKENS)" | OSPREY_GPU=$(GPU) ./$(BIN) $(GPT2_DIR)/generate --run --memory=arc
 
 ## gpt2-train: One training step of GPT-2 on the prompt: loss, gradients, SGD, loss again (usage: make gpt2-train PROMPT="...")
 gpt2-train: build $(GPT2_DIR)/weights/model.safetensors $(GPT2_DIR)/weights/merges.txt
-	@printf '%s\n' "$(PROMPT)" | ./$(BIN) $(GPT2_DIR)/train --run --memory=arc
+	@printf '%s\n' "$(PROMPT)" | OSPREY_GPU=$(GPU) ./$(BIN) $(GPT2_DIR)/train --run --memory=arc
 
 ## run: Compile and run an Osprey file (usage: make run FILE=<path>)
 run: build

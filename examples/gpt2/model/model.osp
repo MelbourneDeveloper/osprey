@@ -6,12 +6,13 @@
 //
 // This is plan 0023's reference application (docs/plans/0023-gpu-computation.md):
 // one model that exercises [GPU-MATMUL], [GPU-BUFFER-TENSOR], [BUILTIN-MATH]
-// and every combinator, on the host backend today and unchanged on a device
-// backend tomorrow. Everything here runs on the CPU; `gpuDevice()` says so.
+// and every combinator. Matrix products dispatch to Metal or OpenCL when a
+// device is selected; the other combinators retain their host implementation.
 
 namespace gpt2;
 
 module Model {
+    extern fn osprey_gpu_panic(message: string) -> GpuBuffer<float>
     export let weightsDir = "examples/gpt2/weights"
 
     // The GPT-2 small configuration (config.json in the same repository).
@@ -75,14 +76,11 @@ module Model {
     export fn maxF(a, x) = match x > a { true => x  false => a }
     export fn gelu(x) = 0.5 * x * (1.0 + tanh(geluScale * (x + geluCubic * x * x * x)))
 
-    /// One tensor of the checkpoint. A missing or mis-typed tensor is reported and
-    /// yields an empty buffer, which the first product refuses by name.
+    /// A missing or mis-typed checkpoint cannot produce a valid model.
     fn tensor(name) = match gpuLoadTensor(weightsDir + "/model.safetensors", name) {
         Success { value } => value
-        Error { message } => {
-            print(message)
-            toGpu([])
-        }
+        // Broken-code quarantine: an empty tensor fabricated a runnable model.
+        Error { message } => osprey_gpu_panic(message)
     }
 
     fn layerAt(i) = {
@@ -117,14 +115,11 @@ module Model {
     /// transposed operand is a gather followed by `gpuMatMul`.
     export fn transpose(m, rows, cols) = gpuIota(rows * cols) |> gpuMap(fn(i) => at(m, (i % rows) * cols + intDiv(i, rows)))
 
-    /// a [rows, inner] times b [inner, cols]; a shape mismatch is reported and
-    /// yields an empty buffer.
+    /// a [rows, inner] times b [inner, cols]; failed work cannot produce logits.
     export fn product(a, b, rows, inner, cols) = match gpuMatMul(a, b, rows, inner, cols) {
         Success { value } => value
-        Error { message } => {
-            print(message)
-            toGpu([])
-        }
+        // Broken-code quarantine: continuing after GPU failure fabricated zeros.
+        Error { message } => osprey_gpu_panic(message)
     }
 
     /// Sum of a contiguous run of a flat buffer.

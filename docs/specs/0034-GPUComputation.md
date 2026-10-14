@@ -1,6 +1,6 @@
 # GPU Computation
 
-**Status: partially implemented.** The typed buffer surface, kernel purity checking, and the host execution backend exist today. Device code generation (PTX, Metal, WebGPU) is roadmap work; the staged plan and its detailed checklist live in [plan 0023](../plans/0023-gpu-computation.md). The scholarly work each design choice rests on is cited inline and collected in [References](#references--gpu-research) at the end of this document.
+**Status: partially implemented.** The typed buffer surface, kernel purity checking, host execution, and direct Metal/OpenCL execution of `gpuMatMul` exist today. General extracted-kernel device emission, SPIR-V/WebGPU coverage, and optional CUDA interoperability remain roadmap work; the staged plan and its detailed checklist live in [plan 0023](../plans/0023-gpu-computation.md). The scholarly work each design choice rests on is cited inline and collected in [References](#references--gpu-research) at the end of this document.
 
 GPU computation in Osprey is a language surface, not a bound library. The type system separates host data from device-shaped data, and the compiler proves at compile time that every kernel is pure — a kernel that logs, performs an effect, or calls something the checker cannot see is a compile error, not a runtime fault. This is the same machinery that already rejects an unhandled effect ([0017](0017-AlgebraicEffects.md)), pointed at data parallelism: parallel-safe by construction, checked before anything runs.
 
@@ -352,17 +352,27 @@ Extraction is a lowering choice, never a semantic one. The compiler retains the 
 
 ## Execution backends
 
+### Vendor independence — [GPU-BACKEND-PORTABILITY]
+
+**Osprey GPU computation is an alternative to CUDA and must work across GPU vendors.** Apple, AMD, Intel, NVIDIA, and other compute-capable GPUs are in scope. The same Osprey source, typed buffers, kernel ABI, effects, and numerical contracts must work unchanged through the appropriate device backend. GPU computation must be usable outside the CUDA ecosystem: installing CUDA, owning an NVIDIA GPU, or translating Osprey kernels into CUDA C/C++ must never be a requirement of the core language or portable runtime.
+
+Osprey owns kernel compilation, scheduling, buffer management, and dispatch. Backend adapters communicate with platform GPU APIs and drivers, such as Metal, OpenCL, Vulkan/SPIR-V, Direct3D, and WebGPU; they implement one shared device contract rather than separate vendor-specific programming models. Hardware capabilities are negotiated explicitly. A backend must preserve the specified arithmetic, including binary64 accumulation and ordering, using device-side emulation where necessary; silently reducing precision or substituting CPU execution does not meet the GPU contract. Unsupported capabilities require a diagnostic naming the device and operation.
+
+CUDA interoperability and acceleration are optional capabilities. Osprey may invoke CUDA libraries or provide a CUDA adapter on NVIDIA systems, but neither defines the GPU language nor supplies the mandatory implementation for other backends. CUDA is also a valid performance comparison where the hardware supports it. Passing a CUDA-only benchmark does not establish portable GPU support.
+
+Full cross-vendor kernel coverage is a delivery requirement, not a claim that every combinator already runs on a device. A GPU backend must demonstrate actual device dispatch, unchanged-source parity with the host oracle, and the GPT-2 reference application on its platform before it is advertised as working.
+
 ### Host baseline — [GPU-BACKEND-HOST]
 
-Every GPU program has defined, deterministic semantics with no GPU present: the host backend executes each combinator as a native counted loop over the dense buffer. The only fusion implemented today is the iterator pipeline into `toGpu` ([GPU-BUFFER-FUSE]); each combinator otherwise allocates its result buffer and runs its own loop. Combinator-to-combinator array fusion in the [Futhark](https://futhark-lang.org)/Accelerate sense (the load-bearing optimization: [McDonell et al., ICFP 2013](https://doi.org/10.1145/2500365.2500595)) is planned alongside the device IR, not present. This is the reference semantics device backends must match, it is what the differential test harness verifies under every memory backend and on wasm32, and it is what runs today. The dense unboxed buffer layout is the same staging layout a device transfer uses, so adopting the surface now costs nothing when device codegen lands.
+Every GPU program has defined, deterministic semantics with no GPU present: the host backend executes each combinator as a native counted loop over the dense buffer. The only fusion implemented today is the iterator pipeline into `toGpu` ([GPU-BUFFER-FUSE]); each combinator otherwise allocates its result buffer and runs its own loop. Combinator-to-combinator array fusion in the [Futhark](https://futhark-lang.org)/Accelerate sense (the load-bearing optimization: [McDonell et al., ICFP 2013](https://doi.org/10.1145/2500365.2500595)) is planned alongside the device IR, not present. This is the reference semantics device backends must match, it is what the differential test harness verifies under every memory backend and on wasm32, and it remains the reference for device execution. Metal and OpenCL matrix products transfer this same dense unboxed layout; transfers and synchronization are real costs, not eliminated by adopting the surface.
 
 ### Device backends — [GPU-BACKEND-DEVICE]
 
-Not implemented. The design (staged in [plan 0023](../plans/0023-gpu-computation.md)): device code generation lowers the same checked combinator calls through a data-parallel pipeline to accelerator targets, selected at build time like the memory backends are. The compiler emits target-agnostic textual LLVM IR and hands it to clang today; the wasm32 target already works as a sibling link driver (`crates/osprey-cli/src/wasm.rs`), and a device target follows the same shape: a kernel-extraction pass plus a target driver (NVPTX via clang, then Metal, then WebGPU/WGSL pairing with the existing wasm target). The studied alternatives — an MLIR `gpu`/`nvgpu`/`nvvm` pipeline (the substrate [Mojo](https://arxiv.org/abs/2509.21039) is built on), tile-level IRs ([Triton — Tillet et al., MAPL 2019](https://doi.org/10.1145/3315508.3329973); NVIDIA's open-source [CUDA Tile IR](https://github.com/NVIDIA/cuda-tile)), and polyhedral compilation ([PPCG — Verdoolaege et al., TACO 2013](https://doi.org/10.1145/2400682.2400713)) — are weighed in the plan, not fixed by this spec. Kernel purity and the element restriction exist precisely so that every program accepted today remains compilable unchanged when offload arrives.
+Direct builtin matrix execution is implemented through Metal and OpenCL. Both adapters compile the same integer-based binary64 kernel, transfer the existing dense buffer words, execute a device command, and copy back only after completion. General device emission for extracted Osprey kernels is still unimplemented; `gpuMap`, `gpuFold`, `gpuZipWith`, `gpuScan`, and `gpuFilter` retain their host lowering. The remaining design is staged in [plan 0023](../plans/0023-gpu-computation.md). General device emission must lower checked combinators and extracted kernels through a shared, vendor-neutral device representation; platform adapters emit the device code, transfer buffers, and launch work. Backend selection must satisfy [GPU-BACKEND-PORTABILITY]. No CUDA-first sequence or NVIDIA-only intermediate representation may become a dependency of the common compiler or runtime. The substrate decision belongs in the plan and must account for Metal, SPIR-V, and WebGPU as well as optional CUDA interoperability. Kernel purity and the element restriction exist so the same accepted Osprey program can execute across devices without vendor-specific source changes.
 
 ### Device selection — [GPU-DEVICE]
 
-`gpuDevice() -> string` names the active execution backend. The host backend reports `"host"`; device backends report device names (`"cuda:0"`, `"metal:0"`). A program can branch on it, and a benchmark can record which backend produced its numbers.
+`gpuDevice() -> string` names the active execution backend. The host backend reports `"host"`; device backends report device names (`"metal:0"`, `"opencl:0"`, and planned `"vulkan:0"`/`"webgpu:0"`; optional CUDA interoperability may report `"cuda:0"`). The planned `"auto"` selection resolves an available compute device by capability rather than vendor; `gpuDevice()` reports the resolved backend, never `"auto"`. A program can branch on it, and a benchmark can record which backend produced its numbers.
 
 Choosing a device is an *effect*, not a global switch — that is roadmap stage 5's `Gpu` effect, and it is the construct that makes Osprey's GPU story a language feature rather than a library. Selection becomes lexical, testable, and capability-checked exactly like every other effect:
 
@@ -372,7 +382,7 @@ Choosing a device is an *effect*, not a global switch — that is roadmap stage 
 // pure; scheduling is the effectful part, so scheduling is what handlers
 // control.
 fn scores() = {
-    handle Gpu { select => "cuda:0" }
+    handle Gpu { select => "auto" }
     embeddings |> gpuMap(normalize) |> gpuZipWith(query, dot)
 }
 // A test handler pins "host" and the same program runs deterministically
@@ -383,11 +393,11 @@ fn scores() = {
 (* Stage 5 surface (design, not yet implemented). *)
 scores () =
     handle Gpu
-        select => "cuda:0"
+        select => "auto"
     embeddings |> gpuMap normalize |> gpuZipWith (query, dot)
 ```
 
-Until stage 5 lands, programs run on the host backend and `gpuDevice()` truthfully reports it; nothing in the surface changes when real devices arrive — a handler simply gains the power to pick one.
+Until stage 5 lands, `OSPREY_GPU=host|auto|metal|opencl` is the experimental bootstrap selection for builtin matrix dispatch. Unset or `host` preserves the host oracle; `auto` selects Metal in a macOS runtime and OpenCL elsewhere. Explicit GPU selection never substitutes CPU matrix execution when device initialization, compilation, allocation, dispatch, or readback fails: `gpuMatMul` returns `Error`. `gpuDevice()` reports the resolved adapter and explicitly labels it as matrix-kernel execution; it does not imply general combinator offload. `OSPREY_GPU_TRACE=1` reports completed matrix commands. The planned `Gpu` handler will replace this bootstrap selection with lexical execution policy.
 
 ## Roadmap invariant — [GPU-ROADMAP]
 
