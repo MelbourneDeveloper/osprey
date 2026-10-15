@@ -154,6 +154,10 @@ FIB_OBJ_ARC += bin/gpu_opencl.o
 ifeq ($(UNAME_S),Linux)
 GPU_DEVICE_LIBS += -ldl -pthread
 endif
+# The iOS and Android archives carry no device adapter: their gpu_runtime is
+# compiled without the adapter flags, so every kernel and product runs the host
+# oracle and a device selection is the no-adapter error [GPU-BACKEND-DEVICE].
+MOBILE_RT_SRC ?= $(filter-out system_runtime $(basename $(notdir $(GPU_DEVICE_OBJ))),$(basename $(notdir $(FIB_OBJ))))
 NATIVE_RUNTIME_CONFIG ?= compiler/bin/.native-runtime-config
 NATIVE_RUNTIME_STAMP ?= compiler/bin/.native-runtime.stamp
 NATIVE_RUNTIME_INPUTS ?= $(filter-out compiler/runtime/%_tests.c compiler/runtime/test_http_length_validation.c compiler/runtime/test_openssl.c compiler/runtime/test_system_runtime.c compiler/runtime/test_file_runtime.c compiler/runtime/web_runtime.c,$(wildcard compiler/runtime/*.c)) $(wildcard compiler/runtime/*.h)

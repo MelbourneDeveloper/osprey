@@ -1,5 +1,5 @@
 # Android native app-logic archives. Platform networking stays in the host.
-ANDROID_RT_SRC ?= $(filter-out system_runtime,$(basename $(notdir $(FIB_OBJ))))
+ANDROID_RT_SRC ?= $(MOBILE_RT_SRC)
 # Which slice the corpus runs on: the attached device or emulator decides.
 ANDROID_GOLDEN_TARGET ?= android
 
