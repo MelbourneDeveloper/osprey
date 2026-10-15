@@ -3,7 +3,7 @@
 use crate::model::SymbolKey;
 use crate::purity::is_pure;
 use crate::resolve::{symbol_key, Context, Locals, Resolver};
-use osprey_ast::{Expr, MatchArm, Pattern, Stmt, TypeParam};
+use osprey_ast::{Expr, Stmt, TypeParam};
 
 fn locals_with_type_parameters(type_params: &[TypeParam]) -> Locals {
     Locals {
@@ -455,52 +455,6 @@ impl Resolver<'_> {
     ) {
         if let Some(key) = self.resolve_path(segments, context, None) {
             self.replace_symbol_expression(expression, &key, context);
-        }
-    }
-
-    fn rewrite_pattern_arms(
-        &mut self,
-        arms: &mut [MatchArm],
-        context: &Context,
-        locals: &mut Locals,
-    ) {
-        for arm in arms {
-            let saved = locals.clone();
-            self.rewrite_pattern(&mut arm.pattern, context, locals);
-            self.rewrite_expr(&mut arm.body, context, locals);
-            *locals = saved;
-        }
-    }
-
-    fn rewrite_pattern(&mut self, pattern: &mut Pattern, context: &Context, locals: &mut Locals) {
-        match pattern {
-            Pattern::Wildcard => {}
-            Pattern::Literal(value) => self.rewrite_expr(value, context, locals),
-            Pattern::Constructor {
-                name,
-                fields,
-                sub_patterns,
-            } => {
-                self.rewrite_constructor_name(name, context, "destructured");
-                locals.values.extend(fields.iter().cloned());
-                for nested in sub_patterns {
-                    self.rewrite_pattern(nested, context, locals);
-                }
-            }
-            Pattern::TypeAnnotated { name, ty } => {
-                self.rewrite_type(ty, context, locals);
-                let _ = locals.values.insert(name.clone());
-            }
-            Pattern::Structural { fields, .. } => locals
-                .values
-                .extend(fields.iter().map(|(_, binder)| binder.clone())),
-            Pattern::List { elements, rest } => {
-                for nested in elements {
-                    self.rewrite_pattern(nested, context, locals);
-                }
-                locals.values.extend(rest.iter().cloned());
-            }
-            Pattern::Binding(name) => locals.values.extend(std::iter::once(name.clone())),
         }
     }
 }

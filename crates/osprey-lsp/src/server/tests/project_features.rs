@@ -452,3 +452,47 @@ async fn nested_project_edits_refresh_every_project_that_includes_the_source(
     h.shutdown_and_exit().await;
     Ok(())
 }
+
+// [LSP-WORKSPACE] A source root two projects share (`source_roots = ["../lib",
+// "."]`) has no manifest of its own, and the manifest that does enclose it
+// does not list it. References from the shared file must still reach every
+// project that includes it; they used to come back from the open buffer alone.
+#[tokio::test]
+async fn references_from_a_shared_source_root_reach_every_project_that_includes_it(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let fixture = crate::test_support::ProjectFixture::new("osp")?;
+    let shared_source = "fn shared(x) = x\n";
+    let shared = fixture.root.join("lib/shared.osp");
+    std::fs::create_dir_all(fixture.root.join("lib"))?;
+    std::fs::write(&shared, shared_source)?;
+    let mut mains = Vec::new();
+    for name in ["app", "tool"] {
+        let dir = fixture.root.join(name);
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(
+            dir.join("osprey.toml"),
+            format!("[project]\nsource_roots = [\"../lib\", \".\"]\ndefault_namespace = \"{name}\"\nentry = \"main.osp\"\n"),
+        )?;
+        let main = dir.join("main.osp");
+        std::fs::write(&main, "fn main() = print(shared(\"x\"))\n")?;
+        mains.push(lspkit_server::uri::path_to_uri(&main)?);
+    }
+    let uri = lspkit_server::uri::path_to_uri(&shared)?;
+    let mut h = Harness::start();
+    let _ = h.open_at(&uri, shared_source).await;
+    let column = crate::test_support::col_of(shared_source, 0, "shared");
+    let reply = h
+        .request(
+            960,
+            "textDocument/references",
+            json!({"textDocument":{"uri":uri},"position":{"line":0,"character":column},"context":{"includeDeclaration":true}}),
+        )
+        .await;
+    let text = format!("{:?}", reply.result);
+    for main in &mains {
+        assert!(text.contains(main.as_str()), "{main}: {reply:?}");
+    }
+    assert!(text.contains(uri.as_str()), "{reply:?}");
+    h.shutdown_and_exit().await;
+    Ok(())
+}

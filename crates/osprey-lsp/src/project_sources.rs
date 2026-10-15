@@ -1,7 +1,7 @@
 //! Incremental syntax snapshots shared by diagnostics and editor features.
 //! Implements [LSP-WORKSPACE] and [LSP-PROJECT-BATCH].
 
-use crate::workspace::{file_path, project_root, same_path, uri_of, Sibling};
+use crate::workspace::{file_path, project_roots, same_path, uri_of, Sibling};
 use lspkit_vfs::{DocumentUri, Vfs};
 use osprey_project::{ProjectConfig, ProjectError, SourceFile};
 use osprey_syntax::Flavor;
@@ -33,6 +33,21 @@ impl Sources {
             errors: Vec::new(),
             incomplete: false,
         }
+    }
+
+    /// Take another project's files as siblings, keeping this project's
+    /// configuration and skipping files already present.
+    fn adopt(&mut self, other: Sources) {
+        for file in other.files {
+            if !self
+                .files
+                .iter()
+                .any(|known| same_path(&known.path, &file.path))
+            {
+                self.files.push(file);
+            }
+        }
+        self.incomplete |= other.incomplete;
     }
 
     pub(crate) fn view(&self, uri: &str) -> crate::workspace::View {
@@ -96,17 +111,22 @@ impl SourceCache {
     }
 
     pub(crate) fn affected(&self, document: &str, changed: &str) -> bool {
-        let root = file_path(document).and_then(|path| project_root(&path));
-        let Some((root, path)) = root.zip(file_path(changed)) else {
+        let Some((document, changed)) = file_path(document).zip(file_path(changed)) else {
             return false;
         };
-        project_root(&path).as_ref() == Some(&root)
-            || self
-                .projects
-                .get(&root)
-                .is_some_and(|members| members.config.contains_source(&root, &path))
+        let changed_roots = project_roots(&changed);
+        project_roots(&document).iter().any(|root| {
+            changed_roots.contains(root)
+                || self
+                    .projects
+                    .get(root)
+                    .is_some_and(|members| members.config.contains_source(root, &changed))
+        })
     }
 
+    /// The sources of every project the document belongs to, as one view: the
+    /// nearest project's configuration with the files of all of them, so a
+    /// shared source root sees every program that includes it.
     pub(crate) fn load(
         &mut self,
         uri: &str,
@@ -114,15 +134,20 @@ impl SourceCache {
         text: Option<&str>,
     ) -> Option<Result<Sources, Vec<ProjectError>>> {
         let current = file_path(uri)?;
-        let root = project_root(&current)?;
-        let inputs = match osprey_project::discover(&root) {
+        let roots = project_roots(&current);
+        let (first, rest) = roots.split_first()?;
+        let inputs = match osprey_project::discover(first) {
             Ok(inputs) => inputs,
             Err(errors) => return Some(Err(errors)),
         };
-        if !inputs.0.contains_source(&root, &current) {
-            return None;
+        let mut sources = self.project(first, &current, vfs, text, inputs);
+        for root in rest {
+            if let Ok(inputs) = osprey_project::discover(root) {
+                let more = self.project(root, &current, vfs, text, inputs);
+                sources.adopt(more);
+            }
         }
-        Some(Ok(self.project(&root, &current, vfs, text, inputs)))
+        Some(Ok(sources))
     }
 
     fn project(
@@ -266,7 +291,7 @@ fn live_text(path: &Path, current: &Path, text: Option<&str>, vfs: Option<&Vfs>)
 
 fn sibling(file: &SourceFile) -> Option<Sibling> {
     Some(Sibling {
-        uri: uri_of(&file.path)?,
+        uri: uri_of(&crate::workspace::lexical(&file.path))?,
         source: file.source.clone(),
         program: file.program.clone(),
         flavor: file.flavor,

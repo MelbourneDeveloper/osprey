@@ -20,15 +20,18 @@ The first line of each run names which handler answered: `gpt2 (124M) on host` o
 
 ## Declare the operations
 
-A tensor program needs a handful of operations: build a buffer from an index function, read an element, measure a buffer, combine two, reduce one, multiply two matrices, lift a host list, load a tensor from a checkpoint, and say who is answering. That list is the effect. `B` is the representation the handler picks; the model never names it.
+A tensor program needs a handful of operations: build a buffer from an index function, read an element, measure a buffer, combine two, reduce one, multiply two matrices, lift a host list, load a tensor from a checkpoint, and say who is answering. That list is the effect. `B` is the representation the handler picks; the model never names it. The two kernel shapes a model hands over get names of their own, so the signatures read as what they mean.
 
 ```osprey
+export type Kernel = fn(int) -> float
+export type Combine = fn(float, float) -> float
+
 export static effect Tensor<B> {
-    build: fn(int, fn(int) -> float) -> B
+    build: fn(int, Kernel) -> B
     get: fn(B, int) -> float
     length: fn(B) -> int
-    zipWith: fn(B, B, fn(float, float) -> float) -> B
-    reduce: fn(B, float, fn(float, float) -> float) -> float
+    zipWith: fn(B, B, Combine) -> B
+    reduce: fn(B, float, Combine) -> float
     matMul: fn(B, B, int, int, int) -> B
     fromList: fn(List<float>) -> B
     load: fn(string, string) -> B
@@ -37,12 +40,15 @@ export static effect Tensor<B> {
 ```
 
 ```osprey-ml
+export type Kernel = (int) -> float
+export type Combine = (float, float) -> float
+
 export static effect Tensor B
-    build : (int, (int) -> float) => B
+    build : (int, Kernel) => B
     get : (B, int) => float
     length : B => int
-    zipWith : (B, B, (float, float) -> float) => B
-    reduce : (B, float, (float, float) -> float) => float
+    zipWith : (B, B, Combine) => B
+    reduce : (B, float, Combine) => float
     matMul : (B, B, int, int, int) => B
     fromList : List<float> => B
     load : (string, string) => B

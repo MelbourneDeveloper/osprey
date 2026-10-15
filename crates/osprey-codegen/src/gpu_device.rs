@@ -3,7 +3,7 @@
 //!
 //! Every kernel [`crate::gpu_kernel`] lifts is also compiled to the shared
 //! device dialect (`compiler/runtime/gpu_f64.metal` and its two companions),
-//! which Metal and OpenCL compile at run time together with the binary64
+//! which Metal and `OpenCL` compile at run time together with the binary64
 //! library. The kernel's body is emitted once from its AST ([`emit`]); the
 //! entry point wrapping it depends on the combinator — one thread per element
 //! for `gpuMap`/`gpuZipWith`, one thread looping in order for `gpuFold` — and
@@ -15,8 +15,10 @@
 //! site declines by name: the runtime runs the host loop when the host is
 //! selected and aborts when a device is ([GPU-BACKEND-DEVICE]).
 
+mod dialect;
 mod emit;
 mod launch;
+mod loops;
 
 pub(crate) use launch::{declined, launch_fold, launch_map};
 
@@ -24,6 +26,7 @@ use crate::builder::Codegen;
 use crate::llty::LType;
 use osprey_ast::{Expr, Parameter, Program, Stmt};
 use std::collections::HashMap;
+use std::fmt::Write as _;
 
 /// The device dialect's spelling of a kernel's scalar word.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,7 +55,7 @@ impl Ty {
     }
 
     /// A raw buffer word as a value of this type.
-    fn from_word(self, word: &str) -> String {
+    fn value_of(self, word: &str) -> String {
         match self {
             Ty::Int => format!("(long)({word})"),
             Ty::Float => word.to_string(),
@@ -61,7 +64,7 @@ impl Ty {
     }
 
     /// A value of this type as the raw buffer word that stores it.
-    fn to_word(self, value: &str) -> String {
+    fn word_of(self, value: &str) -> String {
         match self {
             Ty::Float => value.to_string(),
             Ty::Int | Ty::Bool => format!("(ulong)({value})"),
@@ -151,7 +154,7 @@ pub(crate) fn record(cg: &mut Codegen, program: &Program) {
                 mutable: false,
                 value,
                 ..
-            } if emit::is_literal(value) => {
+            } if dialect::is_literal(value) => {
                 let _ = cg.device.constants.insert(name.clone(), value.clone());
             }
             _ => {}
@@ -163,7 +166,7 @@ pub(crate) fn record(cg: &mut Codegen, program: &Program) {
 /// value forgets an alias the name held before.
 pub(crate) fn note_alias(cg: &mut Codegen, name: &str, value: &Expr) {
     let _ = cg.device.aliases.remove(name);
-    if let Expr::Identifier(target) = emit::callee(value) {
+    if let Expr::Identifier(target) = dialect::callee(value) {
         let target = aliased(cg, target);
         let _ = cg.device.aliases.insert(name.to_string(), target);
     }
@@ -265,14 +268,15 @@ fn uniform_parameters(body: &DeviceBody) -> String {
     for (i, uniform) in body.uniforms.iter().enumerate() {
         match uniform {
             Uniform::Scalar(_) => {
-                text.push_str(&format!(", GPU_PARAM u{i} GPU_BUFFER({index})"));
+                let _ = write!(text, ", GPU_PARAM u{i} GPU_BUFFER({index})");
                 index += 1;
             }
             Uniform::Buffer => {
-                text.push_str(&format!(
+                let _ = write!(
+                    text,
                     ", GPU_GLOBAL const ulong *u{i} GPU_BUFFER({index}), GPU_PARAM u{i}_len GPU_BUFFER({})",
                     index + 1
-                ));
+                );
                 index += 2;
             }
         }
@@ -290,7 +294,7 @@ fn uniform_bindings(body: &DeviceBody) -> String {
             Uniform::Scalar(ty) => Some(format!(
                 "  {} u{i}_v = {};\n",
                 ty.spelling(),
-                ty.from_word(&format!("u{i}"))
+                ty.value_of(&format!("u{i}"))
             )),
             Uniform::Buffer => None,
         })
@@ -300,48 +304,50 @@ fn uniform_bindings(body: &DeviceBody) -> String {
 fn map_entry(text: &mut String, body: &DeviceBody, inputs: usize) {
     text.push_str("  ulong gid = GPU_INDEX;\n  if (gid >= count) return;\n");
     for (i, ty) in body.params.iter().enumerate().take(inputs) {
-        text.push_str(&format!(
-            "  {} p{i} = {};\n",
+        let _ = writeln!(
+            text,
+            "  {} p{i} = {};",
             ty.spelling(),
-            ty.from_word(&format!("in{i}[gid]"))
-        ));
+            ty.value_of(&format!("in{i}[gid]"))
+        );
     }
-    text.push_str(&indented(&body.lines, "  "));
-    text.push_str(&format!(
-        "  out[gid] = {};\n",
-        body.result_ty.to_word(&body.result)
-    ));
+    indented(text, &body.lines, "  ");
+    let _ = writeln!(
+        text,
+        "  out[gid] = {};",
+        body.result_ty.word_of(&body.result)
+    );
 }
 
 fn fold_entry(text: &mut String, body: &DeviceBody) {
-    let (acc, elem) = (
-        body.params[0],
-        body.params.get(1).copied().unwrap_or(Ty::Int),
-    );
-    text.push_str(&format!(
-        "  if (GPU_INDEX != 0) return;\n  {} acc = {};\n  for (ulong i = 0; i < count; i++) {{\n",
+    let acc = body.params.first().copied().unwrap_or(Ty::Int);
+    let elem = body.params.get(1).copied().unwrap_or(Ty::Int);
+    let _ = writeln!(
+        text,
+        "  if (GPU_INDEX != 0) return;\n  {} acc = {};\n  for (ulong i = 0; i < count; i++) {{",
         acc.spelling(),
-        acc.from_word("out[0]")
-    ));
-    text.push_str(&format!(
-        "    {} p0 = acc;\n    {} p1 = {};\n",
+        acc.value_of("out[0]")
+    );
+    let _ = writeln!(
+        text,
+        "    {} p0 = acc;\n    {} p1 = {};",
         acc.spelling(),
         elem.spelling(),
-        elem.from_word("in0[i]")
-    ));
-    text.push_str(&indented(&body.lines, "    "));
-    text.push_str(&format!(
-        "    acc = {};\n  }}\n  out[0] = {};\n",
+        elem.value_of("in0[i]")
+    );
+    indented(text, &body.lines, "    ");
+    let _ = writeln!(
+        text,
+        "    acc = {};\n  }}\n  out[0] = {};",
         body.result,
-        acc.to_word("acc")
-    ));
+        acc.word_of("acc")
+    );
 }
 
-fn indented(lines: &[String], indent: &str) -> String {
-    lines
-        .iter()
-        .map(|line| format!("{indent}{line}\n"))
-        .collect()
+fn indented(text: &mut String, lines: &[String], indent: &str) {
+    for line in lines {
+        let _ = writeln!(text, "{indent}{line}");
+    }
 }
 
 /// Emit the module constant holding every installed kernel, once lowering is

@@ -172,32 +172,28 @@ fn emit(cg: &mut Codegen, kernel: &DeviceKernel, uniforms: &[Value], site: &Site
     let kinds = cg.string_constant(&kernel.kinds).operand;
     let source = cg.emit_reg(format!("load i8*, i8** {SOURCE_POINTER}"));
     let words = uniform_words(cg, uniforms);
-    let in0 = site
-        .inputs
-        .first()
-        .map_or("null".to_string(), |v| v.operand.clone());
-    let in1 = site
-        .inputs
-        .get(1)
-        .map_or("null".to_string(), |v| v.operand.clone());
+    let (in0, in1) = (input(site, 0), input(site, 1));
     let sequential = if site.sequential { "1" } else { "0" };
-    cg.call(
-        "i32",
-        LAUNCH,
-        LAUNCH_PARAMS,
-        &[
-            &name,
-            &source,
-            &kinds,
-            &words,
-            &in0,
-            &in1,
-            site.out,
-            site.out_len,
-            site.count,
-            sequential,
-        ],
-    )
+    let operands = [
+        &name,
+        &source,
+        &kinds,
+        &words,
+        &in0,
+        &in1,
+        site.out,
+        site.out_len,
+        site.count,
+        sequential,
+    ];
+    cg.call("i32", LAUNCH, LAUNCH_PARAMS, &operands)
+}
+
+/// The `i`-th element buffer's handle, `null` when the launch has none there.
+fn input(site: &Site<'_>, i: usize) -> String {
+    site.inputs
+        .get(i)
+        .map_or_else(|| "null".to_string(), |value| value.operand.clone())
 }
 
 /// The uniforms boxed to words in launch order, as a pointer to the first.

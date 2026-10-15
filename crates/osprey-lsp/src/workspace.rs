@@ -28,6 +28,73 @@ pub(crate) fn project_root(file: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
+/// How many ancestors of a file are searched for neighbouring projects.
+const NEIGHBOUR_DEPTH: usize = 4;
+
+/// The roots of every project `file` belongs to, nearest first: the enclosing
+/// manifest's when its source roots list the file, else the neighbouring
+/// projects whose source roots reach it (`source_roots = ["../lib", "."]`),
+/// which live in the child directories of the file's ancestors. A shared
+/// source root has no manifest of its own, so a feature answering from the
+/// enclosing manifest alone saw an empty project. Implements [LSP-WORKSPACE].
+#[must_use]
+pub(crate) fn project_roots(file: &Path) -> Vec<PathBuf> {
+    // A manifest that cannot be read still owns the file: its errors are the
+    // diagnostics the editor must show.
+    if let Some(root) = project_root(file).filter(|root| includes(root, file) != Some(false)) {
+        return vec![root];
+    }
+    let mut roots: Vec<PathBuf> = file
+        .parent()
+        .into_iter()
+        .flat_map(Path::ancestors)
+        .take(NEIGHBOUR_DEPTH)
+        .flat_map(manifests_under)
+        .filter(|root| includes(root, file) == Some(true))
+        .collect();
+    roots.sort();
+    roots.dedup();
+    roots
+}
+
+/// Whether the project at `root` lists `file` among its sources; `None` when
+/// the project cannot be read at all.
+fn includes(root: &Path, file: &Path) -> Option<bool> {
+    osprey_project::discover(root)
+        .ok()
+        .map(|(config, _)| config.contains_source(root, file))
+}
+
+/// `path` without `.` components and with `..` folded, so two spellings of
+/// one file (`app/./main.osp`) produce one editor location; symlinks are left
+/// alone so the result still names the file as the editor opened it.
+#[must_use]
+pub(crate) fn lexical(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut normal = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir if normal.parent().is_some() => {
+                let _ = normal.pop();
+            }
+            other => normal.push(other.as_os_str()),
+        }
+    }
+    normal
+}
+
+/// The child directories of `directory` holding a manifest.
+fn manifests_under(directory: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(directory)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|child| child.join("osprey.toml").is_file())
+        .collect()
+}
+
 /// Whether two paths name the same file, resolving `..` and symlinks when the
 /// filesystem can. A path that cannot be canonicalized (an unsaved buffer)
 /// compares literally rather than erroring.

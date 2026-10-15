@@ -17,6 +17,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -94,6 +95,14 @@ static void uniform_argument(OspreyGpuDispatch *dispatch, char kind, int64_t wor
   } else {
     osprey_gpu_arg(dispatch, OSPREY_GPU_SCALAR, NULL, NULL, (uint64_t)word);
   }
+}
+
+// Broken-code quarantine: a failed load, product or kernel launch used to
+// become an empty buffer, and GPT-2 generated from fabricated zeros. Every
+// handler and launch site aborts through this instead.
+void *osprey_gpu_panic(const char *message) {
+  (void)fprintf(stderr, "GPU execution cannot continue: %s\n", message ? message : "unknown GPU failure");
+  abort();
 }
 
 static const char *fault_message(int64_t fault) {

@@ -105,7 +105,8 @@ fn every_launch_site_has_a_device_kernel_in_both_flavors() -> Result<(), String>
         sources.push(kernels);
     }
     assert_eq!(
-        sources[0], sources[1],
+        sources.first(),
+        sources.get(1),
         "twins must emit the same device source"
     );
     Ok(())

@@ -19,6 +19,7 @@ mod manifest;
 mod model;
 mod name_resolve;
 mod opaque;
+mod patterns;
 mod purity;
 mod resolve;
 mod rewrite;
@@ -238,14 +239,21 @@ pub fn assemble(
 }
 
 /// Module-bearing single files need resolver/flattening; ordinary scripts must
-/// bypass it so their existing IR and debugger symbol names remain exact.
+/// bypass it so their existing IR and debugger symbol names remain exact. A
+/// script declaring a type alias (`type Score = int`) needs it too: the
+/// resolver is what expands an alias into its representation, and a script
+/// that skipped it kept `Score` as a nominal type nothing could unify with.
 #[must_use]
 pub fn needs_assembly(program: &osprey_ast::Program) -> bool {
     use osprey_ast::Stmt;
     program.statements.iter().any(|statement| {
         matches!(
             statement,
-            Stmt::Namespace { .. } | Stmt::Module { .. } | Stmt::Import(_) | Stmt::Signature { .. }
+            Stmt::Namespace { .. }
+                | Stmt::Module { .. }
+                | Stmt::Import(_)
+                | Stmt::Signature { .. }
+                | Stmt::Type { alias: Some(_), .. }
         )
     })
 }

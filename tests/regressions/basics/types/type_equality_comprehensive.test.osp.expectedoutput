@@ -29,5 +29,6 @@ variance produce=4 make=9 items=2 admit=true slot=5 kept=4/7
 applied int=5 text=os nested=2 empty=0 pair=7
 === TYPE EQUALITY COMPLETE ===
 ok 1 - equivalent type shapes compose while union tags remain distinct
-1..1
-# tests=1 passed=1 failed=0 skipped=0
+ok 2 - transparent type aliases are their representation everywhere
+1..2
+# tests=2 passed=2 failed=0 skipped=0

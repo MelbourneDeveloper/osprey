@@ -278,3 +278,24 @@ typeEqualityCase () =
     ]
 
 test "equivalent type shapes compose while union tags remain distinct" (\() => exactArithmetic (typeEqualityCase))
+
+(** A transparent alias is its representation everywhere it is written: a
+    scalar, a function type and a record field alike unify with what they
+    abbreviate, in a plain script as in a project ([MODULES-OPAQUE-TYPES] is
+    the sealed form). Scripts used to skip the alias expansion and reported
+    `cannot unify int with Score`. *)
+type Score = int
+type Kernel = (int) -> float
+type Combine = (float, float) -> float
+type Scored =
+    label : string
+    score : Score
+applyKernel (k : Kernel, i) = k i
+combine (c : Combine, a, b) = c (a, b)
+aliasCase () = checkAll "transparent type aliases are their representation everywhere" [
+        (Scored(label = "a", score = 41)).score + 1 == 42,
+        applyKernel (\i => toFloat i * 0.5, 4) == 2.0,
+        combine (\(a, b) => a + b, 1.5, 2.0) == 3.5
+    ]
+
+test "transparent type aliases are their representation everywhere" (\() => exactArithmetic (aliasCase))

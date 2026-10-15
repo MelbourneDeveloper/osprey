@@ -298,6 +298,29 @@ suite("TextMate grammars", () => {
     assertScoped(discharged, "static", "storage.modifier.static");
   });
 
+  // The effect's own name followed `effect` with no rule of its own, so
+  // `Tensor` in `export static effect Tensor<B> {` fell through to the plain
+  // identifier colour while every other declared type is a type. The same
+  // name at the discharge (`handle static Tensor<GpuBuffer<float>>`) and in
+  // a qualified `handle Backends::Tensor` reads as that type too.
+  test("an effect's name is a type at its declaration and its discharge in both flavors", async () => {
+    for (const [scope, declaration, discharge] of [
+      ["source.osprey", "export static effect Tensor<B> {", "handle static Tensor<GpuBuffer<float>> {"],
+      ["source.osprey-ml", "export static effect Tensor B", "handle static Tensor<GpuBuffer<float>>"],
+    ] as const) {
+      const grammar = await grammarFor(scope);
+      const declared = tokenize(grammar, declaration);
+      assertScoped(declared, "effect", "keyword.declaration.effect");
+      assertScoped(declared, "static", "storage.modifier.static");
+      assertScoped(declared, "Tensor", "entity.name.type.effect");
+      const discharged = tokenize(grammar, discharge);
+      assertScoped(discharged, "handle", "keyword.control");
+      assertScoped(discharged, "Tensor", "entity.name.type.effect");
+      const qualified = tokenize(grammar, "handle Backends::Tensor");
+      assertScoped(qualified, "Backends::Tensor", "entity.name.type.effect");
+    }
+  });
+
   // The sweep. Every invariant here is one a reader can state without knowing
   // the grammar: an arrow is an arrow, a boolean is a boolean, and a word that
   // can only ever be a keyword is highlighted as one. Words that are BOTH
