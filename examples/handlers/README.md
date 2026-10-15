@@ -132,13 +132,17 @@ python3 examples/handlers/run.py all --demo staged-rows --check
 ```
 
 The [Default](staged-rows.osp) and [ML](staged-rows.ospml) programs both print
-`41 42`. Each calls the same `relay` and `work` functions. The first call
+`41 42`, followed by a reactive dashboard update. Each calls the same `relay` and `work` functions. The first call
 interprets `Read.value` with `handle static Read` during compilation; the
 second installs a callable `Read` handler at runtime. The test suite runs both
 programs under the default, GC and ARC backends. This demonstrates one
 closed-program staging path through an open callback row; it does not establish
 independently published row-polymorphic signatures or dynamic control support
 on wasm.
+
+The same programs then derive signal dependencies, cache counter/cursor/status views, and refresh only affected views. Changing count rebuilds counter and status; changing cursor rebuilds cursor and status. An idle update retains every cached value and revision. The [reactive signals guide](../../website/src/docs/reactive-signals.md) describes the three cache operations.
+
+A checkout example derives an immutable quote from quantity and price signals. Quantity changes cross the free-delivery threshold; a price change updates both the total and delivery decision. An idle update retains the previous quote while earlier snapshots keep their original totals.
 
 ## Reproducibility
 

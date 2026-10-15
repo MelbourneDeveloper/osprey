@@ -372,32 +372,71 @@ Direct builtin matrix execution is implemented through Metal and OpenCL. Both ad
 
 ### Device selection — [GPU-DEVICE]
 
-`gpuDevice() -> string` names the active execution backend. The host backend reports `"host"`; device backends report device names (`"metal:0"`, `"opencl:0"`, and planned `"vulkan:0"`/`"webgpu:0"`; optional CUDA interoperability may report `"cuda:0"`). The planned `"auto"` selection resolves an available compute device by capability rather than vendor; `gpuDevice()` reports the resolved backend, never `"auto"`. A program can branch on it, and a benchmark can record which backend produced its numbers.
+`gpuDevice() -> string` names the active execution backend. The host backend reports `"host"`; device backends report device names (`"metal:0"`, `"opencl:0"`, and planned `"vulkan:0"`/`"webgpu:0"`; optional CUDA interoperability may report `"cuda:0"`). The `"auto"` selection resolves an available compute device by capability rather than vendor; `gpuDevice()` reports the resolved backend, never `"auto"`. A program can branch on it, and a benchmark can record which backend produced its numbers.
 
-Choosing a device is an *effect*, not a global switch — that is roadmap stage 5's `Gpu` effect, and it is the construct that makes Osprey's GPU story a language feature rather than a library. Selection becomes lexical, testable, and capability-checked exactly like every other effect:
+Choosing where arithmetic runs is an *effect*, not a global switch. A program declares the operations it needs as a static effect, writes its arithmetic against them, and a handler decides how each operation executes; the compiler discharges the handler before the program runs ([STAGE-HANDLE-STATIC], [STAGE-BACKEND]). This is the construct that makes Osprey's GPU story a language feature rather than a library: selection is lexical, testable and capability-checked exactly like every other effect, and the same source runs under a handler over host lists or a handler over the GPU surface with no change.
 
 ```osprey
-// Stage 5 surface (design, not yet implemented): the handler chooses the
-// execution strategy for everything the region offloads. Kernels stay
-// pure; scheduling is the effectful part, so scheduling is what handlers
-// control.
-fn scores() = {
-    handle Gpu { select => "auto" }
-    embeddings |> gpuMap(normalize) |> gpuZipWith(query, dot)
+static effect Tensor<B> {
+    build: fn(int, fn(int) -> float) -> B
+    get: fn(B, int) -> float
+    device: fn() -> string
 }
-// A test handler pins "host" and the same program runs deterministically
-// in CI with no GPU attached.
+
+fn onLists(work) = {
+    handle static Tensor<List<float>> {
+        build n f => range(0, n) |> map(f) |> toList()
+        get b i => listGet(b, i) ?: 0.0
+        device => "lists"
+    }
+    work()
+}
+
+fn onGpu(work) = {
+    handle static Tensor<GpuBuffer<float>> {
+        build n f => gpuIota(n) |> gpuMap(f)
+        get b i => gpuGet(b, i) ?: 0.0
+        device => gpuDevice()
+    }
+    work()
+}
+
+// The model never names a buffer type; the handler installed around it does.
+fn halves(n) = perform Tensor.build(n, fn(i) => toFloat(i) * 1.5)
+fn report() = "${perform Tensor.device()}: ${perform Tensor.get(halves(4), 3)}"
+
+print("${onLists(report)} / ${onGpu(report)}")  // lists: 4.5 / host: 4.5
 ```
 
 ```osprey-ml
-(* Stage 5 surface (design, not yet implemented). *)
-scores () =
-    handle Gpu
-        select => "auto"
-    embeddings |> gpuMap normalize |> gpuZipWith (query, dot)
+static effect Tensor B
+    build : (int, (int) -> float) => B
+    get : (B, int) => float
+    device : Unit => string
+
+onLists work =
+    handle static Tensor<List<float>>
+        build n f => range 0 n |> map f |> toList
+        get b i => listGet b i ?: 0.0
+        device => "lists"
+    work ()
+
+onGpu work =
+    handle static Tensor<GpuBuffer<float>>
+        build n f => gpuIota n |> gpuMap f
+        get b i => gpuGet b i ?: 0.0
+        device => gpuDevice ()
+    work ()
+
+halves n = perform Tensor.build n (\i => toFloat i * 1.5)
+report () = "${perform Tensor.device ()}: ${perform Tensor.get (halves 4) 3}"
+
+print "${onLists report} / ${onGpu report}"  // lists: 4.5 / host: 4.5
 ```
 
-Until stage 5 lands, `OSPREY_GPU=host|auto|metal|opencl` is the experimental bootstrap selection for builtin matrix dispatch. Unset or `host` preserves the host oracle; `auto` selects Metal in a macOS runtime and OpenCL elsewhere. Explicit GPU selection never substitutes CPU matrix execution when device initialization, compilation, allocation, dispatch, or readback fails: `gpuMatMul` returns `Error`. `gpuDevice()` reports the resolved adapter and explicitly labels it as matrix-kernel execution; it does not imply general combinator offload. `OSPREY_GPU_TRACE=1` reports completed matrix commands. The planned `Gpu` handler will replace this bootstrap selection with lexical execution policy.
+A static handler must answer every operation of its effect ([STAGE-STATIC-TOTAL]); an instantiation never answers another ([EFFECTS-GENERIC-INSTANTIATION]); a callback an arm forwards to `gpuMap`, `gpuZipWith` or `gpuFold` is held to [GPU-KERNEL-PURE], and one that performs a runtime effect is rejected by name. The reference program is GPT-2 (`examples/gpt2`): generation and a training step written once against a nine-operation `Tensor<B>` effect, run by `onLists` and `onGpu` with identical tokens, loss and gradient sums. `gpuDevice()` reports which backend the GPU-surface handler is executing on and the model prints that answer on its first line, so a run never claims hardware it did not use. A device backend changes the answer and nothing else ([GPU-BACKEND-DEVICE]).
+
+Within the GPU-surface handler, `OSPREY_GPU=host|auto|metal|opencl` is the experimental bootstrap selection for builtin matrix dispatch. Unset or `host` preserves the host oracle; `auto` selects Metal in a macOS runtime and OpenCL elsewhere. Explicit GPU selection never substitutes CPU matrix execution when device initialization, compilation, allocation, dispatch, or readback fails: `gpuMatMul` returns `Error`, and an unknown selection is an `Error` naming the expected backends. `gpuDevice()` reports the resolved adapter and explicitly labels it as matrix-kernel execution (`metal:0 (<device>; matrix kernels)`); it does not imply general combinator offload. `OSPREY_GPU_TRACE=1` reports completed matrix commands. A handler that selects the device lexically will replace this bootstrap selection.
 
 ## Roadmap invariant — [GPU-ROADMAP]
 

@@ -176,7 +176,7 @@ fn member_items(receiver: &str, program: &Program, line: u32) -> Vec<CompletionI
 /// the same defect as the old `-> Unit` fallback, one surface along
 /// ([TYPE-RENDER-HOLES]).
 fn inferred_fields(symbol: &SymbolInfo, types: &ProgramTypes) -> Option<Vec<CompletionItem>> {
-    let Type::Record { name, fields } = types.let_type(symbol.position)? else {
+    let Type::Record { name, fields } = types.let_type(None, symbol.position)? else {
         return None;
     };
     if fields.is_empty() {
@@ -227,7 +227,7 @@ fn receiver_type_name(symbol: &SymbolInfo, types: &ProgramTypes) -> Option<Strin
     if !symbol.ty.is_empty() {
         return Some(bare_type_name(&symbol.ty));
     }
-    match types.let_type(symbol.position)? {
+    match types.let_type(None, symbol.position)? {
         Type::Record { name, .. } | Type::Con { name, .. } | Type::Union { name, .. } => {
             Some(name.clone())
         }

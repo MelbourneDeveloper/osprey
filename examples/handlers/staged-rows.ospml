@@ -14,3 +14,62 @@ precomputed =
 runtime = handler Read
     value => 42
 print "${precomputed} ${runtime (\() => relay work)}"
+
+static effect Signal T
+    read : Unit => T
+type Count =
+    value : int
+type Cursor =
+    at : int
+count () = (perform Signal<Count>.read ()).value
+cursor () = (perform Signal<Cursor>.read ()).at
+counterView () = "counter=${count ()}"
+cursorView () = "cursor=${cursor ()}"
+statusView () = "${count ()}/${cursor ()}"
+views n at =
+    handle static Signal<Count>
+        read => Count(value = n)
+    handle static Signal<Cursor>
+        read => Cursor(at = at)
+    { counter = signalSnapshot counterView, cursor = signalSnapshot cursorView, status = signalSnapshot statusView }
+refreshViews old changed n at =
+    handle static Signal<Count>
+        read => Count(value = n)
+    handle static Signal<Cursor>
+        read => Cursor(at = at)
+    { counter = signalRefresh old.counter changed counterView, cursor = signalRefresh old.cursor changed cursorView, status = signalRefresh old.status changed statusView }
+describe frame = "${frame.counter.value} ${frame.cursor.value} status=${frame.status.value} builds=${frame.counter.revision}/${frame.cursor.revision}/${frame.status.revision}"
+first = views 1 2
+next = refreshViews first (signalDependencies count) 7 2
+last = refreshViews next (signalDependencies cursor) 7 4
+idle = refreshViews last [] 7 4
+print "${describe next}\n${describe last}\nidle=${idle.status.value} builds=${idle.status.revision}"
+
+type Quantity =
+    items : int
+type Price =
+    cents : int
+quantity () = (perform Signal<Quantity>.read ()).items
+unitPrice () = (perform Signal<Price>.read ()).cents
+lineTotal () = satMul (quantity ()) (unitPrice ())
+delivery () = match lineTotal () >= 2500
+    true => "free"
+    false => "paid"
+cartQuote () = { total = lineTotal (), delivery = delivery () }
+cartSnapshot items cents =
+    handle static Signal<Quantity>
+        read => Quantity(items = items)
+    handle static Signal<Price>
+        read => Price(cents = cents)
+    signalSnapshot cartQuote
+refreshCart old changed items cents =
+    handle static Signal<Quantity>
+        read => Quantity(items = items)
+    handle static Signal<Price>
+        read => Price(cents = cents)
+    signalRefresh old changed cartQuote
+cart = cartSnapshot 2 500
+bulk = refreshCart cart (signalDependencies quantity) 5 500
+sale = refreshCart bulk (signalDependencies unitPrice) 5 400
+retained = refreshCart sale [] 99 99
+print "cart=${cart.value.total}->${bulk.value.total}->${sale.value.total} delivery=${bulk.value.delivery}->${sale.value.delivery} idle=${retained.value.total}@${retained.revision}"

@@ -63,10 +63,7 @@ static int completed(id<MTLCommandBuffer> command, const GpuShape *shape) {
     return -1;
   }
   uint64_t count = atomic_fetch_add(&gpu_completed, 1) + 1;
-  if (count == 1 || getenv("OSPREY_GPU_TRACE"))
-    (void)fprintf(stderr, "[gpu] %s: completed dispatch %llu (%llu x %llu x %llu)\n",
-        gpu_name, (unsigned long long)count, (unsigned long long)shape->rows,
-        (unsigned long long)shape->inner, (unsigned long long)shape->cols);
+  osprey_gpu_report(gpu_name, count, (const uint64_t[3]){shape->rows, shape->inner, shape->cols});
   return 1;
 }
 

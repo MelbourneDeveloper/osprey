@@ -28,7 +28,8 @@ pub(crate) use construct::gen_constructor;
 /// fields… }` heap block as a named record, with a synthetic layout registered so
 /// field access can recover the slots.
 pub(crate) fn gen_object(cg: &mut Codegen, fields: &[FieldAssignment]) -> Result<Value> {
-    let vals = object_field_values(cg, fields, &field_names(fields))?;
+    let mut vals = object_field_values(cg, fields, &field_names(fields))?;
+    vals.sort_by(|(left, _), (right, _)| left.cmp(right));
     let owner = cg.register_obj_layout(layout_of(&vals));
     Ok(build_tagged_object(cg, owner, &vals))
 }
@@ -243,6 +244,16 @@ fn derived_slots(
     else {
         return None;
     };
+    if let osprey_types::Type::Record { name, fields } = inferred {
+        if name.is_empty() {
+            return Some(
+                fields
+                    .iter()
+                    .map(|(field, ty)| (field.clone(), fields::shape_of(cg, ty)))
+                    .collect(),
+            );
+        }
+    }
     let declared = cg.ctor_layout(name)?;
     declared
         .fields

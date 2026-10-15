@@ -230,7 +230,7 @@ pub(crate) fn comma_join<T>(xs: &[T], f: impl Fn(&T) -> String) -> String {
 
 /// An SSA value: a textual operand (`%3`, a literal like `42`, or a `getelementptr`
 /// result) paired with its LLVM type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Value {
     /// The textual LLVM operand: a register (`%3`), a literal (`42`), or an
     /// instruction result.

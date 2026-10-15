@@ -1,0 +1,70 @@
+// The tensor dialect GPT-2 is written in, and the two interpretations that run
+// it. `gpt2::Model` performs `Tensor` operations and never names a buffer type;
+// `onLists` answers every operation with host list code and `onGpu` with the
+// GPU surface. The handler a program installs decides
+// where the arithmetic runs, and both must agree with examples/gpt2/reference.py
+// bit for bit, because every arm accumulates in the same k order from 0.0.
+// Implements [STAGE-BACKEND], [GPU-DEVICE].
+
+namespace gpt2;
+
+module Backends {
+    extern fn osprey_gpu_panic(message: string) -> GpuBuffer<float>
+
+    /// Broken-code quarantine: a failed load or product used to become an empty
+    /// tensor, and the model generated from fabricated zeros. It aborts instead.
+    fn orAbort(result) = match result {
+        Success { value } => value
+        Error { message } => osprey_gpu_panic(message)
+    }
+
+    /// The operations a model needs: build a buffer from an index function,
+    /// read and measure one, combine two, reduce one, multiply two matrices,
+    /// lift a host list, load a tensor from a safetensors file, and say which
+    /// interpretation is answering. `B` is the representation the handler picks.
+    export static effect Tensor<B> {
+        build: fn(int, fn(int) -> float) -> B
+        get: fn(B, int) -> float
+        length: fn(B) -> int
+        zipWith: fn(B, B, fn(float, float) -> float) -> B
+        reduce: fn(B, float, fn(float, float) -> float) -> float
+        matMul: fn(B, B, int, int, int) -> B
+        fromList: fn(List<float>) -> B
+        load: fn(string, string) -> B
+        device: fn() -> string
+    }
+
+    /// Host lists, loaded through the GPU surface's safetensors reader.
+    export fn onLists(work) = {
+        handle static Tensor<List<float>> {
+            build n f => range(0, n) |> map(f) |> toList()
+            get b i => listGet(b, i) ?: 0.0
+            length b => listLength(b)
+            zipWith a b f => range(0, listLength(a)) |> map(fn(i) => f(listGet(a, i) ?: 0.0, listGet(b, i) ?: 0.0)) |> toList()
+            reduce b seed f => range(0, listLength(b)) |> fold(seed, fn(a, i) => f(a, listGet(b, i) ?: 0.0))
+            matMul a b rows inner cols => range(0, rows * cols) |> map(fn(i) => range(0, inner) |> fold(0.0, fn(acc, k) => acc + (listGet(a, intDiv(i, cols) * inner + k) ?: 0.0) * (listGet(b, k * cols + i % cols) ?: 0.0))) |> toList()
+            fromList xs => xs
+            load path name => fromGpu(orAbort(gpuLoadTensor(path, name)))
+            device => "lists"
+        }
+        work()
+    }
+
+    /// GPU buffers: each operation is a kernel, a product or a loader of the
+    /// GPU surface, and `device` reports which backend executes them. Products
+    /// dispatch to Metal or OpenCL when `OSPREY_GPU` selects a device.
+    export fn onGpu(work) = {
+        handle static Tensor<GpuBuffer<float>> {
+            build n f => gpuIota(n) |> gpuMap(f)
+            get b i => gpuGet(b, i) ?: 0.0
+            length b => gpuLength(b)
+            zipWith a b f => gpuZipWith(a, b, f)
+            reduce b seed f => b |> gpuFold(seed, f)
+            matMul a b rows inner cols => orAbort(gpuMatMul(a, b, rows, inner, cols))
+            fromList xs => toGpu(xs)
+            load path name => orAbort(gpuLoadTensor(path, name))
+            device => gpuDevice()
+        }
+        work()
+    }
+}

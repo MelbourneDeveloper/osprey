@@ -15,6 +15,7 @@
       "items": [
         { "text": "Documentation home", "url": "/docs/" },
         { "text": "Algebraic effects", "url": "/docs/effects/" },
+        { "text": "One model, two backends", "url": "/docs/one-model-two-backends/" },
         { "text": "Installation", "url": "/docs/installation/" },
         { "text": "My First App", "url": "/docs/my-first-app/" }
       ]

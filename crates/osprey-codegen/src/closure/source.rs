@@ -39,7 +39,7 @@ pub(crate) fn lambda_value(
 fn lambda_type(cg: &Codegen, position: Option<Position>) -> Result<osprey_types::Type> {
     let inferred = cg
         .prog
-        .lambda_type(position)
+        .lambda_type(cg.source_function.as_deref(), position)
         .ok_or_else(|| CodegenError::invalid("lambda has no inferred function type"))?;
     if crate::types::fn_value_concrete(inferred) {
         Ok(inferred.clone())

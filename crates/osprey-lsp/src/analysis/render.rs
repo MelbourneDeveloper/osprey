@@ -183,7 +183,7 @@ pub(crate) fn fill_inferred(sym: &mut SymbolInfo, types: &osprey_types::ProgramT
         sym.effect_requirements = types.function_effects.get(&sym.name).cloned();
     }
     if sym.kind == SymbolKind::Variable && sym.ty.is_empty() {
-        if let Some(inferred) = types.let_type(sym.position).and_then(shown) {
+        if let Some(inferred) = types.let_type(None, sym.position).and_then(shown) {
             sym.ty = inferred;
         }
     }

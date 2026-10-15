@@ -35,7 +35,9 @@ pub(crate) fn type_expr_to_type(te: &TypeExpr, params: &HashMap<String, Type>) -
         return var.clone();
     }
     if te.generic_params.is_empty() {
-        normalize_named(&te.name)
+        // A name the lowering carried as text — `fn(float, float) -> float`
+        // from an effect operation's written signature — parses as written.
+        type_name_to_type(&te.name, params)
     } else {
         let args = te
             .generic_params

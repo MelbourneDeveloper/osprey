@@ -64,7 +64,8 @@ pub(super) fn eager_callback_slots(name: &str) -> &'static [usize] {
     match name {
         "test" | "forEach" | "forEachList" | "httpListen" | "spawnProcess" | "mapList"
         | "filterList" => &[1],
-        "fold" | "foldList" => &[2],
+        "fold" | "foldList" | "signalRefresh" => &[2],
+        "signalSnapshot" => &[0],
         _ => &[],
     }
 }
@@ -93,4 +94,18 @@ pub(super) fn requirement_name(requirement: &Requirement) -> String {
             requirement.operation
         )
     }
+}
+
+// Signal intrinsics share positional and named callback resolution.
+pub(super) fn signal_argument<'a>(
+    slot: usize,
+    arguments: &'a [Expr],
+    named: &'a [osprey_ast::NamedArgument],
+) -> Option<&'a Expr> {
+    arguments.get(slot).or_else(|| {
+        named
+            .iter()
+            .find(|argument| argument.name == "work")
+            .map(|argument| &argument.value)
+    })
 }

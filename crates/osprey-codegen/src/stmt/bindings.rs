@@ -145,7 +145,7 @@ fn binding_result_inner(
     declaration: bool,
 ) -> Option<LType> {
     cg.prog
-        .let_type(position)
+        .let_type(cg.source_function.as_deref(), position)
         .and_then(crate::types::result_inner)
         .or_else(|| {
             if declaration {
@@ -172,7 +172,7 @@ fn generate_initializer(
 fn infer_binding(cg: &mut Codegen, position: Option<Position>, mut bound: Value) -> Result<Value> {
     let Some(ty) = cg
         .prog
-        .let_type(position)
+        .let_type(cg.source_function.as_deref(), position)
         .filter(|ty| !osprey_types::has_type_var(ty))
         .cloned()
     else {
@@ -211,7 +211,7 @@ fn finish_binding(cg: &mut Codegen, name: &str, source: &Expr, value: Value, dec
 /// Re-tag a bound handle with the element ABI inference resolved for it. Not a
 /// handle, or a handle whose element is still polymorphic: unchanged.
 fn tag_handle_element(cg: &Codegen, position: Option<Position>, value: Value) -> Value {
-    let Some(ty) = cg.prog.let_type(position) else {
+    let Some(ty) = cg.prog.let_type(cg.source_function.as_deref(), position) else {
         return value;
     };
     let Some(sig) = crate::builder::FiberSig::of(&cg.prog, ty) else {

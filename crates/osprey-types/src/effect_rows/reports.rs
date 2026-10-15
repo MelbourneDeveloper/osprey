@@ -21,13 +21,21 @@ pub(super) fn collect(
         .collect()
 }
 
-fn report(instances: &Instances, row: Summary) -> EffectRequirements {
+pub(super) fn report(instances: &Instances, row: Summary) -> EffectRequirements {
     let operations: std::collections::BTreeSet<_> = row
         .required
         .iter()
         .map(|requirement| operation_name(instances, requirement))
         .collect();
+    let unresolved_instances = row.required.iter().any(|requirement| {
+        !requirement.arguments.is_empty()
+            && instances
+                .argument_types
+                .get(&requirement.arguments)
+                .is_none_or(|arguments| arguments.iter().any(crate::has_type_var))
+    });
     EffectRequirements {
+        unresolved_instances,
         operations: operations.into_iter().collect(),
         runtime_builtins: row.runtime_builtins.into_iter().collect(),
         unresolved_callbacks: row.unresolved_dynamic_call || !row.parameter_uses.is_empty(),
@@ -47,5 +55,6 @@ fn operation_name(instances: &Instances, requirement: &Requirement) -> String {
 #[derive(Default)]
 pub(crate) struct CheckedEffects {
     pub(crate) errors: Vec<crate::TypeError>,
+    pub(crate) signal_queries: HashMap<usize, EffectRequirements>,
     pub(crate) functions: HashMap<String, EffectRequirements>,
 }

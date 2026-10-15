@@ -70,6 +70,7 @@ type HandlerCandidates = HashMap<(u32, u32), BTreeSet<Vec<String>>>;
 
 #[derive(Default)]
 pub(crate) struct Instances {
+    pub(crate) signal_queries: RefCell<HashMap<usize, crate::EffectRequirements>>,
     pub(crate) expression_types: RefCell<HashMap<usize, crate::ty::Type>>,
     pub(crate) methods: crate::methods::Targets,
     /// A type error already proved a call target is not callable. It cannot
@@ -253,6 +254,11 @@ struct CallableEnv {
     /// Discharge rewrites those requests away before the residual program
     /// exists, so they are never dynamic requirements of the code they sit in.
     static_answers: HashSet<(String, String)>,
+    /// Parameters of a compile-time arm whose operands no lexical perform
+    /// supplies. Discharge binds each to the actual operand, so a call or a
+    /// kernel through one is judged on the residual program rather than
+    /// failing closed here ([STAGE-LOWER-ORDER-PHASE], [GPU-KERNEL-PURE]).
+    deferred_arm_parameters: HashSet<String>,
 }
 
 struct Analyzer<'a> {

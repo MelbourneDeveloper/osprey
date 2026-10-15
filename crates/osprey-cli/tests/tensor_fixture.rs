@@ -86,7 +86,7 @@ fn gpt2_failure_project() -> Option<PathBuf> {
     let model = serde_json::to_string(&model.to_string_lossy()).ok()?;
     let config = format!("[project]\nname = \"failure\"\nsource_roots = [{model}, \".\"]\ndefault_namespace = \"failure\"\nentry = \"main.osp\"\n");
     std::fs::write(directory.join("osprey.toml"), config).ok()?;
-    let source = "import gpt2::Model\nfn main() = { let out = Model::product(toGpu([1.0]), toGpu([1.0]), 1, 1, 1)\nprint(gpuLength(out)) }\n";
+    let source = "import gpt2::Model\nimport gpt2::Backends\nfn main() = Backends::onGpu(fn() => print(gpuLength(Model::product(toGpu([1.0]), toGpu([1.0]), 1, 1, 1))))\n";
     std::fs::write(directory.join("main.osp"), source).ok()?;
     Some(directory)
 }

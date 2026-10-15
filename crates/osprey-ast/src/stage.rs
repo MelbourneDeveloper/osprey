@@ -16,11 +16,11 @@
 //! `osprey_types::lower_static_checked`.
 
 use crate::{
-    effect_name, walk_program, AstVisitor, Expr, HandlerArm, OperationMode, Position, Program, Stmt,
+    effect_name, walk_program, AstVisitor, EffectOperation, Expr, HandlerArm, OperationMode,
+    Position, Program, Stmt, TypeExpr,
 };
 use std::collections::BTreeMap;
 
-pub use crate::stage_rows::dependencies;
 pub(crate) use crate::stage_rows::{body_requirements, runtime_requirements};
 
 /// The marker that declares a compile-time stage, spelled once so both flavors'
@@ -121,7 +121,39 @@ pub(crate) struct DeclaredOperation {
     /// Whether `control` was written. A control operation has a continuation,
     /// which is exactly what a static interpretation cannot provide.
     mode: OperationMode,
+    /// Each parameter's written type when it names no type parameter of the
+    /// effect — the part of the operation's contract that holds under every
+    /// instantiation. A static rewrite keeps it on the bound argument, so a
+    /// callback checked against `fn(float, float) -> float` stays that type in
+    /// the residual instead of being re-inferred polymorphic
+    /// ([STAGE-RESIDUE]).
+    parameters: Vec<Option<TypeExpr>>,
     position: Option<Position>,
+}
+
+impl EffectDecl {
+    /// The closed written parameter types of `operation`, by position; empty
+    /// for an operation this effect does not declare.
+    pub(crate) fn parameter_types(&self, operation: &str) -> &[Option<TypeExpr>] {
+        self.operations
+            .iter()
+            .find(|declared| declared.name == operation)
+            .map_or(&[], |declared| declared.parameters.as_slice())
+    }
+}
+
+/// The written parameter types of `op` that mention none of `type_params`.
+/// Implements [STAGE-BACKEND-CONTRACT].
+fn closed_parameter_types(op: &EffectOperation, type_params: &[String]) -> Vec<Option<TypeExpr>> {
+    effect_name::signature_parameters(&op.ty)
+        .into_iter()
+        .map(|text| {
+            let open = text
+                .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .any(|token| type_params.iter().any(|param| param == token));
+            (!open).then(|| TypeExpr::named(text))
+        })
+        .collect()
 }
 
 /// Every violated staging rule in `program`, without rewriting it: a modifier
@@ -184,6 +216,7 @@ pub(crate) fn effect_declarations(program: &Program) -> BTreeMap<String, EffectD
                 ..
             } = statement
             {
+                let names: Vec<String> = type_params.iter().map(|p| p.name.clone()).collect();
                 let declared = EffectDecl {
                     stage: *stage,
                     type_parameters: type_params.len(),
@@ -192,6 +225,7 @@ pub(crate) fn effect_declarations(program: &Program) -> BTreeMap<String, EffectD
                         .map(|op| DeclaredOperation {
                             name: op.name.clone(),
                             mode: op.mode,
+                            parameters: closed_parameter_types(op, &names),
                             position: op.position,
                         })
                         .collect(),

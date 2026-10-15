@@ -65,6 +65,9 @@ int main(void) {
   int64_t a = 1, out = 99;
   assert(osprey_gpu_device_matmul(&a, &a, &out, 1, 1, 1) == -1 && out == 99);
   assert(strstr(osp_io_error(), "unknown backend") != NULL);
-  puts("[ok] GPU selection: host, auto, Metal, OpenCL, missing adapter and no silent CPU fallback");
+  assert(unsetenv("OSPREY_GPU_TRACE") == 0 && osprey_gpu_traced(1) && !osprey_gpu_traced(2));
+  assert(setenv("OSPREY_GPU_TRACE", "0", 1) == 0 && !osprey_gpu_traced(2));
+  assert(setenv("OSPREY_GPU_TRACE", "1", 1) == 0 && osprey_gpu_traced(2));
+  puts("[ok] GPU selection: host, auto, Metal, OpenCL, missing adapter, trace switch and no silent CPU fallback");
   return 0;
 }

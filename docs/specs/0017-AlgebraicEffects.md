@@ -1,13 +1,8 @@
 # Algebraic Effects
 
-Effects let application code ask for work without fixing its implementation.
-A handler decides how that work happens. Use them to manage logging, storage,
-configuration, retries and other interactions at a clear application boundary.
-The compiler tracks the required operations and rejects an application that
-has not provided them.
+Effects let application code ask for work without fixing its implementation. A handler decides how that work happens. Use them to manage logging, storage, configuration, retries and other interactions at a clear application boundary. The compiler tracks the required operations and rejects an application that has not provided them.
 
-This is the single normative effects contract for both flavors, including
-staging and continuations. Delivery status and independent comparisons belong
+This is the single normative effects contract for both flavors, including staging and continuations. Delivery status and independent comparisons belong
 to [plan 0016](../plans/0016-algebraic-effects-and-handlers.md); the
 [runnable guide](../../examples/handlers/README.md) identifies what the current
 prototype can execute.
@@ -409,9 +404,13 @@ A one-shot platform stack-switch primitive does not prohibit multi-shot implemen
 
 `[STAGE-SIGNALS-REBUILD]` A reactive consumer invalidates computations whose may-read sets contain a changed signal. Conservative widening may cause extra work; missing a possible dependency is a correctness defect. Dependency analysis alone does not implement scheduling, change propagation or a UI runtime.
 
+`[STAGE-SIGNALS-CACHE]` `signalDependencies(work)` supplies the sorted may-read identities without invoking the callback; `signalSnapshot(work)` invokes it once and returns an immutable `{ dependencies, value, revision }` snapshot, starting at revision 1. `signalRefresh(cached, changed, work)` rebuilds once when a dependency changed, its may-read set differs, or dependencies or changes contain `<unknown>`; otherwise it retains the existing snapshot without invoking `work`. A rebuild replaces the value and increments revision; it never mutates an older snapshot. Arguments evaluate once, left to right. Callback creation retains its ordinary effects; cached callable payloads retain their latent requirements. Updates are synchronous and callers supply all changed identities for a batch. See the [reactive signals guide](../../website/src/docs/reactive-signals.md).
+
 ## Per-region backends — [STAGE-BACKEND]
 
 `[STAGE-BACKEND]` Each region may select an interpretation suitable for its target. The same operation contract governs host and device interpretations. Backend selection cannot bypass type, row or stage checks, and a host implementation is not proof of execution on device hardware.
+
+`[STAGE-BACKEND-CONTRACT]` A static rewrite binds each operation argument under the parameter type the operation declared where that type names none of the effect's type parameters. The residual program is therefore checked against the same callback contract the request was, under every instantiation: a callback written against `fn(float, float) -> float` keeps that type after discharge even inside a definition that is otherwise polymorphic. The reference program is GPT-2 (`examples/gpt2`), written once against a static `Tensor<B>` effect and run by a handler over `List<float>` or a handler over `GpuBuffer<float>` with identical output; `tests/effects/staged/tensor_backends` pins both interpretations against oracle values in both flavors. See [One model, two backends](../../website/src/docs/one-model-two-backends.md).
 
 ## Stage polymorphism — [STAGE-POLY]
 

@@ -36,6 +36,7 @@ fn builtin_docs() -> impl Iterator<Item = &'static BuiltinDoc> {
     use crate::builtin_docs_sys as sys;
     [
         lang::CORE,
+        crate::builtin_docs_signals::SIGNALS,
         lang::TESTING,
         lang::STRINGS,
         lang::FUNCTIONAL,
@@ -167,6 +168,16 @@ fn append_example(out: &mut String, example: &str) {
     if !example.is_empty() {
         let _ = write!(out, "\n\n**Example**\n```osprey\n{example}\n```");
     }
+}
+
+/// Compiler intrinsics use the same argument labels as documentation.
+pub(crate) fn parameter_names(name: &str) -> Option<Vec<String>> {
+    builtin_docs().find(|doc| doc.name == name).map(|doc| {
+        doc.params
+            .iter()
+            .map(|parameter| parameter.name.to_owned())
+            .collect()
+    })
 }
 
 #[cfg(test)]

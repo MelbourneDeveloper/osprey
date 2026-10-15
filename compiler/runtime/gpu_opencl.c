@@ -1,4 +1,5 @@
 // Portable direct-driver adapter [GPU-BACKEND-PORTABILITY] [GPU-MATMUL].
+#include "gpu_device.h"
 #include "gpu_opencl_api.h"
 #include "io_error.h"
 #include "../bin/gpu_shader_source.h"
@@ -186,8 +187,7 @@ static int dispatch(void *const buffers[3], const uint64_t dimensions[3], int64_
   status = cl.read(cl_queue, buffers[2], 1, 0, count * 8, out, 0, NULL, NULL);
   if (status) return failed("GPU completion/readback", status);
   cl_completed++;
-  if (cl_completed == 1 || getenv("OSPREY_GPU_TRACE"))
-    (void)fprintf(stderr, "[gpu] %s: completed dispatch %llu\n", cl_name, (unsigned long long)cl_completed);
+  osprey_gpu_report(cl_name, cl_completed, dimensions);
   return 1;
 }
 

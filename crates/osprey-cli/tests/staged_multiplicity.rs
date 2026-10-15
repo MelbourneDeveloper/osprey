@@ -1,4 +1,4 @@
-//! Multiplicity — the second axis of `docs/specs/0035-StagedEffects.md`
+//! Multiplicity — the second axis of `docs/specs/0017-AlgebraicEffects.md`
 //! ([MULTI-AXIS]).
 //!
 //! Stage says WHEN a request is answered; multiplicity says HOW MANY TIMES. A
@@ -322,15 +322,9 @@ fn wasm32_names_the_once_operation_it_cannot_yet_run() {
 
 #[test]
 fn wasm32_rejects_many_before_the_target_gate_is_reached() {
-    // [MULTI-WASM] Multi-shot is out of the stack-switching proposal's scope,
-    // so `many` is the one multiplicity `wasm32` will never acquire — a
-    // PERMANENT rejection, unlike `once` above.
-    //
-    // That distinction is not observable yet: no target can run `many`, so the
-    // checker rejects the handle site before the per-target gate is consulted.
-    // The test asserts what actually happens and names the operation, so the
-    // day plan 0016 makes `many` run natively this is the test that notices
-    // wasm32 needs its own permanent wording.
+    // [MULTI-WASM] The current frontend rejects `many` before any target
+    // gate. This is a representation limitation, not a permanent wasm ban:
+    // portable reusable frames or CPS may satisfy the same source contract.
     let (ok, err) = compile_for_target(MANY_ON_WASM, "wasm32");
     assert!(!ok, "wasm32 cannot run a multi-shot continuation");
     assert!(

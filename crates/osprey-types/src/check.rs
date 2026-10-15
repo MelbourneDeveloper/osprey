@@ -36,6 +36,10 @@ use refine::refine_handler_arguments;
 mod sites;
 use sites::collect_site_candidates;
 use sites::dedupe_sites;
+
+/// Where a position-keyed type was recorded: the enclosing top-level function
+/// (`None` at file scope) and the source position ([`crate::info::SiteTable`]).
+pub(crate) type Site = (Option<String>, Position);
 use sites::erased_type_params;
 pub use sites::erased_var;
 use sites::push_site_candidate;
@@ -156,6 +160,7 @@ pub(crate) fn annotation_name(name: &str) -> String {
 pub(crate) struct Checker {
     pub(crate) ctx: InferCtx,
     pub(crate) errors: Vec<TypeError>,
+    signal_queries: HashMap<usize, crate::info::EffectRequirements>,
     function_effects: HashMap<String, crate::info::EffectRequirements>,
     pub(crate) ctors: HashMap<String, CtorInfo>,
     /// Effect name -> its generic declaration (type params + raw op sigs).
@@ -173,16 +178,16 @@ pub(crate) struct Checker {
     handler_factories: HashSet<String>,
     /// Every lambda's inferred function type, keyed by its source position —
     /// resolved and published to the backend by [`infer_program`].
-    pub(crate) lambda_tys: Vec<(Position, Type)>,
+    pub(crate) lambda_tys: Vec<(Site, Type)>,
     /// Every `let` binding's inferred type, keyed by its source position, so
     /// editor hover can show the type of an unannotated binding. Resolved and
     /// published by [`infer_program`]. Implements [LSP-HOVER-VARIABLES]
-    let_tys: Vec<(Position, Type)>,
+    let_tys: Vec<(Site, Type)>,
     /// Every list literal's inferred `List<T>`, keyed by the literal's source
     /// position. An empty literal carries no element the backend can read a
     /// representation from, so this table is its only source of one. Resolved
     /// and published by [`infer_program`].
-    pub(crate) list_tys: Vec<(Position, Type)>,
+    pub(crate) list_tys: Vec<(Site, Type)>,
     /// Fresh substitutions at value uses, retained for the effect proof.
     pub(crate) instantiations: HashMap<usize, HashMap<VarId, Type>>,
     /// Dotted call identity: a field name, or receiver-first function dispatch.
@@ -250,6 +255,10 @@ pub(crate) struct Checker {
     /// inferred, so annotations inside the body (explicit construction-site
     /// type arguments) resolve the binder's variables, not nominal names.
     pub(crate) current_fn_typarams: HashMap<String, Type>,
+    /// The top-level function whose body is currently being inferred, so a
+    /// position-keyed type is recorded under the copy it belongs to
+    /// ([`crate::info::SiteTable`]).
+    pub(crate) current_fn: Option<String>,
     /// Whether an arithmetic site with two unconstrained operands may still
     /// leave its overload open ([`Checker::deferred_arith`]). Cleared for the
     /// resolution pass, which re-enters the same selection to settle every

@@ -86,7 +86,11 @@ pub(crate) fn inferred_elem(
     cg: &Codegen,
     position: Option<osprey_ast::Position>,
 ) -> Option<String> {
-    crate::types::elem_tag(&cg.prog, cg.prog.list_elem_type(position))
+    crate::types::elem_tag(
+        &cg.prog,
+        cg.prog
+            .list_elem_type(cg.source_function.as_deref(), position),
+    )
 }
 
 /// `[e0, e1, …]` → a flat `{ length, data }` block. `position` is the literal's

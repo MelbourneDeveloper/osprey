@@ -8,10 +8,11 @@ impl Checker {
             errors: Vec::new(),
             ctors: HashMap::new(),
             effects: crate::builtins::builtin_effects(),
+            signal_queries: HashMap::new(),
             function_effects: HashMap::new(),
             expression_types: HashMap::new(),
             union_variants: HashMap::new(),
-            fn_params: HashMap::new(),
+            fn_params: crate::staging::signal_parameter_names(),
             fn_sigs: HashMap::new(),
             handler_factories: HashSet::new(),
             lambda_tys: Vec::new(),
@@ -36,6 +37,7 @@ impl Checker {
             fn_typarams: HashMap::new(),
             declared_effect_rows: HashMap::new(),
             current_fn_typarams: HashMap::new(),
+            current_fn: None,
             defer_arith: true,
         };
         c.register_result_ctors();

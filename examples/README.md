@@ -8,7 +8,7 @@ Start with algebraic effects: declare an operation, request it with `perform`, a
 | [Talon Bank](projects/modules/README.md) | Shared web/iOS/Android application, SQLite and mock storage, auditing, metrics, and platform rendering |
 | [Issue Inbox](mobile/README.md) | Shared iOS/Android state and UI, with SQL/HTTP requests interpreted by a platform-command handler |
 | [iPhone counter](ios/README.md) | A native logging callback behind a value effect |
-| [GPT-2](gpt2/README.md) | The published GPT-2 weights loaded with `gpuLoadTensor` and run as `gpu*` kernels and `gpuMatMul` products, checked against a pure-Python reference |
+| [GPT-2](gpt2/README.md) | The published GPT-2 weights, generation and a training step written once against a static `Tensor` effect and run by two handlers — host lists or the GPU surface — with identical output, checked against a pure-Python reference |
 
 `handler E { ... }` creates a callable implementation; `h(work)` installs it while the callback runs. `handle E { ... }` handles the rest of its block. Both forms work in Default (`.osp`) and ML (`.ospml`) syntax. See the [effects contract](../docs/specs/0017-AlgebraicEffects.md) and [current limits](../docs/plans/0016-algebraic-effects-and-handlers.md).
 

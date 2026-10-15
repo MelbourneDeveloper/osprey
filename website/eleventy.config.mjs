@@ -20,8 +20,19 @@ const AUTHOR_URL = "https://www.christianfindlay.com/";
 // `\x => e` lambdas and `:=` mutation. Both flavors share effect keywords and
 // the token palette; ML omits the Default `fn` keyword.
 // See spec 0024 (ML Flavor Syntax) and 0023 (Language Flavors).
+// ML adds `(* … *)` block comments (one nesting level) and whitespace
+// application, so a call at the head of a line (`greet ()`, `jsonFree doc`)
+// is a function like the Default flavor's `greet()`.
 const ospreyMlGrammar = {
   ...ospreyGrammar,
+  comment: [
+    ...ospreyGrammar.comment,
+    { pattern: /\(\*(?:[^(*]|\((?!\*)|\*(?!\))|\(\*[\s\S]*?\*\))*\*\)/, greedy: true },
+  ],
+  function: [
+    ospreyGrammar.function,
+    { pattern: /(^[ \t]*)[a-zA-Z_][a-zA-Z0-9_]*(?=[ \t]+[\w"(\[])/m, lookbehind: true },
+  ],
   keyword:
     /\b(?:let|mut|match|type|effect|perform|handler|handle|static|control|abort|once|many|replayable|resume|return|in|extern|spawn|await|yield|if|else|import|module|true|false|where|Unit|Result|Option|Some|None|Ok|Err|Handler)\b/,
 };
@@ -188,18 +199,21 @@ export default function (eleventyConfig) {
   // that ship as literal HTML in the marketing pages (not processed by the
   // markdown highlighter). Both flavors share the transform; the fence language
   // selects the grammar and the flavor badge (see FLAVOR_LABEL / addFlavorBadge).
+  // An authored block keeps its own attributes (the hero's id, flavor and
+  // `hidden`); one that already has `data-language` is highlighted already.
   eleventyConfig.addTransform("osprey-highlight", function (content, outputPath) {
     if (!outputPath || !outputPath.endsWith(".html")) return content;
     ensureOsprey();
     return content.replace(
-      /<pre class="language-(osprey(?:-ml)?)"><code class="language-\1">([\s\S]*?)<\/code><\/pre>/g,
-      (_m, lang, code) => {
+      /<pre([^>]*)><code class="language-(osprey(?:-ml)?)">([\s\S]*?)<\/code><\/pre>/g,
+      (block, attributes, lang, code) => {
+        if (attributes.includes("data-language")) return block;
         // Strip Prism's token spans while `<` is still escaped as `&lt;`.
         // Decoding first makes generic types such as `Result<string, string>`
         // look like HTML tags and silently removes their opening type argument.
         const decoded = decodeEntities(stripTags(code)).trim();
         const html = Prism.highlight(decoded, Prism.languages[lang], lang);
-        return `<pre class="language-${lang}" tabindex="0" data-language="${lang}"><code class="language-${lang}">${html}</code></pre>`;
+        return `<pre${attributes} tabindex="0" data-language="${lang}"><code class="language-${lang}">${html}</code></pre>`;
       }
     );
   });

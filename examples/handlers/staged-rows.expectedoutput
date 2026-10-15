@@ -1,1 +1,5 @@
 41 42
+counter=7 cursor=2 status=7/2 builds=2/1/2
+counter=7 cursor=4 status=7/4 builds=2/2/3
+idle=7/4 builds=3
+cart=1000->2500->2000 delivery=free->paid idle=2000@3

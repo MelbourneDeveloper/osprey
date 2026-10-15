@@ -286,7 +286,7 @@ fn publish_operation(
 /// Label one position-keyed table so its entries join the same flat map.
 fn sited<'a>(
     kind: &'a str,
-    table: &'a HashMap<(u32, u32), Type>,
+    table: &'a crate::info::SiteTable,
 ) -> impl Iterator<Item = (String, Type)> + 'a {
     table
         .iter()

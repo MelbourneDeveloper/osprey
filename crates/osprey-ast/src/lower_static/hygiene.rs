@@ -176,8 +176,11 @@ impl Resolver {
                 sub_patterns,
             } => {
                 if name == "Success" || name == "Error" {
-                    for binder in &mut *fields {
-                        self.bind(binder, scope);
+                    // `value`, `message` and the `?:` payload are field labels
+                    // the checker types by name ([PATTERN-RESULT-DEFAULT]), so
+                    // they keep their spelling and shadow by scope alone.
+                    for binder in &*fields {
+                        let _ = scope.insert(binder.clone(), binder.clone());
                     }
                 } else if let Some(order) = self
                     .constructors

@@ -272,9 +272,16 @@ impl Analyzer<'_> {
                 body,
                 return_clause,
                 position,
-                ..
+                stage,
             } => {
-                let local = self.handler_body_env(effect, arms, body, *position, scope, env);
+                let site = super::handlers::HandlerSite {
+                    effect,
+                    arms,
+                    body,
+                    position: *position,
+                    stage: *stage,
+                };
+                let local = self.handler_body_env(&site, scope, env);
                 let normal = self
                     .value(body, scope, &local)
                     .map(|value| Self::resolve_handled_value(value, &local.handler_returns));
@@ -298,7 +305,7 @@ impl Analyzer<'_> {
                     {
                         continue;
                     }
-                    let local = self.handler_arm_env(effect, arm, body, scope, env);
+                    let local = self.handler_arm_env(effect, arm, body, *stage, scope, env);
                     if let Some(value) = self.value(&arm.body, scope, &local) {
                         merge_optional_value(&mut merged, value);
                     }

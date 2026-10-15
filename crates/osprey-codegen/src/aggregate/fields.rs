@@ -39,7 +39,15 @@ pub(crate) fn gen_field_access(cg: &mut Codegen, target: &Expr, field: &str) -> 
     load_field_value(cg, target, &owner, field, inferred.as_ref())
 }
 
-fn field_owner(cg: &Codegen, target: &Value, field: &str) -> Result<String> {
+fn field_owner(cg: &mut Codegen, target: &Value, field: &str) -> Result<String> {
+    if let Some(ty @ Type::Record { name, .. }) = target.inferred_type.as_ref() {
+        if name.is_empty() {
+            if let Some(owner) = crate::types::owner_name(&cg.prog, ty) {
+                let _ = super::record_block(cg, &owner, Some(ty));
+                return Ok(owner);
+            }
+        }
+    }
     target
         .osp_ty
         .clone()
