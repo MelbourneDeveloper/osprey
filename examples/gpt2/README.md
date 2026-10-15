@@ -6,8 +6,9 @@ lists, one on Osprey's GPU surface. No training from scratch, no conversion
 step, no Python at run time: the `load` operation reads the published
 `model.safetensors`, the byte-level BPE tokenizer is rebuilt from the published
 `merges.txt`, and the transformer performs `Tensor` operations that the handler
-a program installs decides how to execute. Both handlers print the same tokens,
-the same loss and the same 148 gradient sums.
+a program installs decides how to execute. On the CPU both handlers print the
+same tokens, the same loss and the same 148 gradient sums; on a GPU the text is
+the same and the numbers agree to twelve digits.
 
 ```
 make gpt2 PROMPT="The capital of France is" TOKENS=20 BACKEND=gpu
@@ -114,7 +115,7 @@ OSPREY_GPU=auto osprey examples/gpt2/generate --run --memory=arc
 
 Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction, the next token's index, the training loss — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and one download of each value the program reads back — the logits a token's index is taken from, and the loss. Every buffer is resident on the device from the first kernel that touches it ([GPU-BUFFER-RESIDENT](../../docs/specs/0034-GPUComputation.md#device-resident-buffers--gpu-buffer-resident)): the weights upload once, a layer's intermediate buffers never leave the device, and a buffer's device copy is released with the buffer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
 
-The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on every argument. The generated text is identical on every path. The training loss agrees to fifteen significant digits and differs in the last (`4.503189215447316` on the host, `4.503189215447317` on Metal), and the gradient sums differ in their trailing digits for the same reason.
+The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on every argument. The generated text is identical on every path. The training loss agrees to fifteen significant digits and differs in the last (`4.503189215447316` on the host, `4.503189215447317` on Metal). Across all 150 numbers the step prints, the largest difference from the host is 2.4 × 10⁻¹³ and no number larger than 10⁻⁶ differs by more than 4 parts in 10¹³, so a gradient sum that cancels to about `1e-15`, such as `wpe`, differs in every digit. Metal and OpenCL print identical bytes apart from the device name.
 
 | Measured 2026-10-13, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build, `--memory=arc`, `GPU=host` | `BACKEND=gpu` | `BACKEND=lists` |
 | --- | --- | --- |
@@ -122,14 +123,16 @@ The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on
 | One training step over the 5-token prompt: load, forward, loss, backward, SGD, forward again | 52 s, 3.6 GB peak | 9 min, 4.6 GB peak |
 | `reference.py`, the same 20 tokens in pure Python | 16 min 25 s | |
 
-| Measured 2026-10-15, Apple M4 Max, macOS, release build, `--memory=arc`, `BACKEND=gpu` | `GPU=host` | `GPU=metal` | `GPU=opencl` |
+| Measured 2026-10-16, Apple M4 Max, macOS, release build, `--memory=arc`, `BACKEND=gpu`, median of three | `GPU=host` | `GPU=metal` | `GPU=opencl` |
 | --- | --- | --- | --- |
-| 5 tokens from the 5-token prompt, every kernel and product on the selected device, buffers resident on it | 5.6 s | 4.6 s | 4.2 s |
-| One training step over the 5-token prompt | 19.4 s | 8.6 s | 8.8 s |
-| `reference.py --train`, the same step in pure Python | 5 min 49 s, 16.2 GB peak | |
+| 20 tokens from the 5-token prompt, every kernel and product on the selected device, buffers resident on it | 6.5 s, 1.7 GB peak | 6.9 s, 3.1 GB peak | 6.8 s, 1.7 GB peak |
+| One training step over the 5-token prompt | 25.2 s, 4.0 GB peak | 7.6 s, 5.9 GB peak | 7.8 s, 3.1 GB peak |
+| `reference.py --train`, the same step in pure Python (2026-10-15) | 5 min 49 s, 16.2 GB peak | | |
 
-The GPU surface is faster because its buffers are dense doubles and its kernels
-are lifted into flat functions; the list handler boxes every element and calls
+Training is about three times faster on the device: half its 1 499 dispatches run over 3 072 threads or more. Generation is not: after the prompt each token is a one-row pass through the KV cache, 4 338 of its 5 919 dispatches run over 768 threads or fewer, and without kernel fusion each is its own launch.
+
+On the CPU the GPU-surface handler beats the list handler because its buffers
+are dense doubles and its kernels are lifted into flat functions; the list handler boxes every element and calls
 the callback through a closure. The Makefile targets run under `--memory=arc`
 because of the memory column.
 
