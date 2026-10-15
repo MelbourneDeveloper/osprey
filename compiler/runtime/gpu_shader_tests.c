@@ -2,10 +2,10 @@
 // binary64 results [GPU-BACKEND-PORTABILITY] [BUILTIN-MATH]: the four
 // operations, sqrt, the conversions and the comparisons must agree bit for
 // bit on every word tried (NaN payloads compare as NaN); exp, ln and tanh are
-// compared with the host's long double libm rounded to binary64. Where long
-// double is wider (x87 on x86-64, binary128 on aarch64 Linux) that is the
-// correctly rounded value bar a rare double rounding; on Darwin it is the
-// binary64 libm itself. glibc's binary64 tanh is up to two ulps off (tanh of
+// compared with the host's long double libm rounded to binary64: glibc's
+// binary128 on aarch64 Linux agrees with the device on every argument, x87's
+// 80-bit on x86-64 differs by one ulp on about 1 in 4 000, and on Darwin it
+// is the binary64 libm itself. glibc's binary64 tanh is up to two ulps off (tanh of
 // 0xbfd8b6b048dce522: 1.69 ulps, where the device is 0.31 against an
 // 80-digit reference), so a binary64 reference would test glibc, not the
 // device. The device must land within one ulp everywhere and agree on at

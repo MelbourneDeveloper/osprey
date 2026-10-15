@@ -31,7 +31,7 @@ Every kernel [GPU-KERNEL-EXTRACT] lifts also has a device form ([GPU-BACKEND-DEV
 ### Device evidence — 2026-10-16, Apple M4 Max, macOS arm64
 
 - Median of three, whole program, `--memory=arc`, `BACKEND=gpu`: 20 generated tokens take 6.5 s on `GPU=host`, 6.9 s on Metal and 6.8 s on OpenCL with identical text; one training step takes 25.2 s, 7.6 s and 7.8 s. `OSPREY_GPU_TRACE=1` counts 5 919 dispatches for the generation, 4 338 of them over 768 threads or fewer (the KV-cached one-row passes, unfused), and 1 499 for the step, half of them over 3 072 threads or more. Across the step's 150 printed numbers the largest difference from the host is 2.4 × 10⁻¹³; Metal and OpenCL print identical bytes apart from the device name.
-- `gpu_shader_tests` on aarch64 Linux (GCC 14, glibc): glibc's binary64 `tanh` is up to two ulps off (`0xbfd8b6b048dce522`: 1.69 ulps, the device 0.31 against an 80-digit reference), so the suite now compares the device with the host's `long double` functions rounded to binary64. glibc's binary128 `expl`, `logl` and `tanhl` match the device on all 800 000 arguments of each; on Darwin `long double` is binary64 and the counts below are unchanged.
+- `gpu_shader_tests` on aarch64 Linux (GCC 14, glibc): glibc's binary64 `tanh` is up to two ulps off (`0xbfd8b6b048dce522`: 1.69 ulps, the device 0.31 against an 80-digit reference), so the suite now compares the device with the host's `long double` functions rounded to binary64. glibc's binary128 `expl`, `logl` and `tanhl` match the device on all 800 000 arguments of each; on x86-64 CI the 80-bit x87 versions differ by one ulp on 215, 182 and 180 of them; on Darwin `long double` is binary64 and the counts below are unchanged.
 
 ### Device evidence — 2026-10-15, Apple M4 Max, macOS arm64
 
