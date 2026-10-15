@@ -428,9 +428,13 @@ find-implementations, find-references, completion, and signature help resolve
 against every source file linked by the manifest. A source root two projects
 share (`source_roots = ["../model", "."]` in each) has no manifest of its
 own, so a file in it belongs to all of them: the server finds those projects
-among the child directories of the file's ancestors and answers from the
-union of their sources, so a reference search from the shared file reaches
-every program that includes it.
+among the child directories of the file's ancestors. Editor features answer
+from the union of their sources, so a reference search from the shared file
+reaches every program that includes it. Diagnostics assemble the file with
+the nearest of those projects alone, listing each file once under its
+lexically normalised path (`generate/../model/m.osp` is `model/m.osp`):
+assembling the projects together would declare the shared file twice and
+give the program two entries.
 
 The server uses the compiler's `osprey_project::discover`, source-root membership and flavor-aware `parse_text` contracts. An engine-owned syntax cache keys each file by its path, configured flavor and exact text, including failed parses. The manifest's flavor override applies to both the active file and every sibling, including formatting and warning fixes. Unchanged sources reuse their syntax across diagnostics, navigation and code actions. The checked project cache described in [LSP-PROJECT-BATCH] reuses assembly and inference until any input changes. URI/path conversion lives in [`workspace.rs`](../../crates/osprey-lsp/src/workspace.rs); source snapshots live in [`project_sources.rs`](../../crates/osprey-lsp/src/project_sources.rs).
 

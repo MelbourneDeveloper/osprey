@@ -1,7 +1,9 @@
 //! Incremental syntax snapshots shared by diagnostics and editor features.
 //! Implements [LSP-WORKSPACE] and [LSP-PROJECT-BATCH].
 
-use crate::workspace::{file_path, project_root, project_roots, same_path, uri_of, Sibling};
+use crate::workspace::{
+    file_path, lexical, project_root, project_roots, same_path, uri_of, Sibling,
+};
 use lspkit_vfs::{DocumentUri, Vfs};
 use osprey_project::{ProjectConfig, ProjectError, SourceFile};
 use osprey_syntax::Flavor;
@@ -20,6 +22,9 @@ pub(crate) struct Sources {
     pub(crate) root: PathBuf,
     pub(crate) config: ProjectConfig,
     pub(crate) files: Vec<SourceFile>,
+    /// The files of the other projects that include the document: siblings
+    /// for editor features, never assembled with this project's own.
+    neighbours: Vec<SourceFile>,
     pub(crate) errors: Vec<ProjectError>,
     pub(crate) incomplete: bool,
 }
@@ -30,24 +35,29 @@ impl Sources {
             root: root.to_path_buf(),
             config,
             files: Vec::new(),
+            neighbours: Vec::new(),
             errors: Vec::new(),
             incomplete: false,
         }
     }
 
-    /// Take another project's files as siblings, keeping this project's
-    /// configuration and skipping files already present.
+    /// Take another project's files as neighbours, skipping files already
+    /// present. Assembling them with this project's would declare a shared
+    /// file twice and give the program two entries.
     fn adopt(&mut self, other: Sources) {
         for file in other.files {
             if !self
-                .files
-                .iter()
+                .everyone()
                 .any(|known| same_path(&known.path, &file.path))
             {
-                self.files.push(file);
+                self.neighbours.push(file);
             }
         }
         self.incomplete |= other.incomplete;
+    }
+
+    fn everyone(&self) -> impl Iterator<Item = &SourceFile> {
+        self.files.iter().chain(&self.neighbours)
     }
 
     pub(crate) fn view(&self, uri: &str) -> crate::workspace::View {
@@ -62,8 +72,7 @@ impl Sources {
             .find(|file| same_path(&path, &file.path))
             .cloned();
         let siblings = self
-            .files
-            .iter()
+            .everyone()
             .filter(|other| !same_path(&path, &other.path))
             .filter_map(sibling)
             .collect();
@@ -129,9 +138,9 @@ impl SourceCache {
         })
     }
 
-    /// The sources of every project the document belongs to, as one view: the
-    /// nearest project's configuration with the files of all of them, so a
-    /// shared source root sees every program that includes it.
+    /// The nearest project the document belongs to, with the files of every
+    /// other project that includes it as neighbours, so a shared source root
+    /// sees every program that includes it.
     pub(crate) fn load(
         &mut self,
         uri: &str,
@@ -188,6 +197,9 @@ impl SourceCache {
                 .filter(|path| config.contains_source(root, path))
                 .map(Path::to_path_buf),
         );
+        // `source_roots = ["../model"]` discovers `generate/../model/m.osp`
+        // while the editor opened `model/m.osp`: one file, listed once.
+        let mut paths: Vec<PathBuf> = paths.iter().map(|path| lexical(path)).collect();
         paths.sort();
         paths.dedup();
         paths
@@ -296,7 +308,7 @@ fn live_text(path: &Path, current: &Path, text: Option<&str>, vfs: Option<&Vfs>)
 
 fn sibling(file: &SourceFile) -> Option<Sibling> {
     Some(Sibling {
-        uri: uri_of(&crate::workspace::lexical(&file.path))?,
+        uri: uri_of(&lexical(&file.path))?,
         source: file.source.clone(),
         program: file.program.clone(),
         flavor: file.flavor,

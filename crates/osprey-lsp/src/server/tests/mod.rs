@@ -244,3 +244,11 @@ async fn signature_quick_fix_is_versioned_and_removes_only_the_header() {
     assert_eq!(action.get("diagnostics"), params.get("diagnostics"));
     h.shutdown_and_exit().await;
 }
+
+/// The diagnostics a `publishDiagnostics` notification carries.
+fn diagnostics(published: &Message) -> Option<&Value> {
+    published
+        .params
+        .as_ref()
+        .and_then(|params| params.get("diagnostics"))
+}

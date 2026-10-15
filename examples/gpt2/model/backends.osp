@@ -24,20 +24,28 @@ module Backends {
     export type Combine = fn(float, float) -> float
 
     /// The operations a model needs: build a buffer from an index function,
-    /// read and measure one, combine two, reduce one, multiply two matrices,
-    /// lift a host list, load a tensor from a safetensors file, and say which
-    /// interpretation is answering. `B` is the representation the handler picks.
+    /// read and measure one, combine two, reduce one, find the first index
+    /// holding a value, multiply two matrices, lift a host list, load a tensor
+    /// from a safetensors file, and say which interpretation is answering. `B`
+    /// is the representation the handler picks.
     export static effect Tensor<B> {
         build: fn(int, Kernel) -> B
         get: fn(B, int) -> float
         length: fn(B) -> int
         zipWith: fn(B, B, Combine) -> B
         reduce: fn(B, float, Combine) -> float
+        indexOf: fn(B, float) -> int
         matMul: fn(B, B, int, int, int) -> B
         fromList: fn(List<float>) -> B
         load: fn(string, string) -> B
         device: fn() -> string
     }
+
+    /// `indexOf`'s two steps under both handlers: element i names itself when
+    /// it holds x and the length n otherwise, and the smallest name wins, so
+    /// the answer is the first index holding x or n when none does.
+    fn hit(v, x, i, n) = match v == x { true => i  false => n }
+    fn minI(a, i) = match i < a { true => i  false => a }
 
     /// Host lists, loaded through the GPU surface's safetensors reader.
     export fn onLists(work) = {
@@ -47,6 +55,7 @@ module Backends {
             length b => listLength(b)
             zipWith a b f => range(0, listLength(a)) |> map(fn(i) => f(listGet(a, i) ?: 0.0, listGet(b, i) ?: 0.0)) |> toList()
             reduce b seed f => range(0, listLength(b)) |> fold(seed, fn(a, i) => f(a, listGet(b, i) ?: 0.0))
+            indexOf b x => range(0, listLength(b)) |> map(fn(i) => hit(listGet(b, i) ?: 0.0, x, i, listLength(b))) |> fold(listLength(b), minI)
             matMul a b rows inner cols => range(0, rows * cols) |> map(fn(i) => range(0, inner) |> fold(0.0, fn(acc, k) => acc + (listGet(a, intDiv(i, cols) * inner + k) ?: 0.0) * (listGet(b, k * cols + i % cols) ?: 0.0))) |> toList()
             fromList xs => xs
             load path name => fromGpu(orAbort(gpuLoadTensor(path, name)))
@@ -65,6 +74,7 @@ module Backends {
             length b => gpuLength(b)
             zipWith a b f => gpuZipWith(a, b, f)
             reduce b seed f => b |> gpuFold(seed, f)
+            indexOf b x => gpuIota(gpuLength(b)) |> gpuMap(fn(i) => hit(gpuGet(b, i) ?: 0.0, x, i, gpuLength(b))) |> gpuFold(gpuLength(b), minI)
             matMul a b rows inner cols => orAbort(gpuMatMul(a, b, rows, inner, cols))
             fromList xs => toGpu(xs)
             load path name => orAbort(gpuLoadTensor(path, name))

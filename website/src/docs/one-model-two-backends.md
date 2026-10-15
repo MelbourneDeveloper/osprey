@@ -20,7 +20,7 @@ The first line of each run names which handler answered: `gpt2 (124M) on host` o
 
 ## Declare the operations
 
-A tensor program needs a handful of operations: build a buffer from an index function, read an element, measure a buffer, combine two, reduce one, multiply two matrices, lift a host list, load a tensor from a checkpoint, and say who is answering. That list is the effect. `B` is the representation the handler picks; the model never names it. The two kernel shapes a model hands over get names of their own, so the signatures read as what they mean.
+A tensor program needs a handful of operations: build a buffer from an index function, read an element, measure a buffer, combine two, reduce one, find the first index holding a value, multiply two matrices, lift a host list, load a tensor from a checkpoint, and say who is answering. That list is the effect. `B` is the representation the handler picks; the model never names it. The two kernel shapes a model hands over get names of their own, so the signatures read as what they mean.
 
 ```osprey
 export type Kernel = fn(int) -> float
@@ -32,6 +32,7 @@ export static effect Tensor<B> {
     length: fn(B) -> int
     zipWith: fn(B, B, Combine) -> B
     reduce: fn(B, float, Combine) -> float
+    indexOf: fn(B, float) -> int
     matMul: fn(B, B, int, int, int) -> B
     fromList: fn(List<float>) -> B
     load: fn(string, string) -> B
@@ -49,6 +50,7 @@ export static effect Tensor B
     length : B => int
     zipWith : (B, B, Combine) => B
     reduce : (B, float, Combine) => float
+    indexOf : (B, float) => int
     matMul : (B, B, int, int, int) => B
     fromList : List<float> => B
     load : (string, string) => B
@@ -120,7 +122,7 @@ Nothing in the model mentions a list or a buffer. Hindley-Milner inference carri
 
 ## Answer with lists
 
-The first handler answers every operation with ordinary list code. The product accumulates in `k` order from `0.0`, and that order is the contract: the two handlers must produce the same doubles, not nearly the same.
+The first handler answers every operation with ordinary list code. The product accumulates in `k` order from `0.0`, and that order is the contract: the two handlers must produce the same doubles, not nearly the same. Both handlers answer `indexOf` in the same two steps: element `i` names itself when it holds the value and the length otherwise (`hit`), and the smallest name wins (`minI`).
 
 ```osprey
 export fn onLists(work) = {
@@ -130,6 +132,7 @@ export fn onLists(work) = {
         length b => listLength(b)
         zipWith a b f => range(0, listLength(a)) |> map(fn(i) => f(listGet(a, i) ?: 0.0, listGet(b, i) ?: 0.0)) |> toList()
         reduce b seed f => range(0, listLength(b)) |> fold(seed, fn(a, i) => f(a, listGet(b, i) ?: 0.0))
+        indexOf b x => range(0, listLength(b)) |> map(fn(i) => hit(listGet(b, i) ?: 0.0, x, i, listLength(b))) |> fold(listLength(b), minI)
         matMul a b rows inner cols => range(0, rows * cols) |> map(fn(i) => range(0, inner) |> fold(0.0, fn(acc, k) => acc + (listGet(a, intDiv(i, cols) * inner + k) ?: 0.0) * (listGet(b, k * cols + i % cols) ?: 0.0))) |> toList()
         fromList xs => xs
         load path name => fromGpu(gpuLoadTensor(path, name) ?: toGpu([]))
@@ -147,6 +150,7 @@ export onLists work =
         length b => listLength b
         zipWith a b f => range 0 (listLength a) |> map (\i => f (listGet a i ?: 0.0, listGet b i ?: 0.0)) |> toList
         reduce b seed f => range 0 (listLength b) |> fold seed (\(a, i) => f (a, listGet b i ?: 0.0))
+        indexOf b x => range 0 (listLength b) |> map (\i => hit (listGet b i ?: 0.0, x, i, listLength b)) |> fold (listLength b) minI
         matMul a b rows inner cols => range 0 (rows * cols) |> map (\i => range 0 inner |> fold 0.0 (\(acc, k) => acc + (listGet a (intDiv (i, cols) * inner + k) ?: 0.0) * (listGet b (k * cols + i % cols) ?: 0.0))) |> toList
         fromList xs => xs
         load path name => fromGpu (gpuLoadTensor path name ?: toGpu [])
@@ -166,6 +170,7 @@ export fn onGpu(work) = {
         length b => gpuLength(b)
         zipWith a b f => gpuZipWith(a, b, f)
         reduce b seed f => b |> gpuFold(seed, f)
+        indexOf b x => gpuIota(gpuLength(b)) |> gpuMap(fn(i) => hit(gpuGet(b, i) ?: 0.0, x, i, gpuLength(b))) |> gpuFold(gpuLength(b), minI)
         matMul a b rows inner cols => gpuMatMul(a, b, rows, inner, cols) ?: toGpu([])
         fromList xs => toGpu(xs)
         load path name => gpuLoadTensor(path, name) ?: toGpu([])
@@ -183,6 +188,7 @@ export onGpu work =
         length b => gpuLength b
         zipWith a b f => gpuZipWith a b f
         reduce b seed f => b |> gpuFold seed f
+        indexOf b x => gpuIota (gpuLength b) |> gpuMap (\i => hit (gpuGet b i ?: 0.0, x, i, gpuLength b)) |> gpuFold (gpuLength b) minI
         matMul a b rows inner cols => gpuMatMul a b rows inner cols ?: toGpu []
         fromList xs => toGpu xs
         load path name => gpuLoadTensor path name ?: toGpu []
@@ -190,7 +196,7 @@ export onGpu work =
     work ()
 ```
 
-The GPU surface runs on the host backend today: every kernel is a native loop, and `gpuDevice()` reports `host`. Nothing here runs on a GPU. The point of the second handler is that when a device backend lands ([plan 0023](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0023-gpu-computation.md), stage 4), this file is the only one that notices.
+Under `OSPREY_GPU=metal` or `opencl`, every kernel this handler launches runs on the GPU, including the next token's index and the training loss, so the CPU tokenizes, sequences the layers and prints. A kernel the device cannot compile stops the run and names itself; it never falls back to the CPU. `gpuDevice()` reports the adapter that answered, and the first line of each run prints it.
 
 ## Choose at the boundary
 
@@ -244,7 +250,7 @@ export under (name, work) = match name
 
 [`tests/effects/staged/tensor_backends.test.osp`](https://github.com/Nimblesite/osprey/blob/main/tests/effects/staged/tensor_backends.test.osp) runs a width-4 transformer block under both handlers and checks every element against values an independent oracle computed, then checks that the two handlers print the same doubles. Its ML twin shares the golden and must emit identical LLVM IR. The differential harness runs both under the default, GC and ARC memory backends and on wasm32.
 
-The full model is the stronger proof. On the default prompt, both handlers print the same tokens and the same continuation. One training step prints the same loss, the same sum for every one of the 148 gradient tensors and the same loss after the step. The GPU surface is faster because its buffers are dense doubles and its kernels are lifted functions; the list handler boxes every element. Neither is a GPU result.
+The full model is the stronger proof. On the default prompt, both handlers print the same tokens and the same continuation. One training step prints the same loss, the same sum for every one of the 148 gradient tensors and the same loss after the step. The GPU surface is faster because its buffers are dense doubles and its kernels are lifted functions; the list handler boxes every element. Both columns ran on the CPU (`OSPREY_GPU=host`); the [GPT-2 README](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2) has the Metal and OpenCL timings.
 
 | Measured 2026-10-13, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build, `--memory=arc` | `BACKEND=gpu` | `BACKEND=lists` |
 | --- | --- | --- |
@@ -253,7 +259,8 @@ The full model is the stronger proof. On the default prompt, both handlers print
 
 ## Limits
 
-- The GPU surface executes on the host backend. `gpuDevice()` reports `host` and the model prints it. Device backends are roadmap work in plan 0023.
+- Every buffer moves through host memory on each launch: there are no device-resident buffers and no kernel fusion yet, so a device run pays a transfer per kernel. A `reduce` runs on one device thread in element order, which keeps its result identical to the host's.
+- The device's `exp`, `ln` and `tanh` are correctly rounded and a host libm is not on every argument, so the training loss can differ from the host's in its last digit.
 - A static handler is selected where it is written. `match input()` chooses between two regions the compiler has already specialised; a handler computed at run time needs a dynamic effect and a runtime handler instead.
 - A callback forwarded through a static arm must be stage-legal: pure, or performing only effects another static region answers.
 - The two handlers agree bit for bit only because both accumulate in the same order. A handler that reassociated a reduction would be a different interpretation, and the differential harness would say so.

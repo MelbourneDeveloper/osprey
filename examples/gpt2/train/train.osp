@@ -142,8 +142,6 @@ fn softmaxRows(logits, t) = {
     perform Backends::Tensor.build(t * vocabSize, fn(i) => at(weights, i) / at(sums, intDiv(i, vocabSize)))
 }
 
-fn target(ids, r) = listGet(ids, r + 1) ?: 0
-
 /// The token ids as a tensor, so a kernel reads them where it reads every
 /// other operand; an id below 2^53 is exact as a float.
 fn idTensor(ids) = perform Backends::Tensor.fromList(range(0, listLength(ids)) |> map(fn(i) => toFloat(listGet(ids, i) ?: 0)) |> toList())
@@ -154,13 +152,19 @@ fn dlogitAt(probs, idsT, t, count, i) = {
     match r == t - 1 { true => 0.0  false => (at(probs, i) - onehot(toFloat(i % vocabSize) == at(idsT, r + 1))) / count }
 }
 
+/// The probability row r gives its target, picked by the one-hot compare the
+/// logit gradient uses: every other term is an exact 0.0, so the sum is that
+/// probability itself.
+fn targetProb(probs, idsT, r) = range(0, vocabSize) |> fold(0.0, fn(a, v) => a + at(probs, r * vocabSize + v) * onehot(toFloat(v) == at(idsT, r + 1)))
+
 /// Mean next-token cross-entropy over the first t - 1 positions of xf [t, width],
-/// and its gradient into xf and into the tied output embedding.
+/// and its gradient into xf and into the tied output embedding. Negating the
+/// in-order sum is exact, so the loss is the host's `0.0 - ln p0 - ln p1 …`.
 fn lossHead(w, xf, ids, t) = {
     let probs = softmaxRows(Model::product(xf, w.wteT, t, width, vocabSize), t)
     let count = toFloat(t - 1)
-    let loss = (range(0, t - 1) |> fold(0.0, fn(a, r) => a - ln(at(probs, r * vocabSize + target(ids, r))))) / count
     let idsT = idTensor(ids)
+    let loss = (0.0 - total(perform Backends::Tensor.build(t - 1, fn(r) => ln(targetProb(probs, idsT, r))))) / count
     let dlogits = perform Backends::Tensor.build(t * vocabSize, fn(i) => dlogitAt(probs, idsT, t, count, i))
     Head {
         loss: loss,

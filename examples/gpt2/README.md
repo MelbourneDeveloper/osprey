@@ -52,7 +52,7 @@ loss after one step 3.8539085307403895
 
 | Path | What it is |
 | --- | --- |
-| `model/backends.osp` | `gpt2::Backends` — the `Tensor<B>` effect (build, get, length, zipWith, reduce, matMul, fromList, load, device) and its two handlers, `onLists` over `List<float>` and `onGpu` over `GpuBuffer<float>` |
+| `model/backends.osp` | `gpt2::Backends` — the `Tensor<B>` effect (build, get, length, zipWith, reduce, indexOf, matMul, fromList, load, device) and its two handlers, `onLists` over `List<float>` and `onGpu` over `GpuBuffer<float>` |
 | `model/tokenizer.osp` | `gpt2::Tokenizer` — the byte-level BPE tokenizer from `merges.txt` alone |
 | `model/model.osp` | `gpt2::Model` — the configuration, the weights, LayerNorm, attention, the blocks, the forward pass keeping every block's activations, and the KV-cached step; every tensor is `B` |
 | `generate/` | A one-file project: greedy sampling over the forward pass and the cached steps; `main` picks the handler |
@@ -97,11 +97,11 @@ walks through the effect, both handlers and what the compiler proves about them.
 
 ## What runs where
 
-`BACKEND=gpu` (the default) runs the model under `onGpu`, and `GPU` picks where its matrix products execute. `make gpt2` and `make gpt2-train` request GPU matrix execution by default (`GPU=auto`). On macOS, products dispatch directly to Metal; elsewhere they dispatch to an OpenCL compute GPU through its installed driver. `GPU=metal` or `GPU=opencl` requests a specific adapter, and `GPU=host` keeps every product on the CPU as the oracle. `BACKEND=lists` runs the same model over host lists, on the CPU, whatever `GPU` says. The same model source runs on every path, without CUDA. `gpuDevice()` names the resolved adapter and labels matrix-kernel execution, and both programs print it on their first line; a completed-command message on stderr proves a matrix reached the GPU. Adapter failures abort the model rather than continuing with empty buffers.
+`BACKEND=gpu` (the default) runs the model under `onGpu`, and `GPU` picks where its kernels and matrix products execute. `make gpt2` and `make gpt2-train` request the GPU by default (`GPU=auto`). On macOS, they dispatch directly to Metal; elsewhere they dispatch to an OpenCL compute GPU through its installed driver. `GPU=metal` or `GPU=opencl` requests a specific adapter, and `GPU=host` keeps every kernel and product on the CPU as the oracle. `BACKEND=lists` runs the same model over host lists, on the CPU, whatever `GPU` says. The same model source runs on every path, without CUDA. `gpuDevice()` names the resolved adapter and labels matrix-kernel execution, and both programs print it on their first line; a completed-command message on stderr proves a matrix reached the GPU. Adapter failures abort the model rather than continuing with empty buffers.
 
 ```sh
-make gpt2 GPU=host      # every product on the CPU
-make gpt2 GPU=metal     # products on the Apple GPU
+make gpt2 GPU=host      # every kernel and product on the CPU
+make gpt2 GPU=metal     # every kernel and product on the Apple GPU
 make gpt2 BACKEND=lists # host lists, CPU only
 ```
 
@@ -111,7 +111,7 @@ To run the compiler interactively from the repository root:
 OSPREY_GPU=auto osprey examples/gpt2/generate --run --memory=arc
 ```
 
-Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and moving every buffer in and out of each launch; there are no device-resident buffers yet, so this is real device execution with real transfer costs, not a device-resident transformer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
+Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction, the next token's index, the training loss — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and moving every buffer in and out of each launch; there are no device-resident buffers yet, so this is real device execution with real transfer costs, not a device-resident transformer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
 
 The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on every argument. The generated text is identical on every path. The training loss agrees to fifteen significant digits and differs in the last (`4.503189215447316` on the host, `4.503189215447317` on Metal), and the gradient sums differ in their trailing digits for the same reason.
 
@@ -182,8 +182,8 @@ lowerings and wasm32 on every `make test`.
 - **The KV cache** — the prompt takes one full forward pass; every later token
   runs `forwardStep`, one position through the blocks over each block's cached
   qkv rows, so a token costs one position rather than the whole sequence.
-- **Sampling** is greedy: a `reduce` for the peak logit and a `fold` for its
-  first index.
+- **Sampling** is greedy: a `reduce` for the peak logit and an `indexOf` for
+  its first index, both kernels.
 - **The backward pass** is the same kinds of operation. A `linear`'s gradients
   are two products against transposed operands plus a column sum; LayerNorm's
   recomputes the normalised rows from its input; attention's is the softmax

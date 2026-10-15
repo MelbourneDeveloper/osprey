@@ -18,16 +18,11 @@ let defaultTokens = 20
 
 /// The most likely token after the last block's output row `last` [1, width]:
 /// the tied output projection of its normalised state, then the first index
-/// holding its peak.
+/// holding its peak; endOfText when none does.
 fn nextToken(w, last) = {
     let logits = Model::product(Model::layerNorm(last, 1, w.lnfG, w.lnfB), w.wteT, 1, width, vocabSize)
-    argmax(logits, perform Backends::Tensor.reduce(logits, at(logits, 0), maxF))
-}
-
-/// The first index of `logits` holding `peak`; endOfText when none does.
-fn argmax(logits, peak) = {
-    let found = range(0, vocabSize) |> fold(-1, fn(best, v) => match best < 0 { true => match at(logits, v) == peak { true => v  false => best }  false => best })
-    match found < 0 { true => endOfText  false => found }
+    let found = perform Backends::Tensor.indexOf(logits, perform Backends::Tensor.reduce(logits, at(logits, 0), maxF))
+    match found < vocabSize { true => found  false => endOfText }
 }
 
 /// Row t - 1 of x [t, width].

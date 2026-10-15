@@ -17,7 +17,8 @@ pub(crate) mod requirements;
 pub(crate) use render::fill_inferred;
 pub use render::render_type_params;
 use render::{
-    extern_pairs, fn_sym, generic_decl_sym, let_sym, param_pairs, render_doc, render_effect_row,
+    effect_sym, extern_pairs, fn_sym, generic_decl_sym, let_sym, param_pairs, render_doc,
+    render_effect_row,
 };
 
 /// What kind of declaration a [`SymbolInfo`] describes.
@@ -361,16 +362,16 @@ fn sym_of(stmt: &Stmt) -> Option<SymbolInfo> {
             *position,
         )),
         Stmt::Effect {
-            stage: osprey_ast::Stage::Dynamic,
+            stage,
             name,
             type_params,
             doc,
             position,
             ..
-        } => Some(generic_decl_sym(
+        } => Some(effect_sym(
+            *stage,
             name,
             type_params,
-            "effect",
             render_doc(doc.as_ref()),
             *position,
         )),
