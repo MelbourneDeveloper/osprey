@@ -1209,8 +1209,8 @@ _vsix_install:
 	echo "  verified: bundled compiler and extension.js are byte-identical to this build"; \
 	if pgrep -f "Visual Studio Code.app" >/dev/null 2>&1; then \
 	  echo ""; \
-	  echo "  VSCode is RUNNING and still hosts the previous build — the version never"; \
-	  echo "  changes (0.0.0-dev), so VSCode has no update to notice. Reload it:"; \
+	  echo "  VSCode is running. A window opened before this install keeps its old"; \
+	  echo "  extension host until reloaded (0.0.0-dev never changes, so no prompt):"; \
 	  echo "      Cmd+Shift+P -> Developer: Reload Window"; \
 	fi
 

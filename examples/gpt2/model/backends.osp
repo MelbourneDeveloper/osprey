@@ -83,6 +83,25 @@ module Backends {
         work()
     }
 
+    /// An arithmetic fault ends the run: its arm answers the whole region.
+    effect Fault {
+        control halt: fn(string) -> int
+    }
+
+    /// Runs `work` under GPT-2's arithmetic policy: Success with its value, or
+    /// Error naming the first fault. A fault is a bug in the model, never a value
+    /// to substitute — a fabricated 0.0 is indistinguishable from a real logit —
+    /// so it stops the run, as a device kernel's fault does [GPU-DEVICE-FAULT].
+    export fn strictly(work) = {
+        handle Fault { halt fault => Error { message: fault } }
+        handle Arith {
+            overflow op l r _ => perform Fault.halt("integer overflow: ${l} ${op} ${r}")
+            divideByZero op l => toFloat(perform Fault.halt("division by zero: ${l} ${op} 0"))
+            remainderByZero l => perform Fault.halt("remainder by zero: ${l} % 0")
+        }
+        Success { value: work() }
+    }
+
     /// Runs `work` under the handler `name` selects. An unknown name runs
     /// nothing, so a mistyped backend never silently lands on the GPU surface.
     export fn under(name, work) = match name {

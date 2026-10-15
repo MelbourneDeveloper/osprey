@@ -200,18 +200,27 @@ Under `OSPREY_GPU=metal` or `opencl`, every kernel this handler launches runs on
 
 ## Choose at the boundary
 
-`main` is the one place that chooses. It reads the prompt, the token count and a backend name, then hands the whole run to `Backends::under`, which installs the handler that name selects:
+`main` is the one place that chooses. It reads the prompt, the token count and a backend name, then hands the whole run to `Backends::under`, which installs the handler that name selects, inside `Backends::strictly`, the arithmetic policy:
 
 ```osprey
 fn main() = {
-    handle Arith {
-        overflow _ _ _ wrapped => wrapped
-        divideByZero _ _ => 0.0
-        remainderByZero _ => 0
-    }
     let prompt = input()
     let count = parseInt(input()) ?: 20
-    Backends::under(input(), fn() => run(prompt, count))
+    let backend = input()
+    match Backends::strictly(fn() => Backends::under(backend, fn() => run(prompt, count))) {
+        Success { value } => value
+        Error { message } => print("generation stopped: ${message}")
+    }
+}
+
+export fn strictly(work) = {
+    handle Fault { halt fault => Error { message: fault } }
+    handle Arith {
+        overflow op l r _ => perform Fault.halt("integer overflow: ${l} ${op} ${r}")
+        divideByZero op l => toFloat(perform Fault.halt("division by zero: ${l} ${op} 0"))
+        remainderByZero l => perform Fault.halt("remainder by zero: ${l} % 0")
+    }
+    Success { value: work() }
 }
 
 export fn under(name, work) = match name {
@@ -223,13 +232,21 @@ export fn under(name, work) = match name {
 
 ```osprey-ml
 main () =
-    handle Arith
-        overflow _ _ _ wrapped => wrapped
-        divideByZero _ _ => 0.0
-        remainderByZero _ => 0
     prompt = input ()
     count = parseInt (input ()) ?: 20
-    Backends::under (input (), \() => run (prompt, count))
+    backend = input ()
+    match Backends::strictly (\() => Backends::under (backend, \() => run (prompt, count)))
+        Success value => value
+        Error message => print "generation stopped: ${message}"
+
+export strictly work =
+    handle Fault
+        halt fault => Error(message = fault)
+    handle Arith
+        overflow op l r _ => perform Fault.halt "integer overflow: ${l} ${op} ${r}"
+        divideByZero op l => toFloat (perform Fault.halt "division by zero: ${l} ${op} 0")
+        remainderByZero l => perform Fault.halt "remainder by zero: ${l} % 0"
+    Success(value = work ())
 
 export under (name, work) = match name
     "gpu" => onGpu work
@@ -237,7 +254,7 @@ export under (name, work) = match name
     _ => print "unknown backend `${name}`: choose gpu or lists"
 ```
 
-`under` only forwards the run, so the compiler applies it at the call site, and each arm of its `match` becomes its own static region. A name that is neither runs nothing rather than silently landing on the GPU surface. The compiler specialises `run` and everything it reaches once per region, with the arms of that region inlined at every `perform`. The compiled program contains two copies of the model and no handler: the `Tensor` effect does not exist at run time. `Arith` is an ordinary runtime effect and stays, because a divisor the program computes needs a policy the handlers cannot supply.
+`under` only forwards the run, so the compiler applies it at the call site, and each arm of its `match` becomes its own static region. A name that is neither runs nothing rather than silently landing on the GPU surface. The compiler specialises `run` and everything it reaches once per region, with the arms of that region inlined at every `perform`. The compiled program contains two copies of the model and no handler: the `Tensor` effect does not exist at run time. `Arith` is an ordinary runtime effect and stays, because a divisor the program computes needs a policy the handlers cannot supply. A fault there is a bug in the model, and a substituted `0.0` cannot be told apart from a real logit, so `strictly` substitutes nothing: each arm performs the `control` operation `Fault.halt`, which answers the whole region without resuming, and `main` receives an `Error` naming the operation and its operands. A device kernel's fault stops the run the same way.
 
 ## What the compiler proves
 

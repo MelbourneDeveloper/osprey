@@ -164,7 +164,11 @@ suite("TextMate grammars", () => {
     assertScoped(tokens, "false", "constant.language.boolean");
     assertScoped(tokens, "=>", "keyword.operator.arrow");
     assert.ok(
-      !tokens.some((t) => t.text === "true" && t.scopes.join("|").includes("entity.name.function")),
+      !tokens.some(
+        (t) =>
+          t.text === "true" &&
+          t.scopes.join("|").includes("entity.name.function"),
+      ),
       "a match arm is not a function definition",
     );
     // The real binding on line 1 still reads as one.
@@ -208,7 +212,13 @@ suite("TextMate grammars", () => {
     const grammar = await grammarFor("source.osprey-ml");
     const tokens = tokenize(
       grammar,
-      ["type LocalNote =", "    note : string", "    priority : string", "", "module Annotations"].join("\n"),
+      [
+        "type LocalNote =",
+        "    note : string",
+        "    priority : string",
+        "",
+        "module Annotations",
+      ].join("\n"),
     );
     assertScoped(tokens, "type", "keyword.declaration.type");
     assertScoped(tokens, "LocalNote", "entity.name.type");
@@ -305,8 +315,16 @@ suite("TextMate grammars", () => {
   // a qualified `handle Backends::Tensor` reads as that type too.
   test("an effect's name is a type at its declaration and its discharge in both flavors", async () => {
     for (const [scope, declaration, discharge] of [
-      ["source.osprey", "export static effect Tensor<B> {", "handle static Tensor<GpuBuffer<float>> {"],
-      ["source.osprey-ml", "export static effect Tensor B", "handle static Tensor<GpuBuffer<float>>"],
+      [
+        "source.osprey",
+        "export static effect Tensor<B> {",
+        "handle static Tensor<GpuBuffer<float>> {",
+      ],
+      [
+        "source.osprey-ml",
+        "export static effect Tensor B",
+        "handle static Tensor<GpuBuffer<float>>",
+      ],
     ] as const) {
       const grammar = await grammarFor(scope);
       const declared = tokenize(grammar, declaration);
@@ -334,8 +352,16 @@ suite("TextMate grammars", () => {
     // tests/effects/multiplicity. Their keyword positions are covered by the
     // contextual rules asserted above.
     const CONTEXTUAL = new Set([
-      "abort", "alias", "extra", "kernel", "many", "once", "out",
-      "replayable", "stage", "static",
+      "abort",
+      "alias",
+      "extra",
+      "kernel",
+      "many",
+      "once",
+      "out",
+      "replayable",
+      "stage",
+      "static",
     ]);
     const ALWAYS_KEYWORD =
       /^(fn|let|match|type|module|namespace|import|effect|handle|perform|signature|export|extern|resume|in|spawn|await|yield|send|recv|mut|handler|do|opaque|state)$/;
@@ -362,7 +388,9 @@ suite("TextMate grammars", () => {
           const at = `${relative}:${index + 1}`;
           const report = (why: string): void => {
             if (problems.length < 20) {
-              problems.push(`${at} ${why}: ${JSON.stringify(text)} → ${token.scopes.slice(1).join("|") || "NONE"}`);
+              problems.push(
+                `${at} ${why}: ${JSON.stringify(text)} → ${token.scopes.slice(1).join("|") || "NONE"}`,
+              );
             }
           };
           const ahead = line.slice(token.startIndex, token.startIndex + 2);

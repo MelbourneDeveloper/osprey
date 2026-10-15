@@ -5,7 +5,11 @@ import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import { lexicalFixtures, mutableFixtures, sourceFixtures } from "./debug-fixtures";
+import {
+  lexicalFixtures,
+  mutableFixtures,
+  sourceFixtures,
+} from "./debug-fixtures";
 import { defaultDebugOutputPath } from "../../client/src/extension";
 import { resolveBuiltOsprey, resolveRequiredLldbDap } from "./osprey-test-env";
 import {
@@ -136,7 +140,8 @@ suite("Osprey Debugger E2E Workflows", function () {
     specs: Parameters<typeof setSourceBreakpoints>[1],
     overrides: Record<string, unknown> = {},
   ): Promise<{ session: vscode.DebugSession; stop: DapStop }> {
-    const program = typeof overrides.program === "string" ? overrides.program : source;
+    const program =
+      typeof overrides.program === "string" ? overrides.program : source;
     setSourceBreakpoints(program, specs);
     const sessionPromise = waitForDebugSessionStart(LAUNCH_TIMEOUT_MS);
     const started = await vscode.debug.startDebugging(undefined, {
@@ -162,27 +167,48 @@ suite("Osprey Debugger E2E Workflows", function () {
       this.timeout(TEST_TIMEOUT_MS);
       const program = path.join(tempDir, `artifacts.${extension}`);
       const output = defaultDebugOutputPath(program);
-      fs.writeFileSync(program, extension === "osp"
-        ? "fn main() = {\n    let value = 41\n    print(wrapAdd(value, 1))\n}\n"
-        : "main () =\n    value = 41\n    print (wrapAdd value 1)\n");
+      fs.writeFileSync(
+        program,
+        extension === "osp"
+          ? "fn main() = {\n    let value = 41\n    print(wrapAdd(value, 1))\n}\n"
+          : "main () =\n    value = 41\n    print (wrapAdd value 1)\n",
+      );
       const { session, stop } = await launchToFirstStop([{ line: 3 }], {
-        program, debugOutput: output, compilerPath: resolveBuiltOsprey(), preserveArtifacts: true,
+        program,
+        debugOutput: output,
+        compilerPath: resolveBuiltOsprey(),
+        preserveArtifacts: true,
       });
       await assertFrameLocals(session, stop, program, 3, "main", { value: 41 });
       const ir = fs.readFileSync(`${output}.ll`, "utf8");
-      assert.ok(ir.includes("!DICompileUnit"), "the exact debug build retains its IR");
-      assert.ok(ir.includes(`artifacts.${extension}`), "the retained IR belongs to the current source");
-      if (process.platform === "darwin") assert.ok(fs.existsSync(`${output}.dSYM`));
+      assert.ok(
+        ir.includes("!DICompileUnit"),
+        "the exact debug build retains its IR",
+      );
+      assert.ok(
+        ir.includes(`artifacts.${extension}`),
+        "the retained IR belongs to the current source",
+      );
+      if (process.platform === "darwin")
+        assert.ok(fs.existsSync(`${output}.dSYM`));
     });
   }
 
   test("debug launch honors an explicit compiler override without fallback", async function () {
     this.timeout(TEST_TIMEOUT_MS);
     const started = await vscode.debug.startDebugging(undefined, {
-      type: "osprey", request: "launch", name: "Compiler override",
-      program: source, compilerPath: path.join(tempDir, "missing-compiler"), lldbDapPath,
+      type: "osprey",
+      request: "launch",
+      name: "Compiler override",
+      program: source,
+      compilerPath: path.join(tempDir, "missing-compiler"),
+      lldbDapPath,
     });
-    assert.strictEqual(started, false, "a missing override must not silently select another compiler");
+    assert.strictEqual(
+      started,
+      false,
+      "a missing override must not silently select another compiler",
+    );
   });
 
   const topName = (stop: DapStop): string => stop.stack.stackFrames[0].name;
@@ -190,19 +216,29 @@ suite("Osprey Debugger E2E Workflows", function () {
     stop.stack.stackFrames.some((frame) => frame.name.includes(name));
 
   for (const [extension, text] of [
-    ["osp", 'namespace "billing/api";\nmodule Tax {\n export fn add(n) = satAdd(n, 1)\n}\nfn main() = print(Tax::add(41))\n'],
-    ["ospml", 'namespace "billing/api"\nmodule Tax\n    export add n = satAdd n 1\nmain () = print (Tax::add 41)\n'],
+    [
+      "osp",
+      'namespace "billing/api";\nmodule Tax {\n export fn add(n) = satAdd(n, 1)\n}\nfn main() = print(Tax::add(41))\n',
+    ],
+    [
+      "ospml",
+      'namespace "billing/api"\nmodule Tax\n    export add n = satAdd n 1\nmain () = print (Tax::add 41)\n',
+    ],
   ]) {
     test(`module stack frames retain their source names (${extension})`, async function () {
       this.timeout(TEST_TIMEOUT_MS);
       const program = path.join(tempDir, `module.${extension}`);
       fs.writeFileSync(program, text);
       const { session, stop } = await launchToFirstStop([3], {
-        program, debugOutput: defaultDebugOutputPath(program),
+        program,
+        debugOutput: defaultDebugOutputPath(program),
       });
       const frame = assertCurrentLine(stop.stack, 3, program);
       assert.ok(frame.name.includes("billing/api::Tax::add"), frame.name);
-      assert.ok(!frame.name.includes("__osp_"), "no encoded names in user frames");
+      assert.ok(
+        !frame.name.includes("__osp_"),
+        "no encoded names in user frames",
+      );
       await assertLocalVariable(session, frame.id, "n", /\b41\b/);
       await continueExecution(session, stop.threadId);
       await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
@@ -216,9 +252,17 @@ suite("Osprey Debugger E2E Workflows", function () {
         const program = path.join(tempDir, `${fixture.prefix}.${extension}`);
         fs.writeFileSync(program, text);
         const { session, stop } = await launchToFirstStop([fixture.line], {
-          program, debugOutput: defaultDebugOutputPath(program),
+          program,
+          debugOutput: defaultDebugOutputPath(program),
         });
-        await assertFrameLocals(session, stop, program, fixture.line, fixture.prefix, fixture.locals);
+        await assertFrameLocals(
+          session,
+          stop,
+          program,
+          fixture.line,
+          fixture.prefix,
+          fixture.locals,
+        );
         await continueExecution(session, stop.threadId);
         await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
       });
@@ -232,43 +276,123 @@ suite("Osprey Debugger E2E Workflows", function () {
         const program = path.join(tempDir, `cell.${extension}`);
         fs.writeFileSync(program, source.text);
         const { session, stop } = await launchToFirstStop([source.line], {
-          program, debugOutput: defaultDebugOutputPath(program),
+          program,
+          debugOutput: defaultDebugOutputPath(program),
         });
-        await assertCellState(session, stop, program, source.line, fixture.prefix, fixture.arguments[0], 42, fixture.record);
+        await assertCellState(
+          session,
+          stop,
+          program,
+          source.line,
+          fixture.prefix,
+          fixture.arguments[0],
+          42,
+          fixture.record,
+        );
         await continueExecution(session, stop.threadId);
         const second = await waitForStop(session, LAUNCH_TIMEOUT_MS);
-        await assertCellState(session, second, program, source.line, fixture.prefix, fixture.arguments[1], 43, fixture.record);
+        await assertCellState(
+          session,
+          second,
+          program,
+          source.line,
+          fixture.prefix,
+          fixture.arguments[1],
+          43,
+          fixture.record,
+        );
         await continueExecution(session, second.threadId);
         await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
       });
     }
   }
 
-  async function assertCellState(session: vscode.DebugSession, stop: DapStop, program: string, line: number, prefix: string, x: number, n: number, record: boolean) {
+  async function assertCellState(
+    session: vscode.DebugSession,
+    stop: DapStop,
+    program: string,
+    line: number,
+    prefix: string,
+    x: number,
+    n: number,
+    record: boolean,
+  ) {
     await assertFrameLocals(session, stop, program, line, prefix, {
-      x, n: record ? { count: n } : n, ...(prefix === "__closure_fn_" ? { sum: n } : {}),
+      x,
+      n: record ? { count: n } : n,
+      ...(prefix === "__closure_fn_" ? { sum: n } : {}),
     });
   }
-
 
   for (const fixture of lexicalFixtures) {
     test(`${fixture.label} (${fixture.extension})`, async function () {
       this.timeout(TEST_TIMEOUT_MS);
       const program = path.join(tempDir, `pattern.${fixture.extension}`);
       fs.writeFileSync(program, fixture.text);
-      const { session, stop } = await launchToFirstStop([fixture.innerLine, fixture.outerLine], {
-        program, debugOutput: defaultDebugOutputPath(program),
-      });
-      const inside = await assertFrameLocals(session, stop, program, fixture.innerLine, fixture.prefix, fixture.innerLocals);
-      await assertWatch(session, inside, "value", new RegExp(`^${fixture.innerValue}$`));
+      const { session, stop } = await launchToFirstStop(
+        [fixture.innerLine, fixture.outerLine],
+        {
+          program,
+          debugOutput: defaultDebugOutputPath(program),
+        },
+      );
+      const inside = await assertFrameLocals(
+        session,
+        stop,
+        program,
+        fixture.innerLine,
+        fixture.prefix,
+        fixture.innerLocals,
+      );
+      await assertWatch(
+        session,
+        inside,
+        "value",
+        new RegExp(`^${fixture.innerValue}$`),
+      );
       const bindings = await readFrameVariables(session, inside);
-      assert.ok(!bindings.some(variable => ["selected", "outside"].includes(variable.name)), "bindings whose initializers have not completed must stay out of scope");
-      assert.ok(bindings.some(variable => new RegExp(`^value(?: @ .*:${fixture.bindingLine})?$`).test(variable.name) && variable.value === String(fixture.innerValue)), "the visible scope exposes its initialized value binding");
-      if (fixture.uniqueValue) assert.strictEqual(bindings.filter(variable => /^value(?: @ .*)?$/.test(variable.name)).length, 1, "an incomplete initializer cannot shadow the enclosing debugger binding");
+      assert.ok(
+        !bindings.some((variable) =>
+          ["selected", "outside"].includes(variable.name),
+        ),
+        "bindings whose initializers have not completed must stay out of scope",
+      );
+      assert.ok(
+        bindings.some(
+          (variable) =>
+            new RegExp(`^value(?: @ .*:${fixture.bindingLine})?$`).test(
+              variable.name,
+            ) && variable.value === String(fixture.innerValue),
+        ),
+        "the visible scope exposes its initialized value binding",
+      );
+      if (fixture.uniqueValue)
+        assert.strictEqual(
+          bindings.filter((variable) => /^value(?: @ .*)?$/.test(variable.name))
+            .length,
+          1,
+          "an incomplete initializer cannot shadow the enclosing debugger binding",
+        );
       await continueExecution(session, stop.threadId);
       const outside = await waitForStop(session, LAUNCH_TIMEOUT_MS);
-      const frame = await assertFrameLocals(session, outside, program, fixture.outerLine, fixture.prefix, { value: 100, selected: fixture.selected, outside: 100 + fixture.selected });
-      assert.ok(!(await readFrameVariables(session, frame)).some(variable => variable.name === "observed"), "inner locals leave scope after the expression");
+      const frame = await assertFrameLocals(
+        session,
+        outside,
+        program,
+        fixture.outerLine,
+        fixture.prefix,
+        {
+          value: 100,
+          selected: fixture.selected,
+          outside: 100 + fixture.selected,
+        },
+      );
+      assert.ok(
+        !(await readFrameVariables(session, frame)).some(
+          (variable) => variable.name === "observed",
+        ),
+        "inner locals leave scope after the expression",
+      );
       await continueExecution(session, outside.threadId);
       await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
     });

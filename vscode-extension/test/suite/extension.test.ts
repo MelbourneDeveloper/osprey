@@ -3162,7 +3162,9 @@ suite("Osprey VSIX Debugger E2E", () => {
         "the saved (not stale) program was debug-compiled to a native binary",
       );
 
-      await session.customRequest("continue", { threadId: initialized.threadId });
+      await session.customRequest("continue", {
+        threadId: initialized.threadId,
+      });
       await waitForDebugSessionEnd(45000, session.id);
     } finally {
       await debugConfig.update(

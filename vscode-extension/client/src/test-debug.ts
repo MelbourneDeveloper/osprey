@@ -112,7 +112,9 @@ function runIdOf(session: vscode.DebugSession): string | undefined {
   return typeof id === "string" ? id : undefined;
 }
 
-function trackerFor(id: string | undefined): vscode.DebugAdapterTracker | undefined {
+function trackerFor(
+  id: string | undefined,
+): vscode.DebugAdapterTracker | undefined {
   return id === undefined
     ? undefined
     : {

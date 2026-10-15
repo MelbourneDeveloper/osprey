@@ -500,10 +500,7 @@ suite("Osprey test documentation and profiling", () => {
     // the file.
     test("an id with no documentation cannot win the cursor race", () => {
       const uri = vscode.Uri.file("/w/a.test.osp");
-      const known = [
-        `${uri.toString()} phantom`,
-        `${uri.toString()} real`,
-      ];
+      const known = [`${uri.toString()} phantom`, `${uri.toString()} real`];
       const lines = new Map([[known[1], 5]]);
       const docOf = (id: string) => {
         const line = lines.get(id);

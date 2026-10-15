@@ -1,7 +1,11 @@
 import * as path from "path";
 import * as fs from "fs";
 import { workspace, ExtensionContext } from "vscode";
-import { CloseAction, ErrorAction, LanguageClientOptions } from "vscode-languageclient/node";
+import {
+  CloseAction,
+  ErrorAction,
+  LanguageClientOptions,
+} from "vscode-languageclient/node";
 
 // shipwrightPlatform maps the Node platform/arch to the Shipwright platform id
 // (e.g. darwin-arm64, win32-x64) used in the bundled binary path. Both inputs

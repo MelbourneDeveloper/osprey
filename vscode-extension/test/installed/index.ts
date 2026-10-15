@@ -7,7 +7,14 @@ export function run(): Promise<void> {
     mocha.addFile(path.join(__dirname, `${name}.test.js`));
   }
   return new Promise((resolve, reject) => {
-    mocha.run((failures) => failures === 0 ? resolve() : reject(new Error(`${failures} installed VSIX tests failed`)))
-      .on("fail", (test, error) => process.stderr.write(`\n${test.fullTitle()}\n${error.stack}\n`));
+    mocha
+      .run((failures) =>
+        failures === 0
+          ? resolve()
+          : reject(new Error(`${failures} installed VSIX tests failed`)),
+      )
+      .on("fail", (test, error) =>
+        process.stderr.write(`\n${test.fullTitle()}\n${error.stack}\n`),
+      );
   });
 }

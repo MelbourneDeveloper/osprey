@@ -60,13 +60,12 @@ fn run(prompt, count) = {
 }
 
 fn main() = {
-    handle Arith {
-        overflow _ _ _ wrapped => wrapped
-        divideByZero _ _ => 0.0
-        remainderByZero _ => 0
-    }
     let promptLine = input()
     let prompt = match promptLine == "" { true => defaultPrompt  false => promptLine }
     let count = parseInt(input()) ?: defaultTokens
-    Backends::under(input(), fn() => run(prompt, count))
+    let backend = input()
+    match Backends::strictly(fn() => Backends::under(backend, fn() => run(prompt, count))) {
+        Success { value } => value
+        Error { message } => print("generation stopped: ${message}")
+    }
 }

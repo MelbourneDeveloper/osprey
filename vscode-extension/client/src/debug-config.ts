@@ -41,7 +41,9 @@ function versionedDap(
 ): [number, string] | undefined {
   const version = /^lldb-dap-(\d+)$/.exec(name)?.[1];
   const candidate = path.join(dir, name);
-  return version && existsSync(candidate) ? [Number(version), candidate] : undefined;
+  return version && existsSync(candidate)
+    ? [Number(version), candidate]
+    : undefined;
 }
 
 function findVersionedLldbDap(
@@ -49,15 +51,18 @@ function findVersionedLldbDap(
   existsSync: (filePath: string) => boolean,
   readDir: (directory: string) => string[],
 ): string | undefined {
-  const candidates = (env.PATH ?? "").split(path.delimiter).filter(Boolean).flatMap((dir) => {
-    try {
-      return readDir(dir)
-        .map((name) => versionedDap(dir, name, existsSync))
-        .filter((item): item is [number, string] => item !== undefined);
-    } catch {
-      return [];
-    }
-  });
+  const candidates = (env.PATH ?? "")
+    .split(path.delimiter)
+    .filter(Boolean)
+    .flatMap((dir) => {
+      try {
+        return readDir(dir)
+          .map((name) => versionedDap(dir, name, existsSync))
+          .filter((item): item is [number, string] => item !== undefined);
+      } catch {
+        return [];
+      }
+    });
   return candidates.sort((left, right) => right[0] - left[0])[0]?.[1];
 }
 
@@ -97,7 +102,11 @@ export function resolveLldbDapExecutable(
     return onPath;
   }
   if (platform === "linux") {
-    const versioned = findVersionedLldbDap(env, existsSync, host.readDir ?? fs.readdirSync);
+    const versioned = findVersionedLldbDap(
+      env,
+      existsSync,
+      host.readDir ?? fs.readdirSync,
+    );
     if (versioned) {
       return versioned;
     }
@@ -156,22 +165,42 @@ export function compileDebugProgram(
 ): Promise<void> {
   fs.mkdirSync(path.dirname(debugOutput), { recursive: true });
   return new Promise((resolve, reject) => {
-    const args = debugBuildArguments(sourceProgram, debugOutput, preserveArtifacts);
-    const build = execFile(compilerCommand, args, { cwd }, (error, stdout, stderr) => {
-      [stdout, stderr].filter(Boolean).forEach(log);
-      if (error) {
-        reject(new Error(`Osprey debug build failed: ${error.message}`));
-      } else {
-        resolve();
-      }
-    });
+    const args = debugBuildArguments(
+      sourceProgram,
+      debugOutput,
+      preserveArtifacts,
+    );
+    const build = execFile(
+      compilerCommand,
+      args,
+      { cwd },
+      (error, stdout, stderr) => {
+        [stdout, stderr].filter(Boolean).forEach(log);
+        if (error) {
+          reject(new Error(`Osprey debug build failed: ${error.message}`));
+        } else {
+          resolve();
+        }
+      },
+    );
     // Nothing writes to a debug build's stdin. Closing it prevents a child
     // from waiting forever on an open, empty pipe.
     build.stdin?.end();
   });
 }
 
-function debugBuildArguments(source: string, output: string, preserve: boolean): string[] {
-  return [source, "--debug", "--debug-opt=none", "--compile", "-o", output,
-    ...(preserve ? ["--debug-preserve-ir", "--debug-preserve-symbols"] : [])];
+function debugBuildArguments(
+  source: string,
+  output: string,
+  preserve: boolean,
+): string[] {
+  return [
+    source,
+    "--debug",
+    "--debug-opt=none",
+    "--compile",
+    "-o",
+    output,
+    ...(preserve ? ["--debug-preserve-ir", "--debug-preserve-symbols"] : []),
+  ];
 }

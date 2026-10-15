@@ -28,9 +28,20 @@ import { registerTestDebugProfile } from "./test-debug";
 import { registerTestProfileProfile } from "./test-profile";
 import { registerWarningFixes, warningFixMiddleware } from "./warning-fixes";
 
-import { resolveServerCommand, makeClientFailureHandling, defaultOspreyDebugConfigForEditor, ospreyLanguageForFile } from "./client-config";
-import { resolveLldbDapExecutable, missingLldbDapMessage } from "./debug-config";
-import { compileCurrentFile, compileAndRunCurrentFile } from "./compile-commands";
+import {
+  resolveServerCommand,
+  makeClientFailureHandling,
+  defaultOspreyDebugConfigForEditor,
+  ospreyLanguageForFile,
+} from "./client-config";
+import {
+  resolveLldbDapExecutable,
+  missingLldbDapMessage,
+} from "./debug-config";
+import {
+  compileCurrentFile,
+  compileAndRunCurrentFile,
+} from "./compile-commands";
 export * from "./client-config";
 export * from "./debug-config";
 
@@ -76,7 +87,9 @@ export function activate(context: ExtensionContext) {
     resolveServerCommand(context),
   );
   registerTestDocsCommand(context);
-  registerWarningFixes(context, (params) => client.sendRequest(CodeActionRequest.type, params));
+  registerWarningFixes(context, (params) =>
+    client.sendRequest(CodeActionRequest.type, params),
+  );
 
   // Check if Osprey server is enabled
   const config = workspace.getConfiguration("osprey");
@@ -231,7 +244,11 @@ export function activate(context: ExtensionContext) {
   // refreshes on every stop.
   registerOspreyDebugPanel(context);
 
-  registerDebugLaunch(context, () => resolveServerCommand(context), outputChannel);
+  registerDebugLaunch(
+    context,
+    () => resolveServerCommand(context),
+    outputChannel,
+  );
 
   // Auto-detect and force language association for .osp and .ospml files. The
   // ML layout flavor (.ospml) binds to "osprey-ml"; the brace flavor (.osp) to
