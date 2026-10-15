@@ -15,6 +15,7 @@ pub(super) fn gen_bind(
     position: Option<Position>,
     declaration: bool,
 ) -> Result<()> {
+    crate::gpu_device::note_alias(cg, name, value);
     if bind_lambda(cg, name, value, declaration)? || bind_returned_lambda(cg, name, value)? {
         return Ok(());
     }

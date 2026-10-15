@@ -144,10 +144,14 @@ fn softmaxRows(logits, t) = {
 
 fn target(ids, r) = listGet(ids, r + 1) ?: 0
 
+/// The token ids as a tensor, so a kernel reads them where it reads every
+/// other operand; an id below 2^53 is exact as a float.
+fn idTensor(ids) = perform Backends::Tensor.fromList(range(0, listLength(ids)) |> map(fn(i) => toFloat(listGet(ids, i) ?: 0)) |> toList())
+
 /// Element i of the logit gradient [t, vocab]; the last position predicts nothing.
-fn dlogitAt(probs, ids, t, count, i) = {
+fn dlogitAt(probs, idsT, t, count, i) = {
     let r = intDiv(i, vocabSize)
-    match r == t - 1 { true => 0.0  false => (at(probs, i) - onehot(i % vocabSize == target(ids, r))) / count }
+    match r == t - 1 { true => 0.0  false => (at(probs, i) - onehot(toFloat(i % vocabSize) == at(idsT, r + 1))) / count }
 }
 
 /// Mean next-token cross-entropy over the first t - 1 positions of xf [t, width],
@@ -156,7 +160,8 @@ fn lossHead(w, xf, ids, t) = {
     let probs = softmaxRows(Model::product(xf, w.wteT, t, width, vocabSize), t)
     let count = toFloat(t - 1)
     let loss = (range(0, t - 1) |> fold(0.0, fn(a, r) => a - ln(at(probs, r * vocabSize + target(ids, r))))) / count
-    let dlogits = perform Backends::Tensor.build(t * vocabSize, fn(i) => dlogitAt(probs, ids, t, count, i))
+    let idsT = idTensor(ids)
+    let dlogits = perform Backends::Tensor.build(t * vocabSize, fn(i) => dlogitAt(probs, idsT, t, count, i))
     Head {
         loss: loss,
         dxf: Model::product(dlogits, w.wte, t, vocabSize, width),
@@ -166,13 +171,16 @@ fn lossHead(w, xf, ids, t) = {
 
 /// Element i of the token embedding gradient: the output projection's share
 /// plus the row of dx0 at every position holding this token.
-fn dwteAt(dx0, dwteOut, ids, t, i) = range(0, t) |> fold(at(dwteOut, i), fn(a, r) =>
-    match (listGet(ids, r) ?: 0) == intDiv(i, width) { true => a + at(dx0, r * width + i % width)  false => a })
+fn dwteAt(dx0, dwteOut, idsT, t, i) = range(0, t) |> fold(at(dwteOut, i), fn(a, r) =>
+    match at(idsT, r) == toFloat(intDiv(i, width)) { true => a + at(dx0, r * width + i % width)  false => a })
 
 /// The embedding gradients, and dx0 [t, width] itself for the positions used.
-fn embedBack(dx0, dwteOut, ids, t) = Embed {
-    dwte: perform Backends::Tensor.build(vocabSize * width, fn(i) => dwteAt(dx0, dwteOut, ids, t, i)),
-    dwpe: perform Backends::Tensor.build(positions * width, fn(i) => match intDiv(i, width) < t { true => at(dx0, i)  false => 0.0 })
+fn embedBack(dx0, dwteOut, ids, t) = {
+    let idsT = idTensor(ids)
+    Embed {
+        dwte: perform Backends::Tensor.build(vocabSize * width, fn(i) => dwteAt(dx0, dwteOut, idsT, t, i)),
+        dwpe: perform Backends::Tensor.build(positions * width, fn(i) => match intDiv(i, width) < t { true => at(dx0, i)  false => 0.0 })
+    }
 }
 
 fn finalState(w, ids, t) = Model::layerNorm(Model::forward(w, ids, t).x, t, w.lnfG, w.lnfB)

@@ -488,9 +488,10 @@ _runtime:
 	  done
 	@$(MAKE) --no-print-directory -s $(NATIVE_RUNTIME_STAMP)
 
-compiler/bin/gpu_shader_source.h: compiler/runtime/gpu_f64.metal scripts/embed_gpu_shader.awk
+GPU_SHADER_SRC := compiler/runtime/gpu_f64.metal compiler/runtime/gpu_math64.metal compiler/runtime/gpu_device_lib.metal
+compiler/bin/gpu_shader_source.h: $(GPU_SHADER_SRC) scripts/embed_gpu_shader.awk
 	@$(MKDIR) compiler/bin
-	awk -f scripts/embed_gpu_shader.awk $< > $@
+	awk -f scripts/embed_gpu_shader.awk $(GPU_SHADER_SRC) > $@
 
 compiler/bin/gpu_metal.o: compiler/runtime/gpu_metal.m compiler/bin/gpu_shader_source.h compiler/runtime/gpu_device.h Makefile
 	$(CC) $(A) -fobjc-arc $(GPU_DEVICE_FLAGS) $< -o $@
@@ -655,7 +656,7 @@ PROF_T = -O2 -g -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-st
 # (_coverage_check_c_runtime) iterate this same table, so adding one row wires
 # a suite into testing AND coverage measurement.
 C_TEST_SUITES ?= memory_gc_stack_root_tests memory_arc_tests memory_gc_tests \
-  memory_pool_tests memory_runtime_tests memory_golden_tests gpu_runtime_tests gpu_opencl_tests gpu_selection_tests gpu_no_device_tests \
+  memory_pool_tests memory_runtime_tests memory_golden_tests gpu_runtime_tests gpu_shader_tests gpu_opencl_tests gpu_selection_tests gpu_no_device_tests \
   list_tests map_tests string_runtime_tests json_runtime_tests \
   effects_runtime_tests builtins_runtime_tests test_system_runtime \
   test_file_runtime \
@@ -681,6 +682,9 @@ C_LIBS_gpu_runtime_tests = $(GPU_DEVICE_LINK) $(GPU_DEVICE_LIBS)
 C_SRC_gpu_device_tests = runtime/gpu_device_tests.c runtime/gpu_runtime.c runtime/gpu_host.c runtime/file_runtime.c runtime/memory_runtime.c
 C_FLAGS_gpu_device_tests = $(GPU_DEVICE_FLAGS)
 C_LIBS_gpu_device_tests = $(GPU_DEVICE_LINK) $(GPU_DEVICE_LIBS)
+C_SRC_gpu_shader_tests = runtime/gpu_shader_tests.c
+C_FLAGS_gpu_shader_tests = -ffp-contract=off
+C_LIBS_gpu_shader_tests = -lm
 C_SRC_gpu_opencl_tests = runtime/gpu_opencl_tests.c runtime/gpu_opencl.c runtime/file_runtime.c runtime/memory_runtime.c
 C_FLAGS_gpu_opencl_tests = -DOSPREY_GPU_TESTING=1
 C_LIBS_gpu_opencl_tests = -pthread $(if $(filter Linux,$(UNAME_S)),-ldl)
@@ -933,9 +937,9 @@ _tui: build
 	./$(BIN) examples/tui/api_browser.osp --run
 
 # _gpu-demo: Render the gpu* kernel demo (fractal, shaded sphere, composite)
-#            Runs on the CPU: only matrix products reach a device backend, so
-#            these gpu* kernels execute on [GPU-BACKEND-HOST], a dispatch
-#            surface, not silicon. For pixels on the actual GPU, see `make graphics`.
+#            on the host backend [GPU-BACKEND-HOST]; the raster suite uses
+#            gpuScan/gpuFilter, which have no device form yet, so a selected
+#            device would decline it. For pixels on the actual GPU, see `make graphics`.
 #            FLAVOR=ml renders the ML twin, which prints byte-identical output.
 _gpu-demo: build
 	@echo "==> rendering gpu* kernel demo on the host backend (CPU)"
@@ -1033,7 +1037,7 @@ graphics: build $(GFX_LIB) _graphics-shader
 endif
 
 ## gpt2: Run the trained GPT-2 model under one Tensor handler (usage: make gpt2 PROMPT="..." TOKENS=20 BACKEND=gpu|lists)
-## BACKEND=gpu runs the model on the GPU surface, its products on GPU=auto|metal|opencl|host; BACKEND=lists runs the same model over host lists.
+## BACKEND=gpu runs the model on the GPU surface: every kernel and product on GPU=auto|metal|opencl, or on the CPU with GPU=host; BACKEND=lists runs the same model over host lists.
 ## The published weights and merges download once into examples/gpt2/weights (ignored by git).
 GPT2_DIR    := examples/gpt2
 GPT2_SOURCE := https://huggingface.co/openai-community/gpt2/resolve/main

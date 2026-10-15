@@ -127,6 +127,7 @@ fn compile_module(program: &Program, options: CodegenOptions, library: bool) -> 
     crate::anybox::seed_rows(&mut cg);
 
     record_declarations(&mut cg, program);
+    crate::gpu_device::record(&mut cg, program);
 
     let mut top_level: Vec<&Stmt> = Vec::new();
     let mut user_main: Option<(&Expr, Option<Position>)> = None;
@@ -221,6 +222,7 @@ fn compile_module(program: &Program, options: CodegenOptions, library: bool) -> 
         cg.emit("ret i32 0");
     }
     cg.finish_function(LType::I32.as_str(), "main", &[]);
+    crate::gpu_device::publish(&mut cg);
 
     Ok(cg.render())
 }

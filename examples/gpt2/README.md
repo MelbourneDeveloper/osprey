@@ -29,7 +29,7 @@ generated 20 tokens
 The capital of France is the capital of the French Republic, and the capital of the French Republic is the capital of the French
 ```
 
-That first line is from `GPU=host`. The default `GPU=auto` names the adapter instead, such as `gpt2 (124M) on metal:0 (Apple M4 Max; matrix kernels)`, and prints the same four lines after it; `BACKEND=lists` prints `gpt2 (124M) on lists`.
+That first line is from `GPU=host`. The default `GPU=auto` names the adapter instead, such as `gpt2 (124M) on metal:0 (Apple M4 Max)`, and prints the same four lines after it; `BACKEND=lists` prints `gpt2 (124M) on lists`.
 
 `make gpt2-train` runs one training step on the same downloaded weights: the
 next-token cross-entropy of the prompt, the gradient of every parameter through
@@ -111,13 +111,20 @@ To run the compiler interactively from the repository root:
 OSPREY_GPU=auto osprey examples/gpt2/generate --run --memory=arc
 ```
 
-Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Both GPU adapters use the same software binary64 arithmetic, preserving the host's product/accumulation order without float32 substitution. Tokenization, attention gathers, LayerNorm, and the other `gpuMap`/fold combinators still execute on the CPU. This is GPU matrix execution with real transfer and synchronization costs, not a fully device-resident transformer. General kernel offload remains in [plan 0023](../../docs/plans/0023-gpu-computation.md).
+Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and moving every buffer in and out of each launch; there are no device-resident buffers yet, so this is real device execution with real transfer costs, not a device-resident transformer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
+
+The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on every argument. The generated text is identical on every path. The training loss agrees to fifteen significant digits and differs in the last (`4.503189215447316` on the host, `4.503189215447317` on Metal), and the gradient sums differ in their trailing digits for the same reason.
 
 | Measured 2026-10-13, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build, `--memory=arc`, `GPU=host` | `BACKEND=gpu` | `BACKEND=lists` |
 | --- | --- | --- |
 | 20 tokens from the 5-token prompt: load, one full pass, 19 KV-cached steps | 19.6 s, 1.4 GB peak | 7 min 18 s, 1.7 GB peak |
 | One training step over the 5-token prompt: load, forward, loss, backward, SGD, forward again | 52 s, 3.6 GB peak | 9 min, 4.6 GB peak |
 | `reference.py`, the same 20 tokens in pure Python | 16 min 25 s | |
+
+| Measured 2026-10-15, Apple M4 Max, macOS, release build, `--memory=arc`, `BACKEND=gpu` | `GPU=host` | `GPU=metal` | `GPU=opencl` |
+| --- | --- | --- | --- |
+| 5 tokens from the 5-token prompt, every kernel and product on the selected device | 7.4 s | 6.1 s | 10.5 s |
+| One training step over the 5-token prompt | 19.4 s | 68.5 s | |
 | `reference.py --train`, the same step in pure Python | 5 min 49 s, 16.2 GB peak | |
 
 The GPU surface is faster because its buffers are dense doubles and its kernels

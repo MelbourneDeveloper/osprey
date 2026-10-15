@@ -150,7 +150,7 @@ export onLists work =
 
 ## Answer with the GPU surface
 
-The second handler answers the same operations with `GpuBuffer<float>`: each `build` is a kernel over `gpuIota`, each `zipWith` and `reduce` forwards the model's callback to a kernel, `matMul` is `gpuMatMul`, and `device` is `gpuDevice()`.
+The second handler answers the same operations with `GpuBuffer<float>`: each `build` is a kernel over `gpuIota`, each `zipWith` and `reduce` forwards the model's callback to a kernel, `matMul` is `gpuMatMul`, and `device` is `gpuDevice()`. When `OSPREY_GPU` selects a device, every one of those kernels and products is compiled from this same source and executed on it, through Metal or OpenCL; with `OSPREY_GPU=host` the same handler runs them on the CPU. The model never changes.
 
 ```osprey
 export fn onGpu(work) = {

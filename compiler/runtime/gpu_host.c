@@ -73,7 +73,7 @@ static const char OP_TENSOR[] = "gpuLoadTensor";
 // Broken-code quarantine: the GPT-2 example used to turn failed tensors and
 // products into empty buffers, then generate/train with fabricated zeros.
 void *osprey_gpu_panic(const char *message) {
-  (void)fprintf(stderr, "GPT-2 cannot continue: %s\n", message ? message : "unknown GPU failure");
+  (void)fprintf(stderr, "GPU execution cannot continue: %s\n", message ? message : "unknown GPU failure");
   abort();
 }
 

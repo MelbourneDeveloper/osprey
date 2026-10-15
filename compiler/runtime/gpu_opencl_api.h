@@ -1,5 +1,6 @@
 #ifndef OSPREY_GPU_OPENCL_API_H
 #define OSPREY_GPU_OPENCL_API_H
+#include "gpu_device.h"
 #include <stddef.h>
 #include <stdint.h>
 #if defined(_WIN32)
@@ -30,7 +31,7 @@ typedef struct {
   int (OSP_CL_CALL *release_context)(void *);
 } OspreyOpenCLApi;
 
-int osprey_gpu_opencl_matmul(const int64_t *, const int64_t *, int64_t *, int64_t, int64_t, int64_t);
+int osprey_gpu_opencl_dispatch(const OspreyGpuDispatch *dispatch);
 const char *osprey_gpu_opencl_name(void);
 uint64_t osprey_gpu_opencl_completed(void);
 #if defined(OSPREY_GPU_TESTING)

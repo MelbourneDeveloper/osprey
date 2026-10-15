@@ -38,6 +38,7 @@ mod freevars_tests;
 mod genfn;
 mod globals;
 mod gpu;
+mod gpu_device;
 mod gpu_kernel;
 mod iter;
 mod listlit;

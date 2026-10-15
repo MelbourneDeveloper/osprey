@@ -20,17 +20,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+int64_t osprey_gpu_len(void *buffer);
+int64_t *osprey_gpu_data(void *buffer);
+
 static int device_selection(void) {
   const char *mode = getenv("OSPREY_GPU");
   if (!mode || !*mode || strcmp(mode, "host") == 0) return 0;
   if (strcmp(mode, "auto") == 0) return 1;
   if (strcmp(mode, "metal") == 0) return 2;
   if (strcmp(mode, "opencl") == 0) return 3;
-  osp_io_error_text("gpuMatMul", "device selection", "unknown backend; expected host, auto, metal, or opencl");
+  osp_io_error_text("gpu", "device selection", "unknown backend; expected host, auto, metal, or opencl");
   return -1;
 }
 
-// Implements [GPU-DEVICE]: report the resolved builtin matrix adapter.
+// Implements [GPU-DEVICE]: report the resolved device adapter.
 const char *osprey_gpu_device_name(void) {
   int selected = device_selection();
   if (!selected) return "host";
@@ -43,20 +46,104 @@ const char *osprey_gpu_device_name(void) {
   return selected < 0 ? "invalid:device" : "unavailable:device";
 }
 
-int osprey_gpu_device_matmul(const int64_t *left, const int64_t *right, int64_t *out,
-                             int64_t rows, int64_t inner, int64_t cols) {
+// Route one dispatch to the selected adapter [GPU-BACKEND-DEVICE]. Nothing to
+// run completes at once; a device, once selected, never falls back to the host.
+int osprey_gpu_device_dispatch(OspreyGpuDispatch *dispatch) {
   int selected = device_selection();
   if (selected <= 0) return selected;
+  if (dispatch->count >= OSPREY_GPU_MAX_ARGS) {
+    osp_io_error_text(dispatch->kernel, "device dispatch", "too many kernel arguments");
+    return -1;
+  }
+  if (!dispatch->threads) return 1;
 #if defined(OSPREY_GPU_METAL)
-  if (selected == 1 || selected == 2) return osprey_gpu_metal_matmul(left, right, out, rows, inner, cols);
+  if (selected == 1 || selected == 2) return osprey_gpu_metal_dispatch(dispatch);
 #endif
 #if defined(OSPREY_GPU_OPENCL)
-  if (selected == 1 || selected == 3) return osprey_gpu_opencl_matmul(left, right, out, rows, inner, cols);
+  if (selected == 1 || selected == 3) return osprey_gpu_opencl_dispatch(dispatch);
 #endif
-#if !defined(OSPREY_GPU_METAL) && !defined(OSPREY_GPU_OPENCL)
-  (void)left; (void)right; (void)out; (void)rows; (void)inner; (void)cols;
-#endif
-  osp_io_error_text("gpuMatMul", "device selection", "no GPU adapter in this runtime build");
+  osp_io_error_text(dispatch->kernel, "device selection", "no GPU adapter in this runtime build");
+  return -1;
+}
+
+// The builtin product as a library-kernel dispatch [GPU-MATMUL].
+int osprey_gpu_device_matmul(const int64_t *left, const int64_t *right, int64_t *out,
+                             int64_t rows, int64_t inner, int64_t cols) {
+  OspreyGpuDispatch dispatch = {"osprey_matmul64", NULL, {{0, NULL, NULL, 0}}, 0, (uint64_t)(rows * cols)};
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_INPUT, left, NULL, (uint64_t)(rows * inner));
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_INPUT, right, NULL, (uint64_t)(inner * cols));
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_OUTPUT, out, out, (uint64_t)(rows * cols));
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_SCALAR, NULL, NULL, (uint64_t)rows);
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_SCALAR, NULL, NULL, (uint64_t)inner);
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_SCALAR, NULL, NULL, (uint64_t)cols);
+  return osprey_gpu_device_dispatch(&dispatch);
+}
+
+// A buffer handle as an input argument: its words and length; an empty or
+// NULL buffer uploads one zero word that `count` keeps every thread from reading.
+static void buffer_argument(OspreyGpuDispatch *dispatch, void *handle) {
+  osprey_gpu_arg(dispatch, OSPREY_GPU_INPUT, osprey_gpu_data(handle), NULL, (uint64_t)osprey_gpu_len(handle));
+}
+
+// One uniform of a compiled kernel: `s` a scalar word, `b` a buffer handle
+// bound as its words followed by its length ([GPU-KERNEL-EXTRACT] uniforms).
+static void uniform_argument(OspreyGpuDispatch *dispatch, char kind, int64_t word) {
+  if (kind == 'b') {
+    buffer_argument(dispatch, (void *)(intptr_t)word);
+    osprey_gpu_arg(dispatch, OSPREY_GPU_SCALAR, NULL, NULL, (uint64_t)osprey_gpu_len((void *)(intptr_t)word));
+  } else {
+    osprey_gpu_arg(dispatch, OSPREY_GPU_SCALAR, NULL, NULL, (uint64_t)word);
+  }
+}
+
+static const char *fault_message(int64_t fault) {
+  switch (fault) {
+  case OSPREY_GPU_FAULT_OVERFLOW: return "integer overflow, which no device kernel can hand to an Arith policy";
+  case OSPREY_GPU_FAULT_DIVIDE_BY_ZERO: return "division by zero, which no device kernel can hand to an Arith policy";
+  case OSPREY_GPU_FAULT_REMAINDER_BY_ZERO: return "remainder by zero, which no device kernel can hand to an Arith policy";
+  default: return "unknown fault";
+  }
+}
+
+// Broken-code quarantine: a `gpuMap` has no error channel, so a device failure
+// aborts naming the kernel rather than continuing with an unwritten buffer.
+static int32_t abort_launch(const char *kernel, const char *reason) {
+  char text[512];
+  (void)snprintf(text, sizeof text, "kernel %s: %s", kernel, reason ? reason : "device failure");
+  (void)osprey_gpu_panic(text);
+  return -1;
+}
+
+// A compiled kernel's launch site [GPU-BACKEND-DEVICE]: 1 when the device ran
+// the kernel and `out` holds its result, 0 when the host loop must run. The
+// `kinds` string names each uniform's kind; a sequential launch runs one
+// thread over `count` elements, seeded from and reducing into `out`.
+int32_t osprey_gpu_launch(const char *kernel, const char *source, const char *kinds, const int64_t *uniforms,
+                          void *in0, void *in1, int64_t *out, int64_t out_len, int64_t count, int32_t sequential) {
+  int64_t fault = 0;
+  OspreyGpuDispatch dispatch = {kernel, source, {{0, NULL, NULL, 0}}, 0, sequential ? 1 : (uint64_t)count};
+  buffer_argument(&dispatch, in0);
+  buffer_argument(&dispatch, in1);
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_OUTPUT, out, out, (uint64_t)out_len);
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_OUTPUT, &fault, &fault, 1);
+  osprey_gpu_arg(&dispatch, OSPREY_GPU_SCALAR, NULL, NULL, (uint64_t)count);
+  for (size_t i = 0; kinds[i]; i++) uniform_argument(&dispatch, kinds[i], uniforms[i]);
+  int status = osprey_gpu_device_dispatch(&dispatch);
+  if (status < 0) return abort_launch(kernel, osp_io_error());
+  if (status > 0 && fault) return abort_launch(kernel, fault_message(fault));
+  return status;
+}
+
+// A launch site whose kernel has no device form [GPU-BACKEND-DEVICE]: the host
+// runs it when the host is selected, and a selected device rejects it by name
+// rather than silently running it on the CPU.
+int32_t osprey_gpu_declined(const char *what) {
+  int selected = device_selection();
+  if (!selected) return 0;
+  if (selected < 0) return abort_launch(what, osp_io_error());
+  char text[512];
+  (void)snprintf(text, sizeof text, "%s; a selected device cannot run it", what);
+  (void)osprey_gpu_panic(text);
   return -1;
 }
 

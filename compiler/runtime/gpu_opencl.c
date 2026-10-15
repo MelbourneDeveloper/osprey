@@ -1,4 +1,7 @@
-// Portable direct-driver adapter [GPU-BACKEND-PORTABILITY] [GPU-MATMUL].
+// Portable direct-driver adapter [GPU-BACKEND-PORTABILITY] [GPU-BACKEND-DEVICE]:
+// one program holding the shader source plus the running program's compiled
+// kernels, one kernel object per name, and one dispatch path for the builtin
+// product and every compiled kernel alike.
 #include "gpu_device.h"
 #include "gpu_opencl_api.h"
 #include "io_error.h"
@@ -13,8 +16,20 @@
 #include <dlfcn.h>
 #endif
 
+#define CL_MAX_KERNELS 512
+// cl_mem_flags: READ_ONLY | COPY_HOST_PTR for inputs, READ_WRITE | COPY_HOST_PTR
+// for outputs, which a kernel may read (a reduction's seed) before it writes.
+#define CL_INPUT_FLAGS UINT64_C(36)
+#define CL_OUTPUT_FLAGS UINT64_C(33)
+#define CL_DEVICE_TYPE_GPU UINT64_C(4)
+#define CL_DEVICE_NAME 0x102B
+#define CL_PROGRAM_BUILD_LOG 0x1183
+
 static OspreyOpenCLApi cl;
-static void *cl_device, *cl_context, *cl_queue, *cl_program, *cl_kernel;
+static void *cl_device, *cl_context, *cl_queue, *cl_program;
+static struct { const char *name; void *kernel; } cl_kernels[CL_MAX_KERNELS];
+static unsigned cl_kernel_count;
+static const char *cl_source;
 static pthread_mutex_t cl_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint64_t cl_completed;
 static int cl_ready;
@@ -87,12 +102,18 @@ static int load_api(void) {
 }
 #undef LOAD
 
-static void release_context(void) {
-  if (cl_kernel) (void)cl.release_kernel(cl_kernel);
+static void release_program(void) {
+  for (unsigned i = 0; i < cl_kernel_count; i++) (void)cl.release_kernel(cl_kernels[i].kernel);
+  cl_kernel_count = 0;
   if (cl_program) (void)cl.release_program(cl_program);
+  cl_program = NULL;
+}
+
+static void release_context(void) {
+  release_program();
   if (cl_queue) (void)cl.release_queue(cl_queue);
   if (cl_context) (void)cl.release_context(cl_context);
-  cl_kernel = cl_program = cl_queue = cl_context = NULL;
+  cl_queue = cl_context = NULL;
 }
 
 static int find_device(void) {
@@ -103,14 +124,14 @@ static int find_device(void) {
   if (!platforms) return failed("platform allocation", -1);
   status = cl.platforms(count, platforms, NULL);
   for (unsigned i = 0; !status && i < count; i++) {
-    if (cl.devices(platforms[i], UINT64_C(4), 1, &cl_device, NULL) == 0 && cl_device) break;
+    if (cl.devices(platforms[i], CL_DEVICE_TYPE_GPU, 1, &cl_device, NULL) == 0 && cl_device) break;
   }
   free(platforms);
   if (status || !cl_device) return failed("compute GPU discovery", status);
   char name[192] = {0};
-  status = cl.info(cl_device, 0x102B, sizeof name, name, NULL);
+  status = cl.info(cl_device, CL_DEVICE_NAME, sizeof name, name, NULL);
   if (status) return failed("device name", status);
-  (void)snprintf(cl_name, sizeof cl_name, "opencl:0 (%s; matrix kernels)", name);
+  (void)snprintf(cl_name, sizeof cl_name, "opencl:0 (%s)", name);
   return 0;
 }
 
@@ -125,28 +146,67 @@ static int create_context(void) {
 static void build_failure(int status) {
   (void)failed("kernel compilation", status);
   char log[900] = {0};
-  if (cl.build_info(cl_program, cl_device, 0x1183, sizeof log, log, NULL) == 0 && log[0])
+  if (cl.build_info(cl_program, cl_device, CL_PROGRAM_BUILD_LOG, sizeof log, log, NULL) == 0 && log[0])
     (void)snprintf(cl_failure, sizeof cl_failure, "kernel compilation (status %d): %.899s", status, log);
 }
 
-static int create_program(void) {
+// The shader source followed by the program's kernels, as one text.
+static char *program_text(const char *source, size_t *size) {
+  size_t extra = source ? strlen(source) : 0;
+  char *text = malloc((size_t)osprey_gpu_shader_len + extra + 2);
+  if (!text) return NULL;
+  memcpy(text, osprey_gpu_shader, osprey_gpu_shader_len);
+  text[osprey_gpu_shader_len] = '\n';
+  memcpy(text + osprey_gpu_shader_len + 1, source ? source : "", extra);
+  *size = (size_t)osprey_gpu_shader_len + 1 + extra;
+  text[*size] = '\0';
+  return text;
+}
+
+// Compile the program when there is none, or when a dispatch brings kernels
+// the current one lacks; the kernel objects of the old program are released.
+static int ensure_program(const char *source) {
+  if (cl_program && (!source || source == cl_source)) return 0;
+  release_program();
+  size_t size = 0;
+  char *text = program_text(source, &size);
+  if (!text) return failed("program text allocation", -1);
   int status = 0;
-  const char *source = (const char *)osprey_gpu_shader;
-  size_t size = osprey_gpu_shader_len;
-  cl_program = cl.program(cl_context, 1, &source, &size, &status);
+  const char *lines = text;
+  cl_program = cl.program(cl_context, 1, &lines, &size, &status);
+  free(text);
   if (status || !cl_program) return failed("program creation", status);
   status = cl.build(cl_program, 1, &cl_device, "-cl-std=CL1.2", NULL, NULL);
   if (status) {
     build_failure(status);
     return -1;
   }
-  cl_kernel = cl.kernel(cl_program, "osprey_matmul64", &status);
-  return status || !cl_kernel ? failed("kernel creation", status) : 0;
+  cl_source = source;
+  return 0;
+}
+
+static void *kernel_of(const char *name) {
+  for (unsigned i = 0; i < cl_kernel_count; i++) {
+    if (strcmp(cl_kernels[i].name, name) == 0) return cl_kernels[i].kernel;
+  }
+  if (cl_kernel_count == CL_MAX_KERNELS) {
+    (void)failed("kernel table", -1);
+    return NULL;
+  }
+  int status = 0;
+  void *kernel = cl.kernel(cl_program, name, &status);
+  if (status || !kernel) {
+    (void)failed("kernel creation", status);
+    return NULL;
+  }
+  cl_kernels[cl_kernel_count].name = name;
+  cl_kernels[cl_kernel_count++].kernel = kernel;
+  return kernel;
 }
 
 static int initialize(void) {
   if (cl_ready) return cl_ready;
-  if ((!cl.platforms && load_api()) || find_device() || create_context() || create_program()) {
+  if ((!cl.platforms && load_api()) || find_device() || create_context() || ensure_program(NULL)) {
     release_context();
     cl_ready = -1;
   } else {
@@ -169,58 +229,72 @@ uint64_t osprey_gpu_opencl_completed(void) {
   return count;
 }
 
-static int set_arguments(void *const buffers[3], const uint64_t dimensions[3]) {
-  for (unsigned i = 0; i < 6; i++) {
-    size_t size = i < 3 ? sizeof buffers[i] : sizeof dimensions[i - 3];
-    const void *value = i < 3 ? (const void *)&buffers[i] : (const void *)&dimensions[i - 3];
-    int status = cl.arg(cl_kernel, i, size, value);
+// Create and bind every argument; the buffers are kept for the read-back.
+static int bind_arguments(void *kernel, const OspreyGpuDispatch *d, void **buffers) {
+  for (unsigned i = 0; i < d->count; i++) {
+    const OspreyGpuArg *arg = &d->args[i];
+    int status = 0;
+    if (arg->kind == OSPREY_GPU_SCALAR) {
+      status = cl.arg(kernel, i, sizeof arg->count, &arg->count);
+      if (status) return failed("kernel argument", status);
+      continue;
+    }
+    uint64_t flags = arg->kind == OSPREY_GPU_INPUT ? CL_INPUT_FLAGS : CL_OUTPUT_FLAGS;
+    buffers[i] = cl.buffer(cl_context, flags, (size_t)osprey_gpu_arg_bytes(arg), arg->words, &status);
+    if (status || !buffers[i]) return failed("GPU buffer allocation", status);
+    status = cl.arg(kernel, i, sizeof buffers[i], &buffers[i]);
     if (status) return failed("kernel argument", status);
   }
   return 0;
 }
 
-static int dispatch(void *const buffers[3], const uint64_t dimensions[3], int64_t *out) {
-  if (set_arguments(buffers, dimensions)) return -1;
-  size_t count = (size_t)(dimensions[0] * dimensions[2]);
-  int status = cl.launch(cl_queue, cl_kernel, 1, NULL, &count, NULL, 0, NULL, NULL);
-  if (status) return failed("GPU dispatch", status);
-  status = cl.read(cl_queue, buffers[2], 1, 0, count * 8, out, 0, NULL, NULL);
-  if (status) return failed("GPU completion/readback", status);
+static int read_back(const OspreyGpuDispatch *d, void **buffers) {
+  for (unsigned i = 0; i < d->count; i++) {
+    const OspreyGpuArg *arg = &d->args[i];
+    if (arg->kind != OSPREY_GPU_OUTPUT || !arg->count) continue;
+    int status = cl.read(cl_queue, buffers[i], 1, 0, (size_t)(arg->count * 8), arg->out, 0, NULL, NULL);
+    if (status) return failed("GPU completion/readback", status);
+  }
+  return 0;
+}
+
+static int dispatch(void *kernel, const OspreyGpuDispatch *d) {
+  void *buffers[OSPREY_GPU_MAX_ARGS] = {NULL};
+  size_t count = (size_t)d->threads;
+  int status = bind_arguments(kernel, d, buffers);
+  if (!status) {
+    status = cl.launch(cl_queue, kernel, 1, NULL, &count, NULL, 0, NULL, NULL);
+    if (status) status = failed("GPU dispatch", status);
+  }
+  if (!status) status = read_back(d, buffers);
+  for (unsigned i = 0; i < d->count; i++) if (buffers[i]) (void)cl.release_buffer(buffers[i]);
+  if (status) return -1;
   cl_completed++;
-  osprey_gpu_report(cl_name, cl_completed, dimensions);
+  osprey_gpu_report(cl_name, cl_completed, d);
   return 1;
 }
 
-static int product(const int64_t *left, const int64_t *right, int64_t *out, const uint64_t dims[3]) {
-  int status = 0;
-  void *buffers[3] = {NULL, NULL, NULL};
-  const void *sources[3] = {left, right, NULL};
-  uint64_t sizes[3] = {dims[0] * dims[1] * 8, dims[1] * dims[2] * 8, dims[0] * dims[2] * 8};
-  for (unsigned i = 0; i < 3; i++) {
-    buffers[i] = cl.buffer(cl_context, i < 2 ? UINT64_C(36) : UINT64_C(2), (size_t)sizes[i], sources[i], &status);
-    if (status || !buffers[i]) { status = failed("GPU buffer allocation", status); break; }
-  }
-  if (!status) status = dispatch(buffers, dims, out);
-  for (unsigned i = 0; i < 3; i++) if (buffers[i]) (void)cl.release_buffer(buffers[i]);
-  return status;
+static int dispatch_locked(const OspreyGpuDispatch *d) {
+  if (initialize() < 0 || ensure_program(d->source)) return -1;
+  void *kernel = kernel_of(d->kernel);
+  return kernel ? dispatch(kernel, d) : -1;
 }
 
-int osprey_gpu_opencl_matmul(const int64_t *left, const int64_t *right, int64_t *out,
-                             int64_t rows, int64_t inner, int64_t cols) {
+int osprey_gpu_opencl_dispatch(const OspreyGpuDispatch *d) {
   (void)pthread_mutex_lock(&cl_lock);
-  uint64_t dimensions[3] = {(uint64_t)rows, (uint64_t)inner, (uint64_t)cols};
-  int status = initialize() < 0 ? -1 : (!rows || !inner || !cols ? 1 : product(left, right, out, dimensions));
-  if (status < 0) osp_io_error_text("gpuMatMul", cl_name[0] ? cl_name : "OpenCL", cl_failure);
+  int status = dispatch_locked(d);
+  if (status < 0) osp_io_error_text(d->kernel, cl_name[0] ? cl_name : "OpenCL", cl_failure);
   (void)pthread_mutex_unlock(&cl_lock);
   return status;
 }
 
 #if defined(OSPREY_GPU_TESTING)
 void osprey_gpu_opencl_test_driver(const OspreyOpenCLApi *api) {
-  release_context();
+  if (cl.release_kernel) release_context();
   test_driver = api;
   memset(&cl, 0, sizeof cl);
   cl_device = NULL;
+  cl_source = NULL;
   cl_ready = 0;
   cl_completed = 0;
 }

@@ -6,7 +6,11 @@
 #include <stdio.h>
 #include <string.h>
 
-static unsigned calls, fail_at, live, next_handle;
+#define MOCK_MARK 42
+// Mirrors gpu_opencl.c's kernel-object table cap.
+#define CL_MAX_NAMES 512
+static unsigned calls, fail_at, live, next_handle, programs, kernels;
+static size_t expected_threads = 1;
 static int status(void) { return ++calls == fail_at ? -7 : 0; }
 static void *handle(int *error) {
   *error = status();
@@ -39,7 +43,8 @@ static void *OSP_CL_CALL queue(void *ctx, void *device, uint64_t properties, int
   return handle(error);
 }
 static void *OSP_CL_CALL program(void *ctx, unsigned count, const char **source, const size_t *size, int *error) {
-  assert(ctx && count == 1 && *size && *source);
+  assert(ctx && count == 1 && *size && strstr(*source, "osprey_matmul64") && (*source)[*size] == '\0');
+  programs++;
   return handle(error);
 }
 static int OSP_CL_CALL build(void *p, unsigned count, void *const *device, const char *options, void *notify, void *user) {
@@ -52,26 +57,27 @@ static int OSP_CL_CALL build_info(void *p, void *d, unsigned key, size_t size, v
   return 0;
 }
 static void *OSP_CL_CALL kernel(void *p, const char *name, int *error) {
-  assert(p && strcmp(name, "osprey_matmul64") == 0);
+  assert(p && name[0]);
+  kernels++;
   return handle(error);
 }
 static void *OSP_CL_CALL buffer(void *ctx, uint64_t flags, size_t bytes, const void *source, int *error) {
-  assert(ctx && bytes == 8 && (flags == 36 ? source != NULL : source == NULL));
+  assert(ctx && bytes >= 8 && (flags == 36 || flags == 33) && source != NULL);
   return handle(error);
 }
 static int OSP_CL_CALL arg(void *k, unsigned i, size_t bytes, const void *value) {
-  assert(k && i < 6 && bytes == 8 && value);
+  assert(k && i < OSPREY_GPU_MAX_ARGS && bytes == 8 && value);
   return status();
 }
 static int OSP_CL_CALL launch(void *q, void *k, unsigned rank, const size_t *offset, const size_t *global,
                             const size_t *local, unsigned count, const void *events, void *event) {
-  assert(q && k && rank == 1 && !offset && *global == 1 && !local && !count && !events && !event);
+  assert(q && k && rank == 1 && !offset && *global == expected_threads && !local && !count && !events && !event);
   return status();
 }
 static int OSP_CL_CALL read_buffer(void *q, void *b, unsigned blocking, size_t offset, size_t size,
                                   void *out, unsigned count, const void *events, void *event) {
-  assert(q && b && blocking == 1 && !offset && size == 8 && !count && !events && !event);
-  memset(out, 0, size);
+  assert(q && b && blocking == 1 && !offset && size >= 8 && !count && !events && !event);
+  for (size_t i = 0; i < size / 8; i++) ((int64_t *)out)[i] = MOCK_MARK;
   return status();
 }
 static int OSP_CL_CALL release(void *object) { assert(object && live); live--; return 0; }
@@ -79,24 +85,70 @@ static int OSP_CL_CALL release(void *object) { assert(object && live); live--; r
 static const OspreyOpenCLApi mock = {platforms, devices, info, context, queue, program, build,
     build_info, kernel, buffer, arg, launch, read_buffer, release, release, release, release, release};
 
+static int product(int64_t *out) {
+  int64_t left = 0, right = 0;
+  OspreyGpuDispatch d = {"osprey_matmul64", NULL, {{0, NULL, NULL, 0}}, 0, 1};
+  osprey_gpu_arg(&d, OSPREY_GPU_INPUT, &left, NULL, 1);
+  osprey_gpu_arg(&d, OSPREY_GPU_INPUT, &right, NULL, 1);
+  osprey_gpu_arg(&d, OSPREY_GPU_OUTPUT, out, out, 1);
+  for (uint64_t i = 0; i < 3; i++) osprey_gpu_arg(&d, OSPREY_GPU_SCALAR, NULL, NULL, 1);
+  expected_threads = 1;
+  return osprey_gpu_opencl_dispatch(&d);
+}
+
+static int compiled(const char *name, const char *source, int64_t *out, size_t threads) {
+  int64_t in = 7, fault = 0;
+  OspreyGpuDispatch d = {name, source, {{0, NULL, NULL, 0}}, 0, threads};
+  osprey_gpu_arg(&d, OSPREY_GPU_INPUT, &in, NULL, 1);
+  osprey_gpu_arg(&d, OSPREY_GPU_INPUT, &in, NULL, 0);
+  osprey_gpu_arg(&d, OSPREY_GPU_OUTPUT, out, out, 2);
+  osprey_gpu_arg(&d, OSPREY_GPU_OUTPUT, &fault, &fault, 1);
+  osprey_gpu_arg(&d, OSPREY_GPU_SCALAR, NULL, NULL, threads);
+  expected_threads = threads;
+  int result = osprey_gpu_opencl_dispatch(&d);
+  assert(result != 1 || fault == MOCK_MARK);
+  return result;
+}
+
 static void failure_case(unsigned point) {
   osprey_gpu_opencl_test_driver(&mock);
   assert(live == 0);
   calls = 0; fail_at = point;
-  int64_t left = 0, right = 0, out = 99;
+  int64_t out = 99;
   osp_io_error_clear();
-  int result = osprey_gpu_opencl_matmul(&left, &right, &out, 1, 1, 1);
+  int result = product(&out);
   assert(point ? result == -1 : result == 1);
-  assert(point ? osp_io_error() != NULL : (out == 0 && osprey_gpu_opencl_completed() == 1));
-  assert(live <= 4); // Failed initialization releases everything; launches retain only the context.
+  assert(point ? osp_io_error() != NULL : (out == MOCK_MARK && osprey_gpu_opencl_completed() == 1));
+  assert(live <= 4); // Failed initialization releases everything; launches retain the context, program and kernels.
+}
+
+// A program's kernels recompile the program once, reuse their kernel objects,
+// and the table of kernel objects refuses to grow without bound.
+static void compiled_case(void) {
+  static const char source[] = "kernel void osprey_kernel_1() {}";
+  static char names[CL_MAX_NAMES][12];
+  osprey_gpu_opencl_test_driver(&mock);
+  calls = 0; fail_at = 0; programs = 0; kernels = 0;
+  int64_t out[2] = {99, 99};
+  assert(product(out) == 1 && programs == 1 && kernels == 1);
+  assert(compiled("osprey_kernel_1", source, out, 3) == 1 && programs == 2 && kernels == 2 && out[1] == MOCK_MARK);
+  assert(compiled("osprey_kernel_1", source, out, 5) == 1 && programs == 2 && kernels == 2);
+  assert(product(out) == 1 && programs == 2 && kernels == 3 && osprey_gpu_opencl_completed() == 4);
+  for (unsigned i = 0; i < CL_MAX_NAMES; i++) {
+    (void)snprintf(names[i], sizeof names[i], "k%u", i);
+    int result = compiled(names[i], source, out, 1);
+    assert(i < CL_MAX_NAMES - 2 ? result == 1 : result == -1);
+  }
+  assert(strstr(osp_io_error(), "kernel table") != NULL);
 }
 
 int main(void) {
   // Exercise the real dynamic loader even on a machine without a compute GPU.
   assert(osprey_gpu_opencl_name() != NULL);
   for (unsigned point = 0; point <= 20; point++) failure_case(point);
+  compiled_case();
   osprey_gpu_opencl_test_driver(&mock);
   assert(live == 0);
-  puts("[ok] OpenCL driver: success plus every initialization/transfer/launch/readback failure releases resources");
+  puts("[ok] OpenCL driver: product and compiled-kernel dispatch, program recompilation, kernel reuse, every initialization/transfer/launch/readback failure releases resources");
   return 0;
 }

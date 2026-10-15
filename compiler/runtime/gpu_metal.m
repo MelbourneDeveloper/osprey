@@ -1,4 +1,7 @@
-// Direct Metal compute adapter [GPU-BACKEND-PORTABILITY] [GPU-MATMUL].
+// Direct Metal compute adapter [GPU-BACKEND-PORTABILITY] [GPU-BACKEND-DEVICE]:
+// one library holding the shader source plus the running program's compiled
+// kernels, one pipeline per kernel name, and one dispatch path for the builtin
+// product and every compiled kernel alike.
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #include "gpu_device.h"
@@ -12,23 +15,16 @@
 
 static id<MTLDevice> gpu_device;
 static id<MTLCommandQueue> gpu_queue;
-static id<MTLComputePipelineState> gpu_pipeline;
+static id<MTLLibrary> gpu_library;
+static NSMutableDictionary<NSString *, id<MTLComputePipelineState>> *gpu_pipelines;
+// The program source the library was compiled with, compared by identity: a
+// launch site always passes the same constant.
+static const char *gpu_source;
 static pthread_once_t gpu_once = PTHREAD_ONCE_INIT;
+static pthread_mutex_t gpu_lock = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic uint64_t gpu_completed = 0;
 static char gpu_failure[512];
 static char gpu_name[256];
-typedef struct { uint64_t rows, inner, cols; } GpuShape;
-
-static void init_pipeline(void) {
-  NSError *error = nil;
-  NSString *source = [[NSString alloc] initWithBytes:osprey_gpu_shader
-      length:osprey_gpu_shader_len encoding:NSUTF8StringEncoding];
-  id<MTLLibrary> library = [gpu_device newLibraryWithSource:source options:nil error:&error];
-  id<MTLFunction> function = [library newFunctionWithName:@"osprey_matmul64"];
-  if (function) gpu_pipeline = [gpu_device newComputePipelineStateWithFunction:function error:&error];
-  if (!gpu_pipeline) (void)snprintf(gpu_failure, sizeof gpu_failure, "%s",
-      error ? error.localizedDescription.UTF8String : "Metal kernel compilation failed");
-}
 
 static void init_device(void) {
   @autoreleasepool {
@@ -38,80 +34,142 @@ static void init_device(void) {
       (void)snprintf(gpu_failure, sizeof gpu_failure, "no Metal compute device or command queue");
       return;
     }
-    (void)snprintf(gpu_name, sizeof gpu_name, "metal:0 (%s; matrix kernels)", gpu_device.name.UTF8String);
-    init_pipeline();
+    (void)snprintf(gpu_name, sizeof gpu_name, "metal:0 (%s)", gpu_device.name.UTF8String);
+    gpu_pipelines = [NSMutableDictionary new];
   }
+}
+
+// Compile the library when there is none, or when a dispatch brings program
+// kernels the current one lacks; the pipelines of the old library are dropped.
+static bool ensure_library(const char *source) {
+  if (gpu_queue == nil) return false;
+  if (gpu_library != nil && (!source || source == gpu_source)) return true;
+  NSString *text = [NSString stringWithFormat:@"%s\n%s", osprey_gpu_shader, source ? source : ""];
+  NSError *error = nil;
+  gpu_library = [gpu_device newLibraryWithSource:text options:nil error:&error];
+  [gpu_pipelines removeAllObjects];
+  gpu_source = source;
+  if (gpu_library == nil)
+    (void)snprintf(gpu_failure, sizeof gpu_failure, "%s",
+                   error ? error.localizedDescription.UTF8String : "Metal kernel compilation failed");
+  return gpu_library != nil;
+}
+
+static id<MTLComputePipelineState> pipeline(const char *kernel) {
+  NSString *name = @(kernel);
+  id<MTLComputePipelineState> state = gpu_pipelines[name];
+  if (state != nil) return state;
+  NSError *error = nil;
+  id<MTLFunction> function = [gpu_library newFunctionWithName:name];
+  if (function != nil) state = [gpu_device newComputePipelineStateWithFunction:function error:&error];
+  if (state == nil) {
+    (void)snprintf(gpu_failure, sizeof gpu_failure, "%s: %s", kernel,
+                   error ? error.localizedDescription.UTF8String : "no such kernel in the compiled library");
+    return nil;
+  }
+  gpu_pipelines[name] = state;
+  return state;
 }
 
 const char *osprey_gpu_metal_name(void) {
   (void)pthread_once(&gpu_once, init_device);
-  return gpu_pipeline ? gpu_name : "metal:unavailable";
+  (void)pthread_mutex_lock(&gpu_lock);
+  bool ready;
+  @autoreleasepool { ready = ensure_library(NULL); }
+  (void)pthread_mutex_unlock(&gpu_lock);
+  return ready ? gpu_name : "metal:unavailable";
 }
 
 uint64_t osprey_gpu_metal_completed(void) { return atomic_load(&gpu_completed); }
 
-static id<MTLBuffer> input_buffer(const int64_t *words, uint64_t count) {
-  return [gpu_device newBufferWithBytes:words length:(NSUInteger)(count * 8)
-      options:MTLResourceStorageModeShared];
+static bool within_limits(const OspreyGpuDispatch *d) {
+  for (unsigned i = 0; i < d->count; i++) {
+    if (d->args[i].kind != OSPREY_GPU_SCALAR && osprey_gpu_arg_bytes(&d->args[i]) > gpu_device.maxBufferLength)
+      return false;
+  }
+  return d->threads <= UINT32_MAX;
 }
 
-static int completed(id<MTLCommandBuffer> command, const GpuShape *shape) {
+// Bind every argument at its index: scalars by value, buffers uploaded with
+// their words and kept for the write-back.
+static bool bind_arguments(id<MTLComputeCommandEncoder> encoder, const OspreyGpuDispatch *d,
+                           id<MTLBuffer> __strong *buffers) {
+  for (unsigned i = 0; i < d->count; i++) {
+    const OspreyGpuArg *arg = &d->args[i];
+    if (arg->kind == OSPREY_GPU_SCALAR) {
+      [encoder setBytes:&arg->count length:sizeof arg->count atIndex:i];
+      continue;
+    }
+    buffers[i] = [gpu_device newBufferWithBytes:arg->words length:(NSUInteger)osprey_gpu_arg_bytes(arg)
+                                        options:MTLResourceStorageModeShared];
+    if (buffers[i] == nil) {
+      osp_io_error_text(d->kernel, "Metal", "buffer allocation failed");
+      return false;
+    }
+    [encoder setBuffer:buffers[i] offset:0 atIndex:i];
+  }
+  return true;
+}
+
+static void write_back(const OspreyGpuDispatch *d, id<MTLBuffer> __strong *buffers) {
+  for (unsigned i = 0; i < d->count; i++) {
+    if (d->args[i].kind == OSPREY_GPU_OUTPUT)
+      memcpy(d->args[i].out, buffers[i].contents, (size_t)(d->args[i].count * 8));
+  }
+}
+
+static int completed(id<MTLCommandBuffer> command, const OspreyGpuDispatch *d) {
   [command commit];
   [command waitUntilCompleted];
   if (command.status != MTLCommandBufferStatusCompleted) {
-    osp_io_error_text("gpuMatMul", "Metal", command.error.localizedDescription.UTF8String);
+    osp_io_error_text(d->kernel, "Metal", command.error.localizedDescription.UTF8String);
     return -1;
   }
   uint64_t count = atomic_fetch_add(&gpu_completed, 1) + 1;
-  osprey_gpu_report(gpu_name, count, (const uint64_t[3]){shape->rows, shape->inner, shape->cols});
+  osprey_gpu_report(gpu_name, count, d);
   return 1;
 }
 
-static void bind_product(id<MTLComputeCommandEncoder> encoder, id<MTLBuffer> left,
-                         id<MTLBuffer> right, id<MTLBuffer> out, const GpuShape *shape) {
-  [encoder setComputePipelineState:gpu_pipeline];
-  [encoder setBuffer:left offset:0 atIndex:0];
-  [encoder setBuffer:right offset:0 atIndex:1];
-  [encoder setBuffer:out offset:0 atIndex:2];
-  [encoder setBytes:&shape->rows length:sizeof shape->rows atIndex:3];
-  [encoder setBytes:&shape->inner length:sizeof shape->inner atIndex:4];
-  [encoder setBytes:&shape->cols length:sizeof shape->cols atIndex:5];
-}
-
-static int encode_product(id<MTLBuffer> left, id<MTLBuffer> right, id<MTLBuffer> out,
-                          const GpuShape *shape) {
+static int encode(const OspreyGpuDispatch *d, id<MTLComputePipelineState> state) {
   id<MTLCommandBuffer> command = [gpu_queue commandBuffer];
   id<MTLComputeCommandEncoder> encoder = [command computeCommandEncoder];
-  if (!command || !encoder) { osp_io_error_text("gpuMatMul", "Metal", "command allocation failed"); return -1; }
-  bind_product(encoder, left, right, out, shape);
-  NSUInteger count = (NSUInteger)(shape->rows * shape->cols);
-  NSUInteger group = MIN(gpu_pipeline.maxTotalThreadsPerThreadgroup, (NSUInteger)256);
-  [encoder dispatchThreads:MTLSizeMake(count, 1, 1) threadsPerThreadgroup:MTLSizeMake(group, 1, 1)];
-  [encoder endEncoding];
-  return completed(command, shape);
-}
-
-static int product(const int64_t *left, const int64_t *right, int64_t *out, const GpuShape *shape) {
-  uint64_t bytes = shape->rows * shape->cols * 8;
-  if (shape->rows * shape->cols > UINT32_MAX || bytes > gpu_device.maxBufferLength ||
-      shape->rows * shape->inner * 8 > gpu_device.maxBufferLength ||
-      shape->inner * shape->cols * 8 > gpu_device.maxBufferLength) {
-    osp_io_error_text("gpuMatMul", "Metal", "matrix exceeds device buffer or dispatch limits"); return -1;
+  if (command == nil || encoder == nil) {
+    osp_io_error_text(d->kernel, "Metal", "command allocation failed");
+    return -1;
   }
-  id<MTLBuffer> a = input_buffer(left, shape->rows * shape->inner);
-  id<MTLBuffer> b = input_buffer(right, shape->inner * shape->cols);
-  id<MTLBuffer> c = [gpu_device newBufferWithLength:(NSUInteger)bytes options:MTLResourceStorageModeShared];
-  if (!a || !b || !c) { osp_io_error_text("gpuMatMul", "Metal", "buffer allocation failed"); return -1; }
-  int status = encode_product(a, b, c, shape);
-  if (status == 1) memcpy(out, c.contents, (size_t)bytes);
+  id<MTLBuffer> buffers[OSPREY_GPU_MAX_ARGS] = {nil};
+  [encoder setComputePipelineState:state];
+  bool bound = bind_arguments(encoder, d, buffers);
+  NSUInteger group = MIN(state.maxTotalThreadsPerThreadgroup, (NSUInteger)256);
+  if (bound) [encoder dispatchThreads:MTLSizeMake((NSUInteger)d->threads, 1, 1) threadsPerThreadgroup:MTLSizeMake(group, 1, 1)];
+  [encoder endEncoding];
+  int status = bound ? completed(command, d) : -1;
+  if (status == 1) write_back(d, buffers);
   return status;
 }
 
-int osprey_gpu_metal_matmul(const int64_t *left, const int64_t *right, int64_t *out,
-                            int64_t rows, int64_t inner, int64_t cols) {
+static int dispatch_locked(const OspreyGpuDispatch *d) {
+  if (!ensure_library(d->source)) {
+    osp_io_error_text(d->kernel, "Metal", gpu_failure);
+    return -1;
+  }
+  if (!within_limits(d)) {
+    osp_io_error_text(d->kernel, "Metal", "exceeds device buffer or dispatch limits");
+    return -1;
+  }
+  id<MTLComputePipelineState> state = pipeline(d->kernel);
+  if (state == nil) {
+    osp_io_error_text(d->kernel, "Metal", gpu_failure);
+    return -1;
+  }
+  return encode(d, state);
+}
+
+int osprey_gpu_metal_dispatch(const OspreyGpuDispatch *d) {
   (void)pthread_once(&gpu_once, init_device);
-  if (!gpu_pipeline) { osp_io_error_text("gpuMatMul", "Metal", gpu_failure); return -1; }
-  if (!rows || !inner || !cols) return 1;
-  GpuShape shape = {(uint64_t)rows, (uint64_t)inner, (uint64_t)cols};
-  @autoreleasepool { return product(left, right, out, &shape); }
+  (void)pthread_mutex_lock(&gpu_lock);
+  int status;
+  @autoreleasepool { status = dispatch_locked(d); }
+  (void)pthread_mutex_unlock(&gpu_lock);
+  return status;
 }
