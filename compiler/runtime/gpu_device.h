@@ -108,11 +108,4 @@ void osprey_gpu_metal_release(void *object);
 const char *osprey_gpu_metal_name(void);
 uint64_t osprey_gpu_metal_completed(void);
 #endif
-#if defined(OSPREY_GPU_OPENCL)
-int osprey_gpu_opencl_dispatch(const OspreyGpuDispatch *dispatch);
-int osprey_gpu_opencl_download(void *object, int64_t *out, uint64_t count);
-void osprey_gpu_opencl_release(void *object);
-const char *osprey_gpu_opencl_name(void);
-uint64_t osprey_gpu_opencl_completed(void);
-#endif
 #endif

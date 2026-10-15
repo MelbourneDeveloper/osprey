@@ -2,11 +2,14 @@
 // binary64 results [GPU-BACKEND-PORTABILITY] [BUILTIN-MATH]: the four
 // operations, sqrt, the conversions and the comparisons must agree bit for
 // bit on every word tried (NaN payloads compare as NaN); exp, ln and tanh are
-// compared with the host libm, whose last digit differs between hosts
-// ([FLOAT-IEEE-RESULTS]), so they must land within one ulp everywhere and
-// agree on at least 99% of arguments. Every disagreement sampled so far was
-// the device's correctly rounded value against a libm one ulp off (checked
-// with an 80-digit reference), so a tighter bound would be testing libm.
+// compared with the host's long double libm rounded to binary64. Where long
+// double is wider (x87 on x86-64, binary128 on aarch64 Linux) that is the
+// correctly rounded value bar a rare double rounding; on Darwin it is the
+// binary64 libm itself. glibc's binary64 tanh is up to two ulps off (tanh of
+// 0xbfd8b6b048dce522: 1.69 ulps, where the device is 0.31 against an
+// 80-digit reference), so a binary64 reference would test glibc, not the
+// device. The device must land within one ulp everywhere and agree on at
+// least 99% of arguments.
 #include <assert.h>
 #include <math.h>
 #include <stdint.h>
@@ -112,7 +115,12 @@ static void check_unary_and_conversions(void) {
 }
 
 typedef ulong (*device_unary)(ulong);
-typedef double (*host_unary)(double);
+typedef long double (*host_unary)(long double);
+
+static uint64_t reference(host_unary host, uint64_t x) {
+  double rounded = host(of(x));
+  return bits(rounded);
+}
 
 // Distance in ulps between two finite words of the same sign.
 static uint64_t ulps(uint64_t a, uint64_t b) { return a > b ? a - b : b - a; }
@@ -120,11 +128,11 @@ static uint64_t ulps(uint64_t a, uint64_t b) { return a > b ? a - b : b - a; }
 static void check_transcendental(const char *what, device_unary device, host_unary host, int low, int range) {
   unsigned long exact = 0, trials = 0;
   uint64_t worst = 0;
-  for (unsigned i = 0; i < SPECIALS; i++) expect(what, specials[i], 0, device(specials[i]), bits(host(of(specials[i]))));
+  for (unsigned i = 0; i < SPECIALS; i++) expect(what, specials[i], 0, device(specials[i]), reference(host, specials[i]));
   for (unsigned i = 0; i < TRIALS * 2; i++) {
     uint64_t x = word_in(low, range);
     if (what[0] == 'l') x &= ~UINT64_C(0x8000000000000000);
-    uint64_t got = device(x), want = bits(host(of(x)));
+    uint64_t got = device(x), want = reference(host, x);
     trials++;
     checks++;
     if (same(got, want)) { exact++; continue; }
@@ -136,7 +144,7 @@ static void check_transcendental(const char *what, device_unary device, host_una
       abort();
     }
   }
-  printf("[ok] %s: %lu of %lu match the host libm bit for bit, worst distance %llu ulp\n", what, exact, trials,
+  printf("[ok] %s: %lu of %lu match the host long double libm bit for bit, worst distance %llu ulp\n", what, exact, trials,
       (unsigned long long)worst);
   assert(trials - exact <= trials / 100);
 }
@@ -177,9 +185,9 @@ int main(void) {
   check_unary_and_conversions();
   check_checked_integers();
   check_matmul_kernel();
-  check_transcendental("exp", exp64, exp, 960, 73);
-  check_transcendental("ln", ln64, log, 0, 2047);
-  check_transcendental("tanh", tanh64, tanh, 990, 38);
+  check_transcendental("exp", exp64, expl, 960, 73);
+  check_transcendental("ln", ln64, logl, 0, 2047);
+  check_transcendental("tanh", tanh64, tanhl, 990, 38);
   printf("[ok] device binary64 library: %lu host parity checks\n", checks);
   return 0;
 }

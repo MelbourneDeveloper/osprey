@@ -21,21 +21,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-// --- backend ABI under test (memory_gc.c) ------------------------------------
+// --- backend ABI under test (memory_gc.c) beyond memory_hooks.h -------------
 void *osp_alloc(int64_t size);
-void *osp_alloc_tagged(int64_t size, int64_t meta);
-void *osp_alloc_tagged_noinit(int64_t size, int64_t meta);
 void osp_collect(void);
-void osp_retain(void *o);
-void osp_release(void *o);
-void osp_mem_notify_multithreaded(void);
 void *osp_gc_malloc(size_t size);
 void *osp_gc_calloc(size_t n, size_t size);
 void *osp_gc_realloc(void *old, size_t size);
 void osp_gc_free(void *p);
 size_t osp_gc_live_objects(void);
 size_t osp_gc_collections(void);
-void osp_mem_boot(void);
 
 static long g_checks = 0;
 #define CHECK(c)                                                               \
