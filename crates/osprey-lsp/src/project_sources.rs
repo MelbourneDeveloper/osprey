@@ -1,7 +1,7 @@
 //! Incremental syntax snapshots shared by diagnostics and editor features.
 //! Implements [LSP-WORKSPACE] and [LSP-PROJECT-BATCH].
 
-use crate::workspace::{file_path, project_roots, same_path, uri_of, Sibling};
+use crate::workspace::{file_path, project_root, project_roots, same_path, uri_of, Sibling};
 use lspkit_vfs::{DocumentUri, Vfs};
 use osprey_project::{ProjectConfig, ProjectError, SourceFile};
 use osprey_syntax::Flavor;
@@ -110,17 +110,22 @@ impl SourceCache {
             .collect()
     }
 
+    /// Whether a change to `changed` can alter `document`'s project: the two
+    /// share an enclosing manifest, or a project the document was loaded into
+    /// lists the changed file. Answered from the loaded memberships alone, so a
+    /// watcher storm never walks the disk.
     pub(crate) fn affected(&self, document: &str, changed: &str) -> bool {
         let Some((document, changed)) = file_path(document).zip(file_path(changed)) else {
             return false;
         };
-        let changed_roots = project_roots(&changed);
-        project_roots(&document).iter().any(|root| {
-            changed_roots.contains(root)
-                || self
-                    .projects
-                    .get(root)
-                    .is_some_and(|members| members.config.contains_source(root, &changed))
+        let enclosing = (project_root(&document), project_root(&changed));
+        if enclosing.0.is_some() && enclosing.0 == enclosing.1 {
+            return true;
+        }
+        self.projects.iter().any(|(root, members)| {
+            members.config.contains_source(root, &document)
+                && (enclosing.1.as_ref() == Some(root)
+                    || members.config.contains_source(root, &changed))
         })
     }
 

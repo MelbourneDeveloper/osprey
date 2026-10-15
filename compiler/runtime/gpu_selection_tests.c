@@ -5,6 +5,7 @@
 #include "gpu_device.h"
 #include "gpu_opencl_api.h"
 #include "io_error.h"
+#include "test_death.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -103,6 +104,8 @@ static void aborts(void (*scenario)(void), const char *expected) {
   pid_t child = fork();
   assert(child >= 0);
   if (!child) {
+    // The guard's own lines count: dump the coverage counters before the abort.
+    (void)signal(SIGABRT, osp_death_dump_and_reraise);
     assert(dup2(pipes[1], 2) >= 0);
     scenario();
     _exit(0);
