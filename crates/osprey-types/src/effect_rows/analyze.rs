@@ -252,7 +252,7 @@ impl Analyzer<'_> {
                 body,
                 return_clause,
                 position,
-                ..
+                stage,
             } => {
                 // Arm bodies run outside this handler's discharge. In
                 // particular, a same-effect arm is diagnosed separately rather
@@ -265,7 +265,14 @@ impl Analyzer<'_> {
                     &self.instances.handlers,
                     "handler",
                 );
-                let local = self.handler_body_env(effect, arms, body, *position, scope, env);
+                let site = super::handlers::HandlerSite {
+                    effect,
+                    arms,
+                    body,
+                    position: *position,
+                    stage: *stage,
+                };
+                let local = self.handler_body_env(&site, scope, env);
                 let body_summary = self.expression(body, scope, &local);
                 let effect = osprey_ast::effect_name::base(effect);
                 if let Some(position) = position {
@@ -280,9 +287,10 @@ impl Analyzer<'_> {
                     effect,
                     &effect_arguments,
                     &handled,
+                    stage.is_compile_time(),
                 );
                 for arm in arms {
-                    let local = self.handler_arm_env(effect, arm, body, scope, env);
+                    let local = self.handler_arm_env(effect, arm, body, *stage, scope, env);
                     out.union(self.expression(&arm.body, scope, &local));
                 }
                 if let Some(clause) = return_clause {

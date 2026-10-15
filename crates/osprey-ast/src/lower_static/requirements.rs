@@ -43,6 +43,60 @@ pub(super) fn retain_referenced_originals(program: &mut Program, consumed: &BTre
     prune(program, consumed, &retained);
 }
 
+/// Functions that still request a `static effect` after the rewrite, directly
+/// or through a function they reference. A reachable request was discharged,
+/// so each of these is dead code; the caller prunes them unless surviving code
+/// references them, since no runtime interpretation of a static operation
+/// exists ([STAGE-RESIDUE]).
+pub(super) fn static_performers(
+    program: &Program,
+    effects: &BTreeMap<String, crate::stage::EffectDecl>,
+) -> BTreeSet<String> {
+    let bodies = function_definitions(program);
+    let references: BTreeMap<&String, BTreeSet<String>> = bodies
+        .iter()
+        .map(|(name, definition)| (name, referenced_names(definition)))
+        .collect();
+    let mut performers: BTreeSet<String> = bodies
+        .iter()
+        .filter(|(_, definition)| {
+            matches!(definition, Stmt::Function { body, .. } if crate::stage_rows::any_perform(body, |effect| {
+                effects
+                    .get(crate::effect_name::base(effect))
+                    .is_some_and(|declared| declared.stage == Stage::Static)
+            }))
+        })
+        .map(|(name, _)| name.clone())
+        .collect();
+    loop {
+        let callers: Vec<String> = references
+            .iter()
+            .filter(|(_, referenced)| !referenced.is_disjoint(&performers))
+            .map(|(name, _)| (*name).clone())
+            .collect();
+        let previous = performers.len();
+        performers.extend(callers);
+        if performers.len() == previous {
+            return performers;
+        }
+    }
+}
+
+fn referenced_names(statement: &Stmt) -> BTreeSet<String> {
+    #[derive(Default)]
+    struct References(BTreeSet<String>);
+    impl crate::AstVisitor for References {
+        fn expression(&mut self, expression: &Expr) {
+            if let Expr::Identifier(name) = expression {
+                let _ = self.0.insert(name.clone());
+            }
+        }
+    }
+    let mut references = References::default();
+    crate::walk_statement(statement, &mut references);
+    references.0
+}
+
 /// Every named function definition in the program, at any nesting depth.
 pub(super) fn function_definitions(program: &Program) -> BTreeMap<String, Stmt> {
     #[derive(Default)]

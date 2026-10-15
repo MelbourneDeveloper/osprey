@@ -1,4 +1,4 @@
-use super::{any, i, mono, res, runtime_mono, s, u, Type, TypeEnv};
+use super::{any, i, mono, poly, res, runtime_mono, s, u, Type, TypeEnv};
 
 pub(super) fn declare(e: &mut TypeEnv) {
     runtime_mono(e, "print", vec![any()], u());
@@ -9,6 +9,7 @@ pub(super) fn declare(e: &mut TypeEnv) {
     runtime_mono(e, "sleep", vec![i()], u());
     // A range is a fused iterator handle, not a materialized List [BUILTIN-ITER].
     mono(e, "range", vec![i(), i()], Type::iterator(i()));
+    signals(e);
     numbers(e);
     randomness(e);
 }
@@ -44,4 +45,37 @@ fn randomness(e: &mut TypeEnv) {
     // Error when n <= 0. Implements [BUILTIN-RANDOM], [BUILTIN-RANDOM-BELOW].
     mono(e, "random", vec![], i());
     mono(e, "randomBelow", vec![i()], res(i()));
+}
+
+fn signals(e: &mut TypeEnv) {
+    let work = Type::fun(vec![], Type::Var(0));
+    let snapshot = Type::Record {
+        name: String::new(),
+        fields: std::collections::BTreeMap::from([
+            ("dependencies".to_owned(), Type::list(s())),
+            ("value".to_owned(), Type::Var(0)),
+            ("revision".to_owned(), i()),
+        ]),
+    };
+    poly(
+        e,
+        "signalDependencies",
+        vec![0],
+        vec![work.clone()],
+        Type::list(s()),
+    );
+    poly(
+        e,
+        "signalSnapshot",
+        vec![0],
+        vec![work.clone()],
+        snapshot.clone(),
+    );
+    poly(
+        e,
+        "signalRefresh",
+        vec![0],
+        vec![snapshot.clone(), Type::list(s()), work],
+        snapshot,
+    );
 }

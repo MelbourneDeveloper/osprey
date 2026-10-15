@@ -192,7 +192,7 @@ fn compile_module(program: &Program, options: CodegenOptions, library: bool) -> 
     }
     if let Some((body, _)) = user_main {
         cg.cell_vars = crate::effects::captured_mut_vars(body);
-        let _ = crate::expr::gen_body(&mut cg, body)?;
+        let _ = cg.within_source_function("main", |cg| crate::expr::gen_body(cg, body))?;
     }
     if !library {
         crate::globals::release_all(&mut cg);
@@ -318,6 +318,7 @@ fn gen_function(
     });
 
     cg.begin_function(name, position);
+    cg.source_function = Some(name.to_owned());
     // Record any function-typed parameters so a call through one lowers to an
     // indirect call (the higher-order `f(x)` in `fn apply(f, x) = f(x)`).
     let fn_ptr_params: Vec<(String, osprey_types::Type)> = cg

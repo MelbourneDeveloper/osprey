@@ -19,6 +19,7 @@ pub use arithmetic::fold_arithmetic;
 mod builtin_constraints;
 mod builtin_docs;
 mod builtin_docs_lang;
+mod builtin_docs_signals;
 mod builtin_docs_sys;
 mod builtins;
 mod callback;
@@ -86,13 +87,15 @@ pub use builtins::{builtin_callback_type, builtin_function_type, builtin_signatu
 pub use callback::{redundant_callbacks, REDUNDANT_CALLBACK};
 pub use check::{check_program, check_program_exports, erased_var, infer_program};
 pub use error::TypeError;
-pub use info::{CtorLayout, EffectRequirements, HandlerSite, OpType, PerformSite, ProgramTypes};
+pub use info::{
+    CtorLayout, EffectRequirements, HandlerSite, OpType, PerformSite, ProgramTypes, SiteTable,
+};
 pub use redundant::{
     redundant_annotation_sites, redundant_annotation_sites_where, redundant_annotations,
     redundant_annotations_where, RedundantAnnotation, RedundantTarget, TypeWarning,
     REDUNDANT_ANNOTATION,
 };
-pub use staging::lower_static_checked;
+pub use staging::{lower_static_checked, signal_dependencies};
 pub use ty::{has_type_var, names, render_with_holes, Scheme, Type, VarId, HOLE};
 pub use unused::{unused_symbols, UnusedKind, UnusedSymbol};
 

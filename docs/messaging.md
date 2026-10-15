@@ -27,7 +27,7 @@ Not every page needs the full list. Give the reader code, its result, and a next
 
 The [effects specification](specs/0017-AlgebraicEffects.md) defines the contract. [Plan 0016](plans/0016-algebraic-effects-and-handlers.md) owns delivery status and limitations. [Runnable handler examples](../examples/handlers/README.md) demonstrate current behavior in both flavors and compare it with other languages. Keep intended semantics and demonstrated support distinct.
 
-Use the [bank](../examples/projects/modules/README.md) and [mobile apps](../examples/mobile/README.md) to explain application boundaries. Mobile handlers describe SQL and HTTP commands; native hosts execute them and send completion events. This does not imply that mobile continuations or the planned staged reactive runtime are implemented.
+Use the [bank](../examples/projects/modules/README.md) and [mobile apps](../examples/mobile/README.md) to explain application boundaries. Mobile handlers describe SQL and HTTP commands; native hosts execute them and send completion events. The [reactive signal primitives](../website/src/docs/reactive-signals.md) provide checked dependency metadata and selective immutable cache refresh; mobile command execution remains at the host boundary.
 
 ## Keep the copy concrete
 
@@ -49,7 +49,7 @@ Use the [bank](../examples/projects/modules/README.md) and [mobile apps](../exam
 - Native memory modes are default, GC, and ARC. The default allocator retains general allocations. Strict static-memory checking and tail-call optimization are not implemented.
 - Mobile C ABI targets use the default allocator and do not expose a stable returned-string release API. Platform networking belongs to the native host.
 - Project modules and cross-flavor imports work; the package manager remains roadmap work.
-- GPU kernels currently execute as host loops. Device code generation remains roadmap work in [plan 0023](plans/0023-gpu-computation.md). A trained model does run on that surface — [GPT-2](../examples/gpt2/README.md) loads the published weights with `gpuLoadTensor` and generates text — so say "runs on the GPU surface" or "on the host backend", never "GPU-accelerated".
+- GPU kernels currently execute as host loops. Device code generation remains roadmap work in [plan 0023](plans/0023-gpu-computation.md). A trained model does run on that surface — [GPT-2](../examples/gpt2/README.md) loads the published weights with `gpuLoadTensor` and generates text — so say "runs on the GPU surface" or "on the host backend", never "GPU-accelerated". The model is written once against a static `Tensor` effect and two handlers run it, over host lists or on the GPU surface; say "the handler decides where the arithmetic runs", never that the compiler "offloads" anything.
 - Calling C crosses Osprey's memory-safety boundary.
 
 Update claims when the implementation and its verification change. A feature appearing in a specification does not by itself establish support.

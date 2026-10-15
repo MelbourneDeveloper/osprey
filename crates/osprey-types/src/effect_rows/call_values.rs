@@ -15,7 +15,9 @@ impl Analyzer<'_> {
         env: &CallableEnv,
     ) -> Option<Value> {
         if let Some(name) = self.builtin_callee(function, scope, env) {
-            if let Some(value) = self.builtin_call_value(name, arguments, scope, env) {
+            if let Some(value) =
+                self.builtin_call_value(name, arguments, named_arguments, scope, env)
+            {
                 return Some(value);
             }
         }
@@ -103,9 +105,13 @@ impl Analyzer<'_> {
         &self,
         name: &str,
         arguments: &[Expr],
+        named: &[NamedArgument],
         scope: &[String],
         env: &CallableEnv,
     ) -> Option<Value> {
+        if matches!(name, "signalSnapshot" | "signalRefresh") {
+            return Some(self.signal_snapshot_value(name, arguments, named, scope, env));
+        }
         let element = |index| {
             arguments
                 .get(index)
@@ -166,6 +172,52 @@ impl Analyzer<'_> {
             "mapValues" => aggregate(element(0)),
             _ => return builtin_return_shape(name),
         })
+    }
+
+    /// Cached callable values keep their latent effects after the snapshot escapes.
+    /// Implements [EFFECTS-PROVENANCE], [STAGE-SIGNALS-REBUILD].
+    fn signal_snapshot_value(
+        &self,
+        name: &str,
+        arguments: &[Expr],
+        named: &[NamedArgument],
+        scope: &[String],
+        env: &CallableEnv,
+    ) -> Value {
+        let slot = if name == "signalRefresh" { 2 } else { 0 };
+        let mut value = super::names::signal_argument(slot, arguments, named)
+            .and_then(|argument| self.callable(argument, scope, env))
+            .and_then(|callback| self.called_value(Some(callback), CallArguments::default()));
+        if name == "signalRefresh" {
+            if let Some(old) = arguments
+                .first()
+                .or_else(|| {
+                    named
+                        .iter()
+                        .find(|argument| argument.name == "cached")
+                        .map(|argument| &argument.value)
+                })
+                .and_then(|argument| self.value(argument, scope, env))
+                .and_then(|old| super::project_field(old, "value"))
+            {
+                merge_optional_value(&mut value, old);
+            }
+        }
+        Value {
+            field_names: Some(
+                ["dependencies", "value", "revision"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
+            ),
+            fields: [(
+                "value".to_owned(),
+                value.unwrap_or_else(Value::unknown_callable),
+            )]
+            .into_iter()
+            .collect(),
+            ..Value::default()
+        }
     }
 
     pub(super) fn lazy_iterator_value(

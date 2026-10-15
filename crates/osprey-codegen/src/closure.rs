@@ -290,7 +290,9 @@ pub(crate) fn returned(reg: String, sig: &FnSig) -> Value {
 /// function, plus a constant cell pointing at it.
 pub(crate) fn named_fn_cell(cg: &mut Codegen, name: &str) -> Result<Value> {
     if let Some((parameters, body, position)) = cg.fn_defs.get(name).cloned() {
-        return specialized_named_cell(cg, name, &parameters, &body, position);
+        return cg.within_source_function(name, |cg| {
+            specialized_named_cell(cg, name, &parameters, &body, position)
+        });
     }
     let cell = match cg.fnval_cells.get(name) {
         Some(g) => g.clone(),

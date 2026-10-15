@@ -252,32 +252,34 @@ pub(super) fn eval_arg(
             // once-per-module forwarder cell via `gen_expr`/`named_fn_cell`.
             // Implements [TYPE-GENERICS-FN].
             if let Some((params, body, position)) = cg.fn_defs.get(&target).cloned() {
-                return cg.with_file_scope(|cg| {
-                    if ffi {
-                        crate::closure::raw_callback_lambda(
-                            cg,
-                            &params,
-                            &body,
-                            sig,
-                            position,
-                            Some(&target),
-                        )
-                    } else {
-                        // Keyed by (function, slot ABI): every use at the same ABI
-                        // lowers to a byte-identical body, so emit it once and
-                        // share the cell. Distinct ABIs still get distinct bodies —
-                        // that is what specialising means.
-                        let key = crate::closure::specialisation_key(&target, sig);
-                        crate::closure::emit_closure_keyed(
-                            cg,
-                            &params,
-                            &body,
-                            sig,
-                            Some(key),
-                            position,
-                            Some(&target),
-                        )
-                    }
+                return cg.within_source_function(&target, |cg| {
+                    cg.with_file_scope(|cg| {
+                        if ffi {
+                            crate::closure::raw_callback_lambda(
+                                cg,
+                                &params,
+                                &body,
+                                sig,
+                                position,
+                                Some(&target),
+                            )
+                        } else {
+                            // Keyed by (function, slot ABI): every use at the same ABI
+                            // lowers to a byte-identical body, so emit it once and
+                            // share the cell. Distinct ABIs still get distinct bodies —
+                            // that is what specialising means.
+                            let key = crate::closure::specialisation_key(&target, sig);
+                            crate::closure::emit_closure_keyed(
+                                cg,
+                                &params,
+                                &body,
+                                sig,
+                                Some(key),
+                                position,
+                                Some(&target),
+                            )
+                        }
+                    })
                 });
             }
             if ffi && cg.fn_params.contains_key(&target) {

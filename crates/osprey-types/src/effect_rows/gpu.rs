@@ -44,9 +44,26 @@ pub(super) fn validate_gpu_kernel(
     let Some(kernel) = arguments.get(slot) else {
         return;
     };
+    if deferred_arm_kernel(analyzer, kernel, scope, env) {
+        return;
+    }
     if let Some(message) = gpu_kernel_verdict(analyzer, kernel, scope, env) {
         errors.push(TypeError::new(message).with_pos(kernel_position(kernel)));
     }
+}
+
+/// A kernel that is an operand of a compile-time arm, with no lexical perform
+/// to read it from. Discharge substitutes the actual callback before the
+/// residual program is checked, so the verdict belongs to that check: judging
+/// the parameter here would fail closed on every static arm forwarding a
+/// kernel. Implements [GPU-KERNEL-PURE], [STAGE-LOWER-ORDER-PHASE].
+fn deferred_arm_kernel(
+    analyzer: &Analyzer<'_>,
+    kernel: &Expr,
+    scope: &[String],
+    env: &CallableEnv,
+) -> bool {
+    env.deferred_arm_parameter(kernel) && analyzer.callable(kernel, scope, env).is_none()
 }
 
 /// The rejection message for a GPU combinator kernel, or `None` when the kernel

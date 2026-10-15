@@ -42,12 +42,16 @@ impl AstNode<'_> {
 /// visitor boilerplate. Implements the shared traversal required by
 /// [LSP-HOVER-EFFECT-OPERATIONS] and [LSP-IMPLEMENTATIONS-EFFECT-HANDLERS].
 pub fn walk_program(program: &Program, visitor: &mut impl AstVisitor) {
-    let mut pending: Vec<_> = program
-        .statements
-        .iter()
-        .rev()
-        .map(AstNode::Statement)
-        .collect();
+    walk_statements(&program.statements, visitor);
+}
+
+/// [`walk_program`] over one statement and everything nested in it.
+pub fn walk_statement(statement: &Stmt, visitor: &mut impl AstVisitor) {
+    walk_statements(std::slice::from_ref(statement), visitor);
+}
+
+fn walk_statements(statements: &[Stmt], visitor: &mut impl AstVisitor) {
+    let mut pending: Vec<_> = statements.iter().rev().map(AstNode::Statement).collect();
     while let Some(node) = pending.pop() {
         match node {
             AstNode::Statement(statement) => visitor.statement(statement),

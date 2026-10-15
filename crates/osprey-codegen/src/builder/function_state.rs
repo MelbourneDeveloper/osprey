@@ -141,6 +141,21 @@ impl Codegen {
     // ---- function framing ----
 
     /// Reset per-function state and open a fresh `entry` block + scope.
+    /// Lower part of top-level source function `name` — its own body, or a
+    /// generic body inlined elsewhere — so its position-keyed inferred types
+    /// resolve to that function's copy ([`osprey_types::SiteTable`]), then
+    /// restore the enclosing function.
+    pub(crate) fn within_source_function<R>(
+        &mut self,
+        name: &str,
+        lower: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let enclosing = self.source_function.replace(name.to_owned());
+        let result = lower(self);
+        self.source_function = enclosing;
+        result
+    }
+
     pub(crate) fn begin_function(&mut self, name: &str, position: Option<Position>) {
         self.reg_count = 0;
         self.label_count = 0;

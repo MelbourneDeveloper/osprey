@@ -8,6 +8,9 @@ pub(crate) fn description(requirements: Option<&EffectRequirements>) -> Option<S
         section("Requires on full application", &requirements.operations),
         section("Runtime operations", &requirements.runtime_builtins),
         requirements
+            .unresolved_instances
+            .then(|| "Generic effect instances remain unresolved.".to_owned()),
+        requirements
             .unresolved_callbacks
             .then(|| "Callback effects remain unresolved.".to_owned()),
     ]
@@ -31,9 +34,9 @@ fn code_list(items: &[String]) -> String {
 
 pub(super) fn json(requirements: &EffectRequirements) -> String {
     format!(
-        "{{\"operations\":{},\"runtimeBuiltins\":{},\"unresolvedCallbacks\":{},\"description\":{}}}",
+        "{{\"operations\":{},\"runtimeBuiltins\":{},\"unresolvedCallbacks\":{},\"unresolvedInstances\":{},\"description\":{}}}",
         array(&requirements.operations), array(&requirements.runtime_builtins),
-        requirements.unresolved_callbacks, json_str(&description(Some(requirements)).unwrap_or_default()),
+        requirements.unresolved_callbacks, requirements.unresolved_instances, json_str(&description(Some(requirements)).unwrap_or_default()),
     )
 }
 

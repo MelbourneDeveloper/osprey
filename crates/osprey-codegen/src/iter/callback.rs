@@ -56,7 +56,7 @@ fn known_lambda(
 ) -> Callback {
     let sig = cg
         .prog
-        .lambda_type(position)
+        .lambda_type(cg.source_function.as_deref(), position)
         .and_then(|ty| Codegen::fn_value_sig(&cg.prog, ty));
     match env {
         Some(env) => Callback::Closed(env, params, body, sig, position),

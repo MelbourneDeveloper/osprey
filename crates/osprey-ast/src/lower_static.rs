@@ -16,7 +16,7 @@ use crate::stage::{
     effect_declarations, EffectDecl, StageError, REWRITE_BOUND, REWRITE_DEPTH_BOUND,
 };
 use crate::stage_rows::operation_name;
-use crate::{EffectRef, Expr, HandlerArm, Parameter, Position, Program, Stmt};
+use crate::{EffectRef, Expr, HandlerArm, Parameter, Position, Program, Stmt, TypeExpr};
 use std::collections::{BTreeMap, BTreeSet};
 
 mod bindings;
@@ -24,7 +24,9 @@ mod hygiene;
 mod region;
 mod requirements;
 use region::{answered, innermost_arm, shadowed_regions, specialization_key, Region};
-use requirements::{all_requirements, function_definitions, retain_referenced_originals};
+use requirements::{
+    all_requirements, function_definitions, retain_referenced_originals, static_performers,
+};
 
 /// The pass state: the program's function definitions plus what the rewrite has
 /// produced so far.
@@ -78,7 +80,9 @@ pub(crate) fn run(program: &Program) -> Result<Program, Vec<StageError>> {
         });
     }
     rewritten.statements.extend(lowering.produced);
-    retain_referenced_originals(&mut rewritten, &lowering.consumed);
+    let mut prunable = static_performers(&rewritten, &lowering.effects);
+    prunable.extend(lowering.consumed);
+    retain_referenced_originals(&mut rewritten, &prunable);
     if lowering.errors.is_empty() {
         Ok(rewritten)
     } else {
@@ -237,7 +241,11 @@ impl Lowering {
             return;
         };
         if self.spend_fuel(&effect, &operation, position) {
-            *expression = bind_parameters(&arm, &arguments);
+            let declared = self
+                .effects
+                .get(crate::effect_name::base(&effect))
+                .map_or(&[][..], |decl| decl.parameter_types(&operation));
+            *expression = bind_parameters(&arm, &arguments, declared);
             self.depth = self.depth.saturating_add(1);
             let mut outer: Vec<Region> = regions
                 .get(..region_index)
@@ -449,10 +457,12 @@ fn call(name: &str, arguments: Vec<Expr>) -> Expr {
     }
 }
 
-/// The arm body with the operation's arguments bound to the arm's parameters.
-/// A nullary operation needs no block, which keeps the common reactive read
-/// ([STAGE-SIGNALS]) a bare expression.
-fn bind_parameters(arm: &HandlerArm, arguments: &[Expr]) -> Expr {
+/// The arm body with the operation's arguments bound to the arm's parameters,
+/// each under the type the operation declared for it where that type is closed
+/// — so the residual keeps the contract the request was checked against. A
+/// nullary operation needs no block, which keeps the common reactive read
+/// ([STAGE-SIGNALS]) a bare expression. Implements [STAGE-BACKEND-CONTRACT].
+fn bind_parameters(arm: &HandlerArm, arguments: &[Expr], declared: &[Option<TypeExpr>]) -> Expr {
     if arm.params.is_empty() {
         return arm.body.clone();
     }
@@ -461,10 +471,11 @@ fn bind_parameters(arm: &HandlerArm, arguments: &[Expr]) -> Expr {
             .params
             .iter()
             .zip(arguments)
-            .map(|(name, value)| Stmt::Let {
+            .enumerate()
+            .map(|(index, (name, value))| Stmt::Let {
                 name: name.clone(),
                 mutable: false,
-                ty: None,
+                ty: declared.get(index).cloned().flatten(),
                 value: value.clone(),
                 doc: None,
                 position: None,

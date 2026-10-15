@@ -17,6 +17,41 @@ impl Requirement {
     }
 }
 
+/// Whether `open` is `resolved` with some arguments left to inference: the same
+/// arity, each argument equal or an inference variable.
+fn instantiates(open: &[String], resolved: &[String]) -> bool {
+    open.len() == resolved.len()
+        && open
+            .iter()
+            .zip(resolved)
+            .all(|(request, answer)| request == answer || is_inference_variable(request))
+}
+
+/// An inference variable renders as `t` plus digits (`Type::Var`).
+fn is_inference_variable(argument: &str) -> bool {
+    argument
+        .strip_prefix('t')
+        .is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()))
+}
+
+fn has_inference_variable(arguments: &[String]) -> bool {
+    arguments
+        .iter()
+        .any(|argument| is_inference_variable(argument))
+}
+
+/// The exclusion a compile-time handler records for a callback: it answers
+/// the operation at any instantiation still left to inference, exactly as
+/// [`Summary::without_operations`] does for a lexical request.
+const OPEN_INSTANTIATION: &str = "<open>";
+
+fn open(requirement: &Requirement) -> Requirement {
+    Requirement {
+        arguments: vec![OPEN_INSTANTIATION.to_owned()],
+        ..requirement.clone()
+    }
+}
+
 impl CallArguments {
     /// Function-value slots have no parameter names. Do this at the call site,
     /// before substitution reveals a callback's declaration and its names.
@@ -35,40 +70,58 @@ impl Summary {
         self.unresolved_dynamic_call |= other.unresolved_dynamic_call;
     }
 
+    /// Remove the operations a handler at `arguments` discharges. A static
+    /// handler also answers a request whose instantiation is still an
+    /// inference variable: discharge rewrites that request into the arm body,
+    /// and the residual program's type check then proves the instantiation
+    /// agreed ([EFFECTS-GENERIC-INSTANTIATION], [STAGE-LOWER-ORDER-PHASE]). A
+    /// runtime handler needs the resolved identity ([EFFECTS-GENERIC-RUNTIME]).
     pub(super) fn without_operations(
         mut self,
         effect: &str,
         arguments: &[String],
         operations: &HashSet<String>,
+        compile_time: bool,
     ) -> Self {
         let excluded: Requirements = self
             .required
             .iter()
             .filter(|r| {
-                r.effect == effect && r.arguments == arguments && operations.contains(&r.operation)
+                r.effect == effect
+                    && operations.contains(&r.operation)
+                    && (r.arguments == arguments
+                        || (compile_time && instantiates(&r.arguments, arguments)))
             })
             .cloned()
             .collect();
         self.required.retain(|r| !excluded.contains(r));
         if !operations.is_empty() {
-            self.parameter_uses =
-                self.parameter_uses
-                    .into_iter()
-                    .map(|mut use_| {
-                        // A callback requirement is not concrete until its call
-                        // site. Record every operation this handler can discharge.
-                        use_.excluded.extend(operations.iter().map(|operation| {
-                            Requirement::new(effect, operation, arguments.to_vec())
+            self.parameter_uses = self
+                .parameter_uses
+                .into_iter()
+                .map(|mut use_| {
+                    // A callback requirement is not concrete until its call
+                    // site. Record every operation this handler can discharge.
+                    use_.excluded
+                        .extend(operations.iter().flat_map(|operation| {
+                            let answered = Requirement::new(effect, operation, arguments.to_vec());
+                            compile_time
+                                .then(|| open(&answered))
+                                .into_iter()
+                                .chain(std::iter::once(answered))
                         }));
-                        use_
-                    })
-                    .collect();
+                    use_
+                })
+                .collect();
         }
         self
     }
 
     pub(super) fn excluding(mut self, excluded: &Requirements) -> Self {
-        self.required.retain(|r| !excluded.contains(r));
+        self.required.retain(|r| {
+            !(excluded.contains(r)
+                || has_inference_variable(&r.arguments) && excluded.contains(&open(r)))
+        });
         self.parameter_uses = self
             .parameter_uses
             .into_iter()

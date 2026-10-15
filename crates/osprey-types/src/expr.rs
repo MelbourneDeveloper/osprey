@@ -71,7 +71,8 @@ impl Checker {
                 // that can tell it whether `[]` is a `List<float>` or a
                 // `List<int>` ([GPU-BUFFER-ELEM], [COLLECTIONS-LIST-ELEM]).
                 if let Some(p) = position {
-                    self.list_tys.push((*p, list.clone()));
+                    self.list_tys
+                        .push(((self.current_fn.clone(), *p), list.clone()));
                 }
                 list
             }
@@ -1330,7 +1331,8 @@ impl Checker {
         // Publish this lambda's type for the backend, keyed by source position
         // (resolved against the final substitution in `infer_program`).
         if let Some(pos) = position {
-            self.lambda_tys.push((pos, fun.clone()));
+            self.lambda_tys
+                .push(((self.current_fn.clone(), pos), fun.clone()));
         }
         fun
     }

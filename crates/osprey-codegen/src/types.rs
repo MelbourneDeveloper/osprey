@@ -97,6 +97,7 @@ pub(crate) fn result_payload_owner(prog: &ProgramTypes, ty: &Type) -> Option<Str
 /// element's `LType` through parameters and returns [GPU-BUFFER-ELEM].
 pub(crate) fn owner_name(prog: &ProgramTypes, ty: &Type) -> Option<String> {
     match ty {
+        Type::Record { name, .. } if name.is_empty() => Some(format!("__row#{ty}")),
         Type::Record { name, fields }
             if prog
                 .ctors

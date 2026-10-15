@@ -245,6 +245,7 @@ pub(crate) fn check(program: &Program, instances: &Instances, exports: &[&str]) 
     }
     CheckedEffects {
         errors,
+        signal_queries: instances.signal_queries.borrow().clone(),
         functions: super::reports::collect(&index, instances, &rows, &returns),
     }
 }

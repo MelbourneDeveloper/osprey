@@ -398,7 +398,7 @@ fn deps_refuses_a_file_that_did_not_parse() {
         open.stdout
     );
     assert!(
-        open.stdout.contains("widget: <unknown>, Signal.read"),
+        open.stdout.contains("widget: Signal.read"),
         "stdout={}",
         open.stdout
     );

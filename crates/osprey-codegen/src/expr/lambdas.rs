@@ -150,7 +150,7 @@ pub(super) fn apply_lambda(
 /// a generic function is ([`crate::genfn`], [TYPE-GENERICS-FN]).
 pub(crate) fn inline_sig(cg: &Codegen, position: Option<Position>) -> Option<FnSig> {
     cg.prog
-        .lambda_type(position)
+        .lambda_type(cg.source_function.as_deref(), position)
         .filter(|t| crate::types::fn_value_concrete(t))
         .and_then(|t| Codegen::fn_value_sig(&cg.prog, t))
 }
@@ -220,7 +220,10 @@ fn bind_lambda_params(
     sig: Option<&FnSig>,
     position: Option<Position>,
 ) -> Result<()> {
-    let declared = cg.prog.lambda_type(position).cloned();
+    let declared = cg
+        .prog
+        .lambda_type(cg.source_function.as_deref(), position)
+        .cloned();
     for (index, (p, v)) in parameters.iter().zip(values).enumerate() {
         bind_lambda_fn_param(cg, &p.name, declared.as_ref(), index);
         let v = match sig.and_then(|s| s.0.get(index)) {

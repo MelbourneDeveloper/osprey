@@ -1,4 +1,4 @@
-//! Helpers shared by the two gates over `docs/specs/0035-StagedEffects.md`.
+//! Helpers shared by the two gates over `docs/specs/0017-AlgebraicEffects.md`.
 //!
 //! Stage and multiplicity are two axes of ONE declaration, so both suites
 //! compile the same way and read the same diagnostics. One copy here, so a

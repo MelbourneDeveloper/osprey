@@ -73,6 +73,7 @@ pub(super) fn publish_program(
         obligations: publish_obligations(&mut checker),
         methods: crate::methods::collect(program, &checker.methods),
         functions,
+        signal_queries: checker.signal_queries.clone(),
         function_effects: checker.function_effects.clone(),
         ctors,
         unions,

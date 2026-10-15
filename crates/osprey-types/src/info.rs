@@ -17,6 +17,8 @@ pub struct EffectRequirements {
     pub runtime_builtins: Vec<String>,
     /// Symbolic callback uses or unresolved dynamic calls remain in the summary.
     pub unresolved_callbacks: bool,
+    /// Some operation instances retain unsolved type arguments.
+    pub unresolved_instances: bool,
 }
 
 /// The declared shape of a record/variant constructor: ordered `(field, type)`
@@ -59,6 +61,8 @@ pub struct OpType {
 /// union memberships.
 #[derive(Debug, Clone, Default)]
 pub struct ProgramTypes {
+    /// Checked signal metadata at source callee identities, before discharge.
+    pub(crate) signal_queries: HashMap<usize, EffectRequirements>,
     /// Function/extern name → (resolved parameter types, resolved return type).
     pub functions: HashMap<String, (Vec<Type>, Type)>,
     /// Qualified function name → the same requirements used by entry checking.
@@ -69,17 +73,16 @@ pub struct ProgramTypes {
     pub unions: HashMap<String, Vec<String>>,
     /// Effect name → operation name → resolved signature.
     pub effects: HashMap<String, HashMap<String, OpType>>,
-    /// Lambda source position `(line, column)` → its resolved function type,
-    /// so the backend lowers every lambda from inferred types, not guesses.
-    pub(crate) lambdas: HashMap<(u32, u32), Type>,
-    /// `let` binding source position `(line, column)` → its resolved type, so
-    /// editor hover can show the type of an unannotated binding.
-    /// Implements [LSP-HOVER-VARIABLES]
-    pub(crate) lets: HashMap<(u32, u32), Type>,
+    /// Lambda source position → its resolved function type, so the backend
+    /// lowers every lambda from inferred types, not guesses.
+    pub(crate) lambdas: SiteTable,
+    /// `let` binding source position → its resolved type, so editor hover can
+    /// show the type of an unannotated binding. Implements [LSP-HOVER-VARIABLES]
+    pub(crate) lets: SiteTable,
     /// Each list literal's resolved `List<T>`, keyed by its source position.
     /// The backend reads it when the literal itself cannot supply an element
     /// representation — i.e. when it is empty.
-    pub(crate) lists: HashMap<(u32, u32), Type>,
+    pub(crate) lists: SiteTable,
     /// `perform` site position `(line, column)` → the operation signature and
     /// effect type arguments instantiated at that site, so the backend can
     /// box/unbox erased generic operation slots against the site's concrete
@@ -167,7 +170,7 @@ impl ProgramTypes {
             substitute(ret);
         }
         for table in [&mut result.lambdas, &mut result.lets, &mut result.lists] {
-            table.values_mut().for_each(&substitute);
+            table.values_mut().for_each(substitute);
         }
         for site in result.performs.values_mut() {
             site.effect_args.iter_mut().for_each(&substitute);
@@ -202,30 +205,163 @@ impl ProgramTypes {
         self.functions.get(name).map(|(p, _)| p.as_slice())
     }
 
-    /// The resolved function type of the lambda written at `position`.
+    /// The resolved function type of the lambda written at `position` inside
+    /// top-level function `function` (`None` at file scope or when unknown).
     #[must_use]
-    pub fn lambda_type(&self, position: Option<osprey_ast::Position>) -> Option<&Type> {
-        position.and_then(|p| self.lambdas.get(&(p.line, p.column)))
+    pub fn lambda_type(
+        &self,
+        function: Option<&str>,
+        position: Option<osprey_ast::Position>,
+    ) -> Option<&Type> {
+        self.lambdas.get(function, position)
     }
 
-    /// The resolved type of the `let` binding written at `position`.
-    /// Implements [LSP-HOVER-VARIABLES]
+    /// The resolved type of the `let` binding written at `position` inside
+    /// top-level function `function`. Implements [LSP-HOVER-VARIABLES]
     #[must_use]
-    pub fn let_type(&self, position: Option<osprey_ast::Position>) -> Option<&Type> {
-        position.and_then(|p| self.lets.get(&(p.line, p.column)))
+    pub fn let_type(
+        &self,
+        function: Option<&str>,
+        position: Option<osprey_ast::Position>,
+    ) -> Option<&Type> {
+        self.lets.get(function, position)
     }
 
-    /// The resolved element type of the list literal written at `position`,
-    /// when inference pinned it to something concrete. This is how an EMPTY
-    /// literal still reaches the backend with an element representation
-    /// ([GPU-BUFFER-ELEM]).
+    /// The resolved element type of the list literal written at `position`
+    /// inside top-level function `function`, when inference pinned it to
+    /// something concrete. This is how an EMPTY literal still reaches the
+    /// backend with an element representation ([GPU-BUFFER-ELEM]).
     #[must_use]
-    pub fn list_elem_type(&self, position: Option<osprey_ast::Position>) -> Option<&Type> {
-        position
-            .and_then(|p| self.lists.get(&(p.line, p.column)))
-            .and_then(|ty| match ty {
-                Type::Con { name, args } if name == names::LIST => args.first(),
-                _ => None,
-            })
+    pub fn list_elem_type(
+        &self,
+        function: Option<&str>,
+        position: Option<osprey_ast::Position>,
+    ) -> Option<&Type> {
+        self.lists.get(function, position).and_then(|ty| match ty {
+            Type::Con { name, args } if name == names::LIST => args.first(),
+            _ => None,
+        })
+    }
+}
+
+/// Inferred types keyed by source position, one entry per enclosing top-level
+/// function. Static discharge copies a function body once per handler region
+/// ([STAGE-POLY]), so two copies share every position and only the function
+/// each landed in tells a `List<float>` binding from a `GpuBuffer<float>` one.
+/// A lookup names the function being lowered; a position recorded under no
+/// matching function (an inlined generic body) answers with the last entry,
+/// which is what a flat position map always did.
+#[derive(Debug, Clone, Default)]
+pub struct SiteTable {
+    entries: HashMap<(u32, u32), Vec<Entry>>,
+}
+
+/// One recorded entry: the enclosing top-level function and the resolved type.
+type Entry = (Option<String>, Type);
+
+impl SiteTable {
+    pub(crate) fn insert(&mut self, function: Option<&str>, position: (u32, u32), ty: Type) {
+        let recorded = self.entries.entry(position).or_default();
+        match recorded
+            .iter_mut()
+            .find(|(owner, _)| owner.as_deref() == function)
+        {
+            Some(slot) => slot.1 = ty,
+            None => recorded.push((function.map(str::to_owned), ty)),
+        }
+    }
+
+    /// The type recorded at `position` for `function`, else the last one
+    /// recorded there.
+    #[must_use]
+    pub fn get(
+        &self,
+        function: Option<&str>,
+        position: Option<osprey_ast::Position>,
+    ) -> Option<&Type> {
+        let recorded = self.entries.get(&(position?.line, position?.column))?;
+        recorded
+            .iter()
+            .find(|(owner, _)| owner.as_deref() == function)
+            .or_else(|| recorded.last())
+            .map(|(_, ty)| ty)
+    }
+
+    /// Whether nothing was recorded.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Every recorded type, in no particular order.
+    pub fn values(&self) -> impl Iterator<Item = &Type> {
+        self.entries.values().flatten().map(|(_, ty)| ty)
+    }
+
+    pub(crate) fn values_mut(&mut self) -> impl Iterator<Item = &mut Type> {
+        self.entries.values_mut().flatten().map(|(_, ty)| ty)
+    }
+
+    /// Every entry as its position and type; a position copied into several
+    /// functions appears once per copy.
+    pub fn iter(&self) -> impl Iterator<Item = (&(u32, u32), &Type)> {
+        self.entries
+            .iter()
+            .flat_map(|(position, recorded)| recorded.iter().map(move |(_, ty)| (position, ty)))
+    }
+}
+
+#[cfg(test)]
+mod site_table_tests {
+    use super::{SiteTable, Type};
+    use osprey_ast::Position;
+
+    const SHARED: (u32, u32) = (7, 4);
+
+    fn at(position: (u32, u32)) -> Position {
+        Position {
+            line: position.0,
+            column: position.1,
+        }
+    }
+
+    /// Two specializations of one function share every source position; each
+    /// reads back its own type, and a reader naming neither gets the last one.
+    #[test]
+    fn one_position_holds_one_type_per_enclosing_function() {
+        let mut table = SiteTable::default();
+        table.insert(Some("run__stage1"), SHARED, Type::list(Type::float()));
+        table.insert(Some("run__stage5"), SHARED, Type::prim("GpuBuffer"));
+        assert_eq!(
+            table.get(Some("run__stage1"), Some(at(SHARED))),
+            Some(&Type::list(Type::float()))
+        );
+        assert_eq!(
+            table.get(Some("run__stage5"), Some(at(SHARED))),
+            Some(&Type::prim("GpuBuffer"))
+        );
+        assert_eq!(
+            table.get(None, Some(at(SHARED))),
+            Some(&Type::prim("GpuBuffer"))
+        );
+        assert_eq!(
+            table.get(Some("other"), Some(at(SHARED))),
+            Some(&Type::prim("GpuBuffer"))
+        );
+        assert_eq!(table.get(Some("run__stage1"), Some(at((1, 1)))), None);
+        assert_eq!(table.get(Some("run__stage1"), None), None);
+        assert_eq!(table.iter().count(), 2);
+    }
+
+    /// Re-recording a site for the same function replaces its type instead of
+    /// adding a second entry.
+    #[test]
+    fn re_recording_a_site_replaces_its_type() {
+        let mut table = SiteTable::default();
+        table.insert(None, SHARED, Type::int());
+        table.insert(None, SHARED, Type::float());
+        assert_eq!(table.get(None, Some(at(SHARED))), Some(&Type::float()));
+        assert_eq!(table.values().count(), 1);
+        assert!(!table.is_empty());
     }
 }

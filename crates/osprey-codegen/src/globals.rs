@@ -94,7 +94,7 @@ fn describe(
     position: Option<osprey_ast::Position>,
     cell: bool,
 ) -> Result<GlobalSlot> {
-    let ty = cg.prog.let_type(position).ok_or_else(|| {
+    let ty = cg.prog.let_type(cg.source_function.as_deref(), position).ok_or_else(|| {
         CodegenError::unsupported(format!(
             "file-scope binding `{name}` is read by a function but inference recorded no type for it"
         ))

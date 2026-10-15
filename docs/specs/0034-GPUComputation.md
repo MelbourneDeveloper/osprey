@@ -364,30 +364,67 @@ Not implemented. The design (staged in [plan 0023](../plans/0023-gpu-computation
 
 `gpuDevice() -> string` names the active execution backend. The host backend reports `"host"`; device backends report device names (`"cuda:0"`, `"metal:0"`). A program can branch on it, and a benchmark can record which backend produced its numbers.
 
-Choosing a device is an *effect*, not a global switch — that is roadmap stage 5's `Gpu` effect, and it is the construct that makes Osprey's GPU story a language feature rather than a library. Selection becomes lexical, testable, and capability-checked exactly like every other effect:
+Choosing where arithmetic runs is an *effect*, not a global switch. A program declares the operations it needs as a static effect, writes its arithmetic against them, and a handler decides how each operation executes; the compiler discharges the handler before the program runs ([STAGE-HANDLE-STATIC], [STAGE-BACKEND]). This is the construct that makes Osprey's GPU story a language feature rather than a library: selection is lexical, testable and capability-checked exactly like every other effect, and the same source runs under a handler over host lists or a handler over the GPU surface with no change.
 
 ```osprey
-// Stage 5 surface (design, not yet implemented): the handler chooses the
-// execution strategy for everything the region offloads. Kernels stay
-// pure; scheduling is the effectful part, so scheduling is what handlers
-// control.
-fn scores() = {
-    handle Gpu { select => "cuda:0" }
-    embeddings |> gpuMap(normalize) |> gpuZipWith(query, dot)
+static effect Tensor<B> {
+    build: fn(int, fn(int) -> float) -> B
+    get: fn(B, int) -> float
+    device: fn() -> string
 }
-// A test handler pins "host" and the same program runs deterministically
-// in CI with no GPU attached.
+
+fn onLists(work) = {
+    handle static Tensor<List<float>> {
+        build n f => range(0, n) |> map(f) |> toList()
+        get b i => listGet(b, i) ?: 0.0
+        device => "lists"
+    }
+    work()
+}
+
+fn onGpu(work) = {
+    handle static Tensor<GpuBuffer<float>> {
+        build n f => gpuIota(n) |> gpuMap(f)
+        get b i => gpuGet(b, i) ?: 0.0
+        device => gpuDevice()
+    }
+    work()
+}
+
+// The model never names a buffer type; the handler installed around it does.
+fn halves(n) = perform Tensor.build(n, fn(i) => toFloat(i) * 1.5)
+fn report() = "${perform Tensor.device()}: ${perform Tensor.get(halves(4), 3)}"
+
+print("${onLists(report)} / ${onGpu(report)}")  // lists: 4.5 / host: 4.5
 ```
 
 ```osprey-ml
-(* Stage 5 surface (design, not yet implemented). *)
-scores () =
-    handle Gpu
-        select => "cuda:0"
-    embeddings |> gpuMap normalize |> gpuZipWith (query, dot)
+static effect Tensor B
+    build : (int, (int) -> float) => B
+    get : (B, int) => float
+    device : Unit => string
+
+onLists work =
+    handle static Tensor<List<float>>
+        build n f => range 0 n |> map f |> toList
+        get b i => listGet b i ?: 0.0
+        device => "lists"
+    work ()
+
+onGpu work =
+    handle static Tensor<GpuBuffer<float>>
+        build n f => gpuIota n |> gpuMap f
+        get b i => gpuGet b i ?: 0.0
+        device => gpuDevice ()
+    work ()
+
+halves n = perform Tensor.build n (\i => toFloat i * 1.5)
+report () = "${perform Tensor.device ()}: ${perform Tensor.get (halves 4) 3}"
+
+print "${onLists report} / ${onGpu report}"  // lists: 4.5 / host: 4.5
 ```
 
-Until stage 5 lands, programs run on the host backend and `gpuDevice()` truthfully reports it; nothing in the surface changes when real devices arrive — a handler simply gains the power to pick one.
+A static handler must answer every operation of its effect ([STAGE-STATIC-TOTAL]); an instantiation never answers another ([EFFECTS-GENERIC-INSTANTIATION]); a callback an arm forwards to `gpuMap`, `gpuZipWith` or `gpuFold` is held to [GPU-KERNEL-PURE], and one that performs a runtime effect is rejected by name. The reference program is GPT-2 (`examples/gpt2`): generation and a training step written once against a nine-operation `Tensor<B>` effect, run by `onLists` and `onGpu` with identical tokens, loss and gradient sums. `gpuDevice()` reports which backend the GPU-surface handler is executing on — `host` today — and the model prints that answer on its first line, so a run never claims hardware it did not use. A device backend changes the answer and nothing else ([GPU-BACKEND-DEVICE]).
 
 ## Roadmap invariant — [GPU-ROADMAP]
 

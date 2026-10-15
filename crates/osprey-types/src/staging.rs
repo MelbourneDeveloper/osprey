@@ -1,5 +1,9 @@
 //! Validate staged data contracts before any operation or unused arm disappears.
 
+mod signals;
+use signals::materialize_signal_queries;
+pub(crate) use signals::parameter_names as signal_parameter_names;
+
 use crate::TypeError;
 use osprey_ast::{mutate, walk_program, AstVisitor, Expr, Program, Stmt};
 
@@ -27,13 +31,72 @@ pub fn lower_static_checked(program: &Program) -> Result<Program, Vec<TypeError>
     // enclosing `handle static Echo<int>`. Use the already checked site
     // instantiations for this backend copy before matching regions; otherwise
     // the rewrite silently leaves a request that the checker proved handled.
-    let mut resolved = program.clone();
+    let mut resolved = materialize_signal_queries(program, &source_types);
     for statement in &mut resolved.statements {
         mutate::statement_children_mut(statement, &mut |expression| {
             resolve_effect_mentions(expression, &source_types);
         });
     }
     osprey_ast::stage::lower(&resolved).map_err(stage_errors)
+}
+
+/// Resolved, validated signal may-read sets before static discharge.
+/// Implements [STAGE-SIGNALS-EXACT]; callers must assemble modules first.
+///
+/// # Errors
+/// Invalid source never produces a complete-looking dependency report.
+pub fn signal_dependencies(
+    program: &Program,
+) -> Result<std::collections::BTreeMap<String, Vec<String>>, Vec<TypeError>> {
+    let _ = lower_static_checked(program)?;
+    let types = crate::check::infer_checked(program)?;
+    let mut static_effects = StaticEffects::default();
+    walk_program(program, &mut static_effects);
+    Ok(types
+        .function_effects
+        .into_iter()
+        .map(|(name, requirements)| {
+            (
+                osprey_ast::symbol::demangle_message(&name).into_owned(),
+                static_effects.dependencies(&requirements),
+            )
+        })
+        .collect())
+}
+
+#[derive(Default)]
+struct StaticEffects(std::collections::BTreeSet<String>);
+
+impl AstVisitor for StaticEffects {
+    fn statement(&mut self, statement: &Stmt) {
+        if let Stmt::Effect { name, stage, .. } = statement {
+            if stage.is_compile_time() {
+                let _ = self.0.insert(name.clone());
+            }
+        }
+    }
+}
+
+impl StaticEffects {
+    fn dependencies(&self, requirements: &crate::EffectRequirements) -> Vec<String> {
+        let mut operations: Vec<_> = requirements
+            .operations
+            .iter()
+            .filter(|operation| {
+                let effect = operation
+                    .rsplit_once('.')
+                    .map_or(operation.as_str(), |(effect, _)| effect);
+                self.0.contains(osprey_ast::effect_name::base(effect))
+            })
+            .map(|operation| osprey_ast::symbol::demangle_message(operation).into_owned())
+            .collect();
+        if requirements.unresolved_callbacks || requirements.unresolved_instances {
+            operations.push("<unknown>".to_owned());
+        }
+        operations.sort();
+        operations.dedup();
+        operations
+    }
 }
 
 fn resolve_effect_mentions(expression: &mut Expr, types: &crate::ProgramTypes) {
@@ -136,6 +199,7 @@ pub(crate) fn has_staging(program: &Program) -> bool {
             }
         }
         fn expression(&mut self, expression: &Expr) {
+            self.0 |= matches!(expression, Expr::Call { function, .. } if matches!(function.as_ref(), Expr::Identifier(name) if signals::is_intrinsic(name)));
             if let Expr::Handler { stage, .. } = expression {
                 self.0 |= stage.is_compile_time();
             }
@@ -150,6 +214,102 @@ pub(crate) fn has_staging(program: &Program) -> bool {
 mod tests {
     use super::*;
     use std::collections::{BTreeMap, HashMap};
+
+    const GPU_ARMS_WITH_RESULT_FALLBACKS: &str = "static effect Tensor<B> {\n\
+        get: fn(B, int) -> float\n\
+        matMul: fn(B, B, int, int, int) -> B\n\
+    }\n\
+    fn onGpu(work) = {\n\
+        handle static Tensor<GpuBuffer<float>> {\n\
+            get b i => gpuGet(b, i) ?: 0.0\n\
+            matMul a b rows inner cols => gpuMatMul(a, b, rows, inner, cols) ?: toGpu([])\n\
+        }\n\
+        work()\n\
+    }\n\
+    fn main() = {\n\
+        let ones = toGpu([1.0, 1.0, 1.0, 1.0])\n\
+        onGpu(fn() => perform Tensor.get(perform Tensor.matMul(ones, ones, 2, 2, 2), 0))\n\
+    }\n";
+
+    /// [PATTERN-RESULT-DEFAULT] types a `Success` payload by its field label,
+    /// so the lowering's hygiene must leave `value` and the `?:` binder
+    /// unrenamed: renamed, the fallback `toGpu([])` kept an open element type
+    /// and the backend read the float buffer back as `int`.
+    #[test]
+    fn a_static_arm_keeps_its_result_field_labels_so_the_residual_types_its_fallback() {
+        let parsed = osprey_syntax::parse_program_with_flavor(
+            GPU_ARMS_WITH_RESULT_FALLBACKS,
+            osprey_syntax::Flavor::Default,
+        );
+        let lowered = lower_static_checked(&parsed.program);
+        assert!(lowered.is_ok(), "lowering failed: {lowered:?}");
+        let Ok(lowered) = lowered else { return };
+        let types = crate::infer_program(&lowered);
+        let elements: Vec<_> = types
+            .lists
+            .iter()
+            .map(|((line, column), _)| {
+                types.list_elem_type(
+                    None,
+                    Some(osprey_ast::Position {
+                        line: *line,
+                        column: *column,
+                    }),
+                )
+            })
+            .collect();
+        assert_eq!(elements.len(), 2, "both list literals survive lowering");
+        assert!(
+            elements
+                .iter()
+                .all(|element| *element == Some(&crate::Type::float())),
+            "every list literal is a float list after lowering: {elements:?}"
+        );
+    }
+
+    const GENERIC_MODEL_OVER_A_TENSOR_EFFECT: &str = "static effect Tensor<B> {\n\
+        build: fn(int, fn(int) -> float) -> B\n\
+        zipWith: fn(B, B, fn(float, float) -> float) -> B\n\
+    }\n\
+    type Acts<B> = { f: B }\n\
+    fn onGpu(work) = {\n\
+        handle static Tensor<GpuBuffer<float>> {\n\
+            build n f => gpuIota(n) |> gpuMap(f)\n\
+            zipWith a b f => gpuZipWith(a, b, f)\n\
+        }\n\
+        work()\n\
+    }\n\
+    fn blockLike(dy, acts) = perform Tensor.zipWith(dy, acts.f, fn(g, x) => g)\n\
+    fn main() = onGpu(fn() => {\n\
+        let ones = perform Tensor.build(4, fn(i) => 1.0)\n\
+        blockLike(ones, Acts { f: ones })\n\
+    })\n";
+
+    /// A static operation's declared callback type is part of the contract the
+    /// model was checked against. The residual must keep it: a kernel written
+    /// against `fn(float, float) -> float` inside a generic function is
+    /// otherwise re-inferred polymorphic, and the backend lowers its element
+    /// slots as raw words — reading every float as an int.
+    #[test]
+    fn a_discharged_arm_keeps_the_operation_s_declared_callback_types() {
+        let parsed = osprey_syntax::parse_program_with_flavor(
+            GENERIC_MODEL_OVER_A_TENSOR_EFFECT,
+            osprey_syntax::Flavor::Default,
+        );
+        let lowered = lower_static_checked(&parsed.program);
+        assert!(lowered.is_ok(), "lowering failed: {lowered:?}");
+        let Ok(lowered) = lowered else { return };
+        let types = crate::infer_program(&lowered);
+        let lambdas: Vec<String> = types.lambdas.values().map(ToString::to_string).collect();
+        assert!(
+            lambdas.len() >= 3,
+            "every lambda survives lowering: {lambdas:?}"
+        );
+        assert!(
+            !types.lambdas.values().any(crate::has_type_var),
+            "every residual lambda is concrete: {lambdas:?}"
+        );
+    }
 
     #[test]
     fn nested_record_effect_identity_round_trips_through_source_spelling() {
