@@ -1,8 +1,30 @@
 // Page-health checks for every template at every breakpoint:
 // no JS errors, no failed requests, no horizontal overflow, dark theme intact,
-// site chrome present, and the logo image resolving.
+// site chrome present, the logo image resolving, and Osprey code highlighted.
+const fs = require("node:fs");
+const path = require("node:path");
 const { test, expect } = require("@playwright/test");
-const { PAGES, VIEWPORTS, collectProblems } = require("./helpers");
+const { PAGES, VIEWPORTS, collectProblems, paintedColours } = require("./helpers");
+
+const SITE = path.resolve(__dirname, "../_site");
+const OSPREY_CODE = /<code([^>]*)class="language-osprey(?:-ml)?"[^>]*>([\s\S]*?)<\/code>/g;
+const COMMENT_TOKEN = /<span class="token comment">[\s\S]*?<\/span>/g;
+const OSPREY_BLOCKS = "pre > code.language-osprey, pre > code.language-osprey-ml";
+
+// A block is unhighlighted when it has no tokens or an ML `(* … *)` comment
+// outside a comment token. The /wasm/ studio fills #src-code at runtime; the
+// browser check below waits for its tokens.
+const unhighlightedBlocks = (file) =>
+  [...fs.readFileSync(path.join(SITE, file), "utf8").matchAll(OSPREY_CODE)]
+    .filter(([, attributes, body]) => !attributes.includes('id="src-code"'))
+    .filter(([, , body]) => !body.includes('class="token') || body.replace(COMMENT_TOKEN, "").replace(/<[^>]+>/g, "").includes("(*"))
+    .map(([, , body]) => `${file}: ${body.slice(0, 60)}`);
+
+test("every built page ships its Osprey code highlighted", () => {
+  const pages = fs.readdirSync(SITE, { recursive: true }).filter((file) => file.endsWith(".html"));
+  expect(pages).toContain("index.html");
+  expect(pages.flatMap(unhighlightedBlocks)).toEqual([]);
+});
 
 const DARK_BACKGROUNDS = ["rgb(12, 19, 37)", "rgb(7, 13, 31)", "rgb(25, 31, 50)"];
 
@@ -42,6 +64,14 @@ for (const pg of PAGES) {
       expect(match, "logo ::before background-image url").toBeTruthy();
       const res = await page.request.get(match[1]);
       expect(res.status(), "logo request status").toBe(200);
+    });
+
+    test(`Osprey code paints its tokens (${pg.path})`, async ({ page }) => {
+      await page.goto(pg.path, { waitUntil: "domcontentloaded" });
+      for (const block of await page.locator(OSPREY_BLOCKS).all()) {
+        await expect(block.locator(".token").first()).toBeAttached();
+        expect(await paintedColours(block.or(block.locator(".token"))), await block.textContent()).toBeGreaterThan(1);
+      }
     });
 
     // The playground is a fixed-height Monaco app — horizontal overflow there

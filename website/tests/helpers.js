@@ -64,8 +64,13 @@ function collectProblems(page, pageName) {
   return { consoleErrors, pageErrors, failedRequests };
 }
 
+// Plain text paints one colour, so highlighted code is any code surface whose
+// text carriers paint more than one.
+const paintedColours = (carriers) =>
+  carriers.evaluateAll((nodes) => new Set(nodes.map((node) => getComputedStyle(node).color)).size);
+
 function isKnown(pageName, text) {
   return KNOWN_ERRORS.some((k) => k.page === pageName && k.pattern.test(text));
 }
 
-module.exports = { PAGES, VIEWPORTS, collectProblems };
+module.exports = { PAGES, VIEWPORTS, collectProblems, paintedColours };
