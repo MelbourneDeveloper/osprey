@@ -9,7 +9,7 @@ tags: [algebraic-effects, handlers, gpu, static-effects]
 
 A program that has to run in two places is usually written twice. The CPU version and the GPU version start as copies, then one gains a fix the other never sees, and the test that would have caught it is the one nobody wrote because it needed both. Osprey removes the second copy. The model is written once, against an effect that names the operations it needs. Two handlers answer those operations: one with plain lists, one with the GPU surface. The handler a program installs is the only place the choice is made, and the compiler discharges it before the program runs, so there is no dispatch, no trait object and no `if gpu` left in the code.
 
-The worked example is the 124M-parameter GPT-2 model in [`examples/gpt2`](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2): the forward pass, greedy generation, a training step. One source. Two backends. Byte-identical output.
+The worked example is the 124M-parameter GPT-2 model in [`examples/gpt2`](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2): the forward pass, greedy generation, a training step. One source. Two backends. Byte-identical output on the CPU.
 
 ```bash
 make gpt2 PROMPT="The capital of France is" TOKENS=20 BACKEND=gpu
@@ -122,7 +122,7 @@ Nothing in the model mentions a list or a buffer. Hindley-Milner inference carri
 
 ## Answer with lists
 
-The first handler answers every operation with ordinary list code. The product accumulates in `k` order from `0.0`, and that order is the contract: the two handlers must produce the same doubles, not nearly the same. Both handlers answer `indexOf` in the same two steps: element `i` names itself when it holds the value and the length otherwise (`hit`), and the smallest name wins (`minI`).
+The first handler answers every operation with ordinary list code. The product accumulates in `k` order from `0.0`, and that order is the contract: the two handlers must produce the same doubles, not nearly the same. Both handlers answer `indexOf` in the same two steps: element `i` names itself when it holds the value and the length otherwise (`hit`), and the smallest name wins (`minI`). `orAbort` ends the run with the error when a load or a product fails, so the model never computes on a fabricated empty tensor.
 
 ```osprey
 export fn onLists(work) = {
@@ -135,7 +135,7 @@ export fn onLists(work) = {
         indexOf b x => range(0, listLength(b)) |> map(fn(i) => hit(listGet(b, i) ?: 0.0, x, i, listLength(b))) |> fold(listLength(b), minI)
         matMul a b rows inner cols => range(0, rows * cols) |> map(fn(i) => range(0, inner) |> fold(0.0, fn(acc, k) => acc + (listGet(a, intDiv(i, cols) * inner + k) ?: 0.0) * (listGet(b, k * cols + i % cols) ?: 0.0))) |> toList()
         fromList xs => xs
-        load path name => fromGpu(gpuLoadTensor(path, name) ?: toGpu([]))
+        load path name => fromGpu(orAbort(gpuLoadTensor(path, name)))
         device => "lists"
     }
     work()
@@ -153,7 +153,7 @@ export onLists work =
         indexOf b x => range 0 (listLength b) |> map (\i => hit (listGet b i ?: 0.0, x, i, listLength b)) |> fold (listLength b) minI
         matMul a b rows inner cols => range 0 (rows * cols) |> map (\i => range 0 inner |> fold 0.0 (\(acc, k) => acc + (listGet a (intDiv (i, cols) * inner + k) ?: 0.0) * (listGet b (k * cols + i % cols) ?: 0.0))) |> toList
         fromList xs => xs
-        load path name => fromGpu (gpuLoadTensor path name ?: toGpu [])
+        load path name => fromGpu (orAbort (gpuLoadTensor path name))
         device => "lists"
     work ()
 ```
@@ -171,9 +171,9 @@ export fn onGpu(work) = {
         zipWith a b f => gpuZipWith(a, b, f)
         reduce b seed f => b |> gpuFold(seed, f)
         indexOf b x => gpuIota(gpuLength(b)) |> gpuMap(fn(i) => hit(gpuGet(b, i) ?: 0.0, x, i, gpuLength(b))) |> gpuFold(gpuLength(b), minI)
-        matMul a b rows inner cols => gpuMatMul(a, b, rows, inner, cols) ?: toGpu([])
+        matMul a b rows inner cols => orAbort(gpuMatMul(a, b, rows, inner, cols))
         fromList xs => toGpu(xs)
-        load path name => gpuLoadTensor(path, name) ?: toGpu([])
+        load path name => orAbort(gpuLoadTensor(path, name))
         device => gpuDevice()
     }
     work()
@@ -189,9 +189,9 @@ export onGpu work =
         zipWith a b f => gpuZipWith a b f
         reduce b seed f => b |> gpuFold seed f
         indexOf b x => gpuIota (gpuLength b) |> gpuMap (\i => hit (gpuGet b i ?: 0.0, x, i, gpuLength b)) |> gpuFold (gpuLength b) minI
-        matMul a b rows inner cols => gpuMatMul a b rows inner cols ?: toGpu []
+        matMul a b rows inner cols => orAbort (gpuMatMul a b rows inner cols)
         fromList xs => toGpu xs
-        load path name => gpuLoadTensor path name ?: toGpu []
+        load path name => orAbort (gpuLoadTensor path name)
         device => gpuDevice ()
     work ()
 ```
