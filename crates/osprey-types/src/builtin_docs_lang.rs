@@ -606,13 +606,13 @@ pub(crate) static GPU: &[BuiltinDoc] = &[
     ),
     builtin_doc!(
         "gpuMap",
-        "Applies a pure kernel to every buffer element independently. The compiler rejects a kernel that performs any effect a handler must discharge at runtime; an effect a static handler has already erased is gone before the check.",
+        "Applies a pure kernel to every buffer element independently, one thread per element when OSPREY_GPU selects Metal or OpenCL. The compiler rejects a kernel that performs any effect a handler must discharge at runtime; an effect a static handler has already erased is gone before the check.",
         ["buffer" => "The source buffer", "kernel" => "The pure per-element function"],
         "toGpu([1, 2, 3]) |> gpuMap(fn(x) => satMul(x, x))",
     ),
     builtin_doc!(
         "gpuFold",
-        "Reduces a buffer to one scalar with a pure combine function. Use an associative combine: a device backend may reassociate.",
+        "Reduces a buffer to one scalar with a pure combine function, applied left to right on every backend. A device runs the fold on one thread, so fold a large buffer by rows and then fold the rows.",
         ["buffer" => "The buffer to reduce", "initial" => "The initial scalar accumulator", "combine" => "The pure (accumulator, element) function"],
         "toGpu([1, 2, 3]) |> gpuFold(0, fn(a, x) => wrapAdd(a, x))",
     ),
@@ -636,13 +636,13 @@ pub(crate) static GPU: &[BuiltinDoc] = &[
     ),
     builtin_doc!(
         "gpuScan",
-        "Inclusive prefix scan: element i is combine folded through element i. Use an associative combine: a device backend may run it work-efficiently in parallel.",
+        "Inclusive prefix scan: element i is combine folded left to right through element i. It has no device form yet: when OSPREY_GPU selects a device, the run stops and names it.",
         ["buffer" => "The buffer to scan", "initial" => "The initial scalar accumulator", "combine" => "The pure (accumulator, element) function"],
         "toGpu([1, 2, 3]) |> gpuScan(0, fn(a, x) => wrapAdd(a, x))  // 1, 3, 6",
     ),
     builtin_doc!(
         "gpuFilter",
-        "Stream compaction: keeps the elements a pure predicate accepts, preserving order.",
+        "Stream compaction: keeps the elements a pure predicate accepts, preserving order. It has no device form yet: when OSPREY_GPU selects a device, the run stops and names it.",
         ["buffer" => "The source buffer", "predicate" => "The pure element predicate"],
         "toGpu([1, 2, 3, 4]) |> gpuFilter(fn(x) => x % 2 == 0)",
     ),
@@ -666,7 +666,7 @@ pub(crate) static GPU: &[BuiltinDoc] = &[
     ),
     builtin_doc!(
         "gpuDevice",
-        "Returns the active GPU execution backend's name. The host backend reports \"host\"; device backends report names like \"cuda:0\".",
+        "Returns the name of the backend GPU kernels and products run on: \"host\", or the adapter OSPREY_GPU selected, such as \"metal:0 (Apple M4 Max)\" or \"opencl:0 (Apple M4 Max)\".",
         [],
         "print(gpuDevice())  // host",
     ),

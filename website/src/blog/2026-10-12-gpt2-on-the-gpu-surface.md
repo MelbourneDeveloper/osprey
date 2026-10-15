@@ -9,6 +9,8 @@ author: "Christian Findlay"
 readingTime: 11
 ---
 
+**Source: [`examples/gpt2`](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2)** — the model ([`model/model.osp`](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/model/model.osp)), the `Tensor` effect and both handlers ([`model/backends.osp`](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/model/backends.osp)), the [generation](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/generate/generate.osp) and [training](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/train/train.osp) programs, and the [pure-Python reference](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/reference.py). `make gpt2` runs it.
+
 Every numeric codebase that runs on more than one kind of hardware has the same shape: a reference implementation that is slow and trusted, a fast implementation that is trusted because it agrees with the slow one, and a growing list of places where they disagree. The two are written twice. They drift. The test that compares them is the one that gets skipped when the fast path changes.
 
 Osprey's answer is to write the program once and make the choice of implementation an algebraic effect. This post is about doing that to GPT-2, the 124M-parameter model exactly as Hugging Face publishes it: load the weights, generate text, run a training step. One source. Two handlers. On the CPU the two print identical output, byte for byte, and so does an independent Python reference. On a GPU, through Metal or OpenCL, the same source generates the same text, and a training step runs about three times faster than on the CPU.
@@ -33,7 +35,7 @@ The first line names who answered. `GPU=opencl` prints `on opencl:0 (Apple M4 Ma
 
 ## The effect is the interface
 
-A tensor program needs ten operations. Build a buffer from an index function. Read an element. Measure a buffer. Combine two element-wise. Reduce one. Find the first index holding a value. Multiply two matrices. Lift a host list. Load a tensor from a checkpoint. Say who is answering. That list is the effect, and `B` is whatever the handler wants a tensor to be:
+A tensor program needs ten operations. Build a buffer from an index function. Read an element. Measure a buffer. Combine two element-wise. Reduce one. Find the first index holding a value. Multiply two matrices. Lift a host list. Load a tensor from a checkpoint. Say who is answering. That list is the effect, in [`model/backends.osp`](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/model/backends.osp), and `B` is whatever the handler wants a tensor to be:
 
 ```osprey
 export type Kernel = fn(int) -> float
@@ -53,7 +55,7 @@ export static effect Tensor<B> {
 }
 ```
 
-The model performs these and nothing else. LayerNorm over the `t` rows of a `[t, width]` tensor is three `build`s:
+The model, [`model/model.osp`](https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/model/model.osp), performs these and nothing else. LayerNorm over the `t` rows of a `[t, width]` tensor is three `build`s:
 
 ```osprey
 fn layerNorm(x, t, g, b) = {

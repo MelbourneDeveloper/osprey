@@ -173,11 +173,11 @@ rowSum (m, r) = at (m, r * 3) + at (m, r * 3 + 1)
 
 ### `gpuScan(buffer: GpuBuffer<T>, initial: T, combine: fn(T, T) -> T) -> GpuBuffer<T>` — [GPU-SCAN]
 
-Inclusive prefix scan: element `i` of the result is `combine` folded over the source through element `i`, seeded with `initial` — so the first element is `combine(initial, src[0])`, not `src[0]`, and the result always has the source's length. Scan is *the* classic parallel primitive — segmented scans and flag vectors are how nested data parallelism flattens onto flat hardware ([Blelloch, CACM 1996](https://doi.org/10.1145/227234.227246); [NESL](https://www.cs.cmu.edu/~scandal/nesl.html)). The order contract is `gpuFold`'s: element `i` is the left-to-right fold through `i` on every backend. A device backend may substitute the work-efficient parallel scan only where it reproduces the host's exact bytes, and falls back to the sequential order where it cannot.
+Inclusive prefix scan: element `i` of the result is `combine` folded over the source through element `i`, seeded with `initial` — so the first element is `combine(initial, src[0])`, not `src[0]`, and the result always has the source's length. Scan is *the* classic parallel primitive — segmented scans and flag vectors are how nested data parallelism flattens onto flat hardware ([Blelloch, CACM 1996](https://doi.org/10.1145/227234.227246); [NESL](https://www.cs.cmu.edu/~scandal/nesl.html)). The order contract is `gpuFold`'s: element `i` is the left-to-right fold through `i` on every backend. A device backend may substitute the work-efficient parallel scan only where it reproduces the host's exact bytes, and falls back to the sequential order where it cannot. No device form exists yet: a selected device declines `gpuScan`, and the run stops naming it ([GPU-BACKEND-DEVICE]).
 
 ### `gpuFilter(buffer: GpuBuffer<T>, predicate: fn(T) -> bool) -> GpuBuffer<T>` — [GPU-FILTER]
 
-Stream compaction: keeps the elements the pure predicate accepts, preserving source order. The host backend fills a source-length scratch buffer and publishes the kept prefix; a device backend implements the same contract with a scan-based compaction.
+Stream compaction: keeps the elements the pure predicate accepts, preserving source order. The host backend fills a source-length scratch buffer and publishes the kept prefix; a device backend implements the same contract with a scan-based compaction. No device form exists yet: a selected device declines `gpuFilter`, and the run stops naming it ([GPU-BACKEND-DEVICE]).
 
 ## Dense linear algebra
 
