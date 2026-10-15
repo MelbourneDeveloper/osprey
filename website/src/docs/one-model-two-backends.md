@@ -188,7 +188,7 @@ The GPU surface runs on the host backend today: every kernel is a native loop, a
 
 ## Choose at the boundary
 
-`main` is the one place that chooses. It reads the prompt, the token count and a backend name, then installs a handler around the whole run:
+`main` is the one place that chooses. It reads the prompt, the token count and a backend name, then hands the whole run to `Backends::under`, which installs the handler that name selects:
 
 ```osprey
 fn main() = {
@@ -199,10 +199,13 @@ fn main() = {
     }
     let prompt = input()
     let count = parseInt(input()) ?: 20
-    match input() {
-        "lists" => Backends::onLists(fn() => run(prompt, count))
-        _ => Backends::onGpu(fn() => run(prompt, count))
-    }
+    Backends::under(input(), fn() => run(prompt, count))
+}
+
+export fn under(name, work) = match name {
+    "gpu" => onGpu(work)
+    "lists" => onLists(work)
+    _ => print("unknown backend `${name}`: choose gpu or lists")
 }
 ```
 
@@ -214,12 +217,15 @@ main () =
         remainderByZero _ => 0
     prompt = input ()
     count = parseInt (input ()) ?: 20
-    match input ()
-        "lists" => Backends::onLists (\() => run (prompt, count))
-        _ => Backends::onGpu (\() => run (prompt, count))
+    Backends::under (input (), \() => run (prompt, count))
+
+export under (name, work) = match name
+    "gpu" => onGpu work
+    "lists" => onLists work
+    _ => print "unknown backend `${name}`: choose gpu or lists"
 ```
 
-Each arm of the `match` is its own static region. The compiler specialises `run` and everything it reaches once per region, with the arms of that region inlined at every `perform`. The compiled program contains two copies of the model and no handler: the `Tensor` effect does not exist at run time. `Arith` is an ordinary runtime effect and stays, because a divisor the program computes needs a policy the handlers cannot supply.
+`under` only forwards the run, so the compiler applies it at the call site, and each arm of its `match` becomes its own static region. A name that is neither runs nothing rather than silently landing on the GPU surface. The compiler specialises `run` and everything it reaches once per region, with the arms of that region inlined at every `perform`. The compiled program contains two copies of the model and no handler: the `Tensor` effect does not exist at run time. `Arith` is an ordinary runtime effect and stays, because a divisor the program computes needs a policy the handlers cannot supply.
 
 ## What the compiler proves
 

@@ -67,4 +67,12 @@ module Backends {
         }
         work()
     }
+
+    /// Runs `work` under the handler `name` selects. An unknown name runs
+    /// nothing, so a mistyped backend never silently lands on the GPU surface.
+    export fn under(name, work) = match name {
+        "gpu" => onGpu(work)
+        "lists" => onLists(work)
+        _ => print("unknown backend `${name}`: choose gpu or lists")
+    }
 }

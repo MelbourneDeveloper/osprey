@@ -82,17 +82,15 @@ export fn layerNorm(x, t, g, b) = {
 `onLists` answers `build` with `range |> map |> toList` and `matMul` with a
 `fold` over `k`; `onGpu` answers them with `gpuIota |> gpuMap` and `gpuMatMul`,
 forwarding the model's callbacks to the kernels. `main` reads the backend name
-from stdin and installs one handler around the whole run:
+from stdin and `Backends::under` installs the handler it names around the whole
+run; any other name runs nothing:
 
 ```osprey
-match input() {
-    "lists" => Backends::onLists(fn() => run(prompt, count))
-    _ => Backends::onGpu(fn() => run(prompt, count))
-}
+Backends::under(input(), fn() => run(prompt, count))
 ```
 
 The effect is `static`, so the compiler discharges it before the program runs:
-each arm of the `match` is its own specialised copy of the model with the
+each arm of the `match` in `under` is its own specialised copy of the model with the
 handler's arms inlined at every `perform`, and no `Tensor` handler exists at run
 time. [One model, two backends](../../website/src/docs/one-model-two-backends.md)
 walks through the effect, both handlers and what the compiler proves about them.

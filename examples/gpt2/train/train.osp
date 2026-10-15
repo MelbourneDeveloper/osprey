@@ -233,9 +233,5 @@ fn main() = {
     }
     let promptLine = input()
     let prompt = match promptLine == "" { true => defaultPrompt  false => promptLine }
-    match input() {
-        "gpu" => Backends::onGpu(fn() => run(prompt))
-        "lists" => Backends::onLists(fn() => run(prompt))
-        other => print("unknown backend `${other}`: choose gpu or lists")
-    }
+    Backends::under(input(), fn() => run(prompt))
 }

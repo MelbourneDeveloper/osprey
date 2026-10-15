@@ -73,9 +73,5 @@ fn main() = {
     let promptLine = input()
     let prompt = match promptLine == "" { true => defaultPrompt  false => promptLine }
     let count = parseInt(input()) ?: defaultTokens
-    match input() {
-        "gpu" => Backends::onGpu(fn() => run(prompt, count))
-        "lists" => Backends::onLists(fn() => run(prompt, count))
-        other => print("unknown backend `${other}`: choose gpu or lists")
-    }
+    Backends::under(input(), fn() => run(prompt, count))
 }

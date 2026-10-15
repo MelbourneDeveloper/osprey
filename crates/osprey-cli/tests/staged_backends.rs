@@ -263,15 +263,15 @@ fn a_forwarded_kernel_whose_callback_performs_a_dynamic_effect_is_rejected() {
 }
 
 /// A helper that selects the interpretation by name and forwards the work to
-/// its installer, as `examples/gpt2` selects `BACKEND`. [STAGE-LOWER-ORDER]
-/// requires the selected handler to answer the forwarded requests. Pins the
-/// missing implementation: static lowering does not follow the forwarding and
-/// once compiled `main` away, so the program printed nothing and exited 0.
+/// its installer, as `examples/gpt2` selects `BACKEND`: the selected handler
+/// answers the forwarded requests, from a named function or a lambda
+/// ([STAGE-LOWER-ORDER]). Static lowering once left them unanswered and pruned
+/// `main`, so the program printed nothing and exited 0.
 #[test]
 fn a_handler_selected_through_a_helper_answers_the_forwarded_work() {
     let source = TWO_BACKENDS.replace(
         r#"print("${onLists(corner)} ${onGpu(corner)}")"#,
-        r#"print("${under("lists", corner)} ${under("gpu", corner)}")"#,
+        r#"print("${under("lists", corner)} ${under("gpu", fn() => corner())}")"#,
     ) + "fn under(name, work) = match name {\n    \"lists\" => onLists(work)\n    _ => onGpu(work)\n}\n";
     assert_flavored_output("selected_backend", "osp", &source, BOTH_ANSWERS);
 }
