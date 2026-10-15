@@ -7,7 +7,7 @@
 # --run`) and TypeScript sub-projects (vscode-extension, webcompiler, website).
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup run install bench bench-osprey wasm wasm-site wasm-serve bank bank-web bank-test bank-e2e hawk graphics gpt2 gpt2-train \
+.PHONY: build test lint fmt clean ci setup run install bench bench-osprey wasm wasm-site wasm-serve bank bank-web bank-test bank-e2e hawk hawk-install graphics gpt2 gpt2-train \
 	vsix-rebuild-reinstall \
 	_language-test _deslop _gpu-demo _graphics-shader \
 	_test_gc_stack_root _test_c_runtime _test_gpu_device _coverage_check_c_runtime _bank_test _test_bench_tools \
@@ -343,11 +343,20 @@ _deslop:
 ## over-exposure, not dead code, and several are irreducibly public for the
 ## integration tests under this workspace's `dead_code = "deny"` policy, so they
 ## must NOT fail the gate. hawk needs rustc_private (RUSTC_BOOTSTRAP=1) and its
-## prebuilt driver is pinned to one exact rustc (1.98.0 as of cargo-hawk 0.1.13)
-## — it refuses to run under any other, so bump the installed hawk and the
-## toolchain together. An absent cargo-hawk FAILS this
+## prebuilt driver is built against one exact rustc and refuses any other, so
+## the gate runs hawk under that toolchain, not under whatever stable is today:
+## CI installing the latest hawk over the latest stable failed the day stable
+## moved to 1.99.1 while hawk 0.1.15 was built for 1.99.0. HAWK_VERSION and
+## HAWK_RUSTC move together; `make hawk-install` installs both. An absent
+## cargo-hawk FAILS this
 ## target: a gate that cannot run must not report success.
-## Install: https://github.com/astral-sh/hawk
+## Install: make hawk-install (https://github.com/astral-sh/hawk)
+HAWK_VERSION ?= 0.1.15
+HAWK_RUSTC   ?= 1.99.0
+hawk-install:
+	rustup toolchain install $(HAWK_RUSTC) --profile minimal
+	curl --proto '=https' --tlsv1.2 -LsSf https://github.com/astral-sh/hawk/releases/download/$(HAWK_VERSION)/cargo-hawk-installer.sh | sh
+
 hawk:
 	@echo "==> Dead-code gate (hawk)..."
 	@if ! command -v cargo-hawk >/dev/null 2>&1; then \
@@ -356,10 +365,10 @@ hawk:
 		echo "      print a warning and exit 0, so 'make hawk' was green on every"; \
 		echo "      machine without the binary, the CI runner included if its"; \
 		echo "      install step ever stopped landing cargo-hawk on PATH."; \
-		echo "      Install: https://github.com/astral-sh/hawk"; \
+		echo "      Install: make hawk-install"; \
 		exit 1; \
 	fi
-	RUSTC_BOOTSTRAP=1 cargo hawk check --only dead-public -D hawk::dead_public --target-dir $(CURDIR)/target/hawk
+	RUSTC_BOOTSTRAP=1 cargo +$(HAWK_RUSTC) hawk check --only dead-public -D hawk::dead_public --target-dir $(CURDIR)/target/hawk
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 fmt: $(EXT_NODE_DEPS)
