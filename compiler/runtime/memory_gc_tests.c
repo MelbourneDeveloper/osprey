@@ -13,6 +13,7 @@
 // Built under the hardened unit-test warning core (Makefile WARN): no shadowing,
 // no VLAs, prototypes, const-correct.
 
+#include "memory_hooks.h"
 #include <assert.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -190,6 +191,37 @@ static void t_root_keeps_alive(void) {
   }
 }
 
+// An OSP_MEM_LIST_HDR_EXTERN block runs the registered finalizer at the sweep
+// that reclaims it, over its still-intact words; a rooted one is left alone,
+// and with nothing registered nothing runs.
+static unsigned g_finalized;
+static void note_finalized(void *body) {
+  CHECK(load(body, 1) == body); // the words are intact when the finalizer runs
+  g_finalized++;
+}
+static void *extern_churn(int rounds) {
+  void *sink = NULL;
+  for (int i = 0; i < rounds; i++) {
+    sink = osp_alloc_tagged(24, OSP_MEM_LIST_HDR_EXTERN);
+    put(sink, 1, sink);
+  }
+  return sink;
+}
+static void t_finalizer_at_sweep(void) {
+  osp_mem_set_finalizer(note_finalized);
+  void *keep = osp_alloc_tagged(24, OSP_MEM_LIST_HDR_EXTERN);
+  put(keep, 1, keep);
+  (void)extern_churn(100000);
+  osp_collect();
+  CHECK(g_finalized > 99000);   // the unrooted blocks were finalized as they were swept
+  CHECK(load(keep, 1) == keep); // the rooted one was not
+  unsigned seen = g_finalized;
+  osp_mem_set_finalizer(NULL);
+  (void)extern_churn(1000);
+  osp_collect();
+  CHECK(g_finalized == seen);
+}
+
 // Interior pointers are followed: a child reachable ONLY through a rooted
 // parent's word survives, and the parent still names it after collection.
 static void t_interior_pointer(void) {
@@ -265,6 +297,7 @@ int main(void) {
   t_root_keeps_alive();
   t_interior_pointer();
   t_many_rooted_survive();
+  t_finalizer_at_sweep();
   t_multithread_disables_collection(); // LAST: disables collection forever
   printf("[ok] memory_gc: %ld assertions\n", g_checks);
   return 0;

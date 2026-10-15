@@ -20,7 +20,7 @@ void *osprey_gpu_alloc(int64_t length);
 void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, int64_t cols);
 int64_t *osprey_gpu_data(void *buffer);
 int32_t osprey_gpu_launch(const char *kernel, const char *source, const char *kinds, const int64_t *uniforms,
-                          void *in0, void *in1, int64_t *out, int64_t out_len, int64_t count, int32_t sequential);
+                          void *in0, void *in1, void *out, int64_t *acc, int64_t count);
 static uint64_t state = 0x3f27d489aeb5106c;
 static unsigned checks;
 static const char *selected;
@@ -105,7 +105,15 @@ static void extremes(void) {
   compare(left, right, count, 1, count);
 }
 
-// The per-element kernel over 1000 elements against the shader source run as C.
+// The host's fold of `words` in element order, as the sequential kernel computes it.
+static int64_t summed(const int64_t *words, int64_t count, int64_t seed) {
+  for (int64_t i = 0; i < count; i++) seed = (int64_t)add64((ulong)seed, (ulong)words[i]);
+  return seed;
+}
+
+// The per-element kernel over 1000 elements against the shader source run as
+// C; its result feeds the reduction without leaving the device, and only then
+// is it read back [GPU-BUFFER-RESIDENT].
 static void compiled_probe(void) {
   const int64_t n = 1000;
   void *a = random_buffer(n, 1010, 20), *b = random_buffer(n, 1000, 30), *table = random_buffer(n - 1, 900, 300);
@@ -116,25 +124,26 @@ static void compiled_probe(void) {
   int64_t uniforms[2] = {0, (int64_t)(intptr_t)table};
   memcpy(uniforms, &scale, sizeof scale);
   assert(setenv("OSPREY_GPU", selected, 1) == 0);
-  assert(osprey_gpu_launch("osprey_kernel_probe", KERNELS, "sb", uniforms, a, b, osprey_gpu_data(out), n, n, 0) == 1);
-  int64_t *x = osprey_gpu_data(a), *y = osprey_gpu_data(b), expected[1000];
+  assert(osprey_gpu_launch("osprey_kernel_probe", KERNELS, "sb", uniforms, a, b, out, NULL, n) == 1);
+  int64_t *x = osprey_gpu_data(a), *y = osprey_gpu_data(b), expected[1000], acc = 0;
   for (int64_t i = 0; i < n; i++) {
     ulong gathered = i < n - 1 ? (ulong)ta[i] : 0ul;
     expected[i] = (int64_t)add64(tanh64((ulong)x[i]), multiply64((ulong)uniforms[0], sub64(exp64((ulong)y[i]), ln64(gathered))));
   }
+  assert(osprey_gpu_launch("osprey_kernel_sum", KERNELS, "", NULL, out, NULL, NULL, &acc, n) == 1);
+  int64_t total = summed(expected, n, 0);
+  same_words(&total, &acc, 1);
   same_words(expected, osprey_gpu_data(out), n);
 }
 
 static void compiled_reduction(void) {
   const int64_t n = 777;
   void *a = random_buffer(n, 1000, 40);
-  int64_t *x = osprey_gpu_data(a);
   double seed = 0.25;
-  int64_t acc, expected;
+  int64_t acc;
   memcpy(&acc, &seed, sizeof acc);
-  expected = acc;
-  for (int64_t i = 0; i < n; i++) expected = (int64_t)add64((ulong)expected, (ulong)x[i]);
-  assert(osprey_gpu_launch("osprey_kernel_sum", KERNELS, "", NULL, a, NULL, &acc, 1, n, 1) == 1);
+  int64_t expected = summed(osprey_gpu_data(a), n, acc);
+  assert(osprey_gpu_launch("osprey_kernel_sum", KERNELS, "", NULL, a, NULL, NULL, &acc, n) == 1);
   same_words(&expected, &acc, 1);
 }
 
@@ -145,7 +154,7 @@ static void compiled_fault(void) {
   void *a = osprey_gpu_alloc(4);
   osprey_gpu_data(a)[2] = INT64_MAX;
   int64_t out[4] = {7, 7, 7, 7}, fault = 0;
-  OspreyGpuDispatch d = {"osprey_kernel_fault", KERNELS, {{0, NULL, NULL, 0}}, 0, 4};
+  OspreyGpuDispatch d = {"osprey_kernel_fault", KERNELS, {{0, NULL, NULL, 0, NULL}}, 0, 4};
   osprey_gpu_arg(&d, OSPREY_GPU_INPUT, osprey_gpu_data(a), NULL, 4);
   osprey_gpu_arg(&d, OSPREY_GPU_INPUT, osprey_gpu_data(a), NULL, 4);
   osprey_gpu_arg(&d, OSPREY_GPU_OUTPUT, out, out, 4);
@@ -169,8 +178,8 @@ int main(void) {
   compiled_reduction();
   compiled_fault();
 #if defined(OSPREY_GPU_METAL)
-  if (strcmp(selected, "opencl") != 0) assert(osprey_gpu_metal_completed() == 8);
+  if (strcmp(selected, "opencl") != 0) assert(osprey_gpu_metal_completed() == 9);
 #endif
-  printf("[ok] device binary64 parity: %u results over five products, a compiled kernel, a sequential reduction and a faulting kernel\n", checks);
+  printf("[ok] device binary64 parity: %u results over five products, a compiled kernel chained into a reduction on the device, a sequential reduction and a faulting kernel\n", checks);
   return 0;
 }

@@ -309,6 +309,23 @@ static void t_list_hdr_edges(void) {
   osp_release(fgn); // elements and data all probe-miss
   CHECK(frame[0] == 7 && frame[1] == 8);
 }
+// --- LIST_HDR_EXTERN: the finalizer sees the intact body, then data drops -----
+static void *g_finalized, *g_finalized_data;
+static void note_finalized(void *body) { g_finalized = body; g_finalized_data = load(body, 1); }
+static void t_list_hdr_extern(void) {
+  void *w = witness(), *hdr = mk(4 * W, OSP_MEM_LIST_HDR_EXTERN);
+  put_i64(hdr, 0, 1); put(hdr, 1, w); put_i64(hdr, 2, 0x1234); osp_retain(w);
+  osp_mem_set_finalizer(note_finalized);
+  osp_release(hdr);
+  CHECK(g_finalized == hdr && g_finalized_data == w); // the words were intact when it ran
+  survived(w); // ...and data was released after it
+  osp_mem_set_finalizer(NULL);
+  g_finalized = NULL;
+  void *plain = mk(4 * W, OSP_MEM_LIST_HDR_EXTERN); // no finalizer: drops like a scalar header
+  w = witness(); put_i64(plain, 0, 0); put(plain, 1, w); osp_retain(w);
+  osp_release(plain); survived(w);
+  CHECK(g_finalized == NULL);
+}
 // --- worklist: depth and width -----------------------------------------------
 static void t_deep_chain(void) {
   void *tail = mk(W, OSP_MEM_LAYOUT(OSP_MEM_WORD(0)));
@@ -610,7 +627,7 @@ int main(void) {
   t_immortal(); t_immortal_child(); t_set_layout();
   t_mask_drop(); t_mask_bounds_and_bits();
   t_ptr_array(); t_ptr_array_ragged();
-  t_list_hdr_kinds(); t_list_hdr_edges();
+  t_list_hdr_kinds(); t_list_hdr_edges(); t_list_hdr_extern();
   t_deep_chain(); t_alloc_noinit(); t_mask_direct(); t_wide_fanout();
   t_registry_churn(); t_slot_reuse(); t_diagnostic_counters();
   // Everything below runs LOCKED (notify is monotonic): the shim suite

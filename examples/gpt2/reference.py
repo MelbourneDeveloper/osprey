@@ -116,6 +116,21 @@ def dot(a, b):
     return add_all(map(operator.mul, a, b))
 
 
+def checksum(values, cols):
+    """A matrix gradient's summary as train.osp prints it: each row added
+    left-to-right, then the row sums — a shape a device computes in parallel."""
+    return add_all(add_all(values[r * cols:(r + 1) * cols]) for r in range(len(values) // cols))
+
+
+# The column count of each matrix gradient; every other gradient is a vector.
+COLUMNS = {"attn.c_attn.weight": QKV, "attn.c_proj.weight": WIDTH, "mlp.c_fc.weight": MLP, "mlp.c_proj.weight": WIDTH}
+
+
+def summary(name, values):
+    cols = COLUMNS.get(name)
+    return checksum(values, cols) if cols else add_all(values)
+
+
 def matmul(x, w, rows, inner, cols):
     # Same per-element k order as osprey_gpu_matmul: out[r][c] = Σ_k x[r][k] w[k][c].
     wcols = [w[c::cols] for c in range(cols)]
@@ -358,8 +373,8 @@ def train(st, layers, ids, prompt):
     print("gpt2 (124M) on host — one training step over %d tokens, learning rate %r\nprompt: %s\ntokens: %s"
           % (len(ids), LEARNING_RATE, prompt, " ".join(map(str, ids))), flush=True)
     loss, grads, dwte, dwpe, d_lnf_g, d_lnf_b = train_step(st, layers, ids)
-    lines = ["loss %r" % loss, "grad wte %r wpe %r ln_f %r %r" % (add_all(dwte), add_all(dwpe), add_all(d_lnf_g), add_all(d_lnf_b))]
-    lines.extend("h.%d %s" % (i, " ".join(repr(add_all(g[n])) for n in LAYER_NAMES)) for i, g in enumerate(grads))
+    lines = ["loss %r" % loss, "grad wte %r wpe %r ln_f %r %r" % (checksum(dwte, WIDTH), checksum(dwpe, WIDTH), add_all(d_lnf_g), add_all(d_lnf_b))]
+    lines.extend("h.%d %s" % (i, " ".join(repr(summary(n, g[n])) for n in LAYER_NAMES)) for i, g in enumerate(grads))
     print("\n".join(lines), flush=True)
     st = {"wte": descend(st["wte"], dwte), "wpe": descend(st["wpe"], dwpe),
           "ln_f.weight": descend(st["ln_f.weight"], d_lnf_g), "ln_f.bias": descend(st["ln_f.bias"], d_lnf_b)}

@@ -229,7 +229,18 @@ uint64_t osprey_gpu_opencl_completed(void) {
   return count;
 }
 
-// Create and bind every argument; the buffers are kept for the read-back.
+// The device object a buffer argument is bound to [GPU-BUFFER-RESIDENT]: the
+// one its slot holds, else a new one created from its words, kept in the slot
+// of a resident argument and released after this dispatch otherwise.
+static void *object_of(const OspreyGpuArg *arg, int *status) {
+  if (arg->slot && *arg->slot) return *arg->slot;
+  uint64_t flags = arg->kind == OSPREY_GPU_INPUT ? CL_INPUT_FLAGS : CL_OUTPUT_FLAGS;
+  void *object = cl.buffer(cl_context, flags, (size_t)osprey_gpu_arg_bytes(arg), arg->words, status);
+  if (object && !*status && arg->slot) *arg->slot = object;
+  return object;
+}
+
+// Bind every argument; the buffers are kept for the read-back.
 static int bind_arguments(void *kernel, const OspreyGpuDispatch *d, void **buffers) {
   for (unsigned i = 0; i < d->count; i++) {
     const OspreyGpuArg *arg = &d->args[i];
@@ -239,8 +250,7 @@ static int bind_arguments(void *kernel, const OspreyGpuDispatch *d, void **buffe
       if (status) return failed("kernel argument", status);
       continue;
     }
-    uint64_t flags = arg->kind == OSPREY_GPU_INPUT ? CL_INPUT_FLAGS : CL_OUTPUT_FLAGS;
-    buffers[i] = cl.buffer(cl_context, flags, (size_t)osprey_gpu_arg_bytes(arg), arg->words, &status);
+    buffers[i] = object_of(arg, &status);
     if (status || !buffers[i]) return failed("GPU buffer allocation", status);
     status = cl.arg(kernel, i, sizeof buffers[i], &buffers[i]);
     if (status) return failed("kernel argument", status);
@@ -248,10 +258,11 @@ static int bind_arguments(void *kernel, const OspreyGpuDispatch *d, void **buffe
   return 0;
 }
 
+// Read back every output the host asked for; the rest stay on the device.
 static int read_back(const OspreyGpuDispatch *d, void **buffers) {
   for (unsigned i = 0; i < d->count; i++) {
     const OspreyGpuArg *arg = &d->args[i];
-    if (arg->kind != OSPREY_GPU_OUTPUT || !arg->count) continue;
+    if (arg->kind != OSPREY_GPU_OUTPUT || !arg->count || !arg->out) continue;
     int status = cl.read(cl_queue, buffers[i], 1, 0, (size_t)(arg->count * 8), arg->out, 0, NULL, NULL);
     if (status) return failed("GPU completion/readback", status);
   }
@@ -267,7 +278,7 @@ static int dispatch(void *kernel, const OspreyGpuDispatch *d) {
     if (status) status = failed("GPU dispatch", status);
   }
   if (!status) status = read_back(d, buffers);
-  for (unsigned i = 0; i < d->count; i++) if (buffers[i]) (void)cl.release_buffer(buffers[i]);
+  for (unsigned i = 0; i < d->count; i++) if (buffers[i] && !d->args[i].slot) (void)cl.release_buffer(buffers[i]);
   if (status) return -1;
   cl_completed++;
   osprey_gpu_report(cl_name, cl_completed, d);
@@ -278,6 +289,23 @@ static int dispatch_locked(const OspreyGpuDispatch *d) {
   if (initialize() < 0 || ensure_program(d->source)) return -1;
   void *kernel = kernel_of(d->kernel);
   return kernel ? dispatch(kernel, d) : -1;
+}
+
+int osprey_gpu_opencl_download(void *object, int64_t *out, uint64_t count) {
+  (void)pthread_mutex_lock(&cl_lock);
+  int status = cl.read ? cl.read(cl_queue, object, 1, 0, (size_t)(count * 8), out, 0, NULL, NULL) : -1;
+  if (status) {
+    (void)failed("GPU readback", status);
+    osp_io_error_text("gpu", cl_name[0] ? cl_name : "OpenCL", cl_failure);
+  }
+  (void)pthread_mutex_unlock(&cl_lock);
+  return status ? -1 : 1;
+}
+
+void osprey_gpu_opencl_release(void *object) {
+  (void)pthread_mutex_lock(&cl_lock);
+  if (cl.release_buffer) (void)cl.release_buffer(object);
+  (void)pthread_mutex_unlock(&cl_lock);
 }
 
 int osprey_gpu_opencl_dispatch(const OspreyGpuDispatch *d) {

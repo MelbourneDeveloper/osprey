@@ -142,15 +142,14 @@ static void host_product(int64_t *o, const int64_t *a, const int64_t *b, int64_t
   }
 }
 
+// The product on the selected device, where its operands and result stay
+// resident [GPU-BUFFER-RESIDENT], or on the host when the host is selected.
 void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, int64_t cols) {
   void *out = matrix_result(left, right, rows, inner, cols);
   if (!out) return NULL;
-  int64_t *o = osprey_gpu_data(out);
-  const int64_t *a = osprey_gpu_data(left);
-  const int64_t *b = osprey_gpu_data(right);
-  int device = osprey_gpu_device_matmul(a, b, o, rows, inner, cols);
+  int device = osprey_gpu_device_matmul(left, right, out, rows, inner, cols);
   if (device != 0) return device > 0 ? out : abandoned(out);
-  host_product(o, a, b, rows, inner, cols);
+  host_product(osprey_gpu_data(out), osprey_gpu_data(left), osprey_gpu_data(right), rows, inner, cols);
   return out;
 }
 

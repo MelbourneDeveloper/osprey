@@ -20,6 +20,7 @@
 // heap lock after the runtime announces multithreaded execution, so disabling
 // and the heap table remain race-free.
 
+#include "memory_hooks.h"
 #include <pthread.h>
 #include <setjmp.h>
 #include <stdatomic.h>
@@ -59,8 +60,11 @@
 typedef struct {
   uintptr_t base;
   uint32_t size;
-  uint32_t mark;
+  uint32_t mark; // GC_MARKED while reached in the current collection; GC_FINAL for a finalizer
 } OspGcEnt;
+
+#define GC_MARKED 1u
+#define GC_FINAL 2u
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -130,14 +134,14 @@ static OspGcEnt *gc_lookup(uintptr_t w) {
 
 // Place (base,size) into `tab` (no growth, no duplicates) — used by both the
 // live insert path and the post-sweep rebuild.
-static void gc_place(OspGcEnt *tab, size_t cap, uintptr_t base, size_t size) {
+static void gc_place(OspGcEnt *tab, size_t cap, uintptr_t base, size_t size, uint32_t flags) {
   size_t i = gc_hash(base, cap);
   while (tab[i].base != 0) {
     i = (i + 1) & (cap - 1);
   }
   tab[i].base = base;
   tab[i].size = (uint32_t)size;
-  tab[i].mark = 0;
+  tab[i].mark = flags;
 }
 
 static int gc_grow(void) {
@@ -148,7 +152,7 @@ static int gc_grow(void) {
   }
   for (size_t i = 0; i < g_cap; i++) {
     if (g_tab[i].base != 0) {
-      gc_place(tab, cap, g_tab[i].base, g_tab[i].size);
+      gc_place(tab, cap, g_tab[i].base, g_tab[i].size, g_tab[i].mark & GC_FINAL);
     }
   }
   free(g_tab);
@@ -163,7 +167,7 @@ static void gc_insert(uintptr_t base, size_t size) {
       return; // out of table memory: object is simply untracked (never freed)
     }
   }
-  gc_place(g_tab, g_cap, base, size);
+  gc_place(g_tab, g_cap, base, size, 0);
   g_count++;
 }
 
@@ -190,8 +194,8 @@ static void gc_scan_range(uintptr_t lo, uintptr_t hi) {
     uintptr_t w;
     memcpy(&w, (const void *)p, sizeof(w));
     OspGcEnt *e = gc_lookup(w);
-    if (e && !e->mark) {
-      e->mark = 1;
+    if (e && !(e->mark & GC_MARKED)) {
+      e->mark |= GC_MARKED;
       gc_ms_push(w);
     }
   }
@@ -222,13 +226,23 @@ static void gc_scan_data(void) {
 
 // --- collect -----------------------------------------------------------------
 
+// The finalizer OSP_MEM_LIST_HDR_EXTERN blocks pass through (memory_hooks.h).
+static void (*g_finalizer)(void *body);
+
+// Run a dying block's finalizer, when it carries one, over its intact words.
+static void gc_finalize(const OspGcEnt *e) {
+  if ((e->mark & GC_FINAL) && g_finalizer) {
+    g_finalizer((void *)e->base);
+  }
+}
+
 // Rebuild the table keeping only marked objects; free the rest; re-arm the
 // adaptive budget at max(min-heap, 2× live).
 static void gc_sweep(void) {
   size_t live = 0;
   size_t live_bytes = 0;
   for (size_t i = 0; i < g_cap; i++) {
-    if (g_tab[i].base != 0 && g_tab[i].mark) {
+    if (g_tab[i].base != 0 && (g_tab[i].mark & GC_MARKED)) {
       live++;
       live_bytes += g_tab[i].size;
     }
@@ -241,7 +255,7 @@ static void gc_sweep(void) {
   if (!tab) {
     // Can't rebuild: keep everything (just clear marks). Sound, no reclamation.
     for (size_t i = 0; i < g_cap; i++) {
-      g_tab[i].mark = 0;
+      g_tab[i].mark &= GC_FINAL;
     }
     return;
   }
@@ -249,9 +263,10 @@ static void gc_sweep(void) {
     if (g_tab[i].base == 0) {
       continue;
     }
-    if (g_tab[i].mark) {
-      gc_place(tab, cap, g_tab[i].base, g_tab[i].size);
+    if (g_tab[i].mark & GC_MARKED) {
+      gc_place(tab, cap, g_tab[i].base, g_tab[i].size, g_tab[i].mark & GC_FINAL);
     } else {
+      gc_finalize(&g_tab[i]);
       free((void *)g_tab[i].base);
     }
   }
@@ -411,13 +426,32 @@ void *osp_alloc(int64_t size) {
 // still extracts this object. The collector arms lazily; nothing to do here.
 void osp_mem_boot(void) {}
 
-// Layout-carrying allocation: the meta word (kind + pointer mask) is only
-// meaningful to the ARC backend — the conservative collector scans words, so
-// it needs no layout and treats this as a plain managed allocation.
+static void gc_set_final(void *p);
+
+// Layout-carrying allocation: the conservative collector scans words, so the
+// meta word's pointer mask is not needed; its kind matters only to flag an
+// OSP_MEM_LIST_HDR_EXTERN block for finalization at the sweep that frees it.
 void *osp_alloc_tagged(int64_t size, int64_t meta) {
-  (void)meta;
-  return osp_alloc(size);
+  void *p = osp_alloc(size);
+  if (p && (meta & 0xFF) == OSP_MEM_LIST_HDR_EXTERN) {
+    gc_set_final(p);
+  }
+  return p;
 }
+
+// Flag a block whose sweep runs the finalizer; one left untracked by a full
+// table is never freed, so never finalized either.
+static void gc_set_final(void *p) {
+  gc_lock();
+  OspGcEnt *e = gc_lookup((uintptr_t)p);
+  if (e) {
+    e->mark |= GC_FINAL;
+  }
+  gc_unlock();
+}
+
+// Finalizer registration (memory_hooks.h).
+void osp_mem_set_finalizer(void (*finalize)(void *body)) { g_finalizer = finalize; }
 
 // Fully-initialized-by-caller twin (memory_hooks.h). The conservative collector
 // never relies on pre-zeroed bodies, so it is identical to osp_alloc_tagged.

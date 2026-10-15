@@ -216,7 +216,13 @@ fn descendAll(w, s) = {
     }
 }
 
-fn layerLine(g) = "${total(g.ln1g)} ${total(g.ln1b)} ${total(g.qkvW)} ${total(g.qkvB)} ${total(g.projW)} ${total(g.projB)} ${total(g.ln2g)} ${total(g.ln2b)} ${total(g.fcW)} ${total(g.fcB)} ${total(g.outW)} ${total(g.outB)}"
+/// The checksum of a matrix gradient: each row summed in order by its own
+/// thread, then the rows summed — the same two-level sum under either handler.
+/// A flat `total` would fold every element on one device thread.
+fn rowTotal(g, cols, r) = range(0, cols) |> fold(0.0, fn(a, c) => a + at(g, r * cols + c))
+fn checksum(g, rows, cols) = total(perform Backends::Tensor.build(rows, fn(r) => rowTotal(g, cols, r)))
+
+fn layerLine(g) = "${total(g.ln1g)} ${total(g.ln1b)} ${checksum(g.qkvW, width, qkvWidth)} ${total(g.qkvB)} ${checksum(g.projW, width, width)} ${total(g.projB)} ${total(g.ln2g)} ${total(g.ln2b)} ${checksum(g.fcW, width, mlpWidth)} ${total(g.fcB)} ${checksum(g.outW, mlpWidth, width)} ${total(g.outB)}"
 
 fn gradLines(grads, i) = match i == layerCount {
     true => ""
@@ -232,7 +238,7 @@ fn run(prompt) = {
     let t = listLength(ids)
     print("gpt2 (124M) on ${Model::device()} — one training step over ${t} tokens, learning rate ${learningRate}\nprompt: ${prompt}\ntokens:${Tokenizer::idsText(ids)}")
     let s = trainStep(w, ids, t)
-    print("loss ${s.loss}\ngrad wte ${total(s.dwte)} wpe ${total(s.dwpe)} ln_f ${total(s.dlnfG)} ${total(s.dlnfB)}${gradLines(s.grads, 0)}")
+    print("loss ${s.loss}\ngrad wte ${checksum(s.dwte, vocabSize, width)} wpe ${checksum(s.dwpe, positions, width)} ln_f ${total(s.dlnfG)} ${total(s.dlnfB)}${gradLines(s.grads, 0)}")
     let stepped = descendAll(w, s)
     print("loss after one step ${lossHead(stepped, finalState(stepped, ids, t), ids, t).loss}")
 }

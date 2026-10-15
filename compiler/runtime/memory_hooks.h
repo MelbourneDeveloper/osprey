@@ -24,6 +24,7 @@
 #define OSP_MEM_LIST_HDR_SCALAR 3 // { i64 len, ptr data }: release data only
 #define OSP_MEM_PTR_ARRAY 4       // every 8-byte word in [0, size) is a child
 #define OSP_MEM_MASK_DIRECT 5     // MASK whose children codegen PROVED are ARC bodies or NULL: drop reads their headers, no registry probe
+#define OSP_MEM_LIST_HDR_EXTERN 6 // { i64 len, ptr data, ... }: run the finalizer over the intact body, then release data only
 
 // The bit marking the 8-byte word at byte offset `off` (use with offsetof so
 // the layout can never drift from the struct).
@@ -55,6 +56,15 @@ void *osp_alloc_tagged_noinit(int64_t size, int64_t meta);
 // zeroed slack words are what makes a PTR_ARRAY walk safe — so they tag after
 // the fact rather than switching to osp_alloc_tagged. No-op off ARC.
 void osp_mem_set_layout(void *p, int64_t meta);
+
+// The finalizer every OSP_MEM_LIST_HDR_EXTERN body passes through on its way
+// out of the heap, before its data is released: a unit whose objects own a
+// resource beyond the heap (a GPU buffer's copy on the device) registers one,
+// and the resource dies with its owner. ARC runs it at the owner's last
+// release and the tracing GC at the sweep that reclaims it; the default
+// backend reclaims no general allocation, so it never runs it. One per
+// process; registering again replaces it. [MEM-BACKENDS]
+void osp_mem_set_finalizer(void (*finalize)(void *body));
 
 // dup / drop (ARC: registry-probed reference counting; others: no-ops).
 void osp_retain(void *o);

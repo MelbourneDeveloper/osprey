@@ -85,20 +85,25 @@ static int OSP_CL_CALL release(void *object) { assert(object && live); live--; r
 static const OspreyOpenCLApi mock = {platforms, devices, info, context, queue, program, build,
     build_info, kernel, buffer, arg, launch, read_buffer, release, release, release, release, release};
 
-static int product(int64_t *out) {
-  int64_t left = 0, right = 0;
-  OspreyGpuDispatch d = {"osprey_matmul64", NULL, {{0, NULL, NULL, 0}}, 0, 1};
-  osprey_gpu_arg(&d, OSPREY_GPU_INPUT, &left, NULL, 1);
-  osprey_gpu_arg(&d, OSPREY_GPU_INPUT, &right, NULL, 1);
-  osprey_gpu_arg(&d, OSPREY_GPU_OUTPUT, out, out, 1);
+static OspreyGpuDispatch product_of(const int64_t *in, int64_t *out, void **in_slot, void **out_slot) {
+  OspreyGpuDispatch d = {"osprey_matmul64", NULL, {{0, NULL, NULL, 0, NULL}}, 0, 1};
+  osprey_gpu_arg_at(&d, OSPREY_GPU_INPUT, in, NULL, 1, in_slot);
+  osprey_gpu_arg_at(&d, OSPREY_GPU_INPUT, in, NULL, 1, in_slot);
+  osprey_gpu_arg_at(&d, OSPREY_GPU_OUTPUT, out, out_slot ? NULL : out, 1, out_slot);
   for (uint64_t i = 0; i < 3; i++) osprey_gpu_arg(&d, OSPREY_GPU_SCALAR, NULL, NULL, 1);
   expected_threads = 1;
+  return d;
+}
+
+static int product(int64_t *out) {
+  int64_t in = 0;
+  OspreyGpuDispatch d = product_of(&in, out, NULL, NULL);
   return osprey_gpu_opencl_dispatch(&d);
 }
 
 static int compiled(const char *name, const char *source, int64_t *out, size_t threads) {
   int64_t in = 7, fault = 0;
-  OspreyGpuDispatch d = {name, source, {{0, NULL, NULL, 0}}, 0, threads};
+  OspreyGpuDispatch d = {name, source, {{0, NULL, NULL, 0, NULL}}, 0, threads};
   osprey_gpu_arg(&d, OSPREY_GPU_INPUT, &in, NULL, 1);
   osprey_gpu_arg(&d, OSPREY_GPU_INPUT, &in, NULL, 0);
   osprey_gpu_arg(&d, OSPREY_GPU_OUTPUT, out, out, 2);
@@ -142,13 +147,35 @@ static void compiled_case(void) {
   assert(strstr(osp_io_error(), "kernel table") != NULL);
 }
 
+// A resident buffer is created once however many dispatches bind it (twice
+// in one dispatch binds one object), an output left on the device is read on
+// demand, and its release is the only one [GPU-BUFFER-RESIDENT].
+static void resident_case(void) {
+  int64_t in = 5, out = 99;
+  void *in_slot = NULL, *out_slot = NULL;
+  unsigned held = 0;
+  osprey_gpu_opencl_test_driver(&mock);
+  calls = 0; fail_at = 0;
+  for (unsigned round = 0; round < 2; round++) {
+    OspreyGpuDispatch d = product_of(&in, &out, &in_slot, &out_slot);
+    assert(osprey_gpu_opencl_dispatch(&d) == 1 && in_slot && out_slot && out == 99);
+    if (!round) held = live;
+  }
+  assert(live == held); // the second dispatch created and released nothing
+  assert(osprey_gpu_opencl_download(out_slot, &out, 1) == 1 && out == MOCK_MARK);
+  osprey_gpu_opencl_release(in_slot);
+  osprey_gpu_opencl_release(out_slot);
+  assert(live == held - 2);
+}
+
 int main(void) {
   // Exercise the real dynamic loader even on a machine without a compute GPU.
   assert(osprey_gpu_opencl_name() != NULL);
   for (unsigned point = 0; point <= 20; point++) failure_case(point);
   compiled_case();
+  resident_case();
   osprey_gpu_opencl_test_driver(&mock);
   assert(live == 0);
-  puts("[ok] OpenCL driver: product and compiled-kernel dispatch, program recompilation, kernel reuse, every initialization/transfer/launch/readback failure releases resources");
+  puts("[ok] OpenCL driver: product and compiled-kernel dispatch, program recompilation, kernel reuse, resident buffers created once and read back on demand, every initialization/transfer/launch/readback failure releases resources");
   return 0;
 }

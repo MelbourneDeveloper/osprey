@@ -51,7 +51,7 @@ static long g_checks = 0;
 #define CHURN_BODY ((size_t)48)
 #define CHAIN_LEN ((size_t)50000)
 #define GPU_LEN ((int64_t)10)
-#define GPU_HDR_BYTES ((size_t)16)     // { i64 len, ptr data }
+#define GPU_HDR_BYTES ((size_t)32)     // { i64 len, ptr data, ptr device, i64 stale }
 #define REALLOC_OLD ((size_t)32)
 #define REALLOC_NEW ((size_t)128)
 
@@ -188,10 +188,11 @@ static void t_strdup_exact(void) {
   at_floor();
 }
 
-// A GPU buffer is exactly two managed objects — { len, data } header plus the
-// word array — and ONE release reclaims both via the LIST_HDR_SCALAR layout.
-// Pins the gpu_runtime.c/[GPU-BUFFER] contract that device staging buffers
-// need no GPU-specific drop code under ARC.
+// A GPU buffer is exactly two managed objects — { len, data, device, stale }
+// header plus the word array — and ONE release reclaims both via the
+// LIST_HDR_EXTERN layout, whose finalizer releases the device copy
+// [GPU-BUFFER-RESIDENT]. Pins the gpu_runtime.c/[GPU-BUFFER] contract that a
+// buffer's drop under ARC is one release.
 static void t_gpu_buffer_accounting(void) {
   osp_arc_peak_reset();
   void *buf = osprey_gpu_alloc(GPU_LEN);

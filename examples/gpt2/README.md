@@ -33,17 +33,18 @@ That first line is from `GPU=host`. The default `GPU=auto` names the adapter ins
 
 `make gpt2-train` runs one training step on the same downloaded weights: the
 next-token cross-entropy of the prompt, the gradient of every parameter through
-the twelve blocks, one SGD step, and the loss again. It prints the loss, the sum
-of every gradient tensor (one line per block, in the checkpoint's tensor order),
-and the loss after the step:
+the twelve blocks, one SGD step, and the loss again. It prints the loss, a
+checksum of every gradient tensor (one line per block, in the checkpoint's
+tensor order: a vector's elements added in order; a matrix's rows each added in
+order, then the rows), and the loss after the step:
 
 ```
 gpt2 (124M) on host — one training step over 5 tokens, learning rate 0.0001
 prompt: The capital of France is
 tokens: 464 3139 286 4881 318
 loss 4.503189215447316
-grad wte 3.6263587280065644e-12 wpe -1.5898740657327437e-15 ln_f 0.20932690619905386 0.512850562773751
-h.0 -3.3628631026293108 -7.1375868853910704 3.8554208861589285 …
+grad wte -6.369071936518367e-13 wpe -1.4510961876545991e-15 ln_f 0.20932690619905386 0.512850562773751
+h.0 -3.3628631026293108 -7.1375868853910704 3.8554208861589614 …
 …
 loss after one step 3.8539085307403895
 ```
@@ -111,7 +112,7 @@ To run the compiler interactively from the repository root:
 OSPREY_GPU=auto osprey examples/gpt2/generate --run --memory=arc
 ```
 
-Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction, the next token's index, the training loss — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and moving every buffer in and out of each launch; there are no device-resident buffers yet, so this is real device execution with real transfer costs, not a device-resident transformer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
+Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction, the next token's index, the training loss — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and one download of each value the program reads back — the logits a token's index is taken from, and the loss. Every buffer is resident on the device from the first kernel that touches it ([GPU-BUFFER-RESIDENT](../../docs/specs/0034-GPUComputation.md#device-resident-buffers--gpu-buffer-resident)): the weights upload once, a layer's intermediate buffers never leave the device, and a buffer's device copy is released with the buffer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
 
 The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on every argument. The generated text is identical on every path. The training loss agrees to fifteen significant digits and differs in the last (`4.503189215447316` on the host, `4.503189215447317` on Metal), and the gradient sums differ in their trailing digits for the same reason.
 
@@ -123,8 +124,8 @@ The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on
 
 | Measured 2026-10-15, Apple M4 Max, macOS, release build, `--memory=arc`, `BACKEND=gpu` | `GPU=host` | `GPU=metal` | `GPU=opencl` |
 | --- | --- | --- | --- |
-| 5 tokens from the 5-token prompt, every kernel and product on the selected device | 7.4 s | 6.1 s | 10.5 s |
-| One training step over the 5-token prompt | 19.4 s | 68.5 s | |
+| 5 tokens from the 5-token prompt, every kernel and product on the selected device, buffers resident on it | 5.6 s | 4.6 s | 4.2 s |
+| One training step over the 5-token prompt | 19.4 s | 8.6 s | 8.8 s |
 | `reference.py --train`, the same step in pure Python | 5 min 49 s, 16.2 GB peak | |
 
 The GPU surface is faster because its buffers are dense doubles and its kernels

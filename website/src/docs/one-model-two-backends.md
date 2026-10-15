@@ -259,7 +259,7 @@ The full model is the stronger proof. On the default prompt, both handlers print
 
 ## Limits
 
-- Every buffer moves through host memory on each launch: there are no device-resident buffers and no kernel fusion yet, so a device run pays a transfer per kernel. A `reduce` runs on one device thread in element order, which keeps its result identical to the host's.
+- Buffers are resident on the device from their first launch and come back only when the program reads them; there is no kernel fusion yet, so every kernel is its own dispatch. A `reduce` runs on one device thread in element order, which keeps its result identical to the host's, so a reduction over a large buffer is shaped as a per-row kernel and a `reduce` over the rows, as the training program's gradient checksums are.
 - The device's `exp`, `ln` and `tanh` are correctly rounded and a host libm is not on every argument, so the training loss can differ from the host's in its last digit.
 - A static handler is selected where it is written. `match input()` chooses between two regions the compiler has already specialised; a handler computed at run time needs a dynamic effect and a runtime handler instead.
 - A callback forwarded through a static arm must be stage-legal: pure, or performing only effects another static region answers.

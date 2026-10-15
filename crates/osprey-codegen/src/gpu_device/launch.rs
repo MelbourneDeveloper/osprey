@@ -11,7 +11,7 @@ use crate::llty::{LType, Value};
 
 /// The runtime entry points of the launch contract.
 const LAUNCH: &str = "osprey_gpu_launch";
-const LAUNCH_PARAMS: &str = "i8*, i8*, i8*, i64*, i8*, i8*, i64*, i64, i64, i32";
+const LAUNCH_PARAMS: &str = "i8*, i8*, i8*, i64*, i8*, i8*, i8*, i64*, i64";
 const DECLINED: &str = "osprey_gpu_declined";
 
 /// The device body of `kernel` with the uniforms its launch passes, or the
@@ -91,7 +91,8 @@ fn named(cg: &Codegen, name: &str, slots: &[LType]) -> Result<DeviceBody, String
     super::compile(cg, &parameters, &body, slots, &[])
 }
 
-/// Launch `kernel` over `inputs` into `out`, one thread per element.
+/// Launch `kernel` over `inputs` into `out`, one thread per element; the
+/// result stays on the device until the host reads it [GPU-BUFFER-RESIDENT].
 pub(crate) fn launch_map(
     cg: &mut Codegen,
     what: &str,
@@ -110,13 +111,11 @@ pub(crate) fn launch_map(
                     inputs: inputs.len(),
                 },
             );
-            let words = cg.call("i64*", "osprey_gpu_data", "i8*", &[&out.operand]);
             let site = Site {
                 inputs,
-                out: &words,
-                out_len: len,
+                out: &out.operand,
+                acc: "null",
                 count: len,
-                sequential: false,
             };
             emit(cg, &installed, &uniforms, &site)
         }
@@ -138,10 +137,9 @@ pub(crate) fn launch_fold(
             let installed = install(cg, &body, Shape::Fold);
             let site = Site {
                 inputs: &[src],
-                out: acc,
-                out_len: "1",
+                out: "null",
+                acc,
                 count: len,
-                sequential: true,
             };
             emit(cg, &installed, &uniforms, &site)
         }
@@ -159,12 +157,12 @@ pub(crate) fn declined(cg: &mut Codegen, what: &str) -> String {
 /// The operands of one launch beyond the kernel and its uniforms.
 struct Site<'a> {
     inputs: &'a [&'a Value],
-    /// The result words and how many to copy back.
+    /// A map's result buffer, left on the device; `null` for a fold.
     out: &'a str,
-    out_len: &'a str,
+    /// A fold's accumulator slot, written back; `null` for a map.
+    acc: &'a str,
     /// Elements processed: the thread count, or the trip count of a fold.
     count: &'a str,
-    sequential: bool,
 }
 
 fn emit(cg: &mut Codegen, kernel: &DeviceKernel, uniforms: &[Value], site: &Site<'_>) -> String {
@@ -173,18 +171,8 @@ fn emit(cg: &mut Codegen, kernel: &DeviceKernel, uniforms: &[Value], site: &Site
     let source = cg.emit_reg(format!("load i8*, i8** {SOURCE_POINTER}"));
     let words = uniform_words(cg, uniforms);
     let (in0, in1) = (input(site, 0), input(site, 1));
-    let sequential = if site.sequential { "1" } else { "0" };
     let operands = [
-        &name,
-        &source,
-        &kinds,
-        &words,
-        &in0,
-        &in1,
-        site.out,
-        site.out_len,
-        site.count,
-        sequential,
+        &name, &source, &kinds, &words, &in0, &in1, site.out, site.acc, site.count,
     ];
     cg.call("i32", LAUNCH, LAUNCH_PARAMS, &operands)
 }

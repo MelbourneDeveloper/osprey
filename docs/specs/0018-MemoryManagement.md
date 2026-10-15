@@ -87,9 +87,9 @@ separate managed-value flag. Codegen supplies these flags from static types.
 
 The runtime archives implement the same internal C hooks: allocation,
 tagged allocation, retain, release, proved-unique release, layout stamping,
-multithread notification, and collection. Backends that do not use a hook
-implement it as a no-op. This ABI keeps emitted IR independent of
-the selected native backend.
+finalizer registration, multithread notification, and collection. Backends
+that do not use a hook implement it as a no-op. This ABI keeps emitted IR
+independent of the selected native backend.
 
 ### Conservative Tracing GC [GC-TRACE-CONSERVATIVE]
 
@@ -117,8 +117,14 @@ a signed reference count, and the body size. Retain/release first probe the live
 allocation registry, so literals, foreign pointers, and other unmanaged
 pointers are safe no-ops.
 
-The layout word identifies raw blocks, pointer masks, list headers, and pointer
-arrays. Releases walk managed child slots non-recursively. Persistent list and
+The layout word identifies raw blocks, pointer masks, list headers, pointer
+arrays, and finalized list headers: a header whose body owns a resource beyond
+the heap (a GPU buffer's copy on the device, [GPU-BUFFER-RESIDENT](0034-GPUComputation.md#device-resident-buffers--gpu-buffer-resident))
+passes through the one finalizer the owning runtime unit registers
+(`osp_mem_set_finalizer`) before its data is released; the tracing collector
+runs the same finalizer at the sweep that reclaims the header, and the default
+backend, which reclaims no general allocation, never runs it. Releases walk
+managed child slots non-recursively. Persistent list and
 map nodes retain shared structure and release the portion no longer referenced
 by any live version. ARC operations start lock-free and become mutex-protected
 before a pthread-backed fiber is spawned.

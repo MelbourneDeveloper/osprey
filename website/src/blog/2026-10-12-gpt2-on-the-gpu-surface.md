@@ -127,13 +127,13 @@ gpt2 (124M) on host — one training step over 5 tokens, learning rate 0.0001
 prompt: The capital of France is
 tokens: 464 3139 286 4881 318
 loss 4.503189215447316
-grad wte 3.6263587280065644e-12 wpe -1.5898740657327437e-15 ln_f 0.20932690619905386 0.512850562773751
-h.0 -3.3628631026293108 -7.1375868853910704 3.8554208861589285 …
+grad wte -6.369071936518367e-13 wpe -1.4510961876545991e-15 ln_f 0.20932690619905386 0.512850562773751
+h.0 -3.3628631026293108 -7.1375868853910704 3.8554208861589614 …
 …
 loss after one step 3.8539085307403895
 ```
 
-`BACKEND=lists` prints the same loss, the same sum for every one of the 148 gradient tensors and the same loss after the step. Several of those sums are near `1e-16`, where any difference in accumulation order shows. The reference prints them too.
+`BACKEND=lists` prints the same loss, the same checksum for every one of the 148 gradient tensors and the same loss after the step. Several of those sums are near `1e-16`, where any difference in accumulation order shows. The reference prints them too.
 
 | Measured 2026-10-13, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build, `--memory=arc` | `BACKEND=gpu` | `BACKEND=lists` |
 | --- | --- | --- |

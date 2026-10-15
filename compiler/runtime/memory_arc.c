@@ -437,15 +437,22 @@ static void arc_drop_masked(char *body, uint32_t size, uint64_t mask, int direct
   }
 }
 
-// { i64 len, i8* data }: release elements (PTR kind only), then the array.
-static void arc_drop_list_hdr(char *body, uint32_t size, int elems_are_ptrs) {
+// The finalizer OSP_MEM_LIST_HDR_EXTERN bodies pass through (memory_hooks.h).
+static void (*g_finalizer)(void *body);
+
+// { i64 len, i8* data }: run an EXTERN header's finalizer while its words are
+// intact, release elements (PTR kind only), then the array.
+static void arc_drop_list_hdr(char *body, uint32_t size, int kind) {
   if (size < 16) {
     return;
+  }
+  if (kind == OSP_MEM_LIST_HDR_EXTERN && g_finalizer) {
+    g_finalizer(body);
   }
   int64_t len;
   memcpy(&len, body, sizeof(len));
   char *data = (char *)arc_load_child(body + 8);
-  if (data && elems_are_ptrs) {
+  if (data && kind == OSP_MEM_LIST_HDR_PTR) {
     for (int64_t j = 0; j < len; j++) {
       arc_drop_child(arc_load_child(data + (size_t)j * 8));
     }
@@ -478,8 +485,9 @@ static void arc_release_zero_locked(uintptr_t start) {
     if (kind == OSP_MEM_MASK || kind == OSP_MEM_MASK_DIRECT) {
       arc_drop_masked((char *)body, h->size, OSP_ARC_MASK_BITS(h->meta),
                       kind == OSP_MEM_MASK_DIRECT);
-    } else if (kind == OSP_MEM_LIST_HDR_PTR || kind == OSP_MEM_LIST_HDR_SCALAR) {
-      arc_drop_list_hdr((char *)body, h->size, kind == OSP_MEM_LIST_HDR_PTR);
+    } else if (kind == OSP_MEM_LIST_HDR_PTR || kind == OSP_MEM_LIST_HDR_SCALAR ||
+               kind == OSP_MEM_LIST_HDR_EXTERN) {
+      arc_drop_list_hdr((char *)body, h->size, kind);
     } else if (kind == OSP_MEM_PTR_ARRAY) {
       arc_drop_ptr_array((char *)body, h->size);
     }
@@ -489,6 +497,9 @@ static void arc_release_zero_locked(uintptr_t start) {
 
 // --- public ABI ------------------------------------------------------------------
 // Implements the [MEM-BACKENDS] C interface (docs/specs/0018 §Custom Managers).
+
+// Finalizer registration (memory_hooks.h).
+void osp_mem_set_finalizer(void (*finalize)(void *body)) { g_finalizer = finalize; }
 
 // Link anchor AND unconditional arming (memory_hooks.h): the leak sentinel
 // must print under OSPREY_ARC_DEBUG even when the program never allocates —
