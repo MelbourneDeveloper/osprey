@@ -3,7 +3,7 @@ import Mocha from "mocha";
 
 export function run(): Promise<void> {
   const mocha = new Mocha({ ui: "tdd", timeout: 30000, color: true });
-  for (const name of ["signatures", "unused"]) {
+  for (const name of ["signatures", "unused", "implementations"]) {
     mocha.addFile(path.join(__dirname, `${name}.test.js`));
   }
   return new Promise((resolve, reject) => {

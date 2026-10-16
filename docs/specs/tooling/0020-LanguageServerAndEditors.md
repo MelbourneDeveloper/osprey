@@ -91,7 +91,7 @@ The server exposes:
 | Diagnostics      | `textDocument/publishDiagnostics` | Push, via `DiagnosticsBus`. `[LSP-DIAGNOSTICS]`                                                                                                                                             |
 | Hover            | `textDocument/hover`              | Markdown. Functions/builtins → signature; **effect operations → qualified operation type plus owning-effect docs**; **`let`/`mut` bindings (local _and_ top-level) → their declared or inferred type**; **reserved keywords (`match`, `handle`, `in`, …) → a one-line meaning**; declaration docs rendered as prose. `[LSP-HOVER]` |
 | Go to definition | `textDocument/definition`         | AST-driven, anchored on the identifier; built-ins resolve to their own use. `[LSP-DEFINITION-BUILTIN]`                                                                                       |
-| Find implementations | `textDocument/implementation` | An effect operation resolves to every matching handler arm, keyed by owning effect plus operation. `[LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]` |
+| Find implementations | `textDocument/implementation` | An effect operation resolves to every matching handler arm, keyed by owning effect plus operation; an effect name resolves to every handler that discharges it. `[LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]` |
 | Find references  | `textDocument/references`         | Whole-word scan; `includeDeclaration` honored.                                                                                                                                              |
 | Document symbols | `textDocument/documentSymbol`     | Flat `DocumentSymbol`s; range on the **name**, not the `fn`/`let`/`type` keyword.                                                                                                           |
 | Signature help   | `textDocument/signatureHelp`      | Active-parameter tracking; ignores `,`/`(`/`)` inside strings and `//` comments. Triggers on the **callee name** as well as inside its parentheses. `[LSP-WORKSPACE]`                       |
@@ -316,11 +316,11 @@ sits on, a graceful self-definition. Implemented in
 
 ## Find implementations `[LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]`
 
-`textDocument/implementation` on any effect-operation site returns the
-operation-name range of every handler arm that implements it. Identity includes
-both the owning effect and operation, so `Trace.mark` never returns a handler
-for `Other.mark`. The unsaved open buffer is searched first, followed by project
-siblings through `[LSP-WORKSPACE]`; a standalone file searches only itself.
+`textDocument/implementation` on any effect-operation site — its declaration in an `effect` or a `signature`, or a `perform` — returns the operation-name range of every handler arm that implements it. Identity includes both the owning effect and operation, so `Trace.mark` never returns a handler for `Other.mark`.
+
+On an effect's name — at its declaration, in a `handle` or `handler` head, or as the qualifier of a `perform` — the query returns the effect-name range of every `handle`, `handler` and `kernel` region that discharges it. A builtin effect such as `Arith` has no declaration in the project; a discharge of it is enough to name it.
+
+Identity is the declaration, not the instantiation: `handle static Tensor<List<float>>` and `handle static Tensor<GpuBuffer<float>>` both implement `Tensor`. A qualified mention (`Backends::Tensor`) matches its declaration by path suffix. The unsaved open buffer is searched first, followed by project siblings through `[LSP-WORKSPACE]`, each file once even when several manifests share its source root; a standalone file searches only itself.
 
 `[LSP-EFFECT-MULTIPLICITY]` Multiplicity
 ([MULTI-AXIS](../language/0017-AlgebraicEffects.md#multiplicity--multi-axis)) adds two reports,
