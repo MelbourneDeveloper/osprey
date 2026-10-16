@@ -3,17 +3,21 @@
 //! Operations are identified by both their owning effect and operation name.
 //! That keeps `Trace.mark` distinct from `Other.mark`, while one AST-derived
 //! index serves declaration, `perform`, handler-arm hover, and implementation
-//! queries. Implements [LSP-HOVER-EFFECT-OPERATIONS] and
-//! [LSP-IMPLEMENTATIONS-EFFECT-HANDLERS].
+//! queries. An effect is identified by its declaration, so every
+//! instantiation `Tensor<List<float>>` discharges `Tensor`. Implements
+//! [LSP-HOVER-EFFECT-OPERATIONS] and [LSP-IMPLEMENTATIONS-EFFECT-HANDLERS].
 
 use lspkit_vfs::PositionEncoding;
-use osprey_ast::{walk_program, AstVisitor, Expr, Position, Program, Stmt};
+use osprey_ast::effect_name::base;
+use osprey_ast::{
+    walk_program, AstVisitor, DocComment, EffectOperation, Expr, Position, Program, SignatureItem,
+    Stmt,
+};
 use osprey_syntax::Flavor;
 
 use crate::analysis::{collect_symbols, SymbolInfo};
 use crate::features::nth_line;
-use crate::model::Location;
-use crate::text::{char_width, measure, prefix_to, word_at, WordSpan};
+use crate::text::{measure, prefix_to, word_at, WordSpan};
 use crate::{mlrender, workspace};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,11 +40,22 @@ struct Site {
     position: Option<Position>,
 }
 
+/// A handler region: the effect it discharges, at its `handle` keyword.
+#[derive(Debug, Clone)]
+struct Discharge {
+    effect: String,
+    position: Option<Position>,
+}
+
 #[derive(Debug, Default)]
 struct EffectIndex {
     declarations: Vec<Declaration>,
+    /// Operations a `signature` promises. They resolve a query made on the
+    /// contract, while hover keeps reading the module's own declaration.
+    contracts: Vec<Declaration>,
     performs: Vec<Site>,
     handlers: Vec<Site>,
+    discharges: Vec<Discharge>,
     effect_symbols: Vec<SymbolInfo>,
 }
 
@@ -58,38 +73,6 @@ pub(crate) fn operation_hover(
     let id = target_at(&index, source, line, character, encoding, flavor)?;
     let declaration = declaration(&index, siblings, &id)?;
     Some(render_hover(&declaration, flavor))
-}
-
-/// Every handler arm implementing the operation under the cursor.
-pub(crate) fn implementations(
-    source: &str,
-    uri: &str,
-    line: u32,
-    character: u32,
-    encoding: PositionEncoding,
-    project: &workspace::View,
-) -> Vec<Location> {
-    let siblings = &project.siblings;
-    let program = project.program(uri, source);
-    let flavor = project.flavor(uri, source);
-    let index = effect_index(&program);
-    let Some(id) = target_at(&index, source, line, character, encoding, flavor) else {
-        return Vec::new();
-    };
-    let mut out = handler_locations(&index, source, uri, &id, encoding, flavor);
-    for sibling in siblings {
-        let flavor = sibling.flavor;
-        let sibling_index = effect_index(&sibling.program);
-        out.extend(handler_locations(
-            &sibling_index,
-            &sibling.source,
-            &sibling.uri,
-            &id,
-            encoding,
-            flavor,
-        ));
-    }
-    out
 }
 
 fn declaration(
@@ -113,10 +96,11 @@ fn declaration(
 }
 
 fn same_operation(left: &OperationId, right: &OperationId) -> bool {
-    left.operation == right.operation
-        && (left.effect == right.effect
-            || qualified_suffix(&left.effect, &right.effect)
-            || qualified_suffix(&right.effect, &left.effect))
+    left.operation == right.operation && same_effect(&left.effect, &right.effect)
+}
+
+fn same_effect(left: &str, right: &str) -> bool {
+    left == right || qualified_suffix(left, right) || qualified_suffix(right, left)
 }
 
 fn qualified_suffix(qualified: &str, suffix: &str) -> bool {
@@ -138,40 +122,6 @@ fn render_hover(declaration: &Declaration, flavor: Flavor) -> String {
     markdown
 }
 
-fn handler_locations(
-    index: &EffectIndex,
-    source: &str,
-    uri: &str,
-    id: &OperationId,
-    encoding: PositionEncoding,
-    flavor: Flavor,
-) -> Vec<Location> {
-    index
-        .handlers
-        .iter()
-        .filter(|site| same_operation(&site.id, id))
-        .filter_map(|site| site_location(site, source, uri, encoding, flavor))
-        .collect()
-}
-
-fn site_location(
-    site: &Site,
-    source: &str,
-    uri: &str,
-    encoding: PositionEncoding,
-    flavor: Flavor,
-) -> Option<Location> {
-    let position = site.position?;
-    let line = position.line.checked_sub(1)?;
-    let text = nth_line(source, line)?;
-    let start = encoded_column(text, position.column, encoding, flavor)?;
-    let end = start.saturating_add(measure(&site.id.operation, encoding));
-    Some(Location {
-        uri: uri.to_owned(),
-        span: (line, start, line, end),
-    })
-}
-
 fn target_at(
     index: &EffectIndex,
     source: &str,
@@ -185,6 +135,7 @@ fn target_at(
     index
         .declarations
         .iter()
+        .chain(&index.contracts)
         .find(|declaration| {
             positioned_at(declaration.position, text, line, &span, encoding, flavor)
         })
@@ -246,16 +197,19 @@ fn performed_operation(
 }
 
 fn dotted_owner(text: &str, span: &WordSpan, encoding: PositionEncoding) -> Option<String> {
-    let before = prefix_to(text, span.start, encoding).strip_suffix('.')?;
-    let owner: String = before
-        .chars()
+    let owner = trailing_path(prefix_to(text, span.start, encoding).strip_suffix('.')?);
+    (!owner.is_empty()).then_some(owner)
+}
+
+/// The `a::b::` path `text` ends with, or empty when it ends with none.
+fn trailing_path(text: &str) -> String {
+    text.chars()
         .rev()
         .take_while(|character| character.is_alphanumeric() || matches!(character, '_' | ':'))
         .collect::<String>()
         .chars()
         .rev()
-        .collect();
-    (!owner.is_empty()).then_some(owner)
+        .collect()
 }
 
 fn encoded_column(
@@ -264,15 +218,20 @@ fn encoded_column(
     encoding: PositionEncoding,
     flavor: Flavor,
 ) -> Option<u32> {
+    let prefix = text.get(..byte_column(text, column, flavor)?)?;
+    Some(measure(prefix, encoding))
+}
+
+/// The byte offset of an AST column: Default counts bytes, ML characters.
+fn byte_column(text: &str, column: u32, flavor: Flavor) -> Option<usize> {
     let column = usize::try_from(column).ok()?;
     match flavor {
-        Flavor::Default => text.get(..column).map(|prefix| measure(prefix, encoding)),
-        Flavor::Ml => Some(
-            text.chars()
-                .take(column)
-                .map(|character| char_width(character, encoding))
-                .sum(),
-        ),
+        Flavor::Default => text.is_char_boundary(column).then_some(column),
+        Flavor::Ml => text
+            .char_indices()
+            .map(|(offset, _)| offset)
+            .chain(std::iter::once(text.len()))
+            .nth(column),
     }
 }
 
@@ -291,37 +250,33 @@ fn effect_index(program: &Program) -> EffectIndex {
 
 impl AstVisitor for EffectIndex {
     fn statement(&mut self, statement: &Stmt) {
-        let Stmt::Effect {
-            name,
-            operations,
-            doc,
-            position,
-            ..
-        } = statement
-        else {
-            return;
-        };
-        let owner = self
-            .effect_symbols
-            .iter()
-            .find(|symbol| symbol.source_name == *name && symbol.position == *position)
-            .map_or(name.as_str(), |symbol| symbol.name.as_str());
-        self.declarations.extend(operations.iter().map(|operation| {
-            Declaration {
-                id: operation_id(owner, &operation.name),
-                ty: operation.ty.clone(),
-                // The operation's OWN doc wins. Falling back to the effect's
-                // doc keeps undocumented operations useful, but showing the
-                // capability blurb on every operation would make `Prompt.ask`
-                // and `Prompt.tell` hover identically ([DOC-EFFECT-OP]).
-                doc: operation
-                    .doc
-                    .as_ref()
-                    .or(doc.as_ref())
-                    .map(osprey_ast::DocComment::render_markdown),
-                position: operation.position,
+        match statement {
+            Stmt::Effect {
+                name,
+                operations,
+                doc,
+                position,
+                ..
+            } => {
+                let owner = self
+                    .effect_symbols
+                    .iter()
+                    .find(|symbol| symbol.source_name == *name && symbol.position == *position)
+                    .map_or(name.as_str(), |symbol| symbol.name.as_str());
+                let declared = declarations(owner, operations, doc.as_ref());
+                self.declarations.extend(declared);
             }
-        }));
+            Stmt::Signature { items, .. } => {
+                self.contracts
+                    .extend(items.iter().flat_map(|item| match item {
+                        SignatureItem::Effect {
+                            name, operations, ..
+                        } => declarations(name, operations, None),
+                        _ => Vec::new(),
+                    }));
+            }
+            _ => {}
+        }
     }
 
     fn expression(&mut self, expression: &Expr) {
@@ -335,98 +290,62 @@ impl AstVisitor for EffectIndex {
                 id: operation_id(effect, operation),
                 position: *position,
             }),
-            Expr::Handler { effect, arms, .. } => {
+            Expr::Handler {
+                effect,
+                arms,
+                position,
+                ..
+            } => {
                 self.handlers.extend(arms.iter().map(|arm| Site {
                     id: operation_id(effect, &arm.operation),
                     position: arm.position,
                 }));
+                self.discharges.push(Discharge {
+                    effect: base(effect).to_owned(),
+                    position: *position,
+                });
             }
             _ => {}
         }
     }
 }
 
+fn declarations(
+    owner: &str,
+    operations: &[EffectOperation],
+    effect_doc: Option<&DocComment>,
+) -> Vec<Declaration> {
+    operations
+        .iter()
+        .map(|operation| Declaration {
+            id: operation_id(owner, &operation.name),
+            ty: operation.ty.clone(),
+            // The operation's OWN doc wins. Falling back to the effect's doc
+            // keeps undocumented operations useful, but showing the capability
+            // blurb on every operation would make `Prompt.ask` and
+            // `Prompt.tell` hover identically ([DOC-EFFECT-OP]).
+            doc: operation
+                .doc
+                .as_ref()
+                .or(effect_doc)
+                .map(DocComment::render_markdown),
+            position: operation.position,
+        })
+        .collect()
+}
+
+/// A discharge spells its instantiation (`Tensor<List<float>>`); identity is
+/// the declaration it instantiates, so the mention is reduced to its base.
 fn operation_id(effect: &str, operation: &str) -> OperationId {
     OperationId {
-        effect: effect.to_owned(),
+        effect: base(effect).to_owned(),
         operation: operation.to_owned(),
     }
 }
 
+mod implementations;
+
+pub(crate) use implementations::implementations;
+
 #[cfg(test)]
-mod tests {
-    #[cfg(unix)]
-    mod unix {
-        use super::super::*;
-
-        /// The `perform` and the handler arm are located by their source text
-        /// rather than by line number: both live in a demo project that is
-        /// edited for its own reasons, and a hard-coded line makes an unrelated
-        /// comment fail this test.
-        const CREDIT_PERFORM: &str = "credit id cents note";
-        const CREDIT_OPERATION: &str = "credit";
-
-        fn project_source(relative: &str) -> (String, String) {
-            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../examples/projects/modules/src")
-                .join(relative);
-            let source = std::fs::read_to_string(&path)
-                .unwrap_or_else(|error| panic!("read {relative}: {error}"));
-            (source, format!("file://{}", path.display()))
-        }
-
-        /// Zero-based line and column of `needle`'s first occurrence.
-        fn locate(source: &str, needle: &str) -> (u32, u32) {
-            let (line, column) = source
-                .lines()
-                .enumerate()
-                .find_map(|(line, text)| text.find(needle).map(|column| (line, column)))
-                .unwrap_or_else(|| panic!("`{needle}` present in the example source"));
-            (
-                u32::try_from(line).unwrap_or_default(),
-                u32::try_from(column).unwrap_or_default(),
-            )
-        }
-
-        fn credit_hover(source: &str, uri: &str) -> String {
-            let (line, column) = locate(source, CREDIT_PERFORM);
-            let parsed = osprey_syntax::parse_program_for_path(uri, source);
-            operation_hover(
-                &parsed.program,
-                source,
-                &crate::test_support::view(uri).siblings,
-                line,
-                column,
-                PositionEncoding::Utf16,
-                parsed.flavor,
-            )
-            .expect("resolve the Store declaration in the ledger sibling")
-        }
-
-        fn credit_implementations(source: &str, uri: &str) -> Vec<Location> {
-            let (line, column) = locate(source, CREDIT_PERFORM);
-            crate::test_support::implementations(source, uri, line, column, PositionEncoding::Utf16)
-        }
-
-        // Hover resolves the operation's declaration across project files
-        // ([LSP-HOVER-EFFECT-OPERATIONS]) and go-to-implementations lands on
-        // the handler arm ([LSP-IMPLEMENTATIONS-EFFECT-HANDLERS]).
-        #[test]
-        fn effect_navigation_crosses_project_files() {
-            let (source, uri) = project_source("api/routes.ospml");
-            let hover = credit_hover(&source, &uri);
-            assert!(hover.contains("bank::Ledger::Store.credit"), "{hover}");
-            assert!(hover.contains("(int, int, string) => int"), "{hover}");
-            let locations = credit_implementations(&source, &uri);
-            assert_eq!(locations.len(), 1, "{locations:?}");
-            let handler = locations.first().expect("one Store.credit handler");
-            assert!(handler.uri.ends_with("store/ledger.ospml"), "{handler:?}");
-            let (ledger, _) = project_source("store/ledger.ospml");
-            let (line, column) = locate(&ledger, CREDIT_PERFORM);
-            let end = column.saturating_add(
-                u32::try_from(CREDIT_OPERATION.len()).expect("operation name fits a u32"),
-            );
-            assert_eq!(handler.span, (line, column, line, end));
-        }
-    }
-}
+mod tests;

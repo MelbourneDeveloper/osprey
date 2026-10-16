@@ -3,39 +3,19 @@
   "scopeName": "source.osprey",
   "fileTypes": ["osp"],
   "patterns": [
-    {
-      "include": "#comments"
-    },
-    {
-      "include": "#keywords"
-    },
-    {
-      "include": "#strings"
-    },
-    {
-      "include": "#interpolated-strings"
-    },
-    {
-      "include": "#numbers"
-    },
-    {
-      "include": "#booleans"
-    },
-    {
-      "include": "#functions"
-    },
-    {
-      "include": "#types"
-    },
-    {
-      "include": "#modules"
-    },
-    {
-      "include": "#operators"
-    },
-    {
-      "include": "#identifiers"
-    }
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#handler-arms" },
+    { "include": "#numbers" },
+    { "include": "#booleans" },
+    { "include": "#lambdas" },
+    { "include": "#type-arguments" },
+    { "include": "#calls" },
+    { "include": "#operators" },
+    { "include": "#type-names" },
+    { "include": "#identifiers" }
   ],
   "repository": {
     "comments": {
@@ -48,6 +28,184 @@
         {
           "name": "comment.line.double-slash.osprey",
           "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "comment": "Every double-quoted string interpolates `${…}`, so there is one string rule; a second plain rule on the same `\"` shadowed it and no interpolation was ever highlighted.",
+      "patterns": [
+        {
+          "name": "string.quoted.double.osprey",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.osprey" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.osprey" }
+          },
+          "patterns": [
+            {
+              "name": "meta.embedded.expression.osprey",
+              "begin": "\\$\\{",
+              "end": "\\}",
+              "beginCaptures": {
+                "0": {
+                  "name": "punctuation.definition.template-expression.begin.osprey"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.template-expression.end.osprey"
+                }
+              },
+              "patterns": [{ "include": "$self" }]
+            },
+            {
+              "name": "constant.character.escape.osprey",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "declarations": {
+      "comment": "Matched before #keywords: a declaration rule and the bare keyword start at the same column, and the first rule listed wins a tie, so a declaration listed after #keywords never names what it declares.",
+      "patterns": [
+        { "include": "#type-declaration" },
+        { "include": "#effect-declaration" },
+        { "include": "#handle-head" },
+        { "include": "#function-declaration" },
+        { "include": "#modules" }
+      ]
+    },
+    "type-declaration": {
+      "comment": "A declaration runs until a line that does not continue it with `|`, so a multi-line union or record keeps its colours.",
+      "name": "meta.type.declaration.osprey",
+      "begin": "\\b(type)\\s+([A-Z][a-zA-Z0-9_]*)",
+      "end": "(?=^\\s*[^\\s|])|(?=;)",
+      "beginCaptures": {
+        "1": { "name": "keyword.declaration.type.osprey" },
+        "2": { "name": "entity.name.type.osprey" }
+      },
+      "patterns": [
+        { "include": "#type-parameters" },
+        { "include": "#type-expression" }
+      ]
+    },
+    "effect-declaration": {
+      "name": "meta.effect.declaration.osprey",
+      "begin": "\\b(effect)\\s+([A-Z][a-zA-Z0-9_]*)",
+      "end": "(?<=\\})",
+      "beginCaptures": {
+        "1": { "name": "keyword.declaration.effect.osprey" },
+        "2": { "name": "entity.name.type.effect.osprey" }
+      },
+      "patterns": [
+        { "include": "#type-parameters" },
+        {
+          "name": "meta.effect.body.osprey",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.block.begin.osprey" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.block.end.osprey" }
+          },
+          "patterns": [
+            { "include": "#comments" },
+            {
+              "name": "meta.effect.operation.osprey",
+              "match": "\\b([a-z_][a-zA-Z0-9_]*)\\s*(:)(?!:)",
+              "captures": {
+                "1": { "name": "entity.name.function.effect.osprey" },
+                "2": { "name": "punctuation.separator.type.osprey" }
+              }
+            },
+            { "include": "#type-expression" }
+          ]
+        }
+      ]
+    },
+    "handle-head": {
+      "comment": "The discharged effect's name, then its type arguments when `<` follows it directly; ends at anything else.",
+      "name": "meta.handle.osprey",
+      "begin": "\\b(handle|handler)\\s+(?:(static)\\s+)?([A-Z][a-zA-Z0-9_]*(?:::[A-Z][a-zA-Z0-9_]*)*)",
+      "end": "(?=[^<])|$",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.osprey" },
+        "2": { "name": "storage.modifier.static.osprey" },
+        "3": { "name": "entity.name.type.effect.osprey" }
+      },
+      "patterns": [{ "include": "#type-parameters" }]
+    },
+    "function-declaration": {
+      "name": "meta.function.declaration.osprey",
+      "begin": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=[<(])",
+      "end": "(?<=\\))",
+      "beginCaptures": {
+        "1": { "name": "keyword.declaration.function.osprey" },
+        "2": { "name": "entity.name.function.osprey" }
+      },
+      "patterns": [
+        { "include": "#type-parameters" },
+        { "include": "#parameter-list" }
+      ]
+    },
+    "modules": {
+      "patterns": [
+        {
+          "name": "meta.namespace.declaration.osprey",
+          "match": "\\b(namespace)\\s+(\\\"(?:\\\\.|[^\\\"\\\\])*\\\"|[a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.namespace.osprey" },
+            "2": { "name": "entity.name.namespace.osprey" }
+          }
+        },
+        {
+          "name": "meta.module.declaration.osprey",
+          "match": "\\b(?:(state)\\s+)?(module)\\s+([a-zA-Z_][a-zA-Z0-9_]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)*)(?:\\s*(:)\\s*([a-zA-Z_][a-zA-Z0-9_]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)*))?",
+          "captures": {
+            "1": { "name": "storage.modifier.state.osprey" },
+            "2": { "name": "keyword.declaration.module.osprey" },
+            "3": { "name": "entity.name.type.module.osprey" },
+            "4": { "name": "punctuation.separator.type.osprey" },
+            "5": { "name": "entity.name.type.interface.osprey" }
+          }
+        },
+        {
+          "name": "meta.signature.declaration.osprey",
+          "match": "\\b(signature)\\s+([A-Z][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.signature.osprey" },
+            "2": { "name": "entity.name.type.interface.osprey" }
+          }
+        },
+        {
+          "name": "meta.import.osprey",
+          "match": "\\b(import)\\s+(\\\"(?:\\\\.|[^\\\"\\\\])*\\\"|[a-zA-Z_][a-zA-Z0-9_]*(?:(?:::|\\.)[a-zA-Z_][a-zA-Z0-9_]*)*)(?:(::)(\\*|\\{[^}]*\\}))?(?:\\s+(as)\\s+([a-zA-Z_][a-zA-Z0-9_]*))?",
+          "captures": {
+            "1": { "name": "keyword.control.import.osprey" },
+            "2": { "name": "entity.name.type.module.osprey" },
+            "3": { "name": "keyword.operator.qualifier.osprey" },
+            "4": {
+              "patterns": [
+                { "include": "#type-names" },
+                { "include": "#operators" },
+                { "include": "#identifiers" }
+              ]
+            },
+            "5": { "name": "keyword.control.import.alias.osprey" },
+            "6": { "name": "entity.name.namespace.alias.osprey" }
+          }
+        },
+        {
+          "name": "meta.path.qualified.osprey",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)+\\b",
+          "captures": {
+            "0": { "name": "entity.name.namespace.osprey" }
+          }
         }
       ]
     },
@@ -66,18 +224,8 @@
           "match": "\\b(static)\\b(?=\\s+(?:effect\\b|[A-Z]))"
         },
         {
-          "name": "meta.effect.declaration.osprey",
-          "match": "\\b(?:(effect)|(handle))\\s+(?:(static)\\s+)?([A-Z][a-zA-Z0-9_]*(?:::[A-Z][a-zA-Z0-9_]*)*)",
-          "captures": {
-            "1": { "name": "keyword.declaration.effect.osprey" },
-            "2": { "name": "keyword.control.osprey" },
-            "3": { "name": "storage.modifier.static.osprey" },
-            "4": { "name": "entity.name.type.effect.osprey" }
-          }
-        },
-        {
           "name": "keyword.control.osprey",
-          "match": "\\b(match|if|else|loop|select|handle|in|perform|resume|do)\\b"
+          "match": "\\b(match|if|else|loop|select|where|handle|in|perform|resume|do)\\b"
         },
         {
           "name": "keyword.declaration.osprey",
@@ -93,65 +241,25 @@
         }
       ]
     },
-    "strings": {
-      "patterns": [
-        {
-          "name": "string.quoted.double.osprey",
-          "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            {
-              "name": "constant.character.escape.osprey",
-              "match": "\\\\."
-            }
-          ]
-        }
-      ]
-    },
-    "interpolated-strings": {
-      "patterns": [
-        {
-          "name": "string.interpolated.osprey",
-          "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            {
-              "name": "meta.embedded.expression.osprey",
-              "begin": "\\$\\{",
-              "end": "\\}",
-              "patterns": [
-                {
-                  "include": "source.osprey"
-                }
-              ],
-              "beginCaptures": {
-                "0": {
-                  "name": "punctuation.definition.template-expression.begin.osprey"
-                }
-              },
-              "endCaptures": {
-                "0": {
-                  "name": "punctuation.definition.template-expression.end.osprey"
-                }
-              }
-            },
-            {
-              "name": "constant.character.escape.osprey",
-              "match": "\\\\."
-            }
-          ]
-        }
-      ]
+    "handler-arms": {
+      "comment": "`op params =>` at the start of a line or a `{`: an operation a handler answers and the values it binds. A match arm never starts with a lowercase name other than a boolean or `_`, both excluded.",
+      "name": "meta.handler.arm.osprey",
+      "match": "(?:^|(?<=\\{))\\s*(?!(?:true|false)\\b)([a-z][a-zA-Z0-9_]*)((?:\\s+[a-z_][a-zA-Z0-9_]*)*)\\s*(?==>)",
+      "captures": {
+        "1": { "name": "entity.name.function.effect.osprey" },
+        "2": { "name": "variable.parameter.osprey" }
+      }
     },
     "numbers": {
+      "comment": "Float before integer: the integer rule matches the whole-number part of a float at the same column.",
       "patterns": [
-        {
-          "name": "constant.numeric.integer.osprey",
-          "match": "\\b[0-9]+\\b"
-        },
         {
           "name": "constant.numeric.float.osprey",
           "match": "\\b[0-9]+\\.[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.osprey",
+          "match": "\\b[0-9]+\\b"
         }
       ]
     },
@@ -163,225 +271,167 @@
         }
       ]
     },
-    "functions": {
+    "lambdas": {
+      "comment": "`fn(…)` is a lambda or a function type; its list holds parameters or types and #parameter-items tells them apart.",
       "patterns": [
         {
-          "name": "meta.function.declaration.osprey",
-          "begin": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
-          "end": "\\)",
+          "name": "meta.function.lambda.osprey",
+          "begin": "\\b(fn)\\s*(?=\\()",
+          "end": "(?<=\\))",
           "beginCaptures": {
-            "1": {
-              "name": "keyword.declaration.function.osprey"
-            },
-            "2": {
-              "name": "entity.name.function.osprey"
-            }
+            "1": { "name": "keyword.declaration.function.osprey" }
           },
-          "patterns": [
-            {
-              "include": "#identifiers"
-            },
-            {
-              "include": "#types"
-            },
-            {
-              "name": "punctuation.separator.parameter.osprey",
-              "match": ","
-            }
-          ]
+          "patterns": [{ "include": "#parameter-list" }]
         },
         {
-          "name": "meta.function.call.osprey",
-          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+          "name": "meta.function.lambda.osprey",
+          "match": "(\\|)([^|]*)(\\|)(?=\\s*=>)",
           "captures": {
-            "1": {
-              "name": "entity.name.function.call.osprey"
-            }
+            "1": { "name": "punctuation.definition.parameters.begin.osprey" },
+            "2": { "patterns": [{ "include": "#parameter-items" }] },
+            "3": { "name": "punctuation.definition.parameters.end.osprey" }
           }
         }
       ]
     },
-    "modules": {
+    "parameter-list": {
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.parameters.begin.osprey" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.parameters.end.osprey" }
+      },
+      "patterns": [{ "include": "#parameter-items" }]
+    },
+    "parameter-items": {
       "patterns": [
+        { "include": "#comments" },
         {
-          "name": "meta.namespace.declaration.osprey",
-          "match": "\\b(namespace)\\s+(\\\"(?:\\\\.|[^\\\"\\\\])*\\\"|[a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "\\b([a-z_][a-zA-Z0-9_]*)\\s*(:)(?!:)",
           "captures": {
-            "1": {
-              "name": "keyword.declaration.namespace.osprey"
-            },
-            "2": {
-              "name": "entity.name.namespace.osprey"
-            }
+            "1": { "name": "variable.parameter.osprey" },
+            "2": { "name": "punctuation.separator.type.osprey" }
           }
         },
+        { "include": "#lambdas" },
+        { "include": "#type-arguments" },
+        { "include": "#type-names" },
+        { "include": "#modules" },
         {
-          "name": "meta.module.declaration.osprey",
-          "begin": "\\b(?:(state)\\s+)?(module)\\s+([a-zA-Z_][a-zA-Z0-9_]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)*)(?:\\s*:\\s*[a-zA-Z_][a-zA-Z0-9_:]*(?:\\s*\\+\\s*extra)?)?\\s*\\{",
+          "name": "variable.parameter.osprey",
+          "match": "\\b[a-z_][a-zA-Z0-9_]*\\b"
+        },
+        { "include": "#operators" }
+      ]
+    },
+    "type-parameters": {
+      "name": "meta.type.parameters.osprey",
+      "begin": "<",
+      "end": ">",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.typeparameters.begin.osprey" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.typeparameters.end.osprey" }
+      },
+      "patterns": [{ "include": "#type-expression" }]
+    },
+    "type-arguments": {
+      "comment": "`Name<…>` with no space before `<`: a generic type, never a comparison.",
+      "name": "meta.type.arguments.osprey",
+      "begin": "\\b([A-Z][a-zA-Z0-9_]*)(<)",
+      "end": ">",
+      "beginCaptures": {
+        "1": { "name": "entity.name.type.osprey" },
+        "2": { "name": "punctuation.definition.typeparameters.begin.osprey" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.typeparameters.end.osprey" }
+      },
+      "patterns": [{ "include": "#type-expression" }]
+    },
+    "type-expression": {
+      "patterns": [
+        { "include": "#comments" },
+        {
+          "name": "meta.type.record.osprey",
+          "begin": "\\{",
           "end": "\\}",
           "beginCaptures": {
-            "1": {
-              "name": "storage.modifier.state.osprey"
-            },
-            "2": {
-              "name": "keyword.declaration.module.osprey"
-            },
-            "3": {
-              "name": "entity.name.type.module.osprey"
-            }
+            "0": { "name": "punctuation.definition.block.begin.osprey" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.block.end.osprey" }
           },
           "patterns": [
+            { "include": "#comments" },
             {
-              "include": "source.osprey"
-            }
+              "name": "meta.type.field.osprey",
+              "match": "\\b([a-z_][a-zA-Z0-9_]*)\\s*(:)(?!:)",
+              "captures": {
+                "1": { "name": "variable.other.member.osprey" },
+                "2": { "name": "punctuation.separator.type.osprey" }
+              }
+            },
+            { "include": "#type-expression" }
           ]
         },
-        {
-          "name": "meta.signature.declaration.osprey",
-          "begin": "\\b(signature)\\s+([A-Z][a-zA-Z0-9_]*)\\s*\\{",
-          "end": "\\}",
-          "beginCaptures": {
-            "1": {
-              "name": "keyword.declaration.signature.osprey"
-            },
-            "2": {
-              "name": "entity.name.type.interface.osprey"
-            }
-          },
-          "patterns": [
-            {
-              "include": "source.osprey"
-            }
-          ]
-        },
-        {
-          "name": "meta.import.osprey",
-          "match": "\\b(import)\\s+(\\\"(?:\\\\.|[^\\\"\\\\])*\\\"|[a-zA-Z_][a-zA-Z0-9_]*(?:(?:::|\\.)[a-zA-Z_][a-zA-Z0-9_]*)*)(?:(::)(\\*|\\{[^}]*\\}))?(?:\\s+(as)\\s+([a-zA-Z_][a-zA-Z0-9_]*))?",
-          "captures": {
-            "1": {
-              "name": "keyword.control.import.osprey"
-            },
-            "2": {
-              "name": "entity.name.type.module.osprey"
-            },
-            "3": {
-              "name": "keyword.operator.qualifier.osprey"
-            },
-            "5": {
-              "name": "keyword.control.import.alias.osprey"
-            },
-            "6": {
-              "name": "entity.name.namespace.alias.osprey"
-            }
-          }
-        },
-        {
-          "name": "meta.path.qualified.osprey",
-          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)+\\b",
-          "captures": {
-            "0": {
-              "name": "entity.name.namespace.osprey"
-            }
-          }
-        }
+        { "include": "#lambdas" },
+        { "include": "#keywords" },
+        { "include": "#type-arguments" },
+        { "include": "#modules" },
+        { "include": "#type-names" },
+        { "include": "#operators" },
+        { "include": "#identifiers" }
       ]
     },
-    "types": {
-      "patterns": [
-        {
-          "name": "meta.type.declaration.osprey",
-          "begin": "\\b(type)\\s+([A-Z][a-zA-Z0-9_]*)\\s*=",
-          "end": "(?=\\n|;|$)",
-          "beginCaptures": {
-            "1": {
-              "name": "keyword.declaration.type.osprey"
-            },
-            "2": {
-              "name": "entity.name.type.osprey"
-            }
-          },
-          "patterns": [
-            {
-              "name": "punctuation.separator.type.osprey",
-              "match": "\\|"
-            },
-            {
-              "name": "entity.name.type.variant.osprey",
-              "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
-            },
-            {
-              "name": "punctuation.separator.type.union.osprey",
-              "match": "\\|"
-            }
-          ]
-        }
-      ]
-    },
-    "type-annotations": {
-      "patterns": [
-        {
-          "name": "meta.type.annotation.osprey",
-          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*:\\s*([A-Z][a-zA-Z0-9_]*)",
-          "captures": {
-            "1": {
-              "name": "variable.parameter.osprey"
-            },
-            "2": {
-              "name": "entity.name.type.osprey"
-            }
-          }
-        },
-        {
-          "name": "entity.name.type.osprey",
-          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
-        }
-      ]
+    "calls": {
+      "name": "meta.function.call.osprey",
+      "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+      "captures": {
+        "1": { "name": "entity.name.function.call.osprey" }
+      }
     },
     "operators": {
+      "comment": "Longest first: the first rule listed wins a tie at the same column, so `=` before `==` or `-` before `->` split every compound operator.",
       "patterns": [
+        { "name": "keyword.operator.qualifier.osprey", "match": "::" },
         {
-          "name": "keyword.operator.qualifier.osprey",
-          "match": "::"
+          "name": "keyword.operator.error-propagation.osprey",
+          "match": "\\?:"
         },
-        {
-          "name": "keyword.operator.arrow.osprey",
-          "match": "=>"
-        },
-        {
-          "name": "keyword.operator.pipe.osprey",
-          "match": "\\|>"
-        },
-        {
-          "name": "keyword.operator.assignment.osprey",
-          "match": "="
-        },
-        {
-          "name": "keyword.operator.arithmetic.osprey",
-          "match": "[+\\-*/]"
-        },
+        { "name": "keyword.operator.arrow.osprey", "match": "=>|->" },
+        { "name": "keyword.operator.pipe.osprey", "match": "\\|>" },
         {
           "name": "keyword.operator.comparison.osprey",
-          "match": "(==|!=|<=|>=|<|>)"
+          "match": "==|!=|<=|>="
         },
-        {
-          "name": "keyword.operator.logical.osprey",
-          "match": "(&&|\\|\\||!)"
-        },
-        {
-          "name": "keyword.operator.channel.osprey",
-          "match": "(<-|->)"
-        },
-        {
-          "name": "punctuation.separator.osprey",
-          "match": "[,;:]"
-        },
+        { "name": "keyword.operator.logical.osprey", "match": "&&|\\|\\|" },
+        { "name": "keyword.operator.comparison.osprey", "match": "<|>" },
+        { "name": "keyword.operator.assignment.osprey", "match": "=" },
+        { "name": "keyword.operator.logical.osprey", "match": "!" },
+        { "name": "keyword.operator.arithmetic.osprey", "match": "[+\\-*/%]" },
+        { "name": "keyword.operator.ternary.osprey", "match": "\\?" },
+        { "name": "punctuation.separator.union.osprey", "match": "\\|" },
+        { "name": "punctuation.separator.osprey", "match": "[,;:]" },
         {
           "name": "punctuation.definition.group.osprey",
           "match": "[(){}\\[\\]]"
         },
+        { "name": "punctuation.accessor.osprey", "match": "\\." }
+      ]
+    },
+    "type-names": {
+      "patterns": [
         {
-          "name": "punctuation.accessor.osprey",
-          "match": "\\."
+          "name": "support.type.primitive.osprey",
+          "match": "\\b(int|float|string|bool|any|Unit)\\b"
+        },
+        {
+          "name": "entity.name.type.osprey",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
         }
       ]
     },
