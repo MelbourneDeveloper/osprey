@@ -8,7 +8,9 @@
 //
 // This is plan 0023's reference application (docs/plans/0023-gpu-computation.md)
 // and its stage 5, effect-selected execution: one model, two interpretations,
-// chosen per lexical region ([STAGE-BACKEND], [GPU-DEVICE]).
+// chosen per lexical region ([STAGE-BACKEND], [GPU-DEVICE]). Under `onGpu`,
+// matrix products dispatch to Metal or OpenCL when a device is selected; the
+// other combinators retain their host implementation.
 
 namespace gpt2;
 
@@ -73,17 +75,9 @@ module Model {
     export fn gelu(x) = 0.5 * x * (1.0 + tanh(geluScale * (x + geluCubic * x * x * x)))
     export fn gelus(f) = perform Backends::Tensor.build(size(f), fn(i) => gelu(at(f, i)))
 
-    /// One tensor of the checkpoint. A handler arm cannot print, so a tensor
-    /// that failed to load — an empty one — is reported here by name; the
-    /// first product over it yields an empty result in turn.
-    fn tensor(name) = reported(name, perform Backends::Tensor.load(weightsDir + "/model.safetensors", name))
-    fn reported(name, t) = match size(t) == 0 {
-        true => {
-            print("gpt2: ${name} did not load")
-            t
-        }
-        false => t
-    }
+    /// One tensor of the checkpoint; the handler aborts on a missing or
+    /// mis-typed tensor rather than fabricate a runnable model.
+    fn tensor(name) = perform Backends::Tensor.load(weightsDir + "/model.safetensors", name)
 
     fn layerAt(i) = {
         let p = "h.${i}."
@@ -117,7 +111,7 @@ module Model {
     /// transposed operand is a gather followed by `matMul`.
     export fn transpose(m, rows, cols) = perform Backends::Tensor.build(rows * cols, fn(i) => at(m, (i % rows) * cols + intDiv(i, rows)))
 
-    /// a [rows, inner] times b [inner, cols]; a shape mismatch yields an empty tensor.
+    /// a [rows, inner] times b [inner, cols]; the handler aborts on failed work.
     export fn product(a, b, rows, inner, cols) = perform Backends::Tensor.matMul(a, b, rows, inner, cols)
 
     /// Sum of a contiguous run of a flat tensor.
@@ -221,8 +215,9 @@ module Model {
         }
     }
 
-    /// Token plus position embeddings of the host-side ids, [t, width].
-    export fn embed(w, ids, t) = perform Backends::Tensor.build(t * width, fn(i) => at(w.wte, (listGet(ids, intDiv(i, width)) ?: 0) * width + i % width) + at(w.wpe, i))
+    /// Token plus position embeddings of the host-side ids, [t, width]: one
+    /// row per position, so every kernel sees buffers and scalars only.
+    export fn embed(w, ids, t) = range(0, t) |> fold(empty(), fn(rows, p) => appended(rows, embedOne(w, listGet(ids, p) ?: 0, p)))
 
     /// The twelve blocks over the embedded tokens [t, width].
     export fn forward(w, ids, t) = blocks(w, embed(w, ids, t), t, 0, [])
@@ -254,7 +249,8 @@ module Model {
     }
 
     /// The embedding of one token at position p, [1, width].
-    export fn embedOne(w, token, p) = perform Backends::Tensor.build(width, fn(c) => at(w.wte, token * width + c) + at(w.wpe, p * width + c))
+    export fn embedOne(w, token, p) = embedRow(w.wte, w.wpe, token, p)
+    fn embedRow(wte, wpe, token, p) = perform Backends::Tensor.build(width, fn(c) => at(wte, token * width + c) + at(wpe, p * width + c))
 
     /// The newest position, token at index t - 1, through the twelve blocks over
     /// their caches of the t - 1 earlier positions.

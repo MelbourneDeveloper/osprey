@@ -30,6 +30,26 @@ pub(super) fn generic_decl_sym(
     sym
 }
 
+/// An effect's symbol at either stage. Its kind stays `effect`, so every
+/// effect feature finds a static one too, and its signature says `static`
+/// when a `handle static` region discharges it ([STAGE-DECL]).
+pub(super) fn effect_sym(
+    stage: osprey_ast::Stage,
+    name: &str,
+    type_params: &[osprey_ast::TypeParam],
+    doc: Option<String>,
+    position: Option<Position>,
+) -> SymbolInfo {
+    let mut sym = generic_decl_sym(name, type_params, "effect", doc, position);
+    if stage.is_compile_time() {
+        sym.signature = Some(format!(
+            "static effect {name}{}",
+            render_type_params(type_params)
+        ));
+    }
+    sym
+}
+
 /// Render a declaration's type-parameter binder (`<T, out U>`), empty when it
 /// has none. Implements [TYPE-GENERICS-DECL].
 #[must_use]

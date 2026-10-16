@@ -6,8 +6,9 @@ lists, one on Osprey's GPU surface. No training from scratch, no conversion
 step, no Python at run time: the `load` operation reads the published
 `model.safetensors`, the byte-level BPE tokenizer is rebuilt from the published
 `merges.txt`, and the transformer performs `Tensor` operations that the handler
-a program installs decides how to execute. Both handlers print the same tokens,
-the same loss and the same 148 gradient sums.
+a program installs decides how to execute. On the CPU both handlers print the
+same tokens, the same loss and the same 148 gradient sums; on a GPU the text is
+the same and the numbers agree to twelve digits.
 
 ```
 make gpt2 PROMPT="The capital of France is" TOKENS=20 BACKEND=gpu
@@ -29,30 +30,31 @@ generated 20 tokens
 The capital of France is the capital of the French Republic, and the capital of the French Republic is the capital of the French
 ```
 
-`BACKEND=lists` prints `gpt2 (124M) on lists` and the same four lines after it.
+That first line is from `GPU=host`. The default `GPU=auto` names the adapter instead, such as `gpt2 (124M) on metal:0 (Apple M4 Max)`, and prints the same four lines after it; `BACKEND=lists` prints `gpt2 (124M) on lists`.
 
 `make gpt2-train` runs one training step on the same downloaded weights: the
 next-token cross-entropy of the prompt, the gradient of every parameter through
-the twelve blocks, one SGD step, and the loss again. It prints the loss, the sum
-of every gradient tensor (one line per block, in the checkpoint's tensor order),
-and the loss after the step:
+the twelve blocks, one SGD step, and the loss again. It prints the loss, a
+checksum of every gradient tensor (one line per block, in the checkpoint's
+tensor order: a vector's elements added in order; a matrix's rows each added in
+order, then the rows), and the loss after the step:
 
 ```
 gpt2 (124M) on host — one training step over 5 tokens, learning rate 0.0001
 prompt: The capital of France is
 tokens: 464 3139 286 4881 318
-loss 4.5031892154473265
-grad wte 3.580909711548702e-12 wpe 4.3062341886779265e-15 ln_f 0.20932690619903307 0.5128505627737475
-h.0 -3.3628631026292846 -7.137586885391019 3.8554208861589476 …
+loss 4.503189215447316
+grad wte -6.369071936518367e-13 wpe -1.4510961876545991e-15 ln_f 0.20932690619905386 0.512850562773751
+h.0 -3.3628631026293108 -7.1375868853910704 3.8554208861589614 …
 …
-loss after one step 3.8539085307403833
+loss after one step 3.8539085307403895
 ```
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `model/backends.osp` | `gpt2::Backends` — the `Tensor<B>` effect (build, get, length, zipWith, reduce, matMul, fromList, load, device) and its two handlers, `onLists` over `List<float>` and `onGpu` over `GpuBuffer<float>` |
+| `model/backends.osp` | `gpt2::Backends` — the `Tensor<B>` effect (build, get, length, zipWith, reduce, indexOf, matMul, fromList, load, device) and its two handlers, `onLists` over `List<float>` and `onGpu` over `GpuBuffer<float>` |
 | `model/tokenizer.osp` | `gpt2::Tokenizer` — the byte-level BPE tokenizer from `merges.txt` alone |
 | `model/model.osp` | `gpt2::Model` — the configuration, the weights, LayerNorm, attention, the blocks, the forward pass keeping every block's activations, and the KV-cached step; every tensor is `B` |
 | `generate/` | A one-file project: greedy sampling over the forward pass and the cached steps; `main` picks the handler |
@@ -82,40 +84,55 @@ export fn layerNorm(x, t, g, b) = {
 `onLists` answers `build` with `range |> map |> toList` and `matMul` with a
 `fold` over `k`; `onGpu` answers them with `gpuIota |> gpuMap` and `gpuMatMul`,
 forwarding the model's callbacks to the kernels. `main` reads the backend name
-from stdin and installs one handler around the whole run:
+from stdin and `Backends::under` installs the handler it names around the whole
+run; any other name runs nothing:
 
 ```osprey
-match input() {
-    "lists" => Backends::onLists(fn() => run(prompt, count))
-    _ => Backends::onGpu(fn() => run(prompt, count))
-}
+Backends::under(input(), fn() => run(prompt, count))
 ```
 
 The effect is `static`, so the compiler discharges it before the program runs:
-each arm of the `match` is its own specialised copy of the model with the
+each arm of the `match` in `under` is its own specialised copy of the model with the
 handler's arms inlined at every `perform`, and no `Tensor` handler exists at run
 time. [One model, two backends](../../website/src/docs/one-model-two-backends.md)
 walks through the effect, both handlers and what the compiler proves about them.
 
 ## What runs where
 
-Everything runs on the CPU today. Under `BACKEND=gpu` the model runs on the GPU
-surface, whose kernels execute on the host backend: `gpuDevice()` reports
-`host`, and both programs say so on their first line. Under `BACKEND=lists` the
-same model runs over host lists and says `lists`. The GPU surface is the shape
-one handler is written in, so the same source runs unchanged when a device
-backend lands ([plan 0023](../../docs/plans/0023-gpu-computation.md)); nothing
-here is GPU-accelerated.
+`BACKEND=gpu` (the default) runs the model under `onGpu`, and `GPU` picks where its kernels and matrix products execute. `make gpt2` and `make gpt2-train` request the GPU by default (`GPU=auto`). On macOS, they dispatch directly to Metal; elsewhere they dispatch to an OpenCL compute GPU through its installed driver. `GPU=metal` or `GPU=opencl` requests a specific adapter, and `GPU=host` keeps every kernel and product on the CPU as the oracle. `BACKEND=lists` runs the same model over host lists, on the CPU, whatever `GPU` says. The same model source runs on every path, without CUDA. `gpuDevice()` names the resolved adapter and labels matrix-kernel execution, and both programs print it on their first line; a completed-command message on stderr proves a matrix reached the GPU. Adapter failures abort the model rather than continuing with empty buffers.
 
-| Measured 2026-10-13, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build, `--memory=arc` | `BACKEND=gpu` | `BACKEND=lists` |
+```sh
+make gpt2 GPU=host      # every kernel and product on the CPU
+make gpt2 GPU=metal     # every kernel and product on the Apple GPU
+make gpt2 BACKEND=lists # host lists, CPU only
+```
+
+To run the compiler interactively from the repository root:
+
+```sh
+OSPREY_GPU=auto osprey examples/gpt2/generate --run --memory=arc
+```
+
+Enter the prompt, the token count and the backend (`gpu` or `lists`) on three lines. Set `OSPREY_GPU_TRACE=1` to report every completed dispatch. Under `BACKEND=gpu` with a device selected, every kernel the model performs — embeddings, LayerNorm, attention scores and softmax, GELU, the residual adds, every reduction, the next token's index, the training loss — and every matrix product executes on that device, compiled from the same Osprey source the host runs ([GPU-BACKEND-DEVICE](../../docs/specs/0034-GPUComputation.md#device-backends--gpu-backend-device)). Both adapters use the same software binary64 arithmetic, preserving the host's accumulation order without float32 substitution. What stays on the CPU: tokenization, building and loading buffers, and one download of each value the program reads back — the logits a token's index is taken from, and the loss. Every buffer is resident on the device from the first kernel that touches it ([GPU-BUFFER-RESIDENT](../../docs/specs/0034-GPUComputation.md#device-resident-buffers--gpu-buffer-resident)): the weights upload once, a layer's intermediate buffers never leave the device, and a buffer's device copy is released with the buffer. A kernel the device dialect cannot express aborts the run naming itself rather than running on the CPU; `GPU=host` runs the same program on the CPU and `BACKEND=lists` runs it over plain lists without touching the GPU surface at all.
+
+The device's `exp`, `ln` and `tanh` are correctly rounded; a host libm is not on every argument. The generated text is identical on every path. The training loss agrees to fifteen significant digits and differs in the last (`4.503189215447316` on the host, `4.503189215447317` on Metal). Across all 150 numbers the step prints, the largest difference from the host is 2.4 × 10⁻¹³ and no number larger than 10⁻⁶ differs by more than 4 parts in 10¹³, so a gradient sum that cancels to about `1e-15`, such as `wpe`, differs in every digit. Metal and OpenCL print identical bytes apart from the device name.
+
+| Measured 2026-10-13, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build, `--memory=arc`, `GPU=host` | `BACKEND=gpu` | `BACKEND=lists` |
 | --- | --- | --- |
 | 20 tokens from the 5-token prompt: load, one full pass, 19 KV-cached steps | 19.6 s, 1.4 GB peak | 7 min 18 s, 1.7 GB peak |
 | One training step over the 5-token prompt: load, forward, loss, backward, SGD, forward again | 52 s, 3.6 GB peak | 9 min, 4.6 GB peak |
 | `reference.py`, the same 20 tokens in pure Python | 16 min 25 s | |
-| `reference.py --train`, the same step in pure Python | 5 min 49 s, 16.2 GB peak | |
 
-The GPU surface is faster because its buffers are dense doubles and its kernels
-are lifted into flat functions; the list handler boxes every element and calls
+| Measured 2026-10-16, Apple M4 Max, macOS, release build, `--memory=arc`, `BACKEND=gpu`, median of three | `GPU=host` | `GPU=metal` | `GPU=opencl` |
+| --- | --- | --- | --- |
+| 20 tokens from the 5-token prompt, every kernel and product on the selected device, buffers resident on it | 6.5 s, 1.7 GB peak | 6.9 s, 3.1 GB peak | 6.8 s, 1.7 GB peak |
+| One training step over the 5-token prompt | 25.2 s, 4.0 GB peak | 7.6 s, 5.9 GB peak | 7.8 s, 3.1 GB peak |
+| `reference.py --train`, the same step in pure Python (2026-10-15) | 5 min 49 s, 16.2 GB peak | | |
+
+Training is about three times faster on the device: half its 1 499 dispatches run over 3 072 threads or more. Generation is not: after the prompt each token is a one-row pass through the KV cache, 4 338 of its 5 919 dispatches run over 768 threads or fewer, and without kernel fusion each is its own launch.
+
+On the CPU the GPU-surface handler beats the list handler because its buffers
+are dense doubles and its kernels are lifted into flat functions; the list handler boxes every element and calls
 the callback through a closure. The Makefile targets run under `--memory=arc`
 because of the memory column.
 
@@ -169,8 +186,8 @@ lowerings and wasm32 on every `make test`.
 - **The KV cache** — the prompt takes one full forward pass; every later token
   runs `forwardStep`, one position through the blocks over each block's cached
   qkv rows, so a token costs one position rather than the whole sequence.
-- **Sampling** is greedy: a `reduce` for the peak logit and a `fold` for its
-  first index.
+- **Sampling** is greedy: a `reduce` for the peak logit and an `indexOf` for
+  its first index, both kernels.
 - **The backward pass** is the same kinds of operation. A `linear`'s gradients
   are two products against transposed operands plus a column sum; LayerNorm's
   recomputes the normalised rows from its input; attention's is the softmax

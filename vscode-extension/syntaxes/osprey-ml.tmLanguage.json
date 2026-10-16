@@ -63,6 +63,16 @@
           "match": "\\b(static)\\b(?=\\s+(?:effect\\b|[A-Z]))"
         },
         {
+          "name": "meta.effect.declaration.osprey-ml",
+          "match": "\\b(?:(effect)|(handle))\\s+(?:(static)\\s+)?([A-Z][a-zA-Z0-9_]*(?:::[A-Z][a-zA-Z0-9_]*)*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.effect.osprey-ml" },
+            "2": { "name": "keyword.control.osprey-ml" },
+            "3": { "name": "storage.modifier.static.osprey-ml" },
+            "4": { "name": "entity.name.type.effect.osprey-ml" }
+          }
+        },
+        {
           "name": "keyword.control.osprey-ml",
           "match": "\\b(match|handle|do|perform|in|resume)\\b"
         },

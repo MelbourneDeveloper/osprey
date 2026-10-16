@@ -29,6 +29,9 @@ mod debug;
 #[path = "cross_flavor_ir_equiv/gpu.rs"]
 mod gpu;
 
+#[path = "cross_flavor_ir_equiv/device.rs"]
+mod device;
+
 use std::path::{Path, PathBuf};
 
 use osprey_ast::Program;

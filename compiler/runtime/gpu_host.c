@@ -18,6 +18,7 @@
 
 #include "io_error.h"
 #include "memory_hooks.h"
+#include "gpu_device.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -116,7 +117,7 @@ static void axpy_row(int64_t *out, const int64_t *right, double x, int64_t cols)
 // out[r*cols + c] = sum over k, in order from 0.0, of left[r*inner + k] *
 // right[k*cols + c], in double. NULL with the reason recorded when either
 // operand's length disagrees with the shape or the shape overflows.
-void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, int64_t cols) {
+static void *matrix_result(void *left, void *right, int64_t rows, int64_t inner, int64_t cols) {
   int64_t n = area(rows, cols);
   if (n < 0) {
     osp_io_error_text(OP_MATMUL, "result", "rows * cols is negative or overflows");
@@ -131,14 +132,24 @@ void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, in
     osp_io_error_set(OP_MATMUL, "result", ENOMEM);
     return abandoned(out);
   }
-  int64_t *o = osprey_gpu_data(out);
-  const int64_t *a = osprey_gpu_data(left);
-  const int64_t *b = osprey_gpu_data(right);
+  return out;
+}
+
+static void host_product(int64_t *o, const int64_t *a, const int64_t *b, int64_t rows, int64_t inner, int64_t cols) {
   for (int64_t r = 0; o && a && b && r < rows; r++) {
-    for (int64_t k = 0; k < inner; k++) {
+    for (int64_t k = 0; k < inner; k++)
       axpy_row(o + r * cols, b + k * cols, word_double(a[r * inner + k]), cols);
-    }
   }
+}
+
+// The product on the selected device, where its operands and result stay
+// resident [GPU-BUFFER-RESIDENT], or on the host when the host is selected.
+void *osprey_gpu_matmul(void *left, void *right, int64_t rows, int64_t inner, int64_t cols) {
+  void *out = matrix_result(left, right, rows, inner, cols);
+  if (!out) return NULL;
+  int device = osprey_gpu_device_matmul(left, right, out, rows, inner, cols);
+  if (device != 0) return device > 0 ? out : abandoned(out);
+  host_product(osprey_gpu_data(out), osprey_gpu_data(left), osprey_gpu_data(right), rows, inner, cols);
   return out;
 }
 

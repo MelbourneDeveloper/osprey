@@ -399,14 +399,7 @@ async fn files_outside_source_roots_keep_standalone_flavor_and_symbols(
     let uri = lspkit_server::uri::path_to_uri(&fixture.root.join("scratch.osp"))?;
     let mut h = Harness::start();
     let opened = h.open_at(&uri, "fn main() = print(\"standalone\")\n").await;
-    assert_eq!(
-        opened
-            .params
-            .as_ref()
-            .and_then(|params| params.get("diagnostics")),
-        Some(&json!([])),
-        "{opened:?}"
-    );
+    assert_eq!(diagnostics(&opened), Some(&json!([])), "{opened:?}");
     let completion = h
         .request(950, "textDocument/completion", position_params(&uri, 0, 0))
         .await;

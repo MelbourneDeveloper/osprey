@@ -50,7 +50,7 @@ The release list was unavailable when this page was built. See
 - User-defined generics, declaration-site variance, generic effects and explicit
   call-site type arguments in both flavors.
 - Immutable persistent lists and maps
-- [Dense computation buffers](/spec/0034-gpucomputation/) with typed kernels and explicit arithmetic policies. Known let-bound kernels retain their original captures when extracted; execution currently uses CPU host loops.
+- [Dense computation buffers](/spec/0034-gpucomputation/) with typed kernels and explicit arithmetic policies. Kernels and matrix products run on Metal or OpenCL when `OSPREY_GPU` selects a device, and on the CPU otherwise; buffers stay on the device between kernels. Known let-bound kernels retain their original captures when extracted.
 - Lightweight native fibers and channels
 - Native HTTP, WebSocket, file, process and C FFI runtime APIs
 - Default, tracing-GC and Perceus-ARC native memory backends
@@ -102,6 +102,7 @@ The current development build rejects these older forms:
 - The strict static-memory mode described in the memory specification is not a current CLI option. Native builds accept `default`, `gc`, and `arc`; mobile and WebAssembly accept `default` only.
 - The initial mobile runtime retains general allocations for process lifetime and has no public library teardown or returned-string release API.
 - The mobile sample reads one public GitHub issue page. Authentication, pagination, background refresh, and posting changes to GitHub are not implemented.
+- GPU kernels run in software binary64 with no kernel fusion, so small kernels are launch-bound: GPT-2 trains about three times faster on an M4 Max GPU than on its CPU and generates no faster. `gpuScan` and `gpuFilter` have no device form; a selected device stops the run on them. Only Apple GPUs have been tested, and iOS, Android and WebAssembly run GPU code on the CPU.
 - C integrations are outside Osprey's memory-safety guarantee.
 
 For detailed intended behavior and chapter-specific implementation notes, read

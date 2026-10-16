@@ -74,7 +74,10 @@ suite("Osprey Test Explorer Debug profile ([TESTING-DEBUG-VSCODE])", () => {
 
   suite("foldDapMessage", () => {
     test("stdout output events accumulate in order", () => {
-      const first = foldDapMessage(NOTHING, outputEvent("stdout", "ok 1 - a\n"));
+      const first = foldDapMessage(
+        NOTHING,
+        outputEvent("stdout", "ok 1 - a\n"),
+      );
       const both = foldDapMessage(first, outputEvent("stdout", "1..1\n"));
       assert.strictEqual(both.stdout, "ok 1 - a\n1..1\n");
       assert.strictEqual(both.stderr, "");
@@ -102,7 +105,10 @@ suite("Osprey Test Explorer Debug profile ([TESTING-DEBUG-VSCODE])", () => {
     });
 
     test("a non-string output body cannot corrupt the stream", () => {
-      assert.deepStrictEqual(foldDapMessage(NOTHING, outputEvent("stdout", 7)), NOTHING);
+      assert.deepStrictEqual(
+        foldDapMessage(NOTHING, outputEvent("stdout", 7)),
+        NOTHING,
+      );
     });
 
     test("the exited event carries the process exit code", () => {
@@ -218,7 +224,11 @@ suite("Osprey Test Explorer Debug profile ([TESTING-DEBUG-VSCODE])", () => {
     async function discovered(
       controller: vscode.TestController,
     ): Promise<vscode.TestItem> {
-      const item = await refreshTestFile(controller, failUri, compiler ?? "osprey");
+      const item = await refreshTestFile(
+        controller,
+        failUri,
+        compiler ?? "osprey",
+      );
       assert.strictEqual(item.error, undefined);
       return item;
     }
@@ -294,7 +304,11 @@ suite("Osprey Test Explorer Debug profile ([TESTING-DEBUG-VSCODE])", () => {
         launched.push(config);
         return Promise.resolve(false);
       };
-      await makeDebugHandler(controller, () => compiler, start)(
+      await makeDebugHandler(
+        controller,
+        () => compiler,
+        start,
+      )(
         new vscode.TestRunRequest([file]),
         new vscode.CancellationTokenSource().token,
       );
@@ -319,7 +333,11 @@ suite("Osprey Test Explorer Debug profile ([TESTING-DEBUG-VSCODE])", () => {
         launched.push(config);
         return Promise.resolve(false);
       };
-      await makeDebugHandler(controller, () => compiler, start)(
+      await makeDebugHandler(
+        controller,
+        () => compiler,
+        start,
+      )(
         new vscode.TestRunRequest([good]),
         new vscode.CancellationTokenSource().token,
       );
@@ -344,10 +362,11 @@ suite("Osprey Test Explorer Debug profile ([TESTING-DEBUG-VSCODE])", () => {
         source.cancel();
         return Promise.resolve(true);
       };
-      await makeDebugHandler(controller, () => compiler, start)(
-        new vscode.TestRunRequest([file]),
-        source.token,
-      );
+      await makeDebugHandler(
+        controller,
+        () => compiler,
+        start,
+      )(new vscode.TestRunRequest([file]), source.token);
       assert.ok(source.token.isCancellationRequested);
     });
   });

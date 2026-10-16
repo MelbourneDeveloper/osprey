@@ -47,10 +47,15 @@ fn program(ext: &str, template: &str) -> Option<PathBuf> {
 /// `(exit code, stdout, stderr)` of `osprey <path> --run --quiet`, rooted at
 /// the repo so the runtime archives resolve.
 fn run(path: &Path) -> (Option<i32>, String, String) {
+    run_with_gpu(path, "host")
+}
+
+fn run_with_gpu(path: &Path, backend: &str) -> (Option<i32>, String, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_osprey"))
         .current_dir(manifest().join("..").join(".."))
         .arg(path)
         .args(["--run", "--quiet"])
+        .env("OSPREY_GPU", backend)
         .output();
     match output {
         Ok(out) => (
@@ -70,5 +75,67 @@ fn both_flavors_read_the_safetensors_fixture_exactly() {
         let (code, stdout, stderr) = path.as_deref().map(run).unwrap_or_default();
         assert_eq!(code, Some(0), "{ext}: stderr: {stderr}");
         assert_eq!(stdout, EXPECTED, "{ext}");
+    }
+}
+
+/// A project whose `main.osp` is `source`, importing the gpt2 model modules.
+fn gpt2_project(name: &str, source: &str) -> Option<PathBuf> {
+    let directory = std::env::temp_dir().join(format!("osprey_gpt2_{name}_{}", std::process::id()));
+    std::fs::create_dir_all(&directory).ok()?;
+    let model = manifest().join("../../examples/gpt2/model");
+    let model = serde_json::to_string(&model.to_string_lossy()).ok()?;
+    let config = format!("[project]\nname = \"failure\"\nsource_roots = [{model}, \".\"]\ndefault_namespace = \"failure\"\nentry = \"main.osp\"\n");
+    std::fs::write(directory.join("osprey.toml"), config).ok()?;
+    std::fs::write(directory.join("main.osp"), source).ok()?;
+    Some(directory)
+}
+
+#[test]
+fn gpt2_rejects_a_failed_gpu_dispatch_instead_of_generating_with_empty_matrices() {
+    let source = "import gpt2::Model\nimport gpt2::Backends\nfn main() = Backends::onGpu(fn() => print(gpuLength(Model::product(toGpu([1.0]), toGpu([1.0]), 1, 1, 1))))\n";
+    let path = gpt2_project("failure", source);
+    assert!(path.is_some(), "GPU failure project could not be written");
+    let (code, stdout, stderr) = path
+        .as_deref()
+        .map(|p| run_with_gpu(p, "invalid"))
+        .unwrap_or_default();
+    assert_ne!(code, Some(0), "failed GPU dispatch continued: {stdout}");
+    assert!(stderr.contains("unknown backend"), "{stderr}");
+    if let Some(path) = path {
+        let _ = std::fs::remove_dir_all(path);
+    }
+}
+
+/// The arithmetic policy GPT-2's `main` installs halts on a fault and hands the
+/// caller an `Error` naming it. Substituting `0`/`0.0` was indistinguishable
+/// from a real logit, so a faulted run generated from fabricated values.
+const ARITH_FAULTS: &str = r#"import gpt2::Backends
+
+fn quotient(d) = 10 % d
+fn ratio(d) = 3.0 / d
+fn grow(n) = n * 4611686018427387904
+fn report(outcome) = match outcome {
+    Success { value } => "value ${value}"
+    Error { message } => "fault: ${message}"
+}
+
+fn main() = print("${report(Backends::strictly(fn() => quotient(listLength([1, 2, 3]))))}\n${report(Backends::strictly(fn() => quotient(listLength([]))))}\n${report(Backends::strictly(fn() => ratio(toFloat(listLength([])))))}\n${report(Backends::strictly(fn() => grow(listLength([1, 2, 3]))))}")
+"#;
+
+#[test]
+fn gpt2_arithmetic_faults_reach_the_caller_instead_of_substituting_zero() {
+    let path = gpt2_project("arith", ARITH_FAULTS);
+    assert!(path.is_some(), "Arith fault project could not be written");
+    let (code, stdout, stderr) = path.as_deref().map(run).unwrap_or_default();
+    assert_eq!(code, Some(0), "stderr: {stderr}");
+    assert_eq!(
+        stdout,
+        "value 1\n\
+         fault: remainder by zero: 10 % 0\n\
+         fault: division by zero: 3.0 / 0\n\
+         fault: integer overflow: 3 * 4611686018427387904\n"
+    );
+    if let Some(path) = path {
+        let _ = std::fs::remove_dir_all(path);
     }
 }

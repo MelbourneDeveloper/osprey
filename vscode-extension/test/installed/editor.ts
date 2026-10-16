@@ -16,7 +16,11 @@ vscode.languages.onDidChangeDiagnostics((event) => {
   for (const uri of event.uris) published.add(uri.toString());
 });
 
-export async function waitFor<T>(read: () => T | Promise<T>, accepts: (value: T) => boolean, description: string): Promise<T> {
+export async function waitFor<T>(
+  read: () => T | Promise<T>,
+  accepts: (value: T) => boolean,
+  description: string,
+): Promise<T> {
   const deadline = Date.now() + 20000;
   let value = await read();
   while (!accepts(value) && Date.now() < deadline) {
@@ -27,165 +31,344 @@ export async function waitFor<T>(read: () => T | Promise<T>, accepts: (value: T)
   return value;
 }
 
-export function rangeOf(document: vscode.TextDocument, text: string, occurrence = 0): vscode.Range {
+export function rangeOf(
+  document: vscode.TextDocument,
+  text: string,
+  occurrence = 0,
+): vscode.Range {
   const source = document.getText();
   let offset = -1;
-  for (let index = 0; index <= occurrence; index++) offset = source.indexOf(text, offset + 1);
-  assert.notStrictEqual(offset, -1, `Missing source fragment ${JSON.stringify(text)}`);
-  return new vscode.Range(document.positionAt(offset), document.positionAt(offset + text.length));
+  for (let index = 0; index <= occurrence; index++)
+    offset = source.indexOf(text, offset + 1);
+  assert.notStrictEqual(
+    offset,
+    -1,
+    `Missing source fragment ${JSON.stringify(text)}`,
+  );
+  return new vscode.Range(
+    document.positionAt(offset),
+    document.positionAt(offset + text.length),
+  );
 }
 
-export async function openSource(name: string, source: string): Promise<vscode.TextEditor> {
+export async function openSource(
+  name: string,
+  source: string,
+): Promise<vscode.TextEditor> {
   const root = process.env.OSPREY_VSIX_TEST_ROOT;
   assert.ok(root, "Installed VSIX runner must provide its isolated root");
   const file = path.join(root, "workspace", name);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, source);
   const document = await vscode.workspace.openTextDocument(file);
-  const editor = await vscode.window.showTextDocument(document, { preview: false });
-  assert.strictEqual(document.languageId, name.endsWith(".ospml") ? "osprey-ml" : "osprey");
+  const editor = await vscode.window.showTextDocument(document, {
+    preview: false,
+  });
+  assert.strictEqual(
+    document.languageId,
+    name.endsWith(".ospml") ? "osprey-ml" : "osprey",
+  );
   assert.strictEqual(document.getText(), source);
   assert.strictEqual(document.isDirty, false);
   return editor;
 }
 
 function summary(diagnostic: vscode.Diagnostic): object {
-  return { code: diagnostic.code, message: diagnostic.message, severity: diagnostic.severity,
-    source: diagnostic.source, range: diagnostic.range, tags: diagnostic.tags ?? [] };
+  return {
+    code: diagnostic.code,
+    message: diagnostic.message,
+    severity: diagnostic.severity,
+    source: diagnostic.source,
+    range: diagnostic.range,
+    tags: diagnostic.tags ?? [],
+  };
 }
 
-export async function diagnostics(document: vscode.TextDocument, expected: ExpectedDiagnostic[]): Promise<vscode.Diagnostic[]> {
-  const wanted = expected.map((item) => ({ code: item.code, message: item.message,
-    severity: vscode.DiagnosticSeverity.Warning, source: "osprey",
+export async function diagnostics(
+  document: vscode.TextDocument,
+  expected: ExpectedDiagnostic[],
+): Promise<vscode.Diagnostic[]> {
+  const wanted = expected.map((item) => ({
+    code: item.code,
+    message: item.message,
+    severity: vscode.DiagnosticSeverity.Warning,
+    source: "osprey",
     range: rangeOf(document, item.text, item.occurrence),
-    tags: item.unnecessary ? [vscode.DiagnosticTag.Unnecessary] : [] }));
-  const actual = await waitFor(() => vscode.languages.getDiagnostics(document.uri),
-    (items) => published.has(document.uri.toString()) && JSON.stringify(items.map(summary)) === JSON.stringify(wanted),
-    `Exact diagnostics for ${document.fileName}; expected ${JSON.stringify(wanted)}`);
+    tags: item.unnecessary ? [vscode.DiagnosticTag.Unnecessary] : [],
+  }));
+  const actual = await waitFor(
+    () => vscode.languages.getDiagnostics(document.uri),
+    (items) =>
+      published.has(document.uri.toString()) &&
+      JSON.stringify(items.map(summary)) === JSON.stringify(wanted),
+    `Exact diagnostics for ${document.fileName}; expected ${JSON.stringify(wanted)}`,
+  );
   assert.deepStrictEqual(actual.map(summary), wanted);
   return actual;
 }
 
-export async function actions(document: vscode.TextDocument, range: vscode.Range,
-  kind: vscode.CodeActionKind | string = vscode.CodeActionKind.QuickFix): Promise<vscode.CodeAction[]> {
+export async function actions(
+  document: vscode.TextDocument,
+  range: vscode.Range,
+  kind: vscode.CodeActionKind | string = vscode.CodeActionKind.QuickFix,
+): Promise<vscode.CodeAction[]> {
   const version = document.version;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const found = await vscode.commands.executeCommand<vscode.CodeAction[]>(
-        "vscode.executeCodeActionProvider", document.uri, range, typeof kind === "string" ? kind : kind.value);
-      assert.ok(Array.isArray(found), "Code action provider must answer the request");
+        "vscode.executeCodeActionProvider",
+        document.uri,
+        range,
+        typeof kind === "string" ? kind : kind.value,
+      );
+      assert.ok(
+        Array.isArray(found),
+        "Code action provider must answer the request",
+      );
       return found;
     } catch (error) {
       // VS Code cancels an in-flight provider request when diagnostics are
       // republished. Retry only that transient cancellation on the same
       // document version; a changed source must still fail the test.
-      if (error instanceof Error && error.message === "Canceled" && document.version === version && attempt < 2) {
+      if (
+        error instanceof Error &&
+        error.message === "Canceled" &&
+        document.version === version &&
+        attempt < 2
+      ) {
         await new Promise((resolve) => setTimeout(resolve, 50));
         continue;
       }
       throw error;
     }
   }
-  throw new Error("Code action provider did not answer after cancellation retries");
+  throw new Error(
+    "Code action provider did not answer after cancellation retries",
+  );
 }
 
-export function assertAction(action: vscode.CodeAction, title: string, diagnostic: vscode.Diagnostic): void {
+export function assertAction(
+  action: vscode.CodeAction,
+  title: string,
+  diagnostic: vscode.Diagnostic,
+): void {
   assert.strictEqual(action.title, title);
   assert.strictEqual(action.kind?.value, "quickfix");
   assert.strictEqual(action.isPreferred, true);
   assert.strictEqual(action.disabled, undefined);
-  assert.strictEqual(action.edit, undefined, "VSIX must guard edits until invocation");
+  assert.strictEqual(
+    action.edit,
+    undefined,
+    "VSIX must guard edits until invocation",
+  );
   assert.strictEqual(action.command?.command, "osprey.applyWarningFix");
   assert.strictEqual(action.command?.title, title);
   // VS Code's executeCodeActionProvider omits diagnostics from its public
   // return object. The wire suite checks that attachment; here the source edit
   // must overlap the exact published diagnostic the user requested a fix for.
-  const edits = action.command?.arguments?.[0].edits as { range: [number, number, number, number] }[];
-  assert.ok(edits.some((edit) => new vscode.Range(...edit.range).intersection(diagnostic.range)),
-    "The guarded edit must address this diagnostic's exact source range");
+  const edits = action.command?.arguments?.[0].edits as {
+    range: [number, number, number, number];
+  }[];
+  assert.ok(
+    edits.some((edit) =>
+      new vscode.Range(...edit.range).intersection(diagnostic.range),
+    ),
+    "The guarded edit must address this diagnostic's exact source range",
+  );
 }
 
-export function assertEdit(action: vscode.CodeAction, document: vscode.TextDocument, expected: string, movedExport = false): void {
-  assert.strictEqual(action.edit, undefined, "No unguarded workspace edit may bypass the version check");
+export function assertEdit(
+  action: vscode.CodeAction,
+  document: vscode.TextDocument,
+  expected: string,
+  movedExport = false,
+): void {
+  assert.strictEqual(
+    action.edit,
+    undefined,
+    "No unguarded workspace edit may bypass the version check",
+  );
   assert.strictEqual(action.command?.command, "osprey.applyWarningFix");
   assert.strictEqual(action.command?.arguments?.length, 1);
   const payload = action.command.arguments[0];
-  assert.strictEqual(payload.uri, document.uri.toString(), "Only the current document is edited");
+  assert.strictEqual(
+    payload.uri,
+    document.uri.toString(),
+    "Only the current document is edited",
+  );
   assert.strictEqual(payload.version, document.version);
   assert.strictEqual(payload.source, document.getText());
-  assert.deepStrictEqual(payload.dependencies, vscode.workspace.textDocuments
-    .filter((item) => ["osprey", "osprey-ml"].includes(item.languageId))
-    .map((item) => ({ uri: item.uri.toString(), version: item.version, source: item.getText() }))
-    .sort((left, right) => left.uri.localeCompare(right.uri)));
-  const edits = payload.edits.map((edit: { range: [number, number, number, number]; newText: string }) => ({
-    start: document.offsetAt(new vscode.Position(edit.range[0], edit.range[1])),
-    end: document.offsetAt(new vscode.Position(edit.range[2], edit.range[3])), text: edit.newText,
-  })).sort((a: { start: number }, b: { start: number }) => b.start - a.start);
-  const changed = edits.reduce((text: string, edit: { start: number; end: number; text: string }) =>
-    text.slice(0, edit.start) + edit.text + text.slice(edit.end), document.getText());
+  assert.deepStrictEqual(
+    payload.dependencies,
+    vscode.workspace.textDocuments
+      .filter((item) => ["osprey", "osprey-ml"].includes(item.languageId))
+      .map((item) => ({
+        uri: item.uri.toString(),
+        version: item.version,
+        source: item.getText(),
+      }))
+      .sort((left, right) => left.uri.localeCompare(right.uri)),
+  );
+  const edits = payload.edits
+    .map(
+      (edit: { range: [number, number, number, number]; newText: string }) => ({
+        start: document.offsetAt(
+          new vscode.Position(edit.range[0], edit.range[1]),
+        ),
+        end: document.offsetAt(
+          new vscode.Position(edit.range[2], edit.range[3]),
+        ),
+        text: edit.newText,
+      }),
+    )
+    .sort((a: { start: number }, b: { start: number }) => b.start - a.start);
+  const changed = edits.reduce(
+    (text: string, edit: { start: number; end: number; text: string }) =>
+      text.slice(0, edit.start) + edit.text + text.slice(edit.end),
+    document.getText(),
+  );
   assert.ok(edits.length > 0);
-  assert.ok(edits.every((edit: { text: string }) => edit.text === "" || (movedExport && edit.text === "export ")),
-    "Only annotation deletion and an explicitly checked export relocation are allowed");
-  assert.strictEqual(changed, expected, "Exact edit must preserve body, comments and surrounding text");
+  assert.ok(
+    edits.every(
+      (edit: { text: string }) =>
+        edit.text === "" || (movedExport && edit.text === "export "),
+    ),
+    "Only annotation deletion and an explicitly checked export relocation are allowed",
+  );
+  assert.strictEqual(
+    changed,
+    expected,
+    "Exact edit must preserve body, comments and surrounding text",
+  );
 }
 
-async function focusAt(editor: vscode.TextEditor, range: vscode.Range): Promise<void> {
-  await vscode.window.showTextDocument(editor.document, { preserveFocus: false });
-  await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
-  assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), editor.document.uri.toString());
+async function focusAt(
+  editor: vscode.TextEditor,
+  range: vscode.Range,
+): Promise<void> {
+  await vscode.window.showTextDocument(editor.document, {
+    preserveFocus: false,
+  });
+  await vscode.commands.executeCommand(
+    "workbench.action.focusActiveEditorGroup",
+  );
+  assert.strictEqual(
+    vscode.window.activeTextEditor?.document.uri.toString(),
+    editor.document.uri.toString(),
+  );
   editor.selection = new vscode.Selection(range.start, range.start);
   // Setting selection sends an asynchronous RPC. Exercise native cursor
   // movement and observe its return before asking the focused editor for a
   // quick fix; activeTextEditor alone does not prove main-thread readiness.
-  await vscode.commands.executeCommand("cursorMove", { to: "right", by: "character", value: 1 });
-  await waitFor(() => editor.selection.active, (position) => position.isEqual(range.start.translate(0, 1)),
-    "Native cursor movement reaches the requested source editor");
-  await vscode.commands.executeCommand("cursorMove", { to: "left", by: "character", value: 1 });
-  await waitFor(() => editor.selection.active, (position) => position.isEqual(range.start),
-    "Native cursor returns to the exact annotation range");
+  await vscode.commands.executeCommand("cursorMove", {
+    to: "right",
+    by: "character",
+    value: 1,
+  });
+  await waitFor(
+    () => editor.selection.active,
+    (position) => position.isEqual(range.start.translate(0, 1)),
+    "Native cursor movement reaches the requested source editor",
+  );
+  await vscode.commands.executeCommand("cursorMove", {
+    to: "left",
+    by: "character",
+    value: 1,
+  });
+  await waitFor(
+    () => editor.selection.active,
+    (position) => position.isEqual(range.start),
+    "Native cursor returns to the exact annotation range",
+  );
   assert.ok(editor.selection.isEmpty);
 }
 
 /** Wait for an advertised action on one unchanged source snapshot. */
-export async function requiredActions(document: vscode.TextDocument, range: vscode.Range,
-  kind: vscode.CodeActionKind | string = vscode.CodeActionKind.QuickFix): Promise<vscode.CodeAction[]> {
+export async function requiredActions(
+  document: vscode.TextDocument,
+  range: vscode.Range,
+  kind: vscode.CodeActionKind | string = vscode.CodeActionKind.QuickFix,
+): Promise<vscode.CodeAction[]> {
   const version = document.version;
   // Diagnostic publication and the editor's provider refresh are separate
   // asynchronous operations. Preserve the existing deadline and every exact
   // action assertion; a source change or permanently absent fix still fails.
-  return waitFor(async () => {
-    assert.strictEqual(document.version, version, "The source changed before the quick fix arrived");
-    return actions(document, range, kind);
-  }, (found) => found.length > 0, "Advertised quick fix becomes available on the unchanged document");
+  return waitFor(
+    async () => {
+      assert.strictEqual(
+        document.version,
+        version,
+        "The source changed before the quick fix arrived",
+      );
+      return actions(document, range, kind);
+    },
+    (found) => found.length > 0,
+    "Advertised quick fix becomes available on the unchanged document",
+  );
 }
 
-async function focusedAction(editor: vscode.TextEditor, range: vscode.Range, kind: string): Promise<vscode.CodeAction> {
+async function focusedAction(
+  editor: vscode.TextEditor,
+  range: vscode.Range,
+  kind: string,
+): Promise<vscode.CodeAction> {
   const offered = await requiredActions(editor.document, range, kind);
-  assert.strictEqual(offered.length, 1, "The requested fix must remain available at invocation");
+  assert.strictEqual(
+    offered.length,
+    1,
+    "The requested fix must remain available at invocation",
+  );
   return offered[0];
 }
 
-export async function invokeFix(editor: vscode.TextEditor, range: vscode.Range, expected: string, kind = "quickfix"): Promise<void> {
+export async function invokeFix(
+  editor: vscode.TextEditor,
+  range: vscode.Range,
+  expected: string,
+  kind = "quickfix",
+): Promise<void> {
   await focusAt(editor, range);
   const action = await focusedAction(editor, range, kind);
   assertEdit(action, editor.document, expected, true);
   const command = action.command;
   assert.ok(command);
   assert.strictEqual(command.command, "osprey.applyWarningFix");
-  assert.strictEqual(await vscode.commands.executeCommand<boolean>(command.command, ...(command.arguments ?? [])), true,
-    "The installed extension must apply its revalidated code action");
-  await waitFor(() => editor.document.getText(), (text) => text === expected, "Editor applied exact quick fix");
+  assert.strictEqual(
+    await vscode.commands.executeCommand<boolean>(
+      command.command,
+      ...(command.arguments ?? []),
+    ),
+    true,
+    "The installed extension must apply its revalidated code action",
+  );
+  await waitFor(
+    () => editor.document.getText(),
+    (text) => text === expected,
+    "Editor applied exact quick fix",
+  );
   assert.strictEqual(editor.document.isDirty, true);
 }
 
 export async function save(document: vscode.TextDocument): Promise<void> {
   assert.strictEqual(await document.save(), true);
   assert.strictEqual(document.isDirty, false);
-  assert.strictEqual(fs.readFileSync(document.uri.fsPath, "utf8"), document.getText());
+  assert.strictEqual(
+    fs.readFileSync(document.uri.fsPath, "utf8"),
+    document.getText(),
+  );
 }
 
-export async function replace(editor: vscode.TextEditor, text: string, replacement: string): Promise<void> {
-  assert.strictEqual(await editor.edit((edit) => edit.replace(rangeOf(editor.document, text), replacement)), true);
+export async function replace(
+  editor: vscode.TextEditor,
+  text: string,
+  replacement: string,
+): Promise<void> {
+  assert.strictEqual(
+    await editor.edit((edit) =>
+      edit.replace(rangeOf(editor.document, text), replacement),
+    ),
+    true,
+  );
   assert.strictEqual(editor.document.isDirty, true);
 }
 
@@ -193,8 +376,15 @@ export async function closeEditors(): Promise<void> {
   // Failed assertions must not leave a modal Save prompt blocking later tests.
   await vscode.workspace.saveAll(false);
   const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
-  if (tabs.length) assert.strictEqual(await vscode.window.tabGroups.close(tabs), true);
+  if (tabs.length)
+    assert.strictEqual(await vscode.window.tabGroups.close(tabs), true);
   await vscode.commands.executeCommand("workbench.action.closePanel");
-  await waitFor(() => vscode.window.visibleTextEditors.map((editor) => editor.document.uri.toString()),
-    (uris) => uris.length === 0, "All editor documents closed");
+  await waitFor(
+    () =>
+      vscode.window.visibleTextEditors.map((editor) =>
+        editor.document.uri.toString(),
+      ),
+    (uris) => uris.length === 0,
+    "All editor documents closed",
+  );
 }

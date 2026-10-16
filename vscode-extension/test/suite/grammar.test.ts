@@ -164,7 +164,11 @@ suite("TextMate grammars", () => {
     assertScoped(tokens, "false", "constant.language.boolean");
     assertScoped(tokens, "=>", "keyword.operator.arrow");
     assert.ok(
-      !tokens.some((t) => t.text === "true" && t.scopes.join("|").includes("entity.name.function")),
+      !tokens.some(
+        (t) =>
+          t.text === "true" &&
+          t.scopes.join("|").includes("entity.name.function"),
+      ),
       "a match arm is not a function definition",
     );
     // The real binding on line 1 still reads as one.
@@ -208,7 +212,13 @@ suite("TextMate grammars", () => {
     const grammar = await grammarFor("source.osprey-ml");
     const tokens = tokenize(
       grammar,
-      ["type LocalNote =", "    note : string", "    priority : string", "", "module Annotations"].join("\n"),
+      [
+        "type LocalNote =",
+        "    note : string",
+        "    priority : string",
+        "",
+        "module Annotations",
+      ].join("\n"),
     );
     assertScoped(tokens, "type", "keyword.declaration.type");
     assertScoped(tokens, "LocalNote", "entity.name.type");
@@ -298,6 +308,37 @@ suite("TextMate grammars", () => {
     assertScoped(discharged, "static", "storage.modifier.static");
   });
 
+  // The effect's own name followed `effect` with no rule of its own, so
+  // `Tensor` in `export static effect Tensor<B> {` fell through to the plain
+  // identifier colour while every other declared type is a type. The same
+  // name at the discharge (`handle static Tensor<GpuBuffer<float>>`) and in
+  // a qualified `handle Backends::Tensor` reads as that type too.
+  test("an effect's name is a type at its declaration and its discharge in both flavors", async () => {
+    for (const [scope, declaration, discharge] of [
+      [
+        "source.osprey",
+        "export static effect Tensor<B> {",
+        "handle static Tensor<GpuBuffer<float>> {",
+      ],
+      [
+        "source.osprey-ml",
+        "export static effect Tensor B",
+        "handle static Tensor<GpuBuffer<float>>",
+      ],
+    ] as const) {
+      const grammar = await grammarFor(scope);
+      const declared = tokenize(grammar, declaration);
+      assertScoped(declared, "effect", "keyword.declaration.effect");
+      assertScoped(declared, "static", "storage.modifier.static");
+      assertScoped(declared, "Tensor", "entity.name.type.effect");
+      const discharged = tokenize(grammar, discharge);
+      assertScoped(discharged, "handle", "keyword.control");
+      assertScoped(discharged, "Tensor", "entity.name.type.effect");
+      const qualified = tokenize(grammar, "handle Backends::Tensor");
+      assertScoped(qualified, "Backends::Tensor", "entity.name.type.effect");
+    }
+  });
+
   // The sweep. Every invariant here is one a reader can state without knowing
   // the grammar: an arrow is an arrow, a boolean is a boolean, and a word that
   // can only ever be a keyword is highlighted as one. Words that are BOTH
@@ -311,8 +352,16 @@ suite("TextMate grammars", () => {
     // tests/effects/multiplicity. Their keyword positions are covered by the
     // contextual rules asserted above.
     const CONTEXTUAL = new Set([
-      "abort", "alias", "extra", "kernel", "many", "once", "out",
-      "replayable", "stage", "static",
+      "abort",
+      "alias",
+      "extra",
+      "kernel",
+      "many",
+      "once",
+      "out",
+      "replayable",
+      "stage",
+      "static",
     ]);
     const ALWAYS_KEYWORD =
       /^(fn|let|match|type|module|namespace|import|effect|handle|perform|signature|export|extern|resume|in|spawn|await|yield|send|recv|mut|handler|do|opaque|state)$/;
@@ -339,7 +388,9 @@ suite("TextMate grammars", () => {
           const at = `${relative}:${index + 1}`;
           const report = (why: string): void => {
             if (problems.length < 20) {
-              problems.push(`${at} ${why}: ${JSON.stringify(text)} → ${token.scopes.slice(1).join("|") || "NONE"}`);
+              problems.push(
+                `${at} ${why}: ${JSON.stringify(text)} → ${token.scopes.slice(1).join("|") || "NONE"}`,
+              );
             }
           };
           const ahead = line.slice(token.startIndex, token.startIndex + 2);

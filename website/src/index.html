@@ -91,24 +91,26 @@ print "${ada greet} / ${grace greet}"</code></pre>
 
 <section class="section effect-story model-section" id="gpt2" aria-labelledby="model-title">
   <div class="container">
-    <div class="section-heading"><p class="home-eyebrow">04 / A model on the surface</p><h2 id="model-title">The trained GPT-2.<br><span class="muted-heading">Written as kernels.</span></h2></div>
+    <div class="section-heading"><p class="home-eyebrow">04 / A model on the surface</p><h2 id="model-title">The trained GPT-2.<br><span class="muted-heading">Written once. Run on the GPU.</span></h2></div>
     <div class="effect-layout">
-      <div class="effect-intro"><p><code>gpuLoadTensor</code> reads the published weights. The twelve transformer blocks are <code>gpuIota |> gpuMap</code> kernels and <code>gpuMatMul</code> products. A training step runs the backward pass through the same kinds of kernel.</p><p>Every number matches an independent pure-Python reference exactly, token ids and gradients alike. Everything runs on the CPU today: the surface is the shape the model is written in, so the same source runs unchanged when a device backend lands.</p><a class="text-link" href="/blog/2026-10-12-gpt2-on-the-gpu-surface/">Read how it was ported <span>↗</span></a></div>
+      <div class="effect-intro"><p><code>gpuLoadTensor</code> reads the published weights. The model performs a static <code>Tensor</code> effect. One handler answers it with plain lists. The other answers every operation with a GPU-surface kernel or a <code>gpuMatMul</code> product, and Metal or OpenCL executes them.</p><p>On the CPU every number matches an independent pure-Python reference exactly, token ids and gradients alike. On an Apple M4 Max a training step runs about three times faster on the GPU than on the CPU. The text is the same, and the numbers agree to twelve digits.</p><a class="text-link" href="/blog/2026-10-12-gpt2-on-the-gpu-surface/">Read how it was ported <span>↗</span></a></div>
       <div class="flight-code">
         <div class="code-toolbar"><span>examples/gpt2/model/model.osp</span><span>LayerNorm</span></div>
-        <pre class="language-osprey"><code class="language-osprey">fn layerNorm(x, t, g, b) = {
+        <pre class="language-osprey"><code class="language-osprey">fn normalised(x, means, variances, g, b, i) = {
+    let r = intDiv(i, width)
+    let c = i % width
+    (at(x, i) - at(means, r)) / sqrt(at(variances, r) + epsilon) * at(g, c) + at(b, c)
+}
+
+export fn layerNorm(x, t, g, b) = {
     let means = rowMeans(x, t)
     let variances = rowVariances(x, t, means)
-    gpuIota(t * width) |> gpuMap(fn(i) => {
-        let r = intDiv(i, width)
-        let c = i % width
-        (at(x, i) - at(means, r)) / sqrt(at(variances, r) + epsilon) * at(g, c) + at(b, c)
-    })
+    perform Backends::Tensor.build(t * width, fn(i) => normalised(x, means, variances, g, b, i))
 }</code></pre>
-        <div class="code-result"><span aria-hidden="true">↳</span><samp>make gpt2 PROMPT="The capital of France is" TOKENS=2 → the capital</samp><span class="result-label">HOST BACKEND</span></div>
+        <div class="code-result"><span aria-hidden="true">↳</span><samp>make gpt2 GPU=metal PROMPT="The capital of France is" TOKENS=2 → the capital</samp><span class="result-label">METAL</span></div>
       </div>
     </div>
-    <p class="support-note">Nothing here is GPU-accelerated. Kernels execute as host loops; device code generation is <a href="https://github.com/Nimblesite/osprey/blob/main/docs/plans/0023-gpu-computation.md">plan 0023</a>'s next stage. <a href="https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/README.md">Measurements and source →</a></p>
+    <p class="support-note">Device arithmetic is software binary64 and kernels are not fused yet, so generation is no faster on the GPU than on the CPU. <a href="https://github.com/Nimblesite/osprey/blob/main/examples/gpt2/README.md">Measurements and source →</a></p>
   </div>
 </section>
 

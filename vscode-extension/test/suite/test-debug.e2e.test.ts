@@ -159,7 +159,11 @@ suite("Osprey Test Explorer Debug profile E2E", function () {
     setSourceBreakpoints(uri.fsPath, [BREAK_LINE]);
 
     const sessionStarted = waitForDebugSessionStart(LAUNCH_TIMEOUT_MS);
-    const run = debugExecutor(sink, token, realRun)(file, leaves(file), undefined);
+    const run = debugExecutor(sink, token, realRun)(
+      file,
+      leaves(file),
+      undefined,
+    );
     const session = await sessionStarted;
     assert.strictEqual(session.type, "osprey");
     const stop = await waitForStop(session, LAUNCH_TIMEOUT_MS);
@@ -211,20 +215,29 @@ suite("Osprey Test Explorer Debug profile E2E", function () {
       test(`console selection preserves input and breakpoints (${console}, ${flavor})`, async function () {
         this.timeout(TEST_TIMEOUT_MS);
         const program = path.join(fixtureDir, `console.${flavor}`);
-        const input = console === "integratedTerminal" ? "input()" : '"console answer"';
+        const input =
+          console === "integratedTerminal" ? "input()" : '"console answer"';
         const mlInput = console === "integratedTerminal" ? "input ()" : input;
-        fs.writeFileSync(program, flavor === "osp"
-          ? `fn main() = {\n    let marker = 42\n    let answer = ${input}\n    print(answer)\n}\n`
-          : `main () =\n    marker = 42\n    answer = ${mlInput}\n    print answer\n`);
+        fs.writeFileSync(
+          program,
+          flavor === "osp"
+            ? `fn main() = {\n    let marker = 42\n    let answer = ${input}\n    print(answer)\n}\n`
+            : `main () =\n    marker = 42\n    answer = ${mlInput}\n    print answer\n`,
+        );
         await assertConsoleSession(program, console);
       });
     }
   }
 
-  async function assertConsoleSession(program: string, console: string): Promise<void> {
+  async function assertConsoleSession(
+    program: string,
+    console: string,
+  ): Promise<void> {
     const protocol = consoleProtocol();
     let terminal: vscode.Terminal | undefined;
-    const opened = vscode.window.onDidOpenTerminal(value => { terminal = value; });
+    const opened = vscode.window.onDidOpenTerminal((value) => {
+      terminal = value;
+    });
     try {
       const session = await launchConsole(program, console);
       const stop = await waitForStop(session);
@@ -234,13 +247,25 @@ suite("Osprey Test Explorer Debug profile E2E", function () {
         terminal.sendText("console answer", true);
       }
       await assertConsoleAnswer(session, program, stop.threadId);
-      assert.deepStrictEqual(protocol.kinds, console === "integratedTerminal" ? ["integrated"] : []);
+      assert.deepStrictEqual(
+        protocol.kinds,
+        console === "integratedTerminal" ? ["integrated"] : [],
+      );
       // LLDB's native pseudo-terminal translates the program's LF to CRLF.
-      if (console === "internalConsole") assert.strictEqual(protocol.stdout, "console answer\r\n");
-    } finally { opened.dispose(); protocol.dispose(); terminal?.dispose(); }
+      if (console === "internalConsole")
+        assert.strictEqual(protocol.stdout, "console answer\r\n");
+    } finally {
+      opened.dispose();
+      protocol.dispose();
+      terminal?.dispose();
+    }
   }
 
-  async function assertConsoleAnswer(session: vscode.DebugSession, program: string, threadId: number): Promise<void> {
+  async function assertConsoleAnswer(
+    session: vscode.DebugSession,
+    program: string,
+    threadId: number,
+  ): Promise<void> {
     await continueExecution(session, threadId);
     const stop = await waitForStop(session);
     const frame = assertCurrentLine(stop.stack, 4, program);
@@ -250,25 +275,53 @@ suite("Osprey Test Explorer Debug profile E2E", function () {
     await waitForDebugSessionEnd(LAUNCH_TIMEOUT_MS, session.id);
   }
 
-  async function launchConsole(program: string, console: string): Promise<vscode.DebugSession> {
+  async function launchConsole(
+    program: string,
+    console: string,
+  ): Promise<vscode.DebugSession> {
     setSourceBreakpoints(program, [3, 4]);
     const started = waitForDebugSessionStart(LAUNCH_TIMEOUT_MS);
-    assert.strictEqual(await vscode.debug.startDebugging(undefined, {
-      type: "osprey", request: "launch", name: "console contract", program,
-      cwd: fixtureDir, compilerPath: compiler, lldbDapPath: resolveRequiredLldbDap(), console,
-    }), true);
+    assert.strictEqual(
+      await vscode.debug.startDebugging(undefined, {
+        type: "osprey",
+        request: "launch",
+        name: "console contract",
+        program,
+        cwd: fixtureDir,
+        compilerPath: compiler,
+        lldbDapPath: resolveRequiredLldbDap(),
+        console,
+      }),
+      true,
+    );
     const session = await started;
     assert.strictEqual(session.configuration.console, console);
     return session;
   }
 
   function consoleProtocol() {
-    const output = { kinds: [] as string[], stdout: "", dispose: () => tracker.dispose() };
+    const output = {
+      kinds: [] as string[],
+      stdout: "",
+      dispose: () => tracker.dispose(),
+    };
     const tracker = vscode.debug.registerDebugAdapterTrackerFactory("osprey", {
       createDebugAdapterTracker: () => ({
-        onDidSendMessage: (message: { type?: string; command?: string; arguments?: { kind: string }; event?: string; body?: { category: string; output: string } }) => {
-          if (message.type === "request" && message.command === "runInTerminal" && message.arguments) output.kinds.push(message.arguments.kind);
-          if (message.event === "output" && message.body?.category === "stdout") output.stdout += message.body.output;
+        onDidSendMessage: (message: {
+          type?: string;
+          command?: string;
+          arguments?: { kind: string };
+          event?: string;
+          body?: { category: string; output: string };
+        }) => {
+          if (
+            message.type === "request" &&
+            message.command === "runInTerminal" &&
+            message.arguments
+          )
+            output.kinds.push(message.arguments.kind);
+          if (message.event === "output" && message.body?.category === "stdout")
+            output.stdout += message.body.output;
         },
       }),
     });
@@ -280,12 +333,31 @@ suite("Osprey Test Explorer Debug profile E2E", function () {
       this.timeout(TEST_TIMEOUT_MS);
       assert.ok(compiler);
       const program = path.join(fixtureDir, `external.${flavor}`);
-      const output = path.join(fixtureDir, `external-${flavor}${process.platform === "win32" ? ".exe" : ""}`);
-      fs.writeFileSync(program, flavor === "osp" ? 'print("external")\n' : 'print "external"\n');
-      await compileDebugProgram(compiler, program, output, fixtureDir, () => {});
+      const output = path.join(
+        fixtureDir,
+        `external-${flavor}${process.platform === "win32" ? ".exe" : ""}`,
+      );
+      fs.writeFileSync(
+        program,
+        flavor === "osp" ? 'print("external")\n' : 'print "external"\n',
+      );
+      await compileDebugProgram(
+        compiler,
+        program,
+        output,
+        fixtureDir,
+        () => {},
+      );
       const adapter = resolveRequiredLldbDap();
-      const console = await resolveDebugConsole({ console: "externalTerminal" }, adapter);
-      const request = await terminalRequest(adapter, { program: output, cwd: fixtureDir, console });
+      const console = await resolveDebugConsole(
+        { console: "externalTerminal" },
+        adapter,
+      );
+      const request = await terminalRequest(adapter, {
+        program: output,
+        cwd: fixtureDir,
+        console,
+      });
       assert.strictEqual(request.kind, "external");
       assert.strictEqual(request.cwd, fixtureDir);
       assert.ok(request.args.includes(output), JSON.stringify(request));
@@ -293,45 +365,112 @@ suite("Osprey Test Explorer Debug profile E2E", function () {
   }
 });
 
-interface TerminalRequest { kind: string; cwd: string; args: string[] }
-interface ProtocolMessage { type: string; command?: string; success?: boolean; message?: string; arguments?: TerminalRequest }
+interface TerminalRequest {
+  kind: string;
+  cwd: string;
+  args: string[];
+}
+interface ProtocolMessage {
+  type: string;
+  command?: string;
+  success?: boolean;
+  message?: string;
+  arguments?: TerminalRequest;
+}
 
 /** Inspect the adapter's reverse request without opening an unmanaged OS window. */
-async function terminalRequest(adapter: string, launch: Record<string, string>): Promise<TerminalRequest> {
+async function terminalRequest(
+  adapter: string,
+  launch: Record<string, string>,
+): Promise<TerminalRequest> {
   const child = spawn(adapter, [], { stdio: "pipe" });
   let timer: NodeJS.Timeout | undefined;
   try {
     return await new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error("adapter did not request the external terminal")), 10_000);
+      timer = setTimeout(
+        () =>
+          reject(new Error("adapter did not request the external terminal")),
+        10_000,
+      );
       child.once("error", reject);
-      child.once("exit", code => reject(new Error(`adapter exited before requesting the terminal: ${code}`)));
-      receiveProtocol(child, message => respondToLaunch(child, message, launch, resolve, reject));
-      sendProtocol(child, 1, "initialize", { adapterID: "osprey", pathFormat: "path", linesStartAt1: true, columnsStartAt1: true, supportsRunInTerminalRequest: true });
+      child.once("exit", (code) =>
+        reject(
+          new Error(`adapter exited before requesting the terminal: ${code}`),
+        ),
+      );
+      receiveProtocol(child, (message) =>
+        respondToLaunch(child, message, launch, resolve, reject),
+      );
+      sendProtocol(child, 1, "initialize", {
+        adapterID: "osprey",
+        pathFormat: "path",
+        linesStartAt1: true,
+        columnsStartAt1: true,
+        supportsRunInTerminalRequest: true,
+      });
     });
-  } finally { clearTimeout(timer); child.stdin.end(); child.kill(); }
+  } finally {
+    clearTimeout(timer);
+    child.stdin.end();
+    child.kill();
+  }
 }
 
-function respondToLaunch(child: ChildProcessWithoutNullStreams, message: ProtocolMessage, launch: Record<string, string>, resolve: (value: TerminalRequest) => void, reject: (error: Error) => void): void {
-  if (message.type === "response" && message.success === false) reject(new Error(JSON.stringify(message)));
-  if (message.type === "response" && message.command === "initialize") sendProtocol(child, 2, "launch", launch);
-  if (message.type === "request" && message.command === "runInTerminal" && message.arguments) resolve(message.arguments);
+function respondToLaunch(
+  child: ChildProcessWithoutNullStreams,
+  message: ProtocolMessage,
+  launch: Record<string, string>,
+  resolve: (value: TerminalRequest) => void,
+  reject: (error: Error) => void,
+): void {
+  if (message.type === "response" && message.success === false)
+    reject(new Error(JSON.stringify(message)));
+  if (message.type === "response" && message.command === "initialize")
+    sendProtocol(child, 2, "launch", launch);
+  if (
+    message.type === "request" &&
+    message.command === "runInTerminal" &&
+    message.arguments
+  )
+    resolve(message.arguments);
 }
 
-function sendProtocol(child: ChildProcessWithoutNullStreams, seq: number, command: string, args: object): void {
-  const body = JSON.stringify({ seq, type: "request", command, arguments: args });
-  child.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+function sendProtocol(
+  child: ChildProcessWithoutNullStreams,
+  seq: number,
+  command: string,
+  args: object,
+): void {
+  const body = JSON.stringify({
+    seq,
+    type: "request",
+    command,
+    arguments: args,
+  });
+  child.stdin.write(
+    `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`,
+  );
 }
 
-function receiveProtocol(child: ChildProcessWithoutNullStreams, accept: (message: ProtocolMessage) => void): void {
+function receiveProtocol(
+  child: ChildProcessWithoutNullStreams,
+  accept: (message: ProtocolMessage) => void,
+): void {
   let pending = Buffer.alloc(0);
   child.stdout.on("data", (chunk: Buffer) => {
     pending = Buffer.concat([pending, chunk]);
     for (;;) {
       const end = pending.indexOf("\r\n\r\n");
       if (end < 0) return;
-      const length = Number(/Content-Length: (\d+)/i.exec(pending.subarray(0, end).toString())?.[1]);
+      const length = Number(
+        /Content-Length: (\d+)/i.exec(pending.subarray(0, end).toString())?.[1],
+      );
       if (!Number.isFinite(length) || pending.length < end + 4 + length) return;
-      accept(JSON.parse(pending.subarray(end + 4, end + 4 + length).toString()) as ProtocolMessage);
+      accept(
+        JSON.parse(
+          pending.subarray(end + 4, end + 4 + length).toString(),
+        ) as ProtocolMessage,
+      );
       pending = pending.subarray(end + 4 + length);
     }
   });

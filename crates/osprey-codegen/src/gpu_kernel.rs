@@ -78,9 +78,11 @@ pub(crate) fn mode_from_env() -> Result<GpuKernelMode> {
 #[derive(Clone, Debug)]
 pub(crate) struct Extracted {
     symbol: String,
-    uniforms: Vec<Value>,
+    pub(crate) uniforms: Vec<Value>,
     /// The element/accumulator slots only; `uniforms` are prepended at the call.
     sig: FnSig,
+    /// The kernel's device form, or why it has none [GPU-BACKEND-DEVICE].
+    pub(crate) device: std::result::Result<crate::gpu_device::DeviceBody, String>,
 }
 
 /// The `LType` of the kernel's element parameter at `slot`, when a concrete
@@ -194,9 +196,12 @@ fn extract_local(cg: &mut Codegen, cb: Callback, slots: &[LType]) -> Result<Call
     }
 }
 
+/// The lambda a local names, through any `let f = g` renaming a static
+/// handler arm introduced, with the environment fixed at its definition.
 fn local_candidate(cg: &Codegen, name: &str, own: &FnSig) -> Option<Callback> {
-    let (parameters, body, position) = cg.lambda_def(name)?.clone();
-    let env = cg.lambda_envs.get(name).cloned()?;
+    let name = crate::gpu_device::aliased(cg, name);
+    let (parameters, body, position) = cg.lambda_def(&name)?.clone();
+    let env = cg.lambda_envs.get(&name).cloned()?;
     Some(Callback::Closed(
         env,
         parameters,
@@ -301,7 +306,7 @@ fn host_bound(cg: &Codegen, names: &BTreeSet<String>) -> bool {
 /// box, a `Result` block or a Fiber carries host-side structure the flat
 /// device ABI has no slot for — the same restriction [GPU-BUFFER-ELEM] places
 /// on element data, and the same predicate ([`crate::gpu::is_scalar`]).
-fn uniform_admissible(v: &Value) -> bool {
+pub(crate) fn uniform_admissible(v: &Value) -> bool {
     let buffer_handle =
         matches!(v.ty, LType::Ptr) && v.osp_ty.as_deref().is_some_and(crate::gpu::is_buffer_owner);
     v.result_inner.is_none()
@@ -335,6 +340,8 @@ fn param_sigs(parameters: &[Parameter], own: Option<&FnSig>, slots: &[LType]) ->
 fn emit(cg: &mut Codegen, k: &Lifting<'_>, params: Vec<ParamSig>) -> Result<Callback> {
     let symbol = format!("{KERNEL_PREFIX}{}", cg.next_kernel_id());
     let uniforms: Vec<Value> = k.caps.iter().map(|c| c.val.clone()).collect();
+    let slots: Vec<LType> = params.iter().map(|p| p.ty).collect();
+    let device = crate::gpu_device::compile(cg, k.parameters, k.body, &slots, k.caps);
     let value = define(cg, k, &symbol, &params)?;
     let sig = (
         params,
@@ -347,6 +354,7 @@ fn emit(cg: &mut Codegen, k: &Lifting<'_>, params: Vec<ParamSig>) -> Result<Call
         symbol,
         uniforms,
         sig,
+        device,
     }))
 }
 

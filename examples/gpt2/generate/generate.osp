@@ -2,8 +2,8 @@
 // scratch, no conversion step, no Python. `make gpt2 PROMPT="..."` downloads the
 // published weights into examples/gpt2/weights and runs this project. Three
 // lines of stdin: the prompt, the number of tokens to generate (default 20), and
-// the interpretation to run the model under — `gpu` for the GPU surface (the
-// host backend today) or `lists` for plain host lists. The model lives in
+// the interpretation to run the model under — `gpu` for the GPU surface (its
+// products on the device `OSPREY_GPU` selects) or `lists` for plain host lists. The model lives in
 // ../model and performs the `Tensor` effect; this file is the sampler, and
 // `main` is the one place that chooses a handler. The prompt takes one full
 // forward pass; every later token takes one forwardStep over the blocks' cached
@@ -18,16 +18,11 @@ let defaultTokens = 20
 
 /// The most likely token after the last block's output row `last` [1, width]:
 /// the tied output projection of its normalised state, then the first index
-/// holding its peak.
+/// holding its peak; endOfText when none does.
 fn nextToken(w, last) = {
     let logits = Model::product(Model::layerNorm(last, 1, w.lnfG, w.lnfB), w.wteT, 1, width, vocabSize)
-    argmax(logits, perform Backends::Tensor.reduce(logits, at(logits, 0), maxF))
-}
-
-/// The first index of `logits` holding `peak`; endOfText when none does.
-fn argmax(logits, peak) = {
-    let found = range(0, vocabSize) |> fold(-1, fn(best, v) => match best < 0 { true => match at(logits, v) == peak { true => v  false => best }  false => best })
-    match found < 0 { true => endOfText  false => found }
+    let found = perform Backends::Tensor.indexOf(logits, perform Backends::Tensor.reduce(logits, at(logits, 0), maxF))
+    match found < vocabSize { true => found  false => endOfText }
 }
 
 /// Row t - 1 of x [t, width].
@@ -65,16 +60,12 @@ fn run(prompt, count) = {
 }
 
 fn main() = {
-    handle Arith {
-        overflow _ _ _ wrapped => wrapped
-        divideByZero _ _ => 0.0
-        remainderByZero _ => 0
-    }
     let promptLine = input()
     let prompt = match promptLine == "" { true => defaultPrompt  false => promptLine }
     let count = parseInt(input()) ?: defaultTokens
-    match input() {
-        "lists" => Backends::onLists(fn() => run(prompt, count))
-        _ => Backends::onGpu(fn() => run(prompt, count))
+    let backend = input()
+    match Backends::strictly(fn() => Backends::under(backend, fn() => run(prompt, count))) {
+        Success { value } => value
+        Error { message } => print("generation stopped: ${message}")
     }
 }

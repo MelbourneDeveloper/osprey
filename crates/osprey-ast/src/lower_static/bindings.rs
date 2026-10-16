@@ -46,6 +46,37 @@ pub(super) fn collect(program: &Program) -> BTreeMap<String, Expr> {
     bindings.0
 }
 
+/// The one-parameter static region `function` names through `let` aliases:
+/// the aliases passed through, its parameter and its region.
+pub(super) fn installer<'a>(
+    bindings: &'a BTreeMap<String, Expr>,
+    function: &'a Expr,
+) -> Option<(Vec<String>, &'a crate::Parameter, &'a Expr)> {
+    let mut selected = function;
+    let mut aliases = Vec::new();
+    while let Expr::Identifier(name) = selected {
+        if aliases.contains(name) {
+            return None;
+        }
+        selected = bindings.get(name)?;
+        aliases.push(name.clone());
+    }
+    let Expr::Lambda {
+        parameters, body, ..
+    } = selected
+    else {
+        return None;
+    };
+    let [parameter] = parameters.as_slice() else {
+        return None;
+    };
+    matches!(body.as_ref(), Expr::Handler { stage, .. } if stage.is_compile_time()).then_some((
+        aliases,
+        parameter,
+        body.as_ref(),
+    ))
+}
+
 impl Lowering {
     /// A callable static interpretation must be selected before its callback is
     /// specialized. Erasing the lambda's region at definition time loses that
@@ -68,40 +99,16 @@ impl Lowering {
         {
             return false;
         }
-        let mut selected = function.as_ref();
-        let mut aliases = Vec::new();
-        while let Expr::Identifier(name) = selected {
-            if aliases.contains(name) {
-                return false;
-            }
-            let Some(value) = self.bindings.get(name) else {
-                return false;
-            };
-            aliases.push(name.clone());
-            selected = value;
-        }
-        let Expr::Lambda {
-            parameters, body, ..
-        } = selected
-        else {
-            return false;
-        };
-        let [parameter] = parameters.as_slice() else {
+        let Some((aliases, parameter, body)) = installer(&self.bindings, function) else {
             return false;
         };
         let Expr::Handler {
-            stage,
-            effect,
-            position,
-            ..
-        } = body.as_ref()
+            effect, position, ..
+        } = body
         else {
             return false;
         };
-        if !stage.is_compile_time() {
-            return false;
-        }
-        let mut applied = body.as_ref().clone();
+        let mut applied = body.clone();
         let parameter = parameter.name.clone();
         let effect = effect.clone();
         let position = *position;
@@ -126,7 +133,7 @@ impl Lowering {
     }
 }
 
-fn substitute(expression: &mut Expr, parameter: &str, action: &Expr) {
+pub(super) fn substitute(expression: &mut Expr, parameter: &str, action: &Expr) {
     if matches!(expression, Expr::Identifier(name) if name == parameter) {
         *expression = action.clone();
     } else {

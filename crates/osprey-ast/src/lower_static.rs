@@ -19,7 +19,11 @@ use crate::stage_rows::operation_name;
 use crate::{EffectRef, Expr, HandlerArm, Parameter, Position, Program, Stmt, TypeExpr};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// The program entry, which nothing references and pruning must never remove.
+const ENTRY_POINT: &str = "main";
+
 mod bindings;
+mod forwarding;
 mod hygiene;
 mod region;
 mod requirements;
@@ -34,6 +38,7 @@ struct Lowering {
     /// Every named function's definition, keyed by name.
     definitions: BTreeMap<String, Stmt>,
     bindings: BTreeMap<String, Expr>,
+    forwarders: BTreeSet<String>,
     effects: BTreeMap<String, EffectDecl>,
     /// Each function's requirements, independent of its selected interpretation.
     requirements: BTreeMap<String, Vec<String>>,
@@ -59,9 +64,11 @@ pub(crate) fn run(program: &Program) -> Result<Program, Vec<StageError>> {
         return Ok(program.clone());
     }
     let program = hygiene::resolve(program);
+    let (definitions, bindings) = (function_definitions(&program), bindings::collect(&program));
     let mut lowering = Lowering {
-        definitions: function_definitions(&program),
-        bindings: bindings::collect(&program),
+        forwarders: forwarding::collect(&definitions, &bindings),
+        definitions,
+        bindings,
         effects: effect_declarations(&program),
         requirements: all_requirements(&program),
         dispatches: crate::stage_rows::dispatch_requirements(&program),
@@ -82,6 +89,9 @@ pub(crate) fn run(program: &Program) -> Result<Program, Vec<StageError>> {
     rewritten.statements.extend(lowering.produced);
     let mut prunable = static_performers(&rewritten, &lowering.effects);
     prunable.extend(lowering.consumed);
+    // Broken-code quarantine: pruning a `main` whose request the rewrite could
+    // not reach compiled the program to nothing; the residual row names it.
+    let _ = prunable.remove(ENTRY_POINT);
     retain_referenced_originals(&mut rewritten, &prunable);
     if lowering.errors.is_empty() {
         Ok(rewritten)
@@ -106,7 +116,7 @@ fn has_regions(program: &Program) -> bool {
 impl Lowering {
     /// Rewrite one expression under the regions enclosing it.
     fn rewrite(&mut self, expression: &mut Expr, regions: &mut Vec<Region>) {
-        if self.apply_static_handler(expression) {
+        if self.apply_static_handler(expression) || self.apply_forwarder(expression) {
             self.depth = self.depth.saturating_add(1);
             self.rewrite(expression, regions);
             self.depth = self.depth.saturating_sub(1);

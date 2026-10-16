@@ -1,7 +1,9 @@
 //! Incremental syntax snapshots shared by diagnostics and editor features.
 //! Implements [LSP-WORKSPACE] and [LSP-PROJECT-BATCH].
 
-use crate::workspace::{file_path, project_root, same_path, uri_of, Sibling};
+use crate::workspace::{
+    file_path, lexical, project_root, project_roots, same_path, uri_of, Sibling,
+};
 use lspkit_vfs::{DocumentUri, Vfs};
 use osprey_project::{ProjectConfig, ProjectError, SourceFile};
 use osprey_syntax::Flavor;
@@ -20,6 +22,9 @@ pub(crate) struct Sources {
     pub(crate) root: PathBuf,
     pub(crate) config: ProjectConfig,
     pub(crate) files: Vec<SourceFile>,
+    /// The files of the other projects that include the document: siblings
+    /// for editor features, never assembled with this project's own.
+    neighbours: Vec<SourceFile>,
     pub(crate) errors: Vec<ProjectError>,
     pub(crate) incomplete: bool,
 }
@@ -30,9 +35,29 @@ impl Sources {
             root: root.to_path_buf(),
             config,
             files: Vec::new(),
+            neighbours: Vec::new(),
             errors: Vec::new(),
             incomplete: false,
         }
+    }
+
+    /// Take another project's files as neighbours, skipping files already
+    /// present. Assembling them with this project's would declare a shared
+    /// file twice and give the program two entries.
+    fn adopt(&mut self, other: Sources) {
+        for file in other.files {
+            if !self
+                .everyone()
+                .any(|known| same_path(&known.path, &file.path))
+            {
+                self.neighbours.push(file);
+            }
+        }
+        self.incomplete |= other.incomplete;
+    }
+
+    fn everyone(&self) -> impl Iterator<Item = &SourceFile> {
+        self.files.iter().chain(&self.neighbours)
     }
 
     pub(crate) fn view(&self, uri: &str) -> crate::workspace::View {
@@ -47,8 +72,7 @@ impl Sources {
             .find(|file| same_path(&path, &file.path))
             .cloned();
         let siblings = self
-            .files
-            .iter()
+            .everyone()
             .filter(|other| !same_path(&path, &other.path))
             .filter_map(sibling)
             .collect();
@@ -95,18 +119,28 @@ impl SourceCache {
             .collect()
     }
 
+    /// Whether a change to `changed` can alter `document`'s project: the two
+    /// share an enclosing manifest, or a project the document was loaded into
+    /// lists the changed file. Answered from the loaded memberships alone, so a
+    /// watcher storm never walks the disk.
     pub(crate) fn affected(&self, document: &str, changed: &str) -> bool {
-        let root = file_path(document).and_then(|path| project_root(&path));
-        let Some((root, path)) = root.zip(file_path(changed)) else {
+        let Some((document, changed)) = file_path(document).zip(file_path(changed)) else {
             return false;
         };
-        project_root(&path).as_ref() == Some(&root)
-            || self
-                .projects
-                .get(&root)
-                .is_some_and(|members| members.config.contains_source(&root, &path))
+        let enclosing = (project_root(&document), project_root(&changed));
+        if enclosing.0.is_some() && enclosing.0 == enclosing.1 {
+            return true;
+        }
+        self.projects.iter().any(|(root, members)| {
+            members.config.contains_source(root, &document)
+                && (enclosing.1.as_ref() == Some(root)
+                    || members.config.contains_source(root, &changed))
+        })
     }
 
+    /// The nearest project the document belongs to, with the files of every
+    /// other project that includes it as neighbours, so a shared source root
+    /// sees every program that includes it.
     pub(crate) fn load(
         &mut self,
         uri: &str,
@@ -114,15 +148,20 @@ impl SourceCache {
         text: Option<&str>,
     ) -> Option<Result<Sources, Vec<ProjectError>>> {
         let current = file_path(uri)?;
-        let root = project_root(&current)?;
-        let inputs = match osprey_project::discover(&root) {
+        let roots = project_roots(&current);
+        let (first, rest) = roots.split_first()?;
+        let inputs = match osprey_project::discover(first) {
             Ok(inputs) => inputs,
             Err(errors) => return Some(Err(errors)),
         };
-        if !inputs.0.contains_source(&root, &current) {
-            return None;
+        let mut sources = self.project(first, &current, vfs, text, inputs);
+        for root in rest {
+            if let Ok(inputs) = osprey_project::discover(root) {
+                let more = self.project(root, &current, vfs, text, inputs);
+                sources.adopt(more);
+            }
         }
-        Some(Ok(self.project(&root, &current, vfs, text, inputs)))
+        Some(Ok(sources))
     }
 
     fn project(
@@ -158,6 +197,9 @@ impl SourceCache {
                 .filter(|path| config.contains_source(root, path))
                 .map(Path::to_path_buf),
         );
+        // `source_roots = ["../model"]` discovers `generate/../model/m.osp`
+        // while the editor opened `model/m.osp`: one file, listed once.
+        let mut paths: Vec<PathBuf> = paths.iter().map(|path| lexical(path)).collect();
         paths.sort();
         paths.dedup();
         paths
@@ -266,7 +308,7 @@ fn live_text(path: &Path, current: &Path, text: Option<&str>, vfs: Option<&Vfs>)
 
 fn sibling(file: &SourceFile) -> Option<Sibling> {
     Some(Sibling {
-        uri: uri_of(&file.path)?,
+        uri: uri_of(&lexical(&file.path))?,
         source: file.source.clone(),
         program: file.program.clone(),
         flavor: file.flavor,

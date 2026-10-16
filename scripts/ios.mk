@@ -1,7 +1,7 @@
 # iOS device and simulator archives, using Xcode's SDK and Apple clang.
 # Processes and HTTP/OpenSSL have no implementation in this target. Files,
 # fibers and substituting effects use the existing native runtime. [IOS-TARGET-CAPABILITIES]
-IOS_RT_SRC ?= $(filter-out system_runtime,$(basename $(notdir $(FIB_OBJ))))
+IOS_RT_SRC ?= $(MOBILE_RT_SRC)
 
 .PHONY: ios ios-test _runtime_ios _runtime_ios_sim _test_ios _test_ios_goldens
 

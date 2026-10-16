@@ -9,7 +9,7 @@ tags: [algebraic-effects, handlers, gpu, static-effects]
 
 A program that has to run in two places is usually written twice. The CPU version and the GPU version start as copies, then one gains a fix the other never sees, and the test that would have caught it is the one nobody wrote because it needed both. Osprey removes the second copy. The model is written once, against an effect that names the operations it needs. Two handlers answer those operations: one with plain lists, one with the GPU surface. The handler a program installs is the only place the choice is made, and the compiler discharges it before the program runs, so there is no dispatch, no trait object and no `if gpu` left in the code.
 
-The worked example is the 124M-parameter GPT-2 model in [`examples/gpt2`](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2): the forward pass, greedy generation, a training step. One source. Two backends. Byte-identical output.
+The worked example is the 124M-parameter GPT-2 model in [`examples/gpt2`](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2): the forward pass, greedy generation, a training step. One source. Two backends. Byte-identical output on the CPU.
 
 ```bash
 make gpt2 PROMPT="The capital of France is" TOKENS=20 BACKEND=gpu
@@ -20,15 +20,19 @@ The first line of each run names which handler answered: `gpt2 (124M) on host` o
 
 ## Declare the operations
 
-A tensor program needs a handful of operations: build a buffer from an index function, read an element, measure a buffer, combine two, reduce one, multiply two matrices, lift a host list, load a tensor from a checkpoint, and say who is answering. That list is the effect. `B` is the representation the handler picks; the model never names it.
+A tensor program needs a handful of operations: build a buffer from an index function, read an element, measure a buffer, combine two, reduce one, find the first index holding a value, multiply two matrices, lift a host list, load a tensor from a checkpoint, and say who is answering. That list is the effect. `B` is the representation the handler picks; the model never names it. The two kernel shapes a model hands over get names of their own, so the signatures read as what they mean.
 
 ```osprey
+export type Kernel = fn(int) -> float
+export type Combine = fn(float, float) -> float
+
 export static effect Tensor<B> {
-    build: fn(int, fn(int) -> float) -> B
+    build: fn(int, Kernel) -> B
     get: fn(B, int) -> float
     length: fn(B) -> int
-    zipWith: fn(B, B, fn(float, float) -> float) -> B
-    reduce: fn(B, float, fn(float, float) -> float) -> float
+    zipWith: fn(B, B, Combine) -> B
+    reduce: fn(B, float, Combine) -> float
+    indexOf: fn(B, float) -> int
     matMul: fn(B, B, int, int, int) -> B
     fromList: fn(List<float>) -> B
     load: fn(string, string) -> B
@@ -37,12 +41,16 @@ export static effect Tensor<B> {
 ```
 
 ```osprey-ml
+export type Kernel = (int) -> float
+export type Combine = (float, float) -> float
+
 export static effect Tensor B
-    build : (int, (int) -> float) => B
+    build : (int, Kernel) => B
     get : (B, int) => float
     length : B => int
-    zipWith : (B, B, (float, float) -> float) => B
-    reduce : (B, float, (float, float) -> float) => float
+    zipWith : (B, B, Combine) => B
+    reduce : (B, float, Combine) => float
+    indexOf : (B, float) => int
     matMul : (B, B, int, int, int) => B
     fromList : List<float> => B
     load : (string, string) => B
@@ -114,7 +122,7 @@ Nothing in the model mentions a list or a buffer. Hindley-Milner inference carri
 
 ## Answer with lists
 
-The first handler answers every operation with ordinary list code. The product accumulates in `k` order from `0.0`, and that order is the contract: the two handlers must produce the same doubles, not nearly the same.
+The first handler answers every operation with ordinary list code. The product accumulates in `k` order from `0.0`, and that order is the contract: the two handlers must produce the same doubles, not nearly the same. Both handlers answer `indexOf` in the same two steps: element `i` names itself when it holds the value and the length otherwise (`hit`), and the smallest name wins (`minI`). `orAbort` ends the run with the error when a load or a product fails, so the model never computes on a fabricated empty tensor.
 
 ```osprey
 export fn onLists(work) = {
@@ -124,9 +132,10 @@ export fn onLists(work) = {
         length b => listLength(b)
         zipWith a b f => range(0, listLength(a)) |> map(fn(i) => f(listGet(a, i) ?: 0.0, listGet(b, i) ?: 0.0)) |> toList()
         reduce b seed f => range(0, listLength(b)) |> fold(seed, fn(a, i) => f(a, listGet(b, i) ?: 0.0))
+        indexOf b x => range(0, listLength(b)) |> map(fn(i) => hit(listGet(b, i) ?: 0.0, x, i, listLength(b))) |> fold(listLength(b), minI)
         matMul a b rows inner cols => range(0, rows * cols) |> map(fn(i) => range(0, inner) |> fold(0.0, fn(acc, k) => acc + (listGet(a, intDiv(i, cols) * inner + k) ?: 0.0) * (listGet(b, k * cols + i % cols) ?: 0.0))) |> toList()
         fromList xs => xs
-        load path name => fromGpu(gpuLoadTensor(path, name) ?: toGpu([]))
+        load path name => fromGpu(orAbort(gpuLoadTensor(path, name)))
         device => "lists"
     }
     work()
@@ -141,16 +150,17 @@ export onLists work =
         length b => listLength b
         zipWith a b f => range 0 (listLength a) |> map (\i => f (listGet a i ?: 0.0, listGet b i ?: 0.0)) |> toList
         reduce b seed f => range 0 (listLength b) |> fold seed (\(a, i) => f (a, listGet b i ?: 0.0))
+        indexOf b x => range 0 (listLength b) |> map (\i => hit (listGet b i ?: 0.0, x, i, listLength b)) |> fold (listLength b) minI
         matMul a b rows inner cols => range 0 (rows * cols) |> map (\i => range 0 inner |> fold 0.0 (\(acc, k) => acc + (listGet a (intDiv (i, cols) * inner + k) ?: 0.0) * (listGet b (k * cols + i % cols) ?: 0.0))) |> toList
         fromList xs => xs
-        load path name => fromGpu (gpuLoadTensor path name ?: toGpu [])
+        load path name => fromGpu (orAbort (gpuLoadTensor path name))
         device => "lists"
     work ()
 ```
 
 ## Answer with the GPU surface
 
-The second handler answers the same operations with `GpuBuffer<float>`: each `build` is a kernel over `gpuIota`, each `zipWith` and `reduce` forwards the model's callback to a kernel, `matMul` is `gpuMatMul`, and `device` is `gpuDevice()`.
+The second handler answers the same operations with `GpuBuffer<float>`: each `build` is a kernel over `gpuIota`, each `zipWith` and `reduce` forwards the model's callback to a kernel, `matMul` is `gpuMatMul`, and `device` is `gpuDevice()`. When `OSPREY_GPU` selects a device, every one of those kernels and products is compiled from this same source and executed on it, through Metal or OpenCL; with `OSPREY_GPU=host` the same handler runs them on the CPU. The model never changes.
 
 ```osprey
 export fn onGpu(work) = {
@@ -160,9 +170,10 @@ export fn onGpu(work) = {
         length b => gpuLength(b)
         zipWith a b f => gpuZipWith(a, b, f)
         reduce b seed f => b |> gpuFold(seed, f)
-        matMul a b rows inner cols => gpuMatMul(a, b, rows, inner, cols) ?: toGpu([])
+        indexOf b x => gpuIota(gpuLength(b)) |> gpuMap(fn(i) => hit(gpuGet(b, i) ?: 0.0, x, i, gpuLength(b))) |> gpuFold(gpuLength(b), minI)
+        matMul a b rows inner cols => orAbort(gpuMatMul(a, b, rows, inner, cols))
         fromList xs => toGpu(xs)
-        load path name => gpuLoadTensor(path, name) ?: toGpu([])
+        load path name => orAbort(gpuLoadTensor(path, name))
         device => gpuDevice()
     }
     work()
@@ -177,49 +188,73 @@ export onGpu work =
         length b => gpuLength b
         zipWith a b f => gpuZipWith a b f
         reduce b seed f => b |> gpuFold seed f
-        matMul a b rows inner cols => gpuMatMul a b rows inner cols ?: toGpu []
+        indexOf b x => gpuIota (gpuLength b) |> gpuMap (\i => hit (gpuGet b i ?: 0.0, x, i, gpuLength b)) |> gpuFold (gpuLength b) minI
+        matMul a b rows inner cols => orAbort (gpuMatMul a b rows inner cols)
         fromList xs => toGpu xs
-        load path name => gpuLoadTensor path name ?: toGpu []
+        load path name => orAbort (gpuLoadTensor path name)
         device => gpuDevice ()
     work ()
 ```
 
-The GPU surface runs on the host backend today: every kernel is a native loop, and `gpuDevice()` reports `host`. Nothing here runs on a GPU. The point of the second handler is that when a device backend lands ([plan 0023](https://github.com/Nimblesite/osprey/blob/main/docs/plans/0023-gpu-computation.md), stage 4), this file is the only one that notices.
+Under `OSPREY_GPU=metal` or `opencl`, every kernel this handler launches runs on the GPU, including the next token's index and the training loss, so the CPU tokenizes, sequences the layers and prints. A kernel the device cannot compile stops the run and names itself; it never falls back to the CPU. `gpuDevice()` reports the adapter that answered, and the first line of each run prints it.
 
 ## Choose at the boundary
 
-`main` is the one place that chooses. It reads the prompt, the token count and a backend name, then installs a handler around the whole run:
+`main` is the one place that chooses. It reads the prompt, the token count and a backend name, then hands the whole run to `Backends::under`, which installs the handler that name selects, inside `Backends::strictly`, the arithmetic policy:
 
 ```osprey
 fn main() = {
-    handle Arith {
-        overflow _ _ _ wrapped => wrapped
-        divideByZero _ _ => 0.0
-        remainderByZero _ => 0
-    }
     let prompt = input()
     let count = parseInt(input()) ?: 20
-    match input() {
-        "lists" => Backends::onLists(fn() => run(prompt, count))
-        _ => Backends::onGpu(fn() => run(prompt, count))
+    let backend = input()
+    match Backends::strictly(fn() => Backends::under(backend, fn() => run(prompt, count))) {
+        Success { value } => value
+        Error { message } => print("generation stopped: ${message}")
     }
+}
+
+export fn strictly(work) = {
+    handle Fault { halt fault => Error { message: fault } }
+    handle Arith {
+        overflow op l r _ => perform Fault.halt("integer overflow: ${l} ${op} ${r}")
+        divideByZero op l => toFloat(perform Fault.halt("division by zero: ${l} ${op} 0"))
+        remainderByZero l => perform Fault.halt("remainder by zero: ${l} % 0")
+    }
+    Success { value: work() }
+}
+
+export fn under(name, work) = match name {
+    "gpu" => onGpu(work)
+    "lists" => onLists(work)
+    _ => print("unknown backend `${name}`: choose gpu or lists")
 }
 ```
 
 ```osprey-ml
 main () =
-    handle Arith
-        overflow _ _ _ wrapped => wrapped
-        divideByZero _ _ => 0.0
-        remainderByZero _ => 0
     prompt = input ()
     count = parseInt (input ()) ?: 20
-    match input ()
-        "lists" => Backends::onLists (\() => run (prompt, count))
-        _ => Backends::onGpu (\() => run (prompt, count))
+    backend = input ()
+    match Backends::strictly (\() => Backends::under (backend, \() => run (prompt, count)))
+        Success value => value
+        Error message => print "generation stopped: ${message}"
+
+export strictly work =
+    handle Fault
+        halt fault => Error(message = fault)
+    handle Arith
+        overflow op l r _ => perform Fault.halt "integer overflow: ${l} ${op} ${r}"
+        divideByZero op l => toFloat (perform Fault.halt "division by zero: ${l} ${op} 0")
+        remainderByZero l => perform Fault.halt "remainder by zero: ${l} % 0"
+    Success(value = work ())
+
+export under (name, work) = match name
+    "gpu" => onGpu work
+    "lists" => onLists work
+    _ => print "unknown backend `${name}`: choose gpu or lists"
 ```
 
-Each arm of the `match` is its own static region. The compiler specialises `run` and everything it reaches once per region, with the arms of that region inlined at every `perform`. The compiled program contains two copies of the model and no handler: the `Tensor` effect does not exist at run time. `Arith` is an ordinary runtime effect and stays, because a divisor the program computes needs a policy the handlers cannot supply.
+`under` only forwards the run, so the compiler applies it at the call site, and each arm of its `match` becomes its own static region. A name that is neither runs nothing rather than silently landing on the GPU surface. The compiler specialises `run` and everything it reaches once per region, with the arms of that region inlined at every `perform`. The compiled program contains two copies of the model and no handler: the `Tensor` effect does not exist at run time. `Arith` is an ordinary runtime effect and stays, because a divisor the program computes needs a policy the handlers cannot supply. A fault there is a bug in the model, and a substituted `0.0` cannot be told apart from a real logit, so `strictly` substitutes nothing: each arm performs the `control` operation `Fault.halt`, which answers the whole region without resuming, and `main` receives an `Error` naming the operation and its operands. A device kernel's fault stops the run the same way.
 
 ## What the compiler proves
 
@@ -232,7 +267,7 @@ Each arm of the `match` is its own static region. The compiler specialises `run`
 
 [`tests/effects/staged/tensor_backends.test.osp`](https://github.com/Nimblesite/osprey/blob/main/tests/effects/staged/tensor_backends.test.osp) runs a width-4 transformer block under both handlers and checks every element against values an independent oracle computed, then checks that the two handlers print the same doubles. Its ML twin shares the golden and must emit identical LLVM IR. The differential harness runs both under the default, GC and ARC memory backends and on wasm32.
 
-The full model is the stronger proof. On the default prompt, both handlers print the same tokens and the same continuation. One training step prints the same loss, the same sum for every one of the 148 gradient tensors and the same loss after the step. The GPU surface is faster because its buffers are dense doubles and its kernels are lifted functions; the list handler boxes every element. Neither is a GPU result.
+The full model is the stronger proof. On the default prompt, both handlers print the same tokens and the same continuation. One training step prints the same loss, the same sum for every one of the 148 gradient tensors and the same loss after the step. The GPU surface is faster because its buffers are dense doubles and its kernels are lifted functions; the list handler boxes every element. Both columns ran on the CPU (`OSPREY_GPU=host`); the [GPT-2 README](https://github.com/Nimblesite/osprey/tree/main/examples/gpt2) has the Metal and OpenCL timings.
 
 | Measured 2026-10-13, AMD Ryzen 9 3900X, Linux 6.18 (WSL2), release build, `--memory=arc` | `BACKEND=gpu` | `BACKEND=lists` |
 | --- | --- | --- |
@@ -241,7 +276,8 @@ The full model is the stronger proof. On the default prompt, both handlers print
 
 ## Limits
 
-- The GPU surface executes on the host backend. `gpuDevice()` reports `host` and the model prints it. Device backends are roadmap work in plan 0023.
+- Buffers are resident on the device from their first launch and come back only when the program reads them; there is no kernel fusion yet, so every kernel is its own dispatch. A `reduce` runs on one device thread in element order, which keeps its result identical to the host's, so a reduction over a large buffer is shaped as a per-row kernel and a `reduce` over the rows, as the training program's gradient checksums are.
+- The device's `exp`, `ln` and `tanh` are correctly rounded and a host libm is not on every argument, so the training loss can differ from the host's in its last digit.
 - A static handler is selected where it is written. `match input()` chooses between two regions the compiler has already specialised; a handler computed at run time needs a dynamic effect and a runtime handler instead.
 - A callback forwarded through a static arm must be stage-legal: pure, or performing only effects another static region answers.
 - The two handlers agree bit for bit only because both accumulate in the same order. A handler that reassociated a reduction would be a different interpretation, and the differential harness would say so.

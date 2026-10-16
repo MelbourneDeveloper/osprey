@@ -198,14 +198,12 @@ jobs:
         run: deslop . --nohtml --nojson --output "$RUNNER_TEMP/deslop-report" --log-to-console --log-level error --no-color
 
       # Dead-code gate: fail if any `pub` declaration is unreachable from the
-      # osprey binary (hawk::dead_public). cargo-hawk's prebuilt driver is
-      # pinned to the stable toolchain this job installs; when stable moves,
-      # hawk's own release must move with it or this gate fails on a toolchain
-      # mismatch alone.
+      # osprey binary (hawk::dead_public). cargo-hawk's prebuilt driver runs
+      # only under the exact rustc it was built for, so the Makefile pins the
+      # hawk release and that toolchain together and runs hawk under it; a
+      # stable release no longer breaks the gate.
       - name: Install cargo-hawk (dead-code gate)
-        run: |
-          curl --proto '=https' --tlsv1.2 -LsSf \
-            https://github.com/astral-sh/hawk/releases/latest/download/cargo-hawk-installer.sh | sh
+        run: make hawk-install
       - name: Dead-code gate (hawk)
         run: make hawk
 

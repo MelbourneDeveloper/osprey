@@ -25,7 +25,7 @@ Osprey uses typed algebraic effects to separate application requests from their 
 ## Language
 
 - **[Read the language specification](/spec/)** — the intended language contract; check feature status for current implementation limits.
-- **[Use dense computation buffers](/spec/0034-gpucomputation/)** — typed buffers and pure kernels; they run on the CPU today and device execution is planned.
+- **[Use dense computation buffers](/spec/0034-gpucomputation/)** — typed buffers and pure kernels, run on Metal or OpenCL when `OSPREY_GPU` selects a device and on the CPU otherwise.
 - **[Check feature status](/status/)** — see what is stable, partial, experimental, or planned.
 - **[Browse keywords](/docs/keywords/)** — declarations, bindings, matching, imports, and literals.
 

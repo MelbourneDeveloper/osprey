@@ -13,6 +13,7 @@ use crate::builder::Codegen;
 use crate::conv::box_to_i64;
 use crate::error::{CodegenError, Result};
 use crate::expr::gen_expr;
+use crate::gpu_device::{declined, launch_fold, launch_map};
 use crate::gpu_kernel::{extract, kernel_elem, kernel_of, slot};
 use crate::iter::{acc_init, acc_result, acc_step, invoke, nth, Callback};
 use crate::llty::{LType, Value};
@@ -37,11 +38,6 @@ pub(crate) fn is_scalar(ty: LType) -> bool {
 fn is_scalar_value(v: &Value) -> bool {
     v.result_inner.is_none() && is_scalar(v.ty)
 }
-
-/// The name `gpuDevice()` reports for the host execution backend
-/// [GPU-DEVICE] [GPU-BACKEND-HOST]. Device backends will report their own
-/// names (`cuda:0`, `metal:0`) when they land.
-const HOST_DEVICE: &str = "host";
 
 /// Owner-tag prefix marking a buffer whose element `LType` is known; the suffix
 /// is the element's LLVM spelling (`Gpu#double`), mirroring the flat
@@ -92,7 +88,8 @@ pub(crate) fn gen(
     _named: &[NamedArgument],
 ) -> Result<Option<Value>> {
     if name == "gpuDevice" {
-        return Ok(Some(cg.string_constant(HOST_DEVICE)));
+        let name = cg.call("i8*", "osprey_gpu_device_name", "", &[]);
+        return Ok(Some(Value::new(name, LType::Str)));
     }
     operation(name).map(|lower| lower(cg, args)).transpose()
 }
@@ -202,20 +199,39 @@ fn kernel_loop(
     Ok(())
 }
 
-/// The shared chassis of `gpuMap`/`gpuZipWith`: `apply` runs at every index of
-/// `src` and each scalar result is stored at that index in a fresh
-/// `len`-element buffer. The kernel's result `LType` is codegen-time
-/// knowledge, so the handle is retagged with it and downstream combinators
-/// recover the element without a kernel signature.
+/// Branch to the host loop only when the runtime did not run the kernel on
+/// the device ([GPU-BACKEND-DEVICE]); the loop rejoins at the returned label.
+fn host_fallback(cg: &mut Codegen, done: &str) -> String {
+    let (host, join) = (cg.fresh_label(), cg.fresh_label());
+    let ran = cg.emit_reg(format!("icmp ne i32 {done}, 0"));
+    cg.emit(format!("br i1 {ran}, label %{join}, label %{host}"));
+    cg.start_block(&host);
+    join
+}
+
+fn rejoin(cg: &mut Codegen, join: &str) {
+    cg.emit(format!("br label %{join}"));
+    cg.start_block(join);
+}
+
+/// The shared chassis of `gpuMap`/`gpuZipWith`: `launch` asks the device to
+/// fill the fresh `len`-element buffer, and otherwise `apply` runs at every
+/// index of `src` and each scalar result is stored at that index. The
+/// kernel's result `LType` is codegen-time knowledge, so the handle is
+/// retagged with it and downstream combinators recover the element without a
+/// kernel signature.
 fn map_into(
     cg: &mut Codegen,
     src: &Value,
     len: &str,
     elem: Option<LType>,
     what: &str,
+    launch: impl FnOnce(&mut Codegen, &Value) -> String,
     mut apply: impl FnMut(&mut Codegen, Value, &str) -> Result<Value>,
 ) -> Result<Value> {
     let out = buffer_alloc(cg, len, GPU_OWNER.to_string());
+    let done = launch(cg, &out);
+    let join = host_fallback(cg, &done);
     let mut mapped_ty = LType::I64;
     kernel_loop(cg, src, len, elem, |cg, arg, i| {
         let mapped = apply(cg, arg, i)?;
@@ -224,6 +240,7 @@ fn map_into(
         buffer_set(cg, &out, i, &stored.operand);
         Ok(())
     })?;
+    rejoin(cg, &join);
     Ok(out.with_owner(Some(elem_owner(Some(mapped_ty)))))
 }
 
@@ -248,6 +265,7 @@ fn gpu_map(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
         &len,
         elem,
         "a gpuMap kernel result",
+        |cg, out| launch_map(cg, "gpuMap", &kernel, &[slot(elem)], &[&src], out, &len),
         |cg, arg, _| invoke(cg, &kernel, vec![arg]),
     )
 }
@@ -260,12 +278,24 @@ fn gpu_zip_with(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let right_elem = kernel_elem(cg, nth(args, 2)?, &kernel, &right, 1);
     let kernel = extract(cg, kernel, &[slot(left_elem), slot(right_elem)])?;
     let len = shorter_len(cg, &left, &right);
+    let slots = [slot(left_elem), slot(right_elem)];
     map_into(
         cg,
         &left,
         &len,
         left_elem,
         "a gpuZipWith kernel result",
+        |cg, out| {
+            launch_map(
+                cg,
+                "gpuZipWith",
+                &kernel,
+                &slots,
+                &[&left, &right],
+                out,
+                &len,
+            )
+        },
         |cg, a, i| {
             let raw = buffer_get(cg, &right, i);
             let b = elem_value(cg, raw, right_elem);
@@ -330,7 +360,17 @@ fn step(cg: &mut Codegen, r: &Reduction, arg: Value) -> Result<()> {
 /// `gpuFold(buffer, initial, combine)` — reduce to one scalar [GPU-FOLD].
 fn gpu_fold(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
     let r = reduction(cg, args, "gpuFold")?;
+    let done = launch_fold(
+        cg,
+        &r.combine,
+        &[r.tmpl.ty, slot(r.elem)],
+        &r.src,
+        &r.acc,
+        &r.len,
+    );
+    let join = host_fallback(cg, &done);
     kernel_loop(cg, &r.src, &r.len, r.elem, |cg, arg, _| step(cg, &r, arg))?;
+    rejoin(cg, &join);
     Ok(acc_result(cg, &r.acc, &r.tmpl))
 }
 
@@ -374,6 +414,7 @@ fn gpu_get(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 /// The running accumulator is the same scalar slot `gpuFold` uses, so a device
 /// backend can swap in a work-efficient parallel scan without changing meaning.
 fn gpu_scan(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let _ = declined(cg, "gpuScan has no device form yet");
     let r = reduction(cg, args, "gpuScan")?;
     let out = buffer_alloc(cg, &r.len, elem_owner(Some(r.tmpl.ty)));
     kernel_loop(cg, &r.src, &r.len, r.elem, |cg, arg, i| {
@@ -391,6 +432,7 @@ fn gpu_scan(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
 /// length is unknown until the predicate has run, so this fills a
 /// source-length scratch buffer and publishes the exact prefix length.
 fn gpu_filter(cg: &mut Codegen, args: &[Expr]) -> Result<Value> {
+    let _ = declined(cg, "gpuFilter has no device form yet");
     let (src, elem, predicate) = unary_kernel(cg, args)?;
     let len = buffer_len(cg, &src);
     let out = buffer_alloc(cg, &len, elem_owner(elem));

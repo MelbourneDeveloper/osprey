@@ -60,6 +60,9 @@ void osp_mem_set_layout(void *p, int64_t meta) {
   (void)p;
   (void)meta;
 }
+// Finalizer registration (memory_hooks.h): this backend reclaims no general
+// allocation, so no body it frees carries a finalizer to run.
+void osp_mem_set_finalizer(void (*finalize)(void *body)) { (void)finalize; }
 
 // Full-collection hook — nothing to collect in a passthrough backend.
 void osp_collect(void) {}

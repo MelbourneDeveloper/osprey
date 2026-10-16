@@ -238,6 +238,8 @@ pub(crate) struct Codegen {
     /// The Perceus ownership ledger for the in-progress function
     /// [GC-ARC-PERCEUS] (see `crate::arc`).
     pub(crate) arc: crate::arc::ArcLedger,
+    /// Device emission of extracted kernels [GPU-BACKEND-DEVICE].
+    pub(crate) device: crate::gpu_device::DeviceState,
     /// Monotonic id for hoisted ARC spill slots (`%arc.sN`), per function.
     arc_slot_count: usize,
     /// Registers this function materialised from a `private constant` global
@@ -367,6 +369,7 @@ impl Codegen {
                 .coverage
                 .then(crate::coverage::CoverageState::default),
             arc: crate::arc::ArcLedger::new(),
+            device: crate::gpu_device::DeviceState::default(),
             arc_slot_count: 0,
             rodata_regs: HashSet::new(),
             anys: crate::anybox::AnyState::default(),
@@ -424,7 +427,7 @@ impl Default for Codegen {
 /// Escape a Rust string into an LLVM `c"..."` body, returning the escaped text
 /// and the byte length **including** the trailing NUL. Bytes outside printable
 /// ASCII (and `"`/`\`) are emitted as `\HH`.
-fn escape_c_string(text: &str) -> (String, usize) {
+pub(crate) fn escape_c_string(text: &str) -> (String, usize) {
     let mut out = String::new();
     let bytes = text.as_bytes();
     for &b in bytes {

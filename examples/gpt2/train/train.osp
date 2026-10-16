@@ -2,7 +2,8 @@
 // the next-token cross-entropy of the prompt, the gradient of every parameter
 // through the twelve blocks, one SGD step, and the loss again. Two lines of
 // stdin: the prompt, and the interpretation to run under — `gpu` for the GPU
-// surface (the host backend today) or `lists` for plain host lists.
+// surface (its products on the device `OSPREY_GPU` selects) or `lists` for
+// plain host lists.
 // `make gpt2-train PROMPT="..."` runs it, and examples/gpt2/reference.py prints
 // the same loss and gradient sums from the same accumulation order. The model
 // lives in ../model; this file is the backward pass, written as the same
@@ -141,21 +142,30 @@ fn softmaxRows(logits, t) = {
     perform Backends::Tensor.build(t * vocabSize, fn(i) => at(weights, i) / at(sums, intDiv(i, vocabSize)))
 }
 
-fn target(ids, r) = listGet(ids, r + 1) ?: 0
+/// The token ids as a tensor, so a kernel reads them where it reads every
+/// other operand; an id below 2^53 is exact as a float.
+fn idTensor(ids) = perform Backends::Tensor.fromList(range(0, listLength(ids)) |> map(fn(i) => toFloat(listGet(ids, i) ?: 0)) |> toList())
 
 /// Element i of the logit gradient [t, vocab]; the last position predicts nothing.
-fn dlogitAt(probs, ids, t, count, i) = {
+fn dlogitAt(probs, idsT, t, count, i) = {
     let r = intDiv(i, vocabSize)
-    match r == t - 1 { true => 0.0  false => (at(probs, i) - onehot(i % vocabSize == target(ids, r))) / count }
+    match r == t - 1 { true => 0.0  false => (at(probs, i) - onehot(toFloat(i % vocabSize) == at(idsT, r + 1))) / count }
 }
 
+/// The probability row r gives its target, picked by the one-hot compare the
+/// logit gradient uses: every other term is an exact 0.0, so the sum is that
+/// probability itself.
+fn targetProb(probs, idsT, r) = range(0, vocabSize) |> fold(0.0, fn(a, v) => a + at(probs, r * vocabSize + v) * onehot(toFloat(v) == at(idsT, r + 1)))
+
 /// Mean next-token cross-entropy over the first t - 1 positions of xf [t, width],
-/// and its gradient into xf and into the tied output embedding.
+/// and its gradient into xf and into the tied output embedding. Negating the
+/// in-order sum is exact, so the loss is the host's `0.0 - ln p0 - ln p1 …`.
 fn lossHead(w, xf, ids, t) = {
     let probs = softmaxRows(Model::product(xf, w.wteT, t, width, vocabSize), t)
     let count = toFloat(t - 1)
-    let loss = (range(0, t - 1) |> fold(0.0, fn(a, r) => a - ln(at(probs, r * vocabSize + target(ids, r))))) / count
-    let dlogits = perform Backends::Tensor.build(t * vocabSize, fn(i) => dlogitAt(probs, ids, t, count, i))
+    let idsT = idTensor(ids)
+    let loss = (0.0 - total(perform Backends::Tensor.build(t - 1, fn(r) => ln(targetProb(probs, idsT, r))))) / count
+    let dlogits = perform Backends::Tensor.build(t * vocabSize, fn(i) => dlogitAt(probs, idsT, t, count, i))
     Head {
         loss: loss,
         dxf: Model::product(dlogits, w.wte, t, vocabSize, width),
@@ -165,13 +175,16 @@ fn lossHead(w, xf, ids, t) = {
 
 /// Element i of the token embedding gradient: the output projection's share
 /// plus the row of dx0 at every position holding this token.
-fn dwteAt(dx0, dwteOut, ids, t, i) = range(0, t) |> fold(at(dwteOut, i), fn(a, r) =>
-    match (listGet(ids, r) ?: 0) == intDiv(i, width) { true => a + at(dx0, r * width + i % width)  false => a })
+fn dwteAt(dx0, dwteOut, idsT, t, i) = range(0, t) |> fold(at(dwteOut, i), fn(a, r) =>
+    match at(idsT, r) == toFloat(intDiv(i, width)) { true => a + at(dx0, r * width + i % width)  false => a })
 
 /// The embedding gradients, and dx0 [t, width] itself for the positions used.
-fn embedBack(dx0, dwteOut, ids, t) = Embed {
-    dwte: perform Backends::Tensor.build(vocabSize * width, fn(i) => dwteAt(dx0, dwteOut, ids, t, i)),
-    dwpe: perform Backends::Tensor.build(positions * width, fn(i) => match intDiv(i, width) < t { true => at(dx0, i)  false => 0.0 })
+fn embedBack(dx0, dwteOut, ids, t) = {
+    let idsT = idTensor(ids)
+    Embed {
+        dwte: perform Backends::Tensor.build(vocabSize * width, fn(i) => dwteAt(dx0, dwteOut, idsT, t, i)),
+        dwpe: perform Backends::Tensor.build(positions * width, fn(i) => match intDiv(i, width) < t { true => at(dx0, i)  false => 0.0 })
+    }
 }
 
 fn finalState(w, ids, t) = Model::layerNorm(Model::forward(w, ids, t).x, t, w.lnfG, w.lnfB)
@@ -203,7 +216,13 @@ fn descendAll(w, s) = {
     }
 }
 
-fn layerLine(g) = "${total(g.ln1g)} ${total(g.ln1b)} ${total(g.qkvW)} ${total(g.qkvB)} ${total(g.projW)} ${total(g.projB)} ${total(g.ln2g)} ${total(g.ln2b)} ${total(g.fcW)} ${total(g.fcB)} ${total(g.outW)} ${total(g.outB)}"
+/// The checksum of a matrix gradient: each row summed in order by its own
+/// thread, then the rows summed — the same two-level sum under either handler.
+/// A flat `total` would fold every element on one device thread.
+fn rowTotal(g, cols, r) = range(0, cols) |> fold(0.0, fn(a, c) => a + at(g, r * cols + c))
+fn checksum(g, rows, cols) = total(perform Backends::Tensor.build(rows, fn(r) => rowTotal(g, cols, r)))
+
+fn layerLine(g) = "${total(g.ln1g)} ${total(g.ln1b)} ${checksum(g.qkvW, width, qkvWidth)} ${total(g.qkvB)} ${checksum(g.projW, width, width)} ${total(g.projB)} ${total(g.ln2g)} ${total(g.ln2b)} ${checksum(g.fcW, width, mlpWidth)} ${total(g.fcB)} ${checksum(g.outW, mlpWidth, width)} ${total(g.outB)}"
 
 fn gradLines(grads, i) = match i == layerCount {
     true => ""
@@ -219,21 +238,17 @@ fn run(prompt) = {
     let t = listLength(ids)
     print("gpt2 (124M) on ${Model::device()} — one training step over ${t} tokens, learning rate ${learningRate}\nprompt: ${prompt}\ntokens:${Tokenizer::idsText(ids)}")
     let s = trainStep(w, ids, t)
-    print("loss ${s.loss}\ngrad wte ${total(s.dwte)} wpe ${total(s.dwpe)} ln_f ${total(s.dlnfG)} ${total(s.dlnfB)}${gradLines(s.grads, 0)}")
+    print("loss ${s.loss}\ngrad wte ${checksum(s.dwte, vocabSize, width)} wpe ${checksum(s.dwpe, positions, width)} ln_f ${total(s.dlnfG)} ${total(s.dlnfB)}${gradLines(s.grads, 0)}")
     let stepped = descendAll(w, s)
     print("loss after one step ${lossHead(stepped, finalState(stepped, ids, t), ids, t).loss}")
 }
 
 fn main() = {
-    handle Arith {
-        overflow _ _ _ wrapped => wrapped
-        divideByZero _ _ => 0.0
-        remainderByZero _ => 0
-    }
     let promptLine = input()
     let prompt = match promptLine == "" { true => defaultPrompt  false => promptLine }
-    match input() {
-        "lists" => Backends::onLists(fn() => run(prompt))
-        _ => Backends::onGpu(fn() => run(prompt))
+    let backend = input()
+    match Backends::strictly(fn() => Backends::under(backend, fn() => run(prompt))) {
+        Success { value } => value
+        Error { message } => print("training stopped: ${message}")
     }
 }

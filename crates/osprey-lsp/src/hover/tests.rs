@@ -172,6 +172,50 @@ fn hover_on_performed_effect_operation_shows_type_and_effect_docs() {
     }
 }
 
+/// A `static effect` hovers like a dynamic one: at its declaration, where a
+/// `handle static` discharges it and where a `perform` names it qualified.
+/// Only dynamic effects were collected, so the name hovered nothing.
+#[test]
+fn static_effect_names_hover_at_declaration_handler_and_perform() {
+    let src = concat!(
+        "module Backends {\n",
+        "    /// Tensor operations a handler answers.\n",
+        "    export static effect Tensor<B> {\n",
+        "        build: fn(int) -> B\n",
+        "    }\n",
+        "    export fn onLists(work) = {\n",
+        "        handle static Tensor<List<int>> {\n",
+        "            build n => [n]\n",
+        "        }\n",
+        "        work()\n",
+        "    }\n",
+        "}\n",
+        "fn make() = perform Backends::Tensor.build(1)\n",
+    );
+    for line in [2usize, 6, 12] {
+        let row = u32::try_from(line).expect("line fits");
+        let md = hover(src, "file:///t.osp", row, col_of(src, line, "Tensor"), U16)
+            .unwrap_or_else(|| panic!("hover over `Tensor` on line {line}"));
+        shows(
+            &md,
+            &[
+                "static effect Tensor<B>",
+                "Tensor operations a handler answers.",
+            ],
+        );
+    }
+    let ml = "(** Tensor operations a handler answers. *)\nstatic effect Tensor B\n    build : int => B\n";
+    let md = hover(ml, "file:///t.ospml", 1, col_of(ml, 1, "Tensor"), U16)
+        .expect("hover over the ML `Tensor` declaration");
+    shows(
+        &md,
+        &[
+            "static effect Tensor",
+            "Tensor operations a handler answers.",
+        ],
+    );
+}
+
 /// Sibling operations must hover with their OWN prose. Before
 /// [DOC-EFFECT-OP] every operation was handed the owning effect's doc, so
 /// `ask` and `tell` rendered identically and the hover said nothing about

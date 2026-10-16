@@ -38,11 +38,7 @@ module.exports = defineConfig({
     // Product code only. A harness is exercised by definition, so counting it
     // inflates the number the threshold gate reads.
     include: ["**/out/client/src/**/*.js"],
-    exclude: [
-      "**/out/test/**",
-      "**/node_modules/**",
-      "**/.vscode-test/**",
-    ],
+    exclude: ["**/out/test/**", "**/node_modules/**", "**/.vscode-test/**"],
     includeAll: true,
   },
 });
